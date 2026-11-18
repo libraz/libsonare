@@ -9,9 +9,9 @@ import type {
   MasteringProcessorCatalogEntry,
   MasteringProcessorCategory,
   Matrix2D,
+  ModuleHandle,
   nnFilter,
   polyFeatures,
-  SonareModuleHandle,
   spectralContrast,
 } from '../../dist/index.js';
 
@@ -28,7 +28,7 @@ describe('core public type names', () => {
   });
 
   it('types moduleFactory with the opaque module handle', () => {
-    expectTypeOf<ReturnType<ModuleFactory>>().toEqualTypeOf<Promise<SonareModuleHandle>>();
+    expectTypeOf<ReturnType<ModuleFactory>>().toEqualTypeOf<Promise<ModuleHandle>>();
     expectTypeOf<Capabilities['features']['ffmpeg']>().toEqualTypeOf<boolean>();
     expect(true).toBe(true);
   });

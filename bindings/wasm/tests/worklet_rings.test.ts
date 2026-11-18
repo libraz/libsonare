@@ -1,30 +1,34 @@
 import {
+  clipPageRequestRingBufferByteLength,
   commitOverwriteWrite,
   commitSonareEngineTelemetryRingWrite,
-  createSonareClipPageRequestRingBuffer,
+  createClipPageRequestRingBuffer,
+  createEngineTelemetryRingBuffer,
+  createExternalMidiRingBuffer,
+  createMeterRingBuffer,
+  createScopeRingBuffer,
   createSonareEngineCommandRingBuffer,
-  createSonareEngineTelemetryRingBuffer,
-  createSonareExternalMidiRingBuffer,
-  createSonareMeterRingBuffer,
-  createSonareScopeRingBuffer,
-  createSonareSpectrumRingBuffer,
+  createSpectrumRingBuffer,
   describe,
+  engineTelemetryRingBufferByteLength,
   engineTelemetryRingFromSharedBuffer,
   expect,
+  externalMidiRingBufferByteLength,
   it,
   Mixer,
+  meterRingBufferByteLength,
   meterRingFromSharedBuffer,
   mixingScenePreset,
   popSonareEngineCommandRingBuffer,
   pushSonareClipPageRequestRingBuffer,
   pushSonareEngineCommandRingBuffer,
   pushSonareExternalMidiRingBuffer,
-  readSonareClipPageRequestRingBuffer,
-  readSonareEngineTelemetryRingBuffer,
-  readSonareExternalMidiRingBuffer,
-  readSonareMeterRingBuffer,
-  readSonareScopeRingBuffer,
-  readSonareSpectrumRingBuffer,
+  readClipPageRequestRingBuffer,
+  readEngineTelemetryRingBuffer,
+  readExternalMidiRingBuffer,
+  readMeterRingBuffer,
+  readScopeRingBuffer,
+  readSpectrumRingBuffer,
   releaseOverwriteRead,
   SONARE_CLIP_PAGE_REQUEST_RING_HEADER_INTS,
   SONARE_CLIP_PAGE_REQUEST_RING_RECORD_UINT32S,
@@ -45,30 +49,24 @@ import {
   SonareEngineTelemetryError,
   SonareEngineTelemetryType,
   SonareWorkletProcessor,
+  scopeRingBufferByteLength,
   scopeRingFromSharedBuffer,
   setupWorklet,
-  sonareClipPageRequestRingBufferByteLength,
   sonareEngineCommandRingBufferByteLength,
-  sonareEngineTelemetryRingBufferByteLength,
-  sonareExternalMidiRingBufferByteLength,
-  sonareMeterRingBufferByteLength,
-  sonareScopeRingBufferByteLength,
   sonareScopeRingRecordFloats,
-  sonareSpectrumRingBufferByteLength,
+  spectrumRingBufferByteLength,
   spectrumRingFromSharedBuffer,
   tryAcquireOverwriteRead,
   tryBeginOverwriteWrite,
   writeSonareEngineTelemetryRingBuffer,
 } from './_worklet_helpers';
 
-type TelemetryRingWithPublicationWrapped = ReturnType<
-  typeof createSonareEngineTelemetryRingBuffer
-> & {
+type TelemetryRingWithPublicationWrapped = ReturnType<typeof createEngineTelemetryRingBuffer> & {
   publicationWrapped: Int32Array;
 };
 
 function createTelemetryRing(capacity: number): TelemetryRingWithPublicationWrapped {
-  return createSonareEngineTelemetryRingBuffer({ capacity }) as TelemetryRingWithPublicationWrapped;
+  return createEngineTelemetryRingBuffer({ capacity }) as TelemetryRingWithPublicationWrapped;
 }
 
 describe('Sonare worklet ring buffers', () => {
@@ -76,26 +74,26 @@ describe('Sonare worklet ring buffers', () => {
 
   describe('clip-page request ring-buffer (SPSC)', () => {
     it('drains in FIFO order and reports bounded overflow without overwriting requests', () => {
-      const ring = createSonareClipPageRequestRingBuffer({ capacity: 2 });
+      const ring = createClipPageRequestRingBuffer({ capacity: 2 });
       expect(pushSonareClipPageRequestRingBuffer(ring, 10, 3)).toBe(true);
       expect(pushSonareClipPageRequestRingBuffer(ring, 11, 4)).toBe(true);
       expect(pushSonareClipPageRequestRingBuffer(ring, 12, 5)).toBe(false);
 
-      const read = readSonareClipPageRequestRingBuffer(ring);
+      const read = readClipPageRequestRingBuffer(ring);
       expect(read.requests).toEqual([
         { clipId: 10, pageIndex: 3 },
         { clipId: 11, pageIndex: 4 },
       ]);
       expect(read.dropped).toBe(1);
-      expect(readSonareClipPageRequestRingBuffer(ring)).toEqual({ requests: [], dropped: 1 });
+      expect(readClipPageRequestRingBuffer(ring)).toEqual({ requests: [], dropped: 1 });
 
       expect(pushSonareClipPageRequestRingBuffer(ring, -1, 0)).toBe(false);
-      expect(readSonareClipPageRequestRingBuffer(ring).dropped).toBe(2);
+      expect(readClipPageRequestRingBuffer(ring).dropped).toBe(2);
     });
 
     it('accepts a manually constructed buffer with the documented header layout', () => {
       const capacity = 2;
-      const sab = new SharedArrayBuffer(sonareClipPageRequestRingBufferByteLength({ capacity }));
+      const sab = new SharedArrayBuffer(clipPageRequestRingBufferByteLength({ capacity }));
       const header = new Int32Array(sab, 0, SONARE_CLIP_PAGE_REQUEST_RING_HEADER_INTS);
       const records = new Uint32Array(
         sab,
@@ -109,7 +107,7 @@ describe('Sonare worklet ring buffers', () => {
       records[0] = 42;
       records[1] = 7;
       expect(
-        readSonareClipPageRequestRingBuffer({ sharedBuffer: sab, header, records, capacity }),
+        readClipPageRequestRingBuffer({ sharedBuffer: sab, header, records, capacity }),
       ).toEqual({ requests: [{ clipId: 42, pageIndex: 7 }], dropped: 0 });
       expect(header[1]).toBe(1);
     });
@@ -120,19 +118,19 @@ describe('Sonare worklet ring buffers', () => {
       const capacity = 3;
       const bands = 4;
       const maxPoints = 5;
-      const meter = createSonareMeterRingBuffer({ capacity });
-      const spectrum = createSonareSpectrumRingBuffer({ capacity, bands });
-      const scope = createSonareScopeRingBuffer({ capacity, bands, maxPoints });
+      const meter = createMeterRingBuffer({ capacity });
+      const spectrum = createSpectrumRingBuffer({ capacity, bands });
+      const scope = createScopeRingBuffer({ capacity, bands, maxPoints });
       const telemetry = createTelemetryRing(capacity);
 
       expect(meter.header[3]).toBe(0);
       expect(spectrum.header[4]).toBe(0);
       expect(scope.header[5]).toBe(0);
       expect(telemetry.header[1]).toBe(0);
-      expect(readSonareMeterRingBuffer(meter)).toEqual({ nextReadIndex: 0, meters: [] });
-      expect(readSonareSpectrumRingBuffer(spectrum)).toEqual({ nextReadIndex: 0, spectra: [] });
-      expect(readSonareScopeRingBuffer(scope)).toEqual({ nextReadIndex: 0, scopes: [] });
-      expect(readSonareEngineTelemetryRingBuffer(telemetry)).toEqual({
+      expect(readMeterRingBuffer(meter)).toEqual({ nextReadIndex: 0, meters: [] });
+      expect(readSpectrumRingBuffer(spectrum)).toEqual({ nextReadIndex: 0, spectra: [] });
+      expect(readScopeRingBuffer(scope)).toEqual({ nextReadIndex: 0, scopes: [] });
+      expect(readEngineTelemetryRingBuffer(telemetry)).toEqual({
         nextReadIndex: 0,
         telemetry: [],
       });
@@ -158,15 +156,15 @@ describe('Sonare worklet ring buffers', () => {
       expect(telemetry.publicationWrapped.byteOffset).toBe(telemetryPublicationWrappedOffset);
       expect(telemetry.publicationWrapped.byteLength).toBe(Int32Array.BYTES_PER_ELEMENT);
       expect(telemetry.publicationWrapped).toHaveLength(1);
-      expect(meter.sharedBuffer.byteLength).toBe(sonareMeterRingBufferByteLength({ capacity }));
+      expect(meter.sharedBuffer.byteLength).toBe(meterRingBufferByteLength({ capacity }));
       expect(spectrum.sharedBuffer.byteLength).toBe(
-        sonareSpectrumRingBufferByteLength({ capacity, bands }),
+        spectrumRingBufferByteLength({ capacity, bands }),
       );
       expect(scope.sharedBuffer.byteLength).toBe(
-        sonareScopeRingBufferByteLength({ capacity, bands, maxPoints }),
+        scopeRingBufferByteLength({ capacity, bands, maxPoints }),
       );
       expect(telemetry.sharedBuffer.byteLength).toBe(
-        sonareEngineTelemetryRingBufferByteLength({ capacity }),
+        engineTelemetryRingBufferByteLength({ capacity }),
       );
       expect(telemetry.sharedBuffer.byteLength).toBe(
         telemetryPublicationWrappedOffset + Int32Array.BYTES_PER_ELEMENT,
@@ -191,17 +189,17 @@ describe('Sonare worklet ring buffers', () => {
       const stale = [
         {
           name: 'meter',
-          ring: createSonareMeterRingBuffer({ capacity: 2 }),
+          ring: createMeterRingBuffer({ capacity: 2 }),
           versionSlot: 3,
         },
         {
           name: 'spectrum',
-          ring: createSonareSpectrumRingBuffer({ capacity: 2, bands: 4 }),
+          ring: createSpectrumRingBuffer({ capacity: 2, bands: 4 }),
           versionSlot: 4,
         },
         {
           name: 'scope',
-          ring: createSonareScopeRingBuffer({ capacity: 2, bands: 4, maxPoints: 3 }),
+          ring: createScopeRingBuffer({ capacity: 2, bands: 4, maxPoints: 3 }),
           versionSlot: 5,
         },
         {
@@ -215,19 +213,19 @@ describe('Sonare worklet ring buffers', () => {
         const before = Array.from(entry.ring.header);
         expect(() => {
           if (entry.name === 'meter') {
-            readSonareMeterRingBuffer(entry.ring);
+            readMeterRingBuffer(entry.ring);
           } else if (entry.name === 'spectrum') {
-            readSonareSpectrumRingBuffer(entry.ring);
+            readSpectrumRingBuffer(entry.ring);
           } else if (entry.name === 'scope') {
-            readSonareScopeRingBuffer(entry.ring);
+            readScopeRingBuffer(entry.ring);
           } else {
-            readSonareEngineTelemetryRingBuffer(entry.ring);
+            readEngineTelemetryRingBuffer(entry.ring);
           }
         }).toThrow(/protocol version 2 is incompatible/);
         expect(Array.from(entry.ring.header)).toEqual(before);
       }
 
-      const staleMeter = createSonareMeterRingBuffer({ capacity: 2 });
+      const staleMeter = createMeterRingBuffer({ capacity: 2 });
       staleMeter.header[3] = 2;
       const staleMeterBefore = Array.from(staleMeter.header);
       expect(() => meterRingFromSharedBuffer(staleMeter.sharedBuffer, 2)).toThrow(
@@ -235,7 +233,7 @@ describe('Sonare worklet ring buffers', () => {
       );
       expect(Array.from(staleMeter.header)).toEqual(staleMeterBefore);
 
-      const staleSpectrum = createSonareSpectrumRingBuffer({ capacity: 2, bands: 4 });
+      const staleSpectrum = createSpectrumRingBuffer({ capacity: 2, bands: 4 });
       staleSpectrum.header[4] = 2;
       const staleSpectrumBefore = Array.from(staleSpectrum.header);
       expect(() => spectrumRingFromSharedBuffer(staleSpectrum.sharedBuffer, 2, 4)).toThrow(
@@ -243,7 +241,7 @@ describe('Sonare worklet ring buffers', () => {
       );
       expect(Array.from(staleSpectrum.header)).toEqual(staleSpectrumBefore);
 
-      const staleScope = createSonareScopeRingBuffer({ capacity: 2, bands: 4, maxPoints: 3 });
+      const staleScope = createScopeRingBuffer({ capacity: 2, bands: 4, maxPoints: 3 });
       staleScope.header[5] = 2;
       const staleScopeBefore = Array.from(staleScope.header);
       expect(() => scopeRingFromSharedBuffer(staleScope.sharedBuffer, 2, 4, 3)).toThrow(
@@ -293,7 +291,7 @@ describe('Sonare worklet ring buffers', () => {
       oldHeader[2] = SONARE_METER_RING_RECORD_FLOATS;
       oldHeader[3] = 2;
       expect(() =>
-        readSonareMeterRingBuffer({
+        readMeterRingBuffer({
           sharedBuffer: oldSharedBuffer,
           header: oldHeader,
           records: oldRecords,
@@ -320,8 +318,8 @@ describe('Sonare worklet ring buffers', () => {
         const malformedRing = {
           ...ring,
           publicationWrapped,
-        } as Parameters<typeof readSonareEngineTelemetryRingBuffer>[0];
-        expect(() => readSonareEngineTelemetryRingBuffer(malformedRing)).toThrow(
+        } as Parameters<typeof readEngineTelemetryRingBuffer>[0];
+        expect(() => readEngineTelemetryRingBuffer(malformedRing)).toThrow(
           /invalid publicationWrapped view/,
         );
         expect(Array.from(ring.header)).toEqual(headerBefore);
@@ -330,9 +328,7 @@ describe('Sonare worklet ring buffers', () => {
 
       ring.publicationWrapped[0] = 2;
       const headerBeforeInvalidValue = Array.from(ring.header);
-      expect(() => readSonareEngineTelemetryRingBuffer(ring)).toThrow(
-        /invalid publicationWrapped value/,
-      );
+      expect(() => readEngineTelemetryRingBuffer(ring)).toThrow(/invalid publicationWrapped value/);
       expect(Array.from(ring.header)).toEqual(headerBeforeInvalidValue);
       expect(ring.publicationWrapped[0]).toBe(2);
     });
@@ -375,7 +371,7 @@ describe('Sonare worklet ring buffers', () => {
         });
 
         it(`keeps the clip-page request ring FIFO and bounded (capacity ${capacity}, cursor ${seed})`, () => {
-          const ring = createSonareClipPageRequestRingBuffer({ capacity });
+          const ring = createClipPageRequestRingBuffer({ capacity });
           seedCursors(ring.header, seed, [0, 1]);
           for (let round = 0; round < 3; round++) {
             for (let i = 0; i < capacity; i++) {
@@ -384,17 +380,17 @@ describe('Sonare worklet ring buffers', () => {
               );
             }
             expect(pushSonareClipPageRequestRingBuffer(ring, 1, 1)).toBe(false);
-            const read = readSonareClipPageRequestRingBuffer(ring);
+            const read = readClipPageRequestRingBuffer(ring);
             expect(read.requests.map((request) => request.pageIndex)).toEqual(
               Array.from({ length: capacity }, (_, i) => round * 1000 + i),
             );
             expect(read.requests.every((request) => request.clipId === 0xffff_ffff)).toBe(true);
-            expect(readSonareClipPageRequestRingBuffer(ring).requests).toEqual([]);
+            expect(readClipPageRequestRingBuffer(ring).requests).toEqual([]);
           }
         });
 
         it(`keeps the external-MIDI ring FIFO and bounded (capacity ${capacity}, cursor ${seed})`, () => {
-          const ring = createSonareExternalMidiRingBuffer({ capacity });
+          const ring = createExternalMidiRingBuffer({ capacity });
           seedCursors(ring.header, seed, [0, 1]);
           for (let round = 0; round < 3; round++) {
             for (let i = 0; i < capacity; i++) {
@@ -404,9 +400,9 @@ describe('Sonare worklet ring buffers', () => {
             }
             expect(pushSonareExternalMidiRingBuffer(ring, 1, 0, 0x00003c80, 3)).toBe(false);
             expect(
-              readSonareExternalMidiRingBuffer(ring).events.map((event) => event.renderFrame),
+              readExternalMidiRingBuffer(ring).events.map((event) => event.renderFrame),
             ).toEqual(Array.from({ length: capacity }, (_, i) => round * 1000 + i));
-            expect(readSonareExternalMidiRingBuffer(ring).events).toEqual([]);
+            expect(readExternalMidiRingBuffer(ring).events).toEqual([]);
           }
         });
 
@@ -426,31 +422,29 @@ describe('Sonare worklet ring buffers', () => {
               value: i,
             });
           }
-          const read = readSonareEngineTelemetryRingBuffer(ring, seed);
+          const read = readEngineTelemetryRingBuffer(ring, seed);
           expect(read.telemetry.map((item) => item.renderFrame)).toEqual(
             [0, 1, 2].slice(3 - written),
           );
-          expect(readSonareEngineTelemetryRingBuffer(ring, read.nextReadIndex).telemetry).toEqual(
-            [],
-          );
+          expect(readEngineTelemetryRingBuffer(ring, read.nextReadIndex).telemetry).toEqual([]);
         });
       }
     }
 
     it('round-trips external-MIDI render frames past 32 bits', () => {
-      const ring = createSonareExternalMidiRingBuffer({ capacity: 4 });
+      const ring = createExternalMidiRingBuffer({ capacity: 4 });
       const frames = [2 ** 32 - 1, 2 ** 32, 2 ** 32 + 1, Number.MAX_SAFE_INTEGER];
       for (const frame of frames) {
         expect(pushSonareExternalMidiRingBuffer(ring, 2, frame, 0x00403c90, 3)).toBe(true);
       }
-      expect(
-        readSonareExternalMidiRingBuffer(ring).events.map((event) => event.renderFrame),
-      ).toEqual(frames);
+      expect(readExternalMidiRingBuffer(ring).events.map((event) => event.renderFrame)).toEqual(
+        frames,
+      );
     });
 
     it('reads the newest meter records across a wrapped write cursor', () => {
       for (const seed of seeds) {
-        const ring = createSonareMeterRingBuffer({ capacity: 3 });
+        const ring = createMeterRingBuffer({ capacity: 3 });
         ring.header[0] = seed;
         ring.header[3] = SONARE_METER_RING_PROTOCOL_VERSION;
         const sceneJson = JSON.stringify(mixingScenePreset('vocalReverbSend'));
@@ -477,7 +471,7 @@ describe('Sonare worklet ring buffers', () => {
               processor.process(inputs, [[new Float32Array(128), new Float32Array(128)]]),
             ).toBe(true);
           }
-          const read = readSonareMeterRingBuffer(ring, seed);
+          const read = readMeterRingBuffer(ring, seed);
           expect(read.meters.map((meter) => meter.frame)).toEqual([256, 384, 512]);
         } finally {
           processor.destroy();
@@ -487,7 +481,7 @@ describe('Sonare worklet ring buffers', () => {
 
     it('reads the newest spectrum records across a wrapped write cursor', () => {
       for (const seed of seeds) {
-        const ring = createSonareSpectrumRingBuffer({ capacity: 3, bands: 4 });
+        const ring = createSpectrumRingBuffer({ capacity: 3, bands: 4 });
         ring.header[0] = seed;
         ring.header[4] = SONARE_SPECTRUM_RING_PROTOCOL_VERSION;
         const processor = new SonareWorkletProcessor({
@@ -505,7 +499,7 @@ describe('Sonare worklet ring buffers', () => {
               processor.process([[left, new Float32Array(128)]], [[new Float32Array(128)]]),
             ).toBe(true);
           }
-          const read = readSonareSpectrumRingBuffer(ring, seed);
+          const read = readSpectrumRingBuffer(ring, seed);
           expect(read.spectra.map((spectrum) => spectrum.frame)).toEqual([256, 384, 512]);
           expect(read.spectra.every((spectrum) => spectrum.bands.length === 4)).toBe(true);
         } finally {
@@ -517,25 +511,23 @@ describe('Sonare worklet ring buffers', () => {
 
   describe('external-MIDI ring-buffer (SPSC)', () => {
     it('preserves lowered MIDI bytes and drops only new records when full', () => {
-      const ring = createSonareExternalMidiRingBuffer({ capacity: 2 });
+      const ring = createExternalMidiRingBuffer({ capacity: 2 });
       expect(ring.header).toHaveLength(SONARE_EXTERNAL_MIDI_RING_HEADER_INTS);
       expect(ring.header[3]).toBe(SONARE_EXTERNAL_MIDI_RING_RECORD_UINT32S);
-      expect(ring.sharedBuffer.byteLength).toBe(
-        sonareExternalMidiRingBufferByteLength({ capacity: 2 }),
-      );
+      expect(ring.sharedBuffer.byteLength).toBe(externalMidiRingBufferByteLength({ capacity: 2 }));
       expect(pushSonareExternalMidiRingBuffer(ring, 7, 127, 0x00643c90, 3)).toBe(true);
       // Transport clock retains the uint32 destination sentinel.
       expect(pushSonareExternalMidiRingBuffer(ring, 0xffffffff, 0, 0x000000f8, 1)).toBe(true);
       expect(pushSonareExternalMidiRingBuffer(ring, 8, 0, 0x00403c90, 3)).toBe(false);
 
-      expect(readSonareExternalMidiRingBuffer(ring)).toEqual({
+      expect(readExternalMidiRingBuffer(ring)).toEqual({
         events: [
           { destinationId: 7, renderFrame: 127, byteWord: 0x00643c90, byteCount: 3 },
           { destinationId: 0xffffffff, renderFrame: 0, byteWord: 0x000000f8, byteCount: 1 },
         ],
         dropped: 1,
       });
-      expect(readSonareExternalMidiRingBuffer(ring)).toEqual({ events: [], dropped: 1 });
+      expect(readExternalMidiRingBuffer(ring)).toEqual({ events: [], dropped: 1 });
     });
   });
 
@@ -598,13 +590,13 @@ describe('Sonare worklet ring buffers', () => {
     }
 
     it('publishes one finite record per block and advances the read cursor', () => {
-      const ring = createSonareMeterRingBuffer({ capacity: 8 });
+      const ring = createMeterRingBuffer({ capacity: 8 });
       const { processor, stripCount } = makeRingProcessor(ring.sharedBuffer);
       try {
         const blocks = 5;
         driveBlocks(processor, stripCount, blocks);
 
-        const read = readSonareMeterRingBuffer(ring, 0);
+        const read = readMeterRingBuffer(ring, 0);
         expect(read.meters).toHaveLength(blocks);
         expect(read.nextReadIndex).toBe(blocks);
 
@@ -635,22 +627,22 @@ describe('Sonare worklet ring buffers', () => {
     });
 
     it('returns only new records on incremental reads', () => {
-      const ring = createSonareMeterRingBuffer({ capacity: 8 });
+      const ring = createMeterRingBuffer({ capacity: 8 });
       const { processor, stripCount } = makeRingProcessor(ring.sharedBuffer);
       try {
         driveBlocks(processor, stripCount, 2);
-        const first = readSonareMeterRingBuffer(ring, 0);
+        const first = readMeterRingBuffer(ring, 0);
         expect(first.meters).toHaveLength(2);
         expect(first.nextReadIndex).toBe(2);
 
         // Re-reading from the returned cursor yields nothing new.
-        const empty = readSonareMeterRingBuffer(ring, first.nextReadIndex);
+        const empty = readMeterRingBuffer(ring, first.nextReadIndex);
         expect(empty.meters).toHaveLength(0);
         expect(empty.nextReadIndex).toBe(2);
 
         // After more blocks, only the new records are returned.
         driveBlocks(processor, stripCount, 3);
-        const incremental = readSonareMeterRingBuffer(ring, first.nextReadIndex);
+        const incremental = readMeterRingBuffer(ring, first.nextReadIndex);
         expect(incremental.meters).toHaveLength(3);
         expect(incremental.nextReadIndex).toBe(5);
         expect(incremental.meters[0].frame).toBe(blockSize * 3);
@@ -661,13 +653,13 @@ describe('Sonare worklet ring buffers', () => {
 
     it('wraps around and returns at most capacity most-recent records', () => {
       const capacity = 4;
-      const ring = createSonareMeterRingBuffer({ capacity });
+      const ring = createMeterRingBuffer({ capacity });
       const { processor, stripCount } = makeRingProcessor(ring.sharedBuffer);
       try {
         const blocks = 10; // more than capacity
         driveBlocks(processor, stripCount, blocks);
 
-        const read = readSonareMeterRingBuffer(ring, 0);
+        const read = readMeterRingBuffer(ring, 0);
         // The reader never returns more than capacity records.
         expect(read.meters.length).toBeLessThanOrEqual(capacity);
         expect(read.meters).toHaveLength(capacity);
@@ -696,7 +688,7 @@ describe('Sonare worklet ring buffers', () => {
 
     it('round-trips a manually populated SharedArrayBuffer using the documented layout', () => {
       const capacity = 4;
-      const sab = new SharedArrayBuffer(sonareMeterRingBufferByteLength({ capacity }));
+      const sab = new SharedArrayBuffer(meterRingBufferByteLength({ capacity }));
       const header = new Int32Array(sab, 0, SONARE_METER_RING_HEADER_INTS);
       const records = new Float32Array(
         sab,
@@ -749,7 +741,7 @@ describe('Sonare worklet ring buffers', () => {
       writeRecord(128, 0, -1, -2, -3, -4, 0.5, -9, -10);
       writeRecord(256, 1, -5, -6, -7, -8, 0.25, -11, -12);
 
-      const first = readSonareMeterRingBuffer(ring, 0);
+      const first = readMeterRingBuffer(ring, 0);
       expect(first.meters).toHaveLength(2);
       expect(first.nextReadIndex).toBe(2);
       expect(first.meters[0]).toMatchObject({
@@ -777,7 +769,7 @@ describe('Sonare worklet ring buffers', () => {
       writeRecord(640, 33, -17, -18, -19, -20, 0, -17, -18);
       writeRecord(768, 0xffff, -21, -22, -23, -24, 0, -19, -20);
 
-      const wrapped = readSonareMeterRingBuffer(ring, first.nextReadIndex);
+      const wrapped = readMeterRingBuffer(ring, first.nextReadIndex);
       expect(wrapped.meters.length).toBeLessThanOrEqual(capacity);
       expect(wrapped.nextReadIndex).toBe(6);
       // Frames 128/256 were overwritten; 384..768 remain (most-recent capacity).
@@ -872,7 +864,7 @@ describe('Sonare worklet ring buffers', () => {
       expect(ring.header[2]).toBe(2);
       expect(ring.header[3]).toBe(SONARE_ENGINE_TELEMETRY_RECORD_BYTES);
       expect(ring.sharedBuffer.byteLength).toBe(
-        sonareEngineTelemetryRingBufferByteLength({ capacity: 2 }),
+        engineTelemetryRingBufferByteLength({ capacity: 2 }),
       );
       expect(ring.publicationWrapped[0]).toBe(0);
 
@@ -888,7 +880,7 @@ describe('Sonare worklet ring buffers', () => {
       expect(ring.header[1]).toBe(SONARE_ENGINE_TELEMETRY_RING_PROTOCOL_VERSION);
       expect(ring.header[4]).toBe(0);
       expect(ring.publicationWrapped[0]).toBe(0);
-      const first = readSonareEngineTelemetryRingBuffer(ring);
+      const first = readEngineTelemetryRingBuffer(ring);
       expect(first.nextReadIndex).toBe(1);
       expect(first.telemetry).toHaveLength(1);
       expect(first.telemetry[0]).toMatchObject({
@@ -916,7 +908,7 @@ describe('Sonare worklet ring buffers', () => {
         value: 128,
       });
 
-      const wrapped = readSonareEngineTelemetryRingBuffer(ring, first.nextReadIndex);
+      const wrapped = readEngineTelemetryRingBuffer(ring, first.nextReadIndex);
       expect(wrapped.nextReadIndex).toBe(3);
       expect(wrapped.telemetry).toHaveLength(2);
       expect(wrapped.telemetry.map((item) => item.timelineSample)).toEqual([256, 384]);
@@ -946,9 +938,9 @@ describe('Sonare worklet ring buffers', () => {
         error: SonareEngineTelemetryError.MaxChannelsExceeded,
       });
 
-      expect(readSonareEngineTelemetryRingBuffer(ring).telemetry.map((item) => item.error)).toEqual(
-        [19, 20],
-      );
+      expect(readEngineTelemetryRingBuffer(ring).telemetry.map((item) => item.error)).toEqual([
+        19, 20,
+      ]);
     });
 
     it('documents the shared ring header layout', () => {
@@ -1026,11 +1018,11 @@ describe('Sonare worklet ring buffers', () => {
       // published while its writer bit is still set.
       Atomics.or(ring.slotStates, 1, 0x8000_0000);
 
-      const held = readSonareEngineTelemetryRingBuffer(ring, 0);
+      const held = readEngineTelemetryRingBuffer(ring, 0);
       expect(held).toEqual({ nextReadIndex: 1, telemetry: [recordA] });
 
       Atomics.and(ring.slotStates, 1, 0x7fff_ffff);
-      expect(readSonareEngineTelemetryRingBuffer(ring, held.nextReadIndex)).toEqual({
+      expect(readEngineTelemetryRingBuffer(ring, held.nextReadIndex)).toEqual({
         nextReadIndex: 2,
         telemetry: [recordB],
       });
@@ -1042,7 +1034,7 @@ describe('Sonare worklet ring buffers', () => {
       writeSonareEngineTelemetryRingBuffer(ring, recordA);
 
       let peakState = 0;
-      let second: ReturnType<typeof readSonareEngineTelemetryRingBuffer> | undefined;
+      let second: ReturnType<typeof readEngineTelemetryRingBuffer> | undefined;
       const ringR2 = {
         ...ring,
         view: viewWithFirstReadHook(ring.view, () => {
@@ -1052,11 +1044,11 @@ describe('Sonare worklet ring buffers', () => {
       const ringR1 = {
         ...ring,
         view: viewWithFirstReadHook(ring.view, () => {
-          second = readSonareEngineTelemetryRingBuffer(ringR2, 0);
+          second = readEngineTelemetryRingBuffer(ringR2, 0);
         }),
       };
 
-      const first = readSonareEngineTelemetryRingBuffer(ringR1, 0);
+      const first = readEngineTelemetryRingBuffer(ringR1, 0);
       expect(peakState).toBe(2);
       expect(first).toEqual({ nextReadIndex: 1, telemetry: [recordA] });
       expect(second).toEqual({ nextReadIndex: 1, telemetry: [recordA] });
@@ -1086,14 +1078,14 @@ describe('Sonare worklet ring buffers', () => {
 
       releaseOverwriteRead(ring.slotStates, ring.capacity, 0);
       expect(Atomics.load(ring.slotStates, 0)).toBe(0);
-      expect(readSonareEngineTelemetryRingBuffer(ring, 0).telemetry).toEqual([recordA]);
+      expect(readEngineTelemetryRingBuffer(ring, 0).telemetry).toEqual([recordA]);
 
       const recordC = telemetryRecord(67);
       writeSonareEngineTelemetryRingBuffer(ring, recordC);
       expect(ring.header[0]).toBe(2);
       expect(ring.header[4]).toBe(66);
       expect(ring.publicationWrapped[0]).toBe(1);
-      expect(readSonareEngineTelemetryRingBuffer(ring, 1).telemetry).toEqual([recordC]);
+      expect(readEngineTelemetryRingBuffer(ring, 1).telemetry).toEqual([recordC]);
       expect(Atomics.load(ring.slotStates, 0)).toBe(0);
     });
 
@@ -1124,14 +1116,14 @@ describe('Sonare worklet ring buffers', () => {
       expect(ring.header[0]).toBe(2);
       expect(ring.header[4]).toBe(65);
       expect(ring.publicationWrapped[0]).toBe(0);
-      expect(readSonareEngineTelemetryRingBuffer(ring, 1).telemetry).toEqual([recordB]);
+      expect(readEngineTelemetryRingBuffer(ring, 1).telemetry).toEqual([recordB]);
 
       const recordC = telemetryRecord(68);
       writeSonareEngineTelemetryRingBuffer(ring, recordC);
       expect(ring.header[0]).toBe(3);
       expect(ring.header[4]).toBe(66);
       expect(ring.publicationWrapped[0]).toBe(1);
-      expect(readSonareEngineTelemetryRingBuffer(ring, 2).telemetry).toEqual([recordC]);
+      expect(readEngineTelemetryRingBuffer(ring, 2).telemetry).toEqual([recordC]);
     });
 
     it('keeps the physical-wrap latch across reattachment and the uint32 cursor span', () => {
@@ -1166,7 +1158,7 @@ describe('Sonare worklet ring buffers', () => {
       expect(reattached.header[0]).toBe(1);
       expect(reattached.header[4]).toBe(3);
       expect(reattached.publicationWrapped[0]).toBe(1);
-      expect(readSonareEngineTelemetryRingBuffer(reattached, 0xffffffff).telemetry).toEqual([
+      expect(readEngineTelemetryRingBuffer(reattached, 0xffffffff).telemetry).toEqual([
         telemetryRecord(4),
         telemetryRecord(5),
       ]);
@@ -1233,7 +1225,7 @@ describe('Sonare worklet ring buffers', () => {
       expect(ringA.header[0]).toBe(1);
       expect(ringA.header[1]).toBe(SONARE_ENGINE_TELEMETRY_RING_PROTOCOL_VERSION);
       expect(ringA.publicationWrapped[0]).toBe(0);
-      expect(readSonareEngineTelemetryRingBuffer(ringA).telemetry).toEqual([recordB]);
+      expect(readEngineTelemetryRingBuffer(ringA).telemetry).toEqual([recordB]);
       expect(Array.from(ringB.header)).toEqual([0, 0, 2, SONARE_ENGINE_TELEMETRY_RECORD_BYTES, 0]);
       expect(Array.from(ringB.slotStates)).toEqual([0, 0]);
       expect(ringB.publicationWrapped[0]).toBe(0);
@@ -1296,11 +1288,11 @@ describe('Sonare worklet ring buffers', () => {
       expect(
         Array.from(new Uint8Array(ring.sharedBuffer, SONARE_ENGINE_RING_HEADER_INTS * 4, 48)),
       ).toEqual(payloadA);
-      expect(readSonareEngineTelemetryRingBuffer(ring, 0).telemetry).toEqual([recordA]);
+      expect(readEngineTelemetryRingBuffer(ring, 0).telemetry).toEqual([recordA]);
 
       const recordC = telemetryRecord(3);
       writeSonareEngineTelemetryRingBuffer(ring, recordC);
-      expect(readSonareEngineTelemetryRingBuffer(ring, 1).telemetry).toEqual([recordC]);
+      expect(readEngineTelemetryRingBuffer(ring, 1).telemetry).toEqual([recordC]);
     });
 
     it('releases a reader exactly once when materialization throws', () => {
@@ -1312,66 +1304,45 @@ describe('Sonare worklet ring buffers', () => {
           throw new Error('telemetry materializer');
         }),
       };
-      expect(() => readSonareEngineTelemetryRingBuffer(throwingRing, 0)).toThrow(
+      expect(() => readEngineTelemetryRingBuffer(throwingRing, 0)).toThrow(
         'telemetry materializer',
       );
       expect(Atomics.load(ring.slotStates, 0)).toBe(0);
 
       const recordC = telemetryRecord(3);
       writeSonareEngineTelemetryRingBuffer(ring, recordC);
-      expect(readSonareEngineTelemetryRingBuffer(ring, 1).telemetry).toEqual([recordC]);
+      expect(readEngineTelemetryRingBuffer(ring, 1).telemetry).toEqual([recordC]);
       expect(Atomics.load(ring.slotStates, 0)).toBe(0);
     });
   });
 
   describe('ring dimensions are refused, never floored or clamped', () => {
     const creators: Array<[string, (value: unknown) => unknown]> = [
-      ['meter', (v) => createSonareMeterRingBuffer({ capacity: v as number })],
-      [
-        'spectrum capacity',
-        (v) => createSonareSpectrumRingBuffer({ capacity: v as number, bands: 4 }),
-      ],
-      [
-        'spectrum bands',
-        (v) => createSonareSpectrumRingBuffer({ capacity: 2, bands: v as number }),
-      ],
+      ['meter', (v) => createMeterRingBuffer({ capacity: v as number })],
+      ['spectrum capacity', (v) => createSpectrumRingBuffer({ capacity: v as number, bands: 4 })],
+      ['spectrum bands', (v) => createSpectrumRingBuffer({ capacity: 2, bands: v as number })],
       [
         'scope capacity',
-        (v) => createSonareScopeRingBuffer({ capacity: v as number, bands: 4, maxPoints: 3 }),
+        (v) => createScopeRingBuffer({ capacity: v as number, bands: 4, maxPoints: 3 }),
       ],
       [
         'scope bands',
-        (v) => createSonareScopeRingBuffer({ capacity: 2, bands: v as number, maxPoints: 3 }),
+        (v) => createScopeRingBuffer({ capacity: 2, bands: v as number, maxPoints: 3 }),
       ],
       ['command', (v) => createSonareEngineCommandRingBuffer({ capacity: v as number })],
-      ['telemetry', (v) => createSonareEngineTelemetryRingBuffer({ capacity: v as number })],
-      [
-        'clip page request',
-        (v) => createSonareClipPageRequestRingBuffer({ capacity: v as number }),
-      ],
-      ['external MIDI', (v) => createSonareExternalMidiRingBuffer({ capacity: v as number })],
-      ['meter bytes', (v) => sonareMeterRingBufferByteLength({ capacity: v as number })],
-      [
-        'spectrum bytes',
-        (v) => sonareSpectrumRingBufferByteLength({ capacity: v as number, bands: 4 }),
-      ],
+      ['telemetry', (v) => createEngineTelemetryRingBuffer({ capacity: v as number })],
+      ['clip page request', (v) => createClipPageRequestRingBuffer({ capacity: v as number })],
+      ['external MIDI', (v) => createExternalMidiRingBuffer({ capacity: v as number })],
+      ['meter bytes', (v) => meterRingBufferByteLength({ capacity: v as number })],
+      ['spectrum bytes', (v) => spectrumRingBufferByteLength({ capacity: v as number, bands: 4 })],
       [
         'scope bytes',
-        (v) => sonareScopeRingBufferByteLength({ capacity: v as number, bands: 4, maxPoints: 3 }),
+        (v) => scopeRingBufferByteLength({ capacity: v as number, bands: 4, maxPoints: 3 }),
       ],
       ['command bytes', (v) => sonareEngineCommandRingBufferByteLength({ capacity: v as number })],
-      [
-        'telemetry bytes',
-        (v) => sonareEngineTelemetryRingBufferByteLength({ capacity: v as number }),
-      ],
-      [
-        'clip page bytes',
-        (v) => sonareClipPageRequestRingBufferByteLength({ capacity: v as number }),
-      ],
-      [
-        'external MIDI bytes',
-        (v) => sonareExternalMidiRingBufferByteLength({ capacity: v as number }),
-      ],
+      ['telemetry bytes', (v) => engineTelemetryRingBufferByteLength({ capacity: v as number })],
+      ['clip page bytes', (v) => clipPageRequestRingBufferByteLength({ capacity: v as number })],
+      ['external MIDI bytes', (v) => externalMidiRingBufferByteLength({ capacity: v as number })],
     ];
 
     for (const [name, create] of creators) {
@@ -1393,18 +1364,16 @@ describe('Sonare worklet ring buffers', () => {
     });
 
     it('refuses scope bands and points past the native tap ceiling', () => {
-      expect(() =>
-        createSonareScopeRingBuffer({ capacity: 2, bands: 64, maxPoints: 32 }),
-      ).not.toThrow();
-      expect(() => createSonareScopeRingBuffer({ capacity: 2, bands: 65, maxPoints: 3 })).toThrow(
+      expect(() => createScopeRingBuffer({ capacity: 2, bands: 64, maxPoints: 32 })).not.toThrow();
+      expect(() => createScopeRingBuffer({ capacity: 2, bands: 65, maxPoints: 3 })).toThrow(
         RangeError,
       );
-      expect(() => createSonareScopeRingBuffer({ capacity: 2, bands: 4, maxPoints: 33 })).toThrow(
+      expect(() => createScopeRingBuffer({ capacity: 2, bands: 4, maxPoints: 33 })).toThrow(
         RangeError,
       );
-      expect(() =>
-        sonareScopeRingBufferByteLength({ capacity: 2, bands: 65, maxPoints: 3 }),
-      ).toThrow(RangeError);
+      expect(() => scopeRingBufferByteLength({ capacity: 2, bands: 65, maxPoints: 3 })).toThrow(
+        RangeError,
+      );
     });
   });
 });

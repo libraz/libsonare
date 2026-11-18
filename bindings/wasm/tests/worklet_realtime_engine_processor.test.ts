@@ -9,28 +9,25 @@ import type { SonareEngineSyncMessage } from '../src/internal/worklet_messages';
 // The accepted-type table itself, so the coverage below is generated from the
 // same source of truth as the guard rather than restated.
 import { ENGINE_SYNC_MESSAGE_TYPES, isEngineSyncMessage } from '../src/worklet/guards';
-import type {
-  SonareEngineCommandRecord,
-  SonareEngineTelemetryRecord,
-} from '../src/worklet/protocol';
+import type { EngineTelemetryRecord, SonareEngineCommandRecord } from '../src/worklet/protocol';
 import {
   countFloat32Subarrays,
-  createSonareClipPageRequestRingBuffer,
+  createClipPageRequestRingBuffer,
+  createEngineTelemetryRingBuffer,
+  createExternalMidiRingBuffer,
+  createMeterRingBuffer,
+  createScopeRingBuffer,
   createSonareEngineCommandRingBuffer,
-  createSonareEngineTelemetryRingBuffer,
-  createSonareExternalMidiRingBuffer,
-  createSonareMeterRingBuffer,
-  createSonareScopeRingBuffer,
   describe,
   engineTelemetryRingFromSharedBuffer,
   expect,
   it,
   pushSonareEngineCommandRingBuffer,
-  readSonareClipPageRequestRingBuffer,
-  readSonareEngineTelemetryRingBuffer,
-  readSonareExternalMidiRingBuffer,
-  readSonareMeterRingBuffer,
-  readSonareScopeRingBuffer,
+  readClipPageRequestRingBuffer,
+  readEngineTelemetryRingBuffer,
+  readExternalMidiRingBuffer,
+  readMeterRingBuffer,
+  readScopeRingBuffer,
   registerSonareRealtimeEngineWorkletProcessor,
   SONARE_ENGINE_RING_HEADER_INTS,
   SONARE_ENGINE_TELEMETRY_RECORD_BYTES,
@@ -71,7 +68,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
 
     it('drains external MIDI into the SAB ring without postMessage', () => {
       const blockSize = 128;
-      const externalMidiRing = createSonareExternalMidiRingBuffer({ capacity: 8 });
+      const externalMidiRing = createExternalMidiRingBuffer({ capacity: 8 });
       const posted: unknown[] = [];
       const processor = new SonareRealtimeEngineWorkletProcessor(
         {
@@ -111,7 +108,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
           processor.process([[]], [[new Float32Array(blockSize), new Float32Array(blockSize)]]),
         ).toBe(true);
 
-        expect(readSonareExternalMidiRingBuffer(externalMidiRing)).toEqual({
+        expect(readExternalMidiRingBuffer(externalMidiRing)).toEqual({
           events: [
             { destinationId: 5, renderFrame: 0, byteWord: 0x00643c90, byteCount: 3 },
             { destinationId: 5, renderFrame: 64, byteWord: 0x00003c80, byteCount: 3 },
@@ -126,7 +123,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
 
     it('keeps an external-MIDI event the full ring refused for a later quantum', () => {
       const blockSize = 128;
-      const externalMidiRing = createSonareExternalMidiRingBuffer({ capacity: 1 });
+      const externalMidiRing = createExternalMidiRingBuffer({ capacity: 1 });
       const processor = new SonareRealtimeEngineWorkletProcessor({
         sampleRate: 48000,
         maxBlockSize: blockSize,
@@ -161,7 +158,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         const received: number[] = [];
         for (let quantum = 0; quantum < 3; quantum++) {
           processor.process([[]], [[new Float32Array(blockSize), new Float32Array(blockSize)]]);
-          const read = readSonareExternalMidiRingBuffer(externalMidiRing);
+          const read = readExternalMidiRingBuffer(externalMidiRing);
           expect(read.dropped).toBe(0);
           received.push(...read.events.map((event) => event.byteWord));
         }
@@ -230,7 +227,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
     it('refuses a scopeIntervalFrames instead of rounding it into range', () => {
       const blockSize = 256;
       const scopeCount = (scopeIntervalFrames: number): number => {
-        const scopeRing = createSonareScopeRingBuffer({ capacity: 64, bands: 32 });
+        const scopeRing = createScopeRingBuffer({ capacity: 64, bands: 32 });
         const processor = new SonareRealtimeEngineWorkletProcessor({
           sampleRate: 48000,
           maxBlockSize: blockSize,
@@ -257,7 +254,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         } finally {
           processor.destroy();
         }
-        return readSonareScopeRingBuffer(scopeRing).scopes.length;
+        return readScopeRingBuffer(scopeRing).scopes.length;
       };
 
       const perBlock = scopeCount(blockSize);
@@ -274,7 +271,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
     it('applies SAB transport commands within the next processed block', () => {
       const blockSize = 128;
       const commandRing = createSonareEngineCommandRingBuffer({ capacity: 8 });
-      const telemetryRing = createSonareEngineTelemetryRingBuffer({ capacity: 8 });
+      const telemetryRing = createEngineTelemetryRingBuffer({ capacity: 8 });
       const processor = new SonareRealtimeEngineWorkletProcessor({
         sampleRate: 48000,
         maxBlockSize: blockSize,
@@ -293,7 +290,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         const outR = new Float32Array(blockSize);
         expect(processor.process([[]], [[outL, outR]])).toBe(true);
 
-        const first = readSonareEngineTelemetryRingBuffer(telemetryRing);
+        const first = readEngineTelemetryRingBuffer(telemetryRing);
         expect(first.telemetry.length).toBeGreaterThan(0);
         expect(first.telemetry.at(-1)).toMatchObject({
           type: SonareEngineTelemetryType.ProcessBlock,
@@ -310,7 +307,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
           }),
         ).toBe(true);
         expect(processor.process([[]], [[outL, outR]])).toBe(true);
-        const second = readSonareEngineTelemetryRingBuffer(telemetryRing, first.nextReadIndex);
+        const second = readEngineTelemetryRingBuffer(telemetryRing, first.nextReadIndex);
         expect(second.telemetry.at(-1)?.timelineSample).toBe(48000 + blockSize);
       } finally {
         processor.destroy();
@@ -319,7 +316,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
 
     it('refuses a raw Punch record with a fractional out sample instead of rounding it', () => {
       const blockSize = 128;
-      const telemetryRing = createSonareEngineTelemetryRingBuffer({ capacity: 8 });
+      const telemetryRing = createEngineTelemetryRingBuffer({ capacity: 8 });
       const processor = new SonareRealtimeEngineWorkletProcessor({
         sampleRate: 48000,
         maxBlockSize: blockSize,
@@ -335,7 +332,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
           argFloat: 4.5,
         });
         expect(engine.captureStatus().punchEnabled).toBe(false);
-        const telemetry = readSonareEngineTelemetryRingBuffer(telemetryRing).telemetry;
+        const telemetry = readEngineTelemetryRingBuffer(telemetryRing).telemetry;
         expect(telemetry.at(-1)).toMatchObject({
           type: SonareEngineTelemetryType.Error,
           error: SonareEngineTelemetryError.InvalidCommand,
@@ -393,15 +390,15 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
     });
 
     it('keeps a public telemetry publication coherent across 65 held-reader writes', () => {
-      const ring = createSonareEngineTelemetryRingBuffer({ capacity: 1 });
+      const ring = createEngineTelemetryRingBuffer({ capacity: 1 });
       // A viewer must accept a newly-created, unacknowledged ring as empty.
       expect(ring.header[1]).toBe(0);
-      expect(readSonareEngineTelemetryRingBuffer(ring)).toEqual({
+      expect(readEngineTelemetryRingBuffer(ring)).toEqual({
         nextReadIndex: 0,
         telemetry: [],
       });
 
-      const telemetry = (frame: number): SonareEngineTelemetryRecord => ({
+      const telemetry = (frame: number): EngineTelemetryRecord => ({
         type: SonareEngineTelemetryType.ProcessBlock,
         error: SonareEngineTelemetryError.None,
         renderFrame: frame,
@@ -447,12 +444,12 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
       // second collision merely because the cumulative counter is nonzero.
       expect(Atomics.load(ring.header, 4)).toBe(66);
       expect(Atomics.load(ring.publicationWrapped, 0)).toBe(1);
-      expect(readSonareEngineTelemetryRingBuffer(ring, 1).telemetry).toEqual([telemetry(2)]);
+      expect(readEngineTelemetryRingBuffer(ring, 1).telemetry).toEqual([telemetry(2)]);
     });
 
     it('separates capacity-two collision history from physical overwrites across reattach and cursor wrap', () => {
-      const ring = createSonareEngineTelemetryRingBuffer({ capacity: 2 });
-      const telemetry = (frame: number): SonareEngineTelemetryRecord => ({
+      const ring = createEngineTelemetryRingBuffer({ capacity: 2 });
+      const telemetry = (frame: number): EngineTelemetryRecord => ({
         type: SonareEngineTelemetryType.ProcessBlock,
         error: SonareEngineTelemetryError.None,
         renderFrame: frame,
@@ -497,13 +494,13 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
       // overwrite even though the collision counter is already nonzero.
       expect(Atomics.load(ring.header, 4)).toBe(65);
       expect(Atomics.load(ring.publicationWrapped, 0)).toBe(0);
-      expect(readSonareEngineTelemetryRingBuffer(ring, 1).telemetry).toEqual([telemetry(2)]);
+      expect(readEngineTelemetryRingBuffer(ring, 1).telemetry).toEqual([telemetry(2)]);
 
       writeSonareEngineTelemetryRingBuffer(ring, telemetry(3));
       expect(Atomics.load(ring.header, 0) >>> 0).toBe(3);
       expect(Atomics.load(ring.header, 4)).toBe(66);
       expect(Atomics.load(ring.publicationWrapped, 0)).toBe(1);
-      expect(readSonareEngineTelemetryRingBuffer(ring, 2).telemetry).toEqual([telemetry(3)]);
+      expect(readEngineTelemetryRingBuffer(ring, 2).telemetry).toEqual([telemetry(3)]);
 
       const reattached = engineTelemetryRingFromSharedBuffer(ring.sharedBuffer, ring.capacity);
       expect(Atomics.load(reattached.publicationWrapped, 0)).toBe(1);
@@ -519,7 +516,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
     });
 
     it('reads and coerces every public telemetry field before a late getter failure', () => {
-      const ring = createSonareEngineTelemetryRingBuffer({ capacity: 1 });
+      const ring = createEngineTelemetryRingBuffer({ capacity: 1 });
       writeSonareEngineTelemetryRingBuffer(ring, {
         type: SonareEngineTelemetryType.ProcessBlock,
         error: SonareEngineTelemetryError.None,
@@ -562,10 +559,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
       });
 
       expect(() =>
-        writeSonareEngineTelemetryRingBuffer(
-          ring,
-          source as unknown as SonareEngineTelemetryRecord,
-        ),
+        writeSonareEngineTelemetryRingBuffer(ring, source as unknown as EngineTelemetryRecord),
       ).toThrow('late public telemetry getter');
       // The initial A publication proves the writer branch was reached. The
       // late accessor then proves all source reads happened before its claim.
@@ -582,7 +576,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
     });
 
     it('holds engine telemetry scratch writes and resumes after the reader releases', () => {
-      const ring = createSonareEngineTelemetryRingBuffer({ capacity: 1 });
+      const ring = createEngineTelemetryRingBuffer({ capacity: 1 });
       const processor = new SonareRealtimeEngineWorkletProcessor({
         sampleRate: 48000,
         maxBlockSize: 128,
@@ -644,14 +638,14 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         expect(Atomics.load(ring.header, 0) >>> 0).toBe(2);
         expect(Atomics.load(ring.header, 4)).toBe(66);
         expect(Atomics.load(ring.publicationWrapped, 0)).toBe(1);
-        expect(readSonareEngineTelemetryRingBuffer(ring, 1).telemetry.at(-1)?.renderFrame).toBe(2);
+        expect(readEngineTelemetryRingBuffer(ring, 1).telemetry.at(-1)?.renderFrame).toBe(2);
       } finally {
         processor.destroy();
       }
     });
 
     it('keeps engine telemetry scratch A intact when the last prepared getter throws', () => {
-      const ring = createSonareEngineTelemetryRingBuffer({ capacity: 1 });
+      const ring = createEngineTelemetryRingBuffer({ capacity: 1 });
       const processor = new SonareRealtimeEngineWorkletProcessor({
         sampleRate: 48000,
         maxBlockSize: 128,
@@ -708,7 +702,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
     });
 
     it('holds every engine wide-meter scratch write until the reader releases', () => {
-      const ring = createSonareMeterRingBuffer({ capacity: 1 });
+      const ring = createMeterRingBuffer({ capacity: 1 });
       const processor = new SonareRealtimeEngineWorkletProcessor({
         sampleRate: 48000,
         maxBlockSize: 128,
@@ -763,7 +757,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         frame = 2;
         write();
         expect(Atomics.load(ring.header, 0) >>> 0).toBe(2);
-        const resumed = readSonareMeterRingBuffer(ring, 1).meters.at(-1);
+        const resumed = readMeterRingBuffer(ring, 1).meters.at(-1);
         expect(resumed).toMatchObject({ frame: 2, targetId: 7 });
 
         const payloadB = recordBytes(
@@ -789,7 +783,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
     });
 
     it('holds every engine scope scratch write until release and keeps scope A on a late getter throw', () => {
-      const ring = createSonareScopeRingBuffer({ capacity: 1, bands: 4, maxPoints: 2 });
+      const ring = createScopeRingBuffer({ capacity: 1, bands: 4, maxPoints: 2 });
       const processor = new SonareRealtimeEngineWorkletProcessor({
         sampleRate: 48000,
         maxBlockSize: 128,
@@ -854,7 +848,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         frame = 2;
         write();
         expect(Atomics.load(ring.header, 0) >>> 0).toBe(2);
-        expect(readSonareScopeRingBuffer(ring, 1).scopes.at(-1)).toMatchObject({
+        expect(readScopeRingBuffer(ring, 1).scopes.at(-1)).toMatchObject({
           frame: 2,
           targetId: 4,
           bands: Float32Array.from([12, 13, 14, 15]),
@@ -1467,7 +1461,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
     it('contains an invalid SAB command and continues rendering later blocks', () => {
       const blockSize = 128;
       const commandRing = createSonareEngineCommandRingBuffer({ capacity: 8 });
-      const telemetryRing = createSonareEngineTelemetryRingBuffer({ capacity: 8 });
+      const telemetryRing = createEngineTelemetryRingBuffer({ capacity: 8 });
       const processor = new SonareRealtimeEngineWorkletProcessor({
         sampleRate: 48000,
         maxBlockSize: blockSize,
@@ -1489,7 +1483,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         expect(processor.process([[]], [[first]])).toBe(true);
         expect(Array.from(first).every(Number.isFinite)).toBe(true);
 
-        const telemetry = readSonareEngineTelemetryRingBuffer(telemetryRing);
+        const telemetry = readEngineTelemetryRingBuffer(telemetryRing);
         expect(telemetry.telemetry).toContainEqual(
           expect.objectContaining({
             type: SonareEngineTelemetryType.Error,
@@ -2011,7 +2005,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
     it('publishes a missing worklet clip page through the SAB ring without postMessage', () => {
       const blockSize = 4;
       const posted: unknown[] = [];
-      const clipPageRequestRing = createSonareClipPageRequestRingBuffer({ capacity: 4 });
+      const clipPageRequestRing = createClipPageRequestRingBuffer({ capacity: 4 });
       const processor = new SonareRealtimeEngineWorkletProcessor(
         {
           sampleRate: 48000,
@@ -2047,7 +2041,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         // ahead of the playhead, so page 1 is requested before the block that
         // needs it rather than after that block has already read silence.
         expect(processor.process([[]], [[new Float32Array(blockSize)]])).toBe(true);
-        expect(readSonareClipPageRequestRingBuffer(clipPageRequestRing)).toEqual({
+        expect(readClipPageRequestRingBuffer(clipPageRequestRing)).toEqual({
           requests: [{ clipId: 90, pageIndex: 1 }],
           dropped: 0,
         });
@@ -2055,7 +2049,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         // reads it misses and re-requests. A host that keeps the newest request
         // per clip coalesces the repeat.
         expect(processor.process([[]], [[new Float32Array(blockSize)]])).toBe(true);
-        expect(readSonareClipPageRequestRingBuffer(clipPageRequestRing)).toEqual({
+        expect(readClipPageRequestRingBuffer(clipPageRequestRing)).toEqual({
           requests: [{ clipId: 90, pageIndex: 1 }],
           dropped: 0,
         });
@@ -2706,7 +2700,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
       const blockSize = 256;
       const sampleRate = 48000;
       const toneHz = 1000;
-      const scopeRing = createSonareScopeRingBuffer({ capacity: 64, bands: 32 });
+      const scopeRing = createScopeRingBuffer({ capacity: 64, bands: 32 });
       const processor = new SonareRealtimeEngineWorkletProcessor({
         sampleRate,
         maxBlockSize: blockSize,
@@ -2736,7 +2730,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
           ).toBe(true);
         }
 
-        const read = readSonareScopeRingBuffer(scopeRing);
+        const read = readScopeRingBuffer(scopeRing);
         expect(read.scopes.length).toBeGreaterThan(0);
         const master = read.scopes.find((scope) => scope.targetId === 0);
         expect(master).toBeDefined();

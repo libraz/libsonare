@@ -68,7 +68,7 @@ import { commitCommand, commitSync, type EngineCommitContext } from './engine-co
 import type {
   EngineExportContext,
   OpfsExportSource,
-  SonareRenderOfflineRequest,
+  SonareEngineRenderOfflineRequest,
 } from './engine-export.js';
 import * as exporter from './engine-export.js';
 import type { EngineMarkerContext } from './engine-markers.js';
@@ -92,8 +92,8 @@ import * as tempo from './engine-tempo-facade.js';
 import { requireChannelCount, resolveContextSampleRate } from './guards.js';
 import {
   SonareEngineCommandType,
-  type SonareWorkletMeterSnapshot,
-  type SonareWorkletScopeSnapshot,
+  type WorkletMeterSnapshot,
+  type WorkletScopeSnapshot,
 } from './protocol.js';
 import { AUDIO_WORKLET_RENDER_QUANTUM } from './render_quantum.js';
 
@@ -1550,7 +1550,7 @@ export class SonareEngine {
    * {@link finishOfflineRender}. The mirror's transport position is restored
    * when the timeline ends.
    */
-  async renderOffline(request: SonareRenderOfflineRequest): Promise<Float32Array[]> {
+  async renderOffline(request: SonareEngineRenderOfflineRequest): Promise<Float32Array[]> {
     return exporter.renderOffline(this.exportContext, request);
   }
 
@@ -1598,12 +1598,12 @@ export class SonareEngine {
   }
 
   /** Subscribes to meter snapshots from the worklet. Returns a function that removes the subscription. */
-  onMeter(callback: (meter: SonareWorkletMeterSnapshot) => void): () => void {
+  onMeter(callback: (meter: WorkletMeterSnapshot) => void): () => void {
     return this.realtimeNode.onMeter(callback);
   }
 
   /** Subscribes to scope snapshots (spectrum and goniometer); produced only when `scopeIntervalFrames` is above 0 in SAB mode. Returns a function that removes the subscription. */
-  onScope(callback: (scope: SonareWorkletScopeSnapshot) => void): () => void {
+  onScope(callback: (scope: WorkletScopeSnapshot) => void): () => void {
     return this.realtimeNode.onScope(callback);
   }
 
@@ -1617,12 +1617,13 @@ export class SonareEngine {
     return this.realtimeNode.pollTelemetry();
   }
 
-  pollMeters(): SonareWorkletMeterSnapshot[] {
+  /** Drains meter snapshots published since the last poll (SAB mode); empty otherwise. See {@link SonareRealtimeEngineNode.pollMeters}. */
+  pollMeters(): WorkletMeterSnapshot[] {
     return this.realtimeNode.pollMeters();
   }
 
   /** Drains scope snapshots published since the last poll (SAB mode with `scopeIntervalFrames` above 0); empty otherwise. */
-  pollScope(): SonareWorkletScopeSnapshot[] {
+  pollScope(): WorkletScopeSnapshot[] {
     return this.realtimeNode.pollScope();
   }
 

@@ -5,10 +5,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import {
-  createSonarePlaybackNode,
-  registerSonarePlaybackWorkletProcessor,
-} from '../dist/worklet.js';
+import { createPlaybackNode, registerSonarePlaybackWorkletProcessor } from '../dist/worklet.js';
 
 interface Posted {
   type: string;
@@ -16,10 +13,10 @@ interface Posted {
 }
 
 describe('playback worklet embind initialization', () => {
-  it('forwards wasmBinary through createSonarePlaybackNode', () => {
+  it('forwards wasmBinary through createPlaybackNode', () => {
     const wasmBinary = new Uint8Array([0, 97, 115, 109]);
     let seen: { processorOptions?: { wasmBinary?: unknown } } | undefined;
-    createSonarePlaybackNode({ sampleRate: 48000 } as unknown as BaseAudioContext, {
+    createPlaybackNode({ sampleRate: 48000 } as unknown as BaseAudioContext, {
       config: { target: { kind: 'speakers', layout: 'stereo' } },
       wasmBinary,
       nodeFactory: (_context, _name, options) => {

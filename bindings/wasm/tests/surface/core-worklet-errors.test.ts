@@ -2,22 +2,22 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { ErrorCode, init, isSonareError, SonareError } from '../../dist/index.js';
 import * as worklet from '../../dist/worklet.js';
 import {
-  createSonareClipPageRequestRingBuffer,
-  createSonareEngineTelemetryRingBuffer,
-  createSonareExternalMidiRingBuffer,
-  createSonareMeterRingBuffer,
-  createSonareScopeRingBuffer,
-  createSonareSpectrumRingBuffer,
+  clipPageRequestRingBufferByteLength,
+  createClipPageRequestRingBuffer,
+  createEngineTelemetryRingBuffer,
+  createExternalMidiRingBuffer,
+  createMeterRingBuffer,
+  createScopeRingBuffer,
+  createSpectrumRingBuffer,
+  engineTelemetryRingBufferByteLength,
+  externalMidiRingBufferByteLength,
   init as initWorklet,
-  readSonareMeterRingBuffer,
-  readSonareScopeRingBuffer,
+  meterRingBufferByteLength,
+  readMeterRingBuffer,
+  readScopeRingBuffer,
   SonareRealtimeEngineNode,
-  sonareClipPageRequestRingBufferByteLength,
-  sonareEngineTelemetryRingBufferByteLength,
-  sonareExternalMidiRingBufferByteLength,
-  sonareMeterRingBufferByteLength,
-  sonareScopeRingBufferByteLength,
-  sonareSpectrumRingBufferByteLength,
+  scopeRingBufferByteLength,
+  spectrumRingBufferByteLength,
 } from '../../dist/worklet.js';
 import {
   createSonareEngineCommandRingBuffer,
@@ -35,57 +35,55 @@ function caught(fn: () => unknown): unknown {
 
 describe('ring creators take one options object', () => {
   it('creates each ring from named options and applies the defaults', () => {
-    expect(createSonareMeterRingBuffer({ capacity: 4 }).capacity).toBe(4);
-    expect(createSonareMeterRingBuffer().capacity).toBe(128);
-    expect(createSonareMeterRingBuffer({}).capacity).toBe(128);
-    const spectrum = createSonareSpectrumRingBuffer({ capacity: 3, bands: 8 });
+    expect(createMeterRingBuffer({ capacity: 4 }).capacity).toBe(4);
+    expect(createMeterRingBuffer().capacity).toBe(128);
+    expect(createMeterRingBuffer({}).capacity).toBe(128);
+    const spectrum = createSpectrumRingBuffer({ capacity: 3, bands: 8 });
     expect([spectrum.capacity, spectrum.bands]).toEqual([3, 8]);
-    expect(createSonareSpectrumRingBuffer().bands).toBe(16);
-    const scope = createSonareScopeRingBuffer({ capacity: 2, bands: 4, maxPoints: 3 });
+    expect(createSpectrumRingBuffer().bands).toBe(16);
+    const scope = createScopeRingBuffer({ capacity: 2, bands: 4, maxPoints: 3 });
     expect([scope.capacity, scope.bands, scope.maxPoints]).toEqual([2, 4, 3]);
-    expect(createSonareScopeRingBuffer().capacity).toBe(64);
+    expect(createScopeRingBuffer().capacity).toBe(64);
     expect(createSonareEngineCommandRingBuffer({ capacity: 8 }).capacity).toBe(8);
-    expect(createSonareEngineTelemetryRingBuffer({ capacity: 8 }).capacity).toBe(8);
-    expect(createSonareClipPageRequestRingBuffer({ capacity: 8 }).capacity).toBe(8);
-    expect(createSonareExternalMidiRingBuffer({ capacity: 8 }).capacity).toBe(8);
+    expect(createEngineTelemetryRingBuffer({ capacity: 8 }).capacity).toBe(8);
+    expect(createClipPageRequestRingBuffer({ capacity: 8 }).capacity).toBe(8);
+    expect(createExternalMidiRingBuffer({ capacity: 8 }).capacity).toBe(8);
   });
 
   it('treats null and undefined fields as absent', () => {
-    const ring = createSonareSpectrumRingBuffer({
+    const ring = createSpectrumRingBuffer({
       capacity: null,
       bands: undefined,
-    } as unknown as Parameters<typeof createSonareSpectrumRingBuffer>[0]);
+    } as unknown as Parameters<typeof createSpectrumRingBuffer>[0]);
     expect([ring.capacity, ring.bands]).toEqual([128, 16]);
   });
 
   it('sizes each ring from named options, capacity required', () => {
-    expect(sonareMeterRingBufferByteLength({ capacity: 4 })).toBe(
-      createSonareMeterRingBuffer({ capacity: 4 }).sharedBuffer.byteLength,
+    expect(meterRingBufferByteLength({ capacity: 4 })).toBe(
+      createMeterRingBuffer({ capacity: 4 }).sharedBuffer.byteLength,
     );
-    expect(sonareSpectrumRingBufferByteLength({ capacity: 3, bands: 8 })).toBe(
-      createSonareSpectrumRingBuffer({ capacity: 3, bands: 8 }).sharedBuffer.byteLength,
+    expect(spectrumRingBufferByteLength({ capacity: 3, bands: 8 })).toBe(
+      createSpectrumRingBuffer({ capacity: 3, bands: 8 }).sharedBuffer.byteLength,
     );
-    expect(sonareScopeRingBufferByteLength({ capacity: 2, bands: 4, maxPoints: 3 })).toBe(
-      createSonareScopeRingBuffer({ capacity: 2, bands: 4, maxPoints: 3 }).sharedBuffer.byteLength,
+    expect(scopeRingBufferByteLength({ capacity: 2, bands: 4, maxPoints: 3 })).toBe(
+      createScopeRingBuffer({ capacity: 2, bands: 4, maxPoints: 3 }).sharedBuffer.byteLength,
     );
     expect(sonareEngineCommandRingBufferByteLength({ capacity: 2 })).toBeGreaterThan(0);
-    expect(sonareEngineTelemetryRingBufferByteLength({ capacity: 2 })).toBeGreaterThan(0);
-    expect(sonareClipPageRequestRingBufferByteLength({ capacity: 2 })).toBeGreaterThan(0);
-    expect(sonareExternalMidiRingBufferByteLength({ capacity: 2 })).toBeGreaterThan(0);
-    const missing = caught(() =>
-      sonareMeterRingBufferByteLength({} as unknown as { capacity: number }),
-    );
+    expect(engineTelemetryRingBufferByteLength({ capacity: 2 })).toBeGreaterThan(0);
+    expect(clipPageRequestRingBufferByteLength({ capacity: 2 })).toBeGreaterThan(0);
+    expect(externalMidiRingBufferByteLength({ capacity: 2 })).toBeGreaterThan(0);
+    const missing = caught(() => meterRingBufferByteLength({} as unknown as { capacity: number }));
     expect(missing).toBeInstanceOf(TypeError);
   });
 
   it('refuses the positional form at the type level', () => {
     const legacyForms = [
       // @ts-expect-error a number is not an options object
-      () => createSonareMeterRingBuffer(4),
+      () => createMeterRingBuffer(4),
       // @ts-expect-error a number is not an options object
-      () => createSonareScopeRingBuffer(2, 4, 3),
+      () => createScopeRingBuffer(2, 4, 3),
       // @ts-expect-error a number is not an options object
-      () => sonareSpectrumRingBufferByteLength(2, 4),
+      () => spectrumRingBufferByteLength(2, 4),
       // @ts-expect-error a number is not an options object
       () => sonareEngineCommandRingBufferByteLength(2),
     ];
@@ -93,18 +91,18 @@ describe('ring creators take one options object', () => {
   });
 
   it('refuses a positional number at run time with a TypeError', () => {
-    expect(
-      caught(() => (createSonareMeterRingBuffer as (v: unknown) => unknown)(4)),
-    ).toBeInstanceOf(TypeError);
+    expect(caught(() => (createMeterRingBuffer as (v: unknown) => unknown)(4))).toBeInstanceOf(
+      TypeError,
+    );
   });
 
   it('refuses an unknown option key with a TypeError naming it', () => {
     const creators: Array<[string, () => unknown]> = [
-      ['meter', () => createSonareMeterRingBuffer({ capacity: 2, bands: 3 } as never)],
-      ['spectrum', () => createSonareSpectrumRingBuffer({ capacity: 2, maxPoints: 3 } as never)],
-      ['scope', () => createSonareScopeRingBuffer({ capacity: 2, band: 3 } as never)],
+      ['meter', () => createMeterRingBuffer({ capacity: 2, bands: 3 } as never)],
+      ['spectrum', () => createSpectrumRingBuffer({ capacity: 2, maxPoints: 3 } as never)],
+      ['scope', () => createScopeRingBuffer({ capacity: 2, band: 3 } as never)],
       ['command', () => createSonareEngineCommandRingBuffer({ capacity: 2, extra: 1 } as never)],
-      ['bytes', () => sonareMeterRingBufferByteLength({ capacity: 2, extra: 1 } as never)],
+      ['bytes', () => meterRingBufferByteLength({ capacity: 2, extra: 1 } as never)],
     ];
     for (const [, run] of creators) {
       const error = caught(run);
@@ -115,35 +113,29 @@ describe('ring creators take one options object', () => {
 
   it('refuses a fractional, non-positive or non-finite value with a RangeError', () => {
     for (const bad of [0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
-      expect(caught(() => createSonareMeterRingBuffer({ capacity: bad }))).toBeInstanceOf(
+      expect(caught(() => createMeterRingBuffer({ capacity: bad }))).toBeInstanceOf(RangeError);
+      expect(caught(() => meterRingBufferByteLength({ capacity: bad }))).toBeInstanceOf(RangeError);
+      expect(caught(() => createSpectrumRingBuffer({ capacity: 2, bands: bad }))).toBeInstanceOf(
         RangeError,
       );
-      expect(caught(() => sonareMeterRingBufferByteLength({ capacity: bad }))).toBeInstanceOf(
-        RangeError,
-      );
-      expect(
-        caught(() => createSonareSpectrumRingBuffer({ capacity: 2, bands: bad })),
-      ).toBeInstanceOf(RangeError);
     }
-    expect(caught(() => createSonareScopeRingBuffer({ capacity: 2, bands: 65 }))).toBeInstanceOf(
+    expect(caught(() => createScopeRingBuffer({ capacity: 2, bands: 65 }))).toBeInstanceOf(
       RangeError,
     );
   });
 
   it('refuses a non-number value with a TypeError', () => {
     expect(
-      caught(() =>
-        createSonareMeterRingBuffer({ capacity: '4' } as unknown as { capacity: number }),
-      ),
+      caught(() => createMeterRingBuffer({ capacity: '4' } as unknown as { capacity: number })),
     ).toBeInstanceOf(TypeError);
   });
 });
 
 describe('ring reads of a malformed ring are coded failures', () => {
   it('reports a descriptor that does not describe a ring as InvalidFormat', () => {
-    const ring = createSonareMeterRingBuffer({ capacity: 2 });
+    const ring = createMeterRingBuffer({ capacity: 2 });
     Atomics.store(ring.header, 2, 999);
-    const error = caught(() => readSonareMeterRingBuffer(ring));
+    const error = caught(() => readMeterRingBuffer(ring));
     expect(isSonareError(error)).toBe(true);
     expect(error).toBeInstanceOf(SonareError);
     expect((error as SonareError).code).toBe(ErrorCode.InvalidFormat);
@@ -151,17 +143,17 @@ describe('ring reads of a malformed ring are coded failures', () => {
   });
 
   it('reports a scope ring with a wrong descriptor as InvalidFormat', () => {
-    const ring = createSonareScopeRingBuffer({ capacity: 2, bands: 4, maxPoints: 3 });
+    const ring = createScopeRingBuffer({ capacity: 2, bands: 4, maxPoints: 3 });
     Atomics.store(ring.header, 3, 5);
-    const error = caught(() => readSonareScopeRingBuffer(ring));
+    const error = caught(() => readScopeRingBuffer(ring));
     expect((error as SonareError).codeName).toBe('InvalidFormat');
   });
 
   it('reports a protocol version skew as AbiMismatch', () => {
-    const ring = createSonareMeterRingBuffer({ capacity: 2 });
+    const ring = createMeterRingBuffer({ capacity: 2 });
     Atomics.store(ring.header, 0, 1);
     Atomics.store(ring.header, 3, 99);
-    const error = caught(() => readSonareMeterRingBuffer(ring));
+    const error = caught(() => readMeterRingBuffer(ring));
     expect((error as SonareError).code).toBe(ErrorCode.AbiMismatch);
   });
 });

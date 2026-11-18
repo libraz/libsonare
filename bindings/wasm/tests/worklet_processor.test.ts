@@ -5,15 +5,15 @@ import {
 } from '../dist/worklet.js';
 import {
   countFloat32Subarrays,
-  createSonareMeterRingBuffer,
-  createSonareSpectrumRingBuffer,
+  createMeterRingBuffer,
+  createSpectrumRingBuffer,
   describe,
   expect,
   it,
   Mixer,
   mixingScenePreset,
-  readSonareMeterRingBuffer,
-  readSonareSpectrumRingBuffer,
+  readMeterRingBuffer,
+  readSpectrumRingBuffer,
   registerSonareWorkletProcessor,
   SonareWorkletProcessor,
   setupWorklet,
@@ -225,7 +225,7 @@ describe('SonareWorkletProcessor', () => {
   it('allocates no meter record per publish when a ring is configured', () => {
     const sampleRate = 48000;
     const blockSize = 128;
-    const ring = createSonareMeterRingBuffer({ capacity: 64 });
+    const ring = createMeterRingBuffer({ capacity: 64 });
     const posted: unknown[] = [];
     const processor = new SonareWorkletProcessor(
       {
@@ -265,7 +265,7 @@ describe('SonareWorkletProcessor', () => {
       internals.writeMeterRing = realWrite;
       expect(seen.size).toBe(1);
       expect(posted).toHaveLength(0);
-      const read = readSonareMeterRingBuffer(ring);
+      const read = readMeterRingBuffer(ring);
       expect(read.meters).toHaveLength(publishes);
       // Reuse must not smear one publish over another: each record reached the
       // ring with its own frame before the next overwrote the fields.
@@ -280,7 +280,7 @@ describe('SonareWorkletProcessor', () => {
   it('can publish meters through a SharedArrayBuffer ring', () => {
     const sampleRate = 48000;
     const blockSize = 128;
-    const ring = createSonareMeterRingBuffer({ capacity: 4 });
+    const ring = createMeterRingBuffer({ capacity: 4 });
     const posted: unknown[] = [];
     const processor = new SonareWorkletProcessor(
       {
@@ -313,7 +313,7 @@ describe('SonareWorkletProcessor', () => {
       ).toBe(true);
 
       expect(posted).toHaveLength(0);
-      const read = readSonareMeterRingBuffer(ring);
+      const read = readMeterRingBuffer(ring);
       expect(read.nextReadIndex).toBe(1);
       expect(read.meters).toHaveLength(1);
       expect(read.meters[0]).toMatchObject({ type: 'meter', frame: blockSize });
@@ -323,11 +323,11 @@ describe('SonareWorkletProcessor', () => {
   });
 
   it('holds mixer meter records stable while a reader is active and resumes after release', () => {
-    const ring = createSonareMeterRingBuffer({ capacity: 1 });
+    const ring = createMeterRingBuffer({ capacity: 1 });
     // A newly-created viewer ring is explicitly unacknowledged until a producer
     // attaches it. This guards the version cut without depending on a record.
     expect(ring.header[3]).toBe(0);
-    expect(readSonareMeterRingBuffer(ring)).toEqual({ nextReadIndex: 0, meters: [] });
+    expect(readMeterRingBuffer(ring)).toEqual({ nextReadIndex: 0, meters: [] });
 
     const processor = new SonareWorkletProcessor({
       sceneJson: JSON.stringify(mixingScenePreset('vocalReverbSend')),
@@ -385,14 +385,14 @@ describe('SonareWorkletProcessor', () => {
       expect(Atomics.load(ring.slotStates, 0)).toBe(0);
       write(meter(2));
       expect(Atomics.load(ring.header, 0) >>> 0).toBe(2);
-      expect(readSonareMeterRingBuffer(ring, 1).meters.at(-1)?.frame).toBe(2);
+      expect(readMeterRingBuffer(ring, 1).meters.at(-1)?.frame).toBe(2);
     } finally {
       processor.destroy();
     }
   });
 
   it('materializes mixer meter properties before claiming and preserves the old record on throw', () => {
-    const ring = createSonareMeterRingBuffer({ capacity: 1 });
+    const ring = createMeterRingBuffer({ capacity: 1 });
     const processor = new SonareWorkletProcessor({
       sceneJson: JSON.stringify(mixingScenePreset('vocalReverbSend')),
       sampleRate: 48000,
@@ -581,7 +581,7 @@ describe('SonareWorkletProcessor', () => {
       processor.destroy();
     }
 
-    const ring = createSonareSpectrumRingBuffer({ capacity: 4, bands: 8 });
+    const ring = createSpectrumRingBuffer({ capacity: 4, bands: 8 });
     const ringProcessor = new SonareWorkletProcessor({
       sceneJson: JSON.stringify(mixingScenePreset('vocalReverbSend')),
       sampleRate,
@@ -595,7 +595,7 @@ describe('SonareWorkletProcessor', () => {
       vocalL[0] = 1.0;
       vocalR[0] = 1.0;
       expect(ringProcessor.process([[vocalL, vocalR]], [[new Float32Array(blockSize)]])).toBe(true);
-      const read = readSonareSpectrumRingBuffer(ring);
+      const read = readSpectrumRingBuffer(ring);
       expect(read.nextReadIndex).toBe(1);
       expect(read.spectra).toHaveLength(1);
       expect(read.spectra[0].bands).toHaveLength(8);
@@ -605,9 +605,9 @@ describe('SonareWorkletProcessor', () => {
   });
 
   it('holds mixer spectrum records stable across 65 failed claims and resumes after release', () => {
-    const ring = createSonareSpectrumRingBuffer({ capacity: 1, bands: 4 });
+    const ring = createSpectrumRingBuffer({ capacity: 1, bands: 4 });
     expect(ring.header[4]).toBe(0);
-    expect(readSonareSpectrumRingBuffer(ring)).toEqual({ nextReadIndex: 0, spectra: [] });
+    expect(readSpectrumRingBuffer(ring)).toEqual({ nextReadIndex: 0, spectra: [] });
     const processor = new SonareWorkletProcessor({
       sceneJson: JSON.stringify(mixingScenePreset('vocalReverbSend')),
       sampleRate: 48000,
@@ -645,7 +645,7 @@ describe('SonareWorkletProcessor', () => {
       expect(Atomics.sub(ring.slotStates, 0, 1)).toBe(1);
       write(2, Float32Array.from([5, 6, 7, 8]));
       expect(Atomics.load(ring.header, 0) >>> 0).toBe(2);
-      expect(readSonareSpectrumRingBuffer(ring, 1).spectra.at(-1)?.frame).toBe(2);
+      expect(readSpectrumRingBuffer(ring, 1).spectra.at(-1)?.frame).toBe(2);
     } finally {
       processor.destroy();
     }

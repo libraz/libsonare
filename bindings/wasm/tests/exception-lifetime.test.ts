@@ -19,7 +19,7 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
-import { init, type SonareModuleHandle } from '../src/index';
+import { init, type ModuleHandle } from '../src/index';
 import { getSonareModule, nativeExceptionPtr } from '../src/module_state';
 import type { SonareModule } from '../src/sonare.js';
 
@@ -36,7 +36,7 @@ beforeAll(async () => {
   await init({
     moduleFactory: async (options) => {
       raw = await createModule(options);
-      return raw as unknown as SonareModuleHandle;
+      return raw as unknown as ModuleHandle;
     },
   });
 });

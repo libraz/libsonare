@@ -7,8 +7,8 @@ import type {
 } from '../internal/worklet_messages.js';
 import type { PlaybackRendererConfig } from '../public_types_playback.js';
 import type {
-  SonarePlaybackNodeOptions,
-  SonarePlaybackWorkletDiagnostics,
+  PlaybackNodeOptions,
+  SonarePlaybackWorkletProcessorDiagnostics,
   SonarePlaybackWorkletProcessorOptions,
   WorkletPort,
 } from '../public_types_worklet.js';
@@ -146,7 +146,7 @@ export class SonarePlaybackWorkletProcessor {
   }
 
   /** The renderer's diagnostics plus `unsupported_input_blocks`, as a plain object. */
-  diagnostics(): SonarePlaybackWorkletDiagnostics {
+  diagnostics(): SonarePlaybackWorkletProcessorDiagnostics {
     return {
       ...this.renderer.diagnostics(),
       unsupported_input_blocks: this.unsupportedInputBlocks,
@@ -351,16 +351,16 @@ export function registerSonarePlaybackWorkletProcessor(name = 'sonare-playback-p
  * const video = document.querySelector('video') as HTMLVideoElement;
  * await context.audioWorklet.addModule(playbackWorkletUrl);
  * const hrtf = await (await fetch(hrtfUrl)).arrayBuffer();
- * const node = createSonarePlaybackNode(context, { config: {}, hrtf });
+ * const node = createPlaybackNode(context, { config: {}, hrtf });
  * context.createMediaElementSource(video).connect(node).connect(context.destination);
  * video.addEventListener('seeking', () => node.port.postMessage({ type: 'reset' }));
  * ```
  */
-export function createSonarePlaybackNode(
+export function createPlaybackNode(
   context: BaseAudioContext,
-  options: SonarePlaybackNodeOptions = {},
+  options: PlaybackNodeOptions = {},
 ): AudioWorkletNode {
-  assertKnownProcessorOptions('createSonarePlaybackNode', 'playbackNode', options);
+  assertKnownProcessorOptions('createPlaybackNode', 'playbackNode', options);
   const config = configObject(options.config);
   const factory =
     options.nodeFactory ??
@@ -370,7 +370,7 @@ export function createSonarePlaybackNode(
     config,
     hrtf: options.hrtf,
     maxBlockSize: options.maxBlockSize,
-    sampleRate: resolveContextSampleRate(options.sampleRate, context, 'createSonarePlaybackNode'),
+    sampleRate: resolveContextSampleRate(options.sampleRate, context, 'createPlaybackNode'),
     wasmBinary: options.wasmBinary,
   };
   return factory(context, options.processorName ?? 'sonare-playback-processor', {

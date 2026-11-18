@@ -4,7 +4,7 @@ import { engineNativeHandle } from '../../src/internal/engine_native_handle';
 import { RealtimeEngine } from '../../src/realtime_engine';
 import { SonareRealtimeEngineWorkletProcessor as SourceSonareRealtimeEngineWorkletProcessor } from '../../src/worklet/engine-processor';
 import { isScopeSnapshot } from '../../src/worklet/guards';
-import type { SonareWorkletScopeSnapshot } from '../../src/worklet/protocol';
+import type { WorkletScopeSnapshot } from '../../src/worklet/protocol';
 import { SonareEngineCommandType as SourceSonareEngineCommandType } from '../../src/worklet/protocol';
 import {
   SonareEngineCommandType,
@@ -49,9 +49,9 @@ describe('realtime engine scope postMessage transport', () => {
         scopeBands: 48,
       });
 
-      const seen: SonareWorkletScopeSnapshot[] = [];
+      const seen: WorkletScopeSnapshot[] = [];
       const unsubscribe = node.onScope((scope) => seen.push(scope));
-      const scope: SonareWorkletScopeSnapshot = {
+      const scope: WorkletScopeSnapshot = {
         type: 'scope',
         targetId: 0,
         frame: 256,
@@ -74,7 +74,7 @@ describe('realtime engine scope postMessage transport', () => {
   });
 
   it('rejects malformed scope records before they reach listeners', () => {
-    const valid: SonareWorkletScopeSnapshot = {
+    const valid: WorkletScopeSnapshot = {
       type: 'scope',
       targetId: 0,
       frame: 0,
@@ -145,7 +145,7 @@ describe('realtime engine scope postMessage transport', () => {
 
       const scopes = posted
         .map(({ message }) => message)
-        .filter((message): message is SonareWorkletScopeSnapshot => isScopeSnapshot(message));
+        .filter((message): message is WorkletScopeSnapshot => isScopeSnapshot(message));
       expect(scopes.length).toBeGreaterThan(0);
       expect(new Set(scopes.map((scope) => `${scope.targetId}:${scope.frame}`)).size).toBe(
         scopes.length,

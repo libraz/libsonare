@@ -694,6 +694,29 @@ class TypeNamesRule(unittest.TestCase):
         verdict = self.judge([*self.CLEAN, planted])
         self.assertEqual([f.key for f in verdict.violations], ["wasm:SonareCapabilities"])
 
+    def test_companion_of_a_registered_class_keeps_the_prefix(self) -> None:
+        def record(surface: str, name: str) -> dict:
+            return {"surface": surface, "kind": "type", "name": name, "owner": "", "member": ""}
+
+        planted = [
+            record("wasm", "SonareEngine"),
+            record("wasm", "SonareEngineOptions"),
+            record("wasm", "SonareStreamAnalyzerNodeOptions"),
+            record("node", "SonareEngineOptions"),
+            record("wasm", "SonareEngineeringNotes"),
+            record("wasm", "SonareMixerOptions"),
+        ]
+        verdict = self.judge([*self.CLEAN, *planted])
+        self.assertEqual(
+            sorted(f.key for f in verdict.violations),
+            [
+                "node:SonareEngineOptions",
+                "wasm:SonareEngine",
+                "wasm:SonareEngineeringNotes",
+                "wasm:SonareMixerOptions",
+            ],
+        )
+
 
 class EngineVocabularyRule(unittest.TestCase):
     CLEAN: ClassVar[list[dict]] = [

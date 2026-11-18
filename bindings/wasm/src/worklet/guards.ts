@@ -1,8 +1,8 @@
 import type { EngineCaptureStatus } from '../index.js';
 import type {
+  EngineClipPageRequestMessage,
   SonareEngineCaptureRequestMessage,
   SonareEngineCaptureResponseMessageInternal,
-  SonareEngineClipPageRequestMessage,
   SonareEngineInsertGainReductionRequestMessage,
   SonareEngineInsertGainReductionResponseMessage,
   SonareEngineSyncMessage,
@@ -17,14 +17,14 @@ import type {
 } from '../internal/worklet_messages.js';
 import { PROCESSOR_OPTION_KEYS } from '../request_keys.js';
 import {
+  type EngineTelemetryRecord,
   isRecord,
   SONARE_SCOPE_DEFAULT_BANDS,
   SONARE_SCOPE_MAX_BANDS,
   SONARE_SCOPE_MAX_POINTS,
   type SonareEngineCommandRecord,
-  type SonareEngineTelemetryRecord,
-  type SonareWorkletMeterSnapshot,
-  type SonareWorkletScopeSnapshot,
+  type WorkletMeterSnapshot,
+  type WorkletScopeSnapshot,
 } from './protocol.js';
 
 export function isWorkletMessage(value: unknown): value is SonareWorkletMessage {
@@ -354,7 +354,7 @@ export function isPlaybackMessage(value: unknown): value is SonarePlaybackMessag
   }
 }
 
-export function isEngineTelemetryRecord(value: unknown): value is SonareEngineTelemetryRecord {
+export function isEngineTelemetryRecord(value: unknown): value is EngineTelemetryRecord {
   return (
     isRecord(value) &&
     typeof value.type === 'number' &&
@@ -373,9 +373,7 @@ export function isExternalMidiBatchMessage(
   return isRecord(value) && value.type === 'externalMidi' && Array.isArray(value.events);
 }
 
-export function isClipPageRequestMessage(
-  value: unknown,
-): value is SonareEngineClipPageRequestMessage {
+export function isClipPageRequestMessage(value: unknown): value is EngineClipPageRequestMessage {
   return (
     isRecord(value) &&
     value.type === 'clipPageRequest' &&
@@ -399,7 +397,7 @@ function hasMeterPlanes(value: Record<string, unknown>, numChannels: unknown): b
   );
 }
 
-export function isMeterSnapshot(value: unknown): value is SonareWorkletMeterSnapshot {
+export function isMeterSnapshot(value: unknown): value is WorkletMeterSnapshot {
   return (
     isRecord(value) &&
     value.type === 'meter' &&
@@ -441,7 +439,7 @@ function isPlainFloat32Array(
 }
 
 /** Validates the bounded postMessage representation of a scope snapshot. */
-export function isScopeSnapshot(value: unknown): value is SonareWorkletScopeSnapshot {
+export function isScopeSnapshot(value: unknown): value is WorkletScopeSnapshot {
   return (
     isRecord(value) &&
     value.type === 'scope' &&

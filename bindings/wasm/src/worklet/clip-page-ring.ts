@@ -1,10 +1,10 @@
 import type { ClipPagePageRequest } from '../clip_page_streamer.js';
 import {
   loadSonareRingCursor,
+  type RingCapacityOptions,
   requirePositiveCapacity,
   resolveRingCapacity,
   ringCursorSpan,
-  type SonareRingCapacityOptions,
   sonareRingCursorDistance,
   sonareRingCursorSlot,
   storeSonareRingCursor,
@@ -23,7 +23,7 @@ export const SONARE_CLIP_PAGE_REQUEST_RING_RECORD_UINT32S = 2;
 export type { ClipPagePageRequest } from '../clip_page_streamer.js';
 
 /** Shared-memory clip-page request ring. */
-export interface SonareClipPageRequestRingBuffer {
+export interface ClipPageRequestRingBuffer {
   /** Backing buffer holding the header and the records. */
   sharedBuffer: SharedArrayBuffer;
   /** Ring header: write index, read index, capacity, record size and drop count. */
@@ -41,7 +41,7 @@ export interface SharedClipPageRequestRingWriter {
 }
 
 /** Requests drained from a clip-page request ring. */
-export interface SonareClipPageRequestRingReadResult {
+export interface ClipPageRequestRingReadResult {
   /** Requests read, oldest first. */
   requests: ClipPagePageRequest[];
   /** Cumulative uint32 drop count for native and SAB-ring overflows. */
@@ -49,9 +49,9 @@ export interface SonareClipPageRequestRingReadResult {
 }
 
 /** Byte length of the ring. `capacity` is required; RangeError outside the domain, TypeError for an unknown key. */
-export function sonareClipPageRequestRingBufferByteLength(options: { capacity: number }): number {
+export function clipPageRequestRingBufferByteLength(options: { capacity: number }): number {
   const clampedCapacity = resolveRingCapacity(
-    'sonareClipPageRequestRingBufferByteLength',
+    'clipPageRequestRingBufferByteLength',
     options,
     undefined,
   );
@@ -62,16 +62,12 @@ export function sonareClipPageRequestRingBufferByteLength(options: { capacity: n
 }
 
 /** Creates a shared clip-page request ring (default `capacity` 128). RangeError outside the domain, TypeError for an unknown key. */
-export function createSonareClipPageRequestRingBuffer(
-  options?: SonareRingCapacityOptions,
-): SonareClipPageRequestRingBuffer {
-  const clampedCapacity = resolveRingCapacity(
-    'createSonareClipPageRequestRingBuffer',
-    options,
-    128,
-  );
+export function createClipPageRequestRingBuffer(
+  options?: RingCapacityOptions,
+): ClipPageRequestRingBuffer {
+  const clampedCapacity = resolveRingCapacity('createClipPageRequestRingBuffer', options, 128);
   const sharedBuffer = new SharedArrayBuffer(
-    sonareClipPageRequestRingBufferByteLength({ capacity: clampedCapacity }),
+    clipPageRequestRingBufferByteLength({ capacity: clampedCapacity }),
   );
   const ring = clipPageRequestRingFromSharedBuffer(sharedBuffer, clampedCapacity);
   Atomics.store(ring.header, 0, 0);
@@ -119,9 +115,9 @@ export function pushSonareClipPageRequestRingBuffer(
 }
 
 /** Drains the SPSC request ring on the main thread. Object creation is here, never in process(). */
-export function readSonareClipPageRequestRingBuffer(
-  ring: SonareClipPageRequestRingBuffer,
-): SonareClipPageRequestRingReadResult {
+export function readClipPageRequestRingBuffer(
+  ring: ClipPageRequestRingBuffer,
+): ClipPageRequestRingReadResult {
   const readIndex = loadSonareRingCursor(ring.header, 1, ring.capacity);
   const writeIndex = loadSonareRingCursor(ring.header, 0, ring.capacity);
   const pending = Math.min(
@@ -154,7 +150,7 @@ export function clipPageRequestRingFromSharedBuffer(
     fallbackCapacity,
     'clipPageRequestRingCapacity',
   );
-  const minBytes = sonareClipPageRequestRingBufferByteLength({ capacity });
+  const minBytes = clipPageRequestRingBufferByteLength({ capacity });
   if (sharedBuffer.byteLength < minBytes) {
     throw new RangeError(
       'clipPageRequestSharedBuffer is too small for the requested ring capacity.',

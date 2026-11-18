@@ -13,7 +13,7 @@ import {
   notInitializedError,
   setSonareModule,
 } from './module_state.js';
-import type { Capabilities, SonareModuleHandle } from './public_types.js';
+import type { Capabilities, ModuleHandle } from './public_types.js';
 import type { SonareModule } from './sonare.js';
 
 export type { ErrorCodeName } from './errors.js';
@@ -129,7 +129,7 @@ export async function init(options?: {
   moduleFactory?: (options?: {
     locateFile?: (path: string, prefix: string) => string;
     wasmBinary?: ArrayBuffer | Uint8Array;
-  }) => Promise<SonareModuleHandle>;
+  }) => Promise<ModuleHandle>;
 }): Promise<void> {
   if (module) {
     assertSameInitOptions(firstInitOptions, options);

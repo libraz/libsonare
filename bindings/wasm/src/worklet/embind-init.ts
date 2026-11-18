@@ -1,5 +1,5 @@
 import { ErrorCode, SonareError } from '../errors.js';
-import { init as initSonareModule, isInitialized, type SonareModuleHandle } from '../index.js';
+import { init as initSonareModule, isInitialized, type ModuleHandle } from '../index.js';
 import type { SonareModule } from '../sonare.js';
 
 type EmbindModuleFactory = (options?: {
@@ -50,6 +50,6 @@ export async function initializeEmbindInWorklet(
     locateFile: (path) => path,
     wasmBinary,
     // The embind factory is the module the public handle brand stands for.
-    moduleFactory: moduleFactory as unknown as () => Promise<SonareModuleHandle>,
+    moduleFactory: moduleFactory as unknown as () => Promise<ModuleHandle>,
   });
 }

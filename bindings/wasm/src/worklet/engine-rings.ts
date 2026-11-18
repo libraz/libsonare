@@ -7,6 +7,7 @@ import {
   makeOverwriteSlotStates,
   overwriteRingByteLength,
   overwriteRingFirstReadable,
+  type RingCapacityOptions,
   readInt64Words,
   recordOffset,
   releaseOverwriteRead,
@@ -14,7 +15,6 @@ import {
   requireProtocolVersion,
   resolveRingCapacity,
   ringCursorSpan,
-  type SonareRingCapacityOptions,
   sonareRingCursorDistance,
   toSafeInteger,
   tryAcquireOverwriteRead,
@@ -100,7 +100,7 @@ export enum SonareEngineTelemetryError {
 }
 
 /** One engine telemetry record as stored in the ring; mirrors the C ABI `SonareEngineTelemetry`. */
-export interface SonareEngineTelemetryRecord {
+export interface EngineTelemetryRecord {
   /** Record kind, a {@link SonareEngineTelemetryType} ordinal. */
   type: SonareEngineTelemetryType | number;
   /** Error ordinal, a {@link SonareEngineTelemetryError}; `None` (0) on a block record. */
@@ -117,8 +117,8 @@ export interface SonareEngineTelemetryRecord {
   value: number;
 }
 
-/** Shared-memory overwrite ring of engine telemetry records; create one with `createSonareEngineTelemetryRingBuffer`. */
-export interface SonareEngineTelemetryRingBuffer {
+/** Shared-memory overwrite ring of engine telemetry records; create one with `createEngineTelemetryRingBuffer`. */
+export interface EngineTelemetryRingBuffer {
   /** Backing shared memory. */
   sharedBuffer: SharedArrayBuffer;
   /** Header words `[writeIndex, protocolVersion, capacity, recordBytes, lost]`. */
@@ -134,11 +134,11 @@ export interface SonareEngineTelemetryRingBuffer {
 }
 
 /** Telemetry records drained from a ring and the index to resume from. */
-export interface SonareEngineTelemetryRingReadResult {
+export interface EngineTelemetryRingReadResult {
   /** Index to pass as `readIndex` on the next read. */
   nextReadIndex: number;
   /** Records read, oldest first. */
-  telemetry: SonareEngineTelemetryRecord[];
+  telemetry: EngineTelemetryRecord[];
 }
 
 function makeEngineTelemetryPublicationWrapped(
@@ -182,9 +182,9 @@ function validateEngineTelemetryPublicationWrapped(
 }
 
 /** Byte length of the ring. `capacity` is required; RangeError outside the domain, TypeError for an unknown key. */
-export function sonareEngineTelemetryRingBufferByteLength(options: { capacity: number }): number {
+export function engineTelemetryRingBufferByteLength(options: { capacity: number }): number {
   const clampedCapacity = resolveRingCapacity(
-    'sonareEngineTelemetryRingBufferByteLength',
+    'engineTelemetryRingBufferByteLength',
     options,
     undefined,
   );
@@ -198,16 +198,12 @@ export function sonareEngineTelemetryRingBufferByteLength(options: { capacity: n
 }
 
 /** Creates a shared engine telemetry ring (default `capacity` 128). RangeError outside the domain, TypeError for an unknown key. */
-export function createSonareEngineTelemetryRingBuffer(
-  options?: SonareRingCapacityOptions,
-): SonareEngineTelemetryRingBuffer {
-  const clampedCapacity = resolveRingCapacity(
-    'createSonareEngineTelemetryRingBuffer',
-    options,
-    128,
-  );
+export function createEngineTelemetryRingBuffer(
+  options?: RingCapacityOptions,
+): EngineTelemetryRingBuffer {
+  const clampedCapacity = resolveRingCapacity('createEngineTelemetryRingBuffer', options, 128);
   const sharedBuffer = new SharedArrayBuffer(
-    sonareEngineTelemetryRingBufferByteLength({ capacity: clampedCapacity }),
+    engineTelemetryRingBufferByteLength({ capacity: clampedCapacity }),
   );
   const headerBytes = SONARE_ENGINE_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT;
   const header = new Int32Array(sharedBuffer, 0, SONARE_ENGINE_RING_HEADER_INTS);
@@ -241,8 +237,8 @@ export function createSonareEngineTelemetryRingBuffer(
 }
 
 export function writeSonareEngineTelemetryRingBuffer(
-  ring: SonareEngineTelemetryRingBuffer,
-  telemetry: SonareEngineTelemetryRecord,
+  ring: EngineTelemetryRingBuffer,
+  telemetry: EngineTelemetryRecord,
 ): void {
   // Capture the complete mapping once. In particular, do not validate one
   // getter-backed mapping and then let a later helper read another mapping.
@@ -303,7 +299,7 @@ export function writeSonareEngineTelemetryRingBuffer(
  */
 export function commitSonareEngineTelemetryRingWrite(
   ring: Pick<
-    SonareEngineTelemetryRingBuffer,
+    EngineTelemetryRingBuffer,
     'header' | 'slotStates' | 'publicationWrapped' | 'capacity'
   >,
   writeIndex: number,
@@ -317,10 +313,7 @@ export function commitSonareEngineTelemetryRingWrite(
 ): void;
 export function commitSonareEngineTelemetryRingWrite(
   ringOrHeader:
-    | Pick<
-        SonareEngineTelemetryRingBuffer,
-        'header' | 'slotStates' | 'publicationWrapped' | 'capacity'
-      >
+    | Pick<EngineTelemetryRingBuffer, 'header' | 'slotStates' | 'publicationWrapped' | 'capacity'>
     | Int32Array,
   slotStatesOrWriteIndex: Int32Array | number,
   publicationWrappedArgument?: Int32Array,
@@ -330,17 +323,16 @@ export function commitSonareEngineTelemetryRingWrite(
   const scalarForm = writeIndexArgument !== undefined;
   const header = scalarForm
     ? (ringOrHeader as Int32Array)
-    : (ringOrHeader as Pick<SonareEngineTelemetryRingBuffer, 'header'>).header;
+    : (ringOrHeader as Pick<EngineTelemetryRingBuffer, 'header'>).header;
   const slotStates = scalarForm
     ? (slotStatesOrWriteIndex as Int32Array)
-    : (ringOrHeader as Pick<SonareEngineTelemetryRingBuffer, 'slotStates'>).slotStates;
+    : (ringOrHeader as Pick<EngineTelemetryRingBuffer, 'slotStates'>).slotStates;
   const publicationWrapped = scalarForm
     ? (publicationWrappedArgument as Int32Array)
-    : (ringOrHeader as Pick<SonareEngineTelemetryRingBuffer, 'publicationWrapped'>)
-        .publicationWrapped;
+    : (ringOrHeader as Pick<EngineTelemetryRingBuffer, 'publicationWrapped'>).publicationWrapped;
   const capacity = scalarForm
     ? (capacityArgument as number)
-    : (ringOrHeader as Pick<SonareEngineTelemetryRingBuffer, 'capacity'>).capacity;
+    : (ringOrHeader as Pick<EngineTelemetryRingBuffer, 'capacity'>).capacity;
   const writeIndex = scalarForm
     ? (writeIndexArgument as number)
     : (slotStatesOrWriteIndex as number);
@@ -364,10 +356,10 @@ export function commitSonareEngineTelemetryRingWrite(
  * @throws SonareError `InvalidFormat` for views or descriptors that do not match the ring layout,
  * and `AbiMismatch` for a different protocol version.
  */
-export function readSonareEngineTelemetryRingBuffer(
-  ring: SonareEngineTelemetryRingBuffer,
+export function readEngineTelemetryRingBuffer(
+  ring: EngineTelemetryRingBuffer,
   readIndex = 0,
-): SonareEngineTelemetryRingReadResult {
+): EngineTelemetryRingReadResult {
   const { sharedBuffer, header, view, slotStates, publicationWrapped, capacity } = ring;
   const headerBytes = SONARE_ENGINE_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT;
   validateOverwriteViews(
@@ -404,7 +396,7 @@ export function readSonareEngineTelemetryRingBuffer(
   }
   const firstReadable = overwriteRingFirstReadable(readIndex, writeIndex, capacity);
   const count = sonareRingCursorDistance(firstReadable, writeIndex, capacity);
-  const telemetry: SonareEngineTelemetryRecord[] = [];
+  const telemetry: EngineTelemetryRecord[] = [];
   let nextReadIndex = writeIndex;
   for (let i = 0; i < count; i++) {
     const cursor = (firstReadable + i) % ringCursorSpan(capacity);
@@ -462,7 +454,7 @@ export function engineRingFromSharedBuffer(
 export function engineTelemetryRingFromSharedBuffer(
   sharedBuffer: SharedArrayBuffer,
   fallbackCapacity?: number,
-): SonareEngineTelemetryRingBuffer {
+): EngineTelemetryRingBuffer {
   const headerBytes = SONARE_ENGINE_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT;
   if (sharedBuffer.byteLength < headerBytes) {
     throw new RangeError('telemetrySharedBuffer is too small for the ring header.');
@@ -600,7 +592,7 @@ function writePreparedEngineTelemetryRecord(
   view.setUint32(offset + 44, 0, true);
 }
 
-function readEngineTelemetryRecord(view: DataView, offset: number): SonareEngineTelemetryRecord {
+function readEngineTelemetryRecord(view: DataView, offset: number): EngineTelemetryRecord {
   return {
     type: view.getUint32(offset, true),
     error: view.getUint32(offset + 4, true),
@@ -617,7 +609,7 @@ function upperFirst(name: string): string {
 }
 
 /** Converts a drained {@link EngineTelemetry} back to the wire record (ordinals, Q8 latency). */
-export function telemetryFromEngine(telemetry: EngineTelemetry): SonareEngineTelemetryRecord {
+export function telemetryFromEngine(telemetry: EngineTelemetry): EngineTelemetryRecord {
   return {
     type: SonareEngineTelemetryType[
       upperFirst(telemetry.type) as keyof typeof SonareEngineTelemetryType

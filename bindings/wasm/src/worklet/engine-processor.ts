@@ -4,11 +4,11 @@ import { engineNativeHandle } from '../internal/engine_native_handle.js';
 import { failurePayload } from '../internal/failure_payload.js';
 import {
   DEFAULT_METRONOME_CONFIG,
+  type EngineClipPageRequestMessage,
   type ResolvedMetronomeConfig,
   resolveMetronomeConfig,
   type SonareEngineCaptureRequestMessage,
   type SonareEngineCaptureResponseMessageInternal,
-  type SonareEngineClipPageRequestMessage,
   type SonareEngineInsertGainReductionRequestMessage,
   type SonareEngineInsertGainReductionResponseMessage,
   type SonareEngineSyncMessage,
@@ -35,6 +35,8 @@ import {
   clipPageRequestRingFromSharedBuffer,
   commitOverwriteWrite,
   commitSonareEngineTelemetryRingWrite,
+  type EngineTelemetryRecord,
+  type EngineTelemetryRingBuffer,
   encodeFrameHi,
   encodeFrameLo,
   engineRingFromSharedBuffer,
@@ -61,16 +63,14 @@ import {
   type SonareEngineCommandRingBuffer,
   SonareEngineCommandType,
   SonareEngineTelemetryError,
-  type SonareEngineTelemetryRecord,
-  type SonareEngineTelemetryRingBuffer,
   SonareEngineTelemetryType,
-  type SonareWorkletMeterSnapshot,
-  type SonareWorkletScopeSnapshot,
   scopeRingFromSharedBuffer,
   sonareExternalMidiRingHasRoom,
   telemetryFromEngine,
   toSafeInteger,
   tryBeginOverwriteWrite,
+  type WorkletMeterSnapshot,
+  type WorkletScopeSnapshot,
   writePreparedInt64Words,
   writeSonareEngineTelemetryRingBuffer,
 } from './protocol.js';
@@ -126,7 +126,7 @@ export class SonareRealtimeEngineWorkletProcessor {
   private syncSequence = 0;
   /** A ring command popped ahead of the sync it follows, applied once that sync arrives. */
   private heldCommand: SonareEngineCommandRecord | undefined;
-  private telemetryRing?: SonareEngineTelemetryRingBuffer;
+  private telemetryRing?: EngineTelemetryRingBuffer;
   private meterRing?: SharedMeterRingWriter;
   private scopeRing?: SharedScopeRingWriter;
   private clipPageRequestRing?: SharedClipPageRequestRingWriter;
@@ -191,11 +191,11 @@ export class SonareRealtimeEngineWorkletProcessor {
   private readonly clipPageRequestPayloadArrays = Array.from({ length: 65 }, (_, n) =>
     this.clipPageRequestPayloadEntries.slice(0, n),
   );
-  private readonly clipPageRequestMessage: SonareEngineClipPageRequestMessage = {
+  private readonly clipPageRequestMessage: EngineClipPageRequestMessage = {
     type: 'clipPageRequest',
     requests: [],
   };
-  private readonly clipPageRequestMessageWithDropped: SonareEngineClipPageRequestMessage = {
+  private readonly clipPageRequestMessageWithDropped: EngineClipPageRequestMessage = {
     type: 'clipPageRequest',
     requests: [],
     dropped: 0,
@@ -1286,7 +1286,7 @@ export class SonareRealtimeEngineWorkletProcessor {
     }
   }
 
-  private writeTelemetryScratch(ring: SonareEngineTelemetryRingBuffer): void {
+  private writeTelemetryScratch(ring: EngineTelemetryRingBuffer): void {
     const header = ring.header;
     const view = ring.view;
     const slotStates = ring.slotStates;
@@ -1326,7 +1326,7 @@ export class SonareRealtimeEngineWorkletProcessor {
     );
   }
 
-  private publishTelemetryRecord(record: SonareEngineTelemetryRecord): void {
+  private publishTelemetryRecord(record: EngineTelemetryRecord): void {
     if (this.telemetryRing) {
       writeSonareEngineTelemetryRingBuffer(this.telemetryRing, record);
       return;
@@ -1357,8 +1357,8 @@ export class SonareRealtimeEngineWorkletProcessor {
       }
       return;
     }
-    const delivered: SonareWorkletMeterSnapshot[] = [];
-    const newestByTarget = new Map<number, SonareWorkletMeterSnapshot>();
+    const delivered: WorkletMeterSnapshot[] = [];
+    const newestByTarget = new Map<number, WorkletMeterSnapshot>();
     for (const item of this.engine.drainMeterTelemetryWide(64)) {
       const meter = meterFromEngine(item);
       if (!this.meterDue(meter.targetId, meter.frame)) {
@@ -1491,7 +1491,7 @@ export class SonareRealtimeEngineWorkletProcessor {
       points[2 * i] = this.native.scopeScratchPointLeft(i);
       points[2 * i + 1] = this.native.scopeScratchPointRight(i);
     }
-    const scope: SonareWorkletScopeSnapshot = {
+    const scope: WorkletScopeSnapshot = {
       type: 'scope',
       targetId: this.native.scopeScratchTargetId(),
       frame: Number(this.native.scopeScratchRenderFrame()),
@@ -1761,7 +1761,7 @@ export class SonareRealtimeEngineWorkletProcessor {
   private telemetryRingFromSharedBuffer(
     sharedBuffer: SharedArrayBuffer,
     fallbackCapacity?: number,
-  ): SonareEngineTelemetryRingBuffer {
+  ): EngineTelemetryRingBuffer {
     return engineTelemetryRingFromSharedBuffer(sharedBuffer, fallbackCapacity);
   }
 }

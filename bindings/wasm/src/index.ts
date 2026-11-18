@@ -25,7 +25,7 @@ import {
   notInitializedError,
   setSonareModule,
 } from './module_state.js';
-import type { Capabilities, CapabilityCatalog, SonareModuleHandle } from './public_types.js';
+import type { Capabilities, CapabilityCatalog, ModuleHandle } from './public_types.js';
 import type { SonareModule } from './sonare.js';
 
 export { alignTakeToReference } from './align_take.js';
@@ -932,6 +932,7 @@ export type {
   MixSceneVcaGroupInput,
   MixSourceClass,
   MixTrackAlignment,
+  ModuleHandle,
   MultibandCompressorBand,
   NoiseDetection,
   NormType,
@@ -1006,7 +1007,6 @@ export type {
   SidechainRefusal,
   SidechainSourceKind,
   SoloProcessor,
-  SonareModuleHandle,
   SpectralEditMode,
   SpectralEditOptions,
   SpectralRegionOp,
@@ -1290,7 +1290,7 @@ export async function init(options?: {
   moduleFactory?: (options?: {
     locateFile?: (path: string, prefix: string) => string;
     wasmBinary?: ArrayBuffer | Uint8Array;
-  }) => Promise<SonareModuleHandle>;
+  }) => Promise<ModuleHandle>;
 }): Promise<void> {
   if (module) {
     assertSameInitOptions(firstInitOptions, options);

@@ -709,6 +709,34 @@ def _payload_channel_violation(r: dict) -> str | None:
 _ERROR_CLASS_REASON = "the error class keeps its Sonare prefix"
 
 
+_REGISTERED_CLASS_REASON = "registered with Web Audio or as a global"
+_REGISTERED_CLASSES = (
+    "wasm:SonareEngine",
+    "wasm:SonarePlaybackWorkletProcessor",
+    "wasm:SonareRealtimeEngineNode",
+    "wasm:SonareRealtimeEngineWorkletProcessor",
+    "wasm:SonareRealtimeVoiceChangerWorkletProcessor",
+    "wasm:SonareStreamAnalyzerNode",
+    "wasm:SonareStreamAnalyzerWorkletProcessor",
+    "wasm:SonareWorkletProcessor",
+)
+
+
+def _type_name_violation(r: dict) -> str | None:
+    """Flag a Sonare-prefixed type unless it is a registered class or named for one."""
+    name = r["name"]
+    if not name.startswith("Sonare"):
+        return None
+    owners = [
+        key.split(":", 1)[1] for key in _REGISTERED_CLASSES if key.split(":", 1)[0] == r["surface"]
+    ]
+    if any(
+        name.startswith(owner) and name[len(owner) : len(owner) + 1].isupper() for owner in owners
+    ):
+        return None
+    return "a public type drops the Sonare prefix"
+
+
 _Q8 = re.compile(r"q8", re.IGNORECASE)
 
 
@@ -1318,68 +1346,20 @@ RULES: list[Rule] = [
     ),
     Rule(
         name="type-names",
-        summary="public JS/Python type names carry no Sonare prefix, except the error class",
+        summary=(
+            "public JS/Python type names carry no Sonare prefix, except the error class, the "
+            "registered classes and the companion types named for them"
+        ),
         population=lambda r: (
             r["surface"] in ("node", "wasm", "python") and r["kind"] in ("type", "class")
         ),
-        violation=lambda r: (
-            "a public type drops the Sonare prefix" if r["name"].startswith("Sonare") else None
-        ),
+        violation=_type_name_violation,
         exempt={
             "node:SonareError": _ERROR_CLASS_REASON,
             "wasm:SonareError": _ERROR_CLASS_REASON,
             "python:SonareError": _ERROR_CLASS_REASON,
             "python:SonareValueError": _ERROR_CLASS_REASON,
-        },
-        pending={
-            key: "drop the Sonare prefix from the worklet types"
-            for key in (
-                "wasm:SonareClipPageRequestRingBuffer",
-                "wasm:SonareClipPageRequestRingReadResult",
-                "wasm:SonareEngine",
-                "wasm:SonareEngineClipPageRequestMessage",
-                "wasm:SonareEngineOptions",
-                "wasm:SonareEngineSyncErrorMessage",
-                "wasm:SonareEngineTelemetryError",
-                "wasm:SonareEngineTelemetryRecord",
-                "wasm:SonareEngineTelemetryRingBuffer",
-                "wasm:SonareEngineTelemetryRingReadResult",
-                "wasm:SonareEngineTelemetryType",
-                "wasm:SonareEngineTransportFacade",
-                "wasm:SonareExternalMidiRingBuffer",
-                "wasm:SonareExternalMidiRingReadResult",
-                "wasm:SonareMeterRingBuffer",
-                "wasm:SonareMeterRingReadResult",
-                "wasm:SonareModuleHandle",
-                "wasm:SonarePlaybackNodeOptions",
-                "wasm:SonarePlaybackWorkletDiagnostics",
-                "wasm:SonarePlaybackWorkletProcessor",
-                "wasm:SonarePlaybackWorkletProcessorOptions",
-                "wasm:SonareRealtimeEngineNode",
-                "wasm:SonareRealtimeEngineNodeCapabilities",
-                "wasm:SonareRealtimeEngineNodeOptions",
-                "wasm:SonareRealtimeEngineWorkletProcessor",
-                "wasm:SonareRealtimeEngineWorkletProcessorOptions",
-                "wasm:SonareRealtimeVoiceChangerWorkletProcessor",
-                "wasm:SonareRealtimeVoiceChangerWorkletProcessorOptions",
-                "wasm:SonareRenderOfflineRequest",
-                "wasm:SonareRingCapacityOptions",
-                "wasm:SonareScopeRingBuffer",
-                "wasm:SonareScopeRingOptions",
-                "wasm:SonareScopeRingReadResult",
-                "wasm:SonareSpectrumRingBuffer",
-                "wasm:SonareSpectrumRingOptions",
-                "wasm:SonareSpectrumRingReadResult",
-                "wasm:SonareStreamAnalyzerNode",
-                "wasm:SonareStreamAnalyzerNodeOptions",
-                "wasm:SonareStreamAnalyzerWorkletProcessor",
-                "wasm:SonareStreamAnalyzerWorkletProcessorOptions",
-                "wasm:SonareWorkletMeterSnapshot",
-                "wasm:SonareWorkletProcessor",
-                "wasm:SonareWorkletProcessorOptions",
-                "wasm:SonareWorkletScopeSnapshot",
-                "wasm:SonareWorkletSpectrumSnapshot",
-            )
+            **{key: _REGISTERED_CLASS_REASON for key in _REGISTERED_CLASSES},
         },
     ),
     Rule(
@@ -1397,7 +1377,7 @@ RULES: list[Rule] = [
         pending={
             "node:PlaybackStageLatency.q8": "remove the field; state its unit before renaming it",
             "wasm:PlaybackStageLatency.q8": "remove the field; state its unit before renaming it",
-            "wasm:SonareEngineTelemetryRecord.graphLatencySamplesQ8": "expose graph latency in samples as a plain number",
+            "wasm:EngineTelemetryRecord.graphLatencySamplesQ8": "expose graph latency in samples as a plain number",
         },
     ),
     Rule(

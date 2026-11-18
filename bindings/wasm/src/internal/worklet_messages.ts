@@ -18,20 +18,20 @@ import type { AutomationCurve, SurroundPan } from '../public_types.js';
 import type { ExternalMidiEvent, MidiFxConfig } from '../public_types_engine.js';
 import type { PlaybackRendererConfig } from '../public_types_playback.js';
 import type {
-  SonareEngineClipPageRequestMessage,
-  SonarePlaybackWorkletDiagnostics,
+  EngineClipPageRequestMessage,
+  SonarePlaybackWorkletProcessorDiagnostics,
 } from '../public_types_worklet.js';
 import type {
-  SonareEngineTelemetryRecord,
-  SonareWorkletMeterSnapshot,
-  SonareWorkletScopeSnapshot,
-  SonareWorkletSpectrumSnapshot,
+  EngineTelemetryRecord,
+  WorkletMeterSnapshot,
+  WorkletScopeSnapshot,
+  WorkletSpectrumSnapshot,
 } from '../worklet/protocol.js';
 import type { SonareFailurePayload } from './failure_payload.js';
 
 export type {
-  SonareEngineClipPageRequestMessage,
-  SonareEngineSyncErrorMessage,
+  EngineClipPageRequestMessage,
+  EngineSyncErrorMessage,
   WorkletPort,
 } from '../public_types_worklet.js';
 
@@ -89,7 +89,7 @@ export type SonarePlaybackMessage =
 
 export interface SonarePlaybackDiagnosticsReplyMessage {
   type: 'diagnostics';
-  diagnostics: SonarePlaybackWorkletDiagnostics;
+  diagnostics: SonarePlaybackWorkletProcessorDiagnostics;
 }
 
 /** Posted when a control message is refused (e.g. a changed prepare key). */
@@ -139,12 +139,12 @@ export interface SonareEngineSyncErrorWireMessage {
 }
 
 export type SonareWorkletTransportMessage =
-  | SonareWorkletMeterSnapshot
-  | SonareWorkletScopeSnapshot
-  | SonareWorkletSpectrumSnapshot
+  | WorkletMeterSnapshot
+  | WorkletScopeSnapshot
+  | WorkletSpectrumSnapshot
   | SonareWorkletExternalMidiMessage
-  | SonareEngineClipPageRequestMessage
-  | SonareEngineTelemetryRecord;
+  | EngineClipPageRequestMessage
+  | EngineTelemetryRecord;
 
 /** A processor's host channel as it posts through it; constructors take the public `WorkletTransport`. */
 export interface TypedWorkletTransport {
@@ -157,8 +157,8 @@ export interface TypedWorkletTransport {
       | SonareEngineSyncErrorWireMessage,
     transfer?: Transferable[],
   ) => void;
-  onMeter?: (meter: SonareWorkletMeterSnapshot) => void;
-  onSpectrum?: (spectrum: SonareWorkletSpectrumSnapshot) => void;
+  onMeter?: (meter: WorkletMeterSnapshot) => void;
+  onSpectrum?: (spectrum: WorkletSpectrumSnapshot) => void;
 }
 
 export interface ResolvedMetronomeConfig {

@@ -5,7 +5,7 @@
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { init } from '../dist/index.js';
 import {
-  createSonarePlaybackNode,
+  createPlaybackNode,
   init as initWorklet,
   registerSonarePlaybackWorkletProcessor,
   registerSonareRealtimeVoiceChangerWorkletProcessor,
@@ -88,9 +88,9 @@ describe('processorOptions refuses undeclared keys', () => {
       ['blockSize', 128],
       ['channelCount', 2],
     ])('the node factory and the processor refuse the retired %s by name', (key, value) => {
-      expect(() =>
-        createSonarePlaybackNode(context, { nodeFactory, [key]: value } as never),
-      ).toThrow(new TypeError(`createSonarePlaybackNode: unknown option '${key}'`));
+      expect(() => createPlaybackNode(context, { nodeFactory, [key]: value } as never)).toThrow(
+        new TypeError(`createPlaybackNode: unknown option '${key}'`),
+      );
       const Processor = registered(registerSonarePlaybackWorkletProcessor, 'pb-test');
       expect(
         () => new Processor({ processorOptions: { sampleRate: 48000, [key]: value } }),

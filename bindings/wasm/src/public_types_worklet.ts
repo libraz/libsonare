@@ -13,10 +13,7 @@ import type {
   StreamConfig,
 } from './index.js';
 import type { SonareEngineSyncMessage } from './internal/worklet_messages.js';
-import type {
-  SonareWorkletMeterSnapshot,
-  SonareWorkletSpectrumSnapshot,
-} from './worklet/meter-rings.js';
+import type { WorkletMeterSnapshot, WorkletSpectrumSnapshot } from './worklet/meter-rings.js';
 import type { SonareEngineCommandRecord } from './worklet/protocol.js';
 
 /** Options of the mixer worklet processor (`SonareWorkletProcessor`). */
@@ -41,7 +38,7 @@ export interface SonareWorkletProcessorOptions {
   stripCount?: number;
   /** Frames between meter publications, an integer of at least 0; 0 switches meters off. Default 2048. */
   meterIntervalFrames?: number;
-  /** Shared memory from `createSonareMeterRingBuffer`. Omitted: meters go to the transport instead. */
+  /** Shared memory from `createMeterRingBuffer`. Omitted: meters go to the transport instead. */
   meterSharedBuffer?: SharedArrayBuffer;
   /** Slots of `meterSharedBuffer`. Omitted: read from the buffer's header; a differing value is a RangeError. */
   meterRingCapacity?: number;
@@ -49,7 +46,7 @@ export interface SonareWorkletProcessorOptions {
   spectrumIntervalFrames?: number;
   /** Spectrum bands per snapshot, an integer of at least 1. Omitted: the ring's count, else 16. */
   spectrumBands?: number;
-  /** Shared memory from `createSonareSpectrumRingBuffer`. Omitted: spectra go to the transport instead. */
+  /** Shared memory from `createSpectrumRingBuffer`. Omitted: spectra go to the transport instead. */
   spectrumSharedBuffer?: SharedArrayBuffer;
   /** Slots of `spectrumSharedBuffer`. Omitted: read from the buffer's header; a differing value is a RangeError. */
   spectrumRingCapacity?: number;
@@ -103,7 +100,7 @@ export interface SonareRealtimeEngineWorkletProcessorOptions {
    */
   commandRingCapacity?: number;
   /**
-   * Shared memory of the telemetry ring (`createSonareEngineTelemetryRingBuffer`). Omitted:
+   * Shared memory of the telemetry ring (`createEngineTelemetryRingBuffer`). Omitted:
    * telemetry is posted as port messages.
    */
   telemetrySharedBuffer?: SharedArrayBuffer;
@@ -112,7 +109,7 @@ export interface SonareRealtimeEngineWorkletProcessorOptions {
    * a differing value is a RangeError. Node creation: 128.
    */
   telemetryRingCapacity?: number;
-  /** Shared memory from `createSonareMeterRingBuffer`. Omitted: meters are posted as port messages. */
+  /** Shared memory from `createMeterRingBuffer`. Omitted: meters are posted as port messages. */
   meterSharedBuffer?: SharedArrayBuffer;
   /**
    * Slots of the meter ring, an integer of at least 1. Omitted: read from the buffer's header; a
@@ -129,7 +126,7 @@ export interface SonareRealtimeEngineWorkletProcessorOptions {
   scopeIntervalFrames?: number;
   /** Spectrum bands per scope record, an integer in [1, 64]. Omitted: 48. */
   scopeBands?: number;
-  /** Shared memory from `createSonareScopeRingBuffer`. Omitted: scope records are posted as port messages. */
+  /** Shared memory from `createScopeRingBuffer`. Omitted: scope records are posted as port messages. */
   scopeSharedBuffer?: SharedArrayBuffer;
   /**
    * Slots of the scope ring, an integer of at least 1. Omitted: read from the buffer's header; a
@@ -225,7 +222,7 @@ export interface SonarePlaybackWorkletProcessorOptions {
    * Defaults to the AudioWorkletGlobalScope `sampleRate`; any other value is
    * refused with a RangeError, since nothing resamples the scope's quanta.
    * Outside a worklet scope there is no default and the option is required.
-   * `createSonarePlaybackNode` defaults it to the AudioContext's.
+   * `createPlaybackNode` defaults it to the AudioContext's.
    */
   sampleRate?: number;
   /**
@@ -238,8 +235,8 @@ export interface SonarePlaybackWorkletProcessorOptions {
   wasmBinary?: ArrayBuffer | Uint8Array;
 }
 
-/** Options of `createSonarePlaybackNode`, on top of the processor options. */
-export interface SonarePlaybackNodeOptions extends SonarePlaybackWorkletProcessorOptions {
+/** Options of `createPlaybackNode`, on top of the processor options. */
+export interface PlaybackNodeOptions extends SonarePlaybackWorkletProcessorOptions {
   /** Registered processor name. Default `'sonare-playback-processor'`. */
   processorName?: string;
   /** Creates the `AudioWorkletNode`. Omitted: `new AudioWorkletNode(context, name, options)`. */
@@ -251,7 +248,7 @@ export interface SonarePlaybackNodeOptions extends SonarePlaybackWorkletProcesso
 }
 
 /** The renderer's diagnostics plus the worklet's own block counter. */
-export interface SonarePlaybackWorkletDiagnostics extends PlaybackDiagnostics {
+export interface SonarePlaybackWorkletProcessorDiagnostics extends PlaybackDiagnostics {
   /**
    * Render quanta whose input channel count the renderer does not accept
    * (not 1, 2, 6 or 8 under `"auto"`; not the fixed layout's count otherwise).
@@ -321,7 +318,7 @@ export interface SonareRealtimeEngineNodeOptions
 }
 
 /** A control-plane sync rejection as handed to an `onSyncError` listener. */
-export interface SonareEngineSyncErrorMessage {
+export interface EngineSyncErrorMessage {
   /** Always `'syncError'`. */
   type: 'syncError';
   /** The refusal as raised on the audio thread, rebuilt with its class and any SonareError code. */
@@ -342,7 +339,7 @@ export interface SonareEngineSyncErrorMessage {
  * resolves these from OPFS and responds with `syncClipPage`; a missing page is
  * silent until that response arrives.
  */
-export interface SonareEngineClipPageRequestMessage {
+export interface EngineClipPageRequestMessage {
   /** Always `'clipPageRequest'`. */
   type: 'clipPageRequest';
   /** The pages the audio thread missed, oldest first. */
@@ -371,7 +368,7 @@ export interface WorkletTransport {
   /** Receives the processor's replies. */
   postMessage?: (message: unknown, transfer?: Transferable[]) => void;
   /** Receives each meter snapshot the mixer processor publishes. */
-  onMeter?: (meter: SonareWorkletMeterSnapshot) => void;
+  onMeter?: (meter: WorkletMeterSnapshot) => void;
   /** Receives each spectrum snapshot the mixer processor publishes. */
-  onSpectrum?: (spectrum: SonareWorkletSpectrumSnapshot) => void;
+  onSpectrum?: (spectrum: WorkletSpectrumSnapshot) => void;
 }

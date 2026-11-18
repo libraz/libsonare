@@ -37,11 +37,11 @@ export const SONARE_SCOPE_MAX_POINTS = 32;
 /**
  * A single target-addressed scope record drained from the realtime engine's
  * scope ring: an FFT magnitude spectrum plus a decimated goniometer/vectorscope
- * point cloud. Unlike {@link SonareWorkletSpectrumSnapshot} (the legacy
+ * point cloud. Unlike {@link WorkletSpectrumSnapshot} (the legacy
  * coarse-DFT meter spectrum), this carries a `targetId` (master/lane/bus) and a
  * stereo point cloud, mirroring the engine's `ScopeTelemetryRecord`.
  */
-export interface SonareWorkletScopeSnapshot {
+export interface WorkletScopeSnapshot {
   /** Message discriminator, always `'scope'`. */
   type: 'scope';
   /** Id of the scoped target: 0 master, 1..32 track lane (index + 1), 33..40 bus, 0xFFFF input monitor. */
@@ -54,8 +54,8 @@ export interface SonareWorkletScopeSnapshot {
   points: Float32Array;
 }
 
-/** Main-thread views over a shared scope ring, as returned by {@link createSonareScopeRingBuffer}. */
-export interface SonareScopeRingBuffer {
+/** Main-thread views over a shared scope ring, as returned by {@link createScopeRingBuffer}. */
+export interface ScopeRingBuffer {
   /** Shared memory holding the header, the records and the per-slot states; hand it to the worklet. */
   sharedBuffer: SharedArrayBuffer;
   /** Header view: write cursor, capacity, record floats, bands, max points, protocol version. */
@@ -72,12 +72,12 @@ export interface SonareScopeRingBuffer {
   maxPoints: number;
 }
 
-/** Result of {@link readSonareScopeRingBuffer}. */
-export interface SonareScopeRingReadResult {
+/** Result of {@link readScopeRingBuffer}. */
+export interface ScopeRingReadResult {
   /** Cursor to pass as `readIndex` on the next read. */
   nextReadIndex: number;
   /** Scope records published since `readIndex`, oldest first. */
-  scopes: SonareWorkletScopeSnapshot[];
+  scopes: WorkletScopeSnapshot[];
 }
 
 export interface SharedScopeRingWriter {
@@ -94,8 +94,8 @@ export function sonareScopeRingRecordFloats(bands: number, maxPoints: number): n
   return SONARE_SCOPE_RING_RECORD_PREFIX_FLOATS + bands + 2 * maxPoints;
 }
 
-/** Options of {@link createSonareScopeRingBuffer}; the byte-length helper requires `capacity`. */
-export interface SonareScopeRingOptions {
+/** Options of {@link createScopeRingBuffer}; the byte-length helper requires `capacity`. */
+export interface ScopeRingOptions {
   /** Records the ring holds, an integer of at least 1. Default 64 when creating. */
   capacity?: number;
   /** Spectrum bands per record, an integer in [1, 64]. Default 48. */
@@ -122,11 +122,11 @@ function resolveScopeRingOptions(
 }
 
 /** Byte length of a scope ring. `capacity` is required; RangeError outside the domain, TypeError for an unknown key. */
-export function sonareScopeRingBufferByteLength(
-  options: SonareScopeRingOptions & { capacity: number },
+export function scopeRingBufferByteLength(
+  options: ScopeRingOptions & { capacity: number },
 ): number {
   const { capacity, bands, maxPoints } = resolveScopeRingOptions(
-    'sonareScopeRingBufferByteLength',
+    'scopeRingBufferByteLength',
     options,
     undefined,
   );
@@ -138,16 +138,14 @@ export function sonareScopeRingBufferByteLength(
 }
 
 /** Creates a shared scope ring. RangeError outside the domain, TypeError for an unknown key. */
-export function createSonareScopeRingBuffer(
-  options?: SonareScopeRingOptions,
-): SonareScopeRingBuffer {
+export function createScopeRingBuffer(options?: ScopeRingOptions): ScopeRingBuffer {
   const {
     capacity: clampedCapacity,
     bands: clampedBands,
     maxPoints: clampedPoints,
-  } = resolveScopeRingOptions('createSonareScopeRingBuffer', options, 64);
+  } = resolveScopeRingOptions('createScopeRingBuffer', options, 64);
   const sharedBuffer = new SharedArrayBuffer(
-    sonareScopeRingBufferByteLength({
+    scopeRingBufferByteLength({
       capacity: clampedCapacity,
       bands: clampedBands,
       maxPoints: clampedPoints,
@@ -189,10 +187,7 @@ export function createSonareScopeRingBuffer(
  * @throws SonareError `InvalidFormat` when the views or header descriptors do not match the ring;
  *   `AbiMismatch` when the writer published a different protocol version.
  */
-export function readSonareScopeRingBuffer(
-  ring: SonareScopeRingBuffer,
-  readIndex = 0,
-): SonareScopeRingReadResult {
+export function readScopeRingBuffer(ring: ScopeRingBuffer, readIndex = 0): ScopeRingReadResult {
   const { sharedBuffer, header, records, slotStates, capacity, bands, maxPoints } = ring;
   const recordFloats = sonareScopeRingRecordFloats(bands, maxPoints);
   const headerBytes = SONARE_SCOPE_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT;
@@ -228,7 +223,7 @@ export function readSonareScopeRingBuffer(
   }
   const firstReadable = overwriteRingFirstReadable(readIndex, writeIndex, capacity);
   const count = sonareRingCursorDistance(firstReadable, writeIndex, capacity);
-  const scopes: SonareWorkletScopeSnapshot[] = [];
+  const scopes: WorkletScopeSnapshot[] = [];
   let nextReadIndex = writeIndex;
   for (let i = 0; i < count; i++) {
     const cursor = (firstReadable + i) % ringCursorSpan(capacity);

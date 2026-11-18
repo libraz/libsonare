@@ -6,14 +6,14 @@ import type {
   ExternalMidiEvent,
 } from '../public_types_engine.js';
 import { SonareEngineTelemetryError, SonareEngineTelemetryType } from './engine-rings.js';
-import type { SonareEngineTelemetryRecord } from './protocol.js';
+import type { EngineTelemetryRecord } from './protocol.js';
 
 function lowerCamel(name: string): string {
   return name.charAt(0).toLowerCase() + name.slice(1);
 }
 
 /** Converts a wire telemetry record (ordinals, Q8 latency) into the public {@link EngineTelemetry}. */
-export function telemetryFromRecord(record: SonareEngineTelemetryRecord): EngineTelemetry {
+export function telemetryFromRecord(record: EngineTelemetryRecord): EngineTelemetry {
   const type = SonareEngineTelemetryType[record.type as number];
   const error = SonareEngineTelemetryError[record.error as number];
   if (type === undefined || error === undefined) {

@@ -7,6 +7,7 @@ import {
   makeOverwriteSlotStates,
   overwriteRingByteLength,
   overwriteRingFirstReadable,
+  type RingCapacityOptions,
   releaseOverwriteRead,
   requireNoUnpublishedRecords,
   requirePositiveCapacity,
@@ -15,7 +16,6 @@ import {
   resolveRingCapacity,
   resolveRingOptions,
   ringCursorSpan,
-  type SonareRingCapacityOptions,
   sonareRingCursorDistance,
   sonareRingCursorSlot,
   tryAcquireOverwriteRead,
@@ -23,7 +23,7 @@ import {
 } from './ring-core.js';
 
 /** One meter reading delivered by the worklet, for a single target. */
-export interface SonareWorkletMeterSnapshot {
+export interface WorkletMeterSnapshot {
   /** Message discriminator, always `'meter'`. */
   type: 'meter';
   /** Id of the metered target. */
@@ -88,7 +88,7 @@ export interface SonareWorkletMeterSnapshot {
 }
 
 /** One spectrum reading delivered by the worklet. */
-export interface SonareWorkletSpectrumSnapshot {
+export interface WorkletSpectrumSnapshot {
   /** Message discriminator, always `'spectrum'`. */
   type: 'spectrum';
   /** Sample-frame index of the reading. */
@@ -123,8 +123,8 @@ export const SONARE_SPECTRUM_RING_HEADER_INTS = 5;
 /** Spectrum ring record-layout version. */
 export const SONARE_SPECTRUM_RING_PROTOCOL_VERSION = 1;
 
-/** Shared-memory ring of meter records; create one with `createSonareMeterRingBuffer`. */
-export interface SonareMeterRingBuffer {
+/** Shared-memory ring of meter records; create one with `createMeterRingBuffer`. */
+export interface MeterRingBuffer {
   /** Backing shared memory. */
   sharedBuffer: SharedArrayBuffer;
   /** Header words, including the protocol version. */
@@ -138,15 +138,15 @@ export interface SonareMeterRingBuffer {
 }
 
 /** Meter snapshots read from a ring and the index to resume from. */
-export interface SonareMeterRingReadResult {
+export interface MeterRingReadResult {
   /** Index to pass as `readIndex` on the next read. */
   nextReadIndex: number;
   /** Snapshots read, oldest first. */
-  meters: SonareWorkletMeterSnapshot[];
+  meters: WorkletMeterSnapshot[];
 }
 
-/** Shared-memory ring of spectrum records; create one with `createSonareSpectrumRingBuffer`. */
-export interface SonareSpectrumRingBuffer {
+/** Shared-memory ring of spectrum records; create one with `createSpectrumRingBuffer`. */
+export interface SpectrumRingBuffer {
   /** Backing shared memory. */
   sharedBuffer: SharedArrayBuffer;
   /** Header words, including the protocol version. */
@@ -162,11 +162,11 @@ export interface SonareSpectrumRingBuffer {
 }
 
 /** Spectrum snapshots read from a ring and the index to resume from. */
-export interface SonareSpectrumRingReadResult {
+export interface SpectrumRingReadResult {
   /** Index to pass as `readIndex` on the next read. */
   nextReadIndex: number;
   /** Snapshots read, oldest first. */
-  spectra: SonareWorkletSpectrumSnapshot[];
+  spectra: WorkletSpectrumSnapshot[];
 }
 
 export interface SharedMeterRingWriter {
@@ -192,8 +192,8 @@ export interface SharedSpectrumRingWriter {
 export const SONARE_FLOOR_DB = -120;
 
 /** Byte length of a meter ring. `capacity` is required; RangeError outside the domain, TypeError for an unknown key. */
-export function sonareMeterRingBufferByteLength(options: { capacity: number }): number {
-  const capacity = resolveRingCapacity('sonareMeterRingBufferByteLength', options, undefined);
+export function meterRingBufferByteLength(options: { capacity: number }): number {
+  const capacity = resolveRingCapacity('meterRingBufferByteLength', options, undefined);
   return overwriteRingByteLength(
     SONARE_METER_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT,
     SONARE_METER_RING_RECORD_FLOATS * Float32Array.BYTES_PER_ELEMENT,
@@ -202,12 +202,10 @@ export function sonareMeterRingBufferByteLength(options: { capacity: number }): 
 }
 
 /** Creates a shared meter ring. RangeError outside the domain, TypeError for an unknown key. */
-export function createSonareMeterRingBuffer(
-  options?: SonareRingCapacityOptions,
-): SonareMeterRingBuffer {
-  const clampedCapacity = resolveRingCapacity('createSonareMeterRingBuffer', options, 128);
+export function createMeterRingBuffer(options?: RingCapacityOptions): MeterRingBuffer {
+  const clampedCapacity = resolveRingCapacity('createMeterRingBuffer', options, 128);
   const sharedBuffer = new SharedArrayBuffer(
-    sonareMeterRingBufferByteLength({ capacity: clampedCapacity }),
+    meterRingBufferByteLength({ capacity: clampedCapacity }),
   );
   const headerBytes = SONARE_METER_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT;
   const recordBytes = SONARE_METER_RING_RECORD_FLOATS * Float32Array.BYTES_PER_ELEMENT;
@@ -232,10 +230,7 @@ export function createSonareMeterRingBuffer(
 }
 
 /** Reads the meter snapshots published since `readIndex` (default `0`) and returns them with the index to resume from. */
-export function readSonareMeterRingBuffer(
-  ring: SonareMeterRingBuffer,
-  readIndex = 0,
-): SonareMeterRingReadResult {
+export function readMeterRingBuffer(ring: MeterRingBuffer, readIndex = 0): MeterRingReadResult {
   const { sharedBuffer, header, records, slotStates, capacity } = ring;
   const headerBytes = SONARE_METER_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT;
   const recordBytes = SONARE_METER_RING_RECORD_FLOATS * Float32Array.BYTES_PER_ELEMENT;
@@ -268,7 +263,7 @@ export function readSonareMeterRingBuffer(
   }
   const firstReadable = overwriteRingFirstReadable(readIndex, writeIndex, capacity);
   const count = sonareRingCursorDistance(firstReadable, writeIndex, capacity);
-  const meters: SonareWorkletMeterSnapshot[] = [];
+  const meters: WorkletMeterSnapshot[] = [];
   let nextReadIndex = writeIndex;
   for (let i = 0; i < count; i++) {
     const cursor = (firstReadable + i) % ringCursorSpan(capacity);
@@ -284,7 +279,7 @@ export function readSonareMeterRingBuffer(
         continue;
       }
       const offset = sonareRingCursorSlot(cursor, capacity) * SONARE_METER_RING_RECORD_FLOATS;
-      const meter: SonareWorkletMeterSnapshot = {
+      const meter: WorkletMeterSnapshot = {
         type: 'meter',
         frame: decodeFrame(records[offset], records[offset + 1]),
         targetId: records[offset + 2],
@@ -330,7 +325,7 @@ export function readSonareMeterRingBuffer(
 }
 
 /** Options of the spectrum ring helpers; the byte-length helper requires `capacity`. */
-export interface SonareSpectrumRingOptions {
+export interface SpectrumRingOptions {
   /** Records the ring holds, an integer of at least 1. Default 128 when creating. */
   capacity?: number;
   /** Bands per record, an integer of at least 1. Default 16. */
@@ -350,11 +345,11 @@ function resolveSpectrumRingOptions(
 }
 
 /** Byte length of a spectrum ring. `capacity` is required; RangeError outside the domain, TypeError for an unknown key. */
-export function sonareSpectrumRingBufferByteLength(
-  options: SonareSpectrumRingOptions & { capacity: number },
+export function spectrumRingBufferByteLength(
+  options: SpectrumRingOptions & { capacity: number },
 ): number {
   const { capacity, bands } = resolveSpectrumRingOptions(
-    'sonareSpectrumRingBufferByteLength',
+    'spectrumRingBufferByteLength',
     options,
     undefined,
   );
@@ -368,16 +363,14 @@ export function sonareSpectrumRingBufferByteLength(
 }
 
 /** Creates a shared spectrum ring. RangeError outside the domain, TypeError for an unknown key. */
-export function createSonareSpectrumRingBuffer(
-  options?: SonareSpectrumRingOptions,
-): SonareSpectrumRingBuffer {
+export function createSpectrumRingBuffer(options?: SpectrumRingOptions): SpectrumRingBuffer {
   const { capacity: clampedCapacity, bands: clampedBands } = resolveSpectrumRingOptions(
-    'createSonareSpectrumRingBuffer',
+    'createSpectrumRingBuffer',
     options,
     128,
   );
   const sharedBuffer = new SharedArrayBuffer(
-    sonareSpectrumRingBufferByteLength({ capacity: clampedCapacity, bands: clampedBands }),
+    spectrumRingBufferByteLength({ capacity: clampedCapacity, bands: clampedBands }),
   );
   const headerBytes = SONARE_SPECTRUM_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT;
   const recordFloats = 3 + clampedBands;
@@ -407,10 +400,10 @@ export function createSonareSpectrumRingBuffer(
 }
 
 /** Reads the spectrum snapshots published since `readIndex` (default `0`) and returns them with the index to resume from. */
-export function readSonareSpectrumRingBuffer(
-  ring: SonareSpectrumRingBuffer,
+export function readSpectrumRingBuffer(
+  ring: SpectrumRingBuffer,
   readIndex = 0,
-): SonareSpectrumRingReadResult {
+): SpectrumRingReadResult {
   const { sharedBuffer, header, records, slotStates, capacity, bands } = ring;
   const recordFloats = 3 + bands;
   const headerBytes = SONARE_SPECTRUM_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT;
@@ -445,7 +438,7 @@ export function readSonareSpectrumRingBuffer(
   }
   const firstReadable = overwriteRingFirstReadable(readIndex, writeIndex, capacity);
   const count = sonareRingCursorDistance(firstReadable, writeIndex, capacity);
-  const spectra: SonareWorkletSpectrumSnapshot[] = [];
+  const spectra: WorkletSpectrumSnapshot[] = [];
   let nextReadIndex = writeIndex;
   for (let i = 0; i < count; i++) {
     const cursor = (firstReadable + i) % ringCursorSpan(capacity);
@@ -575,8 +568,8 @@ export function spectrumRingFromSharedBuffer(
 }
 
 // A plane the target does not have (the right side of a mono lane) reads as the floor.
-export function meterFromEngine(meter: EngineMeterTelemetryWide): SonareWorkletMeterSnapshot {
-  const snapshot: SonareWorkletMeterSnapshot = {
+export function meterFromEngine(meter: EngineMeterTelemetryWide): WorkletMeterSnapshot {
+  const snapshot: WorkletMeterSnapshot = {
     type: 'meter',
     targetId: meter.targetId,
     frame: meter.renderFrame,

@@ -284,7 +284,7 @@ import type {
 } from './public_types_vocal_edit.js';
 import type { ProjectVocalEditApplyRequest } from './public_types_vocal_project.js';
 import type {
-  SonarePlaybackNodeOptions,
+  PlaybackNodeOptions,
   SonarePlaybackWorkletProcessorOptions,
   SonareRealtimeEngineNodeOptions,
   SonareRealtimeEngineWorkletProcessorOptions,
@@ -355,7 +355,7 @@ import type {
   MasteringRepairTrimSilenceStereoRequest,
 } from './repair_trim.js';
 import type { TranscribeRequest } from './transcribe.js';
-import type { SonareRenderOfflineRequest } from './worklet/engine-export.js';
+import type { SonareEngineRenderOfflineRequest } from './worklet/engine-export.js';
 
 /** Declared keys of `T`, without the index-signature widening. */
 type KnownKeys<T> = keyof {
@@ -2472,7 +2472,7 @@ const CapturePunchKeys = keysOf<CapturePunch>()([
 ]);
 const ArmCaptureRequestKeys = keysOf<{ armed: boolean }>()(['armed']);
 const ScheduleParamRequestKeys = keysOf<EngineAutomationPoint>()(['ppq', 'value', 'curveToNext']);
-const SonareEngineRenderOfflineRequestKeys = keysOf<SonareRenderOfflineRequest>()([
+const SonareEngineRenderOfflineRequestKeys = keysOf<SonareEngineRenderOfflineRequest>()([
   'totalFrames',
   'blockSize',
   'finalize',
@@ -3304,7 +3304,7 @@ export const PROCESSOR_OPTION_KEYS = {
     'sampleRate',
     'wasmBinary',
   ]),
-  playbackNode: keysOf<SonarePlaybackNodeOptions>()([
+  playbackNode: keysOf<PlaybackNodeOptions>()([
     'config',
     'hrtf',
     'maxBlockSize',

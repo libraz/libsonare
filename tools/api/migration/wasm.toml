@@ -80,6 +80,7 @@ test = "bindings/wasm/tests/surface/core-worklet-errors.test.ts::rebuilds the po
 [[entry]]
 kind = "field"
 old = "SonareEngineSyncErrorMessage.failure"
+to = "EngineSyncErrorMessage.failure"
 changed = "typed Error (coded SonareError when the audio thread raised one) instead of SonareFailurePayload"
 domain = "engine"
 rule = "error-class-by-cause"
@@ -97,6 +98,7 @@ entry = "./worklet"
 [[entry]]
 kind = "function"
 old = "createSonareScopeRingBuffer"
+to = "createScopeRingBuffer"
 changed = "takes one options object { capacity, bands, maxPoints } instead of positional numbers; an unknown key is a TypeError, a non-integer or out-of-domain value a RangeError"
 domain = "core"
 rule = "individual"
@@ -106,6 +108,7 @@ test = "bindings/wasm/tests/surface/core-worklet-errors.test.ts::creates each ri
 [[entry]]
 kind = "function"
 old = "createSonareMeterRingBuffer"
+to = "createMeterRingBuffer"
 changed = "takes one options object { capacity } instead of positional numbers; an unknown key is a TypeError, a non-integer or out-of-domain value a RangeError"
 domain = "mastering"
 rule = "individual"
@@ -115,6 +118,7 @@ test = "bindings/wasm/tests/surface/core-worklet-errors.test.ts::creates each ri
 [[entry]]
 kind = "function"
 old = "createSonareSpectrumRingBuffer"
+to = "createSpectrumRingBuffer"
 changed = "takes one options object { capacity, bands } instead of positional numbers; an unknown key is a TypeError, a non-integer or out-of-domain value a RangeError"
 domain = "mastering"
 rule = "individual"
@@ -124,6 +128,7 @@ test = "bindings/wasm/tests/surface/core-worklet-errors.test.ts::creates each ri
 [[entry]]
 kind = "function"
 old = "createSonareClipPageRequestRingBuffer"
+to = "createClipPageRequestRingBuffer"
 changed = "takes one options object { capacity } instead of positional numbers; an unknown key is a TypeError, a non-integer or out-of-domain value a RangeError"
 domain = "project"
 rule = "individual"
@@ -133,6 +138,7 @@ test = "bindings/wasm/tests/surface/core-worklet-errors.test.ts::creates each ri
 [[entry]]
 kind = "function"
 old = "createSonareExternalMidiRingBuffer"
+to = "createExternalMidiRingBuffer"
 changed = "takes one options object { capacity } instead of positional numbers; an unknown key is a TypeError, a non-integer or out-of-domain value a RangeError"
 domain = "engine"
 rule = "individual"
@@ -150,6 +156,7 @@ entry = "./worklet"
 [[entry]]
 kind = "function"
 old = "createSonareEngineTelemetryRingBuffer"
+to = "createEngineTelemetryRingBuffer"
 changed = "takes one options object { capacity } instead of positional numbers; an unknown key is a TypeError, a non-integer or out-of-domain value a RangeError"
 domain = "engine"
 rule = "individual"
@@ -159,6 +166,7 @@ test = "bindings/wasm/tests/surface/core-worklet-errors.test.ts::creates each ri
 [[entry]]
 kind = "function"
 old = "sonareScopeRingBufferByteLength"
+to = "scopeRingBufferByteLength"
 changed = "takes one options object { capacity, bands, maxPoints } instead of positional numbers; an unknown key is a TypeError, a non-integer or out-of-domain value a RangeError"
 domain = "core"
 rule = "individual"
@@ -168,6 +176,7 @@ test = "bindings/wasm/tests/surface/core-worklet-errors.test.ts::sizes each ring
 [[entry]]
 kind = "function"
 old = "sonareMeterRingBufferByteLength"
+to = "meterRingBufferByteLength"
 changed = "takes one options object { capacity } instead of positional numbers; an unknown key is a TypeError, a non-integer or out-of-domain value a RangeError"
 domain = "mastering"
 rule = "individual"
@@ -177,6 +186,7 @@ test = "bindings/wasm/tests/surface/core-worklet-errors.test.ts::sizes each ring
 [[entry]]
 kind = "function"
 old = "sonareSpectrumRingBufferByteLength"
+to = "spectrumRingBufferByteLength"
 changed = "takes one options object { capacity, bands } instead of positional numbers; an unknown key is a TypeError, a non-integer or out-of-domain value a RangeError"
 domain = "mastering"
 rule = "individual"
@@ -186,6 +196,7 @@ test = "bindings/wasm/tests/surface/core-worklet-errors.test.ts::sizes each ring
 [[entry]]
 kind = "function"
 old = "sonareClipPageRequestRingBufferByteLength"
+to = "clipPageRequestRingBufferByteLength"
 changed = "takes one options object { capacity } instead of positional numbers; an unknown key is a TypeError, a non-integer or out-of-domain value a RangeError"
 domain = "project"
 rule = "individual"
@@ -195,6 +206,7 @@ test = "bindings/wasm/tests/surface/core-worklet-errors.test.ts::sizes each ring
 [[entry]]
 kind = "function"
 old = "sonareExternalMidiRingBufferByteLength"
+to = "externalMidiRingBufferByteLength"
 changed = "takes one options object { capacity } instead of positional numbers; an unknown key is a TypeError, a non-integer or out-of-domain value a RangeError"
 domain = "engine"
 rule = "individual"
@@ -212,6 +224,7 @@ entry = "./worklet"
 [[entry]]
 kind = "function"
 old = "sonareEngineTelemetryRingBufferByteLength"
+to = "engineTelemetryRingBufferByteLength"
 changed = "takes one options object { capacity } instead of positional numbers; an unknown key is a TypeError, a non-integer or out-of-domain value a RangeError"
 domain = "engine"
 rule = "individual"
@@ -471,7 +484,7 @@ rule = "matrix-2d"
 [[entry]]
 kind = "type"
 old = "SonareModule"
-removed = "an Emscripten module type, no longer exported; pass the opaque SonareModuleHandle as the moduleFactory option of init()"
+removed = "an Emscripten module type, no longer exported; pass the opaque ModuleHandle as the moduleFactory option of init()"
 domain = "core"
 rule = "no-internal-types"
 
@@ -16524,7 +16537,7 @@ test = "bindings/wasm/tests/surface/engine-worklet.test.ts::configures capture f
 [[entry]]
 kind = "method"
 old = "SonareEngine.renderOffline"
-changed = "request-only renderOffline(request: SonareRenderOfflineRequest) with validate; the frame-count number is a TypeError"
+changed = "request-only renderOffline(request: SonareEngineRenderOfflineRequest) with validate; the frame-count number is a TypeError"
 domain = "engine"
 rule = "one-positional-form"
 entry = "./worklet"
@@ -22282,7 +22295,7 @@ entry = "./worklet"
 [[entry]]
 kind = "type"
 old = "SonarePlaybackConfigMessage"
-removed = "a worklet wire-protocol type, no longer exported; drive playback through the node createSonarePlaybackNode returns"
+removed = "a worklet wire-protocol type, no longer exported; drive playback through the node createPlaybackNode returns"
 domain = "engine"
 rule = "worklet-scope"
 entry = "./worklet"
@@ -22290,7 +22303,7 @@ entry = "./worklet"
 [[entry]]
 kind = "type"
 old = "SonarePlaybackDestroyMessage"
-removed = "a worklet wire-protocol type, no longer exported; drive playback through the node createSonarePlaybackNode returns"
+removed = "a worklet wire-protocol type, no longer exported; drive playback through the node createPlaybackNode returns"
 domain = "engine"
 rule = "worklet-scope"
 entry = "./worklet"
@@ -22298,7 +22311,7 @@ entry = "./worklet"
 [[entry]]
 kind = "type"
 old = "SonarePlaybackDiagnosticsReplyMessage"
-removed = "a worklet wire-protocol type, no longer exported; drive playback through the node createSonarePlaybackNode returns"
+removed = "a worklet wire-protocol type, no longer exported; drive playback through the node createPlaybackNode returns"
 domain = "engine"
 rule = "worklet-scope"
 entry = "./worklet"
@@ -22306,7 +22319,7 @@ entry = "./worklet"
 [[entry]]
 kind = "type"
 old = "SonarePlaybackDiagnosticsRequestMessage"
-removed = "a worklet wire-protocol type, no longer exported; drive playback through the node createSonarePlaybackNode returns"
+removed = "a worklet wire-protocol type, no longer exported; drive playback through the node createPlaybackNode returns"
 domain = "engine"
 rule = "worklet-scope"
 entry = "./worklet"
@@ -22314,7 +22327,7 @@ entry = "./worklet"
 [[entry]]
 kind = "type"
 old = "SonarePlaybackErrorMessage"
-removed = "a worklet wire-protocol type, no longer exported; drive playback through the node createSonarePlaybackNode returns"
+removed = "a worklet wire-protocol type, no longer exported; drive playback through the node createPlaybackNode returns"
 domain = "engine"
 rule = "worklet-scope"
 entry = "./worklet"
@@ -22322,7 +22335,7 @@ entry = "./worklet"
 [[entry]]
 kind = "type"
 old = "SonarePlaybackMessage"
-removed = "a worklet wire-protocol type, no longer exported; drive playback through the node createSonarePlaybackNode returns"
+removed = "a worklet wire-protocol type, no longer exported; drive playback through the node createPlaybackNode returns"
 domain = "engine"
 rule = "worklet-scope"
 entry = "./worklet"
@@ -22330,7 +22343,7 @@ entry = "./worklet"
 [[entry]]
 kind = "type"
 old = "SonarePlaybackOrientationMessage"
-removed = "a worklet wire-protocol type, no longer exported; drive playback through the node createSonarePlaybackNode returns"
+removed = "a worklet wire-protocol type, no longer exported; drive playback through the node createPlaybackNode returns"
 domain = "engine"
 rule = "worklet-scope"
 entry = "./worklet"
@@ -22338,7 +22351,7 @@ entry = "./worklet"
 [[entry]]
 kind = "type"
 old = "SonarePlaybackResetMessage"
-removed = "a worklet wire-protocol type, no longer exported; drive playback through the node createSonarePlaybackNode returns"
+removed = "a worklet wire-protocol type, no longer exported; drive playback through the node createPlaybackNode returns"
 domain = "engine"
 rule = "worklet-scope"
 entry = "./worklet"
@@ -22466,7 +22479,7 @@ entry = "./worklet"
 [[entry]]
 kind = "type"
 old = "SharedClipPageRequestRingWriter"
-removed = "a ring-writer type for the engine processor, no longer exported; create the ring with createSonareClipPageRequestRingBuffer and read it with readSonareClipPageRequestRingBuffer"
+removed = "a ring-writer type for the engine processor, no longer exported; create the ring with createClipPageRequestRingBuffer and read it with readClipPageRequestRingBuffer"
 domain = "project"
 rule = "worklet-scope"
 entry = "./worklet"
@@ -22474,7 +22487,7 @@ entry = "./worklet"
 [[entry]]
 kind = "type"
 old = "SharedExternalMidiRingWriter"
-removed = "a ring-writer type for the engine processor, no longer exported; create the ring with createSonareExternalMidiRingBuffer and read it with readSonareExternalMidiRingBuffer"
+removed = "a ring-writer type for the engine processor, no longer exported; create the ring with createExternalMidiRingBuffer and read it with readExternalMidiRingBuffer"
 domain = "engine"
 rule = "worklet-scope"
 entry = "./worklet"
@@ -24326,12 +24339,12 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::chain config: neste
 [[entry]]
 kind = "field"
 old = "SonareWorkletMeterSnapshot.channelCount"
-to = "SonareWorkletMeterSnapshot.numChannels"
+to = "WorkletMeterSnapshot.numChannels"
 changed = "channelCount -> numChannels"
 domain = "mastering"
 rule = "num-channels"
 entry = "./worklet"
-test = "bindings/wasm/tests/surface/mastering-metering.test.ts::SonareWorkletMeterSnapshot.channelCount"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::WorkletMeterSnapshot.channelCount"
 
 [[entry]]
 kind = "field"
@@ -26259,7 +26272,7 @@ test = "bindings/wasm/tests/meter-telemetry-wide.test.ts::busMeter.numChannels"
 [[entry]]
 kind = "field"
 old = "SonareWorkletMeterSnapshot.truePeakDbL"
-new = "SonareWorkletMeterSnapshot.truePeakDbtpL"
+new = "WorkletMeterSnapshot.truePeakDbtpL"
 domain = "mastering"
 rule = "loudness-names"
 entry = "./worklet"
@@ -26267,7 +26280,7 @@ entry = "./worklet"
 [[entry]]
 kind = "field"
 old = "SonareWorkletMeterSnapshot.truePeakDbR"
-new = "SonareWorkletMeterSnapshot.truePeakDbtpR"
+new = "WorkletMeterSnapshot.truePeakDbtpR"
 domain = "mastering"
 rule = "loudness-names"
 entry = "./worklet"
@@ -26275,7 +26288,7 @@ entry = "./worklet"
 [[entry]]
 kind = "field"
 old = "SonareWorkletMeterSnapshot.truePeakDb"
-new = "SonareWorkletMeterSnapshot.truePeakDbtp"
+new = "WorkletMeterSnapshot.truePeakDbtp"
 domain = "mastering"
 rule = "loudness-names"
 entry = "./worklet"
@@ -28380,3 +28393,227 @@ old = "EngineBounceResult.numChannels"
 removed = "read channels.length"
 domain = "engine"
 rule = "num-channels"
+
+[[entry]]
+kind = "type"
+old = "SonareClipPageRequestRingBuffer"
+new = "ClipPageRequestRingBuffer"
+domain = "project"
+rule = "type-names"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonareClipPageRequestRingReadResult"
+new = "ClipPageRequestRingReadResult"
+domain = "project"
+rule = "type-names"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonareEngineTelemetryRecord"
+new = "EngineTelemetryRecord"
+domain = "engine"
+rule = "type-names"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonareEngineTelemetryRingBuffer"
+new = "EngineTelemetryRingBuffer"
+domain = "engine"
+rule = "type-names"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonareEngineTelemetryRingReadResult"
+new = "EngineTelemetryRingReadResult"
+domain = "engine"
+rule = "type-names"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonareExternalMidiRingBuffer"
+new = "ExternalMidiRingBuffer"
+domain = "engine"
+rule = "type-names"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonareExternalMidiRingReadResult"
+new = "ExternalMidiRingReadResult"
+domain = "engine"
+rule = "type-names"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonareMeterRingBuffer"
+new = "MeterRingBuffer"
+domain = "mastering"
+rule = "type-names"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonareMeterRingReadResult"
+new = "MeterRingReadResult"
+domain = "mastering"
+rule = "type-names"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonareScopeRingBuffer"
+new = "ScopeRingBuffer"
+domain = "core"
+rule = "type-names"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonareScopeRingReadResult"
+new = "ScopeRingReadResult"
+domain = "core"
+rule = "type-names"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonareSpectrumRingBuffer"
+new = "SpectrumRingBuffer"
+domain = "mastering"
+rule = "type-names"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonareSpectrumRingReadResult"
+new = "SpectrumRingReadResult"
+domain = "mastering"
+rule = "type-names"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonareWorkletMeterSnapshot"
+new = "WorkletMeterSnapshot"
+domain = "mastering"
+rule = "type-names"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonareWorkletScopeSnapshot"
+new = "WorkletScopeSnapshot"
+domain = "engine"
+rule = "type-names"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonareWorkletSpectrumSnapshot"
+new = "WorkletSpectrumSnapshot"
+domain = "mastering"
+rule = "type-names"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonareRenderOfflineRequest"
+new = "SonareEngineRenderOfflineRequest"
+domain = "engine"
+rule = "type-names"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonarePlaybackWorkletDiagnostics"
+new = "SonarePlaybackWorkletProcessorDiagnostics"
+domain = "engine"
+rule = "type-names"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonarePlaybackNodeOptions"
+new = "PlaybackNodeOptions"
+domain = "engine"
+rule = "type-names"
+entry = "./worklet"
+
+[[entry]]
+kind = "function"
+old = "readSonareClipPageRequestRingBuffer"
+new = "readClipPageRequestRingBuffer"
+domain = "project"
+rule = "type-names"
+entry = "./worklet"
+
+[[entry]]
+kind = "function"
+old = "readSonareEngineTelemetryRingBuffer"
+new = "readEngineTelemetryRingBuffer"
+domain = "engine"
+rule = "type-names"
+entry = "./worklet"
+
+[[entry]]
+kind = "function"
+old = "readSonareExternalMidiRingBuffer"
+new = "readExternalMidiRingBuffer"
+domain = "engine"
+rule = "type-names"
+entry = "./worklet"
+
+[[entry]]
+kind = "function"
+old = "readSonareMeterRingBuffer"
+new = "readMeterRingBuffer"
+domain = "mastering"
+rule = "type-names"
+entry = "./worklet"
+
+[[entry]]
+kind = "function"
+old = "readSonareScopeRingBuffer"
+new = "readScopeRingBuffer"
+domain = "core"
+rule = "type-names"
+entry = "./worklet"
+
+[[entry]]
+kind = "function"
+old = "readSonareSpectrumRingBuffer"
+new = "readSpectrumRingBuffer"
+domain = "mastering"
+rule = "type-names"
+entry = "./worklet"
+
+[[entry]]
+kind = "function"
+old = "createSonarePlaybackNode"
+new = "createPlaybackNode"
+domain = "engine"
+rule = "type-names"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonareEngineClipPageRequestMessage"
+new = "EngineClipPageRequestMessage"
+domain = "project"
+rule = "type-names"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonareEngineSyncErrorMessage"
+new = "EngineSyncErrorMessage"
+domain = "engine"
+rule = "type-names"
+entry = "./worklet"

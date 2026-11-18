@@ -27,10 +27,10 @@ import {
   SONARE_FLOOR_DB,
   SONARE_METER_RING_CHANNEL_COUNT_OFFSET,
   SONARE_METER_RING_RECORD_FLOATS,
-  type SonareWorkletMeterSnapshot,
-  type SonareWorkletSpectrumSnapshot,
   spectrumRingFromSharedBuffer,
   tryBeginOverwriteWrite,
+  type WorkletMeterSnapshot,
+  type WorkletSpectrumSnapshot,
 } from './protocol.js';
 import { AUDIO_WORKLET_RENDER_QUANTUM } from './render_quantum.js';
 
@@ -66,7 +66,7 @@ export class SonareWorkletProcessor {
    * K-weighting filters or the engine's pre-trim input tap — so finite floor
    * values are set once rather than per interval.
    */
-  private readonly meterScratch: SonareWorkletMeterSnapshot = {
+  private readonly meterScratch: WorkletMeterSnapshot = {
     type: 'meter',
     targetId: 0,
     frame: 0,
@@ -292,7 +292,7 @@ export class SonareWorkletProcessor {
     // zero-allocation contract, and a listener may retain what it is handed. It
     // still reads the latched scalars rather than `meterSnapshot()`, so the one
     // object it does build is the one it posts.
-    const meter: SonareWorkletMeterSnapshot = {
+    const meter: WorkletMeterSnapshot = {
       type: 'meter',
       targetId: 0,
       frame: this.processedFrames,
@@ -323,7 +323,7 @@ export class SonareWorkletProcessor {
     }
   }
 
-  private writeMeterRing(meter: SonareWorkletMeterSnapshot): void {
+  private writeMeterRing(meter: WorkletMeterSnapshot): void {
     const ring = this.meterRing;
     if (!ring) {
       return;
@@ -392,7 +392,7 @@ export class SonareWorkletProcessor {
       this.writeSpectrumRing(this.processedFrames, this.spectrumBands);
       return;
     }
-    const spectrum: SonareWorkletSpectrumSnapshot = {
+    const spectrum: WorkletSpectrumSnapshot = {
       type: 'spectrum',
       frame: this.processedFrames,
       bands: new Float32Array(this.spectrumBands),

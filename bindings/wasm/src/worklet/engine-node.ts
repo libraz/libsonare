@@ -4,10 +4,10 @@ import { externalMidiEvent } from '../internal/external_midi.js';
 import { failureFromPayload, isFailurePayload } from '../internal/failure_payload.js';
 import { assertHandleLive, releasedHandleError } from '../internal/handle_guard.js';
 import type {
+  EngineClipPageRequestMessage,
+  EngineSyncErrorMessage,
   SonareEngineCaptureRequestMessage,
   SonareEngineCaptureResponseMessageInternal,
-  SonareEngineClipPageRequestMessage,
-  SonareEngineSyncErrorMessage,
   SonareEngineSyncMessage,
   SonareEngineTransportResponseMessage,
 } from '../internal/worklet_messages.js';
@@ -39,32 +39,32 @@ import {
   resolveScopeBandCount,
 } from './guards.js';
 import {
-  createSonareClipPageRequestRingBuffer,
+  type ClipPageRequestRingBuffer,
+  createClipPageRequestRingBuffer,
+  createEngineTelemetryRingBuffer,
+  createExternalMidiRingBuffer,
+  createMeterRingBuffer,
+  createScopeRingBuffer,
   createSonareEngineCommandRingBuffer,
-  createSonareEngineTelemetryRingBuffer,
-  createSonareExternalMidiRingBuffer,
-  createSonareMeterRingBuffer,
-  createSonareScopeRingBuffer,
+  type EngineTelemetryRingBuffer,
+  type ExternalMidiRingBuffer,
   isRecord,
   isUint32Slot,
+  type MeterRingBuffer,
   pushSonareEngineCommandRingBuffer,
-  readSonareClipPageRequestRingBuffer,
-  readSonareEngineTelemetryRingBuffer,
-  readSonareExternalMidiRingBuffer,
-  readSonareMeterRingBuffer,
-  readSonareScopeRingBuffer,
+  readClipPageRequestRingBuffer,
+  readEngineTelemetryRingBuffer,
+  readExternalMidiRingBuffer,
+  readMeterRingBuffer,
+  readScopeRingBuffer,
+  type ScopeRingBuffer,
   SONARE_MAX_PUBLIC_PPQ,
-  type SonareClipPageRequestRingBuffer,
   type SonareEngineCommandRecord,
   type SonareEngineCommandRingBuffer,
   SonareEngineCommandType,
-  type SonareEngineTelemetryRingBuffer,
-  type SonareExternalMidiRingBuffer,
-  type SonareMeterRingBuffer,
-  type SonareScopeRingBuffer,
-  type SonareWorkletMeterSnapshot,
-  type SonareWorkletScopeSnapshot,
   sonareEngineCommandRingHasRoom,
+  type WorkletMeterSnapshot,
+  type WorkletScopeSnapshot,
 } from './protocol.js';
 import { AUDIO_WORKLET_RENDER_QUANTUM } from './render_quantum.js';
 
@@ -167,15 +167,15 @@ export class SonareRealtimeEngineNode {
   /** @internal */
   readonly commandRing?: SonareEngineCommandRingBuffer;
   /** Telemetry ring drained by {@link pollTelemetry}; present only in `'sab'` mode. */
-  readonly telemetryRing?: SonareEngineTelemetryRingBuffer;
+  readonly telemetryRing?: EngineTelemetryRingBuffer;
   /** Meter ring drained by {@link pollMeters}; present only in `'sab'` mode. */
-  readonly meterRing?: SonareMeterRingBuffer;
+  readonly meterRing?: MeterRingBuffer;
   /** Scope ring drained by {@link pollScope}; present only in `'sab'` mode with `scopeIntervalFrames` above 0. */
-  readonly scopeRing?: SonareScopeRingBuffer;
+  readonly scopeRing?: ScopeRingBuffer;
   /** Paged-clip miss ring drained by `pollClipPageRequests`; present only in `'sab'` mode. */
-  readonly clipPageRequestRing?: SonareClipPageRequestRingBuffer;
+  readonly clipPageRequestRing?: ClipPageRequestRingBuffer;
   /** External-MIDI output ring drained by `pollMidiOut`; present only in `'sab'` mode. */
-  readonly externalMidiRing?: SonareExternalMidiRingBuffer;
+  readonly externalMidiRing?: ExternalMidiRingBuffer;
   /**
    * Settles when the worklet processor has reported ready (already resolved when the processor sends no
    * ready message). Rejects if the worklet reports an error, or with `InvalidState` if the node is
@@ -188,13 +188,11 @@ export class SonareRealtimeEngineNode {
   private clipPageRequestDroppedRead = 0;
   private ringPollTimer: ReturnType<typeof setInterval> | undefined;
   private telemetryListeners = new Set<(telemetry: EngineTelemetry) => void>();
-  private meterListeners = new Set<(meter: SonareWorkletMeterSnapshot) => void>();
-  private scopeListeners = new Set<(scope: SonareWorkletScopeSnapshot) => void>();
+  private meterListeners = new Set<(meter: WorkletMeterSnapshot) => void>();
+  private scopeListeners = new Set<(scope: WorkletScopeSnapshot) => void>();
   private midiOutListeners = new Set<(events: ExternalMidiEvent[]) => void>();
-  private clipPageRequestListeners = new Set<
-    (message: SonareEngineClipPageRequestMessage) => void
-  >();
-  private syncErrorListeners = new Set<(message: SonareEngineSyncErrorMessage) => void>();
+  private clipPageRequestListeners = new Set<(message: EngineClipPageRequestMessage) => void>();
+  private syncErrorListeners = new Set<(message: EngineSyncErrorMessage) => void>();
   private captureRequestId = 1;
   private readonly captureRequests = new Map<
     number,
@@ -231,11 +229,11 @@ export class SonareRealtimeEngineNode {
     node: AudioWorkletNode,
     capabilities: SonareRealtimeEngineNodeCapabilities,
     commandRing?: SonareEngineCommandRingBuffer,
-    telemetryRing?: SonareEngineTelemetryRingBuffer,
-    meterRing?: SonareMeterRingBuffer,
-    scopeRing?: SonareScopeRingBuffer,
-    clipPageRequestRing?: SonareClipPageRequestRingBuffer,
-    externalMidiRing?: SonareExternalMidiRingBuffer,
+    telemetryRing?: EngineTelemetryRingBuffer,
+    meterRing?: MeterRingBuffer,
+    scopeRing?: ScopeRingBuffer,
+    clipPageRequestRing?: ClipPageRequestRingBuffer,
+    externalMidiRing?: ExternalMidiRingBuffer,
   ) {
     this.node = node;
     this.capabilities = capabilities;
@@ -318,7 +316,7 @@ export class SonareRealtimeEngineNode {
       } else if (isClipPageRequestMessage(event.data)) {
         this.emitClipPageRequests(event.data);
       } else if (isRecord(event.data) && event.data.type === 'syncError') {
-        const syncError: SonareEngineSyncErrorMessage = {
+        const syncError: EngineSyncErrorMessage = {
           type: 'syncError',
           syncType: String(event.data.syncType),
           message: String(event.data.message ?? 'AudioWorklet sync failed'),
@@ -338,7 +336,7 @@ export class SonareRealtimeEngineNode {
   }
 
   /** Subscribes to control-plane sync rejections reported by the worklet. */
-  onSyncError(listener: (message: SonareEngineSyncErrorMessage) => void): () => void {
+  onSyncError(listener: (message: EngineSyncErrorMessage) => void): () => void {
     this.syncErrorListeners.add(listener);
     return () => this.syncErrorListeners.delete(listener);
   }
@@ -461,13 +459,13 @@ export class SonareRealtimeEngineNode {
         : undefined;
     const telemetryRing =
       mode === 'sab'
-        ? createSonareEngineTelemetryRingBuffer({ capacity: telemetryRingCapacity })
+        ? createEngineTelemetryRingBuffer({ capacity: telemetryRingCapacity })
         : undefined;
     // Meter ring: the engine publishes meters into a SAB ring. Lock-free meter
     // delivery matches the telemetry path and keeps the audio render callback
     // allocation-free in SAB mode.
     const meterRing =
-      mode === 'sab' ? createSonareMeterRingBuffer({ capacity: meterRingCapacity }) : undefined;
+      mode === 'sab' ? createMeterRingBuffer({ capacity: meterRingCapacity }) : undefined;
     // Scope ring (FFT spectrum + goniometer): opt-in. The per-block FFT is
     // heavier than the meter path, so it is created only when the caller
     // requests scope telemetry via scopeIntervalFrames > 0. Zero is the off
@@ -480,18 +478,18 @@ export class SonareRealtimeEngineNode {
     );
     const scopeRing =
       mode === 'sab' && scopeIntervalFrames > 0
-        ? createSonareScopeRingBuffer({ capacity: scopeRingCapacity, bands: scopeBands })
+        ? createScopeRingBuffer({ capacity: scopeRingCapacity, bands: scopeBands })
         : undefined;
     // Paged-clip cache misses are a worklet-to-main-thread control signal. A
     // dedicated SPSC SAB ring keeps process() free of both embind request
     // objects and postMessage structured cloning.
     const clipPageRequestRing =
       mode === 'sab'
-        ? createSonareClipPageRequestRingBuffer({ capacity: clipPageRequestRingCapacity })
+        ? createClipPageRequestRingBuffer({ capacity: clipPageRequestRingCapacity })
         : undefined;
     const externalMidiRing =
       mode === 'sab'
-        ? createSonareExternalMidiRingBuffer({ capacity: externalMidiRingCapacity })
+        ? createExternalMidiRingBuffer({ capacity: externalMidiRingCapacity })
         : undefined;
     const channelCount = requireChannelCount(options.numChannels, 'numChannels');
     const cueOutput = options.cueOutput === true;
@@ -768,7 +766,7 @@ export class SonareRealtimeEngineNode {
     if (!this.telemetryRing) {
       return [];
     }
-    const read = readSonareEngineTelemetryRingBuffer(this.telemetryRing, this.telemetryReadIndex);
+    const read = readEngineTelemetryRingBuffer(this.telemetryRing, this.telemetryReadIndex);
     this.telemetryReadIndex = read.nextReadIndex;
     const records = read.telemetry.map(telemetryFromRecord);
     for (const telemetry of records) {
@@ -785,11 +783,11 @@ export class SonareRealtimeEngineNode {
    * {@link onMeter} listeners. Returns an empty array outside `'sab'` mode, where meters arrive through
    * the port.
    */
-  pollMeters(): SonareWorkletMeterSnapshot[] {
+  pollMeters(): WorkletMeterSnapshot[] {
     if (!this.meterRing) {
       return [];
     }
-    const read = readSonareMeterRingBuffer(this.meterRing, this.meterReadIndex);
+    const read = readMeterRingBuffer(this.meterRing, this.meterReadIndex);
     this.meterReadIndex = read.nextReadIndex;
     for (const meter of read.meters) {
       this.emitMeter(meter);
@@ -805,11 +803,11 @@ export class SonareRealtimeEngineNode {
    * each to {@link onScope} listeners. Returns an empty array unless the node was created in `'sab'`
    * mode with `scopeIntervalFrames` above 0.
    */
-  pollScope(): SonareWorkletScopeSnapshot[] {
+  pollScope(): WorkletScopeSnapshot[] {
     if (!this.scopeRing) {
       return [];
     }
-    const read = readSonareScopeRingBuffer(this.scopeRing, this.scopeReadIndex);
+    const read = readScopeRingBuffer(this.scopeRing, this.scopeReadIndex);
     this.scopeReadIndex = read.nextReadIndex;
     for (const scope of read.scopes) {
       this.emitScope(scope);
@@ -822,7 +820,7 @@ export class SonareRealtimeEngineNode {
     if (!this.externalMidiRing) {
       return [];
     }
-    const read = readSonareExternalMidiRingBuffer(this.externalMidiRing);
+    const read = readExternalMidiRingBuffer(this.externalMidiRing);
     const events = read.events.map((event) => {
       const bytes = new Uint8Array(event.byteCount);
       for (let index = 0; index < event.byteCount; index++) {
@@ -841,17 +839,17 @@ export class SonareRealtimeEngineNode {
    * to subscribers. In postMessage mode the legacy handler remains available,
    * but that degraded path is not realtime-safe for OPFS streaming.
    */
-  pollClipPageRequests(): SonareEngineClipPageRequestMessage | undefined {
+  pollClipPageRequests(): EngineClipPageRequestMessage | undefined {
     if (!this.clipPageRequestRing) {
       return undefined;
     }
-    const read = readSonareClipPageRequestRingBuffer(this.clipPageRequestRing);
+    const read = readClipPageRequestRingBuffer(this.clipPageRequestRing);
     const dropped = (read.dropped - this.clipPageRequestDroppedRead) >>> 0;
     this.clipPageRequestDroppedRead = read.dropped;
     if (read.requests.length === 0 && dropped === 0) {
       return undefined;
     }
-    const message: SonareEngineClipPageRequestMessage = {
+    const message: EngineClipPageRequestMessage = {
       type: 'clipPageRequest',
       requests: read.requests,
       ...(dropped > 0 ? { dropped } : {}),
@@ -879,7 +877,7 @@ export class SonareRealtimeEngineNode {
    *
    * @returns A function that removes the subscription.
    */
-  onMeter(callback: (meter: SonareWorkletMeterSnapshot) => void): () => void {
+  onMeter(callback: (meter: WorkletMeterSnapshot) => void): () => void {
     this.meterListeners.add(callback);
     this.startRingPolling();
     return () => {
@@ -893,7 +891,7 @@ export class SonareRealtimeEngineNode {
    *
    * @returns A function that removes the subscription.
    */
-  onScope(callback: (scope: SonareWorkletScopeSnapshot) => void): () => void {
+  onScope(callback: (scope: WorkletScopeSnapshot) => void): () => void {
     this.scopeListeners.add(callback);
     this.startRingPolling();
     return () => {
@@ -925,7 +923,7 @@ export class SonareRealtimeEngineNode {
    * Subscribe to bounded batches of paged-clip misses from the worklet. The
    * callback runs on the main thread and may initiate asynchronous OPFS I/O.
    */
-  onClipPageRequests(callback: (message: SonareEngineClipPageRequestMessage) => void): () => void {
+  onClipPageRequests(callback: (message: EngineClipPageRequestMessage) => void): () => void {
     this.clipPageRequestListeners.add(callback);
     return () => {
       this.clipPageRequestListeners.delete(callback);
@@ -1031,7 +1029,7 @@ export class SonareRealtimeEngineNode {
     }
   }
 
-  private emitMeter(meter: SonareWorkletMeterSnapshot): void {
+  private emitMeter(meter: WorkletMeterSnapshot): void {
     for (const listener of this.meterListeners) {
       listener(meter);
     }
@@ -1043,7 +1041,7 @@ export class SonareRealtimeEngineNode {
     }
   }
 
-  private emitClipPageRequests(message: SonareEngineClipPageRequestMessage): void {
+  private emitClipPageRequests(message: EngineClipPageRequestMessage): void {
     for (const listener of this.clipPageRequestListeners) {
       listener(message);
     }
@@ -1073,7 +1071,7 @@ export class SonareRealtimeEngineNode {
     return promise;
   }
 
-  private emitScope(scope: SonareWorkletScopeSnapshot): void {
+  private emitScope(scope: WorkletScopeSnapshot): void {
     for (const listener of this.scopeListeners) {
       listener(scope);
     }

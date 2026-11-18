@@ -1,7 +1,7 @@
 import { ErrorCode, RealtimeEngine, SonareError } from '../dist/index.js';
-import type { SonareWorkletMeterSnapshot } from '../src/worklet/protocol';
+import type { WorkletMeterSnapshot } from '../src/worklet/protocol';
 import {
-  createSonareMeterRingBuffer,
+  createMeterRingBuffer,
   describe,
   expect,
   it,
@@ -94,7 +94,7 @@ describe('insert gain reduction query', () => {
   });
 
   it('attaches insertGainReductionDb to postMessage meter snapshots', () => {
-    const meters: SonareWorkletMeterSnapshot[] = [];
+    const meters: WorkletMeterSnapshot[] = [];
     const processor = new SonareRealtimeEngineWorkletProcessor(
       { sampleRate: 48000, maxBlockSize: BLOCK, numChannels: 2, meterIntervalFrames: BLOCK },
       { onMeter: (meter) => meters.push(meter), postMessage: () => undefined },
@@ -119,7 +119,7 @@ describe('insert gain reduction query', () => {
   });
 
   it('attaches the field only to the newest record per target in one drain', () => {
-    const meters: SonareWorkletMeterSnapshot[] = [];
+    const meters: WorkletMeterSnapshot[] = [];
     const processor = new SonareRealtimeEngineWorkletProcessor(
       { sampleRate: 48000, maxBlockSize: BLOCK, numChannels: 2, meterIntervalFrames: 1 },
       { onMeter: (meter) => meters.push(meter), postMessage: () => undefined },
@@ -144,7 +144,7 @@ describe('insert gain reduction query', () => {
   });
 
   it('answers insertGainReductionRequest in shared-ring meter mode', () => {
-    const ring = createSonareMeterRingBuffer({ capacity: 64 });
+    const ring = createMeterRingBuffer({ capacity: 64 });
     const posted: unknown[] = [];
     const processor = new SonareRealtimeEngineWorkletProcessor(
       {

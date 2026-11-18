@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { init, type PlaybackRendererConfig } from '../dist/index.js';
 import {
-  createSonarePlaybackNode,
+  createPlaybackNode,
   init as initWorklet,
   registerSonarePlaybackWorkletProcessor,
   SonarePlaybackWorkletProcessor,
@@ -299,7 +299,7 @@ describe('SonarePlaybackWorkletProcessor', () => {
     const context = { sampleRate: 44100 } as BaseAudioContext;
     const nodeFactory = () => ({}) as AudioWorkletNode;
     const text = JSON.stringify(SPEAKERS_5_1_AUTO);
-    expect(() => createSonarePlaybackNode(context, { config: text as never, nodeFactory })).toThrow(
+    expect(() => createPlaybackNode(context, { config: text as never, nodeFactory })).toThrow(
       new TypeError('config must be a configuration object'),
     );
     expect(
@@ -318,9 +318,9 @@ describe('SonarePlaybackWorkletProcessor', () => {
       return {} as AudioWorkletNode;
     };
     const context = { sampleRate: 44100 } as BaseAudioContext;
-    createSonarePlaybackNode(context, { config: SPEAKERS_5_1_AUTO, nodeFactory });
+    createPlaybackNode(context, { config: SPEAKERS_5_1_AUTO, nodeFactory });
     const hrtf = hrtfBuffer();
-    createSonarePlaybackNode(context, { hrtf, nodeFactory, processorName: 'custom' });
+    createPlaybackNode(context, { hrtf, nodeFactory, processorName: 'custom' });
 
     expect(calls[0].name).toBe('sonare-playback-processor');
     expect(calls[0].options).toMatchObject({
@@ -337,9 +337,9 @@ describe('SonarePlaybackWorkletProcessor', () => {
     expect(calls[1].options.processorOptions.hrtf).toBe(hrtf);
 
     // An explicit rate must be the context's: nothing resamples its quanta.
-    createSonarePlaybackNode(context, { nodeFactory, sampleRate: 44100 });
+    createPlaybackNode(context, { nodeFactory, sampleRate: 44100 });
     expect(calls).toHaveLength(3);
-    expect(() => createSonarePlaybackNode(context, { nodeFactory, sampleRate: 48000 })).toThrow(
+    expect(() => createPlaybackNode(context, { nodeFactory, sampleRate: 48000 })).toThrow(
       RangeError,
     );
     expect(calls).toHaveLength(3);

@@ -15,7 +15,7 @@ import { commitSync } from './engine-commit.js';
 import { requireIntegerOption } from './guards.js';
 
 /** Request of {@link SonareEngine.renderOffline}. */
-export interface SonareRenderOfflineRequest {
+export interface SonareEngineRenderOfflineRequest {
   /** Length of the render in frames. */
   totalFrames: number;
   /**
@@ -173,7 +173,7 @@ function endTimeline(ctx: EngineExportContext, origin: number): void {
 
 export async function renderOffline(
   ctx: EngineExportContext,
-  request: SonareRenderOfflineRequest,
+  request: SonareEngineRenderOfflineRequest,
 ): Promise<Float32Array[]> {
   requestObject('SonareEngine.renderOffline', request, 'request', true);
   const frames = requireIntegerOption(request.totalFrames, Number.NaN, 'totalFrames', 0);

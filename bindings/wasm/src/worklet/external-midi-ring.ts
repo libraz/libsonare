@@ -1,10 +1,10 @@
 import {
   loadSonareRingCursor,
   RING_CURSOR_RANGE,
+  type RingCapacityOptions,
   requirePositiveCapacity,
   resolveRingCapacity,
   ringCursorSpan,
-  type SonareRingCapacityOptions,
   sonareRingCursorDistance,
   sonareRingCursorSlot,
   storeSonareRingCursor,
@@ -25,8 +25,8 @@ export interface SonareExternalMidiRingEvent {
   byteCount: number;
 }
 
-/** Shared-memory ring of external MIDI events; create one with `createSonareExternalMidiRingBuffer`. */
-export interface SonareExternalMidiRingBuffer {
+/** Shared-memory ring of external MIDI events; create one with `createExternalMidiRingBuffer`. */
+export interface ExternalMidiRingBuffer {
   /** Backing shared memory. */
   sharedBuffer: SharedArrayBuffer;
   /** Header words `[writeIndex, readIndex, capacity, recordUint32s, dropped]`. */
@@ -44,7 +44,7 @@ export interface SharedExternalMidiRingWriter {
 }
 
 /** External MIDI events drained from a ring. */
-export interface SonareExternalMidiRingReadResult {
+export interface ExternalMidiRingReadResult {
   /** Events read, oldest first. */
   events: SonareExternalMidiRingEvent[];
   /** Events the writer refused (ring full or malformed event) since the ring was created; cumulative. */
@@ -52,9 +52,9 @@ export interface SonareExternalMidiRingReadResult {
 }
 
 /** Byte length of the ring. `capacity` is required; RangeError outside the domain, TypeError for an unknown key. */
-export function sonareExternalMidiRingBufferByteLength(options: { capacity: number }): number {
+export function externalMidiRingBufferByteLength(options: { capacity: number }): number {
   const clampedCapacity = resolveRingCapacity(
-    'sonareExternalMidiRingBufferByteLength',
+    'externalMidiRingBufferByteLength',
     options,
     undefined,
   );
@@ -76,7 +76,7 @@ export function externalMidiRingFromSharedBuffer(
     fallbackCapacity,
     'externalMidiRingCapacity',
   );
-  if (sharedBuffer.byteLength < sonareExternalMidiRingBufferByteLength({ capacity })) {
+  if (sharedBuffer.byteLength < externalMidiRingBufferByteLength({ capacity })) {
     throw new RangeError('externalMidiSharedBuffer is too small for the requested ring capacity.');
   }
   Atomics.store(header, 2, capacity);
@@ -93,12 +93,12 @@ export function externalMidiRingFromSharedBuffer(
 }
 
 /** Creates a shared external-MIDI ring (default `capacity` 256). RangeError outside the domain, TypeError for an unknown key. */
-export function createSonareExternalMidiRingBuffer(
-  options?: SonareRingCapacityOptions,
-): SonareExternalMidiRingBuffer {
-  const clampedCapacity = resolveRingCapacity('createSonareExternalMidiRingBuffer', options, 256);
+export function createExternalMidiRingBuffer(
+  options?: RingCapacityOptions,
+): ExternalMidiRingBuffer {
+  const clampedCapacity = resolveRingCapacity('createExternalMidiRingBuffer', options, 256);
   const sharedBuffer = new SharedArrayBuffer(
-    sonareExternalMidiRingBufferByteLength({ capacity: clampedCapacity }),
+    externalMidiRingBufferByteLength({ capacity: clampedCapacity }),
   );
   const ring = externalMidiRingFromSharedBuffer(sharedBuffer, clampedCapacity);
   Atomics.store(ring.header, 0, 0);
@@ -164,9 +164,9 @@ export function pushSonareExternalMidiRingBuffer(
 }
 
 /** Main-thread drain. It is intentionally the only place MIDI byte arrays are built. */
-export function readSonareExternalMidiRingBuffer(
-  ring: SonareExternalMidiRingBuffer,
-): SonareExternalMidiRingReadResult {
+export function readExternalMidiRingBuffer(
+  ring: ExternalMidiRingBuffer,
+): ExternalMidiRingReadResult {
   const readIndex = loadSonareRingCursor(ring.header, 1, ring.capacity);
   const writeIndex = loadSonareRingCursor(ring.header, 0, ring.capacity);
   const pending = Math.min(

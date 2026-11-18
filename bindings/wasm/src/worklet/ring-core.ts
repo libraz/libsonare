@@ -189,7 +189,7 @@ export function resolveRingOptions<K extends string>(
 }
 
 /** Options of a single-dimension ring helper; the byte-length helpers require `capacity`. */
-export interface SonareRingCapacityOptions {
+export interface RingCapacityOptions {
   /** Records the ring holds, an integer of at least 1. */
   capacity?: number;
 }

@@ -4,10 +4,10 @@ import {
 } from '../worklet/engine-rings.js';
 import {
   loadSonareRingCursor,
+  type RingCapacityOptions,
   readInt64Words,
   recordOffset,
   resolveRingCapacity,
-  type SonareRingCapacityOptions,
   sonareRingCursorDistance,
   storeSonareRingCursor,
   toSafeInteger,
@@ -90,7 +90,7 @@ export function sonareEngineCommandRingBufferByteLength(options: { capacity: num
 
 /** Creates a shared engine command ring (default `capacity` 128). RangeError outside the domain, TypeError for an unknown key. */
 export function createSonareEngineCommandRingBuffer(
-  options?: SonareRingCapacityOptions,
+  options?: RingCapacityOptions,
 ): SonareEngineCommandRingBuffer {
   const clampedCapacity = resolveRingCapacity('createSonareEngineCommandRingBuffer', options, 128);
   const sharedBuffer = new SharedArrayBuffer(

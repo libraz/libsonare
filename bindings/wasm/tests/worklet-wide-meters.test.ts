@@ -5,13 +5,13 @@
  */
 
 import { type MixSceneStrip, RealtimeEngine } from '../dist/index.js';
-import type { SonareWorkletMeterSnapshot } from '../src/worklet/protocol';
+import type { WorkletMeterSnapshot } from '../src/worklet/protocol';
 import {
-  createSonareMeterRingBuffer,
+  createMeterRingBuffer,
   describe,
   expect,
   it,
-  readSonareMeterRingBuffer,
+  readMeterRingBuffer,
   SONARE_METER_RING_PROTOCOL_VERSION,
   SONARE_METER_RING_RECORD_FLOATS,
   SonareRealtimeEngineWorkletProcessor,
@@ -94,7 +94,7 @@ describe('wide meters on the live worklet engine', () => {
 
   it('delivers every plane of a 5.1 bus over postMessage', () => {
     const reference = referenceBusMeter('5.1', SURROUND_STRIP, 6);
-    const meters: SonareWorkletMeterSnapshot[] = [];
+    const meters: WorkletMeterSnapshot[] = [];
     const processor = new SonareRealtimeEngineWorkletProcessor(
       { sampleRate: SR, maxBlockSize: BLOCK, numChannels: 6, meterIntervalFrames: BLOCK },
       { onMeter: (meter) => meters.push(meter) },
@@ -119,7 +119,7 @@ describe('wide meters on the live worklet engine', () => {
 
   it('delivers every plane of a 5.1 bus over the shared meter ring', () => {
     const reference = referenceBusMeter('5.1', SURROUND_STRIP, 6);
-    const ring = createSonareMeterRingBuffer({ capacity: 64 });
+    const ring = createMeterRingBuffer({ capacity: 64 });
     const processor = new SonareRealtimeEngineWorkletProcessor(
       {
         sampleRate: SR,
@@ -134,7 +134,7 @@ describe('wide meters on the live worklet engine', () => {
       seedBus(engineOf(processor), '5.1', SURROUND_STRIP);
       processor.process([[]], [silent(6)]);
       expect(ring.header[3]).toBe(SONARE_METER_RING_PROTOCOL_VERSION);
-      const bus = readSonareMeterRingBuffer(ring).meters.find((m) => m.targetId === BUS_TARGET);
+      const bus = readMeterRingBuffer(ring).meters.find((m) => m.targetId === BUS_TARGET);
       expect(bus?.numChannels).toBe(6);
       expectPlanes(bus?.peakDb, reference.peakDb);
       expectPlanes(bus?.rmsDb, reference.rmsDb);
@@ -148,12 +148,12 @@ describe('wide meters on the live worklet engine', () => {
 
   it('keeps a stereo engine snapshot stereo-only and identical across both paths', () => {
     const reference = referenceBusMeter('mono', undefined, 2);
-    const posted: SonareWorkletMeterSnapshot[] = [];
+    const posted: WorkletMeterSnapshot[] = [];
     const viaMessage = new SonareRealtimeEngineWorkletProcessor(
       { sampleRate: SR, maxBlockSize: BLOCK, numChannels: 2, meterIntervalFrames: BLOCK },
       { onMeter: (meter) => posted.push(meter) },
     );
-    const ring = createSonareMeterRingBuffer({ capacity: 64 });
+    const ring = createMeterRingBuffer({ capacity: 64 });
     const viaRing = new SonareRealtimeEngineWorkletProcessor(
       {
         sampleRate: SR,
@@ -170,7 +170,7 @@ describe('wide meters on the live worklet engine', () => {
       viaMessage.process([[]], [silent(2)]);
       viaRing.process([[]], [silent(2)]);
       const message = posted.find((m) => m.targetId === BUS_TARGET);
-      const shared = readSonareMeterRingBuffer(ring).meters.find((m) => m.targetId === BUS_TARGET);
+      const shared = readMeterRingBuffer(ring).meters.find((m) => m.targetId === BUS_TARGET);
       for (const meter of [message, shared]) {
         expect(meter).toBeDefined();
         expect(meter?.numChannels).toBeUndefined();
@@ -190,7 +190,7 @@ describe('wide meters on the live worklet engine', () => {
 
   it('widens the meter ring record to carry the per-plane block', () => {
     expect(SONARE_METER_RING_RECORD_FLOATS).toBe(49);
-    expect(createSonareMeterRingBuffer({ capacity: 4 }).header[3]).toBe(0);
+    expect(createMeterRingBuffer({ capacity: 4 }).header[3]).toBe(0);
   });
 
   it('gates the meter interval per target', () => {
@@ -217,7 +217,7 @@ describe('wide meters on the live worklet engine', () => {
   });
 
   it('keeps each target on its own cadence while rendering', () => {
-    const meters: SonareWorkletMeterSnapshot[] = [];
+    const meters: WorkletMeterSnapshot[] = [];
     const processor = new SonareRealtimeEngineWorkletProcessor(
       { sampleRate: SR, maxBlockSize: BLOCK, numChannels: 2, meterIntervalFrames: BLOCK * 4 },
       { onMeter: (meter) => meters.push(meter) },

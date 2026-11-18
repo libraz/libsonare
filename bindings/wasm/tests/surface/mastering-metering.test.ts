@@ -769,7 +769,7 @@ describe('renamed, removed and tightened names', () => {
     ],
     ['MeteringTruePeakRequest.sampleRate', 'rate', 'meteringTruePeakDbtp'],
     ['meteringVectorscope', 'exported', 'meteringVectorscope'],
-    ['SonareWorkletMeterSnapshot.channelCount', 'ringSource'],
+    ['WorkletMeterSnapshot.channelCount', 'ringSource'],
     ['SpectrumOptions.dbAmin', 'zero', 'meteringSpectrum', 'dbAmin'],
     ['SpectrumOptions.dbRef', 'zero', 'meteringSpectrum', 'dbRef'],
     ['SpectrumOptions.nFft', 'zero', 'meteringSpectrum', 'nFft'],

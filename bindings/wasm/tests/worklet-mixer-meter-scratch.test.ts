@@ -1,12 +1,12 @@
 import type { MeterScratchField } from '../dist/index.js';
 import {
-  createSonareMeterRingBuffer,
+  createMeterRingBuffer,
   describe,
   expect,
   it,
   type Mixer,
   mixingScenePreset,
-  readSonareMeterRingBuffer,
+  readMeterRingBuffer,
   SONARE_METER_RING_PROTOCOL_VERSION,
   SonareWorkletProcessor,
   setupWorklet,
@@ -79,7 +79,7 @@ describe('SonareWorkletProcessor meter scratch', () => {
   }
 
   it('writes the ring from scalar accessors, never from meterSnapshot', () => {
-    const ring = createSonareMeterRingBuffer({ capacity: 64 });
+    const ring = createMeterRingBuffer({ capacity: 64 });
     const posted: unknown[] = [];
     const processor = new SonareWorkletProcessor(
       {
@@ -120,7 +120,7 @@ describe('SonareWorkletProcessor meter scratch', () => {
         expect(fields).toEqual([0, 1, 2, 3, 4, 5, 6]);
       }
 
-      const read = readSonareMeterRingBuffer(ring);
+      const read = readMeterRingBuffer(ring);
       expect(read.meters).toHaveLength(publishes);
       read.meters.forEach((meter, index) => {
         expect(meter.frame).toBe((index + 1) * blockSize);
@@ -200,7 +200,7 @@ describe('SonareWorkletProcessor meter scratch', () => {
   });
 
   it('leaves the last meter record intact when a late scratch getter throws', () => {
-    const ring = createSonareMeterRingBuffer({ capacity: 1 });
+    const ring = createMeterRingBuffer({ capacity: 1 });
     expect(ring.header[3]).toBe(0);
     const processor = new SonareWorkletProcessor(
       {
@@ -248,7 +248,7 @@ describe('SonareWorkletProcessor meter scratch', () => {
       // The failed preparation does not advance the cursor; the next complete
       // generation is therefore the second publication.
       expect(Atomics.load(ring.header, 0) >>> 0).toBe(2);
-      expect(readSonareMeterRingBuffer(ring, 1).meters.at(-1)?.frame).toBe(blockSize * 3);
+      expect(readMeterRingBuffer(ring, 1).meters.at(-1)?.frame).toBe(blockSize * 3);
     } finally {
       mixer.meterScratchValue = realValue;
       processor.destroy();

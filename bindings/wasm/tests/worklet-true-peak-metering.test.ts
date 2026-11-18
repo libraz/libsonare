@@ -14,8 +14,8 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { init, meteringTruePeakDbtp, mixingScenePreset, RealtimeEngine } from '../dist/index.js';
 import {
   init as initWorklet,
-  type SonareWorkletMeterSnapshot,
   SonareWorkletProcessor,
+  type WorkletMeterSnapshot,
 } from '../dist/worklet.js';
 
 const SR = 48000;
@@ -82,7 +82,7 @@ const UNITY_SCENE_JSON = JSON.stringify({
 });
 
 interface MixerRun {
-  meters: SonareWorkletMeterSnapshot[];
+  meters: WorkletMeterSnapshot[];
   output: Float32Array;
 }
 
@@ -92,7 +92,7 @@ function runMixerWorklet(
   blocks: number,
   sceneJson: string = JSON.stringify(mixingScenePreset('vocalReverbSend')),
 ): MixerRun {
-  const meters: SonareWorkletMeterSnapshot[] = [];
+  const meters: WorkletMeterSnapshot[] = [];
   const output = new Float32Array(blocks * BLOCK);
   const processor = new SonareWorkletProcessor(
     {
@@ -117,7 +117,7 @@ function runMixerWorklet(
   return { meters, output };
 }
 
-function dbFields(meter: SonareWorkletMeterSnapshot): number[] {
+function dbFields(meter: WorkletMeterSnapshot): number[] {
   return [
     meter.peakDbL,
     meter.peakDbR,
