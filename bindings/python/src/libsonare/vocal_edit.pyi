@@ -413,30 +413,55 @@ class VocalEditSession:
     ) -> VocalEditSession: ...
     def __enter__(self) -> VocalEditSession: ...
     def __exit__(self, exc_type: object, exc: object, tb: object) -> None: ...
-    def close(self) -> None: ...
-    def notes(self) -> VocalNotesResult: ...
-    def analysis(self) -> VocalAnalysisResult: ...
-    def capabilities(self) -> VocalCapabilities: ...
-    def token(self) -> VocalStateToken: ...
+    def close(self) -> None:
+        """Release the native session; safe to call twice."""
+    def notes(self) -> VocalNotesResult:
+        """Notes and transitions of the committed state; SonareError (InvalidState) once closed."""
+    def analysis(self) -> VocalAnalysisResult:
+        """The pitch analysis the session was built from."""
+    def capabilities(self) -> VocalCapabilities:
+        """What the loaded engine supports."""
+    def token(self) -> VocalStateToken:
+        """State token of the committed state."""
     @property
-    def revision(self) -> int: ...
+    def revision(self) -> int:
+        """Counter of committed edits."""
     @property
-    def output_length_samples(self) -> int: ...
-    def history(self) -> VocalHistory: ...
+    def output_length_samples(self) -> int:
+        """Length of the output in samples."""
+    def history(self) -> VocalHistory:
+        """Whether an undo or a redo is available."""
     @property
-    def can_undo(self) -> bool: ...
+    def can_undo(self) -> bool:
+        """True when an edit can be undone."""
     @property
-    def can_redo(self) -> bool: ...
-    def begin_edit(self, expected_revision: int | None = ...) -> VocalEditDraft: ...
-    def undo(self, expected_revision: int | None = ...) -> VocalEditResult: ...
-    def redo(self, expected_revision: int | None = ...) -> VocalEditResult: ...
-    def evaluate_pitch(self, note_id: int) -> VocalPitchResult: ...
-    def source_sample_to_destination_sample(self, note_id: int, source_sample: float) -> float: ...
-    def destination_sample_to_source_sample(
-        self, note_id: int, destination_sample: float
-    ) -> float: ...
-    def capture_render_snapshot(self) -> VocalRenderSnapshot: ...
-    def export_state(self) -> bytes: ...
+    def can_redo(self) -> bool:
+        """True when an undone edit can be redone."""
+    def begin_edit(self, expected_revision: int | None = ...) -> VocalEditDraft:
+        """Open a draft; ``expected_revision`` None means the current revision.
+
+        Raises VocalEditError on a stale revision.
+        """
+    def undo(self, expected_revision: int | None = ...) -> VocalEditResult:
+        """Undo the last committed edit; ``expected_revision`` None means the current revision.
+
+        Raises VocalEditError when refused.
+        """
+    def redo(self, expected_revision: int | None = ...) -> VocalEditResult:
+        """Redo the last undone edit; ``expected_revision`` None means the current revision.
+
+        Raises VocalEditError when refused.
+        """
+    def evaluate_pitch(self, note_id: int) -> VocalPitchResult:
+        """Measured, target and effective pitch per frame of one note."""
+    def source_sample_to_destination_sample(self, note_id: int, source_sample: float) -> float:
+        """Map a source position of a note to the output, in samples."""
+    def destination_sample_to_source_sample(self, note_id: int, destination_sample: float) -> float:
+        """Map an output position of a note back to the source, in samples."""
+    def capture_render_snapshot(self) -> VocalRenderSnapshot:
+        """Capture the committed state for rendering."""
+    def export_state(self) -> bytes:
+        """Serialise the session state to bytes that ``restore`` accepts."""
     def render(
         self,
         range: VocalRange | Sequence[int | None] | None = ...,
@@ -450,29 +475,45 @@ class VocalEditSession:
 class VocalEditDraft:
     def __enter__(self) -> VocalEditDraft: ...
     def __exit__(self, exc_type: object, exc: object, tb: object) -> None: ...
-    def close(self) -> None: ...
-    def notes(self) -> VocalNotesResult: ...
-    def token(self) -> VocalStateToken: ...
+    def close(self) -> None:
+        """Release the native draft; safe to call twice."""
+    def notes(self) -> VocalNotesResult:
+        """Notes and transitions of the draft; SonareError (InvalidState) once closed."""
+    def token(self) -> VocalStateToken:
+        """State token of the draft."""
     def apply(
         self,
         operations: Iterable[VocalOperation],
         expected_generation: int,
-    ) -> VocalEditResult: ...
-    def commit(self, expected_revision: int | None = ...) -> VocalEditResult: ...
-    def cancel(self) -> None: ...
-    def evaluate_pitch(self, note_id: int) -> VocalPitchResult: ...
-    def source_sample_to_destination_sample(self, note_id: int, source_sample: float) -> float: ...
-    def destination_sample_to_source_sample(
-        self, note_id: int, destination_sample: float
-    ) -> float: ...
-    def capture_render_snapshot(self) -> VocalRenderSnapshot: ...
+    ) -> VocalEditResult:
+        """Apply operations in order; ``expected_generation`` must be the draft's generation.
+
+        Raises VocalEditError when refused.
+        """
+    def commit(self, expected_revision: int | None = ...) -> VocalEditResult:
+        """Commit the draft; ``expected_revision`` None means the session's current revision.
+
+        Raises VocalEditError on a stale revision.
+        """
+    def cancel(self) -> None:
+        """Discard the draft."""
+    def evaluate_pitch(self, note_id: int) -> VocalPitchResult:
+        """Measured, target and effective pitch per frame of one note in the draft."""
+    def source_sample_to_destination_sample(self, note_id: int, source_sample: float) -> float:
+        """Map a note's source position in the draft to the output, in samples."""
+    def destination_sample_to_source_sample(self, note_id: int, destination_sample: float) -> float:
+        """Map a note's output position in the draft to the source, in samples."""
+    def capture_render_snapshot(self) -> VocalRenderSnapshot:
+        """Capture the draft state for rendering."""
 
 class VocalRenderSnapshot:
     def __enter__(self) -> VocalRenderSnapshot: ...
     def __exit__(self, exc_type: object, exc: object, tb: object) -> None: ...
-    def close(self) -> None: ...
+    def close(self) -> None:
+        """Release the native snapshot; safe to call twice."""
     @property
-    def output_length_samples(self) -> int: ...
+    def output_length_samples(self) -> int:
+        """Length of the output in samples."""
     def render(
         self,
         range: VocalRange | Sequence[int | None] | None = ...,
@@ -489,15 +530,20 @@ class VocalRenderSnapshot:
         start_sec: float | None = ...,
         end_sec: float | None = ...,
         request_id: int = ...,
-    ) -> VocalRenderJob: ...
+    ) -> VocalRenderJob:
+        """Start an incremental render of a destination range, in samples or seconds."""
 
 class VocalRenderJob:
     def __enter__(self) -> VocalRenderJob: ...
     def __exit__(self, exc_type: object, exc: object, tb: object) -> None: ...
-    def close(self) -> None: ...
-    def abort(self) -> None: ...
-    def next(self, cancel: Callable[[], bool] | None = ...) -> bool: ...
-    def finalize(self, cancel: Callable[[], bool] | None = ...) -> VocalRenderResult: ...
+    def close(self) -> None:
+        """Release the native job; safe to call twice."""
+    def abort(self) -> None:
+        """Abandon the render."""
+    def next(self, cancel: Callable[[], bool] | None = ...) -> bool:
+        """Run one step; True once the render is complete; ``cancel`` is polled."""
+    def finalize(self, cancel: Callable[[], bool] | None = ...) -> VocalRenderResult:
+        """Return the rendered result and release the job; ``cancel`` is polled."""
 
 def vocal_edit_abi_version() -> int | None: ...
 def create_vocal_edit_session(

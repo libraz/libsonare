@@ -287,7 +287,10 @@ class _HandleOwner:
     def _owned_notes(self) -> VocalNotesResult:
         lib = _get_lib()
         with _owned_result(
-            lib, "sonare_vocal_notes_result_init", SonareVocalNotesResult, "sonare_free_vocal_notes_result"
+            lib,
+            "sonare_vocal_notes_result_init",
+            SonareVocalNotesResult,
+            "sonare_free_vocal_notes_result",
         ) as raw:
             _vocal_check(
                 getattr(lib, f"{self._symbol_prefix}_notes")(
@@ -338,10 +341,12 @@ class _HandleOwner:
         return handle
 
     def __enter__(self) -> Self:
+        """Return self; raise SonareError (InvalidState) when the handle is released."""
         self._require_handle()
         return self
 
     def __exit__(self, exc_type: Any, exc: Any, tb: Any) -> None:
+        """Release the handle."""
         self.close()
 
     def __del__(self) -> None:
@@ -624,6 +629,8 @@ class VocalEditSession(_HandleOwner):
 
 
 class VocalEditDraft(_HandleOwner):
+    """An uncommitted batch of edits on a session; ``commit`` applies it, ``cancel`` discards it."""
+
     _destroy_symbol = "sonare_vocal_draft_destroy"
     _symbol_prefix = "sonare_vocal_draft"
 
@@ -693,6 +700,8 @@ class VocalEditDraft(_HandleOwner):
 
 
 class VocalRenderSnapshot(_HandleOwner):
+    """An immutable capture of an edit state that can be rendered, whole or as a job."""
+
     _destroy_symbol = "sonare_vocal_snapshot_destroy"
 
     def __init__(self, handle: ctypes.c_void_p, sample_rate: int) -> None:
@@ -774,6 +783,8 @@ class VocalRenderSnapshot(_HandleOwner):
 
 
 class VocalRenderJob(_HandleOwner):
+    """An incremental render stepped with ``next`` and completed with ``finalize``."""
+
     _destroy_symbol = "sonare_vocal_render_job_destroy"
 
     def __init__(self, snapshot: VocalRenderSnapshot, handle: ctypes.c_void_p) -> None:

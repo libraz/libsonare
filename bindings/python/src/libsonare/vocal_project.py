@@ -70,6 +70,8 @@ class ProjectVocalOriginalSource:
 
 @dataclass(frozen=True, slots=True)
 class ProjectVocalEditApplyResult:
+    """Result of applying a committed vocal edit to a project clip."""
+
     clip_id: int
     """Id of the clip that was edited."""
     take_id: int
@@ -90,6 +92,8 @@ class ProjectVocalEditApplyResult:
 
 @dataclass(frozen=True, slots=True)
 class ProjectVocalEditDependency:
+    """A clip's recorded dependency on a vocal edit, with source digests and availability."""
+
     clip_id: int
     """Id of the clip the edit belongs to."""
     take_id: int
@@ -123,6 +127,8 @@ class ProjectVocalEditDependency:
 
 @dataclass(frozen=True, slots=True)
 class ProjectVocalRehydrateItem:
+    """Rehydration outcome for one recorded vocal edit."""
+
     clip_id: int
     """Id of the clip the edit belongs to."""
     take_id: int

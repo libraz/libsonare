@@ -40,6 +40,8 @@ _VOCAL_REASONS: tuple[VocalReason, ...] = get_args(VocalReason)
 
 @dataclass(frozen=True, slots=True)
 class VocalRange:
+    """A half-open range of source or output samples."""
+
     start_sample: int
     """First sample of the range."""
     end_sample: int
@@ -47,11 +49,14 @@ class VocalRange:
 
     @property
     def length(self) -> int:
+        """Number of samples in the range; 0 when empty or inverted."""
         return max(0, self.end_sample - self.start_sample)
 
 
 @dataclass(frozen=True, slots=True)
 class VocalPitchPoint:
+    """One point of a pitch curve: a source position and its target pitch."""
+
     source_sample: float
     """Position in the source, in samples."""
     target_midi: float
@@ -59,11 +64,14 @@ class VocalPitchPoint:
 
     @property
     def midi(self) -> float:
+        """Alias of ``target_midi``."""
         return self.target_midi
 
 
 @dataclass(frozen=True, slots=True)
 class VocalNoteEdit:
+    """The edit applied to one note: pitch target, correction, timing, gain and formant settings."""
+
     target_mode: VocalTargetMode = "none"
     """How the pitch target is given (``VocalTargetMode``): ``"none"``, ``"center"`` or
     ``"curve"``."""
@@ -106,6 +114,8 @@ class VocalNoteEdit:
 
 @dataclass(frozen=True, slots=True)
 class VocalNote:
+    """One detected note with its source span, measured pitch and current edit."""
+
     id: int
     """Note id, stable until an operation retires it."""
     source_start_sample: int
@@ -130,11 +140,14 @@ class VocalNote:
 
     @property
     def source_range(self) -> VocalRange:
+        """The note's source span as a ``VocalRange``."""
         return VocalRange(self.source_start_sample, self.source_end_sample)
 
 
 @dataclass(frozen=True, slots=True)
 class VocalTransition:
+    """The crossfade between two adjacent notes."""
+
     left_note_id: int
     """Id of the earlier note."""
     right_note_id: int
@@ -169,6 +182,8 @@ class VocalHistory:
 
 @dataclass(frozen=True, slots=True)
 class VocalStateToken:
+    """Identifies a session or draft state by epoch, revision, draft and generation counters."""
+
     session_epoch: int
     """Counter naming the session instance."""
     revision: int
@@ -184,11 +199,14 @@ class VocalStateToken:
 
     @property
     def committed_revision(self) -> int:
+        """Alias of ``revision``."""
         return self.revision
 
 
 @dataclass(frozen=True, slots=True)
 class VocalAnalysis:
+    """Frame-wise pitch analysis of the source and the settings it was made with."""
+
     frame_origin_sample: float
     """Source sample of the first analysis frame."""
     samples_per_frame: float
@@ -223,6 +241,8 @@ class VocalAnalysis:
 
 @dataclass(frozen=True, slots=True)
 class VocalAnalysisResult:
+    """A pitch analysis with the digests and format of the source it describes."""
+
     analysis: VocalAnalysis
     """The pitch analysis the session was built from."""
     source_sha256: str
@@ -237,6 +257,8 @@ class VocalAnalysisResult:
 
 @dataclass(frozen=True, slots=True)
 class VocalCapabilities:
+    """What the loaded vocal-edit engine supports."""
+
     abi_version: int
     """Vocal-edit ABI version of the loaded library."""
     profile_id: int
@@ -253,6 +275,8 @@ class VocalCapabilities:
 
 @dataclass(frozen=True, slots=True)
 class VocalIdChange:
+    """A note id retired by an operation and the ids that replace it."""
+
     operation_index: int
     """Index of the operation in the request that replaced the id."""
     retired_id: int
@@ -263,6 +287,8 @@ class VocalIdChange:
 
 @dataclass(frozen=True, slots=True)
 class VocalEditResult:
+    """Outcome of an applied edit: the new state, changed output ranges and id replacements."""
+
     token: VocalStateToken
     """State after the call."""
     dirty_ranges: tuple[VocalRange, ...]
@@ -273,6 +299,8 @@ class VocalEditResult:
 
 @dataclass(frozen=True, slots=True)
 class VocalPitchResult:
+    """Per-frame measured, target and effective pitch over a range."""
+
     source_samples: NDArray[np.float64]
     """Source positions of the frames, in samples."""
     measured_midi: NDArray[np.float64]
@@ -289,6 +317,8 @@ class VocalPitchResult:
 
 @dataclass(frozen=True, slots=True)
 class VocalRenderResult:
+    """Rendered audio with the state it came from and render statistics."""
+
     samples: NDArray[np.float32]
     """Rendered mono samples."""
     start_sample: int
@@ -307,6 +337,8 @@ class VocalRenderResult:
 
 @dataclass(frozen=True, slots=True)
 class VocalCreateOptions:
+    """Options for creating a vocal-edit session; None leaves a setting at the library default."""
+
     output_length_samples: int | None = None
     """Length of the output in samples; None uses the source length."""
     edge_fade_ms: float | None = None
@@ -347,6 +379,8 @@ class VocalCreateOptions:
 
 @dataclass(frozen=True, slots=True)
 class VocalSetNoteEdit:
+    """Operation: replace a note's edit."""
+
     note_id: int
     """Id of the note to edit."""
     edit: VocalNoteEdit
@@ -398,6 +432,8 @@ class VocalSplitNote:
 
 @dataclass(frozen=True, slots=True)
 class VocalMergeNotes:
+    """Operation: merge adjacent notes into one."""
+
     note_ids: tuple[int, ...]
     """Ids of the adjacent notes to merge, in order."""
     merge_policy: VocalMergePolicy = "preserve"
@@ -410,12 +446,16 @@ class VocalMergeNotes:
 
 @dataclass(frozen=True, slots=True)
 class VocalSetTransition:
+    """Operation: set the crossfade between two adjacent notes."""
+
     transition: VocalTransition
     """The crossfade to set between two adjacent notes."""
 
 
 @dataclass(frozen=True, slots=True)
 class VocalRemoveTransition:
+    """Operation: remove the crossfade between two adjacent notes."""
+
     left_note_id: int
     """Id of the earlier note."""
     right_note_id: int
@@ -424,6 +464,8 @@ class VocalRemoveTransition:
 
 @dataclass(frozen=True, slots=True)
 class VocalResetNotes:
+    """Operation: restore notes to their analysed state."""
+
     note_ids: tuple[int, ...]
     """Ids of the notes to restore to their analysed state."""
 
@@ -440,3 +482,4 @@ VocalOperation: TypeAlias = (
     | VocalRemoveTransition
     | VocalResetNotes
 )
+"""One edit operation accepted by a vocal session or draft."""
