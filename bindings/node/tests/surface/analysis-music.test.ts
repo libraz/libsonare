@@ -712,16 +712,16 @@ describe('tempo range on detectBpm and detectBeats', () => {
   });
 });
 
-describe('noteSegments voicedFlags', () => {
-  it('takes voicedFlags in place of voicedProb', () => {
+describe('noteSegments voiced', () => {
+  it('takes voiced in place of voicedProb, and voiced wins when both are given', () => {
     const f0Hz = Float32Array.from({ length: 50 }, () => 440);
-    const voicedFlags = Uint8Array.from({ length: 50 }, () => 1);
+    const voiced = Uint8Array.from({ length: 50 }, () => 1);
     const frameRate = 100;
-    const result = noteSegments({ f0Hz, frameRate, voicedFlags });
+    const result = noteSegments({ f0Hz, frameRate, voiced });
     expect(result.length).toBeGreaterThan(0);
-    expect(() =>
-      noteSegments({ f0Hz, frameRate, voicedFlags, voicedProb: new Float32Array(50) }),
-    ).toThrow(RangeError);
+    expect(noteSegments({ f0Hz, frameRate, voiced, voicedProb: new Float32Array(50) })).toEqual(
+      result,
+    );
   });
 });
 

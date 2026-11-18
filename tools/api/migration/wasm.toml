@@ -1273,19 +1273,19 @@ test = "bindings/wasm/tests/surface/analysis-features.test.ts::is a row-major Ma
 [[entry]]
 kind = "function"
 old = "noteSegments"
-changed = "request gains voiced?: VoicedFlags; voicedProb optional; nested config removed"
+changed = "request gains voiced?: VoicedFlags (wins over voicedProb); voicedProb optional; nested config removed"
 domain = "analysis"
 rule = "individual"
-test = "bindings/wasm/tests/surface/analysis-features.test.ts::reports note segment bounds in seconds"
+test = "bindings/wasm/tests/surface/analysis-features.test.ts::lets voiced take precedence over voicedProb"
 
 [[entry]]
 kind = "function"
 old = "noteSegments"
-changed = "request gains voiced?: VoicedFlags; voicedProb optional; nested config removed"
+changed = "request gains voiced?: VoicedFlags (wins over voicedProb); voicedProb optional; nested config removed"
 domain = "analysis"
 rule = "individual"
 entry = "./analysis"
-test = "bindings/wasm/tests/surface/analysis-features.test.ts::reports note segment bounds in seconds"
+test = "bindings/wasm/tests/surface/analysis-features.test.ts::lets voiced take precedence over voicedProb"
 
 [[entry]]
 kind = "function"
@@ -7548,19 +7548,19 @@ entry = "./analysis"
 [[entry]]
 kind = "field"
 old = "NoteSegmentsRequest.voicedProb"
-changed = "optional; give voiced?: VoicedFlags (pitchPyin voicedFlag) or a real probability; one of the two required"
+changed = "optional; give voiced?: VoicedFlags (pitchPyin voicedFlag) or a real probability; one of the two required, voiced wins"
 domain = "analysis"
 rule = "individual"
-test = "bindings/wasm/tests/surface/analysis-features.test.ts::declares the shapes the table names"
+test = "bindings/wasm/tests/surface/analysis-features.test.ts::refuses a call with neither voiced nor voicedProb by name"
 
 [[entry]]
 kind = "field"
 old = "NoteSegmentsRequest.voicedProb"
-changed = "optional; give voiced?: VoicedFlags (pitchPyin voicedFlag) or a real probability; one of the two required"
+changed = "optional; give voiced?: VoicedFlags (pitchPyin voicedFlag) or a real probability; one of the two required, voiced wins"
 domain = "analysis"
 rule = "individual"
 entry = "./analysis"
-test = "bindings/wasm/tests/surface/analysis-features.test.ts::declares the shapes the table names"
+test = "bindings/wasm/tests/surface/analysis-features.test.ts::refuses a call with neither voiced nor voicedProb by name"
 
 [[entry]]
 kind = "field"

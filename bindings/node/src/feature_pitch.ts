@@ -1,3 +1,4 @@
+import { toVoicedInt32 } from './internal/effects_common.js';
 import { assertMatrix2D, toMatrix2D } from './internal/feature_matrix.js';
 import { resolvePositiveIntegerOption } from './internal/feature_options.js';
 import { resolveFftOptions } from './internal/fft_options.js';
@@ -11,6 +12,7 @@ import type {
   PiptrackResult,
   PitchResult,
 } from './types.js';
+import type { VoicedFlags } from './types_notes.js';
 import type { OptionsOf } from './validation.js';
 import {
   assertAudioInput,
@@ -180,7 +182,7 @@ export interface PiptrackRequest {
   validate?: boolean;
 }
 
-/** Request for {@link noteSegments}. Give exactly one of `voicedProb` and `voicedFlags`. */
+/** Request for {@link noteSegments}. Give `voiced` or `voicedProb`; `voiced` takes precedence. */
 export interface NoteSegmentsRequest {
   /** Per-frame F0 track in Hz, one value per frame, at `frameRate` frames per second. */
   f0Hz: Float32Array;
@@ -188,20 +190,18 @@ export interface NoteSegmentsRequest {
    * Per-frame voicing values in `[0, 1]`; anything below `voicedThreshold` is
    * unvoiced.
    *
-   * Pass `pitchPyin`'s `voicedFlag` converted to `0`/`1`, or give it as
-   * `voicedFlags`. Do **not** pass its `voicedProb`: that value is the frame's
-   * voiced observation mass and rises with F0 for a fixed `frameLength`, so a
-   * fixed threshold silently returns no segments at all for low-register
-   * material.
+   * Read only when `voiced` is omitted. Pass `pitchPyin`'s `voicedFlag` as
+   * `voiced` instead. Do **not** pass its `voicedProb`: that value is the
+   * frame's voiced observation mass and rises with F0 for a fixed `frameLength`,
+   * so a fixed threshold silently returns no segments at all for low-register
+   * material. `null` is omitted.
    */
-  voicedProb?: Float32Array;
+  voicedProb?: Float32Array | null;
   /**
-   * Per-frame voiced flags, nonzero = voiced, the same length as `f0Hz`;
-   * `voicedThreshold` does not apply. Build it from `pitchPyin`'s `voicedFlag`
-   * with `Uint8Array.from(flags, Number)`. A `RangeError` when both or neither of
-   * `voicedProb` and `voicedFlags` is given, or the length differs.
+   * Per-frame voiced flags (truthy = voiced), the same length as `f0Hz`. Takes
+   * precedence over `voicedProb`; `voicedThreshold` does not apply. `null` is omitted.
    */
-  voicedFlags?: Uint8Array;
+  voiced?: VoicedFlags | null;
   /** Frames per second of the F0 track. */
   frameRate: number;
   /** Cents of pitch change that start a new segment. Default 50. */
@@ -638,25 +638,26 @@ export function noteSegments(...args: unknown[]): NoteSegment[] {
     minNoteMs !== undefined ||
     referenceHz !== undefined ||
     voicedThreshold !== undefined;
-  const hasProb = r.voicedProb !== undefined && r.voicedProb !== null;
-  const hasFlags = r.voicedFlags !== undefined && r.voicedFlags !== null;
-  if (hasProb === hasFlags) {
-    throw new RangeError('noteSegments: exactly one of voicedProb and voicedFlags must be given');
+  if (r.voiced == null && r.voicedProb == null) {
+    throw new TypeError('noteSegments: one of voiced and voicedProb is required');
   }
-  const voicing = hasProb ? r.voicedProb : r.voicedFlags;
+  // The native reader takes 0/1 bytes; voiced wins, so voicedProb is not sent beside it.
+  const flags = r.voiced != null ? Uint8Array.from(toVoicedInt32('noteSegments', r.voiced)) : null;
+  const prob = flags === null ? r.voicedProb : null;
+  const voicing = flags ?? prob;
   if (
     ArrayBuffer.isView(r.f0Hz) &&
     ArrayBuffer.isView(voicing) &&
     r.f0Hz.length !== voicing.length
   ) {
     throw new RangeError(
-      `noteSegments: ${hasProb ? 'voicedProb' : 'voicedFlags'} must have the same length as f0Hz`,
+      `noteSegments: ${flags ? 'voiced' : 'voicedProb'} must have the same length as f0Hz`,
     );
   }
   return addon.noteSegments(
     r.f0Hz,
-    r.voicedProb ?? null,
-    r.voicedFlags ?? null,
+    prob ?? null,
+    flags,
     r.frameRate,
     hasTuningOptions
       ? { segmentationThresholdCents, minNoteMs, referenceHz, voicedThreshold }

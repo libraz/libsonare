@@ -1848,7 +1848,7 @@ const NoteMoveRequestKeys = keysOf<NoteMoveRequest>()([
 const NoteSegmentsRequestKeys = keysOf<NoteSegmentsRequest>()([
   'f0Hz',
   'voicedProb',
-  'voicedFlags',
+  'voiced',
   'frameRate',
   'segmentationThresholdCents',
   'minNoteMs',

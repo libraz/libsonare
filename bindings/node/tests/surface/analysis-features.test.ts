@@ -878,24 +878,44 @@ describe('type shapes', () => {
 describe('noteSegments voicing input', () => {
   const f0Hz = new Float32Array(60).fill(440);
   const ones = new Float32Array(60).fill(1);
+  const fromProb = () =>
+    sonare.noteSegments({ f0Hz, voicedProb: ones, frameRate: 100, minNoteMs: 100 });
 
-  it('takes voicedFlags and equals the 0/1 voicedProb form', () => {
-    const voicedFlags = new Uint8Array(60).fill(1);
-    const fromFlags = sonare.noteSegments({ f0Hz, voicedFlags, frameRate: 100, minNoteMs: 100 });
-    const fromProb = sonare.noteSegments({
+  it.each([
+    ['Int32Array', new Int32Array(60).fill(1)],
+    ['Uint8Array', new Uint8Array(60).fill(1)],
+    ['Float32Array', new Float32Array(60).fill(1)],
+    ['number[]', Array.from({ length: 60 }, () => 1)],
+    ['boolean[]', Array.from({ length: 60 }, () => true)],
+  ])('takes voiced as %s and equals the 0/1 voicedProb form', (_name, voiced) => {
+    const fromVoiced = sonare.noteSegments({ f0Hz, voiced, frameRate: 100, minNoteMs: 100 });
+    expect(fromVoiced.length).toBeGreaterThan(0);
+    expect(fromVoiced).toEqual(fromProb());
+  });
+
+  it('lets voiced take precedence over voicedProb', () => {
+    const silent = new Float32Array(60);
+    const both = sonare.noteSegments({
       f0Hz,
-      voicedProb: ones,
+      voiced: new Uint8Array(60).fill(1),
+      voicedProb: silent,
       frameRate: 100,
       minNoteMs: 100,
     });
-    expect(fromFlags).toEqual(fromProb);
+    expect(both).toEqual(fromProb());
+    expect(sonare.noteSegments({ f0Hz, voicedProb: silent, frameRate: 100 })).toEqual([]);
   });
 
-  it('requires exactly one of voicedFlags / voicedProb', () => {
-    const voicedFlags = new Uint8Array(60).fill(1);
-    expect(() => api.noteSegments({ f0Hz, frameRate: 100 })).toThrow(RangeError);
-    expect(() => api.noteSegments({ f0Hz, voicedFlags, voicedProb: ones, frameRate: 100 })).toThrow(
-      RangeError,
+  it('refuses a call with neither voiced nor voicedProb by name', () => {
+    expect(() => api.noteSegments({ f0Hz, frameRate: 100 } as never)).toThrow(
+      /one of voiced and voicedProb is required/,
     );
+    expect(() => api.noteSegments({ f0Hz, frameRate: 100 } as never)).toThrow(TypeError);
+  });
+
+  it('refuses the old voicedFlags key as unknown', () => {
+    expect(() =>
+      api.noteSegments({ f0Hz, voicedFlags: new Uint8Array(60).fill(1), frameRate: 100 } as never),
+    ).toThrow(TypeError);
   });
 });

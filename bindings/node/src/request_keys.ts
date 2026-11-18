@@ -1962,7 +1962,7 @@ export const REQUEST_KEYS = {
   noteSegments: keySet(
     'f0Hz',
     'voicedProb',
-    'voicedFlags',
+    'voiced',
     'frameRate',
     'segmentationThresholdCents',
     'minNoteMs',

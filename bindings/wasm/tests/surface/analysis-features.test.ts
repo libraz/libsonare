@@ -650,20 +650,44 @@ describe('analysis features: types', () => {
 describe('analysis features: note segments voicing', () => {
   const frames = 40;
   const f0Hz = new Float32Array(frames).fill(440);
+  const viaProb = () =>
+    noteSegments({ f0Hz, voicedProb: new Float32Array(frames).fill(1), frameRate: 100 });
 
-  it('takes voicedFlags in place of a probability', () => {
-    const voicedFlags = new Uint8Array(frames).fill(1);
-    const viaFlags = noteSegments({ f0Hz, voicedFlags, frameRate: 100 });
-    const viaProb = noteSegments({
-      f0Hz,
-      voicedProb: new Float32Array(frames).fill(1),
-      frameRate: 100,
-    });
-    expect(viaFlags).toEqual(viaProb);
+  it.each([
+    ['Int32Array', new Int32Array(frames).fill(1)],
+    ['Uint8Array', new Uint8Array(frames).fill(1)],
+    ['Float32Array', new Float32Array(frames).fill(1)],
+    ['number[]', Array.from({ length: frames }, () => 1)],
+    ['boolean[]', Array.from({ length: frames }, () => true)],
+  ])('takes voiced as %s in place of a probability', (_name, voiced) => {
+    const viaVoiced = noteSegments({ f0Hz, voiced, frameRate: 100 });
+    expect(viaVoiced.length).toBeGreaterThan(0);
+    expect(viaVoiced).toEqual(viaProb());
   });
 
-  it('requires exactly one of voicedFlags or voicedProb', () => {
-    expect(() => noteSegments({ f0Hz, frameRate: 100 } as never)).toThrow(RangeError);
+  it('lets voiced take precedence over voicedProb', () => {
+    const silent = new Float32Array(frames);
+    const both = noteSegments({
+      f0Hz,
+      voiced: new Uint8Array(frames).fill(1),
+      voicedProb: silent,
+      frameRate: 100,
+    });
+    expect(both).toEqual(viaProb());
+    expect(noteSegments({ f0Hz, voicedProb: silent, frameRate: 100 })).toEqual([]);
+  });
+
+  it('refuses a call with neither voiced nor voicedProb by name', () => {
+    expect(() => noteSegments({ f0Hz, frameRate: 100 } as never)).toThrow(
+      /one of voiced and voicedProb is required/,
+    );
+    expect(() => noteSegments({ f0Hz, frameRate: 100 } as never)).toThrow(TypeError);
+  });
+
+  it('refuses the old voicedFlags key as unknown', () => {
+    expect(() =>
+      noteSegments({ f0Hz, voicedFlags: new Uint8Array(frames).fill(1), frameRate: 100 } as never),
+    ).toThrow(TypeError);
   });
 
   it('segments a pitchPyin track through its voicedFlag', () => {
@@ -672,8 +696,11 @@ describe('analysis features: note segments voicing', () => {
       (_, i) => 0.4 * Math.sin((2 * Math.PI * 440 * i) / sr),
     );
     const track = pitchPyin(samples, sr);
-    const voicedFlags = Uint8Array.from(track.voicedFlag, Number);
-    const segments = noteSegments({ f0Hz: track.f0, voicedFlags, frameRate: sr / 512 });
+    const segments = noteSegments({
+      f0Hz: track.f0,
+      voiced: track.voicedFlag,
+      frameRate: sr / 512,
+    });
     expect(segments.length).toBeGreaterThan(0);
   });
 });
