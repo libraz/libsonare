@@ -1827,6 +1827,8 @@ class MasteringRepairAnalysis(TypedDict):
     recommended: list[dict[str, Any]]
     explanation: list[str]
 
+MasteringChainConfig: TypeAlias = dict[str, Any]
+
 class MasteringChainConfigDocument(TypedDict):
     version: int
     params: dict[str, Any]

@@ -503,6 +503,9 @@ from ._types_mastering_results import (
     MasteringAudioProfileSpectral as MasteringAudioProfileSpectral,
 )
 from ._types_mastering_results import (
+    MasteringChainConfig as MasteringChainConfig,
+)
+from ._types_mastering_results import (
     MasteringChainConfigDocument as MasteringChainConfigDocument,
 )
 from ._types_mastering_results import (

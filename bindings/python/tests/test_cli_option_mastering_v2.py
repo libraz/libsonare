@@ -66,7 +66,7 @@ def test_mastering_preset_params_and_bits_reach_api_and_writer(
     assert _cli_mastering.cmd_mastering(args) == 0
 
     assert calls["preset"] == "pop"
-    assert calls["overrides"] == {"loudness.targetLufs": -13.0}
+    assert calls["overrides"] == {"loudness": {"targetLufs": -13.0}}
     assert calls["writer"] == (str(output), 48_000, 24)
     payload = json.loads(capsys.readouterr().out)
     assert payload["mode"] == "preset"
@@ -102,10 +102,7 @@ def test_mastering_config_unwraps_native_wrapper_and_forwards_params(monkeypatch
     )
 
     assert _cli_mastering.cmd_mastering(args) == 0
-    assert calls["config"] == {
-        "loudness.targetLufs": -15.0,
-        "loudness.ceilingDb": -0.5,
-    }
+    assert calls["config"] == {"loudness": {"targetLufs": -15.0, "ceilingDb": -0.5}}
 
 
 def test_mastering_assistant_enable_repair_explain_reaches_suggestion_and_chain(
@@ -154,9 +151,8 @@ def test_mastering_assistant_enable_repair_explain_reaches_suggestion_and_chain(
     # every unnamed control keeps the library's own default.
     assert calls["assistant_params"] == {"enableRepair": True}
     assert calls["config"] == {
-        "loudness.targetLufs": -14.0,
-        "repair.declick.enabled": 1,
-        "loudness.truePeakOversample": 8.0,
+        "loudness": {"targetLufs": -14.0, "truePeakOversample": 8.0},
+        "repair": {"declick": {"enabled": 1}},
     }
     assert json.loads(capsys.readouterr().out)["explanation"] == ["repair enabled"]
 

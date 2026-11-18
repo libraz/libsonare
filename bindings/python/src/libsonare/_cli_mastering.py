@@ -44,6 +44,7 @@ from ._cli_repair import (
     register_repair_parsers,
 )
 from ._errors import _unknown_error
+from ._mastering_offline import _chain_config_paths, _nest_chain_config
 
 if TYPE_CHECKING:
     from .analyzer import MasteringPreset, SoloProcessor
@@ -342,8 +343,10 @@ def cmd_mastering(args: argparse.Namespace) -> int:
         from . import mastering_chain, mastering_chain_stereo
 
         if stereo:
-            return mastering_chain_stereo(planes[0], planes[1], sample_rate=sr, config=config)
-        return mastering_chain(samples, sample_rate=sr, config=config)
+            return mastering_chain_stereo(
+                planes[0], planes[1], sample_rate=sr, config=_nest_chain_config(config)
+            )
+        return mastering_chain(samples, sample_rate=sr, config=_nest_chain_config(config))
 
     result: Any
     mode = "loudness"
@@ -357,14 +360,14 @@ def cmd_mastering(args: argparse.Namespace) -> int:
                 planes[1],
                 sample_rate=sr,
                 preset=cast("MasteringPreset", preset),
-                overrides=params or None,
+                overrides=_nest_chain_config(params) if params else None,
             )
         else:
             result = master_audio(
                 samples,
                 sample_rate=sr,
                 preset=cast("MasteringPreset", preset),
-                overrides=params or None,
+                overrides=_nest_chain_config(params) if params else None,
             )
         mode = "preset"
     elif config_raw:
@@ -772,10 +775,12 @@ def cmd_mastering_chain(args: argparse.Namespace) -> int:
     # only in which buffers they carry.
     result: MasteringChainStereoResult | MasteringChainResult
     if len(planes) == 2:
-        result = mastering_chain_stereo(planes[0], planes[1], sample_rate=sr, config=config)
+        result = mastering_chain_stereo(
+            planes[0], planes[1], sample_rate=sr, config=_nest_chain_config(config)
+        )
         rendered = [result.left, result.right]
     else:
-        result = mastering_chain(planes[0], sample_rate=sr, config=config)
+        result = mastering_chain(planes[0], sample_rate=sr, config=_nest_chain_config(config))
         rendered = [result.samples]
     report_path = getattr(args, "report", "")
 
@@ -841,9 +846,11 @@ def cmd_master(args: argparse.Namespace) -> int:
         carries them is what the two chain entry points differ in.
         """
         if stereo:
-            pair = mastering_chain_stereo(planes[0], planes[1], sample_rate=sr, config=config)
+            pair = mastering_chain_stereo(
+                planes[0], planes[1], sample_rate=sr, config=_nest_chain_config(config)
+            )
             return pair, [pair.left, pair.right]
-        mono = mastering_chain(planes[0], sample_rate=sr, config=config)
+        mono = mastering_chain(planes[0], sample_rate=sr, config=_nest_chain_config(config))
         return mono, [mono.samples]
 
     result: MasteringChainStereoResult | MasteringChainResult
@@ -865,7 +872,8 @@ def cmd_master(args: argparse.Namespace) -> int:
         suggestion_params: dict[str, float | int | bool | str] = (
             {"preset": args.preset} if preset_supplied else {}
         )
-        suggested: dict[str, Any] = dict(
+        # Flattened to paths so a nested --config override merges leaf by leaf.
+        suggested: dict[str, Any] = _chain_config_paths(
             mastering_assistant_suggest_chain_stereo(
                 planes[0], planes[1], sample_rate=sr, params=suggestion_params
             )
@@ -879,12 +887,16 @@ def cmd_master(args: argparse.Namespace) -> int:
         mode = "assistant"
     elif stereo:
         stereo_result = master_audio_stereo(
-            planes[0], planes[1], sample_rate=sr, preset=args.preset, overrides=overrides
+            planes[0],
+            planes[1],
+            sample_rate=sr,
+            preset=args.preset,
+            overrides=_nest_chain_config(overrides),
         )
         result, rendered = stereo_result, [stereo_result.left, stereo_result.right]
     else:
         mono_result = master_audio(
-            planes[0], sample_rate=sr, preset=args.preset, overrides=overrides
+            planes[0], sample_rate=sr, preset=args.preset, overrides=_nest_chain_config(overrides)
         )
         result, rendered = mono_result, [mono_result.samples]
     report_path = getattr(args, "report", "")

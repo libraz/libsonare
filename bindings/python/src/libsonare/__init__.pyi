@@ -1095,6 +1095,9 @@ from .types import (
     MasteringAudioProfileSpectral as MasteringAudioProfileSpectral,
 )
 from .types import (
+    MasteringChainConfig as MasteringChainConfig,
+)
+from .types import (
     MasteringChainConfigDocument as MasteringChainConfigDocument,
 )
 from .types import (

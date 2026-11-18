@@ -43,6 +43,7 @@ from ._runtime import (
 from ._types_enums import _EQ_PHASE_MODES, _EQ_STEREO_PLACEMENTS, EqPhaseMode, EqStereoPlacement
 from .types import (
     EqSpectrumSnapshot,
+    MasteringChainConfig,
     StereoBlock,
     StreamingLoudnessGain,
 )
@@ -61,7 +62,7 @@ def _streaming_loudness_gain_result(out: SonareStreamingLoudnessGain) -> Streami
 def streaming_loudness_gain(
     samples: Sequence[float] | list[float],
     sample_rate: int,
-    config: dict[str, Any] | None = None,
+    config: MasteringChainConfig | None = None,
 ) -> StreamingLoudnessGain:
     """Measure the loudness numbers a :class:`StreamingMasteringChain` needs.
 
@@ -112,7 +113,7 @@ def streaming_loudness_gain_stereo(
     left: Sequence[float] | list[float],
     right: Sequence[float] | list[float],
     sample_rate: int,
-    config: dict[str, Any] | None = None,
+    config: MasteringChainConfig | None = None,
 ) -> StreamingLoudnessGain:
     """Stereo counterpart of :func:`streaming_loudness_gain`.
 
@@ -180,7 +181,7 @@ class StreamingMasteringChain:
 
     def __init__(
         self,
-        config: dict[str, Any] | None = None,
+        config: MasteringChainConfig | None = None,
         *,
         sample_rate: int,
         max_block_size: int = 128,
@@ -191,7 +192,7 @@ class StreamingMasteringChain:
         """Build and prepare a streaming mastering chain.
 
         Args:
-            config: Flat chain params (see :func:`mastering_chain`).
+            config: Nested chain config (see :func:`mastering_chain`).
             sample_rate: Sample rate in Hz.
             max_block_size: Largest block, in samples, any one
                 :meth:`process_mono` / :meth:`process_stereo` call passes.

@@ -51,7 +51,7 @@ def _make_retune() -> Any:
 def _make_chain() -> Any:
     from libsonare import StreamingMasteringChain
 
-    return StreamingMasteringChain({"eq.tilt.tiltDb": 1.0}, sample_rate=48000)
+    return StreamingMasteringChain({"eq": {"tilt": {"tiltDb": 1.0}}}, sample_rate=48000)
 
 
 def _make_mixer() -> Any:

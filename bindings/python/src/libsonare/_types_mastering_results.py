@@ -111,6 +111,17 @@ class MasteringRepairAnalysis(TypedDict):
     explanation: list[str]
 
 
+MasteringChainConfig = dict[str, Any]
+"""A nested mastering chain config: module -> processor -> parameter.
+
+``{"dynamics": {"compressor": {"thresholdDb": -24}}, "loudness": {"targetLufs":
+-14}}``. A boolean toggles a module/processor's ``enabled`` flag, an enum leaf
+is its token, and a list (``crossover.cutoffsHz``, ``bands``) is a list. The
+form :func:`libsonare.master_audio` takes as ``overrides`` and
+:func:`libsonare.mastering_assistant_suggest_chain` returns.
+"""
+
+
 class MasteringChainConfigDocument(TypedDict):
     """A chain document: a version and flat ``"module.param": value`` params.
 

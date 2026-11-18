@@ -42,6 +42,7 @@ from ._types_capabilities import _from_wire
 from .types import (
     CapabilityCatalog,
     MasteringAmpPresetCatalogEntry,
+    MasteringChainConfig,
     MasteringChainResult,
     MasteringChainStereoResult,
     MasteringInsertParamInfo,
@@ -569,47 +570,108 @@ def _enum_value(processor: str | None, key: str, name: str) -> float:
     return value.value if is_enum.value else float(name)
 
 
-def _flatten_chain_config(
-    config: dict[str, Any] | None,
-    prefix: str = "",
-) -> dict[str, float]:
-    """Flatten a nested chain config dict using dot-notation keys.
+def _chain_config_paths(config: Mapping[str, Any] | None) -> dict[str, Any]:
+    """Walk a nested chain config into ``{"module.processor.param": leaf}``.
 
-    Accepts both nested (``{"dynamics": {"compressor": {"thresholdDb": -24}}}``)
-    and flat (``{"dynamics.compressor.thresholdDb": -24}``) representations.
-    Booleans are coerced to 0.0/1.0 and other values via ``float``. A string
-    for an enum-valued key (``"repair.denoise.noiseEstimator": "mcra"``) is
-    resolved by the core to the number every flat parameter list carries; an
-    unknown name raises with the key and the valid names. A list recurses as
-    ``<path>.<index>`` (``crossover.cutoffsHz`` -> ``crossover.cutoffsHz.0``);
-    an empty list has no flat spelling and is refused by path.
+    Leaves are returned unconverted. A key containing a dot is refused: the
+    nested object is the only accepted spelling, and the dot is the path
+    separator the native call reads. A list recurses as ``<path>.<index>``
+    (``crossover.cutoffsHz`` -> ``crossover.cutoffsHz.0``); an empty list has no
+    flat spelling and is refused by path.
+    """
+    paths: dict[str, Any] = {}
+    if not config:
+        return paths
+
+    def walk(value: Any, path: str) -> None:
+        if isinstance(value, Mapping):
+            for key, child in value.items():
+                name = str(key)
+                child_path = f"{path}.{name}" if path else name
+                if "." in name:
+                    raise SonareValueError(
+                        f"mastering config key {child_path!r}: dotted keys are not accepted; "
+                        "nest the object"
+                    )
+                walk(child, child_path)
+        elif isinstance(value, (list, tuple)):
+            if not value:
+                raise SonareValueError(f"{path} is an empty list, which has no flat spelling")
+            for index, item in enumerate(value):
+                walk(item, f"{path}.{index}")
+        else:
+            paths[path] = value
+
+    walk(config, "")
+    return paths
+
+
+def _flatten_chain_config(config: Mapping[str, Any] | None) -> dict[str, float]:
+    """Flatten a nested chain config into the dotted-key map the native call reads.
+
+    Booleans are coerced to 0.0/1.0 and numbers narrowed to a finite double. A
+    string for an enum-valued key (``{"repair": {"denoise": {"noiseEstimator":
+    "mcra"}}}``) is resolved by the core to the number every flat parameter
+    list carries; an unknown name raises with the key and the valid names.
     """
     flat: dict[str, float] = {}
-    if not config:
-        return flat
-    for key, value in config.items():
-        full_key = f"{prefix}{key}" if not prefix else f"{prefix}.{key}"
-        _flatten_chain_value(value, full_key, flat)
+    for path, value in _chain_config_paths(config).items():
+        if isinstance(value, bool):
+            flat[path] = 1.0 if value else 0.0
+        elif isinstance(value, str):
+            flat[path] = _enum_value(None, path, value)
+        else:
+            flat[path] = _narrow_double(value, path)
     return flat
 
 
-def _flatten_chain_value(value: Any, full_key: str, flat: dict[str, float]) -> None:
-    if isinstance(value, dict):
-        flat.update(_flatten_chain_config(value, full_key))
-    elif isinstance(value, (list, tuple)):
-        if not value:
-            raise SonareValueError(f"{full_key} is an empty list, which has no flat spelling")
-        for index, item in enumerate(value):
-            _flatten_chain_value(item, f"{full_key}.{index}", flat)
-    elif isinstance(value, bool):
-        flat[full_key] = 1.0 if value else 0.0
-    elif isinstance(value, str):
-        flat[full_key] = _enum_value(None, full_key, value)
-    else:
-        flat[full_key] = _narrow_double(value, full_key)
+def _nest_chain_config(flat: Mapping[str, Any]) -> dict[str, Any]:
+    """Nest a native ``{"module.param": value}`` map into a chain config.
+
+    The inverse of :func:`_flatten_chain_config`'s path walk: each dot opens an
+    object, and an object whose keys are exactly ``0..n-1`` becomes a list. A
+    value that is itself an object (a version 2 document's multiband stage)
+    merges at its path.
+    """
+    root: dict[str, Any] = {}
+    for path, value in flat.items():
+        node = root
+        parts = str(path).split(".")
+        for part in parts[:-1]:
+            child = node.setdefault(part, {})
+            if not isinstance(child, dict):
+                raise SonareValueError(f"mastering config path {path!r} nests under a value")
+            node = child
+        leaf = parts[-1]
+        if isinstance(value, Mapping):
+            child = node.setdefault(leaf, {})
+            if not isinstance(child, dict):
+                raise SonareValueError(f"mastering config path {path!r} nests under a value")
+            for key, member in _nest_chain_config(value).items():
+                child[key] = member
+        elif isinstance(value, list):
+            node[leaf] = [
+                _nest_chain_config(item) if isinstance(item, Mapping) else item for item in value
+            ]
+        else:
+            node[leaf] = value
+    return cast(dict[str, Any], _lists_from_index_objects(root))
 
 
-def _chain_params(config: dict[str, Any] | None) -> tuple[Any, int]:
+def _lists_from_index_objects(node: Any) -> Any:
+    if isinstance(node, list):
+        return [_lists_from_index_objects(item) for item in node]
+    if not isinstance(node, dict):
+        return node
+    converted = {key: _lists_from_index_objects(value) for key, value in node.items()}
+    if converted and all(key.isdigit() for key in converted):
+        indices = sorted(int(key) for key in converted)
+        if indices == list(range(len(indices))):
+            return [converted[str(index)] for index in indices]
+    return converted
+
+
+def _chain_params(config: Mapping[str, Any] | None) -> tuple[Any, int]:
     flat = _flatten_chain_config(config)
     items = list(flat.items())
     array_type = SonareMasteringParam * len(items)
@@ -689,7 +751,7 @@ def _make_progress_trampoline(
 def mastering_chain(
     samples: Sequence[float] | list[float],
     sample_rate: int,
-    config: dict[str, Any] | None = None,
+    config: MasteringChainConfig | None = None,
     on_progress: Callable[[float, str], None] | None = None,
     *,
     cancel: Callable[[], bool] | None = None,
@@ -707,9 +769,9 @@ def mastering_chain(
         config: A nested dict of module -> processor -> parameter, e.g.
             ``{"dynamics": {"compressor": {"thresholdDb": -24}},
             "loudness": {"targetLufs": -14}}``. A boolean toggles a
-            module/processor's ``enabled`` flag. (Flat dot-notation keys such
-            as ``{"dynamics.compressor.thresholdDb": -24}`` are also accepted
-            and may be mixed in.)
+            module/processor's ``enabled`` flag. A dotted key such as
+            ``"dynamics.compressor.thresholdDb"`` raises SonareValueError;
+            nest the object instead.
         on_progress: Optional callback ``(progress, stage)`` invoked after
             each enabled stage completes. ``progress`` is in ``[0.0, 1.0]``
             and ``stage`` is the stage identifier (e.g.
@@ -808,7 +870,7 @@ def mastering_chain_stereo(
     left: Sequence[float] | list[float],
     right: Sequence[float] | list[float],
     sample_rate: int,
-    config: dict[str, Any] | None = None,
+    config: MasteringChainConfig | None = None,
     on_progress: Callable[[float, str], None] | None = None,
     *,
     cancel: Callable[[], bool] | None = None,
@@ -934,7 +996,7 @@ def master_audio(
     samples: Sequence[float] | list[float],
     sample_rate: int,
     preset: str = "pop",
-    overrides: dict[str, Any] | None = None,
+    overrides: MasteringChainConfig | None = None,
     on_progress: Callable[[float, str], None] | None = None,
     *,
     cancel: Callable[[], bool] | None = None,
@@ -1051,7 +1113,7 @@ def master_audio_stereo(
     right: Sequence[float] | list[float],
     sample_rate: int,
     preset: str = "pop",
-    overrides: dict[str, Any] | None = None,
+    overrides: MasteringChainConfig | None = None,
     on_progress: Callable[[float, str], None] | None = None,
     *,
     cancel: Callable[[], bool] | None = None,

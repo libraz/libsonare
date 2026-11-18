@@ -245,9 +245,12 @@ def _mentions_any(text: str) -> bool:
 def _open_slot_parameters() -> list[tuple[str, str, str, str, str]]:
     """(stub, dotted, arg, stub annotation, runtime annotation) for open runtime types."""
     found: list[tuple[str, str, str, str, str]] = []
+    # Shared aliases (``MasteringChainConfig``) live in types.pyi and reach a
+    # runtime annotation by name, so both sides expand them.
+    shared = _stub_type_aliases(ast.parse((STUB_DIR / "types.pyi").read_text(encoding="utf-8")))
     for stub_name in sorted(_STUB_FLOORS):
         tree = ast.parse((STUB_DIR / stub_name).read_text(encoding="utf-8"))
-        aliases = _stub_type_aliases(tree)
+        aliases = {**shared, **_stub_type_aliases(tree)}
         for _stub, dotted, node in STUB_CALLABLES:
             if _stub != stub_name:
                 continue
@@ -266,7 +269,7 @@ def _open_slot_parameters() -> list[tuple[str, str, str, str, str]]:
                 parameter = parameters.get(argument.arg)
                 if parameter is None or parameter.annotation is inspect.Parameter.empty:
                     continue
-                runtime_annotation = str(parameter.annotation)
+                runtime_annotation = _expand_aliases(str(parameter.annotation), aliases)
                 if not _mentions_any(runtime_annotation):
                     continue
                 found.append(

@@ -20,7 +20,8 @@ from libsonare import (
     mastering_assistant_suggest_chain_stereo,
     mastering_assistant_suggest_stereo,
 )
-from libsonare._mastering_pair import _unwrap_chain_params
+from libsonare._mastering_offline import _flatten_chain_config, _nest_chain_config
+from libsonare._mastering_pair import _chain_config_from_document
 
 from ._helpers import LIB_AVAILABLE, sine
 
@@ -37,7 +38,8 @@ def test_chain_matches_the_document_chain_config() -> None:
     """The chain-only extractor agrees with the chain config nested in the document."""
     document = json.loads(mastering_assistant_suggest(SAMPLES, sample_rate=SR, params=PARAMS))
     chain = mastering_assistant_suggest_chain(SAMPLES, sample_rate=SR, params=PARAMS)
-    assert chain == document["chainConfig"]["params"]
+    assert chain == _nest_chain_config(document["chainConfig"]["params"])
+    assert not any("." in key for key in chain)
 
 
 def test_chain_stereo_matches_the_document_chain_config() -> None:
@@ -46,14 +48,25 @@ def test_chain_stereo_matches_the_document_chain_config() -> None:
         mastering_assistant_suggest_stereo(LEFT, RIGHT, sample_rate=SR, params=PARAMS)
     )
     chain = mastering_assistant_suggest_chain_stereo(LEFT, RIGHT, sample_rate=SR, params=PARAMS)
-    assert chain == document["chainConfig"]["params"]
+    assert chain == _nest_chain_config(document["chainConfig"]["params"])
 
 
 def test_chain_overrides_master_audio() -> None:
-    """The extracted chain is accepted as master_audio overrides as-is."""
+    """The nested chain round-trips: as overrides it renders like the document's own params."""
+    document = json.loads(mastering_assistant_suggest(SAMPLES, sample_rate=SR, params=PARAMS))
     chain = mastering_assistant_suggest_chain(SAMPLES, sample_rate=SR, params=PARAMS)
+    assert _flatten_chain_config(chain) == {
+        key: float(value) for key, value in document["chainConfig"]["params"].items()
+    }
     result = master_audio(SAMPLES, sample_rate=SR, preset="pop", overrides=chain)
+    by_hand = master_audio(
+        SAMPLES,
+        sample_rate=SR,
+        preset="pop",
+        overrides=_nest_chain_config(document["chainConfig"]["params"]),
+    )
     assert result.report is not None
+    assert result.samples == by_hand.samples
 
 
 def test_chain_stereo_overrides_master_audio_stereo() -> None:
@@ -63,8 +76,8 @@ def test_chain_stereo_overrides_master_audio_stereo() -> None:
     assert result.report is not None
 
 
-def test_nested_chain_param_is_flattened_into_the_array_spelling() -> None:
-    """A schema v2 nested block comes back as flat keys, lists as ``.<index>``.
+def test_nested_chain_param_merges_into_the_nested_config() -> None:
+    """A schema v2 structured block merges at its path, lists staying lists.
 
     The assistant cannot emit schema v2 today, so there is no C entry point
     that produces a nested value to exercise this through; the unwrap helper
@@ -82,13 +95,14 @@ def test_nested_chain_param_is_flattened_into_the_array_spelling() -> None:
             },
         }
     )
-    assert _unwrap_chain_params(document) == {
-        "dynamics.multibandComp.crossover.cutoffsHz.0": 200.0,
-        "dynamics.multibandComp.crossover.cutoffsHz.1": 2000.0,
-        "dynamics.multibandComp.bands.0.ratio": 2.0,
-        "dynamics.multibandComp.bands.1.ratio": 3.0,
-        "dynamics.multibandComp.bands.2.ratio": 4.0,
-        "loudness.targetLufs": -14.0,
+    assert _chain_config_from_document(document) == {
+        "dynamics": {
+            "multibandComp": {
+                "crossover": {"cutoffsHz": [200.0, 2000.0]},
+                "bands": [{"ratio": 2.0}, {"ratio": 3.0}, {"ratio": 4.0}],
+            }
+        },
+        "loudness": {"targetLufs": -14.0},
     }
 
 
@@ -96,10 +110,10 @@ def test_non_numeric_chain_param_leaf_is_rejected_by_name() -> None:
     """A leaf that is neither a number nor a boolean is named rather than dropped."""
     document = json.dumps({"version": 2, "params": {"dynamics.multibandComp": {"slope": None}}})
     with pytest.raises(SonareValueError, match="dynamics.multibandComp.slope"):
-        _unwrap_chain_params(document)
+        _chain_config_from_document(document)
 
 
 def test_a_config_without_params_is_refused() -> None:
     """An empty overrides mapping applies the preset unchanged, so it is not a result."""
     with pytest.raises(SonareValueError, match="no params block"):
-        _unwrap_chain_params(json.dumps({"version": 1, "params": {}}))
+        _chain_config_from_document(json.dumps({"version": 1, "params": {}}))

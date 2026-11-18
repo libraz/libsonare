@@ -473,7 +473,7 @@ def test_mastering_chain_cli_writes_output_and_merges_params(monkeypatch, tmp_pa
     assert cli.cmd_mastering_chain(args) == 0
     assert calls["samples"] == [0.25, -0.25, 0.0]
     assert calls["sample_rate"] == 22050
-    assert calls["config"] == {"eq.tilt.tiltDb": 1.5, "loudness.enabled": 1.0}
+    assert calls["config"] == {"eq": {"tilt": {"tiltDb": 1.5}}, "loudness": {"enabled": 1.0}}
     assert output.exists()
     payload = json.loads(capsys.readouterr().out)
     assert payload["stages"] == ["eq.tilt", "loudness"]
@@ -526,7 +526,7 @@ def test_master_cli_applies_preset_and_override_params(monkeypatch, tmp_path, ca
     assert calls["samples"] == [0.1, -0.1]
     assert calls["sample_rate"] == 44100
     assert calls["preset"] == "streaming"
-    assert calls["overrides"] == {"eq.tilt.tiltDb": -0.5, "loudness.enabled": 1.0}
+    assert calls["overrides"] == {"eq": {"tilt": {"tiltDb": -0.5}}, "loudness": {"enabled": 1.0}}
     assert output.exists()
     payload = json.loads(capsys.readouterr().out)
     assert payload["preset"] == "streaming"

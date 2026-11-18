@@ -60,6 +60,7 @@ from .types import (
     LoudnessMatch,
     LufsResult,
     MasteringAmpPresetCatalogEntry,
+    MasteringChainConfig,
     MasteringChainResult,
     MasteringChainStereoResult,
     MasteringInsertParamInfo,
@@ -136,7 +137,6 @@ MasteringSoloParams: TypeAlias = dict[str, MasteringParamValue | str]
 # target (see mastering_platform_names), and preset, the mastering preset the
 # suggestion starts from (see mastering_preset_names; default "streaming").
 MasteringAssistantParams: TypeAlias = dict[str, MasteringParamValue | str]
-MasteringChainParams: TypeAlias = dict[str, float | bool]
 ProgressCallback: TypeAlias = Callable[[float, str], object]
 CancelCallback: TypeAlias = Callable[[], bool]
 
@@ -1246,7 +1246,7 @@ def mastering_assistant_suggest_chain(
     samples: FloatSamples,
     sample_rate: int,
     params: MasteringAssistantParams | None = None,
-) -> MasteringChainParams: ...
+) -> MasteringChainConfig: ...
 def mastering_audio_profile(
     samples: FloatSamples,
     sample_rate: int,
@@ -1266,7 +1266,7 @@ def mastering_assistant_suggest_chain_stereo(
     right: FloatSamples,
     sample_rate: int,
     params: MasteringAssistantParams | None = None,
-) -> MasteringChainParams: ...
+) -> MasteringChainConfig: ...
 def mastering_audio_profile_stereo(
     left: FloatSamples,
     right: FloatSamples,
@@ -1296,7 +1296,7 @@ def mastering_process_stereo(
 def mastering_chain(
     samples: FloatSamples,
     sample_rate: int,
-    config: dict[str, Any] | None = None,
+    config: MasteringChainConfig | None = None,
     on_progress: ProgressCallback | None = None,
     *,
     cancel: CancelCallback | None = None,
@@ -1316,13 +1316,13 @@ def mastering_chain_stereo(
     left: FloatSamples,
     right: FloatSamples,
     sample_rate: int,
-    config: dict[str, Any] | None = None,
+    config: MasteringChainConfig | None = None,
     on_progress: ProgressCallback | None = None,
     *,
     cancel: CancelCallback | None = None,
 ) -> MasteringChainStereoResult: ...
 def mastering_preset_names() -> list[MasteringPreset]: ...
-def mastering_preset_params(preset: MasteringPreset | str) -> MasteringChainParams: ...
+def mastering_preset_params(preset: MasteringPreset | str) -> MasteringChainConfig: ...
 def mastering_platform_names() -> list[str]: ...
 def mastering_insert_names() -> list[str]: ...
 def mastering_insert_param_names(name: str) -> list[str]: ...
@@ -1504,7 +1504,7 @@ def master_audio(
     samples: FloatSamples,
     sample_rate: int,
     preset: MasteringPreset = "pop",
-    overrides: dict[str, Any] | None = None,
+    overrides: MasteringChainConfig | None = None,
     on_progress: ProgressCallback | None = None,
     *,
     cancel: CancelCallback | None = None,
@@ -1514,7 +1514,7 @@ def master_audio_stereo(
     right: FloatSamples,
     sample_rate: int,
     preset: MasteringPreset = "pop",
-    overrides: dict[str, Any] | None = None,
+    overrides: MasteringChainConfig | None = None,
     on_progress: ProgressCallback | None = None,
     *,
     cancel: CancelCallback | None = None,
@@ -1522,19 +1522,19 @@ def master_audio_stereo(
 def streaming_loudness_gain(
     samples: FloatSamples,
     sample_rate: int,
-    config: dict[str, Any] | None = None,
+    config: MasteringChainConfig | None = None,
 ) -> StreamingLoudnessGain: ...
 def streaming_loudness_gain_stereo(
     left: FloatSamples,
     right: FloatSamples,
     sample_rate: int,
-    config: dict[str, Any] | None = None,
+    config: MasteringChainConfig | None = None,
 ) -> StreamingLoudnessGain: ...
 
 class StreamingMasteringChain:
     def __init__(
         self,
-        config: dict[str, Any] | None = None,
+        config: MasteringChainConfig | None = None,
         *,
         sample_rate: int,
         max_block_size: int = 128,

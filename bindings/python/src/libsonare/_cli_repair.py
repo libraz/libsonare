@@ -29,6 +29,7 @@ from ._cli_options import (
     _option_supplied,
     _wav_bits,
 )
+from ._mastering_offline import _nest_chain_config
 
 if TYPE_CHECKING:
     from .analyzer import MasteringPreset
@@ -361,7 +362,7 @@ def cmd_repair(args: argparse.Namespace) -> int:
             samples,
             sample_rate=sr,
             preset=cast("MasteringPreset", preset),
-            overrides=overrides,
+            overrides=_nest_chain_config(overrides),
         )
         mode = "preset"
     else:
@@ -375,7 +376,7 @@ def cmd_repair(args: argparse.Namespace) -> int:
             key: value for key, value in chain_config.items() if key.startswith("repair.")
         }
         repair_config.update(params)
-        result = mastering_chain(samples, sample_rate=sr, config=repair_config)
+        result = mastering_chain(samples, sample_rate=sr, config=_nest_chain_config(repair_config))
         mode = "assistant"
         explanation_value = suggestion.get("explanation", [])
         if not isinstance(explanation_value, list) or not all(

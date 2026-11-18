@@ -17,6 +17,8 @@ from pathlib import Path
 
 import pytest
 
+from libsonare._mastering_offline import _nest_chain_config
+
 _SAMPLE_RATE = 22_050
 _DURATION_SEC = 0.5
 
@@ -154,7 +156,7 @@ def test_config_out_writes_the_chain_config_the_core_reports(tmp_path, capsys) -
 
     expected = libsonare.mastering_assistant_suggest_chain(planes[0], _SAMPLE_RATE)
     assert expected, "the assistant reported no chain, so nothing was compared"
-    assert written["params"] == expected
+    assert _nest_chain_config(written["params"]) == expected
     assert isinstance(written["version"], int)
 
 
@@ -503,10 +505,12 @@ def test_chain_config_takes_a_v2_multiband_document(tmp_path, capsys, channels) 
         },
     }
     if channels == 2:
-        result = libsonare.mastering_chain_stereo(planes[0], planes[1], rate, flat)
+        result = libsonare.mastering_chain_stereo(
+            planes[0], planes[1], rate, _nest_chain_config(flat)
+        )
         rendered = [result.left, result.right]
     else:
-        rendered = [libsonare.mastering_chain(planes[0], rate, flat).samples]
+        rendered = [libsonare.mastering_chain(planes[0], rate, _nest_chain_config(flat)).samples]
     expected = tmp_path / "facade.wav"
     _write_channel_output(str(expected), rendered, rate)
     assert output.read_bytes() == expected.read_bytes()

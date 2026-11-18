@@ -8,7 +8,9 @@
 #   kind     function | method | class | type | field | option | value | export | flag | command
 #   old      the 1.x public name, spelled as below; it must exist in v1.10.0
 #   new      the 2.0.0 name (old must be absent, new present, same kind and entry)
-#   removed  true when the name is gone with no replacement (old must be absent)
+#   removed  what a caller writes instead, one line (old must be absent); true only
+#            with no_replacement, when nothing public does the job any more
+#   no_replacement  with removed = true: why, in terms a caller can act on
 #   changed  one line saying what a caller must change; requires
 #            test = "<file>::<case name substring>", which must exist. Without to,
 #            old must still be present (in any kind)
@@ -19,6 +21,7 @@
 #   entry    WASM subpath ("./analysis", "./worklet", ...); omitted means "."
 #   frontend CLI ledger only: "python" or "native" to check one front-end; omitted checks both
 # Exactly one of new / removed / changed per entry.
+# One entry per name; a member of a removed name takes no entry of its own.
 #
 # Names by kind:
 #   function  exported name on this surface: analyzeBpm (wasm/node), analyze_bpm (python),
@@ -5540,7 +5543,7 @@ test = "bindings/python/tests/test_metering_absent_defaults.py::test_a_percentil
 [[entry]]
 kind = "class"
 old = "StreamingMasteringChain"
-changed = "builds and prepares at construction; sample_rate is a required keyword, max_block_size defaults to 128 and num_channels to 1"
+changed = "builds and prepares at construction; sample_rate is a required keyword, max_block_size defaults to 128 and num_channels to 1; config takes the nested chain config only, and a dotted key such as \"eq.tilt.tiltDb\" raises SonareValueError"
 domain = "mastering"
 rule = "construction"
 test = "bindings/python/tests/test_streaming_mastering_shape.py::test_the_chain_is_ready_once_constructed"
@@ -6405,9 +6408,29 @@ test = "bindings/python/tests/test_engine_routing.py::test_can_set_sidechain_rep
 [[entry]]
 kind = "method"
 old = "Mixer.meter_tap"
-removed = true
+to = "Mixer.strip_meter"
+changed = "renamed to strip_meter; tap takes a MeterTap token (\"preFader\", \"postFader\") instead of an enum member, string variant or ordinal"
 domain = "engine"
 rule = "aliases-removed"
+test = "bindings/python/tests/test_closed_handle_state.py::test_closed_handle_member_raises_invalid_state"
+
+[[entry]]
+kind = "option"
+old = "Mixer.meter_tap(strip)"
+to = "Mixer.strip_meter(strip)"
+changed = "carried over unchanged by the rename to strip_meter"
+domain = "engine"
+rule = "aliases-removed"
+test = "bindings/python/tests/test_closed_handle_state.py::test_closed_handle_member_raises_invalid_state"
+
+[[entry]]
+kind = "option"
+old = "Mixer.meter_tap(tap)"
+to = "Mixer.strip_meter(tap)"
+changed = "takes a MeterTap token (\"preFader\", \"postFader\"; default \"postFader\"); another spelling is refused and a number is TypeError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_exact_closed_set_tokens.py::test_a_number_is_a_type_error"
 
 [[entry]]
 kind = "export"
@@ -7025,3 +7048,75 @@ old = "master_audio_stereo(preset_name)"
 new = "master_audio_stereo(preset)"
 domain = "mastering"
 rule = "individual"
+
+[[entry]]
+kind = "function"
+old = "mastering_assistant_suggest_chain"
+changed = "returns the nested chain config (module -> processor -> parameter) instead of a flat dotted-key dict; pass it to master_audio(overrides=) unchanged"
+domain = "mastering"
+rule = "typed-results"
+test = "bindings/python/tests/test_mastering_assistant_chain.py::test_chain_matches_the_document_chain_config"
+
+[[entry]]
+kind = "function"
+old = "mastering_assistant_suggest_chain_stereo"
+changed = "returns the nested chain config instead of a flat dotted-key dict"
+domain = "mastering"
+rule = "typed-results"
+test = "bindings/python/tests/test_mastering_assistant_chain.py::test_chain_stereo_matches_the_document_chain_config"
+
+[[entry]]
+kind = "function"
+old = "mastering_preset_params"
+changed = "returns the nested chain config instead of a flat dotted-key dict"
+domain = "mastering"
+rule = "typed-results"
+test = "bindings/python/tests/test_mastering_preset_params.py::test_preset_params_values_are_scalar"
+
+[[entry]]
+kind = "option"
+old = "master_audio(overrides)"
+changed = "takes the nested chain config only; a dotted key such as \"eq.tilt.tiltDb\" raises SonareValueError"
+domain = "mastering"
+rule = "typed-results"
+test = "bindings/python/tests/test_analyzer_streaming_mastering.py::test_a_dotted_chain_key_is_refused_by_name"
+
+[[entry]]
+kind = "option"
+old = "master_audio_stereo(overrides)"
+changed = "takes the nested chain config only; a dotted key such as \"eq.tilt.tiltDb\" raises SonareValueError"
+domain = "mastering"
+rule = "typed-results"
+test = "bindings/python/tests/test_analyzer_streaming_mastering.py::test_a_dotted_chain_key_is_refused_by_name"
+
+[[entry]]
+kind = "option"
+old = "mastering_chain(config)"
+changed = "takes the nested chain config only; a dotted key such as \"eq.tilt.tiltDb\" raises SonareValueError"
+domain = "mastering"
+rule = "typed-results"
+test = "bindings/python/tests/test_analyzer_streaming_mastering.py::test_a_dotted_chain_key_is_refused_by_name"
+
+[[entry]]
+kind = "option"
+old = "mastering_chain_stereo(config)"
+changed = "takes the nested chain config only; a dotted key such as \"eq.tilt.tiltDb\" raises SonareValueError"
+domain = "mastering"
+rule = "typed-results"
+test = "bindings/python/tests/test_analyzer_streaming_mastering.py::test_a_dotted_chain_key_is_refused_by_name"
+
+[[entry]]
+kind = "option"
+old = "streaming_loudness_gain(config)"
+changed = "takes the nested chain config only; a dotted key such as \"eq.tilt.tiltDb\" raises SonareValueError"
+domain = "mastering"
+rule = "typed-results"
+test = "bindings/python/tests/test_analyzer_streaming_mastering.py::test_a_dotted_chain_key_is_refused_by_name"
+
+[[entry]]
+kind = "option"
+old = "streaming_loudness_gain_stereo(config)"
+changed = "takes the nested chain config only; a dotted key such as \"eq.tilt.tiltDb\" raises SonareValueError"
+domain = "mastering"
+rule = "typed-results"
+test = "bindings/python/tests/test_analyzer_streaming_mastering.py::test_a_dotted_chain_key_is_refused_by_name"

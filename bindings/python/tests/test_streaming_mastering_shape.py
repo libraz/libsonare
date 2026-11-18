@@ -19,7 +19,7 @@ from ._helpers import LIB_AVAILABLE
 pytestmark = pytest.mark.skipif(not LIB_AVAILABLE, reason="libsonare shared library missing")
 
 SR = 48000
-IMAGER = {"stereo.imager.enabled": 1, "stereo.imager.width": 1.5}
+IMAGER = {"stereo": {"imager": {"enabled": 1, "width": 1.5}}}
 
 
 def _tone(n: int) -> np.ndarray:
@@ -28,7 +28,7 @@ def _tone(n: int) -> np.ndarray:
 
 def test_the_sample_rate_is_required() -> None:
     with pytest.raises(TypeError):
-        StreamingMasteringChain({"eq.tilt.tiltDb": 1.0})  # type: ignore[call-arg]
+        StreamingMasteringChain({"eq": {"tilt": {"tiltDb": 1.0}}})  # type: ignore[call-arg]
     with pytest.raises(TypeError):
         StreamingEqualizer()  # type: ignore[call-arg]
     with pytest.raises(TypeError):
@@ -36,7 +36,7 @@ def test_the_sample_rate_is_required() -> None:
 
 
 def test_the_chain_is_ready_once_constructed() -> None:
-    with StreamingMasteringChain({"eq.tilt.tiltDb": 3.0}, sample_rate=SR) as chain:
+    with StreamingMasteringChain({"eq": {"tilt": {"tiltDb": 3.0}}}, sample_rate=SR) as chain:
         assert not hasattr(chain, "prepare")
         assert "eq.tilt" in chain.stage_names()
         out = chain.process_mono(_tone(128))
@@ -59,7 +59,7 @@ def test_the_channel_count_given_at_construction_selects_the_stereo_stages() -> 
 
 def test_the_block_size_given_at_construction_bounds_a_block() -> None:
     with StreamingMasteringChain(
-        {"eq.tilt.tiltDb": 1.0}, sample_rate=SR, max_block_size=64
+        {"eq": {"tilt": {"tiltDb": 1.0}}}, sample_rate=SR, max_block_size=64
     ) as chain:
         chain.process_mono(_tone(64))
         with pytest.raises(SonareValueError):
@@ -69,11 +69,13 @@ def test_the_block_size_given_at_construction_bounds_a_block() -> None:
 @pytest.mark.parametrize("value", [0, 3])
 def test_a_channel_count_other_than_one_or_two_is_refused(value: int) -> None:
     with pytest.raises(SonareValueError):
-        StreamingMasteringChain({"eq.tilt.tiltDb": 1.0}, sample_rate=SR, num_channels=value)
+        StreamingMasteringChain(
+            {"eq": {"tilt": {"tiltDb": 1.0}}}, sample_rate=SR, num_channels=value
+        )
 
 
 def test_counters_are_properties() -> None:
-    with StreamingMasteringChain({"eq.tilt.tiltDb": 1.0}, sample_rate=SR) as chain:
+    with StreamingMasteringChain({"eq": {"tilt": {"tiltDb": 1.0}}}, sample_rate=SR) as chain:
         assert chain.non_finite_substitution_count == 0
         assert chain.non_finite_discard_count == 0
         assert isinstance(chain.latency_samples, int)

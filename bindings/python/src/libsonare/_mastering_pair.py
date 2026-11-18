@@ -16,7 +16,12 @@ from ._ffi import (
     SonareMasteringStereoResult,
     SonareStreamingPlatform,
 )
-from ._mastering_offline import _assistant_params, _mastering_params
+from ._mastering_offline import (
+    _assistant_params,
+    _chain_config_paths,
+    _mastering_params,
+    _nest_chain_config,
+)
 from ._narrowing import _narrow_double
 from ._runtime import (
     SonareValueError,
@@ -33,6 +38,7 @@ from ._runtime import (
 )
 from .types import (
     LoudnessMatch,
+    MasteringChainConfig,
     MasteringResult,
     MasteringStereoResult,
 )
@@ -527,38 +533,23 @@ def mastering_assistant_suggest(
             lib.sonare_free_string(json_ptr)
 
 
-def _unwrap_chain_params(json_text: str) -> dict[str, float | bool]:
-    """Strip the ``{"version": ..., "params": {...}}`` envelope from a chain config.
+def _chain_config_from_document(json_text: str) -> MasteringChainConfig:
+    """Nest a ``{"version": ..., "params": {...}}`` chain document's params.
 
-    A schema v2 chain config nests ``dynamics.multibandComp`` as an object with
-    lists; it is flattened into the array spelling the input side accepts
-    (``...crossover.cutoffsHz.<i>``, ``...bands.<i>.<field>``). A leaf that is
-    neither a number nor a boolean is refused by name rather than dropped, and
-    an absent or empty ``params`` block is refused: an empty overrides mapping
-    applies the preset unchanged.
+    The result is the nested chain config :func:`master_audio` takes as
+    ``overrides``. A version 2 document's structured multiband stage merges at
+    its path. A leaf that is neither a number nor a boolean is refused by name
+    rather than dropped, and an absent or empty ``params`` block is refused: an
+    empty overrides mapping applies the preset unchanged.
     """
     raw: Any = json.loads(json_text).get("params")
     if not raw:
         raise SonareValueError("chain config carries no params block")
-    unwrapped: dict[str, float | bool] = {}
-
-    def flatten(key: str, value: Any) -> None:
-        if isinstance(value, dict):
-            for child, item in value.items():
-                flatten(f"{key}.{child}", item)
-        elif isinstance(value, list):
-            if not value:
-                raise SonareValueError(f"{key} is an empty list, which has no flat spelling")
-            for index, item in enumerate(value):
-                flatten(f"{key}.{index}", item)
-        elif isinstance(value, (int, float, bool)):
-            unwrapped[key] = value
-        else:
-            raise SonareValueError(f"chain config param {key!r} is not a scalar value")
-
-    for key, value in raw.items():
-        flatten(str(key), value)
-    return unwrapped
+    config = _nest_chain_config(raw)
+    for path, value in _chain_config_paths(config).items():
+        if not isinstance(value, (int, float, bool)):
+            raise SonareValueError(f"chain config param {path!r} is not a scalar value")
+    return config
 
 
 @_guard_buffer("samples")
@@ -566,8 +557,8 @@ def mastering_assistant_suggest_chain(
     samples: Sequence[float] | list[float],
     sample_rate: int,
     params: dict[str, float | int | bool | str] | None = None,
-) -> dict[str, float | bool]:
-    """Suggest a mastering chain as a :func:`master_audio` overrides mapping.
+) -> MasteringChainConfig:
+    """Suggest a mastering chain as a nested :func:`master_audio` overrides mapping.
 
     Skips parsing the full profile+chain document :func:`mastering_assistant_suggest`
     returns down to the chain config it already carries.
@@ -592,7 +583,7 @@ def mastering_assistant_suggest_chain(
     finally:
         if json_ptr.value:
             lib.sonare_free_string(json_ptr)
-    return _unwrap_chain_params(json_text)
+    return _chain_config_from_document(json_text)
 
 
 @_guard_buffer("samples")
@@ -736,7 +727,7 @@ def mastering_assistant_suggest_chain_stereo(
     right: Sequence[float] | list[float],
     sample_rate: int,
     params: dict[str, float | int | bool | str] | None = None,
-) -> dict[str, float | bool]:
+) -> MasteringChainConfig:
     """Stereo counterpart of :func:`mastering_assistant_suggest_chain`."""
     param_array, param_count = _assistant_params(params)
     json_text = _stereo_analysis_json(
@@ -748,16 +739,15 @@ def mastering_assistant_suggest_chain_stereo(
         param_array,
         param_count,
     )
-    return _unwrap_chain_params(json_text)
+    return _chain_config_from_document(json_text)
 
 
-def mastering_preset_params(preset: str) -> dict[str, float | bool]:
-    """Return a built-in preset's chain configuration as ``master_audio`` overrides.
+def mastering_preset_params(preset: str) -> MasteringChainConfig:
+    """Return a built-in preset's chain configuration as nested ``master_audio`` overrides.
 
-    Same document shape as :func:`mastering_assistant_suggest_chain` --
-    ``{"version": 1, "params": {...}}`` -- unwrapped the same way, so the
-    result's key set matches what the assistant would suggest and applies to
-    :func:`master_audio` as overrides unchanged.
+    The same nested shape :func:`mastering_assistant_suggest_chain` returns, so
+    the result's parameter set matches what the assistant would suggest and
+    applies to :func:`master_audio` as overrides unchanged.
 
     Args:
         preset: Preset identifier from :func:`mastering_preset_names`.
@@ -779,7 +769,7 @@ def mastering_preset_params(preset: str) -> dict[str, float | bool]:
     finally:
         if json_ptr.value:
             lib.sonare_free_string(json_ptr)
-    return _unwrap_chain_params(json_text)
+    return _chain_config_from_document(json_text)
 
 
 @_guard_buffer("left", "right")

@@ -15,6 +15,7 @@ from libsonare import (
     mastering_preset_names,
     mastering_preset_params,
 )
+from libsonare._mastering_offline import _chain_config_paths
 
 from ._helpers import LIB_AVAILABLE, sine
 
@@ -25,19 +26,20 @@ SAMPLES = sine(220.0, 0.2, sr=SR, amp=0.2)
 
 
 def test_every_preset_key_set_matches_the_assistant_suggested_chain() -> None:
-    """Each preset's flat params carry the same keys the assistant would suggest."""
-    suggested_keys = set(mastering_assistant_suggest_chain(SAMPLES, sample_rate=SR))
+    """Each preset's nested params carry the same leaves the assistant would suggest."""
+    suggested = _chain_config_paths(mastering_assistant_suggest_chain(SAMPLES, sample_rate=SR))
     for preset in mastering_preset_names():
-        params = mastering_preset_params(preset)
-        assert set(params) == suggested_keys, preset
+        params = _chain_config_paths(mastering_preset_params(preset))
+        assert set(params) == set(suggested), preset
 
 
 def test_preset_params_values_are_scalar() -> None:
     for preset in mastering_preset_names():
         params = mastering_preset_params(preset)
         assert params
-        for key, value in params.items():
-            assert isinstance(value, (float, bool, int)), (preset, key)
+        assert not any("." in key for key in params), preset
+        for path, value in _chain_config_paths(params).items():
+            assert isinstance(value, (float, bool, int)), (preset, path)
 
 
 def test_unknown_preset_raises() -> None:

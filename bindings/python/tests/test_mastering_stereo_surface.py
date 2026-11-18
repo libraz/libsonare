@@ -195,7 +195,7 @@ def test_stereo_loudness_match_supports_without_match_and_rejects_bad_planes() -
 def test_streaming_set_parameter_rejects_nonfinite() -> None:
     from libsonare import StreamingMasteringChain
 
-    chain = StreamingMasteringChain({"eq.tilt.tiltDb": 0.0}, sample_rate=48000)
+    chain = StreamingMasteringChain({"eq": {"tilt": {"tiltDb": 0.0}}}, sample_rate=48000)
     with pytest.raises(SonareValueError, match="key must not be empty"):
         chain.set_parameter("", 3.0)
     with pytest.raises(SonareValueError, match="value must be a finite number"):
@@ -220,10 +220,7 @@ def test_streaming_set_parameter_rejects_nul_key_before_library_dispatch() -> No
 def test_streaming_rejected_structural_update_preserves_processing_state() -> None:
     from libsonare import StreamingMasteringChain
 
-    config = {
-        "maximizer.truePeakLimiter.enabled": 1.0,
-        "maximizer.truePeakLimiter.ceilingDb": -1.0,
-    }
+    config = {"maximizer": {"truePeakLimiter": {"enabled": 1.0, "ceilingDb": -1.0}}}
     chain = StreamingMasteringChain(config, sample_rate=48000)
     control = StreamingMasteringChain(config, sample_rate=48000)
     try:

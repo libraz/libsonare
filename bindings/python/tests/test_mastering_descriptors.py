@@ -139,7 +139,7 @@ def test_streaming_loudness_gain_measures_through_the_streaming_default() -> Non
     assert math.isfinite(gain.loudness_static_gain_db)
 
 
-def test_enum_names_resolve_to_the_numbers_the_flat_list_carries() -> None:
+def test_enum_names_resolve_to_the_numbers_the_native_list_carries() -> None:
     import libsonare
 
     x = _noise(SR)
@@ -152,18 +152,7 @@ def test_enum_names_resolve_to_the_numbers_the_flat_list_carries() -> None:
         "pop",
         {"repair": {"denoise": {"enabled": True, "noiseEstimator": "mcra", "mode": "mmseStsa"}}},
     )
-    flat = libsonare.master_audio(
-        x,
-        SR,
-        "pop",
-        {
-            "repair.denoise.enabled": True,
-            "repair.denoise.noiseEstimator": "mcra",
-            "repair.denoise.mode": "mmseStsa",
-        },
-    )
     assert list(by_name.samples) == list(by_number.samples)
-    assert list(flat.samples) == list(by_number.samples)
 
 
 def test_an_unknown_enum_name_is_refused_with_the_key_and_the_valid_names() -> None:

@@ -6,6 +6,9 @@ import math
 
 import numpy as np
 
+import libsonare
+from libsonare import SonareValueError
+
 # ruff: noqa: F403,F405
 from ._analyzer_helpers import *
 from ._helpers import raises_coded
@@ -60,7 +63,9 @@ def test_streaming_mastering_chain_processes_mono_block() -> None:
     """StreamingMasteringChain processes a 512-sample mono block in place."""
     from libsonare import StreamingMasteringChain
 
-    chain = StreamingMasteringChain({"eq.tilt.tiltDb": 1.0}, sample_rate=44100, max_block_size=512)
+    chain = StreamingMasteringChain(
+        {"eq": {"tilt": {"tiltDb": 1.0}}}, sample_rate=44100, max_block_size=512
+    )
     block = [0.1] * 512
     out = chain.process_mono(block)
     assert len(out) == len(block)
@@ -73,7 +78,7 @@ def test_streaming_mastering_chain_flushes_delayed_output() -> None:
     from libsonare import StreamingMasteringChain
 
     with StreamingMasteringChain(
-        {"maximizer.truePeakLimiter.enabled": 1}, sample_rate=48000, max_block_size=64
+        {"maximizer": {"truePeakLimiter": {"enabled": 1}}}, sample_rate=48000, max_block_size=64
     ) as chain:
         assert chain.latency_samples > 0
         chain.process_mono([0.5] + [0.0] * 63)
@@ -93,7 +98,9 @@ def test_streaming_mastering_chain_preserves_ndarray_input() -> None:
 
     from libsonare import StreamingMasteringChain
 
-    chain = StreamingMasteringChain({"eq.tilt.tiltDb": 3.0}, sample_rate=44100, max_block_size=256)
+    chain = StreamingMasteringChain(
+        {"eq": {"tilt": {"tiltDb": 3.0}}}, sample_rate=44100, max_block_size=256
+    )
     block = np.full(256, 0.25, dtype=np.float32)
     original = block.copy()
     out = chain.process_mono(block)
@@ -124,7 +131,9 @@ def test_streaming_mastering_chain_reports_stage_names() -> None:
     """stage_names() exposes the stages the constructor realized."""
     from libsonare import StreamingMasteringChain
 
-    chain = StreamingMasteringChain({"eq.tilt.tiltDb": 1.0}, sample_rate=44100, max_block_size=512)
+    chain = StreamingMasteringChain(
+        {"eq": {"tilt": {"tiltDb": 1.0}}}, sample_rate=44100, max_block_size=512
+    )
     names = chain.stage_names()
     assert isinstance(names, list)
     assert all(isinstance(name, str) for name in names)
@@ -322,9 +331,9 @@ def test_streaming_mastering_chain_rejects_denoise_with_the_quantile_estimator()
 
     with pytest.raises(SonareError, match="quantile"):
         StreamingMasteringChain(
-            {"repair.denoise.enabled": 1, "repair.denoise.noiseEstimator": 0}, sample_rate=44100
+            {"repair": {"denoise": {"enabled": 1, "noiseEstimator": 0}}}, sample_rate=44100
         )
-    StreamingMasteringChain({"repair.denoise.enabled": 1}, sample_rate=44100).close()
+    StreamingMasteringChain({"repair": {"denoise": {"enabled": 1}}}, sample_rate=44100).close()
 
 
 def test_streaming_mastering_chain_accepts_loudness_with_static_gain() -> None:
@@ -333,11 +342,11 @@ def test_streaming_mastering_chain_accepts_loudness_with_static_gain() -> None:
 
     # Without a static gain a loudness target raises (cannot measure online)...
     with raises_coded():
-        StreamingMasteringChain({"loudness.targetLufs": -14.0}, sample_rate=44100)
+        StreamingMasteringChain({"loudness": {"targetLufs": -14.0}}, sample_rate=44100)
 
     # ...but supplying a precomputed static gain makes it processable.
     chain = StreamingMasteringChain(
-        {"loudness.targetLufs": -14.0},
+        {"loudness": {"targetLufs": -14.0}},
         sample_rate=44100,
         max_block_size=512,
         loudness_static_gain_db=3.0,
@@ -359,7 +368,7 @@ def test_streaming_mastering_chain_reports_no_substitution_on_a_clean_stream() -
     from libsonare import StreamingMasteringChain
 
     with StreamingMasteringChain(
-        {"maximizer.truePeakLimiter.enabled": 1}, sample_rate=44100, max_block_size=256
+        {"maximizer": {"truePeakLimiter": {"enabled": 1}}}, sample_rate=44100, max_block_size=256
     ) as chain:
         assert chain.non_finite_substitution_count == 0
         for _ in range(4):
@@ -383,7 +392,7 @@ def test_streaming_mastering_chain_discard_count_rises_after_a_stage_overflow() 
     """
     from libsonare import StreamingMasteringChain
 
-    with StreamingMasteringChain({"eq.tilt.tiltDb": 24.0}, sample_rate=48000) as chain:
+    with StreamingMasteringChain({"eq": {"tilt": {"tiltDb": 24.0}}}, sample_rate=48000) as chain:
         # Without an enabled recursive stage the chain holds no state to lose,
         # so its count would stay at zero for a reason unrelated to the entry.
         assert chain.non_finite_discard_count == 0
@@ -516,27 +525,47 @@ def test_remaining_mastering_progress_variants_forward_cancellation(operation: s
     assert result is None
 
 
-def test_mastering_chain_nested_and_flat_config_equivalent() -> None:
-    """The nested (canonical) and flat dot-notation configs select the same stages."""
+def test_mastering_chain_reads_the_nested_config() -> None:
+    """The nested config selects the stages it names."""
     from libsonare import mastering_chain
 
-    samples = [0.1] * 22050
-    nested = mastering_chain(
-        samples=samples,
+    result = mastering_chain(
+        samples=[0.1] * 22050,
         sample_rate=22050,
         config={
             "eq": {"tilt": {"tiltDb": 1.0}},
             "dynamics": {"compressor": {"thresholdDb": -24.0}},
         },
     )
-    flat = mastering_chain(
-        samples=samples,
-        sample_rate=22050,
-        config={"eq.tilt.tiltDb": 1.0, "dynamics.compressor.thresholdDb": -24.0},
-    )
-    assert nested.stages == flat.stages
-    assert "eq.tilt" in nested.stages
-    assert "dynamics.compressor" in nested.stages
+    assert "eq.tilt" in result.stages
+    assert "dynamics.compressor" in result.stages
+
+
+_DOTTED_KEY_CALLS = {
+    "mastering_chain": lambda c: libsonare.mastering_chain([0.1] * 2205, 22050, c),
+    "master_audio": lambda c: libsonare.master_audio([0.1] * 2205, 22050, "pop", c),
+    "streaming_loudness_gain": lambda c: libsonare.streaming_loudness_gain([0.1] * 2205, 22050, c),
+    "StreamingMasteringChain": lambda c: libsonare.StreamingMasteringChain(c, sample_rate=22050),
+    "mastering_chain_stereo": lambda c: libsonare.mastering_chain_stereo(
+        [0.1] * 2205, [0.1] * 2205, 22050, c
+    ),
+    "master_audio_stereo": lambda c: libsonare.master_audio_stereo(
+        [0.1] * 2205, [0.1] * 2205, 22050, "pop", c
+    ),
+    "streaming_loudness_gain_stereo": lambda c: libsonare.streaming_loudness_gain_stereo(
+        [0.1] * 2205, [0.1] * 2205, 22050, c
+    ),
+}
+
+
+@pytest.mark.parametrize("name", sorted(_DOTTED_KEY_CALLS))
+def test_a_dotted_chain_key_is_refused_by_name(name: str) -> None:
+    """Only the nested object is a chain config; a dotted key is named, not read as a path."""
+    call = _DOTTED_KEY_CALLS[name]
+    with pytest.raises(SonareValueError, match=r"'eq\.tilt\.tiltDb': dotted keys are not accepted"):
+        call({"eq.tilt.tiltDb": 1.0})
+    with pytest.raises(SonareValueError, match=r"'eq\.tilt': dotted keys are not accepted"):
+        call({"eq": {"tilt": {}}, "eq.tilt": {"tiltDb": 1.0}})
 
 
 def test_color_saturation_stages_engage_only_when_meaningful() -> None:
@@ -547,18 +576,18 @@ def test_color_saturation_stages_engage_only_when_meaningful() -> None:
         return mastering_chain(samples=[0.1] * 22050, sample_rate=22050, config=config).stages
 
     # A zero-amount exciter / zero-drive tape is a no-op and stays bypassed.
-    assert "saturation.exciter" not in stages_for({"saturation.exciter.amount": 0.0})
+    assert "saturation.exciter" not in stages_for({"saturation": {"exciter": {"amount": 0.0}}})
     assert "saturation.tape" not in stages_for(
-        {"saturation.tape.driveDb": 0.0, "saturation.tape.saturation": 0.0}
+        {"saturation": {"tape": {"driveDb": 0.0, "saturation": 0.0}}}
     )
     # Meaningful params engage the stage.
-    assert "saturation.exciter" in stages_for({"saturation.exciter.amount": 0.2})
+    assert "saturation.exciter" in stages_for({"saturation": {"exciter": {"amount": 0.2}}})
     # An explicit enabled flag wins either way.
     assert "saturation.exciter" in stages_for(
-        {"saturation.exciter.amount": 0.0, "saturation.exciter.enabled": True}
+        {"saturation": {"exciter": {"amount": 0.0, "enabled": True}}}
     )
     assert "saturation.tape" not in stages_for(
-        {"saturation.tape.driveDb": 3.0, "saturation.tape.enabled": False}
+        {"saturation": {"tape": {"driveDb": 3.0, "enabled": False}}}
     )
 
 
