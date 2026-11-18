@@ -50,8 +50,8 @@ def test_vocal_notes_options_default_to_absence() -> None:
         "min_note_ms",
         "frame_length_samples",
         "hop_length_samples",
-        "fmin_hz",
-        "fmax_hz",
+        "f0_min_hz",
+        "f0_max_hz",
         "yin_threshold",
         "voiced_threshold",
         "reference_hz",
@@ -83,7 +83,7 @@ def test_vocal_notes_omitted_settings_are_not_passed(monkeypatch: pytest.MonkeyP
     assert _cli_note_edit.cmd_vocal_notes(_parse()) == 0
     assert (
         _cli_note_edit.cmd_vocal_notes(
-            _parse("--min-note-ms", "80", "--fmax-hz", "1000", "--no-centered")
+            _parse("--min-note-ms", "80", "--f0-max-hz", "1000", "--no-centered")
         )
         == 0
     )
@@ -98,17 +98,17 @@ def test_vocal_notes_omitted_settings_are_not_passed(monkeypatch: pytest.MonkeyP
         ("--frame-length-samples", "0"),
         ("--hop-length-samples", "0"),
         ("--hop-length-samples", "not-an-integer"),
-        ("--fmin-hz", "0"),
-        ("--fmax-hz", "0"),
+        ("--f0-min-hz", "0"),
+        ("--f0-max-hz", "0"),
         ("--yin-threshold", "0"),
         ("--yin-threshold", "1.5"),
         ("--voiced-threshold", "1.5"),
         ("--voiced-threshold", "-0.1"),
         ("--reference-hz", "0"),
         ("--reference-hz", "nan"),
-        ("--fmin-hz", "3000"),
-        ("--fmax-hz", "50"),
-        ("--fmin-hz", "100", "--fmax-hz", "99"),
+        ("--f0-min-hz", "3000"),
+        ("--f0-max-hz", "50"),
+        ("--f0-min-hz", "100", "--f0-max-hz", "99"),
     ],
 )
 def test_vocal_notes_rejects_out_of_domain_values(extra: tuple[str, ...]) -> None:
@@ -158,9 +158,9 @@ def test_vocal_notes_reports_each_note_with_its_name_and_offset() -> None:
                 "2048",
                 "--hop-length-samples",
                 "512",
-                "--fmin-hz",
+                "--f0-min-hz",
                 "65",
-                "--fmax-hz",
+                "--f0-max-hz",
                 "2093",
                 "--yin-threshold",
                 "0.1",

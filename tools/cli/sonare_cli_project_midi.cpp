@@ -136,8 +136,8 @@ int cmd_transcribe(const CliArgs& args, const Audio& audio) {
   config.struct_version = 4;
   config.polyphonic = args.has("polyphonic") ? 1 : 0;
   config.reference_hz = args.get_float("reference-hz", 0.0f);
-  config.f0_min_hz = args.get_float("fmin", 0.0f);
-  config.f0_max_hz = args.get_float("fmax", 0.0f);
+  config.f0_min_hz = args.get_float("f0-min-hz", 0.0f);
+  config.f0_max_hz = args.get_float("f0-max-hz", 0.0f);
   config.min_note_ms = args.get_float("min-note-ms", 0.0f);
   config.segmentation_threshold_cents = args.get_float("segmentation-threshold-cents", 0.0f);
   config.velocity_floor_db = args.get_float("velocity-floor-db", 0.0f);

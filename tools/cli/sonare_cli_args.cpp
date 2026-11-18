@@ -559,8 +559,8 @@ bool ArgParser::try_parse_global_option(CliArgs& args, const std::string& arg, c
         break;
       }
       case CliOptionScalarType::Number:
-        if (spec->name == "fmin") args.fmin = parse_float_strict(spec->name, value);
-        if (spec->name == "fmax") args.fmax = parse_float_strict(spec->name, value);
+        if (spec->name == "fmin-hz") args.fmin = parse_float_strict(spec->name, value);
+        if (spec->name == "fmax-hz") args.fmax = parse_float_strict(spec->name, value);
         break;
       case CliOptionScalarType::Path:
         args.output_file = value;

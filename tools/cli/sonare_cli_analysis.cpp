@@ -453,8 +453,8 @@ int cmd_rhythm(const CliArgs& args, const Audio& audio) {
 
 int cmd_melody(const CliArgs& args, const Audio& audio) {
   MelodyConfig config;
-  config.fmin = args.fmin > 0.0f ? args.fmin : 80.0f;
-  config.fmax = args.fmax > 0.0f ? args.fmax : 1000.0f;
+  config.fmin = args.get_float("f0-min-hz", 80.0f);
+  config.fmax = args.get_float("f0-max-hz", 1000.0f);
   config.threshold = args.get_float("threshold", 0.1f);
   config.hop_length = args.hop_length;
 

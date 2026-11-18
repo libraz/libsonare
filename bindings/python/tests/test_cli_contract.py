@@ -403,7 +403,7 @@ _NON_FINITE_FLOAT_SITES = (
     (["mastering", "input.wav"], "--target-lufs"),
     (["mastering", "input.wav", "--assistant"], "--target-lufs"),
     (["mastering", "input.wav", "--assistant"], "--speech-mono-amount"),
-    (["pitch", "input.wav"], "--fmin"),
+    (["pitch", "input.wav"], "--f0-min-hz"),
     (["normalize", "input.wav", "-o", "out.wav"], "--target-db"),
     (["time-stretch", "input.wav", "-o", "out.wav"], "--rate"),
     (["eq", "input.wav"], "--detector-delay-ms"),

@@ -269,7 +269,7 @@
     },
     {
       "command": "melody",
-      "option": "fmin",
+      "option": "f0-min-hz",
       "rejectExit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
@@ -279,7 +279,7 @@
     },
     {
       "command": "melody",
-      "option": "fmax",
+      "option": "f0-max-hz",
       "rejectExit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
@@ -633,7 +633,7 @@
     },
     {
       "command": "pitch",
-      "option": "fmax",
+      "option": "f0-max-hz",
       "rejectExit": "usage",
       "choices": [],
       "minimum": 0.0,
@@ -643,7 +643,7 @@
     },
     {
       "command": "pitch",
-      "option": "fmin",
+      "option": "f0-min-hz",
       "rejectExit": "usage",
       "choices": [],
       "minimum": 0.0,
@@ -1004,7 +1004,7 @@
     },
     {
       "command": "mel",
-      "option": "fmin",
+      "option": "fmin-hz",
       "rejectExit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
@@ -1014,31 +1014,91 @@
     },
     {
       "command": "mel",
-      "option": "fmax",
+      "option": "fmax-hz",
+      "rejectExit": "usage",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusiveMinimum": true,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "mel-to-audio",
+      "option": "fmin-hz",
       "rejectExit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
       "exclusiveMinimum": false,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "mel-to-audio",
+      "option": "fmax-hz",
+      "rejectExit": "usage",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusiveMinimum": true,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "mfcc-to-audio",
+      "option": "fmin-hz",
+      "rejectExit": "invalid_parameter",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusiveMinimum": false,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "mfcc-to-audio",
+      "option": "fmax-hz",
+      "rejectExit": "usage",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusiveMinimum": true,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "chirp",
+      "option": "fmin-hz",
+      "rejectExit": "invalid_parameter",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusiveMinimum": false,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "chirp",
+      "option": "fmax-hz",
+      "rejectExit": "usage",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusiveMinimum": true,
       "maximum": null,
       "exclusiveMaximum": false
     },
     {
       "command": "cqt",
-      "option": "fmin",
-      "rejectExit": "invalid_parameter",
+      "option": "fmin-hz",
+      "rejectExit": "usage",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": false,
+      "exclusiveMinimum": true,
       "maximum": null,
       "exclusiveMaximum": false
     },
     {
       "command": "vqt",
-      "option": "fmin",
-      "rejectExit": "invalid_parameter",
+      "option": "fmin-hz",
+      "rejectExit": "usage",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": false,
+      "exclusiveMinimum": true,
       "maximum": null,
       "exclusiveMaximum": false
     },
@@ -1200,7 +1260,7 @@
     },
     {
       "command": "vocal-notes",
-      "option": "fmax-hz",
+      "option": "f0-max-hz",
       "rejectExit": "usage",
       "choices": [],
       "minimum": 0.0,
@@ -1210,7 +1270,7 @@
     },
     {
       "command": "vocal-notes",
-      "option": "fmin-hz",
+      "option": "f0-min-hz",
       "rejectExit": "usage",
       "choices": [],
       "minimum": 0.0,

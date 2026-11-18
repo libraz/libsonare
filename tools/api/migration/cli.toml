@@ -316,3 +316,151 @@ no_replacement = "the rendered mix does not depend on the block size the mixer i
 domain = "engine"
 rule = "individual"
 frontend = "python"
+
+[[entry]]
+kind = "flag"
+old = "mel --fmin"
+new = "mel --fmin-hz"
+domain = "analysis"
+rule = "frequency-bounds"
+
+[[entry]]
+kind = "flag"
+old = "mel --fmax"
+changed = "renamed --fmax-hz; omitted, the band reaches the Nyquist frequency (no longer 0 spelled by the CLI); an explicit 0 or a negative value is refused as a usage error (exit 2)"
+to = "mel --fmax-hz"
+domain = "analysis"
+rule = "frequency-bounds"
+test = "tests/conformance/cli_contract_v2.json::mel_reject_zero_fmax_hz"
+
+[[entry]]
+kind = "flag"
+old = "pitch --fmin"
+new = "pitch --f0-min-hz"
+domain = "analysis"
+rule = "frequency-bounds"
+
+[[entry]]
+kind = "flag"
+old = "pitch --fmax"
+new = "pitch --f0-max-hz"
+domain = "analysis"
+rule = "frequency-bounds"
+
+[[entry]]
+kind = "flag"
+old = "transcribe --fmin"
+new = "transcribe --f0-min-hz"
+domain = "analysis"
+rule = "frequency-bounds"
+
+[[entry]]
+kind = "flag"
+old = "transcribe --fmax"
+new = "transcribe --f0-max-hz"
+domain = "analysis"
+rule = "frequency-bounds"
+
+[[entry]]
+kind = "flag"
+old = "vocal-notes --fmin-hz"
+new = "vocal-notes --f0-min-hz"
+domain = "analysis"
+rule = "frequency-bounds"
+
+[[entry]]
+kind = "flag"
+old = "vocal-notes --fmax-hz"
+new = "vocal-notes --f0-max-hz"
+domain = "analysis"
+rule = "frequency-bounds"
+
+[[entry]]
+kind = "flag"
+old = "melody --fmin"
+new = "melody --f0-min-hz"
+frontend = "native"
+domain = "analysis"
+rule = "frequency-bounds"
+
+[[entry]]
+kind = "flag"
+old = "melody --fmax"
+new = "melody --f0-max-hz"
+frontend = "native"
+domain = "analysis"
+rule = "frequency-bounds"
+
+[[entry]]
+kind = "flag"
+old = "mel-to-audio --fmin"
+new = "mel-to-audio --fmin-hz"
+frontend = "native"
+domain = "analysis"
+rule = "frequency-bounds"
+
+[[entry]]
+kind = "flag"
+old = "mel-to-audio --fmax"
+frontend = "native"
+changed = "renamed --fmax-hz; omitted, the band reaches the Nyquist frequency (no longer 0 spelled by the CLI); an explicit 0 or a negative value is refused as a usage error (exit 2)"
+to = "mel-to-audio --fmax-hz"
+domain = "analysis"
+rule = "frequency-bounds"
+test = "tests/cli/cli_analysis_test.cpp::CLI band bounds leave an omitted edge to the library and refuse 0"
+
+[[entry]]
+kind = "flag"
+old = "mfcc-to-audio --fmin"
+new = "mfcc-to-audio --fmin-hz"
+frontend = "native"
+domain = "analysis"
+rule = "frequency-bounds"
+
+[[entry]]
+kind = "flag"
+old = "mfcc-to-audio --fmax"
+frontend = "native"
+changed = "renamed --fmax-hz; omitted, the band reaches the Nyquist frequency (no longer 0 spelled by the CLI); an explicit 0 or a negative value is refused as a usage error (exit 2)"
+to = "mfcc-to-audio --fmax-hz"
+domain = "analysis"
+rule = "frequency-bounds"
+test = "tests/cli/cli_analysis_test.cpp::CLI band bounds leave an omitted edge to the library and refuse 0"
+
+[[entry]]
+kind = "flag"
+old = "cqt --fmin"
+frontend = "native"
+changed = "renamed --fmin-hz; omitted, the library default (C1, 32.7 Hz) applies (no longer 0 spelled by the CLI); an explicit 0 or a negative value is refused as a usage error (exit 2)"
+to = "cqt --fmin-hz"
+domain = "analysis"
+rule = "frequency-bounds"
+test = "tests/cli/cli_analysis_test.cpp::CLI band bounds leave an omitted edge to the library and refuse 0"
+
+[[entry]]
+kind = "flag"
+old = "vqt --fmin"
+frontend = "native"
+changed = "renamed --fmin-hz; omitted, the library default (C1, 32.7 Hz) applies (no longer 0 spelled by the CLI); an explicit 0 or a negative value is refused as a usage error (exit 2)"
+to = "vqt --fmin-hz"
+domain = "analysis"
+rule = "frequency-bounds"
+test = "tests/cli/cli_analysis_test.cpp::CLI band bounds leave an omitted edge to the library and refuse 0"
+
+[[entry]]
+kind = "flag"
+old = "chirp --fmin"
+new = "chirp --fmin-hz"
+frontend = "native"
+domain = "core"
+rule = "frequency-bounds"
+
+[[entry]]
+kind = "flag"
+old = "chirp --fmax"
+frontend = "native"
+changed = "renamed --fmax-hz and required; leaving it out, or giving 0 or a negative value, is a usage error (exit 2)"
+to = "chirp --fmax-hz"
+domain = "core"
+rule = "frequency-bounds"
+test = "tests/cli/cli_analysis_test.cpp::CLI band bounds leave an omitted edge to the library and refuse 0"

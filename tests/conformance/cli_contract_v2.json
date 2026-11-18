@@ -1740,23 +1740,23 @@
       ],
       "mel": [
         {
-          "name": "fmax",
+          "name": "fmax-hz",
           "type": "number",
-          "default": 0,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": false,
+            "exclusiveMinimum": true,
             "maximum": null,
             "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "rejectExit": "usage"
           }
         },
         {
-          "name": "fmin",
+          "name": "fmin-hz",
           "type": "number",
           "default": 0,
           "aliases": [],
@@ -2348,7 +2348,7 @@
           }
         },
         {
-          "name": "fmax",
+          "name": "f0-max-hz",
           "type": "number",
           "default": 2093,
           "aliases": [],
@@ -2364,7 +2364,7 @@
           }
         },
         {
-          "name": "fmin",
+          "name": "f0-min-hz",
           "type": "number",
           "default": 65,
           "aliases": [],
@@ -2834,7 +2834,7 @@
       ],
       "vocal-notes": [
         {
-          "name": "fmax-hz",
+          "name": "f0-max-hz",
           "type": "number",
           "default": null,
           "aliases": [],
@@ -2850,7 +2850,7 @@
           }
         },
         {
-          "name": "fmin-hz",
+          "name": "f0-min-hz",
           "type": "number",
           "default": null,
           "aliases": [],
@@ -4390,7 +4390,7 @@
           "domain": null
         },
         {
-          "name": "fmax",
+          "name": "f0-max-hz",
           "type": "number",
           "default": null,
           "aliases": [],
@@ -4399,7 +4399,7 @@
           "domain": null
         },
         {
-          "name": "fmin",
+          "name": "f0-min-hz",
           "type": "number",
           "default": null,
           "aliases": [],
@@ -7952,7 +7952,7 @@
           }
         },
         {
-          "name": "fmax",
+          "name": "f0-max-hz",
           "type": "number",
           "default": 2093,
           "aliases": [],
@@ -7968,7 +7968,7 @@
           }
         },
         {
-          "name": "fmin",
+          "name": "f0-min-hz",
           "type": "number",
           "default": 65,
           "aliases": [],
@@ -9493,23 +9493,23 @@
       "path": "mel",
       "options": [
         {
-          "name": "fmax",
+          "name": "fmax-hz",
           "type": "number",
-          "default": 0,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": false,
+            "exclusiveMinimum": true,
             "maximum": null,
             "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "rejectExit": "usage"
           }
         },
         {
-          "name": "fmin",
+          "name": "fmin-hz",
           "type": "number",
           "default": 0,
           "aliases": [],
@@ -11456,7 +11456,7 @@
       "path": "vocal-notes",
       "options": [
         {
-          "name": "fmax-hz",
+          "name": "f0-max-hz",
           "type": "number",
           "default": null,
           "aliases": [],
@@ -11472,7 +11472,7 @@
           }
         },
         {
-          "name": "fmin-hz",
+          "name": "f0-min-hz",
           "type": "number",
           "default": null,
           "aliases": [],
@@ -11702,9 +11702,9 @@
             "80",
             "--min-note-ms",
             "20",
-            "--fmin-hz",
+            "--f0-min-hz",
             "100",
-            "--fmax-hz",
+            "--f0-max-hz",
             "1000",
             "--yin-threshold",
             "0.15",
@@ -16582,7 +16582,7 @@
           "domain": null
         },
         {
-          "name": "fmax",
+          "name": "f0-max-hz",
           "type": "number",
           "default": null,
           "aliases": [],
@@ -16591,7 +16591,7 @@
           "domain": null
         },
         {
-          "name": "fmin",
+          "name": "f0-min-hz",
           "type": "number",
           "default": null,
           "aliases": [],
@@ -16832,9 +16832,9 @@
             "{audio}",
             "-o",
             "{smf_output}",
-            "--fmin",
+            "--f0-min-hz",
             "900",
-            "--fmax",
+            "--f0-max-hz",
             "100",
             "--json"
           ],
@@ -18114,7 +18114,7 @@
       "argv": [
         "pitch",
         "{audio}",
-        "--fmin",
+        "--f0-min-hz",
         "-50",
         "--json"
       ],
@@ -18128,7 +18128,7 @@
       "argv": [
         "pitch",
         "{audio}",
-        "--fmin",
+        "--f0-min-hz",
         "0",
         "--json"
       ],
@@ -18142,9 +18142,9 @@
       "argv": [
         "pitch",
         "{audio}",
-        "--fmin",
+        "--f0-min-hz",
         "3000",
-        "--fmax",
+        "--f0-max-hz",
         "500",
         "--json"
       ],
@@ -18158,9 +18158,9 @@
       "argv": [
         "pitch",
         "{audio}",
-        "--fmin",
+        "--f0-min-hz",
         "3000",
-        "--fmax",
+        "--f0-max-hz",
         "500",
         "--algorithm",
         "yin",
@@ -18270,11 +18270,25 @@
       "payload": "none"
     },
     {
+      "id": "mel_reject_zero_fmax_hz",
+      "argv": [
+        "mel",
+        "{audio}",
+        "--fmax-hz",
+        "0",
+        "--json"
+      ],
+      "exit": 2,
+      "legacy_exit": 1,
+      "stdout": "empty",
+      "payload": "none"
+    },
+    {
       "id": "vocal_notes_reject_inverted_frequency_range",
       "argv": [
         "vocal-notes",
         "{audio}",
-        "--fmin-hz",
+        "--f0-min-hz",
         "3000",
         "--json"
       ],

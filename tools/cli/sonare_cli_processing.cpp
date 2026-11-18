@@ -545,8 +545,8 @@ int cmd_vocal_notes(const CliArgs& args, const Audio& audio) {
     options.frame_length_samples = args.get_uint32("frame-length-samples", 0);
   if (args.has("hop-length-samples"))
     options.hop_length_samples = args.get_uint32("hop-length-samples", 0);
-  if (args.has("fmin-hz")) options.fmin_hz = args.get_double("fmin-hz", 0.0);
-  if (args.has("fmax-hz")) options.fmax_hz = args.get_double("fmax-hz", 0.0);
+  if (args.has("f0-min-hz")) options.fmin_hz = args.get_double("f0-min-hz", 0.0);
+  if (args.has("f0-max-hz")) options.fmax_hz = args.get_double("f0-max-hz", 0.0);
   if (args.has("yin-threshold")) options.yin_threshold = args.get_double("yin-threshold", 0.0);
   if (args.has("voiced-threshold"))
     options.voiced_threshold = args.get_double("voiced-threshold", 0.0);

@@ -327,39 +327,39 @@ CliValidationError validate_repair_output(const CliArgs& args) {
 }
 #endif
 
-// `--fmax` must stay above `--fmin`; neither option's own domain can express
+// `--f0-max-hz` must stay above `--f0-min-hz`; neither option's own domain can express
 // that, and the two pitch engines disagreed about it (pyin checked, yin did
 // not), so the CLI settles it before either is reached.
 //
 // The comparison is between the values the command will actually run with, not
-// between two supplied options: `--fmin 3000` on its own inverts the range just
-// as surely against the 2093 Hz default `--fmax`, and gating the check on both
+// between two supplied options: `--f0-min-hz 3000` on its own inverts the range
+// just as surely against the 2093 Hz default `--f0-max-hz`, and gating the check on both
 // being present let that invocation through to a `SONARE_CHECK` that names
 // neither option. The effective values are in the message because the offending
 // half is commonly the one the caller never typed.
 CliValidationError validate_pitch_frequency_order(const CliArgs& args) {
-  if (!args.has("fmin") && !args.has("fmax")) return {};
-  const float minimum = args.get_float("fmin", 0.0f);
-  const float maximum = args.get_float("fmax", 0.0f);
+  if (!args.has("f0-min-hz") && !args.has("f0-max-hz")) return {};
+  const float minimum = args.get_float("f0-min-hz", 65.0f);
+  const float maximum = args.get_float("f0-max-hz", 2093.0f);
   if (maximum > minimum) return {};
   std::ostringstream message;
-  message << "--fmax must be greater than --fmin (--fmin " << minimum << ", --fmax " << maximum
-          << ")";
+  message << "--f0-max-hz must be greater than --f0-min-hz (--f0-min-hz " << minimum
+          << ", --f0-max-hz " << maximum << ")";
   return {message.str(), false};
 }
 
-// The same ordering rule as `pitch`, over `--fmin-hz` / `--fmax-hz`. Neither
+// The same ordering rule as `pitch`, for a vocal session. Neither
 // option has a registry default here (an unspelled one is left to the session),
 // so the effective value of the missing half is the session's own default,
 // which is the pitch tracker's range.
 CliValidationError validate_vocal_frequency_order(const CliArgs& args) {
-  if (!args.has("fmin-hz") && !args.has("fmax-hz")) return {};
-  const double minimum = args.get_double("fmin-hz", 65.0);
-  const double maximum = args.get_double("fmax-hz", 2093.0);
+  if (!args.has("f0-min-hz") && !args.has("f0-max-hz")) return {};
+  const double minimum = args.get_double("f0-min-hz", 65.0);
+  const double maximum = args.get_double("f0-max-hz", 2093.0);
   if (maximum > minimum) return {};
   std::ostringstream message;
-  message << "--fmax-hz must be greater than --fmin-hz (--fmin-hz " << minimum << ", --fmax-hz "
-          << maximum << ")";
+  message << "--f0-max-hz must be greater than --f0-min-hz (--f0-min-hz " << minimum
+          << ", --f0-max-hz " << maximum << ")";
   return {message.str(), false};
 }
 
@@ -411,17 +411,17 @@ CliValidationError validate_rhythm_tempo_range(const CliArgs& args) {
 
 // Compared against the values the handler will actually use, not the raw
 // options: melody substitutes its own band for an absent one, so checking the
-// raw pair lets `--fmax 50` through against an unstated 80 Hz floor that the
+// raw pair lets `--f0-max-hz 50` through against an unstated 80 Hz floor that the
 // analyzer then inverts. The two numbers repeat the handler's because the
 // substitution lives there; they are this command's published band, not
 // MelodyConfig's wider default.
 CliValidationError validate_melody_frequency_band(const CliArgs& args) {
-  const float minimum = args.fmin > 0.0f ? args.fmin : 80.0f;
-  const float maximum = args.fmax > 0.0f ? args.fmax : 1000.0f;
+  const float minimum = args.get_float("f0-min-hz", 80.0f);
+  const float maximum = args.get_float("f0-max-hz", 1000.0f);
   if (maximum > minimum) return {};
   std::ostringstream message;
-  message << "--fmax must be greater than --fmin (--fmin " << minimum << ", --fmax " << maximum
-          << ")";
+  message << "--f0-max-hz must be greater than --f0-min-hz (--f0-min-hz " << minimum
+          << ", --f0-max-hz " << maximum << ")";
   return {message.str(), true};
 }
 
@@ -595,9 +595,9 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
                              greater_than(0.0, CliOptionDomainStage::Parameter)),
                  with_domain(global_int("hop-length", 512),
                              greater_than(0.0, CliOptionDomainStage::Parameter)),
-                 with_domain(global_number("fmin", 80.0),
+                 with_domain(number_value("f0-min-hz", 80.0),
                              greater_than(0.0, CliOptionDomainStage::Parameter)),
-                 with_domain(global_number("fmax", 1000.0),
+                 with_domain(number_value("f0-max-hz", 1000.0),
                              greater_than(0.0, CliOptionDomainStage::Parameter))},
                 {}, validate_melody_frequency_band);
     // The whole of BoundaryConfig, so a command line can reach the same detector
@@ -716,8 +716,8 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
                      greater_than(0.0, CliOptionDomainStage::Usage)),
          with_domain(int_value("hop-length-samples"),
                      greater_than(0.0, CliOptionDomainStage::Usage)),
-         with_domain(number_value("fmin-hz"), greater_than(0.0, CliOptionDomainStage::Usage)),
-         with_domain(number_value("fmax-hz"), greater_than(0.0, CliOptionDomainStage::Usage)),
+         with_domain(number_value("f0-min-hz"), greater_than(0.0, CliOptionDomainStage::Usage)),
+         with_domain(number_value("f0-max-hz"), greater_than(0.0, CliOptionDomainStage::Usage)),
          with_domain(number_value("yin-threshold"),
                      above_zero_up_to(1.0, CliOptionDomainStage::Usage)),
          with_domain(number_value("voiced-threshold"),
@@ -799,12 +799,15 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
                                      CliOptionDomainStage::Parameter)),
                  number_value("duration", 1.0), number_value("phase", 0.0),
                  number_value("amplitude", 1.0), required_output()});
-    add_command(commands, "chirp", false,
-                {with_domain(int_value("sr", 22050),
-                             between(sonare::kMinAudioSampleRate, sonare::kMaxAudioSampleRate,
-                                     CliOptionDomainStage::Parameter)),
-                 number_value("duration", 1.0), required_output(), flag("exponential"),
-                 global_number("fmin", 0.0), global_number("fmax", 0.0)});
+    add_command(
+        commands, "chirp", false,
+        {with_domain(int_value("sr", 22050),
+                     between(sonare::kMinAudioSampleRate, sonare::kMaxAudioSampleRate,
+                             CliOptionDomainStage::Parameter)),
+         number_value("duration", 1.0), required_output(), flag("exponential"),
+         with_domain(global_number("fmin-hz", 0.0), at_least(0.0, CliOptionDomainStage::Parameter)),
+         with_domain(number_value("fmax-hz", true, true),
+                     greater_than(0.0, CliOptionDomainStage::Usage))});
     add_command(commands, "clicks", false,
                 {string_value("times"),
                  with_domain(int_value("sr", 22050),
@@ -924,17 +927,16 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
 #endif
 
     // Feature leaves.
-    // Zero is the librosa default both bounds are spelled with on every surface, so
-    // the domains refuse negatives only: the handler substitutes sr/2 for a negative
-    // `fmax`, which made a typo produce output bit-identical to omitting the flag,
-    // and a negative `fmin` reaches the filterbank, where only fmax > fmin is
-    // checked. `n-mels` needs none -- the filterbank's own ceiling refuses an
-    // oversized band count for every command and every surface at once.
+    // A lower band edge of 0 Hz is a real edge, so `fmin-hz` refuses only a negative;
+    // an omitted `fmax-hz` is the Nyquist frequency, so a spelled one must be above 0.
+    // `n-mels` needs none -- the filterbank's own ceiling refuses an oversized band
+    // count for every command and every surface at once.
     add_command(
         commands, "mel", true,
         {global_int("n-fft", 2048), global_int("hop-length", 512), global_int("n-mels", 128),
-         with_domain(global_number("fmin", 0.0), at_least(0.0, CliOptionDomainStage::Parameter)),
-         with_domain(global_number("fmax", 0.0), at_least(0.0, CliOptionDomainStage::Parameter)),
+         with_domain(global_number("fmin-hz", 0.0), at_least(0.0, CliOptionDomainStage::Parameter)),
+         with_domain(number_value("fmax-hz", false, true),
+                     greater_than(0.0, CliOptionDomainStage::Usage)),
          flag("htk")});
     add_command(commands, "chroma", true,
                 {global_int("n-fft", 2048), global_int("hop-length", 512)});
@@ -953,8 +955,9 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
          with_domain(number_value("threshold", 0.1),
                      above_zero_up_to(1.0, CliOptionDomainStage::Usage)),
          with_domain(global_int("hop-length", 512), greater_than(0.0, CliOptionDomainStage::Usage)),
-         with_domain(global_number("fmin", 65.0), greater_than(0.0, CliOptionDomainStage::Usage)),
-         with_domain(global_number("fmax", 2093.0),
+         with_domain(number_value("f0-min-hz", 65.0),
+                     greater_than(0.0, CliOptionDomainStage::Usage)),
+         with_domain(number_value("f0-max-hz", 2093.0),
                      greater_than(0.0, CliOptionDomainStage::Usage))},
         {}, &validate_pitch_frequency_order);
     add_command(
@@ -974,27 +977,33 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
                  global_int("n-mels", 128), tempo(number_value("bpm-min")),
                  tempo(number_value("bpm-max")), int_value("win-length", 384)});
     add_command(commands, "nnls-chroma", true, {global_int("hop-length", 512)});
-    // Zero keeps the 32.7 Hz default, so the domain refuses only a negative lower
-    // bound -- which the handler otherwise substitutes that same default for,
-    // leaving a typo indistinguishable from an omission.
+    // An omitted lower bound is the library's (C1); a constant-Q bin cannot sit at
+    // or below 0 Hz, so a spelled one must be above it.
     add_command(
         commands, "cqt", true,
         {int_value("n-bins", 84), int_value("bins-per-octave", 12), global_int("hop-length", 512),
-         with_domain(global_number("fmin", 0.0), at_least(0.0, CliOptionDomainStage::Parameter))});
+         with_domain(number_value("fmin-hz", false, true),
+                     greater_than(0.0, CliOptionDomainStage::Usage))});
     add_command(
         commands, "vqt", true,
         {int_value("n-bins", 84), int_value("bins-per-octave", 12), number_value("gamma", 0.0),
          number_value("filter-scale", 1.0), global_int("hop-length", 512),
-         with_domain(global_number("fmin", 0.0), at_least(0.0, CliOptionDomainStage::Parameter))});
-    add_command(commands, "mel-to-audio", true,
-                {int_value("n-iter", 32), required_output(), global_int("n-fft", 2048),
-                 global_int("hop-length", 512), global_int("n-mels", 128),
-                 global_number("fmin", 0.0), global_number("fmax", 0.0)});
+         with_domain(number_value("fmin-hz", false, true),
+                     greater_than(0.0, CliOptionDomainStage::Usage))});
+    add_command(
+        commands, "mel-to-audio", true,
+        {int_value("n-iter", 32), required_output(), global_int("n-fft", 2048),
+         global_int("hop-length", 512), global_int("n-mels", 128),
+         with_domain(global_number("fmin-hz", 0.0), at_least(0.0, CliOptionDomainStage::Parameter)),
+         with_domain(number_value("fmax-hz", false, true),
+                     greater_than(0.0, CliOptionDomainStage::Usage))});
     add_command(
         commands, "mfcc-to-audio", true,
         {int_value("n-mfcc", 13), int_value("n-iter", 32), required_output(),
          global_int("n-fft", 2048), global_int("hop-length", 512), global_int("n-mels", 128),
-         global_number("fmin", 0.0), global_number("fmax", 0.0)});
+         with_domain(global_number("fmin-hz", 0.0), at_least(0.0, CliOptionDomainStage::Parameter)),
+         with_domain(number_value("fmax-hz", false, true),
+                     greater_than(0.0, CliOptionDomainStage::Usage))});
     add_command(commands, "acoustic", true,
                 {flag("ir"), int_value("n-bands", 6), number_value("min-decay-db", 30.0),
                  number_value("noise-floor-margin-db", 10.0)});
@@ -1163,7 +1172,7 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     add_command(
         commands, "transcribe", true,
         {required_output(), tempo(number_value("tempo-bpm")), flag("polyphonic"),
-         number_value("reference-hz"), number_value("fmin"), number_value("fmax"),
+         number_value("reference-hz"), number_value("f0-min-hz"), number_value("f0-max-hz"),
          number_value("min-note-ms"), number_value("segmentation-threshold-cents"),
          int_value("max-polyphony"), int_value("min-note-division"),
          number_value("min-frame-peak-ratio"), number_value("min-ridge-peak-ratio"),

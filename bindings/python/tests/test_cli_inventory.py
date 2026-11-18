@@ -53,7 +53,7 @@ def test_dump_cli_contract_uses_argparse_actions_and_schema_v2(monkeypatch, caps
     # `type=` callable or a `choices=` tuple) reports the usage class; one the
     # handler enforces after parsing reports the invalid-parameter class.
     pitch_record = next(command for command in payload["commands"] if command["path"] == "pitch")
-    assert _option(pitch_record, "fmin")["domain"] == {
+    assert _option(pitch_record, "f0-min-hz")["domain"] == {
         "choices": [],
         "minimum": 0.0,
         "exclusiveMinimum": True,

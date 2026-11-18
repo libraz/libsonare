@@ -338,9 +338,9 @@ def test_pitch_forwards_threshold_hop_and_frequency_bounds(
             "0.35",
             "--hop-length",
             "256",
-            "--fmin",
+            "--f0-min-hz",
             "90",
-            "--fmax",
+            "--f0-max-hz",
             "1200",
             "--json",
         ]

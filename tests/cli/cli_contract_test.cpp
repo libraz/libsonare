@@ -326,8 +326,8 @@ TEST_CASE("CLI contract inventory follows path-scoped parser metadata", "[cli][c
   // its own path, or the parser rejects the spelling and the read can only
   // ever observe the built-in default.
   REQUIRE(has_option(command("melody"), "hop-length"));
-  REQUIRE(has_option(command("melody"), "fmin"));
-  REQUIRE(has_option(command("melody"), "fmax"));
+  REQUIRE(has_option(command("melody"), "f0-min-hz"));
+  REQUIRE(has_option(command("melody"), "f0-max-hz"));
   REQUIRE(has_option(command("boundaries"), "n-fft"));
   REQUIRE(has_option(command("boundaries"), "hop-length"));
   REQUIRE(has_option(command("pcen"), "hop-length"));
@@ -376,10 +376,10 @@ TEST_CASE("CLI global DSP options reach the analysis on every path that reads th
       return payload.contains("mean_frequency_hz") ? payload["mean_frequency_hz"].as_float()
                                                    : -1.0f;
     };
-    const auto lowered_ceiling = payload_of(base_command + " --fmax 300");
+    const auto lowered_ceiling = payload_of(base_command + " --f0-max-hz 300");
     REQUIRE(mean_hz(lowered_ceiling) != mean_hz(base));
 
-    const auto raised_floor = payload_of(base_command + " --fmin 500");
+    const auto raised_floor = payload_of(base_command + " --f0-min-hz 500");
     REQUIRE(raised_floor.contains("mean_frequency_hz") != base.contains("mean_frequency_hz"));
   }
 
@@ -542,11 +542,11 @@ TEST_CASE("CLI registry exposes immutable leaf contracts", "[cli][registry]") {
   REQUIRE(pitch_hop != nullptr);
   REQUIRE(pitch_hop->default_value.kind == CliOptionDefaultKind::Integer);
   REQUIRE(pitch_hop->default_value.integer_value == 512);
-  const auto* pitch_fmin = cli_option_spec_for_command("pitch", "fmin");
+  const auto* pitch_fmin = cli_option_spec_for_command("pitch", "f0-min-hz");
   REQUIRE(pitch_fmin != nullptr);
   REQUIRE(pitch_fmin->default_value.kind == CliOptionDefaultKind::Number);
   REQUIRE(pitch_fmin->default_value.number_value == 65.0);
-  const auto* pitch_fmax = cli_option_spec_for_command("pitch", "fmax");
+  const auto* pitch_fmax = cli_option_spec_for_command("pitch", "f0-max-hz");
   REQUIRE(pitch_fmax != nullptr);
   REQUIRE(pitch_fmax->default_value.kind == CliOptionDefaultKind::Number);
   REQUIRE(pitch_fmax->default_value.number_value == 2093.0);
@@ -656,8 +656,8 @@ TEST_CASE("CLI registry defaults and hidden controls project through parser", "[
   const CliArgs pitch = parse({"sonare-cli", "pitch"});
   REQUIRE(pitch.get_float("threshold", -1.0f) == 0.1f);
   REQUIRE(pitch.get_int("hop-length", -1) == 512);
-  REQUIRE(pitch.get_float("fmin", -1.0f) == 65.0f);
-  REQUIRE(pitch.get_float("fmax", -1.0f) == 2093.0f);
+  REQUIRE(pitch.get_float("f0-min-hz", -1.0f) == 65.0f);
+  REQUIRE(pitch.get_float("f0-max-hz", -1.0f) == 2093.0f);
   REQUIRE(validate_cli_arguments(pitch, true).empty());
 
   const CliArgs trim = parse({"sonare-cli", "trim-silence"});
@@ -830,7 +830,7 @@ TEST_CASE("CLI option domains are declared once and enforced before dispatch",
     // Parse-time domains on the Python side (`type=` callables): usage.
     for (const auto* value : {"-50", "0"}) {
       CAPTURE(value);
-      const CliValidationError error = reject({"sonare-cli", "pitch", "--fmin", value}, true);
+      const CliValidationError error = reject({"sonare-cli", "pitch", "--f0-min-hz", value}, true);
       REQUIRE_FALSE(error.empty());
       REQUIRE_FALSE(error.invalid_parameter);
     }
@@ -844,13 +844,14 @@ TEST_CASE("CLI option domains are declared once and enforced before dispatch",
     // different answer per algorithm.
     for (const auto* algorithm : {"pyin", "yin"}) {
       CAPTURE(algorithm);
-      const CliValidationError error = reject(
-          {"sonare-cli", "pitch", "--fmin", "3000", "--fmax", "500", "--algorithm", algorithm},
-          true);
+      const CliValidationError error = reject({"sonare-cli", "pitch", "--f0-min-hz", "3000",
+                                               "--f0-max-hz", "500", "--algorithm", algorithm},
+                                              true);
       REQUIRE_FALSE(error.empty());
       REQUIRE_FALSE(error.invalid_parameter);
     }
-    REQUIRE(reject({"sonare-cli", "pitch", "--fmin", "100", "--fmax", "1000"}, true).empty());
+    REQUIRE(
+        reject({"sonare-cli", "pitch", "--f0-min-hz", "100", "--f0-max-hz", "1000"}, true).empty());
 
     // A handler-level domain on the Python side: invalid parameter.
     const CliValidationError algorithm =
@@ -1448,31 +1449,33 @@ TEST_CASE("CLI refuses an enumerator index outside its enumeration", "[cli][argu
   std::remove(eq_output.c_str());
 }
 
-TEST_CASE("CLI checks --fmin against the effective --fmax, not only a supplied one",
+TEST_CASE("CLI checks --f0-min-hz against the effective --f0-max-hz, not only a supplied one",
           "[cli][argument-contract]") {
-  // `--fmin 3000` inverts the range against the 2093 Hz default `--fmax` just as
+  // `--f0-min-hz 3000` inverts the range against the 2093 Hz default `--f0-max-hz` just as
   // surely as an explicit pair does. Gating the cross-option check on both being
   // present let this invocation reach a core SONARE_CHECK that names neither
   // option and reports the invalid-parameter class, so the same mistake had two
   // exit codes and two messages depending on how it was typed.
   create_test_wav(TEST_WAV);
 
-  auto [code, output] = exec_command(CLI + " pitch " + TEST_WAV + " --fmin 3000 -q");
+  auto [code, output] = exec_command(CLI + " pitch " + TEST_WAV + " --f0-min-hz 3000 -q");
   REQUIRE(code == 2);
-  REQUIRE_THAT(output, ContainsSubstring("--fmax must be greater than --fmin"));
+  REQUIRE_THAT(output, ContainsSubstring("--f0-max-hz must be greater than --f0-min-hz"));
   // The effective value of the half the caller never typed is what explains the
   // refusal.
   REQUIRE_THAT(output, ContainsSubstring("2093"));
 
-  // The symmetric case: a lone --fmax below the 65 Hz default --fmin.
-  auto [reverse_code, reverse_output] = exec_command(CLI + " pitch " + TEST_WAV + " --fmax 40 -q");
+  // The symmetric case: a lone --f0-max-hz below the 65 Hz default --f0-min-hz.
+  auto [reverse_code, reverse_output] =
+      exec_command(CLI + " pitch " + TEST_WAV + " --f0-max-hz 40 -q");
   REQUIRE(reverse_code == 2);
-  REQUIRE_THAT(reverse_output, ContainsSubstring("--fmax must be greater than --fmin"));
+  REQUIRE_THAT(reverse_output, ContainsSubstring("--f0-max-hz must be greater than --f0-min-hz"));
 
-  // A valid lone --fmin still runs.
-  auto [ok_code, ok_output] = exec_command(CLI + " pitch " + TEST_WAV + " --fmin 100 --json -q");
+  // A valid lone --f0-min-hz still runs.
+  auto [ok_code, ok_output] =
+      exec_command(CLI + " pitch " + TEST_WAV + " --f0-min-hz 100 --json -q");
   REQUIRE(ok_code == 0);
-  REQUIRE_THAT(ok_output, !ContainsSubstring("--fmax must be greater"));
+  REQUIRE_THAT(ok_output, !ContainsSubstring("--f0-max-hz must be greater"));
 }
 
 #ifdef SONARE_WITH_MIXING
@@ -1592,7 +1595,7 @@ TEST_CASE("CLI global options", "[cli]") {
 
   SECTION("equals syntax for global and command options") {
     auto [code, output] =
-        exec_command(CLI + " mel " + TEST_WAV + " --n-mels=64 --fmin=20 --json -q");
+        exec_command(CLI + " mel " + TEST_WAV + " --n-mels=64 --fmin-hz=20 --json -q");
     REQUIRE(code == 0);
     REQUIRE_THAT(output, ContainsSubstring("\"n_mels\": 64"));
   }
@@ -1610,7 +1613,7 @@ TEST_CASE("CLI global options", "[cli]") {
 
   SECTION("rejects global DSP options outside their command schema") {
     for (const char* option :
-         {"--n-fft 4096", "--hop-length 256", "--n-mels 64", "--fmin 20", "--fmax 20000"}) {
+         {"--n-fft 4096", "--hop-length 256", "--n-mels 64", "--fmin-hz 20", "--fmax-hz 20000"}) {
       auto [code, output] = exec_command(CLI + " version " + option + " -q");
       REQUIRE(code == 2);
       REQUIRE_THAT(output, ContainsSubstring("Unknown option"));
@@ -1643,13 +1646,13 @@ TEST_CASE("CLI command help", "[cli]") {
   REQUIRE_THAT(output, ContainsSubstring("Usage:"));
   REQUIRE_THAT(output, ContainsSubstring("mel [options] <audio_file>"));
   REQUIRE_THAT(output, ContainsSubstring("--n-mels <value>"));
-  REQUIRE_THAT(output, ContainsSubstring("--fmin <value>"));
+  REQUIRE_THAT(output, ContainsSubstring("--fmin-hz <value>"));
 
   auto [global_code, global_output] = exec_command(CLI + " --help");
   REQUIRE(global_code == 0);
   REQUIRE_THAT(global_output, ContainsSubstring("--n-mels <int>"));
-  REQUIRE_THAT(global_output, ContainsSubstring("--fmin <hz>"));
-  REQUIRE_THAT(global_output, ContainsSubstring("--fmax <hz>"));
+  REQUIRE_THAT(global_output, ContainsSubstring("--fmin-hz <hz>"));
+  REQUIRE_THAT(global_output, ContainsSubstring("--fmax-hz <hz>"));
 
 #ifdef SONARE_WITH_ARRANGEMENT
   auto [project_code, project_output] = exec_command(CLI + " project validate --help");

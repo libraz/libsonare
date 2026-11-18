@@ -90,7 +90,7 @@ struct CliOptionSpec {
 };
 
 /// A command-level check for a constraint that spans two options (for example
-/// `--fmin` against `--fmax`), which no per-option domain can express. Returns
+/// `--f0-min-hz` against `--f0-max-hz`), which no per-option domain can express. Returns
 /// an empty error when the combination is accepted.
 using CliCommandValidator = CliValidationError (*)(const CliArgs&);
 

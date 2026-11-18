@@ -682,8 +682,8 @@ def cmd_transcribe(args: argparse.Namespace) -> int:
             sr,
             polyphonic=args.polyphonic,
             reference_hz=args.reference_hz,
-            f0_min_hz=args.fmin,
-            f0_max_hz=args.fmax,
+            f0_min_hz=args.f0_min_hz,
+            f0_max_hz=args.f0_max_hz,
             min_note_ms=args.min_note_ms,
             segmentation_threshold_cents=args.segmentation_threshold_cents,
             velocity_floor_db=args.velocity_floor_db,
@@ -970,13 +970,13 @@ def register_project_parsers(
         help="Tuning reference the MIDI note numbers are measured against (default: 440)",
     )
     transcribe_p.add_argument(
-        "--fmin",
+        "--f0-min-hz",
         type=_finite_float,
         default=None,
         help="Low end of the F0 tracker range in Hz; omitted uses 65 mono or 55 poly",
     )
     transcribe_p.add_argument(
-        "--fmax",
+        "--f0-max-hz",
         type=_finite_float,
         default=None,
         help="High end of the F0 tracker range in Hz; omitted uses 2093 mono or 1760 poly",

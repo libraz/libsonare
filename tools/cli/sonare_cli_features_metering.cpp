@@ -11,7 +11,7 @@ int cmd_mel(const CliArgs& args, const Audio& audio) {
   config.hop_length = args.hop_length;
   config.htk = args.has("htk");
   config.fmin = args.fmin;
-  config.fmax = args.fmax > 0 ? args.fmax : static_cast<float>(audio.sample_rate()) / 2.0f;
+  config.fmax = args.has("fmax-hz") ? args.fmax : static_cast<float>(audio.sample_rate()) / 2.0f;
 
   MelSpectrogram mel = MelSpectrogram::compute(audio, config);
   const float* data = mel.power_data();
@@ -207,8 +207,8 @@ int cmd_pitch(const CliArgs& args, const Audio& audio) {
   // passed, so an out-of-range frequency is no longer substituted with the
   // default it happens to sit next to.
   PitchConfig config;
-  config.fmin = args.get_float("fmin", 65.0f);
-  config.fmax = args.get_float("fmax", 2093.0f);
+  config.fmin = args.get_float("f0-min-hz", 65.0f);
+  config.fmax = args.get_float("f0-max-hz", 2093.0f);
   config.threshold = args.get_float("threshold", 0.1f);
   config.hop_length = args.get_int("hop-length", 512);
 
@@ -383,7 +383,7 @@ int cmd_plp(const CliArgs& args, const Audio& audio) {
 int cmd_cqt(const CliArgs& args, const Audio& audio) {
   CqtConfig config;
   config.hop_length = args.hop_length;
-  config.fmin = args.fmin > 0.0f ? args.fmin : 32.7f;
+  if (args.has("fmin-hz")) config.fmin = args.fmin;
   config.n_bins = args.get_int("n-bins", 84);
   config.bins_per_octave = args.get_int("bins-per-octave", 12);
 
@@ -414,7 +414,7 @@ int cmd_cqt(const CliArgs& args, const Audio& audio) {
 int cmd_vqt(const CliArgs& args, const Audio& audio) {
   VqtConfig config;
   config.hop_length = args.hop_length;
-  config.fmin = args.fmin > 0.0f ? args.fmin : 32.7f;
+  if (args.has("fmin-hz")) config.fmin = args.fmin;
   config.n_bins = args.get_int("n-bins", 84);
   config.bins_per_octave = args.get_int("bins-per-octave", 12);
   config.gamma = args.get_float("gamma", 0.0f);
@@ -455,7 +455,7 @@ int cmd_mel_to_audio(const CliArgs& args, const Audio& audio) {
   config.n_fft = args.n_fft;
   config.hop_length = args.hop_length;
   config.fmin = args.fmin;
-  config.fmax = args.fmax > 0 ? args.fmax : static_cast<float>(audio.sample_rate()) / 2.0f;
+  config.fmax = args.has("fmax-hz") ? args.fmax : static_cast<float>(audio.sample_rate()) / 2.0f;
 
   const int n_iter = args.get_int("n-iter", 32);
   MelSpectrogram mel = MelSpectrogram::compute(audio, config);
@@ -485,7 +485,7 @@ int cmd_mfcc_to_audio(const CliArgs& args, const Audio& audio) {
   config.n_fft = args.n_fft;
   config.hop_length = args.hop_length;
   config.fmin = args.fmin;
-  config.fmax = args.fmax > 0 ? args.fmax : static_cast<float>(audio.sample_rate()) / 2.0f;
+  config.fmax = args.has("fmax-hz") ? args.fmax : static_cast<float>(audio.sample_rate()) / 2.0f;
 
   const int n_mfcc = args.get_int("n-mfcc", 13);
   const int n_iter = args.get_int("n-iter", 32);

@@ -348,18 +348,21 @@ def _option_supplied(args: argparse.Namespace, name: str) -> bool:
 
 
 def _validate_pitch_namespace(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
-    fmin = getattr(args, "fmin", None)
-    fmax = getattr(args, "fmax", None)
+    fmin = getattr(args, "f0_min_hz", None)
+    fmax = getattr(args, "f0_max_hz", None)
     if fmin is not None and fmax is not None and fmax <= fmin:
         # The effective values, not just the rule: the offending half is
-        # commonly the option the caller never typed, and `--fmin 3000` against
-        # the 2093 Hz default `--fmax` reads as an unexplained refusal without
-        # them.
-        parser.error(f"--fmax must be greater than --fmin (--fmin {fmin:g}, --fmax {fmax:g})")
+        # commonly the option the caller never typed, and `--f0-min-hz 3000`
+        # against the 2093 Hz default `--f0-max-hz` reads as an unexplained
+        # refusal without them.
+        parser.error(
+            f"--f0-max-hz must be greater than --f0-min-hz "
+            f"(--f0-min-hz {fmin:g}, --f0-max-hz {fmax:g})"
+        )
 
 
 # The pitch tracker's range, which a vocal session falls back to for whichever
-# of `--fmin-hz` / `--fmax-hz` the caller left out.
+# of `--f0-min-hz` / `--f0-max-hz` the caller left out.
 _VOCAL_DEFAULT_FMIN_HZ = 65.0
 _VOCAL_DEFAULT_FMAX_HZ = 2093.0
 
@@ -367,15 +370,16 @@ _VOCAL_DEFAULT_FMAX_HZ = 2093.0
 def _validate_vocal_notes_namespace(
     args: argparse.Namespace, parser: argparse.ArgumentParser
 ) -> None:
-    fmin_given = getattr(args, "fmin_hz", None)
-    fmax_given = getattr(args, "fmax_hz", None)
+    fmin_given = getattr(args, "f0_min_hz", None)
+    fmax_given = getattr(args, "f0_max_hz", None)
     if fmin_given is None and fmax_given is None:
         return
     fmin = _VOCAL_DEFAULT_FMIN_HZ if fmin_given is None else fmin_given
     fmax = _VOCAL_DEFAULT_FMAX_HZ if fmax_given is None else fmax_given
     if fmax <= fmin:
         parser.error(
-            f"--fmax-hz must be greater than --fmin-hz (--fmin-hz {fmin:g}, --fmax-hz {fmax:g})"
+            f"--f0-max-hz must be greater than --f0-min-hz "
+            f"(--f0-min-hz {fmin:g}, --f0-max-hz {fmax:g})"
         )
 
 

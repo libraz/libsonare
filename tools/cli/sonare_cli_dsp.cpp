@@ -249,13 +249,10 @@ int cmd_chirp(const CliArgs& args, const Audio&) {
   const float fmin = args.fmin;
   const float fmax = args.fmax;
   const bool linear = !args.has("exponential");
-  if (fmax <= 0.0f) {
-    std::cerr << color::red << "Error: --fmax must be > 0" << color::reset << "\n";
-    return 1;
-  }
+  // The registry has already required --fmax-hz above 0.
   if (!linear && fmin <= 0.0f) {
-    std::cerr << color::red << "Error: --fmin must be > 0 for an exponential sweep" << color::reset
-              << "\n";
+    std::cerr << color::red << "Error: --fmin-hz must be > 0 for an exponential sweep"
+              << color::reset << "\n";
     return 1;
   }
   const int sr = args.get_int("sr", 22050);

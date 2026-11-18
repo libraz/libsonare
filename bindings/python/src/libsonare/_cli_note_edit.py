@@ -460,8 +460,8 @@ _VOCAL_NOTES_SETTINGS = (
     ("min_note_ms", "min_note_ms"),
     ("frame_length_samples", "frame_length_samples"),
     ("hop_length_samples", "hop_length_samples"),
-    ("fmin_hz", "fmin_hz"),
-    ("fmax_hz", "fmax_hz"),
+    ("f0_min_hz", "fmin_hz"),
+    ("f0_max_hz", "fmax_hz"),
     ("yin_threshold", "yin_threshold"),
     ("voiced_threshold", "voiced_threshold"),
     ("reference_hz", "reference_hz"),
@@ -886,18 +886,18 @@ def register_note_edit_parsers(
         help="Analysis hop length in samples (session default: 512)",
     )
     vocal_notes_p.add_argument(
-        "--fmin-hz",
+        "--f0-min-hz",
         type=_positive_finite_float,
         default=None,
         metavar="HZ",
         help="Lowest tracked frequency (session default: 65)",
     )
     vocal_notes_p.add_argument(
-        "--fmax-hz",
+        "--f0-max-hz",
         type=_positive_finite_float,
         default=None,
         metavar="HZ",
-        help="Highest tracked frequency, above --fmin-hz (session default: 2093)",
+        help="Highest tracked frequency, above --f0-min-hz (session default: 2093)",
     )
     vocal_notes_p.add_argument(
         "--yin-threshold",

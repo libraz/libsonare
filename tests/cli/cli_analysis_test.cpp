@@ -627,7 +627,7 @@ TEST_CASE("CLI mel command", "[cli]") {
 
   SECTION("htk flag is accepted and changes the mel filterbank") {
     const std::string options =
-        " --n-fft 512 --hop-length 128 --n-mels 40 --fmin 20 --fmax 10000 --json -q";
+        " --n-fft 512 --hop-length 128 --n-mels 40 --fmin-hz 20 --fmax-hz 10000 --json -q";
     auto [slaney_code, slaney_output] = exec_command(CLI + " mel " + TEST_WAV + options);
     auto [htk_code, htk_output] = exec_command(CLI + " mel " + TEST_WAV + " --htk" + options);
     REQUIRE(slaney_code == 0);
@@ -747,7 +747,7 @@ TEST_CASE("CLI pitch command", "[cli]") {
     const std::string short_wav = unique_temp_path("_pitch_infeasible_fmin.wav");
     create_test_wav(short_wav, 0.02f, 440.0f);
     auto [code, output] =
-        exec_command(CLI + " pitch " + short_wav + " --fmin 5 --fmax 10 --json -q");
+        exec_command(CLI + " pitch " + short_wav + " --f0-min-hz 5 --f0-max-hz 10 --json -q");
     REQUIRE(code == 3);
     REQUIRE_THAT(output, ContainsSubstring("fmin=5 is too small for frame_length=2048"));
     std::remove(short_wav.c_str());
@@ -837,12 +837,11 @@ TEST_CASE("CLI cqt command", "[.][slow][cli]") {
     REQUIRE_THAT(output, ContainsSubstring("\"n_frames\""));
   }
 
-  SECTION("global --fmin reaches the cqt handler") {
-    // Regression: cqt (like pitch/melody) read the global --fmin/--fmax through
-    // args.options, which never receives them, so the flag was silently ignored
-    // and the hardcoded default (32.7 Hz) was used regardless.
+  SECTION("global --fmin-hz reaches the cqt handler") {
+    // Regression: cqt read the global --fmin-hz through args.options, which never
+    // receives it, so the flag was silently ignored and the 32.7 Hz default used.
     auto [code, output] =
-        exec_command(CLI + " cqt " + TEST_WAV + " --fmin 100 --n-bins 72 --json -q");
+        exec_command(CLI + " cqt " + TEST_WAV + " --fmin-hz 100 --n-bins 72 --json -q");
     REQUIRE(code == 0);
     REQUIRE_THAT(output, ContainsSubstring("\"fmin\": 100"));
     // The default still applies when the flag is absent.
@@ -850,6 +849,30 @@ TEST_CASE("CLI cqt command", "[.][slow][cli]") {
     REQUIRE(defCode == 0);
     REQUIRE_THAT(defOutput, ContainsSubstring("\"fmin\": 32.7"));
   }
+}
+
+TEST_CASE("CLI band bounds leave an omitted edge to the library and refuse 0", "[cli]") {
+  create_test_wav(TEST_WAV);
+  const std::string out = unique_temp_path("_band_bounds.wav");
+  for (const std::string& invocation :
+       {" mel " + TEST_WAV + " --fmax-hz 0 --json -q",
+        " mel-to-audio " + TEST_WAV + " -o " + out + " --fmax-hz 0 -q",
+        " mfcc-to-audio " + TEST_WAV + " -o " + out + " --fmax-hz 0 -q",
+        " cqt " + TEST_WAV + " --fmin-hz 0 --json -q",
+        " vqt " + TEST_WAV + " --fmin-hz 0 --json -q",
+        std::string(" chirp -o ") + out + " --fmin-hz 100 -q"}) {
+    CAPTURE(invocation);
+    auto [code, output] = exec_command(CLI + invocation);
+    REQUIRE(code == 2);
+    REQUIRE_THAT(output, ContainsSubstring("-hz"));
+  }
+  auto [mel_code, mel_output] = exec_command(CLI + " mel " + TEST_WAV + " --json -q");
+  REQUIRE(mel_code == 0);
+  auto [chirp_code, chirp_output] =
+      exec_command(CLI + " chirp -o " + out + " --fmin-hz 100 --fmax-hz 1000 --json -q");
+  REQUIRE(chirp_code == 0);
+  REQUIRE_THAT(chirp_output, ContainsSubstring("\"fmax\": 1000"));
+  std::remove(out.c_str());
 }
 
 TEST_CASE("CLI analyze command", "[.][slow][cli]") {
@@ -966,7 +989,7 @@ TEST_CASE("CLI vocal-notes lists the notes a vocal session finds", "[cli][vocal]
     const auto [same_code, same_text] = exec_command(
         CLI + " vocal-notes " + wav +
         " --segmentation-threshold-cents 50 --min-note-ms 30 --frame-length-samples 2048"
-        " --hop-length-samples 512 --fmin-hz 65 --fmax-hz 2093 --yin-threshold 0.1"
+        " --hop-length-samples 512 --f0-min-hz 65 --f0-max-hz 2093 --yin-threshold 0.1"
         " --voiced-threshold 0.5 --reference-hz 440 --json -q");
     REQUIRE(same_code == 0);
     REQUIRE(same_text == text);
@@ -986,7 +1009,7 @@ TEST_CASE("CLI vocal-notes lists the notes a vocal session finds", "[cli][vocal]
   SECTION("an out-of-domain setting is a usage error") {
     for (const char* bad :
          {"--segmentation-threshold-cents 0", "--min-note-ms -1", "--frame-length-samples 0",
-          "--hop-length-samples 0", "--fmin-hz 0", "--fmax-hz 0", "--yin-threshold 0",
+          "--hop-length-samples 0", "--f0-min-hz 0", "--f0-max-hz 0", "--yin-threshold 0",
           "--yin-threshold 1.5", "--voiced-threshold 1.5", "--voiced-threshold -0.1",
           "--reference-hz 0"}) {
       const auto [bad_code, bad_text] =
@@ -994,11 +1017,11 @@ TEST_CASE("CLI vocal-notes lists the notes a vocal session finds", "[cli][vocal]
       INFO(bad << ": " << bad_text);
       REQUIRE(bad_code == 2);
     }
-    // The effective range is checked, so `--fmin-hz` alone can invert it.
+    // The effective range is checked, so `--f0-min-hz` alone can invert it.
     const auto [inverted_code, inverted_text] =
-        exec_command(CLI + " vocal-notes " + wav + " --fmin-hz 3000 -q");
+        exec_command(CLI + " vocal-notes " + wav + " --f0-min-hz 3000 -q");
     REQUIRE(inverted_code == 2);
-    REQUIRE_THAT(inverted_text, ContainsSubstring("--fmax-hz must be greater than --fmin-hz"));
+    REQUIRE_THAT(inverted_text, ContainsSubstring("--f0-max-hz must be greater than --f0-min-hz"));
   }
   std::remove(wav.c_str());
 }

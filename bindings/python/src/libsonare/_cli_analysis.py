@@ -32,6 +32,7 @@ from ._cli_options import (
     _finite_float,
     _nonnegative_finite_float,
     _pitch_threshold,
+    _positive_finite_float,
     _positive_int,
     _positive_pitch_frequency,
 )
@@ -432,9 +433,8 @@ def cmd_mel(args: argparse.Namespace) -> int:
         n_fft=args.n_fft,
         hop_length=args.hop_length,
         n_mels=args.n_mels,
-        fmin_hz=args.fmin,
-        # The flag keeps the command line's 0 = Nyquist.
-        fmax_hz=args.fmax or None,
+        fmin_hz=args.fmin_hz,
+        fmax_hz=args.fmax_hz,
         htk=args.htk,
     )
     n_mels, n_frames = result.power.shape
@@ -558,11 +558,11 @@ def cmd_pitch(args: argparse.Namespace) -> int:
     # on the old call shape; parser-built pitch invocations always carry the
     # four explicit analysis fields and therefore forward them to the core.
     use_pitch_options = any(
-        hasattr(args, name) for name in ("hop_length", "fmin", "fmax", "threshold")
+        hasattr(args, name) for name in ("hop_length", "f0_min_hz", "f0_max_hz", "threshold")
     )
     hop_length = int(getattr(args, "hop_length", 512))
-    fmin = float(getattr(args, "fmin", 65.0))
-    fmax = float(getattr(args, "fmax", 2093.0))
+    fmin = float(getattr(args, "f0_min_hz", 65.0))
+    fmax = float(getattr(args, "f0_max_hz", 2093.0))
     threshold = float(getattr(args, "threshold", 0.1))
     if algo == "yin":
         if use_pitch_options:
@@ -777,27 +777,22 @@ def register_analysis_parsers(
         help="Beat unit reported for the detected meter (default: 4)",
     )
     mel_p = sub.add_parser("mel", parents=[mel_options], help="Compute mel spectrogram")
-    # 0 is the librosa default both bounds are spelled with, so the range is
-    # closed at the bottom rather than starting above it. Declared on the action
-    # rather than on the type callable: argparse takes any finite number here and
-    # the filterbank is what refuses a negative, so the refusal is the
-    # invalid-parameter class, not the usage one.
+    # A lower band edge of 0 Hz is a real edge, so the range is closed at the
+    # bottom. Declared on the action rather than on the type callable: argparse
+    # takes any finite number here and the filterbank is what refuses a negative,
+    # so the refusal is the invalid-parameter class, not the usage one.
     _cli_domain(
         mel_p.add_argument(
-            "--fmin", type=_finite_float, default=0.0, help="Lowest mel band frequency in Hz"
+            "--fmin-hz", type=_finite_float, default=0.0, help="Lowest mel band frequency in Hz"
         ),
         minimum=0,
         reject_exit="invalid_parameter",
     )
-    _cli_domain(
-        mel_p.add_argument(
-            "--fmax",
-            type=_finite_float,
-            default=0.0,
-            help="Highest mel band frequency in Hz (0 = Nyquist)",
-        ),
-        minimum=0,
-        reject_exit="invalid_parameter",
+    mel_p.add_argument(
+        "--fmax-hz",
+        type=_positive_finite_float,
+        default=None,
+        help="Highest mel band frequency in Hz (default: the Nyquist frequency)",
     )
     mel_p.add_argument(
         "--htk", action="store_true", help="Use the HTK mel formula instead of Slaney"
@@ -832,13 +827,13 @@ def register_analysis_parsers(
         help="Hop length in samples (default: 512)",
     )
     pitch_p.add_argument(
-        "--fmin",
+        "--f0-min-hz",
         type=_positive_pitch_frequency,
         default=65.0,
         help="Minimum frequency in Hz (default: 65.0)",
     )
     pitch_p.add_argument(
-        "--fmax",
+        "--f0-max-hz",
         type=_positive_pitch_frequency,
         default=2093.0,
         help="Maximum frequency in Hz (default: 2093.0)",

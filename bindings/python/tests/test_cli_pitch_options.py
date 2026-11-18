@@ -35,8 +35,8 @@ def test_pitch_parser_accepts_and_defaults_analysis_options() -> None:
     assert defaults.algorithm == "pyin"
     assert defaults.threshold == 0.1
     assert defaults.hop_length == 512
-    assert defaults.fmin == 65.0
-    assert defaults.fmax == 2093.0
+    assert defaults.f0_min_hz == 65.0
+    assert defaults.f0_max_hz == 2093.0
     assert not hasattr(defaults, "output")
 
     explicit = _pitch_args(
@@ -46,16 +46,16 @@ def test_pitch_parser_accepts_and_defaults_analysis_options() -> None:
         "0.25",
         "--hop-length",
         "256",
-        "--fmin",
+        "--f0-min-hz",
         "80",
-        "--fmax",
+        "--f0-max-hz",
         "1000",
     )
     assert explicit.algorithm == "yin"
     assert explicit.threshold == 0.25
     assert explicit.hop_length == 256
-    assert explicit.fmin == 80.0
-    assert explicit.fmax == 1000.0
+    assert explicit.f0_min_hz == 80.0
+    assert explicit.f0_max_hz == 1000.0
 
 
 def test_pitch_omitted_options_are_legacy_equivalent(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -78,9 +78,9 @@ def test_pitch_omitted_options_are_legacy_equivalent(monkeypatch: pytest.MonkeyP
             "0.1",
             "--hop-length",
             "512",
-            "--fmin",
+            "--f0-min-hz",
             "65.0",
-            "--fmax",
+            "--f0-max-hz",
             "2093.0",
         )
     )
@@ -127,13 +127,13 @@ def test_pitch_rejects_output_at_parser_level(
         ("--hop-length", "0"),
         ("--hop-length", "-1"),
         ("--hop-length", "not-an-integer"),
-        ("--fmin", "0"),
-        ("--fmin", "-1"),
-        ("--fmin", "nan"),
-        ("--fmax", "0"),
-        ("--fmax", "-1"),
-        ("--fmax", "inf"),
-        ("--fmin", "100", "--fmax", "99"),
+        ("--f0-min-hz", "0"),
+        ("--f0-min-hz", "-1"),
+        ("--f0-min-hz", "nan"),
+        ("--f0-max-hz", "0"),
+        ("--f0-max-hz", "-1"),
+        ("--f0-max-hz", "inf"),
+        ("--f0-min-hz", "100", "--f0-max-hz", "99"),
     ],
 )
 @pytest.mark.parametrize(
@@ -184,9 +184,9 @@ def test_pitch_forwards_nondefault_options_to_selected_core_call(
         "0.35",
         "--hop-length",
         "256",
-        "--fmin",
+        "--f0-min-hz",
         "90",
-        "--fmax",
+        "--f0-max-hz",
         "1200",
     )
     assert _cli_analysis.cmd_pitch(args) == 0
