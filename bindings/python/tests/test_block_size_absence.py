@@ -43,7 +43,7 @@ def _playback(size: int | None) -> object:
 
 
 def _mixer(size: int | None) -> object:
-    return ls.Mixer.from_scene_json(_EMPTY_SCENE, SR, max_block_size=size)
+    return ls.Mixer.from_json(_EMPTY_SCENE, sample_rate=SR, max_block_size=size)
 
 
 def _engine(size: int | None) -> object:
@@ -119,7 +119,7 @@ def test_engine_offline_block_size_takes_none_and_refuses_zero() -> None:
         lambda: ls.RealtimeVoiceChanger(SR),
         lambda: ls.StreamingMasteringChain(sample_rate=SR),
         lambda: ls.PlaybackRenderer({}),
-        lambda: ls.Mixer.from_scene_json(_EMPTY_SCENE),
+        lambda: ls.Mixer.from_json(_EMPTY_SCENE),
         lambda: ls.RealtimeEngine(),
         lambda: ls.EngineBounceOptions(total_frames=256),
         lambda: ls.EngineFreezeOptions(total_frames=256),
@@ -209,7 +209,7 @@ def test_the_reported_block_is_the_one_each_handle_accepts() -> None:
         engine.process([zeros(limit + 1), zeros(limit + 1)])
         assert any(record.error == "maxBlockExceeded" for record in engine.drain_telemetry())
     scene = json.dumps(ls.mixing_scene_preset(ls.mixing_scene_preset_names()[0]))
-    mixer = ls.Mixer.from_scene_json(scene, SR)
+    mixer = ls.Mixer.from_json(scene, sample_rate=SR)
     try:
         strips = mixer.strip_count
         _accepts(

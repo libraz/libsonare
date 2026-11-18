@@ -75,7 +75,7 @@ def mixer():
     """Build a Mixer from the first preset scene and close it afterwards."""
     from libsonare import Mixer
 
-    mixer = Mixer.from_scene_json(_first_preset_json(), sample_rate=48000, max_block_size=256)
+    mixer = Mixer.from_json(_first_preset_json(), sample_rate=48000, max_block_size=256)
     try:
         yield mixer
     finally:
@@ -92,7 +92,7 @@ def _process_one_block(mixer) -> None:
 def test_preset_scene_builds_mixer(mixer) -> None:
     """A mixer built from the first preset exposes the expected strips."""
     assert mixer.strip_count == 2
-    scene = json.loads(mixer.to_scene_json())
+    scene = json.loads(mixer.to_json())
     assert len(scene["strips"]) == 2
 
 
@@ -234,7 +234,7 @@ def test_strip_non_finite_discard_count_rises_after_an_insert_overflow() -> None
     """
     from libsonare import Mixer
 
-    mixer = Mixer.from_scene_json(
+    mixer = Mixer.from_json(
         _scene_with_pre_eq(200.0, on_bus=False), sample_rate=48000, max_block_size=64
     )
     try:
@@ -255,7 +255,7 @@ def test_bus_non_finite_discard_count_rises_after_an_insert_overflow() -> None:
     """Same overflow mechanism as the strip case, for a bus's own insert."""
     from libsonare import Mixer
 
-    mixer = Mixer.from_scene_json(
+    mixer = Mixer.from_json(
         _scene_with_pre_eq(200.0, on_bus=True), sample_rate=48000, max_block_size=64
     )
     try:
@@ -370,7 +370,7 @@ def test_simple_strip_setters_reach_the_scene(mixer) -> None:
     mixer.set_vca_offset_db("vocal", -2.0)
     mixer.set_dual_pan("vocal", -0.3, 0.4)
 
-    scene = json.loads(mixer.to_scene_json())
+    scene = json.loads(mixer.to_json())
     vocal = next(strip for strip in scene["strips"] if strip["id"] == "vocal")
     assert vocal["channelDelaySamples"] == 8
     assert vocal["vcaOffsetDb"] == pytest.approx(-2.0)
@@ -385,7 +385,7 @@ def test_asymmetric_strip_controls_round_trip_in_scene_json(mixer) -> None:
     mixer.set_polarity_invert("vocal", True, False)
     mixer.set_dual_pan("vocal", 0.75, -0.25)
 
-    scene = json.loads(mixer.to_scene_json())
+    scene = json.loads(mixer.to_json())
     vocal = next(strip for strip in scene["strips"] if strip["id"] == "vocal")
     assert vocal["polarityInvertLeft"] is True
     assert vocal["polarityInvertRight"] is False
@@ -435,7 +435,7 @@ def _render_settle_scene(*, settle: bool, length: int = 4096) -> tuple[list[floa
     """
     from libsonare import Mixer
 
-    mixer = Mixer.from_scene_json(_SETTLE_SCENE, sample_rate=48000, max_block_size=length)
+    mixer = Mixer.from_json(_SETTLE_SCENE, sample_rate=48000, max_block_size=length)
     try:
         if settle:
             mixer.settle("s")
@@ -476,11 +476,11 @@ def test_settle_leaves_the_serialized_scene_unchanged() -> None:
     """settle moves smoothers to values the scene already records, so it clears nothing."""
     from libsonare import Mixer
 
-    mixer = Mixer.from_scene_json(_SETTLE_SCENE, sample_rate=48000, max_block_size=256)
+    mixer = Mixer.from_json(_SETTLE_SCENE, sample_rate=48000, max_block_size=256)
     try:
-        before = json.loads(mixer.to_scene_json())
+        before = json.loads(mixer.to_json())
         mixer.settle("s")
-        assert json.loads(mixer.to_scene_json()) == before
+        assert json.loads(mixer.to_json()) == before
     finally:
         mixer.close()
 
@@ -488,7 +488,7 @@ def test_settle_leaves_the_serialized_scene_unchanged() -> None:
 def test_set_surround_pan_reflected_in_scene(mixer) -> None:
     """set_surround_pan stores azimuth/divergence/lfe on the strip's scene object."""
     mixer.set_surround_pan("vocal", azimuth=-45.0, divergence=0.25, lfe=0.5)
-    scene = json.loads(mixer.to_scene_json())
+    scene = json.loads(mixer.to_json())
     by_id = {strip["id"]: strip for strip in scene["strips"]}
     pan = by_id["vocal"]["surroundPan"]
     assert pan["azimuth"] == pytest.approx(-45.0)
@@ -501,21 +501,21 @@ def test_set_surround_pan_reflected_in_scene(mixer) -> None:
     "field", [{"azimuth": 181.0}, {"azimuth": -181.0}, {"divergence": 1.5}, {"lfe": -0.1}]
 )
 def test_set_surround_pan_refuses_out_of_range_fields(mixer, field) -> None:
-    before = mixer.to_scene_json()
+    before = mixer.to_json()
     with raises_coded():
         mixer.set_surround_pan("vocal", **field)
-    assert mixer.to_scene_json() == before
+    assert mixer.to_json() == before
 
 
 def test_soloed_and_solo_safe_reflected_in_scene(mixer) -> None:
     """set_soloed / set_solo_safe are reflected in the re-serialized scene."""
-    scene_before = json.loads(mixer.to_scene_json())
+    scene_before = json.loads(mixer.to_json())
     assert all(not strip["soloed"] for strip in scene_before["strips"])
 
     mixer.set_soloed("vocal", True)
     mixer.set_solo_safe("vocal-verb-return", True)
 
-    scene_after = json.loads(mixer.to_scene_json())
+    scene_after = json.loads(mixer.to_json())
     by_id = {strip["id"]: strip for strip in scene_after["strips"]}
     assert by_id["vocal"]["soloed"] is True
     assert by_id["vocal-verb-return"]["soloSafe"] is True
@@ -571,7 +571,7 @@ def test_strip_can_be_added_to_a_live_mixer(mixer) -> None:
     # The metering keywords are the scene's own "metering" object, so a strip
     # added here and one declared in the document describe the same thing.
     mixer.add_strip("py-quiet-strip", enabled=False)
-    scene = json.loads(mixer.to_scene_json())
+    scene = json.loads(mixer.to_json())
     ids = [strip["id"] for strip in scene["strips"]]
     assert "py-live-strip" in ids
     quiet = next(strip for strip in scene["strips"] if strip["id"] == "py-quiet-strip")
@@ -615,7 +615,7 @@ def test_add_bus_takes_a_role_token(mixer) -> None:
 def _empty_mixer():
     from libsonare import Mixer
 
-    return Mixer.from_scene_json(
+    return Mixer.from_json(
         '{"version":1,"strips":[],"buses":[],"connections":[]}',
         sample_rate=48000,
         max_block_size=256,
@@ -627,7 +627,7 @@ def _tone_block() -> list[float]:
 
 
 def _connections(mixer) -> list[tuple[str, str]]:
-    scene = json.loads(mixer.to_scene_json())
+    scene = json.loads(mixer.to_json())
     return [(c["source"], c["destination"]) for c in scene["connections"]]
 
 
@@ -665,7 +665,7 @@ def test_set_output_bus_refusals_name_the_ids_and_leave_the_scene_unchanged() ->
         mixer.add_bus("sub", "submix")
         mixer.add_bus("sub2", "submix")
         mixer.set_output_bus("sub", "sub2")
-        before = mixer.to_scene_json()
+        before = mixer.to_json()
         cases = [
             ("ghost", "sub", "ghost"),
             ("a", "ghost", "ghost"),
@@ -677,7 +677,7 @@ def test_set_output_bus_refusals_name_the_ids_and_leave_the_scene_unchanged() ->
             with pytest.raises(SonareValueError, match=named) as info:
                 mixer.set_output_bus(source, destination)
             assert info.value.code == int(ErrorCode.INVALID_PARAMETER)
-            assert mixer.to_scene_json() == before
+            assert mixer.to_json() == before
         # No refused call compiled the graph: a bus never compiled still reports
         # an invalid parameter rather than a discard count.
         with pytest.raises(SonareValueError) as info:
@@ -695,7 +695,7 @@ def test_vca_group_add_remove_and_count(mixer) -> None:
     assert mixer.vca_group_count == before + 1
     mixer.set_vca_group_gain_db(id="py-vca", gain_db=-7.0)
     mixer.set_vca_group_members("py-vca", ["guest"])
-    scene = json.loads(mixer.to_scene_json())
+    scene = json.loads(mixer.to_json())
     group = next(group for group in scene["vcaGroups"] if group["id"] == "py-vca")
     assert group["gainDb"] == -7.0
     assert group["members"] == ["guest"]
@@ -739,18 +739,14 @@ def test_mixer_is_a_context_manager() -> None:
     """Leaving a with-block closes the native handle, on a normal exit and on a raise."""
     from libsonare import Mixer
 
-    with Mixer.from_scene_json(
-        _first_preset_json(), sample_rate=48000, max_block_size=256
-    ) as mixer:
+    with Mixer.from_json(_first_preset_json(), sample_rate=48000, max_block_size=256) as mixer:
         assert mixer.strip_count > 0
     with raises_coded(ErrorCode.INVALID_STATE):
         _ = mixer.strip_count
 
     with (
         pytest.raises(KeyError),
-        Mixer.from_scene_json(
-            _first_preset_json(), sample_rate=48000, max_block_size=256
-        ) as raised,
+        Mixer.from_json(_first_preset_json(), sample_rate=48000, max_block_size=256) as raised,
     ):
         raise KeyError("inside")
     with raises_coded(ErrorCode.INVALID_STATE):
@@ -800,7 +796,7 @@ def test_drain_tail_stereo_enforces_block_count_range(mixer) -> None:
 def test_tail_samples_reports_longest_serial_send_route() -> None:
     from libsonare import Mixer
 
-    mixer = Mixer.from_scene_json(_serial_tail_scene(), sample_rate=48000, max_block_size=128)
+    mixer = Mixer.from_json(_serial_tail_scene(), sample_rate=48000, max_block_size=128)
     try:
         assert mixer.tail_samples > 1440
     finally:
@@ -848,7 +844,7 @@ def test_scene_warnings_surface_ignored_insert_params() -> None:
 
     # eq.parametric reads only band{i}.* fields, so flat keys take no effect.
     scene = _scene_with_insert_params("eq.parametric", {"highPassHz": 80, "presenceDb": 4})
-    mixer = Mixer.from_scene_json(scene, sample_rate=48000, max_block_size=256)
+    mixer = Mixer.from_json(scene, sample_rate=48000, max_block_size=256)
     try:
         warnings = mixer.scene_warnings()
         assert len(warnings) == 1
@@ -862,7 +858,7 @@ def test_scene_warnings_surface_ignored_insert_params() -> None:
     clean = _scene_with_insert_params(
         "eq.parametric", {"band0.frequencyHz": 1000, "band0.gainDb": 3}
     )
-    mixer = Mixer.from_scene_json(clean, sample_rate=48000, max_block_size=256)
+    mixer = Mixer.from_json(clean, sample_rate=48000, max_block_size=256)
     try:
         assert mixer.scene_warnings() == []
     finally:
@@ -890,7 +886,7 @@ def test_scene_warnings_surface_a_send_to_an_undeclared_bus() -> None:
             }
         )
 
-    mixer = Mixer.from_scene_json(scene("aux1typo"), sample_rate=48000, max_block_size=256)
+    mixer = Mixer.from_json(scene("aux1typo"), sample_rate=48000, max_block_size=256)
     try:
         assert mixer.scene_warnings() == [
             "send 'a' targets undeclared bus 'aux1typo'; created as implicit aux"
@@ -898,14 +894,36 @@ def test_scene_warnings_surface_a_send_to_an_undeclared_bus() -> None:
     finally:
         mixer.close()
 
-    mixer = Mixer.from_scene_json(scene("aux1"), sample_rate=48000, max_block_size=256)
+    mixer = Mixer.from_json(scene("aux1"), sample_rate=48000, max_block_size=256)
     try:
         assert mixer.scene_warnings() == []
     finally:
         mixer.close()
 
 
-def test_from_scene_json_refuses_an_unknown_scene_key_by_path() -> None:
+def test_a_mixer_is_built_from_a_scene_mapping_or_empty_by_keyword() -> None:
+    """The constructor takes the scene document mapping; JSON text goes through from_json."""
+    from libsonare import Mixer, mixing_scene_preset, mixing_scene_preset_names
+
+    scene = mixing_scene_preset(mixing_scene_preset_names()[0])
+    with Mixer(sample_rate=48000, scene=scene, max_block_size=256) as from_mapping:
+        text = from_mapping.to_json()
+        assert from_mapping.strip_count == len(scene["strips"])
+    with Mixer.from_json(text, sample_rate=48000, max_block_size=256) as from_text:
+        assert json.loads(from_text.to_json()) == json.loads(text)
+    with Mixer(sample_rate=48000) as empty:
+        assert empty.strip_count == 0
+    with pytest.raises(TypeError, match="json.loads"):
+        Mixer(sample_rate=48000, scene=text)  # type: ignore[arg-type]
+    with pytest.raises(TypeError):
+        Mixer(48000)  # type: ignore[misc]
+    with pytest.raises(TypeError):
+        Mixer.from_json(text, 48000)  # type: ignore[misc]
+    with raises_coded(ErrorCode.INVALID_FORMAT, match=r"strips\[0\]\.faderDB"):
+        Mixer(sample_rate=48000, scene={"strips": [{"id": "a", "faderDB": -3}]})
+
+
+def test_from_json_refuses_an_unknown_scene_key_by_path() -> None:
     """A misspelled scene key is refused by path; ``$`` and ``x-`` keys are exempt."""
     import json
 
@@ -923,13 +941,13 @@ def test_from_scene_json_refuses_an_unknown_scene_key_by_path() -> None:
         )
 
     with pytest.raises(SonareError) as refused:
-        Mixer.from_scene_json(build({}, {"faderDB": -3}), sample_rate=48000, max_block_size=256)
+        Mixer.from_json(build({}, {"faderDB": -3}), sample_rate=48000, max_block_size=256)
     assert not isinstance(refused.value, SonareValueError)
     assert refused.value.code == int(ErrorCode.INVALID_FORMAT)
     assert "unknown scene key 'strips[0].faderDB'" in str(refused.value)
 
     annotated = build({"$schema": "x", "x-note": 1}, {"x-color": "red"})
-    mixer = Mixer.from_scene_json(annotated, sample_rate=48000, max_block_size=256)
+    mixer = Mixer.from_json(annotated, sample_rate=48000, max_block_size=256)
     try:
         assert mixer.scene_warnings() == []
     finally:
@@ -1092,7 +1110,7 @@ def test_mixing_scene_preset_returns_a_scene_document_mapping() -> None:
         scene = mixing_scene_preset(name)
         assert isinstance(scene, dict)
         assert isinstance(scene["strips"], list)
-        mixer = Mixer.from_scene_json(json.dumps(scene), sample_rate=48000)
+        mixer = Mixer.from_json(json.dumps(scene), sample_rate=48000)
         try:
             assert mixer.strip_count == len(scene["strips"])
         finally:

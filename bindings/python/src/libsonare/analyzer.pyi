@@ -96,6 +96,7 @@ from .types import (
     MixMeterSnapshot,
     MixResult,
     MixSceneDocument,
+    NmfInit,
     NoiseDetection,
     NormalizeStereoResult,
     NormType,
@@ -704,7 +705,7 @@ def hpss(
     kernel_harmonic: int = 31,
     kernel_percussive: int = 31,
     n_fft: int = 2048,
-    hop_length: int = 512,
+    hop_length: int | None = None,
     hard_mask: bool = False,
     *,
     validate: bool = True,
@@ -720,7 +721,7 @@ def time_stretch(
     sample_rate: int,
     speed_ratio: float,
     n_fft: int = 2048,
-    hop_length: int = 512,
+    hop_length: int | None = None,
     *,
     validate: bool = True,
 ) -> np.ndarray[Any, Any]: ...
@@ -729,7 +730,7 @@ def pitch_shift(
     sample_rate: int,
     pitch_semitones: float,
     n_fft: int = 2048,
-    hop_length: int = 512,
+    hop_length: int | None = None,
     *,
     validate: bool = True,
 ) -> np.ndarray[Any, Any]: ...
@@ -1083,10 +1084,10 @@ def spectral_edit(
     sample_rate: int,
     ops: Sequence[SpectralRegionOp],
     *,
-    n_fft: int = 2048,
-    hop_length: int = 512,
+    n_fft: int | None = None,
+    hop_length: int | None = None,
     window: WindowType = "hann",
-    heal_radius_frames: int = 2,
+    heal_radius_frames: int | None = None,
 ) -> npt.NDArray[np.float32]: ...
 
 VoiceEngineName: TypeAlias = Literal["grain", "psola"]
@@ -1180,14 +1181,18 @@ class RealtimeVoiceChanger:
         sample_rate: int,
         *,
         num_channels: int,
-        config: VoicePresetId | RealtimeVoiceChangerPreset = "neutralMonitor",
+        config: VoicePresetId
+        | RealtimeVoiceChangerPreset
+        | RealtimeVoiceChangerConfig = "neutralMonitor",
         max_block_size: int | None = None,
     ) -> None: ...
     def close(self) -> None: ...
     def __enter__(self) -> RealtimeVoiceChanger: ...
     def __exit__(self, exc_type: object, exc: object, tb: object) -> None: ...
     def reset(self) -> None: ...
-    def set_config(self, config: VoicePresetId | RealtimeVoiceChangerPreset) -> None: ...
+    def set_config(
+        self, config: VoicePresetId | RealtimeVoiceChangerPreset | RealtimeVoiceChangerConfig
+    ) -> None: ...
     @property
     def max_block_size(self) -> int: ...
     @property
@@ -1195,8 +1200,8 @@ class RealtimeVoiceChanger:
     @property
     def non_finite_discard_count(self) -> int: ...
     def config_json(self) -> str: ...
-    def config_pod(self) -> RealtimeVoiceChangerConfig: ...
-    def set_config_pod(self, config: RealtimeVoiceChangerConfig) -> None: ...
+    @property
+    def config(self) -> RealtimeVoiceChangerConfig: ...
     def process_mono(self, samples: FloatSamples) -> np.ndarray: ...
     def process_interleaved(
         self, samples: FloatSamples, num_channels: int | None = None
@@ -1278,7 +1283,7 @@ def mastering(
     samples: FloatSamples,
     sample_rate: int,
     target_lufs: float = -14.0,
-    ceiling_db: float = -1.0,
+    ceiling_dbtp: float = -1.0,
     true_peak_oversample: int = 4,
     release_ms: float | None = None,
     apply_gain_at_input_rate: bool = False,
@@ -1360,13 +1365,14 @@ def mixing_scene_preset(name: str) -> MixSceneDocument: ...
 class Mixer:
     def __init__(
         self,
-        handle: int,
+        *,
         sample_rate: int,
-        scene_warnings: list[str] | None = None,
+        scene: MixSceneDocument | None = None,
+        max_block_size: int | None = None,
     ) -> None: ...
     @classmethod
-    def from_scene_json(
-        cls, json: str, sample_rate: int, max_block_size: int | None = None
+    def from_json(
+        cls, json: str, *, sample_rate: int, max_block_size: int | None = None
     ) -> Mixer: ...
     def compile(self) -> None:
         """Rebuild the graph while preserving automation position and queued events."""
@@ -1497,7 +1503,7 @@ class Mixer:
     def latency_samples(self) -> int: ...
     def drain_tail_stereo(self, num_samples: int) -> MixerStereoResult: ...
     def flush_meters(self) -> None: ...
-    def to_scene_json(self) -> str: ...
+    def to_json(self) -> str: ...
     def close(self) -> None: ...
     def __enter__(self) -> Mixer: ...
     def __exit__(self, *_exc: object) -> None: ...
@@ -2010,31 +2016,31 @@ def decompose_with_init(
     n_components: int,
     n_iter: int | None = None,
     beta: float = 2.0,
-    init: str = "random",
+    init: NmfInit | None = None,
 ) -> DecomposeResult: ...
 def decompose_stems(
     samples: FloatSamples,
     sample_rate: int,
-    n_components: int = 4,
-    n_fft: int = 2048,
-    hop_length: int = 512,
-    n_iter: int = 100,
-    beta: float = 2.0,
-    init: str = "random",
-    mask_power: float = 1.0,
+    n_components: int | None = None,
+    n_fft: int | None = None,
+    hop_length: int | None = None,
+    n_iter: int | None = None,
+    beta: float | None = None,
+    init: NmfInit | None = None,
+    mask_power: float | None = None,
     *,
     validate: bool = True,
 ) -> dict[str, object]: ...
 def decompose_stems_linked(
     channels: PlanarChannels,
     sample_rate: int,
-    n_components: int = 4,
-    n_fft: int = 2048,
-    hop_length: int = 512,
-    n_iter: int = 100,
-    beta: float = 2.0,
-    init: str = "random",
-    mask_power: float = 1.0,
+    n_components: int | None = None,
+    n_fft: int | None = None,
+    hop_length: int | None = None,
+    n_iter: int | None = None,
+    beta: float | None = None,
+    init: NmfInit | None = None,
+    mask_power: float | None = None,
     *,
     validate: bool = True,
 ) -> dict[str, object]: ...
@@ -2064,7 +2070,7 @@ def hpss_with_residual(
     kernel_harmonic: int = 31,
     kernel_percussive: int = 31,
     n_fft: int = 2048,
-    hop_length: int = 512,
+    hop_length: int | None = None,
     hard_mask: bool = False,
     *,
     validate: bool = True,
@@ -2750,7 +2756,7 @@ def mel_to_audio(
     mel: npt.ArrayLike,
     sr: int = 22050,
     n_fft: int = 2048,
-    hop_length: int = 512,
+    hop_length: int | None = None,
     fmin: float = 0.0,
     fmax: float | None = None,
     n_iter: int = 32,
@@ -2759,8 +2765,8 @@ def mel_to_audio(
 def griffin_lim(
     magnitude: npt.ArrayLike,
     sample_rate: int,
-    n_fft: int = 2048,
-    hop_length: int = 512,
+    n_fft: int | None = None,
+    hop_length: int | None = None,
     n_iter: int = 32,
     momentum: float = 0.99,
 ) -> np.ndarray[Any, Any]: ...
@@ -2774,7 +2780,7 @@ def mfcc_to_audio(
     n_mels: int = 128,
     sr: int = 22050,
     n_fft: int = 2048,
-    hop_length: int = 512,
+    hop_length: int | None = None,
     fmin: float = 0.0,
     fmax: float | None = None,
     n_iter: int = 32,

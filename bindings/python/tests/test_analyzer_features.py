@@ -539,6 +539,91 @@ def test_griffin_lim() -> None:
     assert len(result) > 0
 
 
+def test_griffin_lim_infers_n_fft_from_the_bin_count() -> None:
+    """An omitted n_fft is (n_bins - 1) * 2; a disagreeing explicit one is refused."""
+    import numpy as np
+    import pytest
+
+    from libsonare import SonareValueError, griffin_lim, stft
+
+    samples = _generate_sine(440, 22050, 0.5)
+    magnitude = stft(samples, sr=22050, n_fft=1024, hop_length=256).magnitude
+    assert magnitude.shape[0] == 513
+    inferred = griffin_lim(magnitude, 22050, hop_length=256, n_iter=1)
+    given = griffin_lim(magnitude, 22050, n_fft=1024, hop_length=256, n_iter=1)
+    np.testing.assert_array_equal(inferred, given)
+    with pytest.raises(
+        SonareValueError,
+        match=r"^griffin_lim: n_fft must equal \(n_bins - 1\) \* 2 \(got 2048 for 513 bins\)$",
+    ):
+        griffin_lim(magnitude, 22050, n_fft=2048, hop_length=256, n_iter=1)
+
+
+def test_an_omitted_inverse_hop_is_a_quarter_of_n_fft() -> None:
+    """A small n_fft with no hop runs, and equals the explicit n_fft // 4 call."""
+    import numpy as np
+
+    from libsonare import griffin_lim, mel_to_audio, mfcc_to_audio, stft
+
+    rng = np.random.default_rng(7)
+    mel = rng.uniform(0.01, 1.0, size=(40, 16)).astype(np.float32)
+    mfcc = rng.uniform(-1.0, 1.0, size=(13, 16)).astype(np.float32)
+    magnitude = stft(_generate_sine(440, 22050, 0.25), sr=22050, n_fft=256, hop_length=64).magnitude
+    pairs = [
+        (
+            lambda: mel_to_audio(mel, sr=22050, n_fft=256, n_iter=1),
+            lambda: mel_to_audio(mel, sr=22050, n_fft=256, hop_length=64, n_iter=1),
+        ),
+        (
+            lambda: mfcc_to_audio(mfcc, n_mels=40, sr=22050, n_fft=256, n_iter=1),
+            lambda: mfcc_to_audio(mfcc, n_mels=40, sr=22050, n_fft=256, hop_length=64, n_iter=1),
+        ),
+        (
+            lambda: griffin_lim(magnitude, 22050, n_iter=1),
+            lambda: griffin_lim(magnitude, 22050, n_fft=256, hop_length=64, n_iter=1),
+        ),
+    ]
+    for omitted, explicit in pairs:
+        np.testing.assert_array_equal(omitted(), explicit())
+
+
+def test_an_omitted_hpss_hop_is_a_quarter_of_n_fft() -> None:
+    """hpss and hpss_with_residual with n_fft 512 and no hop equal the hop-128 call."""
+    from libsonare import hpss, hpss_with_residual
+
+    tone = _generate_sine(440, 22050, 0.5)
+    omitted = hpss(tone, 22050, n_fft=512)
+    explicit = hpss(tone, 22050, n_fft=512, hop_length=128)
+    np.testing.assert_array_equal(omitted.harmonic, explicit.harmonic)
+    np.testing.assert_array_equal(omitted.percussive, explicit.percussive)
+    with_residual = hpss_with_residual(tone, 22050, n_fft=512)
+    with_residual_explicit = hpss_with_residual(tone, 22050, n_fft=512, hop_length=128)
+    for key in ("harmonic", "percussive", "residual"):
+        np.testing.assert_array_equal(with_residual[key], with_residual_explicit[key])
+
+
+def test_an_omitted_time_stretch_hop_is_a_quarter_of_n_fft() -> None:
+    """time_stretch with n_fft 512 and no hop equals the hop-128 call."""
+    from libsonare import time_stretch
+
+    tone = _generate_sine(440, 22050, 0.5)
+    np.testing.assert_array_equal(
+        time_stretch(tone, 22050, 1.25, n_fft=512),
+        time_stretch(tone, 22050, 1.25, n_fft=512, hop_length=128),
+    )
+
+
+def test_an_omitted_pitch_shift_hop_is_a_quarter_of_n_fft() -> None:
+    """pitch_shift with n_fft 512 and no hop equals the hop-128 call."""
+    from libsonare import pitch_shift
+
+    tone = _generate_sine(440, 22050, 0.5)
+    np.testing.assert_array_equal(
+        pitch_shift(tone, 22050, 2.0, n_fft=512),
+        pitch_shift(tone, 22050, 2.0, n_fft=512, hop_length=128),
+    )
+
+
 def test_spectral_rolloff() -> None:
     """spectral_rolloff returns non-empty list."""
     from libsonare import spectral_rolloff

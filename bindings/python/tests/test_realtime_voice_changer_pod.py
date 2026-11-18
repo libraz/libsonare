@@ -1,8 +1,8 @@
 """Tests for the flat POD-config path of RealtimeVoiceChanger.
 
 These tests exercise the ctypes-direct path that skips the JSON round-trip:
-``realtime_voice_changer_preset_config`` + ``RealtimeVoiceChanger.config_pod`` /
-``set_config_pod``. The slow JSON path is covered separately by
+``realtime_voice_changer_preset_config`` + ``RealtimeVoiceChanger.config`` /
+``set_config`` with a record. The slow JSON path is covered separately by
 ``test_editing.py``.
 """
 
@@ -52,7 +52,7 @@ def test_default_constructed_config_matches_neutral_monitor_preset() -> None:
 
     Regression guard: previously the dataclass carried hand-written literals that
     matched neither the C POD defaults nor any preset, so
-    ``RealtimeVoiceChangerConfig()`` -> ``set_config_pod`` produced a
+    ``RealtimeVoiceChangerConfig()`` -> ``set_config`` produced a
     bypassed-gate / flat-EQ voice instead of a usable neutral one.
     """
     default = libsonare.RealtimeVoiceChangerConfig()
@@ -95,10 +95,10 @@ def _build_changer() -> libsonare.RealtimeVoiceChanger:
     )
 
 
-def test_config_pod_returns_live_normalized_config() -> None:
+def test_config_returns_the_live_normalized_record() -> None:
     changer = _build_changer()
     try:
-        cfg = changer.config_pod()
+        cfg = changer.config
         assert isinstance(cfg, libsonare.RealtimeVoiceChangerConfig)
         # The handle was created from the neutral preset, so its live config
         # must agree with realtime_voice_changer_preset_config("neutralMonitor")
@@ -120,10 +120,10 @@ def test_config_pod_returns_live_normalized_config() -> None:
         changer.close()
 
 
-def test_set_config_pod_round_trips_through_get_config() -> None:
+def test_set_config_with_a_record_round_trips_through_config() -> None:
     changer = _build_changer()
     try:
-        cfg = changer.config_pod()
+        cfg = changer.config
         cfg = dataclasses.replace(
             cfg,
             input_gain_db=-3.5,
@@ -134,8 +134,8 @@ def test_set_config_pod_round_trips_through_get_config() -> None:
             limiter_enable_isp_limiter=0,
             limiter_isp_ceiling_dbtp=-2.5,
         )
-        changer.set_config_pod(cfg)
-        round_tripped = changer.config_pod()
+        changer.set_config(cfg)
+        round_tripped = changer.config
         assert round_tripped.input_gain_db == pytest.approx(-3.5, abs=1e-6)
         assert round_tripped.output_gain_db == pytest.approx(1.25, abs=1e-6)
         assert round_tripped.wet_mix == pytest.approx(0.7, abs=1e-6)
@@ -147,14 +147,14 @@ def test_set_config_pod_round_trips_through_get_config() -> None:
         changer.close()
 
 
-def test_set_config_pod_does_not_break_processing() -> None:
+def test_set_config_with_a_record_does_not_break_processing() -> None:
     """After a POD config swap, the handle must still produce finite audio."""
     sr = 48000
     samples = 0.2 * np.sin(2 * math.pi * 220.0 * np.arange(sr // 4) / sr).astype(np.float32)
     changer = _build_changer()
     try:
         cfg = libsonare.realtime_voice_changer_preset_config("brightIdol")
-        changer.set_config_pod(cfg)
+        changer.set_config(cfg)
         out = changer.process_mono(samples)
         assert out.shape == samples.shape
         assert out.dtype == np.float32
@@ -211,12 +211,12 @@ def test_formant_mode_is_fixed_when_the_changer_is_created() -> None:
     ):
         # One analysis frame (1024 samples at 48 kHz) more than the relative chain.
         assert warped.latency_samples == relative.latency_samples + 1024
-        assert warped.config_pod().formant_mode == "absolute"
-        warped.set_config_pod(dataclasses.replace(absolute, formant_factor=1.2))
+        assert warped.config.formant_mode == "absolute"
+        warped.set_config(dataclasses.replace(absolute, formant_factor=1.2))
         with pytest.raises(ValueError, match="formant mode"):
-            warped.set_config_pod(base)
+            warped.set_config(base)
         with pytest.raises(ValueError, match="formant mode"):
-            relative.set_config_pod(absolute)
+            relative.set_config(absolute)
 
 
 def test_unreachable_absolute_warp_is_refused_with_the_reachable_range() -> None:
@@ -234,16 +234,44 @@ def test_unreachable_absolute_warp_is_refused_with_the_reachable_range() -> None
 def test_out_of_range_field_is_refused_and_the_previous_config_kept() -> None:
     base = libsonare.realtime_voice_changer_preset_config("neutralMonitor")
     with libsonare.RealtimeVoiceChanger(48000, num_channels=1, config=_flat(base)) as changer:
-        before = changer.config_pod()
+        before = changer.config
         factor_range = r"formant\.factor out of range \[0\.55, 1\.65\]"
         with pytest.raises(SonareValueError, match=factor_range):
-            changer.set_config_pod(dataclasses.replace(base, formant_factor=3.0))
+            changer.set_config(dataclasses.replace(base, formant_factor=3.0))
         with pytest.raises(SonareValueError, match=r"limiter\.ceilingDb out of range"):
-            changer.set_config_pod(dataclasses.replace(base, limiter_ceiling_db=0.5))
-        assert changer.config_pod() == before
+            changer.set_config(dataclasses.replace(base, limiter_ceiling_db=0.5))
+        assert changer.config == before
     with pytest.raises(SonareError, match="out of range") as created:
         libsonare.RealtimeVoiceChanger(
             48000, num_channels=1, config=_flat(dataclasses.replace(base, formant_factor=3.0))
         )
     assert not isinstance(created.value, SonareValueError)
     assert created.value.code == int(ErrorCode.INVALID_FORMAT)
+
+
+def test_set_config_takes_a_record_and_config_is_a_property() -> None:
+    """One setter for every config form; the record read is a property."""
+    base = libsonare.realtime_voice_changer_preset_config("neutralMonitor")
+    with libsonare.RealtimeVoiceChanger(48000, num_channels=1) as changer:
+        changer.set_config(dataclasses.replace(base, formant_factor=1.2))
+        assert changer.config.formant_factor == pytest.approx(1.2)
+        changer.set_config("neutralMonitor")
+        assert changer.config.formant_factor == pytest.approx(base.formant_factor)
+        assert not hasattr(changer, "set_config_pod")
+        assert not hasattr(changer, "config_pod")
+
+
+def test_a_changer_built_from_a_record_reproduces_the_source() -> None:
+    """The constructor takes the same three config kinds set_config does."""
+    base = dataclasses.replace(
+        libsonare.realtime_voice_changer_preset_config("neutralMonitor"),
+        voice_engine="grain",
+        formant_mode="absolute",
+        formant_factor=1.1,
+    )
+    with (
+        libsonare.RealtimeVoiceChanger(48000, num_channels=1, config=_flat(base)) as source,
+        libsonare.RealtimeVoiceChanger(48000, num_channels=1, config=source.config) as copy,
+    ):
+        assert copy.config_json() == source.config_json()
+        assert copy.latency_samples == source.latency_samples

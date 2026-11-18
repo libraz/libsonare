@@ -223,7 +223,7 @@ def test_a_representable_extreme_is_still_accepted() -> None:
 @pytest.fixture
 def mixer_scene():
     scene = json.dumps(ls.mixing_scene_preset(ls.mixing_scene_preset_names()[0]))
-    mixer = ls.Mixer.from_scene_json(scene, sample_rate=48000, max_block_size=256)
+    mixer = ls.Mixer.from_json(scene, sample_rate=48000, max_block_size=256)
     try:
         yield mixer
     finally:

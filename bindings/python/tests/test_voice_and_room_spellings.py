@@ -88,10 +88,10 @@ def test_the_config_fields_carry_their_unit_and_no_doubled_word() -> None:
 def test_config_tokens_are_lower_camel(field: str, new: str, old: str) -> None:
     base = libsonare.realtime_voice_changer_preset_config("neutralMonitor")
     with libsonare.RealtimeVoiceChanger(SR, num_channels=1) as changer:
-        changer.set_config_pod(dataclasses.replace(base, **{field: new}))
-        assert getattr(changer.config_pod(), field) == new
+        changer.set_config(dataclasses.replace(base, **{field: new}))
+        assert getattr(changer.config, field) == new
         with pytest.raises(SonareValueError, match="expected one of|must be one of"):
-            changer.set_config_pod(dataclasses.replace(base, **{field: old}))
+            changer.set_config(dataclasses.replace(base, **{field: old}))
 
 
 def _flat(config: RealtimeVoiceChangerConfig) -> dict[str, object]:

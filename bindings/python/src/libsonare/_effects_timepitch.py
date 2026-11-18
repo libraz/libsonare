@@ -54,7 +54,7 @@ def time_stretch(
     sample_rate: int,
     speed_ratio: float,
     n_fft: int = _DEFAULT_EFFECT_N_FFT,
-    hop_length: int = _DEFAULT_EFFECT_HOP_LENGTH,
+    hop_length: int | None = None,
     *,
     validate: bool = True,
 ) -> np.ndarray:
@@ -69,7 +69,8 @@ def time_stretch(
         n_fft: FFT size used for analysis/synthesis; an even integer >= 4
             (default 2048).
         hop_length: Hop size used for analysis/synthesis, in ``(0, n_fft / 2]``
-            so frames overlap by at least half a window (default 512).
+            so frames overlap by at least half a window. Default: ``n_fft // 4``
+            (at least 1), 512 at the default ``n_fft``.
         validate: Reject empty / NaN / Inf input (default True). Pass
             ``validate=False`` to skip the scan on hot paths.
 
@@ -105,7 +106,7 @@ def pitch_shift(
     sample_rate: int,
     pitch_semitones: float,
     n_fft: int = _DEFAULT_EFFECT_N_FFT,
-    hop_length: int = _DEFAULT_EFFECT_HOP_LENGTH,
+    hop_length: int | None = None,
     *,
     validate: bool = True,
 ) -> np.ndarray:
@@ -118,7 +119,8 @@ def pitch_shift(
         n_fft: FFT size used for analysis/synthesis; an even integer >= 4
             (default 2048).
         hop_length: Hop size used for analysis/synthesis, in ``(0, n_fft / 2]``
-            so frames overlap by at least half a window (default 512).
+            so frames overlap by at least half a window. Default: ``n_fft // 4``
+            (at least 1), 512 at the default ``n_fft``.
         validate: Reject empty / NaN / Inf input (default True). Pass
             ``validate=False`` to skip the scan on hot paths.
 

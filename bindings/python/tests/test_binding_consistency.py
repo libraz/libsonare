@@ -414,7 +414,7 @@ def mixer():
     """Build a Mixer from the first preset scene and close it afterwards."""
     from libsonare import Mixer
 
-    mixer = Mixer.from_scene_json(_first_preset_json(), sample_rate=48000, max_block_size=256)
+    mixer = Mixer.from_json(_first_preset_json(), sample_rate=48000, max_block_size=256)
     try:
         yield mixer
     finally:
@@ -423,7 +423,7 @@ def mixer():
 
 def _pan_mode(mixer, strip_id: str) -> str:
     """Read a strip's current panMode token from the serialized scene."""
-    by_id = {s["id"]: s for s in json.loads(mixer.to_scene_json())["strips"]}
+    by_id = {s["id"]: s for s in json.loads(mixer.to_json())["strips"]}
     return str(by_id[strip_id]["panMode"])
 
 
@@ -453,7 +453,7 @@ def test_set_pan_keeps_current_mode_by_default(mixer) -> None:
     mixer.set_pan("vocal", 0.3)
     assert _pan_mode(mixer, "vocal") == "stereoPan"
 
-    by_id = {s["id"]: s for s in json.loads(mixer.to_scene_json())["strips"]}
+    by_id = {s["id"]: s for s in json.loads(mixer.to_json())["strips"]}
     assert by_id["vocal"]["pan"] == pytest.approx(0.3, abs=1e-5)
 
 

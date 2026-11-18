@@ -55,7 +55,7 @@ def test_project_abi_mismatch_raises_coded_error(monkeypatch: pytest.MonkeyPatch
 
 def test_bad_scene_json_carries_oracle_code_and_detail() -> None:
     with pytest.raises(SonareError) as raised:
-        Mixer.from_scene_json("{ not json", 48000)
+        Mixer.from_json("{ not json", sample_rate=48000)
     assert type(raised.value) is SonareError
     assert raised.value.code != ErrorCode.OK
     detail = str(raised.value).split("failed to build mixer from scene JSON", 1)[1]
@@ -63,7 +63,7 @@ def test_bad_scene_json_carries_oracle_code_and_detail() -> None:
 
 
 def test_closed_mixer_raises_invalid_state() -> None:
-    mixer = Mixer.from_scene_json('{"strips":[]}', 48000)
+    mixer = Mixer.from_json('{"strips":[]}', sample_rate=48000)
     mixer.close()
     with pytest.raises(SonareError) as raised:
         mixer.add_bus("b")

@@ -15,6 +15,7 @@ import numpy as np
 import pytest
 
 import libsonare
+from libsonare import SonareValueError
 
 from ._helpers import LIB_AVAILABLE, raises_coded
 
@@ -118,6 +119,70 @@ def test_decompose_stems_rejects_an_out_of_range_mask_power() -> None:
         libsonare.decompose_stems(_tone(440.0, 0.2), SR, mask_power=0.5)
 
 
+def test_an_omitted_stems_framing_is_the_library_default() -> None:
+    """No n_fft / hop_length reaches the core as absent and runs its 2048 / 512 framing."""
+    x = _tone(440.0, 0.4)
+    common: dict[str, Any] = {"n_components": 2, "n_iter": 10, "init": "nndsvd"}
+    omitted = libsonare.decompose_stems(x, SR, **common)
+    explicit = libsonare.decompose_stems(x, SR, n_fft=2048, hop_length=512, **common)
+    linked = libsonare.decompose_stems_linked([x], SR, **common)
+    linked_explicit = libsonare.decompose_stems_linked(
+        [x], SR, n_fft=2048, hop_length=512, **common
+    )
+    for a, b in ((omitted, explicit), (linked, linked_explicit)):
+        for key in ("w", "h"):
+            np.testing.assert_array_equal(np.asarray(a[key]), np.asarray(b[key]))
+        for ca, cb in zip(
+            cast("Sequence[Any]", a["components"]),
+            cast("Sequence[Any]", b["components"]),
+            strict=True,
+        ):
+            np.testing.assert_array_equal(np.asarray(ca), np.asarray(cb))
+    assert np.asarray(omitted["w"]).shape == (2048 // 2 + 1, 2)
+    with pytest.raises(ValueError, match="hop_length"):
+        libsonare.decompose_stems(x, SR, hop_length=0, **common)
+
+
+@pytest.mark.parametrize(
+    ("field", "library_default"),
+    [
+        ("n_components", 4),
+        ("n_iter", 100),
+        ("beta", 2.0),
+        ("init", "random"),
+        ("mask_power", 1.0),
+    ],
+)
+def test_an_omitted_stems_setting_is_the_library_default(
+    field: str, library_default: object
+) -> None:
+    """Leaving a setting out hands the core its own default, which equals the explicit one."""
+    x = _tone(440.0, 0.3)
+    for fn, signal in ((libsonare.decompose_stems, x), (libsonare.decompose_stems_linked, [x])):
+        omitted = fn(signal, SR)  # type: ignore[operator]
+        explicit = fn(signal, SR, **{field: library_default})  # type: ignore[operator]
+        for key in ("w", "h"):
+            np.testing.assert_array_equal(np.asarray(omitted[key]), np.asarray(explicit[key]))
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "field"),
+    [
+        ({"n_components": 0}, "n_components"),
+        ({"n_iter": 0}, "n_iter"),
+        ({"mask_power": 0.0}, "mask_power"),
+        ({"init": ""}, "init"),
+    ],
+)
+def test_a_stems_sentinel_is_refused_by_name(kwargs: dict[str, Any], field: str) -> None:
+    """0 and "" are the C config's default spellings, not values a caller can pass."""
+    x = _tone(440.0, 0.2)
+    with pytest.raises(SonareValueError, match=field):
+        libsonare.decompose_stems(x, SR, **kwargs)
+    with pytest.raises(SonareValueError, match=field):
+        libsonare.decompose_stems_linked([x], SR, **kwargs)
+
+
 def _stems_fingerprint(**kwargs: float) -> tuple[int, int, tuple[float, ...]]:
     res = libsonare.decompose_stems(_tone(440.0, 0.37), SR, **kwargs)  # type: ignore[arg-type]
     components = cast("Sequence[Any]", res["components"])
@@ -125,8 +190,8 @@ def _stems_fingerprint(**kwargs: float) -> tuple[int, int, tuple[float, ...]]:
     return len(components), int(first.size), tuple(float(v) for v in first[:8])
 
 
-def test_decompose_stems_beta_zero_selects_the_documented_default() -> None:
-    """0 reaches the C ABI, which reads it as "use the built-in default".
+def test_an_explicit_zero_beta_currently_reads_as_the_default_on_decompose_stems() -> None:
+    """An explicit beta of 0 reaches the C config, which currently reads it as "use the default".
 
     The C ABI documents 0 on every numeric field of SonareDecomposeStemsConfig
     as that sentinel, which is what makes a zero-initialised config mean the
@@ -204,6 +269,18 @@ def test_nn_filter_and_decompose_take_none_for_the_library_default() -> None:
         stated = fn(spec, n_features, n_frames, 2, n_iter=50)
         np.testing.assert_array_equal(omitted.w, stated.w)
         np.testing.assert_array_equal(omitted.h, stated.h)
+
+
+def test_an_omitted_nmf_init_is_the_library_default_and_an_empty_one_is_refused() -> None:
+    """init=None reaches the C ABI as NULL ("random"); "" is an unknown token, not absence."""
+    rng = np.random.default_rng(2)
+    spec = np.abs(rng.standard_normal((12, 20))).astype(np.float32).ravel()
+    omitted = libsonare.decompose_with_init(spec, 12, 20, 2, n_iter=5)
+    explicit = libsonare.decompose_with_init(spec, 12, 20, 2, n_iter=5, init="random")
+    np.testing.assert_array_equal(omitted.w, explicit.w)
+    np.testing.assert_array_equal(omitted.h, explicit.h)
+    with pytest.raises(ValueError, match="init"):
+        libsonare.decompose_with_init(spec, 12, 20, 2, n_iter=5, init="")  # type: ignore[arg-type]
 
 
 @pytest.mark.parametrize(

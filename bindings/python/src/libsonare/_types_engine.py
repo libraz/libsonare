@@ -221,8 +221,8 @@ key or token raises ``SonareError`` (InvalidFormat) naming it.
 MixSceneDocument = dict[str, Any]
 """A whole mixer scene with camelCase keys (``strips``, ``buses``, ``vcaGroups`` and the rest).
 
-:func:`mixing_scene_preset` returns one; ``json.dumps`` gives the text :meth:`Mixer.from_scene_json`
-reads.
+:func:`mixing_scene_preset` returns one and :class:`Mixer` takes one as ``scene``; its JSON text
+is what :meth:`Mixer.from_json` reads and :meth:`Mixer.to_json` writes.
 """
 
 MixSceneBusInput = dict[str, Any]

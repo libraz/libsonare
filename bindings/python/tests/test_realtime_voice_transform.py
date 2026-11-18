@@ -115,8 +115,8 @@ def test_new_fields_round_trip_through_the_pod() -> None:
     assert pod.reverb_variation_division == 2
     assert libsonare.RealtimeVoiceChangerConfig._from_pod(pod) == cfg
     with _changer(base) as changer:
-        changer.set_config_pod(cfg)
-        live = changer.config_pod()
+        changer.set_config(cfg)
+        live = changer.config
         assert live.harmony_steps == (5, -2, -7)
         assert live.pitch_correction_scale == "naturalMinor"
         assert live.character_type == "bbdChorus"
@@ -198,10 +198,10 @@ def test_numeric_fields_refuse_what_a_c_type_would_change() -> None:
 def test_out_of_range_new_field_is_refused_and_the_previous_config_kept(field, value) -> None:
     base = _neutral()
     with _changer(base) as changer:
-        before = changer.config_pod()
+        before = changer.config
         with pytest.raises(SonareValueError):
-            changer.set_config_pod(dataclasses.replace(base, **{field: value}))
-        assert changer.config_pod() == before
+            changer.set_config(dataclasses.replace(base, **{field: value}))
+        assert changer.config == before
 
 
 def test_range_edges_are_accepted() -> None:
@@ -218,8 +218,8 @@ def test_range_edges_are_accepted() -> None:
             reverb_variation_feedback=0.95,
             reverb_variation_tempo_bpm=300.0,
         )
-        changer.set_config_pod(edge)
-        assert changer.config_pod().harmony_steps == (-7, 0, 7)
+        changer.set_config(edge)
+        assert changer.config.harmony_steps == (-7, 0, 7)
 
 
 def test_grain_engine_refuses_pitch_correction_harmony_and_vocoder() -> None:
@@ -238,10 +238,10 @@ def test_grain_engine_refuses_pitch_correction_harmony_and_vocoder() -> None:
         assert from_document.value.code == int(ErrorCode.INVALID_FORMAT)
         # Through the POD it is a refused argument.
         with _changer(grain) as changer, pytest.raises(SonareValueError):
-            changer.set_config_pod(refused)
+            changer.set_config(refused)
 
 
-def test_construction_time_fields_are_fixed_by_set_config_pod() -> None:
+def test_construction_time_fields_are_fixed_by_a_record_set_config() -> None:
     base = _neutral()
     with _changer(base) as changer:
         for change in (
@@ -250,7 +250,7 @@ def test_construction_time_fields_are_fixed_by_set_config_pod() -> None:
             {"vocoder_bands": 16},
         ):
             with pytest.raises(SonareValueError):
-                changer.set_config_pod(dataclasses.replace(base, **change))
+                changer.set_config(dataclasses.replace(base, **change))
 
 
 def test_tone_through_hard_tune_style_correction_stays_finite() -> None:

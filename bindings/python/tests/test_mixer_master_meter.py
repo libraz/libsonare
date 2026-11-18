@@ -61,7 +61,7 @@ def test_the_master_meter_reproduces_the_conformance_reading(case: dict) -> None
     left = tone.astype(np.float32)
     right = (tone * case["rightGain"]).astype(np.float32)
 
-    mixer = libsonare.Mixer.from_scene_json(case["scene"], sample_rate=rate, max_block_size=block)
+    mixer = libsonare.Mixer.from_json(case["scene"], sample_rate=rate, max_block_size=block)
     try:
         mixer.configure_meter(true_peak_oversample=case["truePeakOversample"], measure_lufs=False)
         for start in range(0, block * blocks, block):
@@ -75,7 +75,7 @@ def test_the_master_meter_reproduces_the_conformance_reading(case: dict) -> None
 
 @pytest.fixture
 def mixer():
-    mixer = libsonare.Mixer.from_scene_json(_SCENE, sample_rate=48000, max_block_size=256)
+    mixer = libsonare.Mixer.from_json(_SCENE, sample_rate=48000, max_block_size=256)
     try:
         yield mixer
     finally:

@@ -129,7 +129,7 @@ def _assert_render(output: np.ndarray | list[np.ndarray], layout: str, frames: i
 
 
 def _assert_external_config(changer: libsonare.RealtimeVoiceChanger) -> None:
-    config = changer.config_pod()
+    config = changer.config
     assert config.vocoder_enabled == 1
     assert config.vocoder_carrier_source == "external"
 

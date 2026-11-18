@@ -467,6 +467,9 @@ from ._types_enums import (
     MixBusRole as MixBusRole,
 )
 from ._types_enums import (
+    NmfInit as NmfInit,
+)
+from ._types_enums import (
     NormType as NormType,
 )
 from ._types_enums import (

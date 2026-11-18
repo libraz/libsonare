@@ -90,15 +90,31 @@ def test_omitted_end_sample_spans_whole_signal() -> None:
     assert high_after < high_before * 0.05
 
 
-def test_heal_radius_frames_zero_uses_core_default() -> None:
-    # heal_radius_frames=0 must succeed (the C-ABI oracle remaps 0 -> default 2),
-    # matching the Node path; only negative values are rejected.
+_HEAL_OP = libsonare.SpectralRegionOp(
+    start_sample=2000, end_sample=8000, low_hz=300.0, high_hz=600.0, gain_db=-24.0, mode="heal"
+)
+
+
+@pytest.mark.parametrize(
+    ("field", "library_default"),
+    [("n_fft", 2048), ("hop_length", 512), ("heal_radius_frames", 2)],
+)
+def test_an_omitted_framing_value_is_the_library_default(field: str, library_default: int) -> None:
+    """Leaving a value out hands the core its own default, which equals the explicit one."""
     x = sine(440.0, 0.5, amp=0.4)
-    out = np.asarray(libsonare.spectral_edit(x, SR, [], heal_radius_frames=0), dtype=np.float32)
-    assert len(out) == len(x)
-    assert np.all(np.isfinite(out))
+    omitted = libsonare.spectral_edit(x, SR, [_HEAL_OP])
+    explicit = libsonare.spectral_edit(x, SR, [_HEAL_OP], **{field: library_default})
+    np.testing.assert_array_equal(omitted, explicit)
+
+
+@pytest.mark.parametrize("field", ["n_fft", "hop_length", "heal_radius_frames"])
+def test_an_explicit_zero_is_refused_rather_than_read_as_the_default(field: str) -> None:
+    """0 is the C ABI's spelling of the default; absence is None."""
+    x = sine(440.0, 0.5, amp=0.4)
+    with pytest.raises(SonareValueError, match=field):
+        libsonare.spectral_edit(x, SR, [], **{field: 0})
     with raises_coded():
-        libsonare.spectral_edit(x, SR, [], heal_radius_frames=-1)
+        libsonare.spectral_edit(x, SR, [], **{field: -1})
 
 
 def test_invalid_parameters_raise() -> None:

@@ -136,7 +136,7 @@ def test_a_voice_changer_enum_ordinal_is_a_type_error(field: str) -> None:
         libsonare.RealtimeVoiceChanger(SR, num_channels=1) as changer,
         pytest.raises(TypeError, match=field),
     ):
-        changer.set_config_pod(dataclasses.replace(base, **{field: 1}))
+        changer.set_config(dataclasses.replace(base, **{field: 1}))
 
 
 # (public Literal, resolver, {token: C value}); the SF2 loop modes skip 2 and "sawtooth" is "saw".

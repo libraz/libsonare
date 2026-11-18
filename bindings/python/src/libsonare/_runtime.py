@@ -1111,7 +1111,9 @@ _DEFAULT_EFFECT_N_FFT = 2048
 _DEFAULT_EFFECT_HOP_LENGTH = 512
 
 
-def _validate_effect_fft_options(fn_name: str, n_fft: int, hop_length: int) -> tuple[int, int]:
+def _validate_effect_fft_options(
+    fn_name: str, n_fft: int, hop_length: int | None
+) -> tuple[int, int]:
     """Validate and normalize the FFT options shared by spectral effects.
 
     Entry points that additionally constrain the hop (the constant-overlap-add
@@ -1120,7 +1122,7 @@ def _validate_effect_fft_options(fn_name: str, n_fft: int, hop_length: int) -> t
     Args:
         fn_name: Caller name, used to prefix the error messages.
         n_fft: Requested STFT size; see :func:`_validate_stft_n_fft`.
-        hop_length: Requested hop size in samples.
+        hop_length: Requested hop size in samples; ``None`` is ``max(1, n_fft // 4)``.
 
     Returns:
         The validated ``(n_fft, hop_length)`` pair as plain ``int`` values.
@@ -1130,6 +1132,13 @@ def _validate_effect_fft_options(fn_name: str, n_fft: int, hop_length: int) -> t
         SonareValueError: If either value falls outside the accepted domain.
     """
     n_fft = _validate_stft_n_fft(fn_name, n_fft)
+    if hop_length is None:
+        return n_fft, max(1, n_fft // 4)
+    return n_fft, _validate_effect_hop(fn_name, hop_length)
+
+
+def _validate_effect_hop(fn_name: str, hop_length: object) -> int:
+    """Narrow a given STFT hop onto a positive C ``int``; 0 is refused, not a default."""
     domain = "must fit in a positive signed 32-bit integer"
     try:
         hop = _narrow_int(hop_length, "hop_length", _C_INT_MIN, _C_INT_MAX)
@@ -1137,7 +1146,7 @@ def _validate_effect_fft_options(fn_name: str, n_fft: int, hop_length: int) -> t
         raise _int_refusal(fn_name, hop_length, "hop_length", domain) from exc
     if hop <= 0:
         raise SonareValueError(f"{fn_name}: hop_length {domain}")
-    return n_fft, hop
+    return hop
 
 
 def _synth_enum_value(value: object, names: Mapping[str, int], what: str) -> int:

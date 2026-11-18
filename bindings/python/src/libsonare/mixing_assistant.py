@@ -3,7 +3,7 @@
 The assistant only ever returns parameters. It does not process audio and it
 does not apply anything: feeding a suggestion to :class:`~libsonare.Mixer` is
 the caller's separate, explicit step through
-:meth:`~libsonare.Mixer.from_scene_json`, and there is deliberately no entry
+``Mixer(scene=...)``, and there is deliberately no entry
 point that performs both halves at once.
 
 Everything here is offline work. It allocates, runs an STFT per track and
@@ -448,7 +448,7 @@ def mixing_assistant_suggest(
 
     Returns:
         A :class:`MixAssistantResult`: ``scene`` (the document
-        :meth:`~libsonare.Mixer.from_scene_json` reads), ``tracks`` and ``mix``
+        :class:`~libsonare.Mixer` takes as ``scene``), ``tracks`` and ``mix``
         with the measurements behind the suggestion, and ``explanation``, a list
         of human-readable lines in application order.
     """

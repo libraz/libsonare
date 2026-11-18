@@ -172,6 +172,9 @@ PitchTargetMode = Literal["midi", "scale"]
 WindowType = Literal["hann", "hamming", "blackman", "rectangular"]
 """Analysis window shape."""
 
+NmfInit = Literal["random", "nndsvd"]
+"""NMF initialiser: seeded random factors or the SVD-based warm start."""
+
 SpectralEditMode = Literal["gain", "attenuate", "mute", "heal"]
 """What a :class:`SpectralRegionOp` does to its rectangle."""
 

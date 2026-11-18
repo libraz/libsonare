@@ -262,7 +262,7 @@ def test_the_suggested_scene_loads_into_a_mixer(mono_tracks, mono_suggestion):
     from libsonare import Mixer
 
     scene_json = json.dumps(mono_suggestion.scene)
-    mixer = Mixer.from_scene_json(scene_json, sample_rate=SAMPLE_RATE, max_block_size=256)
+    mixer = Mixer.from_json(scene_json, sample_rate=SAMPLE_RATE, max_block_size=256)
     try:
         assert mixer.strip_count >= len(mono_tracks)
     finally:

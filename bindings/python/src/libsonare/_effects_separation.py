@@ -5,6 +5,7 @@ from __future__ import annotations
 import ctypes
 from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import get_args
 
 import numpy as np
 import numpy.typing as npt
@@ -36,14 +37,19 @@ from ._runtime import (
     _to_c_int,
     _to_c_int_array,
     _to_c_size_t,
+    _token_arg,
     _unsupported_effect_symbol,
     _utf8_arg,
     _validate_c_int_field,
     _validate_effect_fft_options,
+    _validate_effect_hop,
     _validate_hpss_kernel,
     _validate_samples,
+    _validate_stft_n_fft,
 )
-from .types import HpssResult
+from .types import HpssResult, NmfInit
+
+_NMF_INITS: tuple[str, ...] = get_args(NmfInit)
 
 # ============================================================================
 # Effects - decomposition / separation
@@ -120,13 +126,14 @@ def decompose_with_init(
     n_components: int,
     n_iter: int | None = None,
     beta: float = 2.0,
-    init: str = "random",
+    init: NmfInit | None = None,
 ) -> DecomposeResult:
     """NMF with a selectable initialiser (librosa.decompose.decompose, ``init``).
 
     Identical to :func:`decompose` but exposes the initialisation strategy:
-    ``"random"`` (default) or ``"nndsvd"`` (the SVD-based warm start, which tends
-    to converge in fewer iterations).
+    ``"random"`` or ``"nndsvd"`` (the SVD-based warm start, which tends to
+    converge in fewer iterations). Default: the library's (``"random"``). Any
+    other string, the empty one included, is refused.
 
     Returns:
         A :class:`DecomposeResult` of float32 arrays: ``w`` of shape
@@ -151,7 +158,7 @@ def decompose_with_init(
                 _to_c_int(n_components, "n_components"),
                 _to_c_int(_resolve_zero_default(n_iter, "n_iter"), "n_iter"),
                 _to_c_float(beta, "beta"),
-                _utf8_arg(init, "init") if init else None,
+                None if init is None else _utf8_arg(_token_arg(init, _NMF_INITS, "init"), "init"),
                 ctypes.byref(out_w),
                 ctypes.byref(out_w_length),
                 ctypes.byref(out_h),
@@ -163,16 +170,56 @@ def decompose_with_init(
         return DecomposeResult(w=w, h=h)
 
 
+def _stems_config(
+    fn_name: str,
+    n_components: int | None,
+    n_fft: int | None,
+    hop_length: int | None,
+    n_iter: int | None,
+    beta: float | None,
+    init: NmfInit | None,
+    mask_power: float | None,
+) -> SonareDecomposeStemsConfig:
+    """Build a stems config; an omitted value is the C field's 0 / NULL, the core's default.
+
+    A given count is narrowed before its positivity check: int(0.5) is the 0
+    sentinel, so a fraction would run at the default and report success. The C
+    reader treats "" as NULL, so the init token is checked here.
+    """
+    counts = {"n_components": n_components, "n_iter": n_iter}
+    c_counts = {name: 0 for name in counts}
+    for name, value in counts.items():
+        if value is not None:
+            c_counts[name] = _validate_c_int_field(fn_name, value, name)
+            if c_counts[name] <= 0:
+                raise SonareValueError(f"{fn_name}: {name} must be positive")
+    c_mask_power = 0.0
+    if mask_power is not None:
+        c_mask_power = _narrow_double(mask_power, "mask_power")
+        if c_mask_power < 1.0:
+            raise SonareValueError(f"{fn_name}: mask_power must be >= 1")
+    return SonareDecomposeStemsConfig(
+        struct_version=1,
+        n_components=c_counts["n_components"],
+        n_fft=0 if n_fft is None else _validate_stft_n_fft(fn_name, n_fft),
+        hop_length=0 if hop_length is None else _validate_effect_hop(fn_name, hop_length),
+        n_iter=c_counts["n_iter"],
+        beta=0.0 if beta is None else _narrow_double(beta, "beta"),
+        init=None if init is None else _utf8_arg(_token_arg(init, _NMF_INITS, "init"), "init"),
+        mask_power=c_mask_power,
+    )
+
+
 def decompose_stems(
     samples: Sequence[float] | list[float],
     sample_rate: int,
-    n_components: int = 4,
-    n_fft: int = _DEFAULT_EFFECT_N_FFT,
-    hop_length: int = _DEFAULT_EFFECT_HOP_LENGTH,
-    n_iter: int = 100,
-    beta: float = 2.0,
-    init: str = "random",
-    mask_power: float = 1.0,
+    n_components: int | None = None,
+    n_fft: int | None = None,
+    hop_length: int | None = None,
+    n_iter: int | None = None,
+    beta: float | None = None,
+    init: NmfInit | None = None,
+    mask_power: float | None = None,
     *,
     validate: bool = True,
 ) -> dict[str, object]:
@@ -188,15 +235,19 @@ def decompose_stems(
     Args:
         samples: Input signal (mono).
         sample_rate: Sample rate in Hz.
-        n_components: Number of NMF components (default 4).
-        n_fft: STFT size (default 2048).
-        hop_length: STFT hop (default 512).
-        n_iter: NMF multiplicative-update iterations (default 100).
-        beta: Beta divergence (2 = Frobenius, 1 = Kullback-Leibler).
-        init: NMF initialisation, ``"random"`` (default) or ``"nndsvd"``.
-        mask_power: Soft-mask exponent (default 1). 1 keeps the magnitude
-            ratio; 2 is the Wiener-style power ratio, which separates harder at
-            the cost of more artefacts on overlapping partials. Must be >= 1.
+        n_components: Number of NMF components. Default: the library's (4).
+        n_fft: STFT size. Default: the library's (2048).
+        hop_length: STFT hop. Default: the library default.
+        n_iter: NMF multiplicative-update iterations. Default: the library's (100).
+        beta: Beta divergence (2 = Frobenius, 1 = Kullback-Leibler). Default:
+            the library's (2.0).
+        init: NMF initialisation, ``"random"`` or ``"nndsvd"``; any other
+            string, the empty one included, is refused. Default: the library's
+            (``"random"``).
+        mask_power: Soft-mask exponent, at least 1. Default: the library's
+            (1.0). 1 keeps the magnitude ratio; 2 is the Wiener-style power
+            ratio, which separates harder at the cost of more artefacts on
+            overlapping partials.
         validate: Validate the input samples (default True).
 
     Returns:
@@ -205,38 +256,20 @@ def decompose_stems(
         (``(n_components, n_frames)``) and ``sample_rate``.
 
     Raises:
-        SonareValueError: If ``n_components``, ``n_fft``, ``hop_length`` or
-            ``n_iter`` is not positive, or ``mask_power`` is below 1. These arguments carry
-            real defaults here, so 0 is refused as a caller mistake rather than
-            read as the "use the default" sentinel that the same field means on
-            the C ABI and the JavaScript surfaces.
+        SonareValueError: If a given ``n_components``, ``n_iter``, ``n_fft`` or
+            ``hop_length`` is not positive, ``mask_power`` is below 1, or
+            ``init`` is not a known token. Leaving a value out is spelled
+            ``None``, so 0 is refused rather than read as the C ABI's default.
         SonareError: If the library rejects a value that reaches it, such as a
             non-finite ``beta`` or ``mask_power``.
     """
     _validate_samples("decompose_stems", samples, validate=validate)
-    n_fft, hop_length = _validate_effect_fft_options("decompose_stems", n_fft, hop_length)
-    # Narrowed ahead of the positivity check below, and for a reason of its own:
-    # 0 is the C sentinel for "keep the default" on both, and int(0.5) is that 0,
-    # so a fractional count passes `<= 0` and then runs at the default.
-    n_components = _validate_c_int_field("decompose_stems", n_components, "n_components")
-    n_iter = _validate_c_int_field("decompose_stems", n_iter, "n_iter")
-    if n_components <= 0 or n_iter <= 0:
-        raise SonareValueError("decompose_stems: n_components and n_iter must be positive")
-    if mask_power < 1.0:
-        raise SonareValueError("decompose_stems: mask_power must be >= 1")
+    config = _stems_config(
+        "decompose_stems", n_components, n_fft, hop_length, n_iter, beta, init, mask_power
+    )
     lib = _get_lib()
     if not hasattr(lib, "sonare_decompose_stems"):
         raise _unsupported_effect_symbol("sonare_decompose_stems")
-    config = SonareDecomposeStemsConfig(
-        struct_version=1,
-        n_components=n_components,
-        n_fft=n_fft,
-        hop_length=hop_length,
-        n_iter=n_iter,
-        beta=_narrow_double(beta, "beta"),
-        init=_utf8_arg(init, "init") if init else None,
-        mask_power=_narrow_double(mask_power, "mask_power"),
-    )
     c_array, length = _to_c_float_array(samples)
     component_count = ctypes.c_size_t()
     with (
@@ -266,10 +299,9 @@ def decompose_stems(
         components = [flat[i * per : (i + 1) * per] for i in range(count)]
         w = _from_c_float_array(out_w, out_w_length.value)
         h = _from_c_float_array(out_h, out_h_length.value)
-        n_bins = n_fft // 2 + 1
         return {
             "components": components,
-            "w": w.reshape(n_bins, count) if count else w,
+            "w": w.reshape(-1, count) if count else w,
             "h": h.reshape(count, -1) if count else h,
             "sample_rate": sample_rate,
         }
@@ -278,13 +310,13 @@ def decompose_stems(
 def decompose_stems_linked(
     channels: Sequence[Sequence[float] | np.ndarray] | np.ndarray,
     sample_rate: int,
-    n_components: int = 4,
-    n_fft: int = _DEFAULT_EFFECT_N_FFT,
-    hop_length: int = _DEFAULT_EFFECT_HOP_LENGTH,
-    n_iter: int = 100,
-    beta: float = 2.0,
-    init: str = "random",
-    mask_power: float = 1.0,
+    n_components: int | None = None,
+    n_fft: int | None = None,
+    hop_length: int | None = None,
+    n_iter: int | None = None,
+    beta: float | None = None,
+    init: NmfInit | None = None,
+    mask_power: float | None = None,
     *,
     validate: bool = True,
 ) -> dict[str, object]:
@@ -305,14 +337,18 @@ def decompose_stems_linked(
             array. All channels must be the same length; the C form has one
             length for the set. At least one and at most 64 channels.
         sample_rate: Sample rate in Hz, shared by every channel.
-        n_components: Number of NMF components (default 4).
-        n_fft: STFT size (default 2048).
-        hop_length: STFT hop (default 512).
-        n_iter: NMF multiplicative-update iterations (default 100).
-        beta: Beta divergence (2 = Frobenius, 1 = Kullback-Leibler).
-        init: NMF initialisation, ``"random"`` (default) or ``"nndsvd"``.
-        mask_power: Soft-mask exponent (default 1). 1 keeps the magnitude
-            ratio; 2 is the Wiener-style power ratio. Must be >= 1.
+        n_components: Number of NMF components. Default: the library's (4).
+        n_fft: STFT size. Default: the library's (2048).
+        hop_length: STFT hop. Default: the library default.
+        n_iter: NMF multiplicative-update iterations. Default: the library's (100).
+        beta: Beta divergence (2 = Frobenius, 1 = Kullback-Leibler). Default:
+            the library's (2.0).
+        init: NMF initialisation, ``"random"`` or ``"nndsvd"``; any other
+            string, the empty one included, is refused. Default: the library's
+            (``"random"``).
+        mask_power: Soft-mask exponent, at least 1. Default: the library's
+            (1.0). 1 keeps the magnitude ratio; 2 is the Wiener-style power
+            ratio.
         validate: Validate the input samples (default True).
 
     Returns:
@@ -324,33 +360,20 @@ def decompose_stems_linked(
 
     Raises:
         SonareValueError: If ``channels`` is empty or its planes disagree in
-            length, if ``n_components``, ``n_fft``, ``hop_length`` or
-            ``n_iter`` is not positive, or ``mask_power`` is below 1.
+            length, if a given ``n_components``, ``n_iter``, ``n_fft`` or
+            ``hop_length`` is not positive, ``mask_power`` is below 1, or
+            ``init`` is not a known token.
         SonareError: If the library rejects a value that reaches it, such as a
             non-finite ``beta`` or ``mask_power``, or more than 64 channels.
     """
-    n_fft, hop_length = _validate_effect_fft_options("decompose_stems_linked", n_fft, hop_length)
-    n_components = _validate_c_int_field("decompose_stems_linked", n_components, "n_components")
-    n_iter = _validate_c_int_field("decompose_stems_linked", n_iter, "n_iter")
-    if n_components <= 0 or n_iter <= 0:
-        raise SonareValueError("decompose_stems_linked: n_components and n_iter must be positive")
-    if mask_power < 1.0:
-        raise SonareValueError("decompose_stems_linked: mask_power must be >= 1")
+    config = _stems_config(
+        "decompose_stems_linked", n_components, n_fft, hop_length, n_iter, beta, init, mask_power
+    )
     lib = _get_lib()
     if not hasattr(lib, "sonare_decompose_stems_linked"):
         raise _unsupported_effect_symbol("sonare_decompose_stems_linked")
     planes = _linked_channel_planes("decompose_stems_linked", channels, validate=validate)
     arrays, in_ptrs, frame_count = _planar_channel_arrays(planes, subject="channels")
-    config = SonareDecomposeStemsConfig(
-        struct_version=1,
-        n_components=n_components,
-        n_fft=n_fft,
-        hop_length=hop_length,
-        n_iter=n_iter,
-        beta=_narrow_double(beta, "beta"),
-        init=_utf8_arg(init, "init") if init else None,
-        mask_power=_narrow_double(mask_power, "mask_power"),
-    )
     channel_count = len(arrays)
     component_count = ctypes.c_size_t()
     out_channel_count = ctypes.c_size_t()
@@ -385,10 +408,9 @@ def decompose_stems_linked(
         ]
         w = _from_c_float_array(out_w, out_w_length.value)
         h = _from_c_float_array(out_h, out_h_length.value)
-        n_bins = n_fft // 2 + 1
         return {
             "components": components,
-            "w": w.reshape(n_bins, count) if count else w,
+            "w": w.reshape(-1, count) if count else w,
             "h": h.reshape(count, -1) if count else h,
             "sample_rate": sample_rate,
         }
@@ -549,7 +571,7 @@ def hpss(
     kernel_harmonic: int = 31,
     kernel_percussive: int = 31,
     n_fft: int = _DEFAULT_EFFECT_N_FFT,
-    hop_length: int = _DEFAULT_EFFECT_HOP_LENGTH,
+    hop_length: int | None = None,
     hard_mask: bool = False,
     *,
     validate: bool = True,
@@ -567,7 +589,8 @@ def hpss(
         n_fft: FFT size used for analysis/synthesis; an even integer >= 4
             (default 2048).
         hop_length: Hop size used for analysis/synthesis, in ``(0, n_fft / 2]``
-            so frames overlap by at least half a window (default 512).
+            so frames overlap by at least half a window. Default: ``n_fft // 4``
+            (at least 1), 512 at the default ``n_fft``.
         hard_mask: Use binary harmonic/percussive masks (default ``False``).
         validate: Reject empty / NaN / Inf input (default ``True``).
 
@@ -701,7 +724,7 @@ def hpss_with_residual(
     kernel_harmonic: int = 31,
     kernel_percussive: int = 31,
     n_fft: int = _DEFAULT_EFFECT_N_FFT,
-    hop_length: int = _DEFAULT_EFFECT_HOP_LENGTH,
+    hop_length: int | None = None,
     hard_mask: bool = False,
     *,
     validate: bool = True,
@@ -733,7 +756,8 @@ def hpss_with_residual(
         n_fft: FFT size used for analysis/synthesis; an even integer >= 4
             (default 2048).
         hop_length: Hop size used for analysis/synthesis, in ``(0, n_fft / 2]``
-            so frames overlap by at least half a window (default 512).
+            so frames overlap by at least half a window. Default: ``n_fft // 4``
+            (at least 1), 512 at the default ``n_fft``.
         hard_mask: Use binary harmonic/percussive masks (default ``False``).
         validate: Reject empty / NaN / Inf input (default ``True``).
 

@@ -1,7 +1,7 @@
 """Result records of :func:`mixing_assistant_suggest`.
 
 The suggestion is parameters only: ``scene`` is a mixer scene document, kept
-with its own keys so it goes to :meth:`Mixer.from_scene_json` unchanged, and
+with its own keys so it goes to ``Mixer(scene=...)`` unchanged, and
 the records beside it are the measurements the decisions were made from.
 """
 

@@ -21,6 +21,7 @@ MasteringPresetKind = Literal["mastering", "restoration"]
 MasteringInsertParamUnit = Literal[
     "dB",
     "dBFS",
+    "dBTP",
     "LUFS",
     "Hz",
     "ms",
@@ -445,6 +446,7 @@ TempogramMode: TypeAlias = Literal["autocorrelation", "cosine"]
 PitchTargetMode: TypeAlias = Literal["midi", "scale"]
 
 WindowType: TypeAlias = Literal["hann", "hamming", "blackman", "rectangular"]
+NmfInit: TypeAlias = Literal["random", "nndsvd"]
 
 SpectralEditMode: TypeAlias = Literal["gain", "attenuate", "mute", "heal"]
 

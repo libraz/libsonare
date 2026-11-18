@@ -59,7 +59,7 @@ def _make_chain() -> Any:
 def _make_mixer() -> Any:
     from libsonare import Mixer
 
-    return Mixer.from_scene_json(_SCENE, 48000)
+    return Mixer.from_json(_SCENE, sample_rate=48000)
 
 
 _MEMBERS: dict[str, tuple[Callable[[], Any], list[tuple[str, tuple[Any, ...]]]]] = {
@@ -70,7 +70,7 @@ _MEMBERS: dict[str, tuple[Callable[[], Any], list[tuple[str, tuple[Any, ...]]]]]
             ("set_config", ("neutralMonitor",)),
             ("non_finite_discard_count", ()),
             ("config_json", ()),
-            ("config_pod", ()),
+            ("config", ()),
             ("process_mono", (_BLOCK,)),
             ("process_interleaved", (_BLOCK,)),
             ("process_planar", ([_BLOCK, _BLOCK],)),

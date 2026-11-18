@@ -175,12 +175,16 @@ class RealtimeVoiceChanger:
         sample_rate: int,
         *,
         num_channels: int,
-        config: VoicePresetId | RealtimeVoiceChangerPreset = "neutralMonitor",
+        config: VoicePresetId | RealtimeVoiceChangerPreset | RealtimeVoiceChangerConfig = (
+            "neutralMonitor"
+        ),
         max_block_size: int | None = None,
     ) -> None:
         """Create a voice changer for ``num_channels`` (1 or 2) at ``sample_rate``.
 
-        ``config`` is a built-in preset id or a configuration document mapping.
+        ``config`` is a built-in preset id, a configuration document mapping or a
+        :class:`RealtimeVoiceChangerConfig` record, the same three kinds
+        :meth:`set_config` takes.
         ``max_block_size`` bounds each native call; omitted, the library default
         applies. The ``process_*`` methods chunk longer buffers to it.
         """
@@ -189,13 +193,29 @@ class RealtimeVoiceChanger:
         self._handle = ctypes.c_void_p()
         self._lib = _get_lib()
         self._channels = _narrow_int(num_channels, "num_channels", _C_INT_MIN, _C_INT_MAX)
-        rc = self._lib.sonare_realtime_voice_changer_create_json(
-            _voice_config_to_json("RealtimeVoiceChanger", config),
-            _to_c_int(sample_rate, "sample_rate"),
-            _to_c_int(_resolve_zero_default(max_block_size, "max_block_size"), "max_block_size"),
-            _to_c_int(self._channels, "num_channels"),
-            ctypes.byref(self._handle),
+        c_sample_rate = _to_c_int(sample_rate, "sample_rate")
+        c_block = _to_c_int(
+            _resolve_zero_default(max_block_size, "max_block_size"), "max_block_size"
         )
+        c_channels = _to_c_int(self._channels, "num_channels")
+        if isinstance(config, RealtimeVoiceChangerConfig):
+            if not hasattr(self._lib, "sonare_realtime_voice_changer_create"):
+                raise _not_supported(
+                    "loaded libsonare is missing sonare_realtime_voice_changer_create; "
+                    "rebuild the shared library."
+                )
+            pod = config._to_pod()
+            rc = self._lib.sonare_realtime_voice_changer_create(
+                ctypes.byref(pod), c_sample_rate, c_block, c_channels, ctypes.byref(self._handle)
+            )
+        else:
+            rc = self._lib.sonare_realtime_voice_changer_create_json(
+                _voice_config_to_json("RealtimeVoiceChanger", config),
+                c_sample_rate,
+                c_block,
+                c_channels,
+                ctypes.byref(self._handle),
+            )
         _check(rc)
 
     def close(self) -> None:
@@ -224,12 +244,20 @@ class RealtimeVoiceChanger:
         rc = self._lib.sonare_realtime_voice_changer_reset(self._require_handle())
         _check(rc)
 
-    def set_config(self, config: VoicePresetId | RealtimeVoiceChangerPreset) -> None:
-        """Apply a preset id or a configuration document mapping.
+    def set_config(
+        self, config: VoicePresetId | RealtimeVoiceChangerPreset | RealtimeVoiceChangerConfig
+    ) -> None:
+        """Apply a preset id, a configuration document mapping or a config record.
 
-        Raises ``TypeError`` for any other type, ``SonareValueError`` for an unknown
-        preset id, and ``SonareError`` when the document is refused or the changer closed.
+        A :class:`RealtimeVoiceChangerConfig` record takes the realtime-safe path with
+        no JSON round-trip. Raises ``TypeError`` for any other type,
+        ``SonareValueError`` for an unknown preset id or a record field outside its
+        range, and ``SonareError`` when the document is refused or the changer closed;
+        the previous configuration stays in effect on a refusal.
         """
+        if isinstance(config, RealtimeVoiceChangerConfig):
+            self._set_record(config)
+            return
         rc = self._lib.sonare_realtime_voice_changer_set_config_json(
             self._require_handle(),
             _voice_config_to_json("RealtimeVoiceChanger.set_config", config),
@@ -297,11 +325,11 @@ class RealtimeVoiceChanger:
             if out:
                 self._lib.sonare_free_string(out)
 
-    def config_pod(self) -> RealtimeVoiceChangerConfig:
-        """Return the live (normalized) configuration as a flat POD dataclass.
+    @property
+    def config(self) -> RealtimeVoiceChangerConfig:
+        """The live (normalized) configuration as a :class:`RealtimeVoiceChangerConfig` record.
 
-        Faster than :meth:`config_json` because it skips JSON serialisation on
-        the C side and parsing on the Python side.
+        Read without JSON on either side; :meth:`config_json` gives the document.
         """
         if not hasattr(self._lib, "sonare_realtime_voice_changer_get_config"):
             raise _not_supported(
@@ -315,13 +343,7 @@ class RealtimeVoiceChanger:
         _check(rc)
         return RealtimeVoiceChangerConfig._from_pod(pod)
 
-    def set_config_pod(self, config: RealtimeVoiceChangerConfig) -> None:
-        """Realtime-safe configuration update via the flat POD path.
-
-        Equivalent to :meth:`set_config` but skips the JSON round-trip. A
-        non-finite or out-of-range field raises ``SonareValueError`` naming the
-        field and its range, and the previous configuration stays in effect.
-        """
+    def _set_record(self, config: RealtimeVoiceChangerConfig) -> None:
         if not hasattr(self._lib, "sonare_realtime_voice_changer_set_config"):
             raise _not_supported(
                 "loaded libsonare is missing sonare_realtime_voice_changer_set_config; "
@@ -688,7 +710,7 @@ def _neutral_monitor_defaults() -> dict[str, Any]:
 
     These are the single source of truth for the default-constructed
     :class:`RealtimeVoiceChangerConfig`, so that ``RealtimeVoiceChangerConfig()``
-    followed by :func:`RealtimeVoiceChanger.set_config_pod` reproduces the same
+    followed by :meth:`RealtimeVoiceChanger.set_config` reproduces the same
     neutral voice as the C++ ``realtime_voice_changer_preset(NeutralMonitor)``
     idiom instead of a bypassed-gate / flat-EQ configuration.
     """
@@ -728,12 +750,12 @@ class RealtimeVoiceChangerConfig:
     from the library once and cached), so a default-constructed instance is a
     usable neutral voice rather than a bypassed-gate / flat-EQ configuration.
     An out-of-range entry is refused by
-    :func:`RealtimeVoiceChanger.set_config_pod` with a ``SonareValueError`` and
+    :meth:`RealtimeVoiceChanger.set_config` with a ``SonareValueError`` and
     at creation with a coded ``SonareError`` (``INVALID_FORMAT``, the creation
     document being a JSON entry point); nothing is clamped.
 
     ``formant_mode`` is ``"relative"`` (default) or ``"absolute"`` and is fixed
-    when the changer is created: :func:`RealtimeVoiceChanger.set_config_pod`
+    when the changer is created: :meth:`RealtimeVoiceChanger.set_config`
     with a different mode raises. In absolute mode ``formant_factor`` is the
     formant shift relative to the input, ``formant_amount`` is ignored, one
     analysis frame of latency is added, and a configuration whose warp

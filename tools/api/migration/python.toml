@@ -6019,7 +6019,8 @@ test = "bindings/python/tests/test_exact_closed_set_tokens.py::test_the_loop_mod
 [[entry]]
 kind = "method"
 old = "RealtimeVoiceChanger.set_config_pod"
-changed = "an enum field given as a number is TypeError (was SonareValueError)"
+to = "RealtimeVoiceChanger.set_config"
+changed = "folded into set_config, which takes a preset id, a mapping or a RealtimeVoiceChangerConfig record; an enum field given as a number is TypeError (was SonareValueError)"
 domain = "effects"
 rule = "string-closed-sets"
 test = "bindings/python/tests/test_exact_closed_set_tokens.py::test_a_voice_changer_enum_ordinal_is_a_type_error"
@@ -8068,7 +8069,7 @@ test = "bindings/python/tests/test_mixing_assistant.py::test_a_track_profile_rep
 kind = "function"
 old = "mixing_scene_preset_json"
 to = "mixing_scene_preset"
-changed = "renamed to the C/JS name and returns the scene as a MixSceneDocument dict instead of JSON text (json.dumps it for Mixer.from_scene_json); the argument is name, a non-string raises TypeError and a name mixing_scene_preset_names does not list raises SonareValueError"
+changed = "renamed to the C/JS name and returns the scene as a MixSceneDocument dict instead of JSON text (pass it as Mixer(scene=...)); the argument is name, a non-string raises TypeError and a name mixing_scene_preset_names does not list raises SonareValueError"
 domain = "mastering"
 rule = "typed-results"
 test = "bindings/python/tests/test_mixing.py::test_mixing_scene_preset_returns_a_scene_document_mapping"
@@ -8863,7 +8864,7 @@ test = "bindings/python/tests/test_mapping_keys.py::test_a_helper_mapping_refuse
 [[entry]]
 kind = "class"
 old = "RealtimeVoiceChanger"
-changed = "num_channels (was channels, default 1) is a required keyword, and an omitted max_block_size takes the library default (was 128); an explicit 0 raises SonareValueError. The preset argument is the keyword config, as the Node and WASM facades name it: a string is a lowerCamel preset id only (JSON text raises SonareValueError, parse it with json.loads), a mapping is a preset document or flat config, and any other type is TypeError"
+changed = "num_channels (was channels, default 1) is a required keyword, and an omitted max_block_size takes the library default (was 128); an explicit 0 raises SonareValueError. The preset argument is the keyword config, as the Node and WASM facades name it: a string is a lowerCamel preset id only (JSON text raises SonareValueError, parse it with json.loads), a mapping is a preset document or flat config, a RealtimeVoiceChangerConfig record builds the changer from that config (formant mode included), and any other type is TypeError"
 domain = "effects"
 rule = "num-channels"
 test = "bindings/python/tests/test_block_size_absence.py::test_a_required_channel_count_or_sample_rate_has_no_default"
@@ -8937,7 +8938,7 @@ test = "bindings/python/tests/test_project_midi.py::test_a_midi_fx_config_refusa
 [[entry]]
 kind = "option"
 old = "Mixer.from_scene_json(block_size)"
-to = "Mixer.from_scene_json(max_block_size)"
+to = "Mixer.from_json(max_block_size)"
 changed = "renamed max_block_size after the C parameter; omitted takes the library default (was 512) and an explicit 0 raises SonareValueError"
 domain = "engine"
 rule = "absent-not-sentinel"
@@ -8946,6 +8947,7 @@ test = "bindings/python/tests/test_block_size_absence.py::test_an_explicit_non_p
 [[entry]]
 kind = "option"
 old = "Mixer.from_scene_json(sample_rate)"
+to = "Mixer.from_json(sample_rate)"
 changed = "required (was 48000 by default)"
 domain = "engine"
 rule = "sample-rate-required"
@@ -9937,6 +9939,24 @@ test = "bindings/python/tests/test_acoustic.py::test_room_estimate_and_morph_rej
 
 [[entry]]
 kind = "option"
+old = "mastering(ceiling_db)"
+to = "mastering(ceiling_dbtp)"
+changed = "the ceiling is held on a true-peak measurement, so the keyword carries dBTP; ceiling_db raises TypeError"
+domain = "mastering"
+rule = "unit-in-name"
+test = "bindings/python/tests/test_analyzer_mastering_mixing.py::test_the_true_peak_ceiling_keyword_is_ceiling_dbtp"
+
+[[entry]]
+kind = "option"
+old = "Audio.mastering(ceiling_db)"
+to = "Audio.mastering(ceiling_dbtp)"
+changed = "the ceiling is held on a true-peak measurement, so the keyword carries dBTP; ceiling_db raises TypeError"
+domain = "core"
+rule = "unit-in-name"
+test = "bindings/python/tests/test_analyzer_mastering_mixing.py::test_the_true_peak_ceiling_keyword_is_ceiling_dbtp"
+
+[[entry]]
+kind = "option"
 old = "mastering(release_ms)"
 changed = "absent is None (the library default 50 ms); an explicit 0 or a negative value raises SonareValueError"
 domain = "mastering"
@@ -9978,7 +9998,7 @@ test = "bindings/python/tests/test_mixing.py::test_strip_by_id_returns_index_and
 [[entry]]
 kind = "class"
 old = "Mixer"
-changed = "a strip reference naming an unknown id or an out-of-range index raises SonareValueError instead of KeyError or IndexError"
+changed = "a strip reference naming an unknown id or an out-of-range index raises SonareValueError instead of KeyError or IndexError. The constructor takes keywords: Mixer(sample_rate=..., scene=<MixSceneDocument mapping>) builds from a scene, an omitted scene builds an empty mixer, a non-mapping scene raises TypeError (parse JSON text with json.loads or use Mixer.from_json); the handle form is gone"
 domain = "engine"
 rule = "error-class-by-cause"
 test = "bindings/python/tests/test_mixing.py::test_strip_by_id_returns_index_and_raises_on_unknown"
@@ -11273,3 +11293,238 @@ changed = "configure_capture(..., input_monitor=CaptureInputMonitor(enabled, gai
 domain = "engine"
 rule = "one-entry-per-operation"
 test = "bindings/python/tests/test_engine_telemetry.py::test_configure_capture_applies_the_whole_setup_and_resizes_only_when_disarmed"
+
+[[entry]]
+kind = "method"
+old = "Mixer.from_scene_json"
+to = "Mixer.from_json"
+changed = "renamed; sample_rate and max_block_size are keywords. Mixer(scene=...) takes the scene as a mapping"
+domain = "engine"
+rule = "construction"
+test = "bindings/python/tests/test_mixing.py::test_a_mixer_is_built_from_a_scene_mapping_or_empty_by_keyword"
+
+[[entry]]
+kind = "method"
+old = "Mixer.to_scene_json"
+to = "Mixer.to_json"
+changed = "renamed to pair with Mixer.from_json"
+domain = "engine"
+rule = "construction"
+test = "bindings/python/tests/test_mixing.py::test_a_mixer_is_built_from_a_scene_mapping_or_empty_by_keyword"
+
+[[entry]]
+kind = "method"
+old = "RealtimeVoiceChanger.config_pod"
+to = "RealtimeVoiceChanger.config"
+changed = "a read-only property returning the RealtimeVoiceChangerConfig record"
+domain = "effects"
+rule = "getters"
+test = "bindings/python/tests/test_realtime_voice_changer_pod.py::test_set_config_takes_a_record_and_config_is_a_property"
+
+[[entry]]
+kind = "option"
+old = "griffin_lim(n_fft)"
+changed = "omitted is implied by the bin count, (n_bins - 1) * 2 (was 2048); an explicit value that disagrees raises SonareValueError"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_analyzer_features.py::test_griffin_lim_infers_n_fft_from_the_bin_count"
+
+[[entry]]
+kind = "option"
+old = "griffin_lim(hop_length)"
+changed = "omitted is n_fft // 4 (at least 1) instead of a fixed 512, so a small n_fft with no hop resynthesizes"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_analyzer_features.py::test_an_omitted_inverse_hop_is_a_quarter_of_n_fft"
+
+[[entry]]
+kind = "option"
+old = "mel_to_audio(hop_length)"
+changed = "omitted is n_fft // 4 (at least 1) instead of a fixed 512, so a small n_fft with no hop resynthesizes"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_analyzer_features.py::test_an_omitted_inverse_hop_is_a_quarter_of_n_fft"
+
+[[entry]]
+kind = "option"
+old = "mfcc_to_audio(hop_length)"
+changed = "omitted is n_fft // 4 (at least 1) instead of a fixed 512, so a small n_fft with no hop resynthesizes"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_analyzer_features.py::test_an_omitted_inverse_hop_is_a_quarter_of_n_fft"
+
+[[entry]]
+kind = "option"
+old = "hpss(hop_length)"
+changed = "omitted is n_fft // 4 (at least 1) instead of a fixed 512, so a small n_fft with no hop resynthesizes"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_analyzer_features.py::test_an_omitted_hpss_hop_is_a_quarter_of_n_fft"
+
+[[entry]]
+kind = "option"
+old = "hpss_with_residual(hop_length)"
+changed = "omitted is n_fft // 4 (at least 1) instead of a fixed 512, so a small n_fft with no hop resynthesizes"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_analyzer_features.py::test_an_omitted_hpss_hop_is_a_quarter_of_n_fft"
+
+[[entry]]
+kind = "option"
+old = "time_stretch(hop_length)"
+changed = "omitted is n_fft // 4 (at least 1) instead of a fixed 512, so a small n_fft with no hop resynthesizes"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_analyzer_features.py::test_an_omitted_time_stretch_hop_is_a_quarter_of_n_fft"
+
+[[entry]]
+kind = "option"
+old = "pitch_shift(hop_length)"
+changed = "omitted is n_fft // 4 (at least 1) instead of a fixed 512, so a small n_fft with no hop resynthesizes"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_analyzer_features.py::test_an_omitted_pitch_shift_hop_is_a_quarter_of_n_fft"
+
+[[entry]]
+kind = "option"
+old = "decompose_stems(n_fft)"
+changed = "omitted hands the core its default (was the literal 2048); an explicit 0 raises SonareValueError"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_new_bindings.py::test_an_omitted_stems_framing_is_the_library_default"
+
+[[entry]]
+kind = "option"
+old = "decompose_stems(hop_length)"
+changed = "omitted hands the core its default (was the literal 512); an explicit 0 raises SonareValueError"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_new_bindings.py::test_an_omitted_stems_framing_is_the_library_default"
+
+[[entry]]
+kind = "option"
+old = "decompose_stems(n_components)"
+changed = "omitted hands the core its default (was the literal 4); an explicit 0 raises SonareValueError"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_new_bindings.py::test_a_stems_sentinel_is_refused_by_name"
+
+[[entry]]
+kind = "option"
+old = "decompose_stems(n_iter)"
+changed = "omitted hands the core its default (was the literal 100); an explicit 0 raises SonareValueError"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_new_bindings.py::test_a_stems_sentinel_is_refused_by_name"
+
+[[entry]]
+kind = "option"
+old = "decompose_stems(mask_power)"
+changed = "omitted hands the core its default (was the literal 1.0); an explicit 0 raises SonareValueError"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_new_bindings.py::test_a_stems_sentinel_is_refused_by_name"
+
+[[entry]]
+kind = "option"
+old = "decompose_stems(beta)"
+changed = "omitted hands the core its default (was the literal 2.0)"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_new_bindings.py::test_an_omitted_stems_setting_is_the_library_default"
+
+[[entry]]
+kind = "option"
+old = "decompose_stems(init)"
+changed = "an NmfInit token or None; omitted hands the core its default (was the literal \"random\"), and \"\" raises SonareValueError instead of selecting the default"
+domain = "effects"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_new_bindings.py::test_a_stems_sentinel_is_refused_by_name"
+
+[[entry]]
+kind = "option"
+old = "decompose_stems_linked(n_fft)"
+changed = "omitted hands the core its default (was the literal 2048); an explicit 0 raises SonareValueError"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_new_bindings.py::test_an_omitted_stems_framing_is_the_library_default"
+
+[[entry]]
+kind = "option"
+old = "decompose_stems_linked(hop_length)"
+changed = "omitted hands the core its default (was the literal 512); an explicit 0 raises SonareValueError"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_new_bindings.py::test_an_omitted_stems_framing_is_the_library_default"
+
+[[entry]]
+kind = "option"
+old = "decompose_stems_linked(n_components)"
+changed = "omitted hands the core its default (was the literal 4); an explicit 0 raises SonareValueError"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_new_bindings.py::test_a_stems_sentinel_is_refused_by_name"
+
+[[entry]]
+kind = "option"
+old = "decompose_stems_linked(n_iter)"
+changed = "omitted hands the core its default (was the literal 100); an explicit 0 raises SonareValueError"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_new_bindings.py::test_a_stems_sentinel_is_refused_by_name"
+
+[[entry]]
+kind = "option"
+old = "decompose_stems_linked(mask_power)"
+changed = "omitted hands the core its default (was the literal 1.0); an explicit 0 raises SonareValueError"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_new_bindings.py::test_a_stems_sentinel_is_refused_by_name"
+
+[[entry]]
+kind = "option"
+old = "decompose_stems_linked(beta)"
+changed = "omitted hands the core its default (was the literal 2.0)"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_new_bindings.py::test_an_omitted_stems_setting_is_the_library_default"
+
+[[entry]]
+kind = "option"
+old = "decompose_stems_linked(init)"
+changed = "an NmfInit token or None; omitted hands the core its default (was the literal \"random\"), and \"\" raises SonareValueError instead of selecting the default"
+domain = "effects"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_new_bindings.py::test_a_stems_sentinel_is_refused_by_name"
+
+[[entry]]
+kind = "option"
+old = "decompose_with_init(init)"
+changed = "an NmfInit token or None; omitted hands the core its default (was the literal \"random\"), and \"\" raises SonareValueError instead of selecting the default"
+domain = "effects"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_new_bindings.py::test_an_omitted_nmf_init_is_the_library_default_and_an_empty_one_is_refused"
+
+[[entry]]
+kind = "option"
+old = "spectral_edit(n_fft)"
+changed = "omitted hands the core its default (was the literal 2048); an explicit 0 raises SonareValueError instead of selecting the default"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_spectral_edit.py::test_an_explicit_zero_is_refused_rather_than_read_as_the_default"
+
+[[entry]]
+kind = "option"
+old = "spectral_edit(hop_length)"
+changed = "omitted hands the core its default (was the literal 512); an explicit 0 raises SonareValueError instead of selecting the default"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_spectral_edit.py::test_an_explicit_zero_is_refused_rather_than_read_as_the_default"
+
+[[entry]]
+kind = "option"
+old = "spectral_edit(heal_radius_frames)"
+changed = "omitted hands the core its default (was the literal 2); an explicit 0 raises SonareValueError instead of selecting the default"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_spectral_edit.py::test_an_explicit_zero_is_refused_rather_than_read_as_the_default"

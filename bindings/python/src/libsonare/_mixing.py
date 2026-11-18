@@ -5,7 +5,7 @@ from __future__ import annotations
 import ctypes
 import json
 import typing
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
 import numpy as np
@@ -118,12 +118,30 @@ def mixing_scene_preset(name: str) -> MixSceneDocument:
     return typing.cast(MixSceneDocument, json.loads(text))
 
 
+def _scene_handle(text: str, sample_rate: int, max_block_size: int | None) -> tuple[int, list[str]]:
+    """Build a mixer handle from scene JSON text, with the warnings its load left."""
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_mixer_from_scene_json"):
+        raise _not_supported("libsonare was built without mixing support")
+    handle = lib.sonare_mixer_from_scene_json(
+        _utf8_arg(text, "json"),
+        _narrow_int(sample_rate, "sample_rate", _MIN_SAMPLE_RATE, _MAX_SAMPLE_RATE),
+        _to_c_int(_resolve_zero_default(max_block_size, "max_block_size"), "max_block_size"),
+    )
+    if not handle:
+        raise _last_error(int(ErrorCode.INVALID_PARAMETER), "failed to build mixer from scene JSON")
+    # Capture the load's warnings (e.g. insert params no processor read)
+    # immediately, before any later C-ABI call overwrites them.
+    return int(handle), [message for _, message, _ in _last_diagnostics()]
+
+
 class Mixer:
     """Scene-based persistent stereo mixer.
 
-    Built from a scene JSON string (see :func:`mixing_scene_preset`), it
+    Built from a scene document (see :func:`mixing_scene_preset`) or empty, it
     routes per-strip stereo blocks through a compiled routing graph (sends,
-    buses, inserts) into a stereo master.
+    buses, inserts) into a stereo master. :meth:`from_json` reads a scene's
+    JSON text and :meth:`to_json` writes it.
 
     Strips are addressed by index in ``[0, strip_count())`` or by their string
     id. Strip handles are *borrowed*: they are owned by the native mixer and
@@ -138,19 +156,12 @@ class Mixer:
 
     def __init__(
         self,
-        handle: int,
+        *,
         sample_rate: int,
-        scene_warnings: list[str] | None = None,
+        scene: MixSceneDocument | None = None,
+        max_block_size: int | None = None,
     ) -> None:
-        self._handle = handle
-        self._sample_rate = sample_rate
-        self._scene_warnings: list[str] = scene_warnings or []
-
-    @classmethod
-    def from_scene_json(
-        cls, json: str, sample_rate: int, max_block_size: int | None = None
-    ) -> Mixer:
-        """Build a mixer from a scene JSON string.
+        """Build a mixer from a scene document, or an empty one when ``scene`` is absent.
 
         ``max_block_size`` bounds the frames of every process and drain call; an
         omitted value takes the library default and an explicit 0 is refused.
@@ -160,24 +171,43 @@ class Mixer:
         strip (``enabled`` / ``lufs`` / ``truePeak`` / ``truePeakOversample``)
         selects it, and leaving it out keeps the full default (LUFS + true peak
         at 4x, about 1.4 MB per strip at 48 kHz). ``{"enabled": false}`` drops
-        both meters for a strip whose snapshots are never read.
+        both meters for a strip whose snapshots are never read. The core reads
+        the scene, so a content refusal is ``SonareError`` (``INVALID_FORMAT``)
+        naming the path.
         """
-        lib = _get_lib()
-        if not hasattr(lib, "sonare_mixer_from_scene_json"):
-            raise _not_supported("libsonare was built without mixing support")
-        handle = lib.sonare_mixer_from_scene_json(
-            _utf8_arg(json, "json"),
-            _narrow_int(sample_rate, "sample_rate", _MIN_SAMPLE_RATE, _MAX_SAMPLE_RATE),
-            _to_c_int(_resolve_zero_default(max_block_size, "max_block_size"), "max_block_size"),
-        )
-        if not handle:
-            raise _last_error(
-                int(ErrorCode.INVALID_PARAMETER), "failed to build mixer from scene JSON"
+        if scene is not None and not isinstance(scene, Mapping):
+            raise TypeError("scene must be a mapping (parse JSON text with json.loads first)")
+        if scene is None:
+            lib = _get_lib()
+            if not hasattr(lib, "sonare_mixer_create"):
+                raise _not_supported("libsonare was built without mixing support")
+            out = ctypes.c_void_p()
+            _check(
+                lib.sonare_mixer_create(
+                    _narrow_int(sample_rate, "sample_rate", _MIN_SAMPLE_RATE, _MAX_SAMPLE_RATE),
+                    _to_c_int(
+                        _resolve_zero_default(max_block_size, "max_block_size"), "max_block_size"
+                    ),
+                    ctypes.byref(out),
+                )
             )
-        # Capture the load's warnings (e.g. insert params no processor read)
-        # immediately, before any later C-ABI call overwrites them.
-        warnings = [message for _, message, _ in _last_diagnostics()]
-        return cls(int(handle), sample_rate, warnings)
+            self._adopt(typing.cast(int, out.value), sample_rate, [])
+            return
+        handle, warnings = _scene_handle(json.dumps(dict(scene)), sample_rate, max_block_size)
+        self._adopt(handle, sample_rate, warnings)
+
+    @classmethod
+    def from_json(cls, json: str, *, sample_rate: int, max_block_size: int | None = None) -> Mixer:
+        """Build a mixer from a scene's JSON text, as :meth:`to_json` writes it."""
+        handle, warnings = _scene_handle(json, sample_rate, max_block_size)
+        mixer = cls.__new__(cls)
+        mixer._adopt(handle, sample_rate, warnings)
+        return mixer
+
+    def _adopt(self, handle: int, sample_rate: int, scene_warnings: list[str]) -> None:
+        self._handle = handle
+        self._sample_rate = sample_rate
+        self._scene_warnings: list[str] = scene_warnings
 
     def scene_warnings(self) -> list[str]:
         """Non-fatal warnings captured when this mixer was built from scene JSON.
@@ -187,7 +217,7 @@ class Mixer:
         send to a destination the scene does not declare. The scene still loaded;
         those keys and sends simply took no effect. Empty when nothing was ignored.
         Use :func:`mastering_insert_param_names` to discover the keys an insert
-        accepts. An unknown scene key is not a warning: :meth:`from_scene_json`
+        accepts. An unknown scene key is not a warning: building the mixer
         raises ``SonareError`` (``INVALID_FORMAT``) naming its path.
         """
         return list(self._scene_warnings)
@@ -229,7 +259,7 @@ class Mixer:
 
         The metering keywords are the strip's ``"metering"`` object from scene
         JSON under their Python spelling, and the defaults are the full
-        configuration :meth:`from_scene_json` applies to a strip that omits it
+        configuration a scene load applies to a strip that omits it
         (LUFS + true peak at 4x, about 1.4 MB per strip at 48 kHz).
         ``enabled=False`` drops both meters for a strip whose snapshots are never
         read. ``true_peak_oversample`` is 4 or 8; ``None`` keeps the
@@ -1092,8 +1122,8 @@ class Mixer:
         self._require()
         _check(_get_lib().sonare_mixer_flush_meters(self._handle))
 
-    def to_scene_json(self) -> str:
-        """Serialize the current scene (strips, buses, sends, connections)."""
+    def to_json(self) -> str:
+        """Serialize the current scene (strips, buses, sends, connections) as JSON text."""
         self._require()
         lib = _get_lib()
         json_ptr = ctypes.c_char_p()
