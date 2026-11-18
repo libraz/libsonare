@@ -123,22 +123,50 @@ std::vector<mastering::api::Param> parse_mastering_params(const std::string& tex
 /// borrow a stable pointer.
 struct StreamingPlatformSpec {
   std::string name;
-  float target_lufs = -14.0f;
-  float ceiling_db = -1.0f;
+  float target_lufs = 0.0f;
+  float ceiling_dbtp = 0.0f;
 };
 
 namespace {
 
-/// Read a platform number under either spelling, defaulting when absent.
-float streaming_platform_number(const sonare::util::json::Value& entry, const char* camel,
-                                const char* snake, float fallback) {
-  const sonare::util::json::Value* value = entry.find(camel);
-  if (value == nullptr) value = entry.find(snake);
-  if (value == nullptr) return fallback;
-  if (!value->is_number()) {
-    throw std::invalid_argument(std::string("--platforms \"") + camel + "\" must be a number");
+/// The record's keys; every one is required, matching the library's platform record.
+constexpr const char* kStreamingPlatformKeys[] = {"name", "target_lufs", "ceiling_dbtp"};
+
+/// Spellings the record used to take, refused with the key that replaced them.
+constexpr std::pair<const char*, const char*> kStreamingPlatformRenamed[] = {
+    {"targetLufs", "target_lufs"},
+    {"ceilingDb", "ceiling_dbtp"},
+    {"ceilingDbtp", "ceiling_dbtp"},
+    {"ceiling_db", "ceiling_dbtp"},
+};
+
+float streaming_platform_number(const sonare::util::json::Value& entry, const char* key) {
+  const sonare::util::json::Value& value = *entry.find(key);
+  if (!value.is_number()) {
+    throw std::invalid_argument(std::string("--platforms: ") + key + " must be a number");
   }
-  return value->as_float();
+  return value.as_float();
+}
+
+void check_streaming_platform_keys(const sonare::util::json::Value& entry) {
+  for (const auto& [key, unused] : entry.as_object()) {
+    (void)unused;
+    for (const auto& [old_key, new_key] : kStreamingPlatformRenamed) {
+      if (key == old_key) {
+        throw std::invalid_argument("--platforms: unknown key '" + key + "'; use '" + new_key +
+                                    "'");
+      }
+    }
+    bool known = false;
+    for (const char* expected : kStreamingPlatformKeys) known = known || key == expected;
+    if (!known) throw std::invalid_argument("--platforms: unknown key '" + key + "'");
+  }
+  std::string missing;
+  for (const char* expected : kStreamingPlatformKeys) {
+    if (entry.find(expected) == nullptr)
+      missing += (missing.empty() ? "" : ", ") + std::string(expected);
+  }
+  if (!missing.empty()) throw std::invalid_argument("--platforms: missing " + missing);
 }
 
 }  // namespace
@@ -157,14 +185,15 @@ std::vector<StreamingPlatformSpec> parse_streaming_platforms(const std::string& 
     if (!entry.is_object()) {
       throw std::invalid_argument("--platforms entries must be JSON objects");
     }
+    check_streaming_platform_keys(entry);
     StreamingPlatformSpec spec;
-    const sonare::util::json::Value* name = entry.find("name");
-    if (name == nullptr || !name->is_string() || name->as_string().empty()) {
-      throw std::invalid_argument("--platforms entry needs a non-empty \"name\"");
+    const sonare::util::json::Value& name = *entry.find("name");
+    if (!name.is_string() || name.as_string().empty()) {
+      throw std::invalid_argument("--platforms: name must be a non-empty string");
     }
-    spec.name = name->as_string();
-    spec.target_lufs = streaming_platform_number(entry, "targetLufs", "target_lufs", -14.0f);
-    spec.ceiling_db = streaming_platform_number(entry, "ceilingDb", "ceiling_db", -1.0f);
+    spec.name = name.as_string();
+    spec.target_lufs = streaming_platform_number(entry, "target_lufs");
+    spec.ceiling_dbtp = streaming_platform_number(entry, "ceiling_dbtp");
     platforms.push_back(std::move(spec));
   }
   return platforms;
@@ -285,7 +314,7 @@ void print_loudness_result_json(const LoudnessResult& result,
       .kv("output_lufs", result.output_lufs)
       .kv("applied_gain_db", result.applied_gain_db)
       .kv("target_lufs", config.target_lufs)
-      .kv("ceiling_db", config.ceiling_db)
+      .kv("ceiling_dbtp", config.ceiling_db)
       .kv("true_peak_oversample", config.true_peak_oversample)
       .kv("latency_samples", result.latency_samples)
       .kv("loudness_target_limited", result.loudness_target_limited)
@@ -320,7 +349,7 @@ struct AssistantOption {
 
 constexpr AssistantOption kAssistantOptions[] = {
     {"targetLufs", "target-lufs"},
-    {"ceilingDb", "ceiling-db"},
+    {"ceilingDb", "ceiling-dbtp"},
     {"enableRepair", "enable-repair"},
     {"preferStreamingSafe", "no-streaming-safe"},
     {"speechMonoAmount", "speech-mono-amount"},
@@ -372,7 +401,7 @@ mastering::assistant::AssistantConfig assistant_config_from_cli(const CliArgs& a
   }
 
   if (args.has("target-lufs")) params.push_back({"targetLufs", args.get_float("target-lufs", 0)});
-  if (args.has("ceiling-db")) params.push_back({"ceilingDb", args.get_float("ceiling-db", 0)});
+  if (args.has("ceiling-dbtp")) params.push_back({"ceilingDb", args.get_float("ceiling-dbtp", 0)});
   if (args.has("enable-repair")) params.push_back({"enableRepair", 1.0});
   if (args.has("no-streaming-safe")) params.push_back({"preferStreamingSafe", 0.0});
   if (args.has("speech-mono-amount")) {
@@ -463,7 +492,7 @@ int cmd_mastering(const CliArgs& args, const Audio& audio) {
       // Named by the option rather than by `mode`, which stays the reported
       // payload value: the option's canonical spelling is --chain-config.
       const std::string selector = mode == "config" ? "chain-config" : mode;
-      for (const char* loudness_flag : {"target-lufs", "ceiling-db", "true-peak-oversample"}) {
+      for (const char* loudness_flag : {"target-lufs", "ceiling-dbtp", "true-peak-oversample"}) {
         if (args.has(loudness_flag)) {
           throw std::invalid_argument(std::string("--") + loudness_flag +
                                       " cannot be combined with --" + selector);
@@ -539,7 +568,7 @@ int cmd_mastering(const CliArgs& args, const Audio& audio) {
 
   mastering::maximizer::LoudnessOptimizeConfig config;
   config.target_lufs = args.get_float("target-lufs", -14.0f);
-  config.ceiling_db = args.get_float("ceiling-db", -1.0f);
+  config.ceiling_db = args.get_float("ceiling-dbtp", -1.0f);
   config.true_peak_oversample = args.get_int("true-peak-oversample", 4);
 
   // The standalone loudness facade predates the chain report and has no stereo
@@ -887,7 +916,7 @@ int cmd_mastering_streaming(const CliArgs& args, const Audio& audio) {
   std::vector<SonareStreamingPlatform> platforms;
   platforms.reserve(specs.size());
   for (const auto& spec : specs) {
-    platforms.push_back({spec.name.c_str(), spec.target_lufs, spec.ceiling_db});
+    platforms.push_back({spec.name.c_str(), spec.target_lufs, spec.ceiling_dbtp});
   }
 
   char* json = nullptr;

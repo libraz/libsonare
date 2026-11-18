@@ -1160,7 +1160,7 @@
           }
         },
         {
-          "name": "ceiling-db",
+          "name": "ceiling-dbtp",
           "type": "number",
           "default": -1,
           "aliases": [],
@@ -1617,7 +1617,7 @@
       ],
       "mastering-suggest": [
         {
-          "name": "ceiling-db",
+          "name": "ceiling-dbtp",
           "type": "number",
           "default": -1,
           "aliases": [],
@@ -7150,7 +7150,7 @@
           }
         },
         {
-          "name": "ceiling-db",
+          "name": "ceiling-dbtp",
           "type": "number",
           "default": -1,
           "aliases": [],
@@ -7323,7 +7323,7 @@
             "output_lufs": "number",
             "applied_gain_db": "number",
             "target_lufs": "number",
-            "ceiling_db": "number",
+            "ceiling_dbtp": "number",
             "true_peak_oversample": "integer",
             "latency_samples": "integer",
             "loudness_target_limited": "boolean",
@@ -7357,7 +7357,7 @@
             "{mastering_report}",
             "--target-lufs",
             "-20",
-            "--ceiling-db",
+            "--ceiling-dbtp",
             "-1",
             "--json"
           ],
@@ -7374,7 +7374,7 @@
             "{audio}",
             "--target-lufs",
             "-6",
-            "--ceiling-db",
+            "--ceiling-dbtp",
             "-3",
             "--json"
           ],
@@ -14179,6 +14179,59 @@
           "payload": "success",
           "artifact": "none",
           "stdout": "json"
+        },
+        {
+          "id": "platforms_record",
+          "argv": [
+            "mastering-streaming",
+            "{audio}",
+            "--platforms",
+            "[{\"name\":\"custom\",\"target_lufs\":-14,\"ceiling_dbtp\":-1}]",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "platforms_renamed_key_refused",
+          "argv": [
+            "mastering-streaming",
+            "{audio}",
+            "--platforms",
+            "[{\"name\":\"custom\",\"target_lufs\":-14,\"ceilingDb\":-1}]",
+            "--json"
+          ],
+          "exit": 3,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty",
+          "stderr_contains": [
+            "use 'ceiling_dbtp'"
+          ]
+        },
+        {
+          "id": "platforms_missing_key_refused",
+          "argv": [
+            "mastering-streaming",
+            "{audio}",
+            "--platforms",
+            "[{\"name\":\"custom\",\"target_lufs\":-14}]",
+            "--json"
+          ],
+          "exit": 3,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty",
+          "stderr_contains": [
+            "missing ceiling_dbtp"
+          ]
         }
       ],
       "artifacts": {}
@@ -15409,7 +15462,7 @@
       "path": "mastering-suggest",
       "options": [
         {
-          "name": "ceiling-db",
+          "name": "ceiling-dbtp",
           "type": "number",
           "default": -1,
           "aliases": [],

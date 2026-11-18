@@ -39,15 +39,24 @@ TEST_CASE("CLI mastering command", "[cli][mastering]") {
 
   SECTION("writes mastered wav and reports metadata") {
     auto [code, output] = exec_command(CLI + " mastering " + TEST_WAV + " -o " + out +
-                                       " --target-lufs -18 --ceiling-db -1 --json -q");
+                                       " --target-lufs -18 --ceiling-dbtp -1 --json -q");
     REQUIRE(code == 0);
     REQUIRE_THAT(output, ContainsSubstring("\"input_lufs\""));
     REQUIRE_THAT(output, ContainsSubstring("\"output_lufs\""));
     REQUIRE_THAT(output, ContainsSubstring("\"applied_gain_db\""));
     REQUIRE_THAT(output, ContainsSubstring("\"target_lufs\": -18"));
+    // The ceiling is held on the true peak, so the echo carries dBTP.
+    REQUIRE_THAT(output, ContainsSubstring("\"ceiling_dbtp\": -1"));
 
     std::ifstream f(out);
     REQUIRE(f.good());
+  }
+
+  SECTION("the dB-spelled ceiling flag is gone") {
+    const SplitResult result = exec_command_split(CLI + " mastering " + TEST_WAV + " -o " + out +
+                                                  " --ceiling-db -1 --json -q");
+    CHECK(result.exit_code == 2);
+    CHECK_THAT(result.err, ContainsSubstring("--ceiling-db"));
   }
 
   SECTION("report JSON always publishes zero latency") {
@@ -81,7 +90,7 @@ TEST_CASE("CLI mastering command", "[cli][mastering]") {
     const std::string limited_out = unique_temp_path("_ceiling_limited.wav");
     auto [limited_code, limited_output] =
         exec_command(CLI + " mastering " + TEST_WAV + " -o " + limited_out +
-                     " --target-lufs -6 --ceiling-db -3 --json -q");
+                     " --target-lufs -6 --ceiling-dbtp -3 --json -q");
     REQUIRE(limited_code == 0);
     const auto limited_payload = sonare::util::json::parse_strict(limited_output);
     REQUIRE(limited_payload.contains("loudness_target_limited"));
@@ -93,7 +102,7 @@ TEST_CASE("CLI mastering command", "[cli][mastering]") {
     const std::string reached_out = unique_temp_path("_ceiling_clear.wav");
     auto [reached_code, reached_output] =
         exec_command(CLI + " mastering " + TEST_WAV + " -o " + reached_out +
-                     " --target-lufs -20 --ceiling-db -1 --json -q");
+                     " --target-lufs -20 --ceiling-dbtp -1 --json -q");
     REQUIRE(reached_code == 0);
     const auto reached_payload = sonare::util::json::parse_strict(reached_output);
     REQUIRE(reached_payload.contains("loudness_target_limited"));
@@ -181,7 +190,7 @@ TEST_CASE("CLI mastering command", "[cli][mastering]") {
       REQUIRE_THAT(output, ContainsSubstring("base preset: classical"));
     }
     auto [loud_code, loud_output] = exec_command(CLI + " mastering-suggest " + TEST_WAV +
-                                                 " --target-lufs -12 --ceiling-db -2 --json");
+                                                 " --target-lufs -12 --ceiling-dbtp -2 --json");
     REQUIRE(loud_code == 0);
     const auto loud = sonare::util::json::parse_strict(loud_output);
     CHECK(loud["chain_config"]["params"]["loudness.targetLufs"].as_number() == -12.0);
@@ -504,6 +513,39 @@ TEST_CASE("CLI auxiliary outputs are atomic", "[cli][atomic-output]") {
 #endif
 }
 #endif
+
+TEST_CASE("CLI mastering-streaming takes one platform record spelling", "[cli][mastering]") {
+  create_test_wav(TEST_WAV);
+  const auto run = [](const std::string& platforms) {
+    return exec_command_split(CLI + " mastering-streaming " + TEST_WAV + " --platforms '" +
+                              platforms + "' --json -q");
+  };
+
+  const SplitResult accepted = run(R"([{"name":"custom","target_lufs":-14,"ceiling_dbtp":-1}])");
+  REQUIRE(accepted.exit_code == 0);
+  const auto payload = sonare::util::json::parse_strict(accepted.out);
+  REQUIRE(payload["platforms"].as_array().size() == 1);
+
+  for (const auto& [old_key, new_key] :
+       std::vector<std::pair<std::string, std::string>>{{"targetLufs", "target_lufs"},
+                                                        {"ceilingDb", "ceiling_dbtp"},
+                                                        {"ceilingDbtp", "ceiling_dbtp"},
+                                                        {"ceiling_db", "ceiling_dbtp"}}) {
+    INFO(old_key);
+    const std::string record =
+        new_key == "target_lufs"
+            ? R"([{"name":"custom","targetLufs":-14,"ceiling_dbtp":-1}])"
+            : R"([{"name":"custom","target_lufs":-14,")" + old_key + R"(":-1}])";
+    const SplitResult refused = run(record);
+    CHECK(refused.exit_code == 3);
+    CHECK_THAT(refused.err,
+               ContainsSubstring("unknown key '" + old_key + "'; use '" + new_key + "'"));
+  }
+
+  const SplitResult missing = run(R"([{"name":"custom","target_lufs":-14}])");
+  CHECK(missing.exit_code == 3);
+  CHECK_THAT(missing.err, ContainsSubstring("missing ceiling_dbtp"));
+}
 
 TEST_CASE("CLI mastering takes an enum-valued key by its name", "[cli][mastering]") {
   create_test_wav(TEST_WAV);

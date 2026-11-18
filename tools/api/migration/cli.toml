@@ -131,3 +131,25 @@ changed = "renamed --bpm-max; omitted, it searches the library's 60-200 BPM rang
 domain = "analysis"
 rule = "tempo-range"
 test = "bindings/python/tests/test_cli_option_advanced.py::test_plp_omitted_bpm_bounds_keep_the_library_range"
+
+[[entry]]
+kind = "flag"
+old = "mastering --ceiling-db"
+new = "mastering --ceiling-dbtp"
+domain = "mastering"
+rule = "loudness-names"
+
+[[entry]]
+kind = "flag"
+old = "mastering-suggest --ceiling-db"
+new = "mastering-suggest --ceiling-dbtp"
+domain = "mastering"
+rule = "loudness-names"
+
+[[entry]]
+kind = "flag"
+old = "mastering-streaming --platforms"
+changed = "each platform is exactly {name, target_lufs, ceiling_dbtp}, all three required; targetLufs, ceilingDb, ceilingDbtp and ceiling_db are refused with the key that replaced them, and a missing target or ceiling no longer defaults to -14 LUFS / -1 dB"
+domain = "mastering"
+rule = "loudness-names"
+test = "tests/cli/cli_mastering_test.cpp::CLI mastering-streaming takes one platform record spelling"

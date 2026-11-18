@@ -815,7 +815,7 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     add_command(
         commands, "mastering", true,
         {string_value("preset"), path_value("chain-config", false, false, true, {"config"}),
-         number_value("target-lufs", -14.0), number_value("ceiling-db", -1.0),
+         number_value("target-lufs", -14.0), number_value("ceiling-dbtp", -1.0),
          string_value("params"), bits_value(), true_peak_oversample_value(), path_value("report"),
          output_value(), flag("assistant"), flag("enable-repair"), flag("explain"),
          // The remaining AssistantConfig fields. `prefer_streaming_safe`
@@ -874,7 +874,7 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     // names, defaults and domains; --params still carries them as flat keys.
     add_command(commands, "mastering-suggest", true,
                 {string_value("params"), string_value("config-out", ""),
-                 number_value("target-lufs", -14.0), number_value("ceiling-db", -1.0),
+                 number_value("target-lufs", -14.0), number_value("ceiling-dbtp", -1.0),
                  flag("enable-repair"), string_value("preset"), target_platform_value(),
                  flag("no-streaming-safe"), number_value("speech-mono-amount", 1.0)});
     add_command(commands, "mastering-processors", false, {});

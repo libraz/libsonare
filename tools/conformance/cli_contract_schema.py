@@ -179,7 +179,7 @@ _MASTERING_REPORT_KEYS = {
     "output_lufs",
     "applied_gain_db",
     "target_lufs",
-    "ceiling_db",
+    "ceiling_dbtp",
     "true_peak_oversample",
     "latency_samples",
     "loudness_target_limited",

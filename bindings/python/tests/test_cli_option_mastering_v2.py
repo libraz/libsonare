@@ -440,7 +440,7 @@ def test_mastering_cli_reports_a_blocked_loudness_target(capsys, monkeypatch) ->
             "input.wav",
             "--target-lufs",
             "-6",
-            "--ceiling-db",
+            "--ceiling-dbtp",
             "-3",
             "--json",
         ]
@@ -539,7 +539,7 @@ def test_assistant_controls_are_refused_without_assistant(monkeypatch) -> None:
     ("option", "value", "key"),
     [
         ("--target-lufs", "-14.0", "targetLufs"),
-        ("--ceiling-db", "-1.0", "ceilingDb"),
+        ("--ceiling-dbtp", "-1.0", "ceilingDb"),
     ],
 )
 def test_a_loudness_option_carrying_its_default_still_reaches_the_assistant(
@@ -583,7 +583,7 @@ def test_a_loudness_option_carrying_its_default_still_reaches_the_assistant(
     ("option", "value"),
     [
         ("--target-lufs", "-14.0"),
-        ("--ceiling-db", "-1.0"),
+        ("--ceiling-dbtp", "-1.0"),
         ("--true-peak-oversample", "4"),
     ],
 )
@@ -634,7 +634,7 @@ def test_presence_gated_mastering_options_match_the_native_handler() -> None:
         "no-streaming-safe",
         "speech-mono-amount",
         "target-lufs",
-        "ceiling-db",
+        "ceiling-dbtp",
         "true-peak-oversample",
     ):
         assert f'args.has("{name}")' in text or f'"{name}",' in text
@@ -801,7 +801,7 @@ def test_mastering_suggest_takes_the_delivery_target_by_name(monkeypatch, capsys
 
 def test_mastering_suggest_named_options_reach_the_assistant(monkeypatch, capsys) -> None:
     """The options `mastering --assistant` declares mean the same thing here."""
-    payload = _suggest(monkeypatch, capsys, "--target-lufs", "-12", "--ceiling-db", "-2")
+    payload = _suggest(monkeypatch, capsys, "--target-lufs", "-12", "--ceiling-dbtp", "-2")
     params = payload["chain_config"]["params"]  # type: ignore[index]
     assert params["loudness.targetLufs"] == -12
     assert params["loudness.ceilingDb"] == -2

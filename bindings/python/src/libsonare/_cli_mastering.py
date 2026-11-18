@@ -95,7 +95,7 @@ def _write_mastering_report(path: str, report: Any) -> None:
 # the native CLI's assistant_config_from_cli() reads.
 _ASSISTANT_OPTIONS = (
     ("targetLufs", "target-lufs"),
-    ("ceilingDb", "ceiling-db"),
+    ("ceilingDb", "ceiling-dbtp"),
     ("enableRepair", "enable-repair"),
     ("preferStreamingSafe", "no-streaming-safe"),
     ("speechMonoAmount", "speech-mono-amount"),
@@ -136,8 +136,8 @@ def _assistant_params_from_args(
             params.update(_parse_kv_params(item))
     if _option_supplied(args, "target-lufs"):
         params["targetLufs"] = float(args.target_lufs)
-    if _option_supplied(args, "ceiling-db"):
-        params["ceilingDb"] = float(args.ceiling_db)
+    if _option_supplied(args, "ceiling-dbtp"):
+        params["ceilingDb"] = float(args.ceiling_dbtp)
     if getattr(args, "enable_repair", False):
         params["enableRepair"] = True
     if getattr(args, "no_streaming_safe", False):
@@ -329,7 +329,7 @@ def cmd_mastering(args: argparse.Namespace) -> int:
     if selectors and not assistant:
         ignored_loudness = [
             name
-            for name in ("target-lufs", "ceiling-db", "true-peak-oversample")
+            for name in ("target-lufs", "ceiling-dbtp", "true-peak-oversample")
             if _option_supplied(args, name)
         ]
         if ignored_loudness:
@@ -418,7 +418,7 @@ def cmd_mastering(args: argparse.Namespace) -> int:
                 "loudness": {
                     "enabled": True,
                     "targetLufs": getattr(args, "target_lufs", -14.0),
-                    "ceilingDb": getattr(args, "ceiling_db", -1.0),
+                    "ceilingDb": getattr(args, "ceiling_dbtp", -1.0),
                     "truePeakOversample": getattr(args, "true_peak_oversample", 4),
                 }
             }
@@ -428,7 +428,7 @@ def cmd_mastering(args: argparse.Namespace) -> int:
 
         result = Audio.from_buffer(samples, sr).mastering(
             target_lufs=getattr(args, "target_lufs", -14.0),
-            ceiling_db=getattr(args, "ceiling_db", -1.0),
+            ceiling_db=getattr(args, "ceiling_dbtp", -1.0),
             true_peak_oversample=getattr(args, "true_peak_oversample", 4),
         )
 
@@ -461,7 +461,7 @@ def cmd_mastering(args: argparse.Namespace) -> int:
                 "output_lufs": result.output_lufs,
                 "applied_gain_db": result.applied_gain_db,
                 "target_lufs": getattr(args, "target_lufs", -14.0),
-                "ceiling_db": getattr(args, "ceiling_db", -1.0),
+                "ceiling_dbtp": getattr(args, "ceiling_dbtp", -1.0),
                 "true_peak_oversample": getattr(args, "true_peak_oversample", 4),
                 "latency_samples": getattr(result, "latency_samples", 0),
                 "loudness_target_limited": bool(result.loudness_target_limited),
@@ -1053,7 +1053,7 @@ def register_mastering_parsers(
     # the handler's destination keeps its own name.
     mastering_p.add_argument("--chain-config", "--config", dest="config", default=None)
     mastering_p.add_argument("--target-lufs", type=_finite_float, default=-14.0)
-    mastering_p.add_argument("--ceiling-db", type=_finite_float, default=-1.0)
+    mastering_p.add_argument("--ceiling-dbtp", type=_finite_float, default=-1.0)
     mastering_p.add_argument("--params", default="")
     _add_wav_bits_argument(mastering_p)
     mastering_p.add_argument(
@@ -1242,7 +1242,7 @@ def register_mastering_parsers(
         "--preset", default="", help="Mastering preset the suggestion starts from"
     )
     msuggest_p.add_argument("--target-lufs", type=_finite_float, default=-14.0)
-    msuggest_p.add_argument("--ceiling-db", type=_finite_float, default=-1.0)
+    msuggest_p.add_argument("--ceiling-dbtp", type=_finite_float, default=-1.0)
     msuggest_p.add_argument("--enable-repair", action="store_true")
     _add_assistant_control_arguments(msuggest_p)
     msuggest_p.add_argument(

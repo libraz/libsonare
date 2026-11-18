@@ -1419,14 +1419,14 @@ def test_mastering_cli_reports_ceiling_limited_loudness(tmp_path) -> None:
     _write_tone_wav(source)
 
     limited = _run_console(
-        "mastering", "--json", "--target-lufs", "-6", "--ceiling-db", "-12", str(source)
+        "mastering", "--json", "--target-lufs", "-6", "--ceiling-dbtp", "-12", str(source)
     )
     assert limited.returncode == 0, limited.stderr
     limited_payload = json.loads(limited.stdout)
     assert limited_payload["loudness_target_limited"] is True
 
     reachable = _run_console(
-        "mastering", "--json", "--target-lufs", "-20", "--ceiling-db", "-1", str(source)
+        "mastering", "--json", "--target-lufs", "-20", "--ceiling-dbtp", "-1", str(source)
     )
     assert reachable.returncode == 0, reachable.stderr
     assert json.loads(reachable.stdout)["loudness_target_limited"] is False
@@ -1471,3 +1471,48 @@ def test_an_option_past_its_c_type_range_is_a_usage_error(tmp_path, arguments) -
 
     result = _run_console(arguments[0], str(source), *arguments[1:])
     assert result.returncode == 2, result.stderr
+
+
+def test_mastering_ceiling_is_spelled_and_echoed_in_dbtp(tmp_path: Path) -> None:
+    """The ceiling is held on the true peak, so the flag and the echo carry dBTP."""
+    source = tmp_path / "tone.wav"
+    _write_tone_wav(source)
+    result = _run_console("mastering", "--json", "--ceiling-dbtp", "-2", str(source))
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["ceiling_dbtp"] == -2
+    assert "ceiling_db" not in payload
+
+    refused = _run_console("mastering", "--json", "--ceiling-db", "-2", str(source))
+    assert refused.returncode == 2
+    assert "--ceiling-db" in refused.stderr
+
+
+@pytest.mark.parametrize(
+    ("record", "message"),
+    [
+        ('{"name":"x","targetLufs":-14,"ceiling_dbtp":-1}', "use 'target_lufs'"),
+        ('{"name":"x","target_lufs":-14,"ceilingDb":-1}', "use 'ceiling_dbtp'"),
+        ('{"name":"x","target_lufs":-14,"ceilingDbtp":-1}', "use 'ceiling_dbtp'"),
+        ('{"name":"x","target_lufs":-14,"ceiling_db":-1}', "use 'ceiling_dbtp'"),
+        ('{"name":"x","target_lufs":-14}', "missing ceiling_dbtp"),
+    ],
+)
+def test_mastering_streaming_takes_one_platform_record_spelling(
+    tmp_path: Path, record: str, message: str
+) -> None:
+    source = tmp_path / "tone.wav"
+    _write_tone_wav(source)
+    accepted = _run_console(
+        "mastering-streaming",
+        str(source),
+        "--platforms",
+        '[{"name":"x","target_lufs":-14,"ceiling_dbtp":-1}]',
+        "--json",
+    )
+    assert accepted.returncode == 0, accepted.stderr
+    refused = _run_console(
+        "mastering-streaming", str(source), "--platforms", f"[{record}]", "--json"
+    )
+    assert refused.returncode == 3
+    assert message in refused.stderr
