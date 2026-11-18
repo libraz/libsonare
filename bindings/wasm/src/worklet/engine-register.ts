@@ -133,9 +133,12 @@ export function registerSonareRealtimeEngineWorkletProcessor(
             'AudioWorklet initialization message buffer overflowed.',
           );
         }
-        this.bridge = new SonareRealtimeEngineWorkletProcessor(options, {
-          postMessage: (message, transfer) => port?.postMessage?.(message, transfer),
-          onMeter: (meter) => port?.postMessage?.(meter),
+        this.bridge = new SonareRealtimeEngineWorkletProcessor({
+          ...options,
+          transport: {
+            postMessage: (message, transfer) => port?.postMessage?.(message, transfer),
+            onMeter: (meter) => port?.postMessage?.(meter),
+          },
         });
         for (const message of options.initialSyncMessages ?? []) {
           this.bridge.receiveSync(message);

@@ -81,16 +81,14 @@ describe('SonareWorkletProcessor meter scratch', () => {
   it('writes the ring from scalar accessors, never from meterSnapshot', () => {
     const ring = createMeterRingBuffer({ capacity: 64 });
     const posted: unknown[] = [];
-    const processor = new SonareWorkletProcessor(
-      {
-        sceneJson: JSON.stringify(mixingScenePreset('vocalReverbSend')),
-        sampleRate,
-        maxBlockSize: blockSize,
-        meterIntervalFrames: blockSize,
-        meterSharedBuffer: ring.sharedBuffer,
-      },
-      { postMessage: (meter) => posted.push(meter) },
-    );
+    const processor = new SonareWorkletProcessor({
+      sceneJson: JSON.stringify(mixingScenePreset('vocalReverbSend')),
+      sampleRate,
+      maxBlockSize: blockSize,
+      meterIntervalFrames: blockSize,
+      meterSharedBuffer: ring.sharedBuffer,
+      transport: { postMessage: (meter) => posted.push(meter) },
+    });
     const calls = instrumentMeterAccessors(processor);
     try {
       const outL = new Float32Array(blockSize);
@@ -169,15 +167,13 @@ describe('SonareWorkletProcessor meter scratch', () => {
 
   it('keeps meterSnapshot off the postMessage fallback path too', () => {
     const meters: { peakDbL: number }[] = [];
-    const processor = new SonareWorkletProcessor(
-      {
-        sceneJson: JSON.stringify(mixingScenePreset('vocalReverbSend')),
-        sampleRate,
-        maxBlockSize: blockSize,
-        meterIntervalFrames: blockSize,
-      },
-      { onMeter: (meter) => meters.push(meter as { peakDbL: number }) },
-    );
+    const processor = new SonareWorkletProcessor({
+      sceneJson: JSON.stringify(mixingScenePreset('vocalReverbSend')),
+      sampleRate,
+      maxBlockSize: blockSize,
+      meterIntervalFrames: blockSize,
+      transport: { onMeter: (meter) => meters.push(meter as { peakDbL: number }) },
+    });
     const calls = instrumentMeterAccessors(processor);
     try {
       const outL = new Float32Array(blockSize);
@@ -202,16 +198,14 @@ describe('SonareWorkletProcessor meter scratch', () => {
   it('leaves the last meter record intact when a late scratch getter throws', () => {
     const ring = createMeterRingBuffer({ capacity: 1 });
     expect(ring.header[3]).toBe(0);
-    const processor = new SonareWorkletProcessor(
-      {
-        sceneJson: JSON.stringify(mixingScenePreset('vocalReverbSend')),
-        sampleRate,
-        maxBlockSize: blockSize,
-        meterIntervalFrames: blockSize,
-        meterSharedBuffer: ring.sharedBuffer,
-      },
-      { postMessage: () => undefined },
-    );
+    const processor = new SonareWorkletProcessor({
+      sceneJson: JSON.stringify(mixingScenePreset('vocalReverbSend')),
+      sampleRate,
+      maxBlockSize: blockSize,
+      meterIntervalFrames: blockSize,
+      meterSharedBuffer: ring.sharedBuffer,
+      transport: { postMessage: () => undefined },
+    });
     const mixer = (processor as unknown as { mixer: Mixer }).mixer;
     const realValue = mixer.meterScratchValue;
     try {

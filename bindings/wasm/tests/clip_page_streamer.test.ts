@@ -16,7 +16,7 @@ function fakeEngine(requests: ClipPageRequest[]) {
   };
 }
 
-/** Binding stand-in recording every supply / clear / close. */
+/** Binding stand-in recording every supply / clear / destroy. */
 function fakeBinding(options: { failPages?: Set<number> } = {}) {
   const supplied: number[] = [];
   const cleared: number[] = [];
@@ -37,7 +37,7 @@ function fakeBinding(options: { failPages?: Set<number> } = {}) {
       return Promise.resolve(!options.failPages?.has(pageIndex));
     },
     supplyRequest: () => Promise.resolve(true),
-    close: () => {
+    destroy: () => {
       closed = true;
     },
   };
@@ -48,7 +48,7 @@ describe('ClipPageStreamer', () => {
   it('fetches the missed page plus its read-ahead window', async () => {
     const engine = fakeEngine([{ clipId: 1, channel: 0, sample: 12 }]);
     const binding = fakeBinding();
-    const streamer = new ClipPageStreamer(engine, { readAheadPages: 2, retainBehindPages: 1 });
+    const streamer = new ClipPageStreamer({ engine, readAheadPages: 2, retainBehindPages: 1 });
     streamer.addSource({ clipId: 1, binding: binding as never, pageFrames: 4, numSamples: 4000 });
 
     await streamer.pump();
@@ -61,7 +61,7 @@ describe('ClipPageStreamer', () => {
   it('evicts pages that fall outside the window as the frontier advances', async () => {
     const engine = fakeEngine([{ clipId: 1, channel: 0, sample: 0 }]);
     const binding = fakeBinding();
-    const streamer = new ClipPageStreamer(engine, { readAheadPages: 1, retainBehindPages: 1 });
+    const streamer = new ClipPageStreamer({ engine, readAheadPages: 1, retainBehindPages: 1 });
     streamer.addSource({ clipId: 1, binding: binding as never, pageFrames: 4, numSamples: 4000 });
 
     await streamer.pump(); // page 0 -> window [0,1]
@@ -89,7 +89,7 @@ describe('ClipPageStreamer', () => {
       { clipId: 1, channel: 0, sample: 8 },
     ]);
     const binding = fakeBinding();
-    const streamer = new ClipPageStreamer(engine, { readAheadPages: 0, retainBehindPages: 0 });
+    const streamer = new ClipPageStreamer({ engine, readAheadPages: 0, retainBehindPages: 0 });
     streamer.addSource({ clipId: 1, binding: binding as never, pageFrames: 4, numSamples: 4000 });
 
     await streamer.pump();
@@ -104,7 +104,7 @@ describe('ClipPageStreamer', () => {
       { clipId: 1, channel: 0, sample: 0 }, // seek/loop page 0 is newer
     ]);
     const binding = fakeBinding();
-    const streamer = new ClipPageStreamer(engine, { readAheadPages: 0, retainBehindPages: 0 });
+    const streamer = new ClipPageStreamer({ engine, readAheadPages: 0, retainBehindPages: 0 });
     streamer.addSource({ clipId: 1, binding: binding as never, pageFrames: 4, numSamples: 4000 });
 
     await streamer.pump();
@@ -115,7 +115,7 @@ describe('ClipPageStreamer', () => {
   it('advances generation and resets resident pages on a backward seek', async () => {
     const engine = fakeEngine([{ clipId: 1, channel: 0, sample: 400 }]);
     const binding = fakeBinding();
-    const streamer = new ClipPageStreamer(engine, { readAheadPages: 0, retainBehindPages: 0 });
+    const streamer = new ClipPageStreamer({ engine, readAheadPages: 0, retainBehindPages: 0 });
     streamer.addSource({ clipId: 1, binding: binding as never, pageFrames: 4, numSamples: 4000 });
 
     await streamer.pump();
@@ -129,7 +129,7 @@ describe('ClipPageStreamer', () => {
   it('explicit reset refetches pages in a new playback generation', async () => {
     const engine = fakeEngine([{ clipId: 1, channel: 0, sample: 0 }]);
     const binding = fakeBinding();
-    const streamer = new ClipPageStreamer(engine, { readAheadPages: 0, retainBehindPages: 0 });
+    const streamer = new ClipPageStreamer({ engine, readAheadPages: 0, retainBehindPages: 0 });
     streamer.addSource({ clipId: 1, binding: binding as never, pageFrames: 4, numSamples: 4000 });
 
     await streamer.pump();
@@ -156,7 +156,7 @@ describe('ClipPageStreamer', () => {
       },
       close: () => undefined,
     };
-    const streamer = new ClipPageStreamer(engine, { readAheadPages: 0, retainBehindPages: 0 });
+    const streamer = new ClipPageStreamer({ engine, readAheadPages: 0, retainBehindPages: 0 });
     streamer.addSource({ clipId: 1, binding: binding as never, pageFrames: 4, numSamples: 4000 });
 
     const pumping = streamer.pump();
@@ -200,7 +200,7 @@ describe('ClipPageStreamer', () => {
   it('evicts a page whose fetch completes after an overlapping pump moved the window', async () => {
     const engine = fakeEngine([{ clipId: 1, channel: 0, sample: 0 }]);
     const binding = deferredBinding();
-    const streamer = new ClipPageStreamer(engine, { readAheadPages: 0, retainBehindPages: 0 });
+    const streamer = new ClipPageStreamer({ engine, readAheadPages: 0, retainBehindPages: 0 });
     streamer.addSource({ clipId: 1, binding: binding as never, pageFrames: 4, numSamples: 4000 });
 
     const first = streamer.pump();
@@ -218,7 +218,7 @@ describe('ClipPageStreamer', () => {
   it('does not evict a newer fetch of the same page when an older one completes last', async () => {
     const engine = fakeEngine([{ clipId: 1, channel: 0, sample: 12 }]);
     const binding = deferredBinding();
-    const streamer = new ClipPageStreamer(engine, { readAheadPages: 0, retainBehindPages: 0 });
+    const streamer = new ClipPageStreamer({ engine, readAheadPages: 0, retainBehindPages: 0 });
     streamer.addSource({ clipId: 1, binding: binding as never, pageFrames: 4, numSamples: 4000 });
 
     const first = streamer.pump();
@@ -234,7 +234,7 @@ describe('ClipPageStreamer', () => {
   });
 
   it('refuses a source once closed', () => {
-    const streamer = new ClipPageStreamer(fakeEngine([]));
+    const streamer = new ClipPageStreamer({ engine: fakeEngine([]) });
     streamer.destroy();
     expect(() =>
       streamer.addSource({
@@ -249,7 +249,7 @@ describe('ClipPageStreamer', () => {
   it('honors pages already resident before registration', async () => {
     const engine = fakeEngine([{ clipId: 1, channel: 0, sample: 0 }]);
     const binding = fakeBinding();
-    const streamer = new ClipPageStreamer(engine, { readAheadPages: 1, retainBehindPages: 0 });
+    const streamer = new ClipPageStreamer({ engine, readAheadPages: 1, retainBehindPages: 0 });
     streamer.addSource(
       { clipId: 1, binding: binding as never, pageFrames: 4, numSamples: 4000 },
       [0],
@@ -264,7 +264,7 @@ describe('ClipPageStreamer', () => {
   it('drops a page from the resident set when its fetch reports a miss', async () => {
     const engine = fakeEngine([{ clipId: 1, channel: 0, sample: 0 }]);
     const binding = fakeBinding({ failPages: new Set([1]) });
-    const streamer = new ClipPageStreamer(engine, { readAheadPages: 1, retainBehindPages: 0 });
+    const streamer = new ClipPageStreamer({ engine, readAheadPages: 1, retainBehindPages: 0 });
     streamer.addSource({ clipId: 1, binding: binding as never, pageFrames: 4, numSamples: 4000 });
 
     await streamer.pump();
@@ -279,7 +279,7 @@ describe('ClipPageStreamer', () => {
   it('clamps the window to the final page of the clip', async () => {
     const engine = fakeEngine([{ clipId: 1, channel: 0, sample: 20 }]);
     const binding = fakeBinding();
-    const streamer = new ClipPageStreamer(engine, { readAheadPages: 5, retainBehindPages: 0 });
+    const streamer = new ClipPageStreamer({ engine, readAheadPages: 5, retainBehindPages: 0 });
     // 24 samples / 4 = 6 pages (0..5).
     streamer.addSource({ clipId: 1, binding: binding as never, pageFrames: 4, numSamples: 24 });
 
@@ -292,18 +292,18 @@ describe('ClipPageStreamer', () => {
   it('ignores requests for unregistered clips', async () => {
     const engine = fakeEngine([{ clipId: 99, channel: 0, sample: 0 }]);
     const binding = fakeBinding();
-    const streamer = new ClipPageStreamer(engine);
+    const streamer = new ClipPageStreamer({ engine });
     streamer.addSource({ clipId: 1, binding: binding as never, pageFrames: 4, numSamples: 4000 });
 
     await streamer.pump();
     expect(binding.supplied).toEqual([]);
   });
 
-  it('closes every registered binding on close', () => {
+  it('destroys every registered binding on destroy', () => {
     const engine = fakeEngine([]);
     const a = fakeBinding();
     const b = fakeBinding();
-    const streamer = new ClipPageStreamer(engine);
+    const streamer = new ClipPageStreamer({ engine });
     streamer.addSource({ clipId: 1, binding: a as never, pageFrames: 4, numSamples: 400 });
     streamer.addSource({ clipId: 2, binding: b as never, pageFrames: 4, numSamples: 400 });
 
@@ -321,7 +321,23 @@ describe('ClipPageStreamer', () => {
       { maxRequestsPerPump: 0 },
       { maxRequestsPerPump: 2.5 },
     ]) {
-      expect(() => new ClipPageStreamer(engine, options)).toThrow(RangeError);
+      expect(() => new ClipPageStreamer({ engine, ...options })).toThrow(RangeError);
     }
+  });
+
+  it('takes one options object holding the engine and refuses any other shape', () => {
+    const engine = fakeEngine([]);
+    expect(() => new ClipPageStreamer(engine as never)).toThrow(
+      new TypeError("ClipPageStreamer: unknown request key 'popClipPageRequest'"),
+    );
+    expect(() => new ClipPageStreamer({ readAheadPages: 1 } as never)).toThrow(
+      new TypeError('ClipPageStreamer: engine must provide popClipPageRequest()'),
+    );
+    expect(() => new ClipPageStreamer(undefined as never)).toThrow(
+      new TypeError('ClipPageStreamer: options must be an object holding the engine'),
+    );
+    expect(() => new ClipPageStreamer({ engine, readAhead: 1 } as never)).toThrow(
+      new TypeError("ClipPageStreamer: unknown request key 'readAhead'"),
+    );
   });
 });

@@ -52,6 +52,12 @@ export interface SonareWorkletProcessorOptions {
   spectrumRingCapacity?: number;
 }
 
+/** Options of the `SonareWorkletProcessor` constructor: its `processorOptions` and the host it reports to. */
+export interface SonareWorkletProcessorConstructorOptions extends SonareWorkletProcessorOptions {
+  /** Where replies, meters and spectra go when the processor runs outside a worklet scope. Omitted: nowhere. */
+  transport?: WorkletTransport;
+}
+
 /** Options of the realtime-engine worklet processor. Ring capacities apply together with their shared buffer. */
 export interface SonareRealtimeEngineWorkletProcessorOptions {
   /**
@@ -160,6 +166,13 @@ export interface SonareRealtimeEngineWorkletProcessorOptions {
   cueOutput?: boolean;
 }
 
+/** Options of the `SonareRealtimeEngineWorkletProcessor` constructor: its `processorOptions` and the host it reports to. */
+export interface SonareRealtimeEngineWorkletProcessorConstructorOptions
+  extends SonareRealtimeEngineWorkletProcessorOptions {
+  /** Where replies and meters go when the processor runs outside a worklet scope. Omitted: nowhere. */
+  transport?: WorkletTransport;
+}
+
 /**
  * The processor reads an external vocoder carrier from the first channel of its second input
  * (`inputs[1]`); a missing second input is a silent carrier. The carrier is ignored unless the
@@ -185,6 +198,13 @@ export interface SonareRealtimeVoiceChangerWorkletProcessorOptions {
 export interface SonareStreamAnalyzerWorkletProcessorOptions {
   /** Mono samples per posted chunk. Integer of at least 128. Default 4096. */
   chunkFrames?: number;
+}
+
+/** Options of the `SonareStreamAnalyzerWorkletProcessor` constructor: its `processorOptions` and its port. */
+export interface SonareStreamAnalyzerWorkletProcessorConstructorOptions
+  extends SonareStreamAnalyzerWorkletProcessorOptions {
+  /** The port chunks are posted on. Omitted: chunks are dropped. */
+  port?: WorkletPort;
 }
 
 /** Options for creating a stream-analyzer worklet node. */
@@ -233,6 +253,13 @@ export interface SonarePlaybackWorkletProcessorOptions {
    * once the module is up and renders silence until then.
    */
   wasmBinary?: ArrayBuffer | Uint8Array;
+}
+
+/** Options of the `SonarePlaybackWorkletProcessor` constructor: its `processorOptions` and its port. */
+export interface SonarePlaybackWorkletProcessorConstructorOptions
+  extends SonarePlaybackWorkletProcessorOptions {
+  /** The port replies and diagnostics are posted on. Omitted: nowhere. */
+  port?: WorkletPort;
 }
 
 /** Options of `createPlaybackNode`, on top of the processor options. */

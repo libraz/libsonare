@@ -6,7 +6,11 @@ import {
 } from './opfs_clip_pages.js';
 import { OwnerEpoch } from './owner_epoch.js';
 import type { ClipPageProvider, RealtimeEngine } from './realtime_engine.js';
-import { assertNonNegativeInteger, assertPositiveInteger } from './validation.js';
+import {
+  assertKnownRequestKeys,
+  assertNonNegativeInteger,
+  assertPositiveInteger,
+} from './validation.js';
 
 /**
  * Minimal engine surface the streamer drives. {@link RealtimeEngine} satisfies
@@ -50,8 +54,10 @@ export interface ClipPageStreamSource {
   numSamples: number;
 }
 
-/** Prefetch and eviction policy of a {@link ClipPageStreamer}. */
+/** The engine a {@link ClipPageStreamer} drains, and its prefetch and eviction policy. */
 export interface ClipPageStreamerOptions {
+  /** The engine whose page misses the streamer drains. Required. */
+  engine: ClipPageStreamerEngine;
   /**
    * Pages to prefetch ahead of the page a miss was reported for. Larger values
    * hide fetch latency at the cost of more resident memory. Default 2.
@@ -107,8 +113,15 @@ export class ClipPageStreamer {
   private readonly epoch = new OwnerEpoch('ClipPageStreamer');
   private nextFetchToken = 1;
 
-  constructor(engine: ClipPageStreamerEngine, options: ClipPageStreamerOptions = {}) {
-    this.engine = engine;
+  constructor(options: ClipPageStreamerOptions) {
+    if (typeof options !== 'object' || options === null || Array.isArray(options)) {
+      throw new TypeError('ClipPageStreamer: options must be an object holding the engine');
+    }
+    assertKnownRequestKeys('ClipPageStreamer', options);
+    if (typeof options.engine?.popClipPageRequest !== 'function') {
+      throw new TypeError('ClipPageStreamer: engine must provide popClipPageRequest()');
+    }
+    this.engine = options.engine;
     streamerEpochs.set(this, this.epoch);
     // Refused rather than floored or clamped, so the streamer runs with what was asked for.
     this.readAheadPages = options.readAheadPages ?? 2;

@@ -8,8 +8,10 @@ import {
   createPlaybackNode,
   init as initWorklet,
   registerSonarePlaybackWorkletProcessor,
+  registerSonareRealtimeEngineWorkletProcessor,
   registerSonareRealtimeVoiceChangerWorkletProcessor,
   registerSonareStreamAnalyzerWorkletProcessor,
+  registerSonareWorkletProcessor,
   SonarePlaybackWorkletProcessor,
   SonareRealtimeVoiceChangerWorkletProcessor,
   SonareStreamAnalyzerNode,
@@ -122,6 +124,34 @@ describe('processorOptions refuses undeclared keys', () => {
       expect(() => new SonareStreamAnalyzerWorkletProcessor({ bufferSize: 4096 } as never)).toThrow(
         new TypeError("SonareStreamAnalyzerWorkletProcessor: unknown option 'bufferSize'"),
       );
+    });
+  });
+
+  describe('the port and transport a structured clone cannot carry', () => {
+    it.each([
+      ['playback', 'port', registerSonarePlaybackWorkletProcessor],
+      ['stream analyzer', 'port', registerSonareStreamAnalyzerWorkletProcessor],
+      ['mixer', 'transport', registerSonareWorkletProcessor],
+      ['realtime engine', 'transport', registerSonareRealtimeEngineWorkletProcessor],
+    ] as const)('the %s processorOptions refuse %s by name', (_label, key, register) => {
+      const Processor = registered(register, 'carry-test');
+      expect(() => new Processor({ processorOptions: { [key]: {} } })).toThrow(
+        new TypeError(`carry-test: unknown option '${key}'`),
+      );
+    });
+
+    it('the processor constructors take them as fields of their one options object', () => {
+      const posted: unknown[] = [];
+      const port = { postMessage: (message: unknown) => posted.push(message) };
+      const analyzer = new SonareStreamAnalyzerWorkletProcessor({ chunkFrames: 128, port });
+      expect(posted).toEqual([{ type: 'ready' }]);
+      expect(analyzer).toBeInstanceOf(SonareStreamAnalyzerWorkletProcessor);
+      expect(() => new SonareStreamAnalyzerWorkletProcessor({ transport: port } as never)).toThrow(
+        new TypeError("SonareStreamAnalyzerWorkletProcessor: unknown option 'transport'"),
+      );
+      expect(
+        () => new SonarePlaybackWorkletProcessor({ sampleRate: 48000, transport: port } as never),
+      ).toThrow(new TypeError("SonarePlaybackWorkletProcessor: unknown option 'transport'"));
     });
   });
 });

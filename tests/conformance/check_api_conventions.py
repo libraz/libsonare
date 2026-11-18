@@ -1497,13 +1497,6 @@ RULES: list[Rule] = [
         population=lambda r: r["kind"] in ("js-ctor", "js-create", "py-ctor"),
         violation=_construction_violation,
         derive=_construction_records,
-        pending={
-            "wasm:ClipPageStreamer": "take one config object holding the engine",
-            "wasm:SonarePlaybackWorkletProcessor": "fold port into the options object",
-            "wasm:SonareRealtimeEngineWorkletProcessor": "fold transport into the options object",
-            "wasm:SonareStreamAnalyzerWorkletProcessor": "fold port into the options object",
-            "wasm:SonareWorkletProcessor": "fold transport into the options object",
-        },
     ),
     Rule(
         name="input-types",
@@ -1645,10 +1638,6 @@ RULES: list[Rule] = [
             else None
         ),
         scan=_worklet_quantum_sites,
-        pending={
-            "wasm:bindings/wasm/src/worklet/playback-processor.ts:87": "default maxBlockSize to AUDIO_WORKLET_RENDER_QUANTUM",
-            "wasm:bindings/wasm/src/worklet/stream-analyzer-processor.ts:14": "define the minimum chunk from AUDIO_WORKLET_RENDER_QUANTUM",
-        },
     ),
     Rule(
         name="matrix-2d",

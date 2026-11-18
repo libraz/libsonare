@@ -94,15 +94,13 @@ function runMixerWorklet(
 ): MixerRun {
   const meters: WorkletMeterSnapshot[] = [];
   const output = new Float32Array(blocks * BLOCK);
-  const processor = new SonareWorkletProcessor(
-    {
-      sceneJson,
-      sampleRate: SR,
-      maxBlockSize: BLOCK,
-      meterIntervalFrames: BLOCK,
-    },
-    { onMeter: (meter) => meters.push(meter) },
-  );
+  const processor = new SonareWorkletProcessor({
+    sceneJson,
+    sampleRate: SR,
+    maxBlockSize: BLOCK,
+    meterIntervalFrames: BLOCK,
+    transport: { onMeter: (meter) => meters.push(meter) },
+  });
   try {
     for (let block = 0; block < blocks; block++) {
       const source = input.subarray(block * BLOCK, (block + 1) * BLOCK);
@@ -251,15 +249,13 @@ describe('mixer worklet true-peak metering', () => {
     // Filter history and the published snapshot both predate the gap; carrying
     // them across would report a peak from audio the caller had metering off for.
     const loud = interSamplePeakSine(BLOCK, 0.9);
-    const processor = new SonareWorkletProcessor(
-      {
-        sceneJson: JSON.stringify(mixingScenePreset('vocalReverbSend')),
-        sampleRate: SR,
-        maxBlockSize: BLOCK,
-        meterIntervalFrames: 0,
-      },
-      {},
-    );
+    const processor = new SonareWorkletProcessor({
+      sceneJson: JSON.stringify(mixingScenePreset('vocalReverbSend')),
+      sampleRate: SR,
+      maxBlockSize: BLOCK,
+      meterIntervalFrames: 0,
+      transport: {},
+    });
     try {
       for (let block = 0; block < 4; block++) {
         processor.process([[loud, loud]], [[new Float32Array(BLOCK), new Float32Array(BLOCK)]]);
@@ -275,15 +271,13 @@ describe('mixer worklet true-peak metering', () => {
   it('refuses a bad setMeterInterval value and keeps the previous interval', () => {
     const loud = interSamplePeakSine(BLOCK, 0.9);
     const meters: unknown[] = [];
-    const processor = new SonareWorkletProcessor(
-      {
-        sceneJson: JSON.stringify(mixingScenePreset('vocalReverbSend')),
-        sampleRate: SR,
-        maxBlockSize: BLOCK,
-        meterIntervalFrames: 0,
-      },
-      { onMeter: (meter) => meters.push({ ...meter }) },
-    );
+    const processor = new SonareWorkletProcessor({
+      sceneJson: JSON.stringify(mixingScenePreset('vocalReverbSend')),
+      sampleRate: SR,
+      maxBlockSize: BLOCK,
+      meterIntervalFrames: 0,
+      transport: { onMeter: (meter) => meters.push({ ...meter }) },
+    });
     const run = (blocks: number) => {
       for (let block = 0; block < blocks; block++) {
         processor.process([[loud, loud]], [[new Float32Array(BLOCK), new Float32Array(BLOCK)]]);

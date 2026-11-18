@@ -294,7 +294,7 @@ describe('worklet processors take their rate from the AudioWorkletGlobalScope', 
 
   describe('SonarePlaybackWorkletProcessor', () => {
     const make = (sampleRate?: number, port?: { postMessage: (message: unknown) => void }) =>
-      new SonarePlaybackWorkletProcessor({ config: SPEAKERS, sampleRate }, port);
+      new SonarePlaybackWorkletProcessor({ config: SPEAKERS, sampleRate, port });
 
     /** A reference renderer prepared explicitly at `rate`. */
     function referenceLatency(rate: number): number {

@@ -451,16 +451,14 @@ describe('Sonare worklet ring buffers', () => {
         const reference = Mixer.fromJson(sceneJson, { sampleRate: 48000, maxBlockSize: 128 });
         const stripCount = reference.stripCount;
         reference.destroy();
-        const processor = new SonareWorkletProcessor(
-          {
-            sceneJson,
-            sampleRate: 48000,
-            maxBlockSize: 128,
-            meterIntervalFrames: 128,
-            meterSharedBuffer: ring.sharedBuffer,
-          },
-          {},
-        );
+        const processor = new SonareWorkletProcessor({
+          sceneJson,
+          sampleRate: 48000,
+          maxBlockSize: 128,
+          meterIntervalFrames: 128,
+          meterSharedBuffer: ring.sharedBuffer,
+          transport: {},
+        });
         try {
           for (let block = 0; block < 4; block++) {
             const inputs = Array.from({ length: stripCount }, () => [
@@ -542,16 +540,14 @@ describe('Sonare worklet ring buffers', () => {
       const sceneJson = JSON.stringify(mixingScenePreset('vocalReverbSend'));
       // A transport must be present for the processor to compute and publish
       // meters; with a meterSharedBuffer the records go to the ring (not postMessage).
-      const processor = new SonareWorkletProcessor(
-        {
-          sceneJson,
-          sampleRate,
-          maxBlockSize: blockSize,
-          meterIntervalFrames: blockSize,
-          meterSharedBuffer: ringSharedBuffer,
-        },
-        {},
-      );
+      const processor = new SonareWorkletProcessor({
+        sceneJson,
+        sampleRate,
+        maxBlockSize: blockSize,
+        meterIntervalFrames: blockSize,
+        meterSharedBuffer: ringSharedBuffer,
+        transport: {},
+      });
       // One meter record is published per processed block.
       const reference = Mixer.fromJson(sceneJson, {
         sampleRate: sampleRate,

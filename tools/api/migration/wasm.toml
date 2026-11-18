@@ -14698,6 +14698,45 @@ domain = "engine"
 rule = "construction"
 
 [[entry]]
+kind = "option"
+old = "SonarePlaybackWorkletProcessor.constructor(port)"
+removed = "pass port in the one options object: new SonarePlaybackWorkletProcessor({ ...processorOptions, port }), typed SonarePlaybackWorkletProcessorConstructorOptions; processorOptions itself still refuses port"
+domain = "engine"
+rule = "construction"
+entry = "./worklet"
+
+[[entry]]
+kind = "option"
+old = "SonareStreamAnalyzerWorkletProcessor.constructor(port)"
+removed = "pass port in the one options object: new SonareStreamAnalyzerWorkletProcessor({ ...processorOptions, port }), typed SonareStreamAnalyzerWorkletProcessorConstructorOptions; processorOptions itself still refuses port"
+domain = "analysis"
+rule = "construction"
+entry = "./worklet"
+
+[[entry]]
+kind = "option"
+old = "SonareWorkletProcessor.constructor(transport)"
+removed = "pass transport in the one options object: new SonareWorkletProcessor({ ...processorOptions, transport }), typed SonareWorkletProcessorConstructorOptions; processorOptions itself still refuses transport"
+domain = "engine"
+rule = "construction"
+entry = "./worklet"
+
+[[entry]]
+kind = "option"
+old = "SonareRealtimeEngineWorkletProcessor.constructor(transport)"
+removed = "pass transport in the one options object: new SonareRealtimeEngineWorkletProcessor({ ...processorOptions, transport }), typed SonareRealtimeEngineWorkletProcessorConstructorOptions; processorOptions itself still refuses transport"
+domain = "engine"
+rule = "construction"
+entry = "./worklet"
+
+[[entry]]
+kind = "option"
+old = "ClipPageStreamer.constructor(engine)"
+removed = "pass the engine in the one options object: new ClipPageStreamer({ engine, readAheadPages, retainBehindPages, maxRequestsPerPump })"
+domain = "project"
+rule = "construction"
+
+[[entry]]
 kind = "method"
 old = "RealtimeEngine.prepare"
 changed = "prepare(config: RealtimeEngineConfig) takes the constructor object with the same defaults and validation"

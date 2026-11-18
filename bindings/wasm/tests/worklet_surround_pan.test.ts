@@ -79,10 +79,12 @@ describe('SonareEngine surround pan at numChannels 6', () => {
       pan: { azimuth: -110, elevation: 0, divergence: 0, lfe: 0, distance: 1 },
     });
 
-    const processor = new SonareRealtimeEngineWorkletProcessor(
-      { sampleRate: SR, maxBlockSize: BLOCK, numChannels: PLANES },
-      { postMessage: () => undefined },
-    );
+    const processor = new SonareRealtimeEngineWorkletProcessor({
+      sampleRate: SR,
+      maxBlockSize: BLOCK,
+      numChannels: PLANES,
+      transport: { postMessage: () => undefined },
+    });
     try {
       const replay = (messages: unknown[]): void => {
         for (const message of messages) {

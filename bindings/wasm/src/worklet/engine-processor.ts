@@ -16,10 +16,7 @@ import {
   type SonareEngineTransportResponseMessage,
   type TypedWorkletTransport,
 } from '../internal/worklet_messages.js';
-import type {
-  SonareRealtimeEngineWorkletProcessorOptions,
-  WorkletTransport,
-} from '../public_types_worklet.js';
+import type { SonareRealtimeEngineWorkletProcessorConstructorOptions } from '../public_types_worklet.js';
 import { copyPlanesToOutput, type WorkletInput, type WorkletOutput } from './audio_types.js';
 import { buildCaptureConfig } from './engine-offline.js';
 import {
@@ -201,8 +198,12 @@ export class SonareRealtimeEngineWorkletProcessor {
     dropped: 0,
   };
 
-  constructor(options: SonareRealtimeEngineWorkletProcessorOptions, transport?: WorkletTransport) {
-    assertKnownProcessorOptions('SonareRealtimeEngineWorkletProcessor', 'engineProcessor', options);
+  constructor(options: SonareRealtimeEngineWorkletProcessorConstructorOptions) {
+    assertKnownProcessorOptions(
+      'SonareRealtimeEngineWorkletProcessor',
+      'engineProcessorConstructor',
+      options,
+    );
     this.sampleRate = resolveScopeSampleRate(
       options.sampleRate,
       'SonareRealtimeEngineWorkletProcessor',
@@ -210,7 +211,7 @@ export class SonareRealtimeEngineWorkletProcessor {
     this.clipPageRepostFrames = Math.max(1, Math.round(this.sampleRate * CLIP_PAGE_REPOST_SECONDS));
     this.blockSize = options.maxBlockSize ?? AUDIO_WORKLET_RENDER_QUANTUM;
     this.numChannels = requireChannelCount(options.numChannels, 'numChannels');
-    this.transport = transport;
+    this.transport = options.transport;
     // Zero is the off switch for meter publication, so the floor is 0.
     this.meterIntervalFrames = requireIntegerOption(
       options.meterIntervalFrames,

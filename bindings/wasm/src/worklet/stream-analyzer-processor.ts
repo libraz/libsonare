@@ -1,17 +1,22 @@
 import { ErrorCode, SonareError } from '../errors.js';
 import type { SonareStreamAnalyzerChunkMessage } from '../internal/stream_analyzer_messages.js';
 import type { WorkletPort } from '../internal/worklet_messages.js';
-import type { SonareStreamAnalyzerWorkletProcessorOptions } from '../public_types_worklet.js';
+import type {
+  SonareStreamAnalyzerWorkletProcessorConstructorOptions,
+  SonareStreamAnalyzerWorkletProcessorOptions,
+} from '../public_types_worklet.js';
 import type { WorkletInput, WorkletOutput } from './audio_types.js';
 import {
   assertKnownProcessorOptions,
   isStreamAnalyzerMessage,
   requireIntegerOption,
 } from './guards.js';
+import { AUDIO_WORKLET_RENDER_QUANTUM } from './render_quantum.js';
 
 /** Default and minimum mono samples per posted chunk. */
 export const STREAM_ANALYZER_DEFAULT_CHUNK_FRAMES = 4096;
-const STREAM_ANALYZER_MIN_CHUNK_FRAMES = 128;
+// A chunk holds at least one render quantum.
+const STREAM_ANALYZER_MIN_CHUNK_FRAMES = AUDIO_WORKLET_RENDER_QUANTUM;
 // Chunk buffers in flight at once: one filling, the rest posted or awaiting return.
 const POOL_BUFFERS = 4;
 const EMPTY = new Float32Array(0);
@@ -48,15 +53,15 @@ export class SonareStreamAnalyzerWorkletProcessor {
   private readonly chunkMessage: SonareStreamAnalyzerChunkMessage;
   private readonly transferList: ArrayBuffer[] = [];
 
-  constructor(
-    options: SonareStreamAnalyzerWorkletProcessorOptions = {},
-    private readonly port?: WorkletPort,
-  ) {
+  private readonly port?: WorkletPort;
+
+  constructor(options: SonareStreamAnalyzerWorkletProcessorConstructorOptions = {}) {
     assertKnownProcessorOptions(
       'SonareStreamAnalyzerWorkletProcessor',
-      'streamAnalyzerProcessor',
+      'streamAnalyzerProcessorConstructor',
       options,
     );
+    this.port = options.port;
     this.chunkFrames = resolveStreamAnalyzerChunkFrames(options.chunkFrames);
     for (let i = 0; i < POOL_BUFFERS; i++) {
       this.recycle(new Float32Array(this.chunkFrames));
@@ -193,7 +198,7 @@ export function registerSonareStreamAnalyzerWorkletProcessor(
       const port = this.port;
       const processorOptions = options?.processorOptions ?? {};
       assertKnownProcessorOptions(name, 'streamAnalyzerProcessor', processorOptions);
-      this.bridge = new SonareStreamAnalyzerWorkletProcessor(processorOptions, port);
+      this.bridge = new SonareStreamAnalyzerWorkletProcessor({ ...processorOptions, port });
       const onMessage = (event: { data: unknown }) => {
         if (isStreamAnalyzerMessage(event.data)) {
           this.bridge.receiveMessage(event.data);

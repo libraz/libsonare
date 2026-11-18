@@ -4,9 +4,9 @@ import { Mixer } from '../index.js';
 import { failurePayload } from '../internal/failure_payload.js';
 import type { SonareWorkletMessage, TypedWorkletTransport } from '../internal/worklet_messages.js';
 import type {
+  SonareWorkletProcessorConstructorOptions,
   SonareWorkletProcessorOptions,
   WorkletPort,
-  WorkletTransport,
 } from '../public_types_worklet.js';
 import { leadingSamples, type WorkletInput, type WorkletOutput } from './audio_types.js';
 import { initializeEmbindInWorklet, isEmbindReady } from './embind-init.js';
@@ -87,8 +87,8 @@ export class SonareWorkletProcessor {
   private spectrumRing?: SharedSpectrumRingWriter;
   private spectrumBands: Float32Array;
 
-  constructor(options: SonareWorkletProcessorOptions, transport?: WorkletTransport) {
-    assertKnownProcessorOptions('SonareWorkletProcessor', 'mixerProcessor', options);
+  constructor(options: SonareWorkletProcessorConstructorOptions) {
+    assertKnownProcessorOptions('SonareWorkletProcessor', 'mixerProcessorConstructor', options);
     if (!options.sceneJson) {
       throw new TypeError('sceneJson is required.');
     }
@@ -107,7 +107,7 @@ export class SonareWorkletProcessor {
       'spectrumIntervalFrames',
       0,
     );
-    this.transport = transport;
+    this.transport = options.transport;
     this.meterRing = options.meterSharedBuffer
       ? meterRingFromSharedBuffer(options.meterSharedBuffer, options.meterRingCapacity)
       : undefined;
@@ -498,8 +498,9 @@ export function registerSonareWorkletProcessor(name = 'sonare-worklet-processor'
         }
       };
       const start = () => {
-        this.bridge = new SonareWorkletProcessor(processorOptions, {
-          postMessage: (message) => port?.postMessage?.(message),
+        this.bridge = new SonareWorkletProcessor({
+          ...processorOptions,
+          transport: { postMessage: (message) => port?.postMessage?.(message) },
         });
         for (const message of this.pendingMessages.splice(0)) {
           deliver(this.bridge, message);

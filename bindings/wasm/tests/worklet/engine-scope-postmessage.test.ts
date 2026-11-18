@@ -100,18 +100,16 @@ describe('realtime engine scope postMessage transport', () => {
   it('publishes real native scope records over postMessage with transferred buffers', () => {
     const posted: Array<{ message: unknown; transfer?: Transferable[] }> = [];
     const blockSize = 256;
-    const processor = new SonareRealtimeEngineWorkletProcessor(
-      {
-        sampleRate: 48000,
-        maxBlockSize: blockSize,
-        numChannels: 2,
-        scopeIntervalFrames: blockSize,
-        scopeBands: 32,
-      },
-      {
+    const processor = new SonareRealtimeEngineWorkletProcessor({
+      sampleRate: 48000,
+      maxBlockSize: blockSize,
+      numChannels: 2,
+      scopeIntervalFrames: blockSize,
+      scopeBands: 32,
+      transport: {
         postMessage: (message, transfer) => posted.push({ message, transfer }),
       },
-    );
+    });
     const control = new SonareRealtimeEngineWorkletProcessor({
       sampleRate: 48000,
       maxBlockSize: blockSize,
@@ -187,17 +185,15 @@ describe('realtime engine scope postMessage transport', () => {
     }
     const transport = new ClassTransport();
     const blockSize = 256;
-    const processor = new SourceSonareRealtimeEngineWorkletProcessor(
-      {
-        sampleRate: 48000,
-        maxBlockSize: blockSize,
-        numChannels: 2,
-        scopeIntervalFrames: blockSize,
-      },
-      transport as unknown as ConstructorParameters<
+    const processor = new SourceSonareRealtimeEngineWorkletProcessor({
+      sampleRate: 48000,
+      maxBlockSize: blockSize,
+      numChannels: 2,
+      scopeIntervalFrames: blockSize,
+      transport: transport as unknown as ConstructorParameters<
         typeof SourceSonareRealtimeEngineWorkletProcessor
-      >[1],
-    );
+      >[0]['transport'],
+    });
     try {
       processor.receiveCommand({
         type: SourceSonareEngineCommandType.TransportPlay,
@@ -220,10 +216,13 @@ describe('realtime engine scope postMessage transport', () => {
   it('does not configure or publish scope when the interval is zero', () => {
     const posted: unknown[] = [];
     const configureScopeTelemetry = vi.spyOn(RealtimeEngine.prototype, 'configureScopeTelemetry');
-    const processor = new SourceSonareRealtimeEngineWorkletProcessor(
-      { sampleRate: 48000, maxBlockSize: 128, numChannels: 2, scopeIntervalFrames: 0 },
-      { postMessage: (message) => posted.push(message) },
-    );
+    const processor = new SourceSonareRealtimeEngineWorkletProcessor({
+      sampleRate: 48000,
+      maxBlockSize: 128,
+      numChannels: 2,
+      scopeIntervalFrames: 0,
+      transport: { postMessage: (message) => posted.push(message) },
+    });
     const engine = (processor as unknown as { engine: RealtimeEngine }).engine;
     const popScopeTelemetryToScratch = vi.spyOn(
       engineNativeHandle(engine),

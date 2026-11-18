@@ -2,6 +2,8 @@
  * Declared keys of every request-object entry point, checked against the request
  * types at compile time. `requestObject` refuses any other key by name.
  */
+
+import type { ClipPageStreamerOptions } from './clip_page_streamer.js';
 import type {
   AssignNoteTargetsRequest,
   DecomposeNotePitchRequest,
@@ -284,12 +286,16 @@ import type {
 import type { ProjectVocalEditApplyRequest } from './public_types_vocal_project.js';
 import type {
   PlaybackNodeOptions,
+  SonarePlaybackWorkletProcessorConstructorOptions,
   SonarePlaybackWorkletProcessorOptions,
   SonareRealtimeEngineNodeOptions,
+  SonareRealtimeEngineWorkletProcessorConstructorOptions,
   SonareRealtimeEngineWorkletProcessorOptions,
   SonareRealtimeVoiceChangerWorkletProcessorOptions,
   SonareStreamAnalyzerNodeOptions,
+  SonareStreamAnalyzerWorkletProcessorConstructorOptions,
   SonareStreamAnalyzerWorkletProcessorOptions,
+  SonareWorkletProcessorConstructorOptions,
   SonareWorkletProcessorOptions,
 } from './public_types_worklet.js';
 import type {
@@ -2853,6 +2859,12 @@ const ApplyProjectVocalEditRequestKeys = keysOf<ProjectVocalEditApplyRequest>()(
   'renderToken',
   'vocalState',
 ]);
+const ClipPageStreamerOptionsKeys = keysOf<ClipPageStreamerOptions>()([
+  'engine',
+  'readAheadPages',
+  'retainBehindPages',
+  'maxRequestsPerPump',
+]);
 const VocalApplyRequestKeys = keysOf<VocalApplyRequest>()(['expectedGeneration', 'operations']);
 const VocalRenderRequestKeys = keysOf<VocalRenderRequest>()(['range', 'requestId', 'cancel']);
 
@@ -2861,6 +2873,7 @@ export const REQUEST_SHAPES = {
   setPartRig: { keys: SetPartRigRequestKeys },
   renderOffline: { keys: RenderOfflineRequestKeys },
   RealtimeEngine: { keys: EngineConfigRequestKeys },
+  ClipPageStreamer: { keys: ClipPageStreamerOptionsKeys },
   prepare: { keys: EngineConfigRequestKeys },
   setBusSidechain: { keys: SidechainSourceRequestKeys },
   setStripSidechain: { keys: SidechainSourceRequestKeys },
@@ -3197,9 +3210,10 @@ export const REQUEST_SHAPES = {
 } as const satisfies Readonly<Record<string, RequestShape>>;
 
 /**
- * Declared `processorOptions` keys of each AudioWorklet processor, and the option
- * keys of the main-thread factory that builds its node. Checked by
- * `assertKnownProcessorOptions` on both sides of the port.
+ * Declared `processorOptions` keys of each AudioWorklet processor, the option
+ * keys of the main-thread factory that builds its node, and the keys of the
+ * processor's own constructor, which adds the port or transport a structured
+ * clone cannot carry. Checked by `assertKnownProcessorOptions`.
  */
 export const PROCESSOR_OPTION_KEYS = {
   engineProcessor: keysOf<SonareRealtimeEngineWorkletProcessorOptions>()([
@@ -3225,6 +3239,31 @@ export const PROCESSOR_OPTION_KEYS = {
     'externalMidiSharedBuffer',
     'externalMidiRingCapacity',
     'cueOutput',
+  ]),
+  engineProcessorConstructor: keysOf<SonareRealtimeEngineWorkletProcessorConstructorOptions>()([
+    'wasmBinary',
+    'initialSyncMessages',
+    'initialCommands',
+    'sampleRate',
+    'maxBlockSize',
+    'numChannels',
+    'meterIntervalFrames',
+    'commandSharedBuffer',
+    'commandRingCapacity',
+    'telemetrySharedBuffer',
+    'telemetryRingCapacity',
+    'meterSharedBuffer',
+    'meterRingCapacity',
+    'scopeIntervalFrames',
+    'scopeBands',
+    'scopeSharedBuffer',
+    'scopeRingCapacity',
+    'clipPageRequestSharedBuffer',
+    'clipPageRequestRingCapacity',
+    'externalMidiSharedBuffer',
+    'externalMidiRingCapacity',
+    'cueOutput',
+    'transport',
   ]),
   engineNode: keysOf<SonareRealtimeEngineNodeOptions>()([
     'wasmBinary',
@@ -3271,6 +3310,21 @@ export const PROCESSOR_OPTION_KEYS = {
     'spectrumSharedBuffer',
     'spectrumRingCapacity',
   ]),
+  mixerProcessorConstructor: keysOf<SonareWorkletProcessorConstructorOptions>()([
+    'wasmBinary',
+    'sceneJson',
+    'sampleRate',
+    'maxBlockSize',
+    'stripCount',
+    'meterIntervalFrames',
+    'meterSharedBuffer',
+    'meterRingCapacity',
+    'spectrumIntervalFrames',
+    'spectrumBands',
+    'spectrumSharedBuffer',
+    'spectrumRingCapacity',
+    'transport',
+  ]),
   voiceChangerProcessor: keysOf<SonareRealtimeVoiceChangerWorkletProcessorOptions>()([
     'config',
     'sampleRate',
@@ -3285,6 +3339,14 @@ export const PROCESSOR_OPTION_KEYS = {
     'sampleRate',
     'wasmBinary',
   ]),
+  playbackProcessorConstructor: keysOf<SonarePlaybackWorkletProcessorConstructorOptions>()([
+    'config',
+    'hrtf',
+    'maxBlockSize',
+    'sampleRate',
+    'wasmBinary',
+    'port',
+  ]),
   playbackNode: keysOf<PlaybackNodeOptions>()([
     'config',
     'hrtf',
@@ -3295,6 +3357,8 @@ export const PROCESSOR_OPTION_KEYS = {
     'nodeFactory',
   ]),
   streamAnalyzerProcessor: keysOf<SonareStreamAnalyzerWorkletProcessorOptions>()(['chunkFrames']),
+  streamAnalyzerProcessorConstructor:
+    keysOf<SonareStreamAnalyzerWorkletProcessorConstructorOptions>()(['chunkFrames', 'port']),
   streamAnalyzerNode: keysOf<SonareStreamAnalyzerNodeOptions>()([
     'chunkFrames',
     'config',

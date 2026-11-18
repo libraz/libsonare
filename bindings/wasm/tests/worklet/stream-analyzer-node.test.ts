@@ -69,7 +69,7 @@ function feed(processor: SonareStreamAnalyzerWorkletProcessor, quanta: number, v
 describe('SonareStreamAnalyzerWorkletProcessor', () => {
   it('announces itself and posts a chunk once chunkFrames samples are in', () => {
     const { posted, chunks, port } = chunkRecorder();
-    const processor = new SonareStreamAnalyzerWorkletProcessor({ chunkFrames: 256 }, port);
+    const processor = new SonareStreamAnalyzerWorkletProcessor({ chunkFrames: 256, port });
     expect(posted[0].message).toEqual({ type: 'ready' });
     feed(processor, 1);
     expect(chunks).toHaveLength(0);
@@ -82,22 +82,22 @@ describe('SonareStreamAnalyzerWorkletProcessor', () => {
 
   it('defaults to 4096-sample chunks and refuses a chunk shorter than a render quantum', () => {
     const { chunks, port } = chunkRecorder();
-    const processor = new SonareStreamAnalyzerWorkletProcessor({}, port);
+    const processor = new SonareStreamAnalyzerWorkletProcessor({ port });
     feed(processor, 31);
     expect(chunks).toHaveLength(0);
     feed(processor, 1);
     expect(chunks[0].samples).toHaveLength(4096);
-    expect(() => new SonareStreamAnalyzerWorkletProcessor({ chunkFrames: 64 }, port)).toThrow(
+    expect(() => new SonareStreamAnalyzerWorkletProcessor({ chunkFrames: 64, port })).toThrow(
       RangeError,
     );
-    expect(() => new SonareStreamAnalyzerWorkletProcessor({ chunkFrames: 300.5 }, port)).toThrow(
+    expect(() => new SonareStreamAnalyzerWorkletProcessor({ chunkFrames: 300.5, port })).toThrow(
       /chunkFrames must be an integer of at least 128/,
     );
   });
 
   it('averages every input channel, not just the first', () => {
     const { chunks, port } = chunkRecorder();
-    const processor = new SonareStreamAnalyzerWorkletProcessor({ chunkFrames: 128 }, port);
+    const processor = new SonareStreamAnalyzerWorkletProcessor({ chunkFrames: 128, port });
     processor.process(quantum([1, 3]), []);
     processor.process(quantum([0, 0, 0.6]), []);
     processor.process(quantum([-0.5]), []);
@@ -109,7 +109,7 @@ describe('SonareStreamAnalyzerWorkletProcessor', () => {
 
   it('keeps samples contiguous when a chunk ends inside a render quantum', () => {
     const { chunks, port } = chunkRecorder();
-    const processor = new SonareStreamAnalyzerWorkletProcessor({ chunkFrames: 192 }, port);
+    const processor = new SonareStreamAnalyzerWorkletProcessor({ chunkFrames: 192, port });
     let n = 0;
     for (let q = 0; q < 6; q++) {
       const block = new Float32Array(QUANTUM);
@@ -126,14 +126,14 @@ describe('SonareStreamAnalyzerWorkletProcessor', () => {
 
   it('posts through one reused message object', () => {
     const { chunks, port } = chunkRecorder();
-    const processor = new SonareStreamAnalyzerWorkletProcessor({ chunkFrames: 128 }, port);
+    const processor = new SonareStreamAnalyzerWorkletProcessor({ chunkFrames: 128, port });
     feed(processor, 3);
     expect(chunks[0].message).toBe(chunks[1].message);
   });
 
   it('drops a chunk when the pool is empty and flags the discontinuity on the next one', () => {
     const { chunks, port } = chunkRecorder();
-    const processor = new SonareStreamAnalyzerWorkletProcessor({ chunkFrames: 128 }, port);
+    const processor = new SonareStreamAnalyzerWorkletProcessor({ chunkFrames: 128, port });
     feed(processor, 4);
     expect(chunks).toHaveLength(4);
     // Nothing returned yet: this chunk has no buffer to fill.
@@ -156,7 +156,7 @@ describe('SonareStreamAnalyzerWorkletProcessor', () => {
 
   it('recycles a returned buffer so the stream continues without a gap', () => {
     const { chunks, port } = chunkRecorder();
-    const processor = new SonareStreamAnalyzerWorkletProcessor({ chunkFrames: 128 }, port);
+    const processor = new SonareStreamAnalyzerWorkletProcessor({ chunkFrames: 128, port });
     for (let i = 0; i < 20; i++) {
       feed(processor, 1, i);
       processor.receiveMessage({ type: 'recycle', samples: chunks[i].samples });
@@ -168,7 +168,7 @@ describe('SonareStreamAnalyzerWorkletProcessor', () => {
 
   it('ignores a recycled buffer of the wrong size', () => {
     const { chunks, port } = chunkRecorder();
-    const processor = new SonareStreamAnalyzerWorkletProcessor({ chunkFrames: 128 }, port);
+    const processor = new SonareStreamAnalyzerWorkletProcessor({ chunkFrames: 128, port });
     feed(processor, 4);
     processor.receiveMessage({ type: 'recycle', samples: new Float32Array(64) });
     feed(processor, 2);
@@ -177,7 +177,7 @@ describe('SonareStreamAnalyzerWorkletProcessor', () => {
 
   it('leaves a quantum with no connected input alone and stops after destroy', () => {
     const { chunks, port } = chunkRecorder();
-    const processor = new SonareStreamAnalyzerWorkletProcessor({ chunkFrames: 128 }, port);
+    const processor = new SonareStreamAnalyzerWorkletProcessor({ chunkFrames: 128, port });
     expect(processor.process([[]], [])).toBe(true);
     feed(processor, 1);
     expect(chunks).toHaveLength(1);

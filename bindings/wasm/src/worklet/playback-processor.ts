@@ -8,6 +8,7 @@ import type {
 import type { PlaybackRendererConfig } from '../public_types_playback.js';
 import type {
   PlaybackNodeOptions,
+  SonarePlaybackWorkletProcessorConstructorOptions,
   SonarePlaybackWorkletProcessorDiagnostics,
   SonarePlaybackWorkletProcessorOptions,
   WorkletPort,
@@ -27,6 +28,7 @@ import {
   resolveContextSampleRate,
   resolveScopeSampleRate,
 } from './guards.js';
+import { AUDIO_WORKLET_RENDER_QUANTUM } from './render_quantum.js';
 
 /** Largest input channel count any layout accepts (7.1). */
 const MAX_INPUT_CHANNELS = 8;
@@ -81,10 +83,19 @@ export class SonarePlaybackWorkletProcessor {
   private unsupportedInputBlocks = 0;
   private destroyed = false;
 
-  constructor(options: SonarePlaybackWorkletProcessorOptions = {}, port?: WorkletPort) {
-    assertKnownProcessorOptions('SonarePlaybackWorkletProcessor', 'playbackProcessor', options);
-    this.port = port;
-    this.maxBlockSize = requireIntegerOption(options.maxBlockSize, 128, 'maxBlockSize', 1);
+  constructor(options: SonarePlaybackWorkletProcessorConstructorOptions = {}) {
+    assertKnownProcessorOptions(
+      'SonarePlaybackWorkletProcessor',
+      'playbackProcessorConstructor',
+      options,
+    );
+    this.port = options.port;
+    this.maxBlockSize = requireIntegerOption(
+      options.maxBlockSize,
+      AUDIO_WORKLET_RENDER_QUANTUM,
+      'maxBlockSize',
+      1,
+    );
     const sampleRate = resolveScopeSampleRate(options.sampleRate, 'SonarePlaybackWorkletProcessor');
     const hrtf = options.hrtf ? HrtfSet.fromBytes(new Uint8Array(options.hrtf)) : undefined;
     try {
@@ -282,7 +293,7 @@ export function registerSonarePlaybackWorkletProcessor(name = 'sonare-playback-p
       const processorOptions = options?.processorOptions ?? {};
       assertKnownProcessorOptions(name, 'playbackProcessor', processorOptions);
       const start = () => {
-        this.bridge = new SonarePlaybackWorkletProcessor(processorOptions, port);
+        this.bridge = new SonarePlaybackWorkletProcessor({ ...processorOptions, port });
         for (const message of this.pendingMessages.splice(0)) {
           this.bridge.receiveMessage(message);
         }

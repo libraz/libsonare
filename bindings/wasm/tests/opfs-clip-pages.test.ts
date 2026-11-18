@@ -361,14 +361,14 @@ async function createWiredSabEngine(): Promise<{
     maxBlockSize: 128,
     numChannels: 1,
     nodeFactory: (_context, _name, options) => {
-      processor = new SonareRealtimeEngineWorkletProcessor(
-        options.processorOptions as ConstructorParameters<
+      processor = new SonareRealtimeEngineWorkletProcessor({
+        ...(options.processorOptions as ConstructorParameters<
           typeof SonareRealtimeEngineWorkletProcessor
-        >[0],
-        {
+        >[0]),
+        transport: {
           postMessage: (message) => port.onmessage?.({ data: message } as MessageEvent<unknown>),
         },
-      );
+      });
       queueMicrotask(() => port.onmessage?.({ data: { type: 'ready' } } as MessageEvent));
       return { port, disconnect: () => undefined } as unknown as AudioWorkletNode;
     },
@@ -418,14 +418,14 @@ describe('worklet attachOpfsClipStream', () => {
       maxBlockSize: blockSize,
       numChannels: 1,
       nodeFactory: (_context, _name, options) => {
-        processor = new SonareRealtimeEngineWorkletProcessor(
-          options.processorOptions as ConstructorParameters<
+        processor = new SonareRealtimeEngineWorkletProcessor({
+          ...(options.processorOptions as ConstructorParameters<
             typeof SonareRealtimeEngineWorkletProcessor
-          >[0],
-          {
+          >[0]),
+          transport: {
             postMessage: (message) => port.onmessage?.({ data: message } as MessageEvent<unknown>),
           },
-        );
+        });
         // A browser worklet initializes asynchronously. Mirror that timing so
         // the node has installed its port handler before the ready signal.
         queueMicrotask(() => port.onmessage?.({ data: { type: 'ready' } } as MessageEvent));
@@ -640,7 +640,7 @@ describe('attachOpfsClipStream', () => {
   it('rejects and closes the binding when the streamer closes while priming', async () => {
     const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 8 });
     const worker = new DeferredClipPageWorker();
-    const streamer = new ClipPageStreamer(engine);
+    const streamer = new ClipPageStreamer({ engine });
     try {
       const attach = attachOpfsClipStream(streamer, {
         path: 'clips/clip.f32',
@@ -675,7 +675,7 @@ describe('attachOpfsClipStream', () => {
     const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 8 });
     const worker = new FakeClipPageWorker();
     // Default window retains page 0 behind the frontier, so a seek back replays it.
-    const streamer = new ClipPageStreamer(engine);
+    const streamer = new ClipPageStreamer({ engine });
     const { provider } = await attachOpfsClipStream(streamer, {
       path: 'clips/clip.f32',
       clipId: 400,

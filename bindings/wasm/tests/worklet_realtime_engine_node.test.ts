@@ -2098,10 +2098,12 @@ describe('SonareRealtimeEngineNode', () => {
             onmessage: undefined,
           }),
       });
-      const live = new SonareRealtimeEngineWorkletProcessor(
-        { sampleRate: 48000, maxBlockSize: 128, numChannels: 2 },
-        { postMessage: (message) => livePosted.push(message) },
-      );
+      const live = new SonareRealtimeEngineWorkletProcessor({
+        sampleRate: 48000,
+        maxBlockSize: 128,
+        numChannels: 2,
+        transport: { postMessage: (message) => livePosted.push(message) },
+      });
       try {
         engine.setTrackBuses([{ busId: 100 }]);
         engine.setBusStrip(
@@ -2192,10 +2194,12 @@ describe('SonareRealtimeEngineNode', () => {
             onmessage: undefined,
           }),
       });
-      const live = new SonareRealtimeEngineWorkletProcessor(
-        { sampleRate: 48000, maxBlockSize: blockSize, numChannels: 2 },
-        { postMessage: () => undefined },
-      );
+      const live = new SonareRealtimeEngineWorkletProcessor({
+        sampleRate: 48000,
+        maxBlockSize: blockSize,
+        numChannels: 2,
+        transport: { postMessage: () => undefined },
+      });
       try {
         engine.setTrackBuses([{ busId: 100 }, { busId: 200 }]);
         engine.setTrackOutputBus(7, 100);
@@ -2363,10 +2367,12 @@ describe('SonareRealtimeEngineNode', () => {
             onmessage: undefined,
           }),
       });
-      const live = new SonareRealtimeEngineWorkletProcessor(
-        { sampleRate: 48000, maxBlockSize: blockSize, numChannels: 2 },
-        { postMessage: (message) => livePosted.push(message) },
-      );
+      const live = new SonareRealtimeEngineWorkletProcessor({
+        sampleRate: 48000,
+        maxBlockSize: blockSize,
+        numChannels: 2,
+        transport: { postMessage: (message) => livePosted.push(message) },
+      });
       const replay = (messages: unknown[]): void => {
         for (const message of messages) {
           const type = (message as { type?: unknown }).type;
@@ -2542,10 +2548,12 @@ describe('SonareRealtimeEngineNode', () => {
           }),
       });
       const livePosted: unknown[] = [];
-      const live = new SonareRealtimeEngineWorkletProcessor(
-        { sampleRate: 48000, maxBlockSize: blockSize, numChannels: 2 },
-        { postMessage: (message) => livePosted.push(message) },
-      );
+      const live = new SonareRealtimeEngineWorkletProcessor({
+        sampleRate: 48000,
+        maxBlockSize: blockSize,
+        numChannels: 2,
+        transport: { postMessage: (message) => livePosted.push(message) },
+      });
       try {
         engine.setTrackBuses([
           { busId: 100, gainDb: 0 },
@@ -3072,10 +3080,12 @@ describe('SonareRealtimeEngineNode', () => {
           }),
       });
       const livePosted: unknown[] = [];
-      const live = new SonareRealtimeEngineWorkletProcessor(
-        { sampleRate: 48000, maxBlockSize: blockSize, numChannels: 2 },
-        { postMessage: (message) => livePosted.push(message) },
-      );
+      const live = new SonareRealtimeEngineWorkletProcessor({
+        sampleRate: 48000,
+        maxBlockSize: blockSize,
+        numChannels: 2,
+        transport: { postMessage: (message) => livePosted.push(message) },
+      });
       try {
         engine.setTrackLanes([{ trackId: 7 }, { trackId: 8 }]);
         engine.setStrip(

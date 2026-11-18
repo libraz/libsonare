@@ -63,10 +63,11 @@ describe('SonarePlaybackWorkletProcessor', () => {
 
   it('keeps its output shape while the input channel count changes', () => {
     const port = capturePort();
-    const processor = new SonarePlaybackWorkletProcessor(
-      { config: SPEAKERS_5_1_AUTO, sampleRate: 48000 },
+    const processor = new SonarePlaybackWorkletProcessor({
+      config: SPEAKERS_5_1_AUTO,
+      sampleRate: 48000,
       port,
-    );
+    });
     try {
       const sequence = [2, 6, 0, 6, 2];
       let seed = 1;
@@ -96,10 +97,11 @@ describe('SonarePlaybackWorkletProcessor', () => {
 
   it('renders silence correctly as the very first block, before any real block establishes a layout', () => {
     const port = capturePort();
-    const processor = new SonarePlaybackWorkletProcessor(
-      { config: SPEAKERS_5_1_AUTO, sampleRate: 48000 },
+    const processor = new SonarePlaybackWorkletProcessor({
+      config: SPEAKERS_5_1_AUTO,
+      sampleRate: 48000,
       port,
-    );
+    });
     try {
       const output = outputBlock(6);
       // An empty inputs[0] (no channels connected yet) maps to
@@ -120,10 +122,11 @@ describe('SonarePlaybackWorkletProcessor', () => {
 
   it('renders an unsupported block as silence without shifting the timeline', () => {
     const port = capturePort();
-    const processor = new SonarePlaybackWorkletProcessor(
-      { config: SPEAKERS_5_1_AUTO, sampleRate: 48000 },
+    const processor = new SonarePlaybackWorkletProcessor({
+      config: SPEAKERS_5_1_AUTO,
+      sampleRate: 48000,
       port,
-    );
+    });
     try {
       const latency = (requestDiagnostics(processor, port).latency as { samples: number }).samples;
       const impulseBlock = 4;
@@ -154,10 +157,12 @@ describe('SonarePlaybackWorkletProcessor', () => {
 
   it('renders binaural output from HRTF bytes and answers its control messages', () => {
     const port = capturePort();
-    const processor = new SonarePlaybackWorkletProcessor(
-      { config: {}, hrtf: hrtfBuffer(), sampleRate: 48000 },
+    const processor = new SonarePlaybackWorkletProcessor({
+      config: {},
+      hrtf: hrtfBuffer(),
+      sampleRate: 48000,
       port,
-    );
+    });
     try {
       let heard = false;
       for (let block = 0; block < 16; block++) {
@@ -222,18 +227,24 @@ describe('SonarePlaybackWorkletProcessor', () => {
     const expectedPort = capturePort();
     const rejectedPort = capturePort();
     const oldPosePort = capturePort();
-    const expected = new SonarePlaybackWorkletProcessor(
-      { config: {}, hrtf: hrtfBuffer(), sampleRate: 48000 },
-      expectedPort,
-    );
-    const rejected = new SonarePlaybackWorkletProcessor(
-      { config: {}, hrtf: hrtfBuffer(), sampleRate: 48000 },
-      rejectedPort,
-    );
-    const oldPose = new SonarePlaybackWorkletProcessor(
-      { config: {}, hrtf: hrtfBuffer(), sampleRate: 48000 },
-      oldPosePort,
-    );
+    const expected = new SonarePlaybackWorkletProcessor({
+      config: {},
+      hrtf: hrtfBuffer(),
+      sampleRate: 48000,
+      port: expectedPort,
+    });
+    const rejected = new SonarePlaybackWorkletProcessor({
+      config: {},
+      hrtf: hrtfBuffer(),
+      sampleRate: 48000,
+      port: rejectedPort,
+    });
+    const oldPose = new SonarePlaybackWorkletProcessor({
+      config: {},
+      hrtf: hrtfBuffer(),
+      sampleRate: 48000,
+      port: oldPosePort,
+    });
     try {
       const initialPose = { type: 'orientation' as const, yaw: 90, pitch: -20, roll: 10 };
       for (const processor of [expected, rejected, oldPose]) {

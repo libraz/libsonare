@@ -95,10 +95,13 @@ describe('wide meters on the live worklet engine', () => {
   it('delivers every plane of a 5.1 bus over postMessage', () => {
     const reference = referenceBusMeter('5.1', SURROUND_STRIP, 6);
     const meters: WorkletMeterSnapshot[] = [];
-    const processor = new SonareRealtimeEngineWorkletProcessor(
-      { sampleRate: SR, maxBlockSize: BLOCK, numChannels: 6, meterIntervalFrames: BLOCK },
-      { onMeter: (meter) => meters.push(meter) },
-    );
+    const processor = new SonareRealtimeEngineWorkletProcessor({
+      sampleRate: SR,
+      maxBlockSize: BLOCK,
+      numChannels: 6,
+      meterIntervalFrames: BLOCK,
+      transport: { onMeter: (meter) => meters.push(meter) },
+    });
     try {
       seedBus(engineOf(processor), '5.1', SURROUND_STRIP);
       processor.process([[]], [silent(6)]);
@@ -120,16 +123,14 @@ describe('wide meters on the live worklet engine', () => {
   it('delivers every plane of a 5.1 bus over the shared meter ring', () => {
     const reference = referenceBusMeter('5.1', SURROUND_STRIP, 6);
     const ring = createMeterRingBuffer({ capacity: 64 });
-    const processor = new SonareRealtimeEngineWorkletProcessor(
-      {
-        sampleRate: SR,
-        maxBlockSize: BLOCK,
-        numChannels: 6,
-        meterIntervalFrames: BLOCK,
-        meterSharedBuffer: ring.sharedBuffer,
-      },
-      { postMessage: () => undefined },
-    );
+    const processor = new SonareRealtimeEngineWorkletProcessor({
+      sampleRate: SR,
+      maxBlockSize: BLOCK,
+      numChannels: 6,
+      meterIntervalFrames: BLOCK,
+      meterSharedBuffer: ring.sharedBuffer,
+      transport: { postMessage: () => undefined },
+    });
     try {
       seedBus(engineOf(processor), '5.1', SURROUND_STRIP);
       processor.process([[]], [silent(6)]);
@@ -149,21 +150,22 @@ describe('wide meters on the live worklet engine', () => {
   it('keeps a stereo engine snapshot stereo-only and identical across both paths', () => {
     const reference = referenceBusMeter('mono', undefined, 2);
     const posted: WorkletMeterSnapshot[] = [];
-    const viaMessage = new SonareRealtimeEngineWorkletProcessor(
-      { sampleRate: SR, maxBlockSize: BLOCK, numChannels: 2, meterIntervalFrames: BLOCK },
-      { onMeter: (meter) => posted.push(meter) },
-    );
+    const viaMessage = new SonareRealtimeEngineWorkletProcessor({
+      sampleRate: SR,
+      maxBlockSize: BLOCK,
+      numChannels: 2,
+      meterIntervalFrames: BLOCK,
+      transport: { onMeter: (meter) => posted.push(meter) },
+    });
     const ring = createMeterRingBuffer({ capacity: 64 });
-    const viaRing = new SonareRealtimeEngineWorkletProcessor(
-      {
-        sampleRate: SR,
-        maxBlockSize: BLOCK,
-        numChannels: 2,
-        meterIntervalFrames: BLOCK,
-        meterSharedBuffer: ring.sharedBuffer,
-      },
-      { postMessage: () => undefined },
-    );
+    const viaRing = new SonareRealtimeEngineWorkletProcessor({
+      sampleRate: SR,
+      maxBlockSize: BLOCK,
+      numChannels: 2,
+      meterIntervalFrames: BLOCK,
+      meterSharedBuffer: ring.sharedBuffer,
+      transport: { postMessage: () => undefined },
+    });
     try {
       seedBus(engineOf(viaMessage), 'mono');
       seedBus(engineOf(viaRing), 'mono');
@@ -194,10 +196,13 @@ describe('wide meters on the live worklet engine', () => {
   });
 
   it('gates the meter interval per target', () => {
-    const processor = new SonareRealtimeEngineWorkletProcessor(
-      { sampleRate: SR, maxBlockSize: BLOCK, numChannels: 2, meterIntervalFrames: 1000 },
-      { onMeter: () => undefined },
-    );
+    const processor = new SonareRealtimeEngineWorkletProcessor({
+      sampleRate: SR,
+      maxBlockSize: BLOCK,
+      numChannels: 2,
+      meterIntervalFrames: 1000,
+      transport: { onMeter: () => undefined },
+    });
     try {
       const gate = (
         processor as unknown as { meterDue(id: number, frame: number): boolean }
@@ -218,10 +223,13 @@ describe('wide meters on the live worklet engine', () => {
 
   it('keeps each target on its own cadence while rendering', () => {
     const meters: WorkletMeterSnapshot[] = [];
-    const processor = new SonareRealtimeEngineWorkletProcessor(
-      { sampleRate: SR, maxBlockSize: BLOCK, numChannels: 2, meterIntervalFrames: BLOCK * 4 },
-      { onMeter: (meter) => meters.push(meter) },
-    );
+    const processor = new SonareRealtimeEngineWorkletProcessor({
+      sampleRate: SR,
+      maxBlockSize: BLOCK,
+      numChannels: 2,
+      meterIntervalFrames: BLOCK * 4,
+      transport: { onMeter: (meter) => meters.push(meter) },
+    });
     try {
       seedBus(engineOf(processor), 'mono');
       for (let block = 0; block < 9; ++block) {

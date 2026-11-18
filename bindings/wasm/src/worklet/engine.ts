@@ -1663,7 +1663,7 @@ export class SonareEngine {
   private ensureWorkletClipStreamer(): ClipPageStreamer {
     if (!this.workletClipStreamer) {
       this.workletClipStreamer = new ClipPageStreamer({
-        popClipPageRequest: () => this.popWorkletClipPageRequest(),
+        engine: { popClipPageRequest: () => this.popWorkletClipPageRequest() },
       });
     }
     return this.workletClipStreamer;

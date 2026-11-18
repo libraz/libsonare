@@ -95,10 +95,13 @@ describe('insert gain reduction query', () => {
 
   it('attaches insertGainReductionDb to postMessage meter snapshots', () => {
     const meters: WorkletMeterSnapshot[] = [];
-    const processor = new SonareRealtimeEngineWorkletProcessor(
-      { sampleRate: 48000, maxBlockSize: BLOCK, numChannels: 2, meterIntervalFrames: BLOCK },
-      { onMeter: (meter) => meters.push(meter), postMessage: () => undefined },
-    );
+    const processor = new SonareRealtimeEngineWorkletProcessor({
+      sampleRate: 48000,
+      maxBlockSize: BLOCK,
+      numChannels: 2,
+      meterIntervalFrames: BLOCK,
+      transport: { onMeter: (meter) => meters.push(meter), postMessage: () => undefined },
+    });
     try {
       const engine = (processor as unknown as { engine: RealtimeEngine }).engine;
       seedCompressorLimiterLane(engine);
@@ -120,10 +123,13 @@ describe('insert gain reduction query', () => {
 
   it('attaches the field only to the newest record per target in one drain', () => {
     const meters: WorkletMeterSnapshot[] = [];
-    const processor = new SonareRealtimeEngineWorkletProcessor(
-      { sampleRate: 48000, maxBlockSize: BLOCK, numChannels: 2, meterIntervalFrames: 1 },
-      { onMeter: (meter) => meters.push(meter), postMessage: () => undefined },
-    );
+    const processor = new SonareRealtimeEngineWorkletProcessor({
+      sampleRate: 48000,
+      maxBlockSize: BLOCK,
+      numChannels: 2,
+      meterIntervalFrames: 1,
+      transport: { onMeter: (meter) => meters.push(meter), postMessage: () => undefined },
+    });
     try {
       const engine = (processor as unknown as { engine: RealtimeEngine }).engine;
       seedCompressorLimiterLane(engine);
@@ -146,16 +152,14 @@ describe('insert gain reduction query', () => {
   it('answers insertGainReductionRequest in shared-ring meter mode', () => {
     const ring = createMeterRingBuffer({ capacity: 64 });
     const posted: unknown[] = [];
-    const processor = new SonareRealtimeEngineWorkletProcessor(
-      {
-        sampleRate: 48000,
-        maxBlockSize: BLOCK,
-        numChannels: 2,
-        meterIntervalFrames: BLOCK,
-        meterSharedBuffer: ring.sharedBuffer,
-      },
-      { postMessage: (message) => posted.push(message) },
-    );
+    const processor = new SonareRealtimeEngineWorkletProcessor({
+      sampleRate: 48000,
+      maxBlockSize: BLOCK,
+      numChannels: 2,
+      meterIntervalFrames: BLOCK,
+      meterSharedBuffer: ring.sharedBuffer,
+      transport: { postMessage: (message) => posted.push(message) },
+    });
     try {
       const engine = (processor as unknown as { engine: RealtimeEngine }).engine;
       seedCompressorLimiterLane(engine);
@@ -196,10 +200,12 @@ describe('insert gain reduction query', () => {
 
   it('keeps a library failure coded across the port on every request path', async () => {
     const posted: unknown[] = [];
-    const processor = new SonareRealtimeEngineWorkletProcessor(
-      { sampleRate: 48000, maxBlockSize: BLOCK, numChannels: 2 },
-      { postMessage: (message) => posted.push(message) },
-    );
+    const processor = new SonareRealtimeEngineWorkletProcessor({
+      sampleRate: 48000,
+      maxBlockSize: BLOCK,
+      numChannels: 2,
+      transport: { postMessage: (message) => posted.push(message) },
+    });
     const port: {
       postMessage: (message: unknown) => void;
       onmessage?: ((event: MessageEvent<unknown>) => void) | null;

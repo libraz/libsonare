@@ -70,16 +70,14 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
       const blockSize = 128;
       const externalMidiRing = createExternalMidiRingBuffer({ capacity: 8 });
       const posted: unknown[] = [];
-      const processor = new SonareRealtimeEngineWorkletProcessor(
-        {
-          sampleRate: 48000,
-          maxBlockSize: blockSize,
-          numChannels: 2,
-          externalMidiSharedBuffer: externalMidiRing.sharedBuffer,
-          externalMidiRingCapacity: externalMidiRing.capacity,
-        },
-        { postMessage: (message) => posted.push(message) },
-      );
+      const processor = new SonareRealtimeEngineWorkletProcessor({
+        sampleRate: 48000,
+        maxBlockSize: blockSize,
+        numChannels: 2,
+        externalMidiSharedBuffer: externalMidiRing.sharedBuffer,
+        externalMidiRingCapacity: externalMidiRing.capacity,
+        transport: { postMessage: (message) => posted.push(message) },
+      });
       try {
         const engine = (
           processor as unknown as {
@@ -194,10 +192,13 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
       const blockSize = 128;
       const meterCount = (meterIntervalFrames: number): number => {
         const meters: unknown[] = [];
-        const processor = new SonareRealtimeEngineWorkletProcessor(
-          { sampleRate: 48000, maxBlockSize: blockSize, numChannels: 2, meterIntervalFrames },
-          { onMeter: (meter) => meters.push(meter), postMessage: () => undefined },
-        );
+        const processor = new SonareRealtimeEngineWorkletProcessor({
+          sampleRate: 48000,
+          maxBlockSize: blockSize,
+          numChannels: 2,
+          meterIntervalFrames,
+          transport: { onMeter: (meter) => meters.push(meter), postMessage: () => undefined },
+        });
         try {
           for (let block = 0; block < 8; block++) {
             expect(
@@ -877,15 +878,13 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
     it('drains a large SAB command snapshot before a structural strip sync', () => {
       const commandRing = createSonareEngineCommandRingBuffer({ capacity: 2048 });
       const posted: unknown[] = [];
-      const processor = new SonareRealtimeEngineWorkletProcessor(
-        {
-          sampleRate: 48000,
-          maxBlockSize: 128,
-          numChannels: 2,
-          commandSharedBuffer: commandRing.sharedBuffer,
-        },
-        { postMessage: (message) => posted.push(message) },
-      );
+      const processor = new SonareRealtimeEngineWorkletProcessor({
+        sampleRate: 48000,
+        maxBlockSize: 128,
+        numChannels: 2,
+        commandSharedBuffer: commandRing.sharedBuffer,
+        transport: { postMessage: (message) => posted.push(message) },
+      });
       try {
         for (let index = 0; index < 1080; index += 1) {
           expect(
@@ -915,10 +914,12 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
     });
 
     it('clears requested insert bases after the strip replay without settling ramps', () => {
-      const processor = new SonareRealtimeEngineWorkletProcessor(
-        { sampleRate: 48000, maxBlockSize: 128, numChannels: 2 },
-        { postMessage: () => undefined },
-      );
+      const processor = new SonareRealtimeEngineWorkletProcessor({
+        sampleRate: 48000,
+        maxBlockSize: 128,
+        numChannels: 2,
+        transport: { postMessage: () => undefined },
+      });
       try {
         shadowNative(processor);
         const engine = (
@@ -1539,10 +1540,12 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
 
     it('reports a rejected sync without stopping subsequent processing', () => {
       const posted: unknown[] = [];
-      const processor = new SonareRealtimeEngineWorkletProcessor(
-        { sampleRate: 48000, maxBlockSize: 128, numChannels: 1 },
-        { postMessage: (message) => posted.push(message) },
-      );
+      const processor = new SonareRealtimeEngineWorkletProcessor({
+        sampleRate: 48000,
+        maxBlockSize: 128,
+        numChannels: 1,
+        transport: { postMessage: (message) => posted.push(message) },
+      });
       try {
         expect(() =>
           processor.receiveSync({
@@ -1572,10 +1575,12 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
 
     it('publishes telemetry through postMessage fallback when SAB telemetry is absent', () => {
       const posted: unknown[] = [];
-      const processor = new SonareRealtimeEngineWorkletProcessor(
-        { sampleRate: 48000, maxBlockSize: 128, numChannels: 1 },
-        { postMessage: (message) => posted.push(message) },
-      );
+      const processor = new SonareRealtimeEngineWorkletProcessor({
+        sampleRate: 48000,
+        maxBlockSize: 128,
+        numChannels: 1,
+        transport: { postMessage: (message) => posted.push(message) },
+      });
       try {
         processor.receiveCommand({ type: SonareEngineCommandType.TransportPlay, renderFrame: -1 });
         expect(processor.process([[]], [[new Float32Array(128)]])).toBe(true);
@@ -1599,10 +1604,12 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
 
     it('reports native clip-page request queue overflow once without a request batch', () => {
       const posted: unknown[] = [];
-      const processor = new SonareRealtimeEngineWorkletProcessor(
-        { sampleRate: 48000, maxBlockSize: 128, numChannels: 1 },
-        { postMessage: (message) => posted.push(message) },
-      );
+      const processor = new SonareRealtimeEngineWorkletProcessor({
+        sampleRate: 48000,
+        maxBlockSize: 128,
+        numChannels: 1,
+        transport: { postMessage: (message) => posted.push(message) },
+      });
       try {
         const engine = (
           processor as unknown as {
@@ -1624,10 +1631,12 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
 
     it('keeps the clip bus silent while the transport is stopped', () => {
       const blockSize = 128;
-      const processor = new SonareRealtimeEngineWorkletProcessor(
-        { sampleRate: 48000, maxBlockSize: blockSize, numChannels: 2 },
-        { postMessage: () => undefined },
-      );
+      const processor = new SonareRealtimeEngineWorkletProcessor({
+        sampleRate: 48000,
+        maxBlockSize: blockSize,
+        numChannels: 2,
+        transport: { postMessage: () => undefined },
+      });
       try {
         const left = new Float32Array(blockSize).fill(0.5);
         const right = new Float32Array(blockSize).fill(-0.5);
@@ -1653,14 +1662,18 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
 
     it('renders clip delta sync equivalently to full clip sync', () => {
       const blockSize = 128;
-      const fullProcessor = new SonareRealtimeEngineWorkletProcessor(
-        { sampleRate: 48000, maxBlockSize: blockSize, numChannels: 1 },
-        { postMessage: () => undefined },
-      );
-      const deltaProcessor = new SonareRealtimeEngineWorkletProcessor(
-        { sampleRate: 48000, maxBlockSize: blockSize, numChannels: 1 },
-        { postMessage: () => undefined },
-      );
+      const fullProcessor = new SonareRealtimeEngineWorkletProcessor({
+        sampleRate: 48000,
+        maxBlockSize: blockSize,
+        numChannels: 1,
+        transport: { postMessage: () => undefined },
+      });
+      const deltaProcessor = new SonareRealtimeEngineWorkletProcessor({
+        sampleRate: 48000,
+        maxBlockSize: blockSize,
+        numChannels: 1,
+        transport: { postMessage: () => undefined },
+      });
       try {
         const source = new Float32Array(blockSize * 2).fill(0.5);
         const removed = new Float32Array(blockSize * 2).fill(1);
@@ -1702,10 +1715,12 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
 
     it('adopts pre-baked PCM pages before scheduling a long clip', () => {
       const blockSize = 128;
-      const processor = new SonareRealtimeEngineWorkletProcessor(
-        { sampleRate: 48000, maxBlockSize: blockSize, numChannels: 1 },
-        { postMessage: () => undefined },
-      );
+      const processor = new SonareRealtimeEngineWorkletProcessor({
+        sampleRate: 48000,
+        maxBlockSize: blockSize,
+        numChannels: 1,
+        transport: { postMessage: () => undefined },
+      });
       try {
         processor.receiveSync({ type: 'syncMixer', lanes: [{ trackId: 10 }] });
         processor.receiveSync({
@@ -1741,10 +1756,12 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
     it('reports a missing worklet clip page as one bounded pull request', () => {
       const blockSize = 4;
       const posted: unknown[] = [];
-      const processor = new SonareRealtimeEngineWorkletProcessor(
-        { sampleRate: 48000, maxBlockSize: blockSize, numChannels: 1 },
-        { postMessage: (message) => posted.push(message) },
-      );
+      const processor = new SonareRealtimeEngineWorkletProcessor({
+        sampleRate: 48000,
+        maxBlockSize: blockSize,
+        numChannels: 1,
+        transport: { postMessage: (message) => posted.push(message) },
+      });
       try {
         processor.receiveSync({ type: 'syncMixer', lanes: [{ trackId: 10 }] });
         // The OPFS path creates and primes the provider before it has the
@@ -1806,9 +1823,11 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
     it('posts clip page requests only when the missing set changes, without the allocating pop', () => {
       const blockSize = 4;
       const posted: Array<{ type: string; requests: unknown[] }> = [];
-      const processor = new SonareRealtimeEngineWorkletProcessor(
-        { sampleRate: 48000, maxBlockSize: blockSize, numChannels: 1 },
-        {
+      const processor = new SonareRealtimeEngineWorkletProcessor({
+        sampleRate: 48000,
+        maxBlockSize: blockSize,
+        numChannels: 1,
+        transport: {
           postMessage: (message) => {
             const clone = structuredClone(message) as { type: string; requests: unknown[] };
             if (clone.type === 'clipPageRequest') {
@@ -1816,7 +1835,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
             }
           },
         },
-      );
+      });
       try {
         shadowNative(processor);
         const engine = (
@@ -1904,16 +1923,18 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
       const intervalQuanta = Math.ceil((sampleRate * 0.25) / blockSize);
       let quantum = 0;
       const postedAt: number[] = [];
-      const processor = new SonareRealtimeEngineWorkletProcessor(
-        { sampleRate, maxBlockSize: blockSize, numChannels: 1 },
-        {
+      const processor = new SonareRealtimeEngineWorkletProcessor({
+        sampleRate,
+        maxBlockSize: blockSize,
+        numChannels: 1,
+        transport: {
           postMessage: (message) => {
             if ((message as { type?: string }).type === 'clipPageRequest') {
               postedAt.push(quantum);
             }
           },
         },
-      );
+      });
       const run = (quanta: number) => {
         for (let i = 0; i < quanta; ++i, ++quantum) {
           processor.process([[]], [[new Float32Array(blockSize)]]);
@@ -1976,10 +1997,12 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
     it('reuses one preallocated request payload across clip page posts', () => {
       const blockSize = 4;
       const messages: object[] = [];
-      const processor = new SonareRealtimeEngineWorkletProcessor(
-        { sampleRate: 48000, maxBlockSize: blockSize, numChannels: 1 },
-        { postMessage: (message) => messages.push(message as object) },
-      );
+      const processor = new SonareRealtimeEngineWorkletProcessor({
+        sampleRate: 48000,
+        maxBlockSize: blockSize,
+        numChannels: 1,
+        transport: { postMessage: (message) => messages.push(message as object) },
+      });
       try {
         const engine = (processor as unknown as { engine: object }).engine;
         let overflow = 0;
@@ -2006,15 +2029,13 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
       const blockSize = 4;
       const posted: unknown[] = [];
       const clipPageRequestRing = createClipPageRequestRingBuffer({ capacity: 4 });
-      const processor = new SonareRealtimeEngineWorkletProcessor(
-        {
-          sampleRate: 48000,
-          maxBlockSize: blockSize,
-          numChannels: 1,
-          clipPageRequestSharedBuffer: clipPageRequestRing.sharedBuffer,
-        },
-        { postMessage: (message) => posted.push(message) },
-      );
+      const processor = new SonareRealtimeEngineWorkletProcessor({
+        sampleRate: 48000,
+        maxBlockSize: blockSize,
+        numChannels: 1,
+        clipPageRequestSharedBuffer: clipPageRequestRing.sharedBuffer,
+        transport: { postMessage: (message) => posted.push(message) },
+      });
       try {
         processor.receiveSync({ type: 'syncMixer', lanes: [{ trackId: 10 }] });
         processor.receiveSync({
@@ -2064,10 +2085,12 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
 
     it('applies mixer lane sync and lane parameter commands', () => {
       const blockSize = 128;
-      const processor = new SonareRealtimeEngineWorkletProcessor(
-        { sampleRate: 48000, maxBlockSize: blockSize, numChannels: 1 },
-        { postMessage: () => undefined },
-      );
+      const processor = new SonareRealtimeEngineWorkletProcessor({
+        sampleRate: 48000,
+        maxBlockSize: blockSize,
+        numChannels: 1,
+        transport: { postMessage: () => undefined },
+      });
       try {
         const source = new Float32Array(blockSize * 4).fill(1);
         processor.receiveSync({ type: 'syncMixer', lanes: [{ trackId: 10 }] });
@@ -2095,10 +2118,12 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
 
     it('applies scheduled MIDI clip resync to the live embind engine', () => {
       const blockSize = 128;
-      const processor = new SonareRealtimeEngineWorkletProcessor(
-        { sampleRate: 48000, maxBlockSize: blockSize, numChannels: 2 },
-        { postMessage: () => undefined },
-      );
+      const processor = new SonareRealtimeEngineWorkletProcessor({
+        sampleRate: 48000,
+        maxBlockSize: blockSize,
+        numChannels: 2,
+        transport: { postMessage: () => undefined },
+      });
       try {
         processor.receiveSync({
           type: 'syncBuiltinInstrument',
@@ -2147,10 +2172,12 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
 
     it('renders live MIDI note sync on the next processed block', () => {
       const blockSize = 128;
-      const processor = new SonareRealtimeEngineWorkletProcessor(
-        { sampleRate: 48000, maxBlockSize: blockSize, numChannels: 2 },
-        { postMessage: () => undefined },
-      );
+      const processor = new SonareRealtimeEngineWorkletProcessor({
+        sampleRate: 48000,
+        maxBlockSize: blockSize,
+        numChannels: 2,
+        transport: { postMessage: () => undefined },
+      });
       try {
         processor.receiveSync({
           type: 'syncBuiltinInstrument',
@@ -2179,10 +2206,12 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
 
     it('applies mixer strip specs from syncMixer', () => {
       const blockSize = 128;
-      const processor = new SonareRealtimeEngineWorkletProcessor(
-        { sampleRate: 48000, maxBlockSize: blockSize, numChannels: 1 },
-        { postMessage: () => undefined },
-      );
+      const processor = new SonareRealtimeEngineWorkletProcessor({
+        sampleRate: 48000,
+        maxBlockSize: blockSize,
+        numChannels: 1,
+        transport: { postMessage: () => undefined },
+      });
       try {
         const source = new Float32Array(blockSize * 4).fill(1);
         processor.receiveSync({
@@ -2226,10 +2255,12 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
 
     it('applies worklet strip insert bypass sync messages', () => {
       const blockSize = 128;
-      const processor = new SonareRealtimeEngineWorkletProcessor(
-        { sampleRate: 48000, maxBlockSize: blockSize, numChannels: 1 },
-        { postMessage: () => undefined },
-      );
+      const processor = new SonareRealtimeEngineWorkletProcessor({
+        sampleRate: 48000,
+        maxBlockSize: blockSize,
+        numChannels: 1,
+        transport: { postMessage: () => undefined },
+      });
       try {
         const source = new Float32Array(blockSize * 4).fill(1);
         const insertParams =
@@ -2275,15 +2306,13 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
     it('applies bus/send mixer sync and preserves same-frame meter targets', () => {
       const blockSize = 128;
       const meters: unknown[] = [];
-      const processor = new SonareRealtimeEngineWorkletProcessor(
-        {
-          sampleRate: 48000,
-          maxBlockSize: blockSize,
-          numChannels: 1,
-          meterIntervalFrames: blockSize,
-        },
-        { onMeter: (meter) => meters.push(meter), postMessage: () => undefined },
-      );
+      const processor = new SonareRealtimeEngineWorkletProcessor({
+        sampleRate: 48000,
+        maxBlockSize: blockSize,
+        numChannels: 1,
+        meterIntervalFrames: blockSize,
+        transport: { onMeter: (meter) => meters.push(meter), postMessage: () => undefined },
+      });
       try {
         const source = new Float32Array(blockSize * 4).fill(1);
         processor.receiveSync({
@@ -2335,10 +2364,12 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
 
     it('applies bus strip pan and EQ band sync messages', () => {
       const blockSize = 128;
-      const processor = new SonareRealtimeEngineWorkletProcessor(
-        { sampleRate: 48000, maxBlockSize: blockSize, numChannels: 2 },
-        { postMessage: () => undefined },
-      );
+      const processor = new SonareRealtimeEngineWorkletProcessor({
+        sampleRate: 48000,
+        maxBlockSize: blockSize,
+        numChannels: 2,
+        transport: { postMessage: () => undefined },
+      });
       const rms = (data: Float32Array): number =>
         Math.sqrt(data.reduce((sum, value) => sum + value * value, 0) / data.length);
       try {
@@ -2394,15 +2425,13 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
     it('applies capture sync to the live embind engine', () => {
       const blockSize = 128;
       const meters: unknown[] = [];
-      const processor = new SonareRealtimeEngineWorkletProcessor(
-        {
-          sampleRate: 48000,
-          maxBlockSize: blockSize,
-          numChannels: 2,
-          meterIntervalFrames: blockSize,
-        },
-        { onMeter: (meter) => meters.push(meter), postMessage: () => undefined },
-      );
+      const processor = new SonareRealtimeEngineWorkletProcessor({
+        sampleRate: 48000,
+        maxBlockSize: blockSize,
+        numChannels: 2,
+        meterIntervalFrames: blockSize,
+        transport: { onMeter: (meter) => meters.push(meter), postMessage: () => undefined },
+      });
       try {
         processor.receiveSync({
           type: 'syncCapture',
@@ -2448,10 +2477,12 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
     it('responds to capture status, read, and reset requests', () => {
       const blockSize = 128;
       const posted: unknown[] = [];
-      const processor = new SonareRealtimeEngineWorkletProcessor(
-        { sampleRate: 48000, maxBlockSize: blockSize, numChannels: 1 },
-        { postMessage: (message) => posted.push(message) },
-      );
+      const processor = new SonareRealtimeEngineWorkletProcessor({
+        sampleRate: 48000,
+        maxBlockSize: blockSize,
+        numChannels: 1,
+        transport: { postMessage: (message) => posted.push(message) },
+      });
       try {
         processor.receiveSync({
           type: 'syncCapture',
@@ -2502,10 +2533,12 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
     it('applies tempo sync and responds to transport state requests', () => {
       const blockSize = 128;
       const posted: unknown[] = [];
-      const processor = new SonareRealtimeEngineWorkletProcessor(
-        { sampleRate: 48000, maxBlockSize: blockSize, numChannels: 1 },
-        { postMessage: (message) => posted.push(message) },
-      );
+      const processor = new SonareRealtimeEngineWorkletProcessor({
+        sampleRate: 48000,
+        maxBlockSize: blockSize,
+        numChannels: 1,
+        transport: { postMessage: (message) => posted.push(message) },
+      });
       try {
         processor.receiveSync({
           type: 'syncTempo',
@@ -2534,10 +2567,12 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
     it('preserves a full block of future commands while restoring insert values', () => {
       const blockSize = 128;
       const posted: unknown[] = [];
-      const processor = new SonareRealtimeEngineWorkletProcessor(
-        { sampleRate: 48000, maxBlockSize: blockSize, numChannels: 1 },
-        { postMessage: (message) => posted.push(message) },
-      );
+      const processor = new SonareRealtimeEngineWorkletProcessor({
+        sampleRate: 48000,
+        maxBlockSize: blockSize,
+        numChannels: 1,
+        transport: { postMessage: (message) => posted.push(message) },
+      });
       try {
         processor.receiveCommand({ type: SonareEngineCommandType.TransportPlay, renderFrame: 64 });
         for (let index = 1; index < 64; index++) {
@@ -2573,10 +2608,12 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
     it('keeps an overflowed future command queued for the next audio block', () => {
       const blockSize = 128;
       const posted: unknown[] = [];
-      const processor = new SonareRealtimeEngineWorkletProcessor(
-        { sampleRate: 48000, maxBlockSize: blockSize, numChannels: 1 },
-        { postMessage: (message) => posted.push(message) },
-      );
+      const processor = new SonareRealtimeEngineWorkletProcessor({
+        sampleRate: 48000,
+        maxBlockSize: blockSize,
+        numChannels: 1,
+        transport: { postMessage: (message) => posted.push(message) },
+      });
       try {
         for (let index = 0; index < 64; index++) {
           processor.receiveCommand({
@@ -2652,10 +2689,13 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
           delivered.push(message);
         }
       };
-      const processor = new SonareRealtimeEngineWorkletProcessor(
-        { sampleRate: 48000, maxBlockSize: 128, numChannels: 2, meterIntervalFrames: 128 },
-        { onMeter: record, postMessage: record },
-      );
+      const processor = new SonareRealtimeEngineWorkletProcessor({
+        sampleRate: 48000,
+        maxBlockSize: 128,
+        numChannels: 2,
+        meterIntervalFrames: 128,
+        transport: { onMeter: record, postMessage: record },
+      });
       try {
         const inL = new Float32Array(128).fill(0.5);
         const inR = new Float32Array(128).fill(-0.5);
@@ -2678,10 +2718,13 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
 
     it('delivers meters over postMessage when the transport has no onMeter sink', () => {
       const posted: unknown[] = [];
-      const processor = new SonareRealtimeEngineWorkletProcessor(
-        { sampleRate: 48000, maxBlockSize: 128, numChannels: 2, meterIntervalFrames: 128 },
-        { postMessage: (message) => posted.push(message) },
-      );
+      const processor = new SonareRealtimeEngineWorkletProcessor({
+        sampleRate: 48000,
+        maxBlockSize: 128,
+        numChannels: 2,
+        meterIntervalFrames: 128,
+        transport: { postMessage: (message) => posted.push(message) },
+      });
       try {
         const inL = new Float32Array(128).fill(0.5);
         const inR = new Float32Array(128).fill(-0.5);
@@ -3287,9 +3330,11 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
     it('transfers capture buffers without invalidating native capture state', () => {
       const blockSize = 128;
       const posted: Array<{ message: unknown; transfer?: Transferable[] }> = [];
-      const processor = new SonareRealtimeEngineWorkletProcessor(
-        { sampleRate: 48000, maxBlockSize: blockSize, numChannels: 2 },
-        {
+      const processor = new SonareRealtimeEngineWorkletProcessor({
+        sampleRate: 48000,
+        maxBlockSize: blockSize,
+        numChannels: 2,
+        transport: {
           postMessage: (message, transfer) => {
             // Model MessagePort's structured-clone + transfer behavior. The
             // sender-side typed arrays are detached here; the delivered clone
@@ -3299,7 +3344,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
             posted.push({ message: delivered, transfer });
           },
         },
-      );
+      });
       try {
         processor.receiveSync({
           type: 'syncCapture',
@@ -3574,10 +3619,12 @@ describe('processor state reset through the worklet facade', () => {
     const posted: unknown[] = [];
     const mirror = new RealtimeEngine({ sampleRate: SR, maxBlockSize: BLOCK });
     const facade = await createFacade(posted, mirror);
-    const worklet = new SonareRealtimeEngineWorkletProcessor(
-      { sampleRate: SR, maxBlockSize: BLOCK, numChannels: 2 },
-      { postMessage: () => undefined },
-    );
+    const worklet = new SonareRealtimeEngineWorkletProcessor({
+      sampleRate: SR,
+      maxBlockSize: BLOCK,
+      numChannels: 2,
+      transport: { postMessage: () => undefined },
+    });
     try {
       facade.addClip(TRACK, { channels: burst(), startPpq: 0, lengthSamples: 96000 });
       configure(facade, processor, placement);
@@ -3675,10 +3722,12 @@ describe('processor state reset through the worklet facade', () => {
     const posted: unknown[] = [];
     const mirror = new RealtimeEngine({ sampleRate: SR, maxBlockSize: BLOCK });
     const facade = await createFacade(posted, mirror);
-    const worklet = new SonareRealtimeEngineWorkletProcessor(
-      { sampleRate: SR, maxBlockSize: BLOCK, numChannels: 2 },
-      { postMessage: () => undefined },
-    );
+    const worklet = new SonareRealtimeEngineWorkletProcessor({
+      sampleRate: SR,
+      maxBlockSize: BLOCK,
+      numChannels: 2,
+      transport: { postMessage: () => undefined },
+    });
     try {
       facade.addClip(TRACK, { channels: burst(), startPpq: 0, lengthSamples: 96000 });
       facade.setTrackLanes([{ trackId: TRACK }]);
