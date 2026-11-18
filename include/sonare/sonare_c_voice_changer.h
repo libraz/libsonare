@@ -52,18 +52,31 @@ typedef struct {
   /// @brief Layout version; must be 2. Earlier layouts are refused.
   int32_t struct_version;
 
+  /// Gain applied before the chain in dB, [-24, 24].
   float input_gain_db;
+  /// Gain applied after the chain in dB, [-36, 12].
   float output_gain_db;
+  /// Dry/wet ratio of the whole chain, [0, 1]; 1 is fully processed.
   float wet_mix;
 
+  /// Fixed pitch shift of the retune stage in semitones, [-24, 24].
   float retune_pitch_semitones;
+  /// Retune dry/wet ratio, [0, 1].
   float retune_mix;
+  /// Retune grain length in samples, [0, 8192]; 0 derives about 46 ms from the sample rate. Applied
+  /// only when the handle is prepared; reads back as the effective size.
   int retune_grain_size_samples;
 
+  /// Formant scale factor, [0.55, 1.65]; 1 leaves formants unchanged.
   float formant_factor;
+  /// How much of formant_factor the colour stage applies after the retune, [0, 1]. Ignored in
+  /// absolute mode.
   float formant_amount;
+  /// Low-formant body colour, [-1, 1]; 0 is neutral.
   float formant_body;
+  /// Formant brightness colour, [-1, 1]; 0 is neutral.
   float formant_brightness;
+  /// Formant nasality colour, [-1, 1]; 0 is neutral.
   float formant_nasal;
   /// @brief A @ref SonareFormantMode. Relative (0, the default) leaves @ref formant_factor to the
   ///        colour stage after the retune; absolute (1) warps the formants to
@@ -75,35 +88,58 @@ typedef struct {
   ///        sonare_last_error_message().
   int32_t formant_mode;
 
+  /// High-pass corner in Hz, [20, 300].
   float eq_high_pass_hz;
+  /// Body band gain in dB, [-12, 12].
   float eq_body_db;
+  /// Presence band gain in dB, [-12, 12].
   float eq_presence_db;
+  /// Air band gain in dB, [-12, 12].
   float eq_air_db;
 
   /* Gate, compressor and limiter attack/release times are one time constant:
      about 63% of the way at the set time. */
+  /// Gate threshold in dB, [-90, -12].
   float gate_threshold_db;
+  /// Gate attack time in milliseconds, [0.05, 100].
   float gate_attack_ms;
+  /// Gate release time in milliseconds, [5, 1000].
   float gate_release_ms;
+  /// Maximum gate attenuation in dB, [0, 80].
   float gate_range_db;
 
+  /// Compressor threshold in dB, [-60, 0].
   float compressor_threshold_db;
+  /// Compression ratio above the threshold, [1, 20]; 1 is no reduction.
   float compressor_ratio;
+  /// Compressor attack time in milliseconds, [0.05, 200].
   float compressor_attack_ms;
+  /// Compressor release time in milliseconds, [5, 2000].
   float compressor_release_ms;
+  /// Compressor make-up gain in dB, [-12, 12].
   float compressor_makeup_gain_db;
 
+  /// De-esser centre frequency in Hz, [3000, 12000].
   float deesser_frequency_hz;
+  /// De-esser threshold in dB, [-60, -6].
   float deesser_threshold_db;
+  /// De-esser slope above the threshold, [1, 20]; 1 is no reduction.
   float deesser_ratio;
+  /// Maximum sibilance gain reduction in dB, [0, 24].
   float deesser_range_db;
 
+  /// Reverb wet level, [0, 0.45].
   float reverb_mix;
+  /// Reverb decay time in milliseconds, [40, 1800].
   float reverb_time_ms;
+  /// High-frequency damping of the reverb tail, [0, 1].
   float reverb_damping;
+  /// Seed of the reverb delay-line randomisation; any int32 is accepted.
   int reverb_seed;
 
+  /// Sample-domain limiter ceiling in dB, [-12, -1].
   float limiter_ceiling_db;
+  /// Limiter release time in milliseconds, [1, 500].
   float limiter_release_ms;
 
   /// @brief Enables the optional 4x-oversampled inter-sample peak (true-peak)
@@ -125,47 +161,64 @@ typedef struct {
 
   /// @brief A @ref SonarePitchCorrectionMode.
   int32_t pitch_correction_mode;
+  /// Pitch correction strength, [0, 1]; 1 snaps fully to the target.
   float pitch_correction_amount;
+  /// Time the correction takes to reach the target pitch in milliseconds, [0, 400].
   float pitch_correction_speed_ms;
   /// @brief Scale root, 0 = C .. 11 = B; validated but unused for a chromatic scale.
   int32_t pitch_correction_key_root;
   /// @brief A @ref SonareScaleKind.
   int32_t pitch_correction_scale;
+  /// Octave offset of the robot-mode pitch, [-1, 1].
   int32_t pitch_correction_robot_octave;
 
   /// @brief Harmony voices beside the lead, [0, 3].
   int32_t harmony_voices;
   /// @brief Scale degrees of each harmony voice from the lead (0 = unison, +2 = a third up).
   int32_t harmony_steps[3];
+  /// Harmony voices level, [0, 1].
   float harmony_level;
+  /// Lead voice level while harmony is active, [0, 1].
   float harmony_lead_level;
+  /// Detune applied to the harmony voices in cents, [0, 30].
   float harmony_detune_cents;
+  /// Delay of the harmony voices in milliseconds, [0, 40].
   float harmony_delay_ms;
 
   /// @brief Non-zero enables the channel vocoder.
   int32_t vocoder_enabled;
   /// @brief Band count, [8, 32]. Fixed at creation.
   int32_t vocoder_bands;
+  /// Vocoder envelope attack time in milliseconds, [0.5, 50].
   float vocoder_attack_ms;
+  /// Vocoder envelope release time in milliseconds, [2, 300].
   float vocoder_release_ms;
+  /// Amount of the input sibilance mixed into the vocoder output, [0, 1].
   float vocoder_sibilance;
   /// @brief A @ref SonareVocoderCarrierSource. External reads the carrier passed to the
   ///        *_with_carrier process entries.
   int32_t vocoder_carrier_source;
   /// @brief A @ref SonareVocoderCarrierWave.
   int32_t vocoder_carrier_wave;
+  /// Detune of the ensemble carrier wave in cents, [0, 30].
   float vocoder_ensemble_detune_cents;
+  /// Vocoder output level, [0, 1].
   float vocoder_level;
 
   /// @brief A @ref SonareCharacterType.
   int32_t character_type;
+  /// Character effect depth, [0, 1].
   float character_amount;
+  /// Tone tilt of the character effect, [-1, 1]; 0 is neutral.
   float character_tone;
 
   /// @brief A @ref SonareReverbVariation; every variation shares @ref reverb_mix.
   int32_t reverb_variation;
+  /// Delay time of the echo variations in milliseconds, [1, 3000].
   float reverb_variation_delay_ms;
+  /// Feedback of the echo variations, [0, 0.95].
   float reverb_variation_feedback;
+  /// Tempo of the tempo-delay variation in BPM, [30, 300].
   float reverb_variation_tempo_bpm;
   /// @brief A @ref SonareNoteDivision for the tempo delay.
   int32_t reverb_variation_division;
