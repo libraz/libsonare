@@ -615,6 +615,13 @@ rule = "seconds-suffix"
 
 [[entry]]
 kind = "function"
+old = "sonare_mixing_assistant_suggest_scene_json"
+removed = "call sonare_mixing_assistant_suggest with the same arguments and read the scene member of the returned document"
+domain = "mastering"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "function"
 old = "sonare_analyze_json_with_progress"
 removed = "call sonare_analyze_json_ex_with_progress with options NULL and cancel_cb NULL"
 domain = "analysis"
