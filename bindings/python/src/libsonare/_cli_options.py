@@ -188,6 +188,11 @@ def _positive_finite_float(value: str) -> float:
     return parsed
 
 
+def _tempo_bpm(value: str) -> float:
+    """A tempo flag's value on every command that takes one: finite and greater than 0."""
+    return _positive_finite_float(value)
+
+
 def _closed_unit_float(value: str) -> float:
     parsed = _finite_float(value)
     if parsed < 0.0 or parsed > 1.0:
@@ -270,6 +275,7 @@ _cli_scalar_type(_finite_float, "number")
 _cli_scalar_type(_candidate_count, "integer")
 _cli_scalar_type(_mode_mask, "integer")
 _cli_scalar_type(_positive_finite_float, "number")
+_cli_scalar_type(_tempo_bpm, "number")
 _cli_scalar_type(_closed_unit_float, "number")
 _cli_scalar_type(_pitch_threshold, "number")
 _cli_scalar_type(_c_int, "integer")
@@ -284,6 +290,7 @@ _cli_domain(_nonnegative_finite_float, minimum=0.0)
 _cli_domain(_positive_pitch_frequency, minimum=0.0, exclusive_minimum=True)
 _cli_domain(_pitch_threshold, minimum=0.0, exclusive_minimum=True, maximum=1.0)
 _cli_domain(_positive_finite_float, minimum=0.0, exclusive_minimum=True)
+_cli_domain(_tempo_bpm, minimum=0.0, exclusive_minimum=True)
 _cli_domain(_closed_unit_float, minimum=0.0, maximum=1.0)
 _cli_domain(_positive_int, minimum=0.0, exclusive_minimum=True)
 

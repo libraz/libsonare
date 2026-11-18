@@ -244,6 +244,12 @@ CliOptionSpec position(CliOptionSpec spec) {
   return with_domain(std::move(spec), at_least(0.0, CliOptionDomainStage::Parameter));
 }
 
+// A tempo, on every command that takes one, is refused at the flag unless it is
+// greater than 0, so no command reaches the library with a tempo nobody can play.
+CliOptionSpec tempo(CliOptionSpec spec) {
+  return with_domain(std::move(spec), greater_than(0.0, CliOptionDomainStage::Usage));
+}
+
 // A twelve-bit scale mask the caller may also name by mode. It stays an Integer
 // option in the inventory: the name is another spelling of the same mask.
 CliOptionSpec mode_mask_value(const char* name, int value) {
@@ -570,13 +576,9 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     // Neither RhythmAnalyzer nor the BeatAnalyzer it forwards to validates any of
     // the three tempo bounds; the derived periods are merely floored at 1.
     add_command(commands, "rhythm", true,
-                {with_domain(number_value("start-bpm", 120.0),
-                             greater_than(0.0, CliOptionDomainStage::Parameter)),
-                 with_domain(number_value("bpm-min", 60.0),
-                             greater_than(0.0, CliOptionDomainStage::Parameter)),
-                 with_domain(number_value("bpm-max", 200.0),
-                             greater_than(0.0, CliOptionDomainStage::Parameter)),
-                 global_int("n-fft", 2048), global_int("hop-length", 512)},
+                {tempo(number_value("start-bpm", 120.0)), tempo(number_value("bpm-min", 60.0)),
+                 tempo(number_value("bpm-max", 200.0)), global_int("n-fft", 2048),
+                 global_int("hop-length", 512)},
                 {}, validate_rhythm_tempo_range);
     // This command's `hop-length` does NOT reach the STFT, so the guard that
     // covers every other command's copy does not cover this one: MelodyAnalyzer
@@ -912,7 +914,9 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     add_command(
         commands, "suggest-mix", false,
         {repeatable_path("input"), int_value("sample-rate", 48000), string_value("params", ""),
-         string_value("tempo-bpm"), string_value("scene-out", "")});
+         tempo(make_option("tempo-bpm", CliOptionArity::RequiredValue, CliOptionScalarType::String,
+                           null_default())),
+         string_value("scene-out", "")});
 #endif
 
     // Feature leaves.
@@ -961,12 +965,10 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     add_command(commands, "tempogram", true,
                 {global_int("n-fft", 2048), global_int("hop-length", 512),
                  global_int("n-mels", 128), int_value("win-length", 384)});
-    add_command(
-        commands, "plp", true,
-        {global_int("n-fft", 2048), global_int("hop-length", 512), global_int("n-mels", 128),
-         with_domain(number_value("bpm-min"), greater_than(0.0, CliOptionDomainStage::Parameter)),
-         with_domain(number_value("bpm-max"), greater_than(0.0, CliOptionDomainStage::Parameter)),
-         int_value("win-length", 384)});
+    add_command(commands, "plp", true,
+                {global_int("n-fft", 2048), global_int("hop-length", 512),
+                 global_int("n-mels", 128), tempo(number_value("bpm-min")),
+                 tempo(number_value("bpm-max")), int_value("win-length", 384)});
     add_command(commands, "nnls-chroma", true, {global_int("hop-length", 512)});
     // Zero keeps the 32.7 Hz default, so the domain refuses only a negative lower
     // bound -- which the handler otherwise substitutes that same default for,
@@ -1153,10 +1155,10 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
                 {}, &validate_project_bounce_channels);
     // Every numeric here means "keep the library default" when absent, and the
     // C ABI spells that 0 and refuses an out-of-domain value by name, so the
-    // domains stay on that one entry rather than being restated per surface.
+    // domains stay on that one entry -- except the tempo, which every tempo flag refuses.
     add_command(
         commands, "transcribe", true,
-        {required_output(), number_value("tempo-bpm"), flag("polyphonic"),
+        {required_output(), tempo(number_value("tempo-bpm")), flag("polyphonic"),
          number_value("reference-hz"), number_value("fmin"), number_value("fmax"),
          number_value("min-note-ms"), number_value("segmentation-threshold-cents"),
          int_value("max-polyphony"), int_value("min-note-division"),

@@ -28,7 +28,13 @@ from ._cli_common import (
     _load_audio_from_facade as _load_audio,
 )
 from ._cli_inventory import _cli_domain
-from ._cli_options import SharedParsers, _c_int, _ContractArgumentParser, _finite_float
+from ._cli_options import (
+    SharedParsers,
+    _c_int,
+    _ContractArgumentParser,
+    _finite_float,
+    _tempo_bpm,
+)
 from ._runtime import ErrorCode, SonareError
 
 # A project source's serialized `kind`: 0 audio, 1 MIDI (SourceKind). Only an
@@ -653,8 +659,6 @@ def cmd_transcribe(args: argparse.Namespace) -> int:
 
     if not args.output:
         raise ValueError("transcribe requires --output")
-    if args.tempo_bpm is not None and args.tempo_bpm <= 0.0:
-        raise ValueError("--tempo-bpm must be greater than 0")
 
     samples, sr = _load_audio(args.file)
     project = Project()
@@ -940,7 +944,7 @@ def register_project_parsers(
     )
     transcribe_p.add_argument(
         "--tempo-bpm",
-        type=_finite_float,
+        type=_tempo_bpm,
         default=None,
         help="Tempo the PPQ grid is built on (default: detected from the audio)",
     )

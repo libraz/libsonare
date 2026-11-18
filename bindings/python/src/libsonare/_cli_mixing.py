@@ -30,7 +30,8 @@ from ._cli_common import (
     _write_channel_output,
     _write_wav_stereo_frames,
 )
-from ._cli_options import SharedParsers, _c_int, _ContractArgumentParser, _positive_finite_float
+from ._cli_inventory import _cli_domain, _cli_scalar_type
+from ._cli_options import SharedParsers, _c_int, _ContractArgumentParser, _tempo_bpm
 from ._result_records import _result_to_json_dict
 
 
@@ -98,7 +99,12 @@ def _tempo_bpm_arg(value: str) -> str | float:
     """``--tempo-bpm``: ``auto`` or a tempo greater than 0, refused at the flag otherwise."""
     if value.strip().lower() == "auto":
         return "auto"
-    return _positive_finite_float(value)
+    return _tempo_bpm(value)
+
+
+# `auto` is not a number, so the tempo domain is published on the string option.
+_cli_scalar_type(_tempo_bpm_arg, "string")
+_cli_domain(_tempo_bpm_arg, minimum=0.0, exclusive_minimum=True)
 
 
 def _resolve_tempo_bpm(raw: str | float, entries: list[str]) -> tuple[float, list[Any]]:

@@ -87,9 +87,6 @@ int cmd_project_import_midi(const CliArgs& args, const ProjectMidiImportSpec& sp
 // takes no tempo at all. Omitting it detects one from the take.
 int cmd_transcribe(const CliArgs& args, const Audio& audio) {
   const bool tempo_given = args.has("tempo-bpm");
-  if (tempo_given && !(args.get_float("tempo-bpm", 0.0f) > 0.0f)) {
-    throw std::invalid_argument("--tempo-bpm must be greater than 0");
-  }
 
   ProjectHandle handle;
   SonareError err = sonare_project_create(&handle.ptr);

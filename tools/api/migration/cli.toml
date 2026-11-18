@@ -118,7 +118,7 @@ rule = "unit-in-name"
 kind = "flag"
 old = "plp --tempo-min"
 to = "plp --bpm-min"
-changed = "renamed --bpm-min; omitted, it searches the library's 60-200 BPM range rather than 30-300, so pass --bpm-min 30 --bpm-max 300 for the old search"
+changed = "renamed --bpm-min; omitted, it searches the library's 60-200 BPM range rather than 30-300, so pass --bpm-min 30 --bpm-max 300 for the old search; a value at or below 0 is refused as a usage error (exit 2) rather than an invalid parameter"
 domain = "analysis"
 rule = "tempo-range"
 test = "bindings/python/tests/test_cli_option_advanced.py::test_plp_omitted_bpm_bounds_keep_the_library_range"
@@ -127,7 +127,7 @@ test = "bindings/python/tests/test_cli_option_advanced.py::test_plp_omitted_bpm_
 kind = "flag"
 old = "plp --tempo-max"
 to = "plp --bpm-max"
-changed = "renamed --bpm-max; omitted, it searches the library's 60-200 BPM range rather than 30-300, so pass --bpm-min 30 --bpm-max 300 for the old search"
+changed = "renamed --bpm-max; omitted, it searches the library's 60-200 BPM range rather than 30-300, so pass --bpm-min 30 --bpm-max 300 for the old search; a value at or below 0 is refused as a usage error (exit 2) rather than an invalid parameter"
 domain = "analysis"
 rule = "tempo-range"
 test = "bindings/python/tests/test_cli_option_advanced.py::test_plp_omitted_bpm_bounds_keep_the_library_range"
@@ -219,3 +219,35 @@ changed = "the flag takes auto or a tempo greater than 0; an explicit 0, a negat
 domain = "mastering"
 rule = "absent-not-sentinel"
 test = "tests/conformance/cli_contract_v2.json::tempo_zero_refused"
+
+[[entry]]
+kind = "flag"
+old = "rhythm --start-bpm"
+changed = "a value at or below 0 is refused as a usage error (exit 2) rather than an invalid parameter (exit 3), as on every flag that takes a tempo"
+domain = "analysis"
+rule = "tempo-range"
+test = "tests/conformance/cli_contract_v2.json::bpm_min_zero_refused"
+
+[[entry]]
+kind = "flag"
+old = "rhythm --bpm-min"
+changed = "a value at or below 0 is refused as a usage error (exit 2) rather than an invalid parameter (exit 3), as on every flag that takes a tempo"
+domain = "analysis"
+rule = "tempo-range"
+test = "tests/conformance/cli_contract_v2.json::bpm_min_zero_refused"
+
+[[entry]]
+kind = "flag"
+old = "rhythm --bpm-max"
+changed = "a value at or below 0 is refused as a usage error (exit 2) rather than an invalid parameter (exit 3), as on every flag that takes a tempo"
+domain = "analysis"
+rule = "tempo-range"
+test = "tests/conformance/cli_contract_v2.json::bpm_min_zero_refused"
+
+[[entry]]
+kind = "flag"
+old = "transcribe --tempo-bpm"
+changed = "a value at or below 0 is refused as a usage error (exit 2) rather than an invalid parameter (exit 3), as on every flag that takes a tempo"
+domain = "analysis"
+rule = "tempo-range"
+test = "tests/conformance/cli_contract_v2.json::zero_tempo"

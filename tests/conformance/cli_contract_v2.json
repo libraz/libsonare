@@ -2705,7 +2705,7 @@
             "exclusiveMinimum": true,
             "maximum": null,
             "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "rejectExit": "usage"
           }
         },
         {
@@ -2721,7 +2721,7 @@
             "exclusiveMinimum": true,
             "maximum": null,
             "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "rejectExit": "usage"
           }
         },
         {
@@ -3537,7 +3537,7 @@
             "exclusiveMinimum": true,
             "maximum": null,
             "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "rejectExit": "usage"
           }
         },
         {
@@ -3553,7 +3553,7 @@
             "exclusiveMinimum": true,
             "maximum": null,
             "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "rejectExit": "usage"
           }
         },
         {
@@ -3596,7 +3596,7 @@
             "exclusiveMinimum": true,
             "maximum": null,
             "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "rejectExit": "usage"
           }
         }
       ],
@@ -4009,7 +4009,14 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "usage"
+          }
         }
       ],
       "synthesize-rir": [
@@ -4511,7 +4518,14 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "usage"
+          }
         },
         {
           "name": "velocity-floor-db",
@@ -7712,7 +7726,7 @@
             "exclusiveMinimum": true,
             "maximum": null,
             "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "rejectExit": "usage"
           }
         },
         {
@@ -7728,7 +7742,7 @@
             "exclusiveMinimum": true,
             "maximum": null,
             "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "rejectExit": "usage"
           }
         },
         {
@@ -7771,7 +7785,7 @@
             "exclusiveMinimum": true,
             "maximum": null,
             "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "rejectExit": "usage"
           }
         }
       ],
@@ -7838,6 +7852,25 @@
             "161.50",
             "4/4",
             "straight"
+          ]
+        },
+        {
+          "id": "bpm_min_zero_refused",
+          "argv": [
+            "rhythm",
+            "{audio}",
+            "--bpm-min",
+            "0",
+            "--json"
+          ],
+          "exit": 2,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty",
+          "stderr_contains": [
+            "bpm-min"
           ]
         }
       ],
@@ -9246,7 +9279,7 @@
             "exclusiveMinimum": true,
             "maximum": null,
             "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "rejectExit": "usage"
           }
         },
         {
@@ -9262,7 +9295,7 @@
             "exclusiveMinimum": true,
             "maximum": null,
             "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "rejectExit": "usage"
           }
         },
         {
@@ -9346,6 +9379,25 @@
           "payload": "success",
           "artifact": "none",
           "stdout": "json"
+        },
+        {
+          "id": "bpm_max_zero_refused",
+          "argv": [
+            "plp",
+            "{audio}",
+            "--bpm-max",
+            "0",
+            "--json"
+          ],
+          "exit": 2,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty",
+          "stderr_contains": [
+            "bpm-max"
+          ]
         }
       ],
       "artifacts": {}
@@ -16400,7 +16452,14 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "usage"
+          }
         },
         {
           "name": "velocity-floor-db",
@@ -16473,12 +16532,15 @@
             "0",
             "--json"
           ],
-          "exit": 3,
+          "exit": 2,
           "legacy_exit": 1,
           "payload": "none",
           "artifact": "none",
           "stdout": "empty",
-          "stderr": "nonempty"
+          "stderr": "nonempty",
+          "stderr_contains": [
+            "tempo-bpm"
+          ]
         },
         {
           "id": "inverted_pitch_range",
@@ -16594,7 +16656,14 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "usage"
+          }
         }
       ],
       "positionals": [],
@@ -16685,7 +16754,9 @@
           "artifact": "none",
           "stdout": "empty",
           "stderr": "nonempty",
-          "stderr_contains": "tempo-bpm"
+          "stderr_contains": [
+            "tempo-bpm"
+          ]
         },
         {
           "id": "duplicate_track_ids",

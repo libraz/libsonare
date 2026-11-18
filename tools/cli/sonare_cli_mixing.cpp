@@ -199,9 +199,8 @@ double resolve_assistant_tempo(const std::string& raw, const std::string& first_
     stream.imbue(std::locale::classic());
     double value = 0.0;
     stream >> value;
-    // A stated tempo is checked as the flag's own domain, before the library is reached.
-    if (!stream || stream.peek() != std::char_traits<char>::eof() || !std::isfinite(value) ||
-        value <= 0.0) {
+    // The registry domain refuses a number at or below 0; what is left is a non-number.
+    if (!stream || stream.peek() != std::char_traits<char>::eof() || !std::isfinite(value)) {
       throw CliUsageError("invalid --tempo-bpm value: " + raw +
                           " (expected 'auto' or a tempo greater than 0)");
     }

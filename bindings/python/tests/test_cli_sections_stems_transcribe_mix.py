@@ -493,7 +493,7 @@ def test_transcribe_refuses_a_non_positive_tempo(melody_wav: str) -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         output = os.path.join(tmpdir, "take.mid")
         result = _run_cli(["transcribe", melody_wav, "-o", output, "--tempo-bpm", "0"])
-        assert result.returncode == 3
+        assert result.returncode == 2
         assert "--tempo-bpm" in result.stderr
         assert not os.path.exists(output)
 

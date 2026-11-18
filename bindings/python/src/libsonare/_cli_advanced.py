@@ -14,7 +14,13 @@ from ._cli_common import (
     _load_audio_from_facade as _load_audio,
 )
 from ._cli_inventory import _cli_domain
-from ._cli_options import SharedParsers, _c_int, _ContractArgumentParser, _finite_float
+from ._cli_options import (
+    SharedParsers,
+    _c_int,
+    _ContractArgumentParser,
+    _finite_float,
+    _tempo_bpm,
+)
 
 
 def cmd_rhythm(args: argparse.Namespace) -> int:
@@ -335,12 +341,7 @@ def register_advanced_parsers(
         ("--bpm-min", 60.0),
         ("--bpm-max", 200.0),
     ):
-        _cli_domain(
-            rhythm_p.add_argument(_tempo_option, type=_finite_float, default=_tempo_default),
-            minimum=0,
-            exclusive_minimum=True,
-            reject_exit="invalid_parameter",
-        )
+        rhythm_p.add_argument(_tempo_option, type=_tempo_bpm, default=_tempo_default)
     dynamics_p = sub.add_parser(
         "dynamics", parents=[stdout_options], help="Analyze dynamics/loudness"
     )
@@ -370,24 +371,14 @@ def register_advanced_parsers(
     )
     tempogram_p.add_argument("--win-length", type=_c_int, default=384)
     plp_p = sub.add_parser("plp", parents=[mel_options], help="Compute predominant local pulse")
-    _cli_domain(
-        plp_p.add_argument(
-            "--bpm-min",
-            type=_finite_float,
-            help="Lower bound of the tempo search (omitted: the library's range)",
-        ),
-        minimum=0,
-        exclusive_minimum=True,
-        reject_exit="invalid_parameter",
+    plp_p.add_argument(
+        "--bpm-min",
+        type=_tempo_bpm,
+        help="Lower bound of the tempo search (omitted: the library's range)",
     )
-    _cli_domain(
-        plp_p.add_argument(
-            "--bpm-max",
-            type=_finite_float,
-            help="Upper bound of the tempo search (omitted: the library's range)",
-        ),
-        minimum=0,
-        exclusive_minimum=True,
-        reject_exit="invalid_parameter",
+    plp_p.add_argument(
+        "--bpm-max",
+        type=_tempo_bpm,
+        help="Upper bound of the tempo search (omitted: the library's range)",
     )
     plp_p.add_argument("--win-length", type=_c_int, default=384)

@@ -162,7 +162,7 @@
     {
       "command": "rhythm",
       "option": "start-bpm",
-      "rejectExit": "invalid_parameter",
+      "rejectExit": "usage",
       "choices": [],
       "minimum": 0.0,
       "exclusiveMinimum": true,
@@ -172,7 +172,7 @@
     {
       "command": "rhythm",
       "option": "bpm-min",
-      "rejectExit": "invalid_parameter",
+      "rejectExit": "usage",
       "choices": [],
       "minimum": 0.0,
       "exclusiveMinimum": true,
@@ -182,7 +182,7 @@
     {
       "command": "rhythm",
       "option": "bpm-max",
-      "rejectExit": "invalid_parameter",
+      "rejectExit": "usage",
       "choices": [],
       "minimum": 0.0,
       "exclusiveMinimum": true,
@@ -418,6 +418,16 @@
       "exclusiveMaximum": false
     },
     {
+      "command": "suggest-mix",
+      "option": "tempo-bpm",
+      "rejectExit": "usage",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusiveMinimum": true,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
       "command": "repair",
       "option": "bits",
       "rejectExit": "invalid_parameter",
@@ -533,7 +543,7 @@
     {
       "command": "plp",
       "option": "bpm-min",
-      "rejectExit": "invalid_parameter",
+      "rejectExit": "usage",
       "choices": [],
       "minimum": 0.0,
       "exclusiveMinimum": true,
@@ -543,7 +553,7 @@
     {
       "command": "plp",
       "option": "bpm-max",
-      "rejectExit": "invalid_parameter",
+      "rejectExit": "usage",
       "choices": [],
       "minimum": 0.0,
       "exclusiveMinimum": true,
@@ -768,6 +778,16 @@
       "choices": [],
       "minimum": 0.0,
       "exclusiveMinimum": false,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "transcribe",
+      "option": "tempo-bpm",
+      "rejectExit": "usage",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusiveMinimum": true,
       "maximum": null,
       "exclusiveMaximum": false
     },
