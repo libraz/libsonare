@@ -88,6 +88,7 @@ def render_solo_typescript(catalog: Any) -> str:
     lines += [
         "] as const;",
         "",
+        "/** A processor name the solo apply path accepts; see `SOLO_PROCESSORS`. */",
         "export type SoloProcessor = (typeof SOLO_PROCESSORS)[number];",
     ]
     return "\n".join(lines)
@@ -126,6 +127,7 @@ def render_insert_names(catalog: Any) -> str:
     lines += [
         "] as const;",
         "",
+        "/** A processor id the realtime insert factory builds; see `MASTERING_INSERT_NAMES`. */",
         "export type MasteringInsertName = (typeof MASTERING_INSERT_NAMES)[number];",
     ]
     return "\n".join(lines)
@@ -147,6 +149,7 @@ def render_scene_presets(catalog: Any) -> str:
     lines += [
         "] as const;",
         "",
+        "/** A built-in mixing scene name; see `MIX_SCENE_PRESETS`. */",
         "export type MixScenePreset = (typeof MIX_SCENE_PRESETS)[number];",
     ]
     return "\n".join(lines)

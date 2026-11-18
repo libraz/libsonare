@@ -225,6 +225,7 @@ export const SOLO_PROCESSORS = [
   'voice.changer',
 ] as const;
 
+/** A processor name the solo apply path accepts; see `SOLO_PROCESSORS`. */
 export type SoloProcessor = (typeof SOLO_PROCESSORS)[number];
 // END GENERATED SoloProcessor
 
@@ -317,6 +318,7 @@ export const MASTERING_INSERT_NAMES = [
   'voice.changer',
 ] as const;
 
+/** A processor id the realtime insert factory builds; see `MASTERING_INSERT_NAMES`. */
 export type MasteringInsertName = (typeof MASTERING_INSERT_NAMES)[number];
 // END GENERATED MasteringInsertName
 
@@ -13702,6 +13704,7 @@ export const MIX_SCENE_PRESETS = [
   'commentaryDucking',
 ] as const;
 
+/** A built-in mixing scene name; see `MIX_SCENE_PRESETS`. */
 export type MixScenePreset = (typeof MIX_SCENE_PRESETS)[number];
 // END GENERATED MixScenePreset
 

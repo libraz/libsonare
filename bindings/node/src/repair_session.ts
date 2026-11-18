@@ -40,12 +40,30 @@ export type MasteringRepairStageName =
  * refused by name. `declip` takes `clipThresholdDb` in dBFS.
  */
 export type MasteringRepairStage =
-  | ({ stage: 'declip' } & Omit<DeclipOptions, 'validate'>)
-  | ({ stage: 'declick' } & Omit<DeclickOptions, 'validate'>)
-  | ({ stage: 'decrackle' } & Omit<DecrackleOptions, 'validate'>)
-  | ({ stage: 'dehum' } & Omit<DehumOptions, 'validate'>)
-  | ({ stage: 'denoise' } & Omit<DenoiseClassicalOptions, 'validate'>)
-  | ({ stage: 'dereverb' } & Omit<DereverbClassicalOptions, 'validate'>);
+  | ({
+      /** Stage to apply. */
+      stage: 'declip';
+    } & Omit<DeclipOptions, 'validate'>)
+  | ({
+      /** Stage to apply. */
+      stage: 'declick';
+    } & Omit<DeclickOptions, 'validate'>)
+  | ({
+      /** Stage to apply. */
+      stage: 'decrackle';
+    } & Omit<DecrackleOptions, 'validate'>)
+  | ({
+      /** Stage to apply. */
+      stage: 'dehum';
+    } & Omit<DehumOptions, 'validate'>)
+  | ({
+      /** Stage to apply. */
+      stage: 'denoise';
+    } & Omit<DenoiseClassicalOptions, 'validate'>)
+  | ({
+      /** Stage to apply. */
+      stage: 'dereverb';
+    } & Omit<DereverbClassicalOptions, 'validate'>);
 
 /** Native stage settings still carry the declip level as the linear `clipThreshold`. */
 function stageToNative(stage: MasteringRepairStage): Record<string, unknown> {
@@ -104,12 +122,54 @@ export interface MasteringRepairAnalysis {
 
 /** One applied stage's reports: one per channel, or one for a linked stage's whole set. */
 export type MasteringRepairStageReports =
-  | { stage: 'declip'; scope: 'channel'; reports: DeclipReport[] }
-  | { stage: 'declick'; scope: 'channel'; reports: DeclickReport[] }
-  | { stage: 'decrackle'; scope: 'channel'; reports: DecrackleReport[] }
-  | { stage: 'dehum'; scope: 'channel'; reports: DehumReport[] }
-  | { stage: 'denoise'; scope: 'linked'; reports: [DenoiseReport] }
-  | { stage: 'dereverb'; scope: 'linked'; reports: [DereverbReport] };
+  | {
+      /** Stage applied. */
+      stage: 'declip';
+      /** `'channel'`: one report per channel, in channel order. */
+      scope: 'channel';
+      /** The stage's reports. */
+      reports: DeclipReport[];
+    }
+  | {
+      /** Stage applied. */
+      stage: 'declick';
+      /** `'channel'`: one report per channel, in channel order. */
+      scope: 'channel';
+      /** The stage's reports. */
+      reports: DeclickReport[];
+    }
+  | {
+      /** Stage applied. */
+      stage: 'decrackle';
+      /** `'channel'`: one report per channel, in channel order. */
+      scope: 'channel';
+      /** The stage's reports. */
+      reports: DecrackleReport[];
+    }
+  | {
+      /** Stage applied. */
+      stage: 'dehum';
+      /** `'channel'`: one report per channel, in channel order. */
+      scope: 'channel';
+      /** The stage's reports. */
+      reports: DehumReport[];
+    }
+  | {
+      /** Stage applied. */
+      stage: 'denoise';
+      /** `'linked'`: one report covering every channel. */
+      scope: 'linked';
+      /** The stage's reports. */
+      reports: [DenoiseReport];
+    }
+  | {
+      /** Stage applied. */
+      stage: 'dereverb';
+      /** `'linked'`: one report covering every channel. */
+      scope: 'linked';
+      /** The stage's reports. */
+      reports: [DereverbReport];
+    };
 
 /** Result of {@link masteringRepairApply}. */
 export interface MasteringRepairApplyResult {
