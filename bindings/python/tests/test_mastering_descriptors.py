@@ -148,13 +148,18 @@ def test_enum_names_resolve_to_the_numbers_the_native_list_carries() -> None:
 
     x = _noise(SR)
     by_number = libsonare.master_audio(
-        x, SR, "pop", {"repair": {"denoise": {"enabled": True, "noiseEstimator": 1, "mode": 1}}}
+        x,
+        SR,
+        preset="pop",
+        overrides={"repair": {"denoise": {"enabled": True, "noiseEstimator": 1, "mode": 1}}},
     )
     by_name = libsonare.master_audio(
         x,
         SR,
-        "pop",
-        {"repair": {"denoise": {"enabled": True, "noiseEstimator": "mcra", "mode": "mmseStsa"}}},
+        preset="pop",
+        overrides={
+            "repair": {"denoise": {"enabled": True, "noiseEstimator": "mcra", "mode": "mmseStsa"}}
+        },
     )
     assert list(by_name.samples) == list(by_number.samples)
 
@@ -168,7 +173,7 @@ def test_an_unknown_enum_name_is_refused_with_the_key_and_the_valid_names() -> N
         SonareError,
         match=r"repair\.denoise\.noiseEstimator: unknown name 'nope' \(valid names: quantile, mcra",
     ):
-        libsonare.master_audio(_noise(SR), SR, "pop", config)
+        libsonare.master_audio(_noise(SR), SR, preset="pop", overrides=config)
     with pytest.raises(SonareError, match="unknown name 'nope'"):
         libsonare.StreamingMasteringChain(config, sample_rate=SR, num_channels=1)
 

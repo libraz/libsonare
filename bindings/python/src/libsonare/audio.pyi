@@ -24,6 +24,7 @@ from .types import (
     KeyMode,
     KeyProfile,
     LufsResult,
+    MasteringChainConfig,
     MasteringChainResult,
     MasteringResult,
     MelSpectrogramResult,
@@ -211,10 +212,10 @@ class Audio:
     ) -> MasteringChainResult: ...
     def master_audio(
         self,
-        preset: MasteringPreset = "pop",
-        overrides: dict[str, Any] | None = None,
-        on_progress: Callable[[float, str], None] | None = None,
         *,
+        preset: MasteringPreset | None = None,
+        overrides: MasteringChainConfig | None = None,
+        on_progress: Callable[[float, str], None] | None = None,
         cancel: Callable[[], bool] | None = None,
     ) -> MasteringChainResult: ...
     def trim(self, threshold_db: float = -60.0) -> np.ndarray: ...

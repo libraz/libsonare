@@ -67,7 +67,7 @@ def test_no_encode_call_bypasses_the_shared_encoder() -> None:
         lambda: mixing_scene_preset_json("a\x00b"),
         lambda: Mixer.from_scene_json('{"version":1}\x00trailing', 48000),
         lambda: mastering_preset_params("pop\x00junk"),
-        lambda: master_audio([0.1] * 4096, 44100, "pop\x00junk"),
+        lambda: master_audio([0.1] * 4096, 44100, preset="pop\x00junk"),
         lambda: realtime_voice_changer_preset_json("neutralMonitor\x00junk"),
         lambda: realtime_voice_changer_preset_config("neutralMonitor\x00junk"),
         lambda: validate_realtime_voice_changer_preset_json("{}\x00junk"),

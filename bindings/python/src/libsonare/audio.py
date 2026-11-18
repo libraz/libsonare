@@ -174,6 +174,7 @@ from .types import (
     KeyMode,
     KeyProfile,
     LufsResult,
+    MasteringChainConfig,
     MasteringChainResult,
     MasteringResult,
     MelSpectrogramResult,
@@ -1022,19 +1023,24 @@ class Audio:
 
     def master_audio(
         self,
-        preset: str = "pop",
-        overrides: dict | None = None,
-        on_progress: Callable[[float, str], None] | None = None,
         *,
+        preset: str | None = None,
+        overrides: MasteringChainConfig | None = None,
+        on_progress: Callable[[float, str], None] | None = None,
         cancel: Callable[[], bool] | None = None,
     ) -> MasteringChainResult:
-        """Apply a named mastering preset chain to this audio.
+        """Master this audio with a named preset, a chain of overrides, or both.
 
         See :func:`libsonare.master_audio` for the ``preset``, ``overrides``,
-        ``on_progress``, and ``cancel`` semantics.
+        ``on_progress``, and ``cancel`` semantics; neither given raises SonareValueError.
         """
         return _master_audio(
-            self.data, self.sample_rate, preset, overrides, on_progress=on_progress, cancel=cancel
+            self.data,
+            self.sample_rate,
+            preset=preset,
+            overrides=overrides,
+            on_progress=on_progress,
+            cancel=cancel,
         )
 
     def trim(self, threshold_db: float = -60.0) -> np.ndarray:

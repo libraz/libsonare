@@ -92,7 +92,7 @@ def test_dotted_key_is_refused_by_name() -> None:
     with pytest.raises(SonareValueError, match=r"dotted keys are not accepted; nest the object"):
         mastering_chain(LEFT, SR, FLAT)
     with pytest.raises(SonareValueError, match=r"dynamics\.multibandComp"):
-        master_audio(LEFT, SR, "pop", {MB: {"enabled": True}})
+        master_audio(LEFT, SR, preset="pop", overrides={MB: {"enabled": True}})
 
 
 def test_typed_config_renders_like_flat_keys_mono() -> None:
@@ -122,8 +122,8 @@ def test_typed_config_changes_the_render() -> None:
 
 
 def test_typed_overrides_on_a_preset_render_like_flat_keys() -> None:
-    nested = master_audio(LEFT, SR, "pop", TYPED)
-    flat = master_audio(LEFT, SR, "pop", _nest_chain_config(FLAT))
+    nested = master_audio(LEFT, SR, preset="pop", overrides=TYPED)
+    flat = master_audio(LEFT, SR, preset="pop", overrides=_nest_chain_config(FLAT))
     np.testing.assert_array_equal(nested.samples, flat.samples)
 
 

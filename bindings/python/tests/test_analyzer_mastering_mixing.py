@@ -774,3 +774,36 @@ def test_clean_input_reports_no_non_finite_substitution() -> None:
     for result in results:
         assert result.non_finite_substitution_count == 0
         assert isinstance(result.non_finite_substitution_count, int)
+
+
+def test_master_audio_refuses_a_call_with_neither_preset_nor_overrides() -> None:
+    """The caller chooses the chain; mastering with nothing chosen is refused, not a no-op."""
+    import libsonare
+
+    sr = 22050
+    tone = np.sin(2 * np.pi * 220 * np.arange(sr // 4) / sr).astype(np.float32) * 0.1
+    for call in (
+        lambda: libsonare.master_audio(tone, sr),
+        lambda: libsonare.master_audio_stereo(tone, tone, sr),
+        lambda: libsonare.Audio.from_buffer(tone, sr).master_audio(),
+    ):
+        with pytest.raises(libsonare.SonareValueError, match="give a preset or overrides"):
+            call()
+
+
+def test_master_audio_runs_explicit_overrides_as_the_whole_chain() -> None:
+    """With no preset, an explicit overrides mapping is the chain, even an empty one."""
+    import libsonare
+
+    sr = 22050
+    tone = np.sin(2 * np.pi * 220 * np.arange(sr // 4) / sr).astype(np.float32) * 0.1
+    np.testing.assert_array_equal(libsonare.master_audio(tone, sr, overrides={}).samples, tone)
+    pair = libsonare.master_audio_stereo(tone, tone, sr, overrides={})
+    np.testing.assert_array_equal(pair.left, tone)
+    np.testing.assert_array_equal(pair.right, tone)
+    chain = {"dynamics": {"compressor": {"enabled": True, "thresholdDb": -30.0}}}
+    np.testing.assert_array_equal(
+        libsonare.master_audio(tone, sr, overrides=chain).samples,
+        libsonare.mastering_chain(tone, sr, chain).samples,
+    )
+    assert not np.array_equal(libsonare.master_audio(tone, sr, overrides=chain).samples, tone)

@@ -7003,6 +7003,30 @@ rule = "individual"
 
 [[entry]]
 kind = "function"
+old = "master_audio"
+changed = "preset, overrides and on_progress are keyword-only; preset defaults to None (was \"pop\"), which runs overrides as the whole chain (overrides={} returns the input); neither given raises SonareValueError"
+domain = "mastering"
+rule = "one-input-form"
+test = "bindings/python/tests/test_analyzer_mastering_mixing.py::test_master_audio_refuses_a_call_with_neither_preset_nor_overrides"
+
+[[entry]]
+kind = "function"
+old = "master_audio_stereo"
+changed = "preset, overrides and on_progress are keyword-only; preset defaults to None (was \"pop\"), which runs overrides as the whole chain (overrides={} returns the input); neither given raises SonareValueError"
+domain = "mastering"
+rule = "one-input-form"
+test = "bindings/python/tests/test_analyzer_mastering_mixing.py::test_master_audio_refuses_a_call_with_neither_preset_nor_overrides"
+
+[[entry]]
+kind = "method"
+old = "Audio.master_audio"
+changed = "preset, overrides and on_progress are keyword-only; preset defaults to None (was \"pop\"), which runs overrides as the whole chain (overrides={} returns the input); neither given raises SonareValueError"
+domain = "core"
+rule = "one-input-form"
+test = "bindings/python/tests/test_analyzer_mastering_mixing.py::test_master_audio_refuses_a_call_with_neither_preset_nor_overrides"
+
+[[entry]]
+kind = "function"
 old = "mastering_assistant_suggest_chain"
 changed = "returns the nested chain config (module -> processor -> parameter) instead of a flat dotted-key dict; pass it to master_audio(overrides=) unchanged"
 domain = "mastering"

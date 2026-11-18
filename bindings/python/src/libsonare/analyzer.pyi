@@ -1556,20 +1556,20 @@ def mix_stereo(
 def master_audio(
     samples: FloatSamples,
     sample_rate: int,
-    preset: MasteringPreset = "pop",
+    *,
+    preset: MasteringPreset | None = None,
     overrides: MasteringChainConfig | None = None,
     on_progress: ProgressCallback | None = None,
-    *,
     cancel: CancelCallback | None = None,
 ) -> MasteringChainResult: ...
 def master_audio_stereo(
     left: FloatSamples,
     right: FloatSamples,
     sample_rate: int,
-    preset: MasteringPreset = "pop",
+    *,
+    preset: MasteringPreset | None = None,
     overrides: MasteringChainConfig | None = None,
     on_progress: ProgressCallback | None = None,
-    *,
     cancel: CancelCallback | None = None,
 ) -> MasteringChainStereoResult: ...
 def streaming_loudness_gain(

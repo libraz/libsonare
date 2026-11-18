@@ -551,9 +551,11 @@ def test_remaining_mastering_progress_variants_forward_cancellation(operation: s
                 cancel=lambda: True,
             )
         elif operation == "preset-mono":
-            result = master_audio(samples, sample_rate=22050, cancel=lambda: True)
+            result = master_audio(samples, sample_rate=22050, preset="pop", cancel=lambda: True)
         else:
-            result = master_audio_stereo(samples, samples, sample_rate=22050, cancel=lambda: True)
+            result = master_audio_stereo(
+                samples, samples, sample_rate=22050, preset="pop", cancel=lambda: True
+            )
 
     assert exc.value.code == 8
     assert result is None
@@ -577,7 +579,9 @@ def test_mastering_chain_reads_the_nested_config() -> None:
 
 _DOTTED_KEY_CALLS = {
     "mastering_chain": lambda c: libsonare.mastering_chain([0.1] * 2205, 22050, c),
-    "master_audio": lambda c: libsonare.master_audio([0.1] * 2205, 22050, "pop", c),
+    "master_audio": lambda c: libsonare.master_audio(
+        [0.1] * 2205, 22050, preset="pop", overrides=c
+    ),
     "streaming_loudness_gain": lambda c: libsonare.streaming_loudness_gain([0.1] * 2205, 22050, c),
     "StreamingMasteringChain": lambda c: libsonare.StreamingMasteringChain(
         c, sample_rate=22050, num_channels=1
@@ -586,7 +590,7 @@ _DOTTED_KEY_CALLS = {
         [0.1] * 2205, [0.1] * 2205, 22050, c
     ),
     "master_audio_stereo": lambda c: libsonare.master_audio_stereo(
-        [0.1] * 2205, [0.1] * 2205, 22050, "pop", c
+        [0.1] * 2205, [0.1] * 2205, 22050, preset="pop", overrides=c
     ),
     "streaming_loudness_gain_stereo": lambda c: libsonare.streaming_loudness_gain_stereo(
         [0.1] * 2205, [0.1] * 2205, 22050, c

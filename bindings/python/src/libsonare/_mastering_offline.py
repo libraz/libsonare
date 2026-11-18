@@ -995,20 +995,25 @@ def mastering_platform_names() -> list[str]:
 def master_audio(
     samples: Sequence[float] | list[float],
     sample_rate: int,
-    preset: str = "pop",
+    *,
+    preset: str | None = None,
     overrides: MasteringChainConfig | None = None,
     on_progress: Callable[[float, str], None] | None = None,
-    *,
     cancel: Callable[[], bool] | None = None,
 ) -> MasteringChainResult:
-    """Apply a named mastering preset chain to mono audio.
+    """Master mono audio with a named preset, a chain of overrides, or both.
+
+    A call with neither ``preset`` nor ``overrides`` raises SonareValueError: the
+    caller chooses the chain. An explicit ``overrides`` without a preset, even an
+    empty mapping, runs as the whole chain, so ``overrides={}`` returns the input.
 
     Args:
         samples: Mono audio samples.
         sample_rate: Sample rate in Hz.
-        preset: Preset identifier from :func:`mastering_preset_names`.
-        overrides: Optional nested overrides applied on top of the preset
-            defaults. Uses the same config shape as :func:`mastering_chain`.
+        preset: Preset identifier from :func:`mastering_preset_names`; None runs
+            ``overrides`` alone.
+        overrides: Nested camelCase chain config (:data:`MasteringChainConfig`),
+            applied on top of the preset defaults when a preset is given.
             Exception: the color stages ``saturation.tape`` and
             ``saturation.exciter`` are engaged from an override only when you
             pass ``enabled=True`` explicitly. On a preset where they are off,
@@ -1024,6 +1029,10 @@ def master_audio(
         :class:`MasteringChainResult` with processed samples, LUFS info, and the
         ordered list of stages that ran.
     """
+    if preset is None:
+        if overrides is None:
+            raise SonareValueError("master_audio: give a preset or overrides")
+        return mastering_chain(samples, sample_rate, overrides, on_progress, cancel=cancel)
     lib = _get_lib()
     if not hasattr(lib, "sonare_master_audio"):
         raise _not_supported("libsonare was built without mastering preset support")
@@ -1112,17 +1121,23 @@ def master_audio_stereo(
     left: Sequence[float] | list[float],
     right: Sequence[float] | list[float],
     sample_rate: int,
-    preset: str = "pop",
+    *,
+    preset: str | None = None,
     overrides: MasteringChainConfig | None = None,
     on_progress: Callable[[float, str], None] | None = None,
-    *,
     cancel: Callable[[], bool] | None = None,
 ) -> MasteringChainStereoResult:
-    """Apply a named mastering preset chain to stereo audio.
+    """Master stereo audio with a named preset, a chain of overrides, or both.
 
     See :func:`master_audio` for the ``preset``, ``overrides``,
-    ``on_progress``, and ``cancel`` semantics.
+    ``on_progress``, and ``cancel`` semantics; neither given raises SonareValueError.
     """
+    if preset is None:
+        if overrides is None:
+            raise SonareValueError("master_audio_stereo: give a preset or overrides")
+        return mastering_chain_stereo(
+            left, right, sample_rate, overrides, on_progress, cancel=cancel
+        )
     lib = _get_lib()
     if not hasattr(lib, "sonare_master_audio_stereo"):
         raise _not_supported("libsonare was built without mastering preset support")
