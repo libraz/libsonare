@@ -249,13 +249,13 @@ val js_pitch_correct_timevarying(val samples, const val& sample_rate_val, val f0
     if (hasProperty(options, "targetMode")) {
       const val mode_value = options["targetMode"];
       if (mode_value.typeOf().as<std::string>() != "string") {
-        throw WasmTypeError("pitch correction targetMode must be 'midi' or 'scale'");
+        throw WasmTypeError("targetMode must be one of 'midi', 'scale' (a name, not a number)");
       }
       const std::string mode = mode_value.as<std::string>();
       if (mode == "scale") {
         scale_mode = true;
       } else if (mode != "midi") {
-        throw WasmRangeError("unknown pitch correction targetMode");
+        throw WasmRangeError("targetMode must be one of 'midi', 'scale', got '" + mode + "'");
       }
     }
     target_midi = floatProperty(options, "targetMidi", target_midi);

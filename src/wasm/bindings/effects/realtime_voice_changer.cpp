@@ -103,12 +103,13 @@ constexpr VcEnumName kVcMidiReleaseNames[] = {{0, "hold"}, {1, "input"}};
 // harmonySteps: an array of exactly kMaxHarmonyVoices whole numbers.
 void vcReadHarmonySteps(const val& pod, int (&steps)[editing::voice_changer::kMaxHarmonyVoices]) {
   const val value = requireTypedProperty(pod, "harmonySteps", kVcPodSubject, "object", "an array");
-  const std::string path = std::string(kVcPodSubject) + ".harmonySteps";
+  constexpr char kPath[] = "voice changer POD config.harmonySteps";
+  const std::string path = kPath;
   if (!val::global("Array").call<bool>("isArray", value)) {
     throw WasmTypeError(path + " must be an array");
   }
   const int count = editing::voice_changer::kMaxHarmonyVoices;
-  if (wasmArrayLikeLength(value, path.c_str()) != static_cast<std::size_t>(count)) {
+  if (wasmArrayLikeLength(value, kPath) != static_cast<std::size_t>(count)) {
     throw WasmRangeError(path + " must have exactly " + std::to_string(count) + " entries");
   }
   for (int i = 0; i < count; ++i) {

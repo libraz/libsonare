@@ -37,8 +37,8 @@ describe('RealtimeVoiceChanger flat POD setConfig', () => {
 
   it('rejects a partial nested preset instead of applying defaults', () => {
     const vc = new RealtimeVoiceChanger({ sampleRate: 48000 });
-    // @ts-expect-error deliberately partial nested preset; setConfig must reject it, not fill in defaults.
     expect(() =>
+      // @ts-expect-error deliberately partial nested preset; setConfig must reject it, not fill in defaults.
       vc.setConfig({ schemaVersion: 3, dsp: { retune: { pitchSemitones: 3 } } }),
     ).toThrow(/missing field|field must/i);
     vc.destroy();

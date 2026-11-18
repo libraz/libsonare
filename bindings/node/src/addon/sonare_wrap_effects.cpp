@@ -325,22 +325,8 @@ Napi::Value SonareWrap::PitchCorrectTimevarying(const Napi::CallbackInfo& info) 
         {"targetMode", "targetMidi", "scaleRoot", "scaleModeMask", "scaleReferenceMidi",
          "retuneAmount", "maxCorrectionSemitones", "retuneSpeedMs", "vibratoThresholdCents",
          "voiced", "voicedProb"});
-    const Napi::Value mode_value = opts.Get("targetMode");
-    if (!mode_value.IsUndefined() && !mode_value.IsNull()) {
-      if (!mode_value.IsString()) {
-        Napi::TypeError::New(env, "pitch correction targetMode must be 'midi' or 'scale'")
-            .ThrowAsJavaScriptException();
-        return env.Undefined();
-      }
-      std::string mode = node_narrow_string(env, mode_value, "targetMode");
-      if (mode == "scale") {
-        config.target_mode = SONARE_PITCH_TARGET_SCALE;
-      } else if (mode != "midi") {
-        Napi::RangeError::New(env, "unknown pitch correction targetMode")
-            .ThrowAsJavaScriptException();
-        return env.Undefined();
-      }
-    }
+    config.target_mode = sonare_node::NamedSelectorProperty(
+        opts, "targetMode", std::array<const char*, 2>{"midi", "scale"}, config.target_mode);
     config.target_midi = sonare_node::FloatProperty(opts, "targetMidi", config.target_midi);
     config.scale_root = sonare_node::IntProperty(opts, "scaleRoot", config.scale_root);
     const Napi::Value mask_value = opts.Get("scaleModeMask");
