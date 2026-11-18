@@ -45,15 +45,18 @@ class ClipPageProvider:
         self._handle = handle
 
     def close(self) -> None:
+        """Release the native provider; idempotent."""
         handle = getattr(self, "_handle", None)
         if handle is not None:
             _get_lib().sonare_clip_page_provider_destroy(handle)
             self._handle = None
 
     def __enter__(self) -> ClipPageProvider:
+        """Return the provider for use as a context manager."""
         return self
 
     def __exit__(self, *_exc: object) -> None:
+        """Close the provider on leaving the ``with`` block."""
         self.close()
 
     def __del__(self) -> None:
@@ -63,6 +66,7 @@ class ClipPageProvider:
         return _require_open(self._handle, "ClipPageProvider")
 
     def supply(self, page_index: int, channels: Sequence[Sequence[float]]) -> None:
+        """Make page ``page_index`` resident from one float sequence per channel."""
         arrays, ptrs, frames = _planar_channel_arrays(channels)
         _check(
             _get_lib().sonare_clip_page_provider_supply(
@@ -75,6 +79,7 @@ class ClipPageProvider:
         )
 
     def clear(self, page_index: int) -> None:
+        """Mark page ``page_index`` as not resident."""
         _check(
             _get_lib().sonare_clip_page_provider_clear(
                 self._require_handle(), _to_c_int64(page_index, "page_index")
@@ -128,6 +133,7 @@ class FileClipPageProvider(ClipPageProvider):
         )
 
     def close(self) -> None:
+        """Close the file and release the native provider; idempotent."""
         file = getattr(self, "_file", None)
         if file is not None:
             file.close()
@@ -135,6 +141,11 @@ class FileClipPageProvider(ClipPageProvider):
         super().close()
 
     def supply_page(self, page_index: int) -> bool:
+        """Read page ``page_index`` from the file and supply it.
+
+        Returns False when the page is out of range or the file is short.
+        Raises SonareError (InvalidState) once closed.
+        """
         if self._file is None:
             raise _invalid_state("FileClipPageProvider is closed")
         # Narrowed before the page arithmetic: int(2.5) is page 2, a whole page
@@ -158,4 +169,5 @@ class FileClipPageProvider(ClipPageProvider):
         return True
 
     def supply_request(self, request: ClipPageRequest) -> bool:
+        """Supply the page containing ``request.sample``; same result as :meth:`supply_page`."""
         return self.supply_page(request.sample // self.page_frames)

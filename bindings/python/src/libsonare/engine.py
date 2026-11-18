@@ -107,6 +107,7 @@ _ALL_EXTERNAL_PORTS = 0xFFFFFFFF
 
 # SONARE_ENGINE_MAX_TRACK_LANES: most lanes RealtimeEngine.set_track_lanes accepts.
 MAX_TRACK_LANES = 32
+"""Most track lanes :meth:`RealtimeEngine.set_track_lanes` accepts."""
 
 # The most MIDI 1.0 messages one queued external-MIDI record can lower to, and
 # therefore the smallest drain budget that can consume a record at all. Mirrors
@@ -165,9 +166,11 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
             self._handle = None
 
     def __enter__(self) -> RealtimeEngine:
+        """Return the engine for use as a context manager."""
         return self
 
     def __exit__(self, *_exc: object) -> None:
+        """Close the engine on leaving the ``with`` block."""
         self.close()
 
     def __del__(self) -> None:
