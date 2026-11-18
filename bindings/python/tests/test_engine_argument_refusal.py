@@ -16,7 +16,7 @@ _VALUE_REFUSALS: list[tuple[str, Callable[[RealtimeEngine], object]]] = [
     (
         "unknown_engine_param_key",
         lambda e: e.set_synth_instrument(
-            SynthPatch(engine_mode="bowed-string", engine_params={"noSuchKey": 1.0}),
+            SynthPatch(engine_mode="bowedString", engine_params={"noSuchKey": 1.0}),
             destination_id=3,
         ),
     ),

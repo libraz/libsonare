@@ -216,7 +216,7 @@ def test_capability_catalog_aggregates_processors_and_presets() -> None:
     assert catalog.abi.project == (libsonare.project_abi_version() or 0)
     assert catalog.processors
     assert "pop" in catalog.presets.mastering
-    assert "harp-plucked" in catalog.presets.synth
+    assert "harpPlucked" in catalog.presets.synth
     for names in dataclasses.astuple(catalog.presets):
         assert len(names) == len(set(names))
     compressor = next(entry for entry in catalog.processors if entry.id == "dynamics.compressor")

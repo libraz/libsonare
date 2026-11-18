@@ -58,7 +58,6 @@ from ._project_synth import (
     _SAMPLE_LOOP_MODES,
     _SYNTH_BODY_TYPES,
     _SYNTH_ENGINE_MODES,
-    _SYNTH_FILTER_MODEL_INPUT,
     _SYNTH_FILTER_MODELS,
     _SYNTH_FILTER_OUTPUTS,
     _SYNTH_LFO_SHAPES,
@@ -255,41 +254,41 @@ class SynthModRouting:
     """One NativeSynth mod-matrix routing (see :class:`SynthPatch`).
 
     ``source`` / ``destination`` accept the ordinal or a name (sources:
-    ``"amp-env"`` / ``"filter-env"`` / ``"lfo1"`` / ``"lfo2"`` / ``"velocity"``
-    / ``"key-track"`` / ``"mod-wheel"`` / ``"random"`` / ``"breath"`` /
-    ``"aftertouch"`` / ``"expression-cc"`` / ``"pitch-bend"``; destinations:
-    ``"pitch-cents"`` / ``"cutoff-cents"`` / ``"amp-gain"`` / ``"pan-units"`` /
-    ``"resonance-q"`` / ``"vibrato-depth-cents"`` / ``"filter-env-depth"`` /
-    ``"lfo1-rate-scale"`` / ``"excitation-force"`` / ``"excitation-position"`` /
-    ``"excitation-brightness"`` / ``"spectrum-morph"``). ``"none"`` is refused
+    ``"ampEnv"`` / ``"filterEnv"`` / ``"lfo1"`` / ``"lfo2"`` / ``"velocity"``
+    / ``"keyTrack"`` / ``"modWheel"`` / ``"random"`` / ``"breath"`` /
+    ``"aftertouch"`` / ``"expressionCc"`` / ``"pitchBend"``; destinations:
+    ``"pitchCents"`` / ``"cutoffCents"`` / ``"ampGain"`` / ``"panUnits"`` /
+    ``"resonanceQ"`` / ``"vibratoDepthCents"`` / ``"filterEnvDepth"`` /
+    ``"lfo1RateScale"`` / ``"excitationForce"`` / ``"excitationPosition"`` /
+    ``"excitationBrightness"`` / ``"spectrumMorph"``). ``"none"`` is refused
     for either field: a routing driven by or aimed at nothing is a caller
     mistake, not an empty slot.
 
     ``depth`` is destination units at full source deflection, summed onto
     whatever the patch or a CC already set and then handled per destination:
 
-    - ``"pan-units"``: SF2 pan units, clamped to ``[-500, 500]`` -- ``1`` moves
+    - ``"panUnits"``: SF2 pan units, clamped to ``[-500, 500]`` -- ``1`` moves
       the image by about 0.2% of a side.
-    - ``"amp-gain"`` / ``"filter-env-depth"``: multiplicative. Each routing's
+    - ``"ampGain"`` / ``"filterEnvDepth"``: multiplicative. Each routing's
       amount composes onto a running multiplier clamped to ``[0, 4]``.
-      ``"filter-env-depth"`` has nothing to scale while the patch's
+      ``"filterEnvDepth"`` has nothing to scale while the patch's
       ``env_to_cutoff_cents`` is ``0``.
-    - ``"resonance-q"``: added to the patch's own Q, then floored at a fixed
+    - ``"resonanceQ"``: added to the patch's own Q, then floored at a fixed
       ``0.5`` (not at that patch's own Q).
-    - ``"lfo1-rate-scale"``: multiplicative, clamped to ``[1/16, 16]``. It
+    - ``"lfo1RateScale"``: multiplicative, clamped to ``[1/16, 16]``. It
       retunes LFO1 rather than sounding on its own, so it is audible only once
       something else already reads LFO1's output (vibrato depth, the filter's
       LFO amount, tremolo).
-    - The three ``excitation-*`` destinations and ``"spectrum-morph"``: an
+    - The three ``excitation-*`` destinations and ``"spectrumMorph"``: an
       offset in the engine's own normalized ``[0, 1]`` units -- the same scale
       the live-control CCs drive -- clamped to ``[-1, 1]``. Reach is per engine
-      and not uniform across the three: ``"excitation-force"`` reaches pipe
+      and not uniform across the three: ``"excitationForce"`` reaches pipe
       organ, bowed string, reed, brass, flute and free reed;
-      ``"excitation-position"`` reaches bowed string only;
-      ``"excitation-brightness"`` reaches pipe organ, reed, brass, flute, free
+      ``"excitationPosition"`` reaches bowed string only;
+      ``"excitationBrightness"`` reaches pipe organ, reed, brass, flute, free
       reed and vocal. An engine outside a destination's list ignores it -- its
       exciter is finished before the second sample renders, or it has none.
-      ``"spectrum-morph"`` travels between the two spectral tables an additive
+      ``"spectrumMorph"`` travels between the two spectral tables an additive
       patch carries; a patch needs an explicit ``drawbars_b`` distinct from
       ``drawbars`` to have a second table to travel to, and no catalog preset
       ships one, so the destination is currently unreachable from a preset name
@@ -326,7 +325,7 @@ class SynthPatch:
     Every engine mode except ``"sample"`` is audible from ``engine_mode`` alone:
     the engine section is the named preset's when that preset uses the selected
     engine, else the engine's base preset's, so the bare ``"fm"``, ``"modal"``,
-    ``"percussion"`` and ``"karplus-strong"`` modes voice their base preset
+    ``"percussion"`` and ``"karplusStrong"`` modes voice their base preset
     (``"percussion"`` is the GM drum kit) and follow that preset's bank version.
     ``"sample"`` without a bank stays silent. The fields are the wrapper
     sections; which engines honour each one:
@@ -340,7 +339,7 @@ class SynthPatch:
       ``sample_hold_hz`` / ``bit_depth``, ``stereo_spread``.
     - every engine and a percussion channel: ``gain``, ``polyphony``,
       ``bus_drive``. On a percussion channel (a percussion patch voicing a GM
-      kit, as the ``"drum-kit"`` preset does) each note runs its per-note kit
+      kit, as the ``"drumKit"`` preset does) each note runs its per-note kit
       patch and every other field is discarded.
 
     ``drift_rate_hz`` is the per-voice drift rate in Hz, ``[0.01, 20]``;
@@ -378,7 +377,7 @@ class SynthPatch:
     ``"sample"``, which is what lets ``sample_set`` keep its natural zero: a
     patch voicing another engine never consults them, so set 0 stays
     addressable. ``sample_loop`` overrides what the bank recorded
-    (``"default"`` / ``"none"`` / ``"continuous"`` / ``"key-down"``) and
+    (``"default"`` / ``"none"`` / ``"continuous"`` / ``"keyDown"``) and
     ``sample_key_track`` whether the sample follows the played key
     (``"default"`` / ``"on"`` / ``"off"``); both accept the C ordinal too.
 
@@ -399,7 +398,7 @@ class SynthPatch:
     them per note. State outside the voice is reset by neither: controllers,
     the bus DC blocker, a piano's shared soundboard, a plucked string's
     sympathetic halo, an organ's wind chest and effect tails. The
-    ``"drum-kit"`` preset's per-note pieces keep their own mode.
+    ``"drumKit"`` preset's per-note pieces keep their own mode.
 
     ``sample_bank`` carries the PCM those fields address. It is a BINDING
     option, not a patch field -- it travels on the C binding struct rather than
@@ -520,9 +519,7 @@ class SynthPatch:
         _set_float("detune_cents", SONARE_SYNTH_FIELD_DETUNE_CENTS, self.detune_cents)
         _set_float("drift_cents", SONARE_SYNTH_FIELD_DRIFT_CENTS, self.drift_cents)
         _set_float("drive", SONARE_SYNTH_FIELD_DRIVE, self.drive)
-        c.filter_model = _synth_enum_value(
-            self.filter_model, _SYNTH_FILTER_MODEL_INPUT, "filter model"
-        )
+        c.filter_model = _synth_enum_value(self.filter_model, _SYNTH_FILTER_MODELS, "filter model")
         c.filter_output = _synth_enum_value(
             self.filter_output, _SYNTH_FILTER_OUTPUTS, "filter output"
         )
@@ -697,8 +694,8 @@ def _synth_patch_arg(instrument: SynthPatch | str | None) -> SynthPatch:
 
 
 def synth_preset_names() -> list[str]:
-    """NativeSynth preset catalog names (``"sine"``, ``"saw-lead"``,
-    ``"e-piano"``, ``"drum-kit"``, ...). Use these to discover valid
+    """NativeSynth preset catalog names (``"sine"``, ``"sawLead"``,
+    ``"ePiano"``, ``"drumKit"``, ...). Use these to discover valid
     :class:`SynthPatch` preset names instead of hardcoding magic strings."""
     lib = _get_lib()
     if not hasattr(lib, "sonare_synth_preset_names"):
@@ -802,7 +799,7 @@ def synth_gs_variation_is_voiced_apart(bank: int, program: int) -> bool | None:
 
 def controller_profile_names() -> list[str]:
     """Controller-profile preset names (``"gm"``, ``"breath"``,
-    ``"breath-aftertouch"``, ``"mpe"``, ...). Use these to discover the names
+    ``"breathAftertouch"``, ``"mpe"``, ...). Use these to discover the names
     :meth:`RealtimeEngine.set_controller_profile` accepts instead of hardcoding
     magic strings."""
     lib = _get_lib()

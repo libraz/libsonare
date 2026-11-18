@@ -129,7 +129,7 @@ def test_add_sample_rejects_bad_buffers_and_out_of_range_fields() -> None:
             bank.add_sample(_tone(), root_key=60.5)  # type: ignore[arg-type]
         with pytest.raises(ValueError, match="source_rate must be a finite number"):
             bank.add_sample(_tone(), source_rate=float("inf"))
-        with pytest.raises(ValueError, match="unknown sample loop mode"):
+        with pytest.raises(ValueError, match="invalid sample loop mode"):
             bank.add_sample(_tone(), loop_mode="looping-forever")
         assert bank.sample_count == 0
 
@@ -156,9 +156,10 @@ def test_add_zone_rejects_what_the_binding_and_the_core_each_reject() -> None:
 
 
 def test_patch_sample_enums_reject_unknown_spellings() -> None:
-    with pytest.raises(ValueError, match="unknown sample loop mode"):
-        SynthPatch(sample_loop="loop-forever")._to_c()
-    with pytest.raises(ValueError, match="unknown sample key track"):
+    for old in ("loop-forever", "key-down", "KeyDown"):
+        with pytest.raises(ValueError, match="keyDown"):
+            SynthPatch(sample_loop=old)._to_c()
+    with pytest.raises(ValueError, match="invalid sample key track"):
         SynthPatch(sample_key_track="sometimes")._to_c()
 
 
@@ -170,7 +171,7 @@ def test_patch_sample_fields_round_trip_through_the_c_struct() -> None:
         engine_mode="sample",
         sample_set=3,
         sample_level=0.75,
-        sample_loop="key-down",
+        sample_loop="keyDown",
         sample_start_offset=0.25,
         sample_key_track="off",
     )
@@ -182,7 +183,7 @@ def test_patch_sample_fields_round_trip_through_the_c_struct() -> None:
     back = SynthPatch._from_c(c)
     assert back.sample_set == 3
     assert back.sample_level == pytest.approx(0.75)
-    assert back.sample_loop == "key-down"
+    assert back.sample_loop == "keyDown"
     assert back.sample_start_offset == pytest.approx(0.25)
     assert back.sample_key_track == "off"
 
@@ -193,7 +194,7 @@ def test_patch_sample_fields_round_trip_through_the_c_struct() -> None:
     assert plain.sample_level == 0.0
     assert plain.sample_start_offset == 0.0
 
-    for ordinal, name in enumerate(("default", "none", "continuous", "key-down")):
+    for ordinal, name in enumerate(("default", "none", "continuous", "keyDown")):
         assert SynthPatch(sample_loop=name)._to_c().sample_loop == ordinal
     for ordinal, name in enumerate(("default", "on", "off")):
         assert SynthPatch(sample_key_track=name)._to_c().sample_key_track == ordinal

@@ -1120,9 +1120,15 @@ def _validate_effect_fft_options(fn_name: str, n_fft: int, hop_length: int) -> t
     return n_fft, hop
 
 
-def _synth_enum_value(value: str | int, names: Mapping[str, int], what: str) -> int:
-    """Resolve a NativeSynth patch enum spelling to its C ordinal."""
-    return _resolve_enum(value, names, what, expected=True)
+def _synth_enum_value(value: object, names: Mapping[str, int], what: str) -> int:
+    """Resolve a NativeSynth enum token, or one of its ordinals, to the C ordinal.
+
+    A string must be the exact token; an ``int`` must be one of the table's
+    ordinals, as on the JavaScript surfaces. A ``bool`` is not an ordinal.
+    """
+    if isinstance(value, int) and not isinstance(value, bool):
+        return _resolve_enum(value, names, what, expected=True)
+    return names[_token_arg(value, tuple(names), what)]
 
 
 def _pan_mode_value(value: PanMode) -> int:

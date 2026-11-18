@@ -222,8 +222,8 @@ class _ProjectRenderMixin:
 
         Args:
             instrument: Patch bound to ``destination_id`` (default 0). Pass a
-                :class:`SynthPatch`, a preset name string (``"saw-lead"`` or
-                ``"va:saw-lead"``; see :func:`synth_preset_names`), or ``None``
+                :class:`SynthPatch`, a preset name string (``"sawLead"`` or
+                ``"va:sawLead"``; see :func:`synth_preset_names`), or ``None``
                 for the default subtractive patch. Ignored when ``instruments``
                 is given.
             destination_id: Destination id for ``instrument`` (matches

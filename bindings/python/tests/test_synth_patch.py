@@ -37,19 +37,19 @@ EXPECTED_SYNTH_ENUM_TABLES = {
         "default",
         "subtractive",
         "fm",
-        "karplus-strong",
+        "karplusStrong",
         "modal",
         "additive",
         "percussion",
         "piano",
-        "pipe-organ",
-        "bowed-string",
+        "pipeOrgan",
+        "bowedString",
         "reed",
         "brass",
         "flute",
-        "plucked-string",
+        "pluckedString",
         "vocal",
-        "free-reed",
+        "freeReed",
         "harpsichord",
         "sample",
         "singing",
@@ -59,48 +59,48 @@ EXPECTED_SYNTH_ENUM_TABLES = {
     "filter_models": (
         "default",
         "svf",
-        "transistor-ladder",
-        "diode-ladder",
-        "sallen-key",
-        "svf-4-pole",
+        "transistorLadder",
+        "diodeLadder",
+        "sallenKey",
+        "svf4Pole",
     ),
     "filter_outputs": ("default", "lowpass", "bandpass", "highpass"),
-    "body_types": ("default", "none", "guitar", "violin", "wood-tube", "brass-bell", "vocal"),
+    "body_types": ("default", "none", "guitar", "violin", "woodTube", "brassBell", "vocal"),
     "mod_sources": (
         "none",
-        "amp-env",
-        "filter-env",
+        "ampEnv",
+        "filterEnv",
         "lfo1",
         "lfo2",
         "velocity",
-        "key-track",
-        "mod-wheel",
+        "keyTrack",
+        "modWheel",
         "random",
         "breath",
         "aftertouch",
-        "expression-cc",
-        "pitch-bend",
+        "expressionCc",
+        "pitchBend",
     ),
     "mod_destinations": (
         "none",
-        "pitch-cents",
-        "cutoff-cents",
-        "amp-gain",
-        "pan-units",
-        "resonance-q",
-        "vibrato-depth-cents",
-        "filter-env-depth",
-        "lfo1-rate-scale",
-        "excitation-force",
-        "excitation-position",
-        "excitation-brightness",
-        "spectrum-morph",
+        "pitchCents",
+        "cutoffCents",
+        "ampGain",
+        "panUnits",
+        "resonanceQ",
+        "vibratoDepthCents",
+        "filterEnvDepth",
+        "lfo1RateScale",
+        "excitationForce",
+        "excitationPosition",
+        "excitationBrightness",
+        "spectrumMorph",
     ),
     "controller_inputs": (
-        "control-change",
-        "channel-pressure",
-        "poly-pressure",
-        "pitch-bend",
+        "controlChange",
+        "channelPressure",
+        "polyPressure",
+        "pitchBend",
         "velocity",
     ),
     "controller_axes": (
@@ -110,13 +110,13 @@ EXPECTED_SYNTH_ENUM_TABLES = {
         "brightness",
         "morph",
         "loudness",
-        "pitch-cents",
-        "vibrato-depth",
+        "pitchCents",
+        "vibratoDepth",
     ),
     "articulations": (
         "poly",
-        "mono-retrigger",
-        "mono-legato",
+        "monoRetrigger",
+        "monoLegato",
     ),
     "mpe_dimensions": (
         "bend",
@@ -129,12 +129,12 @@ EXPECTED_SYNTH_ENUM_TABLES = {
         "highest",
         "all",
     ),
-    "sample_loop_modes": ("default", "none", "continuous", "key-down"),
+    "sample_loop_modes": ("default", "none", "continuous", "keyDown"),
     "sample_key_tracks": ("default", "on", "off"),
     "retriggers": ("default", "free", "note"),
     "lfo_shapes": ("default", "triangle", "sine", "random"),
     "part_rig_modes": ("bank", "none", "chain"),
-    "sample_desc_loop_modes": ("none", "continuous", "key-down"),
+    "sample_desc_loop_modes": ("none", "continuous", "keyDown"),
 }
 
 
@@ -173,29 +173,29 @@ def test_synth_preset_names_lists_the_catalog() -> None:
     names = synth_preset_names()
     for expected in (
         "sine",
-        "saw-lead",
-        "warm-pad",
-        "e-piano",
-        "electric-guitar",
+        "sawLead",
+        "warmPad",
+        "ePiano",
+        "electricGuitar",
         "harp",
         "marimba",
         "organ",
-        "drum-kit",
-        "acoustic-piano",
+        "drumKit",
+        "acousticPiano",
     ):
         assert expected in names
 
 
 def test_synth_preset_patch_round_trips() -> None:
-    pad = synth_preset_patch("warm-pad")
-    assert pad.preset == "warm-pad"
+    pad = synth_preset_patch("warmPad")
+    assert pad.preset == "warmPad"
     assert pad.engine_mode == "subtractive"
     assert pad.waveform == "saw"
     assert pad.unison == 2
     assert pad.stereo_spread > 0.0
     # The "va:" routing prefix is accepted.
-    assert synth_preset_patch("va:e-piano").engine_mode == "fm"
-    assert synth_preset_patch("acoustic-piano").engine_mode == "piano"
+    assert synth_preset_patch("va:ePiano").engine_mode == "fm"
+    assert synth_preset_patch("acousticPiano").engine_mode == "piano"
     assert synth_preset_patch("clarinet").engine_mode == "reed"
     with pytest.raises(SonareError):
         synth_preset_patch("no-such-preset")
@@ -220,8 +220,9 @@ def test_synth_patch_enum_tables_round_trip_all_names_and_ordinals() -> None:
         by_ordinal = SynthPatch._from_c(SynthPatch(filter_model=ordinal)._to_c())
         assert by_name.filter_model == name
         assert by_ordinal.filter_model == name
-    legacy = SynthPatch._from_c(SynthPatch(filter_model="moog-ladder")._to_c())
-    assert legacy.filter_model == "transistor-ladder"
+    for old in ("moog-ladder", "transistor-ladder", "TransistorLadder"):
+        with pytest.raises(SonareValueError, match="transistorLadder"):
+            SynthPatch(filter_model=old)._to_c()
     for ordinal, name in enumerate(EXPECTED_SYNTH_ENUM_TABLES["filter_outputs"]):
         by_name = SynthPatch._from_c(SynthPatch(filter_output=name)._to_c())
         by_ordinal = SynthPatch._from_c(SynthPatch(filter_output=ordinal)._to_c())
@@ -234,10 +235,10 @@ def test_synth_patch_enum_tables_round_trip_all_names_and_ordinals() -> None:
         assert by_ordinal.body == name
     for ordinal, name in enumerate(EXPECTED_SYNTH_ENUM_TABLES["mod_sources"]):
         by_name = SynthPatch._from_c(
-            SynthPatch(mod_routings=(SynthModRouting(name, "pitch-cents", 1.0),))._to_c()
+            SynthPatch(mod_routings=(SynthModRouting(name, "pitchCents", 1.0),))._to_c()
         )
         by_ordinal = SynthPatch._from_c(
-            SynthPatch(mod_routings=(SynthModRouting(ordinal, "pitch-cents", 1.0),))._to_c()
+            SynthPatch(mod_routings=(SynthModRouting(ordinal, "pitchCents", 1.0),))._to_c()
         )
         assert by_name.mod_routings[0].source == name
         assert by_ordinal.mod_routings[0].source == name
@@ -300,9 +301,6 @@ def test_every_python_enum_table_matches_the_c_abi_kind() -> None:
     desc_loop = c_names(synth._SYNTH_ENUM_KINDS["sample_desc_loop_modes"])
     assert tuple(synth._SAMPLE_DESC_LOOP_MODES) == desc_loop
     assert tuple(synth._SAMPLE_DESC_LOOP_MODES.values()) == (0, 1, 3)
-    # Input-only spellings are accepted but never listed.
-    assert synth._SYNTH_FILTER_MODEL_INPUT == {**synth._SYNTH_FILTER_MODELS, "moog-ladder": 2}
-    assert "moog-ladder" not in c_names(synth._SYNTH_ENUM_KINDS["filter_models"])
 
 
 def _header_struct_version() -> int:
@@ -319,7 +317,7 @@ def test_synth_patch_struct_version_is_the_header_macro() -> None:
 
 
 def test_synth_patch_second_presence_word_fields() -> None:
-    preset = synth_preset_patch("saw-lead")
+    preset = synth_preset_patch("sawLead")
     assert preset.drift_rate_hz is not None and preset.drift_rate_hz > 0.0
     for name in ("amp_delay_ms", "amp_hold_ms", "filter_delay_ms", "filter_hold_ms"):
         assert isinstance(getattr(preset, name), float)
@@ -332,7 +330,7 @@ def test_synth_patch_second_presence_word_fields() -> None:
     assert echoed.one_shot is True
 
     base = SynthPatch(
-        preset="saw-lead",
+        preset="sawLead",
         drift_cents=40.0,
         amp_decay_ms=200.0,
         amp_sustain=0.5,
@@ -384,7 +382,7 @@ def test_synth_patch_retrigger_round_trips_and_refuses_unknown_values() -> None:
         assert SynthPatch._from_c(SynthPatch(retrigger=name)._to_c()).retrigger == name
         assert SynthPatch._from_c(SynthPatch(retrigger=ordinal)._to_c()).retrigger == name
     assert SynthPatch()._to_c().struct_version == _header_struct_version()
-    assert synth_preset_patch("saw-lead").retrigger == "free"
+    assert synth_preset_patch("sawLead").retrigger == "free"
     with pytest.raises(ValueError):
         SynthPatch(retrigger="phase")._to_c()
     with pytest.raises(ValueError):
@@ -395,7 +393,7 @@ def test_synth_patch_lfo_shape_round_trips_and_refuses_unknown_values() -> None:
     for ordinal, name in enumerate(("default", "triangle", "sine", "random")):
         assert SynthPatch._from_c(SynthPatch(lfo_shape=name)._to_c()).lfo_shape == name
         assert SynthPatch._from_c(SynthPatch(lfo_shape=ordinal)._to_c()).lfo_shape == name
-    assert synth_preset_patch("saw-lead").lfo_shape == "triangle"
+    assert synth_preset_patch("sawLead").lfo_shape == "triangle"
     with pytest.raises(ValueError):
         SynthPatch(lfo_shape="square")._to_c()
     with pytest.raises(ValueError):
@@ -430,10 +428,10 @@ def test_note_retrigger_renders_a_repeated_note_identically() -> None:
         )
         frames = 48000 * 6
         note = project.bounce_with_synth_instrument(
-            SynthPatch(preset="saw-lead", retrigger="note"), total_frames=frames
+            SynthPatch(preset="sawLead", retrigger="note"), total_frames=frames
         )
         free = project.bounce_with_synth_instrument(
-            SynthPatch(preset="saw-lead", retrigger="free"), total_frames=frames
+            SynthPatch(preset="sawLead", retrigger="free"), total_frames=frames
         )
         assert float(np.max(np.abs(note))) > 0.01
         assert _repeated_note_diff(note) == 0.0
@@ -445,13 +443,13 @@ def test_note_retrigger_renders_a_repeated_note_identically() -> None:
 def test_bounce_with_synth_instrument_renders_presets() -> None:
     project = _build_midi_only_project()
     try:
-        for preset in ("va:saw-lead", "e-piano", "harp"):
+        for preset in ("va:sawLead", "ePiano", "harp"):
             audio = project.bounce_with_synth_instrument(preset, total_frames=24000)
             assert audio.shape == (24000, 2)
             assert float(np.max(np.abs(audio))) > 0.0
         # Deterministic: bit-identical renders for a fixed patch.
-        first = project.bounce_with_synth_instrument("saw-lead", total_frames=24000)
-        second = project.bounce_with_synth_instrument("saw-lead", total_frames=24000)
+        first = project.bounce_with_synth_instrument("sawLead", total_frames=24000)
+        second = project.bounce_with_synth_instrument("sawLead", total_frames=24000)
         assert np.array_equal(first, second)
     finally:
         project.close()
@@ -469,7 +467,7 @@ def test_synth_patch_overrides_and_mod_matrix() -> None:
         wobble = project.bounce_with_synth_instrument(
             SynthPatch(
                 lfo_rate_hz=6.0,
-                mod_routings=(SynthModRouting("lfo1", "pitch-cents", 80.0),),
+                mod_routings=(SynthModRouting("lfo1", "pitchCents", 80.0),),
             ),
             total_frames=24000,
         )
@@ -488,36 +486,36 @@ def test_synth_patch_zero_is_an_override_not_keep_the_base() -> None:
     """A field left at None keeps the base; a supplied zero overrides with it."""
     project = _build_midi_only_project()
     try:
-        preset = project.bounce_with_synth_instrument("warm-pad", total_frames=24000)
+        preset = project.bounce_with_synth_instrument("warmPad", total_frames=24000)
 
         # warm-pad carries a non-zero stereo spread and bus drive, so turning
         # either off is a real edit that the patch can now express.
         no_spread = project.bounce_with_synth_instrument(
-            SynthPatch(preset="warm-pad", stereo_spread=0.0), total_frames=24000
+            SynthPatch(preset="warmPad", stereo_spread=0.0), total_frames=24000
         )
         assert not np.array_equal(no_spread, preset)
         no_drive = project.bounce_with_synth_instrument(
-            SynthPatch(preset="warm-pad", bus_drive=0.0), total_frames=24000
+            SynthPatch(preset="warmPad", bus_drive=0.0), total_frames=24000
         )
         assert not np.array_equal(no_drive, preset)
 
         # Leaving the fields out keeps the preset's own values.
         untouched = project.bounce_with_synth_instrument(
-            SynthPatch(preset="warm-pad"), total_frames=24000
+            SynthPatch(preset="warmPad"), total_frames=24000
         )
         assert np.array_equal(untouched, preset)
 
         # An empty routing tuple clears the base matrix; None keeps it.
         wobble = project.bounce_with_synth_instrument(
             SynthPatch(
-                preset="warm-pad",
+                preset="warmPad",
                 lfo_rate_hz=6.0,
-                mod_routings=(SynthModRouting("lfo1", "pitch-cents", 80.0),),
+                mod_routings=(SynthModRouting("lfo1", "pitchCents", 80.0),),
             ),
             total_frames=24000,
         )
         cleared = project.bounce_with_synth_instrument(
-            SynthPatch(preset="warm-pad", lfo_rate_hz=6.0, mod_routings=()),
+            SynthPatch(preset="warmPad", lfo_rate_hz=6.0, mod_routings=()),
             total_frames=24000,
         )
         assert not np.array_equal(cleared, wobble)
@@ -528,16 +526,16 @@ def test_synth_patch_zero_is_an_override_not_keep_the_base() -> None:
 def test_synth_patch_gain_zero_renders_silence() -> None:
     project = _build_midi_only_project()
     try:
-        reference = project.bounce_with_synth_instrument("warm-pad", total_frames=24000)
+        reference = project.bounce_with_synth_instrument("warmPad", total_frames=24000)
         assert float(np.max(np.abs(reference))) > 0.0
 
         silent = project.bounce_with_synth_instrument(
-            SynthPatch(preset="warm-pad", gain=0.0), total_frames=24000
+            SynthPatch(preset="warmPad", gain=0.0), total_frames=24000
         )
         assert float(np.max(np.abs(silent))) == 0.0
 
         quiet = project.bounce_with_synth_instrument(
-            SynthPatch(preset="warm-pad", gain=0.01), total_frames=24000
+            SynthPatch(preset="warmPad", gain=0.01), total_frames=24000
         )
         assert float(np.max(np.abs(quiet))) > 0.0
     finally:
@@ -582,7 +580,7 @@ def test_mod_routing_naming_none_is_refused() -> None:
     try:
         with pytest.raises(SonareError):
             project.bounce_with_synth_instrument(
-                SynthPatch(mod_routings=(SynthModRouting("none", "pitch-cents", 80.0),)),
+                SynthPatch(mod_routings=(SynthModRouting("none", "pitchCents", 80.0),)),
                 total_frames=128,
             )
         with pytest.raises(SonareError):
@@ -592,7 +590,7 @@ def test_mod_routing_naming_none_is_refused() -> None:
             )
         # Not vacuous: a real routing on both ends still passes.
         audio = project.bounce_with_synth_instrument(
-            SynthPatch(mod_routings=(SynthModRouting("lfo1", "pitch-cents", 80.0),)),
+            SynthPatch(mod_routings=(SynthModRouting("lfo1", "pitchCents", 80.0),)),
             total_frames=24000,
         )
         assert float(np.max(np.abs(audio))) > 0.0
@@ -730,7 +728,7 @@ def test_drum_kit_preset_plays_the_gm_map() -> None:
     # Note 38 = acoustic snare in the GM drum map.
     project = _build_midi_only_project(note=38)
     try:
-        audio = project.bounce_with_synth_instrument("drum-kit", total_frames=24000)
+        audio = project.bounce_with_synth_instrument("drumKit", total_frames=24000)
         assert float(np.max(np.abs(audio))) > 0.0
     finally:
         project.close()
@@ -740,7 +738,7 @@ def test_engine_set_synth_instrument_renders_live_midi() -> None:
     engine = RealtimeEngine()
     try:
         engine.prepare(48000.0, 128, 16, 16)
-        engine.set_synth_instrument("saw-lead", destination_id=7)
+        engine.set_synth_instrument("sawLead", destination_id=7)
         engine.push_midi_note_on(7, 0, 0, 60, 100)
         out = np.asarray(engine.process([[0.0] * 128, [0.0] * 128]))
         assert float(np.max(np.abs(out))) > 0.0
@@ -767,7 +765,7 @@ def test_engine_set_synth_instrument_follows_gm_programs_only_when_enabled() -> 
         try:
             engine.prepare(48000.0, block_size, 16, 16)
             engine.set_synth_instrument(
-                SynthPatch(preset="saw-lead", use_gm_programs=use_gm_programs), destination_id=1
+                SynthPatch(preset="sawLead", use_gm_programs=use_gm_programs), destination_id=1
             )
             engine.set_midi_clips(
                 [
@@ -882,11 +880,11 @@ def test_engine_params_change_a_render_and_default_to_none() -> None:
     project = _build_midi_only_project()
     try:
         soft = project.bounce_with_synth_instrument(
-            SynthPatch(engine_mode="bowed-string", engine_params={"bowForce": 0.15}),
+            SynthPatch(engine_mode="bowedString", engine_params={"bowForce": 0.15}),
             total_frames=24000,
         )
         hard = project.bounce_with_synth_instrument(
-            SynthPatch(engine_mode="bowed-string", engine_params={"bowForce": 0.9}),
+            SynthPatch(engine_mode="bowedString", engine_params={"bowForce": 0.9}),
             total_frames=24000,
         )
         assert _peak(soft) > 0.0 and _peak(hard) > 0.0
@@ -943,9 +941,9 @@ def test_engine_params_refusals_are_coded_errors_naming_the_key() -> None:
     project = _build_midi_only_project()
     try:
         cases = [
-            ("bowed-string", {"noSuchKey": 1.0}, "noSuchKey"),
-            ("bowed-string", {"bowForce": 7.0}, "bowForce"),
-            ("bowed-string", {"bowForce": float("nan")}, "bowForce"),
+            ("bowedString", {"noSuchKey": 1.0}, "noSuchKey"),
+            ("bowedString", {"bowForce": 7.0}, "bowForce"),
+            ("bowedString", {"bowForce": float("nan")}, "bowForce"),
             ("fm", {"bowForce": 0.5}, "bowForce"),
             ("percussion", {"numModes": 2.5}, "numModes"),
         ]
@@ -962,14 +960,14 @@ def test_engine_params_refusals_are_coded_errors_naming_the_key() -> None:
 def test_engine_param_info_shape() -> None:
     for mode in ("default", "sample"):
         assert synth_engine_param_info(mode) == []
-    bowed = synth_engine_param_info("bowed-string")
+    bowed = synth_engine_param_info("bowedString")
     by_name = {row.name: row for row in bowed}
     force = by_name["bowForce"]
     assert force.type == "number"
     assert force.min is not None and force.max is not None
     assert force.min <= force.default <= force.max
     assert force.unit
-    assert synth_engine_param_info(SYNTH_ENUM_TABLES["engine_modes"].index("bowed-string")) == bowed
+    assert synth_engine_param_info(SYNTH_ENUM_TABLES["engine_modes"].index("bowedString")) == bowed
     with pytest.raises(Exception, match="engine mode"):
         synth_engine_param_info(99)
     patch_rows = synth_patch_param_info()
@@ -1001,7 +999,7 @@ def test_engine_param_info_states_gates_only_where_set() -> None:
             cond("plateContact", "engine", "gt", 0),
         ),
     )
-    bowed = {row.name: row for row in synth_engine_param_info("bowed-string")}
+    bowed = {row.name: row for row in synth_engine_param_info("bowedString")}
     assert bowed["corpusScale"].active_when == (
         (
             cond("body", "patch", "eq", "violin"),
@@ -1019,14 +1017,14 @@ def _engine_params_patch() -> SynthPatch:
     # Built in its own scope: the dict and its keys are garbage once this
     # returns, so only the patch's own conversion keeps them alive.
     key = "bow" + "Force"
-    return SynthPatch(engine_mode="bowed-string", engine_params={key: 0.9})
+    return SynthPatch(engine_mode="bowedString", engine_params={key: 0.9})
 
 
 def test_engine_params_survive_garbage_collection_until_the_call_returns() -> None:
     project = _build_midi_only_project()
     try:
         expected = project.bounce_with_synth_instrument(
-            SynthPatch(engine_mode="bowed-string", engine_params={"bowForce": 0.9}),
+            SynthPatch(engine_mode="bowedString", engine_params={"bowForce": 0.9}),
             total_frames=24000,
         )
         patch = _engine_params_patch()
@@ -1047,12 +1045,12 @@ def test_engine_params_reach_the_live_engine_binding() -> None:
     engine = RealtimeEngine()
     try:
         engine.set_synth_instrument(
-            SynthPatch(engine_mode="bowed-string", engine_params={"bowForce": 0.5}),
+            SynthPatch(engine_mode="bowedString", engine_params={"bowForce": 0.5}),
             destination_id=1,
         )
         with pytest.raises(SonareError, match="noSuchKey"):
             engine.set_synth_instrument(
-                SynthPatch(engine_mode="bowed-string", engine_params={"noSuchKey": 0.5}),
+                SynthPatch(engine_mode="bowedString", engine_params={"noSuchKey": 0.5}),
                 destination_id=1,
             )
     finally:

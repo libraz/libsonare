@@ -69,7 +69,7 @@ def test_the_articulation_name_table_comes_from_the_c_abi() -> None:
     # Named rather than counted alone: a table that lost an entry and gained an
     # empty one keeps its count, and these names are what this surface spells
     # the ordinals as.
-    assert tables["articulations"] == ("poly", "mono-retrigger", "mono-legato")
+    assert tables["articulations"] == ("poly", "monoRetrigger", "monoLegato")
     assert tables["articulations"] == SYNTH_ENUM_TABLES["articulations"]
 
 
@@ -77,16 +77,16 @@ def test_articulation_round_trips_per_channel() -> None:
     with _synth_engine("reed") as engine:
         assert engine.articulation(DESTINATION, 0) == "poly"
 
-        engine.set_articulation(DESTINATION, 0, "mono-legato")
-        assert engine.articulation(DESTINATION, 0) == "mono-legato"
+        engine.set_articulation(DESTINATION, 0, "monoLegato")
+        assert engine.articulation(DESTINATION, 0) == "monoLegato"
 
         # A second channel is untouched by the first, so the mode is per channel
         # rather than per instrument -- a host slurring one part must not slur
         # the rest of the rack.
         assert engine.articulation(DESTINATION, 1) == "poly"
-        engine.set_articulation(DESTINATION, 1, "mono-retrigger")
-        assert engine.articulation(DESTINATION, 1) == "mono-retrigger"
-        assert engine.articulation(DESTINATION, 0) == "mono-legato"
+        engine.set_articulation(DESTINATION, 1, "monoRetrigger")
+        assert engine.articulation(DESTINATION, 1) == "monoRetrigger"
+        assert engine.articulation(DESTINATION, 0) == "monoLegato"
 
         # The ordinal is accepted wherever the name is, and reads back as the
         # name, so a caller holding a C enum value and one holding a spelling
@@ -138,7 +138,7 @@ def test_articulation_keeps_its_three_refusals_apart() -> None:
         # Both would otherwise read as "the call worked" to a caller that only
         # checks for the absence of an exception.
         for unbound in (
-            lambda: engine.set_articulation(5, 0, "mono-legato"),
+            lambda: engine.set_articulation(5, 0, "monoLegato"),
             lambda: engine.articulation(5, 0),
             lambda: engine.legato_fallback_count(5),
         ):
@@ -153,7 +153,7 @@ def test_articulation_keeps_its_three_refusals_apart() -> None:
         # read it as "every slur took".
         engine.set_builtin_instrument(destination_id=5)
         for unsupported in (
-            lambda: engine.set_articulation(5, 0, "mono-legato"),
+            lambda: engine.set_articulation(5, 0, "monoLegato"),
             lambda: engine.articulation(5, 0),
             lambda: engine.legato_fallback_count(5),
         ):
@@ -163,8 +163,8 @@ def test_articulation_keeps_its_three_refusals_apart() -> None:
 
 
 def test_an_articulation_set_through_python_reaches_the_sound() -> None:
-    slurred, slurred_fallbacks = _render_slur("reed", "mono-legato")
-    retriggered, retriggered_fallbacks = _render_slur("reed", "mono-retrigger")
+    slurred, slurred_fallbacks = _render_slur("reed", "monoLegato")
+    retriggered, retriggered_fallbacks = _render_slur("reed", "monoRetrigger")
 
     # The renders carry energy, so "they differ" is not two kinds of silence.
     assert max(abs(sample) for sample in retriggered) > 0.0
@@ -176,13 +176,13 @@ def test_an_articulation_set_through_python_reaches_the_sound() -> None:
 
     # And the same call twice is bit-identical, so the difference above is the
     # articulation rather than anything free-running in the render.
-    assert _render_slur("reed", "mono-retrigger")[0] == retriggered
+    assert _render_slur("reed", "monoRetrigger")[0] == retriggered
 
 
 def test_an_engine_that_declines_to_be_carried_is_counted_through_python() -> None:
     # A struck string cannot be slurred: its exciter is spent before the second
     # sample. The note still sounds, so the counter is the only evidence.
-    audio, declined = _render_slur("piano", "mono-legato")
+    audio, declined = _render_slur("piano", "monoLegato")
     assert declined >= 1
     assert max(abs(sample) for sample in audio) > 0.0
 

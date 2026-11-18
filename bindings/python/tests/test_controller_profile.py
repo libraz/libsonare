@@ -60,7 +60,7 @@ def test_controller_profile_names_lists_the_presets() -> None:
     names = controller_profile_names()
     # Each preset is named rather than counted alone: a table that lost an entry
     # and gained an empty one keeps its count.
-    for expected in ("gm", "breath", "breath-aftertouch", "mpe"):
+    for expected in ("gm", "breath", "breathAftertouch", "mpe"):
         assert expected in names
     assert len(names) >= 4
 
@@ -71,9 +71,9 @@ def test_controller_enum_tables_come_from_the_c_abi() -> None:
     assert len(tables["controller_axes"]) == 8
     assert tables["controller_inputs"] == SYNTH_ENUM_TABLES["controller_inputs"]
     assert tables["controller_axes"] == SYNTH_ENUM_TABLES["controller_axes"]
-    assert "channel-pressure" in tables["controller_inputs"]
+    assert "channelPressure" in tables["controller_inputs"]
     assert "excitation" in tables["controller_axes"]
-    assert "vibrato-depth" in tables["controller_axes"]
+    assert "vibratoDepth" in tables["controller_axes"]
 
 
 def test_a_controller_profile_installs_binds_counts_and_clears() -> None:
@@ -91,7 +91,7 @@ def test_a_controller_profile_installs_binds_counts_and_clears() -> None:
             engine.set_controller_profile(DESTINATION, "no-such-device")
         assert engine.controller_binding_count(DESTINATION) == breath_bindings
 
-        engine.bind_controller(DESTINATION, input="control-change", index=2, axis="excitation")
+        engine.bind_controller(DESTINATION, input="controlChange", index=2, axis="excitation")
         assert engine.controller_binding_count(DESTINATION) == breath_bindings + 1
 
         engine.clear_controller_bindings(DESTINATION)
@@ -115,7 +115,7 @@ def test_an_unknown_spelling_or_ordinal_is_refused_by_the_binding() -> None:
     with _reed_engine() as engine:
         engine.clear_controller_bindings(DESTINATION)
         with pytest.raises(SonareValueError, match="controller axis"):
-            engine.bind_controller(DESTINATION, input="control-change", axis="no-such-axis")
+            engine.bind_controller(DESTINATION, input="controlChange", axis="no-such-axis")
         with pytest.raises(SonareValueError, match="controller input"):
             engine.bind_controller(DESTINATION, input="no-such-input", axis="excitation")
         # An ordinal past the enum, taken from the table's own length so it
@@ -123,7 +123,7 @@ def test_an_unknown_spelling_or_ordinal_is_refused_by_the_binding() -> None:
         with pytest.raises(SonareValueError, match="controller axis"):
             engine.bind_controller(
                 DESTINATION,
-                input="control-change",
+                input="controlChange",
                 axis=len(SYNTH_ENUM_TABLES["controller_axes"]),
             )
         with pytest.raises(SonareValueError, match="controller input"):
@@ -140,7 +140,7 @@ def test_an_unknown_spelling_or_ordinal_is_refused_by_the_binding() -> None:
             with pytest.raises(SonareValueError, match=field):
                 engine.bind_controller(
                     DESTINATION,
-                    input="control-change",
+                    input="controlChange",
                     axis="excitation",
                     **{field: math.nan},
                 )
@@ -154,18 +154,18 @@ def test_a_binding_that_cannot_mean_anything_is_refused_by_the_c_abi() -> None:
         # A per-note value on a channel-level axis: refused rather than widened,
         # because a caller cannot tell a widened binding from one that took.
         with pytest.raises(SonareValueError) as refusal:
-            engine.bind_controller(DESTINATION, input="poly-pressure", axis="loudness")
+            engine.bind_controller(DESTINATION, input="polyPressure", axis="loudness")
         assert refusal.value.code == int(ErrorCode.INVALID_PARAMETER)
 
         with pytest.raises(SonareValueError) as none_refusal:
-            engine.bind_controller(DESTINATION, input="control-change", axis="none")
+            engine.bind_controller(DESTINATION, input="controlChange", axis="none")
         # "none" is a name the C table supplies, so the spelling resolves here
         # and the refusal is the C ABI's -- asserted the same way as above.
         assert none_refusal.value.code == int(ErrorCode.INVALID_PARAMETER)
 
         # The same input on an excitation axis is accepted, so the refusal above
         # is about the axis and not about poly pressure.
-        engine.bind_controller(DESTINATION, input="poly-pressure", axis="brightness")
+        engine.bind_controller(DESTINATION, input="polyPressure", axis="brightness")
         assert engine.controller_binding_count(DESTINATION) == 1
 
 
@@ -206,7 +206,7 @@ def test_controller_calls_name_the_destination_that_has_no_instrument() -> None:
         engine.prepare(SAMPLE_RATE, BLOCK, 16, 16)
         for call in (
             lambda: engine.set_controller_profile(5, "gm"),
-            lambda: engine.bind_controller(5, input="control-change", axis="excitation"),
+            lambda: engine.bind_controller(5, input="controlChange", axis="excitation"),
             lambda: engine.clear_controller_bindings(5),
             lambda: engine.controller_binding_count(5),
             lambda: engine.controller_velocity_meaningful(5),
@@ -223,7 +223,7 @@ def test_a_binding_made_through_python_reaches_the_sound() -> None:
     # Bound: CC2 drives the reed's excitation axis.
     with _reed_engine() as engine:
         engine.clear_controller_bindings(DESTINATION)
-        engine.bind_controller(DESTINATION, input="control-change", index=2, axis="excitation")
+        engine.bind_controller(DESTINATION, input="controlChange", index=2, axis="excitation")
         with_binding = _render_breath_ramp(engine)
 
     # Unbound: the same ramp, the same patch, nothing bound.

@@ -60,7 +60,7 @@ _FAMILIES: Sequence[_Family] = (
     (
         _sample_loop_value,
         "sample loop mode",
-        (("default", 0), ("none", 1), ("continuous", 2), ("key-down", 3)),
+        (("default", 0), ("none", 1), ("continuous", 2), ("keyDown", 3)),
         (),
         (4, 99, -1),
     ),
@@ -76,7 +76,7 @@ _FAMILIES: Sequence[_Family] = (
     (
         _sample_desc_loop_value,
         "sample loop mode",
-        (("none", 0), ("continuous", 1), ("key-down", 3)),
+        (("none", 0), ("continuous", 1), ("keyDown", 3)),
         (2,),
         (4, 99, -1),
     ),

@@ -250,7 +250,7 @@ class _EngineMidiMixin:
         RX PROGRAM CHANGE / RX BANK SELECT gates; a native synth bound with
         ``SynthPatch.use_gm_programs`` (:meth:`set_synth_instrument`) resolves
         each channel's voice from the bank and program; a native synth whose
-        patch plays the GM kit (the ``drum-kit`` preset, or a percussion patch
+        patch plays the GM kit (the ``drumKit`` preset, or a percussion patch
         with ``gm_kit`` on) takes the program as the GS drum-set select on every
         channel. Every other receiver accepts the message and ignores it: the
         built-in synth, any other native synth patch, a part with RX PROGRAM
@@ -338,7 +338,7 @@ class _EngineMidiMixin:
         """Bind the patch-driven NativeSynth to ``destination_id`` (default 0).
 
         ``patch`` is a :class:`SynthPatch`, a preset name string
-        (``"saw-lead"`` or ``"va:saw-lead"``; see :func:`synth_preset_names`),
+        (``"sawLead"`` or ``"va:sawLead"``; see :func:`synth_preset_names`),
         or ``None`` for the default subtractive patch. The patch resolves
         exactly like :meth:`Project.bounce_with_synth_instrument`. After
         binding, live MIDI input and scheduled MIDI clips routed to that
@@ -519,7 +519,7 @@ class _EngineMidiMixin:
         """Replace the instrument's controller profile with a named preset.
 
         ``preset_name`` is one of :func:`controller_profile_names` (``"gm"``,
-        ``"breath"``, ``"breath-aftertouch"``, ``"mpe"``). The preset replaces
+        ``"breath"``, ``"breathAftertouch"``, ``"mpe"``). The preset replaces
         the binding table wholesale and drops every channel's accumulated axis
         value, since the new bindings say nothing about what the old ones had
         reached. Raises :class:`SonareValueError` for an unknown name and for a
@@ -557,17 +557,17 @@ class _EngineMidiMixin:
         """Add one binding on top of the instrument's current controller profile.
 
         ``input`` is how the device spells the gesture
-        (``synth_enum_tables()["controller_inputs"]``: ``"control-change"``,
-        ``"channel-pressure"``, ``"poly-pressure"``, ``"pitch-bend"``,
+        (``synth_enum_tables()["controller_inputs"]``: ``"controlChange"``,
+        ``"channelPressure"``, ``"polyPressure"``, ``"pitchBend"``,
         ``"velocity"``) and ``index`` is the CC number for
-        ``"control-change"``; every other input is identified by its message
+        ``"controlChange"``; every other input is identified by its message
         status alone and ignores it. ``axis`` is what the gesture means
         (``synth_enum_tables()["controller_axes"]``), so the engine is reached
         by the meaning rather than by the controller number that carried it.
 
         ``lo`` / ``hi`` are the axis values at zero and full deflection in the
         axis's own unit -- normalized ``[0, 1]`` for the excitation axes and
-        loudness, cents for ``"pitch-cents"`` and ``"vibrato-depth"`` -- and
+        loudness, cents for ``"pitchCents"`` and ``"vibratoDepth"`` -- and
         ``lo > hi`` inverts the gesture. ``curve`` is the exponent applied to
         the normalized input before the range maps it; keep the linear ``1.0``
         unless the device has not already shaped the gesture.
@@ -750,9 +750,9 @@ class _EngineMidiMixin:
         """Set what one channel does with an overlapping note-on.
 
         ``articulation`` is one of ``synth_enum_tables()["articulations"]``:
-        ``"poly"`` gives every note-on its own voice, ``"mono-retrigger"``
+        ``"poly"`` gives every note-on its own voice, ``"monoRetrigger"``
         stops the sounding note and starts over (what GS MONO MODE and CC126
-        mean, and all they can reach), and ``"mono-legato"`` carries the
+        mean, and all they can reach), and ``"monoLegato"`` carries the
         sounding voice and only re-tunes it, so the exciter and the amplitude
         envelope never restart -- a wind player's slur, which no MIDI message
         names.
@@ -761,7 +761,7 @@ class _EngineMidiMixin:
         leaves the rest of the rack alone. ``channel`` is 0..15 and an
         articulation outside the table is refused rather than clamped.
 
-        ``"mono-legato"`` is a request, not a guarantee: an engine whose
+        ``"monoLegato"`` is a request, not a guarantee: an engine whose
         exciter is spent at the onset -- anything struck or plucked -- and a
         target pitch below what the engine's delay line holds both fall back to
         an ordinary note, which :meth:`legato_fallback_count` counts.
@@ -1333,7 +1333,7 @@ class _EngineMidiMixin:
         RX PROGRAM CHANGE / RX BANK SELECT gates; a native synth bound with
         ``SynthPatch.use_gm_programs`` (:meth:`set_synth_instrument`) resolves
         each channel's voice from the bank and program; a native synth whose
-        patch plays the GM kit (the ``drum-kit`` preset, or a percussion patch
+        patch plays the GM kit (the ``drumKit`` preset, or a percussion patch
         with ``gm_kit`` on) takes the program as the GS drum-set select on every
         channel. Every other receiver accepts the message and ignores it: the
         built-in synth, any other native synth patch, a part with RX PROGRAM

@@ -6672,3 +6672,123 @@ changed = "a ChannelLayout token; the ordinal form is TypeError"
 domain = "analysis"
 rule = "string-closed-sets"
 test = "bindings/python/tests/test_decode_channels.py::test_downmix_refuses_an_upmix_an_unknown_layout_and_malformed_channels"
+
+[[entry]]
+kind = "function"
+old = "synth_preset_names"
+changed = "lists the NativeSynth presets in lowerCamel (sawLead, ePiano, drumKit, ...)"
+domain = "engine"
+rule = "token-case"
+test = "bindings/python/tests/test_synth_patch.py::test_synth_preset_names_lists_the_catalog"
+
+[[entry]]
+kind = "function"
+old = "synth_preset_patch"
+changed = "accepts only the lowerCamel preset names synth_preset_names lists"
+domain = "engine"
+rule = "token-case"
+test = "bindings/python/tests/test_synth_patch.py::test_synth_preset_patch_round_trips"
+
+[[entry]]
+kind = "function"
+old = "synth_enum_tables"
+changed = "every NativeSynth enum token is lowerCamel (karplusStrong, transistorLadder, keyDown, monoRetrigger, ...)"
+domain = "engine"
+rule = "token-case"
+test = "bindings/python/tests/test_synth_patch.py::test_every_python_enum_table_matches_the_c_abi_kind"
+
+[[entry]]
+kind = "export"
+old = "SYNTH_ENUM_TABLES"
+changed = "every NativeSynth enum token is lowerCamel, matching synth_enum_tables"
+domain = "engine"
+rule = "token-case"
+test = "bindings/python/tests/test_synth_patch.py::test_every_python_enum_table_matches_the_c_abi_kind"
+
+[[entry]]
+kind = "field"
+old = "SynthPatch.engine_mode"
+changed = "takes the exact lowerCamel engine mode token (karplusStrong, pipeOrgan, bowedString, pluckedString, freeReed); kebab and case-folded spellings are refused"
+domain = "engine"
+rule = "token-case"
+test = "bindings/python/tests/test_synth_patch.py::test_synth_patch_enum_tables_round_trip_all_names_and_ordinals"
+
+[[entry]]
+kind = "field"
+old = "SynthPatch.filter_model"
+changed = "takes the exact lowerCamel filter model token (transistorLadder, diodeLadder, sallenKey, svf4Pole); the moog-ladder input spelling is removed"
+domain = "engine"
+rule = "token-case"
+test = "bindings/python/tests/test_synth_patch.py::test_synth_patch_enum_tables_round_trip_all_names_and_ordinals"
+
+[[entry]]
+kind = "field"
+old = "SynthPatch.body"
+changed = "takes the exact lowerCamel body type token (woodTube, brassBell)"
+domain = "engine"
+rule = "token-case"
+test = "bindings/python/tests/test_synth_patch.py::test_synth_patch_enum_tables_round_trip_all_names_and_ordinals"
+
+[[entry]]
+kind = "field"
+old = "SynthPatch.sample_loop"
+changed = "takes keyDown instead of key-down"
+domain = "engine"
+rule = "token-case"
+test = "bindings/python/tests/test_sample_bank.py::test_patch_sample_fields_round_trip_through_the_c_struct"
+
+[[entry]]
+kind = "field"
+old = "SynthModRouting.source"
+changed = "takes the exact lowerCamel mod source token (ampEnv, filterEnv, keyTrack, modWheel, expressionCc, pitchBend)"
+domain = "engine"
+rule = "token-case"
+test = "bindings/python/tests/test_synth_patch.py::test_synth_patch_overrides_and_mod_matrix"
+
+[[entry]]
+kind = "field"
+old = "SynthModRouting.destination"
+changed = "takes the exact lowerCamel mod destination token (pitchCents, cutoffCents, ampGain, ...)"
+domain = "engine"
+rule = "token-case"
+test = "bindings/python/tests/test_synth_patch.py::test_synth_patch_overrides_and_mod_matrix"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.set_articulation(articulation)"
+changed = "takes monoRetrigger / monoLegato exactly; the kebab spellings are refused"
+domain = "engine"
+rule = "token-case"
+test = "bindings/python/tests/test_articulation.py::test_an_unknown_articulation_spelling_or_ordinal_is_refused_by_the_binding"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.articulation"
+changed = "reports monoRetrigger / monoLegato"
+domain = "engine"
+rule = "token-case"
+test = "bindings/python/tests/test_articulation.py::test_articulation_round_trips_per_channel"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.set_controller_profile(preset_name)"
+changed = "takes breathAftertouch instead of breath-aftertouch"
+domain = "engine"
+rule = "token-case"
+test = "bindings/python/tests/test_controller_profile.py::test_controller_profile_names_lists_the_presets"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.bind_controller(input)"
+changed = "takes the exact lowerCamel controller input token (controlChange, channelPressure, polyPressure, pitchBend)"
+domain = "engine"
+rule = "token-case"
+test = "bindings/python/tests/test_controller_profile.py::test_an_unknown_spelling_or_ordinal_is_refused_by_the_binding"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.bind_controller(axis)"
+changed = "takes pitchCents / vibratoDepth exactly"
+domain = "engine"
+rule = "token-case"
+test = "bindings/python/tests/test_controller_profile.py::test_an_unknown_spelling_or_ordinal_is_refused_by_the_binding"

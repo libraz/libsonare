@@ -51,19 +51,19 @@ _SYNTH_ENGINE_MODES = {
     "default": 0,
     "subtractive": 1,
     "fm": 2,
-    "karplus-strong": 3,
+    "karplusStrong": 3,
     "modal": 4,
     "additive": 5,
     "percussion": 6,
     "piano": 7,
-    "pipe-organ": 8,
-    "bowed-string": 9,
+    "pipeOrgan": 8,
+    "bowedString": 9,
     "reed": 10,
     "brass": 11,
     "flute": 12,
-    "plucked-string": 13,
+    "pluckedString": 13,
     "vocal": 14,
-    "free-reed": 15,
+    "freeReed": 15,
     "harpsichord": 16,
     "sample": 17,
     "singing": 18,
@@ -74,7 +74,7 @@ _SAMPLE_LOOP_MODES = {
     "default": 0,
     "none": 1,
     "continuous": 2,
-    "key-down": 3,
+    "keyDown": 3,
 }
 _SAMPLE_KEY_TRACKS = {
     "default": 0,
@@ -100,7 +100,7 @@ _SYNTH_LFO_SHAPES = {
 _SAMPLE_DESC_LOOP_MODES = {
     "none": 0,
     "continuous": 1,
-    "key-down": 3,
+    "keyDown": 3,
 }
 # SonarePartRigMode.
 PART_RIG_MODES = {"bank": 0, "none": 1, "chain": 2}
@@ -158,13 +158,11 @@ _BUILTIN_SYNTH_WAVEFORMS = {
 _SYNTH_FILTER_MODELS = {
     "default": 0,
     "svf": 1,
-    "transistor-ladder": 2,
-    "diode-ladder": 3,
-    "sallen-key": 4,
-    "svf-4-pole": 5,
+    "transistorLadder": 2,
+    "diodeLadder": 3,
+    "sallenKey": 4,
+    "svf4Pole": 5,
 }
-# Input-only: "moog-ladder" is the pre-rename spelling of "transistor-ladder".
-_SYNTH_FILTER_MODEL_INPUT = {**_SYNTH_FILTER_MODELS, "moog-ladder": 2}
 _SYNTH_FILTER_OUTPUTS = {
     "default": 0,
     "lowpass": 1,
@@ -176,49 +174,49 @@ _SYNTH_BODY_TYPES = {
     "none": 1,
     "guitar": 2,
     "violin": 3,
-    "wood-tube": 4,
-    "brass-bell": 5,
+    "woodTube": 4,
+    "brassBell": 5,
     "vocal": 6,
 }
 _SYNTH_MOD_SOURCES = {
     "none": 0,
-    "amp-env": 1,
-    "filter-env": 2,
+    "ampEnv": 1,
+    "filterEnv": 2,
     "lfo1": 3,
     "lfo2": 4,
     "velocity": 5,
-    "key-track": 6,
-    "mod-wheel": 7,
+    "keyTrack": 6,
+    "modWheel": 7,
     "random": 8,
     "breath": 9,
     "aftertouch": 10,
-    "expression-cc": 11,
-    "pitch-bend": 12,
+    "expressionCc": 11,
+    "pitchBend": 12,
 }
 _SYNTH_MOD_DESTINATIONS = {
     "none": 0,
-    "pitch-cents": 1,
-    "cutoff-cents": 2,
-    "amp-gain": 3,
-    "pan-units": 4,
-    "resonance-q": 5,
-    "vibrato-depth-cents": 6,
-    "filter-env-depth": 7,
-    "lfo1-rate-scale": 8,
-    "excitation-force": 9,
-    "excitation-position": 10,
-    "excitation-brightness": 11,
-    "spectrum-morph": 12,
+    "pitchCents": 1,
+    "cutoffCents": 2,
+    "ampGain": 3,
+    "panUnits": 4,
+    "resonanceQ": 5,
+    "vibratoDepthCents": 6,
+    "filterEnvDepth": 7,
+    "lfo1RateScale": 8,
+    "excitationForce": 9,
+    "excitationPosition": 10,
+    "excitationBrightness": 11,
+    "spectrumMorph": 12,
 }
 # Controller-profile enum names (mirror SonareControllerInput /
 # SonareControllerAxis in sonare_c_engine.h). They describe a device gesture
 # rather than a patch field, but sonare_synth_enum_names serves them, so they
 # are part of the table set whose contract is "the names the C ABI supplies".
 _CONTROLLER_INPUTS = {
-    "control-change": 0,
-    "channel-pressure": 1,
-    "poly-pressure": 2,
-    "pitch-bend": 3,
+    "controlChange": 0,
+    "channelPressure": 1,
+    "polyPressure": 2,
+    "pitchBend": 3,
     "velocity": 4,
 }
 _CONTROLLER_AXES = {
@@ -228,15 +226,15 @@ _CONTROLLER_AXES = {
     "brightness": 3,
     "morph": 4,
     "loudness": 5,
-    "pitch-cents": 6,
-    "vibrato-depth": 7,
+    "pitchCents": 6,
+    "vibratoDepth": 7,
 }
 # Articulation names (mirror SonareArticulation in sonare_c_engine.h): what a
 # channel does with a note-on while another note on it is still held.
 _ARTICULATIONS = {
     "poly": 0,
-    "mono-retrigger": 1,
-    "mono-legato": 2,
+    "monoRetrigger": 1,
+    "monoLegato": 2,
 }
 # The per-note dimensions MPE carries (mirror SonareMpeDimension), and which
 # note a channel-addressed value of one belongs to when several are sounding on
@@ -498,7 +496,7 @@ class SampleBank:
                 dropped, so a malformed loop plays as an unlooped sample rather
                 than as a wrap over nothing.
             loop_mode: The sample's own looping, in SoundFont ``sampleModes``
-                values: ``"none"`` (0), ``"continuous"`` (1) or ``"key-down"``
+                values: ``"none"`` (0), ``"continuous"`` (1) or ``"keyDown"``
                 (3). :attr:`SynthPatch.sample_loop` overrides this per patch.
 
         Raises:
