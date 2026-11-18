@@ -10,7 +10,6 @@ from typing import TYPE_CHECKING, Any, cast
 from ._cli_common import (
     _atomic_write_bytes,
     _chain_params_config,
-    _json_key_to_snake_case,
     _load_channels_or_downmix,
     _load_json_object,
     _parse_json_config,
@@ -103,7 +102,7 @@ _ASSISTANT_OPTIONS = (
     ("targetPlatform", "target-platform"),
     ("preset", "preset"),
 )
-_NAMED_ASSISTANT_KEYS = ("target_platform", "preset")
+_NAMED_ASSISTANT_KEYS = ("targetPlatform", "preset")
 
 
 def _assistant_params_from_args(
@@ -127,11 +126,14 @@ def _assistant_params_from_args(
         if "=" not in item:
             raise ValueError(f"invalid param (expected key=value): {item}")
         key, raw = (part.strip() for part in item.split("=", 1))
-        canonical = _json_key_to_snake_case(key)
+        if key == "target_platform":
+            raise ValueError(
+                "--params target_platform is an earlier spelling; write targetPlatform"
+            )
         for named_key, option in _ASSISTANT_OPTIONS:
-            if canonical == _json_key_to_snake_case(named_key) and _option_supplied(args, option):
+            if key == named_key and _option_supplied(args, option):
                 raise ValueError(f"--{option} and --params {key}= set the same value")
-        if canonical in _NAMED_ASSISTANT_KEYS:
+        if key in _NAMED_ASSISTANT_KEYS:
             params[key] = raw
         else:
             params.update(_parse_kv_params(item))

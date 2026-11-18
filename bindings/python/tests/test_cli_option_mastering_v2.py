@@ -784,7 +784,6 @@ def test_mastering_suggest_takes_the_preset_by_name(monkeypatch, capsys, extra) 
     [
         ("--target-platform", "broadcast"),
         ("--params", "targetPlatform=broadcast"),
-        ("--params", "target_platform=broadcast"),
     ],
 )
 def test_mastering_suggest_takes_the_delivery_target_by_name(monkeypatch, capsys, extra) -> None:
@@ -805,7 +804,8 @@ def test_mastering_suggest_named_options_reach_the_assistant(monkeypatch, capsys
     [
         (("--preset", "jazz", "--params", "preset=jazz"), "set the same value"),
         (("--target-lufs", "-12", "--params", "targetLufs=-12"), "set the same value"),
-        (("--target-platform", "club", "--params", "target_platform=club"), "set the same value"),
+        (("--target-platform", "club", "--params", "targetPlatform=club"), "set the same value"),
+        (("--params", "target_platform=club"), "earlier spelling; write targetPlatform"),
         (("--params", "notAKey=1"), "notAKey"),
         # The index the C ABI carries is a transport detail, not a CLI value.
         (("--params", "preset=3"), "3"),
