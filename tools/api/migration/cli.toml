@@ -8,7 +8,9 @@
 #   kind     function | method | class | type | field | option | value | export | flag | command
 #   old      the 1.x public name, spelled as below; it must exist in v1.10.0
 #   new      the 2.0.0 name (old must be absent, new present, same kind and entry)
-#   removed  true when the name is gone with no replacement (old must be absent)
+#   removed  what a caller writes instead, one line (old must be absent); true only
+#            with no_replacement, when nothing public does the job any more
+#   no_replacement  with removed = true: why, in terms a caller can act on
 #   changed  one line saying what a caller must change; requires
 #            test = "<file>::<case name substring>", which must exist. Without to,
 #            old must still be present (in any kind)
@@ -19,6 +21,7 @@
 #   entry    WASM subpath ("./analysis", "./worklet", ...); omitted means "."
 #   frontend CLI ledger only: "python" or "native" to check one front-end; omitted checks both
 # Exactly one of new / removed / changed per entry.
+# One entry per name; a member of a removed name takes no entry of its own.
 #
 # Names by kind:
 #   function  exported name on this surface: analyzeBpm (wasm/node), analyze_bpm (python),

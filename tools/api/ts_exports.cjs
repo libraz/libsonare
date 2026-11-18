@@ -36,7 +36,23 @@ const where = (d) => {
 const declHasDoc = (d) => !!(d && d.jsDoc && d.jsDoc.length > 0);
 const symHasDoc = (s) =>
   s.getDocumentationComment(checker).length > 0 || (s.declarations || []).some(declHasDoc);
+// The doc comment with its tags (`@param`, `@returns`), as one string.
+const symDocText = (s) =>
+  clip(
+    [
+      ts.displayPartsToString(s.getDocumentationComment(checker)),
+      ...s.getJsDocTags(checker).map((g) => ts.displayPartsToString(g.text || [])),
+    ]
+      .filter(Boolean)
+      .join('\n'),
+  );
 const typeText = (t) => clip(checker.typeToString(t, undefined, TF));
+
+// An array, tuple or standard-library object (Uint8Array, Map ...): its members are not the API's.
+const isLibObject = (t) =>
+  checker.isArrayType(t) ||
+  checker.isTupleType(t) ||
+  (t.symbol?.declarations || []).some((d) => d.getSourceFile().hasNoDefaultLib);
 
 // Members of a union after dropping undefined / null.
 const definedParts = (t) =>
@@ -106,6 +122,7 @@ const describeMember = (m, isStatic) => {
     readonly: !!(ts.getCombinedModifierFlags(md) & ts.ModifierFlags.Readonly),
     ...where(md),
     doc: symHasDoc(m),
+    docText: symDocText(m),
     sigs: kind === 'method' ? cs.map(describeSignature) : [],
     type: typeText(mt),
     boolean: kind !== 'method' && isBoolean(mt),
@@ -145,6 +162,7 @@ for (let i = 0; i < files.length; i++) {
       kind,
       ...where(d),
       doc: symHasDoc(s),
+      docText: symDocText(s),
       sigs: [],
       members: [],
       enumMembers: [],
@@ -163,11 +181,18 @@ for (let i = 0; i < files.length; i++) {
       const t = checker.getDeclaredTypeOfSymbol(s);
       row.type = clip(d.getText().replace(/\s+/g, ' '));
       row.literals = stringLiterals(t);
-      if (t.flags & (ts.TypeFlags.Object | ts.TypeFlags.Intersection)) {
-        for (const m of checker.getPropertiesOfType(t)) {
-          const r = describeMember(m, false);
-          if (r) row.members.push(r);
-        }
+      // An object union (a discriminated union, or `Union & { ... }` distributed over it)
+      // contributes every property any arm declares.
+      const objectFlags = ts.TypeFlags.Object | ts.TypeFlags.Intersection;
+      const props =
+        t.flags & objectFlags
+          ? checker.getPropertiesOfType(t)
+          : t.isUnion() && t.types.every((p) => p.flags & objectFlags && !isLibObject(p))
+            ? checker.getAllPossiblePropertiesOfTypes(t.types)
+            : [];
+      for (const m of props) {
+        const r = describeMember(m, false);
+        if (r) row.members.push(r);
       }
     } else if (kind === 'enum') {
       row.enumMembers = (d.members || []).map((m) => ({

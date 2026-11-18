@@ -39,7 +39,9 @@ def _target(e: dict) -> str:
     if "new" in e:
         return f"`{_cell(e['new'])}`"
     if "removed" in e:
-        return "removed"
+        if e["removed"] is True:
+            return f"removed, no replacement: {_cell(str(e.get('no_replacement', '')))}"
+        return f"removed: {_cell(e['removed'])}"
     text = _cell(str(e.get("changed", "")))
     return f"`{_cell(e['to'])}`: {text}" if "to" in e else text
 

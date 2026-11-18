@@ -433,6 +433,7 @@
    "type": "boolean"
   },
   {
+   "doc_text": "Estimate the tempo of a signal. Omit `fminHz` to search the default range.",
    "domain": "analysis",
    "domain_path": "declaring-file",
    "entries": [],
@@ -610,6 +611,7 @@
    "type": "float"
   },
   {
+   "doc_text": "Estimate the tempo of a signal; ``start`` is None to read from the beginning.",
    "domain": "analysis",
    "domain_path": "declaring-file",
    "entries": [],

@@ -8,7 +8,9 @@
 #   kind     function | method | class | type | field | option | value | export | flag | command
 #   old      the 1.x public name, spelled as below; it must exist in v1.10.0
 #   new      the 2.0.0 name (old must be absent, new present, same kind and entry)
-#   removed  true when the name is gone with no replacement (old must be absent)
+#   removed  what a caller writes instead, one line (old must be absent); true only
+#            with no_replacement, when nothing public does the job any more
+#   no_replacement  with removed = true: why, in terms a caller can act on
 #   changed  one line saying what a caller must change; requires
 #            test = "<file>::<case name substring>", which must exist. Without to,
 #            old must still be present (in any kind)
@@ -19,6 +21,7 @@
 #   entry    WASM subpath ("./analysis", "./worklet", ...); omitted means "."
 #   frontend CLI ledger only: "python" or "native" to check one front-end; omitted checks both
 # Exactly one of new / removed / changed per entry.
+# One entry per name; a member of a removed name takes no entry of its own.
 #
 # Names by kind:
 #   function  exported name on this surface: analyzeBpm (wasm/node), analyze_bpm (python),
@@ -85,35 +88,35 @@ test = "bindings/node/tests/surface/core-teardown.test.ts::declare number | unde
 [[entry]]
 kind = "function"
 old = "hasFfmpegSupport"
-removed = true
+removed = "read capabilities().features.ffmpeg"
 domain = "core"
 rule = "aliases-removed"
 
 [[entry]]
 kind = "function"
 old = "vocalEditAvailable"
-removed = true
+removed = "read capabilities().features.vocalEdit"
 domain = "core"
 rule = "aliases-removed"
 
 [[entry]]
 kind = "export"
 old = "EXPECTED_ABI_VERSION"
-removed = true
+removed = "no longer exported; the binding checks ABI compatibility at load and throws AbiMismatch, and capabilities().abi reports the loaded versions"
 domain = "core"
 rule = "abi-probes"
 
 [[entry]]
 kind = "export"
 old = "EXPECTED_ENGINE_ABI_VERSION"
-removed = true
+removed = "no longer exported; the binding checks ABI compatibility at load and throws AbiMismatch, and capabilities().abi reports the loaded versions"
 domain = "core"
 rule = "abi-probes"
 
 [[entry]]
 kind = "export"
 old = "EXPECTED_PROJECT_ABI_VERSION"
-removed = true
+removed = "no longer exported; the binding checks ABI compatibility at load and throws AbiMismatch, and capabilities().abi reports the loaded versions"
 domain = "project"
 rule = "abi-probes"
 
@@ -195,21 +198,21 @@ rule = "seconds-suffix"
 [[entry]]
 kind = "method"
 old = "Mixer.delete"
-removed = true
+removed = "call destroy()"
 domain = "engine"
 rule = "teardown"
 
 [[entry]]
 kind = "method"
 old = "Project.delete"
-removed = true
+removed = "call destroy()"
 domain = "project"
 rule = "teardown"
 
 [[entry]]
 kind = "method"
 old = "SampleBank.delete"
-removed = true
+removed = "call destroy()"
 domain = "engine"
 rule = "teardown"
 
@@ -223,28 +226,28 @@ rule = "teardown"
 [[entry]]
 kind = "method"
 old = "VocalEditSession.dispose"
-removed = true
+removed = "call destroy()"
 domain = "project"
 rule = "teardown"
 
 [[entry]]
 kind = "method"
 old = "VocalEditDraft.dispose"
-removed = true
+removed = "call destroy()"
 domain = "project"
 rule = "teardown"
 
 [[entry]]
 kind = "method"
 old = "VocalRenderSnapshot.dispose"
-removed = true
+removed = "call destroy()"
 domain = "project"
 rule = "teardown"
 
 [[entry]]
 kind = "method"
 old = "VocalRenderJob.dispose"
-removed = true
+removed = "call destroy()"
 domain = "project"
 rule = "teardown"
 
@@ -913,42 +916,42 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::takes samples, sa
 [[entry]]
 kind = "option"
 old = "amplitudeToDb(amin)"
-removed = true
+removed = "pass amin as a field of AmplitudeToDbRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "amplitudeToDb(ref)"
-removed = true
+removed = "pass ref as a field of AmplitudeToDbRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "amplitudeToDb(topDb)"
-removed = true
+removed = "pass topDb as a field of AmplitudeToDbRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "amplitudeToDb(values)"
-removed = true
+removed = "pass values as a field of AmplitudeToDbRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "bassChroma(hopLength)"
-removed = true
+removed = "pass hopLength as a field of BassChromaRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "bassChroma(nChroma)"
-removed = true
+removed = "pass nChroma as a field of BassChromaRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
@@ -963,49 +966,49 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRa
 [[entry]]
 kind = "option"
 old = "chirp(duration)"
-removed = true
+removed = "pass it as durationSec in ChirpRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "chirp(fmax)"
-removed = true
+removed = "pass it as fmaxHz in ChirpRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "chirp(fmin)"
-removed = true
+removed = "pass it as fminHz in ChirpRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "chirp(linear)"
-removed = true
+removed = "pass linear as a field of ChirpRequest"
 domain = "analysis"
 rule = "no-positional-bools"
 
 [[entry]]
 kind = "option"
 old = "chirp(sampleRate)"
-removed = true
+removed = "pass sampleRate as a field of ChirpRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "chroma(hopLength)"
-removed = true
+removed = "pass hopLength as a field of ChromaRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "chroma(nFft)"
-removed = true
+removed = "pass nFft as a field of ChromaRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
@@ -1020,21 +1023,21 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRa
 [[entry]]
 kind = "option"
 old = "chromaCens(binsPerOctave)"
-removed = true
+removed = "pass binsPerOctave as a field of ChromaCensRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "chromaCens(hopLength)"
-removed = true
+removed = "pass hopLength as a field of ChromaCensRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "chromaCens(nChroma)"
-removed = true
+removed = "pass nChroma as a field of ChromaCensRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
@@ -1049,21 +1052,21 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRa
 [[entry]]
 kind = "option"
 old = "chromaCqt(binsPerOctave)"
-removed = true
+removed = "pass binsPerOctave as a field of ChromaCqtRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "chromaCqt(hopLength)"
-removed = true
+removed = "pass hopLength as a field of ChromaCqtRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "chromaCqt(nChroma)"
-removed = true
+removed = "pass nChroma as a field of ChromaCqtRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
@@ -1078,63 +1081,63 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRa
 [[entry]]
 kind = "option"
 old = "clicks(clickDuration)"
-removed = true
+removed = "pass it as clickDurationSec in ClicksRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "clicks(frequency)"
-removed = true
+removed = "pass it as frequencyHz in ClicksRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "clicks(length)"
-removed = true
+removed = "pass length as a field of ClicksRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "clicks(sampleRate)"
-removed = true
+removed = "pass sampleRate as a field of ClicksRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "clicks(times)"
-removed = true
+removed = "pass times as a field of ClicksRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "cqt(binsPerOctave)"
-removed = true
+removed = "pass binsPerOctave as a field of CqtRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "cqt(fmin)"
-removed = true
+removed = "pass it as fminHz in CqtRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "cqt(hopLength)"
-removed = true
+removed = "pass hopLength as a field of CqtRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "cqt(nBins)"
-removed = true
+removed = "pass nBins as a field of CqtRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
@@ -1149,168 +1152,168 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRa
 [[entry]]
 kind = "option"
 old = "cqtToAudio(binsPerOctave)"
-removed = true
+removed = "pass binsPerOctave as a field of CqtToAudioRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "cqtToAudio(fmin)"
-removed = true
+removed = "pass it as fminHz in CqtToAudioRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "cqtToAudio(hopLength)"
-removed = true
+removed = "pass hopLength as a field of CqtToAudioRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "cqtToAudio(magnitude)"
-removed = true
+removed = "pass magnitude as a field of CqtToAudioRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "cqtToAudio(nBins)"
-removed = true
+removed = "the Matrix2D input carries it as rows / cols"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "cqtToAudio(nFrames)"
-removed = true
+removed = "the Matrix2D input carries it as rows / cols"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "cqtToAudio(nIter)"
-removed = true
+removed = "pass nIter as a field of CqtToAudioRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "cqtToAudio(sampleRate)"
-removed = true
+removed = "pass sampleRate as a field of CqtToAudioRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "cyclicTempogram(bpmMin)"
-removed = true
+removed = "pass bpmMin as a field of CyclicTempogramRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "cyclicTempogram(hopLength)"
-removed = true
+removed = "pass hopLength as a field of CyclicTempogramRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "cyclicTempogram(nBins)"
-removed = true
+removed = "pass nBins as a field of CyclicTempogramRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "cyclicTempogram(onsetEnvelope)"
-removed = true
+removed = "pass onsetEnvelope as a field of CyclicTempogramRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "cyclicTempogram(sampleRate)"
-removed = true
+removed = "pass sampleRate as a field of CyclicTempogramRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "cyclicTempogram(winLength)"
-removed = true
+removed = "pass winLength as a field of CyclicTempogramRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "dbToAmplitude(ref)"
-removed = true
+removed = "pass ref as a field of DbToAmplitudeRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "dbToAmplitude(values)"
-removed = true
+removed = "pass values as a field of DbToAmplitudeRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "dbToPower(ref)"
-removed = true
+removed = "pass ref as a field of DbToPowerRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "dbToPower(values)"
-removed = true
+removed = "pass values as a field of DbToPowerRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "deemphasis(coef)"
-removed = true
+removed = "pass coef as a field of DeemphasisRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "deemphasis(zi)"
-removed = true
+removed = "pass zi as a field of DeemphasisRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "estimateTuning(binsPerOctave)"
-removed = true
+removed = "pass binsPerOctave as a field of EstimateTuningRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "estimateTuning(hopLength)"
-removed = true
+removed = "pass hopLength as a field of EstimateTuningRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "estimateTuning(nFft)"
-removed = true
+removed = "pass nFft as a field of EstimateTuningRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "estimateTuning(resolution)"
-removed = true
+removed = "pass resolution as a field of EstimateTuningRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
@@ -1325,105 +1328,105 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRa
 [[entry]]
 kind = "option"
 old = "fixFrames(frames)"
-removed = true
+removed = "pass frames as a field of FixFramesRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "fixFrames(pad)"
-removed = true
+removed = "pass pad as a field of FixFramesRequest"
 domain = "analysis"
 rule = "no-positional-bools"
 
 [[entry]]
 kind = "option"
 old = "fixFrames(xMax)"
-removed = true
+removed = "pass xMax as a field of FixFramesRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "fixFrames(xMin)"
-removed = true
+removed = "pass xMin as a field of FixFramesRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "fixLength(padValue)"
-removed = true
+removed = "pass padValue as a field of FixLengthRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "fixLength(targetSize)"
-removed = true
+removed = "pass targetSize as a field of FixLengthRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "fixLength(values)"
-removed = true
+removed = "pass values as a field of FixLengthRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "fourierTempogram(center)"
-removed = true
+removed = "pass center as a field of FourierTempogramRequest"
 domain = "analysis"
 rule = "no-positional-bools"
 
 [[entry]]
 kind = "option"
 old = "fourierTempogram(hopLength)"
-removed = true
+removed = "pass hopLength as a field of FourierTempogramRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "fourierTempogram(norm)"
-removed = true
+removed = "the option had no effect in 1.x (the Fourier tempogram never read it); remove the argument, the output is unchanged"
 domain = "analysis"
 rule = "no-positional-bools"
 
 [[entry]]
 kind = "option"
 old = "fourierTempogram(onsetEnvelope)"
-removed = true
+removed = "pass onsetEnvelope as a field of FourierTempogramRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "fourierTempogram(sampleRate)"
-removed = true
+removed = "pass sampleRate as a field of FourierTempogramRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "fourierTempogram(winLength)"
-removed = true
+removed = "pass winLength as a field of FourierTempogramRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "frameSignal(frameLength)"
-removed = true
+removed = "pass frameLength as a field of FrameSignalRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "frameSignal(hopLength)"
-removed = true
+removed = "pass hopLength as a field of FrameSignalRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
@@ -1445,84 +1448,84 @@ rule = "sample-rate-name"
 [[entry]]
 kind = "option"
 old = "griffinLim(hopLength)"
-removed = true
+removed = "pass hopLength as a field of GriffinLimRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "griffinLim(magnitude)"
-removed = true
+removed = "pass magnitude as a field of GriffinLimRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "griffinLim(momentum)"
-removed = true
+removed = "pass momentum as a field of GriffinLimRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "griffinLim(nBins)"
-removed = true
+removed = "the Matrix2D input carries it as rows / cols"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "griffinLim(nFft)"
-removed = true
+removed = "pass nFft as a field of GriffinLimRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "griffinLim(nFrames)"
-removed = true
+removed = "the Matrix2D input carries it as rows / cols"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "griffinLim(nIter)"
-removed = true
+removed = "pass nIter as a field of GriffinLimRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "griffinLim(sampleRate)"
-removed = true
+removed = "pass sampleRate as a field of GriffinLimRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "hybridCqt(binsPerOctave)"
-removed = true
+removed = "pass binsPerOctave as a field of HybridCqtRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "hybridCqt(fmin)"
-removed = true
+removed = "pass it as fminHz in HybridCqtRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "hybridCqt(hopLength)"
-removed = true
+removed = "pass hopLength as a field of HybridCqtRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "hybridCqt(nBins)"
-removed = true
+removed = "pass nBins as a field of HybridCqtRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
@@ -1545,70 +1548,70 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRa
 [[entry]]
 kind = "option"
 old = "melDelta(features)"
-removed = true
+removed = "pass features as a field of MelDeltaRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "melDelta(nFeatures)"
-removed = true
+removed = "the Matrix2D input carries it as rows / cols"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "melDelta(nFrames)"
-removed = true
+removed = "the Matrix2D input carries it as rows / cols"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "melDelta(width)"
-removed = true
+removed = "pass width as a field of MelDeltaRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "melSpectrogram(fmax)"
-removed = true
+removed = "pass it as fmaxHz in MelSpectrogramRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "melSpectrogram(fmin)"
-removed = true
+removed = "pass it as fminHz in MelSpectrogramRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "melSpectrogram(hopLength)"
-removed = true
+removed = "pass hopLength as a field of MelSpectrogramRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "melSpectrogram(htk)"
-removed = true
+removed = "pass htk as a field of MelSpectrogramRequest"
 domain = "analysis"
 rule = "no-positional-bools"
 
 [[entry]]
 kind = "option"
 old = "melSpectrogram(nFft)"
-removed = true
+removed = "pass nFft as a field of MelSpectrogramRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "melSpectrogram(nMels)"
-removed = true
+removed = "pass nMels as a field of MelSpectrogramRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
@@ -1623,182 +1626,182 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRa
 [[entry]]
 kind = "option"
 old = "melToAudio(fmax)"
-removed = true
+removed = "pass it as fmaxHz in MelToAudioRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "melToAudio(fmin)"
-removed = true
+removed = "pass it as fminHz in MelToAudioRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "melToAudio(hopLength)"
-removed = true
+removed = "pass hopLength as a field of MelToAudioRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "melToAudio(htk)"
-removed = true
+removed = "pass htk as a field of MelToAudioRequest"
 domain = "analysis"
 rule = "no-positional-bools"
 
 [[entry]]
 kind = "option"
 old = "melToAudio(nFft)"
-removed = true
+removed = "pass nFft as a field of MelToAudioRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "melToAudio(nFrames)"
-removed = true
+removed = "the Matrix2D input carries it as rows / cols"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "melToAudio(nIter)"
-removed = true
+removed = "pass nIter as a field of MelToAudioRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "melToAudio(nMels)"
-removed = true
+removed = "the Matrix2D input carries it as rows / cols"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "melToAudio(power)"
-removed = true
+removed = "pass power as a field of MelToAudioRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "melToAudio(sampleRate)"
-removed = true
+removed = "pass sampleRate as a field of MelToAudioRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "melToStft(fmax)"
-removed = true
+removed = "pass it as fmaxHz in MelToStftRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "melToStft(fmin)"
-removed = true
+removed = "pass it as fminHz in MelToStftRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "melToStft(htk)"
-removed = true
+removed = "pass htk as a field of MelToStftRequest"
 domain = "analysis"
 rule = "no-positional-bools"
 
 [[entry]]
 kind = "option"
 old = "melToStft(nFft)"
-removed = true
+removed = "pass nFft as a field of MelToStftRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "melToStft(nFrames)"
-removed = true
+removed = "the Matrix2D input carries it as rows / cols"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "melToStft(nMels)"
-removed = true
+removed = "the Matrix2D input carries it as rows / cols"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "melToStft(power)"
-removed = true
+removed = "pass power as a field of MelToStftRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "melToStft(sampleRate)"
-removed = true
+removed = "pass sampleRate as a field of MelToStftRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "mfcc(fmax)"
-removed = true
+removed = "pass it as fmaxHz in MfccRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "mfcc(fmin)"
-removed = true
+removed = "pass it as fminHz in MfccRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "mfcc(hopLength)"
-removed = true
+removed = "pass hopLength as a field of MfccRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "mfcc(htk)"
-removed = true
+removed = "pass htk as a field of MfccRequest"
 domain = "analysis"
 rule = "no-positional-bools"
 
 [[entry]]
 kind = "option"
 old = "mfcc(lifter)"
-removed = true
+removed = "pass lifter as a field of MfccRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "mfcc(nFft)"
-removed = true
+removed = "pass nFft as a field of MfccRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "mfcc(nMels)"
-removed = true
+removed = "pass nMels as a field of MfccRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "mfcc(nMfcc)"
-removed = true
+removed = "pass nMfcc as a field of MfccRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
@@ -1813,119 +1816,119 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRa
 [[entry]]
 kind = "option"
 old = "mfccToAudio(coefficients)"
-removed = true
+removed = "pass coefficients as a field of MfccToAudioRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "mfccToAudio(fmax)"
-removed = true
+removed = "pass it as fmaxHz in MfccToAudioRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "mfccToAudio(fmin)"
-removed = true
+removed = "pass it as fminHz in MfccToAudioRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "mfccToAudio(hopLength)"
-removed = true
+removed = "pass hopLength as a field of MfccToAudioRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "mfccToAudio(htk)"
-removed = true
+removed = "pass htk as a field of MfccToAudioRequest"
 domain = "analysis"
 rule = "no-positional-bools"
 
 [[entry]]
 kind = "option"
 old = "mfccToAudio(lifter)"
-removed = true
+removed = "pass lifter as a field of MfccToAudioRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "mfccToAudio(nFft)"
-removed = true
+removed = "pass nFft as a field of MfccToAudioRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "mfccToAudio(nFrames)"
-removed = true
+removed = "the Matrix2D input carries it as rows / cols"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "mfccToAudio(nIter)"
-removed = true
+removed = "pass nIter as a field of MfccToAudioRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "mfccToAudio(nMels)"
-removed = true
+removed = "pass nMels as a field of MfccToAudioRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "mfccToAudio(nMfcc)"
-removed = true
+removed = "the Matrix2D input carries it as rows / cols"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "mfccToAudio(sampleRate)"
-removed = true
+removed = "pass sampleRate as a field of MfccToAudioRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "mfccToMel(coefficients)"
-removed = true
+removed = "pass coefficients as a field of MfccToMelRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "mfccToMel(lifter)"
-removed = true
+removed = "pass lifter as a field of MfccToMelRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "mfccToMel(nFrames)"
-removed = true
+removed = "the Matrix2D input carries it as rows / cols"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "mfccToMel(nMels)"
-removed = true
+removed = "pass nMels as a field of MfccToMelRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "mfccToMel(nMfcc)"
-removed = true
+removed = "the Matrix2D input carries it as rows / cols"
 domain = "analysis"
 rule = "one-positional-form"
 
@@ -1948,63 +1951,63 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRa
 [[entry]]
 kind = "option"
 old = "onsetBacktrack(energy)"
-removed = true
+removed = "pass energy as a field of OnsetBacktrackRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "onsetBacktrack(events)"
-removed = true
+removed = "pass events as a field of OnsetBacktrackRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "onsetEnvelope(hopLength)"
-removed = true
+removed = "onsetEnvelope is gone; call onsetStrength and pass hopLength in OnsetStrengthRequest."
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "onsetEnvelope(nFft)"
-removed = true
+removed = "onsetEnvelope is gone; call onsetStrength and pass nFft in OnsetStrengthRequest."
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "onsetEnvelope(nMels)"
-removed = true
+removed = "the Matrix2D input carries it as rows / cols"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "onsetStrengthMulti(hopLength)"
-removed = true
+removed = "pass hopLength as a field of OnsetStrengthMultiRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "onsetStrengthMulti(nBands)"
-removed = true
+removed = "pass nBands as a field of OnsetStrengthMultiRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "onsetStrengthMulti(nFft)"
-removed = true
+removed = "pass nFft as a field of OnsetStrengthMultiRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "onsetStrengthMulti(nMels)"
-removed = true
+removed = "pass nMels as a field of OnsetStrengthMultiRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
@@ -2019,126 +2022,126 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRa
 [[entry]]
 kind = "option"
 old = "padCenter(padValue)"
-removed = true
+removed = "pass padValue as a field of PadCenterRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "padCenter(targetSize)"
-removed = true
+removed = "pass targetSize as a field of PadCenterRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "padCenter(values)"
-removed = true
+removed = "pass values as a field of PadCenterRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "pcen(nBins)"
-removed = true
+removed = "the Matrix2D input carries it as rows / cols"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "pcen(nFrames)"
-removed = true
+removed = "the Matrix2D input carries it as rows / cols"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "pcen(options)"
-removed = true
+removed = "pass the option fields in PcenRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "pcen(values)"
-removed = true
+removed = "pass values as a field of PcenRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "peakPick(delta)"
-removed = true
+removed = "pass delta as a field of PeakPickRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "peakPick(postAvg)"
-removed = true
+removed = "pass postAvg as a field of PeakPickRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "peakPick(postMax)"
-removed = true
+removed = "pass postMax as a field of PeakPickRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "peakPick(preAvg)"
-removed = true
+removed = "pass preAvg as a field of PeakPickRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "peakPick(preMax)"
-removed = true
+removed = "pass preMax as a field of PeakPickRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "peakPick(values)"
-removed = true
+removed = "pass values as a field of PeakPickRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "peakPick(wait)"
-removed = true
+removed = "pass wait as a field of PeakPickRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "piptrack(fmax)"
-removed = true
+removed = "pass it as fmaxHz in PiptrackRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "piptrack(fmin)"
-removed = true
+removed = "pass it as fminHz in PiptrackRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "piptrack(hopLength)"
-removed = true
+removed = "pass hopLength as a field of PiptrackRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "piptrack(nFft)"
-removed = true
+removed = "pass nFft as a field of PiptrackRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
@@ -2153,42 +2156,42 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRa
 [[entry]]
 kind = "option"
 old = "piptrack(threshold)"
-removed = true
+removed = "pass threshold as a field of PiptrackRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "pitchPyin(fillNa)"
-removed = true
+removed = "pass fillNa as a field of PitchPyinRequest"
 domain = "analysis"
 rule = "no-positional-bools"
 
 [[entry]]
 kind = "option"
 old = "pitchPyin(fmax)"
-removed = true
+removed = "Pass it as f0MaxHz in PitchPyinRequest, e.g. pitchPyin(samples, sampleRate, { f0MaxHz }) or pitchPyin({ samples, sampleRate, f0MaxHz })."
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "pitchPyin(fmin)"
-removed = true
+removed = "Pass it as f0MinHz in PitchPyinRequest, e.g. pitchPyin(samples, sampleRate, { f0MinHz }) or pitchPyin({ samples, sampleRate, f0MinHz })."
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "pitchPyin(frameLength)"
-removed = true
+removed = "pass frameLength as a field of PitchPyinRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "pitchPyin(hopLength)"
-removed = true
+removed = "pass hopLength as a field of PitchPyinRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
@@ -2203,63 +2206,63 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRa
 [[entry]]
 kind = "option"
 old = "pitchPyin(threshold)"
-removed = true
+removed = "pass threshold as a field of PitchPyinRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "pitchTuning(binsPerOctave)"
-removed = true
+removed = "pass binsPerOctave as a field of PitchTuningRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "pitchTuning(frequencies)"
-removed = true
+removed = "pass frequencies as a field of PitchTuningRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "pitchTuning(resolution)"
-removed = true
+removed = "pass resolution as a field of PitchTuningRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "pitchYin(fillNa)"
-removed = true
+removed = "pass fillNa as a field of PitchYinRequest"
 domain = "analysis"
 rule = "no-positional-bools"
 
 [[entry]]
 kind = "option"
 old = "pitchYin(fmax)"
-removed = true
+removed = "Pass it as f0MaxHz in PitchYinRequest, e.g. pitchYin(samples, sampleRate, { f0MaxHz }) or pitchYin({ samples, sampleRate, f0MaxHz })."
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "pitchYin(fmin)"
-removed = true
+removed = "Pass it as f0MinHz in PitchYinRequest, e.g. pitchYin(samples, sampleRate, { f0MinHz }) or pitchYin({ samples, sampleRate, f0MinHz })."
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "pitchYin(frameLength)"
-removed = true
+removed = "pass frameLength as a field of PitchYinRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "pitchYin(hopLength)"
-removed = true
+removed = "pass hopLength as a field of PitchYinRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
@@ -2274,70 +2277,70 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRa
 [[entry]]
 kind = "option"
 old = "pitchYin(threshold)"
-removed = true
+removed = "pass threshold as a field of PitchYinRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "plp(hopLength)"
-removed = true
+removed = "pass hopLength as a field of PlpRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "plp(onsetEnvelope)"
-removed = true
+removed = "pass onsetEnvelope as a field of PlpRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "plp(sampleRate)"
-removed = true
+removed = "pass sampleRate as a field of PlpRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "plp(tempoMax)"
-removed = true
+removed = "Pass it as bpmMax in PlpRequest: plp({ onsetEnvelope, bpmMax })."
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "plp(tempoMin)"
-removed = true
+removed = "Pass it as bpmMin in PlpRequest: plp({ onsetEnvelope, bpmMin })."
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "plp(winLength)"
-removed = true
+removed = "pass winLength as a field of PlpRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "polyFeatures(hopLength)"
-removed = true
+removed = "pass hopLength as a field of PolyFeaturesRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "polyFeatures(nFft)"
-removed = true
+removed = "pass nFft as a field of PolyFeaturesRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "polyFeatures(order)"
-removed = true
+removed = "pass order as a field of PolyFeaturesRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
@@ -2352,70 +2355,70 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRa
 [[entry]]
 kind = "option"
 old = "powerToDb(amin)"
-removed = true
+removed = "pass amin as a field of PowerToDbRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "powerToDb(ref)"
-removed = true
+removed = "pass ref as a field of PowerToDbRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "powerToDb(topDb)"
-removed = true
+removed = "pass topDb as a field of PowerToDbRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "powerToDb(values)"
-removed = true
+removed = "pass values as a field of PowerToDbRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "preemphasis(coef)"
-removed = true
+removed = "pass coef as a field of PreemphasisRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "preemphasis(zi)"
-removed = true
+removed = "pass zi as a field of PreemphasisRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "pseudoCqt(binsPerOctave)"
-removed = true
+removed = "pass binsPerOctave as a field of PseudoCqtRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "pseudoCqt(fmin)"
-removed = true
+removed = "pass it as fminHz in PseudoCqtRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "pseudoCqt(hopLength)"
-removed = true
+removed = "pass hopLength as a field of PseudoCqtRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "pseudoCqt(nBins)"
-removed = true
+removed = "pass nBins as a field of PseudoCqtRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
@@ -2430,28 +2433,28 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRa
 [[entry]]
 kind = "option"
 old = "reassignedSpectrogram(fillNan)"
-removed = true
+removed = "pass fillNan as a field of ReassignedSpectrogramRequest"
 domain = "analysis"
 rule = "no-positional-bools"
 
 [[entry]]
 kind = "option"
 old = "reassignedSpectrogram(hopLength)"
-removed = true
+removed = "pass hopLength as a field of ReassignedSpectrogramRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "reassignedSpectrogram(nFft)"
-removed = true
+removed = "pass nFft as a field of ReassignedSpectrogramRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "reassignedSpectrogram(refPower)"
-removed = true
+removed = "pass refPower as a field of ReassignedSpectrogramRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
@@ -2480,14 +2483,14 @@ rule = "unit-in-name"
 [[entry]]
 kind = "option"
 old = "rmsEnergy(frameLength)"
-removed = true
+removed = "pass frameLength as a field of RmsEnergyRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "rmsEnergy(hopLength)"
-removed = true
+removed = "pass hopLength as a field of RmsEnergyRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
@@ -2518,21 +2521,21 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRa
 [[entry]]
 kind = "option"
 old = "spectralBandwidth(hopLength)"
-removed = true
+removed = "pass hopLength as a field of SpectralBandwidthRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "spectralBandwidth(nFft)"
-removed = true
+removed = "pass nFft as a field of SpectralBandwidthRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "spectralBandwidth(p)"
-removed = true
+removed = "pass p as a field of SpectralBandwidthRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
@@ -2547,14 +2550,14 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRa
 [[entry]]
 kind = "option"
 old = "spectralCentroid(hopLength)"
-removed = true
+removed = "pass hopLength as a field of SpectralCentroidRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "spectralCentroid(nFft)"
-removed = true
+removed = "pass nFft as a field of SpectralCentroidRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
@@ -2569,35 +2572,35 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRa
 [[entry]]
 kind = "option"
 old = "spectralContrast(fmin)"
-removed = true
+removed = "pass it as fminHz in SpectralContrastRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "spectralContrast(hopLength)"
-removed = true
+removed = "pass hopLength as a field of SpectralContrastRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "spectralContrast(nBands)"
-removed = true
+removed = "pass nBands as a field of SpectralContrastRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "spectralContrast(nFft)"
-removed = true
+removed = "pass nFft as a field of SpectralContrastRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "spectralContrast(quantile)"
-removed = true
+removed = "pass quantile as a field of SpectralContrastRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
@@ -2612,14 +2615,14 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRa
 [[entry]]
 kind = "option"
 old = "spectralFlatness(hopLength)"
-removed = true
+removed = "pass hopLength as a field of SpectralFlatnessRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "spectralFlatness(nFft)"
-removed = true
+removed = "pass nFft as a field of SpectralFlatnessRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
@@ -2634,21 +2637,21 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRa
 [[entry]]
 kind = "option"
 old = "spectralFlux(hopLength)"
-removed = true
+removed = "pass hopLength as a field of SpectralFluxRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "spectralFlux(lag)"
-removed = true
+removed = "pass lag as a field of SpectralFluxRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "spectralFlux(nFft)"
-removed = true
+removed = "pass nFft as a field of SpectralFluxRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
@@ -2663,21 +2666,21 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRa
 [[entry]]
 kind = "option"
 old = "spectralRolloff(hopLength)"
-removed = true
+removed = "pass hopLength as a field of SpectralRolloffRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "spectralRolloff(nFft)"
-removed = true
+removed = "pass nFft as a field of SpectralRolloffRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "spectralRolloff(rollPercent)"
-removed = true
+removed = "pass rollPercent as a field of SpectralRolloffRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
@@ -2692,35 +2695,35 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRa
 [[entry]]
 kind = "option"
 old = "splitSilence(frameLength)"
-removed = true
+removed = "pass frameLength as a field of SplitSilenceRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "splitSilence(hopLength)"
-removed = true
+removed = "pass hopLength as a field of SplitSilenceRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "splitSilence(topDb)"
-removed = true
+removed = "pass topDb as a field of SplitSilenceRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "stft(hopLength)"
-removed = true
+removed = "pass hopLength as a field of StftRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "stft(nFft)"
-removed = true
+removed = "pass nFft as a field of StftRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
@@ -2735,14 +2738,14 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRa
 [[entry]]
 kind = "option"
 old = "stftDb(hopLength)"
-removed = true
+removed = "pass hopLength as a field of StftDbRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "stftDb(nFft)"
-removed = true
+removed = "pass nFft as a field of StftDbRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
@@ -2757,84 +2760,84 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRa
 [[entry]]
 kind = "option"
 old = "tempogram(center)"
-removed = true
+removed = "pass center as a field of TempogramRequest"
 domain = "analysis"
 rule = "no-positional-bools"
 
 [[entry]]
 kind = "option"
 old = "tempogram(hopLength)"
-removed = true
+removed = "pass hopLength as a field of TempogramRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "tempogram(mode)"
-removed = true
+removed = "pass mode as a field of TempogramRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "tempogram(norm)"
-removed = true
+removed = "pass norm as a field of TempogramRequest"
 domain = "analysis"
 rule = "no-positional-bools"
 
 [[entry]]
 kind = "option"
 old = "tempogram(onsetEnvelope)"
-removed = true
+removed = "pass onsetEnvelope as a field of TempogramRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "tempogram(sampleRate)"
-removed = true
+removed = "pass sampleRate as a field of TempogramRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "tempogram(winLength)"
-removed = true
+removed = "pass winLength as a field of TempogramRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "tempogramRatio(factors)"
-removed = true
+removed = "pass factors as a field of TempogramRatioRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "tempogramRatio(hopLength)"
-removed = true
+removed = "pass hopLength as a field of TempogramRatioRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "tempogramRatio(sampleRate)"
-removed = true
+removed = "pass sampleRate as a field of TempogramRatioRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "tempogramRatio(tempogramData)"
-removed = true
+removed = "Pass the tempogram as tempogram, a Matrix2D (rows = lags, cols = frames), in TempogramRatioRequest."
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "tempogramRatio(winLength)"
-removed = true
+removed = "Drop it; the window length is the row count of the tempogram Matrix2D passed as tempogram in TempogramRatioRequest."
 domain = "analysis"
 rule = "one-positional-form"
 
@@ -2855,77 +2858,77 @@ rule = "seconds-suffix"
 [[entry]]
 kind = "option"
 old = "tone(amplitude)"
-removed = true
+removed = "pass amplitude as a field of ToneRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "tone(duration)"
-removed = true
+removed = "pass it as durationSec in ToneRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "tone(frequency)"
-removed = true
+removed = "pass it as frequencyHz in ToneRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "tone(phase)"
-removed = true
+removed = "pass phase as a field of ToneRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "tone(sampleRate)"
-removed = true
+removed = "pass sampleRate as a field of ToneRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "tonnetz(chromagram)"
-removed = true
+removed = "pass chromagram as a field of TonnetzRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "tonnetz(nChroma)"
-removed = true
+removed = "the Matrix2D input carries it as rows / cols"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "tonnetz(nFrames)"
-removed = true
+removed = "the Matrix2D input carries it as rows / cols"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "trimSilence(frameLength)"
-removed = true
+removed = "pass frameLength as a field of TrimSilenceRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "trimSilence(hopLength)"
-removed = true
+removed = "pass hopLength as a field of TrimSilenceRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "trimSilence(topDb)"
-removed = true
+removed = "pass topDb as a field of TrimSilenceRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
@@ -2946,56 +2949,56 @@ rule = "unit-in-name"
 [[entry]]
 kind = "option"
 old = "vectorNormalize(normType)"
-removed = true
+removed = "Pass the norm by name as norm in VectorNormalizeRequest: 'max', 'l1', 'l2' or 'power'. The numeric code is refused."
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "vectorNormalize(threshold)"
-removed = true
+removed = "pass threshold as a field of VectorNormalizeRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "vectorNormalize(values)"
-removed = true
+removed = "pass values as a field of VectorNormalizeRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "vqt(binsPerOctave)"
-removed = true
+removed = "pass binsPerOctave as a field of VqtRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "vqt(fmin)"
-removed = true
+removed = "pass it as fminHz in VqtRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "vqt(gamma)"
-removed = true
+removed = "pass gamma as a field of VqtRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "vqt(hopLength)"
-removed = true
+removed = "pass hopLength as a field of VqtRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "vqt(nBins)"
-removed = true
+removed = "pass nBins as a field of VqtRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
@@ -3010,77 +3013,77 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRa
 [[entry]]
 kind = "option"
 old = "vqtToAudio(binsPerOctave)"
-removed = true
+removed = "pass binsPerOctave as a field of VqtToAudioRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "vqtToAudio(fmin)"
-removed = true
+removed = "pass it as fminHz in VqtToAudioRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "vqtToAudio(gamma)"
-removed = true
+removed = "pass gamma as a field of VqtToAudioRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "vqtToAudio(hopLength)"
-removed = true
+removed = "pass hopLength as a field of VqtToAudioRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "vqtToAudio(magnitude)"
-removed = true
+removed = "pass magnitude as a field of VqtToAudioRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "vqtToAudio(nBins)"
-removed = true
+removed = "the Matrix2D input carries it as rows / cols"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "vqtToAudio(nFrames)"
-removed = true
+removed = "the Matrix2D input carries it as rows / cols"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "vqtToAudio(nIter)"
-removed = true
+removed = "pass nIter as a field of VqtToAudioRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "vqtToAudio(sampleRate)"
-removed = true
+removed = "pass sampleRate as a field of VqtToAudioRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "zeroCrossingRate(frameLength)"
-removed = true
+removed = "pass frameLength as a field of ZeroCrossingRateRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "zeroCrossingRate(hopLength)"
-removed = true
+removed = "pass hopLength as a field of ZeroCrossingRateRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
@@ -3095,28 +3098,28 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRa
 [[entry]]
 kind = "option"
 old = "zeroCrossings(pad)"
-removed = true
+removed = "pass pad as a field of ZeroCrossingsRequest"
 domain = "analysis"
 rule = "no-positional-bools"
 
 [[entry]]
 kind = "option"
 old = "zeroCrossings(refMagnitude)"
-removed = true
+removed = "pass refMagnitude as a field of ZeroCrossingsRequest"
 domain = "analysis"
 rule = "no-positional-bools"
 
 [[entry]]
 kind = "option"
 old = "zeroCrossings(threshold)"
-removed = true
+removed = "pass threshold as a field of ZeroCrossingsRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "zeroCrossings(zeroPos)"
-removed = true
+removed = "pass zeroPos as a field of ZeroCrossingsRequest"
 domain = "analysis"
 rule = "no-positional-bools"
 
@@ -3147,7 +3150,7 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::declares sampleRa
 [[entry]]
 kind = "type"
 old = "EmphasisRequest"
-removed = true
+removed = "Use PreemphasisRequest with preemphasis and DeemphasisRequest with deemphasis."
 domain = "analysis"
 rule = "type-names"
 
@@ -3170,7 +3173,7 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::declares sampleRa
 [[entry]]
 kind = "type"
 old = "FeatureSamplesRequest"
-removed = true
+removed = "Use the request type of the function; each carries samples and sampleRate itself."
 domain = "analysis"
 rule = "type-names"
 
@@ -3185,14 +3188,14 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::declares sampleRa
 [[entry]]
 kind = "type"
 old = "InverseMelResult"
-removed = true
+removed = "Use Matrix2D { data, rows, cols }; rows are mel bands, cols are frames."
 domain = "analysis"
 rule = "matrix-2d"
 
 [[entry]]
 kind = "type"
 old = "InverseStftResult"
-removed = true
+removed = "Use Matrix2D { data, rows, cols }; rows are frequency bins, cols are frames."
 domain = "analysis"
 rule = "matrix-2d"
 
@@ -3207,14 +3210,14 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::declares sampleRa
 [[entry]]
 kind = "type"
 old = "MelResultToAudioRequest"
-removed = true
+removed = "Use MelToAudioRequest: pass the forward result's power Matrix2D as power, with its sampleRate, nFft, hopLength, fminHz, fmaxHz and htk."
 domain = "analysis"
 rule = "one-entry-per-operation"
 
 [[entry]]
 kind = "type"
 old = "MelResultToStftRequest"
-removed = true
+removed = "Use MelToStftRequest: pass the forward result's power Matrix2D as power, with its sampleRate, nFft, fminHz, fmaxHz and htk."
 domain = "analysis"
 rule = "one-entry-per-operation"
 
@@ -3237,14 +3240,14 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::declares sampleRa
 [[entry]]
 kind = "type"
 old = "MfccResultToAudioRequest"
-removed = true
+removed = "Use MfccToAudioRequest: pass the forward result's coefficients Matrix2D as coefficients, with its nMels, sampleRate, nFft and hopLength."
 domain = "analysis"
 rule = "one-entry-per-operation"
 
 [[entry]]
 kind = "type"
 old = "MfccResultToMelRequest"
-removed = true
+removed = "Use MfccToMelRequest: pass the forward result's coefficients Matrix2D as coefficients, with its nMels."
 domain = "analysis"
 rule = "one-entry-per-operation"
 
@@ -3259,7 +3262,7 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::declares sampleRa
 [[entry]]
 kind = "type"
 old = "NoteSegmentsConfig"
-removed = true
+removed = "put segmentationThresholdCents, minNoteMs, referenceHz and voicedThreshold directly on NoteSegmentsRequest"
 domain = "analysis"
 rule = "individual"
 
@@ -3281,7 +3284,7 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::declares sampleRa
 [[entry]]
 kind = "type"
 old = "PcenOptions"
-removed = true
+removed = "put timeConstant, gain, bias, power and eps on PcenRequest"
 domain = "analysis"
 rule = "individual"
 
@@ -3296,7 +3299,7 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::declares sampleRa
 [[entry]]
 kind = "type"
 old = "PitchRequest"
-removed = true
+removed = "Use PitchYinRequest with pitchYin and PitchPyinRequest with pitchPyin."
 domain = "analysis"
 rule = "type-names"
 
@@ -3319,7 +3322,7 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::declares sampleRa
 [[entry]]
 kind = "type"
 old = "SegmentMatrix"
-removed = true
+removed = "Use Matrix2D { data, rows, cols }."
 domain = "analysis"
 rule = "matrix-2d"
 
@@ -3334,7 +3337,7 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::declares sampleRa
 [[entry]]
 kind = "type"
 old = "StftDbResult"
-removed = true
+removed = "Use Matrix2D { data, rows, cols }; rows are frequency bins, cols are frames."
 domain = "analysis"
 rule = "matrix-2d"
 
@@ -3378,7 +3381,7 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::declares sampleRa
 [[entry]]
 kind = "type"
 old = "ValuesRequest"
-removed = true
+removed = "Use the request type of the function, such as PadCenterRequest, FixLengthRequest or VectorNormalizeRequest; each carries values itself."
 domain = "analysis"
 rule = "type-names"
 
@@ -3454,14 +3457,14 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::carries every 2-D
 [[entry]]
 kind = "field"
 old = "ChromaResult.nChroma"
-removed = true
+removed = "read rows / cols of the result's Matrix2D"
 domain = "analysis"
 rule = "matrix-2d"
 
 [[entry]]
 kind = "field"
 old = "ChromaResult.nFrames"
-removed = true
+removed = "read rows / cols of the result's Matrix2D"
 domain = "analysis"
 rule = "matrix-2d"
 
@@ -3513,14 +3516,14 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::carries every 2-D
 [[entry]]
 kind = "field"
 old = "CqtResult.nBins"
-removed = true
+removed = "read rows / cols of the result's Matrix2D"
 domain = "analysis"
 rule = "matrix-2d"
 
 [[entry]]
 kind = "field"
 old = "CqtResult.nFrames"
-removed = true
+removed = "read rows / cols of the result's Matrix2D"
 domain = "analysis"
 rule = "matrix-2d"
 
@@ -3542,14 +3545,14 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::takes its matrix 
 [[entry]]
 kind = "field"
 old = "CqtToAudioRequest.nBins"
-removed = true
+removed = "the Matrix2D input carries it as rows / cols"
 domain = "analysis"
 rule = "matrix-2d"
 
 [[entry]]
 kind = "field"
 old = "CqtToAudioRequest.nFrames"
-removed = true
+removed = "the Matrix2D input carries it as rows / cols"
 domain = "analysis"
 rule = "matrix-2d"
 
@@ -3564,7 +3567,7 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::declares result t
 [[entry]]
 kind = "field"
 old = "EqBandInput.lookaheadMs"
-removed = true
+removed = "use detectorDelayMs"
 domain = "analysis"
 rule = "aliases-removed"
 
@@ -3603,14 +3606,14 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::takes its matrix 
 [[entry]]
 kind = "field"
 old = "GriffinLimRequest.nBins"
-removed = true
+removed = "the Matrix2D input carries it as rows / cols"
 domain = "analysis"
 rule = "matrix-2d"
 
 [[entry]]
 kind = "field"
 old = "GriffinLimRequest.nFrames"
-removed = true
+removed = "the Matrix2D input carries it as rows / cols"
 domain = "analysis"
 rule = "matrix-2d"
 
@@ -3640,14 +3643,14 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::takes its matrix 
 [[entry]]
 kind = "field"
 old = "MelDeltaRequest.nFeatures"
-removed = true
+removed = "the Matrix2D input carries it as rows / cols"
 domain = "analysis"
 rule = "matrix-2d"
 
 [[entry]]
 kind = "field"
 old = "MelDeltaRequest.nFrames"
-removed = true
+removed = "the Matrix2D input carries it as rows / cols"
 domain = "analysis"
 rule = "matrix-2d"
 
@@ -3698,21 +3701,21 @@ rule = "frequency-bounds"
 [[entry]]
 kind = "field"
 old = "MelSpectrogramResult.isDb"
-removed = true
+removed = "removed; it was always false for a forward transform, so read power as linear power and db as the dB form"
 domain = "analysis"
 rule = "aliases-removed"
 
 [[entry]]
 kind = "field"
 old = "MelSpectrogramResult.nFrames"
-removed = true
+removed = "read rows / cols of the result's Matrix2D"
 domain = "analysis"
 rule = "matrix-2d"
 
 [[entry]]
 kind = "field"
 old = "MelSpectrogramResult.nMels"
-removed = true
+removed = "read rows / cols of the result's Matrix2D"
 domain = "analysis"
 rule = "matrix-2d"
 
@@ -3741,14 +3744,14 @@ rule = "frequency-bounds"
 [[entry]]
 kind = "field"
 old = "MelToAudioRequest.nFrames"
-removed = true
+removed = "the Matrix2D input carries it as rows / cols"
 domain = "analysis"
 rule = "matrix-2d"
 
 [[entry]]
 kind = "field"
 old = "MelToAudioRequest.nMels"
-removed = true
+removed = "the Matrix2D input carries it as rows / cols"
 domain = "analysis"
 rule = "matrix-2d"
 
@@ -3777,14 +3780,14 @@ rule = "frequency-bounds"
 [[entry]]
 kind = "field"
 old = "MelToStftRequest.nFrames"
-removed = true
+removed = "the Matrix2D input carries it as rows / cols"
 domain = "analysis"
 rule = "matrix-2d"
 
 [[entry]]
 kind = "field"
 old = "MelToStftRequest.nMels"
-removed = true
+removed = "the Matrix2D input carries it as rows / cols"
 domain = "analysis"
 rule = "matrix-2d"
 
@@ -3843,21 +3846,21 @@ rule = "frequency-bounds"
 [[entry]]
 kind = "field"
 old = "MfccResult.isDb"
-removed = true
+removed = "removed; it was always false for a forward transform, so read power as linear power and db as the dB form"
 domain = "analysis"
 rule = "aliases-removed"
 
 [[entry]]
 kind = "field"
 old = "MfccResult.nFrames"
-removed = true
+removed = "read rows / cols of the result's Matrix2D"
 domain = "analysis"
 rule = "matrix-2d"
 
 [[entry]]
 kind = "field"
 old = "MfccResult.nMfcc"
-removed = true
+removed = "read rows / cols of the result's Matrix2D"
 domain = "analysis"
 rule = "matrix-2d"
 
@@ -3886,14 +3889,14 @@ rule = "frequency-bounds"
 [[entry]]
 kind = "field"
 old = "MfccToAudioRequest.nFrames"
-removed = true
+removed = "the Matrix2D input carries it as rows / cols"
 domain = "analysis"
 rule = "matrix-2d"
 
 [[entry]]
 kind = "field"
 old = "MfccToAudioRequest.nMfcc"
-removed = true
+removed = "the Matrix2D input carries it as rows / cols"
 domain = "analysis"
 rule = "matrix-2d"
 
@@ -3908,14 +3911,14 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::takes its matrix 
 [[entry]]
 kind = "field"
 old = "MfccToMelRequest.nFrames"
-removed = true
+removed = "the Matrix2D input carries it as rows / cols"
 domain = "analysis"
 rule = "matrix-2d"
 
 [[entry]]
 kind = "field"
 old = "MfccToMelRequest.nMfcc"
-removed = true
+removed = "the Matrix2D input carries it as rows / cols"
 domain = "analysis"
 rule = "matrix-2d"
 
@@ -3944,7 +3947,7 @@ rule = "seconds-suffix"
 [[entry]]
 kind = "field"
 old = "NoteSegmentsRequest.config"
-removed = true
+removed = "put segmentationThresholdCents, minNoteMs, referenceHz and voicedThreshold directly on the request"
 domain = "analysis"
 rule = "individual"
 
@@ -4014,14 +4017,14 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::carries every 2-D
 [[entry]]
 kind = "field"
 old = "PiptrackResult.nBins"
-removed = true
+removed = "read rows / cols of the result's Matrix2D"
 domain = "analysis"
 rule = "matrix-2d"
 
 [[entry]]
 kind = "field"
 old = "PiptrackResult.nFrames"
-removed = true
+removed = "read rows / cols of the result's Matrix2D"
 domain = "analysis"
 rule = "matrix-2d"
 
@@ -4082,14 +4085,14 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::carries every 2-D
 [[entry]]
 kind = "field"
 old = "ReassignedSpectrogramResult.nBins"
-removed = true
+removed = "read rows / cols of the result's Matrix2D"
 domain = "analysis"
 rule = "matrix-2d"
 
 [[entry]]
 kind = "field"
 old = "ReassignedSpectrogramResult.nFrames"
-removed = true
+removed = "read rows / cols of the result's Matrix2D"
 domain = "analysis"
 rule = "matrix-2d"
 
@@ -4104,7 +4107,7 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::carries every 2-D
 [[entry]]
 kind = "field"
 old = "SegmentAgglomerativeRequest.cols"
-removed = true
+removed = "the Matrix2D input carries it as rows / cols"
 domain = "analysis"
 rule = "matrix-2d"
 
@@ -4119,7 +4122,7 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::takes its matrix 
 [[entry]]
 kind = "field"
 old = "SegmentAgglomerativeRequest.rows"
-removed = true
+removed = "the Matrix2D input carries it as rows / cols"
 domain = "analysis"
 rule = "matrix-2d"
 
@@ -4134,14 +4137,14 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::takes its matrix 
 [[entry]]
 kind = "field"
 old = "SegmentCrossSimilarityRequest.xCols"
-removed = true
+removed = "Drop it; x is a Matrix2D (rows = features, cols = frames) and its cols is the frame count."
 domain = "analysis"
 rule = "matrix-2d"
 
 [[entry]]
 kind = "field"
 old = "SegmentCrossSimilarityRequest.xRows"
-removed = true
+removed = "Drop it; x is a Matrix2D (rows = features, cols = frames) and its rows is the feature count."
 domain = "analysis"
 rule = "matrix-2d"
 
@@ -4156,14 +4159,14 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::takes its matrix 
 [[entry]]
 kind = "field"
 old = "SegmentCrossSimilarityRequest.yCols"
-removed = true
+removed = "Drop it; y is a Matrix2D (rows = features, cols = frames) and its cols is the frame count."
 domain = "analysis"
 rule = "matrix-2d"
 
 [[entry]]
 kind = "field"
 old = "SegmentCrossSimilarityRequest.yRows"
-removed = true
+removed = "Drop it; y is a Matrix2D (rows = features, cols = frames) and its rows is the feature count."
 domain = "analysis"
 rule = "matrix-2d"
 
@@ -4178,21 +4181,21 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::takes its matrix 
 [[entry]]
 kind = "field"
 old = "SegmentLagToRecurrenceRequest.lags"
-removed = true
+removed = "Drop it; lag is a Matrix2D (rows = lags, cols = frames) and its rows is the lag count."
 domain = "analysis"
 rule = "matrix-2d"
 
 [[entry]]
 kind = "field"
 old = "SegmentLagToRecurrenceRequest.rows"
-removed = true
+removed = "the Matrix2D input carries it as rows / cols"
 domain = "analysis"
 rule = "matrix-2d"
 
 [[entry]]
 kind = "field"
 old = "SegmentPathEnhanceRequest.n"
-removed = true
+removed = "Drop it; recurrence is a square Matrix2D and its rows is the frame count."
 domain = "analysis"
 rule = "matrix-2d"
 
@@ -4207,7 +4210,7 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::takes its matrix 
 [[entry]]
 kind = "field"
 old = "SegmentRecurrenceMatrixRequest.cols"
-removed = true
+removed = "the Matrix2D input carries it as rows / cols"
 domain = "analysis"
 rule = "matrix-2d"
 
@@ -4222,14 +4225,14 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::takes its matrix 
 [[entry]]
 kind = "field"
 old = "SegmentRecurrenceMatrixRequest.rows"
-removed = true
+removed = "the Matrix2D input carries it as rows / cols"
 domain = "analysis"
 rule = "matrix-2d"
 
 [[entry]]
 kind = "field"
 old = "SegmentRecurrenceToLagRequest.n"
-removed = true
+removed = "Drop it; recurrence is a square Matrix2D and its rows is the frame count."
 domain = "analysis"
 rule = "matrix-2d"
 
@@ -4252,7 +4255,7 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::takes boundaries 
 [[entry]]
 kind = "field"
 old = "SegmentSubsegmentRequest.cols"
-removed = true
+removed = "the Matrix2D input carries it as rows / cols"
 domain = "analysis"
 rule = "matrix-2d"
 
@@ -4267,7 +4270,7 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::takes its matrix 
 [[entry]]
 kind = "field"
 old = "SegmentSubsegmentRequest.rows"
-removed = true
+removed = "the Matrix2D input carries it as rows / cols"
 domain = "analysis"
 rule = "matrix-2d"
 
@@ -4289,10 +4292,10 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRa
 [[entry]]
 kind = "field"
 old = "SpectralEditOptions.window"
-changed = "type WindowType; 'rect' removed (use 'rectangular')"
+changed = "a WindowType name only ('rect' is now 'rectangular'): an ordinal is refused (TypeError), an unknown name (RangeError)"
 domain = "effects"
-rule = "type-names"
-test = "bindings/node/tests/surface/analysis-features.test.ts::declares sampleRate required on every sample request"
+rule = "token-case"
+test = "bindings/node/tests/surface/effects-notes.test.ts::spectralEdit takes a window by name only"
 
 [[entry]]
 kind = "field"
@@ -4313,14 +4316,14 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::carries every 2-D
 [[entry]]
 kind = "field"
 old = "StftResult.nBins"
-removed = true
+removed = "read rows / cols of the result's Matrix2D"
 domain = "analysis"
 rule = "matrix-2d"
 
 [[entry]]
 kind = "field"
 old = "StftResult.nFrames"
-removed = true
+removed = "read rows / cols of the result's Matrix2D"
 domain = "analysis"
 rule = "matrix-2d"
 
@@ -4335,7 +4338,7 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::carries every 2-D
 [[entry]]
 kind = "field"
 old = "StreamAnalyzerConfig.computeMagnitude"
-removed = true
+removed = "removed; it never took effect, so drop it from the config"
 domain = "analysis"
 rule = "aliases-removed"
 
@@ -4356,7 +4359,7 @@ rule = "frequency-bounds"
 [[entry]]
 kind = "field"
 old = "StreamAnalyzerConfig.outputFormat"
-removed = true
+removed = "removed; it never took effect, so drop it from the config and read frames with readFrames"
 domain = "analysis"
 rule = "aliases-removed"
 
@@ -4449,7 +4452,7 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::declares StreamFr
 [[entry]]
 kind = "field"
 old = "StreamFramesI16.featureFlags"
-removed = true
+removed = "Drop it; test each feature array (mel, chroma, onsetStrength, spectralCentroid) for undefined, since an uncomputed feature is absent."
 domain = "analysis"
 rule = "absent-not-sentinel"
 
@@ -4539,7 +4542,7 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::declares StreamFr
 [[entry]]
 kind = "field"
 old = "StreamFramesSoa.featureFlags"
-removed = true
+removed = "Drop it; read StreamFrames and test each feature array (mel, chroma, onsetStrength, spectralCentroid) for undefined, since an uncomputed feature is absent."
 domain = "analysis"
 rule = "absent-not-sentinel"
 
@@ -4555,14 +4558,14 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::declares StreamFr
 [[entry]]
 kind = "field"
 old = "StreamFramesSoa.nChroma"
-removed = true
+removed = "the Matrix2D input carries it as rows / cols"
 domain = "analysis"
 rule = "matrix-2d"
 
 [[entry]]
 kind = "field"
 old = "StreamFramesSoa.nMels"
-removed = true
+removed = "the Matrix2D input carries it as rows / cols"
 domain = "analysis"
 rule = "matrix-2d"
 
@@ -4620,7 +4623,7 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::declares StreamFr
 [[entry]]
 kind = "field"
 old = "StreamFramesU8.featureFlags"
-removed = true
+removed = "Drop it; test each feature array (mel, chroma, onsetStrength, spectralCentroid) for undefined, since an uncomputed feature is absent."
 domain = "analysis"
 rule = "absent-not-sentinel"
 
@@ -4704,35 +4707,35 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::declares the stre
 [[entry]]
 kind = "field"
 old = "StreamProgressiveEstimate.chordConfidence"
-removed = true
+removed = "Read estimate.chord?.confidence from StreamProgressiveEstimate; it is undefined until the analyzer has an estimate."
 domain = "analysis"
 rule = "absent-not-sentinel"
 
 [[entry]]
 kind = "field"
 old = "StreamProgressiveEstimate.chordName"
-removed = true
+removed = "Read estimate.chord?.name from StreamProgressiveEstimate; it is undefined until the analyzer has an estimate."
 domain = "analysis"
 rule = "absent-not-sentinel"
 
 [[entry]]
 kind = "field"
 old = "StreamProgressiveEstimate.chordQuality"
-removed = true
+removed = "Read estimate.chord?.quality from StreamProgressiveEstimate; it is undefined until the analyzer has an estimate."
 domain = "analysis"
 rule = "absent-not-sentinel"
 
 [[entry]]
 kind = "field"
 old = "StreamProgressiveEstimate.chordRoot"
-removed = true
+removed = "Read estimate.chord?.root from StreamProgressiveEstimate; it is undefined until the analyzer has an estimate."
 domain = "analysis"
 rule = "absent-not-sentinel"
 
 [[entry]]
 kind = "field"
 old = "StreamProgressiveEstimate.chordStartTime"
-removed = true
+removed = "Read estimate.chord?.startSec from StreamProgressiveEstimate; it is undefined until the analyzer has an estimate."
 domain = "analysis"
 rule = "absent-not-sentinel"
 
@@ -4771,28 +4774,28 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::declares the stre
 [[entry]]
 kind = "field"
 old = "StreamProgressiveEstimate.keyConfidence"
-removed = true
+removed = "Read estimate.key?.confidence from StreamProgressiveEstimate; it is undefined until the analyzer has an estimate."
 domain = "analysis"
 rule = "absent-not-sentinel"
 
 [[entry]]
 kind = "field"
 old = "StreamProgressiveEstimate.keyMinor"
-removed = true
+removed = "Read estimate.key?.mode === 'minor' from StreamProgressiveEstimate; it is undefined until the analyzer has an estimate."
 domain = "analysis"
 rule = "absent-not-sentinel"
 
 [[entry]]
 kind = "field"
 old = "StreamProgressiveEstimate.keyName"
-removed = true
+removed = "Read estimate.key?.name from StreamProgressiveEstimate; it is undefined until the analyzer has an estimate."
 domain = "analysis"
 rule = "absent-not-sentinel"
 
 [[entry]]
 kind = "field"
 old = "StreamProgressiveEstimate.keyShortName"
-removed = true
+removed = "Read estimate.key?.shortName from StreamProgressiveEstimate; it is undefined until the analyzer has an estimate."
 domain = "analysis"
 rule = "absent-not-sentinel"
 
@@ -4806,7 +4809,7 @@ rule = "matrix-2d"
 [[entry]]
 kind = "field"
 old = "TempogramRatioRequest.winLength"
-removed = true
+removed = "Drop it; the tempogram field is a Matrix2D (rows = lags) and its rows is the window length."
 domain = "analysis"
 rule = "matrix-2d"
 
@@ -4857,14 +4860,14 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::takes its matrix 
 [[entry]]
 kind = "field"
 old = "VqtToAudioRequest.nBins"
-removed = true
+removed = "the Matrix2D input carries it as rows / cols"
 domain = "analysis"
 rule = "matrix-2d"
 
 [[entry]]
 kind = "field"
 old = "VqtToAudioRequest.nFrames"
-removed = true
+removed = "the Matrix2D input carries it as rows / cols"
 domain = "analysis"
 rule = "matrix-2d"
 
@@ -4943,7 +4946,7 @@ test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted s
 [[entry]]
 kind = "function"
 old = "analyzeWithProgress"
-removed = true
+removed = "call analyze with onProgress in the request, for example analyze({ samples, sampleRate, onProgress })"
 domain = "analysis"
 rule = "progress-callback"
 
@@ -5078,14 +5081,14 @@ test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted s
 [[entry]]
 kind = "option"
 old = "analyzeImpulseResponse(minDecayDb)"
-removed = true
+removed = "pass minDecayDb as a field of AnalyzeImpulseResponseRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "analyzeImpulseResponse(nOctaveBands)"
-removed = true
+removed = "pass nOctaveBands as a field of AnalyzeImpulseResponseRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
@@ -5132,56 +5135,56 @@ test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted s
 [[entry]]
 kind = "option"
 old = "chordFunctionalAnalysis(chromaMethod)"
-removed = true
+removed = "pass chromaMethod as a field of ChordFunctionalAnalysisRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "chordFunctionalAnalysis(detectInversions)"
-removed = true
+removed = "pass detectInversions as a field of ChordFunctionalAnalysisRequest"
 domain = "analysis"
 rule = "no-positional-bools"
 
 [[entry]]
 kind = "option"
 old = "chordFunctionalAnalysis(hmmBeamWidth)"
-removed = true
+removed = "pass hmmBeamWidth as a field of ChordFunctionalAnalysisRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "chordFunctionalAnalysis(hopLength)"
-removed = true
+removed = "pass hopLength as a field of ChordFunctionalAnalysisRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "chordFunctionalAnalysis(keyMode)"
-removed = true
+removed = "pass keyMode as a field of ChordFunctionalAnalysisRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "chordFunctionalAnalysis(keyRoot)"
-removed = true
+removed = "pass keyRoot as a field of ChordFunctionalAnalysisRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "chordFunctionalAnalysis(minDuration)"
-removed = true
+removed = "pass it as minDurationSec in ChordFunctionalAnalysisRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "chordFunctionalAnalysis(nFft)"
-removed = true
+removed = "pass nFft as a field of ChordFunctionalAnalysisRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
@@ -5196,42 +5199,42 @@ test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted s
 [[entry]]
 kind = "option"
 old = "chordFunctionalAnalysis(smoothingWindow)"
-removed = true
+removed = "pass it as smoothingWindowSec in ChordFunctionalAnalysisRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "chordFunctionalAnalysis(threshold)"
-removed = true
+removed = "pass threshold as a field of ChordFunctionalAnalysisRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "chordFunctionalAnalysis(useBeatSync)"
-removed = true
+removed = "pass useBeatSync as a field of ChordFunctionalAnalysisRequest"
 domain = "analysis"
 rule = "no-positional-bools"
 
 [[entry]]
 kind = "option"
 old = "chordFunctionalAnalysis(useHmm)"
-removed = true
+removed = "pass useHmm as a field of ChordFunctionalAnalysisRequest"
 domain = "analysis"
 rule = "no-positional-bools"
 
 [[entry]]
 kind = "option"
 old = "chordFunctionalAnalysis(useKeyContext)"
-removed = true
+removed = "pass useKeyContext as a field of ChordFunctionalAnalysisRequest"
 domain = "analysis"
 rule = "no-positional-bools"
 
 [[entry]]
 kind = "option"
 old = "chordFunctionalAnalysis(useTriadsOnly)"
-removed = true
+removed = "pass useTriadsOnly as a field of ChordFunctionalAnalysisRequest"
 domain = "analysis"
 rule = "no-positional-bools"
 
@@ -5262,56 +5265,56 @@ test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted s
 [[entry]]
 kind = "option"
 old = "detectChords(chromaMethod)"
-removed = true
+removed = "pass chromaMethod as a field of DetectChordsRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "detectChords(detectInversions)"
-removed = true
+removed = "pass detectInversions as a field of DetectChordsRequest"
 domain = "analysis"
 rule = "no-positional-bools"
 
 [[entry]]
 kind = "option"
 old = "detectChords(hmmBeamWidth)"
-removed = true
+removed = "pass hmmBeamWidth as a field of DetectChordsRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "detectChords(hopLength)"
-removed = true
+removed = "pass hopLength as a field of DetectChordsRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "detectChords(keyMode)"
-removed = true
+removed = "pass keyMode as a field of DetectChordsRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "detectChords(keyRoot)"
-removed = true
+removed = "pass keyRoot as a field of DetectChordsRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "detectChords(minDuration)"
-removed = true
+removed = "pass it as minDurationSec in DetectChordsRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "detectChords(nFft)"
-removed = true
+removed = "pass nFft as a field of DetectChordsRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
@@ -5326,42 +5329,42 @@ test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted s
 [[entry]]
 kind = "option"
 old = "detectChords(smoothingWindow)"
-removed = true
+removed = "pass it as smoothingWindowSec in DetectChordsRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "detectChords(threshold)"
-removed = true
+removed = "pass threshold as a field of DetectChordsRequest"
 domain = "analysis"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "detectChords(useBeatSync)"
-removed = true
+removed = "pass useBeatSync as a field of DetectChordsRequest"
 domain = "analysis"
 rule = "no-positional-bools"
 
 [[entry]]
 kind = "option"
 old = "detectChords(useHmm)"
-removed = true
+removed = "pass useHmm as a field of DetectChordsRequest"
 domain = "analysis"
 rule = "no-positional-bools"
 
 [[entry]]
 kind = "option"
 old = "detectChords(useKeyContext)"
-removed = true
+removed = "pass useKeyContext as a field of DetectChordsRequest"
 domain = "analysis"
 rule = "no-positional-bools"
 
 [[entry]]
 kind = "option"
 old = "detectChords(useTriadsOnly)"
-removed = true
+removed = "pass useTriadsOnly as a field of DetectChordsRequest"
 domain = "analysis"
 rule = "no-positional-bools"
 
@@ -5421,28 +5424,28 @@ rule = "type-names"
 [[entry]]
 kind = "type"
 old = "AnalysisPitchPoint"
-removed = true
+removed = "Use MelodyPoint, the element type of the pitches array."
 domain = "analysis"
 rule = "type-names"
 
 [[entry]]
 kind = "type"
 old = "AnalysisProgressCallback"
-removed = true
+removed = "use ProgressCallback"
 domain = "analysis"
 rule = "aliases-removed"
 
 [[entry]]
 kind = "type"
 old = "AnalysisSection"
-removed = true
+removed = "Use Section, the element type of the sections array."
 domain = "analysis"
 rule = "type-names"
 
 [[entry]]
 kind = "type"
 old = "AnalysisTimbre"
-removed = true
+removed = "Use TimbreFrame, the type of the timbre field."
 domain = "analysis"
 rule = "type-names"
 
@@ -5505,7 +5508,7 @@ test = "bindings/node/tests/surface/analysis-music.test.ts::scans for NaN by def
 [[entry]]
 kind = "type"
 old = "AnalyzeWithProgressRequest"
-removed = true
+removed = "use AnalyzeRequest, which carries onProgress"
 domain = "analysis"
 rule = "progress-callback"
 
@@ -5528,7 +5531,7 @@ test = "bindings/node/tests/surface/analysis-music.test.ts::exposes the closed s
 [[entry]]
 kind = "type"
 old = "BpmHypothesis"
-removed = true
+removed = "Use BpmCandidate, which carries bpm, confidence and an optional relation."
 domain = "analysis"
 rule = "type-names"
 
@@ -5551,7 +5554,7 @@ test = "bindings/node/tests/surface/analysis-music.test.ts::exposes the closed s
 [[entry]]
 kind = "type"
 old = "ChordQualityName"
-removed = true
+removed = "Use ChordQuality, the token union behind CHORD_QUALITIES; decode a native ordinal with CHORD_QUALITIES[ordinal]."
 domain = "analysis"
 rule = "string-closed-sets"
 
@@ -5590,7 +5593,7 @@ test = "bindings/node/tests/surface/analysis-music.test.ts::scans for NaN by def
 [[entry]]
 kind = "type"
 old = "DetectKeyOptions"
-removed = true
+removed = "use KeyDetectionOptions on wasm and DetectKeyRequest on node"
 domain = "analysis"
 rule = "aliases-removed"
 
@@ -5613,7 +5616,7 @@ test = "bindings/node/tests/surface/analysis-music.test.ts::scans for NaN by def
 [[entry]]
 kind = "type"
 old = "DynamicsAnalysisResult"
-removed = true
+removed = "use DynamicsResult"
 domain = "analysis"
 rule = "aliases-removed"
 
@@ -5635,21 +5638,21 @@ rule = "type-names"
 [[entry]]
 kind = "type"
 old = "SamplesRequest"
-removed = true
+removed = "Use the request type of the function, such as DetectOnsetsRequest or DetectKeyRequest; each carries samples and sampleRate itself."
 domain = "analysis"
 rule = "type-names"
 
 [[entry]]
 kind = "type"
 old = "ScaleName"
-removed = true
+removed = "use KeyMode"
 domain = "analysis"
 rule = "aliases-removed"
 
 [[entry]]
 kind = "type"
 old = "SectionTypeOrdinal"
-removed = true
+removed = "Use SectionType: 'intro', 'verse', 'preChorus', 'chorus', 'bridge', 'instrumental', 'outro' or 'unknown'."
 domain = "analysis"
 rule = "string-closed-sets"
 
@@ -5729,7 +5732,7 @@ rule = "unit-in-name"
 [[entry]]
 kind = "field"
 old = "AnalysisResult.beatTimes"
-removed = true
+removed = "Read beats and take timeSec from each Beat: result.beats.map((b) => b.timeSec)."
 domain = "analysis"
 rule = "typed-results"
 
@@ -6283,7 +6286,7 @@ rule = "loudness-names"
 [[entry]]
 kind = "field"
 old = "EstimateMeterRequest.beatStrengths"
-removed = true
+removed = "Put the strength on each entry of beats: Beat[] ({ timeSec, strength }) in EstimateMeterRequest."
 domain = "analysis"
 rule = "typed-results"
 
@@ -6762,7 +6765,7 @@ rule = "string-closed-sets"
 [[entry]]
 kind = "value"
 old = "KeyProfile='bellman'"
-removed = true
+removed = "Use 'bellmanBudge'; key profiles are lowerCamelCase names and numbers are refused."
 domain = "analysis"
 rule = "string-closed-sets"
 
@@ -6776,21 +6779,21 @@ rule = "token-case"
 [[entry]]
 kind = "value"
 old = "KeyProfile='edma'"
-removed = true
+removed = "Use 'faraldoEdma'; key profiles are lowerCamelCase names and numbers are refused."
 domain = "analysis"
 rule = "string-closed-sets"
 
 [[entry]]
 kind = "value"
 old = "KeyProfile='edmm'"
-removed = true
+removed = "Use 'faraldoEdmm'; key profiles are lowerCamelCase names and numbers are refused."
 domain = "analysis"
 rule = "string-closed-sets"
 
 [[entry]]
 kind = "value"
 old = "KeyProfile='edmt'"
-removed = true
+removed = "Use 'faraldoEdmt'; key profiles are lowerCamelCase names and numbers are refused."
 domain = "analysis"
 rule = "string-closed-sets"
 
@@ -6818,14 +6821,14 @@ rule = "token-case"
 [[entry]]
 kind = "value"
 old = "KeyProfile='keyfinder'"
-removed = true
+removed = "Use 'shaath'; key profiles are lowerCamelCase names and numbers are refused."
 domain = "analysis"
 rule = "string-closed-sets"
 
 [[entry]]
 kind = "value"
 old = "KeyProfile='krumhansl'"
-removed = true
+removed = "Use 'krumhanslSchmuckler'; key profiles are lowerCamelCase names and numbers are refused."
 domain = "analysis"
 rule = "string-closed-sets"
 
@@ -6839,70 +6842,21 @@ rule = "token-case"
 [[entry]]
 kind = "value"
 old = "KeyProfile='ks'"
-removed = true
+removed = "Use 'krumhanslSchmuckler'; key profiles are lowerCamelCase names and numbers are refused."
 domain = "analysis"
 rule = "string-closed-sets"
 
 [[entry]]
 kind = "value"
-old = "ScaleName='dorian'"
-removed = true
-domain = "analysis"
-rule = "aliases-removed"
-
-[[entry]]
-kind = "value"
-old = "ScaleName='locrian'"
-removed = true
-domain = "analysis"
-rule = "aliases-removed"
-
-[[entry]]
-kind = "value"
-old = "ScaleName='lydian'"
-removed = true
-domain = "analysis"
-rule = "aliases-removed"
-
-[[entry]]
-kind = "value"
-old = "ScaleName='major'"
-removed = true
-domain = "analysis"
-rule = "aliases-removed"
-
-[[entry]]
-kind = "value"
-old = "ScaleName='minor'"
-removed = true
-domain = "analysis"
-rule = "aliases-removed"
-
-[[entry]]
-kind = "value"
-old = "ScaleName='mixolydian'"
-removed = true
-domain = "analysis"
-rule = "aliases-removed"
-
-[[entry]]
-kind = "value"
-old = "ScaleName='phrygian'"
-removed = true
-domain = "analysis"
-rule = "aliases-removed"
-
-[[entry]]
-kind = "value"
 old = "TempogramMode='ac'"
-removed = true
+removed = "Use 'autocorrelation'; the only modes are 'autocorrelation' and 'cosine', and numbers are refused."
 domain = "analysis"
 rule = "string-closed-sets"
 
 [[entry]]
 kind = "value"
 old = "TempogramMode='auto'"
-removed = true
+removed = "Use 'autocorrelation'; the only modes are 'autocorrelation' and 'cosine', and numbers are refused."
 domain = "analysis"
 rule = "string-closed-sets"
 
@@ -6940,7 +6894,7 @@ test = "bindings/node/tests/surface/analysis-stream.test.ts::returns band-major 
 [[entry]]
 kind = "method"
 old = "StreamAnalyzer.readFramesSoa"
-removed = true
+removed = "call readFrames, which returns StreamFrames with band-major Matrix2D mel and chroma"
 domain = "analysis"
 rule = "aliases-removed"
 
@@ -7141,231 +7095,231 @@ test = "bindings/node/tests/surface/analysis-audio.test.ts::delegation equivalen
 [[entry]]
 kind = "option"
 old = "Audio.analyzeImpulseResponse(nOctaveBands)"
-removed = true
+removed = "pass nOctaveBands as a field of AnalyzeImpulseResponseRequest"
 domain = "core"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "Audio.chordFunctionalAnalysis(keyMode)"
-removed = true
+removed = "pass keyMode as a field of ChordFunctionalAnalysisRequest"
 domain = "core"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "Audio.chordFunctionalAnalysis(keyRoot)"
-removed = true
+removed = "pass keyRoot as a field of ChordFunctionalAnalysisRequest"
 domain = "core"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "Audio.chroma(hopLength)"
-removed = true
+removed = "pass hopLength as a field of ChromaRequest"
 domain = "core"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "Audio.chroma(nFft)"
-removed = true
+removed = "pass nFft as a field of ChromaRequest"
 domain = "core"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "Audio.melSpectrogram(fmax)"
-removed = true
+removed = "pass it as fmaxHz in MelSpectrogramRequest"
 domain = "core"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "Audio.melSpectrogram(fmin)"
-removed = true
+removed = "pass it as fminHz in MelSpectrogramRequest"
 domain = "core"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "Audio.melSpectrogram(hopLength)"
-removed = true
+removed = "pass hopLength as a field of MelSpectrogramRequest"
 domain = "core"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "Audio.melSpectrogram(htk)"
-removed = true
+removed = "pass htk as a field of MelSpectrogramRequest"
 domain = "core"
 rule = "no-positional-bools"
 
 [[entry]]
 kind = "option"
 old = "Audio.melSpectrogram(nFft)"
-removed = true
+removed = "pass nFft as a field of MelSpectrogramRequest"
 domain = "core"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "Audio.melSpectrogram(nMels)"
-removed = true
+removed = "pass nMels as a field of MelSpectrogramRequest"
 domain = "core"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "Audio.mfcc(fmax)"
-removed = true
+removed = "pass it as fmaxHz in MfccRequest"
 domain = "core"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "Audio.mfcc(fmin)"
-removed = true
+removed = "pass it as fminHz in MfccRequest"
 domain = "core"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "Audio.mfcc(hopLength)"
-removed = true
+removed = "pass hopLength as a field of MfccRequest"
 domain = "core"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "Audio.mfcc(htk)"
-removed = true
+removed = "pass htk as a field of MfccRequest"
 domain = "core"
 rule = "no-positional-bools"
 
 [[entry]]
 kind = "option"
 old = "Audio.mfcc(nFft)"
-removed = true
+removed = "pass nFft as a field of MfccRequest"
 domain = "core"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "Audio.mfcc(nMels)"
-removed = true
+removed = "pass nMels as a field of MfccRequest"
 domain = "core"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "Audio.mfcc(nMfcc)"
-removed = true
+removed = "pass nMfcc as a field of MfccRequest"
 domain = "core"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "Audio.onsetEnvelope(hopLength)"
-removed = true
+removed = "Audio.onsetEnvelope is gone; call audio.onsetStrength({ hopLength })."
 domain = "core"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "Audio.onsetEnvelope(nFft)"
-removed = true
+removed = "Audio.onsetEnvelope is gone; call audio.onsetStrength({ nFft })."
 domain = "core"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "Audio.onsetEnvelope(nMels)"
-removed = true
+removed = "the Matrix2D input carries it as rows / cols"
 domain = "core"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "Audio.pitchPyin(fillNa)"
-removed = true
+removed = "pass fillNa as a field of PitchPyinRequest"
 domain = "core"
 rule = "no-positional-bools"
 
 [[entry]]
 kind = "option"
 old = "Audio.pitchPyin(fmax)"
-removed = true
+removed = "Pass it as f0MaxHz in the options object: audio.pitchPyin({ f0MaxHz })."
 domain = "core"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "Audio.pitchPyin(fmin)"
-removed = true
+removed = "Pass it as f0MinHz in the options object: audio.pitchPyin({ f0MinHz })."
 domain = "core"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "Audio.pitchPyin(frameLength)"
-removed = true
+removed = "pass frameLength as a field of PitchPyinRequest"
 domain = "core"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "Audio.pitchPyin(hopLength)"
-removed = true
+removed = "pass hopLength as a field of PitchPyinRequest"
 domain = "core"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "Audio.pitchPyin(threshold)"
-removed = true
+removed = "pass threshold as a field of PitchPyinRequest"
 domain = "core"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "Audio.pitchYin(fillNa)"
-removed = true
+removed = "pass fillNa as a field of PitchYinRequest"
 domain = "core"
 rule = "no-positional-bools"
 
 [[entry]]
 kind = "option"
 old = "Audio.pitchYin(fmax)"
-removed = true
+removed = "Pass it as f0MaxHz in the options object: audio.pitchYin({ f0MaxHz })."
 domain = "core"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "Audio.pitchYin(fmin)"
-removed = true
+removed = "Pass it as f0MinHz in the options object: audio.pitchYin({ f0MinHz })."
 domain = "core"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "Audio.pitchYin(frameLength)"
-removed = true
+removed = "pass frameLength as a field of PitchYinRequest"
 domain = "core"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "Audio.pitchYin(hopLength)"
-removed = true
+removed = "pass hopLength as a field of PitchYinRequest"
 domain = "core"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "Audio.pitchYin(threshold)"
-removed = true
+removed = "pass threshold as a field of PitchYinRequest"
 domain = "core"
 rule = "one-positional-form"
 
@@ -7379,77 +7333,77 @@ rule = "sample-rate-name"
 [[entry]]
 kind = "option"
 old = "Audio.rmsEnergy(frameLength)"
-removed = true
+removed = "pass frameLength as a field of RmsEnergyRequest"
 domain = "core"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "Audio.rmsEnergy(hopLength)"
-removed = true
+removed = "pass hopLength as a field of RmsEnergyRequest"
 domain = "core"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "Audio.spectralBandwidth(hopLength)"
-removed = true
+removed = "pass hopLength as a field of SpectralBandwidthRequest"
 domain = "core"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "Audio.spectralBandwidth(nFft)"
-removed = true
+removed = "pass nFft as a field of SpectralBandwidthRequest"
 domain = "core"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "Audio.spectralCentroid(hopLength)"
-removed = true
+removed = "pass hopLength as a field of SpectralCentroidRequest"
 domain = "core"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "Audio.spectralCentroid(nFft)"
-removed = true
+removed = "pass nFft as a field of SpectralCentroidRequest"
 domain = "core"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "Audio.spectralFlatness(hopLength)"
-removed = true
+removed = "pass hopLength as a field of SpectralFlatnessRequest"
 domain = "core"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "Audio.spectralFlatness(nFft)"
-removed = true
+removed = "pass nFft as a field of SpectralFlatnessRequest"
 domain = "core"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "Audio.spectralRolloff(hopLength)"
-removed = true
+removed = "pass hopLength as a field of SpectralRolloffRequest"
 domain = "core"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "Audio.spectralRolloff(nFft)"
-removed = true
+removed = "pass nFft as a field of SpectralRolloffRequest"
 domain = "core"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "Audio.spectralRolloff(rollPercent)"
-removed = true
+removed = "pass rollPercent as a field of SpectralRolloffRequest"
 domain = "core"
 rule = "one-positional-form"
 
@@ -7463,42 +7417,42 @@ rule = "unit-in-name"
 [[entry]]
 kind = "option"
 old = "Audio.stft(hopLength)"
-removed = true
+removed = "pass hopLength as a field of StftRequest"
 domain = "core"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "Audio.stft(nFft)"
-removed = true
+removed = "pass nFft as a field of StftRequest"
 domain = "core"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "Audio.stftDb(hopLength)"
-removed = true
+removed = "pass hopLength as a field of StftDbRequest"
 domain = "core"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "Audio.stftDb(nFft)"
-removed = true
+removed = "pass nFft as a field of StftDbRequest"
 domain = "core"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "Audio.zeroCrossingRate(frameLength)"
-removed = true
+removed = "pass frameLength as a field of ZeroCrossingRateRequest"
 domain = "core"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "option"
 old = "Audio.zeroCrossingRate(hopLength)"
-removed = true
+removed = "pass hopLength as a field of ZeroCrossingRateRequest"
 domain = "core"
 rule = "one-positional-form"
 
@@ -7512,7 +7466,7 @@ rule = "seconds-suffix"
 [[entry]]
 kind = "option"
 old = "RealtimeEngine.constructor(maxChannels)"
-removed = true
+removed = "pass maxNumChannels in the config object: new RealtimeEngine({ sampleRate, maxNumChannels })"
 domain = "engine"
 rule = "construction"
 
@@ -7534,7 +7488,7 @@ rule = "getters"
 [[entry]]
 kind = "field"
 old = "EngineTransportState.isPlaying"
-removed = true
+removed = "read playing"
 domain = "engine"
 rule = "aliases-removed"
 
@@ -7564,28 +7518,28 @@ test = "bindings/node/tests/surface/engine.test.ts::sets the loop from one objec
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.parameterCount"
-removed = true
+removed = "Call parameters(), which returns every parameter info as an array, and use its length."
 domain = "engine"
 rule = "collections"
 
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.parameterInfoByIndex"
-removed = true
+removed = "Index the array returned by parameters(), or call parameterInfo(id) with the parameter id."
 domain = "engine"
 rule = "collections"
 
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.markerCount"
-removed = true
+removed = "Call markers() and use the length of the returned array."
 domain = "engine"
 rule = "collections"
 
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.markerByIndex"
-removed = true
+removed = "Call markers() and index the returned array."
 domain = "engine"
 rule = "collections"
 
@@ -7797,7 +7751,7 @@ test = "bindings/node/tests/surface/engine.test.ts::names a marker kind and refu
 [[entry]]
 kind = "type"
 old = "EngineAutomationPointCurve"
-removed = true
+removed = "use AutomationCurve and pass the curve name such as exponential; ordinals are refused"
 domain = "engine"
 rule = "aliases-removed"
 
@@ -7948,14 +7902,14 @@ test = "bindings/node/tests/surface/engine.test.ts::refuses a bad capture reques
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.setTrackStripJson"
-removed = true
+removed = "Call setStrip(ref, strip) with a track id and a MixSceneStripInput object; no JSON string."
 domain = "engine"
 rule = "typed-results"
 
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.setMasterStripJson"
-removed = true
+removed = "Call setStrip('master', strip) with a MixSceneStripInput object; no JSON string."
 domain = "engine"
 rule = "typed-results"
 
@@ -7969,35 +7923,35 @@ rule = "typed-results"
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.setTrackStripEqBand"
-removed = true
+removed = "Call setStripEqBand(ref, bandIndex, band) with a track id as ref."
 domain = "engine"
 rule = "typed-results"
 
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.setMasterStripEqBand"
-removed = true
+removed = "Call setStripEqBand('master', bandIndex, band)."
 domain = "engine"
 rule = "typed-results"
 
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.setTrackStripEqBandJson"
-removed = true
+removed = "Call setStripEqBand(ref, bandIndex, band) with a track id as ref and an EqBand object; no JSON string."
 domain = "engine"
 rule = "typed-results"
 
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.setMasterStripEqBandJson"
-removed = true
+removed = "Call setStripEqBand('master', bandIndex, band) with an EqBand object; no JSON string."
 domain = "engine"
 rule = "typed-results"
 
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.setBusStripEqBandJson"
-removed = true
+removed = "Call setBusEqBand(busId, bandIndex, band) with an EqBand object; no JSON string."
 domain = "engine"
 rule = "typed-results"
 
@@ -8020,7 +7974,7 @@ test = "bindings/node/tests/surface/engine.test.ts::bypasses an insert from a la
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.setMasterStripInsertBypassed"
-removed = true
+removed = "Call setStripInsertBypassed('master', insertIndex, { bypassed, resetOnBypass? })."
 domain = "engine"
 rule = "no-positional-bools"
 
@@ -8045,7 +7999,7 @@ test = "bindings/node/tests/surface/engine.test.ts::sets, applies and restores a
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.setMasterStripInsertParamByName"
-removed = true
+removed = "Call setStripInsertParam('master', insertIndex, { name, value })."
 domain = "engine"
 rule = "one-positional-form"
 
@@ -8061,7 +8015,7 @@ test = "bindings/node/tests/surface/engine.test.ts::sets, applies and restores a
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.applyMasterStripInsertParamByNameNow"
-removed = true
+removed = "Call applyStripInsertParamNow('master', insertIndex, { name, value })."
 domain = "engine"
 rule = "one-positional-form"
 
@@ -8077,7 +8031,7 @@ test = "bindings/node/tests/surface/engine.test.ts::sets, applies and restores a
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.restoreMasterStripInsertParamByName"
-removed = true
+removed = "Call restoreStripInsertParam('master', insertIndex, { name, value })."
 domain = "engine"
 rule = "one-positional-form"
 
@@ -8111,42 +8065,42 @@ test = "bindings/node/tests/surface/engine.test.ts::sets, applies and restores a
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.clearTrackInsertParameterBases"
-removed = true
+removed = "Call clearStripInsertParameterBases(trackId)."
 domain = "engine"
 rule = "strip-ref"
 
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.clearMasterInsertParameterBases"
-removed = true
+removed = "Call clearStripInsertParameterBases('master')."
 domain = "engine"
 rule = "strip-ref"
 
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.resolveTrackInsertAutomationId"
-removed = true
+removed = "Call resolveStripInsertAutomationId(trackId, insertIndex, paramName)."
 domain = "engine"
 rule = "strip-ref"
 
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.resolveMasterInsertAutomationId"
-removed = true
+removed = "Call resolveStripInsertAutomationId('master', insertIndex, paramName)."
 domain = "engine"
 rule = "strip-ref"
 
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.resolveTrackLaneAutomationId"
-removed = true
+removed = "Call resolveStripAutomationId(trackId, kind) with kind 'faderDb', 'pan' or 'width'."
 domain = "engine"
 rule = "strip-ref"
 
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.resolveMasterAutomationId"
-removed = true
+removed = "Call resolveStripAutomationId('master', kind) with kind 'faderDb', 'pan' or 'width'."
 domain = "engine"
 rule = "strip-ref"
 
@@ -8263,7 +8217,7 @@ rule = "one-positional-form"
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.setMasterSidechain"
-removed = true
+removed = "Call setStripSidechain('master', insertIndex, source); pass null to clear the binding."
 domain = "engine"
 rule = "strip-ref"
 
@@ -8278,14 +8232,14 @@ test = "bindings/node/tests/surface/engine.test.ts::keys a sidechain by strip an
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.canSetLaneSidechain"
-removed = true
+removed = "Call canSetStripSidechain(trackId, insertIndex, source)."
 domain = "engine"
 rule = "strip-ref"
 
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.canSetMasterSidechain"
-removed = true
+removed = "Call canSetStripSidechain('master', insertIndex, source)."
 domain = "engine"
 rule = "strip-ref"
 
@@ -8300,35 +8254,35 @@ test = "bindings/node/tests/surface/engine.test.ts::keys a sidechain by strip an
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.setCaptureBuffer"
-removed = true
+removed = "Call configureCapture({ capacityFrames, numChannels? }); it sets the buffer together with source, offset, monitor and punch."
 domain = "engine"
 rule = "engine-vocabulary"
 
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.setCapturePunch"
-removed = true
+removed = "Call configureCapture({ capacityFrames, punch: { startSample, endSample } }); startSec/endSec or startPpq/endPpq work too, and omitting punch clears the window."
 domain = "engine"
 rule = "engine-vocabulary"
 
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.setCaptureSource"
-removed = true
+removed = "Call configureCapture({ capacityFrames, source }) with source 'output' or 'input'; the call states the whole capture setup."
 domain = "engine"
 rule = "engine-vocabulary"
 
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.setRecordOffsetSamples"
-removed = true
+removed = "Call configureCapture({ capacityFrames, recordOffsetSamples }); the call states the whole capture setup."
 domain = "engine"
 rule = "engine-vocabulary"
 
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.setInputMonitor"
-removed = true
+removed = "Call configureCapture({ capacityFrames, inputMonitor: { enabled, gain? } }); the call states the whole capture setup."
 domain = "engine"
 rule = "engine-vocabulary"
 
@@ -8407,7 +8361,7 @@ rule = "one-entry-per-operation"
 [[entry]]
 kind = "type"
 old = "MidiCcBindOptions"
-removed = true
+removed = "Use ProjectMidiCcBinding: minValue and maxValue now sit beside ccNumber and paramId in the one binding passed to bindMidiCc."
 domain = "engine"
 rule = "one-entry-per-operation"
 
@@ -8636,14 +8590,14 @@ rule = "strip-ref"
 [[entry]]
 kind = "field"
 old = "DecomposeRequest.nFeatures"
-removed = true
+removed = "the Matrix2D input carries it as rows / cols"
 domain = "effects"
 rule = "matrix-2d"
 
 [[entry]]
 kind = "field"
 old = "DecomposeRequest.nFrames"
-removed = true
+removed = "the Matrix2D input carries it as rows / cols"
 domain = "effects"
 rule = "matrix-2d"
 
@@ -8698,14 +8652,14 @@ test = "bindings/node/tests/surface/effects-sep.test.ts::nnFilter refuses aggreg
 [[entry]]
 kind = "field"
 old = "NnFilterRequest.nFeatures"
-removed = true
+removed = "the Matrix2D input carries it as rows / cols"
 domain = "effects"
 rule = "matrix-2d"
 
 [[entry]]
 kind = "field"
 old = "NnFilterRequest.nFrames"
-removed = true
+removed = "the Matrix2D input carries it as rows / cols"
 domain = "effects"
 rule = "matrix-2d"
 
@@ -9119,7 +9073,7 @@ test = "bindings/node/tests/surface/effects-sep.test.ts::requires sampleRate in 
 [[entry]]
 kind = "type"
 old = "EffectSamplesRequest"
-removed = true
+removed = "a shared base interface, no longer exported; NoteStretchRequest and NoteMoveRequest each declare samples and sampleRate themselves"
 domain = "effects"
 rule = "worklet-scope"
 
@@ -9204,7 +9158,7 @@ rule = "type-names"
 [[entry]]
 kind = "type"
 old = "RoomGeometryFromEstimateOptions"
-removed = true
+removed = "Use RoomGeometryFromEstimateRequest; its option fields sit beside the estimate in the one request object."
 domain = "effects"
 rule = "one-positional-form"
 
@@ -9470,7 +9424,7 @@ test = "bindings/node/tests/surface/effects-notes.test.ts::positional form equal
 [[entry]]
 kind = "function"
 old = "pitchCorrectToMidiTimevarying"
-removed = true
+removed = "Call pitchCorrectTimevarying with targetMode: 'midi' and targetMidi, plus samples, sampleRate and f0Hz."
 domain = "effects"
 rule = "one-entry-per-operation"
 
@@ -9742,7 +9696,7 @@ test = "bindings/node/tests/surface/effects-notes.test.ts::positional form equal
 [[entry]]
 kind = "type"
 old = "PitchCorrectToMidiTimevaryingRequest"
-removed = true
+removed = "Use PitchCorrectTimevaryingRequest with targetMode: 'midi' and targetMidi."
 domain = "effects"
 rule = "one-entry-per-operation"
 
@@ -10181,7 +10135,7 @@ test = "bindings/node/tests/surface/effects-repair.test.ts::declares validate as
 [[entry]]
 kind = "type"
 old = "DenoiseLinkedResult"
-removed = true
+removed = "Use MasteringRepairDenoiseClassicalResult: channels plus reports, whose single entry is the shared report."
 domain = "effects"
 rule = "type-names"
 
@@ -10205,7 +10159,7 @@ test = "bindings/node/tests/surface/effects-repair.test.ts::declares validate as
 [[entry]]
 kind = "type"
 old = "DereverbLinkedResult"
-removed = true
+removed = "Use MasteringRepairDereverbClassicalResult: channels plus reports, whose single entry is the shared report."
 domain = "effects"
 rule = "type-names"
 
@@ -10640,7 +10594,7 @@ test = "bindings/node/tests/surface/effects-voice.test.ts::exposes latencySample
 [[entry]]
 kind = "method"
 old = "RealtimeVoiceChanger.processInterleaved"
-removed = true
+removed = "Allocate the output yourself and call processInterleavedInto(input, numChannels, output), or use processPlanar(channels)."
 domain = "effects"
 rule = "one-positional-form"
 
@@ -10655,7 +10609,7 @@ test = "bindings/node/tests/surface/effects-voice.test.ts::require numChannels 1
 [[entry]]
 kind = "method"
 old = "RealtimeVoiceChanger.processPlanarStereo"
-removed = true
+removed = "call processPlanar([left, right]), which returns the processed channels"
 domain = "effects"
 rule = "individual"
 
@@ -10711,7 +10665,7 @@ test = "bindings/node/tests/surface/effects-voice.test.ts::names its controls pi
 [[entry]]
 kind = "type"
 old = "VoiceChangeRealtimeOptions"
-removed = true
+removed = "Use VoiceChangeRealtimeRequest; the option fields are part of the request object."
 domain = "effects"
 rule = "one-positional-form"
 
@@ -10764,14 +10718,6 @@ old = "VoicePresetId='soft-whisper'"
 new = "VoicePresetId='softWhisper'"
 domain = "core"
 rule = "token-case"
-
-[[entry]]
-kind = "field"
-old = "SpectralEditOptions.window"
-changed = "a WindowType name only: an ordinal is refused (TypeError), an unknown name (RangeError)"
-domain = "effects"
-rule = "token-case"
-test = "bindings/node/tests/surface/effects-notes.test.ts::spectralEdit takes a window by name only"
 
 [[entry]]
 kind = "function"
@@ -10832,7 +10778,7 @@ test = "bindings/node/tests/surface/effects-repair.test.ts::trim reports the ran
 [[entry]]
 kind = "method"
 old = "Project.create"
-removed = true
+removed = "call new Project()"
 domain = "project"
 rule = "construction"
 
@@ -10862,7 +10808,7 @@ test = "bindings/node/tests/surface/project.test.ts::sets a program and a part r
 [[entry]]
 kind = "method"
 old = "Project.getAssistSidecar"
-removed = true
+removed = "Call assistSidecars() and pick the entry you need from the returned array."
 domain = "project"
 rule = "collections"
 
@@ -10876,7 +10822,7 @@ rule = "getters"
 [[entry]]
 kind = "method"
 old = "Project.trackCount"
-removed = true
+removed = "Call tracks() and use the length of the returned array."
 domain = "project"
 rule = "collections"
 
@@ -10892,7 +10838,7 @@ test = "bindings/node/tests/surface/project.test.ts::lists every collection as a
 [[entry]]
 kind = "method"
 old = "Project.clipCount"
-removed = true
+removed = "Call clips() and use the length of the returned array."
 domain = "project"
 rule = "collections"
 
@@ -10908,7 +10854,7 @@ test = "bindings/node/tests/surface/project.test.ts::lists every collection as a
 [[entry]]
 kind = "method"
 old = "Project.markerCount"
-removed = true
+removed = "Call markers() and use the length of the returned array."
 domain = "project"
 rule = "collections"
 
@@ -10924,7 +10870,7 @@ test = "bindings/node/tests/surface/project.test.ts::lists every collection as a
 [[entry]]
 kind = "method"
 old = "Project.sourceCount"
-removed = true
+removed = "Call sources() and use the length of the returned array."
 domain = "project"
 rule = "collections"
 
@@ -10940,7 +10886,7 @@ test = "bindings/node/tests/surface/project.test.ts::lists every collection as a
 [[entry]]
 kind = "method"
 old = "Project.tempoSegmentCount"
-removed = true
+removed = "Call tempoSegments() and use the length of the returned array."
 domain = "project"
 rule = "collections"
 
@@ -10956,7 +10902,7 @@ test = "bindings/node/tests/surface/project.test.ts::lists every collection as a
 [[entry]]
 kind = "method"
 old = "Project.timeSignatureCount"
-removed = true
+removed = "Call timeSignatures() and use the length of the returned array."
 domain = "project"
 rule = "collections"
 
@@ -10972,21 +10918,21 @@ test = "bindings/node/tests/surface/project.test.ts::lists every collection as a
 [[entry]]
 kind = "method"
 old = "Project.assistSidecarCount"
-removed = true
+removed = "Call assistSidecars() and use the length of the returned array."
 domain = "project"
 rule = "collections"
 
 [[entry]]
 kind = "method"
 old = "Project.setMarkerEx"
-removed = true
+removed = "Call setMarker(input) with a ProjectMarkerInput; omit id to allocate a new marker. It returns the marker id."
 domain = "project"
 rule = "one-entry-per-operation"
 
 [[entry]]
 kind = "method"
 old = "Project.setMidiFx"
-removed = true
+removed = "Call bakeMidiFx({ clipId, config }) with a MidiFxConfig object."
 domain = "project"
 rule = "one-entry-per-operation"
 
@@ -11315,7 +11261,7 @@ rule = "planar-channels"
 [[entry]]
 kind = "field"
 old = "ProjectClipDesc.audioChannels"
-removed = true
+removed = "Pass planar channels: Float32Array[] with sampleRate; the channel count is channels.length, so no count field is needed."
 domain = "project"
 rule = "planar-channels"
 
@@ -11336,21 +11282,21 @@ rule = "planar-channels"
 [[entry]]
 kind = "field"
 old = "ProjectBounceOptions.sampleRate"
-removed = true
+removed = "Omit it; a bounce always renders at the project sample rate and ProjectBounceResult.sampleRate reports it."
 domain = "project"
 rule = "absent-not-sentinel"
 
 [[entry]]
 kind = "field"
 old = "ProjectCompileResult.messages"
-removed = true
+removed = "Read diagnostics, an array of ProjectDiagnostic, and use each entry's message."
 domain = "project"
 rule = "typed-results"
 
 [[entry]]
 kind = "field"
 old = "ProjectCompileResult.hasTimeline"
-removed = true
+removed = "Check whether diagnostics holds an entry with severity 'error'; none means it compiled. compileTimeline() returns the timeline itself."
 domain = "project"
 rule = "typed-results"
 
@@ -11364,35 +11310,35 @@ rule = "type-names"
 [[entry]]
 kind = "field"
 old = "ProjectTempoSegment.startSample"
-removed = true
+removed = "Drop it; give the segment startPpq only, since sample positions are derived when the project is compiled."
 domain = "project"
 rule = "absent-not-sentinel"
 
 [[entry]]
 kind = "field"
 old = "BuiltinSynthConfig.destinationId"
-removed = true
+removed = "Pass the destination id as the first argument of setBuiltinInstrument(destinationId, config), or as destinationId beside instrument in a bounce pair; a destinationId field is refused."
 domain = "project"
 rule = "one-entry-per-operation"
 
 [[entry]]
 kind = "field"
 old = "Sf2InstrumentConfig.destinationId"
-removed = true
+removed = "Pass the destination id as the first argument of setSf2Instrument(destinationId, config), or as destinationId beside instrument in a bounce pair; a destinationId field is refused."
 domain = "project"
 rule = "one-entry-per-operation"
 
 [[entry]]
 kind = "field"
 old = "SynthPatch.destinationId"
-removed = true
+removed = "Pass the destination id as the first argument of setSynthInstrument(destinationId, patch), or as destinationId beside instrument in a bounce pair; a destinationId field is refused."
 domain = "engine"
 rule = "one-entry-per-operation"
 
 [[entry]]
 kind = "field"
 old = "ExternalInstrument.destinationId"
-removed = true
+removed = "Pass destinationId beside instrument in the pair given to bounceWithInstruments, { destinationId, instrument }; the instrument itself carries none."
 domain = "engine"
 rule = "one-entry-per-operation"
 
@@ -11406,7 +11352,7 @@ rule = "planar-channels"
 [[entry]]
 kind = "field"
 old = "EngineBounceResult.frames"
-removed = true
+removed = "Read channels[0].length; the result is planar, with channels, numChannels and sampleRate."
 domain = "engine"
 rule = "planar-channels"
 
@@ -11436,21 +11382,21 @@ test = "bindings/node/tests/surface/project.test.ts::fadeInPpq: 1, fadeOutPpq: 1
 [[entry]]
 kind = "export"
 old = "PROJECT_AUTOMATION_TARGET_OPAQUE"
-removed = true
+removed = "Pass the string 'opaque' as targetKind; numeric target kinds are refused."
 domain = "project"
 rule = "string-closed-sets"
 
 [[entry]]
 kind = "export"
 old = "PROJECT_AUTOMATION_TARGET_TRACK_FADER_DB"
-removed = true
+removed = "Pass the string 'trackFaderDb' as targetKind; numeric target kinds are refused."
 domain = "project"
 rule = "string-closed-sets"
 
 [[entry]]
 kind = "export"
 old = "PROJECT_AUTOMATION_TARGET_TRACK_PAN"
-removed = true
+removed = "Pass the string 'trackPan' as targetKind; numeric target kinds are refused."
 domain = "project"
 rule = "string-closed-sets"
 
@@ -11499,14 +11445,14 @@ rule = "token-case"
 [[entry]]
 kind = "type"
 old = "VocalUint64"
-removed = true
+removed = "removed; 64-bit counters in VocalStateToken are plain decimal strings"
 domain = "project"
 rule = "no-internal-types"
 
 [[entry]]
 kind = "type"
 old = "VocalError"
-removed = true
+removed = "Catch SonareError; the vocal reason, field, expected and actual values are on its detail (VocalErrorDetail)."
 domain = "project"
 rule = "error-class-by-cause"
 
@@ -11608,7 +11554,7 @@ rule = "individual"
 [[entry]]
 kind = "field"
 old = "ProjectVocalEditApplyRequest.renderedStartSample"
-removed = true
+removed = "Omit it; the field was required to be 0, and the rendered range now always starts at sample 0."
 domain = "project"
 rule = "absent-not-sentinel"
 
@@ -11733,273 +11679,273 @@ test = "bindings/node/tests/project-edit-extra.test.ts::refuses a curve ordinal 
 [[entry]]
 kind = "method"
 old = "Project.midiNoteOn"
-removed = true
+removed = "call the module function midiNoteOn"
 domain = "project"
 rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.midiNoteOff"
-removed = true
+removed = "call the module function midiNoteOff"
 domain = "project"
 rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.midiCc"
-removed = true
+removed = "call the module function midiCc"
 domain = "project"
 rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.midiPolyPressure"
-removed = true
+removed = "call the module function midiPolyPressure"
 domain = "project"
 rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.midiProgram"
-removed = true
+removed = "call the module function midiProgram"
 domain = "project"
 rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.midi2NoteOn"
-removed = true
+removed = "call the module function midi2NoteOn"
 domain = "project"
 rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.midi2NoteOff"
-removed = true
+removed = "call the module function midi2NoteOff"
 domain = "project"
 rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.midi2Cc"
-removed = true
+removed = "call the module function midi2Cc"
 domain = "project"
 rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.midi2PolyPressure"
-removed = true
+removed = "call the module function midi2PolyPressure"
 domain = "project"
 rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.midi2ChannelPressure"
-removed = true
+removed = "call the module function midi2ChannelPressure"
 domain = "project"
 rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.midi2PitchBend"
-removed = true
+removed = "call the module function midi2PitchBend"
 domain = "project"
 rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.midi2Program"
-removed = true
+removed = "call the module function midi2Program"
 domain = "project"
 rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.midi2RegisteredController"
-removed = true
+removed = "call the module function midi2RegisteredController"
 domain = "project"
 rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.midi2AssignableController"
-removed = true
+removed = "call the module function midi2AssignableController"
 domain = "project"
 rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.midi2RelativeRegisteredController"
-removed = true
+removed = "call the module function midi2RelativeRegisteredController"
 domain = "project"
 rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.midi2RelativeAssignableController"
-removed = true
+removed = "call the module function midi2RelativeAssignableController"
 domain = "project"
 rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.midi2RegisteredPerNoteController"
-removed = true
+removed = "call the module function midi2RegisteredPerNoteController"
 domain = "project"
 rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.midi2AssignablePerNoteController"
-removed = true
+removed = "call the module function midi2AssignablePerNoteController"
 domain = "project"
 rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.midi2PerNotePitchBend"
-removed = true
+removed = "call the module function midi2PerNotePitchBend"
 domain = "project"
 rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.midi2PerNoteManagement"
-removed = true
+removed = "call the module function midi2PerNoteManagement"
 domain = "project"
 rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.midiBankProgram"
-removed = true
+removed = "call the module function midiBankProgram"
 domain = "project"
 rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.midiParamToCc"
-removed = true
+removed = "call the module function midiParamToCc"
 domain = "project"
 rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.midiChannelPressure"
-removed = true
+removed = "call the module function midiChannelPressure"
 domain = "project"
 rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.midiPitchBend"
-removed = true
+removed = "call the module function midiPitchBend"
 domain = "project"
 rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.gmInstrumentName"
-removed = true
+removed = "call the module function gmInstrumentName"
 domain = "project"
 rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.gmProgramForName"
-removed = true
+removed = "call the module function gmProgramForName"
 domain = "project"
 rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.gmFamilyName"
-removed = true
+removed = "call the module function gmFamilyName"
 domain = "project"
 rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.gmFamilyFirstProgram"
-removed = true
+removed = "call the module function gmFamilyFirstProgram"
 domain = "project"
 rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.gm2InstrumentName"
-removed = true
+removed = "call the module function gm2InstrumentName"
 domain = "project"
 rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.gmDrumName"
-removed = true
+removed = "call the module function gmDrumName"
 domain = "project"
 rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.gmDrumNoteForName"
-removed = true
+removed = "call the module function gmDrumNoteForName"
 domain = "project"
 rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.gm2DrumSetName"
-removed = true
+removed = "call the module function gm2DrumSetName"
 domain = "project"
 rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.gm2DrumName"
-removed = true
+removed = "call the module function gm2DrumName"
 domain = "project"
 rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.midiCcName"
-removed = true
+removed = "call the module function midiCcName"
 domain = "project"
 rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.midiCcIndexForName"
-removed = true
+removed = "call the module function midiCcIndexForName"
 domain = "project"
 rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.perNoteControllerName"
-removed = true
+removed = "call the module function perNoteControllerName"
 domain = "project"
 rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.midiRouteEvents"
-removed = true
+removed = "call the module function midiRouteEvents"
 domain = "project"
 rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.midiCcLearn"
-removed = true
+removed = "call the module function midiCcLearn"
 domain = "project"
 rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.midiCcToBreakpoint"
-removed = true
+removed = "call the module function midiCcToBreakpoint"
 domain = "project"
 rule = "midi-module-functions"
 
@@ -12052,49 +11998,49 @@ test = "bindings/node/tests/basic_engine_mixer.test.ts::exposes live non-destruc
 [[entry]]
 kind = "type"
 old = "JsonResult"
-removed = true
+removed = "Drop it. Functions that returned a JSON string now return the typed object, so there is no JSON.parse or cast."
 domain = "mastering"
 rule = "typed-results"
 
 [[entry]]
 kind = "type"
 old = "MasteringChainConfigDocument"
-removed = true
+removed = "Use MasteringChainConfig, the nested config object, instead of the version and flat params document."
 domain = "mastering"
 rule = "typed-results"
 
 [[entry]]
 kind = "type"
 old = "MasteringChainSection"
-removed = true
+removed = "Use MasteringChainConfig for a chain config, or Record<string, unknown> for a generic walk over its sections."
 domain = "mastering"
 rule = "typed-results"
 
 [[entry]]
 kind = "type"
 old = "MatchTonalBalanceLogBandsResult"
-removed = true
+removed = "Use MatchTonalBalanceResult, which both match.tonalBalance and match.tonalBalanceLogBands now return."
 domain = "mastering"
 rule = "one-entry-per-operation"
 
 [[entry]]
 kind = "type"
 old = "MixAssistantOptions"
-removed = true
+removed = "Pass its fields (targetTrackLufs, suggestionStrength, eqMaxCutDb and the rest) directly on MixingAssistantSuggestRequest."
 domain = "mastering"
 rule = "options-struct"
 
 [[entry]]
 kind = "type"
 old = "MixOptions"
-removed = true
+removed = "Set inputTrimDb, faderDb, pan, panMode, width and muted on each MixStereoStrip in MixStereoRequest strips, one value per strip."
 domain = "mastering"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "type"
 old = "TypedJson"
-removed = true
+removed = "Drop it. Functions that returned TypedJson now return the typed object, so there is no JSON.parse."
 domain = "mastering"
 rule = "typed-results"
 
@@ -12248,7 +12194,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::the assistant chain
 [[entry]]
 kind = "field"
 old = "MasteringAssistantSuggestRequest.params"
-removed = true
+removed = "Put the params fields (targetLufs, ceilingDb, targetPlatform, ...) directly on the request."
 domain = "mastering"
 rule = "options-struct"
 
@@ -12263,7 +12209,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::requires sampleRate
 [[entry]]
 kind = "field"
 old = "MasteringAssistantSuggestStereoRequest.params"
-removed = true
+removed = "Put the params fields (targetLufs, ceilingDb, targetPlatform, ...) directly on the request."
 domain = "mastering"
 rule = "options-struct"
 
@@ -12310,7 +12256,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::the audio profile i
 [[entry]]
 kind = "field"
 old = "MasteringAudioProfileRequest.params"
-removed = true
+removed = "Put nFft, hopLength, truePeakOversample and detectDefects directly on the request."
 domain = "mastering"
 rule = "options-struct"
 
@@ -12325,7 +12271,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::requires sampleRate
 [[entry]]
 kind = "field"
 old = "MasteringAudioProfileStereoRequest.params"
-removed = true
+removed = "Put nFft, hopLength, truePeakOversample and detectDefects directly on the request."
 domain = "mastering"
 rule = "options-struct"
 
@@ -12823,14 +12769,14 @@ test = "bindings/node/tests/surface/mastering-mixing.test.ts::MixSceneStrip.surr
 [[entry]]
 kind = "field"
 old = "MixStereoRequest.faderDb"
-removed = true
+removed = "Set faderDb on each MixStereoStrip in strips, one value per strip, instead of a request-level scalar or array."
 domain = "mastering"
 rule = "options-struct"
 
 [[entry]]
 kind = "field"
 old = "MixStereoRequest.inputTrimDb"
-removed = true
+removed = "Set inputTrimDb on each MixStereoStrip in strips, one value per strip, instead of a request-level scalar or array."
 domain = "mastering"
 rule = "options-struct"
 
@@ -12846,21 +12792,21 @@ test = "bindings/node/tests/surface/mastering-mixing.test.ts::MixStereoRequest.l
 [[entry]]
 kind = "field"
 old = "MixStereoRequest.muted"
-removed = true
+removed = "Set muted on each MixStereoStrip in strips, one value per strip, instead of a request-level scalar or array."
 domain = "mastering"
 rule = "options-struct"
 
 [[entry]]
 kind = "field"
 old = "MixStereoRequest.pan"
-removed = true
+removed = "Set pan on each MixStereoStrip in strips, one value per strip, instead of a request-level scalar or array."
 domain = "mastering"
 rule = "options-struct"
 
 [[entry]]
 kind = "field"
 old = "MixStereoRequest.panMode"
-removed = true
+removed = "Set panMode on each MixStereoStrip in strips, one value per strip, instead of a request-level scalar or array."
 domain = "mastering"
 rule = "options-struct"
 
@@ -12884,7 +12830,7 @@ test = "bindings/node/tests/surface/mastering-mixing.test.ts::MixStereoRequest.s
 [[entry]]
 kind = "field"
 old = "MixStereoRequest.width"
-removed = true
+removed = "Set width on each MixStereoStrip in strips, one value per strip, instead of a request-level scalar or array."
 domain = "mastering"
 rule = "options-struct"
 
@@ -12982,7 +12928,7 @@ test = "bindings/node/tests/surface/mastering-mixing.test.ts::StripMeteringOptio
 [[entry]]
 kind = "field"
 old = "SuggestMixSceneRequest.options"
-removed = true
+removed = "Use MixingAssistantSuggestRequest and put the option fields (targetTrackLufs, suggestionStrength, ...) directly on it."
 domain = "mastering"
 rule = "options-struct"
 
@@ -12998,7 +12944,7 @@ test = "bindings/node/tests/surface/mastering-metering.test.ts::WaveformPeakPyra
 [[entry]]
 kind = "field"
 old = "WaveformPeaksReport.channels"
-removed = true
+removed = "Read min.length; min and max hold one Float32Array per channel."
 domain = "mastering"
 rule = "num-channels"
 
@@ -13118,14 +13064,14 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::the audio profile i
 [[entry]]
 kind = "function"
 old = "masteringChain"
-removed = true
+removed = "Call masterAudio({ samples, sampleRate, preset, overrides }); the old config is now overrides, and sampleRate is required."
 domain = "mastering"
 rule = "one-entry-per-operation"
 
 [[entry]]
 kind = "function"
 old = "masteringChainStereo"
-removed = true
+removed = "Call masterAudioStereo({ left, right, sampleRate, preset, overrides }); the old config is now overrides, and sampleRate is required."
 domain = "mastering"
 rule = "one-entry-per-operation"
 
@@ -13373,7 +13319,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::streamingLoudnessGa
 [[entry]]
 kind = "function"
 old = "suggestMixSceneJson"
-removed = true
+removed = "Call mixingAssistantSuggest(request), which returns the typed MixAssistantResult; no JSON.parse."
 domain = "mastering"
 rule = "typed-results"
 
@@ -13404,7 +13350,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::Audio carries the r
 [[entry]]
 kind = "method"
 old = "Audio.masteringChain"
-removed = true
+removed = "Call masterAudio({ preset, overrides }); the old config is now overrides."
 domain = "core"
 rule = "one-entry-per-operation"
 
@@ -13467,7 +13413,7 @@ test = "bindings/node/tests/surface/mastering-streaming.test.ts::StreamingMaster
 [[entry]]
 kind = "method"
 old = "StreamingMasteringChain.prepare"
-removed = true
+removed = "the constructor prepares the chain; pass sampleRate, maxBlockSize and numChannels in the config, and create a new chain to change them"
 domain = "mastering"
 rule = "construction"
 
@@ -13490,7 +13436,7 @@ test = "bindings/node/tests/surface/mastering-metering.test.ts::CompressorDetect
 [[entry]]
 kind = "type"
 old = "MasteringAssistantParams"
-removed = true
+removed = "Use MasteringAssistantSettings; its fields now sit directly on the assistant request, not under params."
 domain = "mastering"
 rule = "options-struct"
 
@@ -13505,35 +13451,35 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::the audio profile i
 [[entry]]
 kind = "type"
 old = "MasteringChainRequest"
-removed = true
+removed = "Use MasterAudioRequest; the old config is now overrides, with an optional preset, and sampleRate is required."
 domain = "mastering"
 rule = "one-entry-per-operation"
 
 [[entry]]
 kind = "type"
 old = "MasteringChainStereoRequest"
-removed = true
+removed = "Use MasterAudioStereoRequest; the old config is now overrides, with an optional preset, and sampleRate is required."
 domain = "mastering"
 rule = "one-entry-per-operation"
 
 [[entry]]
 kind = "type"
 old = "MasteringInsertParamValue"
-removed = true
+removed = "no longer exported; type a processor param bag with MasteringProcessorParams"
 domain = "mastering"
 rule = "worklet-scope"
 
 [[entry]]
 kind = "type"
 old = "MasteringInsertParams"
-removed = true
+removed = "no longer exported; type a processor param bag with MasteringProcessorParams"
 domain = "mastering"
 rule = "worklet-scope"
 
 [[entry]]
 kind = "type"
 old = "MasteringSoloProcessorParams"
-removed = true
+removed = "no longer exported; type a processor param bag with MasteringProcessorParams"
 domain = "mastering"
 rule = "worklet-scope"
 
@@ -13548,21 +13494,21 @@ test = "bindings/node/tests/surface/mastering-mixing.test.ts::MeterTap"
 [[entry]]
 kind = "type"
 old = "MeteringSamplesRequest"
-removed = true
+removed = "Use the request type of the function, such as MeteringPeakDbRequest, MeteringRmsDbRequest or MeteringTruePeakDbRequest."
 domain = "mastering"
 rule = "type-names"
 
 [[entry]]
 kind = "type"
 old = "MeteringScopeRequest"
-removed = true
+removed = "Use MeteringVectorscopeRequest or MeteringPhaseScopeRequest and set maxPoints to decimate."
 domain = "mastering"
 rule = "type-names"
 
 [[entry]]
 kind = "type"
 old = "MeteringStereoRequest"
-removed = true
+removed = "Use the request type of the function: MeteringStereoCorrelationRequest, MeteringStereoWidthRequest or MeteringCrestFactorDbStereoRequest."
 domain = "mastering"
 rule = "type-names"
 
@@ -13601,7 +13547,7 @@ test = "bindings/node/tests/surface/mastering-mixing.test.ts::PanMode"
 [[entry]]
 kind = "type"
 old = "ScopeOptions"
-removed = true
+removed = "Set maxPoints in MeteringVectorscopeRequest or MeteringPhaseScopeRequest."
 domain = "mastering"
 rule = "one-positional-form"
 
@@ -13616,7 +13562,7 @@ test = "bindings/node/tests/surface/mastering-mixing.test.ts::SendTiming"
 [[entry]]
 kind = "type"
 old = "StreamingEqualizerPhaseMode"
-removed = true
+removed = "use EqPhaseMode: zero, natural or linear"
 domain = "mastering"
 rule = "aliases-removed"
 
@@ -13639,14 +13585,14 @@ test = "bindings/node/tests/surface/mastering-mixing.test.ts::StripMeteringOptio
 [[entry]]
 kind = "type"
 old = "WaveformPeakPyramidOptions"
-removed = true
+removed = "Set samplesPerBucketLevels in WaveformPeakPyramidRequest beside channels."
 domain = "mastering"
 rule = "one-positional-form"
 
 [[entry]]
 kind = "type"
 old = "WaveformPeaksOptions"
-removed = true
+removed = "Set samplesPerBucket in WaveformPeaksRequest beside channels."
 domain = "mastering"
 rule = "one-positional-form"
 
@@ -14079,14 +14025,6 @@ rule = "type-names"
 
 [[entry]]
 kind = "method"
-old = "StreamingEqualizer.setAutoGain"
-changed = "TSDoc only: the single boolean is the property the name states (settled setter ruling)"
-domain = "mastering"
-rule = "no-positional-bools"
-test = "bindings/node/tests/surface/mastering-streaming.test.ts::StreamingEqualizer.setPhaseMode"
-
-[[entry]]
-kind = "method"
 old = "PlaybackRenderer.latencySamples"
 changed = "readonly getter (was a method)"
 domain = "engine"
@@ -14128,14 +14066,14 @@ test = "bindings/node/tests/playback.test.ts::reads cheap scalar state as getter
 [[entry]]
 kind = "type"
 old = "PanLawName"
-removed = true
+removed = "use PanLaw and pass the canonical name such as const3Db; aliases and ordinals are refused"
 domain = "mastering"
 rule = "aliases-removed"
 
 [[entry]]
 kind = "type"
 old = "PanLawInput"
-removed = true
+removed = "use PanLaw and pass the canonical name such as const3Db; aliases and ordinals are refused"
 domain = "mastering"
 rule = "aliases-removed"
 
@@ -14150,28 +14088,28 @@ test = "bindings/node/tests/synth-patch.test.ts::describes each engine section"
 [[entry]]
 kind = "field"
 old = "StreamFramesU8.nMels"
-removed = true
+removed = "the Matrix2D input carries it as rows / cols"
 domain = "analysis"
 rule = "array-results"
 
 [[entry]]
 kind = "field"
 old = "StreamFramesU8.nChroma"
-removed = true
+removed = "the Matrix2D input carries it as rows / cols"
 domain = "analysis"
 rule = "array-results"
 
 [[entry]]
 kind = "field"
 old = "StreamFramesI16.nMels"
-removed = true
+removed = "the Matrix2D input carries it as rows / cols"
 domain = "analysis"
 rule = "array-results"
 
 [[entry]]
 kind = "field"
 old = "StreamFramesI16.nChroma"
-removed = true
+removed = "the Matrix2D input carries it as rows / cols"
 domain = "analysis"
 rule = "array-results"
 
@@ -14760,7 +14698,7 @@ test = "bindings/node/tests/surface/engine.test.ts::takes one config object with
 [[entry]]
 kind = "method"
 old = "ProjectTimeline.constructor"
-removed = true
+removed = "not constructible; get a timeline from Project.compileTimeline() and install it with RealtimeEngine.applyProjectTimeline()"
 domain = "project"
 rule = "construction"
 
@@ -14829,21 +14767,21 @@ test = "bindings/node/tests/surface/effects-sep.test.ts::synthesizeRir takes sou
 [[entry]]
 kind = "field"
 old = "ProjectCompileTimelineResult.hasTimeline"
-removed = true
+removed = "Test timeline !== null on the result."
 domain = "project"
 rule = "typed-results"
 
 [[entry]]
 kind = "field"
 old = "ProjectCompileTimelineResult.messages"
-removed = true
+removed = "Read diagnostics, an array of ProjectDiagnostic, and use each entry's message."
 domain = "project"
 rule = "typed-results"
 
 [[entry]]
 kind = "field"
 old = "BuiltinInstrumentConfig.destinationId"
-removed = true
+removed = "Use BuiltinSynthConfig with destinationId beside it: { destinationId, instrument } in bounceWithBuiltinInstruments or setBuiltinInstrument(destinationId, config)."
 domain = "engine"
 rule = "one-entry-per-operation"
 
@@ -14851,6 +14789,7 @@ rule = "one-entry-per-operation"
 kind = "field"
 old = "OnsetEnvelopeRequest.fmax"
 removed = true
+no_replacement = "not available in 2.0.0; the mel range is the library default"
 domain = "analysis"
 rule = "onset-strength"
 
@@ -14858,6 +14797,7 @@ rule = "onset-strength"
 kind = "field"
 old = "OnsetEnvelopeRequest.fmin"
 removed = true
+no_replacement = "not available in 2.0.0; the mel range is the library default"
 domain = "analysis"
 rule = "onset-strength"
 
@@ -14865,6 +14805,7 @@ rule = "onset-strength"
 kind = "field"
 old = "OnsetEnvelopeRequest.htk"
 removed = true
+no_replacement = "not available in 2.0.0; the mel range is the library default"
 domain = "analysis"
 rule = "onset-strength"
 
@@ -14881,3 +14822,20 @@ old = "ProjectFadeCurve='log'"
 new = "ProjectFadeCurve='logarithmic'"
 domain = "project"
 rule = "token-case"
+
+[[entry]]
+kind = "field"
+old = "ChordSymbolFields.slashBassPc"
+changed = "absent when the bass is the root, instead of 255; read it with ?? to supply a default"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/chord-annotation.test.ts::reports a slash bass only when it differs from the root"
+
+[[entry]]
+kind = "field"
+old = "EngineExternalMidiEvent.destinationId"
+to = "ExternalMidiEvent.destinationId"
+changed = "absent for clock and transport bytes meant for every external port, instead of 0xFFFFFFFF"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/engine-midi.test.ts::forwards MIDI clock/transport to the external queue"

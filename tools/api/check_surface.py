@@ -14,7 +14,9 @@ old name's, and a ledger domain disagreeing with the file is a validation proble
 A check that examined zero candidates fails in an unfiltered run, because an
 extractor that stopped feeding it reads exactly like a clean tree. Violations may be excused by
 tools/api/surface_allowlist.toml (four categories) or, for the Python surface of a
-librosa-named function, by tools/api/librosa_mirrors.toml. ``--audit-allowlist``
+librosa-named function, by tools/api/librosa_mirrors.toml. A name ``unit-in-name`` would
+flag whose quantity has no unit is listed, with its class and range, in
+tools/api/dimensionless_names.toml. ``--audit-allowlist``
 fails on any allowlist entry that excused nothing in a full run.
 
 Exit 0 only when nothing failed.
@@ -122,6 +124,8 @@ BASELINE_TAG = "v1.10.0"
 DEFAULT_RULES = HERE / "migration" / "rules.toml"
 DEFAULT_MIRRORS = HERE / "librosa_mirrors.toml"
 DEFAULT_ALLOWLIST = HERE / "surface_allowlist.toml"
+DEFAULT_DIMENSIONLESS = HERE / "dimensionless_names.toml"
+DIMENSIONLESS_CLASSES = ("ratio", "probability", "correlation", "normalized", "magnitude")
 DEFAULT_DOMAINS = HERE / "domains.json"
 
 
@@ -194,6 +198,54 @@ def load_mirrors(path: Path, problems: list[str]) -> dict[str, str]:
     return out
 
 
+def load_dimensionless(
+    path: Path, problems: list[str], records: list[dict]
+) -> set[tuple[str, str]]:
+    """(surface, name) pairs whose unit-less quantity is declared; a row naming no candidate is stale."""
+    data = load_toml(path, problems, "dimensionless_names.toml")
+    if data is None:
+        return set()
+    for k in sorted(set(data) - {"name"}):
+        problems.append(f"dimensionless_names.toml: unknown top-level key {k!r}")
+    flagged = {
+        (r["surface"], r["name"])
+        for r in records
+        if r["kind"] in ("option", "field", "flag")
+        and not (r["kind"] == "flag" and r.get("boolean"))
+        and (hit := _unit_split(bare(r))) is not None
+        and hit[1] is None
+    }
+    out: set[tuple[str, str]] = set()
+    for i, n in enumerate(data.get("name", []), 1):
+        surface, symbol = n.get("surface", ""), n.get("symbol", "")
+        label = f"dimensionless_names.toml name {i} ({surface} {symbol})"
+        for k in sorted(set(n) - {"surface", "symbol", "class", "range", "evidence"}):
+            problems.append(f"{label}: unknown key {k!r}")
+        if n.get("class") not in DIMENSIONLESS_CLASSES:
+            problems.append(f"{label}: class must be one of {', '.join(DIMENSIONLESS_CLASSES)}")
+        rng = n.get("range")
+        if not (
+            isinstance(rng, list)
+            and len(rng) == 2
+            and all(isinstance(x, (int, float)) for x in rng)
+            and rng[0] <= rng[1]
+        ):
+            problems.append(f"{label}: range must be [low, high]")
+        if not isinstance(n.get("evidence"), str) or not n["evidence"].strip():
+            problems.append(f"{label}: evidence is required")
+        surfaces = CLI if surface == "cli" else (surface,)
+        if surface not in SURFACES + ("cli",):
+            problems.append(f"{label}: unknown surface {surface!r}")
+            continue
+        keys = {(s, symbol) for s in surfaces}
+        if keys & out:
+            problems.append(f"{label}: listed twice")
+        if not keys & flagged:
+            problems.append(f"{label}: names nothing unit-in-name would flag")
+        out |= keys
+    return out
+
+
 @dataclass
 class Allow:
     index: int
@@ -254,6 +306,7 @@ _LEDGER_KEYS = {
     "removed",
     "changed",
     "to",
+    "no_replacement",
     "test",
     "domain",
     "rule",
@@ -285,8 +338,20 @@ def validate_ledger(entries: list[LedgerEntry], slugs: set[str], root: Path) -> 
         forms = [k for k in ("new", "removed", "changed") if k in e]
         if len(forms) != 1:
             bad.append(f"needs exactly one of new / removed / changed, has {len(forms)}")
-        if "removed" in e and e["removed"] is not True:
-            bad.append("removed must be true")
+        if "removed" in e:
+            note, why = e["removed"], e.get("no_replacement")
+            if note is True:
+                if not isinstance(why, str) or not why.strip():
+                    bad.append(
+                        "removed needs the caller's replacement as its text, or true with"
+                        " no_replacement = <reason>"
+                    )
+            elif not isinstance(note, str) or not note.strip():
+                bad.append("removed must be the caller's replacement, or true")
+            elif why is not None:
+                bad.append("no_replacement is only for removed = true")
+        elif "no_replacement" in e:
+            bad.append("no_replacement is only for removed = true")
         if "new" in e and (not isinstance(e["new"], str) or not e["new"]):
             bad.append("new must be a name")
         if e.get("kind") not in KINDS:
@@ -326,7 +391,46 @@ def validate_ledger(entries: list[LedgerEntry], slugs: set[str], root: Path) -> 
         if bad:
             le.valid = False
             problems.extend(f"{le.label}: {b}" for b in bad)
+    problems += _ledger_redundancy(entries)
     return problems
+
+
+def _ledger_redundancy(entries: list[LedgerEntry]) -> list[str]:
+    """Two rows for one name, and a removal under an owner whose removal already speaks for it."""
+    seen, removed, out = {}, set(), []
+    for le in entries:
+        e = le.data
+        if not isinstance(e.get("old"), str):
+            continue
+        key = (le.surface, e.get("kind"), e["old"], e.get("entry", "."), e.get("frontend"))
+        if key in seen:
+            le.valid = False
+            out.append(f"{le.label}: a second row for {e['old']} (first at {seen[key]})")
+        else:
+            seen[key] = le.label
+        if "removed" in e:
+            removed.add((le.surface, e["old"], e.get("entry", ".")))
+    for le in entries:
+        e = le.data
+        # A member row that says where the member went (new / changed) still informs.
+        if (
+            "removed" not in e
+            or not isinstance(e.get("old"), str)
+            or not isinstance(e.get("kind"), str)
+        ):
+            continue
+        owner = next(
+            (
+                o
+                for o in _owner_names(e["kind"], e["old"])
+                if (le.surface, o, e.get("entry", ".")) in removed
+            ),
+            None,
+        )
+        if owner:
+            le.valid = False
+            out.append(f"{le.label}: {owner} is removed, which already covers removing {e['old']}")
+    return out
 
 
 def load_domains(path: Path, problems: list[str]) -> dict[str, dict]:
@@ -577,6 +681,7 @@ class Ctx:
     cli_only: dict[str, list[str]]
     by_owner: dict = field(default_factory=dict)
     all_records: list[dict] = field(default_factory=list)
+    dimensionless: set = field(default_factory=set)
 
     def __post_init__(self):
         idx = collections.defaultdict(list)
@@ -688,13 +793,14 @@ def _unit_split(name: str):
 def chk_unit_in_name(ctx):
     cands, bad = 0, []
     for r in recs(ctx, ALL, ("option", "field", "flag")):
-        if ctx.mirror(r):
+        # A CLI switch takes no value, so it carries no quantity to name a unit for.
+        if ctx.mirror(r) or (r["kind"] == "flag" and r.get("boolean")):
             continue
         hit = _unit_split(bare(r))
         if hit is None:
             continue
         cands += 1
-        if hit[1] is None:
+        if hit[1] is None and (r["surface"], r["name"]) not in ctx.dimensionless:
             bad.append((r, f"'{hit[0]}' names a physical quantity; add its unit suffix"))
     return cands, bad
 
@@ -1368,6 +1474,42 @@ _PY_ALLOWED = {
 }
 
 
+_SENTINEL_NUM = r"`*(?:-1|255|4294967295|0x(?:[fF]{2}){1,4})(?![\w.])`*"
+_MARKER_NUM = r"`*(?:255|4294967295|0x(?:[fF]{2}){1,4})(?![\w.])`*"
+_DOC_SENTINEL = re.compile(
+    rf"(?<![\w.]){_SENTINEL_NUM}\s*(?:for|=|means|to mean)\s+(?:an?\s+|the\s+)?"
+    r"(?:any|none|unknown|unset|no|not|all|every|auto|default|disabled?|off|the end|now|missing)\b"
+    rf"|\bsentinel\W+(?:\w+\W+){{0,2}}?{_SENTINEL_NUM}|(?<![\w.]){_SENTINEL_NUM}\s+sentinel"
+    # An all-ones marker given a meaning ("`0xFFFFFFFF` for clock bytes", "255 tags ...").
+    rf"|(?<![\w.]){_MARKER_NUM}\s*(?:\([^)]*\)\s*)?"
+    r"(?:for|=|means|to mean|tags|marks|denotes|signals|indicates|is|the|as)\b",
+    re.IGNORECASE,
+)
+# Zero standing for a default the library or project picks; "0 = no fade" is a real quantity.
+_DOC_ZERO_DEFAULT = re.compile(
+    r"(?<![\w.])`*0`*\s*(?:\([^)]*\)\s*)?(?:for|=|means|to mean|selects|uses|picks|keeps)\s+"
+    r"(?:the\s+|an?\s+)?(?:(?:library|engine|project)(?:'s)?\s+)?(?:own|default|auto|automatic)\b",
+    re.IGNORECASE,
+)
+# "no surface returns a -1 sentinel" states the rule rather than breaking it.
+_DOC_NEGATED = re.compile(r"\b(?:no|never|not|nor)\b[^.;]*$", re.IGNORECASE)
+
+
+def chk_doc_sentinel(ctx):
+    """A binding's docs never offer a magic number for "not given"; absence says it."""
+    cands = [r for r in recs(ctx, BINDINGS + ("cli-python",), KINDS) if r.get("doc_text")]
+    bad = []
+    for r in cands:
+        text = r["doc_text"]
+        for m in [*_DOC_SENTINEL.finditer(text), *_DOC_ZERO_DEFAULT.finditer(text)]:
+            if not _DOC_NEGATED.search(text[max(0, m.start() - 40) : m.start()]):
+                bad.append(
+                    (r, f"doc offers a sentinel ({m.group(0)!r}); document the omitted value")
+                )
+                break
+    return len(cands), bad
+
+
 def chk_python_public_names(ctx):
     cands, bad = 0, []
     seen = set()
@@ -1406,13 +1548,25 @@ def chk_python_public_names(ctx):
 
 
 def chk_cli_front_end_parity(ctx):
+    """Compares the two front-ends from the whole inventory, reporting the selected side(s)."""
     cands, bad = 0, []
+    every = [r for r in ctx.all_records if r["surface"] in CLI]
+    selected = {r["surface"] for r in ctx.records} & set(CLI)
     cmds = {
-        s: {r["name"]: r for r in recs(ctx, (s,), ("command",)) if not r.get("group")} for s in CLI
+        s: {
+            r["name"]: r
+            for r in every
+            if r["surface"] == s and r["kind"] == "command" and not r.get("group")
+        }
+        for s in CLI
     }
-    flags = {s: {r["name"]: r for r in recs(ctx, (s,), ("flag",))} for s in CLI}
+    flags = {
+        s: {r["name"]: r for r in every if r["surface"] == s and r["kind"] == "flag"} for s in CLI
+    }
     skip = set(ctx.cli_only.get("python_only", [])) | set(ctx.cli_only.get("native_only", []))
     for s, other in (("cli-python", "cli-native"), ("cli-native", "cli-python")):
+        if s not in selected:
+            continue
         for name, r in sorted(cmds[s].items()):
             cands += 1
             if name in skip:
@@ -1483,11 +1637,19 @@ CHECKS: tuple[Check, ...] = (
     Check("frequency-bounds", ALL, chk_frequency_bounds),
     Check("frequency-bounds:centre", ALL, chk_frequency_centre),
     Check("doc-comments", LANG, chk_doc_comments),
+    Check("absent-not-sentinel:doc", BINDINGS + ("cli-python",), chk_doc_sentinel),
     Check("python-public-names", ("python",), chk_python_public_names),
     Check("cli-front-end-parity", CLI, chk_cli_front_end_parity),
     Check("cli-positional-input", CLI, chk_cli_positional_input),
 )
 CHECK_IDS = {c.id for c in CHECKS}
+# Inputs a check cannot read yet on one surface; reported as not compared, never as clean.
+UNREAD = {
+    "absent-not-sentinel:doc": (
+        "cli-native",
+        "native CLI help (the registry carries no flag descriptions)",
+    ),
+}
 
 
 # ------------------------------------------------------------------ driver
@@ -1587,6 +1749,7 @@ def run(args) -> tuple[int, list[str], dict]:
     slugs = {r.get("slug") for r in rules}
     mirrors = load_mirrors(args.mirrors_file, problems)
     allow = load_allowlist(args.allowlist_file, problems, CHECK_IDS)
+    dimensionless = load_dimensionless(args.dimensionless_file, problems, records)
     entries = load_ledgers(args.ledger_dir, problems)
     problems += validate_ledger(entries, slugs, root)
     frozen = load_domains(args.domains_file, problems)
@@ -1703,6 +1866,7 @@ def run(args) -> tuple[int, list[str], dict]:
         set(inv.get("python_all", [])),
         inv.get("cli_only", {}),
         all_records=records,
+        dimensionless=dimensionless,
     )
     table = collections.Counter()
     for f in lfail:
@@ -1764,6 +1928,8 @@ def run(args) -> tuple[int, list[str], dict]:
             )
             failed = True
         out += [f"    {line_of(v)}" for v in viol]
+        if chk.id in UNREAD and UNREAD[chk.id][0] in selected:
+            out.append(f"    not compared: {UNREAD[chk.id][1]}")
         failed |= bool(viol)
         for v in viol:
             table[(v["domain"], v["surface"])] += 1
@@ -1843,6 +2009,7 @@ def parse_args(argv):
     ap.add_argument("--rules-file", type=Path, default=DEFAULT_RULES)
     ap.add_argument("--mirrors-file", type=Path, default=DEFAULT_MIRRORS)
     ap.add_argument("--allowlist-file", type=Path, default=DEFAULT_ALLOWLIST)
+    ap.add_argument("--dimensionless-file", type=Path, default=DEFAULT_DIMENSIONLESS)
     ap.add_argument("--root", type=Path, default=ROOT)
     return ap.parse_args(argv)
 

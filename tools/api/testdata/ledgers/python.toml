@@ -3,7 +3,7 @@
 [[entry]]
 kind = "function"
 old = "bpm_legacy"
-removed = true
+removed = "call detect_bpm"
 domain = "analysis"
 rule = "individual"
 

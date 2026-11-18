@@ -1,0 +1,199 @@
+# Option, field and flag names that unit-in-name would flag but whose quantity has no unit.
+#
+# One [[name]] per (surface, symbol); surface "cli" covers both CLI front-ends.
+#   surface   wasm | node | python | c | cli-python | cli-native | cli
+#   symbol    the qualified name as the inventory spells it (Type.field, fn(param), "cmd --flag")
+#   class     ratio | probability | correlation | normalized | magnitude
+#   range     [low, high]; inf for no upper bound
+#   evidence  what the number is measured against, in one line
+# A row that names nothing unit-in-name would flag is a validation problem, so a renamed or
+# removed symbol takes its row with it.
+
+[[name]]
+surface = "node"
+symbol = "ProjectTempoOptions.rampThreshold"
+class = "ratio"
+range = [0, inf]
+evidence = "finite, >= 0 (default 0.02); relative tempo change, no upper bound. src/mir/tempo_estimator_bridge.cpp:127-131; validated src/c_api/project_mir.cpp:85-86"
+
+[[name]]
+surface = "wasm"
+symbol = "ProjectTempoOptions.rampThreshold"
+class = "ratio"
+range = [0, inf]
+evidence = "finite, >= 0 (default 0.02); relative tempo change, no upper bound. src/mir/tempo_estimator_bridge.cpp:127-131; validated src/c_api/project_mir.cpp:85-86"
+
+[[name]]
+surface = "node"
+symbol = "VocalAnalysis.yinThreshold"
+class = "ratio"
+range = [0, 1]
+evidence = "lower bound 0 exclusive, upper 1 inclusive: a cutoff on the normalized YIN CMNDF. src/feature/pitch.cpp:199; refused at 0 by src/editing/vocal_edit/analysis.cpp:431"
+
+[[name]]
+surface = "node"
+symbol = "VocalAnalysisInput.yinThreshold"
+class = "ratio"
+range = [0, 1]
+evidence = "lower bound 0 exclusive, upper 1 inclusive: a cutoff on the normalized YIN CMNDF. src/feature/pitch.cpp:199; refused at 0 by src/editing/vocal_edit/analysis.cpp:431"
+
+[[name]]
+surface = "node"
+symbol = "VocalCreateOptions.yinThreshold"
+class = "ratio"
+range = [0, 1]
+evidence = "lower bound 0 exclusive, upper 1 inclusive: a cutoff on the normalized YIN CMNDF. src/feature/pitch.cpp:199; refused at 0 by src/editing/vocal_edit/analysis.cpp:431"
+
+[[name]]
+surface = "node"
+symbol = "VocalCreateRequest.yinThreshold"
+class = "ratio"
+range = [0, 1]
+evidence = "lower bound 0 exclusive, upper 1 inclusive: a cutoff on the normalized YIN CMNDF. src/feature/pitch.cpp:199; refused at 0 by src/editing/vocal_edit/analysis.cpp:431"
+
+[[name]]
+surface = "wasm"
+symbol = "VocalAnalysis.yinThreshold"
+class = "ratio"
+range = [0, 1]
+evidence = "lower bound 0 exclusive, upper 1 inclusive: a cutoff on the normalized YIN CMNDF. src/feature/pitch.cpp:199; refused at 0 by src/editing/vocal_edit/analysis.cpp:431"
+
+[[name]]
+surface = "wasm"
+symbol = "VocalAnalysisInput.yinThreshold"
+class = "ratio"
+range = [0, 1]
+evidence = "lower bound 0 exclusive, upper 1 inclusive: a cutoff on the normalized YIN CMNDF. src/feature/pitch.cpp:199; refused at 0 by src/editing/vocal_edit/analysis.cpp:431"
+
+[[name]]
+surface = "wasm"
+symbol = "VocalCreateOptions.yinThreshold"
+class = "ratio"
+range = [0, 1]
+evidence = "lower bound 0 exclusive, upper 1 inclusive: a cutoff on the normalized YIN CMNDF. src/feature/pitch.cpp:199; refused at 0 by src/editing/vocal_edit/analysis.cpp:431"
+
+[[name]]
+surface = "wasm"
+symbol = "VocalCreateRequest.yinThreshold"
+class = "ratio"
+range = [0, 1]
+evidence = "lower bound 0 exclusive, upper 1 inclusive: a cutoff on the normalized YIN CMNDF. src/feature/pitch.cpp:199; refused at 0 by src/editing/vocal_edit/analysis.cpp:431"
+
+[[name]]
+surface = "node"
+symbol = "VocalAnalysis.voicedThreshold"
+class = "probability"
+range = [0, 1]
+evidence = "both bounds inclusive; voiced probability. validated src/editing/vocal_edit/analysis.cpp:432, :501-506; semantics src/editing/note_model/note_extractor.cpp:87"
+
+[[name]]
+surface = "node"
+symbol = "VocalAnalysisInput.voicedThreshold"
+class = "probability"
+range = [0, 1]
+evidence = "both bounds inclusive; voiced probability. validated src/editing/vocal_edit/analysis.cpp:432, :501-506; semantics src/editing/note_model/note_extractor.cpp:87"
+
+[[name]]
+surface = "node"
+symbol = "VocalCreateOptions.voicedThreshold"
+class = "probability"
+range = [0, 1]
+evidence = "both bounds inclusive; voiced probability. validated src/editing/vocal_edit/analysis.cpp:432, :501-506; semantics src/editing/note_model/note_extractor.cpp:87"
+
+[[name]]
+surface = "node"
+symbol = "VocalCreateRequest.voicedThreshold"
+class = "probability"
+range = [0, 1]
+evidence = "both bounds inclusive; voiced probability. validated src/editing/vocal_edit/analysis.cpp:432, :501-506; semantics src/editing/note_model/note_extractor.cpp:87"
+
+[[name]]
+surface = "wasm"
+symbol = "VocalAnalysis.voicedThreshold"
+class = "probability"
+range = [0, 1]
+evidence = "both bounds inclusive; voiced probability. validated src/editing/vocal_edit/analysis.cpp:432, :501-506; semantics src/editing/note_model/note_extractor.cpp:87"
+
+[[name]]
+surface = "wasm"
+symbol = "VocalAnalysisInput.voicedThreshold"
+class = "probability"
+range = [0, 1]
+evidence = "both bounds inclusive; voiced probability. validated src/editing/vocal_edit/analysis.cpp:432, :501-506; semantics src/editing/note_model/note_extractor.cpp:87"
+
+[[name]]
+surface = "wasm"
+symbol = "VocalCreateOptions.voicedThreshold"
+class = "probability"
+range = [0, 1]
+evidence = "both bounds inclusive; voiced probability. validated src/editing/vocal_edit/analysis.cpp:432, :501-506; semantics src/editing/note_model/note_extractor.cpp:87"
+
+[[name]]
+surface = "wasm"
+symbol = "VocalCreateRequest.voicedThreshold"
+class = "probability"
+range = [0, 1]
+evidence = "both bounds inclusive; voiced probability. validated src/editing/vocal_edit/analysis.cpp:432, :501-506; semantics src/editing/note_model/note_extractor.cpp:87"
+
+[[name]]
+surface = "cli-native"
+symbol = "boundaries --threshold"
+class = "ratio"
+range = [0, inf]
+evidence = "peak threshold relative to the local novelty maximum"
+
+[[name]]
+surface = "cli-native"
+symbol = "boundaries --absolute-threshold"
+class = "normalized"
+range = [0, inf]
+evidence = "absolute floor on the normalized novelty curve"
+
+[[name]]
+surface = "cli"
+symbol = "sections --threshold"
+class = "normalized"
+range = [0, inf]
+evidence = "boundary threshold on the normalized novelty curve"
+
+[[name]]
+surface = "cli"
+symbol = "chords --threshold"
+class = "correlation"
+range = [0, 1]
+evidence = "chord-template correlation below which a frame is no chord"
+
+[[name]]
+surface = "cli"
+symbol = "pitch --threshold"
+class = "ratio"
+range = [0, 1]
+evidence = "YIN aperiodicity cutoff on the cumulative-mean-normalized difference"
+
+[[name]]
+surface = "cli-native"
+symbol = "melody --threshold"
+class = "ratio"
+range = [0, 1]
+evidence = "YIN aperiodicity cutoff on the cumulative-mean-normalized difference"
+
+[[name]]
+surface = "cli"
+symbol = "vocal-notes --yin-threshold"
+class = "ratio"
+range = [0, 1]
+evidence = "upper bound of the pYIN swept threshold distribution"
+
+[[name]]
+surface = "cli"
+symbol = "vocal-notes --voiced-threshold"
+class = "probability"
+range = [0, 1]
+evidence = "voiced-probability cutoff"
+
+[[name]]
+surface = "cli-native"
+symbol = "vector-normalize --threshold"
+class = "magnitude"
+range = [0, inf]
+evidence = "norm floor below which a vector is left unnormalized, in the input vector's own unitless scale"

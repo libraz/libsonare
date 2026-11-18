@@ -73,7 +73,15 @@ class CheckerCase(unittest.TestCase):
             (d / f"{s}.toml").write_text(files.get(s, ""), encoding="utf-8")
         return d
 
-    def run_check(self, *extra, ledger_dir=None, mirrors=None, allowlist=None, domains_file=None):
+    def run_check(
+        self,
+        *extra,
+        ledger_dir=None,
+        mirrors=None,
+        allowlist=None,
+        domains_file=None,
+        dimensionless=None,
+    ):
         inv_path = self.dir / "inventory.json"
         inv_path.write_text(json.dumps(self.inv), encoding="utf-8")
         argv = [
@@ -89,6 +97,8 @@ class CheckerCase(unittest.TestCase):
             str(allowlist or TD / "allowlist.toml"),
             "--domains-file",
             str(domains_file or TD / "domains.json"),
+            "--dimensionless-file",
+            str(dimensionless or TD / "dimensionless.toml"),
             "--root",
             str(ROOT),
             *extra,
@@ -213,6 +223,46 @@ class LedgerValidation(CheckerCase):
 
     def test_two_forms(self):
         self.assertProblem("needs exactly one of new / removed / changed, has 2", removed=True)
+
+    def test_removed_needs_the_callers_replacement(self):
+        self.assertProblem(
+            "removed needs the caller's replacement as its text, or true with"
+            " no_replacement = <reason>",
+            new=None,
+            removed=True,
+        )
+        self.assertProblem(
+            "removed must be the caller's replacement, or true", new=None, removed=" "
+        )
+
+    def test_no_replacement_goes_only_with_removed_true(self):
+        self.assertProblem(
+            "no_replacement is only for removed = true",
+            new=None,
+            removed="call x",
+            no_replacement="gone",
+        )
+        self.assertProblem("no_replacement is only for removed = true", no_replacement="gone")
+        lines = self.problems(self.entry(new=None, removed=True, no_replacement="gone") + "x = 1\n")
+        self.assertFalse(any("no_replacement" in x for x in lines), lines)
+
+    def test_a_name_takes_one_row(self):
+        lines = self.problems(self.entry() + "\n[[entry]]\n" + self.entry(new="other"))
+        self.assertIn(
+            "  python.toml entry 2 (detect_bpm): a second row for detect_bpm"
+            " (first at python.toml entry 1 (detect_bpm))",
+            lines,
+        )
+
+    def test_a_member_of_a_removed_name_takes_no_row(self):
+        owner = self.entry(kind="class", old="Bpm", new=None, removed="use detect_bpm")
+        member = self.entry(kind="method", old="Bpm.value", new=None, removed="read it")
+        lines = self.problems(owner + "\n[[entry]]\n" + member)
+        self.assertIn(
+            "  python.toml entry 2 (Bpm.value): Bpm is removed, which already covers removing"
+            " Bpm.value",
+            lines,
+        )
 
     def test_unknown_kind(self):
         self.assertProblem("unknown kind 'func'", kind="func")
@@ -410,7 +460,12 @@ class Conventions(CheckerCase):
             self.assertIn("  check options-struct:struct-size: checked 0, violations 0", lines)
             self.assertIn(self.ZERO_FAIL, lines)
             self.assertFalse(
-                any(x.lstrip().startswith("not compared:") and "v1.10.0" not in x for x in lines)
+                any(
+                    x.lstrip().startswith("not compared:")
+                    and "v1.10.0" not in x
+                    and "native CLI help" not in x
+                    for x in lines
+                )
             )
 
     def test_c_free_accepts_the_plain_buffer_set_and_names_the_rest(self):
@@ -761,6 +816,145 @@ class NumericTokens(CheckerCase):
                 "node option Bus(layout): token '5_1' is not lowerCamel",
             ],
         )
+
+
+class CliFrontEnds(CheckerCase):
+    def test_one_front_end_run_compares_against_the_other(self):
+        self.add(_rec("cli-native", "flag", "bpm --window-sec", owner="bpm", member="window-sec"))
+        rows = {}
+        for surface in ("cli", "cli-python", "cli-native"):
+            _, lines = self.run_check("--surface", surface, "--check", "cli-front-end-parity")
+            rows[surface] = sorted(x.strip() for x in lines if "missing on" in x)
+        self.assertEqual(rows["cli"], ["cli-native flag bpm --window-sec: missing on cli-python"])
+        self.assertEqual(rows["cli-native"], rows["cli"])
+        self.assertEqual(rows["cli-python"], [])
+
+    def test_a_switch_names_no_quantity(self):
+        for boolean, expected in ((True, []), (False, ["cli-native flag bpm --auto-threshold"])):
+            with self.subTest(boolean=boolean):
+                self.setUp()
+                self.add(
+                    _rec(
+                        "cli-native",
+                        "flag",
+                        "bpm --auto-threshold",
+                        owner="bpm",
+                        member="auto-threshold",
+                        boolean=boolean,
+                    )
+                )
+                _, lines = self.run_check("--surface", "cli-native", "--check", "unit-in-name")
+                bad = [x.strip().split(":")[0] for x in lines if "names a physical quantity" in x]
+                self.assertEqual(bad, expected)
+
+
+class CliHelpSentinel(CheckerCase):
+    def test_python_cli_help_text_is_read(self):
+        self.add(
+            _rec(
+                "cli-python",
+                "flag",
+                "bpm --bands",
+                owner="bpm",
+                member="bands",
+                doc_text="Octave-band count (0 = library default)",
+            )
+        )
+        _, lines = self.run_check("--surface", "cli-python", "--check", "absent-not-sentinel:doc")
+        self.assertTrue(
+            any("cli-python flag bpm --bands: doc offers a sentinel" in x for x in lines)
+        )
+
+    def test_native_help_is_reported_unread(self):
+        unread = "    not compared: native CLI help (the registry carries no flag descriptions)"
+        _, lines = self.run_check("--surface", "cli", "--check", "absent-not-sentinel:doc")
+        self.assertIn(unread, lines)
+        _, lines = self.run_check("--surface", "cli-python", "--check", "absent-not-sentinel:doc")
+        self.assertNotIn(unread, lines)
+
+
+class Dimensionless(CheckerCase):
+    ROW = (
+        '[[name]]\nsurface = "node"\nsymbol = "Probe.threshold"\nclass = "{cls}"\n'
+        'range = [0, 1]\nevidence = "a correlation"\n'
+    )
+
+    def run_dim(self, body, with_record=True):
+        if with_record:
+            self.add(_rec("node", "field", "Probe.threshold", owner="Probe", member="threshold"))
+        dim = self.write("d.toml", body)
+        _, lines = self.run_check("--surface", "node", "--check", "unit-in-name", dimensionless=dim)
+        flagged = [x.strip() for x in lines if x.strip().startswith("node field Probe.threshold:")]
+        problems = [x.strip() for x in lines if x.startswith("  dimensionless_names.toml")]
+        return flagged, problems
+
+    def test_a_listed_name_takes_no_unit(self):
+        flagged, problems = self.run_dim("")
+        self.assertEqual(len(flagged), 1, flagged)
+        self.setUp()
+        flagged, problems = self.run_dim(self.ROW.format(cls="correlation"))
+        self.assertEqual((flagged, problems), ([], []))
+
+    def test_a_row_must_be_well_formed_and_name_a_candidate(self):
+        _, problems = self.run_dim(self.ROW.format(cls="percent"))
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn("class must be one of", problems[0])
+        self.setUp()
+        _, problems = self.run_dim(self.ROW.format(cls="ratio"), with_record=False)
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn("names nothing unit-in-name would flag", problems[0])
+
+
+class DocSentinel(CheckerCase):
+    def run_doc(self, surface, text):
+        self.add(
+            _rec(surface, "field", "Probe.value", owner="Probe", member="value", doc_text=text)
+        )
+        _, lines = self.run_check("--surface", surface, "--check", "absent-not-sentinel:doc")
+        return [x.strip() for x in lines if x.startswith(f"    {surface} field Probe.value")]
+
+    def test_a_documented_sentinel_fails(self):
+        for surface, text in (
+            ("node", "Slash-bass pitch class 0..11 or 255 for none. Default 255."),
+            ("wasm", "Root pitch class 0..11 (C=0) or `255` for unknown."),
+            ("node", "MIDI channel 0..15. Omit for the any-channel sentinel `255`."),
+            ("python", "``filter_channel`` (``-1`` = any), ``remap_channel`` (``-1`` = no remap)"),
+            ("node", "Destination id, or the transport sentinel `0xFFFFFFFF` for every port."),
+            (
+                "wasm",
+                (
+                    "Originating track destination, or `0xFFFFFFFF` for clock and transport bytes"
+                    " meant for every port."
+                ),
+            ),
+            ("python", "``destination_id`` of ``0xFFFFFFFF`` (4294967295) tags a clock byte."),
+            ("python", "Analyzer octave-band count (0 = library default)."),
+            ("wasm", "Gate threshold; ``0`` keeps the library default."),
+            ("node", "Block size in frames; 0 selects the engine's own."),
+            (
+                "wasm",
+                "`0` is the master mix, `33..40` the buses, and `0xFFFF` the input-monitor tap.",
+            ),
+        ):
+            with self.subTest(text=text):
+                self.setUp()
+                bad = self.run_doc(surface, text)
+                self.assertEqual(len(bad), 1, bad)
+                self.assertIn("doc offers a sentinel", bad[0])
+
+    def test_absence_negation_and_real_quantities_pass(self):
+        for text in (
+            "Root pitch class 0..11 (C=0). Omit when the root is unknown.",
+            "Throws RangeError for an unknown name; no surface returns a `-1` sentinel.",
+            "True-peak ceiling in dBTP, for example -1 for streaming delivery.",
+            "Velocity 1..255 for the note on.",
+            "Full 32-bit value, `0`..`4294967295`.",
+            "Chroma high-pass corner in Hz; 0 = no high-pass.",
+            "Fade-in length in PPQ, 0 for no fade.",
+        ):
+            with self.subTest(text=text):
+                self.setUp()
+                self.assertEqual(self.run_doc("node", text), [])
 
 
 class MirrorSchema(CheckerCase):
@@ -1146,12 +1340,22 @@ class UpgradeNotes(unittest.TestCase):
         self.assertIn(
             "### WASM (`.`)\n\n| 1.x | 2.0.0 |\n|---|---|\n| `getBpm` | `detectBpm` |", text
         )
-        self.assertIn("| `bpm --verbose` (native CLI only) | removed |", text)
+        self.assertIn(
+            "| `bpm --verbose` (native CLI only) | removed: drop the flag; the output is the same |",
+            text,
+        )
         self.assertIn("| `detect_bpm` | sample_rate is a required argument. |", text)
         self.assertLess(
             text.index("## Title of sample-rate-required"), text.index("## Title of individual")
         )
         self.assertNotIn("## Title of teardown", text)
+
+    def test_removed_row_says_what_replaces_it(self):
+        self.assertEqual(upgrade_notes._target({"removed": "call x"}), "removed: call x")
+        self.assertEqual(
+            upgrade_notes._target({"removed": True, "no_replacement": "gone"}),
+            "removed, no replacement: gone",
+        )
 
     def test_changed_row_leads_with_its_target(self):
         e = {"old": "a", "changed": "takes an object", "to": "b"}

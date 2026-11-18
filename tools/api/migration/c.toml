@@ -8,7 +8,9 @@
 #   kind     function | method | class | type | field | option | value | export | flag | command
 #   old      the 1.x public name, spelled as below; it must exist in v1.10.0
 #   new      the 2.0.0 name (old must be absent, new present, same kind and entry)
-#   removed  true when the name is gone with no replacement (old must be absent)
+#   removed  what a caller writes instead, one line (old must be absent); true only
+#            with no_replacement, when nothing public does the job any more
+#   no_replacement  with removed = true: why, in terms a caller can act on
 #   changed  one line saying what a caller must change; requires
 #            test = "<file>::<case name substring>", which must exist. Without to,
 #            old must still be present (in any kind)
@@ -19,6 +21,7 @@
 #   entry    WASM subpath ("./analysis", "./worklet", ...); omitted means "."
 #   frontend CLI ledger only: "python" or "native" to check one front-end; omitted checks both
 # Exactly one of new / removed / changed per entry.
+# One entry per name; a member of a removed name takes no entry of its own.
 #
 # Names by kind:
 #   function  exported name on this surface: analyzeBpm (wasm/node), analyze_bpm (python),
@@ -72,14 +75,14 @@ rule = "abi-probes"
 [[entry]]
 kind = "function"
 old = "sonare_has_ffmpeg_support"
-removed = true
+removed = 'call sonare_has_feature("ffmpeg"), which returns 1 when the FFmpeg decode path is compiled in'
 domain = "core"
 rule = "abi-probes"
 
 [[entry]]
 kind = "function"
 old = "sonare_vocal_available"
-removed = true
+removed = 'call sonare_has_feature("vocalEdit"), which returns 1 when vocal editing is compiled in'
 domain = "core"
 rule = "abi-probes"
 
@@ -121,7 +124,7 @@ rule = "c-error-path"
 [[entry]]
 kind = "field"
 old = "SonareRirSynthResult.has_error"
-removed = true
+removed = 'check the SonareError that sonare_synthesize_rir returns: an invalid room or placement now returns SONARE_ERROR_INVALID_PARAMETER with the first diagnostic as "code: message" in sonare_last_error_message()'
 domain = "effects"
 rule = "c-error-path"
 
@@ -230,7 +233,7 @@ test = "tests/api/sonare_c_core_test.cpp::sonare_downmix reports the unnormalise
 [[entry]]
 kind = "function"
 old = "sonare_downmix_ex"
-removed = true
+removed = "call sonare_downmix with a SonareDownmixOptions filled by sonare_downmix_options_init, setting include_lfe and normalize there"
 domain = "analysis"
 rule = "options-struct"
 
@@ -613,14 +616,14 @@ rule = "seconds-suffix"
 [[entry]]
 kind = "function"
 old = "sonare_analyze_json_with_progress"
-removed = true
+removed = "call sonare_analyze_json_ex_with_progress with options NULL and cancel_cb NULL"
 domain = "analysis"
 rule = "progress-callback"
 
 [[entry]]
 kind = "function"
 old = "sonare_analyze_json_with_progress_ex"
-removed = true
+removed = "call sonare_analyze_json_ex_with_progress with options NULL, passing the same cancel_cb and cancel_user_data"
 domain = "analysis"
 rule = "progress-callback"
 
@@ -643,7 +646,7 @@ test = "tests/api/sonare_c_acoustic_test.cpp::refuses a room config below its st
 [[entry]]
 kind = "export"
 old = "SONARE_REVERB_MODEL_DEFAULT"
-removed = true
+removed = "start the config from sonare_rir_synth_config_init or sonare_room_morph_config_init, which sets late_model to the default (Eyring), or write SONARE_REVERB_MODEL_EYRING"
 domain = "effects"
 rule = "absent-not-sentinel"
 

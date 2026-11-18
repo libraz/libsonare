@@ -3,7 +3,7 @@
 [[entry]]
 kind = "flag"
 old = "bpm --verbose"
-removed = true
+removed = "drop the flag; the output is the same"
 frontend = "native"
 domain = "analysis"
 rule = "individual"

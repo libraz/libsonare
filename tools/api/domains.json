@@ -614,6 +614,7 @@
 "engine_telemetry_ring_buffer": {"domain": "engine", "surfaces": ["wasm"]},
 "engine_telemetry_ring_protocol_version": {"domain": "engine", "surfaces": ["wasm"]},
 "engine_telemetry_ring_read_result": {"domain": "engine", "surfaces": ["wasm"]},
+"engine_telemetry_target": {"domain": "engine", "surfaces": ["node", "wasm"]},
 "engine_telemetry_type": {"domain": "engine", "surfaces": ["node", "python", "wasm"]},
 "engine_tempo_segment": {"domain": "engine", "surfaces": ["wasm"]},
 "engine_time_signature_segment": {"domain": "engine", "surfaces": ["wasm"]},

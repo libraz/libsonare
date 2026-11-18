@@ -183,6 +183,7 @@ def ts_records(surface: str, rows: list[dict], entry_label: dict[str, str]) -> l
             r["line"],
             r["doc"],
             entries=entries,
+            doc_text=r.get("docText", ""),
             ts_kind=tk,
             sigs=[_sig(s) for s in r["sigs"]],
             type=r.get("type", ""),
@@ -239,6 +240,7 @@ def ts_records(surface: str, rows: list[dict], entry_label: dict[str, str]) -> l
                     m["doc"],
                     owner=name,
                     member=m["name"],
+                    doc_text=m.get("docText", ""),
                     ts_kind=m["kind"],
                     static=m["static"],
                     optional=m["optional"],
@@ -336,6 +338,16 @@ def _docstring(node: ast.AST | None) -> bool:
     if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
         return bool(ast.get_docstring(node))
     return False
+
+
+def _docstring_text(*nodes: ast.AST | None) -> str:
+    """The first docstring among ``nodes`` (implementation, then stub)."""
+    for node in nodes:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            text = ast.get_docstring(node)
+            if text:
+                return text
+    return ""
 
 
 def _attr_doc(tree: ast.AST | None, node: ast.AST | None) -> bool:
@@ -612,6 +624,7 @@ def _py_function(surface, qual, f, node, stub, file, line, extra, kind="function
         f.line if f else line,
         has_doc,
         sigs=[{"params": params, "returns": returns}],
+        doc_text=_docstring_text(node, stub),
         owner=owner,
         member=qual.split(".")[-1] if owner else "",
         **extra,
@@ -658,6 +671,7 @@ def _py_class(pkg, name, node, stub, stem, file, pick_sig, sig_names, common):
         file,
         node.lineno,
         has_doc,
+        doc_text=_docstring_text(node, stub),
         py_kind=py_kind,
         bases=bases,
         decorators=decos,
@@ -1043,6 +1057,7 @@ _NATIVE_BUILDERS = (
     "|mode_mask_value|make_option"
 )
 _NATIVE_OPTION = re.compile(rf"\b(?:{_NATIVE_BUILDERS})\s*\(\s*\"([^\"]+)\"")
+_NATIVE_SWITCH = re.compile(r"\bflag\s*\(\s*\"([^\"]+)\"")
 _NATIVE_FIXED = {
     "output_value": "output",
     "required_output": "output",
@@ -1106,14 +1121,20 @@ def _native_cli(root: Path) -> tuple[dict[str, dict], int]:
                 continue
             flags = ["json"] + _NATIVE_OPTION.findall(call)
             flags += [v for k, v in _NATIVE_FIXED.items() if re.search(rf"\b{k}\s*\(", call)]
+            switches = {"json", *_NATIVE_SWITCH.findall(call)}
             for n in names:
                 entry = commands.setdefault(
-                    n, {"file": rel, "line": _line_of(raw, m.start()), "flags": []}
+                    n,
+                    {"file": rel, "line": _line_of(raw, m.start()), "flags": [], "switches": set()},
                 )
+                entry["switches"] |= switches
                 for fl in flags:
                     if fl not in entry["flags"]:
                         entry["flags"].append(fl)
     return commands, len(files)
+
+
+_PY_SWITCH_ACTIONS = {"store_true", "store_false", "store_const", "count", "BooleanOptionalAction"}
 
 
 class _PyCliScan:
@@ -1127,6 +1148,8 @@ class _PyCliScan:
         self.parent_flags: dict[str, list[str]] = collections.defaultdict(list)
         self.helpers: dict[str, list[str]] = {}
         self.commands: dict[str, dict] = {}
+        self.switches: set[str] = set()
+        self.help: dict[str, list[str]] = collections.defaultdict(list)
 
     @staticmethod
     def _loops(tree: ast.AST) -> dict[str, list[str]]:
@@ -1173,6 +1196,28 @@ class _PyCliScan:
             self._scan_helpers(tree, loops)
         for path, tree in trees:
             self._scan_commands(tree, path, self._loops(tree))
+        self._scan_switches(trees)
+
+    def _scan_switches(self, trees) -> None:
+        """Long flags every declaration of which takes no value, and each flag's help texts."""
+        switched, valued = set(), set()
+        for _, tree in trees:
+            loops = self._loops(tree)
+            for c in ast.walk(tree):
+                if not (isinstance(c, ast.Call) and getattr(c.func, "attr", "") == "add_argument"):
+                    continue
+                action = next((_unparse(k.value) for k in c.keywords if k.arg == "action"), "")
+                bucket = (
+                    switched if action.strip("'\"").split(".")[-1] in _PY_SWITCH_ACTIONS else valued
+                )
+                names = self._long_flags(c, loops)
+                bucket.update(names)
+                text = next((k.value for k in c.keywords if k.arg == "help"), None)
+                if isinstance(text, ast.Constant) and isinstance(text.value, str):
+                    for n in names:
+                        if text.value not in self.help[n]:
+                            self.help[n].append(text.value)
+        self.switches = switched - valued
 
     def _scan_parents(self, tree: ast.AST, fname: str, loops) -> None:
         for node in ast.walk(tree):
@@ -1362,6 +1407,7 @@ def extract_cli(root: Path) -> tuple[list[dict], dict[str, int], dict]:
     for surface, cmds in (("cli-python", py_cmds), ("cli-native", nat_cmds)):
         for name in sorted(cmds):
             c = cmds[name]
+            switches = c["switches"] if surface == "cli-native" else scan.switches
             group = any(other.startswith(name + ".") for other in cmds)
             out.append(_record(surface, "command", name, c["file"], c["line"], True, group=group))
             for fl in sorted(c["flags"]):
@@ -1375,6 +1421,10 @@ def extract_cli(root: Path) -> tuple[list[dict], dict[str, int], dict]:
                         True,
                         owner=name,
                         member=fl,
+                        boolean=fl in switches,
+                        doc_text="\n".join(scan.help.get(fl, []))
+                        if surface == "cli-python"
+                        else "",
                     )
                 )
     contract = json.loads((root / CLI_CONTRACT).read_text(encoding="utf-8"))
