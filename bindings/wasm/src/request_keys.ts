@@ -1976,7 +1976,6 @@ const PitchYinRequestKeys = keysOf<PitchYinRequest>()([
   'frameLength',
   'hopLength',
   'threshold',
-  'fillNa',
   'f0MinHz',
   'f0MaxHz',
   'validate',

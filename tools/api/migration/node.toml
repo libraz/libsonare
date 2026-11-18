@@ -2234,7 +2234,7 @@ rule = "one-positional-form"
 [[entry]]
 kind = "option"
 old = "pitchYin(fillNa)"
-removed = "pass fillNa as a field of PitchYinRequest"
+removed = "had no effect: YIN reads no fill flag, so PitchYinRequest has no fillNa (pitchPyin keeps it)"
 domain = "analysis"
 rule = "no-positional-bools"
 
@@ -7288,7 +7288,7 @@ rule = "one-positional-form"
 [[entry]]
 kind = "option"
 old = "Audio.pitchYin(fillNa)"
-removed = "pass fillNa as a field of PitchYinRequest"
+removed = "had no effect: YIN reads no fill flag, so PitchYinRequest has no fillNa (pitchPyin keeps it)"
 domain = "core"
 rule = "no-positional-bools"
 

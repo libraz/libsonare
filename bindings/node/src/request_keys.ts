@@ -1978,7 +1978,6 @@ export const REQUEST_KEYS = {
     'f0MinHz',
     'f0MaxHz',
     'threshold',
-    'fillNa',
     'validate',
   ),
   pitchPyin: keySet(

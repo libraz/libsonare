@@ -153,14 +153,15 @@ export interface PitchYinRequest {
   f0MaxHz?: number;
   /** YIN threshold in [0, 1] for voiced/unvoiced decisions. Default `0.1`. */
   threshold?: number;
-  /** pYIN: fill unvoiced f0 with zero. Retained but ignored by YIN, which always estimates f0. */
-  fillNa?: boolean;
   /** `false` skips the NaN/Inf pre-scan of the samples. Default `true`. */
   validate?: boolean;
 }
 
 /** Request for {@link pitchPyin}. */
-export type PitchPyinRequest = PitchYinRequest;
+export interface PitchPyinRequest extends PitchYinRequest {
+  /** Return 0 for unvoiced f0 frames instead of NaN. Default `false`. */
+  fillNa?: boolean;
+}
 
 /** Request for {@link piptrack}. */
 export interface PiptrackRequest {
@@ -586,7 +587,7 @@ export function piptrack(...args: unknown[]): PiptrackResult {
 }
 
 function pitchTrack(fnName: 'pitchYin' | 'pitchPyin', args: unknown[]): PitchResult {
-  const request = sampleOneShot<PitchYinRequest>(fnName, args);
+  const request = sampleOneShot<PitchPyinRequest>(fnName, args);
   assertAudioInput(fnName, request.samples, request.sampleRate, request);
   // frameLength is a framing window, not a transform size, so it carries no evenness rule.
   assertPositiveInteger(fnName, request.frameLength ?? 2048, 'frameLength');
@@ -602,7 +603,8 @@ function pitchTrack(fnName: 'pitchYin' | 'pitchPyin', args: unknown[]): PitchRes
     f0MinHz,
     f0MaxHz,
     request.threshold ?? 0.1,
-    request.fillNa ?? false,
+    // YIN reads no fill flag; its request refuses fillNa as an unknown key.
+    fnName === 'pitchPyin' ? (request.fillNa ?? false) : false,
   );
 }
 

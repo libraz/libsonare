@@ -499,20 +499,17 @@ describe('newly exposed WASM functions', () => {
       f0MinHz: 65,
       f0MaxHz: 2093,
       threshold: 0.3,
-      fillNa: false,
     });
     expect(nanRes.f0.every((v) => Number.isFinite(v))).toBe(true);
     expect(nanRes.voicedFlag.every((v) => !v)).toBe(true);
+  });
 
-    const filled = pitchYin(silence, SR, {
-      frameLength: 2048,
-      hopLength: 512,
-      f0MinHz: 65,
-      f0MaxHz: 2093,
-      threshold: 0.3,
-      fillNa: true,
-    });
-    expect(filled.f0.every((v) => Number.isFinite(v))).toBe(true);
+  it('pitchYin refuses fillNa, which only pYIN reads', () => {
+    const silence = new Float32Array(SR);
+    expect(() => pitchYin({ samples: silence, sampleRate: SR, fillNa: true } as never)).toThrow(
+      /fillNa/,
+    );
+    expect(() => pitchYin(silence, SR, { fillNa: false } as never)).toThrow(/fillNa/);
   });
 
   it('pitchPyin fillNa controls the unvoiced value', () => {

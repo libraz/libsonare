@@ -488,7 +488,6 @@ describe('features', () => {
       f0MinHz: 80,
       f0MaxHz: 1000,
       threshold: 0.2,
-      fillNa: true,
     };
     expect(pitchYin({ samples: tone, sampleRate: SR, ...yinOptions }).f0).toEqual(
       pitchYin(tone, SR, yinOptions).f0,

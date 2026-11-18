@@ -69,7 +69,6 @@ const pitchOptions = {
   f0MinHz: 80,
   f0MaxHz: 1000,
   threshold: 0.15,
-  fillNa: true,
 };
 
 /** Audio method, module function it delegates to, and a non-default option bag. */
@@ -88,7 +87,7 @@ const delegations: Array<[string, Record<string, unknown>]> = [
   ['zeroCrossingRate', { frameLength: 1024, hopLength: 256 }],
   ['rmsEnergy', { frameLength: 1024, hopLength: 256 }],
   ['pitchYin', pitchOptions],
-  ['pitchPyin', pitchOptions],
+  ['pitchPyin', { ...pitchOptions, fillNa: true }],
   ['detectOnsets', {}],
   ['chordFunctionalAnalysis', { keyRoot: 0, keyMode: 'major' }],
   ['analyzeBpm', {}],

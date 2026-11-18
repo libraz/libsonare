@@ -1118,11 +1118,9 @@ const ROWS: Row[] = [
         f0MinHz: 250,
         f0MaxHz: 500,
         threshold: 0.5,
-        fillNa: true,
       },
     },
     invalid: { hopLength: 0 },
-    inert: { fillNa: 'the core YIN reads no fill_na; only pYIN does' },
   },
   {
     name: 'pitchPyin',

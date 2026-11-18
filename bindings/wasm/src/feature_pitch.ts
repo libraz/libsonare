@@ -37,8 +37,6 @@ export interface PitchYinRequest extends ValidateOptions {
   f0MaxHz?: number;
   /** YIN threshold. Default 0.1. */
   threshold?: number;
-  /** Retained for compatibility; YIN always returns a finite per-frame estimate. */
-  fillNa?: boolean;
 }
 
 /** pYIN pitch request. */
@@ -132,7 +130,8 @@ export function pitchYin(...args: unknown[]): PitchResult {
     f0MinHz,
     f0MaxHz,
     r.threshold ?? 0.1,
-    r.fillNa ?? false,
+    // YIN reads no fill flag; its request refuses fillNa as an unknown key.
+    false,
   );
 }
 
