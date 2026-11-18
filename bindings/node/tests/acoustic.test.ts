@@ -123,7 +123,8 @@ describe('geometric room acoustics', () => {
 
     const samples = new Float32Array(4000);
     samples[0] = 1.0;
-    const morph = { lengthM: 12, widthM: 9, heightM: 5, absorption: 0.08, wet: 0.7 };
+    // A small, damped room keeps the render short; the crossfade still moves the output.
+    const morph = { lengthM: 7, widthM: 5, heightM: 3, absorption: 0.3, wet: 0.7 };
     const morphOmitted = roomMorph(samples, 48000, morph);
     expect(Array.from(roomMorph(samples, 48000, { ...morph, crossfadeMs: 0 }).audio)).not.toEqual(
       Array.from(morphOmitted.audio),
