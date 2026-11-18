@@ -27055,7 +27055,7 @@ test = "bindings/wasm/tests/surface/effects-sep.test.ts::nnFilter refuses a zero
 [[entry]]
 kind = "field"
 old = "ProjectLoopRecordingDesc.audioChannels"
-changed = "required with interleaved audio: the channel count of the caller's capture has no default (was 1); planar audio takes its count from the channel arrays, and its type has no audioChannels"
+changed = "required with interleaved audio: the channel count of the caller's capture has no default (was 1); planar audio takes its count from the channel arrays and refuses audioChannels with TypeError"
 domain = "project"
 rule = "num-channels"
 test = "bindings/wasm/tests/project-edit-ops.test.ts::addLoopRecordingTakes refuses interleaved audio without its channel count or sample rate"
