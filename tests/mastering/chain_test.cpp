@@ -1094,8 +1094,9 @@ TEST_CASE("MasteringChain stereo denoise builds one mask from both channels",
 TEST_CASE("StreamingMasteringChain prepare leaves no partial chain when a stage throws",
           "[mastering][chain][streaming]") {
   MasteringChainConfig config;
-  config.eq.tilt.enabled = true;                      // stage 1: prepares at any rate
-  config.dynamics.multiband_comp.enabled = true;      // stage 5: 2 kHz crossover by default
+  config.eq.tilt.enabled = true;                  // stage 1: prepares at any rate
+  config.dynamics.multiband_comp.enabled = true;  // stage 5: split at 6 kHz below
+  config.dynamics.multiband_comp.config.crossover.cutoffs_hz = {120.0f, 6000.0f};
   config.maximizer.true_peak_limiter.enabled = true;  // the tail that must never go missing
   StreamingMasteringChain chain(config);
 
@@ -1106,9 +1107,9 @@ TEST_CASE("StreamingMasteringChain prepare leaves no partial chain when a stage 
   float* channels[] = {left.data(), right.data()};
   REQUIRE_NOTHROW(chain.process_block(channels, 2, 512));
 
-  // 3 kHz puts Nyquist at 1.5 kHz, below the crossover's default 2 kHz split,
-  // so the multiband stage throws after eq.tilt has already been built.
-  REQUIRE_THROWS_AS(chain.prepare(3000.0, 512, 2), sonare::SonareException);
+  // 8 kHz is a rate prepare() accepts, but its 4 kHz Nyquist sits below the 6 kHz
+  // split, so the multiband stage throws after eq.tilt has already been built.
+  REQUIRE_THROWS_AS(chain.prepare(8000.0, 512, 2), sonare::SonareException);
 
   // Not "prepared with the stages that happened to succeed": unprepared.
   CHECK(chain.stage_names().empty());
