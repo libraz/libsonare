@@ -399,18 +399,20 @@ class _EngineIoMixin:
                 self._require_handle(), ctypes.byref(raw_options), ctypes.byref(raw_result)
             )
         )
+        # Converted whole before the free, which resets every field of the struct.
         try:
-            interleaved = _from_c_float_array(raw_result.interleaved, int(raw_result.sample_count))
+            return EngineBounceResult(
+                interleaved=_from_c_float_array(
+                    raw_result.interleaved, int(raw_result.sample_count)
+                ),
+                frames=int(raw_result.frames),
+                num_channels=int(raw_result.num_channels),
+                sample_rate=int(raw_result.sample_rate),
+                integrated_lufs=float(raw_result.integrated_lufs),
+            )
         finally:
             if raw_result.interleaved:
                 lib.sonare_free_engine_bounce_result(ctypes.byref(raw_result))
-        return EngineBounceResult(
-            interleaved=interleaved,
-            frames=int(raw_result.frames),
-            num_channels=int(raw_result.num_channels),
-            sample_rate=int(raw_result.sample_rate),
-            integrated_lufs=float(raw_result.integrated_lufs),
-        )
 
     def freeze_offline(self, options: EngineFreezeOptions) -> EngineFreezeResult:
         """Render the source layer over the span and install it as the only clip.
