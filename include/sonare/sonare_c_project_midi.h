@@ -470,16 +470,16 @@ SonareError sonare_project_set_program_on_channel(SonareProject* project, uint32
 /// @brief Applies a deterministic MIDI-FX transform to a clip's stored events.
 ///
 /// Supported JSON object fields are optional:
-///   - transpose_semitones: integer
-///   - velocity_scale / velocity_offset / velocity_gamma: numbers, applied in
+///   - transposeSemitones: integer
+///   - velocityScale / velocityOffset / velocityGamma: numbers, applied in
 ///     gamma -> scale -> offset order
-///   - quantize_ppq: positive PPQ grid, with quantize_strength in [0,1]
-///   - chord_intervals: array of up to 8 integer semitone offsets
-///   - arpeggiator_intervals: array of up to 16 integer semitone offsets (one
-///     per step), with arpeggiator_step_ppq (positive PPQ between steps) and an
-///     optional arpeggiator_gate_ppq (positive gate length, capped to the step;
+///   - quantizePpq: positive PPQ grid, with quantizeStrength in [0,1]
+///   - chordIntervals: array of up to 8 integer semitone offsets
+///   - arpeggiatorIntervals: array of up to 16 integer semitone offsets (one
+///     per step), with arpeggiatorStepPpq (positive PPQ between steps) and an
+///     optional arpeggiatorGatePpq (positive gate length, capped to the step;
 ///     defaults to the full step)
-///   - humanize_ppq / humanize_velocity / seed: deterministic jitter controls
+///   - humanizePpq / humanizeVelocity / seed: deterministic jitter controls
 ///
 /// This is an offline/control-plane destructive bake over the clip's event list,
 /// not a live RT insert chain. Clips larger than the realtime MIDI-FX buffer are

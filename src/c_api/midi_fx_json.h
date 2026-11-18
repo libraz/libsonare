@@ -5,10 +5,13 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <string>
 
+#include "c_api/sonare_c_internal.h"
 #include "midi/midi_fx.h"
 #include "transport/tempo_map.h"
 #include "util/json_budget.h"
+#include "util/json_key.h"
 #include "util/numeric_validation.h"
 
 namespace sonare_c_detail {
@@ -47,6 +50,48 @@ inline bool float_or(const json::Value& obj, const char* key, float fallback, fl
   return sonare::numeric::checked_float_cast(value->as_number(), out);
 }
 
+// Earlier snake_case spelling of each key, refused by name rather than as unknown.
+struct KeySpelling {
+  const char* current;
+  const char* earlier;
+};
+constexpr KeySpelling kKeys[] = {
+    {"transposeSemitones", "transpose_semitones"},
+    {"velocityScale", "velocity_scale"},
+    {"velocityOffset", "velocity_offset"},
+    {"velocityGamma", "velocity_gamma"},
+    {"quantizePpq", "quantize_ppq"},
+    {"quantizeStrength", "quantize_strength"},
+    {"chordIntervals", "chord_intervals"},
+    {"arpeggiatorIntervals", "arpeggiator_intervals"},
+    {"arpeggiatorStepPpq", "arpeggiator_step_ppq"},
+    {"arpeggiatorGatePpq", "arpeggiator_gate_ppq"},
+    {"humanizePpq", "humanize_ppq"},
+    {"humanizeVelocity", "humanize_velocity"},
+    {"seed", nullptr},
+};
+
+// Refuses an unknown key, naming an earlier spelling's replacement; annotation keys pass.
+inline SonareError refuse_unknown_keys(const json::Value& root) {
+  for (const auto& entry : root.as_object()) {
+    const std::string& key = entry.first;
+    if (json::is_annotation_key(key)) continue;
+    const KeySpelling* earlier = nullptr;
+    bool known = false;
+    for (const KeySpelling& spelling : kKeys) {
+      known = known || key == spelling.current;
+      if (spelling.earlier != nullptr && key == spelling.earlier) earlier = &spelling;
+    }
+    if (known) continue;
+    const std::string message = earlier != nullptr
+                                    ? key + " is an earlier spelling; write " + earlier->current
+                                    : "unknown MIDI-FX key '" + json::escape_key(key) + "'";
+    set_last_error(SONARE_ERROR_INVALID_FORMAT, message.c_str());
+    return SONARE_ERROR_INVALID_FORMAT;
+  }
+  return SONARE_OK;
+}
+
 inline bool ppq_frames(double ppq, int64_t* out) {
   if (!sonare::transport::valid_public_ppq(ppq)) return false;
   return sonare::numeric::checked_round_cast(
@@ -68,33 +113,33 @@ inline SonareError midi_fx_chain_from_json(const char* config_json,
     return SONARE_ERROR_INVALID_FORMAT;
   }
   if (!root.is_object()) return SONARE_ERROR_INVALID_FORMAT;
+  if (const SonareError key_err = refuse_unknown_keys(root); key_err != SONARE_OK) return key_err;
 
   sonare::midi::TransposeConfig transpose;
-  if (has_number(root, "transpose_semitones")) {
+  if (has_number(root, "transposeSemitones")) {
     transpose.enabled = true;
-    if (!int_or(root, "transpose_semitones", 0, &transpose.semitones)) {
+    if (!int_or(root, "transposeSemitones", 0, &transpose.semitones)) {
       return SONARE_ERROR_INVALID_FORMAT;
     }
     chain->set_transpose(transpose);
   }
 
   sonare::midi::VelocityCurveConfig velocity;
-  const bool has_velocity = has_number(root, "velocity_scale") ||
-                            has_number(root, "velocity_offset") ||
-                            has_number(root, "velocity_gamma");
+  const bool has_velocity = has_number(root, "velocityScale") ||
+                            has_number(root, "velocityOffset") || has_number(root, "velocityGamma");
   if (has_velocity) {
     velocity.enabled = true;
-    if (!float_or(root, "velocity_scale", 1.0f, &velocity.scale) ||
-        !float_or(root, "velocity_offset", 0.0f, &velocity.offset) ||
-        !float_or(root, "velocity_gamma", 1.0f, &velocity.gamma) || velocity.gamma <= 0.0f) {
+    if (!float_or(root, "velocityScale", 1.0f, &velocity.scale) ||
+        !float_or(root, "velocityOffset", 0.0f, &velocity.offset) ||
+        !float_or(root, "velocityGamma", 1.0f, &velocity.gamma) || velocity.gamma <= 0.0f) {
       return SONARE_ERROR_INVALID_FORMAT;
     }
     chain->set_velocity_curve(velocity);
   }
 
-  if (has_number(root, "quantize_ppq")) {
-    const double grid_ppq = number_or(root, "quantize_ppq", 0.0);
-    const double strength = number_or(root, "quantize_strength", 1.0);
+  if (has_number(root, "quantizePpq")) {
+    const double grid_ppq = number_or(root, "quantizePpq", 0.0);
+    const double strength = number_or(root, "quantizeStrength", 1.0);
     int64_t grid_frames = 0;
     if (!std::isfinite(grid_ppq) || grid_ppq <= 0.0 || !ppq_frames(grid_ppq, &grid_frames) ||
         !std::isfinite(strength) || strength < 0.0 || strength > 1.0) {
@@ -107,7 +152,7 @@ inline SonareError midi_fx_chain_from_json(const char* config_json,
     chain->set_quantize(quantize);
   }
 
-  if (const json::Value* intervals = root.find("chord_intervals")) {
+  if (const json::Value* intervals = root.find("chordIntervals")) {
     if (!intervals->is_array()) return SONARE_ERROR_INVALID_FORMAT;
     sonare::midi::ChordConfig chord;
     chord.enabled = true;
@@ -125,19 +170,19 @@ inline SonareError midi_fx_chain_from_json(const char* config_json,
     chain->set_chord(chord);
   }
 
-  if (const json::Value* arp_intervals = root.find("arpeggiator_intervals")) {
+  if (const json::Value* arp_intervals = root.find("arpeggiatorIntervals")) {
     if (!arp_intervals->is_array()) return SONARE_ERROR_INVALID_FORMAT;
     const auto& values = arp_intervals->as_array();
     if (values.empty() || values.size() > sonare::midi::ArpeggiatorConfig::kMaxArpSteps) {
       return SONARE_ERROR_INVALID_FORMAT;
     }
-    const double step_ppq = number_or(root, "arpeggiator_step_ppq", 0.0);
+    const double step_ppq = number_or(root, "arpeggiatorStepPpq", 0.0);
     int64_t step_frames = 0;
     if (!std::isfinite(step_ppq) || step_ppq <= 0.0 || !ppq_frames(step_ppq, &step_frames)) {
       return SONARE_ERROR_INVALID_FORMAT;
     }
     // Gate defaults to a full-length (legato) step when omitted.
-    const double gate_ppq = number_or(root, "arpeggiator_gate_ppq", step_ppq);
+    const double gate_ppq = number_or(root, "arpeggiatorGatePpq", step_ppq);
     int64_t gate_frames = 0;
     if (!std::isfinite(gate_ppq) || gate_ppq <= 0.0 || !ppq_frames(gate_ppq, &gate_frames)) {
       return SONARE_ERROR_INVALID_FORMAT;
@@ -156,15 +201,15 @@ inline SonareError midi_fx_chain_from_json(const char* config_json,
     chain->set_arpeggiator(arpeggiator);
   }
 
-  const bool has_humanize = has_number(root, "humanize_ppq") ||
-                            has_number(root, "humanize_velocity") || has_number(root, "seed");
+  const bool has_humanize = has_number(root, "humanizePpq") ||
+                            has_number(root, "humanizeVelocity") || has_number(root, "seed");
   if (has_humanize) {
-    const double timing_ppq = number_or(root, "humanize_ppq", 0.0);
+    const double timing_ppq = number_or(root, "humanizePpq", 0.0);
     int velocity_amount = 0;
     int seed = 0;
     int64_t timing_frames = 0;
-    if (!int_or(root, "humanize_velocity", 0, &velocity_amount) ||
-        !int_or(root, "seed", 0, &seed) || !ppq_frames(timing_ppq, &timing_frames)) {
+    if (!int_or(root, "humanizeVelocity", 0, &velocity_amount) || !int_or(root, "seed", 0, &seed) ||
+        !ppq_frames(timing_ppq, &timing_frames)) {
       return SONARE_ERROR_INVALID_FORMAT;
     }
     if (!std::isfinite(timing_ppq) || timing_ppq < 0.0 || velocity_amount < 0 ||

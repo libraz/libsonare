@@ -1158,8 +1158,8 @@ TEST_CASE("project C surface set_midi_fx transforms stored MIDI events", "[proje
   REQUIRE(huge_ppq_project == nullptr);
 
   const char* config =
-      "{\"transpose_semitones\":12,\"quantize_ppq\":0.25,\"quantize_strength\":1.0,"
-      "\"velocity_scale\":0.5,\"chord_intervals\":[0,7]}";
+      "{\"transposeSemitones\":12,\"quantizePpq\":0.25,\"quantizeStrength\":1.0,"
+      "\"velocityScale\":0.5,\"chordIntervals\":[0,7]}";
   REQUIRE(sonare_project_bake_midi_fx(project, clip, config) == SONARE_OK);
 
   uint8_t* bytes = nullptr;
@@ -1185,7 +1185,7 @@ TEST_CASE("project C surface set_midi_fx transforms stored MIDI events", "[proje
   REQUIRE(saw_g5);
 
   REQUIRE(sonare_project_set_midi_fx(project, clip, "{bad json") == SONARE_ERROR_INVALID_FORMAT);
-  REQUIRE(sonare_project_set_midi_fx(project, clip, "{\"quantize_ppq\":0}") ==
+  REQUIRE(sonare_project_set_midi_fx(project, clip, "{\"quantizePpq\":0}") ==
           SONARE_ERROR_INVALID_FORMAT);
   REQUIRE(sonare_project_bake_midi_fx(project, clip, "{bad json") == SONARE_ERROR_INVALID_FORMAT);
 
@@ -1237,7 +1237,7 @@ TEST_CASE("project C surface MIDI-FX bake reports per-event provenance", "[proje
   }
 
   SECTION("chord fan-out shares one source index per input") {
-    const char* config = "{\"chord_intervals\":[0,4,7]}";
+    const char* config = "{\"chordIntervals\":[0,4,7]}";
     size_t predicted = 0;
     REQUIRE(sonare_project_preview_midi_fx_count(project, clip, config, &predicted) == SONARE_OK);
     REQUIRE(predicted == 12);
@@ -1268,8 +1268,8 @@ TEST_CASE("project C surface MIDI-FX bake reports per-event provenance", "[proje
     // header promises every entry is non-negative; nothing exercised that
     // promise on this shape, only on the 1:1 and fixed-fan-out ones.
     const char* config =
-        "{\"arpeggiator_intervals\":[0,12],\"arpeggiator_step_ppq\":0.25,"
-        "\"arpeggiator_gate_ppq\":0.125}";
+        "{\"arpeggiatorIntervals\":[0,12],\"arpeggiatorStepPpq\":0.25,"
+        "\"arpeggiatorGatePpq\":0.125}";
     size_t predicted = 0;
     REQUIRE(sonare_project_preview_midi_fx_count(project, clip, config, &predicted) == SONARE_OK);
     REQUIRE(predicted > 0);
@@ -1395,7 +1395,7 @@ TEST_CASE("project MIDI-FX quantize bake keeps short notes paired through SMF ex
   REQUIRE(sonare_midi_note_off(0.20, 0, 0, 60, 0, &events[1]) == SONARE_OK);
   REQUIRE(sonare_project_set_midi_events(project, clip, events, 2) == SONARE_OK);
   REQUIRE(sonare_project_bake_midi_fx(
-              project, clip, "{\"quantize_ppq\":1.0,\"quantize_strength\":1.0}") == SONARE_OK);
+              project, clip, "{\"quantizePpq\":1.0,\"quantizeStrength\":1.0}") == SONARE_OK);
 
   SonareNotePairValidation validation{};
   REQUIRE(sonare_project_validate_midi_notes(project, clip, &validation) == SONARE_OK);
@@ -1469,8 +1469,8 @@ TEST_CASE("project C surface bakes an arpeggiator into gated steps", "[project]"
   // sixteenth. The single held note expands into two short gated note pairs and
   // the original note-off is consumed by the arpeggiator.
   const char* config =
-      "{\"arpeggiator_intervals\":[0,12],\"arpeggiator_step_ppq\":0.25,"
-      "\"arpeggiator_gate_ppq\":0.125}";
+      "{\"arpeggiatorIntervals\":[0,12],\"arpeggiatorStepPpq\":0.25,"
+      "\"arpeggiatorGatePpq\":0.125}";
   REQUIRE(sonare_project_bake_midi_fx(project, clip, config) == SONARE_OK);
 
   uint8_t* bytes = nullptr;
@@ -1496,11 +1496,11 @@ TEST_CASE("project C surface bakes an arpeggiator into gated steps", "[project]"
   REQUIRE(saw_octave_step);
 
   // An empty interval list and a non-positive step are rejected by the parser.
-  REQUIRE(sonare_project_set_midi_fx(
-              project, clip, "{\"arpeggiator_intervals\":[],\"arpeggiator_step_ppq\":0.25}") ==
+  REQUIRE(sonare_project_set_midi_fx(project, clip,
+                                     "{\"arpeggiatorIntervals\":[],\"arpeggiatorStepPpq\":0.25}") ==
           SONARE_ERROR_INVALID_FORMAT);
-  REQUIRE(sonare_project_set_midi_fx(
-              project, clip, "{\"arpeggiator_intervals\":[0],\"arpeggiator_step_ppq\":0}") ==
+  REQUIRE(sonare_project_set_midi_fx(project, clip,
+                                     "{\"arpeggiatorIntervals\":[0],\"arpeggiatorStepPpq\":0}") ==
           SONARE_ERROR_INVALID_FORMAT);
 
   sonare_free_bytes(bytes);

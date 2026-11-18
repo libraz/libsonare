@@ -30,6 +30,7 @@ import json
 import os
 import re
 import sys
+import tomllib
 from collections.abc import Callable, Iterable
 from pathlib import Path
 
@@ -180,6 +181,40 @@ def _interface_teardown_violation(record: dict) -> str | None:
     if "destroy" in record["spelled"]:
         return None
     return f"an interface with {'/'.join(record['spelled'])}() releases through destroy()"
+
+
+_KEYS_OF = re.compile(r"const (\w+) = keysOf<(\w+)>\(\)\(\[([^\]]*)\]\)")
+_KEY_SET = re.compile(r"const (\w+) = keySet\(([^)]*)\)")
+_QUOTED = re.compile(r"'([^']+)'")
+
+
+def _document_roots() -> set[str]:
+    """Root type names declared in tools/api/document_types.toml."""
+    data = tomllib.loads((ROOT / "tools/api/document_types.toml").read_text(encoding="utf-8"))
+    return {entry["type"] for entry in data.get("document", [])}
+
+
+def _key_screen_records(records: list[dict]) -> list[dict]:
+    """One record per facade key set, naming the document type it screens, if any."""
+    roots = _document_roots()
+    fields: dict[tuple[str, str], set[str]] = {}
+    for r in records:
+        if _js(r) and r["kind"] == "field" and r["owner"] in roots and "." not in r["member"]:
+            fields.setdefault((r["surface"], r["owner"]), set()).add(r["member"])
+    out: list[dict] = []
+    for surface in ("node", "wasm"):
+        text = (ROOT / "bindings" / surface / "src/request_keys.ts").read_text(encoding="utf-8")
+        for name, typed, body in _KEYS_OF.findall(text):
+            screened = typed if typed in roots else None
+            out.append({"surface": surface, "kind": "key-set", "name": name, "screens": screened})
+        for name, body in _KEY_SET.findall(text):
+            keys = set(_QUOTED.findall(body))
+            screened = next(
+                (doc for (s, doc), names in fields.items() if s == surface and keys == names),
+                None,
+            )
+            out.append({"surface": surface, "kind": "key-set", "name": name, "screens": screened})
+    return out
 
 
 def _worker_teardown_violation(record: dict) -> str | None:
@@ -1120,7 +1155,7 @@ _C_ERROR_PATH_PENDING: dict[str, int] = {
     "src/c_api/project_edit_clip.cpp": 76,
     "src/c_api/project_edit_track.cpp": 84,
     "src/c_api/project_external_stems.cpp": 6,
-    "src/c_api/project_midi.cpp": 42,
+    "src/c_api/project_midi.cpp": 39,
     "src/c_api/project_mir.cpp": 25,
     "src/c_api/project_part_rig.cpp": 11,
     "src/c_api/project_soundfont.cpp": 5,
@@ -1176,6 +1211,17 @@ RULES: list[Rule] = [
         population=lambda r: r["kind"] == "worker-class" or r["kind"] in ("field", "option"),
         violation=_worker_teardown_violation,
         derive=_worker_teardown_records,
+    ),
+    Rule(
+        name="document-key-screen",
+        summary="a facade key set screens request objects, never a document the core parses",
+        population=lambda r: r["kind"] == "key-set",
+        violation=lambda r: (
+            f"{r['screens']} is a document; the core refuses its keys at every depth as InvalidFormat"
+            if r["screens"]
+            else None
+        ),
+        derive=_key_screen_records,
     ),
     Rule(
         name="interface-teardown",
@@ -1320,8 +1366,6 @@ RULES: list[Rule] = [
         pending={
             "python:mastering_process_stereo": "rename to mastering_apply_processor_stereo (Node/WASM masteringApplyProcessorStereo)",
             "python:mastering_pair_process_stereo": "rename to mastering_apply_pair_processor_stereo (Node/WASM masteringApplyPairProcessorStereo)",
-            "python:RealtimeVoiceChanger.process_planar_stereo": "Node/WASM RealtimeVoiceChanger.processPlanar takes channels",
-            "python:RealtimeVoiceChanger.process_planar_stereo_with_carrier": "Node/WASM RealtimeVoiceChanger.processPlanarWithCarrier takes channels",
             "node:masteringApplyProcessorStereo": "Python spells it mastering_process_stereo",
             "wasm:masteringApplyProcessorStereo": "Python spells it mastering_process_stereo",
             "node:masteringApplyPairProcessorStereo": "Python spells it mastering_pair_process_stereo",
@@ -1361,7 +1405,6 @@ RULES: list[Rule] = [
                     ("wasm", "SonareEngine"),
                 )
             },
-            "python:Mixer.strip_by_id(strip_id)": "type the strip parameter StripRef",
         },
     ),
     Rule(
@@ -1418,8 +1461,6 @@ RULES: list[Rule] = [
             else None
         ),
         pending={
-            "node:PlaybackStageLatency.q8": "remove the field; state its unit before renaming it",
-            "wasm:PlaybackStageLatency.q8": "remove the field; state its unit before renaming it",
             "wasm:EngineTelemetryRecord.graphLatencySamplesQ8": "expose graph latency in samples as a plain number",
         },
     ),

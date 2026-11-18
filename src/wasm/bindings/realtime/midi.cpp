@@ -26,10 +26,14 @@
 namespace {
 
 void wasmMidiFxChainFromJson(const std::string& config_json, sonare::midi::MidiFxChain* chain) {
+  sonare_c_detail::clear_last_error();
   const SonareError error =
       sonare_c_detail::midi_fx_chain_from_json(wasmCString(config_json, "configJson"), chain);
   if (error == SONARE_ERROR_INVALID_FORMAT) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidFormat, "invalid MIDI-FX JSON");
+    const char* detail = sonare_c_detail::last_error_message();
+    throw sonare::SonareException(
+        sonare::ErrorCode::InvalidFormat,
+        detail != nullptr && *detail != '\0' ? detail : "invalid MIDI-FX JSON");
   }
   if (error != SONARE_OK) throw WasmRangeError("invalid MIDI-FX configuration");
 }

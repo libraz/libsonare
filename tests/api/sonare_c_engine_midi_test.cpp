@@ -833,34 +833,51 @@ TEST_CASE("sonare_engine exposes live non-destructive MIDI FX inserts", "[c_api]
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
 
 #if defined(SONARE_WITH_ARRANGEMENT)
-  REQUIRE(sonare_engine_set_midi_fx(engine, 5, "{\"transpose_semitones\":12}") == SONARE_OK);
+  REQUIRE(sonare_engine_set_midi_fx(engine, 5, "{\"transposeSemitones\":12}") == SONARE_OK);
   REQUIRE(sonare_engine_clear_midi_fx(engine, 5) == SONARE_OK);
   REQUIRE(sonare_engine_set_midi_fx(engine, 5, "{bad json") == SONARE_ERROR_INVALID_FORMAT);
-  REQUIRE(sonare_engine_set_midi_fx(engine, 5, "{\"quantize_ppq\":0}") ==
+  REQUIRE(sonare_engine_set_midi_fx(engine, 5, "{\"quantizePpq\":0}") ==
           SONARE_ERROR_INVALID_FORMAT);
-  REQUIRE(sonare_engine_set_midi_fx(engine, 5, "{\"quantize_ppq\":1e300}") ==
+  REQUIRE(sonare_engine_set_midi_fx(engine, 5, "{\"quantizePpq\":1e300}") ==
           SONARE_ERROR_INVALID_FORMAT);
-  REQUIRE(sonare_engine_set_midi_fx(engine, 5, "{\"transpose_semitones\":1e100}") ==
+  REQUIRE(sonare_engine_set_midi_fx(engine, 5, "{\"transposeSemitones\":1e100}") ==
           SONARE_ERROR_INVALID_FORMAT);
-  REQUIRE(sonare_engine_set_midi_fx(engine, 5, "{\"chord_intervals\":[0,7.5]}") ==
+  REQUIRE(sonare_engine_set_midi_fx(engine, 5, "{\"chordIntervals\":[0,7.5]}") ==
           SONARE_ERROR_INVALID_FORMAT);
   // The three velocity-curve fields are narrowed to float from a full JSON
   // double, so a value outside float range is refused rather than cast first
   // and inspected as +inf afterwards.
-  for (const char* key : {"velocity_scale", "velocity_offset", "velocity_gamma"}) {
+  for (const char* key : {"velocityScale", "velocityOffset", "velocityGamma"}) {
     const std::string too_large = std::string("{\"") + key + "\":1e39}";
     const std::string too_small = std::string("{\"") + key + "\":-1e39}";
     INFO(key);
     REQUIRE(sonare_engine_set_midi_fx(engine, 5, too_large.c_str()) == SONARE_ERROR_INVALID_FORMAT);
     REQUIRE(sonare_engine_set_midi_fx(engine, 5, too_small.c_str()) == SONARE_ERROR_INVALID_FORMAT);
   }
-  REQUIRE(
-      sonare_engine_set_midi_fx(
-          engine, 5, "{\"velocity_scale\":1.5,\"velocity_offset\":-4,\"velocity_gamma\":0.8}") ==
-      SONARE_OK);
+  REQUIRE(sonare_engine_set_midi_fx(
+              engine, 5, "{\"velocityScale\":1.5,\"velocityOffset\":-4,\"velocityGamma\":0.8}") ==
+          SONARE_OK);
+  REQUIRE(sonare_engine_clear_midi_fx(engine, 5) == SONARE_OK);
+
+  // An earlier snake_case key is refused naming the key to write, an unknown
+  // key by its own name, and an annotation key passes.
+  REQUIRE(sonare_engine_set_midi_fx(engine, 5, "{\"transpose_semitones\":12}") ==
+          SONARE_ERROR_INVALID_FORMAT);
+  CHECK(std::string(sonare_last_error_message()) ==
+        "transpose_semitones is an earlier spelling; write transposeSemitones");
+  REQUIRE(sonare_engine_set_midi_fx(engine, 5, "{\"arpeggiator_gate_ppq\":0.5}") ==
+          SONARE_ERROR_INVALID_FORMAT);
+  CHECK(std::string(sonare_last_error_message()) ==
+        "arpeggiator_gate_ppq is an earlier spelling; write arpeggiatorGatePpq");
+  REQUIRE(sonare_engine_set_midi_fx(engine, 5, "{\"transposeSemitone\":12}") ==
+          SONARE_ERROR_INVALID_FORMAT);
+  CHECK(std::string(sonare_last_error_message()) == "unknown MIDI-FX key 'transposeSemitone'");
+  REQUIRE(sonare_engine_set_midi_fx(engine, 5,
+                                    "{\"$comment\":\"up\",\"x-ui\":1,\"transposeSemitones\":12}") ==
+          SONARE_OK);
   REQUIRE(sonare_engine_clear_midi_fx(engine, 5) == SONARE_OK);
 #else
-  REQUIRE(sonare_engine_set_midi_fx(engine, 5, "{\"transpose_semitones\":12}") ==
+  REQUIRE(sonare_engine_set_midi_fx(engine, 5, "{\"transposeSemitones\":12}") ==
           SONARE_ERROR_NOT_SUPPORTED);
   REQUIRE(sonare_engine_clear_midi_fx(engine, 5) == SONARE_ERROR_NOT_SUPPORTED);
 #endif
@@ -878,12 +895,12 @@ TEST_CASE("config_json exceeding the JSON byte budget is refused, not parsed",
   // to come from the byte precheck, not from the parser walking a document
   // this size into json::Value nodes first.
   const std::string oversized =
-      "{\"pad\": \"" + std::string(64u * 1024u * 1024u + 1024u, 'a') + "\"}";
+      "{\"x-pad\": \"" + std::string(64u * 1024u * 1024u + 1024u, 'a') + "\"}";
   REQUIRE(sonare_engine_set_midi_fx(engine, 5, oversized.c_str()) == SONARE_ERROR_INVALID_FORMAT);
 
   // The same destination still accepts an ordinary config, so the refusal
   // above is the size and not some other change to midi_fx_chain_from_json.
-  REQUIRE(sonare_engine_set_midi_fx(engine, 5, "{\"transpose_semitones\":12}") == SONARE_OK);
+  REQUIRE(sonare_engine_set_midi_fx(engine, 5, "{\"transposeSemitones\":12}") == SONARE_OK);
   REQUIRE(sonare_engine_clear_midi_fx(engine, 5) == SONARE_OK);
 
   sonare_engine_destroy(engine);
