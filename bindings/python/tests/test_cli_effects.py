@@ -136,12 +136,9 @@ def test_acoustic_cli_stays_blind_without_ir() -> None:
         assert result.returncode == 0, result.stderr
         payload = json.loads(result.stdout)
         assert payload["is_blind"] is True
-        # Blind estimation cannot measure clarity and reports that as null
-        # rather than as a value.
-        assert payload["c50"] is None
-        assert payload["c80"] is None
-        assert payload["d50"] is None
-        assert payload["c50_bands"] == []
+        # Blind estimation cannot measure EDT or clarity, so it omits the keys.
+        for key in ("edt", "c50", "c80", "d50", "edt_bands", "c50_bands", "c80_bands"):
+            assert key not in payload, key
 
 
 def test_voice_preset_validate_set_delivers_a_json_value_containing_commas() -> None:
