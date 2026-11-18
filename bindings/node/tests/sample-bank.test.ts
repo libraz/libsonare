@@ -86,21 +86,27 @@ describe('the sample engine joins the patch enum tables', () => {
 });
 
 describe('SampleBank', () => {
+  it('reads the counts as getters', () => {
+    for (const name of ['sampleCount', 'setCount']) {
+      expect(typeof Object.getOwnPropertyDescriptor(SampleBank.prototype, name)?.get).toBe('function');
+    }
+  });
+
   it('counts samples and keymap sets as they are added', () => {
     withBank((bank) => {
-      expect(bank.sampleCount()).toBe(0);
-      expect(bank.setCount()).toBe(0);
+      expect(bank.sampleCount).toBe(0);
+      expect(bank.setCount).toBe(0);
 
       const index = bank.addSample(sampleSine(), { rootKey: 69, sourceRate: SR });
       expect(index).toBe(0);
       expect(bank.addSample(sampleSine(1024))).toBe(1);
-      expect(bank.sampleCount()).toBe(2);
+      expect(bank.sampleCount).toBe(2);
 
       bank.addZone({ sampleIndex: 0 });
-      expect(bank.setCount()).toBe(1);
+      expect(bank.setCount).toBe(1);
       // A set is created along with every set below it.
       bank.addZone({ setIndex: 3, sampleIndex: 1 });
-      expect(bank.setCount()).toBe(4);
+      expect(bank.setCount).toBe(4);
     });
   });
 
@@ -117,7 +123,7 @@ describe('SampleBank', () => {
           bank.addSample(pcm, { loopMode: sf2Mode as never, loopStart: 0, loopEnd: 512 }),
         ).toThrow(new TypeError('addSample: loopMode must be a name'));
       }
-      expect(bank.sampleCount()).toBe(3);
+      expect(bank.sampleCount).toBe(3);
     });
   });
 
@@ -126,7 +132,7 @@ describe('SampleBank', () => {
       // @ts-expect-error the frames argument is deliberately the wrong type.
       expect(() => bank.addSample([0, 1, 2])).toThrow(TypeError);
       expect(() => bank.addSample(new Float32Array(0))).toThrow();
-      expect(bank.sampleCount()).toBe(0);
+      expect(bank.sampleCount).toBe(0);
     });
   });
 
@@ -134,7 +140,7 @@ describe('SampleBank', () => {
     withBank((bank) => {
       // @ts-expect-error the descriptor is deliberately the wrong type.
       expect(() => bank.addSample(sampleSine(64), 'rootKey=60')).toThrow(TypeError);
-      expect(bank.sampleCount()).toBe(0);
+      expect(bank.sampleCount).toBe(0);
     });
   });
 
@@ -142,7 +148,7 @@ describe('SampleBank', () => {
     withBank((bank) => {
       // 256 would arrive at the C ABI as 0, which its own check accepts.
       expect(() => bank.addSample(sampleSine(64), { rootKey: 256 })).toThrow(RangeError);
-      expect(bank.sampleCount()).toBe(0);
+      expect(bank.sampleCount).toBe(0);
     });
   });
 
@@ -152,7 +158,7 @@ describe('SampleBank', () => {
       expect(() => bank.addSample(sampleSine(64), { loopMode: 'ping-pong' })).toThrow(
         /Unknown sample loop mode name/,
       );
-      expect(bank.sampleCount()).toBe(0);
+      expect(bank.sampleCount).toBe(0);
     });
   });
 
@@ -167,12 +173,12 @@ describe('SampleBank', () => {
       }
       // Checking the count rather than the throw is what separates refusing
       // from appending and then reporting failure.
-      expect(bank.sampleCount()).toBe(0);
+      expect(bank.sampleCount).toBe(0);
 
       // The bank still takes the clean sample, so the refusals are the values
       // being read and not the bank having been left unusable.
       expect(bank.addSample(sampleSine(1024), { rootKey: 69, sourceRate: SR })).toBe(0);
-      expect(bank.sampleCount()).toBe(1);
+      expect(bank.sampleCount).toBe(1);
     });
   });
 
@@ -196,7 +202,7 @@ describe('SampleBank', () => {
       expect(() => bank.addZone({ sampleIndex: 0, keyLo: 90, keyHi: 30 })).toThrow();
       expect(() => bank.addZone({ sampleIndex: 0, velLo: 100, velHi: 20 })).toThrow();
       expect(() => bank.addZone({ setIndex: 4096, sampleIndex: 0 })).toThrow();
-      expect(bank.setCount()).toBe(0);
+      expect(bank.setCount).toBe(0);
     });
   });
 
@@ -205,7 +211,7 @@ describe('SampleBank', () => {
       bank.addSample(sampleSine(64));
       // @ts-expect-error the set index is deliberately the wrong type.
       expect(() => bank.addZone({ setIndex: '0', sampleIndex: 0 })).toThrow(TypeError);
-      expect(bank.setCount()).toBe(0);
+      expect(bank.setCount).toBe(0);
     });
   });
 
@@ -215,7 +221,7 @@ describe('SampleBank', () => {
     bank.destroy();
     expect(() => bank.destroy()).not.toThrow();
     expect(() => bank.destroy()).not.toThrow();
-    expect(() => bank.sampleCount()).toThrow(/destroyed/);
+    expect(() => bank.sampleCount).toThrow(/destroyed/);
     expect(() => bank.addSample(sampleSine(64))).toThrow(/destroyed/);
   });
 
@@ -226,7 +232,7 @@ describe('SampleBank', () => {
       captured = bank;
       expect(bank.addSample(sampleSine(64))).toBe(0);
     }
-    expect(() => captured?.sampleCount()).toThrow(/destroyed/);
+    expect(() => captured?.sampleCount).toThrow(/destroyed/);
   });
 });
 

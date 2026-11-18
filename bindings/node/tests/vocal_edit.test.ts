@@ -199,13 +199,30 @@ describe('Node vocal edit facade', () => {
     }
   });
 
+  it('reads the output length as a getter', () => {
+    const session = create();
+    const snapshot = session.captureRenderSnapshot();
+    try {
+      for (const owner of [session, snapshot]) {
+        const descriptor = Object.getOwnPropertyDescriptor(
+          Object.getPrototypeOf(Object.getPrototypeOf(owner)),
+          'outputLengthSamples',
+        );
+        expect(typeof descriptor?.get).toBe('function');
+      }
+    } finally {
+      snapshot.destroy();
+      session.destroy();
+    }
+  });
+
   it('exposes destination length and history state and defaults a snapshot to the full output', () => {
     const session = create();
     const snapshot = session.captureRenderSnapshot();
     try {
-      expect(session.outputLengthSamples()).toBe(SAMPLE_COUNT);
+      expect(session.outputLengthSamples).toBe(SAMPLE_COUNT);
       expect(session.history()).toEqual({ canUndo: false, canRedo: false });
-      expect(snapshot.outputLengthSamples()).toBe(SAMPLE_COUNT);
+      expect(snapshot.outputLengthSamples).toBe(SAMPLE_COUNT);
       expect(snapshot.render({}).samples.length).toBe(SAMPLE_COUNT);
     } finally {
       snapshot.destroy();

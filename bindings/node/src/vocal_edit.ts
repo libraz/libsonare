@@ -272,7 +272,7 @@ export class VocalEditSession implements Disposable {
   }
 
   /** Length of the rendered output in samples. */
-  outputLengthSamples(): number {
+  get outputLengthSamples(): number {
     this.requireAlive();
     return this.native.outputLengthSamples();
   }
@@ -472,7 +472,7 @@ export class VocalRenderSnapshot implements Disposable {
   ) {}
 
   /** Length of the rendered output in samples. */
-  outputLengthSamples(): number {
+  get outputLengthSamples(): number {
     this.requireAlive();
     return this.native.outputLengthSamples();
   }

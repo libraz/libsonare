@@ -81,12 +81,12 @@ export class SampleBank {
   }
 
   /** Samples added so far. */
-  sampleCount(): number {
+  get sampleCount(): number {
     return this.native.sampleCount();
   }
 
   /** Keymap sets the bank has (one past the highest index used). */
-  setCount(): number {
+  get setCount(): number {
     return this.native.setCount();
   }
 

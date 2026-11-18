@@ -870,7 +870,7 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
     invoke: (o) =>
       withSampleBank((bank) => [
         bank.addSample(new Float32Array(64).fill(0.5), { ...o }),
-        bank.sampleCount(),
+        bank.sampleCount,
       ]),
   },
   {
@@ -879,7 +879,7 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
       withSampleBank((bank) => {
         bank.addSample(new Float32Array(64).fill(0.5));
         bank.addZone({ ...o });
-        return bank.setCount();
+        return bank.setCount;
       }),
   },
   {
