@@ -102,7 +102,7 @@ describe('SonareRealtimeEngineNode numChannels', () => {
 
 describe('SonareRealtimeEngineNode integer ring options', () => {
   async function capture(
-    options: SonareRealtimeEngineNodeOptions,
+    options: Partial<SonareRealtimeEngineNodeOptions>,
   ): Promise<AudioWorkletNodeOptions> {
     let captured: AudioWorkletNodeOptions | undefined;
     const node = await SonareRealtimeEngineNode.create(fakeContext(), {
