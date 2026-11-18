@@ -43,7 +43,7 @@ def _make_voice_changer() -> Any:
 def _make_retune() -> Any:
     from libsonare import StreamingRetune
 
-    retune = StreamingRetune(semitones=2.0)
+    retune = StreamingRetune(pitch_semitones=2.0)
     retune.prepare(48000.0, 128)
     return retune
 
@@ -67,7 +67,7 @@ _MEMBERS: dict[str, tuple[Callable[[], Any], list[tuple[str, tuple[Any, ...]]]]]
         _make_voice_changer,
         [
             ("reset", ()),
-            ("set_config", ("neutral-monitor",)),
+            ("set_config", ("neutralMonitor",)),
             ("non_finite_discard_count", ()),
             ("config_json", ()),
             ("config_pod", ()),
@@ -84,7 +84,7 @@ _MEMBERS: dict[str, tuple[Callable[[], Any], list[tuple[str, tuple[Any, ...]]]]]
             ("reset", ()),
             ("set_config", ()),
             ("config", ()),
-            ("grain_size", ()),
+            ("grain_size_samples", ()),
             ("latency_samples", ()),
             ("process_mono", (_BLOCK,)),
         ],

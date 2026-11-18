@@ -20,7 +20,7 @@ pytestmark = pytest.mark.skipif(not LIB_AVAILABLE, reason="libsonare not availab
 
 def test_streaming_retune_refusal_is_coded_from_the_library() -> None:
     with pytest.raises(SonareError) as caught:
-        StreamingRetune(semitones=math.nan)
+        StreamingRetune(pitch_semitones=math.nan)
     assert caught.value.code == int(ErrorCode.INVALID_PARAMETER)
     assert "finite" in str(caught.value)
 

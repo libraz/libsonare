@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 #: Names accepted for ``material_preset`` (the ``SONARE_MATERIAL_PRESET_*`` values).
 MaterialPresetName = Literal["none", "concrete", "wood", "curtain", "carpet", "glass"]
 #: Names accepted for the room-estimate ``mode`` (the ``SONARE_ACOUSTIC_MODE_*`` values).
-AcousticModeName = Literal["auto", "blind", "impulse_response"]
+AcousticModeName = Literal["auto", "blind", "impulseResponse"]
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -66,10 +66,10 @@ class RirResult:
 
     ``diagnostics`` carries every diagnostic the synthesizer reported, in its own
     order. Warnings appear on SUCCESSFUL calls too and are otherwise invisible: a
-    ``max_seconds`` clamp that cut the reverb tail
-    (``acoustic.rir_length_clamped``), a ``max_seconds`` shorter than the direct
+    ``max_sec`` clamp that cut the reverb tail
+    (``acoustic.rir_length_clamped``), a ``max_sec`` shorter than the direct
     sound's own arrival, which is raised to fit it
-    (``acoustic.rir_length_floored``), a ``max_seconds`` shorter than the
+    (``acoustic.rir_length_floored``), a ``max_sec`` shorter than the
     longest band's RT60, which cuts that band before it decays by 60 dB so its
     reverberation time cannot be measured from the RIR
     (``acoustic.rir_tail_truncated``), or a request reduced from "early
@@ -96,15 +96,15 @@ class RoomMorphResult:
     An unusable morph raises, so every entry in ``diagnostics`` is a warning. Each says the morph
     went through a room other than the one requested — an image-source order
     reduced to the safe maximum (``acoustic.ism_order_clamped``), a tail cut
-    against ``max_seconds`` (``acoustic.rir_length_clamped``), a ``max_seconds``
+    against ``max_sec`` (``acoustic.rir_length_clamped``), a ``max_sec``
     shorter than the direct sound's flight time and extended to fit it
-    (``acoustic.rir_length_floored``), a ``max_seconds`` shorter than the
+    (``acoustic.rir_length_floored``), a ``max_sec`` shorter than the
     longest band's RT60, which cuts that band before it decays by 60 dB
     (``acoustic.rir_tail_truncated``), a request that produced no diffuse tail
     (``acoustic.no_late_tail``) — and is otherwise invisible.
 
     These are the five codes the synthesis can emit here, so a ``match`` over
-    them needs no fall-through case. :func:`room_morph` forwards ``max_seconds``
+    them needs no fall-through case. :func:`room_morph` forwards ``max_sec``
     unchanged, which is why the floored one reaches a morph at all.
     """
 

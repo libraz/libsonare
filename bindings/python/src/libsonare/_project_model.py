@@ -165,13 +165,9 @@ FADE_CURVE_LOGARITHMIC = 3
 
 _FADE_CURVE_NAMES = {
     "linear": FADE_CURVE_LINEAR,
-    "equal-power": FADE_CURVE_EQUAL_POWER,
-    "equal_power": FADE_CURVE_EQUAL_POWER,
-    "equalpower": FADE_CURVE_EQUAL_POWER,
+    "equalPower": FADE_CURVE_EQUAL_POWER,
     "exponential": FADE_CURVE_EXPONENTIAL,
-    "exp": FADE_CURVE_EXPONENTIAL,
     "logarithmic": FADE_CURVE_LOGARITHMIC,
-    "log": FADE_CURVE_LOGARITHMIC,
 }
 
 # Clip loop-mode ordinals (mirror SonareProjectLoopMode).

@@ -887,7 +887,7 @@ class _ProjectEditMixin:
         """Set a clip's fade-in and fade-out regions via an undoable edit.
 
         Each fade length (PPQ) must be finite and >= 0 (0 = no fade); each curve
-        is a :data:`FADE_CURVE_*` ordinal or name (``"linear"`` / ``"equal-power"``
+        is a :data:`FADE_CURVE_*` ordinal or name (``"linear"`` / ``"equalPower"``
         / ``"exponential"`` / ``"logarithmic"``).
         """
         fin = _narrow_double(fade_in_length_ppq, "fade_in_length_ppq")

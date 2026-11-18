@@ -4,6 +4,7 @@ of what the pass did, the same pairing the stereo entry points already use.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Callable
 from typing import Any
 
@@ -93,9 +94,13 @@ def test_the_declick_report_counts_the_clicks_it_repaired() -> None:
 def test_the_declip_report_counts_the_samples_it_rebuilt() -> None:
     clipped = np.clip(sine(440.0, 0.3, amp=1.0) * 2.0, -0.9, 0.9).astype(np.float32)
 
-    result = libsonare.mastering_repair_declip(clipped, SR, clip_threshold=0.85)
+    result = libsonare.mastering_repair_declip(
+        clipped, SR, clip_threshold_db=20.0 * math.log10(0.85)
+    )
     assert result.report.repaired_samples > 0
-    clean = libsonare.mastering_repair_declip(_signal(), SR, clip_threshold=0.85)
+    clean = libsonare.mastering_repair_declip(
+        _signal(), SR, clip_threshold_db=20.0 * math.log10(0.85)
+    )
     assert clean.report.repaired_samples == 0
 
 

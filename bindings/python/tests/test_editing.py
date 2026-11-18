@@ -363,14 +363,14 @@ def test_realtime_voice_changer_function_and_class() -> None:
     sr = 22050
     samples = _tone(sr, duration=0.1)
 
-    result = libsonare.voice_change_realtime(samples, sample_rate=sr, preset="bright-idol")
+    result = libsonare.voice_change_realtime(samples, sample_rate=sr, preset="brightIdol")
     # numpy fast path: results are returned as numpy arrays (Sequence-compatible).
     assert hasattr(result, "__len__")
     assert hasattr(result, "__iter__")
     assert len(result) == len(samples)
     assert all(math.isfinite(x) for x in result)
 
-    with libsonare.RealtimeVoiceChanger(sr, "soft-whisper", max_block_size=128) as changer:
+    with libsonare.RealtimeVoiceChanger(sr, "softWhisper", max_block_size=128) as changer:
         block = samples[:128]
         out = changer.process_mono(block)
         assert len(out) == len(block)
@@ -379,15 +379,15 @@ def test_realtime_voice_changer_function_and_class() -> None:
         cfg = changer.config_json()
         assert isinstance(cfg, str) and cfg.startswith("{")
         assert "schemaVersion" in cfg
-        changer.set_config("deep-narrator")
+        changer.set_config("deepNarrator")
         cfg2 = changer.config_json()
         assert cfg2 != cfg  # config text must change after set_config
         changer.reset()
 
     names = libsonare.realtime_voice_changer_preset_names()
-    assert "robot-mascot" in names
-    preset_json = libsonare.realtime_voice_changer_preset_json("bright-idol")
-    assert "bright-idol" in preset_json
+    assert "robotMascot" in names
+    preset_json = libsonare.realtime_voice_changer_preset_json("brightIdol")
+    assert "brightIdol" in preset_json
     assert libsonare.validate_realtime_voice_changer_preset_json(preset_json)["ok"] is True
     # Empty object lacks required schemaVersion/id/name/dsp — must be rejected.
     assert libsonare.validate_realtime_voice_changer_preset_json("{}")["ok"] is False
@@ -401,8 +401,8 @@ def test_voice_character_preset_id_round_trips() -> None:
         assert libsonare.voice_character_preset_id(ordinal) == name
 
     # Spot-check the documented example explicitly.
-    bright_ordinal = _VC_PRESET_NAME_TO_ORDINAL["bright-idol"]
-    assert libsonare.voice_character_preset_id(bright_ordinal) == "bright-idol"
+    bright_ordinal = _VC_PRESET_NAME_TO_ORDINAL["brightIdol"]
+    assert libsonare.voice_character_preset_id(bright_ordinal) == "brightIdol"
 
     # Out-of-range ordinals resolve to None per the wrapper contract.
     assert libsonare.voice_character_preset_id(-1) is None
@@ -420,7 +420,7 @@ def test_realtime_voice_changer_stereo_interleaved() -> None:
         interleaved.append(s)
 
     result = libsonare.voice_change_realtime(
-        interleaved, sample_rate=sr, preset="bright-idol", channels=2
+        interleaved, sample_rate=sr, preset="brightIdol", channels=2
     )
     assert len(result) == len(interleaved)
     assert all(math.isfinite(x) for x in result)
@@ -450,7 +450,7 @@ def test_editing_audio_methods() -> None:
         changed = audio.voice_change(pitch_semitones=5.0, formant_factor=1.1)
         assert len(changed) > 0
 
-        realtime_changed = audio.voice_change_realtime("bright-idol")
+        realtime_changed = audio.voice_change_realtime("brightIdol")
         assert len(realtime_changed) == len(samples)
     finally:
         audio.close()
@@ -465,27 +465,27 @@ def test_realtime_voice_changer_invalid_sample_rate() -> None:
     """Negative or zero sample_rate must be rejected at construction."""
 
     with raises_coded():
-        libsonare.RealtimeVoiceChanger(-1, "neutral-monitor")
+        libsonare.RealtimeVoiceChanger(-1, "neutralMonitor")
 
     with raises_coded():
-        libsonare.RealtimeVoiceChanger(0, "neutral-monitor")
+        libsonare.RealtimeVoiceChanger(0, "neutralMonitor")
 
 
 def test_realtime_voice_changer_invalid_channels() -> None:
     """channels > 2 must be rejected at construction."""
 
     with raises_coded():
-        libsonare.RealtimeVoiceChanger(48000, "neutral-monitor", channels=3)
+        libsonare.RealtimeVoiceChanger(48000, "neutralMonitor", channels=3)
 
 
 def test_realtime_voice_changer_invalid_max_block_size() -> None:
     """max_block_size <= 0 must be rejected at construction."""
 
     with raises_coded():
-        libsonare.RealtimeVoiceChanger(48000, "neutral-monitor", max_block_size=-1)
+        libsonare.RealtimeVoiceChanger(48000, "neutralMonitor", max_block_size=-1)
 
     with raises_coded():
-        libsonare.RealtimeVoiceChanger(48000, "neutral-monitor", max_block_size=0)
+        libsonare.RealtimeVoiceChanger(48000, "neutralMonitor", max_block_size=0)
 
 
 def test_realtime_voice_changer_invalid_preset_id() -> None:
@@ -516,7 +516,7 @@ def test_realtime_voice_changer_invalid_json_config() -> None:
 def test_realtime_voice_changer_close_then_process() -> None:
     """process_mono after close() must raise (NULL handle returns INVALID_PARAMETER)."""
 
-    changer = libsonare.RealtimeVoiceChanger(48000, "neutral-monitor", max_block_size=128)
+    changer = libsonare.RealtimeVoiceChanger(48000, "neutralMonitor", max_block_size=128)
     changer.close()
     with raises_coded(ErrorCode.INVALID_STATE):
         changer.process_mono([0.0] * 128)
@@ -527,9 +527,9 @@ def test_realtime_voice_changer_close_then_process() -> None:
 def test_voice_change_realtime_default_preset_matches_every_entry_point() -> None:
     """One named operation, one default, wherever it is exposed.
 
-    ``Audio.voice_change_realtime`` defaulted to ``"bright-idol"`` while the
+    ``Audio.voice_change_realtime`` defaulted to ``"brightIdol"`` while the
     module function, the CLI, the Node and WASM facades and ordinal 0 of the C
-    ABI's preset enum all defaulted to ``"neutral-monitor"``. The two Python
+    ABI's preset enum all defaulted to ``"neutralMonitor"``. The two Python
     entry points therefore rendered the same buffer audibly differently, with
     the handle form silently adding retune, a formant lift, EQ and reverb.
     """
