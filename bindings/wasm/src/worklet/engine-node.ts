@@ -66,6 +66,7 @@ import {
   type SonareWorkletScopeSnapshot,
   sonareEngineCommandRingHasRoom,
 } from './protocol.js';
+import { AUDIO_WORKLET_RENDER_QUANTUM } from './render_quantum.js';
 
 // The record writer stores 64-bit lanes as safe integers, so a bigint past that range is refused.
 function isFiniteInteger(value: number | bigint | undefined): boolean {
@@ -139,8 +140,6 @@ function workletFailure(
   }
   return new SonareError(ErrorCode.Unknown, String(data[messageKey] ?? fallback));
 }
-
-const AUDIO_WORKLET_RENDER_QUANTUM = 128;
 
 function workletBlockSize(maxBlockSize: number | undefined): number {
   const resolved = maxBlockSize ?? AUDIO_WORKLET_RENDER_QUANTUM;
