@@ -13,7 +13,7 @@ import pytest
 
 from libsonare import (
     MatchReferenceLoudnessResult,
-    MixTrackInput,
+    MixAssistantTrack,
     SonareError,
     SonareValueError,
     StreamingEqualizer,
@@ -180,10 +180,10 @@ def test_a_non_positive_reference_rate_is_refused_like_the_sample_rate(bad_rate:
         eq.match(SOURCE, REFERENCE, reference_sample_rate=bad_rate)
 
 
-def _mix_tracks(rate_of_second: int | None, second: np.ndarray) -> list[MixTrackInput]:
+def _mix_tracks(rate_of_second: int | None, second: np.ndarray) -> list[MixAssistantTrack]:
     return [
-        MixTrackInput("bass", sine(110.0, 0.8, sr=SR, amp=0.3), None, "bass"),
-        MixTrackInput("keys", second, None, "keys", rate_of_second),
+        MixAssistantTrack("bass", sine(110.0, 0.8, sr=SR, amp=0.3), None, "bass"),
+        MixAssistantTrack("keys", second, None, "keys", rate_of_second),
     ]
 
 
@@ -191,7 +191,7 @@ def test_mixing_assistant_resamples_a_track_at_another_rate() -> None:
     keys = sine(660.0, 0.8, sr=REF_SR, amp=0.2)
     resampled = np.asarray(resample(keys, REF_SR, SR), dtype=np.float32)
 
-    def scene(tracks: list[MixTrackInput]) -> object:
+    def scene(tracks: list[MixAssistantTrack]) -> object:
         return mixing_assistant_suggest(tracks, sample_rate=SR).scene
 
     expected = scene(_mix_tracks(None, resampled))

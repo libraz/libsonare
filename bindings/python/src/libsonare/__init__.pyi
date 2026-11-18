@@ -829,7 +829,7 @@ from .engine import MAX_TRACK_LANES as MAX_TRACK_LANES
 from .engine import ClipPageProvider as ClipPageProvider
 from .engine import FileClipPageProvider as FileClipPageProvider
 from .engine import RealtimeEngine as RealtimeEngine
-from .mixing_assistant import MixTrackInput as MixTrackInput
+from .mixing_assistant import MixAssistantTrack as MixAssistantTrack
 from .mixing_assistant import (
     mixing_assistant_source_class_from_name as mixing_assistant_source_class_from_name,
 )

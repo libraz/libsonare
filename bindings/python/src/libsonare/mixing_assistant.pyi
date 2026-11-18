@@ -13,15 +13,15 @@ FloatSamples: TypeAlias = Sequence[float] | list[float] | np.ndarray[Any, Any]
 _PARAM_KEYS: dict[str, str]
 _INTEGER_PARAMS: frozenset[str]
 
-class MixTrackInput(NamedTuple):
-    track_id: str
+class MixAssistantTrack(NamedTuple):
+    id: str
     left: FloatSamples
     right: FloatSamples | None = None
     name: str | None = None
     sample_rate: int | None = None
 
 def mixing_assistant_suggest(
-    tracks: Sequence[MixTrackInput],
+    tracks: Sequence[MixAssistantTrack],
     *,
     sample_rate: int,
     target_track_lufs: float | None = None,

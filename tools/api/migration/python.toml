@@ -8336,3 +8336,19 @@ old = "StereoMonoCompatBand.sideRms"
 new = "StereoMonoCompatBand.side_rms"
 domain = "mastering"
 rule = "typed-results"
+
+# The mixing assistant's track input takes the JS record's name and fields.
+
+[[entry]]
+kind = "type"
+old = "MixTrackInput"
+new = "MixAssistantTrack"
+domain = "mastering"
+rule = "type-names"
+
+[[entry]]
+kind = "field"
+old = "MixTrackInput.track_id"
+new = "MixAssistantTrack.id"
+domain = "mastering"
+rule = "type-names"

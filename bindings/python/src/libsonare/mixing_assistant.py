@@ -75,12 +75,12 @@ _PARAM_KEYS = {
 _INTEGER_PARAMS = frozenset({"n_fft", "hop_length"})
 
 
-class MixTrackInput(NamedTuple):
+class MixAssistantTrack(NamedTuple):
     """One track handed to the mixing assistant.
 
     Attributes:
-        track_id: Strip identifier, non-empty and unique within the call. It is
-            the id the suggested scene addresses this track by.
+        id: Strip identifier, non-empty and unique within the call. It is the
+            id the suggested scene addresses this track by.
         left: Left channel, or the whole signal for a mono track.
         right: Right channel, or ``None`` for a mono track. Tracks may mix mono
             and stereo freely within one call.
@@ -103,7 +103,7 @@ class MixTrackInput(NamedTuple):
     delete a part that only enters late in the song.
     """
 
-    track_id: str
+    id: str
     left: Sequence[float] | np.ndarray
     right: Sequence[float] | np.ndarray | None = None
     name: str | None = None
@@ -124,7 +124,7 @@ class _TrackArrays(NamedTuple):
 
 
 def _build_track_arrays(
-    fn_name: str, tracks: Sequence[MixTrackInput], sample_rate: int
+    fn_name: str, tracks: Sequence[MixAssistantTrack], sample_rate: int
 ) -> _TrackArrays:
     """Validate ``tracks`` and marshal them into the parallel C arrays.
 
@@ -146,13 +146,11 @@ def _build_track_arrays(
     any_right = False
 
     for index, track in enumerate(tracks):
-        track_id = track.track_id
+        track_id = track.id
         if not isinstance(track_id, str) or not track_id:
-            raise SonareValueError(
-                f"{fn_name}: tracks[{index}].track_id must be a non-empty string"
-            )
+            raise SonareValueError(f"{fn_name}: tracks[{index}].id must be a non-empty string")
         if track_id in seen:
-            raise SonareValueError(f"{fn_name}: duplicate track_id {track_id!r}")
+            raise SonareValueError(f"{fn_name}: duplicate track id {track_id!r}")
         seen.add(track_id)
 
         if track.sample_rate is None:
@@ -194,7 +192,7 @@ def _build_track_arrays(
         left_arrays.append(left_array)
         right_arrays.append(right_array)
         lengths.append(left_length)
-        id_buffers.append(_utf8_arg(track_id, "track_id"))
+        id_buffers.append(_utf8_arg(track_id, f"tracks[{index}].id"))
         name_buffers.append(_utf8_arg(track.name, "name") if track.name is not None else None)
 
     float_ptr = ctypes.POINTER(ctypes.c_float)
@@ -253,7 +251,7 @@ def _assistant_params(
 
 def _suggest(
     fn_name: str,
-    tracks: Sequence[MixTrackInput],
+    tracks: Sequence[MixAssistantTrack],
     sample_rate: int,
     options: dict[str, float | int | bool | None],
 ) -> Any:
@@ -362,7 +360,7 @@ def _mix_assistant_result_from_wire(wire: dict[str, Any]) -> MixAssistantResult:
 
 
 def mixing_assistant_suggest(
-    tracks: Sequence[MixTrackInput],
+    tracks: Sequence[MixAssistantTrack],
     *,
     sample_rate: int,
     target_track_lufs: float | None = None,
@@ -383,7 +381,7 @@ def mixing_assistant_suggest(
     """Analyse ``tracks`` and return a suggested scene with the reasoning behind it.
 
     Args:
-        tracks: Tracks to analyse, each a :class:`MixTrackInput`. Lengths may
+        tracks: Tracks to analyse, each a :class:`MixAssistantTrack`. Lengths may
             differ between tracks. An empty sequence yields an empty suggestion.
             A track whose audio is degenerate — empty, at a non-positive sample
             rate, holding a NaN or Inf sample, too short for a gated loudness,

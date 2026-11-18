@@ -347,7 +347,7 @@ from .analyzer import (
 from .audio import Audio, decode_channels, downmix
 from .engine import MAX_TRACK_LANES, ClipPageProvider, FileClipPageProvider, RealtimeEngine
 from .mixing_assistant import (
-    MixTrackInput,
+    MixAssistantTrack,
     mixing_assistant_source_class_from_name,
     mixing_assistant_source_class_names,
     mixing_assistant_suggest,
@@ -858,7 +858,7 @@ __all__ = [
     "MidiRouteResult",
     "MixMeterSnapshot",
     "MixResult",
-    "MixTrackInput",
+    "MixAssistantTrack",
     "MixAnalysisBand",
     "MixAssistantMixProfile",
     "MixAssistantResult",
