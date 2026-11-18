@@ -5270,18 +5270,19 @@ test = "bindings/python/tests/test_voice_and_room_spellings.py::test_every_prese
 [[entry]]
 kind = "option"
 old = "realtime_voice_changer_preset_config(preset)"
-changed = "takes the lowerCamel preset ids (default neutralMonitor); a kebab id raises"
+changed = "takes a VoicePresetId token (the lowerCamel preset ids) only; a kebab id raises SonareValueError and an int ordinal or a bool is TypeError"
 domain = "effects"
 rule = "token-case"
 test = "bindings/python/tests/test_voice_and_room_spellings.py::test_a_kebab_preset_id_is_refused"
 
 [[entry]]
-kind = "option"
-old = "realtime_voice_changer_preset_pod(preset)"
-changed = "takes the lowerCamel preset ids (default neutralMonitor); a kebab id raises"
+kind = "function"
+old = "realtime_voice_changer_preset_pod"
+to = "realtime_voice_changer_preset_config"
+changed = "the deprecated alias is removed; call the C/JS name, which takes a VoicePresetId token"
 domain = "effects"
-rule = "token-case"
-test = "bindings/python/tests/test_voice_and_room_spellings.py::test_a_kebab_preset_id_is_refused"
+rule = "aliases-removed"
+test = "bindings/python/tests/test_realtime_voice_changer_pod.py::test_preset_config_returns_dataclass_for_known_name"
 
 [[entry]]
 kind = "option"

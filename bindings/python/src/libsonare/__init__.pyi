@@ -652,9 +652,6 @@ from .analyzer import (
     realtime_voice_changer_preset_names as realtime_voice_changer_preset_names,
 )
 from .analyzer import (
-    realtime_voice_changer_preset_pod as realtime_voice_changer_preset_pod,
-)
-from .analyzer import (
     reassigned_spectrogram as reassigned_spectrogram,
 )
 from .analyzer import (
@@ -1416,6 +1413,9 @@ from .types import (
 )
 from .types import (
     VectorscopeReport as VectorscopeReport,
+)
+from .types import (
+    VoicePresetId as VoicePresetId,
 )
 from .types import (
     WaveformPeaksReport as WaveformPeaksReport,

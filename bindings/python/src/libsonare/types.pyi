@@ -475,6 +475,21 @@ CompressorDetector: TypeAlias = Literal["peak", "rms", "logRms"]
 
 ProjectWarpMode: TypeAlias = Literal["off", "repitch", "tempoSync", "timeStretch"]
 
+VoicePresetId: TypeAlias = Literal[
+    "neutralMonitor",
+    "brightIdol",
+    "softWhisper",
+    "deepNarrator",
+    "robotMascot",
+    "darkVillain",
+    "hardTune",
+    "robotMonotone",
+    "choirHarmony",
+    "vocoderStrings",
+    "megaphone",
+    "radioVoice",
+]
+
 KeyProfile: TypeAlias = Literal[
     "krumhanslSchmuckler",
     "temperley",

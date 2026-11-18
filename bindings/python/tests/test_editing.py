@@ -394,19 +394,16 @@ def test_realtime_voice_changer_function_and_class() -> None:
 
 
 def test_voice_character_preset_id_round_trips() -> None:
-    from libsonare._effects import _VC_PRESET_NAME_TO_ORDINAL
+    from typing import get_args
 
-    # Every canonical name maps to an ordinal that resolves back to the same id.
-    for name, ordinal in _VC_PRESET_NAME_TO_ORDINAL.items():
+    ids = get_args(libsonare.VoicePresetId)
+    # Every ordinal resolves to the id at that position of VoicePresetId.
+    for ordinal, name in enumerate(ids):
         assert libsonare.voice_character_preset_id(ordinal) == name
-
-    # Spot-check the documented example explicitly.
-    bright_ordinal = _VC_PRESET_NAME_TO_ORDINAL["brightIdol"]
-    assert libsonare.voice_character_preset_id(bright_ordinal) == "brightIdol"
 
     # Out-of-range ordinals resolve to None per the wrapper contract.
     assert libsonare.voice_character_preset_id(-1) is None
-    assert libsonare.voice_character_preset_id(len(_VC_PRESET_NAME_TO_ORDINAL)) is None
+    assert libsonare.voice_character_preset_id(len(ids)) is None
 
 
 def test_realtime_voice_changer_stereo_interleaved() -> None:

@@ -15,18 +15,7 @@ import numpy as np
 from ._errors import _not_supported, _require_open
 from ._ffi import (
     SONARE_OK,
-    SONARE_VC_PRESET_BRIGHT_IDOL,
-    SONARE_VC_PRESET_CHOIR_HARMONY,
-    SONARE_VC_PRESET_DARK_VILLAIN,
-    SONARE_VC_PRESET_DEEP_NARRATOR,
-    SONARE_VC_PRESET_HARD_TUNE,
-    SONARE_VC_PRESET_MEGAPHONE,
     SONARE_VC_PRESET_NEUTRAL_MONITOR,
-    SONARE_VC_PRESET_RADIO_VOICE,
-    SONARE_VC_PRESET_ROBOT_MASCOT,
-    SONARE_VC_PRESET_ROBOT_MONOTONE,
-    SONARE_VC_PRESET_SOFT_WHISPER,
-    SONARE_VC_PRESET_VOCODER_STRINGS,
     SonareRealtimeVoiceChangerConfig,
     SonareVoiceChangeConfig,
 )
@@ -49,10 +38,12 @@ from ._runtime import (
     _to_c_float_array,
     _to_c_int,
     _to_c_size_t,
+    _token_ordinal,
     _utf8_arg,
     _validate_samples,
 )
 from ._types_analysis import StereoBlock
+from ._types_enums import _VOICE_PRESET_IDS, VoicePresetId
 
 _VOICE_CHANGE_STRUCT_VERSION = 1
 _FORMANT_MODES = {"relative": 0, "absolute": 1}
@@ -630,22 +621,6 @@ def validate_realtime_voice_changer_preset_json(json_text: str) -> dict[str, obj
             lib.sonare_free_string(error)
 
 
-_VC_PRESET_NAME_TO_ORDINAL: dict[str, int] = {
-    "neutralMonitor": SONARE_VC_PRESET_NEUTRAL_MONITOR,
-    "brightIdol": SONARE_VC_PRESET_BRIGHT_IDOL,
-    "softWhisper": SONARE_VC_PRESET_SOFT_WHISPER,
-    "deepNarrator": SONARE_VC_PRESET_DEEP_NARRATOR,
-    "robotMascot": SONARE_VC_PRESET_ROBOT_MASCOT,
-    "darkVillain": SONARE_VC_PRESET_DARK_VILLAIN,
-    "hardTune": SONARE_VC_PRESET_HARD_TUNE,
-    "robotMonotone": SONARE_VC_PRESET_ROBOT_MONOTONE,
-    "choirHarmony": SONARE_VC_PRESET_CHOIR_HARMONY,
-    "vocoderStrings": SONARE_VC_PRESET_VOCODER_STRINGS,
-    "megaphone": SONARE_VC_PRESET_MEGAPHONE,
-    "radioVoice": SONARE_VC_PRESET_RADIO_VOICE,
-}
-
-
 def voice_character_preset_id(ordinal: int) -> str | None:
     """Map a voice-character preset enum ordinal to its canonical id string.
 
@@ -654,8 +629,7 @@ def voice_character_preset_id(ordinal: int) -> str | None:
 
     Returns:
         The canonical preset id (e.g. ``"brightIdol"``) or ``None`` when the
-        ordinal is out of range. This is the reverse of
-        :data:`_VC_PRESET_NAME_TO_ORDINAL`.
+        ordinal is out of range.
     """
     raw = _get_lib().sonare_voice_character_preset_id(_to_c_int(ordinal, "ordinal"))
     if not raw:
@@ -922,35 +896,21 @@ class RealtimeVoiceChangerConfig:
         return out
 
 
-def _resolve_preset_ordinal(preset: str | int) -> int:
-    """Map a preset name to its ordinal, passing an integer ordinal through.
-
-    The name half only. An integer is not checked against anything here -- the
-    caller narrows it, and the C entry point owns the ordinal's own range.
-    """
-    if isinstance(preset, int):
-        return preset
-    _utf8_arg(preset, "preset")
-    try:
-        return _VC_PRESET_NAME_TO_ORDINAL[preset]
-    except KeyError as exc:
-        raise SonareValueError(f"unknown voice character preset: {preset!r}") from exc
+def _resolve_preset_ordinal(preset: VoicePresetId) -> int:
+    if isinstance(preset, str):
+        _utf8_arg(preset, "preset")
+    return _token_ordinal(preset, _VOICE_PRESET_IDS, "voice character preset")
 
 
-def realtime_voice_changer_preset_config(preset: str | int) -> RealtimeVoiceChangerConfig:
+def realtime_voice_changer_preset_config(preset: VoicePresetId) -> RealtimeVoiceChangerConfig:
     """Return the canonical (normalised) config for a built-in preset.
 
     Skips the JSON round-trip that ``realtime_voice_changer_preset_json``
-    incurs. Accepts either the canonical preset id (``"neutralMonitor"``,
-    ...) or the integer ordinal from :data:`SONARE_VC_PRESET_NEUTRAL_MONITOR`
-    and friends.
-
-    This is the canonical name shared with the C / Node / WASM ``preset_config``
-    surfaces; :func:`realtime_voice_changer_preset_pod` is a deprecated alias.
+    incurs.
 
     Raises:
-        SonareValueError: If ``preset`` is neither a known name nor an integer
-            ordinal a C ``int`` holds.
+        TypeError: If ``preset`` is not a string.
+        SonareValueError: If ``preset`` is not a :data:`VoicePresetId` token.
     """
     lib = _get_lib()
     if not hasattr(lib, "sonare_realtime_voice_changer_preset_config"):
@@ -960,19 +920,10 @@ def realtime_voice_changer_preset_config(preset: str | int) -> RealtimeVoiceChan
         )
     pod = SonareRealtimeVoiceChangerConfig()
     rc = lib.sonare_realtime_voice_changer_preset_config(
-        _to_c_int(_resolve_preset_ordinal(preset), "preset"), ctypes.byref(pod)
+        _resolve_preset_ordinal(preset), ctypes.byref(pod)
     )
     _check(rc)
     return RealtimeVoiceChangerConfig.from_pod(pod)
-
-
-def realtime_voice_changer_preset_pod(preset: str | int) -> RealtimeVoiceChangerConfig:
-    """Deprecated alias for :func:`realtime_voice_changer_preset_config`.
-
-    Retained for backward compatibility; prefer the ``preset_config`` name,
-    which matches the other language bindings.
-    """
-    return realtime_voice_changer_preset_config(preset)
 
 
 def _retune_grain_size_request(grain_size_samples: int | None) -> int:

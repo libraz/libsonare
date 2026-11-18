@@ -40,7 +40,6 @@ from ._effects_separation import *  # noqa: F403
 from ._effects_spectral import *  # noqa: F403
 from ._effects_timepitch import *  # noqa: F403
 from ._effects_voice import *  # noqa: F403
-from ._effects_voice import _VC_PRESET_NAME_TO_ORDINAL as _VC_PRESET_NAME_TO_ORDINAL
 from ._effects_voice import (
     _resolve_preset_ordinal as _resolve_preset_ordinal,
 )

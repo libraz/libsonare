@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import dataclasses
 import math
+from typing import get_args
 
 import numpy as np
 import pytest
@@ -66,13 +67,12 @@ def test_neutral_preset_selects_the_psola_engine() -> None:
 
 
 @pytest.mark.parametrize("name", NEW_PRESETS)
-def test_new_presets_resolve_by_name_ordinal_and_id(name: str) -> None:
+def test_new_presets_resolve_by_name_and_id(name: str) -> None:
     names = libsonare.realtime_voice_changer_preset_names()
     assert name in names
     ordinal = names.index(name)
-    by_name = libsonare.realtime_voice_changer_preset_config(name)
-    assert dataclasses.astuple(by_name) == dataclasses.astuple(
-        libsonare.realtime_voice_changer_preset_config(ordinal)
+    assert isinstance(
+        libsonare.realtime_voice_changer_preset_config(name), libsonare.RealtimeVoiceChangerConfig
     )
     assert libsonare.voice_character_preset_id(ordinal) == name
     with libsonare.RealtimeVoiceChanger(SAMPLE_RATE, name, max_block_size=128) as changer:
@@ -84,6 +84,8 @@ def test_preset_list_has_twelve_ordered_entries() -> None:
     names = libsonare.realtime_voice_changer_preset_names()
     assert len(names) == 12
     assert names[6:] == NEW_PRESETS
+    # The Literal lists the ids in the core's ordinal order.
+    assert tuple(names) == get_args(libsonare.VoicePresetId)
 
 
 def test_new_fields_round_trip_through_the_pod() -> None:

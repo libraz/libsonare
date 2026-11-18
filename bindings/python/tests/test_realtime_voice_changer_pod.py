@@ -1,7 +1,7 @@
 """Tests for the flat POD-config path of RealtimeVoiceChanger.
 
 These tests exercise the ctypes-direct path that skips the JSON round-trip:
-``realtime_voice_changer_preset_pod`` + ``RealtimeVoiceChanger.config_pod`` /
+``realtime_voice_changer_preset_config`` + ``RealtimeVoiceChanger.config_pod`` /
 ``set_config_pod``. The slow JSON path is covered separately by
 ``test_editing.py``.
 """
@@ -38,8 +38,8 @@ def test_pod_dataclass_has_one_field_per_pod_field() -> None:
     assert pod_field_names == dc_field_names
 
 
-def test_preset_pod_returns_dataclass_for_known_name() -> None:
-    cfg = libsonare.realtime_voice_changer_preset_pod("neutralMonitor")
+def test_preset_config_returns_dataclass_for_known_name() -> None:
+    cfg = libsonare.realtime_voice_changer_preset_config("neutralMonitor")
     assert isinstance(cfg, libsonare.RealtimeVoiceChangerConfig)
     # Neutral monitor is a no-op-ish preset: wet_mix should be 1.0 and the
     # formant factor should be 1.0 (no pitch shift).
@@ -60,85 +60,33 @@ def test_default_constructed_config_matches_neutral_monitor_preset() -> None:
     assert default == preset
 
 
-def test_preset_config_is_canonical_alias_of_preset_pod() -> None:
-    # realtime_voice_changer_preset_config is the canonical name (matching the
-    # other bindings); realtime_voice_changer_preset_pod is the deprecated alias.
-    cfg = libsonare.realtime_voice_changer_preset_config("brightIdol")
-    pod = libsonare.realtime_voice_changer_preset_pod("brightIdol")
-    assert isinstance(cfg, libsonare.RealtimeVoiceChangerConfig)
-    assert cfg == pod
-
-
-def test_preset_pod_accepts_int_ordinal() -> None:
-    by_name = libsonare.realtime_voice_changer_preset_pod("brightIdol")
-    by_ord = libsonare.realtime_voice_changer_preset_pod(
-        libsonare._ffi.SONARE_VC_PRESET_BRIGHT_IDOL
-    )
-    # All fields should match between the two access paths.
-    for f in dataclasses.fields(libsonare.RealtimeVoiceChangerConfig):
-        assert getattr(by_name, f.name) == getattr(by_ord, f.name)
-
-
-def test_preset_pod_distinguishes_presets() -> None:
-    neutral = libsonare.realtime_voice_changer_preset_pod("neutralMonitor")
-    bright = libsonare.realtime_voice_changer_preset_pod("brightIdol")
-    # The "bright" preset cannot be identical to the neutral one — at least one
+def test_preset_config_distinguishes_presets() -> None:
+    neutral = libsonare.realtime_voice_changer_preset_config("neutralMonitor")
+    bright = libsonare.realtime_voice_changer_preset_config("brightIdol")
+    # The "bright" preset cannot be identical to the neutral one -- at least one
     # field must differ.
     assert dataclasses.astuple(neutral) != dataclasses.astuple(bright)
 
 
-def test_preset_pod_rejects_unknown_name() -> None:
-    with pytest.raises(ValueError, match="unknown voice character preset"):
-        libsonare.realtime_voice_changer_preset_pod("does-not-exist")
+def test_preset_config_rejects_an_unknown_name_listing_the_ids() -> None:
+    with pytest.raises(SonareValueError, match="invalid voice character preset") as caught:
+        libsonare.realtime_voice_changer_preset_config("does-not-exist")  # type: ignore[arg-type]
+    assert "'radioVoice'" in str(caught.value)
 
 
-# Preset ordinals past the signed range, each with the ordinal a C ``int`` folds
-# it to. The fold is what makes these the interesting inputs rather than merely
-# huge ones: every one lands on a live preset, so each has a plausible
-# SUCCESSFUL outcome waiting for it and a refusal-shaped assertion alone cannot
-# see that.
-WRAPPING_PRESET_ORDINALS = [(2**32, 0), (2**32 + 1, 1), (2**32 + 2, 2), (3 * 2**32, 0)]
+@pytest.mark.parametrize("value", [0, 1, 2**32, True, False, 1.0])
+def test_preset_config_refuses_a_number_rather_than_reading_it_as_an_ordinal(value) -> None:
+    """A preset is named by its id; an ordinal (or a bool posing as one) is a TypeError.
 
-PRESET_ENTRIES = [
-    libsonare.realtime_voice_changer_preset_config,
-    libsonare.realtime_voice_changer_preset_pod,
-]
-
-
-@pytest.mark.parametrize("entry", PRESET_ENTRIES)
-def test_preset_config_refuses_an_ordinal_past_the_c_range_rather_than_folding_it(entry) -> None:
-    """An ordinal past the signed range reached the core as a different preset.
-
-    The refusal is anchored on the argument it names, because this entry point's
-    other refusal is "unknown voice character preset: ..." -- which contains the
-    word "preset" too, so an unanchored match would be satisfied by the wrong
-    guard entirely.
-
-    The positive control carries the claim a refusal cannot: the three ordinals
-    these values fold onto are live presets with three distinct configs, so an
-    unchecked call returns one of them -- indistinguishable from having asked
-    for it, and nothing downstream can tell the two apart.
+    The positive control: the ids these ordinals would have named are three
+    distinct live presets, so a resolver that read the number would return one
+    of them, indistinguishable from having asked for it.
     """
-    folded = [dataclasses.astuple(entry(ordinal)) for ordinal in (0, 1, 2)]
+    ids = ("neutralMonitor", "brightIdol", "softWhisper")
+    folded = [dataclasses.astuple(libsonare.realtime_voice_changer_preset_config(i)) for i in ids]
     assert len(set(folded)) == 3
-
-    for value, folds_to in WRAPPING_PRESET_ORDINALS:
-        with pytest.raises(SonareValueError, match=r"^preset must be"):
-            entry(value)
-        assert dataclasses.astuple(entry(folds_to)) == folded[folds_to]
-
-
-@pytest.mark.parametrize("entry", PRESET_ENTRIES)
-@pytest.mark.parametrize("value", [True, False])
-def test_preset_config_refuses_a_bool_rather_than_reading_it_as_an_ordinal(entry, value) -> None:
-    """``bool`` is an ``int`` subclass, so it reached the ordinal path unchallenged.
-
-    It cannot fail a range check either, which is why keeping it out takes an
-    explicit test rather than a bound: ``True`` selected preset 1 and ``False``
-    preset 0, both legal answers to a question nobody asked.
-    """
-    with pytest.raises(TypeError, match=r"^preset must be"):
-        entry(value)
+    with pytest.raises(TypeError, match="voice character preset"):
+        libsonare.realtime_voice_changer_preset_config(value)
 
 
 def _build_changer() -> libsonare.RealtimeVoiceChanger:
@@ -153,11 +101,11 @@ def test_config_pod_returns_live_normalized_config() -> None:
         cfg = changer.config_pod()
         assert isinstance(cfg, libsonare.RealtimeVoiceChangerConfig)
         # The handle was created from the neutral preset, so its live config
-        # must agree with realtime_voice_changer_preset_pod("neutralMonitor")
+        # must agree with realtime_voice_changer_preset_config("neutralMonitor")
         # on every field except the retune grain size. Grain size is structural
         # and resolved at prepare() time, so config() reports the effective grain
         # rather than the requested value (0 = "library default") in the preset.
-        preset = libsonare.realtime_voice_changer_preset_pod("neutralMonitor")
+        preset = libsonare.realtime_voice_changer_preset_config("neutralMonitor")
         for f in dataclasses.fields(libsonare.RealtimeVoiceChangerConfig):
             if f.name == "retune_grain_size_samples":
                 continue
@@ -202,7 +150,7 @@ def test_set_config_pod_does_not_break_processing() -> None:
     samples = 0.2 * np.sin(2 * math.pi * 220.0 * np.arange(sr // 4) / sr).astype(np.float32)
     changer = _build_changer()
     try:
-        cfg = libsonare.realtime_voice_changer_preset_pod("brightIdol")
+        cfg = libsonare.realtime_voice_changer_preset_config("brightIdol")
         changer.set_config_pod(cfg)
         out = changer.process_mono(samples)
         assert out.shape == samples.shape
@@ -213,7 +161,7 @@ def test_set_config_pod_does_not_break_processing() -> None:
 
 
 def test_to_pod_and_from_pod_are_inverses() -> None:
-    cfg = libsonare.realtime_voice_changer_preset_pod("darkVillain")
+    cfg = libsonare.realtime_voice_changer_preset_config("darkVillain")
     cycled = libsonare.RealtimeVoiceChangerConfig.from_pod(cfg.to_pod())
     assert dataclasses.astuple(cycled) == dataclasses.astuple(cfg)
 

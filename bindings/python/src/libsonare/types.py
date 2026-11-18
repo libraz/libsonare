@@ -476,6 +476,9 @@ from ._types_enums import (
     TrimSilenceMode as TrimSilenceMode,
 )
 from ._types_enums import (
+    VoicePresetId as VoicePresetId,
+)
+from ._types_enums import (
     WindowType as WindowType,
 )
 from ._types_mastering import (
