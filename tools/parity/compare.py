@@ -43,6 +43,7 @@ from pathlib import Path
 
 from allowlist import AGREED, DIVERGED, Allowlist
 from core_defaults import CoreConfig
+from extractors import native_defaults as native_defaults_mod
 from extractors.c_api import matrix_dimensions
 from extractors.wasm_internal import WasmInternal
 from model import Extraction, FunctionSig, RecordShape
@@ -622,11 +623,14 @@ class Report:
     # own validation, so the report lists them apart from the C-symbol credits.
     core_reached: list[tuple[str, str, str, str]] = field(default_factory=list)
 
-    def decline(self, category: str, key: str, surface: str, reason: str) -> None:
-        """Record a comparison that could not be made, and why."""
-        self.not_compared.append(
-            {"category": category, "key": key, "surface": surface, "reason": reason}
-        )
+    def decline(
+        self, category: str, key: str, surface: str, reason: str, location: str = ""
+    ) -> None:
+        """Record a comparison that could not be made, and why (and where, when known)."""
+        row = {"category": category, "key": key, "surface": surface, "reason": reason}
+        if location:
+            row["location"] = location
+        self.not_compared.append(row)
 
     def comparison_counts(self) -> dict[str, int]:
         """Verdicts reached per finding category, counted by the allowlist.
@@ -917,6 +921,7 @@ def build_report(
     core_configs: dict[str, CoreConfig] | None = None,
     wasm_internal: WasmInternal | None = None,
     native_sources: dict[str, list[tuple[str, str]]] | None = None,
+    native_defaults: tuple[list, dict[str, str]] | None = None,
 ) -> Report:
     rep = Report(surfaces=selected, allowlist=allow)
     indexed = {s: _index(ex) for s, ex in extractions.items()}
@@ -1152,6 +1157,8 @@ def build_report(
     # --- 6. Core-default drift (facade vs C++ core struct design default) ---
     if core_configs:
         _core_default_drift(indexed, core_configs, allow, rep, roles)
+    if native_defaults is not None:
+        _native_default_drift(native_defaults[0], native_defaults[1], allow, rep)
 
     # --- 7. WASM-internal wiring consistency (embind <-> SonareModule <-> facade) ---
     if wasm_internal is not None:
@@ -1689,6 +1696,79 @@ def _core_default_drift(
                         location=f"{sig.file}:{sig.line} (core {cfg.header})",
                     )
                 )
+
+
+def _native_default_drift(native_defaults, constants: dict[str, str], allow, rep: Report) -> None:
+    """Flag a native fallback literal that disagrees with the C++ default it stands in for.
+
+    The addon and embind layers substitute a literal when a value is absent, and
+    that literal is a second spelling of a default the core already owns. Each
+    site is followed to the core struct field or default argument the value
+    lands in (``extractors/native_defaults.py``); a site that cannot be followed
+    is reported as not compared, with the reason the resolver gave.
+    """
+    for nd in native_defaults:
+        key = f"{nd.function}.{nd.param or '?'}"
+        if nd.unresolved:
+            where = f" -> {nd.anchor}" if nd.anchor else ""
+            rep.decline(
+                "native_default",
+                f"{key}={nd.literal}{where}",
+                nd.surface,
+                nd.unresolved,
+                f"{nd.file}:{nd.line}",
+            )
+            continue
+        literal = native_defaults_mod.literal_value(nd.literal, constants)
+        if literal is None:
+            rep.decline(
+                "native_default",
+                key,
+                nd.surface,
+                "the fallback is an expression, not a literal"
+                if "." not in nd.literal
+                else "the fallback reads a core config's own member",
+            )
+            continue
+        if nd.core is None:
+            rep.decline("native_default", key, nd.surface, "the core anchor has no literal default")
+            continue
+        lit = re.sub(r"(?<=\d)[uUlL]+$", "", literal)
+        if "::" in nd.core:
+            rep.decline(
+                "native_default",
+                key,
+                nd.surface,
+                "the core default is an enum member, which the fallback spells as a "
+                "selector the resolver cannot map",
+            )
+            continue
+        verdict = (
+            AGREED
+            if canonical_default(lit) == canonical_default(re.sub(r"(?<=\d)[uUlL]+$", "", nd.core))
+            else DIVERGED
+        )
+        message = (
+            f"native fallback drift for '{nd.param}' in {nd.function}: "
+            f"{nd.literal} vs C++ {nd.anchor}={nd.core}"
+        )
+        if allow.native_default_ok(nd.function, nd.param, verdict, message) or verdict == AGREED:
+            continue
+        rep.findings.append(
+            Finding(
+                category="native_default",
+                key=key,
+                surface=nd.surface,
+                message=message,
+                detail={
+                    "param": nd.param,
+                    "native": nd.literal,
+                    "core": nd.core,
+                    "anchor": nd.anchor,
+                },
+                location=f"{nd.file}:{nd.line}",
+            )
+        )
 
 
 def _wasm_internal_drift(wi: WasmInternal, allow, rep: Report) -> None:

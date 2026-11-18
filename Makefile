@@ -962,6 +962,7 @@ conformance-checks:
 	$(CHECK) python3 tools/parity/test_allowlist_audit.py
 	$(CHECK) python3 tools/parity/test_comparison_reach.py
 	$(CHECK) python3 tools/parity/test_c_return_type_coverage.py
+	$(CHECK) python3 tools/parity/test_native_defaults.py
 	$(CHECK) python3 tools/eval/test_summarize_accuracy.py
 	$(CHECK) python3 tools/eval/test_prepare_vocadito.py
 	$(CHECK) python3 tools/eval/test_timed_keys.py

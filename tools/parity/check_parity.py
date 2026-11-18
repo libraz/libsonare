@@ -35,6 +35,7 @@ import report as report_mod
 from extractors import (
     c_api,
     cli,
+    native_defaults,
     node_ts,
     python_pyi,
     wasm_internal,
@@ -90,6 +91,11 @@ def run(
     resolved = {**_EXTRACTORS, **(extractors or {})}
     extractions = {s: resolved[s](root) for s in selected}
     wasm_int = wasm_internal.extract(root) if "wasm" in selected else None
+    native_surfaces = {f"{s}-native" for s in ("node", "wasm") if s in selected}
+    native = None
+    if native_surfaces:
+        sites, constants = native_defaults.extract(root)
+        native = ([n for n in sites if n.surface in native_surfaces], constants)
     return compare.build_report(
         extractions,
         allow,
@@ -97,6 +103,7 @@ def run(
         core_configs,
         wasm_int,
         native_sources=compare.load_native_sources(root),
+        native_defaults=native,
     )
 
 

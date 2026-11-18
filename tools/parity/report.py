@@ -6,12 +6,14 @@ import json
 from dataclasses import asdict
 
 from compare import Report
+from extractors import native_defaults
 from model import SURFACES
 
 CATEGORIES = (
     "coverage",
     "default",
     "core_default",
+    "native_default",
     "order",
     "input",
     "enum",
@@ -22,6 +24,7 @@ _CAT_TITLE = {
     "coverage": "Coverage gaps / surface-only symbols",
     "default": "Default drift (cross-facade)",
     "core_default": "Core-default drift (facade vs C++ core struct)",
+    "native_default": "Native fallback drift (addon / embind fallback vs C++ core default)",
     "order": "Argument order / count / name mismatch (vs C, config params)",
     "input": "Audio-input param naming consistency",
     "enum": "Enum value-set mismatch",
@@ -145,6 +148,25 @@ def to_markdown(rep: Report) -> str:
         for (category, reason), count in sorted(causes.items()):
             out.append(f"| {category} | {count} | {reason} |")
         out.append("")
+        # A native literal no core default stands behind is not a gap in the check
+        # but the default itself, so those sites are listed for whoever owns them.
+        only = [
+            n
+            for n in rep.not_compared
+            if n["reason"].startswith(native_defaults.ONLY_DEFAULT_PREFIX)
+        ]
+        if only:
+            out.append("### Native literals that are the only default\n")
+            out.append(
+                f"**{len(only)}** native fallback sites carry the only default the tree "
+                "spells for their value, so no core value exists to compare them with.\n"
+            )
+            out.append("| site = literal | surface | why | location |")
+            out.append("|---|---|---|---|")
+            for n in sorted(only, key=lambda r: r.get("location", "")):
+                why = n["reason"].split(": ", 1)[1]
+                out.append(f"| `{n['key']}` | {n['surface']} | {why} | `{n.get('location', '')}` |")
+            out.append("")
 
     if rep.core_reached:
         out.append("## Reached through the core, not the C entry\n")

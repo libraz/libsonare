@@ -83,7 +83,7 @@ def _match(name: str, patterns: list[str], used: set[str] | None = None) -> str 
 #: than the reviewed alias the section was written for. Both are empty today.
 #: Taking a section off this tuple is how it stops being -- do that in the same
 #: change as the entry, so the widening is reviewed rather than inherited.
-RATCHETED_SECTIONS = ("core_default", "enum")
+RATCHETED_SECTIONS = ("core_default", "native_default", "enum")
 
 
 @dataclass
@@ -93,6 +93,7 @@ class Allowlist:
     order: dict[str, list[str]] = field(default_factory=dict)
     default: list[str] = field(default_factory=list)
     core_default: list[str] = field(default_factory=list)
+    native_default: list[str] = field(default_factory=list)
     enum: list[str] = field(default_factory=list)
     input_naming: list[str] = field(default_factory=list)
     wasm_internal: list[str] = field(default_factory=list)
@@ -167,6 +168,7 @@ class Allowlist:
             declared += [(f"order.{surface}", p) for p in patterns]
         declared += [("default.params", p) for p in self.default]
         declared += [("core_default.params", p) for p in self.core_default]
+        declared += [("native_default.params", p) for p in self.native_default]
         declared += [("enum.params", p) for p in self.enum]
         declared += [("input_naming.keys", p) for p in self.input_naming]
         declared += [("wasm_internal.names", p) for p in self.wasm_internal]
@@ -259,6 +261,12 @@ class Allowlist:
         self._counted("core_default")
         return self._mark("core_default.params", f"{key}.{param}", self.core_default, verdict, div)
 
+    def native_default_ok(self, key: str, param: str, verdict: str, div: str = "") -> bool:
+        self._counted("native_default")
+        return self._mark(
+            "native_default.params", f"{key}.{param}", self.native_default, verdict, div
+        )
+
     def enum_ok(self, key: str, param: str, verdict: str, div: str = "") -> bool:
         self._counted("enum")
         return self._mark("enum.params", f"{key}.{param}", self.enum, verdict, div)
@@ -307,6 +315,7 @@ def load(path: Path) -> Allowlist:
         order={k: list(v) for k, v in data.get("order", {}).items()},
         default=list(data.get("default", {}).get("params", [])),
         core_default=list(data.get("core_default", {}).get("params", [])),
+        native_default=list(data.get("native_default", {}).get("params", [])),
         enum=list(data.get("enum", {}).get("params", [])),
         input_naming=list(data.get("input_naming", {}).get("keys", [])),
         wasm_internal=list(data.get("wasm_internal", {}).get("names", [])),
