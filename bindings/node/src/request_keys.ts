@@ -1492,7 +1492,7 @@ const APPLY_PROJECT_VOCAL_EDIT_REQUEST_KEYS = keySet(
   'vocalState',
 );
 const VOCAL_APPLY_REQUEST_KEYS = keySet('expectedGeneration', 'operations');
-const VOCAL_RENDER_REQUEST_KEYS = keySet('range', 'requestId', 'signal');
+const VOCAL_RENDER_REQUEST_KEYS = keySet('range', 'requestId', 'cancel');
 const MASTERING_REPAIR_DEREVERB_CONFIG_FOR_ROOM_REQUEST_KEYS = keySet(
   'estimate',
   'threshold',

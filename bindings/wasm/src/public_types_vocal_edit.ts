@@ -470,12 +470,25 @@ export interface VocalRangeInput {
   endSec?: number;
 }
 
-/** Input of a render or preview. */
-export interface VocalRenderRequest {
+/** Range and tag of a render or preview; the request of `VocalRenderSnapshot.beginRenderJob`. */
+export interface VocalRenderJobRequest {
   /** Omit to render the complete destination output. */
   range?: VocalRangeInput;
   /** Caller tag echoed in the result token, as a decimal string (64-bit counter); defaults to `'0'`. */
   requestId?: string;
+}
+
+/** Input of the synchronous `VocalRenderSnapshot.render`. */
+export interface VocalRenderRequest extends VocalRenderJobRequest {
+  /**
+   * Polled between render work units; returning `true` stops the render with a
+   * `Cancelled` error and no partial PCM.
+   */
+  cancel?: () => boolean;
+}
+
+/** Input of an asynchronous render or worker preview. */
+export interface VocalRenderAsyncRequest extends VocalRenderJobRequest {
   /** Aborts the render; an aborted call rejects with a `Cancelled` error. */
   signal?: AbortSignal;
 }

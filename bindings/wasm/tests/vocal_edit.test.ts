@@ -510,7 +510,37 @@ describe('WASM vocal edit facade', () => {
     }
   });
 
-  it('refuses an aborted signal on every render entry point as a Cancelled SonareError', async () => {
+  it('polls a synchronous cancel hook on render', () => {
+    const session = createVocalEditSession({ samples: tone(512), sampleRate: SAMPLE_RATE });
+    try {
+      const snapshot = session.captureRenderSnapshot();
+      try {
+        const range = { startSample: 0, endSample: 256 };
+        let polls = 0;
+        const hooked = snapshot.render({
+          range,
+          cancel: () => {
+            polls += 1;
+            return false;
+          },
+        });
+        expect(polls).toBeGreaterThan(0);
+        expect(hooked.samples).toEqual(snapshot.render({ range }).samples);
+        expect(() => snapshot.render({ range, cancel: () => true })).toThrow(
+          expect.objectContaining({ code: ErrorCode.Cancelled }),
+        );
+        expect(() => snapshot.render({ range, cancel: true as unknown as () => boolean })).toThrow(
+          TypeError,
+        );
+      } finally {
+        snapshot.destroy();
+      }
+    } finally {
+      session.destroy();
+    }
+  });
+
+  it('refuses an aborted signal on renderAsync as a Cancelled SonareError', async () => {
     const session = createVocalEditSession({ samples: tone(512), sampleRate: SAMPLE_RATE });
     try {
       const snapshot = session.captureRenderSnapshot();
@@ -518,12 +548,6 @@ describe('WASM vocal edit facade', () => {
         const signal = AbortSignal.abort();
         const cancelled = (error: unknown) =>
           isSonareError(error) && error.code === ErrorCode.Cancelled;
-        expect(() => snapshot.render({ signal })).toThrow(
-          expect.objectContaining({ code: ErrorCode.Cancelled }),
-        );
-        expect(() => snapshot.beginRenderJob({ signal })).toThrow(
-          expect.objectContaining({ code: ErrorCode.Cancelled }),
-        );
         const rejection = await snapshot.renderAsync({ signal }).then(
           () => undefined,
           (error: unknown) => error,

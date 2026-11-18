@@ -2867,7 +2867,7 @@ const ApplyProjectVocalEditRequestKeys = keysOf<ProjectVocalEditApplyRequest>()(
   'vocalState',
 ]);
 const VocalApplyRequestKeys = keysOf<VocalApplyRequest>()(['expectedGeneration', 'operations']);
-const VocalRenderRequestKeys = keysOf<VocalRenderRequest>()(['range', 'requestId', 'signal']);
+const VocalRenderRequestKeys = keysOf<VocalRenderRequest>()(['range', 'requestId', 'cancel']);
 
 /** Request shape of every entry point that takes a request object, by entry-point name. */
 export const REQUEST_SHAPES = {

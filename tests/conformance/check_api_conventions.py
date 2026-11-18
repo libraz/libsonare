@@ -1086,11 +1086,6 @@ RULES: list[Rule] = [
         population=lambda r: r["kind"] == "call",
         violation=_cancellation_violation,
         derive=_cancellation_calls,
-        pending={
-            f"{s}:VocalRenderSnapshot.{m}": "a synchronous render request takes cancel: () => boolean, not signal"
-            for s in ("node", "wasm")
-            for m in ("render", "beginRenderJob")
-        },
     ),
     Rule(
         name="tempo-range",

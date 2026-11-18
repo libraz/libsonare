@@ -318,7 +318,7 @@ async function runPreview(
     : session.value.captureRenderSnapshot();
   let job: VocalRenderJob | undefined;
   try {
-    job = snapshot.beginRenderJob({ ...message.request, signal: undefined });
+    job = snapshot.beginRenderJob(message.request);
     while (true) {
       if (isCancelled(active)) {
         job.abort();

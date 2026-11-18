@@ -8,7 +8,7 @@ import type {
   VocalHistory,
   VocalNotesResult,
   VocalPitchEvaluation,
-  VocalRenderRequest,
+  VocalRenderJobRequest,
   VocalRenderResult,
   VocalRestoreRequest,
   VocalStateToken,
@@ -74,7 +74,7 @@ export interface VocalWorkerPreviewMessage {
   sessionId: string;
   clientIntentSequence: string;
   baseToken?: VocalStateToken;
-  request: VocalRenderRequest;
+  request: VocalRenderJobRequest;
   cancelBuffer?: SharedArrayBuffer;
 }
 

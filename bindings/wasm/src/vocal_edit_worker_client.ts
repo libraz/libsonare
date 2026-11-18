@@ -23,7 +23,7 @@ import type {
   VocalHistory,
   VocalNotesResult,
   VocalPitchEvaluation,
-  VocalRenderRequest,
+  VocalRenderAsyncRequest,
   VocalRenderResult,
   VocalRestoreRequest,
   VocalStateToken,
@@ -432,7 +432,7 @@ class ClientCore {
 
   preview(
     session: SessionState,
-    request: VocalRenderRequest,
+    request: VocalRenderAsyncRequest,
     options: VocalEditWorkerTransferOptions = {},
   ): Promise<VocalRenderResult> {
     const signal = request.signal;
@@ -796,7 +796,7 @@ export class VocalEditWorkerDraft {
    * rejects with a `StaleResult` error; `request.signal` aborts with a `Cancelled` error.
    */
   async preview(
-    request: VocalRenderRequest,
+    request: VocalRenderAsyncRequest,
     options: VocalEditWorkerTransferOptions = {},
   ): Promise<VocalRenderResult> {
     this.requireOpen();
@@ -965,7 +965,7 @@ export class VocalEditWorkerSession {
    * `request.signal` aborts with a `Cancelled` error.
    */
   async preview(
-    request: VocalRenderRequest,
+    request: VocalRenderAsyncRequest,
     options: VocalEditWorkerTransferOptions = {},
   ): Promise<VocalRenderResult> {
     this.requireAlive();

@@ -15,6 +15,8 @@ import type {
   VocalRange,
   VocalRangeInput,
   VocalReason,
+  VocalRenderAsyncRequest,
+  VocalRenderJobRequest,
   VocalRenderRequest,
   VocalRenderResult,
   VocalRestoreRequest,
@@ -462,6 +464,25 @@ function throwIfAborted(signal: AbortSignal | undefined): void {
   }
 }
 
+/** Steps a job to completion, polling `cancel` before each work unit; no partial PCM on a stop. */
+function renderUntilCancelled(job: VocalRenderJob, cancel: () => boolean): VocalRenderResult {
+  try {
+    while (true) {
+      if (cancel()) {
+        throw cancelledError();
+      }
+      if (job.next().complete) {
+        return job.finalize();
+      }
+    }
+  } catch (error) {
+    job.abort();
+    throw error;
+  } finally {
+    job.destroy();
+  }
+}
+
 /** An immutable render view whose lifetime is independent of its session. */
 export class VocalRenderSnapshot implements Disposable {
   private disposed = false;
@@ -477,15 +498,24 @@ export class VocalRenderSnapshot implements Disposable {
     return this.native.outputLengthSamples();
   }
 
-  /** Renders the requested range synchronously. */
+  /**
+   * Renders the requested range synchronously. A `cancel` hook is polled between
+   * work units; when it returns `true` the render stops with a `Cancelled` error.
+   */
   render(request: VocalRenderRequest): VocalRenderResult {
     this.requireAlive();
-    throwIfAborted(request.signal);
-    return convertRenderResult(this.native.render(this.resolveRange(request), request.requestId));
+    const cancel = request.cancel;
+    if (cancel === undefined) {
+      return convertRenderResult(this.native.render(this.resolveRange(request), request.requestId));
+    }
+    if (typeof cancel !== 'function') {
+      throw new TypeError('VocalRenderSnapshot.render: cancel must be a function');
+    }
+    return renderUntilCancelled(this.beginRenderJob(request), cancel);
   }
 
   /** Renders the requested range off the calling thread. */
-  async renderAsync(request: VocalRenderRequest): Promise<VocalRenderResult> {
+  async renderAsync(request: VocalRenderAsyncRequest): Promise<VocalRenderResult> {
     this.requireAlive();
     throwIfAborted(request.signal);
     try {
@@ -508,9 +538,8 @@ export class VocalRenderSnapshot implements Disposable {
   }
 
   /** Starts an incremental render job. */
-  beginRenderJob(request: VocalRenderRequest): VocalRenderJob {
+  beginRenderJob(request: VocalRenderJobRequest): VocalRenderJob {
     this.requireAlive();
-    throwIfAborted(request.signal);
     return wrapVocalRenderJob(
       this.native.beginRenderJob(this.resolveRange(request), request.requestId),
     );
@@ -536,7 +565,7 @@ export class VocalRenderSnapshot implements Disposable {
     }
   }
 
-  private resolveRange(request: VocalRenderRequest): VocalRange {
+  private resolveRange(request: VocalRenderJobRequest): VocalRange {
     const range: VocalRangeInput = request.range ?? {};
     const start = resolveSampleBound(
       'VocalRenderSnapshot.render',
@@ -836,6 +865,8 @@ export type {
   VocalRangeInput,
   VocalReason,
   VocalRemoveTransitionOperation,
+  VocalRenderAsyncRequest,
+  VocalRenderJobRequest,
   VocalRenderRequest,
   VocalRenderResult,
   VocalResetOperation,

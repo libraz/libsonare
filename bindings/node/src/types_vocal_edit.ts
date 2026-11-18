@@ -489,13 +489,26 @@ export interface VocalRangeInput {
   endSec?: number;
 }
 
-/** Request for the render calls of {@link VocalRenderSnapshot}. */
-export interface VocalRenderRequest {
+/** Range and tag of a render from {@link VocalRenderSnapshot}; the request of {@link VocalRenderSnapshot.beginRenderJob}. */
+export interface VocalRenderJobRequest {
   /** Omit to render the complete destination output. */
   range?: VocalRangeInput;
   /** Decimal id echoed in the result's token (64-bit ids exceed 2^53); omitted means none. */
   requestId?: string;
-  /** Aborts the render. */
+}
+
+/** Request of the synchronous {@link VocalRenderSnapshot.render}. */
+export interface VocalRenderRequest extends VocalRenderJobRequest {
+  /**
+   * Polled between render work units; returning `true` stops the render with a
+   * `Cancelled` error and no partial PCM.
+   */
+  cancel?: () => boolean;
+}
+
+/** Request of {@link VocalRenderSnapshot.renderAsync}. */
+export interface VocalRenderAsyncRequest extends VocalRenderJobRequest {
+  /** Aborts the render; an aborted call rejects with a `Cancelled` error. */
   signal?: AbortSignal;
 }
 

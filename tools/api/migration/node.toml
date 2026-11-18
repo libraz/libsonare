@@ -11621,10 +11621,26 @@ rule = "string-closed-sets"
 [[entry]]
 kind = "method"
 old = "VocalRenderSnapshot.render"
-changed = "an aborted signal rejects with SonareError code Cancelled instead of a DOMException AbortError"
-test = "bindings/node/tests/vocal_edit.test.ts::already-aborted signal"
+changed = "takes cancel: () => boolean, polled between render work units, instead of signal; returning true throws SonareError code Cancelled with no partial PCM"
+test = "bindings/node/tests/vocal_edit.test.ts::polls a synchronous cancel hook on render"
 domain = "project"
-rule = "error-class-by-cause"
+rule = "cancellation"
+
+[[entry]]
+kind = "method"
+old = "VocalRenderSnapshot.beginRenderJob"
+changed = "takes VocalRenderJobRequest (range, requestId) and no signal; the caller stops the job with abort()"
+test = "bindings/node/tests/vocal_edit.test.ts::polls a synchronous cancel hook on render"
+domain = "project"
+rule = "cancellation"
+
+[[entry]]
+kind = "type"
+old = "VocalRenderRequest"
+changed = "carries cancel?: () => boolean instead of signal and is the request of render only; renderAsync takes VocalRenderAsyncRequest (range, requestId, signal) and beginRenderJob takes VocalRenderJobRequest (range, requestId)"
+test = "bindings/node/tests/vocal_edit.test.ts::polls a synchronous cancel hook on render"
+domain = "project"
+rule = "cancellation"
 
 [[entry]]
 kind = "field"

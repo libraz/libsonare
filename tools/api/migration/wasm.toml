@@ -21450,18 +21450,18 @@ test = "bindings/wasm/tests/vocal_project.test.ts::dependency and rehydrate take
 [[entry]]
 kind = "method"
 old = "VocalRenderSnapshot.render"
-changed = "an aborted signal rejects or throws a Cancelled SonareError instead of a DOMException AbortError"
+changed = "takes cancel: () => boolean, polled between render work units, instead of signal; returning true throws a Cancelled SonareError with no partial PCM"
 domain = "project"
 rule = "cancellation"
-test = "bindings/wasm/tests/vocal_edit.test.ts::refuses an aborted signal on every render entry point"
+test = "bindings/wasm/tests/vocal_edit.test.ts::polls a synchronous cancel hook on render"
 
 [[entry]]
 kind = "method"
 old = "VocalRenderSnapshot.beginRenderJob"
-changed = "an aborted signal throws a Cancelled SonareError instead of a DOMException AbortError"
+changed = "takes VocalRenderJobRequest (range, requestId) and no signal; the caller stops the job with abort()"
 domain = "project"
 rule = "cancellation"
-test = "bindings/wasm/tests/vocal_edit.test.ts::refuses an aborted signal on every render entry point"
+test = "bindings/wasm/tests/vocal_edit.test.ts::polls a synchronous cancel hook on render"
 
 [[entry]]
 kind = "method"
@@ -21469,7 +21469,15 @@ old = "VocalRenderSnapshot.renderAsync"
 changed = "an already-aborted signal rejects with a Cancelled SonareError instead of a DOMException AbortError"
 domain = "project"
 rule = "cancellation"
-test = "bindings/wasm/tests/vocal_edit.test.ts::refuses an aborted signal on every render entry point"
+test = "bindings/wasm/tests/vocal_edit.test.ts::refuses an aborted signal on renderAsync"
+
+[[entry]]
+kind = "type"
+old = "VocalRenderRequest"
+changed = "carries cancel?: () => boolean instead of signal and is the request of render only; renderAsync and the worker preview take VocalRenderAsyncRequest (range, requestId, signal) and beginRenderJob takes VocalRenderJobRequest (range, requestId)"
+domain = "project"
+rule = "cancellation"
+test = "bindings/wasm/tests/vocal_edit.test.ts::polls a synchronous cancel hook on render"
 
 [[entry]]
 kind = "field"

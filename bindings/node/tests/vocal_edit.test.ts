@@ -375,17 +375,40 @@ describe('Node vocal edit facade', () => {
     await expect(lifecycle).rejects.toMatchObject({ code: ErrorCode.InvalidState });
   });
 
-  it('refuses an already-aborted signal on every render entry point as Cancelled', async () => {
+  it('refuses an already-aborted signal on renderAsync as Cancelled', async () => {
     const session = createVocalEditSession(request());
     const snapshot = session.captureRenderSnapshot();
     try {
-      const signal = AbortSignal.abort();
-      const cancelled = expect.objectContaining({ code: ErrorCode.Cancelled });
-      expect(() => snapshot.render({ signal })).toThrow(cancelled);
-      expect(() => snapshot.beginRenderJob({ signal })).toThrow(cancelled);
-      await expect(snapshot.renderAsync({ signal })).rejects.toMatchObject({
+      await expect(snapshot.renderAsync({ signal: AbortSignal.abort() })).rejects.toMatchObject({
         code: ErrorCode.Cancelled,
       });
+    } finally {
+      snapshot.destroy();
+      session.destroy();
+    }
+  });
+
+  it('polls a synchronous cancel hook on render', () => {
+    const session = createVocalEditSession(request());
+    const snapshot = session.captureRenderSnapshot();
+    try {
+      const range = { startSample: 0, endSample: 256 };
+      let polls = 0;
+      const hooked = snapshot.render({
+        range,
+        cancel: () => {
+          polls += 1;
+          return false;
+        },
+      });
+      expect(polls).toBeGreaterThan(0);
+      expect(hooked.samples).toEqual(snapshot.render({ range }).samples);
+      expect(() => snapshot.render({ range, cancel: () => true })).toThrow(
+        expect.objectContaining({ code: ErrorCode.Cancelled }),
+      );
+      expect(() => snapshot.render({ range, cancel: true as unknown as () => boolean })).toThrow(
+        TypeError,
+      );
     } finally {
       snapshot.destroy();
       session.destroy();

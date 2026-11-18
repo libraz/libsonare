@@ -16,6 +16,8 @@ import type {
   VocalPitchEvaluation,
   VocalRange,
   VocalRangeInput,
+  VocalRenderAsyncRequest,
+  VocalRenderJobRequest,
   VocalRenderRequest,
   VocalRenderResult,
   VocalRestoreRequest,
@@ -535,7 +537,7 @@ function validateCreate(request: VocalCreateRequest): void {
 }
 
 function normalizeRequest(
-  request: VocalRenderRequest,
+  request: VocalRenderJobRequest,
   outputLengthSamples: number,
   sampleRate: number,
 ): {
@@ -552,6 +554,25 @@ function normalizeRequest(
         );
   const requestId = requireToken(request.requestId, 'requestId');
   return { range, requestId };
+}
+
+/** Advances a render job to completion, polling `cancel` before each work unit. */
+function renderUntilCancelled(job: VocalRenderJob, cancel: () => boolean): VocalRenderResult {
+  try {
+    while (true) {
+      if (cancel()) {
+        throw new SonareError(ErrorCode.Cancelled, 'The render was cancelled');
+      }
+      if (job.next().complete) {
+        return job.finalize();
+      }
+    }
+  } catch (error) {
+    job.abort();
+    throw error;
+  } finally {
+    job.destroy();
+  }
 }
 
 /** Whether this build has the C vocal-edit surface linked. */
@@ -929,8 +950,12 @@ export class VocalRenderSnapshot {
   /** Renders the requested range synchronously. */
   render(request: VocalRenderRequest): VocalRenderResult {
     const handle = this.native();
-    if (request.signal?.aborted) {
-      throw new SonareError(ErrorCode.Cancelled, 'The render was cancelled');
+    const cancel = request.cancel;
+    if (cancel !== undefined) {
+      if (typeof cancel !== 'function') {
+        throw new TypeError('VocalRenderSnapshot.render: cancel must be a function');
+      }
+      return renderUntilCancelled(this.beginRenderJob(request), cancel);
     }
     const normalized = normalizeRequest(request, this.outputLengthSamples, this.sampleRate);
     return copyRender(
@@ -944,11 +969,8 @@ export class VocalRenderSnapshot {
   }
 
   /** Starts an incremental render that the caller advances with {@link VocalRenderJob.next}. */
-  beginRenderJob(request: VocalRenderRequest): VocalRenderJob {
+  beginRenderJob(request: VocalRenderJobRequest): VocalRenderJob {
     const handle = this.native();
-    if (request.signal?.aborted) {
-      throw new SonareError(ErrorCode.Cancelled, 'The render was cancelled');
-    }
     const normalized = normalizeRequest(request, this.outputLengthSamples, this.sampleRate);
     return new VocalRenderJob(
       module().vocalEditRenderJobBegin(
@@ -965,7 +987,7 @@ export class VocalRenderSnapshot {
    * job between units. A cancelled job publishes no partial PCM. Every failure rejects:
    * an aborted signal, before or during the render, with a `Cancelled` SonareError.
    */
-  renderAsync(request: VocalRenderRequest): Promise<VocalRenderResult> {
+  renderAsync(request: VocalRenderAsyncRequest): Promise<VocalRenderResult> {
     let job: VocalRenderJob;
     try {
       this.native();
