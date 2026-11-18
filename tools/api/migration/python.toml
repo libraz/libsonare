@@ -8596,7 +8596,7 @@ kind = "option"
 old = "RealtimeEngine.set_track_lanes(lanes)"
 changed = "each lane is a mapping (a bare track id is TypeError) taking track_id, sends, output_bus_id and source_channel_layout only, and a send takes bus_id, level_db, enabled and send_timing only; trackId, busId, levelDb, outputBusId, sourceChannelLayout, sendTiming and timing raise SonareValueError naming the key"
 domain = "engine"
-rule = "snake-case-only"
+rule = "one-input-form"
 test = "bindings/python/tests/test_mapping_keys.py::test_engine_mixing_mappings_take_one_spelling"
 
 [[entry]]
@@ -8620,7 +8620,7 @@ kind = "option"
 old = "RealtimeEngine.set_tempo_segments(segments)"
 changed = "each segment is a mapping (a tuple is TypeError) taking start_ppq, bpm and end_bpm only; any other key raises SonareValueError naming it instead of being ignored"
 domain = "engine"
-rule = "snake-case-only"
+rule = "one-input-form"
 test = "bindings/python/tests/test_mapping_keys.py::test_engine_tempo_and_meter_segments_take_one_spelling"
 
 [[entry]]
@@ -8628,7 +8628,7 @@ kind = "option"
 old = "RealtimeEngine.set_time_signature_segments(segments)"
 changed = "each segment is a mapping (a tuple is TypeError) taking start_ppq, numerator and denominator only; any other key raises SonareValueError naming it instead of being ignored"
 domain = "engine"
-rule = "snake-case-only"
+rule = "one-input-form"
 test = "bindings/python/tests/test_mapping_keys.py::test_engine_tempo_and_meter_segments_take_one_spelling"
 
 [[entry]]
@@ -8636,7 +8636,7 @@ kind = "option"
 old = "Project.set_clip_takes(takes)"
 changed = "each take is a mapping (a tuple is TypeError) taking id, source_id, source_offset_ppq and name only; sourceId and sourceOffsetPpq raise SonareValueError naming the key"
 domain = "project"
-rule = "snake-case-only"
+rule = "one-input-form"
 test = "bindings/python/tests/test_mapping_keys.py::test_project_mappings_take_one_spelling"
 
 [[entry]]
@@ -8644,31 +8644,31 @@ kind = "option"
 old = "Project.set_clip_comp_segments(segments)"
 changed = "each segment is a mapping (a 3- or 4-tuple is TypeError) taking start_ppq, end_ppq, take_id and crossfade_ppq only; startPpq, endPpq, takeId and crossfadePpq raise SonareValueError naming the key"
 domain = "project"
-rule = "snake-case-only"
+rule = "one-input-form"
 test = "bindings/python/tests/test_mapping_keys.py::test_project_mappings_take_one_spelling"
 
 [[entry]]
 kind = "option"
 old = "Project.add_automation_lane(target_param_id)"
-changed = "takes the target id, points and target_kind as arguments (a descriptor mapping is refused) and each point is a mapping (a tuple is TypeError) taking ppq, value and curve_to_next only; curve, curveToNext and any other key raise SonareValueError naming it, and target_kind=None selects the untyped lane"
+changed = "takes the target id, points and target_kind as arguments (a descriptor mapping is refused) and each point is an AutomationPoint, as RealtimeEngine.set_automation_lane takes; a tuple or a mapping is TypeError, and target_kind=None selects the untyped lane"
 domain = "project"
-rule = "snake-case-only"
-test = "bindings/python/tests/test_mapping_keys.py::test_project_mappings_take_one_spelling"
+rule = "one-input-form"
+test = "bindings/python/tests/test_mapping_keys.py::test_a_positional_tuple_or_descriptor_in_place_of_a_mapping_is_a_type_error"
 
 [[entry]]
 kind = "option"
 old = "Project.edit_automation_lane(target_param_id)"
-changed = "takes the target id, points and target_kind as arguments (a descriptor mapping is refused) and each point is a mapping (a tuple is TypeError) taking ppq, value and curve_to_next only; curve, curveToNext and any other key raise SonareValueError naming it, and target_kind=None keeps the lane's kind"
+changed = "takes the target id, points and target_kind as arguments (a descriptor mapping is refused) and each point is an AutomationPoint, as RealtimeEngine.set_automation_lane takes; a tuple or a mapping is TypeError, and target_kind=None keeps the lane's kind"
 domain = "project"
-rule = "snake-case-only"
-test = "bindings/python/tests/test_mapping_keys.py::test_project_mappings_take_one_spelling"
+rule = "one-input-form"
+test = "bindings/python/tests/test_mapping_keys.py::test_a_positional_tuple_or_descriptor_in_place_of_a_mapping_is_a_type_error"
 
 [[entry]]
 kind = "option"
 old = "Project.set_assist_sidecar(module_id)"
 changed = "takes module_id and payload positionally and schema_version, target_track_id, region_start_ppq and region_end_ppq as keywords; a descriptor mapping in place of module_id is TypeError"
 domain = "project"
-rule = "snake-case-only"
+rule = "one-input-form"
 test = "bindings/python/tests/test_project_edit_ops.py::test_assist_sidecar_invalid_input_does_not_mutate"
 
 [[entry]]
@@ -8684,7 +8684,7 @@ kind = "option"
 old = "Project.set_tempo_segments(segments)"
 changed = "each segment is a mapping (a tuple is TypeError) taking start_ppq, bpm and end_bpm only; start_sample, which was ignored, and any other key raise SonareValueError naming it"
 domain = "project"
-rule = "snake-case-only"
+rule = "one-input-form"
 test = "bindings/python/tests/test_mapping_keys.py::test_project_mappings_take_one_spelling"
 
 [[entry]]
@@ -8692,7 +8692,7 @@ kind = "option"
 old = "Project.set_time_signatures(segments)"
 changed = "each segment is a mapping (a tuple is TypeError) taking start_ppq, numerator and denominator only; any other key raises SonareValueError naming it instead of being ignored"
 domain = "project"
-rule = "snake-case-only"
+rule = "one-input-form"
 test = "bindings/python/tests/test_mapping_keys.py::test_project_mappings_take_one_spelling"
 
 [[entry]]
@@ -9028,7 +9028,7 @@ kind = "option"
 old = "RealtimeEngine.set_track_strip_eq_band(band)"
 changed = "takes a band mapping only; a JSON string is TypeError and goes to set_track_strip_eq_band_json instead"
 domain = "engine"
-rule = "aliases-removed"
+rule = "one-input-form"
 test = "bindings/python/tests/test_mapping_keys.py::test_a_positional_tuple_or_descriptor_in_place_of_a_mapping_is_a_type_error"
 
 [[entry]]
@@ -9036,7 +9036,7 @@ kind = "option"
 old = "RealtimeEngine.set_bus_strip_eq_band(band)"
 changed = "takes a band mapping only; a JSON string is TypeError and goes to set_bus_strip_eq_band_json instead"
 domain = "engine"
-rule = "aliases-removed"
+rule = "one-input-form"
 test = "bindings/python/tests/test_mapping_keys.py::test_a_positional_tuple_or_descriptor_in_place_of_a_mapping_is_a_type_error"
 
 [[entry]]
@@ -9044,7 +9044,7 @@ kind = "option"
 old = "RealtimeEngine.set_master_strip_eq_band(band)"
 changed = "takes a band mapping only; a JSON string is TypeError and goes to set_master_strip_eq_band_json instead"
 domain = "engine"
-rule = "aliases-removed"
+rule = "one-input-form"
 test = "bindings/python/tests/test_mapping_keys.py::test_a_positional_tuple_or_descriptor_in_place_of_a_mapping_is_a_type_error"
 
 [[entry]]
@@ -9101,3 +9101,10 @@ changed = "grain_size -> grain_size_samples; None derives the grain from the sam
 domain = "effects"
 rule = "absent-not-sentinel"
 test = "bindings/python/tests/test_streaming_retune.py::test_streaming_retune_refuses_an_explicit_zero_grain"
+
+[[entry]]
+kind = "class"
+old = "SonareAutomationPoint"
+removed = "pass AutomationPoint records; the ctypes mirror that libsonare.engine re-exported is internal"
+domain = "engine"
+rule = "python-public-names"

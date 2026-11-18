@@ -8,6 +8,7 @@ import operator
 from collections.abc import Mapping, Sequence
 from typing import cast
 
+from ._ffi_types_core import SonareAutomationPoint
 from ._narrowing import _narrow_double
 from ._runtime import (
     _AUTOMATION_CURVES,
@@ -39,6 +40,7 @@ from ._runtime import (
     SonareParameterInfo,
     SonareScopeTelemetryRecord,
     SonareValueError,
+    _curve_value,
     _float_array_result,
     _planar_channel_arrays,
     _require_instance,
@@ -53,6 +55,7 @@ from ._types_engine import (
     _GRAPH_NODE_TYPES,
     _MARKER_KINDS,
     _TRACK_MONITOR_MODES,
+    AutomationPoint,
     EngineCaptureSource,
     EngineTrackMonitorMode,
     MarkerKind,
@@ -121,6 +124,20 @@ def _parameter_from_c(raw: SonareParameterInfo) -> ParameterInfo:
         rt_safe=bool(raw.rt_safe),
         default_curve=cast(AutomationCurve, _AUTOMATION_CURVES[int(raw.default_curve)]),
     )
+
+
+def _automation_points_to_c(
+    points: Sequence[AutomationPoint],
+) -> ctypes.Array[SonareAutomationPoint]:
+    """Marshal :class:`AutomationPoint` records; any other item is a ``TypeError``."""
+    rows = list(points)
+    raw = (SonareAutomationPoint * len(rows))()
+    for i, point in enumerate(rows):
+        _require_instance(point, AutomationPoint, f"points[{i}]")
+        raw[i].ppq = _narrow_double(point.ppq, f"points[{i}].ppq")
+        raw[i].value = _narrow_double(point.value, f"points[{i}].value")
+        raw[i].curve_to_next = _curve_value(point.curve_to_next)
+    return raw
 
 
 def _marker_to_c(marker: EngineMarker) -> SonareEngineMarker:

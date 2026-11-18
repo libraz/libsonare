@@ -91,7 +91,7 @@ from ._types_enums import ProjectWarpMode
 from .types import ProjectSource
 
 if TYPE_CHECKING:
-    pass
+    from ._types_engine import AutomationPoint
 
 # Mirrors SONARE_PROJECT_LOOP_RECORDING_DROP_PARTIAL_TAIL.
 _LOOP_RECORDING_DROP_PARTIAL_TAIL = 1
@@ -1029,14 +1029,13 @@ class _ProjectEditMixin:
         self,
         track_id: int,
         target_param_id: int,
-        points: Sequence[Mapping[str, object]] | None = None,
+        points: Sequence[AutomationPoint] | None = None,
         target_kind: ProjectAutomationTargetKind | None = None,
     ) -> int:
         """Append an automation lane and return its stable target parameter id.
 
-        ``points`` is an optional list of mappings with ``ppq``, ``value`` and
-        an optional ``curve_to_next`` :data:`AutomationCurve` token; any other
-        key is refused by name. ``target_param_id`` must be non-zero; zero is
+        ``points`` is an optional list of :class:`AutomationPoint` records; any
+        other item is a ``TypeError``. ``target_param_id`` must be non-zero; zero is
         reserved as the unset id. Omit ``target_kind`` to use the legacy
         opaque-lane ABI. Supplying ``"opaque"``, ``"trackFaderDb"`` or
         ``"trackPan"`` uses the typed extended ABI.
@@ -1084,7 +1083,7 @@ class _ProjectEditMixin:
         self,
         track_id: int,
         target_param_id: int,
-        points: Sequence[Mapping[str, object]] | None = None,
+        points: Sequence[AutomationPoint] | None = None,
         target_kind: ProjectAutomationTargetKind | None = None,
     ) -> None:
         """Replace an automation lane via an undoable edit.
@@ -1092,7 +1091,7 @@ class _ProjectEditMixin:
         Omit ``target_kind`` to use the legacy edit ABI, which preserves the
         existing lane kind. Supplying a kind applies it through the typed
         extended ABI and rejects same-track typed-target conflicts atomically.
-        ``points`` takes the same mappings as :meth:`add_automation_lane`.
+        ``points`` takes the same records as :meth:`add_automation_lane`.
         """
         desc, _backing = _automation_lane_desc(target_param_id, points)
         target_id = _automation_target_param_id_value(target_param_id)

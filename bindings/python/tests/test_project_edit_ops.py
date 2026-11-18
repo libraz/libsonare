@@ -12,7 +12,7 @@ import json
 
 import pytest
 
-from libsonare import ErrorCode, Project, SonareError, mastering_insert_names
+from libsonare import AutomationPoint, ErrorCode, Project, SonareError, mastering_insert_names
 
 from ._helpers import raises_coded
 
@@ -213,16 +213,14 @@ def test_automation_lane_add_edit_remove() -> None:
         track,
         1,
         [
-            {"ppq": 0.0, "value": 0.0, "curve_to_next": "linear"},
-            {"ppq": 480.0, "value": 1.0, "curve_to_next": "linear"},
+            AutomationPoint(0.0, 0.0, "linear"),
+            AutomationPoint(480.0, 1.0, "linear"),
         ],
     )
     assert target_param_id == 1
     after_add = p.to_json()
     assert after_add != before
-    p.edit_automation_lane(
-        track, target_param_id, [{"ppq": 0.0, "value": 0.5, "curve_to_next": "hold"}]
-    )
+    p.edit_automation_lane(track, target_param_id, [AutomationPoint(0.0, 0.5, "hold")])
     assert p.to_json() != after_add
     p.undo()  # undo edit
     assert p.to_json() == after_add
@@ -236,7 +234,7 @@ def test_automation_lane_rejects_zero_as_reserved_target_id() -> None:
     p, track, _clip = _audio_project()
     before = p.to_json()
     with pytest.raises(ValueError, match="target_param_id must be non-zero"):
-        p.add_automation_lane(track, 0, [{"ppq": 0.0, "value": 0.0, "curve_to_next": "linear"}])
+        p.add_automation_lane(track, 0, [AutomationPoint(0.0, 0.0, "linear")])
     assert p.to_json() == before
 
 
@@ -266,9 +264,7 @@ def test_automation_lane_typed_kind_roundtrip_and_legacy_edit_preservation() -> 
     _require_typed_automation_api()
     p, track, _clip = _audio_project()
 
-    legacy_target = p.add_automation_lane(
-        track, 1, [{"ppq": 0.0, "value": 0.0, "curve_to_next": "linear"}]
-    )
+    legacy_target = p.add_automation_lane(track, 1, [AutomationPoint(0.0, 0.0, "linear")])
     legacy_doc = json.loads(p.to_json())
     assert legacy_doc["version"] == 1
     assert "target_kind" not in legacy_doc["tracks"][0]["automation_lanes"][0]
@@ -278,8 +274,8 @@ def test_automation_lane_typed_kind_roundtrip_and_legacy_edit_preservation() -> 
         track,
         2,
         [
-            {"ppq": 0.0, "value": 0.0, "curve_to_next": "linear"},
-            {"ppq": 480.0, "value": 1.0, "curve_to_next": "hold"},
+            AutomationPoint(0.0, 0.0, "linear"),
+            AutomationPoint(480.0, 1.0, "hold"),
         ],
         target_kind="trackFaderDb",
     )
@@ -290,9 +286,7 @@ def test_automation_lane_typed_kind_roundtrip_and_legacy_edit_preservation() -> 
 
     # The absent kind must stay on the legacy C edit path; native semantics
     # preserve the existing typed classification while replacing points.
-    p.edit_automation_lane(
-        track, typed_target, [{"ppq": 0.0, "value": 0.5, "curve_to_next": "hold"}]
-    )
+    p.edit_automation_lane(track, typed_target, [AutomationPoint(0.0, 0.5, "hold")])
     edited_doc = json.loads(p.to_json())
     assert edited_doc["version"] == 2
     assert edited_doc["tracks"][0]["automation_lanes"][0]["target_kind"] == 1
@@ -307,11 +301,11 @@ def test_automation_lane_typed_kind_conflict_is_atomic() -> None:
     p.add_automation_lane(
         track,
         1,
-        [{"ppq": 0.0, "value": 0.0, "curve_to_next": "linear"}],
+        [AutomationPoint(0.0, 0.0, "linear")],
         target_kind="trackFaderDb",
     )
     pan_target = p.add_automation_lane(
-        track, 2, [{"ppq": 0.0, "value": 0.0, "curve_to_next": "linear"}], target_kind="trackPan"
+        track, 2, [AutomationPoint(0.0, 0.0, "linear")], target_kind="trackPan"
     )
     before = p.to_json()
 
@@ -319,7 +313,7 @@ def test_automation_lane_typed_kind_conflict_is_atomic() -> None:
         p.add_automation_lane(
             track,
             3,
-            [{"ppq": 0.0, "value": 1.0, "curve_to_next": "linear"}],
+            [AutomationPoint(0.0, 1.0, "linear")],
             target_kind="trackFaderDb",
         )
     assert p.to_json() == before
@@ -328,7 +322,7 @@ def test_automation_lane_typed_kind_conflict_is_atomic() -> None:
         p.edit_automation_lane(
             track,
             pan_target,
-            [{"ppq": 0.0, "value": 1.0, "curve_to_next": "linear"}],
+            [AutomationPoint(0.0, 1.0, "linear")],
             target_kind="trackFaderDb",
         )
     assert p.to_json() == before
@@ -353,7 +347,7 @@ def test_automation_lane_rejects_invalid_target_kind_without_mutation() -> None:
             p.add_automation_lane(
                 track,
                 1,
-                [{"ppq": 0.0, "value": 0.0, "curve_to_next": "linear"}],
+                [AutomationPoint(0.0, 0.0, "linear")],
                 target_kind=invalid,
             )
         assert p.to_json() == before
@@ -364,9 +358,7 @@ def test_automation_lane_rejects_nonintegral_target_without_mutation() -> None:
     before = p.to_json()
     for invalid in (1.5, float("nan"), float("inf"), True, "1"):
         with pytest.raises(ValueError):
-            p.add_automation_lane(
-                track, invalid, [{"ppq": 0.0, "value": 0.0, "curve_to_next": "linear"}]
-            )
+            p.add_automation_lane(track, invalid, [AutomationPoint(0.0, 0.0, "linear")])
         assert p.to_json() == before
 
 

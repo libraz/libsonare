@@ -7,6 +7,16 @@ from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 
 from ._engine_conversions import (
+    _automation_points_to_c,
+    _clips_to_c,
+    _fixed_bytes,
+    _marker_from_c,
+    _marker_to_c,
+    _metronome_from_c,
+    _metronome_to_c,
+    _parameter_from_c,
+)
+from ._engine_conversions import (
     _band_json_arg as _band_json_arg,
 )
 from ._engine_conversions import (
@@ -17,15 +27,6 @@ from ._engine_conversions import (
 )
 from ._engine_conversions import (
     _capture_source_value as _capture_source_value,
-)
-from ._engine_conversions import (
-    _clips_to_c,
-    _fixed_bytes,
-    _marker_from_c,
-    _marker_to_c,
-    _metronome_from_c,
-    _metronome_to_c,
-    _parameter_from_c,
 )
 from ._engine_conversions import (
     _graph_connection_to_c as _graph_connection_to_c,
@@ -59,7 +60,6 @@ from ._engine_pages import FileClipPageProvider as FileClipPageProvider
 from ._errors import ErrorCode, SonareError, _not_supported, _require_open
 from ._facade import rebind_facade_exports as _rebind_facade_exports
 from ._ffi_types_core import (
-    SonareAutomationPoint,
     SonareEngineMarker,
     SonareEngineMetronomeConfig,
     SonareExternalMidiEvent,
@@ -577,16 +577,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         regardless of whether the manual value or the lane clear is adopted
         first.
         """
-        raw_points = (SonareAutomationPoint * len(points))(
-            *[
-                SonareAutomationPoint(
-                    _narrow_double(point.ppq, "point.ppq"),
-                    _narrow_double(point.value, "point.value"),
-                    _curve_value(point.curve_to_next),
-                )
-                for point in points
-            ]
-        )
+        raw_points = _automation_points_to_c(points)
         _check(
             _get_lib().sonare_engine_set_automation_lane(
                 self._require_handle(),

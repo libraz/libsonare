@@ -28,6 +28,7 @@ from typing import TYPE_CHECKING, Any, Literal, SupportsFloat, TypeAlias, cast, 
 if TYPE_CHECKING:
     from ._project import Project, ProjectTimeline
 
+from ._engine_conversions import _automation_points_to_c
 from ._errors import ErrorCode, SonareError
 from ._ffi_types_mastering_project import (
     SONARE_ERROR_INVALID_STATE as SONARE_ERROR_INVALID_STATE,
@@ -169,14 +170,11 @@ from ._project_synth import (
 )
 from ._runtime import (
     _UINT32_MAX,
-    AutomationCurve,
     SonareAutomationLaneDesc,
-    SonareAutomationPoint,
     SonareMidiCcBinding,
     SonareMidiEventPod,
     SonareValueError,
     _check,
-    _curve_value,
     _get_lib,
     _mapping_keys,
     _require_export,
@@ -184,6 +182,7 @@ from ._runtime import (
     _token_ordinal,
     _utf8_arg,
 )
+from ._types_engine import AutomationPoint
 
 # Must match SONARE_PROJECT_ABI_VERSION (include/sonare/sonare_c_project.h) and the other
 # bindings' expected project ABI constant. A mismatch means the loaded native
@@ -240,9 +239,6 @@ def _automation_target_param_id_value(value: object) -> int:
     return int(target)
 
 
-_AUTOMATION_POINT_KEYS = ("ppq", "value", "curve_to_next")
-
-
 def _fade_curve_value(curve: ProjectFadeCurve) -> int:
     return _token_ordinal(curve, _FADE_CURVES, "fade curve")
 
@@ -253,33 +249,19 @@ def _loop_mode_value(mode: ProjectLoopMode) -> int:
 
 def _automation_lane_desc(
     target_param_id: object,
-    points: Sequence[Mapping[str, object]] | None,
+    points: Sequence[AutomationPoint] | None,
 ) -> tuple[SonareAutomationLaneDesc, object]:
-    """Marshal ``ppq`` / ``value`` / ``curve_to_next`` points into a SonareAutomationLaneDesc.
+    """Marshal :class:`AutomationPoint` records into a SonareAutomationLaneDesc.
 
     Returns ``(desc, backing)``; the caller must keep ``backing`` (the C point
     array) alive for the duration of the native call.
     """
     target_id = _automation_target_param_id_value(target_param_id)
-    rows = list(points) if points is not None else []
-    count = len(rows)
-    c_points = (SonareAutomationPoint * count)()
-    for i, pt in enumerate(rows):
-        point = _mapping_keys(pt, _AUTOMATION_POINT_KEYS, f"points[{i}]")
-        ppq = float(cast(SupportsFloat, point["ppq"]))
-        value = float(cast(SupportsFloat, point["value"]))
-        if not math.isfinite(ppq):
-            raise SonareValueError(f"points[{i}].ppq must be a finite number")
-        if not math.isfinite(value):
-            raise SonareValueError(f"points[{i}].value must be a finite number")
-        if "curve_to_next" in point:
-            c_points[i].curve_to_next = _curve_value(cast(AutomationCurve, point["curve_to_next"]))
-        c_points[i].ppq = ppq
-        c_points[i].value = value
+    c_points = _automation_points_to_c(points if points is not None else [])
     desc = SonareAutomationLaneDesc(
         target_param_id=target_id,
         points=c_points,
-        point_count=_to_c_size_t(count, "count"),
+        point_count=_to_c_size_t(len(c_points), "count"),
     )
     return desc, c_points
 

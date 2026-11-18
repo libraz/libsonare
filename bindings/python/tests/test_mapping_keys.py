@@ -14,7 +14,7 @@ import pytest
 
 from libsonare import SonareValueError
 from libsonare._analysis_music import _key_pair
-from libsonare._project_model import _automation_lane_desc, _cc_binding_to_c
+from libsonare._project_model import _cc_binding_to_c
 from libsonare._project_synth import _part_rig_inserts_arg
 from libsonare._runtime import _mapping_keys
 
@@ -37,19 +37,11 @@ def _refuses(
         (_key_pair, {"root": 0, "mode": "major"}, "tonic"),
         (_cc_binding_to_c, {"cc_number": 7, "param_id": 3}, "ccNumber"),
         (lambda m: _part_rig_inserts_arg(2, [m]), {"processor": "eq", "params": {}}, "parameters"),
-        (
-            lambda m: _automation_lane_desc(7, [m]),
-            {"ppq": 0.0, "value": 0.5, "curve_to_next": "linear"},
-            "curveToNext",
-        ),
-        (lambda m: _automation_lane_desc(7, [m]), {"ppq": 0.0, "value": 0.5}, "curve"),
     ],
     ids=[
         "key",
         "midi_cc_binding",
         "part_rig_insert",
-        "automation_point",
-        "automation_point_short_curve",
     ],
 )
 def test_a_helper_mapping_refuses_an_unknown_key(
@@ -109,10 +101,6 @@ def test_project_mappings_take_one_spelling() -> None:
         segment = {"start_ppq": 0.0, "end_ppq": 1.0, "take_id": 1, "crossfade_ppq": 0.0}
         _refuses(lambda m: project.set_clip_comp_segments(clip, [m]), segment, "takeId")
 
-        point = {"ppq": 0.0, "value": 0.5, "curve_to_next": "linear"}
-        _refuses(lambda m: project.add_automation_lane(track, 7, [m]), point, "curve")
-        _refuses(lambda m: project.edit_automation_lane(track, 7, [m]), point, "curveToNext")
-
         chord = {"start_ppq": 0.0, "end_ppq": 480.0, "root_pc": 0, "quality": 0}
         _refuses(lambda m: project.annotate_chords([m]), chord, "rootPc")
         tempo = {"start_ppq": 0.0, "bpm": 120.0}
@@ -147,8 +135,8 @@ def test_an_external_stem_takes_one_spelling_and_a_layout_token() -> None:
 
 @needs_lib
 def test_a_positional_tuple_or_descriptor_in_place_of_a_mapping_is_a_type_error() -> None:
-    """Each list below takes mappings only; the tuple and descriptor forms are gone."""
-    from libsonare import Project, RealtimeEngine
+    """Each list below takes one item form: its record class or, with none, a mapping."""
+    from libsonare import AutomationPoint, Project, RealtimeEngine
 
     project = Project()
     try:
@@ -156,7 +144,7 @@ def test_a_positional_tuple_or_descriptor_in_place_of_a_mapping_is_a_type_error(
         clip = project.add_clip(
             track, 0.0, 480.0, audio=[0.1, 0.2, 0.1, 0.0], audio_channels=1, audio_sample_rate=48000
         )
-        point = {"ppq": 0.0, "value": 0.5}
+        point = AutomationPoint(ppq=0.0, value=0.5)
         project.add_automation_lane(track, 7, [point])
         project.set_tempo_segments([{"start_ppq": 0.0, "bpm": 120.0}])
         project.set_time_signatures([{"start_ppq": 0.0, "numerator": 3, "denominator": 4}])
@@ -168,6 +156,11 @@ def test_a_positional_tuple_or_descriptor_in_place_of_a_mapping_is_a_type_error(
             project.add_automation_lane(track, 8, [(0.0, 0.5, "linear")])  # type: ignore[list-item]
         with pytest.raises(TypeError):
             project.edit_automation_lane(track, 7, [(0.0, 0.5)])  # type: ignore[list-item]
+        # AutomationPoint is the record for a point, so a mapping is refused too.
+        with pytest.raises(TypeError, match="AutomationPoint"):
+            project.add_automation_lane(track, 8, [{"ppq": 0.0, "value": 0.5}])  # type: ignore[list-item]
+        with pytest.raises(TypeError, match="AutomationPoint"):
+            project.edit_automation_lane(track, 7, [{"ppq": 0.0, "value": 0.5}])  # type: ignore[list-item]
         with pytest.raises(SonareValueError, match="target_param_id"):
             project.add_automation_lane(track, {"target_param_id": 9, "points": [point]})  # type: ignore[arg-type]
         with pytest.raises(TypeError):
@@ -188,6 +181,9 @@ def test_a_positional_tuple_or_descriptor_in_place_of_a_mapping_is_a_type_error(
         engine.set_track_lanes([{"track_id": 10}])
         engine.set_tempo_segments([{"start_ppq": 0.0, "bpm": 120.0}])
         engine.set_time_signature_segments([{"start_ppq": 0.0, "numerator": 3, "denominator": 4}])
+        engine.set_automation_lane(5, [AutomationPoint(ppq=0.0, value=0.5)])
+        with pytest.raises(TypeError, match="AutomationPoint"):
+            engine.set_automation_lane(5, [{"ppq": 0.0, "value": 0.5}])  # type: ignore[list-item]
         with pytest.raises(TypeError):
             engine.set_track_lanes([10])  # type: ignore[list-item]
         with pytest.raises(TypeError):
