@@ -161,6 +161,232 @@ class TokenTableTests(unittest.TestCase):
 
 
 
+_KIND_FILES = {
+    "src/room.cpp": """
+const char* room_name(Room room) {
+  switch (room) {
+    case Room::Living:
+      return "livingRoom";
+    case Room::Theater:
+      return "homeTheater";
+  }
+  return "livingRoom";
+}
+
+const char* legacy_room_name(Room room) {
+  switch (room) {
+    case Room::Living:
+      return "living_room";
+    case Room::Theater:
+      return "home_theater";
+  }
+  return "living_room";
+}
+
+Room room_from_text(const std::string& value) {
+  if (value == room_name(Room::Living) || value == legacy_room_name(Room::Living)) return Room::Living;
+  return Room::Theater;
+}
+""",
+    "src/bed.cpp": """
+const char* bed_room(Room room) {
+  return room == Room::Living ? "livingRoom" : "homeTheater";
+}
+""",
+    "ts/config.ts": "export interface RoomConfig {\n  preset?: 'livingRoom' | 'homeTheater';\n}\n",
+    "ts/narrow.ts": "export type NarrowRoom = 'livingRoom';\n",
+    "py/config.py": 'class RoomConfig(TypedDict):\n    preset: Literal["livingRoom", "homeTheater"]\n',
+    "py/alias.py": 'Room: TypeAlias = Literal["livingRoom", "homeTheater"]\n',
+}
+
+_KIND_ROW = check.TokenSet(
+    name="room",
+    core=check.CoreTable("src/room.cpp", "Room", writer="room_name"),
+    also_written_by=(check.CoreTable("src/bed.cpp", "Room", writer="bed_room"),),
+    sources=(
+        check.Source("node", "ts/config.ts", "ts_field", "RoomConfig.preset"),
+        check.Source("node", "ts/narrow.ts", "ts_union", "NarrowRoom", subset=True),
+        check.Source("python", "py/config.py", "py_field", "RoomConfig.preset"),
+        check.Source("python", "py/alias.py", "py_literal", "Room"),
+    ),
+)
+
+
+class SourceKindTests(unittest.TestCase):
+    """Field unions, annotated aliases, subset sources, legacy writers and second writers."""
+
+    def run_with(self, edits: dict[str, tuple[str, str]] | None = None) -> tuple[list[str], int, int]:
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            for rel, text in _KIND_FILES.items():
+                old, new = (edits or {}).get(rel, ("", ""))
+                if old:
+                    self.assertIn(old, text, f"fixture edit does not apply to {rel}")
+                    text = text.replace(old, new)
+                (root / rel).parent.mkdir(parents=True, exist_ok=True)
+                (root / rel).write_text(text)
+            return check.evaluate(root, (_KIND_ROW,))
+
+    def test_clean_tree_passes_and_reads_every_kind(self) -> None:
+        self.assertEqual(self.run_with(), ([], 1, len(_KIND_ROW.sources)))
+
+    def test_an_extra_token_in_a_ts_field_is_named(self) -> None:
+        problems, _, _ = self.run_with({"ts/config.ts": ("'homeTheater';", "'homeTheater' | 'cinema';")})
+        self.assertEqual(problems, ["room: node RoomConfig.preset (ts/config.ts): extra token 'cinema'"])
+
+    def test_a_missing_token_in_a_py_field_is_named(self) -> None:
+        problems, _, _ = self.run_with({"py/config.py": (', "homeTheater"', "")})
+        self.assertEqual(
+            problems, ["room: python RoomConfig.preset (py/config.py): missing token 'homeTheater'"]
+        )
+
+    def test_an_annotated_alias_is_read(self) -> None:
+        problems, _, _ = self.run_with({"py/alias.py": ('"homeTheater"', '"home_theater"')})
+        self.assertEqual(
+            problems,
+            [
+                "room: python Room (py/alias.py): extra token 'home_theater'",
+                "room: python Room (py/alias.py): missing token 'homeTheater'",
+            ],
+        )
+
+    def test_a_subset_source_may_omit_but_not_add(self) -> None:
+        problems, _, _ = self.run_with({"ts/narrow.ts": ("'livingRoom';", "'livingRoom' | 'cinema';")})
+        self.assertEqual(problems, ["room: node NarrowRoom (ts/narrow.ts): extra token 'cinema'"])
+
+    def test_a_legacy_writer_nobody_reads_is_named(self) -> None:
+        problems, _, _ = self.run_with(
+            {"src/room.cpp": (" || value == legacy_room_name(Room::Living)", "")}
+        )
+        self.assertEqual(problems, ["room: src/room.cpp does not read what legacy_room_name writes"])
+
+    def test_a_second_writer_that_drifts_is_named(self) -> None:
+        problems, _, _ = self.run_with({"src/bed.cpp": ('"homeTheater"', '"theater"')})
+        self.assertEqual(
+            problems,
+            [
+                (
+                    "room: bed_room (src/bed.cpp) writes ['livingRoom', 'theater'], "
+                    "room_name writes ['homeTheater', 'livingRoom']"
+                )
+            ],
+        )
+
+
+_POP_FILES = {
+    "src/room.cpp": _KIND_FILES["src/room.cpp"],
+    "src/law.cpp": """
+const char* to_string(Law law) {
+  switch (law) {
+    case Law::Soft:
+      return "soft";
+    case Law::Hard:
+      return "hard";
+    case Law::Linear:
+      return "linear";
+  }
+  return "soft";
+}
+
+const char* law_text(Law law) {
+  switch (law) {
+    case Law::Soft:
+      return "soft";
+    case Law::Hard:
+      return "hard";
+  }
+  return "soft";
+}
+""",
+    "bindings/node/src/config.ts": _KIND_FILES["ts/config.ts"],
+    "bindings/node/src/law.ts": "export type Law = 'soft' | 'hard';\nexport type Tap = 'pre' | 'post';\n",
+    "bindings/python/src/pkg/config.py": _KIND_FILES["py/config.py"],
+}
+
+_POP_ROWS = (
+    check.TokenSet(
+        name="room",
+        core=check.CoreTable("src/room.cpp", "Room", writer="room_name"),
+        sources=(
+            check.Source("node", "bindings/node/src/config.ts", "ts_field", "RoomConfig.preset"),
+            check.Source("python", "bindings/python/src/pkg/config.py", "py_field", "RoomConfig.preset"),
+        ),
+    ),
+    check.TokenSet(
+        name="law",
+        core=check.CoreTable("src/law.cpp", "Law", writer="law_text"),
+        sources=(check.Source("node", "bindings/node/src/law.ts", "ts_union", "Law"),),
+    ),
+)
+
+
+class PopulationTests(unittest.TestCase):
+    def run_with(
+        self,
+        edits: dict[str, tuple[str, str]] | None = None,
+        rows: tuple = _POP_ROWS,
+        exempt: dict[tuple[str, str], str] | None = None,
+    ) -> tuple[list[str], int, int]:
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            for rel, text in _POP_FILES.items():
+                old, new = (edits or {}).get(rel, ("", ""))
+                if old:
+                    self.assertIn(old, text, f"fixture edit does not apply to {rel}")
+                    text = text.replace(old, new)
+                (root / rel).parent.mkdir(parents=True, exist_ok=True)
+                (root / rel).write_text(text)
+            return check.evaluate_population(root, rows, exempt or {})
+
+    def test_clean_tree_passes_and_draws_on_the_closest_writer(self) -> None:
+        # Law draws on law_text, which matches exactly, not on the wider to_string.
+        self.assertEqual(self.run_with(), ([], 3, 2))
+
+    def test_an_unpinned_set_is_named(self) -> None:
+        problems, _, _ = self.run_with(rows=(_POP_ROWS[1],))
+        self.assertEqual(
+            problems,
+            [
+                (
+                    "RoomConfig.preset (bindings/node/src/config.ts) spells the tokens of "
+                    "room_name(Room) in src/room.cpp and no row pins it"
+                ),
+                (
+                    "RoomConfig.preset (bindings/python/src/pkg/config.py) spells the tokens of "
+                    "room_name(Room) in src/room.cpp and no row pins it"
+                ),
+                "room_name(Room) in src/room.cpp writes a set a facade spells and no row names it",
+            ],
+        )
+
+    def test_an_earlier_spelling_still_draws_on_its_writer(self) -> None:
+        problems, sets, _ = self.run_with(
+            {"bindings/node/src/config.ts": ("'homeTheater'", "'home_theater'")}
+        )
+        self.assertEqual((problems, sets), ([], 3))
+
+    def test_a_writer_no_row_names_is_named(self) -> None:
+        rows = (_POP_ROWS[0], _POP_ROWS[1]._replace(core=check.CoreTable("src/law.cpp", "Law")))
+        problems, _, _ = self.run_with(rows=rows)
+        self.assertEqual(
+            problems, ["law_text(Law) in src/law.cpp writes a set a facade spells and no row names it"]
+        )
+
+    def test_an_exemption_that_excuses_nothing_is_named(self) -> None:
+        problems, _, _ = self.run_with(exempt={("bindings/node/src/law.ts", "Tap"): "no core writer"})
+        self.assertEqual(problems, ["exemption for Tap (bindings/node/src/law.ts) excuses nothing"])
+
+    def test_an_exempt_set_is_not_drawn(self) -> None:
+        problems, _, writers = self.run_with(
+            rows=(_POP_ROWS[0],), exempt={("bindings/node/src/law.ts", "Law"): "fixture"}
+        )
+        self.assertEqual((problems, writers), ([], 1))
+
+    def test_the_shipped_exemptions_carry_a_reason(self) -> None:
+        for key, reason in check.EXEMPT.items():
+            self.assertTrue(reason.strip(), key)
+
+
 _KEY_FILES = {
     "src/scene.cpp": """
 Insert insert_from_value(const JsonValue& object, const std::string& path) {
