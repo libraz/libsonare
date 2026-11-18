@@ -125,6 +125,7 @@ DEFAULT_RULES = HERE / "migration" / "rules.toml"
 DEFAULT_MIRRORS = HERE / "librosa_mirrors.toml"
 DEFAULT_ALLOWLIST = HERE / "surface_allowlist.toml"
 DEFAULT_DIMENSIONLESS = HERE / "dimensionless_names.toml"
+DEFAULT_CATALOG = ROOT / "tools" / "capability-catalog.json"
 DIMENSIONLESS_CLASSES = ("ratio", "probability", "correlation", "normalized", "magnitude")
 DEFAULT_DOMAINS = HERE / "domains.json"
 
@@ -680,6 +681,7 @@ class Ctx:
     by_owner: dict = field(default_factory=dict)
     all_records: list[dict] = field(default_factory=list)
     dimensionless: set = field(default_factory=set)
+    catalog: dict = field(default_factory=dict)
 
     def __post_init__(self):
         idx = collections.defaultdict(list)
@@ -960,6 +962,63 @@ def chk_wrong_unit(ctx):
                         "its doc describes a true peak, which is measured in dbtp; name it ..._dbtp, not ..._db",
                     )
                 )
+    return cands, bad
+
+
+# The unit word a catalog unit asks of a parameter name; a unit with no word (ratio, none,
+# count ...) asks for none, so a name carrying one disagrees with it. A size in samples (nFft,
+# hopLength) is a count and may go without the word; sampleRate is the one name for a rate.
+_CATALOG_UNIT_WORDS = {
+    "dB": "db",
+    "dBFS": "db",
+    "dBTP": "dbtp",
+    "LUFS": "lufs",
+    "LU": "lu",
+    "ms": "ms",
+    "s": "sec",
+    "Hz": "hz",
+    "cents": "cents",
+    "semitones": "semitones",
+    "samples": "samples",
+    "dBPerOct": "db_per_oct",
+    "m": "m",
+    "deg": "deg",
+}
+
+
+def _name_unit(name: str) -> str | None:
+    s = snake(name.rstrip("0123456789")).rstrip("_")
+    return next(
+        (u for u in sorted(_UNITS, key=len, reverse=True) if s == u or s.endswith("_" + u)), None
+    )
+
+
+def chk_catalog_unit_suffix(ctx):
+    cands, bad = 0, []
+    cat = ctx.catalog
+    groups = [("chain", cat.get("chain", {}).get("params", []))]
+    groups += [(p.get("id", "?"), p.get("params", [])) for p in cat.get("processors", [])]
+    for owner, params in groups:
+        for q in params:
+            name, unit = q["name"].rsplit(".", 1)[-1], q.get("unit")
+            want, given = _CATALOG_UNIT_WORDS.get(unit), _name_unit(name)
+            if given is None and (want in (None, "samples") or snake(name).endswith("sample_rate")):
+                continue
+            cands += 1
+            if want == given:
+                continue
+            r = {
+                "surface": "catalog",
+                "kind": "param",
+                "name": f"{owner}.{q['name']}",
+                "domain": "mastering",
+            }
+            msg = (
+                f"catalog unit {unit} asks for ..._{want}"
+                if want
+                else f"catalog unit {unit} has no unit word"
+            )
+            bad.append((r, f"{msg}; the name says {given or 'no unit'}"))
     return cands, bad
 
 
@@ -1766,6 +1825,7 @@ CHECKS: tuple[Check, ...] = (
     Check("seconds-suffix", ALL, chk_seconds_suffix),
     Check("unit-in-name", ALL, chk_unit_in_name),
     Check("unit-in-name:wrong-unit", ALL, chk_wrong_unit),
+    Check("catalog-unit-suffix", ALL, chk_catalog_unit_suffix),
     Check("sample-rate-name", LANG, chk_sample_rate_name),
     Check("sample-rate-name:family", ("python",), chk_sample_rate_family),
     Check("sample-rate-required", BINDINGS, chk_sample_rate_required),
@@ -2028,6 +2088,9 @@ def run(args) -> tuple[int, list[str], dict]:
         inv.get("cli_only", {}),
         all_records=records,
         dimensionless=dimensionless,
+        catalog=json.loads(args.catalog_file.read_text(encoding="utf-8"))
+        if args.catalog_file.is_file()
+        else {},
     )
     table = collections.Counter()
     for f in lfail:
@@ -2177,6 +2240,7 @@ def parse_args(argv):
     ap.add_argument("--allowlist-file", type=Path, default=DEFAULT_ALLOWLIST)
     ap.add_argument("--dimensionless-file", type=Path, default=DEFAULT_DIMENSIONLESS)
     ap.add_argument("--root", type=Path, default=ROOT)
+    ap.add_argument("--catalog-file", type=Path, default=DEFAULT_CATALOG)
     return ap.parse_args(argv)
 
 

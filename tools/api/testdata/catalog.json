@@ -1,0 +1,4 @@
+{
+  "chain": { "params": [{ "name": "dynamics.compressor.attackMs", "unit": "ms" }] },
+  "processors": [{ "id": "dynamics.compressor", "params": [{ "name": "thresholdDb", "unit": "dB" }] }]
+}

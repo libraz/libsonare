@@ -101,6 +101,8 @@ class CheckerCase(unittest.TestCase):
             str(dimensionless or TD / "dimensionless.toml"),
             "--root",
             str(ROOT),
+            "--catalog-file",
+            str(TD / "catalog.json"),
             *extra,
         ]
         code, lines, self.report = check_surface.run(check_surface.parse_args(argv))
@@ -1059,6 +1061,38 @@ class WrongUnit(CheckerCase):
         _, lines = self.run_check("--check", "unit-in-name:wrong-unit")
         bad = sorted(x.strip().split(":")[0] for x in lines if "measured in" in x)
         want = sorted(f"{s} field {n}" for (s, n, _), flag in cases.items() if flag)
+        self.assertEqual(bad, want)
+
+
+class CatalogUnitSuffix(CheckerCase):
+    def test_a_catalog_parameter_name_states_the_unit_the_catalog_gives(self):
+        params = {
+            "ceilingDb": ("dBFS", False),
+            "ceilingDbtp": ("dBFS", True),
+            "truePeakCeilingDbtp": ("dBTP", False),
+            "loudCeilingDb": ("dBTP", True),
+            "attackMs": ("ms", False),
+            "release": ("ms", True),
+            "slopeDbPerOct": ("dBPerOct", False),
+            "fadeSec": ("s", False),
+            "ratio": ("ratio", False),
+            "mixDb": ("none", True),
+            "enabled": (None, False),
+        }
+        catalog = {
+            "chain": {"params": []},
+            "processors": [
+                {
+                    "id": "p.x",
+                    "params": [{"name": n, "unit": u} for n, (u, _) in params.items()],
+                }
+            ],
+        }
+        path = self.dir / "catalog.json"
+        path.write_text(json.dumps(catalog), encoding="utf-8")
+        _, lines = self.run_check("--check", "catalog-unit-suffix", "--catalog-file", str(path))
+        bad = sorted(x.strip().split(":")[0] for x in lines if "catalog unit" in x)
+        want = sorted(f"catalog param p.x.{n}" for n, (_, flag) in params.items() if flag)
         self.assertEqual(bad, want)
 
 
