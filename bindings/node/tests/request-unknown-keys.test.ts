@@ -58,6 +58,7 @@ const methodShapes = [
   'clearPartRig',
   'configureCapture',
   'configureMeter',
+  'freezeOffline',
   'importExternalSeparatedStem',
   'importExternalStems',
   'moveClip',

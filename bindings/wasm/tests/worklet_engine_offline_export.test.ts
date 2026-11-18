@@ -89,8 +89,12 @@ describe('SonareEngine offline export', () => {
         await expect(run()).rejects.toBeInstanceOf(RangeError);
       };
       await rejects(() => engine.renderOffline({ totalFrames: 256, blockSize: BLOCK + 1 }));
-      await rejects(() => engine.bounceOffline({ totalFrames: 256, blockSize: BLOCK + 1 }));
-      await rejects(() => engine.freezeOffline({ totalFrames: 256, blockSize: BLOCK + 1 }));
+      await rejects(() =>
+        engine.bounceOffline({ totalFrames: 256, blockSize: BLOCK + 1, numChannels: 2 }),
+      );
+      await rejects(() =>
+        engine.freezeOffline({ totalFrames: 256, blockSize: BLOCK + 1, numChannels: 2 }),
+      );
       await rejects(() => engine.renderOffline({ totalFrames: 256, blockSize: 0 }));
     } finally {
       engine.destroy();
@@ -104,8 +108,8 @@ describe('SonareEngine offline export', () => {
       const planes = () => [new Float32Array(256), new Float32Array(256)];
       refused(() => raw.renderOffline({ channels: planes(), blockSize: BLOCK + 1 }));
       refused(() => raw.primeOfflineParameters(2, BLOCK + 1));
-      refused(() => raw.bounceOffline({ totalFrames: 256, blockSize: BLOCK + 1 }));
-      refused(() => raw.freezeOffline({ totalFrames: 256, blockSize: BLOCK + 1 }));
+      refused(() => raw.bounceOffline({ totalFrames: 256, blockSize: BLOCK + 1, numChannels: 2 }));
+      refused(() => raw.freezeOffline({ totalFrames: 256, blockSize: BLOCK + 1, numChannels: 2 }));
       expect(() => raw.renderOffline({ channels: planes(), blockSize: BLOCK })).not.toThrow();
     } finally {
       raw.destroy();

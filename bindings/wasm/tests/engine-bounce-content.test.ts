@@ -95,7 +95,11 @@ describe('RealtimeEngine offline bounce content', () => {
   it('defaults both rates to the prepared rate', () => {
     const engine = new RealtimeEngine({ sampleRate: 44100, maxBlockSize: BLOCK_SIZE });
     try {
-      const result = engine.bounceOffline({ totalFrames: 441, blockSize: BLOCK_SIZE });
+      const result = engine.bounceOffline({
+        totalFrames: 441,
+        blockSize: BLOCK_SIZE,
+        numChannels: 2,
+      });
       expect(result.sampleRate).toBe(44100);
       expect(result.channels).toHaveLength(2);
       for (const channel of result.channels) {
@@ -112,6 +116,7 @@ describe('RealtimeEngine offline bounce content', () => {
       const result = engine.bounceOffline({
         totalFrames: 44100,
         blockSize: BLOCK_SIZE,
+        numChannels: 2,
         targetSampleRate: 48000,
       });
       expect(result.sampleRate).toBe(48000);

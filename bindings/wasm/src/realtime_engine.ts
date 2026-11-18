@@ -148,7 +148,6 @@ export type {
   EngineTrackMonitorMode,
   EngineTrackSend,
   EngineTransportState,
-  EngineWarpMode,
   ExternalMidiEvent,
   MarkerKind,
   MidiFxConfig,
@@ -267,10 +266,10 @@ function noOrdinal(fnName: string, argName: string, value: unknown): void {
   }
 }
 
-/** An optional positive integer count: absent takes `fallback`, and an explicit `0` is refused. */
-function optionalCount(fnName: string, argName: string, value: unknown, fallback: number): number {
+/** An optional positive integer count: absent stays `undefined`, and an explicit `0` is refused. */
+function optionalCount(fnName: string, argName: string, value: unknown): number | undefined {
   if (value === undefined || value === null) {
-    return fallback;
+    return undefined;
   }
   if (typeof value !== 'number') {
     throw new TypeError(`${fnName}: ${argName} must be a number`);
@@ -279,9 +278,7 @@ function optionalCount(fnName: string, argName: string, value: unknown, fallback
     throw new RangeError(`${fnName}: ${argName} must be a finite number`);
   }
   if (value === 0) {
-    throw new RangeError(
-      `${fnName}: ${argName} must not be 0 (omit it for the default ${fallback})`,
-    );
+    throw new RangeError(`${fnName}: ${argName} must not be 0 (omit it for the default)`);
   }
   if (value < 0 || !Number.isInteger(value)) {
     throw new RangeError(`${fnName}: ${argName} must be a positive integer`);
@@ -311,10 +308,19 @@ function requireObject(fnName: string, argName: string, value: unknown): void {
   }
 }
 
+/** An omitted size is `0`, which the native engine reads as the library default. */
+interface ResolvedEngineConfig {
+  sampleRate: number;
+  maxBlockSize: number;
+  commandCapacity: number;
+  telemetryCapacity: number;
+  maxChannels: number;
+}
+
 function normalizeEngineConfig(
   fnName: 'RealtimeEngine' | 'prepare',
   config: unknown,
-): Required<RealtimeEngineConfig> {
+): ResolvedEngineConfig {
   const request = requestObject(fnName, config as RealtimeEngineConfig, 'config', true);
   const sampleRate = request.sampleRate;
   if (typeof sampleRate !== 'number') {
@@ -325,16 +331,16 @@ function normalizeEngineConfig(
   }
   return {
     sampleRate,
-    maxBlockSize: optionalCount(fnName, 'maxBlockSize', request.maxBlockSize, 128),
-    commandCapacity: optionalCount(fnName, 'commandCapacity', request.commandCapacity, 1024),
-    telemetryCapacity: optionalCount(fnName, 'telemetryCapacity', request.telemetryCapacity, 1024),
-    maxNumChannels: optionalCount(fnName, 'maxNumChannels', request.maxNumChannels, 64),
+    maxBlockSize: optionalCount(fnName, 'maxBlockSize', request.maxBlockSize) ?? 0,
+    commandCapacity: optionalCount(fnName, 'commandCapacity', request.commandCapacity) ?? 0,
+    telemetryCapacity: optionalCount(fnName, 'telemetryCapacity', request.telemetryCapacity) ?? 0,
+    maxChannels: optionalCount(fnName, 'maxChannels', request.maxChannels) ?? 0,
   };
 }
 
 function normalizeRenderOfflineRequest(request: RenderOfflineRequest): {
   channels: Float32Array[];
-  blockSize: number;
+  blockSize: number | undefined;
   finalize: boolean;
 } {
   requestObject('renderOffline', request, 'request', true);
@@ -351,7 +357,7 @@ function normalizeRenderOfflineRequest(request: RenderOfflineRequest): {
   }
   return {
     channels: request.channels,
-    blockSize: request.blockSize ?? 128,
+    blockSize: optionalCount('renderOffline', 'blockSize', request.blockSize),
     finalize: optionalBoolean('renderOffline', request.finalize, 'finalize', true),
   };
 }
@@ -636,7 +642,7 @@ export class RealtimeEngine {
       settings.maxBlockSize,
       settings.commandCapacity,
       settings.telemetryCapacity,
-      settings.maxNumChannels,
+      settings.maxChannels,
     );
   }
 
@@ -657,7 +663,7 @@ export class RealtimeEngine {
       settings.maxBlockSize,
       settings.commandCapacity,
       settings.telemetryCapacity,
-      settings.maxNumChannels,
+      settings.maxChannels,
     );
     this.sampleRate = settings.sampleRate;
   }
@@ -1087,7 +1093,7 @@ export class RealtimeEngine {
    * Entry 6/38), so a positive `maxRecords` below 4 could never consume a record
    * and is rejected with a `RangeError` instead of returning nothing forever.
    */
-  drainExternalMidi(maxRecords = 1024): ExternalMidiEvent[] {
+  drainExternalMidi(maxRecords?: number): ExternalMidiEvent[] {
     return this.native
       .drainExternalMidi(maxRecords)
       .map((event) =>
@@ -1526,12 +1532,16 @@ export class RealtimeEngine {
    * called concurrently with {@link process}.
    *
    * @param numChannels - Channel count of the blocks that will be rendered
-   * @param blockSize - Frames per block that will be rendered (a larger block size is refused)
+   * @param blockSize - Frames per block that will be rendered (a larger block size is refused);
+   *   omit it for the engine's default block, capped at the prepared maximum
    * @throws If a count is not positive, `numChannels` exceeds the prepared
    *   channel count, or the engine was never prepared
    */
-  primeOfflineParameters(numChannels: number, blockSize: number): void {
-    this.native.primeOfflineParameters(numChannels, blockSize);
+  primeOfflineParameters(numChannels: number, blockSize?: number): void {
+    this.native.primeOfflineParameters(
+      numChannels,
+      optionalCount('primeOfflineParameters', 'blockSize', blockSize),
+    );
   }
 
   /**
@@ -2490,7 +2500,7 @@ export class RealtimeEngine {
     if (typeof options.capacityFrames !== 'number') {
       throw new TypeError('configureCapture: capacityFrames must be a number');
     }
-    const numChannels = optionalCount('configureCapture', 'numChannels', options.numChannels, 2);
+    const numChannels = optionalCount('configureCapture', 'numChannels', options.numChannels) ?? 2;
     const source = tokenCode(
       'configureCapture',
       'source',
@@ -2690,7 +2700,12 @@ export class RealtimeEngine {
   bounceOffline(options: EngineBounceOptions): EngineBounceResult {
     requireObject('bounceOffline', 'options', options);
     noOrdinal('bounceOffline', 'dither', options.dither);
-    for (const name of ['targetSampleRate', 'sourceSampleRate', 'targetLufs'] as const) {
+    for (const name of [
+      'blockSize',
+      'targetSampleRate',
+      'sourceSampleRate',
+      'targetLufs',
+    ] as const) {
       const value = options[name];
       if (value === undefined || value === null) {
         continue;
@@ -2728,14 +2743,17 @@ export class RealtimeEngine {
    * throws a `RangeError`.
    */
   freezeOffline(options: EngineFreezeOptions): EngineFreezeResult {
-    return this.native.freezeOffline(options);
+    requireObject('freezeOffline', 'options', options);
+    const { blockSize, ...rest } = options;
+    const block = optionalCount('freezeOffline', 'blockSize', blockSize);
+    return this.native.freezeOffline(block === undefined ? rest : { ...rest, blockSize: block });
   }
 
-  drainTelemetry(maxRecords = 1024): EngineTelemetry[] {
+  drainTelemetry(maxRecords?: number): EngineTelemetry[] {
     return this.native.drainTelemetry(maxRecords).map(telemetryFromNative);
   }
 
-  drainMeterTelemetry(maxRecords = 1024): EngineMeterTelemetry[] {
+  drainMeterTelemetry(maxRecords?: number): EngineMeterTelemetry[] {
     return this.native.drainMeterTelemetry(maxRecords).map(meterTelemetryFromNative);
   }
 
@@ -2748,7 +2766,7 @@ export class RealtimeEngine {
    * worklet-driven engine delivers per-plane meters on both the postMessage and
    * the SharedArrayBuffer meter paths.
    */
-  drainMeterTelemetryWide(maxRecords = 1024): EngineMeterTelemetryWide[] {
+  drainMeterTelemetryWide(maxRecords?: number): EngineMeterTelemetryWide[] {
     return this.native.drainMeterTelemetryWide(maxRecords).map(meterTelemetryWideFromNative);
   }
 
@@ -2773,7 +2791,7 @@ export class RealtimeEngine {
   }
 
   /** Drains pending spectrum + vectorscope snapshots (per mix target). */
-  drainScopeTelemetry(maxRecords = 1024): EngineScopeTelemetry[] {
+  drainScopeTelemetry(maxRecords?: number): EngineScopeTelemetry[] {
     return this.native.drainScopeTelemetry(maxRecords);
   }
 

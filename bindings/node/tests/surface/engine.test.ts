@@ -54,22 +54,23 @@ describe('RealtimeEngine construction', () => {
       caught(() => new (RealtimeEngine as unknown as new () => RealtimeEngine)()),
     ).toBeInstanceOf(TypeError);
     expect(caught(() => new RealtimeEngine({} as RealtimeEngineConfig))).toBeInstanceOf(TypeError);
-    expect(() =>
-      new RealtimeEngine({ sampleRate: 48000, maxNumChannels: 2 }).destroy(),
-    ).not.toThrow();
+    expect(() => new RealtimeEngine({ sampleRate: 48000, maxChannels: 2 }).destroy()).not.toThrow();
   });
 
   it('refuses an unknown config key by name', () => {
     const error = caught(
       () =>
-        new RealtimeEngine({ sampleRate: SR, maxChannels: 8 } as unknown as RealtimeEngineConfig),
+        new RealtimeEngine({
+          sampleRate: SR,
+          maxNumChannels: 8,
+        } as unknown as RealtimeEngineConfig),
     );
     expect(error).toBeInstanceOf(TypeError);
-    expect((error as Error).message).toContain('maxChannels');
+    expect((error as Error).message).toContain('maxNumChannels');
   });
 
   it('refuses an explicit 0 on a defaulted field', () => {
-    for (const key of ['maxBlockSize', 'commandCapacity', 'telemetryCapacity', 'maxNumChannels']) {
+    for (const key of ['maxBlockSize', 'commandCapacity', 'telemetryCapacity', 'maxChannels']) {
       const error = caught(
         () => new RealtimeEngine({ sampleRate: SR, [key]: 0 } as unknown as RealtimeEngineConfig),
       );
@@ -80,7 +81,7 @@ describe('RealtimeEngine construction', () => {
 
   it('prepares from the same config object', () => {
     withEngine((engine) => {
-      engine.prepare({ sampleRate: 44100, maxBlockSize: 256, maxNumChannels: 8 });
+      engine.prepare({ sampleRate: 44100, maxBlockSize: 256, maxChannels: 8 });
       expect(engine.transportState().sampleRate).toBe(44100);
       expect(
         caught(() => engine.prepare({ maxBlockSize: 256 } as RealtimeEngineConfig)),
@@ -858,7 +859,12 @@ describe('RealtimeEngine offline render and bounce', () => {
   });
 
   const bounce = (engine: RealtimeEngine, options: object) =>
-    engine.bounceOffline({ totalFrames: 256, blockSize: BLOCK, ...options } as never);
+    engine.bounceOffline({
+      totalFrames: 256,
+      blockSize: BLOCK,
+      numChannels: 2,
+      ...options,
+    } as never);
 
   it('treats an explicit 0 on a rate as an error and absence as the default', () => {
     withEngine((engine) => {

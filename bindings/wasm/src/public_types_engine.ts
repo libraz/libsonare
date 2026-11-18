@@ -1,4 +1,5 @@
 import type { ChannelLayout } from './audio.js';
+import type { ProjectWarpMode } from './project_types.js';
 import type {
   AutomationCurve,
   SendTiming,
@@ -18,7 +19,7 @@ export interface RealtimeEngineConfig {
   /** Telemetry queue capacity, at most 16384. Default `1024`; `0` is refused. */
   telemetryCapacity?: number;
   /** Most channel planes the engine can render. Default `64`; `0` is refused. */
-  maxNumChannels?: number;
+  maxChannels?: number;
 }
 
 /**
@@ -29,9 +30,6 @@ export type StripRef = number | string;
 
 /** Marker kind spellings. */
 export type MarkerKind = 'marker' | 'text' | 'lyric' | 'cuePoint' | 'keySignature';
-
-/** Warp behaviour of a clip. */
-export type EngineWarpMode = 'off' | 'repitch' | 'tempoSync' | 'timeStretch';
 
 /** Where {@link RealtimeEngine.captureStatus} says the capture is taken from. */
 export type EngineCaptureSource = 'output' | 'input';
@@ -107,7 +105,7 @@ export interface EngineClip {
   fadeInSamples?: number;
   fadeOutSamples?: number;
   /** Default `'off'`. */
-  warpMode?: EngineWarpMode;
+  warpMode?: ProjectWarpMode;
   warpAnchors?: Array<{ warpSample: number; sourceSample: number }>;
   pageProvider?: ClipPageProvider;
 }
@@ -291,8 +289,10 @@ export interface EngineBounceOptions {
    * chunks with `renderOffline({ finalize: false })`.
    */
   totalFrames: number;
+  /** Frames per render block. Omit it for the engine's default block (128, capped at the prepared maximum); an explicit `0` is a `RangeError`. */
   blockSize?: number;
-  numChannels?: number;
+  /** Channel count of the rendered result. Required. */
+  numChannels: number;
   /** Output sample rate. Omit to keep the source rate; `0` is refused. */
   targetSampleRate?: number;
   /** Rate `totalFrames` is counted in. Omit for the engine rate; `0` is refused, and any other rate throws. */
@@ -321,8 +321,10 @@ export interface EngineBounceResult {
 /** Settings for {@link RealtimeEngine.freezeOffline}. */
 export interface EngineFreezeOptions {
   totalFrames: number;
+  /** Frames per render block. Omit it for the engine's default block (128, capped at the prepared maximum); an explicit `0` is a `RangeError`. */
   blockSize?: number;
-  numChannels?: number;
+  /** Channel count of the rendered result. Required. */
+  numChannels: number;
   clipId?: number;
   startPpq?: number;
   gain?: number;
@@ -523,7 +525,7 @@ export interface EngineMidiClipSchedule {
 export interface RenderOfflineRequest {
   /** One buffer per output plane; their common length is the render span. */
   channels: Float32Array[];
-  /** Render block size. Default `128`. */
+  /** Render block size. Omit it for the engine's default block (128, capped at the prepared maximum); an explicit `0` is a `RangeError`. */
   blockSize?: number;
   /**
    * Whether this call ends the timeline. `true` (the default) releases every

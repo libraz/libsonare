@@ -63,7 +63,7 @@ describe('RealtimeEngine prepare/time-signature/loop guards', () => {
           maxBlockSize: 128,
           commandCapacity: 1024,
           telemetryCapacity: 1024,
-          maxNumChannels: 0,
+          maxChannels: 0,
         }),
     ).toThrow();
     expect(
@@ -73,7 +73,7 @@ describe('RealtimeEngine prepare/time-signature/loop guards', () => {
           maxBlockSize: 128,
           commandCapacity: 1024,
           telemetryCapacity: 1024,
-          maxNumChannels: 65,
+          maxChannels: 65,
         }),
     ).toThrow();
   });
@@ -91,7 +91,7 @@ describe('RealtimeEngine prepare/time-signature/loop guards', () => {
         maxBlockSize: 128,
         commandCapacity: 1024,
         telemetryCapacity: 1024,
-        maxNumChannels: 0,
+        maxChannels: 0,
       }),
     ).toThrow();
     expect(() =>
@@ -100,7 +100,7 @@ describe('RealtimeEngine prepare/time-signature/loop guards', () => {
         maxBlockSize: 128,
         commandCapacity: 1024,
         telemetryCapacity: 1024,
-        maxNumChannels: 65,
+        maxChannels: 65,
       }),
     ).toThrow();
     expect(() =>
@@ -109,7 +109,7 @@ describe('RealtimeEngine prepare/time-signature/loop guards', () => {
         maxBlockSize: 128,
         commandCapacity: 1024,
         telemetryCapacity: 1024,
-        maxNumChannels: 2,
+        maxChannels: 2,
       }),
     ).not.toThrow();
   });
@@ -136,7 +136,7 @@ describe('RealtimeEngine prepare/time-signature/loop guards', () => {
       maxBlockSize: 128,
       commandCapacity: 1024,
       telemetryCapacity: 1024,
-      maxNumChannels: maxChannels,
+      maxChannels: maxChannels,
     });
     atLimit.destroy();
     expect(
@@ -146,7 +146,7 @@ describe('RealtimeEngine prepare/time-signature/loop guards', () => {
           maxBlockSize: 128,
           commandCapacity: 1024,
           telemetryCapacity: 1024,
-          maxNumChannels: maxChannels + 1,
+          maxChannels: maxChannels + 1,
         }),
     ).toThrow();
 
@@ -155,7 +155,7 @@ describe('RealtimeEngine prepare/time-signature/loop guards', () => {
       maxBlockSize: 128,
       commandCapacity: 1024,
       telemetryCapacity: 1024,
-      maxNumChannels: 2,
+      maxChannels: 2,
     });
     try {
       expect(() =>
@@ -164,7 +164,7 @@ describe('RealtimeEngine prepare/time-signature/loop guards', () => {
           maxBlockSize: 128,
           commandCapacity: 1024,
           telemetryCapacity: 1024,
-          maxNumChannels: maxChannels,
+          maxChannels: maxChannels,
         }),
       ).not.toThrow();
       expect(() =>
@@ -173,7 +173,7 @@ describe('RealtimeEngine prepare/time-signature/loop guards', () => {
           maxBlockSize: 128,
           commandCapacity: 1024,
           telemetryCapacity: 1024,
-          maxNumChannels: maxChannels + 1,
+          maxChannels: maxChannels + 1,
         }),
       ).toThrow();
       // The prepared scratch rows share the same ceiling and the same constant.
@@ -194,7 +194,7 @@ describe('RealtimeEngine prepare/time-signature/loop guards', () => {
         maxBlockSize: 128,
         commandCapacity: 1024,
         telemetryCapacity: 1024,
-        maxNumChannels: 2,
+        maxChannels: 2,
       });
       expect(() =>
         engine.process([new Float32Array(128), new Float32Array(128), new Float32Array(128)]),

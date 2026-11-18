@@ -1368,7 +1368,7 @@ const ENGINE_CONFIG_REQUEST_KEYS = keySet(
   'maxBlockSize',
   'commandCapacity',
   'telemetryCapacity',
-  'maxNumChannels',
+  'maxChannels',
 );
 const ENGINE_TRACK_LANE_REQUEST_KEYS = keySet(
   'trackId',
@@ -1399,6 +1399,14 @@ const BOUNCE_OFFLINE_REQUEST_KEYS = keySet(
   'dither',
   'ditherBits',
   'ditherSeed',
+);
+const FREEZE_OFFLINE_REQUEST_KEYS = keySet(
+  'totalFrames',
+  'blockSize',
+  'numChannels',
+  'clipId',
+  'startPpq',
+  'gain',
 );
 const CONFIGURE_CAPTURE_REQUEST_KEYS = keySet(
   'capacityFrames',
@@ -1582,6 +1590,7 @@ export const REQUEST_KEYS = {
   restoreBusInsertParam: INSERT_PARAM_REQUEST_KEYS,
   setGraph: SET_GRAPH_REQUEST_KEYS,
   bounceOffline: BOUNCE_OFFLINE_REQUEST_KEYS,
+  freezeOffline: FREEZE_OFFLINE_REQUEST_KEYS,
   configureCapture: CONFIGURE_CAPTURE_REQUEST_KEYS,
   armCapture: ARM_CAPTURE_REQUEST_KEYS,
   setLoop: SET_LOOP_REQUEST_KEYS,

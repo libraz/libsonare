@@ -61,8 +61,8 @@ describe('construction', () => {
       () => new (RealtimeEngine as unknown as new (...a: unknown[]) => unknown)(48000, 128),
     ).toThrow(TypeError);
     expect(() => new RealtimeEngine({} as never)).toThrow(TypeError);
-    expect(() => new RealtimeEngine({ sampleRate: 48000, maxChannels: 8 } as never)).toThrow(
-      /maxChannels/,
+    expect(() => new RealtimeEngine({ sampleRate: 48000, maxNumChannels: 8 } as never)).toThrow(
+      /maxNumChannels/,
     );
     expect(() => new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 0 })).toThrow(
       /omit it for the default/,
@@ -77,12 +77,7 @@ describe('construction', () => {
   });
 
   it('refuses an explicit 0 for a count field', () => {
-    for (const field of [
-      'maxBlockSize',
-      'commandCapacity',
-      'telemetryCapacity',
-      'maxNumChannels',
-    ]) {
+    for (const field of ['maxBlockSize', 'commandCapacity', 'telemetryCapacity', 'maxChannels']) {
       const error = caught(() => new RealtimeEngine({ sampleRate: 48000, [field]: 0 } as never));
       expect(error).toBeInstanceOf(RangeError);
       expect((error as Error).message).toContain(field);
@@ -92,7 +87,7 @@ describe('construction', () => {
       maxBlockSize: 64,
       commandCapacity: 256,
       telemetryCapacity: 256,
-      maxNumChannels: 8,
+      maxChannels: 8,
     });
     engine.destroy();
   });
@@ -489,6 +484,58 @@ describe('absent versus zero', () => {
         engine.bounceOffline({ ...base, normalizeLufs: true, targetLufs: Number.NaN }),
       ).toThrow(/targetLufs/);
     });
+  });
+
+  it('takes an omitted block size or record count as the library default and refuses 0', () => {
+    const frames = 512;
+    const tone = new Float32Array(frames);
+    for (let i = 0; i < frames; i++) {
+      tone[i] = 0.5 * Math.sin((2 * Math.PI * 440 * i) / 48000);
+    }
+    const render = (blockSize?: number): Float32Array[] => {
+      const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 256 });
+      try {
+        engine.setClips([
+          { id: 1, channels: [tone, tone.slice()], startPpq: 0, lengthSamples: frames },
+        ]);
+        engine.play();
+        return engine.renderOffline({
+          channels: [new Float32Array(frames), new Float32Array(frames)],
+          ...(blockSize === undefined ? {} : { blockSize }),
+        });
+      } finally {
+        engine.destroy();
+      }
+    };
+    const omitted = render();
+    expect(omitted[0].some((sample) => Math.abs(sample) > 0.1)).toBe(true);
+    expect(omitted).toEqual(render(128));
+
+    const engine = new RealtimeEngine({ sampleRate: 48000 });
+    try {
+      engine.prepare({ sampleRate: 48000 });
+      const planes = [new Float32Array(256), new Float32Array(256)];
+      expect(() => engine.renderOffline({ channels: planes, blockSize: 0 })).toThrow(RangeError);
+      expect(() => engine.primeOfflineParameters(2, 0)).toThrow(RangeError);
+      expect(() => engine.primeOfflineParameters(2)).not.toThrow();
+      for (const run of [
+        () => engine.bounceOffline({ totalFrames: 256, numChannels: 2, blockSize: 0 }),
+        () => engine.freezeOffline({ totalFrames: 256, numChannels: 2, blockSize: 0 }),
+      ]) {
+        const error = caught(run);
+        expect(error).toBeInstanceOf(RangeError);
+        expect((error as Error).message).toContain('omit it for the default');
+      }
+      expect(caught(() => engine.bounceOffline({ totalFrames: 256 } as never))).toBeInstanceOf(
+        TypeError,
+      );
+      expect(engine.bounceOffline({ totalFrames: 256, numChannels: 2 }).channels).toHaveLength(2);
+      expect(engine.freezeOffline({ totalFrames: 256, numChannels: 2 }).frames).toBe(256);
+      expect(Array.isArray(engine.drainTelemetry())).toBe(true);
+      expect(engine.drainTelemetry(0)).toEqual([]);
+    } finally {
+      engine.destroy();
+    }
   });
 });
 

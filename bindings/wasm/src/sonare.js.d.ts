@@ -1469,7 +1469,7 @@ export interface WasmRealtimeEngine {
   insertParameterConstructedValue: (paramId: number) => number;
   seekSample: (timelineSample: number, renderFrame?: number) => void;
   settleParameters: () => void;
-  primeOfflineParameters: (numChannels: number, blockSize: number) => void;
+  primeOfflineParameters: (numChannels: number, blockSize: number | undefined) => void;
   resetProcessorState: (renderFrame?: number) => void;
   tailSamples: () => number;
   graphLatencySamplesQ8: () => number;
@@ -1813,7 +1813,7 @@ export interface WasmRealtimeEngine {
   setExternalMidiClockEnabled: (enabled: boolean) => void;
   externalMidiDroppedCount: () => number;
   externalMidiPendingCount: () => number;
-  drainExternalMidi: (maxRecords: number) => WasmExternalMidiEvent[];
+  drainExternalMidi: (maxRecords: number | undefined) => WasmExternalMidiEvent[];
   popExternalMidiToScratch: () => boolean;
   externalMidiScratchDestinationId: () => number;
   externalMidiScratchRenderFrame: () => number;
@@ -1836,11 +1836,15 @@ export interface WasmRealtimeEngine {
   getMonitorChannelBuffer: (channel: number, numFrames: number) => Float32Array;
   processPreparedWithMonitor: (numFrames: number) => void;
   processWithMonitor: (channels: Float32Array[]) => WasmEngineProcessWithMonitorResult;
-  renderOffline: (channels: Float32Array[], blockSize: number, finalize: boolean) => Float32Array[];
+  renderOffline: (
+    channels: Float32Array[],
+    blockSize: number | undefined,
+    finalize: boolean,
+  ) => Float32Array[];
   finishOfflineRender: () => void;
   bounceOffline: (options: WasmEngineBounceOptions) => WasmEngineBounceResult;
   freezeOffline: (options: WasmEngineFreezeOptions) => WasmEngineFreezeResult;
-  drainTelemetry: (maxRecords: number) => WasmEngineTelemetry[];
+  drainTelemetry: (maxRecords: number | undefined) => WasmEngineTelemetry[];
   popTelemetryToScratch: () => boolean;
   telemetryScratchType: () => number;
   telemetryScratchError: () => number;
@@ -1855,11 +1859,11 @@ export interface WasmRealtimeEngine {
   meterScratchValue: (field: number) => number;
   meterScratchInputPeakDbL: () => number;
   meterScratchInputPeakDbR: () => number;
-  drainMeterTelemetry: (maxRecords: number) => WasmEngineMeterTelemetry[];
-  drainMeterTelemetryWide: (maxRecords: number) => WasmEngineMeterTelemetryWide[];
+  drainMeterTelemetry: (maxRecords: number | undefined) => WasmEngineMeterTelemetry[];
+  drainMeterTelemetryWide: (maxRecords: number | undefined) => WasmEngineMeterTelemetryWide[];
   meterTargetInsertGainReduction: (targetId: number) => number[];
   configureScopeTelemetry: (intervalFrames: number, bandCount: number) => number;
-  drainScopeTelemetry: (maxRecords: number) => WasmEngineScopeTelemetry[];
+  drainScopeTelemetry: (maxRecords: number | undefined) => WasmEngineScopeTelemetry[];
   popScopeTelemetryToScratch: () => boolean;
   scopeScratchTargetId: () => number;
   scopeScratchRenderFrame: () => number;

@@ -95,6 +95,7 @@ import {
   type SonareWorkletMeterSnapshot,
   type SonareWorkletScopeSnapshot,
 } from './protocol.js';
+import { AUDIO_WORKLET_RENDER_QUANTUM } from './render_quantum.js';
 
 const MAX_PENDING_WORKLET_CLIP_PAGE_REQUESTS = 256;
 
@@ -240,7 +241,7 @@ export class SonareEngine {
       offlineNumChannels,
       ...nodeOptions
     } = options;
-    const blockSize = offlineBlockSize ?? options.maxBlockSize ?? 128;
+    const blockSize = offlineBlockSize ?? options.maxBlockSize ?? AUDIO_WORKLET_RENDER_QUANTUM;
     const numChannels = requireChannelCount(
       offlineNumChannels ?? options.numChannels,
       2,

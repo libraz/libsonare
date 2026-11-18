@@ -74,6 +74,7 @@ import {
   writePreparedInt64Words,
   writeSonareEngineTelemetryRingBuffer,
 } from './protocol.js';
+import { AUDIO_WORKLET_RENDER_QUANTUM } from './render_quantum.js';
 
 function captureTransferList(channels: readonly Float32Array[]): Transferable[] {
   const transfers: ArrayBuffer[] = [];
@@ -207,7 +208,7 @@ export class SonareRealtimeEngineWorkletProcessor {
       'SonareRealtimeEngineWorkletProcessor',
     );
     this.clipPageRepostFrames = Math.max(1, Math.round(this.sampleRate * CLIP_PAGE_REPOST_SECONDS));
-    this.blockSize = options.maxBlockSize ?? 128;
+    this.blockSize = options.maxBlockSize ?? AUDIO_WORKLET_RENDER_QUANTUM;
     this.channelCount = requireChannelCount(options.numChannels, 2, 'numChannels');
     this.transport = transport;
     // Zero is the off switch for meter publication, so the floor is 0.
@@ -266,7 +267,7 @@ export class SonareRealtimeEngineWorkletProcessor {
       maxBlockSize: this.blockSize,
       commandCapacity: Math.max(1024, this.commandRing?.capacity ?? 0),
       telemetryCapacity: 1024,
-      maxNumChannels: this.channelCount,
+      maxChannels: this.channelCount,
     });
     this.native = engineNativeHandle(this.engine);
     // Allocate persistent WASM-heap scratch (worst case: channelCount channels x

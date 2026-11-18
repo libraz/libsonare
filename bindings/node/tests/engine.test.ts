@@ -56,7 +56,7 @@ describe('RealtimeEngine native binding', () => {
           maxBlockSize: 128,
           commandCapacity: 1024,
           telemetryCapacity: 1024,
-          maxNumChannels: 2,
+          maxChannels: 2,
         }),
       ).not.toThrow();
       expect(() =>
@@ -65,7 +65,7 @@ describe('RealtimeEngine native binding', () => {
           maxBlockSize: 128,
           commandCapacity: 1024,
           telemetryCapacity: 1024,
-          maxNumChannels: 0,
+          maxChannels: 0,
         }),
       ).toThrow();
       expect(() =>
@@ -74,7 +74,7 @@ describe('RealtimeEngine native binding', () => {
           maxBlockSize: 128,
           commandCapacity: 1024,
           telemetryCapacity: 1024,
-          maxNumChannels: 65,
+          maxChannels: 65,
         }),
       ).toThrow();
     } finally {
@@ -87,7 +87,7 @@ describe('RealtimeEngine native binding', () => {
           maxBlockSize: 128,
           commandCapacity: 1024,
           telemetryCapacity: 1024,
-          maxNumChannels: 0,
+          maxChannels: 0,
         }),
     ).toThrow();
   });
@@ -116,7 +116,7 @@ describe('RealtimeEngine native binding', () => {
           maxBlockSize: 128,
           commandCapacity: 1024,
           telemetryCapacity: 1024,
-          maxNumChannels: maxChannels,
+          maxChannels: maxChannels,
         }),
       ).not.toThrow();
       expect(() =>
@@ -125,7 +125,7 @@ describe('RealtimeEngine native binding', () => {
           maxBlockSize: 128,
           commandCapacity: 1024,
           telemetryCapacity: 1024,
-          maxNumChannels: maxChannels + 1,
+          maxChannels: maxChannels + 1,
         }),
       ).toThrow();
     } finally {
@@ -141,7 +141,7 @@ describe('RealtimeEngine native binding', () => {
         maxBlockSize: 128,
         commandCapacity: 1024,
         telemetryCapacity: 1024,
-        maxNumChannels: 2,
+        maxChannels: 2,
       });
       engine.process([new Float32Array(128), new Float32Array(128), new Float32Array(128)]);
 
@@ -609,20 +609,26 @@ describe('RealtimeEngine native binding', () => {
   it('bounces at the prepared rate by default and still refuses a different source rate', () => {
     const engine = new RealtimeEngine({ sampleRate: 44100, maxBlockSize: 128 });
     try {
-      const result = engine.bounceOffline({ totalFrames: 441, blockSize: 128 });
+      const result = engine.bounceOffline({ totalFrames: 441, blockSize: 128, numChannels: 2 });
       expect(result.sampleRate).toBe(44100);
       expect(result.channels[0]).toHaveLength(441);
 
       const resampled = engine.bounceOffline({
         totalFrames: 44100,
         blockSize: 128,
+        numChannels: 2,
         targetSampleRate: 48000,
       });
       expect(resampled.sampleRate).toBe(48000);
       expect(resampled.channels[0]).toHaveLength(48000);
 
       expect(() =>
-        engine.bounceOffline({ totalFrames: 441, blockSize: 128, sourceSampleRate: 48000 }),
+        engine.bounceOffline({
+          totalFrames: 441,
+          blockSize: 128,
+          numChannels: 2,
+          sourceSampleRate: 48000,
+        }),
       ).toThrow();
     } finally {
       engine.destroy();
@@ -883,11 +889,65 @@ describe('RealtimeEngine native binding', () => {
       refused(() => engine.renderOffline({ channels: planes(), blockSize: 129 }));
       refused(() => engine.renderOffline({ channels: planes(), blockSize: 129 }));
       refused(() => engine.primeOfflineParameters(2, 129));
-      refused(() => engine.bounceOffline({ totalFrames: frames, blockSize: 129 }));
-      refused(() => engine.freezeOffline({ totalFrames: frames, blockSize: 129 }));
+      refused(() => engine.bounceOffline({ totalFrames: frames, blockSize: 129, numChannels: 2 }));
+      refused(() => engine.freezeOffline({ totalFrames: frames, blockSize: 129, numChannels: 2 }));
       // The prepared block and anything smaller still render.
       expect(() => engine.renderOffline({ channels: planes(), blockSize: 128 })).not.toThrow();
       expect(() => engine.renderOffline({ channels: planes(), blockSize: 64 })).not.toThrow();
+    } finally {
+      engine.destroy();
+    }
+  });
+
+  it('takes an omitted block size or capacity as the library default and refuses an explicit 0', () => {
+    for (const key of ['maxBlockSize', 'commandCapacity', 'telemetryCapacity', 'maxChannels']) {
+      expect(() => new RealtimeEngine({ sampleRate: 48000, [key]: 0 })).toThrow(RangeError);
+    }
+    const frames = 512;
+    const tone = new Float32Array(frames);
+    for (let i = 0; i < frames; i++) {
+      tone[i] = 0.5 * Math.sin((2 * Math.PI * 440 * i) / 48000);
+    }
+    const render = (blockSize?: number): Float32Array[] => {
+      const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 256 });
+      try {
+        engine.setClips([
+          { id: 1, channels: [tone, tone.slice()], startPpq: 0, lengthSamples: frames },
+        ]);
+        engine.play();
+        return engine.renderOffline({
+          channels: [new Float32Array(frames), new Float32Array(frames)],
+          ...(blockSize === undefined ? {} : { blockSize }),
+        });
+      } finally {
+        engine.destroy();
+      }
+    };
+    const omitted = render();
+    expect(rms(omitted[0])).toBeGreaterThan(0.1);
+    expect(omitted).toEqual(render(128));
+
+    const engine = new RealtimeEngine({ sampleRate: 48000 });
+    try {
+      expect(() => engine.prepare({ sampleRate: 48000, maxBlockSize: 0 })).toThrow(RangeError);
+      engine.prepare({ sampleRate: 48000 });
+      const planes = [new Float32Array(256), new Float32Array(256)];
+      expect(() => engine.renderOffline({ channels: planes, blockSize: 0 })).toThrow(RangeError);
+      expect(() => engine.primeOfflineParameters(2, 0)).toThrow(RangeError);
+      expect(() => engine.primeOfflineParameters(2)).not.toThrow();
+      expect(() =>
+        engine.bounceOffline({ totalFrames: 256, numChannels: 2, blockSize: 0 }),
+      ).toThrow(RangeError);
+      expect(() =>
+        engine.freezeOffline({ totalFrames: 256, numChannels: 2, blockSize: 0 }),
+      ).toThrow(RangeError);
+      expect(() => engine.bounceOffline({ totalFrames: 256 } as EngineBounceOptions)).toThrow(
+        TypeError,
+      );
+      expect(engine.bounceOffline({ totalFrames: 256, numChannels: 2 }).channels).toHaveLength(2);
+      expect(engine.freezeOffline({ totalFrames: 256, numChannels: 2 }).frames).toBe(256);
+      expect(Array.isArray(engine.drainTelemetry())).toBe(true);
+      expect(engine.drainTelemetry(0)).toEqual([]);
     } finally {
       engine.destroy();
     }

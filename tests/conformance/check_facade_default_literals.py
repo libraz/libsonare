@@ -51,6 +51,16 @@ ROWS: tuple[Literal, ...] = (
             Site("python", "bindings/python/src/libsonare", r"\bbeta: float = ([-\d.]+)", 8),
         ),
     ),
+    Literal(
+        constant="kDefaultDrainRecords",
+        header="src/engine/realtime_engine.h",
+        sites=(
+            # Node and WASM leave an omitted count to the native default.
+            Site("node", "bindings/node/src", r"\bmaxRecords = (\d+)", 0),
+            Site("wasm", "bindings/wasm/src", r"\bmaxRecords = (\d+)", 0),
+            Site("python", "bindings/python/src/libsonare", r"\bmax_records: int = (\d+)", 10),
+        ),
+    ),
 )
 
 _NUMBER = r"([-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?)[fF]?"

@@ -180,14 +180,14 @@ const TELEMETRY_ERROR = {
 const PART_RIG_EVERY_PART = 0xff;
 /** Fixed-point scale of the latency the native engine reports (1/256 sample). */
 const LATENCY_Q8_SCALE = 256;
-const RENDER_OFFLINE_DEFAULT_BLOCK = 128;
 
+/** An omitted size stays undefined, which the addon passes on as the library default. */
 interface ResolvedEngineConfig {
   sampleRate: number;
-  maxBlockSize: number;
-  commandCapacity: number;
-  telemetryCapacity: number;
-  maxNumChannels: number;
+  maxBlockSize: number | undefined;
+  commandCapacity: number | undefined;
+  telemetryCapacity: number | undefined;
+  maxChannels: number | undefined;
 }
 
 function resolveEngineConfig(
@@ -201,11 +201,10 @@ function resolveEngineConfig(
   const sampleRate = requireFinite(fnName, request.sampleRate, 'sampleRate');
   return {
     sampleRate,
-    maxBlockSize: optionalNonZero(fnName, request.maxBlockSize, 'maxBlockSize') ?? 128,
-    commandCapacity: optionalNonZero(fnName, request.commandCapacity, 'commandCapacity') ?? 1024,
-    telemetryCapacity:
-      optionalNonZero(fnName, request.telemetryCapacity, 'telemetryCapacity') ?? 1024,
-    maxNumChannels: optionalNonZero(fnName, request.maxNumChannels, 'maxNumChannels') ?? 64,
+    maxBlockSize: optionalNonZero(fnName, request.maxBlockSize, 'maxBlockSize'),
+    commandCapacity: optionalNonZero(fnName, request.commandCapacity, 'commandCapacity'),
+    telemetryCapacity: optionalNonZero(fnName, request.telemetryCapacity, 'telemetryCapacity'),
+    maxChannels: optionalNonZero(fnName, request.maxChannels, 'maxChannels'),
   };
 }
 
@@ -529,7 +528,7 @@ function bounceToNative(options: EngineBounceOptions): Record<string, unknown> {
   const fnName = 'bounceOffline';
   const request = requestObject(fnName, options, 'options', true);
   const native: Record<string, unknown> = { ...request };
-  for (const key of ['targetSampleRate', 'sourceSampleRate'] as const) {
+  for (const key of ['blockSize', 'targetSampleRate', 'sourceSampleRate'] as const) {
     if (optionalNonZero(fnName, request[key], key) === undefined) {
       delete native[key];
     }
@@ -659,7 +658,7 @@ export class RealtimeEngine {
       resolved.maxBlockSize,
       resolved.commandCapacity,
       resolved.telemetryCapacity,
-      resolved.maxNumChannels,
+      resolved.maxChannels,
     );
   }
 
@@ -680,7 +679,7 @@ export class RealtimeEngine {
       resolved.maxBlockSize,
       resolved.commandCapacity,
       resolved.telemetryCapacity,
-      resolved.maxNumChannels,
+      resolved.maxChannels,
     );
     this.sampleRate = resolved.sampleRate;
   }
@@ -730,12 +729,16 @@ export class RealtimeEngine {
    * called concurrently with {@link process}.
    *
    * @param numChannels - Channel count of the blocks that will be rendered
-   * @param blockSize - Frames per block that will be rendered (a larger block size is refused)
+   * @param blockSize - Frames per block that will be rendered (a larger block size is refused);
+   *   omit it for the engine's default block, capped at the prepared maximum
    * @throws If a count is not positive, `numChannels` exceeds the prepared
    *   channel count, or the engine was never prepared
    */
-  primeOfflineParameters(numChannels: number, blockSize: number): void {
-    this.native.primeOfflineParameters(numChannels, blockSize);
+  primeOfflineParameters(numChannels: number, blockSize?: number): void {
+    this.native.primeOfflineParameters(
+      numChannels,
+      optionalNonZero('primeOfflineParameters', blockSize, 'blockSize'),
+    );
   }
 
   /**
@@ -1828,7 +1831,7 @@ export class RealtimeEngine {
     }
     return this.native.renderOffline(
       record.channels,
-      record.blockSize ?? RENDER_OFFLINE_DEFAULT_BLOCK,
+      optionalNonZero(fnName, record.blockSize, 'blockSize'),
       record.finalize ?? true,
     );
   }
@@ -1872,10 +1875,15 @@ export class RealtimeEngine {
    * throws.
    */
   freezeOffline(options: EngineFreezeOptions): EngineFreezeResult {
-    return this.native.freezeOffline(options);
+    const fnName = 'freezeOffline';
+    const native: Record<string, unknown> = { ...requestObject(fnName, options, 'options', true) };
+    if (optionalNonZero(fnName, native.blockSize, 'blockSize') === undefined) {
+      delete native.blockSize;
+    }
+    return this.native.freezeOffline(native);
   }
 
-  drainTelemetry(maxRecords = 1024): EngineTelemetry[] {
+  drainTelemetry(maxRecords?: number): EngineTelemetry[] {
     return (this.native.drainTelemetry(maxRecords) as Array<Record<string, unknown>>).map(
       telemetryFromNative,
     );
@@ -1885,7 +1893,7 @@ export class RealtimeEngine {
    * Drain pending stereo meter telemetry records published by the engine's meter tap.
    * Compatibility drain over the queue {@link drainMeterTelemetryWide} reads; use that one alone.
    */
-  drainMeterTelemetry(maxRecords = 1024): EngineMeterTelemetry[] {
+  drainMeterTelemetry(maxRecords?: number): EngineMeterTelemetry[] {
     return (this.native.drainMeterTelemetry(maxRecords) as Array<Record<string, unknown>>).map(
       meterTelemetryFromNative,
     );
@@ -1897,7 +1905,7 @@ export class RealtimeEngine {
    * alone; {@link drainMeterTelemetry} consumes the same queue (every target's
    * records) and stays for compatibility.
    */
-  drainMeterTelemetryWide(maxRecords = 1024): EngineMeterTelemetryWide[] {
+  drainMeterTelemetryWide(maxRecords?: number): EngineMeterTelemetryWide[] {
     return (this.native.drainMeterTelemetryWide(maxRecords) as Array<Record<string, unknown>>).map(
       meterTelemetryWideFromNative,
     );
@@ -1935,7 +1943,7 @@ export class RealtimeEngine {
   }
 
   /** Drain pending spectrum + vectorscope telemetry records published by the engine's scope tap. */
-  drainScopeTelemetry(maxRecords = 1024): EngineScopeTelemetry[] {
+  drainScopeTelemetry(maxRecords?: number): EngineScopeTelemetry[] {
     return this.native.drainScopeTelemetry(maxRecords);
   }
 
@@ -2792,7 +2800,7 @@ export class RealtimeEngine {
    * returning an empty array while the queue keeps growing. A negative or
    * fractional value is likewise a `RangeError`, a non-number a `TypeError`.
    */
-  drainExternalMidi(maxRecords = 1024): ExternalMidiEvent[] {
+  drainExternalMidi(maxRecords?: number): ExternalMidiEvent[] {
     return this.native
       .drainExternalMidi(maxRecords)
       .map(

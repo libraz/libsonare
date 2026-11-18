@@ -264,16 +264,28 @@ describe('bounceOffline refuses a non-finite targetLufs instead of normalizing t
     withEngine((engine) => {
       const e = engine as Loose;
       for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
-        const request = { totalFrames: 441, blockSize: 128, normalizeLufs: true, targetLufs: bad };
+        const request = {
+          totalFrames: 441,
+          blockSize: 128,
+          numChannels: 2,
+          normalizeLufs: true,
+          targetLufs: bad,
+        };
         expect(() => e.bounceOffline(request)).toThrow(RangeError);
         expect(captureError(() => e.bounceOffline(request))?.message).toContain('targetLufs');
       }
       expect(() =>
-        e.bounceOffline({ totalFrames: 441, blockSize: 128, normalizeLufs: true, targetLufs: -20 }),
+        e.bounceOffline({
+          totalFrames: 441,
+          blockSize: 128,
+          numChannels: 2,
+          normalizeLufs: true,
+          targetLufs: -20,
+        }),
       ).not.toThrow();
-      expect(() => e.bounceOffline({ totalFrames: 441, blockSize: 128, ditherSeed: -1 })).toThrow(
-        /ditherSeed/,
-      );
+      expect(() =>
+        e.bounceOffline({ totalFrames: 441, blockSize: 128, numChannels: 2, ditherSeed: -1 }),
+      ).toThrow(/ditherSeed/);
     });
   });
 });

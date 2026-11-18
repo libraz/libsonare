@@ -1,7 +1,7 @@
 import type { ClipPageProvider } from './clip_page_provider.js';
 import type { TimeSignature } from './types_analysis.js';
 import type { AutomationCurve, SendTiming } from './types_mixing.js';
-import type { ProjectWarpAnchor } from './types_project.js';
+import type { ProjectWarpAnchor, ProjectWarpMode } from './types_project.js';
 
 /** Kind of a telemetry record: a processed block or an engine error. */
 export type EngineTelemetryType = 'processBlock' | 'error';
@@ -311,7 +311,7 @@ export interface EngineClip {
   fadeInSamples?: number;
   fadeOutSamples?: number;
   /** Warp mode; absent is `'off'`. A number is refused. */
-  warpMode?: 'off' | 'repitch' | 'tempoSync' | 'timeStretch';
+  warpMode?: ProjectWarpMode;
   warpAnchors?: ProjectWarpAnchor[];
   pageProvider?: ClipPageProvider;
 }
@@ -504,8 +504,10 @@ export interface EngineBounceOptions {
    * Render longer material in chunks via `renderOffline({ finalize: false })`.
    */
   totalFrames: number;
+  /** Frames per render block. Omit it for the engine's default block (128, capped at the prepared maximum); an explicit `0` is a `RangeError`. */
   blockSize?: number;
-  numChannels?: number;
+  /** Channel count of the rendered result. Required. */
+  numChannels: number;
   /**
    * Output sample rate. Omitting it keeps the source rate, so nothing is
    * resampled; a different rate resamples. An explicit `0` is a `RangeError`.
@@ -548,8 +550,10 @@ export interface EngineBounceResult {
 
 export interface EngineFreezeOptions {
   totalFrames: number;
+  /** Frames per render block. Omit it for the engine's default block (128, capped at the prepared maximum); an explicit `0` is a `RangeError`. */
   blockSize?: number;
-  numChannels?: number;
+  /** Channel count of the rendered result. Required. */
+  numChannels: number;
   clipId?: number;
   startPpq?: number;
   gain?: number;
@@ -664,7 +668,7 @@ export interface EngineMidiClipSchedule {
 export interface RenderOfflineRequest {
   /** One buffer per output plane; their common length is the render span. */
   channels: Float32Array[];
-  /** Render block size. Default `128`. */
+  /** Render block size. Omit it for the engine's default block (128, capped at the prepared maximum); an explicit `0` is a `RangeError`. */
   blockSize?: number;
   /**
    * Whether this call ends the timeline. `true` (the default, and what a
@@ -710,7 +714,7 @@ export interface RealtimeEngineConfig {
    */
   telemetryCapacity?: number;
   /** Most channels the engine renders. Default `64`. */
-  maxNumChannels?: number;
+  maxChannels?: number;
 }
 
 /** Loop region of {@link RealtimeEngine.setLoop}, in quarter notes. */

@@ -1169,7 +1169,6 @@ export type {
   EngineTrackMonitorMode,
   EngineTrackSend,
   EngineTransportState,
-  EngineWarpMode,
   ExternalMidiEvent,
   MarkerKind,
   RealtimeEngineConfig,

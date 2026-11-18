@@ -88,7 +88,7 @@ describe('offline render honours the prepared channel count', () => {
       maxBlockSize: 128,
       commandCapacity: 1024,
       telemetryCapacity: 1024,
-      maxNumChannels: preparedChannels,
+      maxChannels: preparedChannels,
     });
     const channels = Array.from({ length: requestedChannels }, () => new Float32Array(128));
     expectRangeRefusal(() => engine.renderOffline({ channels, blockSize: 128 }));
@@ -101,7 +101,7 @@ describe('offline render honours the prepared channel count', () => {
       maxBlockSize: 128,
       commandCapacity: 1024,
       telemetryCapacity: 1024,
-      maxNumChannels: preparedChannels,
+      maxChannels: preparedChannels,
     });
     expectRangeRefusal(() =>
       engine.bounceOffline({
@@ -121,7 +121,7 @@ describe('offline render honours the prepared channel count', () => {
       maxBlockSize: 128,
       commandCapacity: 1024,
       telemetryCapacity: 1024,
-      maxNumChannels: preparedChannels,
+      maxChannels: preparedChannels,
     });
     expectRangeRefusal(() =>
       engine.freezeOffline({
@@ -144,7 +144,7 @@ describe('offline render honours the prepared channel count', () => {
         maxBlockSize: 128,
         commandCapacity: 1024,
         telemetryCapacity: 1024,
-        maxNumChannels: preparedChannels,
+        maxChannels: preparedChannels,
       });
       try {
         engine.bounceOffline({
@@ -173,7 +173,7 @@ describe('offline render honours the prepared channel count', () => {
       maxBlockSize: 128,
       commandCapacity: 1024,
       telemetryCapacity: 1024,
-      maxNumChannels: preparedChannels,
+      maxChannels: preparedChannels,
     });
     const rendered = engine.renderOffline({
       channels: [new Float32Array(128), new Float32Array(128)],

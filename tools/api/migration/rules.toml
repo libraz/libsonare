@@ -701,7 +701,7 @@ const mixer = Mixer.fromSceneJson(json, 48000, 512);
 const project = Project.create();
 '''
 after = '''
-const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128, commandCapacity: 1024, telemetryCapacity: 1024, maxNumChannels: 64 });
+const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128, commandCapacity: 1024, telemetryCapacity: 1024, maxChannels: 64 });
 const mixer = new Mixer(scene);
 const project = new Project();
 '''

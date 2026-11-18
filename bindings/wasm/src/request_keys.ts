@@ -2442,7 +2442,7 @@ const EngineConfigRequestKeys = keysOf<RealtimeEngineConfig>()([
   'maxBlockSize',
   'commandCapacity',
   'telemetryCapacity',
-  'maxNumChannels',
+  'maxChannels',
 ]);
 const SidechainSourceRequestKeys = keysOf<SidechainSource>()(['kind', 'id']);
 const InsertBypassRequestKeys = keysOf<{ bypassed: boolean; resetOnBypass?: boolean }>()([
