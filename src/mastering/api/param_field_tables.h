@@ -240,9 +240,9 @@ constexpr const char* enum_choice_name(sonare::mastering::saturation::BitCrusher
     case sonare::mastering::saturation::BitCrusherFilterType::kOff:
       return "off";
     case sonare::mastering::saturation::BitCrusherFilterType::kLowpass:
-      return "lowpass";
+      return "lowPass";
     case sonare::mastering::saturation::BitCrusherFilterType::kHighpass:
-      return "highpass";
+      return "highPass";
   }
   return nullptr;
 }
@@ -306,9 +306,9 @@ constexpr const char* enum_choice_name(sonare::mastering::stereo::BinauralOutput
 constexpr const char* enum_choice_name(sonare::effects::modulation::WahFilterType value) {
   switch (value) {
     case sonare::effects::modulation::WahFilterType::kBandpass:
-      return "bandpass";
+      return "bandPass";
     case sonare::effects::modulation::WahFilterType::kLowpass:
-      return "lowpass";
+      return "lowPass";
   }
   return nullptr;
 }

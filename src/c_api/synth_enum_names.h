@@ -34,7 +34,7 @@ inline constexpr const char* kBuiltinWaveforms[] = {"sine", "saw", "sawtooth", "
                                                     "triangle"};
 inline constexpr const char* kFilterModels[] = {"default",     "svf",       "transistorLadder",
                                                 "diodeLadder", "sallenKey", "svf4Pole"};
-inline constexpr const char* kFilterOutputs[] = {"default", "lowpass", "bandpass", "highpass"};
+inline constexpr const char* kFilterOutputs[] = {"default", "lowPass", "bandPass", "highPass"};
 inline constexpr const char* kBodyTypes[] = {"default",  "none",      "guitar", "violin",
                                              "woodTube", "brassBell", "vocal"};
 inline constexpr const char* kRetriggers[] = {"default", "free", "note"};
