@@ -235,7 +235,7 @@ const projectJson = Buffer.from(encoded, 'base64').toString('utf8');
 const project = Project.fromJson(projectJson);
 try {{
   const result = project.bounceWithSynthInstruments(
-    {{ instrument: {{ preset: 'sine', useGmPrograms: {use_gm_programs_literal} }} }},
+    [{{ instrument: {{ preset: 'sine', useGmPrograms: {use_gm_programs_literal} }} }}],
     {{ totalFrames: {TOTAL_FRAMES}, blockSize: {BLOCK_SIZE}, numChannels: {NUM_CHANNELS} }},
   );
   if (result.sampleRate !== {SAMPLE_RATE}) throw new Error(`render rate ${{result.sampleRate}}`);
