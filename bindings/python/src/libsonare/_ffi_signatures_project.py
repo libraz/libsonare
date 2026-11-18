@@ -1083,13 +1083,15 @@ def _configure_project_extra_signatures(lib: ctypes.CDLL) -> None:
             _fn.restype = ctypes.c_int32
             _fn.argtypes = [ctypes.c_void_p, ctypes.c_size_t, ctypes.POINTER(_struct)]
 
-    if hasattr(lib, "sonare_project_marker_name_by_index"):
-        lib.sonare_project_marker_name_by_index.restype = ctypes.c_int32
-        lib.sonare_project_marker_name_by_index.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_size_t,
-            ctypes.POINTER(ctypes.c_char_p),
-        ]
+    for _name in (
+        "sonare_project_marker_name_by_index",
+        "sonare_project_track_name_by_index",
+        "sonare_project_source_name_or_uri_by_index",
+    ):
+        if hasattr(lib, _name):
+            _fn = getattr(lib, _name)
+            _fn.restype = ctypes.c_int32
+            _fn.argtypes = [ctypes.c_void_p, ctypes.c_size_t, ctypes.POINTER(ctypes.c_char_p)]
 
     if hasattr(lib, "sonare_project_get_audio_source_metadata"):
         lib.sonare_project_get_audio_source_metadata.restype = ctypes.c_int32
