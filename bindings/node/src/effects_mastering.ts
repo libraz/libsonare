@@ -8,6 +8,7 @@ export * from './effects_separation.js';
 export * from './effects_spectral.js';
 export * from './effects_timepitch.js';
 export * from './mastering_chain.js';
+export * from './mastering_core.js';
 export * from './mastering_dynamics.js';
 export * from './mastering_streaming.js';
 export * from './repair_dereverb.js';

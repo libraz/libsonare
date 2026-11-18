@@ -90,16 +90,16 @@ import {
 } from './features.js';
 import { clippingReportFromNative, clipThresholdLinear } from './internal/metering_native.js';
 import { tempoRange } from './internal/tempo_range.js';
+import type { MasterAudioRequest } from './mastering_chain.js';
+import { masterAudio as masterAudioFn } from './mastering_chain.js';
 import type {
-  MasterAudioRequest,
   MasteringApplyProcessorRequest,
   MasteringNormalizeLoudnessRequest,
-} from './mastering_chain.js';
+} from './mastering_core.js';
 import {
-  masterAudio as masterAudioFn,
   masteringApplyProcessor as masteringApplyProcessorFn,
   masteringNormalizeLoudness as masteringNormalizeLoudnessFn,
-} from './mastering_chain.js';
+} from './mastering_core.js';
 import type { NormalizeRequest } from './mastering_normalize.js';
 import type {
   ClippingReport,
