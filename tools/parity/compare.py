@@ -738,7 +738,12 @@ _NATIVE_SOURCE_GLOBS = {
     "node": ("bindings/node/src/addon", ("*.cpp", "*.cc", "*.h")),
     "wasm": ("src/wasm", ("*.cpp", "*.h")),
     "c": ("src/c_api", ("*.cpp",)),
+    # The TypeScript facades, where a class constructor may perform a handle op.
+    "node_facade": ("bindings/node/src", ("*.ts",)),
+    "wasm_facade": ("bindings/wasm/src", ("*.ts",)),
 }
+# Where a surface's class constructors live: TypeScript facades, or the ctypes modules.
+_CONSTRUCTOR_SOURCES = {"node": "node_facade", "wasm": "wasm_facade", "python": "python"}
 
 
 def load_native_sources(root: Path) -> dict[str, list[tuple[str, str]]]:
@@ -814,6 +819,62 @@ def _core_evidence(
                 if call.search(code):
                     return fn, f"{path}:{lineno}", None
     return None, None, None
+
+
+def _balanced(text: str, start: int, open_ch: str, close_ch: str) -> int:
+    """Index just past the bracket group opening at ``text[start]``."""
+    depth, i = 0, start
+    while i < len(text):
+        depth += (text[i] == open_ch) - (text[i] == close_ch)
+        i += 1
+        if depth == 0:
+            break
+    return i
+
+
+def _constructor_body(path: str, text: str, cls: str) -> str | None:
+    """The body of ``cls``'s constructor (TS ``constructor``, Python ``__init__``)."""
+    if path.endswith(".py"):
+        m = re.search(rf"^class {re.escape(cls)}\b.*:$", text, re.MULTILINE)
+        init = m and re.compile(r"^(\s+)def __init__\(", re.MULTILINE).search(text, m.end())
+        if not init or re.search(r"^\S", text[m.end() : init.start()], re.MULTILINE):
+            return None
+        indent = len(init.group(1))
+        signature_end = _balanced(text, init.end() - 1, "(", ")")
+        body = []
+        for line in text[signature_end:].splitlines()[1:]:
+            if line.strip() and len(line) - len(line.lstrip()) <= indent:
+                break
+            body.append(line)
+        return "\n".join(body)
+    m = re.search(rf"\bclass {re.escape(cls)}\b", text)
+    if not m:
+        return None
+    end = re.compile(r"^(?:export )?(?:abstract )?class ", re.MULTILINE).search(text, m.end())
+    ctor = re.compile(r"^\s*constructor\(", re.MULTILINE).search(
+        text, m.end(), end.start() if end else len(text)
+    )
+    if not ctor:
+        return None
+    params_end = _balanced(text, text.index("(", ctor.start()), "(", ")")
+    brace = text.find("{", params_end)
+    return text[brace : _balanced(text, brace, "{", "}")] if brace != -1 else None
+
+
+def _constructor_performs(
+    key: str, cls: str, tail: str, surface: str, sources: list[tuple[str, str]]
+) -> bool:
+    """Whether ``cls``'s constructor on ``surface`` performs the handle op ``key``."""
+    if surface == "python":
+        call = re.compile(rf"\bsonare_{re.escape(key)}\s*\(")
+    else:
+        head, *rest = tail.split("_")
+        call = re.compile(rf"\.{re.escape(head + ''.join(w.title() for w in rest))}\s*\(")
+    for path, text in sources:
+        body = _constructor_body(path, text, cls)
+        if body is not None and any(call.search(code) for _, code in _code_lines(path, body)):
+            return True
+    return False
 
 
 def _struct_readers(c_index: dict[str, FunctionSig]) -> dict[str, list[str]]:
@@ -941,6 +1002,17 @@ def build_report(
                         free_keys.get(s, set()) if prefix else set(indexed.get(s, {}))
                     )
                 covered = bool(aliases) and any(a in alias_symbols for a in aliases)
+            if not covered and prefix and native_sources and s in _CONSTRUCTOR_SOURCES:
+                # A handle op the facade performs while constructing the object
+                # (the streaming chain prepares in its constructor) is reached
+                # without a method of its own.
+                covered = _constructor_performs(
+                    key,
+                    dict(_HANDLE_FULL_PREFIXES)[prefix],
+                    key[len(prefix) :],
+                    s,
+                    native_sources.get(_CONSTRUCTOR_SOURCES[s], []),
+                )
             core_refused = None
             if not covered and key in _CORE_COVERAGE and native_sources and s in ("node", "wasm"):
                 facade = _CORE_COVERAGE[key][0]

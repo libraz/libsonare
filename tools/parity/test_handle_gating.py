@@ -581,6 +581,76 @@ def test_a_core_claim_the_surface_does_not_make_is_a_gap() -> None:
     assert rep.core_reached == []
 
 
+_TS_CHAIN = """export class StreamingMasteringChain {
+  private native: NativeChain;
+  constructor(config: StreamingMasteringChainConfig) {
+    this.native = new addon.StreamingMasteringChain(config.params);
+    %s
+  }
+
+  processMono(samples: Float32Array): Float32Array {
+    return this.native.prepare(samples);
+  }
+}
+"""
+
+
+def _ctor_report(ts: str):
+    node = Extraction(surface="node")
+    node.functions = [
+        FunctionSig(
+            key="process_mono",
+            surface="node",
+            raw_name="StreamingMasteringChain.processMono",
+        )
+    ]
+    return compare.build_report(
+        {"c": _c("streaming_mastering_chain_prepare"), "node": node},
+        allowlist_mod.Allowlist(),
+        ["c", "node"],
+        native_sources={"node_facade": [("chain.ts", ts)]},
+    )
+
+
+def test_an_op_the_constructor_performs_is_reached() -> None:
+    """The facade prepares in its constructor, so prepare needs no method of its own."""
+    rep = _ctor_report(_TS_CHAIN % "this.native.prepare(config.sampleRate, 512, 1);")
+    assert ("streaming_mastering_chain_prepare", "node") not in _active(rep), _active(rep)
+
+
+def test_a_python_init_with_a_wrapped_signature_performs_the_op() -> None:
+    """The body starts after the signature, however many lines it takes."""
+    py = """class StreamingMasteringChain:
+    \"\"\"Docs.\"\"\"
+
+    def __init__(
+        self,
+        sample_rate: int,
+    ) -> None:
+        handle = lib.sonare_streaming_mastering_chain_create()
+        try:
+            rc = lib.sonare_streaming_mastering_chain_prepare(handle, sample_rate)
+        except BaseException:
+            raise
+
+    def process_mono(self, samples):
+        return samples
+"""
+    rep = compare.build_report(
+        {"c": _c("streaming_mastering_chain_prepare"), "python": _py()},
+        allowlist_mod.Allowlist(),
+        ["c", "python"],
+        native_sources={"python": [("chain.py", py)]},
+    )
+    assert ("streaming_mastering_chain_prepare", "python") not in _active(rep), _active(rep)
+
+
+def test_an_op_called_outside_the_constructor_is_still_a_gap() -> None:
+    """A call in another method is not the constructor performing the op."""
+    rep = _ctor_report(_TS_CHAIN % "// prepare is left to the caller")
+    assert ("streaming_mastering_chain_prepare", "node") in _active(rep), _active(rep)
+
+
 def _run_all() -> int:
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     failed = 0
