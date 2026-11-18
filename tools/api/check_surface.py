@@ -844,7 +844,7 @@ _UNITS = (
     "m",
     "deg",
     "bpm",
-    "db_per_oct",
+    "db_oct",
     "samples",
     "frames",
     "sample",
@@ -1071,7 +1071,7 @@ _CATALOG_UNIT_WORDS = {
     "cents": "cents",
     "semitones": "semitones",
     "samples": "samples",
-    "dBPerOct": "db_per_oct",
+    "dBPerOct": "db_oct",
     "m": "m",
     "deg": "deg",
 }
