@@ -211,3 +211,11 @@ old = "analyze --chroma-highpass"
 new = "analyze --chroma-high-pass-hz"
 domain = "analysis"
 rule = "high-pass"
+
+[[entry]]
+kind = "flag"
+old = "suggest-mix --tempo-bpm"
+changed = "the flag takes auto or a tempo greater than 0; an explicit 0, a negative or a non-number is refused as a usage error naming the flag, and leaving it out (no longer an empty string) keeps the transport's fallback tempo"
+domain = "mastering"
+rule = "absent-not-sentinel"
+test = "tests/conformance/cli_contract_v2.json::tempo_zero_refused"

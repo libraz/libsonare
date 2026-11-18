@@ -912,7 +912,7 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     add_command(
         commands, "suggest-mix", false,
         {repeatable_path("input"), int_value("sample-rate", 48000), string_value("params", ""),
-         string_value("tempo-bpm", ""), string_value("scene-out", "")});
+         string_value("tempo-bpm"), string_value("scene-out", "")});
 #endif
 
     // Feature leaves.

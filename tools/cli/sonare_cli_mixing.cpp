@@ -199,8 +199,11 @@ double resolve_assistant_tempo(const std::string& raw, const std::string& first_
     stream.imbue(std::locale::classic());
     double value = 0.0;
     stream >> value;
-    if (!stream || stream.peek() != std::char_traits<char>::eof()) {
-      throw std::invalid_argument("invalid --tempo-bpm value: " + raw);
+    // A stated tempo is checked as the flag's own domain, before the library is reached.
+    if (!stream || stream.peek() != std::char_traits<char>::eof() || !std::isfinite(value) ||
+        value <= 0.0) {
+      throw CliUsageError("invalid --tempo-bpm value: " + raw +
+                          " (expected 'auto' or a tempo greater than 0)");
     }
     return value;
   }
@@ -264,9 +267,9 @@ int cmd_suggest_mix(const CliArgs& args, const Audio&) {
   const int sample_rate = args.get_int("sample-rate", 48000);
 
   auto params = parse_mastering_params(args.get_string("params"));
-  const std::string tempo_text = args.get_string("tempo-bpm");
   std::optional<AssistantTrack> first_track;
-  if (!tempo_text.empty()) {
+  if (args.has("tempo-bpm")) {
+    const std::string tempo_text = args.get_string("tempo-bpm");
     // Both spellings reach the same config field, so naming both is a
     // contradiction rather than a precedence question.
     for (const auto& param : params) {

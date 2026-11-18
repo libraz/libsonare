@@ -4005,7 +4005,7 @@
         {
           "name": "tempo-bpm",
           "type": "string",
-          "default": "",
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -16590,7 +16590,7 @@
         {
           "name": "tempo-bpm",
           "type": "string",
-          "default": "",
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -16654,6 +16654,38 @@
           "payload": "success",
           "artifact": "none",
           "stdout": "json"
+        },
+        {
+          "id": "tempo_auto",
+          "argv": [
+            "suggest-mix",
+            "--input",
+            "{audio}",
+            "--tempo-bpm",
+            "auto"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "tempo_zero_refused",
+          "argv": [
+            "suggest-mix",
+            "--input",
+            "{audio}",
+            "--tempo-bpm",
+            "0"
+          ],
+          "exit": 2,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty",
+          "stderr_contains": "tempo-bpm"
         },
         {
           "id": "duplicate_track_ids",

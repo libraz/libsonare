@@ -30,7 +30,7 @@ from ._cli_common import (
     _write_channel_output,
     _write_wav_stereo_frames,
 )
-from ._cli_options import SharedParsers, _c_int, _ContractArgumentParser
+from ._cli_options import SharedParsers, _c_int, _ContractArgumentParser, _positive_finite_float
 from ._result_records import _result_to_json_dict
 
 
@@ -94,7 +94,14 @@ def _mix_assistant_tracks(entries: list[str]) -> list[Any]:
     return tracks
 
 
-def _resolve_tempo_bpm(raw: str, entries: list[str]) -> tuple[float, list[Any]]:
+def _tempo_bpm_arg(value: str) -> str | float:
+    """``--tempo-bpm``: ``auto`` or a tempo greater than 0, refused at the flag otherwise."""
+    if value.strip().lower() == "auto":
+        return "auto"
+    return _positive_finite_float(value)
+
+
+def _resolve_tempo_bpm(raw: str | float, entries: list[str]) -> tuple[float, list[Any]]:
     """Read ``--tempo-bpm``, detecting it from the first track when asked to.
 
     ``auto`` measures the first ``--input`` rather than the whole set: a tempo is
@@ -109,7 +116,7 @@ def _resolve_tempo_bpm(raw: str, entries: list[str]) -> tuple[float, list[Any]]:
 
     from . import detect_bpm
 
-    if raw.strip().lower() != "auto":
+    if raw != "auto":
         return float(raw), []
     tracks = _mix_assistant_tracks(entries[:1])
     first = tracks[0]
@@ -130,7 +137,7 @@ def cmd_suggest_mix(args: argparse.Namespace) -> int:
         raise ValueError("suggest-mix requires at least one --input")
     tracks: list[Any] = []
     options = _mix_assistant_options(_parse_kv_params(args.params) if args.params else {})
-    if args.tempo_bpm:
+    if args.tempo_bpm is not None:
         # The dedicated option and `--params tempoBpm=` reach the same field, so
         # naming both is a contradiction rather than a precedence question.
         if "tempo_bpm" in options:
@@ -560,7 +567,8 @@ def register_mixing_parsers(
     )
     suggest_mix_p.add_argument(
         "--tempo-bpm",
-        default="",
+        type=_tempo_bpm_arg,
+        default=None,
         metavar="BPM|auto",
         help=(
             "Tempo the suggested delay times are voiced against; 'auto' detects it "
