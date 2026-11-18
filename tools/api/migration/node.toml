@@ -7906,7 +7906,7 @@ test = "bindings/node/tests/surface/engine.test.ts::refuses a bad capture reques
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.setTrackStripJson"
-removed = "Call setStrip(ref, strip) with a track id and a MixSceneStripInput object; no JSON string."
+removed = "Call setStrip(ref, settings) with a track id and a MixSceneStripInput object; no JSON string."
 domain = "engine"
 rule = "typed-results"
 

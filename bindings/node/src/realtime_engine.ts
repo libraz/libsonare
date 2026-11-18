@@ -1204,11 +1204,11 @@ export class RealtimeEngine {
   }
 
   /**
-   * Replaces a bus's strip with `bus`. The bus must already exist via
+   * Replaces a bus's strip with `settings`. The bus must already exist via
    * {@link setTrackBuses}.
    */
-  setBusStrip(busId: number, bus: MixSceneBusInput): void {
-    this.native.setBusStripJson(busId, sceneBusJson('setBusStrip', bus));
+  setBusStrip(busId: number, settings: MixSceneBusInput): void {
+    this.native.setBusStripJson(busId, sceneBusJson('setBusStrip', settings));
   }
 
   /** Replaces one equalizer band of a bus strip. */
@@ -1217,13 +1217,13 @@ export class RealtimeEngine {
   }
 
   /**
-   * Replaces a strip with `strip`: a track id names a track strip, `'master'`
+   * Replaces a strip with `settings`: a track id names a track strip, `'master'`
    * the master strip. The strip document carries its own id; the engine applies
    * it to the addressed strip.
    */
-  setStrip(ref: StripRef, strip: MixSceneStripInput): void {
+  setStrip(ref: StripRef, settings: MixSceneStripInput): void {
     const target = stripTarget('setStrip', ref);
-    const json = sceneStripJson('setStrip', strip);
+    const json = sceneStripJson('setStrip', settings);
     if (target.master) {
       this.native.setMasterStripJson(json);
     } else {

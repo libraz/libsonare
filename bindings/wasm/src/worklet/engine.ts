@@ -685,12 +685,12 @@ export class SonareEngine {
   }
 
   /**
-   * Replaces a strip (a track's, or the master) with the given scene strip; the
-   * document is sent as `{ strips: [strip] }`. A track is declared first when it
-   * has no lane yet.
+   * Replaces a strip (a track's, or the master) with `settings`; the document
+   * is sent as `{ strips: [settings] }`. A track is declared first when it has
+   * no lane yet.
    */
-  setStrip(target: string | number, strip: MixSceneStripInput): void {
-    const sceneJson = JSON.stringify({ strips: [mixSceneStripToNative('setStrip', strip)] });
+  setStrip(target: string | number, settings: MixSceneStripInput): void {
+    const sceneJson = JSON.stringify({ strips: [mixSceneStripToNative('setStrip', settings)] });
     if (target === 'master') {
       mixer.setMasterStripJson(this.mixerContext, sceneJson);
       return;
@@ -709,9 +709,9 @@ export class SonareEngine {
     this.syncMixer(insertBaseResets, constructionOverrides);
   }
 
-  /** Replaces a bus strip with the given scene bus; the document is sent as `{ buses: [bus] }`. */
-  setBusStrip(busId: number, bus: MixSceneBusInput): void {
-    const sceneJson = JSON.stringify({ buses: [mixSceneBusToNative('setBusStrip', bus)] });
+  /** Replaces a bus strip with `settings`; the document is sent as `{ buses: [settings] }`. */
+  setBusStrip(busId: number, settings: MixSceneBusInput): void {
+    const sceneJson = JSON.stringify({ buses: [mixSceneBusToNative('setBusStrip', settings)] });
     mixer.setBusStripJson(this.mixerContext, busId, sceneJson);
   }
 

@@ -2111,18 +2111,18 @@ export class RealtimeEngine {
     );
   }
 
-  /** Replaces a bus strip with the given scene bus; the document is sent as `{ buses: [bus] }`. */
-  setBusStrip(busId: number, bus: MixSceneBusInput): void {
-    this.native.setBusStripJson(busId, sceneBusJson('setBusStrip', bus));
+  /** Replaces a bus strip with `settings`; the document is sent as `{ buses: [settings] }`. */
+  setBusStrip(busId: number, settings: MixSceneBusInput): void {
+    this.native.setBusStripJson(busId, sceneBusJson('setBusStrip', settings));
   }
 
   /**
-   * Replaces a strip (a track's, or the master) with the given scene strip; the
-   * document is sent as `{ strips: [strip] }`.
+   * Replaces a strip (a track's, or the master) with `settings`; the document
+   * is sent as `{ strips: [settings] }`.
    */
-  setStrip(ref: StripRef, strip: MixSceneStripInput): void {
+  setStrip(ref: StripRef, settings: MixSceneStripInput): void {
     const target = stripTarget('setStrip', ref);
-    const json = sceneStripJson('setStrip', strip);
+    const json = sceneStripJson('setStrip', settings);
     if (target.master) {
       this.native.setMasterStripJson(json);
     } else {
