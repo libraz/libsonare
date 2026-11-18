@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ErrorCode,
   Mixer,
   masteringInsertParamNames,
   meteringTruePeakDbtp,
@@ -154,7 +155,7 @@ describe('insert param validation', () => {
     );
   });
 
-  it('reports an unknown scene key by path and exempts $ and x- keys', () => {
+  it('refuses an unknown scene key by path and exempts $ and x- keys', () => {
     const scene = (extra: Record<string, unknown>, stripExtra: Record<string, unknown>) =>
       JSON.stringify({
         version: 1,
@@ -163,12 +164,14 @@ describe('insert param validation', () => {
         strips: [{ id: 'vocal', ...stripExtra }],
         connections: [{ source: 'vocal', destination: 'master' }],
       });
-    expect(
-      Mixer.fromJson(scene({}, { faderDB: -3 }), {
-        sampleRate: 48000,
-        maxBlockSize: 512,
-      }).sceneWarnings(),
-    ).toEqual(["unknown scene key 'strips[0].faderDB'"]);
+    expect(() =>
+      Mixer.fromJson(scene({}, { faderDB: -3 }), { sampleRate: 48000, maxBlockSize: 512 }),
+    ).toThrow(
+      expect.objectContaining({
+        code: ErrorCode.InvalidFormat,
+        message: expect.stringContaining("unknown scene key 'strips[0].faderDB'"),
+      }),
+    );
     const annotated = scene({ $schema: 'x', 'x-note': 1 }, { 'x-color': 'red' });
     expect(
       Mixer.fromJson(annotated, { sampleRate: 48000, maxBlockSize: 512 }).sceneWarnings(),

@@ -7,6 +7,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { MasteringProcessorCatalogEntry } from '../dist/index.js';
 import {
+  ErrorCode,
   init,
   Mixer,
   masteringInsertParamInfo,
@@ -34,7 +35,7 @@ describe('insert param validation (WASM)', () => {
 
   it('flags a bound the processor itself rejects as exclusive', () => {
     const hpf = masteringInsertParamInfo({ insert: 'dynamics.compressor' }).find(
-      (d) => d.name === 'sidechainHpfHz',
+      (d) => d.name === 'sidechainHighPassHz',
     );
     expect(hpf?.min).toBe(0);
     expect(typeof hpf?.minExclusive).toBe('boolean');
@@ -262,7 +263,7 @@ describe('insert param validation (WASM)', () => {
     );
   });
 
-  it('reports an unknown scene key by path and exempts $ and x- keys', () => {
+  it('refuses an unknown scene key by path and exempts $ and x- keys', () => {
     const scene = (extra: Record<string, unknown>, stripExtra: Record<string, unknown>) =>
       JSON.stringify({
         version: 1,
@@ -271,12 +272,14 @@ describe('insert param validation (WASM)', () => {
         strips: [{ id: 'vocal', ...stripExtra }],
         connections: [{ source: 'vocal', destination: 'master' }],
       });
-    expect(
-      Mixer.fromJson(scene({}, { faderDB: -3 }), {
-        sampleRate: SR,
-        maxBlockSize: BLOCK,
-      }).sceneWarnings(),
-    ).toEqual(["unknown scene key 'strips[0].faderDB'"]);
+    expect(() =>
+      Mixer.fromJson(scene({}, { faderDB: -3 }), { sampleRate: SR, maxBlockSize: BLOCK }),
+    ).toThrow(
+      expect.objectContaining({
+        code: ErrorCode.InvalidFormat,
+        message: expect.stringContaining("unknown scene key 'strips[0].faderDB'"),
+      }),
+    );
     const annotated = scene({ $schema: 'x', 'x-note': 1 }, { 'x-color': 'red' });
     expect(
       Mixer.fromJson(annotated, { sampleRate: SR, maxBlockSize: BLOCK }).sceneWarnings(),
