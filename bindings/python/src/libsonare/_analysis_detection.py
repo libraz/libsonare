@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import ctypes
 from collections.abc import Sequence
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 
@@ -39,13 +39,14 @@ from ._types_engine import _SECTION_NAMES
 from ._types_enums import _GENRE_HINTS
 from .types import (
     CHORD_QUALITIES,
+    AnalysisBpmCandidate,
     AnalysisChord,
     AnalysisDynamics,
     AnalysisResult,
     AnalysisRhythm,
     Beat,
     BeatObservations,
-    BpmCandidate,
+    BpmCandidateRelation,
     GenreHint,
     Key,
     KeyCandidate,
@@ -383,10 +384,10 @@ _UNKNOWN_QUALITY_ORDINAL: int = CHORD_QUALITIES.index("unknown")
 _BPM_RELATIONS = frozenset({"primary", "half", "double", "other"})
 
 
-def _bpm_relation(raw: Any) -> str:
+def _bpm_relation(raw: Any) -> BpmCandidateRelation:
     """Spell a candidate's relation token; an unrecognized one reads ``"other"``."""
     token = str(raw) if raw is not None else "other"
-    return token if token in _BPM_RELATIONS else "other"
+    return cast(BpmCandidateRelation, token) if token in _BPM_RELATIONS else "other"
 
 
 def _section_type_from_ordinal(raw: Any) -> SectionType:
@@ -434,7 +435,7 @@ def _parse_analysis_json(data: dict[str, Any]) -> AnalysisResult:
     )
 
     bpm_candidates = [
-        BpmCandidate(
+        AnalysisBpmCandidate(
             bpm=float(candidate.get("bpm", 0.0)),
             confidence=float(candidate.get("confidence", 0.0)),
             relation=_bpm_relation(candidate.get("relation")),

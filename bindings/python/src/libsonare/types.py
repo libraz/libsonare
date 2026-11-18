@@ -41,6 +41,9 @@ from ._types_analysis import (
     CHORD_QUALITIES as CHORD_QUALITIES,
 )
 from ._types_analysis import (
+    AnalysisBpmCandidate as AnalysisBpmCandidate,
+)
+from ._types_analysis import (
     AnalysisChord as AnalysisChord,
 )
 from ._types_analysis import (
@@ -66,6 +69,9 @@ from ._types_analysis import (
 )
 from ._types_analysis import (
     BpmCandidate as BpmCandidate,
+)
+from ._types_analysis import (
+    BpmCandidateRelation as BpmCandidateRelation,
 )
 from ._types_analysis import (
     Chord as Chord,

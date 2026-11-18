@@ -201,7 +201,7 @@ class AnalysisResult:
     # own phase, so it can disagree with the first downbeat once downbeats are
     # refined from chord and low-frequency evidence.
     downbeat_phase: int = 0
-    bpm_candidates: list[BpmCandidate] = dataclasses.field(default_factory=list)
+    bpm_candidates: list[AnalysisBpmCandidate] = dataclasses.field(default_factory=list)
     time_signature_candidates: list[TimeSignature] = dataclasses.field(default_factory=list)
     chords: list[AnalysisChord] = dataclasses.field(default_factory=list)
     sections: list[Section] = dataclasses.field(default_factory=list)
@@ -274,16 +274,20 @@ class MeterEstimate:
 
 @dataclass(frozen=True, slots=True)
 class BpmCandidate:
-    """A tempo candidate with its confidence.
-
-    ``relation`` is the candidate's relation to the chosen tempo --
-    ``"primary"``, ``"half"``, ``"double"`` or ``"other"`` -- on the candidates
-    of :class:`AnalysisResult`, and ``None`` on those of :func:`analyze_bpm`.
-    """
+    """A tempo candidate with its confidence."""
 
     bpm: float
     confidence: float
-    relation: str | None = None
+
+
+BpmCandidateRelation = Literal["primary", "half", "double", "other"]
+
+
+@dataclass(frozen=True, slots=True)
+class AnalysisBpmCandidate(BpmCandidate):
+    """A tempo candidate of :func:`analyze`, with its relation to the chosen tempo."""
+
+    relation: BpmCandidateRelation
 
 
 @dataclass(frozen=True, slots=True, eq=False)

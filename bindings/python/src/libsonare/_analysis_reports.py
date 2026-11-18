@@ -576,7 +576,6 @@ def analyze_bpm(
                 BpmCandidate(
                     bpm=float(out.candidates[i].bpm),
                     confidence=float(out.candidates[i].confidence),
-                    relation=None,
                 )
                 for i in range(out.candidate_count)
             ],

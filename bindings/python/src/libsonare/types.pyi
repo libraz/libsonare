@@ -645,7 +645,7 @@ class AnalysisResult:
     beats: list[Beat]
     downbeats: list[Beat]
     downbeat_phase: int
-    bpm_candidates: list[BpmCandidate]
+    bpm_candidates: list[AnalysisBpmCandidate]
     time_signature_candidates: list[TimeSignature]
     chords: list[AnalysisChord]
     sections: list[Section]
@@ -666,7 +666,7 @@ class AnalysisResult:
         beats: list[Beat] = ...,
         downbeats: list[Beat] = ...,
         downbeat_phase: int = 0,
-        bpm_candidates: list[BpmCandidate] = ...,
+        bpm_candidates: list[AnalysisBpmCandidate] = ...,
         time_signature_candidates: list[TimeSignature] = ...,
         chords: list[AnalysisChord] = ...,
         sections: list[Section] = ...,
@@ -713,8 +713,13 @@ class MeterEstimate:
 class BpmCandidate:
     bpm: float
     confidence: float
-    relation: str | None
-    def __init__(self, bpm: float, confidence: float, relation: str | None = None) -> None: ...
+    def __init__(self, bpm: float, confidence: float) -> None: ...
+
+BpmCandidateRelation: TypeAlias = Literal["primary", "half", "double", "other"]
+
+class AnalysisBpmCandidate(BpmCandidate):
+    relation: BpmCandidateRelation
+    def __init__(self, bpm: float, confidence: float, relation: BpmCandidateRelation) -> None: ...
 
 class BpmAnalysisResult:
     """Detailed BPM analysis result.

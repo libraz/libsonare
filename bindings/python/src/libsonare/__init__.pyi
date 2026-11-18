@@ -845,6 +845,7 @@ from .types import (
 from .types import (
     AcousticResult as AcousticResult,
 )
+from .types import AnalysisBpmCandidate as AnalysisBpmCandidate
 from .types import AnalysisChord as AnalysisChord
 from .types import (
     AnalysisDynamics as AnalysisDynamics,
@@ -874,6 +875,9 @@ from .types import (
 )
 from .types import (
     BpmCandidate as BpmCandidate,
+)
+from .types import (
+    BpmCandidateRelation as BpmCandidateRelation,
 )
 from .types import Capabilities as Capabilities
 from .types import CapabilitiesAbi as CapabilitiesAbi

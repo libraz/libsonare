@@ -848,7 +848,7 @@ def test_beats_and_downbeats_are_beat_objects(analysis: libsonare.AnalysisResult
     times = set(beat_times)
     assert all(beat.time_sec in times for beat in analysis.downbeats)
     assert all(isinstance(chord, libsonare.AnalysisChord) for chord in analysis.chords)
-    assert all(isinstance(c, libsonare.BpmCandidate) for c in analysis.bpm_candidates)
+    assert all(isinstance(c, libsonare.AnalysisBpmCandidate) for c in analysis.bpm_candidates)
     assert {c.relation for c in analysis.bpm_candidates} <= {"primary", "half", "double", "other"}
     assert isinstance(analysis.timbre, libsonare.TimbreFrame)
     assert isinstance(analysis.dynamics, libsonare.AnalysisDynamics)
@@ -858,11 +858,11 @@ def test_beats_and_downbeats_are_beat_objects(analysis: libsonare.AnalysisResult
 
 
 def test_bpm_analysis_candidates_carry_no_relation() -> None:
+    """A field whose presence depends on the returning function is a second record."""
     result = libsonare.analyze_bpm(_clicks(), SR)
     assert result.candidates
-    assert all(
-        isinstance(c, libsonare.BpmCandidate) and c.relation is None for c in result.candidates
-    )
+    assert all(type(c) is libsonare.BpmCandidate for c in result.candidates)
+    assert not any(hasattr(c, "relation") for c in result.candidates)
 
 
 def test_removed_result_attributes_are_absent(analysis: libsonare.AnalysisResult) -> None:
@@ -936,6 +936,8 @@ def test_boundary_and_beat_types_are_importable() -> None:
         "Boundary",
         "BoundaryResult",
         "BpmCandidate",
+        "AnalysisBpmCandidate",
+        "BpmCandidateRelation",
         "CHORD_QUALITIES",
         "ProgressCallback",
         "CancelCallback",

@@ -3377,7 +3377,7 @@ test = "bindings/python/tests/test_surface_analysis.py::test_beats_and_downbeats
 [[entry]]
 kind = "field"
 old = "AnalysisResult.bpm_candidates"
-changed = "list[BpmCandidate] with bpm, confidence and relation"
+changed = "list[AnalysisBpmCandidate] with bpm, confidence and relation"
 domain = "analysis"
 rule = "typed-results"
 test = "bindings/python/tests/test_surface_analysis.py::test_beats_and_downbeats_are_beat_objects"
@@ -3422,7 +3422,7 @@ rule = "typed-results"
 [[entry]]
 kind = "field"
 old = "BpmHypothesis.relation"
-new = "BpmCandidate.relation"
+new = "AnalysisBpmCandidate.relation"
 domain = "analysis"
 rule = "typed-results"
 
@@ -3482,7 +3482,7 @@ test = "bindings/python/tests/test_surface_analysis.py::test_boundary_and_beat_t
 [[entry]]
 kind = "type"
 old = "BpmHypothesis"
-new = "BpmCandidate"
+new = "AnalysisBpmCandidate"
 domain = "analysis"
 rule = "type-names"
 
