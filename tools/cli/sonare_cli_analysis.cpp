@@ -375,7 +375,7 @@ int cmd_dynamics(const CliArgs& args, const Audio& audio) {
         .kv("rms_db", d.rms_db)
         .kv("dynamic_range_db", d.dynamic_range_db)
         .kv("crest_factor", d.crest_factor)
-        .kv("loudness_range_db", d.loudness_range_lu)
+        .kv("loudness_range_lu", d.loudness_range_lu)
         .kv("is_compressed", d.is_compressed);
     write_array_stats(json, "loudness", analyzer.loudness_curve().rms_db);
     json.end_object().print();
@@ -650,7 +650,7 @@ int cmd_analyze(const CliArgs& args, const Audio& audio) {
         .key("dynamics")
         .begin_object()
         .kv("dynamic_range_db", r.dynamics.dynamic_range_db)
-        .kv("loudness_range_db", r.dynamics.loudness_range_lu)
+        .kv("loudness_range_lu", r.dynamics.loudness_range_lu)
         .kv("crest_factor", r.dynamics.crest_factor)
         .kv("is_compressed", r.dynamics.is_compressed)
         .end_object()

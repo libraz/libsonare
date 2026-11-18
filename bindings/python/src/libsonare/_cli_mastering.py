@@ -61,14 +61,14 @@ def _mastering_report_payload(report: Any) -> dict[str, object]:
             "max_momentary_lufs": before.max_momentary_lufs,
             "max_short_term_lufs": before.max_short_term_lufs,
             "true_peak_dbtp": before.true_peak_dbtp,
-            "loudness_range": before.loudness_range_lu,
+            "loudness_range_lu": before.loudness_range_lu,
         },
         "after": {
             "integrated_lufs": after.integrated_lufs,
             "max_momentary_lufs": after.max_momentary_lufs,
             "max_short_term_lufs": after.max_short_term_lufs,
             "true_peak_dbtp": after.true_peak_dbtp,
-            "loudness_range": after.loudness_range_lu,
+            "loudness_range_lu": after.loudness_range_lu,
         },
         "applied_gain_db": report.applied_gain_db,
         "max_gain_reduction_db": report.max_gain_reduction_db,
@@ -92,7 +92,7 @@ def _write_mastering_report(path: str, report: Any) -> None:
 # the native CLI's assistant_config_from_cli() reads.
 _ASSISTANT_OPTIONS = (
     ("targetLufs", "target-lufs"),
-    ("ceilingDb", "ceiling-dbtp"),
+    ("ceilingDbtp", "ceiling-dbtp"),
     ("enableRepair", "enable-repair"),
     ("preferStreamingSafe", "no-streaming-safe"),
     ("speechMonoAmount", "speech-mono-amount"),
@@ -137,7 +137,7 @@ def _assistant_params_from_args(
     if _option_supplied(args, "target-lufs"):
         params["targetLufs"] = float(args.target_lufs)
     if _option_supplied(args, "ceiling-dbtp"):
-        params["ceilingDb"] = float(args.ceiling_dbtp)
+        params["ceilingDbtp"] = float(args.ceiling_dbtp)
     if getattr(args, "enable_repair", False):
         params["enableRepair"] = True
     if getattr(args, "no_streaming_safe", False):
@@ -413,7 +413,7 @@ def cmd_mastering(args: argparse.Namespace) -> int:
                 "loudness": {
                     "enabled": True,
                     "targetLufs": getattr(args, "target_lufs", -14.0),
-                    "ceilingDb": getattr(args, "ceiling_dbtp", -1.0),
+                    "ceilingDbtp": getattr(args, "ceiling_dbtp", -1.0),
                     "truePeakOversample": getattr(args, "true_peak_oversample", 4),
                 }
             }
@@ -423,7 +423,7 @@ def cmd_mastering(args: argparse.Namespace) -> int:
 
         result = Audio.from_buffer(samples, sr).mastering(
             target_lufs=getattr(args, "target_lufs", -14.0),
-            ceiling_db=getattr(args, "ceiling_dbtp", -1.0),
+            ceiling_dbtp=getattr(args, "ceiling_dbtp", -1.0),
             true_peak_oversample=getattr(args, "true_peak_oversample", 4),
         )
 
@@ -969,7 +969,7 @@ def cmd_mastering_suggest(args: argparse.Namespace) -> int:
     # param schema rather than to CLI stdout, and re-keying them would make the
     # document the library rejects. Everything beside it is measurement output
     # and follows the snake_case rule.
-    chain_config = {"version": 1, "params": _chain_config_paths(suggestion.chain_config)}
+    chain_config = {"version": 2, "params": suggestion.chain_config}
     config_out = getattr(args, "config_out", "") or ""
     if config_out:
         # Written from the document already in hand rather than through the

@@ -99,7 +99,7 @@ def cmd_dynamics(args: argparse.Namespace) -> int:
                     "peak_db": r.peak_db,
                     "rms_db": r.rms_db,
                     "crest_factor": r.crest_factor,
-                    "loudness_range_db": r.loudness_range_lu,
+                    "loudness_range_lu": r.loudness_range_lu,
                     "is_compressed": r.is_compressed,
                     "loudness": _array_stats(r.loudness_rms_db.tolist()),
                 }
@@ -165,7 +165,7 @@ def cmd_lufs(args: argparse.Namespace) -> int:
         "integrated_lufs": r.integrated_lufs,
         "momentary_lufs": r.momentary_lufs,
         "short_term_lufs": r.short_term_lufs,
-        "loudness_range": r.loudness_range_lu,
+        "loudness_range_lu": r.loudness_range_lu,
     }
     series = lufs_series_interleaved(samples, channels, sample_rate=sr) if args.series else None
     if args.json:

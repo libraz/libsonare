@@ -930,7 +930,7 @@ int cmd_lufs(const CliArgs& args, const Audio&) {
         .kv("integrated_lufs", result.integrated_lufs)
         .kv("momentary_lufs", result.momentary_lufs)
         .kv("short_term_lufs", result.short_term_lufs)
-        .kv("loudness_range", result.loudness_range_lu);
+        .kv("loudness_range_lu", result.loudness_range_lu);
     if (series) {
       json.key("momentary_series").float_array(momentary_series);
       json.key("short_term_series").float_array(short_term_series);

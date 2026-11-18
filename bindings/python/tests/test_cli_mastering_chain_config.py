@@ -158,8 +158,8 @@ def test_config_out_writes_the_chain_config_the_core_reports(tmp_path, capsys) -
 
     expected = libsonare.mastering_assistant_suggest_chain(planes[0], _SAMPLE_RATE)
     assert expected, "the assistant reported no chain, so nothing was compared"
-    assert _nest_chain_config(written["params"]) == expected
-    assert isinstance(written["version"], int)
+    assert written["params"] == expected
+    assert written["version"] == 2
 
 
 def test_a_written_chain_config_is_read_back_by_both_commands(tmp_path, capsys) -> None:
@@ -295,7 +295,7 @@ def test_chain_config_conflicts_are_refused_by_name(tmp_path, command, extra) ->
     source = tmp_path / "input.wav"
     _write_source(source)
     config = tmp_path / "chain.json"
-    config.write_text(json.dumps({"version": 1, "params": {"loudness.enabled": True}}), "utf-8")
+    config.write_text(json.dumps({"version": 2, "params": {"loudness.enabled": True}}), "utf-8")
     argv = [
         command,
         str(source),
@@ -346,7 +346,7 @@ def test_a_loudness_flag_beside_a_chain_config_is_refused(tmp_path) -> None:
     source = tmp_path / "input.wav"
     _write_source(source)
     config = tmp_path / "chain.json"
-    config.write_text(json.dumps({"version": 1, "params": {"loudness.enabled": True}}), "utf-8")
+    config.write_text(json.dumps({"version": 2, "params": {"loudness.enabled": True}}), "utf-8")
 
     with pytest.raises(ValueError) as caught:
         _run(["mastering", str(source), "--chain-config", str(config), "--target-lufs", "-12"])
@@ -392,7 +392,7 @@ def test_native_front_end_declares_the_same_spelling() -> None:
 
 
 def test_mastering_params_and_chain_config_take_an_enum_name(tmp_path, capsys) -> None:
-    """``--params`` and ``--chain-config`` accept ``noiseEstimator=mcra`` as the number 1."""
+    """``--params`` and ``--chain-config`` take ``noiseEstimator`` by name; a number is refused."""
     source = tmp_path / "input.wav"
     _write_source(source)
 
@@ -402,14 +402,22 @@ def test_mastering_params_and_chain_config_take_an_enum_name(tmp_path, capsys) -
 
     base = ["--preset", "pop", "--params"]
     by_name = run([*base, "repair.denoise.enabled=1,repair.denoise.noiseEstimator=mcra"])
-    by_number = run([*base, "repair.denoise.enabled=1,repair.denoise.noiseEstimator=1"])
-    assert by_name["output_lufs"] == by_number["output_lufs"]
+    assert by_name["mode"] == "preset"
+    with pytest.raises(Exception, match="takes a token, not a number"):
+        _run(
+            [
+                "mastering",
+                str(source),
+                *base,
+                "repair.denoise.enabled=1,repair.denoise.noiseEstimator=1",
+            ]
+        )
 
     config = tmp_path / "chain.json"
     config.write_text(
         json.dumps(
             {
-                "version": 1,
+                "version": 2,
                 "params": {
                     "repair.denoise.enabled": True,
                     "repair.denoise.noiseEstimator": "mcra",
@@ -447,19 +455,23 @@ def test_chain_config_takes_a_v2_multiband_document(tmp_path, capsys, channels) 
         _load_channels_or_downmix,
         _write_channel_output,
     )
-    from libsonare._mastering_offline import _enum_value
 
     prefix = "dynamics.multibandComp"
     # A v2 band is a complete compressor record; start from the library's own defaults.
-    defaults = libsonare.mastering_chain_config_from_json(json.dumps({"version": 1, "params": {}}))
-    band_defaults = {k: v for k, v in defaults["dynamics"]["compressor"].items() if k != "enabled"}
+    defaults = libsonare.mastering_chain_config_from_json(json.dumps({"version": 2, "params": {}}))
+    compressor = "dynamics.compressor."
+    band_defaults = {
+        key.removeprefix(compressor): value
+        for key, value in defaults.items()
+        if key.startswith(compressor) and key != compressor + "enabled"
+    }
     params = {
         prefix: {
             "enabled": True,
             "crossover": {
                 "cutoffsHz": [200.0, 1200.0, 5000.0],
-                "slope": int(_enum_value(None, f"{prefix}.crossover.slope", "lr8")),
-                "mode": 0,
+                "slope": "lr8",
+                "mode": "linkwitzRiley",
                 "firKernelSize": 1024,
             },
             "bands": [
@@ -490,7 +502,7 @@ def test_chain_config_takes_a_v2_multiband_document(tmp_path, capsys, channels) 
         f"{prefix}.enabled": True,
         **{f"{prefix}.crossover.cutoffsHz.{i}": v for i, v in enumerate((200.0, 1200.0, 5000.0))},
         f"{prefix}.crossover.slope": params[prefix]["crossover"]["slope"],
-        f"{prefix}.crossover.mode": 0,
+        f"{prefix}.crossover.mode": "linkwitzRiley",
         f"{prefix}.crossover.firKernelSize": 1024,
         **{
             f"{prefix}.bands.{i}.{field}": value
@@ -515,7 +527,7 @@ def test_chain_config_takes_a_v2_multiband_document(tmp_path, capsys, channels) 
     # The multiband block is read, not skipped: without it the render differs.
     plain = tmp_path / "plain.wav"
     plain_doc = tmp_path / "plain.json"
-    plain_doc.write_text(json.dumps({"version": 1, "params": {"loudness.targetLufs": -14.0}}))
+    plain_doc.write_text(json.dumps({"version": 2, "params": {"loudness.targetLufs": -14.0}}))
     assert (
         _run(["mastering", str(source), "--chain-config", str(plain_doc), "--output", str(plain)])
         == 0
@@ -535,7 +547,7 @@ def test_a_document_the_library_refuses_exits_as_an_invalid_format(tmp_path, par
     source = tmp_path / "input.wav"
     _write_source(source)
     document = tmp_path / "chain.json"
-    document.write_text(json.dumps({"version": 1, "params": params}), encoding="utf-8")
+    document.write_text(json.dumps({"version": 2, "params": params}), encoding="utf-8")
     result = subprocess.run(
         [sys.executable, "-m", "libsonare.cli", "mastering", str(source)]
         + ["--chain-config", str(document), "-o", str(tmp_path / "out.wav")],
@@ -543,3 +555,18 @@ def test_a_document_the_library_refuses_exits_as_an_invalid_format(tmp_path, par
         text=True,
     )
     assert result.returncode == 5, result.stderr
+
+
+def test_a_version_1_document_is_refused_with_the_librarys_message(tmp_path) -> None:
+    source = tmp_path / "input.wav"
+    _write_source(source)
+    document = tmp_path / "chain.json"
+    document.write_text(json.dumps({"version": 1, "params": {}}), encoding="utf-8")
+    result = subprocess.run(
+        [sys.executable, "-m", "libsonare.cli", "mastering", str(source)]
+        + ["--chain-config", str(document), "-o", str(tmp_path / "out.wav")],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 5, result.stderr
+    assert "unsupported chain config version; write 2 or leave it out" in result.stderr

@@ -276,7 +276,7 @@ void append_mastering_loudness_summary_json(
       .kv("max_momentary_lufs", summary.max_momentary_lufs)
       .kv("max_short_term_lufs", summary.max_short_term_lufs)
       .kv("true_peak_dbtp", summary.true_peak_dbtp)
-      .kv("loudness_range", summary.loudness_range_lu)
+      .kv("loudness_range_lu", summary.loudness_range_lu)
       .end_object();
 }
 

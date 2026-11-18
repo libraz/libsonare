@@ -1757,3 +1757,15 @@ TEST_CASE("CLI options left to the library reproduce their stated default", "[cl
   for (const std::string& path : {tone_wav, clipped_wav, stepped_wav, noisy_wav, out})
     std::remove(path.c_str());
 }
+
+TEST_CASE("CLI loudness range keys carry the LU unit", "[cli][json]") {
+  create_test_wav(TEST_WAV);
+  for (const std::string command : {"dynamics", "analyze", "lufs"}) {
+    CAPTURE(command);
+    auto [code, output] = exec_command(CLI + " " + command + " " + TEST_WAV + " --json -q");
+    REQUIRE(code == 0);
+    CHECK_THAT(output, ContainsSubstring("\"loudness_range_lu\""));
+    CHECK_THAT(output, !ContainsSubstring("\"loudness_range_db\""));
+    CHECK_THAT(output, !ContainsSubstring("\"loudness_range\""));
+  }
+}

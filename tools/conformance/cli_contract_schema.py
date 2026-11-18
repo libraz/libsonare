@@ -96,7 +96,7 @@ _ANALYZE_TIMBRE_KEYS = {
 }
 _ANALYZE_DYNAMICS_KEYS = {
     "dynamic_range_db",
-    "loudness_range_db",
+    "loudness_range_lu",
     "crest_factor",
     "is_compressed",
 }

@@ -688,7 +688,7 @@ test = "tests/cli/cli_effects_test.cpp::leaves an omitted band count to the libr
 [[entry]]
 kind = "command"
 old = "mastering"
-changed = "the JSON mode for a chain read from --chain-config is chainConfig rather than config, naming the option that chose the chain; preset and assistant are unchanged"
+changed = "the JSON mode for a chain read from --chain-config is chainConfig rather than config, naming the option that chose the chain; preset and assistant are unchanged; the before and after summaries of --report name the loudness range loudness_range_lu rather than loudness_range"
 domain = "mastering"
 rule = "token-case"
 test = "tests/cli/cli_mastering_test.cpp::CLI mastering command"
@@ -898,3 +898,27 @@ changed = "omitted, the library chooses the bandwidth offset automatically rathe
 domain = "analysis"
 rule = "library-owned-defaults"
 test = "tests/cli/cli_contract_test.cpp::CLI options left to the library reproduce their stated default"
+
+[[entry]]
+kind = "command"
+old = "dynamics"
+changed = "the --json result names the loudness range loudness_range_lu rather than loudness_range_db"
+domain = "analysis"
+rule = "unit-in-name"
+test = "tests/cli/cli_contract_test.cpp::CLI loudness range keys carry the LU unit"
+
+[[entry]]
+kind = "command"
+old = "analyze"
+changed = "the --json result names the loudness range loudness_range_lu rather than loudness_range_db"
+domain = "analysis"
+rule = "unit-in-name"
+test = "tests/cli/cli_contract_test.cpp::CLI loudness range keys carry the LU unit"
+
+[[entry]]
+kind = "command"
+old = "lufs"
+changed = "the --json result names the loudness range loudness_range_lu rather than loudness_range"
+domain = "mastering"
+rule = "unit-in-name"
+test = "tests/cli/cli_contract_test.cpp::CLI loudness range keys carry the LU unit"

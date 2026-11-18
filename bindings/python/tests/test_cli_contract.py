@@ -838,7 +838,12 @@ def test_info_and_lufs_json_match_the_native_cli_schema(tmp_path) -> None:
     lufs_result = _run_console("lufs", "--json", str(source))
     assert lufs_result.returncode == 0, lufs_result.stderr
     lufs = json.loads(lufs_result.stdout)
-    assert set(lufs) == {"integrated_lufs", "momentary_lufs", "short_term_lufs", "loudness_range"}
+    assert set(lufs) == {
+        "integrated_lufs",
+        "momentary_lufs",
+        "short_term_lufs",
+        "loudness_range_lu",
+    }
 
     analyze_result = _run_console("analyze", "--json", str(source))
     assert analyze_result.returncode == 0, analyze_result.stderr
@@ -1462,7 +1467,7 @@ def test_mastering_cli_reports_ceiling_limited_loudness(tmp_path) -> None:
         "maximizer.loudnessOptimize",
         samples,
         sample_rate=sample_rate,
-        params={"targetLufs": -6.0, "ceilingDb": -12.0},
+        params={"targetLufs": -6.0, "ceilingDbtp": -12.0},
     )
     assert named.loudness_target_limited is limited_payload["loudness_target_limited"]
 

@@ -6072,7 +6072,7 @@
             "dynamics": {
               "keys": {
                 "dynamic_range_db": "number",
-                "loudness_range_db": "number",
+                "loudness_range_lu": "number",
                 "crest_factor": "number",
                 "is_compressed": "boolean"
               }
@@ -6491,7 +6491,7 @@
           "placeholder": "project_warning_output",
           "encoding": "utf-8",
           "bytes_key": "bytes",
-          "sha256": "1b578dcb8d68492242b9f14d3b1c2af9b7cbbc87d3a1b60f42f466bcabe7939e"
+          "sha256": "4ce8c7ebec104220b5395038c4b466f1f307f677bea666f9b16c156bdb14029d"
         }
       }
     },
@@ -7306,6 +7306,17 @@
             "sample_rate": "integer",
             "output": "path"
           }
+        },
+        "preset": {
+          "keys": {
+            "mode": "string",
+            "input_lufs": "number",
+            "output_lufs": "number",
+            "applied_gain_db": "number",
+            "output": "path",
+            "preset": "string",
+            "stages": "array:string"
+          }
         }
       },
       "cases": [
@@ -7356,6 +7367,60 @@
           "payload": "success",
           "artifact": "none",
           "stdout": "json"
+        },
+        {
+          "id": "params_choice_by_name",
+          "argv": [
+            "mastering",
+            "{audio}",
+            "--preset",
+            "pop",
+            "--params",
+            "repair.denoise.enabled=1,repair.denoise.noiseEstimator=mcra",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "preset",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "params_choice_number_refused",
+          "argv": [
+            "mastering",
+            "{audio}",
+            "--preset",
+            "pop",
+            "--params",
+            "repair.denoise.enabled=1,repair.denoise.noiseEstimator=1",
+            "--json"
+          ],
+          "exit": 5,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty",
+          "stderr_contains": [
+            "repair.denoise.noiseEstimator takes a token, not a number"
+          ]
+        },
+        {
+          "id": "chain_config_version_1_refused",
+          "argv": [
+            "mastering",
+            "{audio}",
+            "--chain-config",
+            "{chain_config_version_1}",
+            "--json"
+          ],
+          "exit": 5,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty",
+          "stderr_contains": [
+            "unsupported chain config version; write 2 or leave it out"
+          ]
         },
         {
           "id": "chain_config_mixed_spellings",
@@ -10795,7 +10860,7 @@
             "rms_db": "number",
             "dynamic_range_db": "number",
             "crest_factor": "number",
-            "loudness_range_db": "number",
+            "loudness_range_lu": "number",
             "is_compressed": "boolean",
             "loudness": {
               "keys": {
@@ -10961,7 +11026,7 @@
             "integrated_lufs": "number",
             "momentary_lufs": "number",
             "short_term_lufs": "number|null",
-            "loudness_range": "number"
+            "loudness_range_lu": "number"
           }
         },
         "series": {
@@ -10969,7 +11034,7 @@
             "integrated_lufs": "number",
             "momentary_lufs": "number",
             "short_term_lufs": "number|null",
-            "loudness_range": "number",
+            "loudness_range_lu": "number",
             "momentary_series": {
               "type": "array",
               "items": "number"
@@ -13137,19 +13202,19 @@
           "placeholder": "align_takes_output",
           "encoding": "utf-8",
           "bytes_key": "bytes",
-          "sha256": "3a9688af5469f4244a46999f357299a0e2aafdde2d90bb9b3d80880369fc2b7c"
+          "sha256": "8cdefa5e2e716b4b527f11cc44428abead08ab7777da7730302a3ed2662f8262"
         },
         "aligned_project_many": {
           "placeholder": "align_takes_many_output",
           "encoding": "utf-8",
           "bytes_key": "bytes",
-          "sha256": "cf04cec9ae3c9ec7aff8e98e72c3e696d243feeb9899cb6d0671c23bec708b22"
+          "sha256": "a50d8d82ad2d8bdb684050be9615e3a358ff59e0eacaf4c5ed895a9542c177b0"
         },
         "aligned_project_other_rate": {
           "placeholder": "align_takes_other_rate_output",
           "encoding": "utf-8",
           "bytes_key": "bytes",
-          "sha256": "6428dc59292424a048173401f36af25cb4aa466b927f1a5201375134dd0e36be"
+          "sha256": "4c331a5d48e614fd4abe38df89413060d3a4bccd842e15f6f4329c81b5287181"
         }
       }
     },
@@ -17601,6 +17666,26 @@
           "stderr_contains": ["--room"]
         },
         {
+          "id": "config_old_ceiling_key_refused",
+          "argv": ["playback", "{audio}", "-o", "{output}", "--config", "{playback_config_old_ceiling_key}", "--json"],
+          "exit": 5,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty",
+          "stderr_contains": ["unknown key: outputLimiter.ceilingDbtp"]
+        },
+        {
+          "id": "config_null_value_refused",
+          "argv": ["playback", "{audio}", "-o", "{output}", "--config", "{playback_config_null_channel_map}", "--json"],
+          "exit": 5,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty",
+          "stderr_contains": ["input.channelMap must be an array"]
+        },
+        {
           "id": "seven_one",
           "argv": ["playback", "{audio}", "-o", "{output}", "--target", "7.1", "--json"],
           "exit": 0,
@@ -18176,16 +18261,32 @@
     },
     "chain_configs": {
       "mixed_spelling": {
-        "version": 1,
+        "version": 2,
         "params": {
           "dynamics.multibandComp.enabled": true,
           "dynamics.multibandComp.lowThresholdDb": -20
         }
       },
       "module_off": {
-        "version": 1,
+        "version": 2,
         "params": {
           "dynamics.compressor.enabled": false
+        }
+      },
+      "version_1": {
+        "version": 1,
+        "params": {}
+      }
+    },
+    "playback_configs": {
+      "old_ceiling_key": {
+        "outputLimiter": {
+          "ceilingDbtp": -1.0
+        }
+      },
+      "null_channel_map": {
+        "input": {
+          "channelMap": null
         }
       }
     }

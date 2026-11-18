@@ -385,7 +385,7 @@ def cmd_analyze(args: argparse.Namespace) -> int:
                     },
                     "dynamics": {
                         "dynamic_range_db": dynamics.dynamic_range_db,
-                        "loudness_range_db": dynamics.loudness_range_lu,
+                        "loudness_range_lu": dynamics.loudness_range_lu,
                         "crest_factor": dynamics.crest_factor,
                         "is_compressed": dynamics.is_compressed,
                     },

@@ -125,6 +125,10 @@ def _write_fixtures(directory: Path, manifest: dict[str, Any]) -> dict[str, str]
         chain_config_path = directory / f"chain_config_{name}.json"
         chain_config_path.write_text(json.dumps(value, separators=(",", ":")), encoding="utf-8")
         paths[f"chain_config_{name}"] = str(chain_config_path)
+    for name, value in fixtures["playback_configs"].items():
+        playback_config_path = directory / f"playback_config_{name}.json"
+        playback_config_path.write_text(json.dumps(value, separators=(",", ":")), encoding="utf-8")
+        paths[f"playback_config_{name}"] = str(playback_config_path)
     for name, value in fixtures["melodies"].items():
         melody_path = directory / f"melody_{name}.mid"
         _write_smf(melody_path, value)

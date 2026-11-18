@@ -461,10 +461,10 @@ def _validate_parser_cases(parser_cases: Any, errors: list[str]) -> None:
 
 
 def _validate_fixtures(fixtures: Any, errors: list[str]) -> None:
-    """The audio, melody, project, preset and chain-config fixtures the cases name."""
+    """The audio, melody, project, preset and config-document fixtures the cases name."""
     if _exact(
         fixtures,
-        {"audio", "melodies", "projects", "presets", "chain_configs"},
+        {"audio", "melodies", "projects", "presets", "chain_configs", "playback_configs"},
         "manifest.fixtures",
         errors,
     ):
@@ -595,17 +595,25 @@ def _validate_fixtures(fixtures: Any, errors: list[str]) -> None:
         chain_configs = fixtures["chain_configs"]
         if _exact(
             chain_configs,
-            {"mixed_spelling", "module_off"},
+            {"mixed_spelling", "module_off", "version_1"},
             "manifest.fixtures.chain_configs",
             errors,
         ):
-            for key in ("mixed_spelling", "module_off"):
+            for key in ("mixed_spelling", "module_off", "version_1"):
                 _exact(
                     chain_configs[key],
                     {"version", "params"},
                     f"manifest.fixtures.chain_configs.{key}",
                     errors,
                 )
+        # Renderer config documents the playback --config cases read; each is written as given.
+        playback_configs = fixtures["playback_configs"]
+        if not isinstance(playback_configs, dict):
+            errors.append("manifest.fixtures.playback_configs: expected an object")
+        else:
+            for key, value in playback_configs.items():
+                if not isinstance(value, dict):
+                    errors.append(f"manifest.fixtures.playback_configs.{key}: expected an object")
 
 
 def validate_manifest(manifest: Any) -> list[str]:

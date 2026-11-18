@@ -105,16 +105,15 @@ _NON_REPAIR_CHAIN_DISABLE_OVERRIDES: dict[str, float] = {
 }
 
 
-def _parse_repair_params(raw: str) -> dict[str, float]:
+def _parse_repair_params(raw: str) -> dict[str, float | str]:
     """Parse ``repair --params`` into the chain's flat ``repair.*`` dict.
 
-    Every value crosses to C as the same double the chain-config transport
-    uses for every field (``SonareMasteringParam.value``); the chain refuses a
-    fractional value for an integer field there, naming the key, so this parser
-    deliberately carries no second list of which fields are integral. Splitting
-    that judgement across two surfaces is what would let them disagree.
+    A number stays a number and anything else stays text, for the library's chain
+    document reader to judge: it resolves a choice-valued key's name, refuses a
+    number there, and refuses a fractional value for an integer field, naming the
+    key. This parser deliberately carries no second list of either kind of field.
     """
-    params: dict[str, float] = {}
+    params: dict[str, float | str] = {}
     for item in raw.split(","):
         item = item.strip()
         if not item:
@@ -124,7 +123,10 @@ def _parse_repair_params(raw: str) -> dict[str, float]:
         key, value = (part.strip() for part in item.split("=", 1))
         if not key.startswith("repair."):
             raise ValueError(f"--params key must be a repair.* field: {key}")
-        params[key] = float(value)
+        try:
+            params[key] = float(value)
+        except ValueError:
+            params[key] = value
     return params
 
 
@@ -319,7 +321,7 @@ def cmd_repair(args: argparse.Namespace) -> int:
     result: Any
 
     if preset:
-        overrides: dict[str, float] = dict(_NON_REPAIR_CHAIN_DISABLE_OVERRIDES)
+        overrides: dict[str, float | str] = dict(_NON_REPAIR_CHAIN_DISABLE_OVERRIDES)
         overrides.update(params)
         result = master_audio(
             samples,

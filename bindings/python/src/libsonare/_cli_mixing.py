@@ -181,11 +181,11 @@ def cmd_mixing_presets(args: argparse.Namespace) -> int:
 
 
 def cmd_mixing_preset(args: argparse.Namespace) -> int:
-    from . import mixing_scene_preset_json
+    from . import mixing_scene_preset
 
     # The declared argparse default is the only default: a second fallback here
     # would be a value the published contract does not name.
-    print(mixing_scene_preset_json(args.preset))
+    print(_strict_json_dumps(mixing_scene_preset(args.preset), separators=(",", ":")))
     return 0
 
 
@@ -295,7 +295,7 @@ def _mix_strip_channels(
 
 
 def cmd_mix(args: argparse.Namespace) -> int:
-    from . import Mixer, mixing_scene_preset_json
+    from . import Mixer, mixing_scene_preset
 
     if args.input and not args.output:
         raise ValueError("mix with --input requires --output")
@@ -307,11 +307,11 @@ def cmd_mix(args: argparse.Namespace) -> int:
         with open(args.scene, encoding="utf-8") as fh:
             scene_json = fh.read()
     elif args.preset:
-        scene_json = mixing_scene_preset_json(args.preset)
+        scene_json = json.dumps(mixing_scene_preset(args.preset))
     else:
         raise ValueError("either --scene or --preset is required")
 
-    mixer = Mixer.from_scene_json(
+    mixer = Mixer.from_json(
         scene_json, sample_rate=args.sample_rate, max_block_size=_CLI_HOST_CHUNK_FRAMES
     )
     try:
@@ -466,9 +466,7 @@ def cmd_mix_strip(args: argparse.Namespace) -> int:
     # One block covering the whole file, as the native front-end does: the strip
     # is prepared for that block size and processed once.
     frames = len(left)
-    mixer = Mixer.from_scene_json(
-        scene_json, sample_rate=sample_rate, max_block_size=max(frames, 1)
-    )
+    mixer = Mixer.from_json(scene_json, sample_rate=sample_rate, max_block_size=max(frames, 1))
     try:
         # Setters refuse an out-of-domain option as InvalidParameter (exit 3), as the native does.
         mixer.set_input_trim_db("s", input_trim_db)

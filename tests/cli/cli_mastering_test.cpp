@@ -60,6 +60,20 @@ TEST_CASE("CLI mastering command", "[cli][mastering]") {
     CHECK_THAT(result.err, ContainsSubstring("--ceiling-db"));
   }
 
+  SECTION("the report's loudness summaries name the range in LU") {
+    const std::string report = unique_temp_path("_mastering_lra_report.json");
+    auto [code, output] =
+        exec_command(CLI + " mastering " + TEST_WAV + " -o " + out + " --report " + report + " -q");
+    REQUIRE(code == 0);
+    std::ifstream file(report);
+    const std::string text{std::istreambuf_iterator<char>(file), {}};
+    const auto payload = sonare::util::json::parse_strict(text);
+    CHECK(payload["before"].contains("loudness_range_lu"));
+    CHECK(payload["after"].contains("loudness_range_lu"));
+    CHECK_FALSE(payload["before"].contains("loudness_range"));
+    std::remove(report.c_str());
+  }
+
   SECTION("report JSON always publishes zero latency") {
     const std::string report = unique_temp_path("_mastering_report.json");
     auto [code, output] =

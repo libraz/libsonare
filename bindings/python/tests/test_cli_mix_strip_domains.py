@@ -102,10 +102,10 @@ def test_valid_strip_controls_still_render(stereo_source: Path, tmp_path: Path) 
 
 
 def test_malformed_user_scene_remains_invalid_format(stereo_source: Path, tmp_path: Path) -> None:
-    from libsonare import mixing_scene_preset_json
+    from libsonare import mixing_scene_preset
 
     scene = tmp_path / "invalid-scene.json"
-    document = json.loads(mixing_scene_preset_json("vocalReverbSend"))
+    document = mixing_scene_preset("vocalReverbSend")
     document["strips"][0]["pan"] = 1.5
     scene.write_text(json.dumps(document) + "\n")
     output = tmp_path / "invalid-scene.wav"

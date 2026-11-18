@@ -80,7 +80,7 @@ def test_mix_cli_resamples_inputs_to_mixer_rate(monkeypatch, tmp_path) -> None:
 
     class FakeMixer:
         @classmethod
-        def from_scene_json(cls, scene_json, *, sample_rate, max_block_size):
+        def from_json(cls, scene_json, *, sample_rate, max_block_size):
             captured["sample_rate"] = sample_rate
             return cls()
 
@@ -106,7 +106,7 @@ def test_mix_cli_resamples_inputs_to_mixer_rate(monkeypatch, tmp_path) -> None:
             pass
 
     monkeypatch.setattr(libsonare, "Mixer", FakeMixer)
-    monkeypatch.setattr(libsonare, "mixing_scene_preset_json", lambda name: _ONE_STRIP_SCENE)
+    monkeypatch.setattr(libsonare, "mixing_scene_preset", lambda name: json.loads(_ONE_STRIP_SCENE))
     args = argparse.Namespace(
         scene="",
         preset="demo",
@@ -134,7 +134,7 @@ def test_mix_cli_processes_blocks_partial_block_and_tail(monkeypatch, tmp_path) 
 
     class FakeMixer:
         @classmethod
-        def from_scene_json(cls, _scene_json, *, sample_rate, max_block_size):
+        def from_json(cls, _scene_json, *, sample_rate, max_block_size):
             assert sample_rate == 48000
             assert max_block_size == 512
             return cls()
@@ -165,7 +165,9 @@ def test_mix_cli_processes_blocks_partial_block_and_tail(monkeypatch, tmp_path) 
             pass
 
     monkeypatch.setattr(libsonare, "Mixer", FakeMixer)
-    monkeypatch.setattr(libsonare, "mixing_scene_preset_json", lambda _name: _ONE_STRIP_SCENE)
+    monkeypatch.setattr(
+        libsonare, "mixing_scene_preset", lambda _name: json.loads(_ONE_STRIP_SCENE)
+    )
     output = tmp_path / "mix.wav"
     args = argparse.Namespace(
         scene="",

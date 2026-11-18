@@ -658,7 +658,7 @@ def test_declip_cli_writes_repaired_audio(monkeypatch, tmp_path, capsys) -> None
         file="input.wav",
         output=str(output),
         json=True,
-        clip_threshold=0.9,
+        clip_threshold_db=20.0 * math.log10(0.9),
         lpc_order=24,
         iterations=3,
         lpc_blend=0.5,

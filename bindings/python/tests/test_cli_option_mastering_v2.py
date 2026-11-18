@@ -88,7 +88,7 @@ def test_mastering_config_reads_the_document_and_forwards_params(monkeypatch, tm
     monkeypatch.setattr(libsonare, "master_audio", master_audio)
     config_path = tmp_path / "chain.json"
     config_path.write_text(
-        json.dumps({"version": 1, "params": {"loudness.targetLufs": -15.0}}),
+        json.dumps({"version": 2, "params": {"loudness.targetLufs": -15.0}}),
         encoding="utf-8",
     )
     args = cli._build_parser().parse_args(
@@ -98,7 +98,7 @@ def test_mastering_config_reads_the_document_and_forwards_params(monkeypatch, tm
             "--chain-config",
             str(config_path),
             "--params",
-            "loudness.ceilingDb=-0.5",
+            "loudness.ceilingDbtp=-0.5",
         ]
     )
 
@@ -108,7 +108,7 @@ def test_mastering_config_reads_the_document_and_forwards_params(monkeypatch, tm
     assert isinstance(config, dict)
     loudness = config["loudness"]
     assert loudness["targetLufs"] == -15.0
-    assert loudness["ceilingDb"] == -0.5
+    assert loudness["ceilingDbtp"] == -0.5
 
 
 def test_mastering_assistant_enable_repair_explain_reaches_suggestion_and_chain(
@@ -360,8 +360,8 @@ def test_mixing_preset_uses_stable_default(monkeypatch, capsys) -> None:
     calls: list[str] = []
     monkeypatch.setattr(
         libsonare,
-        "mixing_scene_preset_json",
-        lambda name: calls.append(name) or "{}",
+        "mixing_scene_preset",
+        lambda name: calls.append(name) or {},
     )
     args = cli._build_parser().parse_args(["mixing-preset"])
     assert _cli_mixing.cmd_mixing_preset(args) == 0
@@ -457,7 +457,7 @@ def test_mastering_cli_reports_a_blocked_loudness_target(capsys, monkeypatch) ->
         "maximizer.loudnessOptimize",
         samples,
         sample_rate=sample_rate,
-        params={"targetLufs": -6.0, "ceilingDb": -3.0},
+        params={"targetLufs": -6.0, "ceilingDbtp": -3.0},
     )
     assert processed.loudness_target_limited is True
 
@@ -541,7 +541,7 @@ def test_assistant_controls_are_refused_without_assistant(monkeypatch) -> None:
     ("option", "value", "key"),
     [
         ("--target-lufs", "-14.0", "targetLufs"),
-        ("--ceiling-dbtp", "-1.0", "ceilingDb"),
+        ("--ceiling-dbtp", "-1.0", "ceilingDbtp"),
     ],
 )
 def test_a_loudness_option_carrying_its_default_still_reaches_the_assistant(
@@ -803,7 +803,7 @@ def test_mastering_suggest_named_options_reach_the_assistant(monkeypatch, capsys
     payload = _suggest(monkeypatch, capsys, "--target-lufs", "-12", "--ceiling-dbtp", "-2")
     params = payload["chain_config"]["params"]  # type: ignore[index]
     assert params["loudness.targetLufs"] == -12
-    assert params["loudness.ceilingDb"] == -2
+    assert params["loudness.ceilingDbtp"] == -2
 
 
 @pytest.mark.parametrize(
