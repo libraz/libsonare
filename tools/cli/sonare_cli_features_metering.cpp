@@ -395,7 +395,7 @@ int cmd_cqt(const CliArgs& args, const Audio& audio) {
         .kv("n_bins", result.n_bins())
         .kv("n_frames", result.n_frames())
         .kv("duration", result.duration())
-        .kv("fmin", config.fmin)
+        .kv("fmin_hz", config.fmin)
         .kv("bins_per_octave", config.bins_per_octave)
         .end_object()
         .print();
@@ -431,7 +431,7 @@ int cmd_vqt(const CliArgs& args, const Audio& audio) {
         .kv("n_bins", result.n_bins())
         .kv("n_frames", result.n_frames())
         .kv("duration", result.duration())
-        .kv("fmin", config.fmin)
+        .kv("fmin_hz", config.fmin)
         .kv("bins_per_octave", config.bins_per_octave)
         .kv("gamma", gamma)
         .end_object()

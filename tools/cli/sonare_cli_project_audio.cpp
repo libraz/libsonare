@@ -340,7 +340,7 @@ int project_bounce_impl(const CliArgs& args, bool use_synth, bool binds_source_a
   SonareProjectBounceOptions options{};
   options.total_frames = static_cast<int64_t>(args.get_int("frames", 0));
   options.num_channels = args.get_int("channels", 0);
-  options.instrument_latency_samples = args.get_int("instrument-latency", 0);
+  options.instrument_latency_samples = args.get_int("instrument-latency-samples", 0);
   // CRITICAL: the WAV header MUST be tagged with the SAME sample rate the render
   // actually used, or the file plays back at the wrong pitch. Default to the
   // project's own rate (queried above via sonare_project_get_sample_rate) rather

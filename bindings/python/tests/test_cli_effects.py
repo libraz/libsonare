@@ -14,7 +14,7 @@ from ._helpers import patch_mono_decode
 @pytest.mark.parametrize(
     ("command", "extra"),
     [
-        ("pitch-shift", ["--semitones", "2"]),
+        ("pitch-shift", ["--pitch-semitones", "2"]),
         ("normalize", ["--target-db", "-3"]),
         ("time-stretch", ["--rate", "1.1"]),
         ("trim-silence", []),
@@ -41,10 +41,12 @@ def test_pitch_shift_cli_reports_semitones_end_to_end() -> None:
         wav_path = os.path.join(tmpdir, "tone.wav")
         out_path = os.path.join(tmpdir, "shifted.wav")
         _write_test_wav(wav_path, _generate_sine(440, 22050, 0.5), 22050)
-        result = _run_cli(["pitch-shift", wav_path, "-o", out_path, "--semitones", "3", "--json"])
+        result = _run_cli(
+            ["pitch-shift", wav_path, "-o", out_path, "--pitch-semitones", "3", "--json"]
+        )
         assert result.returncode == 0, result.stderr
         payload = json.loads(result.stdout)
-        assert payload["semitones"] == 3.0
+        assert payload["pitch_semitones"] == 3.0
         assert payload["sample_rate"] == 22050
         assert payload["length"] > 0
 

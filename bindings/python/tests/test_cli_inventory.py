@@ -114,7 +114,7 @@ def test_inventory_exposes_canonical_aliases_and_handler_options() -> None:
 
     commands = {record["path"]: record for record in build_cli_contract(_parser())["commands"]}
 
-    assert _option(commands["key"], "use-hpss")["aliases"] == ["hpss"]
+    assert _option(commands["key"], "hpss")["aliases"] == []
     assert _option(commands["chords"], "smoothing-window")["default"] == 2.0
     assert _option(commands["chords"], "no-beat-sync")["default"] is False
     assert _option(commands["dynamics"], "window-sec")["default"] == 0.4

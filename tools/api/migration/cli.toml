@@ -464,3 +464,186 @@ to = "chirp --fmax-hz"
 domain = "core"
 rule = "frequency-bounds"
 test = "tests/cli/cli_analysis_test.cpp::CLI band bounds leave an omitted edge to the library and refuse 0"
+
+[[entry]]
+kind = "flag"
+old = "pitch-shift --semitones"
+new = "pitch-shift --pitch-semitones"
+domain = "effects"
+rule = "pitch-semitones"
+
+[[entry]]
+kind = "flag"
+old = "chords --min-duration"
+new = "chords --min-duration-sec"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "flag"
+old = "sections --min-duration"
+new = "sections --min-duration-sec"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "flag"
+old = "tone --duration"
+new = "tone --duration-sec"
+frontend = "native"
+domain = "core"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "flag"
+old = "chirp --duration"
+new = "chirp --duration-sec"
+frontend = "native"
+domain = "core"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "flag"
+old = "clicks --click-duration"
+new = "clicks --click-duration-sec"
+frontend = "native"
+domain = "core"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "flag"
+old = "fade --fade-in"
+new = "fade --fade-in-sec"
+frontend = "native"
+domain = "effects"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "flag"
+old = "fade --fade-out"
+new = "fade --fade-out-sec"
+frontend = "native"
+domain = "effects"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "flag"
+old = "tone --frequency"
+new = "tone --frequency-hz"
+frontend = "native"
+domain = "core"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "flag"
+old = "clicks --frequency"
+new = "clicks --frequency-hz"
+frontend = "native"
+domain = "core"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "flag"
+old = "filter --cutoff"
+new = "filter --cutoff-hz"
+frontend = "native"
+domain = "effects"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "flag"
+old = "project.bounce --instrument-latency"
+new = "project.bounce --instrument-latency-samples"
+domain = "project"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "flag"
+old = "midi-render --instrument-latency"
+new = "midi-render --instrument-latency-samples"
+domain = "project"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "flag"
+old = "key --use-hpss"
+new = "key --hpss"
+domain = "analysis"
+rule = "individual"
+
+[[entry]]
+kind = "flag"
+old = "tone --sr"
+new = "tone --sample-rate"
+frontend = "native"
+domain = "core"
+rule = "sample-rate-name"
+
+[[entry]]
+kind = "flag"
+old = "chirp --sr"
+new = "chirp --sample-rate"
+frontend = "native"
+domain = "core"
+rule = "sample-rate-name"
+
+[[entry]]
+kind = "flag"
+old = "clicks --sr"
+new = "clicks --sample-rate"
+frontend = "native"
+domain = "core"
+rule = "sample-rate-name"
+
+[[entry]]
+kind = "command"
+old = "pitch-shift"
+changed = "the JSON semitones key is pitch_semitones, named as the flag is"
+domain = "effects"
+rule = "pitch-semitones"
+test = 'bindings/python/tests/test_cli_effects.py::payload["pitch_semitones"]'
+
+[[entry]]
+kind = "command"
+old = "tone"
+frontend = "native"
+changed = "the JSON frequency key is frequency_hz and sr is sample_rate, named as the flags are"
+domain = "core"
+rule = "unit-in-name"
+test = 'tests/cli/cli_analysis_test.cpp::CLI generator and edit flags carry their unit'
+
+[[entry]]
+kind = "command"
+old = "clicks"
+frontend = "native"
+changed = "the JSON sr key is sample_rate, named as the flag is"
+domain = "core"
+rule = "sample-rate-name"
+test = 'tests/cli/cli_analysis_test.cpp::CLI generator and edit flags carry their unit'
+
+[[entry]]
+kind = "command"
+old = "chirp"
+frontend = "native"
+changed = "the JSON fmin and fmax keys are fmin_hz and fmax_hz and sr is sample_rate, named as the flags are"
+domain = "core"
+rule = "frequency-bounds"
+test = 'tests/cli/cli_analysis_test.cpp::\"fmax_hz\": 1000'
+
+[[entry]]
+kind = "command"
+old = "cqt"
+frontend = "native"
+changed = "the JSON fmin key is fmin_hz, named as the flag is"
+domain = "analysis"
+rule = "frequency-bounds"
+test = 'tests/cli/cli_analysis_test.cpp::\"fmin_hz\": 32.7'
+
+[[entry]]
+kind = "command"
+old = "vqt"
+frontend = "native"
+changed = "the JSON fmin key is fmin_hz, named as the flag is"
+domain = "analysis"
+rule = "frequency-bounds"
+test = 'tests/cli/cli_analysis_test.cpp::\"fmin_hz\": 32.7'

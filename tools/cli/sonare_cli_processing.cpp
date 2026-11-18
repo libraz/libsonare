@@ -31,12 +31,12 @@
 // caller happened to run.
 
 int cmd_pitch_shift(const CliArgs& args, const Audio& audio) {
-  if (!args.has("semitones")) {
-    std::cerr << color::red << "Error: --semitones required" << color::reset << "\n";
+  if (!args.has("pitch-semitones")) {
+    std::cerr << color::red << "Error: --pitch-semitones required" << color::reset << "\n";
     return 1;
   }
 
-  float semitones = args.get_float("semitones", 0.0f);
+  float semitones = args.get_float("pitch-semitones", 0.0f);
   PitchShiftConfig config{args.n_fft, args.hop_length};
 
   if (!args.quiet) {
@@ -55,7 +55,7 @@ int cmd_pitch_shift(const CliArgs& args, const Audio& audio) {
     JsonBuilder()
         .begin_object()
         .kv("output", args.output_file)
-        .kv("semitones", semitones)
+        .kv("pitch_semitones", semitones)
         .kv("length", result.size())
         .kv("sample_rate", result.sample_rate())
         .kv("duration", result.duration())

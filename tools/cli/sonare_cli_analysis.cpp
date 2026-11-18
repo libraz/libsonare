@@ -60,7 +60,7 @@ int cmd_key(const CliArgs& args, const Audio& audio) {
   KeyConfig config;
   config.n_fft = args.n_fft;
   config.hop_length = args.hop_length;
-  config.use_hpss = args.has("use-hpss") || args.has("hpss");
+  config.use_hpss = args.has("hpss");
   config.loudness_weighted = args.has("loudness-weighted");
   config.high_pass_hz = args.get_float("high-pass-hz", 80.0f);
   if (args.has("genre-hint")) {
@@ -192,7 +192,7 @@ int cmd_onsets(const CliArgs& args, const Audio& audio) {
 
 int cmd_chords(const CliArgs& args, const Audio& audio) {
   ChordConfig config;
-  config.min_duration = args.get_float("min-duration", 0.3f);
+  config.min_duration = args.get_float("min-duration-sec", 0.3f);
   config.smoothing_window = args.get_float("smoothing-window", 2.0f);
   config.threshold = args.get_float("threshold", 0.5f);
   config.use_triads_only = !args.has("with-seventh");
@@ -260,7 +260,7 @@ int cmd_chords(const CliArgs& args, const Audio& audio) {
 
 int cmd_sections(const CliArgs& args, const Audio& audio) {
   SectionConfig config;
-  config.min_section_sec = args.get_float("min-duration", 4.0f);
+  config.min_section_sec = args.get_float("min-duration-sec", 4.0f);
   config.boundary_threshold = args.get_float("threshold", config.boundary_threshold);
   config.n_fft = args.n_fft;
   config.hop_length = args.hop_length;

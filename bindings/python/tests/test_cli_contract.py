@@ -333,7 +333,7 @@ def test_fft_consumer_commands_run_end_to_end(tmp_path, command) -> None:
 @pytest.mark.parametrize(
     ("command", "effect_args"),
     [
-        ("pitch-shift", ("--semitones", "0")),
+        ("pitch-shift", ("--pitch-semitones", "0")),
         ("time-stretch", ("--rate", "1")),
         ("hpss", ()),
     ],
@@ -356,7 +356,7 @@ def test_effect_commands_require_output(tmp_path, command, effect_args) -> None:
 
 @pytest.mark.parametrize(
     ("command", "required_flag"),
-    [("pitch-shift", "--semitones required"), ("time-stretch", "--rate required")],
+    [("pitch-shift", "--pitch-semitones required"), ("time-stretch", "--rate required")],
 )
 def test_transform_commands_require_their_primary_parameter(
     tmp_path, command, required_flag
@@ -1465,7 +1465,7 @@ def test_root_version_flag_prints_the_package_version_and_exits_zero(monkeypatch
         ("mel", "--n-fft", "99999999999"),
         ("mel", "--n-mels", "3000000000"),
         ("resample", "--target-sr", "3000000000", "-o", "out.wav"),
-        ("pitch-shift", "--semitones", "1e40", "-o", "out.wav"),
+        ("pitch-shift", "--pitch-semitones", "1e40", "-o", "out.wav"),
     ],
 )
 def test_an_option_past_its_c_type_range_is_a_usage_error(tmp_path, arguments) -> None:

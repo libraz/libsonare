@@ -199,7 +199,7 @@
     },
     {
       "command": "sections",
-      "option": "min-duration",
+      "option": "min-duration-sec",
       "rejectExit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
@@ -974,7 +974,7 @@
     },
     {
       "command": "tone",
-      "option": "sr",
+      "option": "sample-rate",
       "rejectExit": "invalid_parameter",
       "choices": [],
       "minimum": 8000.0,
@@ -984,7 +984,7 @@
     },
     {
       "command": "chirp",
-      "option": "sr",
+      "option": "sample-rate",
       "rejectExit": "invalid_parameter",
       "choices": [],
       "minimum": 8000.0,
@@ -994,7 +994,7 @@
     },
     {
       "command": "clicks",
-      "option": "sr",
+      "option": "sample-rate",
       "rejectExit": "invalid_parameter",
       "choices": [],
       "minimum": 8000.0,

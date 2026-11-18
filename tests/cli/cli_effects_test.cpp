@@ -526,12 +526,13 @@ TEST_CASE("CLI filter applies zero phase to fourth-order filters only when reque
   impulse[2048] = 1.0f;
   save_wav(input, impulse, 22050);
 
-  auto [causal_code, causal_message] = exec_command(
-      CLI + " filter " + input + " -o " + causal_output + " --type lp --cutoff 1000 --order 4 -q");
+  auto [causal_code, causal_message] =
+      exec_command(CLI + " filter " + input + " -o " + causal_output +
+                   " --type lp --cutoff-hz 1000 --order 4 -q");
   REQUIRE(causal_code == 0);
   auto [zero_phase_code, zero_phase_message] =
       exec_command(CLI + " filter " + input + " -o " + zero_phase_output +
-                   " --type lp --cutoff 1000 --order 4 --zero-phase -q");
+                   " --type lp --cutoff-hz 1000 --order 4 --zero-phase -q");
   REQUIRE(zero_phase_code == 0);
 
   auto [causal, causal_rate] = load_wav(causal_output);
@@ -594,8 +595,8 @@ TEST_CASE("CLI pitch-shift command", "[cli]") {
   std::remove(TEST_OUT.c_str());
 
   SECTION("shift up") {
-    auto [code, output] =
-        exec_command(CLI + " pitch-shift --semitones 3 " + TEST_WAV + " -o " + TEST_OUT + " -q");
+    auto [code, output] = exec_command(CLI + " pitch-shift --pitch-semitones 3 " + TEST_WAV +
+                                       " -o " + TEST_OUT + " -q");
     REQUIRE(code == 0);
 
     // Verify output file exists
@@ -604,8 +605,8 @@ TEST_CASE("CLI pitch-shift command", "[cli]") {
   }
 
   SECTION("shift down") {
-    auto [code, output] =
-        exec_command(CLI + " pitch-shift --semitones -3 " + TEST_WAV + " -o " + TEST_OUT + " -q");
+    auto [code, output] = exec_command(CLI + " pitch-shift --pitch-semitones -3 " + TEST_WAV +
+                                       " -o " + TEST_OUT + " -q");
     REQUIRE(code == 0);
 
     std::ifstream f(TEST_OUT);
@@ -613,7 +614,8 @@ TEST_CASE("CLI pitch-shift command", "[cli]") {
   }
 
   SECTION("missing output file") {
-    auto [code, output] = exec_command(CLI + " pitch-shift --semitones 3 " + TEST_WAV + " -q");
+    auto [code, output] =
+        exec_command(CLI + " pitch-shift --pitch-semitones 3 " + TEST_WAV + " -q");
     REQUIRE(code == 3);
     REQUIRE_THAT(output, ContainsSubstring("Missing required option '--output'"));
   }
@@ -622,7 +624,7 @@ TEST_CASE("CLI pitch-shift command", "[cli]") {
     auto [code, output] =
         exec_command(CLI + " pitch-shift " + TEST_WAV + " -o " + TEST_OUT + " -q");
     REQUIRE(code == 3);
-    REQUIRE_THAT(output, ContainsSubstring("--semitones required"));
+    REQUIRE_THAT(output, ContainsSubstring("--pitch-semitones required"));
   }
 }
 

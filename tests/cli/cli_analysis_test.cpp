@@ -222,7 +222,7 @@ TEST_CASE("CLI key command", "[.][slow][cli]") {
 
   SECTION("json candidates output with key options") {
     auto [code, output] = exec_command(CLI + " key " + TEST_WAV +
-                                       " --json --candidates 3 --use-hpss "
+                                       " --json --candidates 3 --hpss "
                                        "--loudness-weighted --high-pass-hz 40 "
                                        "--genre-hint edm --profile edma -q");
     REQUIRE(code == 0);
@@ -843,11 +843,11 @@ TEST_CASE("CLI cqt command", "[.][slow][cli]") {
     auto [code, output] =
         exec_command(CLI + " cqt " + TEST_WAV + " --fmin-hz 100 --n-bins 72 --json -q");
     REQUIRE(code == 0);
-    REQUIRE_THAT(output, ContainsSubstring("\"fmin\": 100"));
+    REQUIRE_THAT(output, ContainsSubstring("\"fmin_hz\": 100"));
     // The default still applies when the flag is absent.
     auto [defCode, defOutput] = exec_command(CLI + " cqt " + TEST_WAV + " --json -q");
     REQUIRE(defCode == 0);
-    REQUIRE_THAT(defOutput, ContainsSubstring("\"fmin\": 32.7"));
+    REQUIRE_THAT(defOutput, ContainsSubstring("\"fmin_hz\": 32.7"));
   }
 }
 
@@ -871,7 +871,39 @@ TEST_CASE("CLI band bounds leave an omitted edge to the library and refuse 0", "
   auto [chirp_code, chirp_output] =
       exec_command(CLI + " chirp -o " + out + " --fmin-hz 100 --fmax-hz 1000 --json -q");
   REQUIRE(chirp_code == 0);
-  REQUIRE_THAT(chirp_output, ContainsSubstring("\"fmax\": 1000"));
+  REQUIRE_THAT(chirp_output, ContainsSubstring("\"fmax_hz\": 1000"));
+  std::remove(out.c_str());
+}
+
+TEST_CASE("CLI generator and edit flags carry their unit", "[cli]") {
+  create_test_wav(TEST_WAV);
+  const std::string out = unique_temp_path("_unit_flags.wav");
+  auto [tone_code, tone_output] =
+      exec_command(CLI + " tone -o " + out +
+                   " --frequency-hz 440 --sample-rate 16000 --duration-sec 0.25 --json -q");
+  REQUIRE(tone_code == 0);
+  REQUIRE_THAT(tone_output, ContainsSubstring("\"sample_rate\": 16000"));
+  REQUIRE_THAT(tone_output, ContainsSubstring("\"frequency_hz\": 440"));
+  auto [clicks_code, clicks_output] = exec_command(
+      CLI + " clicks -o " + out +
+      " --times 0.1 --frequency-hz 500 --click-duration-sec 0.05 --sample-rate 16000 --json -q");
+  REQUIRE(clicks_code == 0);
+  REQUIRE_THAT(clicks_output, ContainsSubstring("\"sample_rate\": 16000"));
+  REQUIRE(exec_command(CLI + " fade " + TEST_WAV + " -o " + out + " --fade-in-sec 0.1 -q").first ==
+          0);
+  for (const std::string& retired :
+       {" tone -o " + out + " --frequency 440 -q",
+        " tone -o " + out + " --frequency-hz 440 --sr 16000 -q",
+        " tone -o " + out + " --frequency-hz 440 --duration 1 -q",
+        " clicks -o " + out + " --times 0.1 --click-duration 0.05 -q",
+        " fade " + TEST_WAV + " -o " + out + " --fade-in 0.1 -q",
+        " filter " + TEST_WAV + " -o " + out + " --type lp --cutoff 1000 -q",
+        " chords " + TEST_WAV + " --min-duration 0.3 -q", " key " + TEST_WAV + " --use-hpss -q"}) {
+    CAPTURE(retired);
+    auto [code, output] = exec_command(CLI + retired);
+    REQUIRE(code == 2);
+    REQUIRE_THAT(output, ContainsSubstring("Unknown option"));
+  }
   std::remove(out.c_str());
 }
 

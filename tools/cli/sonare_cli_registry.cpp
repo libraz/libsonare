@@ -431,11 +431,11 @@ CliValidationError validate_melody_frequency_band(const CliArgs& args) {
 // satisfies `hop <= n_fft / 2` and still starves the separation. A per-option
 // domain cannot express it because the same hop is fine without the flag.
 CliValidationError validate_key_hpss_hop(const CliArgs& args) {
-  if (!args.has("use-hpss") && !args.has("hpss")) return {};
+  if (!args.has("hpss")) return {};
   if (args.hop_length >= sonare::kMinKeyHpssHopLength) return {};
   std::ostringstream message;
   message << "--hop-length must be at least " << sonare::kMinKeyHpssHopLength
-          << " with --use-hpss (got " << args.hop_length << ")";
+          << " with --hpss (got " << args.hop_length << ")";
   return {message.str(), true};
 }
 
@@ -540,8 +540,8 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     add_command(
         commands, "key", true,
         {global_int("n-fft", 2048), global_int("hop-length", 512), int_value("candidates"),
-         flag("use-hpss", false, true, {"hpss"}), flag("loudness-weighted"),
-         number_value("high-pass-hz", 80.0), string_value("modes"), string_value("profile"),
+         flag("hpss"), flag("loudness-weighted"), number_value("high-pass-hz", 80.0),
+         string_value("modes"), string_value("profile"),
          with_domain(string_value("genre-hint"),
                      choices_of({"auto", "edm", "electronic", "dance", "pop", "classical", "jazz"},
                                 CliOptionDomainStage::Parameter))},
@@ -553,7 +553,7 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     // `--hmm-beam-width -1` silently ran an unbeamed search.
     add_command(commands, "chords", true,
                 {global_int("n-fft", 2048), global_int("hop-length", 512),
-                 number_value("min-duration", 0.3),
+                 number_value("min-duration-sec", 0.3),
                  with_domain(number_value("smoothing-window", 2.0),
                              greater_than(0.0, CliOptionDomainStage::Parameter)),
                  number_value("threshold", 0.5), flag("with-seventh"),
@@ -567,7 +567,7 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     // SectionAnalyzer validates only that the audio is non-empty, so nothing
     // downstream refuses a negative minimum section length.
     add_command(commands, "sections", true,
-                {with_domain(number_value("min-duration", 4.0),
+                {with_domain(number_value("min-duration-sec", 4.0),
                              at_least(0.0, CliOptionDomainStage::Parameter)),
                  number_value("threshold", sonare::kSectionBoundaryThreshold),
                  global_int("n-fft", 2048), global_int("hop-length", 512)});
@@ -634,7 +634,7 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     // something to repair. These two make the refusal the one a caller gets.
     add_command(
         commands, "pitch-shift", true,
-        {number_value("semitones"), required_output(),
+        {number_value("pitch-semitones"), required_output(),
          with_domain(global_int("n-fft", 2048), greater_than(0.0, CliOptionDomainStage::Parameter)),
          with_domain(global_int("hop-length", 512),
                      greater_than(0.0, CliOptionDomainStage::Parameter))});
@@ -781,9 +781,9 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
                 nullptr, 0, /*preserves_stereo_input=*/true);
     add_command(commands, "gain", true, {number_value("gain-db"), required_output()});
     add_command(commands, "fade", true,
-                {number_value("fade-in"), number_value("fade-out"), required_output()});
+                {number_value("fade-in-sec"), number_value("fade-out-sec"), required_output()});
     add_command(commands, "filter", true,
-                {string_value("type"), int_value("order", 2), number_value("cutoff", 0.0),
+                {string_value("type"), int_value("order", 2), number_value("cutoff-hz", 0.0),
                  number_value("center", 0.0), number_value("bandwidth", 0.0), required_output(),
                  flag("zero-phase")});
     add_command(commands, "resample", true,
@@ -793,28 +793,28 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     // already bounds its target rate here for the same reason; these three are the
     // rest of that family.
     add_command(commands, "tone", false,
-                {number_value("frequency"),
-                 with_domain(int_value("sr", 22050),
+                {number_value("frequency-hz"),
+                 with_domain(int_value("sample-rate", 22050),
                              between(sonare::kMinAudioSampleRate, sonare::kMaxAudioSampleRate,
                                      CliOptionDomainStage::Parameter)),
-                 number_value("duration", 1.0), number_value("phase", 0.0),
+                 number_value("duration-sec", 1.0), number_value("phase", 0.0),
                  number_value("amplitude", 1.0), required_output()});
     add_command(
         commands, "chirp", false,
-        {with_domain(int_value("sr", 22050),
+        {with_domain(int_value("sample-rate", 22050),
                      between(sonare::kMinAudioSampleRate, sonare::kMaxAudioSampleRate,
                              CliOptionDomainStage::Parameter)),
-         number_value("duration", 1.0), required_output(), flag("exponential"),
+         number_value("duration-sec", 1.0), required_output(), flag("exponential"),
          with_domain(global_number("fmin-hz", 0.0), at_least(0.0, CliOptionDomainStage::Parameter)),
          with_domain(number_value("fmax-hz", true, true),
                      greater_than(0.0, CliOptionDomainStage::Usage))});
     add_command(commands, "clicks", false,
                 {string_value("times"),
-                 with_domain(int_value("sr", 22050),
+                 with_domain(int_value("sample-rate", 22050),
                              between(sonare::kMinAudioSampleRate, sonare::kMaxAudioSampleRate,
                                      CliOptionDomainStage::Parameter)),
-                 int_value("length", 0), number_value("frequency", 1000.0),
-                 number_value("click-duration", 0.1), required_output()});
+                 int_value("length", 0), number_value("frequency-hz", 1000.0),
+                 number_value("click-duration-sec", 0.1), required_output()});
 
 #ifdef SONARE_WITH_MASTERING
     // "--chain-config" names a complete chain config in the core's own
@@ -1137,7 +1137,7 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     add_project_command("project.bounce",
                         {required_path("in"), required_output(), int_value("sample-rate"),
                          library_sized(int_value("frames")), library_sized(int_value("channels")),
-                         int_value("instrument-latency", 0), optional_string("synth"),
+                         int_value("instrument-latency-samples", 0), optional_string("synth"),
                          string_value("audio", false, true), flag("resolve-audio")},
                         &validate_project_bounce_channels);
     // `align-takes` reads the source FILES rather than binding PCM, so it shares
@@ -1164,7 +1164,7 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     add_command(commands, "midi-render", false,
                 {required_path("in"), required_output(), int_value("sample-rate"),
                  library_sized(int_value("frames")), library_sized(int_value("channels")),
-                 int_value("instrument-latency", 0), string_value("synth", "")},
+                 int_value("instrument-latency-samples", 0), string_value("synth", "")},
                 {}, &validate_project_bounce_channels);
     // Every numeric here means "keep the library default" when absent, and the
     // C ABI spells that 0 and refuses an out-of-domain value by name, so the

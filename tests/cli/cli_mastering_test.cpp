@@ -977,7 +977,7 @@ TEST_CASE("CLI mastering carries a stereo input through as a stereo pair", "[cli
   // being checked at all if the last named example quietly becomes an exception.
   const std::string downmixed_out = unique_temp_path("_downmixed.wav");
   auto [downmix_code, downmix_output] = exec_command(
-      CLI + " pitch-shift " + input + " --semitones 3 -o " + downmixed_out + " --json -q");
+      CLI + " pitch-shift " + input + " --pitch-semitones 3 -o " + downmixed_out + " --json -q");
   REQUIRE(downmix_code == 0);
   REQUIRE_THAT(downmix_output, ContainsSubstring("downmixed to mono"));
 

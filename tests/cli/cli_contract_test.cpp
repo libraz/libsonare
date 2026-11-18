@@ -258,7 +258,7 @@ TEST_CASE("CLI hidden contract inventory is machine-readable", "[cli][contract]"
     } else if (path == "pitch-shift") {
       found_pitch_shift = true;
       REQUIRE(command["options"][0]["name"].as_string() == "json");
-      REQUIRE(command["options"][1]["name"].as_string() == "semitones");
+      REQUIRE(command["options"][1]["name"].as_string() == "pitch-semitones");
       REQUIRE_FALSE(command["options"][1]["required"].as_bool());
       REQUIRE(command["options"][1]["default"].is_null());
     } else if (path == "resample") {
@@ -472,7 +472,7 @@ TEST_CASE("CLI registry exposes immutable leaf contracts", "[cli][registry]") {
   REQUIRE(optional_output != nullptr);
   REQUIRE_FALSE(optional_output->required);
 
-  const auto* semitones = cli_option_spec_for_command("pitch-shift", "semitones");
+  const auto* semitones = cli_option_spec_for_command("pitch-shift", "pitch-semitones");
   REQUIRE(semitones != nullptr);
   REQUIRE_FALSE(semitones->required);
   REQUIRE(semitones->default_value.kind == CliOptionDefaultKind::Null);
@@ -484,14 +484,14 @@ TEST_CASE("CLI registry exposes immutable leaf contracts", "[cli][registry]") {
   REQUIRE(target_rate->default_value.kind == CliOptionDefaultKind::Null);
   REQUIRE(cli_option_spec_for_command("resample", "target-sr") == target_rate);
 
-  const auto* key_hpss = cli_option_spec_for_command("key", "use-hpss");
+  const auto* key_hpss = cli_option_spec_for_command("key", "hpss");
   REQUIRE(key_hpss != nullptr);
-  REQUIRE(key_hpss->name == "use-hpss");
-  REQUIRE(key_hpss->aliases == std::vector<std::string>{"hpss"});
+  REQUIRE(key_hpss->name == "hpss");
+  REQUIRE(key_hpss->aliases.empty());
   REQUIRE(key_hpss->scalar_type == CliOptionScalarType::Boolean);
   REQUIRE(key_hpss->default_value.kind == CliOptionDefaultKind::Boolean);
   REQUIRE_FALSE(key_hpss->default_value.boolean_value);
-  REQUIRE(cli_option_spec_for_command("key", "hpss") == key_hpss);
+  REQUIRE(cli_option_spec_for_command("key", "use-hpss") == nullptr);
 
   const auto* candidates = cli_option_spec_for_command("key", "candidates");
   REQUIRE(candidates != nullptr);
@@ -642,7 +642,6 @@ TEST_CASE("CLI registry defaults and hidden controls project through parser", "[
   REQUIRE(chroma.get_int("n-fft", -1) != -1);
 
   const CliArgs key = parse({"sonare-cli", "key", "--hpss", "--candidates", "3"});
-  REQUIRE(key.has("use-hpss"));
   REQUIRE(key.has("hpss"));
   REQUIRE(key.get_int("candidates", -1) == 3);
   REQUIRE(validate_cli_arguments(key, true).empty());
@@ -685,7 +684,7 @@ TEST_CASE("CLI registry defaults and hidden controls project through parser", "[
 
   CliArgs required;
   required.command = "pitch-shift";
-  REQUIRE(required.get_float("semitones", 17.0f) == 17.0f);
+  REQUIRE(required.get_float("pitch-semitones", 17.0f) == 17.0f);
 
   const auto metadata = cli_option_metadata_for_command("chroma");
   for (const auto& option : metadata) {
@@ -1557,7 +1556,7 @@ TEST_CASE("CLI error handling", "[cli]") {
     auto [code, output] =
         exec_command(CLI + " pitch-shift " + TEST_WAV + " -o " + TEST_OUT + " -q");
     REQUIRE(code == 3);
-    REQUIRE_THAT(output, ContainsSubstring("--semitones required"));
+    REQUIRE_THAT(output, ContainsSubstring("--pitch-semitones required"));
   }
 
   SECTION("legacy mode folds runtime failures") {

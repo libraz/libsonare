@@ -237,7 +237,7 @@ def _project_bounce(
             # A project rate is a whole number of hertz (loading refuses anything
             # else), so the WAV header carries it exactly.
             sample_rate = int(project_sample_rate)
-        kwargs: dict[str, Any] = {"instrument_latency_samples": args.instrument_latency}
+        kwargs: dict[str, Any] = {"instrument_latency_samples": args.instrument_latency_samples}
         # What is left out stays with the library: the derived length, the project's rate and
         # the master's width.
         if args.frames is not None:
@@ -801,7 +801,7 @@ def register_project_parsers(
             "(default: the scene master's width)"
         ),
     )
-    pbounce.add_argument("--instrument-latency", type=_c_int, default=0)
+    pbounce.add_argument("--instrument-latency-samples", type=_c_int, default=0)
     # One assignment per occurrence, as --set / --edit / suggest-mix --input do:
     # the id written with the path keeps the pairing in one token, so no second
     # repeatable option has to be kept in step with this one.
@@ -939,7 +939,7 @@ def register_project_parsers(
             "(default: the scene master's width)"
         ),
     )
-    midi_render_p.add_argument("--instrument-latency", type=_c_int, default=0)
+    midi_render_p.add_argument("--instrument-latency-samples", type=_c_int, default=0)
     midi_render_p.add_argument(
         "--synth",
         default="",

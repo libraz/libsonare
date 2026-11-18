@@ -140,7 +140,7 @@ def test_sections_reports_the_boundaries_it_found() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         path = os.path.join(tmpdir, "two_tones.wav")
         _write_wav(path, _tone(220.0, duration=4.0) + _tone(311.127, duration=4.0))
-        result = _run_cli(["sections", path, "--min-duration", "1.0", "--json"])
+        result = _run_cli(["sections", path, "--min-duration-sec", "1.0", "--json"])
     assert result.returncode == 0, result.stderr
     payload = json.loads(result.stdout)
 
@@ -167,7 +167,7 @@ def test_sections_reports_the_boundaries_it_found() -> None:
 
 
 def test_sections_human_output_names_every_section(melody_wav: str) -> None:
-    result = _run_cli(["sections", melody_wav, "--min-duration", "0.3"])
+    result = _run_cli(["sections", melody_wav, "--min-duration-sec", "0.3"])
     assert result.returncode == 0, result.stderr
     lines = [line for line in result.stdout.splitlines() if line.strip()]
     assert lines[0].startswith("  Sections (")
@@ -182,9 +182,9 @@ def test_sections_refuses_an_out_of_domain_analysis_size(melody_wav: str) -> Non
 
 def test_sections_names_an_unparseable_option(melody_wav: str) -> None:
     """A value no float reads is refused by name before the pipeline runs."""
-    result = _run_cli(["sections", melody_wav, "--min-duration", "wide"])
+    result = _run_cli(["sections", melody_wav, "--min-duration-sec", "wide"])
     assert result.returncode == 2
-    assert "--min-duration" in result.stderr
+    assert "--min-duration-sec" in result.stderr
 
 
 def test_decompose_stems_writes_components_that_sum_back(melody_wav: str) -> None:

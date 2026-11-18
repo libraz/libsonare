@@ -266,7 +266,7 @@
           "domain": null
         },
         {
-          "name": "min-duration",
+          "name": "min-duration-sec",
           "type": "number",
           "default": 0.3,
           "aliases": [],
@@ -1069,6 +1069,15 @@
           "domain": null
         },
         {
+          "name": "hpss",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
           "name": "json",
           "type": "boolean",
           "default": false,
@@ -1109,17 +1118,6 @@
           "type": "string",
           "default": "",
           "aliases": [],
-          "repeatable": false,
-          "required": false,
-          "domain": null
-        },
-        {
-          "name": "use-hpss",
-          "type": "boolean",
-          "default": false,
-          "aliases": [
-            "hpss"
-          ],
           "repeatable": false,
           "required": false,
           "domain": null
@@ -1860,7 +1858,7 @@
           "domain": null
         },
         {
-          "name": "instrument-latency",
+          "name": "instrument-latency-samples",
           "type": "integer",
           "default": 0,
           "aliases": [],
@@ -2702,7 +2700,7 @@
           "domain": null
         },
         {
-          "name": "semitones",
+          "name": "pitch-semitones",
           "type": "number",
           "default": null,
           "aliases": [],
@@ -3059,7 +3057,7 @@
           "domain": null
         },
         {
-          "name": "instrument-latency",
+          "name": "instrument-latency-samples",
           "type": "integer",
           "default": 0,
           "aliases": [],
@@ -4381,15 +4379,6 @@
           "domain": null
         },
         {
-          "name": "fixed-velocity",
-          "type": "integer",
-          "default": null,
-          "aliases": [],
-          "repeatable": false,
-          "required": false,
-          "domain": null
-        },
-        {
           "name": "f0-max-hz",
           "type": "number",
           "default": null,
@@ -4401,6 +4390,15 @@
         {
           "name": "f0-min-hz",
           "type": "number",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "fixed-velocity",
+          "type": "integer",
           "default": null,
           "aliases": [],
           "repeatable": false,
@@ -8897,7 +8895,7 @@
           "domain": null
         },
         {
-          "name": "semitones",
+          "name": "pitch-semitones",
           "type": "number",
           "default": null,
           "aliases": [],
@@ -8917,7 +8915,7 @@
         "success": {
           "keys": {
             "output": "path",
-            "semitones": "number",
+            "pitch_semitones": "number",
             "length": "integer",
             "sample_rate": "integer",
             "duration": "number"
@@ -8932,7 +8930,7 @@
             "{audio}",
             "-o",
             "{output}",
-            "--semitones",
+            "--pitch-semitones",
             "2",
             "--json"
           ],
@@ -10429,6 +10427,15 @@
           "domain": null
         },
         {
+          "name": "hpss",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
           "name": "json",
           "type": "boolean",
           "default": false,
@@ -10469,17 +10476,6 @@
           "type": "string",
           "default": "",
           "aliases": [],
-          "repeatable": false,
-          "required": false,
-          "domain": null
-        },
-        {
-          "name": "use-hpss",
-          "type": "boolean",
-          "default": false,
-          "aliases": [
-            "hpss"
-          ],
           "repeatable": false,
           "required": false,
           "domain": null
@@ -10682,7 +10678,7 @@
           "domain": null
         },
         {
-          "name": "min-duration",
+          "name": "min-duration-sec",
           "type": "number",
           "default": 0.3,
           "aliases": [],
@@ -12619,7 +12615,7 @@
           "domain": null
         },
         {
-          "name": "instrument-latency",
+          "name": "instrument-latency-samples",
           "type": "integer",
           "default": 0,
           "aliases": [],
@@ -16349,7 +16345,7 @@
           "domain": null
         },
         {
-          "name": "instrument-latency",
+          "name": "instrument-latency-samples",
           "type": "integer",
           "default": 0,
           "aliases": [],
@@ -16573,15 +16569,6 @@
           "domain": null
         },
         {
-          "name": "fixed-velocity",
-          "type": "integer",
-          "default": null,
-          "aliases": [],
-          "repeatable": false,
-          "required": false,
-          "domain": null
-        },
-        {
           "name": "f0-max-hz",
           "type": "number",
           "default": null,
@@ -16593,6 +16580,15 @@
         {
           "name": "f0-min-hz",
           "type": "number",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "fixed-velocity",
+          "type": "integer",
           "default": null,
           "aliases": [],
           "repeatable": false,

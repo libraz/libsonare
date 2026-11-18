@@ -104,17 +104,11 @@ def cmd_key(args: argparse.Namespace) -> int:
     from . import detect_key, detect_key_candidates
 
     samples, sr = _load_audio(args.file)
-    # ``--hpss`` was the historical spelling.  Keep accepting it in handler
-    # namespaces while the parser exposes the canonical ``--use-hpss`` flag.
-    # A parser alias may bind both spellings to ``use_hpss``; reading both
-    # attributes also keeps direct handler callers and older integrations
-    # compatible.
-    use_hpss = bool(getattr(args, "use_hpss", False) or getattr(args, "hpss", False))
     key_options = {
         "sample_rate": sr,
         "n_fft": args.n_fft,
         "hop_length": args.hop_length,
-        "use_hpss": use_hpss,
+        "use_hpss": args.hpss,
         "loudness_weighted": args.loudness_weighted,
         "chroma_high_pass_hz": args.high_pass_hz,
         "modes": _parse_modes(args.modes) if args.modes else None,
@@ -218,7 +212,7 @@ def cmd_chords(args: argparse.Namespace) -> int:
     result = detect_chords(
         samples,
         sample_rate=sr,
-        min_duration_sec=args.min_duration,
+        min_duration_sec=args.min_duration_sec,
         smoothing_window_sec=args.smoothing_window,
         threshold=args.threshold,
         use_triads_only=not args.with_seventh,
@@ -278,7 +272,7 @@ def cmd_sections(args: argparse.Namespace) -> int:
         sample_rate=sr,
         n_fft=args.n_fft,
         hop_length=args.hop_length,
-        min_section_sec=args.min_duration,
+        min_section_sec=args.min_duration_sec,
     )
     sections = result
     if args.json:
@@ -642,9 +636,7 @@ def register_analysis_parsers(
         help="Also show the top N key candidates",
     )
     key_p.add_argument(
-        "--use-hpss",
         "--hpss",
-        dest="use_hpss",
         action="store_true",
         help="Use harmonic audio for key chroma",
     )
@@ -685,7 +677,10 @@ def register_analysis_parsers(
         "chords", parents=[fft_stdout_options], help="Detect chord progression"
     )
     chords_p.add_argument(
-        "--min-duration", type=_finite_float, default=0.3, help="Minimum chord duration in seconds"
+        "--min-duration-sec",
+        type=_finite_float,
+        default=0.3,
+        help="Minimum chord duration in seconds",
     )
     _cli_domain(
         chords_p.add_argument(
@@ -744,7 +739,7 @@ def register_analysis_parsers(
         "sections", parents=[fft_stdout_options], help="Detect song structure"
     )
     sections_p.add_argument(
-        "--min-duration",
+        "--min-duration-sec",
         type=_finite_float,
         default=4.0,
         help="Minimum section duration in seconds (default: 4.0)",

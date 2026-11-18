@@ -242,13 +242,13 @@ def cmd_decompose_stems(args: argparse.Namespace) -> int:
 def cmd_pitch_shift(args: argparse.Namespace) -> int:
     from . import pitch_shift
 
-    if args.semitones is None:
-        raise ValueError("--semitones required")
+    if args.pitch_semitones is None:
+        raise ValueError("--pitch-semitones required")
     samples, sr = _load_audio(args.file)
     result = pitch_shift(
         samples,
         sample_rate=sr,
-        pitch_semitones=args.semitones,
+        pitch_semitones=args.pitch_semitones,
         n_fft=getattr(args, "n_fft", 2048),
         hop_length=getattr(args, "hop_length", 512),
     )
@@ -257,8 +257,8 @@ def cmd_pitch_shift(args: argparse.Namespace) -> int:
         args,
         [result],
         sr,
-        extra={"semitones": args.semitones},
-        label=f"Pitch shift ({args.semitones:+.2f} semitones)",
+        extra={"pitch_semitones": args.pitch_semitones},
+        label=f"Pitch shift ({args.pitch_semitones:+.2f} semitones)",
     )
 
 
@@ -730,7 +730,7 @@ def register_effects_parsers(
         "pitch-shift", parents=[common], help="Shift pitch by a number of semitones"
     )
     pitch_shift_p.add_argument(
-        "--semitones", type=_finite_float, help="Semitones to shift (positive = up)"
+        "--pitch-semitones", type=_finite_float, help="Semitones to shift (positive = up)"
     )
     # The spectral backend repairs a non-positive geometry into the librosa
     # defaults instead of refusing it, so the refusal a caller gets is the

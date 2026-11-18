@@ -242,7 +242,7 @@ def test_cli_warns_once_when_it_downmixes_a_stereo_input(tmp_path) -> None:
     _write_stereo_wav(str(stereo), values, [-v for v in values], 48000)
     _write_test_wav(str(mono), values, 48000)
 
-    args = ["--semitones", "1.0", "--json"]
+    args = ["--pitch-semitones", "1.0", "--json"]
     noisy = _run_cli(["pitch-shift", str(stereo), "-o", str(tmp_path / "a.wav"), *args])
     quiet = _run_cli(["pitch-shift", str(mono), "-o", str(tmp_path / "b.wav"), *args])
 

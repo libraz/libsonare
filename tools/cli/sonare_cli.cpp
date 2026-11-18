@@ -289,7 +289,7 @@ void print_usage(const char* prog, std::ostream& out) {
       << "\nExamples:\n"
       << "  " << prog << " analyze music.mp3\n"
       << "  " << prog << " bpm music.wav --json\n"
-      << "  " << prog << " pitch-shift --semitones 3 input.wav -o output.wav\n";
+      << "  " << prog << " pitch-shift --pitch-semitones 3 input.wav -o output.wav\n";
 }
 
 // Error paths name the problem on one line and point at --help instead of

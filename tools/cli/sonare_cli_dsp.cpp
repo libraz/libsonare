@@ -79,17 +79,17 @@ int cmd_gain(const CliArgs& args, const Audio& audio) {
 }
 
 int cmd_fade(const CliArgs& args, const Audio& audio) {
-  if (!args.has("fade-in") && !args.has("fade-out")) {
-    std::cerr << color::red << "Error: --fade-in and/or --fade-out required" << color::reset
+  if (!args.has("fade-in-sec") && !args.has("fade-out-sec")) {
+    std::cerr << color::red << "Error: --fade-in-sec and/or --fade-out-sec required" << color::reset
               << "\n";
     return 1;
   }
-  const float fade_in_sec = args.get_float("fade-in", 0.0f);
-  const float fade_out_sec = args.get_float("fade-out", 0.0f);
+  const float fade_in_sec = args.get_float("fade-in-sec", 0.0f);
+  const float fade_out_sec = args.get_float("fade-out-sec", 0.0f);
 
   Audio result = audio;
-  if (args.has("fade-in")) result = fade_in(result, fade_in_sec);
-  if (args.has("fade-out")) result = fade_out(result, fade_out_sec);
+  if (args.has("fade-in-sec")) result = fade_in(result, fade_in_sec);
+  if (args.has("fade-out-sec")) result = fade_out(result, fade_out_sec);
   save_wav(args.output_file, result.data(), result.size(), result.sample_rate());
 
   if (args.json_output) {
@@ -129,11 +129,11 @@ int cmd_filter(const CliArgs& args, const Audio& audio) {
   float bandwidth = 0.0f;
 
   if (is_hp || is_lp) {
-    if (!args.has("cutoff")) {
-      std::cerr << color::red << "Error: --cutoff required" << color::reset << "\n";
+    if (!args.has("cutoff-hz")) {
+      std::cerr << color::red << "Error: --cutoff-hz required" << color::reset << "\n";
       return 1;
     }
-    cutoff = args.get_float("cutoff", 0.0f);
+    cutoff = args.get_float("cutoff-hz", 0.0f);
     if (order != 2 && order != 4) {
       std::cerr << color::red << "Error: --order must be 2 or 4" << color::reset << "\n";
       return 1;
@@ -217,13 +217,13 @@ int cmd_resample(const CliArgs& args, const Audio& audio) {
 }
 
 int cmd_tone(const CliArgs& args, const Audio&) {
-  if (!args.has("frequency")) {
-    std::cerr << color::red << "Error: --frequency required" << color::reset << "\n";
+  if (!args.has("frequency-hz")) {
+    std::cerr << color::red << "Error: --frequency-hz required" << color::reset << "\n";
     return 1;
   }
-  const float frequency = args.get_float("frequency", 0.0f);
-  const int sr = args.get_int("sr", 22050);
-  const float duration = args.get_float("duration", 1.0f);
+  const float frequency = args.get_float("frequency-hz", 0.0f);
+  const int sr = args.get_int("sample-rate", 22050);
+  const float duration = args.get_float("duration-sec", 1.0f);
   const float phase = args.get_float("phase", 0.0f);
   const float amplitude = args.get_float("amplitude", 1.0f);
 
@@ -234,8 +234,8 @@ int cmd_tone(const CliArgs& args, const Audio&) {
     JsonBuilder()
         .begin_object()
         .kv("output", args.output_file)
-        .kv("frequency", frequency)
-        .kv("sr", sr)
+        .kv("frequency_hz", frequency)
+        .kv("sample_rate", sr)
         .kv("duration", result.duration())
         .end_object()
         .print();
@@ -255,8 +255,8 @@ int cmd_chirp(const CliArgs& args, const Audio&) {
               << color::reset << "\n";
     return 1;
   }
-  const int sr = args.get_int("sr", 22050);
-  const float duration = args.get_float("duration", 1.0f);
+  const int sr = args.get_int("sample-rate", 22050);
+  const float duration = args.get_float("duration-sec", 1.0f);
 
   Audio result = chirp(fmin, fmax, sr, duration, linear);
   save_wav(args.output_file, result.data(), result.size(), result.sample_rate());
@@ -265,9 +265,9 @@ int cmd_chirp(const CliArgs& args, const Audio&) {
     JsonBuilder()
         .begin_object()
         .kv("output", args.output_file)
-        .kv("fmin", fmin)
-        .kv("fmax", fmax)
-        .kv("sr", sr)
+        .kv("fmin_hz", fmin)
+        .kv("fmax_hz", fmax)
+        .kv("sample_rate", sr)
         .kv("duration", result.duration())
         .kv("linear", linear)
         .end_object()
@@ -284,10 +284,10 @@ int cmd_clicks(const CliArgs& args, const Audio&) {
     return 1;
   }
   const std::vector<float> times = parse_float_list(args.get_string("times"));
-  const int sr = args.get_int("sr", 22050);
+  const int sr = args.get_int("sample-rate", 22050);
   const int length = args.get_int("length", 0);
-  const float frequency = args.get_float("frequency", 1000.0f);
-  const float click_duration = args.get_float("click-duration", 0.1f);
+  const float frequency = args.get_float("frequency-hz", 1000.0f);
+  const float click_duration = args.get_float("click-duration-sec", 0.1f);
 
   Audio result = clicks(times, sr, length, frequency, click_duration);
   save_wav(args.output_file, result.data(), result.size(), result.sample_rate());
@@ -297,7 +297,7 @@ int cmd_clicks(const CliArgs& args, const Audio&) {
         .begin_object()
         .kv("output", args.output_file)
         .kv("n_clicks", times.size())
-        .kv("sr", sr)
+        .kv("sample_rate", sr)
         .kv("duration", result.duration())
         .end_object()
         .print();
