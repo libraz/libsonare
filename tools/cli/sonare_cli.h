@@ -123,15 +123,16 @@ std::vector<float> parse_float_list(const std::string& text);
 std::vector<int> parse_int_list(const std::string& text);
 int print_name_catalog(const CliArgs& args, std::string_view key,
                        const std::vector<std::string>& names);
-/// Spells a library token (lowerCamel) the way a CLI flag value and `--json` output spell it:
-/// kebab-case, with a digit run as its own word ("neutralMonitor" -> "neutral-monitor").
+/// Spells a closed-set library token (lowerCamel) the way a closed-set flag value spells it:
+/// kebab-case, with a digit run as its own word ("stereoPan" -> "stereo-pan").
 std::string cli_token(std::string_view library_token);
 /// Resolves a kebab-case flag value, in any letter case, to the library token it spells.
 /// @throws std::invalid_argument naming `flag` and listing the accepted kebab values.
 std::string library_token(std::string_view flag, std::string_view value,
                           const std::vector<std::string>& library_tokens);
-/// The token among @p tokens that @p value names in any letter case, or @p value
-/// unchanged when it names none, so the consumer's own refusal still reports it.
+/// The library id among @p tokens (a preset, processor or analysis id the library enumerates)
+/// that @p value names in any letter case, or @p value unchanged when it names none, so the
+/// library's own refusal still reports it.
 std::string catalog_token(const std::string& value, const std::vector<std::string>& tokens);
 std::string read_plain_text_file(const std::string& path);
 bool write_binary_file(const std::string& path, const uint8_t* data, size_t len);
