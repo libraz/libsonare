@@ -598,13 +598,12 @@ describe('mastering metering surface', () => {
       expect(energy(late)).toBeGreaterThan(0);
     });
 
-    it.each([
-      ['the compressor sidechain high-pass', 'effects/dynamics.cpp', 'sidechainHpfHz'],
-      ['the compressor sidechain high-pass enable', 'effects/dynamics.cpp', 'sidechainHpfEnabled'],
-      ['the gate key high-pass', 'effects/dynamics.cpp', 'keyHpfHz'],
-    ])('%s is still spelled the old way in the addon source', (_label, path, spelling) => {
-      expect(addonSource(path)).toContain(spelling);
-    });
+    it.each([['the gate key high-pass', 'effects/dynamics.cpp', 'keyHpfHz']])(
+      '%s is still spelled the old way in the addon source',
+      (_label, path, spelling) => {
+        expect(addonSource(path)).toContain(spelling);
+      },
+    );
   });
 });
 

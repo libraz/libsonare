@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import type {
   MasteringAssistantResult,
@@ -595,7 +594,7 @@ describe('results: unit-named fields and objects', () => {
   });
 });
 
-describe('masterAudioAsync: preset required, every failure a rejection', () => {
+describe('masterAudioAsync: a preset or overrides required, every failure a rejection', () => {
   it('resolves with the synchronous result', async () => {
     const sync = sonare.masterAudio({ samples: left, sampleRate, preset: 'pop' });
     const request = await sonare.masterAudioAsync({ samples: left, sampleRate, preset: 'pop' });
@@ -614,7 +613,11 @@ describe('masterAudioAsync: preset required, every failure a rejection', () => {
       () => (sonare.masterAudioAsync as Fn)({ samples: left, preset: 'pop' }),
       TypeError,
     ],
-    ['no preset', () => (sonare.masterAudioAsync as Fn)({ samples: left, sampleRate }), TypeError],
+    [
+      'neither preset nor overrides',
+      () => (sonare.masterAudioAsync as Fn)({ samples: left, sampleRate }),
+      TypeError,
+    ],
     [
       'unknown preset',
       () => (sonare.masterAudioAsync as Fn)({ samples: left, sampleRate, preset: 'nope' }),
@@ -801,12 +804,6 @@ describe('closed sets and catalogs', () => {
 });
 
 describe('native still uses the old spelling', () => {
-  const catalog = JSON.parse(
-    readFileSync(new URL('../../../../tools/capability-catalog.json', import.meta.url), 'utf8'),
-  ) as { processors: { id: string; params: { name: string }[] }[] };
-  const paramNames = (id: string): string[] =>
-    (catalog.processors.find((p) => p.id === id)?.params ?? []).map((p) => p.name);
-
   const raw = () => addon as Record<string, Fn>;
   const pop = () => raw().masteringPresetParams('pop') as Record<string, unknown>;
 
@@ -835,13 +832,6 @@ describe('native still uses the old spelling', () => {
     [
       'a preset comes back as flat dotted keys',
       () => [Object.keys(pop()).every((key) => key.includes('.')), Object.keys(pop()).length > 0],
-    ],
-    [
-      'declip takes a linear clipThreshold and the compressor a sidechainHpfHz',
-      () => [
-        paramNames('repair.declip').includes('clipThreshold'),
-        paramNames('dynamics.compressor').includes('sidechainHpfHz'),
-      ],
     ],
   ])('%s', (_name, probe) => {
     for (const holds of probe() as boolean[]) {

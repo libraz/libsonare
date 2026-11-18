@@ -24,7 +24,7 @@ describe('insert catalog carries construction-only params, and timing answers pe
 
   it('flags a bound the processor itself rejects as exclusive', () => {
     const hpf = masteringInsertParamInfo({ insert: 'dynamics.compressor' }).find(
-      (param) => param.name === 'sidechainHpfHz',
+      (param) => param.name === 'sidechainHighPassHz',
     );
     expect(hpf?.min).toBe(0);
     expect(typeof hpf?.minExclusive).toBe('boolean');
