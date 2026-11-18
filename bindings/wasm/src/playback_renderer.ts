@@ -135,7 +135,7 @@ export class PlaybackRenderer {
   /**
    * Renders one planar block; every plane must carry the same frame count, at
    * most `maxBlockSize` (0 is a no-op). With a fixed input layout the plane
-   * count must equal {@link inputChannels}; with `input.layout: "auto"` it
+   * count must equal {@link numInputChannels}; with `input.layout: "auto"` it
    * must be 1, 2, 6 or 8, and a change switches the input layout without
    * changing the latency. Non-finite input samples are replaced with 0 and
    * counted ({@link nonFiniteDiscardCount}).
@@ -152,7 +152,7 @@ export class PlaybackRenderer {
   /**
    * Resets the renderer, then renders the whole interleaved buffer in one call
    * and returns the interleaved output with the target's channel count
-   * ({@link outputChannels}). The result matches `renderPlayback` for the same
+   * ({@link numOutputChannels}). The result matches `renderPlayback` for the same
    * configuration, and {@link diagnostics} afterwards describes this render.
    * Unlike the block methods, an empty buffer or a non-finite sample throws.
    */
@@ -206,12 +206,12 @@ export class PlaybackRenderer {
    * this follows the channel count of the most recent non-empty process call
    * (2 before the first call).
    */
-  get inputChannels(): number {
+  get numInputChannels(): number {
     return this.native.inputChannels();
   }
 
   /** Channel count of the output target. */
-  get outputChannels(): number {
+  get numOutputChannels(): number {
     return this.native.outputChannels();
   }
 

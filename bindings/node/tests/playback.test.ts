@@ -35,7 +35,7 @@ describe('HrtfSet', () => {
 describe('PlaybackRenderer construction and validation', () => {
   it('defaults a headphones target without an explicit HrtfSet (native built-in)', () => {
     using renderer = new PlaybackRenderer({ config: {} });
-    expect(renderer.outputChannels).toBe(2);
+    expect(renderer.numOutputChannels).toBe(2);
     renderer.destroy();
   });
 
@@ -71,8 +71,8 @@ describe('PlaybackRenderer processing', () => {
     expect(out).toHaveLength(2);
     expect(out[0]).toHaveLength(128);
     expect(Array.from(out[0]).every((s) => Number.isFinite(s))).toBe(true);
-    expect(renderer.inputChannels).toBe(2);
-    expect(renderer.outputChannels).toBe(2);
+    expect(renderer.numInputChannels).toBe(2);
+    expect(renderer.numOutputChannels).toBe(2);
   });
 
   it('processes a stereo interleaved block to a 5.1-speakers target', () => {
@@ -88,7 +88,7 @@ describe('PlaybackRenderer processing', () => {
       interleaved[i * 2 + 1] = r[i];
     }
     const out = renderer.processInterleaved(interleaved, 2);
-    expect(renderer.outputChannels).toBe(6);
+    expect(renderer.numOutputChannels).toBe(6);
     expect(out).toHaveLength(128 * 6);
     expect(Array.from(out).every((s) => Number.isFinite(s))).toBe(true);
   });
@@ -101,7 +101,7 @@ describe('PlaybackRenderer processing', () => {
       renderer.processInterleaved(new Float32Array(4), 'two' as unknown as number),
     ).toThrow();
     // The rejected call must not have advanced state or left the addon unusable.
-    expect(renderer.outputChannels).toBe(2);
+    expect(renderer.numOutputChannels).toBe(2);
   });
 
   it('rejects a planar call whose planes have mismatched lengths', () => {
@@ -426,8 +426,8 @@ describe('playback scalar reads', () => {
     const reads = renderer as unknown as Record<string, unknown>;
     for (const name of [
       'latencySamples',
-      'inputChannels',
-      'outputChannels',
+      'numInputChannels',
+      'numOutputChannels',
       'nonFiniteDiscardCount',
     ]) {
       expect(typeof getter(renderer, name), name).toBe('function');

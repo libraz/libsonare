@@ -117,8 +117,8 @@ describe('playback renderer (WASM)', () => {
       const reads = renderer as unknown as Record<string, unknown>;
       for (const name of [
         'latencySamples',
-        'inputChannels',
-        'outputChannels',
+        'numInputChannels',
+        'numOutputChannels',
         'nonFiniteDiscardCount',
       ]) {
         expect(typeof getter(renderer, name), name).toBe('function');
@@ -138,8 +138,8 @@ describe('playback renderer (WASM)', () => {
     hrtf.destroy();
     try {
       expect(headphones.latencySamples).toBe(1312);
-      expect(headphones.outputChannels).toBe(2);
-      expect(headphones.inputChannels).toBe(2);
+      expect(headphones.numOutputChannels).toBe(2);
+      expect(headphones.numInputChannels).toBe(2);
     } finally {
       headphones.destroy();
     }
@@ -154,7 +154,7 @@ describe('playback renderer (WASM)', () => {
         sampleRate: SR,
       });
       try {
-        expect(renderer.outputChannels).toBe(channels);
+        expect(renderer.numOutputChannels).toBe(channels);
         expect(renderer.latencySamples).toBe(latency);
       } finally {
         renderer.destroy();
@@ -294,9 +294,9 @@ describe('playback renderer (WASM)', () => {
     try {
       renderer.processPlanar(noisePlanes(2, 128));
       renderer.processPlanar(noisePlanes(6, 128));
-      expect(renderer.inputChannels).toBe(6);
+      expect(renderer.numInputChannels).toBe(6);
       renderer.processPlanar(noisePlanes(8, 128));
-      expect(renderer.inputChannels).toBe(8);
+      expect(renderer.numInputChannels).toBe(8);
       expect(() => renderer.processPlanar(noisePlanes(3, 128))).toThrow(RangeError);
       const diagnostics = renderer.diagnostics();
       expect(Object.getPrototypeOf(diagnostics)).toBe(Object.prototype);
@@ -507,7 +507,7 @@ describe('playback renderer (WASM)', () => {
       renderer.processInterleaved(input.subarray(0, 512 * 2), 2);
       const out = renderer.renderOffline(input, 2);
       expect(out.length).toBe(expected.samples.length);
-      expect(out.length).toBe((input.length / 2) * renderer.outputChannels);
+      expect(out.length).toBe((input.length / 2) * renderer.numOutputChannels);
       expect(Array.from(out)).toEqual(Array.from(expected.samples));
     } finally {
       renderer.destroy();

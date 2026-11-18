@@ -118,7 +118,7 @@ export class PlaybackRenderer {
   /**
    * Renders a whole interleaved buffer offline. The renderer is reset first, so the result equals
    * {@link renderPlayback} for the same configuration, and {@link diagnostics} afterwards
-   * describes this render. The result carries {@link outputChannels} interleaved channels.
+   * describes this render. The result carries {@link numOutputChannels} interleaved channels.
    * An empty or non-finite `samples` is refused with a `RangeError` naming `samples`.
    */
   renderOffline(samples: Float32Array, inChannels: number): Float32Array {
@@ -165,12 +165,12 @@ export class PlaybackRenderer {
    * {@link processPlanar} / {@link processInterleaved} call (2 before the
    * first call).
    */
-  get inputChannels(): number {
+  get numInputChannels(): number {
     return this.native.inputChannels();
   }
 
   /** Channel count of the output target. */
-  get outputChannels(): number {
+  get numOutputChannels(): number {
     return this.native.outputChannels();
   }
 
