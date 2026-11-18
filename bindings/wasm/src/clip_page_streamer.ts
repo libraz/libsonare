@@ -372,7 +372,7 @@ export async function attachOpfsClipStream(
   }
   const token = epoch.current();
   const binding = createOpfsClipPageProvider(providerOptions);
-  // A close() while priming reclaims the binding before it is registered.
+  // A destroy() while priming reclaims the binding before it is registered.
   const releaseOnClose = epoch.onClose(() => binding.destroy());
   try {
     const lastPage = Math.ceil(providerOptions.numSamples / providerOptions.pageFrames) - 1;

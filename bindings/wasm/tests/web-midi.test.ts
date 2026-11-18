@@ -254,13 +254,13 @@ describe('Web MIDI helper', () => {
     ]);
     expect(changed.at(-1)).toEqual(['a', 'b']);
 
-    binding.close();
+    binding.destroy();
     inputA.emit([0x90, 67, 100], 6);
     expect(engine.messages).toHaveLength(5);
     expect(engine.sourceDestination).toBeNull();
   });
 
-  it('leaves the input source of a later binding in place when an earlier binding closes', async () => {
+  it('leaves the input source of a later binding in place when an earlier binding is destroyed', async () => {
     const access = new FakeAccess();
     const input = new FakeInput('a');
     access.inputs.set(input.id, input);
@@ -268,20 +268,22 @@ describe('Web MIDI helper', () => {
     const engine = new FakeEngine();
 
     const first = await bindWebMidi(engine as never, { destinationId: 1 });
-    first.close();
+    first.destroy();
     const second = await bindWebMidi(engine as never, { destinationId: 2 });
-    first.close();
+    first.destroy();
     expect(engine.sourceDestination).toBe(2);
     input.emit([0x90, 60, 100]);
     input.emit([0x80, 60, 0]);
     expect(engine.messages.map((message) => message.kind)).toEqual(['on', 'off']);
 
-    // A replaced binding that was never closed does not own the source either.
+    // A replaced binding that was never destroyed does not own the source either.
     const third = await bindWebMidi(engine as never, { destinationId: 3 });
-    second.close();
+    second.destroy();
     expect(engine.sourceDestination).toBe(3);
-    third.close();
+    third[Symbol.dispose]();
     expect(engine.sourceDestination).toBeNull();
+    input.emit([0x90, 62, 100]);
+    expect(engine.messages).toHaveLength(2);
   });
 
   it('clears running status for system common messages and drops incomplete channel voice messages', async () => {
@@ -303,7 +305,7 @@ describe('Web MIDI helper', () => {
       { kind: 'on', group: 0, channel: 0, a: 60, b: 100, time: 0 },
       { kind: 'on', group: 0, channel: 0, a: 65, b: 70, time: 0 },
     ]);
-    binding.close();
+    binding.destroy();
   });
 
   it('routes MIDI 1 pressure and pitch bend, including one-byte running-status messages', async () => {
@@ -331,7 +333,7 @@ describe('Web MIDI helper', () => {
       { kind: 'channel-pressure', group: 0, channel: 2, pressure: 66, time: 168 },
       { kind: 'pitch-bend', group: 0, channel: 2, bend14: 8193, time: 192 },
     ]);
-    binding.close();
+    binding.destroy();
   });
 
   it('keeps MIDI running status isolated per bound input', async () => {
@@ -354,7 +356,7 @@ describe('Web MIDI helper', () => {
       { kind: 'off', group: 0, channel: 0, a: 64, b: 20, time: 0 },
       { kind: 'off', group: 0, channel: 0, a: 65, b: 30, time: 0 },
     ]);
-    binding.close();
+    binding.destroy();
   });
 
   it('binds hot-plugged matching inputs and unbinds disconnected ports', async () => {
@@ -373,7 +375,7 @@ describe('Web MIDI helper', () => {
     access.stateChange(later);
     later.emit([0x91, 64, 80]);
     expect(engine.messages).toHaveLength(1);
-    binding.close();
+    binding.destroy();
   });
 
   it('routes MIDI 1.0 and MIDI 2.0 UMP channel voice words when browsers provide UMP data', async () => {
@@ -393,7 +395,7 @@ describe('Web MIDI helper', () => {
       { kind: 'on', group: 3, channel: 2, a: 65, b: 100, time: 0 },
       { kind: 'cc', group: 3, channel: 2, a: 74, b: 127, time: 0 },
     ]);
-    binding.close();
+    binding.destroy();
   });
 
   it('falls back to optional pressure and bend methods for MIDI 2.0 UMP', async () => {
@@ -417,7 +419,7 @@ describe('Web MIDI helper', () => {
       { kind: 'channel-pressure', group: 4, channel: 3, pressure: 64, time: 96 },
       { kind: 'pitch-bend', group: 4, channel: 3, bend14: 0x12345678 >>> 18, time: 144 },
     ]);
-    binding.close();
+    binding.destroy();
   });
 
   it('routes each framed UMP packet losslessly when raw input is supported', async () => {
@@ -438,7 +440,7 @@ describe('Web MIDI helper', () => {
     expect(engine.rawUmp).toHaveLength(2);
     expect(engine.rawUmp[0]).toEqual({ words: Uint32Array.from([midi1NoteOn]), time: 72 });
     expect(engine.rawUmp[1]).toEqual({ words: Uint32Array.from(midi2Cc), time: 72 });
-    binding.close();
+    binding.destroy();
   });
 
   it('does not pass malformed, truncated, or engine-refused UMP packets to raw input', async () => {
@@ -459,7 +461,7 @@ describe('Web MIDI helper', () => {
     expect(engine.rawUmp).toEqual([
       { words: Uint32Array.from([midi2CcWord0, 0x12345678]), time: 0 },
     ]);
-    binding.close();
+    binding.destroy();
   });
 
   it('MT=4 routes only status 0x8 as note-off and preserves zero note-on velocity', async () => {
@@ -495,7 +497,7 @@ describe('Web MIDI helper', () => {
       { kind: 'off', group: 0, channel: 0, a: 70, b: 0, time: 0 },
       { kind: 'off', group: 0, channel: 0, a: 71, b: 127, time: 0 },
     ]);
-    binding.close();
+    binding.destroy();
   });
 
   it('calls onInputsChanged exactly once per hotplug event', async () => {
@@ -520,7 +522,7 @@ describe('Web MIDI helper', () => {
     access.stateChange(); // No event.port: the refreshInputs() fallback branch.
     expect(notifications).toHaveLength(3);
 
-    binding.close();
+    binding.destroy();
   });
 
   it('invokes requestMIDIAccess with the navigator as `this` (native methods throw otherwise)', async () => {
@@ -539,7 +541,7 @@ describe('Web MIDI helper', () => {
 
     const binding = await bindWebMidi(new FakeEngine() as never);
     expect(binding.inputs()).toEqual([]);
-    binding.close();
+    binding.destroy();
   });
 
   it('throws when Web MIDI is unavailable', async () => {

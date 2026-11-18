@@ -12,30 +12,32 @@ export interface BindMicrophoneInputOptions extends MediaStreamConstraints {
   preferCurrentTab?: MediaStreamConstraints['preferCurrentTab'];
   /**
    * Stream to bind instead of requesting one. Supplying it also transfers
-   * ownership: {@link MicrophoneInputBinding.close} leaves its tracks running,
+   * ownership: {@link MicrophoneInputBinding.destroy} leaves its tracks running,
    * because they may be feeding a recorder, a level meter or a second
    * `AudioContext` that this binding knows nothing about.
    */
   stream?: MediaStream;
   /**
-   * Whether {@link MicrophoneInputBinding.close} stops the stream's audio
+   * Whether {@link MicrophoneInputBinding.destroy} stops the stream's audio
    * tracks. Defaults to whether this binding acquired the stream itself: `true`
    * for a stream it requested through `getUserMedia`, `false` for one the
    * caller supplied. Set it explicitly to override in either direction.
    */
-  stopTracksOnClose?: boolean;
+  stopTracksOnDestroy?: boolean;
 }
 
-/** Handle returned by {@link bindMicrophoneInput}; call `close` to disconnect. */
+/** Handle returned by {@link bindMicrophoneInput}; call `destroy` to disconnect. */
 export interface MicrophoneInputBinding {
   /** The bound microphone stream. */
   stream: MediaStream;
-  /** The source node feeding the engine node; disconnected by `close`. */
+  /** The source node feeding the engine node; disconnected by `destroy`. */
   source: MediaStreamAudioSourceNode;
   /** Whether this binding acquired {@link stream} rather than being handed one. */
   ownsStream: boolean;
-  /** Disconnects the source and, when the binding owns the stream (see `stopTracksOnClose`), stops its audio tracks. Safe to call more than once. */
-  close(): void;
+  /** Disconnects the source and, when the binding owns the stream (see `stopTracksOnDestroy`), stops its audio tracks. Safe to call more than once. */
+  destroy(): void;
+  /** Same as {@link destroy}, so the binding works with `using`. */
+  [Symbol.dispose](): void;
 }
 
 /**
@@ -43,18 +45,21 @@ export interface MicrophoneInputBinding {
  *
  * Ownership is decided by provenance, the same rule `ownsWorker` applies in
  * `opfs_clip_pages.ts` and `worker_client.ts`: a resource the caller handed in
- * is the caller's to release. `close()` used to stop the tracks of a supplied
- * stream by default, which killed a microphone the rest of the page was still
- * using.
+ * is the caller's to release, so `destroy()` leaves a supplied stream's tracks
+ * running unless `stopTracksOnDestroy` asks otherwise.
  */
 export async function bindMicrophoneInput(
   context: AudioContext,
   engine: SonareRealtimeEngineNode | AudioWorkletNode,
   options: BindMicrophoneInputOptions = {},
 ): Promise<MicrophoneInputBinding> {
-  const { stream: providedStream, stopTracksOnClose: stopTracksOverride, ...constraints } = options;
+  const {
+    stream: providedStream,
+    stopTracksOnDestroy: stopTracksOverride,
+    ...constraints
+  } = options;
   const ownsStream = providedStream === undefined;
-  const stopTracksOnClose = stopTracksOverride ?? ownsStream;
+  const stopTracksOnDestroy = stopTracksOverride ?? ownsStream;
   const stream =
     providedStream ??
     (await navigator.mediaDevices.getUserMedia({
@@ -69,7 +74,7 @@ export async function bindMicrophoneInput(
     source.connect(node);
   } catch (error) {
     // No binding escaped to the caller, so an acquired stream is still ours to
-    // release even when close was explicitly configured to keep tracks alive.
+    // release even when destroy was explicitly configured to keep tracks alive.
     // Each cleanup step is independent: one broken track or source must not
     // prevent the rest of the acquired stream from being stopped, and the
     // setup error remains the rejection reason.
@@ -94,21 +99,25 @@ export async function bindMicrophoneInput(
     throw error;
   }
   let closed = false;
-  return {
+  const binding: MicrophoneInputBinding = {
     stream,
     source,
     ownsStream,
-    close() {
+    destroy() {
       if (closed) {
         return;
       }
       closed = true;
       source.disconnect();
-      if (stopTracksOnClose) {
+      if (stopTracksOnDestroy) {
         for (const track of stream.getAudioTracks()) {
           track.stop();
         }
       }
     },
+    [Symbol.dispose]() {
+      this.destroy();
+    },
   };
+  return binding;
 }

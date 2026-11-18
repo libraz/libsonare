@@ -55,7 +55,7 @@ describe('bindMicrophoneInput', () => {
     });
   });
 
-  it('requests microphone audio, connects it to the engine node, and closes cleanly', async () => {
+  it('requests microphone audio, connects it to the engine node, and destroys cleanly', async () => {
     const track = new FakeTrack();
     const videoTrack = new FakeTrack();
     const stream = fakeStream([track], [videoTrack]);
@@ -88,11 +88,11 @@ describe('bindMicrophoneInput', () => {
     expect(requested).toEqual([{ audio: { echoCancellation: false }, video: { width: 640 } }]);
     expect(binding.stream).toBe(stream);
     expect(source.connected).toEqual([node]);
-    binding.close();
-    binding.close();
+    binding.destroy();
+    binding.destroy();
     expect(source.disconnected).toBe(true);
     expect(track.stopped).toBe(true);
-    // Close stops only the audio tracks; a video track on the acquired stream
+    // Destroy stops only the audio tracks; a video track on the acquired stream
     // is left running.
     expect(videoTrack.stopped).toBe(false);
   });
@@ -120,7 +120,7 @@ describe('bindMicrophoneInput', () => {
 
     const binding = await bindMicrophoneInput(context, node, { stream });
     expect(binding.ownsStream).toBe(false);
-    binding.close();
+    binding.destroy();
 
     expect(source.connected).toEqual([node]);
     // The acceptance condition: another consumer can still read the stream.
@@ -134,9 +134,9 @@ describe('bindMicrophoneInput', () => {
 
     const binding = await bindMicrophoneInput(context, node, {
       stream,
-      stopTracksOnClose: false,
+      stopTracksOnDestroy: false,
     });
-    binding.close();
+    binding.destroy();
 
     expect(source.connected).toEqual([node]);
     expect(track.stopped).toBe(false);
@@ -148,13 +148,27 @@ describe('bindMicrophoneInput', () => {
 
     const binding = await bindMicrophoneInput(context, node, {
       stream,
-      stopTracksOnClose: true,
+      stopTracksOnDestroy: true,
     });
     expect(binding.ownsStream).toBe(false);
-    binding.close();
+    binding.destroy();
 
     expect(track.stopped).toBe(true);
     expect(videoTrack.stopped).toBe(false);
+  });
+
+  it('releases the binding through Symbol.dispose', async () => {
+    const { track, stream, source, context, node } = suppliedStreamFixture();
+
+    const binding = await bindMicrophoneInput(context, node, {
+      stream,
+      stopTracksOnDestroy: true,
+    });
+    binding[Symbol.dispose]();
+    binding.destroy();
+
+    expect(source.disconnected).toBe(true);
+    expect(track.stopped).toBe(true);
   });
 
   it('honours an explicit opt-out on a stream it acquired itself', async () => {
@@ -169,9 +183,9 @@ describe('bindMicrophoneInput', () => {
     const context = { createMediaStreamSource: () => source } as unknown as AudioContext;
     const node = { port: {} } as unknown as AudioWorkletNode;
 
-    const binding = await bindMicrophoneInput(context, node, { stopTracksOnClose: false });
+    const binding = await bindMicrophoneInput(context, node, { stopTracksOnDestroy: false });
     expect(binding.ownsStream).toBe(true);
-    binding.close();
+    binding.destroy();
 
     // The caller kept the stream to manage itself; `binding.stream` is still live.
     expect(track.stopped).toBe(false);
@@ -201,7 +215,7 @@ describe('bindMicrophoneInput', () => {
 
     const failed = bindMicrophoneInput(context, node, {
       video: true,
-      stopTracksOnClose: false,
+      stopTracksOnDestroy: false,
     });
     await expect(failed).rejects.toBe(setupError);
     expect(requested).toEqual([{ video: true, audio: true }]);
@@ -223,7 +237,7 @@ describe('bindMicrophoneInput', () => {
     const node = { port: {} } as unknown as AudioWorkletNode;
 
     await expect(
-      bindMicrophoneInput(context, node, { stream, stopTracksOnClose: true }),
+      bindMicrophoneInput(context, node, { stream, stopTracksOnDestroy: true }),
     ).rejects.toBe(setupError);
     expect(source.disconnected).toBe(true);
     expect(audioTrack.stopCalls).toBe(0);
@@ -257,7 +271,7 @@ describe('bindMicrophoneInput', () => {
     const node = { port: {} } as unknown as AudioWorkletNode;
 
     await expect(
-      bindMicrophoneInput(context, node, { video: true, stopTracksOnClose: false }),
+      bindMicrophoneInput(context, node, { video: true, stopTracksOnDestroy: false }),
     ).rejects.toBe(setupError);
     expect(requested).toEqual([{ video: true, audio: true }]);
     expect(audioTrack.stopCalls).toBe(1);

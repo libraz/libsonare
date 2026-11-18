@@ -730,6 +730,27 @@ domain = "project"
 rule = "teardown"
 
 [[entry]]
+kind = "method"
+old = "MicrophoneInputBinding.close"
+new = "MicrophoneInputBinding.destroy"
+domain = "engine"
+rule = "teardown"
+
+[[entry]]
+kind = "field"
+old = "BindMicrophoneInputOptions.stopTracksOnClose"
+new = "BindMicrophoneInputOptions.stopTracksOnDestroy"
+domain = "engine"
+rule = "teardown"
+
+[[entry]]
+kind = "method"
+old = "WebMidiBinding.close"
+new = "WebMidiBinding.destroy"
+domain = "engine"
+rule = "teardown"
+
+[[entry]]
 kind = "function"
 old = "projectAbiVersion"
 changed = "returns undefined instead of 0 when the feature is compiled out"

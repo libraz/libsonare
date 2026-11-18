@@ -148,14 +148,16 @@ export interface BindWebMidiOptions {
   onInputsChanged?: (inputs: WebMidiInputInfo[]) => void;
 }
 
-/** Handle returned by {@link bindWebMidi}; call `close` to release the inputs. */
+/** Handle returned by {@link bindWebMidi}; call `destroy` to release the inputs. */
 export interface WebMidiBinding {
   /** The browser's MIDIAccess object. */
   access: MidiAccessLike;
   /** Current snapshot of every input port, bound or not. */
   inputs(): WebMidiInputInfo[];
   /** Stops listening on every bound input and for hot-plug changes, and clears the engine's MIDI input source unless a newer binding has replaced it. Safe to call more than once. */
-  close(): void;
+  destroy(): void;
+  /** Same as {@link destroy}, so the binding works with `using`. */
+  [Symbol.dispose](): void;
 }
 
 type BoundInput = {
@@ -165,7 +167,7 @@ type BoundInput = {
 };
 
 // Owner of each engine's single MIDI input source: the binding that installed it
-// last. A replaced binding's close leaves its successor's source in place.
+// last. A replaced binding's destroy leaves its successor's source in place.
 const midiInputSourceOwners = new WeakMap<WebMidiEngine, OwnerEpoch>();
 
 function midiInputSourceOwner(engine: WebMidiEngine): OwnerEpoch {
@@ -186,7 +188,7 @@ export function isWebMidiAvailable(): boolean {
 
 /**
  * Routes Web MIDI input ports into a realtime engine's live MIDI input source and tracks hot-plugged
- * ports until the binding is closed. Only one binding per engine owns the input source; a later one
+ * ports until the binding is destroyed. Only one binding per engine owns the input source; a later one
  * replaces it.
  *
  * @throws SonareError `NotSupported` when Web MIDI is unavailable.
@@ -314,10 +316,10 @@ export async function bindWebMidi(
     access.onstatechange = stateListener;
   }
 
-  return {
+  const binding: WebMidiBinding = {
     access,
     inputs: snapshotInputs,
-    close() {
+    destroy() {
       if (closed) {
         return;
       }
@@ -334,7 +336,11 @@ export async function bindWebMidi(
         engine.clearMidiInputSource();
       }
     },
+    [Symbol.dispose]() {
+      this.destroy();
+    },
   };
+  return binding;
 }
 
 function dispatchMidiMessage(
