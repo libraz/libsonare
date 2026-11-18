@@ -461,7 +461,7 @@ def test_bake_midi_fx_and_last_bounce_compile_result() -> None:
         # the no-instrument diagnostic, retrievable after the bounce.
         project.bounce(total_frames=48000, num_channels=2, sample_rate=48000)
         result = project.last_bounce_compile_result()
-        assert isinstance(result.diagnostics, tuple)
+        assert result is not None
         assert [d.code for d in result.diagnostics] == ["midiClipNoInstrument"]
     finally:
         project.close()

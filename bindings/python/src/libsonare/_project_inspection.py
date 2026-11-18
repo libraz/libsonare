@@ -770,17 +770,14 @@ class _ProjectInspectionMixin:
 
     # -- compile / render ---------------------------------------------------
 
-    def last_bounce_compile_result(self) -> ProjectCompileResult:
+    def last_bounce_compile_result(self) -> ProjectCompileResult | None:
         """Return the compile result captured by the most recent bounce.
 
         Mirrors :meth:`compile`'s structured :class:`ProjectCompileResult` but
-        reads the timeline + diagnostics recorded during the last
-        ``bounce*`` call instead of recompiling.
-
-        On a project no bounce has ever run on, ``diagnostics`` is empty. A
-        failed bounce is distinguishable from that state, because a bounce only
-        loses its timeline through an error diagnostic and so always reports at
-        least one.
+        reads the diagnostics recorded during the last ``bounce*`` call instead
+        of recompiling. ``None`` when no bounce has run on this project, or the
+        last one was refused for its arguments before it compiled; an empty
+        ``diagnostics`` means the last bounce compiled clean.
         """
         lib = _get_lib()
         result = SonareProjectCompileResult()
@@ -790,6 +787,9 @@ class _ProjectInspectionMixin:
             )
         )
         try:
+            # A bounce only loses its timeline through an error diagnostic.
+            if not result.has_timeline and result.diagnostic_count == 0:
+                return None
             return ProjectCompileResult(_compile_diagnostics(result))
         finally:
             lib.sonare_project_free_compile_result(ctypes.byref(result))

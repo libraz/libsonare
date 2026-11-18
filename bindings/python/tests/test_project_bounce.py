@@ -7,11 +7,14 @@ import pytest
 
 from libsonare import (
     BuiltinSynthConfig,
+    ErrorCode,
     ExternalInstrument,
     Project,
+    ProjectCompileResult,
     SonareValueError,
 )
 
+from ._helpers import raises_coded
 from ._project_helpers import _build_project
 
 # --- bounce ----------------------------------------------------------------
@@ -250,12 +253,41 @@ def test_bounce_auto_derives_length_when_total_frames_omitted() -> None:
         project.close()
 
 
-def test_last_bounce_compile_result_is_empty_before_any_bounce() -> None:
-    # No bounce has run, so there are no diagnostics. A failed bounce is told
-    # apart by its diagnostics: losing the timeline always leaves an error behind.
+def test_last_bounce_compile_result_is_none_before_any_bounce() -> None:
     project = Project()
     try:
+        assert project.last_bounce_compile_result() is None
+    finally:
+        project.close()
+
+
+def test_last_bounce_compile_result_after_a_clean_bounce_has_no_diagnostics() -> None:
+    project = Project()
+    try:
+        track = project.add_track("audio", "a")
+        project.add_clip(
+            track, 0.0, 1.0, audio=[0.1] * 480, audio_channels=1, audio_sample_rate=48000
+        )
+        project.bounce(total_frames=480, num_channels=2, sample_rate=48000)
         result = project.last_bounce_compile_result()
+        assert isinstance(result, ProjectCompileResult)
         assert result.diagnostics == ()
+    finally:
+        project.close()
+
+
+def test_last_bounce_compile_result_after_a_failed_bounce_carries_the_error() -> None:
+    project = Project()
+    try:
+        # One track more than the realtime track mixer holds is a compile error.
+        for index in range(33):
+            project.add_track("audio", f"t{index}")
+        with raises_coded(ErrorCode.INVALID_STATE):
+            project.bounce(total_frames=480, num_channels=2, sample_rate=48000)
+        result = project.last_bounce_compile_result()
+        assert isinstance(result, ProjectCompileResult)
+        assert ("automationLaneCapacity", "error") in [
+            (d.code, d.severity) for d in result.diagnostics
+        ]
     finally:
         project.close()
