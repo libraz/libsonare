@@ -81,6 +81,18 @@ SCALAR_HELPERS = {
     # its annotation fields out, no audio and no options to name.
     "chordSymbolFromAnalysis",
     "keyModeFromAnalysis",
+    # MIDI and GM vocabulary lookups: one number or one name in, its name or
+    # number out, no event data and no settings to name.
+    "gmInstrumentName",
+    "gmProgramForName",
+    "gmFamilyName",
+    "gmFamilyFirstProgram",
+    "gmDrumName",
+    "gmDrumNoteForName",
+    "gm2DrumSetName",
+    "midiCcName",
+    "midiCcIndexForName",
+    "perNoteControllerName",
 }
 # Do not add a zero-argument accessor here: the zero-argument clause in
 # exemption() already covers every one of them structurally, and it is the rule
@@ -112,10 +124,11 @@ METADATA_HELPERS = {
     "masteringInsertTiming",
     "masteringProcessorCatalog",
     "mixingScenePresetNames",
-    "mixingScenePresetJson",
+    # Catalog read by one preset name; the document it returns is the catalog entry.
+    "mixingScenePreset",
     # Name-to-index lookup over the mixing assistant's source taxonomy. A
     # request object around a single enum name would name nothing.
-    "mixSourceClassFromName",
+    "mixingAssistantSourceClassFromName",
     "realtimeVoiceChangerPresetNames",
     "realtimeVoiceChangerPresetJson",
     "realtimeVoiceChangerValidatePresetJson",
