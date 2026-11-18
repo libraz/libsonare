@@ -68,8 +68,8 @@ def test_vocal_notes_omitted_settings_are_not_passed(monkeypatch: pytest.MonkeyP
     calls: list[dict[str, object]] = []
 
     class _Session:
-        def notes(self) -> tuple[tuple[object, ...], tuple[object, ...]]:
-            return (), ()
+        def notes(self) -> libsonare.VocalNotesResult:
+            return libsonare.VocalNotesResult(notes=(), transitions=())
 
         def close(self) -> None:
             pass

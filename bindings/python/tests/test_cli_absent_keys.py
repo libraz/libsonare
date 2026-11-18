@@ -81,8 +81,8 @@ def test_vocal_notes_omit_every_pitch_key_of_an_unpitched_note(
     notes = (_vocal_note(pitched=True), _vocal_note(pitched=False))
 
     class _Session:
-        def notes(self) -> tuple[tuple[object, ...], tuple[object, ...]]:
-            return notes, ()
+        def notes(self) -> libsonare.VocalNotesResult:
+            return libsonare.VocalNotesResult(notes=notes, transitions=())
 
         def close(self) -> None:
             pass

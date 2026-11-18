@@ -276,7 +276,7 @@ def test_transcribe_writes_an_smf_whose_notes_read_back(melody_wav: str) -> None
         project = libsonare.Project()
         try:
             clip_id = project.import_smf(Path(output).read_bytes())
-            events = json.loads(project.to_json())["midi_content"][str(clip_id)]
+            events = json.loads(project.to_json())["midiContent"][str(clip_id)]
         finally:
             project.close()
 
@@ -325,7 +325,7 @@ def test_transcribe_applies_a_fixed_velocity(melody_wav: str) -> None:
         project = libsonare.Project()
         try:
             clip_id = project.import_smf(Path(output).read_bytes())
-            events = json.loads(project.to_json())["midi_content"][str(clip_id)]
+            events = json.loads(project.to_json())["midiContent"][str(clip_id)]
         finally:
             project.close()
 
