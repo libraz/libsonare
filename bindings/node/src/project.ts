@@ -881,12 +881,7 @@ export class Project {
     if (raw.inserts === undefined) {
       return { mode: raw.mode };
     }
-    const inserts = (JSON.parse(raw.inserts) as { processor: string; params: string }[]).map(
-      (insert) => ({
-        processor: insert.processor,
-        params: JSON.parse(insert.params) as Record<string, unknown>,
-      }),
-    );
+    const inserts = JSON.parse(raw.inserts) as NonNullable<PartRigEntry['inserts']>;
     return { mode: raw.mode, inserts };
   }
 

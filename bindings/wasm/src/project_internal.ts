@@ -333,12 +333,12 @@ function partRigInsertsJson(inserts: PartRigInsert[] | undefined): string | unde
       }
       const { params } = insert;
       if (params === undefined) {
-        return { processor: insert.processor, params: '{}' };
+        return { processor: insert.processor, params: {} };
       }
       if (typeof params !== 'object' || params === null || Array.isArray(params)) {
         throw new TypeError(`inserts[${index}].params must be an object`);
       }
-      return { processor: insert.processor, params: JSON.stringify(params) };
+      return { processor: insert.processor, params };
     }),
   );
 }
@@ -394,12 +394,7 @@ export function partRigFromNative(
   if (native.insertsJson === null) {
     return { mode: native.mode };
   }
-  const inserts = (JSON.parse(native.insertsJson) as { processor: string; params: string }[]).map(
-    ({ processor, params }) => ({
-      processor,
-      params: JSON.parse(params) as Record<string, unknown>,
-    }),
-  );
+  const inserts = JSON.parse(native.insertsJson) as NonNullable<PartRigEntry['inserts']>;
   return { mode: native.mode, inserts };
 }
 

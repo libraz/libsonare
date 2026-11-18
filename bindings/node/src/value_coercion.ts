@@ -215,12 +215,12 @@ function partRigInsertsJson(inserts: PartRigInsert[] | undefined): string | unde
       }
       const { params } = insert;
       if (params === undefined) {
-        return { processor: insert.processor, params: '{}' };
+        return { processor: insert.processor, params: {} };
       }
       if (typeof params !== 'object' || params === null || Array.isArray(params)) {
         throw new TypeError(`inserts[${index}].params must be an object`);
       }
-      return { processor: insert.processor, params: JSON.stringify(params) };
+      return { processor: insert.processor, params };
     }),
   );
 }
