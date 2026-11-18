@@ -1588,29 +1588,6 @@ RULES: list[Rule] = [
             "node:RealtimeEngine.destroy": "JS releases a handle through destroy()",
             "node:RealtimeEngine.[Symbol.dispose]": "the JS explicit-resource-management protocol",
         },
-        pending={
-            **{
-                f"python:RealtimeEngine.{m}": "the Python engine moves onto the Node method names"
-                for m in (
-                    "bind_midi_cc_binding",
-                    "load_soundfont",
-                    "set_capture_buffer",
-                    "set_capture_punch",
-                    "set_capture_source",
-                    "set_input_monitor",
-                    "set_record_offset_samples",
-                    "set_solo_mute",
-                )
-            },
-            **{
-                f"node:RealtimeEngine.{m}": "the Python engine moves onto the Node method names"
-                for m in (
-                    "configureCapture",
-                    "loadSoundFont",
-                    "setTrackSoloMute",
-                )
-            },
-        },
     ),
     Rule(
         name="engine-vocabulary",
