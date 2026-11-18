@@ -211,7 +211,7 @@ if (strip.integratedLufs === undefined) skipStrip();
 [[rule]]
 slug = "token-case"
 title = "String values are lowerCamelCase tokens"
-summary = "Every member of a closed string set is one lowerCamelCase word, identical in JavaScript, Python and JSON documents; acronyms count as one word. CLI values are the same word in kebab-case, and only the exact spelling is accepted. A set that names the members of an enum, such as the error code names, keeps the enum's spelling and is the same set on every binding."
+summary = "Every member of a closed string set is one lowerCamelCase word, identical in JavaScript, Python and JSON documents; acronyms count as one word. CLI values are the same word in kebab-case, read in any letter case; no other spelling is accepted. A name the library enumerates at run time (a preset, processor or analysis name) is an identifier, not a CLI word: the CLI takes and prints it in the library's spelling, also in any letter case. A set that names the members of an enum, such as the error code names, keeps the enum's spelling and is the same set on every binding."
 [[rule.example]]
 surface = "wasm"
 before = '''
