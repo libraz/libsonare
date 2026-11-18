@@ -774,7 +774,7 @@ typedef struct {
   float sample_level;         ///< linear gain on the sample; 0 => base
   int sample_loop;            ///< SonareSampleLoopMode; 0 => what the bank recorded
   float sample_start_offset;  ///< attack skip as a fraction of the region; 0 => base
-  int sample_key_track;       ///< SonareSampleKeyTrack; 0 => base
+  int sample_key_track;       ///< A @ref SonareSampleKeyTrack; 0 => base
 
   /* --- series highpass (struct_version 4) --- */
   /** 12 dB/oct highpass after the main filter, the other end of a band the
