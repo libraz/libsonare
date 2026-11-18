@@ -7,6 +7,7 @@ import {
   programArg,
 } from './internal/ump_events.js';
 import { addon } from './native.js';
+import type { RequestFn } from './request_keys.js';
 import type {
   Gm2DrumNameRequest,
   Gm2InstrumentNameRequest,
@@ -44,7 +45,6 @@ import type {
   ProjectMidiRouteResult,
   ProjectProgramBank,
 } from './types_project.js';
-import type { RequestFn } from './request_keys.js';
 import { assertBoundedInteger, assertU7, midi1Event, requestObject } from './validation.js';
 import { projectAutomationPointFromNative } from './value_coercion.js';
 

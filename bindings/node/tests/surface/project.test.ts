@@ -492,7 +492,9 @@ describe('compile and bounce', () => {
         prepare() {},
         onEvent() {},
         render(outputs: Float32Array[], frames: number) {
-          for (const channel of outputs) channel.fill(0.25, 0, frames);
+          for (const channel of outputs) {
+            channel.fill(0.25, 0, frames);
+          }
         },
       };
       const called = project.bounceWithInstruments(

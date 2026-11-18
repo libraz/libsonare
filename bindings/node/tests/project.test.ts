@@ -28,8 +28,8 @@ import {
   midiPolyPressure,
   midiProgram,
   midiRouteEvents,
-  perNoteControllerName,
   Project,
+  perNoteControllerName,
   projectAbiVersion,
 } from '../src/index.js';
 import { EXPECTED_PROJECT_ABI_VERSION } from '../src/types_project.js';

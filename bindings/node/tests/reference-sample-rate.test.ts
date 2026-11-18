@@ -14,9 +14,9 @@ import {
   masteringAnalyzePair,
   masteringApplyPairProcessor,
   masteringApplyPairProcessorStereo,
+  mixingAssistantSuggest,
   resample,
   StreamingEqualizer,
-  mixingAssistantSuggest,
 } from '../src/index.js';
 
 const SR = 48000;
