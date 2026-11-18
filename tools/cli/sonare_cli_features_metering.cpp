@@ -536,10 +536,7 @@ int cmd_acoustic(const CliArgs& args, const Audio& audio) {
     if (!p.is_blind) {
       json.kv("edt", p.edt).kv("c50", p.c50).kv("c80", p.c80).kv("d50", p.d50);
     }
-    json.kv("confidence", p.confidence)
-        .kv("is_blind", p.is_blind)
-        .key("rt60_bands")
-        .float_array(p.rt60_bands);
+    json.kv("confidence", p.confidence).key("rt60_bands").float_array(p.rt60_bands);
     if (!p.is_blind) {
       json.key("edt_bands")
           .float_array(p.edt_bands)

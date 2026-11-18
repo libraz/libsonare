@@ -53,6 +53,8 @@ def test_acoustic_omits_what_only_an_impulse_response_measures(
     payload = _json_out(capsys)
     for key in _IR_ONLY_KEYS:
         assert (key in payload) is not blind, key
+    # The absent keys are the statement; no flag beside them says it twice.
+    assert "is_blind" not in payload
     assert payload["rt60"] == pytest.approx(0.4)
 
 
@@ -178,3 +180,35 @@ def test_project_compile_omits_the_target_of_a_project_wide_diagnostic(
     targeted, project_wide = _json_out(capsys)["diagnostics"]
     assert targeted["target_id"] == 7
     assert "target_id" not in project_wide
+
+
+def test_analyze_omits_a_group_the_result_does_not_carry(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from libsonare import _cli_analysis, cli
+
+    result = SimpleNamespace(
+        bpm=120.0,
+        bpm_confidence=0.9,
+        key=SimpleNamespace(root=SimpleNamespace(value=0), mode="major", confidence=0.8),
+        time_signature=SimpleNamespace(numerator=4, denominator=4, confidence=0.7),
+        beats=[],
+        downbeats=[],
+        downbeat_phase=0,
+        chords=[],
+        sections=[],
+        timbre=None,
+        dynamics=SimpleNamespace(
+            dynamic_range_db=12.0, loudness_range_lu=6.0, crest_factor=3.0, is_compressed=False
+        ),
+        rhythm=None,
+        form="",
+    )
+    monkeypatch.setattr(_cli_analysis, "_load_audio", lambda _path: ([0.0] * 10, 22050))
+    monkeypatch.setattr(libsonare, "analyze", lambda _samples, **_kwargs: result)
+
+    args = cli._build_parser().parse_args(["analyze", "t.wav", "--json"])
+    assert _cli_analysis.cmd_analyze(args) == 0
+    payload = _json_out(capsys)
+    assert "timbre" not in payload and "rhythm" not in payload
+    assert payload["dynamics"]["dynamic_range_db"] == pytest.approx(12.0)

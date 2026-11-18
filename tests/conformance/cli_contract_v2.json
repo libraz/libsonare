@@ -11022,7 +11022,6 @@
           "keys": {
             "rt60": "number|null",
             "confidence": "number",
-            "is_blind": "boolean",
             "rt60_bands": {
               "type": "array",
               "items": "number|null"

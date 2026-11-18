@@ -170,3 +170,11 @@ changed = "the JSON drops has_melody, mean_frequency becomes mean_frequency_hz a
 domain = "analysis"
 rule = "absent-not-sentinel"
 test = "tests/cli/cli_analysis_test.cpp::silence omits every measure read off voiced frames"
+
+[[entry]]
+kind = "command"
+old = "acoustic"
+changed = "the JSON no longer carries is_blind: a blind estimate omits edt, c50, c80, d50 and their band arrays, so test for edt instead"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_cli_absent_keys.py::test_acoustic_omits_what_only_an_impulse_response_measures"

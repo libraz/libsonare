@@ -88,7 +88,6 @@ def cmd_acoustic(args: argparse.Namespace) -> int:
                         "c80": result.c80,
                         "d50": result.d50,
                         "confidence": result.confidence,
-                        "is_blind": result.is_blind,
                         "rt60_bands": [float(value) for value in result.rt60_bands],
                         "edt_bands": _float_list(result.edt_bands),
                         "c50_bands": _float_list(result.c50_bands),
@@ -113,7 +112,6 @@ def cmd_acoustic(args: argparse.Namespace) -> int:
         print(f"    C80:        {_fmt_optional(result.c80, '.2f', ' dB')}")
         print(f"    D50:        {_fmt_optional(result.d50, '.3f')}")
         print(f"    Confidence: {result.confidence:.1%}")
-        print(f"    Blind:      {result.is_blind}")
     return 0
 
 

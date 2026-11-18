@@ -135,9 +135,9 @@ def test_acoustic_cli_stays_blind_without_ir() -> None:
         result = _run_cli(["acoustic", wav_path, "--json"])
         assert result.returncode == 0, result.stderr
         payload = json.loads(result.stdout)
-        assert payload["is_blind"] is True
-        # Blind estimation cannot measure EDT or clarity, so it omits the keys.
-        for key in ("edt", "c50", "c80", "d50", "edt_bands", "c50_bands", "c80_bands"):
+        # Blind estimation cannot measure EDT or clarity, so it omits the keys,
+        # and no flag beside them says so twice.
+        for key in ("edt", "c50", "c80", "d50", "edt_bands", "c50_bands", "c80_bands", "is_blind"):
             assert key not in payload, key
 
 
