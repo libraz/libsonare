@@ -594,6 +594,30 @@ class StripRefRule(unittest.TestCase):
         verdict = run("strip-ref", [*self.CLEAN, planted])
         self.assertIn("python:Engine.set_bus_gain_db(bus_id)", [f.key for f in verdict.violations])
 
+    def test_id_of_a_strip_being_created_is_exempt_by_position(self) -> None:
+        def method_with(owner: str, *params: str) -> dict:
+            return {
+                "surface": "python",
+                "kind": "method",
+                "name": owner,
+                "sigs": [{"params": [{"name": p} for p in params]}],
+            }
+
+        records = [
+            *self.CLEAN,
+            method_with("Mixer.add_strip", "strip_id", "enabled"),
+            ref_param("python", "Mixer.add_strip", "strip_id", "str"),
+            method_with("Mixer.add_send", "source", "strip_id"),
+            ref_param("python", "Mixer.add_send", "strip_id", "str"),
+            method_with("Mixer.set_strip", "strip_id"),
+            ref_param("python", "Mixer.set_strip", "strip_id", "str"),
+        ]
+        verdict = run("strip-ref", records)
+        self.assertEqual(
+            sorted(f.key for f in verdict.violations),
+            ["python:Mixer.add_send(strip_id)", "python:Mixer.set_strip(strip_id)"],
+        )
+
 
 def keyed_field(surface: str, owner: str, member: str, kind: str = "field") -> dict:
     return {

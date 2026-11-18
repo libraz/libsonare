@@ -592,6 +592,13 @@ def _strip_bus_records(records: list[dict]) -> list[dict]:
             or (r["kind"] == "field" and _INPUT_OWNER.search(r.get("owner", "")))
         )
     ]
+    first_param = {
+        (r["surface"], r["name"]): params[0]["name"]
+        for r in records
+        if r["kind"] == "method"
+        for params in [(r.get("sigs") or [{}])[0].get("params", [])]
+        if params
+    }
     out: list[dict] = []
     by_class: dict[tuple[str, str], list[str]] = {}
     by_method: dict[tuple[str, str, str], dict[str, set[str]]] = {}
@@ -621,12 +628,18 @@ def _strip_bus_records(records: list[dict]) -> list[dict]:
                 "type": r["type"],
                 "family_type": common,
                 "other_kinds": {s: sorted(k) for s, k in others.items()},
+                "creates": _fold(method) == f"add{group}"
+                and first_param.get((r["surface"], r["owner"])) == r["member"],
             }
         )
     return out
 
 
 def _ref_param_violation(r: dict) -> str | None:
+    # The first parameter of add_strip / addStrip is the id of a strip being created, not a
+    # reference to an existing one.
+    if r.get("creates"):
+        return None
     if r["group"] == "strip":
         if not r["type"].startswith("StripRef"):
             return "a strip parameter is a StripRef"
@@ -1283,7 +1296,6 @@ RULES: list[Rule] = [
                     ("wasm", "SonareEngine"),
                 )
             },
-            "python:Mixer.add_strip(strip_id)": "type the strip parameter StripRef, or rename it for a new strip's id",
             "python:Mixer.strip_by_id(strip_id)": "type the strip parameter StripRef",
         },
     ),
