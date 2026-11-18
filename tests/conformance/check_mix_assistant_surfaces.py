@@ -3,7 +3,8 @@
 The C ABI is the oracle.  Python drives
 ``sonare_mixing_assistant_suggest_scene_json`` through the existing ctypes
 declarations, then the public Python, Node, and WASM facades are handed the same
-tracks and the same options and must return the very same scene JSON.  This is
+tracks and the same options, and the ``scene`` of the suggestion each returns
+must be the very same document.  This is
 what a request-object migration or a per-binding option-name table can break
 without the C-ABI parity checker seeing anything: parity compares signatures,
 not the document a facade produces.
@@ -98,10 +99,11 @@ CASES: dict[str, dict[str, float | bool]] = {
 
 SURFACES = ("c", "python", "node", "wasm")
 
-# Surfaces whose scene text must be byte-identical to the C oracle's. The C ABI,
+# Surfaces whose scene must equal the C oracle's exactly once parsed. The C ABI,
 # the Python facade and the Node addon all run the same natively compiled
-# serializer over the same samples, so any difference at all -- including one
-# that only shows in the printed digits -- is drift.
+# serializer over the same samples, so any differing value is drift. The facades
+# return the parsed document rather than its text, so their spacing and key
+# order are not compared.
 #
 # WASM is not in this set. Its C++ is compiled by a different toolchain against a
 # different libm, so transcendental results part company with the native build in
@@ -253,7 +255,7 @@ def _load_binding() -> tuple[Any, ...]:
     if str(PYTHON_SRC) not in sys.path:
         sys.path.insert(0, str(PYTHON_SRC))
     try:
-        from libsonare import MixTrackInput, suggest_mix_scene_json
+        from libsonare import MixAssistantTrack, mixing_assistant_suggest
         from libsonare._runtime import (
             SonareMasteringParam,
             _check,
@@ -266,8 +268,8 @@ def _load_binding() -> tuple[Any, ...]:
             f"build the shared library (reason: {exc})"
         ) from exc
     return (
-        MixTrackInput,
-        suggest_mix_scene_json,
+        MixAssistantTrack,
+        mixing_assistant_suggest,
         SonareMasteringParam,
         _check,
         _get_lib,
@@ -356,7 +358,7 @@ def _suggest_python(
     track_input, facade = binding[0], binding[1]
     inputs = [
         track_input(
-            track_id=track.track_id,
+            id=track.track_id,
             left=track.left,
             right=track.right,
             name=track.name,
@@ -364,7 +366,7 @@ def _suggest_python(
         for track in tracks
     ]
     kwargs = {OPTION_KEYS[key]: value for key, value in options.items()}
-    return str(facade(inputs, sample_rate=SAMPLE_RATE, **kwargs))
+    return json.dumps(facade(inputs, sample_rate=SAMPLE_RATE, **kwargs).scene)
 
 
 def _encode_request(tracks: list[Track], cases: list[dict[str, float | bool]]) -> bytes:
@@ -403,11 +405,11 @@ def _encode_request(tracks: list[Track], cases: list[dict[str, float | bool]]) -
 def _js_runner(surface: str, module_path: Path) -> str:
     module_url = module_path.resolve().as_uri()
     if surface == "node":
-        import_line = f"import {{ suggestMixSceneJson }} from {json.dumps(module_url)};"
+        import_line = f"import {{ mixingAssistantSuggest }} from {json.dumps(module_url)};"
         init_line = ""
     else:
         import_line = (
-            f"import {{ init, suggestMixSceneJson }} from {json.dumps(module_url)};"
+            f"import {{ init, mixingAssistantSuggest }} from {json.dumps(module_url)};"
         )
         init_line = "await init();"
     return f"""\
@@ -432,13 +434,15 @@ const tracks = request.tracks.map((track) => {{
 }});
 {init_line}
 const scenes = request.cases.map((options) => {{
-  const scene = suggestMixSceneJson({{
+  const result = mixingAssistantSuggest({{
     tracks,
     sampleRate: request.sampleRate,
-    options,
+    ...options,
   }});
-  if (typeof scene !== 'string') throw new Error('suggestMixSceneJson did not return a string');
-  return scene;
+  if (result === null || typeof result.scene !== 'object') {{
+    throw new Error('mixingAssistantSuggest returned no scene');
+  }}
+  return JSON.stringify(result.scene);
 }});
 process.stdout.write(Buffer.from(JSON.stringify(scenes), 'utf8').toString('base64'));
 """
@@ -582,7 +586,7 @@ def _compare_to_oracle(surface: str, case: str, scene: str, oracle: str) -> str:
 
     Raises:
         HarnessFailure: when the scenes differ beyond what the surface is
-            allowed (byte-identical text for the native surfaces, ``NUMERIC_RTOL``
+            allowed (equal parsed documents for the native surfaces, ``NUMERIC_RTOL``
             for WASM).
     """
     if scene == oracle:
@@ -592,13 +596,7 @@ def _compare_to_oracle(surface: str, case: str, scene: str, oracle: str) -> str:
         _parse_scene("c", case, oracle), _parse_scene(surface, case, scene), rtol
     )
     if not differences:
-        if rtol == 0.0:
-            raise HarnessFailure(
-                f"{surface} {case}: scene text differs from the C oracle while the "
-                f"parsed documents agree (oracle {len(oracle)} bytes, "
-                f"{surface} {len(scene)} bytes)"
-            )
-        return f"numeric rtol={rtol:g}"
+        return "exact" if rtol == 0.0 else f"numeric rtol={rtol:g}"
     shown = differences[:20]
     suffix = (
         ""
