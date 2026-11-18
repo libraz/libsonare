@@ -980,7 +980,7 @@ sonare project export-smf project.json -o song.mid
 [[rule]]
 slug = "cli-front-end-parity"
 title = "Both CLIs share command names, flags, defaults and failures"
-summary = "The native and Python front-ends use the same command names, flags and defaults, and exit 0 on success, 2 for a usage error, 3 for an invalid argument value and 11 when cancelled. With `--json` a failure prints `{\"ok\":false,\"error\":...,\"code\":\"<error code name>\",\"exit_code\":n}`; `system-info` stays separate from `doctor`."
+summary = "The native and Python front-ends use the same command names, flags and defaults, and exit 0 on success, 2 for a usage error, 3 for an invalid argument value and 11 when cancelled. With `--json` a failure prints `{\"ok\":false,\"error\":...,\"code\":\"<error code name>\",\"exit_code\":n}`; `system-info` stays separate from `doctor`. CLI `--json` result keys are snake_case; a document passed through (`normalized_json`, a config echoed back) keeps its own camelCase keys inside the string."
 [[rule.example]]
 surface = "cli"
 before = '''
@@ -1012,8 +1012,8 @@ summary = "Each public symbol carries a TSDoc, docstring or Doxygen comment stat
 
 [[rule]]
 slug = "config-keys"
-title = "Persistent configuration keys are camelCase"
-summary = "The `playback-renderer-config` document uses camelCase keys (`lfeMixDb`, `nightMode`) and carries a required `version` of 2. Saving always writes version 2; a document without `version`, or containing a snake_case key, is refused with `InvalidFormat` naming the key."
+title = "Every JSON document uses camelCase keys"
+summary = "Every JSON document the library reads or writes uses camelCase keys, and a loader refuses an unknown key with `InvalidFormat` naming its path. The `playback-renderer-config` document uses camelCase keys (`lfeMixDb`, `nightMode`) and carries a required `version` of 2. Saving always writes version 2; a document without `version`, or containing a snake_case key, is refused with `InvalidFormat` naming the key."
 [[rule.example]]
 surface = "wasm"
 before = '''
