@@ -20,25 +20,34 @@ export const ROWS: Row[] = [
     name: 'noteStretch',
     fn: sonare.noteStretch,
     form: 'sampleOptions',
-    params: 'samples sampleRate ...options',
+    params: 'samples sampleRate ...options?',
     values: {
       samples: SIG,
       sampleRate: ALT_SR,
       options: { onsetSample: 2000, offsetSample: 8000, stretchRatio: 1.5 },
     },
     invalid: { sampleRate: 0 },
+    oneOf: [
+      { fields: ['stretchRatio'], error: 'TypeError: noteStretch: stretchRatio must be a number' },
+    ],
   },
   {
     name: 'noteMove',
     fn: sonare.noteMove,
     form: 'sampleOptions',
-    params: 'samples sampleRate ...options',
+    params: 'samples sampleRate ...options?',
     values: {
       samples: SIG,
       sampleRate: ALT_SR,
       options: { onsetSample: 2000, offsetSample: 8000, targetOnsetSample: 4000 },
     },
     invalid: { sampleRate: 0 },
+    oneOf: [
+      {
+        fields: ['targetOnsetSample', 'targetOnsetSec'],
+        error: 'TypeError: noteMove: targetOnsetSample or targetOnsetSec is required',
+      },
+    ],
   },
   {
     name: 'hpss',

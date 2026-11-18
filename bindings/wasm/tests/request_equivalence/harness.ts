@@ -306,6 +306,32 @@ function fieldsOf(row: Row, specs: Spec[]): Field[] {
   return fields.filter((field) => !(row.inert && (field.key ?? field.param) in row.inert));
 }
 
+/**
+ * `values` with `fields` written over it: a name a positional parameter owns
+ * replaces it, any other lands inside the spread options bag.
+ */
+function withFields(specs: Spec[], values: Args, fields: Args): Args {
+  const next: Args = { ...values };
+  const spread = specs.find((spec) => spec.spread);
+  for (const [key, value] of Object.entries(fields)) {
+    if (specs.some((spec) => !spec.spread && spec.name === key) || spread === undefined) {
+      next[key] = value;
+    } else {
+      next[spread.name] = { ...(next[spread.name] as Args), [key]: value };
+    }
+  }
+  return next;
+}
+
+/** A field's value in the row, read from the spread options bag when no parameter owns it. */
+function fieldValue(specs: Spec[], values: Args, key: string): unknown {
+  const spread = specs.find((spec) => spec.spread);
+  if (specs.some((spec) => !spec.spread && spec.name === key) || spread === undefined) {
+    return values[key];
+  }
+  return (values[spread.name] as Args | undefined)?.[key];
+}
+
 function without(row: Row, values: Args, field: Field): Args {
   const next = { ...values };
   if (field.key === undefined) {
@@ -377,10 +403,13 @@ export function describeRows(rows: Row[]): void {
     const required = Object.fromEntries(
       specs.filter((spec) => !spec.optional).map((spec) => [spec.name, row.values[spec.name]]),
     );
-    const requiredOnly: Args = { ...required };
-    for (const group of groups) {
-      requiredOnly[group.fields[0]] = row.values[group.fields[0]];
-    }
+    const requiredOnly = withFields(
+      specs,
+      required,
+      Object.fromEntries(
+        groups.map((group) => [group.fields[0], fieldValue(specs, row.values, group.fields[0])]),
+      ),
+    );
     const hasPositional = row.form !== 'requestOnly';
 
     for (const group of groups) {
@@ -400,9 +429,10 @@ export function describeRows(rows: Row[]): void {
       });
 
       it('shares the positional defaults', async () => {
-        expect(await run(row, specs, requiredOnly, 'request')).toEqual(
-          await run(row, specs, requiredOnly, 'positional'),
-        );
+        const request = await run(row, specs, requiredOnly, 'request');
+        // Two identical refusals would compare equal and share nothing.
+        expect(request).not.toHaveProperty('error');
+        expect(request).toEqual(await run(row, specs, requiredOnly, 'positional'));
       });
     } else {
       it('answers the request form for non-default values and for the required fields alone', async () => {

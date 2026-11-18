@@ -149,6 +149,11 @@ interface Row {
    * field another passed field can mask (a floor that hides a clamp).
    */
   controlBase?: Record<string, Args>;
+  /**
+   * Optional fields of which at least one must be given. The minimal call supplies the first
+   * member of each group, and a call giving none must fail with `error` in every form.
+   */
+  oneOf?: { fields: string[]; error: string }[];
 }
 
 interface Spec {
@@ -268,20 +273,34 @@ function without(values: Args, field: Field): Args {
 }
 
 /**
- * The row's values with `invalid` applied: a name a positional parameter owns
+ * `values` with `fields` written over it: a name a positional parameter owns
  * replaces it, any other lands inside the spread options bag.
  */
-function withInvalid(row: Row, specs: Spec[]): Args {
-  const bad: Args = { ...row.values };
+function withFields(specs: Spec[], values: Args, fields: Args): Args {
+  const next: Args = { ...values };
   const spread = specs.find((spec) => spec.spread);
-  for (const [key, value] of Object.entries(row.invalid)) {
+  for (const [key, value] of Object.entries(fields)) {
     if (specs.some((spec) => !spec.spread && spec.name === key) || spread === undefined) {
-      bad[key] = value;
+      next[key] = value;
     } else {
-      bad[spread.name] = { ...(bad[spread.name] as Args), [key]: value };
+      next[spread.name] = { ...(next[spread.name] as Args), [key]: value };
     }
   }
-  return bad;
+  return next;
+}
+
+/** The row's values with `invalid` applied. */
+function withInvalid(row: Row, specs: Spec[]): Args {
+  return withFields(specs, row.values, row.invalid);
+}
+
+/** A field's value in the row, read from the spread options bag when no parameter owns it. */
+function fieldValue(specs: Spec[], values: Args, key: string): unknown {
+  const spread = specs.find((spec) => spec.spread);
+  if (specs.some((spec) => !spec.spread && spec.name === key) || spread === undefined) {
+    return values[key];
+  }
+  return (values[spread.name] as Args | undefined)?.[key];
 }
 
 /** The row's values with a NaN written into the first audio buffer. */
@@ -561,6 +580,12 @@ const ROWS: Row[] = [
       options: { onsetSample: 2000, offsetSample: 8000, targetOnsetSample: 4000 },
     },
     invalid: { sampleRate: 0 },
+    oneOf: [
+      {
+        fields: ['targetOnsetSample', 'targetOnsetSec'],
+        error: 'TypeError: noteMove: targetOnsetSample or targetOnsetSec is required',
+      },
+    ],
   },
   {
     name: 'noteStretch',
@@ -572,6 +597,9 @@ const ROWS: Row[] = [
       options: { onsetSample: 2000, offsetSample: 8000, stretchRatio: 1.5 },
     },
     invalid: { sampleRate: 0 },
+    oneOf: [
+      { fields: ['stretchRatio'], error: 'TypeError: noteStretch: stretchRatio must be a number' },
+    ],
   },
   // effects_separation.ts / feature_decompose.ts
   {
@@ -1487,6 +1515,12 @@ const ROWS: Row[] = [
       },
     },
     invalid: { preset: 'no-such-preset' },
+    oneOf: [
+      {
+        fields: ['preset', 'overrides'],
+        error: 'TypeError: masterAudio: give a preset or overrides',
+      },
+    ],
   },
   {
     name: 'masterAudioAsync',
@@ -1498,13 +1532,18 @@ const ROWS: Row[] = [
       options: { preset: 'speech', overrides: { loudness: { targetLufs: -20 } } },
     },
     invalid: { preset: 'no-such-preset' },
+    oneOf: [
+      {
+        fields: ['preset', 'overrides'],
+        error: 'TypeError: masterAudioAsync: give a preset or overrides',
+      },
+    ],
   },
   {
     name: 'masterAudioStereo',
     fn: sonare.masterAudioStereo,
     requestOnly: true,
-    // A call giving neither `preset` nor `overrides` is refused, so the bare call carries the overrides.
-    params: 'left right sampleRate preset? overrides onProgress?',
+    params: 'left right sampleRate preset? overrides? onProgress?',
     values: {
       left: SIG,
       right: SIG2,
@@ -1514,12 +1553,18 @@ const ROWS: Row[] = [
       onProgress: PROGRESS,
     },
     invalid: { preset: 'no-such-preset' },
+    oneOf: [
+      {
+        fields: ['preset', 'overrides'],
+        error: 'TypeError: masterAudioStereo: give a preset or overrides',
+      },
+    ],
   },
   {
     name: 'masterAudioStereoAsync',
     fn: sonare.masterAudioStereoAsync,
     requestOnly: true,
-    params: 'left right sampleRate preset overrides?',
+    params: 'left right sampleRate preset? overrides?',
     values: {
       left: SIG,
       right: SIG2,
@@ -1528,6 +1573,12 @@ const ROWS: Row[] = [
       overrides: { loudness: { targetLufs: -20 } },
     },
     invalid: { preset: 'no-such-preset' },
+    oneOf: [
+      {
+        fields: ['preset', 'overrides'],
+        error: 'TypeError: masterAudioStereoAsync: give a preset or overrides',
+      },
+    ],
   },
   {
     name: 'masteringApplyProcessor',
@@ -2152,9 +2203,27 @@ describe('request-object equivalence', () => {
 
   describe.each(ROWS)('$name', (row) => {
     const specs = specsOf(row);
-    const requiredOnly = Object.fromEntries(
+    const groups = row.oneOf ?? [];
+    const required = Object.fromEntries(
       specs.filter((spec) => !spec.optional).map((spec) => [spec.name, row.values[spec.name]]),
     );
+    const requiredOnly = withFields(
+      specs,
+      required,
+      Object.fromEntries(
+        groups.map((group) => [group.fields[0], fieldValue(specs, row.values, group.fields[0])]),
+      ),
+    );
+
+    for (const group of groups) {
+      it(`refuses a call giving none of ${group.fields.join(' | ')}`, async () => {
+        const forms =
+          row.requestOnly === true ? (['request'] as const) : (['request', 'positional'] as const);
+        for (const form of forms) {
+          expect(await run(row, specs, required, form)).toEqual({ error: group.error });
+        }
+      });
+    }
 
     it('returns the positional result for non-default values', async () => {
       const positional = await run(row, specs, row.values, 'positional');
@@ -2166,8 +2235,9 @@ describe('request-object equivalence', () => {
 
     it('shares the positional defaults', async () => {
       const request = await run(row, specs, requiredOnly, 'request');
+      // Two identical refusals would compare equal and share nothing.
+      expect(request).not.toHaveProperty('error');
       if (row.requestOnly === true) {
-        expect(request).not.toHaveProperty('error');
         return;
       }
       expect(request).toEqual(await run(row, specs, requiredOnly, 'positional'));
