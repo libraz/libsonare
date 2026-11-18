@@ -1,8 +1,8 @@
 /**
- * `masteringChainConfigFromJson` reads a `{ version, params }` chain document
- * through the library's parser: every built-in preset survives the trip to a
- * document and back, and a document the parser refuses is a coded
- * `InvalidFormat` error.
+ * `masteringChainConfigFromJson` reads a version 2 `{ version, params }` chain
+ * document through the library's parser: every built-in preset survives the trip
+ * to a document and back, written either fully dotted or nested, and a document
+ * the parser refuses is a coded `InvalidFormat` error naming what it refused.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -16,25 +16,15 @@ import {
 const PRESETS = masteringPresetNames();
 
 /**
- * Flattens a nested chain config into a version 1 document's `params`, written
- * here rather than through the facade so the round trip is not checked against
- * the code it exercises. Enum leaves stay as their names, which the document
- * accepts; the two native spellings the facade hides are written as native
- * reads them.
+ * Flattens a nested chain config into dotted document paths, with a list index
+ * as one path segment. Written here rather than through the facade so the round
+ * trip is not checked against the code it exercises.
  */
 function documentParams(config: unknown): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   const walk = (node: unknown, path: string): void => {
     if (typeof node !== 'object' || node === null) {
-      if (path === 'repair.declip.clipThresholdDb') {
-        out['repair.declip.clipThreshold'] = 10 ** ((node as number) / 20);
-      } else if (/^dynamics\.multibandComp\.bands\.\d+\.sidechainHighPassHz$/.test(path)) {
-        const band = path.slice(0, -'.sidechainHighPassHz'.length);
-        out[`${band}.sidechainHpfEnabled`] = true;
-        out[`${band}.sidechainHpfHz`] = node;
-      } else {
-        out[path] = node;
-      }
+      out[path] = node;
       return;
     }
     for (const [key, value] of Object.entries(node)) {
@@ -54,54 +44,79 @@ function refusal(call: () => unknown): unknown {
   throw new Error('expected the call to throw');
 }
 
+function expectSameParams(got: Record<string, unknown>, want: Record<string, unknown>): void {
+  expect(Object.keys(got).sort()).toEqual(Object.keys(want).sort());
+  for (const [key, value] of Object.entries(got)) {
+    if (typeof value === 'number') {
+      expect(value, key).toBeCloseTo(want[key] as number, 5);
+    } else {
+      expect(value, key).toBe(want[key]);
+    }
+  }
+}
+
 describe('masteringChainConfigFromJson', () => {
   it('has presets to round-trip', () => {
     expect(PRESETS.length).toBeGreaterThan(0);
   });
 
-  it.each(PRESETS)('round-trips the %s preset through a chain document', (preset) => {
+  it.each(PRESETS)('round-trips the %s preset through a dotted chain document', (preset) => {
     const want = documentParams(masteringPresetParams(preset));
     const got = documentParams(
-      masteringChainConfigFromJson(JSON.stringify({ version: 1, params: want })),
+      masteringChainConfigFromJson(JSON.stringify({ version: 2, params: want })),
     );
-    expect(Object.keys(got).sort()).toEqual(Object.keys(want).sort());
-    for (const [key, value] of Object.entries(got)) {
-      if (typeof value === 'number') {
-        expect(value, key).toBeCloseTo(want[key] as number, 5);
-      } else {
-        expect(value, key).toBe(want[key]);
-      }
-    }
+    expectSameParams(got, want);
+  });
+
+  it.each(PRESETS)('round-trips the %s preset through a nested chain document', (preset) => {
+    const config = masteringPresetParams(preset);
+    const got = documentParams(masteringChainConfigFromJson(JSON.stringify({ params: config })));
+    expectSameParams(got, documentParams(config));
   });
 
   it('reads a partial document into the nested form', () => {
     const parsed = masteringChainConfigFromJson(
-      '{"version":1,"params":{"loudness.targetLufs":-9}}',
+      '{"version":2,"params":{"loudness.targetLufs":-9}}',
     );
     expect(parsed.loudness?.targetLufs).toBe(-9);
   });
 
   it.each([
-    ['malformed JSON', '{'],
-    ['an unsupported version', '{"version":3,"params":{"loudness.targetLufs":-9}}'],
-    ['an unknown key', '{"version":1,"params":{"loudness.bogusKey":1}}'],
-  ])('refuses %s as InvalidFormat', (_label, document) => {
+    ['malformed JSON', '{', 'expected object key string at byte 1'],
+    [
+      'version 1',
+      '{"version":1,"params":{"loudness.targetLufs":-9}}',
+      'unsupported chain config version; write 2 or leave it out',
+    ],
+    [
+      'an unsupported version',
+      '{"version":3,"params":{"loudness.targetLufs":-9}}',
+      'unsupported chain config version; write 2 or leave it out',
+    ],
+    [
+      'an unknown key',
+      '{"version":2,"params":{"loudness.bogusKey":1}}',
+      'unknown chain config key: loudness.bogusKey',
+    ],
+    [
+      'a retired key, naming its current spelling',
+      '{"version":2,"params":{"eq.tiltDb":1}}',
+      'unknown chain config key: eq.tiltDb (renamed to eq.tilt.tiltDb)',
+    ],
+    [
+      'a linear declip threshold, naming its decibel spelling',
+      '{"params":{"repair.declip.clipThreshold":0.5}}',
+      'unknown chain config key: repair.declip.clipThreshold (renamed to repair.declip.clipThresholdDb)',
+    ],
+  ])('refuses %s as InvalidFormat', (_label, document, message) => {
     const error = refusal(() => masteringChainConfigFromJson(document));
     expect(isSonareError(error)).toBe(true);
     expect((error as { code: number }).code).toBe(ErrorCode.InvalidFormat);
-  });
-
-  it('refuses a retired key and names its current spelling', () => {
-    const error = refusal(() =>
-      masteringChainConfigFromJson('{"version":1,"params":{"eq.tiltDb":1}}'),
-    );
-    expect(isSonareError(error)).toBe(true);
-    expect((error as { code: number }).code).toBe(ErrorCode.InvalidFormat);
-    expect((error as Error).message).toContain('eq.tilt.tiltDb');
+    expect((error as Error).message).toBe(message);
   });
 
   it('refuses a document that is not a string with a TypeError', () => {
     // @ts-expect-error the document is a JSON string
-    expect(() => masteringChainConfigFromJson({ version: 1, params: {} })).toThrow(TypeError);
+    expect(() => masteringChainConfigFromJson({ version: 2, params: {} })).toThrow(TypeError);
   });
 });
