@@ -210,7 +210,7 @@ Nothing in this section asks anything of you; read it when a checklist item or a
 
 ### Thresholds and analysis windows
 
-- A threshold against the bare maximum lets a single dominant event set the bar for everything else. Boundary detection's `referenceWindow` is the sliding instance; beat trimming's third-highest onset peak is the set-aside instance.
+- A threshold against the bare maximum lets a single dominant event set the bar for everything else. Boundary detection's `referenceWindowSec` is the sliding instance; beat trimming's third-highest onset peak is the set-aside instance.
 - A sliding reference also sets aside a lone dominant event, one no other event in the window comes within a fixed ratio of. That ratio is held apart from the threshold, so raising the threshold never lowers the reference. With too few events to tell an outlier from the body, nothing is set aside (the assistant sets aside one per 10 s of audio, up to two).
 - An analyzer's `n_fft` is samples at 22050 Hz, rescaled to the input rate, and its hop stays in input samples. The polyphony chain and the streaming analyzer state `n_fft` (and, for polyphony, the hop) as samples at 44100 Hz. The mastering and mixing assistants read window and hop as samples at 48 kHz.
 
