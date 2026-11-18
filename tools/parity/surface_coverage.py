@@ -236,15 +236,20 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def main() -> int:
-    args = parse_args()
-    root = _HERE.parent.parent
+def render_repository(root: Path) -> str:
+    """The matrix this repository's surfaces produce."""
     report = check_parity.run(root=root)
-    rendered = render(
+    return render(
         unreachable_by_column(root, report),
         c_declaration_headers(root),
         core_reached_by_column(report),
     )
+
+
+def main() -> int:
+    args = parse_args()
+    root = _HERE.parent.parent
+    rendered = render_repository(root)
     if args.check:
         if not args.output.exists():
             print(f"runtime capability matrix is missing: {args.output}", file=sys.stderr)

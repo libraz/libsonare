@@ -144,12 +144,7 @@ def test_the_tracked_table_matches_the_current_surfaces() -> None:
     root = _HERE.parent.parent
     tracked = root / surface_coverage.DEFAULT_OUTPUT
     assert tracked.exists(), tracked
-    import check_parity
-
-    rendered = surface_coverage.render(
-        surface_coverage.unreachable_by_column(root, check_parity.run(root=root)),
-        surface_coverage.c_declaration_headers(root),
-    )
+    rendered = surface_coverage.render_repository(root)
     assert tracked.read_text(encoding="utf-8") == rendered, "run make surface-coverage"
 
 
