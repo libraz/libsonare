@@ -647,3 +647,11 @@ changed = "the JSON fmin key is fmin_hz, named as the flag is"
 domain = "analysis"
 rule = "frequency-bounds"
 test = 'tests/cli/cli_analysis_test.cpp::\"fmin_hz\": 32.7'
+
+[[entry]]
+kind = "flag"
+old = "playback --room"
+changed = "values are kebab-case (living-room, home-theater, screening-room), read in any letter case; the snake_case spellings are refused as a usage error (exit 2)"
+domain = "engine"
+rule = "token-case"
+test = "tests/conformance/cli_contract_v2.json::room_snake_case_refused"

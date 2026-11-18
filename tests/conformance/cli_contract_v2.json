@@ -5010,7 +5010,7 @@
           "repeatable": false,
           "required": false,
           "domain": {
-            "choices": ["none", "living_room", "home_theater", "screening_room"],
+            "choices": ["none", "living-room", "home-theater", "screening-room"],
             "minimum": null,
             "exclusiveMinimum": false,
             "maximum": null,
@@ -17890,7 +17890,7 @@
           "repeatable": false,
           "required": false,
           "domain": {
-            "choices": ["none", "living_room", "home_theater", "screening_room"],
+            "choices": ["none", "living-room", "home-theater", "screening-room"],
             "minimum": null,
             "exclusiveMinimum": false,
             "maximum": null,
@@ -17972,6 +17972,26 @@
           "payload": "success",
           "artifact": "none",
           "stdout": "json"
+        },
+        {
+          "id": "room_any_case",
+          "argv": ["playback", "{audio}", "-o", "{output}", "--room", "Living-Room", "--json"],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "room_snake_case_refused",
+          "argv": ["playback", "{audio}", "-o", "{output}", "--room", "living_room", "--json"],
+          "exit": 2,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty",
+          "stderr_contains": ["--room"]
         },
         {
           "id": "seven_one",

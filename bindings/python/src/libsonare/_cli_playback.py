@@ -12,6 +12,8 @@ from typing import Any
 import numpy as np
 
 from ._cli_common import (
+    _cli_token,
+    _library_token,
     _load_audio_channels,
     _set_nested_value,
     _strict_json_dumps,
@@ -21,6 +23,9 @@ from ._cli_inventory import _cli_domain, _cli_scalar_type
 from ._cli_options import SharedParsers, _finite_float
 from ._playback import HrtfSet, PlaybackLoudnessMeter, PlaybackRenderer
 from ._runtime import SonareValueError
+
+# The renderer config's room presets; `--room` spells each in kebab-case.
+_ROOM_PRESETS = ("none", "livingRoom", "homeTheater", "screeningRoom")
 
 
 def _unit_interval(value: str) -> float:
@@ -127,7 +132,7 @@ def register_playback_parsers(sub: argparse._SubParsersAction[Any], shared: Shar
     )
     p.add_argument(
         "--room",
-        choices=["none", "living_room", "home_theater", "screening_room"],
+        choices=[_cli_token(preset) for preset in _ROOM_PRESETS],
         default=None,
         help="Room preset (ignored by a speakers target)",
     )
@@ -195,7 +200,9 @@ def _playback_config_document(args: argparse.Namespace) -> dict[str, Any]:
     if args.target_lufs is not None:
         _set_nested_value(document, "loudness.target_lufs", args.target_lufs)
     if args.room is not None:
-        _set_nested_value(document, "room.preset", args.room)
+        _set_nested_value(
+            document, "room.preset", _library_token("--room", args.room, _ROOM_PRESETS)
+        )
     return document
 
 

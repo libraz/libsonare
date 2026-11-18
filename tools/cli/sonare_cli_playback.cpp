@@ -16,6 +16,10 @@ namespace {
 using sonare::util::json::Object;
 using sonare::util::json::Value;
 
+// The renderer config's room presets; `--room` spells each in kebab-case.
+const std::vector<std::string> kRoomPresets = {"none", "livingRoom", "homeTheater",
+                                               "screeningRoom"};
+
 std::vector<uint8_t> read_hrtf_file(const std::string& path) {
   std::vector<uint8_t> bytes;
   if (!read_binary_file(path, &bytes))
@@ -76,7 +80,10 @@ Value playback_config_document(const CliArgs& args) {
     set_json_path(root, "loudness.target_lufs",
                   Value(static_cast<double>(args.get_float("target-lufs", -24.0f))));
   }
-  if (args.has("room")) set_json_path(root, "room.preset", Value(args.get_string("room")));
+  if (args.has("room")) {
+    set_json_path(root, "room.preset",
+                  Value(library_token("--room", args.get_string("room"), kRoomPresets)));
+  }
   return root;
 }
 

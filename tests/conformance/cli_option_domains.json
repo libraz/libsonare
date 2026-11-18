@@ -1209,9 +1209,9 @@
       "rejectExit": "usage",
       "choices": [
         "none",
-        "living_room",
-        "home_theater",
-        "screening_room"
+        "living-room",
+        "home-theater",
+        "screening-room"
       ],
       "minimum": null,
       "exclusiveMinimum": false,

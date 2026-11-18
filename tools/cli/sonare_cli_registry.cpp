@@ -1231,7 +1231,7 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
          with_domain(number_value("target-lufs"),
                      between(-40.0, -5.0, CliOptionDomainStage::Usage)),
          with_domain(nullable_string_value("room"),
-                     choices_of({"none", "living_room", "home_theater", "screening_room"},
+                     choices_of({"none", "living-room", "home-theater", "screening-room"},
                                 CliOptionDomainStage::Usage)),
          path_value("hrtf"), required_output()},
         {}, nullptr, 0, /*preserves_stereo_input=*/false, /*preserves_multichannel_input=*/true);
