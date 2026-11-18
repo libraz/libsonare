@@ -384,7 +384,11 @@ class ClientCore {
     }
     this.sessions.clear();
     this.latestIntent.clear();
-    await Promise.all(released);
+    // Terminating the Worker releases its sessions, so only a Worker that outlives the client is awaited.
+    if (!this.ownsWorker) {
+      await Promise.all(released);
+    }
+    this.disposeWaiters.clear();
     if (this.usesEventTarget) {
       this.worker.removeEventListener?.('message', this.onMessage as EventListener);
       this.worker.removeEventListener?.('error', this.onError as EventListener);
