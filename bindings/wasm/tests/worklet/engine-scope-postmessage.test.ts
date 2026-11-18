@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { init as initSource } from '../../src/index';
-import { engineNativeHandle, RealtimeEngine } from '../../src/realtime_engine';
+import { engineNativeHandle } from '../../src/internal/engine_native_handle';
+import { RealtimeEngine } from '../../src/realtime_engine';
 import { SonareRealtimeEngineWorkletProcessor as SourceSonareRealtimeEngineWorkletProcessor } from '../../src/worklet/engine-processor';
 import { isScopeSnapshot } from '../../src/worklet/guards';
 import type { SonareWorkletScopeSnapshot } from '../../src/worklet/protocol';

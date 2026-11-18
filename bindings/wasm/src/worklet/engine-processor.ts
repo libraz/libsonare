@@ -1,5 +1,6 @@
 import type { EngineClip, SynthPatch } from '../index.js';
 import { RealtimeEngine } from '../index.js';
+import { engineNativeHandle } from '../internal/engine_native_handle.js';
 import { failurePayload } from '../internal/failure_payload.js';
 import {
   DEFAULT_METRONOME_CONFIG,
@@ -19,7 +20,6 @@ import type {
   SonareRealtimeEngineWorkletProcessorOptions,
   WorkletTransport,
 } from '../public_types_worklet.js';
-import { engineNativeHandle } from '../realtime_engine.js';
 import { copyPlanesToOutput, type WorkletInput, type WorkletOutput } from './audio_types.js';
 import { buildCaptureConfig } from './engine-offline.js';
 import {

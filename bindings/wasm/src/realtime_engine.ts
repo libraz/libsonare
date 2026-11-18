@@ -546,14 +546,6 @@ function bandJson(fnName: string, band: unknown): string {
 }
 
 /**
- * The embind object behind an engine, for the worklet processor's allocation-free
- * telemetry scratch path. Internal: it is not re-exported from the package entry.
- */
-export function engineNativeHandle(engine: RealtimeEngine): WasmRealtimeEngine {
-  return (engine as unknown as { native: WasmRealtimeEngine }).native;
-}
-
-/**
  * Sample-accurate realtime engine: clips, MIDI instruments, a track mixer and
  * automation, rendered block by block or offline.
  *
