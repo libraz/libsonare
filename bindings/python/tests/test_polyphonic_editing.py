@@ -536,6 +536,21 @@ def test_a_negative_floor_is_refused(chord: NDArray[np.float32], field: str) -> 
         libsonare.PolyphonicAnalysis(chord, SR, **{field: -1.0})
 
 
+def test_tonality_reaches_the_library(chord: NDArray[np.float32]) -> None:
+    default = libsonare.PolyphonicAnalysis(chord, SR).notes()
+    assert libsonare.PolyphonicAnalysis(chord, SR, tonality=True).notes() == default
+    assert libsonare.PolyphonicAnalysis(chord, SR, tonality=False).notes() != default
+
+
+@pytest.mark.parametrize(("field", "zero"), [("win_length", 0), ("max_refine_hz", 0.0)])
+def test_an_explicit_zero_on_a_named_default_is_refused(
+    chord: NDArray[np.float32], field: str, zero: float
+) -> None:
+    # None is the core's "n_fft" / "derived"; a typed 0 must not select it silently.
+    with pytest.raises(SonareValueError, match=field):
+        libsonare.PolyphonicAnalysis(chord, SR, **{field: zero})
+
+
 # ---------------------------------------------------------------------------
 # reattack_ratio
 # ---------------------------------------------------------------------------

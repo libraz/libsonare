@@ -107,7 +107,7 @@ class PolyphonicAnalysis:
         cent_ref_hz: float | None = None,
         cents_per_bin: float | None = None,
         cent_max_hz: float | None = None,
-        tonality_off: bool = False,
+        tonality: bool = True,
         salience_harmonics: int | None = None,
         f0_min_hz: float | None = None,
         f0_max_hz: float | None = None,
@@ -158,14 +158,14 @@ class PolyphonicAnalysis:
                 input's sample rate, explicit values too.
             hop_length: STFT hop (default 512), samples at 44100 Hz, converted
                 like ``n_fft``.
-            win_length: Window length (default ``n_fft``), samples at 44100 Hz,
-                converted like ``n_fft``.
+            win_length: Window length (``None``, the default, is ``n_fft``),
+                samples at 44100 Hz, converted like ``n_fft``. A given 0 is refused.
             cent_ref_hz: Bottom of the cent axis the salience is folded onto
                 (default 55).
             cents_per_bin: Resolution of that axis (default 100/3). Finer than
                 1 cent is rejected.
             cent_max_hz: Top of that axis (default 8000).
-            tonality_off: ``True`` stops weighting bins by tonality, which is on.
+            tonality: Weight bins by tonality (default ``True``).
             salience_harmonics: Partials summed per F0 candidate (default 20, at
                 most 128).
             f0_min_hz: Lowest F0 a candidate may take (default 55).
@@ -225,8 +225,8 @@ class PolyphonicAnalysis:
                 is identity that is inaudible, since the notes and the residual
                 still sum to the input. Lowering it trades separation for a
                 quieter residual.
-            max_refine_hz: Highest partial usable to refine an F0 (default
-                ``None``, which derives one).
+            max_refine_hz: Highest partial usable to refine an F0 (``None``, the
+                default, derives one). A given 0 is refused.
             f0_tolerance_cents: Worst F0 error tolerated (default 50).
             segmentation_threshold_cents: Scales each note's reported
                 ``f0_stability`` only (default 50). Every tracked ridge is one
@@ -256,6 +256,12 @@ class PolyphonicAnalysis:
         if not hasattr(lib, "sonare_polyphonic_analyze"):
             raise _unsupported_effect_symbol("sonare_polyphonic_analyze")
 
+        # The core reads 0 as "n_fft" / "derived"; here that is None, so a given 0 is refused.
+        for name, named_zero in (("win_length", win_length), ("max_refine_hz", max_refine_hz)):
+            if named_zero is not None and not isinstance(named_zero, bool) and named_zero == 0:
+                raise SonareValueError(
+                    f"PolyphonicAnalysis: {name} must not be 0 (leave it out for the default)"
+                )
         config = SonarePolyphonicConfig()
         lib.sonare_polyphonic_config_init(ctypes.byref(config))
         # None keeps the value sonare_polyphonic_config_init set; a given value is
@@ -307,7 +313,7 @@ class PolyphonicAnalysis:
         # 0 is the core's "no split"; on this surface that is None, so a given 0 is refused.
         if reattack_ratio is not None:
             config.reattack_ratio = _transcribe_reattack("PolyphonicAnalysis", reattack_ratio)
-        config.tonality_off = 1 if tonality_off else 0
+        config.tonality = 1 if tonality else 0
         config.estimate_inharmonicity = 1 if estimate_inharmonicity else 0
 
         c_array, length = _to_c_float_array(buf)
