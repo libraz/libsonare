@@ -10,6 +10,7 @@
 
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
+  Audio,
   analyzeBpm,
   analyzeDynamics,
   analyzeRhythm,
@@ -189,13 +190,47 @@ describe('WASM analyzer coverage parity', () => {
       ).toHaveLength(left.length);
     });
 
+    it('refuses a master call giving neither a preset nor overrides, in every call shape', () => {
+      const samples = makeSine(2, 440);
+      const message = /^masterAudio: give a preset or overrides$/;
+      expect(() => masterAudio({ samples, sampleRate: SR })).toThrow(TypeError);
+      expect(() => masterAudio({ samples, sampleRate: SR })).toThrow(message);
+      expect(() => masterAudio(samples, SR)).toThrow(message);
+      expect(() =>
+        masterAudio({ samples, sampleRate: SR, preset: undefined, overrides: undefined }),
+      ).toThrow(message);
+      expect(() => masterAudio(samples, SR, { onProgress: () => {} })).toThrow(message);
+      using audio = Audio.fromBuffer(samples, SR);
+      expect(() => audio.masterAudio({})).toThrow(message);
+      expect(() => masterAudioStereo({ left: samples, right: samples, sampleRate: SR })).toThrow(
+        /^masterAudioStereo: give a preset or overrides$/,
+      );
+    });
+
+    it('runs an explicit empty overrides as an empty chain that returns the input', () => {
+      const samples = makeSine(2, 440);
+      expect(masterAudio({ samples, sampleRate: SR, overrides: {} }).samples).toEqual(samples);
+      const stereo = masterAudioStereo({
+        left: samples,
+        right: samples,
+        sampleRate: SR,
+        overrides: {},
+      });
+      expect(stereo.left).toEqual(samples);
+      expect(stereo.right).toEqual(samples);
+    });
+
     it('runs a chain without a preset from the request and the positional form', () => {
       const samples = makeSine(2, 440);
-      expect(masterAudio(samples, SR)).toEqual(masterAudio({ samples, sampleRate: SR }));
+      expect(masterAudio(samples, SR, { overrides: {} })).toEqual(
+        masterAudio({ samples, sampleRate: SR, overrides: {} }),
+      );
 
       const left = makeSine(2, 440);
       const right = makeSine(2, 660);
-      expect(masterAudioStereo({ left, right, sampleRate: SR }).left).toHaveLength(left.length);
+      expect(masterAudioStereo({ left, right, sampleRate: SR, overrides: {} }).left).toHaveLength(
+        left.length,
+      );
     });
 
     it('accepts the canonical mono request object', () => {
@@ -240,10 +275,10 @@ describe('WASM analyzer coverage parity', () => {
     // native call, so each variant is driven: a forwarding regression on any one of
     // them would otherwise run to completion instead of aborting.
     it.each([
-      ['mono without a preset', {}],
+      ['mono without a preset', { overrides: {} }],
       ['mono with a preset', { preset: 'pop' }],
       ['mono with progress', { preset: 'pop', onProgress: () => {} }],
-      ['mono chain with progress', { onProgress: () => {} }],
+      ['mono chain with progress', { overrides: {}, onProgress: () => {} }],
     ] as const)('masterAudio cancels through the request callback: %s', (_name, extra) => {
       const samples = makeSine(2, 440);
       expect(() => masterAudio({ samples, sampleRate: SR, ...extra, cancel: () => true })).toThrow(
@@ -252,10 +287,10 @@ describe('WASM analyzer coverage parity', () => {
     });
 
     it.each([
-      ['without a preset', {}],
+      ['without a preset', { overrides: {} }],
       ['with a preset', { preset: 'pop' }],
       ['with progress', { preset: 'pop', onProgress: () => {} }],
-      ['chain with progress', { onProgress: () => {} }],
+      ['chain with progress', { overrides: {}, onProgress: () => {} }],
     ] as const)('masterAudioStereo cancels through the request callback: %s', (_name, extra) => {
       const left = makeSine(2, 440);
       const right = makeSine(2, 660);

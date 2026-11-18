@@ -137,16 +137,20 @@ describe('remix validates its input like the C ABI run_offline path', () => {
 
 describe('masterAudio without a preset validates input on every entry (mono + stereo)', () => {
   it('mono chain rejects non-finite samples', () => {
-    expect(() => masterAudio({ samples: withNaN(), sampleRate: SR })).toThrow();
+    expect(() => masterAudio({ samples: withNaN(), sampleRate: SR, overrides: {} })).toThrow();
   });
   it('mono chain rejects an empty buffer', () => {
-    expect(() => masterAudio({ samples: new Float32Array(0), sampleRate: SR })).toThrow();
+    expect(() =>
+      masterAudio({ samples: new Float32Array(0), sampleRate: SR, overrides: {} }),
+    ).toThrow();
   });
   it('stereo chain rejects non-finite samples', () => {
-    expect(() => masterAudioStereo({ left: withNaN(), right: sine(), sampleRate: SR })).toThrow();
+    expect(() =>
+      masterAudioStereo({ left: withNaN(), right: sine(), sampleRate: SR, overrides: {} }),
+    ).toThrow();
   });
   it('mono chain accepts valid input', () => {
-    const r = masterAudio({ samples: sine(SR), sampleRate: SR });
+    const r = masterAudio({ samples: sine(SR), sampleRate: SR, overrides: {} });
     expect(r.samples.length).toBe(SR);
   });
 });

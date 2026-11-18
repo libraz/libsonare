@@ -153,7 +153,7 @@ describe('typed multiband crossover + bands', () => {
         dynamics: { multibandComp: { crossover: { cutoffsHz: [200, 2000, 8000] } } },
       },
     });
-    const baseline = masterAudio({ samples: x, sampleRate: SAMPLE_RATE });
+    const baseline = masterAudio({ samples: x, sampleRate: SAMPLE_RATE, overrides: {} });
     expect(typed.stages.length).toBeGreaterThan(baseline.stages.length);
   });
 

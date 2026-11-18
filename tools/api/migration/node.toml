@@ -13022,10 +13022,10 @@ test = "bindings/node/tests/surface/mastering-metering.test.ts::ebur128LoudnessR
 [[entry]]
 kind = "function"
 old = "masterAudio"
-changed = "one positional form (masterAudio(samples, sampleRate, options?: OptionsOf<MasterAudioRequest>)); request form takes MasterAudioRequest; returns MasteringChainResult"
+changed = "one positional form (masterAudio(samples, sampleRate, options?: OptionsOf<MasterAudioRequest>)); request form takes MasterAudioRequest; returns MasteringChainResult; a call giving neither preset nor overrides throws TypeError, so pass overrides: {} for an empty chain"
 domain = "mastering"
 rule = "one-positional-form"
-test = "bindings/node/tests/surface/mastering-chain.test.ts::masterAudio takes (samples, sampleRate, options)"
+test = "bindings/node/tests/request_object_mastering.test.ts::refuses a master call giving neither a preset nor overrides"
 
 [[entry]]
 kind = "function"
@@ -13038,10 +13038,10 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::masterAudioAsync: p
 [[entry]]
 kind = "function"
 old = "masterAudioStereo"
-changed = "request-only: masterAudioStereo(request: MasterAudioStereoRequest): MasteringChainStereoResult"
+changed = "request-only: masterAudioStereo(request: MasterAudioStereoRequest): MasteringChainStereoResult; a call giving neither preset nor overrides throws TypeError, so pass overrides: {} for an empty chain"
 domain = "mastering"
 rule = "one-positional-form"
-test = "bindings/node/tests/surface/mastering-chain.test.ts::masterAudio: preset, overrides, progress and cancel"
+test = "bindings/node/tests/request_object_mastering.test.ts::refuses a master call giving neither a preset nor overrides"
 
 [[entry]]
 kind = "function"
@@ -13381,7 +13381,7 @@ test = "bindings/node/tests/surface/mastering-metering.test.ts::waveformPeaks"
 [[entry]]
 kind = "method"
 old = "Audio.masterAudio"
-changed = "masterAudio(options?: OptionsOf<MasterAudioRequest>): MasteringChainResult"
+changed = "masterAudio(options: OptionsOf<MasterAudioRequest>): MasteringChainResult; options must give preset or overrides"
 domain = "core"
 rule = "no-positional-bools"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::Audio carries the renamed methods only"

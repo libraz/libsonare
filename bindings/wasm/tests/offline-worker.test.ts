@@ -332,6 +332,15 @@ describe('OfflineWorkerClient', () => {
     await client.destroy();
   });
 
+  it('refuses a master call giving neither a preset nor overrides in the worker', async () => {
+    const worker = new LoopbackWorker();
+    const client = clientWith(worker);
+    const call = client.masterAudio({ samples: makeTone(), sampleRate: 22050 }, { copy: true });
+    await expect(call).rejects.toThrow(TypeError);
+    await expect(call).rejects.toThrow(/^masterAudio: give a preset or overrides$/);
+    await client.destroy();
+  });
+
   it('refuses a function-valued request field with a TypeError naming it, before dispatch', async () => {
     const worker = new ThrowingWorker(() => undefined);
     const client = clientWith(worker as unknown as LoopbackWorker);

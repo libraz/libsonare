@@ -1503,7 +1503,8 @@ const ROWS: Row[] = [
     name: 'masterAudioStereo',
     fn: sonare.masterAudioStereo,
     requestOnly: true,
-    params: 'left right sampleRate preset? overrides? onProgress?',
+    // A call giving neither `preset` nor `overrides` is refused, so the bare call carries the overrides.
+    params: 'left right sampleRate preset? overrides onProgress?',
     values: {
       left: SIG,
       right: SIG2,

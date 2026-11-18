@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  Audio,
   masterAudio,
   masterAudioAsync,
   masterAudioStereo,
@@ -74,9 +75,37 @@ describe('mastering request-object compatibility', () => {
     );
   });
 
+  it('refuses a master call giving neither a preset nor overrides, in every call shape', () => {
+    const samples = signal();
+    const message = /^masterAudio: give a preset or overrides$/;
+    expect(() => masterAudio({ samples, sampleRate })).toThrow(TypeError);
+    expect(() => masterAudio({ samples, sampleRate })).toThrow(message);
+    expect(() => masterAudio(samples, sampleRate)).toThrow(message);
+    expect(() =>
+      masterAudio({ samples, sampleRate, preset: undefined, overrides: undefined }),
+    ).toThrow(message);
+    expect(() => masterAudio(samples, sampleRate, { onProgress: () => {} })).toThrow(message);
+    using audio = Audio.fromBuffer(samples, sampleRate);
+    expect(() => audio.masterAudio({})).toThrow(message);
+    expect(() => masterAudioStereo({ left: samples, right: samples, sampleRate })).toThrow(
+      /^masterAudioStereo: give a preset or overrides$/,
+    );
+  });
+
+  it('runs an explicit empty overrides as an empty chain that returns the input', () => {
+    const samples = signal();
+    expect(masterAudio({ samples, sampleRate, overrides: {} }).samples).toEqual(samples);
+    const stereo = masterAudioStereo({ left: samples, right: samples, sampleRate, overrides: {} });
+    expect(stereo.left).toEqual(samples);
+    expect(stereo.right).toEqual(samples);
+  });
+
   it('masterAudio without a preset runs the overrides alone, in either call shape', () => {
     const samples = signal();
-    expect(masterAudio({ samples, sampleRate })).toEqual(masterAudio(samples, sampleRate));
+    const empty = {};
+    expect(masterAudio({ samples, sampleRate, overrides: empty })).toEqual(
+      masterAudio(samples, sampleRate, { overrides: empty }),
+    );
     const overrides = { loudness: { targetLufs: -14, ceilingDb: -1 } };
     expect(masterAudio({ samples, sampleRate, overrides })).toEqual(
       masterAudio(samples, sampleRate, { overrides }),

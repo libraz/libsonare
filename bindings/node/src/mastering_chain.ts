@@ -138,9 +138,15 @@ export interface MasterAudioRequest extends ValidateOptions {
   samples: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
-  /** Built-in preset to start from. Absent: the chain runs `overrides` alone. */
+  /**
+   * Built-in preset to start from. Absent: the chain runs `overrides` alone. Giving
+   * neither `preset` nor `overrides` is refused with a `TypeError`.
+   */
   preset?: MasteringPreset;
-  /** Chain config applied over the preset, or run alone when `preset` is absent. */
+  /**
+   * Chain config applied over the preset, or run alone when `preset` is absent. An
+   * explicit `{}` without a preset runs an empty chain and returns the input unchanged.
+   */
   overrides?: MasteringChainConfig;
   /** Called between chain stages with `progress` in `[0, 1]` and the stage name. */
   onProgress?: ProgressCallback;
@@ -156,9 +162,15 @@ export interface MasterAudioStereoRequest extends ValidateOptions {
   right: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
-  /** Built-in preset to start from. Absent: the chain runs `overrides` alone. */
+  /**
+   * Built-in preset to start from. Absent: the chain runs `overrides` alone. Giving
+   * neither `preset` nor `overrides` is refused with a `TypeError`.
+   */
   preset?: MasteringPreset;
-  /** Chain config applied over the preset, or run alone when `preset` is absent. */
+  /**
+   * Chain config applied over the preset, or run alone when `preset` is absent. An
+   * explicit `{}` without a preset runs an empty chain and returns the input unchanged.
+   */
   overrides?: MasteringChainConfig;
   /** Called between chain stages with `progress` in `[0, 1]` and the stage name. */
   onProgress?: ProgressCallback;
@@ -169,12 +181,14 @@ export interface MasterAudioStereoRequest extends ValidateOptions {
 /**
  * Master mono audio. With a `preset` the chain starts from that preset and
  * `overrides` is applied on top; without one the chain runs `overrides` alone.
+ * Giving neither is refused, since that call would return the input unchanged.
  *
  * @param samples - Audio samples (mono, float32)
  * @param sampleRate - Sample rate in Hz, an integer in `[8000, 384000]`
  * @param options - `preset`, `overrides`, `onProgress`, `cancel`, `validate`
  * @returns Processed audio, loudness metadata, and applied stage names
- * @throws {TypeError} when `sampleRate` is missing or a request field has the wrong type
+ * @throws {TypeError} when `sampleRate` is missing, neither `preset` nor `overrides` is given,
+ *   or a request field has the wrong type
  * @throws {RangeError} on audio out of domain, an unknown `preset` or an invalid override
  */
 export function masterAudio(request: MasterAudioRequest): MasteringChainResult;
@@ -187,6 +201,12 @@ export function masterAudio(...args: unknown[]): MasteringChainResult {
   const r = sampleOneShot<MasterAudioRequest>('masterAudio', args);
   assertChainCallbacks('masterAudio', r);
   assertAudioInput('masterAudio', r.samples, r.sampleRate, r);
+  if (
+    (r.preset === undefined || r.preset === null) &&
+    (r.overrides === undefined || r.overrides === null)
+  ) {
+    throw new TypeError('masterAudio: give a preset or overrides');
+  }
   const flat = flattenChainConfig(r.overrides ?? {});
   const progress = r.onProgress ?? undefined;
   const cancel = r.cancel ?? undefined;
@@ -221,7 +241,8 @@ export function masterAudio(...args: unknown[]): MasteringChainResult {
  * Stereo counterpart of {@link masterAudio}; takes a request object only.
  *
  * @returns Processed stereo audio, loudness metadata, and applied stage names
- * @throws {TypeError} when `sampleRate` is missing or a request field has the wrong type
+ * @throws {TypeError} when `sampleRate` is missing, neither `preset` nor `overrides` is given,
+ *   or a request field has the wrong type
  * @throws {RangeError} on audio out of domain, unequal channel lengths, an unknown `preset`
  *   or an invalid override
  */
@@ -232,6 +253,12 @@ export function masterAudioStereo(request: MasterAudioStereoRequest): MasteringC
   assertAudioInput('masterAudioStereo', r.right, r.sampleRate, r, 'right');
   if (r.left.length !== r.right.length) {
     throw new RangeError('Stereo channel lengths must match.');
+  }
+  if (
+    (r.preset === undefined || r.preset === null) &&
+    (r.overrides === undefined || r.overrides === null)
+  ) {
+    throw new TypeError('masterAudioStereo: give a preset or overrides');
   }
   const flat = flattenChainConfig(r.overrides ?? {});
   const progress = r.onProgress ?? undefined;

@@ -38,6 +38,7 @@ describe('progress callback', () => {
   it('masterAudio invokes onProgress for an empty config', () => {
     const progress: Array<[number, string]> = [];
     masterAudio(new Float32Array(22050).fill(0.1), 22050, {
+      overrides: {},
       onProgress: (value, stage) => {
         progress.push([value, stage]);
       },

@@ -655,8 +655,8 @@ export class Audio {
     );
   }
 
-  /** Runs the mastering chain on the held audio. */
-  masterAudio(options?: OptionsOf<MasterAudioRequest>): MasteringChainResult {
+  /** Runs the mastering chain on the held audio; give a `preset`, `overrides` or both. */
+  masterAudio(options: OptionsOf<MasterAudioRequest>): MasteringChainResult {
     return masterAudio(audioRequest('masterAudio', this.samples, this.sampleRate, options));
   }
 

@@ -53,7 +53,7 @@ describe('mastering offline input validation (inherited from the C++ core)', () 
 
   it('still masters valid input', () => {
     const x = sine(4096);
-    const result = masterAudio(x, SR);
+    const result = masterAudio(x, SR, { preset: 'pop' });
     expect(result.samples.length).toBe(x.length);
   });
 
