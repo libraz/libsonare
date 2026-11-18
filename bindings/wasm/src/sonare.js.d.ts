@@ -3490,8 +3490,8 @@ export interface SonareModule {
     onsetEnvelope: Float32Array,
     sampleRate: number,
     hopLength: number,
-    tempoMin: number,
-    tempoMax: number,
+    bpmMin: number,
+    bpmMax: number,
     winLength: number,
   ) => Float32Array;
   chromaCens: (

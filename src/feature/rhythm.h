@@ -128,8 +128,9 @@ std::vector<float> tempogram_ratio(const std::vector<float>& tempogram_data, int
 struct PlpConfig {
   int sr = 22050;
   int hop_length = 512;
-  float tempo_min = 30.0f;
-  float tempo_max = 300.0f;
+  /// Inclusive tempo band in BPM; 60-200 like every public tempo entry.
+  float tempo_min = 60.0f;
+  float tempo_max = 200.0f;
   /// Tempogram window in onset frames; in [2, @ref kMaxTempogramWinLength], the
   /// same range the field takes on TempogramConfig.
   int win_length = 384;

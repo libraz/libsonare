@@ -92,10 +92,10 @@ constexpr std::array<float, 9> kHarmonicRatios = {0.5f, 2.0f / 3.0f, 0.75f, 1.0f
 }  // namespace bpm_constants
 
 /// @brief Configuration for BPM analysis.
-/// @details Default values follow common MIR defaults.
+/// @details The default 60-200 BPM search is the one every public tempo entry uses.
 struct BpmConfig {
-  float bpm_min = 30.0f;     ///< Minimum BPM to consider
-  float bpm_max = 300.0f;    ///< Maximum BPM to consider
+  float bpm_min = 60.0f;     ///< Minimum BPM to consider (inclusive)
+  float bpm_max = 200.0f;    ///< Maximum BPM to consider (inclusive)
   float start_bpm = 120.0f;  ///< Initial BPM estimate (used as fallback)
   int n_fft = 2048;          ///< Window length in samples at 22050 Hz, rescaled to the input rate
   int hop_length = 512;      ///< Hop length in samples of the input buffer

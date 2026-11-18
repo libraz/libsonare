@@ -1,3 +1,5 @@
+#include "feature/rhythm.h"
+
 #include <cstring>
 #include <string>
 #include <vector>
@@ -124,16 +126,19 @@ Napi::Value SonareWrap::Plp(const Napi::CallbackInfo& info) {
   if (!OptionalIntArg(env, info, 1, "sampleRate", 22050, &sr)) return env.Undefined();
   int hop{};
   if (!OptionalIntArg(env, info, 2, "hop", 512, &hop)) return env.Undefined();
-  float tempo_min{};
-  if (!OptionalFiniteFloatArg(env, info, 3, "tempoMin", 30.0f, &tempo_min)) return env.Undefined();
-  float tempo_max{};
-  if (!OptionalFiniteFloatArg(env, info, 4, "tempoMax", 300.0f, &tempo_max)) return env.Undefined();
+  const sonare::PlpConfig plp_defaults;
+  float bpm_min{};
+  if (!OptionalFiniteFloatArg(env, info, 3, "bpmMin", plp_defaults.tempo_min, &bpm_min))
+    return env.Undefined();
+  float bpm_max{};
+  if (!OptionalFiniteFloatArg(env, info, 4, "bpmMax", plp_defaults.tempo_max, &bpm_max))
+    return env.Undefined();
   int win{};
   if (!OptionalIntArg(env, info, 5, "win", 384, &win)) return env.Undefined();
   float* out = nullptr;
   size_t count = 0;
   SonareError err =
-      sonare_plp(arr.Data(), arr.ElementLength(), sr, hop, tempo_min, tempo_max, win, &out, &count);
+      sonare_plp(arr.Data(), arr.ElementLength(), sr, hop, bpm_min, bpm_max, win, &out, &count);
   if (err != SONARE_OK) return CheckCResult(env, err);
   return FloatResult(env, out, count);
   SONARE_NODE_CATCH(env)

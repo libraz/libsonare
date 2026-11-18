@@ -43,9 +43,9 @@ struct BeatIntervalObservation {
 /// @brief Tempo range and stiffness for the per-beat tempo decoder.
 struct TempoCurveConfig {
   /// @brief Lowest BPM the decoded curve may take.
-  float bpm_min = 40.0f;
+  float bpm_min = 60.0f;
   /// @brief Highest BPM the decoded curve may take.
-  float bpm_max = 240.0f;
+  float bpm_max = 200.0f;
   /// @brief Penalty on squared log-tempo change between adjacent intervals;
   ///        larger gives a stiffer, smoother curve.
   /// @details In log tempo the penalty is scale-invariant, so a half/double

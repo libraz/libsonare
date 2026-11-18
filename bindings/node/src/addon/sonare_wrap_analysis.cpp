@@ -5,6 +5,7 @@
 #include <type_traits>
 #include <vector>
 
+#include "analysis/bpm_analyzer.h"
 #include "analysis/music_analyzer.h"
 #include "analysis/onset_analyzer.h"
 #include "core/audio.h"
@@ -510,9 +511,11 @@ Napi::Value SonareWrap::AnalyzeBpm(const Napi::CallbackInfo& info) {
   size_t length = input.length;
   int sample_rate = input.sample_rate;
   float bpm_min{};
-  if (!OptionalFloatArg(env, info, 2, "bpmMin", 30.0f, &bpm_min)) return env.Undefined();
+  if (!OptionalFloatArg(env, info, 2, "bpmMin", sonare::BpmConfig{}.bpm_min, &bpm_min))
+    return env.Undefined();
   float bpm_max{};
-  if (!OptionalFloatArg(env, info, 3, "bpmMax", 300.0f, &bpm_max)) return env.Undefined();
+  if (!OptionalFloatArg(env, info, 3, "bpmMax", sonare::BpmConfig{}.bpm_max, &bpm_max))
+    return env.Undefined();
   float start_bpm{};
   if (!OptionalFloatArg(env, info, 4, "startBpm", 120.0f, &start_bpm)) return env.Undefined();
   int n_fft{};
@@ -694,9 +697,11 @@ Napi::Value SonareWrap::AnalyzeRhythm(const Napi::CallbackInfo& info) {
   size_t length = input.length;
   int sample_rate = input.sample_rate;
   float bpm_min{};
-  if (!OptionalFloatArg(env, info, 2, "bpmMin", 60.0f, &bpm_min)) return env.Undefined();
+  if (!OptionalFloatArg(env, info, 2, "bpmMin", sonare::RhythmConfig{}.bpm_min, &bpm_min))
+    return env.Undefined();
   float bpm_max{};
-  if (!OptionalFloatArg(env, info, 3, "bpmMax", 200.0f, &bpm_max)) return env.Undefined();
+  if (!OptionalFloatArg(env, info, 3, "bpmMax", sonare::RhythmConfig{}.bpm_max, &bpm_max))
+    return env.Undefined();
   float start_bpm{};
   if (!OptionalFloatArg(env, info, 4, "startBpm", 120.0f, &start_bpm)) return env.Undefined();
   int n_fft{};

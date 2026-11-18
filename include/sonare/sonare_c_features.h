@@ -1151,7 +1151,7 @@ SonareError sonare_cyclic_tempogram(const float* onset_envelope, size_t length, 
                                     float** out, size_t* out_length, int* out_n_frames);
 /// @note Free @p out with @ref sonare_free_floats.
 SonareError sonare_plp(const float* onset_envelope, size_t length, int sample_rate, int hop_length,
-                       float tempo_min, float tempo_max, int win_length, float** out,
+                       float bpm_min, float bpm_max, int win_length, float** out,
                        size_t* out_length);
 
 /// @brief Onset strength envelope from audio (librosa.onset.onset_strength).

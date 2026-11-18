@@ -420,7 +420,7 @@ SonareError sonare_cyclic_tempogram(const float* onset_envelope, size_t length, 
 }
 
 SonareError sonare_plp(const float* onset_envelope, size_t length, int sample_rate, int hop_length,
-                       float tempo_min, float tempo_max, int win_length, float** out,
+                       float bpm_min, float bpm_max, int win_length, float** out,
                        size_t* out_length) {
   SONARE_C_API_ENTRY;
   if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
@@ -429,8 +429,8 @@ SonareError sonare_plp(const float* onset_envelope, size_t length, int sample_ra
   PlpConfig config;
   config.sr = sample_rate;
   config.hop_length = hop_length;
-  config.tempo_min = tempo_min;
-  config.tempo_max = tempo_max;
+  config.tempo_min = bpm_min;
+  config.tempo_max = bpm_max;
   config.win_length = win_length;
   std::vector<float> input(onset_envelope, onset_envelope + length);
   return copy_vector(plp(input, config), out, out_length);

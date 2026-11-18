@@ -436,11 +436,11 @@ val js_cyclic_tempogram(val onset_envelope, const val& sample_rate_val, const va
 }
 
 val js_plp(val onset_envelope, const val& sample_rate_val, const val& hop_length_val,
-           const val& tempo_min_val, const val& tempo_max_val, const val& win_length_val) {
+           const val& bpm_min_val, const val& bpm_max_val, const val& win_length_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
-  const float tempo_min = checkedFloatFromVal(tempo_min_val, "tempoMin");
-  const float tempo_max = checkedFloatFromVal(tempo_max_val, "tempoMax");
+  const float bpm_min = checkedFloatFromVal(bpm_min_val, "bpmMin");
+  const float bpm_max = checkedFloatFromVal(bpm_max_val, "bpmMax");
   const int win_length = checkedIntFromVal(win_length_val, "winLength");
   std::vector<float> data = float32ArrayToVector(onset_envelope);
   validateFiniteVector(data, "plp");
@@ -448,8 +448,8 @@ val js_plp(val onset_envelope, const val& sample_rate_val, const val& hop_length
   PlpConfig config;
   config.sr = sample_rate;
   config.hop_length = hop_length;
-  config.tempo_min = tempo_min;
-  config.tempo_max = tempo_max;
+  config.tempo_min = bpm_min;
+  config.tempo_max = bpm_max;
   config.win_length = win_length;
   return vectorToFloat32Array(plp(data, config));
 }

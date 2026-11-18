@@ -145,8 +145,12 @@ TEST_CASE("BpmAnalyzer lists the chosen tempo first even when a sub-octave out-v
           "[bpm_analyzer]") {
   // On a 120 BPM click the 60 BPM bin carries the largest vote share while the
   // chosen tempo stays near 120; the list must still open with the chosen tempo.
+  // A 30-300 search keeps the sub-octave inside the range; the default stops at 60.
+  BpmConfig config;
+  config.bpm_min = 30.0f;
+  config.bpm_max = 300.0f;
   for (float bpm : {120.0f, 200.0f}) {
-    BpmAnalyzer analyzer(create_click_track(bpm, 22050, 10.0f));
+    BpmAnalyzer analyzer(create_click_track(bpm, 22050, 10.0f), config);
     const auto candidates = analyzer.candidates(5);
     CAPTURE(bpm, analyzer.bpm());
     REQUIRE(candidates.size() >= 2);

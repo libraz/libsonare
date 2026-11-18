@@ -52,11 +52,10 @@ TEST_CASE("quick::detect_bpm", "[quick][api]") {
     auto samples = generate_clicks(120.0f, 22050, 4.0f);
     float bpm = sonare::quick::detect_bpm(samples.data(), samples.size(), 22050);
 
-    // Allow ±5 BPM or half/double relationship
+    // Allow ±5 BPM or the half-tempo octave; 240 lies outside the default 60-200 search.
     bool close_to_120 = std::abs(bpm - 120.0f) < 5.0f;
     bool close_to_60 = std::abs(bpm - 60.0f) < 5.0f;
-    bool close_to_240 = std::abs(bpm - 240.0f) < 10.0f;
-    REQUIRE((close_to_120 || close_to_60 || close_to_240));
+    REQUIRE((close_to_120 || close_to_60));
   }
 
   SECTION("detects 140 BPM from click track") {
@@ -80,8 +79,7 @@ TEST_CASE("quick::detect_bpm", "[quick][api]") {
 
     bool close_to_120 = std::abs(bpm_44k - 120.0f) < 8.0f;
     bool close_to_60 = std::abs(bpm_44k - 60.0f) < 8.0f;
-    bool close_to_240 = std::abs(bpm_44k - 240.0f) < 12.0f;
-    REQUIRE((close_to_120 || close_to_60 || close_to_240));
+    REQUIRE((close_to_120 || close_to_60));
 
     // The resampled 44.1k result should agree with the same beat synthesized at
     // 22050 Hz (within a half/double-tempo relationship).

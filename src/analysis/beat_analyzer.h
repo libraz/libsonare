@@ -37,11 +37,11 @@ struct TimeSignature {
 };
 
 /// @brief Configuration for beat tracking.
-/// @details Default values follow common MIR defaults.
+/// @details The default 60-200 BPM search is the one every public tempo entry uses.
 struct BeatConfig {
   float start_bpm = 120.0f;             ///< Prior estimate for tempo
-  float bpm_min = 30.0f;                ///< Minimum BPM to consider
-  float bpm_max = 300.0f;               ///< Maximum BPM to consider
+  float bpm_min = 60.0f;                ///< Minimum BPM to consider (inclusive)
+  float bpm_max = 200.0f;               ///< Maximum BPM to consider (inclusive)
   float tightness = 100.0f;             ///< Tightness of beat distribution
   bool trim = true;                     ///< Trim leading/trailing silent beats
   int n_fft = 2048;                     ///< Onset window, samples at 22050 Hz (rate-scaled)
