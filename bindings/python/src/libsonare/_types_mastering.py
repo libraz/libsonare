@@ -58,7 +58,7 @@ MasteringPreset: TypeAlias = Literal[
 
 # BEGIN GENERATED SoloProcessor (make processor-types)
 # Every processor name mastering_processor_names() can return, and therefore
-# every name mastering_process() / mastering_process_stereo() accept.
+# every name mastering_apply_processor() / mastering_apply_processor_stereo() accept.
 SoloProcessor: TypeAlias = Literal[
     "dynamics.brickwallLimiter",
     "dynamics.compressor",
@@ -152,7 +152,7 @@ SoloProcessor: TypeAlias = Literal[
     "voice.changer",
 ]
 # END GENERATED SoloProcessor
-"""A processor name accepted by ``mastering_process()`` / ``mastering_process_stereo()``."""
+"""A processor name accepted by ``mastering_apply_processor()`` and its stereo form."""
 
 
 @dataclass(frozen=True, slots=True, eq=False)

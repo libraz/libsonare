@@ -83,7 +83,7 @@ def test_named_mastering_processors() -> None:
     assert "eq.equalizer" in names
     assert "stereo.imager" in names
 
-    result = libsonare.mastering_process(
+    result = libsonare.mastering_apply_processor(
         "dynamics.compressor",
         samples,
         sample_rate=sr,
@@ -92,7 +92,7 @@ def test_named_mastering_processors() -> None:
     assert len(result.samples) == len(samples)
     assert math.isfinite(result.output_lufs)
 
-    eq_result = libsonare.mastering_process(
+    eq_result = libsonare.mastering_apply_processor(
         "eq.equalizer",
         samples,
         sample_rate=sr,
@@ -107,7 +107,7 @@ def test_named_mastering_processors() -> None:
     assert len(eq_result.samples) == len(samples)
     assert math.isfinite(eq_result.output_lufs)
 
-    stereo = libsonare.mastering_process_stereo(
+    stereo = libsonare.mastering_apply_processor_stereo(
         "stereo.imager",
         samples,
         samples,
@@ -118,9 +118,11 @@ def test_named_mastering_processors() -> None:
     assert len(stereo.right) == len(samples)
 
     with pytest.raises(libsonare.SonareError):
-        libsonare.mastering_process("stereo.imager", samples, sample_rate=sr, params={"width": 1.1})
+        libsonare.mastering_apply_processor(
+            "stereo.imager", samples, sample_rate=sr, params={"width": 1.1}
+        )
     with pytest.raises(libsonare.SonareError):
-        libsonare.mastering_process(
+        libsonare.mastering_apply_processor(
             "dynamics.compressor", samples, sample_rate=sr, params={"ratio": float("nan")}
         )
 
@@ -276,7 +278,7 @@ def test_mastering_pair_accepts_differing_reference_length() -> None:
     reference = [0.12 * math.sin(2 * math.pi * 880 * i / sr) for i in range(sr // 8)]  # shorter
     assert len(reference) != len(source)
 
-    paired = libsonare.mastering_pair_process(
+    paired = libsonare.mastering_apply_pair_processor(
         "match.abCrossfade", source, reference, sample_rate=sr, params={"mix": 0.5}
     )
     assert len(paired.samples) > 0
@@ -299,7 +301,7 @@ def test_mastering_pair_and_stereo_analysis() -> None:
     assert "match.referenceLoudness" in libsonare.mastering_pair_analysis_names()
     assert "stereo.monoCompatCheck" in libsonare.mastering_stereo_analysis_names()
 
-    paired = libsonare.mastering_pair_process(
+    paired = libsonare.mastering_apply_pair_processor(
         "match.abCrossfade",
         samples,
         reference,
@@ -602,7 +604,7 @@ def test_loudness_target_limited_agrees_across_entry_points() -> None:
         simple = libsonare.mastering(
             samples, sample_rate=sr, target_lufs=target_lufs, ceiling_db=ceiling_db
         )
-        named = libsonare.mastering_process(
+        named = libsonare.mastering_apply_processor(
             "maximizer.loudnessOptimize",
             samples,
             sample_rate=sr,
@@ -646,10 +648,10 @@ def test_loudness_target_limited_matches_on_the_stereo_named_processor() -> None
     samples[len(samples) // 2] = 1.0
     params = {"targetLufs": target_lufs, "ceilingDb": ceiling_db, "truePeakOversample": 4}
 
-    mono = libsonare.mastering_process(
+    mono = libsonare.mastering_apply_processor(
         "maximizer.loudnessOptimize", samples, sample_rate=sr, params=params
     )
-    stereo = libsonare.mastering_process_stereo(
+    stereo = libsonare.mastering_apply_processor_stereo(
         "maximizer.loudnessOptimize", samples, samples, sample_rate=sr, params=params
     )
 
@@ -756,13 +758,13 @@ def test_clean_input_reports_no_non_finite_substitution() -> None:
 
     results = [
         libsonare.mastering(samples, sample_rate=sr, target_lufs=-14.0),
-        libsonare.mastering_process(
+        libsonare.mastering_apply_processor(
             "dynamics.compressor", samples, sample_rate=sr, params={"thresholdDb": -24.0}
         ),
-        libsonare.mastering_process_stereo(
+        libsonare.mastering_apply_processor_stereo(
             "stereo.imager", samples, other, sample_rate=sr, params={"width": 1.1}
         ),
-        libsonare.mastering_pair_process(
+        libsonare.mastering_apply_pair_processor(
             "match.abCrossfade", samples, other, sample_rate=sr, params={"mix": 0.5}
         ),
         libsonare.master_audio(samples, sample_rate=sr, overrides=config),

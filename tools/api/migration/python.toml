@@ -965,6 +965,7 @@ test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_
 [[entry]]
 kind = "option"
 old = "mastering_process(sample_rate)"
+to = "mastering_apply_processor(sample_rate)"
 changed = "sample_rate is required (1.x defaulted to 22050)"
 domain = "mastering"
 rule = "sample-rate-required"
@@ -973,6 +974,7 @@ test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_
 [[entry]]
 kind = "option"
 old = "mastering_process_stereo(sample_rate)"
+to = "mastering_apply_processor_stereo(sample_rate)"
 changed = "sample_rate is required (1.x defaulted to 22050)"
 domain = "mastering"
 rule = "sample-rate-required"
@@ -1021,6 +1023,7 @@ test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_
 [[entry]]
 kind = "option"
 old = "mastering_pair_process(sample_rate)"
+to = "mastering_apply_pair_processor(sample_rate)"
 changed = "sample_rate is required (1.x defaulted to 22050)"
 domain = "mastering"
 rule = "sample-rate-required"
@@ -1029,6 +1032,7 @@ test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_
 [[entry]]
 kind = "option"
 old = "mastering_pair_process_stereo(sample_rate)"
+to = "mastering_apply_pair_processor_stereo(sample_rate)"
 changed = "sample_rate is required (1.x defaulted to 22050)"
 domain = "mastering"
 rule = "sample-rate-required"
@@ -8404,37 +8408,72 @@ rule = "type-names"
 # The mastering processor family names its processor argument as C and JS do.
 
 [[entry]]
+kind = "function"
+old = "mastering_pair_process_stereo"
+new = "mastering_apply_pair_processor_stereo"
+domain = "mastering"
+rule = "mastering-names"
+
+[[entry]]
+kind = "function"
+old = "mastering_pair_process"
+new = "mastering_apply_pair_processor"
+domain = "mastering"
+rule = "mastering-names"
+
+[[entry]]
+kind = "function"
+old = "mastering_process_stereo"
+new = "mastering_apply_processor_stereo"
+domain = "mastering"
+rule = "mastering-names"
+
+[[entry]]
+kind = "function"
+old = "mastering_process"
+new = "mastering_apply_processor"
+domain = "mastering"
+rule = "mastering-names"
+
+[[entry]]
+kind = "method"
+old = "Audio.mastering_process"
+new = "Audio.mastering_apply_processor"
+domain = "core"
+rule = "mastering-names"
+
+[[entry]]
 kind = "option"
 old = "mastering_process(processor_name)"
-new = "mastering_process(processor)"
+new = "mastering_apply_processor(processor)"
 domain = "mastering"
 rule = "individual"
 
 [[entry]]
 kind = "option"
 old = "mastering_process_stereo(processor_name)"
-new = "mastering_process_stereo(processor)"
+new = "mastering_apply_processor_stereo(processor)"
 domain = "mastering"
 rule = "individual"
 
 [[entry]]
 kind = "option"
 old = "mastering_pair_process(processor_name)"
-new = "mastering_pair_process(processor)"
+new = "mastering_apply_pair_processor(processor)"
 domain = "mastering"
 rule = "individual"
 
 [[entry]]
 kind = "option"
 old = "mastering_pair_process_stereo(processor_name)"
-new = "mastering_pair_process_stereo(processor)"
+new = "mastering_apply_pair_processor_stereo(processor)"
 domain = "mastering"
 rule = "individual"
 
 [[entry]]
 kind = "option"
 old = "Audio.mastering_process(processor_name)"
-new = "Audio.mastering_process(processor)"
+new = "Audio.mastering_apply_processor(processor)"
 domain = "core"
 rule = "individual"
 

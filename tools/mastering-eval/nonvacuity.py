@@ -225,7 +225,7 @@ def _band_cut_params(sample_rate: int) -> dict[str, float | bool]:
 
 
 def _cut_band(x: np.ndarray, sample_rate: int) -> np.ndarray:
-    result = libsonare.mastering_process(
+    result = libsonare.mastering_apply_processor(
         "eq.parametric", _f32(x), sample_rate, _band_cut_params(sample_rate)
     )
     return np.asarray(result.samples, dtype=np.float64)

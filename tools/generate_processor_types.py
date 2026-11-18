@@ -98,7 +98,7 @@ def render_solo_pyi(catalog: Any) -> str:
     names = solo_processor_names(catalog)
     lines = [
         "# Every processor name mastering_processor_names() can return, and therefore",
-        "# every name mastering_process() / mastering_process_stereo() accept.",
+        "# every name mastering_apply_processor() / mastering_apply_processor_stereo() accept.",
         "SoloProcessor: TypeAlias = Literal[",
     ]
     lines += [f'    "{name}",' for name in names]

@@ -20,8 +20,8 @@ from libsonare import (
     mastering_ab_match_loudness,
     mastering_ab_match_loudness_stereo,
     mastering_analyze_pair,
-    mastering_pair_process,
-    mastering_pair_process_stereo,
+    mastering_apply_pair_processor,
+    mastering_apply_pair_processor_stereo,
     mixing_assistant_suggest,
     resample,
 )
@@ -47,22 +47,22 @@ RESAMPLED = np.asarray(resample(REFERENCE, REF_SR, SR), dtype=np.float32) if LIB
 
 def test_pair_process_resamples_the_reference() -> None:
     params = {"mix": 0.5}
-    expected = mastering_pair_process("match.abCrossfade", SOURCE, RESAMPLED, SR, params)
-    actual = mastering_pair_process(
+    expected = mastering_apply_pair_processor("match.abCrossfade", SOURCE, RESAMPLED, SR, params)
+    actual = mastering_apply_pair_processor(
         "match.abCrossfade", SOURCE, REFERENCE, SR, params, reference_sample_rate=REF_SR
     )
     assert actual.sample_rate == SR
     assert np.array_equal(actual.samples, expected.samples)
-    misread = mastering_pair_process("match.abCrossfade", SOURCE, REFERENCE, SR, params)
+    misread = mastering_apply_pair_processor("match.abCrossfade", SOURCE, REFERENCE, SR, params)
     assert not np.array_equal(misread.samples, expected.samples)
 
 
 def test_pair_process_stereo_resamples_the_reference() -> None:
     params = {"mix": 0.25}
-    expected = mastering_pair_process_stereo(
+    expected = mastering_apply_pair_processor_stereo(
         "match.abCrossfade", SOURCE, SOURCE, RESAMPLED, RESAMPLED, SR, params
     )
-    actual = mastering_pair_process_stereo(
+    actual = mastering_apply_pair_processor_stereo(
         "match.abCrossfade",
         SOURCE,
         SOURCE,
@@ -74,7 +74,7 @@ def test_pair_process_stereo_resamples_the_reference() -> None:
     )
     assert np.array_equal(actual.left, expected.left)
     assert np.array_equal(actual.right, expected.right)
-    misread = mastering_pair_process_stereo(
+    misread = mastering_apply_pair_processor_stereo(
         "match.abCrossfade", SOURCE, SOURCE, REFERENCE, REFERENCE, SR, params
     )
     assert not np.array_equal(misread.left, expected.left)
@@ -169,7 +169,7 @@ def test_a_non_positive_reference_rate_is_refused_like_the_sample_rate(bad_rate:
             "match.referenceLoudness", SOURCE, REFERENCE, SR, reference_sample_rate=bad_rate
         )
     with pytest.raises(type(by_sample_rate.value)):
-        mastering_pair_process(
+        mastering_apply_pair_processor(
             "match.abCrossfade", SOURCE, REFERENCE, SR, reference_sample_rate=bad_rate
         )
     with pytest.raises(type(by_sample_rate.value)):

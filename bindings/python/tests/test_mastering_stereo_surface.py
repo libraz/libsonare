@@ -21,7 +21,7 @@ from ._helpers import raises_coded, sine
 def test_public_stereo_pair_and_loudness_functions_exist() -> None:
     import libsonare
 
-    assert callable(getattr(libsonare, "mastering_pair_process_stereo", None))
+    assert callable(getattr(libsonare, "mastering_apply_pair_processor_stereo", None))
     assert callable(getattr(libsonare, "mastering_ab_match_loudness_stereo", None))
 
 
@@ -29,7 +29,7 @@ def test_stereo_pair_rejects_nul_c_strings_before_library_dispatch() -> None:
     import libsonare
 
     with pytest.raises(SonareValueError, match="processor must not contain NUL"):
-        libsonare.mastering_pair_process_stereo(
+        libsonare.mastering_apply_pair_processor_stereo(
             "match.abCrossfade\x00junk",
             [0.1],
             [-0.1],
@@ -38,7 +38,7 @@ def test_stereo_pair_rejects_nul_c_strings_before_library_dispatch() -> None:
             sample_rate=48000,
         )
     with pytest.raises(SonareValueError, match="parameter key must not contain NUL"):
-        libsonare.mastering_pair_process_stereo(
+        libsonare.mastering_apply_pair_processor_stereo(
             "match.abCrossfade",
             [0.1],
             [-0.1],
@@ -57,7 +57,7 @@ def test_stereo_pair_uses_independent_lengths_and_shared_crossfade() -> None:
     reference_left = [3.0] * 5
     reference_right = [-3.0] * 5
 
-    mixed = libsonare.mastering_pair_process_stereo(
+    mixed = libsonare.mastering_apply_pair_processor_stereo(
         "match.abCrossfade",
         source_left,
         source_right,
@@ -72,7 +72,7 @@ def test_stereo_pair_uses_independent_lengths_and_shared_crossfade() -> None:
     assert mixed.left[0] == pytest.approx(1.5, abs=1e-6)
     assert mixed.right[0] == pytest.approx(-1.5, abs=1e-6)
 
-    at_source = libsonare.mastering_pair_process_stereo(
+    at_source = libsonare.mastering_apply_pair_processor_stereo(
         "match.abCrossfade",
         source_left,
         source_right,
@@ -81,7 +81,7 @@ def test_stereo_pair_uses_independent_lengths_and_shared_crossfade() -> None:
         48000,
         {"mix": 0.0},
     )
-    at_reference = libsonare.mastering_pair_process_stereo(
+    at_reference = libsonare.mastering_apply_pair_processor_stereo(
         "match.abCrossfade",
         source_left,
         source_right,
@@ -98,7 +98,7 @@ def test_stereo_pair_rejects_bad_plane_shape_and_nonfinite_audio() -> None:
     import libsonare
 
     with pytest.raises(SonareValueError, match="source_left and source_right"):
-        libsonare.mastering_pair_process_stereo(
+        libsonare.mastering_apply_pair_processor_stereo(
             "match.abCrossfade",
             [0.1, 0.2],
             [-0.1],
@@ -108,7 +108,7 @@ def test_stereo_pair_rejects_bad_plane_shape_and_nonfinite_audio() -> None:
             params={"mix": 0.5},
         )
     with pytest.raises(SonareValueError, match="reference_left and reference_right"):
-        libsonare.mastering_pair_process_stereo(
+        libsonare.mastering_apply_pair_processor_stereo(
             "match.abCrossfade",
             [0.1],
             [-0.1],
@@ -118,7 +118,7 @@ def test_stereo_pair_rejects_bad_plane_shape_and_nonfinite_audio() -> None:
             params={"mix": 0.5},
         )
     with pytest.raises(SonareValueError, match="source_left"):
-        libsonare.mastering_pair_process_stereo(
+        libsonare.mastering_apply_pair_processor_stereo(
             "match.abCrossfade",
             [math.nan],
             [0.1],

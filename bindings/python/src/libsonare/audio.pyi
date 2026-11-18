@@ -202,7 +202,7 @@ class Audio:
         release_ms: float | None = None,
         apply_gain_at_input_rate: bool = False,
     ) -> MasteringResult: ...
-    def mastering_process(
+    def mastering_apply_processor(
         self, processor: SoloProcessor, params: MasteringSoloParams | None = None
     ) -> MasteringResult: ...
     def master_audio(

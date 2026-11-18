@@ -73,7 +73,7 @@ from .analyzer import (
     mastering as _mastering,
 )
 from .analyzer import (
-    mastering_process as _mastering_process,
+    mastering_apply_processor as _mastering_process,
 )
 from .analyzer import (
     mel_spectrogram as _mel_spectrogram,
@@ -1001,7 +1001,7 @@ class Audio:
             apply_gain_at_input_rate,
         )
 
-    def mastering_process(
+    def mastering_apply_processor(
         self, processor: str, params: dict[str, float | int | bool | str] | None = None
     ) -> MasteringResult:
         """Apply a named mastering processor."""

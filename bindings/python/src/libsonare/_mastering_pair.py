@@ -79,7 +79,7 @@ def _stereo_pair_params(params: dict[str, float | int | bool] | None) -> tuple[A
 
 
 @_guard_buffer("source", "reference")
-def mastering_pair_process(
+def mastering_apply_pair_processor(
     processor: str,
     source: Sequence[float] | list[float],
     reference: Sequence[float] | list[float],
@@ -135,7 +135,7 @@ def mastering_pair_process(
 
 
 @_guard_buffer("source_left", "source_right", "reference_left", "reference_right")
-def mastering_pair_process_stereo(
+def mastering_apply_pair_processor_stereo(
     processor: str,
     source_left: Sequence[float] | list[float],
     source_right: Sequence[float] | list[float],
@@ -244,7 +244,7 @@ def mastering_analyze_pair(
     reference_array, reference_length = _to_c_float_array(reference)
     param_array, param_count = _mastering_params(params)
     json_ptr = ctypes.c_char_p()
-    # Independent source/reference lengths (see mastering_pair_process).
+    # Independent source/reference lengths (see mastering_apply_pair_processor).
     rc = lib.sonare_mastering_analyze_pair_ex(
         _utf8_arg(analysis, "analysis"),
         source_array,

@@ -455,7 +455,7 @@ def capability_catalog() -> CapabilityCatalog:
 
 
 @_guard_buffer("samples")
-def mastering_process(
+def mastering_apply_processor(
     processor: str,
     samples: Sequence[float] | list[float],
     sample_rate: int,
@@ -498,7 +498,7 @@ def mastering_process(
 
 
 @_guard_buffer("left", "right")
-def mastering_process_stereo(
+def mastering_apply_processor_stereo(
     processor: str,
     left: Sequence[float] | list[float],
     right: Sequence[float] | list[float],
@@ -507,7 +507,7 @@ def mastering_process_stereo(
 ) -> MasteringStereoResult:
     """Apply a named stereo mastering processor using the shared cross-language API.
 
-    ``params`` takes enum names as :func:`mastering_process` does.
+    ``params`` takes enum names as :func:`mastering_apply_processor` does.
     """
     lib = _get_lib()
     if not hasattr(lib, "sonare_mastering_apply_processor_stereo"):

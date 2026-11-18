@@ -361,6 +361,18 @@ from .analyzer import (
     mastering_analyze_stereo as mastering_analyze_stereo,
 )
 from .analyzer import (
+    mastering_apply_pair_processor as mastering_apply_pair_processor,
+)
+from .analyzer import (
+    mastering_apply_pair_processor_stereo as mastering_apply_pair_processor_stereo,
+)
+from .analyzer import (
+    mastering_apply_processor as mastering_apply_processor,
+)
+from .analyzer import (
+    mastering_apply_processor_stereo as mastering_apply_processor_stereo,
+)
+from .analyzer import (
     mastering_assistant_suggest as mastering_assistant_suggest,
 )
 from .analyzer import (
@@ -400,12 +412,6 @@ from .analyzer import (
     mastering_pair_analysis_names as mastering_pair_analysis_names,
 )
 from .analyzer import (
-    mastering_pair_process as mastering_pair_process,
-)
-from .analyzer import (
-    mastering_pair_process_stereo as mastering_pair_process_stereo,
-)
-from .analyzer import (
     mastering_pair_processor_names as mastering_pair_processor_names,
 )
 from .analyzer import (
@@ -416,12 +422,6 @@ from .analyzer import (
 )
 from .analyzer import (
     mastering_preset_params as mastering_preset_params,
-)
-from .analyzer import (
-    mastering_process as mastering_process,
-)
-from .analyzer import (
-    mastering_process_stereo as mastering_process_stereo,
 )
 from .analyzer import (
     mastering_processor_catalog as mastering_processor_catalog,

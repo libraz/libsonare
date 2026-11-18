@@ -97,9 +97,9 @@ def test_eq_ceiling_follows_the_rate_the_insert_is_built_for() -> None:
 
     x = _noise(2048)
     params = {"band0.frequencyHz": 30000.0, "band0.gainDb": 3.0}
-    libsonare.mastering_process("eq.parametric", x, 96000, params)
+    libsonare.mastering_apply_processor("eq.parametric", x, 96000, params)
     with pytest.raises(SonareError, match=r"below 24000 Hz \(Nyquist at 48000 Hz\)"):
-        libsonare.mastering_process("eq.parametric", x, SR, params)
+        libsonare.mastering_apply_processor("eq.parametric", x, SR, params)
 
 
 def test_streaming_denoise_prepares_at_its_default_estimator() -> None:
@@ -182,10 +182,12 @@ def test_per_processor_enum_names_resolve_to_the_numbers() -> None:
     import libsonare
 
     x = _noise(2048)
-    by_name = libsonare.mastering_process(
+    by_name = libsonare.mastering_apply_processor(
         "saturation.softClipper", x, SR, {"aliasing": "oversample4x"}
     )
-    by_number = libsonare.mastering_process("saturation.softClipper", x, SR, {"aliasing": 3})
+    by_number = libsonare.mastering_apply_processor(
+        "saturation.softClipper", x, SR, {"aliasing": 3}
+    )
     assert list(by_name.samples) == list(by_number.samples)
     assert by_name.latency_samples == by_number.latency_samples > 0
     assert libsonare.mastering_insert_timing(
@@ -202,8 +204,8 @@ def test_per_processor_unknown_enum_name_is_refused_with_the_valid_names() -> No
         SonareError,
         match=r"aliasing: unknown name 'nope' \(valid names: none, adaa1, adaa2, oversample4x\)",
     ):
-        libsonare.mastering_process("saturation.softClipper", x, SR, {"aliasing": "nope"})
+        libsonare.mastering_apply_processor("saturation.softClipper", x, SR, {"aliasing": "nope"})
     with pytest.raises(SonareError, match="unknown name 'nope'"):
         libsonare.mastering_insert_timing("saturation.softClipper", {"aliasing": "nope"}, SR)
     with pytest.raises(ValueError):
-        libsonare.mastering_process("saturation.softClipper", x, SR, {"ceiling": "loud"})
+        libsonare.mastering_apply_processor("saturation.softClipper", x, SR, {"ceiling": "loud"})

@@ -24,7 +24,7 @@ pytestmark = pytest.mark.skipif(not LIB_AVAILABLE, reason="libsonare shared libr
 # a property or fully defaulted, so the table stays this short.
 _REQUIRED_ARGS: dict[str, tuple[tuple[Any, ...], dict[str, Any]]] = {
     "resample": ((22050,), {}),
-    "mastering_process": (("limiter",), {}),
+    "mastering_apply_processor": (("limiter",), {}),
     "pitch_shift": ((2.0,), {}),
     "time_stretch": ((1.5,), {}),
 }

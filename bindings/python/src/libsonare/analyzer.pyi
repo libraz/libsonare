@@ -202,7 +202,7 @@ MasteringPreset: TypeAlias = Literal[
 ]
 # BEGIN GENERATED SoloProcessor (make processor-types)
 # Every processor name mastering_processor_names() can return, and therefore
-# every name mastering_process() / mastering_process_stereo() accept.
+# every name mastering_apply_processor() / mastering_apply_processor_stereo() accept.
 SoloProcessor: TypeAlias = Literal[
     "dynamics.brickwallLimiter",
     "dynamics.compressor",
@@ -1322,13 +1322,13 @@ def mastering_processor_names() -> list[SoloProcessor]: ...
 def mastering_pair_processor_names() -> list[PairProcessor]: ...
 def mastering_pair_analysis_names() -> list[PairAnalysis]: ...
 def mastering_stereo_analysis_names() -> list[StereoAnalysis]: ...
-def mastering_process(
+def mastering_apply_processor(
     processor: SoloProcessor,
     samples: FloatSamples,
     sample_rate: int,
     params: MasteringSoloParams | None = None,
 ) -> MasteringResult: ...
-def mastering_process_stereo(
+def mastering_apply_processor_stereo(
     processor: SoloProcessor,
     left: FloatSamples,
     right: FloatSamples,
@@ -1628,7 +1628,7 @@ class StreamingEqualizer:
     def __enter__(self) -> StreamingEqualizer: ...
     def __exit__(self, exc_type: object, exc: object, tb: object) -> None: ...
 
-def mastering_pair_process(
+def mastering_apply_pair_processor(
     processor: PairProcessor,
     source: FloatSamples,
     reference: FloatSamples,
@@ -1637,7 +1637,7 @@ def mastering_pair_process(
     *,
     reference_sample_rate: int | None = None,
 ) -> MasteringResult: ...
-def mastering_pair_process_stereo(
+def mastering_apply_pair_processor_stereo(
     processor: StereoPairProcessor,
     source_left: FloatSamples,
     source_right: FloatSamples,
