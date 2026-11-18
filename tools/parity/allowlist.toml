@@ -253,7 +253,6 @@ node = [
   # facades apply the identical defaults inline (or via a typed config object /
   # dataclass) and never call the seeder, so there is no 1:1 facade member.
   "engine_bounce_options_default",
-  "stream_analyzer_config_default",
   "stream_quantize_config_default",
   # pitch_correction_config_default seeds a SonarePitchCorrectionConfig POD with
   # the documented defaults; the facade pitchCorrectTimevarying applies them
@@ -457,7 +456,6 @@ python = [
   # The Python facade calls these inside its constructors/dataclasses to seed
   # defaults; they are not re-exposed as standalone public methods.
   "engine_bounce_options_default",
-  "stream_analyzer_config_default",
   "stream_quantize_config_default",
   # pitch_correct_timevarying seeds its SonarePitchCorrectionConfig by calling
   # this internally; not re-exposed as a standalone public function.
@@ -662,9 +660,6 @@ python = [
   "note_targets_from_smf",
   "render_percussive_events",
   "split_silence_common",
-  "mel_to_stft",  # Python facade derives matrix extents from sequences; C requires explicit dims
-  "mel_to_audio", # Python facade derives matrix extents from sequences; C requires explicit dims
-  "mfcc_to_audio", # Python facade derives matrix extents from sequences; C requires explicit dims
   "mastering_ab_match_loudness", # Python derives both C lengths from array length, folds the optional out_match into `with_match`, and takes reference_sample_rate as a keyword that defaults to sample_rate
   "mastering_ab_match_loudness_stereo", # Python derives both stereo lengths, folds optional out_match into with_match and defaults reference_sample_rate, as in the mono API
   "align_take_to_reference", # Python derives both C lengths from array length and folds the SonareTakeAlignConfig fields into keyword args
@@ -672,10 +667,6 @@ python = [
   "mastering_repair_analyze", # Python folds the C request JSON into the prefer_streaming_safe keyword
   "chord_symbol_from_analysis", # the facade folds root/quality/bass into one analysis chord object and sizes the extensions array itself
   "mastering_repair_apply", # Python serializes the `stages` mappings into stages_json and folds the cancel callback pair into `cancel`
-  "master_audio", # ergonomic rename: the keyword is `preset`, the field name the JS request objects use; the C parameter is preset_name
-  "master_audio_stereo", # ergonomic rename: `preset` as in master_audio and the JS request objects; the C parameter is preset_name
-  "tone", # librosa mirror: librosa.tone names the phase `phi`; the C parameter is phase
-  "clicks", # librosa mirror: librosa.clicks names the frequency `click_freq`; the C parameter is frequency
 ]
 
 # ---------------------------------------------------------------------------
@@ -726,11 +717,7 @@ params = []
 # real signal worth triaging.
 # ---------------------------------------------------------------------------
 [input_naming]
-# The Python facade names the coefficient input `mfcc_coeffs` where C names it
-# `mfcc`. Same buffer, descriptive spelling — not drift. The WASM facade renames
-# it `coefficients` for the same reason, but takes a request object, so it
-# declares no positional input name and never enters the comparison.
-keys = ["mfcc_to_mel", "mfcc_to_audio"]
+keys = []
 
 # ---------------------------------------------------------------------------
 # [wasm_internal] — WASM embind / SonareModule / index.ts names whose
@@ -771,14 +758,6 @@ names = []
 # Category 1 (ergonomic rename or fold) and category 2 (array-length derivation).
 # Every entry below was read against both the C header and the facade source.
 fields = [
-  # --- harmony steps spelled as one key per voice ---
-  # The flat voice changer config is also the insert's parameter set, whose keys
-  # are scalars, so the C `harmony_steps[3]` array is spelled harmonyStep1..3.
-  "realtime_voice_changer_config.harmony_steps",
-  "realtime_voice_changer_config.harmony_step1",
-  "realtime_voice_changer_config.harmony_step2",
-  "realtime_voice_changer_config.harmony_step3",
-
   # --- seconds alternatives to the sample fields ---
   # Node and WASM spell a region's time bounds in samples or in seconds; the
   # binding converts seconds to samples at the call's rate, so the C struct keeps
@@ -848,10 +827,6 @@ fields = [
   "vocal_id_change.first_new_id",
   "vocal_id_change.second_new_id",
   "vocal_id_change.new_ids",
-
-  # WASM uses a monotonically changing thread-local sequence to ensure an
-  # error detail belongs to the exception that just crossed the module proxy.
-  "vocal_error_detail.sequence",
 
   # --- category 2 + 1: parallel C arrays folded into one array-of-struct ---
   # C carries `stage_gain_reduction_stages` (char**) and
