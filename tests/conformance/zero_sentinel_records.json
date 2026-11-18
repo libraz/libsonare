@@ -41,7 +41,7 @@
     },
     {
       "file": "src/c_api/sonare_c_engine.cpp",
-      "value": "config.click_seconds",
+      "value": "config.click_sec",
       "measured": "no",
       "reason": "Metronome click length; core response to a negative or non-finite length not driven."
     },
