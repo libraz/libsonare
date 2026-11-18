@@ -278,14 +278,14 @@ def test_mastering_pair_accepts_differing_reference_length() -> None:
     )
     assert len(paired.samples) > 0
 
-    pair_json = libsonare.mastering_pair_analyze(
+    pair = libsonare.mastering_analyze_pair(
         "match.referenceLoudness", source, reference, sample_rate=sr
     )
-    assert '"referenceLufs"' in pair_json
+    assert pair.reference_lufs is not None
 
 
 def test_mastering_pair_and_stereo_analysis() -> None:
-    """Pair and stereo mastering APIs return shared processor output/JSON."""
+    """Pair and stereo mastering APIs return processor output and analysis records."""
     import libsonare
 
     sr = 44100
@@ -305,22 +305,24 @@ def test_mastering_pair_and_stereo_analysis() -> None:
     )
     assert len(paired.samples) == len(samples)
 
-    pair_json = libsonare.mastering_pair_analyze(
+    pair = libsonare.mastering_analyze_pair(
         "match.referenceLoudness",
         samples,
         reference,
         sample_rate=sr,
     )
-    assert '"sourceLufs"' in pair_json
-    assert '"referenceLufs"' in pair_json
+    assert isinstance(pair, libsonare.MatchReferenceLoudnessResult)
+    assert pair.source_lufs is not None
+    assert pair.reference_lufs is not None
 
-    stereo_json = libsonare.mastering_stereo_analyze(
+    stereo = libsonare.mastering_analyze_stereo(
         "stereo.monoCompatCheck",
         samples,
         reference,
         sample_rate=sr,
     )
-    assert '"correlation"' in stereo_json
+    assert isinstance(stereo, libsonare.StereoMonoCompatCheckResult)
+    assert -1.0 <= stereo.correlation <= 1.0
 
 
 @pytest.mark.parametrize(

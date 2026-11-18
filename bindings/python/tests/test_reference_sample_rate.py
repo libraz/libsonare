@@ -8,24 +8,24 @@ reference at the source rate, which a call ignoring the rate would also do.
 
 from __future__ import annotations
 
-import json
-
 import numpy as np
 import pytest
 
 from libsonare import (
+    MatchReferenceLoudnessResult,
     MixTrackInput,
     SonareError,
     SonareValueError,
     StreamingEqualizer,
     mastering_ab_match_loudness,
     mastering_ab_match_loudness_stereo,
-    mastering_pair_analyze,
+    mastering_analyze_pair,
     mastering_pair_process,
     mastering_pair_process_stereo,
     mixing_assistant_suggest,
     resample,
 )
+from libsonare._result_records import _result_to_json_dict
 
 from ._helpers import LIB_AVAILABLE, sine
 
@@ -82,34 +82,34 @@ def test_pair_process_stereo_resamples_the_reference() -> None:
 
 @pytest.mark.parametrize("name", ["match.referenceLoudness", "match.matchEqCurve"])
 def test_pair_analyze_resamples_the_reference(name: str) -> None:
-    expected = mastering_pair_analyze(name, SOURCE, RESAMPLED, SR)
-    actual = mastering_pair_analyze(name, SOURCE, REFERENCE, SR, reference_sample_rate=REF_SR)
-    assert actual == expected
-    assert mastering_pair_analyze(name, SOURCE, REFERENCE, SR) != expected
+    expected = _result_to_json_dict(mastering_analyze_pair(name, SOURCE, RESAMPLED, SR))
+    actual = mastering_analyze_pair(name, SOURCE, REFERENCE, SR, reference_sample_rate=REF_SR)
+    assert _result_to_json_dict(actual) == expected
+    misread = mastering_analyze_pair(name, SOURCE, REFERENCE, SR)
+    assert _result_to_json_dict(misread) != expected
 
 
 def test_pair_delay_is_in_source_rate_samples() -> None:
     signal = _noise(16000, 23, 0.5)
     reference = np.concatenate([np.zeros(100, dtype=np.float32), signal])
     source = np.asarray(resample(signal, REF_SR, SR), dtype=np.float32)
-    delay = json.loads(
-        mastering_pair_analyze(
-            "match.estimateReferenceDelaySamples",
-            source,
-            reference,
-            SR,
-            reference_sample_rate=REF_SR,
-        )
-    )["delaySamples"]
+    delay = mastering_analyze_pair(
+        "match.estimateReferenceDelaySamples",
+        source,
+        reference,
+        SR,
+        reference_sample_rate=REF_SR,
+    ).delay_samples
     assert abs(delay - 100 * SR / REF_SR) <= 1.0
 
 
 def test_equal_rates_match_the_omitted_rate_bit_for_bit() -> None:
-    omitted = mastering_pair_analyze("match.referenceLoudness", SOURCE, REFERENCE, SR)
-    stated = mastering_pair_analyze(
+    omitted = mastering_analyze_pair("match.referenceLoudness", SOURCE, REFERENCE, SR)
+    stated = mastering_analyze_pair(
         "match.referenceLoudness", SOURCE, REFERENCE, SR, reference_sample_rate=SR
     )
     assert stated == omitted
+    assert isinstance(stated, MatchReferenceLoudnessResult)
 
 
 def test_ab_match_resamples_the_reference() -> None:
@@ -162,9 +162,9 @@ def test_eq_match_resamples_the_reference_and_accepts_unequal_lengths() -> None:
 @pytest.mark.parametrize("bad_rate", [0, -1])
 def test_a_non_positive_reference_rate_is_refused_like_the_sample_rate(bad_rate: int) -> None:
     with pytest.raises(SonareError) as by_sample_rate:
-        mastering_pair_analyze("match.referenceLoudness", SOURCE, REFERENCE, bad_rate)
+        mastering_analyze_pair("match.referenceLoudness", SOURCE, REFERENCE, bad_rate)
     with pytest.raises(type(by_sample_rate.value)):
-        mastering_pair_analyze(
+        mastering_analyze_pair(
             "match.referenceLoudness", SOURCE, REFERENCE, SR, reference_sample_rate=bad_rate
         )
     with pytest.raises(type(by_sample_rate.value)):

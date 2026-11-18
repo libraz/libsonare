@@ -293,7 +293,7 @@ def test_mastering_pair_analyze_cli_takes_reference_at_its_own_rate(monkeypatch,
     """Pair analysis hands the reference's own rate to the library, which resamples it."""
     import argparse
 
-    from libsonare import cli, mastering_pair_analyze
+    from libsonare import cli, mastering_analyze_pair
 
     # 2 kHz sits on the K-weighting shelf, so the tone read at the wrong rate (2.18 kHz)
     # is not the control's only difference; 1 s clears the loudness gate.
@@ -318,23 +318,19 @@ def test_mastering_pair_analyze_cli_takes_reference_at_its_own_rate(monkeypatch,
     assert cli.cmd_mastering_pair_analyze(args) == 0
     payload = json.loads(capsys.readouterr().out)
 
-    expected = json.loads(
-        mastering_pair_analyze(
-            "match.referenceLoudness",
-            source_samples,
-            reference_samples,
-            sample_rate=48000,
-            reference_sample_rate=44100,
-        )
+    expected = mastering_analyze_pair(
+        "match.referenceLoudness",
+        source_samples,
+        reference_samples,
+        sample_rate=48000,
+        reference_sample_rate=44100,
     )
-    assert payload["reference_lufs"] == expected["referenceLufs"]
+    assert payload["reference_lufs"] == expected.reference_lufs
     # Control: the same reference declared at the source rate is a different signal.
-    declared_at_source = json.loads(
-        mastering_pair_analyze(
-            "match.referenceLoudness", source_samples, reference_samples, sample_rate=48000
-        )
+    declared_at_source = mastering_analyze_pair(
+        "match.referenceLoudness", source_samples, reference_samples, sample_rate=48000
     )
-    assert payload["reference_lufs"] != declared_at_source["referenceLufs"]
+    assert payload["reference_lufs"] != declared_at_source.reference_lufs
 
 
 def test_project_cli_exports_smf_and_midi_render_smoke() -> None:

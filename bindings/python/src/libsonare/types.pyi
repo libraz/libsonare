@@ -2162,43 +2162,76 @@ class MasteringStreamingPreviewResult:
     platforms: list[MasteringStreamingPreviewPlatform]
     def __init__(self, platforms: list[MasteringStreamingPreviewPlatform]) -> None: ...
 
-class MatchReferenceLoudnessResult(TypedDict):
-    sourceLufs: float | None
-    referenceLufs: float | None
-    gainToMatchDb: float | None
+class MatchReferenceLoudnessResult:
+    source_lufs: float | None
+    reference_lufs: float | None
+    gain_to_match_db: float | None
+    def __init__(
+        self,
+        source_lufs: float | None,
+        reference_lufs: float | None,
+        gain_to_match_db: float | None,
+    ) -> None: ...
 
-class MatchTonalBalanceBand(TypedDict):
-    lowHz: float
-    highHz: float
-    sourceDb: float
-    referenceDb: float
-    deviationDb: float
+class MatchTonalBalanceBand:
+    low_hz: float
+    high_hz: float
+    source_db: float
+    reference_db: float
+    deviation_db: float
+    def __init__(
+        self,
+        low_hz: float,
+        high_hz: float,
+        source_db: float,
+        reference_db: float,
+        deviation_db: float,
+    ) -> None: ...
 
-class MatchTonalBalanceResult(TypedDict):
+class MatchTonalBalanceResult:
     bands: list[MatchTonalBalanceBand]
+    def __init__(self, bands: list[MatchTonalBalanceBand]) -> None: ...
 
-class MatchEqCurveResult(TypedDict):
-    frequencies: list[float]
-    gainDb: list[float]
+class MatchEqCurveResult:
+    frequencies: NDArray[np.float32]
+    gain_db: NDArray[np.float32]
+    def __init__(self, frequencies: NDArray[np.float32], gain_db: NDArray[np.float32]) -> None: ...
 
-class MatchEstimateReferenceDelaySamplesResult(TypedDict):
-    delaySamples: float
+class MatchEstimateReferenceDelaySamplesResult:
+    delay_samples: float
+    def __init__(self, delay_samples: float) -> None: ...
 
-class StereoMonoCompatCheckResult(TypedDict):
+class StereoMonoCompatCheckResult:
     correlation: float
     width: float | None
-    monoPeak: float
-    sideRms: float
-    likelyMonoCompatible: bool
+    mono_peak: float
+    side_rms: float
+    likely_mono_compatible: bool
+    def __init__(
+        self,
+        correlation: float,
+        width: float | None,
+        mono_peak: float,
+        side_rms: float,
+        likely_mono_compatible: bool,
+    ) -> None: ...
 
-class StereoMonoCompatBand(TypedDict):
-    lowHz: float
-    highHz: float
+class StereoMonoCompatBand:
+    low_hz: float
+    high_hz: float
     correlation: float
-    sideRms: float
+    side_rms: float
+    def __init__(
+        self,
+        low_hz: float,
+        high_hz: float,
+        correlation: float,
+        side_rms: float,
+    ) -> None: ...
 
-class StereoMonoCompatCheckLogBandsResult(TypedDict):
+class StereoMonoCompatCheckLogBandsResult:
     bands: list[StereoMonoCompatBand]
+    def __init__(self, bands: list[StereoMonoCompatBand]) -> None: ...
 
 class StreamingLoudnessGain:
     loudness_static_gain_db: float

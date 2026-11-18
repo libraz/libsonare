@@ -68,7 +68,7 @@ OPERATIONS = (
     "mastering_dynamics_compressor",
     "mastering_dynamics_gate",
     "mastering_dynamics_transient_shaper",
-    "mastering_pair_analyze",
+    "mastering_analyze_pair",
     "mastering_pair_process",
     "mastering_pair_process_stereo",
     "mastering_process",
@@ -100,7 +100,7 @@ OPERATIONS = (
     "mastering_repair_noise_band_bins",
     "mastering_repair_trim_silence",
     "mastering_repair_trim_silence_stereo",
-    "mastering_stereo_analyze",
+    "mastering_analyze_stereo",
     "mastering_streaming_preview",
     "mastering_streaming_preview_stereo",
     "mel_spectrogram",
@@ -173,7 +173,7 @@ PRIMARY_ARGS = {
     "name",
     "params",
     "processor_name",
-    "analysis_name",
+    "analysis",
     "n_fft",
 }
 # librosa mirrors (tools/api/librosa_mirrors.toml) that take a rate: sr=22050, never sample_rate.

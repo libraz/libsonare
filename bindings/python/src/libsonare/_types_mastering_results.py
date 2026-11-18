@@ -3,15 +3,15 @@
 The audio profile, assistant suggestion and streaming preview come back as
 frozen records with snake_case attributes. A measurement that is not finite (a
 silent take has no integrated loudness) is ``None`` where the field says so.
-The pair and mono-compatibility analyses still return their JSON documents; the
-``TypedDict`` shapes at the end of this module describe them, with the JSON's
-camelCase keys.
+The pair and mono-compatibility analyses return one record per analysis name.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any, TypedDict
+
+import numpy as np
 
 from ._types_repair import AudioDefects
 
@@ -153,63 +153,81 @@ class MasteringStreamingPreviewResult:
     platforms: list[MasteringStreamingPreviewPlatform]
 
 
-class MatchReferenceLoudnessResult(TypedDict):
-    """Result of the ``match.referenceLoudness`` pair analysis."""
+@dataclass(frozen=True, slots=True)
+class MatchReferenceLoudnessResult:
+    """Result of the ``match.referenceLoudness`` pair analysis.
 
-    sourceLufs: float | None
-    referenceLufs: float | None
-    gainToMatchDb: float | None
+    A loudness a silent take cannot give, and the gain derived from it, is None.
+    """
+
+    source_lufs: float | None
+    reference_lufs: float | None
+    gain_to_match_db: float | None
+    """Gain that brings the source to the reference loudness."""
 
 
-class MatchTonalBalanceBand(TypedDict):
+@dataclass(frozen=True, slots=True)
+class MatchTonalBalanceBand:
     """One band of the ``match.tonalBalance`` and ``match.tonalBalanceLogBands`` analyses."""
 
-    lowHz: float
-    highHz: float
-    sourceDb: float
-    referenceDb: float
-    deviationDb: float
+    low_hz: float
+    high_hz: float
+    source_db: float
+    reference_db: float
+    deviation_db: float
+    """Source level minus reference level."""
 
 
-class MatchTonalBalanceResult(TypedDict):
-    """Result of the ``match.tonalBalance`` pair analysis."""
+@dataclass(frozen=True, slots=True)
+class MatchTonalBalanceResult:
+    """Result of the ``match.tonalBalance`` and ``match.tonalBalanceLogBands`` analyses."""
 
     bands: list[MatchTonalBalanceBand]
 
 
-class MatchEqCurveResult(TypedDict):
-    """Result of the ``match.matchEqCurve`` pair analysis: ``gainDb[i]`` at ``frequencies[i]``."""
+@dataclass(frozen=True, slots=True, eq=False)
+class MatchEqCurveResult:
+    """Result of the ``match.matchEqCurve`` pair analysis: ``gain_db[i]`` at ``frequencies[i]``."""
 
-    frequencies: list[float]
-    gainDb: list[float]
+    frequencies: np.ndarray
+    """float32 frequencies in Hz."""
+    gain_db: np.ndarray
+    """float32 gain in dB at each frequency."""
 
 
-class MatchEstimateReferenceDelaySamplesResult(TypedDict):
+@dataclass(frozen=True, slots=True)
+class MatchEstimateReferenceDelaySamplesResult:
     """Result of the ``match.estimateReferenceDelaySamples`` pair analysis."""
 
-    delaySamples: float
+    delay_samples: float
+    """Delay of the reference relative to the source, in source-rate samples."""
 
 
-class StereoMonoCompatCheckResult(TypedDict):
-    """Result of the ``stereo.monoCompatCheck`` analysis; ``width`` is ``None`` out of phase."""
+@dataclass(frozen=True, slots=True)
+class StereoMonoCompatCheckResult:
+    """Result of the ``stereo.monoCompatCheck`` analysis."""
 
     correlation: float
+    """Inter-channel correlation in ``[-1, 1]``."""
     width: float | None
-    monoPeak: float
-    sideRms: float
-    likelyMonoCompatible: bool
+    """Stereo width; None for a fully out-of-phase pair."""
+    mono_peak: float
+    side_rms: float
+    likely_mono_compatible: bool
 
 
-class StereoMonoCompatBand(TypedDict):
+@dataclass(frozen=True, slots=True)
+class StereoMonoCompatBand:
     """One band of the ``stereo.monoCompatCheckLogBands`` analysis."""
 
-    lowHz: float
-    highHz: float
+    low_hz: float
+    high_hz: float
     correlation: float
-    sideRms: float
+    side_rms: float
 
 
-class StereoMonoCompatCheckLogBandsResult(TypedDict):
+@dataclass(frozen=True, slots=True)
+class StereoMonoCompatCheckLogBandsResult:
     """Result of the ``stereo.monoCompatCheckLogBands`` analysis."""
 
     bands: list[StereoMonoCompatBand]

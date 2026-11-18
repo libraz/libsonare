@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any, Literal, NamedTuple, TypeAlias
+from typing import Any, Literal, NamedTuple, TypeAlias, overload
 
 import numpy as np
 import numpy.typing as npt
@@ -72,6 +72,10 @@ from .types import (
     MasteringResult,
     MasteringStereoResult,
     MasteringStreamingPreviewResult,
+    MatchEqCurveResult,
+    MatchEstimateReferenceDelaySamplesResult,
+    MatchReferenceLoudnessResult,
+    MatchTonalBalanceResult,
     MaterialPresetName,
     MelodyResult,
     MelSpectrogramResult,
@@ -106,6 +110,8 @@ from .types import (
     SpectralEditMode,
     SpectrumReport,
     StereoBlock,
+    StereoMonoCompatCheckLogBandsResult,
+    StereoMonoCompatCheckResult,
     StftResult,
     StreamingLoudnessGain,
     StreamingPlatform,
@@ -1623,15 +1629,46 @@ def mastering_pair_process_stereo(
     *,
     reference_sample_rate: int | None = None,
 ) -> MasteringStereoResult: ...
-def mastering_pair_analyze(
-    analysis_name: PairAnalysis,
+@overload
+def mastering_analyze_pair(
+    analysis: Literal["match.referenceLoudness"],
     source: FloatSamples,
     reference: FloatSamples,
     sample_rate: int,
     params: MasteringParams | None = None,
     *,
     reference_sample_rate: int | None = None,
-) -> str: ...
+) -> MatchReferenceLoudnessResult: ...
+@overload
+def mastering_analyze_pair(
+    analysis: Literal["match.tonalBalance", "match.tonalBalanceLogBands"],
+    source: FloatSamples,
+    reference: FloatSamples,
+    sample_rate: int,
+    params: MasteringParams | None = None,
+    *,
+    reference_sample_rate: int | None = None,
+) -> MatchTonalBalanceResult: ...
+@overload
+def mastering_analyze_pair(
+    analysis: Literal["match.matchEqCurve"],
+    source: FloatSamples,
+    reference: FloatSamples,
+    sample_rate: int,
+    params: MasteringParams | None = None,
+    *,
+    reference_sample_rate: int | None = None,
+) -> MatchEqCurveResult: ...
+@overload
+def mastering_analyze_pair(
+    analysis: Literal["match.estimateReferenceDelaySamples"],
+    source: FloatSamples,
+    reference: FloatSamples,
+    sample_rate: int,
+    params: MasteringParams | None = None,
+    *,
+    reference_sample_rate: int | None = None,
+) -> MatchEstimateReferenceDelaySamplesResult: ...
 def mastering_ab_match_loudness(
     source: FloatSamples,
     reference: FloatSamples,
@@ -1650,13 +1687,22 @@ def mastering_ab_match_loudness_stereo(
     with_match: bool = True,
     reference_sample_rate: int | None = None,
 ) -> tuple[tuple[np.ndarray[Any, Any], np.ndarray[Any, Any]], LoudnessMatch | None]: ...
-def mastering_stereo_analyze(
-    analysis_name: StereoAnalysis,
+@overload
+def mastering_analyze_stereo(
+    analysis: Literal["stereo.monoCompatCheck"],
     left: FloatSamples,
     right: FloatSamples,
     sample_rate: int,
     params: MasteringParams | None = None,
-) -> str: ...
+) -> StereoMonoCompatCheckResult: ...
+@overload
+def mastering_analyze_stereo(
+    analysis: Literal["stereo.monoCompatCheckLogBands"],
+    left: FloatSamples,
+    right: FloatSamples,
+    sample_rate: int,
+    params: MasteringParams | None = None,
+) -> StereoMonoCompatCheckLogBandsResult: ...
 def mastering_streaming_preview(
     samples: FloatSamples,
     sample_rate: int,

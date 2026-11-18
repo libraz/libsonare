@@ -1070,6 +1070,7 @@ test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_
 [[entry]]
 kind = "option"
 old = "mastering_pair_analyze(sample_rate)"
+to = "mastering_analyze_pair(sample_rate)"
 changed = "sample_rate is required (1.x defaulted to 22050)"
 domain = "mastering"
 rule = "sample-rate-required"
@@ -1094,6 +1095,7 @@ test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_
 [[entry]]
 kind = "option"
 old = "mastering_stereo_analyze(sample_rate)"
+to = "mastering_analyze_stereo(sample_rate)"
 changed = "sample_rate is required (1.x defaulted to 22050)"
 domain = "mastering"
 rule = "sample-rate-required"
@@ -8124,3 +8126,213 @@ old = "AnalysisMelody.pitches"
 new = "MelodyResult.points"
 domain = "analysis"
 rule = "type-names"
+
+# Pair and stereo analysis result records.
+
+[[entry]]
+kind = "function"
+old = "mastering_pair_analyze"
+to = "mastering_analyze_pair"
+changed = "renamed to the C/JS name and returns the analysis's record (MatchReferenceLoudnessResult, MatchTonalBalanceResult, MatchEqCurveResult or MatchEstimateReferenceDelaySamplesResult) instead of a JSON string"
+domain = "mastering"
+rule = "typed-results"
+test = "bindings/python/tests/test_mastering_result_types.py::test_pair_analysis_results"
+
+[[entry]]
+kind = "function"
+old = "mastering_stereo_analyze"
+to = "mastering_analyze_stereo"
+changed = "renamed to the C/JS name and returns a StereoMonoCompatCheckResult or StereoMonoCompatCheckLogBandsResult record instead of a JSON string"
+domain = "mastering"
+rule = "typed-results"
+test = "bindings/python/tests/test_mastering_result_types.py::test_stereo_analysis_results"
+
+
+[[entry]]
+kind = "option"
+old = "mastering_pair_analyze(analysis_name)"
+new = "mastering_analyze_pair(analysis)"
+domain = "mastering"
+rule = "individual"
+
+[[entry]]
+kind = "option"
+old = "mastering_stereo_analyze(analysis_name)"
+new = "mastering_analyze_stereo(analysis)"
+domain = "mastering"
+rule = "individual"
+[[entry]]
+kind = "type"
+old = "MatchReferenceLoudnessResult"
+changed = "a frozen dataclass with snake_case attributes instead of a TypedDict; a loudness that could not be measured is None"
+domain = "mastering"
+rule = "typed-results"
+test = "bindings/python/tests/test_mastering_result_types.py::test_pair_analysis_results"
+
+[[entry]]
+kind = "type"
+old = "MatchTonalBalanceBand"
+changed = "a frozen dataclass with snake_case attributes instead of a TypedDict"
+domain = "mastering"
+rule = "typed-results"
+test = "bindings/python/tests/test_mastering_result_types.py::test_pair_analysis_results"
+
+[[entry]]
+kind = "type"
+old = "MatchTonalBalanceResult"
+changed = "a frozen dataclass with snake_case attributes instead of a TypedDict"
+domain = "mastering"
+rule = "typed-results"
+test = "bindings/python/tests/test_mastering_result_types.py::test_pair_analysis_results"
+
+[[entry]]
+kind = "type"
+old = "MatchEqCurveResult"
+changed = "a frozen dataclass with snake_case attributes instead of a TypedDict; frequencies and gain_db are float32 arrays"
+domain = "mastering"
+rule = "typed-results"
+test = "bindings/python/tests/test_mastering_result_types.py::test_pair_analysis_eq_curve_is_float32_arrays"
+
+[[entry]]
+kind = "type"
+old = "MatchEstimateReferenceDelaySamplesResult"
+changed = "a frozen dataclass with snake_case attributes instead of a TypedDict"
+domain = "mastering"
+rule = "typed-results"
+test = "bindings/python/tests/test_mastering_result_types.py::test_pair_analysis_results"
+
+[[entry]]
+kind = "type"
+old = "StereoMonoCompatCheckResult"
+changed = "a frozen dataclass with snake_case attributes instead of a TypedDict; width is None for a fully out-of-phase pair"
+domain = "mastering"
+rule = "typed-results"
+test = "bindings/python/tests/test_mastering_result_types.py::test_an_out_of_phase_pair_has_no_width"
+
+[[entry]]
+kind = "type"
+old = "StereoMonoCompatBand"
+changed = "a frozen dataclass with snake_case attributes instead of a TypedDict"
+domain = "mastering"
+rule = "typed-results"
+test = "bindings/python/tests/test_mastering_result_types.py::test_stereo_analysis_results"
+
+[[entry]]
+kind = "type"
+old = "StereoMonoCompatCheckLogBandsResult"
+changed = "a frozen dataclass with snake_case attributes instead of a TypedDict"
+domain = "mastering"
+rule = "typed-results"
+test = "bindings/python/tests/test_mastering_result_types.py::test_stereo_analysis_results"
+
+[[entry]]
+kind = "field"
+old = "MatchReferenceLoudnessResult.sourceLufs"
+new = "MatchReferenceLoudnessResult.source_lufs"
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "MatchReferenceLoudnessResult.referenceLufs"
+new = "MatchReferenceLoudnessResult.reference_lufs"
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "MatchReferenceLoudnessResult.gainToMatchDb"
+new = "MatchReferenceLoudnessResult.gain_to_match_db"
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "MatchTonalBalanceBand.lowHz"
+new = "MatchTonalBalanceBand.low_hz"
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "MatchTonalBalanceBand.highHz"
+new = "MatchTonalBalanceBand.high_hz"
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "MatchTonalBalanceBand.sourceDb"
+new = "MatchTonalBalanceBand.source_db"
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "MatchTonalBalanceBand.referenceDb"
+new = "MatchTonalBalanceBand.reference_db"
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "MatchTonalBalanceBand.deviationDb"
+new = "MatchTonalBalanceBand.deviation_db"
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "MatchEqCurveResult.gainDb"
+new = "MatchEqCurveResult.gain_db"
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "MatchEstimateReferenceDelaySamplesResult.delaySamples"
+new = "MatchEstimateReferenceDelaySamplesResult.delay_samples"
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "StereoMonoCompatCheckResult.monoPeak"
+new = "StereoMonoCompatCheckResult.mono_peak"
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "StereoMonoCompatCheckResult.sideRms"
+new = "StereoMonoCompatCheckResult.side_rms"
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "StereoMonoCompatCheckResult.likelyMonoCompatible"
+new = "StereoMonoCompatCheckResult.likely_mono_compatible"
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "StereoMonoCompatBand.lowHz"
+new = "StereoMonoCompatBand.low_hz"
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "StereoMonoCompatBand.highHz"
+new = "StereoMonoCompatBand.high_hz"
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "StereoMonoCompatBand.sideRms"
+new = "StereoMonoCompatBand.side_rms"
+domain = "mastering"
+rule = "typed-results"

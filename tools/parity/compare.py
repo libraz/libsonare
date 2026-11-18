@@ -288,9 +288,7 @@ _ALIAS_COVERAGE = {
         "mastering_pair_process_stereo",
         "mastering_apply_pair_processor_stereo",
     ),
-    "mastering_analyze_pair": ("mastering_pair_analyze",),
-    "mastering_analyze_pair_ex": ("mastering_pair_analyze",),
-    "mastering_analyze_stereo": ("mastering_stereo_analyze",),
+    "mastering_analyze_pair_ex": ("mastering_analyze_pair",),
     # One EQ match method covers the single-length base and the per-buffer _ex.
     "eq_match_ex": ("match",),
     # Accessors exposed as bare properties or get-prefixed getters.

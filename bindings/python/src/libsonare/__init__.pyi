@@ -321,6 +321,12 @@ from .analyzer import (
     mastering_amp_preset_catalog as mastering_amp_preset_catalog,
 )
 from .analyzer import (
+    mastering_analyze_pair as mastering_analyze_pair,
+)
+from .analyzer import (
+    mastering_analyze_stereo as mastering_analyze_stereo,
+)
+from .analyzer import (
     mastering_assistant_suggest as mastering_assistant_suggest,
 )
 from .analyzer import (
@@ -361,9 +367,6 @@ from .analyzer import (
 )
 from .analyzer import (
     mastering_pair_analysis_names as mastering_pair_analysis_names,
-)
-from .analyzer import (
-    mastering_pair_analyze as mastering_pair_analyze,
 )
 from .analyzer import (
     mastering_pair_process as mastering_pair_process,
@@ -481,9 +484,6 @@ from .analyzer import (
 )
 from .analyzer import (
     mastering_stereo_analysis_names as mastering_stereo_analysis_names,
-)
-from .analyzer import (
-    mastering_stereo_analyze as mastering_stereo_analyze,
 )
 from .analyzer import (
     mastering_streaming_preview as mastering_streaming_preview,

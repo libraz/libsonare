@@ -52,6 +52,14 @@ from .types import (
     MasteringStereoResult,
     MasteringStreamingPreviewPlatform,
     MasteringStreamingPreviewResult,
+    MatchEqCurveResult,
+    MatchEstimateReferenceDelaySamplesResult,
+    MatchReferenceLoudnessResult,
+    MatchTonalBalanceBand,
+    MatchTonalBalanceResult,
+    StereoMonoCompatBand,
+    StereoMonoCompatCheckLogBandsResult,
+    StereoMonoCompatCheckResult,
     StreamingPlatform,
 )
 
@@ -202,28 +210,30 @@ def mastering_pair_process_stereo(
 
 
 @_guard_buffer("source", "reference")
-def mastering_pair_analyze(
-    analysis_name: str,
+def mastering_analyze_pair(
+    analysis: str,
     source: Sequence[float] | list[float],
     reference: Sequence[float] | list[float],
     sample_rate: int,
     params: dict[str, float | int | bool] | None = None,
     *,
     reference_sample_rate: int | None = None,
-) -> str:
-    """Run a named two-input mastering analysis and return shared JSON.
+) -> (
+    MatchReferenceLoudnessResult
+    | MatchTonalBalanceResult
+    | MatchEqCurveResult
+    | MatchEstimateReferenceDelaySamplesResult
+):
+    """Run a named two-input mastering analysis and return its record.
 
     ``reference`` may be at its own ``reference_sample_rate`` (default:
     ``sample_rate``); it is resampled onto ``sample_rate`` first, so a delay
     estimate is in source-rate samples.
 
-    The document's shape depends on ``analysis_name``; parse it with
-    :func:`json.loads` and read it as the matching ``TypedDict``:
-    ``match.referenceLoudness`` is :class:`MatchReferenceLoudnessResult`,
+    ``match.referenceLoudness`` returns :class:`MatchReferenceLoudnessResult`,
     ``match.tonalBalance`` and ``match.tonalBalanceLogBands``
-    :class:`MatchTonalBalanceResult`,
-    ``match.matchEqCurve`` :class:`MatchEqCurveResult` and
-    ``match.estimateReferenceDelaySamples``
+    :class:`MatchTonalBalanceResult`, ``match.matchEqCurve``
+    :class:`MatchEqCurveResult` and ``match.estimateReferenceDelaySamples``
     :class:`MatchEstimateReferenceDelaySamplesResult`.
     """
     lib = _get_lib()
@@ -235,7 +245,7 @@ def mastering_pair_analyze(
     json_ptr = ctypes.c_char_p()
     # Independent source/reference lengths (see mastering_pair_process).
     rc = lib.sonare_mastering_analyze_pair_ex(
-        _utf8_arg(analysis_name, "analysis_name"),
+        _utf8_arg(analysis, "analysis"),
         source_array,
         _to_c_size_t(source_length, "source_length"),
         reference_array,
@@ -250,11 +260,7 @@ def mastering_pair_analyze(
         ctypes.byref(json_ptr),
     )
     _check(rc)
-    try:
-        return ctypes.string_at(json_ptr).decode("utf-8") if json_ptr.value else ""
-    finally:
-        if json_ptr.value:
-            lib.sonare_free_string(json_ptr)
+    return _pair_analysis_from_wire(analysis, _take_json(lib, json_ptr))
 
 
 @_guard_buffer("source", "reference")
@@ -406,19 +412,17 @@ def mastering_ab_match_loudness_stereo(
 
 
 @_guard_buffer("left", "right")
-def mastering_stereo_analyze(
-    analysis_name: str,
+def mastering_analyze_stereo(
+    analysis: str,
     left: Sequence[float] | list[float],
     right: Sequence[float] | list[float],
     sample_rate: int,
     params: dict[str, float | int | bool] | None = None,
-) -> str:
-    """Run a named stereo mastering analysis and return shared JSON.
+) -> StereoMonoCompatCheckResult | StereoMonoCompatCheckLogBandsResult:
+    """Run a named stereo mastering analysis and return its record.
 
-    The document's shape depends on ``analysis_name``; parse it with
-    :func:`json.loads` and read it as :class:`StereoMonoCompatCheckResult`
-    (``stereo.monoCompatCheck``) or :class:`StereoMonoCompatCheckLogBandsResult`
-    (``stereo.monoCompatCheckLogBands``).
+    ``stereo.monoCompatCheck`` returns :class:`StereoMonoCompatCheckResult` and
+    ``stereo.monoCompatCheckLogBands`` :class:`StereoMonoCompatCheckLogBandsResult`.
     """
     lib = _get_lib()
     if not hasattr(lib, "sonare_mastering_analyze_stereo"):
@@ -430,7 +434,7 @@ def mastering_stereo_analyze(
     param_array, param_count = _mastering_params(params)
     json_ptr = ctypes.c_char_p()
     rc = lib.sonare_mastering_analyze_stereo(
-        _utf8_arg(analysis_name, "analysis_name"),
+        _utf8_arg(analysis, "analysis"),
         left_array,
         right_array,
         _to_c_size_t(left_length, "left_length"),
@@ -440,11 +444,7 @@ def mastering_stereo_analyze(
         ctypes.byref(json_ptr),
     )
     _check(rc)
-    try:
-        return ctypes.string_at(json_ptr).decode("utf-8") if json_ptr.value else ""
-    finally:
-        if json_ptr.value:
-            lib.sonare_free_string(json_ptr)
+    return _stereo_analysis_from_wire(analysis, _take_json(lib, json_ptr))
 
 
 _PLATFORM_KEYS = ("name", "target_lufs", "ceiling_dbtp")
@@ -508,6 +508,69 @@ def _take_json(lib: Any, json_ptr: ctypes.c_char_p) -> Any:
     finally:
         if json_ptr.value:
             lib.sonare_free_string(json_ptr)
+
+
+def _optional_float(value: Any) -> float | None:
+    return None if value is None else float(value)
+
+
+def _pair_analysis_from_wire(
+    name: str, wire: Mapping[str, Any]
+) -> (
+    MatchReferenceLoudnessResult
+    | MatchTonalBalanceResult
+    | MatchEqCurveResult
+    | MatchEstimateReferenceDelaySamplesResult
+):
+    if name == "match.referenceLoudness":
+        return MatchReferenceLoudnessResult(
+            source_lufs=_optional_float(wire["sourceLufs"]),
+            reference_lufs=_optional_float(wire["referenceLufs"]),
+            gain_to_match_db=_optional_float(wire["gainToMatchDb"]),
+        )
+    if name in ("match.tonalBalance", "match.tonalBalanceLogBands"):
+        return MatchTonalBalanceResult(
+            bands=[
+                MatchTonalBalanceBand(
+                    low_hz=float(band["lowHz"]),
+                    high_hz=float(band["highHz"]),
+                    source_db=float(band["sourceDb"]),
+                    reference_db=float(band["referenceDb"]),
+                    deviation_db=float(band["deviationDb"]),
+                )
+                for band in wire["bands"]
+            ]
+        )
+    if name == "match.matchEqCurve":
+        return MatchEqCurveResult(
+            frequencies=np.asarray(wire["frequencies"], dtype=np.float32),
+            gain_db=np.asarray(wire["gainDb"], dtype=np.float32),
+        )
+    return MatchEstimateReferenceDelaySamplesResult(delay_samples=float(wire["delaySamples"]))
+
+
+def _stereo_analysis_from_wire(
+    name: str, wire: Mapping[str, Any]
+) -> StereoMonoCompatCheckResult | StereoMonoCompatCheckLogBandsResult:
+    if name == "stereo.monoCompatCheck":
+        return StereoMonoCompatCheckResult(
+            correlation=float(wire["correlation"]),
+            width=_optional_float(wire["width"]),
+            mono_peak=float(wire["monoPeak"]),
+            side_rms=float(wire["sideRms"]),
+            likely_mono_compatible=bool(wire["likelyMonoCompatible"]),
+        )
+    return StereoMonoCompatCheckLogBandsResult(
+        bands=[
+            StereoMonoCompatBand(
+                low_hz=float(band["lowHz"]),
+                high_hz=float(band["highHz"]),
+                correlation=float(band["correlation"]),
+                side_rms=float(band["sideRms"]),
+            )
+            for band in wire["bands"]
+        ]
+    )
 
 
 def _streaming_preview_from_wire(wire: Mapping[str, Any]) -> MasteringStreamingPreviewResult:
