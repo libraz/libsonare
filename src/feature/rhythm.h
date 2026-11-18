@@ -69,6 +69,11 @@ std::vector<float> fourier_tempogram(const std::vector<float>& onset_envelope, i
 std::vector<float> fourier_tempogram(const Audio& audio,
                                      const TempogramConfig& config = TempogramConfig());
 
+/// @brief Default lower tempo of the octave @ref cyclic_tempogram folds into, in BPM.
+inline constexpr float kCyclicTempogramBpmMin = 60.0f;
+/// @brief Default number of cyclic tempo classes @ref cyclic_tempogram returns.
+inline constexpr int kCyclicTempogramBins = 60;
+
 /// @brief Cyclic tempogram by octave-folding a Fourier tempogram.
 /// @details Tempo bins are folded into one octave [bpm_min, 2*bpm_min), so
 ///          octave-equivalent tempi such as 60, 120, and 240 BPM contribute
@@ -89,11 +94,13 @@ std::vector<float> fourier_tempogram(const Audio& audio,
 /// @return Matrix [n_bins x n_frames], row-major
 std::vector<float> cyclic_tempogram(const std::vector<float>& onset_envelope, int sr,
                                     const TempogramConfig& config = TempogramConfig(),
-                                    float bpm_min = 60.0f, int n_bins = 60);
+                                    float bpm_min = kCyclicTempogramBpmMin,
+                                    int n_bins = kCyclicTempogramBins);
 
 std::vector<float> cyclic_tempogram(const Audio& audio,
                                     const TempogramConfig& config = TempogramConfig(),
-                                    float bpm_min = 60.0f, int n_bins = 60);
+                                    float bpm_min = kCyclicTempogramBpmMin,
+                                    int n_bins = kCyclicTempogramBins);
 
 /// @brief Heuristic harmonic-ratio summary of an autocorrelation tempogram.
 /// @warning NOT a drop-in for librosa.feature.tempogram_ratio, which builds a BPM

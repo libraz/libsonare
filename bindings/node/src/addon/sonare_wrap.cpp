@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 
+#include "analysis/bpm_analyzer.h"
 #include "core/channel_layout.h"
 #include "sonare_wrap_key_options.h"
 #include "sonare_wrap_mixer.h"
@@ -998,10 +999,13 @@ Napi::Value SonareWrap::DetectBpmInstance(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
 
+  const sonare::BpmConfig tempo_defaults;
   float bpm_min{};
-  if (!RequiredFloatArg(env, info, 0, "bpmMin", &bpm_min)) return env.Undefined();
+  if (!OptionalFloatArg(env, info, 0, "bpmMin", tempo_defaults.bpm_min, &bpm_min))
+    return env.Undefined();
   float bpm_max{};
-  if (!RequiredFloatArg(env, info, 1, "bpmMax", &bpm_max)) return env.Undefined();
+  if (!OptionalFloatArg(env, info, 1, "bpmMax", tempo_defaults.bpm_max, &bpm_max))
+    return env.Undefined();
 
   float bpm = 0.0f;
   SonareError err = sonare_audio_detect_bpm(audio_, bpm_min, bpm_max, &bpm);
@@ -1132,10 +1136,13 @@ Napi::Value SonareWrap::DetectBeatsInstance(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
 
+  const sonare::BpmConfig tempo_defaults;
   float bpm_min{};
-  if (!RequiredFloatArg(env, info, 0, "bpmMin", &bpm_min)) return env.Undefined();
+  if (!OptionalFloatArg(env, info, 0, "bpmMin", tempo_defaults.bpm_min, &bpm_min))
+    return env.Undefined();
   float bpm_max{};
-  if (!RequiredFloatArg(env, info, 1, "bpmMax", &bpm_max)) return env.Undefined();
+  if (!OptionalFloatArg(env, info, 1, "bpmMax", tempo_defaults.bpm_max, &bpm_max))
+    return env.Undefined();
 
   float* times = nullptr;
   size_t count = 0;

@@ -306,8 +306,8 @@ float js_detect_bpm(val samples, const val& sample_rate_val, const val& bpm_min_
                     const val& bpm_max_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   BpmConfig config;
-  config.bpm_min = checkedFloatFromVal(bpm_min_val, "bpmMin");
-  config.bpm_max = checkedFloatFromVal(bpm_max_val, "bpmMax");
+  if (const auto v = optionalNumber(bpm_min_val, "bpmMin")) config.bpm_min = *v;
+  if (const auto v = optionalNumber(bpm_max_val, "bpmMax")) config.bpm_max = *v;
   validate_bpm_config(config);
   Audio audio = loadValidatedAudio(samples, sample_rate);
   return quick::detect_bpm(audio.data(), audio.size(), sample_rate, config);
@@ -471,8 +471,8 @@ val js_detect_beats(val samples, const val& sample_rate_val, const val& bpm_min_
                     const val& bpm_max_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   BpmConfig tempo;
-  tempo.bpm_min = checkedFloatFromVal(bpm_min_val, "bpmMin");
-  tempo.bpm_max = checkedFloatFromVal(bpm_max_val, "bpmMax");
+  if (const auto v = optionalNumber(bpm_min_val, "bpmMin")) tempo.bpm_min = *v;
+  if (const auto v = optionalNumber(bpm_max_val, "bpmMax")) tempo.bpm_max = *v;
   validate_bpm_config(tempo);
   BeatConfig config;
   config.bpm_min = tempo.bpm_min;

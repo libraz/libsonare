@@ -417,8 +417,11 @@ val js_cyclic_tempogram(val onset_envelope, const val& sample_rate_val, const va
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   const int win_length = checkedIntFromVal(win_length_val, "winLength");
-  const float bpm_min = checkedFloatFromVal(bpm_min_val, "bpmMin");
-  const int n_bins = checkedIntFromVal(n_bins_val, "nBins");
+  float bpm_min = kCyclicTempogramBpmMin;
+  if (const auto v = optionalNumber(bpm_min_val, "bpmMin")) bpm_min = *v;
+  const int n_bins = n_bins_val.isUndefined() || n_bins_val.isNull()
+                         ? kCyclicTempogramBins
+                         : checkedIntFromVal(n_bins_val, "nBins");
   std::vector<float> data = float32ArrayToVector(onset_envelope);
   validateFiniteVector(data, "cyclicTempogram");
   validatePositiveSampleRate("cyclicTempogram", sample_rate);
@@ -439,17 +442,15 @@ val js_plp(val onset_envelope, const val& sample_rate_val, const val& hop_length
            const val& bpm_min_val, const val& bpm_max_val, const val& win_length_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
-  const float bpm_min = checkedFloatFromVal(bpm_min_val, "bpmMin");
-  const float bpm_max = checkedFloatFromVal(bpm_max_val, "bpmMax");
+  PlpConfig config;
+  if (const auto v = optionalNumber(bpm_min_val, "bpmMin")) config.tempo_min = *v;
+  if (const auto v = optionalNumber(bpm_max_val, "bpmMax")) config.tempo_max = *v;
   const int win_length = checkedIntFromVal(win_length_val, "winLength");
   std::vector<float> data = float32ArrayToVector(onset_envelope);
   validateFiniteVector(data, "plp");
   validatePositiveSampleRate("plp", sample_rate);
-  PlpConfig config;
   config.sr = sample_rate;
   config.hop_length = hop_length;
-  config.tempo_min = bpm_min;
-  config.tempo_max = bpm_max;
   config.win_length = win_length;
   return vectorToFloat32Array(plp(data, config));
 }

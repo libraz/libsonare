@@ -97,9 +97,11 @@ Napi::Value SonareWrap::CyclicTempogram(const Napi::CallbackInfo& info) {
   int win{};
   if (!OptionalIntArg(env, info, 3, "win", 384, &win)) return env.Undefined();
   float bpm_min{};
-  if (!OptionalFiniteFloatArg(env, info, 4, "bpmMin", 60.0f, &bpm_min)) return env.Undefined();
+  if (!OptionalFiniteFloatArg(env, info, 4, "bpmMin", sonare::kCyclicTempogramBpmMin, &bpm_min))
+    return env.Undefined();
   int n_bins{};
-  if (!OptionalIntArg(env, info, 5, "nBins", 60, &n_bins)) return env.Undefined();
+  if (!OptionalIntArg(env, info, 5, "nBins", sonare::kCyclicTempogramBins, &n_bins))
+    return env.Undefined();
   float* out = nullptr;
   size_t count = 0;
   int n_frames = 0;

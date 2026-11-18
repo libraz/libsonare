@@ -50,10 +50,13 @@ Napi::Value SonareWrap::DetectBpm(const Napi::CallbackInfo& info) {
   size_t length = input.length;
   int sample_rate = input.sample_rate;
 
+  const sonare::BpmConfig tempo_defaults;
   float bpm_min{};
-  if (!RequiredFloatArg(env, info, 2, "bpmMin", &bpm_min)) return env.Undefined();
+  if (!OptionalFloatArg(env, info, 2, "bpmMin", tempo_defaults.bpm_min, &bpm_min))
+    return env.Undefined();
   float bpm_max{};
-  if (!RequiredFloatArg(env, info, 3, "bpmMax", &bpm_max)) return env.Undefined();
+  if (!OptionalFloatArg(env, info, 3, "bpmMax", tempo_defaults.bpm_max, &bpm_max))
+    return env.Undefined();
 
   float bpm = 0.0f;
   SonareError err = sonare_detect_bpm(data, length, sample_rate, bpm_min, bpm_max, &bpm);
@@ -186,10 +189,13 @@ Napi::Value SonareWrap::DetectBeats(const Napi::CallbackInfo& info) {
   size_t length = input.length;
   int sample_rate = input.sample_rate;
 
+  const sonare::BpmConfig tempo_defaults;
   float bpm_min{};
-  if (!RequiredFloatArg(env, info, 2, "bpmMin", &bpm_min)) return env.Undefined();
+  if (!OptionalFloatArg(env, info, 2, "bpmMin", tempo_defaults.bpm_min, &bpm_min))
+    return env.Undefined();
   float bpm_max{};
-  if (!RequiredFloatArg(env, info, 3, "bpmMax", &bpm_max)) return env.Undefined();
+  if (!OptionalFloatArg(env, info, 3, "bpmMax", tempo_defaults.bpm_max, &bpm_max))
+    return env.Undefined();
 
   float* times = nullptr;
   size_t count = 0;
@@ -517,7 +523,8 @@ Napi::Value SonareWrap::AnalyzeBpm(const Napi::CallbackInfo& info) {
   if (!OptionalFloatArg(env, info, 3, "bpmMax", sonare::BpmConfig{}.bpm_max, &bpm_max))
     return env.Undefined();
   float start_bpm{};
-  if (!OptionalFloatArg(env, info, 4, "startBpm", 120.0f, &start_bpm)) return env.Undefined();
+  if (!OptionalFloatArg(env, info, 4, "startBpm", sonare::BpmConfig{}.start_bpm, &start_bpm))
+    return env.Undefined();
   int n_fft{};
   if (!OptionalIntArg(env, info, 5, "nFft", 2048, &n_fft)) return env.Undefined();
   int hop_length{};
@@ -703,7 +710,8 @@ Napi::Value SonareWrap::AnalyzeRhythm(const Napi::CallbackInfo& info) {
   if (!OptionalFloatArg(env, info, 3, "bpmMax", sonare::RhythmConfig{}.bpm_max, &bpm_max))
     return env.Undefined();
   float start_bpm{};
-  if (!OptionalFloatArg(env, info, 4, "startBpm", 120.0f, &start_bpm)) return env.Undefined();
+  if (!OptionalFloatArg(env, info, 4, "startBpm", sonare::RhythmConfig{}.start_bpm, &start_bpm))
+    return env.Undefined();
   int n_fft{};
   if (!OptionalIntArg(env, info, 5, "nFft", 2048, &n_fft)) return env.Undefined();
   int hop_length{};

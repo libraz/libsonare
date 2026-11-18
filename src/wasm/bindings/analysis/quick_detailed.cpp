@@ -15,17 +15,14 @@
 val js_analyze_bpm(val samples, const val& sample_rate, const val& bpm_min_val,
                    const val& bpm_max_val, const val& start_bpm_val, const val& n_fft_val,
                    const val& hop_length_val, const val& max_candidates_val) {
-  const float bpm_min = checkedFloatFromVal(bpm_min_val, "bpmMin");
-  const float bpm_max = checkedFloatFromVal(bpm_max_val, "bpmMax");
-  const float start_bpm = checkedFloatFromVal(start_bpm_val, "startBpm");
+  BpmConfig config;
+  if (const auto v = optionalNumber(bpm_min_val, "bpmMin")) config.bpm_min = *v;
+  if (const auto v = optionalNumber(bpm_max_val, "bpmMax")) config.bpm_max = *v;
+  if (const auto v = optionalNumber(start_bpm_val, "startBpm")) config.start_bpm = *v;
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   const int max_candidates = checkedIntFromVal(max_candidates_val, "maxCandidates");
   Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
-  BpmConfig config;
-  config.bpm_min = bpm_min;
-  config.bpm_max = bpm_max;
-  config.start_bpm = start_bpm;
   config.n_fft = n_fft;
   config.hop_length = hop_length;
   // The analyzer clamps what these refuse; the rule is the one the C ABI applies.
@@ -57,16 +54,13 @@ val js_analyze_bpm(val samples, const val& sample_rate, const val& bpm_min_val,
 val js_analyze_rhythm(val samples, const val& sample_rate, const val& bpm_min_val,
                       const val& bpm_max_val, const val& start_bpm_val, const val& n_fft_val,
                       const val& hop_length_val) {
-  const float bpm_min = checkedFloatFromVal(bpm_min_val, "bpmMin");
-  const float bpm_max = checkedFloatFromVal(bpm_max_val, "bpmMax");
-  const float start_bpm = checkedFloatFromVal(start_bpm_val, "startBpm");
+  RhythmConfig config;
+  if (const auto v = optionalNumber(bpm_min_val, "bpmMin")) config.bpm_min = *v;
+  if (const auto v = optionalNumber(bpm_max_val, "bpmMax")) config.bpm_max = *v;
+  if (const auto v = optionalNumber(start_bpm_val, "startBpm")) config.start_bpm = *v;
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
-  RhythmConfig config;
-  config.bpm_min = bpm_min;
-  config.bpm_max = bpm_max;
-  config.start_bpm = start_bpm;
   config.n_fft = n_fft;
   config.hop_length = hop_length;
   validate_rhythm_config(config);
