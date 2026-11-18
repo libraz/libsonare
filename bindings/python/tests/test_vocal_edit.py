@@ -35,7 +35,6 @@ from libsonare.vocal_edit import (
     VocalSetNoteEdit,
     VocalSetTransition,
     VocalTransition,
-    restore_vocal_edit_session,
     vocal_edit_abi_version,
 )
 
@@ -155,7 +154,7 @@ def test_extended_output_length_survives_export_restore_and_snapshot() -> None:
             rendered = snapshot.render()
             assert rendered.samples.size == output_length
             assert np.array_equal(rendered.samples[source.size :], np.zeros(1024, dtype=np.float32))
-    with restore_vocal_edit_session(source, 16_000, state) as restored:
+    with VocalEditSession.restore(source, 16_000, state) as restored:
         assert restored.output_length_samples == output_length
         with restored.capture_render_snapshot() as snapshot:
             assert snapshot.output_length_samples == output_length
@@ -230,7 +229,7 @@ def test_draft_edit_evaluate_commit_and_restore() -> None:
         revision = session.revision
         state = session.export_state()
         assert state.startswith(b"SVE1")
-    with restore_vocal_edit_session(source, 16_000, state) as restored:
+    with VocalEditSession.restore(source, 16_000, state) as restored:
         restored_notes = restored.notes().notes
         assert restored_notes[0].id == notes[0].id
         assert restored.token().revision == revision
@@ -425,9 +424,9 @@ def test_restore_honours_limits_and_refuses_zero_render_jobs() -> None:
     with VocalEditSession(source, 16_000, analysis=analysis) as session:
         state = session.export_state()
     with pytest.raises((VocalEditError, SonareError)):
-        restore_vocal_edit_session(source, 16_000, state, max_render_jobs=0)
+        VocalEditSession.restore(source, 16_000, state, max_render_jobs=0)
     with (
-        restore_vocal_edit_session(source, 16_000, state, max_render_jobs=1) as restored,
+        VocalEditSession.restore(source, 16_000, state, max_render_jobs=1) as restored,
         restored.capture_render_snapshot() as snapshot,
         snapshot.begin_render_job(),
         pytest.raises((VocalEditError, SonareError)),
@@ -441,7 +440,7 @@ def test_sample_rate_outside_supported_range_is_refused(rate: int) -> None:
     with pytest.raises(SonareValueError):
         VocalEditSession(source, rate, analysis=analysis)
     with pytest.raises(SonareValueError):
-        restore_vocal_edit_session(source, rate, b"SVE1")
+        VocalEditSession.restore(source, rate, b"SVE1")
 
 
 def test_closing_a_session_disposes_its_live_drafts() -> None:

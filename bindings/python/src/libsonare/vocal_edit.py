@@ -462,7 +462,7 @@ class VocalEditSession(_HandleOwner):
         """Restore a session; the limits default to those of session creation."""
         obj = cls.__new__(cls)
         lib = _get_lib()
-        source = _validate_samples("restore_vocal_edit_session", samples)
+        source = _validate_samples("VocalEditSession.restore", samples)
         rate = _vocal_sample_rate(sample_rate)
         restore_options = _restore_options_to_c(
             lib, max_history_bytes, max_cache_bytes, max_undo_depth, max_render_jobs
@@ -900,36 +900,6 @@ def vocal_edit_abi_version() -> int | None:
     return int(lib.sonare_vocal_edit_abi_version())
 
 
-def restore_vocal_edit_session(
-    samples: Sequence[float] | np.ndarray[Any, Any],
-    sample_rate: int,
-    state: bytes | bytearray | memoryview,
-    *,
-    max_history_bytes: int | None = None,
-    max_cache_bytes: int | None = None,
-    max_undo_depth: int | None = None,
-    max_render_jobs: int | None = None,
-) -> VocalEditSession:
-    """Restore an SVE1 state after strict source matching in the native core."""
-    return VocalEditSession.restore(
-        samples,
-        _vocal_sample_rate(sample_rate),
-        state,
-        max_history_bytes=(
-            None if max_history_bytes is None else _uint64(max_history_bytes, "max_history_bytes")
-        ),
-        max_cache_bytes=(
-            None if max_cache_bytes is None else _uint64(max_cache_bytes, "max_cache_bytes")
-        ),
-        max_undo_depth=(
-            None if max_undo_depth is None else _uint32(max_undo_depth, "max_undo_depth")
-        ),
-        max_render_jobs=(
-            None if max_render_jobs is None else _uint32(max_render_jobs, "max_render_jobs")
-        ),
-    )
-
-
 __all__ = [
     "VocalTargetMode",
     "VocalFormantMode",
@@ -963,7 +933,6 @@ __all__ = [
     "VocalEditDraft",
     "VocalRenderSnapshot",
     "VocalRenderJob",
-    "restore_vocal_edit_session",
     "vocal_edit_abi_version",
 ]
 

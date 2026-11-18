@@ -10321,3 +10321,10 @@ old = "VocalEditSession.constructor(options)"
 removed = "pass each setting as its own keyword (yin_threshold=, max_cache_bytes=, ...)"
 domain = "project"
 rule = "construction"
+
+[[entry]]
+kind = "function"
+old = "restore_vocal_edit_session"
+removed = "call the classmethod VocalEditSession.restore(samples, sample_rate, state, ...) with the same keywords"
+domain = "project"
+rule = "construction"

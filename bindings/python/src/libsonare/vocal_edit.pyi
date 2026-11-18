@@ -515,13 +515,3 @@ class VocalRenderJob:
         """Return the rendered result and release the job; ``cancel`` is polled."""
 
 def vocal_edit_abi_version() -> int | None: ...
-def restore_vocal_edit_session(
-    samples: Sequence[float] | NDArray[Any],
-    sample_rate: int,
-    state: bytes | bytearray | memoryview,
-    *,
-    max_history_bytes: int | None = ...,
-    max_cache_bytes: int | None = ...,
-    max_undo_depth: int | None = ...,
-    max_render_jobs: int | None = ...,
-) -> VocalEditSession: ...

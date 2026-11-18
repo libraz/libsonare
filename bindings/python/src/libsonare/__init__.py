@@ -675,7 +675,6 @@ from .vocal_edit import (
     VocalStateToken,
     VocalTargetMode,
     VocalTransition,
-    restore_vocal_edit_session,
     vocal_edit_abi_version,
 )
 
@@ -721,7 +720,6 @@ __all__ = [
     "VocalEditDraft",
     "VocalRenderSnapshot",
     "VocalRenderJob",
-    "restore_vocal_edit_session",
     "vocal_edit_abi_version",
     "AcousticResult",
     "AnalysisDynamics",
