@@ -4,6 +4,7 @@
 #ifdef __EMSCRIPTEN__
 
 #include <algorithm>
+#include <cmath>
 
 #include "analysis/key_profiles.h"
 #include "editing/pitch_editor/scale_quantizer.h"
@@ -95,10 +96,14 @@ val js_mastering_dynamics_compressor(val samples, const val& sample_rate_val, va
     if (hasProperty(options, "detector")) {
       cfg.detector = parseCompressorDetector(options["detector"], cfg.detector);
     }
-    cfg.sidechain_hpf_enabled =
-        boolProperty(options, "sidechainHpfEnabled", cfg.sidechain_hpf_enabled);
-    if (hasProperty(options, "sidechainHpfHz")) {
-      cfg.sidechain_hpf_hz = checkedFloatFromVal(options["sidechainHpfHz"], "sidechainHpfHz");
+    // A given sidechain high-pass corner switches the filter on; absent leaves it off.
+    if (hasProperty(options, "sidechainHighPassHz")) {
+      cfg.sidechain_hpf_hz =
+          checkedFloatFromVal(options["sidechainHighPassHz"], "sidechainHighPassHz");
+      if (!std::isfinite(cfg.sidechain_hpf_hz) || !(cfg.sidechain_hpf_hz > 0.0f)) {
+        throw WasmRangeError("masteringDynamicsCompressor: sidechainHighPassHz must be positive");
+      }
+      cfg.sidechain_hpf_enabled = true;
     }
     if (hasProperty(options, "pdrTimeMs")) {
       cfg.pdr_time_ms = checkedFloatFromVal(options["pdrTimeMs"], "pdrTimeMs");

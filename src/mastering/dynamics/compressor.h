@@ -85,8 +85,8 @@ class Compressor : public rt::RtConfigLifecycle<Compressor, CompressorConfig> {
   // allocation) is dropped. MUST NOT run concurrently with set_config() (single
   // producer).
   // Automatable parameters: 0=thresholdDb, 1=ratio, 2=attackMs, 3=releaseMs,
-  // 4=makeupGainDb, 5=kneeDb, 6=autoMakeup, 7=detector, 8=sidechainHpfEnabled,
-  // 9=sidechainHpfHz, 10=pdrTimeMs, 11=pdrReleaseScale.
+  // 4=makeupGainDb, 5=kneeDb, 6=autoMakeup, 7=detector, 8=sidechainHighPassEnabled,
+  // 9=sidechainHighPassHz, 10=pdrTimeMs, 11=pdrReleaseScale.
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
   static void validate_config(const CompressorConfig& config);

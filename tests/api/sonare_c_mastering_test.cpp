@@ -1243,7 +1243,6 @@ TEST_CASE("the capability catalog's chain-only params are measured through the c
   const auto& cutoff = find("dynamics.multibandComp.crossover.cutoffsHz");
   REQUIRE(cutoff["min"].as_number() == 0.0);
   REQUIRE(cutoff["minExclusive"].as_bool());
-  REQUIRE(find("repair.denoise.gainFloor")["max"].as_number() == 1.0);
 }
 
 TEST_CASE("sonare_mastering named-processor rejects out-of-range repair modes",

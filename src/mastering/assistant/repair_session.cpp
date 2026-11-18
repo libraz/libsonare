@@ -131,6 +131,8 @@ json::Value setting_value(const T& value) {
 
 json::Object settings_of(const repair::DeclipConfig& config) {
   json::Object out;
+  out.emplace(api::detail::kDeclipThresholdKey,
+              setting_value(sonare::linear_to_db(config.clip_threshold)));
   SONARE_FIELDS_DECLIP(SONARE_WRITE_SETTING)
   return out;
 }
@@ -179,7 +181,8 @@ auto read_settings(const json::Object& object, Stage stage, Reader reader) {
   for (const auto& [key, value] : object) {
     if (key == "stage") continue;
     if (declared.probed_keys().count(key) == 0)
-      refuse_document(subject + "unknown setting '" + key + "'");
+      refuse_document(subject + "unknown setting '" + key + "'" +
+                      api::detail::renamed_param_note(key));
     if (value.is_bool()) {
       map[key] = value.as_bool() ? 1.0 : 0.0;
     } else if (value.is_number()) {

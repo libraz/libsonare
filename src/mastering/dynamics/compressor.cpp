@@ -299,10 +299,10 @@ bool Compressor::apply_parameter(CompressorConfig& config, unsigned int param_id
 }
 
 std::vector<rt::ParamDescriptor> Compressor::parameter_descriptors() const {
-  return {{"thresholdDb", 0},    {"ratio", 1},        {"attackMs", 2},
-          {"releaseMs", 3},      {"makeupGainDb", 4}, {"kneeDb", 5},
-          {"autoMakeup", 6},     {"detector", 7},     {"sidechainHpfEnabled", 8},
-          {"sidechainHpfHz", 9}, {"pdrTimeMs", 10},   {"pdrReleaseScale", 11}};
+  return {{"thresholdDb", 0},         {"ratio", 1},        {"attackMs", 2},
+          {"releaseMs", 3},           {"makeupGainDb", 4}, {"kneeDb", 5},
+          {"autoMakeup", 6},          {"detector", 7},     {"sidechainHighPassEnabled", 8},
+          {"sidechainHighPassHz", 9}, {"pdrTimeMs", 10},   {"pdrReleaseScale", 11}};
 }
 
 void Compressor::validate_config(const CompressorConfig& config) {

@@ -39,9 +39,13 @@ TS_SURFACES = {
 }
 
 _KEY_RE = re.compile(r'key\s*==\s*"([^"]+)"')
-_COMPRESSOR_MACRO_RE = re.compile(
-    r"#define\s+SONARE_FIELDS_COMPRESSOR\(X\)((?:[^\n]*\\\n)*[^\n]*)"
+# The chain spells the compressor's high-pass pair as one optional corner
+# between the two table halves.
+_COMPRESSOR_HALVES = (
+    "SONARE_FIELDS_COMPRESSOR_BEFORE_HIGH_PASS",
+    "SONARE_FIELDS_COMPRESSOR_AFTER_HIGH_PASS",
 )
+CHAIN_HIGH_PASS_FIELD = "sidechainHighPassHz"
 _FIELD_RE = re.compile(r'X\(\s*"([^"]+)"')
 
 MULTIBAND = "dynamics.multibandComp"
@@ -59,10 +63,17 @@ def parameter_keys(source: str) -> list[str]:
     return sorted(set(_KEY_RE.findall(source)))
 
 
+def _macro_fields(tables: str, name: str) -> list[str] | None:
+    macro = re.search(rf"#define\s+{name}\(X\)((?:[^\n]*\\\n)*[^\n]*)", tables)
+    return _FIELD_RE.findall(macro.group(1)) if macro else None
+
+
 def band_field_keys(tables: str) -> list[str]:
-    """`bands.0.<field>` for every field of the chain's compressor X-macro."""
-    macro = _COMPRESSOR_MACRO_RE.search(tables)
-    fields = _FIELD_RE.findall(macro.group(1)) if macro else []
+    """`bands.0.<field>` for every field a chain band record carries."""
+    before, after = (_macro_fields(tables, name) for name in _COMPRESSOR_HALVES)
+    if not before or not after:
+        return []
+    fields = [*before, CHAIN_HIGH_PASS_FIELD, *after]
     return [f"{MULTIBAND}.bands.0.{field}" for field in fields]
 
 
@@ -97,7 +108,7 @@ def main() -> int:
     indexed = indexed_keys(FIELD_TABLES.read_text())
     keys = sorted(set(literal_keys + indexed))
     if not band_field_keys(FIELD_TABLES.read_text()):
-        print("no band fields were read -- SONARE_FIELDS_COMPRESSOR moved")
+        print("no band fields were read -- the compressor field-table halves moved")
         return 1
     surfaces = {side: path.read_text() for side, path in TS_SURFACES.items()}
     missing, unreached, comparisons = scan(keys, surfaces)

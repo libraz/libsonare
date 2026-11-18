@@ -140,8 +140,10 @@ TEST_CASE("repair.declip reconstructs the union of both channels' runs",
     right[i] = std::clamp(right[i], -ceiling, ceiling);
   }
 
-  const std::vector<api::Param> params = {
-      {"clipThreshold", 0.89}, {"lpcOrder", 16.0}, {"iterations", 2.0}, {"lpcBlend", 1.0}};
+  const std::vector<api::Param> params = {{"clipThresholdDb", 20.0 * std::log10(0.89)},
+                                          {"lpcOrder", 16.0},
+                                          {"iterations", 2.0},
+                                          {"lpcBlend", 1.0}};
   const api::StereoResult stereo = run_stereo("repair.declip", left, right, params);
   REQUIRE(stereo.left.size() == kLength);
 

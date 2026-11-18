@@ -299,13 +299,26 @@ inline ParamMap make_map(const std::vector<Param>& params) {
   return map;
 }
 
+/// @brief `" (renamed to <key>)"` for a processor parameter that was renamed, else empty.
+inline std::string renamed_param_note(const std::string& key) {
+  static const std::pair<const char*, const char*> kRenamed[] = {
+      {"clipThreshold", "clipThresholdDb"},
+      {"sidechainHpfEnabled", "sidechainHighPassEnabled"},
+      {"sidechainHpfHz", "sidechainHighPassHz"},
+  };
+  for (const auto& [old_key, new_key] : kRenamed) {
+    if (key == old_key) return std::string(" (renamed to ") + new_key + ")";
+  }
+  return std::string();
+}
+
 /// @brief Refuses the supplied keys @p name never read, naming each one; no-op when empty.
 inline void refuse_unread_params(const std::string& name, const std::vector<std::string>& keys) {
   if (keys.empty()) return;
   std::string joined;
   for (const std::string& key : keys) {
     if (!joined.empty()) joined += ", ";
-    joined += key;
+    joined += key + renamed_param_note(key);
   }
   throw SonareException(ErrorCode::InvalidParameter,
                         name + " does not read parameter(s): " + joined);

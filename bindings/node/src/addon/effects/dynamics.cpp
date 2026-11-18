@@ -90,9 +90,15 @@ Napi::Value SonareWrap::MasteringDynamicsCompressor(const Napi::CallbackInfo& in
     config.makeup_gain_db = FloatProperty(options, "makeupGainDb", config.makeup_gain_db);
     config.auto_makeup = BoolProperty(options, "autoMakeup", config.auto_makeup);
     config.detector = parse_compressor_detector(env, options, config.detector);
-    config.sidechain_hpf_enabled =
-        BoolProperty(options, "sidechainHpfEnabled", config.sidechain_hpf_enabled);
-    config.sidechain_hpf_hz = FloatProperty(options, "sidechainHpfHz", config.sidechain_hpf_hz);
+    // A given sidechain high-pass corner switches the filter on; absent leaves it off.
+    const Napi::Value high_pass = options.Get("sidechainHighPassHz");
+    if (!high_pass.IsUndefined() && !high_pass.IsNull()) {
+      config.sidechain_hpf_hz = FiniteFloatProperty(options, "sidechainHighPassHz", 0.0f);
+      if (!(config.sidechain_hpf_hz > 0.0f)) {
+        throw Napi::RangeError::New(env, "sidechainHighPassHz must be positive");
+      }
+      config.sidechain_hpf_enabled = true;
+    }
     config.pdr_time_ms = FloatProperty(options, "pdrTimeMs", config.pdr_time_ms);
     config.pdr_release_scale = FloatProperty(options, "pdrReleaseScale", config.pdr_release_scale);
   }

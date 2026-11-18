@@ -10,6 +10,7 @@
 // failure names the field instead of a spectrum.
 
 #include <algorithm>
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <limits>
@@ -23,6 +24,7 @@
 #include "mastering/api/insert_factory.h"
 #include "mastering/api/named_processor.h"
 #include "mastering/api/processor_params.h"
+#include "mastering/api/repair_params.h"
 #include "mastering/dynamics/compressor.h"
 #include "mastering/dynamics/sidechain_router.h"
 #include "mastering/maximizer/loudness_optimize.h"
@@ -146,7 +148,7 @@ TEST_CASE("repair.declip lpcBlend is wired through the named-processor path",
   REQUIRE(config.lpc_blend == 0.65f);  // factory default the bug got stuck on
 
   const std::vector<Param> params{
-      {"clipThreshold", 0.9}, {"lpcOrder", 24}, {"iterations", 3}, {"lpcBlend", 0.25}};
+      {"clipThresholdDb", -0.9}, {"lpcOrder", 24}, {"iterations", 3}, {"lpcBlend", 0.25}};
   const auto map = make_map(params);
   config.lpc_blend = f(map, "lpcBlend", config.lpc_blend);
 
@@ -236,8 +238,7 @@ TEST_CASE("chain compressor advanced fields survive flat-param apply",
   const std::vector<Param> params{
       {"dynamics.compressor.enabled", 1.0},
       {"dynamics.compressor.detector", 2.0},  // LogRms
-      {"dynamics.compressor.sidechainHpfEnabled", 1.0},
-      {"dynamics.compressor.sidechainHpfHz", 250.0},
+      {"dynamics.compressor.sidechainHighPassHz", 250.0},
       {"dynamics.compressor.pdrTimeMs", 30.0},
       {"dynamics.compressor.pdrReleaseScale", 1.5},
   };
@@ -1383,4 +1384,61 @@ TEST_CASE("every key the catalog publishes for an offline processor is one it re
   for (const std::string& defect : defects) UNSCOPED_INFO(defect.substr(0, 160));
   CHECK(defects.empty());
   CHECK(ran >= 60);
+}
+
+TEST_CASE("a renamed processor parameter is refused naming its successor",
+          "[mastering][param_wiring]") {
+  namespace api = sonare::mastering::api;
+  const std::vector<float> samples(2048, 0.25f);
+
+  SECTION("declip reads its threshold in dBFS") {
+    const std::vector<Param> params{{"clipThresholdDb", -0.5}};
+    const auto config = api::detail::declip_config(make_map(params));
+    CHECK(config.clip_threshold == Catch::Approx(std::pow(10.0f, -0.5f / 20.0f)).margin(1e-6));
+    CHECK(api::detail::declip_config(make_map({})).clip_threshold == 0.98f);
+
+    const std::string message = refusal_of([&] {
+      api::apply_named_processor("repair.declip", samples.data(), samples.size(), 48000,
+                                 {{"clipThreshold", 0.9}});
+    });
+    CHECK(names_unread_key(message, "clipThreshold"));
+    CHECK(message.find("clipThresholdDb") != std::string::npos);
+  }
+
+  SECTION("compressor and router keep their indices under the new names") {
+    sonare::mastering::dynamics::Compressor compressor;
+    unsigned int enabled_id = 99;
+    unsigned int hz_id = 99;
+    for (const auto& descriptor : compressor.parameter_descriptors()) {
+      if (descriptor.key == "sidechainHighPassEnabled") enabled_id = descriptor.id;
+      if (descriptor.key == "sidechainHighPassHz") hz_id = descriptor.id;
+      CHECK(descriptor.key.find("Hpf") == std::string::npos);
+    }
+    CHECK(enabled_id == 8);
+    CHECK(hz_id == 9);
+
+    std::vector<std::string> unknown;
+    REQUIRE(make_insert("dynamics.compressor",
+                        R"({"sidechainHighPassEnabled":1,"sidechainHighPassHz":200})",
+                        &unknown) != nullptr);
+    CHECK(unknown.empty());
+    for (const char* old_key : {"sidechainHpfEnabled", "sidechainHpfHz"}) {
+      const std::string message = refusal_of([&] {
+        api::apply_named_processor("dynamics.compressor", samples.data(), samples.size(), 48000,
+                                   {{old_key, 1.0}});
+      });
+      CAPTURE(message);
+      CHECK(names_unread_key(message, old_key));
+      CHECK(message.find("sidechainHighPass") != std::string::npos);
+    }
+
+    std::vector<std::string> router_unknown;
+    REQUIRE(make_insert("dynamics.sidechainRouter",
+                        R"({"sidechainHighPassEnabled":1,"sidechainHighPassHz":200})",
+                        &router_unknown) != nullptr);
+    CHECK(router_unknown.empty());
+    REQUIRE(make_insert("dynamics.sidechainRouter", R"({"sidechainHpfHz":200})", &router_unknown) !=
+            nullptr);
+    CHECK(router_unknown == std::vector<std::string>{"sidechainHpfHz"});
+  }
 }

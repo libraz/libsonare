@@ -2,6 +2,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <cstdio>
 #include <iterator>
 #include <string>
 #include <utility>
@@ -13,6 +14,7 @@
 #include "mastering/api/presets.h"
 #include "support/audio_fixtures.h"
 #include "util/constants.h"
+#include "util/db.h"
 #include "util/exception.h"
 #include "util/json.h"
 
@@ -227,6 +229,11 @@ TEST_CASE("preset chain configs round-trip through JSON", "[mastering][preset][j
 
 TEST_CASE("default multiband chain keeps the canonical v1 JSON", "[mastering][preset][json]") {
   const auto config = MasteringChainConfig{};
+  char formatted_db[40];
+  std::snprintf(
+      formatted_db, sizeof(formatted_db), "%.17g",
+      static_cast<double>(sonare::linear_to_db(config.repair.declip.config.clip_threshold)));
+  const std::string clip_threshold_db = formatted_db;
   const std::string expected =
       "{\"params\":{\"dynamics.compressor.attackMs\":10,\"dynamics.compressor.autoMakeup\":false,"
       "\"dynamics.compressor.detector\":1,\"dy"
@@ -234,8 +241,7 @@ TEST_CASE("default multiband chain keeps the canonical v1 JSON", "[mastering][pr
       "makeupGainDb\":0,\"dynamics.compresso"
       "r.pdrReleaseScale\":1,\"dynamics.compressor.pdrTimeMs\":0,\"dynamics.compressor.ratio\":2,"
       "\"dynamics.compressor.releaseMs\":100"
-      ",\"dynamics.compressor.sidechainHpfEnabled\":false,\"dynamics.compressor.sidechainHpfHz\":"
-      "100,\"dynamics.compressor.threshold"
+      ",\"dynamics.compressor.threshold"
       "Db\":-18,\"dynamics.deesser.attackMs\":1,\"dynamics.deesser.bandpassQ\":1.5,\"dynamics."
       "deesser.enabled\":false,\"dynamics.deesse"
       "r.frequencyHz\":6000,\"dynamics.deesser.rangeDb\":12,\"dynamics.deesser.ratio\":4,"
@@ -270,7 +276,9 @@ TEST_CASE("default multiband chain keeps the canonical v1 JSON", "[mastering][pr
       "declick.lpcOrder\":20,\"repair.decli"
       "ck.maxClickSamples\":8,\"repair.declick.neighborRatio\":4,\"repair.declick.residualRatio\":"
       "8,\"repair.declick.threshold\":0.800"
-      "00001192092896,\"repair.declip.clipThreshold\":0.98000001907348633,\"repair.declip."
+      "00001192092896,\"repair.declip.clipThresholdDb\":" +
+      clip_threshold_db +
+      ",\"repair.declip."
       "enabled\":false,\"repair.declip.iterations"
       "\":2,\"repair.declip.lpcBlend\":0.64999997615814209,\"repair.declip.lpcOrder\":36,\"repair."
       "decrackle.enabled\":false,\"repair.de"
@@ -347,7 +355,10 @@ TEST_CASE("v2 multiband JSON preserves four and five full compressor bands",
       REQUIRE(actual_band.auto_makeup == expected_band.auto_makeup);
       REQUIRE(actual_band.detector == expected_band.detector);
       REQUIRE(actual_band.sidechain_hpf_enabled == expected_band.sidechain_hpf_enabled);
-      REQUIRE(actual_band.sidechain_hpf_hz == expected_band.sidechain_hpf_hz);
+      // A record carries the corner only while the high-pass is on.
+      if (expected_band.sidechain_hpf_enabled) {
+        REQUIRE(actual_band.sidechain_hpf_hz == expected_band.sidechain_hpf_hz);
+      }
       REQUIRE(actual_band.pdr_time_ms == expected_band.pdr_time_ms);
       REQUIRE(actual_band.pdr_release_scale == expected_band.pdr_release_scale);
     }

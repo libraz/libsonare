@@ -656,11 +656,11 @@ TEST_CASE("measured bounds reproduce the validation they were measured through",
   const double makeup_max = find_param(compressor, "makeupGainDb")->find("max")->as_number();
   REQUIRE(makeup_max > 770.0);
   REQUIRE(makeup_max < 771.0);
-  // sidechainHpfHz is validated as strictly positive, and an exclusive bound is
+  // sidechainHighPassHz is validated as strictly positive, and an exclusive bound is
   // published as the limit it excludes, flagged as such.
-  REQUIRE(find_param(compressor, "sidechainHpfHz")->find("min")->as_number() == 0.0);
-  REQUIRE(find_param(compressor, "sidechainHpfHz")->find("minExclusive")->as_bool());
-  REQUIRE_FALSE(builds_with("dynamics.compressor", "sidechainHpfHz", json::Value(0.0)));
+  REQUIRE(find_param(compressor, "sidechainHighPassHz")->find("min")->as_number() == 0.0);
+  REQUIRE(find_param(compressor, "sidechainHighPassHz")->find("minExclusive")->as_bool());
+  REQUIRE_FALSE(builds_with("dynamics.compressor", "sidechainHighPassHz", json::Value(0.0)));
   // An inclusive bound carries a false flag, and an absent bound never an exclusive one.
   REQUIRE_FALSE(find_param(compressor, "attackMs")->find("minExclusive")->as_bool());
   REQUIRE_FALSE(find_param(compressor, "thresholdDb")->find("minExclusive")->as_bool());
@@ -1093,7 +1093,7 @@ TEST_CASE("declared units follow what each reader declared, not the key's spelli
   CHECK(unit_of("dynamics.compressor", "thresholdDb") == "dB");
   CHECK(unit_of("dynamics.compressor", "ratio") == "ratio");
   CHECK(unit_of("dynamics.compressor", "attackMs") == "ms");
-  CHECK(unit_of("dynamics.compressor", "sidechainHpfHz") == "Hz");
+  CHECK(unit_of("dynamics.compressor", "sidechainHighPassHz") == "Hz");
   CHECK(unit_of("maximizer.truePeakLimiter", "ceilingDb") == "dBFS");
   CHECK(unit_of("maximizer.truePeakLimiter", "oversampleFactor") == "ratio");
   CHECK(unit_of("eq.linearPhase", "fftSize") == "samples");

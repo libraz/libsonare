@@ -109,27 +109,31 @@ class MasteringParamSurfaces(unittest.TestCase):
         )
 
     def test_the_indexed_families_are_populated_from_their_sources(self):
-        """Twelve compressor band fields plus the four crossover entries."""
+        """Eleven compressor band fields plus the four crossover entries."""
         indexed = check.indexed_keys(check.FIELD_TABLES.read_text())
         bands = [k for k in indexed if ".bands.0." in k]
-        self.assertEqual(len(bands), 12)
+        self.assertEqual(len(bands), 11)
+        self.assertIn("dynamics.multibandComp.bands.0.sidechainHighPassHz", bands)
         self.assertIn("dynamics.multibandComp.bands.0.thresholdDb", bands)
         self.assertIn("dynamics.multibandComp.bands.0.pdrReleaseScale", bands)
-        self.assertEqual(len(indexed), 16)
+        self.assertEqual(len(indexed), 15)
         for key in check.CROSSOVER_KEYS:
             self.assertIn(key, indexed)
 
     def test_the_band_field_reader_follows_the_x_macro(self):
         tables = (
-            "#define SONARE_FIELDS_COMPRESSOR(X) \\\n"
+            "#define SONARE_FIELDS_COMPRESSOR_BEFORE_HIGH_PASS(X) \\\n"
             '  X("thresholdDb", threshold_db, kDb) \\\n'
             '  X("ratio", ratio, kRatio)\n\n'
+            '#define SONARE_FIELDS_COMPRESSOR_AFTER_HIGH_PASS(X) X("pdrTimeMs", p, kMs)\n\n'
             '#define SONARE_FIELDS_LIMITER(X) X("ceilingDb", c, kDb)\n'
         )
         self.assertEqual(
             check.band_field_keys(tables),
             ["dynamics.multibandComp.bands.0.thresholdDb",
-             "dynamics.multibandComp.bands.0.ratio"],
+             "dynamics.multibandComp.bands.0.ratio",
+             "dynamics.multibandComp.bands.0.sidechainHighPassHz",
+             "dynamics.multibandComp.bands.0.pdrTimeMs"],
         )
 
     def test_the_indexed_families_are_compared_not_skipped(self):

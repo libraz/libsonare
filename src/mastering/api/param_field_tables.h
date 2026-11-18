@@ -976,7 +976,10 @@ inline double field_as_double(Enum value) {
 
 // --- Dynamics ---
 
-#define SONARE_FIELDS_COMPRESSOR(X)                              \
+// The compressor's rows split around the sidechain high-pass pair so the chain's records, which
+// carry that pair as the one optional `sidechainHighPassHz`, can write the rest from the table.
+// The indexed processor parameters are the whole table, in this order.
+#define SONARE_FIELDS_COMPRESSOR_BEFORE_HIGH_PASS(X)             \
   X("thresholdDb", threshold_db, display_range(kDb, -60, 0))     \
   X("ratio", ratio, display_range(kRatio, 1, 20))                \
   X("attackMs", attack_ms, display_range(kMsLog, 0.1, 200))      \
@@ -984,11 +987,17 @@ inline double field_as_double(Enum value) {
   X("kneeDb", knee_db, display_range(kDb, 0, 24))                \
   X("makeupGainDb", makeup_gain_db, display_range(kDb, -12, 24)) \
   X("autoMakeup", auto_makeup, kNone)                            \
-  X("detector", detector, kNone)                                 \
-  X("sidechainHpfEnabled", sidechain_hpf_enabled, kNone)         \
-  X("sidechainHpfHz", sidechain_hpf_hz, kHzLog)                  \
-  X("pdrTimeMs", pdr_time_ms, kMs)                               \
+  X("detector", detector, kNone)
+
+#define SONARE_FIELDS_COMPRESSOR_AFTER_HIGH_PASS(X) \
+  X("pdrTimeMs", pdr_time_ms, kMs)                  \
   X("pdrReleaseScale", pdr_release_scale, kNone)
+
+#define SONARE_FIELDS_COMPRESSOR(X)                           \
+  SONARE_FIELDS_COMPRESSOR_BEFORE_HIGH_PASS(X)                \
+  X("sidechainHighPassEnabled", sidechain_hpf_enabled, kNone) \
+  X("sidechainHighPassHz", sidechain_hpf_hz, kHzLog)          \
+  SONARE_FIELDS_COMPRESSOR_AFTER_HIGH_PASS(X)
 
 #define SONARE_FIELDS_LIMITER(X)                               \
   X("thresholdDb", threshold_db, display_range(kDb, -60, 0))   \
@@ -1038,16 +1047,16 @@ inline double field_as_double(Enum value) {
   X("outputLimiter", output_limiter, kNone)     \
   X("outputCeilingDb", output_ceiling_db, kDbfs)
 
-#define SONARE_FIELDS_SIDECHAIN_ROUTER(X)                \
-  X("thresholdDb", threshold_db, kDb)                    \
-  X("ratio", ratio, kRatio)                              \
-  X("attackMs", attack_ms, kMsLog)                       \
-  X("releaseMs", release_ms, kMsLog)                     \
-  X("rangeDb", range_db, kDb)                            \
-  X("sidechainHpfEnabled", sidechain_hpf_enabled, kNone) \
-  X("sidechainHpfHz", sidechain_hpf_hz, kHzLog)          \
-  X("monoSumming", mono_summing, kNone)                  \
-  X("keyListen", key_listen, kNone)                      \
+#define SONARE_FIELDS_SIDECHAIN_ROUTER(X)                     \
+  X("thresholdDb", threshold_db, kDb)                         \
+  X("ratio", ratio, kRatio)                                   \
+  X("attackMs", attack_ms, kMsLog)                            \
+  X("releaseMs", release_ms, kMsLog)                          \
+  X("rangeDb", range_db, kDb)                                 \
+  X("sidechainHighPassEnabled", sidechain_hpf_enabled, kNone) \
+  X("sidechainHighPassHz", sidechain_hpf_hz, kHzLog)          \
+  X("monoSumming", mono_summing, kNone)                       \
+  X("keyListen", key_listen, kNone)                           \
   X("lookaheadMs", lookahead_ms, kMs)
 
 #define SONARE_FIELDS_DUCKING(X)      \
@@ -1295,10 +1304,11 @@ inline double field_as_double(Enum value) {
   X("lpcOrder", lpc_order, kCount)                                        \
   X("residualRatio", residual_ratio, display_range(kRatio, 1, 50))
 
-#define SONARE_FIELDS_DECLIP(X)                                    \
-  X("clipThreshold", clip_threshold, display_range(kNone, 0.5, 1)) \
-  X("lpcOrder", lpc_order, kCount)                                 \
-  X("iterations", iterations, kCount)                              \
+// `clip_threshold` is linear in the config and `clipThresholdDb` on the wire, so it is read and
+// written by hand (see declip_threshold_db_meta); the table holds the other fields.
+#define SONARE_FIELDS_DECLIP(X)       \
+  X("lpcOrder", lpc_order, kCount)    \
+  X("iterations", iterations, kCount) \
   X("lpcBlend", lpc_blend, kNone)
 
 #define SONARE_FIELDS_DECRACKLE(X)                         \

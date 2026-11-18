@@ -6,6 +6,7 @@
 
 #include "mastering/api/insert_factory.h"
 #include "mastering/api/named_processor.h"
+#include "mastering/api/param_map.h"
 #include "mastering/api/retired_names.h"
 #include "mastering/saturation/amp_presets.h"
 #include "rt/processor_base.h"
@@ -190,7 +191,7 @@ InsertTiming insert_timing(const std::string& name, const std::string& json_para
     std::string keys;
     for (const std::string& key : unknown) {
       if (!keys.empty()) keys += ", ";
-      keys += key;
+      keys += key + detail::renamed_param_note(key);
     }
     throw SonareException(ErrorCode::InvalidParameter,
                           name + " does not read parameter(s): " + keys);

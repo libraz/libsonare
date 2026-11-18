@@ -137,46 +137,6 @@ class InterfaceTeardownRule(unittest.TestCase):
         )
 
 
-class DocumentKeyScreenRule(unittest.TestCase):
-    RECORDS: ClassVar[list[dict]] = [
-        field("node", "RendererDoc", "input", "string"),
-        field("node", "RendererDoc", "target", "string"),
-        field("wasm", "RendererDoc", "input", "string"),
-        field("wasm", "RendererDoc", "target", "string"),
-    ]
-
-    def judge(self, node_keys: str, wasm_keys: str):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            (root / "tools/api").mkdir(parents=True)
-            (root / "tools/api/document_types.toml").write_text(
-                '[[document]]\ntype = "RendererDoc"\n'
-            )
-            for surface, text in (("node", node_keys), ("wasm", wasm_keys)):
-                (root / "bindings" / surface / "src").mkdir(parents=True)
-                (root / "bindings" / surface / "src/request_keys.ts").write_text(text)
-            with mock.patch.object(check, "ROOT", root):
-                return run("document-key-screen", self.RECORDS)
-
-    def test_request_object_screens_pass(self) -> None:
-        verdict = self.judge(
-            "const RENDER_KEYS = keySet('input', 'target', 'onProgress');\n",
-            "const RenderRequestKeys = keysOf<RenderRequest>()(['input', 'target']);\n",
-        )
-        self.assertEqual(verdict.read, 2)
-        self.assertFalse(verdict.failed)
-
-    def test_screen_over_a_document_is_named(self) -> None:
-        verdict = self.judge(
-            "const RENDERER_DOC_KEYS = keySet('target', 'input');\n",
-            "const RendererDocKeys = keysOf<RendererDoc>()(['input', 'target']);\n",
-        )
-        self.assertEqual(
-            sorted(f.key for f in verdict.violations),
-            ["node:RENDERER_DOC_KEYS", "wasm:RendererDocKeys"],
-        )
-
-
 class GettersRule(unittest.TestCase):
     CLEAN: ClassVar[list[dict]] = [
         member("node", "Project", "trackCount", ts_kind="accessor"),

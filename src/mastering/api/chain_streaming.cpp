@@ -136,6 +136,9 @@ void add_parameter_targets(std::vector<StreamingParameterTarget>& targets,
                            bool loudness_stage = false) {
   const auto descriptors = processor->parameter_descriptors();
   for (const auto& descriptor : descriptors) {
+    // The chain's records carry the sidechain high-pass as one optional frequency, so the
+    // processor's enable switch has no chain key.
+    if (descriptor.key == "sidechainHighPassEnabled") continue;
     std::string full_key;
     std::string config_key;
     if (loudness_stage) {
@@ -199,7 +202,7 @@ void validate_realtime_parameter_domain(const std::string& key, float value, dou
   if (key == "dynamics.deesser.bandpassQ" && value < 1.0e-3f) {
     throw SonareException(ErrorCode::InvalidParameter, key + " must be >= 0.001");
   }
-  if (key == "dynamics.compressor.sidechainHpfHz" && value < 1.0f) {
+  if (key == "dynamics.compressor.sidechainHighPassHz" && value < 1.0f) {
     throw SonareException(ErrorCode::InvalidParameter, key + " must be >= 1");
   }
   if (key == "spectral.airBand.shelfFrequencyHz") {
@@ -221,7 +224,7 @@ void validate_realtime_parameter_domain(const std::string& key, float value, dou
     throw SonareException(ErrorCode::InvalidParameter,
                           key + " is below the processor's minimum positive value");
   }
-  if (key == "dynamics.compressor.sidechainHpfHz" &&
+  if (key == "dynamics.compressor.sidechainHighPassHz" &&
       value > static_cast<float>(sample_rate * 0.49)) {
     throw SonareException(ErrorCode::InvalidParameter,
                           key + " is above the prepared processor frequency range");
@@ -636,6 +639,11 @@ void StreamingMasteringChain::set_parameter(const std::string& full_key, double 
   const float canonical_value = static_cast<float>(
       requested_value.has_value() ? *requested_value : static_cast<double>(float_value));
   const auto current_value = chain_config_parameter_value(config_, target->config_key);
+  if (full_key == "dynamics.compressor.sidechainHighPassHz" && !current_value.has_value()) {
+    throw SonareException(
+        ErrorCode::InvalidParameter,
+        "streaming mastering parameter would turn the sidechain high-pass on: " + full_key);
+  }
   if (current_value.has_value() && requested_value.has_value() &&
       *current_value == *requested_value) {
     return;

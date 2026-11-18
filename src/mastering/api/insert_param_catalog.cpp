@@ -182,9 +182,9 @@ bool read_chain_only_config(const ParamMap& params) {
       static_cast<double>(detail::read_enum(params, slope_key.c_str(), crossover.slope)));
   supply_if_given(mode_key, mode_key,
                   static_cast<double>(detail::read_enum(params, mode_key.c_str(), crossover.mode)));
-  // A cutoff element and the legacy linear floor have no single default: declared, not read.
+  // A cutoff element has no single default: declared, not read.
   const std::pair<std::string, detail::ParamMeta> undefaulted[] = {
-      {kChainCutoffList, detail::kHzLog}, {"repair.denoise.gainFloor", detail::kNone}};
+      {kChainCutoffList, detail::kHzLog}};
   for (const auto& [key, meta] : undefaulted) {
     detail::declare_number(params, key, meta);
     const auto given = params.find(key);

@@ -14,6 +14,7 @@
 #include "mastering/api/chain.h"
 #include "mastering/api/insert_factory.h"
 #include "mastering/api/param_field_tables.h"
+#include "util/db.h"
 #include "util/exception.h"
 #include "util/json_budget.h"
 #include "util/json_schema.h"
@@ -78,7 +79,11 @@ sonare::util::json::Object build_multiband_params(const MasteringChainConfig& cf
   for (const CompressorConfig& band_config : cfg.dynamics.multiband_comp.config.bands) {
     sonare::util::json::Object band;
 #define X(key, member, meta) add_field(band, key, band_config.member);
-    SONARE_FIELDS_COMPRESSOR(X)
+    SONARE_FIELDS_COMPRESSOR_BEFORE_HIGH_PASS(X)
+    if (band_config.sidechain_hpf_enabled) {
+      add_field(band, "sidechainHighPassHz", band_config.sidechain_hpf_hz);
+    }
+    SONARE_FIELDS_COMPRESSOR_AFTER_HIGH_PASS(X)
 #undef X
     bands.emplace_back(JsonValue(std::move(band)));
   }
@@ -98,7 +103,8 @@ sonare::util::json::Object build_chain_params(const MasteringChainConfig& cfg,
   add_field(params, "repair.declick.residualRatio", cfg.repair.declick.config.residual_ratio);
 
   add_field(params, "repair.declip.enabled", cfg.repair.declip.enabled);
-  add_field(params, "repair.declip.clipThreshold", cfg.repair.declip.config.clip_threshold);
+  add_field(params, "repair.declip.clipThresholdDb",
+            sonare::linear_to_db(cfg.repair.declip.config.clip_threshold));
   add_field(params, "repair.declip.lpcOrder", cfg.repair.declip.config.lpc_order);
   add_field(params, "repair.declip.iterations", cfg.repair.declip.config.iterations);
   add_field(params, "repair.declip.lpcBlend", cfg.repair.declip.config.lpc_blend);
@@ -179,7 +185,12 @@ sonare::util::json::Object build_chain_params(const MasteringChainConfig& cfg,
   add_field(params, "dynamics.compressor.enabled", cfg.dynamics.compressor.enabled);
 #define X(key, member, meta) \
   add_field(params, "dynamics.compressor." key, cfg.dynamics.compressor.config.member);
-  SONARE_FIELDS_COMPRESSOR(X)
+  SONARE_FIELDS_COMPRESSOR_BEFORE_HIGH_PASS(X)
+  if (cfg.dynamics.compressor.config.sidechain_hpf_enabled) {
+    add_field(params, "dynamics.compressor.sidechainHighPassHz",
+              cfg.dynamics.compressor.config.sidechain_hpf_hz);
+  }
+  SONARE_FIELDS_COMPRESSOR_AFTER_HIGH_PASS(X)
 #undef X
 
   if (include_flat_multiband) {
@@ -441,10 +452,16 @@ MultibandCompStage parse_multiband_config(const JsonValue& value) {
     const std::string band_path = std::string(path) + ".bands[" + std::to_string(index) + "]";
     const JsonValue& band_value = band_values[index];
     const auto& band_object = require_object(band_value, band_path);
+    for (const char* retired : {"sidechainHpfEnabled", "sidechainHpfHz"}) {
+      if (band_object.count(retired) != 0) {
+        throw_invalid_json("unknown chain config key: " + band_path + "." + retired +
+                           " (renamed to sidechainHighPassHz)");
+      }
+    }
     require_allowed_keys(
         band_value,
         {"thresholdDb", "ratio", "attackMs", "releaseMs", "kneeDb", "makeupGainDb", "autoMakeup",
-         "detector", "sidechainHpfEnabled", "sidechainHpfHz", "pdrTimeMs", "pdrReleaseScale"},
+         "detector", "sidechainHighPassHz", "pdrTimeMs", "pdrReleaseScale"},
         band_path);
 
     CompressorConfig band;
@@ -457,10 +474,12 @@ MultibandCompStage parse_multiband_config(const JsonValue& value) {
     band.auto_makeup = require_bool(band_object, "autoMakeup", band_path);
     band.detector = static_cast<DetectorMode>(
         require_int(band_object, "detector", band_path, 0, static_cast<int>(DetectorMode::LogRms)));
-    band.sidechain_hpf_enabled = require_bool(band_object, "sidechainHpfEnabled", band_path);
-    band.sidechain_hpf_hz = require_float(band_object, "sidechainHpfHz", band_path, 0.0);
-    if (!(band.sidechain_hpf_hz > 0.0f)) {
-      throw_invalid_json("sidechain HPF frequency must be positive: " + band_path);
+    if (band_object.count("sidechainHighPassHz") != 0) {
+      band.sidechain_hpf_hz = require_float(band_object, "sidechainHighPassHz", band_path, 0.0);
+      if (!(band.sidechain_hpf_hz > 0.0f)) {
+        throw_invalid_json("sidechain high-pass frequency must be positive: " + band_path);
+      }
+      band.sidechain_hpf_enabled = true;
     }
     band.pdr_time_ms = require_float(band_object, "pdrTimeMs", band_path, 0.0);
     band.pdr_release_scale = require_float(band_object, "pdrReleaseScale", band_path, 1.0);

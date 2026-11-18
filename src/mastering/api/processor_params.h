@@ -512,7 +512,7 @@ inline dynamics::ParallelCompConfig parallel_comp_config(const ParamMap& params)
 inline dynamics::SidechainRouterConfig sidechain_router_config(const ParamMap& params) {
   dynamics::SidechainRouterConfig config;
   SONARE_FIELDS_SIDECHAIN_ROUTER(SONARE_READ_FIELD)
-  params.note_coupled("sidechainHpfHz", "sidechainHpfEnabled");
+  params.note_coupled("sidechainHighPassHz", "sidechainHighPassEnabled");
   return config;
 }
 

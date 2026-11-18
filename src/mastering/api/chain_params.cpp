@@ -2,6 +2,7 @@
 /// @brief Flat-parameter bridge for the high-level mastering chain.
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <map>
 #include <optional>
@@ -180,7 +181,11 @@ std::string retired_chain_key_successor(const std::string& key) {
       {"repair.hopLength", "repair.denoise.hopLength"},
       {"repair.ddAlpha", "repair.denoise.ddAlpha"},
       {"repair.reductionDb", "repair.denoise.reductionDb"},
-      {"repair.gainFloor", "repair.denoise.gainFloor"},
+      {"repair.gainFloor", "repair.denoise.reductionDb"},
+      {"repair.denoise.gainFloor", "repair.denoise.reductionDb"},
+      {"repair.declip.clipThreshold", "repair.declip.clipThresholdDb"},
+      {"dynamics.compressor.sidechainHpfEnabled", "dynamics.compressor.sidechainHighPassHz"},
+      {"dynamics.compressor.sidechainHpfHz", "dynamics.compressor.sidechainHighPassHz"},
       {"eq.tiltDb", "eq.tilt.tiltDb"},
       {"eq.pivotHz", "eq.tilt.pivotHz"},
       {"dynamics.multibandComp.lowCutoffHz", "dynamics.multibandComp.cutoff0Hz"},
@@ -196,7 +201,15 @@ std::string retired_chain_key_successor(const std::string& key) {
   }
   std::size_t index = 0;
   std::string_view field;
+  // The band's sidechain high-pass is one optional key; its two earlier keys name it.
+  const bool retired_high_pass = parse_band_field(rest, "bands.", &index, &field) &&
+                                 (field == "sidechainHpfEnabled" || field == "sidechainHpfHz");
+  if (retired_high_pass) {
+    return std::string(kMultibandPrefix) + "bands." + std::to_string(index) +
+           ".sidechainHighPassHz";
+  }
   if (parse_band_field(rest, "band", &index, &field)) {
+    if (field == "sidechainHpfEnabled" || field == "sidechainHpfHz") field = "sidechainHighPassHz";
     return std::string(kMultibandPrefix) + "bands." + std::to_string(index) + "." +
            std::string(field);
   }
@@ -250,9 +263,15 @@ std::optional<double> multiband_parameter_value(const MultibandCompStage& stage,
     return std::nullopt;
   }
   const auto& band = config.bands[index];
+  // Absent while the high-pass is off, so a read-back never reports a frequency that is not in use.
+  if (field == "sidechainHighPassHz") {
+    if (!band.sidechain_hpf_enabled) return std::nullopt;
+    return detail::field_as_double(band.sidechain_hpf_hz);
+  }
 #define X(jkey, member, meta) \
   if (field == jkey) return detail::field_as_double(band.member);
-  SONARE_FIELDS_COMPRESSOR(X)
+  SONARE_FIELDS_COMPRESSOR_BEFORE_HIGH_PASS(X)
+  SONARE_FIELDS_COMPRESSOR_AFTER_HIGH_PASS(X)
 #undef X
   return std::nullopt;
 }
@@ -263,6 +282,20 @@ namespace {
 // was recognized (and applied). A flat sequence of independent early-return
 // `if` blocks keeps the block-nesting depth at 1, which avoids MSVC error
 // C1061 ("blocks nested too deeply") that a long else-if chain triggers.
+
+// A compressor's sidechain high-pass is one optional key: giving it turns the filter on at that
+// frequency, and a value that is not finite and positive is refused rather than read as off.
+void set_sidechain_high_pass(dynamics::CompressorConfig& config, double v, const std::string& key) {
+  const float hz = static_cast<float>(v);
+  if (!std::isfinite(v) || !std::isfinite(hz) || !(hz > 0.0f)) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          key +
+                              " must be finite and > 0; leave it out to keep the sidechain "
+                              "high-pass off");
+  }
+  config.sidechain_hpf_enabled = true;
+  config.sidechain_hpf_hz = hz;
+}
 
 // ---- repair.* (declick, declip, decrackle, dehum, dereverb, denoise) ----
 bool apply_repair_param(MasteringChainConfig& cfg, const std::string& key, double v,
@@ -313,8 +346,8 @@ bool apply_repair_param(MasteringChainConfig& cfg, const std::string& key, doubl
     mark_enabled(flags.declip, v);
     return true;
   }
-  if (key == "repair.declip.clipThreshold") {
-    cfg.repair.declip.config.clip_threshold = vf;
+  if (key == "repair.declip.clipThresholdDb") {
+    cfg.repair.declip.config.clip_threshold = sonare::db_to_linear(vf);
     mark_field(flags.declip);
     return true;
   }
@@ -530,14 +563,6 @@ bool apply_repair_param(MasteringChainConfig& cfg, const std::string& key, doubl
     mark_field(flags.denoise);
     return true;
   }
-  // Documents written while the knob was a linear floor carry that value, so
-  // convert it rather than drop it. The conversion carries the old validity
-  // range with it: a floor above 1 becomes a negative depth and is refused.
-  if (key == "repair.denoise.gainFloor") {
-    cfg.repair.denoise.config.reduction_db = -linear_to_db(vf);
-    mark_field(flags.denoise);
-    return true;
-  }
   if (key == "repair.denoise.overSubtraction") {
     cfg.repair.denoise.config.over_subtraction = vf;
     mark_field(flags.denoise);
@@ -619,13 +644,19 @@ bool apply_eq_dynamics_param(MasteringChainConfig& cfg, const std::string& key, 
     mark_enabled(flags.compressor, v);
     return true;
   }
+  if (key == "dynamics.compressor.sidechainHighPassHz") {
+    set_sidechain_high_pass(cfg.dynamics.compressor.config, v, key);
+    mark_field(flags.compressor);
+    return true;
+  }
 #define X(jkey, member, meta)                                       \
   if (key == "dynamics.compressor." jkey) {                         \
     detail::assign_field(cfg.dynamics.compressor.config.member, v); \
     mark_field(flags.compressor);                                   \
     return true;                                                    \
   }
-  SONARE_FIELDS_COMPRESSOR(X)
+  SONARE_FIELDS_COMPRESSOR_BEFORE_HIGH_PASS(X)
+  SONARE_FIELDS_COMPRESSOR_AFTER_HIGH_PASS(X)
 #undef X
 
   return false;
@@ -678,6 +709,15 @@ bool apply_multiband_param(MasteringChainConfig& cfg, const std::string& key,
   }
   std::string_view field;
   if (!parse_band_field(rest, "band", &index, &field)) return false;
+  if (field == "sidechainHighPassHz") {
+    if (index >= config.bands.size()) {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            "multiband band index out of range: " + spelled);
+    }
+    set_sidechain_high_pass(config.bands[index], v, spelled);
+    mark_field(flags.multiband_comp);
+    return true;
+  }
 #define X(jkey, member, meta)                                                 \
   if (field == jkey) {                                                        \
     if (index >= config.bands.size()) {                                       \
@@ -688,7 +728,8 @@ bool apply_multiband_param(MasteringChainConfig& cfg, const std::string& key,
     mark_field(flags.multiband_comp);                                         \
     return true;                                                              \
   }
-  SONARE_FIELDS_COMPRESSOR(X)
+  SONARE_FIELDS_COMPRESSOR_BEFORE_HIGH_PASS(X)
+  SONARE_FIELDS_COMPRESSOR_AFTER_HIGH_PASS(X)
 #undef X
   return false;
 }

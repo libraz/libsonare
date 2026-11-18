@@ -601,32 +601,168 @@ TEST_CASE("parse_chain_config_params rejects unknown keys", "[mastering][chain]"
   REQUIRE_THROWS_AS(parse_chain_config_params(params, 1), sonare::SonareException);
 }
 
-TEST_CASE("A saved denoise floor loads as the depth it stood for", "[mastering][chain]") {
-  // The knob is a depth in dB; documents written while it was a linear floor
-  // carry that spelling, so loading one has to convert rather than ignore it.
-  Param legacy[] = {{"repair.denoise.gainFloor", 0.1}};
-  REQUIRE_THAT(parse_chain_config_params(legacy, 1).repair.denoise.config.reduction_db,
-               WithinAbs(20.0f, 1e-4f));
+namespace {
 
-  // A floor above unity was refused before. As a depth it is negative, so the
-  // conversion carries the old boundary rather than widening it, and the
-  // refusal names the stage because the repair stages are checked before any
-  // of them has touched the track.
-  Param out_of_range[] = {{"repair.denoise.gainFloor", 1.5}};
-  std::string refusal;
+// The code and message of the refusal @p call raises; fails the case when it raises none.
+template <typename Call>
+std::pair<ErrorCode, std::string> refusal_of(Call&& call) {
   try {
-    parse_chain_config_params(out_of_range, 1);
-    FAIL("a linear floor above unity must not survive the conversion");
+    call();
   } catch (const SonareException& error) {
-    refusal = error.what();
+    return {error.code(), error.what()};
   }
-  REQUIRE(refusal.find("repair.denoise") != std::string::npos);
-  REQUIRE(refusal.find("reduction_db") != std::string::npos);
+  FAIL("expected a refusal");
+  return {ErrorCode::Ok, std::string()};
+}
 
-  // The current spelling is taken as written, with no conversion in the way.
+std::pair<ErrorCode, std::string> dot_key_refusal(const char* key, double value) {
+  const Param params[] = {{key, value}};
+  return refusal_of([&] { (void)parse_chain_config_params(params, 1); });
+}
+
+}  // namespace
+
+TEST_CASE("The linear denoise floor spelling is refused, naming the depth key",
+          "[mastering][chain]") {
+  for (const char* key : {"repair.denoise.gainFloor", "repair.gainFloor"}) {
+    CAPTURE(key);
+    const auto [code, message] = dot_key_refusal(key, 0.1);
+    REQUIRE(code == ErrorCode::InvalidParameter);
+    REQUIRE_THAT(message, ContainsSubstring(key));
+    REQUIRE_THAT(message, ContainsSubstring("repair.denoise.reductionDb"));
+  }
+  const std::string document = "{\"version\":1,\"params\":{\"repair.denoise.gainFloor\":0.1}}";
+  const auto [code, message] = refusal_of([&] { (void)chain_config_from_json(document); });
+  REQUIRE(code == ErrorCode::InvalidFormat);
+  REQUIRE_THAT(message, ContainsSubstring("repair.denoise.reductionDb"));
+
   Param current[] = {{"repair.denoise.reductionDb", 12.0}};
   REQUIRE_THAT(parse_chain_config_params(current, 1).repair.denoise.config.reduction_db,
                WithinAbs(12.0f, 1e-6f));
+}
+
+TEST_CASE("The declip threshold is a dBFS key", "[mastering][chain]") {
+  Param params[] = {{"repair.declip.clipThresholdDb", -0.5}};
+  const MasteringChainConfig config = parse_chain_config_params(params, 1);
+  REQUIRE(config.repair.declip.enabled);
+  REQUIRE_THAT(config.repair.declip.config.clip_threshold,
+               WithinAbs(std::pow(10.0f, -0.5f / 20.0f), 1e-6f));
+  REQUIRE_THAT(*chain_config_parameter_value(config, "repair.declip.clipThresholdDb"),
+               WithinAbs(-0.5, 1e-5));
+
+  const MasteringChainConfig reloaded = chain_config_from_json(chain_config_to_json(config));
+  REQUIRE_THAT(reloaded.repair.declip.config.clip_threshold,
+               WithinAbs(config.repair.declip.config.clip_threshold, 1e-6f));
+  REQUIRE_THAT(chain_config_to_json(config), ContainsSubstring("repair.declip.clipThresholdDb"));
+  REQUIRE_THAT(chain_config_to_json(config), !ContainsSubstring("repair.declip.clipThreshold\""));
+
+  // Above 0 dBFS is no threshold a signal can reach.
+  REQUIRE(dot_key_refusal("repair.declip.clipThresholdDb", 3.0).first ==
+          ErrorCode::InvalidParameter);
+
+  const auto [code, message] = dot_key_refusal("repair.declip.clipThreshold", 0.9);
+  REQUIRE(code == ErrorCode::InvalidParameter);
+  REQUIRE_THAT(message, ContainsSubstring("repair.declip.clipThreshold"));
+  REQUIRE_THAT(message, ContainsSubstring("repair.declip.clipThresholdDb"));
+  const auto [doc_code, doc_message] = refusal_of([] {
+    (void)chain_config_from_json(
+        "{\"version\":1,\"params\":{\"repair.declip.clipThreshold\":0.9}}");
+  });
+  REQUIRE(doc_code == ErrorCode::InvalidFormat);
+  REQUIRE_THAT(doc_message, ContainsSubstring("repair.declip.clipThresholdDb"));
+}
+
+TEST_CASE("The compressor sidechain high-pass is one optional key", "[mastering][chain]") {
+  const MasteringChainConfig defaults;
+  REQUIRE_FALSE(defaults.dynamics.compressor.config.sidechain_hpf_enabled);
+  REQUIRE_THAT(chain_config_to_json(defaults), !ContainsSubstring("sidechainH"));
+  REQUIRE_FALSE(chain_config_parameter_value(defaults, "dynamics.compressor.sidechainHighPassHz"));
+
+  Param params[] = {{"dynamics.compressor.sidechainHighPassHz", 180.0}};
+  const MasteringChainConfig config = parse_chain_config_params(params, 1);
+  REQUIRE(config.dynamics.compressor.config.sidechain_hpf_enabled);
+  REQUIRE(config.dynamics.compressor.config.sidechain_hpf_hz == 180.0f);
+  REQUIRE(*chain_config_parameter_value(config, "dynamics.compressor.sidechainHighPassHz") ==
+          180.0);
+  const std::string document = chain_config_to_json(config);
+  REQUIRE_THAT(document, ContainsSubstring("dynamics.compressor.sidechainHighPassHz"));
+  REQUIRE_THAT(document, !ContainsSubstring("sidechainHpf"));
+  const MasteringChainConfig reloaded = chain_config_from_json(document);
+  REQUIRE(reloaded.dynamics.compressor.config.sidechain_hpf_enabled);
+  REQUIRE(reloaded.dynamics.compressor.config.sidechain_hpf_hz == 180.0f);
+
+  // Presence needs a finite positive frequency; zero is a refusal, not "off".
+  for (const double bad : {0.0, -5.0, std::numeric_limits<double>::infinity(),
+                           std::numeric_limits<double>::quiet_NaN()}) {
+    CAPTURE(bad);
+    REQUIRE(dot_key_refusal("dynamics.compressor.sidechainHighPassHz", bad).first ==
+            ErrorCode::InvalidParameter);
+  }
+
+  for (const char* old_key :
+       {"dynamics.compressor.sidechainHpfEnabled", "dynamics.compressor.sidechainHpfHz"}) {
+    CAPTURE(old_key);
+    const auto [code, message] = dot_key_refusal(old_key, 1.0);
+    REQUIRE(code == ErrorCode::InvalidParameter);
+    REQUIRE_THAT(message, ContainsSubstring(old_key));
+    REQUIRE_THAT(message, ContainsSubstring("dynamics.compressor.sidechainHighPassHz"));
+    const auto [doc_code, doc_message] = refusal_of([&] {
+      (void)chain_config_from_json(std::string("{\"version\":1,\"params\":{\"") + old_key +
+                                   "\":1}}");
+    });
+    REQUIRE(doc_code == ErrorCode::InvalidFormat);
+    REQUIRE_THAT(doc_message, ContainsSubstring("dynamics.compressor.sidechainHighPassHz"));
+  }
+}
+
+TEST_CASE("A multiband band's sidechain high-pass is one optional key", "[mastering][chain]") {
+  const std::string high_pass_key = "dynamics.multibandComp.bands.1.sidechainHighPassHz";
+  const MasteringChainConfig defaults;
+  REQUIRE_FALSE(chain_config_parameter_value(defaults, high_pass_key));
+
+  Param params[] = {{high_pass_key.c_str(), 140.0}};
+  const MasteringChainConfig config = parse_chain_config_params(params, 1);
+  const auto& bands = config.dynamics.multiband_comp.config.bands;
+  REQUIRE_FALSE(bands[0].sidechain_hpf_enabled);
+  REQUIRE(bands[1].sidechain_hpf_enabled);
+  REQUIRE(bands[1].sidechain_hpf_hz == 140.0f);
+  REQUIRE(*chain_config_parameter_value(config, high_pass_key) == 140.0);
+  REQUIRE_FALSE(
+      chain_config_parameter_value(config, "dynamics.multibandComp.bands.0.sidechainHighPassHz"));
+
+  // The structured document names the key on the band that has it and nowhere else.
+  const std::string document = chain_config_to_json(config);
+  REQUIRE_THAT(document, ContainsSubstring("\"sidechainHighPassHz\":140"));
+  REQUIRE_THAT(document, !ContainsSubstring("sidechainHpf"));
+  const MasteringChainConfig reloaded = chain_config_from_json(document);
+  const auto& reloaded_bands = reloaded.dynamics.multiband_comp.config.bands;
+  REQUIRE_FALSE(reloaded_bands[0].sidechain_hpf_enabled);
+  REQUIRE(reloaded_bands[1].sidechain_hpf_enabled);
+  REQUIRE(reloaded_bands[1].sidechain_hpf_hz == 140.0f);
+
+  REQUIRE(dot_key_refusal(high_pass_key.c_str(), 0.0).first == ErrorCode::InvalidParameter);
+  REQUIRE(dot_key_refusal(high_pass_key.c_str(), -1.0).first == ErrorCode::InvalidParameter);
+
+  for (const char* old_field : {"sidechainHpfEnabled", "sidechainHpfHz"}) {
+    CAPTURE(old_field);
+    const std::string old_key = std::string("dynamics.multibandComp.bands.1.") + old_field;
+    const auto [code, message] = dot_key_refusal(old_key.c_str(), 1.0);
+    REQUIRE(code == ErrorCode::InvalidParameter);
+    REQUIRE_THAT(message, ContainsSubstring(old_key));
+    REQUIRE_THAT(message, ContainsSubstring(high_pass_key));
+
+    // The same field inside a band record of the structured document.
+    std::string with_old_field = document;
+    const std::size_t at = with_old_field.find("\"sidechainHighPassHz\":140");
+    REQUIRE(at != std::string::npos);
+    with_old_field.replace(at, std::string("\"sidechainHighPassHz\":140").size(),
+                           std::string("\"") + old_field + "\":1");
+    const auto [doc_code, doc_message] =
+        refusal_of([&] { (void)chain_config_from_json(with_old_field); });
+    REQUIRE(doc_code == ErrorCode::InvalidFormat);
+    REQUIRE_THAT(doc_message, ContainsSubstring("sidechainHighPassHz"));
+    REQUIRE_THAT(doc_message, ContainsSubstring(old_field));
+  }
 }
 
 TEST_CASE("parse_chain_config_params honors explicit enabled=false", "[mastering][chain]") {
@@ -1779,8 +1915,9 @@ TEST_CASE("chain parameter lookup preserves non-default boolean fields",
   config.dynamics.compressor.config.sidechain_hpf_enabled = true;
   REQUIRE(chain_config_parameter_value(config, "dynamics.compressor.autoMakeup") ==
           std::optional<double>{1.0});
-  REQUIRE(chain_config_parameter_value(config, "dynamics.compressor.sidechainHpfEnabled") ==
-          std::optional<double>{1.0});
+  REQUIRE(chain_config_parameter_value(config, "dynamics.compressor.sidechainHighPassHz") ==
+          std::optional<double>{
+              static_cast<double>(config.dynamics.compressor.config.sidechain_hpf_hz)});
 }
 
 TEST_CASE("StreamingMasteringChain preserves typed double parameter semantics",
@@ -2576,7 +2713,7 @@ TEST_CASE("StreamingMasteringChain supports new dynamics stages", "[mastering][c
 
 TEST_CASE("parse_chain_config_params handles new repair keys", "[mastering][chain]") {
   Param params[] = {
-      {"repair.declick.threshold", 0.5},    {"repair.declip.clipThreshold", 0.9},
+      {"repair.declick.threshold", 0.5},    {"repair.declip.clipThresholdDb", -0.9},
       {"repair.decrackle.mode", 1.0},       {"repair.dehum.fundamentalHz", 60.0},
       {"repair.dereverb.attenuation", 0.7},
   };
@@ -2584,7 +2721,8 @@ TEST_CASE("parse_chain_config_params handles new repair keys", "[mastering][chai
   REQUIRE(config.repair.declick.enabled);
   REQUIRE_THAT(config.repair.declick.config.threshold, WithinAbs(0.5f, 1e-6f));
   REQUIRE(config.repair.declip.enabled);
-  REQUIRE_THAT(config.repair.declip.config.clip_threshold, WithinAbs(0.9f, 1e-6f));
+  REQUIRE_THAT(config.repair.declip.config.clip_threshold,
+               WithinAbs(std::pow(10.0f, -0.9f / 20.0f), 1e-6f));
   REQUIRE(config.repair.decrackle.enabled);
   REQUIRE(config.repair.decrackle.config.mode ==
           ::sonare::mastering::repair::DecrackleMode::WaveletShrinkage);
@@ -2982,7 +3120,8 @@ void require_same_band(const CompressorConfig& actual, const CompressorConfig& e
   CHECK(actual.auto_makeup == expected.auto_makeup);
   CHECK(actual.detector == expected.detector);
   CHECK(actual.sidechain_hpf_enabled == expected.sidechain_hpf_enabled);
-  CHECK(actual.sidechain_hpf_hz == expected.sidechain_hpf_hz);
+  // A record carries the corner only while the high-pass is on, so an off band's corner is unused.
+  if (expected.sidechain_hpf_enabled) CHECK(actual.sidechain_hpf_hz == expected.sidechain_hpf_hz);
   CHECK(actual.pdr_time_ms == expected.pdr_time_ms);
   CHECK(actual.pdr_release_scale == expected.pdr_release_scale);
 }
@@ -3052,9 +3191,9 @@ std::vector<Param> array_spelling(const MultibandCompStage& stage) {
     params.push_back({mb_key(prefix + "makeupGainDb"), band.makeup_gain_db});
     params.push_back({mb_key(prefix + "autoMakeup"), band.auto_makeup ? 1.0 : 0.0});
     params.push_back({mb_key(prefix + "detector"), static_cast<double>(band.detector)});
-    params.push_back(
-        {mb_key(prefix + "sidechainHpfEnabled"), band.sidechain_hpf_enabled ? 1.0 : 0.0});
-    params.push_back({mb_key(prefix + "sidechainHpfHz"), band.sidechain_hpf_hz});
+    if (band.sidechain_hpf_enabled) {
+      params.push_back({mb_key(prefix + "sidechainHighPassHz"), band.sidechain_hpf_hz});
+    }
     params.push_back({mb_key(prefix + "pdrTimeMs"), band.pdr_time_ms});
     params.push_back({mb_key(prefix + "pdrReleaseScale"), band.pdr_release_scale});
   }

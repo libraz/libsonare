@@ -1484,7 +1484,7 @@ TEST_CASE("processor catalog publishes a boolean parameter as boolean",
       saw_auto_makeup = true;
       CHECK(type == "boolean");
     }
-    if (name == "thresholdDb" || name == "ratio" || name == "sidechainHpfHz") {
+    if (name == "thresholdDb" || name == "ratio" || name == "sidechainHighPassHz") {
       saw_a_number = true;
       CHECK(type == "number");
     }
