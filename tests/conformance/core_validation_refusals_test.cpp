@@ -142,6 +142,49 @@ TEST_CASE("mel_to_audio refusals are owned by the core function",
   }
 }
 
+TEST_CASE("mfcc_to_audio refusals are owned by the core function",
+          "[conformance][core_validation]") {
+  const Value corpus = load_refusal_corpus();
+  const Value& route = corpus["mfcc_to_audio"];
+  const Value& input = route["input"];
+  const int n_mfcc = static_cast<int>(input["n_mfcc"].as_number());
+  const int n_frames = static_cast<int>(input["n_frames"].as_number());
+  const int n_mels = static_cast<int>(input["n_mels"].as_number());
+  const std::vector<float> mfcc(static_cast<size_t>(n_mfcc) * n_frames,
+                                static_cast<float>(input["fill"].as_number()));
+  constexpr int kRate = 22050;
+  sonare::MelConfig config;
+  config.n_mels = n_mels;
+
+  for (const auto& item : route["accepted"].as_array()) {
+    const int n_iter = static_cast<int>(item["n_iter"].as_number());
+    INFO(item["id"].as_string());
+    CHECK(sonare::mfcc_to_audio(mfcc.data(), n_mfcc, n_frames, config, n_iter, kRate).size() > 0);
+    float* audio = nullptr;
+    size_t audio_length = 0;
+    REQUIRE(sonare_mfcc_to_audio_ex2(mfcc.data(), n_mfcc, n_frames, n_mels, kRate, 2048, 512, 0.0f,
+                                     0.0f, 0, 0.0f, n_iter, &audio, &audio_length) == SONARE_OK);
+    sonare_free_floats(audio);
+  }
+
+  for (const auto& item : route["refused"].as_array()) {
+    const int n_iter = static_cast<int>(item["n_iter"].as_number());
+    const std::string message = item["message"].as_string();
+    INFO(item["id"].as_string());
+    REQUIRE(item["cause"].as_string() == "argument");
+
+    require_argument_refusal(
+        [&] { sonare::mfcc_to_audio(mfcc.data(), n_mfcc, n_frames, config, n_iter, kRate); },
+        message);
+    float* audio = nullptr;
+    size_t audio_length = 0;
+    CHECK(sonare_mfcc_to_audio_ex2(mfcc.data(), n_mfcc, n_frames, n_mels, kRate, 2048, 512, 0.0f,
+                                   0.0f, 0, 0.0f, n_iter, &audio,
+                                   &audio_length) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK_THAT(last_error_message(), Catch::Matchers::ContainsSubstring(message));
+  }
+}
+
 #if defined(SONARE_WITH_VOICE_CHANGER)
 TEST_CASE("streaming retune prepare refusals are owned by the core function",
           "[conformance][core_validation]") {

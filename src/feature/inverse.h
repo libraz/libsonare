@@ -76,7 +76,7 @@ std::vector<float> mfcc_to_mel(const float* mfcc, int n_mfcc, int n_frames, int 
 ///        @ref mel_to_audio.
 /// @param lifter Cepstral lifter factor applied to the MFCC (default 0 = none),
 ///        forwarded to @ref mfcc_to_mel so liftered MFCCs round-trip correctly.
-/// @throw sonare::SonareException (InvalidParameter) for everything @ref
+/// @throw sonare::SonareException (InvalidParameter) for @p n_iter < 1 and everything @ref
 ///        mfcc_to_mel rejects, including a non-finite element of @p mfcc, plus
 ///        anything @ref mel_to_audio rejects in the reconstructed Mel bands.
 Audio mfcc_to_audio(const float* mfcc, int n_mfcc, int n_frames, const MelConfig& mel_config,

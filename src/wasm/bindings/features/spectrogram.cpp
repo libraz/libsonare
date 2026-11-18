@@ -361,7 +361,6 @@ val js_mfcc_to_audio(val mfcc, const val& n_mfcc_val, const val& n_frames_val,
       load_validated_matrix("mfccToAudio", mfcc, n_mfcc, n_frames, "coefficients", "n_mfcc");
   validate_positive("mfccToAudio", n_fft, "n_fft");
   validate_positive("mfccToAudio", hop_length, "hop_length");
-  validate_positive("mfccToAudio", n_iter, "n_iter");
   validate_mel_bounds(fmin, fmax);
 
   MelConfig config;

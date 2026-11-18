@@ -256,7 +256,7 @@ export function mfccToAudio(...args: unknown[]): Float32Array {
   const nMels = r.nMels ?? 128;
   const nIter = r.nIter ?? 32;
   assertInt32('mfccToAudio', nMels, 'nMels');
-  validatePositiveIntegers('mfccToAudio', { nIter });
+  assertInt32('mfccToAudio', nIter, 'nIter');
   const fminHz = r.fminHz ?? 0;
   const fmaxHz = r.fmaxHz ?? 0;
   assertFloatFields('mfccToAudio', { fminHz, fmaxHz });

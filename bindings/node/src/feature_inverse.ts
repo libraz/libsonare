@@ -340,7 +340,7 @@ export function mfccToAudio(...args: unknown[]): Float32Array {
   // inverse transform, under the same geometry rule.
   const nFft = resolvePositiveIntegerOption('mfccToAudio', 'nFft', r.nFft, 2048);
   const hopLength = resolvePositiveIntegerOption('mfccToAudio', 'hopLength', r.hopLength, 512);
-  const nIter = resolvePositiveIntegerOption('mfccToAudio', 'nIter', r.nIter, 32);
+  const nIter = resolveIntegerOption('mfccToAudio', 'nIter', r.nIter, 32);
   const fminHz = r.fminHz ?? 0;
   const fmaxHz = r.fmaxHz ?? 0;
   assertFloatFields('mfccToAudio', { fminHz, fmaxHz });

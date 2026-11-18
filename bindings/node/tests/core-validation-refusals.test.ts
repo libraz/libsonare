@@ -14,6 +14,8 @@ type MfccRoute = { input: MfccInput; accepted: MfccCase[]; refused: MfccCase[] }
 type MelInput = { n_mels: number; n_frames: number; fill: number };
 type MelCase = { id: string; n_iter: number; cause?: Cause; message?: string };
 type MelRoute = { input: MelInput; accepted: MelCase[]; refused: MelCase[] };
+type MfccAudioInput = { n_mfcc: number; n_frames: number; n_mels: number; fill: number };
+type MfccAudioRoute = { input: MfccAudioInput; accepted: MelCase[]; refused: MelCase[] };
 type RetuneCase = {
   id: string;
   sample_rate: number;
@@ -31,6 +33,7 @@ const corpus = JSON.parse(
 ) as {
   mfcc_to_mel: MfccRoute;
   mel_to_audio: MelRoute;
+  mfcc_to_audio: MfccAudioRoute;
   streaming_retune_prepare: RetuneRoute;
 };
 
@@ -104,6 +107,61 @@ describe('mel_to_audio refusals come from the core', () => {
     expectRefusal(
       () =>
         addon.melToAudio(data, input.n_mels, input.n_frames, 22050, 2048, 512, 0, 0, n_iter, false),
+      kind,
+      text,
+    );
+  });
+});
+
+describe('mfcc_to_audio refusals come from the core', () => {
+  const { input, accepted, refused } = corpus.mfcc_to_audio;
+  const data = new Float32Array(input.n_mfcc * input.n_frames).fill(input.fill);
+  const coefficients = { data, rows: input.n_mfcc, cols: input.n_frames };
+
+  it.each(accepted)('accepts $id', ({ n_iter }) => {
+    const out = addon.mfccToAudio(
+      data,
+      input.n_mfcc,
+      input.n_frames,
+      input.n_mels,
+      22050,
+      2048,
+      512,
+      0,
+      0,
+      n_iter,
+      false,
+      0,
+    );
+    const viaFacade = mfccToAudio({ coefficients, nMels: input.n_mels, nIter: n_iter });
+    expect(viaFacade.length).toBeGreaterThan(0);
+    expect(out.length).toBeGreaterThan(0);
+  });
+
+  it.each(refused)('refuses $id', ({ n_iter, cause, message }) => {
+    const kind = errorClassFor[cause as Cause];
+    const text = new RegExp(message as string);
+    expectRefusal(
+      () => mfccToAudio({ coefficients, nMels: input.n_mels, nIter: n_iter }),
+      kind,
+      text,
+    );
+    expectRefusal(
+      () =>
+        addon.mfccToAudio(
+          data,
+          input.n_mfcc,
+          input.n_frames,
+          input.n_mels,
+          22050,
+          2048,
+          512,
+          0,
+          0,
+          n_iter,
+          false,
+          0,
+        ),
       kind,
       text,
     );

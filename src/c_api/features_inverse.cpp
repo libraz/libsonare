@@ -216,7 +216,7 @@ SonareError sonare_mfcc_to_audio_ex2(const float* coefficients, int n_mfcc, int 
   SONARE_C_API_ENTRY;
   if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
   if (!coefficients) return SONARE_ERROR_INVALID_PARAMETER;
-  if (n_fft <= 0 || hop_length <= 0 || sample_rate <= 0 || n_iter <= 0) {
+  if (n_fft <= 0 || hop_length <= 0 || sample_rate <= 0) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
 

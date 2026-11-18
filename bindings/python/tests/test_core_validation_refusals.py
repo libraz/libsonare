@@ -22,6 +22,7 @@ _ERROR_CLASS = {"argument": SonareValueError}
 
 _MFCC = _CORPUS["mfcc_to_mel"]
 _MEL = _CORPUS["mel_to_audio"]
+_MFCC_AUDIO = _CORPUS["mfcc_to_audio"]
 _RETUNE = _CORPUS["streaming_retune_prepare"]
 
 
@@ -59,6 +60,24 @@ def test_mel_to_audio_accepts(case: dict) -> None:
 def test_mel_to_audio_refuses(case: dict) -> None:
     with pytest.raises(_ERROR_CLASS[case["cause"]], match=case["message"]):
         libsonare.mel_to_audio(_mel(), n_iter=case["n_iter"])
+
+
+def _mfcc_audio() -> np.ndarray:
+    shape = (_MFCC_AUDIO["input"]["n_mfcc"], _MFCC_AUDIO["input"]["n_frames"])
+    return np.full(shape, _MFCC_AUDIO["input"]["fill"], dtype=np.float32)
+
+
+@pytest.mark.parametrize("case", _MFCC_AUDIO["accepted"], ids=lambda case: case["id"])
+def test_mfcc_to_audio_accepts(case: dict) -> None:
+    n_mels = _MFCC_AUDIO["input"]["n_mels"]
+    assert libsonare.mfcc_to_audio(_mfcc_audio(), n_mels=n_mels, n_iter=case["n_iter"]).size > 0
+
+
+@pytest.mark.parametrize("case", _MFCC_AUDIO["refused"], ids=lambda case: case["id"])
+def test_mfcc_to_audio_refuses(case: dict) -> None:
+    n_mels = _MFCC_AUDIO["input"]["n_mels"]
+    with pytest.raises(_ERROR_CLASS[case["cause"]], match=case["message"]):
+        libsonare.mfcc_to_audio(_mfcc_audio(), n_mels=n_mels, n_iter=case["n_iter"])
 
 
 @pytest.mark.parametrize("case", _RETUNE["accepted"], ids=lambda case: case["id"])
