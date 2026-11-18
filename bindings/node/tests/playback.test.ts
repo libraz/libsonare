@@ -7,6 +7,7 @@ import {
   PlaybackRenderer,
   renderPlayback,
 } from '../src/index.js';
+import type { PlaybackRendererConfig } from '../src/types_playback.js';
 import { sine } from './_helpers.js';
 
 function stereoBlock(frames: number): [Float32Array, Float32Array] {
@@ -80,6 +81,42 @@ describe('PlaybackRenderer construction and validation', () => {
 });
 
 describe('PlaybackRenderer processing', () => {
+  it('takes a room preset as a lowerCamel token and refuses the snake_case spelling', () => {
+    const render = (preset: string): number[] => {
+      const renderer = new PlaybackRenderer({
+        sampleRate: 48000,
+        config: { room: { preset } } as PlaybackRendererConfig,
+      });
+      try {
+        let state = 1;
+        const out: number[] = [];
+        for (let block = 0; block < 4; block++) {
+          const planes = [new Float32Array(1024), new Float32Array(1024)];
+          for (const plane of planes) {
+            for (let i = 0; i < plane.length; i++) {
+              state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+              plane[i] = 0.1 * (state / 2 ** 31 - 1);
+            }
+          }
+          out.push(...renderer.processPlanar(planes)[0]);
+        }
+        return out;
+      } finally {
+        renderer.destroy();
+      }
+    };
+    const renders = ['none', 'livingRoom', 'homeTheater', 'screeningRoom'].map(render);
+    for (let a = 0; a < renders.length; a++) {
+      for (let b = a + 1; b < renders.length; b++) {
+        expect(renders[a]).not.toEqual(renders[b]);
+      }
+    }
+    // The earlier snake_case spelling is a document content defect.
+    expect(() => render('living_room')).toThrow(
+      expect.objectContaining({ code: ErrorCode.InvalidFormat }),
+    );
+  });
+
   it('processes a stereo planar block to a stereo-speakers target', () => {
     using renderer = new PlaybackRenderer({
       config: { target: { kind: 'speakers', layout: 'stereo' } },
@@ -265,7 +302,7 @@ describe('PlaybackRenderer latency, config and diagnostics', () => {
     expect(diagnostics.layout_switches).toBe(0);
     expect(diagnostics.truncated_drains).toBe(0);
     expect(Array.isArray(diagnostics.inactive_stages)).toBe(true);
-    expect(diagnostics.inactive_stages).toContain('room_early');
+    expect(diagnostics.inactive_stages).toContain('roomEarly');
     expect(typeof diagnostics.latency.samples).toBe('number');
     expect(typeof diagnostics.loudness_gain_db).toBe('number');
     expect(typeof diagnostics.hrtf_ignored).toBe('boolean');

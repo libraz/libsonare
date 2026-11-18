@@ -149,6 +149,45 @@ describe('playback renderer (WASM)', () => {
     }
   });
 
+  it('takes a room preset as a lowerCamel token and refuses the snake_case spelling', () => {
+    const render = (preset: string): number[] => {
+      const hrtf = HrtfSet.fromBytes(hrtfBytes());
+      const renderer = new PlaybackRenderer({
+        sampleRate: SR,
+        hrtf,
+        config: { room: { preset } } as PlaybackRendererConfig,
+      });
+      hrtf.destroy();
+      try {
+        let state = 1;
+        const out: number[] = [];
+        for (let block = 0; block < 4; block++) {
+          const planes = [new Float32Array(1024), new Float32Array(1024)];
+          for (const plane of planes) {
+            for (let i = 0; i < plane.length; i++) {
+              state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+              plane[i] = 0.1 * (state / 2 ** 31 - 1);
+            }
+          }
+          out.push(...renderer.processPlanar(planes)[0]);
+        }
+        return out;
+      } finally {
+        renderer.destroy();
+      }
+    };
+    const renders = ['none', 'livingRoom', 'homeTheater', 'screeningRoom'].map(render);
+    for (let a = 0; a < renders.length; a++) {
+      for (let b = a + 1; b < renders.length; b++) {
+        expect(renders[a]).not.toEqual(renders[b]);
+      }
+    }
+    // The earlier snake_case spelling is a document content defect.
+    expect(() => render('living_room')).toThrow(
+      expect.objectContaining({ code: ErrorCode.InvalidFormat }),
+    );
+  });
+
   it('reports the target latency and channel counts', () => {
     const hrtf = HrtfSet.fromBytes(hrtfBytes());
     const headphones = new PlaybackRenderer({ config: {}, hrtf, sampleRate: SR });

@@ -15460,3 +15460,67 @@ changed = "an omitted width follows the scene master's layout (2 with no master)
 domain = "project"
 rule = "absent-not-sentinel"
 test = "bindings/node/tests/project.test.ts::bounces at the width of the scene master when numChannels is omitted, and reports it"
+
+[[entry]]
+kind = "field"
+old = "PlaybackRoomConfig.preset"
+changed = "'none' | 'livingRoom' | 'homeTheater' | 'screeningRoom'; removed: 'living_room', 'home_theater', 'screening_room' (use 'livingRoom', 'homeTheater', 'screeningRoom'; a document carrying one is refused as InvalidFormat)"
+domain = "engine"
+rule = "token-case"
+test = "bindings/node/tests/playback.test.ts::takes a room preset as a lowerCamel token and refuses the snake_case spelling"
+
+[[entry]]
+kind = "value"
+old = "PlaybackStageName='bass_management'"
+new = "PlaybackStageName='bassManagement'"
+domain = "engine"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "PlaybackStageName='dialogue_level'"
+new = "PlaybackStageName='dialogueLevel'"
+domain = "engine"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "PlaybackStageName='layout_convert'"
+new = "PlaybackStageName='layoutConvert'"
+domain = "engine"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "PlaybackStageName='night_mode'"
+new = "PlaybackStageName='nightMode'"
+domain = "engine"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "PlaybackStageName='output_limiter'"
+new = "PlaybackStageName='outputLimiter'"
+domain = "engine"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "PlaybackStageName='room_early'"
+new = "PlaybackStageName='roomEarly'"
+domain = "engine"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "PlaybackStageName='room_late'"
+new = "PlaybackStageName='roomLate'"
+domain = "engine"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "PlaybackStageName='speaker_calibration'"
+new = "PlaybackStageName='speakerCalibration'"
+domain = "engine"
+rule = "token-case"

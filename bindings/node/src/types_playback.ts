@@ -25,6 +25,7 @@ export interface PlaybackRendererConfig {
   dialogue_level_db?: number;
   loudness?: PlaybackLoudnessConfig;
   night_mode?: PlaybackNightModeConfig;
+  /** Room simulation for a headphones target. Omitted: schema defaults (`livingRoom`, -6 dB). */
   room?: PlaybackRoomConfig;
   head_tracking?: PlaybackHeadTrackingConfig;
   output_limiter?: PlaybackOutputLimiterConfig;
@@ -98,8 +99,8 @@ export interface PlaybackNightModeConfig {
 }
 
 export interface PlaybackRoomConfig {
-  /** Prepare. Headphones only. Default `"living_room"`. */
-  preset?: 'none' | 'living_room' | 'home_theater' | 'screening_room';
+  /** Prepare. Headphones only. Default `"livingRoom"`. */
+  preset?: 'none' | 'livingRoom' | 'homeTheater' | 'screeningRoom';
   /** Realtime. Level of the early reflections and the late reverberation, [-30, 6]. Default -6. */
   mix_db?: number;
   /** Realtime. Default true. */
@@ -121,17 +122,17 @@ export interface PlaybackOutputLimiterConfig {
 /** A stage name used in {@link PlaybackDiagnostics.inactive_stages} and `.latency.stages`. */
 export type PlaybackStageName =
   | 'reorder'
-  | 'dialogue_level'
+  | 'dialogueLevel'
   | 'upmix'
   | 'loudness'
-  | 'night_mode'
-  | 'layout_convert'
-  | 'speaker_calibration'
-  | 'bass_management'
+  | 'nightMode'
+  | 'layoutConvert'
+  | 'speakerCalibration'
+  | 'bassManagement'
   | 'binaural'
-  | 'room_early'
-  | 'room_late'
-  | 'output_limiter';
+  | 'roomEarly'
+  | 'roomLate'
+  | 'outputLimiter';
 
 /** Per-stage reported latency, in samples and in Q8 fixed-point. */
 export interface PlaybackStageLatency {
@@ -148,7 +149,7 @@ export interface PlaybackDiagnostics {
   active_input_layout: 'mono' | 'stereo' | '5.1' | '7.1';
   layout_switches: number;
   truncated_drains: number;
-  /** Stages this configuration does not exercise (e.g. `room_early` for a speakers target). */
+  /** Stages this configuration does not exercise (e.g. `roomEarly` for a speakers target). */
   inactive_stages: PlaybackStageName[];
   latency: {
     samples: number;
