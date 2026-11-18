@@ -109,7 +109,10 @@ def test_engine_tempo_and_time_signature_segments() -> None:
             ]
         )
         engine.set_time_signature_segments(
-            [{"start_ppq": 0.0, "numerator": 4, "denominator": 4}, (1920.0, 3, 4)]
+            [
+                {"start_ppq": 0.0, "numerator": 4, "denominator": 4},
+                {"start_ppq": 1920.0, "numerator": 3, "denominator": 4},
+            ]
         )
         # An empty sequence clears the map without error.
         engine.set_tempo_segments([])
@@ -318,7 +321,7 @@ def test_engine_empty_automation_lane_removes_it() -> None:
 
 def test_engine_apply_restore_clear_insert_param_by_name_now() -> None:
     with RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
-        engine.set_track_lanes([10])
+        engine.set_track_lanes([{"track_id": 10}])
         engine.set_track_strip_json(
             10,
             '{"version":1,"strips":[{"id":"track-10","inserts":[{"slot":"pre",'

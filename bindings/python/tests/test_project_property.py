@@ -82,9 +82,9 @@ def _add_random_midi_track(project: Project, rng: random.Random) -> None:
         project.set_midi_events(clip, events)
 
 
-def _random_tempo_map(rng: random.Random) -> list[tuple[float, float, float]]:
+def _random_tempo_map(rng: random.Random) -> list[dict[str, float]]:
     starts = sorted({0.0, *(round(rng.uniform(1.0, 64.0), 2) for _ in range(rng.randint(0, 3)))})
-    return [(s, round(rng.uniform(40.0, 240.0), 3), 0.0) for s in starts]
+    return [{"start_ppq": s, "bpm": round(rng.uniform(40.0, 240.0), 3)} for s in starts]
 
 
 def build_random_project(seed: int) -> Project:
@@ -133,7 +133,9 @@ def test_boundary_values_round_trip() -> None:
     project = Project()
     try:
         project.set_sample_rate(48000.0)
-        project.set_tempo_segments([(0.0, 40.0, 0.0), (1000.0, 240.0, 0.0)])
+        project.set_tempo_segments(
+            [{"start_ppq": 0.0, "bpm": 40.0}, {"start_ppq": 1000.0, "bpm": 240.0}]
+        )
         track = project.add_track("audio", "ユニコード-name-é")
         project.add_clip(
             track,

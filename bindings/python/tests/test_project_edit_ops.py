@@ -12,7 +12,7 @@ import json
 
 import pytest
 
-from libsonare import ErrorCode, Project, SonareError, SonareValueError, mastering_insert_names
+from libsonare import ErrorCode, Project, SonareError, mastering_insert_names
 
 from ._helpers import raises_coded
 
@@ -210,12 +210,19 @@ def test_automation_lane_add_edit_remove() -> None:
     p, track, _clip = _audio_project()
     before = p.to_json()
     target_param_id = p.add_automation_lane(
-        track, 1, [(0.0, 0.0, "linear"), (480.0, 1.0, "linear")]
+        track,
+        1,
+        [
+            {"ppq": 0.0, "value": 0.0, "curve_to_next": "linear"},
+            {"ppq": 480.0, "value": 1.0, "curve_to_next": "linear"},
+        ],
     )
     assert target_param_id == 1
     after_add = p.to_json()
     assert after_add != before
-    p.edit_automation_lane(track, target_param_id, [(0.0, 0.5, "hold")])
+    p.edit_automation_lane(
+        track, target_param_id, [{"ppq": 0.0, "value": 0.5, "curve_to_next": "hold"}]
+    )
     assert p.to_json() != after_add
     p.undo()  # undo edit
     assert p.to_json() == after_add
@@ -229,7 +236,7 @@ def test_automation_lane_rejects_zero_as_reserved_target_id() -> None:
     p, track, _clip = _audio_project()
     before = p.to_json()
     with pytest.raises(ValueError, match="target_param_id must be non-zero"):
-        p.add_automation_lane(track, 0, [(0.0, 0.0, "linear")])
+        p.add_automation_lane(track, 0, [{"ppq": 0.0, "value": 0.0, "curve_to_next": "linear"}])
     assert p.to_json() == before
 
 
@@ -259,7 +266,9 @@ def test_automation_lane_typed_kind_roundtrip_and_legacy_edit_preservation() -> 
     _require_typed_automation_api()
     p, track, _clip = _audio_project()
 
-    legacy_target = p.add_automation_lane(track, 1, [(0.0, 0.0, "linear")])
+    legacy_target = p.add_automation_lane(
+        track, 1, [{"ppq": 0.0, "value": 0.0, "curve_to_next": "linear"}]
+    )
     legacy_doc = json.loads(p.to_json())
     assert legacy_doc["version"] == 1
     assert "target_kind" not in legacy_doc["tracks"][0]["automation_lanes"][0]
@@ -268,7 +277,10 @@ def test_automation_lane_typed_kind_roundtrip_and_legacy_edit_preservation() -> 
     typed_target = p.add_automation_lane(
         track,
         2,
-        [(0.0, 0.0, "linear"), (480.0, 1.0, "hold")],
+        [
+            {"ppq": 0.0, "value": 0.0, "curve_to_next": "linear"},
+            {"ppq": 480.0, "value": 1.0, "curve_to_next": "hold"},
+        ],
         target_kind="trackFaderDb",
     )
     typed_before_edit = p.to_json()
@@ -278,7 +290,9 @@ def test_automation_lane_typed_kind_roundtrip_and_legacy_edit_preservation() -> 
 
     # The absent kind must stay on the legacy C edit path; native semantics
     # preserve the existing typed classification while replacing points.
-    p.edit_automation_lane(track, typed_target, [(0.0, 0.5, "hold")])
+    p.edit_automation_lane(
+        track, typed_target, [{"ppq": 0.0, "value": 0.5, "curve_to_next": "hold"}]
+    )
     edited_doc = json.loads(p.to_json())
     assert edited_doc["version"] == 2
     assert edited_doc["tracks"][0]["automation_lanes"][0]["target_kind"] == 1
@@ -290,17 +304,32 @@ def test_automation_lane_typed_kind_roundtrip_and_legacy_edit_preservation() -> 
 def test_automation_lane_typed_kind_conflict_is_atomic() -> None:
     _require_typed_automation_api()
     p, track, _clip = _audio_project()
-    p.add_automation_lane(track, 1, [(0.0, 0.0, "linear")], target_kind="trackFaderDb")
-    pan_target = p.add_automation_lane(track, 2, [(0.0, 0.0, "linear")], target_kind="trackPan")
+    p.add_automation_lane(
+        track,
+        1,
+        [{"ppq": 0.0, "value": 0.0, "curve_to_next": "linear"}],
+        target_kind="trackFaderDb",
+    )
+    pan_target = p.add_automation_lane(
+        track, 2, [{"ppq": 0.0, "value": 0.0, "curve_to_next": "linear"}], target_kind="trackPan"
+    )
     before = p.to_json()
 
     with pytest.raises(SonareError):
-        p.add_automation_lane(track, 3, [(0.0, 1.0, "linear")], target_kind="trackFaderDb")
+        p.add_automation_lane(
+            track,
+            3,
+            [{"ppq": 0.0, "value": 1.0, "curve_to_next": "linear"}],
+            target_kind="trackFaderDb",
+        )
     assert p.to_json() == before
 
     with pytest.raises(SonareError):
         p.edit_automation_lane(
-            track, pan_target, [(0.0, 1.0, "linear")], target_kind="trackFaderDb"
+            track,
+            pan_target,
+            [{"ppq": 0.0, "value": 1.0, "curve_to_next": "linear"}],
+            target_kind="trackFaderDb",
         )
     assert p.to_json() == before
 
@@ -318,11 +347,15 @@ def test_automation_lane_rejects_invalid_target_kind_without_mutation() -> None:
         1.5,
         float("nan"),
         True,
-        None,
     ):
         expected = ValueError if isinstance(invalid, str) else TypeError
         with pytest.raises(expected):
-            p.add_automation_lane(track, 1, [(0.0, 0.0, "linear")], target_kind=invalid)
+            p.add_automation_lane(
+                track,
+                1,
+                [{"ppq": 0.0, "value": 0.0, "curve_to_next": "linear"}],
+                target_kind=invalid,
+            )
         assert p.to_json() == before
 
 
@@ -331,7 +364,9 @@ def test_automation_lane_rejects_nonintegral_target_without_mutation() -> None:
     before = p.to_json()
     for invalid in (1.5, float("nan"), float("inf"), True, "1"):
         with pytest.raises(ValueError):
-            p.add_automation_lane(track, invalid, [(0.0, 0.0, "linear")])
+            p.add_automation_lane(
+                track, invalid, [{"ppq": 0.0, "value": 0.0, "curve_to_next": "linear"}]
+            )
         assert p.to_json() == before
 
 
@@ -365,36 +400,10 @@ def test_assist_sidecar_set_count_get_round_trip() -> None:
     assert sidecars[0].schema_version == 2
 
 
-def test_assist_sidecar_descriptor_matches_legacy_keyword_form() -> None:
-    descriptor_project, track, _clip = _audio_project()
-    legacy_project, legacy_track, _legacy_clip = _audio_project()
-    descriptor = {
-        "module_id": "ai.module",
-        "payload": b"\x01\x02\x03",
-        "schema_version": 2,
-        "target_track_id": track,
-        "region_start_ppq": 12.0,
-        "region_end_ppq": 48.0,
-    }
-
-    descriptor_project.set_assist_sidecar(descriptor)
-    legacy_project.set_assist_sidecar(
-        module_id="ai.module",
-        payload=b"\x01\x02\x03",
-        schema_version=2,
-        target_track_id=legacy_track,
-        region_start_ppq=12.0,
-        region_end_ppq=48.0,
-    )
-
-    assert descriptor_project.to_json() == legacy_project.to_json()
-    assert descriptor_project.assist_sidecars()[0] == legacy_project.assist_sidecars()[0]
-
-
-def test_assist_sidecar_descriptor_defaults_and_stable_order() -> None:
+def test_assist_sidecar_defaults_and_stable_order() -> None:
     p, _track, _clip = _audio_project()
-    p.set_assist_sidecar({"module_id": "first"})
-    p.set_assist_sidecar({"module_id": "second", "payload": b"payload"})
+    p.set_assist_sidecar("first")
+    p.set_assist_sidecar("second", b"payload")
 
     assert p.assist_sidecar_count() == 2
     assert [sidecar.module_id for sidecar in p.assist_sidecars()] == ["first", "second"]
@@ -405,17 +414,11 @@ def test_assist_sidecar_descriptor_defaults_and_stable_order() -> None:
     assert p.assist_sidecars()[0].region_end_ppq == 0.0
 
 
-def test_assist_sidecar_descriptor_same_identity_replaces_without_reordering() -> None:
+def test_assist_sidecar_same_identity_replaces_without_reordering() -> None:
     p, _track, _clip = _audio_project()
-    p.set_assist_sidecar({"module_id": "first", "payload": b"old"})
-    p.set_assist_sidecar({"module_id": "second", "payload": b"other"})
-    p.set_assist_sidecar(
-        {
-            "module_id": "first",
-            "payload": b"new",
-            "schema_version": 3,
-        }
-    )
+    p.set_assist_sidecar("first", b"old")
+    p.set_assist_sidecar("second", b"other")
+    p.set_assist_sidecar("first", b"new", schema_version=3)
 
     assert p.assist_sidecar_count() == 2
     assert [sidecar.module_id for sidecar in p.assist_sidecars()] == ["first", "second"]
@@ -423,45 +426,27 @@ def test_assist_sidecar_descriptor_same_identity_replaces_without_reordering() -
     assert p.assist_sidecars()[0].schema_version == 3
 
 
-def test_assist_sidecar_invalid_or_mixed_input_does_not_mutate() -> None:
+def test_assist_sidecar_invalid_input_does_not_mutate() -> None:
     p, _track, _clip = _audio_project()
     before = p.to_json()
 
-    for invalid in ({}, {"module_id": None}, {"module_id": 42}):
+    for invalid in (None, 42, {"module_id": "descriptor"}):
         with pytest.raises(TypeError):
-            p.set_assist_sidecar(invalid)
-        assert p.to_json() == before
-
-    # A key the descriptor does not take, another spelling of one included, is refused by name.
-    for key in ("moduleId", "schemaVersion", "unknown"):
-        with pytest.raises(SonareValueError, match=f"unknown key '{key}'"):
-            p.set_assist_sidecar({"module_id": "first", key: 1})
+            p.set_assist_sidecar(invalid)  # type: ignore[arg-type]
         assert p.to_json() == before
 
     with pytest.raises(ValueError):
-        p.set_assist_sidecar({"module_id": ""})
-    assert p.to_json() == before
-
-    with pytest.raises(TypeError):
-        p.set_assist_sidecar({"module_id": "mixed"}, b"legacy")
-    assert p.to_json() == before
-
-    with pytest.raises(TypeError):
-        p.set_assist_sidecar({"module_id": "mixed"}, schema_version=1)
+        p.set_assist_sidecar("")
     assert p.to_json() == before
 
     for invalid_region in (
-        {"module_id": "bad-region", "region_start_ppq": -1.0},
-        {"module_id": "bad-region", "region_start_ppq": float("nan")},
-        {"module_id": "bad-region", "region_end_ppq": float("inf")},
+        {"region_start_ppq": -1.0},
+        {"region_start_ppq": float("nan")},
+        {"region_end_ppq": float("inf")},
     ):
         with pytest.raises(SonareError):
-            p.set_assist_sidecar(invalid_region)
+            p.set_assist_sidecar("bad-region", **invalid_region)
         assert p.to_json() == before
-
-    with pytest.raises(TypeError):
-        p.set_assist_sidecar(None)  # type: ignore[arg-type]
-    assert p.to_json() == before
 
 
 def test_mastering_insert_names_lists_fx() -> None:

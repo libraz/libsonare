@@ -111,11 +111,11 @@ def test_engine_track_lanes_route_clips_and_lane_commands() -> None:
                 ),
             ]
         )
-        engine.set_track_lanes([10, 20])
+        engine.set_track_lanes([{"track_id": 10}, {"track_id": 20}])
         with pytest.raises(SonareValueError) as duplicate_lane_error:
-            engine.set_track_lanes([10, 10])
+            engine.set_track_lanes([{"track_id": 10}, {"track_id": 10}])
         assert duplicate_lane_error.value.code == 4
-        engine.set_track_lanes([10, 20])
+        engine.set_track_lanes([{"track_id": 10}, {"track_id": 20}])
 
         engine.play()
         processed = engine.process([[0.0] * 256, [0.0] * 256])
@@ -174,9 +174,9 @@ def test_engine_track_buses_route_lane_sends() -> None:
                 engine.set_track_lanes([{"track_id": 10, "source_channel_layout": layout}])
 
         assert MAX_TRACK_LANES == 32
-        engine.set_track_lanes(list(range(1, MAX_TRACK_LANES + 1)))
+        engine.set_track_lanes([{"track_id": i} for i in range(1, MAX_TRACK_LANES + 1)])
         with pytest.raises(SonareError, match="at most 32 track lanes"):
-            engine.set_track_lanes(list(range(1, MAX_TRACK_LANES + 2)))
+            engine.set_track_lanes([{"track_id": i} for i in range(1, MAX_TRACK_LANES + 2)])
 
         engine.set_track_lanes([{"track_id": 10, "sends": [{"bus_id": 1, "level_db": 0.0}]}])
         bad_lanes = [
@@ -248,7 +248,7 @@ def test_engine_track_strip_json_routes_lane_strip() -> None:
                 ),
             ]
         )
-        engine.set_track_lanes([10, 20])
+        engine.set_track_lanes([{"track_id": 10}, {"track_id": 20}])
         scene_json = (
             '{"version":1,"strips":[{"id":"track-10","faderDb":-12,"panLaw":3}],'
             '"buses":[],"connections":[]}'
@@ -288,12 +288,12 @@ def test_engine_track_strip_eq_insert_is_bounded_by_the_engine_rate_nyquist() ->
         )
 
     with RealtimeEngine(sample_rate=96000.0, max_block_size=256) as engine:
-        engine.set_track_lanes([10])
+        engine.set_track_lanes([{"track_id": 10}])
         engine.set_track_strip_json(10, strip_json(30000))
         with pytest.raises(SonareError):
             engine.set_track_strip_json(10, strip_json(48000))
     with RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
-        engine.set_track_lanes([10])
+        engine.set_track_lanes([{"track_id": 10}])
         with pytest.raises(SonareError):
             engine.set_track_strip_json(10, strip_json(30000))
         engine.set_track_strip_json(10, strip_json(20000))
@@ -314,7 +314,7 @@ def test_engine_track_strip_insert_bypass_toggles_insert() -> None:
                 )
             ]
         )
-        engine.set_track_lanes([10])
+        engine.set_track_lanes([{"track_id": 10}])
         engine.set_track_strip_json(
             10,
             '{"version":1,"strips":[{"id":"track-10","inserts":[{"slot":"pre",'
@@ -353,7 +353,7 @@ def test_engine_track_strip_eq_band_updates_embedded_eq() -> None:
                 )
             ]
         )
-        engine.set_track_lanes([10])
+        engine.set_track_lanes([{"track_id": 10}])
         engine.set_track_strip_json(
             10,
             '{"version":1,"strips":[{"id":"track-10"}],"buses":[],"connections":[]}',
@@ -439,7 +439,7 @@ def test_engine_master_strip_json_routes_master_strip() -> None:
 
 def test_engine_refuses_a_reserved_mixer_id_that_names_no_strip() -> None:
     with RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
-        engine.set_track_lanes([5, 7])
+        engine.set_track_lanes([{"track_id": 5}, {"track_id": 7}])
         points = [AutomationPoint(ppq=0.0, value=-6.0)]
         # The retired positional encoding, for the lane that now holds track 7.
         for positional in (0x4D580101, 0x4D580001, 0x4D58FE00):
@@ -524,7 +524,7 @@ def test_engine_track_strip_pan_and_send_setters() -> None:
                 )
             ]
         )
-        engine.set_track_lanes([10])
+        engine.set_track_lanes([{"track_id": 10}])
         # A lane strip must exist before its pan can be set.
         engine.set_track_strip_json(
             10,
@@ -582,7 +582,7 @@ def test_realtime_engine_dual_pan_routes_left_input_to_expected_output() -> None
 
     with RealtimeEngine(sample_rate=48000.0, max_block_size=block) as engine:
         engine.set_clips([clip])
-        engine.set_track_lanes([10])
+        engine.set_track_lanes([{"track_id": 10}])
         engine.set_track_strip_json(
             10,
             '{"version":1,"strips":[{"id":"track-10"}],"buses":[],"connections":[]}',

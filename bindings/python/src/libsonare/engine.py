@@ -432,12 +432,12 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
 
     def set_tempo_segments(
         self,
-        segments: Sequence[Mapping[str, float] | Sequence[float]],
+        segments: Sequence[Mapping[str, float]],
     ) -> None:
         """Install a tempo map from ramp segments.
 
-        Each segment is a mapping (``start_ppq`` / ``bpm`` / optional ``end_bpm``)
-        or a tuple ``(start_ppq, bpm, start_sample=ignored, end_bpm=0.0)``.
+        Each segment is a mapping with ``start_ppq``, ``bpm`` and an optional
+        ``end_bpm``.
         ``bpm`` and a non-zero ``end_bpm`` must be at most 100000. ``end_bpm``
         0 means a constant-tempo segment. Pass an empty sequence to clear the map.
         """
@@ -445,18 +445,10 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         count = len(rows)
         c_segments = (SonareProjectTempoSegment * count)() if count else None
         for i, seg in enumerate(rows):
-            if isinstance(seg, Mapping):
-                fields = _mapping_keys(seg, _TEMPO_SEGMENT_KEYS, f"segments[{i}]")
-                start_ppq = _narrow_double(fields["start_ppq"], "start_ppq")
-                bpm = _narrow_double(fields["bpm"], "bpm")
-                end_bpm = _narrow_double(fields.get("end_bpm", 0.0), "end_bpm")
-            else:
-                tup = tuple(seg)
-                if len(tup) < 2:
-                    raise SonareValueError(f"segments[{i}] must contain (start_ppq, bpm)")
-                start_ppq = _narrow_double(tup[0], "tup[0]")
-                bpm = _narrow_double(tup[1], "tup[1]")
-                end_bpm = _narrow_double(tup[3], "tup[3]") if len(tup) >= 4 else 0.0
+            fields = _mapping_keys(seg, _TEMPO_SEGMENT_KEYS, f"segments[{i}]")
+            start_ppq = _narrow_double(fields["start_ppq"], "start_ppq")
+            bpm = _narrow_double(fields["bpm"], "bpm")
+            end_bpm = _narrow_double(fields.get("end_bpm", 0.0), "end_bpm")
             c_segments[i].start_ppq = start_ppq
             c_segments[i].bpm = bpm
             c_segments[i].end_bpm = end_bpm
@@ -468,13 +460,12 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
 
     def set_time_signature_segments(
         self,
-        segments: Sequence[Mapping[str, float] | Sequence[float]],
+        segments: Sequence[Mapping[str, float]],
     ) -> None:
         """Install a time-signature map.
 
-        Each segment is a mapping (``start_ppq`` / ``numerator`` / ``denominator``)
-        or a tuple ``(start_ppq, numerator, denominator)``. Pass an empty sequence
-        to clear the map.
+        Each segment is a mapping with ``start_ppq``, ``numerator`` and
+        ``denominator``. Pass an empty sequence to clear the map.
         """
         rows = list(segments)
         count = len(rows)
@@ -483,23 +474,10 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         # narrowing sees each caller value; int() truncated 4.5 onto the legal 4,
         # which the core's positive-signature check then accepts as written.
         for i, seg in enumerate(rows):
-            if isinstance(seg, Mapping):
-                fields = _mapping_keys(seg, _METER_SEGMENT_KEYS, f"segments[{i}]")
-                start_ppq = _narrow_double(fields["start_ppq"], "start_ppq")
-                numerator = fields["numerator"]
-                denominator = fields["denominator"]
-            else:
-                tup = tuple(seg)
-                if len(tup) < 3:
-                    raise SonareValueError(
-                        f"segments[{i}] must contain (start_ppq, numerator, denominator)"
-                    )
-                start_ppq = _narrow_double(tup[0], "tup[0]")
-                numerator = tup[1]
-                denominator = tup[2]
-            c_segments[i].start_ppq = start_ppq
-            c_segments[i].numerator = numerator
-            c_segments[i].denominator = denominator
+            fields = _mapping_keys(seg, _METER_SEGMENT_KEYS, f"segments[{i}]")
+            c_segments[i].start_ppq = _narrow_double(fields["start_ppq"], "start_ppq")
+            c_segments[i].numerator = fields["numerator"]
+            c_segments[i].denominator = fields["denominator"]
         _check(
             _get_lib().sonare_engine_set_time_signature_segments(
                 self._require_handle(), c_segments, _to_c_size_t(count, "count")

@@ -33,21 +33,21 @@ def _alive(engine: RealtimeEngine, param_id: int) -> bool:
 
 def test_track_id_survives_reorder_and_removal_of_another_track() -> None:
     with RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
-        engine.set_track_lanes([10, 20])
+        engine.set_track_lanes([{"track_id": 10}, {"track_id": 20}])
         engine.set_track_strip_json(10, _scene("strips", "track-10", ["utility.gain"]))
         engine.set_track_strip_json(20, _scene("strips", "track-20", ["utility.gain"]))
         id10 = engine.resolve_track_insert_automation_id(10, 0, "levelDb")
         id20 = engine.resolve_track_insert_automation_id(20, 0, "levelDb")
         assert id10 != id20
 
-        engine.set_track_lanes([20, 10])
+        engine.set_track_lanes([{"track_id": 20}, {"track_id": 10}])
         assert engine.resolve_track_insert_automation_id(10, 0, "levelDb") == id10
 
-        engine.set_track_lanes([10])
+        engine.set_track_lanes([{"track_id": 10}])
         assert _alive(engine, id10)
         assert not _alive(engine, id20)
 
-        engine.set_track_lanes([20, 10])
+        engine.set_track_lanes([{"track_id": 20}, {"track_id": 10}])
         engine.set_track_strip_json(20, _scene("strips", "track-20", ["utility.gain"]))
         assert not _alive(engine, id20)
         assert engine.resolve_track_insert_automation_id(20, 0, "levelDb") != id20
@@ -77,7 +77,7 @@ def test_bus_id_survives_reorder_and_retires_when_the_bus_is_removed() -> None:
 
 def test_ids_retire_when_the_slot_changes_processor_type() -> None:
     with RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
-        engine.set_track_lanes([10])
+        engine.set_track_lanes([{"track_id": 10}])
         engine.set_track_buses([{"bus_id": 1, "gain_db": 0.0}])
 
         def set_all(processor: str) -> None:

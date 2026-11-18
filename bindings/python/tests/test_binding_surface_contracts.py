@@ -55,7 +55,7 @@ def test_project_ppq_arguments_refuse_non_finite(bad: float) -> None:
         with pytest.raises(SonareValueError):
             project.split_clip(clip, bad)
         with pytest.raises(SonareValueError):
-            project.set_clip_comp_segments(clip, [(0.0, bad, 0)])
+            project.set_clip_comp_segments(clip, [{"start_ppq": 0.0, "end_ppq": bad}])
         with pytest.raises(SonareValueError):
             project.set_warp_map(1, [(bad, 0.0)])
 

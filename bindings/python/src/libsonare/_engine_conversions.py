@@ -88,8 +88,10 @@ def _marker_kind_name(kind: int) -> MarkerKind:
     return cast(MarkerKind, _MARKER_KINDS[int(kind)])
 
 
-def _band_json_arg(band: Mapping[str, object] | str) -> bytes:
-    return _utf8_arg(band if isinstance(band, str) else json.dumps(dict(band)), "band")
+def _band_json_arg(band: Mapping[str, object]) -> bytes:
+    if not isinstance(band, Mapping):
+        raise TypeError(f"band must be a mapping, got {type(band).__name__}")
+    return _utf8_arg(json.dumps(dict(band)), "band")
 
 
 def _fixed_bytes(value: str, capacity: int, name: str) -> bytes:

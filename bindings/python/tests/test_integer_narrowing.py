@@ -258,7 +258,9 @@ def arrangement_project():
     for clip, source in zip(clips, (1, 2), strict=True):
         project.set_clip_takes(clip, [{"id": 1, "source_id": source}])
     for track in tracks:
-        project.add_automation_lane(track, 7, [(0.0, 0.25, "linear")])
+        project.add_automation_lane(
+            track, 7, [{"ppq": 0.0, "value": 0.25, "curve_to_next": "linear"}]
+        )
     return project, tracks, clips, spare
 
 
@@ -272,7 +274,7 @@ def test_a_wrapped_arrangement_id_is_refused_rather_than_selecting_another_objec
     an argument its own edit never reads.
     """
     project, (track_a, track_b), (clip_a, clip_b), (spare_a, spare_b) = arrangement_project
-    points = [(0.0, 0.5, "linear")]
+    points = [{"ppq": 0.0, "value": 0.5, "curve_to_next": "linear"}]
     segment = [{"start_ppq": 0.0, "end_ppq": 100.0, "take_id": 1}]
 
     def applied(edit, value) -> str:

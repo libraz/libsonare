@@ -75,7 +75,7 @@ class _EngineMixingMixin:
 
         def _require_handle(self) -> ctypes.c_void_p: ...
 
-    def set_track_lanes(self, lanes: Sequence[int | Mapping[str, object]]) -> None:
+    def set_track_lanes(self, lanes: Sequence[Mapping[str, object]]) -> None:
         """Declare the mixer track lanes in their order.
 
         Raises SonareValueError when ``lanes`` holds more than
@@ -88,33 +88,30 @@ class _EngineMixingMixin:
             # stereo so callers that omit it keep the
             # prior stereo behavior.
             raw[i].source_channel_layout = 1
-            if isinstance(lane, Mapping):
-                where = f"set_track_lanes: lanes[{i}]"
-                lane = _mapping_keys(lane, _LANE_KEYS, where)
-                # Assigned unconverted so the struct's own narrowing sees the
-                # caller value; int() would truncate a fraction past it.
-                raw[i].track_id = cast(int, lane["track_id"])
-                sends = cast(Sequence[Mapping[str, object]], lane.get("sends", []))
-                if sends:
-                    send_array = _marshal_sends(sends, f"{where}.sends")
-                    raw[i].sends = send_array
-                    raw[i].send_count = len(sends)
-                    send_arrays.append(send_array)
-                # Narrowed rather than coerced: int(0.5) is the 0 this field
-                # reads as "stay on the master mix", so a fractional bus id
-                # would leave the lane unrouted and report success.
-                raw[i].output_bus_id = _narrow_int(
-                    lane.get("output_bus_id", 0),
-                    f"{where}.output_bus_id",
-                    0,
-                    _UINT32_MAX,
+            where = f"set_track_lanes: lanes[{i}]"
+            lane = _mapping_keys(lane, _LANE_KEYS, where)
+            # Assigned unconverted so the struct's own narrowing sees the
+            # caller value; int() would truncate a fraction past it.
+            raw[i].track_id = cast(int, lane["track_id"])
+            sends = cast(Sequence[Mapping[str, object]], lane.get("sends", []))
+            if sends:
+                send_array = _marshal_sends(sends, f"{where}.sends")
+                raw[i].sends = send_array
+                raw[i].send_count = len(sends)
+                send_arrays.append(send_array)
+            # Narrowed rather than coerced: int(0.5) is the 0 this field
+            # reads as "stay on the master mix", so a fractional bus id
+            # would leave the lane unrouted and report success.
+            raw[i].output_bus_id = _narrow_int(
+                lane.get("output_bus_id", 0),
+                f"{where}.output_bus_id",
+                0,
+                _UINT32_MAX,
+            )
+            if "source_channel_layout" in lane:
+                raw[i].source_channel_layout = _channel_layout_value(
+                    cast(ChannelLayout, lane["source_channel_layout"])
                 )
-                if "source_channel_layout" in lane:
-                    raw[i].source_channel_layout = _channel_layout_value(
-                        cast(ChannelLayout, lane["source_channel_layout"])
-                    )
-            else:
-                raw[i].track_id = lane
         _check(_get_lib().sonare_engine_set_track_lanes(self._require_handle(), raw, len(lanes)))
 
     def set_track_sends(self, track_id: int, sends: Sequence[Mapping[str, object]]) -> None:
@@ -315,7 +312,7 @@ class _EngineMixingMixin:
         )
 
     def set_bus_strip_eq_band(
-        self, bus_id: int, band_index: int, band: Mapping[str, object] | str
+        self, bus_id: int, band_index: int, band: Mapping[str, object]
     ) -> None:
         """Realtime change of one bus-strip EQ band.
 
@@ -350,7 +347,7 @@ class _EngineMixingMixin:
         )
 
     def set_track_strip_eq_band(
-        self, track_id: int, band_index: int, band: Mapping[str, object] | str
+        self, track_id: int, band_index: int, band: Mapping[str, object]
     ) -> None:
         _check(
             _get_lib().sonare_engine_set_track_strip_eq_band_json(
@@ -493,7 +490,7 @@ class _EngineMixingMixin:
             )
         )
 
-    def set_master_strip_eq_band(self, band_index: int, band: Mapping[str, object] | str) -> None:
+    def set_master_strip_eq_band(self, band_index: int, band: Mapping[str, object]) -> None:
         _check(
             _get_lib().sonare_engine_set_master_strip_eq_band_json(
                 self._require_handle(),

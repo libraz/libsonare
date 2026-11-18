@@ -552,7 +552,7 @@ def test_set_clip_takes_and_comp_segments_round_trip_and_undo() -> None:
         with pytest.raises(SonareError):
             project.set_clip_takes(
                 audio_clip,
-                [(1, 0, 0.0, "duplicate A"), (1, 0, 0.0, "duplicate B")],
+                [{"id": 1, "name": "duplicate A"}, {"id": 1, "name": "duplicate B"}],
                 active_take_id=1,
             )
         with pytest.raises(SonareError):
@@ -592,19 +592,6 @@ def test_comp_segment_crossfade_ppq_reaches_the_library() -> None:
         segments = as_dict["clips"][0]["comp_segments"]
         assert segments[0]["crossfade_ppq"] == 0.0
         assert segments[1]["crossfade_ppq"] == 0.25
-
-        # 4-tuple positional form round-trips the same way.
-        project.set_clip_comp_segments(
-            audio_clip,
-            [(0.0, 1.0, 1, 0.0), (1.0, 2.0, 2, 0.25)],
-        )
-        as_tuple_dict = json.loads(project.to_json_bytes())
-        assert as_tuple_dict["clips"][0]["comp_segments"] == segments
-
-        # The 3-tuple compatibility form still works and defaults to 0.0.
-        project.set_clip_comp_segments(audio_clip, [(0.0, 1.0, 1), (1.0, 2.0, 2)])
-        as_three_tuple_dict = json.loads(project.to_json_bytes())
-        assert as_three_tuple_dict["clips"][0]["comp_segments"][1]["crossfade_ppq"] == 0.0
     finally:
         project.close()
 
@@ -899,7 +886,9 @@ def test_project_getters_setters_and_counts() -> None:
         project.set_overlap_policy("allow")
         assert project.overlap_policy == "allow"
 
-        project.set_tempo_segments([(0.0, 120.0), (480.0, 140.0)])
+        project.set_tempo_segments(
+            [{"start_ppq": 0.0, "bpm": 120.0}, {"start_ppq": 480.0, "bpm": 140.0}]
+        )
         assert project.tempo_segment_count() == 2
         # The count is only usable alongside a way to read the segments it counts.
         assert project.tempo_segment_by_index(0) == {
@@ -911,7 +900,12 @@ def test_project_getters_setters_and_counts() -> None:
         with pytest.raises(SonareError):
             project.tempo_segment_by_index(2)
 
-        project.set_time_signatures([(0.0, 4, 4), (1920.0, 3, 4)])
+        project.set_time_signatures(
+            [
+                {"start_ppq": 0.0, "numerator": 4, "denominator": 4},
+                {"start_ppq": 1920.0, "numerator": 3, "denominator": 4},
+            ]
+        )
         assert project.time_signature_count() == 2
         assert project.time_signature_by_index(1) == {
             "start_ppq": 1920.0,

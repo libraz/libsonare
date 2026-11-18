@@ -52,8 +52,7 @@ insert_timing = libsonare.mastering_insert_timing(
     "saturation.softClipper", {"aliasing": 3.0}, 48000
 )
 project = libsonare.Project()
-project.set_assist_sidecar("python-smoke", b"legacy")
-project.set_assist_sidecar({"module_id": "python-smoke-descriptor"})
+project.set_assist_sidecar("python-smoke", b"payload")
 assist_sidecars: list[libsonare.AssistSidecar] = project.assist_sidecars()
 
 assert_type(bpm, float)

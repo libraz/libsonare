@@ -37,7 +37,7 @@ def test_fader_id_keeps_its_track_across_a_reorder_and_retires_with_it() -> None
                 )
             ]
         )
-        engine.set_track_lanes([10, 20])
+        engine.set_track_lanes([{"track_id": 10}, {"track_id": 20}])
         fader10 = engine.resolve_track_lane_automation_id(10, "faderDb")
         assert engine.resolve_track_lane_automation_id(10, "pan") != fader10
         with pytest.raises(SonareError):
@@ -45,15 +45,15 @@ def test_fader_id_keeps_its_track_across_a_reorder_and_retires_with_it() -> None
         with pytest.raises(SonareError):
             engine.resolve_track_lane_automation_id(10, "width")
 
-        engine.set_track_lanes([20, 10])
+        engine.set_track_lanes([{"track_id": 20}, {"track_id": 10}])
         assert engine.resolve_track_lane_automation_id(10, "faderDb") == fader10
         engine.set_parameter(fader10, -60.0)
         engine.play()
         assert _settled(engine) == pytest.approx(1.0, abs=1e-3)
 
-        engine.set_track_lanes([20])
+        engine.set_track_lanes([{"track_id": 20}])
         assert not _alive(engine, fader10)
         engine.set_parameter(fader10, -60.0)
         assert _settled(engine) == pytest.approx(1.0, abs=1e-3)
-        engine.set_track_lanes([20, 10])
+        engine.set_track_lanes([{"track_id": 20}, {"track_id": 10}])
         assert engine.resolve_track_lane_automation_id(10, "faderDb") != fader10

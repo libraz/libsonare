@@ -216,7 +216,7 @@ def _plate_engine() -> RealtimeEngine:
             )
         ]
     )
-    engine.set_track_lanes([10])
+    engine.set_track_lanes([{"track_id": 10}])
     engine.set_track_strip_json(10, _PLATE_STRIP)
     return engine
 
@@ -296,7 +296,7 @@ def test_tail_and_latency_follow_the_configured_strips() -> None:
     with RealtimeEngine(sample_rate=48000.0, max_block_size=_RESET_BLOCK) as engine:
         assert engine.tail_samples == 0
         assert engine.graph_latency_samples_q8() == 0
-        engine.set_track_lanes([10])
+        engine.set_track_lanes([{"track_id": 10}])
         # A 1 ms limiter lookahead is 48 samples at 48 kHz: 48 * 256 in q8.
         engine.set_track_strip_json(
             10,
@@ -325,7 +325,7 @@ def test_tail_and_latency_follow_the_configured_strips() -> None:
 
 def test_tail_samples_reports_a_lane_channel_delay() -> None:
     with RealtimeEngine(sample_rate=48000.0, max_block_size=_RESET_BLOCK) as engine:
-        engine.set_track_lanes([10])
+        engine.set_track_lanes([{"track_id": 10}])
         engine.set_track_strip_json(
             10,
             json.dumps(

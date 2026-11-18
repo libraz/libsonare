@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import ctypes
 from collections.abc import Mapping, Sequence
-from typing import TYPE_CHECKING, cast, overload
+from typing import TYPE_CHECKING, cast
 
 import numpy as np
 
@@ -54,14 +54,6 @@ from ._runtime import (
 )
 from .types import ProjectClip, ProjectMarker, ProjectSource, ProjectTrack
 
-_ASSIST_SIDECAR_KEYS = (
-    "module_id",
-    "payload",
-    "schema_version",
-    "target_track_id",
-    "region_start_ppq",
-    "region_end_ppq",
-)
 _CHORD_KEYS = (
     "start_ppq",
     "end_ppq",
@@ -343,24 +335,9 @@ class _ProjectInspectionMixin:
 
     # -- assist sidecars ----------------------------------------------------
 
-    @overload
     def set_assist_sidecar(
         self,
         module_id: str,
-        payload: bytes = b"",
-        *,
-        schema_version: int = 0,
-        target_track_id: int = 0,
-        region_start_ppq: float = 0.0,
-        region_end_ppq: float = 0.0,
-    ) -> None: ...
-
-    @overload
-    def set_assist_sidecar(self, module_id: Mapping[str, object]) -> None: ...
-
-    def set_assist_sidecar(
-        self,
-        module_id: str | Mapping[str, object],
         payload: bytes = b"",
         *,
         schema_version: int = 0,
@@ -372,34 +349,10 @@ class _ProjectInspectionMixin:
 
         Sidecars sharing ``module_id`` + ``target_track_id`` + region scope are
         replaced; otherwise a new one is appended. ``module_id`` must be
-        non-empty and ``payload`` is copied opaque bytes. The first argument
-        may alternatively be a descriptor mapping with the same names as keys:
-        ``module_id`` (required), ``payload``, ``schema_version``,
-        ``target_track_id``, ``region_start_ppq`` and ``region_end_ppq``; any
-        other key is refused by name.
+        non-empty and ``payload`` is copied opaque bytes.
         """
-        if isinstance(module_id, Mapping):
-            if (
-                payload != b""
-                or schema_version != 0
-                or target_track_id != 0
-                or region_start_ppq != 0.0
-                or region_end_ppq != 0.0
-            ):
-                raise TypeError("descriptor form cannot be mixed with legacy arguments")
-            descriptor = _mapping_keys(module_id, _ASSIST_SIDECAR_KEYS, "assist sidecar")
-            resolved_module_id = descriptor.get("module_id")
-            if not isinstance(resolved_module_id, str):
-                raise TypeError("module_id must be a string")
-            module_id = resolved_module_id
-            payload = cast(bytes, descriptor.get("payload", b""))
-            schema_version = cast(int, descriptor.get("schema_version", 0))
-            target_track_id = cast(int, descriptor.get("target_track_id", 0))
-            region_start_ppq = cast(float, descriptor.get("region_start_ppq", 0.0))
-            region_end_ppq = cast(float, descriptor.get("region_end_ppq", 0.0))
-        elif not isinstance(module_id, str):
+        if not isinstance(module_id, str):
             raise TypeError("module_id must be a string")
-
         if not module_id:
             raise SonareValueError("module_id must be a non-empty string")
         raw = bytes(payload)
@@ -683,13 +636,12 @@ class _ProjectInspectionMixin:
 
     def set_tempo_segments(
         self,
-        segments: Sequence[Mapping[str, float] | Sequence[float]],
+        segments: Sequence[Mapping[str, float]],
     ) -> None:
         """Replace the project's tempo map.
 
-        Each segment is a mapping (``start_ppq`` / ``bpm`` / optional
-        ``end_bpm``) or a tuple ``(start_ppq, bpm, start_sample=ignored,
-        end_bpm=0.0)``; sample positions are derived during normalization.
+        Each segment is a mapping with ``start_ppq``, ``bpm`` and an optional
+        ``end_bpm``; sample positions are derived during normalization.
         ``end_bpm`` 0 means a constant-tempo segment. Pass an empty sequence to
         clear.
         """
@@ -697,18 +649,10 @@ class _ProjectInspectionMixin:
         count = len(rows)
         c_segments = (SonareProjectTempoSegment * count)()
         for i, seg in enumerate(rows):
-            if isinstance(seg, Mapping):
-                fields = _mapping_keys(seg, _TEMPO_SEGMENT_KEYS, f"segments[{i}]")
-                start_ppq = _narrow_double(fields["start_ppq"], "start_ppq")
-                bpm = _narrow_double(fields["bpm"], "bpm")
-                end_bpm = _narrow_double(fields.get("end_bpm", 0.0), "end_bpm")
-            else:
-                tup = tuple(seg)
-                if len(tup) < 2:
-                    raise SonareValueError(f"segments[{i}] must contain (start_ppq, bpm)")
-                start_ppq = _narrow_double(tup[0], "tup[0]")
-                bpm = _narrow_double(tup[1], "tup[1]")
-                end_bpm = _narrow_double(tup[3], "tup[3]") if len(tup) >= 4 else 0.0
+            fields = _mapping_keys(seg, _TEMPO_SEGMENT_KEYS, f"segments[{i}]")
+            start_ppq = _narrow_double(fields["start_ppq"], "start_ppq")
+            bpm = _narrow_double(fields["bpm"], "bpm")
+            end_bpm = _narrow_double(fields.get("end_bpm", 0.0), "end_bpm")
             c_segments[i].start_ppq = start_ppq
             c_segments[i].bpm = bpm
             c_segments[i].end_bpm = end_bpm
@@ -720,39 +664,23 @@ class _ProjectInspectionMixin:
 
     def set_time_signatures(
         self,
-        segments: Sequence[Mapping[str, float] | Sequence[float]],
+        segments: Sequence[Mapping[str, float]],
     ) -> None:
         """Replace the project's time-signature map.
 
-        Each segment is a mapping (``start_ppq`` / ``numerator`` /
-        ``denominator``) or a tuple ``(start_ppq, numerator, denominator)``.
-        Pass an empty sequence to clear.
+        Each segment is a mapping with ``start_ppq``, ``numerator`` and
+        ``denominator``. Pass an empty sequence to clear.
         """
         rows = list(segments)
         count = len(rows)
         c_segments = (SonareProjectTimeSignatureSegment * count)()
         for i, seg in enumerate(rows):
-            numerator: object
-            denominator: object
-            if isinstance(seg, Mapping):
-                fields = _mapping_keys(seg, _METER_SEGMENT_KEYS, f"segments[{i}]")
-                start_ppq = _narrow_double(fields["start_ppq"], "start_ppq")
-                numerator = fields["numerator"]
-                denominator = fields["denominator"]
-            else:
-                tup = tuple(seg)
-                if len(tup) < 3:
-                    raise SonareValueError(
-                        f"segments[{i}] must contain (start_ppq, numerator, denominator)"
-                    )
-                start_ppq = _narrow_double(tup[0], "tup[0]")
-                # Left unconverted so the struct's own narrowing below sees each
-                # caller value; int() would truncate a fraction past it.
-                numerator = tup[1]
-                denominator = tup[2]
-            c_segments[i].start_ppq = start_ppq
-            c_segments[i].numerator = numerator
-            c_segments[i].denominator = denominator
+            fields = _mapping_keys(seg, _METER_SEGMENT_KEYS, f"segments[{i}]")
+            c_segments[i].start_ppq = _narrow_double(fields["start_ppq"], "start_ppq")
+            # Left unconverted so the struct's own narrowing sees each caller
+            # value; int() would truncate a fraction past it.
+            c_segments[i].numerator = fields["numerator"]
+            c_segments[i].denominator = fields["denominator"]
         _check(
             _get_lib().sonare_project_set_time_signatures(
                 self._require_handle(), c_segments, _to_c_size_t(count, "count")

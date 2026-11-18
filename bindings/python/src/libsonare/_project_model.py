@@ -217,16 +217,11 @@ ProjectOverlapPolicy: TypeAlias = Literal["disallow", "allow"]
 _OVERLAP_POLICIES: tuple[str, ...] = get_args(ProjectOverlapPolicy)
 
 # Automation target kind; a token's index is its SonareAutomationTargetKind ordinal.
-# Omitting it selects the legacy C call, while an explicit "opaque" selects the
+# None selects the legacy C call, while an explicit "opaque" selects the
 # extended call and is therefore observable at the FFI boundary.
 ProjectAutomationTargetKind: TypeAlias = Literal["opaque", "trackFaderDb", "trackPan"]
 """What an automation lane drives: an opaque parameter, a track fader or a track pan."""
 _AUTOMATION_TARGET_KINDS: tuple[str, ...] = get_args(ProjectAutomationTargetKind)
-
-
-# A private sentinel lets the facade distinguish an omitted optional kind from
-# an explicit ``None`` (which is not a valid target-kind value).
-_AUTOMATION_TARGET_KIND_UNSET = cast(ProjectAutomationTargetKind | None, object())
 
 
 def _automation_target_kind_value(value: object) -> int:
@@ -245,56 +240,7 @@ def _automation_target_param_id_value(value: object) -> int:
     return int(target)
 
 
-_AUTOMATION_LANE_KEYS = ("target_param_id", "points", "target_kind")
-_AUTOMATION_POINT_KEYS = ("ppq", "value", "curve")
-
-
-def _automation_lane_args(
-    target_param_id: object,
-    points: (
-        Sequence[tuple[float, float, AutomationCurve]]
-        | Sequence[Sequence[float]]
-        | Sequence[Mapping[str, object]]
-        | Mapping[str, object]
-        | None
-    ),
-    target_kind: object,
-) -> tuple[
-    object,
-    Sequence[tuple[float, float, AutomationCurve]]
-    | Sequence[Sequence[float]]
-    | Sequence[Mapping[str, object]]
-    | None,
-    object,
-]:
-    """Accept the positional form and a descriptor mapping.
-
-    A descriptor takes the snake_case keys ``target_param_id``, ``points`` and
-    ``target_kind``; any other key is refused by name.
-    """
-    if isinstance(target_param_id, Mapping):
-        descriptor = _mapping_keys(target_param_id, _AUTOMATION_LANE_KEYS, "automation lane")
-        resolved_target = descriptor.get("target_param_id")
-    elif isinstance(points, Mapping):
-        descriptor = _mapping_keys(points, _AUTOMATION_LANE_KEYS, "automation lane")
-        resolved_target = descriptor.get("target_param_id", target_param_id)
-    else:
-        return target_param_id, points, target_kind
-    resolved_points = descriptor.get("points", None if isinstance(points, Mapping) else points)
-    resolved_kind = target_kind
-    if target_kind is _AUTOMATION_TARGET_KIND_UNSET and "target_kind" in descriptor:
-        resolved_kind = descriptor["target_kind"]
-    return (
-        resolved_target,
-        cast(
-            Sequence[tuple[float, float, AutomationCurve]]
-            | Sequence[Sequence[float]]
-            | Sequence[Mapping[str, object]]
-            | None,
-            resolved_points,
-        ),
-        resolved_kind,
-    )
+_AUTOMATION_POINT_KEYS = ("ppq", "value", "curve_to_next")
 
 
 def _fade_curve_value(curve: ProjectFadeCurve) -> int:
@@ -307,14 +253,9 @@ def _loop_mode_value(mode: ProjectLoopMode) -> int:
 
 def _automation_lane_desc(
     target_param_id: object,
-    points: (
-        Sequence[tuple[float, float, AutomationCurve]]
-        | Sequence[Sequence[float]]
-        | Sequence[Mapping[str, object]]
-        | None
-    ),
+    points: Sequence[Mapping[str, object]] | None,
 ) -> tuple[SonareAutomationLaneDesc, object]:
-    """Marshal ``(ppq, value, curve)`` breakpoints into a SonareAutomationLaneDesc.
+    """Marshal ``ppq`` / ``value`` / ``curve_to_next`` points into a SonareAutomationLaneDesc.
 
     Returns ``(desc, backing)``; the caller must keep ``backing`` (the C point
     array) alive for the duration of the native call.
@@ -324,24 +265,17 @@ def _automation_lane_desc(
     count = len(rows)
     c_points = (SonareAutomationPoint * count)()
     for i, pt in enumerate(rows):
-        seq: tuple[object, ...]
-        if isinstance(pt, Mapping):
-            point = _mapping_keys(pt, _AUTOMATION_POINT_KEYS, f"points[{i}]")
-            seq = (point.get("ppq"), point.get("value"), point.get("curve", "linear"))
-        else:
-            seq = tuple(pt)
-        if len(seq) < 2:
-            raise SonareValueError(f"points[{i}] must contain at least (ppq, value)")
-        ppq = float(cast(SupportsFloat, seq[0]))
-        value = float(cast(SupportsFloat, seq[1]))
-        curve = _curve_value(cast(AutomationCurve, seq[2])) if len(seq) >= 3 else 0
+        point = _mapping_keys(pt, _AUTOMATION_POINT_KEYS, f"points[{i}]")
+        ppq = float(cast(SupportsFloat, point["ppq"]))
+        value = float(cast(SupportsFloat, point["value"]))
         if not math.isfinite(ppq):
             raise SonareValueError(f"points[{i}].ppq must be a finite number")
         if not math.isfinite(value):
             raise SonareValueError(f"points[{i}].value must be a finite number")
+        if "curve_to_next" in point:
+            c_points[i].curve_to_next = _curve_value(cast(AutomationCurve, point["curve_to_next"]))
         c_points[i].ppq = ppq
         c_points[i].value = value
-        c_points[i].curve_to_next = int(curve)
     desc = SonareAutomationLaneDesc(
         target_param_id=target_id,
         points=c_points,

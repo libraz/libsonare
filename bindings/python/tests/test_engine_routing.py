@@ -76,7 +76,7 @@ def _direct_level() -> float:
                 )
             ]
         )
-        engine.set_track_lanes([10])
+        engine.set_track_lanes([{"track_id": 10}])
         level = _render_last(engine)
         assert level > 0.5
         return level
@@ -432,7 +432,7 @@ def test_grown_structs_match_abi_layout_snapshot() -> None:
 def test_lane_sidechain_refuses_self_key_and_cycles_but_keeps_valid_bindings() -> None:
     engine = RealtimeEngine(sample_rate=48000.0, max_block_size=_BLOCK)
     try:
-        engine.set_track_lanes([10, 20])
+        engine.set_track_lanes([{"track_id": 10}, {"track_id": 20}])
         for track_id in (10, 20):
             engine.set_track_strip_json(track_id, _strip_json(track_id, [_PASS_LIMITER]))
         engine.set_lane_sidechain(10, 0, 20)
@@ -521,7 +521,7 @@ def test_can_set_sidechain_reports_each_refusal_and_matches_the_setters() -> Non
 
     # Table full: every slot of the binding table taken by lane 10, then a new key.
     with RealtimeEngine(sample_rate=48000.0, max_block_size=_BLOCK) as full:
-        full.set_track_lanes([10, 30])
+        full.set_track_lanes([{"track_id": 10}, {"track_id": 30}])
         full.set_track_strip_json(10, _strip_json(10, [_PASS_LIMITER] * 33))
         for insert in range(32):
             full.set_lane_sidechain(10, insert, 30)
@@ -538,7 +538,7 @@ def test_can_set_sidechain_reports_each_refusal_and_matches_the_setters() -> Non
         {"thresholdDb": -20.0, "ratio": 20.0, "attackMs": 0.05, "releaseMs": 80.0, "rangeDb": 30.0},
     )
     with RealtimeEngine(sample_rate=48000.0, max_block_size=_BLOCK) as plan:
-        plan.set_track_lanes([10, 20, 30])
+        plan.set_track_lanes([{"track_id": 10}, {"track_id": 20}, {"track_id": 30}])
         plan.set_track_strip_json(20, _strip_json(20, [long_limiter]))
         plan.set_track_strip_json(
             30, _strip_json(30, [(limiter[0], {**limiter[1], "lookaheadMs": 1.0}), ducker])

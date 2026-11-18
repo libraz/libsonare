@@ -8,7 +8,7 @@ import json
 import math
 import operator
 from collections.abc import Mapping, Sequence
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 import numpy as np
 
@@ -18,9 +18,7 @@ from ._project_mir import chord_symbol_from_analysis as chord_symbol_from_analys
 from ._project_mir import key_mode_from_analysis as key_mode_from_analysis
 from ._project_model import *  # noqa: F403
 from ._project_model import (
-    _AUTOMATION_TARGET_KIND_UNSET,
     _STEM_LAYOUTS,
-    _automation_lane_args,
     _automation_lane_desc,
     _automation_target_kind_value,
     _automation_target_param_id_value,
@@ -93,7 +91,7 @@ from ._types_enums import ProjectWarpMode
 from .types import ProjectSource
 
 if TYPE_CHECKING:
-    from ._runtime import AutomationCurve
+    pass
 
 # Mirrors SONARE_PROJECT_LOOP_RECORDING_DROP_PARTIAL_TAIL.
 _LOOP_RECORDING_DROP_PARTIAL_TAIL = 1
@@ -560,7 +558,7 @@ class _ProjectEditMixin:
     def set_clip_takes(
         self,
         clip_id: int,
-        takes: Sequence[Mapping[str, object]] | Sequence[tuple[int, int, float, str]] | None,
+        takes: Sequence[Mapping[str, object]] | None,
         active_take_id: int = 0,
     ) -> None:
         """Replace a clip's take list and active take via an undoable edit."""
@@ -568,14 +566,11 @@ class _ProjectEditMixin:
         c_takes = (SonareProjectClipTake * len(take_items))()
         name_backing: list[bytes] = []
         for i, item in enumerate(take_items):
-            if isinstance(item, Mapping):
-                take = _mapping_keys(item, _TAKE_KEYS, f"set_clip_takes: takes[{i}]")
-                take_id = take.get("id", 0)
-                source_id = take.get("source_id", 0)
-                source_offset = take.get("source_offset_ppq", 0.0)
-                name = take.get("name", "")
-            else:
-                take_id, source_id, source_offset, name = cast(tuple[int, int, float, str], item)
+            take = _mapping_keys(item, _TAKE_KEYS, f"set_clip_takes: takes[{i}]")
+            take_id = take.get("id", 0)
+            source_id = take.get("source_id", 0)
+            source_offset = take.get("source_offset_ppq", 0.0)
+            name = take.get("name", "")
             # Narrowed rather than coerced, for the reason source_id gives below:
             # int(0.5) is a 0 the take list then carries as a real take id.
             c_takes[i].id = _narrow_int(take_id, f"set_clip_takes: takes[{i}].id", 0, _UINT32_MAX)
@@ -610,30 +605,19 @@ class _ProjectEditMixin:
     def set_clip_comp_segments(
         self,
         clip_id: int,
-        segments: Sequence[Mapping[str, object]]
-        | Sequence[tuple[float, float, int]]
-        | Sequence[tuple[float, float, int, float]]
-        | None,
+        segments: Sequence[Mapping[str, object]] | None,
     ) -> None:
         """Replace a clip's comp lane via an undoable edit."""
         segment_items = list(segments or [])
         c_segments = (SonareProjectClipCompSegment * len(segment_items))()
         for i, item in enumerate(segment_items):
-            if isinstance(item, Mapping):
-                segment = _mapping_keys(
-                    item, _COMP_SEGMENT_KEYS, f"set_clip_comp_segments: segments[{i}]"
-                )
-                start_ppq = segment.get("start_ppq", 0.0)
-                end_ppq = segment.get("end_ppq", 0.0)
-                take_id = segment.get("take_id", 0)
-                crossfade_ppq = segment.get("crossfade_ppq", 0.0)
-            elif len(item) == 4:
-                start_ppq, end_ppq, take_id, crossfade_ppq = cast(
-                    tuple[float, float, int, float], item
-                )
-            else:
-                start_ppq, end_ppq, take_id = cast(tuple[float, float, int], item)
-                crossfade_ppq = 0.0
+            segment = _mapping_keys(
+                item, _COMP_SEGMENT_KEYS, f"set_clip_comp_segments: segments[{i}]"
+            )
+            start_ppq = segment.get("start_ppq", 0.0)
+            end_ppq = segment.get("end_ppq", 0.0)
+            take_id = segment.get("take_id", 0)
+            crossfade_ppq = segment.get("crossfade_ppq", 0.0)
             c_segments[i].start_ppq = _narrow_double(
                 start_ppq, f"set_clip_comp_segments: segments[{i}].start_ppq"
             )
@@ -1044,37 +1028,21 @@ class _ProjectEditMixin:
     def add_automation_lane(
         self,
         track_id: int,
-        target_param_id: int | Mapping[str, object],
-        points: (
-            Sequence[tuple[float, float, AutomationCurve]]
-            | Sequence[Sequence[float]]
-            | Sequence[Mapping[str, object]]
-            | Mapping[str, object]
-            | None
-        ) = None,
-        target_kind: ProjectAutomationTargetKind | None = _AUTOMATION_TARGET_KIND_UNSET,
+        target_param_id: int,
+        points: Sequence[Mapping[str, object]] | None = None,
+        target_kind: ProjectAutomationTargetKind | None = None,
     ) -> int:
         """Append an automation lane and return its stable target parameter id.
 
-        ``points`` is an optional list of ``(ppq, value, curve)`` breakpoints
-        (``curve`` is an :data:`AutomationCurve` token; default ``"linear"``).
-        ``target_param_id`` must be non-zero; zero is reserved as the unset id.
-        Omit ``target_kind`` to use the legacy opaque-lane ABI. Supplying
-        ``"opaque"``, ``"trackFaderDb"`` or ``"trackPan"`` uses the typed
-        extended ABI.
-        A mapping descriptor with ``target_param_id``, ``points`` and optional
-        ``target_kind`` is also accepted; any other key is refused by name.
-        A point given as a mapping takes ``ppq``, ``value`` and optional ``curve``.
+        ``points`` is an optional list of mappings with ``ppq``, ``value`` and
+        an optional ``curve_to_next`` :data:`AutomationCurve` token; any other
+        key is refused by name. ``target_param_id`` must be non-zero; zero is
+        reserved as the unset id. Omit ``target_kind`` to use the legacy
+        opaque-lane ABI. Supplying ``"opaque"``, ``"trackFaderDb"`` or
+        ``"trackPan"`` uses the typed extended ABI.
         """
-        lane_target, lane_points, lane_kind = _automation_lane_args(
-            target_param_id, points, target_kind
-        )
-        desc, _backing = _automation_lane_desc(lane_target, lane_points)
-        kind = (
-            None
-            if lane_kind is _AUTOMATION_TARGET_KIND_UNSET
-            else _automation_target_kind_value(lane_kind)
-        )
+        desc, _backing = _automation_lane_desc(target_param_id, points)
+        kind = None if target_kind is None else _automation_target_kind_value(target_kind)
         lib = _get_lib()
         out_target_param_id = ctypes.c_uint32()
         if kind is None:
@@ -1115,35 +1083,20 @@ class _ProjectEditMixin:
     def edit_automation_lane(
         self,
         track_id: int,
-        target_param_id: int | Mapping[str, object],
-        points: (
-            Sequence[tuple[float, float, AutomationCurve]]
-            | Sequence[Sequence[float]]
-            | Sequence[Mapping[str, object]]
-            | Mapping[str, object]
-            | None
-        ) = None,
-        target_kind: ProjectAutomationTargetKind | None = _AUTOMATION_TARGET_KIND_UNSET,
+        target_param_id: int,
+        points: Sequence[Mapping[str, object]] | None = None,
+        target_kind: ProjectAutomationTargetKind | None = None,
     ) -> None:
         """Replace an automation lane via an undoable edit.
 
         Omit ``target_kind`` to use the legacy edit ABI, which preserves the
         existing lane kind. Supplying a kind applies it through the typed
         extended ABI and rejects same-track typed-target conflicts atomically.
-        A mapping descriptor is accepted in the same form as
-        :meth:`add_automation_lane`; the edit target id remains the second
-        positional argument when using the historical form.
+        ``points`` takes the same mappings as :meth:`add_automation_lane`.
         """
-        lane_target, lane_points, lane_kind = _automation_lane_args(
-            target_param_id, points, target_kind
-        )
-        desc, _backing = _automation_lane_desc(lane_target, lane_points)
-        target_id = _automation_target_param_id_value(lane_target)
-        kind = (
-            None
-            if lane_kind is _AUTOMATION_TARGET_KIND_UNSET
-            else _automation_target_kind_value(lane_kind)
-        )
+        desc, _backing = _automation_lane_desc(target_param_id, points)
+        target_id = _automation_target_param_id_value(target_param_id)
+        kind = None if target_kind is None else _automation_target_kind_value(target_kind)
         lib = _get_lib()
         if kind is None:
             _check(
