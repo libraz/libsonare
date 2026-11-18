@@ -26,13 +26,19 @@ import {
 
 /** Options for `masteringRepairDeclick`. */
 export interface DeclickOptions extends ValidateOptions {
+  /** Click detection threshold as a linear sample magnitude, in (0, 10]. Default `0.8`. */
   threshold?: number;
+  /** Ratio a click edge must exceed against the sample-to-sample level beside it, in (0, 100]. Default `4`. */
   neighborRatio?: number;
+  /** Longest run treated as a click, in samples, from 1 to 512. Default `8`. */
   maxClickSamples?: number;
+  /** Order of the LPC model that fills a click, from 0 to 2048. Default `20`. */
   lpcOrder?: number;
+  /** How far the LPC residual must stand above its typical level to mark a click, in (0, 1000]. Default `8`. */
   residualRatio?: number;
 }
 
+/** Request form of `masteringRepairDeclick`. */
 export interface MasteringRepairDeclickRequest
   extends MasteringRepairSamplesRequest,
     DeclickOptions {}
@@ -52,8 +58,11 @@ export function masteringRepairDeclick(...args: unknown[]): DeclickResult {
 
 /** Request form of `masteringRepairDeclickStereo`. */
 export interface MasteringRepairDeclickStereoRequest extends DeclickOptions {
+  /** Left channel samples. */
   left: Float32Array;
+  /** Right channel samples. */
   right: Float32Array;
+  /** Sample rate in Hz. */
   sampleRate: number;
 }
 
@@ -87,11 +96,15 @@ export function masteringRepairDeclickStereo(...args: unknown[]): MasteringRepai
 export interface DeclipOptions extends ValidateOptions {
   /** Clip level in dBFS, at most 0. Default about -0.175 (0.98 linear). */
   clipThresholdDb?: number;
+  /** Order of the LPC model that fills a clipped run, from 0 up. Default `36`. */
   lpcOrder?: number;
+  /** Outer reconstruction rounds, from 1 to 8. Default `2`. */
   iterations?: number;
+  /** Weight of the LPC prediction in the fill, in [0, 1]; the interpolation fallback gets the remainder. Default `0.65`. */
   lpcBlend?: number;
 }
 
+/** Request form of `masteringRepairDeclip`. */
 export interface MasteringRepairDeclipRequest
   extends MasteringRepairSamplesRequest,
     DeclipOptions {}
@@ -101,11 +114,15 @@ export type DecrackleMode = 'median' | 'waveletShrinkage';
 
 /** Options for `masteringRepairDecrackle`. */
 export interface DecrackleOptions extends ValidateOptions {
+  /** Detection threshold, in (0, 1000]: a deviation from the local median in `'median'` mode, a cap on the shrinkage threshold in `'waveletShrinkage'` mode. Default `0.4`. */
   threshold?: number;
+  /** Repair algorithm. Default `'median'`. */
   mode?: DecrackleMode;
+  /** Haar decomposition levels, from 1 to 24. Default `4`. */
   levels?: number;
 }
 
+/** Request form of `masteringRepairDecrackle`. */
 export interface MasteringRepairDecrackleRequest
   extends MasteringRepairSamplesRequest,
     DecrackleOptions {}
@@ -136,8 +153,11 @@ export function masteringRepairDeclip(...args: unknown[]): DeclipResult {
 
 /** Request form of `masteringRepairDeclipStereo`. */
 export interface MasteringRepairDeclipStereoRequest extends DeclipOptions {
+  /** Left channel samples. */
   left: Float32Array;
+  /** Right channel samples. */
   right: Float32Array;
+  /** Sample rate in Hz. */
   sampleRate: number;
 }
 
@@ -191,8 +211,11 @@ export function masteringRepairDecrackle(...args: unknown[]): DecrackleResult {
 
 /** Request form of `masteringRepairDecrackleStereo`. */
 export interface MasteringRepairDecrackleStereoRequest extends DecrackleOptions {
+  /** Left channel samples. */
   left: Float32Array;
+  /** Right channel samples. */
   right: Float32Array;
+  /** Sample rate in Hz. */
   sampleRate: number;
 }
 

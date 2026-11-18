@@ -16,6 +16,7 @@ import {
 
 /** Spectral edit request: the audio and rate plus {@link SpectralEditOptions}. */
 export interface SpectralEditRequest extends SpectralEditOptions {
+  /** Mono input audio. */
   samples: Float32Array;
   /**
    * Sample rate in Hz. Required: region frequency boundaries are mapped to STFT

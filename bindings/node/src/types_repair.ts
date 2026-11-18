@@ -168,6 +168,7 @@ export interface CrackleDetection {
   sampleCount: number;
   /** `sampleCount` divided by the input length. */
   sampleFraction: number;
+  /** Crackle samples per second of input. */
   perSecond: number;
 }
 
@@ -512,6 +513,7 @@ export interface MasteringRepairTrimSilenceResult {
 
 /** Common input fields for offline repair processors. */
 export interface MasteringRepairSamplesRequest extends ValidateOptions {
+  /** Mono input samples. */
   samples: Float32Array;
   /** Sample rate in Hz. Required. */
   sampleRate: number;

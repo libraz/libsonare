@@ -24,7 +24,9 @@ import {
  * missing field is a `TypeError`, a non-finite value a `RangeError`.
  */
 export interface TimeStretchRequest extends ValidateOptions {
+  /** Mono input audio. */
   samples: Float32Array;
+  /** Sample rate in Hz. Required. */
   sampleRate: number;
   /**
    * Playback speed: `> 1` is faster and shorter (2 halves the duration), `< 1`
@@ -40,7 +42,9 @@ export interface TimeStretchRequest extends ValidateOptions {
 
 /** Pitch-shift request. `sampleRate` (Hz) and `pitchSemitones` are required. */
 export interface PitchShiftRequest extends ValidateOptions {
+  /** Mono input audio. */
   samples: Float32Array;
+  /** Sample rate in Hz. Required. */
   sampleRate: number;
   /** Shift in semitones: +12 is one octave up, -12 one octave down. */
   pitchSemitones: number;
@@ -52,7 +56,9 @@ export interface PitchShiftRequest extends ValidateOptions {
 
 /** Constant-interval correction request. `sampleRate` (Hz), `currentMidi` and `targetMidi` are required. */
 export interface PitchCorrectToMidiRequest extends ValidateOptions {
+  /** Mono input audio. */
   samples: Float32Array;
+  /** Sample rate in Hz. Required. */
   sampleRate: number;
   /** MIDI note the audio currently sits on, in `[0, 127]`. */
   currentMidi: number;
@@ -62,13 +68,17 @@ export interface PitchCorrectToMidiRequest extends ValidateOptions {
 
 /** Contour-following correction request; the fields are {@link PitchCorrectOptions} plus the audio. */
 export interface PitchCorrectTimevaryingRequest extends PitchCorrectOptions {
+  /** Mono input audio. */
   samples: Float32Array;
+  /** Sample rate in Hz. Required. */
   sampleRate: number;
 }
 
 /** Auto-tune request; the fields are {@link AutoTuneOptions} plus the audio. `sampleRate` (Hz) is required. */
 export interface AutoTuneRequest extends AutoTuneOptions {
+  /** Mono input audio. */
   samples: Float32Array;
+  /** Sample rate in Hz. Required. */
   sampleRate: number;
 }
 

@@ -68,15 +68,18 @@ export interface PercussiveSeparationOptions {
    * the same signal. Default 2048 and 512.
    */
   nFft?: number;
+  /** Hop length in samples, at most half of `nFft`. Default `512`. */
   hopLength?: number;
   /**
    * Median filter lengths the separation runs, along time and along frequency. A
    * longer harmonic kernel calls more of a sustained sound harmonic. Default 31.
    */
   hpssKernelHarmonic?: number;
+  /** Median filter length along frequency (percussive kernel). Default `31`. */
   hpssKernelPercussive?: number;
 }
 
+/** Request for {@link extractPercussiveEvents}: audio plus the separation and onset-detector settings. */
 export interface ExtractPercussiveEventsRequest
   extends PercussiveSeparationOptions,
     ValidateOptions {
@@ -119,6 +122,7 @@ export interface ExtractPercussiveEventsRequest
   minPercussiveRatio?: number;
 }
 
+/** Request for {@link renderPercussiveEvents}: audio, the edited events and the separation they were extracted with. */
 export interface RenderPercussiveEventsRequest
   extends PercussiveSeparationOptions,
     ValidateOptions {

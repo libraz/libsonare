@@ -36,13 +36,17 @@ import {
 
 /** Note-region stretch request: the audio and rate (Hz, required) plus {@link NoteStretchOptions}. */
 export interface NoteStretchRequest extends NoteStretchOptions {
+  /** Mono input audio. */
   samples: Float32Array;
+  /** Sample rate in Hz. Required. */
   sampleRate: number;
 }
 
 /** Note-region move request: the audio and rate (Hz, required) plus {@link NoteMoveOptions}. */
 export interface NoteMoveRequest extends NoteMoveOptions {
+  /** Mono input audio. */
   samples: Float32Array;
+  /** Sample rate in Hz. Required. */
   sampleRate: number;
 }
 
@@ -52,6 +56,7 @@ export interface NoteMoveRequest extends NoteMoveOptions {
  * is measured against something else.
  */
 export interface ExtractNotesRequest extends NoteExtractorOptions, ValidateOptions {
+  /** Mono source audio the F0 track was measured from. */
   samples: Float32Array;
   /**
    * Sample rate in Hz. Required: `minNoteMs` and the per-frame RMS windows are
@@ -75,6 +80,7 @@ export interface ExtractNotesRequest extends NoteExtractorOptions, ValidateOptio
   voicedProb?: Float32Array | null;
 }
 
+/** Request for {@link splitNote}: the audio, F0 track and note set plus the note and cut position. */
 export interface SplitNoteRequest extends ExtractNotesRequest {
   /** The current note set, identified by its frame bounds. */
   notes: readonly NoteSetEntry[];
@@ -86,6 +92,7 @@ export interface SplitNoteRequest extends ExtractNotesRequest {
   frameSec?: number;
 }
 
+/** Request for {@link mergeNotes}: the audio, F0 track and note set plus the inclusive note range to join. */
 export interface MergeNotesRequest extends ExtractNotesRequest {
   /** The current note set, identified by its frame bounds. */
   notes: readonly NoteSetEntry[];
@@ -95,6 +102,7 @@ export interface MergeNotesRequest extends ExtractNotesRequest {
   last: number;
 }
 
+/** Request for {@link decomposeNotePitch}: one note's F0 slice and median pitch. */
 export interface DecomposeNotePitchRequest {
   /**
    * The note's slice of the F0 track (`f0Hz.subarray(frameStart, frameEnd)`);
@@ -114,7 +122,9 @@ export interface DecomposeNotePitchRequest {
   vibratoCutoffHz?: number;
 }
 
+/** Request for {@link renderNotes}: the source audio and the edited notes to render over it. */
 export interface RenderNotesRequest extends ValidateOptions {
+  /** Mono source audio the notes were extracted from. */
   samples: Float32Array;
   /**
    * Sample rate in Hz. Required: `fadeMs` is converted to samples with this
@@ -151,6 +161,7 @@ export interface RenderNotesRequest extends ValidateOptions {
   vibratoCutoffHz?: number;
 }
 
+/** Request for {@link noteTargetsFromSmf}: the Standard MIDI File bytes and the track to read. */
 export interface NoteTargetsFromSmfRequest {
   /** The Standard MIDI File's bytes. */
   data: Uint8Array;
@@ -163,6 +174,7 @@ export interface NoteTargetsFromSmfRequest {
   trackIndex?: number;
 }
 
+/** Request for {@link assignNoteTargets}: the notes, their sample rate and the reference melody to match. */
 export interface AssignNoteTargetsRequest {
   /**
    * The notes to assign to. Their sample bounds, `medianHz` and `edit` are read;

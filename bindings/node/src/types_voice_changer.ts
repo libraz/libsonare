@@ -30,14 +30,21 @@ export type VoicePresetCategory =
   | 'character'
   | 'custom';
 
+/** Identifying metadata shared by every preset document. */
 export interface RealtimeVoiceChangerPresetMetadata {
+  /** Preset document schema version; always `3`. */
   schemaVersion: 3;
+  /** Preset identifier. */
   id: string;
+  /** Display name of the preset. */
   name: string;
+  /** Free-form description of the preset. Optional. */
   description?: string;
+  /** Catalogue category the preset belongs to. */
   category: VoicePresetCategory;
 }
 
+/** A preset document: metadata plus either a nested `dsp` section or a `macros` map, never both. */
 export type RealtimeVoiceChangerPreset =
   | (RealtimeVoiceChangerPresetMetadata & {
       dsp: Record<string, unknown>;
@@ -48,6 +55,7 @@ export type RealtimeVoiceChangerPreset =
       dsp?: never;
     });
 
+/** Anything a voice changer accepts as its configuration: a preset id, a preset document or a flat config. */
 export type RealtimeVoiceChangerConfigInput =
   | VoicePresetId
   | RealtimeVoiceChangerPreset
@@ -100,19 +108,27 @@ export type MidiRelease = 'hold' | 'input';
  * range; nothing is clamped.
  */
 export interface RealtimeVoiceChangerConfig {
+  /** Input gain in dB, [-24, 24]. */
   inputGainDb: number;
+  /** Output gain in dB, [-36, 12]. */
   outputGainDb: number;
+  /** Dry/wet mix in [0, 1]; 1 is fully processed. */
   wetMix: number;
   /** Retune pitch shift in semitones. */
   retunePitchSemitones: number;
+  /** Retune wet amount in [0, 1]. */
   retuneMix: number;
   /** Retune grain length in samples. */
   retuneGrainSizeSamples: number;
+  /** Formant scale factor, [0.55, 1.65]; 1 leaves the formants alone. See `formantMode`. */
   formantFactor: number;
   /** Strength of the formant displacement in [0, 1]. Ignored when `formantMode` is `'absolute'`. */
   formantAmount: number;
+  /** Formant body amount in [-1, 1]. */
   formantBody: number;
+  /** Formant brightness amount in [-1, 1]. */
   formantBrightness: number;
+  /** Formant nasal amount in [-1, 1]. */
   formantNasal: number;
   /**
    * How `formantFactor` acts. `'relative'` leaves it to the colour stage
@@ -123,31 +139,49 @@ export interface RealtimeVoiceChangerConfig {
    * a config carrying a different mode is refused. Required, like every POD field.
    */
   formantMode: FormantMode;
+  /** High-pass corner in Hz, [20, 300]. */
   eqHighPassHz: number;
+  /** Body band gain in dB, [-12, 12]. */
   eqBodyDb: number;
+  /** Presence band gain in dB, [-12, 12]. */
   eqPresenceDb: number;
+  /** Air band gain in dB, [-12, 12]. */
   eqAirDb: number;
+  /** Gate threshold in dB, [-90, -12]. */
   gateThresholdDb: number;
   /** Attack in ms: one time constant, about 63% of the way at the set time. */
   gateAttackMs: number;
   /** Release in ms: one time constant, about 63% of the way at the set time. */
   gateReleaseMs: number;
+  /** Gate attenuation depth in dB, [0, 80]. */
   gateRangeDb: number;
+  /** Compressor threshold in dB, [-60, 0]. */
   compressorThresholdDb: number;
+  /** Compression ratio, [1, 20]. */
   compressorRatio: number;
   /** Attack in ms: one time constant, about 63% of the way at the set time. */
   compressorAttackMs: number;
   /** Release in ms: one time constant, about 63% of the way at the set time. */
   compressorReleaseMs: number;
+  /** Compressor makeup gain in dB, [-12, 12]. */
   compressorMakeupGainDb: number;
+  /** De-esser centre frequency in Hz, [3000, 12000]. */
   deesserFrequencyHz: number;
+  /** De-esser threshold in dB, [-60, -6]. */
   deesserThresholdDb: number;
+  /** De-esser ratio, [1, 20]. */
   deesserRatio: number;
+  /** Maximum de-esser attenuation in dB, [0, 24]. */
   deesserRangeDb: number;
+  /** Space-stage wet level in [0, 0.45]; shared by every `reverbVariation`. */
   reverbMix: number;
+  /** Reverb decay time in ms, [40, 1800]. */
   reverbTimeMs: number;
+  /** Reverb high-frequency damping in [0, 1]. */
   reverbDamping: number;
+  /** Integer seed of the reverb's random generator (32-bit signed). */
   reverbSeed: number;
+  /** Limiter ceiling in dB, [-12, -1]. */
   limiterCeilingDb: number;
   /** Release in ms: one time constant, about 63% of the way at the set time. */
   limiterReleaseMs: number;
@@ -159,6 +193,7 @@ export interface RealtimeVoiceChangerConfig {
   voiceEngine: VoiceEngine;
   /** Lowest tracked f0 in Hz, [50, 200]; sets the psola latency. Fixed when the changer is prepared. */
   voiceEngineF0MinHz: number;
+  /** Pitch correction mode: off, scale snap or single-pitch-class snap. */
   pitchCorrectionMode: PitchCorrectionMode;
   /** Correction strength in [0, 1]. */
   pitchCorrectionAmount: number;
@@ -166,6 +201,7 @@ export interface RealtimeVoiceChangerConfig {
   pitchCorrectionSpeedMs: number;
   /** Scale root, 0 = C .. 11 = B; validated but unused for a chromatic scale. */
   pitchCorrectionKeyRoot: number;
+  /** Scale the correction snaps to. */
   pitchCorrectionScale: ScaleKind;
   /** Octave offset of the robot mode, [-1, 1]. */
   pitchCorrectionRobotOctave: number;
@@ -173,12 +209,15 @@ export interface RealtimeVoiceChangerConfig {
   harmonyVoices: number;
   /** Scale degrees of harmony voices 1 to 3 from the lead, each in [-7, 7] (0 = unison, 2 = a third up). */
   harmonySteps: readonly [number, number, number];
+  /** Level of the harmony voices in [0, 1]. */
   harmonyLevel: number;
+  /** Level of the lead voice in [0, 1]. */
   harmonyLeadLevel: number;
   /** Detune of the harmony voices in cents, [0, 30]. */
   harmonyDetuneCents: number;
   /** Harmony delay in ms, [0, 40]. */
   harmonyDelayMs: number;
+  /** Enables the channel vocoder. */
   vocoderEnabled: boolean;
   /** Band count, [8, 32]. Fixed when the changer is prepared. */
   vocoderBands: number;
@@ -186,16 +225,23 @@ export interface RealtimeVoiceChangerConfig {
   vocoderAttackMs: number;
   /** Envelope release in ms, [2, 300]. */
   vocoderReleaseMs: number;
+  /** Vocoder sibilance amount in [0, 1]. */
   vocoderSibilance: number;
+  /** Where the vocoder takes its carrier from. */
   vocoderCarrierSource: VocoderCarrierSource;
+  /** Waveform of the internal carrier. */
   vocoderCarrierWave: VocoderCarrierWave;
   /** Detune of the ensemble carrier in cents, [0, 30]. */
   vocoderEnsembleDetuneCents: number;
+  /** Vocoder output level in [0, 1]. */
   vocoderLevel: number;
+  /** Character stage type. */
   characterType: CharacterType;
+  /** Character stage amount in [0, 1]. */
   characterAmount: number;
   /** Tone in [-1, 1]. */
   characterTone: number;
+  /** Space stage variation. */
   reverbVariation: ReverbVariation;
   /** Echo delay in ms, [1, 3000]. */
   reverbVariationDelayMs: number;
@@ -203,6 +249,8 @@ export interface RealtimeVoiceChangerConfig {
   reverbVariationFeedback: number;
   /** Tempo of the tempo delay in BPM, [30, 300]. */
   reverbVariationTempoBpm: number;
+  /** Note length of the tempo delay. */
   reverbVariationDivision: NoteDivision;
+  /** Note-release mode: `'hold'` keeps the last held note once every note is released, `'input'` returns to following the input. */
   midiRelease: MidiRelease;
 }

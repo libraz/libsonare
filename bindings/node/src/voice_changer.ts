@@ -172,6 +172,7 @@ function deinterleavePlanes(data: Float32Array, numChannels: number): Float32Arr
 
 const CONSTRUCTOR_KEYS: readonly string[] = ['sampleRate', 'maxBlockSize', 'numChannels', 'config'];
 
+/** Realtime voice-changer chain: pitch, formant, EQ, dynamics, harmony, vocoder, character and space stages over mono or stereo blocks. Call {@link RealtimeVoiceChanger.destroy} when done. */
 export class RealtimeVoiceChanger {
   private native: InstanceType<typeof addon.RealtimeVoiceChanger>;
   private disposed = false;
@@ -215,6 +216,7 @@ export class RealtimeVoiceChanger {
     }
   }
 
+  /** Clears the streaming DSP state (filters, envelopes, reverb, limiter) and keeps the configuration. Not for use while a block is being processed. */
   reset(): void {
     this.native.reset();
   }
@@ -229,6 +231,7 @@ export class RealtimeVoiceChanger {
     this.native.setConfig(nativeVoiceConfig('RealtimeVoiceChanger.setConfig', config));
   }
 
+  /** Current configuration as a JSON preset document. */
   configJson(): string {
     return this.native.configJson();
   }
@@ -264,6 +267,7 @@ export class RealtimeVoiceChanger {
     return this.native.nonFiniteDiscardCount();
   }
 
+  /** Processes a mono block and returns a new array of the same length. */
   processMono(input: Float32Array): Float32Array {
     return this.native.processMono(input);
   }
@@ -278,6 +282,7 @@ export class RealtimeVoiceChanger {
     return this.native.processMonoWithCarrier(input, carrier);
   }
 
+  /** Realtime hot path: {@link RealtimeVoiceChanger.processMonoWithCarrier} writing into `output`, which has the length of `input`. */
   processMonoWithCarrierInto(
     input: Float32Array,
     carrier: Float32Array,
@@ -286,6 +291,7 @@ export class RealtimeVoiceChanger {
     this.native.processMonoWithCarrierInto(input, carrier, output);
   }
 
+  /** Realtime hot path: {@link RealtimeVoiceChanger.processMono} writing into `output`, which has the length of `input`. */
   processMonoInto(input: Float32Array, output: Float32Array): void {
     this.native.processMonoInto(input, output);
   }
@@ -371,6 +377,7 @@ export class RealtimeVoiceChanger {
     this.native.allNotesOff();
   }
 
+  /** Releases the native handle. Idempotent. */
   destroy(): void {
     if (this.disposed) {
       return;
@@ -416,6 +423,7 @@ export interface VoiceChangeOptions extends ValidateOptions {
 
 /** Inputs for the one-shot {@link voiceChange} facade. */
 export interface VoiceChangeRequest extends VoiceChangeOptions {
+  /** Mono input audio. */
   samples: Float32Array;
   /** Sample rate in Hz, an integer in [8000, 384000]. Required. */
   sampleRate: number;
@@ -499,6 +507,7 @@ export function realtimeVoiceChangerPresetJson(name: VoicePresetId): string {
 
 /** Result of {@link realtimeVoiceChangerValidatePresetJson}. */
 export interface RealtimeVoiceChangerValidatePresetJsonResult {
+  /** Whether the document was accepted. */
   ok: boolean;
   /** The document with defaults filled in; present when `ok`. */
   normalizedJson?: string;

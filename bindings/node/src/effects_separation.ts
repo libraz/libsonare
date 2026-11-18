@@ -21,6 +21,7 @@ function resolveHardMask(fnName: string, hardMask: unknown): boolean {
 
 /** Request for {@link hpss}. `validate: false` skips the NaN/Inf pre-scan. */
 export interface HpssRequest extends ValidateOptions {
+  /** Mono input audio. */
   samples: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
@@ -54,6 +55,7 @@ export interface HpssWithResidualResult {
 
 /** Request for {@link harmonic}. */
 export interface HarmonicRequest extends ValidateOptions {
+  /** Mono input audio. */
   samples: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
@@ -61,6 +63,7 @@ export interface HarmonicRequest extends ValidateOptions {
 
 /** Request for {@link percussive}. */
 export interface PercussiveRequest extends ValidateOptions {
+  /** Mono input audio. */
   samples: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;

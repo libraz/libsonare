@@ -28,21 +28,33 @@ export type DereverbClassicalConfig = Required<Omit<DereverbClassicalOptions, 'v
 
 /** Options for `masteringRepairDereverbClassical`. */
 export interface DereverbClassicalOptions extends ValidateOptions {
+  /** Late-reverberation threshold relative to a bin's own power, in [0, 1]; `0` suppresses every bin carrying late energy. Default `0`. */
   threshold?: number;
+  /** Share of the computed suppression applied, from 0 (none) to 1 (all). Default `1`. */
   attenuation?: number;
+  /** STFT size in samples; a power of two. Default `1024`. */
   nFft?: number;
   /** Hop in samples, in (0, nFft / 2]. */
   hopLength?: number;
+  /** Assumed reverberation time in seconds, in (0, 10]. Default `0.4`. */
   t60Sec?: number;
+  /** Delay after which reverberation counts as late, in milliseconds, from 0 to 500. Default `50`. */
   lateDelayMs?: number;
+  /** Over-subtraction factor, from 0 to 16. Default `1`. */
   overSubtraction?: number;
+  /** Floor multiplier relative to the input power, in [0, 1]. Default `0.08`. */
   spectralFloor?: number;
+  /** Whether the WPE stage runs. Default `false`. */
   wpeEnabled?: boolean;
+  /** WPE iterations, from 1 to 16. Default `2`. */
   wpeIterations?: number;
+  /** WPE filter taps, from 1 to 32. Default `3`. */
   wpeTaps?: number;
+  /** WPE strength, in [0, 1]. Default `0.7`. */
   wpeStrength?: number;
 }
 
+/** Request form of `masteringRepairDereverbClassical`. */
 export interface MasteringRepairDereverbClassicalRequest
   extends MasteringRepairSamplesRequest,
     DereverbClassicalOptions {}
@@ -78,8 +90,11 @@ export function masteringRepairDereverbClassical(...args: unknown[]): DereverbRe
 
 /** Request form of `masteringRepairDereverbClassicalStereo`. */
 export interface MasteringRepairDereverbClassicalStereoRequest extends DereverbClassicalOptions {
+  /** Left channel samples. */
   left: Float32Array;
+  /** Right channel samples. */
   right: Float32Array;
+  /** Sample rate in Hz. */
   sampleRate: number;
 }
 
@@ -145,6 +160,7 @@ export function masteringRepairDereverbClassicalStereo(
 export interface MasteringRepairDereverbClassicalLinkedRequest extends DereverbClassicalOptions {
   /** One plane per channel, all of the same length. At least one. */
   channels: Float32Array[];
+  /** Sample rate in Hz. */
   sampleRate: number;
 }
 

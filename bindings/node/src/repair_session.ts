@@ -82,31 +82,53 @@ function stageFromNative(native: Record<string, unknown>): MasteringRepairStage 
 export interface MasteringRepairDefects {
   /** False when the detectors did not run; every count is then 0. */
   measured: boolean;
+  /** Runs the declick criteria count as clicks. */
   clickCount: number;
+  /** Outlier runs the criteria excluded; a large value means the detector could not decide on this material. */
   clickRejected: number;
+  /** Longest counted click run, in samples. */
   clickLongestRunSamples: number;
+  /** Counted clicks divided by the input duration. */
   clickPerSecond: number;
+  /** Samples the crackle detector flags. */
   crackleSampleCount: number;
+  /** `crackleSampleCount` divided by the input length. */
   crackleSampleFraction: number;
+  /** Crackle samples per second of input. */
   cracklePerSecond: number;
+  /** Samples at or past the clip threshold. */
   clipSampleCount: number;
+  /** Number of runs at or past the clip threshold. */
   clipRunCount: number;
+  /** Longest run at or past the clip threshold, in samples. */
   clipLongestRunSamples: number;
+  /** `clipSampleCount` divided by the input length. */
   clipSampleFraction: number;
+  /** Number of flat-topped runs. */
   clipFlatRunCount: number;
+  /** Samples inside flat-topped runs. */
   clipFlatSampleCount: number;
+  /** Longest flat-topped run, in samples. */
   clipLongestFlatRunSamples: number;
   /** Linear amplitude of the flat runs. */
   clipFlatLevel: number;
+  /** Broadband estimated noise floor, in dBFS. */
   noiseFloorDbfs: number;
+  /** Level of the loudest of the 32 noise bands, in dBFS. */
   noiseBandPeakDbfs: number;
+  /** Index of the loudest noise band; -1 when no band was measured. */
   noiseBandPeakIndex: number;
+  /** Winning hum fundamental in Hz; both 50 and 60 Hz mains are searched. */
   humFundamentalHz: number;
   /** Linear energy ratio of the winning hum candidate over the median candidate (not dB); 1.0 means no peak. */
   humFundamentalProminence: number;
+  /** Number of hum harmonics measured. */
   humHarmonics: number;
+  /** Input level at the hum fundamental, in dBFS. */
   humFundamentalDbfs: number;
+  /** Level of the loudest harmonic of the hum fundamental, in dBFS. */
   humPeakHarmonicDbfs: number;
+  /** Decay across the dereverb stage's late-reverb lag, in dB. Not an RT60: a reverberant input reads higher than the same material dry. */
   lateDecayRatioDb: number;
 }
 
