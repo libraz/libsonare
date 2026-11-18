@@ -54,6 +54,7 @@ const ERROR_CODE_NAMES = new Map<number, ErrorCodeName>(
  * failure across a boundary that does not preserve prototypes.
  */
 export class SonareError extends Error {
+  /** Always `'SonareError'`. */
   override readonly name = 'SonareError' as const;
   /** Numeric error code, one of the {@link ErrorCode} values. */
   readonly code: ErrorCode;

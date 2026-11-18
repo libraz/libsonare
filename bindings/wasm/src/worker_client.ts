@@ -50,11 +50,17 @@ export interface OfflineWorkerClientOptions {
 
 /** Browser Worker or Node `worker_threads.Worker` used by the client. */
 export interface OfflineWorker {
+  /** Sends a request message, transferring the listed buffers. */
   postMessage(message: unknown, transfer?: readonly unknown[]): void;
+  /** Stops the worker. */
   terminate(): unknown;
+  /** Browser listener registration; the client uses it whenever it is present. */
   addEventListener?(type: string, listener: EventListener): void;
+  /** Browser listener removal, paired with `addEventListener`. */
   removeEventListener?(type: string, listener: EventListener): void;
+  /** Node listener registration, used when `addEventListener` is absent. */
   on?(type: 'message' | 'error', listener: (...args: unknown[]) => void): unknown;
+  /** Node listener removal, paired with `on`. */
   off?(type: 'message' | 'error', listener: (...args: unknown[]) => void): unknown;
 }
 

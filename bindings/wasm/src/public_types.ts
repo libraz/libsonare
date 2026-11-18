@@ -451,7 +451,10 @@ declare const sonareModuleHandleBrand: unique symbol;
  * Opaque handle to a loaded WASM module, as a custom `moduleFactory` passed to
  * `init()` resolves it. Its members are not part of the public interface.
  */
-export type SonareModuleHandle = { readonly [sonareModuleHandleBrand]: 'SonareModuleHandle' };
+export type SonareModuleHandle = {
+  /** Type brand only; nothing reads it at runtime. */
+  readonly [sonareModuleHandleBrand]: 'SonareModuleHandle';
+};
 
 /** Synchronous progress callback for offline operations. Its return value is ignored. */
 export type ProgressCallback = (progress: number, stage: string) => void;

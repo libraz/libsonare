@@ -114,8 +114,11 @@ export interface KeyCandidate {
   correlation: number;
 }
 
+/** A time signature with the support the analysis found for it. */
 export interface TimeSignature {
+  /** Beats per bar. */
   numerator: number;
+  /** Note value of one beat: `4` is a quarter note. */
   denominator: number;
   /**
    * Support for this signature in `[0, 1]`.

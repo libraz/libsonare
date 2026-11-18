@@ -167,6 +167,11 @@ function audioRequest<R>(
   return { ...bag, samples, sampleRate } as R;
 }
 
+/**
+ * One channel of decoded audio and its sample rate, held in native memory. A multi-channel
+ * source is downmixed as it is loaded; {@link Audio.fromFileChannel} loads one channel instead.
+ * Release it with `destroy()` or a `using` declaration.
+ */
 export class Audio {
   private native: InstanceType<typeof addon.Audio>;
   private disposed = false;
@@ -176,6 +181,14 @@ export class Audio {
     this.native = native;
   }
 
+  /**
+   * Decode a file, downmixing a multi-channel source to mono. Reads WAV and MP3, and the
+   * FFmpeg formats when `capabilities().features.ffmpeg` is true.
+   *
+   * @param path - Source file path.
+   * @throws SonareError when the file is missing or unreadable, its format is not supported,
+   *   or it fails to decode.
+   */
   static fromFile(path: string): Audio {
     return new Audio(addon.Audio.fromFile(path));
   }
@@ -209,6 +222,12 @@ export class Audio {
     return new Audio(addon.Audio.fromFileChannel(path, channelIndex));
   }
 
+  /**
+   * Channel count of an audio file, without loading it as an {@link Audio}.
+   *
+   * @param path - Source file path.
+   * @throws SonareError on the load errors {@link fromFile} raises.
+   */
   static fileNumChannels(path: string): number {
     return addon.Audio.fileChannelCount(path);
   }
@@ -222,6 +241,12 @@ export class Audio {
     return new Audio(addon.Audio.fromBuffer(samples, sampleRate));
   }
 
+  /**
+   * Decode an encoded file held in memory, as {@link fromFile} decodes one on disk.
+   *
+   * @param data - The file's bytes.
+   * @throws SonareError when the format is not supported or the bytes fail to decode.
+   */
   static fromMemory(data: Buffer | Uint8Array): Audio {
     return new Audio(addon.Audio.fromMemory(data));
   }

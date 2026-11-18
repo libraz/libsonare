@@ -31,7 +31,9 @@ export type { OfflineWorkerOperation } from './worker_protocol.js';
 
 /** Minimal endpoint shared by browser Workers and the Node worker-thread test bridge. */
 export interface OfflineWorkerEndpoint {
+  /** Sends a response message to the client. */
   postMessage(message: OfflineWorkerResponseMessage, transfer?: Transferable[]): void;
+  /** Registers the handler for the client's request messages. */
   addEventListener(
     type: 'message',
     listener: (event: MessageEvent<OfflineWorkerRequestMessage>) => void,

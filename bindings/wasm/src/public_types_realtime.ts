@@ -150,6 +150,7 @@ export interface EqMatchOptions {
   maxBands?: number;
 }
 
+/** Name of a built-in realtime voice-changer preset. */
 export type VoicePresetId =
   | 'neutralMonitor'
   | 'brightIdol'
@@ -164,6 +165,7 @@ export type VoicePresetId =
   | 'megaphone'
   | 'radioVoice';
 
+/** Catalogue category of a voice-changer preset. */
 export type VoicePresetCategory =
   | 'monitor'
   | 'bright'
@@ -194,10 +196,18 @@ export interface RealtimeVoiceChangerPresetMetadata {
 /** A preset document: shared metadata plus either raw `dsp` parameters or `macros`. */
 export type RealtimeVoiceChangerPreset =
   | (RealtimeVoiceChangerPresetMetadata & {
+      /**
+       * Every processing stage's settings by section (`retune`, `formant`, `eq`, `gate`, ...);
+       * every section is required.
+       */
       dsp: Record<string, unknown>;
       macros?: never;
     })
   | (RealtimeVoiceChangerPresetMetadata & {
+      /**
+       * Macro controls: `pitch` in semitones, `formant` as a frequency factor, and `brightness`,
+       * `space`, `intensity`, `noiseControl`, `sibilance` in `[0, 1]`.
+       */
       macros: Record<string, number>;
       dsp?: never;
     });

@@ -581,11 +581,11 @@ export interface AnalysisDynamics {
   isCompressed: boolean;
 }
 
-/**
- * Time signature
- */
+/** A time signature with the support the analysis found for it. */
 export interface TimeSignature {
+  /** Beats per bar. */
   numerator: number;
+  /** Note value of one beat: `4` is a quarter note. */
   denominator: number;
   /**
    * Support for this signature in `[0, 1]`.
@@ -806,7 +806,7 @@ export interface AnalysisBpmCandidate extends BpmCandidate {
 /** Result of `analyzeRhythm`. */
 export interface RhythmResult {
   /** Estimated time signature. */
-  timeSignature: { numerator: number; denominator: number; confidence: number };
+  timeSignature: TimeSignature;
   /** Syncopation level in `[0, 1]`. */
   syncopation: number;
   /** Rhythmic feel of the track. */

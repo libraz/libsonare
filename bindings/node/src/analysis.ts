@@ -401,7 +401,12 @@ export interface RoomGeometryFromEstimateRequest {
 /** Request for {@link chordFunctions}. */
 export interface ChordFunctionsRequest<T extends ChordFunctionsInput = Chord> {
   /** `detectChords`' timed result or its `chords` array, or the same shape built by hand. */
-  chords: readonly T[] | { chords: readonly T[] };
+  chords:
+    | readonly T[]
+    | {
+        /** The chords, in time order. */
+        chords: readonly T[];
+      };
   /** Key the chords are labelled against. */
   key: ChordFunctionsKey;
 }

@@ -321,7 +321,9 @@ export interface MixSceneStrip {
    * that never touched its EQ stays byte-identical.
    */
   eq?: {
+    /** False bypasses the equalizer and keeps its bands. Default `true`. */
     enabled?: boolean;
+    /** The equalizer's bands. */
     bands: EqBandInput[];
   };
 }
@@ -380,7 +382,9 @@ export interface MixSceneBus {
   inserts: MixSceneInsert[];
   /** This bus's dedicated equalizer, applied before its inserts. See {@link MixSceneStrip.eq}. */
   eq?: {
+    /** False bypasses the equalizer and keeps its bands. Default `true`. */
     enabled?: boolean;
+    /** The equalizer's bands. */
     bands: EqBandInput[];
   };
 }

@@ -7,6 +7,7 @@
 
 import type { SonareFailurePayload } from './internal/failure_payload.js';
 
+/** One-shot operation an offline worker runs on the client's behalf. */
 export type OfflineWorkerOperation =
   | 'analyze'
   | 'detectBpm'
