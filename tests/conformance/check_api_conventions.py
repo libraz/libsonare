@@ -1618,8 +1618,6 @@ RULES: list[Rule] = [
                 f"python:RealtimeEngine.{m}": "the Python engine moves onto the Node method names"
                 for m in (
                     "bind_midi_cc_binding",
-                    "can_set_lane_sidechain",
-                    "can_set_master_sidechain",
                     "load_soundfont",
                     "set_bus_strip_eq_band_json",
                     "set_bus_strip_json",
@@ -1627,8 +1625,6 @@ RULES: list[Rule] = [
                     "set_capture_punch",
                     "set_capture_source",
                     "set_input_monitor",
-                    "set_lane_sidechain",
-                    "set_master_sidechain",
                     "set_master_strip_eq_band_json",
                     "set_master_strip_json",
                     "set_record_offset_samples",
@@ -1640,12 +1636,10 @@ RULES: list[Rule] = [
             **{
                 f"node:RealtimeEngine.{m}": "the Python engine moves onto the Node method names"
                 for m in (
-                    "canSetStripSidechain",
                     "configureCapture",
                     "loadSoundFont",
                     "setBusStrip",
                     "setStrip",
-                    "setStripSidechain",
                     "setTrackSoloMute",
                 )
             },
