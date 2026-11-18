@@ -203,6 +203,11 @@ describe('NativeSynth preset catalog', () => {
       expect(synthPatchRoundTripForTest({ filterOutput: name }).filterOutput).toBe(name);
       expect(synthPatchRoundTripForTest({ filterOutput: ordinal }).filterOutput).toBe(name);
     }
+    for (const retired of ['lowpass', 'bandpass', 'highpass']) {
+      expect(() =>
+        synthPatchRoundTripForTest({ filterOutput: retired } as unknown as SynthPatch),
+      ).toThrow(RangeError);
+    }
     for (const [ordinal, name] of SYNTH_BODY_TYPES.entries()) {
       expect(synthPatchRoundTripForTest({ body: name }).body).toBe(name);
       expect(synthPatchRoundTripForTest({ body: ordinal }).body).toBe(name);

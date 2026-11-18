@@ -163,6 +163,11 @@ describe('Sonare WASM NativeSynth', () => {
     for (const name of SYNTH_FILTER_OUTPUTS) {
       expect(synthPatchRoundTripForTest({ filterOutput: name }).filterOutput).toBe(name);
     }
+    for (const retired of ['lowpass', 'bandpass', 'highpass']) {
+      expect(() =>
+        synthPatchRoundTripForTest({ filterOutput: retired } as unknown as SynthPatch),
+      ).toThrow(RangeError);
+    }
     for (const name of SYNTH_BODY_TYPES) {
       expect(synthPatchRoundTripForTest({ body: name }).body).toBe(name);
     }

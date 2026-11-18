@@ -28097,6 +28097,27 @@ domain = "engine"
 rule = "token-case"
 
 [[entry]]
+kind = "value"
+old = "SynthFilterOutput='lowpass'"
+new = "SynthFilterOutput='lowPass'"
+domain = "engine"
+rule = "high-pass"
+
+[[entry]]
+kind = "value"
+old = "SynthFilterOutput='bandpass'"
+new = "SynthFilterOutput='bandPass'"
+domain = "engine"
+rule = "high-pass"
+
+[[entry]]
+kind = "value"
+old = "SynthFilterOutput='highpass'"
+new = "SynthFilterOutput='highPass'"
+domain = "engine"
+rule = "high-pass"
+
+[[entry]]
 kind = "field"
 old = "EqBand.lookaheadMs"
 removed = "use detectorDelayMs"

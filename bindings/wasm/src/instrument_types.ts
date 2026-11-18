@@ -208,7 +208,8 @@ export const SYNTH_FILTER_MODELS = [
   'svf4Pole',
 ] as const;
 
-export const SYNTH_FILTER_OUTPUTS = ['default', 'lowpass', 'bandpass', 'highpass'] as const;
+/** Filter outputs for {@link SynthPatch.filterOutput} (SVF only); `'default'` keeps the base patch's. */
+export const SYNTH_FILTER_OUTPUTS = ['default', 'lowPass', 'bandPass', 'highPass'] as const;
 
 /** Body/formant resonance voicings for {@link SynthPatch.body}; `'default'` keeps the base patch's. */
 export const SYNTH_BODY_TYPES = [
