@@ -851,7 +851,7 @@ test = "tests/arrangement/c_abi_edit_ops_test.cpp::C-ABI resolves canonical clip
 [[entry]]
 kind = "export"
 old = "SONARE_REALTIME_VOICE_CHANGER_PRESET_IDS"
-changed = "lists the built-in preset ids in lowerCamel (neutralMonitor, brightIdol, ...); the kebab ids are accepted only inside a version 1 or 2 preset document"
+changed = "lists the built-in preset ids in lowerCamel (neutralMonitor, brightIdol, ...); a kebab id is refused like any unknown preset id"
 domain = "effects"
 rule = "token-case"
 test = "tests/editing/voice_changer_preset_capi_test.cpp::Voice preset metadata table is consistent across surfaces"
