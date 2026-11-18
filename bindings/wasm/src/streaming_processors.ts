@@ -143,7 +143,7 @@ function optionalBlockSize(fnName: string, value: unknown): number | undefined {
  *   eq: { tilt: { tiltDb: 1.0 } },
  * });
  * try {
- *   const out = chain.processMono(blockSamples);
+ *   const out = chain.processMono(block);
  * } finally {
  *   chain.destroy();
  * }
@@ -280,6 +280,8 @@ export class StreamingMasteringChain {
    *
    * @example
    * ```typescript
+   * declare const chain: StreamingMasteringChain;
+   * const previous = chain.nonFiniteSubstitutionCount;
    * chain.processMono(block);
    * if (chain.nonFiniteSubstitutionCount > previous) {
    *   // the block just produced is not derived from `block` everywhere
@@ -547,6 +549,7 @@ export class StreamingEqualizer {
    *
    * @example
    * ```ts
+   * declare const eq: StreamingEqualizer;
    * const freqs = new Float32Array([100, 1000, 10000]);
    * const db = eq.magnitudeResponse(freqs);
    * ```

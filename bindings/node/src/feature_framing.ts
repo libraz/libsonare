@@ -300,6 +300,7 @@ export function splitSilenceCommon(...args: unknown[]): Int32Array {
  * @example
  * ```ts
  * const topDb = 60;
+ * const signals = channels; // takes of one part, sample-aligned
  * const { intervals, report } = splitSilenceCommonWithReport({ signals, topDb });
  * if (intervals.length === 2 && report.silenceCeilingDb < topDb) {
  *   // The takes do have a shared dip; this threshold was too loose to see it.

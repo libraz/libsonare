@@ -198,6 +198,7 @@ export interface MasteringRepairDereverbClassicalLinkedRequest extends DereverbC
  *
  * @example
  * ```ts
+ * declare const centre: Float32Array;
  * const { channels, reports } = masteringRepairDereverbClassicalLinked({
  *   channels: [left, right, centre],
  *   sampleRate: 48000,

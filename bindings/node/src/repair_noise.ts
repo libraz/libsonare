@@ -200,6 +200,7 @@ export interface MasteringRepairDenoiseClassicalLinkedRequest extends DenoiseCla
  *
  * @example
  * ```ts
+ * declare const centre: Float32Array;
  * const { channels, reports } = masteringRepairDenoiseClassicalLinked({
  *   channels: [left, right, centre],
  *   sampleRate: 48000,

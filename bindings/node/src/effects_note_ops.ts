@@ -752,6 +752,8 @@ export function mergeNotes(...args: unknown[]): NoteObject[] {
  *
  * @example
  * ```ts
+ * import { readFile } from 'node:fs/promises';
+ *
  * const targets = noteTargetsFromSmf({ data: await readFile('melody.mid') });
  * const notes = extractNotes({ samples, sampleRate, f0Hz, voiced, frameRate });
  * const { notes: tuned } = assignNoteTargets({ notes, sampleRate, targets });
@@ -794,6 +796,10 @@ export function noteTargetsFromSmf(request: NoteTargetsFromSmfRequest): NoteTarg
  *
  * @example
  * ```ts
+ * import { readFile } from 'node:fs/promises';
+ *
+ * const notes = extractNotes({ samples, sampleRate, f0Hz, voiced, frameRate });
+ * const targets = noteTargetsFromSmf({ data: await readFile('melody.mid') });
  * // Mute whatever the reference does not cover, and cap corrections at a fifth.
  * const { notes: tuned, assignedCount } = assignNoteTargets({
  *   notes,

@@ -296,7 +296,7 @@ export interface MasteringRepairDetectCrackleRequest extends DecrackleOptions {
  * @example
  * ```ts
  * const detected = masteringRepairDetectClicks({ samples, sampleRate: 48000 });
- * if (detected.perSecond > 1) samples = masteringRepairDeclick({ samples, sampleRate: 48000 });
+ * if (detected.perSecond > 1) samples = masteringRepairDeclick({ samples, sampleRate: 48000 }).samples;
  * ```
  */
 export function masteringRepairDetectClicks(

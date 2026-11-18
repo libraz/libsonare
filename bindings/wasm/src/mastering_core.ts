@@ -758,6 +758,7 @@ export function masteringAnalyzeStereo<A extends StereoAnalysis>(
  *
  * @example
  * ```ts
+ * declare const take: Float32Array, master: Float32Array; // mono, 48 kHz
  * const { samples, appliedGainDb, matchedTruePeakDbtp } = masteringAbMatchLoudness({
  *   source: take,
  *   reference: master,

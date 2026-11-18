@@ -199,6 +199,7 @@ export class Audio {
    *
    * @example
    * ```ts
+   * const path = 'take.wav';
    * const planes = Array.from({ length: Audio.fileNumChannels(path) }, (_, i) =>
    *   Audio.fromFileChannel(path, i),
    * );

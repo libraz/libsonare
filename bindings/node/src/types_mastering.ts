@@ -14144,9 +14144,13 @@ export interface MultibandCompressorBand {
  * modules; nest processor and parameter names beneath them, e.g.
  *
  * ```ts
- * masteringChain(samples, sr, {
- *   dynamics: { compressor: { thresholdDb: -24 } },
- *   loudness: { targetLufs: -14 },
+ * masterAudio({
+ *   samples,
+ *   sampleRate,
+ *   overrides: {
+ *     dynamics: { compressor: { thresholdDb: -24 } },
+ *     loudness: { targetLufs: -14 },
+ *   },
  * });
  * ```
  *
@@ -14494,7 +14498,7 @@ export interface MasteringChainResult {
    *
    * @example
    * ```ts
-   * const result = masterAudio(samples, 44100, 'pop');
+   * const result = masterAudio({ samples, sampleRate: 44100, preset: 'pop' });
    * if (result.nonFiniteSubstitutionCount > 0) {
    *   // part of `result.samples` is unrelated to `samples`
    * }

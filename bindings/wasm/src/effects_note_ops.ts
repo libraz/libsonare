@@ -535,10 +535,10 @@ export function renderNotes(...args: unknown[]): Float32Array {
  *
  * @example
  * ```ts
- * const note = notes[0];
+ * const note = extractNotes({ samples, sampleRate, f0Hz, voiced, frameRate })[0];
  * const { centerHz, driftCents, vibratoCents } = decomposeNotePitch({
  *   f0Hz: f0Hz.subarray(note.frameStart, note.frameEnd),
- *   frameRate: sampleRate / 512,
+ *   frameRate,
  *   medianHz: note.medianHz,
  * });
  * ```
@@ -675,6 +675,7 @@ export function splitNote(...args: unknown[]): NoteObject[] {
  *
  * @example
  * ```ts
+ * declare const halves: NoteObject[]; // the notes a split returned
  * // Undo a split by rejoining the two halves it produced.
  * const rejoined = mergeNotes({
  *   samples,
@@ -790,6 +791,7 @@ export function noteTargetsFromSmf(request: NoteTargetsFromSmfRequest): NoteTarg
  *
  * @example
  * ```ts
+ * declare const smf: Uint8Array; // a Standard MIDI File's bytes
  * const notes = extractNotes({ samples, sampleRate, f0Hz, voiced, frameRate });
  * const { notes: retuned, assignedCount } = assignNoteTargets({
  *   notes,

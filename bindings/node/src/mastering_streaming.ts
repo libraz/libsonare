@@ -126,7 +126,7 @@ function optionalBlockSize(fnName: string, value: unknown): number | undefined {
  *   maxBlockSize: 512,
  *   eq: { tilt: { tiltDb: 1.0 } },
  * });
- * const out = chain.processMono(blockSamples);
+ * const out = chain.processMono(block);
  * chain.reset();
  * ```
  */
@@ -244,6 +244,7 @@ export class StreamingMasteringChain {
    *
    * @example
    * ```typescript
+   * declare const chain: StreamingMasteringChain;
    * const out = chain.processMono(block);
    * if (chain.nonFiniteSubstitutionCount > 0) {
    *   // the audio produced so far is not a function of the blocks supplied
@@ -279,6 +280,7 @@ export class StreamingMasteringChain {
    *
    * @example
    * ```typescript
+   * declare const chain: StreamingMasteringChain;
    * const out = chain.processMono(block);
    * if (chain.nonFiniteDiscardCount > 0) {
    *   // a stage's own state was reset this call; the substitution count
@@ -877,6 +879,7 @@ const EQ_PHASE_MODES = Object.keys(EQ_PHASE_MODE_ORDINALS) as EqPhaseMode[];
  * ```typescript
  * const eq = new StreamingEqualizer({ sampleRate: 48000, maxBlockSize: 512 });
  * eq.setBand(0, { type: 'highShelf', frequencyHz: 8000, gainDb: 6, enabled: true });
+ * declare const blockLeft: Float32Array, blockRight: Float32Array;
  * const { left, right } = eq.processStereo(blockLeft, blockRight);
  * ```
  */
@@ -1016,6 +1019,7 @@ export class StreamingEqualizer {
    *
    * @example
    * ```ts
+   * declare const eq: StreamingEqualizer;
    * eq.processStereo(left, right);
    * if (eq.nonFiniteDiscardCount > 0) {
    *   // the audio just produced is not a function of `left`/`right`
@@ -1054,6 +1058,7 @@ export class StreamingEqualizer {
    *
    * @example
    * ```ts
+   * declare const eq: StreamingEqualizer;
    * const db = eq.magnitudeResponse(new Float32Array([100, 1000, 10000]));
    * ```
    */

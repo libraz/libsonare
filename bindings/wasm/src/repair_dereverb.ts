@@ -196,6 +196,7 @@ export function masteringRepairDereverbClassicalStereo(
  *
  * @example
  * ```ts
+ * declare const frontLeft: Float32Array, frontRight: Float32Array, centre: Float32Array;
  * const { channels, reports } = masteringRepairDereverbClassicalLinked({
  *   channels: [frontLeft, frontRight, centre],
  *   sampleRate: 48000,

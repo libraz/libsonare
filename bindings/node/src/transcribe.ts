@@ -25,11 +25,12 @@ import { assertAudioInput, assertPositiveFloatValue, sampleOneShot } from './val
  * @example
  * ```typescript
  * const { events, noteCount, tempoBpm } = transcribe({
- *   samples: audio,
+ *   samples,
  *   sampleRate: 48000,
  *   tempoBpm: 120,
  *   fixedVelocity: 100,
  * });
+ * const clipId = 0; // a MIDI clip of `project`
  * project.setMidiEvents(clipId, events);
  * ```
  *
