@@ -491,17 +491,6 @@ describe('mastering mixing surface', () => {
 
     const rawCases: Array<[string, () => Record<string, unknown>, string[], string[]]> = [
       [
-        'the one-shot mix meter names true peak without the unit and the planes channelCount',
-        () =>
-          (
-            module().mixStereo([leftOnly()], [silence()], SR, {}) as unknown as {
-              meters: Record<string, unknown>[];
-            }
-          ).meters[0],
-        ['truePeakDbL', 'truePeakDbR', 'maxTruePeakDb', 'truePeakDb', 'channelCount'],
-        ['truePeakDbtpL', 'truePeakDbtpR', 'maxTruePeakDbtp', 'truePeakDbtp', 'numChannels'],
-      ],
-      [
         'the scene document holds pan mode and law as ints and the send timing as pre or post',
         () => {
           const scene = JSON.parse(module().mixingScenePresetJson('vocalReverbSend'));

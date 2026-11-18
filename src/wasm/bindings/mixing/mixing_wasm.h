@@ -228,12 +228,15 @@ class MixerWasm {
 
   // Turns the mixer's master-output meter on or off through
   // sonare_mixer_configure_master_meter, which meters every block a process
-  // call writes. Loudness is not measured; @p true_peak_oversample must be 4 or
-  // 8, anything else throws a RangeError.
-  void configureMeter(bool enabled, const val& true_peak_oversample);
+  // call writes. An undefined or null argument keeps the
+  // sonare_mixer_master_meter_config_init default; @p true_peak_oversample must
+  // be 4 or 8, anything else throws a RangeError.
+  void configureMeter(bool enabled, const val& true_peak_oversample, const val& measure_lufs,
+                      const val& measure_true_peak);
 
   // Latest master-meter reading (sonare_mixer_master_meter), describing the
-  // most recently metered block. Throws when the meter has never been enabled.
+  // most recently metered block, as the same record stripMeter returns. Throws
+  // when the meter has never been enabled.
   val meterSnapshot() const;
 
   // Copies the latest meter reading into a member so meterScratchValue can read

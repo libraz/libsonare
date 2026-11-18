@@ -17,47 +17,6 @@ namespace {
 /// would surface as an uncatchable std::bad_alloc that terminates the process.
 constexpr size_t kGoniometerReadCap = 4096;
 
-Napi::Object MeterSnapshotToObject(Napi::Env env, const SonareMixMeterSnapshot& snapshot) {
-  Napi::Object out = Napi::Object::New(env);
-  out.Set("peakDbL", snapshot.peak_db_l);
-  out.Set("peakDbR", snapshot.peak_db_r);
-  out.Set("rmsDbL", snapshot.rms_db_l);
-  out.Set("rmsDbR", snapshot.rms_db_r);
-  out.Set("correlation", snapshot.correlation);
-  out.Set("monoCompatWidth", snapshot.mono_compat_width);
-  out.Set("monoCompatPeak", snapshot.mono_compat_peak);
-  out.Set("monoCompatSideRms", snapshot.mono_compat_side_rms);
-  out.Set("likelyMonoCompatible", snapshot.likely_mono_compatible != 0);
-  out.Set("momentaryLufs", snapshot.momentary_lufs);
-  out.Set("shortTermLufs", snapshot.short_term_lufs);
-  out.Set("integratedLufs", snapshot.integrated_lufs);
-  out.Set("gainReductionDb", snapshot.gain_reduction_db);
-  out.Set("truePeakDbL", snapshot.true_peak_dbtp_l);
-  out.Set("truePeakDbR", snapshot.true_peak_dbtp_r);
-  out.Set("maxTruePeakDb", snapshot.max_true_peak_dbtp);
-  out.Set("seq", Napi::Number::New(env, static_cast<double>(snapshot.seq)));
-
-  // Per-plane surround meters: expose [0, channelCount) as arrays alongside the
-  // stereo convenience fields above. Clamp to the array capacity so a
-  // future/out-of-range channel_count can never index past the fixed buffers.
-  int channel_count = snapshot.num_channels;
-  if (channel_count < 0) channel_count = 0;
-  if (channel_count > SONARE_MAX_METER_CHANNELS) channel_count = SONARE_MAX_METER_CHANNELS;
-  out.Set("channelCount", Napi::Number::New(env, channel_count));
-  Napi::Array peak_db = Napi::Array::New(env, channel_count);
-  Napi::Array rms_db = Napi::Array::New(env, channel_count);
-  Napi::Array true_peak_db = Napi::Array::New(env, channel_count);
-  for (int ch = 0; ch < channel_count; ++ch) {
-    peak_db.Set(ch, Napi::Number::New(env, snapshot.peak_db[ch]));
-    rms_db.Set(ch, Napi::Number::New(env, snapshot.rms_db[ch]));
-    true_peak_db.Set(ch, Napi::Number::New(env, snapshot.true_peak_dbtp[ch]));
-  }
-  out.Set("peakDb", peak_db);
-  out.Set("rmsDb", rms_db);
-  out.Set("truePeakDb", true_peak_db);
-  return out;
-}
-
 }  // namespace
 
 Napi::Value MixerWrap::AddSend(const Napi::CallbackInfo& info) {
@@ -154,7 +113,7 @@ Napi::Value MixerWrap::StripMeter(const Napi::CallbackInfo& info) {
     sonare_node::ThrowSonareError(env, err, "failed to read strip meter: ");
     return env.Undefined();
   }
-  return MeterSnapshotToObject(env, snapshot);
+  return MixMeterSnapshotToObject(env, snapshot);
   SONARE_NODE_CATCH(env)
 }
 
@@ -173,7 +132,7 @@ Napi::Value MixerWrap::BusMeter(const Napi::CallbackInfo& info) {
     sonare_node::ThrowSonareError(env, err, "failed to read bus meter: ");
     return env.Undefined();
   }
-  return MeterSnapshotToObject(env, snapshot);
+  return MixMeterSnapshotToObject(env, snapshot);
   SONARE_NODE_CATCH(env)
 }
 
@@ -183,14 +142,21 @@ Napi::Value MixerWrap::ConfigureMeter(const Napi::CallbackInfo& info) {
   SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
   bool enabled = false;
   if (!sonare_node::RequiredBoolValue(env, info[0], "enabled", &enabled)) return env.Undefined();
+  // Seeded from the C defaults; only what the caller gave overrides them.
   SonareMixerMasterMeterConfig config{};
   sonare_mixer_master_meter_config_init(&config);
   config.enabled = enabled ? 1 : 0;
-  config.measure_lufs = 0;
-  if (enabled && !sonare_node::RequiredIntValue(env, info[1], "truePeakOversample",
-                                                &config.true_peak_oversample)) {
+  bool measure_lufs = config.measure_lufs != 0;
+  bool measure_true_peak = config.measure_true_peak != 0;
+  if (!sonare_node::OptionalIntArg(env, info, 1, "truePeakOversample", config.true_peak_oversample,
+                                   &config.true_peak_oversample) ||
+      !sonare_node::OptionalBoolArg(env, info, 2, "measureLufs", measure_lufs, &measure_lufs) ||
+      !sonare_node::OptionalBoolArg(env, info, 3, "measureTruePeak", measure_true_peak,
+                                    &measure_true_peak)) {
     return env.Undefined();
   }
+  config.measure_lufs = measure_lufs ? 1 : 0;
+  config.measure_true_peak = measure_true_peak ? 1 : 0;
   const SonareError err = sonare_mixer_configure_master_meter(mixer_, &config);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err, "failed to configure the master meter: ");
@@ -207,7 +173,7 @@ Napi::Value MixerWrap::MeterSnapshot(const Napi::CallbackInfo& info) {
   // The read carries SONARE_C_RT_API_ENTRY and records no message of its own.
   sonare_node::ThrowIfRealtimeError(env, sonare_mixer_master_meter(mixer_, &snapshot));
   if (env.IsExceptionPending()) return env.Undefined();
-  return MeterSnapshotToObject(env, snapshot);
+  return MixMeterSnapshotToObject(env, snapshot);
   SONARE_NODE_CATCH(env)
 }
 
@@ -252,7 +218,7 @@ Napi::Value MixerWrap::MeterTap(const Napi::CallbackInfo& info) {
     sonare_node::ThrowSonareError(env, err, "failed to read strip meter tap: ");
     return env.Undefined();
   }
-  return MeterSnapshotToObject(env, snapshot);
+  return MixMeterSnapshotToObject(env, snapshot);
   SONARE_NODE_CATCH(env)
 }
 

@@ -1,6 +1,5 @@
 import {
   assertStripMetering,
-  mixMeterSnapshotFromNative,
   mixSceneJsonFromNative,
   mixSceneJsonToNative,
 } from './internal/mix_scene.js';
@@ -64,8 +63,12 @@ export interface MixerJsonOptions {
 export interface MixerMeterOptions {
   /** Whether to meter the master output. Required. */
   enabled: boolean;
-  /** True-peak oversampling factor, `4` or `8`. Default `4`; any other value is a `RangeError`. */
+  /** True-peak oversampling factor, `4` or `8`. Omitted takes the library default (`4`); any other value is a `RangeError`. */
   truePeakOversample?: number;
+  /** Whether to measure momentary, short-term and integrated loudness. Omitted takes the library default (on). */
+  measureLufs?: boolean;
+  /** Whether to measure the inter-sample (true) peak. Omitted takes the library default (on). */
+  measureTruePeak?: boolean;
 }
 
 /** Polarity of a strip's channels for {@link Mixer.setPolarityInvert}. */
@@ -340,7 +343,9 @@ export class Mixer {
     const bag = requestObject('configureMeter', options, 'options', true);
     this.native.configureMeter(
       requiredBoolean('configureMeter', bag.enabled, 'enabled'),
-      optionalNumber('configureMeter', bag.truePeakOversample, 'truePeakOversample', 4),
+      bag.truePeakOversample as number | undefined,
+      bag.measureLufs as boolean | undefined,
+      bag.measureTruePeak as boolean | undefined,
     );
   }
 
@@ -351,7 +356,7 @@ export class Mixer {
    * @throws SonareError with code `InvalidState` when the meter has never been enabled.
    */
   meterSnapshot(): MixMeterSnapshot {
-    return mixMeterSnapshotFromNative(this.native.meterSnapshot());
+    return this.native.meterSnapshot();
   }
 
   /**
@@ -697,19 +702,17 @@ export class Mixer {
    */
   stripMeter(strip: StripRef, tap?: MeterTap): MixMeterSnapshot {
     if (isAbsent(tap)) {
-      return mixMeterSnapshotFromNative(this.native.stripMeter(strip));
+      return this.native.stripMeter(strip);
     }
-    return mixMeterSnapshotFromNative(
-      this.native.meterTap(
-        strip,
-        tokenArg('stripMeter', tap, 'tap', (token) => meterTapValue(token as MeterTap)),
-      ),
+    return this.native.meterTap(
+      strip,
+      tokenArg('stripMeter', tap, 'tap', (token) => meterTapValue(token as MeterTap)),
     );
   }
 
   /** Read the post-insert meter for a compiled bus, including the master bus. */
   busMeter(busId: string): MixMeterSnapshot {
-    return mixMeterSnapshotFromNative(this.native.busMeter(busId));
+    return this.native.busMeter(busId);
   }
 
   /**

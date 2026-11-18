@@ -80,7 +80,7 @@ class MixerWrap : public Napi::ObjectWrap<MixerWrap> {
   Napi::Value StripMeter(const Napi::CallbackInfo& info);
   Napi::Value BusMeter(const Napi::CallbackInfo& info);
   // The master-output meter (sonare_mixer_configure_master_meter /
-  // sonare_mixer_master_meter); loudness is not measured, as on embind.
+  // sonare_mixer_master_meter), seeded from the C config defaults.
   Napi::Value ConfigureMeter(const Napi::CallbackInfo& info);
   Napi::Value MeterSnapshot(const Napi::CallbackInfo& info);
   Napi::Value MeterTap(const Napi::CallbackInfo& info);

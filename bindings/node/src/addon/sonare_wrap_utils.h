@@ -330,6 +330,10 @@ std::vector<sonare::mastering::api::Param> ParamsFromObject(
 std::vector<SonareMasteringParam> MasteringCParams(
     const std::vector<sonare::mastering::api::Param>& params);
 
+/// @brief The mixer meter record every strip, bus and master read returns: the
+/// stereo fields plus the per-plane arrays over [0, numChannels).
+Napi::Object MixMeterSnapshotToObject(Napi::Env env, const SonareMixMeterSnapshot& snapshot);
+
 }  // namespace sonare_node
 
 #define SONARE_NODE_TRY try {

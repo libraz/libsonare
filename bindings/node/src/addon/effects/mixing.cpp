@@ -86,28 +86,6 @@ void RequireOptionType(Napi::Env env, const Napi::Value& value, bool ok, const c
                                           expected);
 }
 
-Napi::Object MixMeterToObject(Napi::Env env, const SonareMixMeterSnapshot& snapshot) {
-  Napi::Object out = Napi::Object::New(env);
-  out.Set("peakDbL", snapshot.peak_db_l);
-  out.Set("peakDbR", snapshot.peak_db_r);
-  out.Set("rmsDbL", snapshot.rms_db_l);
-  out.Set("rmsDbR", snapshot.rms_db_r);
-  out.Set("correlation", snapshot.correlation);
-  out.Set("monoCompatWidth", snapshot.mono_compat_width);
-  out.Set("monoCompatPeak", snapshot.mono_compat_peak);
-  out.Set("monoCompatSideRms", snapshot.mono_compat_side_rms);
-  out.Set("likelyMonoCompatible", snapshot.likely_mono_compatible != 0);
-  out.Set("momentaryLufs", snapshot.momentary_lufs);
-  out.Set("shortTermLufs", snapshot.short_term_lufs);
-  out.Set("integratedLufs", snapshot.integrated_lufs);
-  out.Set("gainReductionDb", snapshot.gain_reduction_db);
-  out.Set("truePeakDbL", snapshot.true_peak_dbtp_l);
-  out.Set("truePeakDbR", snapshot.true_peak_dbtp_r);
-  out.Set("maxTruePeakDb", snapshot.max_true_peak_dbtp);
-  out.Set("seq", Napi::Number::New(env, static_cast<double>(snapshot.seq)));
-  return out;
-}
-
 }  // namespace
 
 Napi::Value SonareWrap::MixingScenePresetNames(const Napi::CallbackInfo& info) {
@@ -310,7 +288,7 @@ Napi::Value SonareWrap::MixStereo(const Napi::CallbackInfo& info) {
     err = sonare_strip_meter(strips[index], &snapshot);
     if (err != SONARE_OK)
       throw sonare::SonareException(sonare_node::CodeFromCError(err), ErrorMessageForCode(err));
-    meters.Set(index, MixMeterToObject(env, snapshot));
+    meters.Set(index, MixMeterSnapshotToObject(env, snapshot));
   }
 
   Napi::Object out = Napi::Object::New(env);

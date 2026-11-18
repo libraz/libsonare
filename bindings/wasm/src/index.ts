@@ -1200,7 +1200,6 @@ export type {
   StreamStats,
 } from './stream_types.js';
 export type {
-  MixerMeterSnapshot,
   MixerRealtimeBuffer,
   RealtimeVoiceChangerInterleavedBuffer,
   RealtimeVoiceChangerMonoBuffer,

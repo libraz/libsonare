@@ -287,6 +287,16 @@ const NAMED_OPTIONAL_REFUSALS: Array<[string, string, () => unknown]> = [
   ['addon.vqtToAudio', 'sampleRate', () => addon.vqtToAudio(readerMatrix, 2, 2, 'x')],
   ['addon.zeroCrossingRate', 'sampleRate', () => addon.zeroCrossingRate(readerTone, 'x')],
   ['Mixer.addSend', 'sendDb', () => withMixer((mixer) => mixer.addSend('s', 'fx', 'master', 'x'))],
+  [
+    'Mixer.configureMeter',
+    'truePeakOversample',
+    () => withMixer((mixer) => mixer.configureMeter(true, 'x')),
+  ],
+  [
+    'Mixer.configureMeter',
+    'measureLufs',
+    () => withMixer((mixer) => mixer.configureMeter(true, undefined, 'x')),
+  ],
   ['addon.midiParamToCc', 'ppq', () => addon.midiParamToCc([], 0, 0, 0, 'x')],
   [
     'Mixer.scheduleFaderAutomation',

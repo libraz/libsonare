@@ -1004,22 +1004,21 @@ export interface WasmMixMeterSnapshot {
   integratedLufs: number;
   gainReductionDb: number;
   /**
-   * Left-channel inter-sample (true) peak in dB, from the ITU-R BS.1770-4 polyphase reconstruction
-   * at 4x. A streaming measurement that runs one reconstruction-filter group delay (a few samples)
-   * behind the block, so every value has its whole stencil and the reading does not depend on the
-   * block size. Use `meteringTruePeakDb` over the whole signal for an exact dBTP number.
+   * Left-channel inter-sample (true) peak in dBTP, from the ITU-R BS.1770-4 polyphase reconstruction.
+   * A streaming measurement that runs one reconstruction-filter group delay (a few samples) behind
+   * the block, so every value has its whole stencil and the reading does not depend on the block size.
    */
-  truePeakDbL: number;
-  /** Right-channel inter-sample (true) peak in dB. See {@link truePeakDbL}. */
-  truePeakDbR: number;
-  /** Maximum inter-sample peak across channels in dB. See {@link truePeakDbL}. */
-  maxTruePeakDb: number;
+  truePeakDbtpL: number;
+  /** Right-channel inter-sample (true) peak in dBTP. See {@link truePeakDbtpL}. */
+  truePeakDbtpR: number;
+  /** Maximum inter-sample peak across channels in dBTP. See {@link truePeakDbtpL}. */
+  maxTruePeakDbtp: number;
   seq: number;
-  channelCount: number;
+  numChannels: number;
   peakDb: number[];
   rmsDb: number[];
-  /** Per-plane inter-sample peak in dB; [0]/[1] mirror {@link truePeakDbL}/R. */
-  truePeakDb: number[];
+  /** Per-plane inter-sample peak in dBTP; [0]/[1] mirror {@link truePeakDbtpL}/R. */
+  truePeakDbtp: number[];
 }
 
 export interface WasmMixResult {
@@ -1934,7 +1933,12 @@ export interface SonareModule {
   ) => Float32Array[];
 
   // Quick API (high-level)
-  detectBpm: (samples: Float32Array, sampleRate: number, bpmMin: number, bpmMax: number) => number;
+  detectBpm: (
+    samples: Float32Array,
+    sampleRate: number,
+    bpmMin?: number,
+    bpmMax?: number,
+  ) => number;
   detectKey: (samples: Float32Array, sampleRate: number) => WasmKeyResult;
   _detectKeyWithOptions: (
     samples: Float32Array,
@@ -1966,8 +1970,8 @@ export interface SonareModule {
   detectBeats: (
     samples: Float32Array,
     sampleRate: number,
-    bpmMin: number,
-    bpmMax: number,
+    bpmMin?: number,
+    bpmMax?: number,
   ) => Float32Array;
   detectDownbeats: (samples: Float32Array, sampleRate: number) => Float32Array;
   detectChords: (
@@ -2143,9 +2147,9 @@ export interface SonareModule {
   analyzeBpm: (
     samples: Float32Array,
     sampleRate: number,
-    bpmMin: number,
-    bpmMax: number,
-    startBpm: number,
+    bpmMin: number | undefined,
+    bpmMax: number | undefined,
+    startBpm: number | undefined,
     nFft: number,
     hopLength: number,
     maxCandidates: number,
@@ -2153,9 +2157,9 @@ export interface SonareModule {
   analyzeRhythm: (
     samples: Float32Array,
     sampleRate: number,
-    bpmMin: number,
-    bpmMax: number,
-    startBpm: number,
+    bpmMin: number | undefined,
+    bpmMax: number | undefined,
+    startBpm: number | undefined,
     nFft: number,
     hopLength: number,
   ) => WasmRhythmAnalysisResult;
@@ -3491,15 +3495,15 @@ export interface SonareModule {
     sampleRate: number,
     hopLength: number,
     winLength: number,
-    bpmMin: number,
-    nBins: number,
+    bpmMin: number | undefined,
+    nBins: number | undefined,
   ) => WasmCyclicTempogramResult;
   plp: (
     onsetEnvelope: Float32Array,
     sampleRate: number,
     hopLength: number,
-    bpmMin: number,
-    bpmMax: number,
+    bpmMin: number | undefined,
+    bpmMax: number | undefined,
     winLength: number,
   ) => Float32Array;
   chromaCens: (
@@ -3969,23 +3973,6 @@ export interface WasmPlaybackLoudnessMeter {
 }
 
 /** One block's worth of meter readings, all dB fields floored at -120. */
-export interface WasmMixerMeterSnapshot {
-  peakDbL: number;
-  peakDbR: number;
-  rmsDbL: number;
-  rmsDbR: number;
-  correlation: number;
-  /**
-   * Left-channel inter-sample (true) peak in dB, from the ITU-R BS.1770-4 polyphase reconstruction
-   * at 4x. A streaming measurement that runs one reconstruction-filter group delay (a few samples)
-   * behind the block, so every value has its whole stencil and the reading does not depend on the
-   * block size. Use `meteringTruePeakDb` over the whole signal for an exact dBTP number.
-   */
-  truePeakDbL: number;
-  /** Right-channel inter-sample (true) peak in dB. See {@link truePeakDbL}. */
-  truePeakDbR: number;
-}
-
 export interface WasmMixer {
   compile: () => void;
   processStereo: (
@@ -4003,8 +3990,13 @@ export interface WasmMixer {
   outputLeftView: () => Float32Array;
   outputRightView: () => Float32Array;
   processPreparedStereo: (numSamples: number) => void;
-  configureMeter: (enabled: boolean, truePeakOversample: number) => void;
-  meterSnapshot: () => WasmMixerMeterSnapshot;
+  configureMeter: (
+    enabled: boolean,
+    truePeakOversample?: number,
+    measureLufs?: boolean,
+    measureTruePeak?: boolean,
+  ) => void;
+  meterSnapshot: () => WasmMixMeterSnapshot;
   latchMeterSnapshot: () => boolean;
   meterScratchValue: (field: number) => number;
   stripCount: () => number;

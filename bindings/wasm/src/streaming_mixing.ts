@@ -1,4 +1,4 @@
-export type { MixerMeterSnapshot, MixerRealtimeBuffer } from './mixer.js';
+export type { MixerRealtimeBuffer } from './mixer.js';
 export { Mixer } from './mixer.js';
 export type { StripMeteringOptions } from './public_types_mixing.js';
 export type {

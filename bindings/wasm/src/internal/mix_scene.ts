@@ -1,5 +1,4 @@
 import type {
-  MixMeterSnapshot,
   MixSceneBus,
   MixSceneBusInput,
   MixSceneDocument,
@@ -206,25 +205,6 @@ export function mixSceneFromNative(document: unknown): MixSceneDocument {
     out.buses = (out.buses as Loose[]).map(busFromNative);
   }
   return out as unknown as MixSceneDocument;
-}
-
-/** The public meter snapshot for a native one, which still spells the true-peak and channel-count fields without the unit. */
-export function mixMeterSnapshotFromNative(native: unknown): MixMeterSnapshot {
-  const { truePeakDbL, truePeakDbR, maxTruePeakDb, truePeakDb, channelCount, ...rest } =
-    native as Loose;
-  const out: Loose = {
-    ...rest,
-    truePeakDbtpL: truePeakDbL,
-    truePeakDbtpR: truePeakDbR,
-    maxTruePeakDbtp: maxTruePeakDb,
-  };
-  if (channelCount !== undefined) {
-    out.numChannels = channelCount;
-  }
-  if (truePeakDb !== undefined) {
-    out.truePeakDbtp = truePeakDb;
-  }
-  return out as unknown as MixMeterSnapshot;
 }
 
 /** A public scene JSON string as the native document: tokens become ordinals; text that does not parse is left for native to refuse. */

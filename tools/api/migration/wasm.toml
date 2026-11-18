@@ -16746,7 +16746,7 @@ rule = "strip-ref"
 [[entry]]
 kind = "method"
 old = "Mixer.configureMeter"
-changed = "configureMeter({ enabled, truePeakOversample? }) replaces (enabled, truePeakOversample = 4)"
+changed = "configureMeter({ enabled, truePeakOversample?, measureLufs?, measureTruePeak? }) replaces (enabled, truePeakOversample = 4); an omitted field takes the library default"
 domain = "engine"
 rule = "no-positional-bools"
 test = "bindings/wasm/tests/surface/engine-mixer.test.ts::configureMeter takes an options object"
@@ -26850,20 +26850,6 @@ domain = "core"
 rule = "unit-in-name"
 
 [[entry]]
-kind = "field"
-old = "MixerMeterSnapshot.truePeakDbL"
-new = "MixerMeterSnapshot.truePeakDbtpL"
-domain = "mastering"
-rule = "unit-in-name"
-
-[[entry]]
-kind = "field"
-old = "MixerMeterSnapshot.truePeakDbR"
-new = "MixerMeterSnapshot.truePeakDbtpR"
-domain = "mastering"
-rule = "unit-in-name"
-
-[[entry]]
 kind = "method"
 old = "Audio.detectBpm"
 changed = "searches 60-200 BPM by default (was 30-300); bpmMin/bpmMax narrow it"
@@ -26953,3 +26939,10 @@ removed = "pass sampleRate in the options object: new PlaybackLoudnessMeter({ nu
 domain = "engine"
 rule = "construction"
 entry = "."
+
+[[entry]]
+kind = "type"
+old = "MixerMeterSnapshot"
+removed = "Mixer.meterSnapshot() returns MixMeterSnapshot, the same record stripMeter and busMeter return, with the loudness, mono-compatibility and per-plane fields the master reading lacked"
+domain = "mastering"
+rule = "type-names"

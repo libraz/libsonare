@@ -8,7 +8,6 @@ import {
 import { assertHandleLive } from './internal/handle_guard.js';
 import {
   assertStripMetering,
-  mixMeterSnapshotFromNative,
   mixSceneJsonFromNative,
   mixSceneJsonToNative,
 } from './internal/mix_scene.js';
@@ -91,8 +90,12 @@ export interface MixerJsonOptions {
 export interface MixerMeterOptions {
   /** Whether to meter the master output. Required. */
   enabled: boolean;
-  /** True-peak oversampling factor, `4` or `8`. Default `4`; any other value is a `RangeError`. */
+  /** True-peak oversampling factor, `4` or `8`. Omitted takes the library default (`4`); any other value is a `RangeError`. */
   truePeakOversample?: number;
+  /** Whether to measure momentary, short-term and integrated loudness. Omitted takes the library default (on). */
+  measureLufs?: boolean;
+  /** Whether to measure the inter-sample (true) peak. Omitted takes the library default (on). */
+  measureTruePeak?: boolean;
 }
 
 /** Polarity of a strip's channels for {@link Mixer.setPolarityInvert}. */
@@ -215,32 +218,6 @@ function maxBlockSizeOf(fnName: string, value: unknown): number {
 
 /** Scene JSON handed from {@link Mixer.fromJson} to the constructor; consumed there. */
 let adoptedSceneJson: string | undefined;
-
-/**
- * One master-output meter reading. All dB fields are finite and floored at
- * -120; `truePeakDbtp*` is an inter-sample peak from the ITU-R BS.1770-4
- * polyphase reconstruction at 4x, not a sample peak. That reconstruction is a
- * streaming measurement that runs one reconstruction-filter group delay (a few
- * samples) behind the block, so every value has its whole stencil and the
- * reading does not depend on the block size. Use `meteringTruePeakDbtp` over the
- * whole signal for an exact dBTP number.
- */
-export interface MixerMeterSnapshot {
-  /** Left-channel sample peak in dB. */
-  peakDbL: number;
-  /** Right-channel sample peak in dB. */
-  peakDbR: number;
-  /** Left-channel RMS level in dB. */
-  rmsDbL: number;
-  /** Right-channel RMS level in dB. */
-  rmsDbR: number;
-  /** Inter-channel correlation in `[-1, 1]`. */
-  correlation: number;
-  /** Left-channel inter-sample (true) peak in dBTP. */
-  truePeakDbtpL: number;
-  /** Right-channel inter-sample (true) peak in dBTP. */
-  truePeakDbtpR: number;
-}
 
 /** Reusable WASM-heap input and output views for realtime-style mixing; see {@link Mixer.createRealtimeBuffer}. */
 export interface MixerRealtimeBuffer {
@@ -521,7 +498,9 @@ export class Mixer {
     const bag = requestObject('configureMeter', options, 'options', true);
     this.mixer.configureMeter(
       requireBoolean('configureMeter', bag.enabled, 'enabled'),
-      optionalNumber('configureMeter', bag.truePeakOversample, 'truePeakOversample', 4),
+      bag.truePeakOversample as number | undefined,
+      bag.measureLufs as boolean | undefined,
+      bag.measureTruePeak as boolean | undefined,
     );
   }
 
@@ -531,9 +510,8 @@ export class Mixer {
    *
    * @throws When the meter has never been enabled.
    */
-  meterSnapshot(): MixerMeterSnapshot {
-    const { truePeakDbL, truePeakDbR, ...rest } = this.mixer.meterSnapshot();
-    return { ...rest, truePeakDbtpL: truePeakDbL, truePeakDbtpR: truePeakDbR };
+  meterSnapshot(): MixMeterSnapshot {
+    return this.mixer.meterSnapshot();
   }
 
   /**
@@ -905,19 +883,17 @@ export class Mixer {
   stripMeter(strip: StripRef, tap?: MeterTap): MixMeterSnapshot {
     const index = this.stripIndex('stripMeter', strip);
     if (isAbsent(tap)) {
-      return mixMeterSnapshotFromNative(this.mixer.stripMeter(index));
+      return this.mixer.stripMeter(index);
     }
-    return mixMeterSnapshotFromNative(
-      this.mixer.meterTap(
-        index,
-        tokenArg('stripMeter', tap, 'tap', (token) => meterTapCode(token as MeterTap)),
-      ),
+    return this.mixer.meterTap(
+      index,
+      tokenArg('stripMeter', tap, 'tap', (token) => meterTapCode(token as MeterTap)),
     );
   }
 
   /** Read the post-insert meter for a compiled bus, including master. */
   busMeter(busId: string): MixMeterSnapshot {
-    return mixMeterSnapshotFromNative(this.mixer.busMeter(busId));
+    return this.mixer.busMeter(busId);
   }
 
   /**

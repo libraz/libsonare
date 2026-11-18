@@ -1,12 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { beforeAll, describe, expect, it } from 'vitest';
-import {
-  ErrorCode,
-  init,
-  Mixer,
-  type MixerMeterSnapshot,
-  type SonareError,
-} from '../dist/index.js';
+import { ErrorCode, init, Mixer, type MixMeterSnapshot, type SonareError } from '../dist/index.js';
 import { expectRefusalOf } from './_helpers';
 
 interface Reading {
@@ -43,7 +37,7 @@ const fixture = JSON.parse(
 
 const SCENE = fixture.cases[0].scene;
 
-function expectReading(actual: MixerMeterSnapshot, expected: Reading): void {
+function expectReading(actual: MixMeterSnapshot, expected: Reading): void {
   const dB = {
     peakDbL: actual.peakDbL,
     peakDbR: actual.peakDbR,
@@ -130,6 +124,48 @@ describe('Mixer master meter', () => {
     }
   });
 
+  it('measures loudness and true peak by default, and skips loudness when measureLufs is false', () => {
+    const read = (options: Parameters<Mixer['configureMeter']>[0]) => {
+      const mixer = Mixer.fromJson(SCENE, { sampleRate: 48000, maxBlockSize: 480 });
+      try {
+        mixer.configureMeter(options);
+        for (let block = 0; block < 100; block++) {
+          const tone = new Float32Array(480);
+          for (let i = 0; i < 480; i++) {
+            tone[i] = 0.5 * Math.sin((2 * Math.PI * 1000 * (block * 480 + i)) / 48000);
+          }
+          mixer.processStereo([tone], [tone]);
+        }
+        return mixer.meterSnapshot();
+      } finally {
+        mixer.destroy();
+      }
+    };
+    const measured = read({ enabled: true });
+    expect(measured.momentaryLufs).toBeGreaterThan(-20);
+    expect(measured.maxTruePeakDbtp).toBeGreaterThan(-10);
+    const unmeasured = read({ enabled: true, measureLufs: false, measureTruePeak: false });
+    expect(unmeasured.momentaryLufs).toBeLessThan(measured.momentaryLufs - 60);
+    expect(unmeasured.maxTruePeakDbtp).toBeLessThan(measured.maxTruePeakDbtp - 60);
+    expect(unmeasured.peakDbL).toBeCloseTo(measured.peakDbL, 3);
+  });
+
+  it('refuses a non-boolean measureLufs or measureTruePeak by name', () => {
+    const mixer = Mixer.fromJson(SCENE, { sampleRate: 48000, maxBlockSize: 256 });
+    try {
+      for (const key of ['measureLufs', 'measureTruePeak'] as const) {
+        expect(
+          expectRefusalOf(
+            () => mixer.configureMeter({ enabled: true, [key]: 1 } as never),
+            TypeError,
+          ).message,
+        ).toMatch(new RegExp(key));
+      }
+    } finally {
+      mixer.destroy();
+    }
+  });
+
   it('refuses a non-boolean enabled, a missing options bag and an unknown key', () => {
     const mixer = Mixer.fromJson(SCENE, { sampleRate: 48000, maxBlockSize: 256 });
     try {
@@ -141,7 +177,7 @@ describe('Mixer master meter', () => {
       );
       expectRefusalOf(() => mixer.configureMeter(undefined as never), TypeError);
       expectRefusalOf(
-        () => mixer.configureMeter({ enabled: true, measureLufs: true } as never),
+        () => mixer.configureMeter({ enabled: true, measureRms: true } as never),
         TypeError,
       );
     } finally {

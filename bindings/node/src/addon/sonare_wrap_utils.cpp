@@ -656,4 +656,45 @@ bool ReadChannelInputs(Napi::Env env, const Napi::Value& value, const char* fn_n
   return true;
 }
 
+Napi::Object MixMeterSnapshotToObject(Napi::Env env, const SonareMixMeterSnapshot& snapshot) {
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("peakDbL", snapshot.peak_db_l);
+  out.Set("peakDbR", snapshot.peak_db_r);
+  out.Set("rmsDbL", snapshot.rms_db_l);
+  out.Set("rmsDbR", snapshot.rms_db_r);
+  out.Set("correlation", snapshot.correlation);
+  out.Set("monoCompatWidth", snapshot.mono_compat_width);
+  out.Set("monoCompatPeak", snapshot.mono_compat_peak);
+  out.Set("monoCompatSideRms", snapshot.mono_compat_side_rms);
+  out.Set("likelyMonoCompatible", snapshot.likely_mono_compatible != 0);
+  out.Set("momentaryLufs", snapshot.momentary_lufs);
+  out.Set("shortTermLufs", snapshot.short_term_lufs);
+  out.Set("integratedLufs", snapshot.integrated_lufs);
+  out.Set("gainReductionDb", snapshot.gain_reduction_db);
+  out.Set("truePeakDbtpL", snapshot.true_peak_dbtp_l);
+  out.Set("truePeakDbtpR", snapshot.true_peak_dbtp_r);
+  out.Set("maxTruePeakDbtp", snapshot.max_true_peak_dbtp);
+  out.Set("seq", Napi::Number::New(env, static_cast<double>(snapshot.seq)));
+
+  // Per-plane surround meters: expose [0, numChannels) as arrays alongside the
+  // stereo convenience fields above. Clamp to the array capacity so a
+  // future/out-of-range num_channels can never index past the fixed buffers.
+  int channel_count = snapshot.num_channels;
+  if (channel_count < 0) channel_count = 0;
+  if (channel_count > SONARE_MAX_METER_CHANNELS) channel_count = SONARE_MAX_METER_CHANNELS;
+  out.Set("numChannels", Napi::Number::New(env, channel_count));
+  Napi::Array peak_db = Napi::Array::New(env, channel_count);
+  Napi::Array rms_db = Napi::Array::New(env, channel_count);
+  Napi::Array true_peak_db = Napi::Array::New(env, channel_count);
+  for (int ch = 0; ch < channel_count; ++ch) {
+    peak_db.Set(ch, Napi::Number::New(env, snapshot.peak_db[ch]));
+    rms_db.Set(ch, Napi::Number::New(env, snapshot.rms_db[ch]));
+    true_peak_db.Set(ch, Napi::Number::New(env, snapshot.true_peak_dbtp[ch]));
+  }
+  out.Set("peakDb", peak_db);
+  out.Set("rmsDb", rms_db);
+  out.Set("truePeakDbtp", true_peak_db);
+  return out;
+}
+
 }  // namespace sonare_node

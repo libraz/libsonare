@@ -1,10 +1,12 @@
-import {
-  mixMeterSnapshotFromNative,
-  mixSceneFromNative,
-  panModeToNative,
-} from './internal/mix_scene.js';
+import { mixSceneFromNative, panModeToNative } from './internal/mix_scene.js';
 import { addon } from './native.js';
-import type { MixResult, MixSceneDocument, MixScenePreset, PanMode } from './types.js';
+import type {
+  MixMeterSnapshot,
+  MixResult,
+  MixSceneDocument,
+  MixScenePreset,
+  PanMode,
+} from './types.js';
 import {
   assertAudioInput,
   assertFloatValue,
@@ -152,6 +154,6 @@ export function mixStereo(...args: unknown[]): MixResult {
     left: native.left,
     right: native.right,
     sampleRate: native.sampleRate,
-    meters: (native.meters as unknown[]).map(mixMeterSnapshotFromNative),
+    meters: native.meters as MixMeterSnapshot[],
   };
 }

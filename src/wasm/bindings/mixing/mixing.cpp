@@ -17,7 +17,7 @@ std::string js_mixing_scene_preset_json(std::string preset_name) {
 // configuration, so the definition has to sit outside the mixing/graph gate.
 void setPerPlaneMeters(val& out, const float* peak_db, const float* rms_db,
                        const float* true_peak_db, int channel_count) {
-  out.set("channelCount", channel_count);
+  out.set("numChannels", channel_count);
   val peak = val::array();
   val rms = val::array();
   val true_peak = val::array();
@@ -28,7 +28,7 @@ void setPerPlaneMeters(val& out, const float* peak_db, const float* rms_db,
   }
   out.set("peakDb", peak);
   out.set("rmsDb", rms);
-  out.set("truePeakDb", true_peak);
+  out.set("truePeakDbtp", true_peak);
 }
 
 #if defined(SONARE_WITH_MIXING) && defined(SONARE_WITH_GRAPH)
@@ -170,9 +170,9 @@ val MixerWasm::mixMeterSnapshotToVal(const SonareMixMeterSnapshot& snapshot) {
   out.set("shortTermLufs", snapshot.short_term_lufs);
   out.set("integratedLufs", snapshot.integrated_lufs);
   out.set("gainReductionDb", snapshot.gain_reduction_db);
-  out.set("truePeakDbL", snapshot.true_peak_dbtp_l);
-  out.set("truePeakDbR", snapshot.true_peak_dbtp_r);
-  out.set("maxTruePeakDb", snapshot.max_true_peak_dbtp);
+  out.set("truePeakDbtpL", snapshot.true_peak_dbtp_l);
+  out.set("truePeakDbtpR", snapshot.true_peak_dbtp_r);
+  out.set("maxTruePeakDbtp", snapshot.max_true_peak_dbtp);
   out.set("seq", static_cast<double>(snapshot.seq));
   setPerPlaneMeters(out, snapshot.peak_db, snapshot.rms_db, snapshot.true_peak_dbtp,
                     snapshot.num_channels);
@@ -283,9 +283,9 @@ int panModeOrdinalFromVal(val value) {
   out.set("shortTermLufs", snapshot.short_term_lufs);
   out.set("integratedLufs", snapshot.integrated_lufs);
   out.set("gainReductionDb", snapshot.gain_reduction_db);
-  out.set("truePeakDbL", snapshot.true_peak_db[0]);
-  out.set("truePeakDbR", snapshot.true_peak_db[1]);
-  out.set("maxTruePeakDb", snapshot.max_true_peak_db);
+  out.set("truePeakDbtpL", snapshot.true_peak_db[0]);
+  out.set("truePeakDbtpR", snapshot.true_peak_db[1]);
+  out.set("maxTruePeakDbtp", snapshot.max_true_peak_db);
   out.set("seq", static_cast<double>(snapshot.seq));
   setPerPlaneMeters(out, snapshot.peak_db.data(), snapshot.rms_db.data(),
                     snapshot.true_peak_db.data(), snapshot.channel_count);

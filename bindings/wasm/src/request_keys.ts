@@ -2484,7 +2484,12 @@ const SetTrackSoloMuteRequestKeys = keysOf<{ solo: boolean; mute: boolean }>()([
 const MidiBankRequestKeys = keysOf<{ msb: number; lsb: number }>()(['msb', 'lsb']);
 const MixerConfigRequestKeys = keysOf<MixerConfig>()(['scene', 'sampleRate', 'maxBlockSize']);
 const MixerJsonOptionsRequestKeys = keysOf<MixerJsonOptions>()(['sampleRate', 'maxBlockSize']);
-const ConfigureMeterRequestKeys = keysOf<MixerMeterOptions>()(['enabled', 'truePeakOversample']);
+const ConfigureMeterRequestKeys = keysOf<MixerMeterOptions>()([
+  'enabled',
+  'truePeakOversample',
+  'measureLufs',
+  'measureTruePeak',
+]);
 const SetPolarityInvertRequestKeys = keysOf<PolarityInvert>()(['left', 'right']);
 const MixerAddSendRequestKeys = keysOf<MixerSend>()(['id', 'destinationBusId', 'sendDb', 'timing']);
 const ScheduleInsertAutomationRequestKeys = keysOf<InsertAutomationPoint>()([

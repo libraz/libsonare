@@ -177,13 +177,20 @@ void MixerWasm::processPreparedStereo(const val& num_samples_val) {
   if (err != SONARE_OK) throwMixerProcessError(err);
 }
 
-void MixerWasm::configureMeter(bool enabled, const val& true_peak_oversample) {
+void MixerWasm::configureMeter(bool enabled, const val& true_peak_oversample,
+                               const val& measure_lufs, const val& measure_true_peak) {
+  // Seeded from the C defaults; only what the caller gave overrides them.
   SonareMixerMasterMeterConfig config{};
   sonare_mixer_master_meter_config_init(&config);
   config.enabled = enabled ? 1 : 0;
-  config.measure_lufs = 0;
-  if (enabled) {
+  if (!true_peak_oversample.isUndefined() && !true_peak_oversample.isNull()) {
     config.true_peak_oversample = checkedIntFromVal(true_peak_oversample, "truePeakOversample");
+  }
+  if (const auto lufs = optionalBool(measure_lufs, "measureLufs")) {
+    config.measure_lufs = *lufs ? 1 : 0;
+  }
+  if (const auto true_peak = optionalBool(measure_true_peak, "measureTruePeak")) {
+    config.measure_true_peak = *true_peak ? 1 : 0;
   }
   checkStripError(sonare_mixer_configure_master_meter(mixer_, &config),
                   "failed to configure the master meter");
@@ -197,15 +204,7 @@ val MixerWasm::meterSnapshot() const {
                                   "mixer meter has not been enabled");
   }
   checkStripError(err, "failed to read the master meter");
-  val out = val::object();
-  out.set("peakDbL", meter.peak_db_l);
-  out.set("peakDbR", meter.peak_db_r);
-  out.set("rmsDbL", meter.rms_db_l);
-  out.set("rmsDbR", meter.rms_db_r);
-  out.set("correlation", meter.correlation);
-  out.set("truePeakDbL", meter.true_peak_dbtp_l);
-  out.set("truePeakDbR", meter.true_peak_dbtp_r);
-  return out;
+  return mixMeterSnapshotToVal(meter);
 }
 
 bool MixerWasm::latchMeterSnapshot() {
