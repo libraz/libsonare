@@ -6,6 +6,7 @@
 #include <cstddef>
 
 #include "core/audio.h"
+#include "metering/clipping.h"
 
 namespace sonare::metering {
 
@@ -25,7 +26,7 @@ float crest_factor_db(const Audio& audio);
 /// @return Peak-to-RMS ratio in dB, or 0 for silent or empty input, matching
 ///         the mono `crest_factor_db` convention.
 float crest_factor_db_interleaved(const float* samples, std::size_t frames, int channels);
-float clipping_ratio(const Audio& audio, float threshold = 0.999f);
+float clipping_ratio(const Audio& audio, float threshold = kDefaultClippingThreshold);
 float silence_ratio(const Audio& audio, float threshold_db = -45.0f, int frame_length = 1024,
                     int hop_length = 256);
 float dc_offset(const Audio& audio);

@@ -39,6 +39,8 @@ static_assert(kMomentaryWindowSeconds * (1.0f - metering::kLufsMomentaryOverlap)
               "momentary hop mirror drifted from metering::kLufsMomentaryOverlap");
 static_assert(kLoudnessSeriesHopSeconds == metering::kLufsShortTermHopSec,
               "short-term hop mirror drifted from metering::kLufsShortTermHopSec");
+static_assert(kDefaultTruePeakOversample == metering::kDefaultTruePeakOversample,
+              "true-peak oversample mirror drifted from metering::kDefaultTruePeakOversample");
 
 // Linear-domain peak across de-interleaved channels. The buffer overload
 // measures the channel in place; wrapping it in an Audio would deep-copy a
