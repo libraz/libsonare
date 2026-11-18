@@ -26497,23 +26497,6 @@ rule = "construction"
 entry = "./worklet"
 
 [[entry]]
-kind = "method"
-old = "StreamingMasteringChain.stageNames"
-changed = "readonly getter stageNames: string[]"
-domain = "mastering"
-rule = "getters"
-test = "bindings/wasm/tests/surface/mastering-streaming.test.ts::StreamingMasteringChain.stageNames"
-
-[[entry]]
-kind = "method"
-old = "StreamingMasteringChain.stageNames"
-changed = "readonly getter stageNames: string[]"
-domain = "mastering"
-rule = "getters"
-entry = "./worklet"
-test = "bindings/wasm/tests/surface/mastering-streaming.test.ts::StreamingMasteringChain.stageNames"
-
-[[entry]]
 kind = "type"
 old = "AutomationCurve"
 changed = "'linear' | 'exponential' | 'hold' | 'sCurve'"
@@ -27844,3 +27827,10 @@ changed = "type PartRigMode only; a number is refused with TypeError"
 domain = "engine"
 rule = "string-closed-sets"
 test = "bindings/wasm/tests/surface/engine.test.ts::takes every synth closed set by name and refuses a number"
+
+[[entry]]
+kind = "type"
+old = "MidiCcLearnOptions"
+new = "MidiCcLearnRequest"
+domain = "project"
+rule = "one-positional-form"

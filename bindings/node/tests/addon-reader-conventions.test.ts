@@ -523,7 +523,10 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
   {
     jsName: 'midiRouteEvents',
     invoke: (o) =>
-      midiRouteEvents([{ ppq: 0, data0: (0x2 << 28) | (0x9 << 20) | (60 << 8) | 100 }], o),
+      midiRouteEvents({
+        ...requestFields('midiRouteEvents', o),
+        events: [{ ppq: 0, data0: (0x2 << 28) | (0x9 << 20) | (60 << 8) | 100 }],
+      }),
   },
   {
     jsName: 'analyzeTempo',

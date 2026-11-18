@@ -76,7 +76,6 @@ export type {
   ExternalSeparatedStem,
   ExternalSeparatedStemImportRequest,
   ExternalSeparatedStemImportResult,
-  MidiCcLearnOptions,
   ProjectAnalyzeTempoRequest,
   ProjectAssistSidecar,
   ProjectAssistSidecarInput,

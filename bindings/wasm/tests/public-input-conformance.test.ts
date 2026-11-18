@@ -77,15 +77,15 @@ describe('shared public-input conformance corpus (WASM)', () => {
     for (const minMovement of [-1, 128, 255, 256]) {
       let caught: unknown;
       try {
-        midiCcLearn(events, 3, { minMovement });
+        midiCcLearn({ events, paramId: 3, minMovement });
       } catch (error) {
         caught = error;
       }
       expectArgumentRefusal(caught);
     }
-    expect(midiCcLearn(events, 3, { minMovement: 10 })).not.toBeNull();
-    expect(midiCcLearn(events, 3, { minMovement: 11 })).toBeNull();
-    expect(midiCcLearn(events, 3, { minMovement: 127 })).toBeNull();
+    expect(midiCcLearn({ events, paramId: 3, minMovement: 10 })).not.toBeNull();
+    expect(midiCcLearn({ events, paramId: 3, minMovement: 11 })).toBeNull();
+    expect(midiCcLearn({ events, paramId: 3, minMovement: 127 })).toBeNull();
   });
 
   for (const testCase of corpus.marker_transaction.cases) {

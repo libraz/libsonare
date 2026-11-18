@@ -27,7 +27,9 @@ import type {
   Midi2RelativeAssignableControllerRequest,
   Midi2RelativeRegisteredControllerRequest,
   MidiBankProgramRequest,
+  MidiCcLearnRequest,
   MidiCcRequest,
+  MidiCcToBreakpointRequest,
   MidiChannelPressureRequest,
   MidiNoteOffRequest,
   MidiNoteOnRequest,
@@ -35,13 +37,12 @@ import type {
   MidiPitchBendRequest,
   MidiPolyPressureRequest,
   MidiProgramRequest,
+  MidiRouteEventsRequest,
 } from './types_midi_messages.js';
 import type {
-  MidiCcLearnOptions,
   ProjectAutomationPoint,
   ProjectMidiCcBinding,
   ProjectMidiEvent,
-  ProjectMidiRouteConfig,
   ProjectMidiRouteResult,
   ProjectProgramBank,
 } from './types_project.js';
@@ -724,50 +725,46 @@ export function perNoteControllerName(index: number): string {
 /**
  * Routes MIDI events through the native MidiRouter filter/remap/thru logic.
  *
- * @param events - Events to route
- * @param config - Group/channel filter, channel remap and pass-through; absent or `null` fields mean any/none
+ * @param request - Events to route plus the group/channel filter, channel remap
+ *   and pass-through; absent or `null` route fields mean any/none
+ * @throws TypeError for a non-object request or an unknown field
  */
-export function midiRouteEvents(
-  events: ReadonlyArray<ProjectMidiEvent>,
-  config: ProjectMidiRouteConfig = {},
-): ProjectMidiRouteResult {
+export function midiRouteEvents(request: MidiRouteEventsRequest): ProjectMidiRouteResult {
+  const { events, ...config } = requestObject('midiRouteEvents', request, 'request', true);
   return addon.midiRouteEvents(events, config);
 }
 
 /**
  * Runs native MIDI learn over an event stream.
  *
- * @param events - Events to learn from
- * @param paramId - Parameter id the learned controller binds to
- * @param options - Mapped range and activity threshold
+ * @param request - Events to learn from, the parameter id the learned controller
+ *   binds to, the mapped range and the activity threshold
  * @returns The learned binding, or `null` when nothing is learned
+ * @throws TypeError for a non-object request or an unknown field
  */
-export function midiCcLearn(
-  events: ReadonlyArray<ProjectMidiEvent>,
-  paramId: number,
-  options: MidiCcLearnOptions = {},
-): ProjectMidiCcBinding | null {
+export function midiCcLearn(request: MidiCcLearnRequest): ProjectMidiCcBinding | null {
+  const r = requestObject('midiCcLearn', request, 'request', true);
   return addon.midiCcLearn(
-    events,
-    paramId,
-    options.minValue ?? 0,
-    options.maxValue ?? 1,
-    options.minMovement ?? 0,
+    r.events,
+    r.paramId,
+    r.minValue ?? 0,
+    r.maxValue ?? 1,
+    r.minMovement ?? 0,
   );
 }
 
 /**
  * Converts one CC event to an automation breakpoint using the native CcMap.
  *
- * @param bindings - Bindings to search
- * @param event - CC event to convert
+ * @param request - Bindings to search and the CC event to convert
  * @returns The breakpoint, or `null` when no binding matches
+ * @throws TypeError for a non-object request or an unknown field
  */
 export function midiCcToBreakpoint(
-  bindings: ReadonlyArray<ProjectMidiCcBinding>,
-  event: ProjectMidiEvent,
+  request: MidiCcToBreakpointRequest,
 ): ProjectAutomationPoint | null {
-  const native = addon.midiCcToBreakpoint(bindings, event) as {
+  const r = requestObject('midiCcToBreakpoint', request, 'request', true);
+  const native = addon.midiCcToBreakpoint(r.bindings, r.event) as {
     ppq: number;
     value: number;
     curveToNext: number;

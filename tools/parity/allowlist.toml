@@ -282,6 +282,8 @@ node = [
   # Seed the polyphonic analysis config; the facades take each field as an option and keep the
   # core default for an absent one.
   "polyphonic_config_init",
+  # Seed the master-meter config; the facades take enabled and truePeakOversample.
+  "mixer_master_meter_config_init",
   # C-side canonical enum-name supplier consumed internally by the facade
   # snapshot/test helpers; not exposed as a same-named public function.
   "synth_enum_names",
@@ -413,6 +415,8 @@ wasm = [
   # Seed the polyphonic analysis config; the facades take each field as an option and keep the
   # core default for an absent one.
   "polyphonic_config_init",
+  # Seed the master-meter config; the facades take enabled and truePeakOversample.
+  "mixer_master_meter_config_init",
   "synth_enum_names",
   # Unified-analysis variants folded into the base facade analyze /
   # analyzeWithProgress / analyzeMelody (WASM keeps its native analyze() object).
@@ -547,6 +551,8 @@ python = [
   # Seed the polyphonic analysis config; the facades take each field as an option and keep the
   # core default for an absent one.
   "polyphonic_config_init",
+  # Seed the master-meter config; the facades take enabled and truePeakOversample.
+  "mixer_master_meter_config_init",
   "synth_enum_names",
   # Unified-analysis variants folded into the base facade `analyze` /
   # `analyze_with_progress` / `analyze_melody` (use_pyin/center params).
@@ -644,12 +650,12 @@ python = [
 # SonarePitchCorrectionConfig fields and the voiced / voiced_prob companion
 # arrays into keyword args. Same ergonomic options-fold + array-length derivation
 # as spectral_edit. Remapped to C order internally. Not order drift.
-# midi_cc_learn (node/wasm/python): C is (events, count, param_id, min_value,
-# max_value, min_movement). The facades DERIVE `count` from the events array
-# length; Node/WASM additionally fold the optional (min_value, max_value,
-# min_movement) range params into a MidiCcLearnOptions bag (Python keeps them as
-# keyword args). Passing both the array and a redundant count would let them
-# disagree. Remapped to C order internally; ergonomic convenience, not order drift.
+# midi_cc_learn (python): C is (events, count, param_id, min_value, max_value,
+# min_movement). The facade DERIVES `count` from the events array length and keeps
+# the range params as keyword args. Passing both the array and a redundant count
+# would let them disagree. Remapped to C order internally; ergonomic convenience,
+# not order drift. Node and WASM carry no entry: their request object declares no
+# order.
 # midi_route_events (python): C is (events, count, config). The facade exposes
 # (events, config) and DERIVES `count` from the events array length — same
 # array-length derivation as spectral_edit's ops. Node and WASM carry no entry: their
@@ -713,7 +719,6 @@ node = [
   "scale_quantize_midi",
   "scale_correction_semitones",
   "strip_meter",
-  "midi_cc_learn",
   "downmix",
   "chord_symbol_from_analysis", # the facade folds root/quality/bass into one analysis chord object and sizes the extensions array itself
 ]
@@ -721,7 +726,6 @@ wasm = [
   "scale_quantize_midi",
   "scale_correction_semitones",
   "strip_meter",
-  "midi_cc_learn",
   "downmix",
   "chord_symbol_from_analysis", # the facade folds root/quality/bass into one analysis chord object and sizes the extensions array itself
 ]

@@ -642,7 +642,6 @@ export type {
   ExternalSeparatedStem,
   ExternalSeparatedStemImportRequest,
   ExternalSeparatedStemImportResult,
-  MidiCcLearnOptions,
   MpeDimension,
   NoteTracking,
   PartRig,
@@ -1067,7 +1066,9 @@ export type {
   Midi2RelativeRegisteredControllerRequest,
   MidiBank,
   MidiBankProgramRequest,
+  MidiCcLearnRequest,
   MidiCcRequest,
+  MidiCcToBreakpointRequest,
   MidiChannelPressureRequest,
   MidiNoteOffRequest,
   MidiNoteOnRequest,
@@ -1075,6 +1076,7 @@ export type {
   MidiPitchBendRequest,
   MidiPolyPressureRequest,
   MidiProgramRequest,
+  MidiRouteEventsRequest,
 } from './public_types_midi_messages.js';
 export type * from './public_types_vocal_edit.js';
 export type {

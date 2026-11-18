@@ -13869,14 +13869,6 @@ domain = "mastering"
 rule = "construction"
 
 [[entry]]
-kind = "method"
-old = "StreamingMasteringChain.stageNames"
-changed = "readonly getter stageNames: string[]"
-domain = "mastering"
-rule = "getters"
-test = "bindings/node/tests/surface/mastering-streaming.test.ts::StreamingMasteringChain.stageNames"
-
-[[entry]]
 kind = "type"
 old = "AutomationCurve"
 changed = "'linear' | 'exponential' | 'hold' | 'sCurve'"
@@ -14785,3 +14777,10 @@ changed = "type SampleKeyTrack only; a number is refused with TypeError"
 domain = "engine"
 rule = "string-closed-sets"
 test = "bindings/node/tests/surface/engine.test.ts::takes every synth closed set by name and refuses a number"
+
+[[entry]]
+kind = "type"
+old = "MidiCcLearnOptions"
+new = "MidiCcLearnRequest"
+domain = "project"
+rule = "one-positional-form"

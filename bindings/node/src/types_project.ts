@@ -413,16 +413,6 @@ export interface ProjectMidiRouteResult {
 /** Controller shape of a {@link ProjectMidiCcBinding}: 0 = 7-bit CC, 1 = 14-bit CC, 2 = RPN, 3 = NRPN. */
 export type ProjectMidiCcBindingKind = 0 | 1 | 2 | 3;
 
-/** Options for {@link midiCcLearn}. All fields are optional. */
-export interface MidiCcLearnOptions {
-  /** Lower end of the mapped parameter range. Default `0`. */
-  minValue?: number;
-  /** Upper end of the mapped parameter range. Default `1`. */
-  maxValue?: number;
-  /** Activity threshold in 7-bit CC units (integer 0-127) a controller must move to be learned. Default `0`. */
-  minMovement?: number;
-}
-
 /** MIDI CC <-> automation binding descriptor used by CC learn/conversion helpers. */
 export interface ProjectMidiCcBinding {
   /** Controller number (the MSB controller for a 14-bit CC). */

@@ -1,4 +1,9 @@
-import type { ProjectMidiCcBinding, ProjectProgramBank } from './types_project.js';
+import type {
+  ProjectMidiCcBinding,
+  ProjectMidiEvent,
+  ProjectMidiRouteConfig,
+  ProjectProgramBank,
+} from './types_project.js';
 
 /** Request of {@link midiNoteOn}. */
 export interface MidiNoteOnRequest {
@@ -342,6 +347,34 @@ export interface MidiParamToCcRequest {
   group: number;
   /** Position of the produced event in quarter notes. Default `0`. */
   ppq?: number;
+}
+
+/** Request of {@link midiRouteEvents}: the events plus the route configuration. */
+export interface MidiRouteEventsRequest extends ProjectMidiRouteConfig {
+  /** Events to route. */
+  events: ReadonlyArray<ProjectMidiEvent>;
+}
+
+/** Request of {@link midiCcLearn}. */
+export interface MidiCcLearnRequest {
+  /** Events to learn from. */
+  events: ReadonlyArray<ProjectMidiEvent>;
+  /** Parameter id the learned controller binds to. */
+  paramId: number;
+  /** Lower end of the mapped parameter range. Default `0`. */
+  minValue?: number;
+  /** Upper end of the mapped parameter range. Default `1`. */
+  maxValue?: number;
+  /** Activity threshold in 7-bit CC units (integer 0-127) a controller must move to be learned. Default `0`. */
+  minMovement?: number;
+}
+
+/** Request of {@link midiCcToBreakpoint}. */
+export interface MidiCcToBreakpointRequest {
+  /** Bindings to search for the one that maps the event's controller. */
+  bindings: ReadonlyArray<ProjectMidiCcBinding>;
+  /** CC event to convert. */
+  event: ProjectMidiEvent;
 }
 
 /** Request of {@link gm2InstrumentName}. */

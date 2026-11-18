@@ -175,9 +175,11 @@ describe('shared public-input conformance corpus', () => {
     it(`keeps Project.midiCcToBreakpoint byte fields conformant: ${testCase.id}`, () => {
       const event = midiCc({ ppq: 0, group: 0, channel: 0, controller: 7, value: 64 });
       if (testCase.accepted) {
-        expect(() => midiCcToBreakpoint([binding() as never], event)).not.toThrow();
+        expect(() => midiCcToBreakpoint({ bindings: [binding() as never], event })).not.toThrow();
       } else {
-        expect(() => midiCcToBreakpoint([binding() as never], event)).toThrow(RangeError);
+        expect(() => midiCcToBreakpoint({ bindings: [binding() as never], event })).toThrow(
+          RangeError,
+        );
       }
     });
   }
@@ -216,10 +218,16 @@ describe('shared public-input conformance corpus', () => {
     expect(() =>
       midiBankProgram({ ppq: 0, group: 0, channel: 271, program: 24, bank: { msb: 0, lsb: 0 } }),
     ).toThrow(RangeError);
-    expect(() => midiCcLearn(learnEvents, 3, { minMovement: 256 })).toThrow(RangeError);
+    expect(() => midiCcLearn({ events: learnEvents, paramId: 3, minMovement: 256 })).toThrow(
+      RangeError,
+    );
     // 128..255 fit the byte but not the 7-bit CC units the core compares in.
-    expect(() => midiCcLearn(learnEvents, 3, { minMovement: 128 })).toThrow(RangeError);
-    expect(() => midiCcLearn(learnEvents, 3, { minMovement: 255 })).toThrow(RangeError);
+    expect(() => midiCcLearn({ events: learnEvents, paramId: 3, minMovement: 128 })).toThrow(
+      RangeError,
+    );
+    expect(() => midiCcLearn({ events: learnEvents, paramId: 3, minMovement: 255 })).toThrow(
+      RangeError,
+    );
 
     const project = new Project();
     try {
@@ -243,8 +251,8 @@ describe('shared public-input conformance corpus', () => {
       midiBankProgram({ ppq: 0, group: 0, channel: 3, program: 24, bank: { msb: 0x79, lsb: 1 } })
         .length,
     ).toBeGreaterThan(0);
-    expect(midiCcLearn(learnEvents, 3, { minMovement: 4 })).not.toBeNull();
-    expect(() => midiCcLearn(learnEvents, 3, { minMovement: 127 })).not.toThrow();
+    expect(midiCcLearn({ events: learnEvents, paramId: 3, minMovement: 4 })).not.toBeNull();
+    expect(() => midiCcLearn({ events: learnEvents, paramId: 3, minMovement: 127 })).not.toThrow();
   });
 });
 
@@ -365,8 +373,8 @@ describe('explicit undefined reads as an omitted option', () => {
 
   it('keeps the Project.midiRouteEvents thru default with an explicit undefined', () => {
     const events = [noteOn(60)];
-    const omitted = midiRouteEvents(events, {});
-    const explicit = midiRouteEvents(events, { thru: undefined });
+    const omitted = midiRouteEvents({ events });
+    const explicit = midiRouteEvents({ events, thru: undefined });
     expect(omitted.events.length).toBe(1);
     expect(explicit).toEqual(omitted);
   });
@@ -374,35 +382,35 @@ describe('explicit undefined reads as an omitted option', () => {
   it('keeps every Project.midiRouteEvents config field undefined-safe', () => {
     const events = [noteOn(60)];
     expect(
-      midiRouteEvents(events, {
+      midiRouteEvents({
+        events,
         filterGroup: undefined,
         filterChannel: undefined,
         remapChannel: undefined,
         thru: undefined,
       }),
-    ).toEqual(midiRouteEvents(events, {}));
+    ).toEqual(midiRouteEvents({ events }));
   });
 
   it('routes events whose optional data1 is explicitly undefined', () => {
     const events = [noteOn(60), noteOn(64)];
     expect(
-      midiRouteEvents(
-        events.map((event) => ({ ...event, data1: undefined })),
-        {},
-      ),
-    ).toEqual(midiRouteEvents(events, {}));
+      midiRouteEvents({ events: events.map((event) => ({ ...event, data1: undefined })) }),
+    ).toEqual(midiRouteEvents({ events }));
   });
 
   it('learns a CC binding with every option explicitly undefined', () => {
     const cc = (value: number) => ({ ppq: 0, data0: (0x2 << 28) | (0xb << 20) | (7 << 8) | value });
     const events = [cc(0), cc(64), cc(127)];
     expect(
-      midiCcLearn(events, 3, {
+      midiCcLearn({
+        events,
+        paramId: 3,
         minValue: undefined,
         maxValue: undefined,
         minMovement: undefined,
       }),
-    ).toEqual(midiCcLearn(events, 3, {}));
+    ).toEqual(midiCcLearn({ events, paramId: 3 }));
   });
 
   it('applies pcen defaults for explicitly undefined options', () => {

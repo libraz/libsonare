@@ -253,7 +253,9 @@ import type {
   Midi2RelativeAssignableControllerRequest,
   Midi2RelativeRegisteredControllerRequest,
   MidiBankProgramRequest,
+  MidiCcLearnRequest,
   MidiCcRequest,
+  MidiCcToBreakpointRequest,
   MidiChannelPressureRequest,
   MidiNoteOffRequest,
   MidiNoteOnRequest,
@@ -261,6 +263,7 @@ import type {
   MidiPitchBendRequest,
   MidiPolyPressureRequest,
   MidiProgramRequest,
+  MidiRouteEventsRequest,
 } from './public_types_midi_messages.js';
 import type { ChordFunctionsInput } from './public_types_music.js';
 import type { PlaybackRendererConfig, RenderPlaybackRequest } from './public_types_playback.js';
@@ -2688,6 +2691,24 @@ const MidiParamToCcRequestKeys = keysOf<MidiParamToCcRequest>()([
   'ppq',
 ]);
 
+const MidiRouteEventsRequestKeys = keysOf<MidiRouteEventsRequest>()([
+  'events',
+  'filterGroup',
+  'filterChannel',
+  'remapChannel',
+  'thru',
+]);
+
+const MidiCcLearnRequestKeys = keysOf<MidiCcLearnRequest>()([
+  'events',
+  'paramId',
+  'minValue',
+  'maxValue',
+  'minMovement',
+]);
+
+const MidiCcToBreakpointRequestKeys = keysOf<MidiCcToBreakpointRequest>()(['bindings', 'event']);
+
 const MidiPitchBendRequestKeys = keysOf<MidiPitchBendRequest>()([
   'ppq',
   'group',
@@ -2888,6 +2909,9 @@ export const REQUEST_SHAPES = {
   midiNoteOff: { keys: MidiNoteOffRequestKeys },
   midiNoteOn: { keys: MidiNoteOnRequestKeys },
   midiParamToCc: { keys: MidiParamToCcRequestKeys },
+  midiRouteEvents: { keys: MidiRouteEventsRequestKeys },
+  midiCcLearn: { keys: MidiCcLearnRequestKeys },
+  midiCcToBreakpoint: { keys: MidiCcToBreakpointRequestKeys },
   midiPitchBend: { keys: MidiPitchBendRequestKeys },
   midiPolyPressure: { keys: MidiPolyPressureRequestKeys },
   midiProgram: { keys: MidiProgramRequestKeys },

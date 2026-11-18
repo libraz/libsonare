@@ -1397,14 +1397,15 @@ describe('Sonare WASM Project', () => {
     });
 
     it('routes MIDI events through the native MidiRouter', () => {
-      const routed = midiRouteEvents(
-        [
+      const routed = midiRouteEvents({
+        events: [
           midiNoteOn({ ppq: 0, group: 0, channel: 3, note: 60, velocity: 100 }),
           midiNoteOff({ ppq: 0.5, group: 0, channel: 3, note: 60, velocity: 0 }),
           midiNoteOn({ ppq: 1, group: 0, channel: 2, note: 61, velocity: 100 }),
         ],
-        { filterChannel: 3, remapChannel: 7 },
-      );
+        filterChannel: 3,
+        remapChannel: 7,
+      });
       expect(routed.overflowed).toBe(false);
       expect(routed.overflowCount).toBe(0);
       expect(routed.events).toHaveLength(2);
@@ -1412,14 +1413,40 @@ describe('Sonare WASM Project', () => {
       expect(routed.events.map((event) => (event.data0 >>> 16) & 0xf)).toEqual([7, 7]);
       expect((routed.events[1].data0 >>> 20) & 0xf).toBe(0x8);
 
-      const muted = midiRouteEvents(
-        [midiNoteOn({ ppq: 0, group: 0, channel: 0, note: 60, velocity: 100 })],
-        {
-          thru: false,
-        },
-      );
+      const muted = midiRouteEvents({
+        events: [midiNoteOn({ ppq: 0, group: 0, channel: 0, note: 60, velocity: 100 })],
+        thru: false,
+      });
       expect(muted.events).toHaveLength(0);
       expect(muted.overflowed).toBe(false);
+    });
+
+    it('takes the MIDI route, learn and breakpoint helpers as one request and refuses the positional form', () => {
+      const events = [midiCc({ ppq: 0, group: 0, channel: 2, controller: 74, value: 64 })];
+      const binding = {
+        ccNumber: 74,
+        channel: 2,
+        kind: 0 as const,
+        paramId: 9,
+        minValue: 0,
+        maxValue: 1,
+      };
+      expect(midiRouteEvents({ events, filterChannel: 2 }).events).toHaveLength(1);
+      expect(midiCcLearn({ events, paramId: 9 })).toMatchObject({ ccNumber: 74, paramId: 9 });
+      expect(midiCcToBreakpoint({ bindings: [binding], event: events[0] })).not.toBeNull();
+      const loose = (fn: unknown) => fn as (...args: unknown[]) => unknown;
+      for (const [name, call] of [
+        ['midiRouteEvents', () => loose(midiRouteEvents)(events, { filterChannel: 2 })],
+        ['midiCcLearn', () => loose(midiCcLearn)(events, 9, {})],
+        ['midiCcToBreakpoint', () => loose(midiCcToBreakpoint)([binding], events[0])],
+      ] as const) {
+        expect(call, name).toThrow(new TypeError(`${name}: request must be an object`));
+      }
+      expect(() => midiRouteEvents({ events, channel: 2 } as never)).toThrow(TypeError);
+      expect(() => midiCcLearn({ events, paramId: 9, min: 0 } as never)).toThrow(TypeError);
+      expect(() =>
+        midiCcToBreakpoint({ bindings: [binding], event: events[0], ppq: 0 } as never),
+      ).toThrow(TypeError);
     });
 
     it('reads a null route-config field as absent', () => {
@@ -1428,21 +1455,22 @@ describe('Sonare WASM Project', () => {
         midiNoteOn({ ppq: 1, group: 0, channel: 2, note: 61, velocity: 100 }),
       ];
       const nulls = { filterGroup: null, filterChannel: null, remapChannel: null };
-      expect(midiRouteEvents(events, nulls as never)).toEqual(midiRouteEvents(events, {}));
-      expect(midiRouteEvents(events, { ...nulls, filterChannel: 3 } as never).events).toHaveLength(
+      expect(midiRouteEvents({ events, ...nulls } as never)).toEqual(midiRouteEvents({ events }));
+      expect(midiRouteEvents({ events, ...nulls, filterChannel: 3 } as never).events).toHaveLength(
         1,
       );
     });
 
     it('exposes native CcMap learn and CC/automation conversion helpers', () => {
-      const learned14 = midiCcLearn(
-        [
+      const learned14 = midiCcLearn({
+        events: [
           midiCc({ ppq: 0, group: 0, channel: 2, controller: 1, value: 64 }),
           midiCc({ ppq: 0.1, group: 0, channel: 2, controller: 33, value: 12 }),
         ],
-        77,
-        { minValue: -1, maxValue: 1 },
-      );
+        paramId: 77,
+        minValue: -1,
+        maxValue: 1,
+      });
       expect(learned14).toMatchObject({
         kind: 1,
         ccNumber: 1,
@@ -1453,14 +1481,14 @@ describe('Sonare WASM Project', () => {
         maxValue: 1,
       });
 
-      const learnedRpn = midiCcLearn(
-        [
+      const learnedRpn = midiCcLearn({
+        events: [
           midiCc({ ppq: 0, group: 0, channel: 3, controller: 101, value: 0 }),
           midiCc({ ppq: 0.1, group: 0, channel: 3, controller: 100, value: 1 }),
           midiCc({ ppq: 0.2, group: 0, channel: 3, controller: 6, value: 64 }),
         ],
-        78,
-      );
+        paramId: 78,
+      });
       expect(learnedRpn).toMatchObject({ kind: 2, selectorMsb: 0, selectorLsb: 1, paramId: 78 });
 
       const binding = {
@@ -1471,10 +1499,10 @@ describe('Sonare WASM Project', () => {
         minValue: -60,
         maxValue: 0,
       };
-      const point = midiCcToBreakpoint(
-        [binding],
-        midiCc({ ppq: 2, group: 0, channel: 4, controller: 74, value: 127 }),
-      );
+      const point = midiCcToBreakpoint({
+        bindings: [binding],
+        event: midiCc({ ppq: 2, group: 0, channel: 4, controller: 74, value: 127 }),
+      });
       expect(point).toEqual({ ppq: 2, value: 0, curveToNext: 'linear' });
 
       const event = midiParamToCc({

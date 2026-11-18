@@ -88,13 +88,13 @@ describe('int fields refuse a saturating, fractional or non-finite value', () =>
       midiNoteOn({ ppq: 1, group: 0, channel: 3, note: 62, velocity: 100 }),
     ];
     const routed = (config: Record<string, number>): number =>
-      midiRouteEvents(events, config).events.length;
+      midiRouteEvents({ events, ...config }).events.length;
 
     // The control: two legal channels select different events.
     expect(routed({ filterChannel: 0 })).toBe(1);
     expect(routed({ filterChannel: 3 })).toBe(1);
-    expect(midiRouteEvents(events, { filterChannel: 0 }).events[0]?.ppq).toBe(0);
-    expect(midiRouteEvents(events, { filterChannel: 3 }).events[0]?.ppq).toBe(1);
+    expect(midiRouteEvents({ events, filterChannel: 0 }).events[0]?.ppq).toBe(0);
+    expect(midiRouteEvents({ events, filterChannel: 3 }).events[0]?.ppq).toBe(1);
     // -1 is "any group / any channel / no remap" and must survive the check.
     expect(routed({ filterChannel: -1 })).toBe(2);
     expect(routed({ filterGroup: -1 })).toBe(2);
@@ -689,11 +689,11 @@ describe('array-like `.length` reads refuse a wrapped, negative or fractional co
       midiNoteOn({ ppq: 1, group: 0, channel: 0, note: 61, velocity: 100 }),
     ];
     // The control: two legal event arrays route that many events.
-    expect(midiRouteEvents(oneEvent, {}).events.length).toBe(1);
-    expect(midiRouteEvents(twoEvents, {}).events.length).toBe(2);
+    expect(midiRouteEvents({ events: oneEvent }).events.length).toBe(1);
+    expect(midiRouteEvents({ events: twoEvents }).events.length).toBe(2);
     for (const value of WRAPPING_LENGTHS) {
       expectRangeRefusal(() =>
-        midiRouteEvents({ length: value } as unknown as typeof oneEvent, {}),
+        midiRouteEvents({ events: { length: value } as unknown as typeof oneEvent }),
       );
     }
   });
@@ -722,7 +722,10 @@ describe('array-like `.length` reads refuse a wrapped, negative or fractional co
         }),
       );
       expectRangeRefusal(() =>
-        midiCcLearn({ length: value } as unknown as ReturnType<typeof midiNoteOn>[], 1),
+        midiCcLearn({
+          events: { length: value } as unknown as ReturnType<typeof midiNoteOn>[],
+          paramId: 1,
+        }),
       );
     }
   });

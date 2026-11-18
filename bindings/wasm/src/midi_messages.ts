@@ -13,7 +13,6 @@ import {
   projectModule,
 } from './project_internal.js';
 import type {
-  MidiCcLearnOptions,
   ProjectAutomationPoint,
   ProjectMidiCcBinding,
   ProjectMidiEvent,
@@ -40,7 +39,9 @@ import type {
   Midi2RelativeRegisteredControllerRequest,
   MidiBank,
   MidiBankProgramRequest,
+  MidiCcLearnRequest,
   MidiCcRequest,
+  MidiCcToBreakpointRequest,
   MidiChannelPressureRequest,
   MidiNoteOffRequest,
   MidiNoteOnRequest,
@@ -48,6 +49,7 @@ import type {
   MidiPitchBendRequest,
   MidiPolyPressureRequest,
   MidiProgramRequest,
+  MidiRouteEventsRequest,
 } from './public_types_midi_messages.js';
 import { assertBoundedInteger, assertU7, optionalBoolean, requestObject } from './validation.js';
 
@@ -658,12 +660,10 @@ export function midiBankProgram(request: MidiBankProgramRequest): ProjectMidiEve
  * Route MIDI events through the native MidiRouter filter/remap/thru logic. A
  * `null` or omitted config field is absent.
  */
-export function midiRouteEvents(
-  events: ReadonlyArray<ProjectMidiEvent>,
-  config: ProjectMidiRouteConfig = {},
-): ProjectMidiRouteResult {
+export function midiRouteEvents(request: MidiRouteEventsRequest): ProjectMidiRouteResult {
+  const { events, ...config } = requestObject('midiRouteEvents', request, 'request', true);
   const present: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(config ?? {})) {
+  for (const [key, value] of Object.entries(config)) {
     if (value !== null && value !== undefined) {
       present[key] = value;
     }
@@ -672,25 +672,22 @@ export function midiRouteEvents(
 }
 
 /** Run native MIDI learn over an event stream; returns `null` when nothing is learned. */
-export function midiCcLearn(
-  events: ReadonlyArray<ProjectMidiEvent>,
-  paramId: number,
-  options: MidiCcLearnOptions = {},
-): ProjectMidiCcBinding | null {
+export function midiCcLearn(request: MidiCcLearnRequest): ProjectMidiCcBinding | null {
+  const r = requestObject('midiCcLearn', request, 'request', true);
   return projectModule().midiCcLearn(
-    events,
-    paramId,
-    options.minValue ?? 0,
-    options.maxValue ?? 1,
-    options.minMovement ?? 0,
+    r.events,
+    r.paramId,
+    r.minValue ?? 0,
+    r.maxValue ?? 1,
+    r.minMovement ?? 0,
   );
 }
 
 /** Convert one CC event to an automation breakpoint using native CcMap. */
 export function midiCcToBreakpoint(
-  bindings: ReadonlyArray<ProjectMidiCcBinding>,
-  event: ProjectMidiEvent,
+  request: MidiCcToBreakpointRequest,
 ): ProjectAutomationPoint | null {
+  const { bindings, event } = requestObject('midiCcToBreakpoint', request, 'request', true);
   if (!Array.isArray(bindings)) {
     throw new TypeError('midiCcToBreakpoint: bindings must be an array');
   }
