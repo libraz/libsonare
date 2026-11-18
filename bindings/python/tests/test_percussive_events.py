@@ -554,7 +554,7 @@ def test_a_round_trip_changes_only_the_edit() -> None:
         (e.onset_sample, e.offset_sample, e.strength, e.peak_amplitude, e.percussive_ratio)
         for e in events
     ]
-    events[1].edit = libsonare.PercussiveEventEdit(gain_db=-12.0)
+    events[1].edit.gain_db = -12.0
     rendered = libsonare.render_percussive_events(audio, SR, events)
 
     assert [

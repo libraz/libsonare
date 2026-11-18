@@ -9764,3 +9764,35 @@ changed = "absent is None (the library default 4x); an explicit 0 raises SonareV
 domain = "engine"
 rule = "absent-not-sentinel"
 test = "bindings/python/tests/test_mixing.py::test_strip_can_be_added_to_a_live_mixer"
+
+[[entry]]
+kind = "type"
+old = "NoteObject"
+changed = "a frozen dataclass; a changed copy comes from dataclasses.replace (the pending edit is still edited in place)"
+domain = "effects"
+rule = "frozen-results"
+test = "bindings/python/tests/test_frozen_records.py::test_records_refuse_assignment_and_copy_through_replace"
+
+[[entry]]
+kind = "type"
+old = "NoteTarget"
+changed = "a frozen dataclass; a changed copy comes from dataclasses.replace"
+domain = "effects"
+rule = "frozen-results"
+test = "bindings/python/tests/test_frozen_records.py::test_records_refuse_assignment_and_copy_through_replace"
+
+[[entry]]
+kind = "type"
+old = "PercussiveEvent"
+changed = "a frozen dataclass; a changed copy comes from dataclasses.replace (the pending edit is still edited in place)"
+domain = "effects"
+rule = "frozen-results"
+test = "bindings/python/tests/test_frozen_records.py::test_records_refuse_assignment_and_copy_through_replace"
+
+[[entry]]
+kind = "type"
+old = "RealtimeVoiceChangerConfig"
+changed = "a frozen dataclass; a changed copy comes from dataclasses.replace"
+domain = "effects"
+rule = "frozen-results"
+test = "bindings/python/tests/test_frozen_records.py::test_voice_changer_config_is_frozen"

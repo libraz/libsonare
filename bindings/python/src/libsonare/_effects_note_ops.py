@@ -693,7 +693,7 @@ def merge_notes(
     )
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(frozen=True)
 class NoteTarget:
     """One note of a reference melody.
 

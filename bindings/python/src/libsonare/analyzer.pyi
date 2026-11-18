@@ -798,6 +798,7 @@ class NoteEdit:
         time_offset_sec: float | None = None,
     ) -> None: ...
 
+@dataclass(frozen=True)
 class NoteObject:
     onset_sample: int | None
     offset_sample: int | None
@@ -899,6 +900,7 @@ class PercussiveEventEdit:
         time_offset_sec: float | None = None,
     ) -> None: ...
 
+@dataclass(frozen=True)
 class PercussiveEvent:
     onset_sample: int | None
     offset_sample: int | None
@@ -945,6 +947,7 @@ def render_percussive_events(
     fade_ms: float | None = None,
 ) -> np.ndarray[Any, Any]: ...
 
+@dataclass(frozen=True)
 class PitchDecompositionResult:
     center_hz: float | None
     drift_cents: np.ndarray[Any, Any]
@@ -997,6 +1000,7 @@ def merge_notes(
     voiced_threshold: float | None = None,
 ) -> list[NoteObject]: ...
 
+@dataclass(frozen=True)
 class NoteTarget:
     start_sec: float
     end_sec: float
@@ -1065,6 +1069,7 @@ ReverbVariationName: TypeAlias = Literal["reverb", "echo", "tempoDelay", "dubEch
 NoteDivisionName: TypeAlias = Literal["quarter", "eighth", "dottedEighth", "sixteenth"]
 MidiReleaseName: TypeAlias = Literal["hold", "input"]
 
+@dataclass(frozen=True)
 class RealtimeVoiceChangerConfig:
     input_gain_db: float
     output_gain_db: float

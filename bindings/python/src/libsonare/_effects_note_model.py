@@ -139,7 +139,7 @@ class NoteEdit:
         )
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(frozen=True)
 class NoteObject:
     """One editable note returned by :func:`extract_notes`.
 
@@ -200,7 +200,7 @@ class NoteObject:
     offset_sec: float | None = None
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(frozen=True)
 class PitchDecompositionResult:
     """One note's pitch curve split into a centre, a slow drift and a vibrato.
 

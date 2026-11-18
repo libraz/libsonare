@@ -14,6 +14,7 @@ cases that the packing put each note's curve on the right note.
 
 from __future__ import annotations
 
+import dataclasses
 from collections.abc import Sequence
 from typing import TypeAlias
 
@@ -467,9 +468,8 @@ def test_a_default_edit_is_still_the_identity_once_it_carries_the_new_fields() -
     # Non-vacuity, one new field at a time: each moves the output off the source,
     # so the equality above is the identity rather than an edit nobody read.
     def moves_the_output(field: str, value: object) -> None:
-        for note in notes:
-            note.edit = libsonare.NoteEdit()
-            setattr(note.edit, field, value)
+        for i, note in enumerate(notes):
+            notes[i] = dataclasses.replace(note, edit=libsonare.NoteEdit(**{field: value}))
         edited = libsonare.render_notes(audio, SR, notes, f0_hz=f0_hz, frame_rate=FRAME_RATE)
         _assert_edited(edited, audio)
 
@@ -561,9 +561,8 @@ def test_render_notes_requires_frame_rate_alongside_f0_hz() -> None:
 def test_a_curve_edit_is_rejected_without_a_track_and_applied_with_one() -> None:
     audio, f0_hz, _, notes = _vibrato_notes()
     for field, value in (("vibrato_depth_change", -1.0), ("drift_change", 1.0)):
-        for note in notes:
-            note.edit = libsonare.NoteEdit()
-            setattr(note.edit, field, value)
+        for i, note in enumerate(notes):
+            notes[i] = dataclasses.replace(note, edit=libsonare.NoteEdit(**{field: value}))
 
         # The curve the edit acts on is the caller's own track, and there is none.
         with pytest.raises(SonareError):

@@ -686,7 +686,7 @@ def _neutral_default(name: str) -> Callable[[], Any]:
     return lambda: _neutral_monitor_defaults()[name]
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(frozen=True)
 class RealtimeVoiceChangerConfig:
     """Flat mirror of :class:`SonareRealtimeVoiceChangerConfig`.
 

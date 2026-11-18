@@ -124,13 +124,16 @@ def test_set_config_pod_round_trips_through_get_config() -> None:
     changer = _build_changer()
     try:
         cfg = changer.config_pod()
-        cfg.input_gain_db = -3.5
-        cfg.output_gain_db = 1.25
-        cfg.wet_mix = 0.7
-        cfg.compressor_ratio = 4.0
-        cfg.limiter_release_ms = 80.0
-        cfg.limiter_enable_isp_limiter = 0
-        cfg.limiter_isp_ceiling_dbtp = -2.5
+        cfg = dataclasses.replace(
+            cfg,
+            input_gain_db=-3.5,
+            output_gain_db=1.25,
+            wet_mix=0.7,
+            compressor_ratio=4.0,
+            limiter_release_ms=80.0,
+            limiter_enable_isp_limiter=0,
+            limiter_isp_ceiling_dbtp=-2.5,
+        )
         changer.set_config_pod(cfg)
         round_tripped = changer.config_pod()
         assert round_tripped.input_gain_db == pytest.approx(-3.5, abs=1e-6)

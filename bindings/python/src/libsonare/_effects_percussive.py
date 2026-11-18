@@ -67,7 +67,7 @@ class PercussiveEventEdit:
             sustaining under the hit keeps sounding.
 
     Example:
-        >>> events[0].edit = libsonare.PercussiveEventEdit(gain_db=-6.0)
+        >>> events[0].edit.gain_db = -6.0
         >>> events[1].edit.time_offset_samples = -441  # 20 ms earlier at 22050 Hz
     """
 
@@ -77,7 +77,7 @@ class PercussiveEventEdit:
     time_offset_sec: float | None = None
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(frozen=True)
 class PercussiveEvent:
     """One editable percussive event returned by :func:`extract_percussive_events`.
 
