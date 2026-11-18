@@ -100,6 +100,7 @@ def test_pair_delay_is_in_source_rate_samples() -> None:
         SR,
         reference_sample_rate=REF_SR,
     ).delay_samples
+    assert isinstance(delay, int)
     assert abs(delay - 100 * SR / REF_SR) <= 1.0
 
 

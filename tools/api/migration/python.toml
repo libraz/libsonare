@@ -8196,7 +8196,7 @@ test = "bindings/python/tests/test_mastering_result_types.py::test_pair_analysis
 [[entry]]
 kind = "type"
 old = "MatchEstimateReferenceDelaySamplesResult"
-changed = "a frozen dataclass with snake_case attributes instead of a TypedDict"
+changed = "a frozen dataclass with snake_case attributes instead of a TypedDict; delay_samples is an int of whole samples"
 domain = "mastering"
 rule = "typed-results"
 test = "bindings/python/tests/test_mastering_result_types.py::test_pair_analysis_results"

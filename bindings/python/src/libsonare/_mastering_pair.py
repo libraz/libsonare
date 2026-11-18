@@ -546,7 +546,7 @@ def _pair_analysis_from_wire(
             frequencies=np.asarray(wire["frequencies"], dtype=np.float32),
             gain_db=np.asarray(wire["gainDb"], dtype=np.float32),
         )
-    return MatchEstimateReferenceDelaySamplesResult(delay_samples=float(wire["delaySamples"]))
+    return MatchEstimateReferenceDelaySamplesResult(delay_samples=int(wire["delaySamples"]))
 
 
 def _stereo_analysis_from_wire(

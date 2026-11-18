@@ -2223,8 +2223,8 @@ class MatchEqCurveResult:
 
 @dataclass(frozen=True)
 class MatchEstimateReferenceDelaySamplesResult:
-    delay_samples: float
-    def __init__(self, delay_samples: float) -> None: ...
+    delay_samples: int
+    def __init__(self, delay_samples: int) -> None: ...
 
 @dataclass(frozen=True)
 class StereoMonoCompatCheckResult:

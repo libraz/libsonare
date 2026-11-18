@@ -199,8 +199,8 @@ class MatchEqCurveResult:
 class MatchEstimateReferenceDelaySamplesResult:
     """Result of the ``match.estimateReferenceDelaySamples`` pair analysis."""
 
-    delay_samples: float
-    """Delay of the reference relative to the source, in source-rate samples."""
+    delay_samples: int
+    """Delay of the reference relative to the source, in whole source-rate samples."""
 
 
 @dataclass(frozen=True, slots=True)
