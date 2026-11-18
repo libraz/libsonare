@@ -144,6 +144,44 @@ def _worker_teardown_records(records: list[dict]) -> list[dict]:
     return out
 
 
+_TEARDOWN_SPELLINGS = ("destroy", "close", "dispose", "release", "free")
+_FUNCTION_TYPE = re.compile(r"^\(.*\)\s*=>")
+
+
+def _interface_teardown_records(records: list[dict]) -> list[dict]:
+    """One record per JS interface or object type that carries destroy() or another teardown member."""
+    callable_members: dict[tuple[str, str], set[str]] = {}
+    for r in records:
+        if not _js(r) or r.get("static"):
+            continue
+        if r["kind"] == "method" or (
+            r["kind"] == "field" and _FUNCTION_TYPE.match(r.get("type", "")) is not None
+        ):
+            callable_members.setdefault((r["surface"], r["owner"]), set()).add(r["member"])
+    out: list[dict] = []
+    for r in records:
+        if not (_js(r) and r["kind"] == "type" and r.get("ts_kind") in ("interface", "type")):
+            continue
+        names = callable_members.get((r["surface"], r["name"]), set())
+        spelled = sorted(names.intersection(_TEARDOWN_SPELLINGS))
+        if spelled:
+            out.append(
+                {
+                    "surface": r["surface"],
+                    "kind": "teardown-interface",
+                    "name": r["name"],
+                    "spelled": spelled,
+                }
+            )
+    return out
+
+
+def _interface_teardown_violation(record: dict) -> str | None:
+    if "destroy" in record["spelled"]:
+        return None
+    return f"an interface with {'/'.join(record['spelled'])}() releases through destroy()"
+
+
 def _worker_teardown_violation(record: dict) -> str | None:
     if record["kind"] != "worker-class":
         if record["member"] != "terminateWorkerOnDestroy":
@@ -1138,6 +1176,13 @@ RULES: list[Rule] = [
         population=lambda r: r["kind"] == "worker-class" or r["kind"] in ("field", "option"),
         violation=_worker_teardown_violation,
         derive=_worker_teardown_records,
+    ),
+    Rule(
+        name="interface-teardown",
+        summary="a JS interface that can be released carries destroy(), not only close/dispose/release/free",
+        population=lambda r: r["kind"] == "teardown-interface",
+        violation=_interface_teardown_violation,
+        derive=_interface_teardown_records,
     ),
     Rule(
         name="loudness-names",

@@ -87,6 +87,56 @@ def run(name: str, records: list[dict]):
     return check.judge(r, r.derive(records) if r.derive else records)
 
 
+def interface(surface: str, name: str) -> dict:
+    return {
+        "surface": surface,
+        "kind": "type",
+        "ts_kind": "interface",
+        "name": name,
+        "owner": "",
+        "member": "",
+    }
+
+
+class InterfaceTeardownRule(unittest.TestCase):
+    CLEAN: ClassVar[list[dict]] = [
+        interface("wasm", "MicrophoneInputBinding"),
+        method("wasm", "MicrophoneInputBinding", "destroy"),
+        method("wasm", "MicrophoneInputBinding", "close"),
+        interface("wasm", "WebMidiBinding"),
+        method("wasm", "WebMidiBinding", "destroy"),
+        interface("wasm", "OfflineWorker"),
+        method("wasm", "OfflineWorker", "terminate"),
+        interface("wasm", "VocalRenderJob"),
+        method("wasm", "VocalRenderJob", "abort"),
+        interface("wasm", "VocalEditDraft"),
+        method("wasm", "VocalEditDraft", "cancel"),
+        interface("wasm", "RenderRequest"),
+        field("wasm", "RenderRequest", "cancel", "boolean"),
+        field("wasm", "RenderRequest", "free", "number"),
+        interface("wasm", "Midi2PerNoteManagementRequest"),
+        field("wasm", "Midi2PerNoteManagementRequest", "detach", "boolean"),
+    ]
+
+    def test_clean_surface_passes(self) -> None:
+        verdict = run("interface-teardown", self.CLEAN)
+        self.assertEqual(verdict.read, 2)
+        self.assertFalse(verdict.failed)
+
+    def test_interface_released_without_destroy_is_named(self) -> None:
+        planted = [
+            interface("wasm", "OpfsClipPageProviderBinding"),
+            method("wasm", "OpfsClipPageProviderBinding", "close"),
+            interface("node", "ClipPageProviderBinding"),
+            field("node", "ClipPageProviderBinding", "release", "() => void"),
+        ]
+        verdict = run("interface-teardown", [*self.CLEAN, *planted])
+        self.assertEqual(
+            sorted(f.key for f in verdict.violations),
+            ["node:ClipPageProviderBinding", "wasm:OpfsClipPageProviderBinding"],
+        )
+
+
 class GettersRule(unittest.TestCase):
     CLEAN: ClassVar[list[dict]] = [
         member("node", "Project", "trackCount", ts_kind="accessor"),
