@@ -1024,16 +1024,25 @@ describe('v1.2 feature additions (WASM)', () => {
       ).not.toThrow();
       expect(() => engine.clearMidiFx(0)).not.toThrow();
       expect(() => engine.setMidiFx(0, '{}' as never)).toThrow(TypeError);
-      expect(() => engine.setMidiFx(0, { quantizePpq: 0 })).toThrow();
-      expect(() => engine.setMidiFx(0, { quantizePpq: 1e300 })).toThrow();
-      expect(() => engine.setMidiFx(0, { transposeSemitones: 1e100 })).toThrow();
-      expect(() => engine.setMidiFx(0, { chordIntervals: [0, 7.5] })).toThrow();
-      expect(() =>
-        engine.setMidiFx(0, { arpeggiatorIntervals: [], arpeggiatorStepPpq: 0.25 }),
-      ).toThrow();
-      expect(() =>
-        engine.setMidiFx(0, { arpeggiatorIntervals: [0], arpeggiatorStepPpq: 0 }),
-      ).toThrow();
+      const refusals: [Record<string, unknown>, string][] = [
+        [{ quantizePpq: 0 }, 'quantizePpq must be a positive PPQ length in range'],
+        [{ quantizePpq: 1e300 }, 'quantizePpq must be a positive PPQ length in range'],
+        [{ transposeSemitones: 1e100 }, 'transposeSemitones must be a whole number in range'],
+        [{ chordIntervals: [0, 7.5] }, 'chordIntervals[1] must be a whole number'],
+        [
+          { arpeggiatorIntervals: [], arpeggiatorStepPpq: 0.25 },
+          'arpeggiatorIntervals must hold 1 to 16 intervals',
+        ],
+        [
+          { arpeggiatorIntervals: [0], arpeggiatorStepPpq: 0 },
+          'arpeggiatorStepPpq must be a positive PPQ length in range',
+        ],
+      ];
+      for (const [config, message] of refusals) {
+        expect(() => engine.setMidiFx(0, config as never)).toThrow(
+          expect.objectContaining({ code: ErrorCode.InvalidFormat, message }),
+        );
+      }
       engine.setMidiInputSource(0);
       expect(engine.midiInputPendingCount).toBe(0);
       engine.pushMidiInputNoteOn(0, 0, 60, 100, 3);
