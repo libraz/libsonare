@@ -211,6 +211,8 @@ node = [
   "project_tempo_options_default",
   "mixer_strip_at",
   "mixer_add_strip_ex",
+  # Folded into masterAudio / master_audio as its progress and cancel callbacks; the plain
+  # entry point is the same call with neither, so a second name would split one operation.
   "mastering_chain_with_progress",
   "mastering_chain_stereo_with_progress",
   # Unified-analysis variants folded into the base facade `analyze` (the rich
@@ -327,6 +329,10 @@ wasm = [
   "project_tempo_options_default",
   "mixer_strip_at",
   "mixer_add_strip_ex",
+  # Folded into masterAudio / master_audio as its progress and cancel callbacks; the plain
+  # entry point is the same call with neither, so a second name would split one operation.
+  "mastering_chain_with_progress",
+  "mastering_chain_stereo_with_progress",
   # C-ABI-internal length-checked inverse variants (see node note above).
   "mel_to_stft_checked",
   "mel_to_audio_checked",
@@ -424,6 +430,8 @@ python = [
   "project_tempo_options_default",
   "mixer_strip_at",
   "mixer_add_strip_ex",
+  # Folded into masterAudio / master_audio as its progress and cancel callbacks; the plain
+  # entry point is the same call with neither, so a second name would split one operation.
   "mastering_chain_with_progress",
   "mastering_chain_stereo_with_progress",
   # C-ABI-internal length-checked inverse variants (see node note above).
