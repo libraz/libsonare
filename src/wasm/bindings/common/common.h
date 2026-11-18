@@ -638,8 +638,12 @@ T requireProperty(const val& object, const char* key, const char* subject) {
 ///        as an unsupported type.
 std::vector<mastering::api::Param> masteringParamsFromObject(
     val object, const std::vector<std::string>& skip_keys = {});
-mastering::api::MasteringChainConfig masteringChainConfigFromVal(val config,
-                                                                 bool streaming = false);
+/// @brief Reads a chain configuration document (`{"version"?, "params"}` text) as an offline
+///        chain config, or as a streaming one when @p streaming is set.
+/// @details Absent, `undefined` or `null` selects the defaults of that chain kind.
+/// @throws WasmTypeError for a non-string; the core's InvalidFormat for a refused document.
+mastering::api::MasteringChainConfig masteringChainConfigFromDocument(const val& document,
+                                                                      bool streaming = false);
 
 void registerProjectBindings();
 void registerStreamAnalyzerBindings();

@@ -7,28 +7,32 @@
 
 // ---------------------------------------------------------------------------
 // StreamingMasteringChain wrapper (block-by-block streaming).
-// Construct via createStreamingMasteringChain(config) factory. Throws if the
+// Construct via createStreamingMasteringChain(configJson, options) factory. Throws if the
 // configuration enables non-streaming stages (repair.denoise, loudness).
 // ---------------------------------------------------------------------------
 
 namespace {
 
-/// @brief Build StreamingMasteringChainOptions from an optional config val.
+/// @brief Build StreamingMasteringChainOptions from an optional options val.
 ///
 /// Reads the optional numeric fields `loudnessStaticGainDb` and
-/// `loudnessStaticGainPeakDb`. Both defaults are the NaN that
-/// StreamingMasteringChainOptions spells "not provided" with, so floatOption is
-/// the reader: a non-finite value means the same thing, and an enabled loudness
-/// stage still refuses a gain it was never given.
-mastering::api::StreamingMasteringChainOptions streamingOptionsFromVal(val config) {
+/// `loudnessStaticGainPeakDb`; absent, `undefined` or `null` leaves both unset. Both defaults are
+/// the NaN that StreamingMasteringChainOptions spells "not provided" with, so floatOption is the
+/// reader: a non-finite value means the same thing, and an enabled loudness stage still refuses a
+/// gain it was never given.
+mastering::api::StreamingMasteringChainOptions streamingOptionsFromVal(val options_val) {
   mastering::api::StreamingMasteringChainOptions options;
-  if (hasProperty(config, "loudnessStaticGainDb")) {
-    options.loudness_static_gain_db =
-        floatOption(config, "loudnessStaticGainDb", options.loudness_static_gain_db);
+  if (options_val.isUndefined() || options_val.isNull()) return options;
+  if (options_val.typeOf().as<std::string>() != "object") {
+    throw WasmTypeError("streaming chain options must be an object");
   }
-  if (hasProperty(config, "loudnessStaticGainPeakDb")) {
+  if (hasProperty(options_val, "loudnessStaticGainDb")) {
+    options.loudness_static_gain_db =
+        floatOption(options_val, "loudnessStaticGainDb", options.loudness_static_gain_db);
+  }
+  if (hasProperty(options_val, "loudnessStaticGainPeakDb")) {
     options.loudness_static_gain_peak_db =
-        floatOption(config, "loudnessStaticGainPeakDb", options.loudness_static_gain_peak_db);
+        floatOption(options_val, "loudnessStaticGainPeakDb", options.loudness_static_gain_peak_db);
   }
   return options;
 }
@@ -37,8 +41,9 @@ mastering::api::StreamingMasteringChainOptions streamingOptionsFromVal(val confi
 
 class StreamingMasteringChainWrapper {
  public:
-  explicit StreamingMasteringChainWrapper(val config)
-      : chain_(masteringChainConfigFromVal(config, true), streamingOptionsFromVal(config)) {}
+  StreamingMasteringChainWrapper(val config_json, val options)
+      : chain_(masteringChainConfigFromDocument(config_json, true),
+               streamingOptionsFromVal(options)) {}
 
   // The two block dimensions arrive as val rather than as int: embind's integer
   // glue wraps, so 2^32 + n reaches a narrow parameter as n and asks for a block
@@ -157,8 +162,8 @@ class StreamingMasteringChainWrapper {
   int max_block_size_ = 0;
 };
 
-StreamingMasteringChainWrapper* createStreamingMasteringChain(val config) {
-  return new StreamingMasteringChainWrapper(config);
+StreamingMasteringChainWrapper* createStreamingMasteringChain(val config_json, val options) {
+  return new StreamingMasteringChainWrapper(config_json, options);
 }
 
 void registerStreamingMasteringChainBindings() {

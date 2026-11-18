@@ -176,6 +176,11 @@ std::string insert_slot_info_json(const std::string& name);
 std::optional<double> mastering_enum_value(const std::string& processor, const std::string& key,
                                            const std::string& choice);
 
+/// @brief The valid names of enum parameter @p key, comma-separated in wire-value order; empty
+///        when @p key is not an enum parameter. @p processor and @p key as mastering_enum_value.
+std::optional<std::string> mastering_enum_names(const std::string& processor,
+                                                const std::string& key);
+
 /// @brief The capability catalog's `chain` section: how each flat mastering chain key is described.
 /// @return A JSON object string with three arrays:
 ///   - `stages`: each chain stage in execution order, `{prefix, processor, enabledKey}`; the keys

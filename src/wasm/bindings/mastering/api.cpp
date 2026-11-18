@@ -226,50 +226,47 @@ val js_mastering_platform_names() {
   return out;
 }
 
-val js_master_audio(std::string preset_name, val samples, const val& sample_rate_val,
-                    val overrides) {
-  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  std::vector<float> data = float32ArrayToVector(samples);
+// A preset's chain config (absent: the chain defaults) with the overrides document applied.
+mastering::api::MasteringChainConfig presetConfigWithOverrides(const val& preset,
+                                                               const val& overrides) {
+  const bool no_preset = preset.isUndefined() || preset.isNull();
+  const bool no_overrides = overrides.isUndefined() || overrides.isNull();
+  if (no_preset) {
+    if (no_overrides) return mastering::api::MasteringChainConfig{};
+    return mastering::api::chain_config_from_json(stringFromVal(overrides, "overridesJson"));
+  }
+  const std::string preset_name = stringFromVal(preset, "preset");
   wasmRefuseEmbeddedNul(preset_name, "preset");
-  auto preset = mastering::api::preset_from_string(preset_name);
-  auto overrides_vec = masteringParamsFromObject(overrides);
-  auto result = mastering::api::master_audio_mono(
-      preset, data.data(), data.size(), sample_rate,
-      overrides_vec.empty() ? nullptr : overrides_vec.data(), overrides_vec.size());
-
-  return masteringMonoResultToVal(result);
+  auto config = mastering::api::preset_config(mastering::api::preset_from_string(preset_name));
+  if (no_overrides) return config;
+  return mastering::api::chain_config_overrides_from_json(
+      std::move(config), stringFromVal(overrides, "overridesJson"));
 }
 
-val js_master_audio_stereo(std::string preset_name, val left_samples, val right_samples,
+val js_master_audio(val preset, val samples, const val& sample_rate_val, val overrides) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  std::vector<float> data = float32ArrayToVector(samples);
+  mastering::api::MasteringChain chain(presetConfigWithOverrides(preset, overrides));
+  return masteringMonoResultToVal(chain.process_mono(data.data(), data.size(), sample_rate));
+}
+
+val js_master_audio_stereo(val preset, val left_samples, val right_samples,
                            const val& sample_rate_val, val overrides) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   validateWasmFloat32ArrayPair(left_samples, "left samples", right_samples, "right samples",
                                "masterAudioStereo input", true);
   std::vector<float> left = float32ArrayToVector(left_samples);
   std::vector<float> right = float32ArrayToVector(right_samples);
-  wasmRefuseEmbeddedNul(preset_name, "preset");
-  auto preset = mastering::api::preset_from_string(preset_name);
-  auto overrides_vec = masteringParamsFromObject(overrides);
-  auto result = mastering::api::master_audio_stereo(
-      preset, left.data(), right.data(), left.size(), sample_rate,
-      overrides_vec.empty() ? nullptr : overrides_vec.data(), overrides_vec.size());
-
-  return masteringStereoResultToVal(result);
+  mastering::api::MasteringChain chain(presetConfigWithOverrides(preset, overrides));
+  return masteringStereoResultToVal(
+      chain.process_stereo(left.data(), right.data(), left.size(), sample_rate));
 }
 
-val js_master_audio_with_progress(std::string preset_name, val samples, const val& sample_rate_val,
+val js_master_audio_with_progress(val preset, val samples, const val& sample_rate_val,
                                   val overrides, val progress_callback, val cancel_callback) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   std::vector<float> data = float32ArrayToVector(samples);
-  wasmRefuseEmbeddedNul(preset_name, "preset");
-  auto preset = mastering::api::preset_from_string(preset_name);
-  auto config = mastering::api::preset_config(preset);
-  auto overrides_vec = masteringParamsFromObject(overrides);
-  if (!overrides_vec.empty()) {
-    mastering::api::apply_chain_config_overrides(config, overrides_vec.data(),
-                                                 overrides_vec.size());
-  }
-  mastering::api::MasteringChain chain(std::move(config));
+  mastering::api::MasteringChain chain(presetConfigWithOverrides(preset, overrides));
   installMasteringChainCallbacks(chain, progress_callback, cancel_callback);
   const auto result = chain.process_mono_cancellable(data.data(), data.size(), sample_rate);
   if (!result) {
@@ -279,24 +276,15 @@ val js_master_audio_with_progress(std::string preset_name, val samples, const va
   return masteringMonoResultToVal(*result);
 }
 
-val js_master_audio_stereo_with_progress(std::string preset_name, val left_samples,
-                                         val right_samples, const val& sample_rate_val,
-                                         val overrides, val progress_callback,
-                                         val cancel_callback) {
+val js_master_audio_stereo_with_progress(val preset, val left_samples, val right_samples,
+                                         const val& sample_rate_val, val overrides,
+                                         val progress_callback, val cancel_callback) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   validateWasmFloat32ArrayPair(left_samples, "left samples", right_samples, "right samples",
                                "masterAudioStereoWithProgress input", true);
   std::vector<float> left = float32ArrayToVector(left_samples);
   std::vector<float> right = float32ArrayToVector(right_samples);
-  wasmRefuseEmbeddedNul(preset_name, "preset");
-  auto preset = mastering::api::preset_from_string(preset_name);
-  auto config = mastering::api::preset_config(preset);
-  auto overrides_vec = masteringParamsFromObject(overrides);
-  if (!overrides_vec.empty()) {
-    mastering::api::apply_chain_config_overrides(config, overrides_vec.data(),
-                                                 overrides_vec.size());
-  }
-  mastering::api::MasteringChain chain(std::move(config));
+  mastering::api::MasteringChain chain(presetConfigWithOverrides(preset, overrides));
   installMasteringChainCallbacks(chain, progress_callback, cancel_callback);
   const auto result =
       chain.process_stereo_cancellable(left.data(), right.data(), left.size(), sample_rate);
@@ -609,56 +597,37 @@ std::string js_mastering_assistant_suggest(val samples, const val& sample_rate_v
   return mastering::assistant::assistant_result_to_json(result);
 }
 
-// Flattens a suggested chain config to the {key: number|boolean} map the JS
-// facade hands straight to `overrides`; the core flattener owns the walk and
-// refuses a leaf with no flat spelling or an empty params block.
-val chainConfigParamsToVal(const mastering::api::MasteringChainConfig& config) {
-  val out = val::object();
-  for (const auto& param :
-       mastering::api::chain_config_flat_params(mastering::api::chain_config_to_json(config))) {
-    if (param.is_bool) {
-      out.set(param.key, param.value != 0.0);
-    } else {
-      out.set(param.key, param.value);
-    }
-  }
-  return out;
-}
-
-// Flat {key: number|boolean} params for preset `preset_name`'s built-in chain
-// configuration, in the same shape masteringAssistantSuggestChain returns for
-// an analyzed chain -- passing this straight through as `overrides` to
-// masterAudio/mastering reproduces the preset unchanged. Calls the core
-// directly (mastering::api::preset_config, reusing chainConfigParamsToVal's
-// mastering::api::chain_config_to_json) rather than the C ABI's mirror
-// sonare_mastering_preset_params_json, matching every other wrapper in this
-// file.
+// The chain document text of preset `preset_name`'s built-in configuration, the same shape
+// masteringAssistantSuggestChain returns for an analyzed chain -- passing it as the
+// overrides document to masterAudio reproduces the preset unchanged. Calls the core directly
+// rather than the C ABI's mirror sonare_mastering_preset_params_json.
 //
 // Restoration presets' repair stages, like every classical denoise
 // configuration, can mistake a steady tone -- a calibration tone, a drone, a
 // long held note -- for noise and pull it down by the configured reduction
 // depth. Check for musical sustained tones before applying one.
-val js_mastering_preset_params(std::string preset_name) {
+std::string js_mastering_preset_params(std::string preset_name) {
   wasmRefuseEmbeddedNul(preset_name, "preset");
   const auto preset = mastering::api::preset_from_string(preset_name);
-  return chainConfigParamsToVal(mastering::api::preset_config(preset));
+  return mastering::api::chain_config_to_json(mastering::api::preset_config(preset));
 }
 
-// Flat params of a caller's chain configuration document, validated by the parser the
+// A caller's chain configuration document in canonical form, validated by the parser the
 // native CLI applies to --chain-config; a refused document is a coded InvalidFormat.
-val js_mastering_chain_config_params(std::string document) {
+std::string js_mastering_chain_config_params(std::string document) {
   wasmRefuseEmbeddedNul(document, "document");
-  return chainConfigParamsToVal(mastering::api::chain_config_from_json(document));
+  return mastering::api::chain_config_to_json(mastering::api::chain_config_from_json(document));
 }
 
-val js_mastering_assistant_suggest_chain(val samples, const val& sample_rate_val, val params_obj) {
+std::string js_mastering_assistant_suggest_chain(val samples, const val& sample_rate_val,
+                                                 val params_obj) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   std::vector<float> data = float32ArrayToVector(samples);
   validate_offline_audio_input(data.data(), data.size(), sample_rate);
   const mastering::assistant::AssistantConfig config = assistantConfigFromParams(params_obj);
   const auto result =
       mastering::assistant::suggest_chain(data.data(), data.size(), sample_rate, config);
-  return chainConfigParamsToVal(result.config);
+  return mastering::api::chain_config_to_json(result.config);
 }
 
 std::string js_mastering_audio_profile(val samples, const val& sample_rate_val, val params_obj) {
@@ -684,15 +653,16 @@ std::string js_mastering_assistant_suggest_stereo(val left_samples, val right_sa
   return mastering::assistant::assistant_result_to_json(result);
 }
 
-val js_mastering_assistant_suggest_chain_stereo(val left_samples, val right_samples,
-                                                const val& sample_rate_val, val params_obj) {
+std::string js_mastering_assistant_suggest_chain_stereo(val left_samples, val right_samples,
+                                                        const val& sample_rate_val,
+                                                        val params_obj) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const std::vector<float> interleaved = interleaveValidatedPair(
       left_samples, right_samples, sample_rate, "masteringAssistantSuggestChainStereo input");
   const mastering::assistant::AssistantConfig config = assistantConfigFromParams(params_obj);
   const auto result = mastering::assistant::suggest_chain_interleaved(
       interleaved.data(), interleaved.size() / 2, 2, sample_rate, config);
-  return chainConfigParamsToVal(result.config);
+  return mastering::api::chain_config_to_json(result.config);
 }
 
 std::string js_mastering_audio_profile_stereo(val left_samples, val right_samples,

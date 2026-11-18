@@ -188,8 +188,8 @@ std::string retired_chain_key_successor(const std::string& key) {
       {"dynamics.compressor.sidechainHpfHz", "dynamics.compressor.sidechainHighPassHz"},
       {"eq.tiltDb", "eq.tilt.tiltDb"},
       {"eq.pivotHz", "eq.tilt.pivotHz"},
-      {"dynamics.multibandComp.lowCutoffHz", "dynamics.multibandComp.cutoff0Hz"},
-      {"dynamics.multibandComp.highCutoffHz", "dynamics.multibandComp.cutoff1Hz"},
+      {"dynamics.multibandComp.lowCutoffHz", "dynamics.multibandComp.crossover.cutoffsHz.0"},
+      {"dynamics.multibandComp.highCutoffHz", "dynamics.multibandComp.crossover.cutoffsHz.1"},
   };
   for (const auto& [retired, current] : kRenamed) {
     if (key == retired) return std::string(current);

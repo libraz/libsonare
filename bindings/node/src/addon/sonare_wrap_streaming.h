@@ -24,7 +24,7 @@ namespace sonare_node {
 /// repair.denoise runs, but only with a noise estimator recursive in time; its
 /// default ranks every frame of the whole signal and is refused by name.
 /// JS surface:
-///   const chain = new sonare.StreamingMasteringChain(config);
+///   const chain = new sonare.StreamingMasteringChain(configJson?, options?);
 ///   chain.prepare(sampleRate, maxBlockSize, numChannels);
 ///   const out = chain.processMono(samples);              // mono
 ///   const { left, right } = chain.processStereo(l, r);   // stereo

@@ -133,7 +133,7 @@ TEST_CASE("CLI mastering command", "[cli][mastering]") {
     std::string config_path = unique_temp_path("_chain.json");
     {
       std::ofstream config(config_path);
-      config << "{\"version\":1,\"params\":{\"eq.tilt.enabled\":true,"
+      config << "{\"version\":2,\"params\":{\"eq.tilt.enabled\":true,"
                 "\"eq.tilt.tiltDb\":0.25,\"loudness.enabled\":true,"
                 "\"loudness.targetLufs\":-18}}";
     }
@@ -583,7 +583,7 @@ TEST_CASE("CLI mastering takes an enum-valued key by its name", "[cli][mastering
   const std::string config_path = unique_temp_path("_enum_chain.json");
   {
     std::ofstream config(config_path);
-    config << R"({"version":1,"params":{"repair.denoise.enabled":true,)"
+    config << R"({"version":2,"params":{"repair.denoise.enabled":true,)"
            << R"("repair.denoise.noiseEstimator":"mcra"}})";
   }
   const std::string config_out = unique_temp_path("_enum_chain.wav");
@@ -658,7 +658,7 @@ TEST_CASE("CLI mastering reads a chain config and --params as one list", "[cli][
   create_test_wav(TEST_WAV, 1.0f);
   const auto write_config = [](const std::string& params) {
     const std::string path = unique_temp_path("_one_list_chain.json");
-    std::ofstream(path) << R"({"version":1,"params":{)" << params << "}}";
+    std::ofstream(path) << R"({"version":2,"params":{)" << params << "}}";
     return path;
   };
   const auto render = [&](const std::string& config, const std::string& extra) {

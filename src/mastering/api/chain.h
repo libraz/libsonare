@@ -635,11 +635,9 @@ MasteringChainConfig parse_streaming_chain_config_params(const Param* params, st
 void apply_chain_config_overrides(MasteringChainConfig& config, const Param* params,
                                   std::size_t count);
 
-/// @brief Serialize a chain configuration as canonical JSON.
-/// Schema v1 is {"version":1,"params":{"dot.notation.key":number_or_bool,...}}.
-/// Configurations whose multiband compressor needs fields unavailable to v1 use
-/// v2, where params.dynamics.multibandComp is a structured object containing
-/// enabled, crossover, and full per-band CompressorConfig values.
+/// @brief Serialize a chain configuration as its canonical document.
+/// The document is {"version":2,"params":{...}}: flat dotted keys, the multiband stage as the
+/// structured object params["dynamics.multibandComp"], and every enum value by name.
 std::string chain_config_to_json(const MasteringChainConfig& config);
 
 /// @brief Read one numeric field from the canonical flat chain configuration.
@@ -653,10 +651,22 @@ std::string chain_config_to_json(const MasteringChainConfig& config);
 std::optional<double> chain_config_parameter_value(const MasteringChainConfig& config,
                                                    const std::string& key);
 
-/// @brief Parse a chain configuration serialized by chain_config_to_json.
-/// Throws SonareException(InvalidFormat) for malformed JSON, an unsupported
-/// version, an unknown or earlier key spelling, or a value outside its domain.
+/// @brief Parse a chain configuration document.
+/// `version` may be left out and otherwise must be 2. Under `params`, a dotted key and the nested
+/// objects and lists spelling the same path are interchangeable.
+/// Throws SonareException(InvalidFormat) for malformed JSON, an unsupported version, an unknown or
+/// earlier key spelling, a path given twice, a null leaf, an enum given as a number or by an
+/// unknown name, a positive declip threshold, or a value outside its domain.
 MasteringChainConfig chain_config_from_json(const std::string& json);
+
+/// @brief As chain_config_from_json, over the streaming chain's defaults
+///        (parse_streaming_chain_config_params).
+MasteringChainConfig streaming_chain_config_from_json(const std::string& json);
+
+/// @brief @p base with a chain document's params applied as overrides
+///        (apply_chain_config_overrides); refusals as chain_config_from_json.
+MasteringChainConfig chain_config_overrides_from_json(MasteringChainConfig base,
+                                                      const std::string& json);
 
 /// @brief One leaf of a chain config document's `params` block, in flat spelling.
 struct ChainFlatParam {
@@ -665,17 +675,13 @@ struct ChainFlatParam {
   bool is_bool = false;  ///< True when the document wrote a boolean.
 };
 
-/// @brief Flatten the `params` block of a chain config document as written.
-/// @details Nested object members become `.<member>` and array elements `.<index>`, the array
-///          spelling parse_chain_config_params accepts, so a v2 structured multiband stage
-///          becomes `dynamics.multibandComp.crossover.cutoffsHz.<i>` and
-///          `dynamics.multibandComp.bands.<i>.<field>`. Numbers and booleans are the leaves, and
-///          a string is the name of an enum value, resolved as chain_config_from_json resolves it.
-///          The document is not otherwise validated; chain_config_from_json is the validating
-///          reader.
-/// @throws SonareException (InvalidFormat) for malformed JSON, an absent, non-object or empty
-///         `params` block, an empty list, an unknown enum name, or a leaf that is neither a number,
-///         a boolean nor an enum name.
+/// @brief The leaves of a chain config document's `params` block, in flat spelling.
+/// @details Nested object members become `.<member>` and array elements `.<index>`, so the
+///          structured multiband stage becomes `dynamics.multibandComp.crossover.cutoffsHz.<i>`
+///          and `dynamics.multibandComp.bands.<i>.<field>`; an enum name becomes its value. The
+///          document is refused as chain_config_from_json refuses it, except that unknown keys and
+///          out-of-domain values are left to whoever applies the leaves.
+/// @throws SonareException (InvalidFormat).
 std::vector<ChainFlatParam> chain_config_flat_params(const std::string& chain_config_json);
 
 /// @brief Convenience: parse params, build chain, run mono once.

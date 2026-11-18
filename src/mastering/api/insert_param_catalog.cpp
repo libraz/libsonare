@@ -1040,24 +1040,49 @@ bool chain_key_processor(const std::string& chain_key, std::string* processor, s
   return false;
 }
 
+// The declared choices of enum parameter @p key, with its processor-local leaf; null when @p key
+// is not an enum parameter.
+const std::vector<detail::EnumChoice>* enum_choices_of(const std::string& processor,
+                                                       const std::string& key, std::string* leaf) {
+  std::string id = processor;
+  *leaf = key;
+  if (processor.empty() && !chain_key_processor(key, &id, leaf)) return nullptr;
+  const auto& declared_choices = empty_build(id).probed_choices();
+  const auto declared = declared_choices.find(*leaf);
+  return declared == declared_choices.end() ? nullptr : &declared->second;
+}
+
+std::string joined_names(const std::vector<detail::EnumChoice>& choices) {
+  std::string valid;
+  for (const detail::EnumChoice& entry : choices) {
+    if (!valid.empty()) valid += ", ";
+    valid += entry.name;
+  }
+  return valid;
+}
+
 }  // namespace
 
 std::optional<double> mastering_enum_value(const std::string& processor, const std::string& key,
                                            const std::string& choice) {
-  std::string id = processor;
-  std::string leaf = key;
-  if (processor.empty() && !chain_key_processor(key, &id, &leaf)) return std::nullopt;
-  const auto declared = empty_build(id).probed_choices().find(leaf);
-  if (declared == empty_build(id).probed_choices().end()) return std::nullopt;
-  std::string valid;
-  for (const detail::EnumChoice& entry : declared->second) {
+  std::string leaf;
+  const std::vector<detail::EnumChoice>* choices = enum_choices_of(processor, key, &leaf);
+  if (choices == nullptr) return std::nullopt;
+  for (const detail::EnumChoice& entry : *choices) {
     if (entry.name == choice) return static_cast<double>(entry.value);
-    if (!valid.empty()) valid += ", ";
-    valid += entry.name;
   }
-  throw SonareException(ErrorCode::InvalidParameter, key + ": unknown name '" + choice + "'" +
-                                                         retired_choice_note(leaf, choice) +
-                                                         " (valid names: " + valid + ")");
+  throw SonareException(ErrorCode::InvalidParameter,
+                        key + ": unknown name '" + choice + "'" +
+                            retired_choice_note(leaf, choice) +
+                            " (valid names: " + joined_names(*choices) + ")");
+}
+
+std::optional<std::string> mastering_enum_names(const std::string& processor,
+                                                const std::string& key) {
+  std::string leaf;
+  const std::vector<detail::EnumChoice>* choices = enum_choices_of(processor, key, &leaf);
+  if (choices == nullptr) return std::nullopt;
+  return joined_names(*choices);
 }
 
 namespace {

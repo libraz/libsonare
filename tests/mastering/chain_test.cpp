@@ -631,7 +631,7 @@ TEST_CASE("The linear denoise floor spelling is refused, naming the depth key",
     REQUIRE_THAT(message, ContainsSubstring(key));
     REQUIRE_THAT(message, ContainsSubstring("repair.denoise.reductionDb"));
   }
-  const std::string document = "{\"version\":1,\"params\":{\"repair.denoise.gainFloor\":0.1}}";
+  const std::string document = "{\"version\":2,\"params\":{\"repair.denoise.gainFloor\":0.1}}";
   const auto [code, message] = refusal_of([&] { (void)chain_config_from_json(document); });
   REQUIRE(code == ErrorCode::InvalidFormat);
   REQUIRE_THAT(message, ContainsSubstring("repair.denoise.reductionDb"));
@@ -666,7 +666,7 @@ TEST_CASE("The declip threshold is a dBFS key", "[mastering][chain]") {
   REQUIRE_THAT(message, ContainsSubstring("repair.declip.clipThresholdDb"));
   const auto [doc_code, doc_message] = refusal_of([] {
     (void)chain_config_from_json(
-        "{\"version\":1,\"params\":{\"repair.declip.clipThreshold\":0.9}}");
+        "{\"version\":2,\"params\":{\"repair.declip.clipThreshold\":0.9}}");
   });
   REQUIRE(doc_code == ErrorCode::InvalidFormat);
   REQUIRE_THAT(doc_message, ContainsSubstring("repair.declip.clipThresholdDb"));
@@ -707,7 +707,7 @@ TEST_CASE("The compressor sidechain high-pass is one optional key", "[mastering]
     REQUIRE_THAT(message, ContainsSubstring(old_key));
     REQUIRE_THAT(message, ContainsSubstring("dynamics.compressor.sidechainHighPassHz"));
     const auto [doc_code, doc_message] = refusal_of([&] {
-      (void)chain_config_from_json(std::string("{\"version\":1,\"params\":{\"") + old_key +
+      (void)chain_config_from_json(std::string("{\"version\":2,\"params\":{\"") + old_key +
                                    "\":1}}");
     });
     REQUIRE(doc_code == ErrorCode::InvalidFormat);
@@ -1303,11 +1303,10 @@ TEST_CASE("StreamingMasteringChain supported and rejected stages match the imple
           "[mastering][chain][streaming]") {
   const std::vector<std::string> stage_ids = [] {
     const MasteringChainConfig defaults;
-    const auto root = sonare::util::json::parse_strict(chain_config_to_json(defaults));
     const std::string suffix = ".enabled";
     std::vector<std::string> out;
-    for (const auto& [key, value] : root["params"].as_object()) {
-      (void)value;
+    for (const auto& entry : chain_config_flat_params(chain_config_to_json(defaults))) {
+      const std::string& key = entry.key;
       if (key.size() > suffix.size() &&
           key.compare(key.size() - suffix.size(), suffix.size(), suffix) == 0) {
         out.push_back(key.substr(0, key.size() - suffix.size()));
@@ -1442,25 +1441,27 @@ TEST_CASE("a streaming chain config defaults repair.denoise to a causal estimato
 
 TEST_CASE("a chain config document takes an enum-valued key by its name", "[mastering][chain]") {
   const auto by_name = chain_config_from_json(
-      R"({"version":1,"params":{"repair.denoise.enabled":true,)"
+      R"({"version":2,"params":{"repair.denoise.enabled":true,)"
       R"("repair.denoise.noiseEstimator":"imcra","repair.denoise.mode":"mmseStsa"}})");
-  const auto by_number =
-      chain_config_from_json(R"({"version":1,"params":{"repair.denoise.enabled":true,)"
-                             R"("repair.denoise.noiseEstimator":2,"repair.denoise.mode":1}})");
   CHECK(by_name.repair.denoise.config.noise_estimator ==
         sonare::mastering::repair::DenoiseNoiseEstimator::Imcra);
   CHECK(by_name.repair.denoise.config.mode == sonare::mastering::repair::DenoiseMode::MmseStsa);
-  CHECK(chain_config_to_json(by_name) == chain_config_to_json(by_number));
+
+  // A document spells a choice by its token; an ordinal is refused, naming the key.
+  const auto [ordinal_code, ordinal_message] = refusal_of(
+      [] { (void)chain_config_from_json(R"({"params":{"repair.denoise.noiseEstimator":2}})"); });
+  CHECK(ordinal_code == ErrorCode::InvalidFormat);
+  CHECK_THAT(ordinal_message, ContainsSubstring("repair.denoise.noiseEstimator"));
 
   // An unknown name names the key and the valid ones; a string for a number key is a wrong type.
   try {
     (void)chain_config_from_json(
-        R"({"version":1,"params":{"repair.denoise.noiseEstimator":"nope"}})");
+        R"({"version":2,"params":{"repair.denoise.noiseEstimator":"nope"}})");
     FAIL("an unknown enum name was accepted");
   } catch (const sonare::SonareException& error) {
     CHECK(std::string(error.what()).find("quantile, mcra, imcra, spp") != std::string::npos);
   }
-  CHECK_THROWS_AS(chain_config_from_json(R"({"version":1,"params":{"loudness.targetLufs":"x"}})"),
+  CHECK_THROWS_AS(chain_config_from_json(R"({"version":2,"params":{"loudness.targetLufs":"x"}})"),
                   sonare::SonareException);
 }
 
@@ -3264,8 +3265,8 @@ TEST_CASE("flat multiband scalar spellings and shorthand edit in place",
         {"slope", "crossover.slope"},
         {"mode", "crossover.mode"},
         {"firKernelSize", "crossover.firKernelSize"},
-        {"lowCutoffHz", "cutoff0Hz"},
-        {"highCutoffHz", "cutoff1Hz"}};
+        {"lowCutoffHz", "crossover.cutoffsHz.0"},
+        {"highCutoffHz", "crossover.cutoffsHz.1"}};
     for (const auto& [old_key, current] : retired) {
       CAPTURE(old_key);
       const std::string old_full = mb_key(old_key.c_str());

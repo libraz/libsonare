@@ -1108,7 +1108,7 @@ TEST_CASE("sonare_mastering_preset_params_json returns each preset's chain confi
   REQUIRE(sonare_mastering_preset_params_json("pop", &json) == SONARE_OK);
   REQUIRE(json != nullptr);
   const auto root = sonare::util::json::parse_strict(json);
-  REQUIRE(root["version"].as_int() == 1);
+  REQUIRE(root["version"].as_int() == 2);
   REQUIRE(root["params"].contains("loudness.enabled"));
   REQUIRE(root["params"]["loudness.enabled"].as_bool());
   REQUIRE(root["params"]["loudness.targetLufs"].as_number() == -14.0);
@@ -1144,7 +1144,7 @@ TEST_CASE("sonare_mastering_chain_config_params_json returns a document in canon
 
   json = nullptr;
   REQUIRE(sonare_mastering_chain_config_params_json(
-              R"({"version":1,"params":{"loudness.targetLufs":-9}})", &json) == SONARE_OK);
+              R"({"version":2,"params":{"loudness.targetLufs":-9}})", &json) == SONARE_OK);
   REQUIRE(sonare::util::json::parse_strict(json)["params"]["loudness.targetLufs"].as_number() ==
           -9.0);
   sonare_free_string(json);
@@ -1155,8 +1155,8 @@ TEST_CASE("sonare_mastering_chain_config_params_json refuses a document as Inval
   const char* refused[] = {
       "{",
       R"({"version":3,"params":{"loudness.targetLufs":-9}})",
-      R"({"version":1,"params":{"loudness.bogusKey":1}})",
-      R"({"version":1,"params":{"eq.tiltDb":1}})",
+      R"({"version":2,"params":{"loudness.bogusKey":1}})",
+      R"({"version":2,"params":{"eq.tiltDb":1}})",
   };
   for (const char* document : refused) {
     CAPTURE(document);
@@ -1166,7 +1166,7 @@ TEST_CASE("sonare_mastering_chain_config_params_json refuses a document as Inval
     REQUIRE(json == nullptr);
   }
   char* json = nullptr;
-  REQUIRE(sonare_mastering_chain_config_params_json(R"({"version":1,"params":{"eq.tiltDb":1}})",
+  REQUIRE(sonare_mastering_chain_config_params_json(R"({"version":2,"params":{"eq.tiltDb":1}})",
                                                     &json) == SONARE_ERROR_INVALID_FORMAT);
   REQUIRE_THAT(std::string(sonare_last_error_message()),
                Catch::Matchers::ContainsSubstring("eq.tilt.tiltDb"));

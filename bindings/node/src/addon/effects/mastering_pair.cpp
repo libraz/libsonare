@@ -173,21 +173,6 @@ sonare::mastering::assistant::AssistantConfig AssistantConfigFromParams(
   return config;
 }
 
-// Converts the "params" object of a chain_config_to_json() string into a flat
-// JS object keyed by the dotted spelling the input side accepts; the core
-// flattener owns the walk and refuses what has no flat spelling.
-Napi::Object ChainConfigParamsToObject(Napi::Env env, const std::string& chain_config_json) {
-  Napi::Object result = Napi::Object::New(env);
-  for (const auto& param : sonare::mastering::api::chain_config_flat_params(chain_config_json)) {
-    if (param.is_bool) {
-      result.Set(param.key, Napi::Boolean::New(env, param.value != 0.0));
-    } else {
-      result.Set(param.key, Napi::Number::New(env, param.value));
-    }
-  }
-  return result;
-}
-
 }  // namespace
 
 Napi::Value SonareWrap::MasteringPairProcess(const Napi::CallbackInfo& info) {
@@ -491,8 +476,7 @@ Napi::Value SonareWrap::MasteringAssistantSuggestChain(const Napi::CallbackInfo&
   const auto result = sonare::mastering::assistant::suggest_chain(
       samples.Data(), samples.ElementLength(),
       node_narrow_int(env, info[1], node_arg_label(1).c_str()), config);
-  return ChainConfigParamsToObject(env,
-                                   sonare::mastering::api::chain_config_to_json(result.config));
+  return Napi::String::New(env, sonare::mastering::api::chain_config_to_json(result.config));
   SONARE_NODE_CATCH(env)
 }
 
@@ -511,7 +495,7 @@ Napi::Value SonareWrap::MasteringPresetParams(const Napi::CallbackInfo& info) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
-  Napi::Object result = ChainConfigParamsToObject(env, json_out);
+  Napi::String result = Napi::String::New(env, json_out);
   sonare_free_string(json_out);
   return result;
   SONARE_NODE_CATCH(env)
@@ -532,7 +516,7 @@ Napi::Value SonareWrap::MasteringChainConfigParams(const Napi::CallbackInfo& inf
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
-  Napi::Object result = ChainConfigParamsToObject(env, json_out);
+  Napi::String result = Napi::String::New(env, json_out);
   sonare_free_string(json_out);
   return result;
   SONARE_NODE_CATCH(env)
@@ -640,8 +624,7 @@ Napi::Value SonareWrap::MasteringAssistantSuggestChainStereo(const Napi::Callbac
   const sonare::mastering::assistant::AssistantConfig config = AssistantConfigFromParams(info, 3);
   const auto result = sonare::mastering::assistant::suggest_chain_interleaved(
       interleaved.data(), frames, 2, sample_rate, config);
-  return ChainConfigParamsToObject(env,
-                                   sonare::mastering::api::chain_config_to_json(result.config));
+  return Napi::String::New(env, sonare::mastering::api::chain_config_to_json(result.config));
   SONARE_NODE_CATCH(env)
 }
 

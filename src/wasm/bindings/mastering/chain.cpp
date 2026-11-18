@@ -46,41 +46,24 @@ val js_mastering(val samples, const val& sample_rate_val, const val& target_lufs
   return out;
 }
 
-// ---------------------------------------------------------------------------
-// Helpers: build a MasteringChainConfig from the flattened parameter map the
-// TypeScript facade sends.
-// ---------------------------------------------------------------------------
-
-// The facade flattens its nested config to canonical dotted parameters and
-// sends them in this private envelope. Parsing them with the core parser is
-// what keeps WASM in lockstep with the C ABI, Node and Python: a second
-// reader here would be a second set of accepted names and defaults.
-namespace {
-
-std::vector<mastering::api::Param> masteringChainParamsFromVal(val config) {
-  val flat_params = objectProperty(config, "__flatParams");
-  if (!flat_params.isUndefined()) return masteringParamsFromObject(flat_params);
-  throw WasmRangeError(
-      "mastering chain config must be the flattened parameter map the facade "
-      "builds; a nested config object passed straight to the module is not read");
-}
-
-}  // namespace
-
-mastering::api::MasteringChainConfig masteringChainConfigFromVal(val config, bool streaming) {
-  const std::vector<mastering::api::Param> params = masteringChainParamsFromVal(config);
-  return streaming
-             ? mastering::api::parse_streaming_chain_config_params(params.data(), params.size())
-             : mastering::api::parse_chain_config_params(params.data(), params.size());
+// The chain configuration crosses as document text; the core reader is the only parser, which
+// keeps WASM in lockstep with the C ABI, Node and Python.
+mastering::api::MasteringChainConfig masteringChainConfigFromDocument(const val& document,
+                                                                      bool streaming) {
+  const bool absent = document.isUndefined() || document.isNull();
+  const std::string text =
+      absent ? std::string("{\"params\":{}}") : stringFromVal(document, "configJson");
+  if (streaming) return mastering::api::streaming_chain_config_from_json(text);
+  return absent ? mastering::api::MasteringChainConfig{}
+                : mastering::api::chain_config_from_json(text);
 }
 
 val js_mastering_chain(val samples, const val& sample_rate_val, val config) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   std::vector<float> data = float32ArrayToVector(samples);
   validate_offline_audio_input(data.data(), data.size(), sample_rate);
-  const std::vector<mastering::api::Param> params = masteringChainParamsFromVal(config);
-  return masteringMonoResultToVal(mastering::api::run_chain_mono_params(
-      params.data(), params.size(), data.data(), data.size(), sample_rate));
+  mastering::api::MasteringChain chain(masteringChainConfigFromDocument(config));
+  return masteringMonoResultToVal(chain.process_mono(data.data(), data.size(), sample_rate));
 }
 
 val js_mastering_chain_stereo(val left_samples, val right_samples, const val& sample_rate_val,
@@ -93,9 +76,9 @@ val js_mastering_chain_stereo(val left_samples, val right_samples, const val& sa
   validate_offline_audio_input(left.data(), left.size(), sample_rate);
   validate_offline_audio_input(right.data(), right.size(), sample_rate);
 
-  const std::vector<mastering::api::Param> params = masteringChainParamsFromVal(config);
-  return masteringStereoResultToVal(mastering::api::run_chain_stereo_params(
-      params.data(), params.size(), left.data(), right.data(), left.size(), sample_rate));
+  mastering::api::MasteringChain chain(masteringChainConfigFromDocument(config));
+  return masteringStereoResultToVal(
+      chain.process_stereo(left.data(), right.data(), left.size(), sample_rate));
 }
 
 val streamingLoudnessGainToVal(const mastering::api::StreamingLoudnessGain& gain) {
@@ -111,7 +94,7 @@ val js_mastering_streaming_loudness_gain(val samples, const val& sample_rate_val
   std::vector<float> data = float32ArrayToVector(samples);
   validate_offline_audio_input(data.data(), data.size(), sample_rate);
   return streamingLoudnessGainToVal(mastering::api::streaming_loudness_gain_mono(
-      masteringChainConfigFromVal(config, true), data.data(), data.size(), sample_rate));
+      masteringChainConfigFromDocument(config, true), data.data(), data.size(), sample_rate));
 }
 
 val js_mastering_streaming_loudness_gain_stereo(val left_samples, val right_samples,
@@ -124,7 +107,7 @@ val js_mastering_streaming_loudness_gain_stereo(val left_samples, val right_samp
   validate_offline_audio_input(left.data(), left.size(), sample_rate);
   validate_offline_audio_input(right.data(), right.size(), sample_rate);
   return streamingLoudnessGainToVal(mastering::api::streaming_loudness_gain_stereo(
-      masteringChainConfigFromVal(config, true), left.data(), right.data(), left.size(),
+      masteringChainConfigFromDocument(config, true), left.data(), right.data(), left.size(),
       sample_rate));
 }
 
@@ -134,7 +117,7 @@ val js_mastering_chain_with_progress(val samples, const val& sample_rate_val, va
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   std::vector<float> data = float32ArrayToVector(samples);
   validate_offline_audio_input(data.data(), data.size(), sample_rate);
-  mastering::api::MasteringChain chain(masteringChainConfigFromVal(config));
+  mastering::api::MasteringChain chain(masteringChainConfigFromDocument(config));
   installMasteringChainCallbacks(chain, progress_callback, cancel_callback);
   const auto result = chain.process_mono_cancellable(data.data(), data.size(), sample_rate);
   if (!result) {
@@ -156,7 +139,7 @@ val js_mastering_chain_stereo_with_progress(val left_samples, val right_samples,
   validate_offline_audio_input(left.data(), left.size(), sample_rate);
   validate_offline_audio_input(right.data(), right.size(), sample_rate);
 
-  mastering::api::MasteringChain chain(masteringChainConfigFromVal(config));
+  mastering::api::MasteringChain chain(masteringChainConfigFromDocument(config));
   installMasteringChainCallbacks(chain, progress_callback, cancel_callback);
   const auto result =
       chain.process_stereo_cancellable(left.data(), right.data(), left.size(), sample_rate);

@@ -1,8 +1,10 @@
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 #include <cmath>
 #include <cstdio>
+#include <functional>
 #include <iterator>
 #include <string>
 #include <utility>
@@ -227,104 +229,34 @@ TEST_CASE("preset chain configs round-trip through JSON", "[mastering][preset][j
   }
 }
 
-TEST_CASE("default multiband chain keeps the canonical v1 JSON", "[mastering][preset][json]") {
+TEST_CASE("the default chain document is version 2 with tokens and a structured multiband record",
+          "[mastering][preset][json]") {
   const auto config = MasteringChainConfig{};
-  char formatted_db[40];
-  std::snprintf(
-      formatted_db, sizeof(formatted_db), "%.17g",
-      static_cast<double>(sonare::linear_to_db(config.repair.declip.config.clip_threshold)));
-  const std::string clip_threshold_db = formatted_db;
-  const std::string expected =
-      "{\"params\":{\"dynamics.compressor.attackMs\":10,\"dynamics.compressor.autoMakeup\":false,"
-      "\"dynamics.compressor.detector\":1,\"dy"
-      "namics.compressor.enabled\":false,\"dynamics.compressor.kneeDb\":0,\"dynamics.compressor."
-      "makeupGainDb\":0,\"dynamics.compresso"
-      "r.pdrReleaseScale\":1,\"dynamics.compressor.pdrTimeMs\":0,\"dynamics.compressor.ratio\":2,"
-      "\"dynamics.compressor.releaseMs\":100"
-      ",\"dynamics.compressor.threshold"
-      "Db\":-18,\"dynamics.deesser.attackMs\":1,\"dynamics.deesser.bandpassQ\":1.5,\"dynamics."
-      "deesser.enabled\":false,\"dynamics.deesse"
-      "r.frequencyHz\":6000,\"dynamics.deesser.rangeDb\":12,\"dynamics.deesser.ratio\":4,"
-      "\"dynamics.deesser.releaseMs\":60,\"dynamics.d"
-      "eesser.thresholdDb\":-24,\"dynamics.multibandComp.bands.0.attackMs\":10,\"dynamics."
-      "multibandComp.bands.0.ratio\":2,\"dynamics.multibandComp.bands.0.releaseMs\":100,"
-      "\"dynamics.multibandComp.bands.0.thresholdDb\":-18,\"dynamics.multibandComp.bands.1."
-      "attackMs\":10,\"dynamics.multibandComp.bands.1.ratio\":2,\"dynamics.multibandComp."
-      "bands.1.releaseMs\":100,\"dynamics.multibandComp.bands.1.thresholdDb\":-18,"
-      "\"dynamics.multibandComp.bands.2.attackMs\":10,\"dynamics.multibandComp.bands.2.ratio\":2,"
-      "\"dynamics.multibandComp.bands.2.releaseMs\":100,\"dynamics.multibandComp.bands.2."
-      "thresholdDb\":-18,\"dynamics.multibandComp.cutoff0Hz\":120,\"dynamics.multibandComp."
-      "cutoff1Hz\":2000,\"dynamics.multibandComp.enabled\":false,"
-      "\"dynamics.transientShaper.attackGainDb\":3,"
-      "\"dynamics.transientShaper.enabled\":false,"
-      "\"dynamics.transientShaper.fastAttackMs\":0,\"dynamics.transientShaper.fastReleaseMs\":20,"
-      "\"dynamics.transientShaper.gainSmoo"
-      "thingMs\":0,\"dynamics.transientShaper.lookaheadMs\":0,\"dynamics.transientShaper."
-      "maxGainDb\":12,\"dynamics.transientShaper.se"
-      "nsitivity\":1,\"dynamics.transientShaper.slowAttackMs\":15,\"dynamics.transientShaper."
-      "slowReleaseMs\":200,\"dynamics.transient"
-      "Shaper.sustainGainDb\":0,\"eq.tilt.enabled\":false,\"eq.tilt.pivotHz\":1000,\"eq.tilt."
-      "tiltDb\":0,\"loudness.applyGainAtInputRate"
-      "\":false,\"loudness.ceilingDb\":-1,\"loudness.enabled\":false,\"loudness."
-      "maxLimiterGainReductionDb\":12,\"loudness.releaseMs\":50,"
-      "\"loudness.targetLufs\":-14,\"loudness.tru"
-      "ePeakOversample\":4,\"maximizer.truePeakLimiter.applyGainAtInputRate\":false,\"maximizer."
-      "truePeakLimiter.ceilingDb\":-1,\"maxi"
-      "mizer.truePeakLimiter.enabled\":false,\"maximizer.truePeakLimiter.lookaheadMs\":1,"
-      "\"maximizer.truePeakLimiter.oversampleFact"
-      "or\":4,\"maximizer.truePeakLimiter.releaseMs\":50,\"repair.declick.enabled\":false,\"repair."
-      "declick.lpcOrder\":20,\"repair.decli"
-      "ck.maxClickSamples\":8,\"repair.declick.neighborRatio\":4,\"repair.declick.residualRatio\":"
-      "8,\"repair.declick.threshold\":0.800"
-      "00001192092896,\"repair.declip.clipThresholdDb\":" +
-      clip_threshold_db +
-      ",\"repair.declip."
-      "enabled\":false,\"repair.declip.iterations"
-      "\":2,\"repair.declip.lpcBlend\":0.64999997615814209,\"repair.declip.lpcOrder\":36,\"repair."
-      "decrackle.enabled\":false,\"repair.de"
-      "crackle.levels\":4,\"repair.decrackle.mode\":0,\"repair.decrackle.threshold\":0."
-      "40000000596046448,\"repair.dehum.adaptation\":0"
-      ".25,\"repair.dehum.adaptive\":false,\"repair.dehum.enabled\":false,\"repair.dehum."
-      "frameSize\":2048,\"repair.dehum.fundamentalHz"
-      "\":50,\"repair.dehum.harmonics\":4,\"repair.dehum.mode\":0,"
-      "\"repair.dehum.pllBandwidth\":0.0099999997764825821,"
-      "\"repair.dehum.q\":20,\"repair.dehum.sear"
-      "chRangeHz\":2,\"repair.denoise.ddAlpha\":0.98000001907348633,\"repair.denoise.enabled\":"
-      "false,\"repair.denoise.gainSmoothing\":true,\"repair.denoise.hopLength\":256,"
-      "\"repair.denoise.mode\":0,\"repair.denoi"
-      "se.nFft\":1024,\"repair.denoise.noiseEstimationQuantile\":0.10000000149011612,\"repair."
-      "denoise.noiseEstimator\":0,\"repair.den"
-      "oise.overSubtraction\":2,\"repair.denoise.reductionDb\":26,\"repair.denoise."
-      "spectralFloor\":0.05000000074505806,\"repair."
-      "denoise.speechPresenceGain\":true,\"rep"
-      "air.dereverb.attenuation\":1,\"repair.dereverb.enabled\":false,\"repair.dereverb."
-      "hopLength\":256,\"repair.dereverb.lateDelay"
-      "Ms\":50,\"repair.dereverb.nFft\":1024,\"repair.dereverb.overSubtraction\":1,\"repair."
-      "dereverb.spectralFloor\":0.079999998211860"
-      "657,\"repair.dereverb.t60Sec\":0.40000000596046448,\"repair.dereverb.threshold\":0,"
-      "\"repair.dereverb.wpeEna"
-      "bled\":false,\"repair.dereverb.wpeIterations\":2,\"repair.dereverb.wpeStrength\":0."
-      "69999998807907104,\"repair.dereverb.wpeTaps"
-      "\":3,\"saturation.exciter.aliasing\":0,\"saturation.exciter.amount\":0.25,\"saturation."
-      "exciter.driveDb\":6,\"saturation."
-      "exciter.enabled\":false,\"saturation.excit"
-      "er.evenOddMix\":0.5,\"saturation.exciter.frequencyHz\":3000,\"saturation.exciter.q\":1,"
-      "\"saturation.tape.bias\":0,\"saturation.t"
-      "ape.driveDb\":3,\"saturation.tape.enabled\":false,\"saturation.tape.gapLoss\":0."
-      "20000000298023224,\"saturation.tape.headBumpDb"
-      "\":1.5,\"saturation.tape.hysteresis\":0.20000000298023224,\"saturation.tape.outputGainDb\":"
-      "0,\"saturation.tape.oversampleFactor\":1,\"saturation.tape.saturation\":0.5"
-      ",\"saturation.tape.speedIps\":15,\"spectral.airBand.amount\":0.25,\"spectral.airBand."
-      "dynamicRangeDb\":3,\"spectral.airBand.dyna"
-      "micThresholdDb\":-36,\"spectral.airBand.enabled\":false,\"spectral.airBand."
-      "shelfFrequencyHz\":12000,\"stereo.imager.decorrelat"
-      "ionAmount\":0,\"stereo.imager.enabled\":false,\"stereo.imager.outputGainDb\":0,\"stereo."
-      "imager.preserveEnergy\":true,\"stereo.im"
-      "ager.width\":1,\"stereo.monoMaker.amount\":1,\"stereo.monoMaker.enabled\":false,\"stereo."
-      "monoMaker.frequencyHz\":120},\"version\""
-      ":1}";
-  REQUIRE(chain_config_to_json(config) == expected);
-  REQUIRE(chain_config_to_json(chain_config_from_json(expected)) == expected);
+  const std::string json = chain_config_to_json(config);
+  const auto root = sonare::util::json::parse_strict(json);
+  REQUIRE(root["version"].as_int() == 2);
+  const auto& params = root["params"].as_object();
+
+  REQUIRE(params.at("dynamics.compressor.detector").as_string() == "rms");
+  REQUIRE(params.at("repair.decrackle.mode").is_string());
+  REQUIRE(params.at("repair.dehum.mode").is_string());
+  REQUIRE(params.at("repair.denoise.mode").is_string());
+  REQUIRE(params.at("repair.denoise.noiseEstimator").is_string());
+  for (const auto& [key, value] : params) {
+    CAPTURE(key);
+    REQUIRE_FALSE(value.is_null());
+    REQUIRE(key.find("cutoff0Hz") == std::string::npos);
+    REQUIRE(key.find("cutoff1Hz") == std::string::npos);
+  }
+
+  const auto& multiband = params.at("dynamics.multibandComp").as_object();
+  const auto& cutoffs = multiband.at("crossover").as_object().at("cutoffsHz").as_array();
+  REQUIRE(cutoffs.size() == 2);
+  REQUIRE(cutoffs[0].as_number() == 120.0);
+  REQUIRE(cutoffs[1].as_number() == 2000.0);
+  REQUIRE(multiband.at("bands").as_array().size() == 3);
+
+  REQUIRE(chain_config_to_json(chain_config_from_json(json)) == json);
 }
 
 TEST_CASE("v2 multiband JSON preserves four and five full compressor bands",
@@ -385,10 +317,12 @@ TEST_CASE("v2 multiband JSON rejects malformed structured fields", "[mastering][
     REQUIRE_THROWS_AS(chain_config_from_json(malformed), sonare::SonareException);
   }
 
-  SECTION("missing field") {
-    REQUIRE_THROWS_AS(chain_config_from_json(
-                          R"({"version":2,"params":{"dynamics.multibandComp":{"enabled":true}}})"),
-                      sonare::SonareException);
+  SECTION("a partial record reads as its dotted keys") {
+    const auto partial =
+        chain_config_from_json(R"({"params":{"dynamics.multibandComp":{"enabled":true}}})");
+    REQUIRE(partial.dynamics.multiband_comp.enabled);
+    REQUIRE(partial.dynamics.multiband_comp.config.bands.size() ==
+            MasteringChainConfig{}.dynamics.multiband_comp.config.bands.size());
   }
 
   SECTION("non-finite field") {
@@ -397,9 +331,12 @@ TEST_CASE("v2 multiband JSON rejects malformed structured fields", "[mastering][
     REQUIRE_THROWS_AS(chain_config_from_json(malformed), sonare::SonareException);
   }
 
-  SECTION("fractional enum") {
+  SECTION("a number for a token") {
     std::string malformed = valid;
-    replace_once(malformed, "\"slope\":2", "\"slope\":1.5");
+    const auto slope = malformed.find("\"slope\":\"");
+    REQUIRE(slope != std::string::npos);
+    const auto value = slope + std::string("\"slope\":").size();
+    malformed.replace(value, malformed.find('"', value + 1) + 1 - value, "1.5");
     REQUIRE_THROWS_AS(chain_config_from_json(malformed), sonare::SonareException);
   }
 
@@ -426,6 +363,106 @@ TEST_CASE("v2 multiband JSON rejects malformed structured fields", "[mastering][
     auto config = make_full_multiband_config(4);
     config.dynamics.multiband_comp.config.crossover.fir_kernel_size = 65'537;
     REQUIRE_THROWS_AS(chain_config_to_json(config), sonare::SonareException);
+  }
+}
+
+TEST_CASE("a chain document is read the same however its paths are spelled",
+          "[mastering][preset][json]") {
+  const MasteringChainConfig dotted = chain_config_from_json(
+      R"({"params":{"dynamics.compressor.enabled":true,"dynamics.compressor.ratio":3,)"
+      R"("dynamics.compressor.detector":"peak"}})");
+  const MasteringChainConfig nested = chain_config_from_json(
+      R"({"version":2,"params":{"dynamics":{"compressor":{"enabled":true,"ratio":3,)"
+      R"("detector":"peak"}}}})");
+  CHECK(chain_config_to_json(dotted) == chain_config_to_json(nested));
+  CHECK(dotted.dynamics.compressor.config.ratio == 3.0f);
+  CHECK(dotted.dynamics.compressor.config.detector == dynamics::DetectorMode::Peak);
+
+  SECTION("the writer names every enum value and states version 2") {
+    const std::string json = chain_config_to_json(make_full_multiband_config(4));
+    CHECK(json.find("\"version\":2") != std::string::npos);
+    CHECK(json.find("\"dynamics.compressor.detector\":\"") != std::string::npos);
+    CHECK(json.find("\"repair.denoise.mode\":\"") != std::string::npos);
+    CHECK(json.find("\"slope\":\"") != std::string::npos);
+    CHECK(json.find("\"mode\":\"") != std::string::npos);
+    REQUIRE(chain_config_to_json(chain_config_from_json(json)) == json);
+  }
+}
+
+TEST_CASE("a chain document refuses what it cannot mean, naming the path",
+          "[mastering][preset][json]") {
+  const auto refused = [](const std::string& document, const std::string& fragment) {
+    INFO(document);
+    try {
+      (void)chain_config_from_json(document);
+      FAIL("expected a refusal");
+    } catch (const sonare::SonareException& error) {
+      CHECK(error.code() == sonare::ErrorCode::InvalidFormat);
+      CHECK_THAT(std::string(error.what()), Catch::Matchers::ContainsSubstring(fragment));
+    }
+    try {
+      (void)chain_config_flat_params(document);
+      FAIL("expected the flat reader to refuse too");
+    } catch (const sonare::SonareException& error) {
+      CHECK(error.code() == sonare::ErrorCode::InvalidFormat);
+    }
+  };
+
+  refused(R"({"version":1,"params":{}})", "unsupported chain config version");
+  refused(R"({"version":"2","params":{}})", "unsupported chain config version");
+  refused(R"({"params":{"eq.tilt.tiltDb":1,"eq":{"tilt":{"tiltDb":2}}}})",
+          "eq.tilt.tiltDb is given twice");
+  refused(R"({"params":{"dynamics.multibandComp.cutoff0Hz":100,)"
+          R"("dynamics.multibandComp.crossover.cutoffsHz":[200,300]}})",
+          "is given twice");
+  refused(R"({"params":{"eq.tilt.tiltDb":null}})",
+          "eq.tilt.tiltDb is null, not a number, boolean or token");
+  refused(R"({"params":{"dynamics.compressor.detector":1}})",
+          "dynamics.compressor.detector takes a token, not a number (valid names: ");
+  refused(R"({"params":{"dynamics.compressor.detector":"loud"}})",
+          "dynamics.compressor.detector: unknown name 'loud' (valid names: ");
+  refused(R"({"params":{"eq.tilt.tiltDb":"high"}})", "eq.tilt.tiltDb is a string");
+  refused(R"({"params":{"repair.declip.clipThresholdDb":0.5}})",
+          "repair.declip.clipThresholdDb must be at or below 0 dBFS");
+  refused(R"({"params":{"repair.declip.enabled":false,"repair.declip.clipThresholdDb":3}})",
+          "repair.declip.clipThresholdDb must be at or below 0 dBFS");
+  refused(R"({"params":{"dynamics.multibandComp.lowCutoffHz":200}})",
+          "renamed to dynamics.multibandComp.crossover.cutoffsHz.0");
+  refused(R"({"params":{"dynamics.multibandComp.highCutoffHz":2000}})",
+          "renamed to dynamics.multibandComp.crossover.cutoffsHz.1");
+  refused(R"({"params":{},"extra":1})", "unknown chain config key: extra");
+
+  // Annotation keys pass at any depth, and a non-positive threshold is the declipper's own.
+  const MasteringChainConfig annotated =
+      chain_config_from_json(R"({"$comment":"x","params":{"x-ui":1,"repair":{"$note":"y","declip":)"
+                             R"({"clipThresholdDb":-0.5}}}})");
+  CHECK_THAT(sonare::linear_to_db(annotated.repair.declip.config.clip_threshold),
+             WithinAbs(-0.5, 1e-4));
+}
+
+TEST_CASE("every document entry reads the same document and refuses as a document",
+          "[mastering][preset][json]") {
+  const MasteringChainConfig over =
+      chain_config_overrides_from_json(preset_config(Preset::Pop), R"({"params":{"eq":{"tilt":)"
+                                                                   R"({"tiltDb":1.5}}}})");
+  CHECK(over.eq.tilt.enabled);
+  CHECK(over.eq.tilt.tilt_db == 1.5f);
+  CHECK(
+      streaming_chain_config_from_json(R"({"params":{}})").repair.denoise.config.noise_estimator ==
+      repair::DenoiseNoiseEstimator::Spp);
+
+  for (const auto& read : std::vector<std::function<void(const std::string&)>>{
+           [](const std::string& d) { (void)chain_config_from_json(d); },
+           [](const std::string& d) { (void)streaming_chain_config_from_json(d); },
+           [](const std::string& d) {
+             (void)chain_config_overrides_from_json(preset_config(Preset::Pop), d);
+           }}) {
+    require_refused_with([&] { read(R"({"params":{"eq.tilt.noSuchKey":1}})"); },
+                         "unknown chain config key: eq.tilt.noSuchKey",
+                         sonare::ErrorCode::InvalidFormat);
+    require_refused_with([&] { read(R"({"params":{"eq.tilt.tiltDb":null}})"); },
+                         "eq.tilt.tiltDb is null, not a number, boolean or token",
+                         sonare::ErrorCode::InvalidFormat);
   }
 }
 
@@ -457,19 +494,17 @@ TEST_CASE("a multiband chain stage carries between two and 64 bands", "[masterin
   SECTION("the JSON reader") {
     const std::string one_band = v2_document_with_band_count(1);
     REQUIRE(one_band.find("\"cutoffsHz\":[]") != std::string::npos);
-    require_refused_with([&] { chain_config_from_json(one_band); }, too_few,
-                         sonare::ErrorCode::InvalidFormat);
-    require_refused_with([] { chain_config_from_json(v2_document_with_band_count(65)); }, too_many,
+    // The document reader walks the record as dotted paths, so it names the path it stopped at.
+    require_refused_with(
+        [&] { chain_config_from_json(one_band); },
+        "dynamics.multibandComp.crossover.cutoffsHz is an empty list, which has no flat spelling",
+        sonare::ErrorCode::InvalidFormat);
+    require_refused_with([] { chain_config_from_json(v2_document_with_band_count(65)); },
+                         "multiband band index out of range: dynamics.multibandComp.bands.64."
+                         "attackMs",
                          sonare::ErrorCode::InvalidFormat);
     REQUIRE(chain_config_from_json(v2_document_with_band_count(64))
                 .dynamics.multiband_comp.config.bands.size() == 64);
-  }
-
-  SECTION("the flat spelling of a one-band document") {
-    require_refused_with([] { chain_config_flat_params(v2_document_with_band_count(1)); },
-                         "chain config param 'dynamics.multibandComp.crossover.cutoffsHz' is an "
-                         "empty list, which has no flat spelling",
-                         sonare::ErrorCode::InvalidFormat);
   }
 }
 
@@ -488,8 +523,7 @@ TEST_CASE("a chain config document's flat params parse to the document's config"
     CAPTURE(name);
     const std::string text = chain_config_to_json(source);
     const auto root = sonare::util::json::parse_strict(text);
-    const int version = root["version"].as_int();
-    REQUIRE(version == (name == "four bands" || name == "five bands" ? 2 : 1));
+    REQUIRE(root["version"].as_int() == 2);
 
     const auto flat = chain_config_flat_params(text);
     REQUIRE_FALSE(flat.empty());
@@ -500,18 +534,16 @@ TEST_CASE("a chain config document's flat params parse to the document's config"
       if (entry.is_bool) REQUIRE((entry.value == 0.0 || entry.value == 1.0));
       params.push_back(Param{entry.key, entry.value});
     }
-    if (version == 2) {
-      const auto enabled = std::find_if(flat.begin(), flat.end(), [](const auto& entry) {
-        return entry.key == "dynamics.multibandComp.enabled";
-      });
-      REQUIRE(enabled != flat.end());
-      REQUIRE(enabled->is_bool);
-      const auto cutoff = std::find_if(flat.begin(), flat.end(), [](const auto& entry) {
-        return entry.key == "dynamics.multibandComp.crossover.cutoffsHz.0";
-      });
-      REQUIRE(cutoff != flat.end());
-      REQUIRE_FALSE(cutoff->is_bool);
-    }
+    const auto enabled = std::find_if(flat.begin(), flat.end(), [](const auto& entry) {
+      return entry.key == "dynamics.multibandComp.enabled";
+    });
+    REQUIRE(enabled != flat.end());
+    REQUIRE(enabled->is_bool);
+    const auto cutoff = std::find_if(flat.begin(), flat.end(), [](const auto& entry) {
+      return entry.key == "dynamics.multibandComp.crossover.cutoffsHz.0";
+    });
+    REQUIRE(cutoff != flat.end());
+    REQUIRE_FALSE(cutoff->is_bool);
 
     const auto from_flat = parse_chain_config_params(params.data(), params.size());
     const auto from_json = chain_config_from_json(text);
@@ -524,43 +556,39 @@ TEST_CASE("a chain config document's flat params parse to the document's config"
 
 TEST_CASE("chain config flat params refuse what has no flat spelling",
           "[mastering][preset][json]") {
-  const std::string no_params = "chain config carries no params block";
-  require_refused_with([] { chain_config_flat_params(R"({"version":1})"); }, no_params,
+  const std::string no_params = "chain config requires params";
+  require_refused_with([] { chain_config_flat_params(R"({"version":2})"); }, no_params,
                        sonare::ErrorCode::InvalidFormat);
-  require_refused_with([] { chain_config_flat_params(R"({"version":1,"params":[1]})"); }, no_params,
-                       sonare::ErrorCode::InvalidFormat);
-  require_refused_with([] { chain_config_flat_params(R"({"version":1,"params":{}})"); }, no_params,
-                       sonare::ErrorCode::InvalidFormat);
+  require_refused_with([] { chain_config_flat_params(R"({"params":[1]})"); },
+                       "params must be a JSON object", sonare::ErrorCode::InvalidFormat);
+  REQUIRE(chain_config_flat_params(R"({"params":{}})").empty());
 
+  require_refused_with([] { chain_config_flat_params(R"({"params":{"eq.tilt.tiltDb":"steep"}})"); },
+                       "eq.tilt.tiltDb is a string, but takes no token",
+                       sonare::ErrorCode::InvalidFormat);
+  require_refused_with([] { chain_config_flat_params(R"({"params":{"eq.tilt.tiltDb":null}})"); },
+                       "eq.tilt.tiltDb is null, not a number, boolean or token",
+                       sonare::ErrorCode::InvalidFormat);
   require_refused_with(
-      [] { chain_config_flat_params(R"({"version":1,"params":{"eq.tilt.tiltDb":"steep"}})"); },
-      "chain config param 'eq.tilt.tiltDb' is not a number or boolean",
-      sonare::ErrorCode::InvalidFormat);
-  require_refused_with(
-      [] { chain_config_flat_params(R"({"version":1,"params":{"eq.tilt.tiltDb":null}})"); },
-      "chain config param 'eq.tilt.tiltDb' is not a number or boolean",
+      [] {
+        chain_config_flat_params(
+            R"({"params":{"dynamics.multibandComp":{"bands":[{"ratio":"x"}]}}})");
+      },
+      "dynamics.multibandComp.bands.0.ratio is a string, but takes no token",
       sonare::ErrorCode::InvalidFormat);
   require_refused_with(
       [] {
         chain_config_flat_params(
-            R"({"version":2,"params":{"dynamics.multibandComp":{"bands":[{"ratio":"x"}]}}})");
+            R"({"params":{"dynamics.multibandComp":{"crossover":{"cutoffsHz":[]}}}})");
       },
-      "chain config param 'dynamics.multibandComp.bands.0.ratio' is not a number or boolean",
-      sonare::ErrorCode::InvalidFormat);
-  require_refused_with(
-      [] {
-        chain_config_flat_params(
-            R"({"version":2,"params":{"dynamics.multibandComp":{"crossover":{"cutoffsHz":[]}}}})");
-      },
-      "chain config param 'dynamics.multibandComp.crossover.cutoffsHz' is an empty list, which "
-      "has no flat spelling",
+      "dynamics.multibandComp.crossover.cutoffsHz is an empty list, which has no flat spelling",
       sonare::ErrorCode::InvalidFormat);
 }
 
 TEST_CASE("chain config flat params resolve an enum name as the validating reader does",
           "[mastering][preset][json]") {
   const std::string text =
-      R"({"version":1,"params":{"repair.denoise.enabled":true,"repair.denoise.noiseEstimator":"mcra"}})";
+      R"({"params":{"repair.denoise.enabled":true,"repair.denoise.noiseEstimator":"mcra"}})";
   const auto flat = chain_config_flat_params(text);
   REQUIRE(flat.size() == 2u);
   REQUIRE(flat[1].key == "repair.denoise.noiseEstimator");
@@ -568,44 +596,41 @@ TEST_CASE("chain config flat params resolve an enum name as the validating reade
   const auto expected = mastering_enum_value("", "repair.denoise.noiseEstimator", "mcra");
   REQUIRE(expected.has_value());
   REQUIRE(flat[1].value == *expected);
-  REQUIRE_THROWS_AS(
-      chain_config_flat_params(R"({"version":1,"params":{"repair.denoise.noiseEstimator":"x"}})"),
-      sonare::SonareException);
+  REQUIRE_THROWS_AS(chain_config_flat_params(R"({"params":{"repair.denoise.noiseEstimator":"x"}})"),
+                    sonare::SonareException);
 }
 
 TEST_CASE("chain config JSON rejects malformed input", "[mastering][preset][json]") {
   REQUIRE_THROWS_AS(chain_config_from_json("{}"), sonare::SonareException);
   REQUIRE_THROWS_AS(chain_config_from_json("{\"version\":1.5,\"params\":{}}"),
                     sonare::SonareException);
-  REQUIRE_THROWS_AS(chain_config_from_json("{\"version\":2,\"params\":{}}"),
+  REQUIRE_THROWS_AS(chain_config_from_json("{\"version\":1,\"params\":{}}"),
                     sonare::SonareException);
-  REQUIRE_THROWS_AS(chain_config_from_json("{\"version\":1,\"params\":{\"unknown.key\":1}}"),
+  REQUIRE_THROWS_AS(chain_config_from_json("{\"version\":2,\"params\":{\"unknown.key\":1}}"),
                     sonare::SonareException);
-  REQUIRE_THROWS_AS(chain_config_from_json("{\"version\":1,\"params\":{\"eq.tilt.enabled\":}}"),
+  REQUIRE_THROWS_AS(chain_config_from_json("{\"version\":2,\"params\":{\"eq.tilt.enabled\":}}"),
                     sonare::SonareException);
   REQUIRE_THROWS_AS(
-      chain_config_from_json("{\"version\":1,\"params\":{\"repair.denoise.noiseEstimator\":99}}"),
+      chain_config_from_json("{\"version\":2,\"params\":{\"repair.denoise.noiseEstimator\":99}}"),
       sonare::SonareException);
 }
 
 TEST_CASE("chain config JSON rejects unknown top-level keys", "[mastering][preset][json]") {
-  // Allowed top-level keys: {"version", "params"}. The validator delegates the
-  // check to util::json::schema::has_allowed_keys, which surfaces the offending
-  // field name in the error so callers can act on it.
-  REQUIRE_THROWS_AS(chain_config_from_json("{\"version\":1,\"params\":{},\"extra\":1}"),
+  // Allowed top-level keys: version, params and annotation keys.
+  REQUIRE_THROWS_AS(chain_config_from_json("{\"version\":2,\"params\":{},\"extra\":1}"),
                     sonare::SonareException);
   // Legitimate documents must still parse cleanly — guards against an over-tight
   // allowlist regression.
-  REQUIRE_NOTHROW(chain_config_from_json("{\"version\":1,\"params\":{}}"));
+  REQUIRE_NOTHROW(chain_config_from_json("{\"version\":2,\"params\":{}}"));
 }
 
 TEST_CASE("chain config JSON rejects duplicate top-level keys", "[mastering][preset][json]") {
   // Strict parser: a duplicate `"version"` key would otherwise silently take
   // the last-write value and could hide a bumped/incompatible version in the
   // first occurrence. Fail fast instead.
-  REQUIRE_THROWS_AS(chain_config_from_json("{\"version\":1,\"version\":2,\"params\":{}}"),
+  REQUIRE_THROWS_AS(chain_config_from_json("{\"version\":2,\"version\":2,\"params\":{}}"),
                     sonare::SonareException);
-  REQUIRE_THROWS_AS(chain_config_from_json("{\"version\":1,\"params\":{},\"params\":{}}"),
+  REQUIRE_THROWS_AS(chain_config_from_json("{\"version\":2,\"params\":{},\"params\":{}}"),
                     sonare::SonareException);
 }
 
@@ -829,13 +854,13 @@ TEST_CASE("all presets master a three-minute stereo fixture with bounded memory"
   }
 }
 
-TEST_CASE("every preset's params JSON is version 1", "[mastering][preset][json]") {
+TEST_CASE("every preset's params JSON is version 2", "[mastering][preset][json]") {
   for (const auto& name : preset_names()) {
     CAPTURE(name);
     const auto config = preset_config(preset_from_string(name));
     const std::string json = chain_config_to_json(config);
     const auto root = sonare::util::json::parse_strict(json);
-    REQUIRE(root["version"].as_int() == 1);
+    REQUIRE(root["version"].as_int() == 2);
   }
 }
 
@@ -852,14 +877,12 @@ TEST_CASE("applying a preset's own params JSON as overrides is a no-op",
     CAPTURE(name);
     const auto preset = preset_from_string(name);
     const std::string json = chain_config_to_json(preset_config(preset));
-    const auto root = sonare::util::json::parse_strict(json);
-    const auto& params_object = root["params"].as_object();
+    const auto flat = chain_config_flat_params(json);
 
     std::vector<Param> overrides;
-    overrides.reserve(params_object.size());
-    for (const auto& [key, value] : params_object) {
-      const double numeric = value.is_bool() ? (value.as_bool() ? 1.0 : 0.0) : value.as_number();
-      overrides.push_back(Param{key, numeric});
+    overrides.reserve(flat.size());
+    for (const auto& entry : flat) {
+      overrides.push_back(Param{entry.key, entry.value});
     }
 
     const auto baseline = master_audio_mono(preset, fixture.data(), fixture.size(), sample_rate);

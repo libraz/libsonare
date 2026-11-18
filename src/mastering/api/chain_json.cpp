@@ -1,10 +1,8 @@
 /// @file chain_json.cpp
 /// @brief JSON serialization for MasteringChainConfig.
 
-#include <cmath>
-#include <initializer_list>
-#include <limits>
 #include <optional>
+#include <set>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -17,7 +15,7 @@
 #include "util/db.h"
 #include "util/exception.h"
 #include "util/json_budget.h"
-#include "util/json_schema.h"
+#include "util/json_key.h"
 #include "util/resource_limits.h"
 
 namespace sonare::mastering::api {
@@ -25,12 +23,8 @@ namespace {
 
 using JsonValue = sonare::util::json::Value;
 
-// ---------------------------------------------------------------------------
-// Tree builders. Mirror the previous flatten_chain_config() output exactly
-// (same key strings, same numeric values) but emit JSON via util::json::dump
-// so number formatting is locale-independent and uses max_digits10 precision
-// to survive a dump -> parse round-trip without coefficient drift.
-// ---------------------------------------------------------------------------
+// Tree builders. JSON goes through util::json::dump so number formatting is locale-independent
+// and survives a dump -> parse round-trip without drift.
 
 void add_field(sonare::util::json::Object& params, const char* key, bool value) {
   params.emplace(key, JsonValue(value));
@@ -48,11 +42,15 @@ void add_field(sonare::util::json::Object& params, const char* key, Int value) {
   params.emplace(key, JsonValue(static_cast<double>(value)));
 }
 
-// Enum config fields serialize as their underlying integer value (the parser
-// restores them via static_cast). Keeps the dump -> parse round-trip lossless.
+// Enum config fields serialize as the name the reader resolves back to the value.
 template <typename Enum, typename = std::enable_if_t<std::is_enum_v<Enum>>, typename = void>
 void add_field(sonare::util::json::Object& params, const char* key, Enum value) {
-  params.emplace(key, JsonValue(static_cast<double>(static_cast<int>(value))));
+  const char* name = detail::enum_choice_name(value);
+  if (name == nullptr) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          std::string(key) + " holds a value with no name");
+  }
+  params.emplace(key, JsonValue(std::string(name)));
 }
 
 sonare::util::json::Object build_multiband_params(const MasteringChainConfig& cfg) {
@@ -91,8 +89,7 @@ sonare::util::json::Object build_multiband_params(const MasteringChainConfig& cf
   return multiband;
 }
 
-sonare::util::json::Object build_chain_params(const MasteringChainConfig& cfg,
-                                              bool include_flat_multiband) {
+sonare::util::json::Object build_chain_params(const MasteringChainConfig& cfg) {
   sonare::util::json::Object params;
 
   add_field(params, "repair.declick.enabled", cfg.repair.declick.enabled);
@@ -111,12 +108,7 @@ sonare::util::json::Object build_chain_params(const MasteringChainConfig& cfg,
 
   add_field(params, "repair.decrackle.enabled", cfg.repair.decrackle.enabled);
   add_field(params, "repair.decrackle.threshold", cfg.repair.decrackle.config.threshold);
-  // Decrackle "mode" is an enum serialized as 0.0 / 1.0 (the parser side
-  // restores it via the numeric Param schema), so emit a number — not a bool.
-  add_field(params, "repair.decrackle.mode",
-            cfg.repair.decrackle.config.mode == mastering::repair::DecrackleMode::WaveletShrinkage
-                ? 1.0
-                : 0.0);
+  add_field(params, "repair.decrackle.mode", cfg.repair.decrackle.config.mode);
   add_field(params, "repair.decrackle.levels", cfg.repair.decrackle.config.levels);
 
   add_field(params, "repair.dehum.enabled", cfg.repair.dehum.enabled);
@@ -128,7 +120,7 @@ sonare::util::json::Object build_chain_params(const MasteringChainConfig& cfg,
   add_field(params, "repair.dehum.adaptation", cfg.repair.dehum.config.adaptation);
   add_field(params, "repair.dehum.frameSize", cfg.repair.dehum.config.frame_size);
   add_field(params, "repair.dehum.pllBandwidth", cfg.repair.dehum.config.pll_bandwidth);
-  add_field(params, "repair.dehum.mode", static_cast<int>(cfg.repair.dehum.config.mode));
+  add_field(params, "repair.dehum.mode", cfg.repair.dehum.config.mode);
 
   add_field(params, "repair.dereverb.enabled", cfg.repair.dereverb.enabled);
   add_field(params, "repair.dereverb.threshold", cfg.repair.dereverb.config.threshold);
@@ -145,12 +137,8 @@ sonare::util::json::Object build_chain_params(const MasteringChainConfig& cfg,
   add_field(params, "repair.dereverb.wpeStrength", cfg.repair.dereverb.config.wpe_strength);
 
   add_field(params, "repair.denoise.enabled", cfg.repair.denoise.enabled);
-  // `mode` and `noiseEstimator` are enums serialized as their integer values
-  // (the parser side restores them via static_cast in chain_params.cpp), so emit
-  // a number — not a bool — to keep the dump -> parse round-trip lossless.
-  add_field(params, "repair.denoise.mode", static_cast<int>(cfg.repair.denoise.config.mode));
-  add_field(params, "repair.denoise.noiseEstimator",
-            static_cast<int>(cfg.repair.denoise.config.noise_estimator));
+  add_field(params, "repair.denoise.mode", cfg.repair.denoise.config.mode);
+  add_field(params, "repair.denoise.noiseEstimator", cfg.repair.denoise.config.noise_estimator);
   add_field(params, "repair.denoise.nFft", cfg.repair.denoise.config.n_fft);
   add_field(params, "repair.denoise.hopLength", cfg.repair.denoise.config.hop_length);
   add_field(params, "repair.denoise.ddAlpha", cfg.repair.denoise.config.dd_alpha);
@@ -180,8 +168,6 @@ sonare::util::json::Object build_chain_params(const MasteringChainConfig& cfg,
   SONARE_FIELDS_TRANSIENT_SHAPER(X)
 #undef X
 
-  // `detector` is an enum serialized as its integer value via the enum add_field
-  // overload; the parser restores it with static_cast in chain_params.cpp.
   add_field(params, "dynamics.compressor.enabled", cfg.dynamics.compressor.enabled);
 #define X(key, member, meta) \
   add_field(params, "dynamics.compressor." key, cfg.dynamics.compressor.config.member);
@@ -192,37 +178,6 @@ sonare::util::json::Object build_chain_params(const MasteringChainConfig& cfg,
   }
   SONARE_FIELDS_COMPRESSOR_AFTER_HIGH_PASS(X)
 #undef X
-
-  if (include_flat_multiband) {
-    add_field(params, "dynamics.multibandComp.enabled", cfg.dynamics.multiband_comp.enabled);
-    if (cfg.dynamics.multiband_comp.config.crossover.cutoffs_hz.size() >= 2) {
-      add_field(params, "dynamics.multibandComp.cutoff0Hz",
-                cfg.dynamics.multiband_comp.config.crossover.cutoffs_hz[0]);
-      add_field(params, "dynamics.multibandComp.cutoff1Hz",
-                cfg.dynamics.multiband_comp.config.crossover.cutoffs_hz[1]);
-    }
-    if (cfg.dynamics.multiband_comp.config.bands.size() >= 1) {
-      const auto& low = cfg.dynamics.multiband_comp.config.bands[0];
-      add_field(params, "dynamics.multibandComp.bands.0.thresholdDb", low.threshold_db);
-      add_field(params, "dynamics.multibandComp.bands.0.ratio", low.ratio);
-      add_field(params, "dynamics.multibandComp.bands.0.attackMs", low.attack_ms);
-      add_field(params, "dynamics.multibandComp.bands.0.releaseMs", low.release_ms);
-    }
-    if (cfg.dynamics.multiband_comp.config.bands.size() >= 2) {
-      const auto& mid = cfg.dynamics.multiband_comp.config.bands[1];
-      add_field(params, "dynamics.multibandComp.bands.1.thresholdDb", mid.threshold_db);
-      add_field(params, "dynamics.multibandComp.bands.1.ratio", mid.ratio);
-      add_field(params, "dynamics.multibandComp.bands.1.attackMs", mid.attack_ms);
-      add_field(params, "dynamics.multibandComp.bands.1.releaseMs", mid.release_ms);
-    }
-    if (cfg.dynamics.multiband_comp.config.bands.size() >= 3) {
-      const auto& high = cfg.dynamics.multiband_comp.config.bands[2];
-      add_field(params, "dynamics.multibandComp.bands.2.thresholdDb", high.threshold_db);
-      add_field(params, "dynamics.multibandComp.bands.2.ratio", high.ratio);
-      add_field(params, "dynamics.multibandComp.bands.2.attackMs", high.attack_ms);
-      add_field(params, "dynamics.multibandComp.bands.2.releaseMs", high.release_ms);
-    }
-  }
 
   add_field(params, "saturation.tape.enabled", cfg.saturation.tape.enabled);
 #define X(key, member, meta) \
@@ -289,368 +244,115 @@ constexpr sonare::resource::ProjectImportResourceLimits kChainJsonLimits{
   throw SonareException(ErrorCode::InvalidFormat, message);
 }
 
-const sonare::util::json::Object& require_object(const JsonValue& value, std::string_view path) {
-  if (!value.is_object()) {
-    throw_invalid_json(std::string(path) + " must be an object");
-  }
-  return value.as_object();
-}
+constexpr int kChainDocumentVersion = 2;
 
-void require_allowed_keys(const JsonValue& object, std::initializer_list<std::string_view> keys,
-                          std::string_view path) {
-  std::string error;
-  if (!sonare::util::json::schema::has_allowed_keys(object, keys, path, &error)) {
-    throw_invalid_json(error);
-  }
-}
-
-const JsonValue& require_value(const sonare::util::json::Object& object, const char* key,
-                               std::string_view path) {
-  const auto it = object.find(key);
-  if (it == object.end()) {
-    throw_invalid_json("missing field: " + std::string(path) + "." + key);
-  }
-  return it->second;
-}
-
-bool require_bool(const sonare::util::json::Object& object, const char* key,
-                  std::string_view path) {
-  const JsonValue& value = require_value(object, key, path);
-  if (!value.is_bool()) {
-    throw_invalid_json("field must be a boolean: " + std::string(path) + "." + key);
-  }
-  return value.as_bool();
-}
-
-double require_number(const sonare::util::json::Object& object, const char* key,
-                      std::string_view path, double minimum = -std::numeric_limits<double>::max(),
-                      double maximum = std::numeric_limits<double>::max(), bool integer = false) {
-  const JsonValue& value = require_value(object, key, path);
-  if (!value.is_number()) {
-    throw_invalid_json("field must be numeric: " + std::string(path) + "." + key);
-  }
-  const double number = value.as_number();
-  if (!std::isfinite(number)) {
-    throw_invalid_json("field must be finite: " + std::string(path) + "." + key);
-  }
-  if (integer && std::floor(number) != number) {
-    throw_invalid_json("field must be an integer: " + std::string(path) + "." + key);
-  }
-  if (number < minimum || number > maximum) {
-    throw_invalid_json("field is out of range: " + std::string(path) + "." + key);
-  }
-  return number;
-}
-
-float require_float(const sonare::util::json::Object& object, const char* key,
-                    std::string_view path, double minimum = -std::numeric_limits<float>::max(),
-                    double maximum = std::numeric_limits<float>::max()) {
-  return static_cast<float>(require_number(object, key, path, minimum, maximum));
-}
-
-int require_int(const sonare::util::json::Object& object, const char* key, std::string_view path,
-                int minimum, int maximum) {
-  return static_cast<int>(require_number(object, key, path, static_cast<double>(minimum),
-                                         static_cast<double>(maximum), true));
-}
-
-std::vector<float> parse_cutoffs(const JsonValue& value, std::string_view path) {
-  if (!value.is_array()) {
-    throw_invalid_json("field must be an array: " + std::string(path));
-  }
-  const auto& values = value.as_array();
-  if (values.size() > kMaxMultibandBands - 1u) {
-    throw_invalid_json("crossover cutoff count exceeds the 64-band limit");
-  }
-
-  std::vector<float> cutoffs;
-  cutoffs.reserve(values.size());
-  for (std::size_t index = 0; index < values.size(); ++index) {
-    const JsonValue& item = values[index];
-    if (!item.is_number()) {
-      throw_invalid_json("crossover cutoff must be numeric: " + std::string(path) + "[" +
-                         std::to_string(index) + "]");
-    }
-    const double number = item.as_number();
-    if (!std::isfinite(number) || number > static_cast<double>(std::numeric_limits<float>::max()) ||
-        !(number > 0.0)) {
-      throw_invalid_json("crossover cutoff must be finite and positive: " + std::string(path) +
-                         "[" + std::to_string(index) + "]");
-    }
-    const float cutoff = static_cast<float>(number);
-    if (!(cutoff > 0.0f)) {
-      throw_invalid_json("crossover cutoff is too small: " + std::string(path) + "[" +
-                         std::to_string(index) + "]");
-    }
-    if (index > 0 && !(cutoff > cutoffs.back())) {
-      throw_invalid_json("crossover cutoffs must be strictly ascending");
-    }
-    cutoffs.push_back(cutoff);
-  }
-  return cutoffs;
-}
-
-MultibandCompStage parse_multiband_config(const JsonValue& value) {
-  using sonare::mastering::dynamics::CompressorConfig;
-  using sonare::mastering::dynamics::DetectorMode;
-  using sonare::mastering::multiband::CrossoverConfig;
-  using sonare::mastering::multiband::CrossoverMode;
-  using sonare::mastering::multiband::CrossoverSlope;
-  using sonare::mastering::multiband::MultibandCompressorConfig;
-
-  constexpr std::string_view path = "$.params.dynamics.multibandComp";
-  const auto& object = require_object(value, path);
-  require_allowed_keys(value, {"enabled", "crossover", "bands"}, path);
-
-  MultibandCompStage stage;
-  stage.enabled = require_bool(object, "enabled", path);
-
-  const JsonValue& crossover_value = require_value(object, "crossover", path);
-  const auto& crossover_object =
-      require_object(crossover_value, "$.params.dynamics.multibandComp.crossover");
-  constexpr std::string_view crossover_path = "$.params.dynamics.multibandComp.crossover";
-  require_allowed_keys(crossover_value, {"cutoffsHz", "slope", "mode", "firKernelSize"},
-                       crossover_path);
-
-  CrossoverConfig crossover;
-  crossover.cutoffs_hz = parse_cutoffs(require_value(crossover_object, "cutoffsHz", crossover_path),
-                                       "$.params.dynamics.multibandComp.crossover.cutoffsHz");
-  crossover.slope = static_cast<CrossoverSlope>(require_int(
-      crossover_object, "slope", crossover_path, 0, static_cast<int>(CrossoverSlope::LR8)));
-  crossover.mode =
-      static_cast<CrossoverMode>(require_int(crossover_object, "mode", crossover_path, 0,
-                                             static_cast<int>(CrossoverMode::FirLinearPhase)));
-  crossover.fir_kernel_size =
-      require_int(crossover_object, "firKernelSize", crossover_path, 1, kMaxFirKernelSize);
-  if (crossover.mode == CrossoverMode::FirLinearPhase &&
-      (crossover.fir_kernel_size < 3 || crossover.fir_kernel_size % 2 == 0)) {
-    throw_invalid_json("linear-phase crossover FIR kernel size must be odd and >= 3");
-  }
-
-  const JsonValue& bands_value = require_value(object, "bands", path);
-  if (!bands_value.is_array()) {
-    throw_invalid_json("field must be an array: " + std::string(path) + ".bands");
-  }
-  const auto& band_values = bands_value.as_array();
-  if (band_values.size() < kMinMultibandBands) {
-    throw_invalid_json(
-        "multiband stage needs at least two bands; one band is the compressor stage");
-  }
-  if (band_values.size() > kMaxMultibandBands) {
-    throw_invalid_json("multiband bands count must be between 2 and 64");
-  }
-  if (band_values.size() != crossover.cutoffs_hz.size() + 1u) {
-    throw_invalid_json("multiband band count must equal cutoff count plus one");
-  }
-
-  MultibandCompressorConfig config;
-  config.crossover = std::move(crossover);
-  config.bands.clear();
-  config.bands.reserve(band_values.size());
-
-  for (std::size_t index = 0; index < band_values.size(); ++index) {
-    const std::string band_path = std::string(path) + ".bands[" + std::to_string(index) + "]";
-    const JsonValue& band_value = band_values[index];
-    const auto& band_object = require_object(band_value, band_path);
-    for (const char* retired : {"sidechainHpfEnabled", "sidechainHpfHz"}) {
-      if (band_object.count(retired) != 0) {
-        throw_invalid_json("unknown chain config key: " + band_path + "." + retired +
-                           " (renamed to sidechainHighPassHz)");
-      }
-    }
-    require_allowed_keys(
-        band_value,
-        {"thresholdDb", "ratio", "attackMs", "releaseMs", "kneeDb", "makeupGainDb", "autoMakeup",
-         "detector", "sidechainHighPassHz", "pdrTimeMs", "pdrReleaseScale"},
-        band_path);
-
-    CompressorConfig band;
-    band.threshold_db = require_float(band_object, "thresholdDb", band_path);
-    band.ratio = require_float(band_object, "ratio", band_path, 1.0);
-    band.attack_ms = require_float(band_object, "attackMs", band_path, 0.0);
-    band.release_ms = require_float(band_object, "releaseMs", band_path, 0.0);
-    band.knee_db = require_float(band_object, "kneeDb", band_path, 0.0);
-    band.makeup_gain_db = require_float(band_object, "makeupGainDb", band_path);
-    band.auto_makeup = require_bool(band_object, "autoMakeup", band_path);
-    band.detector = static_cast<DetectorMode>(
-        require_int(band_object, "detector", band_path, 0, static_cast<int>(DetectorMode::LogRms)));
-    if (band_object.count("sidechainHighPassHz") != 0) {
-      band.sidechain_hpf_hz = require_float(band_object, "sidechainHighPassHz", band_path, 0.0);
-      if (!(band.sidechain_hpf_hz > 0.0f)) {
-        throw_invalid_json("sidechain high-pass frequency must be positive: " + band_path);
-      }
-      band.sidechain_hpf_enabled = true;
-    }
-    band.pdr_time_ms = require_float(band_object, "pdrTimeMs", band_path, 0.0);
-    band.pdr_release_scale = require_float(band_object, "pdrReleaseScale", band_path, 1.0);
-    config.bands.push_back(band);
-  }
-
-  stage.config = std::move(config);
-  return stage;
-}
-
-bool is_v1_multiband_representable(const MasteringChainConfig& cfg) {
-  using sonare::mastering::dynamics::CompressorConfig;
-  using sonare::mastering::dynamics::DetectorMode;
-  using sonare::mastering::multiband::CrossoverConfig;
-
-  const auto& config = cfg.dynamics.multiband_comp.config;
-  const CrossoverConfig crossover_defaults;
-  if (config.crossover.cutoffs_hz.size() != 2 || config.bands.size() != 3 ||
-      config.crossover.slope != crossover_defaults.slope ||
-      config.crossover.mode != crossover_defaults.mode ||
-      config.crossover.fir_kernel_size != crossover_defaults.fir_kernel_size) {
-    return false;
-  }
-
-  const CompressorConfig band_defaults;
-  for (const auto& band : config.bands) {
-    if (band.knee_db != band_defaults.knee_db ||
-        band.makeup_gain_db != band_defaults.makeup_gain_db ||
-        band.auto_makeup != band_defaults.auto_makeup || band.detector != DetectorMode::Rms ||
-        band.sidechain_hpf_enabled != band_defaults.sidechain_hpf_enabled ||
-        band.sidechain_hpf_hz != band_defaults.sidechain_hpf_hz ||
-        band.pdr_time_ms != band_defaults.pdr_time_ms ||
-        band.pdr_release_scale != band_defaults.pdr_release_scale) {
-      return false;
+// `dynamics.multibandComp.cutoff<i>Hz` and `...crossover.cutoffsHz.<i>` name one value.
+std::string duplicate_identity(const std::string& path) {
+  std::string storage;
+  std::string canonical = canonical_chain_param_key(path, &storage);
+  constexpr std::string_view kScalarCutoff = "dynamics.multibandComp.cutoff";
+  if (canonical.size() > kScalarCutoff.size() + 2 &&
+      canonical.compare(0, kScalarCutoff.size(), kScalarCutoff) == 0 &&
+      canonical.compare(canonical.size() - 2, 2, "Hz") == 0) {
+    const std::string digits =
+        canonical.substr(kScalarCutoff.size(), canonical.size() - kScalarCutoff.size() - 2);
+    if (!digits.empty() && digits.find_first_not_of("0123456789") == std::string::npos) {
+      return "dynamics.multibandComp.crossover.cutoffsHz." + digits;
     }
   }
-  return true;
+  return canonical;
 }
 
-struct ParsedChainJson {
-  int version = 0;
-  std::vector<Param> flat_params;
-  std::optional<MultibandCompStage> multiband;
-};
-
-class JsonParamParser {
+// Walks a `params` block into flat leaves: object members as `.<key>`, array elements as
+// `.<index>`, so a dotted key and the nested spelling of the same path are one parameter.
+class ParamsWalker {
  public:
-  explicit JsonParamParser(const std::string& text) : text_(text) {}
-
-  ParsedChainJson parse() {
-    try {
-      // Strict parse under kChainJsonLimits: duplicate top-level keys (e.g. two
-      // `"version"` entries) are caller bugs, not "last-write-wins" inputs.
-      // With the `has_allowed_keys` allowlist below, unknown and ambiguous
-      // fields are both rejected up front.
-      const auto root = sonare::util::json::admit_strict(text_, kChainJsonLimits);
-      if (!root.is_object())
-        throw SonareException(ErrorCode::InvalidFormat, "expected chain config JSON object");
-      std::string allowed_keys_error;
-      if (!sonare::util::json::schema::has_allowed_keys(root, {"version", "params"}, "$",
-                                                        &allowed_keys_error)) {
-        throw SonareException(ErrorCode::InvalidFormat, allowed_keys_error);
-      }
-      const auto* version = root.find("version");
-      const auto* params_value = root.find("params");
-      if (!version || !params_value) {
-        throw SonareException(ErrorCode::InvalidFormat,
-                              "chain config JSON requires version and params");
-      }
-      if (!version->is_number() || !std::isfinite(version->as_number()) ||
-          std::floor(version->as_number()) != version->as_number() ||
-          (version->as_number() != 1.0 && version->as_number() != 2.0)) {
-        throw SonareException(ErrorCode::InvalidFormat, "unsupported chain config JSON version");
-      }
-      const int version_number = static_cast<int>(version->as_number());
-      if (!params_value->is_object())
-        throw SonareException(ErrorCode::InvalidFormat, "params must be a JSON object");
-      ParsedChainJson parsed;
-      parsed.version = version_number;
-      parsed.flat_params.reserve(params_value->as_object().size());
-      bool has_structured_multiband = false;
-      for (const auto& [key, value] : params_value->as_object()) {
-        if (version_number == 2 && key == "dynamics.multibandComp") {
-          if (has_structured_multiband) {
-            throw SonareException(ErrorCode::InvalidFormat,
-                                  "duplicate structured multiband configuration");
-          }
-          parsed.multiband = parse_multiband_config(value);
-          has_structured_multiband = true;
-          continue;
-        }
-        if (version_number == 2 && key.rfind("dynamics.multibandComp.", 0) == 0) {
-          throw SonareException(ErrorCode::InvalidFormat,
-                                "v2 multiband configuration must use structured params");
-        }
-        if (value.is_bool()) {
-          parsed.flat_params.push_back(Param{key, value.as_bool() ? 1.0 : 0.0});
-        } else if (value.is_number()) {
-          parsed.flat_params.push_back(Param{key, value.as_number()});
-        } else if (const auto named = value.is_string()
-                                          ? mastering_enum_value("", key, value.as_string())
-                                          : std::nullopt) {
-          parsed.flat_params.push_back(Param{key, *named});
-        } else {
-          throw SonareException(ErrorCode::InvalidFormat,
-                                "params values must be numbers or booleans");
-        }
-      }
-      if (version_number == 2 && !has_structured_multiband) {
-        throw SonareException(ErrorCode::InvalidFormat,
-                              "v2 chain config JSON requires structured multiband params");
-      }
-      return parsed;
-    } catch (const sonare::util::json::JsonError& e) {
-      throw SonareException(ErrorCode::InvalidFormat, e.what());
+  std::vector<ChainFlatParam> walk(const JsonValue& params) {
+    for (const auto& [key, value] : params.as_object()) {
+      if (sonare::util::json::is_annotation_key(key)) continue;
+      append(key, value);
     }
+    return std::move(out_);
   }
 
  private:
-  const std::string& text_;
+  void append(const std::string& path, const JsonValue& value) {
+    if (value.is_object()) {
+      for (const auto& [key, member] : value.as_object()) {
+        if (sonare::util::json::is_annotation_key(key)) continue;
+        append(path + "." + key, member);
+      }
+      return;
+    }
+    if (value.is_array()) {
+      const auto& elements = value.as_array();
+      if (elements.empty()) {
+        throw_invalid_json(path + " is an empty list, which has no flat spelling");
+      }
+      for (std::size_t index = 0; index < elements.size(); ++index) {
+        append(path + "." + std::to_string(index), elements[index]);
+      }
+      return;
+    }
+    if (!seen_.insert(duplicate_identity(path)).second)
+      throw_invalid_json(path + " is given twice");
+    const std::optional<std::string> names = mastering_enum_names("", path);
+    if (value.is_null()) throw_invalid_json(path + " is null, not a number, boolean or token");
+    if (value.is_string()) {
+      if (!names) throw_invalid_json(path + " is a string, but takes no token");
+      out_.push_back(
+          ChainFlatParam{path, *mastering_enum_value("", path, value.as_string()), false});
+      return;
+    }
+    if (names)
+      throw_invalid_json(path + " takes a token, not a number (valid names: " + *names + ")");
+    if (value.is_bool()) {
+      out_.push_back(ChainFlatParam{path, value.as_bool() ? 1.0 : 0.0, true});
+      return;
+    }
+    // A positive declip threshold names a level above full scale; refused enabled or not.
+    if (path == "repair.declip.clipThresholdDb" && value.as_number() > 0.0) {
+      throw_invalid_json(path + " must be at or below 0 dBFS");
+    }
+    out_.push_back(ChainFlatParam{path, value.as_number(), false});
+  }
+
+  std::vector<ChainFlatParam> out_;
+  std::set<std::string> seen_;
 };
 
-// Appends one params entry under its dotted path: object members as `.<key>`, array
-// elements as `.<index>`.
-void append_flat_param(std::vector<ChainFlatParam>& out, const std::string& path,
-                       const JsonValue& value) {
-  if (value.is_number()) {
-    out.push_back(ChainFlatParam{path, value.as_number(), false});
-  } else if (value.is_bool()) {
-    out.push_back(ChainFlatParam{path, value.as_bool() ? 1.0 : 0.0, true});
-  } else if (const auto named = value.is_string()
-                                    ? mastering_enum_value("", path, value.as_string())
-                                    : std::nullopt) {
-    out.push_back(ChainFlatParam{path, *named, false});
-  } else if (value.is_object()) {
-    for (const auto& [key, member] : value.as_object()) {
-      append_flat_param(out, path + "." + key, member);
+// The flat leaves of a chain document. Every refusal is the document's, so InvalidFormat.
+std::vector<ChainFlatParam> read_chain_document(const std::string& text) {
+  try {
+    const auto root = sonare::util::json::admit_strict(text, kChainJsonLimits);
+    if (!root.is_object()) throw_invalid_json("expected chain config JSON object");
+    for (const auto& [key, value] : root.as_object()) {
+      if (key == "version" || key == "params" || sonare::util::json::is_annotation_key(key)) {
+        continue;
+      }
+      throw_invalid_json("unknown chain config key: " + key);
     }
-  } else if (value.is_array()) {
-    const auto& elements = value.as_array();
-    if (elements.empty()) {
-      throw SonareException(
-          ErrorCode::InvalidFormat,
-          "chain config param '" + path + "' is an empty list, which has no flat spelling");
+    if (const JsonValue* version = root.find("version")) {
+      if (!version->is_number() || version->as_number() != kChainDocumentVersion) {
+        throw_invalid_json("unsupported chain config version; write 2 or leave it out");
+      }
     }
-    for (std::size_t index = 0; index < elements.size(); ++index) {
-      append_flat_param(out, path + "." + std::to_string(index), elements[index]);
-    }
-  } else {
-    throw SonareException(ErrorCode::InvalidFormat,
-                          "chain config param '" + path + "' is not a number or boolean");
+    const JsonValue* params = root.find("params");
+    if (params == nullptr) throw_invalid_json("chain config requires params");
+    if (!params->is_object()) throw_invalid_json("params must be a JSON object");
+    return ParamsWalker{}.walk(*params);
+  } catch (const sonare::util::json::JsonError& e) {
+    throw SonareException(ErrorCode::InvalidFormat, e.what());
+  } catch (const SonareException& e) {
+    if (e.code() != ErrorCode::InvalidParameter) throw;
+    throw SonareException(ErrorCode::InvalidFormat, e.what());
   }
 }
 
 }  // namespace
 
 std::vector<ChainFlatParam> chain_config_flat_params(const std::string& chain_config_json) {
-  try {
-    const auto root = sonare::util::json::admit_strict(chain_config_json, kChainJsonLimits);
-    const JsonValue* params = root.find("params");
-    if (!params || !params->is_object() || params->as_object().empty()) {
-      throw SonareException(ErrorCode::InvalidFormat, "chain config carries no params block");
-    }
-    std::vector<ChainFlatParam> flat;
-    for (const auto& [key, value] : params->as_object()) {
-      append_flat_param(flat, key, value);
-    }
-    return flat;
-  } catch (const sonare::util::json::JsonError& e) {
-    throw SonareException(ErrorCode::InvalidFormat, e.what());
-  }
+  return read_chain_document(chain_config_json);
 }
 
 std::optional<double> chain_config_parameter_value(const MasteringChainConfig& config,
@@ -662,49 +364,69 @@ std::optional<double> chain_config_parameter_value(const MasteringChainConfig& c
     return multiband_parameter_value(config.dynamics.multiband_comp, canonical);
   }
   // Shares the writer's flat table, but skips document validation.
-  const auto params = build_chain_params(config, true);
+  const auto params = build_chain_params(config);
   const auto it = params.find(canonical);
   if (it == params.end()) return std::nullopt;
   if (it->second.is_bool()) return it->second.as_bool() ? 1.0 : 0.0;
-  if (!it->second.is_number()) return std::nullopt;
+  if (it->second.is_string()) return mastering_enum_value("", canonical, it->second.as_string());
   return it->second.as_number();
 }
 
 std::string chain_config_to_json(const MasteringChainConfig& config) {
-  // Validate the complete multiband shape before selecting v1 or v2. This is
-  // deliberately done at serialization time: otherwise a config beyond the
-  // v2 schema (for example 65 bands or a six-digit FIR kernel) would produce
-  // JSON that chain_config_from_json must reject, breaking writer->parser
-  // round-trips.
+  // Validated here so the writer never emits a document chain_config_from_json refuses.
   validate_chain_multiband_config(config.dynamics.multiband_comp.config);
-  const bool use_v1 = is_v1_multiband_representable(config);
   sonare::util::json::Object root;
-  util::json::put(root, "version", use_v1 ? 1 : 2);
-  auto params = build_chain_params(config, use_v1);
-  if (!use_v1) {
-    util::json::put(params, "dynamics.multibandComp", build_multiband_params(config));
-  }
+  util::json::put(root, "version", kChainDocumentVersion);
+  auto params = build_chain_params(config);
+  util::json::put(params, "dynamics.multibandComp", build_multiband_params(config));
   util::json::put(root, "params", std::move(params));
   return sonare::util::json::dump(JsonValue(std::move(root)));
 }
 
-MasteringChainConfig chain_config_from_json(const std::string& json) {
-  JsonParamParser parser(json);
-  ParsedChainJson parsed = parser.parse();
-  // The flat-param parser and the config validator are shared with the key/value and struct entry
-  // points, where a refusal is the caller's argument. Here the values come from the document.
+namespace {
+
+std::vector<Param> document_params(const std::string& document) {
+  const std::vector<ChainFlatParam> flat = read_chain_document(document);
+  std::vector<Param> params;
+  params.reserve(flat.size());
+  for (const ChainFlatParam& leaf : flat) params.push_back(Param{leaf.key, leaf.value});
+  return params;
+}
+
+// The flat-param parser and the config validator are shared with the key/value and struct entry
+// points, where a refusal is the caller's argument. Here the values come from the document.
+template <typename Build>
+MasteringChainConfig from_document(Build&& build) {
   try {
-    MasteringChainConfig config =
-        parse_chain_config_params(parsed.flat_params.data(), parsed.flat_params.size());
-    if (parsed.version == 2) {
-      config.dynamics.multiband_comp = *parsed.multiband;
-    }
+    MasteringChainConfig config = build();
     validate_mastering_chain_config(config);
     return config;
   } catch (const SonareException& e) {
     if (e.code() != ErrorCode::InvalidParameter) throw;
     throw SonareException(ErrorCode::InvalidFormat, e.what());
   }
+}
+
+}  // namespace
+
+MasteringChainConfig chain_config_from_json(const std::string& json) {
+  const std::vector<Param> params = document_params(json);
+  return from_document([&] { return parse_chain_config_params(params.data(), params.size()); });
+}
+
+MasteringChainConfig streaming_chain_config_from_json(const std::string& json) {
+  const std::vector<Param> params = document_params(json);
+  return from_document(
+      [&] { return parse_streaming_chain_config_params(params.data(), params.size()); });
+}
+
+MasteringChainConfig chain_config_overrides_from_json(MasteringChainConfig base,
+                                                      const std::string& json) {
+  const std::vector<Param> params = document_params(json);
+  return from_document([&] {
+    apply_chain_config_overrides(base, params.data(), params.size());
+    return std::move(base);
+  });
 }
 
 }  // namespace sonare::mastering::api

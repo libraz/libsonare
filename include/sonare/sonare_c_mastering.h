@@ -309,10 +309,12 @@ SonareError sonare_mastering_chain_stereo_with_progress_ex(
 ///   do NOT free it. Returns NULL if the name table cannot be built.
 const char* sonare_mastering_preset_names(void);
 
-/// @brief Returns a built-in preset's chain configuration as flat-params JSON.
-/// @details Same document shape as @ref sonare_mastering_assistant_suggest_chain_json
-/// (`{"version":1,"params":{...}}`); the flat @c params keys are the same
-/// dot-notation @c sonare_master_audio accepts as overrides.
+/// @brief Returns a built-in preset's chain configuration document.
+/// @details Same document shape as @ref sonare_mastering_assistant_suggest_chain_json:
+/// `{"version":2,"params":{...}}`, flat dot-notation keys plus the structured
+/// `dynamics.multibandComp` object, with every enum value by name. Flattened (nested members as
+/// `.<member>`, list elements as `.<index>`, names as their values), the keys are the ones
+/// @c sonare_master_audio accepts as overrides.
 /// @param preset e.g. "pop", "aiMusic". See @c sonare_mastering_preset_names().
 ///   Unknown names return @c SONARE_ERROR_INVALID_PARAMETER.
 /// The returned string must be released with sonare_free_string().
@@ -322,9 +324,10 @@ SonareError sonare_mastering_preset_params_json(const char* preset, char** json_
 /// @details Reads @p document as the native CLI's `--chain-config` reads it and returns the
 ///   chain it describes in the shape of @ref sonare_mastering_preset_params_json, so its flat
 ///   @c params feed @c sonare_mastering_chain or @c sonare_master_audio as a preset's do. A
-///   document that is malformed, carries a version other than 1 or 2, an unknown or earlier
-///   key spelling, or a value outside its domain returns @c SONARE_ERROR_INVALID_FORMAT and
-///   names the field; @c sonare_last_error_message() names the current spelling of an earlier one.
+///   document that is malformed, carries a version other than 2 (it may be left out), an unknown
+///   or earlier key spelling, a path given twice, a null, an enum given as a number or an unknown
+///   name, or a value outside its domain returns @c SONARE_ERROR_INVALID_FORMAT and names the
+///   field; @c sonare_last_error_message() names the current spelling of an earlier one.
 /// @param document NUL-terminated chain configuration JSON; NULL returns
 ///   @c SONARE_ERROR_INVALID_PARAMETER.
 /// The returned string must be released with sonare_free_string().

@@ -22,66 +22,6 @@ namespace sonare_node {
 
 namespace {
 
-// Flatten a nested or already-flat JS config object into dot-notation
-// Param entries that sonare::mastering::api::parse_chain_config_params
-// understands. Mirrors libsonare/python's _flatten_chain_config.
-void FlattenChainConfig(const Napi::Object& object, const std::string& prefix,
-                        std::vector<sonare::mastering::api::Param>* out);
-
-// Flattens one value under `path`: objects as `.<key>`, arrays as `.<index>`.
-// An empty array has no flat spelling and is refused by path.
-void FlattenChainConfigValue(const Napi::Value& value, const std::string& path,
-                             std::vector<sonare::mastering::api::Param>* out) {
-  if (value.IsArray()) {
-    Napi::Array array = value.As<Napi::Array>();
-    if (array.Length() == 0) {
-      throw Napi::TypeError::New(value.Env(), "Mastering override '" + path +
-                                                  "' is an empty list, which has no flat spelling");
-    }
-    for (uint32_t index = 0; index < array.Length(); ++index) {
-      FlattenChainConfigValue(array.Get(index), path + "." + std::to_string(index), out);
-    }
-  } else if (value.IsObject() && !value.IsBuffer() && !value.IsTypedArray() &&
-             !value.IsFunction()) {
-    FlattenChainConfig(value.As<Napi::Object>(), path, out);
-  } else if (value.IsNumber()) {
-    out->push_back({path, value.As<Napi::Number>().DoubleValue()});
-  } else if (value.IsBoolean()) {
-    out->push_back({path, value.As<Napi::Boolean>().Value() ? 1.0 : 0.0});
-  } else if (!value.IsUndefined()) {
-    // Same refusal, in the same words, as the facade's flattenChainConfig.
-    throw Napi::TypeError::New(value.Env(),
-                               "Mastering override '" + path + "' must be a number or boolean.");
-  }
-}
-
-void FlattenChainConfig(const Napi::Object& object, const std::string& prefix,
-                        std::vector<sonare::mastering::api::Param>* out) {
-  Napi::Array names = object.GetPropertyNames();
-  for (uint32_t index = 0; index < names.Length(); ++index) {
-    Napi::Value key_value = names.Get(index);
-    if (!key_value.IsString()) continue;
-    std::string key = node_narrow_string(key_value.Env(), key_value, "chain config key");
-    std::string full_key = prefix.empty() ? key : prefix + "." + key;
-
-    // Top-level streaming-only options are read separately by the constructor
-    // and are not chain config keys; skip them so parse_chain_config_params
-    // does not reject them as unknown.
-    if (prefix.empty() && (key == "loudnessStaticGainDb" || key == "loudnessStaticGainPeakDb")) {
-      continue;
-    }
-
-    FlattenChainConfigValue(object.Get(key_value), full_key, out);
-  }
-}
-
-std::vector<sonare::mastering::api::Param> ParseChainConfigFromJs(const Napi::Value& value) {
-  std::vector<sonare::mastering::api::Param> params;
-  if (!value.IsObject()) return params;
-  FlattenChainConfig(value.As<Napi::Object>(), "", &params);
-  return params;
-}
-
 sonare::mastering::eq::EqBandType ParseBandType(const std::string& value) {
   const auto parsed = sonare::mastering::eq::band_type_from_string(value);
   if (!parsed) {
@@ -214,23 +154,26 @@ StreamingMasteringChainWrap::StreamingMasteringChainWrap(const Napi::CallbackInf
     : Napi::ObjectWrap<StreamingMasteringChainWrap>(info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  std::vector<sonare::mastering::api::Param> params;
+  constexpr const char* kUsage =
+      "Expected (configJson?: string, options?: {loudnessStaticGainDb?, "
+      "loudnessStaticGainPeakDb?})";
+  const bool has_config = info.Length() >= 1 && !info[0].IsUndefined() && !info[0].IsNull();
+  const bool has_options = info.Length() >= 2 && !info[1].IsUndefined() && !info[1].IsNull();
+  if ((has_config && !info[0].IsString()) || (has_options && !info[1].IsObject())) {
+    Napi::TypeError::New(env, kUsage).ThrowAsJavaScriptException();
+    return;
+  }
   sonare::mastering::api::StreamingMasteringChainOptions options;
-  if (info.Length() >= 1 && info[0].IsObject()) {
-    params = ParseChainConfigFromJs(info[0]);
-    Napi::Object config_object = info[0].As<Napi::Object>();
-    // The presence check the file-local reader used to do here was redundant:
-    // the reader already returns the fallback it is handed for an absent,
-    // undefined or null value, and the fallback IS the current field, so the
-    // assignment is a no-op in exactly those cases.
+  if (has_options) {
+    Napi::Object options_object = info[1].As<Napi::Object>();
     options.loudness_static_gain_db = static_cast<float>(
-        DoubleProperty(config_object, "loudnessStaticGainDb", options.loudness_static_gain_db));
+        DoubleProperty(options_object, "loudnessStaticGainDb", options.loudness_static_gain_db));
     options.loudness_static_gain_peak_db = static_cast<float>(DoubleProperty(
-        config_object, "loudnessStaticGainPeakDb", options.loudness_static_gain_peak_db));
+        options_object, "loudnessStaticGainPeakDb", options.loudness_static_gain_peak_db));
   }
 
-  auto config =
-      sonare::mastering::api::parse_streaming_chain_config_params(params.data(), params.size());
+  auto config = sonare::mastering::api::streaming_chain_config_from_json(
+      has_config ? node_narrow_string(env, info[0], "configJson") : std::string("{\"params\":{}}"));
   chain_ =
       std::make_unique<sonare::mastering::api::StreamingMasteringChain>(std::move(config), options);
   SONARE_NODE_CATCH_VOID(env)
