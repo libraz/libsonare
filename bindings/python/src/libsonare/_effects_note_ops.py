@@ -1008,8 +1008,8 @@ def transcribe(
     does each of them elsewhere and a second implementation would drift from the
     first:
 
-    - Quantizing to a grid: :meth:`Project.bake_midi_fx`'s ``quantize_ppq`` /
-      ``quantize_strength``.
+    - Quantizing to a grid: :meth:`Project.bake_midi_fx`'s ``quantizePpq`` /
+      ``quantizeStrength``.
     - Detecting and installing a tempo map: :meth:`Project.auto_tempo`. What
       ``tempo_bpm=None`` does here is detect ONE constant tempo for this grid;
       it installs nothing and follows no tempo that moves during the take.

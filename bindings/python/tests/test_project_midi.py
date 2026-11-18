@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import re
 
 import numpy as np
 import pytest
 
 from libsonare import (
     AutomationPoint,
+    ErrorCode,
     MidiCcBinding,
     Project,
     ProjectMidiEvent,
@@ -17,6 +19,7 @@ from libsonare import (
     SonareValueError,
 )
 
+from ._helpers import raises_coded
 from ._project_helpers import _build_project
 
 
@@ -155,8 +158,8 @@ def test_midi_helpers_program_midi_fx_and_sysex_smf_round_trip() -> None:
         )
         project.bake_midi_fx(
             midi_clip,
-            '{"transpose_semitones":12,"quantize_ppq":0.25,'
-            '"quantize_strength":1.0,"velocity_scale":0.5}',
+            '{"transposeSemitones":12,"quantizePpq":0.25,'
+            '"quantizeStrength":1.0,"velocityScale":0.5}',
         )
         project.set_program(midi_clip, program=42)
         project.set_program_on_channel(midi_clip, group=0, channel=3, program=24, bank=0x0123)
@@ -546,7 +549,7 @@ def test_bake_midi_fx_reports_source_index() -> None:
             ],
         )
 
-    config = '{"chord_intervals":[0,4,7]}'
+    config = '{"chordIntervals":[0,4,7]}'
     tracked = Project()
     plain = Project()
     try:
@@ -589,5 +592,31 @@ def test_project_import_smf_preserves_salvaged_truncation() -> None:
     project = Project()
     try:
         assert project.import_smf(_make_truncated_smf()) > 0
+    finally:
+        project.close()
+
+
+@pytest.mark.parametrize(
+    ("config", "message"),
+    [
+        (
+            '{"transpose_semitones":12}',
+            "transpose_semitones is an earlier spelling; write transposeSemitones",
+        ),
+        ('{"transposeSemitone":12}', "unknown MIDI-FX key 'transposeSemitone'"),
+    ],
+    ids=["earlier_spelling", "unknown_key"],
+)
+def test_a_midi_fx_key_outside_the_document_is_refused_as_invalid_format(
+    config: str, message: str
+) -> None:
+    """The MIDI-FX config names its keys in camelCase; any other key is refused by name."""
+    project = Project()
+    try:
+        clip = project.add_midi_clip(0.0, 4.0).clip_id
+        with raises_coded(ErrorCode.INVALID_FORMAT, match=re.escape(message)):
+            project.preview_midi_fx_count(clip, config)
+        with raises_coded(ErrorCode.INVALID_FORMAT, match=re.escape(message)):
+            project.bake_midi_fx(clip, config)
     finally:
         project.close()

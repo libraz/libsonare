@@ -415,7 +415,7 @@ def test_a_wrapped_midi_argument_is_refused_rather_than_addressing_another_clip(
     """The MIDI surface, whose clip id and channel-voice scalars narrow onto three widths."""
     project, (clip_a, clip_b) = two_midi_clip_project
     events = [ls.Project.midi_note_on(0.0, 0, 0, 72, 100)]
-    fx = '{"transpose_semitones":5}'
+    fx = '{"transposeSemitones":5}'
 
     def applied(edit, value) -> str:
         edit(value)
@@ -461,7 +461,7 @@ def test_a_wrapped_midi_query_argument_is_refused_rather_than_counting_another_c
             ls.Project.midi_note_on(240.0, 0, 0, 69, 100),
         ],
     )
-    fx = '{"transpose_semitones":5}'
+    fx = '{"transposeSemitones":5}'
 
     queries = (
         ("clip_id", lambda v: project.preview_midi_fx_count(v, fx)),

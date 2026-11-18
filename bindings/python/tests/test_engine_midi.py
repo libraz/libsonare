@@ -65,7 +65,7 @@ def test_a_cc_binding_mapping_is_a_type_error() -> None:
 
 def test_engine_set_and_clear_midi_fx_round_trips() -> None:
     with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
-        engine.set_midi_fx(0, '{"transpose_semitones":12}')
+        engine.set_midi_fx(0, '{"transposeSemitones":12}')
         engine.clear_midi_fx(0)
         with pytest.raises(SonareError):
             engine.set_midi_fx(0, "{bad json")
