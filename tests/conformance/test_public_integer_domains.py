@@ -70,7 +70,9 @@ class _SyntheticTree(unittest.TestCase):
     """Cases that need a surface and an implementation of their own."""
 
     def tree(self, stub: str, implementation: str, *, home: str = HOME) -> Path:
-        root = Path(tempfile.mkdtemp())
+        scratch = tempfile.TemporaryDirectory()
+        self.addCleanup(scratch.cleanup)
+        root = Path(scratch.name)
         (root / "m.pyi").write_text(stub, encoding="utf-8")
         (root / "m.py").write_text(implementation, encoding="utf-8")
         (root / "_runtime.py").write_text(home, encoding="utf-8")
@@ -997,7 +999,9 @@ class UnreadableRootTest(_SyntheticTree):
         self.assertIn("not a directory", lines[0])
 
     def test_a_root_without_stubs_is_the_only_report(self) -> None:
-        root = Path(tempfile.mkdtemp())
+        scratch = tempfile.TemporaryDirectory()
+        self.addCleanup(scratch.cleanup)
+        root = Path(scratch.name)
         (root / "m.py").write_text("def f(n):\n    return n\n", encoding="utf-8")
         report = domains.Report(root, exclusions={})
         lines = self.only(
@@ -1006,7 +1010,9 @@ class UnreadableRootTest(_SyntheticTree):
         self.assertIn("holds no *.pyi", lines[0])
 
     def test_a_root_without_implementations_is_the_only_report(self) -> None:
-        root = Path(tempfile.mkdtemp())
+        scratch = tempfile.TemporaryDirectory()
+        self.addCleanup(scratch.cleanup)
+        root = Path(scratch.name)
         (root / "m.pyi").write_text("def f(n: int) -> None: ...\n", encoding="utf-8")
         report = domains.Report(root, exclusions={})
         lines = self.only(
@@ -1016,7 +1022,9 @@ class UnreadableRootTest(_SyntheticTree):
 
     def test_stubs_declaring_no_integer_argument_are_the_only_report(self) -> None:
         """Read, parsed, and empty: a different finding from an unread root."""
-        root = Path(tempfile.mkdtemp())
+        scratch = tempfile.TemporaryDirectory()
+        self.addCleanup(scratch.cleanup)
+        root = Path(scratch.name)
         (root / "m.pyi").write_text("def f(x: float) -> None: ...\n", encoding="utf-8")
         (root / "m.py").write_text("def f(x):\n    return x\n", encoding="utf-8")
         report = domains.Report(root, exclusions={})

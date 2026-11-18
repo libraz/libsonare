@@ -34,9 +34,10 @@ class _SyntheticTree(unittest.TestCase):
     """Cases that need a tree of their own, one module deep."""
 
     def tree(self, body: str, name: str = "m.py") -> Path:
-        root = Path(tempfile.mkdtemp())
+        scratch = tempfile.TemporaryDirectory()
+        self.addCleanup(scratch.cleanup)
+        root = Path(scratch.name)
         (root / name).write_text(body, encoding="utf-8")
-        self.addCleanup(lambda: None)
         return root
 
     def evaluate(self, root: Path, *, records=None, floor=None, **kwargs):
