@@ -75,6 +75,7 @@ export type {
   MasteringApplyPairProcessorStereoRequest,
   MasteringApplyProcessorRequest,
   MasteringApplyProcessorStereoRequest,
+  MasteringAssistantSettings,
   MasteringAssistantSuggestRequest,
   MasteringAssistantSuggestStereoRequest,
   MasteringAudioProfileRequest,

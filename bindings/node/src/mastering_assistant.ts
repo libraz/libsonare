@@ -25,6 +25,7 @@ export type { MasteringAudioProfile, MasteringAudioProfileDefects } from './type
 
 /** Request form of {@link masteringAudioProfile}. */
 export interface MasteringAudioProfileRequest extends ValidateOptions {
+  /** Mono input samples. */
   samples: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
@@ -40,18 +41,24 @@ export interface MasteringAudioProfileRequest extends ValidateOptions {
 
 /** Stereo counterpart of {@link MasteringAudioProfileRequest}. */
 export interface MasteringAudioProfileStereoRequest extends ValidateOptions {
+  /** Left channel samples. */
   left: Float32Array;
+  /** Right channel samples. */
   right: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
+  /** Analysis window in samples at 48000 Hz, rescaled to the input rate; a positive integer. */
   nFft?: number;
+  /** Analysis hop in samples at 48000 Hz, rescaled to the input rate; a positive integer. */
   hopLength?: number;
+  /** True-peak oversampling factor; a positive integer. */
   truePeakOversample?: number;
+  /** Measure the repair defects. Default `true`; `false` leaves `defects` absent. */
   detectDefects?: boolean;
 }
 
 /** Fields the assistant reads beside the audio. */
-interface MasteringAssistantSettings {
+export interface MasteringAssistantSettings {
   /** Integrated loudness target in LUFS. */
   targetLufs?: number;
   /** True-peak ceiling in dBFS. */
@@ -72,6 +79,7 @@ interface MasteringAssistantSettings {
 export interface MasteringAssistantSuggestRequest
   extends MasteringAssistantSettings,
     ValidateOptions {
+  /** Mono input samples. */
   samples: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
@@ -81,7 +89,9 @@ export interface MasteringAssistantSuggestRequest
 export interface MasteringAssistantSuggestStereoRequest
   extends MasteringAssistantSettings,
     ValidateOptions {
+  /** Left channel samples. */
   left: Float32Array;
+  /** Right channel samples. */
   right: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
@@ -89,6 +99,7 @@ export interface MasteringAssistantSuggestStereoRequest
 
 /** Request form of {@link masteringStreamingPreview}. */
 export interface MasteringStreamingPreviewRequest extends ValidateOptions {
+  /** Mono input samples. */
   samples: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
@@ -98,10 +109,13 @@ export interface MasteringStreamingPreviewRequest extends ValidateOptions {
 
 /** Request form of {@link masteringStreamingPreviewStereo}. */
 export interface MasteringStreamingPreviewStereoRequest extends ValidateOptions {
+  /** Left channel samples. */
   left: Float32Array;
+  /** Right channel samples. */
   right: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
+  /** Streaming platforms to preview. */
   platforms?: StreamingPlatform[];
 }
 
