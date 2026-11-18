@@ -500,6 +500,77 @@ def _stereo_pair_violation(c: dict) -> str | None:
     return None
 
 
+_REF_PARAM = re.compile(r"^(strip|bus)(_?[Ii]d)?$")
+
+
+def _ref_kind(type_: str) -> str:
+    base = re.sub(r"\s*\|\s*(null|undefined|None)\b", "", type_).strip()
+    if base in ("number", "int", "float"):
+        return "number"
+    if base in ("string", "str"):
+        return "string"
+    return base
+
+
+def _strip_bus_records(records: list[dict]) -> list[dict]:
+    params = [
+        r
+        for r in records
+        if r["surface"] in ("node", "wasm", "python")
+        and _REF_PARAM.match(r.get("member", ""))
+        and (
+            r["kind"] == "option"
+            or (r["kind"] == "field" and _INPUT_OWNER.search(r.get("owner", "")))
+        )
+    ]
+    out: list[dict] = []
+    by_class: dict[tuple[str, str], list[str]] = {}
+    by_method: dict[tuple[str, str, str], dict[str, set[str]]] = {}
+    for r in params:
+        group = _REF_PARAM.match(r["member"]).group(1)  # type: ignore[union-attr]
+        cls, _, method = r["owner"].partition(".")
+        by_class.setdefault((r["surface"], cls + ":" + group), []).append(r["type"])
+        by_method.setdefault((cls, _fold(method), group), {}).setdefault(r["surface"], set()).add(
+            _ref_kind(r["type"])
+        )
+    for r in params:
+        group = _REF_PARAM.match(r["member"]).group(1)  # type: ignore[union-attr]
+        cls, _, method = r["owner"].partition(".")
+        siblings = by_class[(r["surface"], cls + ":" + group)]
+        common = max(set(siblings), key=siblings.count)
+        others = {
+            s: kinds
+            for s, kinds in by_method[(cls, _fold(method), group)].items()
+            if s != r["surface"]
+        }
+        out.append(
+            {
+                "surface": r["surface"],
+                "kind": "ref-param",
+                "name": r["name"],
+                "group": group,
+                "type": r["type"],
+                "family_type": common,
+                "other_kinds": {s: sorted(k) for s, k in others.items()},
+            }
+        )
+    return out
+
+
+def _ref_param_violation(r: dict) -> str | None:
+    if r["group"] == "strip":
+        if not r["type"].startswith("StripRef"):
+            return "a strip parameter is a StripRef"
+        return None
+    if r["type"] != r["family_type"]:
+        return f"a bus parameter carries one type across its family ({r['family_type']})"
+    kind = _ref_kind(r["type"])
+    for surface, kinds in r["other_kinds"].items():
+        if kind not in kinds:
+            return f"a bus id is the same kind on every surface ({surface}: {', '.join(kinds)})"
+    return None
+
+
 RULES: list[Rule] = [
     Rule(
         name="getters",
@@ -682,6 +753,41 @@ RULES: list[Rule] = [
             "wasm:masteringApplyPairProcessorStereo": "Python spells it mastering_pair_process_stereo",
             "node:mixingAssistantSuggest": "MixAssistantTrack carries left/right; a mixing track takes channels",
             "wasm:mixingAssistantSuggest": "MixAssistantTrack carries left/right; a mixing track takes channels",
+        },
+    ),
+    Rule(
+        name="strip-ref",
+        summary="strip params are StripRef; bus params keep one type per family and one kind per surface",
+        population=lambda r: r["kind"] == "ref-param",
+        violation=_ref_param_violation,
+        derive=_strip_bus_records,
+        pending={
+            **{
+                f"{s}:{c}.setBusStrip(bus)": "the definition object is not a bus reference; name the parameter for what it is"
+                for s, c in (
+                    ("node", "RealtimeEngine"),
+                    ("wasm", "RealtimeEngine"),
+                    ("wasm", "SonareEngine"),
+                )
+            },
+            **{
+                f"{s}:{c}.setStrip(strip)": "the definition object is not a strip reference; name the parameter for what it is"
+                for s, c in (
+                    ("node", "RealtimeEngine"),
+                    ("wasm", "RealtimeEngine"),
+                    ("wasm", "SonareEngine"),
+                )
+            },
+            **{
+                f"{s}:{c}.setTrackOutputBus(busId)": "busId is number | null here and number on every sibling; pick one form for 'no bus'"
+                for s, c in (
+                    ("node", "RealtimeEngine"),
+                    ("wasm", "RealtimeEngine"),
+                    ("wasm", "SonareEngine"),
+                )
+            },
+            "python:Mixer.add_strip(strip_id)": "type the strip parameter StripRef, or rename it for a new strip's id",
+            "python:Mixer.strip_by_id(strip_id)": "type the strip parameter StripRef",
         },
     ),
 ]

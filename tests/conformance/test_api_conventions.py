@@ -503,6 +503,47 @@ class StereoPairRule(unittest.TestCase):
         self.assertEqual(len(verdict.violations), 3)
 
 
+def ref_param(surface: str, owner: str, member: str, type_: str) -> dict:
+    return {
+        "surface": surface,
+        "kind": "option",
+        "owner": owner,
+        "member": member,
+        "name": f"{owner}({member})",
+        "type": type_,
+    }
+
+
+class StripRefRule(unittest.TestCase):
+    CLEAN = [
+        ref_param("node", "Mixer.setFaderDb", "strip", "StripRef"),
+        ref_param("node", "Mixer.busMeter", "busId", "string"),
+        ref_param("python", "Mixer.bus_meter", "bus_id", "str"),
+        ref_param("node", "Engine.setBusGainDb", "busId", "number"),
+        ref_param("node", "Engine.setBusPan", "busId", "number"),
+    ]
+
+    def test_clean_surface_passes(self) -> None:
+        verdict = run("strip-ref", self.CLEAN)
+        self.assertEqual(verdict.read, 5)
+        self.assertFalse(verdict.failed)
+
+    def test_plain_strip_parameter_is_named(self) -> None:
+        planted = ref_param("wasm", "Mixer.setPan", "strip", "number")
+        verdict = run("strip-ref", [*self.CLEAN, planted])
+        self.assertEqual([f.key for f in verdict.violations], ["wasm:Mixer.setPan(strip)"])
+
+    def test_lone_differently_typed_bus_is_named(self) -> None:
+        planted = ref_param("node", "Engine.setBusWidth", "busId", "string")
+        verdict = run("strip-ref", [*self.CLEAN, planted])
+        self.assertEqual([f.key for f in verdict.violations], ["node:Engine.setBusWidth(busId)"])
+
+    def test_bus_kind_differing_across_surfaces_is_named(self) -> None:
+        planted = ref_param("python", "Engine.set_bus_gain_db", "bus_id", "str")
+        verdict = run("strip-ref", [*self.CLEAN, planted])
+        self.assertIn("python:Engine.set_bus_gain_db(bus_id)", [f.key for f in verdict.violations])
+
+
 class Framework(unittest.TestCase):
     def test_reading_nothing_fails(self) -> None:
         verdict = check.judge(rule("getters"), [])
