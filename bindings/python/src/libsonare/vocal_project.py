@@ -18,7 +18,6 @@ from ._ffi_types_vocal import (
     SonareVocalStateToken,
 )
 from ._ffi_types_vocal_project import (
-    SONARE_VOCAL_PROJECT_ABI_VERSION,
     SonareProjectVocalEditApplyDesc,
     SonareProjectVocalEditApplyResult,
     SonareProjectVocalEditDependenciesResult,
@@ -330,6 +329,7 @@ def _original_sources_to_c(
 ) -> tuple[ctypes.Array[SonareProjectVocalOriginalSource] | None, list[np.ndarray]]:
     if not originals:
         return None, []
+    lib = _get_lib()
     rows = (SonareProjectVocalOriginalSource * len(originals))()
     buffers: list[np.ndarray] = []
     seen: set[int] = set()
@@ -350,8 +350,7 @@ def _original_sources_to_c(
             arg_name=f"original_sources[{index}].mono",
         )
         buffers.append(buffer)
-        rows[index].struct_size = ctypes.sizeof(SonareProjectVocalOriginalSource)
-        rows[index].schema_version = SONARE_VOCAL_PROJECT_ABI_VERSION
+        lib.sonare_project_vocal_original_source_init(ctypes.byref(rows[index]))
         rows[index].source_id = source_id
         rows[index].mono = buffer.ctypes.data_as(ctypes.POINTER(ctypes.c_float))
         rows[index].sample_count = int(buffer.size)
