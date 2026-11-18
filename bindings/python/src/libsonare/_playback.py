@@ -46,7 +46,10 @@ PlaybackRendererConfig = dict[str, Any]
 Keys such as ``target``, ``room``, ``loudness`` and ``outputLimiter``; speaker roles
 are spelled out (``left``, ``center``, ``leftSurround``, ...). Complete or partial; an
 omitted key takes the schema default, and an earlier snake_case key or short role
-token raises ``SonareError`` (InvalidFormat) naming the spelling to write. JSON text
+token raises ``SonareError`` (InvalidFormat) naming the spelling to write. An unset
+optional value (``input.channelMap``, a speaker's ``distanceM``,
+``loudness.programLufs``) is an omitted key: ``None`` is refused as InvalidFormat
+naming the path, and :meth:`PlaybackRenderer.config` leaves the key out. JSON text
 is parsed by the caller (``json.loads``) before it is passed.
 """
 

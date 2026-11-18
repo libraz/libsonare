@@ -26,20 +26,21 @@ SAMPLES = sine(220.0, 0.2, sr=SR, amp=0.2)
 
 
 def test_every_preset_key_set_matches_the_assistant_suggested_chain() -> None:
-    """Each preset's nested params carry the same leaves the assistant would suggest."""
+    """Each preset's params carry the same leaves the assistant would suggest."""
     suggested = _chain_config_paths(mastering_assistant_suggest_chain(SAMPLES, sample_rate=SR))
     for preset in mastering_preset_names():
         params = _chain_config_paths(mastering_preset_params(preset))
         assert set(params) == set(suggested), preset
 
 
-def test_preset_params_values_are_scalar() -> None:
+def test_preset_params_are_the_document_params_as_the_core_wrote_them() -> None:
+    """Keys are dotted paths, enum leaves are tokens, and no leaf is a container."""
     for preset in mastering_preset_names():
         params = mastering_preset_params(preset)
-        assert params
-        assert not any("." in key for key in params), preset
+        assert "loudness.targetLufs" in params, preset
         for path, value in _chain_config_paths(params).items():
-            assert isinstance(value, (float, bool, int)), (preset, path)
+            assert isinstance(value, (float, bool, int, str)), (preset, path)
+        assert isinstance(params["dynamics.multibandComp"]["crossover"]["slope"], str), preset
 
 
 def test_unknown_preset_raises() -> None:

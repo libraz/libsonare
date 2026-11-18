@@ -14,15 +14,15 @@ import numpy as np
 import pytest
 
 from libsonare import (
-    SonareValueError,
+    ErrorCode,
     StreamingMasteringChain,
     master_audio,
     master_audio_stereo,
+    mastering_chain_config_from_json,
 )
 from libsonare._mastering_offline import _enum_value, _flatten_chain_config, _nest_chain_config
-from libsonare._mastering_pair import _chain_config_from_document
 
-from ._helpers import LIB_AVAILABLE, sine
+from ._helpers import LIB_AVAILABLE, raises_coded, sine
 
 pytestmark = pytest.mark.skipif(not LIB_AVAILABLE, reason="libsonare shared library missing")
 
@@ -87,11 +87,18 @@ def test_enum_names_resolve_on_nested_and_band_paths() -> None:
     assert detector == _enum_value(None, "dynamics.compressor.detector", "logRms")
 
 
-def test_dotted_key_is_refused_by_name() -> None:
-    with pytest.raises(SonareValueError, match=r"dotted keys are not accepted; nest the object"):
-        master_audio(LEFT, SR, overrides=FLAT)
-    with pytest.raises(SonareValueError, match=r"dynamics\.multibandComp"):
-        master_audio(LEFT, SR, preset="pop", overrides={MB: {"enabled": True}})
+def test_a_dotted_key_and_a_nested_object_name_the_same_path() -> None:
+    np.testing.assert_array_equal(
+        master_audio(LEFT, SR, overrides=FLAT).samples,
+        master_audio(LEFT, SR, overrides=TYPED).samples,
+    )
+    with raises_coded(ErrorCode.INVALID_FORMAT, match=rf"{MB}\.enabled is given twice"):
+        master_audio(
+            LEFT,
+            SR,
+            preset="pop",
+            overrides={MB: {"enabled": True}, "dynamics": {"multibandComp": {"enabled": True}}},
+        )
 
 
 def test_typed_config_renders_like_flat_keys_mono() -> None:
@@ -153,13 +160,13 @@ def test_streaming_chain_typed_matches_flat_keys() -> None:
     ],
 )
 def test_empty_list_is_refused_by_path(config: dict, path: str) -> None:
-    with pytest.raises(SonareValueError, match="is an empty list, which has no flat spelling"):
-        _flatten_chain_config(config)
-    with pytest.raises(SonareValueError, match=path.replace(".", r"\.")):
+    with raises_coded(
+        ErrorCode.INVALID_FORMAT, match=path.replace(".", r"\.") + " is an empty list"
+    ):
         master_audio(LEFT, SR, overrides=config)
 
 
-def _v2_document(slope: int) -> str:
+def _v2_document(slope: str) -> str:
     return json.dumps(
         {
             "version": 2,
@@ -170,7 +177,6 @@ def _v2_document(slope: int) -> str:
                     "crossover": {
                         "cutoffsHz": [200.0, 1200.0, 5000.0],
                         "slope": slope,
-                        "mode": 0,
                         "firKernelSize": 1024,
                     },
                     "bands": [
@@ -185,38 +191,28 @@ def _v2_document(slope: int) -> str:
     )
 
 
-def test_v2_document_nests_and_round_trips() -> None:
-    slope = int(_enum_value(None, f"{MB}.crossover.slope", "lr8"))
-    config = _chain_config_from_document(_v2_document(slope))
-    nested = {
-        "loudness": {"targetLufs": -14.0},
-        "dynamics": {
-            "multibandComp": {
-                "enabled": True,
-                "crossover": {
-                    "cutoffsHz": [200.0, 1200.0, 5000.0],
-                    "slope": slope,
-                    "mode": 0,
-                    "firKernelSize": 1024,
-                },
-                "bands": [
-                    {"thresholdDb": -30.0, "ratio": 3.0},
-                    {"thresholdDb": -26.0, "ratio": 2.0},
-                    {"thresholdDb": -24.0, "ratio": 2.5},
-                    {"thresholdDb": -20.0, "ratio": 4.0},
-                ],
-            }
-        },
-    }
-    assert config == nested
+def test_a_v2_document_returns_its_params_as_the_core_wrote_them() -> None:
+    """The structured multiband stage and its tokens come back unchanged and feed overrides."""
+    config = mastering_chain_config_from_json(_v2_document("lr8"))
+    stage = config[MB]
+    assert stage["crossover"]["slope"] == "lr8"
+    assert stage["crossover"]["cutoffsHz"] == [200.0, 1200.0, 5000.0]
+    assert config["loudness.targetLufs"] == -14.0
     assert _flatten_chain_config(config)[f"{MB}.crossover.cutoffsHz.2"] == 5000.0
+    assert master_audio(LEFT, SR, overrides=config).samples.size == LEFT.size
+
+
+def test_a_v2_document_refuses_a_number_for_a_token() -> None:
+    slope = int(_enum_value(None, f"{MB}.crossover.slope", "lr8"))
+    with raises_coded(ErrorCode.INVALID_FORMAT, match=rf"{MB}\.crossover\.slope takes a token"):
+        mastering_chain_config_from_json(_v2_document(slope))  # type: ignore[arg-type]
 
 
 @pytest.mark.parametrize(
     ("config", "current"),
     [
-        ({"lowCutoffHz": 200.0}, "cutoff0Hz"),
-        ({"highCutoffHz": 5000.0}, "cutoff1Hz"),
+        ({"lowCutoffHz": 200.0}, "crossover.cutoffsHz.0"),
+        ({"highCutoffHz": 5000.0}, "crossover.cutoffsHz.1"),
         ({"band2": {"detector": "rms"}}, "bands.2.detector"),
     ],
 )
@@ -224,13 +220,5 @@ def test_multiband_shorthand_keys_are_refused_naming_the_current_key(
     config: dict, current: str
 ) -> None:
     """The three-band shorthand is gone; the refusal names the list spelling."""
-    with pytest.raises(SonareValueError, match=current.replace(".", r"\.")):
+    with raises_coded(ErrorCode.INVALID_FORMAT, match=current.replace(".", r"\.")):
         master_audio(LEFT, SR, overrides={"dynamics": {"multibandComp": config}})
-
-
-def test_document_refuses_a_non_scalar_leaf_by_name() -> None:
-    document = json.dumps({"version": 2, "params": {MB: {"crossover": {"slope": "lr8"}}}})
-    with pytest.raises(SonareValueError, match=r"dynamics\.multibandComp\.crossover\.slope"):
-        _chain_config_from_document(document)
-    with pytest.raises(SonareValueError, match=r"is an empty list"):
-        _chain_config_from_document(json.dumps({"version": 2, "params": {MB: {"bands": []}}}))

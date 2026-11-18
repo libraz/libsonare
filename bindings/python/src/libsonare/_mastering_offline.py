@@ -572,13 +572,12 @@ def _enum_value(processor: str | None, key: str, name: str) -> float:
 
 
 def _chain_config_paths(config: Mapping[str, Any] | None) -> dict[str, Any]:
-    """Walk a nested chain config into ``{"module.processor.param": leaf}``.
+    """Walk a chain config into ``{"module.processor.param": leaf}``.
 
-    Leaves are returned unconverted. A key containing a dot is refused: the
-    nested object is the only accepted spelling, and the dot is the path
-    separator the native call reads. A list recurses as ``<path>.<index>``
-    (``crossover.cutoffsHz`` -> ``crossover.cutoffsHz.0``); an empty list has no
-    flat spelling and is refused by path.
+    Leaves are returned unconverted. A dotted key and a nested object name the
+    same path, and a list recurses as ``<path>.<index>`` (``crossover.cutoffsHz``
+    -> ``crossover.cutoffsHz.0``). Content is not screened here: an input config
+    has already been read by the core's document reader (:func:`_chain_params`).
     """
     paths: dict[str, Any] = {}
     if not config:
@@ -588,16 +587,8 @@ def _chain_config_paths(config: Mapping[str, Any] | None) -> dict[str, Any]:
         if isinstance(value, Mapping):
             for key, child in value.items():
                 name = str(key)
-                child_path = f"{path}.{name}" if path else name
-                if "." in name:
-                    raise SonareValueError(
-                        f"mastering config key {child_path!r}: dotted keys are not accepted; "
-                        "nest the object"
-                    )
-                walk(child, child_path)
+                walk(child, f"{path}.{name}" if path else name)
         elif isinstance(value, (list, tuple)):
-            if not value:
-                raise SonareValueError(f"{path} is an empty list, which has no flat spelling")
             for index, item in enumerate(value):
                 walk(item, f"{path}.{index}")
         else:
@@ -608,12 +599,10 @@ def _chain_config_paths(config: Mapping[str, Any] | None) -> dict[str, Any]:
 
 
 def _flatten_chain_config(config: Mapping[str, Any] | None) -> dict[str, float]:
-    """Flatten a nested chain config into the dotted-key map the native call reads.
+    """Flatten a chain config into the dotted-key map the native call reads.
 
-    Booleans are coerced to 0.0/1.0 and numbers narrowed to a finite double. A
-    string for an enum-valued key (``{"repair": {"denoise": {"noiseEstimator":
-    "mcra"}}}``) is resolved by the core to the number every flat parameter
-    list carries; an unknown name raises with the key and the valid names.
+    Booleans become 0.0/1.0 and a token is resolved by the core to the number
+    every flat parameter list carries.
     """
     flat: dict[str, float] = {}
     for path, value in _chain_config_paths(config).items():
@@ -672,7 +661,35 @@ def _lists_from_index_objects(node: Any) -> Any:
     return converted
 
 
+def _check_chain_document(config: Mapping[str, Any]) -> None:
+    """Have the core read ``config`` as a version 2 chain document.
+
+    Every content refusal (unknown or earlier key, a path given twice, a null, a
+    number for a token, an out-of-domain value) is the core's ``InvalidFormat``,
+    naming the path.
+    """
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_mastering_chain_config_params_json"):
+        raise _not_supported("libsonare was built without mastering chain config support")
+    document = json.dumps({"version": 2, "params": dict(config)})
+    json_ptr = ctypes.c_char_p()
+    _check(
+        lib.sonare_mastering_chain_config_params_json(
+            _utf8_arg(document, "config"), ctypes.byref(json_ptr)
+        )
+    )
+    if json_ptr.value:
+        lib.sonare_free_string(json_ptr)
+
+
 def _chain_params(config: Mapping[str, Any] | None) -> tuple[Any, int]:
+    if config is not None and not isinstance(config, Mapping):
+        raise TypeError(
+            "chain config must be a mapping (parse JSON text with json.loads first), "
+            f"got {type(config).__name__}"
+        )
+    if config:
+        _check_chain_document(config)
     flat = _flatten_chain_config(config)
     items = list(flat.items())
     array_type = SonareMasteringParam * len(items)
@@ -853,14 +870,13 @@ def master_audio(
         sample_rate: Sample rate in Hz.
         preset: Preset identifier from :func:`mastering_preset_names`; None runs
             ``overrides`` alone.
-        overrides: A nested dict of module -> processor -> parameter
-            (:data:`MasteringChainConfig`), e.g.
+        overrides: Chain document params (:data:`MasteringChainConfig`), e.g.
             ``{"dynamics": {"compressor": {"thresholdDb": -24}},
-            "loudness": {"targetLufs": -14}}``, applied on top of the preset
-            defaults when a preset is given. A boolean toggles a
-            module/processor's ``enabled`` flag. An unknown key, or a dotted key
-            such as ``"dynamics.compressor.thresholdDb"``, raises
-            SonareValueError naming it. The color stages ``saturation.tape`` and
+            "loudness.targetLufs": -14}``, applied on top of the preset defaults
+            when a preset is given. A boolean toggles a module/processor's
+            ``enabled`` flag. The core reads it as a version 2 chain document, so
+            an unknown key, a path given twice or a null raises ``SonareError``
+            (``InvalidFormat``) naming the path. The color stages ``saturation.tape`` and
             ``saturation.exciter`` are engaged from an override only when you
             pass ``enabled=True`` explicitly: on a preset where they are off,
             ``{"saturation": {"tape": {"driveDb": 6}}}`` alone has no audible

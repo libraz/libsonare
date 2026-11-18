@@ -257,6 +257,39 @@ def test_an_earlier_config_spelling_is_refused_as_invalid_format(document: dict)
         PlaybackRenderer(document, sample_rate=SR)
 
 
+@pytest.mark.parametrize(
+    ("document", "message"),
+    [
+        ({"input": {"channelMap": None}}, r"input\.channelMap must be an array"),
+        (
+            {
+                "target": {
+                    "kind": "speakers",
+                    "layout": "stereo",
+                    "speakers": {"left": {"distanceM": None}},
+                }
+            },
+            r"target\.speakers\.left\.distanceM must be a number",
+        ),
+        ({"loudness": {"programLufs": None}}, r"loudness\.programLufs must be a number"),
+        ({"outputLimiter": {"ceilingDbtp": -1.0}}, r"unknown key: outputLimiter\.ceilingDbtp"),
+    ],
+    ids=["null_channel_map", "null_distance", "null_program_lufs", "old_ceiling_key"],
+)
+def test_an_unset_value_is_an_omitted_key_and_null_is_refused(document: dict, message: str) -> None:
+    with raises_coded(ErrorCode.INVALID_FORMAT, match=message):
+        PlaybackRenderer(document, sample_rate=SR)
+
+
+def test_the_config_writer_omits_unset_values_and_spells_the_ceiling_ceiling_db() -> None:
+    with PlaybackRenderer({"target": {"kind": "headphones"}}, sample_rate=SR) as renderer:
+        config = renderer.config()
+    assert "channelMap" not in config.get("input", {})
+    assert "programLufs" not in config.get("loudness", {})
+    assert "ceilingDb" in config["outputLimiter"]
+    assert "ceilingDbtp" not in config["outputLimiter"]
+
+
 def test_diagnostics_reports_active_input_layout() -> None:
     with PlaybackRenderer(_speakers_5_1(), max_block_size=BLOCK, sample_rate=48000) as renderer:
         diagnostics = renderer.diagnostics()

@@ -7,7 +7,6 @@ import math
 import numpy as np
 
 import libsonare
-from libsonare import SonareValueError
 
 # ruff: noqa: F403,F405
 from ._analyzer_helpers import *
@@ -587,7 +586,7 @@ def test_master_audio_reads_the_nested_config() -> None:
     assert "dynamics.compressor" in result.stages
 
 
-_DOTTED_KEY_CALLS = {
+_CHAIN_CONFIG_CALLS = {
     "master_audio_overrides_only": lambda c: libsonare.master_audio(
         [0.1] * 2205, 22050, overrides=c
     ),
@@ -610,14 +609,39 @@ _DOTTED_KEY_CALLS = {
 }
 
 
-@pytest.mark.parametrize("name", sorted(_DOTTED_KEY_CALLS))
-def test_a_dotted_chain_key_is_refused_by_name(name: str) -> None:
-    """Only the nested object is a chain config; a dotted key is named, not read as a path."""
-    call = _DOTTED_KEY_CALLS[name]
-    with pytest.raises(SonareValueError, match=r"'eq\.tilt\.tiltDb': dotted keys are not accepted"):
-        call({"eq.tilt.tiltDb": 1.0})
-    with pytest.raises(SonareValueError, match=r"'eq\.tilt': dotted keys are not accepted"):
-        call({"eq": {"tilt": {}}, "eq.tilt": {"tiltDb": 1.0}})
+_CHAIN_CONTENT_REFUSALS = {
+    "duplicate_path": (
+        {"eq": {"tilt": {"tiltDb": 1.0}}, "eq.tilt.tiltDb": 1.0},
+        r"eq\.tilt\.tiltDb is given twice",
+    ),
+    "null_leaf": ({"loudness": {"targetLufs": None}}, r"loudness\.targetLufs is null"),
+    "number_for_a_token": (
+        {"dynamics": {"compressor": {"detector": 1}}},
+        r"dynamics\.compressor\.detector takes a token, not a number",
+    ),
+    "clip_threshold_above_full_scale": (
+        {"repair": {"declip": {"clipThresholdDb": 1.0}}},
+        r"repair\.declip\.clipThresholdDb must be at or below 0 dBFS",
+    ),
+}
+
+
+@pytest.mark.parametrize("name", sorted(_CHAIN_CONFIG_CALLS))
+def test_a_dotted_chain_key_names_the_path_its_nesting_does(name: str) -> None:
+    """A dotted key is the path a nested object spells; the core reads both."""
+    call = _CHAIN_CONFIG_CALLS[name]
+    call({"eq.tilt.tiltDb": 1.0})
+    call({"eq": {"tilt": {"tiltDb": 1.0}}})
+
+
+@pytest.mark.parametrize("refusal", sorted(_CHAIN_CONTENT_REFUSALS))
+@pytest.mark.parametrize("name", sorted(_CHAIN_CONFIG_CALLS))
+def test_chain_config_content_is_refused_by_the_core_naming_the_path(
+    name: str, refusal: str
+) -> None:
+    config, message = _CHAIN_CONTENT_REFUSALS[refusal]
+    with raises_coded(libsonare.ErrorCode.INVALID_FORMAT, match=message):
+        _CHAIN_CONFIG_CALLS[name](config)
 
 
 def test_color_saturation_stages_engage_only_when_meaningful() -> None:

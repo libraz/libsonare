@@ -98,13 +98,15 @@ class MasteringAudioProfile:
 
 
 MasteringChainConfig = dict[str, Any]
-"""A nested mastering chain config: module -> processor -> parameter.
+"""The ``params`` of a version 2 mastering chain document, with camelCase keys.
 
-``{"dynamics": {"compressor": {"thresholdDb": -24}}, "loudness": {"targetLufs":
--14}}``. A boolean toggles a module/processor's ``enabled`` flag, an enum leaf
-is its token, and a list (``crossover.cutoffsHz``, ``bands``) is a list. The
-form :func:`libsonare.master_audio` takes as ``overrides`` and
-:func:`libsonare.mastering_assistant_suggest_chain` returns.
+A key is a dotted path (``"loudness.targetLufs"``) and a nested object is shorthand for its
+prefix (``{"loudness": {"targetLufs": -14}}``); giving one path both ways is refused. A
+boolean toggles an ``enabled`` flag, an enum leaf is its token, and a list
+(``crossover.cutoffsHz``, ``bands``) is a list. The core reads it on the way in, so a
+content refusal is ``SonareError`` (``InvalidFormat``) naming the path. The form
+:func:`libsonare.master_audio` takes as ``overrides`` and the preset, chain-config and
+assistant calls return, as the core wrote it.
 """
 
 EqBandInput = dict[str, Any]

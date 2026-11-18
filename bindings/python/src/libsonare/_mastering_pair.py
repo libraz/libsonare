@@ -5,7 +5,7 @@ from __future__ import annotations
 import ctypes
 import json
 from collections.abc import Mapping, Sequence
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 
@@ -19,9 +19,7 @@ from ._ffi import (
 )
 from ._mastering_offline import (
     _assistant_params,
-    _chain_config_paths,
     _mastering_params,
-    _nest_chain_config,
 )
 from ._narrowing import _narrow_double
 from ._result_records import _record
@@ -592,7 +590,7 @@ def _streaming_preview_from_wire(wire: Mapping[str, Any]) -> MasteringStreamingP
 
 def _assistant_result_from_wire(wire: Mapping[str, Any]) -> MasteringAssistantResult:
     return MasteringAssistantResult(
-        chain_config=_chain_config_from_params(wire["chainConfig"].get("params")),
+        chain_config=_document_params(wire["chainConfig"]),
         explanation=[str(line) for line in wire["explanation"]],
         profile=_record(MasteringAssistantProfile, wire["profile"]),
     )
@@ -648,7 +646,7 @@ def mastering_assistant_suggest(
     ``params`` accepts ``targetPlatform`` as a delivery-target name (see
     :func:`mastering_platform_names`) and ``preset`` as the mastering preset the
     suggestion starts from (default ``"streaming"``; restoration presets are
-    refused); every other key is numeric. ``chain_config`` is the nested form
+    refused); every other key is numeric. ``chain_config`` is the chain document's params
     :func:`mastering_assistant_suggest_chain` returns.
     """
     lib = _get_lib()
@@ -669,27 +667,14 @@ def mastering_assistant_suggest(
     return _assistant_result_from_wire(_take_json(lib, json_ptr))
 
 
-def _chain_config_from_params(raw: Any) -> MasteringChainConfig:
-    """Nest a ``{"version": ..., "params": {...}}`` chain document's params.
-
-    The result is the nested chain config :func:`master_audio` takes as
-    ``overrides``. A version 2 document's structured multiband stage merges at
-    its path. A leaf that is neither a number nor a boolean is refused by name
-    rather than dropped, and an absent or empty ``params`` block is refused: an
-    empty overrides mapping applies the preset unchanged.
-    """
-    if not raw:
-        raise SonareValueError("chain config carries no params block")
-    config = _nest_chain_config(raw)
-    for path, value in _chain_config_paths(config).items():
-        if not isinstance(value, (int, float, bool)):
-            raise SonareValueError(f"chain config param {path!r} is not a scalar value")
-    return config
+def _document_params(document: Mapping[str, Any]) -> MasteringChainConfig:
+    """The ``params`` of a version 2 chain document, as the core wrote it."""
+    return cast(MasteringChainConfig, document["params"])
 
 
 def _chain_config_from_document(json_text: str) -> MasteringChainConfig:
-    """Nest the params of a ``{"version": ..., "params": {...}}`` chain document."""
-    return _chain_config_from_params(json.loads(json_text).get("params"))
+    """The ``params`` of a version 2 chain document's text."""
+    return _document_params(json.loads(json_text))
 
 
 @_guard_buffer("samples")
@@ -698,7 +683,7 @@ def mastering_assistant_suggest_chain(
     sample_rate: int,
     params: dict[str, float | int | bool | str] | None = None,
 ) -> MasteringChainConfig:
-    """Suggest a mastering chain as a nested :func:`master_audio` overrides mapping.
+    """Suggest a mastering chain as the chain document's params, ready as ``overrides``.
 
     Skips parsing the full profile+chain document :func:`mastering_assistant_suggest`
     returns down to the chain config it already carries.
@@ -874,9 +859,9 @@ def mastering_assistant_suggest_chain_stereo(
 
 
 def mastering_preset_params(preset: str) -> MasteringChainConfig:
-    """Return a built-in preset's chain configuration as nested ``master_audio`` overrides.
+    """Return a built-in preset's chain configuration document's params.
 
-    The same nested shape :func:`mastering_assistant_suggest_chain` returns, so
+    The same shape :func:`mastering_assistant_suggest_chain` returns, so
     the result's parameter set matches what the assistant would suggest and
     applies to :func:`master_audio` as overrides unchanged.
 
@@ -904,23 +889,23 @@ def mastering_preset_params(preset: str) -> MasteringChainConfig:
 
 
 def mastering_chain_config_from_json(document: str) -> MasteringChainConfig:
-    """Validate a chain configuration document and return it as nested overrides.
+    """Validate a chain configuration document and return its params.
 
     Reads ``document`` as the native CLI's ``--chain-config`` reads it and returns
-    the chain it describes in the nested shape :func:`mastering_preset_params`
+    the chain it describes in the shape :func:`mastering_preset_params`
     returns, ready for :func:`master_audio` as ``overrides``. Every chain
     parameter is present in the result, at its document value or its default.
 
     Args:
-        document: Chain configuration JSON text (version 1 or 2).
+        document: Chain configuration JSON text, version 2 (``version`` may be left out).
 
     Raises:
         TypeError: If ``document`` is not a ``str``.
-        SonareError: Code ``INVALID_FORMAT`` when the document is malformed,
-            lacks ``version`` or ``params``, carries another version, an unknown
-            or earlier key spelling, or a
-            value outside its domain; the message names the field and, for an
-            earlier spelling, the current one.
+        SonareError: Code ``INVALID_FORMAT`` when the document is malformed, lacks
+            ``params``, carries another version, an unknown or earlier key
+            spelling, a path given twice, a null, a number for a token or an
+            unknown token, or a value outside its domain; the message names the
+            path and, for an earlier spelling, the current one.
     """
     _require_instance(document, str, "document")
     lib = _get_lib()
@@ -932,7 +917,7 @@ def mastering_chain_config_from_json(document: str) -> MasteringChainConfig:
             _utf8_arg(document, "document"), ctypes.byref(json_ptr)
         )
     )
-    return _chain_config_from_params(_take_json(lib, json_ptr).get("params"))
+    return _document_params(_take_json(lib, json_ptr))
 
 
 @_guard_buffer("left", "right")

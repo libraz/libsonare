@@ -610,16 +610,29 @@ def test_project_import_smf_preserves_salvaged_truncation() -> None:
         ),
         ({"transposeSemitone": 12}, "unknown MIDI-FX key 'transposeSemitone'"),
         ({"velocityScale": float("nan")}, None),
+        ({"velocityGamma": 0.0}, "velocityGamma must be > 0"),
+        (
+            {"quantizePpq": 240, "quantizeStrength": 2.0},
+            "quantizeStrength must be in [0, 1]",
+        ),
+        ({"humanizeVelocity": 200}, "humanizeVelocity must be a whole number in [0, 127]"),
     ],
-    ids=["earlier_spelling", "unknown_key", "non_finite_value"],
+    ids=[
+        "earlier_spelling",
+        "unknown_key",
+        "non_finite_value",
+        "velocity_gamma",
+        "quantize_strength",
+        "humanize_velocity",
+    ],
 )
-def test_a_midi_fx_key_outside_the_document_is_refused_as_invalid_format(
+def test_a_midi_fx_config_refusal_is_invalid_format_naming_the_key(
     config: dict[str, object], message: str | None
 ) -> None:
-    """The MIDI-FX config names its keys in camelCase; any other key is refused by name.
+    """The MIDI-FX config names its keys in camelCase; a refusal names the key it read.
 
-    A non-finite value fails the JSON parse, whose message carries no detail, so only
-    its code is pinned.
+    A value out of its domain is refused naming the key. A non-finite value fails the
+    JSON parse, so only its code is pinned.
     """
     project = Project()
     try:

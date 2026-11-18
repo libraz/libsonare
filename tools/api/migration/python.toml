@@ -5504,7 +5504,7 @@ test = "bindings/python/tests/test_metering_absent_defaults.py::test_a_percentil
 [[entry]]
 kind = "class"
 old = "StreamingMasteringChain"
-changed = "builds and prepares at construction; sample_rate and num_channels are required keywords and an omitted max_block_size takes the library default (an explicit 0 raises SonareValueError); config takes the nested chain config only, and a dotted key such as \"eq.tilt.tiltDb\" raises SonareValueError"
+changed = "builds and prepares at construction; sample_rate and num_channels are required keywords and an omitted max_block_size takes the library default (an explicit 0 raises SonareValueError); config takes a version 2 chain document's params: a key is a dotted path and nesting is prefix shorthand, enum leaves are tokens; the core reads the content, so a path given twice, a null, a number for a token or a value outside its domain raises SonareError InvalidFormat naming the path"
 domain = "mastering"
 rule = "construction"
 test = "bindings/python/tests/test_streaming_mastering_shape.py::test_the_chain_is_ready_once_constructed"
@@ -7072,7 +7072,7 @@ rule = "one-entry-per-operation"
 [[entry]]
 kind = "function"
 old = "mastering_assistant_suggest_chain"
-changed = "returns the nested chain config (module -> processor -> parameter) instead of a flat dotted-key dict; pass it to master_audio(overrides=) unchanged"
+changed = "returns the version 2 chain document's params as the core wrote them: dotted-path keys, enum leaves as tokens and dynamics.multibandComp as a structured record; pass it to master_audio(overrides=) unchanged"
 domain = "mastering"
 rule = "typed-results"
 test = "bindings/python/tests/test_mastering_assistant_chain.py::test_chain_matches_the_suggestion_chain_config"
@@ -7080,7 +7080,7 @@ test = "bindings/python/tests/test_mastering_assistant_chain.py::test_chain_matc
 [[entry]]
 kind = "function"
 old = "mastering_assistant_suggest_chain_stereo"
-changed = "returns the nested chain config instead of a flat dotted-key dict"
+changed = "returns the version 2 chain document's params as the core wrote them: dotted-path keys, enum leaves as tokens and dynamics.multibandComp as a structured record"
 domain = "mastering"
 rule = "typed-results"
 test = "bindings/python/tests/test_mastering_assistant_chain.py::test_chain_stereo_matches_the_suggestion_chain_config"
@@ -7088,42 +7088,42 @@ test = "bindings/python/tests/test_mastering_assistant_chain.py::test_chain_ster
 [[entry]]
 kind = "function"
 old = "mastering_preset_params"
-changed = "returns the nested chain config instead of a flat dotted-key dict"
+changed = "returns the version 2 chain document's params as the core wrote them: dotted-path keys, enum leaves as tokens and dynamics.multibandComp as a structured record"
 domain = "mastering"
 rule = "typed-results"
-test = "bindings/python/tests/test_mastering_preset_params.py::test_preset_params_values_are_scalar"
+test = "bindings/python/tests/test_mastering_preset_params.py::test_preset_params_are_the_document_params_as_the_core_wrote_them"
 
 [[entry]]
 kind = "option"
 old = "master_audio(overrides)"
-changed = "takes the nested chain config only; a dotted key such as \"eq.tilt.tiltDb\" raises SonareValueError"
+changed = "takes a version 2 chain document's params: a key is a dotted path and nesting is prefix shorthand, enum leaves are tokens; the core reads the content, so a path given twice, a null, a number for a token or a value outside its domain raises SonareError InvalidFormat naming the path"
 domain = "mastering"
 rule = "typed-results"
-test = "bindings/python/tests/test_analyzer_streaming_mastering.py::test_a_dotted_chain_key_is_refused_by_name"
+test = "bindings/python/tests/test_analyzer_streaming_mastering.py::test_chain_config_content_is_refused_by_the_core_naming_the_path"
 
 [[entry]]
 kind = "option"
 old = "master_audio_stereo(overrides)"
-changed = "takes the nested chain config only; a dotted key such as \"eq.tilt.tiltDb\" raises SonareValueError"
+changed = "takes a version 2 chain document's params: a key is a dotted path and nesting is prefix shorthand, enum leaves are tokens; the core reads the content, so a path given twice, a null, a number for a token or a value outside its domain raises SonareError InvalidFormat naming the path"
 domain = "mastering"
 rule = "typed-results"
-test = "bindings/python/tests/test_analyzer_streaming_mastering.py::test_a_dotted_chain_key_is_refused_by_name"
+test = "bindings/python/tests/test_analyzer_streaming_mastering.py::test_chain_config_content_is_refused_by_the_core_naming_the_path"
 
 [[entry]]
 kind = "option"
 old = "streaming_loudness_gain(config)"
-changed = "takes the nested chain config only; a dotted key such as \"eq.tilt.tiltDb\" raises SonareValueError"
+changed = "takes a version 2 chain document's params: a key is a dotted path and nesting is prefix shorthand, enum leaves are tokens; the core reads the content, so a path given twice, a null, a number for a token or a value outside its domain raises SonareError InvalidFormat naming the path"
 domain = "mastering"
 rule = "typed-results"
-test = "bindings/python/tests/test_analyzer_streaming_mastering.py::test_a_dotted_chain_key_is_refused_by_name"
+test = "bindings/python/tests/test_analyzer_streaming_mastering.py::test_chain_config_content_is_refused_by_the_core_naming_the_path"
 
 [[entry]]
 kind = "option"
 old = "streaming_loudness_gain_stereo(config)"
-changed = "takes the nested chain config only; a dotted key such as \"eq.tilt.tiltDb\" raises SonareValueError"
+changed = "takes a version 2 chain document's params: a key is a dotted path and nesting is prefix shorthand, enum leaves are tokens; the core reads the content, so a path given twice, a null, a number for a token or a value outside its domain raises SonareError InvalidFormat naming the path"
 domain = "mastering"
 rule = "typed-results"
-test = "bindings/python/tests/test_analyzer_streaming_mastering.py::test_a_dotted_chain_key_is_refused_by_name"
+test = "bindings/python/tests/test_analyzer_streaming_mastering.py::test_chain_config_content_is_refused_by_the_core_naming_the_path"
 
 [[entry]]
 kind = "field"
@@ -7785,7 +7785,7 @@ test = "bindings/python/tests/test_mastering_result_types.py::test_audio_profile
 [[entry]]
 kind = "type"
 old = "MasteringAssistantResult"
-changed = "a frozen dataclass with snake_case attributes instead of a TypedDict; chain_config is the nested MasteringChainConfig mastering_assistant_suggest_chain returns"
+changed = "a frozen dataclass with snake_case attributes instead of a TypedDict; chain_config is the MasteringChainConfig mastering_assistant_suggest_chain returns"
 domain = "mastering"
 rule = "typed-results"
 test = "bindings/python/tests/test_mastering_result_types.py::test_assistant_result"
@@ -8041,7 +8041,7 @@ rule = "typed-results"
 kind = "field"
 old = "MasteringAssistantResult.chainConfig"
 to = "MasteringAssistantResult.chain_config"
-changed = "the nested MasteringChainConfig (module -> processor -> parameter) instead of the version/params document"
+changed = "the version 2 document's params (a MasteringChainConfig) instead of the version/params document"
 domain = "mastering"
 rule = "typed-results"
 test = "bindings/python/tests/test_mastering_result_types.py::test_assistant_result"
@@ -8049,7 +8049,7 @@ test = "bindings/python/tests/test_mastering_result_types.py::test_assistant_res
 [[entry]]
 kind = "type"
 old = "MasteringChainConfigDocument"
-removed = "MasteringAssistantResult.chain_config is the nested MasteringChainConfig"
+removed = "MasteringAssistantResult.chain_config is the document's params as a MasteringChainConfig"
 domain = "mastering"
 rule = "typed-results"
 
@@ -8886,7 +8886,7 @@ test = "bindings/python/tests/test_block_size_absence.py::test_a_required_channe
 [[entry]]
 kind = "option"
 old = "PlaybackRenderer.constructor(config)"
-changed = "a PlaybackRendererConfig mapping only; JSON text raises TypeError, so parse it with json.loads first. Keys are camelCase (channelMap, bassManagement.crossoverHz, outputLimiter.ceilingDbtp, ...) and speaker roles are spelled out (left, leftSurround, ...); an earlier snake_case key or short role token raises SonareError InvalidFormat"
+changed = "a PlaybackRendererConfig mapping only; JSON text raises TypeError, so parse it with json.loads first. Keys are camelCase (channelMap, bassManagement.crossoverHz, outputLimiter.ceilingDb, ...) and speaker roles are spelled out (left, leftSurround, ...); an earlier snake_case key, a short role token or outputLimiter.ceilingDbtp raises SonareError InvalidFormat. An unset input.channelMap, speaker distanceM or loudness.programLufs is an omitted key: None raises InvalidFormat naming the path, and config() leaves the key out"
 domain = "engine"
 rule = "one-input-form"
 test = "bindings/python/tests/test_playback.py::test_the_config_document_is_a_mapping_never_json_text"
@@ -8894,7 +8894,7 @@ test = "bindings/python/tests/test_playback.py::test_the_config_document_is_a_ma
 [[entry]]
 kind = "option"
 old = "PlaybackRenderer.set_config(config)"
-changed = "a PlaybackRendererConfig mapping only; JSON text raises TypeError, so parse it with json.loads first. Keys are camelCase (channelMap, bassManagement.crossoverHz, outputLimiter.ceilingDbtp, ...) and speaker roles are spelled out (left, leftSurround, ...); an earlier snake_case key or short role token raises SonareError InvalidFormat"
+changed = "a PlaybackRendererConfig mapping only; JSON text raises TypeError, so parse it with json.loads first. Keys are camelCase (channelMap, bassManagement.crossoverHz, outputLimiter.ceilingDb, ...) and speaker roles are spelled out (left, leftSurround, ...); an earlier snake_case key, a short role token or outputLimiter.ceilingDbtp raises SonareError InvalidFormat. An unset input.channelMap, speaker distanceM or loudness.programLufs is an omitted key: None raises InvalidFormat naming the path, and config() leaves the key out"
 domain = "engine"
 rule = "one-input-form"
 test = "bindings/python/tests/test_playback.py::test_the_config_document_is_a_mapping_never_json_text"
@@ -8902,7 +8902,7 @@ test = "bindings/python/tests/test_playback.py::test_the_config_document_is_a_ma
 [[entry]]
 kind = "option"
 old = "render_playback(config)"
-changed = "a PlaybackRendererConfig mapping only; JSON text raises TypeError, so parse it with json.loads first. Keys are camelCase (channelMap, bassManagement.crossoverHz, outputLimiter.ceilingDbtp, ...) and speaker roles are spelled out (left, leftSurround, ...); an earlier snake_case key or short role token raises SonareError InvalidFormat"
+changed = "a PlaybackRendererConfig mapping only; JSON text raises TypeError, so parse it with json.loads first. Keys are camelCase (channelMap, bassManagement.crossoverHz, outputLimiter.ceilingDb, ...) and speaker roles are spelled out (left, leftSurround, ...); an earlier snake_case key, a short role token or outputLimiter.ceilingDbtp raises SonareError InvalidFormat. An unset input.channelMap, speaker distanceM or loudness.programLufs is an omitted key: None raises InvalidFormat naming the path, and config() leaves the key out"
 domain = "engine"
 rule = "one-input-form"
 test = "bindings/python/tests/test_playback.py::test_the_config_document_is_a_mapping_never_json_text"
@@ -8923,7 +8923,7 @@ to = "Project.bake_midi_fx(config)"
 changed = "a MidiFxConfig mapping with camelCase keys (transposeSemitones, velocityScale, quantizePpq, chordIntervals, ...) instead of JSON text; JSON text raises TypeError, so parse it with json.loads first, and an earlier snake_case key or an unknown key raises SonareError InvalidFormat naming it"
 domain = "project"
 rule = "one-input-form"
-test = "bindings/python/tests/test_project_midi.py::test_a_midi_fx_key_outside_the_document_is_refused_as_invalid_format"
+test = "bindings/python/tests/test_project_midi.py::test_a_midi_fx_config_refusal_is_invalid_format_naming_the_key"
 
 [[entry]]
 kind = "option"
@@ -8932,7 +8932,7 @@ to = "Project.preview_midi_fx_count(config)"
 changed = "a MidiFxConfig mapping with camelCase keys (transposeSemitones, velocityScale, quantizePpq, chordIntervals, ...) instead of JSON text; JSON text raises TypeError, so parse it with json.loads first, and an earlier snake_case key or an unknown key raises SonareError InvalidFormat naming it"
 domain = "project"
 rule = "one-input-form"
-test = "bindings/python/tests/test_project_midi.py::test_a_midi_fx_key_outside_the_document_is_refused_as_invalid_format"
+test = "bindings/python/tests/test_project_midi.py::test_a_midi_fx_config_refusal_is_invalid_format_naming_the_key"
 
 [[entry]]
 kind = "option"

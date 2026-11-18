@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from ._helpers import LIB_AVAILABLE
+from ._helpers import LIB_AVAILABLE, raises_coded
 
 pytestmark = pytest.mark.skipif(not LIB_AVAILABLE, reason="libsonare shared library not found")
 
@@ -143,16 +143,11 @@ def test_streaming_loudness_gain_measures_through_the_streaming_default() -> Non
     assert math.isfinite(gain.loudness_static_gain_db)
 
 
-def test_enum_names_resolve_to_the_numbers_the_native_list_carries() -> None:
+def test_an_enum_leaf_takes_its_name_and_refuses_the_number() -> None:
     import libsonare
+    from libsonare import ErrorCode
 
     x = _noise(SR)
-    by_number = libsonare.master_audio(
-        x,
-        SR,
-        preset="pop",
-        overrides={"repair": {"denoise": {"enabled": True, "noiseEstimator": 1, "mode": 1}}},
-    )
     by_name = libsonare.master_audio(
         x,
         SR,
@@ -161,7 +156,16 @@ def test_enum_names_resolve_to_the_numbers_the_native_list_carries() -> None:
             "repair": {"denoise": {"enabled": True, "noiseEstimator": "mcra", "mode": "mmseStsa"}}
         },
     )
-    assert list(by_name.samples) == list(by_number.samples)
+    assert by_name.report is not None
+    with raises_coded(
+        ErrorCode.INVALID_FORMAT, match=r"repair\.denoise\.mode takes a token, not a number"
+    ):
+        libsonare.master_audio(
+            x,
+            SR,
+            preset="pop",
+            overrides={"repair": {"denoise": {"enabled": True, "mode": 1}}},
+        )
 
 
 def test_an_unknown_enum_name_is_refused_with_the_key_and_the_valid_names() -> None:

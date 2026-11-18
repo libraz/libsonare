@@ -384,8 +384,8 @@ def test_mastering_assistant_suggest_returns_its_record() -> None:
 
     assert suggestion.explanation
     assert not hasattr(suggestion, "genre_candidates")
-    assert suggestion.chain_config["loudness"]["targetLufs"] == pytest.approx(-13.0)
-    assert suggestion.chain_config["loudness"]["ceilingDb"] == pytest.approx(-0.8)
+    assert suggestion.chain_config["loudness.targetLufs"] == pytest.approx(-13.0)
+    assert suggestion.chain_config["loudness.ceilingDb"] == pytest.approx(-0.8)
 
 
 def test_mastering_audio_profile_returns_its_record() -> None:
@@ -492,7 +492,10 @@ def test_mixing_presets_and_stereo_mix() -> None:
     import libsonare
 
     assert "vocalReverbSend" in libsonare.mixing_scene_preset_names()
-    assert '"vocal"' in libsonare.mixing_scene_preset_json("vocalReverbSend")
+    assert any(
+        strip["id"] == "vocal"
+        for strip in libsonare.mixing_scene_preset("vocalReverbSend")["strips"]
+    )
 
     result = libsonare.mix_stereo(
         [([1.0, 1.0], [0.0, 0.0])],
@@ -685,19 +688,19 @@ def test_mastering_assistant_suggest_follows_target_platform() -> None:
 
     # Without a target the assistant returns the streaming default of -14 LUFS.
     default = libsonare.mastering_assistant_suggest(samples, sample_rate=sr)
-    assert default.chain_config["loudness"]["targetLufs"] == pytest.approx(-14.0)
+    assert default.chain_config["loudness.targetLufs"] == pytest.approx(-14.0)
 
     broadcast = libsonare.mastering_assistant_suggest(
         samples, sample_rate=sr, params={"targetPlatform": "broadcast"}
     )
-    assert broadcast.chain_config["loudness"]["targetLufs"] == pytest.approx(-23.0)
+    assert broadcast.chain_config["loudness.targetLufs"] == pytest.approx(-23.0)
 
     # Only a loud delivery format moves the ceiling as well as the target.
     club = libsonare.mastering_assistant_suggest(
         samples, sample_rate=sr, params={"targetPlatform": "club"}
     )
-    assert club.chain_config["loudness"]["targetLufs"] == pytest.approx(-9.0)
-    assert club.chain_config["loudness"]["ceilingDb"] == pytest.approx(-0.3)
+    assert club.chain_config["loudness.targetLufs"] == pytest.approx(-9.0)
+    assert club.chain_config["loudness.ceilingDb"] == pytest.approx(-0.3)
 
     with pytest.raises(ValueError):
         libsonare.mastering_assistant_suggest(
