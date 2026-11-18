@@ -202,7 +202,7 @@ describe('project timeline', () => {
     project.destroy();
   });
 
-  it('reports a compile failure as a null timeline with diagnostics', () => {
+  it('reports a compile failure as diagnostics with no timeline', () => {
     const project = new Project();
     project.setSampleRate(SAMPLE_RATE);
     const trackId = project.addTrack({ kind: 'audio' });
@@ -210,7 +210,7 @@ describe('project timeline', () => {
     project.addClip({ trackId, startPpq: 0, lengthPpq: 1, sourceUri: 'asset://missing.wav' });
     const result = project.compileTimeline();
     expect(result).not.toHaveProperty('hasTimeline');
-    expect(result.timeline).toBeNull();
+    expect(result).not.toHaveProperty('timeline');
     expect(result.diagnostics.length).toBeGreaterThan(0);
     expect(result.diagnostics.some((diagnostic) => diagnostic.severity === 'error')).toBe(true);
     const plain = project.compile();

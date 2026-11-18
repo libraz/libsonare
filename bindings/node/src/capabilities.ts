@@ -1,3 +1,4 @@
+import { parseRecordJson } from './internal/record_json.js';
 import { addon } from './native.js';
 import type { Capabilities, CapabilityCatalog } from './types.js';
 
@@ -33,5 +34,5 @@ export function capabilities(): Capabilities {
  * {@link masteringInsertParamInfo} return.
  */
 export function capabilityCatalog(): CapabilityCatalog {
-  return JSON.parse(addon.capabilityCatalog()) as CapabilityCatalog;
+  return parseRecordJson(addon.capabilityCatalog()) as CapabilityCatalog;
 }

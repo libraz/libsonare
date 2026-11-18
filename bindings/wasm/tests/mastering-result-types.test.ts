@@ -74,9 +74,9 @@ describe('typed results of the explainable-mastering helpers (WASM)', () => {
     expect(typeof result.loudness.integratedLufs).toBe('number');
   });
 
-  it('reports null integrated loudness for a silent take', () => {
+  it('leaves the integrated loudness of a silent take absent', () => {
     const result = masteringAudioProfile({ samples: new Float32Array(SR), sampleRate: SR });
-    expect(result.loudness.integratedLufs).toBeNull();
+    expect(result.loudness).not.toHaveProperty('integratedLufs');
   });
 
   it('keys the pair analysis result on the analysis name literal', () => {

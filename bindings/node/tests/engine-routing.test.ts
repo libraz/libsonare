@@ -472,11 +472,9 @@ describe('RealtimeEngine sidechain pre-check', () => {
     const engine = makeKeyedRig();
     expect(engine.canSetBusSidechain(2, 0, { kind: 'track', id: 30 })).toEqual({
       ok: true,
-      reason: null,
     });
     expect(engine.canSetStripSidechain('master', 0, { kind: 'bus', id: 1 })).toEqual({
       ok: true,
-      reason: null,
     });
     // The check changes nothing: the bus key set by the rig is still in force.
     expect(settled(engine)).toBeLessThan(0.02);
@@ -547,7 +545,6 @@ describe('RealtimeEngine sidechain pre-check', () => {
     });
     expect(engine.canSetStripSidechain(10, 0, { kind: 'track', id: 30 })).toEqual({
       ok: true,
-      reason: null,
     });
     expectArgumentRefusal(() => engine.setStripSidechain(10, 0, { kind: 'track', id: 99 }));
     expectArgumentRefusal(() => engine.setStripSidechain(10, 3, { kind: 'track', id: 30 }));

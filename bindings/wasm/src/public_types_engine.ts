@@ -569,10 +569,10 @@ export type SidechainRefusal =
   | 'tableFull'
   | 'planRefused';
 
-/** Result of a `canSet*Sidechain` query; `reason` is `null` exactly when `ok`. */
+/** Result of a `canSet*Sidechain` query; `reason` is absent exactly when `ok`. */
 export interface SidechainCheck {
   ok: boolean;
-  reason: SidechainRefusal | null;
+  reason?: SidechainRefusal;
 }
 
 /**

@@ -501,10 +501,10 @@ export interface ProjectCompileTimelineResult {
   /** Every diagnostic the compile produced; empty when it was clean. */
   readonly diagnostics: readonly ProjectDiagnostic[];
   /**
-   * The compiled playback snapshot, or `null` when compilation produced none
+   * The compiled playback snapshot; absent when compilation produced none
    * (see `diagnostics`). Owned by the caller: destroy it when done.
    */
-  readonly timeline: ProjectTimeline | null;
+  readonly timeline?: ProjectTimeline;
 }
 
 /**

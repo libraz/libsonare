@@ -612,7 +612,7 @@ describe('Sonare WASM Module', () => {
       engine.setStrip(10, JSON.parse(stripJson('t10', limiter)).strips[0]);
       engine.setStrip(11, JSON.parse(stripJson('t11', limiter)).strips[0]);
 
-      const ok = { ok: true, reason: null };
+      const ok = { ok: true };
       const no = (reason: string) => ({ ok: false, reason });
       expect(engine.canSetStripSidechain(0, 0, { kind: 'track', id: 11 })).toEqual(
         no('invalidTarget'),
@@ -723,7 +723,7 @@ describe('Sonare WASM Module', () => {
     });
 
     it('maps every refusal code to its name and rejects an unknown one', () => {
-      expect(sidechainCheckFromCode(0)).toEqual({ ok: true, reason: null });
+      expect(sidechainCheckFromCode(0)).toEqual({ ok: true });
       const names = [
         'invalidTarget',
         'insertOutOfRange',

@@ -1,5 +1,6 @@
 import { nestChainConfig } from './internal/chain_config.js';
 import { resolveInsertParams, resolveProcessorParams } from './internal/processor_params.js';
+import { parseRecordJson } from './internal/record_json.js';
 import { audioDefectsFromNative } from './internal/repair_common.js';
 import { masteringPlatformNames, masteringPresetNames } from './mastering_chain.js';
 import { getSonareModule } from './module_state.js';
@@ -459,7 +460,7 @@ export function masteringInsertParamInfo(
     r.sampleRate === undefined || r.sampleRate === null
       ? module.masteringInsertParamInfo(r.insert)
       : module.masteringInsertParamInfoAtRate(r.insert, r.sampleRate);
-  return JSON.parse(json) as MasteringInsertParamInfo[];
+  return parseRecordJson(json) as MasteringInsertParamInfo[];
 }
 
 /** One built-in amp-sim rig with its resolved starting configuration. */
@@ -481,7 +482,7 @@ export interface MasteringAmpPresetCatalogEntry {
  */
 export function masteringAmpPresetCatalog(): MasteringAmpPresetCatalogEntry[] {
   const json = requireModule().masteringAmpPresetCatalog();
-  return JSON.parse(json) as MasteringAmpPresetCatalogEntry[];
+  return parseRecordJson(json) as MasteringAmpPresetCatalogEntry[];
 }
 
 /**
@@ -521,7 +522,7 @@ export function masteringInsertTiming<N extends MasteringInsertName>(
  */
 export function masteringProcessorCatalog(): MasteringProcessorCatalogEntry[] {
   const json = requireModule().masteringProcessorCatalog();
-  return JSON.parse(json) as MasteringProcessorCatalogEntry[];
+  return parseRecordJson(json) as MasteringProcessorCatalogEntry[];
 }
 
 /** Names of the pair processors `masteringApplyPairProcessor` accepts. */
@@ -702,7 +703,7 @@ export function masteringAnalyzePair<A extends PairAnalysis>(
   const fn = 'masteringAnalyzePair';
   assertString(fn, r.analysis, 'analysis');
   const referenceRate = assertPairAudio(fn, r, ['source', r.source], ['reference', r.reference]);
-  return JSON.parse(
+  return parseRecordJson(
     requireModule().masteringPairAnalyze(
       r.analysis,
       r.source,
@@ -729,7 +730,7 @@ export function masteringAnalyzeStereo<A extends StereoAnalysis>(
   assertString(fn, r.analysis, 'analysis');
   assertAudioInput(fn, r.left, r.sampleRate, r, 'left');
   assertAudioInput(fn, r.right, r.sampleRate, r, 'right');
-  return JSON.parse(
+  return parseRecordJson(
     requireModule().masteringStereoAnalyze(
       r.analysis,
       r.left,
@@ -813,7 +814,7 @@ export function masteringAbMatchLoudnessStereo(
 }
 
 function assistantResultFromNative(json: string): MasteringAssistantResult {
-  const native = JSON.parse(json) as {
+  const native = parseRecordJson(json) as {
     chainConfig: { params: Record<string, unknown> };
     explanation: string[];
     profile: MasteringAssistantResult['profile'];
@@ -826,12 +827,12 @@ function assistantResultFromNative(json: string): MasteringAssistantResult {
 }
 
 function previewFromNative(json: string): MasteringStreamingPreviewResult {
-  return JSON.parse(json) as MasteringStreamingPreviewResult;
+  return parseRecordJson(json) as MasteringStreamingPreviewResult;
 }
 
 // `defects` is absent when the detectors did not run.
 function profileFromNative(json: string): MasteringAudioProfile {
-  const profile = JSON.parse(json) as MasteringAudioProfile;
+  const profile = parseRecordJson(json) as MasteringAudioProfile;
   if (profile.defects !== undefined) {
     profile.defects = audioDefectsFromNative(profile.defects);
   }

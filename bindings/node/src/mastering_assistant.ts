@@ -1,4 +1,5 @@
 import { nestChainConfig } from './internal/chain_config.js';
+import { parseRecordJson } from './internal/record_json.js';
 import { audioDefectsFromNative } from './internal/repair_common.js';
 import { masteringPlatformNames, masteringPresetNames } from './mastering_catalog.js';
 import { addon } from './native.js';
@@ -120,7 +121,7 @@ export interface MasteringStreamingPreviewStereoRequest extends ValidateOptions 
 }
 
 function assistantResultFromNative(json: string): MasteringAssistantResult {
-  const native = JSON.parse(json) as {
+  const native = parseRecordJson(json) as {
     chainConfig: { params: Record<string, unknown> };
     explanation: string[];
     profile: MasteringAssistantResult['profile'];
@@ -133,12 +134,12 @@ function assistantResultFromNative(json: string): MasteringAssistantResult {
 }
 
 function previewFromNative(json: string): MasteringStreamingPreviewResult {
-  return JSON.parse(json) as MasteringStreamingPreviewResult;
+  return parseRecordJson(json) as MasteringStreamingPreviewResult;
 }
 
 // `defects` is absent when the detectors did not run.
 function profileFromNative(json: string): MasteringAudioProfile {
-  const profile = JSON.parse(json) as MasteringAudioProfile;
+  const profile = parseRecordJson(json) as MasteringAudioProfile;
   if (profile.defects !== undefined) {
     profile.defects = audioDefectsFromNative(profile.defects);
   }

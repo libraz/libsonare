@@ -185,13 +185,13 @@ describe('Project timeline applied to a RealtimeEngine', () => {
     }
   });
 
-  it('reports a failed compile as a null timeline with its diagnostics', () => {
+  it('reports a failed compile as its diagnostics with no timeline', () => {
     const { project, diagnostics } = Project.fromJsonWithDiagnostics(DANGLING_SOURCE_JSON);
     try {
       expect(diagnostics).toContain('dangling_clip_source');
       const result = project.compileTimeline();
       expect(result).not.toHaveProperty('hasTimeline');
-      expect(result.timeline).toBeNull();
+      expect(result).not.toHaveProperty('timeline');
       expect(result.diagnostics.length).toBeGreaterThan(0);
       expect(result.diagnostics.some((d) => d.severity === 'error')).toBe(true);
     } finally {
@@ -239,7 +239,7 @@ describe('Project timeline applied to a RealtimeEngine', () => {
     try {
       currentTimeline = compileAndApply(engine, current);
       const compiled = forgedSource.compileTimeline();
-      forgedTimeline = compiled.timeline;
+      forgedTimeline = compiled.timeline ?? null;
       expect(forgedTimeline).not.toBeNull();
       const nativeId = (forgedTimeline as unknown as { native: { id: number } }).native.id;
       const before = engine.clipCount;

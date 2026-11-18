@@ -30,7 +30,7 @@ describe('insert timing and construction-key catalog (WASM)', () => {
     const aliasing = info.find((param) => param.name === 'aliasing');
     expect(aliasing).toBeDefined();
     expect(aliasing?.type).toBe('enum');
-    expect(aliasing?.id).toBeNull();
+    expect(aliasing).not.toHaveProperty('id');
     expect(aliasing?.rtSafe).toBe(false);
     expect(aliasing?.choices).toEqual(
       expect.arrayContaining([expect.objectContaining({ name: 'oversample4x', value: 3 })]),

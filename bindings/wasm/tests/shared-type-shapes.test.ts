@@ -87,20 +87,20 @@ describe('shared public type shapes', () => {
 // directly; importing them here is what turns a dropped export into a type error.
 const catalogParameter = {
   name: 'driveDb',
-  id: null,
+  id: undefined,
   rtSafe: false,
   type: 'number',
-  min: null,
-  max: null,
+  min: undefined,
+  max: undefined,
   minExclusive: false,
   maxExclusive: false,
-  maxRelativeTo: null,
-  default: null,
+  maxRelativeTo: undefined,
+  default: undefined,
   unit: 'Hz',
-  uiMin: null,
-  uiMax: null,
+  uiMin: undefined,
+  uiMax: undefined,
   scale: 'linear',
-  choices: null,
+  choices: undefined,
   slot: 'band1',
   dependsOn: [{ key: 'maxHz', relation: 'le', factor: 1 }],
   coupledWith: ['minHz'],
@@ -108,7 +108,7 @@ const catalogParameter = {
 
 const catalogSlot = {
   name: 'band1',
-  parent: null,
+  parent: undefined,
   activation: 'always',
   minCrossoverCutoffs: 1,
 } satisfies MasteringInsertSlot;
@@ -120,7 +120,7 @@ const catalogProcessor = {
   stereoOnly: false,
   latencySamples: 0,
   tailSamples: 0,
-  realtimeCost: null,
+  realtimeCost: undefined,
   channelPolicy: 'perChannel',
   category: 'saturation',
   causal: true,
@@ -139,9 +139,9 @@ const catalogPresets = {
 const catalogMasteringPreset = {
   name: 'vinyl',
   kind: 'restoration',
-  targetLufs: null,
-  truePeakCeilingDbtp: null,
-  maxLimiterGainReductionDb: null,
+  targetLufs: undefined,
+  truePeakCeilingDbtp: undefined,
+  maxLimiterGainReductionDb: undefined,
 } satisfies MasteringPresetCatalogEntry;
 
 const catalogChainStage = {

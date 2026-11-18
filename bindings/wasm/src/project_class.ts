@@ -914,22 +914,23 @@ export class Project {
   /**
    * Compile the project and keep the resulting timeline. The result is
    * {@link compile}'s plus `timeline`: a {@link ProjectTimeline} to install with
-   * `RealtimeEngine.applyProjectTimeline`, or `null` when an error diagnostic
+   * `RealtimeEngine.applyProjectTimeline`, absent when an error diagnostic
    * means nothing compiled.
    */
   compileTimeline(): ProjectCompileTimelineResult {
     const { timeline, ...result } = this.native.compileTimeline();
+    const compiled = projectCompileResultFromNative(result);
+    if (timeline === null) {
+      return compiled;
+    }
     return {
-      ...projectCompileResultFromNative(result),
-      timeline:
-        timeline === null
-          ? null
-          : new (
-              ProjectTimeline as unknown as new (
-                token: symbol,
-                native: WasmProjectTimeline,
-              ) => ProjectTimeline
-            )(timelineToken, timeline),
+      ...compiled,
+      timeline: new (
+        ProjectTimeline as unknown as new (
+          token: symbol,
+          native: WasmProjectTimeline,
+        ) => ProjectTimeline
+      )(timelineToken, timeline),
     };
   }
 

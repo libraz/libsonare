@@ -39,7 +39,7 @@ describe('insert param validation (WASM)', () => {
     expect(hpf?.min).toBe(0);
     expect(typeof hpf?.minExclusive).toBe('boolean');
     expect(hpf?.minExclusive).toBe(true);
-    expect(hpf?.maxRelativeTo).toBeNull();
+    expect(hpf).not.toHaveProperty('maxRelativeTo');
     const frequency = masteringInsertParamInfo({ insert: 'eq.parametric' }).find(
       (d) => d.name === 'band0.frequencyHz',
     );
@@ -124,7 +124,13 @@ describe('insert param validation (WASM)', () => {
     const clickRun = byId
       .get('repair.declick')
       ?.params.find((param) => param.name === 'maxClickSamples');
-    expect(clickRun).toMatchObject({ min: 1, max: 512, unit: 'samples', id: null, rtSafe: false });
+    expect(clickRun).toMatchObject({
+      min: 1,
+      max: 512,
+      unit: 'samples',
+      rtSafe: false,
+    });
+    expect(clickRun).not.toHaveProperty('id');
 
     // The voice changer is a stereo-pair insert whose bounds are the ones construction refuses
     // outside of; its latency-changing switches are construction-only.
@@ -144,7 +150,8 @@ describe('insert param validation (WASM)', () => {
       rtSafe: true,
     });
     for (const name of ['retuneGrainSize', 'limiterEnableIspLimiter', 'reverbSeed']) {
-      expect(voiceParam(name)).toMatchObject({ id: null, rtSafe: false });
+      expect(voiceParam(name)).toMatchObject({ rtSafe: false });
+      expect(voiceParam(name)).not.toHaveProperty('id');
     }
     // realtimeInsertable entries form the always-succeeds scene-insert set.
     const insertable = catalog.filter((entry) => entry.realtimeInsertable).map((entry) => entry.id);
@@ -173,8 +180,14 @@ describe('insert param validation (WASM)', () => {
       params: true,
       slots: true,
     };
+    // `realtimeCost` is absent for a processor that is not an insert.
+    const optional = new Set(['realtimeCost']);
     for (const entry of catalog) {
-      expect(Object.keys(entry).sort()).toEqual(Object.keys(declared).sort());
+      const keys = Object.keys(entry);
+      expect(keys.filter((key) => !(key in declared))).toEqual([]);
+      expect(
+        Object.keys(declared).filter((key) => !optional.has(key) && !keys.includes(key)),
+      ).toEqual([]);
     }
     const compressor = catalog.find((entry) => entry.id === 'dynamics.compressor');
     expect(compressor?.category).toBe('dynamics');
@@ -194,10 +207,10 @@ describe('insert param validation (WASM)', () => {
       ?.slots.find((slot) => slot.name === 'band3');
     expect(band3).toEqual({
       name: 'band3',
-      parent: null,
       activation: 'always',
       minCrossoverCutoffs: 3,
     });
+    expect(band3).not.toHaveProperty('parent');
   });
 
   it('surfaces silently-ignored insert params as scene warnings', () => {

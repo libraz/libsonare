@@ -44,19 +44,23 @@ describe('capabilityCatalog().masteringPresets', () => {
   it('deep-equals the tracked capability-catalog.json entry', () => {
     const tracked = JSON.parse(
       readFileSync(resolve(repoRoot, 'tools/capability-catalog.json'), 'utf-8'),
+      // The facade reports the document's null as an absent field.
+      function (this: unknown, _key: string, value: unknown) {
+        return value === null && !Array.isArray(this) ? undefined : value;
+      },
     );
     expect(capabilityCatalog().masteringPresets).toEqual(tracked.masteringPresets);
   });
 
-  it('reports null loudness fields for restoration presets', () => {
+  it('leaves the loudness fields of a restoration preset absent', () => {
     const catalog = capabilityCatalog();
     const vinyl = catalog.masteringPresets.find((preset) => preset.name === 'vinyl');
     expect(vinyl).toMatchObject({
       kind: 'restoration',
-      targetLufs: null,
-      truePeakCeilingDbtp: null,
-      maxLimiterGainReductionDb: null,
     });
+    expect(vinyl).not.toHaveProperty('targetLufs');
+    expect(vinyl).not.toHaveProperty('truePeakCeilingDbtp');
+    expect(vinyl).not.toHaveProperty('maxLimiterGainReductionDb');
     const pop = catalog.masteringPresets.find((preset) => preset.name === 'pop');
     expect(pop?.kind).toBe('mastering');
     expect(typeof pop?.targetLufs).toBe('number');

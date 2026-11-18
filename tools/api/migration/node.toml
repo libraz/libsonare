@@ -15074,3 +15074,187 @@ changed = "required: the rate of the caller's capture has no default (was 48000)
 domain = "project"
 rule = "sample-rate-required"
 test = "bindings/node/tests/project-edit-extra.test.ts::addLoopRecordingTakes refuses interleaved audio without its channel count or sample rate"
+
+[[entry]]
+kind = "field"
+old = "MasteringAssistantProfile.integratedLufs"
+changed = "T | null -> optional: a value the result cannot give is an absent field, never null"
+domain = "mastering"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/result-absence-types.test.ts::the loudness family"
+
+[[entry]]
+kind = "field"
+old = "MasteringStreamingPreviewPlatform.integratedLufs"
+changed = "T | null -> optional: a value the result cannot give is an absent field, never null"
+domain = "mastering"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/result-absence-types.test.ts::the loudness family"
+
+[[entry]]
+kind = "field"
+old = "MixAssistantTrackProfile.integratedLufs"
+changed = "T | null -> optional: a value the result cannot give is an absent field, never null"
+domain = "mastering"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/result-absence-types.test.ts::the loudness family"
+
+[[entry]]
+kind = "field"
+old = "MatchReferenceLoudnessResult.sourceLufs"
+changed = "T | null -> optional: a value the result cannot give is an absent field, never null"
+domain = "mastering"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/result-absence-types.test.ts::the loudness family"
+
+[[entry]]
+kind = "field"
+old = "MatchReferenceLoudnessResult.referenceLufs"
+changed = "T | null -> optional: a value the result cannot give is an absent field, never null"
+domain = "mastering"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/result-absence-types.test.ts::the loudness family"
+
+[[entry]]
+kind = "field"
+old = "MatchReferenceLoudnessResult.gainToMatchDb"
+changed = "T | null -> optional: a value the result cannot give is an absent field, never null"
+domain = "mastering"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/result-absence-types.test.ts::the loudness family"
+
+[[entry]]
+kind = "field"
+old = "StereoMonoCompatCheckResult.width"
+changed = "T | null -> optional: a value the result cannot give is an absent field, never null"
+domain = "mastering"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/result-absence-types.test.ts::the loudness family"
+
+[[entry]]
+kind = "field"
+old = "MasteringInsertSlot.parent"
+changed = "T | null -> optional: a value the result cannot give is an absent field, never null"
+domain = "mastering"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/result-absence-types.test.ts::the capability catalog"
+
+[[entry]]
+kind = "field"
+old = "MasteringInsertParamInfo.id"
+changed = "T | null -> optional: a value the result cannot give is an absent field, never null"
+domain = "mastering"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/result-absence-types.test.ts::the capability catalog"
+
+[[entry]]
+kind = "field"
+old = "MasteringInsertParamInfo.min"
+changed = "T | null -> optional: a value the result cannot give is an absent field, never null"
+domain = "mastering"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/result-absence-types.test.ts::the capability catalog"
+
+[[entry]]
+kind = "field"
+old = "MasteringInsertParamInfo.max"
+changed = "T | null -> optional: a value the result cannot give is an absent field, never null"
+domain = "mastering"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/result-absence-types.test.ts::the capability catalog"
+
+[[entry]]
+kind = "field"
+old = "MasteringInsertParamInfo.maxRelativeTo"
+changed = "T | null -> optional: a value the result cannot give is an absent field, never null"
+domain = "mastering"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/result-absence-types.test.ts::the capability catalog"
+
+[[entry]]
+kind = "field"
+old = "MasteringInsertParamInfo.default"
+changed = "T | null -> optional: a value the result cannot give is an absent field, never null"
+domain = "mastering"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/result-absence-types.test.ts::the capability catalog"
+
+[[entry]]
+kind = "field"
+old = "MasteringInsertParamInfo.unit"
+changed = "T | null -> optional: a value the result cannot give is an absent field, never null"
+domain = "mastering"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/result-absence-types.test.ts::the capability catalog"
+
+[[entry]]
+kind = "field"
+old = "MasteringInsertParamInfo.uiMin"
+changed = "T | null -> optional: a value the result cannot give is an absent field, never null"
+domain = "mastering"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/result-absence-types.test.ts::the capability catalog"
+
+[[entry]]
+kind = "field"
+old = "MasteringInsertParamInfo.uiMax"
+changed = "T | null -> optional: a value the result cannot give is an absent field, never null"
+domain = "mastering"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/result-absence-types.test.ts::the capability catalog"
+
+[[entry]]
+kind = "field"
+old = "MasteringInsertParamInfo.choices"
+changed = "T | null -> optional: a value the result cannot give is an absent field, never null"
+domain = "mastering"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/result-absence-types.test.ts::the capability catalog"
+
+[[entry]]
+kind = "field"
+old = "MasteringInsertParamInfo.slot"
+changed = "T | null -> optional: a value the result cannot give is an absent field, never null"
+domain = "mastering"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/result-absence-types.test.ts::the capability catalog"
+
+[[entry]]
+kind = "field"
+old = "MasteringProcessorCatalogEntry.realtimeCost"
+changed = "T | null -> optional: a value the result cannot give is an absent field, never null"
+domain = "mastering"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/result-absence-types.test.ts::the capability catalog"
+
+[[entry]]
+kind = "field"
+old = "CapabilityCatalogChainStage.processor"
+changed = "T | null -> optional: a value the result cannot give is an absent field, never null"
+domain = "core"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/result-absence-types.test.ts::the capability catalog"
+
+[[entry]]
+kind = "field"
+old = "CapabilityCatalogChainList.processor"
+changed = "T | null -> optional: a value the result cannot give is an absent field, never null"
+domain = "core"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/result-absence-types.test.ts::the capability catalog"
+
+[[entry]]
+kind = "field"
+old = "SidechainCheck.reason"
+changed = "T | null -> optional: a value the result cannot give is an absent field, never null"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/result-absence-types.test.ts::the engine and project checks"
+
+[[entry]]
+kind = "field"
+old = "ProjectCompileTimelineResult.timeline"
+changed = "T | null -> optional: a value the result cannot give is an absent field, never null"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/result-absence-types.test.ts::the engine and project checks"

@@ -17,6 +17,10 @@ import {
 
 const TRACKED_CATALOG = JSON.parse(
   readFileSync(new URL('../../../tools/capability-catalog.json', import.meta.url).pathname, 'utf8'),
+  // The facade reports the document's null as an absent field.
+  function (this: unknown, _key: string, value: unknown) {
+    return value === null && !Array.isArray(this) ? undefined : value;
+  },
 );
 
 /** Dotted paths of every leaf of a nested chain config. */
@@ -48,9 +52,9 @@ describe('mastering preset catalog', () => {
     const restoration = presets.filter((preset) => preset.kind === 'restoration');
     expect(restoration).toHaveLength(5);
     for (const preset of restoration) {
-      expect(preset.targetLufs).toBeNull();
-      expect(preset.truePeakCeilingDbtp).toBeNull();
-      expect(preset.maxLimiterGainReductionDb).toBeNull();
+      expect(preset).not.toHaveProperty('targetLufs');
+      expect(preset).not.toHaveProperty('truePeakCeilingDbtp');
+      expect(preset).not.toHaveProperty('maxLimiterGainReductionDb');
     }
   });
 

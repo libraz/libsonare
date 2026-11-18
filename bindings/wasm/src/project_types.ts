@@ -1004,11 +1004,11 @@ export interface ProjectCompileResult {
 /** Result of {@link Project.compileTimeline}: the compile diagnostics plus the timeline they produced. */
 export interface ProjectCompileTimelineResult extends ProjectCompileResult {
   /**
-   * The compiled timeline, or `null` when compilation produced none (an error
+   * The compiled timeline; absent when compilation produced none (an error
    * diagnostic; read {@link ProjectCompileResult.diagnostics}). Release it with
    * {@link ProjectTimeline.destroy}.
    */
-  readonly timeline: ProjectTimeline | null;
+  readonly timeline?: ProjectTimeline;
 }
 
 /** Result of {@link Project.fromJsonWithDiagnostics}. */

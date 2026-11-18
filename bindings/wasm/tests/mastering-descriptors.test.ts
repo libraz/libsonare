@@ -52,9 +52,9 @@ describe('log axes', () => {
         const low = param.uiMin ?? param.min;
         const high = param.uiMax ?? param.max;
         const label = `${entry.id}.${param.name}`;
-        if (low === null || !(low > 0)) {
+        if (low === undefined || !(low > 0)) {
           defects.push(`${label} has no positive lower end`);
-        } else if (high === null) {
+        } else if (high === undefined) {
           defects.push(`${label} has no finite upper end`);
         } else if (!(low < high)) {
           defects.push(`${label} has an empty display range`);
@@ -72,16 +72,16 @@ describe('repair stage descriptors', () => {
       const info = masteringInsertParamInfo({ insert: id as never });
       const nFft = info.find((param) => param.name === 'nFft');
       const hop = info.find((param) => param.name === 'hopLength');
-      expect(nFft?.min).toBeNull();
-      expect(nFft?.max).toBeNull();
+      expect(nFft).not.toHaveProperty('min');
+      expect(nFft).not.toHaveProperty('max');
       const sizes = nFft?.choices?.map((choice) => choice.value) ?? [];
       expect(sizes.length).toBeGreaterThan(1);
       expect(sizes.every((size) => Number.isInteger(Math.log2(size)))).toBe(true);
       expect(nFft?.choices?.map((choice) => choice.name)).toEqual(sizes.map(String));
       expect(sizes.at(-1)).toBe(524288);
-      expect(hop?.choices).toBeNull();
+      expect(hop).not.toHaveProperty('choices');
       expect(hop?.min).toBe(1);
-      expect(hop?.max).toBeNull();
+      expect(hop).not.toHaveProperty('max');
       expect(hop?.dependsOn).toEqual([{ key: 'nFft', relation: 'le', factor: 0.5 }]);
     }
   });
@@ -92,7 +92,7 @@ describe('repair stage descriptors', () => {
       const info = masteringInsertParamInfo({ insert: id as never });
       expect(info.length).toBeGreaterThan(0);
       expect(info).toEqual(catalog.get(id)?.params);
-      expect(info.every((param) => param.id === null)).toBe(true);
+      expect(info.every((param) => param.id === undefined)).toBe(true);
     }
     expect(masteringInsertParamInfo({ insert: 'repair.noSuchStage' as never })).toEqual([]);
   });

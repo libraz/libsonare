@@ -1,4 +1,5 @@
 import { resolveProcessorParams } from './internal/processor_params.js';
+import { parseRecordJson } from './internal/record_json.js';
 import { addon } from './native.js';
 import type {
   LoudnessMatchResult,
@@ -394,7 +395,7 @@ export function masteringAnalyzePair<A extends PairAnalysis>(
   const r = requestOnly<MasteringAnalyzePairRequest>('masteringAnalyzePair', [request]);
   const fn = 'masteringAnalyzePair';
   const referenceRate = assertPairAudio(fn, r, ['source', r.source], ['reference', r.reference]);
-  return JSON.parse(
+  return parseRecordJson(
     addon.masteringPairAnalyze(
       r.analysis,
       r.source,
@@ -420,7 +421,7 @@ export function masteringAnalyzeStereo<A extends StereoAnalysis>(
   const fn = 'masteringAnalyzeStereo';
   assertAudioInput(fn, r.left, r.sampleRate, r, 'left');
   assertAudioInput(fn, r.right, r.sampleRate, r, 'right');
-  return JSON.parse(
+  return parseRecordJson(
     addon.masteringStereoAnalyze(r.analysis, r.left, r.right, r.sampleRate, r.params ?? {}),
   ) as StereoAnalysisResultMap[A];
 }

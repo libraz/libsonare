@@ -1403,16 +1403,16 @@ export class Project {
 
   /**
    * Compile the project and keep the resulting timeline. Returns the same
-   * diagnostics as {@link compile} plus `timeline`, which is `null` when
+   * diagnostics as {@link compile} plus `timeline`, which is absent when
    * compilation produced none. Install it with {@link RealtimeEngine.applyProjectTimeline};
    * later project edits do not change an already compiled timeline.
    */
   compileTimeline(): ProjectCompileTimelineResult {
     const raw = this.native.compileTimeline();
-    return {
-      diagnostics: diagnosticsFromNative(raw.diagnostics),
-      timeline: raw.timeline === null ? null : createTimeline(raw.timeline),
-    };
+    const diagnostics = diagnosticsFromNative(raw.diagnostics);
+    return raw.timeline === null
+      ? { diagnostics }
+      : { diagnostics, timeline: createTimeline(raw.timeline) };
   }
 
   /**

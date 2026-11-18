@@ -297,7 +297,7 @@ const SIDECHAIN_REFUSALS: readonly SidechainRefusal[] = [
 /** Maps the C ABI `SonareSidechainRefusal` value (0 = accepted) to the facade shape. */
 function sidechainCheck(code: number): SidechainCheck {
   if (code === 0) {
-    return { ok: true, reason: null };
+    return { ok: true };
   }
   const reason = SIDECHAIN_REFUSALS[code - 1];
   if (reason === undefined) {

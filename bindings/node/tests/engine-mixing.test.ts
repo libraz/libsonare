@@ -919,7 +919,13 @@ describe('RealtimeEngine native binding', () => {
     const clickRun = byId('repair.declick')?.params.find(
       (param) => param.name === 'maxClickSamples',
     );
-    expect(clickRun).toMatchObject({ min: 1, max: 512, unit: 'samples', id: null, rtSafe: false });
+    expect(clickRun).toMatchObject({
+      min: 1,
+      max: 512,
+      unit: 'samples',
+      rtSafe: false,
+    });
+    expect(clickRun).not.toHaveProperty('id');
 
     // The voice changer is a stereo-pair insert whose bounds are the ones construction refuses
     // outside of; its latency-changing switches are construction-only.
@@ -939,7 +945,8 @@ describe('RealtimeEngine native binding', () => {
       rtSafe: true,
     });
     for (const name of ['retuneGrainSize', 'limiterEnableIspLimiter', 'reverbSeed']) {
-      expect(voiceParam(name)).toMatchObject({ id: null, rtSafe: false });
+      expect(voiceParam(name)).toMatchObject({ rtSafe: false });
+      expect(voiceParam(name)).not.toHaveProperty('id');
     }
 
     // The registry emits `category` and `params` unconditionally, but the TS
@@ -961,8 +968,14 @@ describe('RealtimeEngine native binding', () => {
       params: true,
       slots: true,
     };
+    // `realtimeCost` is absent for a processor that is not an insert.
+    const optional = new Set(['realtimeCost']);
     for (const entry of catalog) {
-      expect(Object.keys(entry).sort()).toEqual(Object.keys(declared).sort());
+      const keys = Object.keys(entry);
+      expect(keys.filter((key) => !(key in declared))).toEqual([]);
+      expect(
+        Object.keys(declared).filter((key) => !optional.has(key) && !keys.includes(key)),
+      ).toEqual([]);
     }
     expect(compressor?.category).toBe('dynamics');
     expect(abCrossfade?.category).toBe('reference');
@@ -977,10 +990,10 @@ describe('RealtimeEngine native binding', () => {
     const band3 = byId('multiband.compressor')?.slots.find((slot) => slot.name === 'band3');
     expect(band3).toEqual({
       name: 'band3',
-      parent: null,
       activation: 'always',
       minCrossoverCutoffs: 3,
     });
+    expect(band3).not.toHaveProperty('parent');
   });
 
   it('reports realtime insert param descriptors and changes them live', () => {

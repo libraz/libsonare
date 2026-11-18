@@ -1,4 +1,5 @@
 import { mixSceneFromNative } from './internal/mix_scene.js';
+import { parseRecordJson } from './internal/record_json.js';
 import { getSonareModule } from './module_state.js';
 import type { MixAssistantResult, MixAssistantTrack, MixSourceClass } from './public_types.js';
 import {
@@ -225,7 +226,7 @@ export function mixingAssistantSuggest(...args: unknown[]): MixAssistantResult {
     req.sampleRate,
     params,
   );
-  const native = JSON.parse(json) as Record<string, unknown>;
+  const native = parseRecordJson(json) as Record<string, unknown>;
   return {
     ...native,
     scene: mixSceneFromNative(native.scene),

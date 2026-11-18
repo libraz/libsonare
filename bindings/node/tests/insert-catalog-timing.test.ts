@@ -13,7 +13,7 @@ describe('insert catalog carries construction-only params, and timing answers pe
     const aliasing = info.find((param) => param.name === 'aliasing');
     expect(aliasing).toBeDefined();
     expect(aliasing?.type).toBe('enum');
-    expect(aliasing?.id).toBeNull();
+    expect(aliasing).not.toHaveProperty('id');
     expect(aliasing?.rtSafe).toBe(false);
     expect(aliasing?.choices?.map((choice) => choice.name)).toContain('oversample4x');
     expect(aliasing?.choices?.find((choice) => choice.name === 'oversample4x')?.value).toBe(3);
@@ -30,7 +30,7 @@ describe('insert catalog carries construction-only params, and timing answers pe
     expect(typeof hpf?.minExclusive).toBe('boolean');
     expect(hpf?.minExclusive).toBe(true);
     expect(hpf?.maxExclusive).toBe(false);
-    expect(hpf?.maxRelativeTo).toBeNull();
+    expect(hpf).not.toHaveProperty('maxRelativeTo');
     const frequency = masteringInsertParamInfo({ insert: 'eq.parametric' }).find(
       (param) => param.name === 'band0.frequencyHz',
     );

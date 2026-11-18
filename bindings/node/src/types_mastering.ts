@@ -8019,8 +8019,8 @@ export type StereoAnalysis = 'stereo.monoCompatCheck' | 'stereo.monoCompatCheckL
 
 /** Loudness group of {@link MasteringAudioProfile}. */
 export interface MasteringAudioProfileLoudness {
-  /** Integrated loudness in LUFS; `null` for a silent or below-gate take. */
-  integratedLufs: number | null;
+  /** Integrated loudness in LUFS; absent for a silent or below-gate take. */
+  integratedLufs?: number;
   /** EBU Tech 3342 loudness range, in LU. */
   loudnessRangeLu: number;
   /** True peak, in dBTP. */
@@ -8099,7 +8099,7 @@ export interface MasteringAudioProfile {
 
 /**
  * The measurements the assistant summarises its suggestion from. Flat, unlike
- * `MasteringAudioProfile`'s nested groups. A non-finite loudness is `null`.
+ * `MasteringAudioProfile`'s nested groups. A non-finite loudness is absent.
  */
 export interface MasteringAssistantProfile {
   /** Duration of the input in seconds. */
@@ -8108,8 +8108,8 @@ export interface MasteringAssistantProfile {
   bpm: number;
   /** Confidence of the tempo estimate. */
   bpmConfidence: number;
-  /** Integrated loudness in LUFS; `null` when non-finite. */
-  integratedLufs: number | null;
+  /** Integrated loudness in LUFS; absent for a silent or below-gate take. */
+  integratedLufs?: number;
   /** EBU Tech 3342 loudness range, in LU. */
   loudnessRangeLu: number;
   /** True peak, in dBTP. */
@@ -8140,11 +8140,11 @@ export interface MasteringAssistantResult {
 export interface MasteringStreamingPreviewPlatform {
   /** Platform name, echoed from the requested target. */
   name: string;
-  /** `null` for a silent or below-gate take. */
-  integratedLufs: number | null;
+  /** Integrated loudness in LUFS; absent for a silent or below-gate take. */
+  integratedLufs?: number;
   /** True peak of the take, in dBTP. */
   truePeakDbtp: number;
-  /** Gain that lands the take on the platform's target; 0 when the loudness is `null`. */
+  /** Gain that lands the take on the platform's target; 0 when the loudness is absent. */
   normalizationGainDb: number;
   /** True when that gain would push the true peak above the platform's ceiling. */
   ceilingRisk: boolean;
@@ -8156,14 +8156,14 @@ export interface MasteringStreamingPreviewResult {
   platforms: MasteringStreamingPreviewPlatform[];
 }
 
-/** Result of the `match.referenceLoudness` pair analysis. A silent take reads `null`. */
+/** Result of the `match.referenceLoudness` pair analysis. A loudness a silent take cannot give, and the gain derived from it, is absent. */
 export interface MatchReferenceLoudnessResult {
   /** Integrated loudness of the source in LUFS. */
-  sourceLufs: number | null;
+  sourceLufs?: number;
   /** Integrated loudness of the reference in LUFS. */
-  referenceLufs: number | null;
+  referenceLufs?: number;
   /** Gain in dB that brings the source to the reference loudness. */
-  gainToMatchDb: number | null;
+  gainToMatchDb?: number;
 }
 
 /** One band of the `match.tonalBalance` and `match.tonalBalanceLogBands` analyses. */
@@ -8214,12 +8214,12 @@ export interface PairAnalysisResultMap {
   'match.estimateReferenceDelaySamples': MatchEstimateReferenceDelaySamplesResult;
 }
 
-/** Result of the `stereo.monoCompatCheck` analysis. `width` is `null` for a fully out-of-phase pair. */
+/** Result of the `stereo.monoCompatCheck` analysis. `width` is absent for a fully out-of-phase pair. */
 export interface StereoMonoCompatCheckResult {
   /** Inter-channel correlation (-1 to 1). */
   correlation: number;
-  /** Stereo width; `null` for a fully out-of-phase pair. */
-  width: number | null;
+  /** Stereo width; absent for a fully out-of-phase pair. */
+  width?: number;
   /** Peak of the mono fold-down. */
   monoPeak: number;
   /** RMS level of the side signal. */

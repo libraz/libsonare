@@ -1,5 +1,6 @@
 import { nestChainConfig } from './internal/chain_config.js';
 import { resolveInsertParams } from './internal/processor_params.js';
+import { parseRecordJson } from './internal/record_json.js';
 import { addon } from './native.js';
 import type {
   MasteringChainConfig,
@@ -140,7 +141,7 @@ export function masteringInsertParamInfo(
     assertSampleRate('masteringInsertParamInfo', r.sampleRate);
   }
   const json = addon.masteringInsertParamInfo(r.insert, r.sampleRate ?? undefined);
-  return JSON.parse(json) as MasteringInsertParamInfo[];
+  return parseRecordJson(json) as MasteringInsertParamInfo[];
 }
 
 /**
@@ -183,7 +184,7 @@ export function masteringInsertTiming<N extends MasteringInsertName>(
  */
 export function masteringProcessorCatalog(): MasteringProcessorCatalogEntry[] {
   const json = addon.masteringProcessorCatalog();
-  return JSON.parse(json) as MasteringProcessorCatalogEntry[];
+  return parseRecordJson(json) as MasteringProcessorCatalogEntry[];
 }
 
 /** One built-in amp-sim rig with its resolved starting configuration. */
@@ -205,5 +206,5 @@ export interface MasteringAmpPresetCatalogEntry {
  */
 export function masteringAmpPresetCatalog(): MasteringAmpPresetCatalogEntry[] {
   const json = addon.masteringAmpPresetCatalog();
-  return JSON.parse(json) as MasteringAmpPresetCatalogEntry[];
+  return parseRecordJson(json) as MasteringAmpPresetCatalogEntry[];
 }

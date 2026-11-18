@@ -496,13 +496,12 @@ export interface MixAssistantTrackProfile {
   /** Track duration in seconds. */
   durationSec: number;
   /**
-   * BS.1770 integrated loudness in LUFS, or `null` for a track with no gated
-   * block to measure — a silent stem, or one muted before it was handed over.
-   * The measurement is `-Infinity` there, which JSON has no number for, so the
-   * document carries `null` rather than a finite value that would read as a
-   * real level. Such a track always carries an `exclusionReason` as well.
+   * BS.1770 integrated loudness in LUFS; absent for a track with no gated
+   * block to measure — a silent stem, or one muted before it was handed over —
+   * rather than a finite value that would read as a real level. Such a track
+   * always carries an `exclusionReason` as well.
    */
-  integratedLufs: number | null;
+  integratedLufs?: number;
   /** True peak in dBTP. */
   truePeakDbtp: number;
   /** Crest factor (peak over RMS) in dB. */

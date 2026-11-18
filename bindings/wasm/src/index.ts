@@ -1259,6 +1259,9 @@ export type {
   OfflineWorkerCallOptions,
   OfflineWorkerClientOptions,
 } from './worker_client.js';
+
+import { parseRecordJson } from './internal/record_json.js';
+
 export { OfflineWorkerClient } from './worker_client.js';
 
 /** Framed signal from {@link frameSignal}. */
@@ -1360,7 +1363,7 @@ export function capabilityCatalog(): CapabilityCatalog {
   if (!module) {
     throw notInitializedError();
   }
-  return JSON.parse(module.capabilityCatalog()) as CapabilityCatalog;
+  return parseRecordJson(module.capabilityCatalog()) as CapabilityCatalog;
 }
 
 /**

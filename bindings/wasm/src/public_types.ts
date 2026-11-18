@@ -134,10 +134,10 @@ export interface MasteringInsertSlot {
   /** Key prefix without the trailing dot, e.g. `midBand3` or `band1.dyn2`. */
   readonly name: string;
   /**
-   * Enclosing slot, which has to exist for this one to; null for a top-level
+   * Enclosing slot, which has to exist for this one to; absent for a top-level
    * slot. A parent is always listed before the slots naming it.
    */
-  readonly parent: string | null;
+  readonly parent?: string;
   /**
    * `anyKey`: the slot exists once any one of its keys is supplied, so an EQ
    * band is built as soon as a host sends any of its keys. `always`: it exists
@@ -147,7 +147,7 @@ export interface MasteringInsertSlot {
   /**
    * Crossover cutoffs (`cutoff<i>Hz` keys) the insert needs in effect for the
    * slot to exist; 0 when it needs none. With no cutoff key supplied, the
-   * default split applies: the cutoffs that publish a non-null default.
+   * default split applies: the cutoffs that publish a default.
    */
   readonly minCrossoverCutoffs: number;
 }
@@ -156,13 +156,13 @@ export interface MasteringInsertSlot {
  * One key a processor's construction reads, or one of its realtime automation
  * targets, as both {@link masteringInsertParamInfo} and
  * {@link capabilityCatalog} report it. Entries come in two runs: first the
- * processor's realtime automation targets in id order (`id` non-null), then,
- * sorted by name, every other construction key with `id` null and `rtSafe`
+ * processor's realtime automation targets in id order (`id` present), then,
+ * sorted by name, every other construction key with no `id` and `rtSafe`
  * false.
  *
  * `min` and `max` are the range construction ACCEPTS, measured by handing
  * candidate values to the same code path a caller would use: a hard
- * constraint, not a UI range, and null on both for an unvalidated control.
+ * constraint, not a UI range, and both absent for an unvalidated control.
  * A bound is measured with every other parameter at its default; a
  * sample-rate-derived bound reflects the un-prepared processor; an exclusive
  * bound is reported as its limit value and flagged by `minExclusive` /
@@ -172,60 +172,60 @@ export interface MasteringInsertParamInfo {
   /** JSON-key parameter name, as used in scene insert params. */
   readonly name: string;
   /**
-   * Integer param id for realtime automation lanes / MIDI-CC binding, or null
+   * Integer param id for realtime automation lanes / MIDI-CC binding, absent
    * for a construction-only key with no automation target.
    */
-  readonly id: number | null;
-  /** Whether the param can be changed live from the audio thread; false when `id` is null. */
+  readonly id?: number;
+  /** Whether the param can be changed live from the audio thread; false when `id` is absent. */
   readonly rtSafe: boolean;
   /**
    * The C++ type the processor's config builder reads the key as. `"enum"` is
    * sent as the number in its `choices` entry; `"string"` / `"array"` (an
    * embedded impulse response, a per-band list) is construction-only and
-   * reports null for `min`, `max`, `default` and `choices`.
+   * reports no `min`, `max`, `default` or `choices`.
    */
   readonly type: 'boolean' | 'number' | 'enum' | 'string' | 'array';
-  /** Smallest value construction accepts, or null when the catalog states no limit or `choices` is non-null. */
-  readonly min: number | null;
-  /** Largest value construction accepts, or null when the catalog states no limit or `choices` is non-null. */
-  readonly max: number | null;
-  /** Whether `min` itself is rejected (a `> min` constraint); false when `min` is null. */
+  /** Smallest value construction accepts; absent when the catalog states no limit or `choices` is present. */
+  readonly min?: number;
+  /** Largest value construction accepts; absent when the catalog states no limit or `choices` is present. */
+  readonly max?: number;
+  /** Whether `min` itself is rejected (a `> min` constraint); false when `min` is absent. */
   readonly minExclusive: boolean;
-  /** Whether `max` itself is rejected (a `< max` constraint); false when `max` is null. */
+  /** Whether `max` itself is rejected (a `< max` constraint); false when `max` is absent. */
   readonly maxExclusive: boolean;
   /**
    * `"nyquist"` when the ceiling follows the processing rate: the effective
    * ceiling is then the lower of `max` (measured at the catalog's probe rate)
-   * and the host's Nyquist frequency, both exclusive. Null otherwise.
+   * and the host's Nyquist frequency, both exclusive. Absent otherwise.
    */
-  readonly maxRelativeTo: 'nyquist' | null;
+  readonly maxRelativeTo?: 'nyquist';
   /**
    * Value the processor uses when the key is absent — the config struct's own
-   * field initializer, an enum as its number. Null for a param id with no
+   * field initializer, an enum as its number. Absent for a param id with no
    * construction key, a `"string"` / `"array"` key, or a construction key with
    * no fallback.
    */
-  readonly default: boolean | number | null;
-  /** Declared unit of a number; null for any other type. */
-  readonly unit: MasteringInsertParamUnit | null;
-  /** Lowest value a control should draw, inside `min` / `max`; null when the accepted range is also the display range. */
-  readonly uiMin: number | null;
-  /** Highest value a control should draw, inside `min` / `max`; null when the accepted range is also the display range. */
-  readonly uiMax: number | null;
+  readonly default?: boolean | number;
+  /** Declared unit of a number; absent for any other type. */
+  readonly unit?: MasteringInsertParamUnit;
+  /** Lowest value a control should draw, inside `min` / `max`; absent when the accepted range is also the display range. */
+  readonly uiMin?: number;
+  /** Highest value a control should draw, inside `min` / `max`; absent when the accepted range is also the display range. */
+  readonly uiMax?: number;
   /** Axis a control draws the value on. */
   readonly scale: MasteringInsertParamScale;
   /**
-   * The closed set of values construction accepts, in value order, or null
-   * when the accepted values are not a closed set. Non-null only for `"enum"`
+   * The closed set of values construction accepts, in value order; absent
+   * when the accepted values are not a closed set. Present only for `"enum"`
    * (every declared enumerator construction accepts) or a `"number"` key
-   * whose accepted integers have holes; `min` / `max` are then both null.
+   * whose accepted integers have holes; `min` / `max` are then both absent.
    */
-  readonly choices: readonly MasteringInsertParamChoice[] | null;
-  /** The {@link MasteringInsertSlot} this key belongs to, or null for a key that always exists. */
-  readonly slot: string | null;
+  readonly choices?: readonly MasteringInsertParamChoice[];
+  /** The {@link MasteringInsertSlot} this key belongs to; absent for a key that always exists. */
+  readonly slot?: string;
   /**
    * Siblings whose live value bounds this key, each read as `this <relation> factor * sibling`;
-   * empty for an independent key. A bound that only restates this dependency at the sibling's default is left null, so `min` and `max` are limits of the key's own.
+   * empty for an independent key. A bound that only restates this dependency at the sibling's default is left absent, so `min` and `max` are limits of the key's own.
    */
   readonly dependsOn: readonly MasteringInsertParamDependency[];
   /**
@@ -305,8 +305,8 @@ export interface MasteringProcessorCatalogEntry {
    * offline, dry-only, and no-tail processors.
    */
   readonly tailSamples: number;
-  /** Coarse realtime work estimate, or null when the processor is not an insert. */
-  readonly realtimeCost: MasteringRealtimeCost | null;
+  /** Coarse realtime work estimate; absent when the processor is not an insert. */
+  readonly realtimeCost?: MasteringRealtimeCost;
   /** How the mixer wraps the processor on a >2-channel (surround) bus insert. */
   readonly channelPolicy: MasteringChannelPolicy;
   /** Grouping for a processor picker. */
@@ -332,7 +332,7 @@ export interface MasteringProcessorCatalogEntry {
 
 /**
  * One built-in mastering preset's loudness-stage identity. The restoration
- * kind's three loudness values are null: its repair stages leave level alone,
+ * kind's three loudness values are absent: its repair stages leave level alone,
  * so it carries no loudness target, ceiling or limiter allowance.
  */
 export interface MasteringPresetCatalogEntry {
@@ -340,12 +340,12 @@ export interface MasteringPresetCatalogEntry {
   readonly name: string;
   /** Preset family: `'mastering'` or `'restoration'`. */
   readonly kind: 'mastering' | 'restoration';
-  /** Integrated loudness target in LUFS; null for a restoration preset. */
-  readonly targetLufs: number | null;
-  /** True-peak ceiling in dBTP; null for a restoration preset. */
-  readonly truePeakCeilingDbtp: number | null;
-  /** Largest gain reduction the limiter may apply, in dB; null for a restoration preset. */
-  readonly maxLimiterGainReductionDb: number | null;
+  /** Integrated loudness target in LUFS; absent for a restoration preset. */
+  readonly targetLufs?: number;
+  /** True-peak ceiling in dBTP; absent for a restoration preset. */
+  readonly truePeakCeilingDbtp?: number;
+  /** Largest gain reduction the limiter may apply, in dB; absent for a restoration preset. */
+  readonly maxLimiterGainReductionDb?: number;
 }
 
 /** Built-in preset names grouped by feature family. */
@@ -360,18 +360,18 @@ export interface CapabilityCatalogPresets {
 /** One flat mastering chain stage: `<prefix>.<leaf>` keys are `processor`'s parameters. */
 export interface CapabilityCatalogChainStage {
   readonly prefix: string;
-  /** Catalog processor id, or null when every key of the stage is chain-only. */
-  readonly processor: string | null;
+  /** Catalog processor id; absent when every key of the stage is chain-only. */
+  readonly processor?: string;
   readonly enabledKey: string;
 }
 
 /**
  * An indexed chain list. `<key>.<i>` is the chain parameter `key` when
- * `processor` is null; otherwise `<key>.<i>.<field>` is that processor's `field`.
+ * `processor` is absent; otherwise `<key>.<i>.<field>` is that processor's `field`.
  */
 export interface CapabilityCatalogChainList {
   readonly key: string;
-  readonly processor: string | null;
+  readonly processor?: string;
   readonly minItems: number;
   readonly maxItems: number;
 }
