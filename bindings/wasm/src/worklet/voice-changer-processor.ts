@@ -22,6 +22,7 @@ import {
   resolveScopeSampleRate,
 } from './guards.js';
 
+/** AudioWorklet-side bridge that runs a {@link RealtimeVoiceChanger} over the worklet's input and output blocks and applies control messages from the main thread. */
 export class SonareRealtimeVoiceChangerWorkletProcessor {
   private static warnedMonoOverflow = false;
   private static warnedPlanarOverflow = false;
@@ -91,6 +92,7 @@ export class SonareRealtimeVoiceChangerWorkletProcessor {
     }
   }
 
+  /** Processes one render quantum: input 0 is the signal, input 1 (first plane) the optional external vocoder carrier. Returns `false` once destroyed. */
   process(inputs: WorkletInput, outputs: WorkletOutput): boolean {
     const output = outputs[0];
     if (this.destroyed || !output || output.length === 0) {
@@ -156,6 +158,7 @@ export class SonareRealtimeVoiceChangerWorkletProcessor {
     return true;
   }
 
+  /** Releases the changer and its buffers. Idempotent; later `process()` calls return `false`. */
   destroy(): void {
     if (this.destroyed) {
       return;
@@ -237,6 +240,10 @@ export class SonareRealtimeVoiceChangerWorkletProcessor {
   }
 }
 
+/**
+ * Registers the voice-changer processor under `name` in the AudioWorklet global scope. Default `'sonare-realtime-voice-changer-processor'`.
+ * @throws SonareError `NotSupported` outside an AudioWorklet scope.
+ */
 export function registerSonareRealtimeVoiceChangerWorkletProcessor(
   name = 'sonare-realtime-voice-changer-processor',
 ): void {

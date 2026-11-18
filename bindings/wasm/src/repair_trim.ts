@@ -32,21 +32,29 @@ export interface TrimSilenceOptions extends ValidateOptions {
   paddingSamples?: number;
   /** Kept margin in seconds, rounded to the nearest sample. Not with `paddingSamples`. */
   paddingSec?: number;
+  /** Trim criterion. Default `'peak'`. */
   mode?: TrimSilenceMode;
+  /** Gate level in dBFS, from -144 to 0; read only by `'lufsGated'`. Default `-60`. */
   gateLufs?: number;
+  /** Gate window in milliseconds, in (0, 10000]; read only by `'lufsGated'`. Default `400`. */
   windowMs?: number;
 }
 
 /** Request form of `masteringRepairTrimSilence`. */
 export interface MasteringRepairTrimSilenceRequest extends TrimSilenceOptions {
+  /** Mono input samples. */
   samples: Float32Array;
+  /** Sample rate in Hz. */
   sampleRate: number;
 }
 
 /** Request form of `masteringRepairTrimSilenceStereo`. */
 export interface MasteringRepairTrimSilenceStereoRequest extends TrimSilenceOptions {
+  /** Left channel samples. */
   left: Float32Array;
+  /** Right channel samples. */
   right: Float32Array;
+  /** Sample rate in Hz. */
   sampleRate: number;
 }
 
@@ -167,14 +175,19 @@ export function masteringRepairTrimSilenceStereo(
 
 /** Request form of `masteringRepairDetectTrimRange`. */
 export interface MasteringRepairDetectTrimRangeRequest extends TrimSilenceOptions {
+  /** Mono input samples. */
   samples: Float32Array;
+  /** Sample rate in Hz. */
   sampleRate: number;
 }
 
 /** Request form of `masteringRepairDetectTrimRangeStereo`. */
 export interface MasteringRepairDetectTrimRangeStereoRequest extends TrimSilenceOptions {
+  /** Left channel samples. */
   left: Float32Array;
+  /** Right channel samples. */
   right: Float32Array;
+  /** Sample rate in Hz. */
   sampleRate: number;
 }
 

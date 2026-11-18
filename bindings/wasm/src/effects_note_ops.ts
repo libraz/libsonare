@@ -54,18 +54,23 @@ function assertNoteTrack(
 
 /** Note-region stretch request: the audio and rate (Hz, required) plus {@link NoteStretchOptions}. */
 export interface NoteStretchRequest extends NoteStretchOptions {
+  /** Mono input audio. */
   samples: Float32Array;
+  /** Sample rate in Hz. Required. */
   sampleRate: number;
 }
 
 /** Note-region move request: the audio and rate (Hz, required) plus {@link NoteMoveOptions}. */
 export interface NoteMoveRequest extends NoteMoveOptions {
+  /** Mono input audio. */
   samples: Float32Array;
+  /** Sample rate in Hz. Required. */
   sampleRate: number;
 }
 
 /** Canonical request form for {@link extractNotes}. */
 export interface ExtractNotesRequest extends NoteExtractorOptions, ValidateOptions {
+  /** Mono source audio the F0 track was measured from. */
   samples: Float32Array;
   /**
    * Sample rate in Hz. Required: `minNoteMs` and the per-frame RMS windows are
@@ -91,6 +96,7 @@ export interface ExtractNotesRequest extends NoteExtractorOptions, ValidateOptio
 
 /** Canonical request form for {@link renderNotes}. */
 export interface RenderNotesRequest extends ValidateOptions {
+  /** Mono source audio the notes were extracted from. */
   samples: Float32Array;
   /**
    * Sample rate in Hz. Required: `fadeMs` is converted to samples with this
@@ -158,6 +164,7 @@ interface NoteSetRequest extends NoteExtractorOptions, ValidateOptions {
    * so a different buffer re-derives the whole set against something else.
    */
   samples: Float32Array;
+  /** Sample rate of `samples` in Hz. */
   sampleRate: number;
   /**
    * Per-frame F0 in Hz. A frame carrying no pitch is spelled as zero, a

@@ -27,6 +27,7 @@ export interface RealtimeVoiceChangerOptions {
 
 /** Result of {@link realtimeVoiceChangerValidatePresetJson}. */
 export interface RealtimeVoiceChangerValidatePresetJsonResult {
+  /** Whether the document was accepted. */
   ok: boolean;
   /** The document with defaults filled in; present when `ok`. */
   normalizedJson?: string;
@@ -43,10 +44,13 @@ export interface RealtimeVoiceChangerValidatePresetJsonResult {
  * until `destroy()` is called on it.
  */
 export interface RealtimeVoiceChangerMonoBuffer {
+  /** Heap view receiving the mono input block. */
   input: Float32Array;
+  /** Heap view holding the processed mono block after `process()`. */
   output: Float32Array;
   /** Mono external vocoder carrier, one sample per frame. */
   carrier: Float32Array;
+  /** Processes `input` into `output` without an external carrier. */
   process: () => void;
   /** Like `process()`, reading the external carrier from `carrier`. */
   processWithCarrier: () => void;
@@ -58,11 +62,15 @@ export interface RealtimeVoiceChangerMonoBuffer {
  * are owned by the {@link RealtimeVoiceChanger}.
  */
 export interface RealtimeVoiceChangerInterleavedBuffer {
+  /** Heap view receiving the interleaved input block (L0,R0,L1,R1,...). */
   input: Float32Array;
+  /** Heap view holding the interleaved processed block after `process()`. */
   output: Float32Array;
   /** Mono external vocoder carrier, one sample per frame, shared by every channel. */
   carrier: Float32Array;
+  /** Channel count of the interleaved layout, 1 or 2. */
   readonly numChannels: 1 | 2;
+  /** Processes `input` into `output` without an external carrier. */
   process: () => void;
   /** Like `process()`, reading the external carrier from `carrier`. */
   processWithCarrier: () => void;
@@ -76,9 +84,11 @@ export interface RealtimeVoiceChangerInterleavedBuffer {
  * the same views.
  */
 export interface RealtimeVoiceChangerPlanarBuffer {
+  /** One heap view per channel, processed in place. */
   channels: Float32Array[];
   /** Mono external vocoder carrier, one sample per frame, shared by every channel. */
   carrier: Float32Array;
+  /** Processes `channels` in place without an external carrier. */
   process: () => void;
   /** Like `process()`, reading the external carrier from `carrier`. */
   processWithCarrier: () => void;
@@ -117,6 +127,7 @@ function assertPlanes(fnName: string, channels: unknown, carrier?: unknown): Flo
 // RealtimeVoiceChanger Class
 // ============================================================================
 
+/** Realtime voice-changer chain: pitch, formant, EQ, dynamics, harmony, vocoder, character and space stages over mono or stereo blocks. Call {@link RealtimeVoiceChanger.destroy} when done. */
 export class RealtimeVoiceChanger {
   private changerHandle: import('./sonare.js').WasmRealtimeVoiceChanger;
   private released = false;
@@ -166,6 +177,7 @@ export class RealtimeVoiceChanger {
     }
   }
 
+  /** Clears the streaming DSP state (filters, envelopes, reverb, limiter) and keeps the configuration. Not for use while a block is being processed. */
   reset(): void {
     this.changer.reset();
   }
@@ -180,6 +192,7 @@ export class RealtimeVoiceChanger {
     this.changer.setConfig(nativeVoiceConfig('RealtimeVoiceChanger.setConfig', config));
   }
 
+  /** Current configuration as a JSON preset document. */
   configJson(): string {
     return this.changer.configJson();
   }
@@ -215,10 +228,12 @@ export class RealtimeVoiceChanger {
     return this.changer.nonFiniteDiscardCount();
   }
 
+  /** Processes a mono block and returns a new array of the same length. */
   processMono(samples: Float32Array): Float32Array {
     return this.changer.processMono(samples);
   }
 
+  /** Realtime hot path: {@link RealtimeVoiceChanger.processMono} writing into `output`, which has the length of `samples`. */
   processMonoInto(samples: Float32Array, output: Float32Array): void {
     this.changer.processMonoInto(samples, output);
   }
@@ -233,6 +248,7 @@ export class RealtimeVoiceChanger {
     return this.changer.processMonoWithCarrier(samples, carrier);
   }
 
+  /** Realtime hot path: {@link RealtimeVoiceChanger.processMonoWithCarrier} writing into `output`, which has the length of `samples`. */
   processMonoWithCarrierInto(
     samples: Float32Array,
     carrier: Float32Array,

@@ -40,6 +40,7 @@ export interface VoiceChangeOptions extends ValidateOptions {
 
 /** Canonical request form for one-shot voice changing. */
 export interface VoiceChangeRequest extends VoiceChangeOptions {
+  /** Mono input audio. */
   samples: Float32Array;
   /** Sample rate in Hz, an integer in [8000, 384000]. Required. */
   sampleRate: number;

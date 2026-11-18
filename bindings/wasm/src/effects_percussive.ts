@@ -32,6 +32,7 @@ function percussiveRequest<
   return sampleOneShot<R & { samples: Float32Array }>(fnName, widened);
 }
 
+/** Separation settings shared by percussive-event extraction and rendering; a render must repeat the ones the extraction used. */
 export interface PercussiveSeparationOptions {
   /**
    * FFT size and hop the separation and the onset detector share. They cannot be
@@ -60,6 +61,7 @@ export interface PercussiveSeparationOptions {
 export interface ExtractPercussiveEventsRequest
   extends PercussiveSeparationOptions,
     ValidateOptions {
+  /** Source audio; a plain number array is copied to a `Float32Array` first. */
   samples: Float32Array | readonly number[];
   /**
    * Sample rate in Hz. Required: `maxEventMs` is converted to samples with this
@@ -99,6 +101,7 @@ export interface ExtractPercussiveEventsRequest
 export interface RenderPercussiveEventsRequest
   extends PercussiveSeparationOptions,
     ValidateOptions {
+  /** Source audio; a plain number array is copied to a `Float32Array` first. */
   samples: Float32Array | readonly number[];
   /**
    * Sample rate in Hz. Required: `fadeMs` is converted to samples with this rate,

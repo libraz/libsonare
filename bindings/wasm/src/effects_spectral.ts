@@ -14,7 +14,9 @@ function requireModule() {
 
 /** Spectral edit request: the audio and rate (Hz, required) plus {@link SpectralEditOptions}. */
 export interface SpectralEditRequest extends SpectralEditOptions {
+  /** Mono input audio. */
   samples: Float32Array;
+  /** Sample rate in Hz. Required: region frequency boundaries are mapped to STFT bins with this rate. */
   sampleRate: number;
 }
 

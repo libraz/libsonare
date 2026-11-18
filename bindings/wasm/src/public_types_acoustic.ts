@@ -29,16 +29,27 @@ export interface AcousticOptions extends ValidateOptions {
  * by the same band index as `rt60Bands`.
  */
 export interface AcousticResult {
+  /** Broadband reverberation time (RT60) in seconds. */
   rt60: number;
+  /** Early decay time in seconds; NaN when `isBlind`. */
   edt: number;
+  /** Clarity C50 in dB; NaN when `isBlind`. */
   c50: number;
+  /** Clarity C80 in dB; NaN when `isBlind`. */
   c80: number;
+  /** Definition D50 (early-to-total energy ratio); NaN when `isBlind`. */
   d50: number;
+  /** Per-octave-band RT60 in seconds. */
   rt60Bands: Float32Array;
+  /** Per-octave-band early decay time in seconds; all NaN when `isBlind`. */
   edtBands: Float32Array;
+  /** Per-octave-band C50 in dB; empty when `isBlind`. */
   c50Bands: Float32Array;
+  /** Per-octave-band C80 in dB; empty when `isBlind`. */
   c80Bands: Float32Array;
+  /** Support for the estimate, in [0, 1]. */
   confidence: number;
+  /** True when measured from a blind recording rather than an impulse response. */
   isBlind: boolean;
 }
 
@@ -50,8 +61,11 @@ export type AcousticModeName = 'auto' | 'blind' | 'impulseResponse';
 
 /** Shoebox geometry + placement shared by RIR synthesis and the room morph. */
 export interface RoomGeometryOptions {
+  /** Room length in metres. */
   lengthM?: number;
+  /** Room width in metres. */
   widthM?: number;
+  /** Room height in metres. */
   heightM?: number;
   /**
    * Uniform wall absorption, clamped to [0, 0.999] (the back-compat scalar).
@@ -131,12 +145,17 @@ export interface SynthesizeRirRequest extends RoomGeometryOptions {
 export interface RirDiagnostic {
   /** Stable machine-readable id, e.g. `acoustic.source_outside_room`. */
   code: string;
+  /** Human-readable description of the diagnostic. */
   message: string;
+  /** Severity of the diagnostic. */
   severity: 'info' | 'warning' | 'error';
 }
 
+/** Synthesized room impulse response with its sample rate and diagnostics. */
 export interface RirResult {
+  /** Impulse response samples. */
   rir: Float32Array;
+  /** Sample rate of `rir` in Hz. */
   sampleRate: number;
   /**
    * Every diagnostic the synthesizer reported, in order. A refused synthesis
@@ -177,6 +196,7 @@ export interface RoomEstimateOptions extends ValidateOptions {
   noiseFloorMarginDb?: number;
 }
 
+/** Equivalent-room estimate of a recording: volume, representative dimensions, direct-to-reverberant ratio and per-band absorption. */
 export interface RoomEstimateResult {
   /**
    * Equivalent volume (m^3) and representative dimensions (m), under the names
@@ -186,19 +206,29 @@ export interface RoomEstimateResult {
    * `rt60Bands`.
    */
   volume: number;
+  /** Representative room length in metres; NaN when no decay is measurable. */
   lengthM: number;
+  /** Representative room width in metres; NaN when no decay is measurable. */
   widthM: number;
+  /** Representative room height in metres; NaN when no decay is measurable. */
   heightM: number;
+  /** Direct-to-reverberant ratio in dB. */
   drrDb: number;
+  /** Support for the estimate, in [0, 1]. */
   confidence: number;
+  /** Per-octave-band mean wall absorption. */
   bandAbsorption: Float32Array;
+  /** Per-octave-band RT60 in seconds. */
   rt60Bands: Float32Array;
 }
 
 /** A position inside a room, in metres. */
 export interface RoomPlacement {
+  /** X coordinate in metres. */
   x: number;
+  /** Y coordinate in metres. */
   y: number;
+  /** Z coordinate in metres. */
   z: number;
 }
 
@@ -229,6 +259,7 @@ export interface RoomMorphOptions extends RoomGeometryOptions, ValidateOptions {
 export interface RoomMorphResult {
   /** Morphed samples: input length plus the target room's reverb tail. */
   audio: Float32Array;
+  /** Sample rate of `audio` in Hz. */
   sampleRate: number;
   /**
    * Every diagnostic the target-room synthesis reported, in order. Each says the
@@ -255,6 +286,7 @@ export interface RoomMorphStereoResult {
   left: Float32Array;
   /** Morphed right samples, the same length as `left`. */
   right: Float32Array;
+  /** Sample rate of `left` and `right` in Hz. */
   sampleRate: number;
   /** Target-room synthesis diagnostics, with the same codes as {@link RoomMorphResult.diagnostics}. */
   diagnostics: RirDiagnostic[];

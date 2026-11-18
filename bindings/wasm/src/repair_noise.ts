@@ -33,29 +33,45 @@ export type DenoiseClassicalNoiseEstimator = 'quantile' | 'mcra' | 'imcra' | 'sp
 
 /** Options for `masteringRepairDenoiseClassical`. */
 export interface DenoiseClassicalOptions extends ValidateOptions {
+  /** Gain estimator. Default `'logMmse'`. */
   mode?: DenoiseClassicalMode;
+  /** Noise PSD estimator. Default `'quantile'`. */
   noiseEstimator?: DenoiseClassicalNoiseEstimator;
+  /** STFT size in samples; a power of two. Default `1024`. */
   nFft?: number;
   /** Hop in samples, in (0, nFft / 2]. */
   hopLength?: number;
+  /** Decision-directed a priori SNR smoothing factor, in [0, 1). Default `0.98`. */
   ddAlpha?: number;
+  /** Deepest attenuation applied to any bin, in dB, from 0 to 120. Default `26`. */
   reductionDb?: number;
+  /** Over-subtraction factor, from 0 to 16; read only by `'spectralSubtraction'`. Default `2`. */
   overSubtraction?: number;
+  /** Floor multiplier relative to the noise PSD, in [0, 1]; read only by `'spectralSubtraction'`. Default `0.05`. */
   spectralFloor?: number;
+  /** Fraction of frames taken as noise-only when estimating the noise spectrum, in (0, 1]. Default `0.1`. */
   noiseEstimationQuantile?: number;
+  /** Whether the speech-presence gain is applied. Default `true`. */
   speechPresenceGain?: boolean;
+  /** Whether the gain mask is smoothed. Default `true`. */
   gainSmoothing?: boolean;
 }
 
+/** Request form of `masteringRepairDenoiseClassical`. */
 export interface MasteringRepairDenoiseClassicalRequest extends DenoiseClassicalOptions {
+  /** Mono input samples. */
   samples: Float32Array;
+  /** Sample rate in Hz. */
   sampleRate: number;
 }
 
 /** Request form of `masteringRepairDenoiseClassicalStereo`. */
 export interface MasteringRepairDenoiseClassicalStereoRequest extends DenoiseClassicalOptions {
+  /** Left channel samples. */
   left: Float32Array;
+  /** Right channel samples. */
   right: Float32Array;
+  /** Sample rate in Hz. */
   sampleRate: number;
 }
 
@@ -63,6 +79,7 @@ export interface MasteringRepairDenoiseClassicalStereoRequest extends DenoiseCla
 export interface MasteringRepairDenoiseClassicalLinkedRequest extends DenoiseClassicalOptions {
   /** At least one channel; all the same length. */
   channels: Float32Array[];
+  /** Sample rate in Hz. */
   sampleRate: number;
 }
 
@@ -207,27 +224,41 @@ export type DehumMode = 'subtract' | 'notch';
 
 /** Options for `masteringRepairDehum`. */
 export interface DehumOptions extends ValidateOptions {
+  /** Hum fundamental in Hz, in (0, 5000]. Default `50`. */
   fundamentalHz?: number;
+  /** Number of harmonics removed, from 1 to 16. Default `4`. */
   harmonics?: number;
+  /** Selectivity of the removal, in (0, 100]: the notch Q in `'notch'` mode, the cancellation rate in `'subtract'` mode. Default `20`. */
   q?: number;
+  /** Track the fundamental within `searchRangeHz` instead of holding it fixed. Default `false`. */
   adaptive?: boolean;
+  /** Half-width of the fundamental search in Hz, from 0 to 100. Default `2`. */
   searchRangeHz?: number;
+  /** Adaptation rate of the tracker, in [0, 1]. Default `0.25`. */
   adaptation?: number;
+  /** Tracking frame length in samples, from 16 to 16384. Default `2048`. */
   frameSize?: number;
+  /** PLL loop bandwidth as a fraction of the tracked frequency, in [0, 1]; adaptive tracking only. Default `0.01`. */
   pllBandwidth?: number;
   /** Defaults to `'subtract'`. */
   mode?: DehumMode;
 }
 
+/** Request form of `masteringRepairDehum`. */
 export interface MasteringRepairDehumRequest extends DehumOptions {
+  /** Mono input samples. */
   samples: Float32Array;
+  /** Sample rate in Hz. */
   sampleRate: number;
 }
 
 /** Request form of `masteringRepairDehumStereo`. */
 export interface MasteringRepairDehumStereoRequest extends DehumOptions {
+  /** Left channel samples. */
   left: Float32Array;
+  /** Right channel samples. */
   right: Float32Array;
+  /** Sample rate in Hz. */
   sampleRate: number;
 }
 
@@ -274,19 +305,25 @@ export function masteringRepairDehumStereo(...args: unknown[]): MasteringRepairD
 
 /** Request form of `masteringRepairDetectNoiseFloor`. */
 export interface MasteringRepairDetectNoiseFloorRequest extends DenoiseClassicalOptions {
+  /** Mono input samples. */
   samples: Float32Array;
+  /** Sample rate in Hz. */
   sampleRate: number;
 }
 
 /** Request form of `masteringRepairNoiseBandBins`. */
 export interface MasteringRepairNoiseBandBinsRequest {
+  /** STFT size in samples; a power of two. Default `1024`. */
   nFft?: number;
+  /** Sample rate in Hz. */
   sampleRate: number;
 }
 
 /** Request form of `masteringRepairDetectHum`. */
 export interface MasteringRepairDetectHumRequest extends DehumOptions {
+  /** Mono input samples. */
   samples: Float32Array;
+  /** Sample rate in Hz. */
   sampleRate: number;
 }
 

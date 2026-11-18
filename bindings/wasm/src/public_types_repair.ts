@@ -50,7 +50,9 @@ export interface DeclickReport {
 
 /** What `masteringRepairDeclick` returns: the repaired audio and what the pass did. */
 export interface DeclickResult {
+  /** Repaired audio. */
   samples: Float32Array;
+  /** What the pass found and did. */
   report: DeclickReport;
 }
 
@@ -135,7 +137,9 @@ export interface DeclipReport {
 
 /** What `masteringRepairDeclip` returns: the repaired audio and what the pass did. */
 export interface DeclipResult {
+  /** Repaired audio. */
   samples: Float32Array;
+  /** What the pass found and did. */
   report: DeclipReport;
 }
 
@@ -198,7 +202,9 @@ export interface DecrackleReport {
 
 /** What `masteringRepairDecrackle` returns: the repaired audio and what the pass did. */
 export interface DecrackleResult {
+  /** Repaired audio. */
   samples: Float32Array;
+  /** What the pass found and did. */
   report: DecrackleReport;
 }
 
@@ -258,7 +264,9 @@ export interface DehumReport {
 
 /** What `masteringRepairDehum` returns: the repaired audio and what the pass did. */
 export interface DehumResult {
+  /** Repaired audio. */
   samples: Float32Array;
+  /** What the pass found and did. */
   report: DehumReport;
 }
 
@@ -318,7 +326,9 @@ export interface DenoiseReport {
 
 /** What `masteringRepairDenoiseClassical` returns: the repaired audio and what the pass did. */
 export interface DenoiseResult {
+  /** Repaired audio. */
   samples: Float32Array;
+  /** What the pass found and did. */
   report: DenoiseReport;
 }
 
@@ -380,7 +390,9 @@ export interface DereverbReport {
 
 /** What `masteringRepairDereverbClassical` returns: the repaired audio and what the pass did. */
 export interface DereverbResult {
+  /** Repaired audio. */
   samples: Float32Array;
+  /** What the pass found and did. */
   report: DereverbReport;
 }
 
@@ -433,7 +445,9 @@ export interface TrimReport {
  * kept nothing gives an empty `samples`, not an error.
  */
 export interface TrimSilenceResult {
+  /** Kept audio; empty when nothing was kept. */
   samples: Float32Array;
+  /** What the trim pass found and did. */
   report: TrimReport;
 }
 
