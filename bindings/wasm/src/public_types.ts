@@ -109,7 +109,9 @@ export type MasteringInsertParamRelation = 'lt' | 'le' | 'gt' | 'ge';
 
 /** A sibling whose live value bounds an insert parameter. */
 export interface MasteringInsertParamDependency {
+  /** Key of the sibling parameter that bounds this one. */
   readonly key: string;
+  /** How this value is ordered against `factor * sibling`. */
   readonly relation: MasteringInsertParamRelation;
   /** Positive multiplier on the sibling's value; 1 for a plain ordering. */
   readonly factor: number;
@@ -334,10 +336,15 @@ export interface MasteringProcessorCatalogEntry {
  * so it carries no loudness target, ceiling or limiter allowance.
  */
 export interface MasteringPresetCatalogEntry {
+  /** Preset name. */
   readonly name: string;
+  /** Preset family: `'mastering'` or `'restoration'`. */
   readonly kind: 'mastering' | 'restoration';
+  /** Integrated loudness target in LUFS; null for a restoration preset. */
   readonly targetLufs: number | null;
+  /** True-peak ceiling in dBTP; null for a restoration preset. */
   readonly truePeakCeilingDb: number | null;
+  /** Largest gain reduction the limiter may apply, in dB; null for a restoration preset. */
   readonly maxLimiterGainReductionDb: number | null;
 }
 

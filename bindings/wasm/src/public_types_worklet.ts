@@ -125,11 +125,13 @@ export interface SonareRealtimeVoiceChangerWorkletProcessorOptions {
   wasmBinary?: ArrayBuffer | Uint8Array;
 }
 
+/** Options handed to the stream-analyzer worklet processor. */
 export interface SonareStreamAnalyzerWorkletProcessorOptions {
   /** Mono samples per posted chunk. Integer of at least 128. Default 4096. */
   chunkFrames?: number;
 }
 
+/** Options for creating a stream-analyzer worklet node. */
 export interface SonareStreamAnalyzerNodeOptions
   extends SonareStreamAnalyzerWorkletProcessorOptions {
   /**
@@ -137,8 +139,11 @@ export interface SonareStreamAnalyzerNodeOptions
    * defaults to the context's; any other value throws a RangeError.
    */
   config?: Partial<StreamConfig>;
+  /** Registered processor name. Default `'sonare-stream-analyzer-processor'`. */
   processorName?: string;
+  /** Worklet module loaded with `audioWorklet.addModule` before the node is created. Omitted: no module is added. */
   moduleUrl?: string | URL;
+  /** Creates the `AudioWorkletNode`. Omitted: `new AudioWorkletNode(context, name, options)`. */
   nodeFactory?: (
     context: BaseAudioContext,
     processorName: string,

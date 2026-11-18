@@ -226,20 +226,33 @@ let adoptedSceneJson: string | undefined;
  * whole signal for an exact dBTP number.
  */
 export interface MixerMeterSnapshot {
+  /** Left-channel sample peak in dB. */
   peakDbL: number;
+  /** Right-channel sample peak in dB. */
   peakDbR: number;
+  /** Left-channel RMS level in dB. */
   rmsDbL: number;
+  /** Right-channel RMS level in dB. */
   rmsDbR: number;
+  /** Inter-channel correlation in `[-1, 1]`. */
   correlation: number;
+  /** Left-channel inter-sample (true) peak in dB. */
   truePeakDbL: number;
+  /** Right-channel inter-sample (true) peak in dB. */
   truePeakDbR: number;
 }
 
+/** Reusable WASM-heap input and output views for realtime-style mixing; see {@link Mixer.createRealtimeBuffer}. */
 export interface MixerRealtimeBuffer {
+  /** Per-strip left input views; fill before calling `process`. */
   leftInputs: Float32Array[];
+  /** Per-strip right input views; fill before calling `process`. */
   rightInputs: Float32Array[];
+  /** Left output view; read after `process`. */
   outLeft: Float32Array;
+  /** Right output view; read after `process`. */
   outRight: Float32Array;
+  /** Mixes the filled inputs into the output views. `numSamples` is the block length in samples. */
   process: (numSamples?: number) => void;
 }
 
@@ -251,7 +264,7 @@ export interface MixerRealtimeBuffer {
  * Persistent, scene-based stereo mixer.
  *
  * Build one with `new Mixer({ scene, sampleRate })` (e.g. a scene from
- * {@link mixingScenePresetJson}, or none for an empty mixer) or with
+ * {@link mixingScenePreset}, or none for an empty mixer) or with
  * {@link Mixer.fromJson}, then feed per-strip stereo blocks through
  * {@link processStereo} to get the routed stereo master. Strips are addressed
  * by 0-based index or by scene id ({@link StripRef}). The routing graph is
@@ -263,7 +276,9 @@ export interface MixerRealtimeBuffer {
  *
  * @example
  * ```typescript
- * const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), { sampleRate: 48000 });
+ * const mixer = Mixer.fromJson(JSON.stringify(mixingScenePreset('vocalReverbSend')), {
+ *   sampleRate: 48000,
+ * });
  * try {
  *   const out = mixer.processStereo([stripL], [stripR]);
  * } finally {

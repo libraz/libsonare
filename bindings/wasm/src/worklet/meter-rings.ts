@@ -22,14 +22,23 @@ import {
   validateOverwriteViews,
 } from './ring-core.js';
 
+/** One meter reading delivered by the worklet, for a single target. */
 export interface SonareWorkletMeterSnapshot {
+  /** Message discriminator, always `'meter'`. */
   type: 'meter';
+  /** Id of the metered target. */
   targetId: number;
+  /** Sample-frame index of the reading. */
   frame: number;
+  /** Left-channel peak in dBFS. */
   peakDbL: number;
+  /** Right-channel peak in dBFS. */
   peakDbR: number;
+  /** Left-channel RMS level in dBFS. */
   rmsDbL: number;
+  /** Right-channel RMS level in dBFS. */
   rmsDbR: number;
+  /** Inter-channel correlation in `[-1, 1]`. */
   correlation: number;
   /**
    * Left-channel inter-sample (true) peak in dB, from the ITU-R BS.1770-4 polyphase reconstruction
@@ -40,9 +49,13 @@ export interface SonareWorkletMeterSnapshot {
   truePeakDbL: number;
   /** Right-channel inter-sample (true) peak in dB. See {@link truePeakDbL}. */
   truePeakDbR: number;
+  /** Momentary loudness in LUFS. */
   momentaryLufs: number;
+  /** Short-term loudness in LUFS. */
   shortTermLufs: number;
+  /** Integrated loudness in LUFS. */
   integratedLufs: number;
+  /** Gain reduction in dB. */
   gainReductionDb: number;
   /** Maximum pre-trim input peak for the left channel, in dBFS. */
   inputPeakDbL: number;
@@ -74,12 +87,17 @@ export interface SonareWorkletMeterSnapshot {
   inputPeakDb?: number[];
 }
 
+/** One spectrum reading delivered by the worklet. */
 export interface SonareWorkletSpectrumSnapshot {
+  /** Message discriminator, always `'spectrum'`. */
   type: 'spectrum';
+  /** Sample-frame index of the reading. */
   frame: number;
+  /** Band levels of the spectrum. */
   bands: Float32Array;
 }
 
+/** Number of Int32 header words in a meter ring. */
 export const SONARE_METER_RING_HEADER_INTS = 4;
 
 // Record layout: [frameLo, frameHi, targetId, peakDbL, peakDbR, rmsDbL, rmsDbR,
@@ -92,39 +110,62 @@ export const SONARE_METER_RING_HEADER_INTS = 4;
 // 2^24 exact-integer range of a single Float32 slot (~349 s at 48 kHz), so it is
 // stored split across two Float32 lanes (low 24 bits + high bits) for exact
 // reconstruction. See encodeFrameLo/encodeFrameHi/decodeFrame.
+/** Meter ring record-layout version, stored in header slot 3. */
 export const SONARE_METER_RING_PROTOCOL_VERSION = 3;
 export const SONARE_METER_RING_MAX_CHANNELS = 8;
 export const SONARE_METER_RING_CHANNEL_COUNT_OFFSET = 16;
 export const SONARE_METER_RING_PLANES_OFFSET = 17;
+/** Number of Float32 values in one meter ring record. */
 export const SONARE_METER_RING_RECORD_FLOATS =
   SONARE_METER_RING_PLANES_OFFSET + 4 * SONARE_METER_RING_MAX_CHANNELS;
+/** Number of Int32 header words in a spectrum ring. */
 export const SONARE_SPECTRUM_RING_HEADER_INTS = 5;
+/** Spectrum ring record-layout version. */
 export const SONARE_SPECTRUM_RING_PROTOCOL_VERSION = 1;
 
+/** Shared-memory ring of meter records; create one with `createSonareMeterRingBuffer`. */
 export interface SonareMeterRingBuffer {
+  /** Backing shared memory. */
   sharedBuffer: SharedArrayBuffer;
+  /** Header words, including the protocol version. */
   header: Int32Array;
+  /** Record storage, one fixed-size record per slot. */
   records: Float32Array;
+  /** Per-slot publish state words. */
   slotStates: Int32Array;
+  /** Number of record slots. */
   capacity: number;
 }
 
+/** Meter snapshots read from a ring and the index to resume from. */
 export interface SonareMeterRingReadResult {
+  /** Index to pass as `readIndex` on the next read. */
   nextReadIndex: number;
+  /** Snapshots read, oldest first. */
   meters: SonareWorkletMeterSnapshot[];
 }
 
+/** Shared-memory ring of spectrum records; create one with `createSonareSpectrumRingBuffer`. */
 export interface SonareSpectrumRingBuffer {
+  /** Backing shared memory. */
   sharedBuffer: SharedArrayBuffer;
+  /** Header words, including the protocol version. */
   header: Int32Array;
+  /** Record storage, one fixed-size record per slot. */
   records: Float32Array;
+  /** Per-slot publish state words. */
   slotStates: Int32Array;
+  /** Number of record slots. */
   capacity: number;
+  /** Bands per spectrum record. */
   bands: number;
 }
 
+/** Spectrum snapshots read from a ring and the index to resume from. */
 export interface SonareSpectrumRingReadResult {
+  /** Index to pass as `readIndex` on the next read. */
   nextReadIndex: number;
+  /** Snapshots read, oldest first. */
   spectra: SonareWorkletSpectrumSnapshot[];
 }
 
@@ -190,6 +231,7 @@ export function createSonareMeterRingBuffer(
   return { sharedBuffer, header, records, slotStates, capacity: clampedCapacity };
 }
 
+/** Reads the meter snapshots published since `readIndex` (default `0`) and returns them with the index to resume from. */
 export function readSonareMeterRingBuffer(
   ring: SonareMeterRingBuffer,
   readIndex = 0,
@@ -364,6 +406,7 @@ export function createSonareSpectrumRingBuffer(
   };
 }
 
+/** Reads the spectrum snapshots published since `readIndex` (default `0`) and returns them with the index to resume from. */
 export function readSonareSpectrumRingBuffer(
   ring: SonareSpectrumRingBuffer,
   readIndex = 0,

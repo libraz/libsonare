@@ -21,22 +21,33 @@ export type CompressorDetector = 'peak' | 'rms' | 'logRms';
 
 /** Options for `masteringDynamicsCompressor`. */
 export interface CompressorOptions extends ValidateOptions {
+  /** Level above which compression starts, in dBFS. Default `-18`. */
   thresholdDb?: number;
+  /** Compression ratio, clamped to at least 1. Default `2`. */
   ratio?: number;
+  /** Attack in ms: one time constant, about 63% of the way at the set time. Default `10`. */
   attackMs?: number;
+  /** Release in ms: one time constant, about 63% of the way at the set time. Default `100`. */
   releaseMs?: number;
+  /** Soft-knee width in dB. Default `0`. */
   kneeDb?: number;
+  /** Makeup gain in dB. Default `0`. */
   makeupGainDb?: number;
+  /** Derive the makeup gain automatically. Default `false`. */
   autoMakeup?: boolean;
+  /** Level detector: `'peak'`, `'rms'` or `'logRms'`. Default `'rms'`. */
   detector?: CompressorDetector;
   /** Sidechain high-pass corner in Hz, above 0. Absent = no sidechain high-pass. */
   sidechainHighPassHz?: number;
+  /** Program-dependent release time in ms. Default `0`. */
   pdrTimeMs?: number;
+  /** Program-dependent release multiplier. Default `1`. */
   pdrReleaseScale?: number;
 }
 
 /** Canonical request form for the offline compressor. */
 export interface MasteringDynamicsCompressorRequest extends CompressorOptions {
+  /** Mono input samples. */
   samples: Float32Array;
   /** Sample rate of `samples` in Hz. Required. */
   sampleRate: number;
@@ -44,11 +55,17 @@ export interface MasteringDynamicsCompressorRequest extends CompressorOptions {
 
 /** Options for `masteringDynamicsGate`. */
 export interface GateOptions extends ValidateOptions {
+  /** Level above which the gate opens, in dBFS. Default `-50`. */
   thresholdDb?: number;
+  /** Attack in ms: one time constant, about 63% of the way at the set time. Default `2`. */
   attackMs?: number;
+  /** Release in ms: one time constant, about 63% of the way at the set time. Default `80`. */
   releaseMs?: number;
+  /** Attenuation applied while the gate is closed, in dB. Default `-80`. */
   rangeDb?: number;
+  /** Minimum time the gate stays open, in ms. Default `0`. */
   holdMs?: number;
+  /** Level in dBFS below which an open gate closes (hysteresis), at most `thresholdDb`. Default `-50`. */
   closeThresholdDb?: number;
   /** Key high-pass corner in Hz. Absent = off; 0 Hz passes everything and is accepted. */
   keyHighPassHz?: number;
@@ -56,6 +73,7 @@ export interface GateOptions extends ValidateOptions {
 
 /** Canonical request form for the offline gate. */
 export interface MasteringDynamicsGateRequest extends GateOptions {
+  /** Mono input samples. */
   samples: Float32Array;
   /** Sample rate of `samples` in Hz. Required. */
   sampleRate: number;
@@ -63,20 +81,31 @@ export interface MasteringDynamicsGateRequest extends GateOptions {
 
 /** Options for `masteringDynamicsTransientShaper`. */
 export interface TransientShaperOptions extends ValidateOptions {
+  /** Gain applied to attacks, in dB. Default `3`. */
   attackGainDb?: number;
+  /** Gain applied to sustain, in dB. Default `0`. */
   sustainGainDb?: number;
+  /** Attack of the fast envelope follower, in ms. Default `0`. */
   fastAttackMs?: number;
+  /** Release of the fast envelope follower, in ms. Default `20`. */
   fastReleaseMs?: number;
+  /** Attack of the slow envelope follower, in ms. Default `15`. */
   slowAttackMs?: number;
+  /** Release of the slow envelope follower, in ms. Default `200`. */
   slowReleaseMs?: number;
+  /** Detection sensitivity, clamped to at least 0. Default `1`. */
   sensitivity?: number;
+  /** Safety clamp on the applied gain, in dB. Default `12`. */
   maxGainDb?: number;
+  /** Smoothing of the gain curve in ms; 0 disables it. Default `0`. */
   gainSmoothingMs?: number;
+  /** Lookahead in ms; 0 disables it. Default `0`. */
   lookaheadMs?: number;
 }
 
 /** Canonical request form for the offline transient shaper. */
 export interface MasteringDynamicsTransientShaperRequest extends TransientShaperOptions {
+  /** Mono input samples. */
   samples: Float32Array;
   /** Sample rate of `samples` in Hz. Required. */
   sampleRate: number;
@@ -93,6 +122,7 @@ export interface MasteringDynamicsTransientShaperRequest extends TransientShaper
  * gave it away.
  */
 export interface DynamicsProcessorResult {
+  /** Processed audio, latency already compensated. */
   samples: Float32Array;
   /**
    * The processor's own latency, already compensated in the returned audio;

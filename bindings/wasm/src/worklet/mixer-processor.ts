@@ -452,6 +452,7 @@ export class SonareWorkletProcessor {
   }
 }
 
+/** Registers the Sonare worklet processor under `name` (default `'sonare-worklet-processor'`). Throws `NotSupported` outside an AudioWorklet scope. */
 export function registerSonareWorkletProcessor(name = 'sonare-worklet-processor'): void {
   const scope = globalThis as unknown as {
     AudioWorkletProcessor?: new () => object;

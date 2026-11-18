@@ -22,6 +22,7 @@ function requireModule() {
   return getSonareModule();
 }
 
+/** Level statistic `normalize` targets: `'peak'` or `'rms'`. */
 export type NormalizeMode = 'peak' | 'rms';
 
 // `context` is the calling entry point's name: the refusal is about that
@@ -42,6 +43,7 @@ function resolveNormalizeMode(value: unknown, context = 'normalize'): NormalizeM
 
 /** Request for {@link normalize}. */
 export interface NormalizeRequest extends ValidateOptions {
+  /** Mono input samples. */
   samples: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
@@ -82,7 +84,9 @@ export function normalize(...args: unknown[]): Float32Array {
 
 /** Request for {@link normalizeStereo}. */
 export interface NormalizeStereoRequest extends ValidateOptions {
+  /** Left channel samples. */
   left: Float32Array;
+  /** Right channel samples. */
   right: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
@@ -97,7 +101,9 @@ export interface NormalizeStereoRequest extends ValidateOptions {
 
 /** A normalized channel pair and the gain both channels were moved by. */
 export interface NormalizeStereoResult {
+  /** Normalized left channel. */
   left: Float32Array;
+  /** Normalized right channel. */
   right: Float32Array;
   /**
    * One figure rather than a pair: the gain is one decision shared by both
@@ -195,6 +201,7 @@ function assertChainCallbacks(fnName: string, request: object): void {
 
 /** Request for {@link streamingLoudnessGain}. */
 export interface StreamingLoudnessGainRequest extends ValidateOptions {
+  /** Mono input samples. */
   samples: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
@@ -204,10 +211,13 @@ export interface StreamingLoudnessGainRequest extends ValidateOptions {
 
 /** Request for {@link streamingLoudnessGainStereo}. */
 export interface StreamingLoudnessGainStereoRequest extends ValidateOptions {
+  /** Left channel samples. */
   left: Float32Array;
+  /** Right channel samples. */
   right: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
+  /** The chain config the streaming chain will run; read like `masterAudio`'s `overrides`. */
   config?: MasteringChainConfig;
 }
 
@@ -280,6 +290,7 @@ export function streamingLoudnessGainStereo(
 
 /** Request form of {@link masterAudio}. */
 export interface MasterAudioRequest extends ValidateOptions {
+  /** Mono input samples. */
   samples: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
@@ -295,7 +306,9 @@ export interface MasterAudioRequest extends ValidateOptions {
 
 /** Request form of {@link masterAudioStereo}. */
 export interface MasterAudioStereoRequest extends ValidateOptions {
+  /** Left channel samples. */
   left: Float32Array;
+  /** Right channel samples. */
   right: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;

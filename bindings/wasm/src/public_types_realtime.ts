@@ -16,13 +16,21 @@ import type { FormantMode } from './effects_voice_change.js';
  * published.
  */
 export interface EqSpectrumSnapshot {
+  /** Pre-EQ left waveform scope samples. */
   preLeft: Float32Array;
+  /** Pre-EQ right waveform scope samples. */
   preRight: Float32Array;
+  /** Post-EQ left waveform scope samples. */
   postLeft: Float32Array;
+  /** Post-EQ right waveform scope samples. */
   postRight: Float32Array;
+  /** Applied gain per band in dB (24 entries). */
   bandGainDb: Float32Array;
+  /** Post-EQ level in dB across 16 bands from 20 Hz to 20 kHz. */
   profileDb: Float32Array;
+  /** Latest auto-gain compensation in dB. */
   lastAutoGainDb: number;
+  /** Sequence counter; increments each time a new snapshot is published. */
   seq: number;
 }
 
@@ -169,14 +177,21 @@ export type VoicePresetCategory =
   | 'character'
   | 'custom';
 
+/** Metadata shared by every preset document. */
 export interface RealtimeVoiceChangerPresetMetadata {
+  /** Preset document schema version; always `3`. */
   schemaVersion: 3;
+  /** Preset id. */
   id: string;
+  /** Display name. */
   name: string;
+  /** Optional human-readable description. */
   description?: string;
+  /** Category the preset is listed under. */
   category: VoicePresetCategory;
 }
 
+/** A preset document: shared metadata plus either raw `dsp` parameters or `macros`. */
 export type RealtimeVoiceChangerPreset =
   | (RealtimeVoiceChangerPresetMetadata & {
       dsp: Record<string, unknown>;
@@ -226,19 +241,27 @@ export type MidiRelease = 'hold' | 'input';
  * surfaces (the underlying C ABI / Python POD uses the snake_case equivalents).
  */
 export interface RealtimeVoiceChangerConfig {
+  /** Input gain in dB. */
   inputGainDb: number;
+  /** Output gain in dB. */
   outputGainDb: number;
+  /** Overall wet/dry mix. */
   wetMix: number;
   /** Retune pitch shift in semitones. */
   retunePitchSemitones: number;
+  /** Wet/dry mix of the retune stage. */
   retuneMix: number;
   /** Retune grain length in samples. */
   retuneGrainSizeSamples: number;
+  /** Formant shift factor; 1 leaves the formants unchanged. */
   formantFactor: number;
   /** Strength of the formant displacement in [0, 1]. Ignored when `formantMode` is `'absolute'`. */
   formantAmount: number;
+  /** Body colour of the formant stage. */
   formantBody: number;
+  /** Brightness colour of the formant stage. */
   formantBrightness: number;
+  /** Nasal colour of the formant stage. */
   formantNasal: number;
   /**
    * How `formantFactor` acts. `'relative'` leaves it to the colour stage
@@ -249,31 +272,49 @@ export interface RealtimeVoiceChangerConfig {
    * a config carrying a different mode is refused. Required, like every POD field.
    */
   formantMode: FormantMode;
+  /** High-pass corner frequency in Hz. */
   eqHighPassHz: number;
+  /** Body-band EQ gain in dB. */
   eqBodyDb: number;
+  /** Presence-band EQ gain in dB. */
   eqPresenceDb: number;
+  /** Air-band EQ gain in dB. */
   eqAirDb: number;
+  /** Gate threshold in dB. */
   gateThresholdDb: number;
   /** Attack in ms: one time constant, about 63% of the way at the set time. */
   gateAttackMs: number;
   /** Release in ms: one time constant, about 63% of the way at the set time. */
   gateReleaseMs: number;
+  /** Gate attenuation range in dB. */
   gateRangeDb: number;
+  /** Compressor threshold in dB. */
   compressorThresholdDb: number;
+  /** Compressor ratio. */
   compressorRatio: number;
   /** Attack in ms: one time constant, about 63% of the way at the set time. */
   compressorAttackMs: number;
   /** Release in ms: one time constant, about 63% of the way at the set time. */
   compressorReleaseMs: number;
+  /** Compressor make-up gain in dB. */
   compressorMakeupGainDb: number;
+  /** De-esser centre frequency in Hz. */
   deesserFrequencyHz: number;
+  /** De-esser threshold in dB. */
   deesserThresholdDb: number;
+  /** De-esser ratio. */
   deesserRatio: number;
+  /** Maximum de-esser gain reduction in dB. */
   deesserRangeDb: number;
+  /** Reverb wet/dry mix. */
   reverbMix: number;
+  /** Reverb time in ms. */
   reverbTimeMs: number;
+  /** Reverb high-frequency damping. */
   reverbDamping: number;
+  /** Seed of the reverb's random generator. */
   reverbSeed: number;
+  /** Limiter ceiling in dB. */
   limiterCeilingDb: number;
   /** Release in ms: one time constant, about 63% of the way at the set time. */
   limiterReleaseMs: number;
@@ -288,6 +329,7 @@ export interface RealtimeVoiceChangerConfig {
   voiceEngine: VoiceEngine;
   /** Lowest tracked f0 in Hz, [50, 200]; sets the psola latency. Fixed at creation. */
   voiceEngineF0MinHz: number;
+  /** How the target pitch is chosen. */
   pitchCorrectionMode: PitchCorrectionMode;
   /** Correction strength in [0, 1]. */
   pitchCorrectionAmount: number;
@@ -295,6 +337,7 @@ export interface RealtimeVoiceChangerConfig {
   pitchCorrectionSpeedMs: number;
   /** Scale root, 0 = C .. 11 = B; validated but unused for a chromatic scale. */
   pitchCorrectionKeyRoot: number;
+  /** Scale used by auto pitch correction. */
   pitchCorrectionScale: ScaleKind;
   /** Octave shift of the robot target, [-1, 1]. */
   pitchCorrectionRobotOctave: number;
@@ -302,30 +345,42 @@ export interface RealtimeVoiceChangerConfig {
   harmonyVoices: number;
   /** Scale degrees of harmony voices 1 to 3 from the lead, each in [-7, 7] (0 = unison, +2 = a third up). */
   harmonySteps: readonly [number, number, number];
+  /** Level of the harmony voices. */
   harmonyLevel: number;
+  /** Level of the lead voice in the harmony mix. */
   harmonyLeadLevel: number;
   /** Detune of the harmony voices in cents, [0, 30]. */
   harmonyDetuneCents: number;
   /** Delay of the harmony voices in ms, [0, 40]. */
   harmonyDelayMs: number;
+  /** True when the vocoder is on. */
   vocoderEnabled: boolean;
   /** Band count, [8, 32]. Fixed at creation. */
   vocoderBands: number;
+  /** Vocoder envelope attack in ms. */
   vocoderAttackMs: number;
+  /** Vocoder envelope release in ms. */
   vocoderReleaseMs: number;
+  /** Amount of sibilance passed through the vocoder. */
   vocoderSibilance: number;
   /**
    * `'external'` reads the carrier passed to the `*WithCarrier` process methods (the worklet's
    * second input); a carrier-less process call is then refused with an `InvalidState` error.
    */
   vocoderCarrierSource: VocoderCarrierSource;
+  /** Waveform of the internal vocoder carrier. */
   vocoderCarrierWave: VocoderCarrierWave;
+  /** Detune of the ensemble carrier in cents. */
   vocoderEnsembleDetuneCents: number;
+  /** Vocoder output level. */
   vocoderLevel: number;
+  /** Colouration applied after the voice stage. */
   characterType: CharacterType;
+  /** Amount of the character colouration. */
   characterAmount: number;
   /** Tone tilt in [-1, 1]. */
   characterTone: number;
+  /** Space effect selected by the reverb stage. */
   reverbVariation: ReverbVariation;
   /** Echo delay in ms, [1, 3000]. */
   reverbVariationDelayMs: number;
@@ -333,6 +388,8 @@ export interface RealtimeVoiceChangerConfig {
   reverbVariationFeedback: number;
   /** Tempo of the tempo-synced delay, [30, 300]. */
   reverbVariationTempoBpm: number;
+  /** Note value of the tempo-synced delay. */
   reverbVariationDivision: NoteDivision;
+  /** What the voices do once every held MIDI note has been released. */
   midiRelease: MidiRelease;
 }
