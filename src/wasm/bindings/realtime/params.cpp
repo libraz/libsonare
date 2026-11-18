@@ -124,8 +124,9 @@ void RealtimeEngineWasm::setAutomationLane(double param_id, val points) {
     val point = points[i];
     const double ppq = numberFromVal(objectProperty(point, "ppq"), "ppq");
     const float value = floatProperty(point, "value", 0.0f);
+    const int curve = intProperty(point, "curveToNext",
+                                  static_cast<int>(sonare::automation::Breakpoint{}.curve_to_next));
     // Match the C ABI: reject non-finite automation breakpoints (WASM bypasses the C-ABI guard).
-    const int curve = intProperty(point, "curveToNext", 0);
     if (!sonare::automation::valid_public_breakpoint(ppq, value, curve)) {
       throw WasmRangeError("automation breakpoint ppq and value must be finite");
     }
