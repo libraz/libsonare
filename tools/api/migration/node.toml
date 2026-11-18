@@ -15414,7 +15414,7 @@ old = "Mixer"
 changed = "maxBlockSize: the facade default is gone: omit it for the library default; an explicit 0 is a RangeError"
 domain = "engine"
 rule = "absent-not-sentinel"
-test = "bindings/node/tests/mixer-input-count.test.ts::takes an omitted maxBlockSize as the library default and refuses an explicit 0"
+test = "bindings/node/tests/mixer-input-count.test.ts::reports the library default block size when maxBlockSize is omitted, and refuses an explicit 0"
 
 [[entry]]
 kind = "field"

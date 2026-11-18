@@ -250,7 +250,7 @@ export interface MixerRealtimeBuffer {
  *   sampleRate: 48000,
  * });
  * try {
- *   const out = mixer.processStereo([stripL], [stripR]);
+ *   const out = mixer.processStereo([left], [right]);
  * } finally {
  *   mixer.destroy();
  * }
@@ -717,7 +717,7 @@ export class Mixer {
    * mixer.setFaderDb(0, -3);
    * mixer.setPan(0, 0.3);
    * mixer.settle(0);
-   * const { left, right } = mixer.processStereo([dryLeft], [dryRight]);
+   * const { left, right } = mixer.processStereo([leftSamples], [rightSamples]);
    * ```
    */
   settle(strip: StripRef): void {
@@ -1057,6 +1057,11 @@ export class Mixer {
    */
   get latencySamples(): number {
     return this.mixer.latencySamples();
+  }
+
+  /** Largest block a process call accepts, as the native side resolved it (the library default when `maxBlockSize` was omitted). */
+  get maxBlockSize(): number {
+    return this.mixer.maxBlockSize();
   }
 
   /**

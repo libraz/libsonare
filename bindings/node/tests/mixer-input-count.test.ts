@@ -29,13 +29,25 @@ describe('Mixer input count (Node)', () => {
 });
 
 describe('Mixer block size (Node)', () => {
-  it('takes an omitted maxBlockSize as the library default and refuses an explicit 0', () => {
+  it('reports the library default block size when maxBlockSize is omitted, and refuses an explicit 0', () => {
     const scene = JSON.stringify(mixingScenePreset('commentaryDucking'));
     expect(() => Mixer.fromJson(scene, { sampleRate: 48000, maxBlockSize: 0 })).toThrow(RangeError);
     const mixer = Mixer.fromJson(scene, { sampleRate: 48000 });
     try {
-      expect(mixer.drainTailStereo(512).left).toHaveLength(512);
-      expect(() => mixer.drainTailStereo(513)).toThrow(RangeError);
+      const max = mixer.maxBlockSize;
+      expect(max).toBeGreaterThan(0);
+      expect(mixer.drainTailStereo(max).left).toHaveLength(max);
+      expect(() => mixer.drainTailStereo(max + 1)).toThrow(RangeError);
+    } finally {
+      mixer.destroy();
+    }
+  });
+
+  it('reports the given block size', () => {
+    const scene = JSON.stringify(mixingScenePreset('commentaryDucking'));
+    const mixer = Mixer.fromJson(scene, { sampleRate: 48000, maxBlockSize: 256 });
+    try {
+      expect(mixer.maxBlockSize).toBe(256);
     } finally {
       mixer.destroy();
     }

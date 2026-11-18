@@ -296,6 +296,11 @@ export class Mixer {
     return this.native.latencySamples();
   }
 
+  /** Largest block a process call accepts, as the native side resolved it (the library default when `maxBlockSize` was omitted). */
+  get maxBlockSize(): number {
+    return this.native.maxBlockSize();
+  }
+
   /**
    * Process a zero-input block to drain delayed / tail audio after the host has
    * stopped feeding strip inputs. `numSamples` must not exceed the configured
@@ -569,7 +574,7 @@ export class Mixer {
    * mixer.setFaderDb('bass', -3);
    * mixer.setPan('bass', 0.3);
    * mixer.settle('bass');
-   * const { left, right } = mixer.processStereo([dryLeft], [dryRight]);
+   * const { left, right } = mixer.processStereo([leftSamples], [rightSamples]);
    * ```
    */
   settle(strip: StripRef): void {

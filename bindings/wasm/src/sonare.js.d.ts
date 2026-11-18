@@ -4093,6 +4093,7 @@ export interface WasmMixer {
   toSceneJson: () => string;
   tailSamples: () => number;
   latencySamples: () => number;
+  maxBlockSize: () => number;
   drainTailStereo: (numSamples: number) => {
     left: Float32Array;
     right: Float32Array;
