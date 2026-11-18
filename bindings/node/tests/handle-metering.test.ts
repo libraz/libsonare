@@ -89,6 +89,18 @@ describe('Audio handle-form metering', () => {
     }
   });
 
+  it('truePeakDbtp refuses an oversampling factor of 0 by name, as the buffer form does', () => {
+    const samples = makeSine(440, 1);
+    const audio = Audio.fromBuffer(samples, SR);
+    try {
+      expect(() => audio.truePeakDbtp(0)).toThrow(RangeError);
+      expect(() => audio.truePeakDbtp(0)).toThrow(/oversampleFactor/);
+      expect(() => meteringTruePeakDbtp(samples, SR, { oversampleFactor: 0 })).toThrow(RangeError);
+    } finally {
+      audio.destroy();
+    }
+  });
+
   it('detectClipping agrees with the buffer form on an actually-clipping signal', () => {
     const samples = new Float32Array(8000).fill(0.1);
     for (let i = 1000; i < 1064; i++) {

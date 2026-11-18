@@ -88,7 +88,11 @@ import {
   trim as trimFn,
   zeroCrossingRate as zeroCrossingRateFn,
 } from './features.js';
-import { clippingReportFromNative, clipThresholdLinear } from './internal/metering_native.js';
+import {
+  clippingReportFromNative,
+  clipThresholdLinear,
+  refuseZeroSentinel,
+} from './internal/metering_native.js';
 import { tempoRange } from './internal/tempo_range.js';
 import type { MasterAudioRequest } from './mastering_chain.js';
 import { masterAudio as masterAudioFn } from './mastering_chain.js';
@@ -385,11 +389,12 @@ export class Audio {
 
   /**
    * Inter-sample (true) peak in dBTP. `oversampleFactor` must be a power of two
-   * in [1, 16].
+   * in [1, 16]; omit it for 4.
    */
-  truePeakDbtp(oversampleFactor = 4): number {
+  truePeakDbtp(oversampleFactor?: number): number {
     this.requireAlive();
-    return this.native.truePeakDb(oversampleFactor);
+    refuseZeroSentinel('Audio.truePeakDbtp', { oversampleFactor }, ['oversampleFactor']);
+    return this.native.truePeakDb(oversampleFactor ?? 4);
   }
 
   /** Clipping report: clipped-sample count and runs at or above the threshold. */

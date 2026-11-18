@@ -14854,9 +14854,11 @@ rule = "unit-in-name"
 [[entry]]
 kind = "option"
 old = "Audio.truePeakDb(oversampleFactor)"
-new = "Audio.truePeakDbtp(oversampleFactor)"
+to = "Audio.truePeakDbtp(oversampleFactor)"
+changed = "optional; omitted is 4, and 0 is refused by name instead of meaning the default"
 domain = "core"
-rule = "unit-in-name"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/handle-metering.test.ts::truePeakDbtp refuses an oversampling factor of 0 by name, as the buffer form does"
 
 [[entry]]
 kind = "method"
