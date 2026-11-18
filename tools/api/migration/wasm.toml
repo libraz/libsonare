@@ -10766,35 +10766,22 @@ entry = "./analysis"
 
 [[entry]]
 kind = "type"
-old = "BpmCandidate"
-changed = "gains relation?: BpmCandidateRelation (present on AnalysisResult.bpmCandidates)"
+old = "BpmHypothesis"
+to = "AnalysisBpmCandidate"
+changed = "value is renamed bpm; analyzeBpm candidates are the plain BpmCandidate {bpm, confidence}"
 domain = "analysis"
 rule = "type-names"
 test = "bindings/wasm/tests/surface/analysis-music.test.ts::types"
 
 [[entry]]
 kind = "type"
-old = "BpmCandidate"
-changed = "gains relation?: BpmCandidateRelation (present on AnalysisResult.bpmCandidates)"
+old = "BpmHypothesis"
+to = "AnalysisBpmCandidate"
+changed = "value is renamed bpm; analyzeBpm candidates are the plain BpmCandidate {bpm, confidence}"
 domain = "analysis"
 rule = "type-names"
 entry = "./analysis"
 test = "bindings/wasm/tests/surface/analysis-music.test.ts::types"
-
-[[entry]]
-kind = "type"
-old = "BpmHypothesis"
-removed = "Use BpmCandidate, which carries bpm, confidence and an optional relation."
-domain = "analysis"
-rule = "type-names"
-
-[[entry]]
-kind = "type"
-old = "BpmHypothesis"
-removed = "Use BpmCandidate, which carries bpm, confidence and an optional relation."
-domain = "analysis"
-rule = "type-names"
-entry = "./analysis"
 
 [[entry]]
 kind = "type"
@@ -11324,7 +11311,7 @@ entry = "./analysis"
 [[entry]]
 kind = "field"
 old = "AnalysisResult.bpmCandidates"
-changed = "element type BpmCandidate {bpm, confidence, relation?}"
+changed = "element type AnalysisBpmCandidate {bpm, confidence, relation}"
 domain = "analysis"
 rule = "type-names"
 test = "bindings/wasm/tests/surface/analysis-music.test.ts::analysis records"
@@ -11332,7 +11319,7 @@ test = "bindings/wasm/tests/surface/analysis-music.test.ts::analysis records"
 [[entry]]
 kind = "field"
 old = "AnalysisResult.bpmCandidates"
-changed = "element type BpmCandidate {bpm, confidence, relation?}"
+changed = "element type AnalysisBpmCandidate {bpm, confidence, relation}"
 domain = "analysis"
 rule = "type-names"
 entry = "./analysis"

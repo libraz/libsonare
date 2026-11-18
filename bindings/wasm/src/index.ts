@@ -773,6 +773,7 @@ export type {
   AcousticModeName,
   AcousticOptions,
   AcousticResult,
+  AnalysisBpmCandidate,
   AnalysisChord,
   AnalysisDynamics,
   AnalysisMelody,

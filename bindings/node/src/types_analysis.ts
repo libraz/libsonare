@@ -232,7 +232,7 @@ export interface AnalysisResult {
    */
   bpmConfidence: number;
   /** Tempo hypotheses, the chosen tempo first. */
-  bpmCandidates: BpmCandidate[];
+  bpmCandidates: AnalysisBpmCandidate[];
   /** Detected musical key. */
   key: Key;
   /** Estimated time signature. */
@@ -599,8 +599,12 @@ export interface BpmCandidate {
   bpm: number;
   /** Winning tempo cluster's vote share, in `[0, 1]`. */
   confidence: number;
-  /** Relation to the primary tempo; present on {@link AnalysisResult.bpmCandidates}. */
-  relation?: BpmCandidateRelation;
+}
+
+/** One tempo hypothesis in {@link AnalysisResult.bpmCandidates}: a {@link BpmCandidate} with its relation to the chosen tempo. */
+export interface AnalysisBpmCandidate extends BpmCandidate {
+  /** Relation to the chosen tempo. */
+  relation: BpmCandidateRelation;
 }
 
 /** Result of {@link analyzeBpm}. */

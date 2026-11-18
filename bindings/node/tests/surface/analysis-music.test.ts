@@ -1,5 +1,6 @@
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import type {
+  AnalysisBpmCandidate,
   AnalysisResult,
   AnalyzeAsyncRequest,
   AnalyzeRequest,
@@ -629,7 +630,9 @@ describe('type surface', () => {
     >();
     expectTypeOf<PitchClass>().toEqualTypeOf<0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11>();
     expectTypeOf<Beat>().toEqualTypeOf<{ timeSec: number; strength: number }>();
-    expectTypeOf<BpmCandidate['relation']>().toEqualTypeOf<BpmCandidateRelation | undefined>();
+    expectTypeOf<BpmCandidate>().toEqualTypeOf<{ bpm: number; confidence: number }>();
+    expectTypeOf<AnalysisBpmCandidate['relation']>().toEqualTypeOf<BpmCandidateRelation>();
+    expectTypeOf<AnalysisResult['bpmCandidates']>().toEqualTypeOf<AnalysisBpmCandidate[]>();
     expectTypeOf<MelodyPoint['frequencyHz']>().toEqualTypeOf<number | undefined>();
     expectTypeOf<Section['type']>().toEqualTypeOf<SectionType>();
     expectTypeOf<Chord['quality']>().toEqualTypeOf<ChordQuality>();

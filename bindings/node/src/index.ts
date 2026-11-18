@@ -47,6 +47,7 @@ export type {
   AcousticResult,
   AlignTakeToReferenceRequest,
   AlignTakeToReferenceResult,
+  AnalysisBpmCandidate,
   AnalysisChord,
   AnalysisDynamics,
   AnalysisMelody,

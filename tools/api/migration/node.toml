@@ -5532,18 +5532,12 @@ test = "bindings/node/tests/surface/analysis-music.test.ts::exposes the closed s
 
 [[entry]]
 kind = "type"
-old = "BpmCandidate"
-changed = "gains relation?: BpmCandidateRelation (present on AnalysisResult.bpmCandidates)"
-domain = "analysis"
-rule = "type-names"
-test = "bindings/node/tests/surface/analysis-music.test.ts::exposes the closed sets and records"
-
-[[entry]]
-kind = "type"
 old = "BpmHypothesis"
-removed = "Use BpmCandidate, which carries bpm, confidence and an optional relation."
+to = "AnalysisBpmCandidate"
+changed = "value is renamed bpm; analyzeBpm candidates are the plain BpmCandidate {bpm, confidence}"
 domain = "analysis"
 rule = "type-names"
+test = "bindings/node/tests/surface/analysis-music.test.ts::gives tempo candidates bpm and relation"
 
 [[entry]]
 kind = "type"
@@ -5749,7 +5743,7 @@ rule = "typed-results"
 [[entry]]
 kind = "field"
 old = "AnalysisResult.bpmCandidates"
-changed = "element type BpmCandidate {bpm, confidence, relation?}"
+changed = "element type AnalysisBpmCandidate {bpm, confidence, relation}"
 domain = "analysis"
 rule = "type-names"
 test = "bindings/node/tests/surface/analysis-music.test.ts::gives tempo candidates bpm and relation"

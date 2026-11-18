@@ -595,8 +595,15 @@ describe('types', () => {
     type NoPitchClassName = sonare.PitchClassName;
     // @ts-expect-error profile synonyms live in no type any more
     type NoKeyProfileName = sonare.KeyProfileName;
-    // @ts-expect-error merged into BpmCandidate
+    // @ts-expect-error renamed AnalysisBpmCandidate
     type NoBpmHypothesis = sonare.BpmHypothesis;
+    expectTypeOf<sonare.BpmCandidate>().toEqualTypeOf<{ bpm: number; confidence: number }>();
+    expectTypeOf<
+      sonare.AnalysisBpmCandidate['relation']
+    >().toEqualTypeOf<sonare.BpmCandidateRelation>();
+    expectTypeOf<sonare.AnalysisResult['bpmCandidates']>().toEqualTypeOf<
+      sonare.AnalysisBpmCandidate[]
+    >();
     // @ts-expect-error split into per-function requests
     type NoSamplesRequest = sonare.SamplesRequest;
     // @ts-expect-error progress moved onto AnalyzeRequest
