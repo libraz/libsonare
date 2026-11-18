@@ -1573,6 +1573,178 @@ class RepairApplyResult:
         reports: list[RepairStageReports],
     ) -> None: ...
 
+class AudioDefects:
+    click: ClickDetection
+    clip: ClipDetection
+    crackle: CrackleDetection
+    noise: NoiseDetection
+    hum: HumDetection
+    reverb: ReverbDetection
+    def __init__(
+        self,
+        click: ClickDetection,
+        clip: ClipDetection,
+        crackle: CrackleDetection,
+        noise: NoiseDetection,
+        hum: HumDetection,
+        reverb: ReverbDetection,
+    ) -> None: ...
+
+RepairStageName: TypeAlias = Literal[
+    "declip", "declick", "decrackle", "dehum", "denoise", "dereverb"
+]
+
+class DeclipStage:
+    stage: Literal["declip"]
+    clip_threshold_db: float | None
+    lpc_order: int | None
+    iterations: int | None
+    lpc_blend: float | None
+    def __init__(
+        self,
+        *,
+        clip_threshold_db: float | None = None,
+        lpc_order: int | None = None,
+        iterations: int | None = None,
+        lpc_blend: float | None = None,
+    ) -> None: ...
+
+class DeclickStage:
+    stage: Literal["declick"]
+    threshold: float | None
+    neighbor_ratio: float | None
+    max_click_samples: int | None
+    lpc_order: int | None
+    residual_ratio: float | None
+    def __init__(
+        self,
+        *,
+        threshold: float | None = None,
+        neighbor_ratio: float | None = None,
+        max_click_samples: int | None = None,
+        lpc_order: int | None = None,
+        residual_ratio: float | None = None,
+    ) -> None: ...
+
+class DecrackleStage:
+    stage: Literal["decrackle"]
+    threshold: float | None
+    mode: str | None
+    levels: int | None
+    def __init__(
+        self,
+        *,
+        threshold: float | None = None,
+        mode: str | None = None,
+        levels: int | None = None,
+    ) -> None: ...
+
+class DehumStage:
+    stage: Literal["dehum"]
+    fundamental_hz: float | None
+    harmonics: int | None
+    q: float | None
+    adaptive: bool | None
+    search_range_hz: float | None
+    adaptation: float | None
+    frame_size: int | None
+    pll_bandwidth: float | None
+    mode: str | None
+    def __init__(
+        self,
+        *,
+        fundamental_hz: float | None = None,
+        harmonics: int | None = None,
+        q: float | None = None,
+        adaptive: bool | None = None,
+        search_range_hz: float | None = None,
+        adaptation: float | None = None,
+        frame_size: int | None = None,
+        pll_bandwidth: float | None = None,
+        mode: str | None = None,
+    ) -> None: ...
+
+class DenoiseStage:
+    stage: Literal["denoise"]
+    mode: str | None
+    noise_estimator: str | None
+    n_fft: int | None
+    hop_length: int | None
+    dd_alpha: float | None
+    reduction_db: float | None
+    over_subtraction: float | None
+    spectral_floor: float | None
+    noise_estimation_quantile: float | None
+    speech_presence_gain: bool | None
+    gain_smoothing: bool | None
+    def __init__(
+        self,
+        *,
+        mode: str | None = None,
+        noise_estimator: str | None = None,
+        n_fft: int | None = None,
+        hop_length: int | None = None,
+        dd_alpha: float | None = None,
+        reduction_db: float | None = None,
+        over_subtraction: float | None = None,
+        spectral_floor: float | None = None,
+        noise_estimation_quantile: float | None = None,
+        speech_presence_gain: bool | None = None,
+        gain_smoothing: bool | None = None,
+    ) -> None: ...
+
+class DereverbStage:
+    stage: Literal["dereverb"]
+    threshold: float | None
+    attenuation: float | None
+    n_fft: int | None
+    hop_length: int | None
+    t60_sec: float | None
+    late_delay_ms: float | None
+    over_subtraction: float | None
+    spectral_floor: float | None
+    wpe_enabled: bool | None
+    wpe_iterations: int | None
+    wpe_taps: int | None
+    wpe_strength: float | None
+    def __init__(
+        self,
+        *,
+        threshold: float | None = None,
+        attenuation: float | None = None,
+        n_fft: int | None = None,
+        hop_length: int | None = None,
+        t60_sec: float | None = None,
+        late_delay_ms: float | None = None,
+        over_subtraction: float | None = None,
+        spectral_floor: float | None = None,
+        wpe_enabled: bool | None = None,
+        wpe_iterations: int | None = None,
+        wpe_taps: int | None = None,
+        wpe_strength: float | None = None,
+    ) -> None: ...
+
+RepairStage: TypeAlias = (
+    DeclipStage | DeclickStage | DecrackleStage | DehumStage | DenoiseStage | DereverbStage
+)
+
+class MasteringRepairAnalysis:
+    defects: AudioDefects | None
+    channels: list[AudioDefects] | None
+    declip_threshold_safe: bool
+    integrated_lufs: float
+    recommended: list[RepairStage]
+    explanation: list[str]
+    def __init__(
+        self,
+        defects: AudioDefects | None,
+        channels: list[AudioDefects] | None,
+        declip_threshold_safe: bool,
+        integrated_lufs: float,
+        recommended: list[RepairStage],
+        explanation: list[str],
+    ) -> None: ...
+
 class ReverbDetection:
     late_decay_ratio_db: float
     late_predictability: float | None
@@ -1813,14 +1985,6 @@ class MasteringAudioProfile(TypedDict):
     spectral: MasteringAudioProfileSpectral
     dynamics: MasteringAudioProfileDynamics
     defects: NotRequired[MasteringAudioProfileDefects]
-
-class MasteringRepairAnalysis(TypedDict):
-    defects: NotRequired[MasteringAudioProfileDefects]
-    channels: NotRequired[list[MasteringAudioProfileDefects]]
-    declipThresholdSafe: bool
-    integratedLufs: float
-    recommended: list[dict[str, Any]]
-    explanation: list[str]
 
 MasteringChainConfig: TypeAlias = dict[str, Any]
 

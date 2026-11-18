@@ -855,6 +855,7 @@ from .types import (
 from .types import (
     AnalysisRhythm as AnalysisRhythm,
 )
+from .types import AudioDefects as AudioDefects
 from .types import (
     AutomationCurve as AutomationCurve,
 )
@@ -913,12 +914,15 @@ from .types import (
 from .types import CrackleDetection as CrackleDetection
 from .types import DeclickReport as DeclickReport
 from .types import DeclickResult as DeclickResult
+from .types import DeclickStage as DeclickStage
 from .types import DeclickStereoResult as DeclickStereoResult
 from .types import DeclipReport as DeclipReport
 from .types import DeclipResult as DeclipResult
+from .types import DeclipStage as DeclipStage
 from .types import DeclipStereoResult as DeclipStereoResult
 from .types import DecrackleReport as DecrackleReport
 from .types import DecrackleResult as DecrackleResult
+from .types import DecrackleStage as DecrackleStage
 from .types import DecrackleStereoResult as DecrackleStereoResult
 from .types import (
     DehumReport as DehumReport,
@@ -926,6 +930,7 @@ from .types import (
 from .types import (
     DehumResult as DehumResult,
 )
+from .types import DehumStage as DehumStage
 from .types import (
     DehumStereoResult as DehumStereoResult,
 )
@@ -938,6 +943,7 @@ from .types import (
 from .types import (
     DenoiseResult as DenoiseResult,
 )
+from .types import DenoiseStage as DenoiseStage
 from .types import (
     DenoiseStereoResult as DenoiseStereoResult,
 )
@@ -951,6 +957,7 @@ from .types import (
 from .types import (
     DereverbResult as DereverbResult,
 )
+from .types import DereverbStage as DereverbStage
 from .types import (
     DereverbStereoResult as DereverbStereoResult,
 )
@@ -1255,6 +1262,8 @@ from .types import (
 from .types import (
     RepairApplyResult as RepairApplyResult,
 )
+from .types import RepairStage as RepairStage
+from .types import RepairStageName as RepairStageName
 from .types import (
     RepairStageReports as RepairStageReports,
 )

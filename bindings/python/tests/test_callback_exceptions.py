@@ -24,7 +24,10 @@ def _material() -> np.ndarray:
 
 def _repair(**callbacks):
     return libsonare.mastering_repair_apply(
-        [_material()], SR, stages=[{"stage": "decrackle"}, {"stage": "declick"}], **callbacks
+        [_material()],
+        SR,
+        stages=[libsonare.DecrackleStage(), libsonare.DeclickStage()],
+        **callbacks,
     )
 
 

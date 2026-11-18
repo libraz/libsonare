@@ -90,6 +90,7 @@ from .types import (
     PitchTargetMode,
     ReassignedSpectrogramResult,
     RepairApplyResult,
+    RepairStage,
     ReverbDetection,
     RhythmResult,
     RirResult,
@@ -2243,7 +2244,7 @@ def mastering_repair_apply(
     channels: PlanarChannels,
     sample_rate: int,
     *,
-    stages: Sequence[Mapping[str, Any]],
+    stages: Sequence[RepairStage],
     on_progress: Callable[[float, str], None] | None = None,
     cancel: Callable[[], bool] | None = None,
 ) -> RepairApplyResult: ...

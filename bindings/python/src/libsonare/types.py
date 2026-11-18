@@ -527,9 +527,6 @@ from ._types_mastering_results import (
     MasteringChainConfigDocument as MasteringChainConfigDocument,
 )
 from ._types_mastering_results import (
-    MasteringRepairAnalysis as MasteringRepairAnalysis,
-)
-from ._types_mastering_results import (
     MasteringStreamingPreviewPlatform as MasteringStreamingPreviewPlatform,
 )
 from ._types_mastering_results import (
@@ -563,6 +560,9 @@ from ._types_mastering_results import (
     StreamingPlatform as StreamingPlatform,
 )
 from ._types_repair import (
+    AudioDefects as AudioDefects,
+)
+from ._types_repair import (
     ClickDetection as ClickDetection,
 )
 from ._types_repair import (
@@ -578,6 +578,9 @@ from ._types_repair import (
     DeclickResult as DeclickResult,
 )
 from ._types_repair import (
+    DeclickStage as DeclickStage,
+)
+from ._types_repair import (
     DeclickStereoResult as DeclickStereoResult,
 )
 from ._types_repair import (
@@ -585,6 +588,9 @@ from ._types_repair import (
 )
 from ._types_repair import (
     DeclipResult as DeclipResult,
+)
+from ._types_repair import (
+    DeclipStage as DeclipStage,
 )
 from ._types_repair import (
     DeclipStereoResult as DeclipStereoResult,
@@ -596,6 +602,9 @@ from ._types_repair import (
     DecrackleResult as DecrackleResult,
 )
 from ._types_repair import (
+    DecrackleStage as DecrackleStage,
+)
+from ._types_repair import (
     DecrackleStereoResult as DecrackleStereoResult,
 )
 from ._types_repair import (
@@ -603,6 +612,9 @@ from ._types_repair import (
 )
 from ._types_repair import (
     DehumResult as DehumResult,
+)
+from ._types_repair import (
+    DehumStage as DehumStage,
 )
 from ._types_repair import (
     DehumStereoResult as DehumStereoResult,
@@ -617,6 +629,9 @@ from ._types_repair import (
     DenoiseResult as DenoiseResult,
 )
 from ._types_repair import (
+    DenoiseStage as DenoiseStage,
+)
+from ._types_repair import (
     DenoiseStereoResult as DenoiseStereoResult,
 )
 from ._types_repair import (
@@ -629,16 +644,28 @@ from ._types_repair import (
     DereverbResult as DereverbResult,
 )
 from ._types_repair import (
+    DereverbStage as DereverbStage,
+)
+from ._types_repair import (
     DereverbStereoResult as DereverbStereoResult,
 )
 from ._types_repair import (
     HumDetection as HumDetection,
 )
 from ._types_repair import (
+    MasteringRepairAnalysis as MasteringRepairAnalysis,
+)
+from ._types_repair import (
     NoiseDetection as NoiseDetection,
 )
 from ._types_repair import (
     RepairApplyResult as RepairApplyResult,
+)
+from ._types_repair import (
+    RepairStage as RepairStage,
+)
+from ._types_repair import (
+    RepairStageName as RepairStageName,
 )
 from ._types_repair import (
     RepairStageReports as RepairStageReports,

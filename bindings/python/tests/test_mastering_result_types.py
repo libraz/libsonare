@@ -81,8 +81,13 @@ def test_audio_profile_result_with_defects() -> None:
 
 def test_repair_analysis_result() -> None:
     result = libsonare.mastering_repair_analyze([SOURCE, REFERENCE], SR)
-    assert "defects" in result and len(result["channels"]) == 2
-    _assert_matches(result, libsonare.MasteringRepairAnalysis, "repair")
+    assert isinstance(result, libsonare.MasteringRepairAnalysis)
+    assert isinstance(result.defects, libsonare.AudioDefects)
+    assert result.channels is not None and len(result.channels) == 2
+    assert all(isinstance(c, libsonare.AudioDefects) for c in result.channels)
+    assert isinstance(result.declip_threshold_safe, bool)
+    assert isinstance(result.integrated_lufs, float)
+    assert result.defects.reverb.late_predictability is None
 
 
 @pytest.mark.parametrize(

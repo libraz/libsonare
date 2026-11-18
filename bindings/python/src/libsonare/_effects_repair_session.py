@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import ctypes
+import dataclasses
 import json
+import math
 import re
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any, cast
@@ -28,19 +30,27 @@ from ._runtime import (
     _utf8_arg,
 )
 from .types import (
+    AudioDefects,
     ClickDetection,
     ClipDetection,
     CrackleDetection,
     DeclickReport,
+    DeclickStage,
     DeclipReport,
+    DeclipStage,
     DecrackleReport,
+    DecrackleStage,
     DehumReport,
+    DehumStage,
     DenoiseReport,
+    DenoiseStage,
     DereverbReport,
+    DereverbStage,
     HumDetection,
     MasteringRepairAnalysis,
     NoiseDetection,
     RepairApplyResult,
+    RepairStage,
     RepairStageReports,
     ReverbDetection,
 )
@@ -55,12 +65,83 @@ _REPORT_TYPES: dict[str, tuple[type, type]] = {
 }
 
 
+_STAGE_TYPES: dict[str, type[RepairStage]] = {
+    "declip": DeclipStage,
+    "declick": DeclickStage,
+    "decrackle": DecrackleStage,
+    "dehum": DehumStage,
+    "denoise": DenoiseStage,
+    "dereverb": DereverbStage,
+}
+
+
 def _snake(name: str) -> str:
     return re.sub(r"(?<!^)(?=[A-Z])", "_", name).lower()
 
 
+def _camel(name: str) -> str:
+    head, *rest = name.split("_")
+    return head + "".join(part.capitalize() for part in rest)
+
+
 def _fields(values: Mapping[str, Any]) -> dict[str, Any]:
     return {_snake(key): value for key, value in values.items()}
+
+
+def _detection(detection_type: type, values: Mapping[str, Any]) -> Any:
+    detected = _fields(values)
+    if detection_type is ClipDetection and not detected["flat_run_count"]:
+        # With no flat run there is no level to report; the document still carries one.
+        detected["flat_level"] = None
+    if detection_type is ReverbDetection:
+        # The document omits the key when the WPE stage did not run.
+        detected.setdefault("late_predictability", None)
+    return detection_type(**detected)
+
+
+def _audio_defects_from_wire(values: Mapping[str, Any]) -> AudioDefects:
+    return AudioDefects(
+        click=_detection(ClickDetection, values["click"]),
+        clip=_detection(ClipDetection, values["clip"]),
+        crackle=_detection(CrackleDetection, values["crackle"]),
+        noise=_detection(NoiseDetection, values["noise"]),
+        hum=_detection(HumDetection, values["hum"]),
+        reverb=_detection(ReverbDetection, values["reverb"]),
+    )
+
+
+def _stage_from_wire(values: Mapping[str, Any]) -> RepairStage:
+    settings = {_snake(key): value for key, value in values.items() if key != "stage"}
+    if "clip_threshold" in settings:
+        settings["clip_threshold_db"] = 20.0 * math.log10(settings.pop("clip_threshold"))
+    return _STAGE_TYPES[values["stage"]](**settings)
+
+
+def _stage_to_wire(stage: RepairStage) -> dict[str, Any]:
+    wire: dict[str, Any] = {"stage": stage.stage}
+    for item in dataclasses.fields(cast(Any, stage)):
+        value = getattr(stage, item.name)
+        if item.name == "stage" or value is None:
+            continue
+        if item.name == "clip_threshold_db":
+            # The stage document carries the declip level linear, as its catalog parameter does.
+            wire["clipThreshold"] = 10.0 ** (value / 20.0)
+        else:
+            wire[_camel(item.name)] = value
+    return wire
+
+
+def _repair_analysis_from_wire(values: Mapping[str, Any]) -> MasteringRepairAnalysis:
+    defects = values.get("defects")
+    channels = values.get("channels")
+    return MasteringRepairAnalysis(
+        defects=None if defects is None else _audio_defects_from_wire(defects),
+        channels=None if channels is None else [_audio_defects_from_wire(c) for c in channels],
+        declip_threshold_safe=bool(values["declipThresholdSafe"]),
+        integrated_lufs=float(values["integratedLufs"]),
+        recommended=[_stage_from_wire(stage) for stage in values["recommended"]],
+        explanation=list(values["explanation"]),
+    )
 
 
 def _stage_reports(entry: Mapping[str, Any]) -> RepairStageReports:
@@ -68,14 +149,7 @@ def _stage_reports(entry: Mapping[str, Any]) -> RepairStageReports:
     reports = []
     for report in entry["reports"]:
         fields = _fields(report)
-        detected = _fields(report["detected"])
-        if detection_type is ClipDetection and not detected["flat_run_count"]:
-            # With no flat run there is no level to report; the document still carries one.
-            detected["flat_level"] = None
-        if detection_type is ReverbDetection:
-            # The document omits the key when the WPE stage did not run.
-            detected.setdefault("late_predictability", None)
-        fields["detected"] = detection_type(**detected)
+        fields["detected"] = _detection(detection_type, report["detected"])
         reports.append(report_type(**fields))
     return RepairStageReports(stage=entry["stage"], scope=entry["scope"], reports=reports)
 
@@ -115,7 +189,7 @@ def mastering_repair_analyze(
 
         analysis = libsonare.mastering_repair_analyze([left, right], 48000)
         result = libsonare.mastering_repair_apply(
-            [left, right], 48000, stages=analysis["recommended"]
+            [left, right], 48000, stages=analysis.recommended
         )
 
     Args:
@@ -154,14 +228,14 @@ def mastering_repair_analyze(
             ctypes.byref(json_ptr),
         )
     )
-    return cast(MasteringRepairAnalysis, json.loads(_take_string(lib, json_ptr)))
+    return _repair_analysis_from_wire(json.loads(_take_string(lib, json_ptr)))
 
 
 def mastering_repair_apply(
     channels: Sequence[Sequence[float] | np.ndarray] | np.ndarray,
     sample_rate: int,
     *,
-    stages: Sequence[Mapping[str, Any]],
+    stages: Sequence[RepairStage],
     on_progress: Callable[[float, str], None] | None = None,
     cancel: Callable[[], bool] | None = None,
 ) -> RepairApplyResult:
@@ -179,7 +253,7 @@ def mastering_repair_apply(
         result = libsonare.mastering_repair_apply(
             [left, right],
             48000,
-            stages=[{"stage": "denoise", "mode": "logMmse"}, {"stage": "declick"}],
+            stages=[libsonare.DenoiseStage(mode="logMmse"), libsonare.DeclickStage()],
         )
         print(result.reports[0].stage)  # "declick"
 
@@ -187,13 +261,10 @@ def mastering_repair_apply(
         channels: One buffer per channel, all of the same length, or a 2-D
             ``(channels, frames)`` array. At least one.
         sample_rate: Sample rate in Hz.
-        stages: ``{"stage": name, <setting>: value}`` dicts, each stage at most
-            once; ``name`` is one of ``declip``, ``declick``, ``decrackle``,
-            ``dehum``, ``denoise``, ``dereverb``. The settings are the stage's
-            catalog parameters in their camelCase spelling (``repair.declip``,
-            ``repair.declick``, ``repair.decrackle``, ``repair.dehum``,
-            ``repair.denoiseClassical``, ``repair.dereverbClassical``); an enum
-            takes its choice name or wire value. An unknown one is refused.
+        stages: Stage records (:class:`DeclipStage`, :class:`DeclickStage`,
+            :class:`DecrackleStage`, :class:`DehumStage`, :class:`DenoiseStage`,
+            :class:`DereverbStage`), each stage at most once. A setting left as
+            None takes the stage's default.
         on_progress: Optional callback ``(progress, stage)`` invoked after each
             stage with the fraction done and ``"repair.<stage>"``. An exception
             raised inside it stops the repair at its next cancellation point
@@ -207,7 +278,7 @@ def mastering_repair_apply(
         applied stage, in application order.
 
     Raises:
-        TypeError: If ``stages`` is not a sequence of mappings.
+        TypeError: If ``stages`` is not a sequence of stage records.
         SonareValueError: If ``channels`` is empty, the channels disagree in
             length, or any channel is empty or carries a non-finite sample.
         SonareError: If the C call rejects the request (a repeated or unknown
@@ -217,13 +288,14 @@ def mastering_repair_apply(
     symbol = "sonare_mastering_repair_apply"
     if not hasattr(lib, symbol):
         raise _unsupported_effect_symbol(symbol)
+    stage_types = tuple(_STAGE_TYPES.values())
     if isinstance(stages, (str, bytes, Mapping)) or not all(
-        isinstance(stage, Mapping) for stage in stages
+        isinstance(stage, stage_types) for stage in stages
     ):
-        raise TypeError("mastering_repair_apply: stages must be a sequence of mappings")
+        raise TypeError("mastering_repair_apply: stages must be a sequence of stage records")
     planes = _linked_channel_planes("mastering_repair_apply", channels)
     arrays, in_ptrs, frame_count = _planar_channel_arrays(planes, subject="channels")
-    stages_json = json.dumps([dict(stage) for stage in stages])
+    stages_json = json.dumps([_stage_to_wire(stage) for stage in stages])
     out_buffers, out_ptrs = _linked_output_planes(len(arrays), frame_count)
     state = CancellationState(cancel)
     progress_cb = _progress_trampoline(on_progress, state)

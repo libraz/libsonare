@@ -1,16 +1,15 @@
 """Audio-repair result shapes.
 
 Each defect family carries a detection describing what was found, a report
-describing what the mono repair did, and a stereo result.
-
-camelCase property aliases mirror the JS binding's public API so users moving
-between languages see the same names. They intentionally violate PEP8 N802.
+describing what the mono repair did, and a stereo result. The repair session
+adds the six detections gathered into one record, one stage record per repair
+stage, and the analysis that recommends them.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Literal, TypeAlias
 
 if TYPE_CHECKING:
     import numpy as np
@@ -472,3 +471,142 @@ class RepairApplyResult:
 
     channels: list[NDArray[np.float32]]
     reports: list[RepairStageReports]
+
+
+@dataclass(frozen=True, slots=True)
+class AudioDefects:
+    """What the six repair detectors measured, one detection per detector.
+
+    The audio profile and the repair analysis both report it. ``reverb.late_predictability``
+    is None there, since neither runs the WPE stage.
+    """
+
+    click: ClickDetection
+    clip: ClipDetection
+    crackle: CrackleDetection
+    noise: NoiseDetection
+    hum: HumDetection
+    reverb: ReverbDetection
+
+
+RepairStageName: TypeAlias = Literal[
+    "declip", "declick", "decrackle", "dehum", "denoise", "dereverb"
+]
+"""The repair stages, in the order :func:`mastering_repair_apply` runs them."""
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class DeclipStage:
+    """Declip settings as :func:`mastering_repair_declip` takes them; None is its default."""
+
+    stage: Literal["declip"] = field(default="declip", init=False)
+    clip_threshold_db: float | None = None
+    lpc_order: int | None = None
+    iterations: int | None = None
+    lpc_blend: float | None = None
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class DeclickStage:
+    """Declick settings as :func:`mastering_repair_declick` takes them; None is its default."""
+
+    stage: Literal["declick"] = field(default="declick", init=False)
+    threshold: float | None = None
+    neighbor_ratio: float | None = None
+    max_click_samples: int | None = None
+    lpc_order: int | None = None
+    residual_ratio: float | None = None
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class DecrackleStage:
+    """Decrackle settings as :func:`mastering_repair_decrackle` takes them; None is its default."""
+
+    stage: Literal["decrackle"] = field(default="decrackle", init=False)
+    threshold: float | None = None
+    mode: str | None = None
+    levels: int | None = None
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class DehumStage:
+    """Dehum settings as :func:`mastering_repair_dehum` takes them; None is its default."""
+
+    stage: Literal["dehum"] = field(default="dehum", init=False)
+    fundamental_hz: float | None = None
+    harmonics: int | None = None
+    q: float | None = None
+    adaptive: bool | None = None
+    search_range_hz: float | None = None
+    adaptation: float | None = None
+    frame_size: int | None = None
+    pll_bandwidth: float | None = None
+    mode: str | None = None
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class DenoiseStage:
+    """Linked denoise settings as :func:`mastering_repair_denoise_classical` takes them.
+
+    A setting left as None is that function's default.
+    """
+
+    stage: Literal["denoise"] = field(default="denoise", init=False)
+    mode: str | None = None
+    noise_estimator: str | None = None
+    n_fft: int | None = None
+    hop_length: int | None = None
+    dd_alpha: float | None = None
+    reduction_db: float | None = None
+    over_subtraction: float | None = None
+    spectral_floor: float | None = None
+    noise_estimation_quantile: float | None = None
+    speech_presence_gain: bool | None = None
+    gain_smoothing: bool | None = None
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class DereverbStage:
+    """Linked dereverb settings as :func:`mastering_repair_dereverb_classical` takes them.
+
+    A setting left as None is that function's default.
+    """
+
+    stage: Literal["dereverb"] = field(default="dereverb", init=False)
+    threshold: float | None = None
+    attenuation: float | None = None
+    n_fft: int | None = None
+    hop_length: int | None = None
+    t60_sec: float | None = None
+    late_delay_ms: float | None = None
+    over_subtraction: float | None = None
+    spectral_floor: float | None = None
+    wpe_enabled: bool | None = None
+    wpe_iterations: int | None = None
+    wpe_taps: int | None = None
+    wpe_strength: float | None = None
+
+
+RepairStage: TypeAlias = (
+    DeclipStage | DeclickStage | DecrackleStage | DehumStage | DenoiseStage | DereverbStage
+)
+"""One stage for :func:`mastering_repair_apply`, told apart by its ``stage`` attribute."""
+
+
+@dataclass(frozen=True, slots=True)
+class MasteringRepairAnalysis:
+    """Result of :func:`mastering_repair_analyze`.
+
+    ``defects`` aggregates every channel the way the stereo audio profile does and
+    ``channels`` holds each channel's own, in input order; both are None when the
+    input was too short for the detectors to run. ``recommended`` lists the stages
+    the measurement supports, in application order and with every setting given,
+    ready for :func:`mastering_repair_apply`. Dereverb is never recommended.
+    """
+
+    defects: AudioDefects | None
+    channels: list[AudioDefects] | None
+    declip_threshold_safe: bool
+    integrated_lufs: float
+    recommended: list[RepairStage]
+    explanation: list[str]

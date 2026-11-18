@@ -131,25 +131,6 @@ class MasteringAudioProfile(TypedDict):
     defects: NotRequired[MasteringAudioProfileDefects]
 
 
-class MasteringRepairAnalysis(TypedDict):
-    """Result of :func:`mastering_repair_analyze`.
-
-    ``defects`` is the aggregate over every channel and ``channels`` holds one
-    record per channel; both are left out when the input was too short for the
-    detectors to run. ``recommended`` lists the stages the measurement
-    supports, in application order, each a ``{"stage": ..., <setting>: ...}``
-    dict carrying every setting, ready for :func:`mastering_repair_apply`.
-    Dereverb is never recommended.
-    """
-
-    defects: NotRequired[MasteringAudioProfileDefects]
-    channels: NotRequired[list[MasteringAudioProfileDefects]]
-    declipThresholdSafe: bool
-    integratedLufs: float
-    recommended: list[dict[str, Any]]
-    explanation: list[str]
-
-
 MasteringChainConfig = dict[str, Any]
 """A nested mastering chain config: module -> processor -> parameter.
 

@@ -7619,3 +7619,35 @@ old = "RoomEstimate.rt60Bands"
 removed = "read rt60_bands"
 domain = "effects"
 rule = "aliases-removed"
+
+# The repair analysis is a frozen dataclass and the stages it recommends are stage records.
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairAnalysis"
+changed = "a frozen dataclass with snake_case attributes instead of a TypedDict; defects and channels are AudioDefects or None, and recommended holds DeclipStage ... DereverbStage records with the declip level in dBFS"
+domain = "effects"
+rule = "typed-results"
+test = "bindings/python/tests/test_mastering_result_types.py::test_repair_analysis_result"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairAnalysis.declipThresholdSafe"
+new = "MasteringRepairAnalysis.declip_threshold_safe"
+domain = "effects"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairAnalysis.integratedLufs"
+new = "MasteringRepairAnalysis.integrated_lufs"
+domain = "effects"
+rule = "typed-results"
+
+[[entry]]
+kind = "option"
+old = "mastering_repair_apply(stages)"
+changed = "takes DeclipStage, DeclickStage, DecrackleStage, DehumStage, DenoiseStage and DereverbStage records with snake_case settings, declip in clip_threshold_db; a mapping raises TypeError"
+domain = "effects"
+rule = "typed-results"
+test = "bindings/python/tests/test_mastering_repair_session.py::test_refuses_stages_that_are_not_stage_records"

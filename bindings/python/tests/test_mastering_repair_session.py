@@ -41,16 +41,17 @@ class TestAnalyze:
         channels = [_material(440.0, 1), _clicked(_material(550.0, 2), 2000, 3500)]
         analysis = libsonare.mastering_repair_analyze(channels, SR)
 
-        assert len(analysis["channels"]) == 2
-        assert analysis["channels"][0]["click"]["count"] == 0
-        assert analysis["channels"][1]["click"]["count"] > 0
-        assert isinstance(analysis["declipThresholdSafe"], bool)
-        assert analysis["recommended"][0]["stage"] == "declick"
-        assert all(stage["stage"] != "dereverb" for stage in analysis["recommended"])
+        assert analysis.channels is not None and len(analysis.channels) == 2
+        assert analysis.channels[0].click.count == 0
+        assert analysis.channels[1].click.count > 0
+        assert isinstance(analysis.declip_threshold_safe, bool)
+        assert isinstance(analysis.recommended[0], libsonare.DeclickStage)
+        assert analysis.recommended[0].lpc_order is not None
+        assert all(stage.stage != "dereverb" for stage in analysis.recommended)
 
-        applied = libsonare.mastering_repair_apply(channels, SR, stages=analysis["recommended"])
+        applied = libsonare.mastering_repair_apply(channels, SR, stages=analysis.recommended)
         assert [entry.stage for entry in applied.reports] == [
-            stage["stage"] for stage in analysis["recommended"]
+            stage.stage for stage in analysis.recommended
         ]
 
     def test_refuses_an_empty_channel_set(self) -> None:
@@ -62,10 +63,10 @@ class TestApply:
     def test_runs_the_fixed_order_whatever_the_list_order(self) -> None:
         channels = [_clicked(_material(440.0, 3), 1500, 4000), _material(660.0, 4)]
         forward = libsonare.mastering_repair_apply(
-            channels, SR, stages=[{"stage": "decrackle"}, {"stage": "declick"}]
+            channels, SR, stages=[libsonare.DecrackleStage(), libsonare.DeclickStage()]
         )
         reversed_ = libsonare.mastering_repair_apply(
-            channels, SR, stages=[{"stage": "declick"}, {"stage": "decrackle"}]
+            channels, SR, stages=[libsonare.DeclickStage(), libsonare.DecrackleStage()]
         )
         assert [entry.stage for entry in forward.reports] == ["declick", "decrackle"]
         for a, b in zip(forward.channels, reversed_.channels, strict=True):
@@ -74,11 +75,11 @@ class TestApply:
 
     def test_a_declip_report_with_no_flat_run_has_no_flat_level(self) -> None:
         clean = [_material(440.0, 1)]
-        report = libsonare.mastering_repair_apply(clean, SR, stages=[{"stage": "declip"}])
+        report = libsonare.mastering_repair_apply(clean, SR, stages=[libsonare.DeclipStage()])
         detected = report.reports[0].reports[0].detected
         assert detected.flat_run_count == 0 and detected.flat_level is None
         clipped = [np.clip(_material(440.0, 1) * 8.0, -0.5, 0.5).astype(np.float32)]
-        report = libsonare.mastering_repair_apply(clipped, SR, stages=[{"stage": "declip"}])
+        report = libsonare.mastering_repair_apply(clipped, SR, stages=[libsonare.DeclipStage()])
         detected = report.reports[0].reports[0].detected
         assert detected.flat_run_count > 0 and detected.flat_level == pytest.approx(0.5, abs=0.01)
 
@@ -86,7 +87,7 @@ class TestApply:
         left = _clicked(_material(440.0, 5), 1500, 4000)
         right = _material(660.0, 6)
         applied = libsonare.mastering_repair_apply(
-            [left, right], SR, stages=[{"stage": "declick", "lpcOrder": 16}]
+            [left, right], SR, stages=[libsonare.DeclickStage(lpc_order=16)]
         )
         pair = libsonare.mastering_repair_declick_stereo(left, right, SR, lpc_order=16)
         np.testing.assert_array_equal(applied.channels[0], np.asarray(pair.left, dtype=np.float32))
@@ -95,7 +96,7 @@ class TestApply:
 
         three = [left, right, left]
         denoised = libsonare.mastering_repair_apply(
-            three, SR, stages=[{"stage": "denoise", "mode": "mmseStsa", "reductionDb": 18}]
+            three, SR, stages=[libsonare.DenoiseStage(mode="mmseStsa", reduction_db=18)]
         )
         linked = libsonare.mastering_repair_denoise_classical_linked(
             three, SR, mode="mmseStsa", reduction_db=18
@@ -113,7 +114,7 @@ class TestApply:
     def test_reports_per_channel_and_once_for_linked_stages(self) -> None:
         channels = [_material(440.0, 7), _material(550.0, 8), _material(660.0, 9)]
         result = libsonare.mastering_repair_apply(
-            channels, SR, stages=[{"stage": "dereverb"}, {"stage": "dehum", "adaptive": True}]
+            channels, SR, stages=[libsonare.DereverbStage(), libsonare.DehumStage(adaptive=True)]
         )
         assert [(e.stage, e.scope, len(e.reports)) for e in result.reports] == [
             ("dehum", "channel", 3),
@@ -124,25 +125,41 @@ class TestApply:
     @pytest.mark.parametrize(
         "stages",
         [
-            [{"stage": "declick"}, {"stage": "declick"}],
-            [{"stage": "trimSilence"}],
-            [{"stage": "declick", "lpcOdrer": 8}],
-            [{"stage": "denoise", "mode": "bogus"}],
+            [libsonare.DeclickStage(), libsonare.DeclickStage()],
+            [libsonare.DenoiseStage(mode="bogus")],
         ],
     )
-    def test_refuses_a_bad_stage_list(self, stages: list[dict[str, object]]) -> None:
+    def test_refuses_a_bad_stage_list(self, stages: list[libsonare.RepairStage]) -> None:
         with pytest.raises(libsonare.SonareError) as excinfo:
             libsonare.mastering_repair_apply([_material(440.0, 10)], SR, stages=stages)
         assert not isinstance(excinfo.value, libsonare.SonareValueError)
         assert excinfo.value.code == libsonare.ErrorCode.INVALID_FORMAT
 
-    def test_refuses_stages_that_are_not_mappings(self) -> None:
-        with pytest.raises(TypeError):
+    @pytest.mark.parametrize("stage", ["declick", {"stage": "declick"}])
+    def test_refuses_stages_that_are_not_stage_records(self, stage: object) -> None:
+        with pytest.raises(TypeError, match="stage records"):
             libsonare.mastering_repair_apply(
                 [_material(440.0, 11)],
                 SR,
-                stages=["declick"],  # type: ignore[list-item]
+                stages=[stage],  # type: ignore[list-item]
             )
+
+    def test_a_misspelt_setting_is_refused_where_the_stage_is_built(self) -> None:
+        with pytest.raises(TypeError):
+            libsonare.DeclickStage(lpc_odrer=8)  # type: ignore[call-arg]
+
+    def test_a_recommended_declip_level_is_given_in_dbfs(self) -> None:
+        clipped = [np.clip(_material(440.0, 1) * 8.0, -0.5, 0.5).astype(np.float32)]
+        analysis = libsonare.mastering_repair_analyze(clipped, SR)
+        declip = [s for s in analysis.recommended if isinstance(s, libsonare.DeclipStage)]
+        assert declip and declip[0].clip_threshold_db == pytest.approx(-6.02, abs=0.1)
+        by_hand = libsonare.mastering_repair_apply(
+            clipped,
+            SR,
+            stages=[libsonare.DeclipStage(clip_threshold_db=declip[0].clip_threshold_db)],
+        )
+        recommended = libsonare.mastering_repair_apply(clipped, SR, stages=declip)
+        np.testing.assert_array_equal(by_hand.channels[0], recommended.channels[0])
 
     def test_reports_progress_and_stops_when_cancelled(self) -> None:
         channels = [_material(440.0, 12), _material(550.0, 13)]
@@ -150,12 +167,12 @@ class TestApply:
         libsonare.mastering_repair_apply(
             channels,
             SR,
-            stages=[{"stage": "decrackle"}, {"stage": "declick"}],
+            stages=[libsonare.DecrackleStage(), libsonare.DeclickStage()],
             on_progress=lambda progress, stage: seen.append((progress, stage)),
         )
         assert seen == [(0.5, "repair.declick"), (1.0, "repair.decrackle")]
         with pytest.raises(libsonare.SonareError) as excinfo:
             libsonare.mastering_repair_apply(
-                channels, SR, stages=[{"stage": "declick"}], cancel=lambda: True
+                channels, SR, stages=[libsonare.DeclickStage()], cancel=lambda: True
             )
         assert excinfo.value.code == libsonare.ErrorCode.CANCELLED
