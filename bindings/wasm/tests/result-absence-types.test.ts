@@ -4,6 +4,8 @@ import { describe, expectTypeOf, it } from 'vitest';
 import type {
   CapabilityCatalogChainList,
   CapabilityCatalogChainStage,
+  DecomposeNotePitchRequest,
+  ExtractNotesRequest,
   MasteringAssistantProfile,
   MasteringAudioProfileLoudness,
   MasteringInsertParamChoice,
@@ -15,12 +17,19 @@ import type {
   MasteringRealtimeCost,
   MasteringStreamingPreviewPlatform,
   MatchReferenceLoudnessResult,
+  MergeNotesRequest,
   MixAssistantTrackProfile,
+  NoteSegmentsRequest,
+  PitchCorrectOptions,
+  PitchCorrectTimevaryingRequest,
   ProjectCompileTimelineResult,
   ProjectTimeline,
+  RenderNotesRequest,
   SidechainCheck,
   SidechainRefusal,
+  SplitNoteRequest,
   StereoMonoCompatCheckResult,
+  VoicedFlags,
 } from '../src/index';
 
 describe('result records type an unmeasured value as an absent field', () => {
@@ -82,5 +91,34 @@ describe('result records type an unmeasured value as an absent field', () => {
     expectTypeOf<ProjectCompileTimelineResult['timeline']>().toEqualTypeOf<
       ProjectTimeline | undefined
     >();
+  });
+});
+
+describe('request types do not list null', () => {
+  it('takes voicing data as an omitted field, never null', () => {
+    expectTypeOf<ExtractNotesRequest['voiced']>().toEqualTypeOf<VoicedFlags | undefined>();
+    expectTypeOf<ExtractNotesRequest['voicedProb']>().toEqualTypeOf<Float32Array | undefined>();
+    expectTypeOf<SplitNoteRequest['voiced']>().toEqualTypeOf<VoicedFlags | undefined>();
+    expectTypeOf<SplitNoteRequest['voicedProb']>().toEqualTypeOf<Float32Array | undefined>();
+    expectTypeOf<MergeNotesRequest['voiced']>().toEqualTypeOf<VoicedFlags | undefined>();
+    expectTypeOf<MergeNotesRequest['voicedProb']>().toEqualTypeOf<Float32Array | undefined>();
+    expectTypeOf<NoteSegmentsRequest['voiced']>().toEqualTypeOf<VoicedFlags | undefined>();
+    expectTypeOf<NoteSegmentsRequest['voicedProb']>().toEqualTypeOf<Float32Array | undefined>();
+    expectTypeOf<PitchCorrectOptions['voiced']>().toEqualTypeOf<VoicedFlags | undefined>();
+    expectTypeOf<PitchCorrectOptions['voicedProb']>().toEqualTypeOf<Float32Array | undefined>();
+    expectTypeOf<PitchCorrectTimevaryingRequest['voiced']>().toEqualTypeOf<
+      VoicedFlags | undefined
+    >();
+    expectTypeOf<PitchCorrectTimevaryingRequest['voicedProb']>().toEqualTypeOf<
+      Float32Array | undefined
+    >();
+    expectTypeOf<DecomposeNotePitchRequest['voiced']>().toEqualTypeOf<VoicedFlags | undefined>();
+    expectTypeOf<RenderNotesRequest['voiced']>().toEqualTypeOf<VoicedFlags | undefined>();
+    // @ts-expect-error null is not a spelling of "omitted".
+    const voiced: ExtractNotesRequest['voiced'] = null;
+    // @ts-expect-error null is not a spelling of "omitted".
+    const voicedProb: PitchCorrectOptions['voicedProb'] = null;
+    void voiced;
+    void voicedProb;
   });
 });

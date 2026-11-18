@@ -56,15 +56,15 @@ export interface PitchCorrectOptions extends ValidateOptions {
   vibratoThresholdCents?: number;
   /**
    * Per-frame voiced flags (truthy = voiced). Explicit flags take precedence
-   * over `voicedProb`; omit or pass `null` to use that probability array, and
+   * over `voicedProb`; omit it to use that probability array, and
    * with both omitted every frame is treated as voiced.
    */
-  voiced?: VoicedFlags | null;
+  voiced?: VoicedFlags;
   /**
    * Per-frame voicing probability in `[0, 1]`. It is read only when `voiced`
-   * is omitted or `null`, and is ignored when explicit flags are supplied.
+   * is omitted, and is ignored when explicit flags are supplied.
    */
-  voicedProb?: Float32Array | null;
+  voicedProb?: Float32Array;
 }
 
 /** A key as {@link detectKey} reports it, which is what {@link autoTune} takes to name one. */

@@ -211,15 +211,18 @@ describe('editing effects', () => {
     const voicedProb = new Float32Array(nFrames).fill(0.9);
 
     const withProbability = midiCorrection(tone, f0, 71, SR, hop, undefined, voicedProb);
+    // @ts-expect-error null is not in the type; the runtime still reads it as omitted.
     const withNullFlags = midiCorrection(tone, f0, 71, SR, hop, null, voicedProb);
     expect(Array.from(withNullFlags)).toEqual(Array.from(withProbability));
 
     const explicitVoiced = midiCorrection(tone, f0, 71, SR, hop, voiced);
+    // @ts-expect-error null is not in the type; the runtime still reads it as omitted.
     const withNullProbability = midiCorrection(tone, f0, 71, SR, hop, voiced, null);
     expect(Array.from(withNullProbability)).toEqual(Array.from(explicitVoiced));
 
     const generalWithProbability = contourCorrection(tone, f0, SR, hop, { voicedProb });
     const generalWithNullFlags = contourCorrection(tone, f0, SR, hop, {
+      // @ts-expect-error null is not in the type; the runtime still reads it as omitted.
       voiced: null,
       voicedProb,
     });
@@ -228,6 +231,7 @@ describe('editing effects', () => {
     const generalExplicitVoiced = contourCorrection(tone, f0, SR, hop, { voiced });
     const generalWithNullProbability = contourCorrection(tone, f0, SR, hop, {
       voiced,
+      // @ts-expect-error null is not in the type; the runtime still reads it as omitted.
       voicedProb: null,
     });
     expect(Array.from(generalWithNullProbability)).toEqual(Array.from(generalExplicitVoiced));

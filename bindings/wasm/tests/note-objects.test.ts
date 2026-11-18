@@ -403,6 +403,7 @@ describe('extractNotes', () => {
     const source = gappedSource();
     const voicedProb = Float32Array.from(source.voiced);
     const omitted = extractNotes({ ...source, voiced: undefined, voicedProb });
+    // @ts-expect-error null is not in the type; the runtime still reads it as omitted.
     const explicitNull = extractNotes({ ...source, voiced: null, voicedProb });
     expect(explicitNull).toEqual(omitted);
   });
@@ -1298,6 +1299,7 @@ describe('renderNotes voiced masks', () => {
       samples: source,
       sampleRate: fixtureRate,
       notes: [],
+      // @ts-expect-error null is not in the type; the runtime still reads it as omitted.
       voiced: null,
     });
     expect(explicitNull).toEqual(omitted);
@@ -1437,6 +1439,7 @@ describe('decomposeNotePitch', () => {
 
   it('treats a null voiced field as omitted', () => {
     const base = { f0Hz: curve, frameRate: fixtureFrameRate, medianHz: centreHz };
+    // @ts-expect-error null is not in the type; the runtime still reads it as omitted.
     expect(decomposeNotePitch({ ...base, voiced: null })).toEqual(decomposeNotePitch(base));
   });
 
@@ -1832,7 +1835,11 @@ describe('splitNote', () => {
       voicedProb,
       notes: expected,
     };
-    const explicitNull = { ...omitted, voiced: null };
+    const explicitNull: typeof omitted = {
+      ...omitted,
+      // @ts-expect-error null is not in the type; the runtime still reads it as omitted.
+      voiced: null,
+    };
     expect(splitNote({ ...omitted, index: 1, frame: 18 })).toEqual(
       splitNote({ ...explicitNull, index: 1, frame: 18 }),
     );

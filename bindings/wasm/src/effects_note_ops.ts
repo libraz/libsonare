@@ -88,10 +88,10 @@ export interface ExtractNotesRequest extends NoteExtractorOptions, ValidateOptio
   f0Hz: Float32Array;
   /** F0 frames per second. */
   frameRate: number;
-  /** Per-frame voiced flags (truthy = voiced); takes precedence over `voicedProb` when supplied. Omit or pass `null` to use the probability array. */
-  voiced?: VoicedFlags | null;
-  /** Per-frame voicing probability in `[0, 1]`; read only when `voiced` is omitted or `null`. */
-  voicedProb?: Float32Array | null;
+  /** Per-frame voiced flags (truthy = voiced); takes precedence over `voicedProb` when supplied. Omit it to use the probability array. */
+  voiced?: VoicedFlags;
+  /** Per-frame voicing probability in `[0, 1]`; read only when `voiced` is omitted. */
+  voicedProb?: Float32Array;
 }
 
 /** Canonical request form for {@link renderNotes}. */
@@ -123,7 +123,7 @@ export interface RenderNotesRequest extends ValidateOptions {
    */
   f0Hz?: Float32Array;
   /** Per-frame voiced flags for `f0Hz`; false suppresses a candidate and true cannot make an unusable F0 valid. */
-  voiced?: VoicedFlags | null;
+  voiced?: VoicedFlags;
   /** F0 frames per second. Required when `f0Hz` is given. */
   frameRate?: number;
   /**
@@ -145,7 +145,7 @@ export interface DecomposeNotePitchRequest {
    */
   f0Hz: Float32Array;
   /** Per-frame voiced flags matching `f0Hz`; false suppresses a candidate and true cannot make an unusable F0 valid. */
-  voiced?: VoicedFlags | null;
+  voiced?: VoicedFlags;
   /** F0 frames per second. */
   frameRate: number;
   /**
@@ -176,10 +176,10 @@ interface NoteSetRequest extends NoteExtractorOptions, ValidateOptions {
   f0Hz: Float32Array;
   /** F0 frames per second. */
   frameRate: number;
-  /** Per-frame voiced flags (truthy = voiced); takes precedence over `voicedProb` when supplied. Omit or pass `null` to use the probability array. */
-  voiced?: VoicedFlags | null;
-  /** Per-frame voicing probability in `[0, 1]`; read only when `voiced` is omitted or `null`. */
-  voicedProb?: Float32Array | null;
+  /** Per-frame voiced flags (truthy = voiced); takes precedence over `voicedProb` when supplied. Omit it to use the probability array. */
+  voiced?: VoicedFlags;
+  /** Per-frame voicing probability in `[0, 1]`; read only when `voiced` is omitted. */
+  voicedProb?: Float32Array;
   /** The current note set. Each note's `[frameStart, frameEnd)` must be non-empty and inside the track. */
   notes: readonly NoteSetEntry[];
 }
@@ -364,7 +364,7 @@ export function noteMove(...args: unknown[]): Float32Array {
  * @returns One {@link NoteObject} per segmented note, in time order; an empty
  *   array when the track segments to nothing
  * @throws RangeError when the selected voicing array differs from `f0Hz` in
- *   length (`voiced`, or `voicedProb` when `voiced` is omitted or `null`), the
+ *   length (`voiced`, or `voicedProb` when `voiced` is omitted), the
  *   samples/sample rate fail the shared input checks, or on an empty `f0Hz`, a
  *   non-positive `frameRate`, a `voicedProb` outside `[0, 1]`, or a negative
  *   option value
@@ -587,7 +587,7 @@ export function decomposeNotePitch(request: DecomposeNotePitchRequest): PitchDec
  * @returns The whole new note set, one note longer than the one handed in, or
  *   the same length when a half with no sample span is omitted
  * @throws RangeError when the selected voicing array differs from `f0Hz` in
- *   length (`voiced`, or `voicedProb` when `voiced` is omitted or `null`), or the
+ *   length (`voiced`, or `voicedProb` when `voiced` is omitted), or the
  *   samples/sample rate fail the shared input checks
  * @throws RangeError on the track arguments {@link extractNotes} itself rejects
  * @throws RangeError when both or neither of `frame` and `frameSec` are given
@@ -667,7 +667,7 @@ export function splitNote(...args: unknown[]): NoteObject[] {
  * @returns The whole new note set, `last - first` notes shorter than the one
  *   handed in
  * @throws RangeError when the selected voicing array differs from `f0Hz` in
- *   length (`voiced`, or `voicedProb` when `voiced` is omitted or `null`), or the
+ *   length (`voiced`, or `voicedProb` when `voiced` is omitted), or the
  *   samples/sample rate fail the shared input checks
  * @throws RangeError on the track arguments {@link extractNotes} itself rejects
  * @throws RangeError unless `first < last < notes.length`,

@@ -74,10 +74,10 @@ export interface ExtractNotesRequest extends NoteExtractorOptions, ValidateOptio
   f0Hz: Float32Array;
   /** F0 frames per second. */
   frameRate: number;
-  /** Per-frame voiced flags (truthy = voiced). Takes precedence over `voicedProb`; `null` is omitted. */
-  voiced?: VoicedFlags | null;
-  /** Per-frame voicing probability in `[0, 1]`; read only when `voiced` is omitted, and `null` is omitted. */
-  voicedProb?: Float32Array | null;
+  /** Per-frame voiced flags (truthy = voiced). Takes precedence over `voicedProb`. */
+  voiced?: VoicedFlags;
+  /** Per-frame voicing probability in `[0, 1]`; read only when `voiced` is omitted. */
+  voicedProb?: Float32Array;
 }
 
 /** Request for {@link splitNote}: the audio, F0 track and note set plus the note and cut position. */
@@ -110,7 +110,7 @@ export interface DecomposeNotePitchRequest {
    */
   f0Hz: Float32Array;
   /** Per-frame voiced flags (truthy = voiced); false suppresses F0, while true cannot revive invalid F0. */
-  voiced?: VoicedFlags | null;
+  voiced?: VoicedFlags;
   /** F0 frames per second. */
   frameRate: number;
   /** The note's `medianHz`; non-negative, 0 spelling a note with no pitch. */
@@ -151,7 +151,7 @@ export interface RenderNotesRequest extends ValidateOptions {
   /** F0 frames per second; required when `f0Hz` is given. */
   frameRate?: number;
   /** Per-frame voiced flags for `f0Hz`; must have the same length as `f0Hz`. */
-  voiced?: VoicedFlags | null;
+  voiced?: VoicedFlags;
   /**
    * Boundary between the drift and the vibrato those two edits act on, in Hz.
    * Default 3. Pass whatever {@link decomposeNotePitch} was called with: a host

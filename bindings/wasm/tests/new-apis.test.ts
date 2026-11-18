@@ -440,12 +440,14 @@ describe('v1.2 feature additions (WASM)', () => {
       const voicedProb = new Float32Array(nFrames).fill(0.9);
 
       const positionalOmitted = timevarying(f0, hop, { targetMidi: 60, voicedProb });
+      // @ts-expect-error null is not in the type; the runtime still reads it as omitted.
       const positionalNull = timevarying(f0, hop, { targetMidi: 60, voiced: null, voicedProb });
       expect(Array.from(positionalNull)).toEqual(Array.from(positionalOmitted));
 
       const optionsOmitted = timevaryingRequest(f0, hop, { targetMidi: 60, voicedProb });
       const optionsNull = timevaryingRequest(f0, hop, {
         targetMidi: 60,
+        // @ts-expect-error null is not in the type; the runtime still reads it as omitted.
         voiced: null,
         voicedProb,
       });

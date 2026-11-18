@@ -239,6 +239,7 @@ describe('extractNotes', () => {
       ...tone,
       sampleRate: SR,
       frameRate: FRAME_RATE,
+      // @ts-expect-error null is not in the type; the runtime still reads it as omitted.
       voiced: null,
       voicedProb: probability,
     });
@@ -250,6 +251,7 @@ describe('extractNotes', () => {
       sampleRate: SR,
       frameRate: FRAME_RATE,
       voiced: tone.voiced,
+      // @ts-expect-error null is not in the type; the runtime still reads it as omitted.
       voicedProb: null,
     });
     expect(withNullProbability).toEqual(withMask);
@@ -267,6 +269,7 @@ describe('extractNotes', () => {
       ...tone,
       sampleRate: SR,
       frameRate: FRAME_RATE,
+      // @ts-expect-error null is not in the type; the runtime still reads it as omitted.
       voiced: null,
       voicedProb: probability,
       notes,
@@ -287,6 +290,7 @@ describe('extractNotes', () => {
       ...tone,
       sampleRate: SR,
       frameRate: FRAME_RATE,
+      // @ts-expect-error null is not in the type; the runtime still reads it as omitted.
       voiced: null,
       voicedProb: probability,
       notes,
@@ -300,7 +304,9 @@ describe('extractNotes', () => {
         ...tone,
         sampleRate: SR,
         frameRate: FRAME_RATE,
+        // @ts-expect-error null is not in the type; the runtime still reads it as omitted.
         voiced: null,
+        // @ts-expect-error null is not in the type; the runtime still reads it as omitted.
         voicedProb: null,
       }),
     ).toThrow(TypeError);
@@ -761,6 +767,7 @@ describe('renderNotes pitch curve edits', () => {
     };
 
     const omitted = renderNotes(request);
+    // @ts-expect-error null is not in the type; the runtime still reads it as omitted.
     const explicitNull = renderNotes({ ...request, voiced: null });
     expect(maxDifference(explicitNull, omitted)).toBeLessThan(1e-6);
 
@@ -1010,6 +1017,7 @@ describe('decomposeNotePitch', () => {
     const omitted = decomposeNotePitch({ f0Hz, frameRate: CURVE_RATE, medianHz: CENTRE });
     const explicitNull = decomposeNotePitch({
       f0Hz,
+      // @ts-expect-error null is not in the type; the runtime still reads it as omitted.
       voiced: null,
       frameRate: CURVE_RATE,
       medianHz: CENTRE,

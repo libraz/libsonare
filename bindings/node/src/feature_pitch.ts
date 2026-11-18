@@ -194,14 +194,14 @@ export interface NoteSegmentsRequest {
    * `voiced` instead. Do **not** pass its `voicedProb`: that value is the
    * frame's voiced observation mass and rises with F0 for a fixed `frameLength`,
    * so a fixed threshold silently returns no segments at all for low-register
-   * material. `null` is omitted.
+   * material.
    */
-  voicedProb?: Float32Array | null;
+  voicedProb?: Float32Array;
   /**
    * Per-frame voiced flags (truthy = voiced), the same length as `f0Hz`. Takes
-   * precedence over `voicedProb`; `voicedThreshold` does not apply. `null` is omitted.
+   * precedence over `voicedProb`; `voicedThreshold` does not apply.
    */
-  voiced?: VoicedFlags | null;
+  voiced?: VoicedFlags;
   /** Frames per second of the F0 track. */
   frameRate: number;
   /** Cents of pitch change that start a new segment. Default 50. */
