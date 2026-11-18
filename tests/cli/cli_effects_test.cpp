@@ -518,6 +518,38 @@ TEST_CASE("CLI mix-strip preserves stereo input so --width changes the output", 
   std::remove(mono_out.c_str());
 }
 
+TEST_CASE("CLI mix-strip --pan-mode takes the kebab spellings in any case", "[cli]") {
+  const std::string input = unique_temp_path("_pan_mode.wav");
+  std::vector<float> input_samples(256 * 2);
+  for (size_t frame = 0; frame < 256; ++frame) {
+    input_samples[2 * frame] = 0.5f;
+    input_samples[2 * frame + 1] = -0.25f;
+  }
+  save_wav_multichannel(input, input_samples.data(), 256, 2, ChannelLayout::Stereo, 22050);
+  const auto render = [&](const std::string& mode) {
+    const std::string out = unique_temp_path("_pan_mode_out.wav");
+    auto [code, message] = exec_command(CLI + " mix-strip " + input + " -o " + out +
+                                        " --pan 0.5 --pan-mode " + mode + " -q");
+    INFO(message);
+    REQUIRE(code == 0);
+    return std::get<0>(load_audio_interleaved(out));
+  };
+  const auto stereo_pan = render("stereo-pan");
+  REQUIRE(render("STEREO-PAN") == stereo_pan);
+  REQUIRE(render("dual-pan") != stereo_pan);
+  REQUIRE(render("balance") != stereo_pan);
+
+  for (const char* refused : {"stereopan", "stereoPan", "dualpan", "sideways"}) {
+    const std::string out = unique_temp_path("_pan_mode_refused.wav");
+    auto [code, message] =
+        exec_command(CLI + " mix-strip " + input + " -o " + out + " --pan-mode " + refused + " -q");
+    INFO(refused);
+    REQUIRE(code == 3);
+    REQUIRE_THAT(message, ContainsSubstring("balance, stereo-pan, dual-pan"));
+    REQUIRE_FALSE(std::ifstream(out).good());
+  }
+}
+
 TEST_CASE("CLI filter applies zero phase to fourth-order filters only when requested", "[cli]") {
   const std::string input = unique_temp_path("_impulse.wav");
   const std::string causal_output = unique_temp_path("_causal.wav");

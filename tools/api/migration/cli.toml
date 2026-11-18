@@ -706,3 +706,11 @@ old = "mastering --config"
 removed = "use --chain-config"
 domain = "mastering"
 rule = "aliases-removed"
+
+[[entry]]
+kind = "flag"
+old = "mix-strip --pan-mode"
+changed = "takes balance, stereo-pan or dual-pan in any letter case; stereopan, dualpan and the scene JSON's stereoPan / dualPan are refused as an invalid parameter (exit 3)"
+domain = "mastering"
+rule = "token-case"
+test = "tests/cli/cli_effects_test.cpp::CLI mix-strip --pan-mode takes the kebab spellings in any case"

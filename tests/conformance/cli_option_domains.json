@@ -1214,6 +1214,20 @@
       "exclusiveMaximum": false
     },
     {
+      "command": "mix-strip",
+      "option": "pan-mode",
+      "rejectExit": "invalid_parameter",
+      "choices": [
+        "balance",
+        "stereo-pan",
+        "dual-pan"
+      ],
+      "minimum": null,
+      "exclusiveMinimum": false,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
       "command": "playback",
       "option": "room",
       "rejectExit": "usage",

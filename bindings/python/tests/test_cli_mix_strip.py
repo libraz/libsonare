@@ -156,28 +156,27 @@ def test_pan_mode_spellings_select_the_mode_they_name(stereo_wav: Path, tmp_path
     hyphenated = _render(
         stereo_wav, tmp_path / "hyphen.wav", "--pan", "0.5", "--pan-mode", "stereo-pan"
     )
-    compact = _render(
-        stereo_wav, tmp_path / "compact.wav", "--pan", "0.5", "--pan-mode", "stereopan"
-    )
-    mixed_case = _render(
-        stereo_wav, tmp_path / "mixed.wav", "--pan", "0.5", "--pan-mode", "stereoPan"
-    )
+    upper = _render(stereo_wav, tmp_path / "upper.wav", "--pan", "0.5", "--pan-mode", "STEREO-PAN")
     dual = _render(stereo_wav, tmp_path / "dual.wav", "--pan", "0.5", "--pan-mode", "dual-pan")
 
-    # The three spellings of one mode agree, and the modes differ from each
+    # Either letter case names one mode, and the modes differ from each
     # other -- an option resolved to a constant would satisfy only the first.
-    assert hyphenated == compact == mixed_case
+    assert hyphenated == upper
     assert hyphenated != balance
     assert dual != balance
     assert dual != hyphenated
 
 
-def test_invalid_pan_mode_is_a_parameter_error(stereo_wav: Path, tmp_path: Path) -> None:
+@pytest.mark.parametrize("value", ["sideways", "stereopan", "stereoPan", "dualpan"])
+def test_a_pan_mode_that_is_not_kebab_case_is_a_parameter_error(
+    stereo_wav: Path, tmp_path: Path, value: str
+) -> None:
     result = _run_cli(
-        ["mix-strip", str(stereo_wav), "--pan-mode", "sideways", "-o", str(tmp_path / "out.wav")]
+        ["mix-strip", str(stereo_wav), "--pan-mode", value, "-o", str(tmp_path / "out.wav")]
     )
     assert result.returncode == EXIT_INVALID_PARAMETER
-    assert "invalid pan mode: sideways" in result.stderr
+    assert f"--pan-mode: unknown value '{value}'" in result.stderr
+    assert "balance, stereo-pan, dual-pan" in result.stderr
     assert not (tmp_path / "out.wav").exists()
 
 

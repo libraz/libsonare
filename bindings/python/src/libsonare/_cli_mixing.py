@@ -22,7 +22,9 @@ from ._cli_common import (
     _atomic_wav_writer,
     _atomic_write_bytes,
     _audio_array,
+    _cli_token,
     _json_key_to_snake_case,
+    _library_token,
     _load_channels_or_downmix,
     _parse_kv_params,
     _PcmQuantizer,
@@ -398,28 +400,11 @@ def cmd_mix(args: argparse.Namespace) -> int:
     return 0
 
 
-# The spellings the native front-end accepts, lowercased before the lookup, with
-# the scene JSON's integer encoding of mixing::PanMode. Mixer.set_pan takes its
-# own vocabulary, which is not the same set, so this command resolves its option
-# here rather than through the facade.
-_MIX_STRIP_PAN_MODES = {
-    "balance": 0,
-    "stereopan": 1,
-    "stereo-pan": 1,
-    "dualpan": 2,
-    "dual-pan": 2,
-}
+# The scene JSON's pan mode tokens; --pan-mode spells each in kebab-case.
+_MIX_STRIP_PAN_MODES = ("balance", "stereoPan", "dualPan")
 
 
-def _mix_strip_pan_mode(value: str) -> int:
-    """Resolve one ``--pan-mode`` spelling to its scene JSON encoding."""
-    mode = _MIX_STRIP_PAN_MODES.get(value.lower())
-    if mode is None:
-        raise ValueError(f"invalid pan mode: {value}")
-    return mode
-
-
-def _mix_strip_scene_json(pan_mode: int) -> str:
+def _mix_strip_scene_json(pan_mode: str) -> str:
     """Build the one-strip-to-master scene this command renders through.
 
     The native front-end applies a bare channel strip to the buffer, which this
@@ -440,7 +425,7 @@ def _mix_strip_scene_json(pan_mode: int) -> str:
                     "faderDb": 0.0,
                     "pan": 0.0,
                     "panMode": pan_mode,
-                    "panLaw": 0,
+                    "panLaw": "const3Db",
                     "width": 1.0,
                     "channelDelaySamples": 0,
                     "dualPanLeft": -1,
@@ -474,7 +459,9 @@ def cmd_mix_strip(args: argparse.Namespace) -> int:
     if len(planes) != 2 and width != 1.0:
         raise ValueError("--width requires a stereo input")
 
-    pan_mode = _mix_strip_pan_mode(getattr(args, "pan_mode", "balance"))
+    pan_mode = _library_token(
+        "--pan-mode", getattr(args, "pan_mode", "balance"), _MIX_STRIP_PAN_MODES
+    )
     scene_json = _mix_strip_scene_json(pan_mode)
 
     # One block covering the whole file, as the native front-end does: the strip
@@ -651,9 +638,13 @@ def register_mixing_parsers(
     mix_strip_p.add_argument(
         "--pan", type=float, default=0.0, help="Pan position, -1 to 1 (default: 0)"
     )
-    mix_strip_p.add_argument(
-        "--pan-mode",
-        default="balance",
-        help="Pan mode: balance, stereo-pan or dual-pan (default: balance)",
+    _cli_domain(
+        mix_strip_p.add_argument(
+            "--pan-mode",
+            default="balance",
+            help="Pan mode: balance, stereo-pan or dual-pan (default: balance)",
+        ),
+        choices=tuple(_cli_token(mode) for mode in _MIX_STRIP_PAN_MODES),
+        reject_exit="invalid_parameter",
     )
     mix_strip_p.add_argument("--width", type=float, default=1.0, help="Stereo width (default: 1.0)")

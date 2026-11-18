@@ -898,7 +898,10 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     // refused here as an unknown command rather than carried as an alias.
     add_command(commands, "mix-strip", true,
                 {number_value("input-trim-db", 0.0), number_value("fader-db", 0.0),
-                 number_value("pan", 0.0), string_value("pan-mode", "balance"),
+                 number_value("pan", 0.0),
+                 with_domain(string_value("pan-mode", "balance"),
+                             choices_of({"balance", "stereo-pan", "dual-pan"},
+                                        CliOptionDomainStage::Parameter)),
                  number_value("width", 1.0), output_value()},
                 {}, nullptr, 0, /*preserves_stereo_input=*/true);
     add_command(commands, "mixing-presets", false, {});

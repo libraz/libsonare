@@ -5,11 +5,11 @@
 
 #ifdef SONARE_WITH_MIXING
 mixing::PanMode parse_pan_mode_option(const std::string& value) {
-  const std::string key = lowercase_cli_value(value);
-  if (key == "balance") return mixing::PanMode::Balance;
-  if (key == "stereopan" || key == "stereo-pan") return mixing::PanMode::StereoPan;
-  if (key == "dualpan" || key == "dual-pan") return mixing::PanMode::DualPan;
-  throw std::invalid_argument("invalid pan mode: " + value);
+  // The scene JSON's pan mode tokens; --pan-mode spells each in kebab-case.
+  const std::string token = library_token("--pan-mode", value, {"balance", "stereoPan", "dualPan"});
+  if (token == "stereoPan") return mixing::PanMode::StereoPan;
+  if (token == "dualPan") return mixing::PanMode::DualPan;
+  return mixing::PanMode::Balance;
 }
 
 int cmd_mixing_presets(const CliArgs& args, const Audio&) {
