@@ -525,19 +525,22 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
             raise _not_supported("libsonare was built without parameter-registry support")
         _check(lib.sonare_engine_clear_parameters(self._require_handle()))
 
-    def parameter_count(self) -> int:
-        out = ctypes.c_size_t()
-        _check(_get_lib().sonare_engine_parameter_count(self._require_handle(), ctypes.byref(out)))
-        return int(out.value)
-
-    def parameter_info_by_index(self, index: int) -> ParameterInfo:
-        raw = _ffi_core.SonareParameterInfo()
-        _check(
-            _get_lib().sonare_engine_parameter_info_by_index(
-                self._require_handle(), _to_c_size_t(index, "index"), ctypes.byref(raw)
+    def parameters(self) -> list[ParameterInfo]:
+        """Every registered parameter, in stored order."""
+        lib = _get_lib()
+        handle = self._require_handle()
+        count = ctypes.c_size_t()
+        _check(lib.sonare_engine_parameter_count(handle, ctypes.byref(count)))
+        out: list[ParameterInfo] = []
+        for index in range(int(count.value)):
+            raw = _ffi_core.SonareParameterInfo()
+            _check(
+                lib.sonare_engine_parameter_info_by_index(
+                    handle, _to_c_size_t(index, "index"), ctypes.byref(raw)
+                )
             )
-        )
-        return _parameter_from_c(raw)
+            out.append(_parameter_from_c(raw))
+        return out
 
     def parameter_info(self, id: int) -> ParameterInfo:
         raw = _ffi_core.SonareParameterInfo()

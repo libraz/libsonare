@@ -380,10 +380,6 @@ class _ProjectInspectionMixin:
             )
         )
 
-    def assist_sidecar_count(self) -> int:
-        """Number of assist sidecars currently stored on the project."""
-        return int(_get_lib().sonare_project_assist_sidecar_count(self._require_handle()))
-
     def _assist_sidecar(self, index: int) -> AssistSidecar:
         lib = _get_lib()
         raw = SonareProjectAssistSidecar()
@@ -411,7 +407,8 @@ class _ProjectInspectionMixin:
 
     def assist_sidecars(self) -> list[AssistSidecar]:
         """Return all stored assist sidecars as a list of :class:`AssistSidecar`."""
-        return [self._assist_sidecar(i) for i in range(self.assist_sidecar_count())]
+        count = int(_get_lib().sonare_project_assist_sidecar_count(self._require_handle()))
+        return [self._assist_sidecar(i) for i in range(count)]
 
     # -- project getters / setters ------------------------------------------
 

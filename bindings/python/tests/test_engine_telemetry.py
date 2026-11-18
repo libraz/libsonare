@@ -182,11 +182,11 @@ def test_realtime_engine_process_and_telemetry() -> None:
                 default_curve="linear",
             )
         )
-        assert engine.parameter_count() == 1
         parameter = engine.parameter_info(7)
         assert parameter.name == "gain"
         assert parameter.unit == "dB"
-        assert engine.parameter_info_by_index(0).id == 7
+        # The list holds the same record parameter_info reads by id.
+        assert engine.parameters() == [parameter]
         engine.set_automation_lane(
             7,
             [

@@ -10252,3 +10252,24 @@ to = "RealtimeEngine.graph_latency_samples"
 domain = "engine"
 rule = "engine-vocabulary"
 test = "bindings/python/tests/test_engine_offline_render.py::test_graph_latency_is_the_native_q8_reading_in_fractional_samples"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.parameter_count"
+removed = "len(engine.parameters())"
+domain = "engine"
+rule = "collections"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.parameter_info_by_index"
+removed = "engine.parameters()[index], or iterate engine.parameters()"
+domain = "engine"
+rule = "collections"
+
+[[entry]]
+kind = "method"
+old = "Project.assist_sidecar_count"
+removed = "len(project.assist_sidecars())"
+domain = "project"
+rule = "collections"

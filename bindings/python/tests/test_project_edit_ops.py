@@ -385,7 +385,7 @@ def test_annotate_keys_and_chords_round_trip() -> None:
 def test_assist_sidecar_set_count_get_round_trip() -> None:
     p, track, _clip = _audio_project()
     p.set_assist_sidecar("ai.module", b"\x01\x02\x03", schema_version=2, target_track_id=track)
-    assert p.assist_sidecar_count() == 1
+    assert len(p.assist_sidecars()) == 1
     sidecars = p.assist_sidecars()
     assert sidecars[0].module_id == "ai.module"
     assert sidecars[0].payload == b"\x01\x02\x03"
@@ -397,7 +397,7 @@ def test_assist_sidecar_defaults_and_stable_order() -> None:
     p.set_assist_sidecar("first")
     p.set_assist_sidecar("second", b"payload")
 
-    assert p.assist_sidecar_count() == 2
+    assert len(p.assist_sidecars()) == 2
     assert [sidecar.module_id for sidecar in p.assist_sidecars()] == ["first", "second"]
     assert p.assist_sidecars()[0].payload == b""
     assert p.assist_sidecars()[0].schema_version == 0
@@ -412,7 +412,7 @@ def test_assist_sidecar_same_identity_replaces_without_reordering() -> None:
     p.set_assist_sidecar("second", b"other")
     p.set_assist_sidecar("first", b"new", schema_version=3)
 
-    assert p.assist_sidecar_count() == 2
+    assert len(p.assist_sidecars()) == 2
     assert [sidecar.module_id for sidecar in p.assist_sidecars()] == ["first", "second"]
     assert p.assist_sidecars()[0].payload == b"new"
     assert p.assist_sidecars()[0].schema_version == 3
