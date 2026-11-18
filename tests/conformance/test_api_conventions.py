@@ -200,6 +200,43 @@ class StringClosedSetsRule(unittest.TestCase):
         self.assertEqual([f.key for f in verdict.violations], ["python:Mode"])
 
 
+def call(surface: str, owner: str, name: str, returns: str, *param_types: str) -> dict:
+    rec = method(surface, owner, name, returns=returns)
+    rec["sigs"][0]["params"] = [{"name": f"p{i}", "type": t} for i, t in enumerate(param_types)]
+    return rec
+
+
+class CancellationRule(unittest.TestCase):
+    CLEAN = [
+        field("wasm", "RenderRequest", "cancel", "(() => boolean) | undefined"),
+        field("wasm", "CallOptions", "signal", "AbortSignal | undefined"),
+        call("wasm", "Engine", "render", "Result", "RenderRequest"),
+        call(
+            "wasm",
+            "Client",
+            "render",
+            "Promise<Result>",
+            "WorkerRequest<RenderRequest>",
+            "CallOptions",
+        ),
+    ]
+
+    def test_clean_surface_passes(self) -> None:
+        verdict = run("cancellation", self.CLEAN)
+        self.assertEqual(verdict.read, 2)
+        self.assertFalse(verdict.failed)
+
+    def test_promise_call_taking_cancel_is_named(self) -> None:
+        planted = call("wasm", "Client", "analyze", "Promise<Result>", "RenderRequest")
+        verdict = run("cancellation", [*self.CLEAN, planted])
+        self.assertEqual([f.key for f in verdict.violations], ["wasm:Client.analyze"])
+
+    def test_synchronous_call_taking_signal_is_named(self) -> None:
+        planted = call("wasm", "Engine", "bounce", "Result", "CallOptions")
+        verdict = run("cancellation", [*self.CLEAN, planted])
+        self.assertEqual([f.key for f in verdict.violations], ["wasm:Engine.bounce"])
+
+
 class Framework(unittest.TestCase):
     def test_reading_nothing_fails(self) -> None:
         verdict = check.judge(rule("getters"), [])

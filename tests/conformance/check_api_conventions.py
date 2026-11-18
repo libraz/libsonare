@@ -207,6 +207,59 @@ def _closed_set_violation(r: dict) -> str | None:
     return "a closed set is a string union, not a numeric union"
 
 
+_CANCEL_NAMES = ("cancel", "signal")
+_TYPE_IDENT = re.compile(r"[A-Za-z_]\w*")
+
+
+def _cancellation_calls(records: list[dict]) -> list[dict]:
+    """One synthetic record per function or method that takes a cancel hook, direct or in a request."""
+    hooks: dict[tuple[str, str], set[str]] = {}
+    for r in records:
+        if r["kind"] == "field" and r.get("member") in _CANCEL_NAMES:
+            hooks.setdefault((r["surface"], r["owner"]), set()).add(r["member"])
+    out: list[dict] = []
+    for r in records:
+        if r["kind"] not in ("function", "method") or r["surface"] not in (
+            "node",
+            "wasm",
+            "python",
+        ):
+            continue
+        for sig in r.get("sigs") or []:
+            takes: set[str] = set()
+            for p in sig.get("params", []):
+                if p["name"] in _CANCEL_NAMES:
+                    takes.add(p["name"])
+                found: set[str] = set()
+                for ident in _TYPE_IDENT.findall(p.get("type", "")):
+                    found |= hooks.get((r["surface"], ident), set())
+                # A worker request type omits the hook that cannot cross a thread.
+                if re.search(r"WorkerRequest<|Omit<[^>]*'cancel'", p.get("type", "")):
+                    found.discard("cancel")
+                takes |= found
+            if takes:
+                promise = (sig.get("returns") or "").startswith("Promise<")
+                out.append(
+                    {
+                        "surface": r["surface"],
+                        "kind": "call",
+                        "name": r["name"],
+                        "promise": promise,
+                        "takes": sorted(takes),
+                    }
+                )
+                break
+    return out
+
+
+def _cancellation_violation(record: dict) -> str | None:
+    if record["promise"] and "cancel" in record["takes"]:
+        return "a Promise-returning call takes { signal }, not cancel"
+    if not record["promise"] and "signal" in record["takes"]:
+        return "a synchronous call takes cancel, not signal"
+    return None
+
+
 RULES: list[Rule] = [
     Rule(
         name="getters",
@@ -268,6 +321,18 @@ RULES: list[Rule] = [
                     "wasm:RealtimeVoiceChanger.processInterleavedWithCarrierInto(numChannels)",
                 )
             },
+        },
+    ),
+    Rule(
+        name="cancellation",
+        summary="Promise-returning calls take signal; synchronous calls take cancel",
+        population=lambda r: r["kind"] == "call",
+        violation=_cancellation_violation,
+        derive=_cancellation_calls,
+        pending={
+            f"{s}:VocalRenderSnapshot.{m}": "a synchronous render request takes cancel: () => boolean, not signal"
+            for s in ("node", "wasm")
+            for m in ("render", "beginRenderJob")
         },
     ),
 ]
