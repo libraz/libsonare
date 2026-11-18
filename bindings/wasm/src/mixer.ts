@@ -504,14 +504,14 @@ export class Mixer {
   /**
    * Turn the master-output meter on or off.
    *
-   * While on, every {@link MixerRealtimeBuffer.process} call meters the stereo
-   * master it just produced, so a caller reads {@link meterSnapshot} instead of
-   * copying the output and measuring it again. `truePeakDb*` is an inter-sample
+   * While on, every process and drain call meters the stereo master it just
+   * produced, so a caller reads {@link meterSnapshot} instead of copying the
+   * output and measuring it again. `truePeakDb*` is an inter-sample
    * peak taken after oversampling (ITU-R BS.1770-4 Annex 2 requires at least
    * 4x), which is a different and higher quantity than the sample peak.
    *
    * Enabling resets the meter, so a reading never mixes in audio from a period
-   * when metering was off.
+   * when metering was off; disabling keeps the last reading readable.
    *
    * @param options - See {@link MixerMeterOptions}.
    * @throws TypeError for a wrong-typed field or an unknown key; RangeError when

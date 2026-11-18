@@ -1425,6 +1425,7 @@ const MIDI_BANK_REQUEST_KEYS = keySet('msb', 'lsb');
 const MIXER_CONFIG_REQUEST_KEYS = keySet('scene', 'sampleRate', 'maxBlockSize');
 const MIXER_JSON_OPTIONS_REQUEST_KEYS = keySet('sampleRate', 'maxBlockSize');
 const SET_POLARITY_INVERT_REQUEST_KEYS = keySet('left', 'right');
+const CONFIGURE_METER_REQUEST_KEYS = keySet('enabled', 'truePeakOversample');
 const MIXER_ADD_SEND_REQUEST_KEYS = keySet('id', 'destinationBusId', 'sendDb', 'timing');
 const SCHEDULE_INSERT_AUTOMATION_REQUEST_KEYS = keySet('paramId', 'samplePos', 'value', 'curve');
 const SCHEDULE_FADER_AUTOMATION_REQUEST_KEYS = keySet('samplePos', 'faderDb', 'curve');
@@ -1580,6 +1581,7 @@ export const REQUEST_KEYS = {
   Mixer: MIXER_CONFIG_REQUEST_KEYS,
   'Mixer.fromJson': MIXER_JSON_OPTIONS_REQUEST_KEYS,
   setPolarityInvert: SET_POLARITY_INVERT_REQUEST_KEYS,
+  configureMeter: CONFIGURE_METER_REQUEST_KEYS,
   addSend: MIXER_ADD_SEND_REQUEST_KEYS,
   scheduleInsertAutomation: SCHEDULE_INSERT_AUTOMATION_REQUEST_KEYS,
   scheduleFaderAutomation: SCHEDULE_FADER_AUTOMATION_REQUEST_KEYS,

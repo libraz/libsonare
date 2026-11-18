@@ -60,6 +60,14 @@ export interface MixerJsonOptions {
   maxBlockSize?: number;
 }
 
+/** Master-meter options of {@link Mixer.configureMeter}. */
+export interface MixerMeterOptions {
+  /** Whether to meter the master output. Required. */
+  enabled: boolean;
+  /** True-peak oversampling factor, `4` or `8`. Default `4`; any other value is a `RangeError`. */
+  truePeakOversample?: number;
+}
+
 /** Polarity of a strip's channels for {@link Mixer.setPolarityInvert}. */
 export interface PolarityInvert {
   /** Invert the left channel. */
@@ -301,7 +309,8 @@ export class Mixer {
   }
 
   /**
-   * Marks the end of the signal for every strip and bus meter. The true-peak
+   * Marks the end of the signal for every strip, bus and master-output meter
+   * (see {@link configureMeter}). The true-peak
    * reading runs one reconstruction-filter group delay behind the block; this
    * reads that pending stretch against silence and folds it into the
    * snapshots, so `truePeakDb` covers the whole signal. Call it after the last
@@ -309,6 +318,40 @@ export class Mixer {
    */
   flushMeters(): void {
     this.native.flushMeters();
+  }
+
+  /**
+   * Turn the master-output meter on or off.
+   *
+   * While on, every process and drain call meters the stereo master it just
+   * produced, so a caller reads {@link meterSnapshot} instead of copying the
+   * output and measuring it again. `truePeakDbtp*` is an inter-sample peak taken
+   * after oversampling (ITU-R BS.1770-4 Annex 2 requires at least 4x), which is a
+   * different and higher quantity than the sample peak.
+   *
+   * Enabling resets the meter, so a reading never mixes in audio from a period
+   * when metering was off; disabling keeps the last reading readable.
+   *
+   * @param options - See {@link MixerMeterOptions}.
+   * @throws TypeError for a wrong-typed field or an unknown key; RangeError when
+   *   `truePeakOversample` is not `4` or `8`.
+   */
+  configureMeter(options: MixerMeterOptions): void {
+    const bag = requestObject('configureMeter', options, 'options', true);
+    this.native.configureMeter(
+      requiredBoolean('configureMeter', bag.enabled, 'enabled'),
+      optionalNumber('configureMeter', bag.truePeakOversample, 'truePeakOversample', 4),
+    );
+  }
+
+  /**
+   * Latest master-output meter reading, the same record {@link busMeter} reads
+   * for a bus. All dB fields are finite and floored at -120.
+   *
+   * @throws SonareError with code `InvalidState` when the meter has never been enabled.
+   */
+  meterSnapshot(): MixMeterSnapshot {
+    return mixMeterSnapshotFromNative(this.native.meterSnapshot());
   }
 
   /**
