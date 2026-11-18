@@ -115,7 +115,14 @@ export interface EngineClip {
   fadeOutSamples?: number;
   /** Default `'off'`. */
   warpMode?: ProjectWarpMode;
-  warpAnchors?: Array<{ warpSample: number; sourceSample: number }>;
+  /** Anchor map between warped and source positions (both in source frames). Used when `warpMode` is not `'off'`. */
+  warpAnchors?: Array<{
+    /** Position in the warped (timeline) clip, in frames. */
+    warpSample: number;
+    /** Matching position in the source audio, in frames. */
+    sourceSample: number;
+  }>;
+  /** Paged source supplying the audio on demand. Exactly one of `channels` and `pageProvider`. */
   pageProvider?: ClipPageProvider;
 }
 
@@ -271,7 +278,13 @@ export interface CaptureOptions {
    */
   recordOffsetSamples?: number;
   /** Input monitoring; `gain` defaults to `1`. An absent `inputMonitor` is enabled at gain `1`, the engine default. */
-  inputMonitor?: { enabled: boolean; gain?: number };
+  inputMonitor?: {
+    /** Whether the live input is monitored through the engine output. */
+    enabled: boolean;
+    /** Linear monitor gain. Default `1`. */
+    gain?: number;
+  };
+  /** Punch-in window. Omitted: no punch window, capture is not gated. */
   punch?: CapturePunch;
 }
 
@@ -539,7 +552,13 @@ export interface EngineScopeTelemetry {
   droppedRecords: number;
   /** FFT magnitude spectrum in dBFS, linear-spaced over `[0, Nyquist]`. */
   bands: number[];
-  points: { left: number; right: number }[];
+  /** Goniometer/vectorscope sample points. */
+  points: {
+    /** Left-channel sample value. */
+    left: number;
+    /** Right-channel sample value. */
+    right: number;
+  }[];
 }
 
 /** A send from a track lane or bus to another bus. */
@@ -607,6 +626,7 @@ export interface EngineMidiEvent {
   word2?: number;
   /** Fourth UMP word. */
   word3?: number;
+  /** Number of UMP words in use (1..4). Omitted: inferred as one word when only `word0` is set. */
   wordCount?: number;
   /**
    * Redundant with `word0`, which already carries the UMP group in bits 24..27.

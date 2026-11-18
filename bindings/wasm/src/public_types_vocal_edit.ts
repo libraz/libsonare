@@ -40,9 +40,22 @@ export interface VocalPitchPoint {
 
 /** What a note's pitch is pulled toward. */
 export type VocalPitchTarget =
-  | { mode: 'none' }
-  | { mode: 'center'; midi: number }
-  | { mode: 'curve'; points: readonly VocalPitchPoint[] };
+  | {
+      /** No pitch target; the note keeps its own pitch. */
+      mode: 'none';
+    }
+  | {
+      /** Steer the note toward one centre pitch. */
+      mode: 'center';
+      /** Centre pitch as a MIDI note number (fractional). */
+      midi: number;
+    }
+  | {
+      /** Steer the note along a pitch curve over the source. */
+      mode: 'curve';
+      /** Curve points, each a source position in samples and a target MIDI note. */
+      points: readonly VocalPitchPoint[];
+    };
 
 /** Pitch correction settings of one note. */
 export interface VocalPitchEdit {

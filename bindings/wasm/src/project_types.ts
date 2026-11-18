@@ -236,7 +236,12 @@ export interface ProjectProgramInput {
   /** Program number, `0..127`. */
   program: number;
   /** Bank select. Omit for no Bank Select. */
-  bank?: { msb: number; lsb: number };
+  bank?: {
+    /** Bank Select MSB (CC 0), `0..127`. */
+    msb: number;
+    /** Bank Select LSB (CC 32), `0..127`. */
+    lsb: number;
+  };
 }
 
 /** Input of {@link Project.setSourceAudio}. */

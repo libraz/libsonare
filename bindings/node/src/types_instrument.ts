@@ -833,7 +833,13 @@ export interface PartRigRequest extends PartRigKey {
 export interface PartRigEntry {
   /** Rig mode this entry holds. */
   mode: PartRigMode;
-  inserts?: { processor: string; params: Record<string, unknown> }[];
+  /** Inserts of a `'chain'` entry, in processing order; absent for the other modes. */
+  inserts?: {
+    /** Processor name, e.g. `'saturation.overdrive'`. */
+    processor: string;
+    /** Processor parameters; an empty object when none were given. */
+    params: Record<string, unknown>;
+  }[];
 }
 
 /**

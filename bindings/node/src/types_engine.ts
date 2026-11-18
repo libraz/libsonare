@@ -204,7 +204,12 @@ export interface EngineScopeTelemetry {
    * Python surface exposes the same data as `(left, right)` tuples; this
    * representation difference is intentional, the values match.
    */
-  points: { left: number; right: number }[];
+  points: {
+    /** Left-channel sample value. */
+    left: number;
+    /** Right-channel sample value. */
+    right: number;
+  }[];
 }
 
 /** Read-only engine transport snapshot from {@link RealtimeEngine.transportState}. */
@@ -711,6 +716,7 @@ export interface EngineMidiEvent {
   word2?: number;
   /** Fourth UMP word. */
   word3?: number;
+  /** Number of UMP words in use (1..4). Omitted: inferred as one word when only `word0` is set. */
   wordCount?: number;
   /**
    * Redundant with `word0`, which already carries the UMP group in bits 24..27.

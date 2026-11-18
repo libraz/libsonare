@@ -576,7 +576,12 @@ export interface PartRigEntry {
   /** Rig mode this entry holds. */
   mode: PartRigMode;
   /** Present for `'chain'` only; `params` is the parsed parameter object. */
-  inserts?: { processor: string; params: Record<string, unknown> }[];
+  inserts?: {
+    /** Processor name, e.g. `'saturation.overdrive'`. */
+    processor: string;
+    /** Processor parameters; an empty object when none were given. */
+    params: Record<string, unknown>;
+  }[];
 }
 
 /** @deprecated Use {@link PartRigEntry}, the name the Node binding shares. */

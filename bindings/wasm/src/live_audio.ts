@@ -2,6 +2,14 @@ import type { SonareRealtimeEngineNode } from './worklet.js';
 
 /** Options for {@link bindMicrophoneInput}: the `getUserMedia` constraints plus stream ownership controls. */
 export interface BindMicrophoneInputOptions extends MediaStreamConstraints {
+  /** Audio constraints passed to `getUserMedia`. Default `true`. Ignored when `stream` is given. */
+  audio?: MediaStreamConstraints['audio'];
+  /** Video constraints passed to `getUserMedia`. Default `false`. Ignored when `stream` is given. */
+  video?: MediaStreamConstraints['video'];
+  /** Passed to `getUserMedia` unchanged. Omitted: not sent. Ignored when `stream` is given. */
+  peerIdentity?: MediaStreamConstraints['peerIdentity'];
+  /** Passed to `getUserMedia` unchanged. Omitted: not sent. Ignored when `stream` is given. */
+  preferCurrentTab?: MediaStreamConstraints['preferCurrentTab'];
   /**
    * Stream to bind instead of requesting one. Supplying it also transfers
    * ownership: {@link MicrophoneInputBinding.close} leaves its tracks running,
