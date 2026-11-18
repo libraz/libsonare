@@ -27292,3 +27292,142 @@ domain = "analysis"
 rule = "absent-not-sentinel"
 entry = "./analysis"
 test = "bindings/wasm/tests/surface/analysis-features.test.ts::segment similarity refuses a zero or negative k"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.eq.tiltDb"
+removed = "use eq.tilt.tiltDb"
+domain = "mastering"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.eq.tiltDb"
+removed = "use eq.tilt.tiltDb"
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.eq.pivotHz"
+removed = "use eq.tilt.pivotHz"
+domain = "mastering"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.eq.pivotHz"
+removed = "use eq.tilt.pivotHz"
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.repair.nFft"
+removed = "use repair.denoise.nFft"
+domain = "mastering"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.repair.nFft"
+removed = "use repair.denoise.nFft"
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.repair.hopLength"
+removed = "use repair.denoise.hopLength"
+domain = "mastering"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.repair.hopLength"
+removed = "use repair.denoise.hopLength"
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.repair.ddAlpha"
+removed = "use repair.denoise.ddAlpha"
+domain = "mastering"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.repair.ddAlpha"
+removed = "use repair.denoise.ddAlpha"
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.repair.reductionDb"
+removed = "use repair.denoise.reductionDb"
+domain = "mastering"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.repair.reductionDb"
+removed = "use repair.denoise.reductionDb"
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.repair.gainFloor"
+removed = "use repair.denoise.reductionDb, in dB (reductionDb = -20*log10(gainFloor))"
+domain = "mastering"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.repair.gainFloor"
+removed = "use repair.denoise.reductionDb, in dB (reductionDb = -20*log10(gainFloor))"
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.repair.denoise.gainFloor"
+removed = "use repair.denoise.reductionDb, in dB (reductionDb = -20*log10(gainFloor))"
+domain = "mastering"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.repair.denoise.gainFloor"
+removed = "use repair.denoise.reductionDb, in dB (reductionDb = -20*log10(gainFloor))"
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.repair.declip.clipThreshold"
+to = "MasteringChainConfig.repair.declip.clipThresholdDb"
+changed = "renamed to clipThresholdDb and given in dBFS at or below 0 (was a linear amplitude, 0.98 by default)"
+domain = "mastering"
+rule = "unit-in-name"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::declip.clipThresholdDb is dBFS at or below 0"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.repair.declip.clipThreshold"
+to = "MasteringChainConfig.repair.declip.clipThresholdDb"
+changed = "renamed to clipThresholdDb and given in dBFS at or below 0 (was a linear amplitude, 0.98 by default)"
+domain = "mastering"
+rule = "unit-in-name"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::declip.clipThresholdDb is dBFS at or below 0"
+entry = "./analysis"
