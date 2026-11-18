@@ -458,7 +458,7 @@ class _ProjectInspectionMixin:
         ordinal = _token_ordinal(policy, _OVERLAP_POLICIES, "policy")
         _check(
             _get_lib().sonare_project_set_overlap_policy(
-                self._require_handle(), ctypes.c_uint32(ordinal)
+                self._require_handle(), _to_c_uint32(ordinal, "policy")
             )
         )
 
