@@ -72,6 +72,7 @@ import {
   assertFiniteSamples,
   assertNonNegativeSafeInteger,
   requestObject,
+  requireBoolean,
   resolveRenderFrame,
   resolveSampleBound,
 } from './validation.js';
@@ -96,13 +97,6 @@ function isObjectValue(value: unknown): value is object {
     !Array.isArray(value) &&
     !ArrayBuffer.isView(value)
   );
-}
-
-function requireBoolean(fnName: string, value: unknown, argName: string): boolean {
-  if (typeof value !== 'boolean') {
-    throw new TypeError(`${fnName}: ${argName} must be a boolean`);
-  }
-  return value;
 }
 
 function requireFinite(fnName: string, value: unknown, argName: string): number {
