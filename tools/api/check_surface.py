@@ -251,23 +251,28 @@ _EVIDENCE_AT = re.compile(r"^([\w./-]+):(\d+): \S")
 
 def load_document_types(
     path: Path, problems: list[str], records: list[dict], root: Path
-) -> set[str]:
-    """Python TypedDicts holding a core document's keys, closed over the TypedDicts their fields name."""
+) -> set[tuple[str, str]]:
+    """(surface, type) pairs holding a core document's keys, closed over the types their fields name.
+
+    A name resolves to a Python TypedDict and to a TS interface or alias on each JS surface that has
+    one; the Python half must hold a camelCase key, since that is all it exempts there.
+    """
     data = load_toml(path, problems, "document_types.toml")
     if data is None:
         return set()
     for k in sorted(set(data) - {"document"}):
         problems.append(f"document_types.toml: unknown top-level key {k!r}")
-    typed = {
-        r["name"]
+    types = {
+        (r["surface"], r["name"])
         for r in records
-        if r["surface"] == "python" and r["kind"] == "type" and "TypedDict" in r.get("bases", [])
+        if r["kind"] == "type"
+        and ((r["surface"] == "python" and "TypedDict" in r.get("bases", [])) or r["surface"] in JS)
     }
     fields = collections.defaultdict(list)
     for r in records:
-        if r["surface"] == "python" and r["kind"] == "field" and r["owner"] in typed:
-            fields[r["owner"]].append(r)
-    out: set[str] = set()
+        if r["kind"] == "field" and (r["surface"], r["owner"]) in types:
+            fields[(r["surface"], r["owner"])].append(r)
+    out: set[tuple[str, str]] = set()
     seen: set[str] = set()
     for i, d in enumerate(data.get("document", []), 1):
         name = d.get("type")
@@ -290,20 +295,28 @@ def load_document_types(
             problems.append(f"{label}: listed twice")
             continue
         seen.add(name)
-        if name not in typed:
-            problems.append(f"{label}: {name} is not a Python TypedDict")
+        roots = [(s, n) for s, n in sorted(types) if n == name]
+        if not roots:
+            problems.append(f"{label}: {name} is not a Python TypedDict or a TS interface")
             continue
-        closure, todo = set(), [name]
-        while todo:
-            t = todo.pop()
-            if t in closure:
-                continue
-            closure.add(t)
-            for f in fields[t]:
-                todo += [w for w in re.findall(r"\w+", f.get("type", "")) if w in typed]
-        if not any(re.search(r"[a-z][A-Z]", f["member"]) for t in closure for f in fields[t]):
-            problems.append(f"{label}: has no camelCase key, so there is nothing to declare")
-        out |= closure
+        for surface, _ in roots:
+            closure, todo = set(), [(surface, name)]
+            while todo:
+                t = todo.pop()
+                if t in closure:
+                    continue
+                closure.add(t)
+                for f in fields[t]:
+                    todo += [
+                        (surface, w)
+                        for w in re.findall(r"\w+", f.get("type", ""))
+                        if (surface, w) in types
+                    ]
+            if surface == "python" and not any(
+                re.search(r"[a-z][A-Z]", f["member"]) for t in closure for f in fields[t]
+            ):
+                problems.append(f"{label}: has no camelCase key, so there is nothing to declare")
+            out |= closure
     return out
 
 
@@ -1497,7 +1510,7 @@ def chk_snake_case_only(ctx):
     cands = [
         r
         for r in recs(ctx, ("python",), ("function", "method", "option", "field"))
-        if not (r["kind"] == "field" and r["owner"] in ctx.documents)
+        if not (r["kind"] == "field" and (r["surface"], r["owner"]) in ctx.documents)
     ]
     bad = [(r, "camelCase name") for r in cands if re.search(r"[a-z][A-Z]", bare(r))]
     return len(cands), bad
@@ -1839,6 +1852,38 @@ def chk_doc_sentinel(ctx):
     return len(cands), bad
 
 
+def _union_members(text: str) -> list[str]:
+    """Top-level members of a TS union; a `|` inside brackets or generics belongs to a member."""
+    out, depth, cur = [], 0, ""
+    for i, ch in enumerate(text):
+        if ch in "(<[{":
+            depth += 1
+        elif ch in ")]}" or (ch == ">" and text[i - 1 : i] != "="):
+            depth -= 1
+        if ch == "|" and depth == 0:
+            out.append(cur.strip())
+            cur = ""
+        else:
+            cur += ch
+    out.append(cur.strip())
+    return out
+
+
+def chk_null_member(ctx):
+    """A record field spells "not given" or "not produced" as an omitted field, never `null`."""
+    cands = [
+        r
+        for r in recs(ctx, JS, ("field",))
+        if r.get("type") and (r["surface"], r["owner"]) not in ctx.documents
+    ]
+    bad = [
+        (r, "type lists null; make the field optional and leave it out")
+        for r in cands
+        if "null" in _union_members(r["type"])
+    ]
+    return len(cands), bad
+
+
 def chk_python_public_names(ctx):
     cands, bad = 0, []
     seen = set()
@@ -1970,6 +2015,7 @@ CHECKS: tuple[Check, ...] = (
     Check("frequency-bounds:centre", ALL, chk_frequency_centre),
     Check("doc-comments", LANG, chk_doc_comments),
     Check("absent-not-sentinel:doc", BINDINGS + ("cli-python",), chk_doc_sentinel),
+    Check("absent-not-sentinel:null", JS, chk_null_member),
     Check("python-public-names", ("python",), chk_python_public_names),
     Check("cli-front-end-parity", CLI, chk_cli_front_end_parity),
     Check("cli-positional-input", CLI, chk_cli_positional_input),

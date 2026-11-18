@@ -1357,6 +1357,59 @@ class MirrorSchema(CheckerCase):
         )
 
 
+class NullMember(CheckerCase):
+    """A JS record field is optional, never `| null`; a declared document follows its schema."""
+
+    def run_null(self, docs=""):
+        path = self.write("docs.toml", docs)
+        _, lines = self.run_check(
+            "--surface",
+            "node",
+            "--check",
+            "absent-not-sentinel:null",
+            "--document-types-file",
+            str(path),
+        )
+        flagged = sorted(
+            x.strip().split(":")[0] for x in lines if x.strip().endswith("leave it out")
+        )
+        problems = [x.strip() for x in lines if x.startswith("  document_types.toml")]
+        return flagged, problems
+
+    def setUp(self):
+        super().setUp()
+        for name in ("Report", "Config", "Speaker"):
+            self.add(_rec("node", "type", name, ts_kind="interface"))
+        for owner, member, typ in (
+            ("Report", "lufs", "number | null"),
+            ("Report", "peak", "number | undefined"),
+            ("Report", "frames", "Array<number | null>"),
+            ("Config", "map", "string[] | null | undefined"),
+            ("Config", "speaker", "Partial<Record<string, Speaker>>"),
+            ("Speaker", "distance", "number | null | undefined"),
+        ):
+            self.add(
+                _rec("node", "field", f"{owner}.{member}", owner=owner, member=member, type=typ)
+            )
+
+    def test_a_top_level_null_member_fails(self):
+        flagged, _ = self.run_null()
+        self.assertEqual(
+            flagged,
+            [
+                "node field Config.map",
+                "node field Report.lufs",
+                "node field Speaker.distance",
+            ],
+        )
+
+    def test_a_declared_document_and_the_types_it_reaches_are_exempt(self):
+        row = '[[document]]\ntype = "Config"\nevidence = "schemas/playback-renderer-config.schema.json:5: schema"\n'
+        flagged, problems = self.run_null(row)
+        self.assertEqual(flagged, ["node field Report.lufs"])
+        self.assertEqual(problems, [])
+
+
 class DomainRule(unittest.TestCase):
     def test_override_wins_over_file(self):
         self.assertEqual(
