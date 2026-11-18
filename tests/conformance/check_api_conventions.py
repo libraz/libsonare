@@ -150,6 +150,39 @@ def _worker_teardown_violation(record: dict) -> str | None:
     return None
 
 
+_NUMERIC_TYPE = re.compile(
+    r"^(number|float|int|Float32Array|np\.ndarray|tuple\[float|readonly number)"
+)
+
+# (stem, unit token) pairs: a measurement named by its stem ends in the unit's spelling.
+_LOUDNESS_UNITS = (
+    (re.compile(r"loudness_?range", re.I), "Lu"),
+    (re.compile(r"true_?peak(?!_?oversample)", re.I), "Dbtp"),
+    (re.compile(r"integrated|momentary|short_?term", re.I), "Lufs"),
+)
+
+
+def _loudness_unit(member: str) -> str | None:
+    for stem, unit in _LOUDNESS_UNITS:
+        if stem.search(member):
+            return unit
+    return None
+
+
+def _has_unit_token(record: dict, unit: str) -> bool:
+    member = record["member"]
+    if record["surface"] == "python":
+        return re.search(rf"(^|_){unit.lower()}(_|$)", member) is not None
+    return re.search(rf"{unit}(?![a-z])", member) is not None
+
+
+def _loudness_name_violation(record: dict) -> str | None:
+    unit = _loudness_unit(record["member"])
+    if unit and not _has_unit_token(record, unit):
+        return f"a loudness measurement name carries its unit: {unit}"
+    return None
+
+
 RULES: list[Rule] = [
     Rule(
         name="getters",
@@ -173,6 +206,18 @@ RULES: list[Rule] = [
             "wasm:OpfsClipPageProviderOptions.terminateWorkerOnClose": "rename to terminateWorkerOnDestroy",
             "wasm:OpfsClipStreamOptions.terminateWorkerOnClose": "rename to terminateWorkerOnDestroy",
         },
+    ),
+    Rule(
+        name="loudness-names",
+        summary="loudness range, true peak and integrated/momentary/short-term names end in Lu/Dbtp/Lufs",
+        population=lambda r: (
+            r["surface"] in ("node", "wasm", "python")
+            and r["kind"] == "field"
+            and "." not in r.get("member", "")
+            and _NUMERIC_TYPE.match(r.get("type", "")) is not None
+            and _loudness_unit(r.get("member", "")) is not None
+        ),
+        violation=_loudness_name_violation,
     ),
 ]
 

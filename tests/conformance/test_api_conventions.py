@@ -140,6 +140,32 @@ class AsyncTeardownRule(unittest.TestCase):
         )
 
 
+class LoudnessNamesRule(unittest.TestCase):
+    CLEAN = [
+        field("wasm", "AnalysisDynamics", "loudnessRangeLu"),
+        field("wasm", "LufsResult", "momentaryLufs"),
+        field("node", "MeterTelemetry", "truePeakDbtpL"),
+        field("python", "LufsResult", "short_term_lufs", "float"),
+        field("python", "AnalysisDynamics", "loudness_range_lu", "float"),
+        field("wasm", "MixerMeterOptions", "measureTruePeak", "boolean | undefined"),
+    ]
+
+    def test_clean_surface_passes(self) -> None:
+        verdict = run("loudness-names", self.CLEAN)
+        self.assertEqual(verdict.read, 5)
+        self.assertFalse(verdict.failed)
+
+    def test_unitless_loudness_range_is_named(self) -> None:
+        planted = field("wasm", "LufsResult", "loudnessRange")
+        verdict = run("loudness-names", [*self.CLEAN, planted])
+        self.assertEqual([f.key for f in verdict.violations], ["wasm:LufsResult.loudnessRange"])
+
+    def test_true_peak_in_decibels_is_named(self) -> None:
+        planted = field("python", "Profile", "true_peak_db", "float")
+        verdict = run("loudness-names", [*self.CLEAN, planted])
+        self.assertEqual([f.key for f in verdict.violations], ["python:Profile.true_peak_db"])
+
+
 class Framework(unittest.TestCase):
     def test_reading_nothing_fails(self) -> None:
         verdict = check.judge(rule("getters"), [])
