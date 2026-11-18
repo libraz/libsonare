@@ -38,17 +38,14 @@ def _drop_property(text: str, root: str, prop: str) -> str:
     return text.replace(body, stripped, 1)
 
 
-def _accessor(label: str, family: dict) -> str:
-    """The list a family answers to: its own name unless it names another."""
-    return family.get("accessor", label)
-
-
 class TheRepository(unittest.TestCase):
     def test_every_family_is_clean_on_every_surface(self):
         for label, family in check.FAMILIES.items():
-            paths = check.schema_paths(family["source"].read_text(), _accessor(label, family))
+            paths = check.schema_paths(family["source"].read_text(), label)
             self.assertIsNotNone(paths, label)
             self.assertGreater(len(paths), 0, label)
+            paths, problems = check.delegate(paths, family.get("delegated", {}))
+            self.assertEqual(problems, [], label)
             for side, path in family["surfaces"].items():
                 missing, unreached, comparisons = check.scan_surface(
                     paths, path, family["root"]
@@ -60,24 +57,10 @@ class TheRepository(unittest.TestCase):
     def test_the_lists_are_distinct_populations(self):
         """A table whose entries resolved to one list would pass the case above."""
         lists = {
-            _accessor(label, family): tuple(
-                check.schema_paths(family["source"].read_text(), _accessor(label, family))
-            )
+            label: tuple(check.schema_paths(family["source"].read_text(), label))
             for label, family in check.FAMILIES.items()
         }
         self.assertEqual(len(set(lists.values())), len(lists))
-
-    def test_a_shared_list_is_named_by_more_than_one_result(self):
-        """Tonal balance on linear and on log bands write one shape and one list."""
-        shared = [
-            label
-            for label, family in check.FAMILIES.items()
-            if _accessor(label, family) != label
-        ]
-        self.assertEqual(shared, ["match_tonal_balance_log_bands_schema_paths"])
-        family = check.FAMILIES[shared[0]]
-        self.assertIn(family["accessor"], check.FAMILIES)
-        self.assertNotEqual(family["root"], check.FAMILIES[family["accessor"]]["root"])
 
     def test_python_is_checked_for_the_explainable_mastering_results(self):
         """Each of these results is declared in both Python files, not only in TypeScript."""
@@ -102,6 +85,37 @@ class TheRepository(unittest.TestCase):
             self.assertLessEqual({"node", "wasm"}, set(surfaces), label)
             for side, path in surfaces.items():
                 self.assertTrue(path.is_file(), f"{label} [{side}]: {path}")
+
+
+class DelegatedSubtrees(unittest.TestCase):
+    OWNER = Path(__file__)
+    PATHS: ClassVar[list[str]] = [
+        "profile",
+        "chainConfig",
+        "chainConfig.version",
+        "chainConfig.params",
+    ]
+
+    def test_a_delegated_subtree_leaves_the_comparison_but_its_root_stays(self):
+        kept, problems = check.delegate(self.PATHS, {"chainConfig": self.OWNER})
+        self.assertEqual(problems, [])
+        self.assertEqual(kept, ["profile", "chainConfig"])
+
+    def test_a_delegation_whose_owner_check_is_absent_fails(self):
+        absent = self.OWNER.with_name("no_such.py")
+        _, problems = check.delegate(self.PATHS, {"chainConfig": absent})
+        self.assertEqual(len(problems), 1)
+        self.assertIn("no_such.py", problems[0])
+
+    def test_a_delegation_naming_no_subtree_of_the_list_fails(self):
+        _, problems = check.delegate(self.PATHS, {"profile": self.OWNER})
+        self.assertEqual(len(problems), 1)
+        self.assertIn("profile", problems[0])
+
+    def test_the_assistant_chain_config_is_delegated_to_the_parameter_check(self):
+        family = check.FAMILIES["assistant_result_schema_paths"]
+        owner = family["delegated"]["chainConfig"]
+        self.assertEqual(owner.name, "check_mastering_param_surfaces.py")
 
 
 class RootAnchoring(unittest.TestCase):

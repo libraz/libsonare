@@ -42,16 +42,17 @@ import ts_surface_walk as walk
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
+CONFORMANCE = REPO_ROOT / "tests/conformance"
 NODE = REPO_ROOT / "bindings/node/src"
 WASM = REPO_ROOT / "bindings/wasm/src"
 
-# One entry per published result: where its list is defined, the TypeScript type
-# its paths are rooted at, and the file on each surface that declares that type.
-# The key is the list's accessor unless `accessor` names another, which is how two
-# results that write one shape (tonal balance on linear and on log bands) answer
-# to a single list. A
-# root-array writer roots its paths at the element, so its paths open with the
-# `[]` segment and the type named here is the element type.
+# One entry per published result, keyed by its list's accessor: where the list is
+# defined, the TypeScript type its paths are rooted at, and the file on each
+# surface that declares that type. A root-array writer roots its paths at the
+# element, so its paths open with the `[]` segment and the type named here is the
+# element type. Tonal balance on log bands writes the linear-band shape and list,
+# so the one family covers both. `delegated` names a subtree whose contents
+# another check owns; see delegate().
 FAMILIES = {
     "analysis_result_schema_paths": {
         "source": REPO_ROOT / "src/analysis/analysis_json.cpp",
@@ -134,6 +135,10 @@ FAMILIES = {
     "assistant_result_schema_paths": {
         "source": REPO_ROOT / "src/mastering/assistant/suggester.cpp",
         "root": "MasteringAssistantResult",
+        # The suggested chain is the chain-parameter contract: the wire carries
+        # it as a {version, params} document and the facades as the nested config
+        # a caller passes back, and the parameter check holds both to the core.
+        "delegated": {"chainConfig": CONFORMANCE / "check_mastering_param_surfaces.py"},
         "surfaces": {
             "node": NODE / "types_mastering.ts",
             "wasm": WASM / "public_types_mastering.ts",
@@ -164,17 +169,6 @@ FAMILIES = {
     "match_tonal_balance_schema_paths": {
         "source": REPO_ROOT / "src/mastering/api/named_processor.cpp",
         "root": "MatchTonalBalanceResult",
-        "surfaces": {
-            "node": NODE / "types_mastering.ts",
-            "wasm": WASM / "public_types_mastering.ts",
-            "python": REPO_ROOT / "bindings/python/src/libsonare/_types_mastering_results.py",
-            "python-stub": REPO_ROOT / "bindings/python/src/libsonare/types.pyi",
-        },
-    },
-    "match_tonal_balance_log_bands_schema_paths": {
-        "source": REPO_ROOT / "src/mastering/api/named_processor.cpp",
-        "accessor": "match_tonal_balance_schema_paths",
-        "root": "MatchTonalBalanceLogBandsResult",
         "surfaces": {
             "node": NODE / "types_mastering.ts",
             "wasm": WASM / "public_types_mastering.ts",
@@ -414,6 +408,26 @@ def scan_python(paths: list[str], text: str, root: str) -> tuple[list, list, int
     return missing, unreached, comparisons
 
 
+def delegate(paths: list[str], delegated: dict[str, Path]) -> tuple[list[str], list[str]]:
+    """Drop the paths under each delegated subtree; return (kept, problems).
+
+    The subtree's root stays compared, so the block must still be declared. A
+    delegation is a claim that another check covers the contents, so an owner
+    check that does not exist, or a prefix with nothing under it, is a problem
+    rather than a silent skip.
+    """
+    problems: list[str] = []
+    kept = list(paths)
+    for prefix, owner in delegated.items():
+        under = [p for p in kept if p.startswith((prefix + ".", prefix + "[]"))]
+        if not owner.is_file():
+            problems.append(f"{prefix}: delegated to {owner.name}, which does not exist")
+        if not under:
+            problems.append(f"{prefix}: delegated, but the list has no path under it")
+        kept = [p for p in kept if p not in under]
+    return kept, problems
+
+
 def scan_surface(paths: list[str], path: Path, root: str) -> tuple[list, list, int]:
     """Walk one surface with the reader its file kind calls for.
 
@@ -500,14 +514,19 @@ def scan(paths: list[str], text: str, root: str) -> tuple[list, list, int]:
 def main() -> int:
     failed = False
     for label, family in FAMILIES.items():
-        accessor = family.get("accessor", label)
-        paths = schema_paths(family["source"].read_text(), accessor)
+        paths = schema_paths(family["source"].read_text(), label)
         if not paths:
             print(
                 f"{label}: no literal path list was read -- it moved, was renamed, or computes its entries"
             )
             failed = True
             continue
+        paths, problems = delegate(paths, family.get("delegated", {}))
+        for problem in problems:
+            print(f"{label}: {problem}")
+            failed = True
+        for prefix, owner in family.get("delegated", {}).items():
+            print(f"{label}: {prefix}.* delegated to {owner.name}")
         root = family["root"]
         for side, path in family["surfaces"].items():
             missing, unreached, comparisons = scan_surface(paths, path, root)
