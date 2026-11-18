@@ -205,13 +205,6 @@ class Audio:
     def mastering_process(
         self, processor: SoloProcessor, params: MasteringSoloParams | None = None
     ) -> MasteringResult: ...
-    def mastering_chain(
-        self,
-        config: dict[str, Any] | None = None,
-        on_progress: Callable[[float, str], None] | None = None,
-        *,
-        cancel: Callable[[], bool] | None = None,
-    ) -> MasteringChainResult: ...
     def master_audio(
         self,
         *,

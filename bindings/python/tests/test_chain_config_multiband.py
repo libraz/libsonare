@@ -17,8 +17,7 @@ from libsonare import (
     SonareValueError,
     StreamingMasteringChain,
     master_audio,
-    mastering_chain,
-    mastering_chain_stereo,
+    master_audio_stereo,
 )
 from libsonare._mastering_offline import _enum_value, _flatten_chain_config, _nest_chain_config
 from libsonare._mastering_pair import _chain_config_from_document
@@ -90,21 +89,21 @@ def test_enum_names_resolve_on_nested_and_band_paths() -> None:
 
 def test_dotted_key_is_refused_by_name() -> None:
     with pytest.raises(SonareValueError, match=r"dotted keys are not accepted; nest the object"):
-        mastering_chain(LEFT, SR, FLAT)
+        master_audio(LEFT, SR, overrides=FLAT)
     with pytest.raises(SonareValueError, match=r"dynamics\.multibandComp"):
         master_audio(LEFT, SR, preset="pop", overrides={MB: {"enabled": True}})
 
 
 def test_typed_config_renders_like_flat_keys_mono() -> None:
-    nested = mastering_chain(LEFT, SR, TYPED)
-    flat = mastering_chain(LEFT, SR, _nest_chain_config(FLAT))
+    nested = master_audio(LEFT, SR, overrides=TYPED)
+    flat = master_audio(LEFT, SR, overrides=_nest_chain_config(FLAT))
     np.testing.assert_array_equal(nested.samples, flat.samples)
     assert MB in " ".join(nested.stages)
 
 
 def test_typed_config_renders_like_flat_keys_stereo() -> None:
-    nested = mastering_chain_stereo(LEFT, RIGHT, SR, TYPED)
-    flat = mastering_chain_stereo(LEFT, RIGHT, SR, _nest_chain_config(FLAT))
+    nested = master_audio_stereo(LEFT, RIGHT, SR, overrides=TYPED)
+    flat = master_audio_stereo(LEFT, RIGHT, SR, overrides=_nest_chain_config(FLAT))
     np.testing.assert_array_equal(nested.left, flat.left)
     np.testing.assert_array_equal(nested.right, flat.right)
 
@@ -117,7 +116,8 @@ def test_typed_config_changes_the_render() -> None:
         }
     }
     assert not np.array_equal(
-        mastering_chain(LEFT, SR, TYPED).samples, mastering_chain(LEFT, SR, three).samples
+        master_audio(LEFT, SR, overrides=TYPED).samples,
+        master_audio(LEFT, SR, overrides=three).samples,
     )
 
 
@@ -156,7 +156,7 @@ def test_empty_list_is_refused_by_path(config: dict, path: str) -> None:
     with pytest.raises(SonareValueError, match="is an empty list, which has no flat spelling"):
         _flatten_chain_config(config)
     with pytest.raises(SonareValueError, match=path.replace(".", r"\.")):
-        mastering_chain(LEFT, SR, config)
+        master_audio(LEFT, SR, overrides=config)
 
 
 def _v2_document(slope: int) -> str:
@@ -225,7 +225,7 @@ def test_multiband_shorthand_keys_are_refused_naming_the_current_key(
 ) -> None:
     """The three-band shorthand is gone; the refusal names the list spelling."""
     with pytest.raises(SonareValueError, match=current.replace(".", r"\.")):
-        mastering_chain(LEFT, SR, {"dynamics": {"multibandComp": config}})
+        master_audio(LEFT, SR, overrides={"dynamics": {"multibandComp": config}})
 
 
 def test_document_refuses_a_non_scalar_leaf_by_name() -> None:

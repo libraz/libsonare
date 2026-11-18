@@ -30,7 +30,7 @@ def test_mono_gain_equals_the_offline_applied_gain() -> None:
     samples = _program(0.05)
     for config in ({"loudness": {"targetLufs": -14.0}}, STAGED):
         gain = libsonare.streaming_loudness_gain(samples, SR, config)
-        offline = libsonare.mastering_chain(samples, SR, config)
+        offline = libsonare.master_audio(samples, SR, overrides=config)
         assert gain.loudness_static_gain_db == pytest.approx(offline.applied_gain_db, abs=0)
         assert math.isfinite(gain.integrated_lufs)
         assert math.isfinite(gain.true_peak_dbtp)
@@ -46,7 +46,7 @@ def test_measurement_follows_the_stages_before_loudness() -> None:
 def test_stereo_gain_equals_the_offline_applied_gain() -> None:
     left, right = _program(0.04), _program(0.05, 1.3)
     gain = libsonare.streaming_loudness_gain_stereo(left, right, SR, STAGED)
-    offline = libsonare.mastering_chain_stereo(left, right, SR, STAGED)
+    offline = libsonare.master_audio_stereo(left, right, SR, overrides=STAGED)
     assert gain.loudness_static_gain_db == pytest.approx(offline.applied_gain_db, abs=0)
 
 
@@ -70,7 +70,7 @@ def test_silence_yields_zero_gain_and_builds_a_streaming_chain() -> None:
 def test_streaming_chain_built_from_the_helper_tracks_the_offline_render() -> None:
     samples = _program(0.05)
     gain = libsonare.streaming_loudness_gain(samples, SR, STAGED)
-    offline = np.asarray(libsonare.mastering_chain(samples, SR, STAGED).samples)
+    offline = np.asarray(libsonare.master_audio(samples, SR, overrides=STAGED).samples)
     with libsonare.StreamingMasteringChain(
         STAGED,
         sample_rate=SR,

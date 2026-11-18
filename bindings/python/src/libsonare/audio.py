@@ -73,9 +73,6 @@ from .analyzer import (
     mastering as _mastering,
 )
 from .analyzer import (
-    mastering_chain as _mastering_chain,
-)
-from .analyzer import (
     mastering_process as _mastering_process,
 )
 from .analyzer import (
@@ -1009,22 +1006,6 @@ class Audio:
     ) -> MasteringResult:
         """Apply a named mastering processor."""
         return _mastering_process(processor, self.data, self.sample_rate, params)
-
-    def mastering_chain(
-        self,
-        config: dict | None = None,
-        on_progress: Callable[[float, str], None] | None = None,
-        *,
-        cancel: Callable[[], bool] | None = None,
-    ) -> MasteringChainResult:
-        """Apply a configurable mastering chain (EQ, dynamics, saturation, etc.).
-
-        See :func:`libsonare.mastering_chain` for the ``config`` schema and
-        ``on_progress`` / ``cancel`` semantics.
-        """
-        return _mastering_chain(
-            self.data, self.sample_rate, config, on_progress=on_progress, cancel=cancel
-        )
 
     def master_audio(
         self,

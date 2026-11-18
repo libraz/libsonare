@@ -26,7 +26,7 @@ _CORPUS = json.loads(
     ).read_text()
 )
 
-_ERROR_CLASS = {"argument": SonareValueError}
+_ERROR_CLASS = {"argument": SonareValueError, "missing_argument": SonareValueError}
 
 _MFCC = _CORPUS["mfcc_to_mel"]
 _MEL = _CORPUS["mel_to_audio"]
@@ -37,6 +37,7 @@ _EQ = _CORPUS["equalizer_prepare"]
 _RETUNE = _CORPUS["streaming_retune_prepare"]
 _RESAMPLE = _CORPUS["resample"]
 _ZERO_CROSSINGS = _CORPUS["zero_crossings"]
+_MASTER = _CORPUS["master_audio"]
 
 
 def _mfcc() -> np.ndarray:
@@ -239,3 +240,42 @@ def test_zero_crossings_refuses(case: dict) -> None:
     # read through a direct call to the C entry.
     with pytest.raises(error_class, match=re.escape(case["message"])):
         _zero_crossings_core(samples)
+
+
+def _master_tone() -> np.ndarray:
+    spec = _MASTER["input"]
+    t = np.arange(spec["length"]) / spec["sample_rate"]
+    return (spec["amplitude"] * np.sin(2 * np.pi * spec["frequency_hz"] * t)).astype(np.float32)
+
+
+@pytest.mark.parametrize("case", _MASTER["refused"], ids=lambda case: case["id"])
+@pytest.mark.parametrize("prefix", ["master_audio", "master_audio_stereo"])
+def test_master_audio_refuses(case: dict, prefix: str) -> None:
+    tone, rate = _master_tone(), _MASTER["input"]["sample_rate"]
+    call = {
+        "master_audio": lambda: libsonare.master_audio(tone, rate),
+        "master_audio_stereo": lambda: libsonare.master_audio_stereo(tone, tone, rate),
+    }[prefix]
+    with pytest.raises(
+        _ERROR_CLASS[case["cause"]], match=re.escape(f"{prefix}: {case['message']}")
+    ):
+        call()
+    if prefix == "master_audio":
+        with pytest.raises(
+            _ERROR_CLASS[case["cause"]], match=re.escape(f"{prefix}: {case['message']}")
+        ):
+            libsonare.Audio.from_buffer(tone, rate).master_audio()
+
+
+@pytest.mark.parametrize("case", _MASTER["accepted"], ids=lambda case: case["id"])
+def test_master_audio_accepts(case: dict) -> None:
+    assert case["returns"] == "input"
+    tone, rate = _master_tone(), _MASTER["input"]["sample_rate"]
+    np.testing.assert_array_equal(
+        libsonare.master_audio(tone, rate, overrides=case["overrides"]).samples, tone
+    )
+    pair = libsonare.master_audio_stereo(tone, tone, rate, overrides=case["overrides"])
+    np.testing.assert_array_equal(pair.left, tone)
+    np.testing.assert_array_equal(pair.right, tone)
+    audio = libsonare.Audio.from_buffer(tone, rate)
+    np.testing.assert_array_equal(audio.master_audio(overrides=case["overrides"]).samples, tone)

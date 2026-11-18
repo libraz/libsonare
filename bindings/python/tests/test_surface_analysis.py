@@ -63,8 +63,6 @@ OPERATIONS = (
     "mastering_assistant_suggest_stereo",
     "mastering_audio_profile",
     "mastering_audio_profile_stereo",
-    "mastering_chain",
-    "mastering_chain_stereo",
     "mastering_dynamics_compressor",
     "mastering_dynamics_gate",
     "mastering_dynamics_transient_shaper",

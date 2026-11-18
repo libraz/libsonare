@@ -275,7 +275,7 @@ class StreamingLoudnessGain:
 
     Measured at the loudness stage's input, after every earlier enabled stage,
     which is where the offline chain measures, so ``loudness_static_gain_db``
-    equals the gain :func:`mastering_chain` applies, ceiling clamp included.
+    equals the gain :func:`master_audio` applies, ceiling clamp included.
     Pass ``loudness_static_gain_db`` and ``true_peak_dbtp`` as the constructor's
     ``loudness_static_gain_db`` and ``loudness_static_gain_peak_db``. A silent or
     below-gate stage input has no ``integrated_lufs`` (``None``) and a gain of 0;

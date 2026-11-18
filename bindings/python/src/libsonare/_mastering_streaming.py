@@ -69,7 +69,7 @@ def streaming_loudness_gain(
 
     Runs the offline chain described by ``config`` up to its loudness stage and
     measures there, so ``loudness_static_gain_db`` equals the gain
-    :func:`mastering_chain` applies (ceiling clamp included) and ``true_peak_dbtp``
+    :func:`master_audio` applies (ceiling clamp included) and ``true_peak_dbtp``
     is the peak that clamp used. The gain is computed from the ``loudness``
     section whether or not the stage is enabled; a silent or below-gate stage
     input yields a gain of 0.
@@ -77,7 +77,7 @@ def streaming_loudness_gain(
     Args:
         samples: Mono audio samples.
         sample_rate: Sample rate in Hz.
-        config: Chain config as accepted by :func:`mastering_chain`.
+        config: Chain config as accepted by :func:`master_audio`.
 
     Returns:
         :class:`StreamingLoudnessGain`.
@@ -146,7 +146,7 @@ def streaming_loudness_gain_stereo(
 
 
 class StreamingMasteringChain:
-    """Block-by-block streaming variant of :func:`mastering_chain`.
+    """Block-by-block streaming variant of :func:`master_audio`.
 
     Maintains processor state across :meth:`process_mono`/:meth:`process_stereo`
     calls. Only ProcessorBase-backed stages are supported: eq.tilt,
@@ -196,7 +196,7 @@ class StreamingMasteringChain:
         """Build and prepare a streaming mastering chain.
 
         Args:
-            config: Nested chain config (see :func:`mastering_chain`).
+            config: Nested chain config (see :func:`master_audio`).
             sample_rate: Sample rate in Hz.
             num_channels: 1 (mono) or 2 (stereo). Stereo-only stages
                 (imager, monoMaker) are skipped for mono.

@@ -516,7 +516,7 @@ def test_mixing_presets_and_stereo_mix() -> None:
     libsonare.mix_stereo(two_strips, sample_rate=48000, fader_db=[-6.0206])
 
 
-def test_mastering_chain_validates_offline_input() -> None:
+def test_master_audio_validates_offline_input() -> None:
     """The offline mastering chain rejects empty / out-of-range-rate / non-finite
     input. Validation lives in the C++ core (MasteringChain::process_mono /
     process_stereo), so every surface (C ABI, Node, WASM, Python) behaves the
@@ -527,23 +527,23 @@ def test_mastering_chain_validates_offline_input() -> None:
     ok = [0.1 * math.sin(2 * math.pi * 220 * i / sr) for i in range(2048)]
 
     with pytest.raises(libsonare.SonareError):
-        libsonare.mastering_chain([], sample_rate=sr)
+        libsonare.master_audio([], sample_rate=sr, overrides={})
     with pytest.raises(libsonare.SonareError):
-        libsonare.mastering_chain(ok, sample_rate=100)
+        libsonare.master_audio(ok, sample_rate=100, overrides={})
     with pytest.raises(libsonare.SonareError):
-        libsonare.mastering_chain(ok, sample_rate=10_000_000)
+        libsonare.master_audio(ok, sample_rate=10_000_000, overrides={})
 
     bad = list(ok)
     bad[10] = float("nan")
     with pytest.raises(libsonare.SonareError):
-        libsonare.mastering_chain(bad, sample_rate=sr)
+        libsonare.master_audio(bad, sample_rate=sr, overrides={})
 
     # Valid input still masters and preserves length.
-    result = libsonare.mastering_chain(ok, sample_rate=sr)
+    result = libsonare.master_audio(ok, sample_rate=sr, overrides={})
     assert len(result.samples) == len(ok)
 
 
-def test_mastering_chain_reports_output_metrics() -> None:
+def test_master_audio_reports_output_metrics() -> None:
     """The chain result exposes output true-peak (dBTP), LRA, and per-stage gain
     reductions computed by the core. The gain-reduction stages are a subset
     of the reported stages, in the same order."""
@@ -557,7 +557,7 @@ def test_mastering_chain_reports_output_metrics() -> None:
         "dynamics": {"compressor": {"thresholdDb": -30.0, "ratio": 4.0}},
         "loudness": {"targetLufs": -14.0, "ceilingDb": -1.0},
     }
-    result = libsonare.mastering_chain(samples, sample_rate=sr, config=config)
+    result = libsonare.master_audio(samples, sample_rate=sr, overrides=config)
 
     # Output true peak must be finite and near/under the -1 dBTP ceiling.
     assert math.isfinite(result.output_true_peak_dbtp)
@@ -610,10 +610,10 @@ def test_loudness_target_limited_agrees_across_entry_points() -> None:
         )
         # The chain's loudness stage is the one master_audio composes; a preset
         # only supplies different target / ceiling values.
-        chain = libsonare.mastering_chain(
+        chain = libsonare.master_audio(
             samples,
             sample_rate=sr,
-            config={"loudness": {"targetLufs": target_lufs, "ceilingDb": ceiling_db}},
+            overrides={"loudness": {"targetLufs": target_lufs, "ceilingDb": ceiling_db}},
         )
         return [
             simple.loudness_target_limited,
@@ -765,8 +765,8 @@ def test_clean_input_reports_no_non_finite_substitution() -> None:
         libsonare.mastering_pair_process(
             "match.abCrossfade", samples, other, sample_rate=sr, params={"mix": 0.5}
         ),
-        libsonare.mastering_chain(samples, sample_rate=sr, config=config),
-        libsonare.mastering_chain_stereo(samples, other, sample_rate=sr, config=config),
+        libsonare.master_audio(samples, sample_rate=sr, overrides=config),
+        libsonare.master_audio_stereo(samples, other, sample_rate=sr, overrides=config),
         libsonare.master_audio(samples, sample_rate=sr, preset="pop"),
         libsonare.master_audio_stereo(samples, other, sample_rate=sr, preset="pop"),
     ]
@@ -776,34 +776,13 @@ def test_clean_input_reports_no_non_finite_substitution() -> None:
         assert isinstance(result.non_finite_substitution_count, int)
 
 
-def test_master_audio_refuses_a_call_with_neither_preset_nor_overrides() -> None:
-    """The caller chooses the chain; mastering with nothing chosen is refused, not a no-op."""
+def test_master_audio_runs_explicit_overrides_without_a_preset() -> None:
+    """With no preset, an explicit overrides mapping is the chain that runs."""
     import libsonare
 
     sr = 22050
     tone = np.sin(2 * np.pi * 220 * np.arange(sr // 4) / sr).astype(np.float32) * 0.1
-    for call in (
-        lambda: libsonare.master_audio(tone, sr),
-        lambda: libsonare.master_audio_stereo(tone, tone, sr),
-        lambda: libsonare.Audio.from_buffer(tone, sr).master_audio(),
-    ):
-        with pytest.raises(libsonare.SonareValueError, match="give a preset or overrides"):
-            call()
-
-
-def test_master_audio_runs_explicit_overrides_as_the_whole_chain() -> None:
-    """With no preset, an explicit overrides mapping is the chain, even an empty one."""
-    import libsonare
-
-    sr = 22050
-    tone = np.sin(2 * np.pi * 220 * np.arange(sr // 4) / sr).astype(np.float32) * 0.1
-    np.testing.assert_array_equal(libsonare.master_audio(tone, sr, overrides={}).samples, tone)
-    pair = libsonare.master_audio_stereo(tone, tone, sr, overrides={})
-    np.testing.assert_array_equal(pair.left, tone)
-    np.testing.assert_array_equal(pair.right, tone)
     chain = {"dynamics": {"compressor": {"enabled": True, "thresholdDb": -30.0}}}
-    np.testing.assert_array_equal(
-        libsonare.master_audio(tone, sr, overrides=chain).samples,
-        libsonare.mastering_chain(tone, sr, chain).samples,
-    )
-    assert not np.array_equal(libsonare.master_audio(tone, sr, overrides=chain).samples, tone)
+    result = libsonare.master_audio(tone, sr, overrides=chain)
+    assert "dynamics.compressor" in result.stages
+    assert not np.array_equal(result.samples, tone)

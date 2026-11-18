@@ -379,13 +379,7 @@ from .analyzer import (
     mastering_audio_profile_stereo as mastering_audio_profile_stereo,
 )
 from .analyzer import (
-    mastering_chain as mastering_chain,
-)
-from .analyzer import (
     mastering_chain_config_from_json as mastering_chain_config_from_json,
-)
-from .analyzer import (
-    mastering_chain_stereo as mastering_chain_stereo,
 )
 from .analyzer import mastering_dynamics_compressor as mastering_dynamics_compressor
 from .analyzer import mastering_dynamics_gate as mastering_dynamics_gate

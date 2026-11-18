@@ -32,8 +32,11 @@ def _repair(**callbacks):
 
 
 def _chain(**callbacks):
-    return libsonare.mastering_chain(
-        _material(), SR, {"dynamics": {"compressor": {"thresholdDb": -24.0}}}, **callbacks
+    return libsonare.master_audio(
+        _material(),
+        SR,
+        overrides={"dynamics": {"compressor": {"thresholdDb": -24.0}}},
+        **callbacks,
     )
 
 

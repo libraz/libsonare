@@ -458,19 +458,19 @@ def test_stft_result_types() -> None:
     assert result.power.shape == result.magnitude.shape
 
 
-def test_mastering_chain_invokes_progress_callback() -> None:
-    """mastering_chain preserves void progress callback compatibility."""
-    from libsonare import mastering_chain
+def test_master_audio_invokes_progress_callback() -> None:
+    """master_audio reports each stage to a progress callback."""
+    from libsonare import master_audio
 
     calls: list[tuple[float, str]] = []
 
     def on_progress(progress: float, stage: str) -> None:
         calls.append((progress, stage))
 
-    result = mastering_chain(
+    result = master_audio(
         samples=[0.1] * 22050,
         sample_rate=22050,
-        config={
+        overrides={
             "eq": {"tilt": {"tiltDb": 1.0}},
             "dynamics": {"compressor": {"thresholdDb": -24.0}},
         },
@@ -485,9 +485,9 @@ def test_mastering_chain_invokes_progress_callback() -> None:
     assert calls[-1][0] == pytest.approx(1.0, abs=1e-5)
 
 
-def test_mastering_chain_false_progress_result_does_not_cancel() -> None:
+def test_master_audio_false_progress_result_does_not_cancel() -> None:
     """A progress callback's boolean return value is ignored."""
-    from libsonare import mastering_chain
+    from libsonare import master_audio
 
     calls: list[float] = []
 
@@ -495,10 +495,10 @@ def test_mastering_chain_false_progress_result_does_not_cancel() -> None:
         calls.append(progress)
         return False
 
-    result = mastering_chain(
+    result = master_audio(
         samples=[0.1] * 22050,
         sample_rate=22050,
-        config={
+        overrides={
             "eq": {"tilt": {"tiltDb": 1.0}},
             "dynamics": {"compressor": {"thresholdDb": -24.0}},
         },
@@ -509,16 +509,16 @@ def test_mastering_chain_false_progress_result_does_not_cancel() -> None:
     assert result.samples.size > 0
 
 
-def test_mastering_chain_cancel_callable_cancels_without_a_result() -> None:
+def test_master_audio_cancel_callable_cancels_without_a_result() -> None:
     """The keyword-only cancellation callback is forwarded to the C ABI."""
-    from libsonare import SonareError, mastering_chain
+    from libsonare import SonareError, master_audio
 
     result = None
     with pytest.raises(SonareError) as exc:
-        result = mastering_chain(
+        result = master_audio(
             samples=[0.1] * 22050,
             sample_rate=22050,
-            config={"eq": {"tilt": {"tiltDb": 1.0}}},
+            overrides={"eq": {"tilt": {"tiltDb": 1.0}}},
             cancel=lambda: True,
         )
 
@@ -536,18 +536,17 @@ def test_remaining_mastering_progress_variants_forward_cancellation(operation: s
         SonareError,
         master_audio,
         master_audio_stereo,
-        mastering_chain_stereo,
     )
 
     samples = [0.1] * 22050
     result = None
     with pytest.raises(SonareError) as exc:
         if operation == "chain-stereo":
-            result = mastering_chain_stereo(
+            result = master_audio_stereo(
                 samples,
                 samples,
                 sample_rate=22050,
-                config={"eq": {"tilt": {"tiltDb": 1.0}}},
+                overrides={"eq": {"tilt": {"tiltDb": 1.0}}},
                 cancel=lambda: True,
             )
         elif operation == "preset-mono":
@@ -561,14 +560,14 @@ def test_remaining_mastering_progress_variants_forward_cancellation(operation: s
     assert result is None
 
 
-def test_mastering_chain_reads_the_nested_config() -> None:
+def test_master_audio_reads_the_nested_config() -> None:
     """The nested config selects the stages it names."""
-    from libsonare import mastering_chain
+    from libsonare import master_audio
 
-    result = mastering_chain(
+    result = master_audio(
         samples=[0.1] * 22050,
         sample_rate=22050,
-        config={
+        overrides={
             "eq": {"tilt": {"tiltDb": 1.0}},
             "dynamics": {"compressor": {"thresholdDb": -24.0}},
         },
@@ -578,7 +577,9 @@ def test_mastering_chain_reads_the_nested_config() -> None:
 
 
 _DOTTED_KEY_CALLS = {
-    "mastering_chain": lambda c: libsonare.mastering_chain([0.1] * 2205, 22050, c),
+    "master_audio_overrides_only": lambda c: libsonare.master_audio(
+        [0.1] * 2205, 22050, overrides=c
+    ),
     "master_audio": lambda c: libsonare.master_audio(
         [0.1] * 2205, 22050, preset="pop", overrides=c
     ),
@@ -586,8 +587,8 @@ _DOTTED_KEY_CALLS = {
     "StreamingMasteringChain": lambda c: libsonare.StreamingMasteringChain(
         c, sample_rate=22050, num_channels=1
     ),
-    "mastering_chain_stereo": lambda c: libsonare.mastering_chain_stereo(
-        [0.1] * 2205, [0.1] * 2205, 22050, c
+    "master_audio_stereo_overrides_only": lambda c: libsonare.master_audio_stereo(
+        [0.1] * 2205, [0.1] * 2205, 22050, overrides=c
     ),
     "master_audio_stereo": lambda c: libsonare.master_audio_stereo(
         [0.1] * 2205, [0.1] * 2205, 22050, preset="pop", overrides=c
@@ -610,10 +611,10 @@ def test_a_dotted_chain_key_is_refused_by_name(name: str) -> None:
 
 def test_color_saturation_stages_engage_only_when_meaningful() -> None:
     """Tape/exciter must not auto-engage on a zero-valued config (no coloration)."""
-    from libsonare import mastering_chain
+    from libsonare import master_audio
 
     def stages_for(config: dict) -> list[str]:
-        return mastering_chain(samples=[0.1] * 22050, sample_rate=22050, config=config).stages
+        return master_audio(samples=[0.1] * 22050, sample_rate=22050, overrides=config).stages
 
     # A zero-amount exciter / zero-drive tape is a no-op and stays bypassed.
     assert "saturation.exciter" not in stages_for({"saturation": {"exciter": {"amount": 0.0}}})

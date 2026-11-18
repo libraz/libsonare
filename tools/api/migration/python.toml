@@ -996,22 +996,6 @@ test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_
 
 [[entry]]
 kind = "option"
-old = "mastering_chain(sample_rate)"
-changed = "sample_rate is required (1.x defaulted to 22050)"
-domain = "mastering"
-rule = "sample-rate-required"
-test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
-
-[[entry]]
-kind = "option"
-old = "mastering_chain_stereo(sample_rate)"
-changed = "sample_rate is required (1.x defaulted to 22050)"
-domain = "mastering"
-rule = "sample-rate-required"
-test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
-
-[[entry]]
-kind = "option"
 old = "mix_stereo(sample_rate)"
 changed = "sample_rate is required (1.x defaulted to 48000)"
 domain = "mastering"
@@ -7007,7 +6991,7 @@ old = "master_audio"
 changed = "preset, overrides and on_progress are keyword-only; preset defaults to None (was \"pop\"), which runs overrides as the whole chain (overrides={} returns the input); neither given raises SonareValueError"
 domain = "mastering"
 rule = "one-input-form"
-test = "bindings/python/tests/test_analyzer_mastering_mixing.py::test_master_audio_refuses_a_call_with_neither_preset_nor_overrides"
+test = "bindings/python/tests/test_core_validation_refusals.py::test_master_audio_refuses"
 
 [[entry]]
 kind = "function"
@@ -7015,7 +6999,7 @@ old = "master_audio_stereo"
 changed = "preset, overrides and on_progress are keyword-only; preset defaults to None (was \"pop\"), which runs overrides as the whole chain (overrides={} returns the input); neither given raises SonareValueError"
 domain = "mastering"
 rule = "one-input-form"
-test = "bindings/python/tests/test_analyzer_mastering_mixing.py::test_master_audio_refuses_a_call_with_neither_preset_nor_overrides"
+test = "bindings/python/tests/test_core_validation_refusals.py::test_master_audio_refuses"
 
 [[entry]]
 kind = "method"
@@ -7023,7 +7007,7 @@ old = "Audio.master_audio"
 changed = "preset, overrides and on_progress are keyword-only; preset defaults to None (was \"pop\"), which runs overrides as the whole chain (overrides={} returns the input); neither given raises SonareValueError"
 domain = "core"
 rule = "one-input-form"
-test = "bindings/python/tests/test_analyzer_mastering_mixing.py::test_master_audio_refuses_a_call_with_neither_preset_nor_overrides"
+test = "bindings/python/tests/test_core_validation_refusals.py::test_master_audio_refuses"
 
 [[entry]]
 kind = "option"
@@ -7048,6 +7032,27 @@ changed = "target_db is keyword-only and defaults to None, the default of the ne
 domain = "core"
 rule = "one-input-form"
 test = "bindings/python/tests/test_normalize_stereo.py::test_an_omitted_target_is_the_mode_default"
+
+[[entry]]
+kind = "function"
+old = "mastering_chain"
+removed = "call master_audio(samples, sample_rate, overrides=config) with no preset; overrides={} returns the input"
+domain = "mastering"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "function"
+old = "mastering_chain_stereo"
+removed = "call master_audio_stereo(left, right, sample_rate, overrides=config) with no preset; overrides={} returns the input"
+domain = "mastering"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "method"
+old = "Audio.mastering_chain"
+removed = "call the method Audio.master_audio(overrides=config) with no preset; overrides={} returns the input"
+domain = "core"
+rule = "one-entry-per-operation"
 
 [[entry]]
 kind = "function"
@@ -7084,22 +7089,6 @@ test = "bindings/python/tests/test_analyzer_streaming_mastering.py::test_a_dotte
 [[entry]]
 kind = "option"
 old = "master_audio_stereo(overrides)"
-changed = "takes the nested chain config only; a dotted key such as \"eq.tilt.tiltDb\" raises SonareValueError"
-domain = "mastering"
-rule = "typed-results"
-test = "bindings/python/tests/test_analyzer_streaming_mastering.py::test_a_dotted_chain_key_is_refused_by_name"
-
-[[entry]]
-kind = "option"
-old = "mastering_chain(config)"
-changed = "takes the nested chain config only; a dotted key such as \"eq.tilt.tiltDb\" raises SonareValueError"
-domain = "mastering"
-rule = "typed-results"
-test = "bindings/python/tests/test_analyzer_streaming_mastering.py::test_a_dotted_chain_key_is_refused_by_name"
-
-[[entry]]
-kind = "option"
-old = "mastering_chain_stereo(config)"
 changed = "takes the nested chain config only; a dotted key such as \"eq.tilt.tiltDb\" raises SonareValueError"
 domain = "mastering"
 rule = "typed-results"

@@ -1349,34 +1349,6 @@ def mastering_process_stereo(
     sample_rate: int,
     params: MasteringSoloParams | None = None,
 ) -> MasteringStereoResult: ...
-def mastering_chain(
-    samples: FloatSamples,
-    sample_rate: int,
-    config: MasteringChainConfig | None = None,
-    on_progress: ProgressCallback | None = None,
-    *,
-    cancel: CancelCallback | None = None,
-) -> MasteringChainResult:
-    """Run the mastering chain with a nested or dotted-key ``config``.
-
-    A list value flattens as ``<path>.<index>``, so
-    ``{"dynamics": {"multibandComp": {"crossover": {"cutoffsHz": [200, 2000, 8000]},
-    "bands": [{"ratio": 2.0}, ...]}}}`` carries an arbitrary-band multiband
-    compressor: ``cutoffsHz`` replaces the cutoff list (band count is its length
-    plus one) and a band field left out keeps the base or default value. Do not
-    combine it with the ``lowCutoffHz`` / ``cutoff<i>Hz`` spellings in one call.
-    An empty list has no flat spelling and raises ``SonareValueError``.
-    """
-
-def mastering_chain_stereo(
-    left: FloatSamples,
-    right: FloatSamples,
-    sample_rate: int,
-    config: MasteringChainConfig | None = None,
-    on_progress: ProgressCallback | None = None,
-    *,
-    cancel: CancelCallback | None = None,
-) -> MasteringChainStereoResult: ...
 def mastering_preset_names() -> list[MasteringPreset]: ...
 def mastering_preset_params(preset: MasteringPreset | str) -> MasteringChainConfig: ...
 def mastering_chain_config_from_json(document: str) -> MasteringChainConfig: ...
@@ -1566,7 +1538,18 @@ def master_audio(
     overrides: MasteringChainConfig | None = None,
     on_progress: ProgressCallback | None = None,
     cancel: CancelCallback | None = None,
-) -> MasteringChainResult: ...
+) -> MasteringChainResult:
+    """Master with a preset, a nested ``overrides`` chain document, or both.
+
+    A list value flattens as ``<path>.<index>``, so
+    ``{"dynamics": {"multibandComp": {"crossover": {"cutoffsHz": [200, 2000, 8000]},
+    "bands": [{"ratio": 2.0}, ...]}}}`` carries an arbitrary-band multiband
+    compressor: ``cutoffsHz`` replaces the cutoff list (band count is its length
+    plus one) and a band field left out keeps the base or default value. Do not
+    combine it with the ``lowCutoffHz`` / ``cutoff<i>Hz`` spellings in one call.
+    An empty list has no flat spelling and raises ``SonareValueError``.
+    """
+
 def master_audio_stereo(
     left: FloatSamples,
     right: FloatSamples,
