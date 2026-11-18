@@ -42,22 +42,38 @@ export function encodeFrameHi(frame: number): number {
 export function decodeFrame(lo: number, hi: number): number {
   return hi * SONARE_FRAME_LANE_BASE + lo;
 }
+/**
+ * Int32 words in an engine ring header. Telemetry rings lay them out as
+ * `[writeIndex, protocolVersion, capacity, recordBytes, lost]`; command rings use slot 1 as
+ * their read cursor.
+ */
 export const SONARE_ENGINE_RING_HEADER_INTS = 5;
 
 /** Highest PPQ the public transport accepts; mirrors the core's `kMaxPublicPpq`. */
 export const SONARE_MAX_PUBLIC_PPQ = 1e12;
+/** Bytes in one telemetry record slot of the ring. */
 export const SONARE_ENGINE_TELEMETRY_RECORD_BYTES = 48;
+/**
+ * Telemetry ring protocol version, kept in header slot 1. A ring carrying another non-zero version
+ * is refused with `SonareError` code `AbiMismatch`.
+ */
 export const SONARE_ENGINE_TELEMETRY_RING_PROTOCOL_VERSION = 1;
 // Engine telemetry uses header [writeIndex, protocolVersion, capacity,
 // recordBytes, lost]. Its record area is followed by one slot-state word per
 // record and one publicationWrapped latch. Command rings continue to use
 // header slot 1 as their read cursor and have no appended overwrite metadata.
 
+/** Kind of a telemetry record: one per rendered block, or an error report. */
 export enum SonareEngineTelemetryType {
   ProcessBlock = 0,
   Error = 1,
 }
 
+/**
+ * Error ordinals of an `Error` telemetry record, matching the C ABI `SonareEngineTelemetryError`.
+ * Ordinal 19 (`InvalidCommand`) is raised by the worklet itself for a command it could not apply;
+ * the rest come from the core.
+ */
 export enum SonareEngineTelemetryError {
   None = 0,
   CommandQueueOverflow = 1,
@@ -83,27 +99,45 @@ export enum SonareEngineTelemetryError {
   ParameterBaseOverflow = 21,
 }
 
+/** One engine telemetry record as stored in the ring; mirrors the C ABI `SonareEngineTelemetry`. */
 export interface SonareEngineTelemetryRecord {
+  /** Record kind, a {@link SonareEngineTelemetryType} ordinal. */
   type: SonareEngineTelemetryType | number;
+  /** Error ordinal, a {@link SonareEngineTelemetryError}; `None` (0) on a block record. */
   error: SonareEngineTelemetryError | number;
+  /** Render frame the record refers to, in frames since the engine started rendering. */
   renderFrame: number;
+  /** Transport position at the end of the block, in samples. */
   timelineSample: number;
+  /** `timelineSample` corrected for the graph latency: the position being heard, in samples. */
   audibleTimelineSample: number;
+  /** Graph processing latency in 1/256 sample units. */
   graphLatencySamplesQ8: number;
+  /** Frames in the block for a block record; for an error record a count or id that depends on `error`. */
   value: number;
 }
 
+/** Shared-memory overwrite ring of engine telemetry records; create one with `createSonareEngineTelemetryRingBuffer`. */
 export interface SonareEngineTelemetryRingBuffer {
+  /** Backing shared memory. */
   sharedBuffer: SharedArrayBuffer;
+  /** Header words `[writeIndex, protocolVersion, capacity, recordBytes, lost]`. */
   header: Int32Array;
+  /** Record area, `capacity` slots of 48 bytes each. */
   view: DataView;
+  /** One publish-state word per record slot, guarding readers against a record still being written. */
   slotStates: Int32Array;
+  /** One-word latch set once the ring has overwritten a record that was already published. */
   publicationWrapped: Int32Array;
+  /** Number of record slots. */
   capacity: number;
 }
 
+/** Telemetry records drained from a ring and the index to resume from. */
 export interface SonareEngineTelemetryRingReadResult {
+  /** Index to pass as `readIndex` on the next read. */
   nextReadIndex: number;
+  /** Records read, oldest first. */
   telemetry: SonareEngineTelemetryRecord[];
 }
 
@@ -321,6 +355,15 @@ export function commitSonareEngineTelemetryRingWrite(
   }
 }
 
+/**
+ * Drains the records published since `readIndex`, oldest first. A reader that fell more than
+ * `capacity` records behind resumes at the oldest record still held.
+ *
+ * @param ring Ring to read.
+ * @param readIndex Index returned as `nextReadIndex` by the previous read. Default 0.
+ * @throws SonareError `InvalidFormat` for views or descriptors that do not match the ring layout,
+ * and `AbiMismatch` for a different protocol version.
+ */
 export function readSonareEngineTelemetryRingBuffer(
   ring: SonareEngineTelemetryRingBuffer,
   readIndex = 0,

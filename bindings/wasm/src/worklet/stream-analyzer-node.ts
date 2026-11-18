@@ -28,6 +28,9 @@ import { resolveStreamAnalyzerChunkFrames } from './stream-analyzer-processor.js
  * @example
  * ```ts
  * await init();
+ * const processorUrl = '/assets/stream-analyzer-worklet.js'; // the app's worklet bundle
+ * const source = context.createMediaElementSource(document.querySelector('audio') as HTMLAudioElement);
+ * const draw = (mel: unknown, nFrames: number) => console.log(mel, nFrames); // the app's renderer
  * await context.audioWorklet.addModule(processorUrl); // calls registerSonareStreamAnalyzerWorkletProcessor()
  * const analyzer = await SonareStreamAnalyzerNode.create(context, { config: { nMels: 64 } });
  * source.connect(analyzer.node);

@@ -40,8 +40,11 @@ export const SONARE_SCOPE_MAX_POINTS = 32;
  * stereo point cloud, mirroring the engine's `ScopeTelemetryRecord`.
  */
 export interface SonareWorkletScopeSnapshot {
+  /** Message discriminator, always `'scope'`. */
   type: 'scope';
+  /** Id of the scoped target: 0 master, 1..32 track lane (index + 1), 33..40 bus, 0xFFFF input monitor. */
   targetId: number;
+  /** Render frame index of the reading. */
   frame: number;
   /** Linear-band magnitudes in dB (length = the configured band count). */
   bands: Float32Array;

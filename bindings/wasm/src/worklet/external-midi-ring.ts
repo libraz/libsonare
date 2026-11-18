@@ -13,7 +13,9 @@ import {
 // External MIDI records: destination ID, render frame (low 32 bits), packed
 // MIDI-1 bytes (little-endian), byte count, render frame (high bits). SPSC
 // worklet -> main-thread ring.
+/** Int32 words in the ring header: `[writeIndex, readIndex, capacity, recordUint32s, dropped]`. */
 export const SONARE_EXTERNAL_MIDI_RING_HEADER_INTS = 5;
+/** Uint32 words in one external-MIDI record slot. */
 export const SONARE_EXTERNAL_MIDI_RING_RECORD_UINT32S = 5;
 
 export interface SonareExternalMidiRingEvent {
@@ -23,10 +25,15 @@ export interface SonareExternalMidiRingEvent {
   byteCount: number;
 }
 
+/** Shared-memory ring of external MIDI events; create one with `createSonareExternalMidiRingBuffer`. */
 export interface SonareExternalMidiRingBuffer {
+  /** Backing shared memory. */
   sharedBuffer: SharedArrayBuffer;
+  /** Header words `[writeIndex, readIndex, capacity, recordUint32s, dropped]`. */
   header: Int32Array;
+  /** Record storage, `capacity` slots of 5 Uint32 words each. */
   records: Uint32Array;
+  /** Number of record slots. */
   capacity: number;
 }
 
@@ -36,8 +43,11 @@ export interface SharedExternalMidiRingWriter {
   capacity: number;
 }
 
+/** External MIDI events drained from a ring. */
 export interface SonareExternalMidiRingReadResult {
+  /** Events read, oldest first. */
   events: SonareExternalMidiRingEvent[];
+  /** Events the writer refused (ring full or malformed event) since the ring was created; cumulative. */
   dropped: number;
 }
 

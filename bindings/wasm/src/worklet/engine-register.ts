@@ -15,6 +15,13 @@ import {
 } from './guards.js';
 import { isRecord } from './protocol.js';
 
+/**
+ * Registers the realtime-engine processor in an AudioWorkletGlobalScope. The processor initializes
+ * the WASM module itself when it is not ready and posts `{ type: 'ready' }` once it is up.
+ *
+ * @param name Processor name. Default `'sonare-realtime-engine-processor'`.
+ * @throws SonareError `NotSupported` outside an AudioWorkletGlobalScope.
+ */
 export function registerSonareRealtimeEngineWorkletProcessor(
   name = 'sonare-realtime-engine-processor',
 ): void {

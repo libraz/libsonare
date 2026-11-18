@@ -44,7 +44,9 @@ import { AUDIO_WORKLET_RENDER_QUANTUM } from './render_quantum.js';
  * are replaced with preallocated silence.
  */
 export class SonareWorkletProcessor {
+  /** Mixer sample rate in Hz. */
   readonly sampleRate: number;
+  /** Largest block the mixer renders per `process()` call, in frames. */
   readonly maxBlockSize: number;
   private mixer: Mixer;
   private realtime: MixerRealtimeBuffer;
@@ -138,6 +140,12 @@ export class SonareWorkletProcessor {
     });
   }
 
+  /**
+   * Renders one quantum: each input is one stereo strip, mixed to `outputs[0]`. Frames beyond
+   * `maxBlockSize` are zero-filled.
+   *
+   * @returns `false` once the processor is destroyed, else `true`.
+   */
   process(inputs: WorkletInput, outputs: WorkletOutput): boolean {
     if (this.closed) {
       return false;
@@ -228,6 +236,7 @@ export class SonareWorkletProcessor {
     }
   }
 
+  /** Releases the mixer; later `process()` calls return `false`. Safe to call twice. */
   destroy(): void {
     if (!this.closed) {
       this.mixer.destroy();

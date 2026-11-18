@@ -5,9 +5,13 @@ import { assertNibble } from './validation.js';
 
 /** The slice of {@link RealtimeEngine} that {@link bindWebMidi} drives. */
 export interface WebMidiEngine {
+  /** Maps a MIDI controller to an engine parameter. */
   bindMidiCc(binding: ProjectMidiCcBinding): void;
+  /** Enables the engine-owned live MIDI input source for a MIDI destination (omitted: 0). */
   setMidiInputSource(destinationId?: number): void;
+  /** Disables the engine-owned live MIDI input source. */
   clearMidiInputSource(): void;
+  /** Pushes a live note-on to the input source. `group` and `channel` are 0 to 15; `note` and `velocity` are 0 to 127; `offsetInBlockSamples` is samples into the next drained block (omitted: 0). */
   pushMidiInputNoteOn(
     group: number,
     channel: number,
@@ -15,6 +19,7 @@ export interface WebMidiEngine {
     velocity: number,
     offsetInBlockSamples?: number,
   ): void;
+  /** Pushes a live note-off to the input source. `group` and `channel` are 0 to 15; `note` is 0 to 127; `velocity` is 0 to 127 (omitted: 0); `offsetInBlockSamples` is samples into the next drained block (omitted: 0). */
   pushMidiInputNoteOff(
     group: number,
     channel: number,
@@ -22,6 +27,7 @@ export interface WebMidiEngine {
     velocity?: number,
     offsetInBlockSamples?: number,
   ): void;
+  /** Pushes a live control change to the input source. `group` and `channel` are 0 to 15; `controller` and `value` are 0 to 127; `offsetInBlockSamples` is samples into the next drained block (omitted: 0). */
   pushMidiInputCc(
     group: number,
     channel: number,
@@ -29,18 +35,21 @@ export interface WebMidiEngine {
     value: number,
     offsetInBlockSamples?: number,
   ): void;
+  /** Pushes a live pitch bend to the input source; `bend14` is unsigned 14-bit with centre 8192 (0 to 16383). Pitch-bend input is dropped when the engine lacks this method. */
   pushMidiInputPitchBend?(
     group: number,
     channel: number,
     bend14: number,
     offsetInBlockSamples?: number,
   ): void;
+  /** Pushes a live channel pressure to the input source; `pressure` is 0 to 127. Dropped when the engine lacks this method. */
   pushMidiInputChannelPressure?(
     group: number,
     channel: number,
     pressure: number,
     offsetInBlockSamples?: number,
   ): void;
+  /** Pushes a live polyphonic key pressure to the input source; `note` and `pressure` are 0 to 127. Dropped when the engine lacks this method. */
   pushMidiInputPolyPressure?(
     group: number,
     channel: number,
@@ -48,6 +57,7 @@ export interface WebMidiEngine {
     pressure: number,
     offsetInBlockSamples?: number,
   ): void;
+  /** Pushes one raw UMP message (1 to 4 words) to the input source. When the engine lacks this method, UMP input is lowered to the individual push methods. */
   pushMidiInputUmp?(words: Uint32Array | readonly number[], offsetInBlockSamples?: number): void;
 }
 
@@ -102,13 +112,19 @@ interface NavigatorWithMidi {
   }) => Promise<MidiAccessLike>;
 }
 
+/** Snapshot of one Web MIDI input port. */
 export interface WebMidiInputInfo {
+  /** Browser-assigned port id; pass it in `inputIds` to restrict binding. */
   id: string;
+  /** Port name; empty when the browser reports none. */
   name: string;
+  /** Port manufacturer; empty when the browser reports none. */
   manufacturer: string;
+  /** Port connection state; ports reported without a state read as `'connected'`. */
   state: MidiInputState;
 }
 
+/** Options for {@link bindWebMidi}. */
 export interface BindWebMidiOptions {
   /** Realtime-engine MIDI destination receiving the live input source. Default `0`. */
   destinationId?: number;
@@ -132,9 +148,13 @@ export interface BindWebMidiOptions {
   onInputsChanged?: (inputs: WebMidiInputInfo[]) => void;
 }
 
+/** Handle returned by {@link bindWebMidi}; call `close` to release the inputs. */
 export interface WebMidiBinding {
+  /** The browser's MIDIAccess object. */
   access: MidiAccessLike;
+  /** Current snapshot of every input port, bound or not. */
   inputs(): WebMidiInputInfo[];
+  /** Stops listening on every bound input and for hot-plug changes, and clears the engine's MIDI input source unless a newer binding has replaced it. Safe to call more than once. */
   close(): void;
 }
 
@@ -157,12 +177,21 @@ function midiInputSourceOwner(engine: WebMidiEngine): OwnerEpoch {
   return owner;
 }
 
+/** Whether the environment exposes `navigator.requestMIDIAccess`. */
 export function isWebMidiAvailable(): boolean {
   return (
     typeof (globalThis.navigator as NavigatorWithMidi | undefined)?.requestMIDIAccess === 'function'
   );
 }
 
+/**
+ * Routes Web MIDI input ports into a realtime engine's live MIDI input source and tracks hot-plugged
+ * ports until the binding is closed. Only one binding per engine owns the input source; a later one
+ * replaces it.
+ *
+ * @throws SonareError `NotSupported` when Web MIDI is unavailable.
+ * @throws RangeError when `options.group` is outside 0 to 15.
+ */
 export async function bindWebMidi(
   engine: WebMidiEngine,
   options: BindWebMidiOptions = {},

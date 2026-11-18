@@ -151,16 +151,36 @@ function workletBlockSize(maxBlockSize: number | undefined): number {
   return resolved;
 }
 
+/**
+ * AudioWorkletNode wrapper that hosts a realtime engine on the audio thread.
+ *
+ * Commands travel over a SharedArrayBuffer ring in `'sab'` mode and over the node's message port in
+ * `'postMessage'` mode; reads that need the worklet's answer return a `Promise`. Create it with
+ * {@link SonareRealtimeEngineNode.create}; release it with {@link destroy}. After `destroy`, command
+ * methods throw `SonareError` with `ErrorCode.InvalidState`.
+ */
 export class SonareRealtimeEngineNode {
+  /** The underlying AudioWorkletNode; connect it into the audio graph. */
   readonly node: AudioWorkletNode;
+  /** Transport mode and feature support detected when the node was created. */
   readonly capabilities: SonareRealtimeEngineNodeCapabilities;
   /** @internal */
   readonly commandRing?: SonareEngineCommandRingBuffer;
+  /** Telemetry ring drained by {@link pollTelemetry}; present only in `'sab'` mode. */
   readonly telemetryRing?: SonareEngineTelemetryRingBuffer;
+  /** Meter ring drained by {@link pollMeters}; present only in `'sab'` mode. */
   readonly meterRing?: SonareMeterRingBuffer;
+  /** Scope ring drained by {@link pollScope}; present only in `'sab'` mode with `scopeIntervalFrames` above 0. */
   readonly scopeRing?: SonareScopeRingBuffer;
+  /** Paged-clip miss ring drained by `pollClipPageRequests`; present only in `'sab'` mode. */
   readonly clipPageRequestRing?: SonareClipPageRequestRingBuffer;
+  /** External-MIDI output ring drained by `pollMidiOut`; present only in `'sab'` mode. */
   readonly externalMidiRing?: SonareExternalMidiRingBuffer;
+  /**
+   * Settles when the worklet processor has reported ready (already resolved when the processor sends no
+   * ready message). Rejects if the worklet reports an error, or with `InvalidState` if the node is
+   * destroyed first.
+   */
   readonly ready: Promise<void>;
   private telemetryReadIndex = 0;
   private meterReadIndex = 0;
@@ -323,6 +343,21 @@ export class SonareRealtimeEngineNode {
     return () => this.syncErrorListeners.delete(listener);
   }
 
+  /**
+   * Registers the processor module (when `options.moduleUrl` is given) and creates the node.
+   *
+   * The node accepts commands immediately but the processor may still be starting; await
+   * {@link ready} before relying on a reply.
+   *
+   * @param context Audio context that owns the node.
+   * @param options Transport mode, block size, ring capacities and processor settings.
+   * @throws TypeError for an unknown option key or a wrong-typed option.
+   * @throws RangeError for an out-of-range option (`maxBlockSize` below 128 frames, `commandRingCapacity`
+   * above 65536, a non-integer capacity or interval).
+   * @throws SonareError `AbiMismatch` when the module's engine ABI differs from the expected one (unless
+   * `requireAbiCompatible` is `false`), and `NotSupported` when `mode: 'sab'` is requested without
+   * SharedArrayBuffer and Atomics.
+   */
   static async create(
     context: BaseAudioContext,
     options: SonareRealtimeEngineNodeOptions,
@@ -525,6 +560,13 @@ export class SonareRealtimeEngineNode {
     );
   }
 
+  /**
+   * Queues transport start. `renderFrame` is the absolute render frame to apply at; omitted: applied immediately.
+   *
+   * @returns `false` when the command ring is full; `true` once queued.
+   * @throws RangeError for a negative `renderFrame`.
+   * @throws SonareError `InvalidState` once the node is destroyed.
+   */
   play(renderFrame?: number): boolean {
     return this.sendCommand({
       type: SonareEngineCommandType.TransportPlay,
@@ -548,6 +590,13 @@ export class SonareRealtimeEngineNode {
     });
   }
 
+  /**
+   * Queues transport stop. `renderFrame` is the absolute render frame to apply at; omitted: applied immediately.
+   *
+   * @returns `false` when the command ring is full; `true` once queued.
+   * @throws RangeError for a negative `renderFrame`.
+   * @throws SonareError `InvalidState` once the node is destroyed.
+   */
   stop(renderFrame?: number): boolean {
     return this.sendCommand({
       type: SonareEngineCommandType.TransportStop,
@@ -555,6 +604,13 @@ export class SonareRealtimeEngineNode {
     });
   }
 
+  /**
+   * Queues a transport seek to `timelineSample`, a position in timeline samples. `renderFrame` is the absolute render frame to apply at; omitted: applied immediately.
+   *
+   * @returns `false` when the command ring is full or the position is not a valid sample count.
+   * @throws RangeError for a negative `renderFrame`.
+   * @throws SonareError `InvalidState` once the node is destroyed.
+   */
   seekSample(timelineSample: number, renderFrame?: number): boolean {
     return this.sendCommand({
       type: SonareEngineCommandType.TransportSeekSample,
@@ -563,6 +619,13 @@ export class SonareRealtimeEngineNode {
     });
   }
 
+  /**
+   * Queues a transport seek to `ppq`, a position in quarter notes. `renderFrame` is the absolute render frame to apply at; omitted: applied immediately.
+   *
+   * @returns `false` when the command ring is full or `ppq` is not a valid position.
+   * @throws RangeError for a negative `renderFrame`.
+   * @throws SonareError `InvalidState` once the node is destroyed.
+   */
   seekPpq(ppq: number, renderFrame?: number): boolean {
     const frame = resolveRenderFrame('seekPpq', renderFrame);
     if (!isPublicPpq(ppq) || !Number.isSafeInteger(frame)) {
@@ -637,6 +700,11 @@ export class SonareRealtimeEngineNode {
     assertHandleLive(this.epoch.closed, 'Realtime engine node');
   }
 
+  /**
+   * Asks the worklet for the capture state; the answer arrives asynchronously.
+   *
+   * @throws SonareError `InvalidState` (as a rejection) once the node is destroyed.
+   */
   requestCaptureStatus(): Promise<EngineCaptureStatus> {
     return this.sendCaptureRequest('status').then((response) => {
       if (!response.ok || !('status' in response)) {
@@ -649,6 +717,11 @@ export class SonareRealtimeEngineNode {
     });
   }
 
+  /**
+   * Asks the worklet for the audio captured so far; resolves with one `Float32Array` per channel.
+   *
+   * @throws SonareError `InvalidState` (as a rejection) once the node is destroyed.
+   */
   requestCapturedAudio(): Promise<Float32Array[]> {
     return this.sendCaptureRequest('read').then((response) => {
       if (!response.ok || !('channels' in response)) {
@@ -661,10 +734,20 @@ export class SonareRealtimeEngineNode {
     });
   }
 
+  /**
+   * Asks the worklet to discard the captured audio; resolves once it has done so.
+   *
+   * @throws SonareError `InvalidState` (as a rejection) once the node is destroyed.
+   */
   requestCaptureReset(): Promise<void> {
     return this.sendCaptureRequest('reset').then(() => undefined);
   }
 
+  /**
+   * Reads the transport from the worklet's live engine; the answer arrives asynchronously.
+   *
+   * @throws SonareError `InvalidState` (as a rejection) once the node is destroyed.
+   */
   requestTransportState(): Promise<EngineTransportState> {
     return this.sendTransportRequest().then((response) => {
       if (!response.state) {
@@ -677,6 +760,10 @@ export class SonareRealtimeEngineNode {
     });
   }
 
+  /**
+   * Drains telemetry records published since the last poll and forwards each to {@link onTelemetry}
+   * listeners. Returns an empty array outside `'sab'` mode, where telemetry arrives through the port.
+   */
   pollTelemetry(): EngineTelemetry[] {
     if (!this.telemetryRing) {
       return [];
@@ -693,6 +780,11 @@ export class SonareRealtimeEngineNode {
   // Drains any meters published into the SAB meter ring (embind SAB mode) and
   // forwards them to onMeter listeners. In postMessage mode meters arrive via
   // node.port.onmessage instead, so this is a no-op then.
+  /**
+   * Drains meter snapshots published into the meter ring since the last poll and forwards each to
+   * {@link onMeter} listeners. Returns an empty array outside `'sab'` mode, where meters arrive through
+   * the port.
+   */
   pollMeters(): SonareWorkletMeterSnapshot[] {
     if (!this.meterRing) {
       return [];
@@ -708,6 +800,11 @@ export class SonareRealtimeEngineNode {
   // Drains scope telemetry (FFT spectrum + goniometer points) published into the
   // SAB scope ring and forwards each record to onScope listeners. A no-op unless
   // the node was created with scopeIntervalFrames > 0 (embind SAB mode).
+  /**
+   * Drains scope snapshots (spectrum and goniometer points) published since the last poll and forwards
+   * each to {@link onScope} listeners. Returns an empty array unless the node was created in `'sab'`
+   * mode with `scopeIntervalFrames` above 0.
+   */
   pollScope(): SonareWorkletScopeSnapshot[] {
     if (!this.scopeRing) {
       return [];
@@ -763,6 +860,11 @@ export class SonareRealtimeEngineNode {
     return message;
   }
 
+  /**
+   * Subscribes to telemetry records, polling the ring while any listener is attached.
+   *
+   * @returns A function that removes the subscription.
+   */
   onTelemetry(callback: (telemetry: EngineTelemetry) => void): () => void {
     this.telemetryListeners.add(callback);
     this.startRingPolling();
@@ -772,6 +874,11 @@ export class SonareRealtimeEngineNode {
     };
   }
 
+  /**
+   * Subscribes to meter snapshots, from the meter ring in `'sab'` mode or the port otherwise.
+   *
+   * @returns A function that removes the subscription.
+   */
   onMeter(callback: (meter: SonareWorkletMeterSnapshot) => void): () => void {
     this.meterListeners.add(callback);
     this.startRingPolling();
@@ -781,6 +888,11 @@ export class SonareRealtimeEngineNode {
     };
   }
 
+  /**
+   * Subscribes to scope snapshots, polling the scope ring while any listener is attached.
+   *
+   * @returns A function that removes the subscription.
+   */
   onScope(callback: (scope: SonareWorkletScopeSnapshot) => void): () => void {
     this.scopeListeners.add(callback);
     this.startRingPolling();
