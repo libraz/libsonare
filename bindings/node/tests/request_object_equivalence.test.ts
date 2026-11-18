@@ -608,7 +608,7 @@ const ROWS: Row[] = [
     oneOf: [
       {
         fields: ['targetOnsetSample', 'targetOnsetSec'],
-        error: 'TypeError: noteMove: targetOnsetSample or targetOnsetSec is required',
+        error: 'TypeError: noteMove: give targetOnsetSample or targetOnsetSec',
       },
     ],
   },
@@ -1012,18 +1012,17 @@ const ROWS: Row[] = [
     name: 'griffinLim',
     fn: sonare.griffinLim,
     requestOnly: true,
-    // hopLength stays required: its 512 default exceeds half of the 512-point frame this magnitude has.
-    params: 'magnitude nFft? hopLength sampleRate nIter? momentum?',
+    params: 'magnitude nFft? hopLength? sampleRate nIter? momentum?',
     values: {
       magnitude: ST.magnitude,
       sampleRate: ALT_SR,
       nFft: 512,
-      hopLength: 128,
+      hopLength: 64,
       nIter: 4,
       momentum: 0.5,
     },
     invalid: { hopLength: 0 },
-    defaults: { nFft: 512 },
+    defaults: { nFft: 512, hopLength: 128 },
     oneOf: [
       { fields: ['sampleRate'], error: 'TypeError: griffinLim: sampleRate must be a number' },
     ],
@@ -1057,14 +1056,14 @@ const ROWS: Row[] = [
       power: MEL.power,
       sampleRate: ALT_SR,
       nFft: 512,
-      hopLength: 128,
+      hopLength: 64,
       fminHz: 50,
       fmaxHz: 8000,
       nIter: 4,
       htk: true,
     },
     invalid: { hopLength: 0 },
-    defaults: { sampleRate: 22050 },
+    defaults: { sampleRate: 22050, nFft: 2048, hopLength: 512 },
   },
   {
     name: 'mfccToMel',
@@ -1084,7 +1083,7 @@ const ROWS: Row[] = [
       nMels: 32,
       sampleRate: ALT_SR,
       nFft: 512,
-      hopLength: 128,
+      hopLength: 64,
       fminHz: 50,
       fmaxHz: 8000,
       nIter: 4,
@@ -1092,7 +1091,7 @@ const ROWS: Row[] = [
       lifter: 22,
     },
     invalid: { hopLength: 0 },
-    defaults: { sampleRate: 22050 },
+    defaults: { sampleRate: 22050, nFft: 2048, hopLength: 512 },
   },
   {
     name: 'phaseVocoder',
@@ -1668,7 +1667,7 @@ const ROWS: Row[] = [
     oneOf: [
       {
         fields: ['preset', 'overrides'],
-        error: 'TypeError: masterAudio: give a preset or overrides',
+        error: 'TypeError: masterAudio: give preset or overrides',
       },
     ],
   },
@@ -1685,7 +1684,7 @@ const ROWS: Row[] = [
     oneOf: [
       {
         fields: ['preset', 'overrides'],
-        error: 'TypeError: masterAudioAsync: give a preset or overrides',
+        error: 'TypeError: masterAudioAsync: give preset or overrides',
       },
     ],
   },
@@ -1706,7 +1705,7 @@ const ROWS: Row[] = [
     oneOf: [
       {
         fields: ['preset', 'overrides'],
-        error: 'TypeError: masterAudioStereo: give a preset or overrides',
+        error: 'TypeError: masterAudioStereo: give preset or overrides',
       },
     ],
   },
@@ -1726,7 +1725,7 @@ const ROWS: Row[] = [
     oneOf: [
       {
         fields: ['preset', 'overrides'],
-        error: 'TypeError: masterAudioStereoAsync: give a preset or overrides',
+        error: 'TypeError: masterAudioStereoAsync: give preset or overrides',
       },
     ],
   },
@@ -1967,7 +1966,7 @@ const ROWS: Row[] = [
       },
       {
         fields: ['voicedProb', 'voiced'],
-        error: 'TypeError: extractNotes: one of voiced or voicedProb is required',
+        error: 'TypeError: extractNotes: give voiced or voicedProb',
       },
     ],
   },
@@ -1986,13 +1985,13 @@ const ROWS: Row[] = [
       { fields: ['frameRate'], error: 'TypeError: splitNote: frameRate must be a number' },
       {
         fields: ['voicedProb', 'voiced'],
-        error: 'TypeError: splitNote: one of voiced or voicedProb is required',
+        error: 'TypeError: splitNote: give voiced or voicedProb',
       },
       { fields: ['notes'], error: 'TypeError: splitNote: notes must be an array' },
       { fields: ['index'], error: 'TypeError: splitNote: index must be a number' },
       {
         fields: ['frame', 'frameSec'],
-        error: 'TypeError: splitNote: frame or frameSec is required',
+        error: 'TypeError: splitNote: give frame or frameSec',
       },
     ],
   },
@@ -2011,7 +2010,7 @@ const ROWS: Row[] = [
       { fields: ['frameRate'], error: 'TypeError: mergeNotes: frameRate must be a number' },
       {
         fields: ['voicedProb', 'voiced'],
-        error: 'TypeError: mergeNotes: one of voiced or voicedProb is required',
+        error: 'TypeError: mergeNotes: give voiced or voicedProb',
       },
       { fields: ['notes'], error: 'TypeError: mergeNotes: notes must be an array' },
       { fields: ['first'], error: 'TypeError: mergeNotes: first must be a number' },

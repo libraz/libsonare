@@ -12,6 +12,7 @@ import type { ProgressCallback } from './sonare.js';
 import type { OptionsOf, ValidateOptions } from './validation.js';
 import {
   assertAudioInput,
+  assertSampleRate,
   assertString,
   requestObject,
   requestOnly,
@@ -427,7 +428,7 @@ export function masterAudio(...args: unknown[]): MasteringChainResult {
     (r.preset === undefined || r.preset === null) &&
     (r.overrides === undefined || r.overrides === null)
   ) {
-    throw new TypeError('masterAudio: give a preset or overrides');
+    throw new TypeError('masterAudio: give preset or overrides');
   }
   const overrides = chainConfigJson('masterAudio', 'overrides', r.overrides);
   const preset = r.preset ?? null;
@@ -463,9 +464,7 @@ export function masterAudioStereo(request: MasterAudioStereoRequest): MasteringC
   if (r.preset !== undefined && r.preset !== null) {
     assertString('masterAudioStereo', r.preset, 'preset');
   }
-  if (r.sampleRate === undefined || r.sampleRate === null) {
-    throw new TypeError('masterAudioStereo: sampleRate is required');
-  }
+  assertSampleRate('masterAudioStereo', r.sampleRate);
   assertAudioInput('masterAudioStereo', r.left, r.sampleRate, r, 'left');
   assertAudioInput('masterAudioStereo', r.right, r.sampleRate, r, 'right');
   if (r.left.length !== r.right.length) {
@@ -475,7 +474,7 @@ export function masterAudioStereo(request: MasterAudioStereoRequest): MasteringC
     (r.preset === undefined || r.preset === null) &&
     (r.overrides === undefined || r.overrides === null)
   ) {
-    throw new TypeError('masterAudioStereo: give a preset or overrides');
+    throw new TypeError('masterAudioStereo: give preset or overrides');
   }
   const overrides = chainConfigJson('masterAudioStereo', 'overrides', r.overrides);
   const preset = r.preset ?? null;

@@ -51,7 +51,7 @@ function assertNoteTrack(
   }
   assertFiniteScalar(fnName, request.frameRate, 'frameRate');
   if (request.voiced == null && request.voicedProb == null) {
-    throw new TypeError(`${fnName}: one of voiced or voicedProb is required`);
+    throw new TypeError(`${fnName}: give voiced or voicedProb`);
   }
   const voicedF32 = request.voiced == null ? undefined : toVoicedFloat32(fnName, request.voiced);
   assertPitchTrackLengths(fnName, request.f0Hz, request.voiced, request.voicedProb);
@@ -321,7 +321,7 @@ export function noteMove(...args: unknown[]): Float32Array {
     'targetOnsetSec',
   );
   if (target === undefined) {
-    throw new TypeError('noteMove: targetOnsetSample or targetOnsetSec is required');
+    throw new TypeError('noteMove: give targetOnsetSample or targetOnsetSec');
   }
   return requireModule().noteMove(
     request.samples,
@@ -628,10 +628,10 @@ export function splitNote(...args: unknown[]): NoteObject[] {
   const hasFrame = request.frame !== undefined && request.frame !== null;
   const hasFrameSec = request.frameSec !== undefined && request.frameSec !== null;
   if (!hasFrame && !hasFrameSec) {
-    throw new TypeError('splitNote: frame or frameSec is required');
+    throw new TypeError('splitNote: give frame or frameSec');
   }
   if (hasFrame && hasFrameSec) {
-    throw new RangeError('splitNote: give exactly one of frame or frameSec');
+    throw new RangeError('splitNote: give frame or frameSec, not both');
   }
   assertFloatValue(
     'splitNote',

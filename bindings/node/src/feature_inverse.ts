@@ -61,7 +61,7 @@ export interface MelToStftRequest {
 
 /** Request for {@link melToAudio}. */
 export interface MelToAudioRequest extends MelToStftRequest {
-  /** Hop length in samples. Default `512`. */
+  /** Hop length in samples. Default `nFft / 4`, rounded down. */
   hopLength?: number;
   /** Griffin-Lim iterations. Default 32. */
   nIter?: number;
@@ -75,7 +75,7 @@ export interface GriffinLimRequest {
   sampleRate: number;
   /** FFT size the magnitude came from. Omitted, it is inferred as `(rows - 1) * 2`; a size that disagrees with the bin count is a `RangeError`. */
   nFft?: number;
-  /** Hop length in samples. Default `512`. */
+  /** Hop length in samples. Default `nFft / 4`, rounded down. */
   hopLength?: number;
   /** Griffin-Lim iterations. Default 32. */
   nIter?: number;
@@ -103,7 +103,7 @@ export interface MfccToAudioRequest extends MfccToMelRequest {
   sampleRate?: number;
   /** FFT size in samples. Default `2048`. */
   nFft?: number;
-  /** Hop length in samples. Default `512`. */
+  /** Hop length in samples. Default `nFft / 4`, rounded down. */
   hopLength?: number;
   /** Lower mel band edge in Hz. Default `0`. */
   fminHz?: number;
@@ -267,7 +267,12 @@ export function melToAudio(...args: unknown[]): Float32Array {
   // Positivity only, as melToStft: the geometry rule this reconstruction carries
   // is that all three are positive.
   const nFft = resolvePositiveIntegerOption('melToAudio', 'nFft', r.nFft, 2048);
-  const hopLength = resolvePositiveIntegerOption('melToAudio', 'hopLength', r.hopLength, 512);
+  const hopLength = resolvePositiveIntegerOption(
+    'melToAudio',
+    'hopLength',
+    r.hopLength,
+    inverseHopDefault(nFft),
+  );
   const nIter = resolveIntegerOption('melToAudio', 'nIter', r.nIter, 32);
   const fminHz = r.fminHz ?? 0;
   const fmaxHz = r.fmaxHz ?? 0;
@@ -290,6 +295,11 @@ export function melToAudio(...args: unknown[]): Float32Array {
   );
 }
 
+/** The hop an inverse takes when none is given: a quarter of the frame, never below one sample. */
+function inverseHopDefault(nFft: number): number {
+  return Math.max(1, Math.floor(nFft / 4));
+}
+
 /** A Griffin-Lim magnitude has `nFft / 2 + 1` rows, so an explicit size must agree with them. */
 function assertGriffinLimFftSize(nBins: number, nFft: number): void {
   if (nFft !== (nBins - 1) * 2) {
@@ -309,7 +319,12 @@ export function griffinLim(...args: unknown[]): Float32Array {
   const nBins = r.magnitude.rows;
   const nFft = resolvePositiveIntegerOption('griffinLim', 'nFft', r.nFft, (nBins - 1) * 2);
   assertGriffinLimFftSize(nBins, nFft);
-  const hopLength = resolvePositiveIntegerOption('griffinLim', 'hopLength', r.hopLength, 512);
+  const hopLength = resolvePositiveIntegerOption(
+    'griffinLim',
+    'hopLength',
+    r.hopLength,
+    inverseHopDefault(nFft),
+  );
   const nIter = resolvePositiveIntegerOption('griffinLim', 'nIter', r.nIter, 32);
   return addon.griffinLim(
     r.magnitude.data,
@@ -348,7 +363,12 @@ export function mfccToAudio(...args: unknown[]): Float32Array {
   // Positivity only, as melToAudio: the same reconstruction behind one more
   // inverse transform, under the same geometry rule.
   const nFft = resolvePositiveIntegerOption('mfccToAudio', 'nFft', r.nFft, 2048);
-  const hopLength = resolvePositiveIntegerOption('mfccToAudio', 'hopLength', r.hopLength, 512);
+  const hopLength = resolvePositiveIntegerOption(
+    'mfccToAudio',
+    'hopLength',
+    r.hopLength,
+    inverseHopDefault(nFft),
+  );
   const nIter = resolveIntegerOption('mfccToAudio', 'nIter', r.nIter, 32);
   const fminHz = r.fminHz ?? 0;
   const fmaxHz = r.fmaxHz ?? 0;

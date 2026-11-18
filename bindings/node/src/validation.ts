@@ -872,9 +872,6 @@ export function sampleOneShot<R extends SampleRequest>(
   if (plainObject(first)) {
     assertNoExtraArguments(fnName, args, 1);
     assertKnownRequestKeys(fnName, first);
-    if (first.sampleRate === undefined || first.sampleRate === null) {
-      throw new TypeError(`${fnName}: sampleRate is required`);
-    }
     assertSampleRate(fnName, first.sampleRate);
     return first as unknown as R;
   }

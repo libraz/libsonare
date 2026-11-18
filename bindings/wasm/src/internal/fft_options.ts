@@ -44,6 +44,20 @@ export function resolveEffectFftOptions(
   return resolveWithMinimum(fnName, nFft, hopLength, 4);
 }
 
+/**
+ * The same pair for a Griffin-Lim inverse: the size is resolved first and an
+ * omitted hop is a quarter of it, never below one sample.
+ */
+export function resolveInverseFftOptions(
+  fnName: string,
+  nFft: unknown,
+  hopLength: unknown,
+): { nFft: number; hopLength: number } {
+  assertIntegerValue(fnName, nFft, 'nFft');
+  const hop = hopLength === undefined ? Math.max(1, Math.floor(nFft / 4)) : hopLength;
+  return resolveWithMinimum(fnName, nFft, hop, 2);
+}
+
 function resolveWithMinimum(
   fnName: string,
   nFft: unknown,

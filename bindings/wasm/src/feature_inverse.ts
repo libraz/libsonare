@@ -5,7 +5,7 @@
 
 import type { GuardedOptions } from './internal/feature_validation.js';
 import { validatePositiveIntegers } from './internal/feature_validation.js';
-import { resolveFftOptions } from './internal/fft_options.js';
+import { resolveInverseFftOptions } from './internal/fft_options.js';
 import { getSonareModule } from './module_state.js';
 import type { Matrix2D } from './public_types.js';
 import type { OptionsOf } from './validation.js';
@@ -51,7 +51,7 @@ export interface MelToAudioRequest extends GuardedOptions {
   sampleRate?: number;
   /** FFT size. Default 2048. */
   nFft?: number;
-  /** Hop in samples. Default 512. */
+  /** Hop length in samples. Default `nFft / 4`, rounded down. */
   hopLength?: number;
   /** Lower mel band edge in Hz. Default 0. */
   fminHz?: number;
@@ -85,7 +85,7 @@ export interface MfccToAudioRequest extends GuardedOptions {
   sampleRate?: number;
   /** FFT size. Default 2048. */
   nFft?: number;
-  /** Hop in samples. Default 512. */
+  /** Hop length in samples. Default `nFft / 4`, rounded down. */
   hopLength?: number;
   /** Lower mel band edge in Hz. Default 0. */
   fminHz?: number;
@@ -105,7 +105,7 @@ export interface GriffinLimRequest extends GuardedOptions {
   sampleRate: number;
   /** FFT size the magnitude came from. Omitted, it is inferred as `(rows - 1) * 2`; a size that disagrees with the bin count is a `RangeError`. */
   nFft?: number;
-  /** Hop in samples. Default 512. */
+  /** Hop length in samples. Default `nFft / 4`, rounded down. */
   hopLength?: number;
   /** Iterations. Default 32. */
   nIter?: number;
@@ -162,7 +162,7 @@ export function melToAudio(...args: unknown[]): Float32Array {
   const sampleRate = r.sampleRate ?? 22050;
   assertSampleRate('melToAudio', sampleRate);
   const power = assertMatrix2D('melToAudio', r.power, 'power', r.validate !== false);
-  const fft = resolveFftOptions('melToAudio', r.nFft, r.hopLength);
+  const fft = resolveInverseFftOptions('melToAudio', r.nFft ?? 2048, r.hopLength);
   const nIter = r.nIter ?? 32;
   assertInt32('melToAudio', nIter, 'nIter');
   const fminHz = r.fminHz ?? 0;
@@ -202,7 +202,11 @@ export function griffinLim(...args: unknown[]): Float32Array {
   const sampleRate = r.sampleRate;
   assertSampleRate('griffinLim', sampleRate);
   const magnitude = assertMatrix2D('griffinLim', r.magnitude, 'magnitude', r.validate !== false);
-  const fft = resolveFftOptions('griffinLim', r.nFft ?? (magnitude.rows - 1) * 2, r.hopLength);
+  const fft = resolveInverseFftOptions(
+    'griffinLim',
+    r.nFft ?? (magnitude.rows - 1) * 2,
+    r.hopLength,
+  );
   assertGriffinLimFftSize(magnitude.rows, fft.nFft);
   const nIter = r.nIter ?? 32;
   validatePositiveIntegers('griffinLim', { nIter });
@@ -262,7 +266,7 @@ export function mfccToAudio(...args: unknown[]): Float32Array {
     'coefficients',
     r.validate !== false,
   );
-  const fft = resolveFftOptions('mfccToAudio', r.nFft, r.hopLength);
+  const fft = resolveInverseFftOptions('mfccToAudio', r.nFft ?? 2048, r.hopLength);
   const nMels = r.nMels ?? 128;
   const nIter = r.nIter ?? 32;
   assertInt32('mfccToAudio', nMels, 'nMels');

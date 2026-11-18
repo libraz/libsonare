@@ -758,7 +758,11 @@ describe('async entry points reject instead of throwing synchronously', () => {
       () => masterAudioAsync(undefined as never),
       /samples must be a Float32Array/,
     ],
-    ['masterAudioAsync({})', () => masterAudioAsync({} as never), /sampleRate is required/],
+    [
+      'masterAudioAsync({})',
+      () => masterAudioAsync({} as never),
+      /masterAudioAsync: sampleRate must be a number/,
+    ],
     [
       'masterAudioAsync without samples',
       () => masterAudioAsync({ sampleRate: 22050 } as never),
@@ -779,7 +783,7 @@ describe('async entry points reject instead of throwing synchronously', () => {
           preset: 'pop',
           overrides: badOverrides,
         }),
-      /must be a number or boolean/,
+      /^loudness\.targetLufs is a string, but takes no token$/,
     ],
     [
       'masterAudioStereoAsync with a non-numeric override leaf',
@@ -791,13 +795,13 @@ describe('async entry points reject instead of throwing synchronously', () => {
           preset: 'pop',
           overrides: badOverrides,
         }),
-      /must be a number or boolean/,
+      /^loudness\.targetLufs is a string, but takes no token$/,
     ],
     [
       'masterAudioAsync (positional) with a non-numeric override leaf',
       () =>
         masterAudioAsync(new Float32Array(1024), 22050, { preset: 'pop', overrides: badOverrides }),
-      /must be a number or boolean/,
+      /^loudness\.targetLufs is a string, but takes no token$/,
     ],
     [
       'masterAudioStereoAsync refuses a positional call',

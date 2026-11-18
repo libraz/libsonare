@@ -45,7 +45,7 @@ export const ROWS: Row[] = [
     oneOf: [
       {
         fields: ['targetOnsetSample', 'targetOnsetSec'],
-        error: 'TypeError: noteMove: targetOnsetSample or targetOnsetSec is required',
+        error: 'TypeError: noteMove: give targetOnsetSample or targetOnsetSec',
       },
     ],
   },
@@ -491,7 +491,7 @@ export const ROWS: Row[] = [
     },
     invalid: { frame: 0 },
     oneOf: [
-      { fields: ['frame'], error: 'TypeError: splitNote: frame or frameSec is required' },
+      { fields: ['frame'], error: 'TypeError: splitNote: give frame or frameSec' },
       { fields: ['notes'], error: 'TypeError: splitNote: notes must be an array' },
       { fields: ['f0Hz'], error: 'TypeError: splitNote: f0Hz must be a Float32Array' },
       { fields: ['index'], error: 'TypeError: splitNote: index must be a number' },

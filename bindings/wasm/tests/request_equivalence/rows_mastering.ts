@@ -35,7 +35,7 @@ export const ROWS: Row[] = [
     oneOf: [
       {
         fields: ['preset', 'overrides'],
-        error: 'TypeError: masterAudio: give a preset or overrides',
+        error: 'TypeError: masterAudio: give preset or overrides',
       },
     ],
   },
@@ -56,7 +56,7 @@ export const ROWS: Row[] = [
     oneOf: [
       {
         fields: ['preset', 'overrides'],
-        error: 'TypeError: masterAudioStereo: give a preset or overrides',
+        error: 'TypeError: masterAudioStereo: give preset or overrides',
       },
     ],
   },

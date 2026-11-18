@@ -476,6 +476,35 @@ describe('analysis features: inverse transforms', () => {
     );
   });
 
+  it('derives an omitted inverse hop as a quarter of nFft', () => {
+    const nFft = 512;
+    const mel = melSpectrogram(samples, sr, { nMels: 20, nFft });
+    const cepstrum = mfcc(samples, sr, { nMfcc: 13, nMels: 20, nFft });
+    const spectrum = stft(samples, sr, { nFft, hopLength: 128 });
+    const common = { sampleRate: sr, nFft, nIter: 2 };
+    const pairs: Array<[string, (hop?: number) => Float32Array]> = [
+      ['melToAudio', (hop) => melToAudio({ power: mel.power, ...common, hopLength: hop })],
+      [
+        'mfccToAudio',
+        (hop) =>
+          mfccToAudio({
+            coefficients: cepstrum.coefficients,
+            nMels: 20,
+            ...common,
+            hopLength: hop,
+          }),
+      ],
+      [
+        'griffinLim',
+        (hop) => griffinLim({ magnitude: spectrum.magnitude, ...common, hopLength: hop }),
+      ],
+    ];
+    for (const [name, call] of pairs) {
+      expect(Array.from(call()), name).toEqual(Array.from(call(128)));
+      expect(Array.from(call()), name).not.toEqual(Array.from(call(256)));
+    }
+  });
+
   it.each([
     ['melToStft', (result: unknown) => melToStft({ result } as never)],
     ['melToAudio', (result: unknown) => melToAudio({ result } as never)],
@@ -697,7 +726,7 @@ describe('analysis features: note segments voicing', () => {
 
   it('refuses a call with neither voiced nor voicedProb by name', () => {
     expect(() => noteSegments({ f0Hz, frameRate: 100 } as never)).toThrow(
-      /one of voiced or voicedProb is required/,
+      /give voiced or voicedProb/,
     );
     expect(() => noteSegments({ f0Hz, frameRate: 100 } as never)).toThrow(TypeError);
   });

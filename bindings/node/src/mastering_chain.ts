@@ -205,7 +205,7 @@ export function masterAudio(...args: unknown[]): MasteringChainResult {
     (r.preset === undefined || r.preset === null) &&
     (r.overrides === undefined || r.overrides === null)
   ) {
-    throw new TypeError('masterAudio: give a preset or overrides');
+    throw new TypeError('masterAudio: give preset or overrides');
   }
   const overrides = chainConfigJson('masterAudio', 'overrides', r.overrides);
   const preset = r.preset ?? null;
@@ -246,7 +246,7 @@ export function masterAudioStereo(request: MasterAudioStereoRequest): MasteringC
     (r.preset === undefined || r.preset === null) &&
     (r.overrides === undefined || r.overrides === null)
   ) {
-    throw new TypeError('masterAudioStereo: give a preset or overrides');
+    throw new TypeError('masterAudioStereo: give preset or overrides');
   }
   const overrides = chainConfigJson('masterAudioStereo', 'overrides', r.overrides);
   const preset = r.preset ?? null;
@@ -329,7 +329,7 @@ export function masterAudioAsync(...args: unknown[]): Promise<MasteringChainResu
       (r.preset === undefined || r.preset === null) &&
       (r.overrides === undefined || r.overrides === null)
     ) {
-      throw new TypeError('masterAudioAsync: give a preset or overrides');
+      throw new TypeError('masterAudioAsync: give preset or overrides');
     }
     return addon
       .masterAudioAsync(
@@ -359,7 +359,7 @@ export function masterAudioStereoAsync(
       (r.preset === undefined || r.preset === null) &&
       (r.overrides === undefined || r.overrides === null)
     ) {
-      throw new TypeError('masterAudioStereoAsync: give a preset or overrides');
+      throw new TypeError('masterAudioStereoAsync: give preset or overrides');
     }
     return addon
       .masterAudioStereoAsync(

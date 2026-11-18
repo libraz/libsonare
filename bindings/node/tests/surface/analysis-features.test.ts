@@ -574,6 +574,31 @@ describe('Matrix2D results and inputs', () => {
     ).toBeInstanceOf(Float32Array);
   });
 
+  it('derives an omitted inverse hop as a quarter of nFft', () => {
+    const common = { sampleRate, nFft: 512, nIter: 2 };
+    const pairs: Array<[string, (hop?: number) => Float32Array]> = [
+      ['melToAudio', (hop) => sonare.melToAudio({ power: mel.power, ...common, hopLength: hop })],
+      [
+        'mfccToAudio',
+        (hop) =>
+          sonare.mfccToAudio({
+            coefficients: mfccResult.coefficients,
+            nMels: 16,
+            ...common,
+            hopLength: hop,
+          }),
+      ],
+      [
+        'griffinLim',
+        (hop) => sonare.griffinLim({ magnitude: stftResult.magnitude, ...common, hopLength: hop }),
+      ],
+    ];
+    for (const [name, call] of pairs) {
+      expect(Array.from(call()), name).toEqual(Array.from(call(128)));
+      expect(Array.from(call()), name).not.toEqual(Array.from(call(256)));
+    }
+  });
+
   it.each([
     ['melDelta', 'features', { width: 3 }],
     ['pcen', 'values', {}],
@@ -938,7 +963,7 @@ describe('noteSegments voicing input', () => {
 
   it('refuses a call with neither voiced nor voicedProb by name', () => {
     expect(() => api.noteSegments({ f0Hz, frameRate: 100 } as never)).toThrow(
-      /one of voiced or voicedProb is required/,
+      /give voiced or voicedProb/,
     );
     expect(() => api.noteSegments({ f0Hz, frameRate: 100 } as never)).toThrow(TypeError);
   });

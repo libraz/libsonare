@@ -304,7 +304,7 @@ function requiredOperationBound(
     `${at}.${secName}`,
   );
   if (value === undefined) {
-    throw new TypeError(`${fn}: ${at}.${sampleName} or ${at}.${secName} is required`);
+    throw new TypeError(`${fn}: give ${at}.${sampleName} or ${at}.${secName}`);
   }
   return value;
 }

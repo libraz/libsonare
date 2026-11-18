@@ -144,8 +144,8 @@ describe('Node async API', () => {
     });
 
     it('rejects an unusable override instead of throwing synchronously', async () => {
-      // Both async entry points read their overrides bag with a reader that
-      // reports an unusable value by throwing into JS. They did not check for
+      // Both async entry points read their overrides document with a reader that
+      // reports an unusable value (here an object where the JSON string goes) by throwing into JS. They did not check for
       // that pending exception, so the throw escaped synchronously -- past a
       // caller's `.catch()` -- AND the AsyncWorker was queued anyway, running a
       // full mastering render in the background for a deferred nobody could
@@ -163,7 +163,7 @@ describe('Node async API', () => {
           returned = (addon as Record<string, (...a: unknown[]) => unknown>)[name](...args);
         }, `${name} threw synchronously`).not.toThrow();
         expect(returned).toBeInstanceOf(Promise);
-        await expect(returned).rejects.toThrow(/number or boolean/);
+        await expect(returned).rejects.toThrow(/^overridesJson must be a string$/);
       }
     });
 

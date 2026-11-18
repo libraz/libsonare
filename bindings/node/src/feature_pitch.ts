@@ -649,7 +649,7 @@ export function noteSegments(...args: unknown[]): NoteSegment[] {
     referenceHz !== undefined ||
     voicedThreshold !== undefined;
   if (r.voiced == null && r.voicedProb == null) {
-    throw new TypeError('noteSegments: one of voiced or voicedProb is required');
+    throw new TypeError('noteSegments: give voiced or voicedProb');
   }
   // The native reader takes 0/1 bytes; voiced wins, so voicedProb is not sent beside it.
   const flags = r.voiced != null ? Uint8Array.from(toVoicedInt32('noteSegments', r.voiced)) : null;
