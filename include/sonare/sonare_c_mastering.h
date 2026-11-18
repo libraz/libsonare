@@ -14,46 +14,38 @@ extern "C" {
 // Mastering
 // ============================================================================
 
-// Config for the simple one-shot sonare_mastering_process helper. To chain
-// other processors, use the named-processor path
-// (sonare_mastering_apply_named_processor with "maximizer.loudnessOptimize") or
-// the full MasteringChain API instead.
-//
-// ceiling_db always holds; target_lufs is what one normalization pass aims at.
-// The ceiling is held on the true peak read at true_peak_oversample (4x, the
-// BS.1770 measure, by default); a finer meter can read up to ~0.15 dB higher.
-// Where the input's peak headroom cannot supply the gain the target needs, the
-// helper drives its true-peak limiter up to 12 dB to close the distance and
-// stops there, so peaky or peak-normalized input can finish below target with
-// loudness_target_limited set on the result. The named-processor and
-// MasteringChain paths behave identically and expose that depth as
-// "maxLimiterGainReductionDb"; this struct always uses the default.
-//
-// The struct is zero-init friendly: a field left 0 uses the library default
-// (target_lufs/ceiling_db are real values, so pass them explicitly). release_ms
-// and apply_gain_at_input_rate are appended so older zero-initialized callers
-// keep the previous fixed-release / input-rate-off behavior.
+/// @brief Settings of the one-shot @ref sonare_mastering_process loudness helper.
+/// @details To combine loudness optimization with other processors use
+///   @ref sonare_mastering_apply_processor with "maximizer.loudnessOptimize" or the full chain API.
+///   A field left 0 takes the library default; the loudness target and true-peak ceiling are real
+///   values and must be given explicitly. The ceiling is held on the true peak read at the
+///   configured oversample factor (4x by default); a finer meter can read up to about 0.15 dB
+///   higher. Where peak headroom cannot supply the gain the target needs, the helper drives its
+///   true-peak limiter up to 12 dB to close the distance and stops there, so peaky or
+///   peak-normalized input can finish below the target with @c loudness_target_limited set.
 typedef struct {
-  float target_lufs;
-  float ceiling_db;
+  float target_lufs;  ///< Target integrated loudness, LUFS.
+  float ceiling_db;   ///< True-peak ceiling, dBTP.
+  /// True-peak oversample factor; 0 selects 4, otherwise one of 1, 2, 4, 8, 16.
   int true_peak_oversample;
-  // Post true-peak limiter release in ms (one time constant, about 63% of the way at the set
-  // time). 0 => library default (50 ms). The
-  // helper drives this limiter whenever peak headroom alone cannot reach
-  // target_lufs, so the release shapes the result on low-headroom input; it is
-  // inert only when the static gain already lands under the ceiling.
+  /// Release time of the post true-peak limiter in ms (one time constant, about 63% of the way
+  /// at the set time); 0 selects 50 ms. The limiter runs whenever peak headroom alone cannot reach
+  /// the target, so this shapes the result on low-headroom input.
   float release_ms;
-  // Apply the static loudness gain at the input (pre-oversample) rate. 0 => off
-  // (default); nonzero => on. Matches TruePeakLimiterConfig::apply_gain_at_input_rate.
+  /// Non-zero applies the static loudness gain at the input (pre-oversample) rate; 0 (default) off.
   int apply_gain_at_input_rate;
 } SonareMasteringConfig;
 
+/// @brief Mono audio and loudness measurements from the one-shot and named-processor entries.
+/// @details @c samples is heap-allocated; release the result with
+///   @ref sonare_free_mastering_result.
 typedef struct {
-  float* samples;
-  size_t length;
-  int sample_rate;
-  float input_lufs;
-  float output_lufs;
+  float* samples;  ///< Mono output, heap-allocated; release with @ref sonare_free_mastering_result.
+  size_t length;   ///< Output length in samples.
+  int sample_rate;    ///< Output sample rate in Hz.
+  float input_lufs;   ///< Integrated loudness of the input, LUFS.
+  float output_lufs;  ///< Integrated loudness achieved on the output, LUFS.
+  /// Static loudness-normalization gain in dB; limiter gain reduction is not included.
   float applied_gain_db;
   /// The processor's own latency in samples. The returned audio is already
   /// compensated for it and is time-aligned with the input, so do not trim it.
@@ -70,18 +62,23 @@ typedef struct {
   uint32_t non_finite_substitution_count;
 } SonareMasteringResult;
 
+/// @brief One flat key/value processor or chain parameter.
 typedef struct {
-  const char* key;
-  double value;
+  const char* key;  ///< Parameter key, NUL-terminated.
+  double value;     ///< Parameter value.
 } SonareMasteringParam;
 
+/// @brief Stereo audio and loudness measurements returned by the named-processor stereo entry.
+/// @details @c left and @c right are heap-allocated; release the result with
+///   @ref sonare_free_mastering_stereo_result.
 typedef struct {
-  float* left;
-  float* right;
-  size_t length;
-  int sample_rate;
-  float input_lufs;
-  float output_lufs;
+  float* left;        ///< Left output channel, heap-allocated.
+  float* right;       ///< Right output channel, heap-allocated.
+  size_t length;      ///< Samples per channel.
+  int sample_rate;    ///< Output sample rate in Hz.
+  float input_lufs;   ///< Integrated loudness of the input, LUFS.
+  float output_lufs;  ///< Integrated loudness achieved on the output, LUFS.
+  /// Static loudness-normalization gain in dB; limiter gain reduction is not included.
   float applied_gain_db;
   /// The processor's own latency in samples. The returned audio is already
   /// compensated for it and is time-aligned with the input, so do not trim it.
@@ -105,68 +102,69 @@ typedef void (*SonareMasteringProgressCallback)(float progress, const char* stag
 
 /// Whole-program loudness values used by @ref SonareMasteringReport.
 typedef struct {
-  float integrated_lufs;
-  float max_momentary_lufs;
-  float max_short_term_lufs;
-  float true_peak_dbtp;
-  float loudness_range_lu;
+  float integrated_lufs;      ///< Integrated loudness, LUFS.
+  float max_momentary_lufs;   ///< Highest momentary loudness over the program, LUFS.
+  float max_short_term_lufs;  ///< Highest short-term loudness over the program, LUFS.
+  float true_peak_dbtp;       ///< True peak, dBTP.
+  float loudness_range_lu;    ///< Loudness range, LU.
 } SonareMasteringLoudnessSummary;
 
 /// Explanation-oriented before/after measurements for an offline mastering run.
 /// @c band_energy_delta_db is after-minus-before, from 20 Hz to Nyquist.
 typedef struct {
-  SonareMasteringLoudnessSummary before;
-  SonareMasteringLoudnessSummary after;
-  float applied_gain_db;
+  SonareMasteringLoudnessSummary before;  ///< Measurements of the input.
+  SonareMasteringLoudnessSummary after;   ///< Measurements of the output.
+  float applied_gain_db;                  ///< Sum of the static gains the stages applied, dB.
+  /// Most negative gain reduction any stage reported, dB; 0 when none ran.
   float max_gain_reduction_db;
+  /// Non-zero when the true-peak ceiling prevented reaching the loudness target.
   int loudness_target_limited;
+  /// Output-minus-input long-term spectral energy per band, dB.
   float band_energy_delta_db[SONARE_MASTERING_REPORT_BAND_COUNT];
 } SonareMasteringReport;
 
-// Result of running the MasteringChain on a mono buffer. Offline chain/master_audio
-// outputs are latency-compensated, so this frozen result layout intentionally
-// reports no separate latency_samples field.
-// Memory for @c samples and @c stages (and each char* entry inside it) is
-// allocated by libsonare with @c new[]; free with
-// @c sonare_free_mastering_chain_result.
+/// @brief Result of running the mastering chain on a mono buffer.
+/// @details The audio is latency-compensated, so there is no separate latency field. The audio,
+///   the stage identifier strings and the gain-reduction arrays are allocated by libsonare with
+///   @c new[]; release the whole result with @ref sonare_free_mastering_chain_result.
 typedef struct {
-  float* samples;
-  size_t length;
-  int sample_rate;
-  float input_lufs;
-  float output_lufs;
-  float applied_gain_db;
-  char** stages;  // newline-free stage identifiers, e.g. "dynamics.compressor"
-  size_t stages_count;
-  // ITU-R BS.1770-4 true peak of the output (dBTP). Lets callers verify a
-  // preset ceiling was met without a second oversampled scan.
-  //
-  // The oversample factor follows the peak-limiting stage the chain actually
-  // applied, so it is not fixed: the loudness stage's true-peak oversample
-  // (default 4x) when loudness is enabled, and the maximizer true-peak
-  // limiter's own oversample factor when loudness is disabled but that stage
-  // ran. The two disagree by roughly 0.02 dB between 4x and 8x, so a caller
-  // comparing this against an independently measured peak must use the same
-  // factor the chain used.
+  float* samples;         ///< Mono output, heap-allocated.
+  size_t length;          ///< Output length in samples.
+  int sample_rate;        ///< Output sample rate in Hz.
+  float input_lufs;       ///< Integrated loudness of the input, LUFS.
+  float output_lufs;      ///< Integrated loudness achieved on the output, LUFS.
+  float applied_gain_db;  ///< Sum of the static gains the stages applied, dB.
+  char** stages;          ///< newline-free stage identifiers, e.g. "dynamics.compressor"
+  size_t stages_count;    ///< Number of entries in stages.
+  /// ITU-R BS.1770-4 true peak of the output (dBTP). Lets callers verify a
+  /// preset ceiling was met without a second oversampled scan.
+  ///
+  /// The oversample factor follows the peak-limiting stage the chain actually
+  /// applied, so it is not fixed: the loudness stage's true-peak oversample
+  /// (default 4x) when loudness is enabled, and the maximizer true-peak
+  /// limiter's own oversample factor when loudness is disabled but that stage
+  /// ran. The two disagree by roughly 0.02 dB between 4x and 8x, so a caller
+  /// comparing this against an independently measured peak must use the same
+  /// factor the chain used.
   float output_true_peak_dbtp;
-  // EBU Tech 3342 Loudness Range of the output (LU).
+  /// EBU Tech 3342 Loudness Range of the output (LU).
   float output_loudness_range_lu;
-  // Non-zero when the requested LUFS gain was reduced to respect the true-peak
-  // ceiling. output_lufs is the achieved value, not the requested target.
+  /// Non-zero when the requested LUFS gain was reduced to respect the true-peak
+  /// ceiling. output_lufs is the achieved value, not the requested target.
   int loudness_target_limited;
-  // Per-stage gain reductions for the dynamics / maximizer stages that report
-  // one (a subset of @c stages). @c stage_gain_reduction_stages holds the stage
-  // identifiers and @c stage_gain_reduction_values the matching dB values
-  // (<= 0), both of length @c stage_gain_reductions_count. Every entry is the
-  // most-negative reduction reported anywhere in the whole render, not an
-  // instantaneous or final-block value -- consistent across every stage that
-  // can appear here (dynamics.deesser, dynamics.compressor,
-  // dynamics.multibandComp, maximizer.truePeakLimiter, loudness.optimize).
-  // Memory is allocated by libsonare and released by
-  // @c sonare_free_mastering_chain_result.
+  /// Per-stage gain reductions for the dynamics / maximizer stages that report
+  /// one (a subset of @c stages). @c stage_gain_reduction_stages holds the stage
+  /// identifiers and @c stage_gain_reduction_values the matching dB values
+  /// (<= 0), both of length @c stage_gain_reductions_count. Every entry is the
+  /// most-negative reduction reported anywhere in the whole render, not an
+  /// instantaneous or final-block value -- consistent across every stage that
+  /// can appear here (dynamics.deesser, dynamics.compressor,
+  /// dynamics.multibandComp, maximizer.truePeakLimiter, loudness.optimize).
+  /// Memory is allocated by libsonare and released by
+  /// @c sonare_free_mastering_chain_result.
   char** stage_gain_reduction_stages;
-  float* stage_gain_reduction_values;
-  size_t stage_gain_reductions_count;
+  float* stage_gain_reduction_values;  ///< Matching reductions in dB (<= 0), one per identifier.
+  size_t stage_gain_reductions_count;  ///< Length of both arrays.
   /// Aggregated before/after measurements for UI and artifact reporting.
   SonareMasteringReport report;
   /// Samples a stage replaced with a finite in-domain one, keeping the output
@@ -180,29 +178,29 @@ typedef struct {
   uint32_t non_finite_substitution_count;
 } SonareMasteringChainResult;
 
-// Result of running the MasteringChain on stereo buffers. Offline chain/master_audio
-// outputs are latency-compensated; same ownership rules as
-// @c SonareMasteringChainResult; free with
-// @c sonare_free_mastering_chain_stereo_result.
+/// @brief Result of running the mastering chain on a stereo pair.
+/// @details Same latency compensation and ownership as @ref SonareMasteringChainResult; release
+///   with @ref sonare_free_mastering_chain_stereo_result.
 typedef struct {
-  float* left;
-  float* right;
-  size_t length;
-  int sample_rate;
-  float input_lufs;
-  float output_lufs;
-  float applied_gain_db;
-  char** stages;
-  size_t stages_count;
-  // See @c SonareMasteringChainResult for field semantics. Released by
-  // @c sonare_free_mastering_chain_stereo_result.
-  float output_true_peak_dbtp;
-  float output_loudness_range_lu;
+  float* left;            ///< Left output channel, heap-allocated.
+  float* right;           ///< Right output channel, heap-allocated.
+  size_t length;          ///< Samples per channel.
+  int sample_rate;        ///< Output sample rate in Hz.
+  float input_lufs;       ///< Integrated loudness of the input, LUFS.
+  float output_lufs;      ///< Integrated loudness achieved on the output, LUFS.
+  float applied_gain_db;  ///< Sum of the static gains the stages applied, dB.
+  char** stages;          ///< Stage identifiers, as in the mono result.
+  size_t stages_count;    ///< Number of entries in stages.
+  /// See @c SonareMasteringChainResult for field semantics. Released by
+  /// @c sonare_free_mastering_chain_stereo_result.
+  float output_true_peak_dbtp;     ///< True peak of the output, dBTP.
+  float output_loudness_range_lu;  ///< Loudness range of the output, LU.
+  /// Non-zero when the loudness target was not reached because of the true-peak ceiling.
   int loudness_target_limited;
-  char** stage_gain_reduction_stages;
-  float* stage_gain_reduction_values;
-  size_t stage_gain_reductions_count;
-  SonareMasteringReport report;
+  char** stage_gain_reduction_stages;  ///< Stage identifiers that reported a gain reduction.
+  float* stage_gain_reduction_values;  ///< Matching reductions in dB (<= 0).
+  size_t stage_gain_reductions_count;  ///< Length of both arrays.
+  SonareMasteringReport report;        ///< Before/after measurements of the whole run.
   /// @copydoc SonareMasteringChainResult::non_finite_substitution_count
   uint32_t non_finite_substitution_count;
 } SonareMasteringChainStereoResult;
@@ -745,12 +743,12 @@ SonareError sonare_mastering_analyze_stereo(const char* analysis, const float* l
 
 /// @brief What gain-matching one take to another's loudness took, and produced.
 typedef struct {
-  float reference_lufs;          // the reference take's BS.1770 integrated loudness
-  float source_lufs;             // the matched take's, before the gain
-  float applied_gain_db;         // gain landing the remeasured source on reference_lufs; equal to
-                                 // reference_lufs - source_lufs unless the gain moves blocks
-                                 // across the absolute gate
-  float matched_true_peak_dbtp;  // the matched take's true peak after the gain
+  float reference_lufs;          ///< the reference take's BS.1770 integrated loudness
+  float source_lufs;             ///< the matched take's, before the gain
+  float applied_gain_db;         ///< gain landing the remeasured source on reference_lufs; equal to
+                                 ///< reference_lufs - source_lufs unless the gain moves blocks
+                                 ///< across the absolute gate
+  float matched_true_peak_dbtp;  ///< the matched take's true peak after the gain
 } SonareLoudnessMatch;
 
 /// @brief Gain-matches @p source to @p reference's integrated loudness, so an
@@ -787,10 +785,11 @@ SonareError sonare_mastering_ab_match_loudness_stereo(
     int reference_sample_rate, int sample_rate, SonareMasteringStereoResult* out,
     SonareLoudnessMatch* out_match);
 
+/// @brief One delivery platform: a loudness target and a true-peak ceiling.
 typedef struct {
-  const char* name;
-  float target_lufs;
-  float ceiling_db;
+  const char* name;   ///< Platform name, NUL-terminated; must not be NULL.
+  float target_lufs;  ///< Target integrated loudness, LUFS.
+  float ceiling_db;   ///< True-peak ceiling, dBTP.
 } SonareStreamingPlatform;
 
 /// @brief The loudness numbers a streaming mastering chain is constructed with,
@@ -959,16 +958,23 @@ SonareError sonare_mastering_audio_profile_stereo(const float* left, const float
 /// rises immediately and falls smoothly. Bands that no analysis bin reaches
 /// (above Nyquist) read the numerical floor.
 typedef struct {
+  /// Decimated left samples entering the equalizer.
   float pre_left[SONARE_EQ_SPECTRUM_STREAM_CAPACITY];
+  /// Decimated right samples entering the equalizer.
   float pre_right[SONARE_EQ_SPECTRUM_STREAM_CAPACITY];
+  /// Decimated left samples leaving the equalizer.
   float post_left[SONARE_EQ_SPECTRUM_STREAM_CAPACITY];
+  /// Decimated right samples leaving the equalizer.
   float post_right[SONARE_EQ_SPECTRUM_STREAM_CAPACITY];
-  size_t pre_count;
-  size_t post_count;
+  size_t pre_count;   ///< Valid entries in pre_left and pre_right.
+  size_t post_count;  ///< Valid entries in post_left and post_right.
+  /// Gain each band applies, dB; 0 for a disabled or bypassed band.
   float band_gain_db[SONARE_EQ_MAX_BANDS];
+  /// Post-equalizer level per spectrum band, dB relative to full scale.
   float profile_db[SONARE_EQ_SPECTRUM_PROFILE_BANDS];
+  /// Auto-gain compensation currently applied, dB; 0 when auto-gain is off.
   float last_auto_gain_db;
-  uint64_t seq;
+  uint64_t seq;  ///< Increases by one with each snapshot the equalizer publishes.
 } SonareEqSnapshot;
 
 /// @brief Creates a prepared equalizer handle.
@@ -1103,9 +1109,18 @@ SonareError sonare_eq_spectrum(const SonareEq* eq, SonareEqSnapshot* out);
 SonareError sonare_eq_magnitude_response(const SonareEq* eq, int placement,
                                          const float* frequencies_hz, size_t count, float* out_db);
 
+/// @brief Releases the audio of a @ref SonareMasteringResult and empties it. NULL is a no-op.
 void sonare_free_mastering_result(SonareMasteringResult* result);
+/// @brief Releases both channels of a @ref SonareMasteringStereoResult and empties it.
+/// @details NULL is a no-op.
 void sonare_free_mastering_stereo_result(SonareMasteringStereoResult* result);
+/// @brief Releases the audio, stage identifiers and gain-reduction arrays of a
+///        @ref SonareMasteringChainResult and empties it.
+/// @details NULL is a no-op.
 void sonare_free_mastering_chain_result(SonareMasteringChainResult* result);
+/// @brief Releases both channels, stage identifiers and gain-reduction arrays of a
+///        @ref SonareMasteringChainStereoResult and empties it.
+/// @details NULL is a no-op.
 void sonare_free_mastering_chain_stereo_result(SonareMasteringChainStereoResult* result);
 
 // ----------------------------------------------------------------------------
@@ -1281,14 +1296,15 @@ void sonare_streaming_mastering_chain_destroy(SonareStreamingMasteringChain* han
 // ----------------------------------------------------------------------------
 
 // Algorithm modes for sonare_mastering_repair_denoise_classical.
-#define SONARE_DENOISE_MODE_LOG_MMSE 0              // Ephraim-Malah LSA (1985)
-#define SONARE_DENOISE_MODE_MMSE_STSA 1             // Ephraim-Malah STSA (1984)
-#define SONARE_DENOISE_MODE_SPECTRAL_SUBTRACTION 2  // Berouti spectral subtraction (1979)
+#define SONARE_DENOISE_MODE_LOG_MMSE 0              ///< Ephraim-Malah LSA (1985)
+#define SONARE_DENOISE_MODE_MMSE_STSA 1             ///< Ephraim-Malah STSA (1984)
+#define SONARE_DENOISE_MODE_SPECTRAL_SUBTRACTION 2  ///< Berouti spectral subtraction (1979)
 
 // Noise PSD estimators for sonare_mastering_repair_denoise_classical.
-#define SONARE_DENOISE_NOISE_ESTIMATOR_QUANTILE 0  // Quietest-frames quantile
-#define SONARE_DENOISE_NOISE_ESTIMATOR_MCRA 1      // Minimum-controlled recursive averaging
-#define SONARE_DENOISE_NOISE_ESTIMATOR_IMCRA 2     // Improved MCRA with SPP gating
+#define SONARE_DENOISE_NOISE_ESTIMATOR_QUANTILE 0  ///< Quietest-frames quantile
+#define SONARE_DENOISE_NOISE_ESTIMATOR_MCRA 1      ///< Minimum-controlled recursive averaging
+#define SONARE_DENOISE_NOISE_ESTIMATOR_IMCRA 2     ///< Improved MCRA with SPP gating
+/// Speech-presence-probability PSD; tracks no minima, so carries no minimum-statistics correction.
 #define SONARE_DENOISE_NOISE_ESTIMATOR_SPP \
   3  // Speech-presence-probability PSD,
      // tracking no minima and so carrying
@@ -1297,11 +1313,11 @@ void sonare_streaming_mastering_chain_destroy(SonareStreamingMasteringChain* han
 /// @brief Flat POD mirror of @c mastering::repair::DeclickConfig.
 /// @details Pass NULL to @ref sonare_mastering_repair_declick to use library defaults.
 typedef struct {
-  float threshold;           // amplitude threshold vs LPC prediction (default 0.8)
-  float neighbor_ratio;      // ratio vs neighbour amplitude (default 4.0)
-  size_t max_click_samples;  // max click run length in samples (default 8)
-  int lpc_order;             // LPC order used for prediction (default 20)
-  float residual_ratio;      // residual / signal threshold (default 8.0)
+  float threshold;           ///< amplitude threshold vs LPC prediction (default 0.8)
+  float neighbor_ratio;      ///< ratio vs neighbour amplitude (default 4.0)
+  size_t max_click_samples;  ///< max click run length in samples (default 8)
+  int lpc_order;             ///< LPC order used for prediction (default 20)
+  float residual_ratio;      ///< residual / signal threshold (default 8.0)
 } SonareDeclickConfig;
 
 /// @brief Flat POD mirror of @c mastering::repair::DenoiseClassicalConfig.
@@ -1310,28 +1326,28 @@ typedef struct {
 ///          @c hop_length (in (0, n_fft / 2]); other fields are clamped by the underlying
 ///          processor.
 typedef struct {
-  int mode;                         // SONARE_DENOISE_MODE_*
-  int noise_estimator;              // SONARE_DENOISE_NOISE_ESTIMATOR_*
-  int n_fft;                        // STFT size (default 1024, power of two)
-  int hop_length;                   // hop in samples (default 256)
-  float dd_alpha;                   // decision-directed SNR smoothing (default 0.98)
-  float reduction_db;               // deepest attenuation in dB, >= 0 (default 26)
-  float over_subtraction;           // Berouti alpha (SpectralSubtraction only)
-  float spectral_floor;             // Berouti beta (SpectralSubtraction only)
-  float noise_estimation_quantile;  // noise-only frame fraction (default 0.1)
-  int speech_presence_gain;         // 0/1 (default 1)
-  int gain_smoothing;               // 0/1 (default 1)
+  int mode;                         ///< SONARE_DENOISE_MODE_*
+  int noise_estimator;              ///< SONARE_DENOISE_NOISE_ESTIMATOR_*
+  int n_fft;                        ///< STFT size (default 1024, power of two)
+  int hop_length;                   ///< hop in samples (default 256)
+  float dd_alpha;                   ///< decision-directed SNR smoothing (default 0.98)
+  float reduction_db;               ///< deepest attenuation in dB, >= 0 (default 26)
+  float over_subtraction;           ///< Berouti alpha (SpectralSubtraction only)
+  float spectral_floor;             ///< Berouti beta (SpectralSubtraction only)
+  float noise_estimation_quantile;  ///< noise-only frame fraction (default 0.1)
+  int speech_presence_gain;         ///< 0/1 (default 1)
+  int gain_smoothing;               ///< 0/1 (default 1)
 } SonareDenoiseClassicalConfig;
 
 /// @brief Flat POD mirror of @c mastering::repair::ClickDetection. Counts runs,
 ///        not samples.
 typedef struct {
-  size_t count;                // runs meeting the repair criteria whose steepest
-                               // edge also stands well above the level beside
-                               // them; a run inside a drum hit is not counted
-  size_t rejected;             // runs the criteria excluded as outliers
-  size_t longest_run_samples;  // over the counted runs
-  float per_second;            // count divided by the input duration
+  size_t count;                ///< runs meeting the repair criteria whose steepest
+                               ///< edge also stands well above the level beside
+                               ///< them; a run inside a drum hit is not counted
+  size_t rejected;             ///< runs the criteria excluded as outliers
+  size_t longest_run_samples;  ///< over the counted runs
+  float per_second;            ///< count divided by the input duration
 } SonareClickDetection;
 
 /// @brief Measures clicks without repairing.
@@ -1350,26 +1366,26 @@ SonareError sonare_mastering_repair_detect_clicks(const float* samples, size_t l
 ///   neighbour ratio is too tight for this material, not that the material is
 ///   clean.
 typedef struct {
-  SonareClickDetection detected;  // this channel's own analysis of the input
-  size_t repaired_runs;           // runs interpolated, including runs inside a
-                                  // transient that detected.count leaves out
-  size_t repaired_samples;        // samples overwritten by interpolation
-  size_t linked_runs;             // of repaired_runs, those this channel's own
-                                  // detection did not produce; always 0 from
-                                  // the mono entry point
-  int lpc_model_used;             // 0 when the input was too short for lpc_order,
-                                  // which reduces every fill to linear
+  SonareClickDetection detected;  ///< this channel's own analysis of the input
+  size_t repaired_runs;           ///< runs interpolated, including runs inside a
+                                  ///< transient that detected.count leaves out
+  size_t repaired_samples;        ///< samples overwritten by interpolation
+  size_t linked_runs;             ///< of repaired_runs, those this channel's own
+                                  ///< detection did not produce; always 0 from
+                                  ///< the mono entry point
+  int lpc_model_used;             ///< 0 when the input was too short for lpc_order,
+                                  ///< which reduces every fill to linear
 } SonareDeclickReport;
 
 /// @brief A declicked stereo pair and what each channel's pass did.
 /// @details @c left and @c right are heap-allocated; release the pair with
 ///   @ref sonare_free_declick_stereo_result.
 typedef struct {
-  float* left;
-  float* right;
-  size_t length;
-  SonareDeclickReport left_report;
-  SonareDeclickReport right_report;
+  float* left;                       ///< Declicked left channel, heap-allocated.
+  float* right;                      ///< Declicked right channel, heap-allocated.
+  size_t length;                     ///< Samples per channel.
+  SonareDeclickReport left_report;   ///< What the left channel's own pass found and repaired.
+  SonareDeclickReport right_report;  ///< What the right channel's own pass found and repaired.
 } SonareDeclickStereoResult;
 
 /// @brief Declicks a stereo pair, repairing the union of both channels' runs.
@@ -1393,9 +1409,9 @@ void sonare_free_declick_stereo_result(SonareDeclickStereoResult* result);
 /// @details @c samples is heap-allocated; release it with
 ///   @ref sonare_free_declick_result.
 typedef struct {
-  float* samples;
-  size_t length;
-  SonareDeclickReport report;
+  float* samples;              ///< Repaired audio, heap-allocated.
+  size_t length;               ///< Length in samples.
+  SonareDeclickReport report;  ///< What the pass found and repaired.
 } SonareDeclickResult;
 
 /// @brief Offline LPC-based declicker.
@@ -1409,13 +1425,13 @@ SonareError sonare_mastering_repair_declick(const float* samples, size_t length,
 /// @details NULL and an already-released result are no-ops.
 void sonare_free_declick_result(SonareDeclickResult* result);
 
-// Bands a denoise noise floor is reported in, and the length of
-// SonareNoiseDetection::band_floor_dbfs. A geometric grid from 20 Hz to Nyquist,
-// the same axis the mastering report's band_energy_delta_db uses.
+/// Bands a denoise noise floor is reported in, and the length of
+/// SonareNoiseDetection::band_floor_dbfs. A geometric grid from 20 Hz to Nyquist,
+/// the same axis the mastering report's band_energy_delta_db uses.
 #define SONARE_REPAIR_NOISE_BAND_COUNT 32
 
-// Indices sonare_mastering_repair_noise_band_bins writes: the first bin of every
-// band plus the one-past-the-end bin of the last.
+/// Indices sonare_mastering_repair_noise_band_bins writes: the first bin of every
+/// band plus the one-past-the-end bin of the last.
 #define SONARE_REPAIR_NOISE_BAND_EDGE_COUNT (SONARE_REPAIR_NOISE_BAND_COUNT + 1)
 
 /// @brief Flat POD mirror of @c mastering::repair::NoiseDetection.
@@ -1425,8 +1441,8 @@ void sonare_free_declick_result(SonareDeclickResult* result);
 ///   above the same material through the mono entry point. Compare a stereo floor
 ///   against another stereo floor, never against a mono one.
 typedef struct {
-  float floor_dbfs;                                       // broadband estimated noise floor
-  float band_floor_dbfs[SONARE_REPAIR_NOISE_BAND_COUNT];  // per band, low to high
+  float floor_dbfs;                                       ///< broadband estimated noise floor
+  float band_floor_dbfs[SONARE_REPAIR_NOISE_BAND_COUNT];  ///< per band, low to high
 } SonareNoiseDetection;
 
 /// @brief Measures the noise floor without denoising.
@@ -1463,27 +1479,27 @@ SonareError sonare_mastering_repair_noise_band_bins(int n_fft, int sample_rate, 
 
 /// @brief What a denoise pass found and what it removed.
 typedef struct {
-  SonareNoiseDetection detected;  // analysis of the input, before the mask
-  float mean_reduction_db;        // mean attenuation the gain mask applied. Zero
-                                  // reads the same whether the mask was
-                                  // transparent or no mask ran at all
-  float max_reduction_db;         // deepest attenuation any cell applied; at
-                                  // config.reduction_db the floor set the depth
-  float floor_limited_fraction;   // cells sitting on that floor. Always 0 for
-                                  // SONARE_DENOISE_MODE_SPECTRAL_SUBTRACTION,
-                                  // which floors on spectral_floor instead, so 0
-                                  // from that mode is the mode and not a
-                                  // measurement
+  SonareNoiseDetection detected;  ///< analysis of the input, before the mask
+  float mean_reduction_db;        ///< mean attenuation the gain mask applied. Zero
+                                  ///< reads the same whether the mask was
+                                  ///< transparent or no mask ran at all
+  float max_reduction_db;         ///< deepest attenuation any cell applied; at
+                                  ///< config.reduction_db the floor set the depth
+  float floor_limited_fraction;   ///< cells sitting on that floor. Always 0 for
+                                  ///< SONARE_DENOISE_MODE_SPECTRAL_SUBTRACTION,
+                                  ///< which floors on spectral_floor instead, so 0
+                                  ///< from that mode is the mode and not a
+                                  ///< measurement
 } SonareDenoiseReport;
 
 /// @brief A denoised stereo pair and the one mask that produced it.
 /// @details @c left and @c right are heap-allocated; release the pair with
 ///   @ref sonare_free_denoise_stereo_result.
 typedef struct {
-  float* left;
-  float* right;
-  size_t length;
-  SonareDenoiseReport report;
+  float* left;                 ///< Denoised left channel, heap-allocated.
+  float* right;                ///< Denoised right channel, heap-allocated.
+  size_t length;               ///< Samples per channel.
+  SonareDenoiseReport report;  ///< The one report for the channel-linked mask.
 } SonareDenoiseStereoResult;
 
 /// @brief Denoises a stereo pair with one channel-linked gain mask.
@@ -1513,9 +1529,9 @@ void sonare_free_denoise_stereo_result(SonareDenoiseStereoResult* result);
 /// @details @c samples is heap-allocated; release it with
 ///   @ref sonare_free_denoise_result.
 typedef struct {
-  float* samples;
-  size_t length;
-  SonareDenoiseReport report;
+  float* samples;              ///< Denoised audio, heap-allocated.
+  size_t length;               ///< Length in samples.
+  SonareDenoiseReport report;  ///< What the pass found and removed.
 } SonareDenoiseResult;
 
 /// @brief Offline STFT-domain classical denoiser
@@ -1566,31 +1582,31 @@ SonareError sonare_mastering_repair_denoise_classical_linked(
 
 /// @brief Flat POD mirror of @c mastering::repair::DeclipConfig.
 typedef struct {
-  float clip_threshold_db;  // level in dBFS at or above which a sample counts as clipped
-                            // (default 20*log10(0.98), about -0.175 dBFS)
-  int lpc_order;            // LPC order used for prediction (default 36)
-  int iterations;           // LPC reconstruction iterations (default 2)
-  float lpc_blend;          // LPC vs interpolation blend (default 0.65)
+  float clip_threshold_db;  ///< level in dBFS at or above which a sample counts as clipped
+                            ///< (default 20*log10(0.98), about -0.175 dBFS)
+  int lpc_order;            ///< LPC order used for prediction (default 36)
+  int iterations;           ///< LPC reconstruction iterations (default 2)
+  float lpc_blend;          ///< LPC vs interpolation blend (default 0.65)
 } SonareDeclipConfig;
 
 /// @brief Flat POD mirror of @c mastering::repair::ClipDetection.
 typedef struct {
-  size_t clipped_samples;      // samples at or past clip_threshold_db
-  float clipped_ratio;         // clipped_samples divided by the input length
-  size_t run_count;            // runs of consecutive clipped samples
-  size_t longest_run_samples;  // a run past the 512-sample cap takes the
-                               // interpolation fallback instead of the solver
-  // Flat tops: runs of bit-identical samples at the channel's flat level (the
-  // largest run level once the two highest runs are set aside; candidates are
-  // at least -40 dBFS). These answer
-  // a different question from the four fields above, which are read against
-  // clip_threshold_db and therefore both count the apex of any waveform that
-  // reaches it and miss material clipped before it was attenuated.
+  size_t clipped_samples;      ///< samples at or past clip_threshold_db
+  float clipped_ratio;         ///< clipped_samples divided by the input length
+  size_t run_count;            ///< runs of consecutive clipped samples
+  size_t longest_run_samples;  ///< a run past the 512-sample cap takes the
+                               ///< interpolation fallback instead of the solver
+  /// Flat tops: runs of bit-identical samples at the channel's flat level (the
+  /// largest run level once the two highest runs are set aside; candidates are
+  /// at least -40 dBFS). These answer
+  /// a different question from the four fields above, which are read against
+  /// clip_threshold_db and therefore both count the apex of any waveform that
+  /// reaches it and miss material clipped before it was attenuated.
   size_t flat_run_count;
-  size_t longest_flat_run_samples;
-  size_t flat_sample_count;
-  float flat_level;  // magnitude the counted runs sit at (largest run level once the two
-                     // highest runs are set aside); 0 when there are none
+  size_t longest_flat_run_samples;  ///< Longest flat-top run, in samples.
+  size_t flat_sample_count;         ///< Samples inside the flat-top runs.
+  float flat_level;  ///< magnitude the counted runs sit at (largest run level once the two
+                     ///< highest runs are set aside); 0 when there are none
 } SonareClipDetection;
 
 /// @brief Measures clipping without repairing.
@@ -1614,27 +1630,27 @@ SonareError sonare_mastering_repair_detect_clipping(const float* samples, size_t
 
 /// @brief What one channel's declip pass found and what it did to it.
 typedef struct {
-  SonareClipDetection detected;   // this channel's own analysis of the input
-  size_t lpc_reconstructed_runs;  // runs the solver filled
-  size_t interpolated_runs;       // runs past the cap, filled by interpolation:
-                                  // for these lpc_order, iterations and
-                                  // lpc_blend had no effect
-  size_t repaired_samples;        // samples overwritten by either fill
-  size_t linked_runs;             // of the repaired runs, those reaching past
-                                  // this channel's own clipped samples because
-                                  // the other channel's run was wider; always 0
-                                  // from the mono entry point
+  SonareClipDetection detected;   ///< this channel's own analysis of the input
+  size_t lpc_reconstructed_runs;  ///< runs the solver filled
+  size_t interpolated_runs;       ///< runs past the cap, filled by interpolation:
+                                  ///< for these lpc_order, iterations and
+                                  ///< lpc_blend had no effect
+  size_t repaired_samples;        ///< samples overwritten by either fill
+  size_t linked_runs;             ///< of the repaired runs, those reaching past
+                                  ///< this channel's own clipped samples because
+                                  ///< the other channel's run was wider; always 0
+                                  ///< from the mono entry point
 } SonareDeclipReport;
 
 /// @brief A declipped stereo pair and what each channel's pass did.
 /// @details @c left and @c right are heap-allocated; release the pair with
 ///   @ref sonare_free_declip_stereo_result.
 typedef struct {
-  float* left;
-  float* right;
-  size_t length;
-  SonareDeclipReport left_report;
-  SonareDeclipReport right_report;
+  float* left;                      ///< Declipped left channel, heap-allocated.
+  float* right;                     ///< Declipped right channel, heap-allocated.
+  size_t length;                    ///< Samples per channel.
+  SonareDeclipReport left_report;   ///< What the left channel's own pass found and repaired.
+  SonareDeclipReport right_report;  ///< What the right channel's own pass found and repaired.
 } SonareDeclipStereoResult;
 
 /// @brief Declips a stereo pair over the union of both channels' clipped runs.
@@ -1659,9 +1675,9 @@ void sonare_free_declip_stereo_result(SonareDeclipStereoResult* result);
 /// @details @c samples is heap-allocated; release it with
 ///   @ref sonare_free_declip_result.
 typedef struct {
-  float* samples;
-  size_t length;
-  SonareDeclipReport report;
+  float* samples;             ///< Repaired audio, heap-allocated.
+  size_t length;              ///< Length in samples.
+  SonareDeclipReport report;  ///< What the pass found and repaired.
 } SonareDeclipResult;
 
 /// @brief Offline LPC-based declipper.
@@ -1685,14 +1701,16 @@ SonareError sonare_mastering_repair_declip(const float* samples, size_t length, 
 void sonare_free_declip_result(SonareDeclipResult* result);
 
 // Algorithm modes for sonare_mastering_repair_decrackle.
+/// Median filter replaces samples deviating from the local median.
 #define SONARE_DECRACKLE_MODE_MEDIAN 0
+/// Wavelet-domain shrinkage of detail coefficients.
 #define SONARE_DECRACKLE_MODE_WAVELET_SHRINKAGE 1
 
 /// @brief Flat POD mirror of @c mastering::repair::DecrackleConfig.
 typedef struct {
-  float threshold;  // crackle detection threshold (default 0.4)
-  int mode;         // SONARE_DECRACKLE_MODE_*
-  int levels;       // wavelet decomposition levels (default 4)
+  float threshold;  ///< crackle detection threshold (default 0.4)
+  int mode;         ///< SONARE_DECRACKLE_MODE_*
+  int levels;       ///< wavelet decomposition levels (default 4)
 } SonareDecrackleConfig;
 
 /// @brief Flat POD mirror of @c mastering::repair::CrackleDetection.
@@ -1703,10 +1721,10 @@ typedef struct {
 ///   deviation must also stand well above the level of the few milliseconds
 ///   beside it.
 typedef struct {
-  size_t sample_count;    // samples deviating from the local median by more
-                          // than threshold, above the transient level beside
-                          // them
-  float sample_fraction;  // sample_count divided by the input length
+  size_t sample_count;    ///< samples deviating from the local median by more
+                          ///< than threshold, above the transient level beside
+                          ///< them
+  float sample_fraction;  ///< sample_count divided by the input length
   float per_second;
 } SonareCrackleDetection;
 
@@ -1722,29 +1740,29 @@ SonareError sonare_mastering_repair_detect_crackle(const float* samples, size_t 
 ///   fields read zero because that mode did not run, which the caller knows
 ///   from the config it passed rather than from the value.
 typedef struct {
-  SonareCrackleDetection detected;  // this channel's own analysis of the input
-  size_t replaced_samples;          // median mode: samples the filter overwrote,
-                                    // at least detected.sample_count since the
-                                    // filter also acts inside the transients
-                                    // the detector sets aside
-  size_t detail_coefficients;       // wavelet mode: detail coefficients examined by
-                                    // the unshifted pass, not by every pass the
-                                    // mode averages
-  size_t shrunk_coefficients;       // wavelet mode: of those, driven to zero
-  float noise_sigma;                // wavelet mode: the MAD noise estimate that
-                                    // set every level's threshold, which the
-                                    // configured threshold only caps
+  SonareCrackleDetection detected;  ///< this channel's own analysis of the input
+  size_t replaced_samples;          ///< median mode: samples the filter overwrote,
+                                    ///< at least detected.sample_count since the
+                                    ///< filter also acts inside the transients
+                                    ///< the detector sets aside
+  size_t detail_coefficients;       ///< wavelet mode: detail coefficients examined by
+                                    ///< the unshifted pass, not by every pass the
+                                    ///< mode averages
+  size_t shrunk_coefficients;       ///< wavelet mode: of those, driven to zero
+  float noise_sigma;                ///< wavelet mode: the MAD noise estimate that
+                                    ///< set every level's threshold, which the
+                                    ///< configured threshold only caps
 } SonareDecrackleReport;
 
 /// @brief A decrackled stereo pair and what each channel's pass did.
 /// @details @c left and @c right are heap-allocated; release the pair with
 ///   @ref sonare_free_decrackle_stereo_result.
 typedef struct {
-  float* left;
-  float* right;
-  size_t length;
-  SonareDecrackleReport left_report;
-  SonareDecrackleReport right_report;
+  float* left;                         ///< Decrackled left channel, heap-allocated.
+  float* right;                        ///< Decrackled right channel, heap-allocated.
+  size_t length;                       ///< Samples per channel.
+  SonareDecrackleReport left_report;   ///< What the left channel's own pass found and repaired.
+  SonareDecrackleReport right_report;  ///< What the right channel's own pass found and repaired.
 } SonareDecrackleStereoResult;
 
 /// @brief Decrackles a stereo pair, each channel on its own.
@@ -1767,9 +1785,9 @@ void sonare_free_decrackle_stereo_result(SonareDecrackleStereoResult* result);
 /// @details @c samples is heap-allocated; release it with
 ///   @ref sonare_free_decrackle_result.
 typedef struct {
-  float* samples;
-  size_t length;
-  SonareDecrackleReport report;
+  float* samples;                ///< Repaired audio, heap-allocated.
+  size_t length;                 ///< Length in samples.
+  SonareDecrackleReport report;  ///< What the pass found and repaired.
 } SonareDecrackleResult;
 
 /// @brief Offline crackle suppressor (median or wavelet-shrinkage).
@@ -1783,27 +1801,27 @@ SonareError sonare_mastering_repair_decrackle(const float* samples, size_t lengt
 /// @details NULL and an already-released result are no-ops.
 void sonare_free_decrackle_result(SonareDecrackleResult* result);
 
-#define SONARE_DEHUM_MODE_SUBTRACT 0  // Subtracts the tracked harmonic series
-#define SONARE_DEHUM_MODE_NOTCH 1     // Cascaded RBJ notches, hum or programme
+#define SONARE_DEHUM_MODE_SUBTRACT 0  ///< Subtracts the tracked harmonic series
+#define SONARE_DEHUM_MODE_NOTCH 1     ///< Cascaded RBJ notches, hum or programme
 
 /// @brief Flat POD mirror of @c mastering::repair::DehumConfig.
 typedef struct {
-  float fundamental_hz;   // mains-hum fundamental (default 50 Hz)
-  int harmonics;          // notch count including fundamental (default 4)
-  float q;                // notch Q (default 20)
-  int adaptive;           // 0/1; enable adaptive tracking (default 0)
-  float search_range_hz;  // tracking search range in Hz (default 2); detection and adaptive
-                          // tracking refuse a window missing [1 Hz, 0.49 x sample rate]
-  float adaptation;       // tracking step size (default 0.25)
-  int frame_size;         // analysis frame size (default 2048, must be >= 16)
-  float pll_bandwidth;    // PLL bandwidth (default 0.01)
-  int mode;               // SONARE_DEHUM_MODE_* (default SUBTRACT, so a
-                          // zero-initialized config selects it)
+  float fundamental_hz;   ///< mains-hum fundamental (default 50 Hz)
+  int harmonics;          ///< notch count including fundamental (default 4)
+  float q;                ///< notch Q (default 20)
+  int adaptive;           ///< 0/1; enable adaptive tracking (default 0)
+  float search_range_hz;  ///< tracking search range in Hz (default 2); detection and adaptive
+                          ///< tracking refuse a window missing [1 Hz, 0.49 x sample rate]
+  float adaptation;       ///< tracking step size (default 0.25)
+  int frame_size;         ///< analysis frame size (default 2048, must be >= 16)
+  float pll_bandwidth;    ///< PLL bandwidth (default 0.01)
+  int mode;               ///< SONARE_DEHUM_MODE_* (default SUBTRACT, so a
+                          ///< zero-initialized config selects it)
 } SonareDehumConfig;
 
-// Longest harmonic series a dehum pass tracks, and the length of
-// SonareHumDetection::harmonic_dbfs. 16 harmonics reach 800 Hz from a 50 Hz
-// fundamental, past where mains hum carries energy worth notching.
+/// Longest harmonic series a dehum pass tracks, and the length of
+/// SonareHumDetection::harmonic_dbfs. 16 harmonics reach 800 Hz from a 50 Hz
+/// fundamental, past where mains hum carries energy worth notching.
 #define SONARE_DEHUM_MAX_HARMONICS 16
 
 /// @brief Flat POD mirror of @c mastering::repair::HumDetection.
@@ -1812,25 +1830,25 @@ typedef struct {
 ///   frequency without ever looking for hum, so a detector following the flag
 ///   would hand back its own input.
 typedef struct {
-  float fundamental_hz;          // tracked fundamental; the configured value
-                                 // when adaptive tracking is off
-  float fundamental_prominence;  // winning candidate's projected energy over the
-                                 // median candidate, a linear energy ratio, not
-                                 // dB; 1.0 means no peak: none was found, or the
-                                 // winner was not a stationary line in at least
-                                 // half the one-second frames (a repeating kick
-                                 // reads 1.0). Not a lock flag
-  int harmonics;                 // harmonics above the floor, 0 whenever
-                                 // fundamental_prominence is 1.0; not necessarily
-                                 // a contiguous run from the first
-  float harmonic_dbfs[SONARE_DEHUM_MAX_HARMONICS];  // input level at each k*f0,
-                                                    // k ascending. Measured for
-                                                    // every k the sample rate
-                                                    // carries, not only the
-                                                    // notched ones; a k*f0 at or
-                                                    // past Nyquist reads the dB
-                                                    // floor because nothing is
-                                                    // there to measure
+  float fundamental_hz;          ///< tracked fundamental; the configured value
+                                 ///< when adaptive tracking is off
+  float fundamental_prominence;  ///< winning candidate's projected energy over the
+                                 ///< median candidate, a linear energy ratio, not
+                                 ///< dB; 1.0 means no peak: none was found, or the
+                                 ///< winner was not a stationary line in at least
+                                 ///< half the one-second frames (a repeating kick
+                                 ///< reads 1.0). Not a lock flag
+  int harmonics;                 ///< harmonics above the floor, 0 whenever
+                                 ///< fundamental_prominence is 1.0; not necessarily
+                                 ///< a contiguous run from the first
+  float harmonic_dbfs[SONARE_DEHUM_MAX_HARMONICS];  ///< input level at each k*f0,
+                                                    ///< k ascending. Measured for
+                                                    ///< every k the sample rate
+                                                    ///< carries, not only the
+                                                    ///< notched ones; a k*f0 at or
+                                                    ///< past Nyquist reads the dB
+                                                    ///< floor because nothing is
+                                                    ///< there to measure
 } SonareHumDetection;
 
 /// @brief Measures hum without filtering.
@@ -1841,29 +1859,29 @@ SonareError sonare_mastering_repair_detect_hum(const float* samples, size_t leng
 
 /// @brief What one channel's dehum pass found and what it did to it.
 typedef struct {
-  SonareHumDetection detected;   // this channel's own analysis, before filtering
-  int notched_harmonics;         // harmonics the cascade reached; fewer than
-                                 // config.harmonics once k*f0 hits Nyquist
-  float applied_fundamental_hz;  // frequency the last notch refresh used
-  float fundamental_drift_hz;    // largest excursion of the tracked frequency
-                                 // from the configured one. Zero without
-                                 // adaptive tracking, which is the measurement
-                                 // rather than an unset field. Bounded by
-                                 // config.search_range_hz, and a hum inside a
-                                 // narrow range drives it to that bound
-                                 // exactly, so at small ranges the value
-                                 // reports the range rather than the signal
+  SonareHumDetection detected;   ///< this channel's own analysis, before filtering
+  int notched_harmonics;         ///< harmonics the cascade reached; fewer than
+                                 ///< config.harmonics once k*f0 hits Nyquist
+  float applied_fundamental_hz;  ///< frequency the last notch refresh used
+  float fundamental_drift_hz;    ///< largest excursion of the tracked frequency
+                                 ///< from the configured one. Zero without
+                                 ///< adaptive tracking, which is the measurement
+                                 ///< rather than an unset field. Bounded by
+                                 ///< config.search_range_hz, and a hum inside a
+                                 ///< narrow range drives it to that bound
+                                 ///< exactly, so at small ranges the value
+                                 ///< reports the range rather than the signal
 } SonareDehumReport;
 
 /// @brief A dehummed stereo pair and what each channel's pass did.
 /// @details @c left and @c right are heap-allocated; release the pair with
 ///   @ref sonare_free_dehum_stereo_result.
 typedef struct {
-  float* left;
-  float* right;
-  size_t length;
-  SonareDehumReport left_report;
-  SonareDehumReport right_report;
+  float* left;                     ///< Dehummed left channel, heap-allocated.
+  float* right;                    ///< Dehummed right channel, heap-allocated.
+  size_t length;                   ///< Samples per channel.
+  SonareDehumReport left_report;   ///< What the left channel's own pass found and repaired.
+  SonareDehumReport right_report;  ///< What the right channel's own pass found and repaired.
 } SonareDehumStereoResult;
 
 /// @brief Dehums a stereo pair, sharing the tracked fundamental when tracking is on.
@@ -1890,9 +1908,9 @@ void sonare_free_dehum_stereo_result(SonareDehumStereoResult* result);
 /// @details @c samples is heap-allocated; release it with
 ///   @ref sonare_free_dehum_result.
 typedef struct {
-  float* samples;
-  size_t length;
-  SonareDehumReport report;
+  float* samples;            ///< Repaired audio, heap-allocated.
+  size_t length;             ///< Length in samples.
+  SonareDehumReport report;  ///< What the pass found and filtered.
 } SonareDehumResult;
 
 /// @brief Offline mains-hum remover (cascaded notch filters with optional PLL tracking).
@@ -1907,18 +1925,18 @@ void sonare_free_dehum_result(SonareDehumResult* result);
 
 /// @brief Flat POD mirror of @c mastering::repair::DereverbClassicalConfig.
 typedef struct {
-  float threshold;         // late-reverb detection threshold (default 0, no gate)
-  float attenuation;       // suppression amount, linear (default 1, full)
-  int n_fft;               // STFT size (default 1024, power of two)
-  int hop_length;          // hop in samples, at most n_fft / 2 (default 256)
-  float t60_sec;           // estimated T60 (default 0.4)
-  float late_delay_ms;     // late-reverb onset relative to direct (default 50)
-  float over_subtraction;  // Berouti alpha (default 1.0)
-  float spectral_floor;    // Berouti beta (default 0.08)
-  int wpe_enabled;         // 0/1; enable WPE pre-stage (default 0)
-  int wpe_iterations;      // WPE EM iterations (default 2)
-  int wpe_taps;            // WPE filter taps (default 3)
-  float wpe_strength;      // WPE blend weight (default 0.7)
+  float threshold;         ///< late-reverb detection threshold (default 0, no gate)
+  float attenuation;       ///< suppression amount, linear (default 1, full)
+  int n_fft;               ///< STFT size (default 1024, power of two)
+  int hop_length;          ///< hop in samples, at most n_fft / 2 (default 256)
+  float t60_sec;           ///< estimated T60 (default 0.4)
+  float late_delay_ms;     ///< late-reverb onset relative to direct (default 50)
+  float over_subtraction;  ///< Berouti alpha (default 1.0)
+  float spectral_floor;    ///< Berouti beta (default 0.08)
+  int wpe_enabled;         ///< 0/1; enable WPE pre-stage (default 0)
+  int wpe_iterations;      ///< WPE EM iterations (default 2)
+  int wpe_taps;            ///< WPE filter taps (default 3)
+  float wpe_strength;      ///< WPE blend weight (default 0.7)
 } SonareDereverbClassicalConfig;
 
 /// @brief Flat POD mirror of @c mastering::repair::ReverbDetection.
@@ -1927,17 +1945,17 @@ typedef struct {
 ///   a free decay. Use @ref sonare_detect_acoustic for a graded RT60; this reports
 ///   what the module itself measured while deciding how much to subtract.
 typedef struct {
-  float late_decay_ratio_db;         // decay across the module's own late lag. Less
-                                     // negative means the material sustains across it,
-                                     // which a late tail does and a dry offset does not,
-                                     // so a reverberant input reads HIGHER here than the
-                                     // same material dry
-  float late_predictability;         // mean WPE predictor norm before the clamp; read it
-                                     // only when has_late_predictability is set
-  uint32_t has_late_predictability;  // 1 when the WPE stage ran and measured
-                                     // late_predictability; 0 (and the value 0)
-                                     // whenever config.wpe_enabled is clear -- the
-                                     // default
+  float late_decay_ratio_db;         ///< decay across the module's own late lag. Less
+                                     ///< negative means the material sustains across it,
+                                     ///< which a late tail does and a dry offset does not,
+                                     ///< so a reverberant input reads HIGHER here than the
+                                     ///< same material dry
+  float late_predictability;         ///< mean WPE predictor norm before the clamp; read it
+                                     ///< only when has_late_predictability is set
+  uint32_t has_late_predictability;  ///< 1 when the WPE stage ran and measured
+                                     ///< late_predictability; 0 (and the value 0)
+                                     ///< whenever config.wpe_enabled is clear -- the
+                                     ///< default
 } SonareReverbDetection;
 
 /// @brief Measures reverberation without dereverberating.
@@ -1953,26 +1971,26 @@ SonareError sonare_mastering_repair_detect_reverb(const float* samples, size_t l
 
 /// @brief What a dereverb pass found and what it removed.
 typedef struct {
-  SonareReverbDetection detected;  // analysis of the input
-  float mean_reduction_db;         // mean attenuation the subtraction applied
-  float suppressed_fraction;       // cells the config.threshold gate admitted as
-                                   // late reverberation. The only observation of
-                                   // that knob: 0 alongside a nonzero mean says
-                                   // the gate admitted nothing
-  float wpe_predictor_norm;        // mean predictor norm actually applied, after
-                                   // the clamp. Below detected.late_predictability
-                                   // says the clamp acted, an otherwise silent
-                                   // branch. Zero when the WPE stage did not run
+  SonareReverbDetection detected;  ///< analysis of the input
+  float mean_reduction_db;         ///< mean attenuation the subtraction applied
+  float suppressed_fraction;       ///< cells the config.threshold gate admitted as
+                                   ///< late reverberation. The only observation of
+                                   ///< that knob: 0 alongside a nonzero mean says
+                                   ///< the gate admitted nothing
+  float wpe_predictor_norm;        ///< mean predictor norm actually applied, after
+                                   ///< the clamp. Below detected.late_predictability
+                                   ///< says the clamp acted, an otherwise silent
+                                   ///< branch. Zero when the WPE stage did not run
 } SonareDereverbReport;
 
 /// @brief A dereverberated stereo pair and the one mask that produced it.
 /// @details @c left and @c right are heap-allocated; release the pair with
 ///   @ref sonare_free_dereverb_stereo_result.
 typedef struct {
-  float* left;
-  float* right;
-  size_t length;
-  SonareDereverbReport report;
+  float* left;                  ///< Dereverberated left channel, heap-allocated.
+  float* right;                 ///< Dereverberated right channel, heap-allocated.
+  size_t length;                ///< Samples per channel.
+  SonareDereverbReport report;  ///< The one report for the channel-linked mask.
 } SonareDereverbStereoResult;
 
 /// @brief Dereverberates a stereo pair with one channel-linked mask.
@@ -2000,9 +2018,9 @@ void sonare_free_dereverb_stereo_result(SonareDereverbStereoResult* result);
 /// @details @c samples is heap-allocated; release it with
 ///   @ref sonare_free_dereverb_result.
 typedef struct {
-  float* samples;
-  size_t length;
-  SonareDereverbReport report;
+  float* samples;               ///< Dereverberated audio, heap-allocated.
+  size_t length;                ///< Length in samples.
+  SonareDereverbReport report;  ///< What the pass found and removed.
 } SonareDereverbResult;
 
 /// @brief Offline classical dereverberator (spectral subtraction + optional WPE pre-stage).
@@ -2088,22 +2106,22 @@ SonareError sonare_mastering_repair_dereverb_apply_room_estimate(
     const SonareRoomEstimate* estimate, SonareDereverbClassicalConfig* config);
 
 // Trimming modes for sonare_mastering_repair_trim_silence.
-#define SONARE_TRIM_SILENCE_MODE_PEAK 0
-#define SONARE_TRIM_SILENCE_MODE_LUFS_GATED 1
+#define SONARE_TRIM_SILENCE_MODE_PEAK 0        ///< Trim by peak level against threshold_db.
+#define SONARE_TRIM_SILENCE_MODE_LUFS_GATED 1  ///< Trim by windowed RMS level against gate_lufs.
 
 /// @brief Flat POD mirror of @c mastering::repair::TrimSilenceConfig.
 typedef struct {
-  float threshold_db;      // peak threshold in dBFS (default -60 for Peak mode)
-  size_t padding_samples;  // leading/trailing samples to retain (default 0)
-  int mode;                // SONARE_TRIM_SILENCE_MODE_*
-  float gate_lufs;         // LUFS gate threshold (default -60 for LufsGated mode)
-  float window_ms;         // analysis window in milliseconds (default 400)
+  float threshold_db;      ///< peak threshold in dBFS (default -60 for Peak mode)
+  size_t padding_samples;  ///< leading/trailing samples to retain (default 0)
+  int mode;                ///< SONARE_TRIM_SILENCE_MODE_*
+  float gate_lufs;         ///< LUFS gate threshold (default -60 for LufsGated mode)
+  float window_ms;         ///< analysis window in milliseconds (default 400)
 } SonareTrimSilenceConfig;
 
 /// @brief One half-open sample range, in input-buffer coordinates.
 typedef struct {
-  size_t first;           // first kept sample
-  size_t last_exclusive;  // one past the last kept sample
+  size_t first;           ///< first kept sample
+  size_t last_exclusive;  ///< one past the last kept sample
 } SonareTrimRange;
 
 /// @brief Measures the range a trim pass would keep, without trimming.
@@ -2137,9 +2155,9 @@ SonareError sonare_mastering_repair_detect_trim_range_stereo(const float* left, 
 ///   two still sum to the input length, so a caller reporting how much went
 ///   reads the right total; only the split between the ends is arbitrary there.
 typedef struct {
-  SonareTrimRange range;        // the kept range, padding included
-  size_t removed_head_samples;  // samples dropped before range.first
-  size_t removed_tail_samples;  // samples dropped after range.last_exclusive
+  SonareTrimRange range;        ///< the kept range, padding included
+  size_t removed_head_samples;  ///< samples dropped before range.first
+  size_t removed_tail_samples;  ///< samples dropped after range.last_exclusive
 } SonareTrimReport;
 
 /// @brief A trimmed stereo pair, the range both channels were cut to, and the
@@ -2155,12 +2173,13 @@ typedef struct {
 ///   0 -- no zero-length allocation is made. The releaser accepts that empty
 ///   result, so a caller can still free unconditionally.
 typedef struct {
-  float* left;
+  float* left;  ///< Trimmed left channel, heap-allocated; NULL when neither channel carries signal.
+  /// Trimmed right channel, heap-allocated; NULL when neither channel carries signal.
   float* right;
-  size_t length;
-  SonareTrimReport report;
-  SonareTrimRange left_range;
-  SonareTrimRange right_range;
+  size_t length;                ///< Output length in samples, per channel.
+  SonareTrimReport report;      ///< The range both channels were cut to and what was removed.
+  SonareTrimRange left_range;   ///< Range the left channel's own scan kept.
+  SonareTrimRange right_range;  ///< Range the right channel's own scan kept.
 } SonareTrimSilenceStereoResult;
 
 /// @brief Trims a stereo pair to one shared range.
@@ -2207,9 +2226,9 @@ void sonare_free_trim_silence_stereo_result(SonareTrimSilenceStereoResult* resul
 ///   @c length is the OUTPUT length. A pass that kept nothing leaves @c samples
 ///   NULL and @c length 0; the releaser accepts that result.
 typedef struct {
-  float* samples;
-  size_t length;
-  SonareTrimReport report;
+  float* samples;           ///< Trimmed audio, heap-allocated; NULL when nothing was kept.
+  size_t length;            ///< Output length in samples.
+  SonareTrimReport report;  ///< The kept range and what was removed.
 } SonareTrimSilenceResult;
 
 /// @brief Offline silence trimmer (peak threshold or LUFS-gated).
@@ -2296,25 +2315,25 @@ SonareError sonare_mastering_repair_apply(const float* const* channels, size_t n
 // ============================================================================
 
 // Detector modes for sonare_mastering_dynamics_compressor.
-#define SONARE_COMPRESSOR_DETECTOR_PEAK 0
-#define SONARE_COMPRESSOR_DETECTOR_RMS 1
-#define SONARE_COMPRESSOR_DETECTOR_LOG_RMS 2
+#define SONARE_COMPRESSOR_DETECTOR_PEAK 0     ///< Peak level detector.
+#define SONARE_COMPRESSOR_DETECTOR_RMS 1      ///< RMS level smoothed over 10 ms.
+#define SONARE_COMPRESSOR_DETECTOR_LOG_RMS 2  ///< RMS level smoothed over 50 ms.
 
 /// @brief Flat POD mirror of @c mastering::dynamics::CompressorConfig.
 /// @details attack_ms and release_ms are one time constant: about 63% of the way at the set time.
 typedef struct {
-  float threshold_db;         // default -18 dB
-  float ratio;                // default 2.0 (clamped to >= 1)
-  float attack_ms;            // default 10
-  float release_ms;           // default 100
-  float knee_db;              // default 0
-  float makeup_gain_db;       // default 0
-  int auto_makeup;            // bool: 0 = off (default), nonzero = on
-  int detector;               // SONARE_COMPRESSOR_DETECTOR_*; default RMS
-  int sidechain_hpf_enabled;  // bool: 0 = off (default), nonzero = on
-  float sidechain_hpf_hz;     // default 100
-  float pdr_time_ms;          // program-dependent release ms; default 0
-  float pdr_release_scale;    // PDR release multiplier; default 1.0
+  float threshold_db;    ///< Level above which gain reduction starts, dB; default -18.
+  float ratio;           ///< Compression ratio; default 2.0, values below 1 are clamped to 1.
+  float attack_ms;       ///< Attack time constant, ms; default 10.
+  float release_ms;      ///< Release time constant, ms; default 100.
+  float knee_db;         ///< Soft-knee width around the threshold, dB; default 0.
+  float makeup_gain_db;  ///< Fixed gain added after compression, dB; default 0.
+  int auto_makeup;  ///< Non-zero compensates the average gain reduction automatically; default 0.
+  int detector;     ///< Level detector, SONARE_COMPRESSOR_DETECTOR_*; default RMS.
+  int sidechain_hpf_enabled;  ///< Non-zero high-passes the detector input; default 0.
+  float sidechain_hpf_hz;     ///< Detector high-pass corner, Hz; default 100.
+  float pdr_time_ms;          ///< Program-dependent release time, ms; default 0.
+  float pdr_release_scale;    ///< Program-dependent release multiplier; default 1.0.
 } SonareCompressorConfig;
 
 /// @brief Offline feed-forward compressor. Processes the buffer in place
@@ -2329,13 +2348,14 @@ SonareError sonare_mastering_dynamics_compressor(const float* samples, size_t le
 /// @brief Flat POD mirror of @c mastering::dynamics::GateConfig.
 /// @details attack_ms and release_ms are one time constant: about 63% of the way at the set time.
 typedef struct {
-  float threshold_db;        // open above this level; default -50 dB
-  float attack_ms;           // default 2 ms
-  float release_ms;          // default 80 ms
-  float range_db;            // closed-state attenuation; default -80 dB
-  float hold_ms;             // minimum open time; default 0
-  float close_threshold_db;  // hysteresis (clamped <= threshold_db); default -50
-  float key_hpf_hz;          // sidechain HPF; default 0 (disabled)
+  float threshold_db;  ///< Level above which the gate opens, dB; default -50.
+  float attack_ms;     ///< Attack time constant, ms; default 2.
+  float release_ms;    ///< Release time constant, ms; default 80.
+  float range_db;      ///< Attenuation while closed, dB; default -80.
+  float hold_ms;       ///< Minimum time the gate stays open, ms; default 0.
+  /// Level below which the gate closes, dB; clamped to at most threshold_db; default -50.
+  float close_threshold_db;
+  float key_hpf_hz;  ///< Detector high-pass corner, Hz; 0 disables it (default).
 } SonareGateConfig;
 
 /// @brief Offline noise gate. Output buffer is heap-allocated; release with
@@ -2347,16 +2367,16 @@ SonareError sonare_mastering_dynamics_gate(const float* samples, size_t length, 
 
 /// @brief Flat POD mirror of @c mastering::dynamics::TransientShaperConfig.
 typedef struct {
-  float attack_gain_db;     // default +3 dB
-  float sustain_gain_db;    // default 0
-  float fast_attack_ms;     // default 0
-  float fast_release_ms;    // default 20
-  float slow_attack_ms;     // default 15
-  float slow_release_ms;    // default 200
-  float sensitivity;        // default 1.0 (clamped >= 0)
-  float max_gain_db;        // safety clamp; default 12 dB
-  float gain_smoothing_ms;  // default 0 (disabled)
-  float lookahead_ms;       // default 0 (disabled)
+  float attack_gain_db;     ///< Gain on the attack portion, dB; default +3.
+  float sustain_gain_db;    ///< Gain on the sustain portion, dB; default 0.
+  float fast_attack_ms;     ///< Fast envelope attack, ms; default 0.
+  float fast_release_ms;    ///< Fast envelope release, ms; default 20.
+  float slow_attack_ms;     ///< Slow envelope attack, ms; default 15.
+  float slow_release_ms;    ///< Slow envelope release, ms; default 200.
+  float sensitivity;        ///< Scales the envelope difference; default 1.0, clamped to >= 0.
+  float max_gain_db;        ///< Largest gain change either way, dB; default 12.
+  float gain_smoothing_ms;  ///< Gain smoothing time, ms; 0 disables it (default).
+  float lookahead_ms;       ///< Lookahead delay, ms; 0 disables it (default).
 } SonareTransientShaperConfig;
 
 /// @brief Offline transient shaper (envelope-difference based). Output buffer
