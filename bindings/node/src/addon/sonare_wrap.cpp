@@ -295,9 +295,6 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
   exports.Set(
       "mixingAssistantSuggest",
       Napi::Function::New(env, &SonareWrap::MixingAssistantSuggest, "mixingAssistantSuggest"));
-  exports.Set("mixingAssistantSuggestSceneJson",
-              Napi::Function::New(env, &SonareWrap::MixingAssistantSuggestSceneJson,
-                                  "mixingAssistantSuggestSceneJson"));
   exports.Set("mixingAssistantSourceClassNames",
               Napi::Function::New(env, &SonareWrap::MixingAssistantSourceClassNames,
                                   "mixingAssistantSourceClassNames"));

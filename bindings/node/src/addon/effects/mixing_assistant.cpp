@@ -156,14 +156,7 @@ bool ReadTrackArrays(Napi::Env env, const Napi::CallbackInfo& info, TrackArrays*
   return true;
 }
 
-using SuggestEntry = SonareError (*)(const float* const*, const float* const*, const char* const*,
-                                     const char* const*, const size_t*, const int*, size_t, int,
-                                     const SonareMasteringParam*, size_t, char**);
-
-// Shared body of the two suggest entry points, so they cannot drift into
-// accepting different inputs. @p entry selects the full result document or the
-// scene-only document.
-Napi::Value SuggestMixScene(const Napi::CallbackInfo& info, SuggestEntry entry) {
+Napi::Value SuggestMixScene(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   TrackArrays tracks;
   if (!ReadTrackArrays(env, info, &tracks)) {
@@ -183,7 +176,7 @@ Napi::Value SuggestMixScene(const Napi::CallbackInfo& info, SuggestEntry entry) 
   }
 
   char* json = nullptr;
-  const SonareError err = entry(
+  const SonareError err = sonare_mixing_assistant_suggest(
       tracks.left.data(), tracks.any_right ? tracks.right.data() : nullptr,
       tracks.id_pointers.data(), tracks.any_name ? tracks.name_pointers.data() : nullptr,
       tracks.lengths.data(), tracks.sample_rates.empty() ? nullptr : tracks.sample_rates.data(),
@@ -205,14 +198,7 @@ Napi::Value SuggestMixScene(const Napi::CallbackInfo& info, SuggestEntry entry) 
 Napi::Value SonareWrap::MixingAssistantSuggest(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  return SuggestMixScene(info, &sonare_mixing_assistant_suggest);
-  SONARE_NODE_CATCH(env)
-}
-
-Napi::Value SonareWrap::MixingAssistantSuggestSceneJson(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  SONARE_NODE_TRY
-  return SuggestMixScene(info, &sonare_mixing_assistant_suggest_scene_json);
+  return SuggestMixScene(info);
   SONARE_NODE_CATCH(env)
 }
 

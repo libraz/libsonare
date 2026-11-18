@@ -3066,15 +3066,6 @@ export interface SonareModule {
     sampleRate: number,
     params: Record<string, number | boolean>,
   ) => string;
-  mixingAssistantSuggestSceneJson: (
-    leftChannels: Float32Array[],
-    rightChannels: (Float32Array | null)[] | null,
-    trackIds: string[],
-    trackNames: (string | null)[] | null,
-    trackSampleRates: number[] | null,
-    sampleRate: number,
-    params: Record<string, number | boolean>,
-  ) => string;
   mixingAssistantSourceClassNames: () => string[];
   mixingAssistantSourceClassFromName: (name: string) => number;
   trim: (samples: Float32Array, sampleRate: number, thresholdDb: number) => Float32Array;

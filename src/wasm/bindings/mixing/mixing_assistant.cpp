@@ -28,7 +28,6 @@
 
 #if defined(SONARE_WITH_MIXING_ASSISTANT) && SONARE_WITH_MIXING_ASSISTANT
 #include "core/resample.h"
-#include "mixing/api/scene.h"
 #include "mixing/assistant/config_from_params.h"
 #include "mixing/assistant/suggester.h"
 #include "mixing/assistant/track_profile.h"
@@ -227,31 +226,6 @@ std::string js_mixing_assistant_suggest(val left_channels, val right_channels, v
 #endif
 }
 
-// As js_mixing_assistant_suggest, but returns only the suggested scene, in the
-// schema Mixer.fromSceneJson reads.
-std::string js_mixing_assistant_suggest_scene_json(val left_channels, val right_channels,
-                                                   val track_ids, val track_names,
-                                                   val track_sample_rates, const val& sample_rate,
-                                                   val params_obj) {
-#if defined(SONARE_WITH_MIXING_ASSISTANT) && SONARE_WITH_MIXING_ASSISTANT
-  const assistant::MixAssistantConfig config = assistantConfigFromParams(params_obj);
-  const AssistantInput input =
-      buildAssistantInput(left_channels, right_channels, track_ids, track_names, track_sample_rates,
-                          checkedIntFromVal(sample_rate, "sampleRate"));
-  const auto result = assistant::suggest_scene(input.tracks, config);
-  return mixing::api::scene_to_json(result.scene);
-#else
-  (void)left_channels;
-  (void)right_channels;
-  (void)track_ids;
-  (void)track_names;
-  (void)track_sample_rates;
-  (void)sample_rate;
-  (void)params_obj;
-  throwUnavailable();
-#endif
-}
-
 // Source-class identifiers the assistant can report, in enum order.
 val js_mixing_assistant_source_class_names() {
 #if defined(SONARE_WITH_MIXING_ASSISTANT) && SONARE_WITH_MIXING_ASSISTANT
@@ -278,7 +252,6 @@ int js_mixing_assistant_source_class_from_name(std::string name) {
 
 void registerMixingAssistantBindings() {
   function("mixingAssistantSuggest", &js_mixing_assistant_suggest);
-  function("mixingAssistantSuggestSceneJson", &js_mixing_assistant_suggest_scene_json);
   function("mixingAssistantSourceClassNames", &js_mixing_assistant_source_class_names);
   function("mixingAssistantSourceClassFromName", &js_mixing_assistant_source_class_from_name);
 }
