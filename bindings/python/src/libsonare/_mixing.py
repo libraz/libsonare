@@ -1144,7 +1144,7 @@ def mix_stereo(
         a max-hold over the block just processed, so it is valid immediately and
         floors only on digital silence. This call mixes the whole signal in one
         block and flushes the meters after it, so the reported true peak
-        matches :func:`metering_true_peak_db` over the same signal exactly.
+        matches :func:`metering_true_peak_dbtp` over the same signal exactly.
     """
     lib = _get_lib()
     if not hasattr(lib, "sonare_mixer_create"):

@@ -1325,6 +1325,7 @@ test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_
 [[entry]]
 kind = "option"
 old = "ebur128_loudness_range(sample_rate)"
+to = "ebur128_loudness_range_lu(sample_rate)"
 changed = "sample_rate is required (1.x defaulted to 22050)"
 domain = "mastering"
 rule = "sample-rate-required"
@@ -1791,6 +1792,7 @@ test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_
 [[entry]]
 kind = "option"
 old = "metering_true_peak_db(sample_rate)"
+to = "metering_true_peak_dbtp(sample_rate)"
 changed = "sample_rate is required (1.x defaulted to 22050)"
 domain = "mastering"
 rule = "sample-rate-required"
@@ -5330,6 +5332,7 @@ test = "bindings/python/tests/test_exact_closed_set_tokens.py::test_a_fade_curve
 [[entry]]
 kind = "option"
 old = "metering_true_peak_db(oversample_factor)"
+to = "metering_true_peak_dbtp(oversample_factor)"
 changed = "None (the default) is 4; an explicit 0 raises SonareValueError"
 domain = "mastering"
 rule = "absent-not-sentinel"
@@ -5338,6 +5341,7 @@ test = "bindings/python/tests/test_metering_absent_defaults.py::test_an_explicit
 [[entry]]
 kind = "option"
 old = "Audio.true_peak_db(oversample_factor)"
+to = "Audio.true_peak_dbtp(oversample_factor)"
 changed = "None (the default) is 4; an explicit 0 raises SonareValueError"
 domain = "core"
 rule = "absent-not-sentinel"
@@ -5842,7 +5846,8 @@ test = "bindings/python/tests/test_state_reads_are_properties.py::test_state_rea
 [[entry]]
 kind = "method"
 old = "PlaybackRenderer.input_channels"
-changed = "a property (was a method)"
+to = "PlaybackRenderer.num_input_channels"
+changed = "a property named for the channel count (was the method input_channels)"
 domain = "engine"
 rule = "getters"
 test = "bindings/python/tests/test_state_reads_are_properties.py::test_state_read_is_a_property"
@@ -5850,7 +5855,8 @@ test = "bindings/python/tests/test_state_reads_are_properties.py::test_state_rea
 [[entry]]
 kind = "method"
 old = "PlaybackRenderer.output_channels"
-changed = "a property (was a method)"
+to = "PlaybackRenderer.num_output_channels"
+changed = "a property named for the channel count (was the method output_channels)"
 domain = "engine"
 rule = "getters"
 test = "bindings/python/tests/test_state_reads_are_properties.py::test_state_read_is_a_property"
@@ -7334,3 +7340,177 @@ changed = "one record per detector: {click, clip, crackle, noise, hum, reverb} (
 domain = "mastering"
 rule = "typed-results"
 test = "bindings/python/tests/test_mastering_result_types.py::test_audio_profile_result_with_defects"
+
+# Getter, unit and channel-count renames, and the streaming-platform record.
+
+[[entry]]
+kind = "function"
+old = "ebur128_loudness_range"
+new = "ebur128_loudness_range_lu"
+domain = "mastering"
+rule = "loudness-names"
+
+[[entry]]
+kind = "function"
+old = "metering_true_peak_db"
+new = "metering_true_peak_dbtp"
+domain = "mastering"
+rule = "loudness-names"
+
+[[entry]]
+kind = "function"
+old = "get_project_vocal_edit_dependencies"
+new = "project_vocal_edit_dependencies"
+domain = "project"
+rule = "getters"
+
+[[entry]]
+kind = "method"
+old = "Audio.ebur128_loudness_range"
+new = "Audio.ebur128_loudness_range_lu"
+domain = "core"
+rule = "loudness-names"
+
+[[entry]]
+kind = "method"
+old = "Audio.true_peak_db"
+new = "Audio.true_peak_dbtp"
+domain = "core"
+rule = "loudness-names"
+
+[[entry]]
+kind = "method"
+old = "Audio.file_channel_count"
+new = "Audio.file_num_channels"
+domain = "core"
+rule = "num-channels"
+
+[[entry]]
+kind = "method"
+old = "Project.get_assist_sidecar"
+removed = "read assist_sidecars()[index]"
+domain = "project"
+rule = "getters"
+
+[[entry]]
+kind = "method"
+old = "Project.get_part_rig"
+new = "Project.part_rig"
+domain = "project"
+rule = "getters"
+
+[[entry]]
+kind = "method"
+old = "Project.get_vocal_edit_dependencies"
+new = "Project.vocal_edit_dependencies"
+domain = "project"
+rule = "getters"
+
+[[entry]]
+kind = "method"
+old = "Project.get_sample_rate"
+to = "Project.sample_rate"
+changed = "a property (was the method get_sample_rate)"
+domain = "project"
+rule = "getters"
+test = "bindings/python/tests/test_project.py::test_project_getters_setters_and_counts"
+
+[[entry]]
+kind = "method"
+old = "Project.get_overlap_policy"
+to = "Project.overlap_policy"
+changed = "a property returning \"disallow\" or \"allow\" instead of an integer"
+domain = "project"
+rule = "getters"
+test = "bindings/python/tests/test_project.py::test_overlap_policy_is_a_token_and_an_ordinal_is_refused"
+
+[[entry]]
+kind = "option"
+old = "Project.set_overlap_policy(policy)"
+changed = "takes \"disallow\" or \"allow\"; an integer raises TypeError"
+domain = "project"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_project.py::test_overlap_policy_is_a_token_and_an_ordinal_is_refused"
+
+[[entry]]
+kind = "option"
+old = "analyze_dynamics(compression_threshold)"
+new = "analyze_dynamics(compression_threshold_db)"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "option"
+old = "Audio.analyze_dynamics(compression_threshold)"
+new = "Audio.analyze_dynamics(compression_threshold_db)"
+domain = "core"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "option"
+old = "mastering_insert_param_names(name)"
+new = "mastering_insert_param_names(insert)"
+domain = "mastering"
+rule = "construction"
+
+[[entry]]
+kind = "option"
+old = "voice_character_preset_id(preset)"
+new = "voice_character_preset_id(ordinal)"
+domain = "effects"
+rule = "construction"
+
+[[entry]]
+kind = "option"
+old = "plp(tempo_min)"
+changed = "default 30 -> None, the shared 60 BPM bound"
+domain = "analysis"
+rule = "tempo-range"
+test = "bindings/python/tests/test_analyzer_core.py::test_plp_omitted_tempo_bounds_are_the_core_range"
+
+[[entry]]
+kind = "option"
+old = "plp(tempo_max)"
+changed = "default 300 -> None, the shared 200 BPM bound"
+domain = "analysis"
+rule = "tempo-range"
+test = "bindings/python/tests/test_analyzer_core.py::test_plp_omitted_tempo_bounds_are_the_core_range"
+
+[[entry]]
+kind = "option"
+old = "fourier_tempogram(norm)"
+removed = "the frames are always normalized, as on every other surface"
+domain = "analysis"
+rule = "construction"
+
+[[entry]]
+kind = "option"
+old = "mastering_streaming_preview(platforms)"
+changed = "each platform is a record with exactly name, target_lufs and ceiling_dbtp; any other key raises SonareValueError naming the replacement"
+domain = "mastering"
+rule = "typed-results"
+test = "bindings/python/tests/test_analyzer_mastering_mixing.py::test_a_streaming_platform_takes_exactly_its_snake_case_keys"
+
+[[entry]]
+kind = "option"
+old = "mastering_streaming_preview_stereo(platforms)"
+changed = "each platform is a record with exactly name, target_lufs and ceiling_dbtp; any other key raises SonareValueError naming the replacement"
+domain = "mastering"
+rule = "typed-results"
+test = "bindings/python/tests/test_analyzer_mastering_mixing.py::test_a_streaming_platform_takes_exactly_its_snake_case_keys"
+
+[[entry]]
+kind = "class"
+old = "PlaybackLoudnessMeter"
+changed = "num_channels and sample_rate are keyword-only"
+domain = "engine"
+rule = "construction"
+test = "bindings/python/tests/test_playback.py::test_loudness_meter_takes_its_shape_by_keyword"
+
+[[entry]]
+kind = "class"
+old = "ClipPageProvider"
+changed = "num_channels, num_samples and page_frames are keyword-only"
+domain = "project"
+rule = "construction"
+test = "bindings/python/tests/test_engine_clips.py::test_clip_page_provider_takes_its_shape_by_keyword"

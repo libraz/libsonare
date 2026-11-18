@@ -61,7 +61,7 @@ from .types import (
     TimeSignature,
 )
 
-# The tempo search range shared by detect_bpm, detect_beats and analyze.
+# The core tempo search range every tempo entry point reads an omitted bound as.
 _DEFAULT_BPM_MIN = 60.0
 _DEFAULT_BPM_MAX = 200.0
 

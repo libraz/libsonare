@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import ctypes
 import json
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 import numpy as np
@@ -42,6 +42,7 @@ from .types import (
     MasteringChainConfig,
     MasteringResult,
     MasteringStereoResult,
+    StreamingPlatform,
 )
 
 
@@ -436,37 +437,65 @@ def mastering_stereo_analyze(
             lib.sonare_free_string(json_ptr)
 
 
+_PLATFORM_KEYS = ("name", "target_lufs", "ceiling_dbtp")
+# The camelCase spellings a platform record does not take, with the key that replaces each.
+_PLATFORM_RENAMED = {
+    "targetLufs": "target_lufs",
+    "ceilingDb": "ceiling_dbtp",
+    "ceilingDbtp": "ceiling_dbtp",
+    "ceiling_db": "ceiling_dbtp",
+}
+
+
+def _platform_fields(platform: Mapping[str, Any]) -> tuple[str, float, float]:
+    """Read one :class:`StreamingPlatform` record, refusing any other key by name."""
+    if not isinstance(platform, Mapping):
+        raise TypeError("platforms: each platform must be a mapping")
+    for key in platform:
+        if key in _PLATFORM_RENAMED:
+            raise SonareValueError(
+                f"platforms: unknown key {key!r}; use {_PLATFORM_RENAMED[key]!r}"
+            )
+        if key not in _PLATFORM_KEYS:
+            raise SonareValueError(f"platforms: unknown key {key!r}")
+    missing = [key for key in _PLATFORM_KEYS if key not in platform]
+    if missing:
+        raise SonareValueError(f"platforms: missing {', '.join(missing)}")
+    name = platform["name"]
+    if not isinstance(name, str):
+        raise TypeError("platforms: name must be a string")
+    return (
+        name,
+        _narrow_double(platform["target_lufs"], "target_lufs"),
+        _narrow_double(platform["ceiling_dbtp"], "ceiling_dbtp"),
+    )
+
+
 def _streaming_platforms(
-    platforms: Sequence[dict[str, float | str]] | None,
+    platforms: Sequence[StreamingPlatform] | None,
 ) -> tuple[Any, int, list[bytes]]:
     """Build the C platform array, keeping the name buffers alive for the call."""
     if not platforms:
         return None, 0, []
-    platform_count = len(platforms)
-    array_type = SonareStreamingPlatform * platform_count
-    platform_buffers = [_utf8_arg(str(platform.get("name", "")), "name") for platform in platforms]
+    fields = [_platform_fields(platform) for platform in platforms]
+    array_type = SonareStreamingPlatform * len(fields)
+    platform_buffers = [_utf8_arg(name, "name") for name, _, _ in fields]
     platform_array = array_type(
         *[
             SonareStreamingPlatform(
-                name=platform_buffers[index],
-                target_lufs=_narrow_double(
-                    platform.get("targetLufs", platform.get("target_lufs", -14.0)), "targetLufs"
-                ),
-                ceiling_db=_narrow_double(
-                    platform.get("ceilingDb", platform.get("ceiling_db", -1.0)), "ceilingDb"
-                ),
+                name=platform_buffers[index], target_lufs=target, ceiling_db=ceiling
             )
-            for index, platform in enumerate(platforms)
+            for index, (_, target, ceiling) in enumerate(fields)
         ]
     )
-    return platform_array, platform_count, platform_buffers
+    return platform_array, len(fields), platform_buffers
 
 
 @_guard_buffer("samples")
 def mastering_streaming_preview(
     samples: Sequence[float] | list[float],
     sample_rate: int,
-    platforms: Sequence[dict[str, float | str]] | None = None,
+    platforms: Sequence[StreamingPlatform] | None = None,
 ) -> str:
     """Preview streaming-platform normalization and ceiling risk as shared JSON.
 
@@ -670,7 +699,7 @@ def mastering_streaming_preview_stereo(
     left: Sequence[float] | list[float],
     right: Sequence[float] | list[float],
     sample_rate: int,
-    platforms: Sequence[dict[str, float | str]] | None = None,
+    platforms: Sequence[StreamingPlatform] | None = None,
 ) -> str:
     """Preview streaming normalization for a stereo pair as shared JSON.
 

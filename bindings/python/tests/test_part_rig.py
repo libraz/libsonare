@@ -38,27 +38,27 @@ def test_all_parts_constant():
 
 def test_absent_entry_reads_none():
     with _project() as project:
-        assert project.get_part_rig(DESTINATION, 0) is None
+        assert project.part_rig(DESTINATION, 0) is None
 
 
 def test_set_get_clear_round_trip():
     with _project() as project:
         project.set_part_rig(DESTINATION, 0, mode="none")
-        assert project.get_part_rig(DESTINATION, 0) == ("none", None)
+        assert project.part_rig(DESTINATION, 0) == ("none", None)
 
         # A bank entry is kept explicitly so it can override the destination default.
         project.set_part_rig(DESTINATION, PART_RIG_ALL_PARTS, mode="bank")
-        assert project.get_part_rig(DESTINATION, PART_RIG_ALL_PARTS) == ("bank", None)
+        assert project.part_rig(DESTINATION, PART_RIG_ALL_PARTS) == ("bank", None)
 
         project.clear_part_rig(DESTINATION, 0)
-        assert project.get_part_rig(DESTINATION, 0) is None
-        assert project.get_part_rig(DESTINATION, PART_RIG_ALL_PARTS) is not None
+        assert project.part_rig(DESTINATION, 0) is None
+        assert project.part_rig(DESTINATION, PART_RIG_ALL_PARTS) is not None
 
 
 def test_chain_round_trip():
     with _project() as project:
         project.set_part_rig(DESTINATION, 1, mode="chain", inserts=CHAIN)
-        mode, inserts = project.get_part_rig(DESTINATION, 1)
+        mode, inserts = project.part_rig(DESTINATION, 1)
         assert mode == "chain"
         assert [i["processor"] for i in inserts] == ["saturation.softClipper"]
         assert inserts[0]["params"] == {}
@@ -72,7 +72,7 @@ def test_params_accepts_json_string():
             mode="chain",
             inserts=[{"processor": "saturation.softClipper", "params": "{}"}],
         )
-        assert project.get_part_rig(DESTINATION, 1)[0] == "chain"
+        assert project.part_rig(DESTINATION, 1)[0] == "chain"
 
 
 def test_undo_restores():
@@ -80,11 +80,11 @@ def test_undo_restores():
         project.set_part_rig(DESTINATION, 0, mode="none")
         project.set_part_rig(DESTINATION, 0, mode="bank")
         project.undo()
-        assert project.get_part_rig(DESTINATION, 0) == ("none", None)
+        assert project.part_rig(DESTINATION, 0) == ("none", None)
         project.undo()
-        assert project.get_part_rig(DESTINATION, 0) is None
+        assert project.part_rig(DESTINATION, 0) is None
         project.redo()
-        assert project.get_part_rig(DESTINATION, 0) == ("none", None)
+        assert project.part_rig(DESTINATION, 0) == ("none", None)
 
 
 def test_invalid_input_is_refused():
@@ -117,7 +117,7 @@ def test_invalid_input_is_refused():
             )
         assert not isinstance(bad_json.value, SonareValueError)
         assert bad_json.value.code == int(ErrorCode.INVALID_FORMAT)
-        assert project.get_part_rig(DESTINATION, 0) is None
+        assert project.part_rig(DESTINATION, 0) is None
 
 
 @pytest.mark.parametrize(
@@ -129,7 +129,7 @@ def test_invalid_input_is_refused():
             (DESTINATION, 0),
             {"mode": "none"},
         ),
-        ("get_part_rig", "sonare_project_get_part_rig", (DESTINATION, 0), {}),
+        ("part_rig", "sonare_project_get_part_rig", (DESTINATION, 0), {}),
         ("clear_part_rig", "sonare_project_clear_part_rig", (DESTINATION, 0), {}),
     ],
 )

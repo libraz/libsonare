@@ -112,7 +112,7 @@ def test_clip_page_provider_supply_accepts_a_2d_ndarray_page() -> None:
     page = np.array([[1.0, 2.0, 3.0, 4.0]], dtype=np.float32)
     with (
         RealtimeEngine(sample_rate=48000.0, max_block_size=8) as engine,
-        ClipPageProvider(1, 8, 4) as provider,
+        ClipPageProvider(num_channels=1, num_samples=8, page_frames=4) as provider,
     ):
         provider.supply(0, page)
         provider.supply(1, page * 2.0)
@@ -124,7 +124,7 @@ def test_clip_page_provider_supply_accepts_a_2d_ndarray_page() -> None:
 def test_engine_streams_paged_clip_provider_and_drains_requests() -> None:
     with (
         RealtimeEngine(sample_rate=48000.0, max_block_size=8) as engine,
-        ClipPageProvider(1, 8, 4) as provider,
+        ClipPageProvider(num_channels=1, num_samples=8, page_frames=4) as provider,
     ):
         provider.supply(0, [[1.0, 2.0, 3.0, 4.0]])
         engine.set_clips(
@@ -190,13 +190,18 @@ def test_engine_feeds_paged_clips_from_raw_float32_files(tmp_path) -> None:
         assert second[0].tolist() == [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]
 
 
+def test_clip_page_provider_takes_its_shape_by_keyword() -> None:
+    with pytest.raises(TypeError):
+        ClipPageProvider(1, 8, 4)  # type: ignore[misc]
+
+
 def test_clip_page_provider_failed_construction_does_not_emit_del_noise(capsys) -> None:
     with pytest.raises(SonareError):
-        ClipPageProvider(0, 0, 0)
+        ClipPageProvider(num_channels=0, num_samples=0, page_frames=0)
     with pytest.raises(SonareError):
-        ClipPageProvider(1, 1_000_000_000_000, 1)
+        ClipPageProvider(num_channels=1, num_samples=1_000_000_000_000, page_frames=1)
     with pytest.raises(SonareError):
-        ClipPageProvider(65, 8, 4)
+        ClipPageProvider(num_channels=65, num_samples=8, page_frames=4)
     gc.collect()
     assert "Exception ignored in" not in capsys.readouterr().err
 

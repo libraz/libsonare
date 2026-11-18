@@ -11,6 +11,7 @@ from typing import Any
 import numpy as np
 import numpy.typing as npt
 
+from ._analysis_detection import _DEFAULT_BPM_MAX, _DEFAULT_BPM_MIN
 from ._ffi import SonareSilenceCommonReport
 from ._narrowing import _narrow_double
 from ._runtime import (
@@ -749,18 +750,22 @@ def plp(
     onset_envelope: Sequence[float] | list[float],
     sr: int = 22050,
     hop_length: int = 512,
-    tempo_min: float = 30.0,
-    tempo_max: float = 300.0,
+    tempo_min: float | None = None,
+    tempo_max: float | None = None,
     win_length: int = 384,
 ) -> np.ndarray:
-    """Compute predominant local pulse from an onset envelope (float32, one value per frame)."""
+    """Compute predominant local pulse from an onset envelope (float32, one value per frame).
+
+    The pulse is sought between ``tempo_min`` and ``tempo_max`` BPM; an omitted bound
+    is the library default, 60-200 BPM as on every other tempo entry point.
+    """
     return _call_float_array_transform(
         "sonare_plp",
         onset_envelope,
         _to_c_int(sr, "sr"),
         _to_c_int(hop_length, "hop_length"),
-        _to_c_float(tempo_min, "tempo_min"),
-        _to_c_float(tempo_max, "tempo_max"),
+        _to_c_float(_DEFAULT_BPM_MIN if tempo_min is None else tempo_min, "tempo_min"),
+        _to_c_float(_DEFAULT_BPM_MAX if tempo_max is None else tempo_max, "tempo_max"),
         _to_c_int(win_length, "win_length"),
         arg_name="onset_envelope",
     )
@@ -825,7 +830,6 @@ def fourier_tempogram(
     hop_length: int = 512,
     win_length: int = 384,
     center: bool = True,
-    norm: bool = True,
 ) -> np.ndarray:
     """Compute the Fourier (FFT-based) tempogram magnitude.
 
@@ -842,7 +846,8 @@ def fourier_tempogram(
             _to_c_int(hop_length, "hop_length"),
             _to_c_int(win_length, "win_length"),
             ctypes.c_int(1 if center else 0),
-            ctypes.c_int(1 if norm else 0),
+            # The C norm flag stays set, as on every other surface.
+            ctypes.c_int(1),
             ctypes.byref(out),
             ctypes.byref(out_length),
             ctypes.byref(n_frames),

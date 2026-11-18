@@ -305,7 +305,7 @@ def test_lufs_series_interleaved_rejects_non_multiple_length() -> None:
 
 
 def test_ebur128_loudness_range_is_finite_nonnegative() -> None:
-    lra = libsonare.ebur128_loudness_range(_tone(), sample_rate=22050)
+    lra = libsonare.ebur128_loudness_range_lu(_tone(), sample_rate=22050)
     assert math.isfinite(lra)
     assert lra >= 0.0
 

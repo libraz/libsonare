@@ -11,7 +11,7 @@ from typing import Any
 
 import numpy as np
 
-from ._analysis_detection import _parse_analysis_json
+from ._analysis_detection import _DEFAULT_BPM_MAX, _DEFAULT_BPM_MIN, _parse_analysis_json
 from ._cancellation import (
     CancelCallback,
     CancellationState,
@@ -87,8 +87,8 @@ def _music_analyze_options(
     *,
     n_fft: int,
     hop_length: int,
-    bpm_min: float,
-    bpm_max: float,
+    bpm_min: float | None,
+    bpm_max: float | None,
     start_bpm: float,
     use_triads_only: bool,
     use_hpss: bool,
@@ -126,8 +126,8 @@ def _music_analyze_options(
         struct_version=SONARE_MUSIC_ANALYZE_OPTIONS_VERSION,
         n_fft=n_fft,
         hop_length=hop_length,
-        bpm_min=bpm_min,
-        bpm_max=bpm_max,
+        bpm_min=_DEFAULT_BPM_MIN if bpm_min is None else bpm_min,
+        bpm_max=_DEFAULT_BPM_MAX if bpm_max is None else bpm_max,
         start_bpm=start_bpm,
         use_triads_only=int(use_triads_only),
         use_hpss=int(use_hpss),
@@ -169,8 +169,8 @@ def analyze(
     *,
     n_fft: int = 2048,
     hop_length: int = 512,
-    bpm_min: float = 60.0,
-    bpm_max: float = 200.0,
+    bpm_min: float | None = None,
+    bpm_max: float | None = None,
     start_bpm: float = 120.0,
     use_triads_only: bool = True,
     use_hpss: bool = False,
@@ -603,8 +603,8 @@ def estimate_meter(
 def analyze_bpm(
     samples: Sequence[float] | list[float],
     sample_rate: int,
-    bpm_min: float = 60.0,
-    bpm_max: float = 200.0,
+    bpm_min: float | None = None,
+    bpm_max: float | None = None,
     start_bpm: float = 120.0,
     n_fft: int = 2048,
     hop_length: int = 512,
@@ -625,8 +625,8 @@ def analyze_bpm(
         c_array,
         _to_c_size_t(length, "length"),
         _to_c_int(sample_rate, "sample_rate"),
-        _to_c_float(bpm_min, "bpm_min"),
-        _to_c_float(bpm_max, "bpm_max"),
+        _to_c_float(_DEFAULT_BPM_MIN if bpm_min is None else bpm_min, "bpm_min"),
+        _to_c_float(_DEFAULT_BPM_MAX if bpm_max is None else bpm_max, "bpm_max"),
         _to_c_float(start_bpm, "start_bpm"),
         _to_c_int(n_fft, "n_fft"),
         _to_c_int(hop_length, "hop_length"),
@@ -780,8 +780,8 @@ def detect_acoustic(
 def analyze_rhythm(
     samples: Sequence[float] | list[float],
     sample_rate: int,
-    bpm_min: float = 60.0,
-    bpm_max: float = 200.0,
+    bpm_min: float | None = None,
+    bpm_max: float | None = None,
     start_bpm: float = 120.0,
     n_fft: int = 2048,
     hop_length: int = 512,
@@ -804,8 +804,8 @@ def analyze_rhythm(
         c_array,
         _to_c_size_t(length, "length"),
         _to_c_int(sample_rate, "sample_rate"),
-        _to_c_float(bpm_min, "bpm_min"),
-        _to_c_float(bpm_max, "bpm_max"),
+        _to_c_float(_DEFAULT_BPM_MIN if bpm_min is None else bpm_min, "bpm_min"),
+        _to_c_float(_DEFAULT_BPM_MAX if bpm_max is None else bpm_max, "bpm_max"),
         _to_c_float(start_bpm, "start_bpm"),
         _to_c_int(n_fft, "n_fft"),
         _to_c_int(hop_length, "hop_length"),
@@ -837,7 +837,7 @@ def analyze_dynamics(
     sample_rate: int,
     window_sec: float = 0.4,
     hop_length: int = 512,
-    compression_threshold: float = 6.0,
+    compression_threshold_db: float = 6.0,
 ) -> DynamicsResult:
     """Analyze dynamics and loudness primitives."""
     lib = _get_lib()
@@ -849,7 +849,7 @@ def analyze_dynamics(
         _to_c_int(sample_rate, "sample_rate"),
         _to_c_float(window_sec, "window_sec"),
         _to_c_int(hop_length, "hop_length"),
-        _to_c_float(compression_threshold, "compression_threshold"),
+        _to_c_float(compression_threshold_db, "compression_threshold_db"),
         ctypes.byref(out),
     )
     _check(rc)

@@ -197,6 +197,17 @@ class MasteringAssistantResult(TypedDict):
     profile: MasteringAssistantProfile
 
 
+class StreamingPlatform(TypedDict):
+    """One delivery target a streaming preview or the assistant measures against."""
+
+    name: str
+    """Platform name, echoed into the result."""
+    target_lufs: float
+    """Integrated-loudness target in LUFS, e.g. -14."""
+    ceiling_dbtp: float
+    """True-peak ceiling in dBTP, e.g. -1."""
+
+
 class MasteringStreamingPreviewPlatform(TypedDict):
     """One delivery target in a :class:`MasteringStreamingPreviewResult`."""
 

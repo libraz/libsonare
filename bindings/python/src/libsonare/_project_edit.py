@@ -728,7 +728,7 @@ class _ProjectEditMixin:
             )
         )
 
-    def get_part_rig(
+    def part_rig(
         self, destination_id: int, part: int
     ) -> tuple[PartRigMode, list[dict[str, object]] | None] | None:
         """Read back :meth:`set_part_rig` as ``(mode, inserts)``, or ``None`` if unset.
@@ -742,7 +742,7 @@ class _ProjectEditMixin:
             lib,
             "sonare_project_get_part_rig",
             "loaded libsonare does not export sonare_project_get_part_rig; "
-            "rebuild or upgrade the shared library before calling get_part_rig",
+            "rebuild or upgrade the shared library before calling part_rig",
         )
         mode = ctypes.c_int()
         out_json = ctypes.c_char_p()

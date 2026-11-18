@@ -73,14 +73,14 @@ def test_require_playback_is_silent_when_the_symbol_is_present() -> None:
 
 def test_renderer_reports_its_shape() -> None:
     with PlaybackRenderer(_speakers_5_1(), max_block_size=BLOCK) as renderer:
-        assert renderer.output_channels == 6
-        assert renderer.input_channels == 2
+        assert renderer.num_output_channels == 6
+        assert renderer.num_input_channels == 2
         assert renderer.latency_samples == 1312
 
 
 def test_headphones_default_config_is_stereo_out() -> None:
     with PlaybackRenderer({}, max_block_size=BLOCK) as renderer:
-        assert renderer.output_channels == 2
+        assert renderer.num_output_channels == 2
 
 
 def test_process_planar_renders_finite_output_of_the_right_shape() -> None:
@@ -113,10 +113,10 @@ def test_process_planar_allocates_the_output_once() -> None:
 
 def test_process_planar_switches_auto_input_layout() -> None:
     with PlaybackRenderer(_speakers_5_1(), max_block_size=BLOCK) as renderer:
-        assert renderer.input_channels == 2
+        assert renderer.num_input_channels == 2
         planes = [_sine(BLOCK) for _ in range(6)]
         renderer.process_planar(planes)
-        assert renderer.input_channels == 6
+        assert renderer.num_input_channels == 6
 
 
 def test_process_interleaved_renders_finite_output() -> None:
@@ -238,8 +238,8 @@ def test_closed_renderer_rejects_further_calls() -> None:
         "set_config": lambda: renderer.set_config(None),  # type: ignore[arg-type]
         "config": lambda: renderer.config(),
         "set_head_orientation": lambda: renderer.set_head_orientation(float("nan")),
-        "input_channels": lambda: renderer.input_channels,
-        "output_channels": lambda: renderer.output_channels,
+        "num_input_channels": lambda: renderer.num_input_channels,
+        "num_output_channels": lambda: renderer.num_output_channels,
         "latency_samples": lambda: renderer.latency_samples,
         "non_finite_discard_count": lambda: renderer.non_finite_discard_count,
         "diagnostics": lambda: renderer.diagnostics(),
@@ -297,7 +297,7 @@ def test_hrtf_set_default_and_lifecycle() -> None:
         HrtfSet.default() as hrtf,
         PlaybackRenderer({}, hrtf=hrtf, max_block_size=BLOCK) as renderer,
     ):
-        assert renderer.output_channels == 2
+        assert renderer.num_output_channels == 2
 
 
 def test_hrtf_set_from_bytes_rejects_malformed_data() -> None:
@@ -338,7 +338,12 @@ def test_loudness_meter_integrates_pushed_frames() -> None:
 
 def test_loudness_meter_rejects_an_unsupported_channel_count() -> None:
     with pytest.raises(SonareError):
-        PlaybackLoudnessMeter(3, SR)
+        PlaybackLoudnessMeter(num_channels=3, sample_rate=SR)
+
+
+def test_loudness_meter_takes_its_shape_by_keyword() -> None:
+    with pytest.raises(TypeError):
+        PlaybackLoudnessMeter(2, SR)  # type: ignore[misc]
 
 
 def test_cli_render_trims_what_the_offline_render_trims_with_unequal_distances() -> None:

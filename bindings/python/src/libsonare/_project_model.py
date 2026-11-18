@@ -211,6 +211,11 @@ ProjectLoopMode: TypeAlias = Literal["off", "loop"]
 """Whether a clip loops."""
 _LOOP_MODES: tuple[str, ...] = get_args(ProjectLoopMode)
 
+# Clip-overlap policy; a token's index is its SonareProjectOverlapPolicy ordinal.
+ProjectOverlapPolicy: TypeAlias = Literal["disallow", "allow"]
+"""Whether clips on one track may overlap."""
+_OVERLAP_POLICIES: tuple[str, ...] = get_args(ProjectOverlapPolicy)
+
 # Automation target-kind ordinals (mirror SonareAutomationTargetKind).  The
 # optional Python value is deliberately kept separate from the legacy C
 # descriptor: omission selects the legacy ABI call, while an explicit opaque

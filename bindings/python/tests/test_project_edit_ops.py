@@ -374,7 +374,7 @@ def test_assist_sidecar_descriptor_matches_legacy_keyword_form() -> None:
     )
 
     assert descriptor_project.to_json() == legacy_project.to_json()
-    assert descriptor_project.get_assist_sidecar(0) == legacy_project.get_assist_sidecar(0)
+    assert descriptor_project.assist_sidecars()[0] == legacy_project.assist_sidecars()[0]
 
 
 def test_assist_sidecar_descriptor_defaults_and_stable_order() -> None:
@@ -384,11 +384,11 @@ def test_assist_sidecar_descriptor_defaults_and_stable_order() -> None:
 
     assert p.assist_sidecar_count() == 2
     assert [sidecar.module_id for sidecar in p.assist_sidecars()] == ["first", "second"]
-    assert p.get_assist_sidecar(0).payload == b""
-    assert p.get_assist_sidecar(0).schema_version == 0
-    assert p.get_assist_sidecar(0).target_track_id == 0
-    assert p.get_assist_sidecar(0).region_start_ppq == 0.0
-    assert p.get_assist_sidecar(0).region_end_ppq == 0.0
+    assert p.assist_sidecars()[0].payload == b""
+    assert p.assist_sidecars()[0].schema_version == 0
+    assert p.assist_sidecars()[0].target_track_id == 0
+    assert p.assist_sidecars()[0].region_start_ppq == 0.0
+    assert p.assist_sidecars()[0].region_end_ppq == 0.0
 
 
 def test_assist_sidecar_descriptor_same_identity_replaces_without_reordering() -> None:
@@ -405,8 +405,8 @@ def test_assist_sidecar_descriptor_same_identity_replaces_without_reordering() -
 
     assert p.assist_sidecar_count() == 2
     assert [sidecar.module_id for sidecar in p.assist_sidecars()] == ["first", "second"]
-    assert p.get_assist_sidecar(0).payload == b"new"
-    assert p.get_assist_sidecar(0).schema_version == 3
+    assert p.assist_sidecars()[0].payload == b"new"
+    assert p.assist_sidecars()[0].schema_version == 3
 
 
 def test_assist_sidecar_invalid_or_mixed_input_does_not_mutate() -> None:

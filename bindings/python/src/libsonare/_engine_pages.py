@@ -31,7 +31,7 @@ class ClipPageProvider:
     # Declared on the class so close() reads it even when __init__ never ran.
     _handle: ctypes.c_void_p | None = None
 
-    def __init__(self, num_channels: int, num_samples: int, page_frames: int) -> None:
+    def __init__(self, *, num_channels: int, num_samples: int, page_frames: int) -> None:
         self._handle: ctypes.c_void_p | None = None
         handle = ctypes.c_void_p()
         _check(
@@ -102,7 +102,9 @@ class FileClipPageProvider(ClipPageProvider):
     ) -> None:
         if num_channels <= 0 or num_samples <= 0 or page_frames <= 0:
             raise SonareValueError("num_channels, num_samples, and page_frames must be positive")
-        super().__init__(num_channels, num_samples, page_frames)
+        super().__init__(
+            num_channels=num_channels, num_samples=num_samples, page_frames=page_frames
+        )
         self._file: BinaryIO | None = None
         try:
             self._file = Path(path).open("rb")  # noqa: SIM115

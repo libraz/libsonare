@@ -238,7 +238,7 @@ class PlaybackRenderer:
         )
 
     @property
-    def input_channels(self) -> int:
+    def num_input_channels(self) -> int:
         """Channel count of the active input layout.
 
         With ``input.layout = "auto"`` this follows the channel count of the
@@ -250,7 +250,7 @@ class PlaybackRenderer:
         return int(out.value)
 
     @property
-    def output_channels(self) -> int:
+    def num_output_channels(self) -> int:
         """Channel count of the output target; fixed for the renderer's lifetime."""
         handle = self._require_handle()
         out = ctypes.c_int()
@@ -287,17 +287,17 @@ class PlaybackRenderer:
         return _json_out_result(self._lib, out)
 
     def process_planar(self, planes: Sequence[Sequence[float]] | np.ndarray) -> np.ndarray:
-        """Render one planar block; returns a ``(output_channels, frames)`` array.
+        """Render one planar block; returns a ``(num_output_channels, frames)`` array.
 
         ``planes`` is a sequence of equal-length channel buffers, or a 2-D
-        ``(input_channels, frames)`` array. With a fixed input layout the plane
-        count must equal :meth:`input_channels`; with ``"auto"`` it must be 1,
+        ``(num_input_channels, frames)`` array. With a fixed input layout the plane
+        count must equal :meth:`num_input_channels`; with ``"auto"`` it must be 1,
         2, 6 or 8, and a change switches the input layout at the start of this
         block without changing :meth:`latency_samples`.
         """
         handle = self._require_handle()
         in_arrays, in_ptrs, frames = _planar_channel_arrays(planes, subject="planes")
-        out_channels = self.output_channels
+        out_channels = self.num_output_channels
         # The renderer writes each plane straight into its row of the returned array.
         out = np.zeros((out_channels, frames), dtype=np.float32)
         row_ptr = ctypes.POINTER(ctypes.c_float)
@@ -332,7 +332,7 @@ class PlaybackRenderer:
         if total % ch != 0:
             raise SonareValueError("interleaved samples length must be divisible by in_channels")
         frames = total // ch
-        out_channels = self.output_channels
+        out_channels = self.num_output_channels
         out_len = frames * out_channels
         out_buf = np.zeros(out_len, dtype=np.float32)
         c_out = (
@@ -359,7 +359,7 @@ class PlaybackRenderer:
         input, matching :func:`render_playback` for the same configuration.
         Unlike that function, the render runs through this handle, so
         :meth:`diagnostics` afterwards describes it. The result holds
-        ``frames * output_channels()`` samples.
+        ``frames * num_output_channels()`` samples.
         """
         handle = self._require_handle()
         ch = _narrow_int(in_channels, "in_channels", _C_INT_MIN, _C_INT_MAX)
@@ -456,7 +456,7 @@ class PlaybackLoudnessMeter:
     # Declared on the class so close() reads it even when __init__ never ran.
     _handle: ctypes.c_void_p | None = None
 
-    def __init__(self, num_channels: int, sample_rate: int) -> None:
+    def __init__(self, *, num_channels: int, sample_rate: int) -> None:
         self._handle = ctypes.c_void_p()
         self._lib = _get_lib()
         _require_playback(self._lib)

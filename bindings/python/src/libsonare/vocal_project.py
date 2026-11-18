@@ -307,7 +307,7 @@ def apply_project_vocal_edit(
     return _apply_result(result)
 
 
-def get_project_vocal_edit_dependencies(
+def project_vocal_edit_dependencies(
     project: Project,
 ) -> tuple[ProjectVocalEditDependency, ...]:
     """Return copied vocal sidecar dependencies in native storage order."""
@@ -434,6 +434,6 @@ __all__ = [
     "ProjectVocalEditDependency",
     "ProjectVocalRehydrateItem",
     "apply_project_vocal_edit",
-    "get_project_vocal_edit_dependencies",
+    "project_vocal_edit_dependencies",
     "rehydrate_project_vocal_edits",
 ]

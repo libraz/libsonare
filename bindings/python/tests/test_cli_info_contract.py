@@ -40,27 +40,27 @@ def _write_wav(path, *, channels: int, frames: int = 32, sample_rate: int = 2205
 
 
 @pytest.mark.skipif(not SOURCE_PROBE_AVAILABLE, reason="native source-channel probe unavailable")
-def test_audio_file_channel_count_probes_source_without_changing_mono_audio(tmp_path) -> None:
+def test_audio_file_num_channels_probes_source_without_changing_mono_audio(tmp_path) -> None:
     source = tmp_path / "stereo.wav"
     _write_wav(source, channels=2)
 
-    assert Audio.file_channel_count(str(source)) == 2
+    assert Audio.file_num_channels(str(source)) == 2
     with Audio.from_file(str(source)) as audio:
         assert audio.data.ndim == 1
         assert audio.length == 32
 
 
 @pytest.mark.skipif(not SOURCE_PROBE_AVAILABLE, reason="native source-channel probe unavailable")
-def test_audio_file_channel_count_propagates_probe_failure(tmp_path) -> None:
+def test_audio_file_num_channels_propagates_probe_failure(tmp_path) -> None:
     missing = tmp_path / "missing.wav"
     with pytest.raises(SonareError):
-        Audio.file_channel_count(str(missing))
+        Audio.file_num_channels(str(missing))
 
 
-def test_audio_file_channel_count_reports_missing_optional_symbol(monkeypatch) -> None:
+def test_audio_file_num_channels_reports_missing_optional_symbol(monkeypatch) -> None:
     monkeypatch.setattr(audio_module, "_get_lib", lambda: SimpleNamespace())
     with raises_coded(ErrorCode.NOT_SUPPORTED, match="sonare_audio_file_num_channels"):
-        Audio.file_channel_count("input.wav")
+        Audio.file_num_channels("input.wav")
 
 
 def test_info_json_uses_vectorized_float64_reductions_and_source_channels(monkeypatch, capsys):
@@ -70,7 +70,7 @@ def test_info_json_uses_vectorized_float64_reductions_and_source_channels(monkey
 
     samples = np.asarray([0.5, -0.25, 0.0], dtype=np.float32).view(NonIteratingArray)
     monkeypatch.setattr(_cli_analysis, "_load_audio", lambda path: (samples, 10))
-    monkeypatch.setattr(Audio, "file_channel_count", lambda path: 2)
+    monkeypatch.setattr(Audio, "file_num_channels", lambda path: 2)
 
     args = SimpleNamespace(file="stereo.mp3", json=True)
     assert _cli_analysis.cmd_info(args) == 0
@@ -95,7 +95,7 @@ def test_info_json_uses_vectorized_float64_reductions_and_source_channels(monkey
 
 def test_info_rejects_successful_zero_channel_probe(monkeypatch):
     monkeypatch.setattr(_cli_analysis, "_load_audio", lambda path: (np.zeros(1), 10))
-    monkeypatch.setattr(Audio, "file_channel_count", lambda path: 0)
+    monkeypatch.setattr(Audio, "file_num_channels", lambda path: 0)
 
     with raises_coded(ErrorCode.UNKNOWN, match="invalid audio channel count"):
         _cli_analysis.cmd_info(SimpleNamespace(file="broken.wav", json=True))
@@ -104,7 +104,7 @@ def test_info_rejects_successful_zero_channel_probe(monkeypatch):
 def test_info_reports_the_real_channel_probe_failure_without_a_wav_fallback(
     monkeypatch, tmp_path
 ) -> None:
-    """cmd_info propagates file_channel_count's own failure rather than reading
+    """cmd_info propagates file_num_channels's own failure rather than reading
     the channel count via stdlib wave. A real, wave-readable file at
     args.file is what makes that observable: a fallback would open it and
     return a channel count instead of the real cause.
@@ -119,7 +119,7 @@ def test_info_reports_the_real_channel_probe_failure_without_a_wav_fallback(
             "loaded libsonare does not expose sonare_audio_file_num_channels",
         )
 
-    monkeypatch.setattr(Audio, "file_channel_count", missing_probe)
+    monkeypatch.setattr(Audio, "file_num_channels", missing_probe)
 
     with raises_coded(
         ErrorCode.NOT_SUPPORTED, match="does not expose sonare_audio_file_num_channels"
@@ -129,7 +129,7 @@ def test_info_reports_the_real_channel_probe_failure_without_a_wav_fallback(
 
 def test_info_preserves_minus_200_db_silence_floor(monkeypatch, capsys):
     monkeypatch.setattr(_cli_analysis, "_load_audio", lambda path: (np.zeros(4), 10))
-    monkeypatch.setattr(Audio, "file_channel_count", lambda path: 1)
+    monkeypatch.setattr(Audio, "file_num_channels", lambda path: 1)
 
     assert _cli_analysis.cmd_info(SimpleNamespace(file="silence.wav", json=True)) == 0
     payload = json.loads(capsys.readouterr().out)

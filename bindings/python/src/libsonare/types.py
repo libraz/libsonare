@@ -559,6 +559,9 @@ from ._types_mastering_results import (
 from ._types_mastering_results import (
     StereoMonoCompatCheckResult as StereoMonoCompatCheckResult,
 )
+from ._types_mastering_results import (
+    StreamingPlatform as StreamingPlatform,
+)
 from ._types_repair import (
     ClickDetection as ClickDetection,
 )

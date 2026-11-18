@@ -296,14 +296,14 @@ def mastering_insert_names() -> list[str]:
     return raw.decode("utf-8").splitlines() if raw else []
 
 
-def mastering_insert_param_names(name: str) -> list[str]:
+def mastering_insert_param_names(insert: str) -> list[str]:
     """Return the camelCase parameter names a given insert/FX processor reads.
 
     For tools/UIs that want to validate a scene insert's params before loading
     it: any supplied key NOT in this list is silently ignored by the processor
     (and would be reported via :meth:`Mixer.scene_warnings` on a scene load).
     Band/sub-band processors enumerate their indexed ``band{i}.<field>`` keys.
-    Returns an empty list for an unknown ``name`` (or one whose insert needs an
+    Returns an empty list for an unknown ``insert`` (or one whose insert needs an
     unavailable build feature, e.g. FX).
 
     The native layer returns a thread-local, newline-joined string the caller
@@ -312,14 +312,14 @@ def mastering_insert_param_names(name: str) -> list[str]:
     lib = _get_lib()
     if not hasattr(lib, "sonare_mastering_insert_param_names"):
         raise _not_supported("libsonare was built without mastering support")
-    raw = lib.sonare_mastering_insert_param_names(_utf8_arg(name, "name"))
+    raw = lib.sonare_mastering_insert_param_names(_utf8_arg(insert, "insert"))
     if raw is None:
         raise _last_error(int(ErrorCode.UNKNOWN), "failed to list mastering insert params")
     return raw.decode("utf-8").splitlines() if raw else []
 
 
 def mastering_insert_param_info(
-    name: str, sample_rate: int | None = None
+    insert: str, sample_rate: int | None = None
 ) -> list[MasteringInsertParamInfo]:
     """Return parameter metadata for a given insert/FX processor.
 
@@ -330,7 +330,7 @@ def mastering_insert_param_info(
     :func:`mastering_processor_catalog` is served, an offline repair stage
     (``repair.declick``, ``repair.declip``, ``repair.trimSilence``) included,
     with the rows its catalog entry's ``params`` carries; those rows have a
-    ``None`` ``id``. Returns an empty list for an unknown ``name`` (or one whose
+    ``None`` ``id``. Returns an empty list for an unknown ``insert`` (or one whose
     insert needs an unavailable build feature, e.g. FX).
 
     With ``sample_rate``, a key whose ``maxRelativeTo`` is ``"nyquist"`` reports
@@ -343,20 +343,20 @@ def mastering_insert_param_info(
     if not hasattr(lib, "sonare_mastering_insert_param_info"):
         raise _not_supported("libsonare was built without mastering support")
     if sample_rate is None:
-        raw = _call_string(lib.sonare_mastering_insert_param_info, _utf8_arg(name, "name"))
+        raw = _call_string(lib.sonare_mastering_insert_param_info, _utf8_arg(insert, "insert"))
     else:
         if not hasattr(lib, "sonare_mastering_insert_param_info_at_rate"):
             raise _not_supported("libsonare was built without mastering support")
         raw = _call_string(
             lib.sonare_mastering_insert_param_info_at_rate,
-            _utf8_arg(name, "name"),
+            _utf8_arg(insert, "insert"),
             _to_c_int(sample_rate, "sample_rate"),
         )
     return [_from_wire(MasteringInsertParamInfo, entry) for entry in json.loads(raw)]
 
 
 def mastering_insert_timing(
-    name: str, params: Mapping[str, float | bool | str | Sequence[float]], sample_rate: int
+    insert: str, params: Mapping[str, float | bool | str | Sequence[float]], sample_rate: int
 ) -> MasteringInsertTiming:
     """Return the latency and tail of one insert built from ``params`` at ``sample_rate``.
 
@@ -379,12 +379,12 @@ def mastering_insert_timing(
     lib = _get_lib()
     if not hasattr(lib, "sonare_mastering_insert_timing"):
         raise _not_supported("libsonare was built without mastering support")
-    payload = _insert_params(name, params)
+    payload = _insert_params(insert, params)
     params_json = _utf8_arg(json.dumps(payload, allow_nan=False), "params")
     out_latency = ctypes.c_int(0)
     out_tail = ctypes.c_int(0)
     rc = lib.sonare_mastering_insert_timing(
-        _utf8_arg(name, "name"),
+        _utf8_arg(insert, "insert"),
         params_json,
         _to_c_int(sample_rate, "sample_rate"),
         ctypes.byref(out_latency),

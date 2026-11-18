@@ -31,7 +31,7 @@ def _signal() -> np.ndarray:
 
 
 def _true_peak(**kw: Any) -> object:
-    return libsonare.metering_true_peak_db(_signal(), SR, **kw)
+    return libsonare.metering_true_peak_dbtp(_signal(), SR, **kw)
 
 
 def _spectrum(**kw: Any) -> object:
@@ -51,7 +51,7 @@ def _audio() -> libsonare.Audio:
 
 
 def _audio_true_peak(**kw: Any) -> object:
-    return _audio().true_peak_db(**kw)
+    return _audio().true_peak_dbtp(**kw)
 
 
 def _audio_spectrum(**kw: Any) -> object:

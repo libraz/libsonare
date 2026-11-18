@@ -104,6 +104,7 @@ from .types import (
     StereoBlock,
     StftResult,
     StreamingLoudnessGain,
+    StreamingPlatform,
     TempogramMode,
     TimbreResult,
     TrimRange,
@@ -352,8 +353,8 @@ def analyze(
     *,
     n_fft: int = 2048,
     hop_length: int = 512,
-    bpm_min: float = 60.0,
-    bpm_max: float = 200.0,
+    bpm_min: float | None = None,
+    bpm_max: float | None = None,
     start_bpm: float = 120.0,
     use_triads_only: bool = True,
     use_hpss: bool = False,
@@ -386,8 +387,8 @@ def estimate_meter(
 def analyze_bpm(
     samples: FloatSamples,
     sample_rate: int,
-    bpm_min: float = 60.0,
-    bpm_max: float = 200.0,
+    bpm_min: float | None = None,
+    bpm_max: float | None = None,
     start_bpm: float = 120.0,
     n_fft: int = 2048,
     hop_length: int = 512,
@@ -506,8 +507,8 @@ def room_morph_stereo(
 def analyze_rhythm(
     samples: FloatSamples,
     sample_rate: int,
-    bpm_min: float = 60.0,
-    bpm_max: float = 200.0,
+    bpm_min: float | None = None,
+    bpm_max: float | None = None,
     start_bpm: float = 120.0,
     n_fft: int = 2048,
     hop_length: int = 512,
@@ -520,7 +521,7 @@ def analyze_dynamics(
     sample_rate: int,
     window_sec: float = 0.4,
     hop_length: int = 512,
-    compression_threshold: float = 6.0,
+    compression_threshold_db: float = 6.0,
 ) -> DynamicsResult: ...
 def analyze_timbre(
     samples: FloatSamples,
@@ -1194,7 +1195,7 @@ def voice_change_realtime(
 ) -> np.ndarray: ...
 def realtime_voice_changer_preset_names() -> list[str]: ...
 def realtime_voice_changer_preset_config(preset: str | int) -> RealtimeVoiceChangerConfig: ...
-def voice_character_preset_id(preset: int) -> str | None: ...
+def voice_character_preset_id(ordinal: int) -> str | None: ...
 def realtime_voice_changer_preset_json(name: str) -> str: ...
 def realtime_voice_changer_preset_pod(preset: str | int) -> RealtimeVoiceChangerConfig: ...
 def validate_realtime_voice_changer_preset_json(json_text: str) -> dict[str, object]: ...
@@ -1325,12 +1326,12 @@ def mastering_preset_names() -> list[MasteringPreset]: ...
 def mastering_preset_params(preset: MasteringPreset | str) -> MasteringChainConfig: ...
 def mastering_platform_names() -> list[str]: ...
 def mastering_insert_names() -> list[str]: ...
-def mastering_insert_param_names(name: str) -> list[str]: ...
+def mastering_insert_param_names(insert: str) -> list[str]: ...
 def mastering_insert_param_info(
-    name: str, sample_rate: int | None = None
+    insert: str, sample_rate: int | None = None
 ) -> list[MasteringInsertParamInfo]: ...
 def mastering_insert_timing(
-    name: str, params: Mapping[str, float | bool | str | Sequence[float]], sample_rate: int
+    insert: str, params: Mapping[str, float | bool | str | Sequence[float]], sample_rate: int
 ) -> MasteringInsertTiming: ...
 def mastering_processor_catalog() -> list[MasteringProcessorCatalogEntry]: ...
 def mastering_amp_preset_catalog() -> list[MasteringAmpPresetCatalogEntry]: ...
@@ -1655,13 +1656,13 @@ def mastering_stereo_analyze(
 def mastering_streaming_preview(
     samples: FloatSamples,
     sample_rate: int,
-    platforms: Sequence[dict[str, float | str]] | None = None,
+    platforms: Sequence[StreamingPlatform] | None = None,
 ) -> str: ...
 def mastering_streaming_preview_stereo(
     left: FloatSamples,
     right: FloatSamples,
     sample_rate: int,
-    platforms: Sequence[dict[str, float | str]] | None = None,
+    platforms: Sequence[StreamingPlatform] | None = None,
 ) -> str: ...
 def trim(
     samples: FloatSamples,
@@ -1912,7 +1913,7 @@ def lufs_series_interleaved(
     *,
     validate: bool = True,
 ) -> tuple[list[float], list[float]]: ...
-def ebur128_loudness_range(
+def ebur128_loudness_range_lu(
     samples: FloatSamples,
     sample_rate: int,
     *,
@@ -2121,8 +2122,8 @@ def plp(
     onset_envelope: FloatSamples,
     sr: int = 22050,
     hop_length: int = 512,
-    tempo_min: float = 30.0,
-    tempo_max: float = 300.0,
+    tempo_min: float | None = None,
+    tempo_max: float | None = None,
     win_length: int = 384,
 ) -> np.ndarray[Any, Any]: ...
 def onset_strength(
@@ -2138,7 +2139,6 @@ def fourier_tempogram(
     hop_length: int = 512,
     win_length: int = 384,
     center: bool = True,
-    norm: bool = True,
 ) -> np.ndarray[Any, Any]: ...
 def tempogram_ratio(
     tempogram: npt.ArrayLike,
@@ -2612,7 +2612,7 @@ def metering_crest_factor_db_stereo(
 def metering_dc_offset(
     samples: FloatSamples, sample_rate: int, *, validate: bool = True
 ) -> float: ...
-def metering_true_peak_db(
+def metering_true_peak_dbtp(
     samples: FloatSamples,
     sample_rate: int,
     oversample_factor: int | None = None,

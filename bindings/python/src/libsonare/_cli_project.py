@@ -212,7 +212,7 @@ def _project_bounce(
     try:
         if binds_source_audio:
             _resolve_bounce_audio_sources(project, args)
-        project_sample_rate = cast(Any, project).get_sample_rate()
+        project_sample_rate = cast(Any, project).sample_rate
         # Render at the project's own sample rate by default (args.sample_rate is
         # None unless the user passed --sample-rate); an explicit --sample-rate is
         # only accepted when it matches the project's rate, otherwise report the
@@ -379,7 +379,7 @@ def _project_align_takes(args: argparse.Namespace) -> int:
         reference_samples, reference_rate = _load_audio(paths[reference_source])
         # The alignment returns both anchor axes in reference-rate samples; the
         # warp map reads both at the project rate.
-        anchor_scale = cast(Any, project).get_sample_rate() / float(reference_rate)
+        anchor_scale = project.sample_rate / float(reference_rate)
         # Ids already in the document are never reused and never renumbered.
         next_warp_id = max([int(entry.get("id", 0)) for entry in shape.get("warp_maps", [])] + [0])
         aligned: list[_AlignedTake] = []

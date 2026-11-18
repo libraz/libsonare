@@ -65,9 +65,9 @@ def test_silence_ratio_matches_the_buffer_form() -> None:
 def test_true_peak_db_matches_the_buffer_form() -> None:
     samples = _sine(440.0, 0.5)
     with Audio.from_buffer(samples, sample_rate=SR) as audio:
-        handle_value = audio.true_peak_db(oversample_factor=4)
+        handle_value = audio.true_peak_dbtp(oversample_factor=4)
 
-    buffer_value = libsonare.metering_true_peak_db(samples, SR, oversample_factor=4)
+    buffer_value = libsonare.metering_true_peak_dbtp(samples, SR, oversample_factor=4)
     assert math.isfinite(handle_value)
     assert handle_value >= libsonare.metering_peak_db(samples, SR)
     assert handle_value == buffer_value
@@ -79,9 +79,9 @@ def test_ebur128_loudness_range_matches_the_buffer_form() -> None:
     quiet = _sine(440.0, 2.0) * 0.05
     samples = np.concatenate([loud, quiet, loud]).astype(np.float32)
     with Audio.from_buffer(samples, sample_rate=SR) as audio:
-        handle_lra = audio.ebur128_loudness_range()
+        handle_lra = audio.ebur128_loudness_range_lu()
 
-    buffer_lra = libsonare.ebur128_loudness_range(samples, SR)
+    buffer_lra = libsonare.ebur128_loudness_range_lu(samples, SR)
     assert handle_lra > 0.0
     assert handle_lra == buffer_lra
 

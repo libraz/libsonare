@@ -12,7 +12,7 @@ import numpy as np
 from ._engine_conversions import _marker_kind_name, _marker_kind_value
 from ._narrowing import _narrow_double
 from ._project_model import *  # noqa: F403
-from ._project_model import _NO_PITCH_CLASS, _absent_or_in_range
+from ._project_model import _NO_PITCH_CLASS, _OVERLAP_POLICIES, _absent_or_in_range
 from ._project_synth import (
     SYNTH_ENUM_TABLES as SYNTH_ENUM_TABLES,
 )
@@ -39,12 +39,14 @@ from ._runtime import (
     _guard_buffer,
     _last_diagnostics,
     _narrow_int,
+    _ordinal_token,
     _require_instance,
     _to_c_float_array,
     _to_c_int,
     _to_c_size_t,
     _to_c_uint8,
     _to_c_uint32,
+    _token_ordinal,
     _utf8_arg,
 )
 from .types import ProjectClip, ProjectMarker, ProjectSource, ProjectTrack
@@ -396,8 +398,7 @@ class _ProjectInspectionMixin:
         """Number of assist sidecars currently stored on the project."""
         return int(_get_lib().sonare_project_assist_sidecar_count(self._require_handle()))
 
-    def get_assist_sidecar(self, index: int) -> AssistSidecar:
-        """Read one assist sidecar by stable project order as an :class:`AssistSidecar`."""
+    def _assist_sidecar(self, index: int) -> AssistSidecar:
         lib = _get_lib()
         raw = SonareProjectAssistSidecar()
         _check(
@@ -424,29 +425,40 @@ class _ProjectInspectionMixin:
 
     def assist_sidecars(self) -> list[AssistSidecar]:
         """Return all stored assist sidecars as a list of :class:`AssistSidecar`."""
-        return [self.get_assist_sidecar(i) for i in range(self.assist_sidecar_count())]
+        return [self._assist_sidecar(i) for i in range(self.assist_sidecar_count())]
 
     # -- project getters / setters ------------------------------------------
 
-    def get_sample_rate(self) -> float:
-        """Return the project sample rate in Hz."""
+    @property
+    def sample_rate(self) -> float:
+        """The project sample rate in Hz."""
         out = ctypes.c_double()
         _check(_get_lib().sonare_project_get_sample_rate(self._require_handle(), ctypes.byref(out)))
         return float(out.value)
 
-    def get_overlap_policy(self) -> int:
-        """Return the project's clip-overlap policy ordinal."""
+    @property
+    def overlap_policy(self) -> ProjectOverlapPolicy:
+        """The project's clip-overlap policy."""
         out = ctypes.c_uint32()
         _check(
             _get_lib().sonare_project_get_overlap_policy(self._require_handle(), ctypes.byref(out))
         )
-        return int(out.value)
+        return cast(
+            ProjectOverlapPolicy,
+            _ordinal_token(int(out.value), _OVERLAP_POLICIES, "overlap policy"),
+        )
 
-    def set_overlap_policy(self, policy: int) -> None:
-        """Set the project's clip-overlap policy ordinal."""
+    def set_overlap_policy(self, policy: ProjectOverlapPolicy) -> None:
+        """Set the project's clip-overlap policy.
+
+        Raises:
+            TypeError: If ``policy`` is not a string token.
+            SonareValueError: If ``policy`` is not ``"disallow"`` or ``"allow"``.
+        """
+        ordinal = _token_ordinal(policy, _OVERLAP_POLICIES, "policy")
         _check(
             _get_lib().sonare_project_set_overlap_policy(
-                self._require_handle(), _to_c_uint32(policy, "policy")
+                self._require_handle(), ctypes.c_uint32(ordinal)
             )
         )
 

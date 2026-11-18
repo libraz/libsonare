@@ -323,6 +323,25 @@ def test_mastering_pair_and_stereo_analysis() -> None:
     assert '"correlation"' in stereo_json
 
 
+@pytest.mark.parametrize(
+    ("platform", "message"),
+    [
+        ({"name": "S", "targetLufs": -14.0, "ceiling_dbtp": -1.0}, "use 'target_lufs'"),
+        ({"name": "S", "target_lufs": -14.0, "ceilingDb": -1.0}, "use 'ceiling_dbtp'"),
+        ({"name": "S", "target_lufs": -14.0, "ceiling_db": -1.0}, "use 'ceiling_dbtp'"),
+        ({"name": "S", "target_lufs": -14.0}, "missing ceiling_dbtp"),
+        ({"name": "S", "target_lufs": -14.0, "ceiling_dbtp": -1.0, "gain": 0.0}, "'gain'"),
+    ],
+)
+def test_a_streaming_platform_takes_exactly_its_snake_case_keys(
+    platform: dict[str, object], message: str
+) -> None:
+    import libsonare
+
+    with pytest.raises(libsonare.SonareValueError, match=message):
+        libsonare.mastering_streaming_preview([0.1] * 4800, 48000, platforms=[platform])  # type: ignore[list-item]
+
+
 def test_mastering_streaming_preview_returns_shared_json() -> None:
     """Streaming preview is exposed through the Python mastering API."""
     import libsonare
@@ -333,7 +352,7 @@ def test_mastering_streaming_preview_returns_shared_json() -> None:
     preview_json = libsonare.mastering_streaming_preview(
         samples,
         sample_rate=sr,
-        platforms=[{"name": "Unit Test", "targetLufs": 0.0, "ceilingDb": -6.0}],
+        platforms=[{"name": "Unit Test", "target_lufs": 0.0, "ceiling_dbtp": -6.0}],
     )
 
     assert '"platforms"' in preview_json

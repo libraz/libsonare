@@ -30,7 +30,7 @@ class MixMeterSnapshot:
     peaks from the ITU-R BS.1770-4 polyphase reconstruction at 4x. They are a
     streaming measurement that runs one reconstruction-filter group delay (a
     few samples) behind the block, so the reading does not depend on the block
-    size. :func:`metering_true_peak_db` measures a whole signal at once.
+    size. :func:`metering_true_peak_dbtp` measures a whole signal at once.
     """
 
     peak_db_l: float
@@ -468,7 +468,7 @@ class MeterTelemetryRecord:
     peaks from the ITU-R BS.1770-4 polyphase reconstruction at 4x. They are a
     streaming measurement that runs one reconstruction-filter group delay (a
     few samples) behind the block, so the reading does not depend on the block
-    size. :func:`metering_true_peak_db` measures a whole signal at once.
+    size. :func:`metering_true_peak_dbtp` measures a whole signal at once.
     """
 
     target_id: int
@@ -507,7 +507,7 @@ class MeterTelemetryRecordWide:
     ITU-R BS.1770-4 polyphase reconstruction at 4x. They are a streaming
     measurement that runs one reconstruction-filter group delay (a few samples)
     behind the block, so the reading does not depend on the block size.
-    :func:`metering_true_peak_db` measures a whole signal at once.
+    :func:`metering_true_peak_dbtp` measures a whole signal at once.
     """
 
     target_id: int

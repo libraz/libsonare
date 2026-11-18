@@ -33,7 +33,7 @@ from libsonare.vocal_edit import (
 )
 from libsonare.vocal_project import (
     ProjectVocalOriginalSource,
-    get_project_vocal_edit_dependencies,
+    project_vocal_edit_dependencies,
     rehydrate_project_vocal_edits,
 )
 
@@ -98,7 +98,7 @@ def test_project_vocal_ffi_layout_matches_header() -> None:
 
 def test_empty_project_dependencies_and_rehydrate_are_owned_results() -> None:
     with Project.create() as project:
-        assert get_project_vocal_edit_dependencies(project) == ()
+        assert project_vocal_edit_dependencies(project) == ()
         assert rehydrate_project_vocal_edits(project, ()) == ()
 
 
@@ -140,7 +140,7 @@ def test_apply_roundtrip_and_rehydrate_after_project_reload() -> None:
         assert result.derived_source_id != result.original_source_id
         assert result.sidecar_key == f"libsonare.vocal-edit/clip/{clip_id}/take/0"
 
-        dependencies = project.get_vocal_edit_dependencies()
+        dependencies = project.vocal_edit_dependencies()
         assert len(dependencies) == 1
         dependency = dependencies[0]
         assert dependency.original_source_id == clip.source_id
@@ -157,7 +157,7 @@ def test_apply_roundtrip_and_rehydrate_after_project_reload() -> None:
         serialized = project.to_json_bytes()
 
     with Project.from_json(serialized) as restored:
-        dependencies = restored.get_vocal_edit_dependencies()
+        dependencies = restored.vocal_edit_dependencies()
         assert len(dependencies) == 1
         dependency = dependencies[0]
         assert dependency.original_pcm_available is False
@@ -184,7 +184,7 @@ def test_apply_roundtrip_and_rehydrate_after_project_reload() -> None:
                 cancel=lambda: 1,  # type: ignore[arg-type, return-value]
             )
         assert truthy_cancel.value.code == 8
-        assert restored.get_vocal_edit_dependencies()[0].derived_pcm_available is False
+        assert restored.vocal_edit_dependencies()[0].derived_pcm_available is False
 
         def fail_from_probe() -> bool:
             raise _CancelProbeError("cancel probe failed")
@@ -194,7 +194,7 @@ def test_apply_roundtrip_and_rehydrate_after_project_reload() -> None:
                 original_sources,
                 cancel=fail_from_probe,
             )
-        assert restored.get_vocal_edit_dependencies()[0].derived_pcm_available is False
+        assert restored.vocal_edit_dependencies()[0].derived_pcm_available is False
 
         statuses = restored.rehydrate_vocal_edits(original_sources)
         assert len(statuses) == 1
@@ -203,7 +203,7 @@ def test_apply_roundtrip_and_rehydrate_after_project_reload() -> None:
         already_ready = restored.rehydrate_vocal_edits(original_sources)
         assert already_ready[0].status == "alreadyReady"
         assert already_ready[0].derived_source_id == dependency.derived_source_id
-        ready = restored.get_vocal_edit_dependencies()[0]
+        ready = restored.vocal_edit_dependencies()[0]
         assert ready.original_pcm_available is True
         assert ready.derived_pcm_available is True
         after_rehydrate_bounce = restored.bounce(
@@ -319,7 +319,7 @@ def test_callback_close_guards_survive_in_isolated_native_process() -> None:
 
             statuses = project.rehydrate_vocal_edits((original,), cancel=close_project)
             assert len(statuses) == 1
-            expect_closed(project.get_vocal_edit_dependencies)
+            expect_closed(project.vocal_edit_dependencies)
         finally:
             project.close()
         print("vocal-lifetime-ok")

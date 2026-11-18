@@ -66,7 +66,7 @@ def test_pitch_and_dc_offset_reject_nonfinite_samples_and_invalid_rates() -> Non
 
 def test_metering_true_peak_db_default_oversample() -> None:
     samples = _sine(440.0, 1.0)
-    tp = libsonare.metering_true_peak_db(samples, SR)
+    tp = libsonare.metering_true_peak_dbtp(samples, SR)
     # True peak >= sample peak; differences should be small for a 440 Hz sine.
     assert math.isfinite(tp)
     assert tp >= libsonare.metering_peak_db(samples, SR) - 0.1
@@ -75,7 +75,7 @@ def test_metering_true_peak_db_default_oversample() -> None:
 def test_metering_true_peak_rejects_non_power_of_two() -> None:
     samples = _sine(440.0, 0.1)
     with raises_coded():
-        libsonare.metering_true_peak_db(samples, SR, oversample_factor=3)
+        libsonare.metering_true_peak_dbtp(samples, SR, oversample_factor=3)
 
 
 def test_metering_detect_clipping_reports_runs_and_frees_heap() -> None:

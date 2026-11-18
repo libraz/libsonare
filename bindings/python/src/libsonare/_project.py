@@ -353,12 +353,12 @@ class Project(
             rendered_start_sample=rendered_start_sample,
         )
 
-    def get_vocal_edit_dependencies(
+    def vocal_edit_dependencies(
         self,
     ) -> tuple[ProjectVocalEditDependency, ...]:
-        from .vocal_project import get_project_vocal_edit_dependencies
+        from .vocal_project import project_vocal_edit_dependencies
 
-        return get_project_vocal_edit_dependencies(self)
+        return project_vocal_edit_dependencies(self)
 
     def rehydrate_vocal_edits(
         self,

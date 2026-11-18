@@ -265,14 +265,14 @@ def lufs_series_interleaved(
         )
 
 
-def ebur128_loudness_range(
+def ebur128_loudness_range_lu(
     samples: Sequence[float] | list[float],
     sample_rate: int,
     *,
     validate: bool = True,
 ) -> float:
     """EBU R128 / Tech 3342 Loudness Range (LRA) in LU for a mono buffer."""
-    sample_buf = _validate_samples("ebur128_loudness_range", samples, validate=validate)
+    sample_buf = _validate_samples("ebur128_loudness_range_lu", samples, validate=validate)
     lib = _get_lib()
     c_array, length = _to_c_float_array(sample_buf)
     out = ctypes.c_float(0.0)
@@ -422,7 +422,7 @@ def metering_dc_offset(
     return _metering_scalar("sonare_metering_dc_offset", samples, sample_rate, validate=validate)
 
 
-def metering_true_peak_db(
+def metering_true_peak_dbtp(
     samples: Sequence[float] | list[float],
     sample_rate: int,
     oversample_factor: int | None = None,
@@ -433,7 +433,7 @@ def metering_true_peak_db(
 
     ``oversample_factor`` must be a power of two in [1, 16]; omit it for 4.
     """
-    sample_buf = _validate_samples("metering_true_peak_db", samples, validate=validate)
+    sample_buf = _validate_samples("metering_true_peak_dbtp", samples, validate=validate)
     lib = _get_lib()
     c_array, length = _to_c_float_array(sample_buf)
     out = ctypes.c_float(0.0)

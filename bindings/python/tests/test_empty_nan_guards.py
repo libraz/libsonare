@@ -25,7 +25,7 @@ from libsonare import (
     chroma,
     chroma_cens,
     chroma_cqt,
-    ebur128_loudness_range,
+    ebur128_loudness_range_lu,
     harmonic,
     lufs,
     lufs_interleaved,
@@ -40,7 +40,7 @@ from libsonare import (
     metering_spectrum,
     metering_spectrum_frame,
     metering_stereo_correlation,
-    metering_true_peak_db,
+    metering_true_peak_dbtp,
     mfcc,
     momentary_lufs,
     normalize,
@@ -72,8 +72,8 @@ _SAMPLE_WRAPPERS = {
     "momentary_lufs": lambda buf: momentary_lufs(buf, SR),
     "short_term_lufs": lambda buf: short_term_lufs(buf, SR),
     "lufs_interleaved": lambda buf: lufs_interleaved(buf, 1, SR),
-    "ebur128_loudness_range": lambda buf: ebur128_loudness_range(buf, SR),
-    "metering_true_peak_db": lambda buf: metering_true_peak_db(buf, SR),
+    "ebur128_loudness_range_lu": lambda buf: ebur128_loudness_range_lu(buf, SR),
+    "metering_true_peak_dbtp": lambda buf: metering_true_peak_dbtp(buf, SR),
     "metering_detect_clipping": lambda buf: metering_detect_clipping(buf, SR),
     "metering_dynamic_range": lambda buf: metering_dynamic_range(buf, SR),
     "metering_spectrum": lambda buf: metering_spectrum(buf, SR),
@@ -142,8 +142,8 @@ class TestEmptyGuards:
             metering_rms_db(np.empty(0, dtype=np.float32), sample_rate=22050)
 
     def test_metering_true_peak_db_rejects_empty(self):
-        with pytest.raises(ValueError, match=r"metering_true_peak_db: samples must not be empty"):
-            metering_true_peak_db(np.empty(0, dtype=np.float32), SR)
+        with pytest.raises(ValueError, match=r"metering_true_peak_dbtp: samples must not be empty"):
+            metering_true_peak_dbtp(np.empty(0, dtype=np.float32), SR)
 
     def test_metering_stereo_correlation_rejects_empty_left(self):
         with pytest.raises(

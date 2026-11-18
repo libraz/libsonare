@@ -368,7 +368,7 @@ class Audio:
         An :class:`Audio` carries a single channel, so :meth:`from_file`
         downmixes a multi-channel source into it. This loads the requested
         channel instead, which is what rendering a stereo result needs: pair it
-        with :meth:`file_channel_count` and load each channel in turn.
+        with :meth:`file_num_channels` and load each channel in turn.
 
         The file is decoded once per call, so a stereo load costs two decodes.
         The format set and the decoded-buffer contract are :meth:`from_file`'s.
@@ -397,7 +397,7 @@ class Audio:
         return cls(handle, lib)
 
     @classmethod
-    def file_channel_count(cls, path: str) -> int:
+    def file_num_channels(cls, path: str) -> int:
         """Return the source channel count encoded in an audio file.
 
         Unlike :meth:`from_file`, this probe does not expose or alter the
@@ -734,8 +734,8 @@ class Audio:
 
     def analyze_bpm(
         self,
-        bpm_min: float = 60.0,
-        bpm_max: float = 200.0,
+        bpm_min: float | None = None,
+        bpm_max: float | None = None,
         start_bpm: float = 120.0,
         n_fft: int = 2048,
         hop_length: int = 512,
@@ -776,8 +776,8 @@ class Audio:
 
     def analyze_rhythm(
         self,
-        bpm_min: float = 60.0,
-        bpm_max: float = 200.0,
+        bpm_min: float | None = None,
+        bpm_max: float | None = None,
         start_bpm: float = 120.0,
         n_fft: int = 2048,
         hop_length: int = 512,
@@ -797,7 +797,7 @@ class Audio:
         self,
         window_sec: float = 0.4,
         hop_length: int = 512,
-        compression_threshold: float = 6.0,
+        compression_threshold_db: float = 6.0,
     ) -> DynamicsResult:
         """Analyze dynamics and loudness primitives."""
         return _analyze_dynamics(
@@ -805,7 +805,7 @@ class Audio:
             self.sample_rate,
             window_sec,
             hop_length,
-            compression_threshold,
+            compression_threshold_db,
         )
 
     def analyze_timbre(
@@ -1239,7 +1239,7 @@ class Audio:
             _to_c_int(hop_length, "hop_length"),
         )
 
-    def true_peak_db(self, oversample_factor: int | None = None) -> float:
+    def true_peak_dbtp(self, oversample_factor: int | None = None) -> float:
         """Inter-sample (true) peak in dBFS.
 
         ``oversample_factor`` must be a power of two in [1, 16]; omit it for 4.
@@ -1435,7 +1435,7 @@ class Audio:
         finally:
             self._lib.sonare_free_spectrum_result(ctypes.byref(out))
 
-    def ebur128_loudness_range(self) -> float:
+    def ebur128_loudness_range_lu(self) -> float:
         """EBU R128 / Tech 3342 Loudness Range (LRA) in LU."""
         out = ctypes.c_float(0.0)
         rc = self._lib.sonare_audio_ebur128_loudness_range(

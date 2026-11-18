@@ -5,6 +5,8 @@ from __future__ import annotations
 # ruff: noqa: F403,F405
 import numpy as np
 
+import libsonare
+
 from ._analyzer_helpers import *
 
 
@@ -393,6 +395,19 @@ def test_compat_silence_and_rhythm_utilities() -> None:
     assert cosine.shape == (4, len(onset))
     assert np.all((cosine >= -1.000001) & (cosine <= 1.000001))
     assert len(libsonare.plp(onset, sr=22050, hop_length=512, win_length=4)) == len(onset)
+
+
+def test_plp_omitted_tempo_bounds_are_the_core_range() -> None:
+    sr, hop = 22050, 512
+    frames = np.arange(400)
+    # Pulses every 7 frames sit at ~370 BPM, so the 300 BPM ceiling of a wider band moves them.
+    onset = np.where(frames % 7 == 0, 1.0, 0.0).astype(np.float32)
+    onset += np.where(frames % 43 == 0, 0.6, 0.0).astype(np.float32)
+    omitted = libsonare.plp(onset, sr=sr, hop_length=hop)
+    explicit = libsonare.plp(onset, sr=sr, hop_length=hop, tempo_min=60.0, tempo_max=200.0)
+    np.testing.assert_array_equal(omitted, explicit)
+    wider = libsonare.plp(onset, sr=sr, hop_length=hop, tempo_min=30.0, tempo_max=300.0)
+    assert not np.array_equal(omitted, wider)
 
 
 def test_audio_detect_bpm() -> None:

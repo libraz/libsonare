@@ -48,7 +48,7 @@ from ._mastering_offline import _chain_config_paths, _nest_chain_config
 
 if TYPE_CHECKING:
     from .analyzer import MasteringPreset, SoloProcessor
-    from .types import MasteringChainResult, MasteringChainStereoResult
+    from .types import MasteringChainResult, MasteringChainStereoResult, StreamingPlatform
 
 
 def _mastering_report_payload(report: Any) -> dict[str, object]:
@@ -941,7 +941,11 @@ def cmd_mastering_streaming(args: argparse.Namespace) -> int:
     from . import mastering_streaming_preview
 
     samples, sr = _load_audio(args.file)
-    platforms = _parse_json_list(args.platforms, args.platforms_file) or None
+    # The facade refuses any record key other than its own, so the parsed JSON goes through as is.
+    platforms = cast(
+        "list[StreamingPlatform] | None",
+        _parse_json_list(args.platforms, args.platforms_file) or None,
+    )
     result_json = mastering_streaming_preview(samples, sample_rate=sr, platforms=platforms)
     print(_strict_json_dumps(_json_keys_to_snake_case(json.loads(result_json))))
     return 0
@@ -1219,7 +1223,7 @@ def register_mastering_parsers(
     mstream_p.add_argument(
         "--platforms",
         default=None,
-        help="Platform targets as JSON array of {name,targetLufs,ceilingDb}",
+        help="Platform targets as JSON array of {name,target_lufs,ceiling_dbtp}",
     )
     mstream_p.add_argument("--platforms-file", default=None, help="Platform targets JSON file")
     register_repair_parsers(sub, shared)

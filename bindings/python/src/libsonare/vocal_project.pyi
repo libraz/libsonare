@@ -107,7 +107,7 @@ def apply_project_vocal_edit(
     take_id: int = ...,
     rendered_start_sample: int = ...,
 ) -> ProjectVocalEditApplyResult: ...
-def get_project_vocal_edit_dependencies(
+def project_vocal_edit_dependencies(
     project: Project,
 ) -> tuple[ProjectVocalEditDependency, ...]: ...
 def rehydrate_project_vocal_edits(

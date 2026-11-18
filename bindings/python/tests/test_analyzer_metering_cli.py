@@ -618,14 +618,14 @@ def test_mastering_streaming_cli_passes_platform_targets(monkeypatch, capsys) ->
 
     args = argparse.Namespace(
         file="input.wav",
-        platforms='[{"name":"Service","targetLufs":-14,"ceilingDb":-1}]',
+        platforms='[{"name":"Service","target_lufs":-14,"ceiling_dbtp":-1}]',
         platforms_file="",
     )
 
     assert cli.cmd_mastering_streaming(args) == 0
     assert calls["samples"] == [0.2, -0.2, 0.0]
     assert calls["sample_rate"] == 48000
-    assert calls["platforms"] == [{"name": "Service", "targetLufs": -14, "ceilingDb": -1}]
+    assert calls["platforms"] == [{"name": "Service", "target_lufs": -14, "ceiling_dbtp": -1}]
     assert json.loads(capsys.readouterr().out)["platforms"][0]["name"] == "Service"
 
 

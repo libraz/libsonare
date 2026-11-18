@@ -47,7 +47,7 @@ def test_decode_channels_matches_the_core_decoder(channel_count: int, tmp_path: 
 
     path = tmp_path / "in.wav"
     path.write_bytes(wav)
-    assert Audio.file_channel_count(str(path)) == channel_count
+    assert Audio.file_num_channels(str(path)) == channel_count
     for channel in range(channel_count):
         with Audio.from_file_channel(str(path), channel) as plane:
             np.testing.assert_array_equal(channels[channel], plane.data)

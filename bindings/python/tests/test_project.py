@@ -21,6 +21,7 @@ from libsonare import (
     Project,
     ProjectMarker,
     SonareError,
+    SonareValueError,
     project_abi_version,
 )
 from libsonare._project_model import _EXPECTED_PROJECT_ABI_VERSION
@@ -844,14 +845,27 @@ def test_context_manager_and_aliases_close_handle() -> None:
         project.add_track("audio")
 
 
+def test_overlap_policy_is_a_token_and_an_ordinal_is_refused() -> None:
+    project = Project()
+    try:
+        with pytest.raises(TypeError, match="policy"):
+            project.set_overlap_policy(1)  # type: ignore[arg-type]
+        with pytest.raises(SonareValueError, match="policy"):
+            project.set_overlap_policy("overlap")  # type: ignore[arg-type]
+        assert project.overlap_policy == "disallow"
+    finally:
+        project.close()
+
+
 def test_project_getters_setters_and_counts() -> None:
     project = Project()
     try:
         project.set_sample_rate(44100.0)
-        assert project.get_sample_rate() == 44100.0
+        assert project.sample_rate == 44100.0
 
-        project.set_overlap_policy(1)
-        assert project.get_overlap_policy() == 1
+        assert project.overlap_policy == "disallow"
+        project.set_overlap_policy("allow")
+        assert project.overlap_policy == "allow"
 
         project.set_tempo_segments([(0.0, 120.0), (480.0, 140.0)])
         assert project.tempo_segment_count() == 2

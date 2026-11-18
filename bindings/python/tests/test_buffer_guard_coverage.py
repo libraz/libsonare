@@ -156,7 +156,9 @@ _SCALAR_ARGS: dict[str, Any] = {
 # constructor arguments are the cheapest configuration that opens the handle —
 # what is being probed is the preflight, which runs before any of them matter.
 _CLASS_INSTANCES: dict[str, Callable[[], Any]] = {
-    "PlaybackLoudnessMeter": lambda: libsonare.PlaybackLoudnessMeter(1, 22050),
+    "PlaybackLoudnessMeter": lambda: libsonare.PlaybackLoudnessMeter(
+        num_channels=1, sample_rate=22050
+    ),
     "PlaybackRenderer": lambda: libsonare.PlaybackRenderer({}, max_block_size=128),
     "Project": lambda: libsonare.Project(),
     "RealtimeVoiceChanger": lambda: libsonare.RealtimeVoiceChanger(22050, channels=2),

@@ -960,7 +960,7 @@ def test_mix_stereo_true_peak_is_valid_on_a_one_shot_mix() -> None:
     true peak needed sustained streaming and read the floor on a one-shot mix.
     The loudness half of the caveat is real and is asserted alongside it.
     """
-    from libsonare import metering_true_peak_db, mix_stereo
+    from libsonare import metering_true_peak_dbtp, mix_stereo
 
     sr = 48000
     for frequency, n in ((1000, 64), (1000, 4096), (11000, 1024)):
@@ -974,7 +974,7 @@ def test_mix_stereo_true_peak_is_valid_on_a_one_shot_mix() -> None:
         # One block over the whole signal leaves no internal block edge, so the
         # strip meter agrees with the offline whole-signal measurement.
         assert meter.true_peak_dbtp_l == pytest.approx(
-            metering_true_peak_db(tone, sample_rate=sr), abs=1e-4
+            metering_true_peak_dbtp(tone, sample_rate=sr), abs=1e-4
         )
         # The integrating loudness fields genuinely have not filled their
         # windows at these lengths.
@@ -992,7 +992,7 @@ def test_one_shot_true_peak_covers_a_peak_in_the_last_samples() -> None:
 
     left = [0.0] * 4092 + [0.9, -0.9, 0.9, -0.9]
     result = libsonare.mix_stereo([(left, list(left))], sample_rate=48000)
-    expected = libsonare.metering_true_peak_db(left, 48000)
+    expected = libsonare.metering_true_peak_dbtp(left, 48000)
     assert result.meters[0].true_peak_dbtp_l == pytest.approx(expected, abs=1e-4)
     assert result.meters[0].true_peak_dbtp_l > -1.0
 

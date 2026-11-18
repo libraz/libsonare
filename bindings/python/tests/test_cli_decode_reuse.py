@@ -67,7 +67,7 @@ def test_mono_and_unknown_channel_paths_keep_audio_from_file(monkeypatch, capsys
     path = str(tmp_path / "input.wav")
     from_file_calls: list[str] = []
 
-    monkeypatch.setattr(audio.Audio, "file_channel_count", classmethod(lambda _cls, _path: 1))
+    monkeypatch.setattr(audio.Audio, "file_num_channels", classmethod(lambda _cls, _path: 1))
 
     def from_file(_cls, file_path: str) -> _FakeAudio:
         from_file_calls.append(file_path)
@@ -86,7 +86,7 @@ def test_mono_and_unknown_channel_paths_keep_audio_from_file(monkeypatch, capsys
         probe_calls.append(file_path)
         raise RuntimeError("optional decoder probe failed")
 
-    monkeypatch.setattr(audio.Audio, "file_channel_count", classmethod(failed_probe))
+    monkeypatch.setattr(audio.Audio, "file_num_channels", classmethod(failed_probe))
     from_file_calls.clear()
     samples, sample_rate = common._load_audio(path)
     assert samples.tolist() == [0.25, -0.5]

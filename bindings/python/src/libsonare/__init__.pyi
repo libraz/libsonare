@@ -237,7 +237,7 @@ from .analyzer import (
     detect_onsets as detect_onsets,
 )
 from .analyzer import (
-    ebur128_loudness_range as ebur128_loudness_range,
+    ebur128_loudness_range_lu as ebur128_loudness_range_lu,
 )
 from .analyzer import (
     engine_abi_version as engine_abi_version,
@@ -527,7 +527,7 @@ from .analyzer import (
 from .analyzer import (
     metering_stereo_width as metering_stereo_width,
 )
-from .analyzer import metering_true_peak_db as metering_true_peak_db
+from .analyzer import metering_true_peak_dbtp as metering_true_peak_dbtp
 from .analyzer import (
     metering_vectorscope as metering_vectorscope,
 )
@@ -1349,6 +1349,9 @@ from .types import (
     StreamingLoudnessGain as StreamingLoudnessGain,
 )
 from .types import (
+    StreamingPlatform as StreamingPlatform,
+)
+from .types import (
     StreamPatternScore as StreamPatternScore,
 )
 from .types import (
@@ -1519,7 +1522,7 @@ from .vocal_project import (
     apply_project_vocal_edit as apply_project_vocal_edit,
 )
 from .vocal_project import (
-    get_project_vocal_edit_dependencies as get_project_vocal_edit_dependencies,
+    project_vocal_edit_dependencies as project_vocal_edit_dependencies,
 )
 from .vocal_project import (
     rehydrate_project_vocal_edits as rehydrate_project_vocal_edits,

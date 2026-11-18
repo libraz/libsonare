@@ -1864,6 +1864,11 @@ class MasteringAssistantResult(TypedDict):
     explanation: list[str]
     profile: MasteringAssistantProfile
 
+class StreamingPlatform(TypedDict):
+    name: str
+    target_lufs: float
+    ceiling_dbtp: float
+
 class MasteringStreamingPreviewPlatform(TypedDict):
     name: str
     integratedLufs: float | None

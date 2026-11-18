@@ -358,7 +358,7 @@ def _source_channel_count(path: str) -> int:
     from .audio import Audio
 
     try:
-        return int(Audio.file_channel_count(path))
+        return int(Audio.file_num_channels(path))
     except Exception:
         return 0
 

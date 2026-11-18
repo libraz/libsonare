@@ -454,7 +454,7 @@ def test_audio_from_file_channel_keeps_the_channels_apart(tmp_path) -> None:
         handle.setframerate(22050)
         handle.writeframes(bytes(pcm))
 
-    assert Audio.file_channel_count(path) == 2
+    assert Audio.file_num_channels(path) == 2
     with (
         Audio.from_file_channel(path, 0) as left,
         Audio.from_file_channel(path, 1) as right,
