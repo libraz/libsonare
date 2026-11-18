@@ -782,9 +782,8 @@ export interface ProjectClipCompSegment {
 
 /**
  * One automation breakpoint for {@link Project.addAutomationLane} /
- * {@link Project.editAutomationLane}. `curve` (alias `curveToNext`) is the
- * PPQ-domain curve to the next breakpoint (0 = Linear default, 1 = Exponential,
- * 2 = Hold, 3 = SCurve).
+ * {@link Project.editAutomationLane}. Any key other than `ppq`, `value` and
+ * `curveToNext` is a `TypeError`.
  */
 export interface ProjectAutomationPoint {
   /** Breakpoint position in PPQ. */
