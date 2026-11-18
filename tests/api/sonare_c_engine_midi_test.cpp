@@ -876,6 +876,22 @@ TEST_CASE("sonare_engine exposes live non-destructive MIDI FX inserts", "[c_api]
                                     "{\"$comment\":\"up\",\"x-ui\":1,\"transposeSemitones\":12}") ==
           SONARE_OK);
   REQUIRE(sonare_engine_clear_midi_fx(engine, 5) == SONARE_OK);
+
+  // A present key holding the wrong kind is refused by name, never read as absent.
+  const std::pair<const char*, const char*> wrong_kinds[] = {
+      {"{\"transposeSemitones\":\"3\"}", "transposeSemitones must be a number"},
+      {"{\"velocityScale\":true}", "velocityScale must be a number"},
+      {"{\"seed\":null}", "seed must be a number"},
+      {"{\"humanizePpq\":0.1,\"humanizeVelocity\":false}", "humanizeVelocity must be a number"},
+      {"{\"quantizePpq\":1,\"quantizeStrength\":null}", "quantizeStrength must be a number"},
+      {"{\"chordIntervals\":null}", "chordIntervals must be an array"},
+      {"{\"arpeggiatorIntervals\":\"0,7\"}", "arpeggiatorIntervals must be an array"},
+  };
+  for (const auto& [config, message] : wrong_kinds) {
+    INFO(config);
+    REQUIRE(sonare_engine_set_midi_fx(engine, 5, config) == SONARE_ERROR_INVALID_FORMAT);
+    CHECK(std::string(sonare_last_error_message()) == message);
+  }
 #else
   REQUIRE(sonare_engine_set_midi_fx(engine, 5, "{\"transposeSemitones\":12}") ==
           SONARE_ERROR_NOT_SUPPORTED);

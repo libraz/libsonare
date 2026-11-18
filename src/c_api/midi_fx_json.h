@@ -54,6 +54,7 @@ inline bool float_or(const json::Value& obj, const char* key, float fallback, fl
 struct KeySpelling {
   const char* current;
   const char* earlier;
+  bool array = false;
 };
 constexpr KeySpelling kKeys[] = {
     {"transposeSemitones", "transpose_semitones"},
@@ -62,8 +63,8 @@ constexpr KeySpelling kKeys[] = {
     {"velocityGamma", "velocity_gamma"},
     {"quantizePpq", "quantize_ppq"},
     {"quantizeStrength", "quantize_strength"},
-    {"chordIntervals", "chord_intervals"},
-    {"arpeggiatorIntervals", "arpeggiator_intervals"},
+    {"chordIntervals", "chord_intervals", true},
+    {"arpeggiatorIntervals", "arpeggiator_intervals", true},
     {"arpeggiatorStepPpq", "arpeggiator_step_ppq"},
     {"arpeggiatorGatePpq", "arpeggiator_gate_ppq"},
     {"humanizePpq", "humanize_ppq"},
@@ -92,6 +93,20 @@ inline SonareError refuse_unknown_keys(const json::Value& root) {
   return SONARE_OK;
 }
 
+// A present key holding the wrong kind is refused, never read as absent.
+inline SonareError refuse_wrong_kinds(const json::Value& root) {
+  for (const KeySpelling& spelling : kKeys) {
+    const json::Value* value = root.find(spelling.current);
+    if (value == nullptr) continue;
+    if (spelling.array ? value->is_array() : value->is_number()) continue;
+    const std::string message = std::string(spelling.current) +
+                                (spelling.array ? " must be an array" : " must be a number");
+    set_last_error(SONARE_ERROR_INVALID_FORMAT, message.c_str());
+    return SONARE_ERROR_INVALID_FORMAT;
+  }
+  return SONARE_OK;
+}
+
 inline bool ppq_frames(double ppq, int64_t* out) {
   if (!sonare::transport::valid_public_ppq(ppq)) return false;
   return sonare::numeric::checked_round_cast(
@@ -114,6 +129,7 @@ inline SonareError midi_fx_chain_from_json(const char* config_json,
   }
   if (!root.is_object()) return SONARE_ERROR_INVALID_FORMAT;
   if (const SonareError key_err = refuse_unknown_keys(root); key_err != SONARE_OK) return key_err;
+  if (const SonareError kind_err = refuse_wrong_kinds(root); kind_err != SONARE_OK) return kind_err;
 
   sonare::midi::TransposeConfig transpose;
   if (has_number(root, "transposeSemitones")) {
@@ -153,7 +169,6 @@ inline SonareError midi_fx_chain_from_json(const char* config_json,
   }
 
   if (const json::Value* intervals = root.find("chordIntervals")) {
-    if (!intervals->is_array()) return SONARE_ERROR_INVALID_FORMAT;
     sonare::midi::ChordConfig chord;
     chord.enabled = true;
     const auto& values = intervals->as_array();
@@ -171,7 +186,6 @@ inline SonareError midi_fx_chain_from_json(const char* config_json,
   }
 
   if (const json::Value* arp_intervals = root.find("arpeggiatorIntervals")) {
-    if (!arp_intervals->is_array()) return SONARE_ERROR_INVALID_FORMAT;
     const auto& values = arp_intervals->as_array();
     if (values.empty() || values.size() > sonare::midi::ArpeggiatorConfig::kMaxArpSteps) {
       return SONARE_ERROR_INVALID_FORMAT;
