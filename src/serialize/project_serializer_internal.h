@@ -184,6 +184,10 @@ arrangement::ClipSource source_from_json(const Value& v);
 arrangement::ChordSymbol chord_from_json(const Value& v);
 arrangement::KeySegment key_segment_from_json(const Value& v);
 void annotation_from_json(const Value& v, arrangement::ProjectAnnotation* a);
+/// Rewrites a pre-version-6 built-in assist module id to its lowerCamel form. Returns false
+/// when a version-6 or later document still carries one of the old ids.
+bool migrate_assist_module_id(uint32_t schema_version, std::string* module_id);
+
 bool sidecar_from_json(const Value& v, arrangement::AssistSidecar* out,
                        size_t max_payload_bytes = std::numeric_limits<size_t>::max());
 /// Reports each key the scene reader does not consume as an `unknown_scene_key` warning whose

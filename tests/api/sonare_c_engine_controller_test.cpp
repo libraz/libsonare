@@ -101,7 +101,7 @@ TEST_CASE("sonare_controller_profile_names lists the presets", "[c_api][controll
   // and gained an empty one keeps its count.
   REQUIRE(names_contain(names, "gm"));
   REQUIRE(names_contain(names, "breath"));
-  REQUIRE(names_contain(names, "breath-aftertouch"));
+  REQUIRE(names_contain(names, "breathAftertouch"));
   REQUIRE(names_contain(names, "mpe"));
   REQUIRE(name_count(names) >= 4);
 #else
@@ -115,9 +115,9 @@ TEST_CASE("the controller enum name tables match their C counts", "[c_api][contr
   const char* axes = sonare_synth_enum_names(SONARE_SYNTH_ENUM_CONTROLLER_AXIS);
   REQUIRE(name_count(inputs) == SONARE_CONTROLLER_INPUT_COUNT);
   REQUIRE(name_count(axes) == SONARE_CONTROLLER_AXIS_COUNT);
-  REQUIRE(names_contain(inputs, "channel-pressure"));
+  REQUIRE(names_contain(inputs, "channelPressure"));
   REQUIRE(names_contain(axes, "excitation"));
-  REQUIRE(names_contain(axes, "vibrato-depth"));
+  REQUIRE(names_contain(axes, "vibratoDepth"));
 #else
   REQUIRE(std::string(sonare_synth_enum_names(SONARE_SYNTH_ENUM_CONTROLLER_INPUT)).empty());
 #endif

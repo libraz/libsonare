@@ -90,7 +90,7 @@ TEST_CASE("the articulation name table matches its C count", "[c_api][articulati
   // Named rather than counted alone: a table that lost an entry and gained an
   // empty one keeps its count, and these names are what a surface spells the
   // ordinals as.
-  REQUIRE(std::string(names) == "poly\nmono-retrigger\nmono-legato");
+  REQUIRE(std::string(names) == "poly\nmonoRetrigger\nmonoLegato");
 #else
   REQUIRE(std::string(names).empty());
 #endif

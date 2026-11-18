@@ -373,7 +373,7 @@ val RealtimeEngineWasm::controllerNoteTracking(const val& destination_id_val, va
 
 // Sets how one channel of the destination's instrument treats a note-on while
 // another note on that channel is still held. `articulation` is a canonical
-// name ("poly" / "mono-retrigger" / "mono-legato") or its ordinal. Mirrors
+// name ("poly" / "monoRetrigger" / "monoLegato") or its ordinal. Mirrors
 // sonare_engine_set_articulation, including which refusals stay apart: an
 // instrument with no articulation of its own reports NotSupported (the C ABI's
 // NOT_SUPPORTED) rather than succeeding quietly, because a discarded mode is
@@ -385,7 +385,7 @@ void RealtimeEngineWasm::setArticulation(const val& destination_id_val, const va
   // Checked before the byte it narrows into: channel 256 would otherwise arrive
   // as channel 0 and slur a part the caller never named. Out-of-range modes are
   // refused rather than clamped by the shared enum reader, for the reason the C
-  // ABI gives -- poly substituted for a misspelled mono-legato plays every note
+  // ABI gives -- poly substituted for a misspelled monoLegato plays every note
   // and slurs none of them.
   const int channel = checkedIntFromVal(channel_val, "channel");
   requireOrdinalInRange(channel, 0, 15, "channel");

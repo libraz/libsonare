@@ -300,8 +300,16 @@ int project_bounce_impl(const CliArgs& args, bool use_synth, bool binds_source_a
       // same if the routing is ever asked to yield.
       synth_binding.patch.struct_version = SONARE_SYNTH_PATCH_STRUCT_VERSION;
     } else {
+      // The preset is named in kebab-case on the command line.
+      std::string preset;
+      try {
+        preset = library_token("--synth", requested, synth_preset_name_list());
+      } catch (const std::invalid_argument& e) {
+        std::cerr << color::red << "Error: " << e.what() << color::reset << "\n";
+        return project_exit_code(SONARE_ERROR_INVALID_PARAMETER);
+      }
       const SonareError patch_error =
-          sonare_synth_preset_patch(requested.c_str(), &synth_binding.patch);
+          sonare_synth_preset_patch(preset.c_str(), &synth_binding.patch);
       if (patch_error != SONARE_OK) {
         std::cerr << color::red << "Error: unknown synth preset '" << requested << "'"
                   << color::reset << "\n";

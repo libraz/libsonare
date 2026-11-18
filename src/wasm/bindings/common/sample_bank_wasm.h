@@ -44,7 +44,7 @@ class SampleBankWasm {
   // index. The descriptor carries { rootKey, fineTuneCents, sourceRate,
   // loopStart, loopEnd, loopMode }; every field is optional and zero means the
   // C ABI's own default. loopMode takes the raw SoundFont sampleModes number or
-  // its name ("none" / "continuous" / "key-down"), matching the Node reader.
+  // its name ("none" / "continuous" / "keyDown"), matching the Node reader.
   uint32_t addSample(val data, val desc);
 
   // Appends a { sampleIndex, keyLo, keyHi, velLo, velHi, tuneCents, gain,

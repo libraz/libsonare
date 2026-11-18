@@ -273,33 +273,33 @@ TEST_CASE("NativeSynth enum names are supplied by the C project ABI", "[project]
   };
 
   CHECK(split(sonare_synth_enum_names(SONARE_SYNTH_ENUM_ENGINE_MODE)) ==
-        std::vector<std::string>{"default", "subtractive", "fm", "karplus-strong", "modal",
-                                 "additive", "percussion", "piano", "pipe-organ", "bowed-string",
-                                 "reed", "brass", "flute", "plucked-string", "vocal", "free-reed",
+        std::vector<std::string>{"default", "subtractive", "fm", "karplusStrong", "modal",
+                                 "additive", "percussion", "piano", "pipeOrgan", "bowedString",
+                                 "reed", "brass", "flute", "pluckedString", "vocal", "freeReed",
                                  "harpsichord", "sample", "singing"});
   CHECK(split(sonare_synth_enum_names(SONARE_SYNTH_ENUM_OSC_WAVEFORM)) ==
         std::vector<std::string>{"default", "sine", "saw", "square", "triangle", "noise"});
   CHECK(split(sonare_synth_enum_names(SONARE_SYNTH_ENUM_BUILTIN_WAVEFORM)) ==
         std::vector<std::string>{"sine", "saw", "sawtooth", "square", "triangle"});
   CHECK(split(sonare_synth_enum_names(SONARE_SYNTH_ENUM_FILTER_MODEL)) ==
-        std::vector<std::string>{"default", "svf", "transistor-ladder", "diode-ladder",
-                                 "sallen-key", "svf-4-pole"});
+        std::vector<std::string>{"default", "svf", "transistorLadder", "diodeLadder", "sallenKey",
+                                 "svf4Pole"});
   CHECK(split(sonare_synth_enum_names(SONARE_SYNTH_ENUM_FILTER_OUTPUT)) ==
         std::vector<std::string>{"default", "lowpass", "bandpass", "highpass"});
   CHECK(split(sonare_synth_enum_names(SONARE_SYNTH_ENUM_BODY_TYPE)) ==
-        std::vector<std::string>{"default", "none", "guitar", "violin", "wood-tube", "brass-bell",
+        std::vector<std::string>{"default", "none", "guitar", "violin", "woodTube", "brassBell",
                                  "vocal"});
   CHECK(split(sonare_synth_enum_names(SONARE_SYNTH_ENUM_MOD_SOURCE)) ==
-        std::vector<std::string>{"none", "amp-env", "filter-env", "lfo1", "lfo2", "velocity",
-                                 "key-track", "mod-wheel", "random", "breath", "aftertouch",
-                                 "expression-cc", "pitch-bend"});
+        std::vector<std::string>{"none", "ampEnv", "filterEnv", "lfo1", "lfo2", "velocity",
+                                 "keyTrack", "modWheel", "random", "breath", "aftertouch",
+                                 "expressionCc", "pitchBend"});
   CHECK(split(sonare_synth_enum_names(SONARE_SYNTH_ENUM_MOD_DESTINATION)) ==
-        std::vector<std::string>{"none", "pitch-cents", "cutoff-cents", "amp-gain", "pan-units",
-                                 "resonance-q", "vibrato-depth-cents", "filter-env-depth",
-                                 "lfo1-rate-scale", "excitation-force", "excitation-position",
-                                 "excitation-brightness", "spectrum-morph"});
+        std::vector<std::string>{"none", "pitchCents", "cutoffCents", "ampGain", "panUnits",
+                                 "resonanceQ", "vibratoDepthCents", "filterEnvDepth",
+                                 "lfo1RateScale", "excitationForce", "excitationPosition",
+                                 "excitationBrightness", "spectrumMorph"});
   CHECK(split(sonare_synth_enum_names(SONARE_SYNTH_ENUM_SAMPLE_LOOP_MODE)) ==
-        std::vector<std::string>{"default", "none", "continuous", "key-down"});
+        std::vector<std::string>{"default", "none", "continuous", "keyDown"});
   CHECK(split(sonare_synth_enum_names(SONARE_SYNTH_ENUM_SAMPLE_KEY_TRACK)) ==
         std::vector<std::string>{"default", "on", "off"});
   CHECK(split(sonare_synth_enum_names(SONARE_SYNTH_ENUM_RETRIGGER)) ==
@@ -307,7 +307,7 @@ TEST_CASE("NativeSynth enum names are supplied by the C project ABI", "[project]
   CHECK(split(sonare_synth_enum_names(SONARE_SYNTH_ENUM_PART_RIG_MODE)) ==
         std::vector<std::string>{"bank", "none", "chain"});
   CHECK(split(sonare_synth_enum_names(SONARE_SYNTH_ENUM_SAMPLE_DESC_LOOP_MODE)) ==
-        std::vector<std::string>{"none", "continuous", "key-down"});
+        std::vector<std::string>{"none", "continuous", "keyDown"});
   CHECK(split(sonare_synth_enum_names(SONARE_SYNTH_ENUM_LFO_SHAPE)) ==
         std::vector<std::string>{"default", "triangle", "sine", "random"});
   CHECK(std::string(sonare_synth_enum_names(SONARE_SYNTH_ENUM_LFO_SHAPE + 1)) == "");

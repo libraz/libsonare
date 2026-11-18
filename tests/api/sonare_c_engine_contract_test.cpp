@@ -757,7 +757,7 @@ TEST_CASE("sonare_engine_set_synth_instrument_binding follows GM program changes
 
     SonareSynthPatch patch{};
     patch.struct_version = 1;
-    std::strncpy(patch.preset, "saw-lead", sizeof(patch.preset) - 1);
+    std::strncpy(patch.preset, "sawLead", sizeof(patch.preset) - 1);
 
     SonareSynthInstrumentBinding binding{};
     binding.destination_id = kDestination;

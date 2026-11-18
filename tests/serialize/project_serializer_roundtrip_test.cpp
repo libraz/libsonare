@@ -20,6 +20,10 @@
 #include "arrangement/harmonic_timeline.h"
 #include "automation/automation_lane.h"
 #include "mixing/api/scene.h"
+#if defined(SONARE_WITH_ASSIST)
+#include "midi/assist/modules/chord_tone_generator.h"
+#include "midi/assist/modules/diatonic_harmonizer.h"
+#endif
 #include "serialize/project_serializer.h"
 #include "serialize/project_serializer_internal.h"
 #include "transport/tempo_map.h"
@@ -687,9 +691,9 @@ TEST_CASE("project serialize is deterministic and stable across calls", "[serial
   const auto root = util::json::parse(a);
   REQUIRE(root.is_object());
   REQUIRE(root.contains("version"));
-  // The fixture carries internal comp geometry, which selects schema 4.
+  // The fixture carries assist sidecars, which select schema 6.
   CHECK(root["version"].as_int() ==
-        static_cast<int>(sonare::serialize::SONARE_PROJECT_SCHEMA_VERSION_COMP_RENDER_PARTS));
+        static_cast<int>(sonare::serialize::SONARE_PROJECT_SCHEMA_VERSION_CAMEL_MODULE_IDS));
 }
 
 TEST_CASE("project serialize/deserialize/serialize is byte-identical", "[serialize]") {
@@ -3062,4 +3066,55 @@ TEST_CASE("a negative track or clip gain loads as silence with one warning each"
   };
   CHECK(count("track_gain_clamped") == 1);
   CHECK(count("clip_gain_clamped") == 1);
+}
+
+namespace {
+
+std::string sidecar_document(int version, const char* module_id) {
+  return std::string("{\"version\":") + std::to_string(version) +
+         ",\"assist_sidecars\":[{\"module_id\":\"" + module_id +
+         "\",\"schema_version\":1,\"target_track_id\":0,\"region_start_ppq\":0,"
+         "\"region_end_ppq\":0,\"payload_b64\":\"\"}]}";
+}
+
+}  // namespace
+
+TEST_CASE("an older document's built-in assist module ids load as the lowerCamel ids",
+          "[serialize][assist]") {
+  const struct {
+    const char* old_id;
+    const char* new_id;
+  } kRenamed[] = {
+      {"sonare.builtin.chord_tone_generator", "sonare.builtin.chordToneGenerator"},
+      {"sonare.builtin.diatonic_harmonizer", "sonare.builtin.diatonicHarmonizer"},
+  };
+#if defined(SONARE_WITH_ASSIST)
+  CHECK(std::string(kRenamed[0].new_id) == midi::assist::modules::ChordToneGenerator::kModuleId);
+  CHECK(std::string(kRenamed[1].new_id) == midi::assist::modules::DiatonicHarmonizer::kModuleId);
+#endif
+  for (const auto& r : kRenamed) {
+    for (int version : {1, 5}) {
+      auto loaded = project_from_json(sidecar_document(version, r.old_id));
+      REQUIRE(loaded.ok());
+      REQUIRE(loaded.project->assist_sidecars().size() == 1);
+      CHECK(loaded.project->assist_sidecars()[0].module_id == r.new_id);
+
+      const std::string saved = project_to_json(*loaded.project, loaded.midi);
+      CHECK(saved.find("\"version\":6") != std::string::npos);
+      CHECK(saved.find(r.new_id) != std::string::npos);
+      CHECK(saved.find(r.old_id) == std::string::npos);
+
+      auto reloaded = project_from_json(saved);
+      REQUIRE(reloaded.ok());
+      CHECK(project_to_json(*reloaded.project, reloaded.midi) == saved);
+    }
+
+    auto current = project_from_json(sidecar_document(6, r.new_id));
+    REQUIRE(current.ok());
+    CHECK(current.project->assist_sidecars()[0].module_id == r.new_id);
+
+    auto refused = project_from_json(sidecar_document(6, r.old_id));
+    CHECK_FALSE(refused.ok());
+    CHECK_FALSE(refused.project.has_value());
+  }
 }

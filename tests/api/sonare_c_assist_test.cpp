@@ -222,8 +222,8 @@ TEST_CASE("sonare_assist_module_ids names both built-in modules", "[c_api][assis
   REQUIRE(ids != nullptr);
   const std::vector<std::string> lines = split_on_newline(ids);
   REQUIRE(lines.size() == 2u);
-  CHECK(lines[0] == "sonare.builtin.chord_tone_generator");
-  CHECK(lines[1] == "sonare.builtin.diatonic_harmonizer");
+  CHECK(lines[0] == "sonare.builtin.chordToneGenerator");
+  CHECK(lines[1] == "sonare.builtin.diatonicHarmonizer");
 
   // The ids are what a request selects a module by, so a run naming each of them
   // has to be accepted.
@@ -248,7 +248,7 @@ TEST_CASE("the preview document carries the notes the modules propose", "[c_api]
 
   Document document;
   const std::string request =
-      request_for(fixture.clip_id, "[\"sonare.builtin.diatonic_harmonizer\"]");
+      request_for(fixture.clip_id, "[\"sonare.builtin.diatonicHarmonizer\"]");
   REQUIRE(sonare_project_assist_preview_json(fixture.project, request.c_str(), document.out()) ==
           SONARE_OK);
   const json::Value root = document.parsed();
@@ -284,7 +284,7 @@ TEST_CASE("the preview document carries the notes the modules propose", "[c_api]
   REQUIRE(root["payloads"].is_array());
   REQUIRE(root["payloads"].as_array().size() == 1u);
   const std::string payload = root["payloads"][0].as_string();
-  CHECK(text_contains(payload, "sonare.builtin.diatonic_harmonizer"));
+  CHECK(text_contains(payload, "sonare.builtin.diatonicHarmonizer"));
   CHECK(text_contains(payload, "moved -2 scale steps"));
 }
 
@@ -489,7 +489,7 @@ TEST_CASE("a truncated apply returns its preview without committing or adding hi
   REQUIRE(before_assist != before_sentinel);
 
   const std::string request =
-      "{\"modules\": [\"sonare.builtin.diatonic_harmonizer\"], \"budget\": "
+      "{\"modules\": [\"sonare.builtin.diatonicHarmonizer\"], \"budget\": "
       "{\"maxIterations\": 2}, \"params\": {\"target_clip_id\": " +
       std::to_string(fixture.clip_id) + "}}";
   Document applied;
@@ -527,8 +527,7 @@ TEST_CASE("an unknown module id is an error, not a silent skip", "[c_api][assist
   // A well-formed selection of the SAME shape is accepted, so the refusal is
   // the id and not the field.
   Document accepted;
-  const std::string good =
-      request_for(fixture.clip_id, "[\"sonare.builtin.chord_tone_generator\"]");
+  const std::string good = request_for(fixture.clip_id, "[\"sonare.builtin.chordToneGenerator\"]");
   CHECK(sonare_project_assist_preview_json(fixture.project, good.c_str(), accepted.out()) ==
         SONARE_OK);
 
@@ -644,7 +643,7 @@ TEST_CASE("a params document naming no target clip is REFUSED with an error retu
   // With one module selected the reason is that module's words and nothing else.
   Document single;
   const std::string one_module =
-      "{\"modules\": [\"sonare.builtin.diatonic_harmonizer\"], \"params\": {}}";
+      "{\"modules\": [\"sonare.builtin.diatonicHarmonizer\"], \"params\": {}}";
   CHECK(sonare_project_assist_preview_json(fixture.project, one_module.c_str(), single.out()) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(single.parsed()["reason"].as_string() == declined);
@@ -706,7 +705,7 @@ TEST_CASE("the request's scope and budget reach the modules", "[c_api][assist]")
 
   Document scoped;
   const std::string scope_request =
-      "{\"modules\": [\"sonare.builtin.diatonic_harmonizer\"], \"scope\": {\"startPpq\": 480, "
+      "{\"modules\": [\"sonare.builtin.diatonicHarmonizer\"], \"scope\": {\"startPpq\": 480, "
       "\"endPpq\": 1440}, \"params\": {\"target_clip_id\": " +
       std::to_string(fixture.clip_id) + "}}";
   REQUIRE(sonare_project_assist_preview_json(fixture.project, scope_request.c_str(),
@@ -720,7 +719,7 @@ TEST_CASE("the request's scope and budget reach the modules", "[c_api][assist]")
   // report is the only account of the truncation and it has to reach the status.
   Document budgeted;
   const std::string budget_request =
-      "{\"modules\": [\"sonare.builtin.diatonic_harmonizer\"], \"budget\": {\"maxIterations\": 2}, "
+      "{\"modules\": [\"sonare.builtin.diatonicHarmonizer\"], \"budget\": {\"maxIterations\": 2}, "
       "\"params\": {\"target_clip_id\": " +
       std::to_string(fixture.clip_id) + "}}";
   REQUIRE(sonare_project_assist_preview_json(fixture.project, budget_request.c_str(),
@@ -736,7 +735,7 @@ TEST_CASE("the request's scope and budget reach the modules", "[c_api][assist]")
   // budget acting and not the source being short.
   Document unbudgeted;
   const std::string whole_request =
-      request_for(fixture.clip_id, "[\"sonare.builtin.diatonic_harmonizer\"]");
+      request_for(fixture.clip_id, "[\"sonare.builtin.diatonicHarmonizer\"]");
   REQUIRE(sonare_project_assist_preview_json(fixture.project, whole_request.c_str(),
                                              unbudgeted.out()) == SONARE_OK);
   const json::Value whole_root = unbudgeted.parsed();
@@ -764,7 +763,7 @@ TEST_CASE("the request's scope and budget reach the modules", "[c_api][assist]")
   // first note beginning at 960 PPQ.
   Document scoped_budget;
   const std::string scoped_budget_request =
-      "{\"modules\": [\"sonare.builtin.diatonic_harmonizer\"], \"scope\": "
+      "{\"modules\": [\"sonare.builtin.diatonicHarmonizer\"], \"scope\": "
       "{\"startPpq\": 960, \"endPpq\": 1920}, \"budget\": {\"maxIterations\": 1}, "
       "\"params\": {\"target_clip_id\": " +
       std::to_string(fixture.clip_id) + "}}";
@@ -801,7 +800,7 @@ TEST_CASE("harmonizer apply preserves UMP routing and LIFO overlap through undo/
   const std::string before = serialize_project(fixture.project);
 
   const std::string request =
-      "{\"modules\": [\"sonare.builtin.diatonic_harmonizer\"], \"params\": {\"target_clip_id\": " +
+      "{\"modules\": [\"sonare.builtin.diatonicHarmonizer\"], \"params\": {\"target_clip_id\": " +
       std::to_string(fixture.clip_id) + "}}";
   Document preview;
   REQUIRE(sonare_project_assist_preview_json(fixture.project, request.c_str(), preview.out()) ==
@@ -843,7 +842,7 @@ TEST_CASE("assist params reach the modules through the opaque blob", "[c_api][as
 
   Document document;
   const std::string request =
-      "{\"modules\": [\"sonare.builtin.chord_tone_generator\"], \"params\": {\"target_clip_id\": " +
+      "{\"modules\": [\"sonare.builtin.chordToneGenerator\"], \"params\": {\"target_clip_id\": " +
       std::to_string(fixture.clip_id) + ", \"low_note\": 60, \"base_velocity\": 40}}";
   REQUIRE(sonare_project_assist_preview_json(fixture.project, request.c_str(), document.out()) ==
           SONARE_OK);
@@ -855,7 +854,7 @@ TEST_CASE("assist params reach the modules through the opaque blob", "[c_api][as
   // understand.
   Document refused;
   const std::string bad =
-      "{\"modules\": [\"sonare.builtin.diatonic_harmonizer\"], \"params\": {\"target_clip_id\": " +
+      "{\"modules\": [\"sonare.builtin.diatonicHarmonizer\"], \"params\": {\"target_clip_id\": " +
       std::to_string(fixture.clip_id) + ", \"velocity_scale\": 0}}";
   CHECK(sonare_project_assist_preview_json(fixture.project, bad.c_str(), refused.out()) ==
         SONARE_ERROR_INVALID_PARAMETER);
@@ -868,7 +867,7 @@ TEST_CASE("assist params reach the modules through the opaque blob", "[c_api][as
   // A field of the wrong type is reported by name too, rather than defaulted.
   Document mistyped;
   const std::string broken =
-      "{\"modules\": [\"sonare.builtin.diatonic_harmonizer\"], \"params\": {\"target_clip_id\": " +
+      "{\"modules\": [\"sonare.builtin.diatonicHarmonizer\"], \"params\": {\"target_clip_id\": " +
       std::to_string(fixture.clip_id) + ", \"low_note\": \"48\"}}";
   CHECK(sonare_project_assist_preview_json(fixture.project, broken.c_str(), mistyped.out()) ==
         SONARE_ERROR_INVALID_PARAMETER);
@@ -882,7 +881,7 @@ TEST_CASE("assist params reach the modules through the opaque blob", "[c_api][as
 
   Document no_chords;
   const std::string comp_request =
-      request_for(bare.clip_id, "[\"sonare.builtin.chord_tone_generator\"]");
+      request_for(bare.clip_id, "[\"sonare.builtin.chordToneGenerator\"]");
   REQUIRE(sonare_project_assist_preview_json(bare.project, comp_request.c_str(), no_chords.out()) ==
           SONARE_OK);
   const json::Value bare_root = no_chords.parsed();

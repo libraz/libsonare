@@ -173,7 +173,7 @@ SonareError sonare_project_bounce_with_builtin_instruments(
 // ============================================================================
 
 /// @brief Returns the NativeSynth preset catalog names separated by '\n'
-///        ("sine", "saw-lead", "e-piano", "drum-kit", ...). Use these to
+///        ("sine", "sawLead", "ePiano", "drumKit", ...). Use these to
 ///        discover valid @ref SonareSynthPatch preset names instead of
 ///        hardcoding magic strings.
 /// @details Pointer is owned by libsonare and remains valid for the program
@@ -210,7 +210,7 @@ typedef enum SONARE_ENUM_BASE {
   /// Where a part's rig comes from (@ref SonarePartRigMode).
   SONARE_SYNTH_ENUM_PART_RIG_MODE = 16,
   /// A sample's own looping, as SonareSampleDesc.loop_mode spells it. The names
-  /// are not ordinals: "none" is 0, "continuous" 1 and "key-down" 3.
+  /// are not ordinals: "none" is 0, "continuous" 1 and "keyDown" 3.
   SONARE_SYNTH_ENUM_SAMPLE_DESC_LOOP_MODE = 17,
   /// The patch's LFO waveform, vibrato and tremolo LFOs (@ref SonareSynthLfoShape).
   SONARE_SYNTH_ENUM_LFO_SHAPE = 18

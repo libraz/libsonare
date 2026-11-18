@@ -336,16 +336,16 @@ TEST_CASE("GM orchestra hit is a fast-attack stab", "[midi][synth][organ]") {
 
 TEST_CASE("church organ presets select the pipe organ", "[midi][synth][organ]") {
   using sonare::midi::synth::find_synth_preset;
-  for (const char* name : {"church-organ", "church-flute", "church-bourdon", "church-trumpet"}) {
+  for (const char* name : {"churchOrgan", "churchFlute", "churchBourdon", "churchTrumpet"}) {
     const auto* preset = find_synth_preset(name);
     REQUIRE(preset != nullptr);
     REQUIRE(preset->config.patch.mode == SynthEngineMode::kPipeOrgan);
   }
   // The trumpet is the reed stop.
-  REQUIRE(find_synth_preset("church-trumpet")->config.patch.pipe_organ.ranks[0].reed > 0.0f);
+  REQUIRE(find_synth_preset("churchTrumpet")->config.patch.pipe_organ.ranks[0].reed > 0.0f);
   // The bourdon is the stopped pipe; the principal/flute are open.
-  REQUIRE(find_synth_preset("church-bourdon")->config.patch.pipe_organ.stopped == true);
-  REQUIRE(find_synth_preset("church-organ")->config.patch.pipe_organ.stopped == false);
+  REQUIRE(find_synth_preset("churchBourdon")->config.patch.pipe_organ.stopped == true);
+  REQUIRE(find_synth_preset("churchOrgan")->config.patch.pipe_organ.stopped == false);
 }
 
 TEST_CASE("pipe organ audio path is allocation-free", "[midi][synth][organ]") {
@@ -416,7 +416,7 @@ TEST_CASE("a mutation rank adds a non-harmonic partial", "[midi][synth][organ]")
 
 TEST_CASE("the church organ preset is a stable multi-rank plenum", "[midi][synth][organ]") {
   using sonare::midi::synth::find_synth_preset;
-  const auto* preset = find_synth_preset("church-organ");
+  const auto* preset = find_synth_preset("churchOrgan");
   REQUIRE(preset != nullptr);
   REQUIRE(preset->config.patch.pipe_organ.rank_count > 1);
 
@@ -435,7 +435,7 @@ TEST_CASE("the church organ preset is a stable multi-rank plenum", "[midi][synth
 
 TEST_CASE("a multi-rank registration is allocation-free", "[midi][synth][organ]") {
   using sonare::midi::synth::find_synth_preset;
-  NativeSynthConfig cfg = find_synth_preset("church-organ")->config;
+  NativeSynthConfig cfg = find_synth_preset("churchOrgan")->config;
   NativeSynth synth(cfg);
   synth.prepare(kRate, 256);
 
@@ -645,7 +645,7 @@ double swell_centroid(const std::vector<float>& buf, size_t from) {
 
 TEST_CASE("the swell box darkens the organ as the pedal closes", "[midi][synth][organ]") {
   using sonare::midi::synth::find_synth_preset;
-  NativeSynthConfig cfg = find_synth_preset("church-organ")->config;  // swell = 0.8
+  NativeSynthConfig cfg = find_synth_preset("churchOrgan")->config;  // swell = 0.8
   const auto play = [&](uint8_t expression) {
     NativeSynth synth(cfg);
     synth.prepare(kRate, 256);
@@ -772,7 +772,7 @@ TEST_CASE("the pipe organ is a clean reverb source (dc-free, sustained)", "[midi
   // in-loop and bus DC blockers) and sustain steady energy (no decay) for the
   // whole held note, so the reverb integrates a stable excitation.
   using sonare::midi::synth::find_synth_preset;
-  NativeSynthConfig cfg = find_synth_preset("church-organ")->config;
+  NativeSynthConfig cfg = find_synth_preset("churchOrgan")->config;
   NativeSynth synth(cfg);
   synth.prepare(kRate, 256);
   for (uint8_t note : {48, 55, 60, 64, 67}) {
@@ -804,7 +804,7 @@ TEST_CASE("a full plenum renders faster than real time", "[.][bench][organ-cpu]"
   // artefact). The five-rank church-organ over a ten-note chord is 50
   // waveguides at once.
   using sonare::midi::synth::find_synth_preset;
-  NativeSynthConfig cfg = find_synth_preset("church-organ")->config;
+  NativeSynthConfig cfg = find_synth_preset("churchOrgan")->config;
   NativeSynth synth(cfg);
   synth.prepare(kRate, 256);
   for (uint8_t note : {36, 43, 48, 55, 60, 64, 67, 72, 76, 79}) {

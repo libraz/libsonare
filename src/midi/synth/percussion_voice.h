@@ -51,7 +51,7 @@ struct PercussionPatchParams {
   /// GM kit mode: instead of playing this single kit piece on every key,
   /// note-on resolves the struck note through the GM drum map
   /// (gm_fallback_drum_patch), so one patch is the whole kit — the
-  /// `drum-kit` preset. The remaining fields are ignored when set.
+  /// `drumKit` preset. The remaining fields are ignored when set.
   bool gm_kit = false;
 
   /// GM exclusive/mute group (0 = none). Same-group note-ons on the channel

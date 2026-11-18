@@ -292,7 +292,7 @@ Napi::Value RealtimeEngineWrap::SetArticulation(const Napi::CallbackInfo& info) 
   }
   // Required rather than defaulted, for the reason the C ABI refuses an ordinal
   // past the enum instead of clamping it: poly substituted for a misspelled
-  // mono-legato plays every note and slurs none of them, which sounds exactly
+  // monoLegato plays every note and slurs none of them, which sounds exactly
   // like a request that took.
   int articulation = SONARE_ARTICULATION_POLY;
   if (!sonare_node::SynthEnumValue(env, info[2], kArticulations, SONARE_ARTICULATION_COUNT,

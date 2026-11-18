@@ -417,7 +417,7 @@ TEST_CASE("the brass bore only loses energy after the tongue-off, with the bell 
 TEST_CASE("brass presets speak and stay bounded", "[midi][synth][brass]") {
   // Every catalog brass preset must resolve, sound at F3, and stay bounded. The
   // shipped GM brass compasses are swept in wind_rate_law_test.cpp.
-  for (const char* name : {"trumpet", "trombone", "tuba", "french-horn", "muted-trumpet", "cornet",
+  for (const char* name : {"trumpet", "trombone", "tuba", "frenchHorn", "mutedTrumpet", "cornet",
                            "flugelhorn", "euphonium"}) {
     const sonare::midi::synth::SynthPreset* preset = sonare::midi::synth::find_synth_preset(name);
     REQUIRE(preset != nullptr);
@@ -449,8 +449,8 @@ TEST_CASE("catalog brass radiates through a bell, like the fallback voices",
   for (const Row row : {Row{"trumpet", 56},
                         {"trombone", 57},
                         {"tuba", 58},
-                        {"muted-trumpet", 59},
-                        {"french-horn", 60},
+                        {"mutedTrumpet", 59},
+                        {"frenchHorn", 60},
                         {"cornet", 56},
                         {"flugelhorn", 56},
                         {"euphonium", 58}}) {

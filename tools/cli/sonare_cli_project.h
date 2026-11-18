@@ -5,6 +5,7 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 #include "sonare_cli.h"
 
@@ -31,6 +32,8 @@ struct ProjectHandle {
 
 void project_report_error(const std::string& what, SonareError err);
 int project_exit_code(SonareError err);
+/// The NativeSynth preset names, as the library spells them.
+std::vector<std::string> synth_preset_name_list();
 int report_output_write_failure(const std::string& path);
 std::string project_input_path(const CliArgs& args);
 bool load_project_from_args(const CliArgs& args, ProjectHandle* handle,

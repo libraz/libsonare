@@ -740,7 +740,7 @@ TEST_CASE("a shaker does not swing wider from soft to hard than a noise piece",
 
 namespace {
 
-/// A `drum-kit` patch: note-on resolves each struck key through the GM drum map
+/// A `drumKit` patch: note-on resolves each struck key through the GM drum map
 /// instead of playing one fixed piece.
 NativeSynthPatch drum_kit_patch() {
   NativeSynthPatch p{};

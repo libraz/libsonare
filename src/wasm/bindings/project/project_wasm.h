@@ -234,7 +234,7 @@ struct ProjectWasm {
   // Compiles + renders the project, routing MIDI tracks through the
   // patch-driven NativeSynth (the full synthesizer; see the SynthPatch TS
   // type). @p bindings is a SynthPatch object, a preset-name string
-  // ("saw-lead" / "va:saw-lead"), or an array of either (each entry may carry
+  // ("sawLead" / "va:sawLead"), or an array of either (each entry may carry
   // a destinationId). An empty array / null / undefined produces zero
   // bindings. Unknown preset names throw.
   //
@@ -304,7 +304,7 @@ struct ProjectWasm {
 
   // Reads a JS array of { ppq, value, curve? } automation breakpoints into the
   // shared SonareAutomationPoint POD. `curve` accepts the ordinal or a string
-  // ("linear"/"exponential"/"hold"/"scurve"). The points are stored verbatim.
+  // ("linear"/"exponential"/"hold"/"sCurve"). The points are stored verbatim.
   static std::vector<SonareAutomationPoint> automationPointsFromVal(val points);
 
   static SonareAutomationLaneDesc automationLaneDescFromVal(

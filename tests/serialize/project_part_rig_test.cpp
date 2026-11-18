@@ -251,7 +251,7 @@ TEST_CASE("part rig decode honours schema version and shape", "[serialize][part_
   REQUIRE(v4.ok());
   CHECK(v4.project->part_rigs().empty());
 
-  const auto v6 = project_from_json(std::string(R"({"version":6,)") + body);
+  const auto v6 = project_from_json(std::string(R"({"version":7,)") + body);
   CHECK_FALSE(v6.ok());
 }
 

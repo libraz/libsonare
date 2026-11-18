@@ -30,7 +30,7 @@ def main() -> int:
                 libsonare.Project.midi_note_off(2.0, 0, 0, 64),
             ],
         )
-        audio = project.bounce_with_synth_instrument("saw-lead", num_channels=2)
+        audio = project.bounce_with_synth_instrument("sawLead", num_channels=2)
     write_wav(sys.argv[1], audio, 48000)
     return 0
 

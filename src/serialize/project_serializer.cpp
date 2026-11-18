@@ -166,7 +166,9 @@ Value project_to_value(const arrangement::Project& project,
       project.clips().begin(), project.clips().end(),
       [](const arrangement::EditClip& clip) { return !clip.comp_render_parts.empty(); });
   uint32_t schema_version = SONARE_PROJECT_SCHEMA_VERSION_OPAQUE;
-  if (!project.part_rigs().empty()) {
+  if (!project.assist_sidecars().empty()) {
+    schema_version = SONARE_PROJECT_SCHEMA_VERSION_CAMEL_MODULE_IDS;
+  } else if (!project.part_rigs().empty()) {
     schema_version = SONARE_PROJECT_SCHEMA_VERSION_PART_RIGS;
   } else if (has_comp_render_parts) {
     schema_version = SONARE_PROJECT_SCHEMA_VERSION_COMP_RENDER_PARTS;
@@ -736,6 +738,14 @@ DeserializeResult project_from_json(const std::string& json_text) {
         }
         arrangement::AssistSidecar sidecar;
         sidecar_fields_from_json(sv, &sidecar);
+        if (!migrate_assist_module_id(schema_version, &sidecar.module_id)) {
+          result.diagnostics.push_back(
+              {DiagnosticSeverity::kError, "legacy_assist_module_id",
+               "assist sidecar module id \"" + sidecar.module_id +
+                   "\" is not a lowerCamel id and is not valid in a version " +
+                   std::to_string(schema_version) + " document"});
+          return result;
+        }
         if (!sidecar_from_borrowed_payload(payload, &sidecar, remaining_payload_bytes)) {
           result.diagnostics.push_back({DiagnosticSeverity::kError, "invalid_sidecar_payload",
                                         "assist sidecar payload base64 is malformed"});

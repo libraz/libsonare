@@ -70,7 +70,7 @@ struct PresetEntry {
 constexpr PresetEntry kPresets[] = {
     {"gm", build_gm},
     {"breath", build_breath},
-    {"breath-aftertouch", build_breath_aftertouch},
+    {"breathAftertouch", build_breath_aftertouch},
     {"mpe", build_mpe},
 };
 

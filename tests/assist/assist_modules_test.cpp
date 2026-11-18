@@ -2265,8 +2265,8 @@ TEST_CASE("an injected harmony context reaches the generator's own placement rul
   // surface rather than an implementation detail.
   ChordToneGenerator generator;
   DiatonicHarmonizer harmonizer;
-  CHECK(std::string(generator.module_id()) == "sonare.builtin.chord_tone_generator");
-  CHECK(std::string(harmonizer.module_id()) == "sonare.builtin.diatonic_harmonizer");
+  CHECK(std::string(generator.module_id()) == "sonare.builtin.chordToneGenerator");
+  CHECK(std::string(harmonizer.module_id()) == "sonare.builtin.diatonicHarmonizer");
 
   // Injecting the harmony context explicitly gives the same voicing as letting
   // the module install its own, because the injected one reaches the judge too.

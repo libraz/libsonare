@@ -435,7 +435,7 @@ TEST_CASE("bass presets are voiced Karplus-Strong strings", "[midi][synth][ks]")
   using sonare::midi::synth::find_synth_preset;
   // Low E on a 4-string bass (E2 = MIDI 40, 82.41 Hz) exercises the long delay
   // line: every bass voicing must be a KS string, stay bounded and non-silent.
-  for (const char* name : {"bass-acoustic", "bass-fingered", "bass-picked", "bass-fretless"}) {
+  for (const char* name : {"bassAcoustic", "bassFingered", "bassPicked", "bassFretless"}) {
     const auto* preset = find_synth_preset(name);
     REQUIRE(preset != nullptr);
     const NativeSynthPatch& patch = preset->config.patch;
@@ -449,7 +449,7 @@ TEST_CASE("bass presets are voiced Karplus-Strong strings", "[midi][synth][ks]")
   // Pitch sanity on the clean electric voicing (no body colouration to bias the
   // fundamental estimate): E2 within 10 cents.
   const std::vector<float> fingered =
-      render_patch(find_synth_preset("bass-fingered")->config.patch, 40, 100, 48000);
+      render_patch(find_synth_preset("bassFingered")->config.patch, 40, 100, 48000);
   const double estimated = estimate_frequency(fingered, 8000, 44000, 82.4069);
   REQUIRE(estimated > 0.0);
   REQUIRE(std::fabs(estimated / 82.4069 - 1.0) < 0.0058);
@@ -646,7 +646,7 @@ TEST_CASE("activated guitar presets engage the dedicated physics and stay bounde
   using sonare::midi::synth::find_synth_preset;
   // classical-guitar: the sympathetic halo, coupled polarization and physical
   // finger pluck, but no dispersion (nylon plain strings are not inharmonic).
-  const auto* classical = find_synth_preset("classical-guitar");
+  const auto* classical = find_synth_preset("classicalGuitar");
   REQUIRE(classical != nullptr);
   REQUIRE(classical->config.patch.ks.sympathetic == true);
   REQUIRE(classical->config.patch.ks.body_coupling > 0.0f);
@@ -655,11 +655,11 @@ TEST_CASE("activated guitar presets engage the dedicated physics and stay bounde
   REQUIRE(classical->config.patch.ks.dispersion == 0.0f);
   // steel-guitar adds the steel dispersion and keeps the halo; the electric
   // guitar swaps the halo for the magnetic pickup.
-  const auto* steel = find_synth_preset("steel-guitar");
+  const auto* steel = find_synth_preset("steelGuitar");
   REQUIRE(steel != nullptr);
   REQUIRE(steel->config.patch.ks.dispersion > 0.0f);
   REQUIRE(steel->config.patch.ks.sympathetic == true);
-  const auto* electric = find_synth_preset("electric-guitar");
+  const auto* electric = find_synth_preset("electricGuitar");
   REQUIRE(electric != nullptr);
   REQUIRE(electric->config.patch.ks.pickup_pos > 0.0f);
   REQUIRE(electric->config.patch.ks.sympathetic == false);
@@ -927,9 +927,9 @@ TEST_CASE("picked bass is brighter than fingered", "[midi][synth][ks]") {
   // Picking near the bridge with an open excitation lowpass keeps more upper
   // harmonics than the rounder fingerstyle voicing.
   const std::vector<float> picked =
-      render_patch(find_synth_preset("bass-picked")->config.patch, 40, 100, 24000);
+      render_patch(find_synth_preset("bassPicked")->config.patch, 40, 100, 24000);
   const std::vector<float> fingered =
-      render_patch(find_synth_preset("bass-fingered")->config.patch, 40, 100, 24000);
+      render_patch(find_synth_preset("bassFingered")->config.patch, 40, 100, 24000);
   REQUIRE(high_band_fraction(picked, 2048, 800.0) > high_band_fraction(fingered, 2048, 800.0));
 }
 

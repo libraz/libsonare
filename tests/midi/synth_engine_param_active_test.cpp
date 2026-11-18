@@ -82,7 +82,7 @@ bool excused(SynthEngineMode mode, const std::string& key) {
 }
 
 /// The wrapper body vocabulary, in BodyType order.
-const char* const kBodyNames[] = {"none", "guitar", "violin", "wood-tube", "brass-bell", "vocal"};
+const char* const kBodyNames[] = {"none", "guitar", "violin", "woodTube", "brassBell", "vocal"};
 /// The wrapper waveform vocabulary, in VaWaveform order.
 const char* const kWaveformNames[] = {"sine", "saw", "square", "triangle", "noise"};
 

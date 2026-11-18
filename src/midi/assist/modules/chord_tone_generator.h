@@ -58,7 +58,7 @@ class ChordToneGenerator final : public INoteGenerator {
   AssistResult generate(const arrangement::ProjectView& view,
                         const AssistRequest& request) override;
 
-  static constexpr const char* kModuleId = "sonare.builtin.chord_tone_generator";
+  static constexpr const char* kModuleId = "sonare.builtin.chordToneGenerator";
 
  private:
   // Declaration order is load-bearing: harmony_ resolves to the injected context

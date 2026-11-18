@@ -370,6 +370,20 @@ void sidecar_fields_from_json(const Value& v, arrangement::AssistSidecar* out) {
   out->region_end_ppq = num_or(v, "region_end_ppq", 0.0);
 }
 
+bool migrate_assist_module_id(uint32_t schema_version, std::string* module_id) {
+  static const std::pair<const char*, const char*> kRenamed[] = {
+      {"sonare.builtin.chord_tone_generator", "sonare.builtin.chordToneGenerator"},
+      {"sonare.builtin.diatonic_harmonizer", "sonare.builtin.diatonicHarmonizer"},
+  };
+  for (const auto& [old_id, new_id] : kRenamed) {
+    if (*module_id != old_id) continue;
+    if (schema_version >= SONARE_PROJECT_SCHEMA_VERSION_CAMEL_MODULE_IDS) return false;
+    *module_id = new_id;
+    return true;
+  }
+  return true;
+}
+
 bool sidecar_from_borrowed_payload(const std::string& encoded_payload,
                                    arrangement::AssistSidecar* out, size_t max_payload_bytes) {
   return base64_decode(encoded_payload, &out->payload, max_payload_bytes);

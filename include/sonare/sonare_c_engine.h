@@ -1955,7 +1955,7 @@ SonareError sonare_engine_push_midi_input_ump(SonareRealtimeEngine* engine, cons
 ///          bound with use_gm_programs
 ///          (@ref sonare_engine_set_synth_instrument_binding) resolves each
 ///          channel's voice from the bank and program; a NativeSynth whose patch
-///          plays the GM kit (the `drum-kit` preset, or a percussion patch with
+///          plays the GM kit (the `drumKit` preset, or a percussion patch with
 ///          gm_kit on) takes the program as the GS drum-set select on every
 ///          channel. Every other receiver accepts the message and ignores it: the
 ///          built-in synth, any other NativeSynth patch, a part with RX PROGRAM

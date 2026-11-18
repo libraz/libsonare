@@ -536,10 +536,10 @@ TEST_CASE("the reed-family presets are voiced reed woodwinds", "[midi][synth][re
     uint8_t note;
     bool conical;
   };
-  for (const Member member : {Member{"clarinet", 50, false}, Member{"soprano-sax", 70, true},
-                              Member{"alto-sax", 62, true}, Member{"tenor-sax", 54, true},
-                              Member{"baritone-sax", 46, true}, Member{"oboe", 70, true},
-                              Member{"english-horn", 58, true}, Member{"bassoon", 42, true}}) {
+  for (const Member member :
+       {Member{"clarinet", 50, false}, Member{"sopranoSax", 70, true}, Member{"altoSax", 62, true},
+        Member{"tenorSax", 54, true}, Member{"baritoneSax", 46, true}, Member{"oboe", 70, true},
+        Member{"englishHorn", 58, true}, Member{"bassoon", 42, true}}) {
     INFO(member.name);
     const auto* preset = find_synth_preset(member.name);
     REQUIRE(preset != nullptr);

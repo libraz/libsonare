@@ -117,7 +117,7 @@ int sampleDescLoopMode(val desc) {
     const int mapped = sonare::c_api::synth_names::sample_desc_loop_value(name);
     if (mapped >= 0) return mapped;
     throw WasmRangeError("Unknown sample loop mode name: '" + name +
-                         "' (expected none, continuous or key-down)");
+                         "' (expected none, continuous or keyDown)");
   }
   return static_cast<int>(integerField(desc, "loopMode", "sample descriptor", 3.0));
 }

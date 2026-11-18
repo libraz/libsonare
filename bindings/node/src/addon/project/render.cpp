@@ -575,7 +575,7 @@ Napi::Value ProjectWrap::BounceWithInstruments(const Napi::CallbackInfo& info) {
 // instrument-first to match the WASM and Python bindings:
 //   bounceWithSynthInstruments(instruments, options?)
 // Each binding is { destinationId?, ...patch } where the patch is a SynthPatch
-// object or a preset-name string ("saw-lead" / "va:saw-lead"). An unknown
+// object or a preset-name string ("sawLead" / "va:sawLead"). An unknown
 // preset name throws (the C ABI rejects it).
 Napi::Value ProjectWrap::BounceWithSynthInstruments(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();

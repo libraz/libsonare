@@ -38,7 +38,7 @@ inline int SynthEnumFromName(const std::string& name, const char* const* names, 
   for (int i = 0; i < count; ++i) {
     if (name == names[i]) return i;
   }
-  return synth_names::input_alias(names, name);
+  return -1;
 }
 
 // Resolves an enum value that accepts the C ordinal or a name. Returns false

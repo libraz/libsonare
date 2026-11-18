@@ -19,7 +19,7 @@
 
 namespace sonare::midi::synth {
 
-/// One named preset: the catalog name (stable API surface, kebab-case) and
+/// One named preset: the catalog name (stable API surface, lowerCamel) and
 /// the full synth configuration it selects.
 struct SynthPreset {
   const char* name;
@@ -33,7 +33,7 @@ size_t synth_preset_count() noexcept;
 const SynthPreset* synth_preset_at(size_t index) noexcept;
 
 /// Preset by name (exact match; nullptr when unknown). Accepts the bare
-/// catalog name ("saw-lead") — hosts strip any "va:" routing prefix first.
+/// catalog name ("sawLead") — hosts strip any "va:" routing prefix first.
 const SynthPreset* find_synth_preset(const char* name) noexcept;
 
 /// The catalog preset whose engine section stands for @p mode when a patch

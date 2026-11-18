@@ -60,7 +60,7 @@ class DiatonicHarmonizer final : public ICounterpointEngine {
                       const std::vector<VoiceModel>& cantus,
                       const AssistQueryContext& queries) override;
 
-  static constexpr const char* kModuleId = "sonare.builtin.diatonic_harmonizer";
+  static constexpr const char* kModuleId = "sonare.builtin.diatonicHarmonizer";
 
  private:
   DiatonicHarmonizerConfig config_{};

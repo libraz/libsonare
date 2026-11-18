@@ -15,7 +15,9 @@ from ._cli_common import (
     _MAX_PROJECT_OR_MIDI_BYTES,
     EXIT_INVALID_STATE,
     _atomic_write_bytes,
+    _cli_token,
     _legacy_exit_codes,
+    _library_token,
     _load_audio_channels,
     _read_bounded,
     _strict_json_dumps,
@@ -186,6 +188,15 @@ def _resolve_bounce_audio_sources(project: object, args: argparse.Namespace) -> 
         )
 
 
+def _synth_preset(value: str | None) -> str | None:
+    """Resolve a kebab-case ``--synth`` value to its preset name; empty means GM auto-select."""
+    if not value:
+        return None
+    from . import synth_preset_names
+
+    return _library_token("--synth", value, synth_preset_names())
+
+
 def _project_bounce(
     args: argparse.Namespace,
     *,
@@ -195,6 +206,7 @@ def _project_bounce(
 ) -> int:
     if not args.output:
         raise ValueError(f"{command_name} requires --output")
+    preset = _synth_preset(args.synth)
     project = _load_project(args.input)
     try:
         if binds_source_audio:
@@ -230,7 +242,7 @@ def _project_bounce(
         use_synth = force_synth or args.synth is not None
         if use_synth:
             audio = cast(Any, project).bounce_with_synth_instrument(
-                args.synth or None, auto_select_gm=not bool(args.synth), **kwargs
+                preset, auto_select_gm=preset is None, **kwargs
             )
         else:
             audio = cast(Any, project).bounce(**kwargs)
@@ -615,7 +627,7 @@ def cmd_project(args: argparse.Namespace) -> int:
             print(f"  Imported MIDI2 Clip File: {args.output}")
         return 0
     if subcommand == "synth-presets":
-        names = synth_preset_names()
+        names = [_cli_token(name) for name in synth_preset_names()]
         print(_strict_json_dumps({"presets": names}) if args.json else "\n".join(names))
         return 0
     raise ValueError(f"unknown project subcommand: {subcommand}")

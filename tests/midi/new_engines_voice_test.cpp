@@ -368,8 +368,8 @@ TEST_CASE("plucked-string pluck_ms retires the noise burst's inputs and leaves 0
 TEST_CASE("new-engine presets resolve and select their engine", "[midi][synth][new_engines]") {
   using sonare::midi::synth::find_synth_preset;
   for (const char* name :
-       {"harp", "harp-plucked", "koto", "sitar", "tanpura", "choir-aah", "choir-ooh", "voice-eeh",
-        "accordion", "harmonica", "bandoneon", "reed-organ"}) {
+       {"harp", "harpPlucked", "koto", "sitar", "tanpura", "choirAah", "choirOoh", "voiceEeh",
+        "accordion", "harmonica", "bandoneon", "reedOrgan"}) {
     const auto* preset = find_synth_preset(name);
     REQUIRE(preset != nullptr);
   }
@@ -389,7 +389,7 @@ TEST_CASE("named synth presets are unique and preserve both harp voicings", "[mi
   }
 
   const auto* gm_harp = find_synth_preset("harp");
-  const auto* plucked_harp = find_synth_preset("harp-plucked");
+  const auto* plucked_harp = find_synth_preset("harpPlucked");
   REQUIRE(gm_harp != nullptr);
   REQUIRE(plucked_harp != nullptr);
   REQUIRE(gm_harp->config.patch.mode != plucked_harp->config.patch.mode);

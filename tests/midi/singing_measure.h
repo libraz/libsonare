@@ -80,7 +80,7 @@ inline std::vector<double> frame_rms(const std::vector<float>& x, std::size_t fr
 
 /// The catalog's singing preset as a synth config, unity gain and no bus drive.
 inline midi::synth::NativeSynthConfig singing_config() {
-  const midi::synth::SynthPreset* preset = midi::synth::find_synth_preset("singing-voice");
+  const midi::synth::SynthPreset* preset = midi::synth::find_synth_preset("singingVoice");
   midi::synth::NativeSynthConfig cfg =
       preset != nullptr ? preset->config : midi::synth::NativeSynthConfig{};
   cfg.gain = 1.0f;

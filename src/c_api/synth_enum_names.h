@@ -6,8 +6,7 @@
 ///        WASM bindings read names through, so no surface keeps its own copy.
 ///        Index i of a table is the name of C ordinal i, except that
 ///        kBuiltinWaveforms lists "sawtooth" beside "saw" as the catalogue
-///        does. Input-only spellings live in kInputAliases, apart from the
-///        canonical names, so they are accepted but never listed or returned.
+///        does.
 
 #include <sonare/sonare_c.h>
 #include <sonare/sonare_c_engine.h>
@@ -22,47 +21,38 @@
 namespace sonare::c_api::synth_names {
 
 inline constexpr const char* kEngineModes[] = {
-    "default",   "subtractive", "fm",     "karplus-strong", "modal",
-    "additive",  "percussion",  "piano",  "pipe-organ",     "bowed-string",
-    "reed",      "brass",       "flute",  "plucked-string", "vocal",
-    "free-reed", "harpsichord", "sample", "singing"};
+    "default", "subtractive", "fm",          "karplusStrong", "modal",  "additive", "percussion",
+    "piano",   "pipeOrgan",   "bowedString", "reed",          "brass",  "flute",    "pluckedString",
+    "vocal",   "freeReed",    "harpsichord", "sample",        "singing"};
 // SonareSampleLoopMode, the patch's per-voice override. Distinct from the
 // SoundFont sampleModes value a SonareSampleDesc carries.
-inline constexpr const char* kSampleLoopModes[] = {"default", "none", "continuous", "key-down"};
+inline constexpr const char* kSampleLoopModes[] = {"default", "none", "continuous", "keyDown"};
 inline constexpr const char* kSampleKeyTracks[] = {"default", "on", "off"};
 inline constexpr const char* kWaveforms[] = {"default", "sine",     "saw",
                                              "square",  "triangle", "noise"};
 inline constexpr const char* kBuiltinWaveforms[] = {"sine", "saw", "sawtooth", "square",
                                                     "triangle"};
-inline constexpr const char* kFilterModels[] = {"default",      "svf",        "transistor-ladder",
-                                                "diode-ladder", "sallen-key", "svf-4-pole"};
+inline constexpr const char* kFilterModels[] = {"default",     "svf",       "transistorLadder",
+                                                "diodeLadder", "sallenKey", "svf4Pole"};
 inline constexpr const char* kFilterOutputs[] = {"default", "lowpass", "bandpass", "highpass"};
-inline constexpr const char* kBodyTypes[] = {"default",   "none",       "guitar", "violin",
-                                             "wood-tube", "brass-bell", "vocal"};
+inline constexpr const char* kBodyTypes[] = {"default",  "none",      "guitar", "violin",
+                                             "woodTube", "brassBell", "vocal"};
 inline constexpr const char* kRetriggers[] = {"default", "free", "note"};
 inline constexpr const char* kLfoShapes[] = {"default", "triangle", "sine", "random"};
 inline constexpr const char* kModSources[] = {
-    "none",      "amp-env", "filter-env", "lfo1",       "lfo2",          "velocity",  "key-track",
-    "mod-wheel", "random",  "breath",     "aftertouch", "expression-cc", "pitch-bend"};
-inline constexpr const char* kModDestinations[] = {"none",
-                                                   "pitch-cents",
-                                                   "cutoff-cents",
-                                                   "amp-gain",
-                                                   "pan-units",
-                                                   "resonance-q",
-                                                   "vibrato-depth-cents",
-                                                   "filter-env-depth",
-                                                   "lfo1-rate-scale",
-                                                   "excitation-force",
-                                                   "excitation-position",
-                                                   "excitation-brightness",
-                                                   "spectrum-morph"};
-inline constexpr const char* kControllerInputs[] = {"control-change", "channel-pressure",
-                                                    "poly-pressure", "pitch-bend", "velocity"};
-inline constexpr const char* kControllerAxes[] = {"none",        "excitation",   "position",
-                                                  "brightness",  "morph",        "loudness",
-                                                  "pitch-cents", "vibrato-depth"};
-inline constexpr const char* kArticulations[] = {"poly", "mono-retrigger", "mono-legato"};
+    "none",     "ampEnv", "filterEnv", "lfo1",       "lfo2",         "velocity", "keyTrack",
+    "modWheel", "random", "breath",    "aftertouch", "expressionCc", "pitchBend"};
+inline constexpr const char* kModDestinations[] = {
+    "none",          "pitchCents",      "cutoffCents",        "ampGain",
+    "panUnits",      "resonanceQ",      "vibratoDepthCents",  "filterEnvDepth",
+    "lfo1RateScale", "excitationForce", "excitationPosition", "excitationBrightness",
+    "spectrumMorph"};
+inline constexpr const char* kControllerInputs[] = {"controlChange", "channelPressure",
+                                                    "polyPressure", "pitchBend", "velocity"};
+inline constexpr const char* kControllerAxes[] = {"none",       "excitation",  "position",
+                                                  "brightness", "morph",       "loudness",
+                                                  "pitchCents", "vibratoDepth"};
+inline constexpr const char* kArticulations[] = {"poly", "monoRetrigger", "monoLegato"};
 inline constexpr const char* kMpeDimensions[] = {"bend", "pressure", "timbre"};
 inline constexpr const char* kNoteTrackings[] = {"last", "lowest", "highest", "all"};
 inline constexpr const auto& kPartRigModes = sonare::midi::kPartRigModeNames;
@@ -71,7 +61,7 @@ inline constexpr int kPartRigModeCount = SONARE_PART_RIG_CHAIN + 1;
 // 1 = continuous, 3 = loop while the key is held. Not the scale of
 // kSampleLoopModes, and the names carry no ordinal 2, so the value of name i is
 // kSampleDescLoopValues[i].
-inline constexpr const char* kSampleDescLoopModes[] = {"none", "continuous", "key-down"};
+inline constexpr const char* kSampleDescLoopModes[] = {"none", "continuous", "keyDown"};
 inline constexpr int kSampleDescLoopValues[] = {0, 1, 3};
 
 static_assert(std::size(kPartRigModes) == kPartRigModeCount,
@@ -110,26 +100,6 @@ static_assert(std::size(kMpeDimensions) == SONARE_MPE_DIMENSION_COUNT,
               "MPE dimension names out of step with the enum");
 static_assert(std::size(kNoteTrackings) == SONARE_NOTE_TRACKING_COUNT,
               "note tracking names out of step with the enum");
-
-/// An input-only spelling of a value: accepted by name, never listed or returned.
-struct InputAlias {
-  const char* const* table;
-  const char* name;
-  int value;
-};
-
-inline constexpr InputAlias kInputAliases[] = {
-    // The pre-rename spelling of "transistor-ladder".
-    {kFilterModels, "moog-ladder", SONARE_SYNTH_FILTER_TRANSISTOR_LADDER},
-};
-
-/// Ordinal an input-only spelling of @p table stands for, or -1.
-inline int input_alias(const char* const* table, std::string_view name) {
-  for (const InputAlias& alias : kInputAliases) {
-    if (alias.table == table && name == alias.name) return alias.value;
-  }
-  return -1;
-}
 
 /// SonareSampleDesc.loop_mode value of a sample descriptor loop mode name, or -1.
 inline int sample_desc_loop_value(std::string_view name) {

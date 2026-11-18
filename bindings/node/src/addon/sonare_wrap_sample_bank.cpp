@@ -46,7 +46,7 @@ bool ReadSampleLoopMode(Napi::Env env, const Napi::Value& value, int* out) {
     return true;
   }
   Napi::TypeError::New(
-      env, "Unknown sample loop mode name: '" + name + "' (expected none, continuous or key-down)")
+      env, "Unknown sample loop mode name: '" + name + "' (expected none, continuous or keyDown)")
       .ThrowAsJavaScriptException();
   return false;
 }

@@ -197,11 +197,11 @@ struct GestureRow {
 constexpr GestureRow kGestures[] = {
     {Gesture::kNone, "none"},
     {Gesture::kBend, "bend"},
-    {Gesture::kModWheel, "mod-wheel"},
+    {Gesture::kModWheel, "modWheel"},
     {Gesture::kBreath, "breath"},
     {Gesture::kBrightness, "brightness"},
     {Gesture::kPressure, "pressure"},
-    {Gesture::kPolyPressure, "poly-pressure"},
+    {Gesture::kPolyPressure, "polyPressure"},
     {Gesture::kLegato, "legato"},
 };
 
@@ -214,7 +214,7 @@ const char* engine_label(SynthEngineMode mode) noexcept {
     case SynthEngineMode::kFm:
       return "fm";
     case SynthEngineMode::kKarplusStrong:
-      return "karplus-strong";
+      return "karplusStrong";
     case SynthEngineMode::kModal:
       return "modal";
     case SynthEngineMode::kAdditive:
@@ -224,9 +224,9 @@ const char* engine_label(SynthEngineMode mode) noexcept {
     case SynthEngineMode::kPiano:
       return "piano";
     case SynthEngineMode::kPipeOrgan:
-      return "pipe-organ";
+      return "pipeOrgan";
     case SynthEngineMode::kBowedString:
-      return "bowed-string";
+      return "bowedString";
     case SynthEngineMode::kReed:
       return "reed";
     case SynthEngineMode::kBrass:
@@ -234,11 +234,11 @@ const char* engine_label(SynthEngineMode mode) noexcept {
     case SynthEngineMode::kFlute:
       return "flute";
     case SynthEngineMode::kPluckedString:
-      return "plucked-string";
+      return "pluckedString";
     case SynthEngineMode::kVocal:
       return "vocal";
     case SynthEngineMode::kFreeReed:
-      return "free-reed";
+      return "freeReed";
     case SynthEngineMode::kHarpsichord:
       return "harpsichord";
     case SynthEngineMode::kSample:
@@ -411,7 +411,7 @@ std::string render_gesture(int program, Gesture gesture) {
   // force -- the reach check below found that, and binding it is the answer.
   if (gesture == Gesture::kPressure) {
     ControllerProfile profile;
-    REQUIRE(ControllerProfile::preset("breath-aftertouch", &profile));
+    REQUIRE(ControllerProfile::preset("breathAftertouch", &profile));
     REQUIRE(synth.set_controller_profile(profile));
   }
   if (gesture == Gesture::kPolyPressure) {

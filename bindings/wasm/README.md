@@ -49,7 +49,7 @@ try {
     Project.midiNoteOn(0, 0, 0, 60, 100), // ppq, group, channel, note, velocity
     Project.midiNoteOff(1, 0, 0, 60),
   ]);
-  const audio = project.bounceWithSynthInstrument('saw-lead', { numChannels: 2 });
+  const audio = project.bounceWithSynthInstrument('sawLead', { numChannels: 2 });
 } finally {
   project.destroy();
 }

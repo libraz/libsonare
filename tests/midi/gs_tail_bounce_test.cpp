@@ -165,7 +165,7 @@ TEST_CASE("a drum-kit bounce reports the tail of the pieces it strikes",
   SonareProject* project = make_project(note_events(false));
   SonareSynthInstrumentBinding binding{};
   binding.destination_id = 0;
-  REQUIRE(sonare_synth_preset_patch("drum-kit", &binding.patch) == SONARE_OK);
+  REQUIRE(sonare_synth_preset_patch("drumKit", &binding.patch) == SONARE_OK);
   binding.use_gm_programs = 0;
   const SonareProjectBounceOptions options = auto_length_options();
   float* out = nullptr;

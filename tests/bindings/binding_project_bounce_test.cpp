@@ -2279,7 +2279,7 @@ TEST_CASE("bounce retunes sequential synth notes to each note's pitch, not the f
   REQUIRE(sonare_project_set_track_midi_destination(project, track, 5) == SONARE_OK);
 
   SonareSynthPatch patch{};
-  REQUIRE(sonare_synth_preset_patch("saw-lead", &patch) == SONARE_OK);
+  REQUIRE(sonare_synth_preset_patch("sawLead", &patch) == SONARE_OK);
 
   SonareProjectBounceOptions options{};
   options.total_frames = 4 * kQuarter;  // 2.0 s: through the end of G5.

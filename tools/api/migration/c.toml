@@ -939,3 +939,43 @@ changed = "names the impulse-response mode impulseResponse instead of impulse_re
 domain = "effects"
 rule = "token-case"
 test = "tests/api/sonare_c_acoustic_test.cpp::sonare acoustic C API names its material presets and modes"
+
+[[entry]]
+kind = "function"
+old = "sonare_synth_preset_names"
+changed = "lists the NativeSynth preset names in lowerCamel (sawLead, ePiano, drumKit, ...)"
+domain = "engine"
+rule = "token-case"
+test = "tests/bindings/binding_synth_patch_test.cpp::synth preset catalog lists every"
+
+[[entry]]
+kind = "function"
+old = "sonare_synth_preset_patch"
+changed = "accepts only the lowerCamel preset names that sonare_synth_preset_names lists"
+domain = "engine"
+rule = "token-case"
+test = "tests/bindings/binding_synth_patch_test.cpp::synth preset catalog lists every"
+
+[[entry]]
+kind = "function"
+old = "sonare_synth_enum_names"
+changed = "lists every NativeSynth enum token in lowerCamel (karplusStrong, transistorLadder, keyDown, monoRetrigger, ...); the moog-ladder input spelling is gone"
+domain = "engine"
+rule = "token-case"
+test = "tests/bindings/binding_project_c_surface_test.cpp::NativeSynth enum names are supplied by the C project ABI"
+
+[[entry]]
+kind = "function"
+old = "sonare_assist_module_ids"
+changed = "names the built-in modules sonare.builtin.chordToneGenerator and sonare.builtin.diatonicHarmonizer"
+domain = "mastering"
+rule = "token-case"
+test = "tests/api/sonare_c_assist_test.cpp::sonare_assist_module_ids names both built-in modules"
+
+[[entry]]
+kind = "function"
+old = "sonare_project_deserialize"
+changed = "translates the snake_case built-in assist module ids of a document older than schema version 6 and refuses them in a version 6 document; sonare_project_serialize writes version 6 when the project holds assist sidecars"
+domain = "project"
+rule = "token-case"
+test = "tests/serialize/project_serializer_roundtrip_test.cpp::an older document's built-in assist module ids load as the lowerCamel ids"

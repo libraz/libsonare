@@ -151,7 +151,7 @@ constexpr EngineProbe kProbes[] = {
      nullptr},
     // The bank never assigns the singing voice a program; its preset is how a host reaches it.
     {SynthEngineMode::kSinging, -1, "singing (singing-voice preset)", ForceLevel::kRises,
-     ForceSpectrum::kMoves, "singing-voice"},
+     ForceSpectrum::kMoves, "singingVoice"},
 };
 
 /// A struck or plucked engine, to show the same ramp reaches nothing there.

@@ -108,8 +108,6 @@ inline int enumFromVal(emscripten::val value, const char* const* names, int coun
     for (int i = 0; i < count; ++i) {
       if (name == names[i]) return i;
     }
-    const int alias = synth_names::input_alias(names, name);
-    if (alias >= 0) return alias;
     throw WasmRangeError(std::string("Unknown ") + what + " name: '" + name + "'");
   }
   // Reject non-number, non-string values (e.g. a boolean) instead of coercing

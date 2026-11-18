@@ -61,7 +61,7 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
 
   // The lead and pad programs are voiced apart now, so these two name the one
   // that matches the preset rather than the first of a family that was all saw.
-  alias("saw-lead", 81);
+  alias("sawLead", 81);
 
   NativeSynthPatch square = gm_fallback_patch(0, 80);
   square.waveform = VaWaveform::kSquare;
@@ -69,18 +69,18 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
   square.detune_cents = 8.0f;
   square.drift_cents = 4.0f;  // PWM-ish movement from the seeded drift
   square.cutoff_hz = 3000.0f;
-  t[i++] = {"square-lead", from_patch(clamp_synth_patch(square))};
+  t[i++] = {"squareLead", from_patch(clamp_synth_patch(square))};
 
   // Synth Bass 1 (GM 38) stays subtractive; the plucked GM 32-35 members are
   // Karplus-Strong now, so the synth sub is voiced off the synth-bass family.
   NativeSynthPatch sub = gm_fallback_patch(0, 38);
   sub.unison = 1;
   sub.cutoff_hz = 600.0f;
-  t[i++] = {"sub-bass", from_patch(clamp_synth_patch(sub))};
+  t[i++] = {"subBass", from_patch(clamp_synth_patch(sub))};
 
   {
     SynthPreset& pad = t[i++];
-    pad.name = "warm-pad";
+    pad.name = "warmPad";
     pad.config = from_patch(gm_fallback_patch(0, 89));
     pad.config.bus_drive = 0.15f;  // glue the stack
   }
@@ -90,19 +90,19 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
   // picks the engine — not the grouping here. The trailing comment names the
   // engine each row actually resolves to; a heading naming one engine for the
   // whole group would be wrong for most of it.
-  alias("e-piano", 4);  // FM
-  alias("bell", 14);    // modal (struck bar)
-  alias("brass", 56);   // brass (lip reed)
+  alias("ePiano", 4);  // FM
+  alias("bell", 14);   // modal (struck bar)
+  alias("brass", 56);  // brass (lip reed)
 
   // --- plucked strings (GM fallback aliases) ---
   alias("pluck", 104);  // plucked string (jawari bridge)
   // Classical (nylon) and steel acoustic guitars driven as standalone
   // instruments engage the shared sympathetic open-string bank (the "sound
   // halo") that the per-note GM fallback path cannot host.
-  alias("classical-guitar", 24);  // Karplus-Strong
-  alias("steel-guitar", 25);      // Karplus-Strong
-  alias("electric-guitar", 26);   // Karplus-Strong
-  alias("harp", 46);              // Karplus-Strong
+  alias("classicalGuitar", 24);  // Karplus-Strong
+  alias("steelGuitar", 25);      // Karplus-Strong
+  alias("electricGuitar", 26);   // Karplus-Strong
+  alias("harp", 46);             // Karplus-Strong
   // The harpsichord is not a bright guitar and does not share their engine: it
   // is voiced by its own jack-and-plectrum model, whose parameters the synth
   // patch ABI does not carry, so this alias is how a caller reaches the voiced
@@ -115,11 +115,11 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
   // One data table, two address spaces — the voicings live in the GM fallback
   // map. Slap/pop and the two-polarization beat need the dedicated bass
   // excitation core and are voiced separately once that lands.
-  alias("bass-acoustic", 32);
-  alias("bass-fingered", 33);
-  alias("bass-picked", 34);
-  alias("bass-fretless", 35);
-  alias("bass-slap", 36);
+  alias("bassAcoustic", 32);
+  alias("bassFingered", 33);
+  alias("bassPicked", 34);
+  alias("bassFretless", 35);
+  alias("bassSlap", 36);
 
   // --- modal / additive ---
   alias("marimba", 12);
@@ -129,7 +129,7 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
   // --- percussion / piano ---
   {
     SynthPreset& kit = t[i++];
-    kit.name = "drum-kit";
+    kit.name = "drumKit";
     NativeSynthPatch patch{};
     patch.mode = SynthEngineMode::kPercussion;
     patch.percussion.gm_kit = true;
@@ -139,14 +139,14 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
     kit.config.polyphony = 24;  // a kit stacks pieces, not melodic lines
   }
 
-  alias("acoustic-piano", 0);
+  alias("acousticPiano", 0);
 
   // --- pipe organ (flue pipe waveguide) ---
   // The full principal chorus (plenum) voiced under the GM Church Organ
   // program, with a gentle tremulant drawn for the showcase preset.
   {
     SynthPreset& organ = t[i++];
-    organ.name = "church-organ";
+    organ.name = "churchOrgan";
     NativeSynthPatch patch = gm_fallback_patch(0, 19);
     patch.pipe_organ.tremulant_rate_hz = 5.2f;
     patch.pipe_organ.tremulant_depth = 0.5f;
@@ -156,7 +156,7 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
   {
     // Open flute: softer and darker than the principal (a wide, breathy stop).
     SynthPreset& flute = t[i++];
-    flute.name = "church-flute";
+    flute.name = "churchFlute";
     NativeSynthPatch patch{};
     patch.mode = SynthEngineMode::kPipeOrgan;
     patch.amp_env.attack_ms = 12.0f;
@@ -177,7 +177,7 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
     // octave lower for its length and radiates odd harmonics only (a soft,
     // hollow flute).
     SynthPreset& bourdon = t[i++];
-    bourdon.name = "church-bourdon";
+    bourdon.name = "churchBourdon";
     NativeSynthPatch patch{};
     patch.mode = SynthEngineMode::kPipeOrgan;
     patch.amp_env.attack_ms = 14.0f;
@@ -198,7 +198,7 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
     // buzzes into a bright, brassy self-oscillation (an 8' reed under a 4'),
     // the fanfare colour of the full organ. Voiced under a swell shutter.
     SynthPreset& reed = t[i++];
-    reed.name = "church-trumpet";
+    reed.name = "churchTrumpet";
     // A lingual reed stop voiced directly on the pipe-organ waveguide (an 8'
     // reed under a 4'): the saturating reed valve buzzes into a bright,
     // self-oscillating tone. Not the GM Reed Organ, which is a free-reed core.
@@ -296,12 +296,12 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
     };
     //    name             cone  stiff  open  bright damp  atk    rel    breath body  gain
     reed("clarinet", false, 0.40f, 0.50f, 0.45f, 0.30f, 25.0f, 90.0f, 0.60f, 0.25f, 0.70f);
-    reed("soprano-sax", true, 0.55f, 0.55f, 0.60f, 0.32f, 20.0f, 80.0f, 0.65f, 0.30f, 0.70f);
-    reed("alto-sax", true, 0.55f, 0.55f, 0.54f, 0.34f, 22.0f, 90.0f, 0.65f, 0.32f, 0.70f);
-    reed("tenor-sax", true, 0.60f, 0.50f, 0.48f, 0.36f, 26.0f, 100.0f, 0.68f, 0.36f, 0.72f);
-    reed("baritone-sax", true, 0.60f, 0.50f, 0.40f, 0.40f, 32.0f, 120.0f, 0.70f, 0.40f, 0.72f);
+    reed("sopranoSax", true, 0.55f, 0.55f, 0.60f, 0.32f, 20.0f, 80.0f, 0.65f, 0.30f, 0.70f);
+    reed("altoSax", true, 0.55f, 0.55f, 0.54f, 0.34f, 22.0f, 90.0f, 0.65f, 0.32f, 0.70f);
+    reed("tenorSax", true, 0.60f, 0.50f, 0.48f, 0.36f, 26.0f, 100.0f, 0.68f, 0.36f, 0.72f);
+    reed("baritoneSax", true, 0.60f, 0.50f, 0.40f, 0.40f, 32.0f, 120.0f, 0.70f, 0.40f, 0.72f);
     reed("oboe", true, 0.80f, 0.35f, 0.70f, 0.30f, 18.0f, 70.0f, 0.62f, 0.30f, 0.68f);
-    reed("english-horn", true, 0.70f, 0.40f, 0.60f, 0.34f, 24.0f, 90.0f, 0.64f, 0.34f, 0.68f);
+    reed("englishHorn", true, 0.70f, 0.40f, 0.60f, 0.34f, 24.0f, 90.0f, 0.64f, 0.34f, 0.68f);
     reed("bassoon", true, 0.65f, 0.45f, 0.42f, 0.40f, 30.0f, 120.0f, 0.68f, 0.40f, 0.72f);
   }
 
@@ -388,11 +388,11 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
     brass("trombone", false, 0.48f, 0.45f, 0.55f, 0.32f, 26.0f, 100.0f, 0.85f, 0.0f, 16.0f,
           kTromboneBell);
     brass("tuba", true, 0.42f, 0.70f, 0.30f, 0.42f, 40.0f, 140.0f, 0.88f, 0.0f, 1.83f, kTubaBell);
-    brass("french-horn", true, 0.50f, 0.55f, 0.42f, 0.34f, 30.0f, 110.0f, 0.82f, 0.0f, 1.844f,
+    brass("frenchHorn", true, 0.50f, 0.55f, 0.42f, 0.34f, 30.0f, 110.0f, 0.82f, 0.0f, 1.844f,
           kFrenchHornBell);
     // The mute is modelled, so the bore is voiced open like the trumpet it is:
     // a darkened brightness standing in for the mute darkens it a second time.
-    brass("muted-trumpet", false, 0.58f, 0.35f, 0.72f, 0.30f, 16.0f, 75.0f, 0.80f, 0.0f, 1.421f,
+    brass("mutedTrumpet", false, 0.58f, 0.35f, 0.72f, 0.30f, 16.0f, 75.0f, 0.80f, 0.0f, 1.421f,
           kMutedTrumpetBell, 1.0f, 0.45f);
     // These three have no program and no reference, so each takes the class its
     // bell belongs to: cornet and flugelhorn are small B-flat bells, euphonium a
@@ -439,14 +439,14 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
       v.config = from_patch(clamp_synth_patch(patch));
     };
     //     name             jetr   bright damp   bnoise chiff  vib    breath gain
-    flute("concert-flute", 0.50f, 0.55f, 0.30f, 0.18f, 0.35f, 0.15f, 0.60f, 0.85f);
+    flute("concertFlute", 0.50f, 0.55f, 0.30f, 0.18f, 0.35f, 0.15f, 0.60f, 0.85f);
     flute("piccolo", 0.50f, 0.75f, 0.25f, 0.12f, 0.40f, 0.10f, 0.62f, 0.80f);
     flute("recorder", 0.50f, 0.50f, 0.35f, 0.14f, 0.55f, 0.05f, 0.55f, 0.85f);
-    flute("pan-flute", 0.52f, 0.42f, 0.40f, 0.40f, 0.30f, 0.08f, 0.55f, 0.85f);
+    flute("panFlute", 0.52f, 0.42f, 0.40f, 0.40f, 0.30f, 0.08f, 0.55f, 0.85f);
     flute("shakuhachi", 0.52f, 0.48f, 0.35f, 0.55f, 0.30f, 0.20f, 0.58f, 0.85f);
-    flute("tin-whistle", 0.48f, 0.70f, 0.28f, 0.10f, 0.45f, 0.04f, 0.62f, 0.80f);
+    flute("tinWhistle", 0.48f, 0.70f, 0.28f, 0.10f, 0.45f, 0.04f, 0.62f, 0.80f);
     flute("ocarina", 0.50f, 0.40f, 0.55f, 0.15f, 0.30f, 0.06f, 0.55f, 0.85f);
-    flute("blown-bottle", 0.50f, 0.35f, 0.50f, 0.35f, 0.25f, 0.0f, 0.55f, 0.85f);
+    flute("blownBottle", 0.50f, 0.35f, 0.50f, 0.35f, 0.25f, 0.0f, 0.55f, 0.85f);
   }
 
   // --- buzzing-bridge plucked string ---
@@ -475,7 +475,7 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
     // Keep the established GM-fallback `harp` name above. This separate
     // physical-model voice is intentionally named for its plucked engine so
     // every public catalog key resolves to exactly one patch.
-    plucked("harp-plucked", 0.0f, 0.70f, 4.5f, 0.16f, 0.85f);
+    plucked("harpPlucked", 0.0f, 0.70f, 4.5f, 0.16f, 0.85f);
     plucked("koto", 0.0f, 0.80f, 3.0f, 0.22f, 0.85f);
     plucked("sitar", 0.55f, 0.85f, 3.5f, 0.20f, 0.80f);
     plucked("tanpura", 0.70f, 0.78f, 5.0f, 0.12f, 0.80f);
@@ -503,9 +503,9 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
       v.config = from_patch(clamp_synth_patch(patch));
     };
     //     name          vowel bright vib    breath gain
-    vocal("choir-aah", 0, 0.55f, 0.30f, 0.12f, 0.80f);
-    vocal("choir-ooh", 4, 0.45f, 0.25f, 0.10f, 0.80f);
-    vocal("voice-eeh", 2, 0.60f, 0.35f, 0.14f, 0.80f);
+    vocal("choirAah", 0, 0.55f, 0.30f, 0.12f, 0.80f);
+    vocal("choirOoh", 4, 0.45f, 0.25f, 0.10f, 0.80f);
+    vocal("voiceEeh", 2, 0.60f, 0.35f, 0.14f, 0.80f);
   }
 
   // --- free reed (accordion / harmonica) ---
@@ -532,7 +532,7 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
     free_reed("accordion", 0.60f, 0.50f, 0.35f, 0.80f);
     free_reed("harmonica", 0.75f, 0.65f, 0.15f, 0.78f);
     free_reed("bandoneon", 0.55f, 0.45f, 0.30f, 0.80f);
-    free_reed("reed-organ", 0.50f, 0.40f, 0.10f, 0.82f);
+    free_reed("reedOrgan", 0.50f, 0.40f, 0.10f, 0.82f);
   }
 
   // --- self-oscillating singing voice ---
@@ -540,7 +540,7 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
   // envelope stays out of the way, since the breath is what shapes the note.
   {
     SynthPreset& v = t[i++];
-    v.name = "singing-voice";
+    v.name = "singingVoice";
     NativeSynthPatch patch{};
     patch.mode = SynthEngineMode::kSinging;
     patch.amp_env.attack_ms = 0.0f;
@@ -579,19 +579,19 @@ const SynthPreset* find_synth_preset(const char* name) noexcept {
 const char* base_preset_name(SynthEngineMode mode) noexcept {
   switch (mode) {
     case SynthEngineMode::kFm:
-      return "e-piano";
+      return "ePiano";
     case SynthEngineMode::kModal:
       return "bell";
     case SynthEngineMode::kPercussion:
-      return "drum-kit";
+      return "drumKit";
     case SynthEngineMode::kKarplusStrong:
-      return "classical-guitar";
+      return "classicalGuitar";
     case SynthEngineMode::kAdditive:
       return "organ";
     case SynthEngineMode::kPiano:
-      return "acoustic-piano";
+      return "acousticPiano";
     case SynthEngineMode::kPipeOrgan:
-      return "church-organ";
+      return "churchOrgan";
     case SynthEngineMode::kBowedString:
       return "violin";
     case SynthEngineMode::kReed:
@@ -599,11 +599,11 @@ const char* base_preset_name(SynthEngineMode mode) noexcept {
     case SynthEngineMode::kBrass:
       return "brass";
     case SynthEngineMode::kFlute:
-      return "concert-flute";
+      return "concertFlute";
     case SynthEngineMode::kPluckedString:
       return "pluck";
     case SynthEngineMode::kVocal:
-      return "choir-aah";
+      return "choirAah";
     case SynthEngineMode::kFreeReed:
       return "accordion";
     case SynthEngineMode::kHarpsichord:
@@ -613,7 +613,7 @@ const char* base_preset_name(SynthEngineMode mode) noexcept {
     case SynthEngineMode::kSample:
       return nullptr;
     case SynthEngineMode::kSinging:
-      return "singing-voice";
+      return "singingVoice";
   }
   return nullptr;
 }

@@ -128,7 +128,7 @@ TEST_CASE("note retrigger renders a repeated note identically", "[midi][synth][r
   }
   // FM and modal are silent from a bare patch, so they are reached through a
   // catalog preset instead.
-  for (const char* name : {"e-piano", "bell", "saw-lead"}) {
+  for (const char* name : {"ePiano", "bell", "sawLead"}) {
     CAPTURE(name);
     const auto* preset = sonare::midi::synth::find_synth_preset(name);
     REQUIRE(preset != nullptr);

@@ -172,7 +172,7 @@ void RealtimeEngineWasm::setMidiClips(val clips_val) {
 
 // Binds the patch-driven NativeSynth (the full synthesizer) on a realtime
 // MIDI destination. patch is a SynthPatch object or a preset-name string
-// ("saw-lead" / "va:saw-lead"), resolving exactly like
+// ("sawLead" / "va:sawLead"), resolving exactly like
 // Project.bounceWithSynthInstrument. Unknown preset names throw. A sample patch
 // carries its bank as `sampleBankId`, the same key the bounce reads; the synth
 // takes a share, so the caller may release its handle right afterwards.

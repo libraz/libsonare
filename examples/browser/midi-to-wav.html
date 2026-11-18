@@ -22,7 +22,7 @@
             Project.midiNoteOn(0, 0, 0, 60, 100), Project.midiNoteOff(1, 0, 0, 60),
             Project.midiNoteOn(1, 0, 0, 64, 100), Project.midiNoteOff(2, 0, 0, 64),
           ]);
-          const samples = project.bounceWithSynthInstrument('saw-lead', { numChannels: 2 });
+          const samples = project.bounceWithSynthInstrument('sawLead', { numChannels: 2 });
           downloadPcm16Wav('midi-phrase.wav', samples, 48000, 2);
           result.textContent = 'Downloaded midi-phrase.wav';
         } finally {

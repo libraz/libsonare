@@ -190,9 +190,9 @@ TEST_CASE("synth preset catalog lists every §E entry", "[project][synth_patch]"
   REQUIRE(names != nullptr);
 #if defined(SONARE_WITH_ARRANGEMENT)
   const std::string joined = std::string("\n") + names + "\n";
-  for (const char* expected : {"sine", "saw-lead", "square-lead", "sub-bass", "warm-pad", "e-piano",
-                               "bell", "brass", "pluck", "electric-guitar", "harp", "marimba",
-                               "glass", "organ", "drum-kit", "acoustic-piano"}) {
+  for (const char* expected :
+       {"sine", "sawLead", "squareLead", "subBass", "warmPad", "ePiano", "bell", "brass", "pluck",
+        "electricGuitar", "harp", "marimba", "glass", "organ", "drumKit", "acousticPiano"}) {
     INFO(expected);
     REQUIRE(joined.find(std::string("\n") + expected + "\n") != std::string::npos);
   }
@@ -205,9 +205,9 @@ TEST_CASE("synth preset patches round-trip through the versioned struct",
           "[project][synth_patch]") {
   SonareSynthPatch patch{};
   // warm-pad: two subtractive saws spread across the field.
-  REQUIRE(sonare_synth_preset_patch("warm-pad", &patch) == SONARE_OK);
+  REQUIRE(sonare_synth_preset_patch("warmPad", &patch) == SONARE_OK);
   REQUIRE(patch.struct_version == SONARE_SYNTH_PATCH_STRUCT_VERSION);
-  REQUIRE(std::string(patch.preset) == "warm-pad");
+  REQUIRE(std::string(patch.preset) == "warmPad");
   REQUIRE(patch.engine_mode == SONARE_SYNTH_ENGINE_SUBTRACTIVE);
   REQUIRE(patch.waveform == SONARE_SYNTH_OSC_SAW);
   REQUIRE(patch.unison == 2);
@@ -226,11 +226,11 @@ TEST_CASE("synth preset patches round-trip through the versioned struct",
     REQUIRE(patch.unison == 1);
   }
   // e-piano selects the FM engine; electric-guitar the KS engine.
-  REQUIRE(sonare_synth_preset_patch("e-piano", &patch) == SONARE_OK);
+  REQUIRE(sonare_synth_preset_patch("ePiano", &patch) == SONARE_OK);
   REQUIRE(patch.engine_mode == SONARE_SYNTH_ENGINE_FM);
-  REQUIRE(sonare_synth_preset_patch("electric-guitar", &patch) == SONARE_OK);
+  REQUIRE(sonare_synth_preset_patch("electricGuitar", &patch) == SONARE_OK);
   REQUIRE(patch.engine_mode == SONARE_SYNTH_ENGINE_KARPLUS_STRONG);
-  REQUIRE(sonare_synth_preset_patch("acoustic-piano", &patch) == SONARE_OK);
+  REQUIRE(sonare_synth_preset_patch("acousticPiano", &patch) == SONARE_OK);
   REQUIRE(patch.engine_mode == SONARE_SYNTH_ENGINE_PIANO);
   // Unknown names and NULL args are rejected.
   REQUIRE(sonare_synth_preset_patch("minimoog", &patch) == SONARE_ERROR_INVALID_PARAMETER);
@@ -319,7 +319,7 @@ TEST_CASE("a synth patch takes a missing engine section from the base preset",
 
   // A preset of another engine keeps its wrapper and takes the selected
   // engine's base section: the violin's wrapper over the e-piano's operators.
-  REQUIRE(std::string(sonare::midi::synth::base_preset_name(SynthEngineMode::kFm)) == "e-piano");
+  REQUIRE(std::string(sonare::midi::synth::base_preset_name(SynthEngineMode::kFm)) == "ePiano");
   SonareSynthPatch violin_fm{};
   violin_fm.struct_version = SONARE_SYNTH_PATCH_STRUCT_VERSION;
   std::strcpy(violin_fm.preset, "violin");
@@ -327,11 +327,11 @@ TEST_CASE("a synth patch takes a missing engine section from the base preset",
   sonare::midi::synth::NativeSynthConfig cfg;
   const char* error = nullptr;
   REQUIRE(sonare_c_detail::synth_config_from_patch_c(violin_fm, &cfg, &error));
-  require_section_read_back(cfg.patch, "e-piano");
+  require_section_read_back(cfg.patch, "ePiano");
   const sonare::midi::synth::SynthPreset* violin = sonare::midi::synth::find_synth_preset("violin");
   REQUIRE(violin != nullptr);
   const sonare::test::StereoRender expected =
-      render_config(with_section_of(violin->config, SynthEngineMode::kFm, "e-piano"));
+      render_config(with_section_of(violin->config, SynthEngineMode::kFm, "ePiano"));
   const sonare::test::StereoRender converted = render_config(cfg);
   REQUIRE(converted.left == expected.left);
   REQUIRE(converted.right == expected.right);
@@ -994,7 +994,7 @@ TEST_CASE("bounce_with_synth_instruments renders preset patches deterministicall
 
   // Determinism: bit-identical renders for a fixed patch.
   SonareSynthPatch patch{};
-  REQUIRE(sonare_synth_preset_patch("saw-lead", &patch) == SONARE_OK);
+  REQUIRE(sonare_synth_preset_patch("sawLead", &patch) == SONARE_OK);
   REQUIRE(bounce_synth(project, patch) == bounce_synth(project, patch));
 
   sonare_project_destroy(project);
@@ -1008,7 +1008,7 @@ TEST_CASE("synth patch presence bits express an explicit zero", "[project][synth
   // the zero reads as the "keep base" sentinel and the render is unchanged.
   SonareSynthPatch base{};
   base.struct_version = 2;
-  std::strncpy(base.preset, "warm-pad", SONARE_SYNTH_PRESET_NAME_MAX - 1);
+  std::strncpy(base.preset, "warmPad", SONARE_SYNTH_PRESET_NAME_MAX - 1);
   const std::vector<float> reference = bounce_synth(project, base);
   REQUIRE(peak_of(reference) > 0.0f);
 
@@ -1047,7 +1047,7 @@ TEST_CASE("synth patch presence-bit gain zero renders silence", "[project][synth
 
   SonareSynthPatch base{};
   base.struct_version = 2;
-  std::strncpy(base.preset, "warm-pad", SONARE_SYNTH_PRESET_NAME_MAX - 1);
+  std::strncpy(base.preset, "warmPad", SONARE_SYNTH_PRESET_NAME_MAX - 1);
   REQUIRE(peak_of(bounce_synth(project, base)) > 0.0f);
 
   SonareSynthPatch silent = base;
@@ -1145,7 +1145,7 @@ TEST_CASE("synth patch field overrides shape the preset", "[project][synth_patch
 
 TEST_CASE("synth patch numeric zero fields keep the base preset", "[project][synth_patch]") {
   SonareSynthPatch preset_only{};
-  std::strcpy(preset_only.preset, "warm-pad");
+  std::strcpy(preset_only.preset, "warmPad");
 
   sonare::midi::synth::NativeSynthConfig base;
   const char* error = nullptr;
@@ -1209,7 +1209,7 @@ TEST_CASE("the patch retrigger mode is read only by a caller that declares it",
   using sonare::midi::synth::SynthRetrigger;
   SonareSynthPatch asked{};
   asked.struct_version = SONARE_SYNTH_PATCH_STRUCT_VERSION;
-  std::strcpy(asked.preset, "saw-lead");
+  std::strcpy(asked.preset, "sawLead");
   asked.retrigger = SONARE_SYNTH_RETRIGGER_NOTE;
   sonare::midi::synth::NativeSynthConfig read;
   const char* error = nullptr;
@@ -1238,7 +1238,7 @@ TEST_CASE("the patch retrigger mode is read only by a caller that declares it",
 
   // The read direction reports the resolved mode rather than the keep-base zero.
   SonareSynthPatch preset{};
-  REQUIRE(sonare_synth_preset_patch("saw-lead", &preset) == SONARE_OK);
+  REQUIRE(sonare_synth_preset_patch("sawLead", &preset) == SONARE_OK);
   REQUIRE(preset.retrigger == SONARE_SYNTH_RETRIGGER_FREE);
 }
 
@@ -1247,7 +1247,7 @@ TEST_CASE("the patch LFO shape is read only by a caller that declares it",
   using sonare::midi::synth::LfoShape;
   SonareSynthPatch asked{};
   asked.struct_version = SONARE_SYNTH_PATCH_STRUCT_VERSION;
-  std::strcpy(asked.preset, "saw-lead");
+  std::strcpy(asked.preset, "sawLead");
   asked.lfo_shape = SONARE_SYNTH_LFO_SHAPE_SINE;
   sonare::midi::synth::NativeSynthConfig read;
   const char* error = nullptr;
@@ -1258,7 +1258,7 @@ TEST_CASE("the patch LFO shape is read only by a caller that declares it",
   REQUIRE(sonare_c_detail::synth_config_from_patch_c(random, &read, &error));
   REQUIRE(read.patch.lfo_shape == LfoShape::kRandom);
   SonareSynthPatch written{};
-  sonare_c_detail::synth_patch_to_c(sonare::midi::synth::SynthPreset{"saw-lead", read}, &written);
+  sonare_c_detail::synth_patch_to_c(sonare::midi::synth::SynthPreset{"sawLead", read}, &written);
   REQUIRE(written.lfo_shape == SONARE_SYNTH_LFO_SHAPE_RANDOM);
 
   // Zero keeps the base, which for every catalog preset is the triangle.
@@ -1277,7 +1277,7 @@ TEST_CASE("the patch LFO shape is read only by a caller that declares it",
 
   // The read direction reports the resolved shape rather than the keep-base zero.
   SonareSynthPatch preset{};
-  REQUIRE(sonare_synth_preset_patch("saw-lead", &preset) == SONARE_OK);
+  REQUIRE(sonare_synth_preset_patch("sawLead", &preset) == SONARE_OK);
   REQUIRE(preset.lfo_shape == SONARE_SYNTH_LFO_SHAPE_TRIANGLE);
 }
 
@@ -1286,7 +1286,7 @@ TEST_CASE("the second presence word's fields are read only by a caller that decl
   static_assert(SONARE_SYNTH_FIELD2_ONE_SHOT == 1u << 5, "second presence word bits moved");
   SonareSynthPatch asked{};
   asked.struct_version = SONARE_SYNTH_PATCH_STRUCT_VERSION;
-  std::strcpy(asked.preset, "saw-lead");
+  std::strcpy(asked.preset, "sawLead");
   asked.drift_rate_hz = 4.5f;
   asked.amp_delay_ms = 30.0f;
   asked.amp_hold_ms = 40.0f;
@@ -1307,8 +1307,8 @@ TEST_CASE("the second presence word's fields are read only by a caller that decl
   // Zero keeps the base unless the second word says it was meant.
   SonareSynthPatch zero{};
   zero.struct_version = SONARE_SYNTH_PATCH_STRUCT_VERSION;
-  std::strcpy(zero.preset, "saw-lead");
-  const sonare::midi::synth::SynthPreset* saw = sonare::midi::synth::find_synth_preset("saw-lead");
+  std::strcpy(zero.preset, "sawLead");
+  const sonare::midi::synth::SynthPreset* saw = sonare::midi::synth::find_synth_preset("sawLead");
   REQUIRE(saw != nullptr);
   REQUIRE(saw->config.patch.drift_rate_hz != 0.0f);
   REQUIRE(sonare_c_detail::synth_config_from_patch_c(zero, &read, &error));
@@ -1334,7 +1334,7 @@ TEST_CASE("the second presence word's fields are read only by a caller that decl
 
   // The read direction reports every field with its presence bit set.
   SonareSynthPatch preset{};
-  REQUIRE(sonare_synth_preset_patch("saw-lead", &preset) == SONARE_OK);
+  REQUIRE(sonare_synth_preset_patch("sawLead", &preset) == SONARE_OK);
   REQUIRE(preset.present_fields2 == sonare_c_detail::kSynthPatchAllFields2);
   REQUIRE(preset.drift_rate_hz == saw->config.patch.drift_rate_hz);
   REQUIRE(preset.one_shot == 0);
@@ -1458,7 +1458,7 @@ TEST_CASE("each wrapper field group sounds on the engines the header says honour
   const Base fm = rendered(base(SONARE_SYNTH_ENGINE_FM, ""), nullptr);
   const Base sample = rendered(base(SONARE_SYNTH_ENGINE_SAMPLE, ""), bank);
   // A percussion channel: each note runs the per-note kit patch instead of this one.
-  const Base kit = rendered(base(0, "drum-kit"), nullptr);
+  const Base kit = rendered(base(0, "drumKit"), nullptr);
 
   // Subtractive only: the oscillator stack.
   const CensusEdit kOscillator[] = {
@@ -1557,7 +1557,7 @@ TEST_CASE("the patch pitch offset reaches both of the engine pitch sources",
   // subtractive oscillator from its base frequency, the physical models from
   // the per-sample pitch factor — and the offset is applied at each. One preset
   // per side, because a field wired into only one of them moves only one.
-  for (const char* preset : {"clarinet", "saw-lead"}) {
+  for (const char* preset : {"clarinet", "sawLead"}) {
     SonareSynthPatch base{};
     base.struct_version = SONARE_SYNTH_PATCH_STRUCT_VERSION;
     std::strcpy(base.preset, preset);
@@ -1594,7 +1594,7 @@ TEST_CASE("the drum-kit preset plays the GM drum map on any key", "[project][syn
   // Note 38 = acoustic snare in the GM map.
   SonareProject* project = make_synth_project(3, 38);
   SonareSynthPatch kit{};
-  REQUIRE(sonare_synth_preset_patch("drum-kit", &kit) == SONARE_OK);
+  REQUIRE(sonare_synth_preset_patch("drumKit", &kit) == SONARE_OK);
   REQUIRE(kit.engine_mode == SONARE_SYNTH_ENGINE_PERCUSSION);
   const std::vector<float> snare = bounce_synth(project, kit);
   REQUIRE(peak_of(snare) > 0.0f);
@@ -1663,7 +1663,7 @@ TEST_CASE("sonare_engine synth instrument renders live MIDI input", "[c_api][syn
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
 
   SonareSynthPatch patch{};
-  REQUIRE(sonare_synth_preset_patch("saw-lead", &patch) == SONARE_OK);
+  REQUIRE(sonare_synth_preset_patch("sawLead", &patch) == SONARE_OK);
   REQUIRE(sonare_engine_set_synth_instrument(engine, 7, &patch) == SONARE_OK);
   size_t count = 0;
   REQUIRE(sonare_engine_midi_instrument_count(engine, &count) == SONARE_OK);

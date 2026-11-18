@@ -18,7 +18,7 @@ try {
     Project.midiNoteOn(1, 0, 0, 64, 100),
     Project.midiNoteOff(2, 0, 0, 64),
   ]);
-  const samples = project.bounceWithSynthInstrument('saw-lead', { numChannels: 2 });
+  const samples = project.bounceWithSynthInstrument('sawLead', { numChannels: 2 });
   writePcm16Wav(outputPath, samples, 48000, 2);
 } finally {
   project.destroy();

@@ -551,6 +551,26 @@ TEST_CASE("CLI project command group", "[cli]") {
     std::remove(wav.c_str());
   }
 
+  SECTION("--synth takes the kebab preset name and refuses the library spelling") {
+    const std::string proj = unique_temp_path("_proj.json");
+    const std::string wav = unique_temp_path("_synth.wav");
+    auto [nc, no] = exec_command(CLI + " project new -o " + proj);
+    REQUIRE(nc == 0);
+
+    auto [kc, ko] = exec_command(CLI + " project bounce --in " + proj + " -o " + wav +
+                                 " --frames 256 --synth saw-lead --json");
+    REQUIRE(kc == 0);
+    REQUIRE_THAT(ko, ContainsSubstring("\"synth\": true"));
+
+    auto [cc, co] = exec_command(CLI + " project bounce --in " + proj + " -o " + wav +
+                                 " --frames 256 --synth sawLead -q");
+    REQUIRE(cc == 3);
+    REQUIRE_THAT(co, ContainsSubstring("expected one of"));
+
+    std::remove(proj.c_str());
+    std::remove(wav.c_str());
+  }
+
   SECTION("project help documents CLI SF2 and synth-json limitations") {
     auto [code, output] = exec_command(CLI + " project help");
     REQUIRE(code == 0);

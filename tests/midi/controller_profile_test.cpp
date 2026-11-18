@@ -216,7 +216,7 @@ TEST_CASE("one gesture resolves the same whichever controller carries it",
           "[midi][synth][controller-profile]") {
   const std::vector<ControllerAxisValue> by_cc = resolve_ramp(named("breath"), cc_ramp(2));
   const std::vector<ControllerAxisValue> by_aftertouch =
-      resolve_ramp(named("breath-aftertouch"), aftertouch_ramp());
+      resolve_ramp(named("breathAftertouch"), aftertouch_ramp());
 
   // Reach: two profiles that matched nothing would both emit nothing and
   // compare equal. 128 ramp positions, two axes bound to the gesture.
@@ -235,7 +235,7 @@ TEST_CASE("one gesture resolves the same whichever controller carries it",
 TEST_CASE("a breath ramp sounds the same through either spelling",
           "[midi][synth][controller-profile]") {
   const ControllerProfile by_cc = named("breath");
-  const ControllerProfile by_aftertouch = named("breath-aftertouch");
+  const ControllerProfile by_aftertouch = named("breathAftertouch");
   for (const int program : kWindPrograms) {
     CAPTURE(program);
     const std::vector<float> cc_render = render_ramp(program, by_cc, breath_cc_step);

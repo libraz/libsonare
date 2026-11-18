@@ -170,11 +170,15 @@ int cmd_project_abi(const CliArgs& args) {
 // `project synth-presets` — expose the full NativeSynth catalog accepted by
 // `project bounce --synth`, rather than documenting a small waveform subset.
 int cmd_project_synth_presets(const CliArgs& args) {
-  const char* joined = sonare_synth_preset_names();
-  const std::vector<std::string> names = joined != nullptr && joined[0] != '\0'
-                                             ? split_string(joined, '\n')
-                                             : std::vector<std::string>{};
+  std::vector<std::string> names;
+  for (const auto& name : synth_preset_name_list()) names.push_back(cli_token(name));
   return print_name_catalog(args, "presets", names);
+}
+
+std::vector<std::string> synth_preset_name_list() {
+  const char* joined = sonare_synth_preset_names();
+  return joined != nullptr && joined[0] != '\0' ? split_string(joined, '\n')
+                                                : std::vector<std::string>{};
 }
 
 // `project new -o out.json` — create an empty project and serialize it to disk.
