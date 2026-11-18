@@ -1036,18 +1036,18 @@ class _ProjectEditMixin:
 
         ``points`` is an optional list of :class:`AutomationPoint` records; any
         other item is a ``TypeError``. ``target_param_id`` must be non-zero; zero is
-        reserved as the unset id. Omit ``target_kind`` to use the legacy
-        opaque-lane ABI. Supplying ``"opaque"``, ``"trackFaderDb"`` or
-        ``"trackPan"`` uses the typed extended ABI.
+        reserved as the unset id. Without ``target_kind`` the lane is opaque: it
+        drives exactly ``target_param_id`` -- a host-registered engine parameter,
+        a graph-node parameter binding or strip width (3) -- and reserved mixer,
+        insert and instrument ids are refused. ``"opaque"``, ``"trackFaderDb"``
+        or ``"trackPan"`` state the kind explicitly.
         """
         desc, _backing = _automation_lane_desc(target_param_id, points)
         kind = None if target_kind is None else _automation_target_kind_value(target_kind)
         lib = _get_lib()
         out_target_param_id = ctypes.c_uint32()
         if kind is None:
-            # Keep the legacy call shape and symbol selection exact when the
-            # optional kind is absent. Native legacy edits preserve an
-            # existing lane's typed kind by contract.
+            # An absent kind is the untyped C call, which adds an opaque lane.
             _check(
                 lib.sonare_project_add_automation_lane(
                     self._require_handle(),
@@ -1088,9 +1088,9 @@ class _ProjectEditMixin:
     ) -> None:
         """Replace an automation lane via an undoable edit.
 
-        Omit ``target_kind`` to use the legacy edit ABI, which preserves the
-        existing lane kind. Supplying a kind applies it through the typed
-        extended ABI and rejects same-track typed-target conflicts atomically.
+        Without ``target_kind`` the lane keeps its existing kind. Supplying a
+        kind applies it and rejects a same-track typed-target conflict
+        atomically.
         ``points`` takes the same records as :meth:`add_automation_lane`.
         """
         desc, _backing = _automation_lane_desc(target_param_id, points)

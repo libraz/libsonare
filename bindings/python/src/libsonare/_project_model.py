@@ -215,8 +215,8 @@ ProjectOverlapPolicy: TypeAlias = Literal["disallow", "allow"]
 _OVERLAP_POLICIES: tuple[str, ...] = get_args(ProjectOverlapPolicy)
 
 # Automation target kind; a token's index is its SonareAutomationTargetKind ordinal.
-# None selects the legacy C call, while an explicit "opaque" selects the
-# extended call and is therefore observable at the FFI boundary.
+# None selects the untyped C call (an opaque lane, or the lane's existing kind
+# on edit), while an explicit "opaque" selects the typed call.
 ProjectAutomationTargetKind: TypeAlias = Literal["opaque", "trackFaderDb", "trackPan"]
 """What an automation lane drives: an opaque parameter, a track fader or a track pan."""
 _AUTOMATION_TARGET_KINDS: tuple[str, ...] = get_args(ProjectAutomationTargetKind)
