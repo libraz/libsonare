@@ -45,19 +45,33 @@ export interface SurroundPan {
   distance?: number;
 }
 
+/** Master-output meter reading for a mix. */
 export interface MixMeterSnapshot {
+  /** Left-channel sample peak in dBFS. */
   peakDbL: number;
+  /** Right-channel sample peak in dBFS. */
   peakDbR: number;
+  /** Left-channel RMS level in dBFS. */
   rmsDbL: number;
+  /** Right-channel RMS level in dBFS. */
   rmsDbR: number;
+  /** Inter-channel correlation in `[-1, 1]`. */
   correlation: number;
+  /** Stereo width measured by the mono-compatibility check. */
   monoCompatWidth: number;
+  /** Peak level of the mono sum used by the mono-compatibility check. */
   monoCompatPeak: number;
+  /** RMS level of the side signal used by the mono-compatibility check. */
   monoCompatSideRms: number;
+  /** True when the mono-compatibility check finds no collapse risk. */
   likelyMonoCompatible: boolean;
+  /** Momentary loudness in LUFS. */
   momentaryLufs: number;
+  /** Short-term loudness in LUFS. */
   shortTermLufs: number;
+  /** Integrated loudness in LUFS. */
   integratedLufs: number;
+  /** Gain reduction applied by the dynamics stages, in dB. */
   gainReductionDb: number;
   /**
    * Left-channel inter-sample (true) peak in dBTP, from the ITU-R BS.1770-4
@@ -71,6 +85,7 @@ export interface MixMeterSnapshot {
   truePeakDbtpR: number;
   /** Maximum inter-sample peak across channels in dBTP. See {@link truePeakDbtpL}. */
   maxTruePeakDbtp: number;
+  /** Sequence counter; increments each time a new snapshot is published. */
   seq: number;
   /** Number of valid surround planes (5.1/7.1); 0 before the meter sees audio. */
   numChannels: number;
@@ -85,17 +100,25 @@ export interface MixMeterSnapshot {
   truePeakDbtp: number[];
 }
 
+/** A mixed stereo master and its meter readings. */
 export interface MixResult {
+  /** Left channel of the mixed master. */
   left: Float32Array;
+  /** Right channel of the mixed master. */
   right: Float32Array;
+  /** Sample rate of the mixed master in Hz. */
   sampleRate: number;
+  /** Meter readings taken while mixing. */
   meters: MixMeterSnapshot[];
 }
 
 /** Mixed stereo master returned by {@link Mixer.processStereo}. */
 export interface MixerProcessResult {
+  /** Left channel of the mixed master. */
   left: Float32Array;
+  /** Right channel of the mixed master. */
   right: Float32Array;
+  /** Sample rate of the mixed master in Hz. */
   sampleRate: number;
 }
 
@@ -134,7 +157,9 @@ export type StripRef = number | string;
 
 /** Single goniometer sample from {@link Mixer.readGoniometerLatest}. */
 export interface GoniometerPoint {
+  /** Left-channel sample value. */
   left: number;
+  /** Right-channel sample value. */
   right: number;
 }
 
@@ -214,8 +239,11 @@ export type MixSceneInsert = {
 
 /** A strip send to a destination bus. */
 export interface MixSceneSend {
+  /** Send id. */
   id: string;
+  /** Id of the bus the send feeds. */
   destinationBusId: string;
+  /** Send level in dB. */
   sendDb: number;
   /** Send tap point. */
   timing: SendTiming;
@@ -223,7 +251,9 @@ export interface MixSceneSend {
 
 /** A strip send as given to a scene document; omitted fields take the scene parser's defaults. */
 export interface MixSceneSendInput {
+  /** Send id. */
   id: string;
+  /** Id of the bus the send feeds. */
   destinationBusId: string;
   /** Send level in dB. */
   sendDb?: number;
@@ -233,21 +263,37 @@ export interface MixSceneSendInput {
 
 /** A channel strip in a mixer scene. */
 export interface MixSceneStrip {
+  /** Strip id, unique across the scene. */
   id: string;
+  /** Input trim in dB, applied ahead of the inserts. */
   inputTrimDb: number;
+  /** Fader level in dB. */
   faderDb: number;
+  /** Direct VCA trim in dB. */
   vcaOffsetDb: number;
+  /** Pan position in `[-1, 1]`; -1 is full left. */
   pan: number;
+  /** Stereo width in `[0, 2]`: 0 mono, 1 unchanged, 2 widest. */
   width: number;
+  /** True when the strip is muted. */
   muted: boolean;
+  /** True when the strip is soloed. */
   soloed: boolean;
+  /** True when the strip stays audible while another strip is soloed. */
   soloSafe: boolean;
+  /** How the pan position is applied; see {@link PanMode}. */
   panMode: PanMode;
+  /** Left input's pan position in `'dualPan'` mode, `[-1, 1]`. */
   dualPanLeft: number;
+  /** Right input's pan position in `'dualPan'` mode, `[-1, 1]`. */
   dualPanRight: number;
+  /** True when the left channel polarity is inverted. */
   polarityInvertLeft: boolean;
+  /** True when the right channel polarity is inverted. */
   polarityInvertRight: boolean;
+  /** Pan law applied by the panner; see {@link PanLaw}. */
   panLaw: PanLaw;
+  /** Delay applied to the strip's channels, in samples. */
   channelDelaySamples: number;
   /** Present only for a non-stereo source. */
   sourceLayout?: ChannelLayout;
@@ -265,7 +311,9 @@ export interface MixSceneStrip {
    * 1.4 MB) is worth setting for strips whose meters are never read.
    */
   metering?: Required<StripMeteringOptions>;
+  /** Processor slots, in signal order. */
   inserts: MixSceneInsert[];
+  /** Sends to destination buses. */
   sends: MixSceneSend[];
   /**
    * This strip's dedicated equalizer. Present only when it carries something
@@ -300,12 +348,19 @@ export interface StripMeteringOptions {
 
 /** A bus in a mixer scene. Defaulted fields are omitted from the document. */
 export interface MixSceneBus {
+  /** Bus id, unique across the scene. */
   id: string;
+  /** Role of the bus. */
   role: MixBusRole;
+  /** Channel layout of the bus. */
   layout?: ChannelLayout;
+  /** Input trim in dB, applied ahead of the inserts. */
   inputTrimDb?: number;
+  /** Stereo width in `[0, 2]`: 0 mono, 1 unchanged, 2 widest. */
   width?: number;
+  /** True when the left channel polarity is inverted. */
   polarityInvertLeft?: boolean;
+  /** True when the right channel polarity is inverted. */
   polarityInvertRight?: boolean;
   /**
    * Pan, same field names/defaults/ranges as a strip's. Rejected rather than
@@ -313,10 +368,15 @@ export interface MixSceneBus {
    * bus has no pan of its own.
    */
   pan?: number;
+  /** How the pan position is applied; see {@link PanMode}. */
   panMode?: PanMode;
+  /** Left input's pan position in `'dualPan'` mode, `[-1, 1]`. */
   dualPanLeft?: number;
+  /** Right input's pan position in `'dualPan'` mode, `[-1, 1]`. */
   dualPanRight?: number;
+  /** Pan law applied by the panner; see {@link PanLaw}. */
   panLaw?: PanLaw;
+  /** Processor slots, in signal order. */
   inserts: MixSceneInsert[];
   /** This bus's dedicated equalizer, applied before its inserts. See {@link MixSceneStrip.eq}. */
   eq?: {
@@ -332,45 +392,63 @@ export interface MixSceneBus {
 export type MixSceneStripInput = Partial<
   Omit<MixSceneStrip, 'id' | 'sends' | 'surroundPan' | 'metering'>
 > & {
+  /** Strip id, unique across the scene. */
   id: string;
+  /** Sends to destination buses; omitted fields take the scene parser defaults. */
   sends?: MixSceneSendInput[];
+  /** Surround pan position for a strip feeding a surround bus. */
   surroundPan?: SurroundPan;
+  /** Meter configuration; see {@link StripMeteringOptions}. */
   metering?: StripMeteringOptions;
 };
 
 /** A bus as given to a scene document: every field but `id` and `role` is optional. */
 export type MixSceneBusInput = Partial<Omit<MixSceneBus, 'id' | 'role'>> & {
+  /** Bus id, unique across the scene. */
   id: string;
+  /** Role of the bus. */
   role: MixBusRole;
 };
 
 /** A VCA group in a mixer scene. */
 export interface MixSceneVcaGroup {
+  /** VCA group id. */
   id: string;
+  /** Group gain in dB. */
   gainDb: number;
+  /** Ids of the member strips. */
   members: string[];
 }
 
 /** A VCA group as given to a scene document; omitted fields take the scene parser's defaults. */
 export interface MixSceneVcaGroupInput {
+  /** VCA group id. */
   id: string;
   /** Group gain in dB. */
   gainDb?: number;
+  /** Ids of the member strips. */
   members?: string[];
 }
 
 /** A routing edge in a mixer scene. */
 export interface MixSceneConnection {
+  /** Id of the source strip or bus. */
   source: string;
+  /** Id of the destination bus. */
   destination: string;
 }
 
 /** A mixer scene document as returned by `mixingScenePreset` and `mixingAssistantSuggest`. */
 export interface MixSceneDocument {
+  /** Scene document schema version. */
   version: number;
+  /** Channel strips in the scene. */
   strips: MixSceneStrip[];
+  /** Buses in the scene. */
   buses: MixSceneBus[];
+  /** VCA groups in the scene. */
   vcaGroups: MixSceneVcaGroup[];
+  /** Routing edges between strips and buses. */
   connections: MixSceneConnection[];
 }
 
@@ -379,18 +457,27 @@ export interface MixSceneDocument {
  * scene parser's defaults. A {@link MixSceneDocument} is accepted as is.
  */
 export interface MixSceneDocumentInput {
+  /** Scene document schema version. */
   version?: number;
+  /** Channel strips in the scene. */
   strips?: MixSceneStripInput[];
+  /** Buses in the scene. */
   buses?: MixSceneBusInput[];
+  /** VCA groups in the scene. */
   vcaGroups?: MixSceneVcaGroupInput[];
+  /** Routing edges between strips and buses. */
   connections?: MixSceneConnection[];
 }
 
 /** Per-track measurements and the class the track was resolved to. */
 export interface MixAssistantTrackProfile {
+  /** Id of the strip the track is addressed by. */
   stripId: string;
+  /** Display name the track was given. */
   name: string;
+  /** Source class the track was resolved to. */
   source: MixSourceClass;
+  /** Classifier confidence in `[0, 1]`. */
   sourceConfidence: number;
   /**
    * False when the track could not be measured: it has no samples, a
@@ -404,7 +491,9 @@ export interface MixAssistantTrackProfile {
   usable: boolean;
   /** Why the track was excluded; empty when `usable` is true. */
   exclusionReason: string;
+  /** Channel count of the track: 1 for mono, 2 for stereo. */
   numChannels: number;
+  /** Track duration in seconds. */
   durationSec: number;
   /**
    * BS.1770 integrated loudness in LUFS, or `null` for a track with no gated
@@ -414,13 +503,19 @@ export interface MixAssistantTrackProfile {
    * real level. Such a track always carries an `exclusionReason` as well.
    */
   integratedLufs: number | null;
+  /** True peak in dBTP. */
   truePeakDbtp: number;
+  /** Crest factor (peak over RMS) in dB. */
   crestFactorDb: number;
+  /** Spectral centroid in Hz. */
   spectralCentroidHz: number;
+  /** Spectral flatness; near 0 is tonal, near 1 is noise-like. */
   spectralFlatness: number;
   /** Onsets per second. */
   attackPerSecond: number;
+  /** Sustain ratio of the track's envelope. */
   sustainRatio: number;
+  /** Share of the track's energy in each analysis band. */
   bandOccupancy: MixBandOccupancy;
 }
 
@@ -429,42 +524,63 @@ export interface MixAssistantTrackProfile {
  * array is far shorter than the full matrix.
  */
 export interface MixBandDominance {
+  /** Strip id of the masking track. */
   masker: string;
+  /** Strip id of the masked track. */
   maskee: string;
+  /** Analysis band the pair is measured in. */
   band: MixAnalysisBand;
+  /** Masker's mean energy share in `[0, 1]`; 0.5 means equal band energy. */
   ratio: number;
+  /** Frames where both tracks exceeded the band energy floor. */
   validFrames: number;
 }
 
 /** A related track pair and the time/polarity relationship measured between them. */
 export interface MixTrackAlignment {
+  /** Strip id of the reference track. */
   reference: string;
+  /** Strip id of the track measured against the reference. */
   target: string;
+  /** Lag in samples that aligns the target onto the reference; positive means the target arrives later. */
   lagSamples: number;
+  /** Signed normalized correlation at `lagSamples`, in `[-1, 1]`. */
   correlation: number;
+  /** True when the best correlation peak is negative. */
   polarityOpposed: boolean;
 }
 
 /** A band carrying more simultaneous sources than the image comfortably holds. */
 export interface MixCrowdedBand {
+  /** The crowded analysis band. */
   band: MixAnalysisBand;
+  /** Crowding in `[0, 1]`: 1 when all of the band's energy sits in one pan position. */
   crowding: number;
 }
 
 /** A track whose stereo image is likely to collapse in mono. */
 export interface MixMonoRisk {
+  /** Id of the strip at risk. */
   stripId: string;
+  /** Inter-channel correlation of the track in `[-1, 1]`. */
   correlation: number;
+  /** Stereo width of the track. */
   width: number;
+  /** True when the track carries meaningful low-frequency stereo width. */
   wideLowEnd: boolean;
 }
 
 /** Cross-track measurements the decisions were made from. */
 export interface MixAssistantMixProfile {
+  /** Number of tracks the profile covers. */
   trackCount: number;
+  /** Informative masker/maskee band pairs. */
   bandDominance: MixBandDominance[];
+  /** Time and polarity relationships between related track pairs. */
   alignment: MixTrackAlignment[];
+  /** Bands carrying more simultaneous sources than the image comfortably holds. */
   crowdedBands: MixCrowdedBand[];
+  /** Tracks whose stereo image is likely to collapse in mono. */
   monoRisks: MixMonoRisk[];
 }
 

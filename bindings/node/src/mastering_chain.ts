@@ -41,6 +41,7 @@ export * from './mastering_normalize.js';
 
 /** Request form of {@link masteringNormalizeLoudness}. */
 export interface MasteringNormalizeLoudnessRequest extends MasteringNormalizeLoudnessOptions {
+  /** Mono input samples. */
   samples: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
@@ -49,29 +50,39 @@ export interface MasteringNormalizeLoudnessRequest extends MasteringNormalizeLou
 /** Request form of {@link masteringApplyProcessor}. */
 export interface MasteringApplyProcessorRequest<P extends SoloProcessor = SoloProcessor>
   extends ValidateOptions {
+  /** Name of the processor to apply (see `masteringProcessorNames`). */
   processor: P;
+  /** Mono input samples. */
   samples: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
+  /** Parameters of the processor. */
   params?: MasteringProcessorParams<P>;
 }
 
 /** Request form of {@link masteringApplyProcessorStereo}. */
 export interface MasteringApplyProcessorStereoRequest<P extends SoloProcessor = SoloProcessor>
   extends ValidateOptions {
+  /** Name of the processor to apply to the pair. */
   processor: P;
+  /** Left channel samples. */
   left: Float32Array;
+  /** Right channel samples. */
   right: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
+  /** Parameters of the processor. */
   params?: MasteringProcessorParams<P>;
 }
 
 /** Request form of {@link masteringApplyPairProcessor}. */
 export interface MasteringApplyPairProcessorRequest<P extends PairProcessor = PairProcessor>
   extends ValidateOptions {
+  /** Name of the pair processor to apply (see `masteringPairProcessorNames`). */
   processor: P;
+  /** The take the processor is applied to. */
   source: Float32Array;
+  /** The take the processor reads as its reference. */
   reference: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
@@ -80,15 +91,21 @@ export interface MasteringApplyPairProcessorRequest<P extends PairProcessor = Pa
    * rate is resampled onto `sampleRate` first.
    */
   referenceSampleRate?: number;
+  /** Parameters of the processor. */
   params?: MasteringPairParams;
 }
 
 /** Request form of {@link masteringApplyPairProcessorStereo}. */
 export interface MasteringApplyPairProcessorStereoRequest extends ValidateOptions {
+  /** Name of the pair processor to apply (see `masteringPairProcessorNames`). */
   processor: StereoPairProcessor;
+  /** Left channel of the source take. */
   sourceLeft: Float32Array;
+  /** Right channel of the source take. */
   sourceRight: Float32Array;
+  /** Left channel of the reference take. */
   referenceLeft: Float32Array;
+  /** Right channel of the reference take. */
   referenceRight: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
@@ -97,6 +114,7 @@ export interface MasteringApplyPairProcessorStereoRequest extends ValidateOption
    * rate is resampled onto `sampleRate` first.
    */
   referenceSampleRate?: number;
+  /** Parameters of the processor. */
   params?: MasteringPairParams;
 }
 
@@ -117,9 +135,13 @@ export interface MasteringAbMatchLoudnessRequest extends ValidateOptions {
 
 /** Request form of {@link masteringAbMatchLoudnessStereo}. */
 export interface MasteringAbMatchLoudnessStereoRequest extends ValidateOptions {
+  /** Left channel of the take to gain-match. */
   sourceLeft: Float32Array;
+  /** Right channel of the take to gain-match. */
   sourceRight: Float32Array;
+  /** Left channel of the take whose loudness `source` is matched to; returned untouched. */
   referenceLeft: Float32Array;
+  /** Right channel of the take whose loudness `source` is matched to; returned untouched. */
   referenceRight: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
@@ -133,8 +155,11 @@ export interface MasteringAbMatchLoudnessStereoRequest extends ValidateOptions {
 /** Request form of {@link masteringAnalyzePair}. */
 export interface MasteringAnalyzePairRequest<A extends PairAnalysis = PairAnalysis>
   extends ValidateOptions {
+  /** Name of the pair analysis to run (see `masteringPairAnalysisNames`). */
   analysis: A;
+  /** The take being analyzed. */
   source: Float32Array;
+  /** The take it is compared against. */
   reference: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
@@ -143,17 +168,22 @@ export interface MasteringAnalyzePairRequest<A extends PairAnalysis = PairAnalys
    * rate is resampled onto `sampleRate` first, so a delay estimate is in source-rate samples.
    */
   referenceSampleRate?: number;
+  /** Parameters of the analysis. */
   params?: MasteringPairParams;
 }
 
 /** Request form of {@link masteringAnalyzeStereo}. */
 export interface MasteringAnalyzeStereoRequest<A extends StereoAnalysis = StereoAnalysis>
   extends ValidateOptions {
+  /** Name of the stereo analysis to run (see `masteringStereoAnalysisNames`). */
   analysis: A;
+  /** Left channel samples. */
   left: Float32Array;
+  /** Right channel samples. */
   right: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
+  /** Parameters of the analysis. */
   params?: MasteringPairParams;
 }
 
@@ -500,6 +530,7 @@ function assertChainCallbacks(fnName: string, request: object): void {
 
 /** Request for {@link streamingLoudnessGain}. */
 export interface StreamingLoudnessGainRequest extends ValidateOptions {
+  /** Mono input samples. */
   samples: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
@@ -509,10 +540,13 @@ export interface StreamingLoudnessGainRequest extends ValidateOptions {
 
 /** Request for {@link streamingLoudnessGainStereo}. */
 export interface StreamingLoudnessGainStereoRequest extends ValidateOptions {
+  /** Left channel samples. */
   left: Float32Array;
+  /** Right channel samples. */
   right: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
+  /** The chain config the streaming chain will run; read like `masterAudio`'s `overrides`. */
   config?: MasteringChainConfig;
 }
 
@@ -587,6 +621,7 @@ export function streamingLoudnessGainStereo(
 
 /** Request form of {@link masterAudio}. */
 export interface MasterAudioRequest extends ValidateOptions {
+  /** Mono input samples. */
   samples: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
@@ -602,7 +637,9 @@ export interface MasterAudioRequest extends ValidateOptions {
 
 /** Request form of {@link masterAudioStereo}. */
 export interface MasterAudioStereoRequest extends ValidateOptions {
+  /** Left channel samples. */
   left: Float32Array;
+  /** Right channel samples. */
   right: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
@@ -717,6 +754,7 @@ export function masterAudioStereo(request: MasterAudioStereoRequest): MasteringC
 
 /** Request form of {@link masterAudioAsync}. */
 export interface MasterAudioAsyncRequest extends ValidateOptions {
+  /** Mono input samples. */
   samples: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
@@ -728,7 +766,9 @@ export interface MasterAudioAsyncRequest extends ValidateOptions {
 
 /** Request form of {@link masterAudioStereoAsync}. */
 export interface MasterAudioStereoAsyncRequest extends ValidateOptions {
+  /** Left channel samples. */
   left: Float32Array;
+  /** Right channel samples. */
   right: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;

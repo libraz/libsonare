@@ -1,7 +1,7 @@
 import {
   assertUnitInterval,
-  clipThresholdLinear,
   clippingReportFromNative,
+  clipThresholdLinear,
   interleaveMeterChannels,
   refuseZeroSentinel,
   waveformReportFromNative,
@@ -46,9 +46,13 @@ function assertSpectrumOptions(fnName: string, options: SpectrumOptions): void {
 
 /** One contiguous run of clipped samples reported by `meteringDetectClipping`. */
 export interface ClippingRegion {
+  /** Index of the first clipped sample. */
   startSample: number;
+  /** Index one past the last clipped sample. */
   endSample: number;
+  /** Run length in samples. */
   length: number;
+  /** Largest absolute sample value in the run (linear). */
   peak: number;
 }
 
@@ -61,15 +65,21 @@ export interface ClippingReport {
   clippedSamples: number;
   /** `clippedSamples` divided by the input length. */
   clippedRatio: number;
+  /** Largest absolute sample value over all reported regions (linear). */
   maxClippedPeak: number;
+  /** The clipped runs, in order. */
   regions: ClippingRegion[];
 }
 
 /** Sliding-window dynamic range report. */
 export interface DynamicRangeReport {
+  /** High percentile minus low percentile of the window levels, in dB. */
   dynamicRangeDb: number;
+  /** Window RMS level at the low percentile, in dBFS. */
   lowPercentileDb: number;
+  /** Window RMS level at the high percentile, in dBFS. */
   highPercentileDb: number;
+  /** RMS level of each analysis window, in dBFS. */
   windowRmsDb: Float32Array;
 }
 
@@ -95,6 +105,7 @@ export interface MeteringDynamicRangeOptions extends ValidateOptions {
 
 /** Request form of {@link meteringPeakDb}. */
 export interface MeteringPeakDbRequest extends ValidateOptions {
+  /** Mono input samples. */
   samples: Float32Array;
   /** Sample rate of `samples` in Hz. Required. */
   sampleRate: number;
@@ -102,6 +113,7 @@ export interface MeteringPeakDbRequest extends ValidateOptions {
 
 /** Request form of {@link meteringRmsDb}. */
 export interface MeteringRmsDbRequest extends ValidateOptions {
+  /** Mono input samples. */
   samples: Float32Array;
   /** Sample rate of `samples` in Hz. Required. */
   sampleRate: number;
@@ -109,6 +121,7 @@ export interface MeteringRmsDbRequest extends ValidateOptions {
 
 /** Request form of {@link meteringCrestFactorDb}. */
 export interface MeteringCrestFactorDbRequest extends ValidateOptions {
+  /** Mono input samples. */
   samples: Float32Array;
   /** Sample rate of `samples` in Hz. Required. */
   sampleRate: number;
@@ -116,6 +129,7 @@ export interface MeteringCrestFactorDbRequest extends ValidateOptions {
 
 /** Request form of {@link meteringDcOffset}. */
 export interface MeteringDcOffsetRequest extends ValidateOptions {
+  /** Mono input samples. */
   samples: Float32Array;
   /** Sample rate of `samples` in Hz. Required. */
   sampleRate: number;
@@ -123,6 +137,7 @@ export interface MeteringDcOffsetRequest extends ValidateOptions {
 
 /** Request form of {@link meteringTruePeakDb}. */
 export interface MeteringTruePeakDbRequest extends ValidateOptions {
+  /** Mono input samples. */
   samples: Float32Array;
   /** Sample rate of `samples` in Hz. Required. */
   sampleRate: number;
@@ -132,6 +147,7 @@ export interface MeteringTruePeakDbRequest extends ValidateOptions {
 
 /** Request form of {@link meteringSilenceRatio}. */
 export interface MeteringSilenceRatioRequest extends ValidateOptions {
+  /** Mono input samples. */
   samples: Float32Array;
   /** Sample rate of `samples` in Hz. Required. */
   sampleRate: number;
@@ -145,6 +161,7 @@ export interface MeteringSilenceRatioRequest extends ValidateOptions {
 
 /** Request form of {@link meteringDetectClipping}. */
 export interface MeteringDetectClippingRequest extends MeteringDetectClippingOptions {
+  /** Mono input samples. */
   samples: Float32Array;
   /** Sample rate of `samples` in Hz. Required. */
   sampleRate: number;
@@ -152,6 +169,7 @@ export interface MeteringDetectClippingRequest extends MeteringDetectClippingOpt
 
 /** Request form of {@link meteringDynamicRange}. */
 export interface MeteringDynamicRangeRequest extends MeteringDynamicRangeOptions {
+  /** Mono input samples. */
   samples: Float32Array;
   /** Sample rate of `samples` in Hz. Required. */
   sampleRate: number;
@@ -221,7 +239,9 @@ export function meteringCrestFactorDb(...args: unknown[]): number {
 
 /** Request form of {@link meteringCrestFactorDbStereo}. */
 export interface MeteringCrestFactorDbStereoRequest extends ValidateOptions {
+  /** Left channel samples. */
   left: Float32Array;
+  /** Right channel samples. */
   right: Float32Array;
   /** Sample rate of both channels in Hz. Required. */
   sampleRate: number;
@@ -346,18 +366,27 @@ export function meteringDynamicRange(...args: unknown[]): DynamicRangeReport {
 
 /** Mid/side vectorscope point series for a (left, right) stereo pair. */
 export interface VectorscopeReport {
+  /** Mid component of each point. */
   mid: Float32Array;
+  /** Side component of each point. */
   side: Float32Array;
 }
 
 /** Phase-scope (Lissajous) point series plus summary stats. */
 export interface PhaseScopeReport {
+  /** Mid component of each point. */
   mid: Float32Array;
+  /** Side component of each point. */
   side: Float32Array;
+  /** Distance of each point from the origin. */
   radius: Float32Array;
+  /** Angle of each point, `atan2(side, mid)`, in radians. */
   angleRad: Float32Array;
+  /** Stereo correlation over the full-resolution signal. */
   correlation: number;
+  /** Mean absolute point angle over the full-resolution signal, in radians. */
   averageAbsAngleRad: number;
+  /** Largest point radius over the full-resolution signal. */
   maxRadius: number;
 }
 
@@ -377,17 +406,25 @@ export interface SpectrumOptions extends ValidateOptions {
 
 /** Single-frame magnitude / power / dB spectrum returned by `meteringSpectrum`. */
 export interface SpectrumReport {
+  /** Center frequency of each bin in Hz. */
   frequencies: Float32Array;
+  /** Linear magnitude of each bin. */
   magnitude: Float32Array;
+  /** Power of each bin. */
   power: Float32Array;
+  /** Level of each bin in dB. */
   db: Float32Array;
+  /** FFT size the spectrum was computed with. */
   nFft: number;
+  /** Sample rate of the analyzed audio in Hz. */
   sampleRate: number;
 }
 
 /** Request form of {@link meteringStereoCorrelation}. */
 export interface MeteringStereoCorrelationRequest extends ValidateOptions {
+  /** Left channel samples. */
   left: Float32Array;
+  /** Right channel samples. */
   right: Float32Array;
   /** Sample rate of both channels in Hz. Required. */
   sampleRate: number;
@@ -395,7 +432,9 @@ export interface MeteringStereoCorrelationRequest extends ValidateOptions {
 
 /** Request form of {@link meteringStereoWidth}. */
 export interface MeteringStereoWidthRequest extends ValidateOptions {
+  /** Left channel samples. */
   left: Float32Array;
+  /** Right channel samples. */
   right: Float32Array;
   /** Sample rate of both channels in Hz. Required. */
   sampleRate: number;
@@ -403,7 +442,9 @@ export interface MeteringStereoWidthRequest extends ValidateOptions {
 
 /** Request form of {@link meteringVectorscope}. */
 export interface MeteringVectorscopeRequest extends ValidateOptions {
+  /** Left channel samples. */
   left: Float32Array;
+  /** Right channel samples. */
   right: Float32Array;
   /** Sample rate of both channels in Hz. Required. */
   sampleRate: number;
@@ -417,7 +458,9 @@ export interface MeteringVectorscopeRequest extends ValidateOptions {
 
 /** Request form of {@link meteringPhaseScope}. */
 export interface MeteringPhaseScopeRequest extends ValidateOptions {
+  /** Left channel samples. */
   left: Float32Array;
+  /** Right channel samples. */
   right: Float32Array;
   /** Sample rate of both channels in Hz. Required. */
   sampleRate: number;
@@ -427,6 +470,7 @@ export interface MeteringPhaseScopeRequest extends ValidateOptions {
 
 /** Request form of {@link meteringSpectrum}. */
 export interface MeteringSpectrumRequest extends SpectrumOptions {
+  /** Mono input samples. */
   samples: Float32Array;
   /** Sample rate of `samples` in Hz. Required. */
   sampleRate: number;
@@ -456,9 +500,13 @@ export interface WaveformPeakPyramidRequest extends ValidateOptions {
 
 /** Per-channel min/max waveform buckets: `min[c]` and `max[c]` hold `bucketCount` values for channel `c`. */
 export interface WaveformPeaksReport {
+  /** Per-channel bucket minima: `min[c]` holds `bucketCount` values. */
   min: Float32Array[];
+  /** Per-channel bucket maxima: `max[c]` holds `bucketCount` values. */
   max: Float32Array[];
+  /** Number of buckets per channel. */
   bucketCount: number;
+  /** Bucket width in samples. */
   samplesPerBucket: number;
 }
 

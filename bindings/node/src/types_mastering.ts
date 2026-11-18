@@ -109,6 +109,7 @@ export type MasteringPlatform =
   | 'club'
   | 'cd';
 
+/** One delivery target: its loudness target and true-peak ceiling. */
 export interface StreamingPlatform {
   /** Platform name, echoed into the reported result. */
   name: string;
@@ -7988,6 +7989,7 @@ export const MIX_SCENE_PRESETS = [
 export type MixScenePreset = (typeof MIX_SCENE_PRESETS)[number];
 // END GENERATED MixScenePreset
 
+/** Names of the processors that take a source and a reference. */
 export type PairProcessor =
   | 'match.applyMatchEq'
   | 'match.alignReferenceToSource'
@@ -7997,6 +7999,7 @@ export type PairProcessor =
 /** Pair processors with a stereo entry point. */
 export type StereoPairProcessor = 'match.abCrossfade';
 
+/** Names of the analyses that compare a source with a reference. */
 export type PairAnalysis =
   | 'match.referenceLoudness'
   | 'match.tonalBalance'
@@ -8004,79 +8007,114 @@ export type PairAnalysis =
   | 'match.matchEqCurve'
   | 'match.estimateReferenceDelaySamples';
 
+/** Names of the analyses of a stereo pair. */
 export type StereoAnalysis = 'stereo.monoCompatCheck' | 'stereo.monoCompatCheckLogBands';
 
 /** Loudness group of {@link MasteringAudioProfile}. */
 export interface MasteringAudioProfileLoudness {
+  /** Integrated loudness in LUFS. */
   integratedLufs: number;
   /** EBU Tech 3342 loudness range, in LU. */
   loudnessRangeLu: number;
   /** True peak, in dBTP. */
   truePeakDbtp: number;
+  /** Crest factor (peak over RMS level) in dB. */
   crestFactorDb: number;
 }
 
 /** Spectral group of {@link MasteringAudioProfile}; band levels (`*RmsDb`) are dBFS, mean square: a full-scale sine reads -3.01 dBFS in its band. */
 export interface MasteringAudioProfileSpectral {
+  /** Sub band level in dBFS. */
   subRmsDb: number;
+  /** Low band level in dBFS. */
   lowRmsDb: number;
+  /** Low-mid band level in dBFS. */
   lowMidRmsDb: number;
+  /** Mid band level in dBFS. */
   midRmsDb: number;
+  /** High-mid band level in dBFS. */
   highMidRmsDb: number;
+  /** High band level in dBFS. */
   highRmsDb: number;
+  /** Air band level in dBFS. */
   airRmsDb: number;
+  /** Spectral centroid in Hz. */
   centroidHz: number;
+  /** Spectral flatness of the input. */
   flatness: number;
+  /** Spectral rolloff frequency in Hz. */
   rolloffHz: number;
 }
 
 /** Dynamics group of {@link MasteringAudioProfile}. */
 export interface MasteringAudioProfileDynamics {
+  /** Standard deviation of the short-term loudness, in LU. */
   shortTermLufsStd: number;
   /** Onsets per second of the input. */
   attackPerSecond: number;
+  /** Sustain ratio of the input. */
   sustainRatio: number;
 }
 
 /** Noise reading of the audio profile. */
 export interface MasteringAudioProfileNoise {
+  /** Broadband estimated noise floor in dBFS. */
   floorDbfs: number;
+  /** Level of the strongest noise band in dBFS. */
   bandPeakDbfs: number;
+  /** Index of the strongest noise band. */
   bandPeakIndex: number;
 }
 
 /** Hum reading of the audio profile. */
 export interface MasteringAudioProfileHum {
+  /** Hum fundamental frequency in Hz. */
   fundamentalHz: number;
   /** Linear energy ratio of the winning hum candidate over the median candidate (not dB); 1.0 means no peak. */
   fundamentalProminence: number;
+  /** Number of hum harmonics above the floor. */
   harmonics: number;
+  /** Level of the hum fundamental in dBFS. */
   fundamentalDbfs: number;
+  /** Level of the strongest hum harmonic in dBFS. */
   peakHarmonicDbfs: number;
 }
 
 /** Reverb reading of the audio profile. */
 export interface MasteringAudioProfileReverb {
+  /** Decay across the late lag, in dB; less negative means the material sustains. */
   lateDecayRatioDb: number;
 }
 
 /** What the repair detectors measured, one record per detector. */
 export interface MasteringAudioProfileDefects {
+  /** Click detector reading. */
   click: ClickDetection;
+  /** Clipping detector reading. */
   clip: ClipDetection;
+  /** Crackle detector reading. */
   crackle: CrackleDetection;
+  /** Noise reading. */
   noise: MasteringAudioProfileNoise;
+  /** Hum reading. */
   hum: MasteringAudioProfileHum;
+  /** Reverb reading. */
   reverb: MasteringAudioProfileReverb;
 }
 
 /** What {@link masteringAudioProfile} and its stereo form return. */
 export interface MasteringAudioProfile {
+  /** Duration of the input in seconds. */
   durationSec: number;
+  /** Estimated tempo in beats per minute. */
   bpm: number;
+  /** Confidence of the tempo estimate. */
   bpmConfidence: number;
+  /** Loudness group of the profile. */
   loudness: MasteringAudioProfileLoudness;
+  /** Spectral group of the profile. */
   spectral: MasteringAudioProfileSpectral;
+  /** Dynamics group of the profile. */
   dynamics: MasteringAudioProfileDynamics;
   /** What the repair detectors measured; absent when `detectDefects` is false. */
   defects?: MasteringAudioProfileDefects;
@@ -8087,19 +8125,27 @@ export interface MasteringAudioProfile {
  * `MasteringAudioProfile`'s nested groups. A non-finite loudness is `null`.
  */
 export interface MasteringAssistantProfile {
+  /** Duration of the input in seconds. */
   durationSec: number;
+  /** Estimated tempo in beats per minute. */
   bpm: number;
+  /** Confidence of the tempo estimate. */
   bpmConfidence: number;
+  /** Integrated loudness in LUFS; `null` when non-finite. */
   integratedLufs: number | null;
   /** EBU Tech 3342 loudness range, in LU. */
   loudnessRangeLu: number;
   /** True peak, in dBTP. */
   truePeakDbtp: number;
+  /** Crest factor (peak over RMS level) in dB. */
   crestFactorDb: number;
+  /** Spectral centroid in Hz. */
   spectralCentroidHz: number;
+  /** Spectral flatness of the input. */
   spectralFlatness: number;
   /** Onsets per second of the input. */
   attackPerSecond: number;
+  /** Sustain ratio of the input. */
   sustainRatio: number;
 }
 
@@ -8109,11 +8155,13 @@ export interface MasteringAssistantResult {
   chainConfig: MasteringChainConfig;
   /** One line per decision the assistant made, in the order it made them. */
   explanation: string[];
+  /** Measurements the suggestion was derived from. */
   profile: MasteringAssistantProfile;
 }
 
 /** One delivery target in a {@link MasteringStreamingPreviewResult}. */
 export interface MasteringStreamingPreviewPlatform {
+  /** Platform name, echoed from the requested target. */
   name: string;
   /** `null` for a silent or below-gate take. */
   integratedLufs: number | null;
@@ -8127,83 +8175,119 @@ export interface MasteringStreamingPreviewPlatform {
 
 /** What {@link masteringStreamingPreview} and its stereo form return. */
 export interface MasteringStreamingPreviewResult {
+  /** One entry per delivery target. */
   platforms: MasteringStreamingPreviewPlatform[];
 }
 
 /** Result of the `match.referenceLoudness` pair analysis. A silent take reads `null`. */
 export interface MatchReferenceLoudnessResult {
+  /** Integrated loudness of the source in LUFS. */
   sourceLufs: number | null;
+  /** Integrated loudness of the reference in LUFS. */
   referenceLufs: number | null;
+  /** Gain in dB that brings the source to the reference loudness. */
   gainToMatchDb: number | null;
 }
 
 /** One band of the `match.tonalBalance` and `match.tonalBalanceLogBands` analyses. */
 export interface MatchTonalBalanceBand {
+  /** Lower band edge in Hz. */
   lowHz: number;
+  /** Upper band edge in Hz. */
   highHz: number;
+  /** Source level in the band, in dB. */
   sourceDb: number;
+  /** Reference level in the band, in dB. */
   referenceDb: number;
+  /** Source level minus reference level in dB. */
   deviationDb: number;
 }
 
 /** Result of the `match.tonalBalance` pair analysis. */
 export interface MatchTonalBalanceResult {
+  /** Per-band readings. */
   bands: MatchTonalBalanceBand[];
 }
 
 /** Result of the `match.matchEqCurve` pair analysis: `gainDb[i]` is the gain at `frequencies[i]`. */
 export interface MatchEqCurveResult {
+  /** Frequencies in Hz. */
   frequencies: number[];
+  /** Gain in dB at each frequency. */
   gainDb: number[];
 }
 
 /** Result of the `match.estimateReferenceDelaySamples` pair analysis. */
 export interface MatchEstimateReferenceDelaySamplesResult {
+  /** Estimated delay of the reference relative to the source, in samples. */
   delaySamples: number;
 }
 
 /** What each {@link PairAnalysis} name returns. */
 export interface PairAnalysisResultMap {
+  /** Loudness of source and reference and the gain that matches them. */
   'match.referenceLoudness': MatchReferenceLoudnessResult;
+  /** Per-band level comparison on linear bands. */
   'match.tonalBalance': MatchTonalBalanceResult;
+  /** Per-band level comparison on logarithmic bands. */
   'match.tonalBalanceLogBands': MatchTonalBalanceResult;
+  /** Gain-versus-frequency curve that matches the source tonal balance to the reference. */
   'match.matchEqCurve': MatchEqCurveResult;
+  /** Delay of the reference relative to the source, in samples. */
   'match.estimateReferenceDelaySamples': MatchEstimateReferenceDelaySamplesResult;
 }
 
 /** Result of the `stereo.monoCompatCheck` analysis. `width` is `null` for a fully out-of-phase pair. */
 export interface StereoMonoCompatCheckResult {
+  /** Inter-channel correlation (-1 to 1). */
   correlation: number;
+  /** Stereo width; `null` for a fully out-of-phase pair. */
   width: number | null;
+  /** Peak of the mono fold-down. */
   monoPeak: number;
+  /** RMS level of the side signal. */
   sideRms: number;
+  /** True when the pair is likely to survive a mono fold-down. */
   likelyMonoCompatible: boolean;
 }
 
 /** One band of the `stereo.monoCompatCheckLogBands` analysis. */
 export interface StereoMonoCompatBand {
+  /** Lower band edge in Hz. */
   lowHz: number;
+  /** Upper band edge in Hz. */
   highHz: number;
+  /** Inter-channel correlation (-1 to 1). */
   correlation: number;
+  /** RMS level of the side signal. */
   sideRms: number;
 }
 
 /** Result of the `stereo.monoCompatCheckLogBands` analysis. */
 export interface StereoMonoCompatCheckLogBandsResult {
+  /** Per-band readings. */
   bands: StereoMonoCompatBand[];
 }
 
 /** What each {@link StereoAnalysis} name returns. */
 export interface StereoAnalysisResultMap {
+  /** Mono-compatibility reading of the whole pair. */
   'stereo.monoCompatCheck': StereoMonoCompatCheckResult;
+  /** Mono-compatibility reading per logarithmic band. */
   'stereo.monoCompatCheckLogBands': StereoMonoCompatCheckLogBandsResult;
 }
 
+/** Result of a single mono mastering processor. */
 export interface MasteringResult {
+  /** Processed mono samples. */
   samples: Float32Array;
+  /** Sample rate of the returned audio in Hz. */
   sampleRate: number;
+  /** Integrated loudness of the input in LUFS. */
   inputLufs: number;
+  /** Integrated loudness of the output in LUFS. */
   outputLufs: number;
+  /** Gain applied, in dB. */
   appliedGainDb: number;
   /** True when peak headroom prevented the requested LUFS target. */
   loudnessTargetLimited?: boolean;
@@ -8248,12 +8332,19 @@ export interface MasteringNormalizeLoudnessResult extends MasteringResult {
   loudnessTargetLimited: boolean;
 }
 
+/** Result of a single stereo mastering processor. */
 export interface MasteringStereoResult {
+  /** Left channel of the processed audio. */
   left: Float32Array;
+  /** Right channel of the processed audio. */
   right: Float32Array;
+  /** Sample rate of the returned audio in Hz. */
   sampleRate: number;
+  /** Integrated loudness of the input in LUFS. */
   inputLufs: number;
+  /** Integrated loudness of the output in LUFS. */
   outputLufs: number;
+  /** Gain applied, in dB. */
   appliedGainDb: number;
   /**
    * The processor's own latency, already compensated in the returned audio;
@@ -8292,6 +8383,7 @@ export interface StreamingLoudnessGainResult {
 export interface LoudnessMatchResult {
   /** The source, gain-matched to the reference's integrated loudness. */
   samples: Float32Array;
+  /** Sample rate of the returned audio in Hz. */
   sampleRate: number;
   /**
    * The reference's BS.1770 integrated loudness. Non-finite for a silent or
@@ -8319,6 +8411,7 @@ export interface LoudnessMatchStereoResult {
   left: Float32Array;
   /** The right source channel, gain-matched with the same gain as `left`. */
   right: Float32Array;
+  /** Sample rate of the returned audio in Hz. */
   sampleRate: number;
   /** The reference program's BS.1770 integrated loudness. */
   referenceLufs: number;
@@ -8336,19 +8429,27 @@ export interface LoudnessMatchStereoResult {
  * that band, or the compressor default for a band the crossover adds.
  */
 export interface MultibandCompressorBand {
+  /** Threshold in dB. */
   thresholdDb?: number;
+  /** Compression ratio. */
   ratio?: number;
   /** Attack in ms: one time constant, about 63% of the way at the set time. */
   attackMs?: number;
   /** Release in ms: one time constant, about 63% of the way at the set time. */
   releaseMs?: number;
+  /** Knee width in dB. */
   kneeDb?: number;
+  /** Makeup gain in dB. */
   makeupGainDb?: number;
+  /** Derive the makeup gain automatically. */
   autoMakeup?: boolean;
+  /** Level detector: `'peak'`, `'rms'` or `'logRms'`. */
   detector?: CompressorDetector;
   /** Sidechain high-pass corner in Hz, greater than 0; absent = no high-pass. */
   sidechainHighPassHz?: number;
+  /** Program-dependent release time in ms. Default `0`. */
   pdrTimeMs?: number;
+  /** Program-dependent release multiplier. Default `1`. */
   pdrReleaseScale?: number;
 }
 
@@ -8374,6 +8475,7 @@ export interface MultibandCompressorBand {
  * effect; use `saturation: { tape: { enabled: true, driveDb: 6 } }`.
  */
 export interface MasteringChainConfig {
+  /** Repair modules (denoise, declip, decrackle, dehum, declick, dereverb). */
   repair?: {
     denoise?: {
       enabled?: boolean;
@@ -8441,6 +8543,7 @@ export interface MasteringChainConfig {
       wpeStrength?: number;
     };
   };
+  /** EQ modules. */
   eq?: {
     tilt?: {
       enabled?: boolean;
@@ -8448,6 +8551,7 @@ export interface MasteringChainConfig {
       pivotHz?: number;
     };
   };
+  /** Dynamics modules (compressor, deesser, transientShaper, multibandComp). */
   dynamics?: {
     compressor?: {
       enabled?: boolean;
@@ -8531,6 +8635,7 @@ export interface MasteringChainConfig {
       bands?: MultibandCompressorBand[];
     };
   };
+  /** Saturation modules (tape, exciter). */
   saturation?: {
     tape?: {
       enabled?: boolean;
@@ -8561,6 +8666,7 @@ export interface MasteringChainConfig {
       aliasing?: number;
     };
   };
+  /** Spectral modules (airBand). */
   spectral?: {
     airBand?: {
       enabled?: boolean;
@@ -8570,6 +8676,7 @@ export interface MasteringChainConfig {
       dynamicRangeDb?: number;
     };
   };
+  /** Stereo modules (imager, monoMaker); applied on the stereo path only. */
   stereo?: {
     imager?: {
       enabled?: boolean;
@@ -8584,6 +8691,7 @@ export interface MasteringChainConfig {
       frequencyHz?: number;
     };
   };
+  /** Maximizer modules (true-peak limiter). */
   maximizer?: {
     truePeakLimiter?: {
       enabled?: boolean;
@@ -8595,6 +8703,7 @@ export interface MasteringChainConfig {
       applyGainAtInputRate?: boolean;
     };
   };
+  /** Loudness stage: integrated-loudness target and true-peak ceiling. */
   loudness?: {
     enabled?: boolean;
     targetLufs?: number;
@@ -8628,9 +8737,13 @@ export interface StageGainReduction {
 
 /** Existing EBU R128 measurements captured before or after mastering. */
 export interface MasteringLoudnessSummary {
+  /** Integrated loudness in LUFS. */
   integratedLufs: number;
+  /** Maximum momentary loudness in LUFS. */
   maxMomentaryLufs: number;
+  /** Maximum short-term loudness in LUFS. */
   maxShortTermLufs: number;
+  /** True peak in dBTP. */
   truePeakDbtp: number;
   /** EBU Tech 3342 loudness range, in LU. */
   loudnessRangeLu: number;
@@ -8638,23 +8751,33 @@ export interface MasteringLoudnessSummary {
 
 /** Compact explanation of how an offline mastering chain changed a program. */
 export interface MasteringReport {
+  /** Measurements of the input. */
   before: MasteringLoudnessSummary;
+  /** Measurements of the output. */
   after: MasteringLoudnessSummary;
+  /** Gain applied by the chain, in dB. */
   appliedGainDb: number;
   /** Most-negative final dynamics/limiter gain reduction, or zero when none ran. */
   maxGainReductionDb: number;
+  /** True when peak headroom prevented the requested LUFS target. */
   loudnessTargetLimited: boolean;
   /** 32 logarithmically-spaced after-minus-before spectral energy deltas (dB). */
   bandEnergyDeltaDb: Float32Array;
 }
 
+/** Result of the offline mastering chain on a mono signal. */
 export interface MasteringChainResult {
   /** Latency-compensated offline output; no separate latency field is reported. */
   samples: Float32Array;
+  /** Sample rate of the returned audio in Hz. */
   sampleRate: number;
+  /** Integrated loudness of the input in LUFS. */
   inputLufs: number;
+  /** Integrated loudness of the output in LUFS. */
   outputLufs: number;
+  /** Gain applied by the loudness stage, in dB. */
   appliedGainDb: number;
+  /** Names of the stages that ran, in order. */
   stages: string[];
   /**
    * ITU-R BS.1770-4 true peak of the output (dBTP). Lets callers verify a
@@ -8694,23 +8817,36 @@ export interface MasteringChainResult {
   nonFiniteSubstitutionCount: number;
   /** Per-stage gain reductions for the dynamics/maximizer stages (a subset of `stages`). */
   stageGainReductions: StageGainReduction[];
+  /** Before/after measurements of the run. */
   report: MasteringReport;
 }
 
+/** Result of the offline mastering chain on a stereo signal. */
 export interface MasteringChainStereoResult {
+  /** Left channel of the mastered audio. */
   left: Float32Array;
+  /** Right channel of the mastered audio. */
   right: Float32Array;
+  /** Sample rate of the returned audio in Hz. */
   sampleRate: number;
+  /** Integrated loudness of the input in LUFS. */
   inputLufs: number;
+  /** Integrated loudness of the output in LUFS. */
   outputLufs: number;
+  /** Gain applied by the loudness stage, in dB. */
   appliedGainDb: number;
+  /** Names of the stages that ran, in order. */
   stages: string[];
   /** See {@link MasteringChainResult} for field semantics. */
   outputTruePeakDbtp: number;
+  /** EBU Tech 3342 loudness range of the output, in LU. */
   outputLoudnessRangeLu: number;
+  /** True when peak headroom prevented the requested LUFS target. */
   loudnessTargetLimited: boolean;
   /** See {@link MasteringChainResult} for field semantics. Aggregated over both channels. */
   nonFiniteSubstitutionCount: number;
+  /** Per-stage gain reductions for the dynamics/maximizer stages (a subset of `stages`). */
   stageGainReductions: StageGainReduction[];
+  /** Before/after measurements of the run. */
   report: MasteringReport;
 }

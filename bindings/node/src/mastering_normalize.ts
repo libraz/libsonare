@@ -2,10 +2,12 @@ import { addon } from './native.js';
 import type { OptionsOf, ValidateOptions } from './validation.js';
 import { assertAudioInput, requestObject, sampleOneShot } from './validation.js';
 
+/** Level statistic `normalize` targets: `'peak'` or `'rms'`. */
 export type NormalizeMode = 'peak' | 'rms';
 
 /** Request for {@link normalize}. `validate: false` skips the NaN/Inf pre-scan. */
 export interface NormalizeRequest extends ValidateOptions {
+  /** Mono input samples. */
   samples: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
@@ -58,7 +60,9 @@ function resolveNormalizeMode(fnName: string, value: unknown): NormalizeMode {
 
 /** Canonical request form for {@link normalizeStereo}. */
 export interface NormalizeStereoRequest extends ValidateOptions {
+  /** Left channel samples. */
   left: Float32Array;
+  /** Right channel samples. */
   right: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
@@ -73,7 +77,9 @@ export interface NormalizeStereoRequest extends ValidateOptions {
 
 /** A normalized channel pair and the one gain that produced it. */
 export interface NormalizeStereoResult {
+  /** Normalized left channel. */
   left: Float32Array;
+  /** Normalized right channel. */
   right: Float32Array;
   /**
    * The gain both channels were given, in dB. One figure rather than a pair

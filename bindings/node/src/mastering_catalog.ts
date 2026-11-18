@@ -17,6 +17,7 @@ import type {
 } from './types.js';
 import { assertClosedToken, assertSampleRate, requestOnly } from './validation.js';
 
+/** Names of the built-in mastering presets. */
 export function masteringPresetNames(): MasteringPreset[] {
   return addon.masteringPresetNames();
 }
@@ -42,18 +43,22 @@ export function masteringPlatformNames(): MasteringPlatform[] {
   return addon.masteringPlatformNames();
 }
 
+/** Names of the processors `masteringApplyProcessor` accepts. */
 export function masteringProcessorNames(): SoloProcessor[] {
   return addon.masteringProcessorNames();
 }
 
+/** Names of the pair processors `masteringApplyPairProcessor` accepts. */
 export function masteringPairProcessorNames(): PairProcessor[] {
   return addon.masteringPairProcessorNames();
 }
 
+/** Names of the pair analyses `masteringAnalyzePair` accepts. */
 export function masteringPairAnalysisNames(): PairAnalysis[] {
   return addon.masteringPairAnalysisNames();
 }
 
+/** Names of the stereo analyses `masteringAnalyzeStereo` accepts. */
 export function masteringStereoAnalysisNames(): StereoAnalysis[] {
   return addon.masteringStereoAnalysisNames();
 }
@@ -101,6 +106,7 @@ export interface MasteringInsertParamInfoRequest {
 export interface MasteringInsertTimingRequest<N extends MasteringInsertName = MasteringInsertName> {
   /** Insert processor name (see {@link masteringInsertNames}). */
   insert: N;
+  /** Parameters of the insert. */
   params?: MasteringProcessorParams<N>;
   /** Rate the insert is prepared at, in Hz; there is no default. */
   sampleRate: number;
