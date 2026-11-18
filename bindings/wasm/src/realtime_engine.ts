@@ -1581,6 +1581,11 @@ export class RealtimeEngine {
     return this.native.graphLatencySamplesQ8() / 256;
   }
 
+  /** Largest block a process call accepts, as the native side resolved it (the library default when `maxBlockSize` was omitted); 0 before the engine is prepared. */
+  get maxBlockSize(): number {
+    return this.native.maxBlockSize();
+  }
+
   /** Snap only insert automation slots after structural replay. */
   settleInsertParameters(): void {
     this.native.settleInsertParameters();

@@ -779,6 +779,11 @@ export class RealtimeEngine {
     return this.native.graphLatencySamplesQ8() / LATENCY_Q8_SCALE;
   }
 
+  /** Largest block a process call accepts, as the native side resolved it (the library default when `maxBlockSize` was omitted); 0 before the engine is prepared. */
+  get maxBlockSize(): number {
+    return this.native.maxBlockSize();
+  }
+
   /**
    * Applies commands queued on an offline/control-only engine immediately.
    * A host that never calls {@link process} still queues onto a bounded

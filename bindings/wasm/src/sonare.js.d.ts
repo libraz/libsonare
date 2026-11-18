@@ -1472,6 +1472,7 @@ export interface WasmRealtimeEngine {
   primeOfflineParameters: (numChannels: number, blockSize: number | undefined) => void;
   resetProcessorState: (renderFrame?: number) => void;
   tailSamples: () => number;
+  maxBlockSize: () => number;
   graphLatencySamplesQ8: () => number;
   settleInsertParameters: () => void;
   flushControlCommands: () => void;

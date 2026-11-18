@@ -991,3 +991,32 @@ describe('RealtimeEngine native binding', () => {
     engine.destroy();
   });
 });
+
+describe('RealtimeEngine maxBlockSize', () => {
+  it('reports the library default block size when maxBlockSize is omitted', () => {
+    const engine = new RealtimeEngine({ sampleRate: 48000 });
+    // The audio-thread entry point does not throw: a block over the bound is
+    // silenced and reported through telemetry.
+    const exceeded = (frames: number): number => {
+      engine.process([new Float32Array(frames), new Float32Array(frames)]);
+      return engine.drainTelemetry().filter((record) => record.error === 'maxBlockExceeded').length;
+    };
+    try {
+      const max = engine.maxBlockSize;
+      expect(max).toBeGreaterThan(0);
+      expect(exceeded(max)).toBe(0);
+      expect(exceeded(max + 1)).toBe(1);
+    } finally {
+      engine.destroy();
+    }
+  });
+
+  it('reports the given block size', () => {
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 256 });
+    try {
+      expect(engine.maxBlockSize).toBe(256);
+    } finally {
+      engine.destroy();
+    }
+  });
+});
