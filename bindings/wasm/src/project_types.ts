@@ -362,7 +362,10 @@ export interface ProjectAutomationPoint {
   curveToNext?: ProjectAutomationCurve;
 }
 
-/** Persistent target classification for an automation lane. */
+/**
+ * Persistent target classification for an automation lane: a typed lane
+ * drives its track's fader or pan; an `'opaque'` lane drives the exact `targetParamId` it carries — a host-registered engine parameter, a graph-node parameter binding or strip width (3) — and a reserved mixer, insert or instrument id is refused.
+ */
 export type ProjectAutomationTargetKind = 'opaque' | 'trackFaderDb' | 'trackPan';
 
 /** Automation-lane descriptor for {@link Project.addAutomationLane}. */
@@ -371,7 +374,10 @@ export interface ProjectAutomationLaneDesc {
   targetParamId: number;
   /** Breakpoints (stored verbatim). */
   points: ReadonlyArray<ProjectAutomationPoint>;
-  /** Persistent target classification; omit for `'opaque'`. */
+  /**
+   * Persistent target classification. On add, omitted is `'opaque'`; on edit,
+   * omitted keeps the lane's current kind.
+   */
   targetKind?: ProjectAutomationTargetKind;
 }
 

@@ -663,7 +663,10 @@ export type ProjectFadeCurve = 'linear' | 'equalPower' | 'exponential' | 'logari
 /** Whether a clip loops. */
 export type ProjectLoopMode = 'off' | 'loop';
 
-/** Persistent target classification for a project automation lane. */
+/**
+ * Persistent target classification for a project automation lane: a typed
+ * lane drives its track's fader or pan; an `'opaque'` lane drives the exact `targetParamId` it carries — a host-registered engine parameter, a graph-node parameter binding or strip width (3) — and a reserved mixer, insert or instrument id is refused.
+ */
 export type ProjectAutomationTargetKind = 'opaque' | 'trackFaderDb' | 'trackPan';
 
 /**
@@ -802,8 +805,8 @@ export interface ProjectAutomationLaneDesc {
   /** Host-defined, non-zero target parameter id the lane drives (zero is reserved). */
   targetParamId: number;
   /**
-   * Optional persistent target classification. Omit for the legacy opaque lane
-   * form; typed values are serialized in project schema version 2.
+   * Persistent target classification. On add, omitted is `'opaque'`; on edit,
+   * omitted keeps the lane's current kind.
    */
   targetKind?: ProjectAutomationTargetKind;
   /** Breakpoints (stored verbatim; need not be pre-sorted). */

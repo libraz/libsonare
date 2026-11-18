@@ -1076,8 +1076,8 @@ export class Project {
 
   /**
    * Append an automation lane to a track via an undoable edit; returns the
-   * lane's stable target parameter id. Omit `desc.targetKind` for the legacy
-   * opaque target; supply it to persist a typed fader or pan target.
+   * lane's stable target parameter id. An omitted `desc.targetKind` adds an
+   * `'opaque'` lane; supply it to persist a typed fader or pan target.
    */
   addAutomationLane(trackId: number, desc: ProjectAutomationLaneDesc): number {
     return this.native.addAutomationLane(
@@ -1087,9 +1087,8 @@ export class Project {
   }
 
   /**
-   * Replace the lane identified by its stable target parameter id. Omitting
-   * `desc.targetKind` preserves the existing lane kind through the legacy C
-   * edit path; supplying it applies the typed target through the extended path.
+   * Replace the lane identified by its stable target parameter id. An omitted
+   * `desc.targetKind` keeps the lane's current kind; a supplied one replaces it.
    */
   editAutomationLane(
     trackId: number,
