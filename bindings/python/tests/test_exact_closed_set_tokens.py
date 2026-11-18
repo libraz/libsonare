@@ -14,6 +14,18 @@ import pytest
 
 import libsonare
 from libsonare import SonareValueError
+from libsonare._project_instruments import _synth_waveform_value
+from libsonare._project_synth import (
+    _articulation_value,
+    _controller_axis_value,
+    _controller_input_value,
+    _mpe_dimension_value,
+    _note_tracking_value,
+    _part_rig_mode_value,
+    _sample_desc_loop_value,
+    _sample_key_track_value,
+    _sample_loop_value,
+)
 from libsonare._runtime import (
     _channel_layout_value,
     _curve_value,
@@ -120,3 +132,50 @@ def test_a_voice_changer_enum_ordinal_is_a_type_error(field: str) -> None:
     base = libsonare.realtime_voice_changer_preset_config("neutralMonitor")
     with libsonare.RealtimeVoiceChanger(SR) as changer, pytest.raises(TypeError, match=field):
         changer.set_config_pod(dataclasses.replace(base, **{field: 1}))
+
+
+# (public Literal, resolver, {token: C value}); the SF2 loop modes skip 2 and "sawtooth" is "saw".
+SYNTH_SETS = [
+    (
+        "SampleLoopMode",
+        _sample_loop_value,
+        {"default": 0, "none": 1, "continuous": 2, "keyDown": 3},
+    ),
+    ("SampleKeyTrack", _sample_key_track_value, {"default": 0, "on": 1, "off": 2}),
+    ("SampleDescLoopMode", _sample_desc_loop_value, {"none": 0, "continuous": 1, "keyDown": 3}),
+    (
+        "SynthWaveform",
+        _synth_waveform_value,
+        {"sine": 0, "saw": 1, "sawtooth": 1, "square": 2, "triangle": 3},
+    ),
+    (
+        "ControllerInput",
+        _controller_input_value,
+        {
+            "controlChange": 0,
+            "channelPressure": 1,
+            "polyPressure": 2,
+            "pitchBend": 3,
+            "velocity": 4,
+        },
+    ),
+    ("ControllerAxis", _controller_axis_value, None),
+    ("Articulation", _articulation_value, {"poly": 0, "monoRetrigger": 1, "monoLegato": 2}),
+    ("MpeDimension", _mpe_dimension_value, {"bend": 0, "pressure": 1, "timbre": 2}),
+    ("NoteTracking", _note_tracking_value, {"last": 0, "lowest": 1, "highest": 2, "all": 3}),
+    ("PartRigMode", _part_rig_mode_value, {"bank": 0, "none": 1, "chain": 2}),
+]
+
+
+@pytest.mark.parametrize(("name", "resolve", "values"), SYNTH_SETS, ids=[s[0] for s in SYNTH_SETS])
+def test_the_synth_closed_sets_take_exact_tokens(name: str, resolve, values: dict | None) -> None:
+    tokens = get_args(getattr(libsonare, name))
+    if values is None:
+        values = {token: ordinal for ordinal, token in enumerate(tokens)}
+    assert tokens == tuple(values)
+    assert {token: resolve(token) for token in tokens} == values
+    with pytest.raises(SonareValueError, match=tokens[-1]):
+        resolve(tokens[-1].upper())
+    for number in (0, 1, True):
+        with pytest.raises(TypeError):
+            resolve(number)

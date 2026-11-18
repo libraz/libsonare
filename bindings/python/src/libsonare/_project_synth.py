@@ -14,15 +14,14 @@ import contextlib
 import ctypes
 import json
 from collections.abc import Mapping, Sequence
+from typing import Literal, cast, get_args
 
 import numpy as np
 
-from ._errors import _not_supported, _require_open
+from ._errors import _not_supported, _require_open, _unknown_error
 from ._ffi_types_mastering_project import SonareSampleDesc, SonareSampleZoneDesc
 from ._narrowing import _is_number, _narrow_double
 from ._runtime import (
-    _C_INT_MAX,
-    _C_INT_MIN,
     _UINT8_MAX,
     _UINT32_MAX,
     ErrorCode,
@@ -31,10 +30,10 @@ from ._runtime import (
     _get_lib,
     _joined_names,
     _last_error,
-    _narrow_int,
     _to_c_float_array,
     _to_c_int,
     _to_c_size_t,
+    _token_arg,
     _utf8_arg,
     _validate_samples,
 )
@@ -103,21 +102,19 @@ _SAMPLE_DESC_LOOP_MODES = {
     "keyDown": 3,
 }
 # SonarePartRigMode.
-PART_RIG_MODES = {"bank": 0, "none": 1, "chain": 2}
+_PART_RIG_MODES = {"bank": 0, "none": 1, "chain": 2}
 # SONARE_PART_RIG_ALL_PARTS: every part of a destination.
 PART_RIG_ALL_PARTS = 0xFF
 
 
-def _part_rig_mode_value(mode: str | int) -> int:
-    """Resolve a part-rig mode name (or its ordinal) to the C value."""
-    if isinstance(mode, str):
-        try:
-            return PART_RIG_MODES[mode]
-        except KeyError:
-            raise SonareValueError(
-                f"unknown part rig mode {mode!r}; expected one of {sorted(PART_RIG_MODES)}"
-            ) from None
-    return _narrow_int(mode, "mode", _C_INT_MIN, _C_INT_MAX)
+def _part_rig_mode_value(mode: PartRigMode) -> int:
+    """Resolve a part-rig mode token to the C value."""
+    return _PART_RIG_MODES[_token_arg(mode, PART_RIG_MODES, "part rig mode")]
+
+
+def _part_rig_mode_name(value: int) -> PartRigMode:
+    """Spell a C part-rig mode ordinal."""
+    return cast(PartRigMode, _synth_enum_name(value, _PART_RIG_MODES))
 
 
 def _part_rig_inserts_arg(
@@ -250,6 +247,135 @@ _NOTE_TRACKINGS = {
     "highest": 2,
     "all": 3,
 }
+SynthEngineMode = Literal[
+    "default",
+    "subtractive",
+    "fm",
+    "karplusStrong",
+    "modal",
+    "additive",
+    "percussion",
+    "piano",
+    "pipeOrgan",
+    "bowedString",
+    "reed",
+    "brass",
+    "flute",
+    "pluckedString",
+    "vocal",
+    "freeReed",
+    "harpsichord",
+    "sample",
+    "singing",
+]
+"""NativeSynth engine mode; ``"default"`` keeps the preset's."""
+
+SynthOscWaveform = Literal["default", "sine", "saw", "square", "triangle", "noise"]
+"""NativeSynth oscillator waveform; ``"default"`` keeps the preset's."""
+
+SynthWaveform = Literal["sine", "saw", "sawtooth", "square", "triangle"]
+"""Built-in synth waveform; ``"sawtooth"`` is ``"saw"``."""
+
+SynthFilterModel = Literal[
+    "default",
+    "svf",
+    "transistorLadder",
+    "diodeLadder",
+    "sallenKey",
+    "svf4Pole",
+]
+"""NativeSynth filter model."""
+
+SynthFilterOutput = Literal["default", "lowpass", "bandpass", "highpass"]
+"""NativeSynth filter output tap."""
+
+SynthBodyType = Literal["default", "none", "guitar", "violin", "woodTube", "brassBell", "vocal"]
+"""NativeSynth body resonator."""
+
+SampleLoopMode = Literal["default", "none", "continuous", "keyDown"]
+"""A sample patch's loop override; ``"default"`` keeps the bank's."""
+
+SampleKeyTrack = Literal["default", "on", "off"]
+"""A sample patch's key-track override; ``"default"`` keeps the bank's."""
+
+SynthRetrigger = Literal["default", "free", "note"]
+"""NativeSynth envelope retrigger mode."""
+
+SynthLfoShape = Literal["default", "triangle", "sine", "random"]
+"""NativeSynth LFO shape."""
+
+SampleDescLoopMode = Literal["none", "continuous", "keyDown"]
+"""A bank sample's own looping (SoundFont ``sampleModes``)."""
+
+SynthModSource = Literal[
+    "none",
+    "ampEnv",
+    "filterEnv",
+    "lfo1",
+    "lfo2",
+    "velocity",
+    "keyTrack",
+    "modWheel",
+    "random",
+    "breath",
+    "aftertouch",
+    "expressionCc",
+    "pitchBend",
+]
+"""NativeSynth modulation source."""
+
+SynthModDestination = Literal[
+    "none",
+    "pitchCents",
+    "cutoffCents",
+    "ampGain",
+    "panUnits",
+    "resonanceQ",
+    "vibratoDepthCents",
+    "filterEnvDepth",
+    "lfo1RateScale",
+    "excitationForce",
+    "excitationPosition",
+    "excitationBrightness",
+    "spectrumMorph",
+]
+"""NativeSynth modulation destination."""
+
+ControllerInput = Literal[
+    "controlChange",
+    "channelPressure",
+    "polyPressure",
+    "pitchBend",
+    "velocity",
+]
+"""How a controller binding's device spells the gesture."""
+
+ControllerAxis = Literal[
+    "none",
+    "excitation",
+    "position",
+    "brightness",
+    "morph",
+    "loudness",
+    "pitchCents",
+    "vibratoDepth",
+]
+"""The instrument axis a controller binding drives."""
+
+Articulation = Literal["poly", "monoRetrigger", "monoLegato"]
+"""What a channel does with a note-on while another note is held."""
+
+MpeDimension = Literal["bend", "pressure", "timbre"]
+"""A per-note MPE dimension."""
+
+NoteTracking = Literal["last", "lowest", "highest", "all"]
+"""Which held note a channel-wide controller value follows."""
+
+PartRigMode = Literal["bank", "none", "chain"]
+"""Which rig a part of a destination's instrument plays through."""
+PART_RIG_MODES: tuple[str, ...] = get_args(PartRigMode)
+
+
 SYNTH_ENUM_TABLES = {
     "engine_modes": tuple(_SYNTH_ENGINE_MODES),
     "waveforms": tuple(_SYNTH_OSC_WAVEFORMS),
@@ -268,7 +394,7 @@ SYNTH_ENUM_TABLES = {
     "sample_key_tracks": tuple(_SAMPLE_KEY_TRACKS),
     "retriggers": tuple(_SYNTH_RETRIGGERS),
     "lfo_shapes": tuple(_SYNTH_LFO_SHAPES),
-    "part_rig_modes": tuple(PART_RIG_MODES),
+    "part_rig_modes": PART_RIG_MODES,
     "sample_desc_loop_modes": tuple(_SAMPLE_DESC_LOOP_MODES),
 }
 _SYNTH_ENUM_KINDS = {
@@ -306,73 +432,65 @@ def synth_enum_tables() -> dict[str, tuple[str, ...]]:
     return out
 
 
-def _synth_enum_name(value: int, names: Mapping[str, int]) -> str | int:
+def _synth_enum_name(value: int, names: Mapping[str, int]) -> str:
+    """Spell a C enum ordinal the library returned; one this binding cannot name is a defect."""
     for name, ordinal in names.items():
         if ordinal == value:
             return name
-    return value
+    raise _unknown_error(f"libsonare returned an enum ordinal this binding does not know: {value}")
 
 
 def _strip_va_prefix(name: str) -> str:
     return name[3:] if name.startswith("va:") else name
 
 
-def _sample_loop_value(mode: str | int) -> int:
+def _sample_loop_value(mode: SampleLoopMode) -> int:
     """Resolve a :class:`SynthPatch` sample loop override to its C ordinal."""
     return _synth_enum_value(mode, _SAMPLE_LOOP_MODES, "sample loop mode")
 
 
-def _sample_key_track_value(value: str | int) -> int:
+def _sample_key_track_value(value: SampleKeyTrack) -> int:
     """Resolve a :class:`SynthPatch` sample key-track override to its C ordinal."""
     return _synth_enum_value(value, _SAMPLE_KEY_TRACKS, "sample key track")
 
 
-def _controller_input_value(value: str | int) -> int:
+def _controller_input_value(value: ControllerInput) -> int:
     """Resolve a controller-profile input spelling to its C ordinal."""
     return _synth_enum_value(value, _CONTROLLER_INPUTS, "controller input")
 
 
-def _controller_axis_value(value: str | int) -> int:
+def _controller_axis_value(value: ControllerAxis) -> int:
     """Resolve a controller-profile axis spelling to its C ordinal."""
     return _synth_enum_value(value, _CONTROLLER_AXES, "controller axis")
 
 
-def _articulation_value(value: str | int) -> int:
+def _articulation_value(value: Articulation) -> int:
     """Resolve an articulation spelling to its C ordinal."""
     return _synth_enum_value(value, _ARTICULATIONS, "articulation")
 
 
-def _articulation_name(value: int) -> str | int:
-    """Spell a C articulation ordinal, or return it unchanged if unknown."""
-    return _synth_enum_name(value, _ARTICULATIONS)
+def _articulation_name(value: int) -> Articulation:
+    """Spell a C articulation ordinal."""
+    return cast(Articulation, _synth_enum_name(value, _ARTICULATIONS))
 
 
-def _mpe_dimension_value(value: str | int) -> int:
+def _mpe_dimension_value(value: MpeDimension) -> int:
     """Resolve an MPE dimension spelling to its C ordinal."""
     return _synth_enum_value(value, _MPE_DIMENSIONS, "MPE dimension")
 
 
-def _note_tracking_value(value: str | int) -> int:
+def _note_tracking_value(value: NoteTracking) -> int:
     """Resolve a note-tracking spelling to its C ordinal."""
     return _synth_enum_value(value, _NOTE_TRACKINGS, "note tracking")
 
 
-def _note_tracking_name(value: int) -> str | int:
-    """Spell a C note-tracking ordinal, or return it unchanged if unknown."""
-    return _synth_enum_name(value, _NOTE_TRACKINGS)
+def _note_tracking_name(value: int) -> NoteTracking:
+    """Spell a C note-tracking ordinal."""
+    return cast(NoteTracking, _synth_enum_name(value, _NOTE_TRACKINGS))
 
 
-def _sample_desc_loop_value(mode: str | int) -> int:
-    """Resolve a sample's own loop mode to its SF2 ``sampleModes`` value.
-
-    Bounded by the field's own domain rather than by the spellings below: an
-    SF2 zone carries any of the four, and the core reads anything but 1 or 3 as
-    unlooped. That makes the reserved 2 a documented alternative rather than the
-    silent substitution an out-of-domain value would get.
-    """
-    # sampleModes is two bits wide; 2 is reserved and means no loop.
-    if isinstance(mode, int) and not isinstance(mode, bool) and 0 <= mode <= 3:
-        return mode
+def _sample_desc_loop_value(mode: SampleDescLoopMode) -> int:
+    """Resolve a sample's own loop mode token to its SF2 ``sampleModes`` value."""
     return _synth_enum_value(mode, _SAMPLE_DESC_LOOP_MODES, "sample loop mode")
 
 
@@ -477,7 +595,7 @@ class SampleBank:
         source_rate: float = 0.0,
         loop_start: int = 0,
         loop_end: int = 0,
-        loop_mode: str | int = 0,
+        loop_mode: SampleDescLoopMode = "none",
     ) -> int:
         """Copy mono float frames into the bank and return the new sample's index.
 
@@ -495,9 +613,10 @@ class SampleBank:
                 clamped into it, and a loop that survives the clamp empty is
                 dropped, so a malformed loop plays as an unlooped sample rather
                 than as a wrap over nothing.
-            loop_mode: The sample's own looping, in SoundFont ``sampleModes``
-                values: ``"none"`` (0), ``"continuous"`` (1) or ``"keyDown"``
-                (3). :attr:`SynthPatch.sample_loop` overrides this per patch.
+            loop_mode: The sample's own looping: ``"none"`` (the default),
+                ``"continuous"`` or ``"keyDown"``, the SoundFont ``sampleModes``
+                values 0, 1 and 3. :attr:`SynthPatch.sample_loop` overrides this
+                per patch.
 
         Raises:
             SonareValueError: For an empty, non-finite or non-1-D buffer, or an

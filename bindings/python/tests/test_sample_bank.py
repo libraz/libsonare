@@ -87,7 +87,9 @@ def test_engine_mode_table_carries_the_sample_engine() -> None:
     assert SYNTH_ENUM_TABLES["engine_modes"][17] == "sample"
     assert synth_enum_tables()["engine_modes"] == SYNTH_ENUM_TABLES["engine_modes"]
     assert SynthPatch(engine_mode="sample")._to_c().engine_mode == 17
-    assert SynthPatch._from_c(SynthPatch(engine_mode=17)._to_c()).engine_mode == "sample"
+    assert SynthPatch._from_c(SynthPatch(engine_mode="sample")._to_c()).engine_mode == "sample"
+    with pytest.raises(TypeError, match="engine mode"):
+        SynthPatch(engine_mode=17)._to_c()  # type: ignore[arg-type]
 
 
 # -- lifecycle --------------------------------------------------------------
@@ -472,3 +474,53 @@ def test_a_closed_bank_is_rejected_on_both_hosts() -> None:
         engine.close()
     with raises_coded(ErrorCode.INVALID_STATE, match="SampleBank is closed"):
         _render(60, _sample_patch(bank))
+
+
+def test_the_sample_loop_mode_token_reaches_the_render() -> None:
+    """``"continuous"`` loops past the sample's end; ``"none"`` does not."""
+    import numpy as np
+
+    from libsonare import Project, SampleBank, SampleDescLoopMode, SynthPatch
+
+    sample_rate = 48000
+    frames = 2400  # 50 ms, far shorter than the note, so a loop is audible past it
+    tone = (0.5 * np.sin(2.0 * np.pi * 440.0 * np.arange(frames) / sample_rate)).astype(np.float32)
+
+    def render(loop_mode: SampleDescLoopMode) -> np.ndarray:
+        project = Project()
+        project.set_sample_rate(float(sample_rate))
+        track, clip = project.add_midi_clip(0.0, 4.0)
+        project.set_track_midi_destination(track, 0)
+        project.set_midi_events(
+            clip,
+            [
+                Project.midi_note_on(0.0, 0, 0, 60, 100),
+                Project.midi_note_off(2.0, 0, 0, 60, 0),
+            ],
+        )
+        try:
+            with SampleBank() as bank:
+                index = bank.add_sample(
+                    tone,
+                    root_key=60,
+                    source_rate=float(sample_rate),
+                    loop_start=0,
+                    loop_end=frames,
+                    loop_mode=loop_mode,
+                )
+                bank.add_zone(0, sample_index=index)
+                out = project.bounce_with_synth_instrument(
+                    SynthPatch(engine_mode="sample", sample_set=0, sample_bank=bank),
+                    total_frames=12000,
+                    num_channels=1,
+                    sample_rate=sample_rate,
+                )
+        finally:
+            project.close()
+        return np.asarray(out, dtype=np.float32)
+
+    unlooped, looped = render("none"), render("continuous")
+    # The sample sounded at all, and the field reaches the render.
+    assert float(np.max(np.abs(unlooped))) > 0.0
+    assert not np.array_equal(looped, unlooped)
+    assert np.array_equal(render("none"), unlooped)

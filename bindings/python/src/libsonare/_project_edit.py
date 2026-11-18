@@ -37,7 +37,13 @@ from ._project_synth import (
     SYNTH_ENUM_TABLES as SYNTH_ENUM_TABLES,
 )
 from ._project_synth import (
+    PartRigMode as PartRigMode,
+)
+from ._project_synth import (
     _part_rig_inserts_arg as _part_rig_inserts_arg,
+)
+from ._project_synth import (
+    _part_rig_mode_name as _part_rig_mode_name,
 )
 from ._project_synth import (
     _part_rig_mode_value as _part_rig_mode_value,
@@ -683,7 +689,7 @@ class _ProjectEditMixin:
         destination_id: int,
         part: int,
         *,
-        mode: str | int,
+        mode: PartRigMode,
         inserts: Sequence[Mapping[str, object]] | None = None,
     ) -> None:
         """Pick the rig for one part of a destination's instrument via an undoable edit.
@@ -722,13 +728,12 @@ class _ProjectEditMixin:
 
     def get_part_rig(
         self, destination_id: int, part: int
-    ) -> tuple[str | int, list[dict[str, object]] | None] | None:
+    ) -> tuple[PartRigMode, list[dict[str, object]] | None] | None:
         """Read back :meth:`set_part_rig` as ``(mode, inserts)``, or ``None`` if unset.
 
-        ``mode`` is the canonical name (the raw ordinal for a value this binding
-        has no name for). ``inserts`` is a list of ``{"processor", "params"}``
-        dicts with ``params`` decoded to a dict for a ``"chain"`` entry and
-        ``None`` otherwise.
+        ``mode`` is the :data:`PartRigMode` token. ``inserts`` is a list of
+        ``{"processor", "params"}`` dicts with ``params`` decoded to a dict for a
+        ``"chain"`` entry and ``None`` otherwise.
         """
         lib = _get_lib()
         _require_export(
@@ -757,8 +762,7 @@ class _ProjectEditMixin:
                 lib.sonare_free_string(out_json)
         if not present.value:
             return None
-        names = {value: name for name, value in PART_RIG_MODES.items()}
-        mode_out: str | int = names.get(int(mode.value), int(mode.value))
+        mode_out = _part_rig_mode_name(int(mode.value))
         if raw is None:
             return mode_out, None
         inserts = []

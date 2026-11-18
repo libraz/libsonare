@@ -6,13 +6,6 @@ asked, with nothing in the result to say so. A ``bool`` is the same defect weari
 a different type -- it satisfies ``isinstance(value, int)`` and resolves to the
 ordinal 0 or 1, which is a legal value in every one of these tables.
 
-The domain is the field's, not the spelling table's, and for every table here but
-one they are the same set. The exception is the SF2 ``sampleModes`` field, whose
-reserved 2 is a value a zone really carries and which the core reads as no loop.
-That separates a documented alternative from a silent substitution: both arrive
-at the same catch-all in the core, so the only place they can be told apart is
-the entry point.
-
 Each family opens with a positive control -- a name and an ordinal resolving
 alike, and distinct names resolving differently. Without it a resolver that
 ignored its argument would read as one that accepted it, and the refusals below
@@ -27,11 +20,6 @@ import pytest
 
 from libsonare import SonareValueError
 from libsonare._project_model import _track_kind_value
-from libsonare._project_synth import (
-    _sample_desc_loop_value,
-    _sample_key_track_value,
-    _sample_loop_value,
-)
 from libsonare._runtime import (
     _mode_values,
     _profile_value,
@@ -57,29 +45,6 @@ _FAMILIES: Sequence[_Family] = (
         (4, 99, -1),
     ),
     (_track_kind_value, "track kind", (("audio", 0), ("midi", 1), ("aux", 2)), (), (3, 99, -1)),
-    (
-        _sample_loop_value,
-        "sample loop mode",
-        (("default", 0), ("none", 1), ("continuous", 2), ("keyDown", 3)),
-        (),
-        (4, 99, -1),
-    ),
-    (
-        _sample_key_track_value,
-        "sample key track",
-        (("default", 0), ("on", 1), ("off", 2)),
-        (),
-        (3, 99, -1),
-    ),
-    # The only table with an accepted ordinal it does not spell: SF2 sampleModes
-    # is two bits wide, and its reserved 2 means no loop.
-    (
-        _sample_desc_loop_value,
-        "sample loop mode",
-        (("none", 0), ("continuous", 1), ("keyDown", 3)),
-        (2,),
-        (4, 99, -1),
-    ),
 )
 
 _FAMILY_IDS = [
@@ -102,24 +67,6 @@ def test_a_name_and_its_ordinal_resolve_alike(
     for name, ordinal in legal:
         assert resolve(name) == resolve(ordinal) == ordinal, what
     assert len({resolve(name) for name, _ in legal}) == len(legal), f"{what} collapses its names"
-
-
-@pytest.mark.parametrize(_PARAMS, _FAMILIES, ids=_FAMILY_IDS)
-def test_an_ordinal_the_field_accepts_without_spelling_is_kept_as_it_stands(
-    resolve: Resolver,
-    what: str,
-    legal: Sequence[tuple[str, int]],
-    unspelled: Sequence[int],
-    out_of_domain: Sequence[int],
-) -> None:
-    """It arrives as itself, not folded onto the spelling that shares its meaning.
-
-    Folding it would be the resolver deciding what a reserved value means; the
-    core is what reads it, and the ordinal is what carries it there.
-    """
-    for ordinal in unspelled:
-        assert resolve(ordinal) == ordinal
-        assert ordinal not in {value for _, value in legal}
 
 
 @pytest.mark.parametrize(_PARAMS, _FAMILIES, ids=_FAMILY_IDS)
@@ -153,66 +100,6 @@ def test_a_bool_is_refused_rather_than_read_as_zero_or_one(
     for value in (True, False):
         with pytest.raises(TypeError, match=what):
             resolve(value)
-
-
-@pytest.mark.skipif(not LIB_AVAILABLE, reason="libsonare shared library not found")
-def test_the_reserved_sample_loop_ordinal_renders_as_no_loop() -> None:
-    """The reserved 2 reaches the core and is read there, not dropped on the way.
-
-    Accepting an ordinal and ignoring it are indistinguishable at the resolver,
-    so the separation has to be made where the value is consumed: 2 must render
-    like the unlooped 0 and unlike the continuous 1.
-    """
-    import numpy as np
-
-    from libsonare import Project, SampleBank, SynthPatch
-
-    sample_rate = 48000
-    frames = 2400  # 50 ms, far shorter than the note, so a loop is audible past it
-    tone = (0.5 * np.sin(2.0 * np.pi * 440.0 * np.arange(frames) / sample_rate)).astype(np.float32)
-
-    def render(loop_mode: int) -> np.ndarray:
-        project = Project()
-        project.set_sample_rate(float(sample_rate))
-        track, clip = project.add_midi_clip(0.0, 4.0)
-        project.set_track_midi_destination(track, 0)
-        project.set_midi_events(
-            clip,
-            [
-                Project.midi_note_on(0.0, 0, 0, 60, 100),
-                Project.midi_note_off(2.0, 0, 0, 60, 0),
-            ],
-        )
-        try:
-            with SampleBank() as bank:
-                index = bank.add_sample(
-                    tone,
-                    root_key=60,
-                    source_rate=float(sample_rate),
-                    loop_start=0,
-                    loop_end=frames,
-                    loop_mode=loop_mode,
-                )
-                bank.add_zone(0, sample_index=index)
-                out = project.bounce_with_synth_instrument(
-                    SynthPatch(engine_mode="sample", sample_set=0, sample_bank=bank),
-                    total_frames=12000,
-                    num_channels=1,
-                    sample_rate=sample_rate,
-                )
-        finally:
-            project.close()
-        return np.asarray(out, dtype=np.float32)
-
-    unlooped, looped, reserved = render(0), render(1), render(2)
-    # Two positive controls: the sample sounded at all, and the field reaches the
-    # render -- without the second, every render being equal would satisfy this.
-    assert float(np.max(np.abs(unlooped))) > 0.0
-    assert not np.array_equal(looped, unlooped)
-    # Whole buffer, not a windowed level: the unlooped renders are silent in the
-    # tail either way, so only sample-for-sample identity separates "read as no
-    # loop" from "produced silence for some other reason".
-    assert np.array_equal(reserved, unlooped)
 
 
 def test_a_key_ordinal_is_never_accepted_in_place_of_its_token() -> None:

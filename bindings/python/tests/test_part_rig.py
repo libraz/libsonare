@@ -91,6 +91,8 @@ def test_invalid_input_is_refused():
     with _project() as project:
         with pytest.raises(SonareValueError, match="mode"):
             project.set_part_rig(DESTINATION, 0, mode="wet")
+        with pytest.raises(TypeError, match="mode"):
+            project.set_part_rig(DESTINATION, 0, mode=1)  # type: ignore[arg-type]
         # Refused by the facade before any document reaches the library.
         with pytest.raises(SonareValueError, match="processor"):
             project.set_part_rig(DESTINATION, 0, mode="chain", inserts=[{"params": {}}])

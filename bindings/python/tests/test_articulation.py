@@ -88,11 +88,9 @@ def test_articulation_round_trips_per_channel() -> None:
         assert engine.articulation(DESTINATION, 1) == "monoRetrigger"
         assert engine.articulation(DESTINATION, 0) == "monoLegato"
 
-        # The ordinal is accepted wherever the name is, and reads back as the
-        # name, so a caller holding a C enum value and one holding a spelling
-        # reach the same mode.
-        for ordinal, name in enumerate(SYNTH_ENUM_TABLES["articulations"]):
-            engine.set_articulation(DESTINATION, 2, ordinal)
+        # Every name reads back as itself.
+        for name in SYNTH_ENUM_TABLES["articulations"]:
+            engine.set_articulation(DESTINATION, 2, name)  # type: ignore[arg-type]
             assert engine.articulation(DESTINATION, 2) == name
 
         # Nothing has been asked for and declined yet, so the counter starts
@@ -101,22 +99,14 @@ def test_articulation_round_trips_per_channel() -> None:
 
 
 def test_an_unknown_articulation_spelling_or_ordinal_is_refused_by_the_binding() -> None:
-    """The refusals the binding makes before the C ABI is reached.
-
-    Each one asserts :class:`SonareValueError` rather than :class:`SonareError`,
-    which is what says the binding refused it: the C ABI range-checks the same
-    ordinals and would raise the plain base class, so the two sides are
-    indistinguishable here unless the exception type is the one asserted.
-    """
+    """Another spelling is SonareValueError naming the tokens; any number is TypeError."""
     with _synth_engine("reed") as engine:
-        with pytest.raises(SonareValueError, match="articulation"):
-            engine.set_articulation(DESTINATION, 0, "no-such-articulation")
-        # An ordinal past the enum, taken from the table's own length so it
-        # follows a value being added rather than pinning today's count.
-        with pytest.raises(SonareValueError, match="articulation"):
-            engine.set_articulation(DESTINATION, 0, len(SYNTH_ENUM_TABLES["articulations"]))
-        with pytest.raises(SonareValueError, match="articulation"):
-            engine.set_articulation(DESTINATION, 0, -1)
+        for spelling in ("no-such-articulation", "mono_legato", "MonoLegato"):
+            with pytest.raises(SonareValueError, match="monoLegato"):
+                engine.set_articulation(DESTINATION, 0, spelling)  # type: ignore[arg-type]
+        for number in (0, 2, -1, True):
+            with pytest.raises(TypeError, match="articulation"):
+                engine.set_articulation(DESTINATION, 0, number)  # type: ignore[arg-type]
         # None of the above took: the mode is still what the instrument started
         # at, so a refusal changes nothing rather than clamping to poly.
         assert engine.articulation(DESTINATION, 0) == "poly"

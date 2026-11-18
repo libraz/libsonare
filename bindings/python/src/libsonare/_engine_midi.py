@@ -22,6 +22,12 @@ from ._project import (
     _synth_patch_arg,
 )
 from ._project_synth import (
+    Articulation,
+    ControllerAxis,
+    ControllerInput,
+    MpeDimension,
+    NoteTracking,
+    PartRigMode,
     _articulation_name,
     _articulation_value,
     _controller_axis_value,
@@ -547,9 +553,9 @@ class _EngineMidiMixin:
         self,
         destination_id: int,
         *,
-        input: str | int,
+        input: ControllerInput,
         index: int = 0,
-        axis: str | int,
+        axis: ControllerAxis,
         lo: float = 0.0,
         hi: float = 1.0,
         curve: float = 1.0,
@@ -681,7 +687,7 @@ class _EngineMidiMixin:
         return out.value != 0
 
     def set_controller_note_tracking(
-        self, destination_id: int, dimension: str | int, tracking: str | int
+        self, destination_id: int, dimension: MpeDimension, tracking: NoteTracking
     ) -> None:
         """Say which note a channel-addressed value of one dimension belongs to.
 
@@ -721,7 +727,9 @@ class _EngineMidiMixin:
             )
         )
 
-    def controller_note_tracking(self, destination_id: int, dimension: str | int) -> str | int:
+    def controller_note_tracking(
+        self, destination_id: int, dimension: MpeDimension
+    ) -> NoteTracking:
         """Read back :meth:`set_controller_note_tracking` as its canonical name.
 
         Returns the raw ordinal for a value this binding has no name for, so a
@@ -746,7 +754,9 @@ class _EngineMidiMixin:
 
     # -- articulation --------------------------------------------------------
 
-    def set_articulation(self, destination_id: int, channel: int, articulation: str | int) -> None:
+    def set_articulation(
+        self, destination_id: int, channel: int, articulation: Articulation
+    ) -> None:
         """Set what one channel does with an overlapping note-on.
 
         ``articulation`` is one of ``synth_enum_tables()["articulations"]``:
@@ -794,7 +804,7 @@ class _EngineMidiMixin:
         destination_id: int,
         part: int,
         *,
-        mode: str | int,
+        mode: PartRigMode,
         inserts: Sequence[Mapping[str, object]] | None = None,
     ) -> None:
         """Set one part's rig on the instrument bound to ``destination_id``.
@@ -824,7 +834,7 @@ class _EngineMidiMixin:
             )
         )
 
-    def articulation(self, destination_id: int, channel: int) -> str | int:
+    def articulation(self, destination_id: int, channel: int) -> Articulation:
         """Read back :meth:`set_articulation` as its canonical name.
 
         Returns the raw ordinal for a value this binding has no name for, so a

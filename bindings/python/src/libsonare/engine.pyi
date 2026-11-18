@@ -7,8 +7,14 @@ from typing import Any, TypeAlias
 import numpy as np
 
 from ._project import (
+    Articulation,
     BuiltinSynthConfig,
+    ControllerAxis,
+    ControllerInput,
     MidiCcBinding,
+    MpeDimension,
+    NoteTracking,
+    PartRigMode,
     ProjectTimeline,
     SampleBank,
     Sf2InstrumentConfig,
@@ -399,9 +405,9 @@ class RealtimeEngine:
         self,
         destination_id: int,
         *,
-        input: str | int,
+        input: ControllerInput,
         index: int = 0,
-        axis: str | int,
+        axis: ControllerAxis,
         lo: float = 0.0,
         hi: float = 1.0,
         curve: float = 1.0,
@@ -411,21 +417,23 @@ class RealtimeEngine:
     def set_controller_velocity_meaningful(self, destination_id: int, meaningful: bool) -> None: ...
     def controller_velocity_meaningful(self, destination_id: int) -> bool: ...
     def set_controller_note_tracking(
-        self, destination_id: int, dimension: str | int, tracking: str | int
+        self, destination_id: int, dimension: MpeDimension, tracking: NoteTracking
     ) -> None: ...
-    def controller_note_tracking(self, destination_id: int, dimension: str | int) -> str | int: ...
+    def controller_note_tracking(
+        self, destination_id: int, dimension: MpeDimension
+    ) -> NoteTracking: ...
     def set_articulation(
-        self, destination_id: int, channel: int, articulation: str | int
+        self, destination_id: int, channel: int, articulation: Articulation
     ) -> None: ...
     def set_part_rig(
         self,
         destination_id: int,
         part: int,
         *,
-        mode: str | int,
+        mode: PartRigMode,
         inserts: Sequence[Mapping[str, object]] | None = ...,
     ) -> None: ...
-    def articulation(self, destination_id: int, channel: int) -> str | int: ...
+    def articulation(self, destination_id: int, channel: int) -> Articulation: ...
     def legato_fallback_count(self, destination_id: int) -> int: ...
     def bind_midi_cc(
         self,

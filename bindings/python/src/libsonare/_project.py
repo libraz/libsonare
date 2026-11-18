@@ -25,9 +25,6 @@ from ._project_model import (
     _LOOP_MODES as _LOOP_MODES,
 )
 from ._project_model import (
-    _SYNTH_WAVEFORM_NAMES as _SYNTH_WAVEFORM_NAMES,
-)
-from ._project_model import (
     _TRACK_KIND_NAMES as _TRACK_KIND_NAMES,
 )
 from ._project_model import (

@@ -35,25 +35,10 @@ from ._project_instruments import (
     _GS_EFX_REALIZATIONS as _GS_EFX_REALIZATIONS,
 )
 from ._project_instruments import (
-    _SYNTH_WAVEFORM_NAMES as _SYNTH_WAVEFORM_NAMES,
-)
-from ._project_instruments import (
     SOURCE_BACKEND_SF2 as SOURCE_BACKEND_SF2,
 )
 from ._project_instruments import (
     SOURCE_BACKEND_SYNTH as SOURCE_BACKEND_SYNTH,
-)
-from ._project_instruments import (
-    SYNTH_WAVEFORM_SAW as SYNTH_WAVEFORM_SAW,
-)
-from ._project_instruments import (
-    SYNTH_WAVEFORM_SINE as SYNTH_WAVEFORM_SINE,
-)
-from ._project_instruments import (
-    SYNTH_WAVEFORM_SQUARE as SYNTH_WAVEFORM_SQUARE,
-)
-from ._project_instruments import (
-    SYNTH_WAVEFORM_TRIANGLE as SYNTH_WAVEFORM_TRIANGLE,
 )
 from ._project_instruments import (
     BuiltinSynthConfig as BuiltinSynthConfig,
@@ -119,7 +104,64 @@ from ._project_synth import (
     SYNTH_ENUM_TABLES as SYNTH_ENUM_TABLES,
 )
 from ._project_synth import (
+    Articulation as Articulation,
+)
+from ._project_synth import (
+    ControllerAxis as ControllerAxis,
+)
+from ._project_synth import (
+    ControllerInput as ControllerInput,
+)
+from ._project_synth import (
+    MpeDimension as MpeDimension,
+)
+from ._project_synth import (
+    NoteTracking as NoteTracking,
+)
+from ._project_synth import (
+    PartRigMode as PartRigMode,
+)
+from ._project_synth import (
     SampleBank as SampleBank,
+)
+from ._project_synth import (
+    SampleDescLoopMode as SampleDescLoopMode,
+)
+from ._project_synth import (
+    SampleKeyTrack as SampleKeyTrack,
+)
+from ._project_synth import (
+    SampleLoopMode as SampleLoopMode,
+)
+from ._project_synth import (
+    SynthBodyType as SynthBodyType,
+)
+from ._project_synth import (
+    SynthEngineMode as SynthEngineMode,
+)
+from ._project_synth import (
+    SynthFilterModel as SynthFilterModel,
+)
+from ._project_synth import (
+    SynthFilterOutput as SynthFilterOutput,
+)
+from ._project_synth import (
+    SynthLfoShape as SynthLfoShape,
+)
+from ._project_synth import (
+    SynthModDestination as SynthModDestination,
+)
+from ._project_synth import (
+    SynthModSource as SynthModSource,
+)
+from ._project_synth import (
+    SynthOscWaveform as SynthOscWaveform,
+)
+from ._project_synth import (
+    SynthRetrigger as SynthRetrigger,
+)
+from ._project_synth import (
+    SynthWaveform as SynthWaveform,
 )
 from ._project_synth import (
     synth_enum_tables as synth_enum_tables,

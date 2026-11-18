@@ -201,56 +201,52 @@ def test_synth_preset_patch_round_trips() -> None:
         synth_preset_patch("no-such-preset")
 
 
-def test_synth_patch_enum_tables_round_trip_all_names_and_ordinals() -> None:
+def test_synth_patch_enum_tables_round_trip_names_and_refuse_ordinals() -> None:
     assert SYNTH_ENUM_TABLES == EXPECTED_SYNTH_ENUM_TABLES
     assert synth_enum_tables() == EXPECTED_SYNTH_ENUM_TABLES
 
     for ordinal, name in enumerate(EXPECTED_SYNTH_ENUM_TABLES["engine_modes"]):
         by_name = SynthPatch._from_c(SynthPatch(engine_mode=name)._to_c())
-        by_ordinal = SynthPatch._from_c(SynthPatch(engine_mode=ordinal)._to_c())
+        with pytest.raises(TypeError):
+            SynthPatch(engine_mode=ordinal)._to_c()
         assert by_name.engine_mode == name
-        assert by_ordinal.engine_mode == name
     for ordinal, name in enumerate(EXPECTED_SYNTH_ENUM_TABLES["waveforms"]):
         by_name = SynthPatch._from_c(SynthPatch(waveform=name)._to_c())
-        by_ordinal = SynthPatch._from_c(SynthPatch(waveform=ordinal)._to_c())
+        with pytest.raises(TypeError):
+            SynthPatch(waveform=ordinal)._to_c()
         assert by_name.waveform == name
-        assert by_ordinal.waveform == name
     for ordinal, name in enumerate(EXPECTED_SYNTH_ENUM_TABLES["filter_models"]):
         by_name = SynthPatch._from_c(SynthPatch(filter_model=name)._to_c())
-        by_ordinal = SynthPatch._from_c(SynthPatch(filter_model=ordinal)._to_c())
+        with pytest.raises(TypeError):
+            SynthPatch(filter_model=ordinal)._to_c()
         assert by_name.filter_model == name
-        assert by_ordinal.filter_model == name
     for old in ("moog-ladder", "transistor-ladder", "TransistorLadder"):
         with pytest.raises(SonareValueError, match="transistorLadder"):
             SynthPatch(filter_model=old)._to_c()
     for ordinal, name in enumerate(EXPECTED_SYNTH_ENUM_TABLES["filter_outputs"]):
         by_name = SynthPatch._from_c(SynthPatch(filter_output=name)._to_c())
-        by_ordinal = SynthPatch._from_c(SynthPatch(filter_output=ordinal)._to_c())
+        with pytest.raises(TypeError):
+            SynthPatch(filter_output=ordinal)._to_c()
         assert by_name.filter_output == name
-        assert by_ordinal.filter_output == name
     for ordinal, name in enumerate(EXPECTED_SYNTH_ENUM_TABLES["body_types"]):
         by_name = SynthPatch._from_c(SynthPatch(body=name)._to_c())
-        by_ordinal = SynthPatch._from_c(SynthPatch(body=ordinal)._to_c())
+        with pytest.raises(TypeError):
+            SynthPatch(body=ordinal)._to_c()
         assert by_name.body == name
-        assert by_ordinal.body == name
     for ordinal, name in enumerate(EXPECTED_SYNTH_ENUM_TABLES["mod_sources"]):
         by_name = SynthPatch._from_c(
             SynthPatch(mod_routings=(SynthModRouting(name, "pitchCents", 1.0),))._to_c()
         )
-        by_ordinal = SynthPatch._from_c(
+        with pytest.raises(TypeError):
             SynthPatch(mod_routings=(SynthModRouting(ordinal, "pitchCents", 1.0),))._to_c()
-        )
         assert by_name.mod_routings[0].source == name
-        assert by_ordinal.mod_routings[0].source == name
     for ordinal, name in enumerate(EXPECTED_SYNTH_ENUM_TABLES["mod_destinations"]):
         by_name = SynthPatch._from_c(
             SynthPatch(mod_routings=(SynthModRouting("lfo1", name, 1.0),))._to_c()
         )
-        by_ordinal = SynthPatch._from_c(
+        with pytest.raises(TypeError):
             SynthPatch(mod_routings=(SynthModRouting("lfo1", ordinal, 1.0),))._to_c()
-        )
         assert by_name.mod_routings[0].destination == name
-        assert by_ordinal.mod_routings[0].destination == name
 
 
 def test_every_python_enum_table_matches_the_c_abi_kind() -> None:
@@ -283,7 +279,7 @@ def test_every_python_enum_table_matches_the_c_abi_kind() -> None:
         "sample_key_tracks": synth._SAMPLE_KEY_TRACKS,
         "retriggers": synth._SYNTH_RETRIGGERS,
         "lfo_shapes": synth._SYNTH_LFO_SHAPES,
-        "part_rig_modes": synth.PART_RIG_MODES,
+        "part_rig_modes": synth._PART_RIG_MODES,
     }
     assert set(ordinal_maps) | {"builtin_waveforms", "sample_desc_loop_modes"} == set(
         synth._SYNTH_ENUM_KINDS
@@ -380,24 +376,26 @@ def test_synth_patch_rejects_non_string_preset() -> None:
 def test_synth_patch_retrigger_round_trips_and_refuses_unknown_values() -> None:
     for ordinal, name in enumerate(("default", "free", "note")):
         assert SynthPatch._from_c(SynthPatch(retrigger=name)._to_c()).retrigger == name
-        assert SynthPatch._from_c(SynthPatch(retrigger=ordinal)._to_c()).retrigger == name
+        with pytest.raises(TypeError):
+            SynthPatch(retrigger=ordinal)._to_c()  # type: ignore[arg-type]
     assert SynthPatch()._to_c().struct_version == _header_struct_version()
     assert synth_preset_patch("sawLead").retrigger == "free"
     with pytest.raises(ValueError):
         SynthPatch(retrigger="phase")._to_c()
-    with pytest.raises(ValueError):
-        SynthPatch(retrigger=3)._to_c()
+    with pytest.raises(TypeError):
+        SynthPatch(retrigger=3)._to_c()  # type: ignore[arg-type]
 
 
 def test_synth_patch_lfo_shape_round_trips_and_refuses_unknown_values() -> None:
     for ordinal, name in enumerate(("default", "triangle", "sine", "random")):
         assert SynthPatch._from_c(SynthPatch(lfo_shape=name)._to_c()).lfo_shape == name
-        assert SynthPatch._from_c(SynthPatch(lfo_shape=ordinal)._to_c()).lfo_shape == name
+        with pytest.raises(TypeError):
+            SynthPatch(lfo_shape=ordinal)._to_c()  # type: ignore[arg-type]
     assert synth_preset_patch("sawLead").lfo_shape == "triangle"
     with pytest.raises(ValueError):
         SynthPatch(lfo_shape="square")._to_c()
-    with pytest.raises(ValueError):
-        SynthPatch(lfo_shape=4)._to_c()
+    with pytest.raises(TypeError):
+        SynthPatch(lfo_shape=4)._to_c()  # type: ignore[arg-type]
 
 
 def _repeated_note_diff(audio: np.ndarray) -> float:
@@ -967,9 +965,10 @@ def test_engine_param_info_shape() -> None:
     assert force.min is not None and force.max is not None
     assert force.min <= force.default <= force.max
     assert force.unit
-    assert synth_engine_param_info(SYNTH_ENUM_TABLES["engine_modes"].index("bowedString")) == bowed
-    with pytest.raises(Exception, match="engine mode"):
-        synth_engine_param_info(99)
+    with pytest.raises(TypeError, match="engine mode"):
+        synth_engine_param_info(SYNTH_ENUM_TABLES["engine_modes"].index("bowedString"))  # type: ignore[arg-type]
+    with pytest.raises(SonareValueError, match="engine mode"):
+        synth_engine_param_info("BowedString")  # type: ignore[arg-type]
     patch_rows = synth_patch_param_info()
     names = {row.name for row in patch_rows}
     assert {"gain", "busDrive"} <= names

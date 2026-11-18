@@ -97,18 +97,11 @@ def test_bounce_with_builtin_instrument_accepts_waveform_patch() -> None:
 
 
 def test_builtin_synth_waveform_outside_the_enum_is_rejected() -> None:
-    """An ordinal the enum does not name raises instead of resolving to sine.
-
-    The values matter more than the count: 4 is the first one past the enum,
-    which is what an off-by-one or a 1-based mirror emits, and -1 is the
-    sentinel a generated caller reaches for. A guard that starts checking
-    further out would pass on 42 alone. ``True`` is included because it is an
-    ``int`` in Python and would otherwise resolve to saw.
-    """
+    """A number never selects a waveform; an unknown name raises rather than resolving to sine."""
     project = _build_midi_only_project()
     try:
-        for waveform in (4, -1, 5, 2**31, True):
-            with pytest.raises(TypeError if isinstance(waveform, bool) else SonareValueError):
+        for waveform in (0, 1, 4, -1, True):
+            with pytest.raises(TypeError):
                 project.bounce_with_builtin_instrument(
                     BuiltinSynthConfig(waveform=waveform), total_frames=1200
                 )
@@ -117,7 +110,7 @@ def test_builtin_synth_waveform_outside_the_enum_is_rejected() -> None:
                 BuiltinSynthConfig(waveform="noise"), total_frames=1200
             )
         # Rejection is by domain, not by the field having stopped working.
-        for waveform in (0, 1, 2, 3, "sine", "saw", "sawtooth", "square", "triangle"):
+        for waveform in ("sine", "saw", "sawtooth", "square", "triangle"):
             project.bounce_with_builtin_instrument(
                 BuiltinSynthConfig(waveform=waveform), total_frames=1200
             )

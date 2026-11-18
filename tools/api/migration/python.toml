@@ -6700,10 +6700,10 @@ test = "bindings/python/tests/test_synth_patch.py::test_every_python_enum_table_
 [[entry]]
 kind = "field"
 old = "SynthPatch.engine_mode"
-changed = "takes the exact lowerCamel engine mode token (karplusStrong, pipeOrgan, bowedString, pluckedString, freeReed); kebab and case-folded spellings are refused"
+changed = "takes the exact lowerCamel engine mode token (karplusStrong, pipeOrgan, bowedString, pluckedString, freeReed); kebab and case-folded spellings are refused and an ordinal is TypeError"
 domain = "engine"
 rule = "token-case"
-test = "bindings/python/tests/test_synth_patch.py::test_synth_patch_enum_tables_round_trip_all_names_and_ordinals"
+test = "bindings/python/tests/test_synth_patch.py::test_synth_patch_enum_tables_round_trip_names_and_refuse_ordinals"
 
 [[entry]]
 kind = "field"
@@ -6711,7 +6711,7 @@ old = "SynthPatch.filter_model"
 changed = "takes the exact lowerCamel filter model token (transistorLadder, diodeLadder, sallenKey, svf4Pole); the moog-ladder input spelling is removed"
 domain = "engine"
 rule = "token-case"
-test = "bindings/python/tests/test_synth_patch.py::test_synth_patch_enum_tables_round_trip_all_names_and_ordinals"
+test = "bindings/python/tests/test_synth_patch.py::test_synth_patch_enum_tables_round_trip_names_and_refuse_ordinals"
 
 [[entry]]
 kind = "field"
@@ -6719,7 +6719,7 @@ old = "SynthPatch.body"
 changed = "takes the exact lowerCamel body type token (woodTube, brassBell)"
 domain = "engine"
 rule = "token-case"
-test = "bindings/python/tests/test_synth_patch.py::test_synth_patch_enum_tables_round_trip_all_names_and_ordinals"
+test = "bindings/python/tests/test_synth_patch.py::test_synth_patch_enum_tables_round_trip_names_and_refuse_ordinals"
 
 [[entry]]
 kind = "field"
@@ -6944,3 +6944,227 @@ changed = "None derives the limit; a given 0 is refused instead of deriving it"
 domain = "analysis"
 rule = "absent-not-sentinel"
 test = "bindings/python/tests/test_polyphonic_editing.py::test_an_explicit_zero_on_a_named_default_is_refused"
+
+[[entry]]
+kind = "type"
+old = "SynthEngineMode"
+changed = "new public Literal of the exact lowerCamel tokens; an ordinal is TypeError, another spelling SonareValueError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_synth_patch.py::test_synth_patch_enum_tables_round_trip_names_and_refuse_ordinals"
+
+[[entry]]
+kind = "type"
+old = "SynthOscWaveform"
+changed = "new public Literal of the exact lowerCamel tokens; an ordinal is TypeError, another spelling SonareValueError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_synth_patch.py::test_synth_patch_enum_tables_round_trip_names_and_refuse_ordinals"
+
+[[entry]]
+kind = "type"
+old = "SynthFilterModel"
+changed = "new public Literal of the exact lowerCamel tokens; an ordinal is TypeError, another spelling SonareValueError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_synth_patch.py::test_synth_patch_enum_tables_round_trip_names_and_refuse_ordinals"
+
+[[entry]]
+kind = "type"
+old = "SynthFilterOutput"
+changed = "new public Literal of the exact lowerCamel tokens; an ordinal is TypeError, another spelling SonareValueError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_synth_patch.py::test_synth_patch_enum_tables_round_trip_names_and_refuse_ordinals"
+
+[[entry]]
+kind = "type"
+old = "SynthBodyType"
+changed = "new public Literal of the exact lowerCamel tokens; an ordinal is TypeError, another spelling SonareValueError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_synth_patch.py::test_synth_patch_enum_tables_round_trip_names_and_refuse_ordinals"
+
+[[entry]]
+kind = "type"
+old = "SynthModSource"
+changed = "new public Literal of the exact lowerCamel tokens; an ordinal is TypeError, another spelling SonareValueError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_synth_patch.py::test_synth_patch_enum_tables_round_trip_names_and_refuse_ordinals"
+
+[[entry]]
+kind = "type"
+old = "SynthModDestination"
+changed = "new public Literal of the exact lowerCamel tokens; an ordinal is TypeError, another spelling SonareValueError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_synth_patch.py::test_synth_patch_enum_tables_round_trip_names_and_refuse_ordinals"
+
+[[entry]]
+kind = "type"
+old = "SynthRetrigger"
+changed = "new public Literal of the exact lowerCamel tokens; an ordinal is TypeError, another spelling SonareValueError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_synth_patch.py::test_synth_patch_retrigger_round_trips_and_refuses_unknown_values"
+
+[[entry]]
+kind = "type"
+old = "SynthLfoShape"
+changed = "new public Literal of the exact lowerCamel tokens; an ordinal is TypeError, another spelling SonareValueError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_synth_patch.py::test_synth_patch_lfo_shape_round_trips_and_refuses_unknown_values"
+
+[[entry]]
+kind = "type"
+old = "SampleLoopMode"
+changed = "new public Literal of the exact lowerCamel tokens; an ordinal is TypeError, another spelling SonareValueError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_exact_closed_set_tokens.py::test_the_synth_closed_sets_take_exact_tokens"
+
+[[entry]]
+kind = "type"
+old = "SampleKeyTrack"
+changed = "new public Literal of the exact lowerCamel tokens; an ordinal is TypeError, another spelling SonareValueError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_exact_closed_set_tokens.py::test_the_synth_closed_sets_take_exact_tokens"
+
+[[entry]]
+kind = "type"
+old = "SampleDescLoopMode"
+changed = "new public Literal of the exact lowerCamel tokens; an ordinal is TypeError, another spelling SonareValueError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_exact_closed_set_tokens.py::test_the_synth_closed_sets_take_exact_tokens"
+
+[[entry]]
+kind = "type"
+old = "SynthWaveform"
+changed = "new public Literal of the exact lowerCamel tokens; an ordinal is TypeError, another spelling SonareValueError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_exact_closed_set_tokens.py::test_the_synth_closed_sets_take_exact_tokens"
+
+[[entry]]
+kind = "type"
+old = "ControllerInput"
+changed = "new public Literal of the exact lowerCamel tokens; an ordinal is TypeError, another spelling SonareValueError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_exact_closed_set_tokens.py::test_the_synth_closed_sets_take_exact_tokens"
+
+[[entry]]
+kind = "type"
+old = "ControllerAxis"
+changed = "new public Literal of the exact lowerCamel tokens; an ordinal is TypeError, another spelling SonareValueError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_exact_closed_set_tokens.py::test_the_synth_closed_sets_take_exact_tokens"
+
+[[entry]]
+kind = "type"
+old = "Articulation"
+changed = "new public Literal of the exact lowerCamel tokens; an ordinal is TypeError, another spelling SonareValueError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_exact_closed_set_tokens.py::test_the_synth_closed_sets_take_exact_tokens"
+
+[[entry]]
+kind = "type"
+old = "MpeDimension"
+changed = "new public Literal of the exact lowerCamel tokens; an ordinal is TypeError, another spelling SonareValueError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_exact_closed_set_tokens.py::test_the_synth_closed_sets_take_exact_tokens"
+
+[[entry]]
+kind = "type"
+old = "NoteTracking"
+changed = "new public Literal of the exact lowerCamel tokens; an ordinal is TypeError, another spelling SonareValueError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_exact_closed_set_tokens.py::test_the_synth_closed_sets_take_exact_tokens"
+
+[[entry]]
+kind = "type"
+old = "PartRigMode"
+changed = "new public Literal of the exact lowerCamel tokens; an ordinal is TypeError, another spelling SonareValueError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_exact_closed_set_tokens.py::test_the_synth_closed_sets_take_exact_tokens"
+
+[[entry]]
+kind = "export"
+old = "PART_RIG_MODES"
+changed = "a tuple of the PartRigMode tokens instead of a name-to-ordinal dict"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_synth_patch.py::test_every_python_enum_table_matches_the_c_abi_kind"
+
+[[entry]]
+kind = "field"
+old = "BuiltinSynthConfig.waveform"
+changed = "takes a SynthWaveform token ('sine' default); the SYNTH_WAVEFORM_* ordinals are removed and a number is TypeError"
+domain = "project"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_project_bounce.py::test_builtin_synth_waveform_outside_the_enum_is_rejected"
+
+[[entry]]
+kind = "method"
+old = "SampleBank.add_sample"
+changed = "loop_mode takes a SampleDescLoopMode token ('none' default); the 0..3 ordinals are TypeError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_sample_bank.py::test_the_sample_loop_mode_token_reaches_the_render"
+
+[[entry]]
+kind = "function"
+old = "synth_engine_param_info"
+changed = "engine_mode takes a SynthEngineMode token; an ordinal is TypeError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_synth_patch.py::test_engine_param_info_shape"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.bind_controller"
+changed = "input and axis take ControllerInput / ControllerAxis tokens; an ordinal is TypeError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_controller_profile.py::test_an_unknown_spelling_or_ordinal_is_refused_by_the_binding"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.set_controller_note_tracking"
+changed = "dimension and tracking take MpeDimension / NoteTracking tokens; an ordinal is TypeError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_controller_profile.py::test_controller_note_tracking_round_trips_per_dimension"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.set_articulation"
+changed = "articulation takes an Articulation token; an ordinal is TypeError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_articulation.py::test_an_unknown_articulation_spelling_or_ordinal_is_refused_by_the_binding"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.articulation"
+changed = "returns the Articulation token"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_articulation.py::test_articulation_round_trips_per_channel"
+
+[[entry]]
+kind = "method"
+old = "Project.set_part_rig"
+changed = "mode takes a PartRigMode token; an ordinal is TypeError"
+domain = "project"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_part_rig.py::test_invalid_input_is_refused"

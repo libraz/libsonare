@@ -6,7 +6,7 @@ import ctypes
 import json
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Literal, Protocol, TypeAlias
+from typing import Literal, Protocol, TypeAlias, cast
 
 import numpy as np
 
@@ -54,6 +54,7 @@ from ._ffi_types_mastering_project import (
 )
 from ._narrowing import _narrow_double
 from ._project_synth import (
+    _BUILTIN_SYNTH_WAVEFORMS,
     _SAMPLE_KEY_TRACKS,
     _SAMPLE_LOOP_MODES,
     _SYNTH_BODY_TYPES,
@@ -78,6 +79,42 @@ from ._project_synth import (
     SampleBank as SampleBank,
 )
 from ._project_synth import (
+    SampleKeyTrack as SampleKeyTrack,
+)
+from ._project_synth import (
+    SampleLoopMode as SampleLoopMode,
+)
+from ._project_synth import (
+    SynthBodyType as SynthBodyType,
+)
+from ._project_synth import (
+    SynthEngineMode as SynthEngineMode,
+)
+from ._project_synth import (
+    SynthFilterModel as SynthFilterModel,
+)
+from ._project_synth import (
+    SynthFilterOutput as SynthFilterOutput,
+)
+from ._project_synth import (
+    SynthLfoShape as SynthLfoShape,
+)
+from ._project_synth import (
+    SynthModDestination as SynthModDestination,
+)
+from ._project_synth import (
+    SynthModSource as SynthModSource,
+)
+from ._project_synth import (
+    SynthOscWaveform as SynthOscWaveform,
+)
+from ._project_synth import (
+    SynthRetrigger as SynthRetrigger,
+)
+from ._project_synth import (
+    SynthWaveform as SynthWaveform,
+)
+from ._project_synth import (
     synth_enum_tables as synth_enum_tables,
 )
 from ._runtime import (
@@ -95,26 +132,11 @@ from ._runtime import (
     _check,
     _get_lib,
     _joined_names,
-    _resolve_enum,
     _to_c_int,
     _utf8_arg,
     _validate_c_int_field,
 )
 from ._types_capabilities import SynthParamInfo, _from_wire
-
-# Built-in synth waveform ordinals (mirror SonareSynthWaveform).
-SYNTH_WAVEFORM_SINE = 0
-SYNTH_WAVEFORM_SAW = 1
-SYNTH_WAVEFORM_SQUARE = 2
-SYNTH_WAVEFORM_TRIANGLE = 3
-
-_SYNTH_WAVEFORM_NAMES = {
-    "sine": SYNTH_WAVEFORM_SINE,
-    "saw": SYNTH_WAVEFORM_SAW,
-    "sawtooth": SYNTH_WAVEFORM_SAW,
-    "square": SYNTH_WAVEFORM_SQUARE,
-    "triangle": SYNTH_WAVEFORM_TRIANGLE,
-}
 
 GsEfxRealization: TypeAlias = Literal["modern", "classic"]
 
@@ -126,17 +148,17 @@ class BuiltinSynthConfig:
 
     Every numeric field uses "0 (or non-positive) => sensible default", so a
     default-constructed config is the default sine patch; override only what you
-    need. ``waveform`` may be an ordinal (0=sine, 1=saw, 2=square, 3=triangle)
-    or a name (``"sine"`` / ``"saw"`` / ``"square"`` / ``"triangle"``). It is the
-    one field with no "nearest sensible value": anything outside that set raises
-    :class:`SonareValueError` rather than falling back to sine.
+    need. ``waveform`` is ``"sine"``, ``"saw"`` (also spelled ``"sawtooth"``),
+    ``"square"`` or ``"triangle"``. It is the one field with no "nearest
+    sensible value": another string raises :class:`SonareValueError` and a
+    number raises :class:`TypeError` rather than falling back to sine.
 
     ``attack_ms`` is a linear ramp that reaches full level at the set time;
     ``decay_ms`` and ``release_ms`` are linear too, the set time being a full 0
     to 1 sweep (they take proportionally less from a lower level).
     """
 
-    waveform: str | int = SYNTH_WAVEFORM_SINE
+    waveform: SynthWaveform = "sine"
     gain: float = 0.0
     attack_ms: float = 0.0
     decay_ms: float = 0.0
@@ -226,27 +248,9 @@ class Sf2ProgramStatus:
     preset_name: str
 
 
-def _synth_waveform_value(waveform: str | int) -> int:
-    if isinstance(waveform, str):
-        resolver = getattr(_get_lib(), "sonare_synth_builtin_waveform_from_name", None)
-        if resolver is not None:
-            value = int(resolver(_utf8_arg(waveform, "waveform")))
-            if value >= 0:
-                return value
-            raise SonareValueError(f"unknown synth waveform: {waveform!r}")
-    # validate_int keeps the ordinal on the same contract as the name: the C ABI
-    # refuses an ordinal outside the enum, and without this a caller's 4 or -1
-    # would pass through the binding and be refused there instead, or silently
-    # not at all on an older core. reject_bool because True is an int in Python
-    # and would otherwise resolve to saw.
-    return _resolve_enum(
-        waveform,
-        _SYNTH_WAVEFORM_NAMES,
-        "synth waveform",
-        validate_int=True,
-        reject_bool=True,
-        expected=True,
-    )
+def _synth_waveform_value(waveform: SynthWaveform) -> int:
+    """Resolve a built-in synth waveform token to its C ordinal."""
+    return _synth_enum_value(waveform, _BUILTIN_SYNTH_WAVEFORMS, "synth waveform")
 
 
 @dataclass(frozen=True)
@@ -299,8 +303,8 @@ class SynthModRouting:
     discarded before the voice starts.
     """
 
-    source: str | int
-    destination: str | int
+    source: SynthModSource
+    destination: SynthModDestination
     depth: float
 
 
@@ -419,14 +423,14 @@ class SynthPatch:
     """
 
     preset: str = ""
-    engine_mode: str | int = 0
-    waveform: str | int = 0
+    engine_mode: SynthEngineMode = "default"
+    waveform: SynthOscWaveform = "default"
     unison: int | None = None
     detune_cents: float | None = None
     drift_cents: float | None = None
     drive: float | None = None
-    filter_model: str | int = 0
-    filter_output: str | int = 0
+    filter_model: SynthFilterModel = "default"
+    filter_output: SynthFilterOutput = "default"
     cutoff_hz: float | None = None
     hp_cutoff_hz: float | None = None
     sample_hold_hz: float | None = None
@@ -446,22 +450,22 @@ class SynthPatch:
     filter_release_ms: float | None = None
     lfo_rate_hz: float | None = None
     lfo_to_pitch_cents: float | None = None
-    lfo_shape: str | int = 0
+    lfo_shape: SynthLfoShape = "default"
     lfo2_rate_hz: float | None = None
     glide_ms: float | None = None
-    body: str | int = 0
+    body: SynthBodyType = "default"
     body_mix: float | None = None
     stereo_spread: float | None = None
-    retrigger: str | int = 0
+    retrigger: SynthRetrigger = "default"
     mod_routings: tuple[SynthModRouting, ...] | None = None
     gain: float | None = None
     polyphony: int | None = None
     bus_drive: float | None = None
     sample_set: int | None = None
     sample_level: float | None = None
-    sample_loop: str | int = 0
+    sample_loop: SampleLoopMode = "default"
     sample_start_offset: float | None = None
-    sample_key_track: str | int = 0
+    sample_key_track: SampleKeyTrack = "default"
     # A BINDING option rather than a NativeSynth patch field: it travels on
     # SonareSynthInstrumentBinding, not SonareSynthPatch, so _to_c() does not
     # carry it and _from_c() never fills it. It lives here because the C ABI
@@ -625,22 +629,33 @@ class SynthPatch:
     def _from_c(cls, c: SonareSynthPatch) -> SynthPatch:
         routings = tuple(
             SynthModRouting(
-                source=_synth_enum_name(int(r.source), _SYNTH_MOD_SOURCES),
-                destination=_synth_enum_name(int(r.destination), _SYNTH_MOD_DESTINATIONS),
+                source=cast(SynthModSource, _synth_enum_name(int(r.source), _SYNTH_MOD_SOURCES)),
+                destination=cast(
+                    SynthModDestination,
+                    _synth_enum_name(int(r.destination), _SYNTH_MOD_DESTINATIONS),
+                ),
                 depth=float(r.depth),
             )
             for r in c.mod_routings[: int(c.num_mod_routings)]
         )
         return cls(
             preset=c.preset.decode("utf-8", errors="replace"),
-            engine_mode=_synth_enum_name(int(c.engine_mode), _SYNTH_ENGINE_MODES),
-            waveform=_synth_enum_name(int(c.waveform), _SYNTH_OSC_WAVEFORMS),
+            engine_mode=cast(
+                SynthEngineMode, _synth_enum_name(int(c.engine_mode), _SYNTH_ENGINE_MODES)
+            ),
+            waveform=cast(
+                SynthOscWaveform, _synth_enum_name(int(c.waveform), _SYNTH_OSC_WAVEFORMS)
+            ),
             unison=int(c.unison),
             detune_cents=float(c.detune_cents),
             drift_cents=float(c.drift_cents),
             drive=float(c.drive),
-            filter_model=_synth_enum_name(int(c.filter_model), _SYNTH_FILTER_MODELS),
-            filter_output=_synth_enum_name(int(c.filter_output), _SYNTH_FILTER_OUTPUTS),
+            filter_model=cast(
+                SynthFilterModel, _synth_enum_name(int(c.filter_model), _SYNTH_FILTER_MODELS)
+            ),
+            filter_output=cast(
+                SynthFilterOutput, _synth_enum_name(int(c.filter_output), _SYNTH_FILTER_OUTPUTS)
+            ),
             cutoff_hz=float(c.cutoff_hz),
             hp_cutoff_hz=float(c.hp_cutoff_hz),
             sample_hold_hz=float(c.sample_hold_hz),
@@ -662,20 +677,24 @@ class SynthPatch:
             lfo_to_pitch_cents=float(c.lfo_to_pitch_cents),
             lfo2_rate_hz=float(c.lfo2_rate_hz),
             glide_ms=float(c.glide_ms),
-            body=_synth_enum_name(int(c.body), _SYNTH_BODY_TYPES),
+            body=cast(SynthBodyType, _synth_enum_name(int(c.body), _SYNTH_BODY_TYPES)),
             body_mix=float(c.body_mix),
             stereo_spread=float(c.stereo_spread),
-            retrigger=_synth_enum_name(int(c.retrigger), _SYNTH_RETRIGGERS),
-            lfo_shape=_synth_enum_name(int(c.lfo_shape), _SYNTH_LFO_SHAPES),
+            retrigger=cast(SynthRetrigger, _synth_enum_name(int(c.retrigger), _SYNTH_RETRIGGERS)),
+            lfo_shape=cast(SynthLfoShape, _synth_enum_name(int(c.lfo_shape), _SYNTH_LFO_SHAPES)),
             mod_routings=routings,
             gain=float(c.gain),
             polyphony=int(c.polyphony),
             bus_drive=float(c.bus_drive),
             sample_set=int(c.sample_set),
             sample_level=float(c.sample_level),
-            sample_loop=_synth_enum_name(int(c.sample_loop), _SAMPLE_LOOP_MODES),
+            sample_loop=cast(
+                SampleLoopMode, _synth_enum_name(int(c.sample_loop), _SAMPLE_LOOP_MODES)
+            ),
             sample_start_offset=float(c.sample_start_offset),
-            sample_key_track=_synth_enum_name(int(c.sample_key_track), _SAMPLE_KEY_TRACKS),
+            sample_key_track=cast(
+                SampleKeyTrack, _synth_enum_name(int(c.sample_key_track), _SAMPLE_KEY_TRACKS)
+            ),
             drift_rate_hz=float(c.drift_rate_hz),
             amp_delay_ms=float(c.amp_delay_ms),
             amp_hold_ms=float(c.amp_hold_ms),
@@ -707,7 +726,7 @@ def _synth_param_info(raw: str) -> list[SynthParamInfo]:
     return [_from_wire(SynthParamInfo, entry) for entry in json.loads(raw)]
 
 
-def synth_engine_param_info(engine_mode: str | int) -> list[SynthParamInfo]:
+def synth_engine_param_info(engine_mode: SynthEngineMode) -> list[SynthParamInfo]:
     """Describe every :attr:`SynthPatch.engine_params` key of ``engine_mode``.
 
     One descriptor per field of that engine's own section, in the layout of
