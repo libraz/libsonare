@@ -42,7 +42,7 @@ _STATE_READS = [
     ("RealtimeEngine", "external_midi_dropped_count"),
     ("RealtimeEngine", "clip_page_request_overflow_count"),
     ("RealtimeEngine", "warp_stretch_overflow_count"),
-    ("Project", "soundfont_preset_count"),
+    ("Project", "sound_font_preset_count"),
 ]
 
 

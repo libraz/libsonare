@@ -220,7 +220,7 @@ def test_engine_scheduled_midi_clips_render_builtin_instrument() -> None:
         with pytest.raises(SonareValueError, match=r"channel must be in \[0, 15\]"):
             engine.push_midi_note_on(6, 0, 16, 60, 100)
         with pytest.raises(SonareError) as bad_soundfont_error:
-            engine.load_soundfont(b"not sf2")
+            engine.load_sound_font(b"not sf2")
         assert bad_soundfont_error.value.code == 2
         engine.set_midi_clips([])
 

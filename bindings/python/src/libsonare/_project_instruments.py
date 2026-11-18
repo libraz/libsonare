@@ -248,7 +248,7 @@ def _gs_efx_realization_value(name: str) -> int:
 
 @dataclass(frozen=True)
 class Sf2ProgramStatus:
-    """One :meth:`Project.soundfont_manifest` entry: a (channel, bank, program)
+    """One :meth:`Project.sound_font_manifest` entry: a (channel, bank, program)
     combination the arrangement plays, with the backend it resolves to
     (:data:`SOURCE_BACKEND_SF2` or :data:`SOURCE_BACKEND_SYNTH`) and the
     resolved SF2 preset name (GS fallback included; empty for the synth

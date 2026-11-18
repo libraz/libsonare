@@ -10555,6 +10555,7 @@ test = "bindings/python/tests/test_state_reads_are_properties.py::test_state_rea
 [[entry]]
 kind = "method"
 old = "Project.soundfont_preset_count"
+to = "Project.sound_font_preset_count"
 changed = "a property (was a method)"
 domain = "project"
 rule = "getters"
@@ -11126,3 +11127,31 @@ old = "RealtimeEngine.set_bus_strip_eq_band_json"
 removed = "call set_bus_eq_band(bus_id, band_index, band) with an EqBandInput mapping (json.loads the text first)"
 domain = "engine"
 rule = "one-input-form"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.load_soundfont"
+new = "RealtimeEngine.load_sound_font"
+domain = "engine"
+rule = "individual"
+
+[[entry]]
+kind = "method"
+old = "Project.load_soundfont"
+new = "Project.load_sound_font"
+domain = "project"
+rule = "individual"
+
+[[entry]]
+kind = "method"
+old = "Project.clear_soundfont"
+new = "Project.clear_sound_font"
+domain = "project"
+rule = "individual"
+
+[[entry]]
+kind = "method"
+old = "Project.soundfont_manifest"
+new = "Project.sound_font_manifest"
+domain = "project"
+rule = "individual"

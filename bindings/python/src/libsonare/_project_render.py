@@ -337,7 +337,7 @@ class _ProjectRenderMixin:
             interleaved = _from_c_float_array(out, int(out_len.value))
         return _reshape_bounce(interleaved, width.value)
 
-    def load_soundfont(self, data: bytes | bytearray | memoryview) -> None:
+    def load_sound_font(self, data: bytes | bytearray | memoryview) -> None:
         """Load (parse) SoundFont 2 bytes into the project.
 
         The presets / instruments / sample headers and the sample PCM (decoded
@@ -358,7 +358,7 @@ class _ProjectRenderMixin:
             )
         )
 
-    def clear_soundfont(self) -> None:
+    def clear_sound_font(self) -> None:
         """Release the project's loaded SoundFont (no-op when none is loaded)."""
         lib = _get_lib()
         if not hasattr(lib, "sonare_project_clear_soundfont"):
@@ -366,7 +366,7 @@ class _ProjectRenderMixin:
         _check(lib.sonare_project_clear_soundfont(self._require_handle()))
 
     @property
-    def soundfont_preset_count(self) -> int:
+    def sound_font_preset_count(self) -> int:
         """Number of presets in the loaded SoundFont (0 when none is loaded)."""
         lib = _get_lib()
         if not hasattr(lib, "sonare_project_soundfont_preset_count"):
@@ -375,7 +375,7 @@ class _ProjectRenderMixin:
         _check(lib.sonare_project_soundfont_preset_count(self._require_handle(), ctypes.byref(out)))
         return int(out.value)
 
-    def soundfont_manifest(self) -> list[Sf2ProgramStatus]:
+    def sound_font_manifest(self) -> list[Sf2ProgramStatus]:
         """Enumerate the programs the arrangement plays and their backends.
 
         Returns one :class:`Sf2ProgramStatus` per (channel, bank, program)
@@ -427,12 +427,12 @@ class _ProjectRenderMixin:
 
         Like :meth:`bounce_with_builtin_instrument`, but each bound destination
         renders through a GS-compatible SoundFont player fed by the project's
-        loaded SoundFont (:meth:`load_soundfont`): 16 MIDI channels per player,
+        loaded SoundFont (:meth:`load_sound_font`): 16 MIDI channels per player,
         channel 10 drums via bank 128, GS NRPN part edits and GS/GM SysEx
         resets honored. Programs the SoundFont does not cover — including
         bouncing with no SoundFont loaded at all — play through the built-in
         synthesizer GM fallback bank (the data-free floor; see
-        :meth:`soundfont_manifest` for the per-program backend).
+        :meth:`sound_font_manifest` for the per-program backend).
 
         Args:
             instrument: Patch bound to ``destination_id`` (default 0). Pass

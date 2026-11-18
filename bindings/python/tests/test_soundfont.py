@@ -1,4 +1,4 @@
-"""SoundFont (SF2) binding tests: Project.load_soundfont / soundfont_manifest /
+"""SoundFont (SF2) binding tests: Project.load_sound_font / sound_font_manifest /
 bounce_with_sf2_instrument and the realtime engine SF2 instrument entry."""
 
 from __future__ import annotations
@@ -41,44 +41,44 @@ def _build_midi_only_project() -> Project:
     return project
 
 
-def test_load_soundfont_counts_presets_and_clears() -> None:
+def test_load_sound_font_counts_presets_and_clears() -> None:
     project = Project()
     try:
-        assert project.soundfont_preset_count == 0
-        project.load_soundfont(_SF2_BYTES)
-        assert project.soundfont_preset_count == 3
-        project.clear_soundfont()
-        assert project.soundfont_preset_count == 0
+        assert project.sound_font_preset_count == 0
+        project.load_sound_font(_SF2_BYTES)
+        assert project.sound_font_preset_count == 3
+        project.clear_sound_font()
+        assert project.sound_font_preset_count == 0
     finally:
         project.close()
 
 
-def test_load_soundfont_rejects_malformed_bytes() -> None:
+def test_load_sound_font_rejects_malformed_bytes() -> None:
     project = Project()
     try:
-        project.load_soundfont(_SF2_BYTES)
+        project.load_sound_font(_SF2_BYTES)
         with pytest.raises(SonareError):
-            project.load_soundfont(b"not an sf2 file")
+            project.load_sound_font(b"not an sf2 file")
         # The previous SoundFont is kept after a failed load.
-        assert project.soundfont_preset_count == 3
+        assert project.sound_font_preset_count == 3
         with pytest.raises(ValueError):
-            project.load_soundfont(b"")
+            project.load_sound_font(b"")
     finally:
         project.close()
 
 
-def test_soundfont_manifest_reports_backends() -> None:
+def test_sound_font_manifest_reports_backends() -> None:
     project = _build_midi_only_project()
     try:
         # Without a SoundFont the played program is a synth fallback.
-        manifest = project.soundfont_manifest()
+        manifest = project.sound_font_manifest()
         assert manifest == [
             Sf2ProgramStatus(
                 channel=0, bank=0, program=0, backend=SOURCE_BACKEND_SYNTH, preset_name=""
             )
         ]
-        project.load_soundfont(_SF2_BYTES)
-        manifest = project.soundfont_manifest()
+        project.load_sound_font(_SF2_BYTES)
+        manifest = project.sound_font_manifest()
         assert manifest == [
             Sf2ProgramStatus(
                 channel=0, bank=0, program=0, backend=SOURCE_BACKEND_SF2, preset_name="Piano 1"
@@ -98,7 +98,7 @@ def test_bounce_with_sf2_instrument_produces_deterministic_audio() -> None:
         )
         assert float(np.max(np.abs(fallback))) > 0.01
 
-        project.load_soundfont(_SF2_BYTES)
+        project.load_sound_font(_SF2_BYTES)
         audio = project.bounce_with_sf2_instrument(
             Sf2InstrumentConfig(gain=1.0),
             total_frames=4096,
@@ -202,9 +202,9 @@ def test_engine_sf2_instrument_renders_live_midi() -> None:
         engine.clear_midi_instrument(7)
 
         with pytest.raises(SonareError):
-            engine.load_soundfont(b"bad!")
+            engine.load_sound_font(b"bad!")
 
-        engine.load_soundfont(_SF2_BYTES)
+        engine.load_sound_font(_SF2_BYTES)
         engine.set_sf2_instrument(Sf2InstrumentConfig(gain=1.0), destination_id=7)
         assert engine.midi_instrument_count == 1
 
@@ -229,7 +229,7 @@ def _render_overdrive(realization: str | None) -> np.ndarray:
     """One held note on part 1 through an Overdrive insertion effect, realised as asked."""
     engine = RealtimeEngine(48000.0, 128)
     try:
-        engine.load_soundfont(_SF2_BYTES)
+        engine.load_sound_font(_SF2_BYTES)
         config = (
             Sf2InstrumentConfig()
             if realization is None

@@ -446,7 +446,7 @@ class _EngineMidiMixin:
         )
         return int(out_id.value)
 
-    def load_soundfont(self, data: bytes | bytearray | memoryview) -> None:
+    def load_sound_font(self, data: bytes | bytearray | memoryview) -> None:
         """Load (parse) SoundFont 2 bytes into the engine.
 
         Replaces any previously loaded SoundFont (already-bound SF2 instruments
@@ -477,7 +477,7 @@ class _EngineMidiMixin:
         the defaults. After binding, live MIDI input and scheduled MIDI clips
         routed to that destination render through the player (16 MIDI
         channels, channel 10 drums, GS NRPN part edits, GS/GM SysEx resets).
-        Without a loaded SoundFont (:meth:`load_soundfont`) — or for programs
+        Without a loaded SoundFont (:meth:`load_sound_font`) — or for programs
         the SoundFont does not cover — notes play through the built-in
         synthesizer GM fallback bank (the data-free floor).
         """

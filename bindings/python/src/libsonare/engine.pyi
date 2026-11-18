@@ -570,7 +570,7 @@ class RealtimeEngine:
     def resolve_instrument_automation_id(self, destination_id: int, param_name: str) -> int:
         """Resolve a hosted instrument's continuous parameter to its automation id."""
         ...
-    def load_soundfont(self, data: bytes | bytearray | memoryview) -> None:
+    def load_sound_font(self, data: bytes | bytearray | memoryview) -> None:
         """Parse SoundFont 2 bytes into the engine, replacing any previous one; malformed input
         raises SonareError."""
         ...

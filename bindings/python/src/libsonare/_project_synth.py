@@ -516,7 +516,7 @@ class SampleBank:
     """Host-supplied PCM the NativeSynth sample engine plays.
 
     The other door into sampled playback is a SoundFont
-    (:meth:`Project.load_soundfont`), which brings a container and its own
+    (:meth:`Project.load_sound_font`), which brings a container and its own
     generator model. This one takes float frames a caller prepared elsewhere,
     described by nothing but a keymap: add each sample, map key/velocity
     rectangles onto them, and bind the bank alongside a
