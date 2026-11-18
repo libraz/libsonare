@@ -161,3 +161,12 @@ changed = "the JSON note record no longer carries has_pitch: the pitch keys (med
 domain = "analysis"
 rule = "absent-not-sentinel"
 test = "bindings/python/tests/test_cli_absent_keys.py::test_vocal_notes_omit_every_pitch_key_of_an_unpitched_note"
+
+[[entry]]
+kind = "command"
+old = "melody"
+frontend = "native"
+changed = "the JSON drops has_melody, mean_frequency becomes mean_frequency_hz and vibrato_rate becomes vibrato_rate_hz; with no voiced frame pitch_range_octaves, mean_frequency_hz, pitch_stability and vibrato_rate_hz are absent rather than 0, so test for mean_frequency_hz"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "tests/cli/cli_analysis_test.cpp::silence omits every measure read off voiced frames"

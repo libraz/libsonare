@@ -536,8 +536,30 @@ TEST_CASE("CLI melody command", "[cli]") {
   SECTION("json output") {
     auto [code, output] = exec_command(CLI + " melody " + TEST_WAV + " --json -q");
     REQUIRE(code == 0);
-    REQUIRE_THAT(output, ContainsSubstring("\"has_melody\""));
-    REQUIRE_THAT(output, ContainsSubstring("\"mean_frequency\""));
+    const auto payload = sonare::util::json::parse_strict(output);
+    REQUIRE_FALSE(payload.contains("has_melody"));
+    REQUIRE(payload["mean_frequency_hz"].as_number() > 0.0);
+    REQUIRE(payload.contains("vibrato_rate_hz"));
+  }
+
+  SECTION("silence omits every measure read off voiced frames") {
+    const std::string silent = unique_temp_path("_silent.wav");
+    save_wav(silent, std::vector<float>(22050, 0.0f), 22050);
+    auto [code, output] = exec_command(CLI + " melody " + silent + " --json -q");
+    REQUIRE(code == 0);
+    const auto payload = sonare::util::json::parse_strict(output);
+    for (const char* key : {"has_melody", "pitch_range_octaves", "mean_frequency_hz",
+                            "pitch_stability", "vibrato_rate_hz"}) {
+      INFO(key);
+      REQUIRE_FALSE(payload.contains(key));
+    }
+    REQUIRE(payload.contains("pitch_count"));
+
+    auto [text_code, text] = exec_command(CLI + " melody " + silent + " -q");
+    REQUIRE(text_code == 0);
+    REQUIRE_THAT(text, ContainsSubstring("no melody"));
+    REQUIRE_THAT(text, !ContainsSubstring("Mean Frequency"));
+    std::remove(silent.c_str());
   }
 }
 

@@ -461,26 +461,31 @@ int cmd_melody(const CliArgs& args, const Audio& audio) {
   MelodyAnalyzer analyzer(audio, config);
   const MelodyContour& c = analyzer.contour();
 
+  // The contour measures are read off voiced frames only, so with none voiced
+  // there is nothing to report and the keys are omitted.
+  const bool voiced = analyzer.has_melody();
   if (args.json_output) {
-    JsonBuilder()
-        .begin_object()
-        .kv("has_melody", analyzer.has_melody())
-        .kv("pitch_range_octaves", c.pitch_range_octaves)
-        .kv("mean_frequency", c.mean_frequency)
-        .kv("pitch_stability", c.pitch_stability)
-        .kv("vibrato_rate", c.vibrato_rate)
-        .kv("pitch_count", c.pitches.size())
-        .end_object()
-        .print();
+    JsonBuilder json;
+    json.begin_object();
+    if (voiced) {
+      json.kv("pitch_range_octaves", c.pitch_range_octaves)
+          .kv("mean_frequency_hz", c.mean_frequency)
+          .kv("pitch_stability", c.pitch_stability)
+          .kv("vibrato_rate_hz", c.vibrato_rate);
+    }
+    json.kv("pitch_count", c.pitches.size()).end_object().print();
   } else {
     std::cout << "\n"
               << color::cyan << color::bold << basename(args.input_file) << color::reset << "\n";
     std::cout << "  " << color::cyan << "> Melody Analysis:" << color::reset << "\n";
-    std::cout << "    Has Melody:      " << (analyzer.has_melody() ? "Yes" : "No") << "\n";
-    printf("    Pitch Range:     %.2f octaves\n", c.pitch_range_octaves);
-    printf("    Mean Frequency:  %.1f Hz\n", c.mean_frequency);
-    printf("    Pitch Stability: %.2f\n", c.pitch_stability);
-    printf("    Vibrato Rate:    %.1f Hz\n", c.vibrato_rate);
+    if (voiced) {
+      printf("    Pitch Range:     %.2f octaves\n", c.pitch_range_octaves);
+      printf("    Mean Frequency:  %.1f Hz\n", c.mean_frequency);
+      printf("    Pitch Stability: %.2f\n", c.pitch_stability);
+      printf("    Vibrato Rate:    %.1f Hz\n", c.vibrato_rate);
+    } else {
+      std::cout << "    no melody\n";
+    }
     printf("    Pitch Points:    %zu\n", c.pitches.size());
     std::cout << "\n";
   }

@@ -371,11 +371,16 @@ TEST_CASE("CLI global DSP options reach the analysis on every path that reads th
     const auto finer_hop = payload_of(base_command + " --hop-length 256");
     REQUIRE(finer_hop["pitch_count"].as_int() != base["pitch_count"].as_int());
 
+    // A measure read off voiced frames is absent when none is voiced.
+    const auto mean_hz = [](const auto& payload) {
+      return payload.contains("mean_frequency_hz") ? payload["mean_frequency_hz"].as_float()
+                                                   : -1.0f;
+    };
     const auto lowered_ceiling = payload_of(base_command + " --fmax 300");
-    REQUIRE(lowered_ceiling["mean_frequency"].as_float() != base["mean_frequency"].as_float());
+    REQUIRE(mean_hz(lowered_ceiling) != mean_hz(base));
 
     const auto raised_floor = payload_of(base_command + " --fmin 500");
-    REQUIRE(raised_floor["has_melody"].as_bool() != base["has_melody"].as_bool());
+    REQUIRE(raised_floor.contains("mean_frequency_hz") != base.contains("mean_frequency_hz"));
   }
 
   SECTION("boundaries") {
