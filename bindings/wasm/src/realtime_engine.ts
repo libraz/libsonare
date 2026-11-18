@@ -509,7 +509,7 @@ function stripTarget(fnName: string, ref: StripRef): StripTarget {
 function trackOnly(fnName: string, ref: StripRef): number {
   const target = stripTarget(fnName, ref);
   if (target.master) {
-    throw new RangeError(`${fnName}: the master strip has no such setter`);
+    throw new RangeError(`${fnName}: the master strip has no ${fnName.replace(/^set/, '')}`);
   }
   return target.trackId;
 }
