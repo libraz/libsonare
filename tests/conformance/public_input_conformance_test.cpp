@@ -66,7 +66,7 @@ std::vector<SonareEngineMarker> corpus_markers(const sonare::util::json::Value& 
   return markers;
 }
 
-std::vector<MarkerBytes> marker_snapshot(SonareRealtimeEngine* engine) {
+std::vector<MarkerBytes> marker_snapshot(SonareEngine* engine) {
   size_t count = 0;
   REQUIRE(sonare_engine_marker_count(engine, &count) == SONARE_OK);
   std::vector<MarkerBytes> snapshot(count);
@@ -86,7 +86,7 @@ TEST_CASE("public input corpus preserves atomic marker state across the C ABI",
   const auto& transaction = corpus["marker_transaction"];
   const auto initial = corpus_markers(transaction["initial"]);
 
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
 
@@ -125,7 +125,8 @@ TEST_CASE("public input corpus keeps mixer option rejection conformant across th
     DYNAMIC_SECTION(test_case["id"].as_string()) {
       if (!test_case["c_representable"].as_bool()) continue;
 
-      SonareMixer* mixer = sonare_mixer_create(48000, 128);
+      SonareMixer* mixer = nullptr;
+      REQUIRE(sonare_mixer_create(48000, 128, &mixer) == SONARE_OK);
       REQUIRE(mixer != nullptr);
       SonareStrip* strip = sonare_mixer_add_strip(mixer, "corpus");
       REQUIRE(strip != nullptr);

@@ -53,14 +53,16 @@ bool finite_controls(float pitch_semitones, float mix) noexcept {
 
 extern "C" {
 
-SonareStreamingRetune* sonare_streaming_retune_create(float pitch_semitones, float mix,
-                                                      int grain_size_samples) {
+SonareError sonare_streaming_retune_create(float pitch_semitones, float mix, int grain_size_samples,
+                                           SonareStreamingRetune** out) {
   SONARE_C_API_ENTRY;
+  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = nullptr;
 #if defined(SONARE_WITH_VOICE_CHANGER)
   if (!finite_controls(pitch_semitones, mix)) {
     set_last_error(SONARE_ERROR_INVALID_PARAMETER,
                    "streaming retune: pitch_semitones and mix must be finite");
-    return nullptr;
+    return SONARE_ERROR_INVALID_PARAMETER;
   }
   SONARE_C_TRY
   StreamingRetuneConfig config;
@@ -69,15 +71,16 @@ SonareStreamingRetune* sonare_streaming_retune_create(float pitch_semitones, flo
   config.grain_size = grain_size_samples;
   auto handle = std::make_unique<SonareStreamingRetune>();
   handle->retune = std::make_unique<StreamingRetune>(config);
-  return handle.release();
-  SONARE_C_CATCH_RETURN(nullptr)
+  *out = handle.release();
+  return SONARE_OK;
+  SONARE_C_CATCH
 #else
   (void)pitch_semitones;
   (void)mix;
   (void)grain_size_samples;
   sonare_c_detail::set_last_error(SONARE_ERROR_NOT_SUPPORTED,
                                   "streaming retune: voice changer support is not built");
-  return nullptr;
+  return SONARE_ERROR_NOT_SUPPORTED;
 #endif
 }
 

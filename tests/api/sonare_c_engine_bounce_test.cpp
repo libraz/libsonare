@@ -29,7 +29,7 @@
 namespace {
 
 std::vector<float> run_silent_dither_bounce(int num_channels, int dither_type) {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(engine != nullptr);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 8, 8) == SONARE_OK);
@@ -92,7 +92,7 @@ TEST_CASE("offline bounce dither keeps channel zero invariant across widths",
 
 TEST_CASE("sonare_engine_bounce_offline validates the channel count against a layout",
           "[c_api][engine][surround]") {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(engine != nullptr);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
@@ -124,7 +124,7 @@ TEST_CASE("sonare_engine_bounce_offline validates the channel count against a la
 }
 
 TEST_CASE("sonare_engine_bounce_offline rejects an out-of-range dither type", "[c_api][engine]") {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 2, 2) == SONARE_OK);
 
@@ -159,7 +159,7 @@ TEST_CASE("sonare_engine_bounce_offline rejects an out-of-range dither type", "[
 
 TEST_CASE("sonare_engine_bounce_offline refuses dither bits before it renders",
           "[c_api][engine][dither]") {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 8, 8) == SONARE_OK);
 
@@ -206,7 +206,7 @@ TEST_CASE("an offline render's last meter record holds the true peak of its fina
   const float* clip_channels[] = {clip.data()};
 
   const auto render = [&](bool chunked) {
-    SonareRealtimeEngine* engine = nullptr;
+    SonareEngine* engine = nullptr;
     REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
     REQUIRE(sonare_engine_prepare_with_channels(engine, 48000.0, 128, 16, 64, 1) == SONARE_OK);
     SonareEngineClip source{};
@@ -263,7 +263,7 @@ TEST_CASE("engine-owned offline results reject shapes above the allocation budge
   REQUIRE(sonare::resource::engine_bounce_shape_fits(20, 2, 10, 20, false, tiny_limits));
   REQUIRE_FALSE(sonare::resource::engine_bounce_shape_fits(60, 2, 10, 20, false, tiny_limits));
 
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(engine != nullptr);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
@@ -350,7 +350,7 @@ TEST_CASE("the C bounce entry point charges the budget for the dither request", 
   // engine is deliberately left unprepared, which makes the admitted branch stop
   // at the never-prepared check instead of rendering 40M frames -- a wiring
   // regression then reads as INVALID_STATE in under a millisecond.
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(engine != nullptr);
 
@@ -378,7 +378,7 @@ TEST_CASE("offline render/bounce/freeze reject a never-prepared engine", "[c_api
   // must report this synchronously as INVALID_STATE instead of handing back a
   // silent buffer (and, in debug builds, without tripping the push-before-reserve
   // assert inside the telemetry ring).
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(engine != nullptr);
 
@@ -423,7 +423,7 @@ TEST_CASE("sonare_engine_prepare bounds the command and telemetry capacities", "
   // magnitude larger than it asked for. Both capacities are refused above the
   // documented maximum instead, and a refused prepare leaves the engine exactly
   // as unprepared as it was.
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(engine != nullptr);
 
@@ -454,7 +454,7 @@ TEST_CASE("offline render/bounce/freeze reject more channels than the prepared b
   // sonare_engine_prepare_with_channels bounds capture/instrument/PDC/monitor
   // scratch to max_channels; rendering/bouncing/freezing more planes than that
   // must not silently succeed with zeros written past the reserved scratch.
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(engine != nullptr);
   REQUIRE(sonare_engine_prepare_with_channels(engine, 48000.0, 128, 16, 16, /*max_channels=*/2) ==
@@ -500,7 +500,7 @@ TEST_CASE("offline render/bounce/freeze reject more channels than the prepared b
 
 TEST_CASE("offline render/bounce/freeze/prime reject a block size above the prepared block",
           "[c_api][engine]") {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 8, 8) == SONARE_OK);
 
@@ -542,7 +542,7 @@ TEST_CASE("offline render/bounce/freeze/prime reject a block size above the prep
 TEST_CASE(
     "engine bounce rejects a source rate different from the prepared rate without moving transport",
     "[c_api][engine][sample_rate]") {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(engine != nullptr);
   REQUIRE(sonare_engine_prepare(engine, 44100.0, 128, 16, 16) == SONARE_OK);
@@ -592,7 +592,7 @@ TEST_CASE(
 
 TEST_CASE("engine bounce resamples from the matching prepared source rate",
           "[c_api][engine][sample_rate]") {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(engine != nullptr);
   REQUIRE(sonare_engine_prepare(engine, 44100.0, 128, 16, 16) == SONARE_OK);
@@ -619,7 +619,7 @@ TEST_CASE("engine bounce resamples from the matching prepared source rate",
 
 TEST_CASE("sonare_engine_bounce_offline defaults both rates to the prepared rate",
           "[c_api][engine][bounce_rate]") {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 44100.0, 128, 8, 8) == SONARE_OK);
 
@@ -651,7 +651,7 @@ TEST_CASE("sonare_engine_bounce_offline defaults both rates to the prepared rate
 
 TEST_CASE("sonare_engine_bounce_offline refuses a source rate other than the prepared rate",
           "[c_api][engine][bounce_rate]") {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 44100.0, 128, 8, 8) == SONARE_OK);
 
@@ -676,7 +676,7 @@ TEST_CASE("sonare_engine_bounce_offline refuses a source rate other than the pre
 
 TEST_CASE("sonare_engine_bounce_offline resamples when the target differs from the source",
           "[c_api][engine][bounce_rate]") {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 44100.0, 128, 8, 8) == SONARE_OK);
 
@@ -708,7 +708,7 @@ TEST_CASE("sonare_engine_bounce_offline aligns the mix to the timeline under rep
   sonare::mixing::ChannelStrip master({0.0f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});
   master.add_pre_insert(std::make_unique<sonare::mixing::AlignmentDelay>(kLatency));
 
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare_with_channels(engine, 48000.0, 128, 16, 64, 1) == SONARE_OK);
   SonareEngineClip source{};
@@ -780,7 +780,7 @@ TEST_CASE("an aligned bounce does not need pages past the span it was asked for"
   REQUIRE(sonare_clip_page_provider_supply(provider, 0, page0_channels, 1, 4) == SONARE_OK);
   REQUIRE(sonare_clip_page_provider_supply(provider, 1, page1_channels, 1, 4) == SONARE_OK);
 
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare_with_channels(engine, 48000.0, 4, 16, 16, 1) == SONARE_OK);
   SonareEngineClip clip{};

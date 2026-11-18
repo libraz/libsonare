@@ -81,7 +81,7 @@ std::vector<Scenario> scenarios() {
 
 std::tuple<std::string, int64_t, int, int, float> run_bounce(const std::string& signal,
                                                              const Scenario& scenario) {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, kSourceSampleRate, kBlock, 256, 256) == SONARE_OK);
 
@@ -270,7 +270,7 @@ struct AttenuatedLaneEngine {
 
   std::vector<float> left = std::vector<float>(kLength, 1.0f);
   std::vector<float> right = std::vector<float>(kLength, 1.0f);
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
 
   AttenuatedLaneEngine() {
     REQUIRE(sonare_engine_create(&engine) == SONARE_OK);

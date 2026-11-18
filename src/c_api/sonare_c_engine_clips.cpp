@@ -80,7 +80,7 @@ namespace {
 
 // Validates one public clip and builds its schedule, copying or baking its audio.
 // Nothing reaches the engine here, so a refused clip leaves the published set alone.
-SonareError build_clip_schedule(const SonareRealtimeEngine& handle, const SonareEngineClip& clip,
+SonareError build_clip_schedule(const SonareEngine& handle, const SonareEngineClip& clip,
                                 engine::ClipSchedule* out) {
   const bool paged = clip.page_provider != nullptr;
   if (paged && !clip.page_provider->provider) return SONARE_ERROR_INVALID_PARAMETER;
@@ -196,7 +196,7 @@ SonareError build_clip_schedule(const SonareRealtimeEngine& handle, const Sonare
 
 }  // namespace
 
-SonareError sonare_engine_set_clips(SonareRealtimeEngine* engine, const SonareEngineClip* clips,
+SonareError sonare_engine_set_clips(SonareEngine* engine, const SonareEngineClip* clips,
                                     size_t clip_count) {
   SONARE_C_API_ENTRY;
   if (!engine || (clip_count > 0 && !clips)) return SONARE_ERROR_INVALID_PARAMETER;
@@ -211,7 +211,7 @@ SonareError sonare_engine_set_clips(SonareRealtimeEngine* engine, const SonareEn
   SONARE_C_CATCH
 }
 
-SonareError sonare_engine_upsert_clip(SonareRealtimeEngine* engine, const SonareEngineClip* clip) {
+SonareError sonare_engine_upsert_clip(SonareEngine* engine, const SonareEngineClip* clip) {
   SONARE_C_API_ENTRY;
   if (!engine || !clip) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
@@ -223,7 +223,7 @@ SonareError sonare_engine_upsert_clip(SonareRealtimeEngine* engine, const Sonare
   SONARE_C_CATCH
 }
 
-SonareError sonare_engine_remove_clip(SonareRealtimeEngine* engine, uint32_t clip_id) {
+SonareError sonare_engine_remove_clip(SonareEngine* engine, uint32_t clip_id) {
   SONARE_C_API_ENTRY;
   if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
@@ -231,7 +231,7 @@ SonareError sonare_engine_remove_clip(SonareRealtimeEngine* engine, uint32_t cli
   SONARE_C_CATCH
 }
 
-SonareError sonare_engine_clip_count(SonareRealtimeEngine* engine, size_t* out_count) {
+SonareError sonare_engine_clip_count(SonareEngine* engine, size_t* out_count) {
   SONARE_C_API_ENTRY;
   if (!engine || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
   *out_count = engine->engine.clip_count();
@@ -279,7 +279,7 @@ SonareError sonare_clip_page_provider_clear(SonareClipPageProvider* provider, in
   SONARE_C_CATCH
 }
 
-SonareError sonare_engine_pop_clip_page_request(SonareRealtimeEngine* engine,
+SonareError sonare_engine_pop_clip_page_request(SonareEngine* engine,
                                                 SonareClipPageRequest* out_request,
                                                 int* out_has_request) {
   SONARE_C_API_ENTRY;
@@ -297,7 +297,7 @@ SonareError sonare_engine_pop_clip_page_request(SonareRealtimeEngine* engine,
   return SONARE_OK;
 }
 
-SonareError sonare_engine_clip_page_request_overflow_count(SonareRealtimeEngine* engine,
+SonareError sonare_engine_clip_page_request_overflow_count(SonareEngine* engine,
                                                            uint32_t* out_count) {
   SONARE_C_API_ENTRY;
   if (!engine || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
@@ -305,38 +305,35 @@ SonareError sonare_engine_clip_page_request_overflow_count(SonareRealtimeEngine*
   return SONARE_OK;
 }
 
-SonareError sonare_engine_warp_stretch_overflow_count(SonareRealtimeEngine* engine,
-                                                      uint32_t* out_count) {
+SonareError sonare_engine_warp_stretch_overflow_count(SonareEngine* engine, uint32_t* out_count) {
   SONARE_C_API_ENTRY;
   if (!engine || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
   *out_count = engine->engine.warp_stretch_overflow_count();
   return SONARE_OK;
 }
 
-SonareError sonare_engine_set_warp_voice_capacity(SonareRealtimeEngine* engine, uint32_t voices) {
+SonareError sonare_engine_set_warp_voice_capacity(SonareEngine* engine, uint32_t voices) {
   SONARE_C_API_ENTRY;
   if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
   if (!engine->engine.set_warp_voice_capacity(voices)) return SONARE_ERROR_INVALID_PARAMETER;
   return SONARE_OK;
 }
 
-SonareError sonare_engine_warp_voice_capacity(SonareRealtimeEngine* engine, uint32_t* out_voices) {
+SonareError sonare_engine_warp_voice_capacity(SonareEngine* engine, uint32_t* out_voices) {
   SONARE_C_API_ENTRY;
   if (!engine || !out_voices) return SONARE_ERROR_INVALID_PARAMETER;
   *out_voices = engine->engine.warp_voice_capacity();
   return SONARE_OK;
 }
 
-SonareError sonare_engine_set_clip_page_prefetch_frames(SonareRealtimeEngine* engine,
-                                                        int64_t frames) {
+SonareError sonare_engine_set_clip_page_prefetch_frames(SonareEngine* engine, int64_t frames) {
   SONARE_C_API_ENTRY;
   if (!engine || frames < 0) return SONARE_ERROR_INVALID_PARAMETER;
   engine->engine.set_clip_page_prefetch_frames(frames);
   return SONARE_OK;
 }
 
-SonareError sonare_engine_clip_page_prefetch_frames(SonareRealtimeEngine* engine,
-                                                    int64_t* out_frames) {
+SonareError sonare_engine_clip_page_prefetch_frames(SonareEngine* engine, int64_t* out_frames) {
   SONARE_C_API_ENTRY;
   if (!engine || !out_frames) return SONARE_ERROR_INVALID_PARAMETER;
   *out_frames = engine->engine.clip_page_prefetch_frames();

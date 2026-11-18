@@ -12,7 +12,7 @@ TEST_CASE("sonare_engine bounce scatters a strip's surround pan into a 5.1 maste
   // engine ChannelStrip -> apply_lane_to_mix_surround -> 5.1 bounce buffer.
   constexpr int kBlock = 256;
   constexpr int kFrames = kBlock * 8;
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(engine != nullptr);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, kBlock, 64, 16) == SONARE_OK);
@@ -78,7 +78,7 @@ TEST_CASE("sonare_engine bounce scatters a strip's surround pan into a 5.1 maste
 namespace {
 
 // Renders the engine to a 5.1 bounce and returns the per-plane energy.
-std::array<double, 6> bounce_surround_energy(SonareRealtimeEngine* engine, int frames, int block) {
+std::array<double, 6> bounce_surround_energy(SonareEngine* engine, int frames, int block) {
   // A bounce leaves the transport at its end; rewind so every call renders the clip.
   REQUIRE(sonare_engine_seek_sample(engine, 0, -1) == SONARE_OK);
   SonareEngineBounceOptions options{};
@@ -110,7 +110,7 @@ TEST_CASE("sonare_engine_set_track_strip_surround_pan moves a lane across the 5.
           "[c_api][engine][surround]") {
   constexpr int kBlock = 256;
   constexpr int kFrames = kBlock * 8;
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, kBlock, 64, 16) == SONARE_OK);
 
@@ -188,8 +188,8 @@ constexpr int kPreRollFrames = kPreRollBlock * 48;
 // Builds a one-lane engine playing a DC clip, parks the lane fader at
 // @p fader_db through the smoothed lane parameter, and hands the engine over
 // ready to render. The caller destroys it.
-SonareRealtimeEngine* make_pre_roll_engine(const float* const* clip_channels, float fader_db) {
-  SonareRealtimeEngine* engine = nullptr;
+SonareEngine* make_pre_roll_engine(const float* const* clip_channels, float fader_db) {
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(engine != nullptr);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, kPreRollBlock, 64, 16) == SONARE_OK);
@@ -239,7 +239,7 @@ TEST_CASE("an engine offline render opens at the lane's settled fader", "[c_api]
 
   // Reference bounce at unity: the same signal path with no fader offset, so the
   // level assertion below needs no build-dependent absolute value.
-  SonareRealtimeEngine* reference_engine = make_pre_roll_engine(clip_channels, 0.0f);
+  SonareEngine* reference_engine = make_pre_roll_engine(clip_channels, 0.0f);
   SonareEngineBounceResult reference{};
   REQUIRE(sonare_engine_bounce_offline(reference_engine, &options, &reference) == SONARE_OK);
   REQUIRE(reference.interleaved != nullptr);
@@ -248,7 +248,7 @@ TEST_CASE("an engine offline render opens at the lane's settled fader", "[c_api]
   sonare_free_engine_bounce_result(&reference);
   sonare_engine_destroy(reference_engine);
 
-  SonareRealtimeEngine* engine = make_pre_roll_engine(clip_channels, kFaderDb);
+  SonareEngine* engine = make_pre_roll_engine(clip_channels, kFaderDb);
   SonareEngineBounceResult result{};
   REQUIRE(sonare_engine_bounce_offline(engine, &options, &result) == SONARE_OK);
   REQUIRE(result.interleaved != nullptr);
@@ -271,7 +271,7 @@ TEST_CASE("an engine offline render opens at the lane's settled fader", "[c_api]
   sonare_engine_destroy(engine);
 
   // The freeze path captures the same settled lane.
-  SonareRealtimeEngine* freeze_engine = make_pre_roll_engine(clip_channels, kFaderDb);
+  SonareEngine* freeze_engine = make_pre_roll_engine(clip_channels, kFaderDb);
   SonareEngineFreezeOptions freeze{};
   freeze.total_frames = kPreRollFrames;
   freeze.block_size = kPreRollBlock;
@@ -309,8 +309,8 @@ namespace {
 
 // Builds a one-lane engine playing @p clip_channels through a tape insert at
 // @p bias. The caller destroys it.
-SonareRealtimeEngine* make_tape_bias_engine(const float* const* clip_channels, float bias) {
-  SonareRealtimeEngine* engine = nullptr;
+SonareEngine* make_tape_bias_engine(const float* const* clip_channels, float bias) {
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(engine != nullptr);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, kPreRollBlock, 64, 16) == SONARE_OK);
@@ -362,7 +362,7 @@ TEST_CASE("an engine bounce matches a raw offline render through a biased tape i
 
   for (const float bias : {0.0f, 0.5f}) {
     CAPTURE(bias);
-    SonareRealtimeEngine* render_engine = make_tape_bias_engine(clip_channels, bias);
+    SonareEngine* render_engine = make_tape_bias_engine(clip_channels, bias);
     std::array<float, kPreRollFrames> left{};
     std::array<float, kPreRollFrames> right{};
     float* channels[] = {left.data(), right.data()};
@@ -370,7 +370,7 @@ TEST_CASE("an engine bounce matches a raw offline render through a biased tape i
                                          kPreRollBlock) == SONARE_OK);
     sonare_engine_destroy(render_engine);
 
-    SonareRealtimeEngine* bounce_engine = make_tape_bias_engine(clip_channels, bias);
+    SonareEngine* bounce_engine = make_tape_bias_engine(clip_channels, bias);
     SonareEngineBounceResult result{};
     REQUIRE(sonare_engine_bounce_offline(bounce_engine, &options, &result) == SONARE_OK);
     REQUIRE(result.frames == kPreRollFrames);
@@ -394,7 +394,7 @@ TEST_CASE("an engine bounce matches a raw offline render through a biased tape i
 TEST_CASE("sonare_engine track lanes route clips and accept lane commands", "[c_api][engine]") {
   constexpr int kBlock = 256;
   constexpr int kFrames = kBlock * 10;
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(engine != nullptr);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, kBlock, 64, 16) == SONARE_OK);
@@ -473,7 +473,7 @@ TEST_CASE("sonare_engine track lanes route clips and accept lane commands", "[c_
 
 TEST_CASE("sonare_engine schedules track monitor modes on the prepared monitor bus",
           "[c_api][engine][monitor]") {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(engine != nullptr);
 
@@ -560,7 +560,7 @@ TEST_CASE("sonare_engine schedules track monitor modes on the prepared monitor b
 
   // A valid transition reports queue back-pressure as OOM, not as an invalid
   // mode. The tiny queue is intentionally left undrained.
-  SonareRealtimeEngine* tiny = nullptr;
+  SonareEngine* tiny = nullptr;
   REQUIRE(sonare_engine_create(&tiny) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(tiny, 48000.0, kBlock, 2, 2) == SONARE_OK);
   REQUIRE(sonare_engine_set_track_monitor_mode(tiny, 0, SONARE_ENGINE_TRACK_MONITOR_MODE_OFF, -1) ==
@@ -589,7 +589,7 @@ TEST_CASE("sonare_engine track send zero-init defaults to post-fader", "[c_api][
 TEST_CASE("sonare_engine track buses route lane sends", "[c_api][engine]") {
   constexpr int kBlock = 256;
   constexpr int kFrames = kBlock * 40;
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(engine != nullptr);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, kBlock, 64, 64) == SONARE_OK);
@@ -719,7 +719,7 @@ TEST_CASE("sonare_engine track buses route lane sends", "[c_api][engine]") {
 
 #if defined(SONARE_WITH_MIXING)
 TEST_CASE("sonare_engine resolves and sets bus/master insert automation ids", "[c_api][engine]") {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(engine != nullptr);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 256, 64, 64) == SONARE_OK);
@@ -781,7 +781,7 @@ TEST_CASE("sonare_engine resolves and sets bus/master insert automation ids", "[
 #if defined(SONARE_WITH_MIXING)
 TEST_CASE("sonare_engine applies, restores and clears strip insert parameters by name",
           "[c_api][engine]") {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 256, 64, 64) == SONARE_OK);
 
@@ -864,7 +864,7 @@ TEST_CASE("sonare_engine applies, restores and clears strip insert parameters by
 }
 
 TEST_CASE("sonare_engine_set_automation_lane with no points removes the lane", "[c_api][engine]") {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 256, 64, 64) == SONARE_OK);
   SonareEngineTrackLane lanes[] = {{10, nullptr, 0, 0, 1}};
@@ -892,7 +892,7 @@ TEST_CASE("a track fader id held across a lane reorder keeps driving its own tra
           "[c_api][engine]") {
   constexpr int kBlock = 256;
   constexpr int kFrames = kBlock * 80;
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, kBlock, 64, 16) == SONARE_OK);
 
@@ -947,7 +947,7 @@ TEST_CASE("a track fader id held across a lane reorder keeps driving its own tra
 TEST_CASE("a bus fader id held across a bus reorder keeps driving its own bus", "[c_api][engine]") {
   constexpr int kBlock = 256;
   constexpr int kFrames = kBlock * 80;
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, kBlock, 64, 16) == SONARE_OK);
 
@@ -1009,7 +1009,7 @@ TEST_CASE("a bus fader id held across a bus reorder keeps driving its own bus", 
 
 TEST_CASE("sonare_engine_resolve_bus_automation_id refuses an unknown bus or name",
           "[c_api][engine]") {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 256, 64, 16) == SONARE_OK);
   SonareEngineBus buses[] = {{100, 0.0f, 1, 0, nullptr, 0}};
@@ -1047,7 +1047,7 @@ TEST_CASE("a track insert lane set before a lane reorder survives a later automa
           "[c_api][engine]") {
   constexpr int kBlock = 256;
   constexpr int kFrames = kBlock * 40;
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, kBlock, 64, 16) == SONARE_OK);
 
@@ -1128,7 +1128,7 @@ std::string insert_scene(const char* strip_key, const char* strip_id,
 
 uint32_t insert_param_strip_of(uint32_t id) { return (id >> 16u) & 0x1FFFu; }
 
-bool id_alive(SonareRealtimeEngine* engine, uint32_t id) {
+bool id_alive(SonareEngine* engine, uint32_t id) {
   SonareParameterInfo info{};
   return sonare_engine_parameter_info(engine, id, &info) == SONARE_OK;
 }
@@ -1137,7 +1137,7 @@ bool id_alive(SonareRealtimeEngine* engine, uint32_t id) {
 
 TEST_CASE("track insert ids keep their track across lane reorders and removals",
           "[c_api][engine]") {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 256, 64, 16) == SONARE_OK);
   SonareEngineTrackLane lanes[] = {{10, nullptr, 0, 0, 1}, {20, nullptr, 0, 0, 1}};
@@ -1183,7 +1183,7 @@ TEST_CASE("track insert ids keep their track across lane reorders and removals",
 }
 
 TEST_CASE("insert ids fail once their slot holds another processor type", "[c_api][engine]") {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 256, 64, 16) == SONARE_OK);
   SonareEngineTrackLane lanes[] = {{10, nullptr, 0, 0, 1}};
@@ -1232,7 +1232,7 @@ TEST_CASE("insert ids fail once their slot holds another processor type", "[c_ap
 
 TEST_CASE("bus insert ids survive bus reorders and fail once the bus is removed",
           "[c_api][engine]") {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 256, 64, 16) == SONARE_OK);
   SonareEngineBus buses[] = {{1, 0.0f, 1, 0, nullptr, 0}, {2, 0.0f, 1, 0, nullptr, 0}};
@@ -1272,7 +1272,7 @@ TEST_CASE("bus insert ids survive bus reorders and fail once the bus is removed"
 }
 
 TEST_CASE("a GS EFX type change retires the ids of its slot", "[c_api][engine]") {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 256, 64, 16) == SONARE_OK);
   // Both types are one processor class; only the EFX type tells their byte layouts apart.
@@ -1306,7 +1306,7 @@ TEST_CASE("a GS EFX type change retires the ids of its slot", "[c_api][engine]")
 
 TEST_CASE("track strip, lane and bus changes that would overflow the insert id table are refused",
           "[c_api][engine]") {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 64, 64, 16) == SONARE_OK);
 
@@ -1373,7 +1373,7 @@ TEST_CASE("track strip, lane and bus changes that would overflow the insert id t
 }
 
 TEST_CASE("a strip change that would overflow the insert id table is refused", "[c_api][engine]") {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 64, 64, 16) == SONARE_OK);
 
@@ -1404,7 +1404,7 @@ TEST_CASE("a strip change that would overflow the insert id table is refused", "
 
 TEST_CASE("master strip setters without a master strip report invalid state",
           "[c_api][engine][mixing]") {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 64, 64, 16) == SONARE_OK);
   const char* band = R"({"type":"peak","frequencyHz":1000,"gainDb":3,"q":1,"enabled":true})";
@@ -1449,7 +1449,7 @@ TEST_CASE("master strip setters without a master strip report invalid state",
 
 TEST_CASE("a bus list refused by earlier bus or lane configuration reports invalid state",
           "[c_api][engine][mixing]") {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 64, 64, 16) == SONARE_OK);
   SonareEngineBus stereo[] = {{1, 0.0f, SONARE_CHANNEL_LAYOUT_STEREO, 0, nullptr, 0},
@@ -1487,7 +1487,7 @@ TEST_CASE("a bus list refused by earlier bus or lane configuration reports inval
 
 TEST_CASE("an allocation failure in an engine mixer setter reports out of memory",
           "[c_api][engine][mixing][allocation]") {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 64, 64, 16) == SONARE_OK);
   SonareEngineBus bus[] = {{1, 0.0f, SONARE_CHANNEL_LAYOUT_STEREO, 0, nullptr, 0}};
@@ -1528,7 +1528,7 @@ TEST_CASE("an allocation failure in an engine mixer setter reports out of memory
 
 TEST_CASE("insert automation resolvers define out_id on every exit path",
           "[c_api][engine][mixing]") {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(engine != nullptr);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
@@ -1569,7 +1569,7 @@ TEST_CASE("insert automation resolvers define out_id on every exit path",
 TEST_CASE("sonare_engine_set_track_strip_json processes lane strip", "[c_api][engine]") {
   constexpr int kBlock = 256;
   constexpr int kFrames = kBlock * 4;
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(engine != nullptr);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, kBlock, 64, 64) == SONARE_OK);
@@ -1634,7 +1634,7 @@ TEST_CASE("sonare_engine_set_track_strip_json processes lane strip", "[c_api][en
 TEST_CASE("sonare_engine_set_track_strip_insert_bypassed toggles track insert", "[c_api][engine]") {
   constexpr int kBlock = 256;
   constexpr int kFrames = kBlock * 16;
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(engine != nullptr);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, kBlock, 64, 64) == SONARE_OK);
@@ -1690,7 +1690,7 @@ TEST_CASE("sonare_engine_set_track_strip_eq_band_json updates embedded lane EQ",
           "[c_api][engine]") {
   constexpr int kBlock = 256;
   constexpr int kFrames = kBlock * 16;
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(engine != nullptr);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, kBlock, 64, 64) == SONARE_OK);
@@ -1752,7 +1752,7 @@ TEST_CASE("sonare_engine_set_track_strip_eq_band_json updates embedded lane EQ",
 TEST_CASE("sonare_engine_set_master_strip_json processes master strip", "[c_api][engine]") {
   constexpr int kBlock = 256;
   constexpr int kFrames = kBlock * 40;
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(engine != nullptr);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, kBlock, 64, 64) == SONARE_OK);
@@ -1826,7 +1826,7 @@ TEST_CASE("sonare_engine_set_master_strip_eq_band_json updates embedded master E
           "[c_api][engine]") {
   constexpr int kBlock = 256;
   constexpr int kFrames = kBlock * 16;
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(engine != nullptr);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, kBlock, 64, 64) == SONARE_OK);
@@ -1880,7 +1880,7 @@ TEST_CASE("sonare_engine_set_master_strip_eq_band_json updates embedded master E
 TEST_CASE("sonare_engine_set_bus_strip_eq_band_json updates embedded bus EQ", "[c_api][engine]") {
   constexpr int kBlock = 256;
   constexpr int kFrames = kBlock * 16;
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(engine != nullptr);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, kBlock, 64, 64) == SONARE_OK);
@@ -1951,7 +1951,7 @@ TEST_CASE(
   // missing "eq" flattens.
   constexpr int kBlock = 256;
   constexpr int kFrames = kBlock * 16;
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(engine != nullptr);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, kBlock, 64, 64) == SONARE_OK);
@@ -1996,7 +1996,7 @@ TEST_CASE(
   io[0] = resent_out.data();
   REQUIRE(sonare_engine_process(engine, io, 1, kBlock) == SONARE_OK);
 
-  SonareRealtimeEngine* reference = nullptr;
+  SonareEngine* reference = nullptr;
   REQUIRE(sonare_engine_create(&reference) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(reference, 48000.0, kBlock, 64, 64) == SONARE_OK);
   REQUIRE(sonare_engine_set_clips(reference, &clip, 1) == SONARE_OK);
@@ -2036,7 +2036,7 @@ TEST_CASE(
     "[c_api][engine]") {
   constexpr int kBlock = 256;
   constexpr int kFrames = kBlock * 16;
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(engine != nullptr);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, kBlock, 64, 64) == SONARE_OK);
@@ -2086,7 +2086,7 @@ TEST_CASE(
   io[0] = resent_out.data();
   REQUIRE(sonare_engine_process(engine, io, 1, kBlock) == SONARE_OK);
 
-  SonareRealtimeEngine* reference = nullptr;
+  SonareEngine* reference = nullptr;
   REQUIRE(sonare_engine_create(&reference) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(reference, 48000.0, kBlock, 64, 64) == SONARE_OK);
   REQUIRE(sonare_engine_set_clips(reference, &clip, 1) == SONARE_OK);
@@ -2161,7 +2161,7 @@ TEST_CASE("sonare_engine_set_track_strip_insert_param_by_name changes reverb mix
   constexpr int kBlock = 256;
   constexpr int kFrames = kBlock * 16;
   constexpr float kPi = 3.14159265358979323846f;
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(engine != nullptr);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, kBlock, 64, 64) == SONARE_OK);
@@ -2229,7 +2229,7 @@ TEST_CASE("sonare_engine_set_track_strip_insert_param_by_name changes reverb mix
 TEST_CASE("sonare_engine track strip pan setters reflect in realtime", "[c_api][engine]") {
   constexpr int kBlock = 256;
   constexpr int kFrames = kBlock * 8;
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(engine != nullptr);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, kBlock, 64, 64) == SONARE_OK);
@@ -2299,7 +2299,7 @@ TEST_CASE("sonare_engine track strip pan setters reflect in realtime", "[c_api][
 TEST_CASE("sonare_engine bus strip pan setters reflect in realtime", "[c_api][engine]") {
   constexpr int kBlock = 256;
   constexpr int kFrames = kBlock * 8;
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(engine != nullptr);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, kBlock, 64, 64) == SONARE_OK);
@@ -2375,7 +2375,7 @@ TEST_CASE("sonare_engine bus strip pan setters reflect in realtime", "[c_api][en
 
 TEST_CASE("sonare_engine bus strip pan setters refuse a surround bus",
           "[c_api][engine][surround]") {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(engine != nullptr);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 256, 64, 64) == SONARE_OK);
@@ -2418,7 +2418,7 @@ TEST_CASE("sonare_engine lane send timing taps pre or post fader", "[c_api][engi
   // send bypasses the -40 dB fader, so the bus (and the master sum) stays loud;
   // a post-fader send is attenuated alongside the main path.
   const auto master_rms = [&](int send_timing) -> double {
-    SonareRealtimeEngine* engine = nullptr;
+    SonareEngine* engine = nullptr;
     REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
     REQUIRE(sonare_engine_prepare(engine, 48000.0, kBlock, 64, 64) == SONARE_OK);
 
@@ -2475,7 +2475,7 @@ TEST_CASE("sonare_engine scope telemetry reports a tone's spectrum and goniomete
   constexpr float kPi = 3.14159265358979323846f;
   constexpr float kToneHz = 1000.0f;
   constexpr float kSampleRate = 48000.0f;
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, kSampleRate, kBlock, 64, 64) == SONARE_OK);
 
@@ -2555,7 +2555,7 @@ TEST_CASE("sonare_engine scope telemetry applies a pre-prepare band configuratio
           "[c_api][engine]") {
   constexpr int kBlock = 256;
   constexpr unsigned int kBands = 16;
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
 
 #if defined(SONARE_WITH_MIXING)
@@ -2600,7 +2600,7 @@ TEST_CASE("sonare_engine_drain_meter_telemetry_wide reports per-plane meters for
           "[c_api][engine][surround]") {
   constexpr int kBlock = 256;
   constexpr int kFrames = kBlock;
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, kBlock, 64, 64) == SONARE_OK);
 
@@ -2662,7 +2662,7 @@ TEST_CASE("sonare_engine_drain_meter_telemetry_wide reports per-plane meters for
 #if defined(SONARE_WITH_MIXING)
 TEST_CASE("sonare_engine resolves the master fader, pan and width to engine parameters",
           "[c_api][engine]") {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 256, 64, 16) == SONARE_OK);
 

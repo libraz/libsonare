@@ -295,7 +295,7 @@ TEST_CASE("sonare_realtime_voice_changer ISP limiter fields round-trip through t
 }
 
 TEST_CASE("sonare_engine_get_transport_state surfaces bar position and time signature", "[c_api]") {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
   REQUIRE(sonare_engine_set_tempo(engine, 120.0) == SONARE_OK);
@@ -312,7 +312,7 @@ TEST_CASE("sonare_engine_get_transport_state surfaces bar position and time sign
 }
 
 TEST_CASE("sonare_engine_get_transport_state polls safely during processing", "[c_api][engine]") {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
   REQUIRE(sonare_engine_set_tempo(engine, 120.0) == SONARE_OK);
@@ -347,7 +347,7 @@ TEST_CASE("sonare_engine_get_transport_state polls safely during processing", "[
 }
 
 TEST_CASE("sonare_engine_bounce_offline NULLs the owned result on validation failure", "[c_api]") {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 16, 16, 16) == SONARE_OK);
 
@@ -375,7 +375,7 @@ TEST_CASE("sonare_engine_bounce_offline NULLs the owned result on validation fai
 
 TEST_CASE("sonare_engine_bounce_offline maps non-finite loudness targets to the default",
           "[c_api]") {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
 
@@ -406,7 +406,7 @@ TEST_CASE("sonare_engine_set_markers rejects an invalid list without dangling th
   // intact. The old code cleared the engine's name storage before validating,
   // so a mid-list rejection left the live MarkerMap pointing at freed strings
   // (use-after-free on the next marker query, caught under ASan).
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
 
@@ -445,7 +445,7 @@ TEST_CASE("sonare_engine_set_markers rejects an invalid list without dangling th
 
 TEST_CASE("sonare_engine duplicate parameter rejection preserves the original metadata",
           "[c_api][engine]") {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
 
@@ -486,7 +486,7 @@ TEST_CASE("sonare_engine duplicate parameter rejection preserves the original me
 TEST_CASE("sonare_engine graph replacement is transactional and drops omitted automation targets",
           "[c_api][engine][graph]") {
 #if defined(SONARE_WITH_GRAPH)
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 64, 32, 16) == SONARE_OK);
 
@@ -601,7 +601,7 @@ TEST_CASE("sonare_engine graph replacement is transactional and drops omitted au
 }
 
 TEST_CASE("sonare_realtime_engine_c_api_smoke", "[c_api]") {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(engine != nullptr);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
@@ -831,7 +831,7 @@ TEST_CASE("sonare_realtime_engine_c_api_smoke", "[c_api]") {
 }
 
 TEST_CASE("sonare engine capture can record live input and record offset metadata", "[c_api]") {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(engine != nullptr);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
@@ -976,7 +976,7 @@ TEST_CASE("sonare engine capture can record live input and record offset metadat
 }
 
 TEST_CASE("sonare engine record offset shifts the punch capture window", "[c_api][capture]") {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 16, 4, 4) == SONARE_OK);
 
@@ -1008,7 +1008,7 @@ TEST_CASE("sonare engine record offset shifts the punch capture window", "[c_api
 #endif
 
 TEST_CASE("sonare_engine_process_with_monitor returns a separate monitor bus", "[c_api]") {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 16, 16, 16) == SONARE_OK);
 
@@ -1036,7 +1036,7 @@ TEST_CASE("sonare_engine_process_with_monitor returns a separate monitor bus", "
 
 #ifdef SONARE_WITH_VOICE_CHANGER
 TEST_CASE("sonare_realtime_engine_freeze_c_api_matches_clip_playback", "[c_api]") {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 64, 64) == SONARE_OK);
 
@@ -1086,7 +1086,7 @@ TEST_CASE("sonare_realtime_engine_freeze_c_api_matches_clip_playback", "[c_api]"
 }
 
 TEST_CASE("sonare_engine_set_clips_accepts_repitch_warp_anchors", "[c_api]") {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 4, 64, 64) == SONARE_OK);
 
@@ -1126,7 +1126,7 @@ TEST_CASE("sonare_engine_set_clips_accepts_repitch_warp_anchors", "[c_api]") {
 }
 
 TEST_CASE("sonare_engine_set_clips_prebakes_direct_tempo_sync_warp", "[c_api]") {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 8192, 64, 64) == SONARE_OK);
 
@@ -1174,7 +1174,7 @@ TEST_CASE("sonare_engine_set_clips_reads_a_zero_tempo_sync_length_as_the_source_
   constexpr int64_t kOffset = 1000;
   const SonareEngineWarpAnchor anchors[] = {{0.0, 0.0}, {4000.0, 3096.0}};
   auto render = [&](int64_t length, bool with_anchors, std::vector<float>* out) {
-    SonareRealtimeEngine* engine = nullptr;
+    SonareEngine* engine = nullptr;
     REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
     REQUIRE(sonare_engine_prepare(engine, 48000.0, 8192, 64, 64) == SONARE_OK);
     SonareEngineClip clip{};
@@ -1216,7 +1216,7 @@ TEST_CASE("sonare_engine_set_clips_reads_a_zero_tempo_sync_length_as_the_source_
 }
 
 TEST_CASE("sonare_engine_set_clips_prebakes_direct_tempo_sync_segment_rates", "[c_api]") {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 8192, 64, 64) == SONARE_OK);
 
@@ -1277,7 +1277,7 @@ TEST_CASE("sonare_engine_set_clips_prebakes_direct_tempo_sync_segment_rates", "[
 }
 
 TEST_CASE("sonare_engine streams paged clip providers and reports page misses", "[c_api][engine]") {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 8, 16, 16) == SONARE_OK);
 
@@ -1393,7 +1393,7 @@ TEST_CASE("sonare_clip_page_provider bounds metadata and reclaims retired pages"
 
 TEST_CASE("sonare_engine offline bounce and freeze consume paged clip providers",
           "[c_api][engine]") {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 8, 16, 16) == SONARE_OK);
 
@@ -1465,7 +1465,7 @@ TEST_CASE("sonare_engine offline bounce and freeze consume paged clip providers"
 }
 
 TEST_CASE("sonare_realtime_engine_freeze_c_api_preserves_explicit_zero_gain", "[c_api]") {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 64, 64) == SONARE_OK);
 

@@ -100,7 +100,7 @@ void sonare_project_timeline_destroy(SonareProjectTimeline* timeline);
 ///         @c SONARE_ERROR_OUT_OF_MEMORY when an allocation fails;
 ///         @c SONARE_ERROR_NOT_SUPPORTED when one scene strip is routed from
 ///         several tracks, because live playback runs one strip per track.
-SonareError sonare_engine_apply_project_timeline(SonareRealtimeEngine* engine,
+SonareError sonare_engine_apply_project_timeline(SonareEngine* engine,
                                                  const SonareProjectTimeline* timeline);
 
 #ifdef __cplusplus

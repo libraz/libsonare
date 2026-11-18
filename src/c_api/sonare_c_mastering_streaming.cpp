@@ -290,15 +290,19 @@ struct SonareStreamingMasteringChain {
   int max_block_size = 0;
 };
 
-SonareStreamingMasteringChain* sonare_streaming_mastering_chain_create_ex(
-    const SonareMasteringParam* params, size_t param_count, float loudness_static_gain_db,
-    float loudness_static_gain_peak_db) {
+SonareError sonare_streaming_mastering_chain_create_ex(const SonareMasteringParam* params,
+                                                       size_t param_count,
+                                                       float loudness_static_gain_db,
+                                                       float loudness_static_gain_peak_db,
+                                                       SonareStreamingMasteringChain** out) {
   SONARE_C_API_ENTRY;
+  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = nullptr;
   if (!params && param_count > 0) {
     set_last_error(
         SONARE_ERROR_INVALID_PARAMETER,
         "streaming mastering chain: params must not be null when param_count is non-zero");
-    return nullptr;
+    return SONARE_ERROR_INVALID_PARAMETER;
   }
   SONARE_C_TRY
   auto cpp_params = to_params(params, param_count);
@@ -317,16 +321,18 @@ SonareStreamingMasteringChain* sonare_streaming_mastering_chain_create_ex(
   }
   auto* handle = new SonareStreamingMasteringChain;
   handle->chain = std::move(chain);
-  return handle;
-  SONARE_C_CATCH_RETURN(nullptr)
+  *out = handle;
+  return SONARE_OK;
+  SONARE_C_CATCH
 }
 
-SonareStreamingMasteringChain* sonare_streaming_mastering_chain_create(
-    const SonareMasteringParam* params, size_t param_count) {
+SonareError sonare_streaming_mastering_chain_create(const SonareMasteringParam* params,
+                                                    size_t param_count,
+                                                    SonareStreamingMasteringChain** out) {
   SONARE_C_API_ENTRY;
   return sonare_streaming_mastering_chain_create_ex(params, param_count,
                                                     std::numeric_limits<float>::quiet_NaN(),
-                                                    std::numeric_limits<float>::quiet_NaN());
+                                                    std::numeric_limits<float>::quiet_NaN(), out);
 }
 
 SonareError sonare_streaming_mastering_chain_prepare(SonareStreamingMasteringChain* handle,

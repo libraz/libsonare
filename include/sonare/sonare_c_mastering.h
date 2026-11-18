@@ -984,10 +984,11 @@ typedef struct {
 /// @param sample_rate Processing sample rate; must be positive.
 /// @param max_block_size Maximum number of frames accepted by @ref sonare_eq_process; 0 selects
 ///   the library default (512 frames) and a negative value is refused.
-/// @return A handle, or NULL when the arguments are invalid or allocation fails. The caller owns
-///   it and must release it with @ref sonare_eq_destroy, which is what invalidates it; no other
-///   call does.
-SonareEq* sonare_eq_create(double sample_rate, int max_block_size);
+/// @param out Receives the handle on success, NULL on failure; destroy with
+///   @ref sonare_eq_destroy, which is what invalidates it; no other call does.
+/// @return SONARE_OK, or SONARE_ERROR_INVALID_PARAMETER when the arguments are invalid (or
+///   @p out is NULL), or another error code when allocation fails.
+SonareError sonare_eq_create(double sample_rate, int max_block_size, SonareEq** out);
 /// @brief Destroys an equalizer handle. Accepts NULL.
 void sonare_eq_destroy(SonareEq* eq);
 /// @brief Sets one of the @c SONARE_EQ_MAX_BANDS equalizer bands from JSON.
@@ -1133,16 +1134,17 @@ void sonare_free_mastering_chain_stereo_result(SonareMasteringChainStereoResult*
 /// @brief Opaque streaming mastering chain handle.
 typedef struct SonareStreamingMasteringChain SonareStreamingMasteringChain;
 
-/// @brief Create a streaming chain from flat params. Returns NULL on error
-/// (e.g. unknown key, non-streaming stage enabled). When the params enable the
-/// loudness stage this throws (the streaming chain cannot measure whole-signal
+/// @brief Create a streaming chain from flat params.
+/// @details Fails on an unknown key or a non-streaming stage. When the params enable the
+/// loudness stage this fails (the streaming chain cannot measure whole-signal
 /// integrated LUFS); use @ref sonare_streaming_mastering_chain_create_ex to run
-/// a loudness-enabled chain with a caller-precomputed static gain. A non-NULL
-/// handle is owned by the caller and stays valid until
-/// @ref sonare_streaming_mastering_chain_destroy, which must be called exactly
-/// once.
-SonareStreamingMasteringChain* sonare_streaming_mastering_chain_create(
-    const SonareMasteringParam* params, size_t param_count);
+/// a loudness-enabled chain with a caller-precomputed static gain.
+/// @param out Receives the handle on success, NULL on failure; destroy with
+///        @ref sonare_streaming_mastering_chain_destroy, which must be called exactly once.
+/// @return SONARE_OK, or the error code describing the failure.
+SonareError sonare_streaming_mastering_chain_create(const SonareMasteringParam* params,
+                                                    size_t param_count,
+                                                    SonareStreamingMasteringChain** out);
 
 /// @brief Create a streaming chain with a precomputed loudness static gain.
 /// @details Identical to @ref sonare_streaming_mastering_chain_create except
@@ -1150,19 +1152,22 @@ SonareStreamingMasteringChain* sonare_streaming_mastering_chain_create(
 /// (measured at the loudness stage's input, which
 /// @ref sonare_streaming_loudness_gain returns) is applied per block
 /// before the loudness stage's true-peak limiter instead of throwing.
-/// Pass NaN to reproduce the throw-on-loudness behaviour of the non-_ex create.
+/// Pass NaN to reproduce the fail-on-loudness behaviour of the non-_ex create.
 /// @param loudness_static_gain_peak_db True peak (dBFS) of the loudness stage's
 ///        input the static gain was computed for. When finite, the static gain
 ///        is clamped to `(ceiling_db - peak_db) +
 ///        max(max_limiter_gain_reduction_db, 0)` so the streaming preview does
 ///        not overdrive the loudness limiter harder than the offline chain
 ///        (which applies the same clamp). Pass NaN to apply the static gain
-///        verbatim (no clamp). Returns NULL on error; a non-NULL handle is
-///        owned by the caller and stays valid until
+///        verbatim (no clamp).
+/// @param out Receives the handle on success, NULL on failure; destroy with
 ///        @ref sonare_streaming_mastering_chain_destroy.
-SonareStreamingMasteringChain* sonare_streaming_mastering_chain_create_ex(
-    const SonareMasteringParam* params, size_t param_count, float loudness_static_gain_db,
-    float loudness_static_gain_peak_db);
+/// @return SONARE_OK, or the error code describing the failure.
+SonareError sonare_streaming_mastering_chain_create_ex(const SonareMasteringParam* params,
+                                                       size_t param_count,
+                                                       float loudness_static_gain_db,
+                                                       float loudness_static_gain_peak_db,
+                                                       SonareStreamingMasteringChain** out);
 
 /// @brief Prepare with sample rate, max block size, and channel count (1 or 2).
 /// @details @p max_block_size 0 selects the library default (128 frames); a negative value

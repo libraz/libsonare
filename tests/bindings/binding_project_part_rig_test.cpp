@@ -153,7 +153,7 @@ TEST_CASE("part rigs never reach an exported SMF", "[bindings][part_rig]") {
 
 TEST_CASE("sonare_engine_set_part_rig reaches NativeSynth and Sf2Player, not the built-in synth",
           "[bindings][part_rig][engine]") {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
 
   SonareSynthInstrumentBinding synth{};

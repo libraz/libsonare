@@ -132,33 +132,26 @@ SonareError sonare_mastering_chain_stereo_with_progress(const float* left, const
 void sonare_free_mastering_chain_result(SonareMasteringChainResult* result) {
   if (!result) return;
   delete[] result->samples;
-  result->samples = nullptr;
-  result->length = 0;
   if (result->stages) {
     for (size_t i = 0; i < result->stages_count; ++i) {
       delete[] result->stages[i];
     }
     delete[] result->stages;
   }
-  result->stages = nullptr;
-  result->stages_count = 0;
   free_chain_metrics(result);
+  *result = {};
 }
 
 void sonare_free_mastering_chain_stereo_result(SonareMasteringChainStereoResult* result) {
   if (!result) return;
   delete[] result->left;
   delete[] result->right;
-  result->left = nullptr;
-  result->right = nullptr;
-  result->length = 0;
   if (result->stages) {
     for (size_t i = 0; i < result->stages_count; ++i) {
       delete[] result->stages[i];
     }
     delete[] result->stages;
   }
-  result->stages = nullptr;
-  result->stages_count = 0;
   free_chain_metrics(result);
+  *result = {};
 }

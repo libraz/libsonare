@@ -117,12 +117,13 @@ typedef struct {
   float distance;    ///< Reserved; must be finite, a value of 0 or less is stored as 1
 } SonareSurroundPan;
 
-/// Returns NULL on an invalid argument or an allocation failure; sample_rate must be
-/// in [8000, 384000] and max_block_size in [1, 1048576], or 0 for the library default
-/// (512 frames); a negative max_block_size is refused. A non-NULL
-/// handle is owned by the caller and stays valid until sonare_mixer_destroy,
-/// which must be called exactly once.
-SonareMixer* sonare_mixer_create(int sample_rate, int max_block_size);
+/// Creates a mixer. sample_rate must be in [8000, 384000] and max_block_size in
+/// [1, 1048576], or 0 for the library default (512 frames); a negative max_block_size is refused.
+/// @param out Receives the handle on success, NULL on failure; destroy with
+///        sonare_mixer_destroy, which must be called exactly once.
+/// @return SONARE_OK, SONARE_ERROR_INVALID_PARAMETER on an invalid argument (or NULL @p out),
+///         or another error code on an allocation failure.
+SonareError sonare_mixer_create(int sample_rate, int max_block_size, SonareMixer** out);
 /// Adds a strip carrying the full meter configuration (LUFS + true peak at 4x).
 /// Equivalent to sonare_mixer_add_strip_ex(mixer, id, 1, 1, 1, 0).
 ///

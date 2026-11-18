@@ -78,7 +78,7 @@ SonareBuiltinSynthConfig project_synth() {
 // @p channels. With @p bus_layout the lane feeds one default bus of that layout,
 // which sums into the master; otherwise it sums into the master directly.
 std::vector<float> render_engine_offline(int channels, int bus_layout = kNoBus) {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, kSampleRate, kBlockSize, 64, 16) == SONARE_OK);
   uint32_t output_bus = 0;

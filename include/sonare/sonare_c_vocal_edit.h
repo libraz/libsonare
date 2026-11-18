@@ -17,11 +17,11 @@ extern "C" {
 #define SONARE_VOCAL_EDIT_ABI_VERSION 1u
 
 /// @brief Opaque editing session over one mono source; destroy with sonare_vocal_session_destroy.
-typedef struct SonareVocalEditSession SonareVocalEditSession;
+typedef struct SonareVocalSession SonareVocalSession;
 /// @brief Opaque uncommitted edit draft of a session; destroy with sonare_vocal_draft_destroy.
-typedef struct SonareVocalEditDraft SonareVocalEditDraft;
+typedef struct SonareVocalDraft SonareVocalDraft;
 /// @brief Opaque immutable render snapshot; destroy with sonare_vocal_snapshot_destroy.
-typedef struct SonareVocalRenderSnapshot SonareVocalRenderSnapshot;
+typedef struct SonareVocalSnapshot SonareVocalSnapshot;
 /// @brief Opaque incremental render job; destroy with sonare_vocal_render_job_destroy.
 typedef struct SonareVocalRenderJob SonareVocalRenderJob;
 
@@ -390,127 +390,122 @@ void sonare_vocal_last_error_detail(SonareVocalErrorDetail* detail);
 ///   sonare_vocal_session_destroy, which accepts NULL.
 SonareError sonare_vocal_session_create(const float* samples, int64_t frames, int channels,
                                         int sample_rate, const SonareVocalCreateOptions* options,
-                                        SonareVocalEditSession** out_session);
+                                        SonareVocalSession** out_session);
 /// @brief Destroys a session; NULL is ignored.
-void sonare_vocal_session_destroy(SonareVocalEditSession* session);
+void sonare_vocal_session_destroy(SonareVocalSession* session);
 /// @brief Reads the session's notes and transitions into @p result; free with
 ///   sonare_free_vocal_notes_result.
-SonareError sonare_vocal_session_notes(const SonareVocalEditSession* session,
+SonareError sonare_vocal_session_notes(const SonareVocalSession* session,
                                        SonareVocalNotesResult* result);
 /// @brief Reads the draft's notes and transitions into @p result; free with
 ///   sonare_free_vocal_notes_result.
-SonareError sonare_vocal_draft_notes(const SonareVocalEditDraft* draft,
-                                     SonareVocalNotesResult* result);
+SonareError sonare_vocal_draft_notes(const SonareVocalDraft* draft, SonareVocalNotesResult* result);
 /// @brief Reads the session's current state token.
-SonareError sonare_vocal_session_token(const SonareVocalEditSession* session,
+SonareError sonare_vocal_session_token(const SonareVocalSession* session,
                                        SonareVocalStateToken* token);
 /// @brief Reads the draft's current state token.
-SonareError sonare_vocal_draft_token(const SonareVocalEditDraft* draft,
-                                     SonareVocalStateToken* token);
+SonareError sonare_vocal_draft_token(const SonareVocalDraft* draft, SonareVocalStateToken* token);
 /// @brief Reads the session's analysis into @p result; free with sonare_free_vocal_analysis_result.
-SonareError sonare_vocal_session_analysis(const SonareVocalEditSession* session,
+SonareError sonare_vocal_session_analysis(const SonareVocalSession* session,
                                           SonareVocalAnalysisResult* result);
 /// @brief Reads the renderer capabilities into @p result.
-SonareError sonare_vocal_session_capabilities(const SonareVocalEditSession* session,
+SonareError sonare_vocal_session_capabilities(const SonareVocalSession* session,
                                               SonareVocalCapabilities* result);
 /// @brief Reads the committed revision number of the session.
-SonareError sonare_vocal_session_revision(const SonareVocalEditSession* session,
-                                          uint64_t* revision);
+SonareError sonare_vocal_session_revision(const SonareVocalSession* session, uint64_t* revision);
 /// @brief Reads the session's output length in samples.
 /// @param samples Receives the length.
-SonareError sonare_vocal_session_output_length(const SonareVocalEditSession* session,
-                                               int64_t* samples);
+SonareError sonare_vocal_session_output_length(const SonareVocalSession* session, int64_t* samples);
 /// @brief Reports whether undo and redo are available.
 /// @param can_undo Receives 1 or 0.
 /// @param can_redo Receives 1 or 0.
-SonareError sonare_vocal_session_history(const SonareVocalEditSession* session, int* can_undo,
+SonareError sonare_vocal_session_history(const SonareVocalSession* session, int* can_undo,
                                          int* can_redo);
 /// @brief Opens a draft over the session at @p expected_revision.
 /// @param out_draft Receives the draft, or NULL on failure. Release it with
 ///   sonare_vocal_draft_destroy, which accepts NULL.
-SonareError sonare_vocal_session_begin_edit(SonareVocalEditSession* session,
-                                            uint64_t expected_revision,
-                                            SonareVocalEditDraft** out_draft);
+SonareError sonare_vocal_session_begin_edit(SonareVocalSession* session, uint64_t expected_revision,
+                                            SonareVocalDraft** out_draft);
 /// @brief Applies @p count operations to the draft.
 /// @param expected_generation Draft generation the caller last saw; a stale value is refused.
 /// @param result Receives the new token, dirty ranges and id changes; free with
 ///   sonare_free_vocal_edit_result.
-SonareError sonare_vocal_draft_apply(SonareVocalEditDraft* draft, uint64_t expected_generation,
+SonareError sonare_vocal_draft_apply(SonareVocalDraft* draft, uint64_t expected_generation,
                                      const SonareVocalOperation* operations, uint64_t count,
                                      SonareVocalEditResult* result);
 /// @brief Publishes the draft as a new revision. A draft never applied closes as a no-op: the
 ///   result carries the current revision and no dirty ranges, and redo history is kept.
-SonareError sonare_vocal_draft_commit(SonareVocalEditDraft* draft, uint64_t expected_revision,
+SonareError sonare_vocal_draft_commit(SonareVocalDraft* draft, uint64_t expected_revision,
                                       SonareVocalEditResult* result);
 /// @brief Discards the draft's changes; the draft must still be destroyed.
-SonareError sonare_vocal_draft_cancel(SonareVocalEditDraft* draft);
+SonareError sonare_vocal_draft_cancel(SonareVocalDraft* draft);
 /// @brief Destroys a draft; NULL is ignored.
-void sonare_vocal_draft_destroy(SonareVocalEditDraft* draft);
+void sonare_vocal_draft_destroy(SonareVocalDraft* draft);
 /// @brief Undoes the last committed edit.
 /// @param expected_revision Revision the caller last saw; a stale value is refused.
 /// @param result Receives the new token and dirty ranges; free with
 ///   sonare_free_vocal_edit_result.
-SonareError sonare_vocal_session_undo(SonareVocalEditSession* session, uint64_t expected_revision,
+SonareError sonare_vocal_session_undo(SonareVocalSession* session, uint64_t expected_revision,
                                       SonareVocalEditResult* result);
 /// @brief Redoes the last undone edit.
 /// @param expected_revision Revision the caller last saw; a stale value is refused.
 /// @param result Receives the new token and dirty ranges; free with
 ///   sonare_free_vocal_edit_result.
-SonareError sonare_vocal_session_redo(SonareVocalEditSession* session, uint64_t expected_revision,
+SonareError sonare_vocal_session_redo(SonareVocalSession* session, uint64_t expected_revision,
                                       SonareVocalEditResult* result);
 /// @brief Evaluates the per-frame pitch of note @p note_id in the session.
 /// @param result Receives the frames; free with sonare_free_vocal_pitch_result.
-SonareError sonare_vocal_session_evaluate_pitch(const SonareVocalEditSession* session,
-                                                uint32_t note_id, SonareVocalPitchResult* result);
+SonareError sonare_vocal_session_evaluate_pitch(const SonareVocalSession* session, uint32_t note_id,
+                                                SonareVocalPitchResult* result);
 /// @brief Evaluates the per-frame pitch of note @p note_id in the draft.
 /// @param result Receives the frames; free with sonare_free_vocal_pitch_result.
-SonareError sonare_vocal_draft_evaluate_pitch(const SonareVocalEditDraft* draft, uint32_t note_id,
+SonareError sonare_vocal_draft_evaluate_pitch(const SonareVocalDraft* draft, uint32_t note_id,
                                               SonareVocalPitchResult* result);
 /// @brief Maps a source sample position within note @p note_id to its output position in the
 /// session.
 /// @param destination_sample Receives the output position in samples.
-SonareError sonare_vocal_session_source_to_destination(const SonareVocalEditSession* session,
+SonareError sonare_vocal_session_source_to_destination(const SonareVocalSession* session,
                                                        uint32_t note_id, double source_sample,
                                                        double* destination_sample);
 /// @brief Maps an output sample position within note @p note_id to its source position in the
 /// session.
 /// @param source_sample Receives the source position in samples.
-SonareError sonare_vocal_session_destination_to_source(const SonareVocalEditSession* session,
+SonareError sonare_vocal_session_destination_to_source(const SonareVocalSession* session,
                                                        uint32_t note_id, double destination_sample,
                                                        double* source_sample);
 /// @brief Maps a source sample position within note @p note_id to its output position in the draft.
 /// @param destination_sample Receives the output position in samples.
-SonareError sonare_vocal_draft_source_to_destination(const SonareVocalEditDraft* draft,
+SonareError sonare_vocal_draft_source_to_destination(const SonareVocalDraft* draft,
                                                      uint32_t note_id, double source_sample,
                                                      double* destination_sample);
 /// @brief Maps an output sample position within note @p note_id to its source position in the
 /// draft.
 /// @param source_sample Receives the source position in samples.
-SonareError sonare_vocal_draft_destination_to_source(const SonareVocalEditDraft* draft,
+SonareError sonare_vocal_draft_destination_to_source(const SonareVocalDraft* draft,
                                                      uint32_t note_id, double destination_sample,
                                                      double* source_sample);
 /// @brief Captures an immutable render snapshot of the session.
 /// @param snapshot Receives the snapshot, or NULL on failure. Release it with
 ///   sonare_vocal_snapshot_destroy, which accepts NULL.
-SonareError sonare_vocal_session_capture_snapshot(const SonareVocalEditSession* session,
-                                                  SonareVocalRenderSnapshot** snapshot);
+SonareError sonare_vocal_session_capture_snapshot(const SonareVocalSession* session,
+                                                  SonareVocalSnapshot** snapshot);
 /// @brief Captures an immutable render snapshot of the draft.
 /// @param snapshot Receives the snapshot, or NULL on failure. Release it with
 ///   sonare_vocal_snapshot_destroy, which accepts NULL.
-SonareError sonare_vocal_draft_capture_snapshot(const SonareVocalEditDraft* draft,
-                                                SonareVocalRenderSnapshot** snapshot);
+SonareError sonare_vocal_draft_capture_snapshot(const SonareVocalDraft* draft,
+                                                SonareVocalSnapshot** snapshot);
 /// @brief Destroys a snapshot; NULL is ignored.
-void sonare_vocal_snapshot_destroy(SonareVocalRenderSnapshot* snapshot);
+void sonare_vocal_snapshot_destroy(SonareVocalSnapshot* snapshot);
 /// @brief Reads the snapshot's output length in samples.
 /// @param samples Receives the length.
-SonareError sonare_vocal_snapshot_output_length(const SonareVocalRenderSnapshot* snapshot,
+SonareError sonare_vocal_snapshot_output_length(const SonareVocalSnapshot* snapshot,
                                                 int64_t* samples);
 /// @brief Renders @p range in one call.
 /// @param request_id Caller-chosen id echoed in the result token.
 /// @param result Receives the audio; free with sonare_free_vocal_render_result.
 /// @param cancel Optional; @p cancel and @p user_data are used only during the call and are not
 ///   retained afterwards.
-SonareError sonare_vocal_snapshot_render(const SonareVocalRenderSnapshot* snapshot,
+SonareError sonare_vocal_snapshot_render(const SonareVocalSnapshot* snapshot,
                                          SonareVocalRange range, uint64_t request_id,
                                          SonareVocalCancelCallback cancel, void* user_data,
                                          SonareVocalRenderResult* result);
@@ -518,7 +513,7 @@ SonareError sonare_vocal_snapshot_render(const SonareVocalRenderSnapshot* snapsh
 /// @param request_id Caller-chosen id echoed in the result token.
 /// @param job Receives the job, or NULL on failure. Release it with
 ///   sonare_vocal_render_job_destroy, which accepts NULL.
-SonareError sonare_vocal_render_job_begin(const SonareVocalRenderSnapshot* snapshot,
+SonareError sonare_vocal_render_job_begin(const SonareVocalSnapshot* snapshot,
                                           SonareVocalRange range, uint64_t request_id,
                                           SonareVocalRenderJob** job);
 /// @brief Advances the job by one step.
@@ -542,7 +537,7 @@ void sonare_vocal_render_job_abort(SonareVocalRenderJob* job);
 void sonare_vocal_render_job_destroy(SonareVocalRenderJob* job);
 /// @brief Serializes the session's authored state into @p state; free with
 ///   sonare_free_vocal_state_bytes.
-SonareError sonare_vocal_session_export_state(const SonareVocalEditSession* session,
+SonareError sonare_vocal_session_export_state(const SonareVocalSession* session,
                                               SonareVocalStateBytes* state);
 /// @brief Restores a session from exported state over the same source audio
 ///   (@p sample_rate in [8000, 384000] Hz).
@@ -553,7 +548,7 @@ SonareError sonare_vocal_session_export_state(const SonareVocalEditSession* sess
 SonareError sonare_vocal_session_restore(const float* samples, int64_t frames, int channels,
                                          int sample_rate, const uint8_t* state, uint64_t size,
                                          const SonareVocalRestoreOptions* options,
-                                         SonareVocalEditSession** session);
+                                         SonareVocalSession** session);
 
 /// @brief Frees the arrays owned by @p result and resets it; NULL is ignored.
 void sonare_free_vocal_notes_result(SonareVocalNotesResult* result);

@@ -50,8 +50,8 @@ bool names_contain(const char* names, const std::string& wanted) {
 /// An engine with a reed synth on destination @p dest: an engine whose force
 /// axis a controller can actually reach, so a binding made below has somewhere
 /// to land.
-SonareRealtimeEngine* make_reed_engine(uint32_t dest) {
-  SonareRealtimeEngine* engine = nullptr;
+SonareEngine* make_reed_engine(uint32_t dest) {
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
   SonareSynthPatch patch{};
@@ -74,7 +74,7 @@ SonareControllerBinding breath_to_excitation() {
 
 /// Holds a note on @p dest while stepping CC2 across its range, and returns the
 /// rendered left channel.
-std::vector<float> render_breath_ramp(SonareRealtimeEngine* engine, uint32_t dest) {
+std::vector<float> render_breath_ramp(SonareEngine* engine, uint32_t dest) {
   REQUIRE(sonare_engine_push_midi_note_on(engine, dest, 0, 0, 60, 100, -1) == SONARE_OK);
   std::vector<float> out;
   std::vector<float> left(128, 0.0f);
@@ -126,7 +126,7 @@ TEST_CASE("the controller enum name tables match their C counts", "[c_api][contr
 #if defined(SONARE_WITH_ARRANGEMENT)
 
 TEST_CASE("a controller profile installs, binds, counts and clears", "[c_api][controller]") {
-  SonareRealtimeEngine* engine = make_reed_engine(3);
+  SonareEngine* engine = make_reed_engine(3);
 
   size_t count = 0;
   REQUIRE(sonare_engine_controller_binding_count(engine, 3, &count) == SONARE_OK);
@@ -167,7 +167,7 @@ TEST_CASE("a controller profile installs, binds, counts and clears", "[c_api][co
 }
 
 TEST_CASE("a controller binding that cannot mean anything is refused", "[c_api][controller]") {
-  SonareRealtimeEngine* engine = make_reed_engine(3);
+  SonareEngine* engine = make_reed_engine(3);
   REQUIRE(sonare_engine_clear_controller_bindings(engine, 3) == SONARE_OK);
 
   SonareControllerBinding binding = breath_to_excitation();
@@ -220,7 +220,7 @@ TEST_CASE("a controller binding that cannot mean anything is refused", "[c_api][
 }
 
 TEST_CASE("the controller binding table fills rather than growing", "[c_api][controller]") {
-  SonareRealtimeEngine* engine = make_reed_engine(3);
+  SonareEngine* engine = make_reed_engine(3);
   REQUIRE(sonare_engine_clear_controller_bindings(engine, 3) == SONARE_OK);
 
   // Counted rather than asserted at the limit: an accept count that stops short
@@ -250,7 +250,7 @@ TEST_CASE("the controller binding table fills rather than growing", "[c_api][con
 }
 
 TEST_CASE("controller velocity meaningfulness round-trips", "[c_api][controller]") {
-  SonareRealtimeEngine* engine = make_reed_engine(3);
+  SonareEngine* engine = make_reed_engine(3);
 
   int meaningful = -1;
   REQUIRE(sonare_engine_controller_velocity_meaningful(engine, 3, &meaningful) == SONARE_OK);
@@ -269,7 +269,7 @@ TEST_CASE("controller velocity meaningfulness round-trips", "[c_api][controller]
 
 TEST_CASE("controller profile calls name the destination that has no instrument",
           "[c_api][controller]") {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
 
@@ -293,7 +293,7 @@ TEST_CASE("controller profile calls name the destination that has no instrument"
 
 TEST_CASE("an instrument without a controller profile refuses with a specific message",
           "[c_api][controller]") {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
   SonareEngineBuiltinSynthConfig builtin{};
@@ -314,7 +314,7 @@ TEST_CASE("an instrument without a controller profile refuses with a specific me
 
 TEST_CASE("a binding made through the C ABI reaches the sound", "[c_api][controller]") {
   // Bound: CC2 drives the reed's excitation axis.
-  SonareRealtimeEngine* bound = make_reed_engine(3);
+  SonareEngine* bound = make_reed_engine(3);
   REQUIRE(sonare_engine_clear_controller_bindings(bound, 3) == SONARE_OK);
   const SonareControllerBinding binding = breath_to_excitation();
   REQUIRE(sonare_engine_bind_controller(bound, 3, &binding) == SONARE_OK);
@@ -322,7 +322,7 @@ TEST_CASE("a binding made through the C ABI reaches the sound", "[c_api][control
   sonare_engine_destroy(bound);
 
   // Unbound: the same ramp, the same patch, nothing bound.
-  SonareRealtimeEngine* unbound = make_reed_engine(3);
+  SonareEngine* unbound = make_reed_engine(3);
   REQUIRE(sonare_engine_clear_controller_bindings(unbound, 3) == SONARE_OK);
   const std::vector<float> without_binding = render_breath_ramp(unbound, 3);
   sonare_engine_destroy(unbound);
@@ -336,7 +336,7 @@ TEST_CASE("a binding made through the C ABI reaches the sound", "[c_api][control
 
   // And the unbound side is reproducible to the bit, so the difference above is
   // the binding rather than anything free-running in the render.
-  SonareRealtimeEngine* again = make_reed_engine(3);
+  SonareEngine* again = make_reed_engine(3);
   REQUIRE(sonare_engine_clear_controller_bindings(again, 3) == SONARE_OK);
   REQUIRE(render_breath_ramp(again, 3) == without_binding);
   sonare_engine_destroy(again);

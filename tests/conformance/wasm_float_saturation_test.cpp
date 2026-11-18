@@ -460,7 +460,8 @@ TEST_CASE("timeToFrames saturates rather than refusing, so its facade must",
 // ---------------------------------------------------------------------------
 
 TEST_CASE("The C ABI refuses a saturated strip parameter", "[conformance][wasm]") {
-  SonareMixer* mixer = sonare_mixer_create(48000, 512);
+  SonareMixer* mixer = nullptr;
+  REQUIRE(sonare_mixer_create(48000, 512, &mixer) == SONARE_OK);
   REQUIRE(mixer != nullptr);
   SonareStrip* strip = sonare_mixer_add_strip(mixer, "strip");
   REQUIRE(strip != nullptr);

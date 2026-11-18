@@ -88,9 +88,9 @@ SampleBankWrap::SampleBankWrap(const Napi::CallbackInfo& info)
     : Napi::ObjectWrap<SampleBankWrap>(info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  bank_ = sonare_sample_bank_create();
-  if (bank_ == nullptr) {
-    sonare_node::ThrowLastSonareError(env, "SampleBank: ");
+  const SonareError create_err = sonare_sample_bank_create(&bank_);
+  if (create_err != SONARE_OK) {
+    sonare_node::ThrowSonareError(env, create_err, "SampleBank: ");
   }
   SONARE_NODE_CATCH_VOID(env)
 }

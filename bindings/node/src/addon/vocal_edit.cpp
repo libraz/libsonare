@@ -884,7 +884,7 @@ Napi::FunctionReference VocalRenderJobWrap::constructor_;
 
 namespace {
 
-Napi::Value RequireSessionValue(Napi::Env env, SonareVocalEditSession* session) {
+Napi::Value RequireSessionValue(Napi::Env env, SonareVocalSession* session) {
   if (session != nullptr) return env.Undefined();
   CheckVocalError(env, SONARE_ERROR_INVALID_STATE);
   return env.Undefined();
@@ -1103,7 +1103,7 @@ Napi::Object VocalEditSessionWrap::Init(Napi::Env env, Napi::Object exports) {
   return exports;
 }
 
-Napi::Object VocalEditSessionWrap::NewInstance(Napi::Env env, SonareVocalEditSession* session) {
+Napi::Object VocalEditSessionWrap::NewInstance(Napi::Env env, SonareVocalSession* session) {
   (void)env;
   Napi::Object object = constructor_.New({});
   VocalEditSessionWrap::Unwrap(object)->session_ = session;
@@ -1225,7 +1225,7 @@ Napi::Value VocalEditSessionWrap::BeginEdit(const Napi::CallbackInfo& info) {
       return env.Undefined();
     }
   }
-  SonareVocalEditDraft* draft = nullptr;
+  SonareVocalDraft* draft = nullptr;
   const SonareError error = sonare_vocal_session_begin_edit(session_, revision, &draft);
   if (!CheckVocalError(env, error)) return env.Undefined();
   return VocalEditDraftWrap::NewInstance(env, draft, this, info.This().As<Napi::Object>());
@@ -1328,7 +1328,7 @@ Napi::Value VocalEditSessionWrap::CaptureRenderSnapshot(const Napi::CallbackInfo
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (session_ == nullptr) return RequireSessionValue(env, session_);
-  SonareVocalRenderSnapshot* snapshot = nullptr;
+  SonareVocalSnapshot* snapshot = nullptr;
   const SonareError error = sonare_vocal_session_capture_snapshot(session_, &snapshot);
   if (!CheckVocalError(env, error)) return env.Undefined();
   return VocalRenderSnapshotWrap::NewInstance(env, snapshot);
@@ -1385,7 +1385,7 @@ Napi::Object VocalEditDraftWrap::Init(Napi::Env env, Napi::Object exports) {
   return exports;
 }
 
-Napi::Object VocalEditDraftWrap::NewInstance(Napi::Env env, SonareVocalEditDraft* draft,
+Napi::Object VocalEditDraftWrap::NewInstance(Napi::Env env, SonareVocalDraft* draft,
                                              VocalEditSessionWrap* owner,
                                              const Napi::Object& owner_object) {
   (void)env;
@@ -1539,7 +1539,7 @@ Napi::Value VocalEditDraftWrap::CaptureRenderSnapshot(const Napi::CallbackInfo& 
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (draft_ == nullptr) return RequireSessionValue(env, nullptr);
-  SonareVocalRenderSnapshot* snapshot = nullptr;
+  SonareVocalSnapshot* snapshot = nullptr;
   const SonareError error = sonare_vocal_draft_capture_snapshot(draft_, &snapshot);
   if (!CheckVocalError(env, error)) return env.Undefined();
   return VocalRenderSnapshotWrap::NewInstance(env, snapshot);
@@ -1577,8 +1577,7 @@ Napi::Object VocalRenderSnapshotWrap::Init(Napi::Env env, Napi::Object exports) 
   return exports;
 }
 
-Napi::Object VocalRenderSnapshotWrap::NewInstance(Napi::Env env,
-                                                  SonareVocalRenderSnapshot* snapshot) {
+Napi::Object VocalRenderSnapshotWrap::NewInstance(Napi::Env env, SonareVocalSnapshot* snapshot) {
   (void)env;
   Napi::Object object = constructor_.New({});
   VocalRenderSnapshotWrap::Unwrap(object)->snapshot_ = snapshot;
@@ -1801,7 +1800,7 @@ Napi::Value CreateVocalEditSession(const Napi::CallbackInfo& info) {
                          &algorithm_storage)) {
     return env.Undefined();
   }
-  SonareVocalEditSession* session = nullptr;
+  SonareVocalSession* session = nullptr;
   const SonareError error =
       sonare_vocal_session_create(samples.Data(), static_cast<int64_t>(samples.ElementLength()), 1,
                                   sample_rate, &options, &session);
@@ -1832,7 +1831,7 @@ Napi::Value RestoreVocalEditSession(const Napi::CallbackInfo& info) {
                          &options.max_undo_depth, &options.max_render_jobs)) {
     return env.Undefined();
   }
-  SonareVocalEditSession* session = nullptr;
+  SonareVocalSession* session = nullptr;
   const SonareError error = sonare_vocal_session_restore(
       samples.Data(), static_cast<int64_t>(samples.ElementLength()), 1, sample_rate, state.Data(),
       state.ElementLength(), &options, &session);

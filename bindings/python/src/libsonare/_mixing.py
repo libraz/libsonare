@@ -1216,9 +1216,13 @@ def mix_stereo(
         # indistinguishable from a real mix of silence.
         raise SonareValueError("mix_stereo: every strip is empty; there is no audio to mix")
 
-    mixer = lib.sonare_mixer_create(c_sample_rate, _to_c_int(length, "length"))
-    if not mixer:
-        raise _last_error(int(ErrorCode.UNKNOWN), "failed to create mixer")
+    mixer_handle = ctypes.c_void_p()
+    _check(
+        lib.sonare_mixer_create(
+            c_sample_rate, _to_c_int(length, "length"), ctypes.byref(mixer_handle)
+        )
+    )
+    mixer = mixer_handle.value
 
     try:
         strip_handles: list[ctypes.c_void_p] = []

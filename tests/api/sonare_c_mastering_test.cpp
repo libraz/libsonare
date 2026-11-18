@@ -26,7 +26,8 @@
 #ifdef SONARE_WITH_MASTERING
 TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
   SECTION("streaming EQ handle processes JSON bands and exposes spectrum") {
-    SonareEq* eq = sonare_eq_create(48000.0, 512);
+    SonareEq* eq = nullptr;
+    REQUIRE(sonare_eq_create(48000.0, 512, &eq) == SONARE_OK);
     REQUIRE(eq != nullptr);
     REQUIRE(sonare_eq_set_band(eq, 0,
                                "{\"type\":\"peak\",\"frequencyHz\":1000,\"gainDb\":9,"
@@ -97,7 +98,8 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
   SECTION("streaming EQ match configures live bands from source and reference") {
     auto source = generate_sine(1000.0f, 48000, 1.0f);
     auto reference = source;
-    SonareEq* eq = sonare_eq_create(48000.0, static_cast<int>(source.size()));
+    SonareEq* eq = nullptr;
+    REQUIRE(sonare_eq_create(48000.0, static_cast<int>(source.size()), &eq) == SONARE_OK);
     REQUIRE(eq != nullptr);
 
     for (auto& sample : source) sample *= 0.12f;
@@ -369,8 +371,9 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
     constexpr int kSampleRate = 48000;
     constexpr int kBlockSize = 128;
 
-    SonareStreamingMasteringChain* mono_chain =
-        sonare_streaming_mastering_chain_create_ex(nullptr, 0, 0.0f, 0.0f);
+    SonareStreamingMasteringChain* mono_chain = nullptr;
+    REQUIRE(sonare_streaming_mastering_chain_create_ex(nullptr, 0, 0.0f, 0.0f, &mono_chain) ==
+            SONARE_OK);
     REQUIRE(mono_chain != nullptr);
     REQUIRE(sonare_streaming_mastering_chain_prepare(mono_chain, kSampleRate, kBlockSize, 1) ==
             SONARE_OK);
@@ -384,8 +387,9 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
             SONARE_OK);
     sonare_streaming_mastering_chain_destroy(mono_chain);
 
-    SonareStreamingMasteringChain* stereo_chain =
-        sonare_streaming_mastering_chain_create_ex(nullptr, 0, 0.0f, 0.0f);
+    SonareStreamingMasteringChain* stereo_chain = nullptr;
+    REQUIRE(sonare_streaming_mastering_chain_create_ex(nullptr, 0, 0.0f, 0.0f, &stereo_chain) ==
+            SONARE_OK);
     REQUIRE(stereo_chain != nullptr);
     REQUIRE(sonare_streaming_mastering_chain_prepare(stereo_chain, kSampleRate, kBlockSize, 2) ==
             SONARE_OK);
@@ -415,8 +419,9 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
     constexpr int kSampleRate = 48000;
     constexpr int kBlockSize = 128;
 
-    SonareStreamingMasteringChain* chain =
-        sonare_streaming_mastering_chain_create_ex(nullptr, 0, 0.0f, 0.0f);
+    SonareStreamingMasteringChain* chain = nullptr;
+    REQUIRE(sonare_streaming_mastering_chain_create_ex(nullptr, 0, 0.0f, 0.0f, &chain) ==
+            SONARE_OK);
     REQUIRE(chain != nullptr);
 
     std::vector<float> mono(kBlockSize, 0.0f);
@@ -430,16 +435,18 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
     sonare_streaming_mastering_chain_destroy(chain);
 
     // Never prepared: rejected as a state error, again without reading input.
-    SonareStreamingMasteringChain* unprepared =
-        sonare_streaming_mastering_chain_create_ex(nullptr, 0, 0.0f, 0.0f);
+    SonareStreamingMasteringChain* unprepared = nullptr;
+    REQUIRE(sonare_streaming_mastering_chain_create_ex(nullptr, 0, 0.0f, 0.0f, &unprepared) ==
+            SONARE_OK);
     REQUIRE(unprepared != nullptr);
     REQUIRE(sonare_streaming_mastering_chain_process_mono(unprepared, mono.data(), mono.size()) ==
             SONARE_ERROR_INVALID_STATE);
     REQUIRE(std::string(sonare_last_error_message()).empty());
     sonare_streaming_mastering_chain_destroy(unprepared);
 
-    SonareStreamingMasteringChain* stereo_chain =
-        sonare_streaming_mastering_chain_create_ex(nullptr, 0, 0.0f, 0.0f);
+    SonareStreamingMasteringChain* stereo_chain = nullptr;
+    REQUIRE(sonare_streaming_mastering_chain_create_ex(nullptr, 0, 0.0f, 0.0f, &stereo_chain) ==
+            SONARE_OK);
     REQUIRE(stereo_chain != nullptr);
     REQUIRE(sonare_streaming_mastering_chain_prepare(stereo_chain, kSampleRate, kBlockSize, 2) ==
             SONARE_OK);
@@ -456,7 +463,8 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
     constexpr int kSampleRate = 48000;
     constexpr int kBlockSize = 64;
     const SonareMasteringParam params[] = {{"maximizer.truePeakLimiter.enabled", 1.0}};
-    SonareStreamingMasteringChain* chain = sonare_streaming_mastering_chain_create(params, 1);
+    SonareStreamingMasteringChain* chain = nullptr;
+    REQUIRE(sonare_streaming_mastering_chain_create(params, 1, &chain) == SONARE_OK);
     REQUIRE(chain != nullptr);
     REQUIRE(sonare_streaming_mastering_chain_prepare(chain, kSampleRate, kBlockSize, 1) ==
             SONARE_OK);
@@ -924,7 +932,8 @@ TEST_CASE("sonare_eq_set_band reads detectorDelayMs and refuses its earlier look
       parse_eq_band_json(R"({"type":"peak","dynamic":true,"lookaheadMs":8,"detectorDelayMs":12})"),
       ContainsSubstring("write detectorDelayMs"));
 
-  SonareEq* eq = sonare_eq_create(48000.0, 512);
+  SonareEq* eq = nullptr;
+  REQUIRE(sonare_eq_create(48000.0, 512, &eq) == SONARE_OK);
   REQUIRE(eq != nullptr);
   REQUIRE(sonare_eq_set_band(eq, 0, "{\"type\":\"peak\",\"dynamic\":true,\"detectorDelayMs\":8}") ==
           SONARE_OK);
@@ -1741,7 +1750,8 @@ TEST_CASE("EQ band JSON narrows every numeric field through a checked cast",
       REQUIRE(parses(json) == expected);
       // Every accepted row must survive the whole C ABI, not just the parser.
       if (!expected) continue;
-      SonareEq* eq = sonare_eq_create(48000.0, 512);
+      SonareEq* eq = nullptr;
+      REQUIRE(sonare_eq_create(48000.0, 512, &eq) == SONARE_OK);
       REQUIRE(eq != nullptr);
       const SonareError err = sonare_eq_set_band(eq, 0, json.c_str());
       REQUIRE((err == SONARE_OK || err == SONARE_ERROR_INVALID_PARAMETER));
@@ -1772,7 +1782,8 @@ TEST_CASE("EQ band JSON narrows every numeric field through a checked cast",
 
 TEST_CASE("sonare_eq_set_band refuses a band that would design non-finite taps",
           "[c_api][mastering][eq]") {
-  SonareEq* eq = sonare_eq_create(48000.0, 512);
+  SonareEq* eq = nullptr;
+  REQUIRE(sonare_eq_create(48000.0, 512, &eq) == SONARE_OK);
   REQUIRE(eq != nullptr);
 
   const char* good =
@@ -1839,7 +1850,8 @@ TEST_CASE("an unrealizable dynamic EQ gain never reaches the audio as NaN",
   // detector delta is added to the static gain, so values that are each
   // realizable can still sum past the overflow point. normalize() is the
   // backstop, so drive several blocks and require the output stays finite.
-  SonareEq* eq = sonare_eq_create(48000.0, 512);
+  SonareEq* eq = nullptr;
+  REQUIRE(sonare_eq_create(48000.0, 512, &eq) == SONARE_OK);
   REQUIRE(eq != nullptr);
   REQUIRE(sonare_eq_set_band(eq, 0,
                              "{\"type\":\"peak\",\"frequencyHz\":1000,\"gainDb\":700,\"q\":1,"
@@ -2228,7 +2240,8 @@ TEST_CASE("stereo A/B C API keeps outputs empty when allocation fails",
 
 TEST_CASE("sonare_eq_non_finite_discard_count reports the state the EQ discarded",
           "[c_api][mastering][non_finite]") {
-  SonareEq* eq = sonare_eq_create(48000.0, 512);
+  SonareEq* eq = nullptr;
+  REQUIRE(sonare_eq_create(48000.0, 512, &eq) == SONARE_OK);
   REQUIRE(eq != nullptr);
   // Without an enabled band the EQ holds no recursive state, so its count would
   // stay at zero for a reason unrelated to the entry.
@@ -2279,8 +2292,9 @@ TEST_CASE("sonare_streaming_mastering_chain_non_finite_discard_count reports a l
   // default chain has no such stage, so its count could stay at zero for a
   // reason unrelated to the entry.
   const SonareMasteringParam params[] = {{"eq.tilt.tiltDb", 24.0}};
-  SonareStreamingMasteringChain* chain = sonare_streaming_mastering_chain_create_ex(
-      params, sizeof(params) / sizeof(params[0]), 0.0f, 0.0f);
+  SonareStreamingMasteringChain* chain = nullptr;
+  REQUIRE(sonare_streaming_mastering_chain_create_ex(params, sizeof(params) / sizeof(params[0]),
+                                                     0.0f, 0.0f, &chain) == SONARE_OK);
   REQUIRE(chain != nullptr);
   REQUIRE(sonare_streaming_mastering_chain_prepare(chain, kSampleRate, kBlockSize, 1) == SONARE_OK);
 
@@ -2500,7 +2514,8 @@ bool same_match(const SonareLoudnessMatch& a, const SonareLoudnessMatch& b) {
 std::vector<float> eq_matched_probe(const std::vector<float>& source, const std::vector<float>& ref,
                                     int reference_sample_rate, int sample_rate) {
   constexpr int kBlock = 4096;
-  SonareEq* eq = sonare_eq_create(48000.0, kBlock);
+  SonareEq* eq = nullptr;
+  REQUIRE(sonare_eq_create(48000.0, kBlock, &eq) == SONARE_OK);
   REQUIRE(eq != nullptr);
   REQUIRE(sonare_eq_match_ex(eq, source.data(), source.size(), sample_rate, ref.data(), ref.size(),
                              reference_sample_rate, 6) == SONARE_OK);
@@ -2657,7 +2672,8 @@ TEST_CASE("EQ match resamples a reference at another rate", "[c_api][mastering][
 
   SECTION("equal rates are the base form bit for bit") {
     constexpr int kBlock = 4096;
-    SonareEq* eq = sonare_eq_create(48000.0, kBlock);
+    SonareEq* eq = nullptr;
+    REQUIRE(sonare_eq_create(48000.0, kBlock, &eq) == SONARE_OK);
     REQUIRE(eq != nullptr);
     REQUIRE(sonare_eq_match(eq, source.data(), source.data(), source.size(), kSourceRate, 6) ==
             SONARE_OK);
@@ -2670,7 +2686,8 @@ TEST_CASE("EQ match resamples a reference at another rate", "[c_api][mastering][
   }
 
   SECTION("a reference rate <= 0 is refused") {
-    SonareEq* eq = sonare_eq_create(48000.0, 512);
+    SonareEq* eq = nullptr;
+    REQUIRE(sonare_eq_create(48000.0, 512, &eq) == SONARE_OK);
     REQUIRE(eq != nullptr);
     for (const int bad_rate : {0, -1}) {
       CHECK(sonare_eq_match_ex(eq, source.data(), source.size(), kSourceRate, reference.data(),

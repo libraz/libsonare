@@ -88,8 +88,8 @@ SonareError sidechain_refusal_to_error(engine::SidechainRefusal refusal) {
 }  // namespace
 #endif
 
-SonareError sonare_engine_set_track_lanes(SonareRealtimeEngine* engine,
-                                          const SonareEngineTrackLane* lanes, size_t lane_count) {
+SonareError sonare_engine_set_track_lanes(SonareEngine* engine, const SonareEngineTrackLane* lanes,
+                                          size_t lane_count) {
   SONARE_C_API_ENTRY;
   if (!engine || (lane_count > 0 && !lanes)) return SONARE_ERROR_INVALID_PARAMETER;
 #if !defined(SONARE_WITH_MIXING)
@@ -160,7 +160,7 @@ SonareError track_lane_edit_result_to_error(engine::TrackLaneEditResult result, 
 }  // namespace
 #endif
 
-SonareError sonare_engine_set_track_sends(SonareRealtimeEngine* engine, uint32_t track_id,
+SonareError sonare_engine_set_track_sends(SonareEngine* engine, uint32_t track_id,
                                           const SonareEngineTrackSend* sends, size_t send_count) {
   SONARE_C_API_ENTRY;
   if (!engine || (send_count > 0 && !sends)) return SONARE_ERROR_INVALID_PARAMETER;
@@ -184,7 +184,7 @@ SonareError sonare_engine_set_track_sends(SonareRealtimeEngine* engine, uint32_t
 #endif
 }
 
-SonareError sonare_engine_set_track_output_bus(SonareRealtimeEngine* engine, uint32_t track_id,
+SonareError sonare_engine_set_track_output_bus(SonareEngine* engine, uint32_t track_id,
                                                uint32_t output_bus_id) {
   SONARE_C_API_ENTRY;
   if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
@@ -200,7 +200,7 @@ SonareError sonare_engine_set_track_output_bus(SonareRealtimeEngine* engine, uin
 #endif
 }
 
-SonareError sonare_engine_set_lane_sidechain(SonareRealtimeEngine* engine, uint32_t track_id,
+SonareError sonare_engine_set_lane_sidechain(SonareEngine* engine, uint32_t track_id,
                                              unsigned int insert_index, uint32_t source_track_id) {
   SONARE_C_API_ENTRY;
   if (!engine || track_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
@@ -234,7 +234,7 @@ bool sidechain_source_kind_from_c(int source_kind, engine::SidechainSourceKind* 
 }  // namespace
 #endif
 
-SonareError sonare_engine_set_bus_sidechain(SonareRealtimeEngine* engine, uint32_t bus_id,
+SonareError sonare_engine_set_bus_sidechain(SonareEngine* engine, uint32_t bus_id,
                                             unsigned int insert_index, int source_kind,
                                             uint32_t source_id) {
   SONARE_C_API_ENTRY;
@@ -255,9 +255,8 @@ SonareError sonare_engine_set_bus_sidechain(SonareRealtimeEngine* engine, uint32
   SONARE_C_CATCH
 }
 
-SonareError sonare_engine_set_master_sidechain(SonareRealtimeEngine* engine,
-                                               unsigned int insert_index, int source_kind,
-                                               uint32_t source_id) {
+SonareError sonare_engine_set_master_sidechain(SonareEngine* engine, unsigned int insert_index,
+                                               int source_kind, uint32_t source_id) {
   SONARE_C_API_ENTRY;
   SONARE_C_TRY
   if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
@@ -277,8 +276,8 @@ SonareError sonare_engine_set_master_sidechain(SonareRealtimeEngine* engine,
   SONARE_C_CATCH
 }
 
-SonareError sonare_engine_set_track_buses(SonareRealtimeEngine* engine,
-                                          const SonareEngineBus* buses, size_t bus_count) {
+SonareError sonare_engine_set_track_buses(SonareEngine* engine, const SonareEngineBus* buses,
+                                          size_t bus_count) {
   SONARE_C_API_ENTRY;
   if (!engine || (bus_count > 0 && !buses)) return SONARE_ERROR_INVALID_PARAMETER;
 #if !defined(SONARE_WITH_MIXING)
@@ -314,7 +313,7 @@ SonareError sonare_engine_set_track_buses(SonareRealtimeEngine* engine,
 #endif
 }
 
-SonareError sonare_engine_set_bus_strip_json(SonareRealtimeEngine* engine, uint32_t bus_id,
+SonareError sonare_engine_set_bus_strip_json(SonareEngine* engine, uint32_t bus_id,
                                              const char* scene_json) {
   SONARE_C_API_ENTRY;
   if (!engine || bus_id == 0 || !scene_json) return SONARE_ERROR_INVALID_PARAMETER;
@@ -335,7 +334,7 @@ SonareError sonare_engine_set_bus_strip_json(SonareRealtimeEngine* engine, uint3
 #endif
 }
 
-SonareError sonare_engine_set_track_strip_json(SonareRealtimeEngine* engine, uint32_t track_id,
+SonareError sonare_engine_set_track_strip_json(SonareEngine* engine, uint32_t track_id,
                                                const char* scene_json) {
   SONARE_C_API_ENTRY;
   if (!engine || track_id == 0 || !scene_json) return SONARE_ERROR_INVALID_PARAMETER;
@@ -358,9 +357,8 @@ SonareError sonare_engine_set_track_strip_json(SonareRealtimeEngine* engine, uin
 #endif
 }
 
-SonareError sonare_engine_set_track_strip_eq_band_json(SonareRealtimeEngine* engine,
-                                                       uint32_t track_id, int band_index,
-                                                       const char* band_json) {
+SonareError sonare_engine_set_track_strip_eq_band_json(SonareEngine* engine, uint32_t track_id,
+                                                       int band_index, const char* band_json) {
   SONARE_C_API_ENTRY;
   if (!engine || track_id == 0 || band_index < 0 || !band_json) {
     return SONARE_ERROR_INVALID_PARAMETER;
@@ -380,8 +378,7 @@ SonareError sonare_engine_set_track_strip_eq_band_json(SonareRealtimeEngine* eng
 #endif
 }
 
-SonareError sonare_engine_set_track_strip_insert_bypassed(SonareRealtimeEngine* engine,
-                                                          uint32_t track_id,
+SonareError sonare_engine_set_track_strip_insert_bypassed(SonareEngine* engine, uint32_t track_id,
                                                           unsigned int insert_index, int bypassed,
                                                           int reset_on_bypass) {
   SONARE_C_API_ENTRY;
@@ -402,8 +399,7 @@ SonareError sonare_engine_set_track_strip_insert_bypassed(SonareRealtimeEngine* 
 #endif
 }
 
-SonareError sonare_engine_set_master_strip_json(SonareRealtimeEngine* engine,
-                                                const char* scene_json) {
+SonareError sonare_engine_set_master_strip_json(SonareEngine* engine, const char* scene_json) {
   SONARE_C_API_ENTRY;
   if (!engine || !scene_json) return SONARE_ERROR_INVALID_PARAMETER;
 #if !defined(SONARE_WITH_MIXING)
@@ -423,8 +419,8 @@ SonareError sonare_engine_set_master_strip_json(SonareRealtimeEngine* engine,
 #endif
 }
 
-SonareError sonare_engine_set_master_strip_eq_band_json(SonareRealtimeEngine* engine,
-                                                        int band_index, const char* band_json) {
+SonareError sonare_engine_set_master_strip_eq_band_json(SonareEngine* engine, int band_index,
+                                                        const char* band_json) {
   SONARE_C_API_ENTRY;
   if (!engine || band_index < 0 || !band_json) return SONARE_ERROR_INVALID_PARAMETER;
 #if !defined(SONARE_WITH_MIXING)
@@ -442,7 +438,7 @@ SonareError sonare_engine_set_master_strip_eq_band_json(SonareRealtimeEngine* en
 #endif
 }
 
-SonareError sonare_engine_set_master_strip_insert_bypassed(SonareRealtimeEngine* engine,
+SonareError sonare_engine_set_master_strip_insert_bypassed(SonareEngine* engine,
                                                            unsigned int insert_index, int bypassed,
                                                            int reset_on_bypass) {
   SONARE_C_API_ENTRY;
@@ -463,7 +459,7 @@ SonareError sonare_engine_set_master_strip_insert_bypassed(SonareRealtimeEngine*
 #endif
 }
 
-SonareError sonare_engine_set_bus_strip_eq_band_json(SonareRealtimeEngine* engine, uint32_t bus_id,
+SonareError sonare_engine_set_bus_strip_eq_band_json(SonareEngine* engine, uint32_t bus_id,
                                                      int band_index, const char* band_json) {
   SONARE_C_API_ENTRY;
   if (!engine || bus_id == 0 || band_index < 0 || !band_json) {
@@ -484,9 +480,9 @@ SonareError sonare_engine_set_bus_strip_eq_band_json(SonareRealtimeEngine* engin
 #endif
 }
 
-SonareError sonare_engine_set_bus_strip_insert_bypassed(SonareRealtimeEngine* engine,
-                                                        uint32_t bus_id, unsigned int insert_index,
-                                                        int bypassed, int reset_on_bypass) {
+SonareError sonare_engine_set_bus_strip_insert_bypassed(SonareEngine* engine, uint32_t bus_id,
+                                                        unsigned int insert_index, int bypassed,
+                                                        int reset_on_bypass) {
   SONARE_C_API_ENTRY;
   if (!engine || bus_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
 #if !defined(SONARE_WITH_MIXING)
@@ -505,7 +501,7 @@ SonareError sonare_engine_set_bus_strip_insert_bypassed(SonareRealtimeEngine* en
 #endif
 }
 
-SonareError sonare_engine_set_track_strip_insert_param_by_name(SonareRealtimeEngine* engine,
+SonareError sonare_engine_set_track_strip_insert_param_by_name(SonareEngine* engine,
                                                                uint32_t track_id,
                                                                unsigned int insert_index,
                                                                const char* param_name,
@@ -527,7 +523,7 @@ SonareError sonare_engine_set_track_strip_insert_param_by_name(SonareRealtimeEng
 #endif
 }
 
-SonareError sonare_engine_set_master_strip_insert_param_by_name(SonareRealtimeEngine* engine,
+SonareError sonare_engine_set_master_strip_insert_param_by_name(SonareEngine* engine,
                                                                 unsigned int insert_index,
                                                                 const char* param_name,
                                                                 float value) {
@@ -548,8 +544,7 @@ SonareError sonare_engine_set_master_strip_insert_param_by_name(SonareRealtimeEn
 #endif
 }
 
-SonareError sonare_engine_set_bus_strip_insert_param_by_name(SonareRealtimeEngine* engine,
-                                                             uint32_t bus_id,
+SonareError sonare_engine_set_bus_strip_insert_param_by_name(SonareEngine* engine, uint32_t bus_id,
                                                              unsigned int insert_index,
                                                              const char* param_name, float value) {
   SONARE_C_API_ENTRY;
@@ -570,8 +565,8 @@ SonareError sonare_engine_set_bus_strip_insert_param_by_name(SonareRealtimeEngin
 }
 
 SonareError sonare_engine_apply_track_strip_insert_param_by_name_now(
-    SonareRealtimeEngine* engine, uint32_t track_id, unsigned int insert_index,
-    const char* param_name, float value, int* out_applied) {
+    SonareEngine* engine, uint32_t track_id, unsigned int insert_index, const char* param_name,
+    float value, int* out_applied) {
   SONARE_C_API_ENTRY;
   if (out_applied) *out_applied = 0;
   if (!engine || track_id == 0 || !param_name || param_name[0] == '\0' || !std::isfinite(value) ||
@@ -592,7 +587,7 @@ SonareError sonare_engine_apply_track_strip_insert_param_by_name_now(
 #endif
 }
 
-SonareError sonare_engine_apply_master_strip_insert_param_by_name_now(SonareRealtimeEngine* engine,
+SonareError sonare_engine_apply_master_strip_insert_param_by_name_now(SonareEngine* engine,
                                                                       unsigned int insert_index,
                                                                       const char* param_name,
                                                                       float value,
@@ -614,7 +609,7 @@ SonareError sonare_engine_apply_master_strip_insert_param_by_name_now(SonareReal
 #endif
 }
 
-SonareError sonare_engine_apply_bus_strip_insert_param_by_name_now(SonareRealtimeEngine* engine,
+SonareError sonare_engine_apply_bus_strip_insert_param_by_name_now(SonareEngine* engine,
                                                                    uint32_t bus_id,
                                                                    unsigned int insert_index,
                                                                    const char* param_name,
@@ -639,7 +634,7 @@ SonareError sonare_engine_apply_bus_strip_insert_param_by_name_now(SonareRealtim
 #endif
 }
 
-SonareError sonare_engine_restore_track_strip_insert_param_by_name(SonareRealtimeEngine* engine,
+SonareError sonare_engine_restore_track_strip_insert_param_by_name(SonareEngine* engine,
                                                                    uint32_t track_id,
                                                                    unsigned int insert_index,
                                                                    const char* param_name,
@@ -661,7 +656,7 @@ SonareError sonare_engine_restore_track_strip_insert_param_by_name(SonareRealtim
 #endif
 }
 
-SonareError sonare_engine_restore_master_strip_insert_param_by_name(SonareRealtimeEngine* engine,
+SonareError sonare_engine_restore_master_strip_insert_param_by_name(SonareEngine* engine,
                                                                     unsigned int insert_index,
                                                                     const char* param_name,
                                                                     float value) {
@@ -682,7 +677,7 @@ SonareError sonare_engine_restore_master_strip_insert_param_by_name(SonareRealti
 #endif
 }
 
-SonareError sonare_engine_restore_bus_strip_insert_param_by_name(SonareRealtimeEngine* engine,
+SonareError sonare_engine_restore_bus_strip_insert_param_by_name(SonareEngine* engine,
                                                                  uint32_t bus_id,
                                                                  unsigned int insert_index,
                                                                  const char* param_name,
@@ -703,7 +698,7 @@ SonareError sonare_engine_restore_bus_strip_insert_param_by_name(SonareRealtimeE
 #endif
 }
 
-SonareError sonare_engine_clear_track_insert_parameter_bases(SonareRealtimeEngine* engine,
+SonareError sonare_engine_clear_track_insert_parameter_bases(SonareEngine* engine,
                                                              uint32_t track_id) {
   SONARE_C_API_ENTRY;
   if (!engine || track_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
@@ -716,7 +711,7 @@ SonareError sonare_engine_clear_track_insert_parameter_bases(SonareRealtimeEngin
 #endif
 }
 
-SonareError sonare_engine_clear_master_insert_parameter_bases(SonareRealtimeEngine* engine) {
+SonareError sonare_engine_clear_master_insert_parameter_bases(SonareEngine* engine) {
   SONARE_C_API_ENTRY;
   if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
 #if !defined(SONARE_WITH_MIXING)
@@ -727,8 +722,7 @@ SonareError sonare_engine_clear_master_insert_parameter_bases(SonareRealtimeEngi
 #endif
 }
 
-SonareError sonare_engine_clear_bus_insert_parameter_bases(SonareRealtimeEngine* engine,
-                                                           uint32_t bus_id) {
+SonareError sonare_engine_clear_bus_insert_parameter_bases(SonareEngine* engine, uint32_t bus_id) {
   SONARE_C_API_ENTRY;
   if (!engine || bus_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
 #if !defined(SONARE_WITH_MIXING)
@@ -739,7 +733,7 @@ SonareError sonare_engine_clear_bus_insert_parameter_bases(SonareRealtimeEngine*
 #endif
 }
 
-SonareError sonare_engine_insert_parameter_constructed_value(SonareRealtimeEngine* engine,
+SonareError sonare_engine_insert_parameter_constructed_value(SonareEngine* engine,
                                                              uint32_t param_id, float* out_value) {
   SONARE_C_API_ENTRY;
   if (!engine || !out_value) return SONARE_ERROR_INVALID_PARAMETER;
@@ -753,7 +747,7 @@ SonareError sonare_engine_insert_parameter_constructed_value(SonareRealtimeEngin
 #endif
 }
 
-SonareError sonare_engine_resolve_track_insert_automation_id(SonareRealtimeEngine* engine,
+SonareError sonare_engine_resolve_track_insert_automation_id(SonareEngine* engine,
                                                              uint32_t track_id,
                                                              unsigned int insert_index,
                                                              const char* param_name,
@@ -780,7 +774,7 @@ SonareError sonare_engine_resolve_track_insert_automation_id(SonareRealtimeEngin
 #endif
 }
 
-SonareError sonare_engine_resolve_master_insert_automation_id(SonareRealtimeEngine* engine,
+SonareError sonare_engine_resolve_master_insert_automation_id(SonareEngine* engine,
                                                               unsigned int insert_index,
                                                               const char* param_name,
                                                               uint32_t* out_id) {
@@ -804,8 +798,8 @@ SonareError sonare_engine_resolve_master_insert_automation_id(SonareRealtimeEngi
 #endif
 }
 
-SonareError sonare_engine_resolve_master_automation_id(SonareRealtimeEngine* engine,
-                                                       const char* param_name, uint32_t* out_id) {
+SonareError sonare_engine_resolve_master_automation_id(SonareEngine* engine, const char* param_name,
+                                                       uint32_t* out_id) {
   SONARE_C_API_ENTRY;
   if (!engine || !param_name || param_name[0] == '\0' || !out_id) {
     return SONARE_ERROR_INVALID_PARAMETER;
@@ -824,8 +818,7 @@ SonareError sonare_engine_resolve_master_automation_id(SonareRealtimeEngine* eng
 #endif
 }
 
-SonareError sonare_engine_resolve_bus_insert_automation_id(SonareRealtimeEngine* engine,
-                                                           uint32_t bus_id,
+SonareError sonare_engine_resolve_bus_insert_automation_id(SonareEngine* engine, uint32_t bus_id,
                                                            unsigned int insert_index,
                                                            const char* param_name,
                                                            uint32_t* out_id) {
@@ -850,8 +843,7 @@ SonareError sonare_engine_resolve_bus_insert_automation_id(SonareRealtimeEngine*
 #endif
 }
 
-SonareError sonare_engine_resolve_track_lane_automation_id(SonareRealtimeEngine* engine,
-                                                           uint32_t track_id,
+SonareError sonare_engine_resolve_track_lane_automation_id(SonareEngine* engine, uint32_t track_id,
                                                            const char* param_name,
                                                            uint32_t* out_id) {
   SONARE_C_API_ENTRY;
@@ -873,7 +865,7 @@ SonareError sonare_engine_resolve_track_lane_automation_id(SonareRealtimeEngine*
 #endif
 }
 
-SonareError sonare_engine_resolve_bus_automation_id(SonareRealtimeEngine* engine, uint32_t bus_id,
+SonareError sonare_engine_resolve_bus_automation_id(SonareEngine* engine, uint32_t bus_id,
                                                     const char* param_name, uint32_t* out_id) {
   SONARE_C_API_ENTRY;
   if (!engine || bus_id == 0 || !param_name || param_name[0] == '\0' || !out_id) {
@@ -894,8 +886,7 @@ SonareError sonare_engine_resolve_bus_automation_id(SonareRealtimeEngine* engine
 #endif
 }
 
-SonareError sonare_engine_set_track_strip_pan(SonareRealtimeEngine* engine, uint32_t track_id,
-                                              float pan) {
+SonareError sonare_engine_set_track_strip_pan(SonareEngine* engine, uint32_t track_id, float pan) {
   SONARE_C_API_ENTRY;
   if (!engine || track_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
 #if !defined(SONARE_WITH_MIXING)
@@ -909,7 +900,7 @@ SonareError sonare_engine_set_track_strip_pan(SonareRealtimeEngine* engine, uint
 #endif
 }
 
-SonareError sonare_engine_set_track_strip_pan_law(SonareRealtimeEngine* engine, uint32_t track_id,
+SonareError sonare_engine_set_track_strip_pan_law(SonareEngine* engine, uint32_t track_id,
                                                   int pan_law) {
   SONARE_C_API_ENTRY;
   if (!engine || track_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
@@ -926,7 +917,7 @@ SonareError sonare_engine_set_track_strip_pan_law(SonareRealtimeEngine* engine, 
 #endif
 }
 
-SonareError sonare_engine_set_track_strip_pan_mode(SonareRealtimeEngine* engine, uint32_t track_id,
+SonareError sonare_engine_set_track_strip_pan_mode(SonareEngine* engine, uint32_t track_id,
                                                    int pan_mode) {
   SONARE_C_API_ENTRY;
   if (!engine || track_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
@@ -943,7 +934,7 @@ SonareError sonare_engine_set_track_strip_pan_mode(SonareRealtimeEngine* engine,
 #endif
 }
 
-SonareError sonare_engine_set_track_strip_dual_pan(SonareRealtimeEngine* engine, uint32_t track_id,
+SonareError sonare_engine_set_track_strip_dual_pan(SonareEngine* engine, uint32_t track_id,
                                                    float left_pan, float right_pan) {
   SONARE_C_API_ENTRY;
   if (!engine || track_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
@@ -961,8 +952,7 @@ SonareError sonare_engine_set_track_strip_dual_pan(SonareRealtimeEngine* engine,
 #endif
 }
 
-SonareError sonare_engine_set_track_strip_surround_pan(SonareRealtimeEngine* engine,
-                                                       uint32_t track_id,
+SonareError sonare_engine_set_track_strip_surround_pan(SonareEngine* engine, uint32_t track_id,
                                                        const SonareSurroundPan* pan) {
   SONARE_C_API_ENTRY;
   if (!engine || track_id == 0 || !pan) return SONARE_ERROR_INVALID_PARAMETER;
@@ -984,8 +974,7 @@ SonareError sonare_engine_set_track_strip_surround_pan(SonareRealtimeEngine* eng
 #endif
 }
 
-SonareError sonare_engine_set_bus_strip_pan(SonareRealtimeEngine* engine, uint32_t bus_id,
-                                            float pan) {
+SonareError sonare_engine_set_bus_strip_pan(SonareEngine* engine, uint32_t bus_id, float pan) {
   SONARE_C_API_ENTRY;
   if (!engine || bus_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
 #if !defined(SONARE_WITH_MIXING)
@@ -999,7 +988,7 @@ SonareError sonare_engine_set_bus_strip_pan(SonareRealtimeEngine* engine, uint32
 #endif
 }
 
-SonareError sonare_engine_set_bus_strip_pan_law(SonareRealtimeEngine* engine, uint32_t bus_id,
+SonareError sonare_engine_set_bus_strip_pan_law(SonareEngine* engine, uint32_t bus_id,
                                                 int pan_law) {
   SONARE_C_API_ENTRY;
   if (!engine || bus_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
@@ -1016,7 +1005,7 @@ SonareError sonare_engine_set_bus_strip_pan_law(SonareRealtimeEngine* engine, ui
 #endif
 }
 
-SonareError sonare_engine_set_bus_strip_pan_mode(SonareRealtimeEngine* engine, uint32_t bus_id,
+SonareError sonare_engine_set_bus_strip_pan_mode(SonareEngine* engine, uint32_t bus_id,
                                                  int pan_mode) {
   SONARE_C_API_ENTRY;
   if (!engine || bus_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
@@ -1033,7 +1022,7 @@ SonareError sonare_engine_set_bus_strip_pan_mode(SonareRealtimeEngine* engine, u
 #endif
 }
 
-SonareError sonare_engine_set_bus_strip_dual_pan(SonareRealtimeEngine* engine, uint32_t bus_id,
+SonareError sonare_engine_set_bus_strip_dual_pan(SonareEngine* engine, uint32_t bus_id,
                                                  float left_pan, float right_pan) {
   SONARE_C_API_ENTRY;
   if (!engine || bus_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
@@ -1051,7 +1040,7 @@ SonareError sonare_engine_set_bus_strip_dual_pan(SonareRealtimeEngine* engine, u
 #endif
 }
 
-SonareError sonare_engine_set_track_strip_channel_delay_samples(SonareRealtimeEngine* engine,
+SonareError sonare_engine_set_track_strip_channel_delay_samples(SonareEngine* engine,
                                                                 uint32_t track_id,
                                                                 int delay_samples) {
   SONARE_C_API_ENTRY;
@@ -1072,7 +1061,7 @@ SonareError sonare_engine_set_track_strip_channel_delay_samples(SonareRealtimeEn
 #endif
 }
 
-SonareError sonare_engine_can_set_lane_sidechain(SonareRealtimeEngine* engine, uint32_t track_id,
+SonareError sonare_engine_can_set_lane_sidechain(SonareEngine* engine, uint32_t track_id,
                                                  unsigned int insert_index,
                                                  uint32_t source_track_id, int* out_refusal) {
   SONARE_C_API_ENTRY;
@@ -1105,7 +1094,7 @@ engine::SidechainSourceKind sidechain_source_kind_for_query(int source_kind) {
 }  // namespace
 #endif
 
-SonareError sonare_engine_can_set_bus_sidechain(SonareRealtimeEngine* engine, uint32_t bus_id,
+SonareError sonare_engine_can_set_bus_sidechain(SonareEngine* engine, uint32_t bus_id,
                                                 unsigned int insert_index, int source_kind,
                                                 uint32_t source_id, int* out_refusal) {
   SONARE_C_API_ENTRY;
@@ -1125,9 +1114,9 @@ SonareError sonare_engine_can_set_bus_sidechain(SonareRealtimeEngine* engine, ui
 #endif
 }
 
-SonareError sonare_engine_can_set_master_sidechain(SonareRealtimeEngine* engine,
-                                                   unsigned int insert_index, int source_kind,
-                                                   uint32_t source_id, int* out_refusal) {
+SonareError sonare_engine_can_set_master_sidechain(SonareEngine* engine, unsigned int insert_index,
+                                                   int source_kind, uint32_t source_id,
+                                                   int* out_refusal) {
   SONARE_C_API_ENTRY;
   if (!engine || !out_refusal) return SONARE_ERROR_INVALID_PARAMETER;
   // Defined on every exit path; a feature-disabled build reports no valid target.

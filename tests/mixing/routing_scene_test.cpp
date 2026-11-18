@@ -147,7 +147,8 @@ TEST_CASE("Removing a bus drops strip sends that targeted it", "[mixing][routing
   constexpr int kSr = 48000;
   constexpr int kBlock = 64;
 
-  SonareMixer* mixer = sonare_mixer_create(kSr, kBlock);
+  SonareMixer* mixer = nullptr;
+  REQUIRE(sonare_mixer_create(kSr, kBlock, &mixer) == SONARE_OK);
   REQUIRE(mixer != nullptr);
   REQUIRE(sonare_mixer_add_bus(mixer, "reverb", "aux") == SONARE_OK);
   SonareStrip* lead = sonare_mixer_add_strip(mixer, "lead");

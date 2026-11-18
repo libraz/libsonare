@@ -55,14 +55,14 @@ SonareError profile_status(
 }
 
 /// Reads the profile last installed on the destination into @p out.
-SonareError profile_of(SonareRealtimeEngine* engine, uint32_t destination_id,
+SonareError profile_of(SonareEngine* engine, uint32_t destination_id,
                        sonare::midi::ControllerProfile* out) noexcept {
   return profile_status(engine->engine.instrument_controller_profile(destination_id, out));
 }
 
 /// Hands @p profile to the destination's instrument, adopted on the audio thread
 /// at the next block; the control thread never writes the instrument itself.
-SonareError install(SonareRealtimeEngine* engine, uint32_t destination_id,
+SonareError install(SonareEngine* engine, uint32_t destination_id,
                     const sonare::midi::ControllerProfile& profile) noexcept {
   return profile_status(engine->engine.set_instrument_controller_profile(destination_id, profile));
 }
@@ -107,8 +107,8 @@ const char* sonare_controller_profile_names(void) {
   SONARE_C_CATCH_RETURN("")
 }
 
-SonareError sonare_engine_set_controller_profile(SonareRealtimeEngine* engine,
-                                                 uint32_t destination_id, const char* preset_name) {
+SonareError sonare_engine_set_controller_profile(SonareEngine* engine, uint32_t destination_id,
+                                                 const char* preset_name) {
   SONARE_C_API_ENTRY;
   if (!engine || !preset_name || preset_name[0] == '\0') return SONARE_ERROR_INVALID_PARAMETER;
 #if !defined(SONARE_WITH_ARRANGEMENT)
@@ -128,7 +128,7 @@ SonareError sonare_engine_set_controller_profile(SonareRealtimeEngine* engine,
 #endif
 }
 
-SonareError sonare_engine_bind_controller(SonareRealtimeEngine* engine, uint32_t destination_id,
+SonareError sonare_engine_bind_controller(SonareEngine* engine, uint32_t destination_id,
                                           const SonareControllerBinding* binding) {
   SONARE_C_API_ENTRY;
   if (!engine || !binding) return SONARE_ERROR_INVALID_PARAMETER;
@@ -199,8 +199,7 @@ SonareError sonare_engine_bind_controller(SonareRealtimeEngine* engine, uint32_t
 #endif
 }
 
-SonareError sonare_engine_clear_controller_bindings(SonareRealtimeEngine* engine,
-                                                    uint32_t destination_id) {
+SonareError sonare_engine_clear_controller_bindings(SonareEngine* engine, uint32_t destination_id) {
   SONARE_C_API_ENTRY;
   if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
 #if !defined(SONARE_WITH_ARRANGEMENT)
@@ -217,8 +216,8 @@ SonareError sonare_engine_clear_controller_bindings(SonareRealtimeEngine* engine
 #endif
 }
 
-SonareError sonare_engine_controller_binding_count(SonareRealtimeEngine* engine,
-                                                   uint32_t destination_id, size_t* out_count) {
+SonareError sonare_engine_controller_binding_count(SonareEngine* engine, uint32_t destination_id,
+                                                   size_t* out_count) {
   SONARE_C_API_ENTRY;
   if (!engine || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
   // Defined on every exit path, so a feature-disabled build and an unbound
@@ -239,7 +238,7 @@ SonareError sonare_engine_controller_binding_count(SonareRealtimeEngine* engine,
 #endif
 }
 
-SonareError sonare_engine_set_controller_velocity_meaningful(SonareRealtimeEngine* engine,
+SonareError sonare_engine_set_controller_velocity_meaningful(SonareEngine* engine,
                                                              uint32_t destination_id,
                                                              int meaningful) {
   SONARE_C_API_ENTRY;
@@ -259,7 +258,7 @@ SonareError sonare_engine_set_controller_velocity_meaningful(SonareRealtimeEngin
 #endif
 }
 
-SonareError sonare_engine_controller_velocity_meaningful(SonareRealtimeEngine* engine,
+SonareError sonare_engine_controller_velocity_meaningful(SonareEngine* engine,
                                                          uint32_t destination_id,
                                                          int* out_meaningful) {
   SONARE_C_API_ENTRY;
@@ -279,7 +278,7 @@ SonareError sonare_engine_controller_velocity_meaningful(SonareRealtimeEngine* e
 #endif
 }
 
-SonareError sonare_engine_set_controller_note_tracking(SonareRealtimeEngine* engine,
+SonareError sonare_engine_set_controller_note_tracking(SonareEngine* engine,
                                                        uint32_t destination_id, int dimension,
                                                        int tracking) {
   SONARE_C_API_ENTRY;
@@ -304,9 +303,8 @@ SonareError sonare_engine_set_controller_note_tracking(SonareRealtimeEngine* eng
 #endif
 }
 
-SonareError sonare_engine_controller_note_tracking(SonareRealtimeEngine* engine,
-                                                   uint32_t destination_id, int dimension,
-                                                   int* out_tracking) {
+SonareError sonare_engine_controller_note_tracking(SonareEngine* engine, uint32_t destination_id,
+                                                   int dimension, int* out_tracking) {
   SONARE_C_API_ENTRY;
   if (!engine || !out_tracking) return SONARE_ERROR_INVALID_PARAMETER;
   *out_tracking = SONARE_NOTE_TRACKING_LAST;

@@ -23,14 +23,12 @@ from ._narrowing import _resolve_zero_default
 from ._runtime import (
     _C_INT_MAX,
     _C_INT_MIN,
-    ErrorCode,
     SonareValueError,
     _as_float32_buffer,
     _check,
     _check_realtime,
     _from_c_float_array,
     _get_lib,
-    _last_error,
     _max_block_size,
     _narrow_int,
     _out_float_array,
@@ -1053,14 +1051,15 @@ class StreamingRetune:
         self._handle = ctypes.c_void_p()
         self._lib = _get_lib()
         requested_grain_size = _retune_grain_size_request(grain_size_samples)
-        handle = self._lib.sonare_streaming_retune_create(
+        handle = ctypes.c_void_p()
+        rc = self._lib.sonare_streaming_retune_create(
             _to_c_float(pitch_semitones, "pitch_semitones"),
             _to_c_float(mix, "mix"),
             _to_c_int(requested_grain_size, "grain_size_samples"),
+            ctypes.byref(handle),
         )
-        if not handle:
-            raise _last_error(int(ErrorCode.INVALID_PARAMETER), "failed to create StreamingRetune")
-        self._handle = ctypes.c_void_p(handle)
+        _check(rc)
+        self._handle = handle
         # The grain size the caller last ASKED for. ``config()`` reports the
         # EFFECTIVE grain once prepared, so seeding an omitted ``grain_size_samples``
         # from it froze the 0 "derive from the sample rate" sentinel into a

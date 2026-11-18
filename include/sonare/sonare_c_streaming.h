@@ -399,10 +399,11 @@ void sonare_free_stream_frames_i16(SonareStreamFramesI16* frames);
 /// across the bindings.
 typedef struct SonareStreamingRetune SonareStreamingRetune;
 
-/// @brief Creates a streaming retune stage. Returns NULL on allocation failure
-///        or for a non-finite @p pitch_semitones / @p mix.
+/// @brief Creates a streaming retune stage. Fails with SONARE_ERROR_INVALID_PARAMETER for a
+///        non-finite @p pitch_semitones / @p mix, and with SONARE_ERROR_NOT_SUPPORTED when the
+///        library was built without the voice changer.
 /// @param pitch_semitones Pitch shift in semitones. Finite; the core clamps the
-///        applied value to +/- 24. A non-finite value is REJECTED (NULL), not
+///        applied value to +/- 24. A non-finite value is REJECTED, not
 ///        substituted, so a NaN reaching the control cannot pass as a request.
 /// @param mix Dry/wet blend. Finite; the core clamps the applied value to
 ///        [0, 1]. A non-finite value is REJECTED.
@@ -411,10 +412,11 @@ typedef struct SonareStreamingRetune SonareStreamingRetune;
 ///        effect at the NEXT prepare(), and re-preparing at a different sample
 ///        rate re-derives it when it is 0. Values above the 8192 ceiling are
 ///        clamped by the core.
-/// @details The caller owns the handle and must release it with
+/// @param out Receives the handle on success, NULL on failure; destroy with
 ///        @ref sonare_streaming_retune_destroy, which is what invalidates it; no other call does.
-SonareStreamingRetune* sonare_streaming_retune_create(float pitch_semitones, float mix,
-                                                      int grain_size_samples);
+/// @return SONARE_OK, or the error code describing the failure.
+SonareError sonare_streaming_retune_create(float pitch_semitones, float mix, int grain_size_samples,
+                                           SonareStreamingRetune** out);
 
 /// @brief Destroys a streaming retune stage. NULL is a no-op.
 void sonare_streaming_retune_destroy(SonareStreamingRetune* retune);

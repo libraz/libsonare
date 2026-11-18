@@ -221,7 +221,7 @@ typedef struct SonareStrip SonareStrip;
 /// Realtime multi-band equalizer.
 typedef struct SonareEq SonareEq;
 /// Realtime playback and mixing engine; released with sonare_engine_destroy.
-typedef struct SonareRealtimeEngine SonareRealtimeEngine;
+typedef struct SonareEngine SonareEngine;
 /// Realtime voice changer; released with sonare_realtime_voice_changer_destroy.
 typedef struct SonareRealtimeVoiceChanger SonareRealtimeVoiceChanger;
 /// Block-by-block analyzer of a live stream; released with sonare_stream_analyzer_destroy.

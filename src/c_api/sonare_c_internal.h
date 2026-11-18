@@ -32,7 +32,7 @@ struct SonareAudio {
 // Realtime engine handle. Defined here (rather than in sonare_c_daw.cpp) so that
 // other C API translation units can access engine internals without ODR or
 // linker fragility. The public header keeps the opaque forward-declaration.
-struct SonareRealtimeEngine {
+struct SonareEngine {
   sonare::engine::RealtimeEngine engine;
   sonare::automation::ParameterRegistry parameters;
   std::deque<std::string> parameter_strings;

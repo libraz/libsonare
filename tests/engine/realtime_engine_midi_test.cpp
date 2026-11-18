@@ -3266,7 +3266,7 @@ TEST_CASE("a UMP slot command whose generation does not match is ignored", "[eng
 }
 
 TEST_CASE("sonare_engine_set_part_rig refuses what it cannot apply", "[engine][midi][part_rig]") {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   SonareSynthInstrumentBinding synth{};
   synth.destination_id = 1;

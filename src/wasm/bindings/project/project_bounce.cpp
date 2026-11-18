@@ -228,7 +228,7 @@ JsInstrumentSlot instrumentSlotFromVal(const val& desc, InstrumentFailure* failu
   slot.hasOnEvent = slot.onEvent.typeOf().as<std::string>() == "function";
   slot.failure = failure;
   *binding = SonareInstrumentBinding{};
-  binding->destination_id = uintProperty(desc, "destinationId", 0u);
+  binding->destination_id = uintProperty(desc, "destinationId", binding->destination_id);
   binding->callbacks.latency_samples =
       static_cast<int>(integerField(desc, "latencySamples", "instrument", INT_MAX));
   binding->callbacks.tail_samples =
@@ -249,10 +249,8 @@ val bounceResultToVal(const std::vector<float>& samples, int num_channels) {
 
 }  // namespace
 
-SampleBankWasm::SampleBankWasm() : bank_(sonare_sample_bank_create()), id_(nextSampleBankId()) {
-  if (bank_ == nullptr) {
-    throwLastCError("failed to create sample bank: ", SONARE_ERROR_OUT_OF_MEMORY);
-  }
+SampleBankWasm::SampleBankWasm() : bank_(nullptr), id_(nextSampleBankId()) {
+  checkCodedCError(sonare_sample_bank_create(&bank_), "failed to create sample bank");
   sampleBankRegistry().emplace(id_, bank_);
 }
 

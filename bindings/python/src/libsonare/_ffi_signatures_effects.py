@@ -493,11 +493,12 @@ def configure_effects_signatures(lib: ctypes.CDLL) -> None:
             ctypes.POINTER(SonareRealtimeVoiceChangerConfig),
         ]
     if hasattr(lib, "sonare_streaming_retune_create"):
-        lib.sonare_streaming_retune_create.restype = ctypes.c_void_p
+        lib.sonare_streaming_retune_create.restype = ctypes.c_int32
         lib.sonare_streaming_retune_create.argtypes = [
             ctypes.c_float,
             ctypes.c_float,
             ctypes.c_int,
+            ctypes.POINTER(ctypes.c_void_p),
         ]
         lib.sonare_streaming_retune_destroy.restype = None
         lib.sonare_streaming_retune_destroy.argtypes = [ctypes.c_void_p]

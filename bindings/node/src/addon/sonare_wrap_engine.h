@@ -205,7 +205,7 @@ class RealtimeEngineWrap : public Napi::ObjectWrap<RealtimeEngineWrap> {
   ///        by the destructor (or a second destroy()) frees nothing twice.
   void ReleaseNativeResources();
 
-  SonareRealtimeEngine* engine_ = nullptr;
+  SonareEngine* engine_ = nullptr;
   // Capture storage is owned by the addon, not borrowed from a JS TypedArray:
   // ArrayBuffers may detach after setCaptureBuffer() (e.g. transfer to a worker).
   std::vector<std::vector<float>> capture_buffers_;

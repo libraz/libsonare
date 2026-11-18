@@ -189,12 +189,11 @@ Napi::Value SonareWrap::MixStereo(const Napi::CallbackInfo& info) {
     }
   }
 
-  SonareMixer* mixer =
-      sonare_mixer_create(sample_rate, static_cast<int>(std::max<size_t>(1, length)));
-  if (mixer == nullptr) {
-    // Null is a rejected sample_rate / block size or an allocation failure;
-    // the C ABI records which.
-    sonare_node::ThrowLastSonareError(env, "mixStereo: failed to create mixer: ");
+  SonareMixer* mixer = nullptr;
+  const SonareError create_err =
+      sonare_mixer_create(sample_rate, static_cast<int>(std::max<size_t>(1, length)), &mixer);
+  if (create_err != SONARE_OK) {
+    sonare_node::ThrowSonareError(env, create_err, "mixStereo: failed to create mixer: ");
     return env.Undefined();
   }
 

@@ -88,7 +88,7 @@ TEST_CASE("sonare_project_deserialize reports unknown scene keys with the projec
 #if defined(SONARE_WITH_MIXING)
 
 struct StripEngine {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   StripEngine() {
     REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
     REQUIRE(sonare_engine_prepare(engine, 48000.0, 256, 64, 64) == SONARE_OK);
@@ -170,7 +170,8 @@ TEST_CASE("engine EQ band setters refuse an unknown key by name", "[c_api][engin
 #if defined(SONARE_WITH_MASTERING)
 
 TEST_CASE("sonare_eq_set_band refuses an unknown key by name", "[c_api][warning]") {
-  SonareEq* eq = sonare_eq_create(48000.0, 512);
+  SonareEq* eq = nullptr;
+  REQUIRE(sonare_eq_create(48000.0, 512, &eq) == SONARE_OK);
   REQUIRE(eq != nullptr);
   CHECK(sonare_eq_set_band(eq, 0, R"({"type":"peak","gainDB":3})") == SONARE_ERROR_INVALID_FORMAT);
   CHECK(std::string(sonare_last_error_message()).find("unknown band key 'gainDB'") !=

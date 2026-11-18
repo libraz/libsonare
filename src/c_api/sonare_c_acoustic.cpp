@@ -305,8 +305,7 @@ SonareError sonare_synthesize_rir(const SonareRirSynthConfig* config, int sample
 void sonare_free_rir_synth_result(SonareRirSynthResult* result) {
   if (!result) return;
   delete[] result->rir;
-  result->rir = nullptr;
-  result->length = 0;
+  *result = {};
 }
 
 SonareError sonare_estimate_room(const float* samples, size_t length, int sample_rate,
@@ -380,9 +379,7 @@ void sonare_free_room_estimate(SonareRoomEstimate* result) {
   if (!result) return;
   delete[] result->absorption_bands;
   delete[] result->rt60_bands;
-  result->absorption_bands = nullptr;
-  result->rt60_bands = nullptr;
-  result->band_count = 0;
+  *result = {};
 }
 
 #if defined(SONARE_WITH_ACOUSTIC_SIM)
@@ -512,7 +509,5 @@ void sonare_free_room_morph_stereo_result(SonareRoomMorphStereoResult* result) {
   if (!result) return;
   delete[] result->left;
   delete[] result->right;
-  result->left = nullptr;
-  result->right = nullptr;
-  result->length = 0;
+  *result = {};
 }

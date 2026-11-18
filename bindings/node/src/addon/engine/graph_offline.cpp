@@ -28,9 +28,8 @@ constexpr size_t kTelemetryDrainChunk = 256;
 ///   NAPI_DISABLE_CPP_EXCEPTIONS). Anything that is not a finite non-negative
 ///   integer is rejected before a single record is drained.
 template <typename Record, typename Convert>
-Napi::Value DrainTelemetryInto(const Napi::CallbackInfo& info, SonareRealtimeEngine* engine,
-                               SonareError (*drain)(SonareRealtimeEngine*, Record*, size_t,
-                                                    size_t*),
+Napi::Value DrainTelemetryInto(const Napi::CallbackInfo& info, SonareEngine* engine,
+                               SonareError (*drain)(SonareEngine*, Record*, size_t, size_t*),
                                Convert convert) {
   Napi::Env env = info.Env();
   size_t budget = ::sonare::engine::RealtimeEngine::kDefaultDrainRecords;

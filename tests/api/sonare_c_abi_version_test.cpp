@@ -409,7 +409,9 @@ TEST_CASE("C entry points clear a stale error before their validation returns",
   CHECK_FALSE(stale_error_visible());
 
   // Failing, then succeeding: the success leaves nothing of the failure behind.
-  REQUIRE(sonare_mixer_create(0, 0) == nullptr);
+  SonareMixer* refused_mixer = nullptr;
+  REQUIRE(sonare_mixer_create(0, 0, &refused_mixer) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(refused_mixer == nullptr);
   REQUIRE(sonare_last_error_code() != SONARE_OK);
   REQUIRE(std::string(sonare_last_error_message()).size() > 0);
   const std::vector<float> samples(256, 0.0f);
@@ -424,9 +426,13 @@ TEST_CASE("C entry points clear a stale error before their validation returns",
 TEST_CASE("sonare_streaming_retune_create leaves nothing behind when construction throws",
           "[c_api][abi][entry_guard]") {
   reserve_error_storage();
-  sonare_streaming_retune_destroy(sonare_streaming_retune_create(5.0f, 1.0f, 0));
-  const size_t attempts = allocation_attempts(
-      [] { sonare_streaming_retune_destroy(sonare_streaming_retune_create(5.0f, 1.0f, 0)); });
+  const auto create_and_destroy = [] {
+    SonareStreamingRetune* handle = nullptr;
+    (void)sonare_streaming_retune_create(5.0f, 1.0f, 0, &handle);
+    sonare_streaming_retune_destroy(handle);
+  };
+  create_and_destroy();
+  const size_t attempts = allocation_attempts(create_and_destroy);
   // The handle and the processor it owns, at least.
   REQUIRE(attempts >= 2);
 
@@ -439,9 +445,8 @@ TEST_CASE("sonare_streaming_retune_create leaves nothing behind when constructio
       sonare::test::LiveBlockGuard live;
       {
         sonare::test::AllocationFailureAtGuard fail(nth);
-        retune = sonare_streaming_retune_create(5.0f, 1.0f, 0);
+        code = sonare_streaming_retune_create(5.0f, 1.0f, 0, &retune);
       }
-      code = sonare_last_error_code();
       sonare_streaming_retune_destroy(retune);
       balance = live.balance();
     }

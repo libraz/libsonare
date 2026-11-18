@@ -212,6 +212,8 @@ add_executable(sonare_tests
   api/sonare_c_note_objects_test.cpp
   api/sonare_c_auto_tune_test.cpp
   api/sonare_c_vocal_edit_test.cpp
+  api/sonare_c_free_state_test.cpp
+  api/sonare_c_create_contract_test.cpp
   api/sonare_c_note_split_merge_test.cpp
   api/sonare_c_note_targets_test.cpp
   api/sonare_c_polyphony_test.cpp
@@ -575,6 +577,7 @@ if(BUILD_ACOUSTIC_SIM)
     )
     target_sources(sonare_tests PRIVATE
       api/sonare_c_acoustic_test.cpp
+      api/sonare_c_acoustic_free_state_test.cpp
       ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_acoustic.cpp
     )
   endif()

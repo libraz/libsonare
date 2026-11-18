@@ -41,7 +41,7 @@ std::unique_ptr<rt::ProcessorBase> make_graph_processor(const SonareEngineGraphN
 }  // namespace
 #endif
 
-SonareError sonare_engine_set_capture_buffer(SonareRealtimeEngine* engine,
+SonareError sonare_engine_set_capture_buffer(SonareEngine* engine,
                                              const SonareEngineCaptureBuffer* buffer) {
   SONARE_C_API_ENTRY;
   if (!engine || !buffer || !buffer->channels || buffer->num_channels <= 0 ||
@@ -56,14 +56,14 @@ SonareError sonare_engine_set_capture_buffer(SonareRealtimeEngine* engine,
   return SONARE_OK;
 }
 
-SonareError sonare_engine_arm_capture(SonareRealtimeEngine* engine, int armed) {
+SonareError sonare_engine_arm_capture(SonareEngine* engine, int armed) {
   SONARE_C_API_ENTRY;
   if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
   engine->engine.set_capture_armed(armed != 0);
   return SONARE_OK;
 }
 
-SonareError sonare_engine_set_capture_punch(SonareRealtimeEngine* engine, int64_t start_sample,
+SonareError sonare_engine_set_capture_punch(SonareEngine* engine, int64_t start_sample,
                                             int64_t end_sample, int enabled) {
   SONARE_C_API_ENTRY;
   // An enabled empty window would read as "no punch" and record everything.
@@ -75,7 +75,7 @@ SonareError sonare_engine_set_capture_punch(SonareRealtimeEngine* engine, int64_
   return SONARE_OK;
 }
 
-SonareError sonare_engine_set_capture_source(SonareRealtimeEngine* engine,
+SonareError sonare_engine_set_capture_source(SonareEngine* engine,
                                              SonareEngineCaptureSource source) {
   SONARE_C_API_ENTRY;
   if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
@@ -91,30 +91,28 @@ SonareError sonare_engine_set_capture_source(SonareRealtimeEngine* engine,
   }
 }
 
-SonareError sonare_engine_set_record_offset_samples(SonareRealtimeEngine* engine,
-                                                    int64_t offset_samples) {
+SonareError sonare_engine_set_record_offset_samples(SonareEngine* engine, int64_t offset_samples) {
   SONARE_C_API_ENTRY;
   if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
   engine->engine.set_record_offset_samples(offset_samples);
   return SONARE_OK;
 }
 
-SonareError sonare_engine_set_input_monitor(SonareRealtimeEngine* engine, int enabled, float gain) {
+SonareError sonare_engine_set_input_monitor(SonareEngine* engine, int enabled, float gain) {
   SONARE_C_API_ENTRY;
   if (!engine || !std::isfinite(gain)) return SONARE_ERROR_INVALID_PARAMETER;
   engine->engine.set_input_monitor(enabled != 0, gain);
   return SONARE_OK;
 }
 
-SonareError sonare_engine_reset_capture(SonareRealtimeEngine* engine) {
+SonareError sonare_engine_reset_capture(SonareEngine* engine) {
   SONARE_C_API_ENTRY;
   if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
   engine->engine.reset_capture();
   return SONARE_OK;
 }
 
-SonareError sonare_engine_capture_status(SonareRealtimeEngine* engine,
-                                         SonareEngineCaptureStatus* out) {
+SonareError sonare_engine_capture_status(SonareEngine* engine, SonareEngineCaptureStatus* out) {
   SONARE_C_API_ENTRY;
   if (!engine || !out) return SONARE_ERROR_INVALID_PARAMETER;
   out->captured_frames = engine->engine.captured_frames();
@@ -128,8 +126,7 @@ SonareError sonare_engine_capture_status(SonareRealtimeEngine* engine,
   return SONARE_OK;
 }
 
-SonareError sonare_engine_set_graph(SonareRealtimeEngine* engine,
-                                    const SonareEngineGraphSpec* spec) {
+SonareError sonare_engine_set_graph(SonareEngine* engine, const SonareEngineGraphSpec* spec) {
   SONARE_C_API_ENTRY;
   if (!engine || !spec || !spec->nodes || spec->node_count == 0 || spec->num_channels <= 0 ||
       (spec->connection_count > 0 && !spec->connections) ||
@@ -189,7 +186,7 @@ SonareError sonare_engine_set_graph(SonareRealtimeEngine* engine,
 #endif
 }
 
-SonareError sonare_engine_graph_node_count(SonareRealtimeEngine* engine, size_t* out_count) {
+SonareError sonare_engine_graph_node_count(SonareEngine* engine, size_t* out_count) {
   SONARE_C_API_ENTRY;
   if (!engine || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
 #if defined(SONARE_WITH_GRAPH)
@@ -204,7 +201,7 @@ SonareError sonare_engine_graph_node_count(SonareRealtimeEngine* engine, size_t*
 #endif
 }
 
-SonareError sonare_engine_graph_connection_count(SonareRealtimeEngine* engine, size_t* out_count) {
+SonareError sonare_engine_graph_connection_count(SonareEngine* engine, size_t* out_count) {
   SONARE_C_API_ENTRY;
   if (!engine || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
 #if defined(SONARE_WITH_GRAPH)

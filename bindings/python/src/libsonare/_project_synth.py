@@ -24,12 +24,10 @@ from ._narrowing import _is_number, _narrow_double
 from ._runtime import (
     _UINT8_MAX,
     _UINT32_MAX,
-    ErrorCode,
     SonareValueError,
     _check,
     _get_lib,
     _joined_names,
-    _last_error,
     _mapping_keys,
     _to_c_float_array,
     _to_c_int,
@@ -554,10 +552,9 @@ class SampleBank:
         lib = _get_lib()
         if not hasattr(lib, "sonare_sample_bank_create"):
             raise _not_supported("libsonare was built without the sample-bank ABI")
-        handle = lib.sonare_sample_bank_create()
-        if not handle:
-            raise _last_error(int(ErrorCode.OUT_OF_MEMORY), "failed to create SampleBank")
-        self._handle = ctypes.c_void_p(handle)
+        handle = ctypes.c_void_p()
+        _check(lib.sonare_sample_bank_create(ctypes.byref(handle)))
+        self._handle = handle
 
     # -- lifecycle ----------------------------------------------------------
 

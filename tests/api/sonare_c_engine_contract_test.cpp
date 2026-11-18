@@ -62,7 +62,7 @@ TEST_CASE("sonare_capabilities_json", "[c_api]") {
 }
 
 TEST_CASE("sonare_engine MIDI scalar commands respect arrangement feature flag", "[c_api]") {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(engine != nullptr);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
@@ -82,7 +82,7 @@ TEST_CASE("sonare_engine MIDI scalar commands respect arrangement feature flag",
 
 TEST_CASE("sonare_engine_graph_node/connection_count report feature availability consistently",
           "[c_api][engine][graph]") {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(engine != nullptr);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
@@ -110,7 +110,7 @@ TEST_CASE("sonare_engine_graph_node/connection_count report feature availability
 
 TEST_CASE("engine MIDI getters define their out-parameter on every exit path",
           "[c_api][engine][midi]") {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(engine != nullptr);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
@@ -161,7 +161,7 @@ TEST_CASE("sonare_engine_push_midi_sysex enforces the documented payload ceiling
   constexpr size_t ceiling = sonare::engine::RealtimeEngine::kMaxSysExPayloadBytes;
   REQUIRE(ceiling == 512);
 
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(engine != nullptr);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
@@ -188,7 +188,7 @@ TEST_CASE("sonare_engine_push_midi_sysex enforces the documented payload ceiling
 TEST_CASE("C SysEx distinguishes unsupported prepared controls from queue pressure",
           "[c_api][engine][midi][gs]") {
 #if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_MASTERING)
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
   sonare::midi::synth::Sf2PlayerConfig config;
@@ -224,7 +224,7 @@ TEST_CASE("C SysEx distinguishes unsupported prepared controls from queue pressu
 TEST_CASE("C MIDI instrument bind maps an allocation failure to OUT_OF_MEMORY",
           "[c_api][engine][midi]") {
 #if defined(SONARE_WITH_ARRANGEMENT)
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
   SonareEngineBuiltinSynthConfig synth{};
@@ -268,7 +268,7 @@ TEST_CASE("C MIDI instrument bind maps an allocation failure to OUT_OF_MEMORY",
 TEST_CASE("MIDI instrument bind reports a refused scheduled SysEx as a preparation failure",
           "[c_api][engine][midi][gs]") {
 #if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_MASTERING)
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
   // The C bind entries map kPreparationFailed to SONARE_ERROR_INVALID_STATE;
@@ -304,7 +304,7 @@ TEST_CASE("MIDI instrument bind reports a refused scheduled SysEx as a preparati
 TEST_CASE("failed MIDI instrument clear retains the C-owned instrument",
           "[c_api][engine][midi][gs]") {
 #if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_MIXING)
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
   SonareEngineBuiltinSynthConfig synth{};
@@ -361,7 +361,7 @@ TEST_CASE("sonare_engine_set_warp_voice_capacity enforces the documented ceiling
   constexpr uint32_t ceiling = sonare::engine::RealtimeEngine::kMaxWarpVoices;
   REQUIRE(ceiling == SONARE_ENGINE_MAX_WARP_VOICES);
 
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(engine != nullptr);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
@@ -401,7 +401,7 @@ TEST_CASE("malformed JSON exits every C-ABI entry point with the same code",
       "not json", "{", "{\"a\":}", "{\"a\":1,}", "[1,", "", "{\"a\":1 \"b\":2}",
   };
 
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
 #if defined(SONARE_WITH_ARRANGEMENT)
@@ -420,7 +420,8 @@ TEST_CASE("malformed JSON exits every C-ABI entry point with the same code",
     REQUIRE(sonare_engine_set_track_strip_json(engine, 1, json) == SONARE_ERROR_INVALID_FORMAT);
 #endif
 #if defined(SONARE_WITH_MASTERING)
-    SonareEq* eq = sonare_eq_create(48000.0, 512);
+    SonareEq* eq = nullptr;
+    REQUIRE(sonare_eq_create(48000.0, 512, &eq) == SONARE_OK);
     REQUIRE(eq != nullptr);
     REQUIRE(sonare_eq_set_band(eq, 0, json) == SONARE_ERROR_INVALID_FORMAT);
     sonare_eq_destroy(eq);
@@ -438,7 +439,7 @@ TEST_CASE("a scene JSON entry point separates a malformed document from an inval
   // INVALID_FORMAT means the document did not parse. A document that parses and
   // then fails a scene rule carries its own code, which is the difference
   // between "your file is corrupt" and "this value is not accepted".
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
 
@@ -527,15 +528,22 @@ TEST_CASE("sonare_last_error_message", "[c_api]") {
 
   SECTION("pointer-returning constructors replace stale diagnostics") {
 #if defined(SONARE_WITH_MIXING)
-    REQUIRE(sonare_mixer_create(0, 128) == nullptr);
+    SonareMixer* refused_mixer = nullptr;
+    REQUIRE(sonare_mixer_create(0, 128, &refused_mixer) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(refused_mixer == nullptr);
     REQUIRE(std::string(sonare_last_error_message()).find("sample_rate") != std::string::npos);
     REQUIRE(sonare_mixer_from_scene_json(nullptr, 48000, 128) == nullptr);
     REQUIRE(std::string(sonare_last_error_message()).find("scene JSON") != std::string::npos);
 #endif  // defined(SONARE_WITH_MIXING)
 #if defined(SONARE_WITH_MASTERING)
-    REQUIRE(sonare_eq_create(0.0, 128) == nullptr);
+    SonareEq* refused_eq = nullptr;
+    REQUIRE(sonare_eq_create(0.0, 128, &refused_eq) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(refused_eq == nullptr);
     REQUIRE(std::string(sonare_last_error_message()).find("sample_rate") != std::string::npos);
-    REQUIRE(sonare_streaming_mastering_chain_create(nullptr, 1) == nullptr);
+    SonareStreamingMasteringChain* refused_chain = nullptr;
+    REQUIRE(sonare_streaming_mastering_chain_create(nullptr, 1, &refused_chain) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(refused_chain == nullptr);
     REQUIRE(std::string(sonare_last_error_message()).find("params") != std::string::npos);
 #endif  // defined(SONARE_WITH_MASTERING)
   }
@@ -583,10 +591,13 @@ TEST_CASE("sonare_last_error_code carries the code a NULL handle cannot", "[c_ap
   }
 
   SECTION("mixer constructors and lookups record a code on every NULL return") {
-    REQUIRE(sonare_mixer_create(0, 128) == nullptr);
+    SonareMixer* refused_mixer = nullptr;
+    REQUIRE(sonare_mixer_create(0, 128, &refused_mixer) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(refused_mixer == nullptr);
     REQUIRE(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
 
-    SonareMixer* mixer = sonare_mixer_create(48000, 128);
+    SonareMixer* mixer = nullptr;
+    REQUIRE(sonare_mixer_create(48000, 128, &mixer) == SONARE_OK);
     REQUIRE(mixer != nullptr);
     REQUIRE(sonare_last_error_code() == SONARE_OK);
 
@@ -620,23 +631,34 @@ TEST_CASE("sonare_last_error_code carries the code a NULL handle cannot", "[c_ap
 
 #if defined(SONARE_WITH_MASTERING)
   SECTION("mastering constructors record a code on validation failure") {
-    REQUIRE(sonare_eq_create(0.0, 128) == nullptr);
+    SonareEq* refused_eq = nullptr;
+    REQUIRE(sonare_eq_create(0.0, 128, &refused_eq) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(refused_eq == nullptr);
     REQUIRE(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(sonare_streaming_mastering_chain_create(nullptr, 1) == nullptr);
+    SonareStreamingMasteringChain* refused_chain = nullptr;
+    REQUIRE(sonare_streaming_mastering_chain_create(nullptr, 1, &refused_chain) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(refused_chain == nullptr);
     REQUIRE(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
   }
 #endif  // defined(SONARE_WITH_MASTERING)
 
   SECTION("the retune and sample bank constructors record a code") {
 #if defined(SONARE_WITH_VOICE_CHANGER)
-    REQUIRE(sonare_streaming_retune_create(std::numeric_limits<float>::quiet_NaN(), 1.0f, 0) ==
-            nullptr);
+    SonareStreamingRetune* refused_retune = nullptr;
+    REQUIRE(sonare_streaming_retune_create(std::numeric_limits<float>::quiet_NaN(), 1.0f, 0,
+                                           &refused_retune) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(refused_retune == nullptr);
     REQUIRE(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
 #else
-    REQUIRE(sonare_streaming_retune_create(0.0f, 1.0f, 0) == nullptr);
+    SonareStreamingRetune* refused_retune = nullptr;
+    REQUIRE(sonare_streaming_retune_create(0.0f, 1.0f, 0, &refused_retune) ==
+            SONARE_ERROR_NOT_SUPPORTED);
+    REQUIRE(refused_retune == nullptr);
     REQUIRE(sonare_last_error_code() == SONARE_ERROR_NOT_SUPPORTED);
 #endif  // defined(SONARE_WITH_VOICE_CHANGER)
-    SonareSampleBank* bank = sonare_sample_bank_create();
+    SonareSampleBank* bank = nullptr;
+    REQUIRE(sonare_sample_bank_create(&bank) == SONARE_OK);
 #if defined(SONARE_WITH_ARRANGEMENT)
     REQUIRE(bank != nullptr);
     REQUIRE(sonare_last_error_code() == SONARE_OK);
@@ -716,7 +738,7 @@ TEST_CASE("sonare_last_error_message is per-thread across concurrent failures", 
 #if defined(SONARE_WITH_ARRANGEMENT)
 TEST_CASE("sonare_engine_parameter_info describes a hosted instrument's reserved parameter",
           "[c_api][engine]") {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
 
@@ -753,7 +775,7 @@ TEST_CASE("sonare_engine_set_synth_instrument_binding follows GM program changes
   // A program change one sample before the note-on so the resolved patch is
   // settled before note_on() reads the channel's program/bank state.
   auto render = [](uint8_t use_gm_programs, uint8_t program) -> std::vector<float> {
-    SonareRealtimeEngine* engine = nullptr;
+    SonareEngine* engine = nullptr;
     REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
     REQUIRE(sonare_engine_prepare(engine, 48000.0, kBlock, 16, 16) == SONARE_OK);
 
@@ -812,7 +834,7 @@ TEST_CASE("sonare_engine_set_synth_instrument_binding follows GM program changes
   SonareSynthInstrumentBinding binding{};
   binding.destination_id = kDestination;
   binding.patch = patch;
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_set_synth_instrument_binding(nullptr, &binding) ==
           SONARE_ERROR_INVALID_PARAMETER);
@@ -825,7 +847,7 @@ TEST_CASE("sonare_engine_set_synth_instrument_binding follows GM program changes
 #if defined(SONARE_WITH_MIXING)
 TEST_CASE("sonare_engine_parameter_info describes a compressor insert on every strip kind",
           "[c_api][engine]") {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
 
@@ -908,7 +930,7 @@ TEST_CASE("sonare_engine_parameter_info describes a compressor insert on every s
 
 TEST_CASE("sonare_engine_parameter_info describes the lane fader and master width targets",
           "[c_api][engine]") {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
 
@@ -946,7 +968,7 @@ TEST_CASE("sonare_engine_parameter_info describes the lane fader and master widt
 TEST_CASE("sonare_engine_upsert_clip and remove_clip change one clip and keep the rest",
           "[c_api][engine]") {
   constexpr int kFrames = 64;
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, kFrames, 16, 16) == SONARE_OK);
 
@@ -1011,7 +1033,7 @@ TEST_CASE("sonare_engine_upsert_clip and remove_clip change one clip and keep th
 }
 
 TEST_CASE("sonare_engine_prepare refuses a fractional sample rate", "[c_api][engine]") {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 44100.5, 128, 8, 8) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_engine_prepare_with_channels(engine, 44100.5, 128, 8, 8, 2) ==
@@ -1026,7 +1048,7 @@ TEST_CASE("sonare_engine_prepare refuses a fractional sample rate", "[c_api][eng
 TEST_CASE(
     "sonare_engine_prepare_with_channels reads 0 as the library default for every sized argument",
     "[c_api][engine]") {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare_with_channels(engine, 48000.0, 0, 0, 0, 0) == SONARE_OK);
 
@@ -1053,7 +1075,7 @@ TEST_CASE(
 
 TEST_CASE("sonare_engine_bounce_offline resolves block_size 0 against the prepared block",
           "[c_api][engine]") {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 64, 8, 8) == SONARE_OK);
 
@@ -1081,7 +1103,7 @@ TEST_CASE("sonare_engine_bounce_offline resolves block_size 0 against the prepar
 }
 
 TEST_CASE("sonare_engine_drain_external_midi accepts max_events 0 as a no-op", "[c_api][engine]") {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 8, 8) == SONARE_OK);
 
@@ -1099,7 +1121,7 @@ TEST_CASE("sonare_engine_drain_external_midi accepts max_events 0 as a no-op", "
 TEST_CASE("sonare_engine transport refuses a negative position and never moves the playhead",
           "[c_api][engine]") {
   constexpr int kFrames = 64;
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, kFrames, 16, 16) == SONARE_OK);
   std::array<float, kFrames> left{};
@@ -1126,7 +1148,7 @@ TEST_CASE("sonare_engine transport refuses a negative position and never moves t
 
 TEST_CASE("sonare_engine_count_in_end_sample answers start_sample for a count of no bars",
           "[c_api][engine]") {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 8, 8) == SONARE_OK);
   for (int bars : {0, -1, -4}) {
@@ -1147,7 +1169,7 @@ TEST_CASE("sonare_engine_count_in_end_sample answers start_sample for a count of
 
 TEST_CASE("sonare_engine_set_capture_punch refuses an enabled empty window",
           "[c_api][engine][capture]") {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 8, 8) == SONARE_OK);
   SonareEngineCaptureStatus status{};
@@ -1170,7 +1192,7 @@ TEST_CASE("sonare_engine_set_capture_punch refuses an enabled empty window",
 
 #if defined(SONARE_WITH_GRAPH)
 TEST_CASE("sonare_engine_set_graph refuses a connection mix outside 0 and 1", "[c_api][engine]") {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 64, 8, 8) == SONARE_OK);
   SonareEngineGraphNode nodes[2]{};
@@ -1209,20 +1231,25 @@ TEST_CASE("Create and prepare entries refuse a rate or block size outside their 
 #if defined(SONARE_WITH_MIXING)
   for (const int rate : {7999, 384001, 1000000000}) {
     CAPTURE(rate);
-    REQUIRE(sonare_mixer_create(rate, 128) == nullptr);
+    SonareMixer* refused_mixer = nullptr;
+    REQUIRE(sonare_mixer_create(rate, 128, &refused_mixer) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(refused_mixer == nullptr);
     REQUIRE(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
   }
   for (const int block : {-1, kBlockCeiling + 1, std::numeric_limits<int>::max()}) {
     CAPTURE(block);
-    REQUIRE(sonare_mixer_create(48000, block) == nullptr);
+    SonareMixer* refused_mixer = nullptr;
+    REQUIRE(sonare_mixer_create(48000, block, &refused_mixer) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(refused_mixer == nullptr);
     REQUIRE(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
   }
-  SonareMixer* mixer = sonare_mixer_create(384000, kBlockCeiling);
+  SonareMixer* mixer = nullptr;
+  REQUIRE(sonare_mixer_create(384000, kBlockCeiling, &mixer) == SONARE_OK);
   REQUIRE(mixer != nullptr);
   sonare_mixer_destroy(mixer);
 #endif  // defined(SONARE_WITH_MIXING)
 
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   for (const int block : {kBlockCeiling + 1, std::numeric_limits<int>::max()}) {
     CAPTURE(block);

@@ -739,15 +739,12 @@ SonareError sonare_mastering_ab_match_loudness_stereo(
 void sonare_free_mastering_result(SonareMasteringResult* result) {
   if (!result) return;
   delete[] result->samples;
-  result->samples = nullptr;
-  result->length = 0;
+  *result = {};
 }
 
 void sonare_free_mastering_stereo_result(SonareMasteringStereoResult* result) {
   if (!result) return;
   delete[] result->left;
   delete[] result->right;
-  result->left = nullptr;
-  result->right = nullptr;
-  result->length = 0;
+  *result = {};
 }

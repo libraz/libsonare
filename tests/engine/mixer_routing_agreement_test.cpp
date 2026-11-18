@@ -277,8 +277,8 @@ struct EngineOptions {
   bool bind_key = true;
 };
 
-SonareRealtimeEngine* make_engine(const Row& row, const EngineOptions& options = {}) {
-  SonareRealtimeEngine* engine = nullptr;
+SonareEngine* make_engine(const Row& row, const EngineOptions& options = {}) {
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, kSampleRate, kBlockSize, 64, 16) == SONARE_OK);
 
@@ -368,7 +368,7 @@ SonareRealtimeEngine* make_engine(const Row& row, const EngineOptions& options =
   return engine;
 }
 
-int engine_latency_samples(SonareRealtimeEngine* engine) {
+int engine_latency_samples(SonareEngine* engine) {
   return engine->engine.graph_latency_samples_q8() >> 8;
 }
 
@@ -384,7 +384,7 @@ std::vector<float> interleave(const std::vector<std::vector<float>>& planes) {
 
 // Live block-processing loop.
 std::vector<float> render_live(const Row& row) {
-  SonareRealtimeEngine* engine = make_engine(row);
+  SonareEngine* engine = make_engine(row);
   REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
   const int channels = output_channels(row);
   std::vector<std::vector<float>> planes(static_cast<size_t>(channels),
@@ -413,7 +413,7 @@ struct OfflineRender {
 
 // One sonare_engine_render_offline call.
 OfflineRender render_offline(const Row& row, const EngineOptions& options = {}) {
-  SonareRealtimeEngine* engine = make_engine(row, options);
+  SonareEngine* engine = make_engine(row, options);
   OfflineRender result;
   result.latency = engine_latency_samples(engine);
   const int channels = output_channels(row);

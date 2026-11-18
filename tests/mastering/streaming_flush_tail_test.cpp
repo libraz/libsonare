@@ -128,8 +128,9 @@ CChain make_c_chain(int num_channels) {
       {"saturation.tape.enabled", 1.0},
       {"saturation.tape.bias", 0.1},
   };
-  CChain chain(sonare_streaming_mastering_chain_create(params, 2),
-               &sonare_streaming_mastering_chain_destroy);
+  SonareStreamingMasteringChain* raw_chain = nullptr;
+  REQUIRE(sonare_streaming_mastering_chain_create(params, 2, &raw_chain) == SONARE_OK);
+  CChain chain(raw_chain, &sonare_streaming_mastering_chain_destroy);
   REQUIRE(chain != nullptr);
   REQUIRE(sonare_streaming_mastering_chain_prepare(chain.get(), static_cast<int>(kSampleRate),
                                                    kBlockSize, num_channels) == SONARE_OK);

@@ -262,7 +262,7 @@ TEST_CASE("channel-strip project bounce shares the live destination voice pool",
     bounce_peak = std::max(bounce_peak, std::abs(bounced[i]));
   }
 
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, kSampleRate, kBlockSize, 64, 16) == SONARE_OK);
   SonareEngineBuiltinSynthConfig live_config{};

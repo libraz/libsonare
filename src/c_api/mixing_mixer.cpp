@@ -500,10 +500,11 @@ SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int
     sonare_c_detail::set_last_error(SONARE_ERROR_INVALID_FORMAT, e.what());
     return nullptr;
   }
-  std::unique_ptr<SonareMixer> mixer(sonare_mixer_create(sample_rate, max_block_size));
-  if (!mixer) {
+  SonareMixer* created = nullptr;
+  if (sonare_mixer_create(sample_rate, max_block_size, &created) != SONARE_OK) {
     return nullptr;
   }
+  std::unique_ptr<SonareMixer> mixer(created);
   for (const auto& scene_strip : scene.strips) {
     // Build with the scene's metering: the meters are sized when the strip is
     // constructed, so this is the one point where a scene can opt out of the

@@ -9,7 +9,7 @@ TEST_CASE("engine degradation counters are reachable through the C ABI",
   // could not retain, and time-stretched clips that fell back to resampling
   // because no stretcher voice was free. Neither had a C-ABI entry point, so no
   // host over the C ABI could detect either one.
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(engine != nullptr);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
@@ -37,7 +37,7 @@ TEST_CASE("engine degradation counters are reachable through the C ABI",
 }
 
 TEST_CASE("sonare_engine validates realtime queue error classes", "[c_api][engine]") {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(engine != nullptr);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 1, 1) == SONARE_OK);
@@ -83,7 +83,7 @@ TEST_CASE("sonare_engine validates realtime queue error classes", "[c_api][engin
 
 TEST_CASE("sonare_engine reports prepared channel overflow through telemetry", "[c_api][engine]") {
   constexpr int kBlock = 64;
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare_with_channels(engine, 48000.0, kBlock, 16, 16, 2) == SONARE_OK);
 
@@ -154,7 +154,7 @@ TEST_CASE("sonare_engine_flush_control_commands drains the command ring without 
   // a control-only host that never calls sonare_engine_process must still be
   // able to drain queued commands through this C-ABI entry, or its bounded
   // command ring fills and push_command starts failing.
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(engine != nullptr);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 64, /*command_capacity=*/4,
@@ -176,7 +176,7 @@ TEST_CASE("sonare_engine_flush_control_commands drains the command ring without 
 
 TEST_CASE("sonare_engine rejects registered non realtime-safe automation targets",
           "[c_api][engine]") {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(engine != nullptr);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
@@ -212,7 +212,7 @@ TEST_CASE("sonare_engine rejects registered non realtime-safe automation targets
 
 TEST_CASE("sonare_engine parameter registration leaves automation lanes in place",
           "[c_api][engine]") {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
 
@@ -243,7 +243,7 @@ TEST_CASE("sonare_engine parameter registration leaves automation lanes in place
 
 TEST_CASE("sonare_engine tempo and time-signature segments validate their input",
           "[c_api][engine]") {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(engine != nullptr);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
@@ -279,7 +279,7 @@ TEST_CASE("sonare_engine tempo and time-signature segments validate their input"
 
 TEST_CASE("tempo and time-signature segment setters keep exceptions inside the C ABI",
           "[c_api][engine]") {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(engine != nullptr);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
@@ -321,7 +321,7 @@ TEST_CASE("tempo and time-signature segment setters keep exceptions inside the C
 }
 
 TEST_CASE("sonare_engine rejects out-of-range automation curve ordinals", "[c_api][engine]") {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
 
@@ -347,7 +347,7 @@ TEST_CASE("sonare_engine rejects out-of-range automation curve ordinals", "[c_ap
 }
 
 TEST_CASE("sonare_engine rejects engine-reserved automation parameter ids", "[c_api][engine]") {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(engine != nullptr);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
@@ -372,7 +372,7 @@ TEST_CASE("sonare_engine rejects the reserved invalid parameter id 0", "[c_api][
   // and permanently inert. The refusal lives in ParameterRegistry::add, which
   // every surface's add path goes through, so this matches the WASM binding
   // instead of being the one surface that accepts it.
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
 
@@ -398,7 +398,7 @@ TEST_CASE("sonare_engine rejects the reserved invalid parameter id 0", "[c_api][
 }
 
 TEST_CASE("sonare_engine_add_parameter rejects a non-finite declared range", "[c_api][engine]") {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
 
@@ -478,7 +478,7 @@ TEST_CASE("sonare_engine restores a lane fader's manual value once its automatio
   // 18 blocks are processed below (8 to let the fader settle, 1 to measure,
   // twice); size the clip generously past that so it never runs out.
   constexpr int kFrames = kBlock * 24;
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(engine != nullptr);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, kBlock, 64, 16) == SONARE_OK);

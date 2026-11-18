@@ -23,12 +23,12 @@ Napi::Object InitVocalEdit(Napi::Env env, Napi::Object exports);
 class VocalEditSessionWrap final : public Napi::ObjectWrap<VocalEditSessionWrap> {
  public:
   static Napi::Object Init(Napi::Env env, Napi::Object exports);
-  static Napi::Object NewInstance(Napi::Env env, SonareVocalEditSession* session);
+  static Napi::Object NewInstance(Napi::Env env, SonareVocalSession* session);
 
   explicit VocalEditSessionWrap(const Napi::CallbackInfo& info);
   ~VocalEditSessionWrap() override;
 
-  SonareVocalEditSession* native() const noexcept { return session_; }
+  SonareVocalSession* native() const noexcept { return session_; }
   void RetainDraft(VocalEditDraftWrap* draft) { drafts_.push_back(draft); }
   void ReleaseDraft(VocalEditDraftWrap* draft) noexcept {
     drafts_.erase(std::remove(drafts_.begin(), drafts_.end(), draft), drafts_.end());
@@ -52,7 +52,7 @@ class VocalEditSessionWrap final : public Napi::ObjectWrap<VocalEditSessionWrap>
   Napi::Value ExportState(const Napi::CallbackInfo& info);
   void Destroy(const Napi::CallbackInfo& info);
 
-  SonareVocalEditSession* session_ = nullptr;
+  SonareVocalSession* session_ = nullptr;
   std::vector<VocalEditDraftWrap*> drafts_;
   bool destroyed_ = false;
   static Napi::FunctionReference constructor_;
@@ -61,13 +61,13 @@ class VocalEditSessionWrap final : public Napi::ObjectWrap<VocalEditSessionWrap>
 class VocalEditDraftWrap final : public Napi::ObjectWrap<VocalEditDraftWrap> {
  public:
   static Napi::Object Init(Napi::Env env, Napi::Object exports);
-  static Napi::Object NewInstance(Napi::Env env, SonareVocalEditDraft* draft,
+  static Napi::Object NewInstance(Napi::Env env, SonareVocalDraft* draft,
                                   VocalEditSessionWrap* owner, const Napi::Object& owner_object);
 
   explicit VocalEditDraftWrap(const Napi::CallbackInfo& info);
   ~VocalEditDraftWrap() override;
 
-  SonareVocalEditDraft* native() const noexcept { return draft_; }
+  SonareVocalDraft* native() const noexcept { return draft_; }
 
   /// Disposes the native draft when the owning session closes; later calls fail as disposed.
   void DisposeForOwner() noexcept;
@@ -86,7 +86,7 @@ class VocalEditDraftWrap final : public Napi::ObjectWrap<VocalEditDraftWrap> {
   Napi::Value CaptureRenderSnapshot(const Napi::CallbackInfo& info);
   void Destroy(const Napi::CallbackInfo& info);
 
-  SonareVocalEditDraft* draft_ = nullptr;
+  SonareVocalDraft* draft_ = nullptr;
   VocalEditSessionWrap* owner_ = nullptr;
   Napi::ObjectReference owner_object_;
   bool released_owner_ = false;
@@ -96,12 +96,12 @@ class VocalEditDraftWrap final : public Napi::ObjectWrap<VocalEditDraftWrap> {
 class VocalRenderSnapshotWrap final : public Napi::ObjectWrap<VocalRenderSnapshotWrap> {
  public:
   static Napi::Object Init(Napi::Env env, Napi::Object exports);
-  static Napi::Object NewInstance(Napi::Env env, SonareVocalRenderSnapshot* snapshot);
+  static Napi::Object NewInstance(Napi::Env env, SonareVocalSnapshot* snapshot);
 
   explicit VocalRenderSnapshotWrap(const Napi::CallbackInfo& info);
   ~VocalRenderSnapshotWrap() override;
 
-  SonareVocalRenderSnapshot* native() const noexcept { return snapshot_; }
+  SonareVocalSnapshot* native() const noexcept { return snapshot_; }
 
  private:
   Napi::Value Render(const Napi::CallbackInfo& info);
@@ -110,7 +110,7 @@ class VocalRenderSnapshotWrap final : public Napi::ObjectWrap<VocalRenderSnapsho
   Napi::Value OutputLengthSamples(const Napi::CallbackInfo& info);
   void Destroy(const Napi::CallbackInfo& info);
 
-  SonareVocalRenderSnapshot* snapshot_ = nullptr;
+  SonareVocalSnapshot* snapshot_ = nullptr;
   bool destroyed_ = false;
   static Napi::FunctionReference constructor_;
 };

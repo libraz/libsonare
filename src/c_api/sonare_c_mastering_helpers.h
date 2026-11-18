@@ -147,9 +147,7 @@ void free_stereo_channels(StereoResult* result) {
   if (result == nullptr) return;
   delete[] result->left;
   delete[] result->right;
-  result->left = nullptr;
-  result->right = nullptr;
-  result->length = 0;
+  *result = {};
 }
 
 // Define a chain result before any validation return, so a rejected call hands

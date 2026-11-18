@@ -629,7 +629,7 @@ TEST_CASE("bounce_with_sf2_instruments renders the loaded SoundFont", "[project]
 }
 
 TEST_CASE("sonare_engine SF2 instrument renders live MIDI input", "[c_api][sf2]") {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
 
@@ -714,7 +714,7 @@ TEST_CASE("the project and engine SF2 loaders agree on their error codes", "[pro
   // statement about the imported data".
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
 
   const uint8_t garbage[8] = {'n', 'o', 't', ' ', 'a', 's', 'f', '2'};
@@ -741,7 +741,7 @@ TEST_CASE("the project and engine SF2 loaders agree on their error codes", "[pro
 
 #if defined(SONARE_WITH_ARRANGEMENT)
 TEST_CASE("an SF2 patch gain outside the domain is refused, not replaced", "[c_api][sf2]") {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
 
@@ -798,7 +798,7 @@ std::vector<uint8_t> gs_dt1(uint8_t a0, uint8_t a1, uint8_t a2, std::vector<uint
 
 /// Renders one held note on part 1 through an Overdrive insertion effect, realised as asked.
 std::vector<float> render_overdrive(int realization) {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
   const std::vector<uint8_t> sf2 = make_sf2_bytes();
@@ -829,7 +829,7 @@ std::vector<float> render_overdrive(int realization) {
 }  // namespace
 
 TEST_CASE("an SF2 patch selects how the GS insertion effects are realised", "[c_api][sf2]") {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
   SonareEngineSf2InstrumentConfig config{};

@@ -119,12 +119,12 @@ const Source& source() {
 }
 
 struct EngineDeleter {
-  void operator()(SonareRealtimeEngine* e) const { sonare_engine_destroy(e); }
+  void operator()(SonareEngine* e) const { sonare_engine_destroy(e); }
 };
-using EnginePtr = std::unique_ptr<SonareRealtimeEngine, EngineDeleter>;
+using EnginePtr = std::unique_ptr<SonareEngine, EngineDeleter>;
 
 EnginePtr make_engine(Processor p, Placement placement) {
-  SonareRealtimeEngine* raw = nullptr;
+  SonareEngine* raw = nullptr;
   REQUIRE(sonare_engine_create(&raw) == SONARE_OK);
   EnginePtr engine(raw);
   REQUIRE(sonare_engine_prepare(engine.get(), kSampleRate, kBlock, 1024, 1024) == SONARE_OK);
@@ -182,7 +182,7 @@ struct Planar {
   std::vector<float> right;
 };
 
-void process_blocks(SonareRealtimeEngine* engine, int blocks, Planar* capture = nullptr) {
+void process_blocks(SonareEngine* engine, int blocks, Planar* capture = nullptr) {
   std::array<float, kBlock> left{};
   std::array<float, kBlock> right{};
   float* io[] = {left.data(), right.data()};
@@ -198,13 +198,13 @@ void process_blocks(SonareRealtimeEngine* engine, int blocks, Planar* capture = 
 }
 
 // Plays from the top so every processor carries state, then stops.
-void dirty(SonareRealtimeEngine* engine) {
+void dirty(SonareEngine* engine) {
   REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
   process_blocks(engine, kDirtyBlocks);
   REQUIRE(sonare_engine_stop(engine, -1) == SONARE_OK);
 }
 
-Planar bounce(SonareRealtimeEngine* engine) {
+Planar bounce(SonareEngine* engine) {
   REQUIRE(sonare_engine_seek_sample(engine, kStartSample, -1) == SONARE_OK);
   SonareEngineBounceOptions options{};
   REQUIRE(sonare_engine_bounce_options_default(&options) == SONARE_OK);
@@ -229,7 +229,7 @@ Planar bounce(SonareRealtimeEngine* engine) {
 
 // Freezes from the start position, then reads the frozen clip back with the lanes
 // removed so no insert tail reaches the read-back.
-Planar freeze_and_read_back(SonareRealtimeEngine* engine) {
+Planar freeze_and_read_back(SonareEngine* engine) {
   REQUIRE(sonare_engine_seek_sample(engine, kStartSample, -1) == SONARE_OK);
   SonareEngineFreezeOptions options{};
   options.total_frames = kRenderFrames;
@@ -252,7 +252,7 @@ Planar freeze_and_read_back(SonareRealtimeEngine* engine) {
 }
 
 // Queues seek, optional reset and play together, then renders the span live.
-Planar queued_play(SonareRealtimeEngine* engine, bool reset) {
+Planar queued_play(SonareEngine* engine, bool reset) {
   REQUIRE(sonare_engine_seek_sample(engine, kStartSample, -1) == SONARE_OK);
   if (reset) REQUIRE(engine->engine.reset_processor_state(-1));
   REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);

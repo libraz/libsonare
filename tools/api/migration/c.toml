@@ -1451,3 +1451,83 @@ removed = true
 no_replacement = "the buffers sonare_playback_render_interleaved and sonare_playback_renderer_render_offline return are plain float buffers; release them with sonare_free_floats"
 domain = "engine"
 rule = "c-free"
+
+# Handle types named after the function prefix that operates on them.
+
+[[entry]]
+kind = "type"
+old = "SonareRealtimeEngine"
+new = "SonareEngine"
+domain = "engine"
+rule = "c-create"
+
+[[entry]]
+kind = "type"
+old = "SonareVocalEditSession"
+new = "SonareVocalSession"
+domain = "project"
+rule = "c-create"
+
+[[entry]]
+kind = "type"
+old = "SonareVocalEditDraft"
+new = "SonareVocalDraft"
+domain = "project"
+rule = "c-create"
+
+[[entry]]
+kind = "type"
+old = "SonareVocalRenderSnapshot"
+new = "SonareVocalSnapshot"
+domain = "project"
+rule = "c-create"
+
+# Constructors return SonareError and write the handle through their last parameter.
+
+[[entry]]
+kind = "function"
+old = "sonare_eq_create"
+changed = "SonareError sonare_eq_create(sample_rate, max_block_size, &eq); read the error from the return value, the handle from eq (NULL on failure)"
+domain = "mastering"
+rule = "c-create"
+test = "tests/api/sonare_c_create_contract_test.cpp::sonare_eq_create returns its error"
+
+[[entry]]
+kind = "function"
+old = "sonare_mixer_create"
+changed = "SonareError sonare_mixer_create(sample_rate, max_block_size, &mixer); read the error from the return value, the handle from mixer (NULL on failure)"
+domain = "mastering"
+rule = "c-create"
+test = "tests/api/sonare_c_create_contract_test.cpp::sonare_mixer_create returns its error"
+
+[[entry]]
+kind = "function"
+old = "sonare_sample_bank_create"
+changed = "SonareError sonare_sample_bank_create(&bank); read the error from the return value, the handle from bank (NULL on failure)"
+domain = "engine"
+rule = "c-create"
+test = "tests/api/sonare_c_create_contract_test.cpp::sonare_sample_bank_create returns its error"
+
+[[entry]]
+kind = "function"
+old = "sonare_streaming_mastering_chain_create"
+changed = "SonareError sonare_streaming_mastering_chain_create(params, param_count, &chain); read the error from the return value, the handle from chain (NULL on failure)"
+domain = "mastering"
+rule = "c-create"
+test = "tests/api/sonare_c_create_contract_test.cpp::sonare_streaming_mastering_chain_create returns its error"
+
+[[entry]]
+kind = "function"
+old = "sonare_streaming_mastering_chain_create_ex"
+changed = "SonareError sonare_streaming_mastering_chain_create_ex(params, param_count, loudness_static_gain_db, loudness_static_gain_peak_db, &chain); read the error from the return value, the handle from chain (NULL on failure)"
+domain = "mastering"
+rule = "c-create"
+test = "tests/api/sonare_c_create_contract_test.cpp::sonare_streaming_mastering_chain_create returns its error"
+
+[[entry]]
+kind = "function"
+old = "sonare_streaming_retune_create"
+changed = "SonareError sonare_streaming_retune_create(pitch_semitones, mix, grain_size_samples, &retune); read the error from the return value, the handle from retune (NULL on failure)"
+domain = "effects"
+rule = "c-create"
+test = "tests/api/sonare_c_create_contract_test.cpp::sonare_streaming_retune_create returns its error"

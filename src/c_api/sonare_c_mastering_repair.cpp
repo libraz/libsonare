@@ -460,8 +460,7 @@ template <typename CResult>
 void free_mono_samples(CResult* result) {
   if (result == nullptr) return;
   delete[] result->samples;
-  result->samples = nullptr;
-  result->length = 0;
+  *result = {};
 }
 
 /// Copy a stereo core result's channels into @p out and record the length.

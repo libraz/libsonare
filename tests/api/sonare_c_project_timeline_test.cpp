@@ -128,29 +128,29 @@ std::vector<float> project_bounce(SonareProject* project) {
   return result;
 }
 
-SonareRealtimeEngine* prepared_engine() {
-  SonareRealtimeEngine* engine = nullptr;
+SonareEngine* prepared_engine() {
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, kSampleRate, kBlockSize, 64, 16) == SONARE_OK);
   return engine;
 }
 
 /// Renders one block so queued transport commands are adopted.
-void process_block(SonareRealtimeEngine* engine) {
+void process_block(SonareEngine* engine) {
   std::array<float, kBlockSize> left{};
   std::array<float, kBlockSize> right{};
   float* channels[] = {left.data(), right.data()};
   REQUIRE(sonare_engine_process(engine, channels, 2, kBlockSize) == SONARE_OK);
 }
 
-bool transport_playing(SonareRealtimeEngine* engine) {
+bool transport_playing(SonareEngine* engine) {
   SonareTransportState state{};
   REQUIRE(sonare_engine_get_transport_state(engine, &state) == SONARE_OK);
   return state.playing != 0;
 }
 
 /// Stops the transport and rewinds it to the timeline start.
-void stop_and_rewind(SonareRealtimeEngine* engine) {
+void stop_and_rewind(SonareEngine* engine) {
   REQUIRE(sonare_engine_stop(engine, -1) == SONARE_OK);
   REQUIRE(sonare_engine_seek_sample(engine, 0, -1) == SONARE_OK);
   process_block(engine);
@@ -159,7 +159,7 @@ void stop_and_rewind(SonareRealtimeEngine* engine) {
 
 /// Plays from the current position and bounces kFrames, then leaves the engine
 /// stopped at the start again.
-std::vector<float> engine_bounce(SonareRealtimeEngine* engine) {
+std::vector<float> engine_bounce(SonareEngine* engine) {
   SonareEngineBounceOptions options{};
   REQUIRE(sonare_engine_bounce_options_default(&options) == SONARE_OK);
   options.total_frames = kFrames;
@@ -192,7 +192,7 @@ SonareProjectTimeline* compile_timeline(SonareProject* project) {
 
 /// Compiles, applies and destroys the handle; a fresh instrument is bound first so
 /// voice state from an earlier render cannot leak into the next.
-void apply_project(SonareRealtimeEngine* engine, SonareProject* project) {
+void apply_project(SonareEngine* engine, SonareProject* project) {
   const SonareEngineBuiltinSynthConfig synth = engine_synth();
   REQUIRE(sonare_engine_set_builtin_instrument(engine, kDestination, &synth) == SONARE_OK);
   SonareProjectTimeline* timeline = compile_timeline(project);
@@ -206,19 +206,19 @@ float peak(const std::vector<float>& data) {
   return value;
 }
 
-size_t marker_count(SonareRealtimeEngine* engine) {
+size_t marker_count(SonareEngine* engine) {
   size_t count = 0;
   REQUIRE(sonare_engine_marker_count(engine, &count) == SONARE_OK);
   return count;
 }
 
-size_t clip_count(SonareRealtimeEngine* engine) {
+size_t clip_count(SonareEngine* engine) {
   size_t count = 0;
   REQUIRE(sonare_engine_clip_count(engine, &count) == SONARE_OK);
   return count;
 }
 
-[[maybe_unused]] size_t automation_lane_count(SonareRealtimeEngine* engine) {
+[[maybe_unused]] size_t automation_lane_count(SonareEngine* engine) {
   size_t count = 0;
   REQUIRE(sonare_engine_automation_lane_count(engine, &count) == SONARE_OK);
   return count;
@@ -230,7 +230,7 @@ TEST_CASE("applied timeline renders bit-identically to project bounce across edi
           "[timeline-apply][c_api]") {
   const std::vector<float> tone = stereo_tone(kSampleRate);
   TestProject built = build_project(tone);
-  SonareRealtimeEngine* engine = prepared_engine();
+  SonareEngine* engine = prepared_engine();
 
   const auto require_match = [&](const char* step) {
     INFO("after: " << step);
@@ -274,7 +274,7 @@ TEST_CASE(
   uint32_t marker_id = 0;
   REQUIRE(sonare_project_set_marker(base.project, 0, 2.0, "base", &marker_id) == SONARE_OK);
 
-  SonareRealtimeEngine* engine = prepared_engine();
+  SonareEngine* engine = prepared_engine();
   apply_project(engine, base.project);
   REQUIRE(marker_count(engine) == 1);
   REQUIRE(clip_count(engine) == 1);
@@ -309,7 +309,7 @@ TEST_CASE("applied timeline binds a 1:1 scene strip like the project bounce mixe
   REQUIRE(sonare_project_set_track_route(built.project, built.midi_track, "lead", "") == SONARE_OK);
   const std::vector<float> bounced = project_bounce(built.project);
 
-  SonareRealtimeEngine* engine = prepared_engine();
+  SonareEngine* engine = prepared_engine();
   apply_project(engine, built.project);
   const std::vector<float> live = engine_bounce(engine);
   sonare_engine_destroy(engine);
@@ -340,7 +340,7 @@ TEST_CASE("marker names outlive a destroyed timeline handle", "[timeline-apply][
   uint32_t marker_id = 0;
   REQUIRE(sonare_project_set_marker(project, 0, 2.0, kLongMarkerName, &marker_id) == SONARE_OK);
 
-  SonareRealtimeEngine* engine = prepared_engine();
+  SonareEngine* engine = prepared_engine();
   SonareProjectTimeline* timeline = compile_timeline(project);
   REQUIRE(sonare_engine_apply_project_timeline(engine, timeline) == SONARE_OK);
   sonare_project_timeline_destroy(timeline);
@@ -391,7 +391,7 @@ TEST_CASE("automation set after apply keeps the applied lanes audible", "[timeli
                                                 nullptr) == SONARE_OK);
   const std::vector<float> bounced = project_bounce(built.project);
 
-  SonareRealtimeEngine* engine = prepared_engine();
+  SonareEngine* engine = prepared_engine();
   apply_project(engine, built.project);
   REQUIRE(automation_lane_count(engine) == 1);
   const std::vector<float> applied = engine_bounce(engine);
@@ -432,7 +432,7 @@ TEST_CASE("apply is refused while the transport is playing", "[timeline-apply][c
   REQUIRE(sonare_project_set_marker(second.project, 0, 1.0, "second", &second_marker) == SONARE_OK);
 
   const auto run = [&](bool attempt_while_playing) {
-    SonareRealtimeEngine* engine = prepared_engine();
+    SonareEngine* engine = prepared_engine();
     apply_project(engine, first.project);
     REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
     process_block(engine);
@@ -482,7 +482,7 @@ TEST_CASE("compile_timeline and apply validate their arguments", "[timeline-appl
           SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(result.has_timeline == 0);
 
-  SonareRealtimeEngine* engine = prepared_engine();
+  SonareEngine* engine = prepared_engine();
   timeline = compile_timeline(project);
   REQUIRE(sonare_engine_apply_project_timeline(nullptr, timeline) ==
           SONARE_ERROR_INVALID_PARAMETER);

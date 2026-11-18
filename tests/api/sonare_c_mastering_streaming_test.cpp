@@ -17,7 +17,8 @@ TEST_CASE("streaming mastering C API sets prepared realtime parameters",
   const SonareMasteringParam params[] = {
       {"maximizer.truePeakLimiter.enabled", 1.0},
   };
-  SonareStreamingMasteringChain* chain = sonare_streaming_mastering_chain_create(params, 1);
+  SonareStreamingMasteringChain* chain = nullptr;
+  REQUIRE(sonare_streaming_mastering_chain_create(params, 1, &chain) == SONARE_OK);
   REQUIRE(chain != nullptr);
 
   REQUIRE(sonare_streaming_mastering_chain_set_parameter(
@@ -48,7 +49,8 @@ TEST_CASE("streaming mastering C API validates setter handles and keys",
                                                          "maximizer.truePeakLimiter.ceilingDb",
                                                          -12.0) == SONARE_ERROR_INVALID_PARAMETER);
 
-  SonareStreamingMasteringChain* chain = sonare_streaming_mastering_chain_create(nullptr, 0);
+  SonareStreamingMasteringChain* chain = nullptr;
+  REQUIRE(sonare_streaming_mastering_chain_create(nullptr, 0, &chain) == SONARE_OK);
   REQUIRE(chain != nullptr);
   REQUIRE(sonare_streaming_mastering_chain_set_parameter(chain, nullptr, -12.0) ==
           SONARE_ERROR_INVALID_PARAMETER);
@@ -102,7 +104,8 @@ TEST_CASE("sonare_streaming_loudness_gain matches the offline chain's applied ga
 
 TEST_CASE("streaming mastering chain prepare resolves a zero block size to its default",
           "[c_api][mastering][streaming]") {
-  SonareStreamingMasteringChain* chain = sonare_streaming_mastering_chain_create(nullptr, 0);
+  SonareStreamingMasteringChain* chain = nullptr;
+  REQUIRE(sonare_streaming_mastering_chain_create(nullptr, 0, &chain) == SONARE_OK);
   REQUIRE(chain != nullptr);
   CHECK(sonare_streaming_mastering_chain_prepare(chain, 48000, -1, 1) ==
         SONARE_ERROR_INVALID_PARAMETER);
@@ -119,8 +122,11 @@ TEST_CASE("streaming mastering chain prepare resolves a zero block size to its d
 
 TEST_CASE("sonare_eq_create resolves a zero block size to its default",
           "[c_api][mastering][streaming]") {
-  CHECK(sonare_eq_create(48000.0, -1) == nullptr);
-  SonareEq* eq = sonare_eq_create(48000.0, 0);
+  SonareEq* refused_eq = nullptr;
+  CHECK(sonare_eq_create(48000.0, -1, &refused_eq) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(refused_eq == nullptr);
+  SonareEq* eq = nullptr;
+  REQUIRE(sonare_eq_create(48000.0, 0, &eq) == SONARE_OK);
   REQUIRE(eq != nullptr);
 
   std::vector<float> left(512, 0.1f);

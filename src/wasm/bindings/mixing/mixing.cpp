@@ -370,10 +370,11 @@ val js_mix_stereo(val left_channels, val right_channels, const val& sample_rate_
   // Build a real mixer and route every input through the compiled routing graph
   // + master bus via sonare_mixer_process_stereo, matching the Node/Python
   // mixStereo path exactly (instead of summing bare ChannelStrip outputs).
-  SonareMixer* mixer =
-      sonare_mixer_create(sample_rate, static_cast<int>(std::max<size_t>(1, length)));
-  if (mixer == nullptr) {
-    throwLastCError("failed to create mixer: ");
+  SonareMixer* mixer = nullptr;
+  const SonareError create_err =
+      sonare_mixer_create(sample_rate, static_cast<int>(std::max<size_t>(1, length)), &mixer);
+  if (create_err != SONARE_OK) {
+    throwCodedCError(create_err, "failed to create mixer");
   }
   std::vector<SonareStrip*> strips;
   std::vector<const float*> left_ptrs(static_cast<size_t>(count));

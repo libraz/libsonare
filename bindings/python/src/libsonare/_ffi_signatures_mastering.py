@@ -353,18 +353,20 @@ def configure_mastering_signatures(lib: ctypes.CDLL) -> None:
                 ctypes.POINTER(SonareMasteringChainStereoResult)
             ]
         if hasattr(lib, "sonare_streaming_mastering_chain_create"):
-            lib.sonare_streaming_mastering_chain_create.restype = ctypes.c_void_p
+            lib.sonare_streaming_mastering_chain_create.restype = ctypes.c_int32
             lib.sonare_streaming_mastering_chain_create.argtypes = [
                 ctypes.POINTER(SonareMasteringParam),
                 ctypes.c_size_t,
+                ctypes.POINTER(ctypes.c_void_p),
             ]
             if hasattr(lib, "sonare_streaming_mastering_chain_create_ex"):
-                lib.sonare_streaming_mastering_chain_create_ex.restype = ctypes.c_void_p
+                lib.sonare_streaming_mastering_chain_create_ex.restype = ctypes.c_int32
                 lib.sonare_streaming_mastering_chain_create_ex.argtypes = [
                     ctypes.POINTER(SonareMasteringParam),
                     ctypes.c_size_t,
                     ctypes.c_float,
                     ctypes.c_float,
+                    ctypes.POINTER(ctypes.c_void_p),
                 ]
             lib.sonare_streaming_mastering_chain_prepare.restype = ctypes.c_int32
             lib.sonare_streaming_mastering_chain_prepare.argtypes = [
@@ -438,8 +440,12 @@ def configure_mastering_signatures(lib: ctypes.CDLL) -> None:
             lib.sonare_streaming_mastering_chain_destroy.restype = None
             lib.sonare_streaming_mastering_chain_destroy.argtypes = [ctypes.c_void_p]
         if hasattr(lib, "sonare_eq_create"):
-            lib.sonare_eq_create.restype = ctypes.c_void_p
-            lib.sonare_eq_create.argtypes = [ctypes.c_double, ctypes.c_int]
+            lib.sonare_eq_create.restype = ctypes.c_int32
+            lib.sonare_eq_create.argtypes = [
+                ctypes.c_double,
+                ctypes.c_int,
+                ctypes.POINTER(ctypes.c_void_p),
+            ]
             lib.sonare_eq_destroy.restype = None
             lib.sonare_eq_destroy.argtypes = [ctypes.c_void_p]
             lib.sonare_eq_set_band.restype = ctypes.c_int32

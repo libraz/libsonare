@@ -22,16 +22,19 @@ constexpr uint32_t kMaxKeymapSets = 4096u;
 
 extern "C" {
 
-SonareSampleBank* sonare_sample_bank_create(void) {
+SonareError sonare_sample_bank_create(SonareSampleBank** out) {
   SONARE_C_API_ENTRY;
+  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = nullptr;
 #if defined(SONARE_WITH_ARRANGEMENT)
   SONARE_C_TRY
-  return new SonareSampleBank();
-  SONARE_C_CATCH_RETURN(nullptr)
+  *out = new SonareSampleBank();
+  return SONARE_OK;
+  SONARE_C_CATCH
 #else
   sonare_c_detail::set_last_error(SONARE_ERROR_NOT_SUPPORTED,
                                   "sample bank: arrangement support is not built");
-  return nullptr;
+  return SONARE_ERROR_NOT_SUPPORTED;
 #endif
 }
 

@@ -146,7 +146,7 @@ SonareBuiltinSynthConfig project_synth_config() {
 
 // Builds a fresh engine wired identically to project_scene_json: track -> fx
 // bus (group routing via output_bus_id) -> master, one held note.
-void configure_engine(SonareRealtimeEngine* engine, const BusStripCase& c, uint32_t track_id) {
+void configure_engine(SonareEngine* engine, const BusStripCase& c, uint32_t track_id) {
   REQUIRE(sonare_engine_prepare(engine, kSampleRate, kBlockSize, 64, 16) == SONARE_OK);
   SonareEngineBus buses[] = {
       {kBusId, 0.0f, static_cast<uint8_t>(SONARE_CHANNEL_LAYOUT_STEREO), 0, nullptr, 0}};
@@ -175,7 +175,7 @@ void configure_engine(SonareRealtimeEngine* engine, const BusStripCase& c, uint3
 
 // Interleaved stereo render via the live block-processing loop (a).
 std::vector<float> render_live(const BusStripCase& c, uint32_t track_id) {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   configure_engine(engine, c, track_id);
   // Compare settled state: set_bus_strip glides pan and width in, as a live edit should.
@@ -203,7 +203,7 @@ std::vector<float> render_live(const BusStripCase& c, uint32_t track_id) {
 
 // Interleaved stereo render via a single sonare_engine_render_offline call (b).
 std::vector<float> render_offline(const BusStripCase& c, uint32_t track_id) {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   configure_engine(engine, c, track_id);
   REQUIRE(sonare_engine_settle_parameters(engine) == SONARE_OK);

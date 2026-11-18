@@ -21,14 +21,12 @@ from ._narrowing import _resolve_zero_default
 from ._runtime import (
     _C_INT_MAX,
     _C_INT_MIN,
-    ErrorCode,
     SonareValueError,
     _check,
     _check_realtime,
     _from_c_float_array,
     _get_lib,
     _guard_buffer,
-    _last_error,
     _max_block_size,
     _measured_db,
     _narrow_float,
@@ -230,6 +228,7 @@ class StreamingMasteringChain:
         max_block_value = _resolve_zero_default(max_block_size, "max_block_size")
         channels_value = _narrow_int(num_channels, "num_channels", _C_INT_MIN, _C_INT_MAX)
         param_array, param_count = _chain_params(config)
+        handle = ctypes.c_void_p()
         if loudness_static_gain_db is not None:
             if not hasattr(lib, "sonare_streaming_mastering_chain_create_ex"):
                 raise _not_supported(
@@ -243,22 +242,20 @@ class StreamingMasteringChain:
                 if loudness_static_gain_peak_db is None
                 else _narrow_float(loudness_static_gain_peak_db, "loudness_static_gain_peak_db")
             )
-            handle = lib.sonare_streaming_mastering_chain_create_ex(
+            rc = lib.sonare_streaming_mastering_chain_create_ex(
                 param_array,
                 _to_c_size_t(param_count, "param_count"),
                 _to_c_float(loudness_static_gain_db, "loudness_static_gain_db"),
                 ctypes.c_float(peak),
+                ctypes.byref(handle),
             )
         else:
-            handle = lib.sonare_streaming_mastering_chain_create(
-                param_array, _to_c_size_t(param_count, "param_count")
+            rc = lib.sonare_streaming_mastering_chain_create(
+                param_array, _to_c_size_t(param_count, "param_count"), ctypes.byref(handle)
             )
-        if not handle:
-            raise _last_error(
-                int(ErrorCode.INVALID_PARAMETER), "failed to create StreamingMasteringChain"
-            )
+        _check(rc)
         self._lib = lib
-        self._handle = ctypes.c_void_p(handle)
+        self._handle = handle
         try:
             rc = lib.sonare_streaming_mastering_chain_prepare(
                 self._handle,
@@ -525,15 +522,15 @@ class StreamingEqualizer:
         # but every later call as an int, so int() here would split the two.
         sample_rate_value = _narrow_int(sample_rate, "sample_rate", _C_INT_MIN, _C_INT_MAX)
         max_block_value = _resolve_zero_default(max_block_size, "max_block_size")
-        handle = lib.sonare_eq_create(
-            float(sample_rate_value), _to_c_int(max_block_value, "max_block_size")
+        handle = ctypes.c_void_p()
+        rc = lib.sonare_eq_create(
+            float(sample_rate_value),
+            _to_c_int(max_block_value, "max_block_size"),
+            ctypes.byref(handle),
         )
-        if not handle:
-            raise _last_error(
-                int(ErrorCode.INVALID_PARAMETER), "failed to create StreamingEqualizer"
-            )
+        _check(rc)
         self._lib = lib
-        self._handle = ctypes.c_void_p(handle)
+        self._handle = handle
         self.sample_rate = sample_rate_value
         self._sidechain_refs: object | None = None
 

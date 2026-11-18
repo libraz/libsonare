@@ -40,8 +40,10 @@ sonare::mastering::eq::StereoPlacement parse_placement(int placement) {
 
 }  // namespace
 
-SonareEq* sonare_eq_create(double sample_rate, int max_block_size) {
+SonareError sonare_eq_create(double sample_rate, int max_block_size, SonareEq** out) {
   SONARE_C_API_ENTRY;
+  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = nullptr;
   if (max_block_size == 0) {
     max_block_size = sonare::mastering::eq::EqualizerProcessor::kDefaultMaxBlock;
   }
@@ -50,15 +52,16 @@ SonareEq* sonare_eq_create(double sample_rate, int max_block_size) {
       max_block_size > kMaxRealtimeBlockSize) {
     set_last_error(SONARE_ERROR_INVALID_PARAMETER,
                    "EQ: sample_rate and max_block_size must be within the supported range");
-    return nullptr;
+    return SONARE_ERROR_INVALID_PARAMETER;
   }
   SONARE_C_TRY
   auto handle = std::make_unique<SonareEq>();
   handle->sample_rate = sample_rate;
   handle->max_block_size = max_block_size;
   handle->processor.prepare(sample_rate, max_block_size);
-  return handle.release();
-  SONARE_C_CATCH_RETURN(nullptr)
+  *out = handle.release();
+  return SONARE_OK;
+  SONARE_C_CATCH
 }
 
 void sonare_eq_destroy(SonareEq* eq) { delete eq; }

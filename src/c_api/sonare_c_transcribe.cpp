@@ -261,11 +261,7 @@ SonareTranscribeConfig sonare_transcribe_config_default(void) {
 void sonare_free_transcribe_result(SonareTranscribeResult* result) {
   if (result == nullptr) return;
   delete[] result->events;
-  result->events = nullptr;
-  result->count = 0;
-  result->note_count = 0;
-  result->tempo_bpm = 0.0f;
-  result->tuning_cents = 0.0f;
+  *result = {};
 }
 
 SonareError sonare_transcribe(const float* samples, size_t length, int sample_rate, float tempo_bpm,

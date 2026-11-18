@@ -178,8 +178,7 @@ SonareError sonare_metering_detect_clipping(const float* samples, size_t length,
 void sonare_free_clipping_result(SonareClippingResult* result) {
   if (!result) return;
   delete[] result->regions;
-  result->regions = nullptr;
-  result->region_count = 0;
+  *result = {};
 }
 
 SonareError sonare_metering_dynamic_range(const float* samples, size_t length, int sample_rate,
@@ -205,8 +204,7 @@ SonareError sonare_metering_dynamic_range(const float* samples, size_t length, i
 void sonare_free_dynamic_range_result(SonareDynamicRangeResult* result) {
   if (!result) return;
   delete[] result->window_rms_db;
-  result->window_rms_db = nullptr;
-  result->window_count = 0;
+  *result = {};
 }
 
 namespace {
@@ -351,8 +349,7 @@ SonareError sonare_metering_phase_scope_decimated(const float* left, const float
 void sonare_free_phase_scope_result(SonarePhaseScopeResult* result) {
   if (!result) return;
   delete[] result->points;
-  result->points = nullptr;
-  result->point_count = 0;
+  *result = {};
 }
 
 namespace {
@@ -461,11 +458,7 @@ void sonare_free_spectrum_result(SonareSpectrumResult* result) {
   delete[] result->magnitude;
   delete[] result->power;
   delete[] result->db;
-  result->frequencies = nullptr;
-  result->magnitude = nullptr;
-  result->power = nullptr;
-  result->db = nullptr;
-  result->bin_count = 0;
+  *result = {};
 }
 
 // ============================================================================

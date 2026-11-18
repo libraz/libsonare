@@ -120,15 +120,15 @@ SonareMeterTelemetryRecordWideV2 meter_record_wide_v2(const engine::MeterTelemet
 
 }  // namespace
 
-SonareError sonare_engine_process(SonareRealtimeEngine* engine, float* const* channels,
-                                  int num_channels, int num_frames) {
+SonareError sonare_engine_process(SonareEngine* engine, float* const* channels, int num_channels,
+                                  int num_frames) {
   SONARE_C_RT_API_ENTRY;
   if (!engine || num_channels < 0 || num_frames < 0) return SONARE_ERROR_INVALID_PARAMETER;
   engine->engine.process(channels, num_channels, num_frames);
   return SONARE_OK;
 }
 
-SonareError sonare_engine_process_with_monitor(SonareRealtimeEngine* engine, float* const* channels,
+SonareError sonare_engine_process_with_monitor(SonareEngine* engine, float* const* channels,
                                                float* const* monitor_out, int num_channels,
                                                int num_frames) {
   SONARE_C_RT_API_ENTRY;
@@ -137,7 +137,7 @@ SonareError sonare_engine_process_with_monitor(SonareRealtimeEngine* engine, flo
   return SONARE_OK;
 }
 
-SonareError sonare_engine_render_offline_ex(SonareRealtimeEngine* engine, float* const* out,
+SonareError sonare_engine_render_offline_ex(SonareEngine* engine, float* const* out,
                                             int num_channels, int64_t total_frames, int block_size,
                                             int finalize) {
   SONARE_C_API_ENTRY;
@@ -170,13 +170,13 @@ SonareError sonare_engine_render_offline_ex(SonareRealtimeEngine* engine, float*
   SONARE_C_CATCH
 }
 
-SonareError sonare_engine_render_offline(SonareRealtimeEngine* engine, float* const* out,
-                                         int num_channels, int64_t total_frames, int block_size) {
+SonareError sonare_engine_render_offline(SonareEngine* engine, float* const* out, int num_channels,
+                                         int64_t total_frames, int block_size) {
   SONARE_C_API_ENTRY;
   return sonare_engine_render_offline_ex(engine, out, num_channels, total_frames, block_size, 1);
 }
 
-SonareError sonare_engine_finish_offline_render(SonareRealtimeEngine* engine) {
+SonareError sonare_engine_finish_offline_render(SonareEngine* engine) {
   SONARE_C_API_ENTRY;
   if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
   // Same never-prepared rule as the render entry points: with no reserved
@@ -205,7 +205,7 @@ SonareError sonare_engine_bounce_options_default(SonareEngineBounceOptions* opti
   return SONARE_OK;
 }
 
-SonareError sonare_engine_bounce_offline(SonareRealtimeEngine* engine,
+SonareError sonare_engine_bounce_offline(SonareEngine* engine,
                                          const SonareEngineBounceOptions* options,
                                          SonareEngineBounceResult* out) {
   SONARE_C_API_ENTRY;
@@ -337,7 +337,7 @@ SonareError sonare_engine_bounce_offline(SonareRealtimeEngine* engine,
   SONARE_C_CATCH
 }
 
-SonareError sonare_engine_freeze_offline(SonareRealtimeEngine* engine,
+SonareError sonare_engine_freeze_offline(SonareEngine* engine,
                                          const SonareEngineFreezeOptions* options,
                                          SonareEngineFreezeResult* out) {
   SONARE_C_API_ENTRY;
@@ -377,7 +377,7 @@ SonareError sonare_engine_freeze_offline(SonareRealtimeEngine* engine,
   SONARE_C_CATCH
 }
 
-SonareError sonare_engine_drain_telemetry(SonareRealtimeEngine* engine, SonareEngineTelemetry* out,
+SonareError sonare_engine_drain_telemetry(SonareEngine* engine, SonareEngineTelemetry* out,
                                           size_t max_records, size_t* written) {
   SONARE_C_API_ENTRY;
   if (!engine || !written || (max_records > 0 && !out)) {
@@ -400,7 +400,7 @@ SonareError sonare_engine_drain_telemetry(SonareRealtimeEngine* engine, SonareEn
   return SONARE_OK;
 }
 
-SonareError sonare_engine_drain_meter_telemetry(SonareRealtimeEngine* engine,
+SonareError sonare_engine_drain_meter_telemetry(SonareEngine* engine,
                                                 SonareMeterTelemetryRecord* out, size_t max_records,
                                                 size_t* out_count) {
   SONARE_C_API_ENTRY;
@@ -424,7 +424,7 @@ SonareError sonare_engine_drain_meter_telemetry(SonareRealtimeEngine* engine,
 #endif
 }
 
-SonareError sonare_engine_drain_meter_telemetry_wide(SonareRealtimeEngine* engine,
+SonareError sonare_engine_drain_meter_telemetry_wide(SonareEngine* engine,
                                                      SonareMeterTelemetryRecordWide* out,
                                                      size_t max_records, size_t* out_count) {
   SONARE_C_API_ENTRY;
@@ -448,7 +448,7 @@ SonareError sonare_engine_drain_meter_telemetry_wide(SonareRealtimeEngine* engin
 #endif
 }
 
-SonareError sonare_engine_drain_meter_telemetry_v2(SonareRealtimeEngine* engine,
+SonareError sonare_engine_drain_meter_telemetry_v2(SonareEngine* engine,
                                                    SonareMeterTelemetryRecordV2* out,
                                                    size_t max_records, size_t* out_count) {
   SONARE_C_API_ENTRY;
@@ -471,7 +471,7 @@ SonareError sonare_engine_drain_meter_telemetry_v2(SonareRealtimeEngine* engine,
 #endif
 }
 
-SonareError sonare_engine_drain_meter_telemetry_wide_v2(SonareRealtimeEngine* engine,
+SonareError sonare_engine_drain_meter_telemetry_wide_v2(SonareEngine* engine,
                                                         SonareMeterTelemetryRecordWideV2* out,
                                                         size_t max_records, size_t* out_count) {
   SONARE_C_API_ENTRY;
@@ -494,7 +494,7 @@ SonareError sonare_engine_drain_meter_telemetry_wide_v2(SonareRealtimeEngine* en
 #endif
 }
 
-SonareError sonare_engine_meter_target_insert_gain_reduction(SonareRealtimeEngine* engine,
+SonareError sonare_engine_meter_target_insert_gain_reduction(SonareEngine* engine,
                                                              uint32_t target_id, float* out_db,
                                                              size_t capacity, size_t* out_count) {
   SONARE_C_API_ENTRY;
@@ -520,8 +520,8 @@ SonareError sonare_engine_meter_target_insert_gain_reduction(SonareRealtimeEngin
 #endif
 }
 
-SonareError sonare_engine_configure_scope_telemetry(SonareRealtimeEngine* engine,
-                                                    int interval_frames, unsigned int band_count,
+SonareError sonare_engine_configure_scope_telemetry(SonareEngine* engine, int interval_frames,
+                                                    unsigned int band_count,
                                                     unsigned int* out_band_count) {
   SONARE_C_API_ENTRY;
   if (out_band_count) *out_band_count = 0;
@@ -541,7 +541,7 @@ SonareError sonare_engine_configure_scope_telemetry(SonareRealtimeEngine* engine
 #endif
 }
 
-SonareError sonare_engine_drain_scope_telemetry(SonareRealtimeEngine* engine,
+SonareError sonare_engine_drain_scope_telemetry(SonareEngine* engine,
                                                 SonareScopeTelemetryRecord* out, size_t max_records,
                                                 size_t* out_count) {
   SONARE_C_API_ENTRY;

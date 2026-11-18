@@ -10,8 +10,12 @@ from ._ffi_types import *  # noqa: F403,F405
 
 def configure_mixing_signatures(lib: ctypes.CDLL) -> None:
     if hasattr(lib, "sonare_mixer_create"):
-        lib.sonare_mixer_create.restype = ctypes.c_void_p
-        lib.sonare_mixer_create.argtypes = [ctypes.c_int, ctypes.c_int]
+        lib.sonare_mixer_create.restype = ctypes.c_int32
+        lib.sonare_mixer_create.argtypes = [
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.POINTER(ctypes.c_void_p),
+        ]
         lib.sonare_mixer_add_strip.restype = ctypes.c_void_p
         lib.sonare_mixer_add_strip.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
         # The metering-configured form Mixer.add_strip calls. Both return the

@@ -51,7 +51,8 @@ TEST_CASE("realtime voice changer reports its default max block size", "[c-api]"
 
 #if defined(SONARE_WITH_MASTERING)
 TEST_CASE("streaming mastering chain reports its default max block size", "[c-api]") {
-  SonareStreamingMasteringChain* handle = sonare_streaming_mastering_chain_create(nullptr, 0);
+  SonareStreamingMasteringChain* handle = nullptr;
+  REQUIRE(sonare_streaming_mastering_chain_create(nullptr, 0, &handle) == SONARE_OK);
   REQUIRE(handle != nullptr);
   int max_block = -1;
   REQUIRE(sonare_streaming_mastering_chain_max_block_size(handle, &max_block) == SONARE_OK);
@@ -75,7 +76,8 @@ TEST_CASE("streaming mastering chain reports its default max block size", "[c-ap
 }
 
 TEST_CASE("equalizer reports its default max block size", "[c-api]") {
-  SonareEq* eq = sonare_eq_create(kRate, 0);
+  SonareEq* eq = nullptr;
+  REQUIRE(sonare_eq_create(kRate, 0, &eq) == SONARE_OK);
   REQUIRE(eq != nullptr);
   int max_block = -1;
   REQUIRE(sonare_eq_max_block_size(eq, &max_block) == SONARE_OK);
@@ -96,7 +98,8 @@ TEST_CASE("equalizer reports its default max block size", "[c-api]") {
 
 #if defined(SONARE_WITH_MIXING)
 TEST_CASE("mixer reports its default max block size", "[c-api]") {
-  SonareMixer* mixer = sonare_mixer_create(kRate, 0);
+  SonareMixer* mixer = nullptr;
+  REQUIRE(sonare_mixer_create(kRate, 0, &mixer) == SONARE_OK);
   REQUIRE(mixer != nullptr);
   int max_block = -1;
   REQUIRE(sonare_mixer_max_block_size(mixer, &max_block) == SONARE_OK);
@@ -153,7 +156,7 @@ TEST_CASE("playback renderer reports its default max block size", "[c-api]") {
 #endif  // defined(SONARE_WITH_PLAYBACK)
 
 TEST_CASE("realtime engine reports its default max block size", "[c-api]") {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   int max_block = -1;
   REQUIRE(sonare_engine_max_block_size(engine, &max_block) == SONARE_OK);

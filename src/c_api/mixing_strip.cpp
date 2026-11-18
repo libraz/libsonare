@@ -7,22 +7,25 @@
 
 using namespace sonare_c_mixing_detail;
 
-SonareMixer* sonare_mixer_create(int sample_rate, int max_block_size) {
+SonareError sonare_mixer_create(int sample_rate, int max_block_size, SonareMixer** out) {
   SONARE_C_API_ENTRY;
+  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = nullptr;
   if (max_block_size == 0) max_block_size = sonare::mixing::api::kMixerDefaultMaxBlock;
   if (!sonare::is_valid_realtime_sample_rate(static_cast<double>(sample_rate)) ||
       !sonare::is_valid_realtime_block_size(max_block_size)) {
     sonare_c_detail::set_last_error(
         SONARE_ERROR_INVALID_PARAMETER,
         "mixer: sample_rate and max_block_size must be within the supported range");
-    return nullptr;
+    return SONARE_ERROR_INVALID_PARAMETER;
   }
   SONARE_C_TRY
-  auto* mixer = new SonareMixer;
+  auto mixer = std::make_unique<SonareMixer>();
   mixer->sample_rate = sample_rate;
   mixer->max_block_size = max_block_size;
-  return mixer;
-  SONARE_C_CATCH_RETURN(nullptr)
+  *out = mixer.release();
+  return SONARE_OK;
+  SONARE_C_CATCH
 }
 
 SonareStrip* sonare_mixer_add_strip(SonareMixer* mixer, const char* id) {

@@ -9,8 +9,11 @@
 #if defined(SONARE_WITH_MIXING) && defined(SONARE_WITH_GRAPH)
 
 TEST_CASE("C-API mixer resolves a zero block size to its default", "[mixing][capi]") {
-  REQUIRE(sonare_mixer_create(48000, -1) == nullptr);
-  SonareMixer* mixer = sonare_mixer_create(48000, 0);
+  SonareMixer* refused_mixer = nullptr;
+  REQUIRE(sonare_mixer_create(48000, -1, &refused_mixer) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(refused_mixer == nullptr);
+  SonareMixer* mixer = nullptr;
+  REQUIRE(sonare_mixer_create(48000, 0, &mixer) == SONARE_OK);
   REQUIRE(mixer != nullptr);
   REQUIRE(sonare_mixer_add_strip(mixer, "lead") != nullptr);
 
@@ -35,7 +38,8 @@ TEST_CASE("C-API mixer resolves a zero block size to its default", "[mixing][cap
 }
 
 TEST_CASE("C-API mixer rejects null and duplicate strip ids at insertion", "[mixing][capi]") {
-  SonareMixer* mixer = sonare_mixer_create(48000, 64);
+  SonareMixer* mixer = nullptr;
+  REQUIRE(sonare_mixer_create(48000, 64, &mixer) == SONARE_OK);
   REQUIRE(mixer != nullptr);
   REQUIRE(sonare_mixer_add_strip(mixer, nullptr) == nullptr);
   REQUIRE(sonare_mixer_add_strip(mixer, "lead") != nullptr);
@@ -90,7 +94,8 @@ TEST_CASE("C-API scene mixer applies master bus trim polarity and width", "[mixi
 TEST_CASE("C-API mixer recompilation preserves automation timeline and error kinds",
           "[mixing][capi][automation]") {
   constexpr int kBlock = 16;
-  SonareMixer* mixer = sonare_mixer_create(48000, kBlock);
+  SonareMixer* mixer = nullptr;
+  REQUIRE(sonare_mixer_create(48000, kBlock, &mixer) == SONARE_OK);
   REQUIRE(mixer != nullptr);
   SonareStrip* strip = sonare_mixer_add_strip(mixer, "source");
   REQUIRE(strip != nullptr);
@@ -142,7 +147,8 @@ TEST_CASE("C-API strip runtime setters validate NULL and bad enums", "[mixing][c
   REQUIRE(sonare_strip_meter_tap(nullptr, SONARE_METER_TAP_PRE_FADER, &snapshot) ==
           SONARE_ERROR_INVALID_PARAMETER);
 
-  SonareMixer* mixer = sonare_mixer_create(48000, 64);
+  SonareMixer* mixer = nullptr;
+  REQUIRE(sonare_mixer_create(48000, 64, &mixer) == SONARE_OK);
   REQUIRE(mixer != nullptr);
   SonareStrip* strip = sonare_mixer_add_strip(mixer, "s");
   REQUIRE(strip != nullptr);
@@ -193,7 +199,8 @@ TEST_CASE("C-API strip runtime setters validate NULL and bad enums", "[mixing][c
 
 TEST_CASE("C-API mixer reports latency and drains delayed output", "[mixing][capi]") {
   constexpr int kBlock = 8;
-  SonareMixer* mixer = sonare_mixer_create(48000, kBlock);
+  SonareMixer* mixer = nullptr;
+  REQUIRE(sonare_mixer_create(48000, kBlock, &mixer) == SONARE_OK);
   REQUIRE(mixer != nullptr);
   SonareStrip* strip = sonare_mixer_add_strip(mixer, "src");
   REQUIRE(strip != nullptr);
@@ -471,7 +478,8 @@ TEST_CASE("C-API VCA groups deduplicate duplicate member ids", "[mixing][capi]")
 
   sonare_mixer_destroy(mixer);
 
-  SonareMixer* live = sonare_mixer_create(kSr, kBlock);
+  SonareMixer* live = nullptr;
+  REQUIRE(sonare_mixer_create(kSr, kBlock, &live) == SONARE_OK);
   REQUIRE(live != nullptr);
   REQUIRE(sonare_mixer_add_strip(live, "lead") != nullptr);
   const char* members[] = {"lead", "lead"};
@@ -495,7 +503,8 @@ TEST_CASE("C-API VCA groups apply to strips added after group creation", "[mixin
   constexpr int kSr = 48000;
   constexpr int kBlock = 4096;
 
-  SonareMixer* mixer = sonare_mixer_create(kSr, kBlock);
+  SonareMixer* mixer = nullptr;
+  REQUIRE(sonare_mixer_create(kSr, kBlock, &mixer) == SONARE_OK);
   REQUIRE(mixer != nullptr);
   const char* members[] = {"lead"};
   REQUIRE(sonare_mixer_add_vca_group(mixer, "live-vca", -6.0f, members, 1) == SONARE_OK);
@@ -516,7 +525,8 @@ TEST_CASE("C-API VCA group gain setter updates live gain and scene state", "[mix
   constexpr int kSr = 48000;
   constexpr int kBlock = 4096;
 
-  SonareMixer* mixer = sonare_mixer_create(kSr, kBlock);
+  SonareMixer* mixer = nullptr;
+  REQUIRE(sonare_mixer_create(kSr, kBlock, &mixer) == SONARE_OK);
   REQUIRE(mixer != nullptr);
   REQUIRE(sonare_mixer_add_strip(mixer, "lead") != nullptr);
   const char* members[] = {"lead"};
@@ -575,7 +585,8 @@ TEST_CASE("C-API VCA group gain rejects non-finite and applies a valid value", "
   const float nan = std::numeric_limits<float>::quiet_NaN();
   const float inf = std::numeric_limits<float>::infinity();
 
-  SonareMixer* mixer = sonare_mixer_create(kSr, kBlock);
+  SonareMixer* mixer = nullptr;
+  REQUIRE(sonare_mixer_create(kSr, kBlock, &mixer) == SONARE_OK);
   REQUIRE(mixer != nullptr);
   REQUIRE(sonare_mixer_add_strip(mixer, "lead") != nullptr);
   const char* members[] = {"lead"};
@@ -1255,7 +1266,8 @@ std::string mixer_scene_json(const SonareMixer* mixer) {
 TEST_CASE("C-API set output bus routes a strip into a submix and on to the master",
           "[mixing][capi][routing]") {
   constexpr int kBlock = 64;
-  SonareMixer* mixer = sonare_mixer_create(48000, kBlock);
+  SonareMixer* mixer = nullptr;
+  REQUIRE(sonare_mixer_create(48000, kBlock, &mixer) == SONARE_OK);
   REQUIRE(mixer != nullptr);
   REQUIRE(sonare_mixer_add_strip(mixer, "a") != nullptr);
   REQUIRE(sonare_mixer_add_bus(mixer, "sub", "submix") == SONARE_OK);
@@ -1306,7 +1318,8 @@ TEST_CASE("C-API set output bus routes a strip into a submix and on to the maste
 
 TEST_CASE("C-API set output bus refuses every invalid edit without touching the topology",
           "[mixing][capi][routing]") {
-  SonareMixer* mixer = sonare_mixer_create(48000, 64);
+  SonareMixer* mixer = nullptr;
+  REQUIRE(sonare_mixer_create(48000, 64, &mixer) == SONARE_OK);
   REQUIRE(mixer != nullptr);
   REQUIRE(sonare_mixer_add_strip(mixer, "a") != nullptr);
   SonareStrip* b = sonare_mixer_add_strip(mixer, "b");
@@ -1365,7 +1378,8 @@ TEST_CASE("C-API set output bus refuses a cycle that closes through a send",
 }
 
 TEST_CASE("C-API set output bus does not compile the graph", "[mixing][capi][routing]") {
-  SonareMixer* mixer = sonare_mixer_create(48000, 64);
+  SonareMixer* mixer = nullptr;
+  REQUIRE(sonare_mixer_create(48000, 64, &mixer) == SONARE_OK);
   REQUIRE(mixer != nullptr);
   REQUIRE(sonare_mixer_add_bus(mixer, "sub", "submix") == SONARE_OK);
   uint32_t count = 0;

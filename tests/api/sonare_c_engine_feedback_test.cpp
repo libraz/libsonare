@@ -17,8 +17,8 @@ constexpr int kBlock = 256;
 constexpr int kFrames = kBlock * 8;
 constexpr SonareError kInvalid = SONARE_ERROR_INVALID_PARAMETER;
 
-SonareRealtimeEngine* make_prepared(size_t command_capacity = 64) {
-  SonareRealtimeEngine* engine = nullptr;
+SonareEngine* make_prepared(size_t command_capacity = 64) {
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, kBlock, command_capacity, 64) == SONARE_OK);
   return engine;
@@ -30,8 +30,8 @@ const std::vector<float>& dc_source() {
 }
 
 // One DC clip per track, prepared mono.
-SonareRealtimeEngine* make_dc_engine(std::initializer_list<uint32_t> track_ids) {
-  SonareRealtimeEngine* engine = make_prepared();
+SonareEngine* make_dc_engine(std::initializer_list<uint32_t> track_ids) {
+  SonareEngine* engine = make_prepared();
   static const float* channels[] = {dc_source().data()};
   std::vector<SonareEngineClip> clips;
   uint32_t clip_id = 1;
@@ -55,7 +55,7 @@ SonareRealtimeEngine* make_dc_engine(std::initializer_list<uint32_t> track_ids) 
 TEST_CASE("sonare_engine_reset_processor_state validates and queues", "[c_api][engine][feedback]") {
   CHECK(sonare_engine_reset_processor_state(nullptr, -1) == kInvalid);
 
-  SonareRealtimeEngine* engine = make_prepared();
+  SonareEngine* engine = make_prepared();
   CHECK(sonare_engine_reset_processor_state(engine, -1) == SONARE_OK);
   CHECK(sonare_engine_reset_processor_state(engine, 0) == SONARE_OK);
   sonare_engine_destroy(engine);
@@ -64,7 +64,7 @@ TEST_CASE("sonare_engine_reset_processor_state validates and queues", "[c_api][e
 TEST_CASE("sonare_engine_reset_processor_state reports a full command queue",
           "[c_api][engine][feedback]") {
   // A tiny queue is reachable cheaply: nothing drains it between calls.
-  SonareRealtimeEngine* engine = make_prepared(4);
+  SonareEngine* engine = make_prepared(4);
   SonareError last = SONARE_OK;
   for (int i = 0; i < 4096 && last == SONARE_OK; ++i) {
     last = sonare_engine_reset_processor_state(engine, -1);
@@ -77,12 +77,12 @@ TEST_CASE("sonare_engine_prime_offline_parameters validates its arguments",
           "[c_api][engine][feedback]") {
   CHECK(sonare_engine_prime_offline_parameters(nullptr, 1, kBlock) == kInvalid);
 
-  SonareRealtimeEngine* fresh = nullptr;
+  SonareEngine* fresh = nullptr;
   REQUIRE(sonare_engine_create(&fresh) == SONARE_OK);
   CHECK(sonare_engine_prime_offline_parameters(fresh, 1, kBlock) == SONARE_ERROR_INVALID_STATE);
   sonare_engine_destroy(fresh);
 
-  SonareRealtimeEngine* engine = make_prepared();
+  SonareEngine* engine = make_prepared();
   CHECK(sonare_engine_prime_offline_parameters(engine, 0, kBlock) == kInvalid);
   CHECK(sonare_engine_prime_offline_parameters(engine, -1, kBlock) == kInvalid);
   CHECK(sonare_engine_prime_offline_parameters(engine, 1, -4) == kInvalid);
@@ -99,7 +99,7 @@ TEST_CASE("sonare_engine tail and graph latency queries", "[c_api][engine][feedb
   CHECK(sonare_engine_tail_samples(nullptr, &value) == kInvalid);
   CHECK(sonare_engine_graph_latency_samples_q8(nullptr, &value) == kInvalid);
 
-  SonareRealtimeEngine* engine = make_prepared();
+  SonareEngine* engine = make_prepared();
   CHECK(sonare_engine_tail_samples(engine, nullptr) == kInvalid);
   CHECK(sonare_engine_graph_latency_samples_q8(engine, nullptr) == kInvalid);
 
@@ -130,8 +130,8 @@ constexpr const char* kDuckerTrack30Json =
 
 // Tracks 10 and 30 into buses 2 and 1; bus 1 has a limiter, bus 2 a ducker,
 // the master a ducker, and tracks 10 and 30 a ducker insert each.
-SonareRealtimeEngine* make_keyed_rig() {
-  SonareRealtimeEngine* engine = make_dc_engine({10, 30});
+SonareEngine* make_keyed_rig() {
+  SonareEngine* engine = make_dc_engine({10, 30});
   SonareEngineBus buses[] = {{1, 0.0f, SONARE_CHANNEL_LAYOUT_STEREO, 0, nullptr, 0},
                              {2, 0.0f, SONARE_CHANNEL_LAYOUT_STEREO, 0, nullptr, 0}};
   REQUIRE(sonare_engine_set_track_buses(engine, buses, 2) == SONARE_OK);
@@ -149,7 +149,7 @@ SonareRealtimeEngine* make_keyed_rig() {
 }  // namespace
 
 TEST_CASE("sonare_engine can_set_*_sidechain validate pointers", "[c_api][engine][feedback]") {
-  SonareRealtimeEngine* engine = make_keyed_rig();
+  SonareEngine* engine = make_keyed_rig();
   int refusal = -1;
   CHECK(sonare_engine_can_set_lane_sidechain(nullptr, 10, 0, 30, &refusal) == kInvalid);
   CHECK(sonare_engine_can_set_lane_sidechain(engine, 10, 0, 30, nullptr) == kInvalid);
@@ -167,7 +167,7 @@ TEST_CASE("sonare_engine can_set_*_sidechain validate pointers", "[c_api][engine
 
 TEST_CASE("sonare_engine can_set_*_sidechain agree with the setters and cover the refusals",
           "[c_api][engine][feedback]") {
-  SonareRealtimeEngine* engine = make_keyed_rig();
+  SonareEngine* engine = make_keyed_rig();
   std::set<int> seen;
 
   const auto lane = [&](uint32_t track, unsigned int insert, uint32_t source) {
@@ -250,7 +250,7 @@ TEST_CASE("sonare_engine can_set_*_sidechain agree with the setters and cover th
 
 TEST_CASE("sonare_engine tail and latency match the core for a configured engine",
           "[c_api][engine][feedback]") {
-  SonareRealtimeEngine* engine = make_keyed_rig();
+  SonareEngine* engine = make_keyed_rig();
   engine->engine.set_graph_latency_samples_q8(512);
   int tail = -1;
   int latency = -1;
@@ -264,7 +264,7 @@ TEST_CASE("sonare_engine tail and latency match the core for a configured engine
 
 TEST_CASE("sonare_engine lane transient shaper reports negative gain reduction",
           "[c_api][engine][feedback]") {
-  SonareRealtimeEngine* engine = make_dc_engine({10});
+  SonareEngine* engine = make_dc_engine({10});
   SonareEngineTrackLane lane[] = {{10, nullptr, 0, 0, SONARE_CHANNEL_LAYOUT_STEREO}};
   REQUIRE(sonare_engine_set_track_lanes(engine, lane, 1) == SONARE_OK);
   REQUIRE(
@@ -295,7 +295,7 @@ TEST_CASE("sonare_engine lane transient shaper reports negative gain reduction",
 
 TEST_CASE("sonare_engine refuses a reserved mixer id that names no strip",
           "[c_api][engine][feedback]") {
-  SonareRealtimeEngine* engine = make_prepared();
+  SonareEngine* engine = make_prepared();
   SonareEngineTrackLane lanes[] = {{5, nullptr, 0, 0, SONARE_CHANNEL_LAYOUT_STEREO},
                                    {7, nullptr, 0, 0, SONARE_CHANNEL_LAYOUT_STEREO}};
   REQUIRE(sonare_engine_set_track_lanes(engine, lanes, 2) == SONARE_OK);

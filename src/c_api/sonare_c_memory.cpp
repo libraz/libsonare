@@ -196,14 +196,9 @@ void sonare_free_key_candidates(SonareKeyCandidate* ptr) { delete[] ptr; }
 void sonare_free_analysis_result(SonareAnalysisResult* result) {
   if (result != nullptr) {
     delete[] result->beat_times;
-    result->beat_times = nullptr;
-    result->beat_count = 0;
     delete[] result->bpm_candidates;
-    result->bpm_candidates = nullptr;
-    result->bpm_candidate_count = 0;
     delete[] result->time_signature_candidates;
-    result->time_signature_candidates = nullptr;
-    result->time_signature_candidate_count = 0;
+    *result = {};
   }
 }
 
@@ -333,8 +328,7 @@ void sonare_free_stft_result(SonareStftResult* r) {
   if (r) {
     delete[] r->magnitude;
     delete[] r->power;
-    r->magnitude = nullptr;
-    r->power = nullptr;
+    *r = {};
   }
 }
 
@@ -342,15 +336,14 @@ void sonare_free_mel_result(SonareMelResult* r) {
   if (r) {
     delete[] r->power;
     delete[] r->db;
-    r->power = nullptr;
-    r->db = nullptr;
+    *r = {};
   }
 }
 
 void sonare_free_mfcc_result(SonareMfccResult* r) {
   if (r) {
     delete[] r->coefficients;
-    r->coefficients = nullptr;
+    *r = {};
   }
 }
 
@@ -358,8 +351,7 @@ void sonare_free_chroma_result(SonareChromaResult* r) {
   if (r) {
     delete[] r->features;
     delete[] r->mean_energy;
-    r->features = nullptr;
-    r->mean_energy = nullptr;
+    *r = {};
   }
 }
 
@@ -368,9 +360,7 @@ void sonare_free_pitch_result(SonarePitchResult* r) {
     delete[] r->f0;
     delete[] r->voiced_prob;
     delete[] r->voiced_flag;
-    r->f0 = nullptr;
-    r->voiced_prob = nullptr;
-    r->voiced_flag = nullptr;
+    *r = {};
   }
 }
 
@@ -378,8 +368,7 @@ void sonare_free_hpss_result(SonareHpssResult* r) {
   if (r) {
     delete[] r->harmonic;
     delete[] r->percussive;
-    r->harmonic = nullptr;
-    r->percussive = nullptr;
+    *r = {};
   }
 }
 
@@ -388,12 +377,7 @@ void sonare_free_bpm_analysis_result(SonareBpmAnalysisResult* r) {
     delete[] r->candidates;
     delete[] r->autocorrelation;
     delete[] r->tempogram;
-    r->candidates = nullptr;
-    r->candidate_count = 0;
-    r->autocorrelation = nullptr;
-    r->autocorrelation_count = 0;
-    r->tempogram = nullptr;
-    r->tempogram_count = 0;
+    *r = {};
   }
 }
 
@@ -403,19 +387,14 @@ void sonare_free_acoustic_result(SonareAcousticResult* r) {
     delete[] r->edt_bands;
     delete[] r->c50_bands;
     delete[] r->c80_bands;
-    r->rt60_bands = nullptr;
-    r->edt_bands = nullptr;
-    r->c50_bands = nullptr;
-    r->c80_bands = nullptr;
-    r->band_count = 0;
+    *r = {};
   }
 }
 
 void sonare_free_rhythm_result(SonareRhythmResult* r) {
   if (r) {
     delete[] r->beat_intervals;
-    r->beat_intervals = nullptr;
-    r->beat_interval_count = 0;
+    *r = {};
   }
 }
 
@@ -423,9 +402,7 @@ void sonare_free_dynamics_result(SonareDynamicsResult* r) {
   if (r) {
     delete[] r->loudness_times_sec;
     delete[] r->loudness_rms_db;
-    r->loudness_times_sec = nullptr;
-    r->loudness_rms_db = nullptr;
-    r->loudness_count = 0;
+    *r = {};
   }
 }
 
@@ -435,22 +412,14 @@ void sonare_free_timbre_result(SonareTimbreResult* r) {
     delete[] r->spectral_flatness;
     delete[] r->spectral_rolloff;
     delete[] r->timbre_over_time;
-    r->spectral_centroid = nullptr;
-    r->spectral_centroid_count = 0;
-    r->spectral_flatness = nullptr;
-    r->spectral_flatness_count = 0;
-    r->spectral_rolloff = nullptr;
-    r->spectral_rolloff_count = 0;
-    r->timbre_over_time = nullptr;
-    r->timbre_over_time_count = 0;
+    *r = {};
   }
 }
 
 void sonare_free_chord_analysis_result(SonareChordAnalysisResult* r) {
   if (r) {
     delete[] r->chords;
-    r->chords = nullptr;
-    r->chord_count = 0;
+    *r = {};
   }
 }
 
@@ -470,8 +439,7 @@ void sonare_free_string_array(SonareStringArray* result) {
 void sonare_free_engine_bounce_result(SonareEngineBounceResult* result) {
   if (!result) return;
   delete[] result->interleaved;
-  result->interleaved = nullptr;
-  result->sample_count = 0;
+  *result = {};
 }
 
 void sonare_free_section_result(SonareSectionResult* result) {
@@ -485,19 +453,15 @@ void sonare_free_section_result(SonareSectionResult* result) {
 void sonare_free_boundary_result(SonareBoundaryResult* result) {
   if (result) {
     delete[] result->boundaries;
-    result->boundaries = nullptr;
-    result->boundary_count = 0;
     delete[] result->novelty_curve;
-    result->novelty_curve = nullptr;
-    result->novelty_length = 0;
+    *result = {};
   }
 }
 
 void sonare_free_melody_result(SonareMelodyResult* result) {
   if (result) {
     delete[] result->points;
-    result->points = nullptr;
-    result->point_count = 0;
+    *result = {};
   }
 }
 
@@ -505,7 +469,6 @@ void sonare_free_cqt_result(SonareCqtResult* result) {
   if (result) {
     delete[] result->magnitude;
     delete[] result->frequencies;
-    result->magnitude = nullptr;
-    result->frequencies = nullptr;
+    *result = {};
   }
 }

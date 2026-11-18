@@ -1320,15 +1320,17 @@ TEST_CASE("sonare_eq_create rejects a non-finite or out-of-range sample rate",
                               1.0e9};
   for (double bad_rate : bad_rates) {
     CAPTURE(bad_rate);
-    REQUIRE(sonare_eq_create(bad_rate, 512) == nullptr);
-    // A handle constructor reports through the thread-local message rather than
-    // a SonareError, so the message is the only channel the code can be read on.
+    SonareEq* refused_eq = nullptr;
+    REQUIRE(sonare_eq_create(bad_rate, 512, &refused_eq) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(refused_eq == nullptr);
+    // The refusal also leaves a diagnostic message.
     const char* message = sonare_last_error_message();
     REQUIRE(message != nullptr);
     REQUIRE(message[0] != '\0');
   }
 
-  SonareEq* eq = sonare_eq_create(48000.0, 512);
+  SonareEq* eq = nullptr;
+  REQUIRE(sonare_eq_create(48000.0, 512, &eq) == SONARE_OK);
   REQUIRE(eq != nullptr);
   sonare_eq_destroy(eq);
 }
@@ -1337,7 +1339,8 @@ TEST_CASE("sonare_eq_create rejects a non-finite or out-of-range sample rate",
 #ifdef SONARE_WITH_VOICE_CHANGER
 TEST_CASE("sonare_streaming_retune_prepare rejects a non-finite or out-of-range sample rate",
           "[c_api][validation]") {
-  SonareStreamingRetune* retune = sonare_streaming_retune_create(5.0f, 1.0f, 0);
+  SonareStreamingRetune* retune = nullptr;
+  REQUIRE(sonare_streaming_retune_create(5.0f, 1.0f, 0, &retune) == SONARE_OK);
   REQUIRE(retune != nullptr);
 
   const double bad_rates[] = {std::numeric_limits<double>::quiet_NaN(),
@@ -1363,7 +1366,8 @@ TEST_CASE("sonare streaming retune exports deterministic feature-off stubs",
   // The shared library still exports this API when the optional DSP is absent.
   // Every call must report the capability boundary rather than accidentally
   // validating arguments or reaching an unlinked StreamingRetune symbol.
-  SonareStreamingRetune* retune = sonare_streaming_retune_create(5.0f, 1.0f, 0);
+  SonareStreamingRetune* retune = nullptr;
+  REQUIRE(sonare_streaming_retune_create(5.0f, 1.0f, 0, &retune) == SONARE_OK);
   REQUIRE(retune == nullptr);
   const char* detail = sonare_last_error_message();
   REQUIRE(detail != nullptr);

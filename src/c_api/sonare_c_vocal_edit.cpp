@@ -16,13 +16,13 @@
 #include "editing/vocal_edit/session.h"
 #include "editing/vocal_edit/state_codec.h"
 namespace vocal = sonare::editing::vocal_edit;
-struct SonareVocalEditSession {
+struct SonareVocalSession {
   vocal::VocalEditSession value;
 };
-struct SonareVocalEditDraft {
+struct SonareVocalDraft {
   std::unique_ptr<vocal::VocalEditDraft> value;
 };
-struct SonareVocalRenderSnapshot {
+struct SonareVocalSnapshot {
   std::shared_ptr<const vocal::VocalRenderSnapshot> value;
 };
 struct SonareVocalRenderJob {
@@ -631,18 +631,18 @@ vocal::VocalSessionCreateOptions import_options(const SonareVocalCreateOptions* 
 
 SonareError sonare_vocal_session_create(const float* samples, int64_t frames, int channels,
                                         int sample_rate, const SonareVocalCreateOptions* options,
-                                        SonareVocalEditSession** out_session) {
+                                        SonareVocalSession** out_session) {
   SONARE_C_API_ENTRY;
   if (out_session) *out_session = nullptr;
   VOCAL_ACTION(require_pointer(out_session, "out_session");
                auto session = vocal::VocalEditSession::create(
                    import_source(samples, frames, channels, sample_rate), import_options(options));
-               *out_session = new SonareVocalEditSession{std::move(session)});
+               *out_session = new SonareVocalSession{std::move(session)});
 }
 SonareError sonare_vocal_session_restore(const float* samples, int64_t frames, int channels,
                                          int sample_rate, const uint8_t* state, uint64_t size,
                                          const SonareVocalRestoreOptions* input,
-                                         SonareVocalEditSession** out_session) {
+                                         SonareVocalSession** out_session) {
   SONARE_C_API_ENTRY;
   if (out_session) *out_session = nullptr;
   VOCAL_ACTION(
@@ -653,43 +653,41 @@ SonareError sonare_vocal_session_restore(const float* samples, int64_t frames, i
                                              v.max_undo_depth, v.max_render_jobs};
       auto session = vocal::VocalEditSession::restore(
           import_source(samples, frames, channels, sample_rate), bytes, limits);
-      *out_session = new SonareVocalEditSession{std::move(session)});
+      *out_session = new SonareVocalSession{std::move(session)});
 }
-SonareError sonare_vocal_session_notes(const SonareVocalEditSession* s,
-                                       SonareVocalNotesResult* out) {
+SonareError sonare_vocal_session_notes(const SonareVocalSession* s, SonareVocalNotesResult* out) {
   SONARE_C_API_ENTRY;
   VOCAL_OUTPUT_ACTION(out, require_pointer(s, "session"); map_notes(s->value, out));
 }
-SonareError sonare_vocal_draft_notes(const SonareVocalEditDraft* s, SonareVocalNotesResult* out) {
+SonareError sonare_vocal_draft_notes(const SonareVocalDraft* s, SonareVocalNotesResult* out) {
   SONARE_C_API_ENTRY;
   VOCAL_OUTPUT_ACTION(out, require_pointer(s, "draft"); map_notes(*s->value, out));
 }
-SonareError sonare_vocal_session_token(const SonareVocalEditSession* s,
-                                       SonareVocalStateToken* out) {
+SonareError sonare_vocal_session_token(const SonareVocalSession* s, SonareVocalStateToken* out) {
   SONARE_C_API_ENTRY;
   if (out) *out = {};
   VOCAL_ACTION(require_pointer(out, "token"); require_pointer(s, "session");
                *out = map_token(s->value.token()));
 }
-SonareError sonare_vocal_draft_token(const SonareVocalEditDraft* s, SonareVocalStateToken* out) {
+SonareError sonare_vocal_draft_token(const SonareVocalDraft* s, SonareVocalStateToken* out) {
   SONARE_C_API_ENTRY;
   if (out) *out = {};
   VOCAL_ACTION(require_pointer(out, "token"); require_pointer(s, "draft");
                *out = map_token(s->value->token()));
 }
-SonareError sonare_vocal_session_revision(const SonareVocalEditSession* s, uint64_t* out) {
+SonareError sonare_vocal_session_revision(const SonareVocalSession* s, uint64_t* out) {
   SONARE_C_API_ENTRY;
   if (out) *out = 0;
   VOCAL_ACTION(require_pointer(out, "revision"); require_pointer(s, "session");
                *out = s->value.token().committed_revision);
 }
-SonareError sonare_vocal_session_output_length(const SonareVocalEditSession* s, int64_t* out) {
+SonareError sonare_vocal_session_output_length(const SonareVocalSession* s, int64_t* out) {
   SONARE_C_API_ENTRY;
   if (out) *out = 0;
   VOCAL_ACTION(require_pointer(out, "output length"); require_pointer(s, "session");
                *out = s->value.output_length_samples());
 }
-SonareError sonare_vocal_session_history(const SonareVocalEditSession* s, int* can_undo,
+SonareError sonare_vocal_session_history(const SonareVocalSession* s, int* can_undo,
                                          int* can_redo) {
   SONARE_C_API_ENTRY;
   if (can_undo) *can_undo = 0;
@@ -698,13 +696,13 @@ SonareError sonare_vocal_session_history(const SonareVocalEditSession* s, int* c
                require_pointer(s, "session"); *can_undo = s->value.can_undo();
                *can_redo = s->value.can_redo());
 }
-SonareError sonare_vocal_snapshot_output_length(const SonareVocalRenderSnapshot* s, int64_t* out) {
+SonareError sonare_vocal_snapshot_output_length(const SonareVocalSnapshot* s, int64_t* out) {
   SONARE_C_API_ENTRY;
   if (out) *out = 0;
   VOCAL_ACTION(require_pointer(out, "output length"); require_pointer(s, "snapshot");
                *out = s->value->data().output_length_samples);
 }
-SonareError sonare_vocal_session_analysis(const SonareVocalEditSession* s,
+SonareError sonare_vocal_session_analysis(const SonareVocalSession* s,
                                           SonareVocalAnalysisResult* out) {
   SONARE_C_API_ENTRY;
   VOCAL_OUTPUT_ACTION(
@@ -734,7 +732,7 @@ SonareError sonare_vocal_session_analysis(const SonareVocalEditSession* s,
       local.analysis.voiced = voiced.release(); local.analysis.algorithm_id = name.release();
       *out = local);
 }
-SonareError sonare_vocal_session_capabilities(const SonareVocalEditSession* s,
+SonareError sonare_vocal_session_capabilities(const SonareVocalSession* s,
                                               SonareVocalCapabilities* out) {
   SONARE_C_API_ENTRY;
   VOCAL_OUTPUT_ACTION(
@@ -744,15 +742,15 @@ SonareError sonare_vocal_session_capabilities(const SonareVocalEditSession* s,
       out->minimum_formant_shift_semitones = c.min_formant_shift_semitones;
       out->maximum_formant_shift_semitones = c.max_formant_shift_semitones);
 }
-SonareError sonare_vocal_session_begin_edit(SonareVocalEditSession* s, uint64_t revision,
-                                            SonareVocalEditDraft** out) {
+SonareError sonare_vocal_session_begin_edit(SonareVocalSession* s, uint64_t revision,
+                                            SonareVocalDraft** out) {
   SONARE_C_API_ENTRY;
   if (out) *out = nullptr;
   VOCAL_ACTION(require_pointer(out, "draft output"); require_pointer(s, "session");
-               auto holder = std::make_unique<SonareVocalEditDraft>();
+               auto holder = std::make_unique<SonareVocalDraft>();
                holder->value = s->value.begin_edit(revision); *out = holder.release());
 }
-SonareError sonare_vocal_draft_apply(SonareVocalEditDraft* s, uint64_t generation,
+SonareError sonare_vocal_draft_apply(SonareVocalDraft* s, uint64_t generation,
                                      const SonareVocalOperation* operations, uint64_t count,
                                      SonareVocalEditResult* out) {
   SONARE_C_API_ENTRY;
@@ -764,7 +762,7 @@ SonareError sonare_vocal_draft_apply(SonareVocalEditDraft* s, uint64_t generatio
           generation, ops, [&](const auto& change) { map_apply(change, &prepared.value); });
       prepared.publish(out));
 }
-SonareError sonare_vocal_draft_commit(SonareVocalEditDraft* s, uint64_t revision,
+SonareError sonare_vocal_draft_commit(SonareVocalDraft* s, uint64_t revision,
                                       SonareVocalEditResult* out) {
   SONARE_C_API_ENTRY;
   VOCAL_OUTPUT_ACTION(
@@ -772,11 +770,11 @@ SonareError sonare_vocal_draft_commit(SonareVocalEditDraft* s, uint64_t revision
       s->value->commit(revision, [&](const auto& change) { map_change(change, &prepared.value); });
       prepared.publish(out));
 }
-SonareError sonare_vocal_draft_cancel(SonareVocalEditDraft* s) {
+SonareError sonare_vocal_draft_cancel(SonareVocalDraft* s) {
   SONARE_C_API_ENTRY;
   VOCAL_ACTION(require_pointer(s, "draft"); s->value->cancel());
 }
-SonareError sonare_vocal_session_undo(SonareVocalEditSession* s, uint64_t revision,
+SonareError sonare_vocal_session_undo(SonareVocalSession* s, uint64_t revision,
                                       SonareVocalEditResult* out) {
   SONARE_C_API_ENTRY;
   VOCAL_OUTPUT_ACTION(
@@ -784,7 +782,7 @@ SonareError sonare_vocal_session_undo(SonareVocalEditSession* s, uint64_t revisi
       s->value.undo(revision, [&](const auto& change) { map_change(change, &prepared.value); });
       prepared.publish(out));
 }
-SonareError sonare_vocal_session_redo(SonareVocalEditSession* s, uint64_t revision,
+SonareError sonare_vocal_session_redo(SonareVocalSession* s, uint64_t revision,
                                       SonareVocalEditResult* out) {
   SONARE_C_API_ENTRY;
   VOCAL_OUTPUT_ACTION(
@@ -792,61 +790,61 @@ SonareError sonare_vocal_session_redo(SonareVocalEditSession* s, uint64_t revisi
       s->value.redo(revision, [&](const auto& change) { map_change(change, &prepared.value); });
       prepared.publish(out));
 }
-SonareError sonare_vocal_session_evaluate_pitch(const SonareVocalEditSession* s, uint32_t id,
+SonareError sonare_vocal_session_evaluate_pitch(const SonareVocalSession* s, uint32_t id,
                                                 SonareVocalPitchResult* out) {
   SONARE_C_API_ENTRY;
   VOCAL_OUTPUT_ACTION(out, require_pointer(s, "session");
                       map_pitch(s->value.evaluate_pitch({id}), out));
 }
-SonareError sonare_vocal_draft_evaluate_pitch(const SonareVocalEditDraft* s, uint32_t id,
+SonareError sonare_vocal_draft_evaluate_pitch(const SonareVocalDraft* s, uint32_t id,
                                               SonareVocalPitchResult* out) {
   SONARE_C_API_ENTRY;
   VOCAL_OUTPUT_ACTION(out, require_pointer(s, "draft");
                       map_pitch(s->value->evaluate_pitch({id}), out));
 }
-SonareError sonare_vocal_session_source_to_destination(const SonareVocalEditSession* s, uint32_t id,
+SonareError sonare_vocal_session_source_to_destination(const SonareVocalSession* s, uint32_t id,
                                                        double value, double* out) {
   SONARE_C_API_ENTRY;
   if (out) *out = 0;
   VOCAL_ACTION(require_pointer(out, "coordinate output"); require_pointer(s, "session");
                *out = s->value.source_sample_to_destination_sample(id, value));
 }
-SonareError sonare_vocal_session_destination_to_source(const SonareVocalEditSession* s, uint32_t id,
+SonareError sonare_vocal_session_destination_to_source(const SonareVocalSession* s, uint32_t id,
                                                        double value, double* out) {
   SONARE_C_API_ENTRY;
   if (out) *out = 0;
   VOCAL_ACTION(require_pointer(out, "coordinate output"); require_pointer(s, "session");
                *out = s->value.destination_sample_to_source_sample(id, value));
 }
-SonareError sonare_vocal_draft_source_to_destination(const SonareVocalEditDraft* s, uint32_t id,
+SonareError sonare_vocal_draft_source_to_destination(const SonareVocalDraft* s, uint32_t id,
                                                      double value, double* out) {
   SONARE_C_API_ENTRY;
   if (out) *out = 0;
   VOCAL_ACTION(require_pointer(out, "coordinate output"); require_pointer(s, "draft");
                *out = s->value->source_sample_to_destination_sample(id, value));
 }
-SonareError sonare_vocal_draft_destination_to_source(const SonareVocalEditDraft* s, uint32_t id,
+SonareError sonare_vocal_draft_destination_to_source(const SonareVocalDraft* s, uint32_t id,
                                                      double value, double* out) {
   SONARE_C_API_ENTRY;
   if (out) *out = 0;
   VOCAL_ACTION(require_pointer(out, "coordinate output"); require_pointer(s, "draft");
                *out = s->value->destination_sample_to_source_sample(id, value));
 }
-SonareError sonare_vocal_session_capture_snapshot(const SonareVocalEditSession* s,
-                                                  SonareVocalRenderSnapshot** out) {
+SonareError sonare_vocal_session_capture_snapshot(const SonareVocalSession* s,
+                                                  SonareVocalSnapshot** out) {
   SONARE_C_API_ENTRY;
   if (out) *out = nullptr;
   VOCAL_ACTION(require_pointer(out, "snapshot output"); require_pointer(s, "session");
-               *out = new SonareVocalRenderSnapshot{s->value.capture_render_snapshot()});
+               *out = new SonareVocalSnapshot{s->value.capture_render_snapshot()});
 }
-SonareError sonare_vocal_draft_capture_snapshot(const SonareVocalEditDraft* s,
-                                                SonareVocalRenderSnapshot** out) {
+SonareError sonare_vocal_draft_capture_snapshot(const SonareVocalDraft* s,
+                                                SonareVocalSnapshot** out) {
   SONARE_C_API_ENTRY;
   if (out) *out = nullptr;
   VOCAL_ACTION(require_pointer(out, "snapshot output"); require_pointer(s, "draft");
-               *out = new SonareVocalRenderSnapshot{s->value->capture_render_snapshot()});
+               *out = new SonareVocalSnapshot{s->value->capture_render_snapshot()});
 }
-SonareError sonare_vocal_snapshot_render(const SonareVocalRenderSnapshot* s, SonareVocalRange range,
+SonareError sonare_vocal_snapshot_render(const SonareVocalSnapshot* s, SonareVocalRange range,
                                          uint64_t request, SonareVocalCancelCallback cancel,
                                          void* data, SonareVocalRenderResult* out) {
   SONARE_C_API_ENTRY;
@@ -856,9 +854,8 @@ SonareError sonare_vocal_snapshot_render(const SonareVocalRenderSnapshot* s, Son
                                         cancel_probe(cancel, data)),
                  out));
 }
-SonareError sonare_vocal_render_job_begin(const SonareVocalRenderSnapshot* s,
-                                          SonareVocalRange range, uint64_t request,
-                                          SonareVocalRenderJob** out) {
+SonareError sonare_vocal_render_job_begin(const SonareVocalSnapshot* s, SonareVocalRange range,
+                                          uint64_t request, SonareVocalRenderJob** out) {
   SONARE_C_API_ENTRY;
   if (out) *out = nullptr;
   VOCAL_ACTION(
@@ -886,7 +883,7 @@ SonareError sonare_vocal_render_job_finalize(SonareVocalRenderJob* s,
   VOCAL_OUTPUT_ACTION(out, require_pointer(s, "job");
                       map_render(s->value->finalize(cancel_probe(cancel, data)), out));
 }
-SonareError sonare_vocal_session_export_state(const SonareVocalEditSession* s,
+SonareError sonare_vocal_session_export_state(const SonareVocalSession* s,
                                               SonareVocalStateBytes* out) {
   SONARE_C_API_ENTRY;
   VOCAL_OUTPUT_ACTION(out, require_pointer(s, "session"); auto bytes = s->value.export_state();
@@ -894,21 +891,21 @@ SonareError sonare_vocal_session_export_state(const SonareVocalEditSession* s,
                       out->data = data.release());
 }
 
-void sonare_vocal_session_destroy(SonareVocalEditSession* s) {
+void sonare_vocal_session_destroy(SonareVocalSession* s) {
 #if defined(SONARE_WITH_PITCH_EDITOR)
   delete s;
 #else
   (void)s;
 #endif
 }
-void sonare_vocal_draft_destroy(SonareVocalEditDraft* s) {
+void sonare_vocal_draft_destroy(SonareVocalDraft* s) {
 #if defined(SONARE_WITH_PITCH_EDITOR)
   delete s;
 #else
   (void)s;
 #endif
 }
-void sonare_vocal_snapshot_destroy(SonareVocalRenderSnapshot* s) {
+void sonare_vocal_snapshot_destroy(SonareVocalSnapshot* s) {
 #if defined(SONARE_WITH_PITCH_EDITOR)
   delete s;
 #else

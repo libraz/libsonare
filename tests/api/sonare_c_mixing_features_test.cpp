@@ -14,7 +14,8 @@
 
 #if defined(SONARE_WITH_MIXING)
 TEST_CASE("sonare_strip_schedule_send_automation error mapping", "[c_api][mixing]") {
-  SonareMixer* mixer = sonare_mixer_create(48000, 512);
+  SonareMixer* mixer = nullptr;
+  REQUIRE(sonare_mixer_create(48000, 512, &mixer) == SONARE_OK);
   REQUIRE(mixer != nullptr);
   SonareStrip* strip = sonare_mixer_add_strip(mixer, "src");
   REQUIRE(strip != nullptr);
@@ -51,7 +52,8 @@ TEST_CASE("sonare_strip_schedule_send_automation error mapping", "[c_api][mixing
 
 TEST_CASE("sonare_mixer_compile success leaves last_error empty for unpatched explicit buses",
           "[c_api][mixing]") {
-  SonareMixer* mixer = sonare_mixer_create(48000, 512);
+  SonareMixer* mixer = nullptr;
+  REQUIRE(sonare_mixer_create(48000, 512, &mixer) == SONARE_OK);
   REQUIRE(mixer != nullptr);
   SonareStrip* strip = sonare_mixer_add_strip(mixer, "src");
   REQUIRE(strip != nullptr);
@@ -69,7 +71,8 @@ TEST_CASE("sonare_mixer_compile success leaves last_error empty for unpatched ex
 TEST_CASE("sonare_mixer_process_stereo leaves the caller's output untouched when compile fails",
           "[c_api][mixing]") {
   constexpr size_t kBlock = 64;
-  SonareMixer* mixer = sonare_mixer_create(48000, static_cast<int>(kBlock));
+  SonareMixer* mixer = nullptr;
+  REQUIRE(sonare_mixer_create(48000, static_cast<int>(kBlock), &mixer) == SONARE_OK);
   REQUIRE(mixer != nullptr);
   REQUIRE(sonare_mixer_add_strip(mixer, "src") != nullptr);
   std::vector<float> input(kBlock, 0.25f);

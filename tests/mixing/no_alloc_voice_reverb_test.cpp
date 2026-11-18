@@ -246,7 +246,8 @@ TEST_CASE("sonare_streaming_retune_process_mono performs no heap allocation afte
   constexpr int kBlock = 128;
   constexpr int kSampleRate = 48000;
 
-  SonareStreamingRetune* retune = sonare_streaming_retune_create(5.0f, 1.0f, 0);
+  SonareStreamingRetune* retune = nullptr;
+  REQUIRE(sonare_streaming_retune_create(5.0f, 1.0f, 0, &retune) == SONARE_OK);
   REQUIRE(retune != nullptr);
   REQUIRE(sonare_streaming_retune_prepare(retune, kSampleRate, kBlock) == SONARE_OK);
 

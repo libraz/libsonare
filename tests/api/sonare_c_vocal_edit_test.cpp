@@ -51,7 +51,7 @@ TEST_CASE("vocal C session accepts authoritative supplied analysis", "[vocal_c_a
   SonareVocalCreateOptions options;
   sonare_vocal_create_options_init(&options);
   options.analysis = &analysis;
-  SonareVocalEditSession* session = nullptr;
+  SonareVocalSession* session = nullptr;
   const auto error = sonare_vocal_session_create(samples.data(), samples.size(), 1, kSampleRate,
                                                  &options, &session);
   CHECK(error == SONARE_OK);
@@ -61,7 +61,7 @@ TEST_CASE("vocal C session accepts authoritative supplied analysis", "[vocal_c_a
 
 TEST_CASE("vocal C session rejects stereo and clears poisoned output", "[vocal_c_api]") {
   std::vector<float> samples(64, 0.0f);
-  auto* session = reinterpret_cast<SonareVocalEditSession*>(static_cast<uintptr_t>(1));
+  auto* session = reinterpret_cast<SonareVocalSession*>(static_cast<uintptr_t>(1));
   const auto error = sonare_vocal_session_create(samples.data(), 32, 2, 16000, nullptr, &session);
   CHECK(error == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(session == nullptr);
@@ -89,8 +89,8 @@ struct VocalFixture {
     options.analysis = &analysis;
     options.edge_fade_ms = 0;
   }
-  std::unique_ptr<SonareVocalEditSession, decltype(&sonare_vocal_session_destroy)> create() {
-    SonareVocalEditSession* session = nullptr;
+  std::unique_ptr<SonareVocalSession, decltype(&sonare_vocal_session_destroy)> create() {
+    SonareVocalSession* session = nullptr;
     REQUIRE(sonare_vocal_session_create(samples.data(), samples.size(), 1, 16000, &options,
                                         &session) == SONARE_OK);
     REQUIRE(session != nullptr);
@@ -102,9 +102,9 @@ struct VocalFixture {
 TEST_CASE("vocal C empty commit returns null range storage", "[vocal_c_api][vocal_empty_ranges]") {
   VocalFixture f;
   auto session = f.create();
-  SonareVocalEditDraft* raw = nullptr;
+  SonareVocalDraft* raw = nullptr;
   REQUIRE(sonare_vocal_session_begin_edit(session.get(), 0, &raw) == SONARE_OK);
-  std::unique_ptr<SonareVocalEditDraft, decltype(&sonare_vocal_draft_destroy)> draft(
+  std::unique_ptr<SonareVocalDraft, decltype(&sonare_vocal_draft_destroy)> draft(
       raw, sonare_vocal_draft_destroy);
   SonareVocalEditResult result;
   sonare_vocal_edit_result_init(&result);
@@ -126,9 +126,9 @@ TEST_CASE("vocal C draft exposes provisional notes and stale errors without publ
   REQUIRE(notes.note_count == 1);
   const auto id = notes.notes[0].id;
   const auto edit = notes.notes[0].edit;
-  SonareVocalEditDraft* raw = nullptr;
+  SonareVocalDraft* raw = nullptr;
   REQUIRE(sonare_vocal_session_begin_edit(s.get(), 0, &raw) == SONARE_OK);
-  std::unique_ptr<SonareVocalEditDraft, decltype(&sonare_vocal_draft_destroy)> draft(
+  std::unique_ptr<SonareVocalDraft, decltype(&sonare_vocal_draft_destroy)> draft(
       raw, sonare_vocal_draft_destroy);
   SonareVocalStateToken before{};
   REQUIRE(sonare_vocal_draft_token(raw, &before) == SONARE_OK);
@@ -182,9 +182,9 @@ TEST_CASE("vocal C snapshots own PCM after session destruction and jobs cancel s
           "[vocal_c_api]") {
   VocalFixture f;
   auto s = f.create();
-  SonareVocalRenderSnapshot* raw = nullptr;
+  SonareVocalSnapshot* raw = nullptr;
   REQUIRE(sonare_vocal_session_capture_snapshot(s.get(), &raw) == SONARE_OK);
-  std::unique_ptr<SonareVocalRenderSnapshot, decltype(&sonare_vocal_snapshot_destroy)> snapshot(
+  std::unique_ptr<SonareVocalSnapshot, decltype(&sonare_vocal_snapshot_destroy)> snapshot(
       raw, sonare_vocal_snapshot_destroy);
   s.reset();
   SonareVocalRenderResult full;
@@ -216,7 +216,7 @@ TEST_CASE("vocal C state restores exact source and reports digest mismatch", "[v
   REQUIRE(sonare_vocal_session_export_state(s.get(), &state) == SONARE_OK);
   REQUIRE(state.size > 4);
   CHECK(std::memcmp(state.data, "SVE1", 4) == 0);
-  SonareVocalEditSession* restored = nullptr;
+  SonareVocalSession* restored = nullptr;
   REQUIRE(sonare_vocal_session_restore(f.samples.data(), 3200, 1, 16000, state.data, state.size,
                                        nullptr, &restored) == SONARE_OK);
   SonareVocalStateToken original_token{}, restored_token{};
@@ -225,7 +225,7 @@ TEST_CASE("vocal C state restores exact source and reports digest mismatch", "[v
   CHECK(original_token.session_epoch != restored_token.session_epoch);
   sonare_vocal_session_destroy(restored);
   f.samples[0] = -0.0f;
-  restored = reinterpret_cast<SonareVocalEditSession*>(static_cast<uintptr_t>(1));
+  restored = reinterpret_cast<SonareVocalSession*>(static_cast<uintptr_t>(1));
   CHECK(sonare_vocal_session_restore(f.samples.data(), 3200, 1, 16000, state.data, state.size,
                                      nullptr, &restored) != SONARE_OK);
   CHECK(restored == nullptr);
@@ -250,9 +250,9 @@ TEST_CASE("vocal C mutations publish only after result allocations succeed",
       sonare_vocal_notes_result_init(&notes);
       REQUIRE(sonare_vocal_session_notes(session.get(), &notes) == SONARE_OK);
       REQUIRE(notes.note_count == 1);
-      SonareVocalEditDraft* draft = nullptr;
+      SonareVocalDraft* draft = nullptr;
       REQUIRE(sonare_vocal_session_begin_edit(session.get(), 0, &draft) == SONARE_OK);
-      std::unique_ptr<SonareVocalEditDraft, decltype(&sonare_vocal_draft_destroy)> holder(
+      std::unique_ptr<SonareVocalDraft, decltype(&sonare_vocal_draft_destroy)> holder(
           draft, sonare_vocal_draft_destroy);
       SonareVocalOperation op;
       sonare_vocal_operation_init(&op);
@@ -350,7 +350,7 @@ TEST_CASE("vocal C analysis settings survive authoritative roundtrip",
   fixture.analysis.segmentation_threshold_cents = 60.0;
   fixture.analysis.min_note_ms = 15.0;
   fixture.analysis.reference_hz = 442.0;
-  SonareVocalEditSession* session = nullptr;
+  SonareVocalSession* session = nullptr;
   REQUIRE(sonare_vocal_session_create(fixture.samples.data(), fixture.samples.size(), 1, 16000,
                                       &fixture.options, &session) == SONARE_OK);
   SonareVocalAnalysisResult result;
@@ -367,7 +367,7 @@ TEST_CASE("vocal C analysis settings survive authoritative roundtrip",
   CHECK(result.analysis.reference_hz == fixture.analysis.reference_hz);
   auto options = fixture.options;
   options.analysis = &result.analysis;
-  SonareVocalEditSession* roundtrip = nullptr;
+  SonareVocalSession* roundtrip = nullptr;
   REQUIRE(sonare_vocal_session_create(fixture.samples.data(), fixture.samples.size(), 1, 16000,
                                       &options, &roundtrip) == SONARE_OK);
   SonareVocalAnalysisResult again;
@@ -386,7 +386,7 @@ TEST_CASE("vocal C entry points report unsupported without the pitch editor", "[
   const std::vector<float> samples(1600, 0.0f);
   SonareVocalCreateOptions options;
   sonare_vocal_create_options_init(&options);
-  SonareVocalEditSession* session = nullptr;
+  SonareVocalSession* session = nullptr;
   CHECK(sonare_vocal_session_create(samples.data(), static_cast<int64_t>(samples.size()), 1, 16000,
                                     &options, &session) == SONARE_ERROR_NOT_SUPPORTED);
   CHECK(session == nullptr);
@@ -421,7 +421,7 @@ TEST_CASE("vocal C create and restore enforce the supported sample-rate range",
   for (const int rate : {7999, 8000, 384000, 384001}) {
     CAPTURE(rate);
     const bool supported = rate >= 8000 && rate <= 384000;
-    SonareVocalEditSession* created = nullptr;
+    SonareVocalSession* created = nullptr;
     const auto create_error = sonare_vocal_session_create(f.samples.data(), f.samples.size(), 1,
                                                           rate, &f.options, &created);
     CHECK((create_error == SONARE_OK) == supported);
@@ -434,7 +434,7 @@ TEST_CASE("vocal C create and restore enforce the supported sample-rate range",
       CHECK(std::string(detail.field) == "sample_rate");
     }
     sonare_vocal_session_destroy(created);
-    SonareVocalEditSession* restored = nullptr;
+    SonareVocalSession* restored = nullptr;
     const auto restore_error = sonare_vocal_session_restore(
         f.samples.data(), 3200, 1, rate, state.data, state.size, nullptr, &restored);
     if (supported) {
@@ -455,12 +455,12 @@ TEST_CASE("vocal C restore options carry runtime limits and validate their heade
   SonareVocalStateBytes state;
   sonare_vocal_state_bytes_init(&state);
   REQUIRE(sonare_vocal_session_export_state(s.get(), &state) == SONARE_OK);
-  const auto restore = [&](const SonareVocalRestoreOptions* options, SonareVocalEditSession** out) {
+  const auto restore = [&](const SonareVocalRestoreOptions* options, SonareVocalSession** out) {
     return sonare_vocal_session_restore(f.samples.data(), 3200, 1, 16000, state.data, state.size,
                                         options, out);
   };
-  const auto begin_jobs = [](SonareVocalEditSession* session, int* accepted) {
-    SonareVocalRenderSnapshot* snapshot = nullptr;
+  const auto begin_jobs = [](SonareVocalSession* session, int* accepted) {
+    SonareVocalSnapshot* snapshot = nullptr;
     REQUIRE(sonare_vocal_session_capture_snapshot(session, &snapshot) == SONARE_OK);
     std::vector<SonareVocalRenderJob*> jobs;
     *accepted = 0;
@@ -480,7 +480,7 @@ TEST_CASE("vocal C restore options carry runtime limits and validate their heade
   CHECK(defaults.max_render_jobs == 4);
 
   SECTION("NULL options restore with the default job limit") {
-    SonareVocalEditSession* restored = nullptr;
+    SonareVocalSession* restored = nullptr;
     REQUIRE(restore(nullptr, &restored) == SONARE_OK);
     int accepted = 0;
     begin_jobs(restored, &accepted);
@@ -490,7 +490,7 @@ TEST_CASE("vocal C restore options carry runtime limits and validate their heade
   SECTION("a custom job limit is honoured") {
     SonareVocalRestoreOptions options = defaults;
     options.max_render_jobs = 2;
-    SonareVocalEditSession* restored = nullptr;
+    SonareVocalSession* restored = nullptr;
     REQUIRE(restore(&options, &restored) == SONARE_OK);
     int accepted = 0;
     begin_jobs(restored, &accepted);
@@ -505,7 +505,7 @@ TEST_CASE("vocal C restore options carry runtime limits and validate their heade
     SonareVocalRestoreOptions zero_jobs = defaults;
     zero_jobs.max_render_jobs = 0;
     for (const auto* options : {&small, &schema, &zero_jobs}) {
-      auto* restored = reinterpret_cast<SonareVocalEditSession*>(static_cast<uintptr_t>(1));
+      auto* restored = reinterpret_cast<SonareVocalSession*>(static_cast<uintptr_t>(1));
       CHECK(restore(options, &restored) == SONARE_ERROR_INVALID_PARAMETER);
       CHECK(restored == nullptr);
     }
@@ -525,9 +525,9 @@ TEST_CASE("vocal C operations refuse a mode ordinal outside its enum", "[vocal_c
   const auto id = notes.notes[0].id;
   // The edit borrows the result's arrays, so the result outlives every operation below.
   const auto edit = notes.notes[0].edit;
-  SonareVocalEditDraft* raw = nullptr;
+  SonareVocalDraft* raw = nullptr;
   REQUIRE(sonare_vocal_session_begin_edit(s.get(), 0, &raw) == SONARE_OK);
-  std::unique_ptr<SonareVocalEditDraft, decltype(&sonare_vocal_draft_destroy)> draft(
+  std::unique_ptr<SonareVocalDraft, decltype(&sonare_vocal_draft_destroy)> draft(
       raw, sonare_vocal_draft_destroy);
   SonareVocalStateToken before{};
   REQUIRE(sonare_vocal_draft_token(raw, &before) == SONARE_OK);

@@ -25,8 +25,8 @@ namespace {
 #if defined(SONARE_WITH_ARRANGEMENT)
 
 /// An engine with a NativeSynth on destination @p dest running @p engine_mode.
-SonareRealtimeEngine* make_synth_engine(uint32_t dest, int engine_mode) {
-  SonareRealtimeEngine* engine = nullptr;
+SonareEngine* make_synth_engine(uint32_t dest, int engine_mode) {
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
   SonareSynthPatch patch{};
@@ -36,7 +36,7 @@ SonareRealtimeEngine* make_synth_engine(uint32_t dest, int engine_mode) {
   return engine;
 }
 
-std::vector<float> render_blocks(SonareRealtimeEngine* engine, int blocks) {
+std::vector<float> render_blocks(SonareEngine* engine, int blocks) {
   std::vector<float> out;
   std::vector<float> left(128, 0.0f);
   std::vector<float> right(128, 0.0f);
@@ -53,7 +53,7 @@ std::vector<float> render_blocks(SonareRealtimeEngine* engine, int blocks) {
 /// cannot be told apart from by the first half alone.
 std::vector<float> render_slur(uint32_t dest, int engine_mode, int articulation,
                                uint32_t* out_fallbacks) {
-  SonareRealtimeEngine* engine = make_synth_engine(dest, engine_mode);
+  SonareEngine* engine = make_synth_engine(dest, engine_mode);
   REQUIRE(sonare_engine_set_articulation(engine, dest, 0, articulation) == SONARE_OK);
   REQUIRE(sonare_engine_push_midi_note_on(engine, dest, 0, 0, 60, 100, -1) == SONARE_OK);
   std::vector<float> out = render_blocks(engine, 96);
@@ -99,7 +99,7 @@ TEST_CASE("the articulation name table matches its C count", "[c_api][articulati
 #if defined(SONARE_WITH_ARRANGEMENT)
 
 TEST_CASE("articulation round-trips per channel", "[c_api][articulation]") {
-  SonareRealtimeEngine* engine = make_synth_engine(3, SONARE_SYNTH_ENGINE_REED);
+  SonareEngine* engine = make_synth_engine(3, SONARE_SYNTH_ENGINE_REED);
 
   int mode = -1;
   REQUIRE(sonare_engine_articulation(engine, 3, 0, &mode) == SONARE_OK);
@@ -132,7 +132,7 @@ TEST_CASE("articulation round-trips per channel", "[c_api][articulation]") {
 }
 
 TEST_CASE("articulation keeps its three refusals apart", "[c_api][articulation]") {
-  SonareRealtimeEngine* engine = make_synth_engine(3, SONARE_SYNTH_ENGINE_REED);
+  SonareEngine* engine = make_synth_engine(3, SONARE_SYNTH_ENGINE_REED);
 
   // An ordinal past the enum is refused rather than clamped: kPoly substituted
   // for a misspelled kMonoLegato plays every note and slurs none of them, which

@@ -929,13 +929,17 @@ TEST_CASE("sonare_realtime_voice_changer_validate_preset_json returns a code on 
 
 TEST_CASE("sonare_streaming_retune lifecycle and validation", "[voice_changer][capi]") {
   SECTION("a non-finite control is refused at create, not substituted") {
-    REQUIRE(sonare_streaming_retune_create(std::numeric_limits<float>::quiet_NaN(), 1.0f, 0) ==
-            nullptr);
-    REQUIRE(sonare_streaming_retune_create(0.0f, std::numeric_limits<float>::infinity(), 0) ==
-            nullptr);
+    SonareStreamingRetune* refused_retune = nullptr;
+    REQUIRE(sonare_streaming_retune_create(std::numeric_limits<float>::quiet_NaN(), 1.0f, 0,
+                                           &refused_retune) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(refused_retune == nullptr);
+    REQUIRE(sonare_streaming_retune_create(0.0f, std::numeric_limits<float>::infinity(), 0,
+                                           &refused_retune) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(refused_retune == nullptr);
   }
 
-  SonareStreamingRetune* retune = sonare_streaming_retune_create(0.0f, 1.0f, 0);
+  SonareStreamingRetune* retune = nullptr;
+  REQUIRE(sonare_streaming_retune_create(0.0f, 1.0f, 0, &retune) == SONARE_OK);
   REQUIRE(retune != nullptr);
 
   SECTION("null handles are rejected rather than dereferenced") {
@@ -1001,7 +1005,8 @@ TEST_CASE("sonare_streaming_retune lifecycle and validation", "[voice_changer][c
 }
 
 TEST_CASE("sonare_streaming_retune reports and applies grain size", "[voice_changer][capi]") {
-  SonareStreamingRetune* retune = sonare_streaming_retune_create(0.0f, 1.0f, 0);
+  SonareStreamingRetune* retune = nullptr;
+  REQUIRE(sonare_streaming_retune_create(0.0f, 1.0f, 0, &retune) == SONARE_OK);
   REQUIRE(retune != nullptr);
 
   int grain = -1;
@@ -1040,7 +1045,8 @@ TEST_CASE("sonare_streaming_retune reports and applies grain size", "[voice_chan
 TEST_CASE("sonare_streaming_retune shifts pitch in place", "[voice_changer][capi]") {
   constexpr int kSampleRate = 48000;
   constexpr int kBlock = 512;
-  SonareStreamingRetune* retune = sonare_streaming_retune_create(12.0f, 1.0f, 512);
+  SonareStreamingRetune* retune = nullptr;
+  REQUIRE(sonare_streaming_retune_create(12.0f, 1.0f, 512, &retune) == SONARE_OK);
   REQUIRE(retune != nullptr);
   REQUIRE(sonare_streaming_retune_prepare(retune, kSampleRate, kBlock) == SONARE_OK);
 
@@ -1172,7 +1178,8 @@ TEST_CASE("The POD config refuses an out-of-range field and keeps the previous c
 
 TEST_CASE("sonare_streaming_retune config grain matches the grain in use",
           "[voice_changer][capi]") {
-  SonareStreamingRetune* retune = sonare_streaming_retune_create(0.0f, 1.0f, 513);
+  SonareStreamingRetune* retune = nullptr;
+  REQUIRE(sonare_streaming_retune_create(0.0f, 1.0f, 513, &retune) == SONARE_OK);
   REQUIRE(retune != nullptr);
   REQUIRE(sonare_streaming_retune_prepare(retune, 48000.0, 256) == SONARE_OK);
 
@@ -1193,7 +1200,7 @@ TEST_CASE("sonare_streaming_retune config grain matches the grain in use",
   sonare_streaming_retune_destroy(retune);
 
   // Automatic: the reported grain tracks the rate after a re-prepare.
-  retune = sonare_streaming_retune_create(0.0f, 1.0f, 0);
+  REQUIRE(sonare_streaming_retune_create(0.0f, 1.0f, 0, &retune) == SONARE_OK);
   REQUIRE(retune != nullptr);
   REQUIRE(sonare_streaming_retune_prepare(retune, 48000.0, 256) == SONARE_OK);
   check_consistent(2232);

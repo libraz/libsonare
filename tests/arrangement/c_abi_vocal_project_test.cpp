@@ -66,13 +66,13 @@ struct VocalStateFixture {
     options.analysis = &analysis;
     options.edge_fade_ms = 0.0;
 
-    SonareVocalEditSession* raw_session = nullptr;
+    SonareVocalSession* raw_session = nullptr;
     if (sonare_vocal_session_create(source.data(), kSampleCount, 1, kSampleRate, &options,
                                     &raw_session) != SONARE_OK ||
         raw_session == nullptr) {
       throw std::runtime_error("could not create vocal state fixture");
     }
-    std::unique_ptr<SonareVocalEditSession, decltype(&sonare_vocal_session_destroy)> session(
+    std::unique_ptr<SonareVocalSession, decltype(&sonare_vocal_session_destroy)> session(
         raw_session, sonare_vocal_session_destroy);
     if (nonidentity) {
       SonareVocalNotesResult notes;
@@ -81,13 +81,13 @@ struct VocalStateFixture {
         sonare_free_vocal_notes_result(&notes);
         throw std::runtime_error("could not read vocal notes for edited fixture");
       }
-      SonareVocalEditDraft* raw_draft = nullptr;
+      SonareVocalDraft* raw_draft = nullptr;
       if (sonare_vocal_session_begin_edit(session.get(), 0, &raw_draft) != SONARE_OK ||
           raw_draft == nullptr) {
         sonare_free_vocal_notes_result(&notes);
         throw std::runtime_error("could not begin edited fixture");
       }
-      std::unique_ptr<SonareVocalEditDraft, decltype(&sonare_vocal_draft_destroy)> draft(
+      std::unique_ptr<SonareVocalDraft, decltype(&sonare_vocal_draft_destroy)> draft(
           raw_draft, sonare_vocal_draft_destroy);
       SonareVocalStateToken draft_token{};
       SonareVocalOperation operation;
@@ -127,12 +127,12 @@ struct VocalStateFixture {
     state.assign(bytes.data, bytes.data + bytes.size);
     sonare_free_vocal_state_bytes(&bytes);
 
-    SonareVocalRenderSnapshot* raw_snapshot = nullptr;
+    SonareVocalSnapshot* raw_snapshot = nullptr;
     if (sonare_vocal_session_capture_snapshot(session.get(), &raw_snapshot) != SONARE_OK ||
         raw_snapshot == nullptr) {
       throw std::runtime_error("could not capture vocal snapshot");
     }
-    std::unique_ptr<SonareVocalRenderSnapshot, decltype(&sonare_vocal_snapshot_destroy)> snapshot(
+    std::unique_ptr<SonareVocalSnapshot, decltype(&sonare_vocal_snapshot_destroy)> snapshot(
         raw_snapshot, sonare_vocal_snapshot_destroy);
     SonareVocalRenderResult render;
     sonare_vocal_render_result_init(&render);
@@ -679,7 +679,7 @@ EditedState edit_state(const std::vector<float>& source, const std::vector<uint8
   sonare_vocal_create_options_init(&options);
   options.analysis = &analysis;
   options.edge_fade_ms = 0.0;
-  SonareVocalEditSession* raw = nullptr;
+  SonareVocalSession* raw = nullptr;
   if (prior != nullptr) {
     REQUIRE(sonare_vocal_session_restore(source.data(), kSampleCount, 1, kSampleRate, prior->data(),
                                          prior->size(), nullptr, &raw) == SONARE_OK);
@@ -687,7 +687,7 @@ EditedState edit_state(const std::vector<float>& source, const std::vector<uint8
     REQUIRE(sonare_vocal_session_create(source.data(), kSampleCount, 1, kSampleRate, &options,
                                         &raw) == SONARE_OK);
   }
-  std::unique_ptr<SonareVocalEditSession, decltype(&sonare_vocal_session_destroy)> session(
+  std::unique_ptr<SonareVocalSession, decltype(&sonare_vocal_session_destroy)> session(
       raw, sonare_vocal_session_destroy);
   SonareVocalNotesResult notes;
   sonare_vocal_notes_result_init(&notes);
@@ -701,7 +701,7 @@ EditedState edit_state(const std::vector<float>& source, const std::vector<uint8
   operation.edit.gain_db = gain_db;
   uint64_t revision = 0;
   REQUIRE(sonare_vocal_session_revision(session.get(), &revision) == SONARE_OK);
-  SonareVocalEditDraft* draft = nullptr;
+  SonareVocalDraft* draft = nullptr;
   REQUIRE(sonare_vocal_session_begin_edit(session.get(), revision, &draft) == SONARE_OK);
   SonareVocalStateToken draft_token{};
   REQUIRE(sonare_vocal_draft_token(draft, &draft_token) == SONARE_OK);
@@ -722,7 +722,7 @@ EditedState edit_state(const std::vector<float>& source, const std::vector<uint8
   REQUIRE(sonare_vocal_session_export_state(session.get(), &bytes) == SONARE_OK);
   edited.state.assign(bytes.data, bytes.data + bytes.size);
   sonare_free_vocal_state_bytes(&bytes);
-  SonareVocalRenderSnapshot* snapshot = nullptr;
+  SonareVocalSnapshot* snapshot = nullptr;
   REQUIRE(sonare_vocal_session_capture_snapshot(session.get(), &snapshot) == SONARE_OK);
   SonareVocalRenderResult render;
   sonare_vocal_render_result_init(&render);

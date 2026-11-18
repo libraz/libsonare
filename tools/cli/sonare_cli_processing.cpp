@@ -556,11 +556,11 @@ int cmd_vocal_notes(const CliArgs& args, const Audio& audio) {
   if (!args.quiet && !args.json_output) {
     std::cerr << color::blue << "Analyzing vocal notes..." << color::reset << "\n";
   }
-  SonareVocalEditSession* raw_session = nullptr;
+  SonareVocalSession* raw_session = nullptr;
   const SonareError created =
       sonare_vocal_session_create(audio.data(), static_cast<int64_t>(audio.size()), 1,
                                   audio.sample_rate(), &options, &raw_session);
-  std::unique_ptr<SonareVocalEditSession, decltype(&sonare_vocal_session_destroy)> session(
+  std::unique_ptr<SonareVocalSession, decltype(&sonare_vocal_session_destroy)> session(
       raw_session, &sonare_vocal_session_destroy);
   if (created != SONARE_OK) throw_c_error(created, "vocal session creation failed");
 

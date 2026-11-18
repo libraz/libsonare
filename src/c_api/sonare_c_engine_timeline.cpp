@@ -11,7 +11,7 @@
 
 using namespace sonare_c_detail;
 
-SonareError sonare_engine_apply_project_timeline(SonareRealtimeEngine* engine,
+SonareError sonare_engine_apply_project_timeline(SonareEngine* engine,
                                                  const SonareProjectTimeline* timeline) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)

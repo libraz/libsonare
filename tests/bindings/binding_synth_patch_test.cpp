@@ -1461,7 +1461,8 @@ TEST_CASE("each wrapper field group sounds on the engines the header says honour
     pcm[i] = 0.5f *
              std::sin(2.0f * sonare::constants::kPi * 261.6256f * static_cast<float>(i) / 48000.0f);
   }
-  SonareSampleBank* bank = sonare_sample_bank_create();
+  SonareSampleBank* bank = nullptr;
+  REQUIRE(sonare_sample_bank_create(&bank) == SONARE_OK);
   REQUIRE(bank != nullptr);
   SonareSampleDesc desc{};
   REQUIRE(sonare_sample_bank_add_sample(bank, pcm.data(), pcm.size(), &desc, nullptr) == SONARE_OK);
@@ -1673,7 +1674,7 @@ TEST_CASE("a GS variation bank reports whether it is voiced or falls back",
 }
 
 TEST_CASE("sonare_engine synth instrument renders live MIDI input", "[c_api][synth_patch]") {
-  SonareRealtimeEngine* engine = nullptr;
+  SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
 

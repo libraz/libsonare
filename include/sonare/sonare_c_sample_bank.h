@@ -63,11 +63,12 @@ typedef struct {
   float pan_units;        ///< Pan in the voice mixer's units, -500..500; finite values are clamped
 } SonareSampleZoneDesc;
 
-/// @brief Creates an empty bank. NULL on allocation failure, and when the library was built
-///        without the arrangement subsystem.
-/// @details The caller owns the handle and must release it with @ref sonare_sample_bank_destroy,
-///          which is what invalidates it; no other call does.
-SonareSampleBank* sonare_sample_bank_create(void);
+/// @brief Creates an empty bank.
+/// @param out Receives the handle on success, NULL on failure; destroy with
+///        @ref sonare_sample_bank_destroy, which is what invalidates it; no other call does.
+/// @return SONARE_OK, SONARE_ERROR_NOT_SUPPORTED when the library was built without the
+///         arrangement subsystem, or another error code on allocation failure.
+SonareError sonare_sample_bank_create(SonareSampleBank** out);
 
 /// @brief Releases a bank. NULL is a no-op. Nothing rendering may still hold it.
 void sonare_sample_bank_destroy(SonareSampleBank* bank);

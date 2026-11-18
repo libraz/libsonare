@@ -346,7 +346,9 @@ def configure_project_signatures(lib: ctypes.CDLL) -> None:
                 ctypes.POINTER(SonareTakeAlignment),
             ]
             lib.sonare_free_project_warp_anchors.restype = None
-            lib.sonare_free_project_warp_anchors.argtypes = [ctypes.POINTER(SonareProjectWarpAnchor)]
+            lib.sonare_free_project_warp_anchors.argtypes = [
+                ctypes.POINTER(SonareProjectWarpAnchor)
+            ]
 
         if hasattr(lib, "sonare_align_take_to_reference_ex"):
             lib.sonare_align_take_to_reference_ex.restype = ctypes.c_int32
@@ -853,8 +855,8 @@ def _configure_sample_bank_signatures(lib: ctypes.CDLL) -> None:
     if not hasattr(lib, "sonare_sample_bank_create"):
         return
 
-    lib.sonare_sample_bank_create.restype = ctypes.c_void_p
-    lib.sonare_sample_bank_create.argtypes = []
+    lib.sonare_sample_bank_create.restype = ctypes.c_int32
+    lib.sonare_sample_bank_create.argtypes = [ctypes.POINTER(ctypes.c_void_p)]
 
     lib.sonare_sample_bank_destroy.restype = None
     lib.sonare_sample_bank_destroy.argtypes = [ctypes.c_void_p]

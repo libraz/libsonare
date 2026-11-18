@@ -48,7 +48,8 @@ std::string one_note_project() {
 }  // namespace
 
 TEST_CASE("a sample bank rejects what it cannot hold", "[project][sample_bank]") {
-  SonareSampleBank* bank = sonare_sample_bank_create();
+  SonareSampleBank* bank = nullptr;
+  REQUIRE(sonare_sample_bank_create(&bank) == SONARE_OK);
   REQUIRE(bank != nullptr);
 
   const std::vector<float> pcm = tone(261.6256, 0.2);
@@ -98,7 +99,8 @@ TEST_CASE("a sample bank refuses a value it could not attribute later", "[projec
   const float nan = std::numeric_limits<float>::quiet_NaN();
   const float inf = std::numeric_limits<float>::infinity();
 
-  SonareSampleBank* bank = sonare_sample_bank_create();
+  SonareSampleBank* bank = nullptr;
+  REQUIRE(sonare_sample_bank_create(&bank) == SONARE_OK);
   REQUIRE(bank != nullptr);
 
   std::vector<float> pcm = tone(261.6256, 0.2);
@@ -158,7 +160,8 @@ TEST_CASE("a C sample bank rejects non-finite zone values before changing state"
   const float inf = std::numeric_limits<float>::infinity();
   const float max = std::numeric_limits<float>::max();
 
-  SonareSampleBank* bank = sonare_sample_bank_create();
+  SonareSampleBank* bank = nullptr;
+  REQUIRE(sonare_sample_bank_create(&bank) == SONARE_OK);
   REQUIRE(bank != nullptr);
   const std::vector<float> pcm(16, 0.25f);
   SonareSampleDesc desc{};
@@ -227,7 +230,8 @@ TEST_CASE("a C sample bank rejects non-finite zone values before changing state"
 TEST_CASE("an all-zero zone covers the whole keyboard", "[project][sample_bank]") {
   // The header promises zero-initialize-then-override, and a rectangle nobody
   // filled in must not silently cover nothing.
-  SonareSampleBank* bank = sonare_sample_bank_create();
+  SonareSampleBank* bank = nullptr;
+  REQUIRE(sonare_sample_bank_create(&bank) == SONARE_OK);
   REQUIRE(bank != nullptr);
   const std::vector<float> pcm = tone(261.6256, 0.2);
   SonareSampleDesc desc{};
@@ -267,7 +271,8 @@ TEST_CASE("an all-zero zone covers the whole keyboard", "[project][sample_bank]"
 TEST_CASE("narrowing one range leaves the other covering everything", "[project][sample_bank]") {
   // A zone given only a key range must not come back muted by an empty
   // velocity range it never asked for.
-  SonareSampleBank* bank = sonare_sample_bank_create();
+  SonareSampleBank* bank = nullptr;
+  REQUIRE(sonare_sample_bank_create(&bank) == SONARE_OK);
   REQUIRE(bank != nullptr);
   const std::vector<float> pcm = tone(261.6256, 0.2);
   SonareSampleDesc desc{};
