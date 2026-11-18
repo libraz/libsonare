@@ -799,8 +799,8 @@ def configure_engine_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(SonareEngineBounceOptions),
         ctypes.POINTER(SonareEngineBounceResult),
     ]
-    lib.sonare_free_bounce_result.restype = None
-    lib.sonare_free_bounce_result.argtypes = [ctypes.POINTER(SonareEngineBounceResult)]
+    lib.sonare_free_engine_bounce_result.restype = None
+    lib.sonare_free_engine_bounce_result.argtypes = [ctypes.POINTER(SonareEngineBounceResult)]
     lib.sonare_engine_freeze_offline.restype = ctypes.c_int32
     lib.sonare_engine_freeze_offline.argtypes = [
         ctypes.c_void_p,
