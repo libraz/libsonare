@@ -31,7 +31,10 @@ std::vector<uint8_t> read_hrtf_file(const std::string& path) {
 // code the C ABI can return here (SONARE_ERROR_UNKNOWN, 99, has no C++
 // counterpart and is the one case handled separately).
 [[noreturn]] void throw_playback_error(const std::string& what, SonareError err) {
-  const std::string message = what + ": " + sonare_error_message(err);
+  std::string message = what + ": " + sonare_error_message(err);
+  // The core's own wording names the refused key, so it travels with the code.
+  const char* detail = sonare_last_error_message();
+  if (detail != nullptr && detail[0] != '\0') message += std::string(": ") + detail;
   if (err == SONARE_OK || err == SONARE_ERROR_UNKNOWN) throw std::runtime_error(message);
   throw sonare::SonareException(static_cast<sonare::ErrorCode>(err), message);
 }
