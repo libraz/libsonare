@@ -15,6 +15,9 @@
 #include "effects/pitch_shift.h"
 #include "effects/time_stretch.h"
 #include "feature/inverse.h"
+#if defined(SONARE_WITH_MASTERING)
+#include "mastering/api/chain.h"
+#endif
 #include "util/exception.h"
 #include "util/json.h"
 
@@ -250,6 +253,48 @@ TEST_CASE("native spectral stretch geometry refusals are owned by the core funct
     CHECK_THAT(last_error_message(), Catch::Matchers::ContainsSubstring(message));
   }
 }
+
+#if defined(SONARE_WITH_MASTERING)
+TEST_CASE("streaming mastering chain prepare refusals are owned by the core function",
+          "[conformance][core_validation]") {
+  const Value corpus = load_refusal_corpus();
+  const Value& route = corpus["streaming_mastering_chain_prepare"];
+  const int channels = static_cast<int>(route["input"]["num_channels"].as_number());
+
+  for (const auto& item : route["accepted"].as_array()) {
+    const double rate = item["sample_rate"].as_number();
+    const int block = static_cast<int>(item["max_block_size"].as_number());
+    INFO(item["id"].as_string());
+    sonare::mastering::api::StreamingMasteringChain core(
+        (sonare::mastering::api::MasteringChainConfig()));
+    CHECK_NOTHROW(core.prepare(rate, block, channels));
+    SonareStreamingMasteringChain* handle = nullptr;
+    REQUIRE(sonare_streaming_mastering_chain_create(nullptr, 0, &handle) == SONARE_OK);
+    CHECK(sonare_streaming_mastering_chain_prepare(handle, static_cast<int>(rate), block,
+                                                   channels) == SONARE_OK);
+    sonare_streaming_mastering_chain_destroy(handle);
+  }
+
+  for (const auto& item : route["refused"].as_array()) {
+    const double rate = item["sample_rate"].as_number();
+    const int block = static_cast<int>(item["max_block_size"].as_number());
+    const std::string message = item["message"].as_string();
+    INFO(item["id"].as_string());
+    REQUIRE(item["cause"].as_string() == "argument");
+
+    sonare::mastering::api::StreamingMasteringChain core(
+        (sonare::mastering::api::MasteringChainConfig()));
+    require_argument_refusal([&] { core.prepare(rate, block, channels); }, message);
+
+    SonareStreamingMasteringChain* handle = nullptr;
+    REQUIRE(sonare_streaming_mastering_chain_create(nullptr, 0, &handle) == SONARE_OK);
+    CHECK(sonare_streaming_mastering_chain_prepare(handle, static_cast<int>(rate), block,
+                                                   channels) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK_THAT(last_error_message(), Catch::Matchers::ContainsSubstring(message));
+    sonare_streaming_mastering_chain_destroy(handle);
+  }
+}
+#endif  // defined(SONARE_WITH_MASTERING)
 
 #if defined(SONARE_WITH_VOICE_CHANGER)
 TEST_CASE("streaming retune prepare refusals are owned by the core function",

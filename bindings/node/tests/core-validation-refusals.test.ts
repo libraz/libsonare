@@ -5,6 +5,7 @@ import {
   mfccToAudio,
   mfccToMel,
   pitchShift,
+  StreamingMasteringChain,
   StreamingRetune,
   timeStretch,
 } from '../src/index.js';
@@ -38,6 +39,18 @@ type StretchCase = {
   message?: string;
 };
 type StretchRoute = { input: StretchInput; accepted: StretchCase[]; refused: StretchCase[] };
+type RateBlockCase = {
+  id: string;
+  sample_rate: number;
+  max_block_size: number;
+  cause?: Cause;
+  message?: string;
+};
+type RateBlockRoute = {
+  input: { num_channels: number };
+  accepted: RateBlockCase[];
+  refused: RateBlockCase[];
+};
 type RetuneCase = {
   id: string;
   sample_rate: number;
@@ -57,6 +70,7 @@ const corpus = JSON.parse(
   mel_to_audio: MelRoute;
   mfcc_to_audio: MfccAudioRoute;
   native_spectral_stretch: StretchRoute;
+  streaming_mastering_chain_prepare: RateBlockRoute;
   streaming_retune_prepare: RetuneRoute;
 };
 
@@ -237,6 +251,47 @@ describe('native spectral stretch geometry refusals come from the core', () => {
       kind,
       text,
     );
+  });
+});
+
+describe('streaming mastering chain prepare refusals come from the core', () => {
+  const { input, accepted, refused } = corpus.streaming_mastering_chain_prepare;
+  const channels = input.num_channels;
+
+  it.each(accepted)('accepts $id', ({ sample_rate, max_block_size }) => {
+    const chain = new StreamingMasteringChain({
+      sampleRate: sample_rate,
+      numChannels: channels,
+      maxBlockSize: max_block_size,
+    });
+    const raw = new addon.StreamingMasteringChain({});
+    try {
+      expect(() => raw.prepare(sample_rate, max_block_size, channels)).not.toThrow();
+    } finally {
+      chain.destroy();
+      raw.destroy();
+    }
+  });
+
+  it.each(refused)('refuses $id', ({ sample_rate, max_block_size, cause, message }) => {
+    const kind = errorClassFor[cause as Cause];
+    const text = literal(message as string);
+    expectRefusal(
+      () =>
+        new StreamingMasteringChain({
+          sampleRate: sample_rate,
+          numChannels: channels,
+          maxBlockSize: max_block_size,
+        }),
+      kind,
+      text,
+    );
+    const raw = new addon.StreamingMasteringChain({});
+    try {
+      expectRefusal(() => raw.prepare(sample_rate, max_block_size, channels), kind, text);
+    } finally {
+      raw.destroy();
+    }
   });
 });
 

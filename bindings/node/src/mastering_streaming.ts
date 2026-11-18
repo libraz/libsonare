@@ -90,6 +90,14 @@ function optionalBlockSize(fnName: string, value: unknown): number | undefined {
   return value;
 }
 
+function optionalIntegerBlockSize(fnName: string, value: unknown): number | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  assertIntegerValue(fnName, value, 'maxBlockSize');
+  return value;
+}
+
 /**
  * Block-by-block streaming variant of {@link masterAudio}.
  *
@@ -145,8 +153,8 @@ export class StreamingMasteringChain {
     const fn = 'StreamingMasteringChain';
     assertConfigObject(fn, config);
     const { sampleRate, maxBlockSize, numChannels, ...chainConfig } = config;
-    assertSampleRate(fn, sampleRate);
-    const blockSize = optionalBlockSize(fn, maxBlockSize);
+    assertIntegerValue(fn, sampleRate, 'sampleRate');
+    const blockSize = optionalIntegerBlockSize(fn, maxBlockSize);
     assertIntegerValue(fn, numChannels, 'numChannels');
     if (numChannels !== 1 && numChannels !== 2) {
       throw new RangeError(`${fn}: numChannels must be 1 or 2`);

@@ -342,10 +342,6 @@ SonareError sonare_streaming_mastering_chain_prepare(SonareStreamingMasteringCha
   if (!handle || !handle->chain) return SONARE_ERROR_INVALID_PARAMETER;
   if (max_block_size == 0)
     max_block_size = sonare::mastering::api::MasteringChain::kDefaultMaxBlock;
-  if (!is_valid_realtime_sample_rate(static_cast<double>(sample_rate)) ||
-      !is_valid_realtime_block_size(max_block_size)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
   SONARE_C_TRY
   handle->chain->prepare(static_cast<double>(sample_rate), max_block_size, num_channels);
   handle->max_block_size = max_block_size;

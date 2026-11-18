@@ -24,6 +24,7 @@ _MFCC = _CORPUS["mfcc_to_mel"]
 _MEL = _CORPUS["mel_to_audio"]
 _MFCC_AUDIO = _CORPUS["mfcc_to_audio"]
 _STRETCH = _CORPUS["native_spectral_stretch"]
+_CHAIN = _CORPUS["streaming_mastering_chain_prepare"]
 _RETUNE = _CORPUS["streaming_retune_prepare"]
 
 
@@ -104,6 +105,26 @@ def test_native_spectral_stretch_refuses(case: dict) -> None:
         libsonare.time_stretch(*args, _STRETCH["input"]["speed_ratio"], **geometry)
     with pytest.raises(error_class):
         libsonare.pitch_shift(*args, _STRETCH["input"]["pitch_semitones"], **geometry)
+
+
+@pytest.mark.parametrize("case", _CHAIN["accepted"], ids=lambda case: case["id"])
+def test_streaming_mastering_chain_prepare_accepts(case: dict) -> None:
+    with libsonare.StreamingMasteringChain(
+        sample_rate=case["sample_rate"],
+        num_channels=_CHAIN["input"]["num_channels"],
+        max_block_size=case["max_block_size"],
+    ):
+        pass
+
+
+@pytest.mark.parametrize("case", _CHAIN["refused"], ids=lambda case: case["id"])
+def test_streaming_mastering_chain_prepare_refuses(case: dict) -> None:
+    with pytest.raises(_ERROR_CLASS[case["cause"]], match=re.escape(case["message"])):
+        libsonare.StreamingMasteringChain(
+            sample_rate=case["sample_rate"],
+            num_channels=_CHAIN["input"]["num_channels"],
+            max_block_size=case["max_block_size"],
+        )
 
 
 @pytest.mark.parametrize("case", _RETUNE["accepted"], ids=lambda case: case["id"])

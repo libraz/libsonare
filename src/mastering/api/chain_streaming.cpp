@@ -29,6 +29,7 @@
 #include "mastering/stereo/mono_maker.h"
 #include "rt/processor_base.h"
 #include "rt/tail_budget.h"
+#include "streaming/realtime_limits.h"
 #include "util/db.h"
 #include "util/exception.h"
 #include "util/numeric_validation.h"
@@ -289,11 +290,16 @@ void StreamingMasteringChain::prepare(double sample_rate, int max_block_size, in
   if (num_channels != 1 && num_channels != 2) {
     throw SonareException(ErrorCode::InvalidParameter, "num_channels must be 1 or 2");
   }
-  if (max_block_size <= 0) {
-    throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be > 0");
+  if (!is_valid_realtime_block_size(max_block_size)) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "StreamingMasteringChain::prepare: max_block_size must be within [1, " +
+                              std::to_string(kMaxRealtimeBlockSize) + "]");
   }
-  if (!std::isfinite(sample_rate) || sample_rate <= 0.0) {
-    throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be finite and > 0");
+  if (!is_valid_realtime_sample_rate(sample_rate)) {
+    throw SonareException(
+        ErrorCode::InvalidParameter,
+        "StreamingMasteringChain::prepare: sample_rate must be finite and within [" +
+            std::to_string(kMinAudioSampleRate) + ", " + std::to_string(kMaxAudioSampleRate) + "]");
   }
 
   // A stage's own prepare() can throw for a reason only it can see — a

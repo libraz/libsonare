@@ -6,6 +6,7 @@ import {
   mfccToAudio,
   mfccToMel,
   pitchShift,
+  StreamingMasteringChain,
   StreamingRetune,
   timeStretch,
 } from '../src/index';
@@ -39,6 +40,18 @@ type StretchCase = {
   message?: string;
 };
 type StretchRoute = { input: StretchInput; accepted: StretchCase[]; refused: StretchCase[] };
+type RateBlockCase = {
+  id: string;
+  sample_rate: number;
+  max_block_size: number;
+  cause?: Cause;
+  message?: string;
+};
+type RateBlockRoute = {
+  input: { num_channels: number };
+  accepted: RateBlockCase[];
+  refused: RateBlockCase[];
+};
 type RetuneCase = {
   id: string;
   sample_rate: number;
@@ -58,6 +71,7 @@ const corpus = JSON.parse(
   mel_to_audio: MelRoute;
   mfcc_to_audio: MfccAudioRoute;
   native_spectral_stretch: StretchRoute;
+  streaming_mastering_chain_prepare: RateBlockRoute;
   streaming_retune_prepare: RetuneRoute;
 };
 
@@ -78,6 +92,10 @@ type RawInverse = {
   melToAudio(...args: unknown[]): Float32Array;
   timeStretchEx(...args: unknown[]): Float32Array;
   pitchShiftEx(...args: unknown[]): Float32Array;
+  createStreamingMasteringChain(config: Record<string, unknown>): {
+    prepare(sampleRate: number, maxBlockSize: number, numChannels: number): void;
+    delete(): void;
+  };
   createStreamingRetune(config: Record<string, unknown>): {
     prepare(sampleRate: number, maxBlockSize: number): void;
     delete(): void;
@@ -260,6 +278,49 @@ describe('native spectral stretch geometry refusals come from the core', () => {
     ];
     for (const call of rawCalls) {
       expect(expectRefusalOf(call, kind).message).toMatch(text);
+    }
+  });
+});
+
+describe('streaming mastering chain prepare refusals come from the core', () => {
+  const { input, accepted, refused } = corpus.streaming_mastering_chain_prepare;
+  const channels = input.num_channels;
+  const raw = () => getSonareModule() as unknown as RawInverse;
+
+  it.each(accepted)('accepts $id', ({ sample_rate, max_block_size }) => {
+    const chain = new StreamingMasteringChain({
+      sampleRate: sample_rate,
+      numChannels: channels,
+      maxBlockSize: max_block_size,
+    });
+    const handle = raw().createStreamingMasteringChain({ __flatParams: {} });
+    try {
+      expect(() => handle.prepare(sample_rate, max_block_size, channels)).not.toThrow();
+    } finally {
+      chain.destroy();
+      handle.delete();
+    }
+  });
+
+  it.each(refused)('refuses $id', ({ sample_rate, max_block_size, cause, message }) => {
+    const kind = errorClassFor[cause as Cause];
+    const text = literal(message as string);
+    const handle = raw().createStreamingMasteringChain({ __flatParams: {} });
+    try {
+      const calls: Array<() => unknown> = [
+        () =>
+          new StreamingMasteringChain({
+            sampleRate: sample_rate,
+            numChannels: channels,
+            maxBlockSize: max_block_size,
+          }),
+        () => handle.prepare(sample_rate, max_block_size, channels),
+      ];
+      for (const call of calls) {
+        expect(expectRefusalOf(call, kind).message).toMatch(text);
+      }
+    } finally {
+      handle.delete();
     }
   });
 });
