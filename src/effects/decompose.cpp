@@ -311,7 +311,9 @@ std::vector<float> nn_filter(const float* S, int n_features, int n_frames,
   if (!all_finite(S, n_features, n_frames)) {
     throw SonareException(ErrorCode::InvalidParameter, "nn_filter: S contains a non-finite value");
   }
-  if (k <= 0) k = std::min(5, n_frames);
+  if (k <= 0) {
+    throw SonareException(ErrorCode::InvalidParameter, "nn_filter: k must be positive");
+  }
 
   // Pre-compute column norms for cosine similarity. Feature-major with per-frame
   // accumulators: S is row-major [n_features x n_frames], so a feature is one contiguous

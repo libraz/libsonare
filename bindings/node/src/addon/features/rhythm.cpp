@@ -11,6 +11,7 @@
 #include "feature/chroma.h"
 #include "feature/inverse.h"
 #include "feature/mel_spectrogram.h"
+#include "feature/onset.h"
 #include "feature/pitch.h"
 #include "feature/spectral.h"
 #include "features/common.h"
@@ -188,7 +189,9 @@ Napi::Value SonareWrap::OnsetStrengthMulti(const Napi::CallbackInfo& info) {
   int n_mels{};
   if (!OptionalIntArg(env, info, 4, "nMels", 128, &n_mels)) return env.Undefined();
   int n_bands{};
-  if (!OptionalIntArg(env, info, 5, "nBands", 6, &n_bands)) return env.Undefined();
+  if (!OptionalIntArg(env, info, 5, "nBands", sonare::kOnsetStrengthMultiDefaultBands, &n_bands)) {
+    return env.Undefined();
+  }
   float* out = nullptr;
   size_t count = 0;
   int n_frames = 0;

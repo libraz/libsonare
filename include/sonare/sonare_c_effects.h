@@ -996,8 +996,8 @@ SonareError sonare_trim_ex(const float* samples, size_t length, int sample_rate,
 /// @param n_features Feature dimension (rows). Must be > 0.
 /// @param n_frames Number of time frames. Must be > 0.
 /// @param n_components Target number of components (k). Must be > 0.
-/// @param n_iter Number of multiplicative-update iterations. Must be > 0
-///        (n_iter==0 would return the raw init matrices and is rejected).
+/// @param n_iter Number of multiplicative-update iterations, >= 1; 0 selects the
+///        library default (50). Negative values are rejected.
 /// @param beta Beta divergence (2 = Frobenius, 1 = KL, 0 = Itakura-Saito).
 /// @param out_w Receives the [n_features x n_components] component matrix.
 /// @param out_w_length Receives n_features * n_components.
@@ -1020,7 +1020,8 @@ SonareError sonare_decompose(const float* s, int n_features, int n_frames, int n
 /// @param n_features Feature dimension (rows). Must be > 0.
 /// @param n_frames Number of time frames. Must be > 0.
 /// @param n_components Target number of components (k). Must be > 0.
-/// @param n_iter Number of multiplicative-update iterations. Must be > 0.
+/// @param n_iter Number of multiplicative-update iterations, >= 1; 0 selects the
+///        library default (50). Negative values are rejected.
 /// @param beta Beta divergence (2 = Frobenius, 1 = KL, 0 = Itakura-Saito).
 /// @param init Initialiser: "random" (default if NULL) or "nndsvd".
 /// @param out_w Receives the [n_features x n_components] component matrix.
@@ -1134,9 +1135,11 @@ SonareError sonare_decompose_stems_linked(const float* const* channels, size_t n
 /// @param n_features Feature dimension (rows). Must be > 0.
 /// @param n_frames Number of time frames. Must be > 0.
 /// @param aggregate Aggregator: "mean", "median", "min" or "max". NULL = "mean".
-/// @param k Number of nearest neighbours.
-/// @param width Time exclusion half-width. Must be >= 0 (negative widths are
-///        rejected, mirroring librosa, instead of silently disabling exclusion).
+/// @param k Number of nearest neighbours, >= 1; -1 selects the library default (7).
+///        0 and any other negative value are rejected.
+/// @param width Time exclusion half-width, >= 0; -1 selects the library default (1).
+///        Any other negative value is rejected, mirroring librosa, instead of
+///        silently disabling exclusion.
 /// @param out Receives the smoothed spectrogram buffer.
 /// @param out_length Receives n_features * n_frames.
 SonareError sonare_nn_filter(const float* s, int n_features, int n_frames, const char* aggregate,

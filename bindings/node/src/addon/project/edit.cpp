@@ -326,8 +326,11 @@ Napi::Value ProjectWrap::AddLoopRecordingTakes(const Napi::CallbackInfo& info) {
   desc.track_id = Uint32Property(obj, "trackId", 0);
   desc.start_ppq = DoubleProperty(obj, "startPpq", 0.0);
   desc.loop_length_ppq = DoubleProperty(obj, "loopLengthPpq", 0.0);
-  desc.audio_channels = IntProperty(obj, "audioChannels", 1);
-  desc.audio_sample_rate = IntProperty(obj, "audioSampleRate", 48000);
+  // The capture's format is a fact about the recording, so neither has a default.
+  if (!RequiredIntProperty(env, obj, "audioChannels", &desc.audio_channels) ||
+      !RequiredIntProperty(env, obj, "audioSampleRate", &desc.audio_sample_rate)) {
+    return env.Undefined();
+  }
   const std::string partial_tail = StringProperty(obj, "partialTail", "keep");
   if (partial_tail == "drop") {
     desc.flags = SONARE_PROJECT_LOOP_RECORDING_DROP_PARTIAL_TAIL;

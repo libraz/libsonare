@@ -9,6 +9,9 @@
 
 namespace sonare {
 
+/// @brief Default band count of @ref onset_strength_multi.
+inline constexpr int kOnsetStrengthMultiDefaultBands = 3;
+
 /// @brief Configuration for onset strength computation.
 struct OnsetConfig {
   int lag = 1;           ///< Time lag for computing differences (frames)
@@ -59,7 +62,8 @@ std::vector<float> compute_onset_strength(const Audio& audio,
 /// @param n_bands Number of frequency bands (divides Mel bands evenly)
 /// @param config Onset configuration
 /// @return Multi-band onset strength [n_bands x n_frames]
-std::vector<float> onset_strength_multi(const MelSpectrogram& mel_spec, int n_bands = 3,
+std::vector<float> onset_strength_multi(const MelSpectrogram& mel_spec,
+                                        int n_bands = kOnsetStrengthMultiDefaultBands,
                                         const OnsetConfig& config = OnsetConfig());
 
 /// @brief Backtracks each onset event to the most recent local minimum of an

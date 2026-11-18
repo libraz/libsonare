@@ -92,12 +92,9 @@ val ProjectWasm::addLoopRecordingTakes(val desc) {
   d.track_id = uintProperty(desc, "trackId", 0);
   d.start_ppq = doubleProperty(desc, "startPpq", 0.0);
   d.loop_length_ppq = doubleProperty(desc, "loopLengthPpq", 0.0);
-  d.audio_channels = hasProperty(desc, "audioChannels")
-                         ? checkedIntFromVal(desc["audioChannels"], "audioChannels")
-                         : 1;
-  d.audio_sample_rate = hasProperty(desc, "audioSampleRate")
-                            ? checkedIntFromVal(desc["audioSampleRate"], "audioSampleRate")
-                            : 48000;
+  // The capture's format is a fact about the recording, so neither has a default.
+  d.audio_channels = requireIntProperty(desc, "audioChannels", "addLoopRecordingTakes");
+  d.audio_sample_rate = requireIntProperty(desc, "audioSampleRate", "addLoopRecordingTakes");
   const std::string partial_tail = stringProperty(desc, "partialTail", "keep");
   if (partial_tail == "drop") {
     d.flags = SONARE_PROJECT_LOOP_RECORDING_DROP_PARTIAL_TAIL;

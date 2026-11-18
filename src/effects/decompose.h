@@ -9,6 +9,11 @@
 
 namespace sonare {
 
+/// @brief Default multiplicative-update iteration count of @ref decompose.
+inline constexpr int kDecomposeDefaultIter = 50;
+/// @brief Default beta divergence of @ref decompose (2 = Frobenius).
+inline constexpr float kDecomposeDefaultBeta = 2.0f;
+
 /// @brief Output of @ref decompose: NMF components.
 struct DecomposeResult {
   std::vector<float> W;  ///< Component matrix [n_features x n_components] row-major.
@@ -41,8 +46,8 @@ struct DecomposeResult {
 ///        finiteness precondition lives here rather than in each binding so
 ///        every surface reports it identically.
 DecomposeResult decompose(const float* S, int n_features, int n_frames, int n_components,
-                          int n_iter = 100, const std::string& solver = "mu", float beta = 2.0f,
-                          const std::string& init = "random");
+                          int n_iter = kDecomposeDefaultIter, const std::string& solver = "mu",
+                          float beta = kDecomposeDefaultBeta, const std::string& init = "random");
 
 /// @brief Options for @ref decompose_stems.
 struct DecomposeStemsConfig {
@@ -148,6 +153,11 @@ DecomposeStemsLinkedResult decompose_stems_linked(
     const float* const* channels, std::size_t channel_count, std::size_t n, int sample_rate,
     const DecomposeStemsConfig& config = DecomposeStemsConfig());
 
+/// @brief Default neighbour count of @ref nn_filter.
+inline constexpr int kNnFilterDefaultK = 7;
+/// @brief Default time-exclusion half-width of @ref nn_filter.
+inline constexpr int kNnFilterDefaultWidth = 1;
+
 /// @brief Nearest-neighbour filter for spectrogram denoising.
 /// @details Mirrors `librosa.decompose.nn_filter`. For each frame, the k
 /// nearest neighbour frames (by cosine similarity, with frames within `width`
@@ -156,11 +166,12 @@ DecomposeStemsLinkedResult decompose_stems_linked(
 /// librosa, rather than silently disabling the time-exclusion band).
 /// @return Smoothed spectrogram [n_features x n_frames] row-major.
 /// @throw sonare::SonareException (InvalidParameter) on a null @p S, an
-///        unsupported aggregator, a negative @p width, or any non-finite
+///        unsupported aggregator, a non-positive @p k, a negative @p width, or any non-finite
 ///        element of @p S. Non-finite input is rejected rather than filtered
 ///        because a NaN vanishes in the aggregation and leaves an entirely
 ///        finite but silently altered result.
 std::vector<float> nn_filter(const float* S, int n_features, int n_frames,
-                             const std::string& aggregate = "mean", int k = 5, int width = 1);
+                             const std::string& aggregate = "mean", int k = kNnFilterDefaultK,
+                             int width = kNnFilterDefaultWidth);
 
 }  // namespace sonare

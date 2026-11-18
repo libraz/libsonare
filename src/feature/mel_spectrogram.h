@@ -15,6 +15,9 @@
 
 namespace sonare {
 
+/// @brief Default MFCC coefficient count of @ref MelSpectrogram::mfcc.
+inline constexpr int kMfccDefaultCount = 20;
+
 /// @brief Configuration for Mel spectrogram computation.
 struct MelConfig {
   // Mel filterbank settings
@@ -138,7 +141,7 @@ class MelSpectrogram {
   /// @param lifter Liftering coefficient (0 = no liftering)
   /// @return MFCC coefficients
   /// @details Applies DCT-II to log Mel spectrogram.
-  std::vector<float> mfcc(int n_mfcc = 13, float lifter = 0.0f) const;
+  std::vector<float> mfcc(int n_mfcc = kMfccDefaultCount, float lifter = 0.0f) const;
 
   /// @brief Computes delta (first derivative) of features.
   /// @param features Input features [n_features x n_frames]

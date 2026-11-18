@@ -977,8 +977,10 @@ Napi::Value SonareWrap::DetectChords(const Napi::CallbackInfo& info) {
     return env.Undefined();
   float threshold{};
   if (!OptionalFloatArg(env, info, 4, "threshold", 0.5f, &threshold)) return env.Undefined();
+  const sonare::ChordConfig chord_defaults;
   bool use_triads_only{};
-  if (!OptionalBoolArg(env, info, 5, "useTriadsOnly", false, &use_triads_only))
+  if (!OptionalBoolArg(env, info, 5, "useTriadsOnly", chord_defaults.use_triads_only,
+                       &use_triads_only))
     return env.Undefined();
   int n_fft{};
   if (!OptionalIntArg(env, info, 6, "nFft", 2048, &n_fft)) return env.Undefined();
@@ -987,7 +989,8 @@ Napi::Value SonareWrap::DetectChords(const Napi::CallbackInfo& info) {
   bool use_beat_sync{};
   if (!OptionalBoolArg(env, info, 8, "useBeatSync", true, &use_beat_sync)) return env.Undefined();
   bool use_hmm{};
-  if (!OptionalBoolArg(env, info, 9, "useHmm", false, &use_hmm)) return env.Undefined();
+  if (!OptionalBoolArg(env, info, 9, "useHmm", chord_defaults.use_hmm, &use_hmm))
+    return env.Undefined();
   int hmm_beam_width{};
   if (!OptionalIntArg(env, info, 10, "hmmBeamWidth", 24, &hmm_beam_width)) return env.Undefined();
   bool use_key_context{};
@@ -1003,7 +1006,9 @@ Napi::Value SonareWrap::DetectChords(const Napi::CallbackInfo& info) {
   if (!OptionalBoolArg(env, info, 14, "detectInversions", false, &detect_inversions))
     return env.Undefined();
   int chroma_method{};
-  if (!OptionalIntArg(env, info, 15, "chromaMethod", 0, &chroma_method)) return env.Undefined();
+  if (!OptionalIntArg(env, info, 15, "chromaMethod", static_cast<int>(chord_defaults.chroma_method),
+                      &chroma_method))
+    return env.Undefined();
   float tuning_cents{};
   if (!OptionalFloatArg(env, info, 16, "tuningCents", 0.0f, &tuning_cents)) return env.Undefined();
   bool tuning_auto{};
@@ -1069,8 +1074,10 @@ Napi::Value SonareWrap::FunctionalAnalysis(const Napi::CallbackInfo& info) {
     return env.Undefined();
   float threshold{};
   if (!OptionalFloatArg(env, info, 6, "threshold", 0.5f, &threshold)) return env.Undefined();
+  const sonare::ChordConfig chord_defaults;
   bool use_triads_only{};
-  if (!OptionalBoolArg(env, info, 7, "useTriadsOnly", false, &use_triads_only))
+  if (!OptionalBoolArg(env, info, 7, "useTriadsOnly", chord_defaults.use_triads_only,
+                       &use_triads_only))
     return env.Undefined();
   int n_fft{};
   if (!OptionalIntArg(env, info, 8, "nFft", 2048, &n_fft)) return env.Undefined();
@@ -1079,7 +1086,8 @@ Napi::Value SonareWrap::FunctionalAnalysis(const Napi::CallbackInfo& info) {
   bool use_beat_sync{};
   if (!OptionalBoolArg(env, info, 10, "useBeatSync", true, &use_beat_sync)) return env.Undefined();
   bool use_hmm{};
-  if (!OptionalBoolArg(env, info, 11, "useHmm", false, &use_hmm)) return env.Undefined();
+  if (!OptionalBoolArg(env, info, 11, "useHmm", chord_defaults.use_hmm, &use_hmm))
+    return env.Undefined();
   int hmm_beam_width{};
   if (!OptionalIntArg(env, info, 12, "hmmBeamWidth", 24, &hmm_beam_width)) return env.Undefined();
   bool use_key_context{};
@@ -1089,7 +1097,9 @@ Napi::Value SonareWrap::FunctionalAnalysis(const Napi::CallbackInfo& info) {
   if (!OptionalBoolArg(env, info, 14, "detectInversions", false, &detect_inversions))
     return env.Undefined();
   int chroma_method{};
-  if (!OptionalIntArg(env, info, 15, "chromaMethod", 0, &chroma_method)) return env.Undefined();
+  if (!OptionalIntArg(env, info, 15, "chromaMethod", static_cast<int>(chord_defaults.chroma_method),
+                      &chroma_method))
+    return env.Undefined();
   float tuning_cents{};
   if (!OptionalFloatArg(env, info, 16, "tuningCents", 0.0f, &tuning_cents)) return env.Undefined();
   bool tuning_auto{};

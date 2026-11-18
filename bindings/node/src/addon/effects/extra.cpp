@@ -10,6 +10,7 @@
 #include "editing/pitch_editor/note_editor.h"
 #include "editing/pitch_editor/pitch_corrector.h"
 #include "editing/voice_changer/voice_changer.h"
+#include "effects/decompose.h"
 #include "effects/hpss.h"
 #include "effects/normalize.h"
 #include "effects/pitch_shift.h"
@@ -239,9 +240,18 @@ Napi::Value SonareWrap::Decompose(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   int n_iter{};
-  if (!OptionalIntArg(env, info, 4, "nIter", 50, &n_iter)) return env.Undefined();
+  if (!OptionalIntArg(env, info, 4, "nIter", sonare::kDecomposeDefaultIter, &n_iter)) {
+    return env.Undefined();
+  }
+  // 0 is the C entry's spelling of "library default"; absence is this surface's.
+  if (n_iter < 1) {
+    Napi::RangeError::New(env, "nIter must be >= 1").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
   float beta{};
-  if (!OptionalFiniteFloatArg(env, info, 5, "beta", 2.0f, &beta)) return env.Undefined();
+  if (!OptionalFiniteFloatArg(env, info, 5, "beta", sonare::kDecomposeDefaultBeta, &beta)) {
+    return env.Undefined();
+  }
   // Optional 7th arg selects the initialiser ("random" | "nndsvd"). When given,
   // route through the with-init variant for the NNDSVD warm-start.
   std::string init;
@@ -381,9 +391,16 @@ Napi::Value SonareWrap::NnFilter(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   int k{};
-  if (!OptionalIntArg(env, info, 4, "k", 7, &k)) return env.Undefined();
+  if (!OptionalIntArg(env, info, 4, "k", sonare::kNnFilterDefaultK, &k)) return env.Undefined();
   int width{};
-  if (!OptionalIntArg(env, info, 5, "width", 1, &width)) return env.Undefined();
+  if (!OptionalIntArg(env, info, 5, "width", sonare::kNnFilterDefaultWidth, &width))
+    return env.Undefined();
+  // -1 is the C entry's spelling of "library default"; absence is this surface's.
+  if (k < 1 || width < 0) {
+    Napi::RangeError::New(env, k < 1 ? "k must be >= 1" : "width must be >= 0")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
   float* out = nullptr;
   size_t out_length = 0;
   SonareError err = sonare_nn_filter(arr.Data(), n_features, n_frames, aggregate.c_str(), k, width,

@@ -163,7 +163,9 @@ Napi::Value SonareWrap::Mfcc(const Napi::CallbackInfo& info) {
   int n_mels{};
   if (!OptionalIntArg(env, info, 4, "nMels", 128, &n_mels)) return env.Undefined();
   int n_mfcc{};
-  if (!OptionalIntArg(env, info, 5, "nMfcc", 20, &n_mfcc)) return env.Undefined();
+  if (!OptionalIntArg(env, info, 5, "nMfcc", sonare::kMfccDefaultCount, &n_mfcc)) {
+    return env.Undefined();
+  }
   float fmin{};
   if (!OptionalFloatArg(env, info, 6, "fmin", 0.0f, &fmin)) return env.Undefined();
   float fmax{};
@@ -618,24 +620,18 @@ Napi::Value SonareWrap::PitchYin(const Napi::CallbackInfo& info) {
   size_t length = typed.ElementLength();
   FrameAnalysisArgs args;
   if (!ReadFrameAnalysisArgs(env, info, &args, "frameLength")) return env.Undefined();
-  float fmin{};
-  if (!OptionalFloatArg(env, info, 4, "fmin", 65.0f, &fmin)) return env.Undefined();
-  float fmax{};
-  if (!OptionalFloatArg(env, info, 5, "fmax", 2093.0f, &fmax)) return env.Undefined();
-  float threshold{};
-  if (!OptionalFloatArg(env, info, 6, "threshold", 0.3f, &threshold)) return env.Undefined();
-  bool fill_na{};
-  if (!OptionalBoolArg(env, info, 7, "fillNa", false, &fill_na)) return env.Undefined();
-
-  sonare::validate_offline_audio_input(data, length, args.sample_rate);
-  sonare::Audio audio = sonare::Audio::from_buffer(data, length, args.sample_rate);
   sonare::PitchConfig config;
   config.frame_length = args.frame_length;
   config.hop_length = args.hop_length;
-  config.fmin = fmin;
-  config.fmax = fmax;
-  config.threshold = threshold;
-  config.fill_na = fill_na;
+  if (!OptionalFloatArg(env, info, 4, "fmin", config.fmin, &config.fmin) ||
+      !OptionalFloatArg(env, info, 5, "fmax", config.fmax, &config.fmax) ||
+      !OptionalFloatArg(env, info, 6, "threshold", config.threshold, &config.threshold) ||
+      !OptionalBoolArg(env, info, 7, "fillNa", config.fill_na, &config.fill_na)) {
+    return env.Undefined();
+  }
+
+  sonare::validate_offline_audio_input(data, length, args.sample_rate);
+  sonare::Audio audio = sonare::Audio::from_buffer(data, length, args.sample_rate);
 
   sonare::PitchResult result = sonare::yin_track(audio, config);
 
@@ -672,24 +668,18 @@ Napi::Value SonareWrap::PitchPyin(const Napi::CallbackInfo& info) {
   size_t length = typed.ElementLength();
   FrameAnalysisArgs args;
   if (!ReadFrameAnalysisArgs(env, info, &args, "frameLength")) return env.Undefined();
-  float fmin{};
-  if (!OptionalFloatArg(env, info, 4, "fmin", 65.0f, &fmin)) return env.Undefined();
-  float fmax{};
-  if (!OptionalFloatArg(env, info, 5, "fmax", 2093.0f, &fmax)) return env.Undefined();
-  float threshold{};
-  if (!OptionalFloatArg(env, info, 6, "threshold", 0.3f, &threshold)) return env.Undefined();
-  bool fill_na{};
-  if (!OptionalBoolArg(env, info, 7, "fillNa", false, &fill_na)) return env.Undefined();
-
-  sonare::validate_offline_audio_input(data, length, args.sample_rate);
-  sonare::Audio audio = sonare::Audio::from_buffer(data, length, args.sample_rate);
   sonare::PitchConfig config;
   config.frame_length = args.frame_length;
   config.hop_length = args.hop_length;
-  config.fmin = fmin;
-  config.fmax = fmax;
-  config.threshold = threshold;
-  config.fill_na = fill_na;
+  if (!OptionalFloatArg(env, info, 4, "fmin", config.fmin, &config.fmin) ||
+      !OptionalFloatArg(env, info, 5, "fmax", config.fmax, &config.fmax) ||
+      !OptionalFloatArg(env, info, 6, "threshold", config.threshold, &config.threshold) ||
+      !OptionalBoolArg(env, info, 7, "fillNa", config.fill_na, &config.fill_na)) {
+    return env.Undefined();
+  }
+
+  sonare::validate_offline_audio_input(data, length, args.sample_rate);
+  sonare::Audio audio = sonare::Audio::from_buffer(data, length, args.sample_rate);
 
   sonare::PitchResult result = sonare::pyin(audio, config);
 

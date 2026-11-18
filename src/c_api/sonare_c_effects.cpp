@@ -328,11 +328,10 @@ SonareError sonare_decompose_with_init(const float* s, int n_features, int n_fra
   if (!s || n_features <= 0 || n_frames <= 0 || n_components <= 0) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  // n_iter==0 would skip all multiplicative-update iterations and return the
-  // raw (random or NNDSVD) init matrices: a plausible-shaped but meaningless
-  // factorisation. Reject it at the boundary so callers cannot get garbage
-  // that reports SONARE_OK.
-  if (n_iter <= 0) return SONARE_ERROR_INVALID_PARAMETER;
+  // 0 selects the library default; the core would read it as "no iterations"
+  // and return the raw init matrices, so it never reaches the core as 0.
+  if (n_iter < 0) return SONARE_ERROR_INVALID_PARAMETER;
+  if (n_iter == 0) n_iter = kDecomposeDefaultIter;
   // Reject dims whose product would overflow size_t before the core indexes
   // n_features * n_frames elements of the caller-owned buffer.
   if (static_cast<size_t>(n_features) > SIZE_MAX / static_cast<size_t>(n_frames)) {
@@ -371,6 +370,9 @@ SonareError sonare_nn_filter(const float* s, int n_features, int n_frames, const
   }
   // Non-finite elements of `s` are rejected by the core (nn_filter throws
   // InvalidParameter, which SONARE_C_CATCH maps to SONARE_ERROR_INVALID_PARAMETER).
+
+  if (k == -1) k = kNnFilterDefaultK;
+  if (width == -1) width = kNnFilterDefaultWidth;
 
   SONARE_C_TRY
   std::string agg = aggregate ? aggregate : "mean";

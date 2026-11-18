@@ -404,6 +404,36 @@ TEST_CASE("sonare_decompose", "[c_api][effects]") {
 }
 
 #if defined(SONARE_WITH_MIXING)
+TEST_CASE("sonare_decompose reads n_iter 0 as the library default", "[c_api][effects]") {
+  const int n_features = 16;
+  const int n_frames = 24;
+  const int n_components = 4;
+  auto s = generate_spectrogram(n_features, n_frames);
+  auto run = [&](int n_iter, std::vector<float>* w_out) {
+    float* w = nullptr;
+    float* h = nullptr;
+    size_t w_len = 0;
+    size_t h_len = 0;
+    const SonareError err = sonare_decompose(s.data(), n_features, n_frames, n_components, n_iter,
+                                             2.0f, &w, &w_len, &h, &h_len);
+    if (err == SONARE_OK) w_out->assign(w, w + w_len);
+    sonare_free_floats(w);
+    sonare_free_floats(h);
+    return err;
+  };
+  std::vector<float> defaulted;
+  std::vector<float> explicit_iter;
+  std::vector<float> other_iter;
+  REQUIRE(run(0, &defaulted) == SONARE_OK);
+  REQUIRE(run(50, &explicit_iter) == SONARE_OK);
+  REQUIRE(run(20, &other_iter) == SONARE_OK);
+  CHECK(defaulted == explicit_iter);
+  CHECK(defaulted != other_iter);
+
+  std::vector<float> unused;
+  CHECK(run(-1, &unused) == SONARE_ERROR_INVALID_PARAMETER);
+}
+
 TEST_CASE("sonare_decompose stages both factors before publication on allocation failure",
           "[c_api][effects][allocation]") {
   constexpr int n_features = 16;
@@ -528,6 +558,35 @@ TEST_CASE("sonare_nn_filter", "[c_api][effects]") {
       REQUIRE(out_len == 0);
     }
   }
+}
+
+TEST_CASE("sonare_nn_filter reads -1 as the library default and refuses other non-quantities",
+          "[c_api][effects]") {
+  const int n_features = 16;
+  const int n_frames = 24;
+  auto s = generate_spectrogram(n_features, n_frames);
+  auto run = [&](int k, int width, std::vector<float>* result) {
+    float* out = nullptr;
+    size_t out_len = 0;
+    const SonareError err =
+        sonare_nn_filter(s.data(), n_features, n_frames, "mean", k, width, &out, &out_len);
+    if (err == SONARE_OK) result->assign(out, out + out_len);
+    sonare_free_floats(out);
+    return err;
+  };
+  std::vector<float> defaulted;
+  std::vector<float> explicit_values;
+  std::vector<float> other_k;
+  REQUIRE(run(-1, -1, &defaulted) == SONARE_OK);
+  REQUIRE(run(7, 1, &explicit_values) == SONARE_OK);
+  REQUIRE(run(3, 1, &other_k) == SONARE_OK);
+  CHECK(defaulted == explicit_values);
+  CHECK(defaulted != other_k);
+
+  std::vector<float> unused;
+  CHECK(run(0, 1, &unused) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(run(-2, 1, &unused) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(run(7, -2, &unused) == SONARE_ERROR_INVALID_PARAMETER);
 }
 
 TEST_CASE("sonare_remix", "[c_api][effects]") {
