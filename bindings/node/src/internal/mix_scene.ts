@@ -1,29 +1,20 @@
 import type {
-  MixSceneBus,
   MixSceneBusInput,
   MixSceneDocument,
   MixSceneDocumentInput,
-  MixSceneSend,
   MixSceneSendInput,
-  MixSceneStrip,
   MixSceneStripInput,
   SendTiming,
 } from '../types_mixing.js';
 
-// The native scene document still spells these as ints and 'pre' / 'post'; the public document uses tokens.
+// The native scene document reads and writes the public tokens; these helpers refuse a wrong type or an unknown token
+// with TypeError / RangeError before the document reaches native, which would refuse it as an invalid format.
 
 /** Pan-mode tokens, indexed by the native ordinal. */
 const PAN_MODES: readonly string[] = ['balance', 'stereoPan', 'dualPan'];
 /** Pan-law tokens, indexed by the native ordinal. */
 const PAN_LAWS: readonly string[] = ['const3Db', 'const4.5Db', 'const6Db', 'linear0Db'];
-const SEND_TIMING_TO_NATIVE: Readonly<Record<SendTiming, string>> = {
-  preFader: 'pre',
-  postFader: 'post',
-};
-const SEND_TIMING_FROM_NATIVE: Readonly<Record<string, SendTiming>> = {
-  pre: 'preFader',
-  post: 'postFader',
-};
+const SEND_TIMINGS: readonly SendTiming[] = ['preFader', 'postFader'];
 
 type Loose = Record<string, unknown>;
 
@@ -48,21 +39,6 @@ export function panModeToNative(fnName: string, value: unknown, argName = 'panMo
   return tokenOrdinal(fnName, value, argName, PAN_MODES);
 }
 
-/** A pan-law token as the native ordinal; a non-string is a `TypeError`, an unknown token a `RangeError`. */
-export function panLawToNative(fnName: string, value: unknown, argName = 'panLaw'): number {
-  return tokenOrdinal(fnName, value, argName, PAN_LAWS);
-}
-
-/** A send-timing token as the native scene spelling; a non-string is a `TypeError`, an unknown token a `RangeError`. */
-export function sendTimingToNative(fnName: string, value: unknown, argName = 'timing'): string {
-  tokenOrdinal(fnName, value, argName, Object.keys(SEND_TIMING_TO_NATIVE));
-  return SEND_TIMING_TO_NATIVE[value as SendTiming];
-}
-
-function tokenFromNative(tokens: readonly string[], value: unknown): unknown {
-  return tokens[value as number] ?? value;
-}
-
 function sendToNative(fnName: string, send: MixSceneSendInput, path: string): Loose {
   if (send === null || typeof send !== 'object') {
     throw new TypeError(`${fnName}: ${path} must be an object`);
@@ -70,15 +46,16 @@ function sendToNative(fnName: string, send: MixSceneSendInput, path: string): Lo
   if (send.timing === undefined || send.timing === null) {
     return { ...send };
   }
-  return { ...send, timing: sendTimingToNative(fnName, send.timing, `${path}.timing`) };
+  tokenOrdinal(fnName, send.timing, `${path}.timing`, SEND_TIMINGS);
+  return { ...send };
 }
 
 function panFieldsToNative(fnName: string, out: Loose, path: string): void {
   if (out.panMode !== undefined && out.panMode !== null) {
-    out.panMode = panModeToNative(fnName, out.panMode, `${path}.panMode`);
+    tokenOrdinal(fnName, out.panMode, `${path}.panMode`, PAN_MODES);
   }
   if (out.panLaw !== undefined && out.panLaw !== null) {
-    out.panLaw = panLawToNative(fnName, out.panLaw, `${path}.panLaw`);
+    tokenOrdinal(fnName, out.panLaw, `${path}.panLaw`, PAN_LAWS);
   }
 }
 
@@ -146,7 +123,7 @@ export function mixSceneBusToNative(fnName: string, bus: MixSceneBusInput, path 
   return busToNative(fnName, bus, path);
 }
 
-/** The native scene document for a public one: tokens become ordinals and `'pre'` / `'post'`. */
+/** The native scene document for a public one, with every token checked. */
 export function mixSceneToNative(
   fnName: string,
   document: MixSceneDocument | MixSceneDocumentInput,
@@ -163,51 +140,7 @@ export function mixSceneToNative(
   return out;
 }
 
-function sendFromNative(send: Loose): MixSceneSend {
-  return {
-    ...send,
-    timing: SEND_TIMING_FROM_NATIVE[send.timing as string] ?? send.timing,
-  } as unknown as MixSceneSend;
-}
-
-function stripFromNative(strip: Loose): MixSceneStrip {
-  const out: Loose = { ...strip };
-  if (out.panMode !== undefined) {
-    out.panMode = tokenFromNative(PAN_MODES, out.panMode);
-  }
-  if (out.panLaw !== undefined) {
-    out.panLaw = tokenFromNative(PAN_LAWS, out.panLaw);
-  }
-  if (Array.isArray(out.sends)) {
-    out.sends = (out.sends as Loose[]).map(sendFromNative);
-  }
-  return out as unknown as MixSceneStrip;
-}
-
-function busFromNative(bus: Loose): MixSceneBus {
-  const out: Loose = { ...bus };
-  if (out.panMode !== undefined) {
-    out.panMode = tokenFromNative(PAN_MODES, out.panMode);
-  }
-  if (out.panLaw !== undefined) {
-    out.panLaw = tokenFromNative(PAN_LAWS, out.panLaw);
-  }
-  return out as unknown as MixSceneBus;
-}
-
-/** The public scene document for a parsed native one: ordinals and `'pre'` / `'post'` become tokens. */
-export function mixSceneFromNative(document: unknown): MixSceneDocument {
-  const out: Loose = { ...(document as Loose) };
-  if (Array.isArray(out.strips)) {
-    out.strips = (out.strips as Loose[]).map(stripFromNative);
-  }
-  if (Array.isArray(out.buses)) {
-    out.buses = (out.buses as Loose[]).map(busFromNative);
-  }
-  return out as unknown as MixSceneDocument;
-}
-
-/** A public scene JSON string as the native document: tokens become ordinals; text that does not parse is left for native to refuse. */
+/** A public scene JSON string with every token checked; text that does not parse is left for native to refuse. */
 export function mixSceneJsonToNative(fnName: string, json: string): string {
   let parsed: unknown;
   try {
@@ -219,9 +152,4 @@ export function mixSceneJsonToNative(fnName: string, json: string): string {
     return json;
   }
   return JSON.stringify(mixSceneToNative(fnName, parsed as MixSceneDocumentInput));
-}
-
-/** A native scene JSON string as the public document text: ordinals become tokens. */
-export function mixSceneJsonFromNative(json: string): string {
-  return JSON.stringify(mixSceneFromNative(JSON.parse(json)));
 }

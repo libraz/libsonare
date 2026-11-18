@@ -1,4 +1,4 @@
-import { mixSceneFromNative, panModeToNative } from './internal/mix_scene.js';
+import { panModeToNative } from './internal/mix_scene.js';
 import { addon } from './native.js';
 import type {
   MixMeterSnapshot,
@@ -37,7 +37,7 @@ export function mixingScenePreset(name: MixScenePreset): MixSceneDocument {
   if (!names.includes(name)) {
     throw new RangeError(`mixingScenePreset: name must be one of ${names.join(', ')}`);
   }
-  return mixSceneFromNative(JSON.parse(addon.mixingScenePresetJson(name)));
+  return JSON.parse(addon.mixingScenePresetJson(name)) as MixSceneDocument;
 }
 
 /** One strip of {@link mixStereo}: a stereo pair and its mixer settings. */

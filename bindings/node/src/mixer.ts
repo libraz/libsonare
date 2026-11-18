@@ -1,8 +1,4 @@
-import {
-  assertStripMetering,
-  mixSceneJsonFromNative,
-  mixSceneJsonToNative,
-} from './internal/mix_scene.js';
+import { assertStripMetering, mixSceneJsonToNative } from './internal/mix_scene.js';
 import { addon } from './native.js';
 import type {
   AutomationCurve,
@@ -854,7 +850,7 @@ export class Mixer {
 
   /** Serialize the current scene (strips, buses, sends, connections) to JSON. */
   toJson(): string {
-    return mixSceneJsonFromNative(this.native.toSceneJson());
+    return this.native.toSceneJson();
   }
 
   /** Release the underlying native mixer. Idempotent. */
