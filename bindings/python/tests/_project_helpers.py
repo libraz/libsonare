@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import math
 
 import numpy as np
@@ -51,3 +52,18 @@ def _build_project() -> tuple[Project, int, int, int]:
         [(0.0, 0x20903C40, 0), (1.0, 0x20803C00, 0)],
     )
     return project, audio_clip, midi_track, midi_clip
+
+
+def dangling_source_json() -> str:
+    """A current-version project document whose only clip names a source it does not hold."""
+    project = Project()
+    try:
+        track = project.add_track("audio", "audio")
+        project.add_clip(
+            track, 0.0, 1.0, audio=[0.1, 0.2], audio_channels=1, audio_sample_rate=48000
+        )
+        document = json.loads(project.to_json())
+    finally:
+        project.close()
+    document["clips"][0]["source_id"] = 99
+    return json.dumps(document)

@@ -129,13 +129,7 @@ def _part_rig_inserts_arg(
         insert = _mapping_keys(raw_insert, ("processor", "params"), f"inserts[{i}]")
         if "processor" not in insert:
             raise SonareValueError(f"inserts[{i}] needs a 'processor' key")
-        params = insert.get("params", {})
-        entries.append(
-            {
-                "processor": insert["processor"],
-                "params": params if isinstance(params, str) else json.dumps(params),
-            }
-        )
+        entries.append({"processor": insert["processor"], "params": insert.get("params", {})})
     return _utf8_arg(json.dumps(entries), "entries")
 
 

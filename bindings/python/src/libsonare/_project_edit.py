@@ -723,7 +723,7 @@ class _ProjectEditMixin:
 
         ``mode`` is ``"bank"`` (the instrument's own rig), ``"none"`` (dry) or
         ``"chain"``. A chain takes ``inserts``: 1-8 mappings of
-        ``{"processor": name, "params": dict | JSON-object string}``. ``part`` is
+        ``{"processor": name, "params": dict}``. ``part`` is
         0..15, or :data:`PART_RIG_ALL_PARTS` for the destination default; a
         ``"bank"`` entry is kept so it can override that default.
 
@@ -757,8 +757,8 @@ class _ProjectEditMixin:
         """Read back :meth:`set_part_rig` as a :class:`PartRigEntry`, or ``None`` if unset.
 
         ``mode`` is the :data:`PartRigMode` token. ``inserts`` is a tuple of
-        ``{"processor", "params"}`` dicts with ``params`` decoded to a dict for a
-        ``"chain"`` entry and ``None`` otherwise.
+        ``{"processor", "params"}`` dicts for a ``"chain"`` entry
+        (``params`` is a dict) and ``None`` otherwise.
         """
         lib = _get_lib()
         _require_export(
@@ -790,16 +790,11 @@ class _ProjectEditMixin:
         mode_out = _part_rig_mode_name(int(mode.value))
         if raw is None:
             return PartRigEntry(mode=mode_out, inserts=None)
-        inserts = []
-        for entry in json.loads(raw.decode("utf-8")):
-            params = entry.get("params", "{}")
-            inserts.append(
-                {
-                    "processor": entry["processor"],
-                    "params": json.loads(params) if isinstance(params, str) else params,
-                }
-            )
-        return PartRigEntry(mode=mode_out, inserts=tuple(inserts))
+        inserts = tuple(
+            {"processor": entry["processor"], "params": entry["params"]}
+            for entry in json.loads(raw.decode("utf-8"))
+        )
+        return PartRigEntry(mode=mode_out, inserts=inserts)
 
     def clear_part_rig(self, destination_id: int, part: int) -> None:
         """Remove one part-rig entry via an undoable edit (absent entries are a no-op)."""

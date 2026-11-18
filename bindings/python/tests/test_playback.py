@@ -176,6 +176,23 @@ def test_set_config_accepts_a_json_string() -> None:
         renderer.set_config('{"target": {"kind": "speakers", "layout": "5.1"}}')
 
 
+@pytest.mark.parametrize(
+    ("earlier", "current"),
+    [
+        ("living_room", "livingRoom"),
+        ("home_theater", "homeTheater"),
+        ("screening_room", "screeningRoom"),
+    ],
+)
+def test_room_preset_earlier_spellings_are_refused(earlier: str, current: str) -> None:
+    config = {"target": {"kind": "headphones"}, "room": {"preset": earlier}}
+    with raises_coded(int(ErrorCode.INVALID_FORMAT), match=current):
+        PlaybackRenderer(config, sample_rate=SR, max_block_size=BLOCK)
+    config["room"] = {"preset": current}
+    with PlaybackRenderer(config, sample_rate=SR, max_block_size=BLOCK) as renderer:
+        assert renderer.config()["room"]["preset"] == current
+
+
 def test_set_head_orientation_validates_each_axis_and_float32_range() -> None:
     float32_max = 3.4028234663852886e38
     float32_overflow = float32_max * 2.0

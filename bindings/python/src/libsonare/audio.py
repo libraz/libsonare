@@ -9,11 +9,11 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
+from . import _ffi_types_core as _ffi_core
 from ._analysis_detection import _DEFAULT_BPM_MAX, _DEFAULT_BPM_MIN
 from ._effects_repair_common import _linked_channel_planes
 from ._errors import SonareValueError, _not_supported, _require_open, _unknown_error
 from ._features_metering import _dynamic_range_args, _oversample_factor, _spectrum_args
-from ._ffi_types_core import SonareDownmixOptions as _SonareDownmixOptions
 from ._runtime import (
     _channel_layout_value,
     _check,
@@ -319,7 +319,7 @@ def downmix(
     if any(int(plane.shape[0]) != frame_count for plane in planes):
         raise SonareValueError("downmix: channels must all be the same length")
     packed = np.ascontiguousarray(np.stack(planes), dtype=np.float32)
-    fold = _SonareDownmixOptions()
+    fold = _ffi_core.SonareDownmixOptions()
     lib.sonare_downmix_options_init(ctypes.byref(fold))
     fold.include_lfe = 1 if include_lfe else 0
     fold.normalize = 1 if normalize else 0
@@ -1172,7 +1172,6 @@ class Audio:
         f0_min_hz: float = 65.0,
         f0_max_hz: float = 2093.0,
         threshold: float = 0.1,
-        fill_na: bool = False,
     ) -> PitchResult:
         """Estimate fundamental frequency using the YIN algorithm."""
         return _pitch_yin(
@@ -1183,7 +1182,6 @@ class Audio:
             f0_min_hz,
             f0_max_hz,
             threshold,
-            fill_na,
         )
 
     def pitch_pyin(

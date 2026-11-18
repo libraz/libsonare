@@ -9,9 +9,9 @@ from libsonare import EngineClip, RealtimeEngine, SonareError
 
 _STRIP_JSON = (
     '{"version":1,"strips":[{"id":"track-10","inserts":['
-    '{"slot":"pre","processor":"eq.parametric","params":"{'
-    '\\"band0.type\\":1,\\"band0.frequencyHz\\":1000,'
-    '\\"band0.gainDb\\":-3,\\"band0.enabled\\":1}"}]}],'
+    '{"slot":"pre","processor":"eq.parametric","params":{'
+    '"band0.type":1,"band0.frequencyHz":1000,'
+    '"band0.gainDb":-3,"band0.enabled":1}}]}],'
     '"buses":[],"connections":[]}'
 )
 

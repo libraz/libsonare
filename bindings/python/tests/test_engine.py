@@ -238,8 +238,8 @@ def test_engine_resolve_and_set_bus_master_insert_automation_ids() -> None:
             1,
             '{"version":1,"strips":[],"buses":[{"id":"1","inserts":['
             '{"slot":"pre","processor":"eq.parametric",'
-            '"params":"{\\"band0.type\\":1,\\"band0.frequencyHz\\":1000,'
-            '\\"band0.gainDb\\":0,\\"band0.enabled\\":1}"}]}],"connections":[]}',
+            '"params":{"band0.type":1,"band0.frequencyHz":1000,'
+            '"band0.gainDb":0,"band0.enabled":1}}]}],"connections":[]}',
         )
 
         # Resolving an insert parameter yields a reserved automation id
@@ -265,7 +265,7 @@ def test_engine_resolve_and_set_bus_master_insert_automation_ids() -> None:
         engine.set_master_strip_json(
             '{"version":1,"strips":[{"id":"master","inserts":['
             '{"slot":"pre","processor":"dynamics.compressor",'
-            '"params":"{\\"thresholdDb\\":-3,\\"ratio\\":4}"}]}],'
+            '"params":{"thresholdDb":-3,"ratio":4}}]}],'
             '"buses":[],"connections":[]}'
         )
         master_param = engine.resolve_master_insert_automation_id(0, "thresholdDb")
@@ -326,8 +326,8 @@ def test_engine_apply_restore_clear_insert_param_by_name_now() -> None:
         engine.set_track_strip_json(
             10,
             '{"version":1,"strips":[{"id":"track-10","inserts":[{"slot":"pre",'
-            '"processor":"eq.parametric","params":"{\\"band0.type\\":1,'
-            '\\"band0.frequencyHz\\":1000,\\"band0.gainDb\\":0,\\"band0.enabled\\":1}"}]}],'
+            '"processor":"eq.parametric","params":{"band0.type":1,'
+            '"band0.frequencyHz":1000,"band0.gainDb":0,"band0.enabled":1}}]}],'
             '"buses":[],"connections":[]}',
         )
         engine.set_track_buses([{"bus_id": 1, "gain_db": 0.0}])
@@ -335,13 +335,13 @@ def test_engine_apply_restore_clear_insert_param_by_name_now() -> None:
             1,
             '{"version":1,"strips":[],"buses":[{"id":"1","inserts":['
             '{"slot":"pre","processor":"eq.parametric",'
-            '"params":"{\\"band0.type\\":1,\\"band0.frequencyHz\\":1000,'
-            '\\"band0.gainDb\\":0,\\"band0.enabled\\":1}"}]}],"connections":[]}',
+            '"params":{"band0.type":1,"band0.frequencyHz":1000,'
+            '"band0.gainDb":0,"band0.enabled":1}}]}],"connections":[]}',
         )
         engine.set_master_strip_json(
             '{"version":1,"strips":[{"id":"master","inserts":['
             '{"slot":"pre","processor":"dynamics.compressor",'
-            '"params":"{\\"thresholdDb\\":-3,\\"ratio\\":4}"}]}],'
+            '"params":{"thresholdDb":-3,"ratio":4}}]}],'
             '"buses":[],"connections":[]}'
         )
 

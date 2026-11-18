@@ -468,16 +468,6 @@ class CapabilityCatalogChainList:
 
 
 @dataclass(frozen=True)
-class CapabilityCatalogChainAlias:
-    """The other spellings of a canonical chain key; ``<i>`` stands for a list index."""
-
-    key: str
-    """Canonical chain key."""
-    aliases: tuple[str, ...]
-    """Other accepted spellings."""
-
-
-@dataclass(frozen=True)
 class CapabilityCatalogChain:
     """How each flat mastering chain key is described.
 
@@ -491,8 +481,6 @@ class CapabilityCatalogChain:
     """Indexed chain lists."""
     params: tuple[MasteringInsertParamInfo, ...]
     """Chain-only keys."""
-    aliases: tuple[CapabilityCatalogChainAlias, ...]
-    """Alternative spellings of chain keys."""
 
 
 @dataclass(frozen=True)

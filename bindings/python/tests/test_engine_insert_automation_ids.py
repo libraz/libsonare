@@ -9,7 +9,7 @@ from libsonare import RealtimeEngine, SonareError
 
 def _scene(kind: str, strip_id: str, processors: list[str]) -> str:
     inserts = [
-        {"slot": "pre" if index < 32 else "post", "processor": processor, "params": "{}"}
+        {"slot": "pre" if index < 32 else "post", "processor": processor, "params": {}}
         for index, processor in enumerate(processors)
     ]
     strip = {"id": strip_id, "inserts": inserts}

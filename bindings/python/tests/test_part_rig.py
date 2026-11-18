@@ -19,7 +19,7 @@ from libsonare import (
     SonareValueError,
 )
 
-from ._helpers import LIB_AVAILABLE
+from ._helpers import LIB_AVAILABLE, raises_coded
 
 pytestmark = pytest.mark.skipif(not LIB_AVAILABLE, reason="libsonare shared library not available")
 
@@ -70,15 +70,16 @@ def test_chain_round_trip():
         assert inserts[0]["params"] == {}
 
 
-def test_params_accepts_json_string():
+def test_params_json_string_is_refused():
     with _project() as project:
-        project.set_part_rig(
-            DESTINATION,
-            1,
-            mode="chain",
-            inserts=[{"processor": "saturation.softClipper", "params": "{}"}],
-        )
-        assert project.part_rig(DESTINATION, 1).mode == "chain"
+        with raises_coded(int(ErrorCode.INVALID_FORMAT), match="params"):
+            project.set_part_rig(
+                DESTINATION,
+                1,
+                mode="chain",
+                inserts=[{"processor": "saturation.softClipper", "params": "{}"}],
+            )
+        assert project.part_rig(DESTINATION, 1) is None
 
 
 def test_undo_restores():

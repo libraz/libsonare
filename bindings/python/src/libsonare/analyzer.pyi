@@ -229,7 +229,6 @@ SoloProcessor: TypeAlias = Literal[
     "effects.modulation.rotary",
     "effects.modulation.wah",
     "effects.reverb.convolution",
-    "effects.reverb.dattorro",
     "effects.reverb.fdn",
     "effects.reverb.plate",
     "effects.reverb.room",
@@ -1859,7 +1858,6 @@ def pitch_yin(
     f0_min_hz: float = 65.0,
     f0_max_hz: float = 2093.0,
     threshold: float = 0.1,
-    fill_na: bool = False,
 ) -> PitchResult: ...
 def pitch_pyin(
     samples: FloatSamples,

@@ -238,7 +238,6 @@ def pitch_yin(
     f0_min_hz: float = 65.0,
     f0_max_hz: float = 2093.0,
     threshold: float = 0.1,
-    fill_na: bool = False,
 ) -> PitchResult:
     """Estimate fundamental frequency using the YIN algorithm.
 
@@ -250,12 +249,11 @@ def pitch_yin(
         f0_min_hz: Lowest F0 searched, in Hz (default 65.0).
         f0_max_hz: Highest F0 searched, in Hz (default 2093.0).
         threshold: YIN threshold (default 0.1).
-        fill_na: Retained for API compatibility. YIN always returns a finite
-            estimate for each complete frame, as librosa.yin does; use
-            ``voiced_flag`` to distinguish threshold crossings.
 
     Returns:
-        PitchResult with f0, voiced probabilities, and statistics.
+        PitchResult with f0, voiced probabilities, and statistics. Every
+        complete frame carries a finite f0 estimate, as librosa.yin does;
+        ``voiced_flag`` tells the threshold crossings apart.
     """
     lib = _get_lib()
     sample_buf = _validate_samples("pitch_yin", samples)
@@ -270,7 +268,8 @@ def pitch_yin(
         _to_c_float(f0_min_hz, "f0_min_hz"),
         _to_c_float(f0_max_hz, "f0_max_hz"),
         _to_c_float(threshold, "threshold"),
-        ctypes.c_int(1 if fill_na else 0),
+        # The C slot is unread on the YIN path.
+        ctypes.c_int(0),
         ctypes.byref(out),
     )
     _check(rc)

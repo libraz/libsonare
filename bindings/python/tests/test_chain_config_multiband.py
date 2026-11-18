@@ -84,7 +84,7 @@ def test_enum_names_resolve_on_nested_and_band_paths() -> None:
         == _flatten_chain_config(TYPED)[f"{MB}.crossover.slope"]
     )
     detector = _flatten_chain_config(TYPED)[f"{MB}.bands.2.detector"]
-    assert detector == _enum_value(None, f"{MB}.band2.detector", "logRms")
+    assert detector == _enum_value(None, f"{MB}.bands.2.detector", "logRms")
     assert detector == _enum_value(None, "dynamics.compressor.detector", "logRms")
 
 
@@ -113,7 +113,7 @@ def test_typed_config_changes_the_render() -> None:
     """The typed bands are read: a different band count renders differently."""
     three = {
         "dynamics": {
-            "multibandComp": {"enabled": True, "lowCutoffHz": 200.0, "highCutoffHz": 5000.0}
+            "multibandComp": {"enabled": True, "crossover": {"cutoffsHz": [200.0, 5000.0]}}
         }
     }
     assert not np.array_equal(
@@ -212,17 +212,20 @@ def test_v2_document_nests_and_round_trips() -> None:
     assert _flatten_chain_config(config)[f"{MB}.crossover.cutoffsHz.2"] == 5000.0
 
 
-def test_v1_representable_config_keeps_the_shorthand() -> None:
-    """A suggestion that fits the three-band shorthand is not rewritten into lists."""
-    from libsonare import mastering_assistant_suggest_chain
-
-    chain = mastering_assistant_suggest_chain(LEFT, SR)
-    multiband = chain["dynamics"]["multibandComp"]
-    assert "bands" not in multiband and "crossover" not in multiband
-    document = json.dumps({"version": 1, "params": {f"{MB}.lowCutoffHz": 200.0}})
-    assert _chain_config_from_document(document) == {
-        "dynamics": {"multibandComp": {"lowCutoffHz": 200.0}}
-    }
+@pytest.mark.parametrize(
+    ("config", "current"),
+    [
+        ({"lowCutoffHz": 200.0}, "cutoff0Hz"),
+        ({"highCutoffHz": 5000.0}, "cutoff1Hz"),
+        ({"band2": {"detector": "rms"}}, "bands.2.detector"),
+    ],
+)
+def test_multiband_shorthand_keys_are_refused_naming_the_current_key(
+    config: dict, current: str
+) -> None:
+    """The three-band shorthand is gone; the refusal names the list spelling."""
+    with pytest.raises(SonareValueError, match=current.replace(".", r"\.")):
+        mastering_chain(LEFT, SR, {"dynamics": {"multibandComp": config}})
 
 
 def test_document_refuses_a_non_scalar_leaf_by_name() -> None:

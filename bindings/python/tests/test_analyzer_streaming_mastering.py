@@ -95,6 +95,25 @@ def test_streaming_mastering_chain_flushes_delayed_output() -> None:
         assert chain.flush_mono().size == 0
 
 
+@pytest.mark.parametrize(
+    ("band", "current"),
+    [
+        ({"type": "Peak", "enabled": True}, "peak"),
+        ({"type": "AllPass", "enabled": True}, "allPass"),
+        ({"type": "peak", "lookaheadMs": 1.0, "enabled": True}, "detectorDelayMs"),
+    ],
+)
+def test_streaming_equalizer_refuses_earlier_band_spellings(band: dict, current: str) -> None:
+    """Band types are lowerCamel and ``lookaheadMs`` is gone; the refusal names what is accepted."""
+    from libsonare import ErrorCode, StreamingEqualizer
+
+    with (
+        StreamingEqualizer(sample_rate=44100, max_block_size=256) as eq,
+        raises_coded(int(ErrorCode.INVALID_FORMAT), match=current),
+    ):
+        eq.set_band(0, band)
+
+
 def test_streaming_mastering_chain_preserves_ndarray_input() -> None:
     """process_* must not overwrite a float32 ndarray input (non-destructive)."""
     import numpy as np
@@ -122,7 +141,7 @@ def test_streaming_equalizer_preserves_ndarray_input() -> None:
     with StreamingEqualizer(sample_rate=44100, max_block_size=256) as eq:
         eq.set_band(
             0,
-            {"type": "Peak", "frequencyHz": 1000.0, "gainDb": 6.0, "q": 1.0, "enabled": True},
+            {"type": "peak", "frequencyHz": 1000.0, "gainDb": 6.0, "q": 1.0, "enabled": True},
         )
         block = np.full(256, 0.25, dtype=np.float32)
         original = block.copy()
@@ -158,7 +177,7 @@ def test_streaming_equalizer_processes_blocks_and_exposes_spectrum() -> None:
         eq.set_band(
             0,
             {
-                "type": "Peak",
+                "type": "peak",
                 "frequencyHz": 1000.0,
                 "gainDb": 6.0,
                 "q": 1.0,
@@ -265,7 +284,7 @@ def test_streaming_equalizer_magnitude_response_follows_a_peak_band() -> None:
     with StreamingEqualizer(sample_rate=48000, max_block_size=256) as eq:
         eq.set_band(
             0,
-            {"type": "Peak", "frequencyHz": 1000.0, "gainDb": 6.0, "q": 1.0, "enabled": True},
+            {"type": "peak", "frequencyHz": 1000.0, "gainDb": 6.0, "q": 1.0, "enabled": True},
         )
         centre, low, high = eq.magnitude_response([1000.0, 40.0, 16000.0])
         assert 5.5 < centre < 6.5
@@ -293,7 +312,7 @@ def test_streaming_equalizer_magnitude_response_respects_band_placement() -> Non
         eq.set_band(
             0,
             {
-                "type": "Peak",
+                "type": "peak",
                 "frequencyHz": 1000.0,
                 "gainDb": 6.0,
                 "q": 1.0,
@@ -308,11 +327,11 @@ def test_streaming_equalizer_magnitude_response_respects_band_placement() -> Non
 
 
 def test_streaming_equalizer_magnitude_response_flat_for_all_pass_band() -> None:
-    """An AllPass band rotates phase only, so it moves nothing on the magnitude curve."""
+    """An allPass band rotates phase only, so it moves nothing on the magnitude curve."""
     from libsonare import StreamingEqualizer
 
     with StreamingEqualizer(sample_rate=48000, max_block_size=256) as eq:
-        eq.set_band(0, {"type": "AllPass", "frequencyHz": 1000.0, "q": 1.0, "enabled": True})
+        eq.set_band(0, {"type": "allPass", "frequencyHz": 1000.0, "q": 1.0, "enabled": True})
         response = eq.magnitude_response([200.0, 1000.0, 8000.0])
         assert all(abs(value) < 0.1 for value in response)
 

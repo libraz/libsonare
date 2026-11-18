@@ -658,6 +658,18 @@ def test_loudness_target_limited_matches_on_the_stereo_named_processor() -> None
     assert stereo.output_lufs < target_lufs
 
 
+def test_mastering_assistant_refuses_snake_case_param_names() -> None:
+    """An earlier snake_case param name is refused naming the lowerCamel one."""
+    import libsonare
+    from libsonare import SonareValueError
+
+    samples = [0.2 * math.sin(2 * math.pi * 220 * i / 48000) for i in range(4800)]
+    for earlier, current in (("target_lufs", "targetLufs"), ("target_platform", "targetPlatform")):
+        with pytest.raises(SonareValueError, match=current) as raised:
+            libsonare.mastering_assistant_suggest_chain(samples, 48000, {earlier: 3.0})
+        assert raised.value.code == int(libsonare.ErrorCode.INVALID_PARAMETER)
+
+
 def test_mastering_assistant_suggest_follows_target_platform() -> None:
     """A delivery target reaches the assistant as a name and moves the loudness."""
     import libsonare

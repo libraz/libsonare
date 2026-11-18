@@ -22,7 +22,7 @@ from libsonare import (
 )
 
 from ._helpers import raises_coded
-from ._project_helpers import _make_stereo_sine
+from ._project_helpers import _make_stereo_sine, dangling_source_json
 
 _RATE = 48000
 _BLOCK = 128
@@ -171,15 +171,7 @@ def test_apply_while_playing_raises_and_leaves_engine_unchanged() -> None:
 
 def test_compile_failure_has_no_timeline_and_reports_diagnostics() -> None:
     # A clip naming a source the project does not hold is a compile error.
-    json = (
-        '{"version":1,"sample_rate":48000,"tracks":[{"id":1,"name":"audio","kind":0,'
-        '"channel_strip_ref":"","output_target":"","midi_destination_id":0,'
-        '"automation_lanes":[]}],"clips":[{"id":1,"track_id":1,"source_id":99,'
-        '"start_ppq":0,"length_ppq":1,"source_offset_ppq":0,"gain":1,'
-        '"fade_in":{"length_ppq":0,"curve":0},"fade_out":{"length_ppq":0,"curve":0},'
-        '"loop_mode":0,"loop_length_ppq":0,"warp_ref_id":0}]}'
-    )
-    with Project.from_json(json) as project:
+    with Project.from_json(dangling_source_json()) as project:
         result = project.compile_timeline()
         expected = project.compile()
         assert isinstance(result, libsonare.ProjectCompileTimelineResult)

@@ -206,9 +206,6 @@ from ._types_capabilities import (
     CapabilityCatalogChain as CapabilityCatalogChain,
 )
 from ._types_capabilities import (
-    CapabilityCatalogChainAlias as CapabilityCatalogChainAlias,
-)
-from ._types_capabilities import (
     CapabilityCatalogChainList as CapabilityCatalogChainList,
 )
 from ._types_capabilities import (

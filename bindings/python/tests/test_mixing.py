@@ -41,9 +41,7 @@ def _serial_tail_scene() -> str:
         return {
             "slot": "post",
             "processor": "effects.delay.stereo",
-            "params": json.dumps(
-                {"delayTimeLMs": ms, "delayTimeRMs": ms, "feedback": 0, "dryWet": 1}
-            ),
+            "params": {"delayTimeLMs": ms, "delayTimeRMs": ms, "feedback": 0, "dryWet": 1},
         }
 
     return json.dumps(
@@ -193,7 +191,7 @@ def _scene_with_pre_eq(gain_db: float, *, on_bus: bool) -> str:
     insert = {
         "slot": "pre",
         "processor": "eq.parametric",
-        "params": json.dumps({"band0.frequencyHz": 1000, "band0.gainDb": gain_db, "band0.q": 2}),
+        "params": {"band0.frequencyHz": 1000, "band0.gainDb": gain_db, "band0.q": 2},
     }
     bus = {"id": "master", "role": "master"}
     strip = {"id": "a"}
@@ -796,7 +794,7 @@ def _scene_with_insert_params(processor: str, params: dict[str, float]) -> str:
                         {
                             "slot": "post",
                             "processor": processor,
-                            "params": json.dumps(params),
+                            "params": params,
                         }
                     ],
                 }

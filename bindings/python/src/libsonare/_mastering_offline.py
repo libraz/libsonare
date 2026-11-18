@@ -196,7 +196,7 @@ def _assistant_params(
         return _mastering_params(None)
     resolved: dict[str, float | int | bool] = {}
     for key, value in params.items():
-        if key in ("targetPlatform", "target_platform"):
+        if key == "targetPlatform":
             resolved[key] = _resolve_name(
                 key,
                 value,

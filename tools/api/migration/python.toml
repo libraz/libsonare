@@ -476,10 +476,9 @@ rule = "snake-case-only"
 [[entry]]
 kind = "type"
 old = "CapabilityCatalogChainAlias"
-changed = "a frozen dataclass read by attribute instead of a TypedDict read by key; lists are tuples"
+removed = "a chain key resolves through its descriptor or list; there is no alias table to read"
 domain = "core"
-rule = "frozen-results"
-test = "bindings/python/tests/test_analyzer_core.py::test_capabilities_and_catalog_are_frozen"
+rule = "aliases-removed"
 
 [[entry]]
 kind = "type"
@@ -4444,6 +4443,20 @@ old = "pitch_yin(fmax)"
 new = "pitch_yin(f0_max_hz)"
 domain = "analysis"
 rule = "frequency-bounds"
+
+[[entry]]
+kind = "option"
+old = "pitch_yin(fill_na)"
+removed = "had no effect: YIN reads no fill flag"
+domain = "analysis"
+rule = "individual"
+
+[[entry]]
+kind = "option"
+old = "Audio.pitch_yin(fill_na)"
+removed = "had no effect: YIN reads no fill flag"
+domain = "core"
+rule = "individual"
 
 [[entry]]
 kind = "option"

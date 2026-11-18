@@ -4,7 +4,7 @@ The key population is the one the conformance gate
 ``tests/conformance/check_mastering_param_surfaces.py`` derives from the chain's
 setter, so a key the setter learns without the catalog learning it fails here.
 A stage key is described by its stage's processor, a list element by the list's
-processor or its own chain descriptor, and an alias spelling by its canonical key.
+processor or its own chain descriptor.
 """
 
 from __future__ import annotations
@@ -17,7 +17,6 @@ import pytest
 
 from libsonare import (
     CapabilityCatalog,
-    CapabilityCatalogChain,
     MasteringInsertParamInfo,
     capability_catalog,
 )
@@ -70,19 +69,6 @@ def chain_keys() -> list[str]:
     return sorted(keys)
 
 
-def _alias_pattern(spelling: str) -> re.Pattern[str]:
-    return re.compile("^" + re.escape(spelling).replace(re.escape("<i>"), f"({_INDEX})") + "$")
-
-
-def canonical(section: CapabilityCatalogChain, key: str) -> str:
-    for entry in section.aliases:
-        for spelling in entry.aliases:
-            match = _alias_pattern(spelling).match(key)
-            if match:
-                return entry.key.replace("<i>", match.group(1)) if match.groups() else entry.key
-    return key
-
-
 def resolve(catalog: CapabilityCatalog, key: str) -> MasteringInsertParamInfo | None:
     """The descriptor @p key resolves to through the chain section, or None."""
     section = catalog.chain
@@ -94,7 +80,6 @@ def resolve(catalog: CapabilityCatalog, key: str) -> MasteringInsertParamInfo | 
         return next((p for p in processors[processor].params if p.name == name), None)
 
     own = {entry.name: entry for entry in section.params}
-    key = canonical(section, key)
     if key in own:
         return own[key]
     for entry in section.lists:
@@ -117,7 +102,7 @@ def test_every_chain_key_resolves_to_a_descriptor() -> None:
     catalog = capability_catalog()
     keys = chain_keys()
     # The population is this test's subject: a key source that stopped parsing reports nothing.
-    assert len(keys) > 150
+    assert len(keys) > 140
     unresolved = [key for key in keys if resolve(catalog, key) is None]
     assert unresolved == []
 
@@ -139,11 +124,9 @@ def test_band_fields_are_the_compressor_fields_at_every_band_index() -> None:
     catalog = capability_catalog()
     bands = next(e for e in catalog.chain.lists if e.key.endswith(".bands"))
     last = bands.max_items - 1
-    for spelling in (
-        f"dynamics.multibandComp.bands.{last}.detector",
-        f"dynamics.multibandComp.band{last}.detector",
-    ):
-        descriptor = resolve(catalog, spelling)
-        assert descriptor is not None and descriptor.type == "enum", spelling
+    spelling = f"dynamics.multibandComp.bands.{last}.detector"
+    descriptor = resolve(catalog, spelling)
+    assert descriptor is not None and descriptor.type == "enum", spelling
+    assert resolve(catalog, f"dynamics.multibandComp.band{last}.detector") is None
     assert resolve(catalog, f"dynamics.multibandComp.bands.{last + 1}.ratio") is None
     assert resolve(catalog, "dynamics.multibandComp.bands.01.ratio") is None

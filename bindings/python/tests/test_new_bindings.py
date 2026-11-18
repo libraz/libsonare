@@ -359,14 +359,18 @@ def test_pitch_yin_returns_librosa_style_estimates_for_unvoiced_frames() -> None
     # librosa.yin emits an f0 estimate for every frame and reports voicing separately.
     silence = np.zeros(SR, dtype=np.float32)
 
-    nan_res = libsonare.pitch_yin(silence, SR, fill_na=False)
-    assert len(nan_res.f0) > 0
-    assert all(math.isfinite(v) for v in nan_res.f0)
-    assert not any(nan_res.voiced_flag)
+    result = libsonare.pitch_yin(silence, SR)
+    assert len(result.f0) > 0
+    assert all(math.isfinite(v) for v in result.f0)
+    assert not any(result.voiced_flag)
 
-    filled = libsonare.pitch_yin(silence, SR, fill_na=True)
-    assert len(filled.f0) > 0
-    assert all(math.isfinite(v) for v in filled.f0)
+
+def test_pitch_yin_takes_no_fill_na() -> None:
+    silence = np.zeros(SR, dtype=np.float32)
+    with pytest.raises(TypeError):
+        libsonare.pitch_yin(silence, SR, fill_na=True)  # type: ignore[call-arg]
+    with libsonare.Audio.from_buffer(silence, SR) as audio, pytest.raises(TypeError):
+        audio.pitch_yin(fill_na=True)  # type: ignore[call-arg]
 
 
 def test_pitch_pyin_fill_na_controls_unvoiced_value() -> None:

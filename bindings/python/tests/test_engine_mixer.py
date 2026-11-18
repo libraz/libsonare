@@ -13,11 +13,14 @@ from libsonare import (
     AutomationPoint,
     EngineClip,
     EngineProcessWithMonitorResult,
+    ErrorCode,
     RealtimeEngine,
     SonareError,
     SonareValueError,
 )
 from libsonare._engine_conversions import _track_monitor_mode_value
+
+from ._helpers import raises_coded
 
 _PAN_LAW_CORPUS = json.loads(
     (Path(__file__).resolve().parents[3] / "tests/conformance/pan_law_names.json").read_text(
@@ -265,14 +268,14 @@ def test_engine_track_strip_json_routes_lane_strip() -> None:
             engine.set_track_strip_json(
                 10,
                 '{"version":1,"strips":[{"id":"track-10","inserts":[{"slot":"pre",'
-                '"processor":"missing.processor","params":"{}"}]}],"buses":[],"connections":[]}',
+                '"processor":"missing.processor","params":{}}]}],"buses":[],"connections":[]}',
             )
         assert bad_processor_error.value.code == 4
         with pytest.raises(SonareValueError) as bad_param_error:
             engine.set_track_strip_json(
                 10,
                 '{"version":1,"strips":[{"id":"track-10","inserts":[{"slot":"pre",'
-                '"processor":"eq.parametric","params":"{\\"band0.gainDb\\":\\"loud\\"}"}]}],'
+                '"processor":"eq.parametric","params":{"band0.gainDb":"loud"}}]}],'
                 '"buses":[],"connections":[]}',
             )
         assert bad_param_error.value.code == 4
@@ -282,13 +285,33 @@ def test_engine_track_strip_json_routes_lane_strip() -> None:
         assert 1.20 < processed[0][-1] < 1.40
 
 
+_STRIP = '{"version":1,"strips":[{"id":"track-10",%s}],"buses":[],"connections":[]}'
+
+
+@pytest.mark.parametrize(
+    ("strip_fields", "current"),
+    [
+        ('"inserts":[{"slot":"pre","processor":"eq.parametric","params":"{}"}]', "params"),
+        ('"fader_db":-3', "faderDb"),
+        ('"panLaw":1', "const3Db"),
+        ('"sends":[{"destinationBusId":"1","timing":"pre"}]', "preFader"),
+    ],
+)
+def test_strip_scene_refuses_earlier_spellings(strip_fields: str, current: str) -> None:
+    """Earlier spellings of a strip document are refused as an invalid document."""
+    with RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
+        engine.set_track_lanes([{"track_id": 10}])
+        with raises_coded(int(ErrorCode.INVALID_FORMAT), match=current):
+            engine.set_track_strip_json(10, _STRIP % strip_fields)
+
+
 def test_engine_track_strip_eq_insert_is_bounded_by_the_engine_rate_nyquist() -> None:
     def strip_json(frequency_hz: int) -> str:
         return (
             '{"version":1,"strips":[{"id":"track-10","inserts":[{"slot":"pre",'
-            '"processor":"eq.parametric","params":"{\\"band0.frequencyHz\\":'
+            '"processor":"eq.parametric","params":{"band0.frequencyHz":'
             + str(frequency_hz)
-            + '}"}]}],"buses":[],"connections":[]}'
+            + '}}]}],"buses":[],"connections":[]}'
         )
 
     with RealtimeEngine(sample_rate=96000.0, max_block_size=256) as engine:
@@ -322,8 +345,8 @@ def test_engine_track_strip_insert_bypass_toggles_insert() -> None:
         engine.set_track_strip_json(
             10,
             '{"version":1,"strips":[{"id":"track-10","inserts":[{"slot":"pre",'
-            '"processor":"eq.parametric","params":"{\\"band0.type\\":1,'
-            '\\"band0.frequencyHz\\":1000,\\"band0.gainDb\\":12,\\"band0.enabled\\":1}"}]}],'
+            '"processor":"eq.parametric","params":{"band0.type":1,'
+            '"band0.frequencyHz":1000,"band0.gainDb":12,"band0.enabled":1}}]}],'
             '"buses":[],"connections":[]}',
         )
         with pytest.raises(SonareValueError) as bad_index_error:
@@ -363,7 +386,7 @@ def test_engine_track_strip_eq_band_updates_embedded_eq() -> None:
             '{"version":1,"strips":[{"id":"track-10"}],"buses":[],"connections":[]}',
         )
         with pytest.raises(SonareValueError) as bad_index_error:
-            engine.set_track_strip_eq_band(10, 99, {"type": "Peak", "enabled": True})
+            engine.set_track_strip_eq_band(10, 99, {"type": "peak", "enabled": True})
         assert bad_index_error.value.code == 4
 
         engine.play()
@@ -372,7 +395,7 @@ def test_engine_track_strip_eq_band_updates_embedded_eq() -> None:
             10,
             0,
             {
-                "type": "Peak",
+                "type": "peak",
                 "frequencyHz": 1000,
                 "gainDb": 12,
                 "q": 1,
@@ -418,7 +441,7 @@ def test_engine_master_strip_json_routes_master_strip() -> None:
         with pytest.raises(SonareValueError) as bad_param_error:
             engine.set_master_strip_json(
                 '{"version":1,"strips":[{"id":"master","inserts":[{"slot":"pre",'
-                '"processor":"eq.parametric","params":"{\\"band0.gainDb\\":\\"loud\\"}"}]}],'
+                '"processor":"eq.parametric","params":{"band0.gainDb":"loud"}}]}],'
                 '"buses":[],"connections":[]}'
             )
         assert bad_param_error.value.code == 4
@@ -481,7 +504,7 @@ def test_engine_master_strip_eq_band_updates_embedded_eq() -> None:
             '{"version":1,"strips":[{"id":"master"}],"buses":[],"connections":[]}'
         )
         with pytest.raises(SonareValueError) as bad_index_error:
-            engine.set_master_strip_eq_band(99, {"type": "Peak", "enabled": True})
+            engine.set_master_strip_eq_band(99, {"type": "peak", "enabled": True})
         assert bad_index_error.value.code == 4
 
         engine.play()
@@ -489,7 +512,7 @@ def test_engine_master_strip_eq_band_updates_embedded_eq() -> None:
         engine.set_master_strip_eq_band(
             0,
             {
-                "type": "Peak",
+                "type": "peak",
                 "frequencyHz": 1000,
                 "gainDb": 12,
                 "q": 1,
@@ -697,7 +720,7 @@ def test_engine_bus_strip_pan_rejects_surround_bus() -> None:
             engine.set_bus_strip_pan_mode(1, "balance")
         with pytest.raises(SonareError):
             engine.set_bus_strip_dual_pan(1, -1.0, 1.0)
-        engine.set_bus_strip_eq_band(1, 0, {"type": "Peak", "enabled": True})
+        engine.set_bus_strip_eq_band(1, 0, {"type": "peak", "enabled": True})
 
 
 def test_engine_bus_strip_eq_band_updates_embedded_eq() -> None:
@@ -722,7 +745,7 @@ def test_engine_bus_strip_eq_band_updates_embedded_eq() -> None:
             '{"version":1,"strips":[],"buses":[{"id":"1","inserts":[]}],"connections":[]}',
         )
         with pytest.raises(SonareValueError) as bad_index_error:
-            engine.set_bus_strip_eq_band(1, 99, {"type": "Peak", "enabled": True})
+            engine.set_bus_strip_eq_band(1, 99, {"type": "peak", "enabled": True})
         assert bad_index_error.value.code == 4
 
         engine.play()
@@ -731,7 +754,7 @@ def test_engine_bus_strip_eq_band_updates_embedded_eq() -> None:
             1,
             0,
             {
-                "type": "Peak",
+                "type": "peak",
                 "frequencyHz": 1000,
                 "gainDb": 12,
                 "q": 1,

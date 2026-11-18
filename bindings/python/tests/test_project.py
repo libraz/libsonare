@@ -32,21 +32,7 @@ from libsonare import (
 from libsonare._project_model import _EXPECTED_PROJECT_ABI_VERSION
 
 from ._helpers import raises_coded
-from ._project_helpers import _build_project
-
-
-def _dangling_source_json() -> str:
-    return (
-        '{"version":1,"sample_rate":48000,'
-        '"tracks":[{"id":1,"name":"audio","kind":0,"channel_strip_ref":"",'
-        '"output_target":"","midi_destination_id":0,"automation_lanes":[]}],'
-        '"clips":[{"id":1,"track_id":1,"source_id":99,"start_ppq":0,'
-        '"length_ppq":1,"source_offset_ppq":0,"gain":1,'
-        '"fade_in":{"length_ppq":0,"curve":0},'
-        '"fade_out":{"length_ppq":0,"curve":0},'
-        '"loop_mode":0,"loop_length_ppq":0,"warp_ref_id":0,"warp_mode":0}]}'
-    )
-
+from ._project_helpers import _build_project, dangling_source_json
 
 # --- ABI version -----------------------------------------------------------
 
@@ -379,8 +365,21 @@ def test_malformed_deserialize_raises_without_crashing() -> None:
         Project.from_json_with_diagnostics("{ this is not valid project json ]]")
 
 
+@pytest.mark.parametrize("version", [1, 2, 6, 8])
+def test_from_json_refuses_any_version_but_the_current_one(version: int) -> None:
+    project = Project()
+    try:
+        document = json.loads(project.to_json())
+    finally:
+        project.close()
+    assert document["version"] == 7
+    document["version"] = version
+    with raises_coded(ErrorCode.INVALID_FORMAT, match="unsupported_schema_version"):
+        Project.from_json(json.dumps(document))
+
+
 def test_from_json_with_diagnostics_returns_success_warnings() -> None:
-    result = Project.from_json_with_diagnostics(_dangling_source_json())
+    result = Project.from_json_with_diagnostics(dangling_source_json())
     try:
         assert "dangling_clip_source" in result.diagnostics
         assert result.project.track_count() == 1

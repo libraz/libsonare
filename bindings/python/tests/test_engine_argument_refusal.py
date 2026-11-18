@@ -9,7 +9,7 @@ import pytest
 from libsonare import RealtimeEngine, SonareError, SonareValueError, SynthPatch
 from libsonare._errors import ErrorCode
 
-_BAND = '{"type":"Peak","frequencyHz":1000,"gainDb":3,"q":1,"enabled":true}'
+_BAND = '{"type":"peak","frequencyHz":1000,"gainDb":3,"q":1,"enabled":true}'
 _UNKNOWN_ID = 99
 
 _VALUE_REFUSALS: list[tuple[str, Callable[[RealtimeEngine], object]]] = [

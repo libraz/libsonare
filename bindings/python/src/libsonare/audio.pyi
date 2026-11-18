@@ -251,7 +251,6 @@ class Audio:
         f0_min_hz: float = 65.0,
         f0_max_hz: float = 2093.0,
         threshold: float = 0.1,
-        fill_na: bool = False,
     ) -> PitchResult: ...
     def pitch_pyin(
         self,

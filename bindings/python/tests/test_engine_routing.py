@@ -35,19 +35,19 @@ _BLOCK = 256
 
 _DUCKER_BUS_JSON = (
     '{"version":1,"strips":[],"buses":[{"id":"1","inserts":[{"slot":"pre",'
-    '"processor":"dynamics.duckingProcessor","params":"{\\"thresholdDb\\":-20,'
-    '\\"ratio\\":20,\\"attackMs\\":0.05,\\"releaseMs\\":80,\\"rangeDb\\":30}"}]}],'
+    '"processor":"dynamics.duckingProcessor","params":{"thresholdDb":-20,'
+    '"ratio":20,"attackMs":0.05,"releaseMs":80,"rangeDb":30}}]}],'
     '"connections":[]}'
 )
 _LIMITER_BUS_JSON = (
     '{"version":1,"strips":[],"buses":[{"id":"1","inserts":[{"slot":"pre",'
-    '"processor":"dynamics.limiter","params":"{\\"thresholdDb\\":24,'
-    '\\"lookaheadMs\\":0,\\"releaseMs\\":50}"}]}],"connections":[]}'
+    '"processor":"dynamics.limiter","params":{"thresholdDb":24,'
+    '"lookaheadMs":0,"releaseMs":50}}]}],"connections":[]}'
 )
 _DUCKER_MASTER_JSON = (
     '{"version":1,"strips":[{"id":"master","inserts":[{"slot":"pre",'
-    '"processor":"dynamics.duckingProcessor","params":"{\\"thresholdDb\\":-20,'
-    '\\"ratio\\":20,\\"attackMs\\":0.05,\\"releaseMs\\":80,\\"rangeDb\\":30}"}]}],'
+    '"processor":"dynamics.duckingProcessor","params":{"thresholdDb":-20,'
+    '"ratio":20,"attackMs":0.05,"releaseMs":80,"rangeDb":30}}]}],'
     '"buses":[],"connections":[]}'
 )
 
@@ -462,7 +462,7 @@ def _strip_json(strip_id: int, inserts: list[tuple[str, dict[str, float]]]) -> s
                 {
                     "id": str(strip_id),
                     "inserts": [
-                        {"slot": "pre", "processor": name, "params": json.dumps(params)}
+                        {"slot": "pre", "processor": name, "params": params}
                         for name, params in inserts
                     ],
                 }

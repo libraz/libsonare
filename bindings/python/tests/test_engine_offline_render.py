@@ -189,7 +189,7 @@ _PLATE_STRIP = json.dumps(
                     {
                         "slot": "pre",
                         "processor": "effects.reverb.plate",
-                        "params": json.dumps({"decaySec": 2.0, "dryWet": 0.5}),
+                        "params": {"decaySec": 2.0, "dryWet": 0.5},
                     }
                 ],
             }
@@ -310,9 +310,11 @@ def test_tail_and_latency_follow_the_configured_strips() -> None:
                                 {
                                     "slot": "pre",
                                     "processor": "dynamics.limiter",
-                                    "params": json.dumps(
-                                        {"thresholdDb": 24.0, "releaseMs": 50.0, "lookaheadMs": 1.0}
-                                    ),
+                                    "params": {
+                                        "thresholdDb": 24.0,
+                                        "releaseMs": 50.0,
+                                        "lookaheadMs": 1.0,
+                                    },
                                 }
                             ],
                         }

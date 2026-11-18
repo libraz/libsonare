@@ -87,7 +87,6 @@ SoloProcessor: TypeAlias = Literal[
     "effects.modulation.rotary",
     "effects.modulation.wah",
     "effects.reverb.convolution",
-    "effects.reverb.dattorro",
     "effects.reverb.fdn",
     "effects.reverb.plate",
     "effects.reverb.room",

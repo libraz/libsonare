@@ -26,10 +26,10 @@ from libsonare.types import EngineMarker
 _BUS_STRIP = (
     '{{"version":1,"strips":[],"buses":[{{"id":"{bus}","inserts":['
     '{{"slot":"pre","processor":"eq.parametric",'
-    '"params":"{{\\"band0.type\\":1,\\"band0.frequencyHz\\":1000,'
-    '\\"band0.gainDb\\":0,\\"band0.enabled\\":1}}"}},'
+    '"params":{{"band0.type":1,"band0.frequencyHz":1000,'
+    '"band0.gainDb":0,"band0.enabled":1}}}},'
     '{{"slot":"pre","processor":"dynamics.compressor",'
-    '"params":"{{\\"thresholdDb\\":-3,\\"ratio\\":4}}"}}]}}],"connections":[]}}'
+    '"params":{{"thresholdDb":-3,"ratio":4}}}}]}}],"connections":[]}}'
 )
 
 
