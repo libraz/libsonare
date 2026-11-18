@@ -282,6 +282,23 @@ def _tempo_bound_violation(r: dict) -> str | None:
     return None
 
 
+_MIDI_NAME = re.compile(r"^(midi2?|gm)[A-Z]|^perNoteControllerName$")
+_ABSENT_RETURN = re.compile(r"\|\s*null\b|\|\s*-1\b|\bnull\s*\||-1\s*\|")
+
+
+def _midi_function_violation(r: dict) -> str | None:
+    if r["kind"] == "method":
+        return "a MIDI/GM helper is a module function, not a Project static"
+    sig = (r.get("sigs") or [{}])[0]
+    returns = sig.get("returns") or ""
+    if _ABSENT_RETURN.search(returns):
+        return "a lookup returns its value and throws RangeError instead of returning null or -1"
+    params = sig.get("params", [])
+    if returns.startswith("ProjectMidiEvent") and [p["name"] for p in params] != ["request"]:
+        return "a message packer takes one request object"
+    return None
+
+
 RULES: list[Rule] = [
     Rule(
         name="getters",
@@ -369,6 +386,28 @@ RULES: list[Rule] = [
         violation=_tempo_bound_violation,
         exempt={
             "python:cyclic_tempogram(bpm_min)": "a fold base, not a search range",
+        },
+    ),
+    Rule(
+        name="midi-module-functions",
+        summary="midi*/midi2*/gm* helpers are module functions: request-object packers, throwing lookups",
+        population=lambda r: (
+            _js(r)
+            and (
+                (r["kind"] == "function" and _MIDI_NAME.match(r["name"]) is not None)
+                or (
+                    r["kind"] == "method"
+                    and bool(r.get("static"))
+                    and r["owner"] == "Project"
+                    and _MIDI_NAME.match(r["member"]) is not None
+                )
+            )
+        ),
+        violation=_midi_function_violation,
+        pending={
+            f"{s}:{f}": "throw RangeError for an unmappable input, or state in the rule why the absent result stays"
+            for s in ("node", "wasm")
+            for f in ("midiCcLearn", "midiCcToBreakpoint", "midiParamToCc")
         },
     ),
 ]

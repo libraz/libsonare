@@ -289,6 +289,48 @@ class TempoRangeRule(unittest.TestCase):
         self.assertEqual([f.key for f in verdict.violations], ["python:detect_bpm(bpm_min)"])
 
 
+def function(surface: str, name: str, returns: str, *params: tuple[str, str]) -> dict:
+    return {
+        "surface": surface,
+        "kind": "function",
+        "owner": "",
+        "member": "",
+        "name": name,
+        "sigs": [{"params": [{"name": n, "type": t} for n, t in params], "returns": returns}],
+    }
+
+
+class MidiModuleFunctionsRule(unittest.TestCase):
+    CLEAN = [
+        function("node", "midiNoteOn", "ProjectMidiEvent", ("request", "MidiNoteOnRequest")),
+        function("node", "gmProgramForName", "number", ("name", "string")),
+        function("node", "toJson", "string"),
+    ]
+
+    def test_clean_surface_passes(self) -> None:
+        verdict = run("midi-module-functions", self.CLEAN)
+        self.assertEqual(verdict.read, 2)
+        self.assertFalse(verdict.failed)
+
+    def test_project_static_is_named(self) -> None:
+        planted = method("wasm", "Project", "midiNoteOff")
+        planted["static"] = True
+        verdict = run("midi-module-functions", [*self.CLEAN, planted])
+        self.assertEqual([f.key for f in verdict.violations], ["wasm:Project.midiNoteOff"])
+
+    def test_lookup_returning_minus_one_is_named(self) -> None:
+        planted = function("node", "gmDrumNoteForName", "number | -1", ("name", "string"))
+        verdict = run("midi-module-functions", [*self.CLEAN, planted])
+        self.assertEqual([f.key for f in verdict.violations], ["node:gmDrumNoteForName"])
+
+    def test_positional_packer_is_named(self) -> None:
+        planted = function(
+            "node", "midiCc", "ProjectMidiEvent", ("channel", "number"), ("cc", "number")
+        )
+        verdict = run("midi-module-functions", [*self.CLEAN, planted])
+        self.assertEqual([f.key for f in verdict.violations], ["node:midiCc"])
+
+
 class Framework(unittest.TestCase):
     def test_reading_nothing_fails(self) -> None:
         verdict = check.judge(rule("getters"), [])
