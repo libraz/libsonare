@@ -312,8 +312,8 @@ class EngineMarker:
     """Marker id."""
     ppq: float
     """Marker position in PPQ."""
-    name: str = ""
-    """Marker text."""
+    name: str | None = None
+    """Marker text, at most 63 UTF-8 bytes; ``None`` for an unnamed marker."""
     kind: MarkerKind = "marker"
     """Marker kind (:data:`MarkerKind`)."""
     key_fifths: int = 0
@@ -335,8 +335,8 @@ class ProjectMarker:
     """Marker id."""
     ppq: float
     """Marker position in PPQ."""
-    name: str = ""
-    """Marker text."""
+    name: str | None = None
+    """Marker text; ``None`` for an unnamed marker."""
     kind: MarkerKind = "marker"
     """Marker kind (:data:`MarkerKind`)."""
     key_fifths: int = 0
@@ -409,10 +409,10 @@ class ProjectSource:
     """Sample rate hint of the source, in Hz."""
     name_or_uri: str
     """Display name or URI of the source."""
-    content_hash: str = ""
-    """Content hash of an audio source; empty when unset."""
-    external_stem_role: str = ""
-    """External stem role of an audio source; empty when unset."""
+    content_hash: str | None = None
+    """Content hash of an audio source; ``None`` when unset."""
+    external_stem_role: str | None = None
+    """External stem role of an audio source; ``None`` when unset."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -928,9 +928,9 @@ class Section:
     """Median frame RMS in the section over the loudest section's, in [0, 1]."""
     confidence: float
     """Confidence of the section label; 0 when the type is ``"unknown"``."""
-    group: int = 0
+    group: int
     """Index of the section's material; sections sharing a value repeat the same material."""
-    name: str = ""
+    name: str
     """Display name of the section type."""
 
 

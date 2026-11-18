@@ -105,12 +105,11 @@ def _scene_entry_json(entry: Mapping[str, object], key: str, name: str) -> bytes
 
 
 def _fixed_bytes(value: str, capacity: int, name: str) -> bytes:
-    # Truncate on a UTF-8 character boundary: slicing the encoded bytes at an
-    # arbitrary offset can split a multi-byte codepoint and leave invalid UTF-8.
-    # Decoding with errors="ignore" drops any partial trailing codepoint.
-    if capacity <= 1:
-        return b""
-    return _utf8_arg(value, name)[: capacity - 1].decode("utf-8", "ignore").encode("utf-8")
+    """Encode ``value`` for a fixed C char field; one that does not fit is refused, never cut."""
+    encoded = _utf8_arg(value, name)
+    if len(encoded) >= capacity:
+        raise SonareValueError(f"{name} must be at most {capacity - 1} UTF-8 bytes")
+    return encoded
 
 
 def _c_string(value: bytes) -> str:
@@ -163,7 +162,10 @@ def _marker_to_c(marker: EngineMarker) -> SonareEngineMarker:
     raw.key_fifths = marker.key_fifths
     raw.key_minor = 1 if marker.key_minor else 0
     raw.ppq = _narrow_double(marker.ppq, "marker.ppq")
-    raw.name = _fixed_bytes(marker.name, 64, "name")
+    if marker.name is not None:
+        if marker.name == "":
+            raise SonareValueError("marker name must not be empty; omit it for an unnamed marker")
+        raw.name = _fixed_bytes(marker.name, 64, "name")
     return raw
 
 
@@ -171,7 +173,7 @@ def _marker_from_c(raw: SonareEngineMarker) -> EngineMarker:
     return EngineMarker(
         id=int(raw.id),
         ppq=float(raw.ppq),
-        name=_c_string(bytes(raw.name)),
+        name=_c_string(bytes(raw.name)) or None,
         kind=_marker_kind_name(raw.kind),
         key_fifths=int(raw.key_fifths),
         key_minor=bool(raw.key_minor),

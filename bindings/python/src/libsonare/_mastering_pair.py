@@ -478,12 +478,17 @@ def _platform_fields(platform: Mapping[str, Any]) -> tuple[str, float, float]:
 
 
 def _streaming_platforms(
-    platforms: Sequence[StreamingPlatform] | None,
+    fn_name: str, platforms: Sequence[StreamingPlatform] | None
 ) -> tuple[Any, int, list[bytes]]:
-    """Build the C platform array, keeping the name buffers alive for the call."""
-    if not platforms:
+    """Build the C platform array, keeping the name buffers alive for the call.
+
+    ``None`` is the library's built-in platform set; an empty list is refused.
+    """
+    if platforms is None:
         return None, 0, []
     fields = [_platform_fields(platform) for platform in platforms]
+    if not fields:
+        raise SonareValueError(f"{fn_name}: platforms must not be empty")
     array_type = SonareStreamingPlatform * len(fields)
     platform_buffers = [_utf8_arg(name, "name") for name, _, _ in fields]
     platform_array = array_type(
@@ -615,12 +620,18 @@ def mastering_streaming_preview(
     sample_rate: int,
     platforms: Sequence[StreamingPlatform] | None = None,
 ) -> MasteringStreamingPreviewResult:
-    """Preview streaming-platform normalization and ceiling risk."""
+    """Preview streaming-platform normalization and ceiling risk.
+
+    ``platforms`` lists the targets to preview; ``None`` takes the library's
+    built-in set and an empty list is refused.
+    """
     lib = _get_lib()
     if not hasattr(lib, "sonare_mastering_streaming_preview"):
         raise _not_supported("libsonare was built without mastering streaming preview support")
     c_array, length = _to_c_float_array(samples)
-    platform_array, platform_count, _buffers = _streaming_platforms(platforms)
+    platform_array, platform_count, _buffers = _streaming_platforms(
+        "mastering_streaming_preview", platforms
+    )
 
     json_ptr = ctypes.c_char_p()
     rc = lib.sonare_mastering_streaming_preview(
@@ -795,9 +806,12 @@ def mastering_streaming_preview_stereo(
     the larger of the two channel true peaks. Passing a ``0.5 * (left + right)``
     downmix to :func:`mastering_streaming_preview` instead reads roughly 6 dB
     low on decorrelated material, and both the normalization gain and the
-    ceiling-risk flag follow from that measurement.
+    ceiling-risk flag follow from that measurement. ``platforms`` is as for
+    :func:`mastering_streaming_preview`.
     """
-    platform_array, platform_count, _buffers = _streaming_platforms(platforms)
+    platform_array, platform_count, _buffers = _streaming_platforms(
+        "mastering_streaming_preview_stereo", platforms
+    )
     json_text = _stereo_analysis_json(
         "sonare_mastering_streaming_preview_stereo",
         "libsonare was built without mastering streaming preview support",

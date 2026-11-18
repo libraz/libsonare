@@ -3510,7 +3510,7 @@ rule = "individual"
 [[entry]]
 kind = "method"
 old = "Section.name"
-changed = "a field filled by the analysis functions, with no fallback spelling built from type"
+changed = "a field filled by the analysis functions, with no fallback spelling built from type; a Section built by hand takes name and group, which no longer default to an empty string and 0"
 domain = "analysis"
 rule = "individual"
 test = "bindings/python/tests/test_surface_analysis.py::test_sections_are_a_named_list"
@@ -7569,7 +7569,7 @@ rule = "construction"
 [[entry]]
 kind = "option"
 old = "mastering_streaming_preview(platforms)"
-changed = "each platform is a record with exactly name, target_lufs and ceiling_dbtp; any other key raises SonareValueError naming the replacement"
+changed = "each platform is a record with exactly name, target_lufs and ceiling_dbtp; any other key raises SonareValueError naming the replacement; an empty list raises SonareValueError (omit platforms for the built-in set)"
 domain = "mastering"
 rule = "typed-results"
 test = "bindings/python/tests/test_analyzer_mastering_mixing.py::test_a_streaming_platform_takes_exactly_its_snake_case_keys"
@@ -7577,7 +7577,7 @@ test = "bindings/python/tests/test_analyzer_mastering_mixing.py::test_a_streamin
 [[entry]]
 kind = "option"
 old = "mastering_streaming_preview_stereo(platforms)"
-changed = "each platform is a record with exactly name, target_lufs and ceiling_dbtp; any other key raises SonareValueError naming the replacement"
+changed = "each platform is a record with exactly name, target_lufs and ceiling_dbtp; any other key raises SonareValueError naming the replacement; an empty list raises SonareValueError (omit platforms for the built-in set)"
 domain = "mastering"
 rule = "typed-results"
 test = "bindings/python/tests/test_analyzer_mastering_mixing.py::test_a_streaming_platform_takes_exactly_its_snake_case_keys"
@@ -8776,7 +8776,7 @@ test = "bindings/python/tests/test_mapping_keys.py::test_engine_tempo_and_meter_
 [[entry]]
 kind = "option"
 old = "Project.set_clip_takes(takes)"
-changed = "each take is a mapping (a tuple is TypeError) taking id, source_id, source_offset_ppq and name only; sourceId and sourceOffsetPpq raise SonareValueError naming the key"
+changed = "each take is a mapping (a tuple is TypeError) taking id, source_id, source_offset_ppq and name only; sourceId and sourceOffsetPpq raise SonareValueError naming the key; takes is required and None raises TypeError, pass [] to clear"
 domain = "project"
 rule = "one-input-form"
 test = "bindings/python/tests/test_mapping_keys.py::test_project_mappings_take_one_spelling"
@@ -8784,7 +8784,7 @@ test = "bindings/python/tests/test_mapping_keys.py::test_project_mappings_take_o
 [[entry]]
 kind = "option"
 old = "Project.set_clip_comp_segments(segments)"
-changed = "each segment is a mapping (a 3- or 4-tuple is TypeError) taking start_ppq, end_ppq, take_id and crossfade_ppq only; startPpq, endPpq, takeId and crossfadePpq raise SonareValueError naming the key"
+changed = "each segment is a mapping (a 3- or 4-tuple is TypeError) taking start_ppq, end_ppq, take_id and crossfade_ppq only; startPpq, endPpq, takeId and crossfadePpq raise SonareValueError naming the key; segments is required and None raises TypeError, pass [] to clear"
 domain = "project"
 rule = "one-input-form"
 test = "bindings/python/tests/test_mapping_keys.py::test_project_mappings_take_one_spelling"
@@ -11889,3 +11889,131 @@ changed = "an empty list raises SonareValueError instead of running the default 
 domain = "analysis"
 rule = "absent-not-sentinel"
 test = "bindings/python/tests/test_key_tokens.py::test_an_empty_modes_set_is_refused_rather_than_read_as_the_default"
+
+[[entry]]
+kind = "option"
+old = "Project.set_warp_map(name)"
+changed = "None leaves the map unnamed; an empty string raises SonareValueError"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_empty_is_not_absent.py::test_warp_map_name_is_none_or_a_real_name"
+
+[[entry]]
+kind = "option"
+old = "Project.set_marker(name)"
+changed = "None leaves the marker unnamed; an empty string raises SonareValueError"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_empty_is_not_absent.py::test_project_marker_name_is_none_when_unnamed_and_empty_is_refused"
+
+[[entry]]
+kind = "field"
+old = "ProjectMarker.name"
+changed = "None for an unnamed marker (was an empty string)"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_empty_is_not_absent.py::test_project_marker_name_is_none_when_unnamed_and_empty_is_refused"
+
+[[entry]]
+kind = "field"
+old = "EngineMarker.name"
+changed = "defaults to None for an unnamed marker and reads back None (was an empty string); an empty string raises SonareValueError, and a name over 63 UTF-8 bytes raises instead of being cut"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_empty_is_not_absent.py::test_engine_marker_name_is_none_when_unnamed_and_is_never_cut"
+
+[[entry]]
+kind = "option"
+old = "Project.set_audio_source_metadata(content_hash)"
+changed = "None clears the field; an empty string raises SonareValueError"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_project.py::test_audio_source_metadata_roundtrips_clears_and_undoes"
+
+[[entry]]
+kind = "option"
+old = "Project.set_audio_source_metadata(external_stem_role)"
+changed = "None clears the field; an empty string raises SonareValueError"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_project.py::test_audio_source_metadata_roundtrips_clears_and_undoes"
+
+[[entry]]
+kind = "field"
+old = "ProjectSource.content_hash"
+changed = "None when unset (was an empty string)"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_project.py::test_audio_source_metadata_roundtrips_clears_and_undoes"
+
+[[entry]]
+kind = "field"
+old = "ProjectSource.external_stem_role"
+changed = "None when unset (was an empty string)"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_project.py::test_audio_source_metadata_roundtrips_clears_and_undoes"
+
+[[entry]]
+kind = "field"
+old = "ParameterInfo.name"
+changed = "a value over 63 UTF-8 bytes raises SonareValueError instead of being cut to fit"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_empty_is_not_absent.py::test_engine_fixed_identifiers_are_refused_rather_than_cut"
+
+[[entry]]
+kind = "field"
+old = "ParameterInfo.unit"
+changed = "a value over 15 UTF-8 bytes raises SonareValueError instead of being cut to fit"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_empty_is_not_absent.py::test_engine_fixed_identifiers_are_refused_rather_than_cut"
+
+[[entry]]
+kind = "field"
+old = "EngineGraphNode.id"
+changed = "a value over 63 UTF-8 bytes raises SonareValueError instead of being cut to fit"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_empty_is_not_absent.py::test_engine_fixed_identifiers_are_refused_rather_than_cut"
+
+[[entry]]
+kind = "field"
+old = "EngineGraphConnection.source_node"
+changed = "a value over 63 UTF-8 bytes raises SonareValueError instead of being cut to fit"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_empty_is_not_absent.py::test_engine_fixed_identifiers_are_refused_rather_than_cut"
+
+[[entry]]
+kind = "field"
+old = "EngineGraphConnection.dest_node"
+changed = "a value over 63 UTF-8 bytes raises SonareValueError instead of being cut to fit"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_empty_is_not_absent.py::test_engine_fixed_identifiers_are_refused_rather_than_cut"
+
+[[entry]]
+kind = "field"
+old = "EngineGraphParameterBinding.node_id"
+changed = "a value over 63 UTF-8 bytes raises SonareValueError instead of being cut to fit"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_empty_is_not_absent.py::test_engine_fixed_identifiers_are_refused_rather_than_cut"
+
+[[entry]]
+kind = "field"
+old = "EngineGraphSpec.input_node"
+changed = "a value over 63 UTF-8 bytes raises SonareValueError instead of being cut to fit"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_empty_is_not_absent.py::test_engine_fixed_identifiers_are_refused_rather_than_cut"
+
+[[entry]]
+kind = "field"
+old = "EngineGraphSpec.output_node"
+changed = "a value over 63 UTF-8 bytes raises SonareValueError instead of being cut to fit"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_empty_is_not_absent.py::test_engine_fixed_identifiers_are_refused_rather_than_cut"

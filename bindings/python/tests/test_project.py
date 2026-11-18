@@ -98,8 +98,8 @@ def test_lists_stored_tracks_clips_and_sources() -> None:
         assert source.id == clip.source_id
         assert source.kind == "audio"
         assert source.name_or_uri == "asset://readback.wav"
-        assert source.content_hash == ""
-        assert source.external_stem_role == ""
+        assert source.content_hash is None
+        assert source.external_stem_role is None
 
         assert len(project.tracks()) == len(project.clips()) == len(project.sources()) == 1
     finally:
@@ -119,13 +119,13 @@ def test_audio_source_metadata_roundtrips_clears_and_undoes() -> None:
         assert source.content_hash == "sha256:deadbeef"
         assert source.external_stem_role == "lead"
 
-        # Empty values clear each field while preserving the source itself.
-        project.set_audio_source_metadata(source_id, "", "")
+        # None clears each field while preserving the source itself.
+        project.set_audio_source_metadata(source_id, None, None)
         source = project.sources()[0]
         assert source.id == source_id
         assert source.name_or_uri == "asset://metadata.wav"
-        assert source.content_hash == ""
-        assert source.external_stem_role == ""
+        assert source.content_hash is None
+        assert source.external_stem_role is None
 
         project.undo()
         source = project.sources()[0]
@@ -133,8 +133,13 @@ def test_audio_source_metadata_roundtrips_clears_and_undoes() -> None:
         assert source.external_stem_role == "lead"
         project.redo()
         source = project.sources()[0]
-        assert source.content_hash == ""
-        assert source.external_stem_role == ""
+        assert source.content_hash is None
+        assert source.external_stem_role is None
+
+        # An empty string is not a second spelling of "clear".
+        for args in (("", "lead"), ("sha256:x", "")):
+            with pytest.raises(SonareValueError, match="must not be empty; pass None to clear it"):
+                project.set_audio_source_metadata(source_id, *args)
 
         project.set_audio_source_metadata(source_id, "sha256:roundtrip", "vocals")
         restored = Project.from_json(project.to_json())
@@ -180,13 +185,13 @@ def test_audio_source_metadata_rejects_midi_and_unknown_sources() -> None:
 
         # The invalid edits do not alter the valid audio source or MIDI model.
         assert midi_clip != 0
-        assert project.sources()[0].content_hash == ""
-        assert project.sources()[1].content_hash == ""
-        with pytest.raises(TypeError):
+        assert project.sources()[0].content_hash is None
+        assert project.sources()[1].content_hash is None
+        with pytest.raises(TypeError, match="content_hash must be a string or None"):
             project.set_audio_source_metadata(
                 project.sources()[0].id,
-                None,
-                "lead",  # type: ignore[arg-type]
+                0,  # type: ignore[arg-type]
+                "lead",
             )
     finally:
         project.close()

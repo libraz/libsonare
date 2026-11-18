@@ -45,7 +45,7 @@ from ._project_model import (
     _make_instrument_callbacks as _make_instrument_callbacks,
 )
 from ._project_model import (
-    _marker_name_bytes as _marker_name_bytes,
+    _marker_name_arg as _marker_name_arg,
 )
 from ._project_model import _synth_patch_arg as _synth_patch_arg
 from ._project_model import (

@@ -24,6 +24,7 @@ from ._project_model import (
     ProjectSourceKind,
     ProjectTrackKind,
     _absent_or_in_range,
+    _marker_name_arg,
 )
 from ._project_render import _compile_diagnostics
 from ._project_synth import (
@@ -483,7 +484,7 @@ class _ProjectInspectionMixin:
             _get_lib().sonare_project_set_marker_ex_name(
                 self._require_handle(),
                 ctypes.byref(raw),
-                _utf8_arg(name if name is not None else "", "name"),
+                _utf8_arg(_marker_name_arg(name), "name"),
                 ctypes.byref(out_id),
             )
         )
@@ -505,7 +506,7 @@ class _ProjectInspectionMixin:
             )
         )
         try:
-            name = full_name.value.decode("utf-8") if full_name.value else ""
+            name = full_name.value.decode("utf-8") if full_name.value else None
         finally:
             lib.sonare_free_string(full_name)
         return ProjectMarker(
@@ -569,8 +570,8 @@ class _ProjectInspectionMixin:
 
     def _source_from_raw(self, raw: SonareProjectSource) -> ProjectSource:
         """Build a ProjectSource; audio sources carry the full, untruncated URI."""
-        content_hash = ""
-        external_stem_role = ""
+        content_hash: str | None = None
+        external_stem_role: str | None = None
         if int(raw.kind) == 0:  # SONARE_SOURCE_AUDIO; MIDI has no such metadata.
             lib = _get_lib()
             # Metadata is an additive C API.  Keep source inspection usable
@@ -588,10 +589,9 @@ class _ProjectInspectionMixin:
                             ctypes.byref(metadata),
                         )
                     )
-                    content_hash = metadata.content_hash.decode() if metadata.content_hash else ""
-                    external_stem_role = (
-                        metadata.external_stem_role.decode() if metadata.external_stem_role else ""
-                    )
+                    # The core reports an unset field as NULL or as an empty string.
+                    content_hash = (metadata.content_hash or b"").decode() or None
+                    external_stem_role = (metadata.external_stem_role or b"").decode() or None
                 finally:
                     # The native getter owns both strings even when it reports
                     # a failure after partially filling the descriptor.

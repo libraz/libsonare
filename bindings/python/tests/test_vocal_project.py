@@ -118,7 +118,7 @@ def test_apply_roundtrip_and_rehydrate_after_project_reload() -> None:
         project.set_audio_source_metadata(
             clip.source_id,
             f"sha256:{source_sha256.hex()}",
-            "",
+            None,
         )
         result = project.apply_vocal_edit(
             clip_id=clip_id,
@@ -232,7 +232,7 @@ def test_callback_close_guards_survive_in_isolated_native_process() -> None:
         project.set_audio_source_metadata(
             clip.source_id,
             f"sha256:{source_sha256.hex()}",
-            "",
+            None,
         )
         project.apply_vocal_edit(
             clip_id=clip_id,

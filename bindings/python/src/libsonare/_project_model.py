@@ -181,7 +181,6 @@ from ._runtime import (
     _require_instance,
     _to_c_size_t,
     _token_ordinal,
-    _utf8_arg,
 )
 from ._types_engine import AutomationPoint
 
@@ -495,15 +494,13 @@ def _cc_binding_from_c(b: SonareMidiCcBinding) -> MidiCcBinding:
     )
 
 
-def _marker_name_bytes(name: str | None) -> bytes:
-    """UTF-8-encode a marker name for the fixed 64-byte C ``name`` field.
-
-    Truncates on a codepoint boundary so a split multi-byte sequence never
-    leaves invalid UTF-8 (mirrors the engine binding's ``_fixed_bytes``).
-    """
-    if not name:
-        return b""
-    return _utf8_arg(name, "name")[:63].decode("utf-8", "ignore").encode("utf-8")
+def _marker_name_arg(name: str | None) -> str:
+    """Spell a marker name for the C call, where ``""`` is its encoding of no name."""
+    if name is None:
+        return ""
+    if name == "":
+        raise SonareValueError("marker name must not be empty; omit it for an unnamed marker")
+    return name
 
 
 @dataclass(frozen=True)

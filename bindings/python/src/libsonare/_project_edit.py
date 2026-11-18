@@ -199,15 +199,25 @@ class _ProjectEditMixin:
         )
 
     def set_audio_source_metadata(
-        self, source_id: int, content_hash: str, external_stem_role: str
+        self, source_id: int, content_hash: str | None, external_stem_role: str | None
     ) -> None:
         """Replace an audio source's metadata strings as one undoable edit.
 
-        Both values are required strings. Passing an empty string clears that
-        field; the source URI, audio content, and other source state are kept.
+        Both values are required. ``None`` clears that field and an empty
+        string is refused; the source URI, audio content, and other source
+        state are kept.
         """
-        if not isinstance(content_hash, str) or not isinstance(external_stem_role, str):
-            raise TypeError("content_hash and external_stem_role must be strings")
+        for arg_name, value in (
+            ("content_hash", content_hash),
+            ("external_stem_role", external_stem_role),
+        ):
+            if value is not None and not isinstance(value, str):
+                raise TypeError(f"set_audio_source_metadata: {arg_name} must be a string or None")
+            if value == "":
+                raise SonareValueError(
+                    f"set_audio_source_metadata: {arg_name} must not be empty; "
+                    "pass None to clear it"
+                )
         lib = _get_lib()
         _require_export(
             lib,
@@ -218,8 +228,9 @@ class _ProjectEditMixin:
             lib.sonare_project_set_audio_source_metadata(
                 self._require_handle(),
                 _to_c_uint32(source_id, "source_id"),
-                _utf8_arg(content_hash, "content_hash"),
-                _utf8_arg(external_stem_role, "external_stem_role"),
+                # The C call reads an empty string as "clear".
+                _utf8_arg(content_hash or "", "content_hash"),
+                _utf8_arg(external_stem_role or "", "external_stem_role"),
             )
         )
 
@@ -566,11 +577,13 @@ class _ProjectEditMixin:
     def set_clip_takes(
         self,
         clip_id: int,
-        takes: Sequence[Mapping[str, object]] | None,
+        takes: Sequence[Mapping[str, object]],
         active_take_id: int = 0,
     ) -> None:
-        """Replace a clip's take list and active take via an undoable edit."""
-        take_items = list(takes or [])
+        """Replace a clip's take list and active take via an undoable edit; ``[]`` clears it."""
+        if takes is None:
+            raise TypeError("set_clip_takes: takes must be a sequence; pass [] to clear the takes")
+        take_items = list(takes)
         c_takes = (SonareProjectClipTake * len(take_items))()
         name_backing: list[bytes] = []
         for i, item in enumerate(take_items):
@@ -613,10 +626,14 @@ class _ProjectEditMixin:
     def set_clip_comp_segments(
         self,
         clip_id: int,
-        segments: Sequence[Mapping[str, object]] | None,
+        segments: Sequence[Mapping[str, object]],
     ) -> None:
-        """Replace a clip's comp lane via an undoable edit."""
-        segment_items = list(segments or [])
+        """Replace a clip's comp lane via an undoable edit; ``[]`` clears it."""
+        if segments is None:
+            raise TypeError(
+                "set_clip_comp_segments: segments must be a sequence; pass [] to clear the lane"
+            )
+        segment_items = list(segments)
         c_segments = (SonareProjectClipCompSegment * len(segment_items))()
         for i, item in enumerate(segment_items):
             segment = _mapping_keys(
@@ -656,7 +673,10 @@ class _ProjectEditMixin:
         anchors: Sequence[tuple[float, float]],
         name: str | None = None,
     ) -> None:
-        """Add or replace a first-class project warp map."""
+        """Add or replace a first-class project warp map.
+
+        ``name`` labels the map; ``None`` leaves it unnamed and an empty string is refused.
+        """
         count = len(anchors)
         c_anchors = (SonareProjectWarpAnchor * count)()
         for i, (warp_sample, source_sample) in enumerate(anchors):
@@ -666,7 +686,9 @@ class _ProjectEditMixin:
             c_anchors[i].source_sample = _narrow_double(
                 source_sample, f"set_warp_map: anchors[{i}].source_sample"
             )
-        encoded_name = _utf8_arg(name, "name") if name else None
+        encoded_name = None if name is None else _utf8_arg(name, "name")
+        if encoded_name == b"":
+            raise SonareValueError("set_warp_map: name must not be empty; omit it for no name")
         desc = SonareProjectWarpMapDesc(
             # Passed unconverted so the struct's own narrowing sees the caller's
             # value; int() would truncate a fraction past it.
