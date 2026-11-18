@@ -2202,10 +2202,27 @@ REFUSALS = (
     ),
     (
         "high-pass",
-        [_field("node", "EqOptions", "hpfCutoffHz"), _field("python", "EqOptions", "highpass")],
+        [
+            _field("node", "EqOptions", "hpfCutoffHz"),
+            _field("python", "EqOptions", "highpass"),
+            _field("wasm", "DeesserOptions", "bandpassQ"),
+            _field(
+                "node",
+                "WahOptions",
+                "filterType",
+                "'bandPass' | 'lowpass'",
+                inline_literals=True,
+                literals=["bandPass", "lowpass"],
+            ),
+        ],
         [
             "node field EqOptions.hpfCutoffHz: spell high-pass as highPass / high_pass",
             "python field EqOptions.highpass: spell high-pass as highPass / high_pass",
+            "wasm field DeesserOptions.bandpassQ: spell band-pass as bandPass / band_pass",
+            (
+                "node field WahOptions.filterType: token 'lowpass' spells low-pass as one word;"
+                " use lowPass"
+            ),
         ],
     ),
     (

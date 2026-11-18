@@ -791,8 +791,8 @@ mixer.setFaderDb('bass', -3);
 
 [[rule]]
 slug = "high-pass"
-title = "High-pass filters are spelled HighPass"
-summary = "The seven spellings of one concept become `HighPass` (`chromaHighPassHz`, `keyHighPassHz`, `sidechainHighPassHz`, `highPassHz`; `--chroma-high-pass-hz`). Filters that are on by default keep an 80 Hz default and accept 0 as a real cutoff; a filter with an enable flag drops the flag, so an absent value is off."
+title = "Pass filters are spelled HighPass, LowPass and BandPass"
+summary = "The seven spellings of one concept become `HighPass` (`chromaHighPassHz`, `keyHighPassHz`, `sidechainHighPassHz`, `highPassHz`; `--chroma-high-pass-hz`). Low-pass and band-pass follow it, in names and in tokens alike (`lowPass`, `bandPass`, `bandPassQ`). Filters that are on by default keep an 80 Hz default and accept 0 as a real cutoff; a filter with an enable flag drops the flag, so an absent value is off."
 [[rule.example]]
 surface = "wasm"
 before = '''

@@ -1793,13 +1793,26 @@ def chk_digit_tokens(ctx):
     return cands, bad
 
 
+_PASS = re.compile(r"(hpf|Hpf|HPF)|([hH]igh|[lL]ow|[bB]and)pass")
+
+
+def _pass_word(m: re.Match) -> str:
+    return "high" if m.group(1) else m.group(2).lower()
+
+
 def chk_high_pass(ctx):
+    """High-, low- and band-pass are two words in a name and in a token: highPass, lowPass, bandPass."""
     cands = ctx.records
-    bad = [
-        (r, "spell high-pass as highPass / high_pass")
-        for r in cands
-        if re.search(r"hpf|Hpf|HPF|[hH]ighpass", bare(r))
-    ]
+    bad = []
+    for r in cands:
+        if m := _PASS.search(bare(r)):
+            w = _pass_word(m)
+            bad.append((r, f"spell {w}-pass as {w}Pass / {w}_pass"))
+    # A value record's name is its token, so the name scan above already reads it.
+    for r, t in _tokens(ctx):
+        if r["kind"] != "value" and (m := _PASS.search(t)):
+            w = _pass_word(m)
+            bad.append((r, f"token '{t}' spells {w}-pass as one word; use {w}Pass"))
     return len(cands), bad
 
 
