@@ -41,10 +41,13 @@ from ._runtime import (
 )
 
 PlaybackRendererConfig = dict[str, Any]
-"""A nested playback renderer config document (``target``, ``room``, ``loudness``, ...).
+"""A nested playback renderer config document with camelCase keys.
 
-Complete or partial; an omitted key takes the schema default. JSON text is parsed by
-the caller (``json.loads``) before it is passed.
+Keys such as ``target``, ``room``, ``loudness`` and ``outputLimiter``; speaker roles
+are spelled out (``left``, ``center``, ``leftSurround``, ...). Complete or partial; an
+omitted key takes the schema default, and an earlier snake_case key or short role
+token raises ``SonareError`` (InvalidFormat) naming the spelling to write. JSON text
+is parsed by the caller (``json.loads``) before it is passed.
 """
 
 
@@ -233,7 +236,7 @@ class PlaybackRenderer:
             )
         )
 
-    def config(self) -> dict[str, Any]:
+    def config(self) -> PlaybackRendererConfig:
         """The current complete configuration document."""
         handle = self._require_handle()
         out = ctypes.c_char_p()
@@ -480,7 +483,7 @@ def render_playback(
 class PlaybackLoudnessMeter:
     """Integrated-loudness meter for multichannel program material (1/2/6/8 ch).
 
-    Feeds :meth:`push_interleaved` in chunks to measure ``loudness.program_lufs``
+    Feeds :meth:`push_interleaved` in chunks to measure ``loudness.programLufs``
     ahead of a :class:`PlaybackRenderer`.
     """
 

@@ -163,9 +163,9 @@ def test_config_roundtrip_and_prepare_key_rejection() -> None:
 
         # A realtime-only key on a document with the same prepare shape is
         # accepted.
-        config["night_mode"] = {"amount": 1}
+        config["nightMode"] = {"amount": 1}
         renderer.set_config(config)
-        assert renderer.config()["night_mode"]["amount"] == 1
+        assert renderer.config()["nightMode"]["amount"] == 1
 
         # A document that changes the prepare shape (target.kind) is rejected.
         with pytest.raises(SonareError, match="requires a new renderer"):
@@ -244,10 +244,23 @@ def test_reset_clears_state() -> None:
         renderer.reset()
 
 
+@pytest.mark.parametrize(
+    "document",
+    [
+        {"night_mode": {"amount": 1}},
+        {"target": {"kind": "speakers", "layout": "stereo", "speakers": {"L": {"trimDb": 0.0}}}},
+    ],
+    ids=["snake_case_key", "short_role_token"],
+)
+def test_an_earlier_config_spelling_is_refused_as_invalid_format(document: dict) -> None:
+    with raises_coded(ErrorCode.INVALID_FORMAT, match="earlier spelling"):
+        PlaybackRenderer(document, sample_rate=SR)
+
+
 def test_diagnostics_reports_active_input_layout() -> None:
     with PlaybackRenderer(_speakers_5_1(), max_block_size=BLOCK, sample_rate=48000) as renderer:
         diagnostics = renderer.diagnostics()
-        assert "active_input_layout" in diagnostics
+        assert "activeInputLayout" in diagnostics
 
 
 def test_create_json_rejects_an_unknown_key() -> None:
@@ -380,9 +393,9 @@ def test_cli_render_trims_what_the_offline_render_trims_with_unequal_distances()
         "target": {
             "kind": "speakers",
             "layout": "stereo",
-            "speakers": {"L": {"distance_m": 1.0}, "R": {"distance_m": 5.0}},
+            "speakers": {"left": {"distanceM": 1.0}, "right": {"distanceM": 5.0}},
         },
-        "output_limiter": {"enabled": False},
+        "outputLimiter": {"enabled": False},
     }
     frames = 2400
     burst = np.zeros(frames, dtype=np.float32)
@@ -405,9 +418,9 @@ _UNEQUAL_DISTANCE_CONFIG = {
     "target": {
         "kind": "speakers",
         "layout": "stereo",
-        "speakers": {"L": {"distance_m": 1.0}, "R": {"distance_m": 5.0}},
+        "speakers": {"left": {"distanceM": 1.0}, "right": {"distanceM": 5.0}},
     },
-    "output_limiter": {"enabled": False},
+    "outputLimiter": {"enabled": False},
 }
 
 

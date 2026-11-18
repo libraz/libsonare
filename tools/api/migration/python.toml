@@ -8793,7 +8793,7 @@ test = "bindings/python/tests/test_block_size_absence.py::test_a_required_channe
 [[entry]]
 kind = "option"
 old = "PlaybackRenderer.constructor(config)"
-changed = "a PlaybackRendererConfig mapping only; JSON text raises TypeError, so parse it with json.loads first"
+changed = "a PlaybackRendererConfig mapping only; JSON text raises TypeError, so parse it with json.loads first. Keys are camelCase (channelMap, bassManagement.crossoverHz, outputLimiter.ceilingDbtp, ...) and speaker roles are spelled out (left, leftSurround, ...); an earlier snake_case key or short role token raises SonareError InvalidFormat"
 domain = "engine"
 rule = "one-input-form"
 test = "bindings/python/tests/test_playback.py::test_the_config_document_is_a_mapping_never_json_text"
@@ -8801,7 +8801,7 @@ test = "bindings/python/tests/test_playback.py::test_the_config_document_is_a_ma
 [[entry]]
 kind = "option"
 old = "PlaybackRenderer.set_config(config)"
-changed = "a PlaybackRendererConfig mapping only; JSON text raises TypeError, so parse it with json.loads first"
+changed = "a PlaybackRendererConfig mapping only; JSON text raises TypeError, so parse it with json.loads first. Keys are camelCase (channelMap, bassManagement.crossoverHz, outputLimiter.ceilingDbtp, ...) and speaker roles are spelled out (left, leftSurround, ...); an earlier snake_case key or short role token raises SonareError InvalidFormat"
 domain = "engine"
 rule = "one-input-form"
 test = "bindings/python/tests/test_playback.py::test_the_config_document_is_a_mapping_never_json_text"
@@ -8809,7 +8809,7 @@ test = "bindings/python/tests/test_playback.py::test_the_config_document_is_a_ma
 [[entry]]
 kind = "option"
 old = "render_playback(config)"
-changed = "a PlaybackRendererConfig mapping only; JSON text raises TypeError, so parse it with json.loads first"
+changed = "a PlaybackRendererConfig mapping only; JSON text raises TypeError, so parse it with json.loads first. Keys are camelCase (channelMap, bassManagement.crossoverHz, outputLimiter.ceilingDbtp, ...) and speaker roles are spelled out (left, leftSurround, ...); an earlier snake_case key or short role token raises SonareError InvalidFormat"
 domain = "engine"
 rule = "one-input-form"
 test = "bindings/python/tests/test_playback.py::test_the_config_document_is_a_mapping_never_json_text"
