@@ -23,13 +23,13 @@ extern "C" {
 /// of @p payload_len bytes (also freed by the same helper). The core treats the
 /// payload as opaque module-owned bytes.
 typedef struct {
-  char* module_id;
-  uint32_t schema_version;
-  uint32_t target_track_id;
-  double region_start_ppq;
-  double region_end_ppq;
-  uint8_t* payload;
-  size_t payload_len;
+  char* module_id;           ///< Heap NUL-terminated id of the module that owns the payload.
+  uint32_t schema_version;   ///< Module-defined version of the payload format.
+  uint32_t target_track_id;  ///< Track the sidecar applies to.
+  double region_start_ppq;   ///< Region start in quarter notes.
+  double region_end_ppq;     ///< Region end in quarter notes.
+  uint8_t* payload;          ///< Heap payload bytes; opaque to the core.
+  size_t payload_len;        ///< Size of payload in bytes.
 } SonareProjectAssistSidecar;
 
 #ifdef __cplusplus
@@ -64,10 +64,10 @@ static_assert(sizeof(SonareProjectAssistSidecar) ==
 /// arrangement KeyMode ordinal (0 unknown, 1 major, 2 minor, 3 dorian,
 /// 4 phrygian, 5 lydian, 6 mixolydian, 7 locrian).
 typedef struct {
-  double start_ppq;
-  double end_ppq;
-  uint32_t tonic_pc;
-  uint32_t mode;
+  double start_ppq;   ///< Segment start in quarter notes; finite and non-negative.
+  double end_ppq;     ///< Segment end in quarter notes; must be after start_ppq.
+  uint32_t tonic_pc;  ///< Tonic pitch class 0..11 (C = 0), or 255 for unknown.
+  uint32_t mode;      ///< Key mode ordinal; see the list above.
 } SonareProjectKeySegment;
 
 #ifdef __cplusplus
@@ -93,15 +93,15 @@ static_assert(sizeof(SonareProjectKeySegment) == 2u * sizeof(double) + 2u * size
 /// and copied. @ref sonare_chord_symbol_from_analysis fills the root, quality,
 /// extensions and slash bass from an analysis chord.
 typedef struct {
-  double start_ppq;
-  double end_ppq;
-  uint32_t root_pc;
-  uint32_t quality;
-  const uint8_t* extensions;
-  size_t extension_count;
-  uint32_t slash_bass_pc;
-  const char* roman_numeral;
-  int modulation_boundary;
+  double start_ppq;           ///< Chord start in quarter notes; finite and non-negative.
+  double end_ppq;             ///< Chord end in quarter notes; must be after start_ppq.
+  uint32_t root_pc;           ///< Root pitch class 0..11 (C = 0), or 255 for unknown.
+  uint32_t quality;           ///< Chord quality ordinal 0..7; see the list above.
+  const uint8_t* extensions;  ///< Extension scale degrees; copied; NULL only when count is 0.
+  size_t extension_count;     ///< Number of entries in extensions; at most 32.
+  uint32_t slash_bass_pc;     ///< Slash-bass pitch class 0..11, or 255 for none.
+  const char* roman_numeral;  ///< Optional NUL-terminated Roman-numeral label; copied; may be NULL.
+  int modulation_boundary;    ///< Nonzero when the chord marks a key change.
 } SonareProjectChordSymbol;
 
 #ifdef __cplusplus
@@ -182,11 +182,12 @@ typedef enum SONARE_ENUM_BASE {
 /// applied by @ref sonare_project_auto_tempo_ex; this preview exposes its
 /// first segment and total segment count for selection UI.
 typedef struct {
-  float bpm;
-  float confidence;
-  uint32_t kind;  ///< @ref SonareProjectTempoCandidateKind
-  uint32_t time_signature_count;
-  SonareProjectTimeSignatureSegment first_time_signature;
+  float bpm;         ///< Candidate tempo in beats per minute.
+  float confidence;  ///< Relative confidence of the candidate.
+  uint32_t kind;     ///< A @ref SonareProjectTempoCandidateKind labelling the octave hypothesis.
+  uint32_t time_signature_count;  ///< Number of detected time-signature segments.
+  SonareProjectTimeSignatureSegment
+      first_time_signature;  ///< First detected time-signature segment.
 } SonareProjectTempoCandidate;
 
 /// Maximum number of ranked tempo candidates emitted by
@@ -200,23 +201,22 @@ typedef struct {
 /// zeroed ramp_threshold folds the whole take into one segment, and a zeroed
 /// tempo_update_interval_beats is rejected.
 typedef struct {
-  /* Whether beat tracking may follow a tempo that changes during the take.
-     0 keeps the one-tempo-per-take behaviour the fixed-signature entry points
-     have always had, which is the right answer for material recorded to a
-     click. Turn it on for a performance that accelerates, slows or breathes:
-     with it off the tracker locks near the take's average and every tempo
-     segment the bridge emits sits near that same average. */
+  /// Whether beat tracking may follow a tempo that changes during the take.
+  /// 0 keeps the one-tempo-per-take behaviour of the fixed-signature entry points,
+  /// which is the right answer for material recorded to a click. Turn it on for a
+  /// performance that accelerates, slows or breathes: with it off the tracker locks
+  /// near the take's average and every tempo segment sits near that same average.
   int adaptive_tempo;
-  /* Beats of context the local tempo estimate is read over. Used only when
-     adaptive_tempo is 1. Must be positive. */
+  /// Beats of context the local tempo estimate is read over. Used only when
+  /// adaptive_tempo is 1. Must be positive.
   int tempo_update_interval_beats;
-  /* Relative tempo change (as a fraction) at which the bridge closes one tempo
-     segment and opens the next. Smaller follows the performance more closely
-     and emits more segments; larger merges more of it into constant stretches.
-     Must be non-negative and finite. */
+  /// Relative tempo change (as a fraction) at which the bridge closes one tempo
+  /// segment and opens the next. Smaller follows the performance more closely
+  /// and emits more segments; larger merges more of it into constant stretches.
+  /// Must be non-negative and finite.
   float ramp_threshold;
-  /* Whether to emit the half-tempo and double-tempo alternatives alongside the
-     primary candidate. 0 emits the primary only. */
+  /// Whether to emit the half-tempo and double-tempo alternatives alongside the
+  /// primary candidate. 0 emits the primary only.
   int include_octave_candidates;
 } SonareProjectTempoOptions;
 

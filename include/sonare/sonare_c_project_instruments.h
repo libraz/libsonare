@@ -33,6 +33,7 @@ extern "C" {
 /// outlive the bounce call. The callbacks run on the bounce's render thread and
 /// must not free the project.
 typedef struct {
+  /// Opaque pointer passed verbatim as the first argument of every callback.
   void* user_data;
   /// CONTROL thread (once, before rendering): negotiated sample rate + max block.
   void (*prepare)(void* user_data, double sample_rate, int max_block_size);
@@ -68,8 +69,8 @@ static_assert(sizeof(SonareInstrumentCallbacks) == 4u * sizeof(void*) + 2u * siz
 ///        @ref sonare_project_set_track_midi_destination and stamped onto the
 ///        track's compiled clips). The default destination is 0.
 typedef struct {
-  uint32_t destination_id;
-  SonareInstrumentCallbacks callbacks;
+  uint32_t destination_id;              ///< MIDI destination id the instrument serves.
+  SonareInstrumentCallbacks callbacks;  ///< Callback table; copied for the bounce call.
 } SonareInstrumentBinding;
 
 #ifdef __cplusplus
@@ -109,11 +110,12 @@ SonareError sonare_project_bounce_with_instruments(SonareProject* project,
 ///        @ref SonareBuiltinSynthConfig). A value outside this set is rejected
 ///        with @c SONARE_ERROR_INVALID_PARAMETER, not substituted.
 typedef enum SONARE_ENUM_BASE {
-  SONARE_SYNTH_WAVEFORM_SINE = 0,
-  SONARE_SYNTH_WAVEFORM_SAW = 1,
-  SONARE_SYNTH_WAVEFORM_SQUARE = 2,
-  SONARE_SYNTH_WAVEFORM_TRIANGLE = 3,
+  SONARE_SYNTH_WAVEFORM_SINE = 0,      ///< Sine wave.
+  SONARE_SYNTH_WAVEFORM_SAW = 1,       ///< Sawtooth wave.
+  SONARE_SYNTH_WAVEFORM_SQUARE = 2,    ///< Square wave.
+  SONARE_SYNTH_WAVEFORM_TRIANGLE = 3,  ///< Triangle wave.
 } SonareSynthWaveform;
+/// Number of @ref SonareSynthWaveform values.
 #define SONARE_SYNTH_WAVEFORM_COUNT 4
 #ifdef __cplusplus
 static_assert(SONARE_SYNTH_WAVEFORM_TRIANGLE + 1 == SONARE_SYNTH_WAVEFORM_COUNT,
@@ -130,27 +132,27 @@ static_assert(SONARE_SYNTH_WAVEFORM_TRIANGLE + 1 == SONARE_SYNTH_WAVEFORM_COUNT,
 /// enum rather than sizing a quantity, so there is no meaningful nearest value
 /// to clamp an unknown ordinal to and it is rejected instead.
 typedef struct {
-  int waveform;    /* SonareSynthWaveform; 0 = sine, outside the enum rejected.
-                      NOTE: a distinct enum from SonareSynthOscWaveform
-                      (sonare_c_types_analysis.h), whose 0 means "keep base
-                      preset", not sine. Do not mix the two. */
-  float gain;      /* master output gain (linear); 0 => 0.2 */
-  float attack_ms; /* ADSR attack in ms; 0 => 5. Linear ramp, full level at the set time */
-  float decay_ms;  /* ADSR decay in ms; 0 => 60. Linear ramp: the set time is a full 0 to 1 sweep */
-  float sustain;   /* ADSR sustain level [0,1]; 0 => 0.7 */
-  float release_ms; /* ADSR release in ms; 0 => 120. Linear ramp, as decay */
-  int polyphony;    /* max simultaneous voices; 0 => 16, clamped to [1, 64] */
+  /// A @ref SonareSynthWaveform selecting the oscillator; 0 = sine, outside the enum rejected.
+  /// A distinct enum from SonareSynthOscWaveform (sonare_c_types_analysis.h), whose 0 means
+  /// "keep base preset", not sine. Do not mix the two.
+  int waveform;
+  float gain;       ///< Master output gain (linear); 0 => 0.2.
+  float attack_ms;  ///< ADSR attack in ms; 0 => 5. Linear ramp, full level at the set time.
+  float decay_ms;  ///< ADSR decay in ms; 0 => 60. Linear ramp: the set time is a full 0 to 1 sweep.
+  float sustain;   ///< ADSR sustain level [0,1]; 0 => 0.7.
+  float release_ms;  ///< ADSR release in ms; 0 => 120. Linear ramp, as decay.
+  int polyphony;     ///< Max simultaneous voices; 0 => 16, clamped to [1, 64].
   /* Every field above takes 0 as "use the default". A negative or non-finite
      value is rejected with SONARE_ERROR_INVALID_PARAMETER rather than resolving
-     to the default, which is what it used to do without saying so. */
+     to the default. */
 } SonareBuiltinSynthConfig;
 
 /// @brief Binds a built-in synth patch to a MIDI destination id (the value set
 ///        by @ref sonare_project_set_track_midi_destination). The default
 ///        destination is 0.
 typedef struct {
-  uint32_t destination_id;
-  SonareBuiltinSynthConfig config;
+  uint32_t destination_id;          ///< MIDI destination id the synth serves.
+  SonareBuiltinSynthConfig config;  ///< Synth patch for that destination.
 } SonareBuiltinInstrumentBinding;
 
 /// @brief Like @ref sonare_project_bounce, but renders MIDI tracks routed to the
@@ -185,14 +187,15 @@ SonareError sonare_project_bounce_with_builtin_instruments(
 ///          arrangement support returns the empty string.
 const char* sonare_synth_preset_names(void);
 
+/// @brief Selects which synth enum @ref sonare_synth_enum_names lists.
 typedef enum SONARE_ENUM_BASE {
-  SONARE_SYNTH_ENUM_ENGINE_MODE = 0,
-  SONARE_SYNTH_ENUM_OSC_WAVEFORM = 1,
-  SONARE_SYNTH_ENUM_FILTER_MODEL = 2,
-  SONARE_SYNTH_ENUM_FILTER_OUTPUT = 3,
-  SONARE_SYNTH_ENUM_BODY_TYPE = 4,
-  SONARE_SYNTH_ENUM_MOD_SOURCE = 5,
-  SONARE_SYNTH_ENUM_MOD_DESTINATION = 6,
+  SONARE_SYNTH_ENUM_ENGINE_MODE = 0,      ///< Synth engine modes (SonareSynthEngineMode).
+  SONARE_SYNTH_ENUM_OSC_WAVEFORM = 1,     ///< Patch oscillator waveforms (SonareSynthOscWaveform).
+  SONARE_SYNTH_ENUM_FILTER_MODEL = 2,     ///< Patch filter models.
+  SONARE_SYNTH_ENUM_FILTER_OUTPUT = 3,    ///< Patch filter output types.
+  SONARE_SYNTH_ENUM_BODY_TYPE = 4,        ///< Patch body resonance types.
+  SONARE_SYNTH_ENUM_MOD_SOURCE = 5,       ///< Mod-matrix sources.
+  SONARE_SYNTH_ENUM_MOD_DESTINATION = 6,  ///< Mod-matrix destinations.
   /// Built-in oscillator synth names, including the ``sawtooth`` alias.
   SONARE_SYNTH_ENUM_BUILTIN_WAVEFORM = 7,
   /// How a device spells a gesture (@ref SonareControllerInput).
@@ -327,8 +330,8 @@ int sonare_synth_gs_variation_is_voiced_apart(int bank, int program);
 /// @brief Binds a NativeSynth patch to a MIDI destination id (the value set by
 ///        @ref sonare_project_set_track_midi_destination; default 0).
 typedef struct {
-  uint32_t destination_id;
-  SonareSynthPatch patch;
+  uint32_t destination_id;  ///< MIDI destination id the synth serves.
+  SonareSynthPatch patch;   ///< Patch for that destination; resolved through the preset catalog.
   /// When non-zero, select melodic voices from incoming GM bank/program
   /// messages and route MIDI channel 10 through the GM drum-kit map. The patch
   /// remains the fallback for any unsupported mapping. Zero preserves the
@@ -396,8 +399,8 @@ SonareError sonare_project_soundfont_preset_count(SonareProject* project, size_t
 /// @brief Source backend a resolved MIDI program renders through: the loaded
 ///        SoundFont (kSf2) or the built-in synthesizer fallback (kSynth).
 typedef enum SONARE_ENUM_BASE {
-  SONARE_SOURCE_BACKEND_SYNTH = 0,
-  SONARE_SOURCE_BACKEND_SF2 = 1,
+  SONARE_SOURCE_BACKEND_SYNTH = 0,  ///< Built-in synthesizer fallback.
+  SONARE_SOURCE_BACKEND_SF2 = 1,    ///< The loaded SoundFont.
 } SonareSourceBackend;
 
 /// @brief One bounce-manifest entry: a (channel, bank, program) combination the
@@ -410,11 +413,11 @@ typedef enum SONARE_ENUM_BASE {
 ///        SF2-first coverage, not the optional model-first override in a
 ///        SonareSf2InstrumentConfig supplied to a bounce call.
 typedef struct {
-  uint8_t channel; /* MIDI channel 0-15 */
-  uint8_t program; /* program number 0-127 */
-  uint16_t bank;   /* effective SF2 bank (128 = drums) */
-  int backend;     /* SonareSourceBackend */
-  char preset_name[64];
+  uint8_t channel;       ///< MIDI channel 0-15.
+  uint8_t program;       ///< Program number 0-127.
+  uint16_t bank;         ///< Effective SF2 bank (128 = drums).
+  int backend;           ///< A @ref SonareSourceBackend saying which source renders it.
+  char preset_name[64];  ///< NUL-terminated resolved SF2 preset name; empty for the synth backend.
 } SonareSf2ProgramStatus;
 
 /// @brief Enumerates every (channel, bank, program) combination the compiled
@@ -442,28 +445,29 @@ SonareError sonare_project_soundfont_manifest(SonareProject* project, SonareSf2P
 ///        adds clearing the bank's default rig; version 4 selects how the GS
 ///        insertion effects are realised).
 typedef struct {
-  int struct_version; /* 0 or 1 => version 1; 4 => current version */
-  float gain;         /* master output gain (linear); 0 => 0.5. A negative or non-finite gain is
-                         rejected with SONARE_ERROR_INVALID_PARAMETER, not promoted to the default */
-  int polyphony;      /* max simultaneous voices; 0 => 48, clamped to [1, 64]. A negative count is
-                         rejected with SONARE_ERROR_INVALID_PARAMETER rather than promoted to 48 */
-  int prefer_model_for_modeled_families; /* v2: non-zero selects dedicated melodic models;
-                                            drums remain SF2-first */
-  int clear_bank_rig;                    /* v3: non-zero renders the instrument alone, without the
-                                            amplifier the bank binds after an electric guitar's
-                                            voice; 0 keeps it, so a file that asks for nothing
-                                            still sounds complete */
-  int gs_efx_realization;                /* v4: how the GS insertion effects are realised --
-                                            0 modern (the library's own inserts), 1 classic
-                                            (the measured hardware models); any other value is
-                                            rejected with SONARE_ERROR_INVALID_PARAMETER */
+  int struct_version;  ///< Struct version: 0 or 1 => version 1; 4 => current version.
+  /// Master output gain (linear); 0 => 0.5. A negative or non-finite gain is rejected with
+  /// SONARE_ERROR_INVALID_PARAMETER, not promoted to the default.
+  float gain;
+  /// Max simultaneous voices; 0 => 48, clamped to [1, 64]. A negative count is rejected with
+  /// SONARE_ERROR_INVALID_PARAMETER rather than promoted to 48.
+  int polyphony;
+  /// v2: non-zero selects dedicated melodic models; drums remain SF2-first.
+  int prefer_model_for_modeled_families;
+  /// v3: non-zero renders the instrument alone, without the amplifier the bank binds after an
+  /// electric guitar's voice; 0 keeps it, so a file that asks for nothing still sounds complete.
+  int clear_bank_rig;
+  /// v4: how the GS insertion effects are realised -- 0 modern (the library's own inserts),
+  /// 1 classic (the measured hardware models); any other value is rejected with
+  /// SONARE_ERROR_INVALID_PARAMETER.
+  int gs_efx_realization;
 } SonareSf2InstrumentConfig;
 
 /// @brief Binds an SF2 player patch to a MIDI destination id (the value set by
 ///        @ref sonare_project_set_track_midi_destination; default 0).
 typedef struct {
-  uint32_t destination_id;
-  SonareSf2InstrumentConfig config;
+  uint32_t destination_id;           ///< MIDI destination id the player serves.
+  SonareSf2InstrumentConfig config;  ///< Player patch for that destination.
 } SonareSf2InstrumentBinding;
 
 /// @brief Like @ref sonare_project_bounce, but renders MIDI tracks routed to

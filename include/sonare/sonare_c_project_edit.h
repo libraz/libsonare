@@ -18,8 +18,8 @@ extern "C" {
 /// @brief Description for @ref sonare_project_add_track. The track name is an
 ///        optional NUL-terminated C string (NULL = empty name).
 typedef struct {
-  int kind; /* SonareProjectTrackKind */
-  const char* name;
+  int kind;          ///< A @ref SonareProjectTrackKind selecting the track kind.
+  const char* name;  ///< NUL-terminated UTF-8 name; NULL = empty.
 } SonareProjectTrackDesc;
 
 #ifdef __cplusplus
@@ -45,22 +45,23 @@ static_assert(sizeof(SonareProjectTrackDesc) == 2u * sizeof(void*),
 ///
 /// All musical positions are PPQ (quarter notes). @p length_ppq must be > 0.
 typedef struct {
-  uint32_t track_id;
-  int is_midi; /* 0 = audio clip, non-zero = MIDI clip */
+  uint32_t track_id;  ///< Id of the existing track that receives the clip.
+  int is_midi;        ///< 0 = audio clip, non-zero = MIDI clip.
 
-  double start_ppq;
-  double length_ppq;
-  double source_offset_ppq;
-  float gain; /* linear playback gain; must be finite and >= 0. 0 = silent clip
-                 (passed through verbatim — no coercion to unity). */
+  double start_ppq;          ///< Clip start on the timeline in quarter notes.
+  double length_ppq;         ///< Clip length in quarter notes; must be > 0.
+  double source_offset_ppq;  ///< Offset into the source in quarter notes.
+  /// Linear playback gain; must be finite and >= 0. 0 = silent clip (passed through verbatim,
+  /// no coercion to unity).
+  float gain;
 
-  /* Audio source content (audio clips only; NULL => metadata-only source). */
+  /// Decoded interleaved samples (audio clips only); NULL => metadata-only source.
   const float* audio_interleaved;
-  int64_t audio_frames;
-  int audio_channels;
-  int audio_sample_rate;
+  int64_t audio_frames;   ///< Frames per channel in @p audio_interleaved.
+  int audio_channels;     ///< Channel count of @p audio_interleaved.
+  int audio_sample_rate;  ///< Sample rate of @p audio_interleaved in Hz.
 
-  /* Optional host-local source reference for metadata-only audio sources. */
+  /// Optional host-local source reference for metadata-only audio sources; may be NULL.
   const char* source_uri;
 } SonareProjectClipDesc;
 
@@ -111,14 +112,14 @@ static_assert(sizeof(SonareProjectClipDesc) ==
 /// @ref SONARE_PROJECT_LOOP_RECORDING_DROP_PARTIAL_TAIL does not create it.
 /// Unknown flag bits are rejected.
 typedef struct {
-  uint32_t track_id;
-  uint32_t flags;
-  double start_ppq;
-  double loop_length_ppq;
-  const float* audio_interleaved;
-  int64_t audio_frames;
-  int audio_channels;
-  int audio_sample_rate;
+  uint32_t track_id;               ///< Id of the existing track that receives the clip.
+  uint32_t flags;                  ///< 0 or SONARE_PROJECT_LOOP_RECORDING_DROP_PARTIAL_TAIL.
+  double start_ppq;                ///< Clip start on the timeline in quarter notes.
+  double loop_length_ppq;          ///< Length of one loop in quarter notes; must be > 0.
+  const float* audio_interleaved;  ///< Captured interleaved samples.
+  int64_t audio_frames;            ///< Frames per channel in @p audio_interleaved.
+  int audio_channels;              ///< Channel count of @p audio_interleaved.
+  int audio_sample_rate;           ///< Sample rate of @p audio_interleaved in Hz.
 } SonareProjectLoopRecordingDesc;
 
 #ifdef __cplusplus
@@ -147,8 +148,8 @@ static_assert(sizeof(SonareProjectLoopRecordingDesc) == 6u * sizeof(double),
 /// reference-rate samples instead; scale both fields by
 /// project_rate / reference_rate before passing them here.
 typedef struct {
-  double warp_sample;
-  double source_sample;
+  double warp_sample;    ///< Position on the warped timeline in samples.
+  double source_sample;  ///< Corresponding position in the clip source in samples.
 } SonareProjectWarpAnchor;
 
 #ifdef __cplusplus
@@ -159,20 +160,22 @@ static_assert(sizeof(SonareProjectWarpAnchor) == 2u * sizeof(double),
               "SonareProjectWarpAnchor layout drift");
 #endif
 
+/// @brief Clip warp playback modes.
 typedef enum SONARE_ENUM_BASE {
-  SONARE_PROJECT_WARP_MODE_OFF = 0,
-  SONARE_PROJECT_WARP_MODE_REPITCH = 1,
-  SONARE_PROJECT_WARP_MODE_TEMPO_SYNC = 2,
-  /* Realtime pitch-preserving warp; see SONARE_ENGINE_WARP_MODE_TIME_STRETCH. */
+  SONARE_PROJECT_WARP_MODE_OFF = 0,  ///< No warp; the source plays at its own rate.
+  SONARE_PROJECT_WARP_MODE_REPITCH =
+      1,  ///< Anchor-mapped playback by resampling; pitch follows rate.
+  SONARE_PROJECT_WARP_MODE_TEMPO_SYNC = 2,  ///< Source baked to the tempo map; no loop.
+  /// Realtime pitch-preserving warp; see SONARE_ENGINE_WARP_MODE_TIME_STRETCH.
   SONARE_PROJECT_WARP_MODE_TIME_STRETCH = 3,
 } SonareProjectWarpMode;
 
 /// @brief First-class project warp-map descriptor.
 typedef struct {
-  uint32_t id;
-  const char* name;
-  const SonareProjectWarpAnchor* anchors;
-  size_t anchor_count;
+  uint32_t id;                             ///< Warp map id; must be non-zero.
+  const char* name;                        ///< NUL-terminated UTF-8 name; may be NULL.
+  const SonareProjectWarpAnchor* anchors;  ///< Array of @p anchor_count anchors; copied.
+  size_t anchor_count;                     ///< Number of anchors; at least 2.
 } SonareProjectWarpMapDesc;
 
 #ifdef __cplusplus
@@ -228,6 +231,7 @@ typedef struct {
   /// Chroma frames the reference and the take each produced. Their ratio is the
   /// overall rate difference the anchors encode.
   int32_t reference_frames;
+  /// Chroma frames the take produced (after resampling in the _ex call).
   int32_t take_frames;
 } SonareTakeAlignment;
 
@@ -251,10 +255,10 @@ static_assert(sizeof(SonareTakeAlignment) == sizeof(float) + 2u * sizeof(int32_t
 /// @brief Clip fade-curve ordinals; mirror sonare::arrangement::FadeCurve.
 ///        Pinned by a static_assert in the .cpp so reordering is caught.
 typedef enum SONARE_ENUM_BASE {
-  SONARE_FADE_CURVE_LINEAR = 0,
-  SONARE_FADE_CURVE_EQUAL_POWER = 1,
-  SONARE_FADE_CURVE_EXPONENTIAL = 2,
-  SONARE_FADE_CURVE_LOGARITHMIC = 3,
+  SONARE_FADE_CURVE_LINEAR = 0,       ///< Linear gain ramp.
+  SONARE_FADE_CURVE_EQUAL_POWER = 1,  ///< Equal-power ramp.
+  SONARE_FADE_CURVE_EXPONENTIAL = 2,  ///< Exponential ramp.
+  SONARE_FADE_CURVE_LOGARITHMIC = 3,  ///< Logarithmic ramp.
 } SonareProjectFadeCurve;
 
 /// @brief Resolves a clip fade-curve name to a @ref SonareProjectFadeCurve
@@ -265,17 +269,17 @@ SonareError sonare_project_fade_curve_from_name(const char* name, uint32_t* out_
 /// @brief Clip loop-mode ordinals; mirror sonare::arrangement::LoopMode.
 ///        Pinned by a static_assert in the .cpp.
 typedef enum SONARE_ENUM_BASE {
-  SONARE_LOOP_MODE_OFF = 0,
-  SONARE_LOOP_MODE_LOOP = 1,
+  SONARE_LOOP_MODE_OFF = 0,   ///< Play the clip once.
+  SONARE_LOOP_MODE_LOOP = 1,  ///< Repeat the loop region.
 } SonareProjectLoopMode;
 
 /// @brief Automation breakpoint interpolation ordinals; mirror
 ///        sonare::AutomationCurve. Pinned by a static_assert in the .cpp.
 typedef enum SONARE_ENUM_BASE {
-  SONARE_CURVE_LINEAR = 0,
-  SONARE_CURVE_EXPONENTIAL = 1,
-  SONARE_CURVE_HOLD = 2,
-  SONARE_CURVE_SCURVE = 3,
+  SONARE_CURVE_LINEAR = 0,       ///< Linear interpolation to the next point.
+  SONARE_CURVE_EXPONENTIAL = 1,  ///< Exponential interpolation to the next point.
+  SONARE_CURVE_HOLD = 2,         ///< Hold the value until the next point.
+  SONARE_CURVE_SCURVE = 3,       ///< Smooth S-shaped interpolation to the next point.
 } SonareProjectAutomationCurve;
 
 /// @brief Persistent target classification for an automation lane.
@@ -283,17 +287,17 @@ typedef enum SONARE_ENUM_BASE {
 /// Opaque is the legacy host-defined target. Track fader and track pan are
 /// typed mixer targets; no other ordinal is currently valid.
 typedef enum SONARE_ENUM_BASE {
-  SONARE_AUTOMATION_TARGET_OPAQUE = 0,
-  SONARE_AUTOMATION_TARGET_TRACK_FADER_DB = 1,
-  SONARE_AUTOMATION_TARGET_TRACK_PAN = 2,
+  SONARE_AUTOMATION_TARGET_OPAQUE = 0,          ///< Host-defined target id.
+  SONARE_AUTOMATION_TARGET_TRACK_FADER_DB = 1,  ///< The track's mixer fader, in dB.
+  SONARE_AUTOMATION_TARGET_TRACK_PAN = 2,       ///< The track's mixer pan.
 } SonareAutomationTargetKind;
 
 /// @brief One clip fade region for @ref sonare_project_set_clip_fade.
 ///        @p length_ppq must be finite and >= 0 (0 = no fade). @p curve is a
 ///        @ref SonareProjectFadeCurve ordinal.
 typedef struct {
-  double length_ppq;
-  uint32_t curve; /* SonareProjectFadeCurve */
+  double length_ppq;  ///< Fade length in quarter notes; 0 = no fade.
+  uint32_t curve;     ///< A @ref SonareProjectFadeCurve ordinal.
 } SonareProjectClipFade;
 
 #ifdef __cplusplus
@@ -309,10 +313,10 @@ static_assert(sizeof(SonareProjectClipFade) == sizeof(double) + 2u * sizeof(uint
 /// clip's current source, or an existing source id compatible with the clip's
 /// track kind. @p source_offset_ppq must be finite and >= 0. @p name is optional.
 typedef struct {
-  uint32_t id;
-  uint32_t source_id;
-  double source_offset_ppq;
-  const char* name;
+  uint32_t id;               ///< Clip-local take id; non-zero.
+  uint32_t source_id;        ///< Source id; 0 = the clip's current source.
+  double source_offset_ppq;  ///< Offset into the source in quarter notes; finite and >= 0.
+  const char* name;          ///< Optional NUL-terminated UTF-8 name; may be NULL.
 } SonareProjectClipTake;
 
 #ifdef __cplusplus
@@ -341,10 +345,11 @@ static_assert(sizeof(SonareProjectClipTake) ==
 /// exceed either this segment's length or the preceding part's, and is 0 on a
 /// segment that starts at 0, which has nothing in front of it to fade over.
 typedef struct {
-  double start_ppq;
-  double end_ppq;
-  uint32_t take_id;
-  double crossfade_ppq;
+  double start_ppq;  ///< Segment start in clip-local quarter notes.
+  double end_ppq;    ///< Segment end (exclusive) in clip-local quarter notes.
+  uint32_t take_id;  ///< Id of the take to play; 0 = the base / active fallback.
+  double
+      crossfade_ppq;  ///< Equal-power crossfade into this segment in quarter notes; 0 = butt join.
 } SonareProjectClipCompSegment;
 
 #ifdef __cplusplus
@@ -371,9 +376,9 @@ static_assert(sizeof(SonareProjectClipCompSegment) == 4u * sizeof(double),
 /// be NULL only when @p point_count is 0. The breakpoints are copied; the core
 /// does not require them pre-sorted but stores them verbatim.
 typedef struct {
-  uint32_t target_param_id;
-  const SonareAutomationPoint* points;
-  size_t point_count;
+  uint32_t target_param_id;             ///< Host-defined target parameter id; non-zero.
+  const SonareAutomationPoint* points;  ///< Breakpoints, copied; may be NULL only when count is 0.
+  size_t point_count;                   ///< Number of entries in @p points.
 } SonareAutomationLaneDesc;
 
 #ifdef __cplusplus
@@ -392,10 +397,10 @@ static_assert(sizeof(SonareAutomationLaneDesc) == 2u * sizeof(void*) + sizeof(si
 ///        @ref SonareAutomationTargetKind. The points contract is identical to
 ///        @ref SonareAutomationLaneDesc.
 typedef struct {
-  uint32_t target_param_id;
-  SonareAutomationTargetKind target_kind;
-  const SonareAutomationPoint* points;
-  size_t point_count;
+  uint32_t target_param_id;                ///< Target parameter id; non-zero.
+  SonareAutomationTargetKind target_kind;  ///< A @ref SonareAutomationTargetKind.
+  const SonareAutomationPoint* points;  ///< Breakpoints, copied; may be NULL only when count is 0.
+  size_t point_count;                   ///< Number of entries in @p points.
 } SonareAutomationLaneDescEx;
 
 #ifdef __cplusplus

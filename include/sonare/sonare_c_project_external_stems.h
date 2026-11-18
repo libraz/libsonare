@@ -29,12 +29,12 @@ typedef enum SONARE_ENUM_BASE {
 /// enclosing request's sample rate. All input is copied before this function
 /// returns, so the caller retains ownership of every pointer.
 typedef struct {
-  const char* name;
-  const char* role;
-  uint32_t layout; /* SonareExternalStemLayout */
-  const float* const* planar_samples;
-  int64_t frame_count;
-  int64_t start_frame;
+  const char* name;  ///< Stem name; required, NUL-terminated UTF-8, unique within the request.
+  const char* role;  ///< Optional NUL-terminated UTF-8 label kept as source metadata; may be NULL.
+  uint32_t layout;   ///< A @ref SonareExternalStemLayout giving the number of planes.
+  const float* const* planar_samples;  ///< One non-NULL plane pointer per channel of layout.
+  int64_t frame_count;                 ///< Frames in each plane; must be positive.
+  int64_t start_frame;  ///< Clip start on the project timeline in sample frames; non-negative.
 } SonareExternalStemDesc;
 
 #ifdef __cplusplus
@@ -60,10 +60,10 @@ static_assert(offsetof(SonareExternalStemDesc, start_frame) ==
 /// accepted. @p sample_rate must exactly equal the target project's rate: this
 /// API never resamples, retimes, phase-aligns, normalizes, or compensates gain.
 typedef struct {
-  int struct_version;
-  int sample_rate;
-  const SonareExternalStemDesc* stems;
-  size_t stem_count;
+  int struct_version;  ///< Layout version; 0 and 1 are accepted.
+  int sample_rate;     ///< Sample rate of every stem in Hz; must equal the project's rate.
+  const SonareExternalStemDesc* stems;  ///< Array of stem_count descriptors.
+  size_t stem_count;                    ///< Number of entries in stems.
 } SonareExternalStemImportRequest;
 
 #ifdef __cplusplus
@@ -84,9 +84,9 @@ static_assert(sizeof(SonareExternalStemImportRequest) ==
 /// Heap-owned IDs allocated by @ref sonare_project_import_external_stems.
 /// Release with @ref sonare_free_external_stem_import_result.
 typedef struct {
-  uint32_t* track_ids;
-  uint32_t* clip_ids;
-  size_t count;
+  uint32_t* track_ids;  ///< Created track ids, in input order; heap-owned, count entries.
+  uint32_t* clip_ids;   ///< Created clip ids, in input order; heap-owned, count entries.
+  size_t count;         ///< Number of stems imported.
 } SonareExternalStemImportResult;
 
 #ifdef __cplusplus
