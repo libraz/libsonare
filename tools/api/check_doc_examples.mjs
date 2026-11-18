@@ -6,7 +6,8 @@
 //   node tools/api/check_doc_examples.mjs [node|wasm ...]
 //
 // Each example runs as the body of an async function with every package export in scope.
-// Its `import ... from '<package>'` lines are checked against the exports and dropped. Names an
+// Its `import ... from '<package>'` lines are checked against the exports and dropped; its other
+// imports and its `declare` lines (the inputs it names for itself) move to module level. Names an
 // example takes as given (the audio it works on) are declared in PLACEHOLDERS; any other free
 // name is a finding. Exit 1 on any finding, or when a package yields no examples.
 
@@ -22,8 +23,9 @@ const PACKAGES = {
   wasm: { dir: 'bindings/wasm', name: '@libraz/libsonare' },
 };
 
-// What an example may use without defining it: the input it works on and the handle it is shown
-// on. A handle is typed, so a call on it is checked too.
+// What an example may use without defining it: the input it works on (audio, a block of it, or
+// a pitch track: f0 per frame, voiced flags, frames per second) and the handle it is shown on.
+// A handle is typed, so a call on it is checked too.
 const PLACEHOLDERS = `
 declare let samples: Float32Array;
 declare let left: Float32Array;
@@ -31,6 +33,10 @@ declare let right: Float32Array;
 declare let leftSamples: Float32Array;
 declare let rightSamples: Float32Array;
 declare let channels: Float32Array[];
+declare const block: Float32Array;
+declare const f0Hz: Float32Array;
+declare const voiced: Uint8Array;
+declare const frameRate: number;
 declare const sampleRate: number;
 declare const context: AudioContext;
 declare const project: Project;
@@ -40,6 +46,8 @@ declare const changer: RealtimeVoiceChanger;
 `;
 
 const FENCE = /```(?:ts|typescript)\n([\s\S]*?)```/g;
+// Module-level lines an example may carry: its own imports, and `declare` lines naming its inputs.
+const HOISTED = /^\s*(import|declare)\s/;
 const PKG_IMPORT = /^\s*import\s+(type\s+)?\{([^}]*)\}\s+from\s+'([^']+)';?\s*$/;
 
 function sourceFiles(dir) {
@@ -159,7 +167,7 @@ function check(surface) {
       }
       return '';
     });
-    for (const l of body) if (/^\s*import\s/.test(l)) kept.push(l);
+    for (const l of body) if (HOISTED.test(l)) kept.push(l);
     const head = [
       ...scope,
       ...kept,
@@ -167,7 +175,7 @@ function check(surface) {
       'export async function example(): Promise<void> {',
     ].join('\n');
     const file = path.join(ROOT, dir, `__doc_example_${i}.ts`);
-    const text = `${head}\n${body.map((l) => (/^\s*import\s/.test(l) ? '' : l)).join('\n')}\n}\n`;
+    const text = `${head}\n${body.map((l) => (HOISTED.test(l) ? '' : l)).join('\n')}\n}\n`;
     virtual.set(file, text);
     origin.set(file, { ...ex, offset: head.split('\n').length });
   });
