@@ -805,6 +805,20 @@ SonareError sonare_realtime_voice_changer_latency_samples(const SonareRealtimeVo
 #endif
 }
 
+SonareError sonare_realtime_voice_changer_max_block_size(const SonareRealtimeVoiceChanger* handle,
+                                                         int* out_max_block_size) {
+  // Audio-thread entry: see sonare_realtime_voice_changer_process_mono.
+  SONARE_C_RT_API_ENTRY;
+  if (out_max_block_size) *out_max_block_size = 0;
+#if defined(SONARE_WITH_VOICE_CHANGER)
+  if (!handle || !out_max_block_size) return SONARE_ERROR_INVALID_PARAMETER;
+  *out_max_block_size = handle->max_block_size;
+  return SONARE_OK;
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(handle, out_max_block_size);
+#endif
+}
+
 SonareError sonare_realtime_voice_changer_non_finite_discard_count(
     const SonareRealtimeVoiceChanger* handle, uint32_t* out_count) {
   // Audio-thread entry: see sonare_realtime_voice_changer_process_mono.

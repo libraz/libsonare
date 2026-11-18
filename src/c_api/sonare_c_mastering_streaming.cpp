@@ -460,6 +460,15 @@ int sonare_streaming_mastering_chain_latency_samples(const SonareStreamingMaster
   SONARE_C_CATCH_RETURN(0)
 }
 
+SonareError sonare_streaming_mastering_chain_max_block_size(
+    const SonareStreamingMasteringChain* handle, int* out_max_block_size) {
+  SONARE_C_API_ENTRY;
+  if (out_max_block_size) *out_max_block_size = 0;
+  if (!handle || !handle->chain || !out_max_block_size) return SONARE_ERROR_INVALID_PARAMETER;
+  *out_max_block_size = handle->max_block_size;
+  return SONARE_OK;
+}
+
 const char* sonare_streaming_mastering_chain_stage_names(
     const SonareStreamingMasteringChain* handle) {
   SONARE_C_TRY

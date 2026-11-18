@@ -165,6 +165,14 @@ int sonare_eq_latency_samples(const SonareEq* eq) {
   SONARE_C_CATCH_RETURN(0)
 }
 
+SonareError sonare_eq_max_block_size(const SonareEq* eq, int* out_max_block_size) {
+  SONARE_C_API_ENTRY;
+  if (out_max_block_size) *out_max_block_size = 0;
+  if (!eq || !out_max_block_size) return SONARE_ERROR_INVALID_PARAMETER;
+  *out_max_block_size = eq->max_block_size;
+  return SONARE_OK;
+}
+
 SonareError sonare_eq_non_finite_discard_count(const SonareEq* eq, uint32_t* out_count) {
   // A single relaxed atomic load, so it is safe to poll from the audio thread
   // alongside process(); it touches no diagnostic string.

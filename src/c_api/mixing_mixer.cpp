@@ -772,6 +772,14 @@ SonareError sonare_mixer_latency_samples(SonareMixer* mixer, int* out_latency_sa
   SONARE_C_CATCH
 }
 
+SonareError sonare_mixer_max_block_size(const SonareMixer* mixer, int* out_max_block_size) {
+  SONARE_C_API_ENTRY;
+  if (out_max_block_size) *out_max_block_size = 0;
+  if (!mixer || !out_max_block_size) return SONARE_ERROR_INVALID_PARAMETER;
+  *out_max_block_size = mixer->max_block_size;
+  return SONARE_OK;
+}
+
 SonareError sonare_mixer_tail_samples(SonareMixer* mixer, int* out_tail_samples) {
   SONARE_C_API_ENTRY;
   if (!mixer || !out_tail_samples) {

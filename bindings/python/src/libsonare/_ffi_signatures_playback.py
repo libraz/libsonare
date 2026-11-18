@@ -117,6 +117,12 @@ def configure_playback_signatures(lib: ctypes.CDLL) -> None:
             ctypes.c_void_p,
             ctypes.POINTER(ctypes.c_int),
         ]
+    if hasattr(lib, "sonare_playback_renderer_max_block_size"):
+        lib.sonare_playback_renderer_max_block_size.restype = ctypes.c_int32
+        lib.sonare_playback_renderer_max_block_size.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(ctypes.c_int),
+        ]
 
     if hasattr(lib, "sonare_playback_renderer_diagnostics_json"):
         lib.sonare_playback_renderer_diagnostics_json.restype = ctypes.c_int32

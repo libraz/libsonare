@@ -271,6 +271,12 @@ def configure_mixing_signatures(lib: ctypes.CDLL) -> None:
                 ctypes.c_void_p,
                 ctypes.POINTER(ctypes.c_int),
             ]
+        if hasattr(lib, "sonare_mixer_max_block_size"):
+            lib.sonare_mixer_max_block_size.restype = ctypes.c_int32
+            lib.sonare_mixer_max_block_size.argtypes = [
+                ctypes.c_void_p,
+                ctypes.POINTER(ctypes.c_int),
+            ]
         if hasattr(lib, "sonare_mixer_drain_tail_stereo"):
             lib.sonare_mixer_drain_tail_stereo.restype = ctypes.c_int32
             lib.sonare_mixer_drain_tail_stereo.argtypes = [

@@ -134,6 +134,10 @@ SonareError sonare_playback_renderer_process_interleaved(SonarePlaybackRenderer*
 /// @brief Renderer latency in frames (headphones: near ear).
 SonareError sonare_playback_renderer_latency_samples(const SonarePlaybackRenderer* renderer,
                                                      int* out);
+/// @brief Reports the largest block the process entries accept: the @p max_block_size given
+///        at creation, or the library default when 0 was given. @p out is written 0 first.
+SonareError sonare_playback_renderer_max_block_size(const SonarePlaybackRenderer* renderer,
+                                                    int* out);
 /// @brief Diagnostics document: inactive stages, per-stage latency, clamps,
 ///        active input layout, layout switch and truncated drain counters.
 /// @note Release @p out_json with @ref sonare_free_string.

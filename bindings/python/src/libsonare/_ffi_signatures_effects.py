@@ -628,6 +628,11 @@ def configure_effects_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_void_p,
         ctypes.POINTER(ctypes.c_int),
     ]
+    lib.sonare_realtime_voice_changer_max_block_size.restype = ctypes.c_int32
+    lib.sonare_realtime_voice_changer_max_block_size.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(ctypes.c_int),
+    ]
     lib.sonare_realtime_voice_changer_non_finite_discard_count.restype = ctypes.c_int32
     lib.sonare_realtime_voice_changer_non_finite_discard_count.argtypes = [
         ctypes.c_void_p,

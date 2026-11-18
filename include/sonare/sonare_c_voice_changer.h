@@ -348,6 +348,11 @@ SonareError sonare_realtime_voice_changer_all_notes_off(SonareRealtimeVoiceChang
 ///        omitted. The value is 0 before the handle has been prepared.
 SonareError sonare_realtime_voice_changer_latency_samples(const SonareRealtimeVoiceChanger* handle,
                                                           int* out_latency_samples);
+/// @brief Reports the largest block the process entries accept: the prepared
+///        @p max_block_size, or the library default when 0 was passed.
+/// @details @p out_max_block_size is written 0 first, and stays 0 before the handle is prepared.
+SonareError sonare_realtime_voice_changer_max_block_size(const SonareRealtimeVoiceChanger* handle,
+                                                         int* out_max_block_size);
 /// @brief Number of blocks in which the chain discarded its own state because a
 ///        non-finite value had reached it.
 /// @details Advisory telemetry, and the only thing that separates a degraded

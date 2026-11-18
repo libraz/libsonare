@@ -1024,6 +1024,10 @@ SonareError sonare_eq_set_output_gain_db(SonareEq* eq, float gain_db);
 SonareError sonare_eq_set_output_pan(SonareEq* eq, float pan);
 /// @brief Returns processing latency in samples, or zero for NULL.
 int sonare_eq_latency_samples(const SonareEq* eq);
+/// @brief Reports the largest block @ref sonare_eq_process accepts: the @p max_block_size given
+///        at creation, or the library default when 0 was given.
+/// @details @p out_max_block_size is written 0 first.
+SonareError sonare_eq_max_block_size(const SonareEq* eq, int* out_max_block_size);
 /// @brief Number of blocks in which the equalizer discarded recursive state
 ///        because a non-finite value had reached it.
 /// @details Advisory telemetry, and the only thing that separates a degraded
@@ -1198,6 +1202,12 @@ SonareError sonare_streaming_mastering_chain_set_parameter(SonareStreamingMaster
 
 /// @brief Returns total latency in samples (0 if not prepared).
 int sonare_streaming_mastering_chain_latency_samples(const SonareStreamingMasteringChain* handle);
+
+/// @brief Reports the largest block the process and flush entries accept: the prepared
+///        @p max_block_size, or the library default when 0 was passed.
+/// @details @p out_max_block_size is written 0 first, and stays 0 before the handle is prepared.
+SonareError sonare_streaming_mastering_chain_max_block_size(
+    const SonareStreamingMasteringChain* handle, int* out_max_block_size);
 
 /// @brief Returns the realized stage names in processing order, separated by
 ///        '\n' (empty string when @p handle is NULL or the chain has not been

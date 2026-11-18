@@ -182,6 +182,11 @@ SonareError sonare_engine_prime_offline_parameters(SonareRealtimeEngine* engine,
 /// @details The value the telemetry records carry as graph_latency_samples_q8.
 SonareError sonare_engine_graph_latency_samples_q8(SonareRealtimeEngine* engine,
                                                    int* out_latency_q8);
+/// @brief Reports the largest block sonare_engine_process accepts: the prepared
+///        @p max_block_size, or the library default when 0 was passed.
+/// @details @p out_max_block_size is written 0 first, and stays 0 before the engine is prepared.
+SonareError sonare_engine_max_block_size(const SonareRealtimeEngine* engine,
+                                         int* out_max_block_size);
 /// @brief Reports the longest audible tail after the last input, in samples.
 /// @details An upper bound: the longest instrument tail plus the longest route
 ///   through lane strips (channel delay included), buses, sends, the graph and

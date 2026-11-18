@@ -229,6 +229,19 @@ SonareError sonare_playback_renderer_latency_samples(const SonarePlaybackRendere
   SONARE_C_CATCH
 }
 
+SonareError sonare_playback_renderer_max_block_size(const SonarePlaybackRenderer* renderer,
+                                                    int* out) {
+  SONARE_C_API_ENTRY;
+  if (out) *out = 0;
+#if defined(SONARE_WITH_PLAYBACK)
+  if (!renderer || !out) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = renderer->renderer->max_block_size();
+  return SONARE_OK;
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(renderer, out);
+#endif
+}
+
 SonareError sonare_playback_renderer_diagnostics_json(const SonarePlaybackRenderer* renderer,
                                                       char** out_json) {
   SONARE_C_API_ENTRY;

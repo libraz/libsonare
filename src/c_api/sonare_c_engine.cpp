@@ -790,6 +790,15 @@ SonareError sonare_engine_graph_latency_samples_q8(SonareRealtimeEngine* engine,
   return SONARE_OK;
 }
 
+SonareError sonare_engine_max_block_size(const SonareRealtimeEngine* engine,
+                                         int* out_max_block_size) {
+  SONARE_C_API_ENTRY;
+  if (out_max_block_size) *out_max_block_size = 0;
+  if (!engine || !out_max_block_size) return SONARE_ERROR_INVALID_PARAMETER;
+  *out_max_block_size = engine->engine.max_block_size();
+  return SONARE_OK;
+}
+
 SonareError sonare_engine_tail_samples(SonareRealtimeEngine* engine, int* out_tail_samples) {
   SONARE_C_API_ENTRY;
   SONARE_C_TRY
