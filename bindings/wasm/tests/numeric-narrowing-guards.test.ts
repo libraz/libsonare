@@ -82,7 +82,7 @@ describe('int fields refuse a saturating, fractional or non-finite value', () =>
     expectRangeRefusal(() => importAt(48000.5));
   });
 
-  it('keeps the -1 routing sentinel while refusing what a cast turned into a filter', () => {
+  it('reads an omitted routing field as any and refuses what a cast turned into a filter', () => {
     const events = [
       midiNoteOn({ ppq: 0, group: 0, channel: 0, note: 60, velocity: 100 }),
       midiNoteOn({ ppq: 1, group: 0, channel: 3, note: 62, velocity: 100 }),
@@ -95,13 +95,11 @@ describe('int fields refuse a saturating, fractional or non-finite value', () =>
     expect(routed({ filterChannel: 3 })).toBe(1);
     expect(midiRouteEvents({ events, filterChannel: 0 }).events[0]?.ppq).toBe(0);
     expect(midiRouteEvents({ events, filterChannel: 3 }).events[0]?.ppq).toBe(1);
-    // -1 is "any group / any channel / no remap" and must survive the check.
-    expect(routed({ filterChannel: -1 })).toBe(2);
-    expect(routed({ filterGroup: -1 })).toBe(2);
-    expect(routed({ remapChannel: -1 })).toBe(2);
+    // Omitted is "any group / any channel / no remap"; -1 is a value, not that absence.
+    expect(routed({})).toBe(2);
 
     for (const key of ['filterGroup', 'filterChannel', 'remapChannel']) {
-      for (const value of [...SATURATING, ...NON_FINITE, 1.5]) {
+      for (const value of [-1, ...SATURATING, ...NON_FINITE, 1.5]) {
         expectRangeRefusal(() => routed({ [key]: value }));
       }
     }
@@ -260,10 +258,10 @@ describe('MIDI byte fields refuse a value that would wrap into the byte domain',
     }
   });
 
-  it('keeps the 255 any-channel wildcard and refuses the 511 that wrapped onto it', () => {
-    expect((encode({ channel: 255 }) >>> 16) & 0xf).toBe(0);
+  it('reads an omitted channel as any channel and refuses 255 along with the 511 that wrapped onto it', () => {
+    expect((encode({ channel: undefined as unknown as number }) >>> 16) & 0xf).toBe(0);
     expect((encode({ channel: 7 }) >>> 16) & 0xf).toBe(7);
-    for (const value of [256, 257, 511, 512, -1, 1.5, ...NON_FINITE]) {
+    for (const value of [16, 255, 256, 257, 511, 512, -1, 1.5, ...NON_FINITE]) {
       expectRangeRefusal(() => encode({ channel: value }));
     }
   });
@@ -476,14 +474,14 @@ describe('annotation ordinals refuse a value that clamps or truncates onto a mem
     }
   };
 
-  it('keeps two legal pitch classes and the 255 unknown sentinel', () => {
+  it('keeps two legal pitch classes and stores an omitted one as unknown', () => {
     expect(annotate({ tonicPc: 0 })).toBe(0);
     expect(annotate({ tonicPc: 5 })).toBe(5);
-    expect(annotate({ tonicPc: 255 })).toBe(255);
+    expect(annotate({ tonicPc: undefined })).toBe(255);
   });
 
-  it('refuses a negative, fractional or non-finite pitch class', () => {
-    for (const value of [-1, -2, 1.5, ...NON_FINITE, 2 ** 32, 2 ** 53 + 1]) {
+  it('refuses a negative, fractional, non-finite or past-11 pitch class, 255 included', () => {
+    for (const value of [-1, -2, 1.5, 12, 255, ...NON_FINITE, 2 ** 32, 2 ** 53 + 1]) {
       expectRangeRefusal(() => annotate({ tonicPc: value }));
       // The mode is a token: any number is refused as an ordinal, never narrowed.
       expect(() => annotate({ mode: value })).toThrow(TypeError);

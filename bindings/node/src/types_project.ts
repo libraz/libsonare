@@ -418,7 +418,7 @@ export type ProjectMidiCcBindingKind = 'controlChange7' | 'controlChange14' | 'r
 export interface ProjectMidiCcBinding {
   /** Controller number (the MSB controller for a 14-bit CC). */
   ccNumber: number;
-  /** MIDI channel 0..15, or 255 for any channel. Omit for the any-channel sentinel `255`. */
+  /** MIDI channel 0..15. Omit to match any channel; a learned any-channel binding comes back without it. */
   channel?: number;
   /** Controller shape. Default `'controlChange7'`. */
   kind?: ProjectMidiCcBindingKind;
@@ -834,7 +834,7 @@ export interface ProjectKeySegment {
   startPpq: number;
   /** Segment end in PPQ. */
   endPpq: number;
-  /** Tonic pitch class 0..11 (C=0) or 255 for unknown. Default 255. */
+  /** Tonic pitch class 0..11 (C=0). Omit when the tonic is unknown. */
   tonicPc?: number;
   /** Key mode. Default `'unknown'`. */
   mode?: ProjectKeyMode;
@@ -846,13 +846,13 @@ export interface ProjectChordSymbol {
   startPpq: number;
   /** Chord end in PPQ. */
   endPpq: number;
-  /** Root pitch class 0..11 (C=0) or 255 for unknown. Default 255. */
+  /** Root pitch class 0..11 (C=0). Omit when the root is unknown. */
   rootPc?: number;
   /** Chord quality. Default `'unknown'`. */
   quality?: ProjectChordQuality;
   /** Extension scale degrees (for example 7, 9, 13; 2 or 4 for a suspension), up to 32. */
   extensions?: number[];
-  /** Slash-bass pitch class 0..11 or 255 for none. Default 255. */
+  /** Slash-bass pitch class 0..11. Omit when the chord has no slash bass. */
   slashBassPc?: number;
   /** Optional roman-numeral label. */
   romanNumeral?: string;
