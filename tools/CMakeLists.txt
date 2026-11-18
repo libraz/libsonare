@@ -52,6 +52,8 @@ if(BUILD_PITCH_EDITOR)
   target_compile_definitions(sonare PRIVATE SONARE_WITH_PITCH_EDITOR=1)
 endif()
 if(BUILD_VOICE_CHANGER)
+  # voice-change runs the C ABI's latency-compensated one-shot, whose TU no linked archive holds.
+  target_sources(sonare PRIVATE ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_voice_changer.cpp)
   target_link_libraries(sonare PRIVATE sonare_voice_changer)
   target_compile_definitions(sonare PRIVATE SONARE_WITH_VOICE_CHANGER=1)
 

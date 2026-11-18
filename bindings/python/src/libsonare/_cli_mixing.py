@@ -18,6 +18,7 @@ from typing import Any
 import numpy as np
 
 from ._cli_common import (
+    _CLI_HOST_CHUNK_FRAMES,
     _atomic_wav_writer,
     _atomic_write_bytes,
     _audio_array,
@@ -310,7 +311,7 @@ def cmd_mix(args: argparse.Namespace) -> int:
         raise ValueError("either --scene or --preset is required")
 
     mixer = Mixer.from_scene_json(
-        scene_json, sample_rate=args.sample_rate, block_size=args.block_size
+        scene_json, sample_rate=args.sample_rate, max_block_size=_CLI_HOST_CHUNK_FRAMES
     )
     try:
         for warning in mixer.scene_warnings():
@@ -347,8 +348,8 @@ def cmd_mix(args: argparse.Namespace) -> int:
                 # Whether the stream is dithered depends on every sample of it, so
                 # the blocks are held (as float32) until the render has finished.
                 blocks: list[tuple[np.ndarray, np.ndarray]] = []
-                for offset in range(0, length or 0, args.block_size):
-                    end = min(offset + args.block_size, length or 0)
+                for offset in range(0, length or 0, _CLI_HOST_CHUNK_FRAMES):
+                    end = min(offset + _CLI_HOST_CHUNK_FRAMES, length or 0)
                     result = mixer.process_stereo(
                         [channel[offset:end] for channel in left_channels],
                         [channel[offset:end] for channel in right_channels],
@@ -360,7 +361,7 @@ def cmd_mix(args: argparse.Namespace) -> int:
 
                 tail_remaining = mixer.tail_samples
                 while tail_remaining > 0:
-                    count = min(tail_remaining, args.block_size)
+                    count = min(tail_remaining, _CLI_HOST_CHUNK_FRAMES)
                     result = mixer.drain_tail_stereo(count)
                     blocks.append(
                         (np.asarray(result.left, np.float32), np.asarray(result.right, np.float32))
@@ -380,7 +381,6 @@ def cmd_mix(args: argparse.Namespace) -> int:
             payload: dict[str, object] = {
                 "strip_count": strip_count,
                 "sample_rate": args.sample_rate,
-                "block_size": args.block_size,
             }
             if args.input:
                 payload["rendered_samples"] = rendered_samples
@@ -390,7 +390,6 @@ def cmd_mix(args: argparse.Namespace) -> int:
             print("  Mixer:")
             print(f"    Strips:      {strip_count}")
             print(f"    Sample rate: {args.sample_rate} Hz")
-            print(f"    Block size:  {args.block_size}")
             if args.input:
                 print(f"    Rendered:    {rendered_samples} samples (stereo)")
                 print(f"    Wrote: {args.output}")
@@ -481,7 +480,9 @@ def cmd_mix_strip(args: argparse.Namespace) -> int:
     # One block covering the whole file, as the native front-end does: the strip
     # is prepared for that block size and processed once.
     frames = len(left)
-    mixer = Mixer.from_scene_json(scene_json, sample_rate=sample_rate, block_size=max(frames, 1))
+    mixer = Mixer.from_scene_json(
+        scene_json, sample_rate=sample_rate, max_block_size=max(frames, 1)
+    )
     try:
         # Setters refuse an out-of-domain option as InvalidParameter (exit 3), as the native does.
         mixer.set_input_trim_db("s", input_trim_db)
@@ -631,9 +632,6 @@ def register_mixing_parsers(
     )
     mix_p.add_argument(
         "--sample-rate", type=_c_int, default=48000, help="Mixer sample rate (default: 48000)"
-    )
-    mix_p.add_argument(
-        "--block-size", type=_c_int, default=512, help="Mixer max block size (default: 512)"
     )
 
     mix_strip_p = sub.add_parser(

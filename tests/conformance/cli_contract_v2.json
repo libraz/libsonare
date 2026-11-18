@@ -7011,7 +7011,7 @@
             "voice-change",
             "{audio}",
             "-o",
-            "{output}",
+            "{voice_change_preset_output}",
             "--preset",
             "bright-idol",
             "--json"
@@ -7019,7 +7019,7 @@
           "exit": 0,
           "legacy_exit": 0,
           "payload": "preset",
-          "artifact": "none",
+          "artifact": "preset_wav",
           "stdout": "json"
         },
         {
@@ -7059,7 +7059,14 @@
           "stdout": "json"
         }
       ],
-      "artifacts": {}
+      "artifacts": {
+        "preset_wav": {
+          "placeholder": "voice_change_preset_output",
+          "kind": "wav",
+          "sample_rate_key": "sample_rate",
+          "sha256": "6a3aa60b3553f18fc6d0e91f84b3dce37a8d22d1b2f814ac075743eb4ae4805f"
+        }
+      }
     },
     {
       "path": "voice-presets",

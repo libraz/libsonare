@@ -575,7 +575,7 @@ def cmd_voice_change(args: argparse.Namespace) -> int:
         # Probe the same prepared C-ABI configuration used by the one-shot
         # realtime entry point.  Latency depends on the resolved config and
         # sample rate, so it must not be a hard-coded preset constant.
-        with RealtimeVoiceChanger(sr, preset, max_block_size=128, channels=1) as changer:
+        with RealtimeVoiceChanger(sr, preset, num_channels=1) as changer:
             latency_samples = max(int(changer.latency_samples), 0)
         result = _audio_array(voice_change_realtime(samples, sample_rate=sr, preset=preset))
         mode_metadata: dict[str, object] = {}

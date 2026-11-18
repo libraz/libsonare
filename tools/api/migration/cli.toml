@@ -307,3 +307,12 @@ changed = "omitted, the render takes the scene master's layout width rather than
 domain = "project"
 rule = "absent-not-sentinel"
 test = "tests/conformance/cli_contract_v2.json::channels_zero_refused"
+
+[[entry]]
+kind = "flag"
+old = "mix --block-size"
+removed = true
+no_replacement = "the rendered mix does not depend on the block size the mixer is driven with; leave the flag out"
+domain = "engine"
+rule = "individual"
+frontend = "python"

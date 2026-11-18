@@ -22,10 +22,6 @@ from ._cli_options import SharedParsers, _finite_float
 from ._playback import HrtfSet, PlaybackLoudnessMeter, PlaybackRenderer
 from ._runtime import SonareValueError
 
-# Matches src/playback/renderer.h's kOfflineRenderBlockFrames: the chunk size
-# the C++ one-shot reference render loop uses.
-_OFFLINE_RENDER_BLOCK_FRAMES = 4096
-
 
 def _unit_interval(value: str) -> float:
     parsed = _finite_float(value)
@@ -261,12 +257,7 @@ def cmd_playback(args: argparse.Namespace) -> int:
 
     renderer: PlaybackRenderer | None = None
     try:
-        renderer = PlaybackRenderer(
-            config,
-            hrtf=hrtf,
-            sample_rate=sample_rate,
-            max_block_size=_OFFLINE_RENDER_BLOCK_FRAMES,
-        )
+        renderer = PlaybackRenderer(config, hrtf=hrtf, sample_rate=sample_rate)
         out_channels = renderer.num_output_channels
         rendered = _render_via_reporting_handle(renderer, interleaved, channels)
         # Read after the render so a limiter/loudness clamp or a non-finite

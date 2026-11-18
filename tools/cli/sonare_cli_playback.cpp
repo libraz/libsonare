@@ -16,10 +16,6 @@ namespace {
 using sonare::util::json::Object;
 using sonare::util::json::Value;
 
-// Matches src/playback/renderer.h's kOfflineRenderBlockFrames, so the offline
-// render through this handle uses the one-shot render's block length.
-constexpr size_t kOfflineRenderBlockFrames = 4096;
-
 std::vector<uint8_t> read_hrtf_file(const std::string& path) {
   std::vector<uint8_t> bytes;
   if (!read_binary_file(path, &bytes))
@@ -166,8 +162,7 @@ int cmd_playback(const CliArgs& args, const Audio&) {
 
   SonarePlaybackRenderer* renderer = nullptr;
   const SonareError create_err =
-      sonare_playback_renderer_create_json(config_json.c_str(), hrtf, sample_rate,
-                                           static_cast<int>(kOfflineRenderBlockFrames), &renderer);
+      sonare_playback_renderer_create_json(config_json.c_str(), hrtf, sample_rate, 0, &renderer);
   if (create_err != SONARE_OK) {
     if (hrtf != nullptr) sonare_hrtf_set_destroy(hrtf);
     throw_playback_error("create playback renderer", create_err);

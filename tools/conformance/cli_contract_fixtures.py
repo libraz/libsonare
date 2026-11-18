@@ -148,6 +148,7 @@ def _write_fixtures(directory: Path, manifest: dict[str, Any]) -> dict[str, str]
     paths["eq_non_finite_output_24bit"] = str(directory / "eq-non-finite-output-24bit.wav")
     paths["eq_saturating_output"] = str(directory / "eq-saturating-output.wav")
     paths["rir_output"] = str(directory / "rir-output.wav")
+    paths["voice_change_preset_output"] = str(directory / "voice-change-preset-output.wav")
     paths["render_output"] = str(directory / "render-output.wav")
     paths["resample_output"] = str(directory / "resample-output.wav")
     paths["morph_output"] = str(directory / "morph-output.wav")

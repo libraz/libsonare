@@ -80,7 +80,7 @@ def test_mix_cli_resamples_inputs_to_mixer_rate(monkeypatch, tmp_path) -> None:
 
     class FakeMixer:
         @classmethod
-        def from_scene_json(cls, scene_json, *, sample_rate, block_size):
+        def from_scene_json(cls, scene_json, *, sample_rate, max_block_size):
             captured["sample_rate"] = sample_rate
             return cls()
 
@@ -113,7 +113,6 @@ def test_mix_cli_resamples_inputs_to_mixer_rate(monkeypatch, tmp_path) -> None:
         input=["stem.wav"],
         output=str(tmp_path / "out.wav"),
         sample_rate=48000,
-        block_size=512,
         json=True,
     )
     assert cli.cmd_mix(args) == 0
@@ -125,17 +124,19 @@ def test_mix_cli_resamples_inputs_to_mixer_rate(monkeypatch, tmp_path) -> None:
 def test_mix_cli_processes_blocks_partial_block_and_tail(monkeypatch, tmp_path) -> None:
     """The CLI keeps one mixer alive across bounded blocks and drains its tail."""
     import libsonare
-    from libsonare import cli
+    from libsonare import _cli_mixing, cli
 
+    # A small host chunk keeps the fixture short while still covering a partial block.
+    monkeypatch.setattr(_cli_mixing, "_CLI_HOST_CHUNK_FRAMES", 512)
     block_lengths: list[int] = []
     drain_lengths: list[int] = []
     patch_mono_decode(monkeypatch, lambda _path: ([0.25] * 513, 48000))
 
     class FakeMixer:
         @classmethod
-        def from_scene_json(cls, _scene_json, *, sample_rate, block_size):
+        def from_scene_json(cls, _scene_json, *, sample_rate, max_block_size):
             assert sample_rate == 48000
-            assert block_size == 512
+            assert max_block_size == 512
             return cls()
 
         def scene_warnings(self) -> list[str]:
@@ -172,7 +173,6 @@ def test_mix_cli_processes_blocks_partial_block_and_tail(monkeypatch, tmp_path) 
         input=["stem.wav"],
         output=str(output),
         sample_rate=48000,
-        block_size=512,
         json=True,
     )
 
@@ -358,12 +358,12 @@ def test_mix_cli_rejects_output_without_inputs(tmp_path) -> None:
 
 
 def test_mix_cli_real_mixer_handles_multiple_blocks_and_stems(tmp_path) -> None:
-    """The subprocess path renders >block-size input through the real mixer."""
+    """The subprocess path renders input longer than one host chunk through the real mixer."""
     first = tmp_path / "first.wav"
     second = tmp_path / "second.wav"
     output = tmp_path / "mix.wav"
-    _write_test_wav(str(first), [0.1] * 513, 48000)
-    _write_test_wav(str(second), [0.05] * 513, 48000)
+    _write_test_wav(str(first), [0.1] * 4097, 48000)
+    _write_test_wav(str(second), [0.05] * 4097, 48000)
 
     result = _run_cli(
         [
@@ -374,8 +374,6 @@ def test_mix_cli_real_mixer_handles_multiple_blocks_and_stems(tmp_path) -> None:
             str(first),
             "--input",
             str(second),
-            "--block-size",
-            "512",
             "--sample-rate",
             "48000",
             "--output",
@@ -386,7 +384,7 @@ def test_mix_cli_real_mixer_handles_multiple_blocks_and_stems(tmp_path) -> None:
 
     assert result.returncode == 0, result.stderr
     payload = json.loads(result.stdout)
-    assert payload["rendered_samples"] >= 513
+    assert payload["rendered_samples"] >= 4097
     with wave.open(str(output), "rb") as wav:
         assert wav.getnchannels() == 2
         assert wav.getnframes() == payload["rendered_samples"]
@@ -451,6 +449,6 @@ def test_suggest_mix_tempo_auto_decodes_each_input_once(monkeypatch) -> None:
     assert measured == [(list(np.float32(0.5) * (left + right)), 44_100)]
     tracks, options = scene_calls[0]
     assert options["tempo_bpm"] == 96.0
-    assert [track.track_id for track in tracks] == ["vox", "bass"]
+    assert [track.id for track in tracks] == ["vox", "bass"]
     assert tracks[0].right is not None
     assert tracks[1].right is None

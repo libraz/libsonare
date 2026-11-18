@@ -1,7 +1,9 @@
+#include <sonare/sonare_c_effects.h>
 #include <sonare/sonare_c_vocal_edit.h>
 
 #include <cmath>
 #include <limits>
+#include <memory>
 #include <stdexcept>
 #include <string>
 
@@ -521,7 +523,7 @@ NearestNote nearest_note(double midi) {
           (midi - static_cast<double>(nearest)) * 100.0};
 }
 
-[[noreturn]] void throw_vocal_error(SonareError err, const char* what) {
+[[noreturn]] void throw_c_error(SonareError err, const char* what) {
   const char* message = sonare_error_message(err);
   throw sonare::SonareException(sonare_c_detail::error_code_from_c_error(err),
                                 message != nullptr ? message : what);
@@ -560,14 +562,14 @@ int cmd_vocal_notes(const CliArgs& args, const Audio& audio) {
                                   audio.sample_rate(), &options, &raw_session);
   std::unique_ptr<SonareVocalEditSession, decltype(&sonare_vocal_session_destroy)> session(
       raw_session, &sonare_vocal_session_destroy);
-  if (created != SONARE_OK) throw_vocal_error(created, "vocal session creation failed");
+  if (created != SONARE_OK) throw_c_error(created, "vocal session creation failed");
 
   SonareVocalNotesResult notes;
   sonare_vocal_notes_result_init(&notes);
   const SonareError read = sonare_vocal_session_notes(session.get(), &notes);
   std::unique_ptr<SonareVocalNotesResult, decltype(&sonare_vocal_free_notes)> owned(
       &notes, &sonare_vocal_free_notes);
-  if (read != SONARE_OK) throw_vocal_error(read, "vocal note read failed");
+  if (read != SONARE_OK) throw_c_error(read, "vocal note read failed");
 
   const int sample_rate = audio.sample_rate();
   const size_t note_count = static_cast<size_t>(notes.note_count);
@@ -835,30 +837,28 @@ int cmd_voice_change(const CliArgs& args, const Audio& audio) {
                                                                           &config_error)) {
       throw std::invalid_argument("invalid voice preset: " + config_error);
     }
-    editing::voice_changer::RealtimeVoiceChanger changer(config);
-    // Block size and pre-roll/drop latency compensation mirror the C-ABI
-    // oracle (process_realtime_voice_change_compensated in
-    // src/c_api/sonare_c_voice_changer.cpp): pad the input by the chain
-    // latency, process in fixed 128-sample blocks for bit-identical DSP
-    // across surfaces, then drop the leading pre-roll so output sample k
-    // corresponds to input sample k and the output length equals the input
-    // length.
-    constexpr int kBlock = 128;
-    changer.prepare(audio.sample_rate(), kBlock, 1);
-    latency_samples = std::max(changer.latency_samples(), 0);
-    const size_t latency_frames = static_cast<size_t>(latency_samples);
-    const size_t total = audio.size() + latency_frames;
-    std::vector<float> padded_input(total, 0.0f);
-    std::copy(audio.data(), audio.data() + audio.size(), padded_input.begin());
-    std::vector<float> padded_output(total, 0.0f);
-    for (size_t pos = 0; pos < total; pos += kBlock) {
-      const int n = static_cast<int>(std::min<size_t>(kBlock, total - pos));
-      changer.process_block(padded_input.data() + pos, padded_output.data() + pos, n);
-    }
-    std::vector<float> output(
-        padded_output.begin() + static_cast<std::ptrdiff_t>(latency_frames),
-        padded_output.begin() + static_cast<std::ptrdiff_t>(latency_frames + audio.size()));
-    result = Audio::from_vector(std::move(output), audio.sample_rate());
+    // The library runs the latency-compensated one-shot, so the CLI keeps no block loop of its
+    // own; the probe handle is prepared at the library's default block size.
+    SonareRealtimeVoiceChanger* raw_probe = nullptr;
+    const SonareError probe_err = sonare_realtime_voice_changer_create_json(
+        config_text.c_str(), audio.sample_rate(), 0, 1, &raw_probe);
+    if (probe_err != SONARE_OK) throw_c_error(probe_err, "voice changer creation failed");
+    std::unique_ptr<SonareRealtimeVoiceChanger, decltype(&sonare_realtime_voice_changer_destroy)>
+        probe(raw_probe, sonare_realtime_voice_changer_destroy);
+    const SonareError latency_err =
+        sonare_realtime_voice_changer_latency_samples(probe.get(), &latency_samples);
+    if (latency_err != SONARE_OK) throw_c_error(latency_err, "voice changer latency read failed");
+    latency_samples = std::max(latency_samples, 0);
+
+    float* raw_output = nullptr;
+    size_t output_length = 0;
+    const SonareError render_err =
+        sonare_voice_change_realtime(audio.data(), audio.size(), audio.sample_rate(),
+                                     config_text.c_str(), 1, &raw_output, &output_length);
+    if (render_err != SONARE_OK) throw_c_error(render_err, "voice change failed");
+    std::unique_ptr<float, decltype(&sonare_free_floats)> output(raw_output, sonare_free_floats);
+    result = Audio::from_vector(std::vector<float>(raw_output, raw_output + output_length),
+                                audio.sample_rate());
   } else {
     pitch_semitones = args.get_float("pitch-semitones", 0.0f);
     formant_factor = args.get_float("formant-factor", 1.0f);

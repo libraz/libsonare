@@ -156,6 +156,10 @@ from .types import KeyMode, KeyProfile, PitchClass, SectionType
 PITCH_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
 MODE_NAMES = ["major", "minor", "dorian", "phrygian", "lydian", "mixolydian", "locrian"]
 
+# Frames per call wherever the CLI itself drives a processor block by block. A host choice
+# stated here once; the output of every such loop was measured identical across chunk sizes.
+_CLI_HOST_CHUNK_FRAMES = 4096
+
 # CLI exit codes. Failures map to codes aligned with the C-ABI SonareError so
 # scripts can distinguish usage / missing-file / decode / processing errors.
 # argparse keeps its native exit 2 for usage errors. Set SONARE_LEGACY_EXIT=1 to

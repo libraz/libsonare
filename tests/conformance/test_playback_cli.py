@@ -136,7 +136,7 @@ def _wav_channels_and_format_tag(path: Path) -> tuple[int, int]:
 
 def _write_mono_full_scale_wav(path: Path) -> None:
     """A mono, near-full-scale continuous tone, long enough to span several
-    of the renderer's 4096-frame render blocks (see `kOfflineRenderBlockFrames`).
+    of the renderer's offline render blocks.
     """
     frames = _FRAMES * 4
     with wave.open(str(path), "wb") as wav:
