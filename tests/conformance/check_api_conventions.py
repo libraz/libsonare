@@ -630,6 +630,61 @@ _ERROR_CLASS_REASON = "the error class keeps its Sonare prefix"
 _Q8 = re.compile(r"q8", re.I)
 
 
+_RESULT_OWNER = re.compile(r"Result$")
+_SUMMARY_NAME = re.compile(
+    r"^(num[A-Z]\w*|num_\w+|\w+Count|\w+_count|has[A-Z]\w*|has_\w+|isEmpty|is_empty)$"
+)
+_ARRAY_FIELD = re.compile(r"\[\]|Array|ndarray|Sequence|^list\[|^tuple\[")
+
+
+def _summary_stems(member: str) -> list[str]:
+    """Names of the field a derived summary member would summarise."""
+    if member in ("isEmpty", "is_empty"):
+        return []
+    words = re.split(r"_", member) if "_" in member else re.findall(r"[A-Z]?[a-z0-9]+", member)
+    words = [w.lower() for w in words]
+    if words[0] in ("num", "has"):
+        stem = words[1:]
+    elif words[-1] == "count":
+        stem = words[:-1]
+    else:
+        return []
+    base = (
+        "_".join(stem)
+        if "_" in member
+        else "".join(w if i == 0 else w.capitalize() for i, w in enumerate(stem))
+    )
+    return [base, base + "s", base[:-1] if base.endswith("s") else base]
+
+
+def _derived_summary_records(records: list[dict]) -> list[dict]:
+    arrays: dict[tuple[str, str], set[str]] = {}
+    for r in records:
+        if (
+            r["kind"] == "field"
+            and r["surface"] in ("node", "wasm", "python")
+            and _ARRAY_FIELD.search(r.get("type", ""))
+        ):
+            arrays.setdefault((r["surface"], r["owner"]), set()).add(r["member"])
+    out: list[dict] = []
+    for r in records:
+        if r["kind"] != "field" or r["surface"] not in ("node", "wasm", "python"):
+            continue
+        if not _RESULT_OWNER.search(r["owner"]) or not _SUMMARY_NAME.match(r["member"]):
+            continue
+        beside = arrays.get((r["surface"], r["owner"]), set())
+        stems = _summary_stems(r["member"])
+        out.append(
+            {
+                "surface": r["surface"],
+                "kind": "summary-field",
+                "name": r["name"],
+                "summarises": bool(beside) if not stems else bool(beside & set(stems)),
+            }
+        )
+    return out
+
+
 RULES: list[Rule] = [
     Rule(
         name="getters",
@@ -954,6 +1009,22 @@ RULES: list[Rule] = [
             "node:PlaybackStageLatency.q8": "remove the field; state its unit before renaming it",
             "wasm:PlaybackStageLatency.q8": "remove the field; state its unit before renaming it",
             "wasm:SonareEngineTelemetryRecord.graphLatencySamplesQ8": "expose graph latency in samples as a plain number",
+        },
+    ),
+    Rule(
+        name="derived-summary",
+        summary="a result record carries no count, flag or emptiness summary of a list it already holds",
+        population=lambda r: r["kind"] == "summary-field",
+        violation=lambda r: (
+            "a result record carries no derived summary beside the field it derives from"
+            if r["summarises"]
+            else None
+        ),
+        derive=_derived_summary_records,
+        pending={
+            f"{s}:{r}.numChannels": "drop the count; it is channels.length"
+            for s in ("node", "wasm")
+            for r in ("EngineBounceResult", "ProjectBounceResult")
         },
     ),
 ]

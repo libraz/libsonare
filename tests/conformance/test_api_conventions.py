@@ -639,6 +639,30 @@ class EngineVocabularyRule(unittest.TestCase):
         )
 
 
+class DerivedSummaryRule(unittest.TestCase):
+    CLEAN = [
+        field("node", "BounceResult", "channels", "Float32Array[]"),
+        field("node", "BounceResult", "sampleRate"),
+        field("node", "RenderResult", "numChannels"),
+        field("python", "TakeResult", "takes", "list[Take]"),
+    ]
+
+    def test_clean_surface_passes(self) -> None:
+        verdict = run("derived-summary", self.CLEAN)
+        self.assertEqual(verdict.read, 1)
+        self.assertFalse(verdict.failed)
+
+    def test_count_beside_its_list_is_named(self) -> None:
+        planted = field("node", "BounceResult", "numChannels")
+        verdict = run("derived-summary", [*self.CLEAN, planted])
+        self.assertEqual([f.key for f in verdict.violations], ["node:BounceResult.numChannels"])
+
+    def test_python_count_beside_its_list_is_named(self) -> None:
+        planted = field("python", "TakeResult", "take_count", "int")
+        verdict = run("derived-summary", [*self.CLEAN, planted])
+        self.assertEqual([f.key for f in verdict.violations], ["python:TakeResult.take_count"])
+
+
 class Framework(unittest.TestCase):
     def test_reading_nothing_fails(self) -> None:
         verdict = check.judge(rule("getters"), [])
