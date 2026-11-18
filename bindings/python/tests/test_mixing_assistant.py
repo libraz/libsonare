@@ -60,9 +60,9 @@ def mono_tracks():
     from libsonare import MixAssistantTrack
 
     return [
-        MixAssistantTrack("kick", _percussive(55.0), None, "kick"),
-        MixAssistantTrack("bass", _tone(110.0), None, "bass"),
-        MixAssistantTrack("keys", _noisy(660.0, 7), None, "keys"),
+        MixAssistantTrack("kick", [_percussive(55.0)], "kick"),
+        MixAssistantTrack("bass", [_tone(110.0)], "bass"),
+        MixAssistantTrack("keys", [_noisy(660.0, 7)], "keys"),
     ]
 
 
@@ -72,8 +72,8 @@ def mixed_tracks():
     from libsonare import MixAssistantTrack
 
     return [
-        MixAssistantTrack("kick", _percussive(55.0), None, "kick"),
-        MixAssistantTrack("pad", _noisy(660.0, 3), _noisy(664.0, 4), "pad"),
+        MixAssistantTrack("kick", [_percussive(55.0)], "kick"),
+        MixAssistantTrack("pad", [_noisy(660.0, 3), _noisy(664.0, 4)], "pad"),
     ]
 
 
@@ -187,12 +187,14 @@ def test_suggest_over_tracks_of_differing_lengths():
     from libsonare import MixAssistantTrack, mixing_assistant_suggest
 
     tracks = [
-        MixAssistantTrack("kick", _percussive(55.0, duration_sec=DURATION_SEC), None, "kick"),
-        MixAssistantTrack("bass", _tone(110.0, duration_sec=DURATION_SEC * 0.75), None, "bass"),
+        MixAssistantTrack("kick", [_percussive(55.0, duration_sec=DURATION_SEC)], "kick"),
+        MixAssistantTrack("bass", [_tone(110.0, duration_sec=DURATION_SEC * 0.75)], "bass"),
         MixAssistantTrack(
             "pad",
-            _noisy(660.0, 3, duration_sec=DURATION_SEC * 0.9),
-            _noisy(664.0, 4, duration_sec=DURATION_SEC * 0.9),
+            [
+                _noisy(660.0, 3, duration_sec=DURATION_SEC * 0.9),
+                _noisy(664.0, 4, duration_sec=DURATION_SEC * 0.9),
+            ],
             "pad",
         ),
     ]
@@ -216,8 +218,8 @@ def test_suggest_with_a_silent_track():
 
     n = int(SAMPLE_RATE * DURATION_SEC)
     tracks = [
-        MixAssistantTrack("kick", _percussive(55.0), None, "kick"),
-        MixAssistantTrack("silence", np.zeros(n, dtype=np.float32), None, "pad"),
+        MixAssistantTrack("kick", [_percussive(55.0)], "kick"),
+        MixAssistantTrack("silence", [np.zeros(n, dtype=np.float32)], "pad"),
     ]
     result = mixing_assistant_suggest(tracks, sample_rate=SAMPLE_RATE)
     _assert_document_shape(result, len(tracks))
@@ -238,9 +240,9 @@ def test_a_non_finite_track_is_excluded_as_itself_rather_than_as_silence(bad):
     poisoned[1000] = bad
     n = int(SAMPLE_RATE * DURATION_SEC)
     tracks = [
-        MixAssistantTrack("kick", _percussive(55.0), None, "kick"),
-        MixAssistantTrack("poisoned", poisoned, None, "bass"),
-        MixAssistantTrack("silence", np.zeros(n, dtype=np.float32), None, "pad"),
+        MixAssistantTrack("kick", [_percussive(55.0)], "kick"),
+        MixAssistantTrack("poisoned", [poisoned], "bass"),
+        MixAssistantTrack("silence", [np.zeros(n, dtype=np.float32)], "pad"),
     ]
     result = mixing_assistant_suggest(tracks, sample_rate=SAMPLE_RATE)
     by_id = {track.strip_id: track for track in result.tracks}
@@ -328,7 +330,7 @@ def test_high_pass_is_proposed_only_once_the_switch_is_on():
 
     # A local fixture rather than the shared one: this case needs low-frequency
     # residue that would move unrelated assertions elsewhere.
-    tracks = [MixAssistantTrack("vox", _voice_with_rumble(), None, "Lead Vox")]
+    tracks = [MixAssistantTrack("vox", [_voice_with_rumble()], "Lead Vox")]
     off = mixing_assistant_suggest(tracks, sample_rate=SAMPLE_RATE)
     on = mixing_assistant_suggest(tracks, sample_rate=SAMPLE_RATE, enable_high_pass=True)
 
@@ -375,13 +377,13 @@ def test_empty_track_id_is_rejected():
     from libsonare import MixAssistantTrack, SonareValueError, mixing_assistant_suggest
 
     with pytest.raises(SonareValueError, match=r"tracks\[0\]\.id"):
-        mixing_assistant_suggest([MixAssistantTrack("", _tone(110.0))], sample_rate=SAMPLE_RATE)
+        mixing_assistant_suggest([MixAssistantTrack("", [_tone(110.0)])], sample_rate=SAMPLE_RATE)
 
 
 def test_duplicate_track_ids_are_rejected():
     from libsonare import MixAssistantTrack, SonareValueError, mixing_assistant_suggest
 
-    tracks = [MixAssistantTrack("bass", _tone(110.0)), MixAssistantTrack("bass", _tone(220.0))]
+    tracks = [MixAssistantTrack("bass", [_tone(110.0)]), MixAssistantTrack("bass", [_tone(220.0)])]
     with pytest.raises(SonareValueError, match="duplicate"):
         mixing_assistant_suggest(tracks, sample_rate=SAMPLE_RATE)
 
@@ -397,7 +399,7 @@ def test_non_finite_samples_are_excluded_not_rejected():
     samples = _tone(110.0).copy()
     samples[17] = np.nan
     result = mixing_assistant_suggest(
-        [MixAssistantTrack("bass", samples), MixAssistantTrack("pad", _tone(440.0))],
+        [MixAssistantTrack("bass", [samples]), MixAssistantTrack("pad", [_tone(440.0)])],
         sample_rate=SAMPLE_RATE,
     )
     profiles = {track.strip_id: track for track in result.tracks}
@@ -414,18 +416,38 @@ def test_non_finite_samples_in_the_right_channel_are_excluded():
     right = _tone(440.0).copy()
     right[23] = np.inf
     result = mixing_assistant_suggest(
-        [MixAssistantTrack("pad", _tone(440.0), right)], sample_rate=SAMPLE_RATE
+        [MixAssistantTrack("pad", [_tone(440.0), right])], sample_rate=SAMPLE_RATE
     )
     profile = result.tracks[0]
     assert profile.usable is False
     assert profile.exclusion_reason == "track has non-finite samples"
 
 
+@pytest.mark.parametrize("planes", [0, 3])
+def test_a_track_with_no_planes_or_more_than_two_is_rejected(planes):
+    from libsonare import MixAssistantTrack, SonareValueError, mixing_assistant_suggest
+
+    tracks = [MixAssistantTrack("pad", [_tone(440.0)] * planes)]
+    with pytest.raises(SonareValueError, match=r"tracks\[0\]\.channels"):
+        mixing_assistant_suggest(tracks, sample_rate=SAMPLE_RATE)
+
+
+def test_channels_given_as_a_bare_plane_is_a_type_error():
+    """A single array is not read as a list of planes, one per sample row."""
+    from libsonare import MixAssistantTrack, mixing_assistant_suggest
+
+    tracks = [MixAssistantTrack("pad", _tone(440.0))]  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match=r"tracks\[0\]\.channels"):
+        mixing_assistant_suggest(tracks, sample_rate=SAMPLE_RATE)
+
+
 def test_mismatched_channel_lengths_are_rejected():
     from libsonare import MixAssistantTrack, SonareValueError, mixing_assistant_suggest
 
-    tracks = [MixAssistantTrack("pad", _tone(440.0), _tone(440.0, duration_sec=DURATION_SEC * 0.5))]
-    with pytest.raises(SonareValueError, match="lengths must match"):
+    tracks = [
+        MixAssistantTrack("pad", [_tone(440.0), _tone(440.0, duration_sec=DURATION_SEC * 0.5)])
+    ]
+    with pytest.raises(SonareValueError, match="equal lengths"):
         mixing_assistant_suggest(tracks, sample_rate=SAMPLE_RATE)
 
 
@@ -433,7 +455,7 @@ def test_non_positive_sample_rate_is_rejected():
     from libsonare import MixAssistantTrack, SonareValueError, mixing_assistant_suggest
 
     with pytest.raises(SonareValueError, match="sample_rate"):
-        mixing_assistant_suggest([MixAssistantTrack("bass", _tone(110.0))], sample_rate=0)
+        mixing_assistant_suggest([MixAssistantTrack("bass", [_tone(110.0)])], sample_rate=0)
 
 
 def test_non_finite_option_is_rejected():
@@ -441,7 +463,7 @@ def test_non_finite_option_is_rejected():
 
     with pytest.raises(SonareValueError, match="finite"):
         mixing_assistant_suggest(
-            [MixAssistantTrack("bass", _tone(110.0))],
+            [MixAssistantTrack("bass", [_tone(110.0)])],
             sample_rate=SAMPLE_RATE,
             target_track_lufs=float("nan"),
         )
@@ -461,7 +483,7 @@ def test_tempo_outside_the_musical_range_is_rejected(tempo):
 
     with pytest.raises(SonareValueError, match="tempoBpm") as caught:
         mixing_assistant_suggest(
-            [MixAssistantTrack("bass", _tone(110.0))],
+            [MixAssistantTrack("bass", [_tone(110.0)])],
             sample_rate=SAMPLE_RATE,
             tempo_bpm=tempo,
         )
@@ -477,7 +499,7 @@ def test_a_non_positive_tempo_is_refused(tempo):
 
     with pytest.raises(SonareValueError, match="tempo_bpm"):
         mixing_assistant_suggest(
-            [MixAssistantTrack("bass", _tone(110.0))],
+            [MixAssistantTrack("bass", [_tone(110.0)])],
             sample_rate=SAMPLE_RATE,
             tempo_bpm=tempo,
         )
@@ -488,8 +510,8 @@ def test_a_track_profile_reports_absent_facts_as_none():
 
     n = int(SAMPLE_RATE * DURATION_SEC)
     tracks = [
-        MixAssistantTrack("bass", _tone(110.0)),
-        MixAssistantTrack("silence", np.zeros(n, dtype=np.float32), None, "pad"),
+        MixAssistantTrack("bass", [_tone(110.0)]),
+        MixAssistantTrack("silence", [np.zeros(n, dtype=np.float32)], "pad"),
     ]
     bass, silence = mixing_assistant_suggest(tracks, sample_rate=SAMPLE_RATE).tracks
     # No name was given, and a usable track has no exclusion to explain.

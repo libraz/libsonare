@@ -8422,6 +8422,24 @@ new = "MixAssistantTrack.id"
 domain = "mastering"
 rule = "type-names"
 
+[[entry]]
+kind = "field"
+old = "MixTrackInput.left"
+to = "MixAssistantTrack.channels"
+changed = "left/right -> channels, a list or tuple holding one plane for mono or two of equal length for stereo; any other count raises SonareValueError and a bare array raises TypeError"
+domain = "mastering"
+rule = "stereo-pair"
+test = "bindings/python/tests/test_mixing_assistant.py::test_a_track_with_no_planes_or_more_than_two_is_rejected"
+
+[[entry]]
+kind = "field"
+old = "MixTrackInput.right"
+to = "MixAssistantTrack.channels"
+changed = "left/right -> channels, a list or tuple holding one plane for mono or two of equal length for stereo; any other count raises SonareValueError and a bare array raises TypeError"
+domain = "mastering"
+rule = "stereo-pair"
+test = "bindings/python/tests/test_mixing_assistant.py::test_a_track_with_no_planes_or_more_than_two_is_rejected"
+
 # The mastering processor family names its processor argument as C and JS do.
 
 [[entry]]

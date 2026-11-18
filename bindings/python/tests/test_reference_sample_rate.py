@@ -183,8 +183,8 @@ def test_a_non_positive_reference_rate_is_refused_like_the_sample_rate(bad_rate:
 
 def _mix_tracks(rate_of_second: int | None, second: np.ndarray) -> list[MixAssistantTrack]:
     return [
-        MixAssistantTrack("bass", sine(110.0, 0.8, sr=SR, amp=0.3), None, "bass"),
-        MixAssistantTrack("keys", second, None, "keys", rate_of_second),
+        MixAssistantTrack("bass", [sine(110.0, 0.8, sr=SR, amp=0.3)], "bass"),
+        MixAssistantTrack("keys", [second], "keys", rate_of_second),
     ]
 
 

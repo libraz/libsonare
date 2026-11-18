@@ -81,9 +81,9 @@ class MixAssistantTrack(NamedTuple):
     Attributes:
         id: Strip identifier, non-empty and unique within the call. It is the
             id the suggested scene addresses this track by.
-        left: Left channel, or the whole signal for a mono track.
-        right: Right channel, or ``None`` for a mono track. Tracks may mix mono
-            and stereo freely within one call.
+        channels: The track's planes as a list or tuple: one plane for a mono
+            track, or two of equal length (left, right) for a stereo one.
+            Tracks may mix mono and stereo freely within one call.
         name: Optional display name used as a classification hint. Naming the
             measured class raises its confidence. Naming another class switches
             to it when the measurement does not contradict it: a measurable
@@ -104,8 +104,7 @@ class MixAssistantTrack(NamedTuple):
     """
 
     id: str
-    left: Sequence[float] | np.ndarray
-    right: Sequence[float] | np.ndarray | None = None
+    channels: Sequence[Sequence[float] | np.ndarray]
     name: str | None = None
     sample_rate: int | None = None
 
@@ -173,20 +172,32 @@ def _build_track_arrays(
         # `usable: false` with an exclusion reason, so preflighting it would
         # turn a partial result into a failed call and make that reason
         # unreachable. Rank and type are still named by the coercion.
-        left = _as_float32_buffer(track.left, fn_name=fn_name, arg_name=f"tracks[{index}].left")
+        channels = track.channels
+        if not isinstance(channels, (list, tuple)):
+            raise TypeError(
+                f"{fn_name}: tracks[{index}].channels must be a list or tuple of planes, "
+                f"got {type(channels).__name__}"
+            )
+        if len(channels) not in (1, 2):
+            raise SonareValueError(
+                f"{fn_name}: tracks[{index}].channels must hold 1 or 2 planes, got {len(channels)}"
+            )
+        left = _as_float32_buffer(
+            channels[0], fn_name=fn_name, arg_name=f"tracks[{index}].channels[0]"
+        )
         left_array, left_length = _to_c_float_array(left)
-        if track.right is None:
+        if len(channels) == 1:
             right_array = None
             right_length = left_length
         else:
             right = _as_float32_buffer(
-                track.right, fn_name=fn_name, arg_name=f"tracks[{index}].right"
+                channels[1], fn_name=fn_name, arg_name=f"tracks[{index}].channels[1]"
             )
             right_array, right_length = _to_c_float_array(right)
             any_right = True
         if right_length != left_length:
             raise SonareValueError(
-                f"{fn_name}: tracks[{index}] left and right channel lengths must match"
+                f"{fn_name}: tracks[{index}].channels planes must have equal lengths"
             )
 
         left_arrays.append(left_array)

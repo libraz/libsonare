@@ -15,8 +15,7 @@ _INTEGER_PARAMS: frozenset[str]
 
 class MixAssistantTrack(NamedTuple):
     id: str
-    left: FloatSamples
-    right: FloatSamples | None = None
+    channels: Sequence[FloatSamples]
     name: str | None = None
     sample_rate: int | None = None
 
