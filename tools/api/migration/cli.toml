@@ -714,3 +714,11 @@ changed = "takes balance, stereo-pan or dual-pan in any letter case; stereopan, 
 domain = "mastering"
 rule = "token-case"
 test = "tests/cli/cli_effects_test.cpp::CLI mix-strip --pan-mode takes the kebab spellings in any case"
+
+[[entry]]
+kind = "flag"
+old = "voice-change --preset-json"
+changed = "a preset document the library refuses (an unknown field, an earlier schemaVersion) exits 5 as an invalid format on the native CLI too, rather than 3"
+domain = "effects"
+rule = "error-class-by-cause"
+test = "tests/cli/cli_effects_test.cpp::CLI voice-change rejects a realtime preset document with an unknown field"

@@ -835,7 +835,9 @@ int cmd_voice_change(const CliArgs& args, const Audio& audio) {
     std::string config_error;
     if (!editing::voice_changer::realtime_voice_changer_config_from_input(config_text, &config,
                                                                           &config_error)) {
-      throw std::invalid_argument("invalid voice preset: " + config_error);
+      // A refused preset document is a format error, as the C ABI reports it.
+      throw sonare::SonareException(sonare::ErrorCode::InvalidFormat,
+                                    "invalid voice preset: " + config_error);
     }
     // The library runs the latency-compensated one-shot, so the CLI keeps no block loop of its
     // own; the probe handle is prepared at the library's default block size.

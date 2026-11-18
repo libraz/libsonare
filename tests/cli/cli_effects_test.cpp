@@ -861,8 +861,26 @@ TEST_CASE("CLI voice-change rejects a realtime preset document with an unknown f
     auto [code, output] = exec_command(CLI + " voice-change --preset-json " + preset_path + " " +
                                        TEST_WAV + " -o " + TEST_OUT + " -q");
     std::remove(preset_path.c_str());
-    REQUIRE(code != 0);
+    // A refused preset document is a format error, as the C ABI reports it.
+    REQUIRE(code == 5);
     REQUIRE_THAT(output, ContainsSubstring("dsp.formnt"));
+    std::ifstream f(TEST_OUT);
+    REQUIRE_FALSE(f.good());
+  }
+
+  SECTION("a preset at an earlier schemaVersion") {
+    const std::string preset_path = unique_temp_path("_vc_earlier_preset.json");
+    {
+      std::ofstream preset(preset_path);
+      REQUIRE(preset.good());
+      preset << R"json({"schemaVersion":2,"id":"earlier","name":"Earlier",
+        "category":"custom","macros":{"brightness":0.2}})json";
+    }
+    auto [code, output] = exec_command(CLI + " voice-change --preset-json " + preset_path + " " +
+                                       TEST_WAV + " -o " + TEST_OUT + " -q");
+    std::remove(preset_path.c_str());
+    REQUIRE(code == 5);
+    REQUIRE_THAT(output, ContainsSubstring("schemaVersion 2 is older"));
     std::ifstream f(TEST_OUT);
     REQUIRE_FALSE(f.good());
   }
