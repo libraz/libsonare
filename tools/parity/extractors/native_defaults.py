@@ -33,11 +33,17 @@ NODE_ADDON_DIR = "bindings/node/src/addon"
 WASM_BINDINGS_DIR = "src/wasm"
 _STRUCT_ROOTS = ("src", "include")
 
-_READER_RE = re.compile(r"\b((?:Optional|Finite|Auto|Midi|Int|Uint|Float|Double|Bool|Word)\w*(?:Arg|Property))\s*\(")
-_TERNARY_RE = re.compile(r"\b(\w+)\.isUndefined\(\)(?:\s*\|\|\s*\1\.isNull\(\))?\s*\?\s*([^:;]+?)\s*:")
+_READER_RE = re.compile(
+    r"\b((?:Optional|Finite|Auto|Midi|Int|Uint|Float|Double|Bool|Word)\w*(?:Arg|Property))\s*\("
+)
+_TERNARY_RE = re.compile(
+    r"\b(\w+)\.isUndefined\(\)(?:\s*\|\|\s*\1\.isNull\(\))?\s*\?\s*([^:;]+?)\s*:"
+)
 _VALUE_OR_RE = re.compile(r"\.value_or\(\s*([^()]+?)\s*\)")
 _STRING_ARG_RE = re.compile(r'^"([^"]*)"$')
-_LITERAL_RE = re.compile(r"^-?(?:\d+\.?\d*(?:[eE][-+]?\d+)?|\.\d+(?:[eE][-+]?\d+)?)[fFuUlL]*$|^(?:true|false)$")
+_LITERAL_RE = re.compile(
+    r"^-?(?:\d+\.?\d*(?:[eE][-+]?\d+)?|\.\d+(?:[eE][-+]?\d+)?)[fFuUlL]*$|^(?:true|false)$"
+)
 _FUNC_HEAD_RE = re.compile(r"^[A-Za-z_][\w:<>,\s\*&]*\b([\w:~]+)\s*\(")
 _STRUCT_HEAD_RE = re.compile(r"\bstruct\s+([A-Za-z_]\w*)\s*(?:final\s*)?(?::[^{;]*)?\{")
 
@@ -109,7 +115,11 @@ def _functions(text: str) -> list[tuple[str, int, int]]:
         offsets.append(pos)
         pos += len(ln) + 1
     for idx, ln in enumerate(lines):
-        if not ln or ln[0] in " \t}#/" or ln.startswith(("namespace", "using", "template", "struct", "class")):
+        if (
+            not ln
+            or ln[0] in " \t}#/"
+            or ln.startswith(("namespace", "using", "template", "struct", "class"))
+        ):
             continue
         m = _FUNC_HEAD_RE.match(ln)
         if not m:
@@ -140,7 +150,11 @@ def _enclosing(funcs, pos):
 
 def _statement_lhs(text: str, func_start: int, pos: int) -> str:
     """The text between the previous statement boundary and ``pos``."""
-    k = max(text.rfind(";", func_start, pos), text.rfind("{", func_start, pos), text.rfind("}", func_start, pos))
+    k = max(
+        text.rfind(";", func_start, pos),
+        text.rfind("{", func_start, pos),
+        text.rfind("}", func_start, pos),
+    )
     return text[k + 1 : pos]
 
 
@@ -164,11 +178,12 @@ _CAST = r"(?:static_cast<[^>]+>\(\s*)?"
 
 
 def _field_uses(body: str, value: str) -> set[tuple[str, str, bool]]:
-    """``var.field = value;`` assignments, each flagged when an ``if (value != 0)`` /
+    """``var.field = value;`` assignments (a ``!= 0`` or ``? 1 : 0`` bool spelling allowed), each flagged when an ``if (value != 0)`` /
     ``if (value > 0)`` test guards it -- a zero fallback there means "keep the core's own"."""
     out = set()
     for m in re.finditer(
-        rf"\b(\w+)(?:\.|->)(\w+)\s*=\s*{_CAST}{value}\s*\)?\s*(?:!=\s*0\s*)?;", body
+        rf"\b(\w+)(?:\.|->)(\w+)\s*=\s*{_CAST}{value}\s*\)?\s*(?:!=\s*0\s*|\?\s*1\s*:\s*0\s*)?;",
+        body,
     ):
         before = body[max(0, m.start() - 160) : m.start()]
         guarded = bool(
@@ -178,7 +193,9 @@ def _field_uses(body: str, value: str) -> set[tuple[str, str, bool]]:
     return out
 
 
-GUARDED_SENTINEL = "a zero fallback is only assigned when non-zero, so it keeps the core's own default"
+GUARDED_SENTINEL = (
+    "a zero fallback is only assigned when non-zero, so it keeps the core's own default"
+)
 # Declines where the native literal is itself the only default the tree spells.
 ONLY_DEFAULT_PREFIX = "the native literal is the only default found"
 ONLY_DEFAULT_C_FIELD = f"{ONLY_DEFAULT_PREFIX}: the C struct field is consumed as-is"
@@ -256,9 +273,7 @@ class Resolver:
                             per.append(set())
                         _lhs, eq, rhs = part.partition("=")
                         per[i].add(_classify_default(rhs, self.constants) if eq else None)
-            self._func_cache[func] = [
-                next(iter(v)) if len(v) == 1 else None for v in per
-            ] or None
+            self._func_cache[func] = [next(iter(v)) if len(v) == 1 else None for v in per] or None
         defaults = self._func_cache[func]
         if defaults is None:
             return None, "the value is passed to a function with no C++ declaration in a header"
@@ -320,10 +335,8 @@ class Resolver:
             pm = re.search(rf"\b{struct}\s*(?:const\s*)?[&*]\s*(\w+)", head)
             if not pm:
                 continue
-            for var, cpp_field, guarded in _field_uses(
-                body, rf"{pm.group(1)}(?:\.|->){field}\b"
-            ):
-                ty = _var_type(body, var)
+            for var, cpp_field, guarded in _field_uses(body, rf"{pm.group(1)}(?:\.|->){field}\b"):
+                ty = _var_type(body, var) or _param_type(head, var)
                 if ty and not ty.startswith("Sonare"):
                     hits.add((ty, cpp_field, guarded))
         if not hits:
@@ -340,7 +353,11 @@ class Resolver:
         """Follow a C ABI argument into its implementation."""
         anchor = f"{func}#{pos}"
         if func not in self.c_defs or depth >= 2:
-            return anchor, None, "the C ABI argument is not followed (no definition, or the hop limit)"
+            return (
+                anchor,
+                None,
+                "the C ABI argument is not followed (no definition, or the hop limit)",
+            )
         head, body = self.c_defs[func]
         inner = head[head.find("(") + 1 : head.rfind(")")]
         params = split_top_level_commas(inner, "([{", ")]}")
@@ -407,7 +424,9 @@ def extract(root: Path) -> tuple[list[NativeDefault], dict[str, str]]:
         + sorted((root / NODE_ADDON_DIR).rglob("*.h"))
         if not p.name.startswith("sonare_wrap_options")
     ]
-    sources += [("wasm-native", p, _embind_sites) for p in sorted((root / WASM_BINDINGS_DIR).rglob("*.cpp"))]
+    sources += [
+        ("wasm-native", p, _embind_sites) for p in sorted((root / WASM_BINDINGS_DIR).rglob("*.cpp"))
+    ]
     for surface, path, finder in sources:
         rel = path.relative_to(root).as_posix()
         text = _strip_comments_keep_lines(path.read_text(encoding="utf-8"))

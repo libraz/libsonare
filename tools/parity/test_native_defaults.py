@@ -34,6 +34,7 @@ namespace sonare {
 struct ThingConfig {
   int k = 5;
   float gain = 1.0f;
+  bool smooth = true;
 };
 int run_thing(const float* x, int n, int width = 9);
 }  // namespace sonare
@@ -44,6 +45,10 @@ SonareError sonare_thing(const SonareThingOptions* options) {
   ThingConfig config;
   config.k = options->k;
   return SONARE_OK;
+}
+
+static void apply_options(const SonareThingOptions& options, ThingConfig& config) {
+  config.smooth = options.smooth != 0;
 }
 
 SonareError sonare_width(const float* x, int n, int width) {
@@ -76,6 +81,15 @@ Napi::Value ThroughCStruct(const Napi::CallbackInfo& info) {
   return env.Undefined();
 }
 
+Napi::Value ThroughBoolHelper(const Napi::CallbackInfo& info) {
+  SonareThingOptions options{};
+  bool smooth{};
+  if (!OptionalBoolArg(env, info, 0, "smooth", SMOOTH_LITERAL, &smooth)) return env.Undefined();
+  options.smooth = smooth ? 1 : 0;
+  sonare_thing(&options);
+  return env.Undefined();
+}
+
 Napi::Value ThroughCArg(const Napi::CallbackInfo& info) {
   int width{};
   if (!OptionalIntArg(env, info, 1, "width", 9, &width)) return env.Undefined();
@@ -85,7 +99,7 @@ Napi::Value ThroughCArg(const Napi::CallbackInfo& info) {
 """
 
 
-def _tree(root: Path, k_literal: str = "7") -> Path:
+def _tree(root: Path, k_literal: str = "7", smooth_literal: str = "false") -> Path:
     (root / "src/core").mkdir(parents=True)
     (root / "src/util").mkdir(parents=True)
     (root / "src/c_api").mkdir(parents=True)
@@ -95,7 +109,9 @@ def _tree(root: Path, k_literal: str = "7") -> Path:
     (root / "src/core/thing.h").write_text(_CORE_HEADER)
     (root / "src/util/constants.h").write_text("")
     (root / "src/c_api/thing.cpp").write_text(_C_API)
-    (root / "bindings/node/src/addon/thing.cpp").write_text(_ADDON.replace("K_LITERAL", k_literal))
+    (root / "bindings/node/src/addon/thing.cpp").write_text(
+        _ADDON.replace("K_LITERAL", k_literal).replace("SMOOTH_LITERAL", smooth_literal)
+    )
     return root
 
 
@@ -118,12 +134,12 @@ def _active(rep: compare.Report) -> list[str]:
 def test_a_planted_mismatch_is_found() -> None:
     with tempfile.TemporaryDirectory() as d:
         rep = _report(_tree(Path(d), k_literal="7"))
-    assert _active(rep) == ["Direct.k"], _active(rep)
+    assert _active(rep) == ["Direct.k", "ThroughBoolHelper.smooth"], _active(rep)
 
 
 def test_the_corrected_twin_is_compared_and_agrees() -> None:
     with tempfile.TemporaryDirectory() as d:
-        rep = _report(_tree(Path(d), k_literal="5"))
+        rep = _report(_tree(Path(d), k_literal="5", smooth_literal="true"))
     assert _active(rep) == []
     # Agreement is a verdict, not a silence: the category reached it.
     assert rep.comparison_counts().get("native_default", 0) >= 1
@@ -139,6 +155,12 @@ def test_a_c_struct_field_lands_on_the_cpp_field_the_c_abi_copies_it_into() -> N
     with tempfile.TemporaryDirectory() as d:
         site = _sites(_tree(Path(d)))["ThroughCStruct.kViaC"]
     assert (site.anchor, site.core, site.unresolved) == ("ThingConfig.k", "5", ""), site
+
+
+def test_a_bool_spelled_as_an_int_lands_on_a_field_a_c_abi_helper_copies_it_into() -> None:
+    with tempfile.TemporaryDirectory() as d:
+        site = _sites(_tree(Path(d)))["ThroughBoolHelper.smooth"]
+    assert (site.anchor, site.core, site.unresolved) == ("ThingConfig.smooth", "true", ""), site
 
 
 def test_a_c_abi_argument_lands_on_the_default_argument_its_implementation_passes_it_to() -> None:
