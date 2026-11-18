@@ -560,12 +560,41 @@ def _python_document_aliases() -> set[str]:
     return aliases
 
 
-def _python_is_document(annotation: ast.expr | None, aliases: set[str]) -> bool:
-    """True when the annotation names a document alias, optionally beside None.
+def _python_closed_id_aliases() -> set[str]:
+    """Module-level aliases the package declares for a closed set of id strings (``Literal[...]``)."""
+    aliases: set[str] = set()
+    for path in sorted(_PY_PACKAGE.glob("*.py")):
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+        except (OSError, SyntaxError):
+            continue
+        for node in tree.body:
+            if (
+                isinstance(node, ast.Assign)
+                and len(node.targets) == 1
+                and isinstance(node.targets[0], ast.Name)
+                and _is_literal(node.value)
+            ):
+                aliases.add(node.targets[0].id)
+    return aliases
 
-    A bare dict/Mapping annotation is not a document: it is the untyped option bag the
-    construction rule refuses, so only a declared package alias exempts. JSON text is not
-    accepted beside it; text enters only through an entry named for it (``*_json``).
+
+def _is_literal(node: ast.expr) -> bool:
+    return isinstance(node, ast.Subscript) and ast.unparse(node.value) in {
+        "Literal",
+        "typing.Literal",
+    }
+
+
+def _python_is_document(
+    annotation: ast.expr | None, aliases: set[str], closed_ids: frozenset[str] = frozenset()
+) -> bool:
+    """True when the annotation names a document alias or a closed id set, optionally beside None.
+
+    A value handed over whole (a document, or an id naming a built-in one) is not an option
+    bag. A bare dict/Mapping annotation is: it is the untyped bag the construction rule
+    refuses, so only a declared package alias exempts. JSON text is not accepted beside it;
+    text enters only through an entry named for it (``*_json``).
     """
     if annotation is None:
         return False
@@ -577,9 +606,8 @@ def _python_is_document(annotation: ast.expr | None, aliases: set[str]) -> bool:
             stack += [node.left, node.right]
         else:
             members.append(node)
-    forms = [ast.unparse(m) for m in members]
-    documents = [f for f in forms if f in aliases]
-    return bool(documents) and all(f in documents or f == "None" for f in forms)
+    whole = [m for m in members if ast.unparse(m) in aliases | closed_ids or _is_literal(m)]
+    return bool(whole) and all(m in whole or ast.unparse(m) == "None" for m in members)
 
 
 def _python_init_params(path: Path, cls: str) -> tuple[list[str], list[str]] | None:
@@ -600,7 +628,12 @@ def _python_init_params(path: Path, cls: str) -> tuple[list[str], list[str]] | N
                         *([a.kwarg.arg] if a.kwarg else []),
                     ]
                     aliases = _python_document_aliases()
-                    documents = [x.arg for x in args if _python_is_document(x.annotation, aliases)]
+                    closed_ids = frozenset(_python_closed_id_aliases())
+                    documents = [
+                        x.arg
+                        for x in args
+                        if _python_is_document(x.annotation, aliases, closed_ids)
+                    ]
                     return names, documents
     return None
 
@@ -648,8 +681,8 @@ def _construction_violation(r: dict) -> str | None:
         return "a synchronous constructor takes one config object"
     if r["kind"] == "js-create" and not r["returns"].startswith("Promise<"):
         return "static create() exists only for constructions that return a Promise"
-    # A library document (mixer scene, playback config, mastering chain) is the value the
-    # object is built from, not an option bag, so a `config` typed by a document alias is exempt.
+    # A library document (mixer scene, playback config, mastering chain) or a closed id naming a
+    # built-in one is the value the object is built from, not an option bag, so it is exempt.
     documents = [p for p in r.get("documents", []) if p == "config"]
     if r["kind"] == "py-ctor" and any(
         p in _PY_CONFIG_PARAMS and p not in documents for p in r["params"]

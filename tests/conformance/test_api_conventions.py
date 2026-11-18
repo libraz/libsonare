@@ -539,11 +539,17 @@ class ConstructionRule(unittest.TestCase):
             "Record": "config: StreamConfig",
             "Text": "config: str",
             "Untyped": "config",
+            "PresetOrDoc": "config: PresetId | Doc = 'neutral'",
+            "PresetOnly": "config: PresetId",
+            "InlineIds": "config: Literal['a', 'b'] | None = None",
+            "PresetOrText": "config: PresetId | str",
+            "PresetOrBag": "config: PresetId | dict[str, Any]",
+            "OptionsDict": "options: dict",
         }
         with tempfile.TemporaryDirectory() as tmp:
             src = Path(tmp) / "m.py"
             src.write_text(
-                "Doc = dict[str, Any]\n"
+                "Doc = dict[str, Any]\nPresetId = Literal['neutral', 'bright']\n"
                 + "".join(
                     f"\nclass {n}:\n    def __init__(self, {p}) -> None: ...\n"
                     for n, p in classes.items()
@@ -565,7 +571,7 @@ class ConstructionRule(unittest.TestCase):
                 mock.patch.object(check, "_PY_PACKAGE", Path(tmp)),
             ):
                 verdict = self.judge(records)
-        self.assertEqual(verdict.read, 8)
+        self.assertEqual(verdict.read, 14)
         self.assertEqual(
             sorted(f.key for f in verdict.violations),
             [
@@ -573,6 +579,9 @@ class ConstructionRule(unittest.TestCase):
                 "python:AliasedText",
                 "python:BareMapping",
                 "python:BareOptions",
+                "python:OptionsDict",
+                "python:PresetOrBag",
+                "python:PresetOrText",
                 "python:Record",
                 "python:Text",
                 "python:Untyped",
