@@ -29,12 +29,10 @@ from libsonare.vocal_edit import (
     VocalNoteEdit,
     VocalSetNoteEdit,
     VocalStateToken,
-    VocalTargetMode,
     create_vocal_edit_session,
 )
 from libsonare.vocal_project import (
     ProjectVocalOriginalSource,
-    ProjectVocalRehydrateStatus,
     get_project_vocal_edit_dependencies,
     rehydrate_project_vocal_edits,
 )
@@ -66,7 +64,7 @@ def _source_and_render() -> tuple[np.ndarray, int, bytes, np.ndarray, object]:
                     VocalSetNoteEdit(
                         note.id,
                         VocalNoteEdit(
-                            target_mode=VocalTargetMode.CENTER,
+                            target_mode="center",
                             target_midi=72.0,
                             amount=1.0,
                             speed_ms=0.0,
@@ -200,10 +198,10 @@ def test_apply_roundtrip_and_rehydrate_after_project_reload() -> None:
 
         statuses = restored.rehydrate_vocal_edits(original_sources)
         assert len(statuses) == 1
-        assert statuses[0].status is ProjectVocalRehydrateStatus.REHYDRATED
+        assert statuses[0].status == "rehydrated"
         assert statuses[0].derived_source_id == dependency.derived_source_id
         already_ready = restored.rehydrate_vocal_edits(original_sources)
-        assert already_ready[0].status is ProjectVocalRehydrateStatus.ALREADY_READY
+        assert already_ready[0].status == "alreadyReady"
         assert already_ready[0].derived_source_id == dependency.derived_source_id
         ready = restored.get_vocal_edit_dependencies()[0]
         assert ready.original_pcm_available is True

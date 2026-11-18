@@ -5,8 +5,7 @@ from __future__ import annotations
 import ctypes
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from enum import IntEnum
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal, TypeAlias, cast, get_args
 
 import numpy as np
 from numpy.typing import NDArray
@@ -20,9 +19,6 @@ from ._ffi_types_vocal import (
 )
 from ._ffi_types_vocal_project import (
     SONARE_VOCAL_PROJECT_ABI_VERSION,
-    SONARE_VOCAL_REHYDRATE_ALREADY_READY,
-    SONARE_VOCAL_REHYDRATE_REHYDRATED,
-    SONARE_VOCAL_REHYDRATE_UNRESOLVED,
     SonareProjectVocalEditApplyDesc,
     SonareProjectVocalEditApplyResult,
     SonareProjectVocalEditDependenciesResult,
@@ -39,8 +35,10 @@ from ._runtime import (
     SonareValueError,
     _check,
     _get_lib,
+    _ordinal_token,
     _validate_samples,
 )
+from ._vocal_edit_model import _VOCAL_REASONS, VocalReason
 from .vocal_edit import VocalStateToken
 
 if TYPE_CHECKING:
@@ -53,21 +51,10 @@ _MAX_U32_ID = _UINT32_MAX - 1
 FloatArray = NDArray[np.float32]
 
 
-class ProjectVocalRehydrateStatus(IntEnum):
-    REHYDRATED = SONARE_VOCAL_REHYDRATE_REHYDRATED
-    ALREADY_READY = SONARE_VOCAL_REHYDRATE_ALREADY_READY
-    UNRESOLVED = SONARE_VOCAL_REHYDRATE_UNRESOLVED
+ProjectVocalRehydrateStatus: TypeAlias = Literal["rehydrated", "alreadyReady", "unresolved"]
+"""What rehydration did with one vocal edit."""
 
-
-class ProjectVocalReason(IntEnum):
-    NONE = 0
-    INVALID_INPUT = 1
-    REVISION_CONFLICT = 2
-    SOURCE_MISMATCH = 3
-    UNSUPPORTED = 4
-    CANCELLED = 5
-    COUNTER_EXHAUSTED = 6
-    INVALID_STATE = 7
+_REHYDRATE_STATUSES: tuple[ProjectVocalRehydrateStatus, ...] = get_args(ProjectVocalRehydrateStatus)
 
 
 @dataclass(frozen=True, slots=True)
@@ -105,7 +92,7 @@ class ProjectVocalEditDependency:
     derived_source_sha256: bytes
     original_pcm_available: bool
     derived_pcm_available: bool
-    reason: ProjectVocalReason | int
+    reason: VocalReason
     sidecar_key: str
 
 
@@ -114,15 +101,18 @@ class ProjectVocalRehydrateItem:
     clip_id: int
     take_id: int
     derived_source_id: int
-    status: ProjectVocalRehydrateStatus | int
-    reason: ProjectVocalReason | int
+    status: ProjectVocalRehydrateStatus
+    reason: VocalReason
 
 
-def _enum_or_int(enum_type: type[IntEnum], value: int) -> IntEnum | int:
-    try:
-        return enum_type(value)
-    except ValueError:
-        return value
+def _reason_token(value: int) -> VocalReason:
+    return cast(VocalReason, _ordinal_token(value, _VOCAL_REASONS, "reason"))
+
+
+def _rehydrate_status_token(value: int) -> ProjectVocalRehydrateStatus:
+    return cast(
+        ProjectVocalRehydrateStatus, _ordinal_token(value, _REHYDRATE_STATUSES, "rehydrate status")
+    )
 
 
 def _fixed_text(value: bytes | bytearray) -> str:
@@ -204,7 +194,7 @@ def _dependency(raw: SonareProjectVocalEditDependency) -> ProjectVocalEditDepend
         derived_source_sha256=bytes(raw.derived_source_sha256),
         original_pcm_available=bool(raw.original_pcm_available),
         derived_pcm_available=bool(raw.derived_pcm_available),
-        reason=_enum_or_int(ProjectVocalReason, int(raw.reason)),
+        reason=_reason_token(int(raw.reason)),
         sidecar_key=_fixed_text(raw.sidecar_key),
     )
 
@@ -214,8 +204,8 @@ def _rehydrate_item(raw: SonareProjectVocalRehydrateItem) -> ProjectVocalRehydra
         clip_id=int(raw.clip_id),
         take_id=int(raw.take_id),
         derived_source_id=int(raw.derived_source_id),
-        status=_enum_or_int(ProjectVocalRehydrateStatus, int(raw.status)),
-        reason=_enum_or_int(ProjectVocalReason, int(raw.reason)),
+        status=_rehydrate_status_token(int(raw.status)),
+        reason=_reason_token(int(raw.reason)),
     )
 
 
@@ -440,7 +430,6 @@ def rehydrate_project_vocal_edits(
 
 __all__ = [
     "ProjectVocalRehydrateStatus",
-    "ProjectVocalReason",
     "ProjectVocalOriginalSource",
     "ProjectVocalEditApplyResult",
     "ProjectVocalEditDependency",

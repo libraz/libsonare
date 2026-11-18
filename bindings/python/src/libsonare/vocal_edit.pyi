@@ -1,35 +1,26 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Sequence
-from enum import IntEnum
-from typing import Any, TypeAlias
+from typing import Any, Literal, TypeAlias
 
 import numpy as np
 from numpy.typing import NDArray
 
 from ._errors import SonareError
 
-class VocalTargetMode(IntEnum):
-    NONE = 0
-    CENTER = 1
-    CURVE = 2
-
-class VocalFormantMode(IntEnum):
-    PRESERVE = 0
-    SHIFT = 1
-
-class VocalOperationKind(IntEnum):
-    SET_EDIT = 0
-    SET_SOURCE_SPAN = 1
-    SPLIT = 2
-    MERGE = 3
-    SET_TRANSITION = 4
-    REMOVE_TRANSITION = 5
-    RESET = 6
-
-class VocalMergePolicy(IntEnum):
-    PRESERVE = 0
-    RESET = 1
+VocalTargetMode: TypeAlias = Literal["none", "center", "curve"]
+VocalFormantMode: TypeAlias = Literal["preserve", "shift"]
+VocalMergePolicy: TypeAlias = Literal["preserve", "reset"]
+VocalReason: TypeAlias = Literal[
+    "none",
+    "invalidInput",
+    "revisionConflict",
+    "sourceMismatch",
+    "unsupported",
+    "cancelled",
+    "counterExhausted",
+    "invalidState",
+]
 
 class VocalRange:
     start_sample: int
@@ -46,7 +37,7 @@ class VocalPitchPoint:
     def midi(self) -> float: ...
 
 class VocalNoteEdit:
-    target_mode: VocalTargetMode | int
+    target_mode: VocalTargetMode
     target_midi: float
     target_points: tuple[VocalPitchPoint, ...]
     amount: float
@@ -59,12 +50,12 @@ class VocalNoteEdit:
     destination_length_samples: int
     gain_db: float
     muted: bool
-    formant_mode: VocalFormantMode | int
+    formant_mode: VocalFormantMode
     formant_shift_semitones: float
     amplitude_envelope: tuple[float, ...]
     def __init__(
         self,
-        target_mode: VocalTargetMode | int = ...,
+        target_mode: VocalTargetMode = ...,
         target_midi: float = ...,
         target_points: Sequence[VocalPitchPoint] = ...,
         amount: float = ...,
@@ -77,7 +68,7 @@ class VocalNoteEdit:
         destination_length_samples: int = ...,
         gain_db: float = ...,
         muted: bool = ...,
-        formant_mode: VocalFormantMode | int = ...,
+        formant_mode: VocalFormantMode = ...,
         formant_shift_semitones: float = ...,
         amplitude_envelope: Sequence[float] = ...,
     ) -> None: ...
@@ -347,10 +338,8 @@ class VocalSplitNote:
 
 class VocalMergeNotes:
     note_ids: tuple[int, ...]
-    merge_policy: VocalMergePolicy | int
-    def __init__(
-        self, note_ids: Sequence[int], merge_policy: VocalMergePolicy | int = ...
-    ) -> None: ...
+    merge_policy: VocalMergePolicy
+    def __init__(self, note_ids: Sequence[int], merge_policy: VocalMergePolicy = ...) -> None: ...
 
 class VocalSetTransition:
     transition: VocalTransition
@@ -376,7 +365,7 @@ VocalOperation: TypeAlias = (
 )
 
 class VocalEditError(SonareError):
-    reason: int
+    reason: VocalReason
     field: str
     expected: int
     actual: int

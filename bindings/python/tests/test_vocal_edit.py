@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ctypes
 from dataclasses import replace
+from typing import get_args
 
 import numpy as np
 import pytest
@@ -25,10 +26,11 @@ from libsonare._runtime import _get_lib
 from libsonare.vocal_edit import (
     VocalAnalysis,
     VocalEditError,
+    VocalMergeNotes,
     VocalNoteEdit,
+    VocalReason,
     VocalSetNoteEdit,
     VocalSetTransition,
-    VocalTargetMode,
     VocalTransition,
     create_vocal_edit_session,
     restore_vocal_edit_session,
@@ -172,7 +174,7 @@ def test_history_flags_follow_commit_undo_and_redo() -> None:
                     VocalSetNoteEdit(
                         notes[0].id,
                         VocalNoteEdit(
-                            target_mode=VocalTargetMode.CENTER,
+                            target_mode="center",
                             target_midi=69.0,
                             amount=1.0,
                             destination_start_sample=notes[0].source_start_sample,
@@ -203,7 +205,7 @@ def test_draft_edit_evaluate_commit_and_restore() -> None:
         note = notes[0]
         with session.begin_edit() as draft:
             edit = VocalNoteEdit(
-                target_mode=VocalTargetMode.CENTER,
+                target_mode="center",
                 target_midi=69.0,
                 amount=1.0,
                 speed_ms=0.0,
@@ -226,6 +228,43 @@ def test_draft_edit_evaluate_commit_and_restore() -> None:
         restored_notes, _ = restored.notes()
         assert restored_notes[0].id == notes[0].id
         assert restored.token().revision == revision
+        assert restored_notes[0].edit.target_mode == "center"
+        assert restored_notes[0].edit.formant_mode == "preserve"
+
+
+@pytest.mark.parametrize(
+    ("field", "accepted"),
+    [("target_mode", "curve"), ("formant_mode", "shift")],
+)
+def test_a_vocal_note_edit_mode_is_an_exact_token(field: str, accepted: str) -> None:
+    source, analysis = _source_and_analysis()
+    with create_vocal_edit_session(source, 16_000, analysis=analysis) as session:
+        note = session.notes()[0][0]
+        with session.begin_edit() as draft:
+            for value, error in ((1, TypeError), (True, TypeError), ("Center", SonareValueError)):
+                operation = VocalSetNoteEdit(note.id, VocalNoteEdit(**{field: value}))
+                with pytest.raises(error, match=field):
+                    draft.apply([operation], expected_generation=draft.token().generation)
+            if field == "formant_mode":
+                with pytest.raises(SonareValueError, match=accepted):
+                    draft.apply(
+                        [VocalSetNoteEdit(note.id, VocalNoteEdit(formant_mode="Shift"))],  # type: ignore[arg-type]
+                        expected_generation=draft.token().generation,
+                    )
+
+
+def test_a_merge_policy_is_an_exact_token() -> None:
+    source, analysis = _source_and_analysis()
+    with create_vocal_edit_session(source, 16_000, analysis=analysis) as session:
+        notes, _ = session.notes()
+        ids = tuple(note.id for note in notes[:2])
+        with session.begin_edit() as draft:
+            for value, error in ((0, TypeError), ("Preserve", SonareValueError)):
+                with pytest.raises(error, match="merge_policy"):
+                    draft.apply(
+                        [VocalMergeNotes(ids, merge_policy=value)],  # type: ignore[arg-type]
+                        expected_generation=draft.token().generation,
+                    )
 
 
 def test_render_job_cancellation_is_call_scoped() -> None:
@@ -238,6 +277,8 @@ def test_render_job_cancellation_is_call_scoped() -> None:
         with pytest.raises(VocalEditError) as caught:
             job.next(lambda: True)
         assert caught.value.code in (8, 7)
+        assert caught.value.reason in get_args(VocalReason)
+        assert caught.value.reason != "none"
         job.abort()
 
 

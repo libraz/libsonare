@@ -75,9 +75,6 @@ from ._vocal_edit_marshal import (
     _edit_to_c as _edit_to_c,
 )
 from ._vocal_edit_marshal import (
-    _enum as _enum,
-)
-from ._vocal_edit_marshal import (
     _finite_float as _finite_float,
 )
 from ._vocal_edit_marshal import (
@@ -183,9 +180,6 @@ from ._vocal_edit_model import (
     VocalOperation as VocalOperation,
 )
 from ._vocal_edit_model import (
-    VocalOperationKind as VocalOperationKind,
-)
-from ._vocal_edit_model import (
     VocalPitchPoint as VocalPitchPoint,
 )
 from ._vocal_edit_model import (
@@ -193,6 +187,9 @@ from ._vocal_edit_model import (
 )
 from ._vocal_edit_model import (
     VocalRange as VocalRange,
+)
+from ._vocal_edit_model import (
+    VocalReason as VocalReason,
 )
 from ._vocal_edit_model import (
     VocalRemoveTransition as VocalRemoveTransition,
@@ -922,7 +919,7 @@ def restore_vocal_edit_session(
 __all__ = [
     "VocalTargetMode",
     "VocalFormantMode",
-    "VocalOperationKind",
+    "VocalReason",
     "VocalMergePolicy",
     "VocalRange",
     "VocalPitchPoint",

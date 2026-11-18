@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import IntEnum
-from typing import TypeAlias
+from typing import Literal, TypeAlias, get_args
 
 import numpy as np
 from numpy.typing import NDArray
@@ -12,30 +11,31 @@ from numpy.typing import NDArray
 FloatArray: TypeAlias = NDArray[np.float32]
 
 
-class VocalTargetMode(IntEnum):
-    NONE = 0
-    CENTER = 1
-    CURVE = 2
+VocalTargetMode: TypeAlias = Literal["none", "center", "curve"]
+"""How a note's pitch target is given: untouched, one MIDI pitch, or a curve."""
 
+VocalFormantMode: TypeAlias = Literal["preserve", "shift"]
+"""Whether a note keeps its formants or shifts them by ``formant_shift_semitones``."""
 
-class VocalFormantMode(IntEnum):
-    PRESERVE = 0
-    SHIFT = 1
+VocalMergePolicy: TypeAlias = Literal["preserve", "reset"]
+"""Whether merged notes keep the first note's edit or start from defaults."""
 
+VocalReason: TypeAlias = Literal[
+    "none",
+    "invalidInput",
+    "revisionConflict",
+    "sourceMismatch",
+    "unsupported",
+    "cancelled",
+    "counterExhausted",
+    "invalidState",
+]
+"""Why a vocal-edit call was refused; ``"none"`` on a record that carries no failure."""
 
-class VocalOperationKind(IntEnum):
-    SET_EDIT = 0
-    SET_SOURCE_SPAN = 1
-    SPLIT = 2
-    MERGE = 3
-    SET_TRANSITION = 4
-    REMOVE_TRANSITION = 5
-    RESET = 6
-
-
-class VocalMergePolicy(IntEnum):
-    PRESERVE = 0
-    RESET = 1
+_VOCAL_TARGET_MODES: tuple[VocalTargetMode, ...] = get_args(VocalTargetMode)
+_VOCAL_FORMANT_MODES: tuple[VocalFormantMode, ...] = get_args(VocalFormantMode)
+_VOCAL_MERGE_POLICIES: tuple[VocalMergePolicy, ...] = get_args(VocalMergePolicy)
+_VOCAL_REASONS: tuple[VocalReason, ...] = get_args(VocalReason)
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,7 +60,7 @@ class VocalPitchPoint:
 
 @dataclass(frozen=True, slots=True)
 class VocalNoteEdit:
-    target_mode: VocalTargetMode | int = VocalTargetMode.NONE
+    target_mode: VocalTargetMode = "none"
     target_midi: float = 0.0
     target_points: tuple[VocalPitchPoint, ...] = ()
     amount: float = 0.0
@@ -73,7 +73,7 @@ class VocalNoteEdit:
     destination_length_samples: int = 0
     gain_db: float = 0.0
     muted: bool = False
-    formant_mode: VocalFormantMode | int = VocalFormantMode.PRESERVE
+    formant_mode: VocalFormantMode = "preserve"
     formant_shift_semitones: float = 0.0
     amplitude_envelope: tuple[float, ...] = ()
 
@@ -259,7 +259,7 @@ class VocalSplitNote:
 @dataclass(frozen=True, slots=True)
 class VocalMergeNotes:
     note_ids: tuple[int, ...]
-    merge_policy: VocalMergePolicy | int = VocalMergePolicy.PRESERVE
+    merge_policy: VocalMergePolicy = "preserve"
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "note_ids", tuple(self.note_ids))

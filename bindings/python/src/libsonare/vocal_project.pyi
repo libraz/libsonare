@@ -1,28 +1,14 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
-from enum import IntEnum
-from typing import Any
+from typing import Any, Literal, TypeAlias
 
 from numpy.typing import NDArray
 
 from ._project import Project
-from .vocal_edit import VocalStateToken
+from .vocal_edit import VocalReason, VocalStateToken
 
-class ProjectVocalRehydrateStatus(IntEnum):
-    REHYDRATED = 0
-    ALREADY_READY = 1
-    UNRESOLVED = 2
-
-class ProjectVocalReason(IntEnum):
-    NONE = 0
-    INVALID_INPUT = 1
-    REVISION_CONFLICT = 2
-    SOURCE_MISMATCH = 3
-    UNSUPPORTED = 4
-    CANCELLED = 5
-    COUNTER_EXHAUSTED = 6
-    INVALID_STATE = 7
+ProjectVocalRehydrateStatus: TypeAlias = Literal["rehydrated", "alreadyReady", "unresolved"]
 
 class ProjectVocalOriginalSource:
     source_id: int
@@ -69,7 +55,7 @@ class ProjectVocalEditDependency:
     derived_source_sha256: bytes
     original_pcm_available: bool
     derived_pcm_available: bool
-    reason: ProjectVocalReason | int
+    reason: VocalReason
     sidecar_key: str
     def __init__(
         self,
@@ -85,7 +71,7 @@ class ProjectVocalEditDependency:
         derived_source_sha256: bytes,
         original_pcm_available: bool,
         derived_pcm_available: bool,
-        reason: ProjectVocalReason | int,
+        reason: VocalReason,
         sidecar_key: str,
     ) -> None: ...
 
@@ -93,15 +79,15 @@ class ProjectVocalRehydrateItem:
     clip_id: int
     take_id: int
     derived_source_id: int
-    status: ProjectVocalRehydrateStatus | int
-    reason: ProjectVocalReason | int
+    status: ProjectVocalRehydrateStatus
+    reason: VocalReason
     def __init__(
         self,
         clip_id: int,
         take_id: int,
         derived_source_id: int,
-        status: ProjectVocalRehydrateStatus | int,
-        reason: ProjectVocalReason | int,
+        status: ProjectVocalRehydrateStatus,
+        reason: VocalReason,
     ) -> None: ...
 
 def apply_project_vocal_edit(

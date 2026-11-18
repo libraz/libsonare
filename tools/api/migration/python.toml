@@ -7168,3 +7168,105 @@ changed = "mode takes a PartRigMode token; an ordinal is TypeError"
 domain = "project"
 rule = "string-closed-sets"
 test = "bindings/python/tests/test_part_rig.py::test_invalid_input_is_refused"
+
+[[entry]]
+kind = "type"
+old = "VocalTargetMode"
+changed = "Literal['none', 'center', 'curve']; the IntEnum and its members are removed"
+domain = "project"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_vocal_edit.py::test_a_vocal_note_edit_mode_is_an_exact_token"
+
+[[entry]]
+kind = "type"
+old = "VocalFormantMode"
+changed = "Literal['preserve', 'shift']; the IntEnum and its members are removed"
+domain = "project"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_vocal_edit.py::test_a_vocal_note_edit_mode_is_an_exact_token"
+
+[[entry]]
+kind = "type"
+old = "VocalMergePolicy"
+changed = "Literal['preserve', 'reset']; the IntEnum and its members are removed"
+domain = "project"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_vocal_edit.py::test_a_merge_policy_is_an_exact_token"
+
+[[entry]]
+kind = "type"
+old = "VocalOperationKind"
+removed = true
+domain = "project"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "type"
+old = "ProjectVocalReason"
+new = "VocalReason"
+domain = "project"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "type"
+old = "ProjectVocalRehydrateStatus"
+changed = "Literal['rehydrated', 'alreadyReady', 'unresolved']; the IntEnum and its members are removed"
+domain = "project"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_vocal_project.py::test_apply_roundtrip_and_rehydrate_after_project_reload"
+
+[[entry]]
+kind = "field"
+old = "VocalNoteEdit.target_mode"
+changed = "takes a VocalTargetMode token ('none' default); an ordinal is TypeError"
+domain = "project"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_vocal_edit.py::test_a_vocal_note_edit_mode_is_an_exact_token"
+
+[[entry]]
+kind = "field"
+old = "VocalNoteEdit.formant_mode"
+changed = "takes a VocalFormantMode token ('preserve' default); an ordinal is TypeError"
+domain = "project"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_vocal_edit.py::test_a_vocal_note_edit_mode_is_an_exact_token"
+
+[[entry]]
+kind = "field"
+old = "VocalMergeNotes.merge_policy"
+changed = "takes a VocalMergePolicy token ('preserve' default); an ordinal is TypeError"
+domain = "project"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_vocal_edit.py::test_a_merge_policy_is_an_exact_token"
+
+[[entry]]
+kind = "field"
+old = "VocalEditError.reason"
+changed = "a VocalReason token instead of a number"
+domain = "project"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_vocal_edit.py::test_render_job_cancellation_is_call_scoped"
+
+[[entry]]
+kind = "field"
+old = "ProjectVocalEditDependency.reason"
+changed = "a VocalReason token instead of a number or IntEnum"
+domain = "project"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_vocal_project.py::test_apply_roundtrip_and_rehydrate_after_project_reload"
+
+[[entry]]
+kind = "field"
+old = "ProjectVocalRehydrateItem.reason"
+changed = "a VocalReason token instead of a number or IntEnum"
+domain = "project"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_vocal_project.py::test_apply_roundtrip_and_rehydrate_after_project_reload"
+
+[[entry]]
+kind = "field"
+old = "ProjectVocalRehydrateItem.status"
+changed = "a ProjectVocalRehydrateStatus token instead of a number or IntEnum"
+domain = "project"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_vocal_project.py::test_apply_roundtrip_and_rehydrate_after_project_reload"

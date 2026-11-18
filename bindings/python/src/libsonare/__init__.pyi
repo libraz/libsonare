@@ -1426,9 +1426,6 @@ from .vocal_edit import (
     VocalOperation as VocalOperation,
 )
 from .vocal_edit import (
-    VocalOperationKind as VocalOperationKind,
-)
-from .vocal_edit import (
     VocalPitchPoint as VocalPitchPoint,
 )
 from .vocal_edit import (
@@ -1436,6 +1433,9 @@ from .vocal_edit import (
 )
 from .vocal_edit import (
     VocalRange as VocalRange,
+)
+from .vocal_edit import (
+    VocalReason as VocalReason,
 )
 from .vocal_edit import (
     VocalRemoveTransition as VocalRemoveTransition,
@@ -1490,9 +1490,6 @@ from .vocal_project import (
 )
 from .vocal_project import (
     ProjectVocalOriginalSource as ProjectVocalOriginalSource,
-)
-from .vocal_project import (
-    ProjectVocalReason as ProjectVocalReason,
 )
 from .vocal_project import (
     ProjectVocalRehydrateItem as ProjectVocalRehydrateItem,

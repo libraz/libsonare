@@ -5,7 +5,6 @@ from __future__ import annotations
 import ctypes
 import math
 from collections.abc import Callable, Sequence
-from enum import IntEnum
 from typing import Any, SupportsFloat, cast
 
 import numpy as np
@@ -40,10 +39,16 @@ from ._runtime import (
     _check,
     _get_lib,
     _narrow_int,
+    _ordinal_token,
     _resolve_sample_bound,
+    _token_ordinal,
     _utf8_arg,
 )
 from ._vocal_edit_model import (
+    _VOCAL_FORMANT_MODES,
+    _VOCAL_MERGE_POLICIES,
+    _VOCAL_REASONS,
+    _VOCAL_TARGET_MODES,
     VocalAnalysis,
     VocalAnalysisResult,
     VocalCreateOptions,
@@ -51,14 +56,13 @@ from ._vocal_edit_model import (
     VocalFormantMode,
     VocalIdChange,
     VocalMergeNotes,
-    VocalMergePolicy,
     VocalNote,
     VocalNoteEdit,
     VocalOperation,
-    VocalOperationKind,
     VocalPitchPoint,
     VocalPitchResult,
     VocalRange,
+    VocalReason,
     VocalRemoveTransition,
     VocalRenderResult,
     VocalResetNotes,
@@ -111,18 +115,20 @@ def _uint64(value: object, name: str, *, allow_zero: bool = True) -> int:
     return result
 
 
-def _enum(value: object, enum_type: type[IntEnum], name: str) -> int:
-    try:
-        result = _int64(value, name)
-    except TypeError as exc:
-        raise TypeError(f"{name} must be one of {[e.value for e in enum_type]}") from exc
-    except SonareValueError as exc:
-        raise SonareValueError(f"{name} must be one of {[e.value for e in enum_type]}") from exc
-    try:
-        enum_type(result)
-    except ValueError as exc:
-        raise SonareValueError(f"{name} must be one of {[e.value for e in enum_type]}") from exc
-    return result
+# SonareVocalOperationKind order; a Python operation is chosen by its class, not a kind.
+_OPERATION_KINDS = (
+    "setEdit",
+    "setSourceSpan",
+    "split",
+    "merge",
+    "setTransition",
+    "removeTransition",
+    "reset",
+)
+
+
+def _operation_kind(kind: str) -> int:
+    return _OPERATION_KINDS.index(kind)
 
 
 def _copy_pointer(pointer: Any, count: int, dtype: np.dtype[Any]) -> np.ndarray:
@@ -161,14 +167,14 @@ class VocalEditError(SonareError):
         code: int,
         message: str,
         *,
-        reason: int = 0,
+        reason: VocalReason = "none",
         field: str = "",
         expected: int = 0,
         actual: int = 0,
         expected_text: str = "",
         actual_text: str = "",
     ) -> None:
-        self.reason = int(reason)
+        self.reason: VocalReason = reason
         self.field = field
         self.expected = int(expected)
         self.actual = int(actual)
@@ -194,7 +200,7 @@ def _vocal_check(rc: int) -> None:
         raise VocalEditError(
             exc.code,
             message,
-            reason=int(detail.reason),
+            reason=cast(VocalReason, _ordinal_token(int(detail.reason), _VOCAL_REASONS, "reason")),
             field=_text(detail.field),
             expected=int(detail.expected),
             actual=int(detail.actual),
@@ -376,7 +382,7 @@ def _options_to_c(
 def _edit_to_c(lib: ctypes.CDLL, edit: VocalNoteEdit) -> tuple[SonareVocalNoteEdit, list[Any]]:
     raw = SonareVocalNoteEdit()
     lib.sonare_vocal_note_edit_init(ctypes.byref(raw))
-    raw.target_mode = _enum(edit.target_mode, VocalTargetMode, "target_mode")
+    raw.target_mode = _token_ordinal(edit.target_mode, _VOCAL_TARGET_MODES, "target_mode")
     raw.target_midi = _finite_float(edit.target_midi, "target_midi")
     raw.amount = _finite_float(edit.amount, "amount")
     raw.speed_ms = _finite_float(edit.speed_ms, "speed_ms")
@@ -394,7 +400,7 @@ def _edit_to_c(lib: ctypes.CDLL, edit: VocalNoteEdit) -> tuple[SonareVocalNoteEd
     if not isinstance(edit.muted, (bool, np.bool_)):
         raise TypeError("muted must be a bool")
     raw.muted = int(edit.muted)
-    raw.formant_mode = _enum(edit.formant_mode, VocalFormantMode, "formant_mode")
+    raw.formant_mode = _token_ordinal(edit.formant_mode, _VOCAL_FORMANT_MODES, "formant_mode")
     raw.formant_shift_semitones = _finite_float(
         edit.formant_shift_semitones, "formant_shift_semitones"
     )
@@ -462,12 +468,12 @@ def _operation_to_c(
     lib.sonare_vocal_operation_init(ctypes.byref(raw))
     keepalive: list[Any] = []
     if isinstance(operation, VocalSetNoteEdit):
-        raw.kind = int(VocalOperationKind.SET_EDIT)
+        raw.kind = _operation_kind("setEdit")
         raw.note_id = _uint32(operation.note_id, "note_id", allow_zero=False)
         raw.edit, buffers = _edit_to_c(lib, operation.edit)
         keepalive.extend(buffers)
     elif isinstance(operation, VocalSetNoteSourceSpan):
-        raw.kind = int(VocalOperationKind.SET_SOURCE_SPAN)
+        raw.kind = _operation_kind("setSourceSpan")
         raw.note_id = _uint32(operation.note_id, "note_id", allow_zero=False)
         raw.source_start_sample = _operation_position(
             "VocalSetNoteSourceSpan",
@@ -502,7 +508,7 @@ def _operation_to_c(
             "destination_length_sec",
         )
     elif isinstance(operation, VocalSplitNote):
-        raw.kind = int(VocalOperationKind.SPLIT)
+        raw.kind = _operation_kind("split")
         raw.note_id = _uint32(operation.note_id, "note_id", allow_zero=False)
         raw.cut_source_sample = _operation_position(
             "VocalSplitNote",
@@ -513,8 +519,10 @@ def _operation_to_c(
             "cut_source_sec",
         )
     elif isinstance(operation, VocalMergeNotes):
-        raw.kind = int(VocalOperationKind.MERGE)
-        raw.merge_policy = _enum(operation.merge_policy, VocalMergePolicy, "merge_policy")
+        raw.kind = _operation_kind("merge")
+        raw.merge_policy = _token_ordinal(
+            operation.merge_policy, _VOCAL_MERGE_POLICIES, "merge_policy"
+        )
         ids = (ctypes.c_uint32 * len(operation.note_ids))()
         for i, value in enumerate(operation.note_ids):
             ids[i] = _uint32(value, "note_ids", allow_zero=False)
@@ -522,10 +530,10 @@ def _operation_to_c(
         raw.note_id_count = len(operation.note_ids)
         keepalive.append(ids)
     elif isinstance(operation, VocalSetTransition):
-        raw.kind = int(VocalOperationKind.SET_TRANSITION)
+        raw.kind = _operation_kind("setTransition")
         raw.transition = _transition_to_c(lib, operation.transition)
     elif isinstance(operation, VocalRemoveTransition):
-        raw.kind = int(VocalOperationKind.REMOVE_TRANSITION)
+        raw.kind = _operation_kind("removeTransition")
         raw.transition.left_note_id = _uint32(
             operation.left_note_id, "left_note_id", allow_zero=False
         )
@@ -533,7 +541,7 @@ def _operation_to_c(
             operation.right_note_id, "right_note_id", allow_zero=False
         )
     elif isinstance(operation, VocalResetNotes):
-        raw.kind = int(VocalOperationKind.RESET)
+        raw.kind = _operation_kind("reset")
         ids = (ctypes.c_uint32 * len(operation.note_ids))()
         for i, value in enumerate(operation.note_ids):
             ids[i] = _uint32(value, "note_ids", allow_zero=False)
@@ -563,7 +571,10 @@ def _note_edit_from_c(raw: SonareVocalNoteEdit) -> VocalNoteEdit:
         )
     )
     return VocalNoteEdit(
-        target_mode=VocalTargetMode(int(raw.target_mode)),
+        target_mode=cast(
+            VocalTargetMode,
+            _ordinal_token(int(raw.target_mode), _VOCAL_TARGET_MODES, "target_mode"),
+        ),
         target_midi=float(raw.target_midi),
         target_points=points,
         amount=float(raw.amount),
@@ -576,7 +587,10 @@ def _note_edit_from_c(raw: SonareVocalNoteEdit) -> VocalNoteEdit:
         destination_length_samples=int(raw.destination_length_samples),
         gain_db=float(raw.gain_db),
         muted=bool(raw.muted),
-        formant_mode=VocalFormantMode(int(raw.formant_mode)),
+        formant_mode=cast(
+            VocalFormantMode,
+            _ordinal_token(int(raw.formant_mode), _VOCAL_FORMANT_MODES, "formant_mode"),
+        ),
         formant_shift_semitones=float(raw.formant_shift_semitones),
         amplitude_envelope=envelope,
     )
