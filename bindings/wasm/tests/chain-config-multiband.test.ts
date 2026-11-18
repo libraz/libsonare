@@ -127,7 +127,7 @@ describe('typed multiband crossover + bands', () => {
     expect(() => masterAudio({ samples: left, sampleRate, overrides: numeric })).toThrow(TypeError);
   });
 
-  it('a typed crossover alone enables the stage like a lone shorthand cutoff', () => {
+  it('a typed crossover alone enables the stage', () => {
     const alone = masterAudio({
       samples: left,
       sampleRate,
@@ -140,14 +140,19 @@ describe('typed multiband crossover + bands', () => {
         dynamics: { multibandComp: { enabled: true, crossover: { cutoffsHz: [200, 2000, 8000] } } },
       },
     });
-    const shorthand = masterAudio({
-      samples: left,
-      sampleRate,
-      overrides: { dynamics: { multibandComp: { lowCutoffHz: 200 } } },
-    });
     expect(alone.stages).toContain(MB);
-    expect(shorthand.stages).toContain(MB);
     expect(Array.from(alone.samples)).toEqual(Array.from(explicit.samples));
+  });
+
+  it.each([
+    ['lowCutoffHz', 200, 'cutoff0Hz'],
+    ['highCutoffHz', 4000, 'cutoff1Hz'],
+    ['lowThresholdDb', -20, 'bands.0.thresholdDb'],
+    ['midRatio', 3, 'bands.1.ratio'],
+    ['highReleaseMs', 80, 'bands.2.releaseMs'],
+  ] as const)('refuses the retired %s shorthand and names %s', (key, value, current) => {
+    const overrides = { dynamics: { multibandComp: { [key]: value } } } as never;
+    expect(() => masterAudio({ samples: left, sampleRate, overrides })).toThrow(current);
   });
 
   it('refuses an empty array by path on every entry point', () => {

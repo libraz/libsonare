@@ -27941,3 +27941,213 @@ removed = "the catalog lists no other chain spellings; every chain key has exact
 domain = "core"
 rule = "aliases-removed"
 entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.dynamics.multibandComp.highAttackMs"
+removed = "set bands[2].attackMs; the low/mid/high shorthand is refused"
+domain = "mastering"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.dynamics.multibandComp.highAttackMs"
+removed = "set bands[2].attackMs; the low/mid/high shorthand is refused"
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.dynamics.multibandComp.highCutoffHz"
+removed = "set crossover.cutoffsHz[1]; the low/mid/high shorthand is refused"
+domain = "mastering"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.dynamics.multibandComp.highCutoffHz"
+removed = "set crossover.cutoffsHz[1]; the low/mid/high shorthand is refused"
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.dynamics.multibandComp.highRatio"
+removed = "set bands[2].ratio; the low/mid/high shorthand is refused"
+domain = "mastering"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.dynamics.multibandComp.highRatio"
+removed = "set bands[2].ratio; the low/mid/high shorthand is refused"
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.dynamics.multibandComp.highReleaseMs"
+removed = "set bands[2].releaseMs; the low/mid/high shorthand is refused"
+domain = "mastering"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.dynamics.multibandComp.highReleaseMs"
+removed = "set bands[2].releaseMs; the low/mid/high shorthand is refused"
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.dynamics.multibandComp.highThresholdDb"
+removed = "set bands[2].thresholdDb; the low/mid/high shorthand is refused"
+domain = "mastering"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.dynamics.multibandComp.highThresholdDb"
+removed = "set bands[2].thresholdDb; the low/mid/high shorthand is refused"
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.dynamics.multibandComp.lowAttackMs"
+removed = "set bands[0].attackMs; the low/mid/high shorthand is refused"
+domain = "mastering"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.dynamics.multibandComp.lowAttackMs"
+removed = "set bands[0].attackMs; the low/mid/high shorthand is refused"
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.dynamics.multibandComp.lowCutoffHz"
+removed = "set crossover.cutoffsHz[0]; the low/mid/high shorthand is refused"
+domain = "mastering"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.dynamics.multibandComp.lowCutoffHz"
+removed = "set crossover.cutoffsHz[0]; the low/mid/high shorthand is refused"
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.dynamics.multibandComp.lowRatio"
+removed = "set bands[0].ratio; the low/mid/high shorthand is refused"
+domain = "mastering"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.dynamics.multibandComp.lowRatio"
+removed = "set bands[0].ratio; the low/mid/high shorthand is refused"
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.dynamics.multibandComp.lowReleaseMs"
+removed = "set bands[0].releaseMs; the low/mid/high shorthand is refused"
+domain = "mastering"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.dynamics.multibandComp.lowReleaseMs"
+removed = "set bands[0].releaseMs; the low/mid/high shorthand is refused"
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.dynamics.multibandComp.lowThresholdDb"
+removed = "set bands[0].thresholdDb; the low/mid/high shorthand is refused"
+domain = "mastering"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.dynamics.multibandComp.lowThresholdDb"
+removed = "set bands[0].thresholdDb; the low/mid/high shorthand is refused"
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.dynamics.multibandComp.midAttackMs"
+removed = "set bands[1].attackMs; the low/mid/high shorthand is refused"
+domain = "mastering"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.dynamics.multibandComp.midAttackMs"
+removed = "set bands[1].attackMs; the low/mid/high shorthand is refused"
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.dynamics.multibandComp.midRatio"
+removed = "set bands[1].ratio; the low/mid/high shorthand is refused"
+domain = "mastering"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.dynamics.multibandComp.midRatio"
+removed = "set bands[1].ratio; the low/mid/high shorthand is refused"
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.dynamics.multibandComp.midReleaseMs"
+removed = "set bands[1].releaseMs; the low/mid/high shorthand is refused"
+domain = "mastering"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.dynamics.multibandComp.midReleaseMs"
+removed = "set bands[1].releaseMs; the low/mid/high shorthand is refused"
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.dynamics.multibandComp.midThresholdDb"
+removed = "set bands[1].thresholdDb; the low/mid/high shorthand is refused"
+domain = "mastering"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.dynamics.multibandComp.midThresholdDb"
+removed = "set bands[1].thresholdDb; the low/mid/high shorthand is refused"
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./analysis"

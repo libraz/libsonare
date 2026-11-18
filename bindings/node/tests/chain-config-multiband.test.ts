@@ -157,6 +157,19 @@ describe('typed multiband crossover + bands', () => {
     expect(typed.stages.length).toBeGreaterThan(baseline.stages.length);
   });
 
+  it.each([
+    ['lowCutoffHz', 200, 'cutoff0Hz'],
+    ['highCutoffHz', 4000, 'cutoff1Hz'],
+    ['lowThresholdDb', -20, 'bands.0.thresholdDb'],
+    ['midRatio', 3, 'bands.1.ratio'],
+    ['highReleaseMs', 80, 'bands.2.releaseMs'],
+  ] as const)('refuses the retired %s shorthand and names %s', (key, value, current) => {
+    const overrides = { dynamics: { multibandComp: { [key]: value } } } as never;
+    expect(() => masterAudio({ samples: tone(1), sampleRate: SAMPLE_RATE, overrides })).toThrow(
+      current,
+    );
+  });
+
   it('refuses an empty array by path on the facade flattener and the addon', () => {
     const empty = { dynamics: { multibandComp: { crossover: { cutoffsHz: [] } } } };
     const message = `Mastering override '${P}.crossover.cutoffsHz' is an empty list, which has no flat spelling`;

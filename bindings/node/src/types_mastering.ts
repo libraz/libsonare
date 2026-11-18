@@ -13806,31 +13806,10 @@ export interface MasteringChainConfig {
     };
     multibandComp?: {
       enabled?: boolean;
-      lowCutoffHz?: number;
-      highCutoffHz?: number;
-      lowThresholdDb?: number;
-      lowRatio?: number;
-      /** Attack in ms: one time constant, about 63% of the way at the set time. */
-      lowAttackMs?: number;
-      /** Release in ms: one time constant, about 63% of the way at the set time. */
-      lowReleaseMs?: number;
-      midThresholdDb?: number;
-      midRatio?: number;
-      /** Attack in ms: one time constant, about 63% of the way at the set time. */
-      midAttackMs?: number;
-      /** Release in ms: one time constant, about 63% of the way at the set time. */
-      midReleaseMs?: number;
-      highThresholdDb?: number;
-      highRatio?: number;
-      /** Attack in ms: one time constant, about 63% of the way at the set time. */
-      highAttackMs?: number;
-      /** Release in ms: one time constant, about 63% of the way at the set time. */
-      highReleaseMs?: number;
       /**
        * Crossover of the N-band form. `cutoffsHz` replaces the whole cutoff list
-       * and sets the band count to `length + 1` (2 to 64 bands); do not combine
-       * it with the `lowCutoffHz` / `highCutoffHz` shorthand in one call. An empty
-       * list is refused. Giving any member of `crossover` enables the stage unless
+       * and sets the band count to `length + 1` (2 to 64 bands). An empty list is
+       * refused. Giving any member of `crossover` enables the stage unless
        * `enabled` says otherwise.
        */
       crossover?: {
@@ -13843,8 +13822,7 @@ export interface MasteringChainConfig {
       /**
        * Per-band compressor settings by band index. An omitted band or field
        * keeps the base (preset) value, or the compressor default for a band the
-       * base does not have. Do not combine with the `low*` / `mid*` / `high*`
-       * shorthand for the same field in one call.
+       * base does not have.
        */
       bands?: MultibandCompressorBand[];
     };
