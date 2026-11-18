@@ -12346,7 +12346,7 @@ rule = "typed-results"
 [[entry]]
 kind = "field"
 old = "ClipDetection.sampleCount"
-changed = "changed = \"sampleCount -> clippedSamples\""
+changed = "sampleCount -> clippedSamples"
 domain = "effects"
 rule = "individual"
 test = "bindings/node/tests/surface/mastering-metering.test.ts::ClipDetection.sampleCount"
@@ -12354,7 +12354,7 @@ test = "bindings/node/tests/surface/mastering-metering.test.ts::ClipDetection.sa
 [[entry]]
 kind = "field"
 old = "ClipDetection.sampleFraction"
-changed = "changed = \"sampleFraction -> clippedRatio\""
+changed = "sampleFraction -> clippedRatio"
 domain = "effects"
 rule = "individual"
 test = "bindings/node/tests/surface/mastering-metering.test.ts::ClipDetection.sampleFraction"
@@ -12362,7 +12362,7 @@ test = "bindings/node/tests/surface/mastering-metering.test.ts::ClipDetection.sa
 [[entry]]
 kind = "field"
 old = "ClippingReport.clippingRatio"
-changed = "changed = \"clippingRatio -> clippedRatio\""
+changed = "clippingRatio -> clippedRatio"
 domain = "mastering"
 rule = "individual"
 test = "bindings/node/tests/surface/mastering-metering.test.ts::ClippingReport.clippingRatio"
@@ -12370,7 +12370,7 @@ test = "bindings/node/tests/surface/mastering-metering.test.ts::ClippingReport.c
 [[entry]]
 kind = "field"
 old = "CompressorOptions.detector"
-changed = "changed = \"CompressorDetector ('peak'|'rms'|'logRms'); numbers refused\""
+changed = "CompressorDetector ('peak'|'rms'|'logRms'); numbers refused"
 domain = "mastering"
 rule = "token-case"
 test = "bindings/node/tests/surface/mastering-metering.test.ts::CompressorOptions.detector"
@@ -12378,7 +12378,7 @@ test = "bindings/node/tests/surface/mastering-metering.test.ts::CompressorOption
 [[entry]]
 kind = "field"
 old = "CompressorOptions.sidechainHpfEnabled"
-changed = "changed = \"sidechainHpfEnabled -> sidechainHighPassHz (number (Hz, > 0); absent = sidechain high-pass off; replaces sidechainHpfEnabled + sidechainHpfHz)\""
+changed = "sidechainHpfEnabled -> sidechainHighPassHz (number (Hz, > 0); absent = sidechain high-pass off; replaces sidechainHpfEnabled + sidechainHpfHz)"
 domain = "mastering"
 rule = "high-pass"
 test = "bindings/node/tests/surface/mastering-metering.test.ts::CompressorOptions.sidechainHpfEnabled"
@@ -12386,7 +12386,7 @@ test = "bindings/node/tests/surface/mastering-metering.test.ts::CompressorOption
 [[entry]]
 kind = "field"
 old = "CompressorOptions.sidechainHpfHz"
-changed = "changed = \"sidechainHpfHz -> sidechainHighPassHz (number (Hz, > 0); absent = sidechain high-pass off; replaces sidechainHpfEnabled + sidechainHpfHz)\""
+changed = "sidechainHpfHz -> sidechainHighPassHz (number (Hz, > 0); absent = sidechain high-pass off; replaces sidechainHpfEnabled + sidechainHpfHz)"
 domain = "mastering"
 rule = "high-pass"
 test = "bindings/node/tests/surface/mastering-metering.test.ts::CompressorOptions.sidechainHpfHz"
@@ -12394,7 +12394,7 @@ test = "bindings/node/tests/surface/mastering-metering.test.ts::CompressorOption
 [[entry]]
 kind = "field"
 old = "Ebur128LoudnessRangeRequest.sampleRate"
-changed = "changed = \"optional -> required (no default)\""
+changed = "optional -> required (no default)"
 domain = "mastering"
 rule = "sample-rate-required"
 test = "bindings/node/tests/surface/mastering-metering.test.ts::Ebur128LoudnessRangeRequest.sampleRate"
@@ -12402,7 +12402,7 @@ test = "bindings/node/tests/surface/mastering-metering.test.ts::Ebur128LoudnessR
 [[entry]]
 kind = "field"
 old = "GateOptions.keyHpfHz"
-changed = "changed = \"keyHpfHz -> keyHighPassHz (number (Hz); absent = off; 0 Hz passes everything, the same as off, so it stays accepted)\""
+changed = "keyHpfHz -> keyHighPassHz (number (Hz); absent = off; 0 Hz passes everything, the same as off, so it stays accepted)"
 domain = "mastering"
 rule = "high-pass"
 test = "bindings/node/tests/surface/mastering-metering.test.ts::GateOptions.keyHpfHz"
@@ -12417,7 +12417,7 @@ rule = "options-struct"
 [[entry]]
 kind = "field"
 old = "LufsInterleavedRequest.sampleRate"
-changed = "changed = \"optional -> required (no default)\""
+changed = "optional -> required (no default)"
 domain = "mastering"
 rule = "sample-rate-required"
 test = "bindings/node/tests/surface/mastering-metering.test.ts::LufsInterleavedRequest.sampleRate"
@@ -12425,7 +12425,7 @@ test = "bindings/node/tests/surface/mastering-metering.test.ts::LufsInterleavedR
 [[entry]]
 kind = "field"
 old = "LufsInterleavedRequest.samples"
-changed = "changed = \"samples -> channels (Float32Array[] (planar; was interleaved samples + count))\""
+changed = "samples -> channels (Float32Array[] (planar; was interleaved samples + count))"
 domain = "mastering"
 rule = "num-channels"
 test = "bindings/node/tests/surface/mastering-metering.test.ts::LufsInterleavedRequest.samples"
@@ -12433,7 +12433,7 @@ test = "bindings/node/tests/surface/mastering-metering.test.ts::LufsInterleavedR
 [[entry]]
 kind = "field"
 old = "LufsSeriesResult.momentary"
-changed = "changed = \"momentary -> momentaryLufs\""
+changed = "momentary -> momentaryLufs"
 domain = "mastering"
 rule = "loudness-names"
 test = "bindings/node/tests/surface/mastering-metering.test.ts::LufsSeriesResult.momentary"
@@ -12441,7 +12441,7 @@ test = "bindings/node/tests/surface/mastering-metering.test.ts::LufsSeriesResult
 [[entry]]
 kind = "field"
 old = "LufsSeriesResult.shortTerm"
-changed = "changed = \"shortTerm -> shortTermLufs\""
+changed = "shortTerm -> shortTermLufs"
 domain = "mastering"
 rule = "loudness-names"
 test = "bindings/node/tests/surface/mastering-metering.test.ts::LufsSeriesResult.shortTerm"
@@ -12449,7 +12449,7 @@ test = "bindings/node/tests/surface/mastering-metering.test.ts::LufsSeriesResult
 [[entry]]
 kind = "field"
 old = "MasterAudioAsyncRequest.preset"
-changed = "changed = \"optional -> required (MasteringPreset)\""
+changed = "optional -> required (MasteringPreset)"
 domain = "mastering"
 rule = "individual"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::masterAudioAsync: preset required"
@@ -12457,7 +12457,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::masterAudioAsync: p
 [[entry]]
 kind = "field"
 old = "MasterAudioRequest.sampleRate"
-changed = "changed = \"optional -> required (no default)\""
+changed = "optional -> required (no default)"
 domain = "mastering"
 rule = "sample-rate-required"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::requires sampleRate"
@@ -12465,7 +12465,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::requires sampleRate
 [[entry]]
 kind = "field"
 old = "MasterAudioStereoAsyncRequest.preset"
-changed = "changed = \"optional -> required (MasteringPreset)\""
+changed = "optional -> required (MasteringPreset)"
 domain = "mastering"
 rule = "individual"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::masterAudioAsync: preset required"
@@ -12473,7 +12473,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::masterAudioAsync: p
 [[entry]]
 kind = "field"
 old = "MasterAudioStereoRequest.sampleRate"
-changed = "changed = \"optional -> required (no default)\""
+changed = "optional -> required (no default)"
 domain = "mastering"
 rule = "sample-rate-required"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::requires sampleRate"
@@ -12481,7 +12481,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::requires sampleRate
 [[entry]]
 kind = "field"
 old = "MasteringAbMatchLoudnessRequest.sampleRate"
-changed = "changed = \"optional -> required (no default)\""
+changed = "optional -> required (no default)"
 domain = "mastering"
 rule = "sample-rate-required"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::requires sampleRate"
@@ -12489,7 +12489,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::requires sampleRate
 [[entry]]
 kind = "field"
 old = "MasteringAbMatchLoudnessStereoRequest.sampleRate"
-changed = "changed = \"optional -> required (no default)\""
+changed = "optional -> required (no default)"
 domain = "mastering"
 rule = "sample-rate-required"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::requires sampleRate"
@@ -12497,7 +12497,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::requires sampleRate
 [[entry]]
 kind = "field"
 old = "MasteringAssistantProfile.attackDensity"
-changed = "changed = \"attackDensity -> attackPerSecond\""
+changed = "attackDensity -> attackPerSecond"
 domain = "mastering"
 rule = "unit-in-name"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::the assistant returns objects"
@@ -12505,7 +12505,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::the assistant retur
 [[entry]]
 kind = "field"
 old = "MasteringAssistantProfile.lraLu"
-changed = "changed = \"lraLu -> loudnessRangeLu\""
+changed = "lraLu -> loudnessRangeLu"
 domain = "mastering"
 rule = "loudness-names"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::the assistant returns objects"
@@ -12513,7 +12513,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::the assistant retur
 [[entry]]
 kind = "field"
 old = "MasteringAssistantProfile.truePeakDb"
-changed = "changed = \"truePeakDb -> truePeakDbtp\""
+changed = "truePeakDb -> truePeakDbtp"
 domain = "mastering"
 rule = "loudness-names"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::the assistant returns objects"
@@ -12521,7 +12521,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::the assistant retur
 [[entry]]
 kind = "field"
 old = "MasteringAssistantResult.chainConfig"
-changed = "changed = \"MasteringChainConfig (was MasteringChainConfigDocument {version, params})\""
+changed = "MasteringChainConfig (was MasteringChainConfigDocument {version, params})"
 domain = "mastering"
 rule = "typed-results"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::the assistant chain nests"
@@ -12536,7 +12536,7 @@ rule = "options-struct"
 [[entry]]
 kind = "field"
 old = "MasteringAssistantSuggestRequest.sampleRate"
-changed = "changed = \"optional -> required (no default)\""
+changed = "optional -> required (no default)"
 domain = "mastering"
 rule = "sample-rate-required"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::requires sampleRate"
@@ -12551,7 +12551,7 @@ rule = "options-struct"
 [[entry]]
 kind = "field"
 old = "MasteringAssistantSuggestStereoRequest.sampleRate"
-changed = "changed = \"optional -> required (no default)\""
+changed = "optional -> required (no default)"
 domain = "mastering"
 rule = "sample-rate-required"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::requires sampleRate"
@@ -12559,7 +12559,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::requires sampleRate
 [[entry]]
 kind = "field"
 old = "MasteringAudioProfile.defects"
-changed = "changed = \"defects?: MasteringAudioProfileDefects; absent when detectDefects is false (the measured:false sentinel goes)\""
+changed = "defects?: MasteringAudioProfileDefects; absent when detectDefects is false (the measured:false sentinel goes)"
 domain = "mastering"
 rule = "absent-not-sentinel"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::the audio profile is grouped"
@@ -12567,7 +12567,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::the audio profile i
 [[entry]]
 kind = "field"
 old = "MasteringAudioProfile.dynamics"
-changed = "changed = \"MasteringAudioProfileDynamics (named; attackDensity -> attackPerSecond, other fields unchanged)\""
+changed = "MasteringAudioProfileDynamics (named; attackDensity -> attackPerSecond, other fields unchanged)"
 domain = "mastering"
 rule = "type-names"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::the audio profile is grouped"
@@ -12575,7 +12575,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::the audio profile i
 [[entry]]
 kind = "field"
 old = "MasteringAudioProfile.loudness"
-changed = "changed = \"MasteringAudioProfileLoudness {integratedLufs, loudnessRangeLu, truePeakDbtp, crestFactorDb}\""
+changed = "MasteringAudioProfileLoudness {integratedLufs, loudnessRangeLu, truePeakDbtp, crestFactorDb}"
 domain = "mastering"
 rule = "loudness-names"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::the audio profile is grouped"
@@ -12583,7 +12583,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::the audio profile i
 [[entry]]
 kind = "field"
 old = "MasteringAudioProfile.spectral"
-changed = "changed = \"MasteringAudioProfileSpectral (named; fields unchanged)\""
+changed = "MasteringAudioProfileSpectral (named; fields unchanged)"
 domain = "mastering"
 rule = "type-names"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::the audio profile is grouped"
@@ -12591,7 +12591,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::the audio profile i
 [[entry]]
 kind = "field"
 old = "MasteringAudioProfileDynamics.attackDensity"
-changed = "changed = \"attackDensity -> attackPerSecond\""
+changed = "attackDensity -> attackPerSecond"
 domain = "mastering"
 rule = "unit-in-name"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::the audio profile is grouped"
@@ -12606,7 +12606,7 @@ rule = "options-struct"
 [[entry]]
 kind = "field"
 old = "MasteringAudioProfileRequest.sampleRate"
-changed = "changed = \"optional -> required (no default)\""
+changed = "optional -> required (no default)"
 domain = "mastering"
 rule = "sample-rate-required"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::requires sampleRate"
@@ -12621,7 +12621,7 @@ rule = "options-struct"
 [[entry]]
 kind = "field"
 old = "MasteringAudioProfileStereoRequest.sampleRate"
-changed = "changed = \"optional -> required (no default)\""
+changed = "optional -> required (no default)"
 domain = "mastering"
 rule = "sample-rate-required"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::requires sampleRate"
@@ -12636,7 +12636,7 @@ rule = "aliases-removed"
 [[entry]]
 kind = "field"
 old = "MasteringChainConfig.dynamics.multibandComp.crossover.mode"
-changed = "changed = \"'linkwitzRiley'|'butterworth'|'bessel'|'firLinearPhase' (numbers refused)\""
+changed = "'linkwitzRiley'|'butterworth'|'bessel'|'firLinearPhase' (numbers refused)"
 domain = "mastering"
 rule = "string-closed-sets"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::chain config: nested form only, tokens only"
@@ -12644,7 +12644,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::chain config: neste
 [[entry]]
 kind = "field"
 old = "MasteringChainConfig.dynamics.multibandComp.crossover.slope"
-changed = "changed = \"'lr2'|'lr4'|'lr8' (numbers refused)\""
+changed = "'lr2'|'lr4'|'lr8' (numbers refused)"
 domain = "mastering"
 rule = "string-closed-sets"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::chain config: nested form only, tokens only"
@@ -12673,7 +12673,7 @@ rule = "aliases-removed"
 [[entry]]
 kind = "field"
 old = "MasteringChainConfig.repair.declip.clipThreshold"
-changed = "changed = \"clipThreshold -> clipThresholdDb (dBFS, <= 0; same quantity as DeclipOptions.clipThresholdDb)\""
+changed = "clipThreshold -> clipThresholdDb (dBFS, <= 0; same quantity as DeclipOptions.clipThresholdDb)"
 domain = "mastering"
 rule = "unit-in-name"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::chain config: nested form only, tokens only"
@@ -12681,7 +12681,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::chain config: neste
 [[entry]]
 kind = "field"
 old = "MasteringChainConfig.repair.decrackle.mode"
-changed = "changed = \"'median'|'waveletShrinkage' (numbers refused)\""
+changed = "'median'|'waveletShrinkage' (numbers refused)"
 domain = "mastering"
 rule = "string-closed-sets"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::chain config: nested form only, tokens only"
@@ -12689,7 +12689,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::chain config: neste
 [[entry]]
 kind = "field"
 old = "MasteringChainConfig.repair.dehum.mode"
-changed = "changed = \"'subtract'|'notch' (numbers refused)\""
+changed = "'subtract'|'notch' (numbers refused)"
 domain = "mastering"
 rule = "string-closed-sets"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::chain config: nested form only, tokens only"
@@ -12697,7 +12697,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::chain config: neste
 [[entry]]
 kind = "field"
 old = "MasteringChainConfig.repair.denoise"
-changed = "changed = \"boolean shorthand removed: denoise?: {enabled?, mode?, ...}\""
+changed = "boolean shorthand removed: denoise?: {enabled?, mode?, ...}"
 domain = "mastering"
 rule = "aliases-removed"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::chain config: nested form only, tokens only"
@@ -12712,7 +12712,7 @@ rule = "aliases-removed"
 [[entry]]
 kind = "field"
 old = "MasteringChainConfig.repair.denoise.mode"
-changed = "changed = \"'logMmse'|'mmseStsa'|'spectralSubtraction' (numbers refused)\""
+changed = "'logMmse'|'mmseStsa'|'spectralSubtraction' (numbers refused)"
 domain = "mastering"
 rule = "string-closed-sets"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::chain config: nested form only, tokens only"
@@ -12720,7 +12720,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::chain config: neste
 [[entry]]
 kind = "field"
 old = "MasteringChainConfig.repair.denoise.noiseEstimator"
-changed = "changed = \"'quantile'|'mcra'|'imcra'|'spp' (numbers refused)\""
+changed = "'quantile'|'mcra'|'imcra'|'spp' (numbers refused)"
 domain = "mastering"
 rule = "string-closed-sets"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::chain config: nested form only, tokens only"
@@ -12756,7 +12756,7 @@ rule = "aliases-removed"
 [[entry]]
 kind = "field"
 old = "MasteringChainResult.outputLra"
-changed = "changed = \"outputLra -> outputLoudnessRangeLu\""
+changed = "outputLra -> outputLoudnessRangeLu"
 domain = "mastering"
 rule = "loudness-names"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::chain results name the loudness range"
@@ -12764,7 +12764,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::chain results name 
 [[entry]]
 kind = "field"
 old = "MasteringChainStereoResult.outputLra"
-changed = "changed = \"outputLra -> outputLoudnessRangeLu\""
+changed = "outputLra -> outputLoudnessRangeLu"
 domain = "mastering"
 rule = "loudness-names"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::chain results name the loudness range"
@@ -12772,7 +12772,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::chain results name 
 [[entry]]
 kind = "field"
 old = "MasteringDynamicsCompressorRequest.detector"
-changed = "changed = \"CompressorDetector; numbers refused\""
+changed = "CompressorDetector; numbers refused"
 domain = "mastering"
 rule = "token-case"
 test = "bindings/node/tests/surface/mastering-metering.test.ts::MasteringDynamicsCompressorRequest.detector"
@@ -12780,7 +12780,7 @@ test = "bindings/node/tests/surface/mastering-metering.test.ts::MasteringDynamic
 [[entry]]
 kind = "field"
 old = "MasteringDynamicsCompressorRequest.sampleRate"
-changed = "changed = \"optional -> required (no default)\""
+changed = "optional -> required (no default)"
 domain = "mastering"
 rule = "sample-rate-required"
 test = "bindings/node/tests/surface/mastering-metering.test.ts::MasteringDynamicsCompressorRequest.sampleRate"
@@ -12788,7 +12788,7 @@ test = "bindings/node/tests/surface/mastering-metering.test.ts::MasteringDynamic
 [[entry]]
 kind = "field"
 old = "MasteringDynamicsCompressorRequest.sidechainHpfEnabled"
-changed = "changed = \"sidechainHpfEnabled -> sidechainHighPassHz (number (Hz, > 0); absent = off)\""
+changed = "sidechainHpfEnabled -> sidechainHighPassHz (number (Hz, > 0); absent = off)"
 domain = "mastering"
 rule = "high-pass"
 test = "bindings/node/tests/surface/mastering-metering.test.ts::MasteringDynamicsCompressorRequest.sidechainHpfEnabled"
@@ -12796,7 +12796,7 @@ test = "bindings/node/tests/surface/mastering-metering.test.ts::MasteringDynamic
 [[entry]]
 kind = "field"
 old = "MasteringDynamicsCompressorRequest.sidechainHpfHz"
-changed = "changed = \"sidechainHpfHz -> sidechainHighPassHz (number (Hz, > 0); absent = off)\""
+changed = "sidechainHpfHz -> sidechainHighPassHz (number (Hz, > 0); absent = off)"
 domain = "mastering"
 rule = "high-pass"
 test = "bindings/node/tests/surface/mastering-metering.test.ts::MasteringDynamicsCompressorRequest.sidechainHpfHz"
@@ -12804,7 +12804,7 @@ test = "bindings/node/tests/surface/mastering-metering.test.ts::MasteringDynamic
 [[entry]]
 kind = "field"
 old = "MasteringDynamicsGateRequest.keyHpfHz"
-changed = "changed = \"keyHpfHz -> keyHighPassHz (number (Hz); absent = off)\""
+changed = "keyHpfHz -> keyHighPassHz (number (Hz); absent = off)"
 domain = "mastering"
 rule = "high-pass"
 test = "bindings/node/tests/surface/mastering-metering.test.ts::MasteringDynamicsGateRequest.keyHpfHz"
@@ -12812,7 +12812,7 @@ test = "bindings/node/tests/surface/mastering-metering.test.ts::MasteringDynamic
 [[entry]]
 kind = "field"
 old = "MasteringDynamicsGateRequest.sampleRate"
-changed = "changed = \"optional -> required (no default)\""
+changed = "optional -> required (no default)"
 domain = "mastering"
 rule = "sample-rate-required"
 test = "bindings/node/tests/surface/mastering-metering.test.ts::MasteringDynamicsGateRequest.sampleRate"
@@ -12820,7 +12820,7 @@ test = "bindings/node/tests/surface/mastering-metering.test.ts::MasteringDynamic
 [[entry]]
 kind = "field"
 old = "MasteringDynamicsTransientShaperRequest.sampleRate"
-changed = "changed = \"optional -> required (no default)\""
+changed = "optional -> required (no default)"
 domain = "mastering"
 rule = "sample-rate-required"
 test = "bindings/node/tests/surface/mastering-metering.test.ts::MasteringDynamicsTransientShaperRequest.sampleRate"
@@ -12828,7 +12828,7 @@ test = "bindings/node/tests/surface/mastering-metering.test.ts::MasteringDynamic
 [[entry]]
 kind = "field"
 old = "MasteringLoudnessSummary.loudnessRange"
-changed = "changed = \"loudnessRange -> loudnessRangeLu\""
+changed = "loudnessRange -> loudnessRangeLu"
 domain = "mastering"
 rule = "loudness-names"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::chain results name the loudness range"
@@ -12836,7 +12836,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::chain results name 
 [[entry]]
 kind = "field"
 old = "MasteringOptions.releaseMs"
-changed = "changed = \"absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording\""
+changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
 domain = "mastering"
 rule = "absent-not-sentinel"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::explicit 0 on a default-bearing field"
@@ -12844,7 +12844,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::explicit 0 on a def
 [[entry]]
 kind = "field"
 old = "MasteringOptions.truePeakOversample"
-changed = "changed = \"absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording\""
+changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
 domain = "mastering"
 rule = "absent-not-sentinel"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::explicit 0 on a default-bearing field"
@@ -12852,7 +12852,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::explicit 0 on a def
 [[entry]]
 kind = "field"
 old = "MasteringPairAnalyzeRequest.analysisName"
-changed = "changed = \"analysisName -> analysis (PairAnalysis (generic A))\""
+changed = "analysisName -> analysis (PairAnalysis (generic A))"
 domain = "mastering"
 rule = "mastering-names"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::mastering chain: one name per operation"
@@ -12860,7 +12860,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::mastering chain: on
 [[entry]]
 kind = "field"
 old = "MasteringPairAnalyzeRequest.sampleRate"
-changed = "changed = \"optional -> required (no default)\""
+changed = "optional -> required (no default)"
 domain = "mastering"
 rule = "sample-rate-required"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::requires sampleRate"
@@ -12868,7 +12868,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::requires sampleRate
 [[entry]]
 kind = "field"
 old = "MasteringPairProcessRequest.processorName"
-changed = "changed = \"processorName -> processor (PairProcessor (generic P))\""
+changed = "processorName -> processor (PairProcessor (generic P))"
 domain = "mastering"
 rule = "mastering-names"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::mastering chain: one name per operation"
@@ -12876,7 +12876,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::mastering chain: on
 [[entry]]
 kind = "field"
 old = "MasteringPairProcessRequest.sampleRate"
-changed = "changed = \"optional -> required (no default)\""
+changed = "optional -> required (no default)"
 domain = "mastering"
 rule = "sample-rate-required"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::requires sampleRate"
@@ -12884,7 +12884,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::requires sampleRate
 [[entry]]
 kind = "field"
 old = "MasteringPairProcessStereoRequest.processorName"
-changed = "changed = \"processorName -> processor (StereoPairProcessor)\""
+changed = "processorName -> processor (StereoPairProcessor)"
 domain = "mastering"
 rule = "mastering-names"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::mastering chain: one name per operation"
@@ -12892,7 +12892,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::mastering chain: on
 [[entry]]
 kind = "field"
 old = "MasteringPairProcessStereoRequest.sampleRate"
-changed = "changed = \"optional -> required (no default)\""
+changed = "optional -> required (no default)"
 domain = "mastering"
 rule = "sample-rate-required"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::requires sampleRate"
@@ -12900,7 +12900,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::requires sampleRate
 [[entry]]
 kind = "field"
 old = "MasteringProcessRequest.processorName"
-changed = "changed = \"processorName -> processor (SoloProcessor (generic P))\""
+changed = "processorName -> processor (SoloProcessor (generic P))"
 domain = "mastering"
 rule = "mastering-names"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::mastering chain: one name per operation"
@@ -12908,7 +12908,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::mastering chain: on
 [[entry]]
 kind = "field"
 old = "MasteringProcessRequest.sampleRate"
-changed = "changed = \"optional -> required (no default)\""
+changed = "optional -> required (no default)"
 domain = "mastering"
 rule = "sample-rate-required"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::requires sampleRate"
@@ -12916,7 +12916,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::requires sampleRate
 [[entry]]
 kind = "field"
 old = "MasteringProcessStereoRequest.processorName"
-changed = "changed = \"processorName -> processor (SoloProcessor (generic P))\""
+changed = "processorName -> processor (SoloProcessor (generic P))"
 domain = "mastering"
 rule = "mastering-names"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::mastering chain: one name per operation"
@@ -12924,7 +12924,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::mastering chain: on
 [[entry]]
 kind = "field"
 old = "MasteringProcessStereoRequest.sampleRate"
-changed = "changed = \"optional -> required (no default)\""
+changed = "optional -> required (no default)"
 domain = "mastering"
 rule = "sample-rate-required"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::requires sampleRate"
@@ -12932,7 +12932,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::requires sampleRate
 [[entry]]
 kind = "field"
 old = "MasteringRequest.sampleRate"
-changed = "changed = \"optional -> required (no default)\""
+changed = "optional -> required (no default)"
 domain = "mastering"
 rule = "sample-rate-required"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::requires sampleRate"
@@ -12940,7 +12940,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::requires sampleRate
 [[entry]]
 kind = "field"
 old = "MasteringResult.latencySamples"
-changed = "changed = \"optional -> required\""
+changed = "optional -> required"
 domain = "mastering"
 rule = "typed-results"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::every processor result reports its latency"
@@ -12948,7 +12948,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::every processor res
 [[entry]]
 kind = "field"
 old = "MasteringStereoAnalyzeRequest.analysisName"
-changed = "changed = \"analysisName -> analysis (StereoAnalysis (generic A))\""
+changed = "analysisName -> analysis (StereoAnalysis (generic A))"
 domain = "mastering"
 rule = "mastering-names"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::mastering chain: one name per operation"
@@ -12956,7 +12956,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::mastering chain: on
 [[entry]]
 kind = "field"
 old = "MasteringStereoAnalyzeRequest.sampleRate"
-changed = "changed = \"optional -> required (no default)\""
+changed = "optional -> required (no default)"
 domain = "mastering"
 rule = "sample-rate-required"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::requires sampleRate"
@@ -12964,7 +12964,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::requires sampleRate
 [[entry]]
 kind = "field"
 old = "MasteringStreamingPreviewPlatform.truePeakDb"
-changed = "changed = \"truePeakDb -> truePeakDbtp\""
+changed = "truePeakDb -> truePeakDbtp"
 domain = "mastering"
 rule = "loudness-names"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::the streaming preview reports truePeakDbtp"
@@ -12972,7 +12972,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::the streaming previ
 [[entry]]
 kind = "field"
 old = "MasteringStreamingPreviewRequest.sampleRate"
-changed = "changed = \"optional -> required (no default)\""
+changed = "optional -> required (no default)"
 domain = "mastering"
 rule = "sample-rate-required"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::requires sampleRate"
@@ -12980,7 +12980,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::requires sampleRate
 [[entry]]
 kind = "field"
 old = "MasteringStreamingPreviewStereoRequest.sampleRate"
-changed = "changed = \"optional -> required (no default)\""
+changed = "optional -> required (no default)"
 domain = "mastering"
 rule = "sample-rate-required"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::requires sampleRate"
@@ -12988,7 +12988,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::requires sampleRate
 [[entry]]
 kind = "field"
 old = "MeteringDetectClippingOptions.minRegionSamples"
-changed = "changed = \"absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording\""
+changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
 domain = "mastering"
 rule = "absent-not-sentinel"
 test = "bindings/node/tests/surface/mastering-metering.test.ts::MeteringDetectClippingOptions.minRegionSamples"
@@ -12996,7 +12996,7 @@ test = "bindings/node/tests/surface/mastering-metering.test.ts::MeteringDetectCl
 [[entry]]
 kind = "field"
 old = "MeteringDetectClippingOptions.threshold"
-changed = "changed = \"threshold -> thresholdDb (linear [0,1] -> dBFS (<= 0))\""
+changed = "threshold -> thresholdDb (linear [0,1] -> dBFS (<= 0))"
 domain = "mastering"
 rule = "unit-in-name"
 test = "bindings/node/tests/surface/mastering-metering.test.ts::MeteringDetectClippingOptions.threshold"
@@ -13004,7 +13004,7 @@ test = "bindings/node/tests/surface/mastering-metering.test.ts::MeteringDetectCl
 [[entry]]
 kind = "field"
 old = "MeteringDetectClippingRequest.threshold"
-changed = "changed = \"threshold -> thresholdDb (linear [0,1] -> dBFS (<= 0); absent = native default (0.999 linear, ~ -0.0087 dBFS); 0 dBFS is a real level)\""
+changed = "threshold -> thresholdDb (linear [0,1] -> dBFS (<= 0); absent = native default (0.999 linear, ~ -0.0087 dBFS); 0 dBFS is a real level)"
 domain = "mastering"
 rule = "unit-in-name"
 test = "bindings/node/tests/surface/mastering-metering.test.ts::MeteringDetectClippingRequest.threshold"
@@ -13012,7 +13012,7 @@ test = "bindings/node/tests/surface/mastering-metering.test.ts::MeteringDetectCl
 [[entry]]
 kind = "field"
 old = "MeteringDynamicRangeOptions.hopSec"
-changed = "changed = \"absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording\""
+changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
 domain = "mastering"
 rule = "absent-not-sentinel"
 test = "bindings/node/tests/surface/mastering-metering.test.ts::MeteringDynamicRangeOptions.hopSec"
@@ -13020,7 +13020,7 @@ test = "bindings/node/tests/surface/mastering-metering.test.ts::MeteringDynamicR
 [[entry]]
 kind = "field"
 old = "MeteringDynamicRangeOptions.lowPercentile"
-changed = "changed = \"checked in [0, 1] by the facade, and lowPercentile <= highPercentile\""
+changed = "checked in [0, 1] by the facade, and lowPercentile <= highPercentile"
 domain = "mastering"
 rule = "individual"
 test = "bindings/node/tests/surface/mastering-metering.test.ts::MeteringDynamicRangeOptions.lowPercentile"
@@ -13028,7 +13028,7 @@ test = "bindings/node/tests/surface/mastering-metering.test.ts::MeteringDynamicR
 [[entry]]
 kind = "field"
 old = "MeteringDynamicRangeOptions.windowSec"
-changed = "changed = \"absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording\""
+changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
 domain = "mastering"
 rule = "absent-not-sentinel"
 test = "bindings/node/tests/surface/mastering-metering.test.ts::MeteringDynamicRangeOptions.windowSec"
@@ -13036,7 +13036,7 @@ test = "bindings/node/tests/surface/mastering-metering.test.ts::MeteringDynamicR
 [[entry]]
 kind = "field"
 old = "MeteringSpectrumFrameRequest.frameOffset"
-changed = "changed = \"frameOffset -> startSample (sample index where the analysis frame begins (0 = first frame, a real position))\""
+changed = "frameOffset -> startSample (sample index where the analysis frame begins (0 = first frame, a real position))"
 domain = "mastering"
 rule = "unit-in-name"
 test = "bindings/node/tests/surface/mastering-metering.test.ts::MeteringSpectrumFrameRequest.frameOffset"
@@ -13044,7 +13044,7 @@ test = "bindings/node/tests/surface/mastering-metering.test.ts::MeteringSpectrum
 [[entry]]
 kind = "field"
 old = "MeteringTruePeakRequest.oversampleFactor"
-changed = "changed = \"absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording\""
+changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
 domain = "mastering"
 rule = "absent-not-sentinel"
 test = "bindings/node/tests/surface/mastering-metering.test.ts::MeteringTruePeakRequest.oversampleFactor"
@@ -13052,7 +13052,7 @@ test = "bindings/node/tests/surface/mastering-metering.test.ts::MeteringTruePeak
 [[entry]]
 kind = "field"
 old = "MeteringTruePeakRequest.sampleRate"
-changed = "changed = \"optional -> required (no default)\""
+changed = "optional -> required (no default)"
 domain = "mastering"
 rule = "sample-rate-required"
 test = "bindings/node/tests/surface/mastering-metering.test.ts::MeteringTruePeakRequest.sampleRate"
@@ -13060,7 +13060,7 @@ test = "bindings/node/tests/surface/mastering-metering.test.ts::MeteringTruePeak
 [[entry]]
 kind = "field"
 old = "MixAssistantTrackProfile.attackDensity"
-changed = "changed = \"attackDensity -> attackPerSecond\""
+changed = "attackDensity -> attackPerSecond"
 domain = "mastering"
 rule = "unit-in-name"
 test = "bindings/node/tests/surface/mastering-mixing.test.ts::MixAssistantTrackProfile.attackDensity"
@@ -13068,7 +13068,7 @@ test = "bindings/node/tests/surface/mastering-mixing.test.ts::MixAssistantTrackP
 [[entry]]
 kind = "field"
 old = "MixAssistantTrackProfile.channelCount"
-changed = "changed = \"channelCount -> numChannels\""
+changed = "channelCount -> numChannels"
 domain = "mastering"
 rule = "num-channels"
 test = "bindings/node/tests/surface/mastering-mixing.test.ts::MixAssistantTrackProfile.channelCount"
@@ -13076,7 +13076,7 @@ test = "bindings/node/tests/surface/mastering-mixing.test.ts::MixAssistantTrackP
 [[entry]]
 kind = "field"
 old = "MixAssistantTrackProfile.truePeakDb"
-changed = "changed = \"truePeakDb -> truePeakDbtp\""
+changed = "truePeakDb -> truePeakDbtp"
 domain = "mastering"
 rule = "loudness-names"
 test = "bindings/node/tests/surface/mastering-mixing.test.ts::MixAssistantTrackProfile.truePeakDb"
@@ -13084,7 +13084,7 @@ test = "bindings/node/tests/surface/mastering-mixing.test.ts::MixAssistantTrackP
 [[entry]]
 kind = "field"
 old = "MixMeterSnapshot.channelCount"
-changed = "changed = \"channelCount -> numChannels\""
+changed = "channelCount -> numChannels"
 domain = "mastering"
 rule = "num-channels"
 test = "bindings/node/tests/surface/mastering-mixing.test.ts::MixMeterSnapshot.channelCount"
@@ -13092,7 +13092,7 @@ test = "bindings/node/tests/surface/mastering-mixing.test.ts::MixMeterSnapshot.c
 [[entry]]
 kind = "field"
 old = "MixMeterSnapshot.maxTruePeakDb"
-changed = "changed = \"maxTruePeakDb -> maxTruePeakDbtp\""
+changed = "maxTruePeakDb -> maxTruePeakDbtp"
 domain = "mastering"
 rule = "loudness-names"
 test = "bindings/node/tests/surface/mastering-mixing.test.ts::MixMeterSnapshot.maxTruePeakDb"
@@ -13100,7 +13100,7 @@ test = "bindings/node/tests/surface/mastering-mixing.test.ts::MixMeterSnapshot.m
 [[entry]]
 kind = "field"
 old = "MixMeterSnapshot.truePeakDb"
-changed = "changed = \"truePeakDb -> truePeakDbtp\""
+changed = "truePeakDb -> truePeakDbtp"
 domain = "mastering"
 rule = "loudness-names"
 test = "bindings/node/tests/surface/mastering-mixing.test.ts::MixMeterSnapshot.truePeakDb"
@@ -13108,7 +13108,7 @@ test = "bindings/node/tests/surface/mastering-mixing.test.ts::MixMeterSnapshot.t
 [[entry]]
 kind = "field"
 old = "MixMeterSnapshot.truePeakDbL"
-changed = "changed = \"truePeakDbL -> truePeakDbtpL\""
+changed = "truePeakDbL -> truePeakDbtpL"
 domain = "mastering"
 rule = "loudness-names"
 test = "bindings/node/tests/surface/mastering-mixing.test.ts::MixMeterSnapshot.truePeakDbL"
@@ -13116,7 +13116,7 @@ test = "bindings/node/tests/surface/mastering-mixing.test.ts::MixMeterSnapshot.t
 [[entry]]
 kind = "field"
 old = "MixMeterSnapshot.truePeakDbR"
-changed = "changed = \"truePeakDbR -> truePeakDbtpR\""
+changed = "truePeakDbR -> truePeakDbtpR"
 domain = "mastering"
 rule = "loudness-names"
 test = "bindings/node/tests/surface/mastering-mixing.test.ts::MixMeterSnapshot.truePeakDbR"
@@ -13124,7 +13124,7 @@ test = "bindings/node/tests/surface/mastering-mixing.test.ts::MixMeterSnapshot.t
 [[entry]]
 kind = "field"
 old = "MixSceneBus.layout"
-changed = "changed = \"string -> ChannelLayout\""
+changed = "string -> ChannelLayout"
 domain = "mastering"
 rule = "string-closed-sets"
 test = "bindings/node/tests/surface/mastering-mixing.test.ts::MixSceneBus.layout"
@@ -13132,7 +13132,7 @@ test = "bindings/node/tests/surface/mastering-mixing.test.ts::MixSceneBus.layout
 [[entry]]
 kind = "field"
 old = "MixSceneBus.panLaw"
-changed = "changed = \"number -> PanLaw\""
+changed = "number -> PanLaw"
 domain = "mastering"
 rule = "string-closed-sets"
 test = "bindings/node/tests/surface/mastering-mixing.test.ts::MixSceneBus.panLaw"
@@ -13140,7 +13140,7 @@ test = "bindings/node/tests/surface/mastering-mixing.test.ts::MixSceneBus.panLaw
 [[entry]]
 kind = "field"
 old = "MixSceneBus.panMode"
-changed = "changed = \"number -> PanMode\""
+changed = "number -> PanMode"
 domain = "mastering"
 rule = "string-closed-sets"
 test = "bindings/node/tests/surface/mastering-mixing.test.ts::MixSceneBus.panMode"
@@ -13148,7 +13148,7 @@ test = "bindings/node/tests/surface/mastering-mixing.test.ts::MixSceneBus.panMod
 [[entry]]
 kind = "field"
 old = "MixSceneBus.role"
-changed = "changed = \"string -> MixBusRole\""
+changed = "string -> MixBusRole"
 domain = "mastering"
 rule = "string-closed-sets"
 test = "bindings/node/tests/surface/mastering-mixing.test.ts::MixSceneBus.role"
@@ -13156,7 +13156,7 @@ test = "bindings/node/tests/surface/mastering-mixing.test.ts::MixSceneBus.role"
 [[entry]]
 kind = "field"
 old = "MixSceneSend.timing"
-changed = "changed = \"string -> SendTiming ('preFader'|'postFader')\""
+changed = "string -> SendTiming ('preFader'|'postFader')"
 domain = "mastering"
 rule = "string-closed-sets"
 test = "bindings/node/tests/surface/mastering-mixing.test.ts::MixSceneSend.timing"
@@ -13164,7 +13164,7 @@ test = "bindings/node/tests/surface/mastering-mixing.test.ts::MixSceneSend.timin
 [[entry]]
 kind = "field"
 old = "MixSceneStrip.metering"
-changed = "changed = \"inline object -> Required<StripMeteringOptions>\""
+changed = "inline object -> Required<StripMeteringOptions>"
 domain = "mastering"
 rule = "type-names"
 test = "bindings/node/tests/surface/mastering-mixing.test.ts::MixSceneStrip.metering"
@@ -13172,7 +13172,7 @@ test = "bindings/node/tests/surface/mastering-mixing.test.ts::MixSceneStrip.mete
 [[entry]]
 kind = "field"
 old = "MixSceneStrip.panLaw"
-changed = "changed = \"number -> PanLaw\""
+changed = "number -> PanLaw"
 domain = "mastering"
 rule = "string-closed-sets"
 test = "bindings/node/tests/surface/mastering-mixing.test.ts::MixSceneStrip.panLaw"
@@ -13180,7 +13180,7 @@ test = "bindings/node/tests/surface/mastering-mixing.test.ts::MixSceneStrip.panL
 [[entry]]
 kind = "field"
 old = "MixSceneStrip.panMode"
-changed = "changed = \"number -> PanMode\""
+changed = "number -> PanMode"
 domain = "mastering"
 rule = "string-closed-sets"
 test = "bindings/node/tests/surface/mastering-mixing.test.ts::MixSceneStrip.panMode"
@@ -13188,7 +13188,7 @@ test = "bindings/node/tests/surface/mastering-mixing.test.ts::MixSceneStrip.panM
 [[entry]]
 kind = "field"
 old = "MixSceneStrip.sourceLayout"
-changed = "changed = \"string -> ChannelLayout\""
+changed = "string -> ChannelLayout"
 domain = "mastering"
 rule = "string-closed-sets"
 test = "bindings/node/tests/surface/mastering-mixing.test.ts::MixSceneStrip.sourceLayout"
@@ -13196,7 +13196,7 @@ test = "bindings/node/tests/surface/mastering-mixing.test.ts::MixSceneStrip.sour
 [[entry]]
 kind = "field"
 old = "MixSceneStrip.surroundPan"
-changed = "changed = \"inline object -> Required<SurroundPan>\""
+changed = "inline object -> Required<SurroundPan>"
 domain = "mastering"
 rule = "type-names"
 test = "bindings/node/tests/surface/mastering-mixing.test.ts::MixSceneStrip.surroundPan"
@@ -13270,7 +13270,7 @@ rule = "options-struct"
 [[entry]]
 kind = "field"
 old = "MultibandCompressorBand.detector"
-changed = "changed = \"CompressorDetector ('peak'|'rms'|'logRms'); numbers refused\""
+changed = "CompressorDetector ('peak'|'rms'|'logRms'); numbers refused"
 domain = "mastering"
 rule = "token-case"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::chain config: nested form only, tokens only"
@@ -13278,7 +13278,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::chain config: neste
 [[entry]]
 kind = "field"
 old = "MultibandCompressorBand.sidechainHpfEnabled"
-changed = "changed = \"sidechainHpfEnabled -> sidechainHighPassHz (Hz, > 0; absent = off)\""
+changed = "sidechainHpfEnabled -> sidechainHighPassHz (Hz, > 0; absent = off)"
 domain = "mastering"
 rule = "high-pass"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::chain config: nested form only, tokens only"
@@ -13286,7 +13286,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::chain config: neste
 [[entry]]
 kind = "field"
 old = "MultibandCompressorBand.sidechainHpfHz"
-changed = "changed = \"sidechainHpfHz -> sidechainHighPassHz (Hz, > 0; absent = off)\""
+changed = "sidechainHpfHz -> sidechainHighPassHz (Hz, > 0; absent = off)"
 domain = "mastering"
 rule = "high-pass"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::chain config: nested form only, tokens only"
@@ -13294,7 +13294,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::chain config: neste
 [[entry]]
 kind = "field"
 old = "PairAnalysisResultMap.'match.tonalBalanceLogBands'"
-changed = "changed = \"MatchTonalBalanceResult\""
+changed = "MatchTonalBalanceResult"
 domain = "mastering"
 rule = "one-entry-per-operation"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::pair and stereo analyses return objects"
@@ -13302,7 +13302,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::pair and stereo ana
 [[entry]]
 kind = "field"
 old = "SpectrumOptions.dbAmin"
-changed = "changed = \"absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording\""
+changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
 domain = "mastering"
 rule = "absent-not-sentinel"
 test = "bindings/node/tests/surface/mastering-metering.test.ts::SpectrumOptions.dbAmin"
@@ -13310,7 +13310,7 @@ test = "bindings/node/tests/surface/mastering-metering.test.ts::SpectrumOptions.
 [[entry]]
 kind = "field"
 old = "SpectrumOptions.dbRef"
-changed = "changed = \"absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording\""
+changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
 domain = "mastering"
 rule = "absent-not-sentinel"
 test = "bindings/node/tests/surface/mastering-metering.test.ts::SpectrumOptions.dbRef"
@@ -13318,7 +13318,7 @@ test = "bindings/node/tests/surface/mastering-metering.test.ts::SpectrumOptions.
 [[entry]]
 kind = "field"
 old = "SpectrumOptions.nFft"
-changed = "changed = \"absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording\""
+changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
 domain = "mastering"
 rule = "absent-not-sentinel"
 test = "bindings/node/tests/surface/mastering-metering.test.ts::SpectrumOptions.nFft"
@@ -13326,7 +13326,7 @@ test = "bindings/node/tests/surface/mastering-metering.test.ts::SpectrumOptions.
 [[entry]]
 kind = "field"
 old = "SpectrumOptions.octaveFraction"
-changed = "changed = \"absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording\""
+changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
 domain = "mastering"
 rule = "absent-not-sentinel"
 test = "bindings/node/tests/surface/mastering-metering.test.ts::SpectrumOptions.octaveFraction"
@@ -13334,7 +13334,7 @@ test = "bindings/node/tests/surface/mastering-metering.test.ts::SpectrumOptions.
 [[entry]]
 kind = "field"
 old = "StreamingLoudnessGainRequest.sampleRate"
-changed = "changed = \"optional -> required (no default)\""
+changed = "optional -> required (no default)"
 domain = "mastering"
 rule = "sample-rate-required"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::requires sampleRate"
@@ -13342,7 +13342,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::requires sampleRate
 [[entry]]
 kind = "field"
 old = "StreamingLoudnessGainResult.truePeakDb"
-changed = "changed = \"truePeakDb -> truePeakDbtp\""
+changed = "truePeakDb -> truePeakDbtp"
 domain = "mastering"
 rule = "loudness-names"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::streamingLoudnessGain reports truePeakDbtp"
@@ -13350,7 +13350,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::streamingLoudnessGa
 [[entry]]
 kind = "field"
 old = "StreamingLoudnessGainStereoRequest.sampleRate"
-changed = "changed = \"optional -> required (no default)\""
+changed = "optional -> required (no default)"
 domain = "mastering"
 rule = "sample-rate-required"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::requires sampleRate"
@@ -13358,7 +13358,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::requires sampleRate
 [[entry]]
 kind = "field"
 old = "StripMeteringOptions.truePeakOversample"
-changed = "changed = \"absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording\""
+changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
 domain = "mastering"
 rule = "absent-not-sentinel"
 test = "bindings/node/tests/surface/mastering-mixing.test.ts::StripMeteringOptions.truePeakOversample"
@@ -13373,7 +13373,7 @@ rule = "options-struct"
 [[entry]]
 kind = "field"
 old = "WaveformPeakPyramidRequest.samples"
-changed = "changed = \"samples -> channels (Float32Array[] (planar))\""
+changed = "samples -> channels (Float32Array[] (planar))"
 domain = "mastering"
 rule = "num-channels"
 test = "bindings/node/tests/surface/mastering-metering.test.ts::WaveformPeakPyramidRequest.samples"
@@ -13388,7 +13388,7 @@ rule = "num-channels"
 [[entry]]
 kind = "field"
 old = "WaveformPeaksReport.max"
-changed = "changed = \"Float32Array[] (one per channel)\""
+changed = "Float32Array[] (one per channel)"
 domain = "mastering"
 rule = "planar-channels"
 test = "bindings/node/tests/surface/mastering-metering.test.ts::WaveformPeaksReport.max"
@@ -13396,7 +13396,7 @@ test = "bindings/node/tests/surface/mastering-metering.test.ts::WaveformPeaksRep
 [[entry]]
 kind = "field"
 old = "WaveformPeaksReport.min"
-changed = "changed = \"Float32Array[] (one per channel; was channel-major flat)\""
+changed = "Float32Array[] (one per channel; was channel-major flat)"
 domain = "mastering"
 rule = "planar-channels"
 test = "bindings/node/tests/surface/mastering-metering.test.ts::WaveformPeaksReport.min"
@@ -13404,7 +13404,7 @@ test = "bindings/node/tests/surface/mastering-metering.test.ts::WaveformPeaksRep
 [[entry]]
 kind = "field"
 old = "WaveformPeaksRequest.samples"
-changed = "changed = \"samples -> channels (Float32Array[] (planar; was interleaved samples + count))\""
+changed = "samples -> channels (Float32Array[] (planar; was interleaved samples + count))"
 domain = "mastering"
 rule = "num-channels"
 test = "bindings/node/tests/surface/mastering-metering.test.ts::WaveformPeaksRequest.samples"
@@ -13412,7 +13412,7 @@ test = "bindings/node/tests/surface/mastering-metering.test.ts::WaveformPeaksReq
 [[entry]]
 kind = "function"
 old = "ebur128LoudnessRange"
-changed = "changed = \"one positional form (ebur128LoudnessRange(samples, sampleRate, options?: OptionsOf<Ebur128LoudnessRangeRequest>)); request form takes Ebur128LoudnessRangeRequest; returns number\""
+changed = "one positional form (ebur128LoudnessRange(samples, sampleRate, options?: OptionsOf<Ebur128LoudnessRangeRequest>)); request form takes Ebur128LoudnessRangeRequest; returns number"
 domain = "mastering"
 rule = "one-positional-form"
 test = "bindings/node/tests/surface/mastering-metering.test.ts::ebur128LoudnessRange"
@@ -13420,7 +13420,7 @@ test = "bindings/node/tests/surface/mastering-metering.test.ts::ebur128LoudnessR
 [[entry]]
 kind = "function"
 old = "masterAudio"
-changed = "changed = \"one positional form (masterAudio(samples, sampleRate, options?: OptionsOf<MasterAudioRequest>)); request form takes MasterAudioRequest; returns MasteringChainResult\""
+changed = "one positional form (masterAudio(samples, sampleRate, options?: OptionsOf<MasterAudioRequest>)); request form takes MasterAudioRequest; returns MasteringChainResult"
 domain = "mastering"
 rule = "one-positional-form"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::masterAudio takes (samples, sampleRate, options)"
@@ -13428,7 +13428,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::masterAudio takes (
 [[entry]]
 kind = "function"
 old = "masterAudioAsync"
-changed = "changed = \"one positional form (masterAudioAsync(samples, sampleRate, options: OptionsOf<MasterAudioAsyncRequest>)); request form takes MasterAudioAsyncRequest; returns Promise<MasteringChainResult>\""
+changed = "one positional form (masterAudioAsync(samples, sampleRate, options: OptionsOf<MasterAudioAsyncRequest>)); request form takes MasterAudioAsyncRequest; returns Promise<MasteringChainResult>"
 domain = "mastering"
 rule = "one-positional-form"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::masterAudioAsync: preset required"
@@ -13436,7 +13436,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::masterAudioAsync: p
 [[entry]]
 kind = "function"
 old = "masterAudioStereo"
-changed = "changed = \"request-only: masterAudioStereo(request: MasterAudioStereoRequest): MasteringChainStereoResult\""
+changed = "request-only: masterAudioStereo(request: MasterAudioStereoRequest): MasteringChainStereoResult"
 domain = "mastering"
 rule = "one-positional-form"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::masterAudio: preset, overrides, progress and cancel"
@@ -13444,7 +13444,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::masterAudio: preset
 [[entry]]
 kind = "function"
 old = "masterAudioStereoAsync"
-changed = "changed = \"request-only: masterAudioStereoAsync(request: MasterAudioStereoAsyncRequest): Promise<MasteringChainStereoResult>\""
+changed = "request-only: masterAudioStereoAsync(request: MasterAudioStereoAsyncRequest): Promise<MasteringChainStereoResult>"
 domain = "mastering"
 rule = "one-positional-form"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::masterAudioAsync: preset required"
@@ -13452,7 +13452,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::masterAudioAsync: p
 [[entry]]
 kind = "function"
 old = "masteringAssistantSuggest"
-changed = "changed = \"one positional form (masteringAssistantSuggest(samples, sampleRate, options?: OptionsOf<MasteringAssistantSuggestRequest>)); request form takes MasteringAssistantSuggestRequest; returns MasteringAssistantResult\""
+changed = "one positional form (masteringAssistantSuggest(samples, sampleRate, options?: OptionsOf<MasteringAssistantSuggestRequest>)); request form takes MasteringAssistantSuggestRequest; returns MasteringAssistantResult"
 domain = "mastering"
 rule = "one-positional-form"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::the assistant returns objects"
@@ -13460,7 +13460,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::the assistant retur
 [[entry]]
 kind = "function"
 old = "masteringAssistantSuggestChain"
-changed = "changed = \"one positional form (masteringAssistantSuggestChain(samples, sampleRate, options?: OptionsOf<MasteringAssistantSuggestRequest>)); request form takes MasteringAssistantSuggestRequest; returns MasteringChainConfig\""
+changed = "one positional form (masteringAssistantSuggestChain(samples, sampleRate, options?: OptionsOf<MasteringAssistantSuggestRequest>)); request form takes MasteringAssistantSuggestRequest; returns MasteringChainConfig"
 domain = "mastering"
 rule = "one-positional-form"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::the assistant chain nests"
@@ -13468,7 +13468,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::the assistant chain
 [[entry]]
 kind = "function"
 old = "masteringAssistantSuggestChainStereo"
-changed = "changed = \"request-only: masteringAssistantSuggestChainStereo(request: MasteringAssistantSuggestStereoRequest): MasteringChainConfig\""
+changed = "request-only: masteringAssistantSuggestChainStereo(request: MasteringAssistantSuggestStereoRequest): MasteringChainConfig"
 domain = "mastering"
 rule = "one-positional-form"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::the assistant chain nests"
@@ -13476,7 +13476,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::the assistant chain
 [[entry]]
 kind = "function"
 old = "masteringAssistantSuggestStereo"
-changed = "changed = \"request-only: masteringAssistantSuggestStereo(request: MasteringAssistantSuggestStereoRequest): MasteringAssistantResult\""
+changed = "request-only: masteringAssistantSuggestStereo(request: MasteringAssistantSuggestStereoRequest): MasteringAssistantResult"
 domain = "mastering"
 rule = "one-positional-form"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::the assistant returns objects"
@@ -13484,7 +13484,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::the assistant retur
 [[entry]]
 kind = "function"
 old = "masteringAudioProfile"
-changed = "changed = \"one positional form (masteringAudioProfile(samples, sampleRate, options?: OptionsOf<MasteringAudioProfileRequest>)); request form takes MasteringAudioProfileRequest; returns MasteringAudioProfile\""
+changed = "one positional form (masteringAudioProfile(samples, sampleRate, options?: OptionsOf<MasteringAudioProfileRequest>)); request form takes MasteringAudioProfileRequest; returns MasteringAudioProfile"
 domain = "mastering"
 rule = "one-positional-form"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::the audio profile is grouped"
@@ -13492,7 +13492,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::the audio profile i
 [[entry]]
 kind = "function"
 old = "masteringAudioProfileStereo"
-changed = "changed = \"request-only: masteringAudioProfileStereo(request: MasteringAudioProfileStereoRequest): MasteringAudioProfile\""
+changed = "request-only: masteringAudioProfileStereo(request: MasteringAudioProfileStereoRequest): MasteringAudioProfile"
 domain = "mastering"
 rule = "one-positional-form"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::the audio profile is grouped"
@@ -13514,7 +13514,7 @@ rule = "one-entry-per-operation"
 [[entry]]
 kind = "function"
 old = "masteringDynamicsCompressor"
-changed = "changed = \"one positional form (masteringDynamicsCompressor(samples, sampleRate, options?: CompressorOptions)); request form takes MasteringDynamicsCompressorRequest; returns DynamicsProcessorResult\""
+changed = "one positional form (masteringDynamicsCompressor(samples, sampleRate, options?: CompressorOptions)); request form takes MasteringDynamicsCompressorRequest; returns DynamicsProcessorResult"
 domain = "mastering"
 rule = "one-positional-form"
 test = "bindings/node/tests/surface/mastering-metering.test.ts::masteringDynamicsCompressor"
@@ -13522,7 +13522,7 @@ test = "bindings/node/tests/surface/mastering-metering.test.ts::masteringDynamic
 [[entry]]
 kind = "function"
 old = "masteringDynamicsGate"
-changed = "changed = \"one positional form (masteringDynamicsGate(samples, sampleRate, options?: GateOptions)); request form takes MasteringDynamicsGateRequest; returns DynamicsProcessorResult\""
+changed = "one positional form (masteringDynamicsGate(samples, sampleRate, options?: GateOptions)); request form takes MasteringDynamicsGateRequest; returns DynamicsProcessorResult"
 domain = "mastering"
 rule = "one-positional-form"
 test = "bindings/node/tests/surface/mastering-metering.test.ts::masteringDynamicsGate"
@@ -13530,7 +13530,7 @@ test = "bindings/node/tests/surface/mastering-metering.test.ts::masteringDynamic
 [[entry]]
 kind = "function"
 old = "masteringDynamicsTransientShaper"
-changed = "changed = \"one positional form (masteringDynamicsTransientShaper(samples, sampleRate, options?: TransientShaperOptions)); request form takes MasteringDynamicsTransientShaperRequest; returns DynamicsProcessorResult\""
+changed = "one positional form (masteringDynamicsTransientShaper(samples, sampleRate, options?: TransientShaperOptions)); request form takes MasteringDynamicsTransientShaperRequest; returns DynamicsProcessorResult"
 domain = "mastering"
 rule = "one-positional-form"
 test = "bindings/node/tests/surface/mastering-metering.test.ts::masteringDynamicsTransientShaper"
@@ -13538,7 +13538,7 @@ test = "bindings/node/tests/surface/mastering-metering.test.ts::masteringDynamic
 [[entry]]
 kind = "function"
 old = "masteringInsertNames"
-changed = "changed = \"masteringInsertNames(): MasteringInsertName[]\""
+changed = "masteringInsertNames(): MasteringInsertName[]"
 domain = "mastering"
 rule = "string-closed-sets"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::masteringInsertNames is the typed insert set"
@@ -13546,7 +13546,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::masteringInsertName
 [[entry]]
 kind = "function"
 old = "masteringInsertParamInfo"
-changed = "changed = \"request-only: masteringInsertParamInfo(request: MasteringInsertParamInfoRequest): MasteringInsertParamInfo[]\""
+changed = "request-only: masteringInsertParamInfo(request: MasteringInsertParamInfoRequest): MasteringInsertParamInfo[]"
 domain = "mastering"
 rule = "one-positional-form"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::masteringInsertParamInfo and masteringInsertTiming"
@@ -13554,7 +13554,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::masteringInsertPara
 [[entry]]
 kind = "function"
 old = "masteringInsertParamNames"
-changed = "changed = \"masteringInsertParamNames<N extends MasteringInsertName>(insert: N): (keyof MasteringProcessorParamMap[N] & string)[]\""
+changed = "masteringInsertParamNames<N extends MasteringInsertName>(insert: N): (keyof MasteringProcessorParamMap[N] & string)[]"
 domain = "mastering"
 rule = "string-closed-sets"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::masteringInsertParamNames refuses an unknown insert"
@@ -13562,7 +13562,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::masteringInsertPara
 [[entry]]
 kind = "function"
 old = "masteringInsertTiming"
-changed = "changed = \"request-only: masteringInsertTiming<N extends MasteringInsertName>(request: MasteringInsertTimingRequest<N>): MasteringInsertTiming\""
+changed = "request-only: masteringInsertTiming<N extends MasteringInsertName>(request: MasteringInsertTimingRequest<N>): MasteringInsertTiming"
 domain = "mastering"
 rule = "one-positional-form"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::masteringInsertParamInfo and masteringInsertTiming"
@@ -13570,7 +13570,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::masteringInsertPara
 [[entry]]
 kind = "function"
 old = "masteringPlatformNames"
-changed = "changed = \"masteringPlatformNames(): MasteringPlatform[]\""
+changed = "masteringPlatformNames(): MasteringPlatform[]"
 domain = "mastering"
 rule = "string-closed-sets"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::platform names are the typed set"
@@ -13578,7 +13578,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::platform names are 
 [[entry]]
 kind = "function"
 old = "masteringPresetParams"
-changed = "changed = \"masteringPresetParams(preset: MasteringPreset): MasteringChainConfig\""
+changed = "masteringPresetParams(preset: MasteringPreset): MasteringChainConfig"
 domain = "mastering"
 rule = "typed-results"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::chain config: nested form only, tokens only"
@@ -13586,7 +13586,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::chain config: neste
 [[entry]]
 kind = "function"
 old = "masteringStreamingPreview"
-changed = "changed = \"one positional form (masteringStreamingPreview(samples, sampleRate, options?: OptionsOf<MasteringStreamingPreviewRequest>)); request form takes MasteringStreamingPreviewRequest; returns MasteringStreamingPreviewResult\""
+changed = "one positional form (masteringStreamingPreview(samples, sampleRate, options?: OptionsOf<MasteringStreamingPreviewRequest>)); request form takes MasteringStreamingPreviewRequest; returns MasteringStreamingPreviewResult"
 domain = "mastering"
 rule = "one-positional-form"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::the streaming preview reports truePeakDbtp"
@@ -13594,7 +13594,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::the streaming previ
 [[entry]]
 kind = "function"
 old = "masteringStreamingPreviewStereo"
-changed = "changed = \"request-only: masteringStreamingPreviewStereo(request: MasteringStreamingPreviewStereoRequest): MasteringStreamingPreviewResult\""
+changed = "request-only: masteringStreamingPreviewStereo(request: MasteringStreamingPreviewStereoRequest): MasteringStreamingPreviewResult"
 domain = "mastering"
 rule = "one-positional-form"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::the streaming preview reports truePeakDbtp"
@@ -13602,7 +13602,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::the streaming previ
 [[entry]]
 kind = "function"
 old = "meteringCrestFactorDb"
-changed = "changed = \"one positional form (meteringCrestFactorDb(samples, sampleRate, options?: OptionsOf<MeteringCrestFactorDbRequest>)); request form takes MeteringCrestFactorDbRequest; returns number\""
+changed = "one positional form (meteringCrestFactorDb(samples, sampleRate, options?: OptionsOf<MeteringCrestFactorDbRequest>)); request form takes MeteringCrestFactorDbRequest; returns number"
 domain = "mastering"
 rule = "one-positional-form"
 test = "bindings/node/tests/surface/mastering-metering.test.ts::meteringCrestFactorDb"
@@ -13610,7 +13610,7 @@ test = "bindings/node/tests/surface/mastering-metering.test.ts::meteringCrestFac
 [[entry]]
 kind = "function"
 old = "meteringCrestFactorDbStereo"
-changed = "changed = \"request-only: meteringCrestFactorDbStereo(request: MeteringCrestFactorDbStereoRequest): number\""
+changed = "request-only: meteringCrestFactorDbStereo(request: MeteringCrestFactorDbStereoRequest): number"
 domain = "mastering"
 rule = "one-positional-form"
 test = "bindings/node/tests/surface/mastering-metering.test.ts::meteringCrestFactorDbStereo"
@@ -13618,7 +13618,7 @@ test = "bindings/node/tests/surface/mastering-metering.test.ts::meteringCrestFac
 [[entry]]
 kind = "function"
 old = "meteringDcOffset"
-changed = "changed = \"one positional form (meteringDcOffset(samples, sampleRate, options?: OptionsOf<MeteringDcOffsetRequest>)); request form takes MeteringDcOffsetRequest; returns number\""
+changed = "one positional form (meteringDcOffset(samples, sampleRate, options?: OptionsOf<MeteringDcOffsetRequest>)); request form takes MeteringDcOffsetRequest; returns number"
 domain = "mastering"
 rule = "one-positional-form"
 test = "bindings/node/tests/surface/mastering-metering.test.ts::meteringDcOffset"
@@ -13626,7 +13626,7 @@ test = "bindings/node/tests/surface/mastering-metering.test.ts::meteringDcOffset
 [[entry]]
 kind = "function"
 old = "meteringDetectClipping"
-changed = "changed = \"one positional form (meteringDetectClipping(samples, sampleRate, options?: MeteringDetectClippingOptions)); request form takes MeteringDetectClippingRequest; returns ClippingReport\""
+changed = "one positional form (meteringDetectClipping(samples, sampleRate, options?: MeteringDetectClippingOptions)); request form takes MeteringDetectClippingRequest; returns ClippingReport"
 domain = "mastering"
 rule = "one-positional-form"
 test = "bindings/node/tests/surface/mastering-metering.test.ts::meteringDetectClipping"
@@ -13634,7 +13634,7 @@ test = "bindings/node/tests/surface/mastering-metering.test.ts::meteringDetectCl
 [[entry]]
 kind = "function"
 old = "meteringDynamicRange"
-changed = "changed = \"one positional form (meteringDynamicRange(samples, sampleRate, options?: MeteringDynamicRangeOptions)); request form takes MeteringDynamicRangeRequest; returns DynamicRangeReport\""
+changed = "one positional form (meteringDynamicRange(samples, sampleRate, options?: MeteringDynamicRangeOptions)); request form takes MeteringDynamicRangeRequest; returns DynamicRangeReport"
 domain = "mastering"
 rule = "one-positional-form"
 test = "bindings/node/tests/surface/mastering-metering.test.ts::meteringDynamicRange"
@@ -13642,7 +13642,7 @@ test = "bindings/node/tests/surface/mastering-metering.test.ts::meteringDynamicR
 [[entry]]
 kind = "function"
 old = "meteringPeakDb"
-changed = "changed = \"one positional form (meteringPeakDb(samples, sampleRate, options?: OptionsOf<MeteringPeakDbRequest>)); request form takes MeteringPeakDbRequest; returns number\""
+changed = "one positional form (meteringPeakDb(samples, sampleRate, options?: OptionsOf<MeteringPeakDbRequest>)); request form takes MeteringPeakDbRequest; returns number"
 domain = "mastering"
 rule = "one-positional-form"
 test = "bindings/node/tests/surface/mastering-metering.test.ts::meteringPeakDb"
@@ -13650,7 +13650,7 @@ test = "bindings/node/tests/surface/mastering-metering.test.ts::meteringPeakDb"
 [[entry]]
 kind = "function"
 old = "meteringPhaseScope"
-changed = "changed = \"request-only: meteringPhaseScope(request: MeteringPhaseScopeRequest): PhaseScopeReport\""
+changed = "request-only: meteringPhaseScope(request: MeteringPhaseScopeRequest): PhaseScopeReport"
 domain = "mastering"
 rule = "one-positional-form"
 test = "bindings/node/tests/surface/mastering-metering.test.ts::meteringPhaseScope"
@@ -13658,7 +13658,7 @@ test = "bindings/node/tests/surface/mastering-metering.test.ts::meteringPhaseSco
 [[entry]]
 kind = "function"
 old = "meteringRmsDb"
-changed = "changed = \"one positional form (meteringRmsDb(samples, sampleRate, options?: OptionsOf<MeteringRmsDbRequest>)); request form takes MeteringRmsDbRequest; returns number\""
+changed = "one positional form (meteringRmsDb(samples, sampleRate, options?: OptionsOf<MeteringRmsDbRequest>)); request form takes MeteringRmsDbRequest; returns number"
 domain = "mastering"
 rule = "one-positional-form"
 test = "bindings/node/tests/surface/mastering-metering.test.ts::meteringRmsDb"
@@ -13666,7 +13666,7 @@ test = "bindings/node/tests/surface/mastering-metering.test.ts::meteringRmsDb"
 [[entry]]
 kind = "function"
 old = "meteringSilenceRatio"
-changed = "changed = \"one positional form (meteringSilenceRatio(samples, sampleRate, options?: OptionsOf<MeteringSilenceRatioRequest>)); request form takes MeteringSilenceRatioRequest; returns number\""
+changed = "one positional form (meteringSilenceRatio(samples, sampleRate, options?: OptionsOf<MeteringSilenceRatioRequest>)); request form takes MeteringSilenceRatioRequest; returns number"
 domain = "mastering"
 rule = "one-positional-form"
 test = "bindings/node/tests/surface/mastering-metering.test.ts::meteringSilenceRatio"
@@ -13674,7 +13674,7 @@ test = "bindings/node/tests/surface/mastering-metering.test.ts::meteringSilenceR
 [[entry]]
 kind = "function"
 old = "meteringSpectrum"
-changed = "changed = \"one positional form (meteringSpectrum(samples, sampleRate, options?: SpectrumOptions)); request form takes MeteringSpectrumRequest; returns SpectrumReport\""
+changed = "one positional form (meteringSpectrum(samples, sampleRate, options?: SpectrumOptions)); request form takes MeteringSpectrumRequest; returns SpectrumReport"
 domain = "mastering"
 rule = "one-positional-form"
 test = "bindings/node/tests/surface/mastering-metering.test.ts::meteringSpectrum"
@@ -13682,7 +13682,7 @@ test = "bindings/node/tests/surface/mastering-metering.test.ts::meteringSpectrum
 [[entry]]
 kind = "function"
 old = "meteringSpectrumFrame"
-changed = "changed = \"one positional form (meteringSpectrumFrame(samples, sampleRate, options?: OptionsOf<MeteringSpectrumFrameRequest>)); request form takes MeteringSpectrumFrameRequest; returns SpectrumReport\""
+changed = "one positional form (meteringSpectrumFrame(samples, sampleRate, options?: OptionsOf<MeteringSpectrumFrameRequest>)); request form takes MeteringSpectrumFrameRequest; returns SpectrumReport"
 domain = "mastering"
 rule = "one-positional-form"
 test = "bindings/node/tests/surface/mastering-metering.test.ts::meteringSpectrumFrame"
@@ -13690,7 +13690,7 @@ test = "bindings/node/tests/surface/mastering-metering.test.ts::meteringSpectrum
 [[entry]]
 kind = "function"
 old = "meteringSpectrumFrame(frameOffset)"
-changed = "changed = \"positional frameOffset removed; options.startSample\""
+changed = "positional frameOffset removed; options.startSample"
 domain = "mastering"
 rule = "unit-in-name"
 test = "bindings/node/tests/surface/mastering-metering.test.ts::meteringSpectrumFrame(frameOffset)"
@@ -13698,7 +13698,7 @@ test = "bindings/node/tests/surface/mastering-metering.test.ts::meteringSpectrum
 [[entry]]
 kind = "function"
 old = "meteringStereoCorrelation"
-changed = "changed = \"request-only: meteringStereoCorrelation(request: MeteringStereoCorrelationRequest): number\""
+changed = "request-only: meteringStereoCorrelation(request: MeteringStereoCorrelationRequest): number"
 domain = "mastering"
 rule = "one-positional-form"
 test = "bindings/node/tests/surface/mastering-metering.test.ts::meteringStereoCorrelation"
@@ -13706,7 +13706,7 @@ test = "bindings/node/tests/surface/mastering-metering.test.ts::meteringStereoCo
 [[entry]]
 kind = "function"
 old = "meteringStereoWidth"
-changed = "changed = \"request-only: meteringStereoWidth(request: MeteringStereoWidthRequest): number\""
+changed = "request-only: meteringStereoWidth(request: MeteringStereoWidthRequest): number"
 domain = "mastering"
 rule = "one-positional-form"
 test = "bindings/node/tests/surface/mastering-metering.test.ts::meteringStereoWidth"
@@ -13714,7 +13714,7 @@ test = "bindings/node/tests/surface/mastering-metering.test.ts::meteringStereoWi
 [[entry]]
 kind = "function"
 old = "meteringTruePeakDb"
-changed = "changed = \"one positional form (meteringTruePeakDb(samples, sampleRate, options?: OptionsOf<MeteringTruePeakDbRequest>)); request form takes MeteringTruePeakDbRequest; returns number\""
+changed = "one positional form (meteringTruePeakDb(samples, sampleRate, options?: OptionsOf<MeteringTruePeakDbRequest>)); request form takes MeteringTruePeakDbRequest; returns number"
 domain = "mastering"
 rule = "one-positional-form"
 test = "bindings/node/tests/surface/mastering-metering.test.ts::meteringTruePeakDb"
@@ -13722,7 +13722,7 @@ test = "bindings/node/tests/surface/mastering-metering.test.ts::meteringTruePeak
 [[entry]]
 kind = "function"
 old = "meteringVectorscope"
-changed = "changed = \"request-only: meteringVectorscope(request: MeteringVectorscopeRequest): VectorscopeReport\""
+changed = "request-only: meteringVectorscope(request: MeteringVectorscopeRequest): VectorscopeReport"
 domain = "mastering"
 rule = "one-positional-form"
 test = "bindings/node/tests/surface/mastering-metering.test.ts::meteringVectorscope"
@@ -13730,7 +13730,7 @@ test = "bindings/node/tests/surface/mastering-metering.test.ts::meteringVectorsc
 [[entry]]
 kind = "function"
 old = "mixStereo"
-changed = "changed = \"request-only: mixStereo(request: MixStereoRequest): MixResult\""
+changed = "request-only: mixStereo(request: MixStereoRequest): MixResult"
 domain = "mastering"
 rule = "one-positional-form"
 test = "bindings/node/tests/surface/mastering-mixing.test.ts::mixStereo"
@@ -13738,7 +13738,7 @@ test = "bindings/node/tests/surface/mastering-mixing.test.ts::mixStereo"
 [[entry]]
 kind = "function"
 old = "mixingScenePresetNames"
-changed = "changed = \"mixingScenePresetNames(): MixScenePreset[]\""
+changed = "mixingScenePresetNames(): MixScenePreset[]"
 domain = "mastering"
 rule = "string-closed-sets"
 test = "bindings/node/tests/surface/mastering-mixing.test.ts::mixingScenePresetNames"
@@ -13746,7 +13746,7 @@ test = "bindings/node/tests/surface/mastering-mixing.test.ts::mixingScenePresetN
 [[entry]]
 kind = "function"
 old = "streamingLoudnessGain"
-changed = "changed = \"one positional form (streamingLoudnessGain(samples, sampleRate, options?: OptionsOf<StreamingLoudnessGainRequest>)); request form takes StreamingLoudnessGainRequest; returns StreamingLoudnessGainResult\""
+changed = "one positional form (streamingLoudnessGain(samples, sampleRate, options?: OptionsOf<StreamingLoudnessGainRequest>)); request form takes StreamingLoudnessGainRequest; returns StreamingLoudnessGainResult"
 domain = "mastering"
 rule = "one-positional-form"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::streamingLoudnessGain reports truePeakDbtp"
@@ -13761,7 +13761,7 @@ rule = "typed-results"
 [[entry]]
 kind = "function"
 old = "waveformPeakPyramid"
-changed = "changed = \"request-only: waveformPeakPyramid(request: WaveformPeakPyramidRequest): WaveformPeaksReport[]\""
+changed = "request-only: waveformPeakPyramid(request: WaveformPeakPyramidRequest): WaveformPeaksReport[]"
 domain = "mastering"
 rule = "one-positional-form"
 test = "bindings/node/tests/surface/mastering-metering.test.ts::waveformPeakPyramid"
@@ -13769,7 +13769,7 @@ test = "bindings/node/tests/surface/mastering-metering.test.ts::waveformPeakPyra
 [[entry]]
 kind = "function"
 old = "waveformPeaks"
-changed = "changed = \"request-only: waveformPeaks(request: WaveformPeaksRequest): WaveformPeaksReport\""
+changed = "request-only: waveformPeaks(request: WaveformPeaksRequest): WaveformPeaksReport"
 domain = "mastering"
 rule = "one-positional-form"
 test = "bindings/node/tests/surface/mastering-metering.test.ts::waveformPeaks"
@@ -13777,7 +13777,7 @@ test = "bindings/node/tests/surface/mastering-metering.test.ts::waveformPeaks"
 [[entry]]
 kind = "method"
 old = "Audio.masterAudio"
-changed = "changed = \"masterAudio(options?: OptionsOf<MasterAudioRequest>): MasteringChainResult\""
+changed = "masterAudio(options?: OptionsOf<MasterAudioRequest>): MasteringChainResult"
 domain = "core"
 rule = "no-positional-bools"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::Audio carries the renamed methods only"
@@ -13792,7 +13792,7 @@ rule = "one-entry-per-operation"
 [[entry]]
 kind = "method"
 old = "StreamingEqualizer.constructor"
-changed = "changed = \"constructor(config: StreamingEqualizerConfig)\""
+changed = "constructor(config: StreamingEqualizerConfig)"
 domain = "mastering"
 rule = "sample-rate-required"
 test = "bindings/node/tests/surface/mastering-streaming.test.ts::StreamingEqualizer.constructor"
@@ -13800,7 +13800,7 @@ test = "bindings/node/tests/surface/mastering-streaming.test.ts::StreamingEquali
 [[entry]]
 kind = "method"
 old = "StreamingEqualizer.lastAutoGainDb"
-changed = "changed = \"readonly getter lastAutoGainDb: number\""
+changed = "readonly getter lastAutoGainDb: number"
 domain = "mastering"
 rule = "getters"
 test = "bindings/node/tests/surface/mastering-streaming.test.ts::StreamingEqualizer.lastAutoGainDb"
@@ -13808,7 +13808,7 @@ test = "bindings/node/tests/surface/mastering-streaming.test.ts::StreamingEquali
 [[entry]]
 kind = "method"
 old = "StreamingEqualizer.latencySamples"
-changed = "changed = \"readonly getter latencySamples: number\""
+changed = "readonly getter latencySamples: number"
 domain = "mastering"
 rule = "getters"
 test = "bindings/node/tests/surface/mastering-streaming.test.ts::StreamingEqualizer.latencySamples"
@@ -13816,7 +13816,7 @@ test = "bindings/node/tests/surface/mastering-streaming.test.ts::StreamingEquali
 [[entry]]
 kind = "method"
 old = "StreamingEqualizer.nonFiniteDiscardCount"
-changed = "changed = \"readonly getter nonFiniteDiscardCount: number\""
+changed = "readonly getter nonFiniteDiscardCount: number"
 domain = "mastering"
 rule = "getters"
 test = "bindings/node/tests/surface/mastering-streaming.test.ts::StreamingEqualizer.nonFiniteDiscardCount"
@@ -13824,7 +13824,7 @@ test = "bindings/node/tests/surface/mastering-streaming.test.ts::StreamingEquali
 [[entry]]
 kind = "method"
 old = "StreamingEqualizer.setPhaseMode"
-changed = "changed = \"setPhaseMode(mode: EqPhaseMode) with EqPhaseMode = 'zero' | 'natural' | 'linear'; synonyms and numbers refused\""
+changed = "setPhaseMode(mode: EqPhaseMode) with EqPhaseMode = 'zero' | 'natural' | 'linear'; synonyms and numbers refused"
 domain = "mastering"
 rule = "token-case"
 test = "bindings/node/tests/surface/mastering-streaming.test.ts::StreamingEqualizer.setPhaseMode"
@@ -13832,7 +13832,7 @@ test = "bindings/node/tests/surface/mastering-streaming.test.ts::StreamingEquali
 [[entry]]
 kind = "method"
 old = "StreamingMasteringChain.constructor"
-changed = "changed = \"constructor(config: StreamingMasteringChainConfig)\""
+changed = "constructor(config: StreamingMasteringChainConfig)"
 domain = "mastering"
 rule = "construction"
 test = "bindings/node/tests/surface/mastering-streaming.test.ts::StreamingMasteringChain.constructor"
@@ -13840,7 +13840,7 @@ test = "bindings/node/tests/surface/mastering-streaming.test.ts::StreamingMaster
 [[entry]]
 kind = "method"
 old = "StreamingMasteringChain.latencySamples"
-changed = "changed = \"readonly getter latencySamples: number\""
+changed = "readonly getter latencySamples: number"
 domain = "mastering"
 rule = "getters"
 test = "bindings/node/tests/surface/mastering-streaming.test.ts::StreamingMasteringChain.latencySamples"
@@ -13848,7 +13848,7 @@ test = "bindings/node/tests/surface/mastering-streaming.test.ts::StreamingMaster
 [[entry]]
 kind = "method"
 old = "StreamingMasteringChain.nonFiniteDiscardCount"
-changed = "changed = \"readonly getter nonFiniteDiscardCount: number\""
+changed = "readonly getter nonFiniteDiscardCount: number"
 domain = "mastering"
 rule = "getters"
 test = "bindings/node/tests/surface/mastering-streaming.test.ts::StreamingMasteringChain.nonFiniteDiscardCount"
@@ -13856,7 +13856,7 @@ test = "bindings/node/tests/surface/mastering-streaming.test.ts::StreamingMaster
 [[entry]]
 kind = "method"
 old = "StreamingMasteringChain.nonFiniteSubstitutionCount"
-changed = "changed = \"readonly getter nonFiniteSubstitutionCount: number\""
+changed = "readonly getter nonFiniteSubstitutionCount: number"
 domain = "mastering"
 rule = "getters"
 test = "bindings/node/tests/surface/mastering-streaming.test.ts::StreamingMasteringChain.nonFiniteSubstitutionCount"
@@ -13871,7 +13871,7 @@ rule = "construction"
 [[entry]]
 kind = "method"
 old = "StreamingMasteringChain.stageNames"
-changed = "changed = \"readonly getter stageNames: string[]\""
+changed = "readonly getter stageNames: string[]"
 domain = "mastering"
 rule = "getters"
 test = "bindings/node/tests/surface/mastering-streaming.test.ts::StreamingMasteringChain.stageNames"
@@ -13879,7 +13879,7 @@ test = "bindings/node/tests/surface/mastering-streaming.test.ts::StreamingMaster
 [[entry]]
 kind = "type"
 old = "AutomationCurve"
-changed = "changed = \"'linear' | 'exponential' | 'hold' | 'sCurve'\""
+changed = "'linear' | 'exponential' | 'hold' | 'sCurve'"
 domain = "mastering"
 rule = "token-case"
 test = "bindings/node/tests/surface/mastering-mixing.test.ts::AutomationCurve"
@@ -13887,7 +13887,7 @@ test = "bindings/node/tests/surface/mastering-mixing.test.ts::AutomationCurve"
 [[entry]]
 kind = "type"
 old = "CompressorDetector"
-changed = "changed = \"'peak' | 'rms' | 'logRms' (log_rms and the ordinals 0|1|2 removed)\""
+changed = "'peak' | 'rms' | 'logRms' (log_rms and the ordinals 0|1|2 removed)"
 domain = "mastering"
 rule = "token-case"
 test = "bindings/node/tests/surface/mastering-metering.test.ts::CompressorDetector"
@@ -13909,7 +13909,7 @@ rule = "options-struct"
 [[entry]]
 kind = "type"
 old = "MasteringAudioProfileDefects"
-changed = "changed = \"{click: ClickDetection, clip: ClipDetection, crackle: CrackleDetection, noise: MasteringAudioProfileNoise, hum: MasteringAudioProfileHum, reverb: MasteringAudioProfileReverb}\""
+changed = "{click: ClickDetection, clip: ClipDetection, crackle: CrackleDetection, noise: MasteringAudioProfileNoise, hum: MasteringAudioProfileHum, reverb: MasteringAudioProfileReverb}"
 domain = "mastering"
 rule = "typed-results"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::the audio profile is grouped"
@@ -13973,7 +13973,7 @@ rule = "one-entry-per-operation"
 [[entry]]
 kind = "type"
 old = "MeterTap"
-changed = "changed = \"'preFader' | 'postFader' (numbers refused at every reader)\""
+changed = "'preFader' | 'postFader' (numbers refused at every reader)"
 domain = "mastering"
 rule = "string-closed-sets"
 test = "bindings/node/tests/surface/mastering-mixing.test.ts::MeterTap"
@@ -14016,7 +14016,7 @@ rule = "one-positional-form"
 [[entry]]
 kind = "type"
 old = "MixSceneInsert"
-changed = "changed = \"discriminated union over MasteringInsertName: {slot, processor: P, params: MasteringProcessorParams<P>, sidechainKey?}\""
+changed = "discriminated union over MasteringInsertName: {slot, processor: P, params: MasteringProcessorParams<P>, sidechainKey?}"
 domain = "mastering"
 rule = "individual"
 test = "bindings/node/tests/surface/mastering-mixing.test.ts::MixSceneInsert"
@@ -14032,7 +14032,7 @@ test = "bindings/node/tests/surface/mastering-mixing.test.ts::mixStereo takes a 
 [[entry]]
 kind = "type"
 old = "PanLaw"
-changed = "changed = \"'const3Db' | 'const4.5Db' | 'const6Db' | 'linear0Db'\""
+changed = "'const3Db' | 'const4.5Db' | 'const6Db' | 'linear0Db'"
 domain = "mastering"
 rule = "digit-tokens"
 test = "bindings/node/tests/surface/mastering-mixing.test.ts::PanLaw"
@@ -14040,7 +14040,7 @@ test = "bindings/node/tests/surface/mastering-mixing.test.ts::PanLaw"
 [[entry]]
 kind = "type"
 old = "PanMode"
-changed = "changed = \"'balance' | 'stereoPan' | 'dualPan'\""
+changed = "'balance' | 'stereoPan' | 'dualPan'"
 domain = "mastering"
 rule = "token-case"
 test = "bindings/node/tests/surface/mastering-mixing.test.ts::PanMode"
@@ -14055,7 +14055,7 @@ rule = "one-positional-form"
 [[entry]]
 kind = "type"
 old = "SendTiming"
-changed = "changed = \"'preFader' | 'postFader' (numbers refused at every reader)\""
+changed = "'preFader' | 'postFader' (numbers refused at every reader)"
 domain = "mastering"
 rule = "string-closed-sets"
 test = "bindings/node/tests/surface/mastering-mixing.test.ts::SendTiming"
@@ -14070,7 +14070,7 @@ rule = "aliases-removed"
 [[entry]]
 kind = "type"
 old = "StreamingMasteringChainConfig"
-changed = "changed = \"StreamingMasteringChainConfig extends MasteringChainConfig {sampleRate, maxBlockSize? (default 128), numChannels?: 1 | 2 (default 1), loudnessStaticGainDb?, loudnessStaticGainPeakDb?}\""
+changed = "StreamingMasteringChainConfig extends MasteringChainConfig {sampleRate, maxBlockSize? (default 128), numChannels?: 1 | 2 (default 1), loudnessStaticGainDb?, loudnessStaticGainPeakDb?}"
 domain = "mastering"
 rule = "construction"
 test = "bindings/node/tests/surface/mastering-streaming.test.ts::StreamingMasteringChainConfig"
@@ -14078,7 +14078,7 @@ test = "bindings/node/tests/surface/mastering-streaming.test.ts::StreamingMaster
 [[entry]]
 kind = "type"
 old = "StripMeteringOptions"
-changed = "changed = \"moves to types_mixing.ts (scene document type); fields unchanged\""
+changed = "moves to types_mixing.ts (scene document type); fields unchanged"
 domain = "mastering"
 rule = "type-names"
 test = "bindings/node/tests/surface/mastering-mixing.test.ts::StripMeteringOptions"
