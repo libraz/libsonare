@@ -18,8 +18,8 @@ export interface OpfsClipPageProviderOptions {
   dataOffsetBytes?: number;
   /** Worker that reads the file; defaults to a private one the binding owns. */
   worker?: Worker;
-  /** Terminate a supplied `worker` when the binding closes. Default `false`. */
-  terminateWorkerOnClose?: boolean;
+  /** Terminate a supplied `worker` when the binding is destroyed. Default `false`. */
+  terminateWorkerOnDestroy?: boolean;
   /** Internal bridge hook used to mirror a supplied page into an AudioWorklet. */
   onPageSupplied?: (pageIndex: number, channels: Float32Array[]) => void;
   /** Internal bridge hook used to mirror an eviction into an AudioWorklet. */
@@ -39,7 +39,9 @@ export interface OpfsClipPageProviderBinding {
   /** Evict one resident page from every configured consumer. */
   clearPage?(pageIndex: number): void;
   /** Destroy the provider and release the worker when the binding owns it. Idempotent. */
-  close(): void;
+  destroy(): void;
+  /** Same as {@link destroy}, so the binding works with `using`. */
+  [Symbol.dispose](): void;
 }
 
 interface PageResponse {
@@ -84,6 +86,7 @@ async function sonareWriteClipChunk(message) {
   try {
     const fileHandle = await sonareOpenClipFile(path, true);
     const access = await fileHandle.createSyncAccessHandle();
+    let failure;
     try {
       if (first) {
         access.truncate(0);
@@ -93,15 +96,22 @@ async function sonareWriteClipChunk(message) {
       while (written < view.byteLength) {
         const n = access.write(view.subarray(written), { at: at + written });
         if (n <= 0) {
-          throw new Error('short write');
+          failure = 'short write';
+          break;
         }
         written += n;
       }
-      access.flush();
+      if (failure === undefined) {
+        access.flush();
+      }
     } finally {
       access.close();
     }
-    self.postMessage({ type: 'sonare:write-clip-result', requestId, ok: true });
+    self.postMessage(
+      failure === undefined
+        ? { type: 'sonare:write-clip-result', requestId, ok: true }
+        : { type: 'sonare:write-clip-result', requestId, ok: false, busy: false, error: failure },
+    );
   } catch (error) {
     self.postMessage({
       type: 'sonare:write-clip-result',
@@ -234,7 +244,7 @@ export function createOpfsClipPageProvider(
   const worker = options.worker ?? createOpfsClipPageWorker();
   const heldKey = opfsClipPathKey(options.path);
   heldOpfsClipPaths.set(heldKey, (heldOpfsClipPaths.get(heldKey) ?? 0) + 1);
-  const ownsWorker = options.worker === undefined || options.terminateWorkerOnClose === true;
+  const ownsWorker = options.worker === undefined || options.terminateWorkerOnDestroy === true;
   let closed = false;
   let readQueue: Promise<void> = Promise.resolve();
   const pending = new Map<
@@ -338,7 +348,7 @@ export function createOpfsClipPageProvider(
       provider.clear(pageIndex);
       options.onPageCleared?.(pageIndex);
     },
-    close() {
+    destroy() {
       if (closed) {
         return;
       }
@@ -359,6 +369,9 @@ export function createOpfsClipPageProvider(
       if (ownsWorker) {
         worker.terminate();
       }
+    },
+    [Symbol.dispose]() {
+      this.destroy();
     },
   };
 }

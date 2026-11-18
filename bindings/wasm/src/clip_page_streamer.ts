@@ -219,7 +219,7 @@ export class ClipPageStreamer {
     this.sources.clear();
     for (const state of states) {
       this.resetState(state);
-      state.source.binding.close();
+      state.source.binding.destroy();
     }
     // Bindings still priming in attachOpfsClipStream are closed through here.
     this.epoch.close();
@@ -320,7 +320,7 @@ export interface OpfsClipStreamOptions extends OpfsClipPageProviderOptions {
 
 /** Result of {@link attachOpfsClipStream}. */
 export interface OpfsClipStream {
-  /** Binding that owns the provider; `close()` it to release the stream. */
+  /** Binding that owns the provider; `destroy()` it to release the stream. */
   binding: OpfsClipPageProviderBinding;
   /** Pass as `addClip`'s buffer argument to schedule the streaming clip. */
   provider: ClipPageProvider;
@@ -373,7 +373,7 @@ export async function attachOpfsClipStream(
   const token = epoch.current();
   const binding = createOpfsClipPageProvider(providerOptions);
   // A close() while priming reclaims the binding before it is registered.
-  const releaseOnClose = epoch.onClose(() => binding.close());
+  const releaseOnClose = epoch.onClose(() => binding.destroy());
   try {
     const lastPage = Math.ceil(providerOptions.numSamples / providerOptions.pageFrames) - 1;
     const primed: number[] = [];
@@ -394,7 +394,7 @@ export async function attachOpfsClipStream(
       primed,
     );
   } catch (error) {
-    binding.close();
+    binding.destroy();
     throw error;
   } finally {
     releaseOnClose();

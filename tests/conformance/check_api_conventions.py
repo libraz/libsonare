@@ -1110,10 +1110,6 @@ RULES: list[Rule] = [
         population=lambda r: r["kind"] == "worker-class" or r["kind"] in ("field", "option"),
         violation=_worker_teardown_violation,
         derive=_worker_teardown_records,
-        pending={
-            "wasm:OpfsClipPageProviderOptions.terminateWorkerOnClose": "rename to terminateWorkerOnDestroy",
-            "wasm:OpfsClipStreamOptions.terminateWorkerOnClose": "rename to terminateWorkerOnDestroy",
-        },
     ),
     Rule(
         name="loudness-names",
@@ -1437,9 +1433,6 @@ RULES: list[Rule] = [
             else None
         ),
         scan=_error_construction_sites,
-        pending={
-            "wasm:bindings/wasm/src/opfs_clip_pages.ts:96": "throw SonareError with the code that names the cause",
-        },
     ),
     Rule(
         name="worklet-render-quantum",

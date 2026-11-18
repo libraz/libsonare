@@ -701,6 +701,35 @@ domain = "project"
 rule = "async-teardown"
 
 [[entry]]
+kind = "field"
+old = "OpfsClipPageProviderOptions.terminateWorkerOnClose"
+new = "OpfsClipPageProviderOptions.terminateWorkerOnDestroy"
+domain = "project"
+rule = "async-teardown"
+
+[[entry]]
+kind = "field"
+old = "OpfsClipStreamOptions.terminateWorkerOnClose"
+new = "OpfsClipStreamOptions.terminateWorkerOnDestroy"
+domain = "project"
+rule = "async-teardown"
+
+[[entry]]
+kind = "field"
+old = "OpfsClipStreamOptions.terminateWorkerOnClose"
+new = "OpfsClipStreamOptions.terminateWorkerOnDestroy"
+domain = "project"
+rule = "async-teardown"
+entry = "./worklet"
+
+[[entry]]
+kind = "method"
+old = "OpfsClipPageProviderBinding.close"
+new = "OpfsClipPageProviderBinding.destroy"
+domain = "project"
+rule = "teardown"
+
+[[entry]]
 kind = "function"
 old = "projectAbiVersion"
 changed = "returns undefined instead of 0 when the feature is compiled out"

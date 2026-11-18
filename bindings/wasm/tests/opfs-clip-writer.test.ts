@@ -16,6 +16,8 @@ type FileMap = Map<string, Uint8Array>;
 class OpfsWorkerHarness {
   readonly files: FileMap = new Map();
   readonly openHandles = new Set<string>();
+  /** When set, every sync-handle write reports zero bytes written. */
+  shortWrite = false;
   terminated = false;
   private listeners = new Set<(event: MessageEvent) => void>();
   private readonly scope: { onmessage?: (event: { data: unknown }) => Promise<void> };
@@ -23,6 +25,7 @@ class OpfsWorkerHarness {
   constructor() {
     const files = this.files;
     const openHandles = this.openHandles;
+    const harness = this;
     const fileHandle = (key: string) => ({
       async createSyncAccessHandle() {
         if (openHandles.has(key)) {
@@ -39,6 +42,9 @@ class OpfsWorkerHarness {
             return n;
           },
           write(buffer: Uint8Array, opts: { at: number }) {
+            if (harness.shortWrite) {
+              return 0;
+            }
             const data = files.get(key) ?? new Uint8Array(0);
             const grown = new Uint8Array(Math.max(data.byteLength, opts.at + buffer.byteLength));
             grown.set(data);
@@ -240,12 +246,12 @@ describe('writeOpfsClip', () => {
         }
       }
     } finally {
-      binding.close();
+      binding.destroy();
       engine.destroy();
     }
   });
 
-  it('refuses a path an open page provider holds, and accepts it after close', async () => {
+  it('refuses a path an open page provider holds, and accepts it after destroy', async () => {
     const harness = new OpfsWorkerHarness();
     await writeOpfsClip('held.f32', [new Float32Array(8)], { worker: harness.asWorker() });
     const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 8 });
@@ -262,12 +268,12 @@ describe('writeOpfsClip', () => {
       }).catch((e) => e);
       expect(error).toBeInstanceOf(SonareError);
       expect(error.codeName).toBe('InvalidState');
-      binding.close();
+      binding.destroy();
       await expect(
         writeOpfsClip('held.f32', [new Float32Array(8)], { worker: harness.asWorker() }),
       ).resolves.toMatchObject({ numSamples: 8 });
     } finally {
-      binding.close();
+      binding.destroy();
       engine.destroy();
     }
   });
@@ -280,6 +286,21 @@ describe('writeOpfsClip', () => {
     }).catch((e) => e);
     expect(error).toBeInstanceOf(SonareError);
     expect(error.codeName).toBe('InvalidState');
+  });
+
+  it('maps a short write to EncodeFailed and releases the file handle', async () => {
+    const harness = new OpfsWorkerHarness();
+    harness.shortWrite = true;
+    const error = await writeOpfsClip('short.f32', [new Float32Array(4)], {
+      worker: harness.asWorker(),
+    }).then(
+      () => undefined,
+      (caught: unknown) => caught as SonareError,
+    );
+    expect(error).toBeInstanceOf(SonareError);
+    expect(error?.codeName).toBe('EncodeFailed');
+    expect(error?.message).toContain('short write');
+    expect(harness.openHandles.size).toBe(0);
   });
 
   it('terminates a worker it created itself only', async () => {

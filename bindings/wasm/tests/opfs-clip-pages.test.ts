@@ -165,7 +165,7 @@ describe('createOpfsClipPageProvider', () => {
     const second = engine.process([new Float32Array(8)]);
     expect(Array.from(second[0])).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
 
-    binding.close();
+    binding.destroy();
     engine.destroy();
     expect(worker.terminated).toBe(false);
     expect(worker.messages).toHaveLength(2);
@@ -203,7 +203,7 @@ describe('createOpfsClipPageProvider', () => {
       expect(suppliedA).toEqual([1]);
       expect(suppliedB).toEqual([2]);
 
-      a.close();
+      a.destroy();
       const nextB = b.supplyPage(1);
       await settle();
       worker.respond(2, 3);
@@ -211,8 +211,8 @@ describe('createOpfsClipPageProvider', () => {
       expect(suppliedB).toEqual([2, 3]);
       expect(worker.terminated).toBe(false);
     } finally {
-      a.close();
-      b.close();
+      a.destroy();
+      b.destroy();
       engine.destroy();
     }
   });
@@ -231,11 +231,11 @@ describe('createOpfsClipPageProvider', () => {
     try {
       const pending = binding.supplyPage(0);
       await settle();
-      binding.close();
+      binding.destroy();
       await expect(pending).rejects.toEqual(invalidState);
       await expect(binding.supplyPage(1)).rejects.toEqual(invalidState);
     } finally {
-      binding.close();
+      binding.destroy();
       engine.destroy();
     }
   });
@@ -261,7 +261,7 @@ describe('createOpfsClipPageProvider', () => {
         expect.objectContaining({ codeName: 'InvalidState' }),
       );
     } finally {
-      binding.close();
+      binding.destroy();
       engine.destroy();
     }
   });
@@ -285,7 +285,7 @@ describe('createOpfsClipPageProvider', () => {
       worker.postMessage = post;
       expect(await binding.supplyPage(1)).toBe(true);
     } finally {
-      binding.close();
+      binding.destroy();
       engine.destroy();
     }
   });
@@ -304,7 +304,7 @@ describe('createOpfsClipPageProvider', () => {
 
     expect(await binding.supplyPage(0)).toBe(false);
 
-    binding.close();
+    binding.destroy();
     engine.destroy();
   });
 
@@ -329,7 +329,7 @@ describe('createOpfsClipPageProvider', () => {
     expect(worker.messages).toHaveLength(2);
     expect(await second).toBe(true);
 
-    binding.close();
+    binding.destroy();
     engine.destroy();
   });
 });
@@ -503,7 +503,7 @@ describe('worklet attachOpfsClipStream', () => {
       numSamples: 8,
       pageFrames: 4,
       worker: worker as unknown as Worker,
-      terminateWorkerOnClose: true,
+      terminateWorkerOnDestroy: true,
     });
     await settle();
     expect(worker.requests).toHaveLength(1);
@@ -532,7 +532,7 @@ describe('worklet attachOpfsClipStream', () => {
       });
       engine.addClip(10, { pageProvider: stream.provider, startPpq: 0, id: 704 });
       engine.addClip(10, { channels: [new Float32Array(8).fill(0.5)], startPpq: 0, id: 704 });
-      stream.binding.close();
+      stream.binding.destroy();
       engine.transport.play();
       const out = new Float32Array(128);
       expect(processor.process([[]], [[out]])).toBe(true);
@@ -563,7 +563,7 @@ describe('worklet attachOpfsClipStream', () => {
       const out = new Float32Array(128);
       expect(processor.process([[]], [[out]])).toBe(true);
       expect(Array.from(out.slice(0, 4))).toEqual([1, 2, 3, 4]);
-      stream.binding.close();
+      stream.binding.destroy();
     } finally {
       engine.destroy();
       processor.destroy();
@@ -594,7 +594,7 @@ describe('worklet attachOpfsClipStream', () => {
         worker: new FakeClipPageWorker() as unknown as Worker,
       });
       expect(stream.provider).toBeDefined();
-      stream.binding.close();
+      stream.binding.destroy();
     } finally {
       engine.destroy();
     }

@@ -891,7 +891,7 @@ export class SonareEngine {
       },
     });
     // Destroy during priming closes the binding before the engines go away.
-    const releaseOnDestroy = this.epoch.onClose(() => binding.close());
+    const releaseOnDestroy = this.epoch.onClose(() => binding.destroy());
     this.workletPageProviderClipIds.set(binding.provider, { clipId, streamKey });
     this.opfsExportSources.set(binding.provider, {
       binding,
@@ -920,7 +920,7 @@ export class SonareEngine {
       );
       this.startWorkletClipPagePolling();
     } catch (error) {
-      binding.close();
+      binding.destroy();
       throw error;
     } finally {
       releaseOnDestroy();
