@@ -198,7 +198,7 @@ const FLOAT_FIELDS: FloatField[] = [
   {
     entry: 'analyzeSections',
     key: 'minSectionSec',
-    run: (v) => m().analyzeSections(threePartials, SR, 512, 256, v),
+    run: (v) => m().analyzeSections(threePartials, SR, 512, 256, v, undefined),
   },
   {
     entry: 'analyzeMelody',
