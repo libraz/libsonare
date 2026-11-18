@@ -1235,7 +1235,7 @@ class StreamingRetune:
         )
         return int(out.value)
 
-    def process_mono(self, samples: Sequence[float]) -> np.ndarray:
+    def process_mono(self, samples: Sequence[float] | list[float] | np.ndarray) -> np.ndarray:
         """Process one mono block, returning the shifted samples (same length)."""
         # The C entry point works in place and _as_float32_buffer is zero-copy
         # for a contiguous float32 ndarray, so copy before handing it over: the

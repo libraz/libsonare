@@ -94,3 +94,12 @@ assert_type(catalog[0].slots[0].activation, Literal["anyKey", "always"])
 assert_type(insert_timing, libsonare.MasteringInsertTiming)
 assert_type(insert_timing.latency_samples, int)
 assert_type(assist_sidecars, list[libsonare.AssistSidecar])
+
+voice_config = libsonare.RealtimeVoiceChangerConfig(wet_mix=0.5, formant_mode="absolute")
+assert_type(voice_config.wet_mix, float)
+libsonare.RealtimeVoiceChangerConfig(wet_mixx=0.5)  # type: ignore[call-arg]
+libsonare.RealtimeVoiceChangerConfig(formant_mode="neutral")  # type: ignore[arg-type]
+
+
+def _retune_block(retune: libsonare.StreamingRetune, block: np.ndarray[Any, Any]) -> None:
+    assert_type(retune.process_mono(block), np.ndarray[Any, Any])
