@@ -1120,7 +1120,7 @@ def test_synthesize_rir_json_reports_sample_rate(tmp_path) -> None:
         "synthesize-rir",
         "--sample-rate",
         "44100",
-        "--max-seconds",
+        "--max-sec",
         "0.05",
         "--output",
         str(output),

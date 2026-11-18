@@ -366,7 +366,7 @@ def test_declip_cli_repairs_a_stereo_pair_as_a_pair(tmp_path) -> None:
 _ROOM_MORPH_ARGS = [
     *("--length", "6", "--width", "4", "--height", "3"),
     *("--source-x", "1.5", "--source-y", "1.5", "--listener-x", "4", "--listener-y", "2"),
-    *("--max-seconds", "0.3"),
+    *("--max-sec", "0.3"),
 ]
 
 

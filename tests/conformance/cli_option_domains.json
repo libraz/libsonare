@@ -985,6 +985,16 @@
       "exclusiveMaximum": false
     },
     {
+      "command": "synthesize-rir",
+      "option": "max-sec",
+      "rejectExit": "usage",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusiveMinimum": true,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
       "command": "room-morph",
       "option": "absorption",
       "rejectExit": "invalid_parameter",
@@ -1002,6 +1012,16 @@
       "minimum": 0.0,
       "exclusiveMinimum": false,
       "maximum": 4294967295.0,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "room-morph",
+      "option": "max-sec",
+      "rejectExit": "usage",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusiveMinimum": true,
+      "maximum": null,
       "exclusiveMaximum": false
     },
     {

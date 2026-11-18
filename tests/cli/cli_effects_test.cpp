@@ -236,7 +236,7 @@ TEST_CASE("CLI acoustic commands keep zero as the default seed and refuse a nega
           "[cli][acoustic]") {
   const std::string synth_options =
       " --length 7 --width 5 --height 3 --absorption 0.2 --ism-order 0"
-      " --max-seconds 0.3 --sample-rate 16000 --json -q";
+      " --max-sec 0.3 --sample-rate 16000 --json -q";
   auto run_synthesize = [&](const std::string& label, const std::string& seed_option) {
     const std::string output = unique_temp_path("_seed_synth_" + label + ".wav");
     const auto [code, command_output] =
@@ -289,7 +289,7 @@ TEST_CASE("CLI acoustic commands keep zero as the default seed and refuse a nega
   save_wav(input, impulse, 16000);
   const std::string morph_options =
       " --length 7 --width 5 --height 3 --absorption 0.2 --ism-order 0"
-      " --max-seconds 0.3 --wet 1 --suppression 0 --json -q";
+      " --max-sec 0.3 --wet 1 --suppression 0 --json -q";
   auto run_morph = [&](const std::string& label, const std::string& seed_option) {
     const std::string output = unique_temp_path("_seed_morph_" + label + ".wav");
     const auto [code, command_output] =
@@ -320,13 +320,13 @@ TEST_CASE("CLI acoustic commands keep zero as the default seed and refuse a nega
 
 TEST_CASE("CLI synthesize-rir reports its warning diagnostics and keeps the tail's headroom",
           "[cli][acoustic]") {
-  // A max_seconds below the direct sound's own arrival raises three warnings at
+  // A --max-sec below the direct sound's own arrival raises three warnings at
   // once, none of which sets has_error: the length was clamped, the cap was
   // raised to fit the direct sound, and the request came back as early
   // reflections with no diffuse tail. Discarding them made a truncated RIR
   // indistinguishable from a complete one under a green exit.
   const std::string truncated = unique_temp_path("_rir_truncated.wav");
-  auto [code, output] = exec_command(CLI + " synthesize-rir --max-seconds 0.005 -o " + truncated +
+  auto [code, output] = exec_command(CLI + " synthesize-rir --max-sec 0.005 -o " + truncated +
                                      " --sample-rate 22050 --json");
   REQUIRE(code == 0);
   for (const char* diagnostic :
@@ -351,8 +351,8 @@ TEST_CASE("CLI synthesize-rir reports its warning diagnostics and keeps the tail
   // A request the synthesizer can satisfy in full stays silent, so a warning
   // line is evidence about that run rather than boilerplate.
   const std::string complete = unique_temp_path("_rir_complete.wav");
-  auto [full_code, full_output] = exec_command(CLI + " synthesize-rir --max-seconds 2 -o " +
-                                               complete + " --sample-rate 22050 --json");
+  auto [full_code, full_output] = exec_command(CLI + " synthesize-rir --max-sec 2 -o " + complete +
+                                               " --sample-rate 22050 --json");
   REQUIRE(full_code == 0);
   REQUIRE_THAT(full_output, !ContainsSubstring("warning:"));
   REQUIRE(wav_header_bits_per_sample(complete) == 24);
@@ -371,7 +371,7 @@ TEST_CASE("CLI room-morph reports the same warning diagnostics its sibling does"
 
   const std::string clamped = unique_temp_path("_morph_warn_clamped.wav");
   auto [code, output] = exec_command(CLI + " room-morph " + input + " -o " + clamped +
-                                     " --ism-order 99 --max-seconds 2 --json");
+                                     " --ism-order 99 --max-sec 2 --json");
   REQUIRE(code == 0);
   REQUIRE_THAT(output, ContainsSubstring("acoustic.ism_order_clamped"));
 
@@ -385,7 +385,7 @@ TEST_CASE("CLI room-morph reports the same warning diagnostics its sibling does"
   // about that run rather than boilerplate.
   const std::string quiet = unique_temp_path("_morph_warn_quiet.wav");
   auto [quiet_code, quiet_output] = exec_command(CLI + " room-morph " + input + " -o " + quiet +
-                                                 " --ism-order 2 --max-seconds 2 --json");
+                                                 " --ism-order 2 --max-sec 2 --json");
   REQUIRE(quiet_code == 0);
   REQUIRE_THAT(quiet_output, !ContainsSubstring("warning:"));
   std::remove(quiet.c_str());
@@ -406,7 +406,7 @@ TEST_CASE("CLI room-morph keeps a two-channel input stereo", "[cli][acoustic]") 
   const std::string output = unique_temp_path("_morph_stereo_output.wav");
   const std::string room =
       " --length 6 --width 4 --height 3 --source-x 1.5 --source-y 1.5"
-      " --listener-x 4 --listener-y 2 --max-seconds 0.3 ";
+      " --listener-x 4 --listener-y 2 --max-sec 0.3 ";
 
   auto [code, command_output] = exec_command(CLI + " room-morph " + input + " -o " + output + room +
                                              "--receiver-spacing 0.4 --json");

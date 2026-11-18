@@ -602,7 +602,7 @@ int cmd_synthesize_rir(const CliArgs& args, const Audio&) {
   // uint32, which put every seed above 2^31-1 out of reach here while the other
   // surfaces took it. Zero keeps the library default, as it does everywhere.
   if (const unsigned seed = args.get_uint32("seed", cfg.seed); seed > 0) cfg.seed = seed;
-  cfg.max_seconds = args.get_float("max-seconds", cfg.max_seconds);
+  cfg.max_seconds = args.get_float("max-sec", cfg.max_seconds);
   // --sabine selects the Sabine late-reverb model (default Eyring), matching the
   // core/C-ABI/Python-CLI selection so every surface exposes the same choice.
   cfg.late_model = args.has("sabine") ? sonare::acoustic::ReverbModel::Sabine
@@ -621,7 +621,7 @@ int cmd_synthesize_rir(const CliArgs& args, const Audio&) {
     return 1;
   }
   // Warnings survive a successful synthesis and describe a RIR the caller did
-  // not ask for -- a tail cut against max_seconds, a cap raised to fit the
+  // not ask for -- a tail cut against --max-sec, a cap raised to fit the
   // direct sound, a request reduced to early reflections alone. Dropping them
   // made a truncated RIR indistinguishable from a complete one. They go to
   // stderr in every mode so the --json document on stdout stays exactly the
@@ -715,7 +715,7 @@ int cmd_room_morph(const CliArgs& args, const Audio& audio) {
   // uint32, which put every seed above 2^31-1 out of reach here while the other
   // surfaces took it. Zero keeps the library default, as it does everywhere.
   if (const unsigned seed = args.get_uint32("seed", cfg.seed); seed > 0) cfg.seed = seed;
-  cfg.max_seconds = args.get_float("max-seconds", cfg.max_seconds);
+  cfg.max_seconds = args.get_float("max-sec", cfg.max_seconds);
   // --sabine selects the Sabine late-reverb model (default Eyring), matching the
   // core/C-ABI/Python-CLI selection so every surface exposes the same choice.
   cfg.late_model = args.has("sabine") ? sonare::acoustic::ReverbModel::Sabine

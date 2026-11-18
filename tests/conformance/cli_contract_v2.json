@@ -3681,13 +3681,20 @@
           "domain": null
         },
         {
-          "name": "max-seconds",
+          "name": "max-sec",
           "type": "number",
-          "default": 0,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "usage"
+          }
         },
         {
           "name": "output",
@@ -4086,13 +4093,20 @@
           "domain": null
         },
         {
-          "name": "max-seconds",
+          "name": "max-sec",
           "type": "number",
-          "default": 0,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "usage"
+          }
         },
         {
           "name": "output",
@@ -7516,13 +7530,20 @@
           "domain": null
         },
         {
-          "name": "max-seconds",
+          "name": "max-sec",
           "type": "number",
-          "default": 0,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "usage"
+          }
         },
         {
           "name": "output",
@@ -7631,7 +7652,7 @@
             "0.2",
             "--ism-order",
             "0",
-            "--max-seconds",
+            "--max-sec",
             "0.03",
             "--sample-rate",
             "22050",
@@ -7644,6 +7665,26 @@
           "payload": "success",
           "artifact": "output_wav",
           "stdout": "json"
+        },
+        {
+          "id": "max_sec_zero_refused",
+          "argv": [
+            "synthesize-rir",
+            "--max-sec",
+            "0",
+            "-o",
+            "{rir_output}",
+            "--json"
+          ],
+          "exit": 2,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty",
+          "stderr_contains": [
+            "max-sec"
+          ]
         }
       ],
       "artifacts": {
@@ -11668,13 +11709,20 @@
           "domain": null
         },
         {
-          "name": "max-seconds",
+          "name": "max-sec",
           "type": "number",
-          "default": 0,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "usage"
+          }
         },
         {
           "name": "output",

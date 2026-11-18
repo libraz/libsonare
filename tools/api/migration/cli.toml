@@ -178,3 +178,21 @@ changed = "the JSON no longer carries is_blind: a blind estimate omits edt, c50,
 domain = "analysis"
 rule = "absent-not-sentinel"
 test = "bindings/python/tests/test_cli_absent_keys.py::test_acoustic_omits_what_only_an_impulse_response_measures"
+
+[[entry]]
+kind = "flag"
+old = "synthesize-rir --max-seconds"
+to = "synthesize-rir --max-sec"
+changed = "omit the flag for the natural length; an explicit 0 is refused as a usage error"
+domain = "effects"
+rule = "seconds-suffix"
+test = "tests/conformance/cli_contract_v2.json::max_sec_zero_refused"
+
+[[entry]]
+kind = "flag"
+old = "room-morph --max-seconds"
+to = "room-morph --max-sec"
+changed = "omit the flag for the natural length; an explicit 0 is refused as a usage error"
+domain = "effects"
+rule = "seconds-suffix"
+test = "tests/conformance/cli_contract_v2.json::max_sec_zero_refused"

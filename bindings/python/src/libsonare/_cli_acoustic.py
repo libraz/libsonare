@@ -26,7 +26,13 @@ from ._cli_common import (
     _load_audio_from_facade as _load_audio,
 )
 from ._cli_inventory import _cli_domain
-from ._cli_options import SharedParsers, _c_int, _ContractArgumentParser, _finite_float
+from ._cli_options import (
+    SharedParsers,
+    _c_int,
+    _ContractArgumentParser,
+    _finite_float,
+    _positive_finite_float,
+)
 from ._errors import SonareError
 
 # Upper bound of the receiver spacing, in metres; the library's own limit.
@@ -175,7 +181,7 @@ def cmd_synthesize_rir(args: argparse.Namespace) -> int:
             sample_rate=args.sample_rate,
             ism_order=args.ism_order,
             seed=args.seed,
-            max_sec=args.max_seconds or None,
+            max_sec=args.max_sec,
             prefer_eyring=not args.sabine,
         )
     except SonareError as exc:
@@ -231,7 +237,7 @@ def cmd_room_morph(args: argparse.Namespace) -> int:
         "wet": args.wet,
         "ism_order": args.ism_order,
         "seed": args.seed,
-        "max_sec": args.max_seconds or None,
+        "max_sec": args.max_sec,
         "prefer_eyring": not args.sabine,
     }
     geometry = (args.length, args.width, args.height)
@@ -311,10 +317,10 @@ def register_acoustic_parsers(
             reject_exit="invalid_parameter",
         )
         p.add_argument(
-            "--max-seconds",
-            type=_finite_float,
-            default=0.0,
-            help="Hard cap on RIR/tail length in seconds (0 = natural length)",
+            "--max-sec",
+            type=_positive_finite_float,
+            default=None,
+            help="Hard cap on RIR/tail length in seconds (default: natural length)",
         )
         p.add_argument(
             "--sabine",

@@ -710,7 +710,7 @@ def test_synthesize_rir_invalid_geometry_maps_invalid_parameter(monkeypatch) -> 
         sample_rate=48000,
         ism_order=3,
         seed=1,
-        max_seconds=0.0,
+        max_sec=None,
         sabine=False,
         json=False,
     )
@@ -947,7 +947,7 @@ def test_voice_preset_validate_rejects_an_invalid_preset_file() -> None:
 
 
 def test_synthesize_rir_reports_every_warning_and_keeps_the_tail_headroom() -> None:
-    """A max_seconds below the direct-sound arrival raises three warnings at once.
+    """A --max-sec below the direct-sound arrival raises three warnings at once.
 
     They are warnings on a successful call, so discarding them made a truncated RIR
     indistinguishable from a complete one under a green exit. All three have to
@@ -960,7 +960,7 @@ def test_synthesize_rir_reports_every_warning_and_keeps_the_tail_headroom() -> N
                 "synthesize-rir",
                 "--output",
                 out_path,
-                "--max-seconds",
+                "--max-sec",
                 "0.005",
                 "--sample-rate",
                 "22050",
@@ -994,7 +994,7 @@ def test_synthesize_rir_reports_every_warning_and_keeps_the_tail_headroom() -> N
                 "synthesize-rir",
                 "--output",
                 complete_path,
-                "--max-seconds",
+                "--max-sec",
                 "2",
                 "--sample-rate",
                 "22050",
