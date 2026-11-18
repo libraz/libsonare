@@ -26,7 +26,7 @@ import {
   setSonareModule,
 } from './module_state.js';
 import type { Capabilities, CapabilityCatalog, SonareModuleHandle } from './public_types.js';
-import type { SonareModule, WasmFrameResult } from './sonare.js';
+import type { SonareModule } from './sonare.js';
 
 export { alignTakeToReference } from './align_take.js';
 export type {
@@ -1263,9 +1263,6 @@ export type {
 import { parseRecordJson } from './internal/record_json.js';
 
 export { OfflineWorkerClient } from './worker_client.js';
-
-/** Framed signal from {@link frameSignal}. */
-export type FrameResult = WasmFrameResult;
 
 // ============================================================================
 // Module State

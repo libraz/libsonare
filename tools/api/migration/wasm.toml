@@ -981,6 +981,13 @@ entry = "./analysis"
 test = "bindings/wasm/tests/surface/analysis-features.test.ts::is a row-major Matrix2D"
 
 [[entry]]
+kind = "type"
+old = "FrameResult"
+removed = "frameSignal returns a Matrix2D (samples on rows, frames on columns); read its rows, cols and data"
+domain = "core"
+rule = "no-internal-types"
+
+[[entry]]
 kind = "function"
 old = "framesToSamples"
 changed = "request-object overload removed; call positionally"
