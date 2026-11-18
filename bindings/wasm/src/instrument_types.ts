@@ -176,14 +176,19 @@ export const SYNTH_ENGINE_MODES = [
   'singing',
 ] as const;
 
+/** Loop modes {@link SynthPatch.sampleLoop} can force; `'default'` keeps the mode the bank recorded. */
 export const SAMPLE_LOOP_MODES = ['default', 'none', 'continuous', 'keyDown'] as const;
 
+/** Key-tracking choices for {@link SynthPatch.sampleKeyTrack}; `'default'` keeps the base patch's. */
 export const SAMPLE_KEY_TRACKS = ['default', 'on', 'off'] as const;
 
+/** Voice start-state seeding modes for {@link SynthPatch.retrigger}; `'default'` keeps the base patch's. */
 export const SYNTH_RETRIGGERS = ['default', 'free', 'note'] as const;
 
+/** LFO waveforms for {@link SynthPatch.lfoShape}; `'default'` keeps the base patch's. */
 export const SYNTH_LFO_SHAPES = ['default', 'triangle', 'sine', 'random'] as const;
 
+/** Oscillator waveforms for {@link SynthPatch.waveform} (subtractive engine only); `'default'` keeps the base patch's. */
 export const SYNTH_OSC_WAVEFORMS = [
   'default',
   'sine',
@@ -193,6 +198,7 @@ export const SYNTH_OSC_WAVEFORMS = [
   'noise',
 ] as const;
 
+/** Filter character cores for {@link SynthPatch.filterModel}; `'default'` keeps the base patch's. */
 export const SYNTH_FILTER_MODELS = [
   'default',
   'svf',
@@ -204,6 +210,7 @@ export const SYNTH_FILTER_MODELS = [
 
 export const SYNTH_FILTER_OUTPUTS = ['default', 'lowpass', 'bandpass', 'highpass'] as const;
 
+/** Body/formant resonance voicings for {@link SynthPatch.body}; `'default'` keeps the base patch's. */
 export const SYNTH_BODY_TYPES = [
   'default',
   'none',
@@ -214,6 +221,7 @@ export const SYNTH_BODY_TYPES = [
   'vocal',
 ] as const;
 
+/** Sources a {@link SynthModRouting} can read; `'none'` is refused. */
 export const SYNTH_MOD_SOURCES = [
   'none',
   'ampEnv',
@@ -230,6 +238,7 @@ export const SYNTH_MOD_SOURCES = [
   'pitchBend',
 ] as const;
 
+/** Destinations a {@link SynthModRouting} can drive; `'none'` is refused. */
 export const SYNTH_MOD_DESTINATIONS = [
   'none',
   'pitchCents',
@@ -299,25 +308,45 @@ export const MPE_DIMENSIONS = ['bend', 'pressure', 'timbre'] as const;
  */
 export const NOTE_TRACKINGS = ['last', 'lowest', 'highest', 'all'] as const;
 
+/** Canonical NativeSynth enum vocabularies read from the native module, as arrays of names. */
 export interface SynthEnumTables {
+  /** Names of {@link SYNTH_ENGINE_MODES}. */
   engineModes: string[];
+  /** Names of {@link SYNTH_OSC_WAVEFORMS}. */
   waveforms: string[];
+  /** Names of {@link BUILTIN_SYNTH_WAVEFORMS}. */
   builtinWaveforms: string[];
+  /** Names of {@link SYNTH_FILTER_MODELS}. */
   filterModels: string[];
+  /** Names of {@link SYNTH_FILTER_OUTPUTS}. */
   filterOutputs: string[];
+  /** Names of {@link SYNTH_BODY_TYPES}. */
   bodyTypes: string[];
+  /** Names of {@link SYNTH_MOD_SOURCES}. */
   modSources: string[];
+  /** Names of {@link SYNTH_MOD_DESTINATIONS}. */
   modDestinations: string[];
+  /** Names of {@link CONTROLLER_INPUTS}. */
   controllerInputs: string[];
+  /** Names of {@link CONTROLLER_AXES}. */
   controllerAxes: string[];
+  /** Names of {@link ARTICULATIONS}. */
   articulations: string[];
+  /** Names of {@link MPE_DIMENSIONS}. */
   mpeDimensions: string[];
+  /** Names of {@link NOTE_TRACKINGS}. */
   noteTrackings: string[];
+  /** Names of {@link SAMPLE_LOOP_MODES}. */
   sampleLoopModes: string[];
+  /** Names of {@link SAMPLE_KEY_TRACKS}. */
   sampleKeyTracks: string[];
+  /** Names of {@link SYNTH_RETRIGGERS}. */
   retriggers: string[];
+  /** Names of {@link SYNTH_LFO_SHAPES}. */
   lfoShapes: string[];
+  /** Names of {@link PART_RIG_MODES}. */
   partRigModes: string[];
+  /** Names of the loop modes {@link SampleDesc.loopMode} takes, which has no `'default'`. */
   sampleDescLoopModes: string[];
 }
 
@@ -336,6 +365,10 @@ export interface SynthParamCondition {
    * `'patch'`: a {@link SynthPatch} field.
    */
   scope: 'engine' | 'patch';
+  /**
+   * Comparison applied as `<field> <relation> value`: equal, not equal, greater,
+   * greater-or-equal, less, less-or-equal.
+   */
   relation: 'eq' | 'ne' | 'gt' | 'ge' | 'lt' | 'le';
   /**
    * A number, a boolean against a switch, or a vocabulary name against a
@@ -366,6 +399,7 @@ export interface SynthParamInfo {
    * default (patch fields); a boolean for a switch.
    */
   default: number | boolean;
+  /** Unit of the value; `'none'` for a dimensionless quantity such as a fraction or selector index. */
   unit: MasteringInsertParamUnit;
   /**
    * Present only for a field that reaches the voice under conditions on other
@@ -515,6 +549,7 @@ export type PartRigMode = (typeof PART_RIG_MODES)[number];
 
 /** One stage of a `'chain'` part rig: a processor name and its parameters. */
 export interface PartRigInsert {
+  /** Processor name, e.g. `'saturation.overdrive'`. */
   processor: string;
   /** Processor parameters. */
   params?: Record<string, unknown>;
@@ -522,12 +557,15 @@ export interface PartRigInsert {
 
 /** Selects one part rig entry of a destination; `part` is 0-15 or `PART_RIG_ALL_PARTS`. */
 export interface PartRigKey {
+  /** MIDI destination id whose rig is addressed. */
   destinationId: number;
+  /** Part index 0-15, or {@link PART_RIG_ALL_PARTS} for the destination's default rig. */
   part: number;
 }
 
 /** Request for {@link Project.setPartRig} and {@link RealtimeEngine.setPartRig}. */
 export interface PartRigRequest extends PartRigKey {
+  /** How the part's rig is chosen; `'chain'` requires `inserts`. */
   mode: PartRigMode;
   /** 1-8 inserts; required for `'chain'` and refused for the other modes. */
   inserts?: PartRigInsert[];
@@ -535,6 +573,7 @@ export interface PartRigRequest extends PartRigKey {
 
 /** A part rig as stored on a project ({@link Project.partRig}). */
 export interface PartRigEntry {
+  /** Rig mode this entry holds. */
   mode: PartRigMode;
   /** Present for `'chain'` only; `params` is the parsed parameter object. */
   inserts?: { processor: string; params: Record<string, unknown> }[];
@@ -679,6 +718,7 @@ export interface SynthPatch {
   useGmPrograms?: boolean;
   /** Base preset name (see {@link synthPresetNames}); omit for the init patch. */
   preset?: string;
+  /** Engine selector (see {@link SYNTH_ENGINE_MODES}). Omitted: keeps the base patch's engine. */
   engineMode?: SynthEngineMode;
   /**
    * Fields of the selected engine's own model section, by key (for example
@@ -696,6 +736,7 @@ export interface SynthPatch {
   waveform?: SynthOscWaveform;
   /** Detuned-stack width [1, 7]. */
   unison?: number;
+  /** Unison detune spread (cents), [0, 200]. Subtractive engine only. Omitted: keeps the base value. */
   detuneCents?: number;
   /** Per-voice slow pitch drift depth (cents). */
   driftCents?: number;
@@ -703,8 +744,11 @@ export interface SynthPatch {
   driftRateHz?: number;
   /** Pre-filter drive [0, 1]. */
   drive?: number;
+  /** Filter character core. Omitted: keeps the base patch's. */
   filterModel?: SynthFilterModel;
+  /** Filter output (SVF only). Omitted: keeps the base patch's. */
   filterOutput?: SynthFilterOutput;
+  /** Filter cutoff (Hz), [10, 22000]. Omitted: keeps the base value. */
   cutoffHz?: number;
   /**
    * Series 12 dB/oct highpass after the main filter, in Hz; 0 disables the
@@ -729,6 +773,7 @@ export interface SynthPatch {
    * resolution is rarely a whole number of bits.
    */
   bitDepth?: number;
+  /** Filter resonance (Q), [0.5, 30]. Omitted: keeps the base value. */
   resonanceQ?: number;
   /** Cutoff keyboard tracking [0, 1]. */
   keyTrack?: number;
@@ -775,6 +820,7 @@ export interface SynthPatch {
   ampHoldMs?: number;
   /** Decay in ms: three time constants, about -26 dB of the remaining distance at the set time. */
   ampDecayMs?: number;
+  /** Amplitude envelope sustain level, [0, 1]. Omitted: keeps the base value. */
   ampSustain?: number;
   /** Release in ms: three time constants, about -26 dB of the remaining distance at the set time. */
   ampReleaseMs?: number;
@@ -786,6 +832,7 @@ export interface SynthPatch {
   filterHoldMs?: number;
   /** Decay in ms: three time constants, about -26 dB of the remaining distance at the set time. */
   filterDecayMs?: number;
+  /** Filter envelope sustain level, [0, 1]. Omitted: keeps the base value. */
   filterSustain?: number;
   /** Release in ms: three time constants, about -26 dB of the remaining distance at the set time. */
   filterReleaseMs?: number;
@@ -794,12 +841,17 @@ export interface SynthPatch {
    * own end, as a drum hit does.
    */
   oneShot?: boolean;
+  /** Vibrato LFO rate (Hz), [0, 40]. Omitted: keeps the base value. */
   lfoRateHz?: number;
   /** The patch's LFO waveform (vibrato and tremolo LFOs) at every destination; see {@link SynthLfoShape}. */
   lfoShape?: SynthLfoShape;
+  /** Hardwired vibrato depth (cents), [0, 1200]. Omitted: keeps the base value. */
   lfoToPitchCents?: number;
+  /** Mod-matrix LFO2 rate (Hz), [0, 40]. Omitted: keeps the base value. */
   lfo2RateHz?: number;
+  /** Portamento time (ms), [0, 5000]. Omitted: keeps the base value. */
   glideMs?: number;
+  /** Body/formant resonance voicing. Omitted: keeps the base patch's. */
   body?: SynthBodyType;
   /** Body resonance mix [0, 1]. */
   bodyMix?: number;
@@ -838,8 +890,13 @@ export interface SynthPatch {
   sampleSet?: number;
   /** Linear gain on the sample. */
   sampleLevel?: number;
+  /**
+   * Overrides the loop mode the bank recorded for the sample ({@link SampleDesc.loopMode}).
+   * Same three states, a different numbering: pass the names, not the numbers.
+   */
   sampleLoop?: SampleLoopMode;
   /** Attack skip, as a fraction of the mapped region. */
   sampleStartOffset?: number;
+  /** Whether the sample follows the played key, or sounds at its recorded pitch. */
   sampleKeyTrack?: SampleKeyTrack;
 }
