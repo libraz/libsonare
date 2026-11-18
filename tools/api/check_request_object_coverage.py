@@ -134,6 +134,9 @@ METADATA_HELPERS = {
     "realtimeVoiceChangerValidatePresetJson",
     "voiceCharacterPresetId",
     "realtimeVoiceChangerPresetConfig",
+    # Document reader beside the preset validator above: one chain document in,
+    # its config out, no audio and no settings to name.
+    "masteringChainConfigFromJson",
 }
 # Channel-plane primitives beside `Audio.fromMemory(data)`: the decode takes the
 # encoded bytes alone and the fold takes planes plus a layout code, both
