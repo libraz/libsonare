@@ -160,7 +160,7 @@ const char* SeverityName(sonare::Diagnostic::Severity severity) {
     case sonare::Diagnostic::Severity::Warning:
       return "warning";
     case sonare::Diagnostic::Severity::Info:
-      break;
+      return "info";
   }
   return "info";
 }
