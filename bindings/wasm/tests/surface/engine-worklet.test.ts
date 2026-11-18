@@ -366,7 +366,7 @@ describe('SonareEngine shares the RealtimeEngine vocabulary', () => {
     const { engine } = await newEngine();
     try {
       const result = await engine.bounceOffline({ totalFrames: 256, numChannels: 2 });
-      expect(result.numChannels).toBe(2);
+      expect(result).not.toHaveProperty('numChannels');
       expect(result.sampleRate).toBe(48000);
       expect(result.channels).toHaveLength(2);
       expect(result.channels[0]).toBeInstanceOf(Float32Array);

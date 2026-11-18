@@ -78,7 +78,7 @@ describe('bounceWithInstruments', () => {
     const silent = project.bounce(OPTIONS);
     const instrument = new ConstantInstrument(0.25);
     const audio = project.bounceWithInstruments([{ instrument }], OPTIONS);
-    expect(audio.numChannels).toBe(2);
+    expect(audio).not.toHaveProperty('numChannels');
     expect(audio.channels).toHaveLength(2);
     // The control: a silent bounce is all zero, so the DC is the instrument's.
     for (const channel of silent.channels) {

@@ -2824,7 +2824,6 @@ export class RealtimeEngine {
     return {
       channels: deinterleavePlanes(result.interleaved, result.numChannels),
       sampleRate: result.sampleRate,
-      numChannels: result.numChannels,
       integratedLufs: result.integratedLufs,
     };
   }

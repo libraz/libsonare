@@ -406,13 +406,13 @@ describe('compile and bounce', () => {
   it('bounces to planar channels', () => {
     withProject((project) => {
       const result = project.bounce({ totalFrames: 256, numChannels: 2 });
-      expect(result.numChannels).toBe(2);
       expect(result.sampleRate).toBe(SR);
       expect(result.channels).toHaveLength(2);
       expect(result.channels[0]).toBeInstanceOf(Float32Array);
       expect(result.channels[0].length).toBe(256);
       expect(result).not.toHaveProperty('samples');
-      expect(project.bounce({ totalFrames: 64 }).numChannels).toBeGreaterThan(0);
+      expect(result).not.toHaveProperty('numChannels');
+      expect(project.bounce({ totalFrames: 64 }).channels.length).toBeGreaterThan(0);
     });
   });
 
@@ -442,13 +442,13 @@ describe('compile and bounce', () => {
     const engine = new RealtimeEngine({ sampleRate: SR, maxBlockSize: 128 });
     try {
       const result = engine.bounceOffline({ totalFrames: 256, blockSize: 128, numChannels: 2 });
-      expect(result.numChannels).toBe(2);
       expect(result.sampleRate).toBe(SR);
       expect(result.channels).toHaveLength(2);
       expect(result.channels[0]).toBeInstanceOf(Float32Array);
       expect(result.channels[0].length).toBe(256);
       expect(typeof result.integratedLufs).toBe('number');
       expect(result).not.toHaveProperty('interleaved');
+      expect(result).not.toHaveProperty('numChannels');
     } finally {
       engine.destroy();
     }

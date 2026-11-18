@@ -1914,7 +1914,6 @@ export class RealtimeEngine {
     );
     return {
       channels: deinterleave(interleaved, numChannels),
-      numChannels,
       sampleRate,
       integratedLufs,
     };

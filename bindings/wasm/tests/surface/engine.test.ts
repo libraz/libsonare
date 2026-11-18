@@ -994,7 +994,7 @@ describe('offline bounce', () => {
   it('bounces the timeline to planar channels', () => {
     withEngine((engine) => {
       const result = engine.bounceOffline({ totalFrames: 256, blockSize: BLOCK, numChannels: 2 });
-      expect(result.numChannels).toBe(2);
+      expect(result).not.toHaveProperty('numChannels');
       expect(result.sampleRate).toBe(48000);
       expect(result.channels).toHaveLength(2);
       expect(result.channels[0]).toBeInstanceOf(Float32Array);

@@ -998,7 +998,7 @@ export function projectBounceResult(
   sampleRate: number,
 ): ProjectBounceResult {
   const { interleaved, numChannels } = raw;
-  return { channels: deinterleavePlanes(interleaved, numChannels), sampleRate, numChannels };
+  return { channels: deinterleavePlanes(interleaved, numChannels), sampleRate };
 }
 
 /** A native source with its kind as a token. */

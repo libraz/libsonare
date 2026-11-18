@@ -27796,10 +27796,10 @@ rule = "aliases-removed"
 [[entry]]
 kind = "field"
 old = "ProjectBounceOptions.numChannels"
-changed = "an omitted width follows the scene master's layout (2 with no master) instead of always 2; ProjectBounceResult.numChannels reports the width used"
+changed = "an omitted width follows the scene master's layout (2 with no master) instead of always 2; the result's channels.length is the width used"
 domain = "project"
 rule = "absent-not-sentinel"
-test = "bindings/wasm/tests/project.test.ts::bounces at the width of the scene master when numChannels is omitted, and reports it"
+test = "bindings/wasm/tests/project.test.ts::bounces at the width of the scene master when numChannels is omitted"
 
 [[entry]]
 kind = "field"
@@ -28307,3 +28307,10 @@ removed = "read f0.length (every per-frame array has the same length)"
 domain = "analysis"
 rule = "matrix-2d"
 entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "EngineBounceResult.numChannels"
+removed = "read channels.length"
+domain = "engine"
+rule = "num-channels"

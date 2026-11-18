@@ -339,7 +339,7 @@ describe('compile and bounce', () => {
   it('bounces to planar channels', () => {
     withProject((project) => {
       const result = project.bounce({ totalFrames: 256, numChannels: 2 });
-      expect(result.numChannels).toBe(2);
+      expect(result).not.toHaveProperty('numChannels');
       expect(result.sampleRate).toBe(SR);
       expect(result.channels).toHaveLength(2);
       expect(result.channels[0]).toBeInstanceOf(Float32Array);

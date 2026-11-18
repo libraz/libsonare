@@ -133,7 +133,6 @@ describe('SonareEngine offline export', () => {
       // Non-vacuity: a silent pair would compare equal to anything silent.
       expect(rms(expected.channels[0])).toBeGreaterThan(0);
       expect(bounced.channels[0]).toHaveLength(frames);
-      expect(bounced.numChannels).toBe(2);
       expect(bounced.channels).toHaveLength(2);
       for (let c = 0; c < 2; c++) {
         expect(maxAbsDiff(bounced.channels[c], expected.channels[c])).toBeLessThan(1e-6);

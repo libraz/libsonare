@@ -611,8 +611,6 @@ export type EngineDither = 'rpdf' | 'tpdf' | 'noiseShaped';
 export interface EngineBounceResult {
   /** One plane per output channel, all the same length. */
   readonly channels: Float32Array[];
-  /** Number of output channels; the length of {@link channels}. */
-  readonly numChannels: number;
   /** Sample rate of the returned audio in Hz. */
   readonly sampleRate: number;
   /** Integrated loudness of the returned audio, in LUFS. */

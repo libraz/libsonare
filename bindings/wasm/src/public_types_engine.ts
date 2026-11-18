@@ -381,8 +381,6 @@ export interface EngineBounceResult {
   channels: Float32Array[];
   /** Sample rate of `channels` in Hz. */
   sampleRate: number;
-  /** Output channel count, equal to `channels.length`. */
-  numChannels: number;
   /** Integrated loudness of the bounce in LUFS. */
   integratedLufs: number;
 }

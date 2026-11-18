@@ -517,7 +517,7 @@ describe('Sonare WASM Module', () => {
       expect(bounced.channels).toHaveLength(2);
       expect(bounced.channels[0]).toHaveLength(128);
       expect(bounced.channels[1]).toHaveLength(128);
-      expect(bounced.numChannels).toBe(2);
+      expect(bounced).not.toHaveProperty('numChannels');
       expect(bounced.sampleRate).toBe(24000);
       expect(Number.isFinite(bounced.integratedLufs) || !Number.isNaN(bounced.integratedLufs)).toBe(
         true,

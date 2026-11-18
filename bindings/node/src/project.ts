@@ -259,7 +259,7 @@ interface NativeBounce {
 
 function planarBounce(raw: NativeBounce, sampleRate: number): ProjectBounceResult {
   const { interleaved, numChannels } = raw;
-  return { channels: deinterleave(interleaved, numChannels), sampleRate, numChannels };
+  return { channels: deinterleave(interleaved, numChannels), sampleRate };
 }
 
 function diagnosticsFromNative(raw: unknown): ProjectDiagnostic[] {

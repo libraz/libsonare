@@ -32,7 +32,7 @@ export interface ProjectBounceOptions {
    * Output channel count: 1, 2, 6 or 8, and at most the width of the scene
    * master's layout (mono/stereo/no master allow 2). `1` folds a 2-channel
    * master to 0.5(L+R). Omit it for the master's own width (2 with no master);
-   * the result reports the width used.
+   * the result's `channels.length` is the width used.
    */
   numChannels?: number;
   /** Host-instrument PDC (latency) fed to the compiler, in samples. */
@@ -45,8 +45,6 @@ export interface ProjectBounceResult {
   readonly channels: Float32Array[];
   /** The project sample rate in Hz; a bounce is never resampled. */
   readonly sampleRate: number;
-  /** Output channel count, equal to `channels.length`. */
-  readonly numChannels: number;
 }
 
 /** Stem layout of one {@link ExternalSeparatedStem}. */

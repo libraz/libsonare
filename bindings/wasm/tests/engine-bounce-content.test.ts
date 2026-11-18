@@ -82,7 +82,7 @@ describe('RealtimeEngine offline bounce content', () => {
         targetSampleRate,
       });
       expect(result.channels).toHaveLength(2);
-      expect(result.numChannels).toBe(2);
+      expect(result).not.toHaveProperty('numChannels');
       for (const channel of result.channels) {
         expect(channel.length).toBe(targetSampleRate);
       }
