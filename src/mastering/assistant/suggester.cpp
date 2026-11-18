@@ -41,9 +41,9 @@ AudioProfileConfig profile_config_for(const AssistantConfig& config) {
 ///   this corpus. Real hum sits on the mains frequency to well under a hertz,
 ///   so the frequency is what decides and the prominence only sizes it.
 bool hum_is_mains(const DefectProfile& defects) {
-  const float distance = std::min(std::abs(defects.hum_fundamental_hz - 50.0f),
-                                  std::abs(defects.hum_fundamental_hz - 60.0f));
-  return distance <= kMainsToleranceHz && defects.hum_fundamental_prominence > kHumProminence;
+  const float distance = std::min(std::abs(defects.hum.fundamental_hz - 50.0f),
+                                  std::abs(defects.hum.fundamental_hz - 60.0f));
+  return distance <= kMainsToleranceHz && defects.hum.fundamental_prominence > kHumProminence;
 }
 
 }  // namespace
@@ -67,24 +67,24 @@ void select_repair_stages(const AudioProfile& profile, const AssistantConfig& co
     return;
   }
 
-  if (defects.clip_flat_run_count > 0 && defects.declip_threshold_safe) {
+  if (defects.clip.flat_run_count > 0 && defects.declip_threshold_safe) {
     out.repair.declip.enabled = true;
     // The measured plateau, not the default ceiling. Material clipped before it
     // was attenuated has no sample left at the default, so enabling the stage
     // without moving the threshold reconstructs nothing while the explanation
     // says it repaired. Clamped because float audio may sit over unity.
-    out.repair.declip.config.clip_threshold = std::min(defects.clip_flat_level, 1.0f);
+    out.repair.declip.config.clip_threshold = std::min(defects.clip.flat_level, 1.0f);
     explain(explanation, "declip: runs of samples sit pinned at one level");
-  } else if (defects.clip_flat_run_count > 0) {
+  } else if (defects.clip.flat_run_count > 0) {
     explain(explanation,
             "declip withheld: audio louder than the pinned level reaches the threshold, "
             "so repairing at it would rewrite unclipped audio");
   }
-  if (defects.click_count > 0) {
+  if (defects.click.count > 0) {
     out.repair.declick.enabled = true;
     explain(explanation, "declick: impulsive runs stand out from their neighbours");
   }
-  if (defects.crackle_sample_count > 0) {
+  if (defects.crackle.sample_count > 0) {
     out.repair.decrackle.enabled = true;
     explain(explanation, "decrackle: samples depart from the local median");
   }
@@ -92,13 +92,13 @@ void select_repair_stages(const AudioProfile& profile, const AssistantConfig& co
     out.repair.dehum.enabled = true;
     // The tracked frequency, not the default: the detector searched both mains
     // frequencies and this is the one it found.
-    out.repair.dehum.config.fundamental_hz = defects.hum_fundamental_hz;
+    out.repair.dehum.config.fundamental_hz = defects.hum.fundamental_hz;
     explain(explanation, "dehum: a prominent harmonic series sits on a mains frequency");
   }
   // Referred to the programme rather than to full scale, so a quiet recording
   // with an inaudible floor is not treated like a loud one with the same floor.
-  const float floor_over_programme = defects.noise_floor_dbfs - profile.loudness.integrated_lufs;
-  if (std::isfinite(defects.noise_floor_dbfs) && std::isfinite(profile.loudness.integrated_lufs) &&
+  const float floor_over_programme = defects.noise.floor_dbfs - profile.loudness.integrated_lufs;
+  if (std::isfinite(defects.noise.floor_dbfs) && std::isfinite(profile.loudness.integrated_lufs) &&
       floor_over_programme > kNoiseFloorOverProgrammeDb) {
     out.repair.denoise.enabled = true;
     if (config.prefer_streaming_safe) {
@@ -239,12 +239,12 @@ std::string assistant_result_to_json(const AssistantResult& result) {
   util::json::put(profile, "bpm", result.profile.bpm);
   util::json::put(profile, "bpmConfidence", result.profile.bpm_confidence);
   util::json::put(profile, "integratedLufs", result.profile.loudness.integrated_lufs);
-  util::json::put(profile, "lraLu", result.profile.loudness.lra_lu);
-  util::json::put(profile, "truePeakDb", result.profile.loudness.true_peak_db);
+  util::json::put(profile, "loudnessRangeLu", result.profile.loudness.lra_lu);
+  util::json::put(profile, "truePeakDbtp", result.profile.loudness.true_peak_db);
   util::json::put(profile, "crestFactorDb", result.profile.loudness.crest_factor_db);
   util::json::put(profile, "spectralCentroidHz", result.profile.spectral.centroid_hz);
   util::json::put(profile, "spectralFlatness", result.profile.spectral.flatness);
-  util::json::put(profile, "attackDensity", result.profile.dynamics.attack_density);
+  util::json::put(profile, "attackPerSecond", result.profile.dynamics.attack_density);
   util::json::put(profile, "sustainRatio", result.profile.dynamics.sustain_ratio);
 
   json::Object root;
@@ -261,17 +261,17 @@ const std::vector<std::string>& assistant_result_schema_paths() {
       "chainConfig.version",
       "explanation",
       "profile",
-      "profile.attackDensity",
+      "profile.attackPerSecond",
       "profile.bpm",
       "profile.bpmConfidence",
       "profile.crestFactorDb",
       "profile.durationSec",
       "profile.integratedLufs",
-      "profile.lraLu",
+      "profile.loudnessRangeLu",
       "profile.spectralCentroidHz",
       "profile.spectralFlatness",
       "profile.sustainRatio",
-      "profile.truePeakDb",
+      "profile.truePeakDbtp",
   };
   return paths;
 }

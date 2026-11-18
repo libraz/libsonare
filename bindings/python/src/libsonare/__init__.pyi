@@ -1083,13 +1083,31 @@ from .types import (
     MasteringAudioProfile as MasteringAudioProfile,
 )
 from .types import (
+    MasteringAudioProfileClick as MasteringAudioProfileClick,
+)
+from .types import (
+    MasteringAudioProfileClip as MasteringAudioProfileClip,
+)
+from .types import (
+    MasteringAudioProfileCrackle as MasteringAudioProfileCrackle,
+)
+from .types import (
     MasteringAudioProfileDefects as MasteringAudioProfileDefects,
 )
 from .types import (
     MasteringAudioProfileDynamics as MasteringAudioProfileDynamics,
 )
 from .types import (
+    MasteringAudioProfileHum as MasteringAudioProfileHum,
+)
+from .types import (
     MasteringAudioProfileLoudness as MasteringAudioProfileLoudness,
+)
+from .types import (
+    MasteringAudioProfileNoise as MasteringAudioProfileNoise,
+)
+from .types import (
+    MasteringAudioProfileReverb as MasteringAudioProfileReverb,
 )
 from .types import (
     MasteringAudioProfileSpectral as MasteringAudioProfileSpectral,

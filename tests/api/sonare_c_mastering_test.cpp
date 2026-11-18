@@ -687,35 +687,31 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
   }
 
   SECTION("defect detection is reachable through the C API and stays off by default") {
-    // The defects block is emitted either way, so the reachability question is
-    // whether a param can make `measured` true -- not whether the key is there.
+    // The defects block is left out unless a param asks for detection, which is
+    // what separates "nothing looked" from "nothing there".
     auto samples = generate_sine(330.0f, 48000, 2.0f);
     for (auto& sample : samples) sample *= 0.2f;
     for (size_t index = 4096; index + 1 < samples.size(); index += 4096) {
       samples[index] = 0.9f;
     }
 
-    auto profile_defects = [&samples](const SonareMasteringParam* params, size_t count) {
+    auto profile_of = [&samples](const SonareMasteringParam* params, size_t count) {
       char* json = nullptr;
       REQUIRE(sonare_mastering_audio_profile(samples.data(), samples.size(), 48000, params, count,
                                              &json) == SONARE_OK);
-      const auto root = sonare::util::json::parse(json);
+      auto root = sonare::util::json::parse(json);
       sonare_free_string(json);
-      const auto* defects = root.find("defects");
-      REQUIRE(defects != nullptr);
-      return *defects;
+      return root;
     };
 
-    const auto unasked = profile_defects(nullptr, 0);
-    REQUIRE(unasked.find("measured")->as_bool() == false);
-    REQUIRE(unasked.find("clickCount")->as_number() == 0.0);
+    const auto unasked = profile_of(nullptr, 0);
+    REQUIRE(unasked.find("defects") == nullptr);
 
     const SonareMasteringParam params[] = {{"detectDefects", 1.0}};
-    const auto asked = profile_defects(params, 1);
-    REQUIRE(asked.find("measured")->as_bool() == true);
-    // The same signal reads zero until the param asks, which is what separates
-    // "nothing looked" from "nothing there".
-    REQUIRE(asked.find("clickCount")->as_number() > 0.0);
+    const auto asked = profile_of(params, 1);
+    const auto* defects = asked.find("defects");
+    REQUIRE(defects != nullptr);
+    REQUIRE(defects->find("click")->find("count")->as_number() > 0.0);
   }
 
   SECTION("stereo analysis entry points measure the pair, not a downmix") {
@@ -1026,7 +1022,7 @@ TEST_CASE("sonare_capability_catalog_json exposes masteringPresets", "[c_api][ma
     REQUIRE((kind == "mastering" || kind == "restoration"));
     const bool is_restoration = kind == "restoration";
     if (is_restoration) ++restoration_count;
-    for (const char* key : {"targetLufs", "truePeakCeilingDb", "maxLimiterGainReductionDb"}) {
+    for (const char* key : {"targetLufs", "truePeakCeilingDbtp", "maxLimiterGainReductionDb"}) {
       const auto* value = entry.find(key);
       REQUIRE(value != nullptr);
       REQUIRE(value->is_null() == is_restoration);

@@ -130,7 +130,7 @@ export interface WasmRealtimeVoiceChangerPodConfig {
 }
 
 export interface WasmBeatResult {
-  time: number;
+  timeSec: number;
   /**
    * Onset-envelope value sampled at the beat's frame — a single raw frame, not
    * a normalized or relative salience. Use
@@ -159,8 +159,9 @@ export interface WasmChordResult {
   root: number;
   bass: number;
   quality: number;
-  start: number;
-  end: number;
+  startSec: number;
+  endSec: number;
+  durationSec: number;
   confidence: number;
   name: string;
 }
@@ -171,8 +172,8 @@ export interface WasmAnalysisChordResult extends WasmChordResult {
 
 export interface WasmSectionResult {
   type: number;
-  start: number;
-  end: number;
+  startSec: number;
+  endSec: number;
   /** Median frame RMS in the section over the loudest section's, in `[0, 1]`. */
   energyLevel: number;
   confidence: number;
@@ -192,7 +193,7 @@ export interface WasmDynamicsResult {
   dynamicRangeDb: number;
   peakDb: number;
   rmsDb: number;
-  loudnessRangeDb: number;
+  loudnessRangeLu: number;
   crestFactor: number;
   isCompressed: boolean;
 }
@@ -214,9 +215,16 @@ export interface WasmTimeSignatureResult {
 export interface WasmMelodyContourResult {
   pitchRangeOctaves: number;
   pitchStability: number;
-  meanFrequency: number;
-  vibratoRate: number;
-  pitches: WasmMelodyPoint[];
+  meanFrequencyHz: number;
+  vibratoRateHz: number;
+  pitches: WasmAnalysisMelodyPoint[];
+}
+
+/** A contour point; `frequencyHz` is absent for an unvoiced frame. */
+export interface WasmAnalysisMelodyPoint {
+  timeSec: number;
+  frequencyHz?: number;
+  confidence: number;
 }
 
 export interface WasmAnalysisResult {
@@ -227,7 +235,7 @@ export interface WasmAnalysisResult {
   timeSignature: WasmTimeSignatureResult;
   timeSignatureCandidates: WasmTimeSignatureResult[];
   beats: WasmBeatResult[];
-  downbeatIndices: number[];
+  downbeats: WasmBeatResult[];
   downbeatPhase: number;
   beatObservations: WasmBeatObservationsResult;
   beatLocalBpm: number[];
@@ -242,7 +250,7 @@ export interface WasmAnalysisResult {
 }
 
 export interface WasmBpmHypothesis {
-  value: number;
+  bpm: number;
   confidence: number;
   relation: 'primary' | 'half' | 'double' | 'other';
 }

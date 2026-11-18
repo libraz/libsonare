@@ -8,15 +8,15 @@ A measurement that is not finite (a silent take has no integrated loudness) is
 
 from __future__ import annotations
 
-from typing import Any, TypedDict
+from typing import Any, NotRequired, TypedDict
 
 
 class MasteringAudioProfileLoudness(TypedDict):
     """Loudness block of :class:`MasteringAudioProfile`."""
 
     integratedLufs: float
-    lraLu: float
-    truePeakDb: float
+    loudnessRangeLu: float
+    truePeakDbtp: float
     crestFactorDb: float
 
 
@@ -43,48 +43,84 @@ class MasteringAudioProfileDynamics(TypedDict):
     """Dynamics block of :class:`MasteringAudioProfile`."""
 
     shortTermLufsStd: float
-    attackDensity: float
+    attackPerSecond: float
     sustainRatio: float
 
 
-class MasteringAudioProfileDefects(TypedDict):
-    """What the repair detectors measured.
+class MasteringAudioProfileClick(TypedDict):
+    """Click detector reading in a :class:`MasteringAudioProfileDefects` record."""
 
-    ``measured`` is false when nothing ran, either because ``detectDefects`` was
-    not asked for or the input was too short; every other field is then at its
-    default rather than a reading.
+    count: int
+    rejected: int
+    longestRunSamples: int
+    perSecond: float
+
+
+class MasteringAudioProfileClip(TypedDict):
+    """Clip detector reading in a :class:`MasteringAudioProfileDefects` record."""
+
+    clippedSamples: int
+    clippedRatio: float
+    runCount: int
+    longestRunSamples: int
+    flatRunCount: int
+    longestFlatRunSamples: int
+    flatSampleCount: int
+    flatLevel: float
+
+
+class MasteringAudioProfileCrackle(TypedDict):
+    """Crackle detector reading in a :class:`MasteringAudioProfileDefects` record."""
+
+    sampleCount: int
+    sampleFraction: float
+    perSecond: float
+
+
+class MasteringAudioProfileNoise(TypedDict):
+    """Noise detector reading in a :class:`MasteringAudioProfileDefects` record."""
+
+    floorDbfs: float
+    bandFloorDbfs: list[float]
+
+
+class MasteringAudioProfileHum(TypedDict):
+    """Hum detector reading in a :class:`MasteringAudioProfileDefects` record.
+
+    ``fundamentalProminence`` is a linear energy ratio over the median hum
+    candidate (not dB); 1.0 means no peak.
     """
 
-    measured: bool
-    clickCount: int
-    clickRejected: int
-    clickLongestRunSamples: int
-    clickPerSecond: float
-    crackleSampleCount: int
-    crackleSampleFraction: float
-    cracklePerSecond: float
-    clipSampleCount: int
-    clipRunCount: int
-    clipLongestRunSamples: int
-    clipSampleFraction: float
-    clipFlatRunCount: int
-    clipFlatSampleCount: int
-    clipLongestFlatRunSamples: int
-    clipFlatLevel: float
-    noiseFloorDbfs: float
-    noiseBandPeakDbfs: float
-    noiseBandPeakIndex: int
-    humFundamentalHz: float
-    # Linear energy ratio over the median hum candidate (not dB); 1.0 means no peak.
-    humFundamentalProminence: float
-    humHarmonics: int
-    humFundamentalDbfs: float
-    humPeakHarmonicDbfs: float
+    fundamentalHz: float
+    fundamentalProminence: float
+    harmonics: int
+    harmonicDbfs: list[float]
+
+
+class MasteringAudioProfileReverb(TypedDict):
+    """Reverb detector reading; ``latePredictability`` is present only when WPE ran."""
+
     lateDecayRatioDb: float
+    latePredictability: NotRequired[float]
+
+
+class MasteringAudioProfileDefects(TypedDict):
+    """What the six repair detectors measured, one record per detector."""
+
+    click: MasteringAudioProfileClick
+    clip: MasteringAudioProfileClip
+    crackle: MasteringAudioProfileCrackle
+    noise: MasteringAudioProfileNoise
+    hum: MasteringAudioProfileHum
+    reverb: MasteringAudioProfileReverb
 
 
 class MasteringAudioProfile(TypedDict):
-    """The document :func:`mastering_audio_profile` returns, parsed."""
+    """The document :func:`mastering_audio_profile` returns, parsed.
+
+    ``defects`` is present only when the detectors ran: ``detectDefects`` was
+    asked for and the input was long enough to measure.
+    """
 
     durationSec: float
     bpm: float
@@ -92,19 +128,22 @@ class MasteringAudioProfile(TypedDict):
     loudness: MasteringAudioProfileLoudness
     spectral: MasteringAudioProfileSpectral
     dynamics: MasteringAudioProfileDynamics
-    defects: MasteringAudioProfileDefects
+    defects: NotRequired[MasteringAudioProfileDefects]
 
 
 class MasteringRepairAnalysis(TypedDict):
     """Result of :func:`mastering_repair_analyze`.
 
-    ``recommended`` lists the stages the measurement supports, in application
-    order, each a ``{"stage": ..., <setting>: ...}`` dict carrying every setting,
-    ready for :func:`mastering_repair_apply`. Dereverb is never recommended.
+    ``defects`` is the aggregate over every channel and ``channels`` holds one
+    record per channel; both are left out when the input was too short for the
+    detectors to run. ``recommended`` lists the stages the measurement
+    supports, in application order, each a ``{"stage": ..., <setting>: ...}``
+    dict carrying every setting, ready for :func:`mastering_repair_apply`.
+    Dereverb is never recommended.
     """
 
-    defects: MasteringAudioProfileDefects
-    channels: list[MasteringAudioProfileDefects]
+    defects: NotRequired[MasteringAudioProfileDefects]
+    channels: NotRequired[list[MasteringAudioProfileDefects]]
     declipThresholdSafe: bool
     integratedLufs: float
     recommended: list[dict[str, Any]]
@@ -141,12 +180,12 @@ class MasteringAssistantProfile(TypedDict):
     bpm: float
     bpmConfidence: float
     integratedLufs: float | None
-    lraLu: float
-    truePeakDb: float
+    loudnessRangeLu: float
+    truePeakDbtp: float
     crestFactorDb: float
     spectralCentroidHz: float
     spectralFlatness: float
-    attackDensity: float
+    attackPerSecond: float
     sustainRatio: float
 
 
@@ -163,7 +202,7 @@ class MasteringStreamingPreviewPlatform(TypedDict):
 
     name: str
     integratedLufs: float | None
-    truePeakDb: float
+    truePeakDbtp: float
     normalizationGainDb: float
     ceilingRisk: bool
 

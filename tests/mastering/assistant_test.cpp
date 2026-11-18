@@ -43,8 +43,8 @@ TEST_CASE("Assistant does not suggest denoise for measured silence", "[mastering
 TEST_CASE("Assistant refuses a shared declip threshold marked unsafe", "[mastering][assistant]") {
   assistant::AudioProfile profile;
   profile.defects.measured = true;
-  profile.defects.clip_flat_run_count = 10;
-  profile.defects.clip_flat_level = 0.25f;
+  profile.defects.clip.flat_run_count = 10;
+  profile.defects.clip.flat_level = 0.25f;
   profile.defects.declip_threshold_safe = false;
   assistant::AssistantConfig config;
   config.enable_repair = true;
@@ -99,7 +99,7 @@ TEST_CASE("Assistant withholds declip when unclipped audio is louder than the pi
   const auto stereo_result =
       assistant::suggest_chain_interleaved(stereo.data(), mono.size(), 2, kRate, config);
   for (const auto* result : {&mono_result, &stereo_result}) {
-    CHECK(result->profile.defects.clip_flat_run_count > 0);
+    CHECK(result->profile.defects.clip.flat_run_count > 0);
     CHECK_FALSE(result->profile.defects.declip_threshold_safe);
     CHECK_FALSE(result->config.repair.declip.enabled);
     CHECK(std::any_of(result->explanation.begin(), result->explanation.end(),
@@ -491,8 +491,8 @@ TEST_CASE("Assistant target platform and streaming-safe preference affect sugges
   assistant::AudioProfile damaged = profile;
   damaged.loudness.integrated_lufs = -14.0f;
   damaged.defects.measured = true;
-  damaged.defects.click_count = 5;
-  damaged.defects.noise_floor_dbfs = -20.0f;
+  damaged.defects.click.count = 5;
+  damaged.defects.noise.floor_dbfs = -20.0f;
 
   assistant::AssistantConfig streaming_safe;
   streaming_safe.enable_repair = true;
@@ -521,10 +521,10 @@ TEST_CASE("Assistant target platform and streaming-safe preference affect sugges
   // would select the stage and then hand it nothing above that default to
   // reconstruct, so the explanation would claim a repair that never happened.
   assistant::AudioProfile attenuated = damaged;
-  attenuated.defects.clip_sample_count = 0;
-  attenuated.defects.clip_run_count = 0;
-  attenuated.defects.clip_flat_run_count = 40;
-  attenuated.defects.clip_flat_level = 0.25f;
+  attenuated.defects.clip.sample_count = 0;
+  attenuated.defects.clip.run_count = 0;
+  attenuated.defects.clip.flat_run_count = 40;
+  attenuated.defects.clip.flat_level = 0.25f;
   auto attenuated_result = assistant::suggest_chain(attenuated, offline_repair);
   REQUIRE(attenuated_result.config.repair.declip.enabled);
   REQUIRE(attenuated_result.config.repair.declip.config.clip_threshold == 0.25f);
@@ -533,9 +533,9 @@ TEST_CASE("Assistant target platform and streaming-safe preference affect sugges
   // unclipped full-scale waveform, and selecting declip on it would reconstruct
   // undamaged samples.
   assistant::AudioProfile at_ceiling = damaged;
-  at_ceiling.defects.clip_sample_count = 8460;
-  at_ceiling.defects.clip_run_count = 660;
-  at_ceiling.defects.clip_flat_run_count = 0;
+  at_ceiling.defects.clip.sample_count = 8460;
+  at_ceiling.defects.clip.run_count = 660;
+  at_ceiling.defects.clip.flat_run_count = 0;
   auto at_ceiling_result = assistant::suggest_chain(at_ceiling, offline_repair);
   REQUIRE_FALSE(at_ceiling_result.config.repair.declip.enabled);
 

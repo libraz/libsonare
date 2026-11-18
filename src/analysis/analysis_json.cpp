@@ -41,7 +41,7 @@ const std::vector<std::string>& analysis_result_schema_paths() {
       "bpm",
       "bpmConfidence",
       "bpmCandidates",
-      "bpmCandidates[].value",
+      "bpmCandidates[].bpm",
       "bpmCandidates[].confidence",
       "bpmCandidates[].relation",
       "key",
@@ -59,9 +59,11 @@ const std::vector<std::string>& analysis_result_schema_paths() {
       "timeSignatureCandidates[].denominator",
       "timeSignatureCandidates[].confidence",
       "beats",
-      "beats[].time",
+      "beats[].timeSec",
       "beats[].strength",
-      "downbeatIndices",
+      "downbeats",
+      "downbeats[].timeSec",
+      "downbeats[].strength",
       "downbeatPhase",
       "beatObservations",
       "beatObservations.onsetStrength",
@@ -72,15 +74,16 @@ const std::vector<std::string>& analysis_result_schema_paths() {
       "chords[].root",
       "chords[].bass",
       "chords[].quality",
-      "chords[].start",
-      "chords[].end",
+      "chords[].startSec",
+      "chords[].endSec",
+      "chords[].durationSec",
       "chords[].confidence",
       "chords[].name",
       "chords[].romanNumeral",
       "sections",
       "sections[].type",
-      "sections[].start",
-      "sections[].end",
+      "sections[].startSec",
+      "sections[].endSec",
       "sections[].energyLevel",
       "sections[].confidence",
       "sections[].group",
@@ -96,7 +99,7 @@ const std::vector<std::string>& analysis_result_schema_paths() {
       "dynamics.peakDb",
       "dynamics.rmsDb",
       "dynamics.crestFactor",
-      "dynamics.loudnessRangeDb",
+      "dynamics.loudnessRangeLu",
       "dynamics.isCompressed",
       "rhythm",
       "rhythm.timeSignature",
@@ -110,11 +113,11 @@ const std::vector<std::string>& analysis_result_schema_paths() {
       "melody",
       "melody.pitchRangeOctaves",
       "melody.pitchStability",
-      "melody.meanFrequency",
-      "melody.vibratoRate",
+      "melody.meanFrequencyHz",
+      "melody.vibratoRateHz",
       "melody.pitches",
-      "melody.pitches[].time",
-      "melody.pitches[].frequency",
+      "melody.pitches[].timeSec",
+      "melody.pitches[].frequencyHz",
       "melody.pitches[].confidence",
       "form",
       "tuningCents",
@@ -131,7 +134,7 @@ std::string analysis_result_to_json(const AnalysisResult& result) {
     candidates.reserve(result.bpm_candidates.size());
     for (const auto& candidate : result.bpm_candidates) {
       Object value;
-      value["value"] = Value(candidate.value);
+      value["bpm"] = Value(candidate.value);
       value["confidence"] = Value(candidate.confidence);
       value["relation"] = Value(bpm_candidate_relation_name(candidate.relation));
       candidates.push_back(Value(std::move(value)));
@@ -166,21 +169,25 @@ std::string analysis_result_to_json(const AnalysisResult& result) {
     beats.reserve(result.beats.size());
     for (const auto& beat : result.beats) {
       Object b;
-      b["time"] = Value(beat.time);
+      b["timeSec"] = Value(beat.time);
       b["strength"] = Value(beat.strength);
       beats.push_back(Value(std::move(b)));
     }
     root["beats"] = Value(std::move(beats));
   }
 
-  // Downbeats as indices into beats, plus the meter phase they start from.
+  // Downbeats as the beat records they select, plus the meter phase they start from.
   {
-    Array downbeat_indices;
-    downbeat_indices.reserve(result.downbeat_indices.size());
+    Array downbeats;
+    downbeats.reserve(result.downbeat_indices.size());
     for (int index : result.downbeat_indices) {
-      downbeat_indices.push_back(Value(index));
+      const auto& beat = result.beats.at(static_cast<size_t>(index));
+      Object b;
+      b["timeSec"] = Value(beat.time);
+      b["strength"] = Value(beat.strength);
+      downbeats.push_back(Value(std::move(b)));
     }
-    root["downbeatIndices"] = Value(std::move(downbeat_indices));
+    root["downbeats"] = Value(std::move(downbeats));
   }
   root["downbeatPhase"] = Value(result.downbeat_phase);
 
@@ -218,8 +225,9 @@ std::string analysis_result_to_json(const AnalysisResult& result) {
       c["root"] = Value(static_cast<int>(chord.root));
       c["bass"] = Value(static_cast<int>(chord.bass));
       c["quality"] = Value(static_cast<int>(chord.quality));
-      c["start"] = Value(chord.start);
-      c["end"] = Value(chord.end);
+      c["startSec"] = Value(chord.start);
+      c["endSec"] = Value(chord.end);
+      c["durationSec"] = Value(chord.end - chord.start);
       c["confidence"] = Value(chord.confidence);
       c["name"] = Value(chord.to_string());
       c["romanNumeral"] = Value(
@@ -236,8 +244,8 @@ std::string analysis_result_to_json(const AnalysisResult& result) {
     for (const auto& section : result.sections) {
       Object s;
       s["type"] = Value(static_cast<int>(section.type));
-      s["start"] = Value(section.start);
-      s["end"] = Value(section.end);
+      s["startSec"] = Value(section.start);
+      s["endSec"] = Value(section.end);
       s["energyLevel"] = Value(section.energy_level);
       s["confidence"] = Value(section.confidence);
       s["group"] = Value(section.group);
@@ -265,7 +273,7 @@ std::string analysis_result_to_json(const AnalysisResult& result) {
     d["peakDb"] = Value(result.dynamics.peak_db);
     d["rmsDb"] = Value(result.dynamics.rms_db);
     d["crestFactor"] = Value(result.dynamics.crest_factor);
-    d["loudnessRangeDb"] = Value(result.dynamics.loudness_range_db);
+    d["loudnessRangeLu"] = Value(result.dynamics.loudness_range_db);
     d["isCompressed"] = Value(result.dynamics.is_compressed);
     root["dynamics"] = Value(std::move(d));
   }
@@ -286,14 +294,15 @@ std::string analysis_result_to_json(const AnalysisResult& result) {
     Object m;
     m["pitchRangeOctaves"] = Value(result.melody.pitch_range_octaves);
     m["pitchStability"] = Value(result.melody.pitch_stability);
-    m["meanFrequency"] = Value(result.melody.mean_frequency);
-    m["vibratoRate"] = Value(result.melody.vibrato_rate);
+    m["meanFrequencyHz"] = Value(result.melody.mean_frequency);
+    m["vibratoRateHz"] = Value(result.melody.vibrato_rate);
     Array pitches;
     pitches.reserve(result.melody.pitches.size());
     for (const auto& point : result.melody.pitches) {
       Object p;
-      p["time"] = Value(point.time);
-      p["frequency"] = Value(point.frequency);
+      p["timeSec"] = Value(point.time);
+      // An unvoiced point has no frequency; the key is left out.
+      if (point.frequency > 0.0f) p["frequencyHz"] = Value(point.frequency);
       p["confidence"] = Value(point.confidence);
       pitches.push_back(Value(std::move(p)));
     }

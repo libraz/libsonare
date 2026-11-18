@@ -170,7 +170,7 @@ def test_suggest_over_mixed_mono_and_stereo_tracks(mixed_tracks):
 
     result = suggest_mix_scene(mixed_tracks, sample_rate=SAMPLE_RATE)
     _assert_document_shape(result, len(mixed_tracks))
-    channel_counts = {track["stripId"]: track["channelCount"] for track in result["tracks"]}
+    channel_counts = {track["stripId"]: track["numChannels"] for track in result["tracks"]}
     assert channel_counts["kick"] == 1
     assert channel_counts["pad"] == 2
 

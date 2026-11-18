@@ -69,6 +69,9 @@ def _stage_reports(entry: Mapping[str, Any]) -> RepairStageReports:
     for report in entry["reports"]:
         fields = _fields(report)
         detected = _fields(report["detected"])
+        if detection_type is ClipDetection and not detected["flat_run_count"]:
+            # With no flat run there is no level to report; the document still carries one.
+            detected["flat_level"] = None
         if detection_type is ReverbDetection:
             # The document omits the key when the WPE stage did not run.
             detected.setdefault("late_predictability", None)

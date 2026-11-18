@@ -36,9 +36,11 @@ describe('masteringRepairAnalyze', () => {
     const analysis = masteringRepairAnalyze({ channels, sampleRate: SR });
 
     expect(analysis.channels).toHaveLength(3);
-    expect(analysis.channels[0]?.clickCount).toBe(0);
-    expect(analysis.channels[1]?.clickCount).toBeGreaterThan(0);
-    expect(analysis.defects.clickCount).toBe(analysis.channels[1]?.clickCount);
+    expect(analysis.channels?.[0]?.click.count).toBe(0);
+    expect(analysis.channels?.[1]?.click.count).toBeGreaterThan(0);
+    expect(analysis.defects?.click.count).toBe(analysis.channels?.[1]?.click.count);
+    expect(analysis.defects?.noise.bandFloorDbfs).toBeInstanceOf(Float32Array);
+    expect('measured' in (analysis.defects as object)).toBe(false);
     expect(typeof analysis.declipThresholdSafe).toBe('boolean');
     expect(Number.isFinite(analysis.integratedLufs)).toBe(true);
     expect(analysis.recommended[0]?.stage).toBe('declick');

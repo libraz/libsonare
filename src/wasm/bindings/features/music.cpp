@@ -143,8 +143,8 @@ val js_analyze_sections(val samples, const val& sample_rate, const val& n_fft_va
     val item = val::object();
     item.set("type", static_cast<int>(section.type));
     item.set("name", section.type_string());
-    item.set("start", section.start);
-    item.set("end", section.end);
+    item.set("startSec", section.start);
+    item.set("endSec", section.end);
     item.set("energyLevel", section.energy_level);
     item.set("confidence", section.confidence);
     item.set("group", section.group);

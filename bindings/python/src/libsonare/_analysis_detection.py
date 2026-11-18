@@ -405,6 +405,12 @@ def _section_type_from_ordinal(raw: Any) -> SectionType:
     return _section_type_token(int(raw))
 
 
+def _beat_from_wire(record: dict[str, Any]) -> Beat:
+    return Beat(
+        time_sec=float(record.get("timeSec", 0.0)), strength=float(record.get("strength", 0.0))
+    )
+
+
 def _parse_analysis_json(data: dict[str, Any]) -> AnalysisResult:
     """Parse the camelCase JSON dict returned by ``sonare_analyze_json`` into
     an :class:`AnalysisResult`.
@@ -429,7 +435,7 @@ def _parse_analysis_json(data: dict[str, Any]) -> AnalysisResult:
 
     bpm_candidates = [
         BpmCandidate(
-            bpm=float(candidate.get("value", 0.0)),
+            bpm=float(candidate.get("bpm", 0.0)),
             confidence=float(candidate.get("confidence", 0.0)),
             relation=_bpm_relation(candidate.get("relation")),
         )
@@ -445,14 +451,9 @@ def _parse_analysis_json(data: dict[str, Any]) -> AnalysisResult:
         for candidate in data.get("timeSignatureCandidates", [])
     ]
 
-    # Beats (list of {time, strength}); downbeats are indices into them.
-    beats = [
-        Beat(time_sec=float(b.get("time", 0.0)), strength=float(b.get("strength", 0.0)))
-        for b in data.get("beats", [])
-    ]
-    downbeats = [
-        beats[i] for i in (int(i) for i in data.get("downbeatIndices", [])) if 0 <= i < len(beats)
-    ]
+    # Beats and downbeats are both lists of {timeSec, strength} beat records.
+    beats = [_beat_from_wire(b) for b in data.get("beats", [])]
+    downbeats = [_beat_from_wire(b) for b in data.get("downbeats", [])]
     downbeat_phase = int(data.get("downbeatPhase", 0))
 
     # Beat-level evidence the downbeat and meter pass scores. Each stream is
@@ -495,8 +496,8 @@ def _parse_analysis_json(data: dict[str, Any]) -> AnalysisResult:
                 root=root,
                 bass=bass,
                 quality=quality_str,
-                start_sec=float(c.get("start", 0.0)),
-                end_sec=float(c.get("end", 0.0)),
+                start_sec=float(c.get("startSec", 0.0)),
+                end_sec=float(c.get("endSec", 0.0)),
                 confidence=float(c.get("confidence", 0.0)),
                 name=str(c.get("name", "")) or _chord_symbol(root, quality_str, bass),
                 roman_numeral=str(c.get("romanNumeral", "")),
@@ -510,8 +511,8 @@ def _parse_analysis_json(data: dict[str, Any]) -> AnalysisResult:
         sections.append(
             Section(
                 type=section_type,
-                start_sec=float(s.get("start", 0.0)),
-                end_sec=float(s.get("end", 0.0)),
+                start_sec=float(s.get("startSec", 0.0)),
+                end_sec=float(s.get("endSec", 0.0)),
                 energy_level=float(s.get("energyLevel", 0.0)),
                 confidence=float(s.get("confidence", 0.0)),
                 group=int(s["group"]),
@@ -541,7 +542,7 @@ def _parse_analysis_json(data: dict[str, Any]) -> AnalysisResult:
             peak_db=float(dyn_d.get("peakDb", 0.0)),
             rms_db=float(dyn_d.get("rmsDb", 0.0)),
             crest_factor=float(dyn_d.get("crestFactor", 0.0)),
-            loudness_range_lu=float(dyn_d.get("loudnessRangeDb", 0.0)),
+            loudness_range_lu=float(dyn_d.get("loudnessRangeLu", 0.0)),
             is_compressed=bool(dyn_d.get("isCompressed", False)),
         )
         if dyn_d
@@ -571,8 +572,9 @@ def _parse_analysis_json(data: dict[str, Any]) -> AnalysisResult:
     if mel_d:
         pitches = [
             MelodyPoint(
-                time_sec=float(p.get("time", 0.0)),
-                frequency_hz=float(p.get("frequency", 0.0)),
+                time_sec=float(p.get("timeSec", 0.0)),
+                # Omitted for an unvoiced point.
+                frequency_hz=float(p["frequencyHz"]) if "frequencyHz" in p else None,
                 confidence=float(p.get("confidence", 0.0)),
             )
             for p in mel_d.get("pitches", [])
@@ -580,8 +582,8 @@ def _parse_analysis_json(data: dict[str, Any]) -> AnalysisResult:
         melody = AnalysisMelody(
             pitch_range_octaves=float(mel_d.get("pitchRangeOctaves", 0.0)),
             pitch_stability=float(mel_d.get("pitchStability", 0.0)),
-            mean_frequency_hz=float(mel_d.get("meanFrequency", 0.0)),
-            vibrato_rate_hz=float(mel_d.get("vibratoRate", 0.0)),
+            mean_frequency_hz=float(mel_d.get("meanFrequencyHz", 0.0)),
+            vibrato_rate_hz=float(mel_d.get("vibratoRateHz", 0.0)),
             pitches=pitches,
         )
     else:

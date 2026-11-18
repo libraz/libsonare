@@ -488,15 +488,6 @@ describe('mastering mixing surface', () => {
       await initSource();
     });
     const module = () => getSonareModule();
-    const rawTracks = () => [
-      [tone(0.6, 80)],
-      [null],
-      ['bass'],
-      [null],
-      null,
-      SR,
-      {} as Record<string, number | boolean>,
-    ];
 
     const rawCases: Array<[string, () => Record<string, unknown>, string[], string[]]> = [
       [
@@ -509,14 +500,6 @@ describe('mastering mixing surface', () => {
           ).meters[0],
         ['truePeakDbL', 'truePeakDbR', 'maxTruePeakDb', 'truePeakDb', 'channelCount'],
         ['truePeakDbtpL', 'truePeakDbtpR', 'maxTruePeakDbtp', 'truePeakDbtp', 'numChannels'],
-      ],
-      [
-        'the assistant profile spells channelCount, truePeakDb and attackDensity',
-        () =>
-          JSON.parse((module().mixingAssistantSuggest as Loose)(...rawTracks()) as string)
-            .tracks[0],
-        ['channelCount', 'truePeakDb', 'attackDensity'],
-        ['numChannels', 'truePeakDbtp', 'attackPerSecond'],
       ],
       [
         'the scene document holds pan mode and law as ints and the send timing as pre or post',
@@ -569,7 +552,7 @@ describe('mastering mixing surface', () => {
       expect(raw.left).toHaveLength(BLOCK);
     });
 
-    it('the native sources still read the per-field mix options and the old profile keys', () => {
+    it('the native sources still read the per-field mix options', () => {
       const source = (path: string) =>
         readFileSync(new URL(`../../../../src/wasm/bindings/${path}`, import.meta.url), 'utf8');
       expect(source('mixing/mixing.cpp')).toContain(

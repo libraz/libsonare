@@ -54,7 +54,7 @@ describe('capabilityCatalog().masteringPresets', () => {
     expect(vinyl).toMatchObject({
       kind: 'restoration',
       targetLufs: null,
-      truePeakCeilingDb: null,
+      truePeakCeilingDbtp: null,
       maxLimiterGainReductionDb: null,
     });
     const pop = catalog.masteringPresets.find((preset) => preset.name === 'pop');

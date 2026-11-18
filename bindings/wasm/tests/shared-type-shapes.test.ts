@@ -140,7 +140,7 @@ const catalogMasteringPreset = {
   name: 'vinyl',
   kind: 'restoration',
   targetLufs: null,
-  truePeakCeilingDb: null,
+  truePeakCeilingDbtp: null,
   maxLimiterGainReductionDb: null,
 } satisfies MasteringPresetCatalogEntry;
 

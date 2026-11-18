@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <iterator>
 #include <utility>
 
 #include "sonare_cli.h"
@@ -29,46 +30,57 @@ void reject_non_repair_overrides(const std::vector<mastering::api::Param>& overr
   }
 }
 
-/// Appends the six repair detectors' measurements. Every field carries a trap
-/// documented on DefectProfile (audio_profile.h) that this JSON exposes rather
-/// than hides: `measured` false means nothing ran, a large `click_rejected`
-/// alongside a zero `click_count` means the click detector could not decide
-/// rather than that the material is clean, `hum_fundamental_prominence` (a linear
-/// energy ratio, not dB) of 1.0 means no stationary candidate peak was found (a repeating kick
-/// reads 1.0), and `noise_band_peak_index` of -1 means no band was measured. `hum_peak_found` and
-/// `noise_band_measured` spell those last two out explicitly so a consumer cannot read the sentinel
-/// as data.
+/// Appends the six repair detectors' measurements, one group per detector in
+/// the shape of the audio-profile JSON. The object is omitted when no detector
+/// ran, because nobody looking is not the same as clean. A large
+/// `click.rejected` beside a zero `click.count` means the detector could not
+/// decide, and a `hum.fundamental_prominence` (a linear energy ratio) of 1.0
+/// means no stationary peak was found.
 void append_defect_profile_json(JsonBuilder& json,
                                 const mastering::assistant::DefectProfile& defects) {
-  json.key("defects").begin_object().kv("measured", defects.measured);
-  if (defects.measured) {
-    json.kv("click_count", defects.click_count)
-        .kv("click_rejected", defects.click_rejected)
-        .kv("click_longest_run_samples", defects.click_longest_run_samples)
-        .kv("click_per_second", defects.click_per_second)
-        .kv("crackle_sample_count", defects.crackle_sample_count)
-        .kv("crackle_sample_fraction", defects.crackle_sample_fraction)
-        .kv("crackle_per_second", defects.crackle_per_second)
-        .kv("clip_sample_count", defects.clip_sample_count)
-        .kv("clip_run_count", defects.clip_run_count)
-        .kv("clip_longest_run_samples", defects.clip_longest_run_samples)
-        .kv("clip_sample_fraction", defects.clip_sample_fraction)
-        .kv("clip_flat_run_count", defects.clip_flat_run_count)
-        .kv("clip_flat_sample_count", defects.clip_flat_sample_count)
-        .kv("clip_longest_flat_run_samples", defects.clip_longest_flat_run_samples)
-        .kv("clip_flat_level", defects.clip_flat_level)
-        .kv("noise_floor_dbfs", defects.noise_floor_dbfs)
-        .kv("noise_band_measured", defects.noise_band_peak_index >= 0)
-        .kv("noise_band_peak_dbfs", defects.noise_band_peak_dbfs)
-        .kv("noise_band_peak_index", defects.noise_band_peak_index)
-        .kv("hum_peak_found", defects.hum_fundamental_prominence > 1.0f)
-        .kv("hum_fundamental_hz", defects.hum_fundamental_hz)
-        .kv("hum_fundamental_prominence", defects.hum_fundamental_prominence)
-        .kv("hum_harmonics", defects.hum_harmonics)
-        .kv("hum_fundamental_dbfs", defects.hum_fundamental_dbfs)
-        .kv("hum_peak_harmonic_dbfs", defects.hum_peak_harmonic_dbfs)
-        .kv("late_decay_ratio_db", defects.late_decay_ratio_db);
-  }
+  if (!defects.measured) return;
+  json.key("defects").begin_object();
+  json.key("click")
+      .begin_object()
+      .kv("count", defects.click.count)
+      .kv("rejected", defects.click.rejected)
+      .kv("longest_run_samples", defects.click.longest_run_samples)
+      .kv("per_second", defects.click.per_second)
+      .end_object();
+  json.key("clip")
+      .begin_object()
+      .kv("clipped_samples", defects.clip.sample_count)
+      .kv("clipped_ratio", defects.clip.sample_fraction)
+      .kv("run_count", defects.clip.run_count)
+      .kv("longest_run_samples", defects.clip.longest_run_samples)
+      .kv("flat_run_count", defects.clip.flat_run_count)
+      .kv("longest_flat_run_samples", defects.clip.longest_flat_run_samples)
+      .kv("flat_sample_count", defects.clip.flat_sample_count);
+  // A level is only measured where a flat run was found.
+  if (defects.clip.flat_run_count > 0) json.kv("flat_level", defects.clip.flat_level);
+  json.end_object();
+  json.key("crackle")
+      .begin_object()
+      .kv("sample_count", defects.crackle.sample_count)
+      .kv("sample_fraction", defects.crackle.sample_fraction)
+      .kv("per_second", defects.crackle.per_second)
+      .end_object();
+  json.key("noise").begin_object().kv("floor_dbfs", defects.noise.floor_dbfs);
+  json.key("band_floor_dbfs").begin_array();
+  for (const float level : defects.noise.band_floor_dbfs) json.value(level);
+  json.end_array().end_object();
+  json.key("hum")
+      .begin_object()
+      .kv("fundamental_hz", defects.hum.fundamental_hz)
+      .kv("fundamental_prominence", defects.hum.fundamental_prominence)
+      .kv("harmonics", defects.hum.harmonics);
+  json.key("harmonic_dbfs").begin_array();
+  for (const float level : defects.hum.harmonic_dbfs) json.value(level);
+  json.end_array().end_object();
+  json.key("reverb")
+      .begin_object()
+      .kv("late_decay_ratio_db", defects.reverb.late_decay_ratio_db)
+      .end_object();
   json.end_object();
 }
 
@@ -81,21 +93,24 @@ void print_defect_profile_text(const mastering::assistant::DefectProfile& defect
                  "looked, which is not the same as clean)\n\n";
     return;
   }
+  const auto& click = defects.click;
+  const auto& clip = defects.clip;
+  const auto& crackle = defects.crackle;
+  const auto& hum = defects.hum;
   std::cout << std::fixed << std::setprecision(2);
-  std::cout << "  Clicks:          " << defects.click_count << " detected, "
-            << defects.click_rejected << " rejected as undecided (longest run "
-            << defects.click_longest_run_samples << " samples, " << defects.click_per_second
+  std::cout << "  Clicks:          " << click.count << " detected, " << click.rejected
+            << " rejected as undecided (longest run " << click.longest_run_samples << " samples, "
+            << click.per_second << "/s)\n";
+  std::cout << "  Crackle:         " << crackle.sample_count << " samples ("
+            << (crackle.sample_fraction * 100.0f) << "% of signal, " << crackle.per_second
             << "/s)\n";
-  std::cout << "  Crackle:         " << defects.crackle_sample_count << " samples ("
-            << (defects.crackle_sample_fraction * 100.0f) << "% of signal, "
-            << defects.crackle_per_second << "/s)\n";
-  std::cout << "  Clipping:        " << defects.clip_sample_count << " samples in "
-            << defects.clip_run_count << " runs (" << (defects.clip_sample_fraction * 100.0f)
-            << "% of signal, longest " << defects.clip_longest_run_samples << " samples)\n";
-  if (defects.clip_flat_run_count > 0) {
-    std::cout << "  Flat tops:       " << defects.clip_flat_run_count << " runs pinned at "
-              << defects.clip_flat_level << " (" << defects.clip_flat_sample_count
-              << " samples, longest " << defects.clip_longest_flat_run_samples
+  std::cout << "  Clipping:        " << clip.sample_count << " samples in " << clip.run_count
+            << " runs (" << (clip.sample_fraction * 100.0f) << "% of signal, longest "
+            << clip.longest_run_samples << " samples)\n";
+  if (clip.flat_run_count > 0) {
+    std::cout << "  Flat tops:       " << clip.flat_run_count << " runs pinned at "
+              << clip.flat_level << " (" << clip.flat_sample_count << " samples, longest "
+              << clip.longest_flat_run_samples
               << ") -- these survive a later gain change, so they are clipping rather than a "
                  "peak that merely reaches the ceiling\n";
   } else {
@@ -103,24 +118,22 @@ void print_defect_profile_text(const mastering::assistant::DefectProfile& defect
                  "resampling or a lossy codec erases a real one, so this is not proof of no "
                  "clipping)\n";
   }
-  std::cout << "  Noise floor:     " << defects.noise_floor_dbfs << " dBFS";
-  if (defects.noise_band_peak_index >= 0) {
-    std::cout << ", loudest band " << defects.noise_band_peak_dbfs << " dBFS (band "
-              << defects.noise_band_peak_index << ")\n";
-  } else {
-    std::cout << " (no band was measured)\n";
-  }
-  if (defects.hum_fundamental_prominence > 1.0f) {
-    std::cout << "  Hum:             " << defects.hum_fundamental_hz << " Hz fundamental, "
-              << defects.hum_harmonics << " harmonics, prominence "
-              << defects.hum_fundamental_prominence << "x energy ratio ("
-              << defects.hum_fundamental_dbfs << " dBFS at f0, " << defects.hum_peak_harmonic_dbfs
+  const auto* band_floor = std::begin(defects.noise.band_floor_dbfs);
+  const auto* loudest_band = std::max_element(band_floor, std::end(defects.noise.band_floor_dbfs));
+  std::cout << "  Noise floor:     " << defects.noise.floor_dbfs << " dBFS, loudest band "
+            << *loudest_band << " dBFS (band " << (loudest_band - band_floor) << ")\n";
+  if (hum.fundamental_prominence > 1.0f) {
+    const float loudest_harmonic =
+        *std::max_element(std::begin(hum.harmonic_dbfs), std::end(hum.harmonic_dbfs));
+    std::cout << "  Hum:             " << hum.fundamental_hz << " Hz fundamental, " << hum.harmonics
+              << " harmonics, prominence " << hum.fundamental_prominence << "x energy ratio ("
+              << hum.harmonic_dbfs[0] << " dBFS at f0, " << loudest_harmonic
               << " dBFS loudest harmonic)\n";
   } else {
     std::cout << "  Hum:             no fundamental peak found at 50 or 60 Hz (inconclusive, not "
                  "the same as no hum)\n";
   }
-  std::cout << "  Late decay:      " << defects.late_decay_ratio_db
+  std::cout << "  Late decay:      " << defects.reverb.late_decay_ratio_db
             << " dB (dereverb-window decay ratio, not RT60 -- less negative means more "
                "reverberant)\n\n";
 }

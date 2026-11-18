@@ -218,23 +218,18 @@ function pitchClassOf(value: number): PitchClass {
 }
 
 function chordFromNative(raw: Native): Chord {
-  const chord: Chord = {
+  return {
     root: pitchClassOf(raw.root),
     bass: pitchClassOf(raw.bass),
     rootName: raw.rootName,
     bassName: raw.bassName,
     quality: CHORD_QUALITIES[raw.quality],
     name: raw.name,
-    startSec: raw.start,
-    endSec: raw.end,
-    durationSec: raw.duration ?? raw.end - raw.start,
+    startSec: raw.startSec,
+    endSec: raw.endSec,
+    durationSec: raw.durationSec,
     confidence: raw.confidence,
   };
-  return chord;
-}
-
-function beatFromNative(raw: Native): Beat {
-  return { timeSec: raw.time, strength: raw.strength };
 }
 
 function keyFromNative(raw: Native): Key {
@@ -245,14 +240,15 @@ function sectionFromNative(raw: Native): Section {
   return {
     type: SECTION_TYPES[raw.type],
     name: raw.name,
-    startSec: raw.start,
-    endSec: raw.end,
+    startSec: raw.startSec,
+    endSec: raw.endSec,
     energyLevel: raw.energyLevel,
     confidence: raw.confidence,
     group: raw.group,
   };
 }
 
+// The standalone melody natives still use the 1.x keys.
 function melodyPointFromNative(raw: Native): MelodyPoint {
   const point: MelodyPoint = { timeSec: raw.time, confidence: raw.confidence };
   if (raw.frequency > 0) {
@@ -261,47 +257,17 @@ function melodyPointFromNative(raw: Native): MelodyPoint {
   return point;
 }
 
+// The analysis document already carries the public key names; only the coded
+// enums (pitch class, chord quality, section type) are decoded here.
 function analysisFromNative(raw: Native): AnalysisResult {
-  const beats: Beat[] = raw.beats.map(beatFromNative);
-  const {
-    beatTimes: _beatTimes,
-    downbeatIndices,
-    bpmCandidates,
-    chords,
-    sections,
-    dynamics,
-    melody,
-    ...rest
-  } = raw;
+  const { chords, sections, ...rest } = raw;
   return {
     ...rest,
     key: keyFromNative(raw.key),
-    bpmCandidates: bpmCandidates.map((c: Native) => ({
-      bpm: c.value,
-      confidence: c.confidence,
-      relation: c.relation,
-    })),
-    beats,
-    downbeats: (downbeatIndices as number[]).map((i) => beats[i]),
     chords: chords.map(
       (c: Native): AnalysisChord => ({ ...chordFromNative(c), romanNumeral: c.romanNumeral }),
     ),
     sections: sections.map(sectionFromNative),
-    dynamics: {
-      dynamicRangeDb: dynamics.dynamicRangeDb,
-      peakDb: dynamics.peakDb,
-      rmsDb: dynamics.rmsDb,
-      crestFactor: dynamics.crestFactor,
-      loudnessRangeLu: dynamics.loudnessRangeDb,
-      isCompressed: dynamics.isCompressed,
-    },
-    melody: {
-      pitchRangeOctaves: melody.pitchRangeOctaves,
-      pitchStability: melody.pitchStability,
-      meanFrequencyHz: melody.meanFrequency,
-      vibratoRateHz: melody.vibratoRate,
-      pitches: melody.pitches.map(melodyPointFromNative),
-    },
   };
 }
 

@@ -49,7 +49,7 @@ describe('mastering preset catalog', () => {
     expect(restoration).toHaveLength(5);
     for (const preset of restoration) {
       expect(preset.targetLufs).toBeNull();
-      expect(preset.truePeakCeilingDb).toBeNull();
+      expect(preset.truePeakCeilingDbtp).toBeNull();
       expect(preset.maxLimiterGainReductionDb).toBeNull();
     }
   });

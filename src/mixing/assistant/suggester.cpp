@@ -187,14 +187,14 @@ util::json::Value track_to_value(const TrackProfile& profile) {
   util::json::put(object, "sourceConfidence", profile.source_confidence);
   util::json::put(object, "usable", profile.usable);
   util::json::put(object, "exclusionReason", profile.exclusion_reason);
-  util::json::put(object, "channelCount", profile.channel_count);
+  util::json::put(object, "numChannels", profile.channel_count);
   util::json::put(object, "durationSec", profile.duration_sec);
   util::json::put(object, "integratedLufs", profile.base.loudness.integrated_lufs);
-  util::json::put(object, "truePeakDb", profile.base.loudness.true_peak_db);
+  util::json::put(object, "truePeakDbtp", profile.base.loudness.true_peak_db);
   util::json::put(object, "crestFactorDb", profile.base.loudness.crest_factor_db);
   util::json::put(object, "spectralCentroidHz", profile.base.spectral.centroid_hz);
   util::json::put(object, "spectralFlatness", profile.base.spectral.flatness);
-  util::json::put(object, "attackDensity", profile.base.dynamics.attack_density);
+  util::json::put(object, "attackPerSecond", profile.base.dynamics.attack_density);
   util::json::put(object, "sustainRatio", profile.base.dynamics.sustain_ratio);
   util::json::put(object, "bandOccupancy", band_array(profile.band_occupancy));
   return util::json::Value(std::move(object));
@@ -614,14 +614,14 @@ const std::vector<std::string>& mix_assistant_result_schema_paths() {
       "tracks[].sourceConfidence",
       "tracks[].usable",
       "tracks[].exclusionReason",
-      "tracks[].channelCount",
+      "tracks[].numChannels",
       "tracks[].durationSec",
       "tracks[].integratedLufs",
-      "tracks[].truePeakDb",
+      "tracks[].truePeakDbtp",
       "tracks[].crestFactorDb",
       "tracks[].spectralCentroidHz",
       "tracks[].spectralFlatness",
-      "tracks[].attackDensity",
+      "tracks[].attackPerSecond",
       "tracks[].sustainRatio",
       "tracks[].bandOccupancy",
       "tracks[].bandOccupancy.sub",

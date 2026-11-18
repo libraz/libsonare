@@ -23,7 +23,7 @@ def _tracked_mastering_presets() -> tuple[MasteringPresetCatalogEntry, ...]:
             name=row["name"],
             kind=row["kind"],
             target_lufs=row["targetLufs"],
-            true_peak_ceiling_db=row["truePeakCeilingDb"],
+            true_peak_ceiling_dbtp=row["truePeakCeilingDbtp"],
             max_limiter_gain_reduction_db=row["maxLimiterGainReductionDb"],
         )
         for row in catalog["masteringPresets"]
@@ -41,7 +41,7 @@ def test_mastering_presets_carries_restoration_entries_with_null_loudness() -> N
     assert restoration
     for entry in restoration:
         assert entry.target_lufs is None
-        assert entry.true_peak_ceiling_db is None
+        assert entry.true_peak_ceiling_dbtp is None
         assert entry.max_limiter_gain_reduction_db is None
 
 
@@ -51,5 +51,5 @@ def test_mastering_presets_carries_mastering_entries_with_numeric_loudness() -> 
     assert mastering
     for entry in mastering:
         assert isinstance(entry.target_lufs, (int, float))
-        assert isinstance(entry.true_peak_ceiling_db, (int, float))
+        assert isinstance(entry.true_peak_ceiling_dbtp, (int, float))
         assert isinstance(entry.max_limiter_gain_reduction_db, (int, float))

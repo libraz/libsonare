@@ -491,13 +491,31 @@ from ._types_mastering_results import (
     MasteringAudioProfile as MasteringAudioProfile,
 )
 from ._types_mastering_results import (
+    MasteringAudioProfileClick as MasteringAudioProfileClick,
+)
+from ._types_mastering_results import (
+    MasteringAudioProfileClip as MasteringAudioProfileClip,
+)
+from ._types_mastering_results import (
+    MasteringAudioProfileCrackle as MasteringAudioProfileCrackle,
+)
+from ._types_mastering_results import (
     MasteringAudioProfileDefects as MasteringAudioProfileDefects,
 )
 from ._types_mastering_results import (
     MasteringAudioProfileDynamics as MasteringAudioProfileDynamics,
 )
 from ._types_mastering_results import (
+    MasteringAudioProfileHum as MasteringAudioProfileHum,
+)
+from ._types_mastering_results import (
     MasteringAudioProfileLoudness as MasteringAudioProfileLoudness,
+)
+from ._types_mastering_results import (
+    MasteringAudioProfileNoise as MasteringAudioProfileNoise,
+)
+from ._types_mastering_results import (
+    MasteringAudioProfileReverb as MasteringAudioProfileReverb,
 )
 from ._types_mastering_results import (
     MasteringAudioProfileSpectral as MasteringAudioProfileSpectral,

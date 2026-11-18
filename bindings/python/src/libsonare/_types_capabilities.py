@@ -359,7 +359,7 @@ class CapabilityCatalogPresets:
 class MasteringPresetCatalogEntry:
     """One mastering preset's kind and loudness targets.
 
-    ``target_lufs``, ``true_peak_ceiling_db`` and
+    ``target_lufs``, ``true_peak_ceiling_dbtp`` and
     ``max_limiter_gain_reduction_db`` are ``None`` for a ``"restoration"``
     preset, which carries no loudness stage.
     """
@@ -367,7 +367,7 @@ class MasteringPresetCatalogEntry:
     name: str
     kind: MasteringPresetKind
     target_lufs: float | None
-    true_peak_ceiling_db: float | None
+    true_peak_ceiling_dbtp: float | None
     max_limiter_gain_reduction_db: float | None
 
 

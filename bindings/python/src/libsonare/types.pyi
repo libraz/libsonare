@@ -340,7 +340,7 @@ class CapabilityCatalogPresets:
 class MasteringPresetCatalogEntry:
     """One mastering preset's kind and loudness targets.
 
-    ``target_lufs``, ``true_peak_ceiling_db`` and
+    ``target_lufs``, ``true_peak_ceiling_dbtp`` and
     ``max_limiter_gain_reduction_db`` are ``None`` for a ``"restoration"``
     preset, which carries no loudness stage.
     """
@@ -348,7 +348,7 @@ class MasteringPresetCatalogEntry:
     name: str
     kind: MasteringPresetKind
     target_lufs: float | None
-    true_peak_ceiling_db: float | None
+    true_peak_ceiling_dbtp: float | None
     max_limiter_gain_reduction_db: float | None
 
 @dataclass(frozen=True)
@@ -1759,8 +1759,8 @@ class StageGainReduction:
 
 class MasteringAudioProfileLoudness(TypedDict):
     integratedLufs: float
-    lraLu: float
-    truePeakDb: float
+    loudnessRangeLu: float
+    truePeakDbtp: float
     crestFactorDb: float
 
 class MasteringAudioProfileSpectral(TypedDict):
@@ -1777,36 +1777,51 @@ class MasteringAudioProfileSpectral(TypedDict):
 
 class MasteringAudioProfileDynamics(TypedDict):
     shortTermLufsStd: float
-    attackDensity: float
+    attackPerSecond: float
     sustainRatio: float
 
-class MasteringAudioProfileDefects(TypedDict):
-    measured: bool
-    clickCount: int
-    clickRejected: int
-    clickLongestRunSamples: int
-    clickPerSecond: float
-    crackleSampleCount: int
-    crackleSampleFraction: float
-    cracklePerSecond: float
-    clipSampleCount: int
-    clipRunCount: int
-    clipLongestRunSamples: int
-    clipSampleFraction: float
-    clipFlatRunCount: int
-    clipFlatSampleCount: int
-    clipLongestFlatRunSamples: int
-    clipFlatLevel: float
-    noiseFloorDbfs: float
-    noiseBandPeakDbfs: float
-    noiseBandPeakIndex: int
-    humFundamentalHz: float
-    # Linear energy ratio over the median hum candidate (not dB); 1.0 means no peak.
-    humFundamentalProminence: float
-    humHarmonics: int
-    humFundamentalDbfs: float
-    humPeakHarmonicDbfs: float
+class MasteringAudioProfileClick(TypedDict):
+    count: int
+    rejected: int
+    longestRunSamples: int
+    perSecond: float
+
+class MasteringAudioProfileClip(TypedDict):
+    clippedSamples: int
+    clippedRatio: float
+    runCount: int
+    longestRunSamples: int
+    flatRunCount: int
+    longestFlatRunSamples: int
+    flatSampleCount: int
+    flatLevel: float
+
+class MasteringAudioProfileCrackle(TypedDict):
+    sampleCount: int
+    sampleFraction: float
+    perSecond: float
+
+class MasteringAudioProfileNoise(TypedDict):
+    floorDbfs: float
+    bandFloorDbfs: list[float]
+
+class MasteringAudioProfileHum(TypedDict):
+    fundamentalHz: float
+    fundamentalProminence: float
+    harmonics: int
+    harmonicDbfs: list[float]
+
+class MasteringAudioProfileReverb(TypedDict):
     lateDecayRatioDb: float
+    latePredictability: NotRequired[float]
+
+class MasteringAudioProfileDefects(TypedDict):
+    click: MasteringAudioProfileClick
+    clip: MasteringAudioProfileClip
+    crackle: MasteringAudioProfileCrackle
+    noise: MasteringAudioProfileNoise
+    hum: MasteringAudioProfileHum
+    reverb: MasteringAudioProfileReverb
 
 class MasteringAudioProfile(TypedDict):
     durationSec: float
@@ -1815,11 +1830,11 @@ class MasteringAudioProfile(TypedDict):
     loudness: MasteringAudioProfileLoudness
     spectral: MasteringAudioProfileSpectral
     dynamics: MasteringAudioProfileDynamics
-    defects: MasteringAudioProfileDefects
+    defects: NotRequired[MasteringAudioProfileDefects]
 
 class MasteringRepairAnalysis(TypedDict):
-    defects: MasteringAudioProfileDefects
-    channels: list[MasteringAudioProfileDefects]
+    defects: NotRequired[MasteringAudioProfileDefects]
+    channels: NotRequired[list[MasteringAudioProfileDefects]]
     declipThresholdSafe: bool
     integratedLufs: float
     recommended: list[dict[str, Any]]
@@ -1836,12 +1851,12 @@ class MasteringAssistantProfile(TypedDict):
     bpm: float
     bpmConfidence: float
     integratedLufs: float | None
-    lraLu: float
-    truePeakDb: float
+    loudnessRangeLu: float
+    truePeakDbtp: float
     crestFactorDb: float
     spectralCentroidHz: float
     spectralFlatness: float
-    attackDensity: float
+    attackPerSecond: float
     sustainRatio: float
 
 class MasteringAssistantResult(TypedDict):
@@ -1852,7 +1867,7 @@ class MasteringAssistantResult(TypedDict):
 class MasteringStreamingPreviewPlatform(TypedDict):
     name: str
     integratedLufs: float | None
-    truePeakDb: float
+    truePeakDbtp: float
     normalizationGainDb: float
     ceilingRisk: bool
 

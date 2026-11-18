@@ -517,6 +517,9 @@ describe('results: unit-named fields and objects', () => {
     expect('measured' in (profile.defects as object)).toBe(false);
     expect(typeof defects.clip.clippedSamples).toBe('number');
     expect(typeof defects.clip.clippedRatio).toBe('number');
+    expect(defects.noise.bandFloorDbfs).toBeInstanceOf(Float32Array);
+    expect(defects.hum.harmonicDbfs).toBeInstanceOf(Float32Array);
+    expect('latePredictability' in defects.reverb).toBe(false);
     const off = sonare.masteringAudioProfile({ samples: left, sampleRate, detectDefects: false });
     expect(off.defects).toBeUndefined();
     const stereo = sonare.masteringAudioProfileStereo({ left, right, sampleRate });
@@ -773,50 +776,6 @@ describe('native still uses the old spelling', () => {
           __flatParams: {},
         }) as Record<string, unknown>;
         return ['truePeakDb' in result && !('truePeakDbtp' in result)];
-      },
-    ],
-    [
-      'the assistant profile names lraLu, truePeakDb and attackDensity',
-      () => {
-        const json = JSON.parse(
-          raw().masteringAssistantSuggest(left, sampleRate, {}) as string,
-        ) as {
-          profile: Record<string, unknown>;
-        };
-        return [
-          'lraLu' in json.profile &&
-            'truePeakDb' in json.profile &&
-            'attackDensity' in json.profile,
-          !('truePeakDbtp' in json.profile),
-        ];
-      },
-    ],
-    [
-      'the audio profile is one flat defects bag with a measured flag',
-      () => {
-        const json = JSON.parse(
-          raw().masteringAudioProfile(left, sampleRate, { detectDefects: true }) as string,
-        ) as {
-          loudness: Record<string, unknown>;
-          dynamics: Record<string, unknown>;
-          defects: Record<string, unknown>;
-        };
-        return [
-          'lraLu' in json.loudness && 'truePeakDb' in json.loudness,
-          'attackDensity' in json.dynamics,
-          json.defects.measured === true && 'clickCount' in json.defects,
-        ];
-      },
-    ],
-    [
-      'the preview names the true peak truePeakDb',
-      () => {
-        const json = JSON.parse(
-          raw().masteringStreamingPreview(left, sampleRate, []) as string,
-        ) as {
-          platforms: Record<string, unknown>[];
-        };
-        return ['truePeakDb' in json.platforms[0] && !('truePeakDbtp' in json.platforms[0])];
       },
     ],
     [

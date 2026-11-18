@@ -285,25 +285,9 @@ StagePlan parse_stages(const std::string& stages_json) {
 
 double count(std::size_t value) { return static_cast<double>(value); }
 
-json::Array float_array(const float* values, std::size_t size) {
-  json::Array out;
-  out.reserve(size);
-  for (std::size_t i = 0; i < size; ++i) out.emplace_back(values[i]);
-  return out;
-}
-
 json::Object report_of(const repair::DeclipReport& report) {
-  json::Object detected;
-  json::put(detected, "sampleCount", count(report.detected.sample_count));
-  json::put(detected, "sampleFraction", report.detected.sample_fraction);
-  json::put(detected, "runCount", count(report.detected.run_count));
-  json::put(detected, "longestRunSamples", count(report.detected.longest_run_samples));
-  json::put(detected, "flatRunCount", count(report.detected.flat_run_count));
-  json::put(detected, "longestFlatRunSamples", count(report.detected.longest_flat_run_samples));
-  json::put(detected, "flatSampleCount", count(report.detected.flat_sample_count));
-  json::put(detected, "flatLevel", report.detected.flat_level);
   json::Object out;
-  json::put(out, "detected", std::move(detected));
+  json::put(out, "detected", detection_to_json(report.detected));
   json::put(out, "lpcReconstructedRuns", count(report.lpc_reconstructed_runs));
   json::put(out, "interpolatedRuns", count(report.interpolated_runs));
   json::put(out, "repairedSamples", count(report.repaired_samples));
@@ -312,13 +296,8 @@ json::Object report_of(const repair::DeclipReport& report) {
 }
 
 json::Object report_of(const repair::DeclickReport& report) {
-  json::Object detected;
-  json::put(detected, "count", count(report.detected.count));
-  json::put(detected, "rejected", count(report.detected.rejected));
-  json::put(detected, "longestRunSamples", count(report.detected.longest_run_samples));
-  json::put(detected, "perSecond", report.detected.per_second);
   json::Object out;
-  json::put(out, "detected", std::move(detected));
+  json::put(out, "detected", detection_to_json(report.detected));
   json::put(out, "repairedRuns", count(report.repaired_runs));
   json::put(out, "repairedSamples", count(report.repaired_samples));
   json::put(out, "linkedRuns", count(report.linked_runs));
@@ -327,12 +306,8 @@ json::Object report_of(const repair::DeclickReport& report) {
 }
 
 json::Object report_of(const repair::DecrackleReport& report) {
-  json::Object detected;
-  json::put(detected, "sampleCount", count(report.detected.sample_count));
-  json::put(detected, "sampleFraction", report.detected.sample_fraction);
-  json::put(detected, "perSecond", report.detected.per_second);
   json::Object out;
-  json::put(out, "detected", std::move(detected));
+  json::put(out, "detected", detection_to_json(report.detected));
   json::put(out, "replacedSamples", count(report.replaced_samples));
   json::put(out, "detailCoefficients", count(report.detail_coefficients));
   json::put(out, "shrunkCoefficients", count(report.shrunk_coefficients));
@@ -341,15 +316,8 @@ json::Object report_of(const repair::DecrackleReport& report) {
 }
 
 json::Object report_of(const repair::DehumReport& report) {
-  json::Object detected;
-  json::put(detected, "fundamentalHz", report.detected.fundamental_hz);
-  json::put(detected, "fundamentalProminence", report.detected.fundamental_prominence);
-  json::put(detected, "harmonics", report.detected.harmonics);
-  json::put(detected, "harmonicDbfs",
-            float_array(report.detected.harmonic_dbfs,
-                        static_cast<std::size_t>(repair::kDehumMaxHarmonics)));
   json::Object out;
-  json::put(out, "detected", std::move(detected));
+  json::put(out, "detected", detection_to_json(report.detected));
   json::put(out, "notchedHarmonics", report.notched_harmonics);
   json::put(out, "appliedFundamentalHz", report.applied_fundamental_hz);
   json::put(out, "fundamentalDriftHz", report.fundamental_drift_hz);
@@ -357,12 +325,8 @@ json::Object report_of(const repair::DehumReport& report) {
 }
 
 json::Object report_of(const repair::DenoiseReport& report) {
-  json::Object detected;
-  json::put(detected, "floorDbfs", report.detected.floor_dbfs);
-  json::put(detected, "bandFloorDbfs",
-            float_array(report.detected.band_floor_dbfs, repair::kRepairNoiseBandCount));
   json::Object out;
-  json::put(out, "detected", std::move(detected));
+  json::put(out, "detected", detection_to_json(report.detected));
   json::put(out, "meanReductionDb", report.mean_reduction_db);
   json::put(out, "maxReductionDb", report.max_reduction_db);
   json::put(out, "floorLimitedFraction", report.floor_limited_fraction);
@@ -370,13 +334,8 @@ json::Object report_of(const repair::DenoiseReport& report) {
 }
 
 json::Object report_of(const repair::DereverbReport& report) {
-  json::Object detected;
-  json::put(detected, "lateDecayRatioDb", report.detected.late_decay_ratio_db);
-  if (report.detected.late_predictability) {
-    json::put(detected, "latePredictability", *report.detected.late_predictability);
-  }
   json::Object out;
-  json::put(out, "detected", std::move(detected));
+  json::put(out, "detected", detection_to_json(report.detected));
   json::put(out, "meanReductionDb", report.mean_reduction_db);
   json::put(out, "suppressedFraction", report.suppressed_fraction);
   json::put(out, "wpePredictorNorm", report.wpe_predictor_norm);
@@ -521,16 +480,20 @@ std::string repair_analyze_json(const float* const* channels, std::size_t channe
   std::vector<std::string> explanation;
   select_repair_stages(profile, config, chain, explanation);
 
-  json::Array per_channel;
-  for (const DefectProfile& channel : defects.channels) {
-    per_channel.emplace_back(defects_to_json(channel));
-  }
   json::Array reasons;
   for (const std::string& reason : explanation) reasons.emplace_back(reason);
 
   json::Object root;
-  json::put(root, "defects", defects_to_json(defects.aggregate));
-  json::put(root, "channels", std::move(per_channel));
+  // Every channel has the same length, so the detectors ran on all of them or on none; when on
+  // none, both blocks are left out.
+  if (defects.aggregate.measured) {
+    json::Array per_channel;
+    for (const DefectProfile& channel : defects.channels) {
+      per_channel.emplace_back(defects_to_json(channel));
+    }
+    json::put(root, "defects", defects_to_json(defects.aggregate));
+    json::put(root, "channels", std::move(per_channel));
+  }
   json::put(root, "declipThresholdSafe", defects.aggregate.declip_threshold_safe);
   json::put(root, "integratedLufs", profile.loudness.integrated_lufs);
   json::put(root, "recommended", recommended_stages(chain.repair));
@@ -579,58 +542,64 @@ bool repair_apply_json(const float* const* channels, std::size_t channel_count, 
 const std::vector<std::string>& repair_analysis_schema_paths() {
   static const std::vector<std::string> paths = {
       "channels",
-      "channels[].clickCount",
-      "channels[].clickLongestRunSamples",
-      "channels[].clickPerSecond",
-      "channels[].clickRejected",
-      "channels[].clipFlatLevel",
-      "channels[].clipFlatRunCount",
-      "channels[].clipFlatSampleCount",
-      "channels[].clipLongestFlatRunSamples",
-      "channels[].clipLongestRunSamples",
-      "channels[].clipRunCount",
-      "channels[].clipSampleCount",
-      "channels[].clipSampleFraction",
-      "channels[].cracklePerSecond",
-      "channels[].crackleSampleCount",
-      "channels[].crackleSampleFraction",
-      "channels[].humFundamentalDbfs",
-      "channels[].humFundamentalHz",
-      "channels[].humFundamentalProminence",
-      "channels[].humHarmonics",
-      "channels[].humPeakHarmonicDbfs",
-      "channels[].lateDecayRatioDb",
-      "channels[].measured",
-      "channels[].noiseBandPeakDbfs",
-      "channels[].noiseBandPeakIndex",
-      "channels[].noiseFloorDbfs",
+      "channels[].click",
+      "channels[].click.count",
+      "channels[].click.longestRunSamples",
+      "channels[].click.perSecond",
+      "channels[].click.rejected",
+      "channels[].clip",
+      "channels[].clip.clippedRatio",
+      "channels[].clip.clippedSamples",
+      "channels[].clip.flatLevel",
+      "channels[].clip.flatRunCount",
+      "channels[].clip.flatSampleCount",
+      "channels[].clip.longestFlatRunSamples",
+      "channels[].clip.longestRunSamples",
+      "channels[].clip.runCount",
+      "channels[].crackle",
+      "channels[].crackle.perSecond",
+      "channels[].crackle.sampleCount",
+      "channels[].crackle.sampleFraction",
+      "channels[].hum",
+      "channels[].hum.fundamentalHz",
+      "channels[].hum.fundamentalProminence",
+      "channels[].hum.harmonicDbfs",
+      "channels[].hum.harmonics",
+      "channels[].noise",
+      "channels[].noise.bandFloorDbfs",
+      "channels[].noise.floorDbfs",
+      "channels[].reverb",
+      "channels[].reverb.lateDecayRatioDb",
       "declipThresholdSafe",
       "defects",
-      "defects.clickCount",
-      "defects.clickLongestRunSamples",
-      "defects.clickPerSecond",
-      "defects.clickRejected",
-      "defects.clipFlatLevel",
-      "defects.clipFlatRunCount",
-      "defects.clipFlatSampleCount",
-      "defects.clipLongestFlatRunSamples",
-      "defects.clipLongestRunSamples",
-      "defects.clipRunCount",
-      "defects.clipSampleCount",
-      "defects.clipSampleFraction",
-      "defects.cracklePerSecond",
-      "defects.crackleSampleCount",
-      "defects.crackleSampleFraction",
-      "defects.humFundamentalDbfs",
-      "defects.humFundamentalHz",
-      "defects.humFundamentalProminence",
-      "defects.humHarmonics",
-      "defects.humPeakHarmonicDbfs",
-      "defects.lateDecayRatioDb",
-      "defects.measured",
-      "defects.noiseBandPeakDbfs",
-      "defects.noiseBandPeakIndex",
-      "defects.noiseFloorDbfs",
+      "defects.click",
+      "defects.click.count",
+      "defects.click.longestRunSamples",
+      "defects.click.perSecond",
+      "defects.click.rejected",
+      "defects.clip",
+      "defects.clip.clippedRatio",
+      "defects.clip.clippedSamples",
+      "defects.clip.flatLevel",
+      "defects.clip.flatRunCount",
+      "defects.clip.flatSampleCount",
+      "defects.clip.longestFlatRunSamples",
+      "defects.clip.longestRunSamples",
+      "defects.clip.runCount",
+      "defects.crackle",
+      "defects.crackle.perSecond",
+      "defects.crackle.sampleCount",
+      "defects.crackle.sampleFraction",
+      "defects.hum",
+      "defects.hum.fundamentalHz",
+      "defects.hum.fundamentalProminence",
+      "defects.hum.harmonicDbfs",
+      "defects.hum.harmonics",
+      "defects.noise",
+      "defects.noise.bandFloorDbfs",
+      "defects.noise.floorDbfs",
+      "defects.reverb",
+      "defects.reverb.lateDecayRatioDb",
       "explanation",
       "integratedLufs",
       "recommended",

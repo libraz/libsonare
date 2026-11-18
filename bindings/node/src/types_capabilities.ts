@@ -328,7 +328,7 @@ export interface MasteringPresetCatalogEntry {
   /** Integrated loudness target in LUFS; null for a restoration preset. */
   readonly targetLufs: number | null;
   /** True-peak ceiling in dBTP; null for a restoration preset. */
-  readonly truePeakCeilingDb: number | null;
+  readonly truePeakCeilingDbtp: number | null;
   /** Largest gain reduction the limiter may apply, in dB; null for a restoration preset. */
   readonly maxLimiterGainReductionDb: number | null;
 }

@@ -1,11 +1,6 @@
 import { mixSceneFromNative } from './internal/mix_scene.js';
 import { getSonareModule } from './module_state.js';
-import type {
-  MixAssistantResult,
-  MixAssistantTrack,
-  MixAssistantTrackProfile,
-  MixSourceClass,
-} from './public_types.js';
+import type { MixAssistantResult, MixAssistantTrack, MixSourceClass } from './public_types.js';
 import {
   assertSampleRate,
   assertString,
@@ -174,17 +169,6 @@ const OPTION_KEYS = [
   'hopLength',
 ] as const;
 
-/** The native profile still spells these without the unit and the `PerSecond` / `num` forms. */
-function profileFromNative(native: Record<string, unknown>): MixAssistantTrackProfile {
-  const { channelCount, truePeakDb, attackDensity, ...rest } = native;
-  return {
-    ...rest,
-    numChannels: channelCount,
-    truePeakDbtp: truePeakDb,
-    attackPerSecond: attackDensity,
-  } as unknown as MixAssistantTrackProfile;
-}
-
 /**
  * Analyze a set of tracks and suggest a mixer scene.
  *
@@ -234,7 +218,6 @@ export function mixingAssistantSuggest(...args: unknown[]): MixAssistantResult {
   return {
     ...native,
     scene: mixSceneFromNative(native.scene),
-    tracks: (native.tracks as Record<string, unknown>[]).map(profileFromNative),
   } as unknown as MixAssistantResult;
 }
 

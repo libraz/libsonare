@@ -1,5 +1,12 @@
 import type { CompressorDetector } from './mastering_dynamics.js';
-import type { ClickDetection, ClipDetection, CrackleDetection } from './types_repair.js';
+import type {
+  ClickDetection,
+  ClipDetection,
+  CrackleDetection,
+  HumDetection,
+  NoiseDetection,
+  ReverbDetection,
+} from './types_repair.js';
 import type { ValidateOptions } from './validation.js';
 
 /** Options of {@link masteringNormalizeLoudness}. All fields are optional. */
@@ -8056,36 +8063,6 @@ export interface MasteringAudioProfileDynamics {
   sustainRatio: number;
 }
 
-/** Noise reading of the audio profile. */
-export interface MasteringAudioProfileNoise {
-  /** Broadband estimated noise floor in dBFS. */
-  floorDbfs: number;
-  /** Level of the strongest noise band in dBFS. */
-  bandPeakDbfs: number;
-  /** Index of the strongest noise band. */
-  bandPeakIndex: number;
-}
-
-/** Hum reading of the audio profile. */
-export interface MasteringAudioProfileHum {
-  /** Hum fundamental frequency in Hz. */
-  fundamentalHz: number;
-  /** Linear energy ratio of the winning hum candidate over the median candidate (not dB); 1.0 means no peak. */
-  fundamentalProminence: number;
-  /** Number of hum harmonics above the floor. */
-  harmonics: number;
-  /** Level of the hum fundamental in dBFS. */
-  fundamentalDbfs: number;
-  /** Level of the strongest hum harmonic in dBFS. */
-  peakHarmonicDbfs: number;
-}
-
-/** Reverb reading of the audio profile. */
-export interface MasteringAudioProfileReverb {
-  /** Decay across the late lag, in dB; less negative means the material sustains. */
-  lateDecayRatioDb: number;
-}
-
 /** What the repair detectors measured, one record per detector. */
 export interface MasteringAudioProfileDefects {
   /** Click detector reading. */
@@ -8095,11 +8072,11 @@ export interface MasteringAudioProfileDefects {
   /** Crackle detector reading. */
   crackle: CrackleDetection;
   /** Noise reading. */
-  noise: MasteringAudioProfileNoise;
+  noise: NoiseDetection;
   /** Hum reading. */
-  hum: MasteringAudioProfileHum;
-  /** Reverb reading. */
-  reverb: MasteringAudioProfileReverb;
+  hum: HumDetection;
+  /** Reverb reading; `latePredictability` is absent, since the profile never runs WPE. */
+  reverb: ReverbDetection;
 }
 
 /** What {@link masteringAudioProfile} and its stereo form return. */

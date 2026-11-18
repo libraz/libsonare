@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any, get_type_hints
+from typing import Any, NotRequired, get_origin, get_type_hints
 
 import numpy as np
 import pytest
@@ -31,13 +31,17 @@ def _typed_dict_for(annotation: Any) -> type | None:
 
 
 def _assert_matches(value: Any, typed: type, where: str) -> None:
-    """Every key the document carries is declared, every declared key is carried."""
+    """Every key the document carries is declared, every required key is carried."""
     assert isinstance(value, dict), where
     hints = get_type_hints(typed, globalns=vars(sonare_types))
-    assert set(value) == set(hints), f"{where}: {sorted(set(value) ^ set(hints))}"
+    # Under postponed annotations 3.11 cannot see NotRequired in __required_keys__.
+    extras = get_type_hints(typed, globalns=vars(sonare_types), include_extras=True)
+    required = {k for k, v in extras.items() if get_origin(v) is not NotRequired}
+    assert set(value) <= set(hints), f"{where}: undeclared {sorted(set(value) - set(hints))}"
+    assert required <= set(value), f"{where}: missing {sorted(required - set(value))}"
     for key, annotation in hints.items():
         nested = _typed_dict_for(annotation)
-        if nested is None:
+        if nested is None or key not in value:
             continue
         child = value[key]
         if isinstance(child, list):
@@ -65,6 +69,20 @@ def test_streaming_preview_result() -> None:
 def test_audio_profile_result() -> None:
     result = json.loads(libsonare.mastering_audio_profile(SOURCE, SR))
     _assert_matches(result, libsonare.MasteringAudioProfile, "profile")
+    assert "defects" not in result
+
+
+def test_audio_profile_result_with_defects() -> None:
+    params = {"detectDefects": True}
+    result = json.loads(libsonare.mastering_audio_profile(SOURCE, SR, params))
+    assert "defects" in result
+    _assert_matches(result, libsonare.MasteringAudioProfile, "profile")
+
+
+def test_repair_analysis_result() -> None:
+    result = libsonare.mastering_repair_analyze([SOURCE, REFERENCE], SR)
+    assert "defects" in result and len(result["channels"]) == 2
+    _assert_matches(result, libsonare.MasteringRepairAnalysis, "repair")
 
 
 @pytest.mark.parametrize(

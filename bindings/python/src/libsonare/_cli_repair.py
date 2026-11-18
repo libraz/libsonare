@@ -174,66 +174,78 @@ def _fit_repair_output_to_full_scale(samples: Any) -> tuple[Any, float]:
     return buffer * gain, 20.0 * math.log10(gain)
 
 
-def _repair_detection_report(defects: dict[str, Any]) -> dict[str, object]:
-    """Render the assistant's defect profile as the flat, snake_case ``defects``
-    object the native CLI's ``--json`` also emits, key-for-key.
+# Each detector group of the profile's ``defects`` object, with the wire key
+# and the snake_case key the native CLI's ``--json`` emits for it.
+_DEFECT_GROUP_KEYS: dict[str, tuple[tuple[str, str], ...]] = {
+    "click": (
+        ("count", "count"),
+        ("rejected", "rejected"),
+        ("longestRunSamples", "longest_run_samples"),
+        ("perSecond", "per_second"),
+    ),
+    "clip": (
+        ("clippedSamples", "clipped_samples"),
+        ("clippedRatio", "clipped_ratio"),
+        ("runCount", "run_count"),
+        ("longestRunSamples", "longest_run_samples"),
+        ("flatRunCount", "flat_run_count"),
+        ("longestFlatRunSamples", "longest_flat_run_samples"),
+        ("flatSampleCount", "flat_sample_count"),
+    ),
+    "crackle": (
+        ("sampleCount", "sample_count"),
+        ("sampleFraction", "sample_fraction"),
+        ("perSecond", "per_second"),
+    ),
+    "noise": (("floorDbfs", "floor_dbfs"), ("bandFloorDbfs", "band_floor_dbfs")),
+    "hum": (
+        ("fundamentalHz", "fundamental_hz"),
+        ("fundamentalProminence", "fundamental_prominence"),
+        ("harmonics", "harmonics"),
+        ("harmonicDbfs", "harmonic_dbfs"),
+    ),
+    "reverb": (("lateDecayRatioDb", "late_decay_ratio_db"),),
+}
 
-    ``noise_band_measured`` and ``hum_peak_found`` are added booleans, not
-    replacements: ``noiseBandPeakIndex == -1`` and
-    ``humFundamentalProminence == 1.0`` (a linear energy ratio, not dB) are both
-    "could not decide" sentinels that a raw number invites a reader to mistake for a
-    measured value, so a boolean says so where it cannot be missed. When nothing was measured, no
-    numeric field is emitted at all -- there must be nothing here for a
-    caller to misread as "clean".
+
+def _repair_detection_report(defects: object) -> dict[str, dict[str, object]] | None:
+    """Render the profile's ``defects`` object in the snake_case shape the native
+    CLI's ``--json`` emits, group for group; None when no detector ran.
+
+    A large ``click.rejected`` beside a zero ``click.count`` means the detector
+    could not decide, and a ``hum.fundamental_prominence`` (a linear energy
+    ratio) of 1.0 means no stationary peak was found.
     """
-    if not bool(defects.get("measured", False)):
-        return {"measured": False}
-
-    band_index = int(defects.get("noiseBandPeakIndex", -1))
-    hum_prominence = float(defects.get("humFundamentalProminence", 1.0))
-    return {
-        "measured": True,
-        "click_count": int(defects.get("clickCount", 0)),
-        "click_rejected": int(defects.get("clickRejected", 0)),
-        "click_longest_run_samples": int(defects.get("clickLongestRunSamples", 0)),
-        "click_per_second": float(defects.get("clickPerSecond", 0.0)),
-        "crackle_sample_count": int(defects.get("crackleSampleCount", 0)),
-        "crackle_sample_fraction": float(defects.get("crackleSampleFraction", 0.0)),
-        "crackle_per_second": float(defects.get("cracklePerSecond", 0.0)),
-        "clip_sample_count": int(defects.get("clipSampleCount", 0)),
-        "clip_run_count": int(defects.get("clipRunCount", 0)),
-        "clip_longest_run_samples": int(defects.get("clipLongestRunSamples", 0)),
-        "clip_sample_fraction": float(defects.get("clipSampleFraction", 0.0)),
-        "clip_flat_run_count": int(defects.get("clipFlatRunCount", 0)),
-        "clip_flat_sample_count": int(defects.get("clipFlatSampleCount", 0)),
-        "clip_longest_flat_run_samples": int(defects.get("clipLongestFlatRunSamples", 0)),
-        "clip_flat_level": float(defects.get("clipFlatLevel", 0.0)),
-        "noise_floor_dbfs": float(defects.get("noiseFloorDbfs", 0.0)),
-        "noise_band_measured": band_index >= 0,
-        "noise_band_peak_dbfs": float(defects.get("noiseBandPeakDbfs", 0.0)),
-        "noise_band_peak_index": band_index,
-        "hum_peak_found": hum_prominence > 1.0,
-        "hum_fundamental_hz": float(defects.get("humFundamentalHz", 0.0)),
-        "hum_fundamental_prominence": hum_prominence,
-        "hum_harmonics": int(defects.get("humHarmonics", 0)),
-        "hum_fundamental_dbfs": float(defects.get("humFundamentalDbfs", 0.0)),
-        "hum_peak_harmonic_dbfs": float(defects.get("humPeakHarmonicDbfs", 0.0)),
-        "late_decay_ratio_db": float(defects.get("lateDecayRatioDb", 0.0)),
-    }
+    if defects is None:
+        return None
+    if not isinstance(defects, dict):
+        raise ValueError("libsonare returned an invalid defect profile")
+    report: dict[str, dict[str, object]] = {}
+    for group, keys in _DEFECT_GROUP_KEYS.items():
+        source = defects.get(group)
+        if not isinstance(source, dict) or any(wire not in source for wire, _ in keys):
+            raise ValueError(f"libsonare returned an incomplete '{group}' defect group")
+        report[group] = {cli: source[wire] for wire, cli in keys}
+    # A flat-top level is only measured where a flat run was found.
+    if cast("int", report["clip"]["flat_run_count"]) > 0:
+        report["clip"]["flat_level"] = defects["clip"]["flatLevel"]
+    return report
 
 
-def _print_repair_detection_report(report: dict[str, object]) -> None:
+def _print_repair_detection_report(report: dict[str, dict[str, object]] | None) -> None:
     print("  Repair detection:")
-    if not report.get("measured"):
+    if report is None:
         print("    Measured:     no (nothing looked at this recording)")
         return
+    click, clip, crackle = report["click"], report["clip"], report["crackle"]
+    noise, hum, reverb = report["noise"], report["hum"], report["reverb"]
     print("    Measured:     yes")
-    click_count = cast("int", report["click_count"])
-    click_rejected = cast("int", report["click_rejected"])
+    click_count = cast("int", click["count"])
+    click_rejected = cast("int", click["rejected"])
     print(
         f"    Clicks:       {click_count} found, {click_rejected} rejected as undecidable, "
-        f"longest run {report['click_longest_run_samples']} samples, "
-        f"{cast('float', report['click_per_second']):.2f}/s"
+        f"longest run {click['longest_run_samples']} samples, "
+        f"{cast('float', click['per_second']):.2f}/s"
     )
     if click_count == 0 and click_rejected > 0:
         print(
@@ -241,22 +253,22 @@ def _print_repair_detection_report(report: dict[str, object]) -> None:
             "and confirmed none -- detector uncertainty, not necessarily a clean signal"
         )
     print(
-        f"    Crackle:      {report['crackle_sample_count']} samples "
-        f"({cast('float', report['crackle_sample_fraction']) * 100:.3f}% of input), "
-        f"{cast('float', report['crackle_per_second']):.2f}/s"
+        f"    Crackle:      {crackle['sample_count']} samples "
+        f"({cast('float', crackle['sample_fraction']) * 100:.3f}% of input), "
+        f"{cast('float', crackle['per_second']):.2f}/s"
     )
     print(
-        f"    Clipping:     {report['clip_sample_count']} samples in "
-        f"{report['clip_run_count']} run(s) "
-        f"({cast('float', report['clip_sample_fraction']) * 100:.3f}% of input), "
-        f"longest run {report['clip_longest_run_samples']} samples"
+        f"    Clipping:     {clip['clipped_samples']} samples in "
+        f"{clip['run_count']} run(s) "
+        f"({cast('float', clip['clipped_ratio']) * 100:.3f}% of input), "
+        f"longest run {clip['longest_run_samples']} samples"
     )
-    if cast("int", report["clip_flat_run_count"]) > 0:
+    if cast("int", clip["flat_run_count"]) > 0:
         print(
-            f"    Flat tops:    {report['clip_flat_run_count']} run(s) pinned at "
-            f"{cast('float', report['clip_flat_level']):.3f} "
-            f"({report['clip_flat_sample_count']} samples, longest "
-            f"{report['clip_longest_flat_run_samples']}) -- these survive a later gain "
+            f"    Flat tops:    {clip['flat_run_count']} run(s) pinned at "
+            f"{cast('float', clip['flat_level']):.3f} "
+            f"({clip['flat_sample_count']} samples, longest "
+            f"{clip['longest_flat_run_samples']}) -- these survive a later gain "
             "change, so they are clipping rather than a peak that reaches the ceiling"
         )
     else:
@@ -264,27 +276,25 @@ def _print_repair_detection_report(report: dict[str, object]) -> None:
             "    Flat tops:    none (an unclipped peak reaches the ceiling too; resampling "
             "or a lossy codec erases a real one, so this is not proof of no clipping)"
         )
-    band_text = (
-        f"band {report['noise_band_peak_index']}"
-        if report["noise_band_measured"]
-        else "no band measured"
-    )
+    band_floor = cast("list[float]", noise["band_floor_dbfs"])
+    loudest_band = max(range(len(band_floor)), key=band_floor.__getitem__)
     print(
-        f"    Noise floor:  {cast('float', report['noise_floor_dbfs']):.1f} dBFS, "
-        f"loudest band {cast('float', report['noise_band_peak_dbfs']):.1f} dBFS ({band_text})"
+        f"    Noise floor:  {cast('float', noise['floor_dbfs']):.1f} dBFS, "
+        f"loudest band {band_floor[loudest_band]:.1f} dBFS (band {loudest_band})"
     )
-    if report["hum_peak_found"]:
+    if cast("float", hum["fundamental_prominence"]) > 1.0:
+        harmonic_dbfs = cast("list[float]", hum["harmonic_dbfs"])
         print(
-            f"    Hum:          {cast('float', report['hum_fundamental_hz']):.1f} Hz, "
-            f"{cast('float', report['hum_fundamental_prominence']):.1f}x the rest of the search, "
-            f"{report['hum_harmonics']} harmonic(s), "
-            f"fundamental {cast('float', report['hum_fundamental_dbfs']):.1f} dBFS, "
-            f"loudest harmonic {cast('float', report['hum_peak_harmonic_dbfs']):.1f} dBFS"
+            f"    Hum:          {cast('float', hum['fundamental_hz']):.1f} Hz, "
+            f"{cast('float', hum['fundamental_prominence']):.1f}x the rest of the search, "
+            f"{hum['harmonics']} harmonic(s), "
+            f"fundamental {harmonic_dbfs[0]:.1f} dBFS, "
+            f"loudest harmonic {max(harmonic_dbfs):.1f} dBFS"
         )
     else:
         print("    Hum:          search found no candidate peak (could not decide)")
     print(
-        f"    Late decay:   {cast('float', report['late_decay_ratio_db']):.1f} dB "
+        f"    Late decay:   {cast('float', reverb['late_decay_ratio_db']):.1f} dB "
         "(not RT60; less negative means more reverberant)"
     )
 
@@ -332,20 +342,22 @@ def cmd_repair(args: argparse.Namespace) -> int:
 
     samples, sr = _load_audio(args.file)
 
-    # `defects` is part of the --json contract in every mode (and of the text
-    # report whenever it prints), so it is always measured here -- never only
+    # Every mode reports the detectors, so they always run here -- never only
     # when it happens to be convenient for one mode.
     profile = json.loads(
         mastering_audio_profile(samples, sample_rate=sr, params={"detectDefects": True})
     )
-    raw_defects = profile.get("defects") if isinstance(profile, dict) else None
-    if not isinstance(raw_defects, dict):
-        raise ValueError("libsonare did not return a defect profile")
-    defects = _repair_detection_report(raw_defects)
+    if not isinstance(profile, dict):
+        raise ValueError("libsonare did not return an audio profile")
+    # The profile omits `defects` when no detector ran; so does this report.
+    defects = _repair_detection_report(profile.get("defects"))
 
     if detect_only:
         if getattr(args, "json", False):
-            print(_strict_json_dumps({"mode": "detect", "defects": defects}))
+            detect_payload: dict[str, object] = {"mode": "detect"}
+            if defects is not None:
+                detect_payload["defects"] = defects
+            print(_strict_json_dumps(detect_payload))
         else:
             _print_repair_detection_report(defects)
         return 0
@@ -401,7 +413,8 @@ def cmd_repair(args: argparse.Namespace) -> int:
         # on the files it acted on would make its absence mean both "did not
         # clip" and "this build does not report it".
         payload["output_gain_db"] = output_gain_db
-        payload["defects"] = defects
+        if defects is not None:
+            payload["defects"] = defects
         print(_strict_json_dumps(payload))
     else:
         print(f"  Repair ({mode}):")

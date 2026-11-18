@@ -1,5 +1,6 @@
 import { nestChainConfig } from './internal/chain_config.js';
 import { resolveInsertParams, resolveProcessorParams } from './internal/processor_params.js';
+import { audioDefectsFromNative } from './internal/repair_common.js';
 import { masteringPlatformNames, masteringPresetNames } from './mastering_chain.js';
 import { getSonareModule } from './module_state.js';
 import type {
@@ -8,7 +9,6 @@ import type {
   MasteringAssistantResult,
   MasteringAudioProfile,
   MasteringAudioProfileDefects,
-  MasteringAudioProfileSpectral,
   MasteringChainConfig,
   MasteringChannelPolicy,
   MasteringInsertName,
@@ -812,113 +812,28 @@ export function masteringAbMatchLoudnessStereo(
   );
 }
 
-type NativeJson = Record<string, unknown>;
-
-// Native still names the assistant profile's true peak, loudness range and onset rate
-// `truePeakDb`, `lraLu` and `attackDensity`.
-function assistantProfileFromNative(native: NativeJson): MasteringAssistantResult['profile'] {
-  const { truePeakDb, lraLu, attackDensity, ...rest } = native as NativeJson & {
-    truePeakDb: number;
-    lraLu: number;
-    attackDensity: number;
-  };
-  return {
-    ...rest,
-    loudnessRangeLu: lraLu,
-    truePeakDbtp: truePeakDb,
-    attackPerSecond: attackDensity,
-  } as unknown as MasteringAssistantResult['profile'];
-}
-
 function assistantResultFromNative(json: string): MasteringAssistantResult {
   const native = JSON.parse(json) as {
     chainConfig: { params: Record<string, unknown> };
     explanation: string[];
-    profile: NativeJson;
+    profile: MasteringAssistantResult['profile'];
   };
   return {
     chainConfig: nestChainConfig(native.chainConfig.params),
     explanation: native.explanation,
-    profile: assistantProfileFromNative(native.profile),
+    profile: native.profile,
   };
 }
 
-// Native still names the preview's true peak `truePeakDb`.
 function previewFromNative(json: string): MasteringStreamingPreviewResult {
-  const native = JSON.parse(json) as { platforms: NativeJson[] };
-  return {
-    platforms: native.platforms.map((platform) => {
-      const { truePeakDb, ...rest } = platform as NativeJson & { truePeakDb: number };
-      return { ...rest, truePeakDbtp: truePeakDb };
-    }),
-  } as unknown as MasteringStreamingPreviewResult;
+  return JSON.parse(json) as MasteringStreamingPreviewResult;
 }
 
-// Native reports the defects as one flat bag with a `measured` flag; the facade groups it per detector.
+// `defects` is absent when the detectors did not run.
 function profileFromNative(json: string): MasteringAudioProfile {
-  const native = JSON.parse(json) as {
-    loudness: { integratedLufs: number; lraLu: number; truePeakDb: number; crestFactorDb: number };
-    spectral: MasteringAudioProfileSpectral;
-    dynamics: { shortTermLufsStd: number; attackDensity: number; sustainRatio: number };
-    defects: Record<string, number | boolean>;
-  } & NativeJson;
-  const { loudness, spectral, dynamics, defects, ...rest } = native;
-  const d = defects as Record<string, number>;
-  const profile: MasteringAudioProfile = {
-    ...(rest as unknown as Omit<
-      MasteringAudioProfile,
-      'loudness' | 'spectral' | 'dynamics' | 'defects'
-    >),
-    loudness: {
-      integratedLufs: loudness.integratedLufs,
-      loudnessRangeLu: loudness.lraLu,
-      truePeakDbtp: loudness.truePeakDb,
-      crestFactorDb: loudness.crestFactorDb,
-    },
-    spectral,
-    dynamics: {
-      shortTermLufsStd: dynamics.shortTermLufsStd,
-      attackPerSecond: dynamics.attackDensity,
-      sustainRatio: dynamics.sustainRatio,
-    },
-  };
-  if (defects.measured === true) {
-    profile.defects = {
-      click: {
-        count: d.clickCount,
-        rejected: d.clickRejected,
-        longestRunSamples: d.clickLongestRunSamples,
-        perSecond: d.clickPerSecond,
-      },
-      clip: {
-        clippedSamples: d.clipSampleCount,
-        clippedRatio: d.clipSampleFraction,
-        runCount: d.clipRunCount,
-        longestRunSamples: d.clipLongestRunSamples,
-        flatRunCount: d.clipFlatRunCount,
-        longestFlatRunSamples: d.clipLongestFlatRunSamples,
-        flatSampleCount: d.clipFlatSampleCount,
-        flatLevel: d.clipFlatLevel,
-      },
-      crackle: {
-        sampleCount: d.crackleSampleCount,
-        sampleFraction: d.crackleSampleFraction,
-        perSecond: d.cracklePerSecond,
-      },
-      noise: {
-        floorDbfs: d.noiseFloorDbfs,
-        bandPeakDbfs: d.noiseBandPeakDbfs,
-        bandPeakIndex: d.noiseBandPeakIndex,
-      },
-      hum: {
-        fundamentalHz: d.humFundamentalHz,
-        fundamentalProminence: d.humFundamentalProminence,
-        harmonics: d.humHarmonics,
-        fundamentalDbfs: d.humFundamentalDbfs,
-        peakHarmonicDbfs: d.humPeakHarmonicDbfs,
-      },
-      reverb: { lateDecayRatioDb: d.lateDecayRatioDb },
-    };
+  const profile = JSON.parse(json) as MasteringAudioProfile;
+  if (profile.defects !== undefined) {
+    profile.defects = audioDefectsFromNative(profile.defects);
   }
   return profile;
 }

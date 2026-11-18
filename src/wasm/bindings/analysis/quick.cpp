@@ -84,8 +84,9 @@ val chordToVal(const Chord& chord_result) {
   chord.set("root", static_cast<int>(chord_result.root));
   chord.set("bass", static_cast<int>(chord_result.bass));
   chord.set("quality", static_cast<int>(chord_result.quality));
-  chord.set("start", chord_result.start);
-  chord.set("end", chord_result.end);
+  chord.set("startSec", chord_result.start);
+  chord.set("endSec", chord_result.end);
+  chord.set("durationSec", chord_result.end - chord_result.start);
   chord.set("confidence", chord_result.confidence);
   chord.set("name", chord_result.to_string());
   return chord;
@@ -141,7 +142,7 @@ val analysisResultToVal(const AnalysisResult& result) {
   val bpmCandidates = val::array();
   for (const auto& candidate : result.bpm_candidates) {
     val value = val::object();
-    value.set("value", candidate.value);
+    value.set("bpm", candidate.value);
     value.set("confidence", candidate.confidence);
     switch (candidate.relation) {
       case BpmCandidateRelation::Primary:
@@ -182,21 +183,21 @@ val analysisResultToVal(const AnalysisResult& result) {
   val beats = val::array();
   for (size_t i = 0; i < result.beats.size(); ++i) {
     val beat = val::object();
-    beat.set("time", result.beats[i].time);
+    beat.set("timeSec", result.beats[i].time);
     beat.set("strength", result.beats[i].strength);
     beats.call<void>("push", beat);
   }
   out.set("beats", beats);
 
-  // Downbeats as indices into beats, plus the meter phase they start from.
+  // Downbeats as the beat records they index, plus the meter phase they start from.
   // Field names and order mirror analysis_result_to_json /
   // analysis_result_schema_paths, which the cross-surface field-set test
   // compares this object against.
-  val downbeatIndices = val::array();
+  val downbeats = val::array();
   for (int index : result.downbeat_indices) {
-    downbeatIndices.call<void>("push", index);
+    downbeats.call<void>("push", beats[static_cast<unsigned>(index)]);
   }
-  out.set("downbeatIndices", downbeatIndices);
+  out.set("downbeats", downbeats);
   out.set("downbeatPhase", result.downbeat_phase);
 
   // Beat-level evidence the downbeat and meter decisions score, one value per
@@ -229,8 +230,8 @@ val analysisResultToVal(const AnalysisResult& result) {
   for (size_t i = 0; i < result.sections.size(); ++i) {
     val section = val::object();
     section.set("type", static_cast<int>(result.sections[i].type));
-    section.set("start", result.sections[i].start);
-    section.set("end", result.sections[i].end);
+    section.set("startSec", result.sections[i].start);
+    section.set("endSec", result.sections[i].end);
     section.set("energyLevel", result.sections[i].energy_level);
     section.set("confidence", result.sections[i].confidence);
     section.set("group", result.sections[i].group);
@@ -249,7 +250,7 @@ val analysisResultToVal(const AnalysisResult& result) {
   out.set("timbre", timbre);
 
   // Dynamics. Field order mirrors analysis_result_to_json /
-  // analysis_result_schema_paths (crestFactor before loudnessRangeDb) so the two
+  // analysis_result_schema_paths (crestFactor before loudnessRangeLu) so the two
   // hand-maintained serializers read identically; both are anchored to the same
   // canonical schema by the cross-surface field-set tests.
   val dynamics = val::object();
@@ -257,7 +258,7 @@ val analysisResultToVal(const AnalysisResult& result) {
   dynamics.set("peakDb", result.dynamics.peak_db);
   dynamics.set("rmsDb", result.dynamics.rms_db);
   dynamics.set("crestFactor", result.dynamics.crest_factor);
-  dynamics.set("loudnessRangeDb", result.dynamics.loudness_range_db);
+  dynamics.set("loudnessRangeLu", result.dynamics.loudness_range_db);
   dynamics.set("isCompressed", result.dynamics.is_compressed);
   out.set("dynamics", dynamics);
 
@@ -274,13 +275,16 @@ val analysisResultToVal(const AnalysisResult& result) {
   val melody = val::object();
   melody.set("pitchRangeOctaves", result.melody.pitch_range_octaves);
   melody.set("pitchStability", result.melody.pitch_stability);
-  melody.set("meanFrequency", result.melody.mean_frequency);
-  melody.set("vibratoRate", result.melody.vibrato_rate);
+  melody.set("meanFrequencyHz", result.melody.mean_frequency);
+  melody.set("vibratoRateHz", result.melody.vibrato_rate);
   val melodyPitches = val::array();
   for (size_t i = 0; i < result.melody.pitches.size(); ++i) {
     val pitch = val::object();
-    pitch.set("time", result.melody.pitches[i].time);
-    pitch.set("frequency", result.melody.pitches[i].frequency);
+    pitch.set("timeSec", result.melody.pitches[i].time);
+    // An unvoiced point has no frequency; the key is left out.
+    if (result.melody.pitches[i].frequency > 0.0f) {
+      pitch.set("frequencyHz", result.melody.pitches[i].frequency);
+    }
     pitch.set("confidence", result.melody.pitches[i].confidence);
     melodyPitches.call<void>("push", pitch);
   }

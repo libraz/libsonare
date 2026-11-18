@@ -177,29 +177,17 @@ export function chordChromaMethodValue(method: ChordChromaMethod | undefined): n
 }
 
 export function convertSection(s: WasmSectionResult): Section {
-  return {
-    type: sectionTypeToken(s.type),
-    startSec: s.start,
-    endSec: s.end,
-    energyLevel: s.energyLevel,
-    confidence: s.confidence,
-    group: s.group,
-    name: s.name,
-  };
+  return { ...s, type: sectionTypeToken(s.type) };
 }
 
 function convertChord(c: WasmChordResult) {
   return {
+    ...c,
     root: c.root as PitchClass,
     bass: c.bass as PitchClass,
     rootName: pitchClassName(c.root),
     bassName: pitchClassName(c.bass),
     quality: chordQualityToken(c.quality),
-    startSec: c.start,
-    endSec: c.end,
-    durationSec: c.end - c.start,
-    confidence: c.confidence,
-    name: c.name,
   };
 }
 
@@ -210,16 +198,11 @@ export function convertChordAnalysisResult(wasm: WasmChordAnalysisResult): Chord
   };
 }
 
+// The analysis object already carries the public key names; only the coded
+// enums (pitch class, key mode, chord quality, section type) are decoded here.
 export function convertAnalysisResult(wasm: WasmAnalysisResult): AnalysisResult {
-  const beats = wasm.beats.map((b) => ({ timeSec: b.time, strength: b.strength }));
   return {
-    bpm: wasm.bpm,
-    bpmConfidence: wasm.bpmConfidence,
-    bpmCandidates: wasm.bpmCandidates.map((candidate) => ({
-      bpm: candidate.value,
-      confidence: candidate.confidence,
-      relation: candidate.relation,
-    })),
+    ...wasm,
     key: {
       root: wasm.key.root as PitchClass,
       mode: keyModeName(wasm.key.mode),
@@ -227,41 +210,11 @@ export function convertAnalysisResult(wasm: WasmAnalysisResult): AnalysisResult 
       name: wasm.key.name,
       shortName: wasm.key.shortName,
     },
-    timeSignature: wasm.timeSignature,
-    timeSignatureCandidates: wasm.timeSignatureCandidates,
-    beats,
-    downbeats: wasm.downbeatIndices.map((i) => beats[i]),
-    downbeatPhase: wasm.downbeatPhase,
-    beatObservations: wasm.beatObservations,
-    beatLocalBpm: wasm.beatLocalBpm,
     chords: wasm.chords.map((c) => ({ ...convertChord(c), romanNumeral: c.romanNumeral })),
     sections: wasm.sections.map(convertSection),
-    timbre: wasm.timbre,
-    dynamics: {
-      dynamicRangeDb: wasm.dynamics.dynamicRangeDb,
-      peakDb: wasm.dynamics.peakDb,
-      rmsDb: wasm.dynamics.rmsDb,
-      loudnessRangeLu: wasm.dynamics.loudnessRangeDb,
-      crestFactor: wasm.dynamics.crestFactor,
-      isCompressed: wasm.dynamics.isCompressed,
-    },
     rhythm: {
       ...wasm.rhythm,
       grooveType: wasm.rhythm.grooveType as AnalysisResult['rhythm']['grooveType'],
     },
-    melody: {
-      pitchRangeOctaves: wasm.melody.pitchRangeOctaves,
-      pitchStability: wasm.melody.pitchStability,
-      meanFrequencyHz: wasm.melody.meanFrequency,
-      vibratoRateHz: wasm.melody.vibratoRate,
-      // Native reports an unvoiced frame as frequency 0; here it is absent.
-      pitches: wasm.melody.pitches.map((p) =>
-        p.frequency > 0
-          ? { timeSec: p.time, frequencyHz: p.frequency, confidence: p.confidence }
-          : { timeSec: p.time, confidence: p.confidence },
-      ),
-    },
-    form: wasm.form,
-    tuningCents: wasm.tuningCents,
   };
 }

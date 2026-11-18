@@ -2,6 +2,7 @@
  * Input shape and geometry check the repair families share.
  */
 
+import type { MasteringAudioProfileDefects } from '../types_mastering.js';
 import type { DehumReport, DenoiseReport, HumDetection, NoiseDetection } from '../types_repair.js';
 import { assertIntegerValue, assertPositiveInteger } from '../validation.js';
 
@@ -66,6 +67,12 @@ export function repairNativeOptions(request: object): Record<string, unknown> {
     }
   }
   return native;
+}
+
+/** Grouped defects as the profile and repair documents carry them, with the detection arrays as `Float32Array`. */
+export function audioDefectsFromNative(native: unknown): MasteringAudioProfileDefects {
+  const d = native as MasteringAudioProfileDefects;
+  return { ...d, noise: noiseDetection(d.noise), hum: humDetection(d.hum) };
 }
 
 /** A hum detection with the addon's `harmonicDbfs` array as a `Float32Array`. */

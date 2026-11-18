@@ -61,7 +61,7 @@ MASTERING_PRESET_KEYS = {
     "name",
     "kind",
     "targetLufs",
-    "truePeakCeilingDb",
+    "truePeakCeilingDbtp",
     "maxLimiterGainReductionDb",
 }
 
@@ -276,7 +276,7 @@ def validate_mastering_presets(root: dict[str, Any]) -> None:
         if entry["kind"] not in {"mastering", "restoration"}:
             raise ValueError(f"{path}.kind must be 'mastering' or 'restoration'")
         is_mastering = entry["kind"] == "mastering"
-        for key in ("targetLufs", "truePeakCeilingDb", "maxLimiterGainReductionDb"):
+        for key in ("targetLufs", "truePeakCeilingDbtp", "maxLimiterGainReductionDb"):
             value = entry[key]
             if is_mastering:
                 if not optional_number(value) or value is None:

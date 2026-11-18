@@ -70,7 +70,7 @@ std::string streaming_preview_to_json(const std::vector<StreamingPreviewResult>&
     json::Object entry;
     entry["name"] = result.name;
     entry["integratedLufs"] = static_cast<double>(result.integrated_lufs);
-    entry["truePeakDb"] = static_cast<double>(result.true_peak_db);
+    entry["truePeakDbtp"] = static_cast<double>(result.true_peak_db);
     entry["normalizationGainDb"] = static_cast<double>(result.normalization_gain_db);
     entry["ceilingRisk"] = result.ceiling_risk;
     platforms.push_back(json::Value(std::move(entry)));
@@ -83,7 +83,7 @@ std::string streaming_preview_to_json(const std::vector<StreamingPreviewResult>&
 const std::vector<std::string>& streaming_preview_schema_paths() {
   static const std::vector<std::string> paths = {
       "platforms",        "platforms[].ceilingRisk",         "platforms[].integratedLufs",
-      "platforms[].name", "platforms[].normalizationGainDb", "platforms[].truePeakDb",
+      "platforms[].name", "platforms[].normalizationGainDb", "platforms[].truePeakDbtp",
   };
   return paths;
 }

@@ -70,7 +70,7 @@ def native_option_defaults() -> Any:
     return lib.sonare_music_analyze_options_default()
 
 
-def test_analyze_reports_downbeats_as_indices_into_beats(four_four_result) -> None:
+def test_analyze_reports_downbeats_drawn_from_beats(four_four_result) -> None:
     """downbeats are the beats that open a bar, drawn from beats in time order."""
     result = four_four_result
 
@@ -80,8 +80,8 @@ def test_analyze_reports_downbeats_as_indices_into_beats(four_four_result) -> No
 
     assert result.downbeats, "an accented click track should yield at least one bar start"
     assert len(result.downbeats) <= len(result.beats)
-    beat_ids = {id(beat) for beat in result.beats}
-    assert all(id(beat) in beat_ids for beat in result.downbeats)
+    beat_times = {beat.time_sec for beat in result.beats}
+    assert all(beat.time_sec in beat_times for beat in result.downbeats)
     times = [beat.time_sec for beat in result.downbeats]
     assert times == sorted(set(times))
 

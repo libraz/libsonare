@@ -1493,12 +1493,15 @@ TEST_CASE("sonare_analyze_json", "[.][slow][c_api]") {
     REQUIRE(root["sections"][static_cast<std::size_t>(0)]["group"].as_number() ==
             static_cast<double>(fixture.sections.front().group));
 
-    // Downbeats serialize as indices into the beat array plus the meter phase,
-    // so a reader can resolve them without a second time series.
-    REQUIRE(root["downbeatIndices"].is_array());
-    REQUIRE(root["downbeatIndices"].size() == fixture.downbeat_indices.size());
-    REQUIRE(root["downbeatIndices"][static_cast<std::size_t>(0)].as_number() ==
-            static_cast<double>(fixture.downbeat_indices.front()));
+    // Downbeats serialize as the beat records they index, plus the meter phase.
+    const auto& downbeat =
+        fixture.beats.at(static_cast<std::size_t>(fixture.downbeat_indices.front()));
+    REQUIRE(root["downbeats"].is_array());
+    REQUIRE(root["downbeats"].size() == fixture.downbeat_indices.size());
+    REQUIRE(root["downbeats"][static_cast<std::size_t>(0)]["timeSec"].as_number() ==
+            Catch::Approx(downbeat.time));
+    REQUIRE(root["downbeats"][static_cast<std::size_t>(0)]["strength"].as_number() ==
+            Catch::Approx(downbeat.strength));
     REQUIRE(root["downbeatPhase"].as_number() == static_cast<double>(fixture.downbeat_phase));
   }
 

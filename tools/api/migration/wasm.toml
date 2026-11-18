@@ -26896,6 +26896,21 @@ rule = "unit-in-name"
 
 [[entry]]
 kind = "field"
+old = "CapabilityCatalogMasteringPreset.truePeakCeilingDb"
+new = "MasteringPresetCatalogEntry.truePeakCeilingDbtp"
+domain = "mastering"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "CapabilityCatalogMasteringPreset.truePeakCeilingDb"
+new = "MasteringPresetCatalogEntry.truePeakCeilingDbtp"
+domain = "mastering"
+rule = "unit-in-name"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
 old = "EngineTransportState.timeSignature.numerator"
 new = "TimeSignature.numerator"
 domain = "engine"

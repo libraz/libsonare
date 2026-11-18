@@ -1,11 +1,6 @@
 import { mixSceneFromNative } from './internal/mix_scene.js';
 import { addon } from './native.js';
-import type {
-  MixAssistantResult,
-  MixAssistantTrack,
-  MixAssistantTrackProfile,
-  MixSourceClass,
-} from './types.js';
+import type { MixAssistantResult, MixAssistantTrack, MixSourceClass } from './types.js';
 import {
   assertPositiveInteger,
   assertSampleRate,
@@ -205,17 +200,6 @@ function normalizeOptions(
   return params;
 }
 
-/** The native profile still spells these without the unit and the `PerSecond` / `num` forms. */
-function profileFromNative(native: Record<string, unknown>): MixAssistantTrackProfile {
-  const { channelCount, truePeakDb, attackDensity, ...rest } = native;
-  return {
-    ...rest,
-    numChannels: channelCount,
-    truePeakDbtp: truePeakDb,
-    attackPerSecond: attackDensity,
-  } as unknown as MixAssistantTrackProfile;
-}
-
 /**
  * Analyse a set of tracks and return a suggested mixer scene, the measurements
  * behind it and a human-readable explanation.
@@ -254,7 +238,6 @@ export function mixingAssistantSuggest(...args: unknown[]): MixAssistantResult {
   return {
     ...native,
     scene: mixSceneFromNative(native.scene),
-    tracks: (native.tracks as Record<string, unknown>[]).map(profileFromNative),
   } as unknown as MixAssistantResult;
 }
 

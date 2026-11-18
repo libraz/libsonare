@@ -2,10 +2,10 @@
  * One repair analysis and one repair application over any number of channels.
  */
 
-import { declipReportFromNative } from './internal/metering_native.js';
-import { dbFromLinear, linearFromDb } from './internal/repair_common.js';
+import { audioDefectsFromNative, dbFromLinear, linearFromDb } from './internal/repair_common.js';
 import { getSonareModule } from './module_state.js';
 import type { ProgressCallback } from './public_types.js';
+import type { MasteringAudioProfileDefects } from './public_types_mastering.js';
 import type {
   DeclickReport,
   DeclipReport,
@@ -75,72 +75,15 @@ function stageFromNative(native: Record<string, unknown>): MasteringRepairStage 
 }
 
 /**
- * One channel's repair defects, or their aggregate, as {@link masteringRepairAnalyze} measures them.
- * Flat, unlike the grouped `defects` of the audio profile.
- */
-export interface MasteringRepairDefects {
-  /** False when the detectors did not run; every count is then 0. */
-  measured: boolean;
-  /** Runs the declick criteria count as clicks. */
-  clickCount: number;
-  /** Outlier runs the criteria excluded; a large value means the detector could not decide on this material. */
-  clickRejected: number;
-  /** Longest counted click run, in samples. */
-  clickLongestRunSamples: number;
-  /** Counted clicks divided by the input duration. */
-  clickPerSecond: number;
-  /** Samples the crackle detector flags. */
-  crackleSampleCount: number;
-  /** `crackleSampleCount` divided by the input length. */
-  crackleSampleFraction: number;
-  /** Crackle samples per second of input. */
-  cracklePerSecond: number;
-  /** Samples at or past the clip threshold. */
-  clipSampleCount: number;
-  /** Number of runs at or past the clip threshold. */
-  clipRunCount: number;
-  /** Longest run at or past the clip threshold, in samples. */
-  clipLongestRunSamples: number;
-  /** `clipSampleCount` divided by the input length. */
-  clipSampleFraction: number;
-  /** Number of flat-topped runs. */
-  clipFlatRunCount: number;
-  /** Samples inside flat-topped runs. */
-  clipFlatSampleCount: number;
-  /** Longest flat-topped run, in samples. */
-  clipLongestFlatRunSamples: number;
-  /** Linear amplitude of the flat runs. */
-  clipFlatLevel: number;
-  /** Broadband estimated noise floor, in dBFS. */
-  noiseFloorDbfs: number;
-  /** Level of the loudest of the 32 noise bands, in dBFS. */
-  noiseBandPeakDbfs: number;
-  /** Index of the loudest noise band; -1 when no band was measured. */
-  noiseBandPeakIndex: number;
-  /** Winning hum fundamental in Hz; both 50 and 60 Hz mains are searched. */
-  humFundamentalHz: number;
-  /** Linear energy ratio of the winning hum candidate over the median candidate (not dB); 1.0 means no peak. */
-  humFundamentalProminence: number;
-  /** Number of hum harmonics measured. */
-  humHarmonics: number;
-  /** Input level at the hum fundamental, in dBFS. */
-  humFundamentalDbfs: number;
-  /** Level of the loudest harmonic of the hum fundamental, in dBFS. */
-  humPeakHarmonicDbfs: number;
-  /** Decay across the dereverb stage's late-reverb lag, in dB. Not an RT60: a reverberant input reads higher than the same material dry. */
-  lateDecayRatioDb: number;
-}
-
-/**
  * What {@link masteringRepairAnalyze} measured and recommends.
  *
  * Crosses as a string; this declaration is held to the paths the C++ writer publishes.
  */
 export interface MasteringRepairAnalysis {
-  /** The channels' defects aggregated as the stereo audio profile aggregates them. */
-  defects: MasteringRepairDefects;
-  /** Each channel's own defects, in input order. */
-  channels: MasteringRepairDefects[];
+  /** The channels' defects aggregated as the stereo audio profile aggregates them; absent when the detectors did not run. */
+  defects?: MasteringAudioProfileDefects;
+  /** Each channel's own defects, in input order; absent exactly when `defects` is. */
+  channels?: MasteringAudioProfileDefects[];
   /**
    * Whether a declip at the flat level leaves louder audio alone. When false, declip is withheld
    * from `recommended` even though flat runs were found.
@@ -201,7 +144,7 @@ export interface MasteringRepairApplyRequest extends ValidateOptions {
 /** The JSON form of a stage's reports, before the per-band arrays become Float32Arrays. */
 type StageReportsJson = { stage: string; scope: string; reports: Record<string, unknown>[] };
 
-/** Gives the band and harmonic arrays the Float32Array type, and declip its public detection names. */
+/** Gives the band and harmonic arrays the Float32Array type. */
 function toStageReports(entry: StageReportsJson): MasteringRepairStageReports {
   if (entry.stage === 'denoise' || entry.stage === 'dehum') {
     const key = entry.stage === 'denoise' ? 'bandFloorDbfs' : 'harmonicDbfs';
@@ -209,10 +152,6 @@ function toStageReports(entry: StageReportsJson): MasteringRepairStageReports {
       const detected = report.detected as Record<string, unknown>;
       detected[key] = Float32Array.from(detected[key] as number[]);
     }
-  }
-  if (entry.stage === 'declip') {
-    const reports = entry.reports.map((r) => declipReportFromNative(r as never));
-    return { ...entry, reports } as unknown as MasteringRepairStageReports;
   }
   return entry as unknown as MasteringRepairStageReports;
 }
@@ -255,6 +194,10 @@ export function masteringRepairAnalyze(...args: unknown[]): MasteringRepairAnaly
   analysis.recommended = (analysis.recommended as unknown as Record<string, unknown>[]).map(
     stageFromNative,
   );
+  if (analysis.defects !== undefined) {
+    analysis.defects = audioDefectsFromNative(analysis.defects);
+    analysis.channels = analysis.channels?.map(audioDefectsFromNative);
+  }
   return analysis;
 }
 

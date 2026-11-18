@@ -2,6 +2,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstddef>
+#include <iterator>
 #include <random>
 #include <set>
 #include <utility>
@@ -132,6 +133,24 @@ assistant::DefectProfile interleaved_profile(const std::vector<float>& samples) 
       .defects;
 }
 
+// Loudest of the noise detector's bands.
+float band_peak_dbfs(const assistant::DefectProfile& defects) {
+  return *std::max_element(std::begin(defects.noise.band_floor_dbfs),
+                           std::end(defects.noise.band_floor_dbfs));
+}
+
+std::ptrdiff_t band_peak_index(const assistant::DefectProfile& defects) {
+  return std::max_element(std::begin(defects.noise.band_floor_dbfs),
+                          std::end(defects.noise.band_floor_dbfs)) -
+         std::begin(defects.noise.band_floor_dbfs);
+}
+
+// Loudest k*f0 of the hum series.
+float peak_harmonic_dbfs(const assistant::DefectProfile& defects) {
+  return *std::max_element(std::begin(defects.hum.harmonic_dbfs),
+                           std::end(defects.hum.harmonic_dbfs));
+}
+
 }  // namespace
 
 TEST_CASE("Defect profile click fields separate planted clicks from a clean tone",
@@ -139,11 +158,11 @@ TEST_CASE("Defect profile click fields separate planted clicks from a clean tone
   const auto clean = profile_of(tone(220.0f, 0.2f));
   const auto planted = profile_of(with_spikes(tone(220.0f, 0.2f), 2048, 0.9f));
 
-  CAPTURE(clean.click_count, planted.click_count, clean.click_per_second, planted.click_per_second);
-  REQUIRE(clean.click_count == 0);
-  REQUIRE(planted.click_count >= 8);
-  REQUIRE(planted.click_per_second > clean.click_per_second);
-  REQUIRE(planted.click_longest_run_samples > clean.click_longest_run_samples);
+  CAPTURE(clean.click.count, planted.click.count, clean.click.per_second, planted.click.per_second);
+  REQUIRE(clean.click.count == 0);
+  REQUIRE(planted.click.count >= 8);
+  REQUIRE(planted.click.per_second > clean.click.per_second);
+  REQUIRE(planted.click.longest_run_samples > clean.click.longest_run_samples);
 }
 
 TEST_CASE("Defect profile crackle fields separate dense small deviations from a clean tone",
@@ -153,12 +172,12 @@ TEST_CASE("Defect profile crackle fields separate dense small deviations from a 
   const auto clean = profile_of(tone(220.0f, 0.2f));
   const auto planted = profile_of(with_spikes(tone(220.0f, 0.2f), 32, 0.5f));
 
-  CAPTURE(clean.crackle_sample_count, planted.crackle_sample_count, clean.crackle_sample_fraction,
-          planted.crackle_sample_fraction);
-  REQUIRE(clean.crackle_sample_count == 0);
-  REQUIRE(planted.crackle_sample_count >= 600);
-  REQUIRE(planted.crackle_sample_fraction > clean.crackle_sample_fraction);
-  REQUIRE(planted.crackle_per_second > clean.crackle_per_second);
+  CAPTURE(clean.crackle.sample_count, planted.crackle.sample_count, clean.crackle.sample_fraction,
+          planted.crackle.sample_fraction);
+  REQUIRE(clean.crackle.sample_count == 0);
+  REQUIRE(planted.crackle.sample_count >= 600);
+  REQUIRE(planted.crackle.sample_fraction > clean.crackle.sample_fraction);
+  REQUIRE(planted.crackle.per_second > clean.crackle.per_second);
 }
 
 TEST_CASE("Defect profile clip fields separate a clipped tone from the same tone below the ceiling",
@@ -166,14 +185,14 @@ TEST_CASE("Defect profile clip fields separate a clipped tone from the same tone
   const auto clean = profile_of(clipped(0.5f, 1.0f));
   const auto planted = profile_of(clipped(1.4f, 1.0f));
 
-  CAPTURE(clean.clip_sample_count, planted.clip_sample_count, clean.clip_sample_fraction,
-          planted.clip_sample_fraction);
-  REQUIRE(clean.clip_sample_count == 0);
-  REQUIRE(clean.clip_run_count == 0);
-  REQUIRE(planted.clip_sample_count >= 2000);
-  REQUIRE(planted.clip_run_count >= 100);
-  REQUIRE(planted.clip_sample_fraction > clean.clip_sample_fraction);
-  REQUIRE(planted.clip_longest_run_samples > clean.clip_longest_run_samples);
+  CAPTURE(clean.clip.sample_count, planted.clip.sample_count, clean.clip.sample_fraction,
+          planted.clip.sample_fraction);
+  REQUIRE(clean.clip.sample_count == 0);
+  REQUIRE(clean.clip.run_count == 0);
+  REQUIRE(planted.clip.sample_count >= 2000);
+  REQUIRE(planted.clip.run_count >= 100);
+  REQUIRE(planted.clip.sample_fraction > clean.clip.sample_fraction);
+  REQUIRE(planted.clip.longest_run_samples > clean.clip.longest_run_samples);
 }
 
 TEST_CASE("Defect profile still sees clipping after the file has been turned down",
@@ -186,22 +205,22 @@ TEST_CASE("Defect profile still sees clipping after the file has been turned dow
   const auto quiet = profile_of(turned_down);
   const auto loud = profile_of(clipped(1.4f, 1.0f));
 
-  CAPTURE(quiet.clip_sample_count, quiet.clip_flat_run_count, quiet.clip_flat_level);
-  REQUIRE(quiet.clip_sample_count == 0);
-  REQUIRE(quiet.clip_run_count == 0);
-  REQUIRE(quiet.clip_flat_run_count == loud.clip_flat_run_count);
-  REQUIRE(quiet.clip_flat_sample_count == loud.clip_flat_sample_count);
-  REQUIRE(quiet.clip_longest_flat_run_samples == loud.clip_longest_flat_run_samples);
-  REQUIRE(quiet.clip_flat_level < 0.3f);
-  REQUIRE(quiet.clip_flat_level > 0.2f);
+  CAPTURE(quiet.clip.sample_count, quiet.clip.flat_run_count, quiet.clip.flat_level);
+  REQUIRE(quiet.clip.sample_count == 0);
+  REQUIRE(quiet.clip.run_count == 0);
+  REQUIRE(quiet.clip.flat_run_count == loud.clip.flat_run_count);
+  REQUIRE(quiet.clip.flat_sample_count == loud.clip.flat_sample_count);
+  REQUIRE(quiet.clip.longest_flat_run_samples == loud.clip.longest_flat_run_samples);
+  REQUIRE(quiet.clip.flat_level < 0.3f);
+  REQUIRE(quiet.clip.flat_level > 0.2f);
 
   // The unclipped tone is the negative side: it reaches the ceiling on every
   // cycle without a flat top, so a count alone would call it clipped.
   const auto untouched = profile_of(tone(220.0f, 1.0f));
-  CAPTURE(untouched.clip_sample_count, untouched.clip_flat_run_count);
-  REQUIRE(untouched.clip_sample_count > 0);
-  REQUIRE(untouched.clip_flat_run_count == 0);
-  REQUIRE(untouched.clip_flat_level == 0.0f);
+  CAPTURE(untouched.clip.sample_count, untouched.clip.flat_run_count);
+  REQUIRE(untouched.clip.sample_count > 0);
+  REQUIRE(untouched.clip.flat_run_count == 0);
+  REQUIRE(untouched.clip.flat_level == 0.0f);
 }
 
 TEST_CASE("Defect profile noise fields separate added white noise from a clean tone",
@@ -209,14 +228,10 @@ TEST_CASE("Defect profile noise fields separate added white noise from a clean t
   const auto clean = profile_of(tone(220.0f, 0.2f));
   const auto planted = profile_of(with_noise(tone(220.0f, 0.2f), 0.15f));
 
-  CAPTURE(clean.noise_floor_dbfs, planted.noise_floor_dbfs, clean.noise_band_peak_dbfs,
-          planted.noise_band_peak_dbfs);
-  REQUIRE(planted.noise_floor_dbfs > clean.noise_floor_dbfs + 6.0f);
-  REQUIRE(planted.noise_band_peak_dbfs > clean.noise_band_peak_dbfs + 6.0f);
-  // A measured band was picked on both sides, so the peak is a reading rather
-  // than the "no band" sentinel.
-  REQUIRE(clean.noise_band_peak_index >= 0);
-  REQUIRE(planted.noise_band_peak_index >= 0);
+  CAPTURE(clean.noise.floor_dbfs, planted.noise.floor_dbfs, band_peak_dbfs(clean),
+          band_peak_dbfs(planted));
+  REQUIRE(planted.noise.floor_dbfs > clean.noise.floor_dbfs + 6.0f);
+  REQUIRE(band_peak_dbfs(planted) > band_peak_dbfs(clean) + 6.0f);
 }
 
 TEST_CASE("Defect profile hum fields separate a planted mains series from a clean tone",
@@ -229,17 +244,17 @@ TEST_CASE("Defect profile hum fields separate a planted mains series from a clea
   const auto clean = profile_of(tone(440.0f, 0.2f));
   const auto planted = profile_of(hummed);
 
-  CAPTURE(clean.hum_harmonics, planted.hum_harmonics, clean.hum_fundamental_prominence,
-          planted.hum_fundamental_prominence, clean.hum_fundamental_dbfs,
-          planted.hum_fundamental_dbfs);
-  REQUIRE(planted.hum_harmonics > clean.hum_harmonics);
-  REQUIRE(planted.hum_fundamental_dbfs > clean.hum_fundamental_dbfs + 12.0f);
-  REQUIRE(planted.hum_peak_harmonic_dbfs > clean.hum_peak_harmonic_dbfs + 12.0f);
+  CAPTURE(clean.hum.harmonics, planted.hum.harmonics, clean.hum.fundamental_prominence,
+          planted.hum.fundamental_prominence, clean.hum.harmonic_dbfs[0],
+          planted.hum.harmonic_dbfs[0]);
+  REQUIRE(planted.hum.harmonics > clean.hum.harmonics);
+  REQUIRE(planted.hum.harmonic_dbfs[0] > clean.hum.harmonic_dbfs[0] + 12.0f);
+  REQUIRE(peak_harmonic_dbfs(planted) > peak_harmonic_dbfs(clean) + 12.0f);
   // The clean tone does not sit at the detector's 1.0 "found no peak" reading --
   // its search still picks a winner out of the programme material. What the
   // field has to do is separate, and an order of magnitude apart is what makes a
   // tracked mains series readable from a picked candidate.
-  REQUIRE(planted.hum_fundamental_prominence > 5.0f * clean.hum_fundamental_prominence);
+  REQUIRE(planted.hum.fundamental_prominence > 5.0f * clean.hum.fundamental_prominence);
 }
 
 TEST_CASE("Defect profile finds a 60 Hz mains series, not just a 50 Hz one",
@@ -252,15 +267,15 @@ TEST_CASE("Defect profile finds a 60 Hz mains series, not just a 50 Hz one",
   const auto clean = profile_of(tone(440.0f, 0.2f));
   const auto planted = profile_of(hummed);
 
-  CAPTURE(clean.hum_fundamental_hz, planted.hum_fundamental_hz, clean.hum_fundamental_prominence,
-          planted.hum_fundamental_prominence, planted.hum_harmonics);
+  CAPTURE(clean.hum.fundamental_hz, planted.hum.fundamental_hz, clean.hum.fundamental_prominence,
+          planted.hum.fundamental_prominence, planted.hum.harmonics);
   // One detector search reaches a couple of Hz either side of its configured
   // fundamental, so it can only ever find one of the two mains frequencies; the
   // other lands on the search boundary at a prominence barely above clean
   // material, which reads as "no hum" and is not. The profile searches both.
-  REQUIRE(std::abs(planted.hum_fundamental_hz - 60.0f) <= 0.25f);
-  REQUIRE(planted.hum_fundamental_prominence > 5.0f * clean.hum_fundamental_prominence);
-  REQUIRE(planted.hum_harmonics >= 2);
+  REQUIRE(std::abs(planted.hum.fundamental_hz - 60.0f) <= 0.25f);
+  REQUIRE(planted.hum.fundamental_prominence > 5.0f * clean.hum.fundamental_prominence);
+  REQUIRE(planted.hum.harmonics >= 2);
 }
 
 TEST_CASE("Defect profile late decay separates a reverberant copy from the dry bursts",
@@ -269,11 +284,11 @@ TEST_CASE("Defect profile late decay separates a reverberant copy from the dry b
   const auto clean = profile_of(dry);
   const auto planted = profile_of(with_tail(dry, 0.05f, 0.7f));
 
-  CAPTURE(clean.late_decay_ratio_db, planted.late_decay_ratio_db);
+  CAPTURE(clean.reverb.late_decay_ratio_db, planted.reverb.late_decay_ratio_db);
   // Less negative means the material sustains across the module's late lag, so
   // the reverberant copy reads HIGHER here. This is not an RT60 and does not
   // invert like one.
-  REQUIRE(planted.late_decay_ratio_db > clean.late_decay_ratio_db);
+  REQUIRE(planted.reverb.late_decay_ratio_db > clean.reverb.late_decay_ratio_db);
 }
 
 TEST_CASE("Defect profile stays unmeasured until the config asks for it",
@@ -293,29 +308,30 @@ TEST_CASE("Defect profile stays unmeasured until the config asks for it",
   REQUIRE(profile_of(samples).measured);
 
   REQUIRE_FALSE(defects.measured);
-  REQUIRE(defects.click_count == untouched.click_count);
-  REQUIRE(defects.click_rejected == untouched.click_rejected);
-  REQUIRE(defects.click_longest_run_samples == untouched.click_longest_run_samples);
-  REQUIRE(defects.click_per_second == untouched.click_per_second);
-  REQUIRE(defects.crackle_sample_count == untouched.crackle_sample_count);
-  REQUIRE(defects.crackle_sample_fraction == untouched.crackle_sample_fraction);
-  REQUIRE(defects.crackle_per_second == untouched.crackle_per_second);
-  REQUIRE(defects.clip_sample_count == untouched.clip_sample_count);
-  REQUIRE(defects.clip_run_count == untouched.clip_run_count);
-  REQUIRE(defects.clip_longest_run_samples == untouched.clip_longest_run_samples);
-  REQUIRE(defects.clip_sample_fraction == untouched.clip_sample_fraction);
-  REQUIRE(defects.noise_floor_dbfs == untouched.noise_floor_dbfs);
-  REQUIRE(defects.noise_band_peak_dbfs == untouched.noise_band_peak_dbfs);
-  REQUIRE(defects.noise_band_peak_index == untouched.noise_band_peak_index);
-  REQUIRE(defects.hum_fundamental_hz == untouched.hum_fundamental_hz);
-  REQUIRE(defects.hum_fundamental_prominence == untouched.hum_fundamental_prominence);
-  REQUIRE(defects.hum_harmonics == untouched.hum_harmonics);
-  REQUIRE(defects.hum_fundamental_dbfs == untouched.hum_fundamental_dbfs);
-  REQUIRE(defects.hum_peak_harmonic_dbfs == untouched.hum_peak_harmonic_dbfs);
-  REQUIRE(defects.late_decay_ratio_db == untouched.late_decay_ratio_db);
+  REQUIRE(defects.click.count == untouched.click.count);
+  REQUIRE(defects.click.rejected == untouched.click.rejected);
+  REQUIRE(defects.click.longest_run_samples == untouched.click.longest_run_samples);
+  REQUIRE(defects.click.per_second == untouched.click.per_second);
+  REQUIRE(defects.crackle.sample_count == untouched.crackle.sample_count);
+  REQUIRE(defects.crackle.sample_fraction == untouched.crackle.sample_fraction);
+  REQUIRE(defects.crackle.per_second == untouched.crackle.per_second);
+  REQUIRE(defects.clip.sample_count == untouched.clip.sample_count);
+  REQUIRE(defects.clip.run_count == untouched.clip.run_count);
+  REQUIRE(defects.clip.longest_run_samples == untouched.clip.longest_run_samples);
+  REQUIRE(defects.clip.sample_fraction == untouched.clip.sample_fraction);
+  REQUIRE(defects.noise.floor_dbfs == untouched.noise.floor_dbfs);
+  REQUIRE(std::equal(std::begin(defects.noise.band_floor_dbfs),
+                     std::end(defects.noise.band_floor_dbfs),
+                     std::begin(untouched.noise.band_floor_dbfs)));
+  REQUIRE(defects.hum.fundamental_hz == untouched.hum.fundamental_hz);
+  REQUIRE(defects.hum.fundamental_prominence == untouched.hum.fundamental_prominence);
+  REQUIRE(defects.hum.harmonics == untouched.hum.harmonics);
+  REQUIRE(std::equal(std::begin(defects.hum.harmonic_dbfs), std::end(defects.hum.harmonic_dbfs),
+                     std::begin(untouched.hum.harmonic_dbfs)));
+  REQUIRE(defects.reverb.late_decay_ratio_db == untouched.reverb.late_decay_ratio_db);
 }
 
-TEST_CASE("Defect profile JSON carries the block whether or not it was measured",
+TEST_CASE("Defect profile JSON leaves the block out when it was not measured",
           "[mastering][assistant][defects]") {
   const auto samples = with_spikes(tone(220.0f, 0.2f), 2048, 0.9f);
 
@@ -327,20 +343,16 @@ TEST_CASE("Defect profile JSON carries the block whether or not it was measured"
   const json::Value measured = json::parse(assistant::audio_profile_to_json(
       assistant::analyze_audio_profile(samples.data(), samples.size(), kSr, detecting_config())));
 
-  // Same shape either way: the flag is what a consumer reads, not the presence
-  // of the block.
-  REQUIRE(unmeasured.contains("defects"));
+  // An unmeasured profile leaves the block out rather than writing zeros a clean recording would.
+  REQUIRE_FALSE(unmeasured.contains("defects"));
   REQUIRE(measured.contains("defects"));
-  REQUIRE(unmeasured["defects"].size() == measured["defects"].size());
-
-  REQUIRE_FALSE(unmeasured["defects"]["measured"].as_bool());
-  REQUIRE(unmeasured["defects"]["clickCount"].as_int() == 0);
-  REQUIRE(unmeasured["defects"]["noiseBandPeakIndex"].as_int() == -1);
-  REQUIRE(unmeasured["defects"]["humFundamentalProminence"].as_float() == 1.0f);
-
-  REQUIRE(measured["defects"]["measured"].as_bool());
-  REQUIRE(measured["defects"]["clickCount"].as_int() >= 8);
-  REQUIRE(measured["defects"]["noiseBandPeakIndex"].as_int() >= 0);
+  REQUIRE(measured["defects"]["click"]["count"].as_int() >= 8);
+  REQUIRE(measured["defects"]["noise"]["bandFloorDbfs"].size() ==
+          sonare::mastering::repair::kRepairNoiseBandCount);
+  REQUIRE(measured["defects"]["hum"]["harmonicDbfs"].size() ==
+          static_cast<std::size_t>(sonare::mastering::repair::kDehumMaxHarmonics));
+  // The profile path never runs WPE, so the predictability is absent, not 0.
+  REQUIRE_FALSE(measured["defects"]["reverb"].contains("latePredictability"));
 }
 
 TEST_CASE("Interleaved anti-phase clipping retains flat evidence for the repair suggestion",
@@ -349,11 +361,11 @@ TEST_CASE("Interleaved anti-phase clipping retains flat evidence for the repair 
   const auto interleaved = interleave(left, negate(left));
   const auto profile = interleaved_profile(interleaved);
 
-  CAPTURE(profile.clip_flat_run_count, profile.clip_flat_sample_count, profile.clip_flat_level);
+  CAPTURE(profile.clip.flat_run_count, profile.clip.flat_sample_count, profile.clip.flat_level);
   REQUIRE(profile.measured);
-  REQUIRE(profile.clip_flat_run_count > 0);
-  REQUIRE(profile.clip_flat_sample_count > 0);
-  REQUIRE(profile.clip_flat_level > 0.9f);
+  REQUIRE(profile.clip.flat_run_count > 0);
+  REQUIRE(profile.clip.flat_sample_count > 0);
+  REQUIRE(profile.clip.flat_level > 0.9f);
 
   assistant::AssistantConfig config;
   config.enable_repair = true;
@@ -375,10 +387,10 @@ TEST_CASE("Interleaved flat-top aggregation uses the highest evidenced plateau",
   const auto interleaved = interleave(left, right);
   const auto profile = interleaved_profile(interleaved);
 
-  CAPTURE(left_profile.clip_flat_level, right_profile.clip_flat_level, profile.clip_flat_level);
-  REQUIRE(left_profile.clip_flat_level > 0.2f);
-  REQUIRE(right_profile.clip_flat_level > left_profile.clip_flat_level);
-  REQUIRE(std::abs(profile.clip_flat_level - right_profile.clip_flat_level) < 1.0e-6f);
+  CAPTURE(left_profile.clip.flat_level, right_profile.clip.flat_level, profile.clip.flat_level);
+  REQUIRE(left_profile.clip.flat_level > 0.2f);
+  REQUIRE(right_profile.clip.flat_level > left_profile.clip.flat_level);
+  REQUIRE(std::abs(profile.clip.flat_level - right_profile.clip.flat_level) < 1.0e-6f);
   REQUIRE(profile.declip_threshold_safe);
 }
 
@@ -389,8 +401,8 @@ TEST_CASE("Interleaved flat evidence is unsafe when a clean channel reaches the 
   const auto clean_loud = tone(220.0f, 0.5f);
   const auto profile = interleaved_profile(interleave(clipped_quiet, clean_loud));
 
-  CAPTURE(profile.clip_flat_level, profile.declip_threshold_safe);
-  REQUIRE(profile.clip_flat_level > 0.2f);
+  CAPTURE(profile.clip.flat_level, profile.declip_threshold_safe);
+  REQUIRE(profile.clip.flat_level > 0.2f);
   REQUIRE_FALSE(profile.declip_threshold_safe);
 }
 
@@ -401,8 +413,8 @@ TEST_CASE("Interleaved safety clamps an above-unity plateau before checking clea
   const auto clean_loud = tone(220.0f, 1.2f);
   const auto profile = interleaved_profile(interleave(above_unity, clean_loud));
 
-  CAPTURE(profile.clip_flat_level, profile.declip_threshold_safe);
-  REQUIRE(profile.clip_flat_level > 1.0f);
+  CAPTURE(profile.clip.flat_level, profile.declip_threshold_safe);
+  REQUIRE(profile.clip.flat_level > 1.0f);
   REQUIRE_FALSE(profile.declip_threshold_safe);
 }
 
@@ -412,10 +424,9 @@ TEST_CASE("Interleaved anti-phase noise survives the noise detector",
   const auto interleaved = interleave(left, negate(left));
   const auto profile = interleaved_profile(interleaved);
 
-  CAPTURE(profile.noise_floor_dbfs, profile.noise_band_peak_dbfs, profile.noise_band_peak_index);
-  REQUIRE(profile.noise_floor_dbfs > -80.0f);
-  REQUIRE(profile.noise_band_peak_dbfs > -80.0f);
-  REQUIRE(profile.noise_band_peak_index >= 0);
+  CAPTURE(profile.noise.floor_dbfs, band_peak_dbfs(profile), band_peak_index(profile));
+  REQUIRE(profile.noise.floor_dbfs > -80.0f);
+  REQUIRE(band_peak_dbfs(profile) > -80.0f);
 }
 
 TEST_CASE("Duplicated mono defects preserve rates and fractions and double noise power",
@@ -427,28 +438,27 @@ TEST_CASE("Duplicated mono defects preserve rates and fractions and double noise
   const auto stereo = interleaved_profile(interleaved);
   const float duplicate_power_db = 10.0f * std::log10(2.0f);
 
-  CAPTURE(mono.click_count, stereo.click_count, mono.crackle_sample_count,
-          stereo.crackle_sample_count, mono.clip_sample_count, stereo.clip_sample_count,
-          mono.noise_floor_dbfs, stereo.noise_floor_dbfs);
-  REQUIRE(stereo.click_count == mono.click_count * 2);
-  REQUIRE(stereo.click_rejected == mono.click_rejected * 2);
-  REQUIRE(stereo.click_longest_run_samples == mono.click_longest_run_samples);
-  REQUIRE(std::abs(stereo.click_per_second - mono.click_per_second) < 1.0e-6f);
-  REQUIRE(stereo.crackle_sample_count == mono.crackle_sample_count * 2);
-  REQUIRE(std::abs(stereo.crackle_sample_fraction - mono.crackle_sample_fraction) < 1.0e-6f);
-  REQUIRE(std::abs(stereo.crackle_per_second - mono.crackle_per_second) < 1.0e-6f);
-  REQUIRE(stereo.clip_sample_count == mono.clip_sample_count * 2);
-  REQUIRE(stereo.clip_run_count == mono.clip_run_count * 2);
-  REQUIRE(stereo.clip_longest_run_samples == mono.clip_longest_run_samples);
-  REQUIRE(std::abs(stereo.clip_sample_fraction - mono.clip_sample_fraction) < 1.0e-6f);
-  REQUIRE(stereo.clip_flat_run_count == mono.clip_flat_run_count * 2);
-  REQUIRE(stereo.clip_flat_sample_count == mono.clip_flat_sample_count * 2);
-  REQUIRE(stereo.clip_longest_flat_run_samples == mono.clip_longest_flat_run_samples);
-  REQUIRE(std::abs(stereo.clip_flat_level - mono.clip_flat_level) < 1.0e-6f);
-  REQUIRE(std::abs(stereo.noise_floor_dbfs - mono.noise_floor_dbfs - duplicate_power_db) < 0.01f);
-  REQUIRE(std::abs(stereo.noise_band_peak_dbfs - mono.noise_band_peak_dbfs - duplicate_power_db) <
-          0.01f);
-  REQUIRE(stereo.noise_band_peak_index == mono.noise_band_peak_index);
+  CAPTURE(mono.click.count, stereo.click.count, mono.crackle.sample_count,
+          stereo.crackle.sample_count, mono.clip.sample_count, stereo.clip.sample_count,
+          mono.noise.floor_dbfs, stereo.noise.floor_dbfs);
+  REQUIRE(stereo.click.count == mono.click.count * 2);
+  REQUIRE(stereo.click.rejected == mono.click.rejected * 2);
+  REQUIRE(stereo.click.longest_run_samples == mono.click.longest_run_samples);
+  REQUIRE(std::abs(stereo.click.per_second - mono.click.per_second) < 1.0e-6f);
+  REQUIRE(stereo.crackle.sample_count == mono.crackle.sample_count * 2);
+  REQUIRE(std::abs(stereo.crackle.sample_fraction - mono.crackle.sample_fraction) < 1.0e-6f);
+  REQUIRE(std::abs(stereo.crackle.per_second - mono.crackle.per_second) < 1.0e-6f);
+  REQUIRE(stereo.clip.sample_count == mono.clip.sample_count * 2);
+  REQUIRE(stereo.clip.run_count == mono.clip.run_count * 2);
+  REQUIRE(stereo.clip.longest_run_samples == mono.clip.longest_run_samples);
+  REQUIRE(std::abs(stereo.clip.sample_fraction - mono.clip.sample_fraction) < 1.0e-6f);
+  REQUIRE(stereo.clip.flat_run_count == mono.clip.flat_run_count * 2);
+  REQUIRE(stereo.clip.flat_sample_count == mono.clip.flat_sample_count * 2);
+  REQUIRE(stereo.clip.longest_flat_run_samples == mono.clip.longest_flat_run_samples);
+  REQUIRE(std::abs(stereo.clip.flat_level - mono.clip.flat_level) < 1.0e-6f);
+  REQUIRE(std::abs(stereo.noise.floor_dbfs - mono.noise.floor_dbfs - duplicate_power_db) < 0.01f);
+  REQUIRE(std::abs(band_peak_dbfs(stereo) - band_peak_dbfs(mono) - duplicate_power_db) < 0.01f);
+  REQUIRE(band_peak_index(stereo) == band_peak_index(mono));
 
   assistant::AssistantConfig config;
   config.enable_repair = true;

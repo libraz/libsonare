@@ -92,8 +92,8 @@ def test_parse_analysis_json_retains_tempo_and_meter_hypotheses() -> None:
             "bpm": 120.0,
             "bpmConfidence": 0.9,
             "bpmCandidates": [
-                {"value": 120.0, "confidence": 0.9, "relation": "primary"},
-                {"value": 60.0, "confidence": 0.4, "relation": "half"},
+                {"bpm": 120.0, "confidence": 0.9, "relation": "primary"},
+                {"bpm": 60.0, "confidence": 0.4, "relation": "half"},
             ],
             "key": {},
             "timeSignature": {"numerator": 4, "denominator": 4, "confidence": 0.8},
@@ -189,8 +189,8 @@ def test_analysis_json_uses_canonical_display_names() -> None:
                     "root": 0,
                     "bass": 0,
                     "quality": 0,
-                    "start": 0,
-                    "end": 1,
+                    "startSec": 0,
+                    "endSec": 1,
                     "confidence": 1,
                     "name": "canonical-chord",
                 }
@@ -198,8 +198,8 @@ def test_analysis_json_uses_canonical_display_names() -> None:
             "sections": [
                 {
                     "type": 2,
-                    "start": 0,
-                    "end": 1,
+                    "startSec": 0,
+                    "endSec": 1,
                     "energyLevel": 0.5,
                     "confidence": 1,
                     "name": "canonical-section",
@@ -218,8 +218,8 @@ def test_analyze_beats_carry_a_strength_each(analyze_result) -> None:
     """Every beat has a float strength and downbeats are drawn from the beats (JSON path)."""
     result = analyze_result
     assert all(isinstance(b.strength, float) for b in result.beats)
-    beat_ids = {id(b) for b in result.beats}
-    assert all(id(d) in beat_ids for d in result.downbeats)
+    beat_times = {b.time_sec for b in result.beats}
+    assert all(d.time_sec in beat_times for d in result.downbeats)
 
 
 @requires_json
@@ -373,12 +373,12 @@ def test_parse_analysis_json_rejects_an_unmirrored_section_type() -> None:
         )
 
     with pytest.raises(SonareValueError, match="99"):
-        parse({"type": 99, "start": 0.0, "end": 1.0})
+        parse({"type": 99, "startSec": 0.0, "endSec": 1.0})
 
     with pytest.raises(SonareValueError, match="missing its type"):
-        parse({"start": 0.0, "end": 1.0})
+        parse({"startSec": 0.0, "endSec": 1.0})
 
-    result = parse({"type": 3, "start": 0.0, "end": 1.0, "group": 0})
+    result = parse({"type": 3, "startSec": 0.0, "endSec": 1.0, "group": 0})
     assert result.sections[0].type == "chorus"  # type: ignore[attr-defined]
 
 
@@ -396,9 +396,12 @@ def test_parse_analysis_json_rejects_an_unmirrored_chord_quality() -> None:
         return _parse_analysis_json({"key": {}, "beats": [], "chords": [chord], "tuningCents": 0.0})
 
     with pytest.raises(SonareValueError, match="99"):
-        parse({"root": 0, "quality": 99, "start": 0.0, "end": 1.0})
+        parse({"root": 0, "quality": 99, "startSec": 0.0, "endSec": 1.0})
 
     # The genuine "unknown" quality still round-trips, including as the default
     # when the producer omitted the field.
-    assert parse({"root": 0, "quality": 9, "start": 0.0, "end": 1.0}).chords[0].quality == "unknown"  # type: ignore[attr-defined]
-    assert parse({"root": 0, "start": 0.0, "end": 1.0}).chords[0].quality == "unknown"  # type: ignore[attr-defined]
+    assert (
+        parse({"root": 0, "quality": 9, "startSec": 0.0, "endSec": 1.0}).chords[0].quality
+        == "unknown"
+    )  # type: ignore[attr-defined]
+    assert parse({"root": 0, "startSec": 0.0, "endSec": 1.0}).chords[0].quality == "unknown"  # type: ignore[attr-defined]

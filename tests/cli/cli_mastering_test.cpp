@@ -981,9 +981,12 @@ TEST_CASE("CLI repair command", "[cli][mastering][repair]") {
     REQUIRE_THAT(output, !ContainsSubstring("\"dynamics."));
     REQUIRE_THAT(output, !ContainsSubstring("\"loudness"));
     REQUIRE(payload.contains("explanation"));
-    REQUIRE(payload["defects"]["measured"].as_bool());
-    REQUIRE(payload["defects"]["noise_band_measured"].as_bool());
-    REQUIRE(payload["defects"].contains("hum_peak_found"));
+    const auto& defects = payload["defects"];
+    for (const char* group : {"click", "clip", "crackle", "noise", "hum", "reverb"}) {
+      REQUIRE(defects.contains(group));
+    }
+    REQUIRE(defects["noise"]["band_floor_dbfs"].size() == 32);
+    REQUIRE(defects["hum"]["harmonic_dbfs"].size() == 16);
     // The fixed cross-surface shape carries no loudness fields: applied_gain_db
     // is structurally always 0 (repair never touches loudness) and the LUFS
     // pair would otherwise be the only numbers here that vary with the field
@@ -1013,9 +1016,9 @@ TEST_CASE("CLI repair command", "[cli][mastering][repair]") {
     REQUIRE_THAT(output, !ContainsSubstring("\"eq."));
     REQUIRE_THAT(output, !ContainsSubstring("\"dynamics."));
     REQUIRE_THAT(output, !ContainsSubstring("\"loudness"));
-    // The report is unconditional: a caller scripting against --json should not
-    // have to branch on mode to find out whether it exists.
-    REQUIRE(payload["defects"]["measured"].as_bool());
+    // The report does not depend on the mode: a caller scripting against --json
+    // should not have to branch on mode to find out whether it exists.
+    REQUIRE(payload["defects"].contains("click"));
 
     std::ifstream f(out);
     REQUIRE(f.good());
@@ -1085,21 +1088,19 @@ TEST_CASE("CLI repair command", "[cli][mastering][repair]") {
     REQUIRE(code == 0);
     const auto payload = sonare::util::json::parse_strict(output);
     REQUIRE(payload["mode"].as_string() == "detect");
-    REQUIRE(payload["defects"]["measured"].as_bool());
-    REQUIRE(payload["defects"]["noise_floor_dbfs"].as_number() < 0.0);
+    REQUIRE(payload["defects"]["noise"]["floor_dbfs"].as_number() < 0.0);
 
     std::ifstream f(out);
     REQUIRE_FALSE(f.good());
   }
 
-  SECTION("an input too short for the detectors reports unmeasured, not clean") {
+  SECTION("an input too short for the detectors omits the report, not reads clean") {
     const std::string tiny = unique_temp_path("_tiny.wav");
     create_test_wav(tiny, 0.02f);
     auto [code, output] = exec_command(CLI + " repair " + tiny + " --detect --json -q");
     REQUIRE(code == 0);
     const auto payload = sonare::util::json::parse_strict(output);
-    REQUIRE_FALSE(payload["defects"]["measured"].as_bool());
-    REQUIRE(payload["defects"].size() == 1);
+    REQUIRE_FALSE(payload.contains("defects"));
     std::remove(tiny.c_str());
   }
 

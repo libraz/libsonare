@@ -42,8 +42,8 @@ class TestAnalyze:
         analysis = libsonare.mastering_repair_analyze(channels, SR)
 
         assert len(analysis["channels"]) == 2
-        assert analysis["channels"][0]["clickCount"] == 0
-        assert analysis["channels"][1]["clickCount"] > 0
+        assert analysis["channels"][0]["click"]["count"] == 0
+        assert analysis["channels"][1]["click"]["count"] > 0
         assert isinstance(analysis["declipThresholdSafe"], bool)
         assert analysis["recommended"][0]["stage"] == "declick"
         assert all(stage["stage"] != "dereverb" for stage in analysis["recommended"])
@@ -71,6 +71,16 @@ class TestApply:
         for a, b in zip(forward.channels, reversed_.channels, strict=True):
             np.testing.assert_array_equal(a, b)
         assert forward.reports == reversed_.reports
+
+    def test_a_declip_report_with_no_flat_run_has_no_flat_level(self) -> None:
+        clean = [_material(440.0, 1)]
+        report = libsonare.mastering_repair_apply(clean, SR, stages=[{"stage": "declip"}])
+        detected = report.reports[0].reports[0].detected
+        assert detected.flat_run_count == 0 and detected.flat_level is None
+        clipped = [np.clip(_material(440.0, 1) * 8.0, -0.5, 0.5).astype(np.float32)]
+        report = libsonare.mastering_repair_apply(clipped, SR, stages=[{"stage": "declip"}])
+        detected = report.reports[0].reports[0].detected
+        assert detected.flat_run_count > 0 and detected.flat_level == pytest.approx(0.5, abs=0.01)
 
     def test_matches_the_per_stage_entries(self) -> None:
         left = _clicked(_material(440.0, 5), 1500, 4000)

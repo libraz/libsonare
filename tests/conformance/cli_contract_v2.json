@@ -13828,33 +13828,51 @@
             "mode": "string",
             "defects": {
               "keys": {
-                "measured": "boolean",
-                "click_count": "integer",
-                "click_rejected": "integer",
-                "click_longest_run_samples": "integer",
-                "click_per_second": "number",
-                "crackle_sample_count": "integer",
-                "crackle_sample_fraction": "number",
-                "crackle_per_second": "number",
-                "clip_sample_count": "integer",
-                "clip_run_count": "integer",
-                "clip_longest_run_samples": "integer",
-                "clip_sample_fraction": "number",
-                "clip_flat_run_count": "integer",
-                "clip_flat_sample_count": "integer",
-                "clip_longest_flat_run_samples": "integer",
-                "clip_flat_level": "number",
-                "noise_floor_dbfs": "number",
-                "noise_band_measured": "boolean",
-                "noise_band_peak_dbfs": "number",
-                "noise_band_peak_index": "integer",
-                "hum_peak_found": "boolean",
-                "hum_fundamental_hz": "number",
-                "hum_fundamental_prominence": "number",
-                "hum_harmonics": "integer",
-                "hum_fundamental_dbfs": "number",
-                "hum_peak_harmonic_dbfs": "number",
-                "late_decay_ratio_db": "number"
+                "click": {
+                  "keys": {
+                    "count": "integer",
+                    "rejected": "integer",
+                    "longest_run_samples": "integer",
+                    "per_second": "number"
+                  }
+                },
+                "clip": {
+                  "keys": {
+                    "clipped_samples": "integer",
+                    "clipped_ratio": "number",
+                    "run_count": "integer",
+                    "longest_run_samples": "integer",
+                    "flat_run_count": "integer",
+                    "longest_flat_run_samples": "integer",
+                    "flat_sample_count": "integer"
+                  }
+                },
+                "crackle": {
+                  "keys": {
+                    "sample_count": "integer",
+                    "sample_fraction": "number",
+                    "per_second": "number"
+                  }
+                },
+                "noise": {
+                  "keys": {
+                    "floor_dbfs": "number",
+                    "band_floor_dbfs": { "type": "array", "items": "number" }
+                  }
+                },
+                "hum": {
+                  "keys": {
+                    "fundamental_hz": "number",
+                    "fundamental_prominence": "number",
+                    "harmonics": "integer",
+                    "harmonic_dbfs": { "type": "array", "items": "number" }
+                  }
+                },
+                "reverb": {
+                  "keys": {
+                    "late_decay_ratio_db": "number"
+                  }
+                }
               }
             }
           }
@@ -13868,33 +13886,51 @@
             "output_gain_db": "number",
             "defects": {
               "keys": {
-                "measured": "boolean",
-                "click_count": "integer",
-                "click_rejected": "integer",
-                "click_longest_run_samples": "integer",
-                "click_per_second": "number",
-                "crackle_sample_count": "integer",
-                "crackle_sample_fraction": "number",
-                "crackle_per_second": "number",
-                "clip_sample_count": "integer",
-                "clip_run_count": "integer",
-                "clip_longest_run_samples": "integer",
-                "clip_sample_fraction": "number",
-                "clip_flat_run_count": "integer",
-                "clip_flat_sample_count": "integer",
-                "clip_longest_flat_run_samples": "integer",
-                "clip_flat_level": "number",
-                "noise_floor_dbfs": "number",
-                "noise_band_measured": "boolean",
-                "noise_band_peak_dbfs": "number",
-                "noise_band_peak_index": "integer",
-                "hum_peak_found": "boolean",
-                "hum_fundamental_hz": "number",
-                "hum_fundamental_prominence": "number",
-                "hum_harmonics": "integer",
-                "hum_fundamental_dbfs": "number",
-                "hum_peak_harmonic_dbfs": "number",
-                "late_decay_ratio_db": "number"
+                "click": {
+                  "keys": {
+                    "count": "integer",
+                    "rejected": "integer",
+                    "longest_run_samples": "integer",
+                    "per_second": "number"
+                  }
+                },
+                "clip": {
+                  "keys": {
+                    "clipped_samples": "integer",
+                    "clipped_ratio": "number",
+                    "run_count": "integer",
+                    "longest_run_samples": "integer",
+                    "flat_run_count": "integer",
+                    "longest_flat_run_samples": "integer",
+                    "flat_sample_count": "integer"
+                  }
+                },
+                "crackle": {
+                  "keys": {
+                    "sample_count": "integer",
+                    "sample_fraction": "number",
+                    "per_second": "number"
+                  }
+                },
+                "noise": {
+                  "keys": {
+                    "floor_dbfs": "number",
+                    "band_floor_dbfs": { "type": "array", "items": "number" }
+                  }
+                },
+                "hum": {
+                  "keys": {
+                    "fundamental_hz": "number",
+                    "fundamental_prominence": "number",
+                    "harmonics": "integer",
+                    "harmonic_dbfs": { "type": "array", "items": "number" }
+                  }
+                },
+                "reverb": {
+                  "keys": {
+                    "late_decay_ratio_db": "number"
+                  }
+                }
               }
             }
           }
@@ -14010,7 +14046,6 @@
             "bpm": "number",
             "bpm_confidence": "number",
             "duration_sec": "number",
-            "defects": "any",
             "dynamics": "any",
             "loudness": "any",
             "spectral": "any"

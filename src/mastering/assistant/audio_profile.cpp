@@ -136,48 +136,26 @@ float sustain_ratio(const std::vector<float>& rms, float duration_sec, int lookb
   return static_cast<float>(sustained) / static_cast<float>(rms.size());
 }
 
-struct HumCandidate {
-  float fundamental_hz = 0.0f;
-  float prominence = 1.0f;
-  int harmonics = 0;
-  float fundamental_dbfs = 0.0f;
-  float peak_harmonic_dbfs = 0.0f;
-  size_t index = 0;
-};
-
-HumCandidate make_hum_candidate(const repair::HumDetection& detection, size_t index) {
-  HumCandidate candidate;
-  candidate.fundamental_hz = detection.fundamental_hz;
-  candidate.prominence = detection.fundamental_prominence;
-  candidate.harmonics = detection.harmonics;
-  candidate.fundamental_dbfs = detection.harmonic_dbfs[0];
-  candidate.peak_harmonic_dbfs = *std::max_element(
-      detection.harmonic_dbfs, detection.harmonic_dbfs + repair::kDehumMaxHarmonics);
-  candidate.index = index;
-  return candidate;
+/// Loudest k*f0 of a hum detection; the tie-break after prominence.
+float peak_harmonic_dbfs(const repair::HumDetection& detection) {
+  return *std::max_element(detection.harmonic_dbfs,
+                           detection.harmonic_dbfs + repair::kDehumMaxHarmonics);
 }
 
-bool hum_candidate_better(const HumCandidate& candidate, const HumCandidate& current) {
-  if (candidate.prominence != current.prominence) {
-    return candidate.prominence > current.prominence;
+/// Whether @p candidate (from channel @p candidate_index) beats @p current (from @p current_index).
+bool hum_candidate_better(const repair::HumDetection& candidate, size_t candidate_index,
+                          const repair::HumDetection& current, size_t current_index) {
+  if (candidate.fundamental_prominence != current.fundamental_prominence) {
+    return candidate.fundamental_prominence > current.fundamental_prominence;
   }
-  if (candidate.peak_harmonic_dbfs != current.peak_harmonic_dbfs) {
-    return candidate.peak_harmonic_dbfs > current.peak_harmonic_dbfs;
-  }
-  return candidate.index < current.index;
-}
-
-void assign_hum_candidate(DefectProfile& defects, const HumCandidate& candidate) {
-  defects.hum_fundamental_hz = candidate.fundamental_hz;
-  defects.hum_fundamental_prominence = candidate.prominence;
-  defects.hum_harmonics = candidate.harmonics;
-  defects.hum_fundamental_dbfs = candidate.fundamental_dbfs;
-  defects.hum_peak_harmonic_dbfs = candidate.peak_harmonic_dbfs;
+  const float candidate_peak = peak_harmonic_dbfs(candidate);
+  const float current_peak = peak_harmonic_dbfs(current);
+  if (candidate_peak != current_peak) return candidate_peak > current_peak;
+  return candidate_index < current_index;
 }
 
 struct ChannelDefects {
   DefectProfile profile;
-  std::vector<float> noise_band_dbfs;
   float peak_abs = 0.0f;
 };
 
@@ -219,7 +197,7 @@ bool channel_allows_declip(float clip_flat_level, float peak_abs, std::size_t fl
 // Runs the six repair detectors over one signal, each with its own default
 // config. Only a non-finite sample throws (the clipping detector refuses it); a
 // non-positive rate and an input shorter than the STFT are settled beforehand.
-DefectProfile measure_defects(const Audio& audio, std::vector<float>* noise_band_dbfs = nullptr) {
+DefectProfile measure_defects(const Audio& audio) {
   DefectProfile defects;
 
   const repair::DenoiseClassicalConfig denoise_config;
@@ -231,40 +209,15 @@ DefectProfile measure_defects(const Audio& audio, std::vector<float>* noise_band
   const std::size_t size = audio.size();
   const int sample_rate = audio.sample_rate();
 
-  const auto clicks = repair::detect_clicks(samples, size, sample_rate);
-  defects.click_count = clicks.count;
-  defects.click_rejected = clicks.rejected;
-  defects.click_longest_run_samples = clicks.longest_run_samples;
-  defects.click_per_second = clicks.per_second;
-
-  const auto crackle = repair::detect_crackle(samples, size, sample_rate);
-  defects.crackle_sample_count = crackle.sample_count;
-  defects.crackle_sample_fraction = crackle.sample_fraction;
-  defects.crackle_per_second = crackle.per_second;
-
-  const auto clipping = repair::detect_clipping(samples, size, sample_rate);
-  defects.clip_sample_count = clipping.sample_count;
-  defects.clip_run_count = clipping.run_count;
-  defects.clip_longest_run_samples = clipping.longest_run_samples;
-  defects.clip_sample_fraction = clipping.sample_fraction;
-  defects.clip_flat_run_count = clipping.flat_run_count;
-  defects.clip_flat_sample_count = clipping.flat_sample_count;
-  defects.clip_longest_flat_run_samples = clipping.longest_flat_run_samples;
-  defects.clip_flat_level = clipping.flat_level;
+  defects.click = repair::detect_clicks(samples, size, sample_rate);
+  defects.crackle = repair::detect_crackle(samples, size, sample_rate);
+  defects.clip = repair::detect_clipping(samples, size, sample_rate);
   float peak_abs = 0.0f;
   for (std::size_t i = 0; i < size; ++i) peak_abs = std::max(peak_abs, std::abs(samples[i]));
   defects.declip_threshold_safe =
-      channel_allows_declip(defects.clip_flat_level, peak_abs, defects.clip_flat_run_count);
+      channel_allows_declip(defects.clip.flat_level, peak_abs, defects.clip.flat_run_count);
 
-  const auto noise = repair::detect_noise_floor(samples, size, sample_rate, denoise_config);
-  defects.noise_floor_dbfs = noise.floor_dbfs;
-  if (noise_band_dbfs != nullptr) {
-    noise_band_dbfs->assign(std::begin(noise.band_floor_dbfs), std::end(noise.band_floor_dbfs));
-  }
-  const auto* peak_band = std::max_element(noise.band_floor_dbfs,
-                                           noise.band_floor_dbfs + repair::kRepairNoiseBandCount);
-  defects.noise_band_peak_dbfs = *peak_band;
-  defects.noise_band_peak_index = static_cast<int>(peak_band - noise.band_floor_dbfs);
+  defects.noise = repair::detect_noise_floor(samples, size, sample_rate, denoise_config);
 
   // Searched at both mains frequencies and the more prominent one kept. The
   // detector's default search spans a couple of Hz around 50, so a 60 Hz series
@@ -277,11 +230,9 @@ DefectProfile measure_defects(const Audio& audio, std::vector<float>* noise_band
   const auto at_60 = repair::detect_hum(samples, size, sample_rate, hum_60);
   // Keep the mono search's historical tie behaviour: the 60 Hz candidate only
   // wins when its prominence is strictly greater, so an equal result keeps 50.
-  const bool use_60 = at_60.fundamental_prominence > at_50.fundamental_prominence;
-  assign_hum_candidate(defects, make_hum_candidate(use_60 ? at_60 : at_50, use_60 ? 1 : 0));
+  defects.hum = at_60.fundamental_prominence > at_50.fundamental_prominence ? at_60 : at_50;
 
-  defects.late_decay_ratio_db =
-      repair::detect_reverb(samples, size, sample_rate).late_decay_ratio_db;
+  defects.reverb = repair::detect_reverb(samples, size, sample_rate);
 
   defects.measured = true;
   return defects;
@@ -291,10 +242,7 @@ DefectProfile aggregate_defects(const std::vector<ChannelDefects>& per_channel) 
   DefectProfile defects;
   if (per_channel.empty()) return defects;
   for (const ChannelDefects& channel : per_channel) {
-    if (!channel.profile.measured ||
-        channel.noise_band_dbfs.size() != repair::kRepairNoiseBandCount) {
-      return defects;
-    }
+    if (!channel.profile.measured) return defects;
   }
 
   double click_per_second_sum = 0.0;
@@ -303,79 +251,69 @@ DefectProfile aggregate_defects(const std::vector<ChannelDefects>& per_channel) 
   double clip_fraction_sum = 0.0;
   double noise_floor_power = 0.0;
   std::vector<double> noise_band_power(repair::kRepairNoiseBandCount, 0.0);
-  HumCandidate hum;
-  bool have_hum = false;
+  size_t hum_index = 0;
 
   for (size_t index = 0; index < per_channel.size(); ++index) {
     const DefectProfile& channel = per_channel[index].profile;
-    defects.click_count += channel.click_count;
-    defects.click_rejected += channel.click_rejected;
-    defects.click_longest_run_samples =
-        std::max(defects.click_longest_run_samples, channel.click_longest_run_samples);
-    click_per_second_sum += channel.click_per_second;
+    defects.click.count += channel.click.count;
+    defects.click.rejected += channel.click.rejected;
+    defects.click.longest_run_samples =
+        std::max(defects.click.longest_run_samples, channel.click.longest_run_samples);
+    click_per_second_sum += channel.click.per_second;
 
-    defects.crackle_sample_count += channel.crackle_sample_count;
-    crackle_fraction_sum += channel.crackle_sample_fraction;
-    crackle_per_second_sum += channel.crackle_per_second;
+    defects.crackle.sample_count += channel.crackle.sample_count;
+    crackle_fraction_sum += channel.crackle.sample_fraction;
+    crackle_per_second_sum += channel.crackle.per_second;
 
-    defects.clip_sample_count += channel.clip_sample_count;
-    defects.clip_run_count += channel.clip_run_count;
-    defects.clip_longest_run_samples =
-        std::max(defects.clip_longest_run_samples, channel.clip_longest_run_samples);
-    clip_fraction_sum += channel.clip_sample_fraction;
-    defects.clip_flat_run_count += channel.clip_flat_run_count;
-    defects.clip_flat_sample_count += channel.clip_flat_sample_count;
-    defects.clip_longest_flat_run_samples =
-        std::max(defects.clip_longest_flat_run_samples, channel.clip_longest_flat_run_samples);
-    if (channel.clip_flat_level > 0.0f &&
-        (defects.clip_flat_level == 0.0f || channel.clip_flat_level > defects.clip_flat_level)) {
-      defects.clip_flat_level = channel.clip_flat_level;
+    defects.clip.sample_count += channel.clip.sample_count;
+    defects.clip.run_count += channel.clip.run_count;
+    defects.clip.longest_run_samples =
+        std::max(defects.clip.longest_run_samples, channel.clip.longest_run_samples);
+    clip_fraction_sum += channel.clip.sample_fraction;
+    defects.clip.flat_run_count += channel.clip.flat_run_count;
+    defects.clip.flat_sample_count += channel.clip.flat_sample_count;
+    defects.clip.longest_flat_run_samples =
+        std::max(defects.clip.longest_flat_run_samples, channel.clip.longest_flat_run_samples);
+    if (channel.clip.flat_level > 0.0f &&
+        (defects.clip.flat_level == 0.0f || channel.clip.flat_level > defects.clip.flat_level)) {
+      defects.clip.flat_level = channel.clip.flat_level;
     }
 
-    noise_floor_power += measured_noise_power(channel.noise_floor_dbfs);
+    noise_floor_power += measured_noise_power(channel.noise.floor_dbfs);
     for (size_t band = 0; band < noise_band_power.size(); ++band) {
-      noise_band_power[band] += measured_noise_power(per_channel[index].noise_band_dbfs[band]);
+      noise_band_power[band] += measured_noise_power(channel.noise.band_floor_dbfs[band]);
     }
 
-    const HumCandidate channel_hum = {
-        channel.hum_fundamental_hz,   channel.hum_fundamental_prominence, channel.hum_harmonics,
-        channel.hum_fundamental_dbfs, channel.hum_peak_harmonic_dbfs,     index};
-    if (!have_hum || hum_candidate_better(channel_hum, hum)) {
-      hum = channel_hum;
-      have_hum = true;
+    if (index > 0 &&
+        hum_candidate_better(channel.hum, index, per_channel[hum_index].profile.hum, hum_index)) {
+      hum_index = index;
     }
     if (index == 0) {
-      defects.late_decay_ratio_db = channel.late_decay_ratio_db;
+      defects.reverb.late_decay_ratio_db = channel.reverb.late_decay_ratio_db;
     } else {
-      defects.late_decay_ratio_db =
-          std::max(defects.late_decay_ratio_db, channel.late_decay_ratio_db);
+      defects.reverb.late_decay_ratio_db =
+          std::max(defects.reverb.late_decay_ratio_db, channel.reverb.late_decay_ratio_db);
     }
   }
 
   const float channel_count = static_cast<float>(per_channel.size());
-  defects.click_per_second = static_cast<float>(click_per_second_sum / channel_count);
-  defects.crackle_sample_fraction = static_cast<float>(crackle_fraction_sum / channel_count);
-  defects.crackle_per_second = static_cast<float>(crackle_per_second_sum / channel_count);
-  defects.clip_sample_fraction = static_cast<float>(clip_fraction_sum / channel_count);
-  defects.noise_floor_dbfs = noise_power_to_db(noise_floor_power);
-  defects.noise_band_peak_dbfs = kMinDb;
-  defects.noise_band_peak_index = -1;
+  defects.click.per_second = static_cast<float>(click_per_second_sum / channel_count);
+  defects.crackle.sample_fraction = static_cast<float>(crackle_fraction_sum / channel_count);
+  defects.crackle.per_second = static_cast<float>(crackle_per_second_sum / channel_count);
+  defects.clip.sample_fraction = static_cast<float>(clip_fraction_sum / channel_count);
+  defects.noise.floor_dbfs = noise_power_to_db(noise_floor_power);
   for (size_t band = 0; band < noise_band_power.size(); ++band) {
-    const float level = noise_power_to_db(noise_band_power[band]);
-    if (band == 0 || level > defects.noise_band_peak_dbfs) {
-      defects.noise_band_peak_dbfs = level;
-      defects.noise_band_peak_index = static_cast<int>(band);
-    }
+    defects.noise.band_floor_dbfs[band] = noise_power_to_db(noise_band_power[band]);
   }
   defects.declip_threshold_safe = true;
   for (const ChannelDefects& channel : per_channel) {
-    if (!channel_allows_declip(defects.clip_flat_level, channel.peak_abs,
-                               channel.profile.clip_flat_run_count)) {
+    if (!channel_allows_declip(defects.clip.flat_level, channel.peak_abs,
+                               channel.profile.clip.flat_run_count)) {
       defects.declip_threshold_safe = false;
       break;
     }
   }
-  if (have_hum) assign_hum_candidate(defects, hum);
+  defects.hum = per_channel[hum_index].profile.hum;
   defects.measured = true;
   return defects;
 }
@@ -390,7 +328,7 @@ ChannelSetDefects measure_defects_planar(const float* const* channels, std::size
   for (size_t channel = 0; channel < channel_count; ++channel) {
     const Audio channel_audio = Audio::from_buffer(channels[channel], length, sample_rate);
     ChannelDefects measured;
-    measured.profile = measure_defects(channel_audio, &measured.noise_band_dbfs);
+    measured.profile = measure_defects(channel_audio);
     for (float sample : channel_audio) {
       measured.peak_abs = std::max(measured.peak_abs, std::abs(sample));
     }
@@ -640,40 +578,85 @@ AudioProfile analyze_audio_profile_interleaved(const float* samples, std::size_t
   return profile;
 }
 
-sonare::util::json::Object defects_to_json(const DefectProfile& defects) {
-  namespace json = sonare::util::json;
-  // Emitted whatever `measured` says, so the object's shape does not depend on
-  // the config: a consumer reads one flag rather than having to tell an absent
-  // block from a core too old to write one.
-  json::Object out;
-  util::json::put(out, "measured", defects.measured);
-  util::json::put(out, "clickCount", static_cast<double>(defects.click_count));
-  util::json::put(out, "clickRejected", static_cast<double>(defects.click_rejected));
-  util::json::put(out, "clickLongestRunSamples",
-                  static_cast<double>(defects.click_longest_run_samples));
-  util::json::put(out, "clickPerSecond", defects.click_per_second);
-  util::json::put(out, "crackleSampleCount", static_cast<double>(defects.crackle_sample_count));
-  util::json::put(out, "crackleSampleFraction", defects.crackle_sample_fraction);
-  util::json::put(out, "cracklePerSecond", defects.crackle_per_second);
-  util::json::put(out, "clipSampleCount", static_cast<double>(defects.clip_sample_count));
-  util::json::put(out, "clipRunCount", static_cast<double>(defects.clip_run_count));
-  util::json::put(out, "clipLongestRunSamples",
-                  static_cast<double>(defects.clip_longest_run_samples));
-  util::json::put(out, "clipSampleFraction", defects.clip_sample_fraction);
-  util::json::put(out, "clipFlatRunCount", static_cast<double>(defects.clip_flat_run_count));
-  util::json::put(out, "clipFlatSampleCount", static_cast<double>(defects.clip_flat_sample_count));
-  util::json::put(out, "clipLongestFlatRunSamples",
-                  static_cast<double>(defects.clip_longest_flat_run_samples));
-  util::json::put(out, "clipFlatLevel", defects.clip_flat_level);
-  util::json::put(out, "noiseFloorDbfs", defects.noise_floor_dbfs);
-  util::json::put(out, "noiseBandPeakDbfs", defects.noise_band_peak_dbfs);
-  util::json::put(out, "noiseBandPeakIndex", defects.noise_band_peak_index);
-  util::json::put(out, "humFundamentalHz", defects.hum_fundamental_hz);
-  util::json::put(out, "humFundamentalProminence", defects.hum_fundamental_prominence);
-  util::json::put(out, "humHarmonics", defects.hum_harmonics);
-  util::json::put(out, "humFundamentalDbfs", defects.hum_fundamental_dbfs);
-  util::json::put(out, "humPeakHarmonicDbfs", defects.hum_peak_harmonic_dbfs);
-  util::json::put(out, "lateDecayRatioDb", defects.late_decay_ratio_db);
+namespace {
+
+double json_count(std::size_t value) { return static_cast<double>(value); }
+
+util::json::Array json_floats(const float* values, std::size_t size) {
+  util::json::Array out;
+  out.reserve(size);
+  for (std::size_t i = 0; i < size; ++i) out.emplace_back(values[i]);
+  return out;
+}
+
+}  // namespace
+
+util::json::Object detection_to_json(const repair::ClickDetection& detected) {
+  util::json::Object out;
+  util::json::put(out, "count", json_count(detected.count));
+  util::json::put(out, "rejected", json_count(detected.rejected));
+  util::json::put(out, "longestRunSamples", json_count(detected.longest_run_samples));
+  util::json::put(out, "perSecond", detected.per_second);
+  return out;
+}
+
+util::json::Object detection_to_json(const repair::ClipDetection& detected) {
+  util::json::Object out;
+  util::json::put(out, "clippedSamples", json_count(detected.sample_count));
+  util::json::put(out, "clippedRatio", detected.sample_fraction);
+  util::json::put(out, "runCount", json_count(detected.run_count));
+  util::json::put(out, "longestRunSamples", json_count(detected.longest_run_samples));
+  util::json::put(out, "flatRunCount", json_count(detected.flat_run_count));
+  util::json::put(out, "longestFlatRunSamples", json_count(detected.longest_flat_run_samples));
+  util::json::put(out, "flatSampleCount", json_count(detected.flat_sample_count));
+  util::json::put(out, "flatLevel", detected.flat_level);
+  return out;
+}
+
+util::json::Object detection_to_json(const repair::CrackleDetection& detected) {
+  util::json::Object out;
+  util::json::put(out, "sampleCount", json_count(detected.sample_count));
+  util::json::put(out, "sampleFraction", detected.sample_fraction);
+  util::json::put(out, "perSecond", detected.per_second);
+  return out;
+}
+
+util::json::Object detection_to_json(const repair::NoiseDetection& detected) {
+  util::json::Object out;
+  util::json::put(out, "floorDbfs", detected.floor_dbfs);
+  util::json::put(out, "bandFloorDbfs",
+                  json_floats(detected.band_floor_dbfs, repair::kRepairNoiseBandCount));
+  return out;
+}
+
+util::json::Object detection_to_json(const repair::HumDetection& detected) {
+  util::json::Object out;
+  util::json::put(out, "fundamentalHz", detected.fundamental_hz);
+  util::json::put(out, "fundamentalProminence", detected.fundamental_prominence);
+  util::json::put(out, "harmonics", detected.harmonics);
+  util::json::put(
+      out, "harmonicDbfs",
+      json_floats(detected.harmonic_dbfs, static_cast<std::size_t>(repair::kDehumMaxHarmonics)));
+  return out;
+}
+
+util::json::Object detection_to_json(const repair::ReverbDetection& detected) {
+  util::json::Object out;
+  util::json::put(out, "lateDecayRatioDb", detected.late_decay_ratio_db);
+  if (detected.late_predictability) {
+    util::json::put(out, "latePredictability", *detected.late_predictability);
+  }
+  return out;
+}
+
+util::json::Object defects_to_json(const DefectProfile& defects) {
+  util::json::Object out;
+  util::json::put(out, "click", detection_to_json(defects.click));
+  util::json::put(out, "clip", detection_to_json(defects.clip));
+  util::json::put(out, "crackle", detection_to_json(defects.crackle));
+  util::json::put(out, "noise", detection_to_json(defects.noise));
+  util::json::put(out, "hum", detection_to_json(defects.hum));
+  util::json::put(out, "reverb", detection_to_json(defects.reverb));
   return out;
 }
 
@@ -682,8 +665,8 @@ std::string audio_profile_to_json(const AudioProfile& profile) {
 
   json::Object loudness;
   util::json::put(loudness, "integratedLufs", profile.loudness.integrated_lufs);
-  util::json::put(loudness, "lraLu", profile.loudness.lra_lu);
-  util::json::put(loudness, "truePeakDb", profile.loudness.true_peak_db);
+  util::json::put(loudness, "loudnessRangeLu", profile.loudness.lra_lu);
+  util::json::put(loudness, "truePeakDbtp", profile.loudness.true_peak_db);
   util::json::put(loudness, "crestFactorDb", profile.loudness.crest_factor_db);
 
   json::Object spectral;
@@ -700,10 +683,8 @@ std::string audio_profile_to_json(const AudioProfile& profile) {
 
   json::Object dynamics;
   util::json::put(dynamics, "shortTermLufsStd", profile.dynamics.short_term_lufs_std);
-  util::json::put(dynamics, "attackDensity", profile.dynamics.attack_density);
+  util::json::put(dynamics, "attackPerSecond", profile.dynamics.attack_density);
   util::json::put(dynamics, "sustainRatio", profile.dynamics.sustain_ratio);
-
-  json::Object defects = defects_to_json(profile.defects);
 
   json::Object root;
   util::json::put(root, "durationSec", profile.duration_sec);
@@ -712,7 +693,8 @@ std::string audio_profile_to_json(const AudioProfile& profile) {
   util::json::put(root, "loudness", std::move(loudness));
   util::json::put(root, "spectral", std::move(spectral));
   util::json::put(root, "dynamics", std::move(dynamics));
-  util::json::put(root, "defects", std::move(defects));
+  // Left out when the detectors did not run, so a clean recording and an unmeasured one differ.
+  if (profile.defects.measured) util::json::put(root, "defects", defects_to_json(profile.defects));
   return json::dump(json::Value(std::move(root)));
 }
 
@@ -721,41 +703,44 @@ const std::vector<std::string>& audio_profile_schema_paths() {
       "bpm",
       "bpmConfidence",
       "defects",
-      "defects.clickCount",
-      "defects.clickLongestRunSamples",
-      "defects.clickPerSecond",
-      "defects.clickRejected",
-      "defects.clipFlatLevel",
-      "defects.clipFlatRunCount",
-      "defects.clipFlatSampleCount",
-      "defects.clipLongestFlatRunSamples",
-      "defects.clipLongestRunSamples",
-      "defects.clipRunCount",
-      "defects.clipSampleCount",
-      "defects.clipSampleFraction",
-      "defects.cracklePerSecond",
-      "defects.crackleSampleCount",
-      "defects.crackleSampleFraction",
-      "defects.humFundamentalDbfs",
-      "defects.humFundamentalHz",
-      "defects.humFundamentalProminence",
-      "defects.humHarmonics",
-      "defects.humPeakHarmonicDbfs",
-      "defects.lateDecayRatioDb",
-      "defects.measured",
-      "defects.noiseBandPeakDbfs",
-      "defects.noiseBandPeakIndex",
-      "defects.noiseFloorDbfs",
+      "defects.click",
+      "defects.click.count",
+      "defects.click.longestRunSamples",
+      "defects.click.perSecond",
+      "defects.click.rejected",
+      "defects.clip",
+      "defects.clip.clippedRatio",
+      "defects.clip.clippedSamples",
+      "defects.clip.flatLevel",
+      "defects.clip.flatRunCount",
+      "defects.clip.flatSampleCount",
+      "defects.clip.longestFlatRunSamples",
+      "defects.clip.longestRunSamples",
+      "defects.clip.runCount",
+      "defects.crackle",
+      "defects.crackle.perSecond",
+      "defects.crackle.sampleCount",
+      "defects.crackle.sampleFraction",
+      "defects.hum",
+      "defects.hum.fundamentalHz",
+      "defects.hum.fundamentalProminence",
+      "defects.hum.harmonicDbfs",
+      "defects.hum.harmonics",
+      "defects.noise",
+      "defects.noise.bandFloorDbfs",
+      "defects.noise.floorDbfs",
+      "defects.reverb",
+      "defects.reverb.lateDecayRatioDb",
       "durationSec",
       "dynamics",
-      "dynamics.attackDensity",
+      "dynamics.attackPerSecond",
       "dynamics.shortTermLufsStd",
       "dynamics.sustainRatio",
       "loudness",
       "loudness.crestFactorDb",
       "loudness.integratedLufs",
-      "loudness.lraLu",
-      "loudness.truePeakDb",
+      "loudness.loudnessRangeLu",
+      "loudness.truePeakDbtp",
       "spectral",
       "spectral.airRmsDb",
       "spectral.centroidHz",

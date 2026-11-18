@@ -845,8 +845,8 @@ def test_beats_and_downbeats_are_beat_objects(analysis: libsonare.AnalysisResult
         assert isinstance(beat.strength, float)
     beat_times = [beat.time_sec for beat in analysis.beats]
     assert beat_times == sorted(beat_times)
-    ids = {id(beat) for beat in analysis.beats}
-    assert all(id(beat) in ids for beat in analysis.downbeats)
+    times = set(beat_times)
+    assert all(beat.time_sec in times for beat in analysis.downbeats)
     assert all(isinstance(chord, libsonare.AnalysisChord) for chord in analysis.chords)
     assert all(isinstance(c, libsonare.BpmCandidate) for c in analysis.bpm_candidates)
     assert {c.relation for c in analysis.bpm_candidates} <= {"primary", "half", "double", "other"}

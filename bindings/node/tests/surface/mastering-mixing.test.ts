@@ -491,15 +491,6 @@ describe('mastering mixing surface', () => {
 
   describe('native still uses the old spelling', () => {
     const module = () => addon;
-    const rawTracks = () => [
-      [tone(0.6, 80)],
-      null,
-      ['bass'],
-      null,
-      null,
-      SR,
-      {} as Record<string, number | boolean>,
-    ];
 
     const rawCases: Array<[string, () => Record<string, unknown>, string[], string[]]> = [
       [
@@ -512,14 +503,6 @@ describe('mastering mixing surface', () => {
           ).meters[0],
         ['truePeakDbL', 'truePeakDbR', 'maxTruePeakDb'],
         ['truePeakDbtpL', 'truePeakDbtpR', 'maxTruePeakDbtp'],
-      ],
-      [
-        'the assistant profile spells channelCount, truePeakDb and attackDensity',
-        () =>
-          JSON.parse((module().mixingAssistantSuggest as Loose)(...rawTracks()) as string)
-            .tracks[0],
-        ['channelCount', 'truePeakDb', 'attackDensity'],
-        ['numChannels', 'truePeakDbtp', 'attackPerSecond'],
       ],
       [
         'the scene document holds pan mode and law as ints and the send timing as pre or post',

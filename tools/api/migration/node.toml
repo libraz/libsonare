@@ -14912,6 +14912,13 @@ domain = "core"
 rule = "unit-in-name"
 
 [[entry]]
+kind = "field"
+old = "CapabilityCatalogMasteringPreset.truePeakCeilingDb"
+new = "MasteringPresetCatalogEntry.truePeakCeilingDbtp"
+domain = "mastering"
+rule = "unit-in-name"
+
+[[entry]]
 kind = "option"
 old = "PlaybackLoudnessMeter.constructor(sampleRate)"
 removed = "pass sampleRate in the options object: new PlaybackLoudnessMeter({ numChannels, sampleRate })"

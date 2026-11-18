@@ -188,7 +188,7 @@ std::string build_capability_catalog() {
     entry["kind"] = is_mastering ? "mastering" : "restoration";
     entry["targetLufs"] =
         is_mastering ? json::Value(config.loudness.target_lufs) : json::Value(nullptr);
-    entry["truePeakCeilingDb"] =
+    entry["truePeakCeilingDbtp"] =
         is_mastering ? json::Value(config.loudness.ceiling_db) : json::Value(nullptr);
     entry["maxLimiterGainReductionDb"] =
         is_mastering ? json::Value(config.loudness.max_limiter_gain_reduction_db)

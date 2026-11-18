@@ -18,30 +18,14 @@
 namespace sonare {
 
 /// @brief Serializes a complete AnalysisResult to a camelCase JSON object.
-/// @details Schema (every field always present):
-///   {
-///     "bpm": number, "bpmConfidence": number,
-///     "key": {root, mode, confidence, name, shortName},
-///     "timeSignature": {numerator, denominator, confidence},
-///     "beats": [{time, strength}],
-///     "beatLocalBpm": [number],
-///     "chords": [{root, bass, quality, start, end, confidence, name,
-///                 romanNumeral}],  // romanNumeral is "" for N.C.
-///     "sections": [{type, start, end, energyLevel, confidence, name}],
-///     "timbre": {brightness, warmth, density, roughness, complexity},
-///     "dynamics": {dynamicRangeDb, peakDb, rmsDb, crestFactor,
-///                  loudnessRangeDb, isCompressed},
-///     "rhythm": {timeSignature, syncopation, grooveType,
-///                patternRegularity, tempoStability},
-///     "melody": {pitchRangeOctaves, pitchStability, meanFrequency,
-///                vibratoRate, pitches: [{time, frequency, confidence}]},
-///     "form": string
-///   }
-/// Non-finite floats are emitted as null (handled by the JSON dumper).
+/// @details The field set is @ref analysis_result_schema_paths. Every field is present except
+///          `melody.pitches[].frequencyHz`, which is left out for an unvoiced point. Downbeats are
+///          written as the beat records they index. Non-finite floats are emitted as null
+///          (handled by the JSON dumper).
 std::string analysis_result_to_json(const AnalysisResult& result);
 
 /// @brief Canonical field paths for the unified AnalysisResult schema.
-/// @details Array item fields use [] (for example beats[].time). Keep the JSON
+/// @details Array item fields use [] (for example beats[].timeSec). Keep the JSON
 /// serializer and WASM native object in parity by testing both surfaces against
 /// this list.
 const std::vector<std::string>& analysis_result_schema_paths();

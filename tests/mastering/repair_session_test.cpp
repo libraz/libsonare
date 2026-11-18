@@ -156,10 +156,10 @@ TEST_CASE("repair analysis measures every channel and recommends from the sugges
   const json::Value result = json::parse(text);
 
   REQUIRE(result["channels"].as_array().size() == 3);
-  CHECK(result["channels"][0]["clickCount"].as_number() == 0.0);
-  CHECK(result["channels"][1]["clickCount"].as_number() > 0.0);
-  CHECK(result["defects"]["clickCount"].as_number() ==
-        result["channels"][1]["clickCount"].as_number());
+  CHECK(result["channels"][0]["click"]["count"].as_number() == 0.0);
+  CHECK(result["channels"][1]["click"]["count"].as_number() > 0.0);
+  CHECK(result["defects"]["click"]["count"].as_number() ==
+        result["channels"][1]["click"]["count"].as_number());
   CHECK(result["declipThresholdSafe"].is_bool());
   CHECK(std::isfinite(result["integratedLufs"].as_number()));
   const json::Array& recommended = result["recommended"].as_array();

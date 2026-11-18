@@ -425,7 +425,7 @@ rule = "snake-case-only"
 [[entry]]
 kind = "field"
 old = "MasteringPresetCatalogEntry.truePeakCeilingDb"
-new = "MasteringPresetCatalogEntry.true_peak_ceiling_db"
+new = "MasteringPresetCatalogEntry.true_peak_ceiling_dbtp"
 domain = "mastering"
 rule = "snake-case-only"
 
@@ -7263,3 +7263,74 @@ changed = "a non-positive sr or hop_length raises SonareValueError (returned 0)"
 domain = "analysis"
 rule = "absent-not-sentinel"
 test = "bindings/python/tests/test_analyzer_features.py::test_frame_time_conversions_refuse_a_non_positive_rate_or_hop"
+
+[[entry]]
+kind = "field"
+old = "MasteringAudioProfileLoudness.lraLu"
+to = "MasteringAudioProfileLoudness.loudnessRangeLu"
+changed = "lraLu -> loudnessRangeLu"
+domain = "mastering"
+rule = "loudness-names"
+test = "bindings/python/tests/test_mastering_result_types.py::test_audio_profile_result"
+
+[[entry]]
+kind = "field"
+old = "MasteringAudioProfileLoudness.truePeakDb"
+to = "MasteringAudioProfileLoudness.truePeakDbtp"
+changed = "truePeakDb -> truePeakDbtp"
+domain = "mastering"
+rule = "loudness-names"
+test = "bindings/python/tests/test_mastering_result_types.py::test_audio_profile_result"
+
+[[entry]]
+kind = "field"
+old = "MasteringAssistantProfile.lraLu"
+to = "MasteringAssistantProfile.loudnessRangeLu"
+changed = "lraLu -> loudnessRangeLu"
+domain = "mastering"
+rule = "loudness-names"
+test = "bindings/python/tests/test_mastering_result_types.py::test_assistant_result"
+
+[[entry]]
+kind = "field"
+old = "MasteringAssistantProfile.truePeakDb"
+to = "MasteringAssistantProfile.truePeakDbtp"
+changed = "truePeakDb -> truePeakDbtp"
+domain = "mastering"
+rule = "loudness-names"
+test = "bindings/python/tests/test_mastering_result_types.py::test_assistant_result"
+
+[[entry]]
+kind = "field"
+old = "MasteringAudioProfileDynamics.attackDensity"
+to = "MasteringAudioProfileDynamics.attackPerSecond"
+changed = "attackDensity -> attackPerSecond"
+domain = "mastering"
+rule = "unit-in-name"
+test = "bindings/python/tests/test_mastering_result_types.py::test_audio_profile_result"
+
+[[entry]]
+kind = "field"
+old = "MasteringAssistantProfile.attackDensity"
+to = "MasteringAssistantProfile.attackPerSecond"
+changed = "attackDensity -> attackPerSecond"
+domain = "mastering"
+rule = "unit-in-name"
+test = "bindings/python/tests/test_mastering_result_types.py::test_assistant_result"
+
+[[entry]]
+kind = "field"
+old = "MasteringStreamingPreviewPlatform.truePeakDb"
+to = "MasteringStreamingPreviewPlatform.truePeakDbtp"
+changed = "truePeakDb -> truePeakDbtp"
+domain = "mastering"
+rule = "loudness-names"
+test = "bindings/python/tests/test_mastering_result_types.py::test_streaming_preview_result"
+
+[[entry]]
+kind = "type"
+old = "MasteringAudioProfileDefects"
+changed = "one record per detector: {click, clip, crackle, noise, hum, reverb} (MasteringAudioProfileClick, ...); the flat clip*/hum*/noise* fields go, and the measured flag goes because the whole block is absent when the detectors did not run"
+domain = "mastering"
+rule = "typed-results"
+test = "bindings/python/tests/test_mastering_result_types.py::test_audio_profile_result_with_defects"

@@ -297,7 +297,7 @@ std::string build_capability_catalog_json() {
     entry["kind"] = is_mastering ? "mastering" : "restoration";
     entry["targetLufs"] =
         is_mastering ? json::Value(config.loudness.target_lufs) : json::Value(nullptr);
-    entry["truePeakCeilingDb"] =
+    entry["truePeakCeilingDbtp"] =
         is_mastering ? json::Value(config.loudness.ceiling_db) : json::Value(nullptr);
     entry["maxLimiterGainReductionDb"] =
         is_mastering ? json::Value(config.loudness.max_limiter_gain_reduction_db)
@@ -339,7 +339,7 @@ const std::vector<std::string>& capability_catalog_schema_paths() {
       "masteringPresets[].name",
       "masteringPresets[].kind",
       "masteringPresets[].targetLufs",
-      "masteringPresets[].truePeakCeilingDb",
+      "masteringPresets[].truePeakCeilingDbtp",
       "masteringPresets[].maxLimiterGainReductionDb",
       "processors",
       "processors[].id",

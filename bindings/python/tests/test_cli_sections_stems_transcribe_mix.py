@@ -696,8 +696,8 @@ def test_suggest_mix_measures_a_stereo_track_as_a_pair() -> None:
         as_pair = _track(stereo)
         as_fold = _track(folded)
 
-    assert as_pair["channelCount"] == 2
-    assert as_fold["channelCount"] == 1
+    assert as_pair["numChannels"] == 2
+    assert as_fold["numChannels"] == 1
     # The fold is not the pair, and the difference is in the figure every gain
     # decision is made from.
     assert as_pair["integratedLufs"] != as_fold["integratedLufs"]

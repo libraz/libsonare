@@ -2,6 +2,18 @@
  * Request-to-native conversions the repair families share.
  */
 
+import type { MasteringAudioProfileDefects } from '../public_types_mastering.js';
+
+/** Grouped defects as the profile and repair documents carry them, with the detection arrays as `Float32Array`. */
+export function audioDefectsFromNative(native: unknown): MasteringAudioProfileDefects {
+  const d = native as MasteringAudioProfileDefects;
+  return {
+    ...d,
+    noise: { ...d.noise, bandFloorDbfs: Float32Array.from(d.noise.bandFloorDbfs) },
+    hum: { ...d.hum, harmonicDbfs: Float32Array.from(d.hum.harmonicDbfs) },
+  };
+}
+
 /** Request fields that are audio, rate or JS-side validation and never reach the native options. */
 const NON_NATIVE_FIELDS = new Set([
   'samples',
