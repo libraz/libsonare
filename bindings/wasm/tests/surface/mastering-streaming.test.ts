@@ -1,5 +1,9 @@
 import { beforeAll, describe, expect, expectTypeOf, it } from 'vitest';
 import {
+  type EqBand,
+  type EqBandPhase,
+  type EqBandType,
+  type EqCoeffMode,
   type EqPhaseMode,
   type EqStereoPlacement,
   init,
@@ -327,6 +331,59 @@ describe('StereoBlock', () => {
       expectTypeOf(eq.processStereo).returns.toEqualTypeOf<StereoBlock>();
     } finally {
       chain.destroy();
+      eq.destroy();
+    }
+  });
+});
+
+describe('StreamingEqualizer band tokens', () => {
+  it('declares the band tokens in lowerCamel and no lookaheadMs', () => {
+    expectTypeOf<EqBand['type']>().toEqualTypeOf<EqBandType | undefined>();
+    expectTypeOf<'lowShelf'>().toExtend<EqBandType>();
+    expectTypeOf<'vicanek'>().toExtend<EqCoeffMode>();
+    expectTypeOf<'naturalPhase'>().toExtend<EqBandPhase>();
+    // @ts-expect-error retired spelling of detectorDelayMs
+    type NoLookahead = EqBand['lookaheadMs'];
+    expectTypeOf<NoLookahead>().not.toBeNever();
+  });
+
+  it('takes every lowerCamel token', () => {
+    const eq = new StreamingEqualizer({ sampleRate });
+    try {
+      const types: EqBandType[] = [
+        'peak',
+        'lowShelf',
+        'highShelf',
+        'lowPass',
+        'highPass',
+        'bandPass',
+        'notch',
+        'tiltShelf',
+        'flatTilt',
+        'allPass',
+      ];
+      for (const type of types) {
+        eq.setBand(0, { type, frequencyHz: 1000, enabled: true });
+      }
+      eq.setBand(0, { type: 'peak', coeffMode: 'vicanek', phase: 'naturalPhase' });
+      eq.setBand(0, { type: 'peak', coeffMode: 'rbj', phase: 'zeroLatency' });
+    } finally {
+      eq.destroy();
+    }
+  });
+
+  it.each([
+    { type: 'Peak' },
+    { type: 'LowShelf' },
+    { type: 'Bell' },
+    { type: 'peak', coeffMode: 'Rbj' },
+    { type: 'peak', phase: 'NaturalPhase' },
+    { type: 'peak', lookaheadMs: 5 },
+  ])('refuses the earlier spelling %j', (band) => {
+    const eq = new StreamingEqualizer({ sampleRate });
+    try {
+      expect(errorOf(() => eq.setBand(0, band as never))).toBeInstanceOf(RangeError);
+    } finally {
       eq.destroy();
     }
   });

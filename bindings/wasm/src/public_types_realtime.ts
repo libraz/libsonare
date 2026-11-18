@@ -109,8 +109,6 @@ export interface EqBand {
    * true look-ahead, and adds no latency to the audio path.
    */
   detectorDelayMs?: number;
-  /** Former (misleading) spelling of `detectorDelayMs`, still accepted; `detectorDelayMs` wins if both are set. */
-  lookaheadMs?: number;
   externalSidechain?: boolean;
   sidechainFreqHz?: number;
   sidechainQ?: number;

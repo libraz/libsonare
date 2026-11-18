@@ -27857,3 +27857,20 @@ old = "PlaybackStageName='speaker_calibration'"
 new = "PlaybackStageName='speakerCalibration'"
 domain = "engine"
 rule = "token-case"
+
+[[entry]]
+kind = "field"
+old = "EqBand.lookaheadMs"
+removed = "use detectorDelayMs"
+domain = "analysis"
+rule = "aliases-removed"
+test = "bindings/wasm/tests/surface/mastering-streaming.test.ts::refuses the earlier spelling %j"
+
+[[entry]]
+kind = "field"
+old = "EqBand.lookaheadMs"
+removed = "use detectorDelayMs"
+domain = "analysis"
+rule = "aliases-removed"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-streaming.test.ts::refuses the earlier spelling %j"

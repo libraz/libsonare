@@ -21,29 +21,29 @@ import {
 /** Global equalizer phase mode. */
 export type EqPhaseMode = 'zero' | 'natural' | 'linear';
 
-// Native still spells placements capitalised and reads magnitudeResponse's as an ordinal.
-const EQ_PLACEMENTS: Record<EqStereoPlacement, { name: string; ordinal: number }> = {
-  stereo: { name: 'Stereo', ordinal: 0 },
-  left: { name: 'Left', ordinal: 1 },
-  right: { name: 'Right', ordinal: 2 },
-  mid: { name: 'Mid', ordinal: 3 },
-  side: { name: 'Side', ordinal: 4 },
+// Native reads magnitudeResponse's placement as an ordinal.
+const EQ_PLACEMENT_ORDINALS: Record<EqStereoPlacement, number> = {
+  stereo: 0,
+  left: 1,
+  right: 2,
+  mid: 3,
+  side: 4,
 };
 
 /** Absent or null takes `'stereo'`; a non-string is a `TypeError`, an unknown token a `RangeError`. */
-function eqPlacementToNative(fnName: string, value: unknown): { name: string; ordinal: number } {
+function eqPlacementOrdinal(fnName: string, value: unknown): number {
   if (value === undefined || value === null) {
-    return EQ_PLACEMENTS.stereo;
+    return EQ_PLACEMENT_ORDINALS.stereo;
   }
   if (typeof value !== 'string') {
     throw new TypeError(`${fnName}: placement must be a string`);
   }
-  if (!Object.keys(EQ_PLACEMENTS).includes(value)) {
+  if (!Object.keys(EQ_PLACEMENT_ORDINALS).includes(value)) {
     throw new RangeError(
-      `${fnName}: placement must be one of ${Object.keys(EQ_PLACEMENTS).join(', ')}`,
+      `${fnName}: placement must be one of ${Object.keys(EQ_PLACEMENT_ORDINALS).join(', ')}`,
     );
   }
-  return EQ_PLACEMENTS[value as EqStereoPlacement];
+  return EQ_PLACEMENT_ORDINALS[value as EqStereoPlacement];
 }
 
 /** One block of planar stereo audio: the left and right channels, equal in length. */
@@ -390,11 +390,10 @@ export class StreamingEqualizer {
    * Configure the band at `index` (0..23). Omitted fields use C++ defaults.
    */
   setBand(index: number, band: EqBand): void {
-    const native: Record<string, unknown> = { ...band };
     if (band.placement !== undefined) {
-      native.placement = eqPlacementToNative('StreamingEqualizer.setBand', band.placement).name;
+      eqPlacementOrdinal('StreamingEqualizer.setBand', band.placement);
     }
-    this.eq.setBand(index, native);
+    this.eq.setBand(index, { ...band });
   }
 
   /** Disable and reset every band. */
@@ -558,7 +557,7 @@ export class StreamingEqualizer {
     frequenciesHz: Float32Array,
     placement: EqStereoPlacement = 'stereo',
   ): Float32Array {
-    const { ordinal } = eqPlacementToNative('StreamingEqualizer.magnitudeResponse', placement);
+    const ordinal = eqPlacementOrdinal('StreamingEqualizer.magnitudeResponse', placement);
     return this.eq.magnitudeResponse(ordinal, frequenciesHz);
   }
 
