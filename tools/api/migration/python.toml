@@ -3383,10 +3383,10 @@ test = "bindings/python/tests/test_surface_analysis.py::test_beats_and_downbeats
 [[entry]]
 kind = "field"
 old = "AnalysisResult.timbre"
-changed = "TimbreFrame | None"
+changed = "a TimbreFrame, always present (never None); a required constructor field placed after time_signature"
 domain = "analysis"
 rule = "typed-results"
-test = "bindings/python/tests/test_surface_analysis.py::test_beats_and_downbeats_are_beat_objects"
+test = "bindings/python/tests/test_analysis_full.py::test_analyze_always_carries_every_summary_block"
 
 [[entry]]
 kind = "field"
@@ -8086,3 +8086,27 @@ changed = "omitted (None) is full resolution; 0 or a negative raises SonareValue
 domain = "mastering"
 rule = "absent-not-sentinel"
 test = "bindings/python/tests/test_stereo_and_spectrum.py::test_a_non_positive_max_points_is_refused"
+
+[[entry]]
+kind = "field"
+old = "AnalysisResult.dynamics"
+changed = "always present (was Optional, None on the removed flat-struct fallback); a required constructor field placed after time_signature"
+domain = "analysis"
+rule = "typed-results"
+test = "bindings/python/tests/test_analysis_full.py::test_analyze_always_carries_every_summary_block"
+
+[[entry]]
+kind = "field"
+old = "AnalysisResult.rhythm"
+changed = "always present (was Optional, None on the removed flat-struct fallback); a required constructor field placed after time_signature"
+domain = "analysis"
+rule = "typed-results"
+test = "bindings/python/tests/test_analysis_full.py::test_analyze_always_carries_every_summary_block"
+
+[[entry]]
+kind = "field"
+old = "AnalysisResult.melody"
+changed = "always present (was Optional, None on the removed flat-struct fallback); a required constructor field placed after time_signature"
+domain = "analysis"
+rule = "typed-results"
+test = "bindings/python/tests/test_analysis_full.py::test_analyze_always_carries_every_summary_block"

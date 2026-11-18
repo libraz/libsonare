@@ -850,7 +850,10 @@ def test_beats_and_downbeats_are_beat_objects(analysis: libsonare.AnalysisResult
     assert all(isinstance(chord, libsonare.AnalysisChord) for chord in analysis.chords)
     assert all(isinstance(c, libsonare.BpmCandidate) for c in analysis.bpm_candidates)
     assert {c.relation for c in analysis.bpm_candidates} <= {"primary", "half", "double", "other"}
-    assert analysis.timbre is None or isinstance(analysis.timbre, libsonare.TimbreFrame)
+    assert isinstance(analysis.timbre, libsonare.TimbreFrame)
+    assert isinstance(analysis.dynamics, libsonare.AnalysisDynamics)
+    assert isinstance(analysis.rhythm, libsonare.AnalysisRhythm)
+    assert isinstance(analysis.melody, libsonare.AnalysisMelody)
     assert isinstance(analysis.beat_observations, libsonare.BeatObservations)
 
 

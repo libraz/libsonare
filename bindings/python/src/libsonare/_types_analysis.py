@@ -201,6 +201,10 @@ class AnalysisResult:
     bpm_confidence: float
     key: Key
     time_signature: TimeSignature
+    timbre: TimbreFrame
+    dynamics: AnalysisDynamics
+    rhythm: AnalysisRhythm
+    melody: AnalysisMelody
     beats: list[Beat] = dataclasses.field(default_factory=list)
     # The bar starts, drawn from ``beats``: each is the beat that opens a bar.
     downbeats: list[Beat] = dataclasses.field(default_factory=list)
@@ -212,15 +216,6 @@ class AnalysisResult:
     time_signature_candidates: list[TimeSignature] = dataclasses.field(default_factory=list)
     chords: list[AnalysisChord] = dataclasses.field(default_factory=list)
     sections: list[Section] = dataclasses.field(default_factory=list)
-    # timbre/dynamics/rhythm/melody are intentionally Optional here, unlike the
-    # Node/WASM surfaces which type them as required: Python keeps a legacy
-    # fallback to the older flat sonare_analyze struct (for builds without
-    # sonare_analyze_json) that returns only bpm/key/time-signature/beats and
-    # leaves these four unset. Guard with `is not None` before use.
-    timbre: TimbreFrame | None = None
-    dynamics: AnalysisDynamics | None = None
-    rhythm: AnalysisRhythm | None = None
-    melody: AnalysisMelody | None = None
     beat_observations: BeatObservations | None = None
     # Smoothed local tempo at each beat, in BPM, parallel to ``beats``.
     # Empty unless ``compute_tempo_curve`` was set, and empty regardless when

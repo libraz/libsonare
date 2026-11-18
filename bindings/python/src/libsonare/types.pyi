@@ -653,6 +653,10 @@ class AnalysisResult:
     bpm_confidence: float
     key: Key
     time_signature: TimeSignature
+    timbre: TimbreFrame
+    dynamics: AnalysisDynamics
+    rhythm: AnalysisRhythm
+    melody: AnalysisMelody
     beats: list[Beat]
     downbeats: list[Beat]
     downbeat_phase: int
@@ -660,10 +664,6 @@ class AnalysisResult:
     time_signature_candidates: list[TimeSignature]
     chords: list[AnalysisChord]
     sections: list[Section]
-    timbre: TimbreFrame | None
-    dynamics: AnalysisDynamics | None
-    rhythm: AnalysisRhythm | None
-    melody: AnalysisMelody | None
     beat_observations: BeatObservations | None
     beat_local_bpm: NDArray[np.float32]
     form: str
@@ -674,6 +674,10 @@ class AnalysisResult:
         bpm_confidence: float,
         key: Key,
         time_signature: TimeSignature,
+        timbre: TimbreFrame,
+        dynamics: AnalysisDynamics,
+        rhythm: AnalysisRhythm,
+        melody: AnalysisMelody,
         beats: list[Beat] = ...,
         downbeats: list[Beat] = ...,
         downbeat_phase: int = 0,
@@ -681,10 +685,6 @@ class AnalysisResult:
         time_signature_candidates: list[TimeSignature] = ...,
         chords: list[AnalysisChord] = ...,
         sections: list[Section] = ...,
-        timbre: TimbreFrame | None = None,
-        dynamics: AnalysisDynamics | None = None,
-        rhythm: AnalysisRhythm | None = None,
-        melody: AnalysisMelody | None = None,
         beat_observations: BeatObservations | None = None,
         beat_local_bpm: NDArray[np.float32] = ...,
         form: str = "",

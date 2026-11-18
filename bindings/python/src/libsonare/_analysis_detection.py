@@ -520,74 +520,53 @@ def _parse_analysis_json(data: dict[str, Any]) -> AnalysisResult:
             )
         )
 
-    # Timbre
-    timbre_d = data.get("timbre", {})
-    timbre = (
-        TimbreFrame(
-            brightness=float(timbre_d.get("brightness", 0.0)),
-            warmth=float(timbre_d.get("warmth", 0.0)),
-            density=float(timbre_d.get("density", 0.0)),
-            roughness=float(timbre_d.get("roughness", 0.0)),
-            complexity=float(timbre_d.get("complexity", 0.0)),
-        )
-        if timbre_d
-        else None
+    # Timbre, dynamics, rhythm and melody are always written by the core.
+    timbre_d = data["timbre"]
+    timbre = TimbreFrame(
+        brightness=float(timbre_d["brightness"]),
+        warmth=float(timbre_d["warmth"]),
+        density=float(timbre_d["density"]),
+        roughness=float(timbre_d["roughness"]),
+        complexity=float(timbre_d["complexity"]),
     )
-
-    # Dynamics
-    dyn_d = data.get("dynamics", {})
-    dynamics = (
-        AnalysisDynamics(
-            dynamic_range_db=float(dyn_d.get("dynamicRangeDb", 0.0)),
-            peak_db=float(dyn_d.get("peakDb", 0.0)),
-            rms_db=float(dyn_d.get("rmsDb", 0.0)),
-            crest_factor=float(dyn_d.get("crestFactor", 0.0)),
-            loudness_range_lu=float(dyn_d.get("loudnessRangeLu", 0.0)),
-            is_compressed=bool(dyn_d.get("isCompressed", False)),
-        )
-        if dyn_d
-        else None
+    dyn_d = data["dynamics"]
+    dynamics = AnalysisDynamics(
+        dynamic_range_db=float(dyn_d["dynamicRangeDb"]),
+        peak_db=float(dyn_d["peakDb"]),
+        rms_db=float(dyn_d["rmsDb"]),
+        crest_factor=float(dyn_d["crestFactor"]),
+        loudness_range_lu=float(dyn_d["loudnessRangeLu"]),
+        is_compressed=bool(dyn_d["isCompressed"]),
     )
-
-    # Rhythm
-    rhy_d = data.get("rhythm", {})
-    if rhy_d:
-        rts_d = rhy_d.get("timeSignature", ts_d)
-        rhythm = AnalysisRhythm(
-            time_signature=TimeSignature(
-                numerator=int(rts_d.get("numerator", 4)),
-                denominator=int(rts_d.get("denominator", 4)),
-                confidence=float(rts_d.get("confidence", 0.0)),
-            ),
-            syncopation=float(rhy_d.get("syncopation", 0.0)),
-            groove_type=str(rhy_d.get("grooveType", "straight")),
-            pattern_regularity=float(rhy_d.get("patternRegularity", 0.0)),
-            tempo_stability=float(rhy_d.get("tempoStability", 0.0)),
-        )
-    else:
-        rhythm = None
-
-    # Melody
-    mel_d = data.get("melody", {})
-    if mel_d:
-        pitches = [
+    rhy_d = data["rhythm"]
+    rts_d = rhy_d["timeSignature"]
+    rhythm = AnalysisRhythm(
+        time_signature=TimeSignature(
+            numerator=int(rts_d["numerator"]),
+            denominator=int(rts_d["denominator"]),
+            confidence=float(rts_d["confidence"]),
+        ),
+        syncopation=float(rhy_d["syncopation"]),
+        groove_type=str(rhy_d["grooveType"]),
+        pattern_regularity=float(rhy_d["patternRegularity"]),
+        tempo_stability=float(rhy_d["tempoStability"]),
+    )
+    mel_d = data["melody"]
+    melody = AnalysisMelody(
+        pitch_range_octaves=float(mel_d["pitchRangeOctaves"]),
+        pitch_stability=float(mel_d["pitchStability"]),
+        mean_frequency_hz=float(mel_d["meanFrequencyHz"]),
+        vibrato_rate_hz=float(mel_d["vibratoRateHz"]),
+        pitches=[
             MelodyPoint(
-                time_sec=float(p.get("timeSec", 0.0)),
+                time_sec=float(p["timeSec"]),
                 # Omitted for an unvoiced point.
                 frequency_hz=float(p["frequencyHz"]) if "frequencyHz" in p else None,
-                confidence=float(p.get("confidence", 0.0)),
+                confidence=float(p["confidence"]),
             )
-            for p in mel_d.get("pitches", [])
-        ]
-        melody = AnalysisMelody(
-            pitch_range_octaves=float(mel_d.get("pitchRangeOctaves", 0.0)),
-            pitch_stability=float(mel_d.get("pitchStability", 0.0)),
-            mean_frequency_hz=float(mel_d.get("meanFrequencyHz", 0.0)),
-            vibrato_rate_hz=float(mel_d.get("vibratoRateHz", 0.0)),
-            pitches=pitches,
-        )
-    else:
-        melody = None
+            for p in mel_d["pitches"]
+        ],
+    )
 
     return AnalysisResult(
         bpm=float(data.get("bpm", 0.0)),

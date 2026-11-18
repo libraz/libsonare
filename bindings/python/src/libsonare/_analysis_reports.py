@@ -24,7 +24,6 @@ from ._ffi import (
     SONARE_MAX_METER_CANDIDATE_NUMERATORS,
     SONARE_MUSIC_ANALYZE_OPTIONS_VERSION,
     SonareAcousticResult,
-    SonareAnalysisResult,
     SonareAnalyzeProgressCallback,
     SonareBpmAnalysisResult,
     SonareDynamicsResult,
@@ -44,7 +43,6 @@ from ._runtime import (
     _from_c_float_array,
     _get_lib,
     _guard_buffer,
-    _key_mode_token,
     _narrow_int,
     _optional_from_c_float_array,
     _to_c_float,
@@ -61,9 +59,7 @@ from .types import (
     BpmAnalysisResult,
     BpmCandidate,
     DynamicsResult,
-    Key,
     MeterEstimate,
-    PitchClass,
     RhythmResult,
     TimbreFrame,
     TimbreResult,
@@ -192,9 +188,6 @@ def analyze(
 ) -> AnalysisResult:
     """Run full audio analysis on samples.
 
-    Calls ``sonare_analyze_json`` when available to return the complete
-    analysis result; falls back to ``sonare_analyze`` for older builds.
-
     Args:
         samples: Mono audio samples (1D float). See :func:`detect_bpm` for
             accepted types.
@@ -298,81 +291,22 @@ def analyze(
             lib, c_array, length, sample_rate, options, on_progress, cancel
         )
 
-    if hasattr(lib, "sonare_analyze_json"):
-        out_json = ctypes.c_char_p()
-        if hasattr(lib, "sonare_analyze_json_ex"):
-            rc = lib.sonare_analyze_json_ex(
-                c_array,
-                _to_c_size_t(length, "length"),
-                _to_c_int(sample_rate, "sample_rate"),
-                ctypes.byref(options),
-                ctypes.byref(out_json),
-            )
-        else:
-            rc = lib.sonare_analyze_json(
-                c_array,
-                _to_c_size_t(length, "length"),
-                _to_c_int(sample_rate, "sample_rate"),
-                ctypes.byref(out_json),
-            )
-        _check(rc)
-        try:
-            raw = out_json.value
-            data = json.loads(raw.decode("utf-8") if raw else "{}")
-        finally:
-            if out_json.value and hasattr(lib, "sonare_free_string"):
-                lib.sonare_free_string(out_json)
-        return _parse_analysis_json(data)
-
-    # Fallback for builds that only have the older flat struct API.
-    out = SonareAnalysisResult()
-    rc = lib.sonare_analyze(
-        c_array,
-        _to_c_size_t(length, "length"),
-        _to_c_int(sample_rate, "sample_rate"),
-        ctypes.byref(out),
-    )
-    _check(rc)
-    try:
-        beat_times = _from_c_float_array(out.beat_times, out.beat_count)
-        relation_names = ("primary", "half", "double", "other")
-        return AnalysisResult(
-            bpm=float(out.bpm),
-            bpm_confidence=float(out.bpm_confidence),
-            key=Key(
-                root=PitchClass(out.key.root),
-                mode=_key_mode_token(out.key.mode),
-                confidence=float(out.key.confidence),
-            ),
-            time_signature=TimeSignature(
-                numerator=int(out.time_signature.numerator),
-                denominator=int(out.time_signature.denominator),
-                confidence=float(out.time_signature.confidence),
-            ),
-            beats=[Beat(time_sec=float(t), strength=0.0) for t in beat_times],
-            bpm_candidates=[
-                BpmCandidate(
-                    bpm=float(out.bpm_candidates[i].value),
-                    confidence=float(out.bpm_candidates[i].confidence),
-                    relation=(
-                        relation_names[out.bpm_candidates[i].relation]
-                        if 0 <= out.bpm_candidates[i].relation < len(relation_names)
-                        else "other"
-                    ),
-                )
-                for i in range(out.bpm_candidate_count)
-            ],
-            time_signature_candidates=[
-                TimeSignature(
-                    numerator=int(out.time_signature_candidates[i].numerator),
-                    denominator=int(out.time_signature_candidates[i].denominator),
-                    confidence=float(out.time_signature_candidates[i].confidence),
-                )
-                for i in range(out.time_signature_candidate_count)
-            ],
+    out_json = ctypes.c_char_p()
+    _check(
+        lib.sonare_analyze_json_ex(
+            c_array,
+            _to_c_size_t(length, "length"),
+            _to_c_int(sample_rate, "sample_rate"),
+            ctypes.byref(options),
+            ctypes.byref(out_json),
         )
+    )
+    try:
+        raw = out_json.value
+        data = json.loads(raw.decode("utf-8") if raw else "{}")
     finally:
-        lib.sonare_free_analysis_result(ctypes.byref(out))
+        _free_json(lib, out_json)
+    return _parse_analysis_json(data)
 
 
 def _free_json(lib: ctypes.CDLL, out_json: ctypes.c_char_p) -> None:

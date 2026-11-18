@@ -11,7 +11,7 @@ These cover the full analysis result surface:
 from __future__ import annotations
 
 import math
-from typing import get_args
+from typing import Any, get_args
 
 import pytest
 
@@ -82,6 +82,62 @@ def _generate_test_signal(sample_rate: int = 22050, duration: float = 4.0) -> li
     return out
 
 
+# The four summary blocks the core writes on every analysis; synthetic payloads
+# below carry them so each test exercises only the field it is about.
+_SUMMARY_BLOCKS: dict[str, object] = {
+    "timbre": {
+        "brightness": 0.5,
+        "warmth": 0.5,
+        "density": 0.5,
+        "roughness": 0.5,
+        "complexity": 0.5,
+    },
+    "dynamics": {
+        "dynamicRangeDb": 10.0,
+        "peakDb": -1.0,
+        "rmsDb": -12.0,
+        "crestFactor": 4.0,
+        "loudnessRangeLu": 5.0,
+        "isCompressed": False,
+    },
+    "rhythm": {
+        "timeSignature": {"numerator": 4, "denominator": 4, "confidence": 0.8},
+        "syncopation": 0.1,
+        "grooveType": "straight",
+        "patternRegularity": 0.9,
+        "tempoStability": 0.9,
+    },
+    "melody": {
+        "pitchRangeOctaves": 1.0,
+        "pitchStability": 0.5,
+        "meanFrequencyHz": 220.0,
+        "vibratoRateHz": 0.0,
+        "pitches": [],
+    },
+}
+
+
+def test_parse_analysis_json_requires_every_summary_block() -> None:
+    """The core always writes timbre, dynamics, rhythm and melody, so a missing one is refused."""
+    from libsonare._analysis_detection import _parse_analysis_json
+
+    for missing in _SUMMARY_BLOCKS:
+        payload = {"key": {}, "beats": [], "tuningCents": 0.0, **_SUMMARY_BLOCKS}
+        del payload[missing]
+        with pytest.raises(KeyError, match=missing):
+            _parse_analysis_json(payload)
+
+
+def test_analyze_always_carries_every_summary_block(analyze_result: Any) -> None:
+    from libsonare import AnalysisDynamics, AnalysisMelody, AnalysisRhythm, TimbreFrame
+
+    result = analyze_result
+    assert isinstance(result.timbre, TimbreFrame)
+    assert isinstance(result.dynamics, AnalysisDynamics)
+    assert isinstance(result.rhythm, AnalysisRhythm)
+    assert isinstance(result.melody, AnalysisMelody)
+
+
 def test_parse_analysis_json_retains_tempo_and_meter_hypotheses() -> None:
     """The rich JSON decoder keeps the existing estimator candidates intact."""
     from libsonare._analysis_detection import _parse_analysis_json
@@ -102,6 +158,7 @@ def test_parse_analysis_json_retains_tempo_and_meter_hypotheses() -> None:
                 {"numerator": 3, "denominator": 4, "confidence": 0.3},
             ],
             "beats": [],
+            **_SUMMARY_BLOCKS,
         }
     )
 
@@ -206,6 +263,7 @@ def test_analysis_json_uses_canonical_display_names() -> None:
                     "group": 3,
                 }
             ],
+            **_SUMMARY_BLOCKS,
         }
     )
     assert result.chords[0].name == "canonical-chord"
@@ -352,10 +410,10 @@ def test_analyze_progress_matches_analyze_shape(analyze_result, progress_result)
     assert len(a.chords) == len(b.chords)
     assert len(a.sections) == len(b.sections)
     assert a.form == b.form
-    assert (a.timbre is None) == (b.timbre is None)
-    assert (a.dynamics is None) == (b.dynamics is None)
-    assert (a.rhythm is None) == (b.rhythm is None)
-    assert (a.melody is None) == (b.melody is None)
+    assert a.timbre == b.timbre
+    assert a.dynamics == b.dynamics
+    assert a.rhythm == b.rhythm
+    assert a.melody == b.melody
 
 
 def test_parse_analysis_json_rejects_an_unmirrored_section_type() -> None:
@@ -369,7 +427,13 @@ def test_parse_analysis_json_rejects_an_unmirrored_section_type() -> None:
 
     def parse(section: dict[str, object]) -> object:
         return _parse_analysis_json(
-            {"key": {}, "beats": [], "sections": [section], "tuningCents": 0.0}
+            {
+                "key": {},
+                "beats": [],
+                "sections": [section],
+                "tuningCents": 0.0,
+                **_SUMMARY_BLOCKS,
+            }
         )
 
     with pytest.raises(SonareValueError, match="99"):
@@ -393,7 +457,9 @@ def test_parse_analysis_json_rejects_an_unmirrored_chord_quality() -> None:
     from libsonare._analysis_detection import _parse_analysis_json
 
     def parse(chord: dict[str, object]) -> object:
-        return _parse_analysis_json({"key": {}, "beats": [], "chords": [chord], "tuningCents": 0.0})
+        return _parse_analysis_json(
+            {"key": {}, "beats": [], "chords": [chord], "tuningCents": 0.0, **_SUMMARY_BLOCKS}
+        )
 
     with pytest.raises(SonareValueError, match="99"):
         parse({"root": 0, "quality": 99, "startSec": 0.0, "endSec": 1.0})
