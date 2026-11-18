@@ -90,6 +90,24 @@ Napi::Value ThroughBoolHelper(const Napi::CallbackInfo& info) {
   return env.Undefined();
 }
 
+Napi::Value PresenceGuarded(const Napi::CallbackInfo& info) {
+  sonare::ThingConfig config;
+  const Napi::Value given = options.Get("guardedK");
+  if (!given.IsUndefined() && !given.IsNull()) {
+    config.k = IntProperty(options, "guardedK", 0);
+  }
+  return env.Undefined();
+}
+
+Napi::Value Unguarded(const Napi::CallbackInfo& info) {
+  sonare::ThingConfig config;
+  const Napi::Value given = options.Get("otherKey");
+  if (!given.IsUndefined()) {
+    config.k = IntProperty(options, "unguardedK", 5);
+  }
+  return env.Undefined();
+}
+
 Napi::Value ThroughCArg(const Napi::CallbackInfo& info) {
   int width{};
   if (!OptionalIntArg(env, info, 1, "width", 9, &width)) return env.Undefined();
@@ -149,6 +167,15 @@ def test_a_guarded_zero_is_declined_as_a_sentinel() -> None:
     with tempfile.TemporaryDirectory() as d:
         site = _sites(_tree(Path(d)))["Guarded.gain"]
     assert site.unresolved == native_defaults.GUARDED_SENTINEL, site
+
+
+def test_a_fallback_read_only_when_its_key_is_present_reaches_no_verdict() -> None:
+    with tempfile.TemporaryDirectory() as d:
+        sites = _sites(_tree(Path(d)))
+    guarded, unguarded = sites["PresenceGuarded.guardedK"], sites["Unguarded.unguardedK"]
+    assert guarded.unresolved == native_defaults.PRESENCE_GUARDED, guarded
+    # A guard on a different key does not decline the read: it is compared and agrees.
+    assert (unguarded.anchor, unguarded.core, unguarded.unresolved) == ("ThingConfig.k", "5", "")
 
 
 def test_a_c_struct_field_lands_on_the_cpp_field_the_c_abi_copies_it_into() -> None:

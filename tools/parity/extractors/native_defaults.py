@@ -203,6 +203,39 @@ ONLY_DEFAULT_ARG = f"{ONLY_DEFAULT_PREFIX}: the core argument has no default"
 C_FIELD_SWITCHED = (
     "the C ABI maps the C struct field through a switch, which the walker does not follow"
 )
+PRESENCE_GUARDED = "read only when the key is present, so the fallback never applies"
+
+
+def _presence_guarded(text: str, func_start: int, pos: int, key: str) -> bool:
+    """True when the read at ``pos`` sits in a block entered only when ``key`` is present.
+
+    The guard is ``if (!v.IsUndefined() ...)`` over ``v = obj.Get("key")``, or
+    ``if (obj.Has("key"))``, on the innermost block holding the read.
+    """
+    depth = 0
+    brace = -1
+    for i in range(pos - 1, func_start - 1, -1):
+        if text[i] == "}":
+            depth += 1
+        elif text[i] == "{":
+            if depth == 0:
+                brace = i
+                break
+            depth -= 1
+    if brace < 0:
+        return False
+    head = re.search(r"\bif\s*\((.*)\)\s*$", text[func_start:brace], re.DOTALL)
+    if head is None:
+        return False
+    cond = head.group(1)[-400:]
+    if re.search(rf'\.Has\(\s*"{re.escape(key)}"\s*\)', cond):
+        return True
+    before = text[func_start:brace]
+    return any(
+        re.search(rf'\b{re.escape(v)}\s*=\s*[\w.>-]+\.Get\(\s*"{re.escape(key)}"\s*\)', before)
+        for v in re.findall(r"!\s*(\w+)\.IsUndefined\(\)", cond)
+    )
+
 
 _NOT_CALLS = {"if", "while", "for", "switch", "return", "sizeof", "catch"}
 
@@ -448,6 +481,8 @@ def extract(root: Path) -> tuple[list[NativeDefault], dict[str, str]]:
             )
             if fallback.startswith("ZeroIsSentinel"):
                 rec.unresolved = "zero is the library-default sentinel, not a default value"
+            elif param and _presence_guarded(text, fn[1], pos, param):
+                rec.unresolved = PRESENCE_GUARDED
             elif not target:
                 rec.unresolved = "reader result is not stored"
             else:
