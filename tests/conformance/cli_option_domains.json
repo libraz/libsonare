@@ -116,6 +116,46 @@
       "exclusiveMaximum": false
     },
     {
+      "command": "project.bounce",
+      "option": "frames",
+      "rejectExit": "usage",
+      "choices": [],
+      "minimum": 0,
+      "exclusiveMinimum": true,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "project.bounce",
+      "option": "channels",
+      "rejectExit": "usage",
+      "choices": [],
+      "minimum": 0,
+      "exclusiveMinimum": true,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "midi-render",
+      "option": "frames",
+      "rejectExit": "usage",
+      "choices": [],
+      "minimum": 0,
+      "exclusiveMinimum": true,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "midi-render",
+      "option": "channels",
+      "rejectExit": "usage",
+      "choices": [],
+      "minimum": 0,
+      "exclusiveMinimum": true,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
       "command": "key",
       "option": "genre-hint",
       "rejectExit": "invalid_parameter",

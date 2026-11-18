@@ -33,6 +33,7 @@ from ._cli_options import (
     _c_int,
     _ContractArgumentParser,
     _finite_float,
+    _positive_int,
     _tempo_bpm,
 )
 from ._runtime import ErrorCode, SonareError
@@ -232,20 +233,19 @@ def _project_bounce(
                     "the project's own rate"
                 )
             sample_rate = requested_sample_rate
-            bounce_sample_rate = requested_sample_rate
         else:
             # A project rate is a whole number of hertz (loading refuses anything
             # else), so the WAV header carries it exactly.
             sample_rate = int(project_sample_rate)
-            # 0 is the C ABI's "render at the project's own rate" sentinel.
-            bounce_sample_rate = 0
-        kwargs = {
-            "total_frames": args.frames,
-            "block_size": args.block_size,
-            "num_channels": args.channels,
-            "sample_rate": bounce_sample_rate,
-            "instrument_latency_samples": args.instrument_latency,
-        }
+        kwargs: dict[str, Any] = {"instrument_latency_samples": args.instrument_latency}
+        # What is left out stays with the library: the derived length, the project's rate and
+        # the master's width.
+        if args.frames is not None:
+            kwargs["total_frames"] = args.frames
+        if requested_sample_rate is not None:
+            kwargs["sample_rate"] = requested_sample_rate
+        if args.channels is not None:
+            kwargs["num_channels"] = args.channels
         use_synth = force_synth or args.synth is not None
         if use_synth:
             audio = cast(Any, project).bounce_with_synth_instrument(
@@ -786,14 +786,19 @@ def register_project_parsers(
             "Default: the project's own sample rate."
         ),
     )
-    pbounce.add_argument("--frames", type=_c_int, default=0, help="Render length in frames")
-    pbounce.add_argument("--block-size", type=_c_int, default=0, help="Render block size")
+    pbounce.add_argument(
+        "--frames",
+        type=_positive_int,
+        default=None,
+        help="Render length in frames (default: through the last event and its tail)",
+    )
     pbounce.add_argument(
         "--channels",
-        type=_c_int,
-        default=2,
+        type=_positive_int,
+        default=None,
         help=(
-            "Render channel count: 1, 2, 6, or 8, at most the scene master's own width (default 2)"
+            "Render channel count: 1, 2, 6, or 8, at most the scene master's own width "
+            "(default: the scene master's width)"
         ),
     )
     pbounce.add_argument("--instrument-latency", type=_c_int, default=0)
@@ -919,14 +924,19 @@ def register_project_parsers(
             "Default: the project's own sample rate."
         ),
     )
-    midi_render_p.add_argument("--frames", type=_c_int, default=0, help="Render length in frames")
-    midi_render_p.add_argument("--block-size", type=_c_int, default=0, help="Render block size")
+    midi_render_p.add_argument(
+        "--frames",
+        type=_positive_int,
+        default=None,
+        help="Render length in frames (default: through the last event and its tail)",
+    )
     midi_render_p.add_argument(
         "--channels",
-        type=_c_int,
-        default=2,
+        type=_positive_int,
+        default=None,
         help=(
-            "Render channel count: 1, 2, 6, or 8, at most the scene master's own width (default 2)"
+            "Render channel count: 1, 2, 6, or 8, at most the scene master's own width "
+            "(default: the scene master's width)"
         ),
     )
     midi_render_p.add_argument("--instrument-latency", type=_c_int, default=0)

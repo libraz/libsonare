@@ -250,6 +250,12 @@ CliOptionSpec tempo(CliOptionSpec spec) {
   return with_domain(std::move(spec), greater_than(0.0, CliOptionDomainStage::Usage));
 }
 
+// A render length or channel count the library chooses when the flag is left out;
+// a value the caller spells is refused at the flag unless it is greater than 0.
+CliOptionSpec library_sized(CliOptionSpec spec) {
+  return with_domain(std::move(spec), greater_than(0.0, CliOptionDomainStage::Usage));
+}
+
 // A twelve-bit scale mask the caller may also name by mode. It stays an Integer
 // option in the inventory: the name is another spelling of the same mask.
 CliOptionSpec mode_mask_value(const char* name, int value) {
@@ -443,27 +449,22 @@ CliValidationError validate_key_hpss_hop(const CliArgs& args) {
 // itself is not duplicated here: a count from this set that still exceeds the
 // scene's master reaches the same generic error the render always had.
 //
-// This is a command validator rather than a per-option domain because a domain
-// is published in the shared option inventory both CLIs are pinned against, and
-// the Python CLI declares none for this option.
+// The layout set is a command validator rather than a per-option domain: a
+// domain is published in the shared option inventory both CLIs are pinned
+// against, and both declare only the positive bound there.
 CliValidationError validate_project_bounce_channels(const CliArgs& args) {
   if (!args.has("channels")) return {};
-  const int channels = args.get_int("channels", 2);
+  // The registry domain has already refused a count at or below 0; leaving the
+  // flag out is how the scene master's own width is asked for.
+  const int channels = args.get_int("channels", 0);
   const int mono = sonare::channel_count(sonare::ChannelLayout::Mono);
   const int stereo = sonare::channel_count(sonare::ChannelLayout::Stereo);
-  // `<= 0` is the bounce options struct's own documented "let the engine
-  // choose" sentinel (sonare_c_project_core.h: num_channels <= 0 => 2), so
-  // refusing it made this validator stricter than the oracle it fronts and
-  // stricter than the Python CLI, which accepts it. Only a positive count that
-  // is not one of the four speaker-layout widths is a value nothing
-  // downstream can honour.
-  if (channels <= 0 || channels == mono || channels == stereo ||
-      sonare::is_surround_channel_count(channels)) {
+  if (channels == mono || channels == stereo || sonare::is_surround_channel_count(channels)) {
     return {};
   }
   return {"invalid value for --channels: " + std::to_string(channels) + " (expected one of " +
               std::to_string(mono) + ", " + std::to_string(stereo) +
-              ", 6, 8, or <= 0 for the default)",
+              ", 6 or 8; leave it out for the scene master's width)",
           true};
 }
 #endif
@@ -1124,12 +1125,12 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     // pairing in one token, and a path may carry whatever separator a fold would
     // have to pick. Its type is String rather than Path because the value is an
     // assignment, not a bare path.
-    add_project_command(
-        "project.bounce",
-        {required_path("in"), required_output(), int_value("sample-rate"), int_value("frames", 0),
-         int_value("block-size", 0), int_value("channels", 2), int_value("instrument-latency", 0),
-         optional_string("synth"), string_value("audio", false, true), flag("resolve-audio")},
-        &validate_project_bounce_channels);
+    add_project_command("project.bounce",
+                        {required_path("in"), required_output(), int_value("sample-rate"),
+                         library_sized(int_value("frames")), library_sized(int_value("channels")),
+                         int_value("instrument-latency", 0), optional_string("synth"),
+                         string_value("audio", false, true), flag("resolve-audio")},
+                        &validate_project_bounce_channels);
     // `align-takes` reads the source FILES rather than binding PCM, so it shares
     // `--audio` / `--resolve-audio` with `bounce` and nothing else. Its three
     // numeric options carry the invalid-parameter class: each is a value the
@@ -1153,7 +1154,7 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     // only the preset is in question.
     add_command(commands, "midi-render", false,
                 {required_path("in"), required_output(), int_value("sample-rate"),
-                 int_value("frames", 0), int_value("block-size", 0), int_value("channels", 2),
+                 library_sized(int_value("frames")), library_sized(int_value("channels")),
                  int_value("instrument-latency", 0), string_value("synth", "")},
                 {}, &validate_project_bounce_channels);
     // Every numeric here means "keep the library default" when absent, and the

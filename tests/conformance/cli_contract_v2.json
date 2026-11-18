@@ -1819,31 +1819,36 @@
       ],
       "midi-render": [
         {
-          "name": "block-size",
-          "type": "integer",
-          "default": 0,
-          "aliases": [],
-          "repeatable": false,
-          "required": false,
-          "domain": null
-        },
-        {
           "name": "channels",
           "type": "integer",
-          "default": 2,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "usage"
+          }
         },
         {
           "name": "frames",
           "type": "integer",
-          "default": 0,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "usage"
+          }
         },
         {
           "name": "in",
@@ -3013,31 +3018,36 @@
           "domain": null
         },
         {
-          "name": "block-size",
-          "type": "integer",
-          "default": 0,
-          "aliases": [],
-          "repeatable": false,
-          "required": false,
-          "domain": null
-        },
-        {
           "name": "channels",
           "type": "integer",
-          "default": 2,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "usage"
+          }
         },
         {
           "name": "frames",
           "type": "integer",
-          "default": 0,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "usage"
+          }
         },
         {
           "name": "in",
@@ -12561,31 +12571,36 @@
           "domain": null
         },
         {
-          "name": "block-size",
-          "type": "integer",
-          "default": 0,
-          "aliases": [],
-          "repeatable": false,
-          "required": false,
-          "domain": null
-        },
-        {
           "name": "channels",
           "type": "integer",
-          "default": 2,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "usage"
+          }
         },
         {
           "name": "frames",
           "type": "integer",
-          "default": 0,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "usage"
+          }
         },
         {
           "name": "in",
@@ -12728,6 +12743,54 @@
           "artifact": "none",
           "stdout": "empty",
           "stderr": "nonempty"
+        },
+        {
+          "id": "channels_zero_refused",
+          "argv": [
+            "project",
+            "bounce",
+            "--in",
+            "{project_clean}",
+            "--frames",
+            "128",
+            "-o",
+            "{bounce_output}",
+            "--channels",
+            "0",
+            "--json"
+          ],
+          "exit": 2,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty",
+          "stderr_contains": [
+            "channels"
+          ]
+        },
+        {
+          "id": "frames_zero_refused",
+          "argv": [
+            "project",
+            "bounce",
+            "--in",
+            "{project_clean}",
+            "-o",
+            "{bounce_output}",
+            "--frames",
+            "0",
+            "--json"
+          ],
+          "exit": 2,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty",
+          "stderr_contains": [
+            "frames"
+          ]
         }
       ],
       "artifacts": {}
@@ -16238,31 +16301,36 @@
       "path": "midi-render",
       "options": [
         {
-          "name": "block-size",
-          "type": "integer",
-          "default": 0,
-          "aliases": [],
-          "repeatable": false,
-          "required": false,
-          "domain": null
-        },
-        {
           "name": "channels",
           "type": "integer",
-          "default": 2,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "usage"
+          }
         },
         {
           "name": "frames",
           "type": "integer",
-          "default": 0,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "usage"
+          }
         },
         {
           "name": "in",
@@ -16435,6 +16503,52 @@
           "artifact": "none",
           "stdout": "empty",
           "stderr": "nonempty"
+        },
+        {
+          "id": "channels_zero_refused",
+          "argv": [
+            "midi-render",
+            "--in",
+            "{project_clean}",
+            "--frames",
+            "128",
+            "-o",
+            "{bounce_output}",
+            "--channels",
+            "0",
+            "--json"
+          ],
+          "exit": 2,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty",
+          "stderr_contains": [
+            "channels"
+          ]
+        },
+        {
+          "id": "frames_zero_refused",
+          "argv": [
+            "midi-render",
+            "--in",
+            "{project_clean}",
+            "-o",
+            "{bounce_output}",
+            "--frames",
+            "0",
+            "--json"
+          ],
+          "exit": 2,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty",
+          "stderr_contains": [
+            "frames"
+          ]
         }
       ],
       "artifacts": {}

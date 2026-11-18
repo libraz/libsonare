@@ -259,3 +259,51 @@ changed = "a value that names no genre hint (auto, edm, electronic, dance, pop, 
 domain = "analysis"
 rule = "token-case"
 test = "tests/conformance/cli_contract_v2.json::genre_hint_unknown"
+
+[[entry]]
+kind = "flag"
+old = "project.bounce --block-size"
+removed = true
+no_replacement = "the rendered audio does not depend on the block size the project is rendered in; leave the flag out"
+domain = "project"
+rule = "individual"
+
+[[entry]]
+kind = "flag"
+old = "project.bounce --frames"
+changed = "omitted, the length is derived from the project (no longer 0 spelled by the CLI); an explicit 0 or a negative value is refused as a usage error (exit 2)"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "tests/conformance/cli_contract_v2.json::frames_zero_refused"
+
+[[entry]]
+kind = "flag"
+old = "project.bounce --channels"
+changed = "omitted, the render takes the scene master's layout width rather than 2; an explicit 0 or a negative value is refused as a usage error (exit 2) rather than read as the default"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "tests/conformance/cli_contract_v2.json::channels_zero_refused"
+
+[[entry]]
+kind = "flag"
+old = "midi-render --block-size"
+removed = true
+no_replacement = "the rendered audio does not depend on the block size the project is rendered in; leave the flag out"
+domain = "project"
+rule = "individual"
+
+[[entry]]
+kind = "flag"
+old = "midi-render --frames"
+changed = "omitted, the length is derived from the project (no longer 0 spelled by the CLI); an explicit 0 or a negative value is refused as a usage error (exit 2)"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "tests/conformance/cli_contract_v2.json::frames_zero_refused"
+
+[[entry]]
+kind = "flag"
+old = "midi-render --channels"
+changed = "omitted, the render takes the scene master's layout width rather than 2; an explicit 0 or a negative value is refused as a usage error (exit 2) rather than read as the default"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "tests/conformance/cli_contract_v2.json::channels_zero_refused"
