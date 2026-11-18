@@ -526,8 +526,9 @@ Napi::Object MonoResultToObject(Napi::Env env,
 // worker so the JS thread can release its Float32Array view.
 class MasterAudioAsyncWorker : public Napi::AsyncWorker {
  public:
-  MasterAudioAsyncWorker(Napi::Env env, std::string preset_name, std::vector<float> samples,
-                         int sample_rate, std::vector<sonare::mastering::api::Param> overrides)
+  MasterAudioAsyncWorker(Napi::Env env, std::optional<std::string> preset_name,
+                         std::vector<float> samples, int sample_rate,
+                         std::vector<sonare::mastering::api::Param> overrides)
       : Napi::AsyncWorker(env),
         deferred_(Napi::Promise::Deferred::New(env)),
         preset_name_(std::move(preset_name)),
@@ -539,10 +540,16 @@ class MasterAudioAsyncWorker : public Napi::AsyncWorker {
     try {
       // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
       sonare::validate_offline_audio_input(samples_.data(), samples_.size(), sample_rate_);
-      auto preset = sonare::mastering::api::preset_from_string(preset_name_);
-      result_ = sonare::mastering::api::master_audio_mono(preset, samples_.data(), samples_.size(),
-                                                          sample_rate_, overrides_.data(),
-                                                          overrides_.size());
+      // An absent preset runs the overrides alone, as the synchronous chain entry does.
+      if (preset_name_.has_value()) {
+        auto preset = sonare::mastering::api::preset_from_string(*preset_name_);
+        result_ = sonare::mastering::api::master_audio_mono(preset, samples_.data(),
+                                                            samples_.size(), sample_rate_,
+                                                            overrides_.data(), overrides_.size());
+      } else {
+        result_ = sonare::mastering::api::run_chain_mono_params(
+            overrides_.data(), overrides_.size(), samples_.data(), samples_.size(), sample_rate_);
+      }
     } catch (const sonare::SonareException& e) {
       error_code_ = sonare_node::CErrorFromException(e);
       SetError(e.what());
@@ -569,7 +576,7 @@ class MasterAudioAsyncWorker : public Napi::AsyncWorker {
 
  private:
   Napi::Promise::Deferred deferred_;
-  std::string preset_name_;
+  std::optional<std::string> preset_name_;
   std::vector<float> samples_;
   int sample_rate_;
   std::vector<sonare::mastering::api::Param> overrides_;
@@ -579,8 +586,8 @@ class MasterAudioAsyncWorker : public Napi::AsyncWorker {
 
 class MasterAudioStereoAsyncWorker : public Napi::AsyncWorker {
  public:
-  MasterAudioStereoAsyncWorker(Napi::Env env, std::string preset_name, std::vector<float> left,
-                               std::vector<float> right, int sample_rate,
+  MasterAudioStereoAsyncWorker(Napi::Env env, std::optional<std::string> preset_name,
+                               std::vector<float> left, std::vector<float> right, int sample_rate,
                                std::vector<sonare::mastering::api::Param> overrides)
       : Napi::AsyncWorker(env),
         deferred_(Napi::Promise::Deferred::New(env)),
@@ -595,10 +602,16 @@ class MasterAudioStereoAsyncWorker : public Napi::AsyncWorker {
       // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
       sonare::validate_offline_audio_input(left_.data(), left_.size(), sample_rate_);
       sonare::validate_offline_audio_input(right_.data(), right_.size(), sample_rate_);
-      auto preset = sonare::mastering::api::preset_from_string(preset_name_);
-      result_ = sonare::mastering::api::master_audio_stereo(preset, left_.data(), right_.data(),
-                                                            left_.size(), sample_rate_,
-                                                            overrides_.data(), overrides_.size());
+      if (preset_name_.has_value()) {
+        auto preset = sonare::mastering::api::preset_from_string(*preset_name_);
+        result_ = sonare::mastering::api::master_audio_stereo(preset, left_.data(), right_.data(),
+                                                              left_.size(), sample_rate_,
+                                                              overrides_.data(), overrides_.size());
+      } else {
+        result_ = sonare::mastering::api::run_chain_stereo_params(
+            overrides_.data(), overrides_.size(), left_.data(), right_.data(), left_.size(),
+            sample_rate_);
+      }
     } catch (const sonare::SonareException& e) {
       error_code_ = sonare_node::CErrorFromException(e);
       SetError(e.what());
@@ -638,7 +651,7 @@ class MasterAudioStereoAsyncWorker : public Napi::AsyncWorker {
 
  private:
   Napi::Promise::Deferred deferred_;
-  std::string preset_name_;
+  std::optional<std::string> preset_name_;
   std::vector<float> left_;
   std::vector<float> right_;
   int sample_rate_;
@@ -667,14 +680,17 @@ Napi::Value SonareWrap::MasterAudioAsync(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   // A Promise-returning entry point must reject rather than throw synchronously,
   // so invalid input never escapes a caller's `.catch()`.
-  if (info.Length() < 3 || !info[0].IsString() || !IsFloat32Array(info[1]) || !info[2].IsNumber()) {
+  const bool preset_absent = info.Length() >= 1 && (info[0].IsUndefined() || info[0].IsNull());
+  if (info.Length() < 3 || !(info[0].IsString() || preset_absent) || !IsFloat32Array(info[1]) ||
+      !info[2].IsNumber()) {
     auto deferred = Napi::Promise::Deferred::New(env);
-    deferred.Reject(
-        Napi::TypeError::New(env, "Expected (presetName, Float32Array, sampleRate, overrides?)")
-            .Value());
+    deferred.Reject(Napi::TypeError::New(
+                        env, "Expected (presetName | null, Float32Array, sampleRate, overrides?)")
+                        .Value());
     return deferred.Promise();
   }
-  std::string preset_name = node_narrow_string(env, info[0], "presetName");
+  std::optional<std::string> preset_name;
+  if (!preset_absent) preset_name = node_narrow_string(env, info[0], "presetName");
   auto typed = info[1].As<Napi::Float32Array>();
   std::vector<float> samples(typed.Data(), typed.Data() + typed.ElementLength());
   int sample_rate = node_narrow_int(env, info[2], "sampleRate");
@@ -696,15 +712,17 @@ Napi::Value SonareWrap::MasterAudioStereoAsync(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   // A Promise-returning entry point must reject rather than throw synchronously,
   // so invalid input never escapes a caller's `.catch()`.
-  if (info.Length() < 4 || !info[0].IsString() || !IsFloat32Array(info[1]) ||
+  const bool preset_absent = info.Length() >= 1 && (info[0].IsUndefined() || info[0].IsNull());
+  if (info.Length() < 4 || !(info[0].IsString() || preset_absent) || !IsFloat32Array(info[1]) ||
       !IsFloat32Array(info[2]) || !info[3].IsNumber()) {
     auto deferred = Napi::Promise::Deferred::New(env);
-    deferred.Reject(
-        Napi::TypeError::New(env, "Expected (presetName, left, right, sampleRate, overrides?)")
-            .Value());
+    deferred.Reject(Napi::TypeError::New(
+                        env, "Expected (presetName | null, left, right, sampleRate, overrides?)")
+                        .Value());
     return deferred.Promise();
   }
-  std::string preset_name = node_narrow_string(env, info[0], "presetName");
+  std::optional<std::string> preset_name;
+  if (!preset_absent) preset_name = node_narrow_string(env, info[0], "presetName");
   auto left_typed = info[1].As<Napi::Float32Array>();
   auto right_typed = info[2].As<Napi::Float32Array>();
   if (left_typed.ElementLength() != right_typed.ElementLength()) {
