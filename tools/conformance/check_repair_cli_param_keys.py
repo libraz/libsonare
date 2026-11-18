@@ -28,6 +28,18 @@ CLI_REPAIR_PATH = REPO_ROOT / "bindings/python/src/libsonare/_cli_repair.py"
 # One `add_field(params, "dotted.key", <cpp expression>);` call, possibly
 # wrapped across two lines (the printed form breaks long calls after the key).
 _ADD_FIELD_RE = re.compile(r'add_field\(\s*params\s*,\s*"([\w.]+)"\s*,\s*(.*?)\)\s*;', re.DOTALL)
+# A module written as one nested record: `util::json::put(params, "dotted.key", build_x(...));`.
+_NESTED_MODULE_RE = re.compile(r'put\(\s*params\s*,\s*"([\w.]+)"\s*,\s*(\w+)\(')
+
+
+def _nested_enabled_keys(source: str) -> set[str]:
+    """``<key>.enabled`` for each nested module whose builder writes its own ``enabled`` field."""
+    keys: set[str] = set()
+    for key, builder in _NESTED_MODULE_RE.findall(source):
+        body = re.search(rf"\b{re.escape(builder)}\([^)]*\)\s*\{{(.*?)\n\}}", source, re.DOTALL)
+        if body and re.search(r'add_field\(\s*\w+\s*,\s*"enabled"', body.group(1)):
+            keys.add(f"{key}.enabled")
+    return keys
 
 
 def _extract_python_string_set(source: str, name: str) -> set[str]:
@@ -52,7 +64,7 @@ def main() -> int:
 
     all_enabled_keys = {
         key for key, _expr in _ADD_FIELD_RE.findall(chain_json_text) if key.endswith(".enabled")
-    }
+    } | _nested_enabled_keys(chain_json_text)
     expected_non_repair_enabled = {key for key in all_enabled_keys if not key.startswith("repair.")}
     actual_non_repair_overrides = _extract_python_string_set(
         cli_source, "_NON_REPAIR_CHAIN_DISABLE_OVERRIDES"
