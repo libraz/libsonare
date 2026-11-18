@@ -295,6 +295,11 @@ title = "Title of config-keys"
 summary = "Summary of config-keys."
 
 [[rule]]
+slug = "old-documents-refused"
+title = "Title of old-documents-refused"
+summary = "Summary of old-documents-refused."
+
+[[rule]]
 slug = "python-public-names"
 title = "Title of python-public-names"
 summary = "Summary of python-public-names."

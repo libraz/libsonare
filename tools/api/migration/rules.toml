@@ -1005,7 +1005,7 @@ summary = "Each public symbol carries a TSDoc, docstring or Doxygen comment stat
 [[rule]]
 slug = "config-keys"
 title = "Persistent configuration keys are camelCase"
-summary = "The `playback-renderer-config` document uses camelCase keys (`lfeMixDb`, `nightMode`) and carries a required `version` of 2. A document without `version` is read as version 1 (snake_case) and converted on load, saving always writes version 2, and a version 2 document containing a snake_case key is refused with `InvalidFormat` naming the key."
+summary = "The `playback-renderer-config` document uses camelCase keys (`lfeMixDb`, `nightMode`) and carries a required `version` of 2. Saving always writes version 2; a document without `version`, or containing a snake_case key, is refused with `InvalidFormat` naming the key."
 [[rule.example]]
 surface = "wasm"
 before = '''
@@ -1013,6 +1013,19 @@ const config = { lfe_mix_db: -6 };
 '''
 after = '''
 const config = { version: 2, lfeMixDb: -6 };
+'''
+
+[[rule]]
+slug = "old-documents-refused"
+title = "Documents in a 1.x spelling are refused"
+summary = "A document written by v1.10.0 that uses a removed key or token (a scene's integer pan, `pre`/`post` send timing, a renamed insert or chain key, a snake_case room preset, a project MIDI event's `data0`/`data1`) is refused with `InvalidFormat`, and the message names the current spelling. Nothing converts an old document on load; rewrite it with the 2.0 names."
+[[rule.example]]
+surface = "wasm"
+before = '''
+const send = { destinationBusId: 'reverb', timing: 'pre' };
+'''
+after = '''
+const send = { destinationBusId: 'reverb', timing: 'preFader' };
 '''
 
 [[rule]]

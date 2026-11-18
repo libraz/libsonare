@@ -122,6 +122,7 @@ RULE_SLUGS = (
     "cpp-include",
     "doc-comments",
     "config-keys",
+    "old-documents-refused",
     "python-public-names",
     "individual",
 )
