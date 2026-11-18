@@ -939,6 +939,10 @@ fields = [
   "mfcc_result.n_frames",
   "reassigned_spectrogram_result.n_bins",
   "reassigned_spectrogram_result.n_frames",
+  # --- Frame count carried by the per-frame array (category 2) ---
+  # Both JS facades return the per-frame curve itself; its length is the count.
+  "boundary_result.n_frames",
+  "pitch_result.n_frames",
   # --- Stream frame dims and presence word (categories 2 and 1) ---
   # mel and chroma are Matrix2D whose rows are n_mels / n_chroma, and each
   # feature array is absent when not computed, which says what feature_flags says.
