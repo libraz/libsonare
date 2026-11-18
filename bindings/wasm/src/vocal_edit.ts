@@ -29,6 +29,7 @@ import {
   assertAudioInput,
   optionalBoolean,
   requestObject,
+  requireSampleBound,
   resolveSampleBound,
 } from './validation.js';
 
@@ -295,18 +296,7 @@ function requiredOperationBound(
   secName: string,
 ): number {
   const fn = 'VocalEditDraft.apply';
-  const value = resolveSampleBound(
-    fn,
-    sample,
-    sec,
-    sampleRate,
-    `${at}.${sampleName}`,
-    `${at}.${secName}`,
-  );
-  if (value === undefined) {
-    throw new TypeError(`${fn}: give ${at}.${sampleName} or ${at}.${secName}`);
-  }
-  return value;
+  return requireSampleBound(fn, sample, sec, sampleRate, `${at}.${sampleName}`, `${at}.${secName}`);
 }
 
 /**

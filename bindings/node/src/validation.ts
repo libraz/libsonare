@@ -1,3 +1,4 @@
+import { requireOneOf } from './internal/one_of.js';
 import { NESTED_REQUEST_KEYS, REQUEST_KEYS, type RequestFn } from './request_keys.js';
 import type { ProjectMidiEvent } from './types.js';
 
@@ -611,6 +612,35 @@ export function secondsToSampleCount(
 /** How {@link resolveSampleBound} treats the sign of the value it resolves. */
 export type SampleBoundSign = 'non-negative' | 'signed';
 
+/** {@link resolveSampleBound} for a bound the call cannot do without: neither spelling is a `TypeError`. */
+export function requireSampleBound(
+  fnName: string,
+  sampleValue: number | null | undefined,
+  secValue: number | null | undefined,
+  sampleRate: number,
+  sampleName: string,
+  secName: string,
+  sign: SampleBoundSign = 'non-negative',
+): number {
+  requireOneOf(
+    fnName,
+    [sampleName, secName],
+    [
+      sampleValue !== undefined && sampleValue !== null,
+      secValue !== undefined && secValue !== null,
+    ],
+  );
+  return resolveSampleBound(
+    fnName,
+    sampleValue,
+    secValue,
+    sampleRate,
+    sampleName,
+    secName,
+    sign,
+  ) as number;
+}
+
 /**
  * Resolve one time bound that is spelled either in samples or in seconds.
  *
@@ -631,12 +661,10 @@ export function resolveSampleBound(
 ): number | undefined {
   const hasSample = sampleValue !== undefined && sampleValue !== null;
   const hasSec = secValue !== undefined && secValue !== null;
-  if (hasSample && hasSec) {
-    throw new RangeError(`${fnName}: give ${sampleName} or ${secName}, not both`);
-  }
   if (!hasSample && !hasSec) {
     return undefined;
   }
+  requireOneOf(fnName, [sampleName, secName], [hasSample, hasSec]);
   const value = hasSec
     ? secondsToSampleCount(fnName, secValue as number, sampleRate, secName)
     : (sampleValue as number);

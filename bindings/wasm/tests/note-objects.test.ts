@@ -485,7 +485,7 @@ describe('extractNotes', () => {
   it('rejects a malformed request', () => {
     const voiced = voicedFlags(true);
     // Neither voicing input given.
-    expectRangeRefusal(() => extractNotes({ samples, sampleRate, f0Hz, frameRate }));
+    expectTypeRefusal(() => extractNotes({ samples, sampleRate, f0Hz, frameRate }));
     expectRangeRefusal(() => extractNotes({ samples, sampleRate, f0Hz, voiced, frameRate: 0 }));
     expectRangeRefusal(() =>
       extractNotes({ samples, sampleRate, f0Hz, voiced, frameRate, minNoteMs: -1 }),
@@ -2057,7 +2057,7 @@ describe('splitNote', () => {
     expectCoreRefusal(() => splitNote({ ...source, notes: beyond, index: 0, frame: 5 }));
 
     // The track arguments extraction itself rejects.
-    expectRangeRefusal(() =>
+    expectTypeRefusal(() =>
       splitNote({ ...source, voiced: undefined, notes: before, index: 1, frame: 18 }),
     );
     expectRangeRefusal(() =>
@@ -2174,7 +2174,7 @@ describe('mergeNotes', () => {
     expectCoreRefusal(() => mergeNotes({ ...source, notes: beyond, first: 0, last: 1 }));
 
     // The track arguments extraction itself rejects.
-    expectRangeRefusal(() =>
+    expectTypeRefusal(() =>
       mergeNotes({ ...source, voiced: undefined, notes: before, first: 0, last: 1 }),
     );
     expectRangeRefusal(() =>

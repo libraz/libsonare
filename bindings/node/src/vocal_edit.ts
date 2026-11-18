@@ -24,7 +24,12 @@ import type {
   VocalStateToken,
   VocalTransition,
 } from './types_vocal_edit.js';
-import { assertAudioInput, requestObject, resolveSampleBound } from './validation.js';
+import {
+  assertAudioInput,
+  requestObject,
+  requireSampleBound,
+  resolveSampleBound,
+} from './validation.js';
 
 /** A note as the addon returns it: frame indices are decimal strings. */
 type NativeNote = Omit<VocalNote, 'analysisFrameStart' | 'analysisFrameEnd'> & {
@@ -696,18 +701,7 @@ function requiredOperationBound(
   secName: string,
 ): number {
   const fn = 'VocalEditDraft.apply';
-  const value = resolveSampleBound(
-    fn,
-    sample,
-    sec,
-    sampleRate,
-    `${at}.${sampleName}`,
-    `${at}.${secName}`,
-  );
-  if (value === undefined) {
-    throw new TypeError(`${fn}: give ${at}.${sampleName} or ${at}.${secName}`);
-  }
-  return value;
+  return requireSampleBound(fn, sample, sec, sampleRate, `${at}.${sampleName}`, `${at}.${secName}`);
 }
 
 /**

@@ -9,6 +9,7 @@ import {
   resolveEntryTimes,
   toVoicedFloat32,
 } from './internal/effects_common.js';
+import { requireOneOf } from './internal/one_of.js';
 import { getSonareModule } from './module_state.js';
 import type {
   AssignNoteTargetsResult,
@@ -29,6 +30,7 @@ import {
   assertFiniteScalar,
   assertFloatValue,
   requestObject,
+  requireSampleBound,
   resolveSampleBound,
   sampleOneShot,
 } from './validation.js';
@@ -312,7 +314,7 @@ export function noteMove(...args: unknown[]): Float32Array {
   const request = sampleOneShot<NoteMoveRequest>('noteMove', args);
   assertAudioInput('noteMove', request.samples, request.sampleRate, request);
   const rate = request.sampleRate;
-  const target = resolveSampleBound(
+  const target = requireSampleBound(
     'noteMove',
     request.targetOnsetSample,
     request.targetOnsetSec,
@@ -320,9 +322,6 @@ export function noteMove(...args: unknown[]): Float32Array {
     'targetOnsetSample',
     'targetOnsetSec',
   );
-  if (target === undefined) {
-    throw new TypeError('noteMove: give targetOnsetSample or targetOnsetSec');
-  }
   return requireModule().noteMove(
     request.samples,
     rate,
@@ -627,12 +626,7 @@ export function splitNote(...args: unknown[]): NoteObject[] {
   const voicedF32 = assertNoteTrack('splitNote', request);
   const hasFrame = request.frame !== undefined && request.frame !== null;
   const hasFrameSec = request.frameSec !== undefined && request.frameSec !== null;
-  if (!hasFrame && !hasFrameSec) {
-    throw new TypeError('splitNote: give frame or frameSec');
-  }
-  if (hasFrame && hasFrameSec) {
-    throw new RangeError('splitNote: give frame or frameSec, not both');
-  }
+  requireOneOf('splitNote', ['frame', 'frameSec'], [hasFrame, hasFrameSec]);
   assertFloatValue(
     'splitNote',
     hasFrame ? request.frame : request.frameSec,
