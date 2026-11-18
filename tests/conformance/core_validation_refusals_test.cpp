@@ -17,6 +17,7 @@
 #include "effects/pitch_shift.h"
 #include "effects/time_stretch.h"
 #include "feature/inverse.h"
+#include "feature/spectral.h"
 #if defined(SONARE_WITH_MASTERING)
 #include "mastering/api/chain.h"
 #include "mastering/eq/equalizer.h"
@@ -419,6 +420,40 @@ TEST_CASE("resample refusals are owned by the core function", "[conformance][cor
     size_t out_length = 0;
     CHECK(sonare_resample(samples.data(), samples.size(), src_sr, target_sr, &out, &out_length) ==
           SONARE_ERROR_INVALID_PARAMETER);
+    CHECK_THAT(last_error_message(), Catch::Matchers::ContainsSubstring(message));
+  }
+}
+
+TEST_CASE("zero_crossings refusals are owned by the core function",
+          "[conformance][core_validation]") {
+  const Value corpus = load_refusal_corpus();
+  const Value& route = corpus["zero_crossings"];
+
+  for (const auto& item : route["accepted"].as_array()) {
+    const std::vector<float> samples = resample_input(route, item);
+    INFO(item["id"].as_string());
+    CHECK_FALSE(sonare::zero_crossings(samples.data(), samples.size()).empty());
+    int* out = nullptr;
+    size_t out_count = 0;
+    REQUIRE(sonare_zero_crossings(samples.data(), samples.size(), 1e-10f, 0, 1, 1, &out,
+                                  &out_count) == SONARE_OK);
+    CHECK(out_count > 0);
+    sonare_free_ints(out);
+  }
+
+  for (const auto& item : route["refused"].as_array()) {
+    const std::string message = item["message"].as_string();
+    const std::vector<float> samples = resample_input(route, item);
+    INFO(item["id"].as_string());
+    REQUIRE(item["cause"].as_string() == "argument");
+
+    require_argument_refusal([&] { sonare::zero_crossings(samples.data(), samples.size()); },
+                             message);
+
+    int* out = nullptr;
+    size_t out_count = 0;
+    CHECK(sonare_zero_crossings(samples.data(), samples.size(), 1e-10f, 0, 1, 1, &out,
+                                &out_count) == SONARE_ERROR_INVALID_PARAMETER);
     CHECK_THAT(last_error_message(), Catch::Matchers::ContainsSubstring(message));
   }
 }

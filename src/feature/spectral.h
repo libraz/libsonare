@@ -153,7 +153,9 @@ std::vector<float> rms_energy(const float* samples, size_t n_samples, int frame_
 ///        (uses `std::signbit`). If false, distinct signs {-, 0, +} are
 ///        compared (default true).
 /// @return Sorted vector of zero-crossing indices.
-/// @throw sonare::SonareException if `y` is null with `n > 0` or `threshold < 0`.
+/// @throw sonare::SonareException if `y` is null with `n > 0`, `threshold` is negative or
+/// non-finite,
+///        or `y` holds a non-finite sample.
 std::vector<int> zero_crossings(const float* y, size_t n, float threshold = constants::kEpsilon,
                                 bool ref_magnitude = false, bool pad = true, bool zero_pos = true);
 std::vector<int> zero_crossings(const std::vector<float>& y, float threshold = constants::kEpsilon,

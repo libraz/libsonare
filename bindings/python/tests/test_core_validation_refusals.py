@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ctypes
 import json
 import re
 from pathlib import Path
@@ -11,6 +12,13 @@ import pytest
 
 import libsonare
 from libsonare import SonareValueError, _conversions
+from libsonare._runtime import (
+    _check,
+    _from_c_int_array,
+    _get_lib,
+    _out_int_array,
+    _to_c_float_array,
+)
 
 _CORPUS = json.loads(
     (
@@ -28,6 +36,7 @@ _CHAIN = _CORPUS["streaming_mastering_chain_prepare"]
 _EQ = _CORPUS["equalizer_prepare"]
 _RETUNE = _CORPUS["streaming_retune_prepare"]
 _RESAMPLE = _CORPUS["resample"]
+_ZERO_CROSSINGS = _CORPUS["zero_crossings"]
 
 
 def _mfcc() -> np.ndarray:
@@ -184,3 +193,49 @@ def test_resample_refuses(case: dict) -> None:
     # read through the ctypes wrapper that reaches the C entry directly.
     with pytest.raises(error_class, match=re.escape(case["message"])):
         _conversions._resample_float32(samples, case["src_sr"], case["target_sr"])
+
+
+def _zero_crossings_input(case: dict) -> np.ndarray:
+    samples = np.full(
+        _ZERO_CROSSINGS["input"]["length"], _ZERO_CROSSINGS["input"]["fill"], dtype=np.float32
+    )
+    if "nan_at" in case:
+        samples[case["nan_at"]] = np.nan
+    return samples
+
+
+def _zero_crossings_core(samples: np.ndarray) -> np.ndarray:
+    lib = _get_lib()
+    c_array, length = _to_c_float_array(samples)
+    with _out_int_array(lib) as (out, out_count):
+        rc = lib.sonare_zero_crossings(
+            c_array,
+            ctypes.c_size_t(length),
+            ctypes.c_float(1e-10),
+            ctypes.c_int(0),
+            ctypes.c_int(1),
+            ctypes.c_int(1),
+            ctypes.byref(out),
+            ctypes.byref(out_count),
+        )
+        _check(rc)
+        return _from_c_int_array(out, out_count.value)
+
+
+@pytest.mark.parametrize("case", _ZERO_CROSSINGS["accepted"], ids=lambda case: case["id"])
+def test_zero_crossings_accepts(case: dict) -> None:
+    samples = _zero_crossings_input(case)
+    assert libsonare.zero_crossings(samples).shape[0] > 0
+    assert _zero_crossings_core(samples).shape[0] > 0
+
+
+@pytest.mark.parametrize("case", _ZERO_CROSSINGS["refused"], ids=lambda case: case["id"])
+def test_zero_crossings_refuses(case: dict) -> None:
+    error_class = _ERROR_CLASS[case["cause"]]
+    samples = _zero_crossings_input(case)
+    with pytest.raises(error_class):
+        libsonare.zero_crossings(samples)
+    # The facade's buffer guard names a non-finite sample first, so the core's message is
+    # read through a direct call to the C entry.
+    with pytest.raises(error_class, match=re.escape(case["message"])):
+        _zero_crossings_core(samples)

@@ -10,6 +10,7 @@ import {
   StreamingMasteringChain,
   StreamingRetune,
   timeStretch,
+  zeroCrossings,
 } from '../src/index.js';
 import { addon } from '../src/native.js';
 import { expectRefusal } from './_helpers.js';
@@ -75,6 +76,12 @@ type ResampleRoute = {
   accepted: ResampleCase[];
   refused: ResampleCase[];
 };
+type ZeroCrossingsCase = { id: string; nan_at?: number; cause?: Cause; message?: string };
+type ZeroCrossingsRoute = {
+  input: { length: number; fill: number };
+  accepted: ZeroCrossingsCase[];
+  refused: ZeroCrossingsCase[];
+};
 
 const corpus = JSON.parse(
   readFileSync(
@@ -90,6 +97,7 @@ const corpus = JSON.parse(
   equalizer_prepare: EqualizerRoute;
   streaming_retune_prepare: RetuneRoute;
   resample: ResampleRoute;
+  zero_crossings: ZeroCrossingsRoute;
 };
 
 const errorClassFor: Record<Cause, ErrorConstructor> = { argument: RangeError };
@@ -406,5 +414,28 @@ describe('resample takes no validate option', () => {
       TypeError,
       /validate/,
     );
+  });
+});
+
+describe('zeroCrossings refuses a non-finite sample in the core', () => {
+  const { input, accepted, refused } = corpus.zero_crossings;
+  const samplesFor = ({ nan_at }: ZeroCrossingsCase) => {
+    const samples = new Float32Array(input.length).fill(input.fill);
+    if (nan_at !== undefined) {
+      samples[nan_at] = Number.NaN;
+    }
+    return samples;
+  };
+
+  it.each(accepted)('accepts $id', (item) => {
+    const samples = samplesFor(item);
+    expect(zeroCrossings(samples, 22050, { validate: false }).length).toBeGreaterThan(0);
+  });
+
+  it.each(refused)('refuses $id with the facade scan skipped', (item) => {
+    const kind = errorClassFor[item.cause as Cause];
+    const text = literal(item.message as string);
+    const samples = samplesFor(item);
+    expectRefusal(() => zeroCrossings(samples, 22050, { validate: false }), kind, text);
   });
 });

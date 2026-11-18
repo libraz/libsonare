@@ -605,6 +605,10 @@ std::vector<int> zero_crossings(const float* y, size_t n, float threshold, bool 
     throw SonareException(ErrorCode::InvalidParameter,
                           "zero_crossings: threshold must be finite and non-negative");
   }
+  if (!numeric::all_finite(y, n)) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "zero_crossings: input contains a non-finite sample");
+  }
 
   std::vector<int> indices;
   if (n == 0) return indices;
