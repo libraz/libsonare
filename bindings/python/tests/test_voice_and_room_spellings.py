@@ -180,7 +180,7 @@ def test_the_clip_threshold_is_in_dbfs() -> None:
     above = libsonare.mastering_repair_detect_clipping(
         samples, SR, clip_threshold_db=20.0 * math.log10(0.9)
     )
-    assert below.sample_count > above.sample_count
+    assert below.clipped_samples > above.clipped_samples
     with pytest.raises(TypeError):
         libsonare.mastering_repair_detect_clipping(samples, SR, clip_threshold=0.5)  # type: ignore[call-arg]
 

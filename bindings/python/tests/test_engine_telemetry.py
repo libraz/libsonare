@@ -379,7 +379,7 @@ def test_telemetry_counts_are_clamped_to_the_mirror_arrays(reader: str) -> None:
         assert wide.num_channels == max_planes
         assert len(wide.peak_db) == max_planes
         assert len(wide.rms_db) == max_planes
-        assert len(wide.true_peak_db) == max_planes
+        assert len(wide.true_peak_dbtp) == max_planes
 
 
 def test_scope_telemetry_still_returns_a_count_it_can_serve() -> None:

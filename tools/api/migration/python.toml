@@ -7515,3 +7515,59 @@ old = "EngineMetronomeConfig.click_seconds"
 new = "EngineMetronomeConfig.click_sec"
 domain = "engine"
 rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "MeterTelemetryRecord.true_peak_db_l"
+new = "MeterTelemetryRecord.true_peak_dbtp_l"
+domain = "engine"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "MeterTelemetryRecord.true_peak_db_r"
+new = "MeterTelemetryRecord.true_peak_dbtp_r"
+domain = "engine"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "MeterTelemetryRecord.max_true_peak_db"
+new = "MeterTelemetryRecord.max_true_peak_dbtp"
+domain = "engine"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "MeterTelemetryRecordWide.true_peak_db"
+new = "MeterTelemetryRecordWide.true_peak_dbtp"
+domain = "engine"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "MeterTelemetryRecordWide.max_true_peak_db"
+new = "MeterTelemetryRecordWide.max_true_peak_dbtp"
+domain = "engine"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "ClipDetection.sample_count"
+new = "ClipDetection.clipped_samples"
+domain = "effects"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "ClipDetection.sample_fraction"
+new = "ClipDetection.clipped_ratio"
+domain = "effects"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "StreamingLoudnessGain.true_peak_db"
+new = "StreamingLoudnessGain.true_peak_dbtp"
+domain = "mastering"
+rule = "unit-in-name"

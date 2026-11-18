@@ -81,11 +81,11 @@ class DeclickStereoResult:
 class ClipDetection:
     """What one channel's clip detector found, independent of repair.
 
-    ``sample_fraction`` is ``sample_count`` divided by the input length.
+    ``clipped_ratio`` is ``clipped_samples`` divided by the input length.
     ``longest_run_samples`` past the 512-sample cap takes the interpolation
     fallback instead of the LPC solver.
 
-    The flat-top fields answer a different question: ``sample_count`` and
+    The flat-top fields answer a different question: ``clipped_samples`` and
     ``longest_run_samples`` are read against ``clip_threshold_db``, so they count
     the apex of any waveform that reaches it and miss material clipped before
     it was attenuated. The flat-top fields instead count runs of at least
@@ -107,8 +107,8 @@ class ClipDetection:
     channel before mixing them down, not after.
     """
 
-    sample_count: int
-    sample_fraction: float
+    clipped_samples: int
+    clipped_ratio: float
     run_count: int
     longest_run_samples: int
     flat_run_count: int

@@ -183,9 +183,9 @@ class TestDetectClipping:
         detected = libsonare.mastering_repair_detect_clipping(_clipped(), SR)
 
         assert isinstance(detected, libsonare.ClipDetection)
-        assert detected.sample_count > 0
+        assert detected.clipped_samples > 0
         assert detected.run_count > 0
-        assert detected.sample_fraction == pytest.approx(detected.sample_count / N, rel=1e-5)
+        assert detected.clipped_ratio == pytest.approx(detected.clipped_samples / N, rel=1e-5)
         assert detected.longest_run_samples > 0
 
     def test_agrees_with_the_analysis_the_repair_reports(self) -> None:
@@ -217,14 +217,14 @@ class TestDetectClipping:
         strict = libsonare.mastering_repair_detect_clipping(
             clipped, SR, clip_threshold_db=20.0 * math.log10(0.999)
         )
-        assert lenient.sample_count > strict.sample_count
+        assert lenient.clipped_samples > strict.clipped_samples
 
     def test_clean_material_measures_zero(self) -> None:
         detected = libsonare.mastering_repair_detect_clipping(_tone(), SR)
 
-        assert detected.sample_count == 0
+        assert detected.clipped_samples == 0
         assert detected.run_count == 0
-        assert detected.sample_fraction == 0.0
+        assert detected.clipped_ratio == 0.0
 
     def test_flat_top_fires_on_clipping_attenuated_after_the_fact(self) -> None:
         """A tone clipped then turned down leaves nothing at ``clip_threshold_db``.
@@ -236,7 +236,7 @@ class TestDetectClipping:
         attenuated = _clipped() * 0.25
         detected = libsonare.mastering_repair_detect_clipping(attenuated, SR)
 
-        assert detected.sample_count == 0
+        assert detected.clipped_samples == 0
         assert detected.run_count == 0
         assert detected.flat_run_count > 0
         assert detected.flat_sample_count > 0
@@ -252,7 +252,7 @@ class TestDetectClipping:
         full_scale = _tone(amp=1.0)
         detected = libsonare.mastering_repair_detect_clipping(full_scale, SR)
 
-        assert detected.sample_count > 0
+        assert detected.clipped_samples > 0
         assert detected.flat_run_count == 0
         assert detected.flat_sample_count == 0
         assert detected.longest_flat_run_samples == 0

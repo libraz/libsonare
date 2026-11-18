@@ -360,8 +360,8 @@ def mastering_repair_declip(
 
 def _extract_clip_detection(raw: Any) -> ClipDetection:
     return ClipDetection(
-        sample_count=int(raw.sample_count),
-        sample_fraction=float(raw.sample_fraction),
+        clipped_samples=int(raw.sample_count),
+        clipped_ratio=float(raw.sample_fraction),
         run_count=int(raw.run_count),
         longest_run_samples=int(raw.longest_run_samples),
         flat_run_count=int(raw.flat_run_count),
@@ -390,7 +390,7 @@ def mastering_repair_detect_clipping(
     being read, since no field here is a rate::
 
         detected = libsonare.mastering_repair_detect_clipping(samples, 44100)
-        if detected.sample_fraction > 0.0:
+        if detected.clipped_ratio > 0.0:
             samples = libsonare.mastering_repair_declip(samples, 44100).samples
 
     ``longest_run_samples`` past 512 is the one field that predicts the repair's

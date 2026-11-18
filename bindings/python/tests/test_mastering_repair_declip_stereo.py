@@ -74,9 +74,9 @@ class TestMasteringRepairDeclipStereo:
         # Non-vacuity: each channel's own detector must have found its own
         # clipped samples before the cross-channel assertions below mean
         # anything. Right has two runs (shared + right-only); left has one.
-        assert result.left_report.detected.sample_count > 0
+        assert result.left_report.detected.clipped_samples > 0
         assert result.left_report.detected.run_count >= 1
-        assert result.right_report.detected.sample_count > 0
+        assert result.right_report.detected.clipped_samples > 0
         assert result.right_report.detected.run_count >= 2
 
         # The narrower channel's reconstruction reaches past its own clipped

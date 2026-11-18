@@ -33,7 +33,7 @@ def test_mono_gain_equals_the_offline_applied_gain() -> None:
         offline = libsonare.mastering_chain(samples, SR, config)
         assert gain.loudness_static_gain_db == pytest.approx(offline.applied_gain_db, abs=0)
         assert math.isfinite(gain.integrated_lufs)
-        assert math.isfinite(gain.true_peak_db)
+        assert math.isfinite(gain.true_peak_dbtp)
 
 
 def test_measurement_follows_the_stages_before_loudness() -> None:
@@ -60,7 +60,7 @@ def test_silence_yields_zero_gain_and_builds_a_streaming_chain() -> None:
         sample_rate=SR,
         max_block_size=512,
         loudness_static_gain_db=gain.loudness_static_gain_db,
-        loudness_static_gain_peak_db=gain.true_peak_db,
+        loudness_static_gain_peak_db=gain.true_peak_dbtp,
     ) as chain:
         assert len(chain.process_mono([0.0] * 512)) == 512
 
@@ -74,7 +74,7 @@ def test_streaming_chain_built_from_the_helper_tracks_the_offline_render() -> No
         sample_rate=SR,
         max_block_size=512,
         loudness_static_gain_db=gain.loudness_static_gain_db,
-        loudness_static_gain_peak_db=gain.true_peak_db,
+        loudness_static_gain_peak_db=gain.true_peak_dbtp,
     ) as chain:
         out: list[float] = []
         for start in range(0, len(samples), 512):

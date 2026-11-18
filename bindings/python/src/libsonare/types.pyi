@@ -1011,8 +1011,8 @@ class ClickDetection:
     ) -> None: ...
 
 class ClipDetection:
-    sample_count: int
-    sample_fraction: float
+    clipped_samples: int
+    clipped_ratio: float
     run_count: int
     longest_run_samples: int
     flat_run_count: int
@@ -1021,8 +1021,8 @@ class ClipDetection:
     flat_level: float  # largest run level once the two highest runs are set aside; 0 if none
     def __init__(
         self,
-        sample_count: int,
-        sample_fraction: float,
+        clipped_samples: int,
+        clipped_ratio: float,
         run_count: int,
         longest_run_samples: int,
         flat_run_count: int,
@@ -1902,10 +1902,10 @@ class StereoMonoCompatCheckLogBandsResult(TypedDict):
 
 class StreamingLoudnessGain:
     loudness_static_gain_db: float
-    true_peak_db: float
+    true_peak_dbtp: float
     integrated_lufs: float
     def __init__(
-        self, loudness_static_gain_db: float, true_peak_db: float, integrated_lufs: float
+        self, loudness_static_gain_db: float, true_peak_dbtp: float, integrated_lufs: float
     ) -> None: ...
 
 class MasteringLoudnessSummary:
@@ -2506,9 +2506,9 @@ class MeterTelemetryRecord:
     peak_db_r: float
     rms_db_l: float
     rms_db_r: float
-    true_peak_db_l: float
-    true_peak_db_r: float
-    max_true_peak_db: float
+    true_peak_dbtp_l: float
+    true_peak_dbtp_r: float
+    max_true_peak_dbtp: float
     correlation: float
     mono_compat_width: float
     momentary_lufs: float
@@ -2527,9 +2527,9 @@ class MeterTelemetryRecord:
         peak_db_r: float,
         rms_db_l: float,
         rms_db_r: float,
-        true_peak_db_l: float,
-        true_peak_db_r: float,
-        max_true_peak_db: float,
+        true_peak_dbtp_l: float,
+        true_peak_dbtp_r: float,
+        max_true_peak_dbtp: float,
         correlation: float,
         mono_compat_width: float,
         momentary_lufs: float,
@@ -2556,8 +2556,8 @@ class MeterTelemetryRecordWide:
     num_channels: int
     peak_db: list[float]
     rms_db: list[float]
-    true_peak_db: list[float]
-    max_true_peak_db: float
+    true_peak_dbtp: list[float]
+    max_true_peak_dbtp: float
     correlation: float
     mono_compat_width: float
     momentary_lufs: float
@@ -2574,8 +2574,8 @@ class MeterTelemetryRecordWide:
         num_channels: int,
         peak_db: list[float],
         rms_db: list[float],
-        true_peak_db: list[float],
-        max_true_peak_db: float,
+        true_peak_dbtp: list[float],
+        max_true_peak_dbtp: float,
         correlation: float,
         mono_compat_width: float,
         momentary_lufs: float,

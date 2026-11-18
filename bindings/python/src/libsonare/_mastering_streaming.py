@@ -52,7 +52,7 @@ def _streaming_loudness_gain_result(out: SonareStreamingLoudnessGain) -> Streami
     """Copy the C result into the public dataclass."""
     return StreamingLoudnessGain(
         loudness_static_gain_db=float(out.loudness_static_gain_db),
-        true_peak_db=float(out.true_peak_db),
+        true_peak_dbtp=float(out.true_peak_db),
         integrated_lufs=float(out.integrated_lufs),
     )
 
@@ -67,7 +67,7 @@ def streaming_loudness_gain(
 
     Runs the offline chain described by ``config`` up to its loudness stage and
     measures there, so ``loudness_static_gain_db`` equals the gain
-    :func:`mastering_chain` applies (ceiling clamp included) and ``true_peak_db``
+    :func:`mastering_chain` applies (ceiling clamp included) and ``true_peak_dbtp``
     is the peak that clamp used. The gain is computed from the ``loudness``
     section whether or not the stage is enabled; a silent or below-gate stage
     input yields a gain of 0.
@@ -86,7 +86,7 @@ def streaming_loudness_gain(
         chain = StreamingMasteringChain(
             config,
             loudness_static_gain_db=gain.loudness_static_gain_db,
-            loudness_static_gain_peak_db=gain.true_peak_db,
+            loudness_static_gain_peak_db=gain.true_peak_dbtp,
         )
     """
     lib = _get_lib()
@@ -116,7 +116,7 @@ def streaming_loudness_gain_stereo(
 ) -> StreamingLoudnessGain:
     """Stereo counterpart of :func:`streaming_loudness_gain`.
 
-    The integrated loudness uses BS.1770 channel summing and ``true_peak_db`` is
+    The integrated loudness uses BS.1770 channel summing and ``true_peak_dbtp`` is
     the larger of the two channel peaks.
     """
     lib = _get_lib()

@@ -464,7 +464,7 @@ class EngineGraphSpec:
 class MeterTelemetryRecord:
     """A meter snapshot drained from the realtime engine's meter tap.
 
-    ``true_peak_db_l``/``true_peak_db_r``/``max_true_peak_db`` are inter-sample
+    ``true_peak_dbtp_l``/``true_peak_dbtp_r``/``max_true_peak_dbtp`` are inter-sample
     peaks from the ITU-R BS.1770-4 polyphase reconstruction at 4x. They are a
     streaming measurement that runs one reconstruction-filter group delay (a
     few samples) behind the block, so the reading does not depend on the block
@@ -478,9 +478,9 @@ class MeterTelemetryRecord:
     peak_db_r: float
     rms_db_l: float
     rms_db_r: float
-    true_peak_db_l: float
-    true_peak_db_r: float
-    max_true_peak_db: float
+    true_peak_dbtp_l: float
+    true_peak_dbtp_r: float
+    max_true_peak_dbtp: float
     correlation: float
     mono_compat_width: float
     momentary_lufs: float
@@ -498,12 +498,12 @@ class MeterTelemetryRecord:
 class MeterTelemetryRecordWide:
     """A per-plane meter snapshot for a surround mix target.
 
-    ``peak_db``/``rms_db``/``true_peak_db`` carry ``num_channels`` valid planes
+    ``peak_db``/``rms_db``/``true_peak_dbtp`` carry ``num_channels`` valid planes
     in canonical WAVE order (5.1 = L R C LFE Ls Rs, 7.1 = L R C LFE Ls Rs Lss
     Rss). Use this drain for a surround target; ``MeterTelemetryRecord`` stays the
     stereo fast path.
 
-    ``true_peak_db``/``max_true_peak_db`` are inter-sample peaks from the
+    ``true_peak_dbtp``/``max_true_peak_dbtp`` are inter-sample peaks from the
     ITU-R BS.1770-4 polyphase reconstruction at 4x. They are a streaming
     measurement that runs one reconstruction-filter group delay (a few samples)
     behind the block, so the reading does not depend on the block size.
@@ -516,8 +516,8 @@ class MeterTelemetryRecordWide:
     num_channels: int
     peak_db: list[float]
     rms_db: list[float]
-    true_peak_db: list[float]
-    max_true_peak_db: float
+    true_peak_dbtp: list[float]
+    max_true_peak_dbtp: float
     correlation: float
     mono_compat_width: float
     momentary_lufs: float
