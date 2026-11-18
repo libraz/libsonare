@@ -8,6 +8,13 @@
 
 namespace sonare {
 
+/// Value pad_center and fix_length fill with when a caller gives none.
+inline constexpr float kDefaultPadValue = 0.0f;
+/// fix_frames' lower bound when a caller gives none.
+inline constexpr int kDefaultFixFramesMin = 0;
+/// fix_frames' upper bound meaning "none": only the lower bound is enforced.
+inline constexpr int kFixFramesNoUpperBound = -1;
+
 /// @brief Pad a 1-D array by centering it within target size.
 /// @param x Input pointer
 /// @param n Input length
@@ -17,17 +24,17 @@ namespace sonare {
 ///         where lpad = (size - n) / 2 (matches numpy.pad mode='constant').
 /// @throw sonare::SonareException if size < n.
 std::vector<float> pad_center(const float* x, std::size_t n, std::size_t size,
-                              float pad_value = 0.0f);
+                              float pad_value = kDefaultPadValue);
 std::vector<float> pad_center(const std::vector<float>& x, std::size_t size,
-                              float pad_value = 0.0f);
+                              float pad_value = kDefaultPadValue);
 
 /// @brief Crop or pad to exact length.
 /// @details If n > size, returns the first `size` samples. If n < size, pads
 ///          on the right with pad_value. If n == size, returns a copy.
 std::vector<float> fix_length(const float* x, std::size_t n, std::size_t size,
-                              float pad_value = 0.0f);
+                              float pad_value = kDefaultPadValue);
 std::vector<float> fix_length(const std::vector<float>& x, std::size_t size,
-                              float pad_value = 0.0f);
+                              float pad_value = kDefaultPadValue);
 
 /// @brief Adjust frame indices to fit within bounds (librosa.util.fix_frames).
 /// @param frames Sorted (ascending) frame indices
@@ -47,7 +54,7 @@ std::vector<float> fix_length(const std::vector<float>& x, std::size_t size,
 ///       frame list must decide what "no frames" means before calling.
 ///       This is the one point where the behaviour deliberately diverges from
 ///       librosa.util.fix_frames, which has no stable empty-input result.
-std::vector<int> fix_frames(const std::vector<int>& frames, int x_min = 0, int x_max = -1,
-                            bool pad = true);
+std::vector<int> fix_frames(const std::vector<int>& frames, int x_min = kDefaultFixFramesMin,
+                            int x_max = kFixFramesNoUpperBound, bool pad = true);
 
 }  // namespace sonare

@@ -13,6 +13,11 @@
 
 namespace sonare {
 
+/// Reference value 0 dB is measured against when a caller gives none.
+inline constexpr float kDefaultDbReference = 1.0f;
+/// Amplitude-domain floor of amplitude_to_db (librosa's 1e-5; squared before power_to_db).
+inline constexpr float kDefaultAmplitudeDbFloor = 1e-5f;
+
 /// @brief Convert a power spectrogram (magnitude squared) to dB.
 /// @param S Power values (>= 0 expected)
 /// @param n Length of S
@@ -22,10 +27,10 @@ namespace sonare {
 ///        Pass a negative value to disable clamping.
 /// @return dB values, 10 * log10(max(S, amin)) - 10 * log10(max(ref, amin)).
 /// @throw sonare::SonareException if amin <= 0, or n > 0 with null S.
-std::vector<float> power_to_db(const float* S, std::size_t n, float ref = 1.0f,
+std::vector<float> power_to_db(const float* S, std::size_t n, float ref = kDefaultDbReference,
                                float amin = constants::kEpsilon,
                                float top_db = constants::kDefaultTopDb);
-std::vector<float> power_to_db(const std::vector<float>& S, float ref = 1.0f,
+std::vector<float> power_to_db(const std::vector<float>& S, float ref = kDefaultDbReference,
                                float amin = constants::kEpsilon,
                                float top_db = constants::kDefaultTopDb);
 
@@ -33,17 +38,20 @@ std::vector<float> power_to_db(const std::vector<float>& S, float ref = 1.0f,
 /// @details Internally squares the input and forwards to power_to_db with
 ///          amin squared, exactly matching librosa.amplitude_to_db.
 /// @param amin Amplitude-domain floor (default 1e-5).
-std::vector<float> amplitude_to_db(const float* S, std::size_t n, float ref = 1.0f,
-                                   float amin = 1e-5f, float top_db = constants::kDefaultTopDb);
-std::vector<float> amplitude_to_db(const std::vector<float>& S, float ref = 1.0f,
-                                   float amin = 1e-5f, float top_db = constants::kDefaultTopDb);
+std::vector<float> amplitude_to_db(const float* S, std::size_t n, float ref = kDefaultDbReference,
+                                   float amin = kDefaultAmplitudeDbFloor,
+                                   float top_db = constants::kDefaultTopDb);
+std::vector<float> amplitude_to_db(const std::vector<float>& S, float ref = kDefaultDbReference,
+                                   float amin = kDefaultAmplitudeDbFloor,
+                                   float top_db = constants::kDefaultTopDb);
 
 /// @brief Inverse of power_to_db. ref * 10^(S_db / 10).
-std::vector<float> db_to_power(const float* S_db, std::size_t n, float ref = 1.0f);
-std::vector<float> db_to_power(const std::vector<float>& S_db, float ref = 1.0f);
+std::vector<float> db_to_power(const float* S_db, std::size_t n, float ref = kDefaultDbReference);
+std::vector<float> db_to_power(const std::vector<float>& S_db, float ref = kDefaultDbReference);
 
 /// @brief Inverse of amplitude_to_db. ref * 10^(S_db / 20).
-std::vector<float> db_to_amplitude(const float* S_db, std::size_t n, float ref = 1.0f);
-std::vector<float> db_to_amplitude(const std::vector<float>& S_db, float ref = 1.0f);
+std::vector<float> db_to_amplitude(const float* S_db, std::size_t n,
+                                   float ref = kDefaultDbReference);
+std::vector<float> db_to_amplitude(const std::vector<float>& S_db, float ref = kDefaultDbReference);
 
 }  // namespace sonare

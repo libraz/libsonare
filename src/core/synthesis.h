@@ -6,8 +6,22 @@
 #include <vector>
 
 #include "core/audio.h"
+#include "util/constants.h"
 
 namespace sonare {
+
+/// Length of a generated signal when a caller gives none, in seconds.
+inline constexpr float kDefaultSynthesisDurationSec = 1.0f;
+/// tone's phase offset when a caller gives none, in radians.
+inline constexpr float kDefaultTonePhase = 0.0f;
+/// tone's peak amplitude when a caller gives none.
+inline constexpr float kDefaultToneAmplitude = 1.0f;
+/// clicks' output length meaning "fit the last click in full".
+inline constexpr int kClicksFitLength = 0;
+/// Sine frequency of a click burst when a caller gives none, in hertz.
+inline constexpr float kDefaultClickFrequencyHz = 1000.0f;
+/// Length of a click burst when a caller gives none, in seconds.
+inline constexpr float kDefaultClickDurationSec = 0.1f;
 
 /// @brief Generates a pure sinusoidal tone.
 /// @details Output samples are `amplitude * sin(2*pi*frequency*t + phi)`
@@ -18,8 +32,9 @@ namespace sonare {
 /// @param phi Phase offset in radians (default 0).
 /// @param amplitude Peak amplitude (default 1.0).
 /// @return Mono Audio at the given sample rate.
-Audio tone(float frequency, int sr = 22050, float duration = 1.0f, float phi = 0.0f,
-           float amplitude = 1.0f);
+Audio tone(float frequency, int sr = constants::kDefaultSampleRate,
+           float duration = kDefaultSynthesisDurationSec, float phi = kDefaultTonePhase,
+           float amplitude = kDefaultToneAmplitude);
 
 /// @brief Generates a frequency-sweeping signal (linear or exponential).
 /// @details Linear sweep: `f(t) = fmin + (fmax - fmin) * t / duration`.
@@ -34,7 +49,8 @@ Audio tone(float frequency, int sr = 22050, float duration = 1.0f, float phi = 0
 /// @param duration Duration in seconds (default 1.0).
 /// @param linear If true (default), use a linear sweep, else exponential.
 /// @return Mono Audio.
-Audio chirp(float fmin, float fmax, int sr = 22050, float duration = 1.0f, bool linear = true);
+Audio chirp(float fmin, float fmax, int sr = constants::kDefaultSampleRate,
+            float duration = kDefaultSynthesisDurationSec, bool linear = true);
 
 /// @brief Generates a click track from a list of event times.
 /// @details Each click is a logarithmically-decaying sine burst (matching
@@ -47,7 +63,8 @@ Audio chirp(float fmin, float fmax, int sr = 22050, float duration = 1.0f, bool 
 /// @param frequency Click sine frequency in Hz (default 1000).
 /// @param click_duration Click burst duration in seconds (default 0.1).
 /// @return Mono Audio.
-Audio clicks(const std::vector<float>& times, int sr = 22050, int length = 0,
-             float frequency = 1000.0f, float click_duration = 0.1f);
+Audio clicks(const std::vector<float>& times, int sr = constants::kDefaultSampleRate,
+             int length = kClicksFitLength, float frequency = kDefaultClickFrequencyHz,
+             float click_duration = kDefaultClickDurationSec);
 
 }  // namespace sonare

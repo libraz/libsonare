@@ -10,6 +10,9 @@
 
 namespace sonare {
 
+/// Filter coefficient of preemphasis and deemphasis when a caller gives none (librosa's 0.97).
+inline constexpr float kDefaultEmphasisCoef = 0.97f;
+
 /// @brief First-order pre-emphasis high-pass filter.
 /// @details Matches scipy.signal.lfilter([1, -coef], [1], x, zi=[zi]):
 ///          - y[0] = x[0] + zi
@@ -25,9 +28,9 @@ namespace sonare {
 /// @throw sonare::SonareException if x is null and n > 0, or if `coef` or an
 ///        engaged `zi` is non-finite. Empty input is still valid when the
 ///        parameters are valid.
-std::vector<float> preemphasis(const float* x, std::size_t n, float coef = 0.97f,
+std::vector<float> preemphasis(const float* x, std::size_t n, float coef = kDefaultEmphasisCoef,
                                std::optional<float> zi = std::nullopt);
-std::vector<float> preemphasis(const std::vector<float>& x, float coef = 0.97f,
+std::vector<float> preemphasis(const std::vector<float>& x, float coef = kDefaultEmphasisCoef,
                                std::optional<float> zi = std::nullopt);
 
 /// @brief Inverse of preemphasis (lossy integrator).
@@ -38,9 +41,9 @@ std::vector<float> preemphasis(const std::vector<float>& x, float coef = 0.97f,
 /// @throw sonare::SonareException if x is null and n > 0, or if `coef` or an
 ///        engaged `zi` is non-finite. Empty input is still valid when the
 ///        parameters are valid.
-std::vector<float> deemphasis(const float* x, std::size_t n, float coef = 0.97f,
+std::vector<float> deemphasis(const float* x, std::size_t n, float coef = kDefaultEmphasisCoef,
                               std::optional<float> zi = std::nullopt);
-std::vector<float> deemphasis(const std::vector<float>& x, float coef = 0.97f,
+std::vector<float> deemphasis(const std::vector<float>& x, float coef = kDefaultEmphasisCoef,
                               std::optional<float> zi = std::nullopt);
 
 }  // namespace sonare
