@@ -53,7 +53,7 @@ _PROJECT_NO_OUTPUT = frozenset({"abi", "compile", "synth-presets"})
 
 # The mode an aligned clip plays its warp map through. Anchors encode a rate
 # difference, and a clip left in any other mode ignores it.
-_ALIGNED_WARP_MODE = "time-stretch"
+_ALIGNED_WARP_MODE = "timeStretch"
 
 
 def _load_project(path: str) -> object:
