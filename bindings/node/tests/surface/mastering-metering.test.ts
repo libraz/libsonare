@@ -302,7 +302,7 @@ describe('mastering metering surface', () => {
         addon as unknown as {
           lufsInterleaved: (...args: unknown[]) => {
             integratedLufs: number;
-            loudnessRange: number;
+            loudnessRangeLu: number;
           };
         }
       ).lufsInterleaved(
@@ -313,7 +313,7 @@ describe('mastering metering surface', () => {
         sampleRate,
       );
       expect(result.integratedLufs).toBeCloseTo(native.integratedLufs, 5);
-      expect(result.loudnessRangeLu).toBeCloseTo(native.loudnessRange, 5);
+      expect(result.loudnessRangeLu).toBeCloseTo(native.loudnessRangeLu, 5);
     });
 
     it('returns the series under momentaryLufs / shortTermLufs', () => {
@@ -535,13 +535,6 @@ describe('mastering metering surface', () => {
         () => module().meteringDetectClipping(clippedTone(), sampleRate, 0.4, 1) as never,
         'clippingRatio',
         'clippedRatio',
-      ],
-      [
-        'the loudness result names the range loudnessRange',
-        () =>
-          module().lufsInterleaved(Float32Array.from([...left, ...left]), 2, sampleRate) as never,
-        'loudnessRange',
-        'loudnessRangeLu',
       ],
       [
         'the loudness series is momentary / shortTerm',

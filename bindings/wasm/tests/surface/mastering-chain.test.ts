@@ -487,8 +487,8 @@ describe('chain config: nested form only, tokens only', () => {
   });
 
   it('refuses a string on a number leaf the same way offline and streaming', () => {
-    const bad = { maximizer: { truePeakLimiter: { ceilingDb: '-1.0' } } } as never;
-    const message = 'maximizer.truePeakLimiter.ceilingDb is a string, but takes no token';
+    const bad = { maximizer: { truePeakLimiter: { ceilingDbtp: '-1.0' } } } as never;
+    const message = 'maximizer.truePeakLimiter.ceilingDbtp is a string, but takes no token';
     expectInvalidFormat(
       () => sonare.masterAudio({ samples: left, sampleRate, overrides: bad }),
       message,
@@ -497,6 +497,28 @@ describe('chain config: nested form only, tokens only', () => {
       () => new sonare.StreamingMasteringChain({ sampleRate, numChannels: 1, ...(bad as object) }),
       message,
     );
+  });
+
+  it('refuses a renamed chain key by its new name, the same way offline and streaming', () => {
+    for (const [bad, oldKey, newKey] of [
+      [{ loudness: { ceilingDb: -1 } }, 'loudness.ceilingDb', 'loudness.ceilingDbtp'],
+      [
+        { maximizer: { truePeakLimiter: { ceilingDb: -1 } } },
+        'maximizer.truePeakLimiter.ceilingDb',
+        'maximizer.truePeakLimiter.ceilingDbtp',
+      ],
+    ] as const) {
+      const message = `unknown chain config key: ${oldKey} (renamed to ${newKey})`;
+      expectInvalidFormat(
+        () => sonare.masterAudio({ samples: left, sampleRate, overrides: bad as never }),
+        message,
+      );
+      expectInvalidFormat(
+        () =>
+          new sonare.StreamingMasteringChain({ sampleRate, numChannels: 1, ...(bad as object) }),
+        message,
+      );
+    }
   });
 
   it('declip.clipThresholdDb is dBFS at or below 0', () => {
@@ -773,7 +795,7 @@ describe('closed sets and catalogs', () => {
         samples: left,
         sampleRate,
         targetLufs: -16,
-        ceilingDb: -1,
+        ceilingDbtp: -1,
         enableRepair: false,
         preferStreamingSafe: true,
         speechMonoAmount: 0.5,
@@ -856,17 +878,6 @@ describe('native still uses the old spelling', () => {
   const pop = () => raw().masteringPresetParams('pop') as string;
 
   it.each([
-    [
-      'the chain result names the loudness range outputLra and loudnessRange',
-      () => {
-        const result = raw().masterAudio('pop', left, sampleRate, null) as Record<string, unknown>;
-        const report = result.report as Record<string, Record<string, unknown>>;
-        return [
-          'outputLra' in result && !('outputLoudnessRangeLu' in result),
-          'loudnessRange' in report.before && !('loudnessRangeLu' in report.before),
-        ];
-      },
-    ],
     [
       'streaming loudness gain names the true peak truePeakDb',
       () => {
