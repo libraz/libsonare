@@ -10,5 +10,6 @@
 "session": {"domain": "engine", "surfaces": ["c", "node", "python", "wasm"]},
 "session_create": {"domain": "analysis", "surfaces": ["c"]},
 "session_destroy": {"domain": "analysis", "surfaces": ["c"]},
-"stft": {"domain": "analysis", "surfaces": ["python"]}
+"stft": {"domain": "analysis", "surfaces": ["python"]},
+"window_type": {"domain": "analysis", "surfaces": ["c"]}
 }

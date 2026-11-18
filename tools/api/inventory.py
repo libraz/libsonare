@@ -862,6 +862,27 @@ def _c_doc_before(lines: list[str], idx: int) -> bool:
     return False
 
 
+def _c_doc_text(lines: list[str], idx: int) -> str:
+    """Text of the Doxygen comment ending right above declaration line idx (0-based), or ""."""
+    cur = lines[idx]
+    for mark in ("///<", "/**<", "//!<"):
+        if mark in cur:
+            return cur.split(mark, 1)[1].strip().removesuffix("*/").strip()
+    j = idx - 1
+    while j >= 0 and lines[j].strip().startswith(("///", "//!")):
+        j -= 1
+    if j < idx - 1:
+        return " ".join(s.strip()[3:].strip() for s in lines[j + 1 : idx])
+    if j >= 0 and lines[j].strip().endswith("*/"):
+        k = j
+        while k >= 0 and "/*" not in lines[k]:
+            k -= 1
+        if k >= 0 and ("/**" in lines[k] or "/*!" in lines[k]):
+            body = " ".join(x.strip() for x in lines[k : j + 1])
+            return re.sub(r"^/\*[*!]\s*|\s*\*/$", "", body).replace(" * ", " ").strip()
+    return ""
+
+
 def _c_decl_line(raw: str, pattern: str) -> int:
     """First line matching pattern that is not inside a comment, or 0."""
     stripped = _blank_comments(raw)
@@ -982,6 +1003,7 @@ def extract_c(root: Path) -> tuple[list[dict], dict[str, int]]:
                     index=i,
                     optional=False,
                     literals=[],
+                    doc_text=_c_doc_text(lines_by_file[r.file], fline - 1) if fline else "",
                 )
             )
     for file, raw in raw_by_file.items():

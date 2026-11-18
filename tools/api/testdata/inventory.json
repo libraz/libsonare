@@ -4,7 +4,7 @@
   "python_only": []
  },
  "counts": {
-  "c": 9,
+  "c": 12,
   "cli-native": 2,
   "cli-python": 2,
   "node": 22,
@@ -201,7 +201,8 @@
    "fields": [
     "struct_size",
     "sample_rate",
-    "length"
+    "length",
+    "window_type"
    ],
    "file": "include/sonare/sonare_c_analysis.h",
    "has_doc": true,
@@ -1278,6 +1279,49 @@
    "owner": "ErrorCodeName",
    "surface": "node",
    "token": "Ok"
+  },
+  {
+   "doc_text": "@brief A @ref SonareWindowType.",
+   "domain": "analysis",
+   "domain_path": "inherited",
+   "entries": [],
+   "file": "include/sonare/sonare_c_analysis.h",
+   "has_doc": true,
+   "index": 3,
+   "kind": "field",
+   "line": 1,
+   "member": "window_type",
+   "name": "SonareBpmOptions.window_type",
+   "owner": "SonareBpmOptions",
+   "surface": "c",
+   "type": "int32_t"
+  },
+  {
+   "c_kind": "enum",
+   "domain": "analysis",
+   "domain_path": "declaring-file",
+   "entries": [],
+   "file": "include/sonare/sonare_c_analysis.h",
+   "has_doc": true,
+   "kind": "type",
+   "line": 1,
+   "member": "",
+   "name": "SonareWindowType",
+   "owner": "",
+   "surface": "c"
+  },
+  {
+   "domain": "analysis",
+   "domain_path": "declaring-file",
+   "entries": [],
+   "file": "include/sonare/sonare_c_analysis.h",
+   "has_doc": true,
+   "kind": "value",
+   "line": 1,
+   "member": "SONARE_WINDOW_TYPE_HANN",
+   "name": "SonareWindowType.SONARE_WINDOW_TYPE_HANN",
+   "owner": "SonareWindowType",
+   "surface": "c"
   }
  ]
 }

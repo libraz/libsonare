@@ -464,6 +464,7 @@ class Conventions(CheckerCase):
                     x.lstrip().startswith("not compared:")
                     and "v1.10.0" not in x
                     and "native CLI help" not in x
+                    and "enum-coded" not in x
                     for x in lines
                 )
             )
@@ -976,6 +977,7 @@ class UnitInName(CheckerCase):
             "base_sample_offset",
             "sample_start_offset",
             "envelope_offset",
+            "index_offset",
             "attack_ms",
             "offset",
         )
@@ -991,6 +993,55 @@ class UnitInName(CheckerCase):
             )
         )
         self.assertEqual(self.flagged(*recs), ["c option f(envelope_offset)", "c option f(offset)"])
+
+
+class CEnumFields(CheckerCase):
+    def enum(self, name, *values):
+        recs = [_rec("c", "type", name, c_kind="enum")]
+        recs += [_rec("c", "value", f"{name}.{v}", owner=name, member=v) for v in values]
+        return recs
+
+    def field(self, name, doc, ty="int32_t"):
+        owner, member = name.split(".")
+        return _rec("c", "field", name, owner=owner, member=member, type=ty, doc_text=doc)
+
+    def test_an_enum_coded_field_names_no_quantity_and_is_counted(self):
+        self.add(
+            *self.enum("SonareMidiRelease", "SONARE_MIDI_RELEASE_HOLD"),
+            self.field(
+                "SonareCfg.midi_release", "@brief A @ref SonareMidiRelease: what voices do."
+            ),
+            self.field("SonareCfg.fade_release", "Seconds the fade takes.", ty="float"),
+        )
+        _, lines = self.run_check("--surface", "c", "--check", "unit-in-name")
+        bad = [x.strip().split(":")[0] for x in lines if "names a physical quantity" in x]
+        self.assertEqual(bad, ["c field SonareCfg.fade_release"])
+        self.assertIn(
+            "    not compared: 2 C int fields read as enum-coded (doc opens 'A @ref Sonare<Enum>')",
+            lines,
+        )
+
+    def test_an_enum_field_whose_doc_does_not_open_with_the_reference_is_reported(self):
+        self.add(
+            *self.enum("SonareChannelLayout", "SONARE_CHANNEL_LAYOUT_MONO"),
+            *self.enum("SonarePitchTargetMode", "SONARE_PITCH_TARGET_MODE_SCALE"),
+            self.field("SonareBus.channel_layout", ""),
+            self.field("SonareLane.source_channel_layout", "Layout of the source."),
+            self.field("SonareCfg.target_mode", "@ref SonarePitchTargetMode."),
+            self.field("SonareGood.channel_layout", "@brief A @ref SonareChannelLayout."),
+            self.field("SonareCtl.index", "CC number for SONARE_PITCH_TARGET_MODE_SCALE."),
+            self.field("SonareX.count", "Plain count."),
+        )
+        _, lines = self.run_check("--surface", "c", "--check", "c-enum-field-doc")
+        bad = sorted(x.strip().split(":")[0] for x in lines if "open its doc with" in x)
+        self.assertEqual(
+            bad,
+            [
+                "c field SonareBus.channel_layout",
+                "c field SonareCfg.target_mode",
+                "c field SonareLane.source_channel_layout",
+            ],
+        )
 
 
 class DocSentinel(CheckerCase):
@@ -1355,7 +1406,7 @@ class NameVote(unittest.TestCase):
 class FrozenDomains(CheckerCase):
     def test_baseline_counts(self):
         _, lines = self.run_check()
-        self.assertIn("domain vote: 12 names, 0 by tie-break", lines)
+        self.assertIn("domain vote: 13 names, 0 by tie-break", lines)
         self.assertIn("unassigned: 0", lines)
 
     def test_file_wins_over_the_per_surface_domain(self):
@@ -1405,7 +1456,7 @@ class FrozenDomains(CheckerCase):
         out = self.dir / "domains.json"
         _, lines = self.run_check("--regenerate-domains", domains_file=out)
         self.assertEqual(out.read_text(encoding="utf-8"), (TD / "domains.json").read_text())
-        self.assertIn("Regenerated domains.json: 12 names", lines)
+        self.assertIn("Regenerated domains.json: 13 names", lines)
 
 
 class SkipCheck(CheckerCase):

@@ -784,13 +784,17 @@ def _unit_split(name: str):
     s = snake(name)
     words = s.split("_")
     for stem in _STEMS:
-        for unit in _UNITS:
+        for unit in _QUANTITY_WORDS:
             if s == f"{stem}_{unit}" or s.endswith(f"_{stem}_{unit}"):
                 return stem, unit
         if s == stem or s.endswith("_" + stem):
             head = words[: len(words) - len(stem.split("_"))]
-            return stem, next((w for w in head if w in _UNITS), None)
+            return stem, next((w for w in head if w in _QUANTITY_WORDS), None)
     return None
+
+
+# An element index states its quantity as plainly as a unit word does.
+_QUANTITY_WORDS = (*_UNITS, "index")
 
 
 _NUMERIC_WORD = re.compile(
@@ -804,7 +808,7 @@ def _numeric_type(r: dict) -> bool:
     ty = r.get("type")
     if ty is None:
         return True
-    if r.get("boolean") or ty.lstrip().startswith("{"):
+    if r.get("boolean") or r.get("enum_ref") or ty.lstrip().startswith("{"):
         return False
     return bool(_NUMERIC_WORD.search(ty))
 
@@ -815,6 +819,56 @@ def _unit_hit(r: dict):
     if (r["kind"] == "flag" and r.get("boolean")) or not _numeric_type(r):
         return None
     return _unit_split(bare(r))
+
+
+_C_ENUM_OPEN = re.compile(r"^(?:@brief\s+)?An?\s+@ref\s+(Sonare\w+)")
+_C_INT = re.compile(r"\b(?:u?int(?:8|16|32|64)_t|int|unsigned)\b")
+
+
+def _c_int_field(r: dict) -> bool:
+    return (
+        r["surface"] == "c"
+        and r["kind"] == "field"
+        and "*" not in r.get("type", "")
+        and bool(_C_INT.search(r.get("type", "")))
+    )
+
+
+def _c_enums(records: list[dict]) -> set[str]:
+    return {r["name"] for r in records if r["surface"] == "c" and r.get("c_kind") == "enum"}
+
+
+def mark_c_enum_fields(records: list[dict]) -> int:
+    """Tag each C int field whose doc opens "A @ref Sonare<Enum>" with that enum; return the count."""
+    enums, n = _c_enums(records), 0
+    for r in records:
+        if _c_int_field(r) and (m := _C_ENUM_OPEN.match(r.get("doc_text", ""))) and m[1] in enums:
+            r["enum_ref"] = m[1]
+            n += 1
+    return n
+
+
+def chk_c_enum_field_doc(ctx):
+    """An int field that carries an enumerator says so the one way mark_c_enum_fields reads."""
+    enums = _c_enums(ctx.all_records)
+    # Two-word suffixes only: a bare "mode" field is not evidence of SonareMode.
+    by_name = {
+        snake(e.removeprefix("Sonare")): e for e in enums if "_" in snake(e.removeprefix("Sonare"))
+    }
+    cands, bad = 0, []
+    for r in recs(ctx, ("c",), ("field",)):
+        if not _c_int_field(r):
+            continue
+        f = r["member"]
+        named = [e for s, e in by_name.items() if f == s or f.endswith("_" + s)]
+        cited = [e for e in re.findall(r"@ref\s+(Sonare\w+)", r.get("doc_text", "")) if e in enums]
+        if not (named or cited or r.get("enum_ref")):
+            continue
+        cands += 1
+        if not r.get("enum_ref"):
+            enum = (cited or named)[0]
+            bad.append((r, f"carries a {enum}; open its doc with 'A @ref {enum}'"))
+    return cands, bad
 
 
 def dimensionless_key(name: str) -> str:
@@ -1656,6 +1710,7 @@ CHECKS: tuple[Check, ...] = (
     Check("c-free", ("c",), chk_c_free),
     Check("c-create", ("c",), chk_c_create),
     Check("c-count-types", ("c",), chk_c_count_types),
+    Check("c-enum-field-doc", ("c",), chk_c_enum_field_doc),
     Check("getters", BINDINGS, chk_getters),
     Check("typed-results", JS, chk_typed_results),
     Check("array-results", ("python",), chk_array_results),
@@ -1760,6 +1815,7 @@ def run(args) -> tuple[int, list[str], dict]:
 
         inv = inventory.build(root)
     records = inv["records"]
+    c_enum_fields = mark_c_enum_fields(records)
     selected = selected_surfaces(args.surface)
     want_domains = set(_split(args.domain))
     for d in want_domains:
@@ -1965,6 +2021,11 @@ def run(args) -> tuple[int, list[str], dict]:
         out += [f"    {line_of(v)}" for v in viol]
         if chk.id in UNREAD and UNREAD[chk.id][0] in selected:
             out.append(f"    not compared: {UNREAD[chk.id][1]}")
+        if chk.id == "unit-in-name" and "c" in selected:
+            out.append(
+                f"    not compared: {c_enum_fields} C int fields read as enum-coded"
+                " (doc opens 'A @ref Sonare<Enum>')"
+            )
         failed |= bool(viol)
         for v in viol:
             table[(v["domain"], v["surface"])] += 1
