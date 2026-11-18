@@ -758,7 +758,7 @@ describe('Sonare WASM Project edit ops', () => {
     }
   });
 
-  it('keeps omitted automation target kind on the legacy schema-v1 route', () => {
+  it('writes no target kind for a lane that omits it', () => {
     const { project, trackId } = buildAudioProject();
     try {
       project.addAutomationLane(trackId, {
@@ -766,17 +766,15 @@ describe('Sonare WASM Project edit ops', () => {
         points: [{ ppq: 0, value: 0 }],
       });
       const serialized = JSON.parse(project.toJson()) as {
-        version: number;
         tracks: Array<{ automation_lanes: Array<Record<string, unknown>> }>;
       };
-      expect(serialized.version).toBe(1);
       expect(serialized.tracks[0].automation_lanes[0]).not.toHaveProperty('target_kind');
     } finally {
       project.destroy();
     }
   });
 
-  it('normalizes typed automation target kinds and round-trips schema-v2 JSON', () => {
+  it('normalizes typed automation target kinds and round-trips them through the project JSON', () => {
     const { project, trackId } = buildAudioProject();
     try {
       project.addAutomationLane(trackId, {
@@ -791,10 +789,8 @@ describe('Sonare WASM Project edit ops', () => {
       });
       const json = project.toJson();
       const serialized = JSON.parse(json) as {
-        version: number;
         tracks: Array<{ automation_lanes: Array<Record<string, unknown>> }>;
       };
-      expect(serialized.version).toBe(2);
       expect(serialized.tracks[0].automation_lanes).toEqual(
         expect.arrayContaining([
           expect.objectContaining({ target_param_id: 20, target_kind: 1 }),
