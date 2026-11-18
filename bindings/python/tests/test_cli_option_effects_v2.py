@@ -189,15 +189,10 @@ def test_normalize_mode_and_trim_controls_forward_to_the_matching_facade(
     monkeypatch.setattr(
         libsonare,
         "normalize",
-        lambda _samples, **kwargs: normalize_calls.append(("peak", kwargs)) or [0.2],
-    )
-    monkeypatch.setattr(
-        libsonare,
-        "normalize_rms",
-        lambda _samples, **kwargs: normalize_calls.append(("rms", kwargs)) or [0.3],
+        lambda _samples, **kwargs: normalize_calls.append(("mono", kwargs)) or [0.2],
     )
     assert effects.cmd_normalize(_args(mode="rms", target_db=-12.0)) == 0
-    assert normalize_calls == [("rms", {"sample_rate": 22050, "target_db": -12.0})]
+    assert normalize_calls == [("mono", {"sample_rate": 22050, "mode": "rms", "target_db": -12.0})]
 
     trim_calls: list[tuple[str, dict[str, object]]] = []
     monkeypatch.setattr(
@@ -213,7 +208,7 @@ def test_normalize_mode_and_trim_controls_forward_to_the_matching_facade(
         == 0
     )
     assert trim_calls == [("top", {"top_db": 24.0, "frame_length": 1024, "hop_length": 256})]
-    assert [call["channels"] for call in emitted] == [[[0.3]], [[0.4]]]
+    assert [call["channels"] for call in emitted] == [[[0.2]], [[0.4]]]
 
 
 def test_trim_threshold_and_top_db_conflict_is_semantic_error(

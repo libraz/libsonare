@@ -284,7 +284,7 @@ def cmd_time_stretch(args: argparse.Namespace) -> int:
 
 
 def cmd_normalize(args: argparse.Namespace) -> int:
-    from . import normalize, normalize_rms, normalize_rms_stereo, normalize_stereo
+    from . import normalize, normalize_stereo
 
     planes, sr = _load_channels_or_downmix(args.file)
     mode = getattr(args, "mode", "peak")
@@ -293,20 +293,19 @@ def cmd_normalize(args: argparse.Namespace) -> int:
         target_db = -20.0 if mode == "rms" else 0.0
     if mode not in ("peak", "rms"):
         raise ValueError("--mode must be 'peak' or 'rms'")
+    checked_mode = cast(Literal["peak", "rms"], mode)
 
     # One gain for the pair, measured across both channels. Normalizing each
     # channel to the target on its own would drive the quieter one up by a
     # different amount and collapse the image toward the centre -- for a source
     # 12 dB apart that is a factor of four on one side.
     if len(planes) == 2:
-        stereo = (normalize_rms_stereo if mode == "rms" else normalize_stereo)(
-            planes[0], planes[1], sample_rate=sr, target_db=target_db
+        stereo = normalize_stereo(
+            planes[0], planes[1], sample_rate=sr, mode=checked_mode, target_db=target_db
         )
         channels = [stereo.left, stereo.right]
     else:
-        mono = (normalize_rms if mode == "rms" else normalize)(
-            planes[0], sample_rate=sr, target_db=target_db
-        )
+        mono = normalize(planes[0], sample_rate=sr, mode=checked_mode, target_db=target_db)
         channels = [mono]
 
     return _emit_effect_result(
