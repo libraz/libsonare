@@ -32,6 +32,8 @@ const methodShapes = [
   'ExternalSeparatedStem',
   'Mixer',
   'Mixer.fromJson',
+  'PlaybackLoudnessMeter',
+  'PlaybackRenderer',
   'ProjectInstrumentBinding',
   'RealtimeEngine',
   'addClip',

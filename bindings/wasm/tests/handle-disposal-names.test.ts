@@ -80,7 +80,10 @@ describe('WASM handle teardown names', () => {
       'PlaybackRenderer',
       () => new PlaybackRenderer({ config: {}, hrtf: HrtfSet.fromBytes(hrtfBytes()) }),
     ],
-    ['PlaybackLoudnessMeter', () => new PlaybackLoudnessMeter(2, 48000)],
+    [
+      'PlaybackLoudnessMeter',
+      () => new PlaybackLoudnessMeter({ numChannels: 2, sampleRate: 48000 }),
+    ],
     ['VocalEditSession', () => createVocalEditSession({ samples: tone(), sampleRate: 22050 })],
   ];
 

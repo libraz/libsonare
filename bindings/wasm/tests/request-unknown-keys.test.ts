@@ -34,6 +34,8 @@ function message(call: () => unknown): string {
 const METHOD_SHAPES = [
   'Mixer',
   'Mixer.fromJson',
+  'PlaybackLoudnessMeter',
+  'PlaybackRenderer',
   ...(Object.keys(REQUEST_SHAPES) as RequestFn[]).filter((name) => name.startsWith('Project.')),
   'RealtimeEngine',
   'SonareEngine.renderOffline',

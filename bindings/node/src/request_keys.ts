@@ -1585,6 +1585,8 @@ export const REQUEST_KEYS = {
   pushMidiProgram: MIDI_BANK_REQUEST_KEYS,
   pushMidiInputProgram: MIDI_BANK_REQUEST_KEYS,
   Mixer: MIXER_CONFIG_REQUEST_KEYS,
+  PlaybackRenderer: keySet('config', 'hrtf', 'sampleRate', 'maxBlockSize'),
+  PlaybackLoudnessMeter: keySet('numChannels', 'sampleRate'),
   'Mixer.fromJson': MIXER_JSON_OPTIONS_REQUEST_KEYS,
   setPolarityInvert: SET_POLARITY_INVERT_REQUEST_KEYS,
   configureMeter: CONFIGURE_METER_REQUEST_KEYS,
@@ -2070,6 +2072,7 @@ export const NESTED_REQUEST_KEYS = {
   midiBankProgram: { bank: keySet('msb', 'lsb') },
   configureCapture: { inputMonitor: CAPTURE_INPUT_MONITOR_KEYS, punch: CAPTURE_PUNCH_KEYS },
   renderPlayback: { config: PLAYBACK_RENDERER_CONFIG_KEYS },
+  PlaybackRenderer: { config: PLAYBACK_RENDERER_CONFIG_KEYS },
   restoreVocalEditSession: { limits: VOCAL_SESSION_LIMITS_KEYS },
   createVocalEditSession: { limits: VOCAL_SESSION_LIMITS_KEYS },
 } as const;

@@ -266,7 +266,12 @@ import type {
   MidiRouteEventsRequest,
 } from './public_types_midi_messages.js';
 import type { ChordFunctionsInput } from './public_types_music.js';
-import type { PlaybackRendererConfig, RenderPlaybackRequest } from './public_types_playback.js';
+import type {
+  PlaybackLoudnessMeterOptions,
+  PlaybackRendererConfig,
+  PlaybackRendererOptions,
+  RenderPlaybackRequest,
+} from './public_types_playback.js';
 import type { AutoTuneKey } from './public_types_spectral.js';
 import type {
   VocalAnalysisInput,
@@ -2036,6 +2041,16 @@ const RenderPlaybackRequestKeys = keysOf<RenderPlaybackRequest>()([
   'config',
   'hrtf',
 ]);
+const PlaybackRendererOptionsKeys = keysOf<PlaybackRendererOptions>()([
+  'config',
+  'hrtf',
+  'sampleRate',
+  'maxBlockSize',
+]);
+const PlaybackLoudnessMeterOptionsKeys = keysOf<PlaybackLoudnessMeterOptions>()([
+  'numChannels',
+  'sampleRate',
+]);
 const PlaybackRendererConfigKeys = keysOf<PlaybackRendererConfig>()([
   'input',
   'target',
@@ -2874,6 +2889,11 @@ export const REQUEST_SHAPES = {
   pushMidiProgram: { keys: MidiBankRequestKeys },
   pushMidiInputProgram: { keys: MidiBankRequestKeys },
   Mixer: { keys: MixerConfigRequestKeys },
+  PlaybackRenderer: {
+    keys: PlaybackRendererOptionsKeys,
+    nested: { config: PlaybackRendererConfigKeys },
+  },
+  PlaybackLoudnessMeter: { keys: PlaybackLoudnessMeterOptionsKeys },
   'Mixer.fromJson': { keys: MixerJsonOptionsRequestKeys },
   configureMeter: { keys: ConfigureMeterRequestKeys },
   setPolarityInvert: { keys: SetPolarityInvertRequestKeys },

@@ -110,7 +110,7 @@ describe('playback renderer (WASM)', () => {
 
   it('reads cheap scalar state as getters', () => {
     const renderer = new PlaybackRenderer({ config: SPEAKERS_5_1, sampleRate: SR });
-    const meter = new PlaybackLoudnessMeter(2, SR);
+    const meter = new PlaybackLoudnessMeter({ numChannels: 2, sampleRate: SR });
     try {
       const getter = (target: object, name: string) =>
         Object.getOwnPropertyDescriptor(Object.getPrototypeOf(target), name)?.get;
@@ -470,7 +470,7 @@ describe('playback renderer (WASM)', () => {
   });
 
   it('measures integrated program loudness', () => {
-    const meter = new PlaybackLoudnessMeter(2, SR);
+    const meter = new PlaybackLoudnessMeter({ numChannels: 2, sampleRate: SR });
     try {
       const planes = Array.from({ length: 2 }, () => {
         const plane = new Float32Array(SR);
@@ -487,7 +487,7 @@ describe('playback renderer (WASM)', () => {
     } finally {
       meter.destroy();
     }
-    expect(() => new PlaybackLoudnessMeter(3, SR)).toThrow(RangeError);
+    expect(() => new PlaybackLoudnessMeter({ numChannels: 3, sampleRate: SR })).toThrow(RangeError);
   });
 
   it('renders a whole buffer offline through an existing renderer like renderPlayback', () => {
@@ -547,7 +547,7 @@ describe('playback renderer (WASM)', () => {
   it('releases every handle through destroy()', () => {
     const handles = [
       new PlaybackRenderer({ config: SPEAKERS_5_1, sampleRate: SR }),
-      new PlaybackLoudnessMeter(6, SR),
+      new PlaybackLoudnessMeter({ numChannels: 6, sampleRate: SR }),
       HrtfSet.fromBytes(hrtfBytes()),
     ];
     for (const handle of handles) {
@@ -555,5 +555,38 @@ describe('playback renderer (WASM)', () => {
       expect('delete' in handle).toBe(false);
       handle.destroy();
     }
+  });
+});
+
+describe('playback constructors take one options object', () => {
+  it('refuse an undeclared key by name', () => {
+    expect(
+      () => new PlaybackLoudnessMeter({ numChannels: 2, sampleRate: 48000, bogus: 1 } as never),
+    ).toThrow(new TypeError("PlaybackLoudnessMeter: unknown request key 'bogus'"));
+    expect(() => new PlaybackRenderer({ config: {}, bogus: 1 } as never)).toThrow(
+      new TypeError("PlaybackRenderer: unknown request key 'bogus'"),
+    );
+  });
+
+  it('refuse an undeclared key inside an object config, and leave a JSON string to the parser', () => {
+    expect(() => new PlaybackRenderer({ config: { bogus: 1 } as never })).toThrow(
+      new TypeError("PlaybackRenderer: unknown option 'bogus' in 'config'"),
+    );
+    let renderer: PlaybackRenderer | undefined;
+    try {
+      renderer = new PlaybackRenderer({ config: '{"bogus":1}' });
+    } catch (error) {
+      expect((error as Error).message).not.toMatch(/unknown (request key|option)/);
+    } finally {
+      renderer?.destroy();
+    }
+  });
+
+  it('refuse a positional call', () => {
+    const positional = PlaybackLoudnessMeter as unknown as new (
+      numChannels: number,
+      sampleRate: number,
+    ) => PlaybackLoudnessMeter;
+    expect(() => new positional(2, 48000)).toThrow(TypeError);
   });
 });

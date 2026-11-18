@@ -2,6 +2,7 @@ import { assertHandleLive } from './internal/handle_guard.js';
 import { getSonareModule } from './module_state.js';
 import type {
   PlaybackDiagnostics,
+  PlaybackLoudnessMeterOptions,
   PlaybackRendererConfig,
   PlaybackRendererOptions,
   RenderPlaybackRequest,
@@ -124,6 +125,7 @@ export class PlaybackRenderer {
   }
 
   constructor(options: PlaybackRendererOptions) {
+    requestObject('PlaybackRenderer', options, 'options', true);
     this.nativeHandle = getSonareModule().createPlaybackRenderer(
       configJsonText(options.config),
       nativeHrtf(options.hrtf),
@@ -257,8 +259,12 @@ export class PlaybackLoudnessMeter {
     return this.nativeHandle;
   }
 
-  constructor(numChannels: number, sampleRate: number) {
-    this.nativeHandle = getSonareModule().createPlaybackLoudnessMeter(numChannels, sampleRate);
+  constructor(options: PlaybackLoudnessMeterOptions) {
+    requestObject('PlaybackLoudnessMeter', options, 'options', true);
+    this.nativeHandle = getSonareModule().createPlaybackLoudnessMeter(
+      options.numChannels,
+      options.sampleRate,
+    );
   }
 
   /** Feeds interleaved frames of any length. */

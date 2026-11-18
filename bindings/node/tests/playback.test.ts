@@ -261,7 +261,7 @@ describe('PlaybackRenderer latency, config and diagnostics', () => {
 
 describe('PlaybackLoudnessMeter', () => {
   it('measures a finite integrated LUFS after feeding interleaved stereo audio', () => {
-    using meter = new PlaybackLoudnessMeter(2, 48000);
+    using meter = new PlaybackLoudnessMeter({ numChannels: 2, sampleRate: 48000 });
     const [l, r] = stereoBlock(48000);
     const interleaved = new Float32Array(l.length * 2);
     for (let i = 0; i < l.length; i++) {
@@ -282,23 +282,28 @@ describe('PlaybackLoudnessMeter', () => {
       view[i * 2] = l[i];
       view[i * 2 + 1] = r[i];
     }
-    using fromView = new PlaybackLoudnessMeter(2, 48000);
+    using fromView = new PlaybackLoudnessMeter({ numChannels: 2, sampleRate: 48000 });
     fromView.pushInterleaved(view);
-    using fromCopy = new PlaybackLoudnessMeter(2, 48000);
+    using fromCopy = new PlaybackLoudnessMeter({ numChannels: 2, sampleRate: 48000 });
     fromCopy.pushInterleaved(view.slice());
     expect(fromView.integratedLufs).toBeCloseTo(fromCopy.integratedLufs, 6);
   });
 
   it('refuses an interleaved array that is not a whole number of frames', () => {
-    using meter = new PlaybackLoudnessMeter(2, 48000);
+    using meter = new PlaybackLoudnessMeter({ numChannels: 2, sampleRate: 48000 });
     expect(() => meter.pushInterleaved(new Float32Array(3))).toThrow(RangeError);
   });
 
   it('rejects a non-number numChannels or sampleRate argument', () => {
-    expect(() => new PlaybackLoudnessMeter('two' as unknown as number, 48000)).toThrow();
-    expect(() => new PlaybackLoudnessMeter(2, 'fast' as unknown as number)).toThrow();
+    expect(
+      () =>
+        new PlaybackLoudnessMeter({ numChannels: 'two' as unknown as number, sampleRate: 48000 }),
+    ).toThrow();
+    expect(
+      () => new PlaybackLoudnessMeter({ numChannels: 2, sampleRate: 'fast' as unknown as number }),
+    ).toThrow();
     // The addon must still be usable after the rejected construction.
-    using meter = new PlaybackLoudnessMeter(2, 48000);
+    using meter = new PlaybackLoudnessMeter({ numChannels: 2, sampleRate: 48000 });
     expect(Number.isFinite(meter.integratedLufs)).toBe(true);
   });
 });
@@ -420,7 +425,7 @@ describe('PlaybackRenderer.renderOffline', () => {
 describe('playback scalar reads', () => {
   it('reads cheap scalar state as getters', () => {
     using renderer = new PlaybackRenderer({ config: {} });
-    using meter = new PlaybackLoudnessMeter(2, 48000);
+    using meter = new PlaybackLoudnessMeter({ numChannels: 2, sampleRate: 48000 });
     const getter = (target: object, name: string) =>
       Object.getOwnPropertyDescriptor(Object.getPrototypeOf(target), name)?.get;
     const reads = renderer as unknown as Record<string, unknown>;
@@ -435,5 +440,38 @@ describe('playback scalar reads', () => {
     }
     expect(typeof getter(meter, 'integratedLufs')).toBe('function');
     expect(typeof meter.integratedLufs).toBe('number');
+  });
+});
+
+describe('playback constructors take one options object', () => {
+  it('refuse an undeclared key by name', () => {
+    expect(
+      () => new PlaybackLoudnessMeter({ numChannels: 2, sampleRate: 48000, bogus: 1 } as never),
+    ).toThrow(new TypeError("PlaybackLoudnessMeter: unknown request key 'bogus'"));
+    expect(() => new PlaybackRenderer({ config: {}, bogus: 1 } as never)).toThrow(
+      new TypeError("PlaybackRenderer: unknown request key 'bogus'"),
+    );
+  });
+
+  it('refuse an undeclared key inside an object config, and leave a JSON string to the parser', () => {
+    expect(() => new PlaybackRenderer({ config: { bogus: 1 } as never })).toThrow(
+      new TypeError("PlaybackRenderer: unknown option 'bogus' in 'config'"),
+    );
+    let renderer: PlaybackRenderer | undefined;
+    try {
+      renderer = new PlaybackRenderer({ config: '{"bogus":1}' });
+    } catch (error) {
+      expect((error as Error).message).not.toMatch(/unknown (request key|option)/);
+    } finally {
+      renderer?.destroy();
+    }
+  });
+
+  it('refuse a positional call', () => {
+    const positional = PlaybackLoudnessMeter as unknown as new (
+      numChannels: number,
+      sampleRate: number,
+    ) => PlaybackLoudnessMeter;
+    expect(() => new positional(2, 48000)).toThrow(TypeError);
   });
 });

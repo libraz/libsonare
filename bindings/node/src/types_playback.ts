@@ -172,6 +172,14 @@ export interface PlaybackRendererOptions {
   maxBlockSize?: number;
 }
 
+/** Request shape for the {@link PlaybackLoudnessMeter} constructor. */
+export interface PlaybackLoudnessMeterOptions {
+  /** Interleaved channel count of the program: 1, 2, 6 or 8. */
+  numChannels: number;
+  /** Sample rate of the program, in Hz. */
+  sampleRate: number;
+}
+
 /** Request shape for the one-shot {@link renderPlayback} facade. */
 export interface RenderPlaybackRequest {
   samples: Float32Array;

@@ -971,6 +971,7 @@ export type {
   PlaybackLoudnessConfig,
   PlaybackNightModeConfig,
   PlaybackOutputLimiterConfig,
+  PlaybackLoudnessMeterOptions,
   PlaybackRendererConfig,
   PlaybackRendererOptions,
   PlaybackRoomConfig,

@@ -111,7 +111,7 @@ describe('Symbol.dispose / using', () => {
     },
     {
       name: 'PlaybackLoudnessMeter',
-      make: () => new PlaybackLoudnessMeter(2, SR),
+      make: () => new PlaybackLoudnessMeter({ numChannels: 2, sampleRate: SR }),
       call: (h: PlaybackLoudnessMeter) => h.integratedLufs,
     },
     {

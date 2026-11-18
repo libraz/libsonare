@@ -1,6 +1,7 @@
 import { addon } from './native.js';
 import type {
   PlaybackDiagnostics,
+  PlaybackLoudnessMeterOptions,
   PlaybackRendererConfig,
   PlaybackRendererOptions,
   RenderPlaybackRequest,
@@ -97,6 +98,7 @@ export class PlaybackRenderer {
   private disposed = false;
 
   constructor(options: PlaybackRendererOptions) {
+    requestObject('PlaybackRenderer', options, 'options', true);
     this.native = new addon.PlaybackRenderer(
       configJsonText(options.config),
       nativeHrtf(options.hrtf),
@@ -217,8 +219,9 @@ export class PlaybackLoudnessMeter {
   private native: NativePlaybackLoudnessMeter;
   private disposed = false;
 
-  constructor(numChannels: number, sampleRate: number) {
-    this.native = new addon.PlaybackLoudnessMeter(numChannels, sampleRate);
+  constructor(options: PlaybackLoudnessMeterOptions) {
+    requestObject('PlaybackLoudnessMeter', options, 'options', true);
+    this.native = new addon.PlaybackLoudnessMeter(options.numChannels, options.sampleRate);
   }
 
   /** Feeds interleaved frames of any length. */
