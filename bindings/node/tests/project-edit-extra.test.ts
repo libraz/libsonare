@@ -370,6 +370,18 @@ describe('Project edit ops (new bindings)', () => {
     project.destroy();
   });
 
+  it('addLoopRecordingTakes refuses audioChannels beside planar audio', () => {
+    const project = new Project();
+    const track = project.addTrack({ kind: 'audio', name: 'record' });
+    const planar = [new Float32Array(100), new Float32Array(100)];
+    const desc = { trackId: track, loopLengthPpq: 1, audio: planar, audioSampleRate: 48000 };
+    const add = (partial: object) => () =>
+      project.addLoopRecordingTakes(partial as unknown as ProjectLoopRecordingDesc);
+    expectRefusal(add({ ...desc, audioChannels: 2 }), TypeError, /audioChannels/);
+    expect(add(desc)).not.toThrow(); // positive control
+    project.destroy();
+  });
+
   it('rejects planar clip channels of unequal length and interleaved loop audio that does not divide', () => {
     const project = new Project();
     const track = project.addTrack({ kind: 'audio', name: 'record' });

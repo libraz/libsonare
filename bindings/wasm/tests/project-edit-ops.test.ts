@@ -563,6 +563,28 @@ describe('Sonare WASM Project edit ops', () => {
     }
   });
 
+  it('addLoopRecordingTakes refuses audioChannels beside planar audio', () => {
+    const project = new Project();
+    try {
+      const trackId = project.addTrack({ kind: 'audio', name: 'record' });
+      const planar = [new Float32Array(100), new Float32Array(100)];
+      const desc = { trackId, loopLengthPpq: 1, audio: planar, audioSampleRate: 48000 };
+      let caught: unknown;
+      try {
+        project.addLoopRecordingTakes({
+          ...desc,
+          audioChannels: 2,
+        } as unknown as ProjectLoopRecordingDesc);
+      } catch (err) {
+        caught = err;
+      }
+      expect(expectArgumentRefusal(caught, TypeError).message).toMatch(/audioChannels/);
+      expect(() => project.addLoopRecordingTakes(desc)).not.toThrow(); // positive control
+    } finally {
+      project.destroy();
+    }
+  });
+
   it('rejects interleaved audio lengths that do not match audioChannels', () => {
     const project = new Project();
     try {

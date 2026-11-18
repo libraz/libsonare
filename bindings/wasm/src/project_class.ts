@@ -210,6 +210,11 @@ function interleaveLoopRecording(desc: ProjectLoopRecordingDesc): ProjectLoopRec
   if (!Array.isArray(audio)) {
     return desc;
   }
+  if ((desc as { audioChannels?: unknown }).audioChannels !== undefined) {
+    throw new TypeError(
+      'addLoopRecordingTakes: audioChannels must be omitted for planar audio; the channel count is the number of arrays',
+    );
+  }
   const channels = audio.length;
   const frames = channels > 0 ? audio[0].length : 0;
   if (audio.some((plane) => plane.length !== frames)) {
