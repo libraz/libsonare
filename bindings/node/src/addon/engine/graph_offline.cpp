@@ -95,7 +95,7 @@ Napi::Value RealtimeEngineWrap::SetGraph(const Napi::CallbackInfo& info) {
     Napi::Object obj = entry.As<Napi::Object>();
     SonareEngineGraphNode node{};
     if (!RequiredStringProperty(env, obj, "id", &text)) return env.Undefined();
-    CopyString(node.id, sizeof(node.id), text);
+    if (!CopyString(env, node.id, sizeof(node.id), text, "graph node id")) return env.Undefined();
     node.type = IntProperty(obj, "type", 0);
     node.gain_db = FloatProperty(obj, "gainDb", node.gain_db);
     node.num_ports = IntProperty(obj, "numPorts", kZeroIsSentinel);
@@ -116,12 +116,18 @@ Napi::Value RealtimeEngineWrap::SetGraph(const Napi::CallbackInfo& info) {
     Napi::Object obj = entry.As<Napi::Object>();
     SonareEngineGraphConnection connection{};
     if (!RequiredStringProperty(env, obj, "sourceNode", &text)) return env.Undefined();
-    CopyString(connection.source_node, sizeof(connection.source_node), text);
+    if (!CopyString(env, connection.source_node, sizeof(connection.source_node), text,
+                    "graph connection sourceNode")) {
+      return env.Undefined();
+    }
     if (!RequiredIntProperty(env, obj, "sourcePort", &connection.source_port)) {
       return env.Undefined();
     }
     if (!RequiredStringProperty(env, obj, "destNode", &text)) return env.Undefined();
-    CopyString(connection.dest_node, sizeof(connection.dest_node), text);
+    if (!CopyString(env, connection.dest_node, sizeof(connection.dest_node), text,
+                    "graph connection destNode")) {
+      return env.Undefined();
+    }
     if (!RequiredIntProperty(env, obj, "destPort", &connection.dest_port)) return env.Undefined();
     connection.mix = IntProperty(obj, "mix", 1);
     if (env.IsExceptionPending()) return env.Undefined();
@@ -149,7 +155,10 @@ Napi::Value RealtimeEngineWrap::SetGraph(const Napi::CallbackInfo& info) {
       SonareEngineGraphParameterBinding binding{};
       if (!RequiredUint32Property(env, obj, "paramId", &binding.param_id)) return env.Undefined();
       if (!RequiredStringProperty(env, obj, "nodeId", &text)) return env.Undefined();
-      CopyString(binding.node_id, sizeof(binding.node_id), text);
+      if (!CopyString(env, binding.node_id, sizeof(binding.node_id), text,
+                      "graph parameter binding nodeId")) {
+        return env.Undefined();
+      }
       parameter_bindings.push_back(binding);
     }
   }
@@ -162,9 +171,13 @@ Napi::Value RealtimeEngineWrap::SetGraph(const Napi::CallbackInfo& info) {
   spec.parameter_bindings = parameter_bindings.data();
   spec.parameter_binding_count = parameter_bindings.size();
   if (!RequiredStringProperty(env, spec_obj, "inputNode", &text)) return env.Undefined();
-  CopyString(spec.input_node, sizeof(spec.input_node), text);
+  if (!CopyString(env, spec.input_node, sizeof(spec.input_node), text, "graph spec inputNode")) {
+    return env.Undefined();
+  }
   if (!RequiredStringProperty(env, spec_obj, "outputNode", &text)) return env.Undefined();
-  CopyString(spec.output_node, sizeof(spec.output_node), text);
+  if (!CopyString(env, spec.output_node, sizeof(spec.output_node), text, "graph spec outputNode")) {
+    return env.Undefined();
+  }
   spec.num_channels = IntProperty(spec_obj, "numChannels", 2);
   if (env.IsExceptionPending()) return env.Undefined();
   ThrowIfError(env, sonare_engine_set_graph(engine_, &spec));

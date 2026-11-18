@@ -275,6 +275,16 @@ TEST_CASE("every engine mode but sample sounds from engine_mode alone", "[projec
   sonare_project_destroy(project);
 }
 
+TEST_CASE("every catalog preset name fits the patch preset field whole", "[project][synth_patch]") {
+  // A patch read back from a preset copies its name into the fixed field, so no name may be cut.
+  for (size_t i = 0; i < sonare::midi::synth::synth_preset_count(); ++i) {
+    const sonare::midi::synth::SynthPreset* preset = sonare::midi::synth::synth_preset_at(i);
+    REQUIRE(preset != nullptr);
+    INFO(preset->name);
+    CHECK(std::strlen(preset->name) < SONARE_SYNTH_PRESET_NAME_MAX);
+  }
+}
+
 TEST_CASE("every named synth patch renders as its catalog preset", "[project][synth_patch]") {
   // A patch naming a preset of the engine it selects must reach the voice as
   // that preset, whatever else the conversion seeds or overlays.

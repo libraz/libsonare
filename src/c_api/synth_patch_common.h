@@ -8,6 +8,7 @@
 #include <sonare/sonare_c_types.h>
 
 #include <algorithm>
+#include <cassert>
 #include <cmath>
 #include <cstring>
 #include <limits>
@@ -688,7 +689,10 @@ inline void synth_patch_to_c(const sonare::midi::synth::SynthPreset& preset,
   out->struct_version = SONARE_SYNTH_PATCH_STRUCT_VERSION;
   out->present_fields = kSynthPatchAllFields;
   out->present_fields2 = kSynthPatchAllFields2;
-  std::strncpy(out->preset, preset.name, SONARE_SYNTH_PRESET_NAME_MAX - 1);
+  // Catalog names are bounded by a test, so the copy never cuts one.
+  const size_t name_length = std::strlen(preset.name);
+  assert(name_length < SONARE_SYNTH_PRESET_NAME_MAX);
+  std::memcpy(out->preset, preset.name, name_length);
   out->engine_mode = static_cast<int>(p.mode) + 1;
   out->waveform = static_cast<int>(p.waveform) + 1;
   out->unison = p.unison;

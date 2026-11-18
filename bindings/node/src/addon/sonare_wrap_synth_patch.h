@@ -108,8 +108,8 @@ inline bool SynthFieldPresent(const Napi::Object& obj, const char* key) {
 // routing prefix is accepted — or an object of wrapper-section overrides) into the versioned C
 // struct. A key the caller actually supplied also sets its present_fields bit, so `stereoSpread: 0`
 // reaches the core as an explicit zero rather than the "keep base" sentinel a bare zero would be.
-// Returns false with a pending JS exception on an unknown enum name; unknown PRESET names are
-// validated downstream by the C ABI.
+// Returns false with a pending JS exception on an unknown enum name or an empty or over-long preset
+// name; unknown PRESET names are validated downstream by the C ABI.
 inline bool ReadSynthPatchFields(Napi::Env env, const Napi::Value& desc, SonareSynthPatch* patch) {
   *patch = SonareSynthPatch{};
   // Version 5 is a superset: the sample block at the tail is read only when the
@@ -119,13 +119,26 @@ inline bool ReadSynthPatchFields(Napi::Env env, const Napi::Value& desc, SonareS
   patch->struct_version = SONARE_SYNTH_PATCH_STRUCT_VERSION;
   if (desc.IsUndefined() || desc.IsNull()) return true;
 
-  auto set_preset = [patch](const std::string& name) {
+  // An empty name is never the init patch (omission is), and a name is refused rather than cut.
+  auto set_preset = [env, patch](const std::string& name) {
     const std::string bare = name.rfind("va:", 0) == 0 ? name.substr(3) : name;
-    std::strncpy(patch->preset, bare.c_str(), SONARE_SYNTH_PRESET_NAME_MAX - 1);
+    if (bare.empty()) {
+      Napi::RangeError::New(env, "synth patch preset must not be empty; omit it for the init patch")
+          .ThrowAsJavaScriptException();
+      return false;
+    }
+    if (bare.size() >= SONARE_SYNTH_PRESET_NAME_MAX) {
+      Napi::RangeError::New(env, "synth patch preset must be at most " +
+                                     std::to_string(SONARE_SYNTH_PRESET_NAME_MAX - 1) + " bytes")
+          .ThrowAsJavaScriptException();
+      return false;
+    }
+    std::memcpy(patch->preset, bare.data(), bare.size());
+    return true;
   };
   if (desc.IsString()) {
-    set_preset(node_narrow_string(env, desc, "preset"));
-    return true;
+    const std::string name = node_narrow_string(env, desc, "preset");
+    return !env.IsExceptionPending() && set_preset(name);
   }
   if (!desc.IsObject()) {
     Napi::TypeError::New(env, "synth patch must be a preset-name string or an object")
@@ -141,7 +154,8 @@ inline bool ReadSynthPatchFields(Napi::Env env, const Napi::Value& desc, SonareS
       Napi::TypeError::New(env, "synth patch preset must be a string").ThrowAsJavaScriptException();
       return false;
     } else {
-      set_preset(node_narrow_string(env, preset, "preset"));
+      const std::string name = node_narrow_string(env, preset, "preset");
+      if (env.IsExceptionPending() || !set_preset(name)) return false;
     }
   }
   if (!SynthEnumProperty(env, obj, "engineMode", kSynthEngineModes, SONARE_SYNTH_ENGINE_MODE_COUNT,
@@ -310,7 +324,8 @@ inline Napi::Object SynthPatchToObject(Napi::Env env, const SonareSynthPatch& pa
     return SynthEnumName(env, value, names, count);
   };
   Napi::Object out = Napi::Object::New(env);
-  out.Set("preset", Napi::String::New(env, patch.preset));
+  // The init patch has no preset, so the key is absent rather than "".
+  if (patch.preset[0] != '\0') out.Set("preset", Napi::String::New(env, patch.preset));
   out.Set("engineMode",
           enum_name(patch.engine_mode, kSynthEngineModes, SONARE_SYNTH_ENGINE_MODE_COUNT));
   out.Set("waveform", enum_name(patch.waveform, kSynthWaveforms, SONARE_SYNTH_OSC_WAVEFORM_COUNT));

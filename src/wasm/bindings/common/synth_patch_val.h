@@ -148,9 +148,18 @@ inline void requiredEnumProperty(emscripten::val object, const char* key, const 
   enumProperty(object, key, names, count, what, out);
 }
 
+// An empty name is never the init patch (omission is), and a name is refused rather than cut.
 inline void setPresetName(SonareSynthPatch* patch, const std::string& name) {
   const std::string bare = name.rfind("va:", 0) == 0 ? name.substr(3) : name;
-  std::strncpy(patch->preset, wasmCString(bare, "preset"), SONARE_SYNTH_PRESET_NAME_MAX - 1);
+  if (bare.empty()) {
+    throw WasmRangeError("synth patch preset must not be empty; omit it for the init patch");
+  }
+  if (bare.size() >= SONARE_SYNTH_PRESET_NAME_MAX) {
+    throw WasmRangeError("synth patch preset must be at most " +
+                         std::to_string(SONARE_SYNTH_PRESET_NAME_MAX - 1) + " bytes");
+  }
+  const char* text = wasmCString(bare, "preset");
+  std::memcpy(patch->preset, text, bare.size());
 }
 
 /// A parsed patch together with the memory its @c engine_params pointer
@@ -336,7 +345,8 @@ inline SynthPatchStorage synthPatchFromVal(emscripten::val desc) {
 inline emscripten::val synthPatchToVal(const SonareSynthPatch& patch) {
   using emscripten::val;
   val out = val::object();
-  out.set("preset", std::string(patch.preset));
+  // The init patch has no preset, so the key is absent rather than "".
+  if (patch.preset[0] != '\0') out.set("preset", std::string(patch.preset));
   out.set("engineMode",
           enumNameVal(patch.engine_mode, kEngineModes, SONARE_SYNTH_ENGINE_MODE_COUNT));
   out.set("waveform", enumNameVal(patch.waveform, kWaveforms, SONARE_SYNTH_OSC_WAVEFORM_COUNT));

@@ -763,7 +763,10 @@ Napi::Value RealtimeEngineWrap::SetMarkers(const Napi::CallbackInfo& info) {
     marker.key_fifths = sonare_node::Int8Property(obj, "keyFifths", 0);
     marker.key_minor = BoolProperty(obj, "keyMinor", marker.key_minor != 0) ? 1 : 0;
     if (!RequiredDoubleProperty(env, obj, "ppq", &marker.ppq)) return env.Undefined();
-    CopyString(marker.name, sizeof(marker.name), StringProperty(obj, "name", ""));
+    if (!CopyString(env, marker.name, sizeof(marker.name), StringProperty(obj, "name", ""),
+                    "marker name")) {
+      return env.Undefined();
+    }
     if (env.IsExceptionPending()) return env.Undefined();
     markers.push_back(marker);
   }

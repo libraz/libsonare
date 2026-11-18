@@ -13,10 +13,19 @@ namespace sonare_node::engine {
 
 constexpr uint32_t kExpectedEngineAbiVersion = 3;
 
-inline void CopyString(char* dest, size_t capacity, const std::string& value) {
-  if (capacity == 0) return;
-  std::strncpy(dest, value.c_str(), capacity - 1);
-  dest[capacity - 1] = '\0';
+// Fills a fixed C field from a JS string; a value that does not fit is refused, never cut.
+inline bool CopyString(Napi::Env env, char* dest, size_t capacity, const std::string& value,
+                       const char* what) {
+  if (value.size() >= capacity) {
+    Napi::RangeError::New(env, std::string(what) + " must be at most " +
+                                   std::to_string(capacity - 1) + " bytes, got " +
+                                   std::to_string(value.size()))
+        .ThrowAsJavaScriptException();
+    return false;
+  }
+  std::memcpy(dest, value.data(), value.size());
+  dest[value.size()] = '\0';
+  return true;
 }
 
 inline Napi::Object ParameterToObject(Napi::Env env, const SonareParameterInfo& parameter) {
@@ -72,8 +81,12 @@ inline bool ReadParameter(const Napi::CallbackInfo& info, size_t index, SonarePa
   }
   out->id = node_narrow_uint32(id_val.Env(), id_val, "id");
   // Optional name/unit: absent reads as the empty string, a non-string is refused.
-  CopyString(out->name, sizeof(out->name), sonare_node::StringProperty(obj, "name", ""));
-  CopyString(out->unit, sizeof(out->unit), sonare_node::StringProperty(obj, "unit", ""));
+  if (!CopyString(env, out->name, sizeof(out->name), sonare_node::StringProperty(obj, "name", ""),
+                  "parameter name") ||
+      !CopyString(env, out->unit, sizeof(out->unit), sonare_node::StringProperty(obj, "unit", ""),
+                  "parameter unit")) {
+    return false;
+  }
   // Numeric/bool fields go through the presence-checked *Property helpers so a
   // missing field falls back cleanly instead of coercing `undefined`.
   out->min_value = sonare_node::FloatProperty(obj, "minValue", 0.0f);
