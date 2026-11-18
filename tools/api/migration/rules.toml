@@ -154,7 +154,7 @@ sonare fade song.wav --fade-in-sec 0.5 -o out.wav
 [[rule]]
 slug = "loudness-names"
 title = "Loudness quantities use one name per measurement"
-summary = "Loudness range is `loudnessRangeLu`, true peak is `truePeakDbtp` and integrated, momentary and short-term loudness end in `Lufs`, in every result record. Configured ceilings stay `*Db`."
+summary = "Loudness range is `loudnessRangeLu`, true peak is `truePeakDbtp` and integrated, momentary and short-term loudness end in `Lufs`, in every result record. A ceiling the library applies to a true-peak measurement is `*Dbtp`, a ceiling applied to the sample peak is `*Db`, and a linear clip level carries no unit."
 [[rule.example]]
 surface = "wasm"
 before = '''
@@ -332,15 +332,25 @@ chroma = result.chroma
 
 [[rule]]
 slug = "snake-case-only"
-title = "Python keys and attributes are snake_case only"
-summary = "camelCase keys, alias properties and camelCase override keys are no longer accepted in Python. Keys inside JSON documents follow the document's own spelling."
+title = "Python keyword arguments and attributes are snake_case only"
+summary = "Python keyword arguments, record attributes and their alias properties are snake_case only; the camelCase spellings are no longer accepted. Keys of a document the core parses or writes (the mastering chain config and its overrides, a platform dict, a profile or analysis result read with `json.loads`) keep the core's camelCase spelling, the same keys every surface uses, and the TypedDicts that describe them spell their keys the same way."
+[[rule.example]]
+surface = "python"
+before = '''
+caps = capabilities()
+caps.features.mixingAssistant
+'''
+after = '''
+caps = capabilities()
+caps.features.mixing_assistant
+'''
 [[rule.example]]
 surface = "python"
 before = '''
 master_audio(samples, 44100, overrides={"truePeakLimiter": {"ceilingDb": -1.0}})
 '''
 after = '''
-master_audio(samples, 44100, overrides={"true_peak_limiter": {"ceiling_db": -1.0}})
+master_audio(samples, 44100, overrides={"maximizer": {"truePeakLimiter": {"ceilingDbtp": -1.0}}})
 '''
 
 [[rule]]

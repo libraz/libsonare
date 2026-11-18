@@ -103,6 +103,8 @@ class CheckerCase(unittest.TestCase):
             str(ROOT),
             "--catalog-file",
             str(TD / "catalog.json"),
+            "--document-types-file",
+            str(TD / "document_types.toml"),
             *extra,
         ]
         code, lines, self.report = check_surface.run(check_surface.parse_args(argv))
@@ -1094,6 +1096,140 @@ class CatalogUnitSuffix(CheckerCase):
         bad = sorted(x.strip().split(":")[0] for x in lines if "catalog unit" in x)
         want = sorted(f"catalog param p.x.{n}" for n, (_, flag) in params.items() if flag)
         self.assertEqual(bad, want)
+
+    def test_an_axis_component_passes_only_under_a_group_doc_stating_the_length_unit(self):
+        catalog = {
+            "chain": {"params": []},
+            "processors": [
+                {
+                    "id": "p.room",
+                    "params": [
+                        {"name": "sourceX", "unit": "m"},
+                        {"name": "z", "unit": "m"},
+                        {"name": "lengthM", "unit": "m"},
+                    ],
+                }
+            ],
+        }
+        path = self.dir / "catalog.json"
+        path.write_text(json.dumps(catalog), encoding="utf-8")
+
+        def flagged():
+            _, lines = self.run_check("--check", "catalog-unit-suffix", "--catalog-file", str(path))
+            return sorted(x.strip() for x in lines if x.strip().startswith("catalog param"))
+
+        undocumented = flagged()
+        self.assertEqual(len(undocumented), 2, undocumented)
+        for line in undocumented:
+            self.assertIn("an axis component in m", line)
+            self.assertIn("the group's doc does not state the length unit", line)
+        self.add(
+            _rec(
+                "node",
+                "field",
+                "MasteringProcessorParamMap.p.room",
+                owner="MasteringProcessorParamMap",
+                member="p.room",
+                doc_text="Source and listener positions in metres from the room's origin.",
+            )
+        )
+        self.assertEqual(flagged(), [])
+
+
+class DocumentKeys(CheckerCase):
+    """A Python TypedDict declared as a core document keeps the core's camelCase keys."""
+
+    def typed(self, name, *fields, bases=("TypedDict",)):
+        self.add(_rec("python", "type", name, py_kind="typed", bases=list(bases)))
+        for member, typ in fields:
+            self.add(
+                _rec("python", "field", f"{name}.{member}", owner=name, member=member, type=typ)
+            )
+
+    def run_docs(self, body):
+        docs = self.write("docs.toml", body)
+        _, lines = self.run_check(
+            "--surface", "python", "--check", "snake-case-only", "--document-types-file", str(docs)
+        )
+        flagged = sorted(
+            x.strip().split(":")[0] for x in lines if x.strip().endswith("camelCase name")
+        )
+        problems = [x.strip() for x in lines if x.startswith("  document_types.toml")]
+        return flagged, problems
+
+    ROW = '[[document]]\ntype = "{t}"\nevidence = "bindings/python/src/libsonare/_mastering_pair.py:1: json.loads"\n'
+
+    def setUp(self):
+        super().setUp()
+        self.typed("Profile", ("durationSec", "float"), ("loudness", "ProfileLoudness | None"))
+        self.typed("ProfileLoudness", ("truePeakDbtp", "float"))
+        self.typed("Plain", ("sample_rate", "int"))
+        self.typed("Record", ("hopLength", "int"), bases=())
+
+    def test_keys_of_a_declared_document_and_the_types_it_reaches_are_exempt(self):
+        flagged, problems = self.run_docs("")
+        self.assertEqual(
+            flagged,
+            [
+                "python field Profile.durationSec",
+                "python field ProfileLoudness.truePeakDbtp",
+                "python field Record.hopLength",
+            ],
+        )
+        self.assertEqual(problems, [])
+        flagged, problems = self.run_docs(self.ROW.format(t="Profile"))
+        self.assertEqual(flagged, ["python field Record.hopLength"])
+        self.assertEqual(problems, [])
+
+    def test_a_declaration_must_name_a_typeddict_with_a_camelcase_key(self):
+        for t, why in (
+            ("Record", "is not a Python TypedDict"),
+            ("Missing", "is not a Python TypedDict"),
+            ("Plain", "has no camelCase key"),
+        ):
+            with self.subTest(t=t):
+                self.setUp()
+                _, problems = self.run_docs(self.ROW.format(t=t))
+                self.assertEqual(len(problems), 1, problems)
+                self.assertIn(why, problems[0])
+
+    def test_a_declaration_needs_in_tree_evidence_and_is_listed_once(self):
+        _, problems = self.run_docs('[[document]]\ntype = "Profile"\n')
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn("evidence is required", problems[0])
+        self.setUp()
+        _, problems = self.run_docs(self.ROW.format(t="Profile") * 2)
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn("listed twice", problems[0])
+
+
+class MetadataOnlyDocs(CheckerCase):
+    """A doc built only from catalog metadata is counted apart from a doc that describes."""
+
+    def test_a_metadata_only_doc_does_not_satisfy_doc_comments(self):
+        meta = "Unit: dB.\nRange: -60 to 0.\nDefault: -1."
+        self.add(
+            _rec(
+                "node",
+                "field",
+                "Gen.described",
+                owner="Gen",
+                member="described",
+                doc_text="Output ceiling of the limiter.\n\n" + meta,
+            ),
+            _rec("node", "field", "Gen.metaOnly", owner="Gen", member="metaOnly", doc_text=meta),
+            _rec("node", "field", "Gen.bare", owner="Gen", member="bare", has_doc=False),
+        )
+        _, lines = self.run_check("--surface", "node", "--check", "doc-comments")
+        flagged = {
+            x.strip().split(":")[0]: x.strip()
+            for x in lines
+            if x.strip().startswith("node field Gen.")
+        }
+        self.assertEqual(sorted(flagged), ["node field Gen.bare", "node field Gen.metaOnly"])
+        self.assertIn("no doc comment", flagged["node field Gen.bare"])
+        self.assertIn("states only the catalog metadata", flagged["node field Gen.metaOnly"])
+        self.assertIn("    metadata-only doc: 1", lines)
 
 
 class CEnumFields(CheckerCase):

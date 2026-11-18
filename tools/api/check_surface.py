@@ -126,6 +126,7 @@ DEFAULT_MIRRORS = HERE / "librosa_mirrors.toml"
 DEFAULT_ALLOWLIST = HERE / "surface_allowlist.toml"
 DEFAULT_DIMENSIONLESS = HERE / "dimensionless_names.toml"
 DEFAULT_CATALOG = ROOT / "tools" / "capability-catalog.json"
+DEFAULT_DOCUMENT_TYPES = HERE / "document_types.toml"
 DIMENSIONLESS_CLASSES = ("ratio", "probability", "correlation", "normalized", "magnitude")
 DEFAULT_DOMAINS = HERE / "domains.json"
 
@@ -242,6 +243,67 @@ def load_dimensionless(path: Path, problems: list[str], records: list[dict]) -> 
             elif key not in flagged:
                 problems.append(f"{label}: {name} names nothing unit-in-name would flag")
             out.add(key)
+    return out
+
+
+_EVIDENCE_AT = re.compile(r"^([\w./-]+):(\d+): \S")
+
+
+def load_document_types(
+    path: Path, problems: list[str], records: list[dict], root: Path
+) -> set[str]:
+    """Python TypedDicts holding a core document's keys, closed over the TypedDicts their fields name."""
+    data = load_toml(path, problems, "document_types.toml")
+    if data is None:
+        return set()
+    for k in sorted(set(data) - {"document"}):
+        problems.append(f"document_types.toml: unknown top-level key {k!r}")
+    typed = {
+        r["name"]
+        for r in records
+        if r["surface"] == "python" and r["kind"] == "type" and "TypedDict" in r.get("bases", [])
+    }
+    fields = collections.defaultdict(list)
+    for r in records:
+        if r["surface"] == "python" and r["kind"] == "field" and r["owner"] in typed:
+            fields[r["owner"]].append(r)
+    out: set[str] = set()
+    seen: set[str] = set()
+    for i, d in enumerate(data.get("document", []), 1):
+        name = d.get("type")
+        label = f"document_types.toml document {i}"
+        if not isinstance(name, str) or not name:
+            problems.append(f"{label}: type is required")
+            continue
+        label += f" ({name})"
+        for k in sorted(set(d) - {"type", "evidence"}):
+            problems.append(f"{label}: unknown key {k!r}")
+        ev = d.get("evidence")
+        m = _EVIDENCE_AT.match(ev) if isinstance(ev, str) else None
+        if not m:
+            problems.append(
+                f"{label}: evidence is required, as path:line: what the core does with it"
+            )
+        elif not (root / m.group(1)).is_file():
+            problems.append(f"{label}: evidence names {m.group(1)}, which is not in the tree")
+        if name in seen:
+            problems.append(f"{label}: listed twice")
+            continue
+        seen.add(name)
+        if name not in typed:
+            problems.append(f"{label}: {name} is not a Python TypedDict")
+            continue
+        closure, todo = set(), [name]
+        while todo:
+            t = todo.pop()
+            if t in closure:
+                continue
+            closure.add(t)
+            for f in fields[t]:
+                todo += [w for w in re.findall(r"\w+", f.get("type", "")) if w in typed]
+        if not any(re.search(r"[a-z][A-Z]", f["member"]) for t in closure for f in fields[t]):
+            problems.append(f"{label}: has no camelCase key, so there is nothing to declare")
+        out |= closure
     return out
 
 
@@ -682,6 +744,7 @@ class Ctx:
     all_records: list[dict] = field(default_factory=list)
     dimensionless: set = field(default_factory=set)
     catalog: dict = field(default_factory=dict)
+    documents: set = field(default_factory=set)
 
     def __post_init__(self):
         idx = collections.defaultdict(list)
@@ -993,15 +1056,44 @@ def _name_unit(name: str) -> str | None:
     )
 
 
+# A position component (x / y / z, sourceX ...) is named for its axis; its length unit is stated
+# once by the group that owns the coordinates, so the name passes only where that doc says it.
+_AXIS = re.compile(r"[xyz]|.*[a-z0-9][XYZ]")
+_LENGTH_UNITS = {"m"}
+_LENGTH_DOC = re.compile(r"\bmet(?:re|er)s?\b|\bin m\b", re.IGNORECASE)
+
+
+def _group_doc(ctx, owner: str, group: dict) -> str:
+    name = f"MasteringProcessorParamMap.{owner}"
+    docs = [r.get("doc_text", "") for r in ctx.all_records if r["name"] == name]
+    return " ".join(docs + [group.get("description") or ""])
+
+
 def chk_catalog_unit_suffix(ctx):
     cands, bad = 0, []
     cat = ctx.catalog
-    groups = [("chain", cat.get("chain", {}).get("params", []))]
-    groups += [(p.get("id", "?"), p.get("params", [])) for p in cat.get("processors", [])]
-    for owner, params in groups:
-        for q in params:
+    groups = [("chain", cat.get("chain", {}))]
+    groups += [(p.get("id", "?"), p) for p in cat.get("processors", [])]
+    for owner, group in groups:
+        for q in group.get("params", []):
             name, unit = q["name"].rsplit(".", 1)[-1], q.get("unit")
             want, given = _CATALOG_UNIT_WORDS.get(unit), _name_unit(name)
+            if given is None and unit in _LENGTH_UNITS and _AXIS.fullmatch(name):
+                cands += 1
+                if not _LENGTH_DOC.search(_group_doc(ctx, owner, group)):
+                    r = {
+                        "surface": "catalog",
+                        "kind": "param",
+                        "name": f"{owner}.{q['name']}",
+                        "domain": "mastering",
+                    }
+                    bad.append(
+                        (
+                            r,
+                            f"an axis component in {unit}; the group's doc does not state the length unit",
+                        )
+                    )
+                continue
             if given is None and (want in (None, "samples") or snake(name).endswith("sample_rate")):
                 continue
             cands += 1
@@ -1401,7 +1493,12 @@ def chk_frozen_results(ctx):
 
 
 def chk_snake_case_only(ctx):
-    cands = recs(ctx, ("python",), ("function", "method", "option", "field"))
+    """A key of a declared document type keeps the camelCase spelling the core parses."""
+    cands = [
+        r
+        for r in recs(ctx, ("python",), ("function", "method", "option", "field"))
+        if not (r["kind"] == "field" and r["owner"] in ctx.documents)
+    ]
     bad = [(r, "camelCase name") for r in cands if re.search(r"[a-z][A-Z]", bare(r))]
     return len(cands), bad
 
@@ -1618,9 +1715,24 @@ def chk_frequency_centre(ctx):
     return len(cands), bad
 
 
+# A generated doc states catalog metadata one clause per line in this form; a doc made of
+# nothing else describes no parameter, so it does not satisfy doc-comments.
+_META_LINE = re.compile(r"^(Unit|Range|Default|Values|Scale): \S")
+_META_ONLY = "doc states only the catalog metadata; add a description"
+
+
+def _metadata_only(doc: str) -> bool:
+    lines = [x.strip() for x in doc.splitlines() if x.strip()]
+    return bool(lines) and all(_META_LINE.match(x) for x in lines)
+
+
 def chk_doc_comments(ctx):
     cands = recs(ctx, LANG, ("function", "method", "class", "type", "field", "export"))
-    bad = [(r, "no doc comment") for r in cands if not r.get("has_doc")]
+    bad = [
+        (r, "no doc comment") if not r.get("has_doc") else (r, _META_ONLY)
+        for r in cands
+        if not r.get("has_doc") or _metadata_only(r.get("doc_text", ""))
+    ]
     return len(cands), bad
 
 
@@ -1971,6 +2083,7 @@ def run(args) -> tuple[int, list[str], dict]:
     mirrors = load_mirrors(args.mirrors_file, problems)
     allow = load_allowlist(args.allowlist_file, problems, CHECK_IDS)
     dimensionless = load_dimensionless(args.dimensionless_file, problems, records)
+    documents = load_document_types(args.document_types_file, problems, records, root)
     entries = load_ledgers(args.ledger_dir, problems)
     problems += validate_ledger(entries, slugs, root)
     frozen = load_domains(args.domains_file, problems)
@@ -2088,6 +2201,7 @@ def run(args) -> tuple[int, list[str], dict]:
         inv.get("cli_only", {}),
         all_records=records,
         dimensionless=dimensionless,
+        documents=documents,
         catalog=json.loads(args.catalog_file.read_text(encoding="utf-8"))
         if args.catalog_file.is_file()
         else {},
@@ -2144,6 +2258,8 @@ def run(args) -> tuple[int, list[str], dict]:
         viol.sort(key=line_of)
         suffix = f", excused {excused}" if excused else ""
         out.append(f"  check {chk.id}: checked {n}, violations {len(viol)}{suffix}")
+        if chk.id == "doc-comments":
+            out.append(f"    metadata-only doc: {sum(v['message'] == _META_ONLY for v in viol)}")
         if n == 0 and narrowed:
             out.append(f"    not compared: {chk.id} (no candidates under this filter)")
         elif n == 0:
@@ -2241,6 +2357,7 @@ def parse_args(argv):
     ap.add_argument("--dimensionless-file", type=Path, default=DEFAULT_DIMENSIONLESS)
     ap.add_argument("--root", type=Path, default=ROOT)
     ap.add_argument("--catalog-file", type=Path, default=DEFAULT_CATALOG)
+    ap.add_argument("--document-types-file", type=Path, default=DEFAULT_DOCUMENT_TYPES)
     return ap.parse_args(argv)
 
 
