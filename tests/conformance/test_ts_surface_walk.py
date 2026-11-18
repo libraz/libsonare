@@ -118,6 +118,66 @@ class MappedTypes(unittest.TestCase):
         self.assertEqual(walk.union_literals(SURFACE, "string"), [])
 
 
+WRAPPED = """
+export interface Inner { value: number; mode: string }
+export interface Other { mode: string; tail: number }
+export type Stage = ({ stage: 'a' } & Omit<Inner, 'mode'>) | ({ stage: 'b' } & Other);
+export type ByMode = { [M in 'x' | 'y']: { slot: string; mode: M } }['x' | 'y'];
+export interface Root {
+  required: Required<Inner>;
+  stages: Stage[];
+  narrowed: Omit<Inner, 'mode'> | Other;
+  indexed: Other['mode'] | Holder['other'];
+  mapped: ByMode[];
+}
+export interface Holder { other: { picked: number } }
+"""
+
+
+def _wrapped_root() -> str:
+    return walk.named_type_bodies(WRAPPED, "Root")[0]
+
+
+class TypeOperators(unittest.TestCase):
+    def test_an_identity_wrapper_resolves_to_its_argument(self):
+        bodies = walk.property_bodies(_wrapped_root(), "required", WRAPPED)
+        self.assertTrue(any(walk.declares_leaf(body, "value") for body in bodies))
+
+    def test_a_parenthesized_intersection_contributes_each_member(self):
+        bodies = walk.property_bodies(_wrapped_root(), "stages", WRAPPED)
+        self.assertTrue(any(walk.declares_leaf(body, "stage") for body in bodies))
+        self.assertTrue(any(walk.declares_leaf(body, "tail") for body in bodies))
+
+    def test_a_key_removing_operator_resolves_to_nothing_and_the_union_continues(self):
+        """`Omit` would hand back the keys it removes; the next alternative still counts."""
+        bodies = walk.property_bodies(_wrapped_root(), "narrowed", WRAPPED)
+        self.assertFalse(any(walk.declares_leaf(body, "value") for body in bodies))
+        self.assertTrue(any(walk.declares_leaf(body, "tail") for body in bodies))
+
+
+    def test_an_indexed_access_resolves_to_that_member_alone(self):
+        bodies = walk.property_bodies(_wrapped_root(), "indexed", WRAPPED)
+        self.assertTrue(any(walk.declares_leaf(body, "picked") for body in bodies))
+        self.assertFalse(any(walk.declares_leaf(body, "other") for body in bodies))
+
+    def test_a_mapped_type_resolves_to_its_value_type(self):
+        bodies = walk.property_bodies(_wrapped_root(), "mapped", WRAPPED)
+        self.assertTrue(any(walk.declares_leaf(body, "slot") for body in bodies))
+
+
+class LeafLevel(unittest.TestCase):
+    def test_a_leaf_of_a_nested_object_is_not_a_leaf_of_its_parent(self):
+        self.assertFalse(walk.declares_leaf(_root(), "nested"))
+        self.assertTrue(walk.declares_leaf(_root(), "either"))
+
+    def test_a_name_inside_a_comment_or_a_signature_is_not_a_leaf(self):
+        body = "{ /** e.g. hidden: 1 */ run(arg: number): void; // gone: 2\n kept: number }"
+        self.assertFalse(walk.declares_leaf(body, "hidden"))
+        self.assertFalse(walk.declares_leaf(body, "arg"))
+        self.assertFalse(walk.declares_leaf(body, "gone"))
+        self.assertTrue(walk.declares_leaf(body, "kept"))
+
+
 class BraceMatching(unittest.TestCase):
     def test_a_nested_block_does_not_end_its_parent(self):
         text = "interface A { a: { b: { c: number } }; d: number }"

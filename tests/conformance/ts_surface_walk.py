@@ -127,6 +127,66 @@ def record_body(whole: str, text: str, start: int) -> tuple[str | None, int]:
 
 _DEPTH = 6
 
+# Generic wrappers whose result carries exactly the keys of their first argument.
+_KEY_PRESERVING = frozenset({"Required", "Readonly", "Partial", "NonNullable", "Array"})
+
+
+def _closing_paren(text: str, start: int) -> int | None:
+    """Index of the `)` matching the `(` at `start`, or None when unbalanced."""
+    depth = 0
+    for index in range(start, len(text)):
+        if text[index] == "(":
+            depth += 1
+        elif text[index] == ")":
+            depth -= 1
+            if depth == 0:
+                return index
+    return None
+
+
+# `{ [K in Keys]: Value }`: every key holds the same value type.
+_MAPPED = re.compile(r"\{\s*(?:readonly\s+)?\[\s*\w+\s+in\b[^\]]*\]\s*\??\s*:")
+
+
+def _index_access(text: str, index: int) -> tuple[list[str] | None, int]:
+    """The literal keys of a `['a' | 'b']` access at `index`, and the index past it.
+
+    None when there is no access; an access by a non-literal key (`[number]`,
+    `[K]`) yields an empty key list, since which member it names is not decidable.
+    """
+    at = skip_trivia(text, index)
+    if not text.startswith("[", at) or text.startswith("[]", at):
+        return None, index
+    close = text.find("]", at)
+    if close == -1:
+        return None, index
+    inner = text[at + 1 : close]
+    keys = re.findall(r"""['"]([^'"]+)['"]""", inner)
+    if re.sub(r"""['"][^'"]*['"]|[|\s]""", "", inner):
+        keys = []
+    return keys, _array_suffix_end(text, close + 1)
+
+
+def _statement_end(text: str, index: int) -> int:
+    """Index of the `;` ending the declaration at `index`, skipping nested blocks."""
+    depth = 0
+    for at in range(index, len(text)):
+        char = text[at]
+        if char in "{([":
+            depth += 1
+        elif char in "})]":
+            depth -= 1
+        elif char == ";" and depth <= 0:
+            return at
+    return len(text)
+
+
+def _array_suffix_end(text: str, index: int) -> int:
+    """Index past any `[]` suffixes at `index`: an element type names the same body."""
+    while text.startswith("[]", index):
+        index += 2
+    return index
+
 
 def expression_bodies(
     whole: str, text: str, index: int, depth: int = _DEPTH
@@ -142,27 +202,54 @@ def expression_bodies(
         return bodies
     index = skip_trivia(text, index)
     while index < len(text):
-        if text[index] == "|":
+        if text[index] in "|&":
             index = skip_trivia(text, index + 1)
             continue
         if text[index] == "{":
             body = brace_body(text, index)
             if body is None:
                 break
-            bodies.append(body)
-            index = skip_trivia(text, index + len(body))
+            mapped = _MAPPED.match(body)
+            if mapped is not None:
+                bodies += expression_bodies(whole, body[mapped.end() : -1], 0, depth - 1)
+            else:
+                bodies.append(body)
+            index = skip_trivia(text, _index_access(text, index + len(body))[1])
+            continue
+        if text[index] == "(":
+            close = _closing_paren(text, index)
+            if close is None:
+                break
+            bodies += expression_bodies(whole, text[index + 1 : close], 0, depth)
+            index = skip_trivia(text, _array_suffix_end(text, close + 1))
             continue
         identifier = re.match(r"[A-Za-z_]\w*(\[\])?", text[index:])
         if identifier is None:
             break
         after = index + identifier.end()
         name = identifier.group(0).replace("[]", "")
+        generic = skip_trivia(text, after)
         if name == "Record":
             body, after = record_body(whole, text, after)
             if body is not None:
                 bodies.append(body)
+        elif generic < len(text) and text[generic] == "<":
+            args, after = _generic_args(text, generic)
+            # A wrapper that keeps every key stands for its argument. One that
+            # removes keys (Omit, Pick, Exclude) resolves to nothing: its
+            # argument would answer for a key the result no longer carries.
+            if name in _KEY_PRESERVING and args:
+                bodies += expression_bodies(whole, args[0], 0, depth - 1)
+            after = _array_suffix_end(text, after)
         else:
-            bodies += named_type_bodies(whole, name, depth - 1)
+            named = named_type_bodies(whole, name, depth - 1)
+            keys, after = _index_access(text, after)
+            if keys is None:
+                bodies += named
+            else:
+                for body in named:
+                    for key in keys:
+                        bodies += property_bodies(body, key, whole)
         index = skip_trivia(text, after)
     return bodies
 
@@ -192,8 +279,7 @@ def named_type_bodies(whole: str, name: str, depth: int = _DEPTH) -> list[str]:
                 for base in bases:
                     bodies += named_type_bodies(whole, base, depth - 1)
             continue
-        terminator = whole.find(";", match.end())
-        end = len(whole) if terminator == -1 else terminator
+        end = _statement_end(whole, match.end())
         bodies += expression_bodies(whole, whole[:end], match.end(), depth - 1)
     return bodies
 
@@ -207,10 +293,32 @@ def property_bodies(text: str, prop: str, whole: str) -> list[str]:
     return bodies
 
 
+def own_members(body: str) -> str:
+    """`body` with comments and every nested `{}` / `()` / `<>` interior blanked.
+
+    A leaf belongs to the block that declares it. Without this a key of a nested
+    object, a parameter of a method signature, or a word in a doc comment would
+    each answer for a member of the enclosing block.
+    """
+    text = re.sub(r"/\*.*?\*/|//[^\n]*", lambda m: " " * len(m.group(0)), body, flags=re.DOTALL)
+    out: list[str] = []
+    depth = 0
+    for index, char in enumerate(text):
+        opening = char in "{(<"
+        closing = char in "})>" and not (char == ">" and index and text[index - 1] == "=")
+        if closing:
+            depth -= 1
+        # The outer brace is depth 0 -> 1; everything at depth 1 is the block's own.
+        out.append(char if depth <= 1 or char == "\n" else " ")
+        if opening:
+            depth += 1
+    return "".join(out)
+
+
 def declares_leaf(body: str, leaf: str) -> bool:
     """Whether `body` declares `leaf` as a property of its own."""
     return (
-        re.search(r"(?<![A-Za-z0-9_])" + re.escape(leaf) + r"\s*\??\s*:", body)
+        re.search(r"(?<![A-Za-z0-9_])" + re.escape(leaf) + r"\s*\??\s*:", own_members(body))
         is not None
     )
 
@@ -218,7 +326,7 @@ def declares_leaf(body: str, leaf: str) -> bool:
 def declares_array_leaf(body: str, leaf: str) -> bool:
     """Whether `body` declares `leaf` with an array type (`T[]` or `Array<T>`)."""
     match = re.search(
-        r"(?<![A-Za-z0-9_])" + re.escape(leaf) + r"\s*\??\s*:([^;]*)", body
+        r"(?<![A-Za-z0-9_])" + re.escape(leaf) + r"\s*\??\s*:([^;]*)", own_members(body)
     )
     return match is not None and re.search(r"\[\]|\bArray\s*<", match.group(1)) is not None
 
