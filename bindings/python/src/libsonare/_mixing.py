@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ctypes
+import json
 import typing
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -52,6 +53,7 @@ from ._runtime import (
     _utf8_arg,
     _validate_samples,
 )
+from ._types_engine import MixSceneDocument
 from ._types_enums import _MIX_BUS_ROLES, MixBusRole
 from .types import GoniometerPoint
 
@@ -94,27 +96,32 @@ def mixing_scene_preset_names() -> list[str]:
     return _joined_names(lib.sonare_mixing_scene_preset_names(), "mixing scene preset names")
 
 
-def mixing_scene_preset_json(preset_name: str) -> str:
-    """Return the JSON scene template for a built-in mixer preset."""
+def mixing_scene_preset(name: str) -> MixSceneDocument:
+    """Return a built-in mixer scene preset as a scene document mapping.
+
+    Raises ``TypeError`` for a non-string ``name`` and ``SonareValueError`` for a
+    name :func:`mixing_scene_preset_names` does not list.
+    """
+    if not isinstance(name, str):
+        raise TypeError(f"mixing_scene_preset: name must be a string, got {type(name).__name__}")
+    names = mixing_scene_preset_names()
+    if name not in names:
+        raise SonareValueError(f"mixing_scene_preset: name must be one of {names}, got {name!r}")
     lib = _get_lib()
-    if not hasattr(lib, "sonare_mixing_scene_preset_json"):
-        raise _not_supported("libsonare was built without mixing support")
     json_ptr = ctypes.c_char_p()
-    rc = lib.sonare_mixing_scene_preset_json(
-        _utf8_arg(preset_name, "preset_name"), ctypes.byref(json_ptr)
-    )
-    _check(rc)
+    _check(lib.sonare_mixing_scene_preset_json(_utf8_arg(name, "name"), ctypes.byref(json_ptr)))
     try:
-        return ctypes.string_at(json_ptr).decode("utf-8") if json_ptr.value else ""
+        text = ctypes.string_at(json_ptr).decode("utf-8") if json_ptr.value else "{}"
     finally:
         if json_ptr.value:
             lib.sonare_free_string(json_ptr)
+    return typing.cast(MixSceneDocument, json.loads(text))
 
 
 class Mixer:
     """Scene-based persistent stereo mixer.
 
-    Built from a scene JSON string (see :func:`mixing_scene_preset_json`), it
+    Built from a scene JSON string (see :func:`mixing_scene_preset`), it
     routes per-strip stereo blocks through a compiled routing graph (sends,
     buses, inserts) into a stereo master.
 

@@ -7,6 +7,7 @@ cases hold that for representative entry points and for the source as a whole.
 
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
@@ -19,7 +20,7 @@ from libsonare import (
     master_audio,
     mastering_preset_params,
     mix_stereo,
-    mixing_scene_preset_json,
+    mixing_scene_preset,
     note_to_hz,
     realtime_voice_changer_preset_config,
     realtime_voice_changer_preset_json,
@@ -64,7 +65,6 @@ def test_no_encode_call_bypasses_the_shared_encoder() -> None:
     "call",
     [
         lambda: note_to_hz("A\x004"),
-        lambda: mixing_scene_preset_json("a\x00b"),
         lambda: Mixer.from_scene_json('{"version":1}\x00trailing', 48000),
         lambda: mastering_preset_params("pop\x00junk"),
         lambda: master_audio([0.1] * 4096, 44100, preset="pop\x00junk"),
@@ -75,7 +75,6 @@ def test_no_encode_call_bypasses_the_shared_encoder() -> None:
     ],
     ids=[
         "note_to_hz",
-        "mixing_scene_preset_json",
         "Mixer.from_scene_json",
         "mastering_preset_params",
         "master_audio",
@@ -93,7 +92,7 @@ def test_embedded_nul_is_refused(call) -> None:
 @needs_lib
 def test_embedded_nul_is_refused_on_mixer_methods() -> None:
     mixer = Mixer.from_scene_json(
-        mixing_scene_preset_json(__import__("libsonare").mixing_scene_preset_names()[0]),
+        json.dumps(mixing_scene_preset(__import__("libsonare").mixing_scene_preset_names()[0])),
         sample_rate=48000,
         max_block_size=256,
     )
@@ -124,7 +123,7 @@ def test_mix_stereo_sample_rate_range_is_enforced() -> None:
 
 @needs_lib
 def test_scene_sample_rate_range_is_enforced() -> None:
-    scene = mixing_scene_preset_json(__import__("libsonare").mixing_scene_preset_names()[0])
+    scene = json.dumps(mixing_scene_preset(__import__("libsonare").mixing_scene_preset_names()[0]))
     for bad in (7999, 384001):
         with pytest.raises(
             SonareValueError, match=r"sample_rate must be an integer within \[8000, 384000\]"
@@ -156,7 +155,7 @@ def test_mixer_surround_pan_names_the_refused_field(field: str, bad: object) -> 
     import libsonare
 
     mixer = Mixer.from_scene_json(
-        mixing_scene_preset_json(libsonare.mixing_scene_preset_names()[0]),
+        json.dumps(mixing_scene_preset(libsonare.mixing_scene_preset_names()[0])),
         sample_rate=48000,
         max_block_size=256,
     )

@@ -291,7 +291,7 @@ from ._mixing import (
     Mixer,
     MixerStereoResult,
     mix_stereo,
-    mixing_scene_preset_json,
+    mixing_scene_preset,
     mixing_scene_preset_names,
 )
 
@@ -444,7 +444,7 @@ __all__ = [
     "Mixer",
     "MixerStereoResult",
     "mix_stereo",
-    "mixing_scene_preset_json",
+    "mixing_scene_preset",
     "mixing_scene_preset_names",
     "chroma",
     "chirp",

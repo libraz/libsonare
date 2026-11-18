@@ -218,6 +218,13 @@ MixSceneStripInput = dict[str, Any]
 key or token raises ``SonareError`` (InvalidFormat) naming it.
 """
 
+MixSceneDocument = dict[str, Any]
+"""A whole mixer scene with camelCase keys (``strips``, ``buses``, ``vcaGroups`` and the rest).
+
+:func:`mixing_scene_preset` returns one; ``json.dumps`` gives the text :meth:`Mixer.from_scene_json`
+reads.
+"""
+
 MixSceneBusInput = dict[str, Any]
 """One mixer scene bus with camelCase keys, as :meth:`RealtimeEngine.set_bus_strip` takes it.
 

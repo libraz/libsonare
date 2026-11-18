@@ -8066,6 +8066,15 @@ test = "bindings/python/tests/test_mixing_assistant.py::test_a_track_profile_rep
 
 [[entry]]
 kind = "function"
+old = "mixing_scene_preset_json"
+to = "mixing_scene_preset"
+changed = "renamed to the C/JS name and returns the scene as a MixSceneDocument dict instead of JSON text (json.dumps it for Mixer.from_scene_json); the argument is name, a non-string raises TypeError and a name mixing_scene_preset_names does not list raises SonareValueError"
+domain = "mastering"
+rule = "typed-results"
+test = "bindings/python/tests/test_mixing.py::test_mixing_scene_preset_returns_a_scene_document_mapping"
+
+[[entry]]
+kind = "function"
 old = "suggest_mix_scene_json"
 removed = "read mixing_assistant_suggest(...).scene, the same scene document"
 domain = "mastering"

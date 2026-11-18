@@ -580,7 +580,7 @@ from .analyzer import (
     mix_stereo as mix_stereo,
 )
 from .analyzer import (
-    mixing_scene_preset_json as mixing_scene_preset_json,
+    mixing_scene_preset as mixing_scene_preset,
 )
 from .analyzer import (
     mixing_scene_preset_names as mixing_scene_preset_names,
@@ -1258,6 +1258,9 @@ from .types import (
 )
 from .types import (
     MixSceneBusInput as MixSceneBusInput,
+)
+from .types import (
+    MixSceneDocument as MixSceneDocument,
 )
 from .types import (
     MixSceneStripInput as MixSceneStripInput,

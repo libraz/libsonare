@@ -402,11 +402,11 @@ def test_types_stub_declares_no_comparable_callable() -> None:
 
 def _first_preset_json() -> str:
     """Return the JSON scene of the first built-in mixing preset."""
-    from libsonare._mixing import mixing_scene_preset_json, mixing_scene_preset_names
+    from libsonare._mixing import mixing_scene_preset, mixing_scene_preset_names
 
     names = mixing_scene_preset_names()
     assert names, "expected at least one built-in mixing preset"
-    return mixing_scene_preset_json(names[0])
+    return json.dumps(mixing_scene_preset(names[0]))
 
 
 @pytest.fixture()

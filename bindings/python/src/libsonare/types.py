@@ -377,6 +377,9 @@ from ._types_engine import (
     MixSceneBusInput as MixSceneBusInput,
 )
 from ._types_engine import (
+    MixSceneDocument as MixSceneDocument,
+)
+from ._types_engine import (
     MixSceneStripInput as MixSceneStripInput,
 )
 from ._types_engine import (

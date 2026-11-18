@@ -29,11 +29,11 @@ _AUTOMATION_CURVE_CORPUS = json.loads(
 
 def _first_preset_json() -> str:
     """Return the JSON scene of the first built-in mixing preset."""
-    from libsonare._mixing import mixing_scene_preset_json, mixing_scene_preset_names
+    from libsonare._mixing import mixing_scene_preset, mixing_scene_preset_names
 
     names = mixing_scene_preset_names()
     assert names, "expected at least one built-in mixing preset"
-    return mixing_scene_preset_json(names[0])
+    return json.dumps(mixing_scene_preset(names[0]))
 
 
 def _serial_tail_scene() -> str:
@@ -1083,3 +1083,21 @@ def test_process_stereo_input_count_rule(mixer) -> None:
         )
     with pytest.raises(SonareValueError, match=r"left_inputs\[0\]"):
         mixer.process_stereo(left_inputs=[[[0.0]]], right_inputs=[[0.0]])
+
+
+def test_mixing_scene_preset_returns_a_scene_document_mapping() -> None:
+    from libsonare import Mixer, mixing_scene_preset, mixing_scene_preset_names
+
+    for name in mixing_scene_preset_names():
+        scene = mixing_scene_preset(name)
+        assert isinstance(scene, dict)
+        assert isinstance(scene["strips"], list)
+        mixer = Mixer.from_scene_json(json.dumps(scene), sample_rate=48000)
+        try:
+            assert mixer.strip_count == len(scene["strips"])
+        finally:
+            mixer.close()
+    with pytest.raises(SonareValueError, match="must be one of"):
+        mixing_scene_preset("noSuchScene")
+    with pytest.raises(TypeError, match="name must be a string"):
+        mixing_scene_preset(0)  # type: ignore[arg-type]
