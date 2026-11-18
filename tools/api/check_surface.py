@@ -1489,6 +1489,27 @@ def chk_typed_results(ctx):
     return len(cands), bad
 
 
+def _top_level(text: str, sep: str) -> list[str]:
+    """Split @p text on @p sep outside brackets."""
+    parts, depth, start = [], 0, 0
+    for i, ch in enumerate(text):
+        depth += ch == "["
+        depth -= ch == "]"
+        if ch == sep and depth == 0:
+            parts.append(text[start:i].strip())
+            start = i + 1
+    return parts + [text[start:].strip()]
+
+
+def _bare_tuple(ret: str) -> bool:
+    """A fixed-arity tuple[A, B] as the returned type; tuple[X, ...] is a homogeneous sequence."""
+    for part in _top_level(ret, "|"):
+        if part.startswith("tuple[") and part.endswith("]"):
+            if _top_level(part[len("tuple[") : -1], ",")[-1] != "...":
+                return True
+    return False
+
+
 def chk_array_results(ctx):
     cands, bad = 0, []
     for r in recs(ctx, ("python",), ("function", "method")):
@@ -1498,7 +1519,7 @@ def chk_array_results(ctx):
         cands += 1
         if re.search(r"\blist\[(float|int)\]", ret):
             bad.append((r, "returns a list of numbers; return an ndarray"))
-        if re.search(r"(?<![\w.])tuple\[", ret) and not ctx.mirror(r):
+        if _bare_tuple(ret) and not ctx.mirror(r):
             bad.append((r, "returns a bare tuple; return a typed result"))
     return cands, bad
 

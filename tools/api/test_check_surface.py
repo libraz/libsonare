@@ -2093,10 +2093,15 @@ REFUSALS = (
     ),
     (
         "array-results",
-        [_fn("python", "beat_times", "list[float]"), _fn("python", "key_pair", "tuple[str, str]")],
+        [
+            _fn("python", "beat_times", "list[float]"),
+            _fn("python", "key_pair", "tuple[str, str]"),
+            _fn("python", "notes", "tuple[tuple[Note, ...], tuple[Transition, ...]] | None"),
+        ],
         [
             "python function beat_times: returns a list of numbers; return an ndarray",
             "python function key_pair: returns a bare tuple; return a typed result",
+            "python function notes: returns a bare tuple; return a typed result",
         ],
     ),
     (
@@ -2222,6 +2227,13 @@ PERMITS = (
         ],
     ),
     ("frequency-bounds:centre", [_field("node", "PitchOptions", "centRefHz")]),
+    (
+        "array-results",
+        [
+            _fn("python", "edit_dependencies", "tuple[Dependency, ...]"),
+            _fn("python", "enum_tables", "dict[str, tuple[str, ...]]"),
+        ],
+    ),
 )
 
 
