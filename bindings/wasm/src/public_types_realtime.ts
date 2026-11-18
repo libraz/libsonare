@@ -38,42 +38,42 @@ export interface EqSpectrumSnapshot {
  * Equalizer band type (string union mirroring `sonare::mastering::eq::EqBandType`).
  */
 export type EqBandType =
-  | 'Peak'
-  | 'LowShelf'
-  | 'HighShelf'
-  | 'LowPass'
-  | 'HighPass'
-  | 'BandPass'
-  | 'Notch'
-  | 'TiltShelf'
-  | 'FlatTilt'
-  | 'AllPass';
+  | 'peak'
+  | 'lowShelf'
+  | 'highShelf'
+  | 'lowPass'
+  | 'highPass'
+  | 'bandPass'
+  | 'notch'
+  | 'tiltShelf'
+  | 'flatTilt'
+  | 'allPass';
 
 /** Biquad coefficient design mode. */
-export type EqCoeffMode = 'Rbj' | 'Vicanek';
+export type EqCoeffMode = 'rbj' | 'vicanek';
 
 /** Stereo placement for an EQ band. */
 export type EqStereoPlacement = 'stereo' | 'left' | 'right' | 'mid' | 'side';
 
 /** Per-band phase behaviour. */
-export type EqBandPhase = 'Inherit' | 'ZeroLatency' | 'NaturalPhase' | 'LinearPhase';
+export type EqBandPhase = 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
 
 /**
  * Equalizer band configuration accepted by {@link StreamingEqualizer.setBand}.
  *
  * All fields are optional; omitted values fall back to the C++ band defaults
- * (Peak, 1000 Hz, 0 dB gain, Butterworth Q, disabled).
+ * (`'peak'`, 1000 Hz, 0 dB gain, Butterworth Q, disabled).
  */
 export interface EqBand {
   type?: EqBandType;
   frequencyHz?: number;
   gainDb?: number;
   /**
-   * Resonance/slope. Ignored for a LowShelf/HighShelf band once `phase:
-   * 'NaturalPhase'` forces Vicanek coefficients (the Vicanek matched-Z shelf
+   * Resonance/slope. Ignored for a `'lowShelf'`/`'highShelf'` band once `phase:
+   * 'naturalPhase'` forces Vicanek coefficients (the Vicanek matched-Z shelf
    * design has no Q/S parameter) -- the value is still stored and read back
    * verbatim, so a reflected `q` on such a band does not describe the applied
-   * response. Set `coeffMode: 'Rbj'` for a Q-controllable shelf.
+   * response. Set `coeffMode: 'rbj'` for a Q-controllable shelf.
    */
   q?: number;
   enabled?: boolean;
@@ -86,8 +86,8 @@ export interface EqBand {
   slopeDbOct?: number;
   placement?: EqStereoPlacement;
   /**
-   * `'NaturalPhase'` forces `coeffMode: 'Vicanek'` for this band, which
-   * ignores `q` for LowShelf/HighShelf (see `q`'s doc).
+   * `'naturalPhase'` forces `coeffMode: 'vicanek'` for this band, which
+   * ignores `q` for `'lowShelf'`/`'highShelf'` (see `q`'s doc).
    */
   phase?: EqBandPhase;
   soloed?: boolean;

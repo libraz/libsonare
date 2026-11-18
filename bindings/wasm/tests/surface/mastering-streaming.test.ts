@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs';
 import { beforeAll, describe, expect, expectTypeOf, it } from 'vitest';
 import {
   type EqPhaseMode,
@@ -334,7 +333,7 @@ describe('StereoBlock', () => {
 });
 
 describe('StreamingEqualizer.setPhaseMode', () => {
-  const peak = { type: 'Peak', frequencyHz: 1000, gainDb: 3, q: 1, enabled: true } as const;
+  const peak = { type: 'peak', frequencyHz: 1000, gainDb: 3, q: 1, enabled: true } as const;
 
   it('takes the three tokens and linear phase adds latency', () => {
     const eq = new StreamingEqualizer({ sampleRate, maxBlockSize: 512 });
@@ -380,20 +379,10 @@ describe('native still uses the old spelling', () => {
     const raw = getSonareModule().createEqualizer({ sampleRate, maxBlockSize: 512 });
     try {
       raw.setPhaseMode(3);
-      raw.setBand(0, { type: 'Peak', frequencyHz: 1000, gainDb: 3, q: 1, enabled: true });
+      raw.setBand(0, { type: 'peak', frequencyHz: 1000, gainDb: 3, q: 1, enabled: true });
       expect(raw.latencySamples()).toBeGreaterThan(0);
     } finally {
       raw.delete();
-    }
-  });
-
-  it('placement names are still capitalised in the native source', () => {
-    const source = readFileSync(
-      new URL('../../../../src/wasm/bindings/mastering/streaming_equalizer.cpp', import.meta.url),
-      'utf8',
-    );
-    for (const name of ['"Stereo"']) {
-      expect(source).toContain(name);
     }
   });
 

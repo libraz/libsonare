@@ -72,7 +72,7 @@ export function rms(samples) {
  */
 export function configureDynamicEq(eq) {
   eq.setBand(0, {
-    type: 'Peak',
+    type: 'peak',
     frequencyHz: 1000,
     gainDb: 0,
     q: 2,

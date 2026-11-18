@@ -123,7 +123,7 @@ describe('Sonare WASM Module', () => {
       const eq = new StreamingEqualizer({ sampleRate: 48000, maxBlockSize: 512 });
       try {
         eq.setBand(0, {
-          type: 'HighShelf',
+          type: 'highShelf',
           frequencyHz: 8000,
           gainDb: 6,
           enabled: true,
@@ -165,7 +165,7 @@ describe('Sonare WASM Module', () => {
       const eq = new StreamingEqualizer({ sampleRate: 48000, maxBlockSize: 512 });
       try {
         eq.setBand(0, {
-          type: 'Peak',
+          type: 'peak',
           frequencyHz: 1000,
           gainDb: 6,
           enabled: true,
@@ -210,7 +210,7 @@ describe('Sonare WASM Module', () => {
       const eq = new StreamingEqualizer({ sampleRate: 48000, maxBlockSize: 512 });
       try {
         eq.setBand(0, {
-          type: 'Peak',
+          type: 'peak',
           frequencyHz: 1000,
           gainDb: 6,
           q: 1.5,
@@ -232,7 +232,7 @@ describe('Sonare WASM Module', () => {
       const eq = new StreamingEqualizer({ sampleRate: 48000, maxBlockSize: 512 });
       try {
         eq.setBand(0, {
-          type: 'Peak',
+          type: 'peak',
           frequencyHz: 1000,
           gainDb: 9,
           q: 1.5,
@@ -251,7 +251,7 @@ describe('Sonare WASM Module', () => {
     it('should read an all-pass band as flat', () => {
       const eq = new StreamingEqualizer({ sampleRate: 48000, maxBlockSize: 512 });
       try {
-        eq.setBand(0, { type: 'AllPass', frequencyHz: 1000, q: 0.7, enabled: true });
+        eq.setBand(0, { type: 'allPass', frequencyHz: 1000, q: 0.7, enabled: true });
         const db = eq.magnitudeResponse(new Float32Array([100, 1000, 10000]));
         for (const value of db) {
           expect(Math.abs(value)).toBeLessThan(0.05);
@@ -267,7 +267,7 @@ describe('Sonare WASM Module', () => {
       try {
         linearEq.setPhaseMode('linear');
         linearEq.setBand(0, {
-          type: 'Peak',
+          type: 'peak',
           frequencyHz: 1000,
           gainDb: 3,
           q: 1,
@@ -277,7 +277,7 @@ describe('Sonare WASM Module', () => {
 
         expect(() => aliasEq.setPhaseMode('zero')).not.toThrow();
         aliasEq.setBand(0, {
-          type: 'HighShelf',
+          type: 'highShelf',
           frequencyHz: 8000,
           gainDb: 2,
           enabled: true,
