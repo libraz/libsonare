@@ -258,7 +258,8 @@ def _clips_to_c(
         raw.num_samples = num_samples
         raw.start_ppq = _narrow_double(clip.start_ppq, "clip.start_ppq")
         raw.clip_offset_samples = clip.clip_offset_samples
-        raw.length_samples = clip.length_samples if clip.length_samples is not None else num_samples
+        # An omitted length is 0, which C resolves to the source remaining after the offset.
+        raw.length_samples = clip.length_samples if clip.length_samples is not None else 0
         raw.loop = 1 if clip.loop else 0
         raw.gain = _narrow_double(clip.gain, "clip.gain")
         raw.fade_in_samples = clip.fade_in_samples

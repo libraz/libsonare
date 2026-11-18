@@ -10,6 +10,7 @@ import pytest
 
 from libsonare import (
     ClipPageProvider,
+    EngineBounceOptions,
     EngineClip,
     FileClipPageProvider,
     RealtimeEngine,
@@ -408,3 +409,43 @@ def test_engine_set_warp_voice_capacity_rejects_out_of_range_values(bad_voices: 
         with pytest.raises(ValueError):
             engine.set_warp_voice_capacity(bad_voices)  # type: ignore[arg-type]
         assert engine.warp_voice_capacity() == 12
+
+
+_OPEN_SOURCE_FRAMES = 128
+_OPEN_OFFSET = 48
+
+
+def _bounce_offset_clip(length_samples: int | None) -> list[float]:
+    """Render a faded clip read from an offset, returning the left channel."""
+    source = [0.5] * _OPEN_SOURCE_FRAMES
+    clip = EngineClip(
+        id=1,
+        channels=[source, list(source)],
+        start_ppq=0.0,
+        clip_offset_samples=_OPEN_OFFSET,
+        fade_out_samples=_OPEN_SOURCE_FRAMES - _OPEN_OFFSET,
+        length_samples=length_samples,
+    )
+    with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+        engine.set_clips([clip])
+        engine.play()
+        result = engine.bounce_offline(
+            EngineBounceOptions(
+                total_frames=_OPEN_SOURCE_FRAMES,
+                block_size=128,
+                num_channels=2,
+                source_sample_rate=48000,
+                target_sample_rate=48000,
+            )
+        )
+    return [float(v) for v in result.interleaved[0::2]]
+
+
+def test_an_omitted_clip_length_plays_the_source_remaining_after_the_offset() -> None:
+    """A clip with no length matches the same clip with source minus offset spelled out."""
+    explicit = _bounce_offset_clip(_OPEN_SOURCE_FRAMES - _OPEN_OFFSET)
+    omitted = _bounce_offset_clip(None)
+    # The explicit render fades: its first frame is louder than its last audible one.
+    assert explicit[0] > explicit[_OPEN_SOURCE_FRAMES - _OPEN_OFFSET - 2] + 0.1
+    assert len(omitted) == len(explicit)
+    assert omitted == pytest.approx(explicit, abs=1e-6)
