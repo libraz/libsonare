@@ -1407,18 +1407,6 @@ RULES: list[Rule] = [
         population=lambda r: r["kind"] == "payload-channels",
         violation=_payload_channel_violation,
         derive=_payload_channel_records,
-        pending={
-            **{
-                f"{s}:Mixer.{m}({side}Channels)": "send the declarations and what they count"
-                for s in ("node", "wasm")
-                for m in ("processStereo",)
-                for side in ("left", "right")
-            },
-            **{
-                f"wasm:Mixer.processStereoInto({side}Channels)": "send the declarations and what they count"
-                for side in ("left", "right")
-            },
-        },
     ),
     Rule(
         name="type-names",

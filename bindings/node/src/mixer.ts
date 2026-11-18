@@ -361,16 +361,16 @@ export class Mixer {
   /**
    * Mix one block of per-strip stereo audio into the stereo master.
    *
-   * @param leftChannels - `leftChannels[i]` is the left channel of strip `i`
-   * @param rightChannels - `rightChannels[i]` is the right channel of strip `i`.
+   * @param leftInputs - `leftInputs[i]` is the left channel of strip `i`
+   * @param rightInputs - `rightInputs[i]` is the right channel of strip `i`.
    *   Fewer inputs than strips leave the remaining strips silent.
    * @throws RangeError when more inputs are given than the mixer has strips
    */
-  processStereo(leftChannels: Float32Array[], rightChannels: Float32Array[]): MixerProcessResult {
-    if (leftChannels.length !== rightChannels.length) {
-      throw new RangeError('leftChannels and rightChannels must have the same length.');
+  processStereo(leftInputs: Float32Array[], rightInputs: Float32Array[]): MixerProcessResult {
+    if (leftInputs.length !== rightInputs.length) {
+      throw new RangeError('leftInputs and rightInputs must have the same length.');
     }
-    return this.native.processStereo(leftChannels, rightChannels);
+    return this.native.processStereo(leftInputs, rightInputs);
   }
 
   /**

@@ -357,17 +357,17 @@ export class Mixer {
   /**
    * Mix one block of per-strip stereo audio into the stereo master.
    *
-   * @param leftChannels - `leftChannels[i]` is the left channel of strip `i`
-   * @param rightChannels - `rightChannels[i]` is the right channel of strip `i`.
+   * @param leftInputs - `leftInputs[i]` is the left channel of strip `i`
+   * @param rightInputs - `rightInputs[i]` is the right channel of strip `i`.
    *   Fewer inputs than strips leave the remaining strips silent.
    * @throws RangeError when more inputs are given than the mixer has strips
    * @returns Mixed stereo master (`left`, `right`, `sampleRate`)
    */
-  processStereo(leftChannels: Float32Array[], rightChannels: Float32Array[]): MixerProcessResult {
-    if (leftChannels.length !== rightChannels.length) {
-      throw new RangeError('leftChannels and rightChannels must have the same length.');
+  processStereo(leftInputs: Float32Array[], rightInputs: Float32Array[]): MixerProcessResult {
+    if (leftInputs.length !== rightInputs.length) {
+      throw new RangeError('leftInputs and rightInputs must have the same length.');
     }
-    return this.mixer.processStereo(leftChannels, rightChannels);
+    return this.mixer.processStereo(leftInputs, rightInputs);
   }
 
   /**
@@ -379,18 +379,18 @@ export class Mixer {
    * remaining strips silent and more than the strip count throw a `RangeError`.
    */
   processStereoInto(
-    leftChannels: Float32Array[],
-    rightChannels: Float32Array[],
+    leftInputs: Float32Array[],
+    rightInputs: Float32Array[],
     outLeft: Float32Array,
     outRight: Float32Array,
   ): void {
-    if (leftChannels.length !== rightChannels.length) {
-      throw new RangeError('leftChannels and rightChannels must have the same length.');
+    if (leftInputs.length !== rightInputs.length) {
+      throw new RangeError('leftInputs and rightInputs must have the same length.');
     }
     if (outLeft.length !== outRight.length) {
       throw new RangeError('outLeft and outRight must have the same length.');
     }
-    this.mixer.processStereoInto(leftChannels, rightChannels, outLeft, outRight);
+    this.mixer.processStereoInto(leftInputs, rightInputs, outLeft, outRight);
   }
 
   /**
