@@ -371,7 +371,7 @@ describe('a number no target C type can hold is a RangeError on every width', ()
 describe('explicit undefined reads as an omitted option', () => {
   const noteOn = (note: number) => ({
     ppq: 0,
-    data0: (0x2 << 28) | (0x9 << 20) | (note << 8) | 100,
+    word0: (0x2 << 28) | (0x9 << 20) | (note << 8) | 100,
   });
 
   it('keeps the Project.midiRouteEvents thru default with an explicit undefined', () => {
@@ -395,15 +395,15 @@ describe('explicit undefined reads as an omitted option', () => {
     ).toEqual(midiRouteEvents({ events }));
   });
 
-  it('routes events whose optional data1 is explicitly undefined', () => {
+  it('routes events whose optional word1 is explicitly undefined', () => {
     const events = [noteOn(60), noteOn(64)];
     expect(
-      midiRouteEvents({ events: events.map((event) => ({ ...event, data1: undefined })) }),
+      midiRouteEvents({ events: events.map((event) => ({ ...event, word1: undefined })) }),
     ).toEqual(midiRouteEvents({ events }));
   });
 
   it('learns a CC binding with every option explicitly undefined', () => {
-    const cc = (value: number) => ({ ppq: 0, data0: (0x2 << 28) | (0xb << 20) | (7 << 8) | value });
+    const cc = (value: number) => ({ ppq: 0, word0: (0x2 << 28) | (0xb << 20) | (7 << 8) | value });
     const events = [cc(0), cc(64), cc(127)];
     expect(
       midiCcLearn({

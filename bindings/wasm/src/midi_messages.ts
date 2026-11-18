@@ -297,7 +297,7 @@ export function midi2Program(request: Midi2ProgramRequest): ProjectMidiEvent {
   const ppq = num(fn, r.ppq, 'ppq');
   assertEventPpq(fn, ppq);
   const bank = r.bank === undefined || r.bank === null ? undefined : bankPair(fn, r.bank);
-  const [data0, data1] = packMidi2Program(
+  const [word0, word1] = packMidi2Program(
     fn,
     num(fn, r.group, 'group'),
     num(fn, r.channel, 'channel'),
@@ -306,7 +306,7 @@ export function midi2Program(request: Midi2ProgramRequest): ProjectMidiEvent {
     bank?.msb ?? 0,
     bank?.lsb ?? 0,
   );
-  return { ppq, data0, data1 };
+  return { ppq, word0, word1 };
 }
 
 /** The shared reader of the four bank/index controller messages. */

@@ -805,7 +805,7 @@ const REQUIRED_FLOAT_ARGUMENTS: FloatArgument[] = [
     name: 'midiParamToCc unitValue',
     site: 'addon.cpp MidiParamToCc unitValue',
     control: [0, 1],
-    call: (v) => native.midiParamToCc([CC_BINDING], 88, v, 0, 0)?.data0,
+    call: (v) => native.midiParamToCc([CC_BINDING], 88, v, 0, 0)?.word0,
   },
   {
     name: 'cqt fmin',

@@ -48,7 +48,7 @@ export function midi2Event(
   const g = assertNibble(fnName, group, 'group');
   const ch = assertNibble(fnName, channel, 'channel');
   const word0 = umpWord0(0x4, g, opcode, ch, byte2, byte3);
-  return { ppq, data0: word0, data1: word1 >>> 0 };
+  return { ppq, word0, word1: word1 >>> 0 };
 }
 
 export function midi2U32(fnName: string, value: number, argName: string): number {

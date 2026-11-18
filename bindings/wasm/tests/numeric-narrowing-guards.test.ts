@@ -245,7 +245,7 @@ describe('MIDI byte fields refuse a value that would wrap into the byte domain',
     if (event === null) {
       throw new Error('the binding did not match the requested parameter');
     }
-    return event.data0 >>> 0;
+    return event.word0 >>> 0;
   };
 
   it('places two legal controller numbers in the emitted word', () => {
@@ -308,7 +308,7 @@ describe('a positional parameter id refuses what the positional path used to wra
   /** The controller number the requested id selected, or null for no match. */
   const selectedCc = (paramId: number): number | null => {
     const event = midiParamToCc({ bindings, paramId, unitValue: 0.5, group: 0, ppq: 0 });
-    return event === null ? null : (event.data0 >>> 8) & 0xff;
+    return event === null ? null : (event.word0 >>> 8) & 0xff;
   };
 
   it('selects a different controller for each of two legal ids', () => {

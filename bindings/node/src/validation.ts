@@ -450,7 +450,7 @@ export function midi1Event(
   // this hand-written copy is locked against those words by the golden vectors
   // in project.test.ts (mirrored in the WASM suite) so it cannot silently drift.
   const word = ((0x2 << 28) | (g << 24) | (status << 20) | (ch << 16) | (d1 << 8) | d2) >>> 0;
-  return { ppq, data0: word, data1: 0 };
+  return { ppq, word0: word, word1: 0 };
 }
 
 /** Bounds of the native `int` every addon argument below is narrowed into. */
@@ -546,35 +546,32 @@ export function assertInt64(fnName: string, value: number, argName: string): voi
 
 export function assertProjectMidiEvents(
   fnName: string,
-  events: ReadonlyArray<ProjectMidiEvent | readonly [number, number, number]>,
+  events: ReadonlyArray<ProjectMidiEvent>,
 ): void {
   if (!Array.isArray(events)) {
     throw new TypeError(`${fnName}: events must be an array`);
   }
-  events.forEach((event, index) => {
+  events.forEach((event: unknown, index) => {
     const prefix = `events[${index}]`;
-    if (Array.isArray(event)) {
-      if (event.length < 3) {
-        throw new TypeError(`${fnName}: ${prefix} must contain [ppq, data0, data1]`);
-      }
-      assertFiniteScalar(fnName, event[0], `${prefix}.ppq`);
-      if (event[0] < 0) {
-        throw new RangeError(`${fnName}: ${prefix}.ppq must be non-negative`);
-      }
-      assertU32(fnName, event[1], `${prefix}.data0`);
-      assertU32(fnName, event[2], `${prefix}.data1`);
-      return;
+    if (event === null || typeof event !== 'object' || Array.isArray(event)) {
+      throw new TypeError(`${fnName}: ${prefix} must be a { ppq, word0, word1? } object`);
     }
-    if (event === null || typeof event !== 'object') {
-      throw new TypeError(`${fnName}: ${prefix} must be a MIDI event object or tuple`);
+    const record = event as ProjectMidiEvent;
+    for (const key of ['ppq', 'word0'] as const) {
+      if (typeof record[key] !== 'number') {
+        throw new TypeError(`${fnName}: ${prefix}.${key} must be a number`);
+      }
     }
-    assertFiniteScalar(fnName, event.ppq, `${prefix}.ppq`);
-    if (event.ppq < 0) {
+    if (record.word1 !== undefined && typeof record.word1 !== 'number') {
+      throw new TypeError(`${fnName}: ${prefix}.word1 must be a number`);
+    }
+    assertFiniteScalar(fnName, record.ppq, `${prefix}.ppq`);
+    if (record.ppq < 0) {
       throw new RangeError(`${fnName}: ${prefix}.ppq must be non-negative`);
     }
-    assertU32(fnName, event.data0, `${prefix}.data0`);
-    if (event.data1 !== undefined) {
-      assertU32(fnName, event.data1, `${prefix}.data1`);
+    assertU32(fnName, record.word0, `${prefix}.word0`);
+    if (record.word1 !== undefined) {
+      assertU32(fnName, record.word1, `${prefix}.word1`);
     }
   });
 }

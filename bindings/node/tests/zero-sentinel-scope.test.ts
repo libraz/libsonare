@@ -70,11 +70,11 @@ const ZERO_FALLBACK_REASONS: ReadonlyMap<string, string> = new Map([
   ],
   ['engine/clips_capture.cpp:fadeOutSamples', 'Fade length, as fadeInSamples.'],
   [
-    'addon.cpp:data1',
+    'addon.cpp:word1',
     'The optional second word of a packed MIDI 1.0 event; 0 is the empty word an absent one reads as.',
   ],
   [
-    'project/midi_mir.cpp:data1',
+    'project/midi_mir.cpp:word1',
     'The optional second word of a packed MIDI 1.0 event; 0 is the empty word an absent one reads as.',
   ],
   [

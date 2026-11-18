@@ -1137,9 +1137,8 @@ export class Project {
 
   /**
    * Replace a MIDI clip's entire event list. Each event is
-   * `{ ppq, data0, data1? }` (or a `[ppq, data0, data1]` tuple); pass an empty
-   * array to clear. `data0`/`data1` are the first two UMP-1.0 words of a
-   * channel-voice message (stored opaquely).
+   * `{ ppq, word0, word1? }`; pass an empty array to clear. `word0`/`word1` are
+   * the first two UMP words of a channel-voice message (stored opaquely).
    *
    * Drops the clip's SysEx, which {@link importSmf} and {@link exportSmf} both
    * keep. The payloads sit beside the event list and are reached by a handle
@@ -1154,10 +1153,7 @@ export class Project {
    * including one whose note-off sits at or past `lengthPpq`, is closed with a
    * note-off at the clip end.
    */
-  setMidiEvents(
-    clipId: number,
-    events: ReadonlyArray<ProjectMidiEvent | readonly [number, number, number]>,
-  ): void {
+  setMidiEvents(clipId: number, events: ReadonlyArray<ProjectMidiEvent>): void {
     assertProjectMidiEvents('Project.setMidiEvents', events);
     this.native.setMidiEvents(clipId, events);
   }

@@ -696,10 +696,7 @@ export class Project {
    * including one whose note-off sits at or past `lengthPpq`, is closed with a
    * note-off at the clip end.
    */
-  setMidiEvents(
-    clipId: number,
-    events: ReadonlyArray<ProjectMidiEvent | readonly [number, number, number]>,
-  ): void {
+  setMidiEvents(clipId: number, events: ReadonlyArray<ProjectMidiEvent>): void {
     assertProjectMidiEvents('Project.setMidiEvents', events);
     this.native.setMidiEvents(clipId, events);
   }

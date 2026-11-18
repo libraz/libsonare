@@ -710,9 +710,9 @@ export interface ProjectMidiEvent {
   /** Event position in PPQ. */
   ppq: number;
   /** First UMP word of the message. */
-  data0: number;
+  word0: number;
   /** Second UMP word of the message. Default `0`. */
-  data1?: number;
+  word1?: number;
 }
 
 /** Options for {@link midiRouteEvents}. Omitted filter fields mean any/no remap; `null` reads as omitted. */

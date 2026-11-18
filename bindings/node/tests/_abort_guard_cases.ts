@@ -544,19 +544,11 @@ export const CASES: AbortGuardCase[] = [
     name: 'Project.setMidiEvents',
     missingRequired: [
       {
-        field: 'data0',
+        field: 'word0',
         call: () =>
           withProject((p) => {
             const { clipId } = p.addMidiClip(0, 4);
             p.setMidiEvents(clipId, [{ ppq: 0 }]);
-          }),
-      },
-      {
-        field: 'tuple[2]',
-        call: () =>
-          withProject((p) => {
-            const { clipId } = p.addMidiClip(0, 4);
-            p.setMidiEvents(clipId, [[0, 1]]);
           }),
       },
     ],

@@ -25,7 +25,7 @@ export function midi2Event(
   const ch = assertNibble(fnName, channel, 'channel');
   const word0 =
     ((0x4 << 28) | (g << 24) | (opcode << 20) | (ch << 16) | (byte2 << 8) | byte3) >>> 0;
-  return { ppq, data0: word0, data1: word1 >>> 0 };
+  return { ppq, word0, word1: word1 >>> 0 };
 }
 
 /** Integer in `[0, max]` worded like the shared live-push rule; a non-integer is a TypeError. */

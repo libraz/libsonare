@@ -129,7 +129,7 @@ interface DecodedEvent {
 
 /** Unpacks a UMP MIDI-1.0 channel-voice word (message type 0x2). */
 function decode(event: ProjectMidiEvent): DecodedEvent {
-  const word = event.data0 >>> 0;
+  const word = event.word0 >>> 0;
   return {
     ppq: event.ppq,
     status: (word >> 20) & 0xf,
@@ -221,10 +221,10 @@ describe('WASM transcribe', () => {
     // be a real one first.
     expect(baseline.events[baseline.events.length - 1].ppq).toBeGreaterThan(0);
 
-    // Only the time axis moved: data0 carries status, group, channel, note and
+    // Only the time axis moved: word0 carries status, group, channel, note and
     // velocity, so comparing it pins every part of the payload at once.
-    expect(doubled.events.map((event) => event.data0)).toEqual(
-      baseline.events.map((event) => event.data0),
+    expect(doubled.events.map((event) => event.word0)).toEqual(
+      baseline.events.map((event) => event.word0),
     );
     const notesAndVelocities = (result: typeof baseline) =>
       result.events.map(decode).map((event) => [event.note, event.velocity]);
@@ -275,7 +275,7 @@ describe('WASM transcribe', () => {
     // with the field left out can show that the separation works -- a value
     // check here would refuse omission and no rejection test would notice.
     const asKey = (result: typeof baseline) =>
-      JSON.stringify([result.noteCount, result.events.map((event) => [event.ppq, event.data0])]);
+      JSON.stringify([result.noteCount, result.events.map((event) => [event.ppq, event.word0])]);
     const expected = asKey(baseline);
 
     const guarded = [
@@ -525,7 +525,7 @@ describe('WASM transcribe', () => {
   it('reads minFramePeakRatio and minRidgePeakRatio, and takes 0 as a real 0', () => {
     const chordSamples = triad();
     const key = (result: typeof baseline) =>
-      JSON.stringify(result.events.map((event) => [event.ppq, event.data0]));
+      JSON.stringify(result.events.map((event) => [event.ppq, event.word0]));
     const run = (extra: TranscribeOptions) =>
       transcribe({
         samples: chordSamples,
@@ -548,7 +548,7 @@ describe('WASM transcribe', () => {
     // A sixteenth note at 120 bpm is 125 ms.
     for (const polyphonic of [false, true]) {
       const key = (result: ReturnType<typeof transcribe>) =>
-        JSON.stringify([result.noteCount, result.events.map((event) => [event.ppq, event.data0])]);
+        JSON.stringify([result.noteCount, result.events.map((event) => [event.ppq, event.word0])]);
       const byDivision = transcribe({
         samples,
         sampleRate,

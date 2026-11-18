@@ -1117,7 +1117,7 @@ describe('Sonare WASM Project', () => {
       project.bakeMidiFx({ clipId, config: {} });
 
       const payload = JSON.parse(project.toJson()) as {
-        midi_content: Record<string, Array<{ ppq: number; data0: number; data1: number }>>;
+        midi_content: Record<string, Array<{ ppq: number; word0: number; word1: number }>>;
       };
       expect(payload.midi_content[String(clipId)]).toEqual(events);
 
@@ -1126,7 +1126,7 @@ describe('Sonare WASM Project', () => {
         const roundClip = roundtrip.importSmf(project.exportSmf());
         roundtrip.bakeMidiFx({ clipId: roundClip, config: {} });
         const roundPayload = JSON.parse(roundtrip.toJson()) as {
-          midi_content: Record<string, Array<{ ppq: number; data0: number; data1: number }>>;
+          midi_content: Record<string, Array<{ ppq: number; word0: number; word1: number }>>;
         };
         expect(roundPayload.midi_content[String(roundClip)]).toHaveLength(600);
       } finally {
@@ -1167,8 +1167,8 @@ describe('Sonare WASM Project', () => {
       const { clipId } = project.addMidiClip(0, 4);
       // A MIDI 2.0 note-on (message type 0x4) with a full 16-bit velocity.
       project.setMidiEvents(clipId, [
-        { ppq: 0, data0: 0x40903c00, data1: 0xbeef0000 },
-        { ppq: 1, data0: 0x40803c00, data1: 0 },
+        { ppq: 0, word0: 0x40903c00, word1: 0xbeef0000 },
+        { ppq: 1, word0: 0x40803c00, word1: 0 },
       ]);
       const clipFile = project.exportClipFile();
       expect(clipFile.length).toBeGreaterThan(8);
@@ -1198,14 +1198,30 @@ describe('Sonare WASM Project', () => {
       const { clipId } = project.addMidiClip(0, 1);
 
       expect(() =>
-        project.setMidiEvents(clipId, [{ ppq: Number.NaN, data0: 0, data1: 0 }]),
+        project.setMidiEvents(clipId, [{ ppq: Number.NaN, word0: 0, word1: 0 }]),
       ).toThrow(/ppq/);
-      expect(() => project.setMidiEvents(clipId, [{ ppq: 0, data0: -1, data1: 0 }])).toThrow(
-        /data0/,
+      expect(() => project.setMidiEvents(clipId, [{ ppq: 0, word0: -1, word1: 0 }])).toThrow(
+        /word0/,
       );
+    } finally {
+      project.destroy();
+    }
+  });
+
+  it('refuses a tuple event and the data0/data1 keys', () => {
+    const project = new Project();
+    try {
+      const { clipId } = project.addMidiClip(0, 1);
+      const word = 0x20903c64;
+
       expect(() =>
-        project.setMidiEvents(clipId, [[0, 0] as unknown as [number, number, number]]),
-      ).toThrow(/\[ppq, data0, data1\]/);
+        project.setMidiEvents(clipId, [[0, word, 0] as unknown as { ppq: number; word0: number }]),
+      ).toThrow(TypeError);
+      expect(() =>
+        project.setMidiEvents(clipId, [
+          { ppq: 0, data0: word } as unknown as { ppq: number; word0: number },
+        ]),
+      ).toThrow(TypeError);
     } finally {
       project.destroy();
     }
@@ -1339,7 +1355,7 @@ describe('Sonare WASM Project', () => {
   });
 
   // Golden vectors for the hand-written UMP MIDI-1.0 channel-voice packing
-  // (midiNoteOn/Off/Cc/... build data0 in TS rather than via the native
+  // (midiNoteOn/Off/Cc/... build word0 in TS rather than via the native
   // packer). These exact words are what sonare::midi::make_midi1_* — and thus
   // the C-ABI sonare_midi_* packers Python delegates to — produce, so pinning
   // them here (with the identical vectors mirrored in the Node suite) makes any
@@ -1347,26 +1363,26 @@ describe('Sonare WASM Project', () => {
   describe('UMP MIDI-1.0 packing matches the canonical word layout', () => {
     it('packs channel-voice messages into the spec word', () => {
       expect(
-        midiNoteOn({ ppq: 0, group: 0, channel: 0, note: 60, velocity: 100 }).data0 >>> 0,
+        midiNoteOn({ ppq: 0, group: 0, channel: 0, note: 60, velocity: 100 }).word0 >>> 0,
       ).toBe(0x20903c64);
-      expect(midiNoteOff({ ppq: 2, group: 0, channel: 0, note: 60, velocity: 0 }).data0 >>> 0).toBe(
+      expect(midiNoteOff({ ppq: 2, group: 0, channel: 0, note: 60, velocity: 0 }).word0 >>> 0).toBe(
         0x20803c00,
       );
-      expect(midiCc({ ppq: 0, group: 0, channel: 0, controller: 7, value: 127 }).data0 >>> 0).toBe(
+      expect(midiCc({ ppq: 0, group: 0, channel: 0, controller: 7, value: 127 }).word0 >>> 0).toBe(
         0x20b0077f,
       );
       expect(
-        midiPolyPressure({ ppq: 0, group: 0, channel: 0, note: 60, pressure: 64 }).data0 >>> 0,
+        midiPolyPressure({ ppq: 0, group: 0, channel: 0, note: 60, pressure: 64 }).word0 >>> 0,
       ).toBe(0x20a03c40);
-      expect(midiProgram({ ppq: 0, group: 0, channel: 0, program: 5 }).data0 >>> 0).toBe(
+      expect(midiProgram({ ppq: 0, group: 0, channel: 0, program: 5 }).word0 >>> 0).toBe(
         0x20c00500,
       );
-      expect(midiChannelPressure({ ppq: 0, group: 0, channel: 0, pressure: 90 }).data0 >>> 0).toBe(
+      expect(midiChannelPressure({ ppq: 0, group: 0, channel: 0, pressure: 90 }).word0 >>> 0).toBe(
         0x20d05a00,
       );
       // Group and channel nibbles land in their own fields.
       expect(
-        midiNoteOn({ ppq: 0, group: 0xa, channel: 0x3, note: 60, velocity: 100 }).data0 >>> 0,
+        midiNoteOn({ ppq: 0, group: 0xa, channel: 0x3, note: 60, velocity: 100 }).word0 >>> 0,
       ).toBe(0x2a933c64);
     });
 
@@ -1392,10 +1408,10 @@ describe('Sonare WASM Project', () => {
         program: 24,
         bank: { msb: 0x79, lsb: 1 },
       });
-      expect(events.map((event) => event.data0 >>> 0)).toEqual([
+      expect(events.map((event) => event.word0 >>> 0)).toEqual([
         0x20b30079, 0x20b32001, 0x20c31800,
       ]);
-      expect(events.every((event) => event.ppq === 0 && event.data1 === 0)).toBe(true);
+      expect(events.every((event) => event.ppq === 0 && event.word1 === 0)).toBe(true);
     });
 
     it('refuses an unknown name or an out-of-range number from every lookup', () => {
@@ -1450,8 +1466,8 @@ describe('Sonare WASM Project', () => {
       expect(routed.overflowCount).toBe(0);
       expect(routed.events).toHaveLength(2);
       expect(routed.events.map((event) => event.ppq)).toEqual([0, 0.5]);
-      expect(routed.events.map((event) => (event.data0 >>> 16) & 0xf)).toEqual([7, 7]);
-      expect((routed.events[1].data0 >>> 20) & 0xf).toBe(0x8);
+      expect(routed.events.map((event) => (event.word0 >>> 16) & 0xf)).toEqual([7, 7]);
+      expect((routed.events[1].word0 >>> 20) & 0xf).toBe(0x8);
 
       const muted = midiRouteEvents({
         events: [midiNoteOn({ ppq: 0, group: 0, channel: 0, note: 60, velocity: 100 })],
@@ -1553,9 +1569,9 @@ describe('Sonare WASM Project', () => {
         ppq: 3,
       });
       expect(event?.ppq).toBe(3);
-      expect(((event?.data0 ?? 0) >>> 16) & 0xf).toBe(4);
-      expect(((event?.data0 ?? 0) >>> 8) & 0x7f).toBe(74);
-      expect((event?.data0 ?? 0) & 0x7f).toBe(0);
+      expect(((event?.word0 ?? 0) >>> 16) & 0xf).toBe(4);
+      expect(((event?.word0 ?? 0) >>> 8) & 0x7f).toBe(74);
+      expect((event?.word0 ?? 0) & 0x7f).toBe(0);
     });
   });
 

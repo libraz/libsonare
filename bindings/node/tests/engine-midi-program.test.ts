@@ -21,7 +21,7 @@ function programWords(
     program,
     ...(bankValid ? { bank: { msb: bankMsb, lsb: bankLsb } } : {}),
   });
-  return [e.data0, e.data1 ?? 0];
+  return [e.word0, e.word1 ?? 0];
 }
 
 /** Render one note on the no-SoundFont Sf2Player floor after `prepare` ran. */

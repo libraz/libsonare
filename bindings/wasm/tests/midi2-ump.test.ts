@@ -30,8 +30,8 @@ const G = 1;
 const CH = 2;
 
 /** Words a builder produced, as unsigned hex for readable failures. */
-function words(event: { data0: number; data1?: number }): [number, number] {
-  return [event.data0, event.data1 ?? 0];
+function words(event: { word0: number; word1?: number }): [number, number] {
+  return [event.word0, event.word1 ?? 0];
 }
 
 describe('Project MIDI 2.0 builders', () => {

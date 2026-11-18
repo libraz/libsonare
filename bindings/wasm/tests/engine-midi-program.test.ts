@@ -139,7 +139,7 @@ describe('RealtimeEngine.pushMidiInputProgram', () => {
 describe('midi2Program bank', () => {
   it('packs the bank when given, leaves it out otherwise and refuses a bad one', () => {
     const none = midi2Program({ ppq: 0, group: 0, channel: 0, program: 5 });
-    expect([none.data0, none.data1]).toEqual([0x40c00000, 0x05000000]);
+    expect([none.word0, none.word1]).toEqual([0x40c00000, 0x05000000]);
     expect(() =>
       midi2Program({ ppq: 0, group: 0, channel: 0, program: 5, bank: { msb: 128, lsb: 0 } }),
     ).toThrow(RangeError);
@@ -147,7 +147,7 @@ describe('midi2Program bank', () => {
       midi2Program({ ppq: 0, group: 0, channel: 0, program: 5, bank: { msb: 1 } as never }),
     ).toThrow(TypeError);
     const e = midi2Program({ ppq: 3, group: 1, channel: 2, program: 5, bank: { msb: 1, lsb: 2 } });
-    expect([e.ppq, e.data0, e.data1]).toEqual([3, 0x41c20001, 0x05000102]);
+    expect([e.ppq, e.word0, e.word1]).toEqual([3, 0x41c20001, 0x05000102]);
   });
 });
 
@@ -185,7 +185,7 @@ describe('SonareEngine.pushMidiProgram (worklet facade)', () => {
       expect(posted).toContainEqual({
         type: 'syncMidiUmp',
         destinationId: DEST,
-        words: Uint32Array.from([built.data0, built.data1 ?? 0]),
+        words: Uint32Array.from([built.word0, built.word1 ?? 0]),
         renderFrame: 256,
       });
       expect(() => engine.pushMidiProgram(DEST, 0, 0, 5)).not.toThrow();

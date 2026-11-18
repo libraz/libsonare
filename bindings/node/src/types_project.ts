@@ -373,13 +373,6 @@ export interface ProjectMidiClipResult {
 }
 
 /**
- * A flat MIDI event accepted by {@link Project.setMidiEvents}. `data0` / `data1`
- * are the first two UMP words of a channel-voice message (stored opaquely).
- * `data1` defaults to 0. SysEx imported from SMF is preserved by the native
- * project side store; it is not constructible through this flat event object.
- * The tuple form `[ppq, data0, data1]` is also accepted.
- */
-/**
  * One MIDI event in a clip's list: a position plus the first two UMP words.
  *
  * Channel-voice messages only. A clip's SysEx payloads live beside the event
@@ -391,9 +384,9 @@ export interface ProjectMidiEvent {
   /** Event position in PPQ. */
   ppq: number;
   /** First UMP word of the message. */
-  data0: number;
+  word0: number;
   /** Second UMP word of the message. Default `0`. */
-  data1?: number;
+  word1?: number;
 }
 
 /** Options for {@link midiRouteEvents}. Omitted filter fields mean any group/channel and no remap. */

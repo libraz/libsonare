@@ -53,8 +53,8 @@ function midiProject(notes: number[]): any {
   const { trackId, clipId } = project.addMidiClip(0, 2);
   project.setTrackMidiDestination(trackId, 0);
   project.setMidiEvents(clipId, [
-    ...notes.map((note) => ({ ppq: 0, data0: midi1Word(0x9, 0, note, 100), data1: 0 })),
-    ...notes.map((note) => ({ ppq: 1, data0: midi1Word(0x8, 0, note, 0), data1: 0 })),
+    ...notes.map((note) => ({ ppq: 0, word0: midi1Word(0x9, 0, note, 100), word1: 0 })),
+    ...notes.map((note) => ({ ppq: 1, word0: midi1Word(0x8, 0, note, 0), word1: 0 })),
   ]);
   return project;
 }

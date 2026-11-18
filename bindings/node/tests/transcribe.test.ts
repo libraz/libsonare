@@ -47,14 +47,14 @@ function sustained(hz: number, seconds = 0.5): Float32Array {
 }
 
 /** The UMP MIDI-1.0 channel-voice word, unpacked. */
-function decode(event: { ppq: number; data0: number; data1?: number }) {
+function decode(event: { ppq: number; word0: number; word1?: number }) {
   return {
     ppq: event.ppq,
-    group: (event.data0 >>> 24) & 0xf,
-    status: (event.data0 >>> 20) & 0xf,
-    channel: (event.data0 >>> 16) & 0xf,
-    note: (event.data0 >>> 8) & 0x7f,
-    velocity: event.data0 & 0x7f,
+    group: (event.word0 >>> 24) & 0xf,
+    status: (event.word0 >>> 20) & 0xf,
+    channel: (event.word0 >>> 16) & 0xf,
+    note: (event.word0 >>> 8) & 0x7f,
+    velocity: event.word0 & 0x7f,
   };
 }
 
@@ -137,7 +137,7 @@ describe('transcribe', () => {
       // Only the time axis may move: the packed word carries the note number,
       // the velocity, the status, the group and the channel, so comparing it
       // says every one of them survived the tempo change unchanged.
-      expect(fast[i]?.data0).toBe(slow[i]?.data0);
+      expect(fast[i]?.word0).toBe(slow[i]?.word0);
       expect(decode(fast[i] as (typeof fast)[number]).note).toBe(
         decode(slow[i] as (typeof slow)[number]).note,
       );
@@ -408,7 +408,7 @@ describe('Project.transcribeToClip', () => {
   /** The events a clip holds, read back out of the project's own serialization. */
   function storedEvents(project: Project, clipId: number) {
     const payload = JSON.parse(project.toJson()) as {
-      midi_content: Record<string, Array<{ ppq: number; data0: number; data1: number }>>;
+      midi_content: Record<string, Array<{ ppq: number; word0: number; word1: number }>>;
     };
     return (payload.midi_content[String(clipId)] ?? []).map(decode);
   }
