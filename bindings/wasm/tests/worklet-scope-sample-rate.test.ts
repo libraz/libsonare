@@ -296,7 +296,7 @@ describe('worklet processors take their rate from the AudioWorkletGlobalScope', 
     function referenceLatency(rate: number): number {
       const renderer = new PlaybackRenderer({ config: SPEAKERS, sampleRate: rate });
       try {
-        return renderer.latencySamples();
+        return renderer.latencySamples;
       } finally {
         renderer.destroy();
       }

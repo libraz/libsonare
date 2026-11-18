@@ -155,7 +155,7 @@ export class PlaybackRenderer {
   }
 
   /** Renderer latency in samples (headphones: near ear). Fixed at construction. */
-  latencySamples(): number {
+  get latencySamples(): number {
     return this.native.latencySamples();
   }
 
@@ -165,12 +165,12 @@ export class PlaybackRenderer {
    * {@link processPlanar} / {@link processInterleaved} call (2 before the
    * first call).
    */
-  inputChannels(): number {
+  get inputChannels(): number {
     return this.native.inputChannels();
   }
 
   /** Channel count of the output target. */
-  outputChannels(): number {
+  get outputChannels(): number {
     return this.native.outputChannels();
   }
 
@@ -183,7 +183,7 @@ export class PlaybackRenderer {
   }
 
   /** Non-finite input samples replaced with 0 since construction. */
-  nonFiniteDiscardCount(): number {
+  get nonFiniteDiscardCount(): number {
     return this.native.nonFiniteDiscardCount();
   }
 
@@ -227,7 +227,7 @@ export class PlaybackLoudnessMeter {
   }
 
   /** Integrated loudness of everything pushed so far, in LUFS. */
-  integratedLufs(): number {
+  get integratedLufs(): number {
     return this.native.integratedLufs();
   }
 

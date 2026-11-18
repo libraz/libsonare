@@ -35,7 +35,7 @@ describe('HrtfSet', () => {
 describe('PlaybackRenderer construction and validation', () => {
   it('defaults a headphones target without an explicit HrtfSet (native built-in)', () => {
     using renderer = new PlaybackRenderer({ config: {} });
-    expect(renderer.outputChannels()).toBe(2);
+    expect(renderer.outputChannels).toBe(2);
     renderer.destroy();
   });
 
@@ -71,8 +71,8 @@ describe('PlaybackRenderer processing', () => {
     expect(out).toHaveLength(2);
     expect(out[0]).toHaveLength(128);
     expect(Array.from(out[0]).every((s) => Number.isFinite(s))).toBe(true);
-    expect(renderer.inputChannels()).toBe(2);
-    expect(renderer.outputChannels()).toBe(2);
+    expect(renderer.inputChannels).toBe(2);
+    expect(renderer.outputChannels).toBe(2);
   });
 
   it('processes a stereo interleaved block to a 5.1-speakers target', () => {
@@ -88,7 +88,7 @@ describe('PlaybackRenderer processing', () => {
       interleaved[i * 2 + 1] = r[i];
     }
     const out = renderer.processInterleaved(interleaved, 2);
-    expect(renderer.outputChannels()).toBe(6);
+    expect(renderer.outputChannels).toBe(6);
     expect(out).toHaveLength(128 * 6);
     expect(Array.from(out).every((s) => Number.isFinite(s))).toBe(true);
   });
@@ -101,7 +101,7 @@ describe('PlaybackRenderer processing', () => {
       renderer.processInterleaved(new Float32Array(4), 'two' as unknown as number),
     ).toThrow();
     // The rejected call must not have advanced state or left the addon unusable.
-    expect(renderer.outputChannels()).toBe(2);
+    expect(renderer.outputChannels).toBe(2);
   });
 
   it('rejects a planar call whose planes have mismatched lengths', () => {
@@ -128,16 +128,16 @@ describe('PlaybackRenderer latency, config and diagnostics', () => {
       config: { target: { kind: 'speakers', layout: 'stereo' } },
       sampleRate: 48000,
     });
-    expect(speakers.latencySamples()).toBe(288);
+    expect(speakers.latencySamples).toBe(288);
 
     using surround = new PlaybackRenderer({
       config: { target: { kind: 'speakers', layout: '5.1' } },
       sampleRate: 48000,
     });
-    expect(surround.latencySamples()).toBe(1312);
+    expect(surround.latencySamples).toBe(1312);
 
     using headphones = new PlaybackRenderer({ config: {}, sampleRate: 48000 });
-    expect(headphones.latencySamples()).toBe(1312);
+    expect(headphones.latencySamples).toBe(1312);
   });
 
   it('round-trips a realtime key through setConfig/config and rejects a changed prepare key', () => {
@@ -243,7 +243,7 @@ describe('PlaybackRenderer latency, config and diagnostics', () => {
     expect(typeof diagnostics.latency.samples).toBe('number');
     expect(typeof diagnostics.loudness_gain_db).toBe('number');
     expect(typeof diagnostics.hrtf_ignored).toBe('boolean');
-    expect(renderer.nonFiniteDiscardCount()).toBe(0);
+    expect(renderer.nonFiniteDiscardCount).toBe(0);
   });
 
   it('rejects use after destroy', () => {
@@ -269,7 +269,7 @@ describe('PlaybackLoudnessMeter', () => {
       interleaved[i * 2 + 1] = r[i];
     }
     meter.pushInterleaved(interleaved);
-    expect(Number.isFinite(meter.integratedLufs())).toBe(true);
+    expect(Number.isFinite(meter.integratedLufs)).toBe(true);
   });
 
   it('reads only the frames the array holds, not its element count as frames', () => {
@@ -286,7 +286,7 @@ describe('PlaybackLoudnessMeter', () => {
     fromView.pushInterleaved(view);
     using fromCopy = new PlaybackLoudnessMeter(2, 48000);
     fromCopy.pushInterleaved(view.slice());
-    expect(fromView.integratedLufs()).toBeCloseTo(fromCopy.integratedLufs(), 6);
+    expect(fromView.integratedLufs).toBeCloseTo(fromCopy.integratedLufs, 6);
   });
 
   it('refuses an interleaved array that is not a whole number of frames', () => {
@@ -299,7 +299,7 @@ describe('PlaybackLoudnessMeter', () => {
     expect(() => new PlaybackLoudnessMeter(2, 'fast' as unknown as number)).toThrow();
     // The addon must still be usable after the rejected construction.
     using meter = new PlaybackLoudnessMeter(2, 48000);
-    expect(Number.isFinite(meter.integratedLufs())).toBe(true);
+    expect(Number.isFinite(meter.integratedLufs)).toBe(true);
   });
 });
 
@@ -414,5 +414,26 @@ describe('PlaybackRenderer.renderOffline', () => {
     }
     expect(isSonareError(caught)).toBe(true);
     expect((caught as { code: number }).code).toBe(ErrorCode.InvalidState);
+  });
+});
+
+describe('playback scalar reads', () => {
+  it('reads cheap scalar state as getters', () => {
+    using renderer = new PlaybackRenderer({ config: {} });
+    using meter = new PlaybackLoudnessMeter(2, 48000);
+    const getter = (target: object, name: string) =>
+      Object.getOwnPropertyDescriptor(Object.getPrototypeOf(target), name)?.get;
+    const reads = renderer as unknown as Record<string, unknown>;
+    for (const name of [
+      'latencySamples',
+      'inputChannels',
+      'outputChannels',
+      'nonFiniteDiscardCount',
+    ]) {
+      expect(typeof getter(renderer, name), name).toBe('function');
+      expect(typeof reads[name], name).toBe('number');
+    }
+    expect(typeof getter(meter, 'integratedLufs')).toBe('function');
+    expect(typeof meter.integratedLufs).toBe('number');
   });
 });

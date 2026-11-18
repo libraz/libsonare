@@ -27602,3 +27602,43 @@ domain = "analysis"
 rule = "sample-rate-required"
 entry = "./analysis"
 test = "bindings/wasm/tests/surface/mastering-streaming.test.ts::StreamingEqualizerConfig"
+
+[[entry]]
+kind = "method"
+old = "PlaybackRenderer.latencySamples"
+changed = "readonly getter (was a method)"
+domain = "engine"
+rule = "getters"
+test = "bindings/wasm/tests/playback.test.ts::reads cheap scalar state as getters"
+
+[[entry]]
+kind = "method"
+old = "PlaybackRenderer.inputChannels"
+changed = "readonly getter (was a method)"
+domain = "engine"
+rule = "getters"
+test = "bindings/wasm/tests/playback.test.ts::reads cheap scalar state as getters"
+
+[[entry]]
+kind = "method"
+old = "PlaybackRenderer.outputChannels"
+changed = "readonly getter (was a method)"
+domain = "engine"
+rule = "getters"
+test = "bindings/wasm/tests/playback.test.ts::reads cheap scalar state as getters"
+
+[[entry]]
+kind = "method"
+old = "PlaybackRenderer.nonFiniteDiscardCount"
+changed = "readonly getter (was a method)"
+domain = "engine"
+rule = "getters"
+test = "bindings/wasm/tests/playback.test.ts::reads cheap scalar state as getters"
+
+[[entry]]
+kind = "method"
+old = "PlaybackLoudnessMeter.integratedLufs"
+changed = "readonly getter (was a method)"
+domain = "engine"
+rule = "getters"
+test = "bindings/wasm/tests/playback.test.ts::reads cheap scalar state as getters"

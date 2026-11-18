@@ -103,14 +103,38 @@ describe('playback renderer (WASM)', () => {
     ).toThrow(/hrtf required/);
   });
 
+  it('reads cheap scalar state as getters', () => {
+    const renderer = new PlaybackRenderer({ config: SPEAKERS_5_1, sampleRate: SR });
+    const meter = new PlaybackLoudnessMeter(2, SR);
+    try {
+      const getter = (target: object, name: string) =>
+        Object.getOwnPropertyDescriptor(Object.getPrototypeOf(target), name)?.get;
+      const reads = renderer as unknown as Record<string, unknown>;
+      for (const name of [
+        'latencySamples',
+        'inputChannels',
+        'outputChannels',
+        'nonFiniteDiscardCount',
+      ]) {
+        expect(typeof getter(renderer, name), name).toBe('function');
+        expect(typeof reads[name], name).toBe('number');
+      }
+      expect(typeof getter(meter, 'integratedLufs')).toBe('function');
+      expect(typeof meter.integratedLufs).toBe('number');
+    } finally {
+      renderer.destroy();
+      meter.destroy();
+    }
+  });
+
   it('reports the target latency and channel counts', () => {
     const hrtf = HrtfSet.fromBytes(hrtfBytes());
     const headphones = new PlaybackRenderer({ config: {}, hrtf, sampleRate: SR });
     hrtf.destroy();
     try {
-      expect(headphones.latencySamples()).toBe(1312);
-      expect(headphones.outputChannels()).toBe(2);
-      expect(headphones.inputChannels()).toBe(2);
+      expect(headphones.latencySamples).toBe(1312);
+      expect(headphones.outputChannels).toBe(2);
+      expect(headphones.inputChannels).toBe(2);
     } finally {
       headphones.destroy();
     }
@@ -125,8 +149,8 @@ describe('playback renderer (WASM)', () => {
         sampleRate: SR,
       });
       try {
-        expect(renderer.outputChannels()).toBe(channels);
-        expect(renderer.latencySamples()).toBe(latency);
+        expect(renderer.outputChannels).toBe(channels);
+        expect(renderer.latencySamples).toBe(latency);
       } finally {
         renderer.destroy();
       }
@@ -152,7 +176,7 @@ describe('playback renderer (WASM)', () => {
         center.push(...out[2]);
       }
       expect(
-        Math.abs(onset(Float32Array.from(center)) - (at + renderer.latencySamples())),
+        Math.abs(onset(Float32Array.from(center)) - (at + renderer.latencySamples)),
       ).toBeLessThanOrEqual(1);
     } finally {
       renderer.destroy();
@@ -198,7 +222,7 @@ describe('playback renderer (WASM)', () => {
       bad[1][5] = Number.NaN;
       const planarOut = renderer.processPlanar(bad);
       expect(planarOut.every((plane) => plane.every(Number.isFinite))).toBe(true);
-      const afterPlanar = renderer.nonFiniteDiscardCount();
+      const afterPlanar = renderer.nonFiniteDiscardCount;
       expect(afterPlanar).toBeGreaterThan(0);
 
       expect(() => renderer.processPlanar(noisePlanes(2, 128))).toThrow(
@@ -209,7 +233,7 @@ describe('playback renderer (WASM)', () => {
       const samples = interleave(noisePlanes(6, 128));
       samples[7] = Number.POSITIVE_INFINITY;
       renderer.processInterleaved(samples, 6);
-      expect(renderer.nonFiniteDiscardCount()).toBeGreaterThan(afterPlanar);
+      expect(renderer.nonFiniteDiscardCount).toBeGreaterThan(afterPlanar);
     } finally {
       renderer.destroy();
     }
@@ -265,15 +289,15 @@ describe('playback renderer (WASM)', () => {
     try {
       renderer.processPlanar(noisePlanes(2, 128));
       renderer.processPlanar(noisePlanes(6, 128));
-      expect(renderer.inputChannels()).toBe(6);
+      expect(renderer.inputChannels).toBe(6);
       renderer.processPlanar(noisePlanes(8, 128));
-      expect(renderer.inputChannels()).toBe(8);
+      expect(renderer.inputChannels).toBe(8);
       expect(() => renderer.processPlanar(noisePlanes(3, 128))).toThrow(RangeError);
       const diagnostics = renderer.diagnostics();
       expect(Object.getPrototypeOf(diagnostics)).toBe(Object.prototype);
       expect(diagnostics.layout_switches).toBe(2);
       expect(diagnostics.active_input_layout).toBe('7.1');
-      expect(diagnostics.latency.samples).toBe(renderer.latencySamples());
+      expect(diagnostics.latency.samples).toBe(renderer.latencySamples);
       expect(structuredClone(diagnostics)).toEqual(diagnostics);
     } finally {
       renderer.destroy();
@@ -451,7 +475,7 @@ describe('playback renderer (WASM)', () => {
         return plane;
       });
       meter.pushInterleaved(interleave(planes));
-      const lufs = meter.integratedLufs();
+      const lufs = meter.integratedLufs;
       expect(Number.isFinite(lufs)).toBe(true);
       expect(lufs).toBeLessThan(0);
       expect(() => meter.pushInterleaved(new Float32Array(3))).toThrow(/whole number of frames/);
@@ -478,7 +502,7 @@ describe('playback renderer (WASM)', () => {
       renderer.processInterleaved(input.subarray(0, 512 * 2), 2);
       const out = renderer.renderOffline(input, 2);
       expect(out.length).toBe(expected.samples.length);
-      expect(out.length).toBe((input.length / 2) * renderer.outputChannels());
+      expect(out.length).toBe((input.length / 2) * renderer.outputChannels);
       expect(Array.from(out)).toEqual(Array.from(expected.samples));
     } finally {
       renderer.destroy();
