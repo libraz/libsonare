@@ -154,8 +154,6 @@ def test_the_schema_refuses_what_it_is_written_to_refuse(mutate, expected: str) 
 # which is what makes a schema maximum the difference between "validates" and
 # "loads".
 _BOUNDED = [
-    (("strips", 0, "panMode"), 2, "panMode enum is out of range"),
-    (("strips", 0, "panLaw"), 3, "panLaw enum is out of range"),
     (("strips", 0, "channelDelaySamples"), 192000, "channelDelaySamples must be in"),
 ]
 
@@ -196,6 +194,34 @@ def test_the_schema_and_the_loader_agree_on_where_each_bound_sits(
     _place(scene, path, maximum + 1)
     findings = _findings(scene)
     assert any("over the maximum" in finding for finding in findings), findings
+    with raises_coded(ErrorCode.INVALID_FORMAT):
+        libsonare.Mixer.from_scene_json(json.dumps(scene), 48000)
+
+
+_TOKEN_FIELDS = [
+    (("strips", 0, "panMode"), ["balance", "stereoPan", "dualPan"]),
+    (("strips", 0, "panLaw"), ["const3Db", "const4.5Db", "const6Db", "linear0Db"]),
+]
+
+
+@pytest.mark.parametrize(("path", "tokens"), _TOKEN_FIELDS, ids=lambda v: str(v)[:40])
+def test_the_schema_and_the_loader_agree_on_each_token_set(path: tuple, tokens: list) -> None:
+    """Every token of a closed set is admitted by both arms, and a near miss by neither.
+
+    The tokens are listed here rather than read from the schema, so a schema
+    enum that drops or respells one fails the admit arm instead of agreeing
+    with itself. The near miss is a snake_case spelling, the form a caller is
+    most likely to type.
+    """
+    scene = _preset_scene("vocalReverbSend")
+    for token in tokens:
+        _place(scene, path, token)
+        assert _findings(scene) == [], token
+        libsonare.Mixer.from_scene_json(json.dumps(scene), 48000).close()
+
+    _place(scene, path, "stereo_pan")
+    findings = _findings(scene)
+    assert any("is outside" in finding for finding in findings), findings
     with raises_coded(ErrorCode.INVALID_FORMAT):
         libsonare.Mixer.from_scene_json(json.dumps(scene), 48000)
 
