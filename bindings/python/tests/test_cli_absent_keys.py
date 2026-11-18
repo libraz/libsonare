@@ -157,13 +157,10 @@ def test_project_compile_omits_the_target_of_a_project_wide_diagnostic(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     result = SimpleNamespace(
-        has_timeline=False,
-        diagnostic_count=2,
-        diagnostics=[
-            SimpleNamespace(code=1, severity=0, target_id=7, message="clip"),
-            SimpleNamespace(code=2, severity=0, target_id=None, message="project"),
-        ],
-        messages="clip\nproject",
+        diagnostics=(
+            SimpleNamespace(code=1, severity="error", target_id=7, message="clip"),
+            SimpleNamespace(code=2, severity="error", target_id=None, message="project"),
+        ),
     )
 
     class _Project:
@@ -177,6 +174,10 @@ def test_project_compile_omits_the_target_of_a_project_wide_diagnostic(
     args = argparse.Namespace(project_command="compile", input="p.json", json=True, output=None)
 
     assert _cli_project.cmd_project(args) != 0
-    targeted, project_wide = _json_out(capsys)["diagnostics"]
+    payload = _json_out(capsys)
+    assert payload["has_timeline"] is False
+    assert payload["diagnostic_count"] == 2
+    assert payload["messages"] == "clip\nproject"
+    targeted, project_wide = payload["diagnostics"]
     assert targeted["target_id"] == 7
     assert "target_id" not in project_wide

@@ -534,12 +534,15 @@ def cmd_project(args: argparse.Namespace) -> int:
         project = cast(Project, _load_project(args.input))
         try:
             result = cast(Any, project).compile()
+            # The CLI JSON keeps the native front-end's summary keys, derived here
+            # from the diagnostics: a timeline exists exactly when no error does.
+            has_timeline = not any(d.severity == "error" for d in result.diagnostics)
             if args.json:
                 print(
                     _strict_json_dumps(
                         {
-                            "has_timeline": result.has_timeline,
-                            "diagnostic_count": result.diagnostic_count,
+                            "has_timeline": has_timeline,
+                            "diagnostic_count": len(result.diagnostics),
                             "diagnostics": [
                                 # A project-wide diagnostic names no target.
                                 _omit_absent(
@@ -553,17 +556,17 @@ def cmd_project(args: argparse.Namespace) -> int:
                                 )
                                 for diagnostic in result.diagnostics
                             ],
-                            "messages": result.messages,
+                            "messages": "\n".join(d.message for d in result.diagnostics),
                         }
                     )
                 )
             else:
                 print(
                     "  Compiled"
-                    if result.has_timeline
-                    else f"  Compiled with errors ({result.diagnostic_count} diagnostics)"
+                    if has_timeline
+                    else f"  Compiled with errors ({len(result.diagnostics)} diagnostics)"
                 )
-            if result.has_timeline:
+            if has_timeline:
                 return 0
             return EXIT_INVALID_STATE
         finally:
