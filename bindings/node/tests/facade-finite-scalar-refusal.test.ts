@@ -267,10 +267,15 @@ describe('a required facade scalar is consumed, then refused by name', () => {
     expect(atFastRate).not.toBeCloseTo(untouched, 3);
     expect(atFastRate).not.toBeCloseTo(atTrackRate, 3);
 
-    for (const bad of [...NON_FINITE, undefined]) {
-      expect(() => render(bad)).toThrow(RangeError);
-      expect(() => render(bad)).toThrow(/renderNotes: frameRate must be a finite number/);
+    for (const bad of NON_FINITE) {
+      expect(() => render(bad)).toThrow(
+        new RangeError('renderNotes: frameRate must be a finite number'),
+      );
     }
+    // A missing field is a wrong type, not an out-of-domain value.
+    expect(() => render(undefined)).toThrow(
+      new TypeError('renderNotes: frameRate must be a number'),
+    );
     expect(() => render(PAST_FLT_MAX)).toThrow(NARROWING_REFUSAL);
   });
 

@@ -15,7 +15,8 @@
  * `analyzeBpm` covers `OptionalFloatArg` (argument 2, `bpmMin`), `peakPick`
  * covers `RequiredFloatValue` (`delta`), `renderNotes` covers
  * `FloatArrayProperty` (each `amplitudeEnvelope` element). All three run
- * through the public facade, which forwards each value verbatim.
+ * through the public facade. `peakPick` refuses a non-finite `delta` there by
+ * name, as every entry refuses a non-finite scalar, so it pins the bound alone.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -151,21 +152,17 @@ describe('peakPick narrows the required delta value', () => {
     for (const value of PAST_FLOAT_MAX) {
       const caught = capture(() => peaks(value));
       expect(caught, `delta ${value}`).toBeInstanceOf(RangeError);
-      expect((caught as RangeError).message).toBe(`delta ${RANGE_MESSAGE}`);
+      expect((caught as RangeError).message).toBe(`peakPick: delta ${RANGE_MESSAGE}`);
     }
   });
 
-  it('passes a non-finite delta through to the core', () => {
-    // Infinity is a threshold nothing clears; NaN loses every comparison, so
-    // the run reads as an unset threshold. Both are answers, not refusals.
-    expect(peaks(Number.POSITIVE_INFINITY)).toBe(0);
-    expect(() => peaks(Number.NaN)).not.toThrow();
-    expect(pick(Number.NaN)).toBeInstanceOf(Int32Array);
-  });
-
-  it('answers 1e300 by refusing, where Infinity still returns a result', () => {
-    expect(pick(Number.POSITIVE_INFINITY)).toBeInstanceOf(Int32Array);
-    expect(capture(() => peaks(1e300))).toBeInstanceOf(RangeError);
+  it('refuses a non-finite delta by name, as it refuses one no float can hold', () => {
+    // An infinite threshold is not a way to ask for no peaks.
+    for (const value of [Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, Number.NaN]) {
+      const caught = capture(() => peaks(value));
+      expect(caught, `delta ${value}`).toBeInstanceOf(RangeError);
+      expect((caught as RangeError).message).toBe(`peakPick: delta ${RANGE_MESSAGE}`);
+    }
   });
 
   it('accepts the largest delta a float holds, on both signs', () => {

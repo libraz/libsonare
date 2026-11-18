@@ -1158,6 +1158,7 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
       const analyzer = new StreamAnalyzer({
         ...facadeKeys(o, {
           computeMagnitude: null,
+          magnitudeDownsample: null,
           fmin: 'fminHz',
           fmax: 'fmaxHz',
           tuningRefHz: 'referenceHz',
