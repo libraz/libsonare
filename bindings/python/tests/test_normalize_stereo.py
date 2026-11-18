@@ -277,3 +277,48 @@ class TestNormalizeStereoPairRefusals:
         # Control: the same call on a clean pair is accepted with the flag off,
         # so the refusal above is about the NaN rather than about validate=False.
         assert call(left, right, SR, validate=False).length == len(left)  # type: ignore[operator]
+
+
+class TestMode:
+    """``mode`` picks the statistic; an omitted target is the mode's own default."""
+
+    @pytest.mark.parametrize(("mode", "default_db"), [("peak", 0.0), ("rms", -20.0)])
+    def test_an_omitted_target_is_the_mode_default(self, mode: str, default_db: float) -> None:
+        left, right = _pair()
+        np.testing.assert_array_equal(
+            libsonare.normalize(right, SR, mode=mode),  # type: ignore[arg-type]
+            libsonare.normalize(right, SR, mode=mode, target_db=default_db),  # type: ignore[arg-type]
+        )
+        omitted = libsonare.normalize_stereo(left, right, SR, mode=mode)  # type: ignore[arg-type]
+        explicit = libsonare.normalize_stereo(
+            left,
+            right,
+            SR,
+            mode=mode,  # type: ignore[arg-type]
+            target_db=default_db,
+        )
+        np.testing.assert_array_equal(omitted.left, explicit.left)
+        np.testing.assert_array_equal(omitted.right, explicit.right)
+
+    def test_rms_mode_drives_the_rms_and_peak_mode_the_peak(self) -> None:
+        tone = sine(220.0, 0.25, SR, amp=0.1)
+        assert _rms_db(libsonare.normalize(tone, SR, mode="rms", target_db=-18.0)) == (
+            pytest.approx(-18.0, abs=0.01)
+        )
+        assert _peak_db(libsonare.normalize(tone, SR, target_db=-6.0)) == pytest.approx(
+            -6.0, abs=0.01
+        )
+
+    @pytest.mark.parametrize("call", [libsonare.normalize, libsonare.normalize_stereo])
+    def test_a_mode_outside_the_tokens_is_refused_by_name(self, call: object) -> None:
+        left, right = _pair()
+        args = (right, SR) if call is libsonare.normalize else (left, right, SR)
+        with pytest.raises(SonareValueError, match="mode must be 'peak' or 'rms'"):
+            call(*args, mode="RMS")  # type: ignore[operator]
+        with pytest.raises(TypeError, match="mode must be 'peak' or 'rms'"):
+            call(*args, mode=1)  # type: ignore[operator]
+
+    @pytest.mark.parametrize("mode", ["peak", "rms"])
+    def test_a_target_above_full_scale_is_refused_in_either_mode(self, mode: str) -> None:
+        with pytest.raises(SonareValueError, match="target_db must be at or below 0 dBFS"):
+            libsonare.normalize(_alternating(0.1), SR, mode=mode, target_db=0.5)  # type: ignore[arg-type]

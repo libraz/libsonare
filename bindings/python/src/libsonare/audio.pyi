@@ -5,7 +5,7 @@ from typing import Any, Literal
 
 import numpy as np
 
-from .analyzer import MasteringPreset, MasteringSoloParams, SoloProcessor
+from .analyzer import MasteringPreset, MasteringSoloParams, NormalizeMode, SoloProcessor
 from .types import (
     AcousticResult,
     AnalysisResult,
@@ -191,7 +191,9 @@ class Audio:
         formant_mode: Literal["relative", "absolute"] = "relative",
     ) -> np.ndarray: ...
     def voice_change_realtime(self, preset: str = "neutralMonitor") -> np.ndarray: ...
-    def normalize(self, target_db: float = 0.0) -> np.ndarray: ...
+    def normalize(
+        self, *, mode: NormalizeMode = "peak", target_db: float | None = None
+    ) -> np.ndarray: ...
     def mastering(
         self,
         target_lufs: float = -14.0,

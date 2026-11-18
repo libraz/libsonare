@@ -36,7 +36,7 @@ def test_one_shot_transforms_return_float32_arrays(tone: np.ndarray) -> None:
         libsonare.note_stretch(tone, _SR, 0, len(tone) // 2, 1.5),
         libsonare.note_move(tone, _SR, 0, len(tone) // 2, 100),
         libsonare.voice_change(tone, _SR, 3.0),
-        libsonare.normalize(tone, _SR, -3.0),
+        libsonare.normalize(tone, _SR, target_db=-3.0),
         libsonare.normalize_rms(tone, _SR, -20.0),
         libsonare.trim(tone, _SR),
     ]
@@ -57,7 +57,7 @@ def test_audio_methods_return_float32_arrays(tone: np.ndarray) -> None:
         audio.note_move(0, len(tone) // 2, 100),
         audio.voice_change(3.0),
         audio.voice_change_realtime(),
-        audio.normalize(-3.0),
+        audio.normalize(target_db=-3.0),
         audio.trim(),
     ]
     for result in results:
@@ -145,6 +145,6 @@ def test_records_built_by_the_library_hold_float32_arrays(tone: np.ndarray) -> N
     _assert_float32_vector(hpss.harmonic)
     _assert_float32_vector(hpss.percussive)
 
-    stereo = libsonare.normalize_stereo(tone, tone, _SR, -3.0)
+    stereo = libsonare.normalize_stereo(tone, tone, _SR, target_db=-3.0)
     _assert_float32_vector(stereo.left)
     _assert_float32_vector(stereo.right)

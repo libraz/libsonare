@@ -97,6 +97,9 @@ from .analyzer import (
     MixerStereoResult as MixerStereoResult,
 )
 from .analyzer import (
+    NormalizeMode as NormalizeMode,
+)
+from .analyzer import (
     NoteEdit as NoteEdit,
 )
 from .analyzer import (

@@ -1249,11 +1249,15 @@ def realtime_voice_changer_preset_config(preset: VoicePresetId) -> RealtimeVoice
 def voice_character_preset_id(ordinal: int) -> str | None: ...
 def realtime_voice_changer_preset_json(name: str) -> str: ...
 def validate_realtime_voice_changer_preset_json(json_text: str) -> dict[str, object]: ...
+
+NormalizeMode: TypeAlias = Literal["peak", "rms"]
+
 def normalize(
     samples: FloatSamples,
     sample_rate: int,
-    target_db: float = 0.0,
     *,
+    mode: NormalizeMode = "peak",
+    target_db: float | None = None,
     validate: bool = True,
 ) -> np.ndarray[Any, Any]: ...
 def normalize_rms(
@@ -1267,8 +1271,9 @@ def normalize_stereo(
     left: FloatSamples,
     right: FloatSamples,
     sample_rate: int,
-    target_db: float = 0.0,
     *,
+    mode: NormalizeMode = "peak",
+    target_db: float | None = None,
     validate: bool = True,
 ) -> NormalizeStereoResult: ...
 def normalize_rms_stereo(

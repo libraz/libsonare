@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ctypes
 from collections.abc import Sequence
+from typing import Literal, TypeAlias
 
 import numpy as np
 
@@ -33,6 +34,28 @@ from .types import NormalizeStereoResult
 # share -- the two happen to agree on 2048/512 and mean different things.
 _DEFAULT_TRIM_FRAME_LENGTH = 2048
 _DEFAULT_TRIM_HOP_LENGTH = 512
+
+
+NormalizeMode: TypeAlias = Literal["peak", "rms"]
+"""The level a normalizer drives to ``target_db``: the sample peak or the RMS."""
+
+# The C entries take the target as a required argument; this per-mode default
+# for an omitted target is the facade default Node and WASM share.
+_DEFAULT_NORMALIZE_TARGET_DB = {"peak": 0.0, "rms": -20.0}
+_NORMALIZE_SYMBOLS = {"peak": "sonare_normalize", "rms": "sonare_normalize_rms"}
+_NORMALIZE_STEREO_SYMBOLS = {
+    "peak": "sonare_normalize_stereo",
+    "rms": "sonare_normalize_rms_stereo",
+}
+
+
+def _normalize_mode(fn_name: str, mode: object) -> str:
+    """Refuse a mode outside the :data:`NormalizeMode` tokens, naming them."""
+    if not isinstance(mode, str):
+        raise TypeError(f"{fn_name}: mode must be 'peak' or 'rms'")
+    if mode not in _DEFAULT_NORMALIZE_TARGET_DB:
+        raise SonareValueError(f"{fn_name}: mode must be 'peak' or 'rms' (got {mode!r})")
+    return mode
 
 
 def _trim_length(value: int, arg_name: str) -> int:
@@ -118,31 +141,44 @@ def _run_normalize_stereo(
 def normalize(
     samples: Sequence[float] | list[float],
     sample_rate: int,
-    target_db: float = 0.0,
     *,
+    mode: NormalizeMode = "peak",
+    target_db: float | None = None,
     validate: bool = True,
 ) -> np.ndarray:
-    """Normalize audio to a target dB level.
+    """Normalize audio so its peak or RMS level reaches ``target_db``.
+
+    The ``"rms"`` mode hard-clips the result to ``[-1, 1]``, which a target loud
+    enough to drive the peaks past full scale will reach.
 
     Args:
         samples: Audio samples.
         sample_rate: Sample rate in Hz.
-        target_db: Finite target peak at or below 0 dBFS (default 0.0).
+        mode: ``"peak"`` (default) or ``"rms"``; any other value is refused by name.
+        target_db: Finite target at or below 0 dBFS. Omitted, 0.0 dBFS for
+            ``"peak"`` and -20.0 dBFS for ``"rms"``, as on Node and WASM.
         validate: Reject empty / NaN / Inf input (default True). Pass
             ``validate=False`` to skip the scan on hot paths.
 
     Returns:
         ``float32`` array of normalized samples.
     """
+    resolved = _normalize_mode("normalize", mode)
     _validate_samples("normalize", samples, validate=validate)
+    target_db_c = _normalize_target(
+        "normalize", _DEFAULT_NORMALIZE_TARGET_DB[resolved] if target_db is None else target_db
+    )
+    symbol = _NORMALIZE_SYMBOLS[resolved]
     lib = _get_lib()
+    if not hasattr(lib, symbol):
+        raise _unsupported_effect_symbol(symbol)
     c_array, length = _to_c_float_array(samples)
     with _out_float_array(lib) as (out, out_length):
-        rc = lib.sonare_normalize(
+        rc = getattr(lib, symbol)(
             c_array,
             _to_c_size_t(length, "length"),
             _to_c_int(sample_rate, "sample_rate"),
-            _to_c_float(target_db, "target_db"),
+            ctypes.c_float(target_db_c),
             ctypes.byref(out),
             ctypes.byref(out_length),
         )
@@ -196,18 +232,20 @@ def normalize_stereo(
     left: Sequence[float] | list[float] | np.ndarray,
     right: Sequence[float] | list[float] | np.ndarray,
     sample_rate: int,
-    target_db: float = 0.0,
     *,
+    mode: NormalizeMode = "peak",
+    target_db: float | None = None,
     validate: bool = True,
 ) -> NormalizeStereoResult:
-    """Peak-normalize a stereo pair on a gain measured across both channels.
+    """Normalize a stereo pair on one gain measured across both channels.
 
-    This is the two-channel counterpart to :func:`normalize`. The peak is taken
-    across the pair and the resulting gain is applied to both channels, so the
-    louder channel reaches ``target_db`` and the other keeps its distance from
-    it. Normalizing each channel on its own gain instead would lift the quieter
-    side until the two peaks matched, which changes the stereo balance rather
-    than the level.
+    This is the two-channel counterpart to :func:`normalize`. The peak (or, with
+    ``mode="rms"``, the RMS over both channels' samples together) is taken across
+    the pair and the resulting gain is applied to both channels, so the louder
+    channel reaches ``target_db`` and the other keeps its distance from it.
+    Normalizing each channel on its own gain instead would lift the quieter side
+    until the two levels matched, which changes the stereo balance rather than
+    the level. The ``"rms"`` mode hard-clips the result to ``[-1, 1]``.
 
     A pair that cannot be processed together is refused: either channel empty,
     or the two lengths unequal. The C entry takes one sample rate for the pair,
@@ -221,7 +259,9 @@ def normalize_stereo(
         left: Left channel samples.
         right: Right channel samples, same length as ``left``.
         sample_rate: Sample rate in Hz, shared by both channels.
-        target_db: Finite target peak at or below 0 dBFS (default 0.0).
+        mode: ``"peak"`` (default) or ``"rms"``; any other value is refused by name.
+        target_db: Finite target at or below 0 dBFS. Omitted, 0.0 dBFS for
+            ``"peak"`` and -20.0 dBFS for ``"rms"``, as on Node and WASM.
         validate: Reject empty / NaN / Inf input (default True). Pass
             ``validate=False`` to skip the scan on hot paths.
 
@@ -239,8 +279,14 @@ def normalize_stereo(
         >>> round(max(abs(v) for v in result.left), 3)  # the quiet side keeps its distance
         0.177
     """
+    resolved = _normalize_mode("normalize_stereo", mode)
     return _run_normalize_stereo(
-        "normalize_stereo", "sonare_normalize_stereo", left, right, sample_rate, target_db
+        "normalize_stereo",
+        _NORMALIZE_STEREO_SYMBOLS[resolved],
+        left,
+        right,
+        sample_rate,
+        _DEFAULT_NORMALIZE_TARGET_DB[resolved] if target_db is None else target_db,
     )
 
 

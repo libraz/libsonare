@@ -81,6 +81,7 @@ from ._conversions import (
 from ._effects import (
     AssignNoteTargetsResult,
     DecomposeResult,
+    NormalizeMode,
     NoteEdit,
     NoteObject,
     NoteTarget,
@@ -334,6 +335,7 @@ __all__ = [
     "normalize",
     "normalize_rms",
     "normalize_stereo",
+    "NormalizeMode",
     "normalize_rms_stereo",
     "note_stretch",
     "note_move",

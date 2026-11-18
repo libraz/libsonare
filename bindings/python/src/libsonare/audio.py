@@ -28,6 +28,9 @@ from ._runtime import (
     _utf8_arg,
 )
 from .analyzer import (
+    NormalizeMode,
+)
+from .analyzer import (
     analyze_bpm as _analyze_bpm,
 )
 from .analyzer import (
@@ -976,9 +979,11 @@ class Audio:
         """
         return _voice_change_realtime(self.data, self.sample_rate, preset)
 
-    def normalize(self, target_db: float = 0.0) -> np.ndarray:
-        """Normalize audio to a target dB level."""
-        return _normalize(self.data, self.sample_rate, target_db)
+    def normalize(
+        self, *, mode: NormalizeMode = "peak", target_db: float | None = None
+    ) -> np.ndarray:
+        """Normalize the peak or RMS level; see :func:`libsonare.normalize`."""
+        return _normalize(self.data, self.sample_rate, mode=mode, target_db=target_db)
 
     def mastering(
         self,

@@ -99,11 +99,11 @@ def test_a_saturating_mel_band_edge_is_refused_on_its_own_argument(tone) -> None
 
 def test_a_saturating_normalization_target_is_refused(tone) -> None:
     """The offline effects path."""
-    quiet = ls.normalize(tone, SAMPLE_RATE, -20.0)
-    loud = ls.normalize(tone, SAMPLE_RATE, -6.5)
+    quiet = ls.normalize(tone, SAMPLE_RATE, target_db=-20.0)
+    loud = ls.normalize(tone, SAMPLE_RATE, target_db=-6.5)
     assert max(quiet) != max(loud)  # positive control
     for value in REFUSED:
-        _refuses("target_db", (), ls.normalize, tone, SAMPLE_RATE, value)
+        _refuses("target_db", (), ls.normalize, tone, SAMPLE_RATE, target_db=value)
 
 
 def test_a_saturating_pitch_shift_is_refused(tone) -> None:
