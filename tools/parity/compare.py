@@ -272,7 +272,7 @@ _ALIAS_COVERAGE = {
     # methods. The aliases also keep the Python helper names out of
     # surface-only findings without weakening the Project handle check.
     "project_apply_vocal_edit": ("apply_project_vocal_edit",),
-    "project_get_vocal_edit_dependencies": ("get_project_vocal_edit_dependencies",),
+    "project_get_vocal_edit_dependencies": ("project_vocal_edit_dependencies",),
     "project_rehydrate_vocal_edits": ("rehydrate_project_vocal_edits",),
     # C ABI returns a JSON document; facades parse it into the public descriptor.
     "capabilities_json": ("capabilities",),
