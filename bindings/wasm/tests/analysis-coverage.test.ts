@@ -10,7 +10,6 @@
 
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
-  Audio,
   analyzeBpm,
   analyzeDynamics,
   analyzeRhythm,
@@ -188,36 +187,6 @@ describe('WASM analyzer coverage parity', () => {
           params: { width: 1 },
         }).left,
       ).toHaveLength(left.length);
-    });
-
-    it('refuses a master call giving neither a preset nor overrides, in every call shape', () => {
-      const samples = makeSine(2, 440);
-      const message = /^masterAudio: give a preset or overrides$/;
-      expect(() => masterAudio({ samples, sampleRate: SR })).toThrow(TypeError);
-      expect(() => masterAudio({ samples, sampleRate: SR })).toThrow(message);
-      expect(() => masterAudio(samples, SR)).toThrow(message);
-      expect(() =>
-        masterAudio({ samples, sampleRate: SR, preset: undefined, overrides: undefined }),
-      ).toThrow(message);
-      expect(() => masterAudio(samples, SR, { onProgress: () => {} })).toThrow(message);
-      using audio = Audio.fromBuffer(samples, SR);
-      expect(() => audio.masterAudio({})).toThrow(message);
-      expect(() => masterAudioStereo({ left: samples, right: samples, sampleRate: SR })).toThrow(
-        /^masterAudioStereo: give a preset or overrides$/,
-      );
-    });
-
-    it('runs an explicit empty overrides as an empty chain that returns the input', () => {
-      const samples = makeSine(2, 440);
-      expect(masterAudio({ samples, sampleRate: SR, overrides: {} }).samples).toEqual(samples);
-      const stereo = masterAudioStereo({
-        left: samples,
-        right: samples,
-        sampleRate: SR,
-        overrides: {},
-      });
-      expect(stereo.left).toEqual(samples);
-      expect(stereo.right).toEqual(samples);
     });
 
     it('runs a chain without a preset from the request and the positional form', () => {

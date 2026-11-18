@@ -24593,7 +24593,7 @@ old = "masterAudio"
 changed = "one positional form (masterAudio(samples, sampleRate, options?: OptionsOf<MasterAudioRequest>)); request form takes MasterAudioRequest; returns MasteringChainResult; a call giving neither preset nor overrides throws TypeError, so pass overrides: {} for an empty chain"
 domain = "mastering"
 rule = "one-positional-form"
-test = "bindings/wasm/tests/analysis-coverage.test.ts::refuses a master call giving neither a preset nor overrides"
+test = "bindings/wasm/tests/core-validation-refusals.test.ts::in every synchronous form"
 
 [[entry]]
 kind = "function"
@@ -24601,7 +24601,7 @@ old = "masterAudioStereo"
 changed = "request-only: masterAudioStereo(request: MasterAudioStereoRequest): MasteringChainStereoResult; a call giving neither preset nor overrides throws TypeError, so pass overrides: {} for an empty chain"
 domain = "mastering"
 rule = "one-positional-form"
-test = "bindings/wasm/tests/analysis-coverage.test.ts::refuses a master call giving neither a preset nor overrides"
+test = "bindings/wasm/tests/core-validation-refusals.test.ts::in every synchronous form"
 
 [[entry]]
 kind = "function"

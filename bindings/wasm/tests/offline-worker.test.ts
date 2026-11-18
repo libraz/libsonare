@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { Worker as NodeWorker } from 'node:worker_threads';
 import { describe, expect, it } from 'vitest';
 import { ErrorCode, isSonareError, OfflineWorkerClient } from '../dist/index.js';
@@ -333,11 +334,19 @@ describe('OfflineWorkerClient', () => {
   });
 
   it('refuses a master call giving neither a preset nor overrides in the worker', async () => {
+    const corpus = JSON.parse(
+      readFileSync(
+        new URL('../../../tests/conformance/core_validation_refusals.json', import.meta.url),
+        'utf8',
+      ),
+    ) as { master_audio: { refused: Array<{ message: string }> } };
     const worker = new LoopbackWorker();
     const client = clientWith(worker);
     const call = client.masterAudio({ samples: makeTone(), sampleRate: 22050 }, { copy: true });
     await expect(call).rejects.toThrow(TypeError);
-    await expect(call).rejects.toThrow(/^masterAudio: give a preset or overrides$/);
+    for (const { message } of corpus.master_audio.refused) {
+      await expect(call).rejects.toThrow(`masterAudio: ${message}`);
+    }
     await client.destroy();
   });
 

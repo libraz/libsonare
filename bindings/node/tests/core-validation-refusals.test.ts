@@ -1,6 +1,9 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
+  Audio,
+  masterAudio,
+  masterAudioStereo,
   melToAudio,
   mfccToAudio,
   mfccToMel,
@@ -18,7 +21,7 @@ import { expectRefusal } from './_helpers.js';
 // The core function owns each refusal in this corpus. The addon calls the core
 // directly, so the refusal is asserted on the raw addon as well as on the facade.
 
-type Cause = 'argument';
+type Cause = 'argument' | 'missing_argument';
 type MfccInput = { n_mfcc: number; n_frames: number; fill: number };
 type MfccCase = { id: string; n_mels: number; cause?: Cause; message?: string };
 type MfccRoute = { input: MfccInput; accepted: MfccCase[]; refused: MfccCase[] };
@@ -50,7 +53,7 @@ type RateBlockCase = {
   message?: string;
 };
 type RateBlockRoute = {
-  input: { num_channels: number };
+  input: { num_channels: 1 | 2 };
   accepted: RateBlockCase[];
   refused: RateBlockCase[];
 };
@@ -76,6 +79,18 @@ type ResampleRoute = {
   accepted: ResampleCase[];
   refused: ResampleCase[];
 };
+type MasterAudioCase = {
+  id: string;
+  overrides?: Record<string, never>;
+  returns?: 'input';
+  cause?: Cause;
+  message?: string;
+};
+type MasterAudioRoute = {
+  input: { sample_rate: number; length: number; frequency_hz: number; amplitude: number };
+  accepted: MasterAudioCase[];
+  refused: MasterAudioCase[];
+};
 type ZeroCrossingsCase = { id: string; nan_at?: number; cause?: Cause; message?: string };
 type ZeroCrossingsRoute = {
   input: { length: number; fill: number };
@@ -98,9 +113,13 @@ const corpus = JSON.parse(
   streaming_retune_prepare: RetuneRoute;
   resample: ResampleRoute;
   zero_crossings: ZeroCrossingsRoute;
+  master_audio: MasterAudioRoute;
 };
 
-const errorClassFor: Record<Cause, ErrorConstructor> = { argument: RangeError };
+const errorClassFor: Record<Cause, ErrorConstructor> = {
+  argument: RangeError,
+  missing_argument: TypeError,
+};
 const literal = (text: string) => new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
 
 describe('mfcc_to_mel refusals come from the core', () => {
@@ -437,5 +456,52 @@ describe('zeroCrossings refuses a non-finite sample in the core', () => {
     const text = literal(item.message as string);
     const samples = samplesFor(item);
     expectRefusal(() => zeroCrossings(samples, 22050, { validate: false }), kind, text);
+  });
+});
+
+// The facade owns this refusal: a chain with neither a preset nor overrides would return its input.
+describe('masterAudio refuses a call giving neither a preset nor overrides', () => {
+  const { input, accepted, refused } = corpus.master_audio;
+  const samples = Float32Array.from(
+    { length: input.length },
+    (_, i) =>
+      input.amplitude * Math.sin((2 * Math.PI * input.frequency_hz * i) / input.sample_rate),
+  );
+  const sampleRate = input.sample_rate;
+
+  it.each(accepted)('accepts $id', ({ overrides }) => {
+    expect(masterAudio({ samples, sampleRate, overrides }).samples).toEqual(samples);
+    expect(masterAudio(samples, sampleRate, { overrides }).samples).toEqual(samples);
+    const stereo = masterAudioStereo({ left: samples, right: samples, sampleRate, overrides });
+    expect(stereo.left).toEqual(samples);
+    expect(stereo.right).toEqual(samples);
+    using audio = Audio.fromBuffer(samples, sampleRate);
+    expect(audio.masterAudio({ overrides }).samples).toEqual(samples);
+  });
+
+  const forms: Array<[string, () => unknown]> = [
+    ['masterAudio', () => masterAudio({ samples, sampleRate })],
+    ['masterAudio', () => masterAudio(samples, sampleRate)],
+    [
+      'masterAudio',
+      () => masterAudio({ samples, sampleRate, preset: undefined, overrides: undefined }),
+    ],
+    ['masterAudio', () => masterAudio(samples, sampleRate, { onProgress: () => {} })],
+    [
+      'masterAudio',
+      () => {
+        using audio = Audio.fromBuffer(samples, sampleRate);
+        return audio.masterAudio({});
+      },
+    ],
+    ['masterAudioStereo', () => masterAudioStereo({ left: samples, right: samples, sampleRate })],
+  ];
+
+  it.each(refused)('refuses $id in every synchronous form', (item) => {
+    const kind = errorClassFor[item.cause as Cause];
+    for (const [name, call] of forms) {
+      const text = new RegExp(`^${literal(`${name}: ${item.message as string}`).source}$`);
+      expectRefusal(call, kind, text);
+    }
   });
 });
