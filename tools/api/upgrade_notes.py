@@ -24,20 +24,28 @@ SURFACE_TITLES = {"wasm": "WASM", "node": "Node", "python": "Python", "c": "C", 
 FENCES = {"wasm": "ts", "node": "ts", "python": "python", "c": "c", "cli": "sh"}
 TITLE = "# Upgrading from 1.10 to 2.0.0"
 INTRO = [
-    "2.0.0 changes the public interface of every binding, the C ABI and both command-line "
-    "front-ends. No 1.10 spelling is kept as an alias: a renamed function, argument, field, "
-    "flag or token is refused under its old name, and a JSON document written by 1.10 that "
-    "uses a removed key or token is refused with `InvalidFormat` naming the current spelling. "
-    "Nothing converts an old document on load.",
-    "The changes are grouped by the convention behind them. Each section states the "
-    "convention, shows a before and after where the change does not show in a signature, and "
-    "then lists every affected name, one table per surface. WASM tables are split by package "
-    "entry point.",
-    "The examples and tables write 1.10 as 1.x. In each table row the left column is the 1.x "
-    "name and the right column is one of:",
-    "- the 2.0.0 name, when only the name changed;\n"
-    "- `removed:` and what to use instead, or `removed, no replacement:` and why;\n"
-    "- the change a caller has to make, when the name stays.",
+    (
+        "2.0.0 changes the public interface of every binding, the C ABI and both command-line "
+        "front-ends. No 1.10 spelling is kept as an alias: a renamed function, argument, field, "
+        "flag or token is refused under its old name, and a JSON document written by 1.10 that "
+        "uses a removed key or token is refused with `InvalidFormat` naming the current spelling. "
+        "Nothing converts an old document on load."
+    ),
+    (
+        "The changes are grouped by the convention behind them. Each section states the "
+        "convention, shows a before and after where the change does not show in a signature, and "
+        "then lists every affected name, one table per surface. WASM tables are split by package "
+        "entry point."
+    ),
+    (
+        "The examples and tables write 1.10 as 1.x. In each table row the left column is the 1.x "
+        "name and the right column is one of:"
+    ),
+    (
+        "- the 2.0.0 name, when only the name changed;\n"
+        "- `removed:` and what to use instead, or `removed, no replacement:` and why;\n"
+        "- the change a caller has to make, when the name stays."
+    ),
 ]
 
 
