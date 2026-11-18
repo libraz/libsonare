@@ -331,8 +331,8 @@ describe('compile and bounce', () => {
 
       project.bounce({ totalFrames: 128 });
       const last = project.lastBounceCompileResult();
-      expect(Object.keys(last)).toEqual(['diagnostics']);
-      expect(last.diagnostics.map((d) => d.code)).toEqual(['midiClipNoInstrument']);
+      expect(Object.keys(last ?? {})).toEqual(['diagnostics']);
+      expect(last?.diagnostics.map((d) => d.code)).toEqual(['midiClipNoInstrument']);
     });
   });
 

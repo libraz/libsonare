@@ -228,15 +228,38 @@ describe('Project counts and timeline metadata (WASM)', () => {
     }
   });
 
-  it('returns a compile-result object from lastBounceCompileResult', () => {
+  it('reports no last bounce compile result on a project no bounce has run on', () => {
     const project = new Project();
     try {
+      expect(project.lastBounceCompileResult()).toBeUndefined();
+    } finally {
+      project.destroy();
+    }
+  });
+
+  it('reports empty diagnostics after a clean bounce', () => {
+    const project = new Project();
+    try {
+      project.setSampleRate(48000);
+      project.bounce({ totalFrames: 256 });
+      expect(project.lastBounceCompileResult()).toEqual({ diagnostics: [] });
+    } finally {
+      project.destroy();
+    }
+  });
+
+  it('reports the error diagnostics of a failed bounce', () => {
+    const project = new Project();
+    try {
+      project.setSampleRate(48000);
+      const trackId = project.addTrack({ kind: 'audio' });
+      // A clip whose audio source was never supplied cannot be compiled.
+      project.addClip({ trackId, startPpq: 0, lengthPpq: 1, sourceUri: 'asset://missing.wav' });
+      expect(() => project.bounce({ totalFrames: 256 })).toThrow();
       const result = project.lastBounceCompileResult();
-      expect(result).toBeTypeOf('object');
-      expect(result).not.toHaveProperty('hasTimeline');
-      expect(result).not.toHaveProperty('diagnosticCount');
-      // No bounce has run on this project, so the result is empty in full.
-      expect(result.diagnostics).toHaveLength(0);
+      expect(result).toBeDefined();
+      expect(Object.keys(result ?? {})).toEqual(['diagnostics']);
+      expect(result?.diagnostics.some((diagnostic) => diagnostic.severity === 'error')).toBe(true);
     } finally {
       project.destroy();
     }

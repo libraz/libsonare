@@ -1482,13 +1482,17 @@ export class Project {
 
   /**
    * Compile diagnostics produced by the most recent bounce on this project
-   * (e.g. MIDI clips rendering silently without a bound instrument). On a
-   * project no bounce has ever run on, `diagnostics` is empty. A failed bounce is
-   * distinguishable from that state, because a bounce only loses its timeline
-   * through an error diagnostic and so always reports at least one.
+   * (e.g. MIDI clips rendering silently without a bound instrument).
+   *
+   * `undefined` when no bounce has run on this project. A clean bounce returns a
+   * result with empty diagnostics; a failed one carries at least one error.
    */
-  lastBounceCompileResult(): ProjectCompileResult {
-    return projectCompileResultFromNative(this.native.lastBounceCompileResult());
+  lastBounceCompileResult(): ProjectCompileResult | undefined {
+    const raw = this.native.lastBounceCompileResult();
+    if (!raw.hasTimeline && raw.diagnostics.length === 0) {
+      return undefined;
+    }
+    return projectCompileResultFromNative(raw);
   }
 
   /**

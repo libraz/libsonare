@@ -1288,22 +1288,31 @@ describe('Project value-model accessors', () => {
     project.destroy();
   });
 
-  it('exposes the last bounce compile result', () => {
-    const project = buildProject();
-    project.bounce({ totalFrames: 256 });
-    const result = project.lastBounceCompileResult();
-    expect(result).not.toHaveProperty('hasTimeline');
-    expect(Array.isArray(result.diagnostics)).toBe(true);
+  it('reports no last bounce compile result on a project no bounce has run on', () => {
+    const project = new Project();
+    expect(project.lastBounceCompileResult()).toBeUndefined();
     project.destroy();
   });
 
-  it('reports an empty compile result on a project no bounce has run on', () => {
-    // No bounce has run, so the result is empty in full. A failed bounce is
-    // told apart by its diagnostics: losing the timeline always leaves an error
-    // diagnostic behind.
+  it('reports empty diagnostics after a clean bounce', () => {
     const project = new Project();
+    project.setSampleRate(48000);
+    project.bounce({ totalFrames: 256 });
+    expect(project.lastBounceCompileResult()).toEqual({ diagnostics: [] });
+    project.destroy();
+  });
+
+  it('reports the error diagnostics of a failed bounce', () => {
+    const project = new Project();
+    project.setSampleRate(48000);
+    const trackId = project.addTrack({ kind: 'audio' });
+    // A clip whose audio source was never supplied cannot be compiled.
+    project.addClip({ trackId, startPpq: 0, lengthPpq: 1, sourceUri: 'asset://missing.wav' });
+    expect(() => project.bounce({ totalFrames: 256 })).toThrow();
     const result = project.lastBounceCompileResult();
-    expect(result.diagnostics).toHaveLength(0);
+    expect(result).toBeDefined();
+    expect(Object.keys(result ?? {})).toEqual(['diagnostics']);
+    expect(result?.diagnostics.some((diagnostic) => diagnostic.severity === 'error')).toBe(true);
     project.destroy();
   });
 });

@@ -602,7 +602,7 @@ export interface WasmProject {
   timeSignatureCount: () => number;
   setTempoSegments: (segments: ReadonlyArray<ProjectTempoSegment>) => void;
   setTimeSignatures: (segments: ReadonlyArray<ProjectTimeSignatureSegment>) => void;
-  lastBounceCompileResult: () => NativeProjectCompileResult;
+  lastBounceCompileResult: () => NativeProjectCompileResult & { hasTimeline: boolean };
   delete: () => void;
 }
 

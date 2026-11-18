@@ -1417,14 +1417,15 @@ export class Project {
   /**
    * Retrieve the compile result captured by the most recent {@link bounce}.
    *
-   * On a project no bounce has ever run on, the diagnostics are empty. A failed
-   * bounce is distinguishable from that state, because a bounce only loses its
-   * timeline through an error diagnostic and so always reports at least one.
+   * `undefined` when no bounce has run on this project. A clean bounce returns a
+   * result with empty diagnostics; a failed one carries at least one error.
    */
-  lastBounceCompileResult(): ProjectCompileResult {
-    return {
-      diagnostics: diagnosticsFromNative(this.native.lastBounceCompileResult().diagnostics),
-    };
+  lastBounceCompileResult(): ProjectCompileResult | undefined {
+    const raw = this.native.lastBounceCompileResult();
+    if (!raw.hasTimeline && raw.diagnostics.length === 0) {
+      return undefined;
+    }
+    return { diagnostics: diagnosticsFromNative(raw.diagnostics) };
   }
 
   /**

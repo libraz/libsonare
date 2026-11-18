@@ -386,8 +386,8 @@ describe('compile and bounce', () => {
 
       project.bounce({ totalFrames: 128 });
       const last = project.lastBounceCompileResult();
-      expect(Object.keys(last)).toEqual(['diagnostics']);
-      expect(last.diagnostics[0].severity).toBe('warning');
+      expect(Object.keys(last ?? {})).toEqual(['diagnostics']);
+      expect(last?.diagnostics[0].severity).toBe('warning');
     });
   });
 
