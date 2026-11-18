@@ -875,14 +875,14 @@ class CliHelpSentinel(CheckerCase):
 
 class Dimensionless(CheckerCase):
     ROW = (
-        '[[name]]\nsurface = "node"\nsymbol = "Probe.threshold"\nclass = "{cls}"\n'
+        '[[name]]\nnames = ["{name}"]\nclass = "{cls}"\n'
         'range = [0, 1]\nevidence = "a correlation"\n'
     )
 
-    def run_dim(self, body, with_record=True):
+    def run_dim(self, body, with_record=True, name="Probe.threshold"):
         if with_record:
             self.add(_rec("node", "field", "Probe.threshold", owner="Probe", member="threshold"))
-        dim = self.write("d.toml", body)
+        dim = self.write("d.toml", body.replace("{name}", name))
         _, lines = self.run_check("--surface", "node", "--check", "unit-in-name", dimensionless=dim)
         flagged = [x.strip() for x in lines if x.strip().startswith("node field Probe.threshold:")]
         problems = [x.strip() for x in lines if x.startswith("  dimensionless_names.toml")]
@@ -892,17 +892,105 @@ class Dimensionless(CheckerCase):
         flagged, problems = self.run_dim("")
         self.assertEqual(len(flagged), 1, flagged)
         self.setUp()
-        flagged, problems = self.run_dim(self.ROW.format(cls="correlation"))
+        flagged, problems = self.run_dim(self.ROW.format(name="{name}", cls="correlation"))
         self.assertEqual((flagged, problems), ([], []))
 
+    def test_one_row_covers_every_spelling_of_the_name(self):
+        for spelling in ("SonareProbe.threshold", "probe.threshold", "Probe.threshold"):
+            with self.subTest(spelling=spelling):
+                self.setUp()
+                self.add(
+                    _rec(
+                        "c",
+                        "field",
+                        "SonareProbe.threshold",
+                        owner="SonareProbe",
+                        member="threshold",
+                    )
+                )
+                flagged, problems = self.run_dim(
+                    self.ROW.format(name="{name}", cls="ratio"), name=spelling
+                )
+                _, lines = self.run_check(
+                    "--surface", "c", "--check", "unit-in-name", dimensionless=self.dir / "d.toml"
+                )
+                self.assertEqual((flagged, problems), ([], []))
+                self.assertFalse(any("SonareProbe.threshold:" in x for x in lines), lines)
+
     def test_a_row_must_be_well_formed_and_name_a_candidate(self):
-        _, problems = self.run_dim(self.ROW.format(cls="percent"))
+        _, problems = self.run_dim(self.ROW.format(name="{name}", cls="percent"))
         self.assertEqual(len(problems), 1, problems)
         self.assertIn("class must be one of", problems[0])
         self.setUp()
-        _, problems = self.run_dim(self.ROW.format(cls="ratio"), with_record=False)
+        _, problems = self.run_dim(self.ROW.format(name="{name}", cls="ratio"), with_record=False)
         self.assertEqual(len(problems), 1, problems)
         self.assertIn("names nothing unit-in-name would flag", problems[0])
+
+    def test_a_name_in_two_rows_is_refused(self):
+        row = self.ROW.format(name="{name}", cls="ratio")
+        _, problems = self.run_dim(row + "\n" + row.replace("Probe.threshold", "probe.threshold"))
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn("listed twice", problems[0])
+
+
+class UnitInName(CheckerCase):
+    def flagged(self, *records):
+        self.add(*records)
+        _, lines = self.run_check("--check", "unit-in-name")
+        return sorted(x.strip().split(":")[0] for x in lines if "names a physical quantity" in x)
+
+    def test_a_value_that_is_not_a_number_names_no_quantity(self):
+        rows = [
+            ("node", "A.autoThreshold", "boolean | undefined", True),
+            ("node", "A.midiRelease", "MidiRelease", False),
+            ("wasm", "A.latency", "{ samples: number; stages: Record<S, L>; }", False),
+            ("node", "A.timbreOverTime", "TimbreFrame[]", False),
+            ("python", "A.midi_release", "str", False),
+            ("python", "A.timbre_over_time", "list[TimbreFrame]", False),
+            ("c", "A.timbre_over_time", "SonareTimbreFrame*", False),
+            ("node", "B.threshold", "number | undefined", False),
+            ("python", "B.ceiling", "float | None", False),
+            ("c", "B.delay", "float", False),
+            ("c", "B.release", "float*", False),
+        ]
+        recs = [
+            _rec(s, "field", n, owner=n.split(".")[0], member=n.split(".")[1], type=ty, boolean=b)
+            for s, n, ty, b in rows
+        ]
+        recs.append(_rec("cli-native", "flag", "x --duration", owner="x", member="duration"))
+        self.assertEqual(
+            self.flagged(*recs),
+            [
+                "c field B.delay",
+                "c field B.release",
+                "cli-native flag x --duration",
+                "node field B.threshold",
+                "python field B.ceiling",
+            ],
+        )
+
+    def test_a_unit_word_anywhere_in_the_name_names_the_unit(self):
+        names = (
+            "frame_offset",
+            "sample_offset",
+            "base_sample_offset",
+            "sample_start_offset",
+            "envelope_offset",
+            "attack_ms",
+            "offset",
+        )
+        recs = [_rec("c", "option", f"f({n})", owner="f", member=n, type="int64_t") for n in names]
+        recs.append(
+            _rec(
+                "node",
+                "field",
+                "A.sampleStartOffset",
+                owner="A",
+                member="sampleStartOffset",
+                type="number",
+            )
+        )
+        self.assertEqual(self.flagged(*recs), ["c option f(envelope_offset)", "c option f(offset)"])
 
 
 class DocSentinel(CheckerCase):

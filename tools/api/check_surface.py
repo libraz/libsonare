@@ -198,29 +198,30 @@ def load_mirrors(path: Path, problems: list[str]) -> dict[str, str]:
     return out
 
 
-def load_dimensionless(
-    path: Path, problems: list[str], records: list[dict]
-) -> set[tuple[str, str]]:
-    """(surface, name) pairs whose unit-less quantity is declared; a row naming no candidate is stale."""
+def load_dimensionless(path: Path, problems: list[str], records: list[dict]) -> set[str]:
+    """Surface-neutral names whose unit-less quantity is declared; a name matching no candidate is stale."""
     data = load_toml(path, problems, "dimensionless_names.toml")
     if data is None:
         return set()
     for k in sorted(set(data) - {"name"}):
         problems.append(f"dimensionless_names.toml: unknown top-level key {k!r}")
     flagged = {
-        (r["surface"], r["name"])
+        dimensionless_key(r["name"])
         for r in records
         if r["kind"] in ("option", "field", "flag")
-        and not (r["kind"] == "flag" and r.get("boolean"))
-        and (hit := _unit_split(bare(r))) is not None
+        and (hit := _unit_hit(r)) is not None
         and hit[1] is None
     }
-    out: set[tuple[str, str]] = set()
+    out: set[str] = set()
     for i, n in enumerate(data.get("name", []), 1):
-        surface, symbol = n.get("surface", ""), n.get("symbol", "")
-        label = f"dimensionless_names.toml name {i} ({surface} {symbol})"
-        for k in sorted(set(n) - {"surface", "symbol", "class", "range", "evidence"}):
+        names = n.get("names")
+        label = f"dimensionless_names.toml name {i}"
+        for k in sorted(set(n) - {"names", "class", "range", "evidence"}):
             problems.append(f"{label}: unknown key {k!r}")
+        if not (isinstance(names, list) and names and all(isinstance(x, str) for x in names)):
+            problems.append(f"{label}: names must be a non-empty list of strings")
+            continue
+        label += f" ({names[0]})"
         if n.get("class") not in DIMENSIONLESS_CLASSES:
             problems.append(f"{label}: class must be one of {', '.join(DIMENSIONLESS_CLASSES)}")
         rng = n.get("range")
@@ -233,16 +234,13 @@ def load_dimensionless(
             problems.append(f"{label}: range must be [low, high]")
         if not isinstance(n.get("evidence"), str) or not n["evidence"].strip():
             problems.append(f"{label}: evidence is required")
-        surfaces = CLI if surface == "cli" else (surface,)
-        if surface not in SURFACES + ("cli",):
-            problems.append(f"{label}: unknown surface {surface!r}")
-            continue
-        keys = {(s, symbol) for s in surfaces}
-        if keys & out:
-            problems.append(f"{label}: listed twice")
-        if not keys & flagged:
-            problems.append(f"{label}: names nothing unit-in-name would flag")
-        out |= keys
+        for name in names:
+            key = dimensionless_key(name)
+            if key in out:
+                problems.append(f"{label}: {name} listed twice")
+            elif key not in flagged:
+                problems.append(f"{label}: {name} names nothing unit-in-name would flag")
+            out.add(key)
     return out
 
 
@@ -779,28 +777,65 @@ _UNITS = (
 
 
 def _unit_split(name: str):
-    """(stem, unit) when the snake name ends with stem or stem_unit, else None."""
+    """(stem, unit) when the snake name ends with stem or stem_unit, else None.
+
+    A unit word anywhere else in the name (sample_start_offset) names the unit as well.
+    """
     s = snake(name)
+    words = s.split("_")
     for stem in _STEMS:
-        if s == stem or s.endswith("_" + stem):
-            return stem, None
         for unit in _UNITS:
             if s == f"{stem}_{unit}" or s.endswith(f"_{stem}_{unit}"):
                 return stem, unit
+        if s == stem or s.endswith("_" + stem):
+            head = words[: len(words) - len(stem.split("_"))]
+            return stem, next((w for w in head if w in _UNITS), None)
     return None
+
+
+_NUMERIC_WORD = re.compile(
+    r"\b(?:number|bigint|float|int|double|long|short|unsigned|size_t|u?int(?:8|16|32|64)_t"
+    r"|(?:Float|Int|Uint|BigInt|BigUint)(?:8|16|32|64)Array)\b"
+)
+
+
+def _numeric_type(r: dict) -> bool:
+    """False when the declared type cannot hold a number (a token, a flag, an object, a record list)."""
+    ty = r.get("type")
+    if ty is None:
+        return True
+    if r.get("boolean") or ty.lstrip().startswith("{"):
+        return False
+    return bool(_NUMERIC_WORD.search(ty))
+
+
+def _unit_hit(r: dict):
+    """unit-in-name's verdict input for one record: (stem, unit), or None when it names no quantity."""
+    # A CLI switch takes no value, so it carries no quantity to name a unit for.
+    if (r["kind"] == "flag" and r.get("boolean")) or not _numeric_type(r):
+        return None
+    return _unit_split(bare(r))
+
+
+def dimensionless_key(name: str) -> str:
+    """One spelling for a name on every surface: no Sonare / sonare_ prefix, snake_case words."""
+    return re.sub(
+        r"[A-Za-z][A-Za-z0-9_]*",
+        lambda m: snake(re.sub(r"^(?:Sonare(?=[A-Z])|sonare_)", "", m[0])),
+        name,
+    )
 
 
 def chk_unit_in_name(ctx):
     cands, bad = 0, []
     for r in recs(ctx, ALL, ("option", "field", "flag")):
-        # A CLI switch takes no value, so it carries no quantity to name a unit for.
-        if ctx.mirror(r) or (r["kind"] == "flag" and r.get("boolean")):
+        if ctx.mirror(r):
             continue
-        hit = _unit_split(bare(r))
+        hit = _unit_hit(r)
         if hit is None:
             continue
         cands += 1
-        if hit[1] is None and (r["surface"], r["name"]) not in ctx.dimensionless:
+        if hit[1] is None and dimensionless_key(r["name"]) not in ctx.dimensionless:
             bad.append((r, f"'{hit[0]}' names a physical quantity; add its unit suffix"))
     return cands, bad
 

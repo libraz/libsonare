@@ -1,199 +1,169 @@
 # Option, field and flag names that unit-in-name would flag but whose quantity has no unit.
 #
-# One [[name]] per (surface, symbol); surface "cli" covers both CLI front-ends.
-#   surface   wasm | node | python | c | cli-python | cli-native | cli
-#   symbol    the qualified name as the inventory spells it (Type.field, fn(param), "cmd --flag")
+# One [[name]] per quantity; its names cover every surface's spelling of it. A name matches
+# without its Sonare / sonare_ prefix and with each identifier in snake_case, so
+# "SonareBoundaryOptions.threshold", "BoundaryOptions.threshold" and
+# "boundary_options.threshold" are one name.
+#   names     qualified names as the inventory spells them (Type.field, fn(param), "cmd --flag")
 #   class     ratio | probability | correlation | normalized | magnitude
 #   range     [low, high]; inf for no upper bound
-#   evidence  what the number is measured against, in one line
-# A row that names nothing unit-in-name would flag is a validation problem, so a renamed or
-# removed symbol takes its row with it.
+#   evidence  the header line that states what the number is measured against
+# A name that matches nothing unit-in-name would flag is a validation problem, so a renamed or
+# removed symbol takes its name with it.
 
 [[name]]
-surface = "node"
-symbol = "ProjectTempoOptions.rampThreshold"
+names = [
+  "BoundaryOptions.threshold",
+  "DetectBoundariesRequest.threshold",
+  "detect_boundaries(threshold)",
+  "boundaries --threshold",
+  "sections --threshold",
+]
 class = "ratio"
 range = [0, inf]
-evidence = "finite, >= 0 (default 0.02); relative tempo change, no upper bound. src/mir/tempo_estimator_bridge.cpp:127-131; validated src/c_api/project_mir.cpp:85-86"
+evidence = "include/sonare/sonare_c_types_analysis.h:357: relative to the local novelty maximum"
 
 [[name]]
-surface = "wasm"
-symbol = "ProjectTempoOptions.rampThreshold"
-class = "ratio"
-range = [0, inf]
-evidence = "finite, >= 0 (default 0.02); relative tempo change, no upper bound. src/mir/tempo_estimator_bridge.cpp:127-131; validated src/c_api/project_mir.cpp:85-86"
-
-[[name]]
-surface = "node"
-symbol = "VocalAnalysis.yinThreshold"
-class = "ratio"
-range = [0, 1]
-evidence = "lower bound 0 exclusive, upper 1 inclusive: a cutoff on the normalized YIN CMNDF. src/feature/pitch.cpp:199; refused at 0 by src/editing/vocal_edit/analysis.cpp:431"
-
-[[name]]
-surface = "node"
-symbol = "VocalAnalysisInput.yinThreshold"
-class = "ratio"
-range = [0, 1]
-evidence = "lower bound 0 exclusive, upper 1 inclusive: a cutoff on the normalized YIN CMNDF. src/feature/pitch.cpp:199; refused at 0 by src/editing/vocal_edit/analysis.cpp:431"
-
-[[name]]
-surface = "node"
-symbol = "VocalCreateOptions.yinThreshold"
-class = "ratio"
-range = [0, 1]
-evidence = "lower bound 0 exclusive, upper 1 inclusive: a cutoff on the normalized YIN CMNDF. src/feature/pitch.cpp:199; refused at 0 by src/editing/vocal_edit/analysis.cpp:431"
-
-[[name]]
-surface = "node"
-symbol = "VocalCreateRequest.yinThreshold"
-class = "ratio"
-range = [0, 1]
-evidence = "lower bound 0 exclusive, upper 1 inclusive: a cutoff on the normalized YIN CMNDF. src/feature/pitch.cpp:199; refused at 0 by src/editing/vocal_edit/analysis.cpp:431"
-
-[[name]]
-surface = "wasm"
-symbol = "VocalAnalysis.yinThreshold"
-class = "ratio"
-range = [0, 1]
-evidence = "lower bound 0 exclusive, upper 1 inclusive: a cutoff on the normalized YIN CMNDF. src/feature/pitch.cpp:199; refused at 0 by src/editing/vocal_edit/analysis.cpp:431"
-
-[[name]]
-surface = "wasm"
-symbol = "VocalAnalysisInput.yinThreshold"
-class = "ratio"
-range = [0, 1]
-evidence = "lower bound 0 exclusive, upper 1 inclusive: a cutoff on the normalized YIN CMNDF. src/feature/pitch.cpp:199; refused at 0 by src/editing/vocal_edit/analysis.cpp:431"
-
-[[name]]
-surface = "wasm"
-symbol = "VocalCreateOptions.yinThreshold"
-class = "ratio"
-range = [0, 1]
-evidence = "lower bound 0 exclusive, upper 1 inclusive: a cutoff on the normalized YIN CMNDF. src/feature/pitch.cpp:199; refused at 0 by src/editing/vocal_edit/analysis.cpp:431"
-
-[[name]]
-surface = "wasm"
-symbol = "VocalCreateRequest.yinThreshold"
-class = "ratio"
-range = [0, 1]
-evidence = "lower bound 0 exclusive, upper 1 inclusive: a cutoff on the normalized YIN CMNDF. src/feature/pitch.cpp:199; refused at 0 by src/editing/vocal_edit/analysis.cpp:431"
-
-[[name]]
-surface = "node"
-symbol = "VocalAnalysis.voicedThreshold"
-class = "probability"
-range = [0, 1]
-evidence = "both bounds inclusive; voiced probability. validated src/editing/vocal_edit/analysis.cpp:432, :501-506; semantics src/editing/note_model/note_extractor.cpp:87"
-
-[[name]]
-surface = "node"
-symbol = "VocalAnalysisInput.voicedThreshold"
-class = "probability"
-range = [0, 1]
-evidence = "both bounds inclusive; voiced probability. validated src/editing/vocal_edit/analysis.cpp:432, :501-506; semantics src/editing/note_model/note_extractor.cpp:87"
-
-[[name]]
-surface = "node"
-symbol = "VocalCreateOptions.voicedThreshold"
-class = "probability"
-range = [0, 1]
-evidence = "both bounds inclusive; voiced probability. validated src/editing/vocal_edit/analysis.cpp:432, :501-506; semantics src/editing/note_model/note_extractor.cpp:87"
-
-[[name]]
-surface = "node"
-symbol = "VocalCreateRequest.voicedThreshold"
-class = "probability"
-range = [0, 1]
-evidence = "both bounds inclusive; voiced probability. validated src/editing/vocal_edit/analysis.cpp:432, :501-506; semantics src/editing/note_model/note_extractor.cpp:87"
-
-[[name]]
-surface = "wasm"
-symbol = "VocalAnalysis.voicedThreshold"
-class = "probability"
-range = [0, 1]
-evidence = "both bounds inclusive; voiced probability. validated src/editing/vocal_edit/analysis.cpp:432, :501-506; semantics src/editing/note_model/note_extractor.cpp:87"
-
-[[name]]
-surface = "wasm"
-symbol = "VocalAnalysisInput.voicedThreshold"
-class = "probability"
-range = [0, 1]
-evidence = "both bounds inclusive; voiced probability. validated src/editing/vocal_edit/analysis.cpp:432, :501-506; semantics src/editing/note_model/note_extractor.cpp:87"
-
-[[name]]
-surface = "wasm"
-symbol = "VocalCreateOptions.voicedThreshold"
-class = "probability"
-range = [0, 1]
-evidence = "both bounds inclusive; voiced probability. validated src/editing/vocal_edit/analysis.cpp:432, :501-506; semantics src/editing/note_model/note_extractor.cpp:87"
-
-[[name]]
-surface = "wasm"
-symbol = "VocalCreateRequest.voicedThreshold"
-class = "probability"
-range = [0, 1]
-evidence = "both bounds inclusive; voiced probability. validated src/editing/vocal_edit/analysis.cpp:432, :501-506; semantics src/editing/note_model/note_extractor.cpp:87"
-
-[[name]]
-surface = "cli-native"
-symbol = "boundaries --threshold"
-class = "ratio"
-range = [0, inf]
-evidence = "peak threshold relative to the local novelty maximum"
-
-[[name]]
-surface = "cli-native"
-symbol = "boundaries --absolute-threshold"
-class = "normalized"
-range = [0, inf]
-evidence = "absolute floor on the normalized novelty curve"
-
-[[name]]
-surface = "cli"
-symbol = "sections --threshold"
-class = "normalized"
-range = [0, inf]
-evidence = "boundary threshold on the normalized novelty curve"
-
-[[name]]
-surface = "cli"
-symbol = "chords --threshold"
+names = [
+  "ChordDetectionOptions.threshold",
+  "DetectChordsRequest.threshold",
+  "detect_chords(threshold)",
+  "Audio.detect_chords(threshold)",
+  "chords --threshold",
+]
 class = "correlation"
 range = [0, 1]
-evidence = "chord-template correlation below which a frame is no chord"
+evidence = "include/sonare/sonare_c_types_analysis.h:396 and sonare_c_features.h:68: final chord-template correlation, which must be in [0, 1]"
 
 [[name]]
-surface = "cli"
-symbol = "pitch --threshold"
-class = "ratio"
-range = [0, 1]
-evidence = "YIN aperiodicity cutoff on the cumulative-mean-normalized difference"
+names = [
+  "pitch_yin(threshold)",
+  "Audio.pitch_yin(threshold)",
+  "PitchYinRequest.threshold",
+  "analyze_melody(threshold)",
+  "analyze_melody_ex(threshold)",
+  "AnalyzeMelodyRequest.threshold",
+  "MelodyOptions.threshold",
+  "pitch --threshold",
+  "melody --threshold",
+]
+class = "normalized"
+range = [0, inf]
+evidence = "include/sonare/sonare_c_features.h:144 and :790: aperiodicity cutoff on the cumulative mean normalized difference, scale-free by construction"
 
 [[name]]
-surface = "cli-native"
-symbol = "melody --threshold"
-class = "ratio"
-range = [0, 1]
-evidence = "YIN aperiodicity cutoff on the cumulative-mean-normalized difference"
+names = [
+  "pitch_pyin(threshold)",
+  "Audio.pitch_pyin(threshold)",
+  "PitchPyinRequest.threshold",
+]
+class = "normalized"
+range = [0, inf]
+evidence = "include/sonare/sonare_c_features.h:802: upper bound of the swept cumulative-mean-normalized-difference thresholds"
 
 [[name]]
-surface = "cli"
-symbol = "vocal-notes --yin-threshold"
-class = "ratio"
-range = [0, 1]
-evidence = "upper bound of the pYIN swept threshold distribution"
-
-[[name]]
-surface = "cli"
-symbol = "vocal-notes --voiced-threshold"
-class = "probability"
-range = [0, 1]
-evidence = "voiced-probability cutoff"
-
-[[name]]
-surface = "cli-native"
-symbol = "vector-normalize --threshold"
+names = [
+  "zero_crossings(threshold)",
+  "ZeroCrossingsRequest.threshold",
+]
 class = "magnitude"
 range = [0, inf]
-evidence = "norm floor below which a vector is left unnormalized, in the input vector's own unitless scale"
+evidence = "include/sonare/sonare_c_features.h:634-635: sample magnitudes at or below it count as zero, optionally scaled by max(|y|)"
+
+[[name]]
+names = [
+  "vector_normalize(threshold)",
+  "VectorNormalizeRequest.threshold",
+  "vector-normalize --threshold",
+]
+class = "magnitude"
+range = [0, inf]
+evidence = "include/sonare/sonare_c_features.h:1119-1121: compared against the vector's norm, in the units of the caller's own array"
+
+[[name]]
+names = [
+  "metering_detect_clipping(threshold)",
+  "audio_detect_clipping(threshold)",
+  "Audio.detect_clipping(threshold)",
+  "clipping --threshold",
+  "meter --clip-threshold",
+]
+class = "magnitude"
+range = [0, 1]
+evidence = "include/sonare/sonare_c_metering.h:71: linear absolute sample level in [0, 1]"
+
+[[name]]
+names = [
+  "OnsetDetectConfig.threshold",
+  "OnsetDetectOptions.threshold",
+  "DetectOnsetsRequest.threshold",
+  "detect_onsets(threshold)",
+]
+class = "magnitude"
+range = [0, inf]
+evidence = "include/sonare/sonare_c_types_functions.h:245-250: minimum onset strength, in the units of the onset envelope"
+
+[[name]]
+names = [
+  "ProjectTempoOptions.ramp_threshold",
+  "ProjectAutoTempoOptions.rampThreshold",
+  "ProjectAutoTempoRequest.rampThreshold",
+  "ProjectAnalyzeTempoRequest.rampThreshold",
+  "Project.analyze_tempo(ramp_threshold)",
+  "Project.auto_tempo(ramp_threshold)",
+]
+class = "ratio"
+range = [0, inf]
+evidence = "include/sonare/sonare_c_project_annotate.h:213-216: relative tempo change, as a fraction"
+
+[[name]]
+names = [
+  "NoteExtractorConfig.voiced_threshold",
+  "NoteExtractorOptions.voicedThreshold",
+  "ExtractNotesRequest.voicedThreshold",
+  "extract_notes(voiced_threshold)",
+  "MergeNotesRequest.voicedThreshold",
+  "merge_notes(voiced_threshold)",
+  "SplitNoteRequest.voicedThreshold",
+  "split_note(voiced_threshold)",
+]
+class = "probability"
+range = [0, 1]
+evidence = "include/sonare/sonare_c_effects.h:244: the voiced_prob value at or above which a frame counts as voiced"
+
+[[name]]
+names = [
+  "NoteSegmenterConfig.voiced_threshold",
+  "NoteSegmentsRequest.voicedThreshold",
+  "note_segments(voiced_threshold)",
+]
+class = "probability"
+range = [0, 1]
+evidence = "include/sonare/sonare_c_features.h:854-858: the voiced_prob value at or above which a frame counts as voiced"
+
+[[name]]
+names = [
+  "DereverbClassicalConfig.threshold",
+  "DereverbClassicalOptions.threshold",
+  "mastering_repair_dereverb_classical(threshold)",
+  "mastering_repair_dereverb_classical_stereo(threshold)",
+  "mastering_repair_dereverb_classical_linked(threshold)",
+  "MasteringRepairDereverbClassicalRequest.threshold",
+  "MasteringRepairDereverbClassicalStereoRequest.threshold",
+  "MasteringRepairDereverbClassicalLinkedRequest.threshold",
+  "mastering_repair_dereverb_config_for_room(threshold)",
+  "MasteringRepairDereverbConfigForRoomRequest.threshold",
+  "mastering_repair_detect_reverb(threshold)",
+  "MasteringRepairDetectReverbRequest.threshold",
+]
+class = "ratio"
+range = [0, inf]
+evidence = "src/mastering/repair/dereverb_classical.h:34-35 (the type sonare_c_mastering.h:1885 mirrors): late PSD compared against threshold * the bin's own power"
+
+[[name]]
+names = [
+  "MidiFxConfig.velocityOffset",
+]
+class = "magnitude"
+range = [-127, 127]
+evidence = "bindings/node/src/types_engine.ts:746 and sonare_c_project_midi.h:474-475: MIDI velocity steps added after scaling"
