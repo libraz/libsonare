@@ -77,18 +77,18 @@ def main() -> int:
     # If a preset's compressor/limiter character changes legitimately, update
     # the center here together with the C++ preset definition.
     per_preset_lufs_band = {
-        "neutral-monitor": (-23.5, -17.5),
-        "bright-idol": (-22.5, -16.5),
-        "soft-whisper": (-22.5, -16.5),
-        "deep-narrator": (-21.5, -15.5),
-        "robot-mascot": (-21.5, -15.5),
-        "dark-villain": (-23.5, -17.5),
-        "hard-tune": (-24.0, -18.0),
-        "robot-monotone": (-26.0, -20.0),
-        "choir-harmony": (-24.0, -18.0),
-        "vocoder-strings": (-27.0, -21.0),
+        "neutralMonitor": (-23.5, -17.5),
+        "brightIdol": (-22.5, -16.5),
+        "softWhisper": (-22.5, -16.5),
+        "deepNarrator": (-21.5, -15.5),
+        "robotMascot": (-21.5, -15.5),
+        "darkVillain": (-23.5, -17.5),
+        "hardTune": (-24.0, -18.0),
+        "robotMonotone": (-26.0, -20.0),
+        "choirHarmony": (-24.0, -18.0),
+        "vocoderStrings": (-27.0, -21.0),
         "megaphone": (-26.5, -20.5),
-        "radio-voice": (-26.0, -20.0),
+        "radioVoice": (-26.0, -20.0),
     }
 
     report: dict[str, object] = {"fixtures": {}, "presets": {}}
@@ -100,12 +100,12 @@ def main() -> int:
         for fixture_name, samples in fixtures.items():
             start = time.perf_counter()
             with libsonare.RealtimeVoiceChanger(
-                sample_rate, preset, max_block_size=block, channels=1
+                sample_rate, preset, max_block_size=block, num_channels=1
             ) as changer:
                 output: list[float] = []
                 for pos in range(0, len(samples), block):
                     output.extend(changer.process_mono(samples[pos : pos + block]))
-                latency = int(changer.latency_samples())
+                latency = int(changer.latency_samples)
             elapsed = time.perf_counter() - start
             # The binding returns numpy float32 scalars; coerce to native floats
             # so the strict JSON report below stays serialisable.
