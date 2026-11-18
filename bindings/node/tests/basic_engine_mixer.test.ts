@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { ErrorCode, Mixer, mixingScenePreset, RealtimeEngine } from '../src/index.js';
+import {
+  ErrorCode,
+  Mixer,
+  midiCc,
+  midiCcLearn,
+  mixingScenePreset,
+  RealtimeEngine,
+} from '../src/index.js';
 
 /** One strip feeding a master bus that carries a peaking band at `gainDb`. */
 function sceneWithBusEq(gainDb: number): string {
@@ -99,7 +106,7 @@ describe('RealtimeEngine', () => {
         ccNumber: 1,
         ccLsbNumber: 33,
         channel: 0,
-        kind: 1,
+        kind: 'controlChange14',
         paramId: 8,
         minValue: 0,
         maxValue: 1,
@@ -107,6 +114,34 @@ describe('RealtimeEngine', () => {
       expect(engine.midiCcBindingCount).toBe(2);
       engine.clearMidiCcBindings();
       expect(engine.midiCcBindingCount).toBe(0);
+    } finally {
+      engine.destroy();
+    }
+  });
+
+  it('takes the CC binding kind as a token and refuses an ordinal', () => {
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 16 });
+    try {
+      const binding = {
+        ccNumber: 1,
+        ccLsbNumber: 33,
+        channel: 0,
+        paramId: 8,
+        minValue: 0,
+        maxValue: 1,
+      };
+      expect(() => engine.bindMidiCc({ ...binding, kind: 'controlChange14' })).not.toThrow();
+      expect(engine.midiCcBindingCount).toBe(1);
+      expect(() => engine.bindMidiCc({ ...binding, kind: 1 as never })).toThrow(TypeError);
+      expect(engine.midiCcBindingCount).toBe(1);
+      const learned = midiCcLearn({
+        events: [
+          midiCc({ ppq: 0, group: 0, channel: 2, controller: 1, value: 64 }),
+          midiCc({ ppq: 0.1, group: 0, channel: 2, controller: 33, value: 12 }),
+        ],
+        paramId: 77,
+      });
+      expect(learned?.kind).toBe('controlChange14');
     } finally {
       engine.destroy();
     }

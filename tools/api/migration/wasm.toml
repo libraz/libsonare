@@ -27792,7 +27792,6 @@ domain = "engine"
 rule = "token-case"
 test = "bindings/wasm/tests/playback.test.ts::takes a room preset as a lowerCamel token and refuses the snake_case spelling"
 
-
 [[entry]]
 kind = "field"
 old = "ProjectMidiEvent.data0"
@@ -27814,6 +27813,14 @@ changed = "events are { ppq, word0, word1? } objects only; the [ppq, data0, data
 domain = "project"
 rule = "one-input-form"
 test = "bindings/wasm/tests/project.test.ts::refuses a tuple event and the data0/data1 keys"
+
+[[entry]]
+kind = "field"
+old = "ProjectMidiCcBinding.kind"
+changed = "'controlChange7' | 'controlChange14' | 'rpn' | 'nrpn' (was 0 | 1 | 2 | 3); an ordinal is a TypeError"
+domain = "project"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/project.test.ts::takes the CC binding kind as a token and refuses an ordinal"
 
 [[entry]]
 kind = "method"

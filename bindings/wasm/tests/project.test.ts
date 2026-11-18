@@ -1488,7 +1488,7 @@ describe('Sonare WASM Project', () => {
       const binding = {
         ccNumber: 74,
         channel: 2,
-        kind: 0 as const,
+        kind: 'controlChange7' as const,
         paramId: 9,
         minValue: 0,
         maxValue: 1,
@@ -1523,6 +1523,33 @@ describe('Sonare WASM Project', () => {
       );
     });
 
+    it('takes the CC binding kind as a token and refuses an ordinal', () => {
+      const learned = midiCcLearn({
+        events: [
+          midiCc({ ppq: 0, group: 0, channel: 2, controller: 1, value: 64 }),
+          midiCc({ ppq: 0.1, group: 0, channel: 2, controller: 33, value: 12 }),
+        ],
+        paramId: 77,
+      });
+      expect(learned?.kind).toBe('controlChange14');
+
+      const binding = {
+        ccNumber: 1,
+        ccLsbNumber: 33,
+        channel: 2,
+        paramId: 77,
+        minValue: 0,
+        maxValue: 1,
+      };
+      const event = midiCc({ ppq: 1, group: 0, channel: 2, controller: 1, value: 64 });
+      expect(() =>
+        midiCcToBreakpoint({ bindings: [{ ...binding, kind: 'controlChange14' }], event }),
+      ).not.toThrow();
+      expect(() =>
+        midiCcToBreakpoint({ bindings: [{ ...binding, kind: 1 as never }], event }),
+      ).toThrow(TypeError);
+    });
+
     it('exposes native CcMap learn and CC/automation conversion helpers', () => {
       const learned14 = midiCcLearn({
         events: [
@@ -1534,7 +1561,7 @@ describe('Sonare WASM Project', () => {
         maxValue: 1,
       });
       expect(learned14).toMatchObject({
-        kind: 1,
+        kind: 'controlChange14',
         ccNumber: 1,
         ccLsbNumber: 33,
         channel: 2,
@@ -1551,12 +1578,17 @@ describe('Sonare WASM Project', () => {
         ],
         paramId: 78,
       });
-      expect(learnedRpn).toMatchObject({ kind: 2, selectorMsb: 0, selectorLsb: 1, paramId: 78 });
+      expect(learnedRpn).toMatchObject({
+        kind: 'rpn',
+        selectorMsb: 0,
+        selectorLsb: 1,
+        paramId: 78,
+      });
 
       const binding = {
         ccNumber: 74,
         channel: 4,
-        kind: 0 as const,
+        kind: 'controlChange7' as const,
         paramId: 88,
         minValue: -60,
         maxValue: 0,

@@ -1513,7 +1513,7 @@ describe('UMP MIDI-1.0 packing matches the canonical word layout', () => {
       maxValue: 1,
     });
     expect(learned14).toMatchObject({
-      kind: 1,
+      kind: 'controlChange14',
       ccNumber: 1,
       ccLsbNumber: 33,
       channel: 2,
@@ -1530,12 +1530,12 @@ describe('UMP MIDI-1.0 packing matches the canonical word layout', () => {
       ],
       paramId: 78,
     });
-    expect(learnedRpn).toMatchObject({ kind: 2, selectorMsb: 0, selectorLsb: 1, paramId: 78 });
+    expect(learnedRpn).toMatchObject({ kind: 'rpn', selectorMsb: 0, selectorLsb: 1, paramId: 78 });
 
     const binding = {
       ccNumber: 74,
       channel: 4,
-      kind: 0 as const,
+      kind: 'controlChange7' as const,
       paramId: 88,
       minValue: -60,
       maxValue: 0,
@@ -1694,7 +1694,7 @@ describe('MIDI message module functions', () => {
     const binding = {
       ccNumber: 74,
       channel: 2,
-      kind: 0 as const,
+      kind: 'controlChange7' as const,
       paramId: 9,
       minValue: 0,
       maxValue: 1,

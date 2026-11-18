@@ -226,7 +226,7 @@ describe('MIDI byte fields refuse a value that would wrap into the byte domain',
     ({
       ccNumber: 7,
       channel: 0,
-      kind: 0,
+      kind: 'controlChange7',
       paramId: 1,
       minValue: 0,
       maxValue: 1,
@@ -301,8 +301,8 @@ describe('a positional parameter id refuses what the positional path used to wra
   // construction, so no downstream range check could see it.
   type CcBinding = Parameters<typeof midiParamToCc>[0]['bindings'][number];
   const bindings = [
-    { ccNumber: 7, channel: 0, kind: 0, paramId: 5, minValue: 0, maxValue: 1 },
-    { ccNumber: 64, channel: 0, kind: 0, paramId: 9, minValue: 0, maxValue: 1 },
+    { ccNumber: 7, channel: 0, kind: 'controlChange7', paramId: 5, minValue: 0, maxValue: 1 },
+    { ccNumber: 64, channel: 0, kind: 'controlChange7', paramId: 9, minValue: 0, maxValue: 1 },
   ] as unknown as CcBinding[];
 
   /** The controller number the requested id selected, or null for no match. */
@@ -687,7 +687,14 @@ describe('array-like `.length` reads refuse a wrapped, negative or fractional co
   it('reads midiCcLearn and midiParamToCc bindings from the real array length', () => {
     type CcBinding = Parameters<typeof midiParamToCc>[0]['bindings'][number];
     const binding = (ccNumber: number): CcBinding =>
-      ({ ccNumber, channel: 0, kind: 0, paramId: 1, minValue: 0, maxValue: 1 }) as CcBinding;
+      ({
+        ccNumber,
+        channel: 0,
+        kind: 'controlChange7',
+        paramId: 1,
+        minValue: 0,
+        maxValue: 1,
+      }) as CcBinding;
     // The control: an empty binding list matches nothing; one real, matching
     // binding does -- so the guard is reading how many bindings are really
     // there, not a value baked in ahead of time.

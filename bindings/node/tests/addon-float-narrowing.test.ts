@@ -164,7 +164,14 @@ const NOTES = native.extractNotes(NOTE_AUDIO, SAMPLE_RATE, NOTE_F0, NOTE_RATE, {
 });
 
 /** One parameter binding, so `midiParamToCc` has a parameter to map. */
-const CC_BINDING = { ccNumber: 74, channel: 4, kind: 0, paramId: 88, minValue: 0, maxValue: 1 };
+const CC_BINDING = {
+  ccNumber: 74,
+  channel: 4,
+  kind: 'controlChange7',
+  paramId: 88,
+  minValue: 0,
+  maxValue: 1,
+};
 
 function magnitudeSum(values: Iterable<number>): number {
   let total = 0;

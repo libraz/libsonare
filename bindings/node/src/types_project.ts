@@ -411,8 +411,8 @@ export interface ProjectMidiRouteResult {
   overflowCount: number;
 }
 
-/** Controller shape of a {@link ProjectMidiCcBinding}: 0 = 7-bit CC, 1 = 14-bit CC, 2 = RPN, 3 = NRPN. */
-export type ProjectMidiCcBindingKind = 0 | 1 | 2 | 3;
+/** Controller shape of a {@link ProjectMidiCcBinding}: a 7-bit CC, a 14-bit CC, an RPN or an NRPN. */
+export type ProjectMidiCcBindingKind = 'controlChange7' | 'controlChange14' | 'rpn' | 'nrpn';
 
 /** MIDI CC <-> automation binding descriptor used by CC learn/conversion helpers. */
 export interface ProjectMidiCcBinding {
@@ -420,7 +420,7 @@ export interface ProjectMidiCcBinding {
   ccNumber: number;
   /** MIDI channel 0..15, or 255 for any channel. Omit for the any-channel sentinel `255`. */
   channel?: number;
-  /** 0 = 7-bit CC, 1 = 14-bit CC, 2 = RPN, 3 = NRPN. Default `0`. */
+  /** Controller shape. Default `'controlChange7'`. */
   kind?: ProjectMidiCcBindingKind;
   /** LSB controller number of a 14-bit CC (`ccNumber` + 32). Default `0`. */
   ccLsbNumber?: number;

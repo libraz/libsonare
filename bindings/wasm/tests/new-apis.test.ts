@@ -1005,7 +1005,7 @@ describe('v1.2 feature additions (WASM)', () => {
           ccNumber: 1,
           ccLsbNumber: 33,
           channel: 0,
-          kind: 1,
+          kind: 'controlChange14',
           paramId: 6,
           minValue: 0,
           maxValue: 1,

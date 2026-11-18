@@ -687,6 +687,7 @@ export type {
   ProjectMarkerInput,
   ProjectMarkerKind,
   ProjectMidiCcBinding,
+  ProjectMidiCcBindingKind,
   ProjectMidiClipResult,
   ProjectMidiEvent,
   ProjectMidiFxBakeRequest,

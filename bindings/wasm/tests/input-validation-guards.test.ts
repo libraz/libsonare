@@ -581,8 +581,8 @@ describe('RealtimeEngine.bindMidiCc defaults omitted descriptor fields', () => {
 
   it('defaults an omitted kind to 7-bit Control Change', () => {
     const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
-    // A kind of 1 (14-bit CC) additionally requires ccLsbNumber === ccNumber + 32,
-    // so the descriptor below is accepted only while the default kind is 0.
+    // A kind of 'controlChange14' additionally requires ccLsbNumber === ccNumber + 32,
+    // so the descriptor below is accepted only while the default kind is 'controlChange7'.
     expect(() =>
       engine.bindMidiCc({ ccNumber: 7, paramId: 1 } as CcBindingDescriptor),
     ).not.toThrow();
@@ -590,7 +590,7 @@ describe('RealtimeEngine.bindMidiCc defaults omitted descriptor fields', () => {
     // ccNumber is used because binding an existing (ccNumber, channel) replaces
     // it rather than appending.
     expect(() =>
-      engine.bindMidiCc({ ccNumber: 8, kind: 0, paramId: 2 } as CcBindingDescriptor),
+      engine.bindMidiCc({ ccNumber: 8, kind: 'controlChange7', paramId: 2 } as CcBindingDescriptor),
     ).not.toThrow();
     expect(engine.midiCcBindingCount).toBe(2);
   });
@@ -641,16 +641,32 @@ describe('RealtimeEngine.bindMidiCc defaults omitted descriptor fields', () => {
     expect(engine.midiCcBindingCount).toBe(0);
   });
 
-  it('still requires paramId and range-checks a supplied kind', () => {
+  it('still requires paramId and refuses a numeric kind', () => {
     const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     expectTypeRefusal(() => engine.bindMidiCc({ ccNumber: 7 } as unknown as CcBindingDescriptor));
-    expectRangeRefusal(() =>
+    expectTypeRefusal(() =>
       engine.bindMidiCc({
         ccNumber: 7,
         kind: 9,
         paramId: 1,
       } as unknown as CcBindingDescriptor),
     );
+    expect(engine.midiCcBindingCount).toBe(0);
+  });
+
+  it('refuses an unknown kind name and a reserved paramId as RangeError', () => {
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
+    const unknownKind = expectRefusalOf(() =>
+      engine.bindMidiCc({
+        ccNumber: 7,
+        kind: 'pitchBend',
+        paramId: 1,
+      } as unknown as CcBindingDescriptor),
+    );
+    expect(unknownKind.message).toMatch(/'controlChange7', 'controlChange14', 'rpn', 'nrpn'/);
+    // 0xffffffff lies in the insert-parameter namespace the engine reserves.
+    const reserved = expectRefusalOf(() => engine.bindMidiCc({ ccNumber: 7, paramId: 0xffffffff }));
+    expect(reserved.message).toMatch(/paramId 4294967295 is reserved/);
     expect(engine.midiCcBindingCount).toBe(0);
   });
 });
