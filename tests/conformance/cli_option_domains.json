@@ -208,6 +208,16 @@
       "exclusiveMaximum": false
     },
     {
+      "command": "sections",
+      "option": "threshold",
+      "rejectExit": "invalid_parameter",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusiveMinimum": false,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
       "command": "dynamics",
       "option": "window-sec",
       "rejectExit": "invalid_parameter",

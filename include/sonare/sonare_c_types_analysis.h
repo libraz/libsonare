@@ -330,11 +330,27 @@ typedef struct {
   size_t section_count;     ///< Entries in sections.
 } SonareSectionResult;
 
+/** Zeroing this struct is NOT equivalent to the defaults: `n_fft` and `hop_length`
+ * 0 are refused. Start from sonare_section_options_default(). */
+typedef struct {
+  /** Window length in samples at 22050 Hz, rescaled to the analysis rate. The analysis rate is
+   * 22050 Hz for input above it and the input rate otherwise. Default 2048. */
+  int n_fft;
+  /** Hop between analysis frames in samples of the analysed signal: the input resampled to
+   * 22050 Hz when its rate is above 22050 Hz, the input itself otherwise. Default 512. */
+  int hop_length;
+  /** Minimum section length in seconds; it also sets the analysis scale. Default 4. */
+  float min_section_sec;
+  /** Relative boundary threshold, as SonareBoundaryOptions::threshold. Default 0.22, below the
+   * boundary layer's 0.3 because sections snap to downbeats and enforce a minimum length. */
+  float threshold;
+} SonareSectionOptions;
+
 /** Structural boundary detection. This is the layer sonare_analyze_sections is
  * built on and is not a coarser view of it: sections are labelled spans, these
  * are the unlabelled transitions plus the continuous novelty curve they were
- * picked from, so a caller that wants its own threshold needs this and cannot
- * derive it from the section list. */
+ * picked from, so a caller that wants the curve needs this and cannot derive it
+ * from the section list. */
 typedef struct {
   float time_sec;  ///< seconds; the authoritative output
   /** Index into the ANALYSIS grid, which is not the source's STFT grid: input

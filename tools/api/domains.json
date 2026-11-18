@@ -2026,6 +2026,8 @@
 "scope_ring_read_result": {"domain": "core", "surfaces": ["wasm"]},
 "scope_telemetry_record": {"domain": "engine", "surfaces": ["c", "python"]},
 "section": {"domain": "analysis", "surfaces": ["c", "node", "python", "wasm"]},
+"section_options": {"domain": "analysis", "surfaces": ["c"]},
+"section_options_default": {"domain": "analysis", "surfaces": ["c"]},
 "section_result": {"domain": "analysis", "surfaces": ["c", "python"]},
 "section_type": {"domain": "analysis", "surfaces": ["c", "node", "python", "wasm"]},
 "section_types": {"domain": "core", "surfaces": ["wasm"]},

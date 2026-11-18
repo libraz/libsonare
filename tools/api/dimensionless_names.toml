@@ -19,11 +19,13 @@ names = [
   "DetectBoundariesRequest.threshold",
   "detect_boundaries(threshold)",
   "boundaries --threshold",
+  "SectionOptions.threshold",
+  "analyze_sections(threshold)",
   "sections --threshold",
 ]
 class = "ratio"
 range = [0, inf]
-evidence = "include/sonare/sonare_c_types_analysis.h:357: relative to the local novelty maximum"
+evidence = "include/sonare/sonare_c_types_analysis.h:390: relative to the local novelty maximum"
 
 [[name]]
 names = [

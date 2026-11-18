@@ -124,16 +124,17 @@ val js_nnls_chroma(val samples, const val& sample_rate, bool enable_stft_blend,
 // { type, name, start, end, energyLevel, confidence, group }.
 // Embind passes every argument, so the narrowed sizes carry no C++ default.
 val js_analyze_sections(val samples, const val& sample_rate, const val& n_fft_val,
-                        const val& hop_length_val, const val& min_section_sec_val) {
-  const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
-  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
-  const float min_section_sec = checkedFloatFromVal(min_section_sec_val, "minSectionSec");
-  Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
-
+                        const val& hop_length_val, const val& min_section_sec_val,
+                        const val& threshold_val) {
   SectionConfig config;
-  config.n_fft = n_fft;
-  config.hop_length = hop_length;
-  config.min_section_sec = min_section_sec;
+  config.n_fft = checkedIntFromVal(n_fft_val, "nFft");
+  config.hop_length = checkedIntFromVal(hop_length_val, "hopLength");
+  config.min_section_sec = checkedFloatFromVal(min_section_sec_val, "minSectionSec");
+  // An absent threshold is the library default, not a value the facade restates.
+  if (!threshold_val.isUndefined() && !threshold_val.isNull()) {
+    config.boundary_threshold = checkedFloatFromVal(threshold_val, "threshold");
+  }
+  Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
   validate_section_config(config);
 
   SectionAnalyzer analyzer(audio, config);

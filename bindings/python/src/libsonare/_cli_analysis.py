@@ -273,6 +273,7 @@ def cmd_sections(args: argparse.Namespace) -> int:
         n_fft=args.n_fft,
         hop_length=args.hop_length,
         min_section_sec=args.min_duration_sec,
+        threshold=args.threshold,
     )
     sections = result
     if args.json:
@@ -743,6 +744,12 @@ def register_analysis_parsers(
         type=_finite_float,
         default=4.0,
         help="Minimum section duration in seconds (default: 4.0)",
+    )
+    sections_p.add_argument(
+        "--threshold",
+        type=_finite_float,
+        default=None,
+        help="Relative boundary threshold (default: the library's section default)",
     )
     analyze_p = sub.add_parser("analyze", parents=[stdout_options], help="Full music analysis")
     analyze_p.add_argument(

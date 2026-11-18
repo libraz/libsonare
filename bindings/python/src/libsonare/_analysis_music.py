@@ -338,6 +338,7 @@ def analyze_sections(
     n_fft: int = 2048,
     hop_length: int = 512,
     min_section_sec: float = 4.0,
+    threshold: float | None = None,
 ) -> list[Section]:
     """Detect song-structure sections (intro/verse/chorus/...).
 
@@ -347,6 +348,9 @@ def analyze_sections(
         n_fft: FFT window size used for the structural features.
         hop_length: Hop length in samples.
         min_section_sec: Minimum section duration in seconds.
+        threshold: Relative boundary threshold, as in :func:`detect_boundaries`;
+            ``None`` keeps the library default, which is lower than the boundary
+            layer's because sections snap to downbeats and keep a minimum length.
 
     Returns:
         The detected :class:`Section` list, in time order.
@@ -356,14 +360,18 @@ def analyze_sections(
         lib, "sonare_analyze_sections", "libsonare was built without section-analysis support"
     )
     c_array, length = _to_c_float_array(samples)
+    options = lib.sonare_section_options_default()
+    options.n_fft = _to_c_int(n_fft, "n_fft")
+    options.hop_length = _to_c_int(hop_length, "hop_length")
+    options.min_section_sec = _to_c_float(min_section_sec, "min_section_sec")
+    if threshold is not None:
+        options.threshold = _to_c_float(threshold, "threshold")
     out = SonareSectionResult()
     rc = lib.sonare_analyze_sections(
         c_array,
         _to_c_size_t(length, "length"),
         _to_c_int(sample_rate, "sample_rate"),
-        _to_c_int(n_fft, "n_fft"),
-        _to_c_int(hop_length, "hop_length"),
-        _to_c_float(min_section_sec, "min_section_sec"),
+        ctypes.byref(options),
         ctypes.byref(out),
     )
     _check(rc)

@@ -1531,3 +1531,32 @@ changed = "SonareError sonare_streaming_retune_create(pitch_semitones, mix, grai
 domain = "effects"
 rule = "c-create"
 test = "tests/api/sonare_c_create_contract_test.cpp::sonare_streaming_retune_create returns its error"
+
+[[entry]]
+kind = "function"
+old = "sonare_analyze_sections"
+changed = "takes a const SonareSectionOptions* (non-NULL) in place of n_fft, hop_length and min_section_sec; start from sonare_section_options_default, which also carries the boundary threshold"
+domain = "analysis"
+rule = "options-struct"
+test = "tests/api/sonare_c_music_test.cpp::sonare_analyze_sections threshold reaches the boundary picker"
+
+[[entry]]
+kind = "option"
+old = "sonare_analyze_sections(n_fft)"
+removed = "set SonareSectionOptions.n_fft on the options passed to sonare_analyze_sections"
+domain = "analysis"
+rule = "options-struct"
+
+[[entry]]
+kind = "option"
+old = "sonare_analyze_sections(hop_length)"
+removed = "set SonareSectionOptions.hop_length on the options passed to sonare_analyze_sections"
+domain = "analysis"
+rule = "options-struct"
+
+[[entry]]
+kind = "option"
+old = "sonare_analyze_sections(min_section_sec)"
+removed = "set SonareSectionOptions.min_section_sec on the options passed to sonare_analyze_sections"
+domain = "analysis"
+rule = "options-struct"

@@ -519,9 +519,19 @@ SonareError sonare_chord_functions(const SonareChord* chords, size_t count,
   SONARE_C_CATCH
 }
 
-SonareError sonare_analyze_sections(const float* samples, size_t length, int sample_rate, int n_fft,
-                                    int hop_length, float min_section_sec,
-                                    SonareSectionResult* out) {
+SonareSectionOptions sonare_section_options_default(void) {
+  // Copied from the core defaults rather than restated, so the two cannot part.
+  const SectionConfig config;
+  SonareSectionOptions options;
+  options.n_fft = config.n_fft;
+  options.hop_length = config.hop_length;
+  options.min_section_sec = config.min_section_sec;
+  options.threshold = config.boundary_threshold;
+  return options;
+}
+
+SonareError sonare_analyze_sections(const float* samples, size_t length, int sample_rate,
+                                    const SonareSectionOptions* options, SonareSectionResult* out) {
   SONARE_C_API_ENTRY;
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
 
@@ -530,10 +540,12 @@ SonareError sonare_analyze_sections(const float* samples, size_t length, int sam
   // sonare_free_section_result(&r) would delete[] an uninitialised pointer.
   out->sections = nullptr;
   out->section_count = 0;
+  if (!options) return SONARE_ERROR_INVALID_PARAMETER;
   SectionConfig config;
-  config.n_fft = n_fft;
-  config.hop_length = hop_length;
-  config.min_section_sec = min_section_sec;
+  config.n_fft = options->n_fft;
+  config.hop_length = options->hop_length;
+  config.min_section_sec = options->min_section_sec;
+  config.boundary_threshold = options->threshold;
   if (const SonareError err = run_validation([&] { validate_section_config(config); });
       err != SONARE_OK) {
     return err;

@@ -604,6 +604,7 @@ def analyze_sections(
     n_fft: int = 2048,
     hop_length: int = 512,
     min_section_sec: float = 4.0,
+    threshold: float | None = None,
 ) -> list[Section]: ...
 def detect_boundaries(
     samples: FloatSamples,

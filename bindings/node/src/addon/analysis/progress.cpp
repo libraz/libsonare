@@ -147,17 +147,18 @@ Napi::Value SonareWrap::AnalyzeSections(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   int sample_rate{};
   if (!RequiredIntArg(env, info, 1, "sampleRate", &sample_rate)) return env.Undefined();
-  int n_fft{};
-  if (!OptionalIntArg(env, info, 2, "nFft", 2048, &n_fft)) return env.Undefined();
-  int hop_length{};
-  if (!OptionalIntArg(env, info, 3, "hopLength", 512, &hop_length)) return env.Undefined();
-  float min_section_sec{};
-  if (!OptionalFiniteFloatArg(env, info, 4, "minSectionSec", 4.0f, &min_section_sec))
+  SonareSectionOptions options = sonare_section_options_default();
+  if (!OptionalIntArg(env, info, 2, "nFft", options.n_fft, &options.n_fft) ||
+      !OptionalIntArg(env, info, 3, "hopLength", options.hop_length, &options.hop_length) ||
+      !OptionalFiniteFloatArg(env, info, 4, "minSectionSec", options.min_section_sec,
+                              &options.min_section_sec) ||
+      !OptionalFiniteFloatArg(env, info, 5, "threshold", options.threshold, &options.threshold)) {
     return env.Undefined();
+  }
 
   SonareSectionResult result{};
-  SonareError err = sonare_analyze_sections(typed.Data(), typed.ElementLength(), sample_rate, n_fft,
-                                            hop_length, min_section_sec, &result);
+  SonareError err =
+      sonare_analyze_sections(typed.Data(), typed.ElementLength(), sample_rate, &options, &result);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();

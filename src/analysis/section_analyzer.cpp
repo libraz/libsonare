@@ -60,6 +60,7 @@ std::string section_type_to_string(SectionType type) {
 SectionAnalyzer::SectionAnalyzer(const Audio& audio, const SectionConfig& config)
     : audio_(analysis_rate_audio(audio)), config_(config) {
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
+  validate_section_config(config_);
 
   // Beats on the same analysis-rate signal, framed like every other analyzer here.
   BeatConfig beat_config;
@@ -76,6 +77,7 @@ SectionAnalyzer::SectionAnalyzer(const Audio& audio, const SectionGrid& grid,
                                  const Spectrogram& spec, const SectionConfig& config)
     : audio_(analysis_rate_audio(audio)), config_(config) {
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
+  validate_section_config(config_);
   validate_section_grid(grid);
   // Checked against the geometry this analyzer would have computed for itself. audio_ is the
   // analysis-rate signal, which is what the caller's STFT has to have been taken over -- a

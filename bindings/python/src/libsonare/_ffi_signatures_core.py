@@ -620,14 +620,14 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
         ]
 
     if hasattr(lib, "sonare_analyze_sections"):
+        lib.sonare_section_options_default.restype = SonareSectionOptions
+        lib.sonare_section_options_default.argtypes = []
         lib.sonare_analyze_sections.restype = ctypes.c_int32
         lib.sonare_analyze_sections.argtypes = [
             ctypes.POINTER(ctypes.c_float),
             ctypes.c_size_t,
             ctypes.c_int,
-            ctypes.c_int,
-            ctypes.c_int,
-            ctypes.c_float,
+            ctypes.POINTER(SonareSectionOptions),
             ctypes.POINTER(SonareSectionResult),
         ]
         lib.sonare_free_section_result.restype = None

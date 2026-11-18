@@ -180,6 +180,26 @@ def test_sections_refuses_an_out_of_domain_analysis_size(melody_wav: str) -> Non
     assert result.stdout == ""
 
 
+def test_sections_threshold_reaches_the_boundary_picker() -> None:
+    """A threshold no novelty peak reaches leaves fewer sections than the default."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        path = os.path.join(tmpdir, "two_tones.wav")
+        _write_wav(path, _tone(220.0, duration=4.0) + _tone(311.127, duration=4.0))
+        base = ["sections", path, "--min-duration-sec", "1.0", "--json"]
+        default = _run_cli(base)
+        high = _run_cli([*base, "--threshold", "10"])
+    assert default.returncode == 0, default.stderr
+    assert high.returncode == 0, high.stderr
+    assert json.loads(high.stdout)["count"] < json.loads(default.stdout)["count"]
+
+
+@pytest.mark.parametrize("value", ["-0.5", "nan", "inf"])
+def test_sections_refuses_an_out_of_domain_threshold(melody_wav: str, value: str) -> None:
+    result = _run_cli(["sections", melody_wav, f"--threshold={value}", "--json"])
+    assert result.returncode == (3 if value == "-0.5" else 2)
+    assert result.stdout == ""
+
+
 def test_sections_names_an_unparseable_option(melody_wav: str) -> None:
     """A value no float reads is refused by name before the pipeline runs."""
     result = _run_cli(["sections", melody_wav, "--min-duration-sec", "wide"])

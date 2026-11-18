@@ -262,6 +262,17 @@ class SonareBoundaryOptions(CStruct):
     ]
 
 
+class SonareSectionOptions(CStruct):
+    """Maps to SonareSectionOptions in sonare_c.h."""
+
+    _fields_ = [
+        ("n_fft", ctypes.c_int32),
+        ("hop_length", ctypes.c_int32),
+        ("min_section_sec", ctypes.c_float),
+        ("threshold", ctypes.c_float),
+    ]
+
+
 class SonareMelodyPoint(CStruct):
     """Maps to SonareMelodyPoint in sonare_c.h."""
 

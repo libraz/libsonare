@@ -3602,6 +3602,7 @@ export interface SonareModule {
     nFft: number,
     hopLength: number,
     minSectionSec: number,
+    threshold: number | undefined,
   ) => WasmSectionResult[];
   detectBoundaries: (
     samples: Float32Array,

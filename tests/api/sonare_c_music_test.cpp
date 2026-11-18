@@ -653,7 +653,9 @@ TEST_CASE(
   SECTION("sonare_analyze_sections") {
     SonareSectionResult result;
     std::memset(&result, 0xAA, sizeof(result));
-    REQUIRE(sonare_analyze_sections(samples.data(), samples.size(), 22050, 0, 512, 0.0f, &result) ==
+    SonareSectionOptions options = sonare_section_options_default();
+    options.n_fft = 0;
+    REQUIRE(sonare_analyze_sections(samples.data(), samples.size(), 22050, &options, &result) ==
             SONARE_ERROR_INVALID_PARAMETER);
     sonare_free_section_result(&result);
     REQUIRE(result.sections == nullptr);
@@ -681,9 +683,10 @@ TEST_CASE("sonare_analyze_sections rejects a non-finite min_section_sec", "[c_ap
   SECTION("infinity") {
     SonareSectionResult result;
     std::memset(&result, 0xAA, sizeof(result));
-    REQUIRE(sonare_analyze_sections(samples.data(), samples.size(), 22050, 2048, 512,
-                                    std::numeric_limits<float>::infinity(),
-                                    &result) == SONARE_ERROR_INVALID_PARAMETER);
+    SonareSectionOptions options = sonare_section_options_default();
+    options.min_section_sec = std::numeric_limits<float>::infinity();
+    REQUIRE(sonare_analyze_sections(samples.data(), samples.size(), 22050, &options, &result) ==
+            SONARE_ERROR_INVALID_PARAMETER);
     sonare_free_section_result(&result);
     REQUIRE(result.sections == nullptr);
     REQUIRE(result.section_count == 0);
@@ -692,9 +695,10 @@ TEST_CASE("sonare_analyze_sections rejects a non-finite min_section_sec", "[c_ap
   SECTION("NaN") {
     SonareSectionResult result;
     std::memset(&result, 0xAA, sizeof(result));
-    REQUIRE(sonare_analyze_sections(samples.data(), samples.size(), 22050, 2048, 512,
-                                    std::numeric_limits<float>::quiet_NaN(),
-                                    &result) == SONARE_ERROR_INVALID_PARAMETER);
+    SonareSectionOptions options = sonare_section_options_default();
+    options.min_section_sec = std::numeric_limits<float>::quiet_NaN();
+    REQUIRE(sonare_analyze_sections(samples.data(), samples.size(), 22050, &options, &result) ==
+            SONARE_ERROR_INVALID_PARAMETER);
     sonare_free_section_result(&result);
     REQUIRE(result.sections == nullptr);
     REQUIRE(result.section_count == 0);
@@ -703,8 +707,10 @@ TEST_CASE("sonare_analyze_sections rejects a non-finite min_section_sec", "[c_ap
   SECTION("a legitimate value still produces a working result") {
     SonareSectionResult result;
     std::memset(&result, 0xAA, sizeof(result));
-    REQUIRE(sonare_analyze_sections(samples.data(), samples.size(), 22050, 2048, 512, 0.05f,
-                                    &result) == SONARE_OK);
+    SonareSectionOptions options = sonare_section_options_default();
+    options.min_section_sec = 0.05f;
+    REQUIRE(sonare_analyze_sections(samples.data(), samples.size(), 22050, &options, &result) ==
+            SONARE_OK);
     REQUIRE(result.section_count > 0);
     REQUIRE(result.sections != nullptr);
     REQUIRE(result.sections[0].start_sec == 0.0f);
@@ -744,14 +750,113 @@ TEST_CASE("sonare_analyze_sections reports each section's material group", "[c_a
 
   SonareSectionResult result;
   std::memset(&result, 0xAA, sizeof(result));
-  REQUIRE(sonare_analyze_sections(samples.data(), samples.size(), kRate, config.n_fft,
-                                  config.hop_length, config.min_section_sec, &result) == SONARE_OK);
+  SonareSectionOptions options = sonare_section_options_default();
+  options.min_section_sec = config.min_section_sec;
+  REQUIRE(sonare_analyze_sections(samples.data(), samples.size(), kRate, &options, &result) ==
+          SONARE_OK);
   REQUIRE(result.section_count == expected.size());
   for (size_t i = 0; i < result.section_count; ++i) {
     CHECK(result.sections[i].group == expected[i].group);
     CHECK(result.sections[i].type == static_cast<SonareSectionType>(expected[i].type));
   }
   sonare_free_section_result(&result);
+}
+
+namespace {
+
+// A B A B with distinct pitch classes and partial counts, 8 s per span.
+std::vector<float> section_abab_signal(int rate) {
+  const float freqs[] = {220.0f, 311.13f, 220.0f, 311.13f};
+  const int partials[] = {1, 6, 1, 6};
+  std::vector<float> samples;
+  for (int span = 0; span < 4; ++span) {
+    const int n = 8 * rate;
+    for (int i = 0; i < n; ++i) {
+      const float t = static_cast<float>(i) / rate;
+      float v = 0.0f;
+      for (int h = 1; h <= partials[span]; ++h) {
+        v += std::sin(2.0f * static_cast<float>(M_PI) * freqs[span] * h * t) / h;
+      }
+      samples.push_back(0.2f * v);
+    }
+  }
+  return samples;
+}
+
+}  // namespace
+
+TEST_CASE("sonare_analyze_sections threshold reaches the boundary picker", "[c_api][sections]") {
+  constexpr int kRate = 22050;
+  const auto samples = section_abab_signal(kRate);
+
+  const auto run = [&](float threshold) {
+    SonareSectionOptions options = sonare_section_options_default();
+    options.threshold = threshold;
+    SonareSectionResult result;
+    std::memset(&result, 0xAA, sizeof(result));
+    REQUIRE(sonare_analyze_sections(samples.data(), samples.size(), kRate, &options, &result) ==
+            SONARE_OK);
+    std::vector<SonareSection> sections(result.sections, result.sections + result.section_count);
+    sonare_free_section_result(&result);
+    return sections;
+  };
+
+  // Each run agrees field by field with the core analyzer given the same threshold.
+  std::vector<size_t> counts;
+  for (const float threshold : {sonare::kSectionBoundaryThreshold, 10.0f}) {
+    sonare::SectionConfig config;
+    config.boundary_threshold = threshold;
+    const sonare::SectionAnalyzer analyzer(
+        sonare::Audio::from_vector(std::vector<float>(samples), kRate), config);
+    const auto& expected = analyzer.sections();
+    const auto actual = run(threshold);
+    REQUIRE(actual.size() == expected.size());
+    for (size_t i = 0; i < actual.size(); ++i) {
+      CHECK(actual[i].type == static_cast<SonareSectionType>(expected[i].type));
+      CHECK(actual[i].start_sec == expected[i].start);
+      CHECK(actual[i].end_sec == expected[i].end);
+      CHECK(actual[i].energy_level == expected[i].energy_level);
+      CHECK(actual[i].confidence == expected[i].confidence);
+      CHECK(actual[i].group == expected[i].group);
+    }
+    counts.push_back(actual.size());
+  }
+
+  // A threshold no novelty peak reaches leaves fewer boundaries than the default.
+  REQUIRE(counts[0] >= 2);
+  CHECK(counts[1] < counts[0]);
+}
+
+TEST_CASE("sonare_analyze_sections refuses NULL options and a bad threshold", "[c_api][sections]") {
+  const auto samples = generate_sine(440.0f, 22050, 1.0f);
+  SonareSectionResult result;
+  std::memset(&result, 0xAA, sizeof(result));
+  CHECK(sonare_analyze_sections(samples.data(), samples.size(), 22050, nullptr, &result) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(result.sections == nullptr);
+  CHECK(result.section_count == 0);
+
+  for (const float threshold :
+       {-0.1f, std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity()}) {
+    SonareSectionOptions options = sonare_section_options_default();
+    options.threshold = threshold;
+    std::memset(&result, 0xAA, sizeof(result));
+    CHECK(sonare_analyze_sections(samples.data(), samples.size(), 22050, &options, &result) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(result.sections == nullptr);
+    CHECK(result.section_count == 0);
+  }
+}
+
+TEST_CASE("sonare_section_options_default mirrors the core section defaults", "[c_api][sections]") {
+  const SonareSectionOptions options = sonare_section_options_default();
+  const sonare::SectionConfig config;
+  CHECK(options.n_fft == config.n_fft);
+  CHECK(options.hop_length == config.hop_length);
+  CHECK(options.min_section_sec == config.min_section_sec);
+  CHECK(options.threshold == sonare::kSectionBoundaryThreshold);
+  // Sections snap to downbeats and keep a minimum length, so they take a lower bar.
+  CHECK(options.threshold < sonare_boundary_options_default().threshold);
 }
 
 TEST_CASE("sonare_detect_boundaries reference_window", "[c_api][boundaries]") {

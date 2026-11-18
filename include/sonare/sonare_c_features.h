@@ -114,11 +114,15 @@ SonareError sonare_chord_functional_analysis(const float* samples, size_t length
 SonareError sonare_chord_functions(const SonareChord* chords, size_t count,
                                    SonarePitchClass key_root, SonareMode key_mode,
                                    SonareStringArray* roman, SonareStringArray* functions);
+/// @brief Returns a fully-initialized @ref SonareSectionOptions.
+SonareSectionOptions sonare_section_options_default(void);
+
 /// @brief Detects song-structure sections (intro/verse/chorus/...).
+/// @param options Must be non-NULL; start from @ref sonare_section_options_default. A threshold
+///   that is negative or not finite is refused with SONARE_ERROR_INVALID_PARAMETER.
 /// @param out Receives heap-owned arrays; free with sonare_free_section_result.
-SonareError sonare_analyze_sections(const float* samples, size_t length, int sample_rate, int n_fft,
-                                    int hop_length, float min_section_sec,
-                                    SonareSectionResult* out);
+SonareError sonare_analyze_sections(const float* samples, size_t length, int sample_rate,
+                                    const SonareSectionOptions* options, SonareSectionResult* out);
 
 /// @brief Returns a fully-initialized @ref SonareBoundaryOptions.
 /// @details Zeroing the struct is not the same thing and changes what is
