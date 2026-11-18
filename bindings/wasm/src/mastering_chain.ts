@@ -346,6 +346,39 @@ export function masteringPresetParams(preset: MasteringPreset): MasteringChainCo
 }
 
 /**
+ * Read a serialized chain configuration document into the nested
+ * {@link MasteringChainConfig} that {@link masterAudio} takes as `overrides`.
+ *
+ * The library's own parser validates the document, so a key or token outside
+ * the current spelling is refused rather than read. Retired keys are refused
+ * with a message naming their current spelling. This is the one entry that
+ * takes a chain configuration as JSON; every other call takes the object.
+ *
+ * @param document - Chain configuration document as JSON:
+ *   `{ "version": 1 | 2, "params": { "<stage>.<param>": value } }`, the form the
+ *   native CLI's `--chain-config` reads. Version 2 also takes
+ *   `dynamics.multibandComp` as a structured object.
+ * @returns The validated configuration in its canonical nested form.
+ * @throws {TypeError} when `document` is not a string
+ * @throws {SonareError} with code `InvalidFormat` when the document is not
+ *   valid JSON, carries another version, or names a key or value the chain
+ *   does not accept
+ *
+ * @example
+ * ```ts
+ * import { masteringChainConfigFromJson, masterAudio } from '@libraz/libsonare';
+ *
+ * declare const saved: string; // e.g. read from a project file
+ * const overrides = masteringChainConfigFromJson(saved);
+ * const mastered = masterAudio({ samples, sampleRate, preset: 'pop', overrides });
+ * ```
+ */
+export function masteringChainConfigFromJson(document: string): MasteringChainConfig {
+  assertString('masteringChainConfigFromJson', document, 'document');
+  return nestChainConfig(requireModule().masteringChainConfigParams(document));
+}
+
+/**
  * List the delivery targets the mastering assistant accepts as `targetPlatform`.
  *
  * Read from the library rather than from a list kept here, so a target added in

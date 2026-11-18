@@ -17,6 +17,7 @@ import {
   Mixer,
   masterAudio,
   masterAudioStereo,
+  masteringChainConfigFromJson,
   masteringInsertParamNames,
   masteringPresetParams,
   mixingScenePreset,
@@ -88,12 +89,20 @@ function withNativeEngine<T>(body: (engine: NativeJsonEngine) => T): T {
   }
 }
 
-const BAND_JSON = '{"type":"Peak","frequencyHz":1000,"gainDb":3,"q":1}';
+const BAND_JSON = '{"type":"peak","frequencyHz":1000,"gainDb":3,"q":1}';
 const SCENE_JSON = JSON.stringify({
   version: 1,
   strips: [],
   buses: [{ id: '1', inserts: [] }],
   connections: [],
+});
+
+describe('embedded NUL refusal, mastering chain documents', () => {
+  it('a chain configuration document is refused by name', () => {
+    const document = '{"version":1,"params":{}}';
+    expect(() => masteringChainConfigFromJson(document)).not.toThrow();
+    expectNulRefusal(() => masteringChainConfigFromJson(`${document}${NUL}x`), 'document');
+  });
 });
 
 describe('embedded NUL refusal, mastering preset names', () => {

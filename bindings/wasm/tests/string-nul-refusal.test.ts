@@ -20,6 +20,7 @@ import {
   masterAudioStereo,
   masteringApplyProcessor,
   masteringAssistantSuggest,
+  masteringChainConfigFromJson,
   masteringPresetParams,
   mixingScenePreset,
   noteToHz,
@@ -89,7 +90,7 @@ function nativeOf(engine: RealtimeEngine): {
   return (engine as unknown as { native: ReturnType<typeof nativeOf> }).native;
 }
 
-const BAND_JSON = '{"type":"Peak","frequencyHz":1000,"gainDb":3,"q":1}';
+const BAND_JSON = '{"type":"peak","frequencyHz":1000,"gainDb":3,"q":1}';
 const SCENE_BUS = { id: '1', inserts: [] } as never;
 
 function graph(inputNode: string) {
@@ -236,6 +237,12 @@ describe('embedded NUL refusal, mastering names', () => {
   const expectRangeRefusal = (call: () => unknown) => {
     expect(refusal(call)).toBeInstanceOf(RangeError);
   };
+
+  it('a chain configuration document is refused by name', () => {
+    const document = '{"version":1,"params":{}}';
+    expect(() => masteringChainConfigFromJson(document)).not.toThrow();
+    expectNulRefusal(() => masteringChainConfigFromJson(`${document}${NUL}x`), 'document');
+  });
 
   it('a preset name is refused in every spelling', () => {
     expect(() => masteringPresetParams('pop')).not.toThrow();
@@ -417,12 +424,6 @@ describe('embedded NUL refusal, scan', () => {
       text: '".quality").c_str()',
       count: 1,
       reason: 'error-subject label built from an element index',
-    },
-    {
-      file: 'mastering/api.cpp',
-      text: 'hasProperty(params_obj, key.c_str())',
-      count: 1,
-      reason: 'property name from a static table of literals',
     },
     {
       file: 'common/synth_patch_val.h',

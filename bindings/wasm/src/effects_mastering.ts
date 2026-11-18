@@ -29,6 +29,7 @@ export { voiceChange, voiceChangeRealtime } from './effects_voice_change.js';
 export {
   masterAudio,
   masterAudioStereo,
+  masteringChainConfigFromJson,
   masteringPlatformNames,
   masteringPresetNames,
   masteringPresetParams,

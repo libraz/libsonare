@@ -3027,6 +3027,7 @@ export interface SonareModule {
   ) => WasmMasteringStereoChainResult;
   masteringPresetNames: () => string[];
   masteringPresetParams: (preset: string) => Record<string, number | boolean>;
+  masteringChainConfigParams: (document: string) => Record<string, number | boolean>;
   masteringPlatformNames: () => string[];
   masterAudio: (
     presetName: string,

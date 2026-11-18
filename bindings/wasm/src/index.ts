@@ -169,6 +169,7 @@ export {
   masteringInsertNames,
   masteringInsertParamInfo,
   masteringInsertParamNames,
+  masteringChainConfigFromJson,
   masteringInsertTiming,
   masteringNormalizeLoudness,
   masteringPairAnalysisNames,
