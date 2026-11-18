@@ -152,15 +152,15 @@ def test_empty_buffer_is_refused_whatever_the_frame() -> None:
         libsonare.metering_spectrum_frame(np.empty(0, dtype=np.float32), SR, 99999, N_FFT)
 
 
-def test_zero_n_fft_scans_the_span_the_library_actually_reads() -> None:
-    """With ``n_fft=0`` the scanned span is the library's own default FFT size.
+def test_an_omitted_n_fft_scans_the_span_the_library_actually_reads() -> None:
+    """With ``n_fft`` omitted the scanned span is the library's own default FFT size.
 
     The reported ``n_fft`` pins the facade's mirrored default against the
     library, and the two index probes pin the scan against the same value
     behaviourally -- a mirror that drifted would scan a span the call does not
     read, which neither the constant comparison alone nor the scan alone can see.
     """
-    assert libsonare.metering_spectrum_frame(_tone(), SR, FRAME_OFFSET, 0).n_fft == (
+    assert libsonare.metering_spectrum_frame(_tone(), SR, FRAME_OFFSET).n_fft == (
         _DEFAULT_SPECTRUM_N_FFT
     )
 
@@ -168,9 +168,9 @@ def test_zero_n_fft_scans_the_span_the_library_actually_reads() -> None:
     first_outside = FRAME_OFFSET + _DEFAULT_SPECTRUM_N_FFT
     assert first_outside < LENGTH
     with pytest.raises(SonareValueError, match=rf"at index {last_inside}$"):
-        libsonare.metering_spectrum_frame(_with(last_inside, math.nan), SR, FRAME_OFFSET, 0)
+        libsonare.metering_spectrum_frame(_with(last_inside, math.nan), SR, FRAME_OFFSET)
 
-    report = libsonare.metering_spectrum_frame(_with(first_outside, math.nan), SR, FRAME_OFFSET, 0)
+    report = libsonare.metering_spectrum_frame(_with(first_outside, math.nan), SR, FRAME_OFFSET)
     assert report.n_fft == _DEFAULT_SPECTRUM_N_FFT
     assert np.all(np.isfinite(report.magnitude))
 
@@ -205,11 +205,13 @@ def test_validate_false_skips_the_facade_scan_but_not_the_core_guard() -> None:
 
 
 def _spectrum(samples: NDArray[np.float32], **kwargs: float) -> libsonare.SpectrumReport:
-    return libsonare.metering_spectrum(samples, SR, N_FFT, False, 0, **kwargs)
+    return libsonare.metering_spectrum(samples, SR, N_FFT, False, None, **kwargs)
 
 
 def _spectrum_frame(samples: NDArray[np.float32], **kwargs: float) -> libsonare.SpectrumReport:
-    return libsonare.metering_spectrum_frame(samples, SR, FRAME_OFFSET, N_FFT, False, 0, **kwargs)
+    return libsonare.metering_spectrum_frame(
+        samples, SR, FRAME_OFFSET, N_FFT, False, None, **kwargs
+    )
 
 
 @pytest.mark.parametrize("entry", [_spectrum, _spectrum_frame])

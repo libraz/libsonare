@@ -11,6 +11,7 @@ import numpy as np
 from ._analysis_detection import _DEFAULT_BPM_MAX, _DEFAULT_BPM_MIN
 from ._effects_repair_common import _linked_channel_planes
 from ._errors import SonareValueError, _not_supported, _require_open, _unknown_error
+from ._features_metering import _dynamic_range_args, _oversample_factor_arg, _spectrum_args
 from ._ffi_types_core import SonareDownmixOptions
 from ._runtime import (
     _check,
@@ -19,7 +20,6 @@ from ._runtime import (
     _get_lib,
     _guard_buffer,
     _out_float_array,
-    _resolve_optional_non_negative,
     _to_c_float,
     _to_c_float_array,
     _to_c_int,
@@ -1242,16 +1242,15 @@ class Audio:
             _to_c_int(hop_length, "hop_length"),
         )
 
-    def true_peak_db(self, oversample_factor: int = 4) -> float:
+    def true_peak_db(self, oversample_factor: int | None = None) -> float:
         """Inter-sample (true) peak in dBFS.
 
-        ``oversample_factor`` must be a power of two in [1, 16]; pass 0 for the
-        library default (4).
+        ``oversample_factor`` must be a power of two in [1, 16]; omit it for 4.
         """
         return self._audio_float(
             "sonare_audio_true_peak_db",
             self._require_handle(),
-            _to_c_int(oversample_factor, "oversample_factor"),
+            _oversample_factor_arg(oversample_factor),
         )
 
     def detect_clipping(
@@ -1292,34 +1291,32 @@ class Audio:
 
     def dynamic_range(
         self,
-        window_sec: float = 0.0,
-        hop_sec: float = 0.0,
+        window_sec: float | None = None,
+        hop_sec: float | None = None,
         low_percentile: float | None = None,
         high_percentile: float | None = None,
     ) -> DynamicRangeReport:
         """Sliding-window dynamic range (high_percentile - low_percentile, in dB).
 
-        Pass 0.0 for ``window_sec`` / ``hop_sec`` to use the library default
-        (window=3 s, hop=1 s). For ``low_percentile`` / ``high_percentile``
-        ``None`` (the default) selects the library default percentiles
-        (low=0.10, high=0.95); ``0.0`` is a real request for the 0th percentile
-        (the minimum-RMS window), and a negative value is refused.
+        Omit ``window_sec`` / ``hop_sec`` for the library default (window=3 s,
+        hop=1 s); an explicit 0 is refused. ``low_percentile`` /
+        ``high_percentile`` are ranks in [0, 1] with low at most high; omitted,
+        they are 0.10 / 0.95, and ``0.0`` is a real request for the minimum-RMS
+        window.
         """
         from ._ffi import SonareDynamicRangeResult
 
+        c_window, c_hop, c_low, c_high = _dynamic_range_args(
+            window_sec, hop_sec, low_percentile, high_percentile
+        )
         handle = self._require_handle()
         out = SonareDynamicRangeResult()
         rc = self._lib.sonare_audio_dynamic_range(
             handle,
-            _to_c_float(window_sec, "window_sec"),
-            _to_c_float(hop_sec, "hop_sec"),
-            _to_c_float(
-                _resolve_optional_non_negative(low_percentile, "low_percentile"), "low_percentile"
-            ),
-            _to_c_float(
-                _resolve_optional_non_negative(high_percentile, "high_percentile"),
-                "high_percentile",
-            ),
+            c_window,
+            c_hop,
+            c_low,
+            c_high,
             ctypes.byref(out),
         )
         _check(rc)
@@ -1336,11 +1333,11 @@ class Audio:
 
     def spectrum(
         self,
-        n_fft: int = 0,
+        n_fft: int | None = None,
         apply_octave_smoothing: bool = False,
-        octave_fraction: int = 0,
-        db_ref: float = 0.0,
-        db_amin: float = 0.0,
+        octave_fraction: int | None = None,
+        db_ref: float | None = None,
+        db_amin: float | None = None,
     ) -> SpectrumReport:
         """Welch-averaged magnitude / power / dB spectrum over the whole buffer.
 
@@ -1350,20 +1347,23 @@ class Audio:
         transients are smeared by the averaging. For a true single-frame FFT
         use :meth:`spectrum_frame`.
 
-        Pass 0 for ``n_fft`` / ``octave_fraction`` / ``db_ref`` / ``db_amin``
-        to use the library defaults (2048 / 3 / 1.0 / kEpsilon).
+        Omit ``n_fft`` / ``octave_fraction`` / ``db_ref`` / ``db_amin`` for the
+        library defaults (2048 / 3 / 1.0 / kEpsilon); an explicit 0 is refused.
         """
         from ._ffi import SonareSpectrumResult
 
+        c_n_fft, c_octave_fraction, c_db_ref, c_db_amin = _spectrum_args(
+            n_fft, octave_fraction, db_ref, db_amin
+        )
         handle = self._require_handle()
         out = SonareSpectrumResult()
         rc = self._lib.sonare_audio_spectrum(
             handle,
-            _to_c_int(n_fft, "n_fft"),
+            c_n_fft,
             ctypes.c_int(1 if apply_octave_smoothing else 0),
-            _to_c_int(octave_fraction, "octave_fraction"),
-            _to_c_float(db_ref, "db_ref"),
-            _to_c_float(db_amin, "db_amin"),
+            c_octave_fraction,
+            c_db_ref,
+            c_db_amin,
             ctypes.byref(out),
         )
         _check(rc)
@@ -1383,20 +1383,20 @@ class Audio:
     def spectrum_frame(
         self,
         frame_offset: int = 0,
-        n_fft: int = 0,
+        n_fft: int | None = None,
         apply_octave_smoothing: bool = False,
-        octave_fraction: int = 0,
-        db_ref: float = 0.0,
-        db_amin: float = 0.0,
+        octave_fraction: int | None = None,
+        db_ref: float | None = None,
+        db_amin: float | None = None,
     ) -> SpectrumReport:
         """True single-frame mono magnitude / power / dB spectrum (one Hann-windowed FFT).
 
         Unlike :meth:`spectrum` (Welch-averaged), this is a single
         ``n_fft``-length FFT for spectrum-analyzer "moment" snapshots. The
         frame spans ``[frame_offset, frame_offset + n_fft)``; samples past the
-        end are zero-padded. Pass 0 for ``frame_offset`` for the first frame
-        and 0 for ``n_fft`` / ``octave_fraction`` / ``db_ref`` / ``db_amin``
-        for the library defaults (2048 / 3 / 1.0 / kEpsilon).
+        end are zero-padded. ``frame_offset`` 0 is the first frame. Omit
+        ``n_fft`` / ``octave_fraction`` / ``db_ref`` / ``db_amin`` for the
+        library defaults (2048 / 3 / 1.0 / kEpsilon); an explicit 0 is refused.
 
         Cost per call is set by ``n_fft`` rather than by the buffer's length,
         so this may be polled over a long recording frame by frame -- and
@@ -1409,16 +1409,19 @@ class Audio:
         """
         from ._ffi import SonareSpectrumResult
 
+        c_n_fft, c_octave_fraction, c_db_ref, c_db_amin = _spectrum_args(
+            n_fft, octave_fraction, db_ref, db_amin
+        )
         handle = self._require_handle()
         out = SonareSpectrumResult()
         rc = self._lib.sonare_audio_spectrum_frame(
             handle,
             _to_c_size_t(frame_offset, "frame_offset"),
-            _to_c_int(n_fft, "n_fft"),
+            c_n_fft,
             ctypes.c_int(1 if apply_octave_smoothing else 0),
-            _to_c_int(octave_fraction, "octave_fraction"),
-            _to_c_float(db_ref, "db_ref"),
-            _to_c_float(db_amin, "db_amin"),
+            c_octave_fraction,
+            c_db_ref,
+            c_db_amin,
             ctypes.byref(out),
         )
         _check(rc)

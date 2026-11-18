@@ -2537,11 +2537,11 @@ def metering_phase_scope_decimated(
 def metering_spectrum(
     samples: FloatSamples,
     sample_rate: int,
-    n_fft: int = 0,
+    n_fft: int | None = None,
     apply_octave_smoothing: bool = False,
-    octave_fraction: int = 0,
-    db_ref: float = 0.0,
-    db_amin: float = 0.0,
+    octave_fraction: int | None = None,
+    db_ref: float | None = None,
+    db_amin: float | None = None,
     *,
     validate: bool = True,
 ) -> SpectrumReport: ...
@@ -2549,11 +2549,11 @@ def metering_spectrum_frame(
     samples: FloatSamples,
     sample_rate: int,
     frame_offset: int = 0,
-    n_fft: int = 0,
+    n_fft: int | None = None,
     apply_octave_smoothing: bool = False,
-    octave_fraction: int = 0,
-    db_ref: float = 0.0,
-    db_amin: float = 0.0,
+    octave_fraction: int | None = None,
+    db_ref: float | None = None,
+    db_amin: float | None = None,
     *,
     validate: bool = True,
 ) -> SpectrumReport: ...
@@ -2600,7 +2600,7 @@ def metering_dc_offset(
 def metering_true_peak_db(
     samples: FloatSamples,
     sample_rate: int,
-    oversample_factor: int = 4,
+    oversample_factor: int | None = None,
     *,
     validate: bool = True,
 ) -> float: ...
@@ -2615,8 +2615,8 @@ def metering_detect_clipping(
 def metering_dynamic_range(
     samples: FloatSamples,
     sample_rate: int,
-    window_sec: float = 0.0,
-    hop_sec: float = 0.0,
+    window_sec: float | None = None,
+    hop_sec: float | None = None,
     low_percentile: float | None = None,
     high_percentile: float | None = None,
     *,

@@ -5752,3 +5752,211 @@ changed = "a curve name is exactly linear, equalPower, exponential or logarithmi
 domain = "project"
 rule = "token-case"
 test = "bindings/python/tests/test_voice_and_room_spellings.py::test_a_fade_curve_outside_the_four_tokens_is_refused"
+
+[[entry]]
+kind = "option"
+old = "metering_true_peak_db(oversample_factor)"
+changed = "None (the default) is 4; an explicit 0 raises SonareValueError"
+domain = "mastering"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_metering_absent_defaults.py::test_an_explicit_zero_is_refused"
+
+[[entry]]
+kind = "option"
+old = "Audio.true_peak_db(oversample_factor)"
+changed = "None (the default) is 4; an explicit 0 raises SonareValueError"
+domain = "core"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_metering_absent_defaults.py::test_an_explicit_zero_is_refused"
+
+[[entry]]
+kind = "option"
+old = "metering_spectrum(n_fft)"
+changed = "None (the default) is the library default; an explicit 0 raises SonareValueError"
+domain = "mastering"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_metering_absent_defaults.py::test_an_explicit_zero_is_refused"
+
+[[entry]]
+kind = "option"
+old = "metering_spectrum(octave_fraction)"
+changed = "None (the default) is the library default; an explicit 0 raises SonareValueError"
+domain = "mastering"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_metering_absent_defaults.py::test_an_explicit_zero_is_refused"
+
+[[entry]]
+kind = "option"
+old = "metering_spectrum(db_ref)"
+changed = "None (the default) is the library default; an explicit 0 raises SonareValueError"
+domain = "mastering"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_metering_absent_defaults.py::test_an_explicit_zero_is_refused"
+
+[[entry]]
+kind = "option"
+old = "metering_spectrum(db_amin)"
+changed = "None (the default) is the library default; an explicit 0 raises SonareValueError"
+domain = "mastering"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_metering_absent_defaults.py::test_an_explicit_zero_is_refused"
+
+[[entry]]
+kind = "option"
+old = "metering_spectrum_frame(n_fft)"
+changed = "None (the default) is the library default; an explicit 0 raises SonareValueError"
+domain = "mastering"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_metering_absent_defaults.py::test_an_explicit_zero_is_refused"
+
+[[entry]]
+kind = "option"
+old = "metering_spectrum_frame(octave_fraction)"
+changed = "None (the default) is the library default; an explicit 0 raises SonareValueError"
+domain = "mastering"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_metering_absent_defaults.py::test_an_explicit_zero_is_refused"
+
+[[entry]]
+kind = "option"
+old = "metering_spectrum_frame(db_ref)"
+changed = "None (the default) is the library default; an explicit 0 raises SonareValueError"
+domain = "mastering"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_metering_absent_defaults.py::test_an_explicit_zero_is_refused"
+
+[[entry]]
+kind = "option"
+old = "metering_spectrum_frame(db_amin)"
+changed = "None (the default) is the library default; an explicit 0 raises SonareValueError"
+domain = "mastering"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_metering_absent_defaults.py::test_an_explicit_zero_is_refused"
+
+[[entry]]
+kind = "option"
+old = "Audio.spectrum(n_fft)"
+changed = "None (the default) is the library default; an explicit 0 raises SonareValueError"
+domain = "core"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_metering_absent_defaults.py::test_an_explicit_zero_is_refused"
+
+[[entry]]
+kind = "option"
+old = "Audio.spectrum(octave_fraction)"
+changed = "None (the default) is the library default; an explicit 0 raises SonareValueError"
+domain = "core"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_metering_absent_defaults.py::test_an_explicit_zero_is_refused"
+
+[[entry]]
+kind = "option"
+old = "Audio.spectrum(db_ref)"
+changed = "None (the default) is the library default; an explicit 0 raises SonareValueError"
+domain = "core"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_metering_absent_defaults.py::test_an_explicit_zero_is_refused"
+
+[[entry]]
+kind = "option"
+old = "Audio.spectrum(db_amin)"
+changed = "None (the default) is the library default; an explicit 0 raises SonareValueError"
+domain = "core"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_metering_absent_defaults.py::test_an_explicit_zero_is_refused"
+
+[[entry]]
+kind = "option"
+old = "Audio.spectrum_frame(n_fft)"
+changed = "None (the default) is the library default; an explicit 0 raises SonareValueError"
+domain = "core"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_metering_absent_defaults.py::test_an_explicit_zero_is_refused"
+
+[[entry]]
+kind = "option"
+old = "Audio.spectrum_frame(octave_fraction)"
+changed = "None (the default) is the library default; an explicit 0 raises SonareValueError"
+domain = "core"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_metering_absent_defaults.py::test_an_explicit_zero_is_refused"
+
+[[entry]]
+kind = "option"
+old = "Audio.spectrum_frame(db_ref)"
+changed = "None (the default) is the library default; an explicit 0 raises SonareValueError"
+domain = "core"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_metering_absent_defaults.py::test_an_explicit_zero_is_refused"
+
+[[entry]]
+kind = "option"
+old = "Audio.spectrum_frame(db_amin)"
+changed = "None (the default) is the library default; an explicit 0 raises SonareValueError"
+domain = "core"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_metering_absent_defaults.py::test_an_explicit_zero_is_refused"
+
+[[entry]]
+kind = "option"
+old = "metering_dynamic_range(window_sec)"
+changed = "None (the default) is the library default; an explicit 0 raises SonareValueError"
+domain = "mastering"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_metering_absent_defaults.py::test_an_explicit_zero_is_refused"
+
+[[entry]]
+kind = "option"
+old = "metering_dynamic_range(hop_sec)"
+changed = "None (the default) is the library default; an explicit 0 raises SonareValueError"
+domain = "mastering"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_metering_absent_defaults.py::test_an_explicit_zero_is_refused"
+
+[[entry]]
+kind = "option"
+old = "metering_dynamic_range(low_percentile)"
+changed = "a rank in [0, 1], low at most high; anything else raises SonareValueError"
+domain = "mastering"
+rule = "individual"
+test = "bindings/python/tests/test_metering_absent_defaults.py::test_a_percentile_outside_the_unit_interval_is_refused"
+
+[[entry]]
+kind = "option"
+old = "metering_dynamic_range(high_percentile)"
+changed = "a rank in [0, 1], low at most high; anything else raises SonareValueError"
+domain = "mastering"
+rule = "individual"
+test = "bindings/python/tests/test_metering_absent_defaults.py::test_a_percentile_outside_the_unit_interval_is_refused"
+
+[[entry]]
+kind = "option"
+old = "Audio.dynamic_range(window_sec)"
+changed = "None (the default) is the library default; an explicit 0 raises SonareValueError"
+domain = "core"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_metering_absent_defaults.py::test_an_explicit_zero_is_refused"
+
+[[entry]]
+kind = "option"
+old = "Audio.dynamic_range(hop_sec)"
+changed = "None (the default) is the library default; an explicit 0 raises SonareValueError"
+domain = "core"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_metering_absent_defaults.py::test_an_explicit_zero_is_refused"
+
+[[entry]]
+kind = "option"
+old = "Audio.dynamic_range(low_percentile)"
+changed = "a rank in [0, 1], low at most high; anything else raises SonareValueError"
+domain = "core"
+rule = "individual"
+test = "bindings/python/tests/test_metering_absent_defaults.py::test_a_percentile_outside_the_unit_interval_is_refused"
+
+[[entry]]
+kind = "option"
+old = "Audio.dynamic_range(high_percentile)"
+changed = "a rank in [0, 1], low at most high; anything else raises SonareValueError"
+domain = "core"
+rule = "individual"
+test = "bindings/python/tests/test_metering_absent_defaults.py::test_a_percentile_outside_the_unit_interval_is_refused"

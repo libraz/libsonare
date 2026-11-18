@@ -268,33 +268,33 @@ class Audio:
         frame_length: int = 1024,
         hop_length: int = 256,
     ) -> float: ...
-    def true_peak_db(self, oversample_factor: int = 4) -> float: ...
+    def true_peak_db(self, oversample_factor: int | None = None) -> float: ...
     def detect_clipping(
         self, threshold: float = 0.999, min_region_samples: int = 1
     ) -> ClippingReport: ...
     def dynamic_range(
         self,
-        window_sec: float = 0.0,
-        hop_sec: float = 0.0,
+        window_sec: float | None = None,
+        hop_sec: float | None = None,
         low_percentile: float | None = None,
         high_percentile: float | None = None,
     ) -> DynamicRangeReport: ...
     def spectrum(
         self,
-        n_fft: int = 0,
+        n_fft: int | None = None,
         apply_octave_smoothing: bool = False,
-        octave_fraction: int = 0,
-        db_ref: float = 0.0,
-        db_amin: float = 0.0,
+        octave_fraction: int | None = None,
+        db_ref: float | None = None,
+        db_amin: float | None = None,
     ) -> SpectrumReport: ...
     def spectrum_frame(
         self,
         frame_offset: int = 0,
-        n_fft: int = 0,
+        n_fft: int | None = None,
         apply_octave_smoothing: bool = False,
-        octave_fraction: int = 0,
-        db_ref: float = 0.0,
-        db_amin: float = 0.0,
+        octave_fraction: int | None = None,
+        db_ref: float | None = None,
+        db_amin: float | None = None,
     ) -> SpectrumReport: ...
     def ebur128_loudness_range(self) -> float: ...
     def close(self) -> None: ...
