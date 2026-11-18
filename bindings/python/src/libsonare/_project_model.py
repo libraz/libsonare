@@ -416,17 +416,29 @@ class MidiCcBinding:
     """Upper end of the mapped parameter range."""
 
 
+@dataclass(frozen=True, slots=True)
+class ProjectMidiEvent:
+    """One project MIDI event: a PPQ position and the first two UMP-1.0 words of a message."""
+
+    ppq: float
+    """Event position in PPQ (quarter notes)."""
+    word0: int
+    """First UMP word of the message."""
+    word1: int = 0
+    """Second UMP word of the message."""
+
+
 @dataclass(frozen=True)
 class MidiRouteResult:
     """Result of :meth:`Project.midi_route_events`.
 
-    ``events`` is the filtered / remapped event stream (``(ppq, word0, word1)``
-    tuples). ``overflowed`` is True when the router or caller capacity dropped
-    events; ``overflow_count`` is how many were dropped.
+    ``events`` is the filtered / remapped event stream. ``overflowed`` is True
+    when the router or caller capacity dropped events; ``overflow_count`` is how
+    many were dropped.
     """
 
-    events: list[tuple[float, int, int]]
-    """Events that passed the filter, remapped as configured, as ``(ppq, word0, word1)``."""
+    events: list[ProjectMidiEvent]
+    """Events that passed the filter, remapped as configured."""
     overflowed: bool
     """True when events were dropped for lack of router or caller capacity."""
     overflow_count: int
@@ -595,8 +607,8 @@ def _track_kind_value(kind: ProjectTrackKind) -> int:
     return _token_ordinal(kind, _TRACK_KINDS, "track kind")
 
 
-def _midi_event_tuple(name: str, *args: float | ctypes._SimpleCData[int]) -> tuple[float, int, int]:
-    """Call one packer and read its event back as a tuple.
+def _midi_event_packed(name: str, *args: float | ctypes._SimpleCData[int]) -> ProjectMidiEvent:
+    """Call one packer and read its event back as a record.
 
     Each argument arrives already narrowed, because the widths are not uniform
     across the family (``uint8``, ``uint16``, ``uint32``, ``int32``), and this
@@ -606,7 +618,33 @@ def _midi_event_tuple(name: str, *args: float | ctypes._SimpleCData[int]) -> tup
     event = SonareMidiEventPod()
     fn = getattr(lib, name)
     _check(fn(*args, ctypes.byref(event)))
-    return (float(event.ppq), int(event.word0), int(event.word1))
+    return _midi_event_from_c(event)
+
+
+def _midi_event_from_c(event: SonareMidiEventPod) -> ProjectMidiEvent:
+    return ProjectMidiEvent(float(event.ppq), int(event.word0), int(event.word1))
+
+
+def _midi_event_to_c(event: object, label: str) -> SonareMidiEventPod:
+    """Validate one :class:`ProjectMidiEvent` and pack it for the C ABI."""
+    if not isinstance(event, ProjectMidiEvent):
+        raise TypeError(f"{label} must be a ProjectMidiEvent, not {type(event).__name__}")
+    return SonareMidiEventPod(
+        ppq=_validate_midi_event_ppq(event.ppq, f"{label}.ppq"),
+        word0=_validate_midi_event_word(event.word0, f"{label}.word0"),
+        word1=_validate_midi_event_word(event.word1, f"{label}.word1"),
+    )
+
+
+def _midi_events_to_c(events: object, name: str) -> tuple[ctypes.Array[SonareMidiEventPod], int]:
+    """Pack a sequence of :class:`ProjectMidiEvent` records; a str or mapping is refused."""
+    if isinstance(events, (str, bytes)) or not isinstance(events, Sequence):
+        raise TypeError(f"{name} must be a sequence of ProjectMidiEvent")
+    rows = list(events)
+    c_events = (SonareMidiEventPod * len(rows))()
+    for i, event in enumerate(rows):
+        c_events[i] = _midi_event_to_c(event, f"{name}[{i}]")
+    return c_events, len(rows)
 
 
 def _validate_midi_event_word(value: object, label: str) -> int:

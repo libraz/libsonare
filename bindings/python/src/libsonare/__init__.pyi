@@ -32,6 +32,7 @@ from ._project import ProjectLoopMode as ProjectLoopMode
 from ._project import ProjectLoopRecordingResult as ProjectLoopRecordingResult
 from ._project import ProjectMidiCcBindingKind as ProjectMidiCcBindingKind
 from ._project import ProjectMidiClipResult as ProjectMidiClipResult
+from ._project import ProjectMidiEvent as ProjectMidiEvent
 from ._project import ProjectOverlapPolicy as ProjectOverlapPolicy
 from ._project import ProjectSourceKind as ProjectSourceKind
 from ._project import ProjectStemLayout as ProjectStemLayout

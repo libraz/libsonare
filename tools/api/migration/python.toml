@@ -9993,3 +9993,131 @@ old = "SonareStreamStats"
 removed = "a ctypes mirror of the C struct, never part of the API; use the dataclass the facade returns"
 domain = "analysis"
 rule = "python-public-names"
+
+[[entry]]
+kind = "method"
+old = "Project.midi_note_on"
+changed = "returns a frozen ProjectMidiEvent(ppq, word0, word1) instead of a (ppq, data0, data1) tuple"
+domain = "project"
+rule = "typed-results"
+test = "bindings/python/tests/test_project_midi.py::test_midi_events_come_back_as_project_midi_event_records"
+
+[[entry]]
+kind = "method"
+old = "Project.midi_note_off"
+changed = "returns a frozen ProjectMidiEvent(ppq, word0, word1) instead of a (ppq, data0, data1) tuple"
+domain = "project"
+rule = "typed-results"
+test = "bindings/python/tests/test_project_midi.py::test_midi_events_come_back_as_project_midi_event_records"
+
+[[entry]]
+kind = "method"
+old = "Project.midi_cc"
+changed = "returns a frozen ProjectMidiEvent(ppq, word0, word1) instead of a (ppq, data0, data1) tuple"
+domain = "project"
+rule = "typed-results"
+test = "bindings/python/tests/test_project_midi.py::test_midi_events_come_back_as_project_midi_event_records"
+
+[[entry]]
+kind = "method"
+old = "Project.midi_poly_pressure"
+changed = "returns a frozen ProjectMidiEvent(ppq, word0, word1) instead of a (ppq, data0, data1) tuple"
+domain = "project"
+rule = "typed-results"
+test = "bindings/python/tests/test_project_midi.py::test_midi_events_come_back_as_project_midi_event_records"
+
+[[entry]]
+kind = "method"
+old = "Project.midi_program"
+changed = "returns a frozen ProjectMidiEvent(ppq, word0, word1) instead of a (ppq, data0, data1) tuple"
+domain = "project"
+rule = "typed-results"
+test = "bindings/python/tests/test_project_midi.py::test_midi_events_come_back_as_project_midi_event_records"
+
+[[entry]]
+kind = "method"
+old = "Project.midi_channel_pressure"
+changed = "returns a frozen ProjectMidiEvent(ppq, word0, word1) instead of a (ppq, data0, data1) tuple"
+domain = "project"
+rule = "typed-results"
+test = "bindings/python/tests/test_project_midi.py::test_midi_events_come_back_as_project_midi_event_records"
+
+[[entry]]
+kind = "method"
+old = "Project.midi_pitch_bend"
+changed = "returns a frozen ProjectMidiEvent(ppq, word0, word1) instead of a (ppq, data0, data1) tuple"
+domain = "project"
+rule = "typed-results"
+test = "bindings/python/tests/test_project_midi.py::test_midi_events_come_back_as_project_midi_event_records"
+
+[[entry]]
+kind = "method"
+old = "Project.midi_bank_program"
+changed = "returns a list of ProjectMidiEvent records instead of (ppq, data0, data1) tuples"
+domain = "project"
+rule = "typed-results"
+test = "bindings/python/tests/test_project_midi.py::test_midi_bank_program_lowers_to_events"
+
+[[entry]]
+kind = "method"
+old = "Project.midi_param_to_cc"
+changed = "returns a ProjectMidiEvent record or None instead of a (ppq, data0, data1) tuple"
+domain = "project"
+rule = "typed-results"
+test = "bindings/python/tests/test_project_midi.py::test_midi_cc_learn_and_conversion_helpers"
+
+[[entry]]
+kind = "method"
+old = "Project.midi_cc_to_breakpoint"
+changed = "returns an AutomationPoint record or None instead of a (ppq, value, curve_to_next) tuple"
+domain = "project"
+rule = "typed-results"
+test = "bindings/python/tests/test_project_midi.py::test_midi_cc_learn_and_conversion_helpers"
+
+[[entry]]
+kind = "option"
+old = "Project.set_midi_events(events)"
+changed = "each event is a ProjectMidiEvent record, or the whole list is one (n, 3) array of ppq, word0, word1 columns; a tuple or mapping is TypeError"
+domain = "project"
+rule = "one-input-form"
+test = "bindings/python/tests/test_project_midi.py::test_a_midi_event_is_taken_only_as_a_project_midi_event"
+
+[[entry]]
+kind = "option"
+old = "Project.midi_route_events(events)"
+changed = "each event is a ProjectMidiEvent record; a tuple or mapping is TypeError"
+domain = "project"
+rule = "one-input-form"
+test = "bindings/python/tests/test_project_midi.py::test_a_midi_event_is_taken_only_as_a_project_midi_event"
+
+[[entry]]
+kind = "option"
+old = "Project.midi_cc_learn(events)"
+changed = "each event is a ProjectMidiEvent record; a tuple or mapping is TypeError"
+domain = "project"
+rule = "one-input-form"
+test = "bindings/python/tests/test_project_midi.py::test_a_midi_event_is_taken_only_as_a_project_midi_event"
+
+[[entry]]
+kind = "option"
+old = "Project.midi_cc_to_breakpoint(event)"
+changed = "a ProjectMidiEvent record; a tuple or mapping is TypeError"
+domain = "project"
+rule = "one-input-form"
+test = "bindings/python/tests/test_project_midi.py::test_a_midi_event_is_taken_only_as_a_project_midi_event"
+
+[[entry]]
+kind = "field"
+old = "MidiRouteResult.events"
+changed = "a list of ProjectMidiEvent records instead of (ppq, data0, data1) tuples"
+domain = "project"
+rule = "typed-results"
+test = "bindings/python/tests/test_project_midi.py::test_midi_events_come_back_as_project_midi_event_records"
+
+[[entry]]
+kind = "field"
+old = "TranscribeResult.events"
+changed = "a list of ProjectMidiEvent records instead of (ppq, data0, data1) tuples"
+domain = "analysis"
+rule = "typed-results"
+test = "bindings/python/tests/test_transcribe.py::test_transcribe_events_are_project_midi_event_records"

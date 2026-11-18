@@ -118,9 +118,9 @@ BUILDER_CASES = [
 
 @pytest.mark.parametrize(("builder", "kwargs", "words"), BUILDER_CASES)
 def test_midi2_builder_packs_expected_words(builder, kwargs, words) -> None:
-    ppq, word0, word1 = builder(ppq=1.5, **kwargs)
-    assert ppq == 1.5
-    assert (word0, word1) == words
+    event = builder(ppq=1.5, **kwargs)
+    assert event.ppq == 1.5
+    assert (event.word0, event.word1) == words
 
 
 @pytest.mark.parametrize(
@@ -143,7 +143,8 @@ def test_midi2_builder_rejects_out_of_range(call) -> None:
 
 
 def test_push_midi_ump_accepts_two_word_channel_voice() -> None:
-    _, w0, w1 = Project.midi2_note_on(0.0, 0, 0, 60, 0xC000)
+    event = Project.midi2_note_on(0.0, 0, 0, 60, 0xC000)
+    w0, w1 = event.word0, event.word1
     with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
         engine.set_builtin_instrument(destination_id=0)
         engine.push_midi_ump(0, [w0, w1])
@@ -179,7 +180,8 @@ def test_push_midi_ump_rejects_word_out_of_range() -> None:
 
 
 def test_push_midi_input_ump_queues_messages() -> None:
-    _, w0, w1 = Project.midi2_cc(0.0, 0, 0, 1, 0x80000000)
+    event = Project.midi2_cc(0.0, 0, 0, 1, 0x80000000)
+    w0, w1 = event.word0, event.word1
     with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
         engine.set_builtin_instrument(destination_id=0)
         with pytest.raises(SonareError) as disabled:

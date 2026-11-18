@@ -23,7 +23,10 @@ from ._project_model import (
     _absent_or_in_range,
     _cc_binding_from_c,
     _cc_binding_to_c,
-    _midi_event_tuple,
+    _midi_event_from_c,
+    _midi_event_packed,
+    _midi_event_to_c,
+    _midi_events_to_c,
     _validate_midi_event_ppq,
     _validate_midi_event_word,
 )
@@ -59,6 +62,7 @@ from ._runtime import (
     _to_c_uint32,
     _utf8_arg,
 )
+from ._types_engine import AutomationPoint
 
 
 def _found_index(value: int, message: str) -> int:
@@ -76,12 +80,14 @@ class _ProjectMidiMixin:
     def set_midi_events(
         self,
         clip_id: int,
-        events: Sequence[tuple[float, int, int]] | Sequence[Sequence[float]] | np.ndarray,
+        events: Sequence[ProjectMidiEvent] | np.ndarray,
     ) -> None:
         """Replace a MIDI clip's entire event list.
 
-        Each event is ``(ppq, word0, word1)`` (the first two UMP-1.0 words of a
-        channel-voice message; stored opaquely). Pass an empty sequence to clear.
+        Each event is a :class:`ProjectMidiEvent` (a PPQ position and the first
+        two UMP-1.0 words of a channel-voice message, stored opaquely), or the
+        whole list is one ``(n, 3)`` array whose columns are ``ppq``, ``word0``
+        and ``word1``. Pass an empty sequence to clear.
 
         Drops the clip's SysEx, which :meth:`import_smf` and :meth:`export_smf`
         both keep. The payloads sit beside the event list and are reached by a
@@ -96,16 +102,19 @@ class _ProjectMidiMixin:
         end, including one whose note-off sits at or past ``length_ppq``, is
         closed with a note-off at the clip end.
         """
-        rows = list(events)
-        count = len(rows)
-        c_events = (SonareMidiEventPod * count)()
-        for i, ev in enumerate(rows):
-            if len(ev) < 3:
-                raise SonareValueError(f"events[{i}] must contain (ppq, word0, word1)")
-            ppq, word0, word1 = ev[0], ev[1], ev[2]
-            c_events[i].ppq = _validate_midi_event_ppq(ppq, f"events[{i}].ppq")
-            c_events[i].word0 = _validate_midi_event_word(word0, f"events[{i}].word0")
-            c_events[i].word1 = _validate_midi_event_word(word1, f"events[{i}].word1")
+        if isinstance(events, np.ndarray):
+            if events.ndim != 2 or events.shape[1] != 3:
+                raise SonareValueError(
+                    "events must be an (n, 3) array of ppq, word0, word1 columns"
+                )
+            count = int(events.shape[0])
+            c_events = (SonareMidiEventPod * count)()
+            for i, (ppq, word0, word1) in enumerate(events.tolist()):
+                c_events[i].ppq = _validate_midi_event_ppq(ppq, f"events[{i}].ppq")
+                c_events[i].word0 = _validate_midi_event_word(word0, f"events[{i}].word0")
+                c_events[i].word1 = _validate_midi_event_word(word1, f"events[{i}].word1")
+        else:
+            c_events, count = _midi_events_to_c(events, "events")
         _check(
             _get_lib().sonare_project_set_midi_events(
                 self._require_handle(),
@@ -466,9 +475,9 @@ class _ProjectMidiMixin:
     @staticmethod
     def midi_note_on(
         ppq: float, group: int, channel: int, note: int, velocity: int
-    ) -> tuple[float, int, int]:
-        """Pack a MIDI 1.0 note-on event tuple accepted by :meth:`set_midi_events`."""
-        return _midi_event_tuple(
+    ) -> ProjectMidiEvent:
+        """Pack a MIDI 1.0 note-on event accepted by :meth:`set_midi_events`."""
+        return _midi_event_packed(
             "sonare_midi_note_on",
             _validate_midi_event_ppq(ppq, "ppq"),
             _to_c_uint8(group, "group"),
@@ -480,9 +489,9 @@ class _ProjectMidiMixin:
     @staticmethod
     def midi_note_off(
         ppq: float, group: int, channel: int, note: int, velocity: int = 0
-    ) -> tuple[float, int, int]:
-        """Pack a MIDI 1.0 note-off event tuple accepted by :meth:`set_midi_events`."""
-        return _midi_event_tuple(
+    ) -> ProjectMidiEvent:
+        """Pack a MIDI 1.0 note-off event accepted by :meth:`set_midi_events`."""
+        return _midi_event_packed(
             "sonare_midi_note_off",
             _validate_midi_event_ppq(ppq, "ppq"),
             _to_c_uint8(group, "group"),
@@ -494,9 +503,9 @@ class _ProjectMidiMixin:
     @staticmethod
     def midi_cc(
         ppq: float, group: int, channel: int, controller: int, value: int
-    ) -> tuple[float, int, int]:
+    ) -> ProjectMidiEvent:
         """Pack a MIDI 1.0 control-change event tuple."""
-        return _midi_event_tuple(
+        return _midi_event_packed(
             "sonare_midi_cc",
             _validate_midi_event_ppq(ppq, "ppq"),
             _to_c_uint8(group, "group"),
@@ -508,9 +517,9 @@ class _ProjectMidiMixin:
     @staticmethod
     def midi_poly_pressure(
         ppq: float, group: int, channel: int, note: int, pressure: int
-    ) -> tuple[float, int, int]:
+    ) -> ProjectMidiEvent:
         """Pack a MIDI 1.0 poly-pressure event tuple."""
-        return _midi_event_tuple(
+        return _midi_event_packed(
             "sonare_midi_poly_pressure",
             _validate_midi_event_ppq(ppq, "ppq"),
             _to_c_uint8(group, "group"),
@@ -520,9 +529,9 @@ class _ProjectMidiMixin:
         )
 
     @staticmethod
-    def midi_program(ppq: float, group: int, channel: int, program: int) -> tuple[float, int, int]:
+    def midi_program(ppq: float, group: int, channel: int, program: int) -> ProjectMidiEvent:
         """Pack a MIDI 1.0 program-change event tuple."""
-        return _midi_event_tuple(
+        return _midi_event_packed(
             "sonare_midi_program",
             _validate_midi_event_ppq(ppq, "ppq"),
             _to_c_uint8(group, "group"),
@@ -533,9 +542,9 @@ class _ProjectMidiMixin:
     @staticmethod
     def midi_channel_pressure(
         ppq: float, group: int, channel: int, pressure: int
-    ) -> tuple[float, int, int]:
+    ) -> ProjectMidiEvent:
         """Pack a MIDI 1.0 channel-pressure event tuple."""
-        return _midi_event_tuple(
+        return _midi_event_packed(
             "sonare_midi_channel_pressure",
             _validate_midi_event_ppq(ppq, "ppq"),
             _to_c_uint8(group, "group"),
@@ -544,10 +553,10 @@ class _ProjectMidiMixin:
         )
 
     @staticmethod
-    def midi_pitch_bend(ppq: float, group: int, channel: int, bend: int) -> tuple[float, int, int]:
+    def midi_pitch_bend(ppq: float, group: int, channel: int, bend: int) -> ProjectMidiEvent:
         """Pack a MIDI 1.0 pitch-bend event tuple (`bend` is unsigned 14-bit)."""
         # The one uint16 in the family; a uint8 here would refuse most of the range.
-        return _midi_event_tuple(
+        return _midi_event_packed(
             "sonare_midi_pitch_bend",
             _validate_midi_event_ppq(ppq, "ppq"),
             _to_c_uint8(group, "group"),
@@ -564,9 +573,9 @@ class _ProjectMidiMixin:
         velocity16: int,
         attribute_type: int = 0,
         attribute_data: int = 0,
-    ) -> tuple[float, int, int]:
+    ) -> ProjectMidiEvent:
         """Pack a MIDI 2.0 note-on event tuple (16-bit velocity; 0 still sounds)."""
-        return _midi_event_tuple(
+        return _midi_event_packed(
             "sonare_midi2_note_on",
             _validate_midi_event_ppq(ppq, "ppq"),
             _to_c_uint8(group, "group"),
@@ -580,9 +589,9 @@ class _ProjectMidiMixin:
     @staticmethod
     def midi2_note_off(
         ppq: float, group: int, channel: int, note: int, velocity16: int = 0
-    ) -> tuple[float, int, int]:
+    ) -> ProjectMidiEvent:
         """Pack a MIDI 2.0 note-off event tuple (16-bit release velocity)."""
-        return _midi_event_tuple(
+        return _midi_event_packed(
             "sonare_midi2_note_off",
             _validate_midi_event_ppq(ppq, "ppq"),
             _to_c_uint8(group, "group"),
@@ -594,9 +603,9 @@ class _ProjectMidiMixin:
     @staticmethod
     def midi2_cc(
         ppq: float, group: int, channel: int, controller: int, value32: int
-    ) -> tuple[float, int, int]:
+    ) -> ProjectMidiEvent:
         """Pack a MIDI 2.0 control-change event tuple (32-bit value)."""
-        return _midi_event_tuple(
+        return _midi_event_packed(
             "sonare_midi2_cc",
             _validate_midi_event_ppq(ppq, "ppq"),
             _to_c_uint8(group, "group"),
@@ -608,9 +617,9 @@ class _ProjectMidiMixin:
     @staticmethod
     def midi2_poly_pressure(
         ppq: float, group: int, channel: int, note: int, pressure32: int
-    ) -> tuple[float, int, int]:
+    ) -> ProjectMidiEvent:
         """Pack a MIDI 2.0 poly-pressure event tuple (32-bit pressure)."""
-        return _midi_event_tuple(
+        return _midi_event_packed(
             "sonare_midi2_poly_pressure",
             _validate_midi_event_ppq(ppq, "ppq"),
             _to_c_uint8(group, "group"),
@@ -622,9 +631,9 @@ class _ProjectMidiMixin:
     @staticmethod
     def midi2_channel_pressure(
         ppq: float, group: int, channel: int, pressure32: int
-    ) -> tuple[float, int, int]:
+    ) -> ProjectMidiEvent:
         """Pack a MIDI 2.0 channel-pressure event tuple (32-bit pressure)."""
-        return _midi_event_tuple(
+        return _midi_event_packed(
             "sonare_midi2_channel_pressure",
             _validate_midi_event_ppq(ppq, "ppq"),
             _to_c_uint8(group, "group"),
@@ -633,11 +642,9 @@ class _ProjectMidiMixin:
         )
 
     @staticmethod
-    def midi2_pitch_bend(
-        ppq: float, group: int, channel: int, bend32: int
-    ) -> tuple[float, int, int]:
+    def midi2_pitch_bend(ppq: float, group: int, channel: int, bend32: int) -> ProjectMidiEvent:
         """Pack a MIDI 2.0 pitch-bend event tuple (unsigned 32-bit)."""
-        return _midi_event_tuple(
+        return _midi_event_packed(
             "sonare_midi2_pitch_bend",
             _validate_midi_event_ppq(ppq, "ppq"),
             _to_c_uint8(group, "group"),
@@ -654,14 +661,14 @@ class _ProjectMidiMixin:
         bank_valid: bool = False,
         bank_msb: int = 0,
         bank_lsb: int = 0,
-    ) -> tuple[float, int, int]:
+    ) -> ProjectMidiEvent:
         """Pack a MIDI 2.0 program-change event tuple.
 
         The bank travels in the same message and is applied only when
         ``bank_valid`` is true. A non-zero ``bank_msb`` or ``bank_lsb`` with
         ``bank_valid`` false is refused with :class:`SonareValueError`: a bank the receiver would
         ignore is not packed."""
-        return _midi_event_tuple(
+        return _midi_event_packed(
             "sonare_midi2_program",
             _validate_midi_event_ppq(ppq, "ppq"),
             _to_c_uint8(group, "group"),
@@ -675,9 +682,9 @@ class _ProjectMidiMixin:
     @staticmethod
     def midi2_registered_controller(
         ppq: float, group: int, channel: int, bank: int, index: int, value32: int
-    ) -> tuple[float, int, int]:
+    ) -> ProjectMidiEvent:
         """Pack a MIDI 2.0 registered controller (RPN) event tuple (32-bit value)."""
-        return _midi_event_tuple(
+        return _midi_event_packed(
             "sonare_midi2_registered_controller",
             _validate_midi_event_ppq(ppq, "ppq"),
             _to_c_uint8(group, "group"),
@@ -690,9 +697,9 @@ class _ProjectMidiMixin:
     @staticmethod
     def midi2_assignable_controller(
         ppq: float, group: int, channel: int, bank: int, index: int, value32: int
-    ) -> tuple[float, int, int]:
+    ) -> ProjectMidiEvent:
         """Pack a MIDI 2.0 assignable controller (NRPN) event tuple (32-bit value)."""
-        return _midi_event_tuple(
+        return _midi_event_packed(
             "sonare_midi2_assignable_controller",
             _validate_midi_event_ppq(ppq, "ppq"),
             _to_c_uint8(group, "group"),
@@ -705,9 +712,9 @@ class _ProjectMidiMixin:
     @staticmethod
     def midi2_relative_registered_controller(
         ppq: float, group: int, channel: int, bank: int, index: int, delta32: int
-    ) -> tuple[float, int, int]:
+    ) -> ProjectMidiEvent:
         """Pack a MIDI 2.0 relative registered controller event tuple (signed 32-bit delta)."""
-        return _midi_event_tuple(
+        return _midi_event_packed(
             "sonare_midi2_relative_registered_controller",
             _validate_midi_event_ppq(ppq, "ppq"),
             _to_c_uint8(group, "group"),
@@ -720,9 +727,9 @@ class _ProjectMidiMixin:
     @staticmethod
     def midi2_relative_assignable_controller(
         ppq: float, group: int, channel: int, bank: int, index: int, delta32: int
-    ) -> tuple[float, int, int]:
+    ) -> ProjectMidiEvent:
         """Pack a MIDI 2.0 relative assignable controller event tuple (signed 32-bit delta)."""
-        return _midi_event_tuple(
+        return _midi_event_packed(
             "sonare_midi2_relative_assignable_controller",
             _validate_midi_event_ppq(ppq, "ppq"),
             _to_c_uint8(group, "group"),
@@ -735,9 +742,9 @@ class _ProjectMidiMixin:
     @staticmethod
     def midi2_registered_per_note_controller(
         ppq: float, group: int, channel: int, note: int, index: int, value32: int
-    ) -> tuple[float, int, int]:
+    ) -> ProjectMidiEvent:
         """Pack a MIDI 2.0 registered per-note controller event tuple (32-bit value)."""
-        return _midi_event_tuple(
+        return _midi_event_packed(
             "sonare_midi2_registered_per_note_controller",
             _validate_midi_event_ppq(ppq, "ppq"),
             _to_c_uint8(group, "group"),
@@ -750,9 +757,9 @@ class _ProjectMidiMixin:
     @staticmethod
     def midi2_assignable_per_note_controller(
         ppq: float, group: int, channel: int, note: int, index: int, value32: int
-    ) -> tuple[float, int, int]:
+    ) -> ProjectMidiEvent:
         """Pack a MIDI 2.0 assignable per-note controller event tuple (32-bit value)."""
-        return _midi_event_tuple(
+        return _midi_event_packed(
             "sonare_midi2_assignable_per_note_controller",
             _validate_midi_event_ppq(ppq, "ppq"),
             _to_c_uint8(group, "group"),
@@ -765,9 +772,9 @@ class _ProjectMidiMixin:
     @staticmethod
     def midi2_per_note_pitch_bend(
         ppq: float, group: int, channel: int, note: int, bend32: int
-    ) -> tuple[float, int, int]:
+    ) -> ProjectMidiEvent:
         """Pack a MIDI 2.0 per-note pitch-bend event tuple (unsigned 32-bit)."""
-        return _midi_event_tuple(
+        return _midi_event_packed(
             "sonare_midi2_per_note_pitch_bend",
             _validate_midi_event_ppq(ppq, "ppq"),
             _to_c_uint8(group, "group"),
@@ -779,12 +786,12 @@ class _ProjectMidiMixin:
     @staticmethod
     def midi2_per_note_management(
         ppq: float, group: int, channel: int, note: int, detach: bool = False, reset: bool = False
-    ) -> tuple[float, int, int]:
+    ) -> ProjectMidiEvent:
         """Pack a MIDI 2.0 per-note management event tuple.
 
         ``detach`` detaches per-note controllers from voices already sounding
         on ``note``; ``reset`` resets the note's per-note controllers."""
-        return _midi_event_tuple(
+        return _midi_event_packed(
             "sonare_midi2_per_note_management",
             _validate_midi_event_ppq(ppq, "ppq"),
             _to_c_uint8(group, "group"),
@@ -906,11 +913,11 @@ class _ProjectMidiMixin:
         bank_msb: int,
         bank_lsb: int,
         program: int,
-    ) -> list[tuple[float, int, int]]:
+    ) -> list[ProjectMidiEvent]:
         """Lower a bank/program selection to MIDI 1.0 bank-select + program events.
 
-        Returns the emitted ``(ppq, word0, word1)`` events (Bank MSB CC, Bank LSB
-        CC, then Program Change) at ``ppq``.
+        Returns the emitted events (Bank MSB CC, Bank LSB CC, then Program
+        Change) at ``ppq``.
         """
         lib = _get_lib()
         events = (SonareMidiEventPod * 3)()
@@ -928,14 +935,11 @@ class _ProjectMidiMixin:
                 ctypes.byref(out_count),
             )
         )
-        return [
-            (float(events[i].ppq), int(events[i].word0), int(events[i].word1))
-            for i in range(int(out_count.value))
-        ]
+        return [_midi_event_from_c(events[i]) for i in range(int(out_count.value))]
 
     @staticmethod
     def midi_route_events(
-        events: Sequence[tuple[float, int, int]] | Sequence[Sequence[float]],
+        events: Sequence[ProjectMidiEvent],
         config: Mapping[str, int | None] | None = None,
     ) -> MidiRouteResult:
         """Route events through the RT MidiRouter filter / remap / thru logic.
@@ -947,16 +951,7 @@ class _ProjectMidiMixin:
         group or channel is refused rather than read as "any".
         """
         lib = _get_lib()
-        rows = list(events)
-        n = len(rows)
-        c_in = (SonareMidiEventPod * n)()
-        for i, ev in enumerate(rows):
-            seq = tuple(ev)
-            if len(seq) < 3:
-                raise SonareValueError(f"events[{i}] must contain (ppq, word0, word1)")
-            c_in[i].ppq = _validate_midi_event_ppq(seq[0], f"events[{i}].ppq")
-            c_in[i].word0 = _validate_midi_event_word(seq[1], f"events[{i}].word0")
-            c_in[i].word1 = _validate_midi_event_word(seq[2], f"events[{i}].word1")
+        c_in, n = _midi_events_to_c(events, "events")
         cfg_map: Mapping[str, int | None] = config or {}
         # The C ABI spells "any" / "no remap" as -1; only absence reaches it.
         cfg = SonareMidiRouteConfig(
@@ -985,10 +980,7 @@ class _ProjectMidiMixin:
                 ctypes.byref(overflow_count),
             )
         )
-        routed = [
-            (float(out[i].ppq), int(out[i].word0), int(out[i].word1))
-            for i in range(int(out_count.value))
-        ]
+        routed = [_midi_event_from_c(out[i]) for i in range(int(out_count.value))]
         return MidiRouteResult(
             events=routed,
             overflowed=bool(overflowed.value),
@@ -997,7 +989,7 @@ class _ProjectMidiMixin:
 
     @staticmethod
     def midi_cc_learn(
-        events: Sequence[tuple[float, int, int]] | Sequence[Sequence[float]],
+        events: Sequence[ProjectMidiEvent],
         param_id: int,
         min_value: float = 0.0,
         max_value: float = 1.0,
@@ -1010,16 +1002,7 @@ class _ProjectMidiMixin:
         ``SONARE_ERROR_INVALID_STATE``).
         """
         lib = _get_lib()
-        rows = list(events)
-        n = len(rows)
-        c_in = (SonareMidiEventPod * n)()
-        for i, ev in enumerate(rows):
-            seq = tuple(ev)
-            if len(seq) < 3:
-                raise SonareValueError(f"events[{i}] must contain (ppq, word0, word1)")
-            c_in[i].ppq = _validate_midi_event_ppq(seq[0], f"events[{i}].ppq")
-            c_in[i].word0 = _validate_midi_event_word(seq[1], f"events[{i}].word0")
-            c_in[i].word1 = _validate_midi_event_word(seq[2], f"events[{i}].word1")
+        c_in, n = _midi_events_to_c(events, "events")
         out_binding = SonareMidiCcBinding()
         rc = lib.sonare_midi_cc_learn(
             c_in if n else None,
@@ -1038,25 +1021,18 @@ class _ProjectMidiMixin:
     @staticmethod
     def midi_cc_to_breakpoint(
         bindings: Sequence[MidiCcBinding],
-        event: tuple[float, int, int] | Sequence[float],
-    ) -> tuple[float, float, AutomationCurve] | None:
+        event: ProjectMidiEvent,
+    ) -> AutomationPoint | None:
         """Convert one CC ``event`` to an automation breakpoint via a binding table.
 
-        Returns ``(ppq, value, curve_to_next)`` or ``None`` when the event does
-        not match any binding (native ``SONARE_ERROR_INVALID_STATE``).
+        Returns ``None`` when the event does not match any binding (native
+        ``SONARE_ERROR_INVALID_STATE``).
         """
         lib = _get_lib()
         rows = list(bindings)
         m = len(rows)
         c_bindings = (SonareMidiCcBinding * m)(*[_cc_binding_to_c(b) for b in rows])
-        seq = tuple(event)
-        if len(seq) < 3:
-            raise SonareValueError("event must contain (ppq, word0, word1)")
-        ev = SonareMidiEventPod(
-            ppq=_validate_midi_event_ppq(seq[0], "event.ppq"),
-            word0=_validate_midi_event_word(seq[1], "event.word0"),
-            word1=_validate_midi_event_word(seq[2], "event.word1"),
-        )
+        ev = _midi_event_to_c(event, "event")
         pt = SonareAutomationPoint()
         rc = lib.sonare_midi_cc_to_breakpoint(
             c_bindings if m else None,
@@ -1068,7 +1044,7 @@ class _ProjectMidiMixin:
             return None
         _check(rc)
         curve = cast(AutomationCurve, _AUTOMATION_CURVES[int(pt.curve_to_next)])
-        return (float(pt.ppq), float(pt.value), curve)
+        return AutomationPoint(float(pt.ppq), float(pt.value), curve)
 
     @staticmethod
     def midi_param_to_cc(
@@ -1077,11 +1053,10 @@ class _ProjectMidiMixin:
         unit_value: float,
         group: int,
         ppq: float = 0.0,
-    ) -> tuple[float, int, int] | None:
+    ) -> ProjectMidiEvent | None:
         """Convert an automation parameter value back to a CC event.
 
-        Returns ``(ppq, word0, word1)`` or ``None`` when ``param_id`` is not
-        bound (native ``SONARE_ERROR_INVALID_STATE``).
+        Returns ``None`` when ``param_id`` is not bound (native ``SONARE_ERROR_INVALID_STATE``).
         """
         lib = _get_lib()
         rows = list(bindings)
@@ -1100,6 +1075,6 @@ class _ProjectMidiMixin:
         if rc == SONARE_ERROR_INVALID_STATE:
             return None
         _check(rc)
-        return (float(out_event.ppq), int(out_event.word0), int(out_event.word1))
+        return _midi_event_from_c(out_event)
 
     # -- MIR ----------------------------------------------------------------

@@ -9,8 +9,10 @@ import numpy as np
 import pytest
 
 from libsonare import (
+    AutomationPoint,
     MidiCcBinding,
     Project,
+    ProjectMidiEvent,
     SonareError,
     SonareValueError,
 )
@@ -117,8 +119,8 @@ def test_clip_file_round_trips_midi_2_losslessly() -> None:
     try:
         # A MIDI 2.0 note-on (message type 0x4) whose 16-bit velocity (0xBEEF)
         # would be truncated through MIDI 1.0 SMF.
-        note_on = (0.0, 0x40903C00, 0xBEEF0000)
-        note_off = (1.0, 0x40803C00, 0x00000000)
+        note_on = ProjectMidiEvent(0.0, 0x40903C00, 0xBEEF0000)
+        note_off = ProjectMidiEvent(1.0, 0x40803C00, 0x00000000)
         project.set_midi_events(midi_clip, [note_on, note_off])
 
         data = project.export_clip_file()
@@ -240,11 +242,56 @@ def test_set_midi_events_validates_event_shape_and_words() -> None:
     try:
         clip_id = project.add_midi_clip(0.0, 1.0).clip_id
         with pytest.raises(ValueError, match="ppq"):
-            project.set_midi_events(clip_id, [(float("nan"), 0, 0)])
-        with pytest.raises(ValueError, match="word0"):
-            project.set_midi_events(clip_id, [(0.0, -1, 0)])
-        with pytest.raises(ValueError, match="ppq, word0, word1"):
-            project.set_midi_events(clip_id, [(0.0, 0)])
+            project.set_midi_events(clip_id, [ProjectMidiEvent(float("nan"), 0)])
+        with pytest.raises(ValueError, match=r"events\[0\]\.word0"):
+            project.set_midi_events(clip_id, [ProjectMidiEvent(0.0, -1)])
+        with pytest.raises(ValueError, match=r"events\[1\]\.word1"):
+            project.set_midi_events(
+                clip_id, np.array([[0.0, 0x20903C40, 0], [1.0, 0x20803C00, -1]])
+            )
+        with pytest.raises(ValueError, match=r"\(n, 3\)"):
+            project.set_midi_events(clip_id, np.zeros((2, 2)))
+    finally:
+        project.close()
+
+
+def test_a_midi_event_is_taken_only_as_a_project_midi_event() -> None:
+    on = (0.0, 0x20903C40, 0)
+    project = Project()
+    try:
+        clip_id = project.add_midi_clip(0.0, 1.0).clip_id
+        with pytest.raises(TypeError, match="ProjectMidiEvent"):
+            project.set_midi_events(clip_id, [on])  # type: ignore[list-item]
+        with pytest.raises(TypeError, match="ProjectMidiEvent"):
+            project.set_midi_events(clip_id, [{"ppq": 0.0, "word0": 0x20903C40}])  # type: ignore[list-item]
+    finally:
+        project.close()
+    with pytest.raises(TypeError, match="ProjectMidiEvent"):
+        Project.midi_route_events([on])  # type: ignore[list-item]
+    with pytest.raises(TypeError, match="ProjectMidiEvent"):
+        Project.midi_cc_learn([on], 1)  # type: ignore[list-item]
+    with pytest.raises(TypeError, match="ProjectMidiEvent"):
+        Project.midi_cc_to_breakpoint([], on)  # type: ignore[arg-type]
+
+
+def test_midi_events_come_back_as_project_midi_event_records() -> None:
+    on = Project.midi_note_on(1.5, 0, 0, 60, 100)
+    assert on == ProjectMidiEvent(1.5, on.word0, on.word1)
+    assert (on.word0 >> 20) & 0xF == 0x9  # note-on status in the first UMP word
+    with pytest.raises(TypeError):
+        iter(on)  # type: ignore[call-overload]
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        on.ppq = 0.0  # type: ignore[misc]
+    assert ProjectMidiEvent(0.0, 1).word1 == 0
+    routed = Project.midi_route_events([on]).events
+    assert routed == [on]
+    project = Project()
+    try:
+        clip_id = project.add_midi_clip(0.0, 4.0).clip_id
+        events = [on, Project.midi_note_off(2.0, 0, 0, 60, 0)]
+        project.set_midi_events(clip_id, events)
+        as_array = np.array([[e.ppq, e.word0, e.word1] for e in events])
+        project.set_midi_events(clip_id, as_array)
     finally:
         project.close()
 
@@ -290,8 +337,7 @@ def test_midi_bank_program_lowers_to_events() -> None:
     events = Project.midi_bank_program(0.0, 0, 0, 0, 0, 5)
     assert isinstance(events, list)
     assert 1 <= len(events) <= 3
-    for ev in events:
-        assert len(ev) == 3  # (ppq, word0, word1)
+    assert all(isinstance(ev, ProjectMidiEvent) and ev.ppq == 0.0 for ev in events)
 
 
 def test_midi_route_events_filters_and_reports_overflow() -> None:
@@ -378,13 +424,15 @@ def test_midi_cc_learn_and_conversion_helpers() -> None:
     assert Project.midi_cc_learn([], 99) is None
 
     # cc_to_breakpoint converts a matching CC to an automation point.
-    point = Project.midi_cc_to_breakpoint([binding], Project.midi_cc(0.0, 0, 2, 1, 100))
-    assert point is None or (
-        len(point) == 3 and point[2] in ("linear", "exponential", "hold", "sCurve")
-    )
-    # param_to_cc converts a parameter value back to a CC event (or None if unbound).
-    back = Project.midi_param_to_cc([binding], 77, 0.5, 0)
-    assert back is None or len(back) == 3
+    point = Project.midi_cc_to_breakpoint([binding], Project.midi_cc(1.0, 0, 2, 1, 100))
+    assert isinstance(point, AutomationPoint)
+    assert point.ppq == 1.0
+    assert point.curve_to_next in ("linear", "exponential", "hold", "sCurve")
+    # param_to_cc converts a parameter value back to a CC event; an unbound id is None.
+    back = Project.midi_param_to_cc([binding], 77, 0.5, 0, ppq=2.0)
+    assert isinstance(back, ProjectMidiEvent)
+    assert back.ppq == 2.0
+    assert Project.midi_param_to_cc([binding], 12345, 0.5, 0) is None
 
 
 def test_project_import_smf_surfaces_key_signature_marker() -> None:
@@ -476,9 +524,7 @@ def test_bake_midi_fx_preserves_more_than_512_events() -> None:
         project.bake_midi_fx(clip, "{}")
         payload = json.loads(project.to_json())
         baked = payload["midi_content"][str(clip)]
-        assert baked == [
-            {"word0": word0, "word1": word1, "ppq": ppq} for ppq, word0, word1 in events
-        ]
+        assert baked == [{"word0": e.word0, "word1": e.word1, "ppq": e.ppq} for e in events]
 
         roundtrip = Project()
         try:

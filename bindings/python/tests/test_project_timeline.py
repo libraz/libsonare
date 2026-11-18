@@ -16,6 +16,7 @@ from libsonare import (
     EngineBounceOptions,
     ErrorCode,
     Project,
+    ProjectMidiEvent,
     ProjectTimeline,
     RealtimeEngine,
     SonareError,
@@ -50,10 +51,10 @@ def _build_project() -> tuple[Project, int]:
     project.set_midi_events(
         midi_clip,
         [
-            (0.1, 0x20903C60, 0),
-            (0.5, 0x20803C00, 0),
-            (0.5, 0x20904060, 0),
-            (0.85, 0x20804000, 0),
+            ProjectMidiEvent(0.1, 0x20903C60, 0),
+            ProjectMidiEvent(0.5, 0x20803C00, 0),
+            ProjectMidiEvent(0.5, 0x20904060, 0),
+            ProjectMidiEvent(0.85, 0x20804000, 0),
         ],
     )
     project.set_track_midi_destination(midi_track, _DESTINATION)

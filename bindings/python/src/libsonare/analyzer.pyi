@@ -7,6 +7,7 @@ from typing import Any, Literal, TypeAlias, overload
 import numpy as np
 import numpy.typing as npt
 
+from ._project_model import ProjectMidiEvent
 from .types import (
     AcousticModeName,
     AcousticResult,
@@ -854,13 +855,13 @@ def render_notes(
 ) -> np.ndarray[Any, Any]: ...
 
 class TranscribeResult:
-    events: list[tuple[float, int, int]]
+    events: list[ProjectMidiEvent]
     note_count: int
     tempo_bpm: float
     tuning_cents: float
     def __init__(
         self,
-        events: list[tuple[float, int, int]] = ...,
+        events: list[ProjectMidiEvent] = ...,
         note_count: int = 0,
         tempo_bpm: float = 0.0,
         tuning_cents: float = 0.0,

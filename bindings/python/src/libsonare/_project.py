@@ -47,9 +47,6 @@ from ._project_model import (
 from ._project_model import (
     _marker_name_bytes as _marker_name_bytes,
 )
-from ._project_model import (
-    _midi_event_tuple as _midi_event_tuple,
-)
 from ._project_model import _synth_patch_arg as _synth_patch_arg
 from ._project_model import (
     _synth_waveform_value as _synth_waveform_value,

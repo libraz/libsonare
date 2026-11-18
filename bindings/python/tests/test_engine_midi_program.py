@@ -39,7 +39,8 @@ def _render_input(prepare) -> np.ndarray:
 
 
 def _bank8_words() -> list[int]:
-    _, w0, w1 = Project.midi2_program(0.0, 0, 0, 0, True, 8, 0)
+    event = Project.midi2_program(0.0, 0, 0, 0, True, 8, 0)
+    w0, w1 = event.word0, event.word1
     return [w0, w1]
 
 
@@ -88,7 +89,8 @@ def test_bank_without_bank_valid_is_refused(bank_msb: int, bank_lsb: int) -> Non
 
 
 def test_midi2_program_with_bank_valid_still_packs_a_bank() -> None:
-    _, w0, w1 = Project.midi2_program(0.0, 0, 0, 5, True, 8, 3)
+    event = Project.midi2_program(0.0, 0, 0, 5, True, 8, 3)
+    w0, w1 = event.word0, event.word1
     assert [w0, w1] == [0x40C00001, 0x05000803]
 
 

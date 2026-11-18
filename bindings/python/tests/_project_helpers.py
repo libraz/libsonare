@@ -9,6 +9,7 @@ import numpy as np
 
 from libsonare import (
     Project,
+    ProjectMidiEvent,
 )
 
 
@@ -49,7 +50,7 @@ def _build_project() -> tuple[Project, int, int, int]:
 
     project.set_midi_events(
         midi_clip,
-        [(0.0, 0x20903C40, 0), (1.0, 0x20803C00, 0)],
+        [ProjectMidiEvent(0.0, 0x20903C40), ProjectMidiEvent(1.0, 0x20803C00)],
     )
     return project, audio_clip, midi_track, midi_clip
 

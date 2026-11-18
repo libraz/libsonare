@@ -615,7 +615,7 @@ def test_a_packer_still_refuses_at_the_midi_bound_the_core_owns() -> None:
 def test_a_pitch_bend_keeps_the_range_its_own_width_carries() -> None:
     """The one uint16 in the family, pinned so a uniform uint8 cannot pass.
 
-    ``_midi_event_tuple`` sees only ``*args`` and cannot tell the widths apart,
+    ``_midi_event_packed`` sees only ``*args`` and cannot tell the widths apart,
     so a narrowing folded into it would have to pick one -- and uint8 would
     refuse most of a 14-bit quantity while every other packer stayed green.
     """

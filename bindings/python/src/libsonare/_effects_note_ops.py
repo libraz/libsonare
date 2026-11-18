@@ -1001,7 +1001,7 @@ def transcribe(
 
     The note spans and their measured pitch and level come from the same chains
     :func:`extract_notes` and :class:`PolyphonicAnalysis` read, and the events
-    are ``(ppq, word0, word1)`` triples -- exactly what
+    are :class:`ProjectMidiEvent` records -- exactly what
     :meth:`Project.set_midi_events` takes, so nothing is left to convert.
 
     Two things are deliberately NOT done here, because the library already

@@ -19,6 +19,7 @@ from ._ffi import (
     SonareTranscribeResult,
 )
 from ._narrowing import _is_number, _narrow_double
+from ._project_model import ProjectMidiEvent, _midi_event_from_c
 from ._runtime import (
     _C_INT_MAX,
     _C_INT_MIN,
@@ -276,7 +277,7 @@ class TranscribeResult:
     """What one transcription found, ready to hand to a MIDI clip.
 
     Attributes:
-        events: Note-on / note-off pairs as ``(ppq, word0, word1)``, the shape
+        events: Note-on / note-off pairs, the records
             :meth:`Project.set_midi_events` takes, in canonical PPQ order with a
             note-off before a note-on that shares its tick. Two events per note,
             so ``len(events)`` is ``2 * note_count``.
@@ -289,7 +290,7 @@ class TranscribeResult:
             to (:func:`reference_hz_to_tuning`).
     """
 
-    events: list[tuple[float, int, int]] = dataclasses.field(default_factory=list)
+    events: list[ProjectMidiEvent] = dataclasses.field(default_factory=list)
     note_count: int = 0
     tempo_bpm: float = 0.0
     tuning_cents: float = 0.0
@@ -459,10 +460,7 @@ def _transcribe_result_from_c(out: SonareTranscribeResult) -> TranscribeResult:
     Read length-first: the event pointer is NULL when nothing was found, and a
     ctypes NULL raises on dereference rather than reading zeros.
     """
-    events = [
-        (float(out.events[i].ppq), int(out.events[i].word0), int(out.events[i].word1))
-        for i in range(int(out.count))
-    ]
+    events = [_midi_event_from_c(out.events[i]) for i in range(int(out.count))]
     return TranscribeResult(
         events=events,
         note_count=int(out.note_count),
