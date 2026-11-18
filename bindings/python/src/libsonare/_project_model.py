@@ -382,7 +382,7 @@ class NotePairValidation:
     """Note-offs with no matching note-on."""
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class MidiCcBinding:
     """A MIDI CC <-> automation-parameter binding (see :meth:`Project.midi_cc_learn`).
 
@@ -392,25 +392,27 @@ class MidiCcBinding:
     ``param_id`` is the bound automation parameter; the unit-interval
     automation range maps onto ``[min_value, max_value]``.
     ``channel`` is 0..15, or ``None`` for a binding that answers any channel.
+    Every field but ``cc_number`` and ``param_id`` has a default, so a 7-bit CC
+    binding over the unit range is ``MidiCcBinding(cc_number=1, param_id=42)``.
     """
 
     cc_number: int
     """Controller number (the MSB controller for a 14-bit CC)."""
-    channel: int | None
+    channel: int | None = None
     """MIDI channel 0..15; None matches any channel."""
-    kind: ProjectMidiCcBindingKind
+    kind: ProjectMidiCcBindingKind = "controlChange7"
     """Controller shape, a ``ProjectMidiCcBindingKind`` token."""
-    cc_lsb_number: int
+    cc_lsb_number: int = 0
     """LSB controller number of a 14-bit CC."""
-    selector_msb: int
+    selector_msb: int = 0
     """Selector MSB of an RPN/NRPN binding."""
-    selector_lsb: int
+    selector_lsb: int = 0
     """Selector LSB of an RPN/NRPN binding."""
     param_id: int
     """Automation parameter id the controller drives."""
-    min_value: float
+    min_value: float = 0.0
     """Lower end of the mapped parameter range."""
-    max_value: float
+    max_value: float = 1.0
     """Upper end of the mapped parameter range."""
 
 

@@ -649,19 +649,8 @@ class RealtimeEngine:
     def legato_fallback_count(self, destination_id: int) -> int:
         """Number of times a legato continuation was asked for and refused."""
         ...
-    def bind_midi_cc(
-        self,
-        channel: int,
-        controller: int,
-        param_id: int,
-        min_value: float = 0.0,
-        max_value: float = 1.0,
-    ) -> None:
-        """Bind a live MIDI CC on ``channel`` / ``controller`` to a parameter, mapped onto
-        ``[min_value, max_value]``."""
-        ...
-    def bind_midi_cc_binding(self, binding: MidiCcBinding) -> None:
-        """Bind a full 7/14-bit CC, RPN or NRPN descriptor to the live engine."""
+    def bind_midi_cc(self, binding: MidiCcBinding) -> None:
+        """Bind a 7/14-bit CC, RPN or NRPN descriptor to a live engine parameter."""
         ...
     def clear_midi_cc_bindings(self) -> None:
         """Clear all live MIDI CC to parameter bindings."""

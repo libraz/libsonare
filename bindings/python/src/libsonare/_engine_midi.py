@@ -46,7 +46,6 @@ from ._runtime import (
     _midi_fx_config_json,
     _require_export,
     _resolve_render_frame,
-    _to_c_float,
     _to_c_int,
     _to_c_int64,
     _to_c_size_t,
@@ -889,36 +888,12 @@ class _EngineMidiMixin:
         )
         return int(out.value)
 
-    def bind_midi_cc(
-        self,
-        channel: int,
-        controller: int,
-        param_id: int,
-        min_value: float = 0.0,
-        max_value: float = 1.0,
-    ) -> None:
-        """Bind a live MIDI CC to an engine automation parameter.
+    def bind_midi_cc(self, binding: MidiCcBinding) -> None:
+        """Bind a 7/14-bit CC, RPN or NRPN descriptor to a live engine parameter.
 
-        Incoming CC values on ``channel`` / ``controller`` are mapped onto
-        ``[min_value, max_value]`` and applied to ``param_id``.
+        Incoming controller values are mapped onto ``[binding.min_value, binding.max_value]``
+        and applied to ``binding.param_id``.
         """
-        lib = _get_lib()
-        _require_export(
-            lib, "sonare_engine_bind_midi_cc", "libsonare was built without live-MIDI support"
-        )
-        _check(
-            lib.sonare_engine_bind_midi_cc(
-                self._require_handle(),
-                _to_c_uint8(channel, "channel"),
-                _to_c_uint8(controller, "controller"),
-                _to_c_uint32(param_id, "param_id"),
-                _to_c_float(min_value, "min_value"),
-                _to_c_float(max_value, "max_value"),
-            )
-        )
-
-    def bind_midi_cc_binding(self, binding: MidiCcBinding) -> None:
-        """Bind a full 7/14-bit CC, RPN, or NRPN descriptor to the live engine."""
         lib = _get_lib()
         _require_export(
             lib,

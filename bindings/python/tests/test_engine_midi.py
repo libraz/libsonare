@@ -37,8 +37,8 @@ def test_engine_builtin_instrument_bind_and_clear() -> None:
 
 def test_engine_midi_cc_bindings() -> None:
     with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
-        engine.bind_midi_cc(0, 1, 42, min_value=0.0, max_value=1.0)
-        engine.bind_midi_cc_binding(
+        engine.bind_midi_cc(MidiCcBinding(cc_number=1, channel=0, param_id=42))
+        engine.bind_midi_cc(
             MidiCcBinding(
                 cc_number=2,
                 cc_lsb_number=34,
@@ -59,7 +59,7 @@ def test_engine_midi_cc_bindings() -> None:
 def test_a_cc_binding_mapping_is_a_type_error() -> None:
     with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
         with pytest.raises(TypeError, match="MidiCcBinding"):
-            engine.bind_midi_cc_binding({"cc_number": 2, "param_id": 43})  # type: ignore[arg-type]
+            engine.bind_midi_cc({"cc_number": 2, "param_id": 43})  # type: ignore[arg-type]
         assert engine.midi_cc_binding_count == 0
 
 

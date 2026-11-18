@@ -9292,6 +9292,7 @@ test = "bindings/python/tests/test_project_midi.py::test_a_cc_binding_is_taken_o
 [[entry]]
 kind = "option"
 old = "RealtimeEngine.bind_midi_cc_binding(binding)"
+to = "RealtimeEngine.bind_midi_cc(binding)"
 changed = "binding is a MidiCcBinding record; a mapping is TypeError"
 domain = "engine"
 rule = "one-input-form"
@@ -11155,3 +11156,18 @@ old = "Project.soundfont_manifest"
 new = "Project.sound_font_manifest"
 domain = "project"
 rule = "individual"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.bind_midi_cc"
+changed = "takes one MidiCcBinding record (bind_midi_cc(MidiCcBinding(cc_number=..., channel=..., param_id=...))) instead of channel, controller, param_id, min_value and max_value"
+domain = "engine"
+rule = "one-input-form"
+test = "bindings/python/tests/test_engine_midi.py::test_engine_midi_cc_bindings"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.bind_midi_cc_binding"
+new = "RealtimeEngine.bind_midi_cc"
+domain = "engine"
+rule = "one-input-form"

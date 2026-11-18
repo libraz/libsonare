@@ -18,7 +18,7 @@ from __future__ import annotations
 import pytest
 
 import libsonare as ls
-from libsonare import RealtimeEngine, SonareValueError
+from libsonare import MidiCcBinding, RealtimeEngine, SonareValueError
 from libsonare.types import EngineMarker
 
 from ._helpers import scene_bus
@@ -58,17 +58,17 @@ def test_a_wrapped_marker_id_is_refused_rather_than_read_as_a_smaller_one() -> N
 def test_a_wrapped_cc_number_is_refused_rather_than_replacing_another_binding() -> None:
     """The ``c_uint8`` half: 256 + n aliases onto n and silently replaces its binding."""
     with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
-        engine.bind_midi_cc(0, 1, 42, min_value=0.0, max_value=1.0)
-        engine.bind_midi_cc(0, 2, 42, min_value=0.0, max_value=1.0)
+        engine.bind_midi_cc(MidiCcBinding(cc_number=1, channel=0, param_id=42))
+        engine.bind_midi_cc(MidiCcBinding(cc_number=2, channel=0, param_id=42))
         assert engine.midi_cc_binding_count == 2  # positive control
-        engine.bind_midi_cc(0, 1, 42, min_value=0.0, max_value=1.0)
+        engine.bind_midi_cc(MidiCcBinding(cc_number=1, channel=0, param_id=42))
         assert engine.midi_cc_binding_count == 2  # rebinding replaces rather than adds
 
         for value in (256 + 1, 256, -1, 1.5):
-            with pytest.raises(SonareValueError, match="controller"):
-                engine.bind_midi_cc(0, value, 42, min_value=0.0, max_value=1.0)
+            with pytest.raises(SonareValueError, match="cc_number"):
+                engine.bind_midi_cc(MidiCcBinding(cc_number=value, channel=0, param_id=42))  # type: ignore[arg-type]
             with pytest.raises(SonareValueError, match="channel"):
-                engine.bind_midi_cc(value, 1, 42, min_value=0.0, max_value=1.0)
+                engine.bind_midi_cc(MidiCcBinding(cc_number=1, channel=value, param_id=42))  # type: ignore[arg-type]
         assert engine.midi_cc_binding_count == 2
 
 
