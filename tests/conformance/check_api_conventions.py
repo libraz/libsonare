@@ -1207,7 +1207,6 @@ RULES: list[Rule] = [
         derive=_construction_records,
         pending={
             "python:PlaybackRenderer": "annotate config with the playback config document alias, no JSON text",
-            "python:StreamAnalyzer": "take the stream config as keyword arguments",
             "wasm:ClipPageStreamer": "take one config object holding the engine",
             "wasm:SonarePlaybackWorkletProcessor": "fold port into the options object",
             "wasm:SonareRealtimeEngineWorkletProcessor": "fold transport into the options object",
