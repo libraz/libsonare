@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Literal, TypeAlias
 
 if TYPE_CHECKING:
     import numpy as np
+    import numpy.typing as npt
     from numpy.typing import NDArray
 
 
@@ -83,9 +84,9 @@ class DeclickStereoResult:
     model, which is why the two reports can differ.
     """
 
-    left: np.ndarray
+    left: npt.NDArray[np.float32]
     """The declicked left channel."""
-    right: np.ndarray
+    right: npt.NDArray[np.float32]
     """The declicked right channel."""
     length: int
     """Length of each output channel, in samples."""
@@ -188,9 +189,9 @@ class DeclipStereoResult:
     only one channel produces no linking at all.
     """
 
-    left: np.ndarray
+    left: npt.NDArray[np.float32]
     """The declipped left channel."""
-    right: np.ndarray
+    right: npt.NDArray[np.float32]
     """The declipped right channel."""
     length: int
     """Length of each output channel, in samples."""
@@ -264,9 +265,9 @@ class DecrackleStereoResult:
     declick and declip.
     """
 
-    left: np.ndarray
+    left: npt.NDArray[np.float32]
     """The decrackled left channel."""
-    right: np.ndarray
+    right: npt.NDArray[np.float32]
     """The decrackled right channel."""
     length: int
     """Length of each output channel, in samples."""
@@ -297,7 +298,7 @@ class HumDetection:
     no peak."""
     harmonics: int
     """Number of harmonics above the floor; 0 when ``fundamental_prominence`` is 1.0."""
-    harmonic_dbfs: np.ndarray
+    harmonic_dbfs: npt.NDArray[np.float32]
     """Input level in dBFS at each k times the fundamental, k ascending; at most 16 entries."""
 
 
@@ -345,9 +346,9 @@ class DehumStereoResult:
     channels are filtered independently at the configured frequency.
     """
 
-    left: np.ndarray
+    left: npt.NDArray[np.float32]
     """The dehummed left channel."""
-    right: np.ndarray
+    right: npt.NDArray[np.float32]
     """The dehummed right channel."""
     length: int
     """Length of each output channel, in samples."""
@@ -372,7 +373,7 @@ class NoiseDetection:
 
     floor_dbfs: float
     """Broadband estimated noise floor in dBFS."""
-    band_floor_dbfs: np.ndarray
+    band_floor_dbfs: npt.NDArray[np.float32]
     """Noise floor in dBFS per band: 32 entries on a geometric grid from 20 Hz to Nyquist, low to
     high."""
 
@@ -419,9 +420,9 @@ class DenoiseStereoResult:
     though the two could differ.
     """
 
-    left: np.ndarray
+    left: npt.NDArray[np.float32]
     """The denoised left channel."""
-    right: np.ndarray
+    right: npt.NDArray[np.float32]
     """The denoised right channel."""
     length: int
     """Length of each output channel, in samples."""
@@ -518,9 +519,9 @@ class DereverbStereoResult:
     stereo figure is comparable against a mono one.
     """
 
-    left: np.ndarray
+    left: npt.NDArray[np.float32]
     """The dereverberated left channel."""
-    right: np.ndarray
+    right: npt.NDArray[np.float32]
     """The dereverberated right channel."""
     length: int
     """Length of each output channel, in samples."""

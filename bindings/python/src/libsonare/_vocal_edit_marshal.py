@@ -171,6 +171,13 @@ class VocalEditError(SonareError):
         actual_text: Text spelling of the actual value; empty when it is numeric.
     """
 
+    reason: VocalReason
+    field: str
+    expected: int
+    actual: int
+    expected_text: str
+    actual_text: str
+
     def __init__(
         self,
         code: int,
@@ -183,10 +190,10 @@ class VocalEditError(SonareError):
         expected_text: str = "",
         actual_text: str = "",
     ) -> None:
-        self.reason: VocalReason = reason
+        self.reason = reason
         self.field = field
-        self.expected = int(expected)
-        self.actual = int(actual)
+        self.expected = expected
+        self.actual = actual
         self.expected_text = expected_text
         self.actual_text = actual_text
         super().__init__(code, message)

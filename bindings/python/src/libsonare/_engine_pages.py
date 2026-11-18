@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import ctypes
 import os
-from collections.abc import Sequence
 from pathlib import Path
 from typing import BinaryIO
 
@@ -23,6 +22,7 @@ from ._runtime import (
     _to_c_int,
     _to_c_int64,
 )
+from ._types_engine import PlanarChannels
 
 
 class ClipPageProvider:
@@ -65,7 +65,7 @@ class ClipPageProvider:
     def _require_handle(self) -> ctypes.c_void_p:
         return _require_open(self._handle, "ClipPageProvider")
 
-    def supply(self, page_index: int, channels: Sequence[Sequence[float]]) -> None:
+    def supply(self, page_index: int, channels: PlanarChannels) -> None:
         """Make page ``page_index`` resident from one float sequence per channel."""
         arrays, ptrs, frames = _planar_channel_arrays(channels)
         _check(

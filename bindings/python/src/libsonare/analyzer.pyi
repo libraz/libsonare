@@ -1,18 +1,46 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
 from typing import Any, Literal, TypeAlias, overload
 
 import numpy as np
 import numpy.typing as npt
 
-from ._project_model import ProjectMidiEvent
+from ._conversions import SilenceCommonReport as SilenceCommonReport
+from ._conversions import SplitSilenceCommonWithReportResult as SplitSilenceCommonWithReportResult
+from ._conversions import TrimResult as TrimResult
+from ._effects_note_model import NoteEdit as NoteEdit
+from ._effects_note_model import NoteObject as NoteObject
+from ._effects_note_model import PitchDecompositionResult as PitchDecompositionResult
+from ._effects_note_model import TranscribeResult as TranscribeResult
+from ._effects_note_ops import AssignNoteTargetsResult as AssignNoteTargetsResult
+from ._effects_note_ops import NoteTarget as NoteTarget
+from ._effects_percussive import PercussiveEvent as PercussiveEvent
+from ._effects_percussive import PercussiveEventEdit as PercussiveEventEdit
+from ._effects_separation import DecomposeResult as DecomposeResult
+from ._effects_spectral import SpectralRegionOp as SpectralRegionOp
+from ._effects_voice import CharacterType as CharacterType
+from ._effects_voice import FormantMode as FormantMode
+from ._effects_voice import MidiRelease as MidiRelease
+from ._effects_voice import NoteDivision as NoteDivision
+from ._effects_voice import PitchCorrectionMode as PitchCorrectionMode
+from ._effects_voice import RealtimeVoiceChanger as RealtimeVoiceChanger
+from ._effects_voice import RealtimeVoiceChangerConfig as RealtimeVoiceChangerConfig
+from ._effects_voice import ReverbVariation as ReverbVariation
+from ._effects_voice import ScaleKind as ScaleKind
+from ._effects_voice import StreamingRetune as StreamingRetune
+from ._effects_voice import VocoderCarrierSource as VocoderCarrierSource
+from ._effects_voice import VocoderCarrierWave as VocoderCarrierWave
+from ._effects_voice import VoiceEngine as VoiceEngine
+from ._mastering_streaming import StreamingEqualizer as StreamingEqualizer
+from ._mastering_streaming import StreamingMasteringChain as StreamingMasteringChain
+from ._mixing import Mixer as Mixer
+from ._mixing import MixerStereoResult as MixerStereoResult
+from ._types_engine import PlanarChannels as PlanarChannels
 from .types import (
     AcousticModeName,
     AcousticResult,
     AnalysisResult,
-    AutomationCurve,
     AutoTuneResult,
     Beat,
     BoundaryResult,
@@ -51,13 +79,8 @@ from .types import (
     DynamicRangeReport,
     DynamicsProcessorResult,
     DynamicsResult,
-    EqBandInput,
-    EqPhaseMode,
-    EqSpectrumSnapshot,
-    EqStereoPlacement,
     FunctionalChord,
     GenreHint,
-    GoniometerPoint,
     HpssResult,
     HumDetection,
     Key,
@@ -90,10 +113,7 @@ from .types import (
     MelodyResult,
     MelSpectrogramResult,
     MeterEstimate,
-    MeterTap,
     MfccResult,
-    MixBusRole,
-    MixMeterSnapshot,
     MixResult,
     MixSceneDocument,
     NmfInit,
@@ -102,7 +122,6 @@ from .types import (
     NormalizeStereoResult,
     NormType,
     NoteSegment,
-    PanLaw,
     PanMode,
     PhaseScopeReport,
     PiptrackResult,
@@ -120,10 +139,7 @@ from .types import (
     RoomMorphResult,
     RoomMorphStereoResult,
     Section,
-    SendTiming,
-    SpectralEditMode,
     SpectrumReport,
-    StereoBlock,
     StereoMonoCompatCheckLogBandsResult,
     StereoMonoCompatCheckResult,
     StftResult,
@@ -142,15 +158,8 @@ from .types import (
 )
 
 FloatSamples: TypeAlias = Sequence[float] | list[float] | np.ndarray[Any, Any]
-# Planar audio: one buffer per channel, or a 2-D (channels, frames) array.
-PlanarChannels: TypeAlias = Sequence[FloatSamples] | np.ndarray[Any, Any]
-StripRef: TypeAlias = int | str
 
-@dataclass(frozen=True, slots=True, eq=False)
-class MixerStereoResult:
-    left: np.ndarray[Any, Any]
-    right: np.ndarray[Any, Any]
-    sample_rate: int
+StripRef: TypeAlias = int | str
 
 def abi_version() -> int: ...
 def engine_abi_version() -> int: ...
@@ -796,62 +805,8 @@ def voice_change(
     sample_rate: int,
     pitch_semitones: float = 0.0,
     formant_factor: float = 1.0,
-    formant_mode: Literal["relative", "absolute"] = "relative",
+    formant_mode: FormantMode = "relative",
 ) -> np.ndarray[Any, Any]: ...
-
-class NoteEdit:
-    time_offset_samples: int
-    pitch_semitones: float
-    gain_db: float
-    time_stretch_ratio: float
-    muted: bool
-    formant_semitones: float
-    vibrato_depth_change: float
-    drift_change: float
-    amplitude_envelope: np.ndarray[Any, Any]
-    time_offset_sec: float | None
-    def __init__(
-        self,
-        time_offset_samples: int = 0,
-        pitch_semitones: float = 0.0,
-        gain_db: float = 0.0,
-        time_stretch_ratio: float = 1.0,
-        muted: bool = False,
-        formant_semitones: float = 0.0,
-        vibrato_depth_change: float = 0.0,
-        drift_change: float = 0.0,
-        amplitude_envelope: np.ndarray[Any, Any] = ...,
-        time_offset_sec: float | None = None,
-    ) -> None: ...
-
-@dataclass(frozen=True)
-class NoteObject:
-    onset_sample: int | None
-    offset_sample: int | None
-    frame_start: int
-    frame_end: int
-    median_hz: float | None
-    median_cents: float
-    f0_stability: float
-    amplitude: np.ndarray[Any, Any]
-    edit: NoteEdit
-    onset_sec: float | None
-    offset_sec: float | None
-    def __init__(
-        self,
-        onset_sample: int | None = None,
-        offset_sample: int | None = None,
-        frame_start: int = 0,
-        frame_end: int = 0,
-        median_hz: float | None = None,
-        median_cents: float = 0.0,
-        f0_stability: float = 0.0,
-        amplitude: np.ndarray[Any, Any] = ...,
-        edit: NoteEdit = ...,
-        onset_sec: float | None = None,
-        offset_sec: float | None = None,
-    ) -> None: ...
-
 def extract_notes(
     samples: FloatSamples,
     sample_rate: int,
@@ -876,20 +831,6 @@ def render_notes(
     fade_ms: float | None = None,
     vibrato_cutoff_hz: float | None = None,
 ) -> np.ndarray[Any, Any]: ...
-
-class TranscribeResult:
-    events: list[ProjectMidiEvent]
-    note_count: int
-    tempo_bpm: float
-    tuning_cents: float
-    def __init__(
-        self,
-        events: list[ProjectMidiEvent] = ...,
-        note_count: int = 0,
-        tempo_bpm: float = 0.0,
-        tuning_cents: float = 0.0,
-    ) -> None: ...
-
 def transcribe(
     samples: FloatSamples,
     sample_rate: int,
@@ -912,42 +853,6 @@ def transcribe(
     min_note_division: int | None = None,
     monophonic_model: Literal["segments", "singing"] | None = None,
 ) -> TranscribeResult: ...
-
-class PercussiveEventEdit:
-    time_offset_samples: int
-    gain_db: float
-    muted: bool
-    time_offset_sec: float | None
-    def __init__(
-        self,
-        time_offset_samples: int = 0,
-        gain_db: float = 0.0,
-        muted: bool = False,
-        time_offset_sec: float | None = None,
-    ) -> None: ...
-
-@dataclass(frozen=True)
-class PercussiveEvent:
-    onset_sample: int | None
-    offset_sample: int | None
-    strength: float
-    peak_amplitude: float
-    percussive_ratio: float
-    edit: PercussiveEventEdit
-    onset_sec: float | None
-    offset_sec: float | None
-    def __init__(
-        self,
-        onset_sample: int | None = None,
-        offset_sample: int | None = None,
-        strength: float = 0.0,
-        peak_amplitude: float = 0.0,
-        percussive_ratio: float = 0.0,
-        edit: PercussiveEventEdit = ...,
-        onset_sec: float | None = None,
-        offset_sec: float | None = None,
-    ) -> None: ...
-
 def extract_percussive_events(
     samples: FloatSamples,
     sample_rate: int,
@@ -972,19 +877,6 @@ def render_percussive_events(
     hpss_kernel_percussive: int | None = None,
     fade_ms: float | None = None,
 ) -> np.ndarray[Any, Any]: ...
-
-@dataclass(frozen=True)
-class PitchDecompositionResult:
-    center_hz: float | None
-    drift_cents: np.ndarray[Any, Any]
-    vibrato_cents: np.ndarray[Any, Any]
-    def __init__(
-        self,
-        center_hz: float | None = None,
-        drift_cents: np.ndarray[Any, Any] = ...,
-        vibrato_cents: np.ndarray[Any, Any] = ...,
-    ) -> None: ...
-
 def decompose_note_pitch(
     f0_hz: FloatSamples,
     frame_rate: float,
@@ -1025,25 +917,6 @@ def merge_notes(
     reference_hz: float | None = None,
     voiced_threshold: float | None = None,
 ) -> list[NoteObject]: ...
-
-@dataclass(frozen=True)
-class NoteTarget:
-    start_sec: float
-    end_sec: float
-    target_midi: float
-    def __init__(
-        self,
-        start_sec: float,
-        end_sec: float,
-        target_midi: float,
-    ) -> None: ...
-
-@dataclass(frozen=True)
-class AssignNoteTargetsResult:
-    notes: tuple[NoteObject, ...]
-    assigned_count: int
-    def __init__(self, notes: tuple[NoteObject, ...], assigned_count: int) -> None: ...
-
 def note_targets_from_smf(
     data: bytes | bytearray,
     *,
@@ -1058,28 +931,6 @@ def assign_note_targets(
     min_overlap_ratio: float | None = None,
     max_correction_semitones: float | None = None,
 ) -> AssignNoteTargetsResult: ...
-
-class SpectralRegionOp:
-    start_sample: int | None
-    end_sample: int | None
-    low_hz: float
-    high_hz: float
-    gain_db: float
-    mode: SpectralEditMode
-    start_sec: float | None
-    end_sec: float | None
-    def __init__(
-        self,
-        start_sample: int | None = None,
-        end_sample: int | None = None,
-        low_hz: float = 0.0,
-        high_hz: float = 0.0,
-        gain_db: float = 0.0,
-        mode: SpectralEditMode = "gain",
-        start_sec: float | None = None,
-        end_sec: float | None = None,
-    ) -> None: ...
-
 def spectral_edit(
     samples: FloatSamples,
     sample_rate: int,
@@ -1091,161 +942,7 @@ def spectral_edit(
     heal_radius_frames: int | None = None,
 ) -> npt.NDArray[np.float32]: ...
 
-VoiceEngineName: TypeAlias = Literal["grain", "psola"]
-PitchCorrectionModeName: TypeAlias = Literal["off", "auto", "robot"]
-ScaleKindName: TypeAlias = Literal["major", "naturalMinor", "chromatic"]
-VocoderCarrierSourceName: TypeAlias = Literal["internal", "external"]
-VocoderCarrierWaveName: TypeAlias = Literal["saw", "pulse", "ensemble"]
-CharacterTypeName: TypeAlias = Literal["none", "megaphone", "radio", "bbdChorus", "strobo"]
-ReverbVariationName: TypeAlias = Literal["reverb", "echo", "tempoDelay", "dubEcho"]
-NoteDivisionName: TypeAlias = Literal["quarter", "eighth", "dottedEighth", "sixteenth"]
-MidiReleaseName: TypeAlias = Literal["hold", "input"]
-
 RealtimeVoiceChangerPreset = dict[str, Any]
-
-@dataclass(frozen=True)
-class RealtimeVoiceChangerConfig:
-    input_gain_db: float = ...
-    output_gain_db: float = ...
-    wet_mix: float = ...
-    retune_pitch_semitones: float = ...
-    retune_mix: float = ...
-    retune_grain_size_samples: int = ...
-    formant_factor: float = ...
-    formant_amount: float = ...
-    formant_body: float = ...
-    formant_brightness: float = ...
-    formant_nasal: float = ...
-    formant_mode: Literal["relative", "absolute"] = ...
-    eq_high_pass_hz: float = ...
-    eq_body_db: float = ...
-    eq_presence_db: float = ...
-    eq_air_db: float = ...
-    gate_threshold_db: float = ...
-    gate_attack_ms: float = ...
-    gate_release_ms: float = ...
-    gate_range_db: float = ...
-    compressor_threshold_db: float = ...
-    compressor_ratio: float = ...
-    compressor_attack_ms: float = ...
-    compressor_release_ms: float = ...
-    compressor_makeup_gain_db: float = ...
-    deesser_frequency_hz: float = ...
-    deesser_threshold_db: float = ...
-    deesser_ratio: float = ...
-    deesser_range_db: float = ...
-    reverb_mix: float = ...
-    reverb_time_ms: float = ...
-    reverb_damping: float = ...
-    reverb_seed: int = ...
-    limiter_ceiling_db: float = ...
-    limiter_release_ms: float = ...
-    limiter_enable_isp_limiter: int = ...
-    limiter_isp_ceiling_dbtp: float = ...
-    voice_engine: VoiceEngineName = ...
-    voice_engine_f0_min_hz: float = ...
-    pitch_correction_mode: PitchCorrectionModeName = ...
-    pitch_correction_amount: float = ...
-    pitch_correction_speed_ms: float = ...
-    pitch_correction_key_root: int = ...
-    pitch_correction_scale: ScaleKindName = ...
-    pitch_correction_robot_octave: int = ...
-    harmony_voices: int = ...
-    harmony_steps: tuple[int, int, int] = ...
-    harmony_level: float = ...
-    harmony_lead_level: float = ...
-    harmony_detune_cents: float = ...
-    harmony_delay_ms: float = ...
-    vocoder_enabled: int = ...
-    vocoder_bands: int = ...
-    vocoder_attack_ms: float = ...
-    vocoder_release_ms: float = ...
-    vocoder_sibilance: float = ...
-    vocoder_carrier_source: VocoderCarrierSourceName = ...
-    vocoder_carrier_wave: VocoderCarrierWaveName = ...
-    vocoder_ensemble_detune_cents: float = ...
-    vocoder_level: float = ...
-    character_type: CharacterTypeName = ...
-    character_amount: float = ...
-    character_tone: float = ...
-    reverb_variation: ReverbVariationName = ...
-    reverb_variation_delay_ms: float = ...
-    reverb_variation_feedback: float = ...
-    reverb_variation_tempo_bpm: float = ...
-    reverb_variation_division: NoteDivisionName = ...
-    midi_release: MidiReleaseName = ...
-
-class RealtimeVoiceChanger:
-    def __init__(
-        self,
-        sample_rate: int,
-        *,
-        num_channels: int,
-        config: VoicePresetId
-        | RealtimeVoiceChangerPreset
-        | RealtimeVoiceChangerConfig = "neutralMonitor",
-        max_block_size: int | None = None,
-    ) -> None: ...
-    def close(self) -> None: ...
-    def __enter__(self) -> RealtimeVoiceChanger: ...
-    def __exit__(self, exc_type: object, exc: object, tb: object) -> None: ...
-    def reset(self) -> None: ...
-    def set_config(
-        self, config: VoicePresetId | RealtimeVoiceChangerPreset | RealtimeVoiceChangerConfig
-    ) -> None: ...
-    @property
-    def max_block_size(self) -> int: ...
-    @property
-    def latency_samples(self) -> int: ...
-    @property
-    def non_finite_discard_count(self) -> int: ...
-    def config_json(self) -> str: ...
-    @property
-    def config(self) -> RealtimeVoiceChangerConfig: ...
-    def process_mono(self, samples: FloatSamples) -> np.ndarray: ...
-    def process_interleaved(
-        self, samples: FloatSamples, num_channels: int | None = None
-    ) -> np.ndarray: ...
-    def process_planar(self, channels: PlanarChannels) -> list[np.ndarray[Any, Any]]: ...
-    def process_mono_with_carrier(
-        self, samples: FloatSamples, carrier: FloatSamples
-    ) -> np.ndarray: ...
-    def process_interleaved_with_carrier(
-        self, samples: FloatSamples, carrier: FloatSamples, num_channels: int | None = None
-    ) -> np.ndarray: ...
-    def process_planar_with_carrier(
-        self, channels: PlanarChannels, carrier: FloatSamples
-    ) -> list[np.ndarray[Any, Any]]: ...
-    def note_on(self, note: int, velocity: float = 1.0) -> None: ...
-    def note_off(self, note: int) -> None: ...
-    def all_notes_off(self) -> None: ...
-
-class StreamingRetune:
-    def __init__(
-        self,
-        *,
-        pitch_semitones: float = 0.0,
-        mix: float = 1.0,
-        grain_size_samples: int | None = None,
-    ) -> None: ...
-    def close(self) -> None: ...
-    def __enter__(self) -> StreamingRetune: ...
-    def __exit__(self, exc_type: object, exc: object, tb: object) -> None: ...
-    def prepare(self, sample_rate: float, max_block_size: int) -> None: ...
-    def reset(self) -> None: ...
-    def set_config(
-        self,
-        *,
-        pitch_semitones: float | None = None,
-        mix: float | None = None,
-        grain_size_samples: int | None = None,
-    ) -> None: ...
-    def config(self) -> dict[str, float | int]: ...
-    @property
-    def grain_size_samples(self) -> int: ...
-    @property
-    def latency_samples(self) -> int: ...
-    def process_mono(self, samples: FloatSamples) -> np.ndarray: ...
 
 def voice_change_realtime(
     samples: FloatSamples,
@@ -1361,154 +1058,6 @@ def mastering_amp_preset_catalog() -> list[MasteringAmpPresetCatalogEntry]: ...
 def capability_catalog() -> CapabilityCatalog: ...
 def mixing_scene_preset_names() -> list[str]: ...
 def mixing_scene_preset(name: str) -> MixSceneDocument: ...
-
-class Mixer:
-    def __init__(
-        self,
-        *,
-        sample_rate: int,
-        scene: MixSceneDocument | None = None,
-        max_block_size: int | None = None,
-    ) -> None: ...
-    @classmethod
-    def from_json(
-        cls, json: str, *, sample_rate: int, max_block_size: int | None = None
-    ) -> Mixer: ...
-    def compile(self) -> None:
-        """Rebuild the graph while preserving automation position and queued events."""
-        ...
-    @property
-    def max_block_size(self) -> int: ...
-    @property
-    def strip_count(self) -> int: ...
-    def strip_by_id(self, id: str) -> int: ...
-    def add_strip(
-        self,
-        id: str,
-        *,
-        enabled: bool = True,
-        lufs: bool = True,
-        true_peak: bool = True,
-        true_peak_oversample: int | None = None,
-    ) -> int: ...
-    def add_bus(self, id: str, role: MixBusRole = "aux") -> None: ...
-    def remove_bus(self, id: str) -> None: ...
-    def set_output_bus(self, source_id: str, bus_id: str) -> None: ...
-    @property
-    def bus_count(self) -> int: ...
-    def add_vca_group(
-        self, id: str, gain_db: float = 0.0, members: Sequence[str] | None = None
-    ) -> None: ...
-    def set_vca_group_gain_db(self, id: str, gain_db: float) -> None: ...
-    def set_vca_group_members(self, id: str, members: Sequence[str]) -> None: ...
-    def remove_vca_group(self, id: str) -> None: ...
-    @property
-    def vca_group_count(self) -> int: ...
-    def set_soloed(self, strip: StripRef, soloed: bool) -> None: ...
-    def set_solo_safe(self, strip: StripRef, solo_safe: bool) -> None: ...
-    def set_polarity_invert(
-        self, strip: StripRef, invert_left: bool, invert_right: bool
-    ) -> None: ...
-    def set_pan_law(self, strip: StripRef, pan_law: PanLaw) -> None: ...
-    def set_channel_delay_samples(self, strip: StripRef, delay_samples: int) -> None: ...
-    def set_vca_offset_db(self, strip: StripRef, offset_db: float) -> None: ...
-    def set_dual_pan(self, strip: StripRef, left: float, right: float) -> None: ...
-    def set_surround_pan(
-        self,
-        strip: StripRef,
-        *,
-        azimuth: float = ...,
-        elevation: float = ...,
-        divergence: float = ...,
-        lfe: float = ...,
-        distance: float = ...,
-    ) -> None: ...
-    def set_fader_db(self, strip: StripRef, db: float) -> None: ...
-    def set_input_trim_db(self, strip: StripRef, db: float) -> None: ...
-    def set_pan(self, strip: StripRef, pan: float, pan_mode: PanMode | None = None) -> None: ...
-    def set_width(self, strip: StripRef, width: float) -> None: ...
-    def set_muted(self, strip: StripRef, muted: bool) -> None: ...
-    def settle(self, strip: StripRef) -> None: ...
-    def add_send(
-        self,
-        strip: StripRef,
-        send_id: str,
-        destination_bus_id: str,
-        send_db: float = 0.0,
-        timing: SendTiming = "postFader",
-    ) -> int: ...
-    def set_send_db(self, strip: StripRef, index: int, db: float) -> None: ...
-    def remove_send(self, strip: StripRef, index: int) -> None: ...
-    def strip_meter(self, strip: StripRef, tap: MeterTap = "postFader") -> MixMeterSnapshot: ...
-    def bus_meter(self, bus_id: str) -> MixMeterSnapshot: ...
-    def configure_meter(
-        self,
-        enabled: bool = True,
-        *,
-        true_peak_oversample: int = 4,
-        measure_lufs: bool = True,
-        measure_true_peak: bool = True,
-    ) -> None: ...
-    def meter_snapshot(self) -> MixMeterSnapshot: ...
-    def strip_non_finite_discard_count(self, strip: StripRef) -> int: ...
-    def bus_non_finite_discard_count(self, bus_id: str) -> int: ...
-    def scene_warnings(self) -> list[str]: ...
-    def read_goniometer_latest(self, strip: StripRef, max_points: int) -> list[GoniometerPoint]: ...
-    def schedule_fader_automation(
-        self,
-        strip: StripRef,
-        sample_pos: int,
-        fader_db: float,
-        curve: AutomationCurve = "linear",
-    ) -> None: ...
-    def schedule_pan_automation(
-        self,
-        strip: StripRef,
-        sample_pos: int,
-        pan: float,
-        curve: AutomationCurve = "linear",
-    ) -> None: ...
-    def schedule_width_automation(
-        self,
-        strip: StripRef,
-        sample_pos: int,
-        width: float,
-        curve: AutomationCurve = "linear",
-    ) -> None: ...
-    def schedule_send_automation(
-        self,
-        strip: StripRef,
-        send_index: int,
-        sample_pos: int,
-        db: float,
-        curve: AutomationCurve = "linear",
-    ) -> None: ...
-    def schedule_insert_automation(
-        self,
-        strip_index: StripRef,
-        insert_index: int,
-        param_id: int,
-        sample_pos: int,
-        value: float,
-        curve: AutomationCurve = "linear",
-    ) -> None: ...
-    def process_stereo(
-        self,
-        left_inputs: Sequence[Sequence[float]],
-        right_inputs: Sequence[Sequence[float]],
-    ) -> MixerStereoResult: ...
-    @property
-    def tail_samples(self) -> int: ...
-    @property
-    def latency_samples(self) -> int: ...
-    def drain_tail_stereo(self, num_samples: int) -> MixerStereoResult: ...
-    def flush_meters(self) -> None: ...
-    def to_json(self) -> str: ...
-    def close(self) -> None: ...
-    def __enter__(self) -> Mixer: ...
-    def __exit__(self, *_exc: object) -> None: ...
-    def __del__(self) -> None: ...
-
 def mix_stereo(
     strips: Sequence[tuple[FloatSamples, FloatSamples]],
     sample_rate: int,
@@ -1566,77 +1115,6 @@ def streaming_loudness_gain_stereo(
     sample_rate: int,
     config: MasteringChainConfig | None = None,
 ) -> StreamingLoudnessGain: ...
-
-class StreamingMasteringChain:
-    def __init__(
-        self,
-        config: MasteringChainConfig | None = None,
-        *,
-        sample_rate: int,
-        num_channels: int,
-        max_block_size: int | None = None,
-        loudness_static_gain_db: float | None = None,
-        loudness_static_gain_peak_db: float | None = None,
-    ) -> None: ...
-    def process_mono(self, samples: FloatSamples) -> np.ndarray[Any, Any]: ...
-    def process_stereo(self, left: FloatSamples, right: FloatSamples) -> StereoBlock: ...
-    def set_parameter(self, key: str, value: float) -> None: ...
-    @property
-    def max_block_size(self) -> int: ...
-    def flush_mono(self) -> np.ndarray[Any, Any]: ...
-    def flush_stereo(self) -> StereoBlock: ...
-    def reset(self) -> None: ...
-    @property
-    def latency_samples(self) -> int: ...
-    @property
-    def non_finite_substitution_count(self) -> int: ...
-    @property
-    def non_finite_discard_count(self) -> int: ...
-    def stage_names(self) -> list[str]: ...
-    def close(self) -> None: ...
-    def __enter__(self) -> StreamingMasteringChain: ...
-    def __exit__(self, exc_type: object, exc: object, tb: object) -> None: ...
-
-class StreamingEqualizer:
-    sample_rate: int
-    def __init__(self, *, sample_rate: int, max_block_size: int | None = None) -> None: ...
-    @property
-    def max_block_size(self) -> int: ...
-    def set_band(self, index: int, band: EqBandInput) -> None: ...
-    def clear(self) -> None: ...
-    def set_phase_mode(self, mode: EqPhaseMode) -> None: ...
-    def set_auto_gain(self, enabled: bool) -> None: ...
-    def set_gain_scale(self, scale: float) -> None: ...
-    def set_output_gain_db(self, gain_db: float) -> None: ...
-    def set_output_pan(self, pan: float) -> None: ...
-    def set_sidechain_mono(self, samples: FloatSamples) -> None: ...
-    def set_sidechain_stereo(self, left: FloatSamples, right: FloatSamples) -> None: ...
-    def clear_sidechain(self) -> None: ...
-    def match(
-        self,
-        source: FloatSamples,
-        reference: FloatSamples,
-        *,
-        max_bands: int = 8,
-        sample_rate: int | None = None,
-        reference_sample_rate: int | None = None,
-    ) -> None: ...
-    def process_mono(self, samples: FloatSamples) -> np.ndarray[Any, Any]: ...
-    def process_stereo(self, left: FloatSamples, right: FloatSamples) -> StereoBlock: ...
-    def spectrum(self) -> EqSpectrumSnapshot: ...
-    def magnitude_response(
-        self, frequencies_hz: FloatSamples, *, placement: EqStereoPlacement = "stereo"
-    ) -> np.ndarray[Any, Any]: ...
-    @property
-    def latency_samples(self) -> int: ...
-    @property
-    def last_auto_gain_db(self) -> float: ...
-    @property
-    def non_finite_discard_count(self) -> int: ...
-    def close(self) -> None: ...
-    def __enter__(self) -> StreamingEqualizer: ...
-    def __exit__(self, exc_type: object, exc: object, tb: object) -> None: ...
-
 def mastering_apply_pair_processor(
     processor: PairProcessor,
     source: FloatSamples,
@@ -1994,13 +1472,6 @@ def ebur128_loudness_range_lu(
     *,
     validate: bool = True,
 ) -> float: ...
-
-@dataclass(frozen=True, eq=False)
-class DecomposeResult:
-    w: np.ndarray[Any, Any]
-    h: np.ndarray[Any, Any]
-    def __init__(self, w: np.ndarray[Any, Any], h: np.ndarray[Any, Any]) -> None: ...
-
 def decompose(
     s: FloatSamples,
     n_features: int,
@@ -2124,24 +1595,6 @@ def split_silence_common(
     frame_length: int = 2048,
     hop_length: int = 512,
 ) -> np.ndarray[Any, Any]: ...
-
-@dataclass(frozen=True, slots=True)
-class SilenceCommonReport:
-    silence_ceiling_db: float
-    max_signal_intervals: int
-    min_signal_intervals: int
-
-@dataclass(frozen=True, slots=True, eq=False)
-class TrimResult:
-    audio: np.ndarray[Any, Any]
-    start_sample: int
-    end_sample: int
-
-@dataclass(frozen=True, slots=True, eq=False)
-class SplitSilenceCommonWithReportResult:
-    intervals: np.ndarray[Any, Any]
-    report: SilenceCommonReport
-
 def split_silence_common_with_report(
     signals: Sequence[Sequence[float]],
     top_db: float = 60.0,

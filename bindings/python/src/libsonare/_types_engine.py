@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal, TypeAlias, get_args
 
 import numpy as np
+import numpy.typing as npt
 
 from ._types_analysis import (
     TimeSignature,
@@ -36,9 +37,9 @@ PlanarChannels: TypeAlias = Sequence[Sequence[float] | np.ndarray] | np.ndarray
 class EngineProcessWithMonitorResult:
     """Result of ``Engine.process_with_monitor``: the program and monitor planes."""
 
-    output: tuple[np.ndarray, ...]
+    output: tuple[npt.NDArray[np.float32], ...]
     """Processed program channel planes, one float32 array per channel."""
-    monitor: tuple[np.ndarray, ...]
+    monitor: tuple[npt.NDArray[np.float32], ...]
     """Monitor-bus channel planes, one float32 array per channel."""
 
 
@@ -113,9 +114,9 @@ class GoniometerPoint:
 class MixResult:
     """Result of rendering a small stereo mixer scene."""
 
-    left: np.ndarray
+    left: npt.NDArray[np.float32]
     """Left channel samples."""
-    right: np.ndarray
+    right: npt.NDArray[np.float32]
     """Right channel samples."""
     sample_rate: int
     """Sample rate in Hz."""
@@ -440,7 +441,7 @@ class EngineClip:
 
     id: int
     """Clip id."""
-    channels: list[list[float]] | None
+    channels: PlanarChannels | None
     """Per-channel sample data; None when the clip is read through :attr:`page_provider`."""
     start_ppq: float
     """Clip start position in PPQ."""
@@ -801,11 +802,11 @@ class MeterTelemetryRecordWide:
     """Sequence number of the record."""
     num_channels: int
     """Number of valid planes."""
-    peak_db: np.ndarray
+    peak_db: npt.NDArray[np.float32]
     """Sample peak per plane, in dBFS."""
-    rms_db: np.ndarray
+    rms_db: npt.NDArray[np.float32]
     """RMS level per plane, in dBFS."""
-    true_peak_dbtp: np.ndarray
+    true_peak_dbtp: npt.NDArray[np.float32]
     """True peak per plane, in dBTP."""
     max_true_peak_dbtp: float
     """Maximum true peak over all planes, in dBTP."""
@@ -823,7 +824,7 @@ class MeterTelemetryRecordWide:
     """Gain reduction applied, in dB."""
     dropped_records: int
     """Records dropped because the telemetry queue was full."""
-    input_peak_db: np.ndarray = field(default_factory=_empty_float32)
+    input_peak_db: npt.NDArray[np.float32] = field(default_factory=_empty_float32)
     """Input-tap sample peak per plane, in dBFS."""
 
 
@@ -844,7 +845,7 @@ class ScopeTelemetryRecord:
     """Sequence number of the record."""
     dropped_records: int
     """Records dropped because the telemetry queue was full."""
-    bands: np.ndarray
+    bands: npt.NDArray[np.float32]
     """Spectrum band levels."""
     points: list[tuple[float, float]]
     """Vectorscope points as (left, right) tuples."""
@@ -966,7 +967,7 @@ class BoundaryResult:
 
     boundaries: list[Boundary]
     """Detected boundaries in time order."""
-    novelty_curve: np.ndarray
+    novelty_curve: npt.NDArray[np.float32]
     """Scaled by its own maximum, so values are in [0, 1] and a peak of 1.0 means
     "the most novel frame here" rather than "a large change". Multiply by
     :attr:`novelty_peak` to recover the raw response ``absolute_threshold`` is

@@ -14,7 +14,6 @@ import ast
 import inspect
 import json
 from pathlib import Path
-from typing import is_typeddict
 
 import numpy as np
 import pytest
@@ -35,8 +34,9 @@ def _literal_default(node: ast.expr) -> object:
 # mypy validates CONSUMERS of a stub but cannot see a stub that has drifted from
 # its implementation, so a stub is only as trustworthy as whatever compares it
 # to runtime. That comparison used to cover ``Audio`` and one analyzer function,
-# which left `analyzer.pyi`'s free functions, `engine.pyi` (including the most
-# frequently edited facade in the repository) and `types.pyi` unchecked. The
+# which left `analyzer.pyi`'s free functions and `engine.pyi` (including the most
+# frequently edited facade in the repository) unchecked. A class is declared once,
+# at runtime (test_stub_declarations.py), so only stub callables are compared. The
 # comparison below is the same one, generalized over every stub and applied to
 # every concrete callable each declares.
 # ---------------------------------------------------------------------------
@@ -205,14 +205,24 @@ def test_stub_signature_matches_runtime(stub_name: str, dotted: str, node: ast.F
 
 
 def _stub_type_aliases(tree: ast.Module) -> dict[str, str]:
-    """``Name: TypeAlias = ...`` declarations, so an alias can be expanded."""
-    return {
-        node.target.id: ast.unparse(node.value)
-        for node in tree.body
-        if isinstance(node, ast.AnnAssign)
-        and isinstance(node.target, ast.Name)
-        and node.value is not None
-    }
+    """Type alias declarations, so an alias can be expanded.
+
+    Both ``Name: TypeAlias = ...`` and a plain ``Name = dict[str, Any]`` count; the
+    plain form is taken only when its value is a type expression (a subscript or
+    a ``|`` union), so a module constant is not read as an alias.
+    """
+    aliases: dict[str, str] = {}
+    for node in tree.body:
+        if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name) and node.value:
+            aliases[node.target.id] = ast.unparse(node.value)
+        elif (
+            isinstance(node, ast.Assign)
+            and len(node.targets) == 1
+            and isinstance(node.targets[0], ast.Name)
+            and isinstance(node.value, ast.Subscript | ast.BinOp)
+        ):
+            aliases[node.targets[0].id] = ast.unparse(node.value)
+    return aliases
 
 
 def _expand_aliases(text: str, aliases: dict[str, str], depth: int = 0) -> str:
@@ -246,9 +256,11 @@ def _mentions_any(text: str) -> bool:
 def _open_slot_parameters() -> list[tuple[str, str, str, str, str]]:
     """(stub, dotted, arg, stub annotation, runtime annotation) for open runtime types."""
     found: list[tuple[str, str, str, str, str]] = []
-    # Shared aliases (``MasteringChainConfig``) live in types.pyi and reach a
-    # runtime annotation by name, so both sides expand them.
-    shared = _stub_type_aliases(ast.parse((STUB_DIR / "types.pyi").read_text(encoding="utf-8")))
+    # Shared aliases (``MasteringChainConfig``) live in the runtime record
+    # modules and reach a runtime annotation by name, so both sides expand them.
+    shared: dict[str, str] = {}
+    for module in sorted(STUB_DIR.glob("_types_*.py")):
+        shared.update(_stub_type_aliases(ast.parse(module.read_text(encoding="utf-8"))))
     for stub_name in sorted(_STUB_FLOORS):
         tree = ast.parse((STUB_DIR / stub_name).read_text(encoding="utf-8"))
         aliases = {**shared, **_stub_type_aliases(tree)}
@@ -316,58 +328,6 @@ def test_stub_does_not_close_an_open_runtime_parameter() -> None:
     )
 
 
-def _collect_types_stub_constructors() -> list[tuple[str, ast.FunctionDef]]:
-    """(class name, ``__init__`` node) for every constructor ``types.pyi`` declares."""
-    tree = ast.parse((STUB_DIR / "types.pyi").read_text(encoding="utf-8"))
-    return [
-        (cls.name, member)
-        for cls in tree.body
-        if isinstance(cls, ast.ClassDef)
-        for member in cls.body
-        if isinstance(member, ast.FunctionDef) and member.name == "__init__"
-    ]
-
-
-TYPES_CONSTRUCTORS = _collect_types_stub_constructors()
-
-
-@pytest.mark.parametrize(
-    ("class_name", "node"),
-    [pytest.param(c, n, id=f"types.pyi:{c}") for c, n in TYPES_CONSTRUCTORS],
-)
-def test_types_stub_constructor_matches_runtime(class_name: str, node: ast.FunctionDef) -> None:
-    """``types.pyi`` constructors must match the runtime dataclass constructors.
-
-    ``_is_checkable`` drops every dunder, which is right for the method
-    comparison above but excluded this whole category: the result and config
-    classes are dataclasses whose only declared callable IS ``__init__``, so
-    their field names and defaults — the part a caller actually writes — had
-    nothing comparing them to runtime. A stub that keeps a removed field, or
-    misses a default that was added, is invisible to mypy (which validates
-    consumers of the stub, not the stub) and to every other test here.
-    """
-    from libsonare import types as runtime_types
-
-    runtime = getattr(runtime_types, class_name, None)
-    assert runtime is not None, f"types.pyi declares {class_name}, which does not exist at runtime"
-    try:
-        runtime_parameters = list(inspect.signature(runtime).parameters.values())
-    except (TypeError, ValueError) as exc:  # pragma: no cover - defensive
-        pytest.fail(f"{class_name}: runtime class has no inspectable constructor ({exc})")
-
-    _assert_signature_matches(
-        "types.pyi", f"{class_name}.__init__", node, runtime_parameters, drop_leading=1
-    )
-
-
-def test_types_stub_constructor_floor() -> None:
-    """The constructor comparison must not collapse to nothing."""
-    # `types.pyi` declares roughly one hundred result / config classes; the floor
-    # only has to be high enough that a collector which stops matching, or a stub
-    # that loses its constructors, cannot pass by comparing an empty list.
-    assert len(TYPES_CONSTRUCTORS) >= 80, [name for name, _ in TYPES_CONSTRUCTORS]
-
-
 @pytest.mark.parametrize("stub_name", sorted(_STUB_FLOORS))
 def test_stub_coverage_floor(stub_name: str) -> None:
     """Each stub must keep contributing callables to the comparison above."""
@@ -375,28 +335,6 @@ def test_stub_coverage_floor(stub_name: str) -> None:
     assert count >= _STUB_FLOORS[stub_name], (
         f"{stub_name} contributes only {count} checked callables "
         f"(floor {_STUB_FLOORS[stub_name]}); the stub shrank or the collector stopped matching"
-    )
-
-
-def test_types_stub_declares_no_comparable_callable() -> None:
-    """``types.pyi`` is result/config shapes, so it has nothing to compare here.
-
-    Recorded as an assertion rather than an omission: every member is a
-    property, a dunder or a dataclass field today, so if a real method ever
-    appears there this fails and `types.pyi` has to join the comparison above
-    instead of silently staying outside it.
-    """
-    tree = ast.parse((STUB_DIR / "types.pyi").read_text(encoding="utf-8"))
-    concrete = [
-        f"{cls.name}.{m.name}"
-        for cls in tree.body
-        if isinstance(cls, ast.ClassDef)
-        for m in cls.body
-        if isinstance(m, ast.FunctionDef) and _is_checkable(m)
-    ]
-    assert not concrete, (
-        f"types.pyi now declares concrete callables {concrete}; add 'types.pyi' to "
-        "_STUB_FLOORS so they are compared against runtime"
     )
 
 
@@ -628,58 +566,6 @@ def test_audio_from_buffer_requires_the_sample_rate() -> None:
 
     explicit = Audio.from_buffer([0.0] * 1000, sample_rate=16000)
     assert explicit.sample_rate == 16000
-
-
-def _stub_typed_dict_fields() -> dict[str, set[str]]:
-    """Annotated field names per ``TypedDict`` class declared in ``types.pyi``."""
-    tree = ast.parse((STUB_DIR / "types.pyi").read_text(encoding="utf-8"))
-    fields: dict[str, set[str]] = {}
-    for node in tree.body:
-        if not isinstance(node, ast.ClassDef):
-            continue
-        if not any(isinstance(base, ast.Name) and base.id == "TypedDict" for base in node.bases):
-            continue
-        fields[node.name] = {
-            member.target.id
-            for member in node.body
-            if isinstance(member, ast.AnnAssign) and isinstance(member.target, ast.Name)
-        }
-    return fields
-
-
-def test_types_stub_typed_dicts_match_runtime() -> None:
-    """Every ``TypedDict`` in ``types.pyi`` declares the runtime class's keys.
-
-    The callable comparison above skips ``types.pyi`` entirely because it holds
-    no methods, which left its ``TypedDict`` keys unchecked from either side: a
-    key present at runtime but missing from the stub is invisible to the tests
-    and to ``mypy`` alike, and it is a key describing the C-ABI capabilities
-    payload, so the drift is silent on both surfaces at once.
-    """
-    from libsonare import types as runtime_types
-
-    stub_fields = _stub_typed_dict_fields()
-    # The stub is parsed, not imported, so the parsed set is held to the runtime
-    # one: a collector that stops matching cannot pass by comparing nothing.
-    runtime_names = {name for name, value in vars(runtime_types).items() if is_typeddict(value)}
-    assert runtime_names, "libsonare.types declares no TypedDict; the runtime scan matched nothing"
-    assert set(stub_fields) == runtime_names, (
-        f"TypedDicts parsed from types.pyi {sorted(stub_fields)} differ from the runtime's "
-        f"{sorted(runtime_names)}"
-    )
-
-    compared = 0
-    for name, declared in sorted(stub_fields.items()):
-        runtime = getattr(runtime_types, name, None)
-        if runtime is None:
-            raise AssertionError(f"types.pyi declares {name}, which does not exist at runtime")
-        expected = set(runtime.__annotations__)
-        assert declared == expected, (
-            f"{name} keys differ: stub-only {sorted(declared - expected)}, "
-            f"runtime-only {sorted(expected - declared)}"
-        )
-        compared += 1
-    assert compared == len(stub_fields)
 
 
 def test_estimate_meter_keyword_defaults_match_the_core() -> None:

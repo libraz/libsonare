@@ -142,7 +142,6 @@ AGGREGATE_FILES: frozenset[str] = frozenset(
         "bindings/python/src/libsonare/__init__.pyi",
         "bindings/python/src/libsonare/_types_analysis.py",
         "bindings/python/src/libsonare/__init__.py",
-        "bindings/python/src/libsonare/types.pyi",
         "bindings/python/src/libsonare/analyzer.pyi",
         "bindings/python/src/libsonare/analyzer.py",
         "bindings/python/src/libsonare/_conversions.py",

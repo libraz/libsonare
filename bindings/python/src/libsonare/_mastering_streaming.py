@@ -581,7 +581,7 @@ class StreamingEqualizer:
         _check(self._lib.sonare_eq_set_output_pan(self._handle, _to_c_float(pan, "pan")))
 
     @_guard_buffer("samples")
-    def set_sidechain_mono(self, samples: Sequence[float] | list[float]) -> None:
+    def set_sidechain_mono(self, samples: Sequence[float] | np.ndarray) -> None:
         """Set a mono external key for dynamic bands with ``externalSidechain`` enabled.
 
         Raises:
@@ -601,8 +601,8 @@ class StreamingEqualizer:
     @_guard_buffer("left", "right")
     def set_sidechain_stereo(
         self,
-        left: Sequence[float] | list[float],
-        right: Sequence[float] | list[float],
+        left: Sequence[float] | np.ndarray,
+        right: Sequence[float] | np.ndarray,
     ) -> None:
         """Set a stereo external key for dynamic bands with ``externalSidechain`` enabled.
 
@@ -635,8 +635,8 @@ class StreamingEqualizer:
     @_guard_buffer("source", "reference")
     def match(
         self,
-        source: Sequence[float] | list[float],
-        reference: Sequence[float] | list[float],
+        source: Sequence[float] | np.ndarray,
+        reference: Sequence[float] | np.ndarray,
         *,
         max_bands: int = 8,
         sample_rate: int | None = None,
@@ -744,7 +744,7 @@ class StreamingEqualizer:
 
     def magnitude_response(
         self,
-        frequencies_hz: Sequence[float] | list[float],
+        frequencies_hz: Sequence[float] | np.ndarray,
         *,
         placement: EqStereoPlacement = "stereo",
     ) -> np.ndarray:

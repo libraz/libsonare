@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal, NamedTuple
 
 import numpy as np
+import numpy.typing as npt
 
 from ._types_enums import KeyMode, PitchClass
 
@@ -78,7 +79,7 @@ class AutoTuneResult:
             (``confidence`` 1).
     """
 
-    samples: np.ndarray
+    samples: npt.NDArray[np.float32]
     key: Key
 
 
@@ -177,11 +178,13 @@ class BeatObservations:
     beat's frame.
     """
 
-    onset_strength: np.ndarray = dataclasses.field(default_factory=_empty_float32)
+    onset_strength: npt.NDArray[np.float32] = dataclasses.field(default_factory=_empty_float32)
     """Windowed onset aggregate around each beat; the accent value the downbeat pass scores."""
-    low_frequency_energy: np.ndarray = dataclasses.field(default_factory=_empty_float32)
+    low_frequency_energy: npt.NDArray[np.float32] = dataclasses.field(
+        default_factory=_empty_float32
+    )
     """Low-frequency energy at each beat; empty when the analysis ran without audio."""
-    chord_change: np.ndarray = dataclasses.field(default_factory=_empty_float32)
+    chord_change: npt.NDArray[np.float32] = dataclasses.field(default_factory=_empty_float32)
     """Chord-change evidence at each beat; empty until chords are analyzed."""
 
 
@@ -251,7 +254,7 @@ class AnalysisResult:
     # average, in log tempo, of the beat intervals around it. This is the local
     # tempo rather than ``bpm`` resampled: on material whose tempo moves it
     # departs from ``bpm``.
-    beat_local_bpm: np.ndarray = dataclasses.field(default_factory=_empty_float32)
+    beat_local_bpm: npt.NDArray[np.float32] = dataclasses.field(default_factory=_empty_float32)
     """Smoothed local tempo at each beat, in BPM, parallel to ``beats``; may be empty."""
     form: str = ""
     """Musical form label, e.g. ``"AABA"``; empty when none was derived."""
@@ -309,9 +312,9 @@ class MeterEstimate:
     """Beat index the first bar starts on, in ``[0, time_signature.numerator)``."""
     searched: bool
     """False when the beats were too few to score; every other field is then the fallback."""
-    grouping: np.ndarray = dataclasses.field(default_factory=_empty_int32)
+    grouping: npt.NDArray[np.int32] = dataclasses.field(default_factory=_empty_int32)
     """How the bar divides, in beats per accent group; sums to ``time_signature.numerator``."""
-    candidate_scores: np.ndarray = dataclasses.field(default_factory=_empty_float32)
+    candidate_scores: npt.NDArray[np.float32] = dataclasses.field(default_factory=_empty_float32)
     """Standardized support per requested numerator, in request order (see above)."""
     candidates: list[TimeSignature] = dataclasses.field(default_factory=list)
     """Scored meters by descending support; each ``confidence`` is its share of the total."""
@@ -357,9 +360,9 @@ class BpmAnalysisResult:
     """Winning tempo cluster's vote share, in ``[0, 1]`` (see the class note)."""
     candidates: list[BpmCandidate]
     """Tempo candidates: the chosen tempo first, then the other bins by descending vote share."""
-    autocorrelation: np.ndarray
+    autocorrelation: npt.NDArray[np.float32]
     """Autocorrelation of the onset envelope over tempo lags."""
-    tempogram: np.ndarray
+    tempogram: npt.NDArray[np.float32]
     """Tempogram of the onset envelope, flattened."""
 
 
@@ -389,9 +392,9 @@ class LufsResult:
 class LufsSeriesResult:
     """Momentary and short-term loudness series; a window the signal is too short for is empty."""
 
-    momentary_lufs: np.ndarray
+    momentary_lufs: npt.NDArray[np.float32]
     """400 ms window loudness in LUFS as float32."""
-    short_term_lufs: np.ndarray
+    short_term_lufs: npt.NDArray[np.float32]
     """3 s window loudness in LUFS as float32."""
 
 
@@ -433,7 +436,7 @@ class DynamicRangeReport:
     """Window RMS level at the low percentile, in dBFS."""
     high_percentile_db: float
     """Window RMS level at the high percentile, in dBFS."""
-    window_rms_db: np.ndarray
+    window_rms_db: npt.NDArray[np.float32]
     """RMS level of each analysis window, in dBFS."""
 
 
@@ -557,7 +560,7 @@ class RhythmResult:
     """Regularity of the beat intervals, in ``[0, 1]``; 0 with no beat interval."""
     tempo_stability: float
     """Tempo stability over time, in ``[0, 1]``; 0 below two beat intervals."""
-    beat_intervals: np.ndarray
+    beat_intervals: npt.NDArray[np.float32]
     """Intervals between consecutive beats, in seconds."""
 
 
@@ -577,9 +580,9 @@ class DynamicsResult:
     """Loudness range, in LU."""
     is_compressed: bool
     """True when the signal is flagged as compressed."""
-    loudness_times_sec: np.ndarray
+    loudness_times_sec: npt.NDArray[np.float32]
     """Loudness curve timestamps, in seconds, parallel to ``loudness_rms_db``."""
-    loudness_rms_db: np.ndarray
+    loudness_rms_db: npt.NDArray[np.float32]
     """Loudness curve RMS values, in dB, parallel to ``loudness_times_sec``."""
 
 
@@ -613,11 +616,11 @@ class TimbreResult:
     """Spectral roughness, in ``[0, 1]``; high is rough."""
     complexity: float
     """Harmonic complexity, in ``[0, 1]``; high is complex."""
-    spectral_centroid: np.ndarray
+    spectral_centroid: npt.NDArray[np.float32]
     """Spectral centroid per frame."""
-    spectral_flatness: np.ndarray
+    spectral_flatness: npt.NDArray[np.float32]
     """Spectral flatness per frame."""
-    spectral_rolloff: np.ndarray
+    spectral_rolloff: npt.NDArray[np.float32]
     """Spectral rolloff per frame."""
     timbre_over_time: list[TimbreFrame]
     """Time-varying timbre metrics, one entry per analysis window."""
@@ -948,9 +951,9 @@ class NoteSegment:
 class HpssResult:
     """Harmonic-percussive source separation result."""
 
-    harmonic: np.ndarray
+    harmonic: npt.NDArray[np.float32]
     """Harmonic component, ``length`` samples."""
-    percussive: np.ndarray
+    percussive: npt.NDArray[np.float32]
     """Percussive component, ``length`` samples."""
     length: int
     """Length of each component, in samples."""
@@ -1019,9 +1022,9 @@ class TrimSilenceStereoResult:
     from, so a caller can see which channel decided each edge.
     """
 
-    left: np.ndarray
+    left: npt.NDArray[np.float32]
     """Left channel, cut to the shared range."""
-    right: np.ndarray
+    right: npt.NDArray[np.float32]
     """Right channel, cut to the shared range."""
     length: int
     """Output length of each channel, in samples."""
@@ -1043,9 +1046,9 @@ class NormalizeStereoResult:
     back untouched with the gain at 0.
     """
 
-    left: np.ndarray
+    left: npt.NDArray[np.float32]
     """Normalized left channel."""
-    right: np.ndarray
+    right: npt.NDArray[np.float32]
     """Normalized right channel."""
     length: int
     """Length of each channel, in samples."""

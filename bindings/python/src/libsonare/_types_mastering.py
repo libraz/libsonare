@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from typing import Literal, TypeAlias
 
 import numpy as np
+import numpy.typing as npt
 
 from ._types_analysis import _empty_float32
 
@@ -159,7 +160,7 @@ SoloProcessor: TypeAlias = Literal[
 class MasteringResult:
     """Mastering loudness/true-peak processing result."""
 
-    samples: np.ndarray
+    samples: npt.NDArray[np.float32]
     """Mono output samples."""
     sample_rate: int
     """Sample rate of the output in Hz."""
@@ -191,9 +192,9 @@ class MasteringResult:
 class MasteringStereoResult:
     """Stereo mastering processing result."""
 
-    left: np.ndarray
+    left: npt.NDArray[np.float32]
     """Left output channel samples."""
-    right: np.ndarray
+    right: npt.NDArray[np.float32]
     """Right output channel samples."""
     sample_rate: int
     """Sample rate of the output in Hz."""
@@ -225,7 +226,7 @@ class LoudnessMatchResult:
     ``applied_gain_db`` is then 0.
     """
 
-    samples: np.ndarray
+    samples: npt.NDArray[np.float32]
     """The matched take as float32."""
     sample_rate: int
     """Sample rate of ``samples`` in Hz."""
@@ -243,9 +244,9 @@ class LoudnessMatchResult:
 class LoudnessMatchStereoResult:
     """Result of :func:`mastering_ab_match_loudness_stereo`; see :class:`LoudnessMatchResult`."""
 
-    left: np.ndarray
+    left: npt.NDArray[np.float32]
     """The matched left channel as float32."""
-    right: np.ndarray
+    right: npt.NDArray[np.float32]
     """The matched right channel as float32."""
     sample_rate: int
     """Sample rate of both channels in Hz."""
@@ -263,7 +264,7 @@ class LoudnessMatchStereoResult:
 class DynamicsProcessorResult:
     """Result of a mastering dynamics processor."""
 
-    samples: np.ndarray
+    samples: npt.NDArray[np.float32]
     """The processed audio as float32."""
     latency_samples: int
     """Processor latency in samples."""
@@ -336,7 +337,7 @@ class MasteringReport:
     """Most-negative final dynamics/limiter gain reduction in dB; zero when none ran."""
     loudness_target_limited: bool
     """True when peak headroom prevented the requested LUFS target."""
-    band_energy_delta_db: np.ndarray = field(default_factory=_empty_float32)
+    band_energy_delta_db: npt.NDArray[np.float32] = field(default_factory=_empty_float32)
     """32 log-spaced after-minus-before spectral energy deltas in dB, 20 Hz to Nyquist."""
 
 
@@ -344,7 +345,7 @@ class MasteringReport:
 class MasteringChainResult:
     """Result of running a configurable mastering chain on mono audio."""
 
-    samples: np.ndarray
+    samples: npt.NDArray[np.float32]
     """Mono output samples."""
     sample_rate: int
     """Sample rate of the output in Hz."""
@@ -395,9 +396,9 @@ class MasteringChainResult:
 class MasteringChainStereoResult:
     """Result of running a configurable mastering chain on stereo audio."""
 
-    left: np.ndarray
+    left: npt.NDArray[np.float32]
     """Left output channel samples."""
-    right: np.ndarray
+    right: npt.NDArray[np.float32]
     """Right output channel samples."""
     sample_rate: int
     """Sample rate of the output in Hz."""

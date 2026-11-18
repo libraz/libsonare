@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-import os
 from collections.abc import Iterable, Mapping, Sequence
-from typing import Any, Literal, TypeAlias
+from typing import Literal
 
 import numpy as np
 
+from ._engine_pages import ClipPageProvider as ClipPageProvider
+from ._engine_pages import FileClipPageProvider as FileClipPageProvider
 from ._project import (
     Articulation,
     BuiltinSynthConfig,
@@ -20,7 +21,8 @@ from ._project import (
     Sf2InstrumentConfig,
     SynthPatch,
 )
-from .analyzer import FloatSamples, StripRef
+from ._types_engine import PlanarChannels as PlanarChannels
+from .analyzer import StripRef
 from .types import (
     AutomationPoint,
     CaptureInputMonitor,
@@ -56,35 +58,7 @@ from .types import (
     TransportState,
 )
 
-# Planar audio: one buffer per channel, or a 2-D (channels, frames) array.
-PlanarChannels: TypeAlias = Sequence[FloatSamples] | np.ndarray[Any, Any]
-
 MAX_TRACK_LANES: int
-
-class ClipPageProvider:
-    def __init__(self, *, num_channels: int, num_samples: int, page_frames: int) -> None: ...
-    def close(self) -> None: ...
-    def __enter__(self) -> ClipPageProvider: ...
-    def __exit__(self, *_exc: object) -> None: ...
-    def supply(self, page_index: int, channels: PlanarChannels) -> None: ...
-    def clear(self, page_index: int) -> None: ...
-
-class FileClipPageProvider(ClipPageProvider):
-    num_channels: int
-    num_samples: int
-    page_frames: int
-    data_offset_bytes: int
-    def __init__(
-        self,
-        path: str | os.PathLike[str],
-        *,
-        num_channels: int,
-        num_samples: int,
-        page_frames: int,
-        data_offset_bytes: int = 0,
-    ) -> None: ...
-    def supply_page(self, page_index: int) -> bool: ...
-    def supply_request(self, request: ClipPageRequest) -> bool: ...
 
 class RealtimeEngine:
     def __init__(

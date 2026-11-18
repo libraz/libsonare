@@ -85,7 +85,6 @@ ROWS: tuple[TokenSet, ...] = (
             _src("wasm", "bindings/wasm/src/codes.ts", "ts_object", "PAN_LAW_VALUES"),
             _src("wasm", "bindings/wasm/src/public_types_mixing.ts", "ts_union", "PanLaw"),
             _src("python", "bindings/python/src/libsonare/_types_enums.py", "py_literal", "PanLaw"),
-            _src("python", "bindings/python/src/libsonare/types.pyi", "py_literal", "PanLaw"),
             _src(
                 "python", "bindings/python/src/libsonare/_types_enums.py", "py_tuple", "_PAN_LAWS"
             ),
@@ -103,7 +102,6 @@ ROWS: tuple[TokenSet, ...] = (
             _src(
                 "python", "bindings/python/src/libsonare/_types_enums.py", "py_literal", "PanMode"
             ),
-            _src("python", "bindings/python/src/libsonare/types.pyi", "py_literal", "PanMode"),
             _src(
                 "python", "bindings/python/src/libsonare/_types_enums.py", "py_tuple", "_PAN_MODES"
             ),
@@ -125,7 +123,6 @@ ROWS: tuple[TokenSet, ...] = (
                 "py_literal",
                 "SendTiming",
             ),
-            _src("python", "bindings/python/src/libsonare/types.pyi", "py_literal", "SendTiming"),
             _src(
                 "python",
                 "bindings/python/src/libsonare/_types_enums.py",
@@ -140,7 +137,6 @@ ROWS: tuple[TokenSet, ...] = (
         sources=(
             _src("node", "bindings/node/src/types_instrument.ts", "ts_field", "SynthParamCondition.relation"),
             _src("python", "bindings/python/src/libsonare/_types_capabilities.py", "py_field", "SynthParamCondition.relation"),
-            _src("python", "bindings/python/src/libsonare/types.pyi", "py_field", "SynthParamCondition.relation"),
             _src("wasm", "bindings/wasm/src/instrument_types.ts", "ts_field", "SynthParamCondition.relation"),
         ),
     ),
@@ -150,7 +146,6 @@ ROWS: tuple[TokenSet, ...] = (
         sources=(
             _src("node", "bindings/node/src/types_instrument.ts", "ts_field", "SynthParamCondition.scope"),
             _src("python", "bindings/python/src/libsonare/_types_capabilities.py", "py_field", "SynthParamCondition.scope"),
-            _src("python", "bindings/python/src/libsonare/types.pyi", "py_field", "SynthParamCondition.scope"),
             _src("wasm", "bindings/wasm/src/instrument_types.ts", "ts_field", "SynthParamCondition.scope"),
         ),
     ),
@@ -190,7 +185,6 @@ ROWS: tuple[TokenSet, ...] = (
             _src("node", "bindings/node/src/types_analysis.ts", "ts_union", "BpmCandidateRelation"),
             _src("node", "bindings/node/src/types_project.ts", "ts_field", "ProjectTempoCandidate.label", subset=True),
             _src("python", "bindings/python/src/libsonare/_types_analysis.py", "py_literal", "BpmCandidateRelation"),
-            _src("python", "bindings/python/src/libsonare/types.pyi", "py_literal", "BpmCandidateRelation"),
             _src("wasm", "bindings/wasm/src/project_internal.ts", "ts_field", "NativeProjectTempoCandidate.label", subset=True),
             _src("wasm", "bindings/wasm/src/project_types.ts", "ts_field", "ProjectTempoCandidate.label", subset=True),
             _src("wasm", "bindings/wasm/src/public_types_music.ts", "ts_union", "BpmCandidateRelation"),
@@ -208,7 +202,6 @@ ROWS: tuple[TokenSet, ...] = (
             _src("node", "bindings/node/src/types_engine.ts", "ts_field", "EngineCaptureStatus.source"),
             _src("wasm", "bindings/wasm/src/public_types_engine.ts", "ts_union", "EngineCaptureSource"),
             _src("python", "bindings/python/src/libsonare/_types_engine.py", "py_literal", "EngineCaptureSource"),
-            _src("python", "bindings/python/src/libsonare/types.pyi", "py_literal", "EngineCaptureSource"),
         ),
     ),
     TokenSet(
@@ -225,7 +218,6 @@ ROWS: tuple[TokenSet, ...] = (
             _src("node", "bindings/node/src/types_project.ts", "ts_union", "ProjectStemLayout", subset=True),
             _src("python", "bindings/python/src/libsonare/_project_model.py", "py_literal", "ProjectStemLayout", subset=True),
             _src("python", "bindings/python/src/libsonare/_types_enums.py", "py_literal", "ChannelLayout"),
-            _src("python", "bindings/python/src/libsonare/types.pyi", "py_literal", "ChannelLayout"),
             _src("wasm", "bindings/wasm/src/audio.ts", "ts_union", "ChannelLayout"),
             _src("wasm", "bindings/wasm/src/project_types.ts", "ts_union", "ProjectStemLayout", subset=True),
             _src("wasm", "bindings/wasm/src/public_types_playback.ts", "ts_field", "PlaybackDiagnostics.activeInputLayout"),
@@ -238,7 +230,6 @@ ROWS: tuple[TokenSet, ...] = (
         sources=(
             _src("node", "bindings/node/src/types_capabilities.ts", "ts_union", "MasteringChannelPolicy"),
             _src("python", "bindings/python/src/libsonare/_types_capabilities.py", "py_literal", "MasteringChannelPolicy"),
-            _src("python", "bindings/python/src/libsonare/types.pyi", "py_literal", "MasteringChannelPolicy"),
             _src("wasm", "bindings/wasm/src/public_types.ts", "ts_union", "MasteringChannelPolicy"),
         ),
     ),
@@ -248,7 +239,6 @@ ROWS: tuple[TokenSet, ...] = (
         sources=(
             _src("node", "bindings/node/src/types_features.ts", "ts_union", "EqStereoPlacement"),
             _src("python", "bindings/python/src/libsonare/_types_enums.py", "py_literal", "EqStereoPlacement"),
-            _src("python", "bindings/python/src/libsonare/types.pyi", "py_literal", "EqStereoPlacement"),
             _src("wasm", "bindings/wasm/src/public_types_realtime.ts", "ts_union", "EqStereoPlacement"),
         ),
     ),
@@ -266,7 +256,7 @@ ROWS: tuple[TokenSet, ...] = (
         sources=(
             _src("node", "bindings/node/src/types_mastering.ts", "ts_field", "MasteringProcessorParamMap.formantMode"),
             _src("node", "bindings/node/src/voice_changer.ts", "ts_union", "FormantMode"),
-            _src("python", "bindings/python/src/libsonare/analyzer.pyi", "py_field", "RealtimeVoiceChangerConfig.formant_mode"),
+            _src("python", "bindings/python/src/libsonare/_effects_voice.py", "py_literal", "FormantMode"),
             _src("python", "bindings/python/src/libsonare/audio.pyi", "py_field", "Audio.formant_mode"),
             _src("wasm", "bindings/wasm/src/effects_voice_change.ts", "ts_union", "FormantMode"),
             _src("wasm", "bindings/wasm/src/public_types_mastering.ts", "ts_field", "MasteringProcessorParamMap.formantMode"),
@@ -286,7 +276,6 @@ ROWS: tuple[TokenSet, ...] = (
         sources=(
             _src("node", "bindings/node/src/types_analysis.ts", "ts_union", "KeyMode", subset=True),
             _src("python", "bindings/python/src/libsonare/_types_enums.py", "py_literal", "KeyMode", subset=True),
-            _src("python", "bindings/python/src/libsonare/types.pyi", "py_literal", "KeyMode", subset=True),
             _src("wasm", "bindings/wasm/src/public_types_music.ts", "ts_union", "KeyMode", subset=True),
             _src("wasm", "bindings/wasm/src/analysis_helpers.ts", "ts_array", "KEY_MODE_NAMES"),
         ),
@@ -333,7 +322,6 @@ ROWS: tuple[TokenSet, ...] = (
         sources=(
             _src("node", "bindings/node/src/types_capabilities.ts", "ts_union", "MasteringInsertParamRelation"),
             _src("python", "bindings/python/src/libsonare/_types_capabilities.py", "py_literal", "MasteringInsertParamRelation"),
-            _src("python", "bindings/python/src/libsonare/types.pyi", "py_literal", "MasteringInsertParamRelation"),
             _src("wasm", "bindings/wasm/src/public_types.ts", "ts_union", "MasteringInsertParamRelation"),
         ),
     ),
@@ -360,7 +348,6 @@ ROWS: tuple[TokenSet, ...] = (
         sources=(
             _src("node", "bindings/node/src/repair_session.ts", "ts_union", "MasteringRepairStageName"),
             _src("python", "bindings/python/src/libsonare/_types_repair.py", "py_literal", "RepairStageName"),
-            _src("python", "bindings/python/src/libsonare/types.pyi", "py_literal", "RepairStageName"),
             _src("wasm", "bindings/wasm/src/repair_session.ts", "ts_union", "MasteringRepairStageName"),
         ),
     ),
@@ -378,7 +365,6 @@ ROWS: tuple[TokenSet, ...] = (
         sources=(
             _src("node", "bindings/node/src/types_capabilities.ts", "ts_union", "MasteringInsertParamUnit"),
             _src("python", "bindings/python/src/libsonare/_types_capabilities.py", "py_literal", "MasteringInsertParamUnit"),
-            _src("python", "bindings/python/src/libsonare/types.pyi", "py_literal", "MasteringInsertParamUnit"),
             _src("wasm", "bindings/wasm/src/public_types.ts", "ts_union", "MasteringInsertParamUnit"),
         ),
     ),
@@ -696,7 +682,6 @@ EXEMPT: typing.Mapping[tuple[str, str], str] = types.MappingProxyType(
                 "bindings/node/src/types_mixing.ts",
                 "bindings/wasm/src/public_types_mixing.ts",
                 "bindings/python/src/libsonare/_types_enums.py",
-                "bindings/python/src/libsonare/types.pyi",
             )
         },
     }

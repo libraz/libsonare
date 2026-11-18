@@ -166,6 +166,18 @@ from ._effects import (
     voice_change_realtime,
     voice_character_preset_id,
 )
+from ._effects_voice import (
+    CharacterType,
+    FormantMode,
+    MidiRelease,
+    NoteDivision,
+    PitchCorrectionMode,
+    ReverbVariation,
+    ScaleKind,
+    VocoderCarrierSource,
+    VocoderCarrierWave,
+    VoiceEngine,
+)
 from ._features import (
     bass_chroma,
     chirp,
@@ -296,6 +308,16 @@ from ._mixing import (
 )
 
 __all__ = [
+    "CharacterType",
+    "FormantMode",
+    "MidiRelease",
+    "NoteDivision",
+    "PitchCorrectionMode",
+    "ReverbVariation",
+    "ScaleKind",
+    "VocoderCarrierSource",
+    "VocoderCarrierWave",
+    "VoiceEngine",
     "analyze",
     "analyze_bpm",
     "auto_tune",

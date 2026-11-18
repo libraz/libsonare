@@ -63,7 +63,7 @@ class TheRepository(unittest.TestCase):
         self.assertEqual(len(set(lists.values())), len(lists))
 
     def test_python_is_checked_for_the_explainable_mastering_results(self):
-        """Each of these results is declared in both Python files, not only in TypeScript."""
+        """Each of these results is checked on Python, not only in TypeScript."""
         for label in (
             "audio_profile_schema_paths",
             "assistant_result_schema_paths",
@@ -71,7 +71,7 @@ class TheRepository(unittest.TestCase):
             "match_reference_loudness_schema_paths",
             "stereo_mono_compat_schema_paths",
         ):
-            self.assertLessEqual({"python", "python-stub"}, set(check.FAMILIES[label]["surfaces"]))
+            self.assertIn("python", check.FAMILIES[label]["surfaces"])
 
     def test_both_surfaces_are_checked_for_every_family(self):
         """A family that lost a surface stays clean on the one it kept.

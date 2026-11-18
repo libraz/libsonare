@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Literal, NotRequired, TypedDict
 
 if TYPE_CHECKING:
     import numpy as np
+    import numpy.typing as npt
 
 MaterialPresetName = Literal["none", "concrete", "wood", "curtain", "carpet", "glass"]
 """Names accepted for ``material_preset`` (the ``SONARE_MATERIAL_PRESET_*`` values)."""
@@ -40,13 +41,13 @@ class AcousticResult:
     """Clarity C80 in dB; None when ``is_blind`` is true."""
     d50: float | None
     """Definition D50, the early-energy fraction in [0, 1]; None when ``is_blind`` is true."""
-    rt60_bands: np.ndarray
+    rt60_bands: npt.NDArray[np.float32]
     """RT60 per octave band, in seconds."""
-    edt_bands: np.ndarray | None
+    edt_bands: npt.NDArray[np.float32] | None
     """Early decay time per octave band, in seconds; None when ``is_blind`` is true."""
-    c50_bands: np.ndarray | None
+    c50_bands: npt.NDArray[np.float32] | None
     """Clarity C50 per octave band, in dB; None when ``is_blind`` is true."""
-    c80_bands: np.ndarray | None
+    c80_bands: npt.NDArray[np.float32] | None
     """Clarity C80 per octave band, in dB; None when ``is_blind`` is true."""
     confidence: float
     """Confidence of the estimate, in [0, 1]."""
@@ -88,7 +89,7 @@ class RirResult:
     indistinguishable from a complete one without reading this field.
     """
 
-    rir: np.ndarray
+    rir: npt.NDArray[np.float32]
     """Synthesized impulse response samples."""
     sample_rate: int
     """Sample rate of ``rir`` in Hz."""
@@ -116,7 +117,7 @@ class RoomMorphResult:
     unchanged, which is why the floored one reaches a morph at all.
     """
 
-    audio: np.ndarray
+    audio: npt.NDArray[np.float32]
     """Morphed audio samples."""
     sample_rate: int
     """Sample rate of ``audio`` in Hz."""
@@ -132,9 +133,9 @@ class RoomMorphStereoResult:
     codes as :class:`RoomMorphResult`.
     """
 
-    left: np.ndarray
+    left: npt.NDArray[np.float32]
     """Left channel of the morphed audio."""
-    right: np.ndarray
+    right: npt.NDArray[np.float32]
     """Right channel of the morphed audio."""
     sample_rate: int
     """Sample rate of both channels in Hz."""
@@ -165,9 +166,9 @@ class RoomEstimate:
     """Direct-to-reverberant ratio in dB."""
     confidence: float
     """Confidence of the estimate, in [0, 1]; 0 when nothing was measurable."""
-    band_absorption: np.ndarray
+    band_absorption: npt.NDArray[np.float32]
     """Mean wall absorption per octave band; same length as ``rt60_bands``."""
-    rt60_bands: np.ndarray
+    rt60_bands: npt.NDArray[np.float32]
     """RT60 per octave band in seconds; NaN where a band's fit failed."""
 
 
@@ -231,5 +232,5 @@ class RoomGeometry(TypedDict):
     """Listener position (x, y, z) in metres."""
     absorption: NotRequired[float]
     """Uniform wall absorption in [0, 0.999]."""
-    band_absorption: NotRequired[list[float]]
+    band_absorption: NotRequired[npt.NDArray[np.float32]]
     """Per-octave-band wall absorption, each entry in [0, 1]."""

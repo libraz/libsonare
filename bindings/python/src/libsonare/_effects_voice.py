@@ -8,7 +8,7 @@ import dataclasses
 import functools
 import json
 from collections.abc import Callable, Mapping, Sequence
-from typing import Any, cast
+from typing import Any, Literal, TypeAlias, cast, get_args
 
 import numpy as np
 
@@ -49,18 +49,39 @@ _VOICE_CHANGE_STRUCT_VERSION = 1
 _FORMANT_MODES = {"relative": 0, "absolute": 1}
 _REALTIME_CONFIG_STRUCT_VERSION = 2
 
+FormantMode: TypeAlias = Literal["relative", "absolute"]
+"""How ``formant_factor`` relates to the pitch shift."""
+VoiceEngine: TypeAlias = Literal["grain", "psola"]
+"""Pitch-shift engine of the voice changer."""
+PitchCorrectionMode: TypeAlias = Literal["off", "auto", "robot"]
+"""Pitch correction: off, snap to the key scale (``"auto"``) or to one pitch class (``"robot"``)."""
+ScaleKind: TypeAlias = Literal["major", "naturalMinor", "chromatic"]
+"""Scale the pitch correction snaps to."""
+VocoderCarrierSource: TypeAlias = Literal["internal", "external"]
+"""Where the vocoder carrier comes from: the built-in oscillator or an external input."""
+VocoderCarrierWave: TypeAlias = Literal["saw", "pulse", "ensemble"]
+"""Waveform of the built-in vocoder carrier."""
+CharacterType: TypeAlias = Literal["none", "megaphone", "radio", "bbdChorus", "strobo"]
+"""Character stage type."""
+ReverbVariation: TypeAlias = Literal["reverb", "echo", "tempoDelay", "dubEcho"]
+"""Space stage variation; every variation shares ``reverb_mix``."""
+NoteDivision: TypeAlias = Literal["quarter", "eighth", "dottedEighth", "sixteenth"]
+"""Note length a tempo-synced delay repeats at."""
+MidiRelease: TypeAlias = Literal["hold", "input"]
+"""What the voices do once every held note is released: keep the last one or follow the input."""
+
 # Enum-valued POD fields: token spellings in the order of the C ordinals.
 _ENUM_FIELD_NAMES: dict[str, tuple[str, ...]] = {
-    "formant_mode": ("relative", "absolute"),
-    "voice_engine": ("grain", "psola"),
-    "pitch_correction_mode": ("off", "auto", "robot"),
-    "pitch_correction_scale": ("major", "naturalMinor", "chromatic"),
-    "vocoder_carrier_source": ("internal", "external"),
-    "vocoder_carrier_wave": ("saw", "pulse", "ensemble"),
-    "character_type": ("none", "megaphone", "radio", "bbdChorus", "strobo"),
-    "reverb_variation": ("reverb", "echo", "tempoDelay", "dubEcho"),
-    "reverb_variation_division": ("quarter", "eighth", "dottedEighth", "sixteenth"),
-    "midi_release": ("hold", "input"),
+    "formant_mode": get_args(FormantMode),
+    "voice_engine": get_args(VoiceEngine),
+    "pitch_correction_mode": get_args(PitchCorrectionMode),
+    "pitch_correction_scale": get_args(ScaleKind),
+    "vocoder_carrier_source": get_args(VocoderCarrierSource),
+    "vocoder_carrier_wave": get_args(VocoderCarrierWave),
+    "character_type": get_args(CharacterType),
+    "reverb_variation": get_args(ReverbVariation),
+    "reverb_variation_division": get_args(NoteDivision),
+    "midi_release": get_args(MidiRelease),
 }
 _HARMONY_STEP_COUNT = 3
 
@@ -89,7 +110,7 @@ def voice_change(
     sample_rate: int,
     pitch_semitones: float = 0.0,
     formant_factor: float = 1.0,
-    formant_mode: str = "relative",
+    formant_mode: FormantMode = "relative",
 ) -> np.ndarray:
     """Apply a voice-change effect with independent pitch and formant control.
 
@@ -802,7 +823,7 @@ class RealtimeVoiceChangerConfig:
     """Formant brightness amount in [-1, 1]."""
     formant_nasal: float = dataclasses.field(default_factory=_neutral_default("formant_nasal"))
     """Formant nasal amount in [-1, 1]."""
-    formant_mode: str = dataclasses.field(default_factory=_neutral_default("formant_mode"))
+    formant_mode: FormantMode = dataclasses.field(default_factory=_neutral_default("formant_mode"))
     """How ``formant_factor`` acts: ``"relative"`` or ``"absolute"``; fixed at creation."""
     eq_high_pass_hz: float = dataclasses.field(default_factory=_neutral_default("eq_high_pass_hz"))
     """High-pass corner in Hz, [20, 300]."""
@@ -881,14 +902,14 @@ class RealtimeVoiceChangerConfig:
         default_factory=_neutral_default("limiter_isp_ceiling_dbtp")
     )
     """True-peak ceiling in dBTP of the inter-sample-peak limiter."""
-    voice_engine: str = dataclasses.field(default_factory=_neutral_default("voice_engine"))
+    voice_engine: VoiceEngine = dataclasses.field(default_factory=_neutral_default("voice_engine"))
     """Pitch engine, ``"grain"`` (f0-less SOLA retune) or ``"psola"`` (tracks f0); fixed at
     creation."""
     voice_engine_f0_min_hz: float = dataclasses.field(
         default_factory=_neutral_default("voice_engine_f0_min_hz")
     )
     """Lowest tracked f0 in Hz, [50, 200]; sets the psola latency. Fixed at creation."""
-    pitch_correction_mode: str = dataclasses.field(
+    pitch_correction_mode: PitchCorrectionMode = dataclasses.field(
         default_factory=_neutral_default("pitch_correction_mode")
     )
     """Pitch correction: ``"off"``, ``"auto"`` (scale snap) or ``"robot"`` (one pitch class)."""
@@ -904,7 +925,7 @@ class RealtimeVoiceChangerConfig:
         default_factory=_neutral_default("pitch_correction_key_root")
     )
     """Scale root, 0 = C to 11 = B; unused for a chromatic scale."""
-    pitch_correction_scale: str = dataclasses.field(
+    pitch_correction_scale: ScaleKind = dataclasses.field(
         default_factory=_neutral_default("pitch_correction_scale")
     )
     """Scale the correction snaps to: ``"major"``, ``"naturalMinor"`` or ``"chromatic"``."""
@@ -948,11 +969,11 @@ class RealtimeVoiceChangerConfig:
         default_factory=_neutral_default("vocoder_sibilance")
     )
     """Vocoder sibilance amount in [0, 1]."""
-    vocoder_carrier_source: str = dataclasses.field(
+    vocoder_carrier_source: VocoderCarrierSource = dataclasses.field(
         default_factory=_neutral_default("vocoder_carrier_source")
     )
     """Carrier source, ``"internal"`` or ``"external"``."""
-    vocoder_carrier_wave: str = dataclasses.field(
+    vocoder_carrier_wave: VocoderCarrierWave = dataclasses.field(
         default_factory=_neutral_default("vocoder_carrier_wave")
     )
     """Internal carrier waveform: ``"saw"``, ``"pulse"`` or ``"ensemble"``."""
@@ -962,7 +983,9 @@ class RealtimeVoiceChangerConfig:
     """Detune of the ensemble carrier in cents, [0, 30]."""
     vocoder_level: float = dataclasses.field(default_factory=_neutral_default("vocoder_level"))
     """Vocoder output level in [0, 1]."""
-    character_type: str = dataclasses.field(default_factory=_neutral_default("character_type"))
+    character_type: CharacterType = dataclasses.field(
+        default_factory=_neutral_default("character_type")
+    )
     """Character stage type: ``"none"``, ``"megaphone"``, ``"radio"``, ``"bbdChorus"`` or
     ``"strobo"``."""
     character_amount: float = dataclasses.field(
@@ -971,7 +994,9 @@ class RealtimeVoiceChangerConfig:
     """Character stage amount in [0, 1]."""
     character_tone: float = dataclasses.field(default_factory=_neutral_default("character_tone"))
     """Character stage tone in [-1, 1]."""
-    reverb_variation: str = dataclasses.field(default_factory=_neutral_default("reverb_variation"))
+    reverb_variation: ReverbVariation = dataclasses.field(
+        default_factory=_neutral_default("reverb_variation")
+    )
     """Space stage variation: ``"reverb"``, ``"echo"``, ``"tempoDelay"`` or ``"dubEcho"``."""
     reverb_variation_delay_ms: float = dataclasses.field(
         default_factory=_neutral_default("reverb_variation_delay_ms")
@@ -985,12 +1010,12 @@ class RealtimeVoiceChangerConfig:
         default_factory=_neutral_default("reverb_variation_tempo_bpm")
     )
     """Tempo of the tempo delay in BPM, [30, 300]."""
-    reverb_variation_division: str = dataclasses.field(
+    reverb_variation_division: NoteDivision = dataclasses.field(
         default_factory=_neutral_default("reverb_variation_division")
     )
     """Note length of the tempo delay: ``"quarter"``, ``"eighth"``, ``"dottedEighth"`` or
     ``"sixteenth"``."""
-    midi_release: str = dataclasses.field(default_factory=_neutral_default("midi_release"))
+    midi_release: MidiRelease = dataclasses.field(default_factory=_neutral_default("midi_release"))
     """After every held note is released: ``"hold"`` keeps the last note, ``"input"`` follows the
     input."""
 

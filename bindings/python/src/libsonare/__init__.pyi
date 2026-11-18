@@ -84,12 +84,15 @@ from ._runtime import ErrorCodeName as ErrorCodeName
 from ._runtime import SonareError as SonareError
 from ._runtime import SonareValueError as SonareValueError
 from .analyzer import AssignNoteTargetsResult as AssignNoteTargetsResult
+from .analyzer import CharacterType as CharacterType
 from .analyzer import DecomposeResult as DecomposeResult
+from .analyzer import FormantMode as FormantMode
 from .analyzer import MasteringAssistantParams as MasteringAssistantParams
 from .analyzer import MasteringParams as MasteringParams
 from .analyzer import MasteringParamValue as MasteringParamValue
 from .analyzer import MasteringPreset as MasteringPreset
 from .analyzer import MasteringSoloParams as MasteringSoloParams
+from .analyzer import MidiRelease as MidiRelease
 from .analyzer import (
     Mixer as Mixer,
 )
@@ -99,6 +102,7 @@ from .analyzer import (
 from .analyzer import (
     NormalizeMode as NormalizeMode,
 )
+from .analyzer import NoteDivision as NoteDivision
 from .analyzer import (
     NoteEdit as NoteEdit,
 )
@@ -114,6 +118,7 @@ from .analyzer import (
 from .analyzer import (
     PercussiveEventEdit as PercussiveEventEdit,
 )
+from .analyzer import PitchCorrectionMode as PitchCorrectionMode
 from .analyzer import (
     PitchDecompositionResult as PitchDecompositionResult,
 )
@@ -127,6 +132,8 @@ from .analyzer import (
 from .analyzer import (
     RealtimeVoiceChangerPreset as RealtimeVoiceChangerPreset,
 )
+from .analyzer import ReverbVariation as ReverbVariation
+from .analyzer import ScaleKind as ScaleKind
 from .analyzer import (
     SilenceCommonReport as SilenceCommonReport,
 )
@@ -153,6 +160,9 @@ from .analyzer import (
 from .analyzer import (
     TrimResult as TrimResult,
 )
+from .analyzer import VocoderCarrierSource as VocoderCarrierSource
+from .analyzer import VocoderCarrierWave as VocoderCarrierWave
+from .analyzer import VoiceEngine as VoiceEngine
 from .analyzer import (
     abi_version as abi_version,
 )

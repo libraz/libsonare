@@ -79,7 +79,6 @@ FAMILIES = {
             # The Python result types are dataclasses: the runtime module and
             # the stub that mypy reads each declare the same shape.
             "python": REPO_ROOT / "bindings/python/src/libsonare/_types_capabilities.py",
-            "python-stub": REPO_ROOT / "bindings/python/src/libsonare/types.pyi",
         },
     },
     "processor_catalog_schema_paths": {
@@ -91,7 +90,6 @@ FAMILIES = {
             # The Python result types are dataclasses: the runtime module and
             # the stub that mypy reads each declare the same shape.
             "python": REPO_ROOT / "bindings/python/src/libsonare/_types_capabilities.py",
-            "python-stub": REPO_ROOT / "bindings/python/src/libsonare/types.pyi",
         },
     },
     "mix_assistant_result_schema_paths": {
@@ -121,7 +119,6 @@ FAMILIES = {
             "wasm": WASM / "mastering_core.ts",
             # TypedDicts over the parsed JSON, so their keys are the wire's own.
             "python": REPO_ROOT / "bindings/python/src/libsonare/_types_mastering_results.py",
-            "python-stub": REPO_ROOT / "bindings/python/src/libsonare/types.pyi",
         },
     },
     "repair_analysis_schema_paths": {
@@ -143,7 +140,6 @@ FAMILIES = {
             "node": NODE / "types_mastering.ts",
             "wasm": WASM / "public_types_mastering.ts",
             "python": REPO_ROOT / "bindings/python/src/libsonare/_types_mastering_results.py",
-            "python-stub": REPO_ROOT / "bindings/python/src/libsonare/types.pyi",
         },
     },
     "streaming_preview_schema_paths": {
@@ -153,7 +149,6 @@ FAMILIES = {
             "node": NODE / "types_mastering.ts",
             "wasm": WASM / "public_types_mastering.ts",
             "python": REPO_ROOT / "bindings/python/src/libsonare/_types_mastering_results.py",
-            "python-stub": REPO_ROOT / "bindings/python/src/libsonare/types.pyi",
         },
     },
     "match_reference_loudness_schema_paths": {
@@ -163,7 +158,6 @@ FAMILIES = {
             "node": NODE / "types_mastering.ts",
             "wasm": WASM / "public_types_mastering.ts",
             "python": REPO_ROOT / "bindings/python/src/libsonare/_types_mastering_results.py",
-            "python-stub": REPO_ROOT / "bindings/python/src/libsonare/types.pyi",
         },
     },
     "match_tonal_balance_schema_paths": {
@@ -173,7 +167,6 @@ FAMILIES = {
             "node": NODE / "types_mastering.ts",
             "wasm": WASM / "public_types_mastering.ts",
             "python": REPO_ROOT / "bindings/python/src/libsonare/_types_mastering_results.py",
-            "python-stub": REPO_ROOT / "bindings/python/src/libsonare/types.pyi",
         },
     },
     "match_eq_curve_schema_paths": {
@@ -183,7 +176,6 @@ FAMILIES = {
             "node": NODE / "types_mastering.ts",
             "wasm": WASM / "public_types_mastering.ts",
             "python": REPO_ROOT / "bindings/python/src/libsonare/_types_mastering_results.py",
-            "python-stub": REPO_ROOT / "bindings/python/src/libsonare/types.pyi",
         },
     },
     "match_reference_delay_schema_paths": {
@@ -193,7 +185,6 @@ FAMILIES = {
             "node": NODE / "types_mastering.ts",
             "wasm": WASM / "public_types_mastering.ts",
             "python": REPO_ROOT / "bindings/python/src/libsonare/_types_mastering_results.py",
-            "python-stub": REPO_ROOT / "bindings/python/src/libsonare/types.pyi",
         },
     },
     "stereo_mono_compat_schema_paths": {
@@ -203,7 +194,6 @@ FAMILIES = {
             "node": NODE / "types_mastering.ts",
             "wasm": WASM / "public_types_mastering.ts",
             "python": REPO_ROOT / "bindings/python/src/libsonare/_types_mastering_results.py",
-            "python-stub": REPO_ROOT / "bindings/python/src/libsonare/types.pyi",
         },
     },
     "stereo_mono_compat_log_bands_schema_paths": {
@@ -213,7 +203,6 @@ FAMILIES = {
             "node": NODE / "types_mastering.ts",
             "wasm": WASM / "public_types_mastering.ts",
             "python": REPO_ROOT / "bindings/python/src/libsonare/_types_mastering_results.py",
-            "python-stub": REPO_ROOT / "bindings/python/src/libsonare/types.pyi",
         },
     },
     "capability_catalog_schema_paths": {
@@ -225,7 +214,6 @@ FAMILIES = {
             # The Python result types are dataclasses: the runtime module and
             # the stub that mypy reads each declare the same shape.
             "python": REPO_ROOT / "bindings/python/src/libsonare/_types_capabilities.py",
-            "python-stub": REPO_ROOT / "bindings/python/src/libsonare/types.pyi",
         },
     },
 }

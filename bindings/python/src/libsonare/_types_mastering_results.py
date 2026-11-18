@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from typing import Any, TypedDict
 
 import numpy as np
+import numpy.typing as npt
 
 from ._types_repair import AudioDefects
 
@@ -236,9 +237,9 @@ class MatchTonalBalanceResult:
 class MatchEqCurveResult:
     """Result of the ``match.matchEqCurve`` pair analysis: ``gain_db[i]`` at ``frequencies[i]``."""
 
-    frequencies: np.ndarray
+    frequencies: npt.NDArray[np.float32]
     """float32 frequencies in Hz."""
-    gain_db: np.ndarray
+    gain_db: npt.NDArray[np.float32]
     """float32 gain in dB at each frequency."""
 
 

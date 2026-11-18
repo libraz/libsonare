@@ -92,7 +92,6 @@ def main() -> int:
     wasm_types = _read("bindings/wasm/src/stream_types.ts")
     wasm_raw_types = _read("bindings/wasm/src/sonare.js.d.ts")
     python_types = _read("bindings/python/src/libsonare/_types_streaming.py")
-    python_stubs = _read("bindings/python/src/libsonare/types.pyi")
 
     declarations = [
         (
@@ -155,16 +154,6 @@ def main() -> int:
             ),
             facade_snake_fields,
         ),
-        (
-            "Python StreamFrames stub",
-            _block(
-                python_stubs,
-                r"class StreamFrames:\n(?P<body>.*?)(?=\nclass StreamFramesU8:|\Z)",
-                "Python StreamFrames stub",
-                errors,
-            ),
-            facade_snake_fields,
-        ),
     ]
     for label, body, fields in declarations:
         _require_fields(label, body, fields, errors)
@@ -213,7 +202,9 @@ def main() -> int:
         for error in errors:
             print(f"  - {error}", file=sys.stderr)
         return 1
-    print("public contract conformance: OK (marker corpus + 7 streaming surfaces)")
+    print(
+        f"public contract conformance: OK (marker corpus + {len(declarations)} streaming surfaces)"
+    )
     return 0
 
 

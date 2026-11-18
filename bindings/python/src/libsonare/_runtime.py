@@ -534,7 +534,7 @@ def _not_planar_channels(channels: object, subject: str) -> SonareValueError:
 
 
 def _planar_channel_arrays(
-    channels: Sequence[Sequence[float]] | np.ndarray,
+    channels: Sequence[Sequence[float] | np.ndarray] | np.ndarray,
     *,
     subject: str = "channels",
 ) -> tuple[list[ctypes.Array[ctypes.c_float]], ctypes.Array[Any], int]:

@@ -326,7 +326,6 @@ _NOT_SCANNED: tuple[tuple[str, tuple[str, ...]], ...] = (
         "result/config shapes: dataclasses and TypedDicts, no methods to compare",
         (
             "types.py",
-            "types.pyi",
             "_types_acoustic.py",
             "_types_analysis.py",
             "_types_capabilities.py",

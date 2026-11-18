@@ -1081,7 +1081,7 @@ class Mixer:
         _check(_get_lib().sonare_mixer_latency_samples(self._handle, ctypes.byref(out)))
         return int(out.value)
 
-    def drain_tail_stereo(self, num_samples: int | float) -> MixerStereoResult:
+    def drain_tail_stereo(self, num_samples: int) -> MixerStereoResult:
         """Drain ``num_samples`` of trailing effect-tail audio with no new input.
 
         Pushes silence through the compiled graph so the stereo master keeps

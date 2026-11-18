@@ -3,10 +3,31 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable, Sequence
 from typing import Any, Literal, TypeAlias
 
-import numpy as np
 from numpy.typing import NDArray
 
-from ._errors import SonareError
+from ._vocal_edit_marshal import VocalEditError as VocalEditError
+from ._vocal_edit_model import VocalAnalysis as VocalAnalysis
+from ._vocal_edit_model import VocalAnalysisResult as VocalAnalysisResult
+from ._vocal_edit_model import VocalCapabilities as VocalCapabilities
+from ._vocal_edit_model import VocalEditResult as VocalEditResult
+from ._vocal_edit_model import VocalHistory as VocalHistory
+from ._vocal_edit_model import VocalIdChange as VocalIdChange
+from ._vocal_edit_model import VocalMergeNotes as VocalMergeNotes
+from ._vocal_edit_model import VocalNote as VocalNote
+from ._vocal_edit_model import VocalNoteEdit as VocalNoteEdit
+from ._vocal_edit_model import VocalNotesResult as VocalNotesResult
+from ._vocal_edit_model import VocalPitchPoint as VocalPitchPoint
+from ._vocal_edit_model import VocalPitchResult as VocalPitchResult
+from ._vocal_edit_model import VocalRange as VocalRange
+from ._vocal_edit_model import VocalRemoveTransition as VocalRemoveTransition
+from ._vocal_edit_model import VocalRenderResult as VocalRenderResult
+from ._vocal_edit_model import VocalResetNotes as VocalResetNotes
+from ._vocal_edit_model import VocalSetNoteEdit as VocalSetNoteEdit
+from ._vocal_edit_model import VocalSetNoteSourceSpan as VocalSetNoteSourceSpan
+from ._vocal_edit_model import VocalSetTransition as VocalSetTransition
+from ._vocal_edit_model import VocalSplitNote as VocalSplitNote
+from ._vocal_edit_model import VocalStateToken as VocalStateToken
+from ._vocal_edit_model import VocalTransition as VocalTransition
 
 VocalTargetMode: TypeAlias = Literal["none", "center", "curve"]
 VocalFormantMode: TypeAlias = Literal["preserve", "shift"]
@@ -22,309 +43,6 @@ VocalReason: TypeAlias = Literal[
     "invalidState",
 ]
 
-class VocalRange:
-    start_sample: int
-    end_sample: int
-    def __init__(self, start_sample: int, end_sample: int) -> None: ...
-    @property
-    def length(self) -> int: ...
-
-class VocalPitchPoint:
-    source_sample: float
-    target_midi: float
-    def __init__(self, source_sample: float, target_midi: float) -> None: ...
-    @property
-    def midi(self) -> float: ...
-
-class VocalNoteEdit:
-    target_mode: VocalTargetMode
-    target_midi: float
-    target_points: tuple[VocalPitchPoint, ...]
-    amount: float
-    speed_ms: float
-    max_correction_semitones: float
-    transpose_semitones: float
-    drift_scale: float
-    vibrato_scale: float
-    destination_start_sample: int
-    destination_length_samples: int
-    gain_db: float
-    muted: bool
-    formant_mode: VocalFormantMode
-    formant_shift_semitones: float
-    amplitude_envelope: tuple[float, ...]
-    def __init__(
-        self,
-        target_mode: VocalTargetMode = ...,
-        target_midi: float = ...,
-        target_points: Sequence[VocalPitchPoint] = ...,
-        amount: float = ...,
-        speed_ms: float = ...,
-        max_correction_semitones: float = ...,
-        transpose_semitones: float = ...,
-        drift_scale: float = ...,
-        vibrato_scale: float = ...,
-        destination_start_sample: int = ...,
-        destination_length_samples: int = ...,
-        gain_db: float = ...,
-        muted: bool = ...,
-        formant_mode: VocalFormantMode = ...,
-        formant_shift_semitones: float = ...,
-        amplitude_envelope: Sequence[float] = ...,
-    ) -> None: ...
-
-class VocalNote:
-    id: int
-    source_start_sample: int
-    source_end_sample: int
-    analysis_frame_start: int
-    analysis_frame_end: int
-    median_hz: float | None
-    center_midi: float | None
-    f0_stability: float | None
-    amplitude: NDArray[np.float32]
-    edit: VocalNoteEdit
-    def __init__(
-        self,
-        id: int,
-        source_start_sample: int,
-        source_end_sample: int,
-        analysis_frame_start: int,
-        analysis_frame_end: int,
-        median_hz: float | None,
-        center_midi: float | None,
-        f0_stability: float | None,
-        amplitude: NDArray[np.float32],
-        edit: VocalNoteEdit,
-    ) -> None: ...
-    @property
-    def source_range(self) -> VocalRange: ...
-
-class VocalTransition:
-    left_note_id: int
-    right_note_id: int
-    left_window_samples: int
-    right_window_samples: int
-    strength: float
-    def __init__(
-        self,
-        left_note_id: int,
-        right_note_id: int,
-        left_window_samples: int,
-        right_window_samples: int,
-        strength: float,
-    ) -> None: ...
-
-class VocalNotesResult:
-    notes: tuple[VocalNote, ...]
-    transitions: tuple[VocalTransition, ...]
-    def __init__(
-        self,
-        notes: tuple[VocalNote, ...],
-        transitions: tuple[VocalTransition, ...],
-    ) -> None: ...
-
-class VocalHistory:
-    can_undo: bool
-    can_redo: bool
-    def __init__(self, can_undo: bool, can_redo: bool) -> None: ...
-
-class VocalStateToken:
-    session_epoch: int
-    revision: int
-    draft_id: int
-    generation: int
-    request_id: int
-    profile_id: int
-    def __init__(
-        self,
-        session_epoch: int,
-        revision: int,
-        draft_id: int,
-        generation: int,
-        request_id: int = ...,
-        profile_id: int = ...,
-    ) -> None: ...
-    @property
-    def committed_revision(self) -> int: ...
-
-class VocalAnalysis:
-    frame_origin_sample: float
-    samples_per_frame: float
-    frame_length_samples: int
-    f0_hz: NDArray[np.float32]
-    voiced: NDArray[np.uint8]
-    algorithm_id: str
-    algorithm_version: int
-    fmin_hz: float
-    fmax_hz: float
-    yin_threshold: float
-    voiced_threshold: float
-    centered: bool
-    segmentation_threshold_cents: float
-    min_note_ms: float
-    reference_hz: float
-    def __init__(
-        self,
-        frame_origin_sample: float,
-        samples_per_frame: float,
-        frame_length_samples: int,
-        f0_hz: NDArray[np.float32],
-        voiced: NDArray[np.uint8],
-        algorithm_id: str,
-        algorithm_version: int,
-        fmin_hz: float = ...,
-        fmax_hz: float = ...,
-        yin_threshold: float = ...,
-        voiced_threshold: float = ...,
-        centered: bool = ...,
-        segmentation_threshold_cents: float = ...,
-        min_note_ms: float = ...,
-        reference_hz: float = ...,
-    ) -> None: ...
-
-class VocalAnalysisResult:
-    analysis: VocalAnalysis
-    source_sha256: str
-    analysis_sha256: str
-    source_length_samples: int
-    sample_rate: int
-    def __init__(
-        self,
-        analysis: VocalAnalysis,
-        source_sha256: str,
-        analysis_sha256: str,
-        source_length_samples: int,
-        sample_rate: int,
-    ) -> None: ...
-
-class VocalCapabilities:
-    abi_version: int
-    profile_id: int
-    monophonic_only: bool
-    analysis_cancellable: bool
-    minimum_formant_shift_semitones: float
-    maximum_formant_shift_semitones: float
-    def __init__(
-        self,
-        abi_version: int,
-        profile_id: int,
-        monophonic_only: bool,
-        analysis_cancellable: bool,
-        minimum_formant_shift_semitones: float,
-        maximum_formant_shift_semitones: float,
-    ) -> None: ...
-
-class VocalIdChange:
-    operation_index: int
-    retired_id: int
-    new_ids: tuple[int, ...]
-    def __init__(self, operation_index: int, retired_id: int, new_ids: Sequence[int]) -> None: ...
-
-class VocalEditResult:
-    token: VocalStateToken
-    dirty_ranges: tuple[VocalRange, ...]
-    id_changes: tuple[VocalIdChange, ...]
-    def __init__(
-        self,
-        token: VocalStateToken,
-        dirty_ranges: Sequence[VocalRange],
-        id_changes: Sequence[VocalIdChange] = ...,
-    ) -> None: ...
-
-class VocalPitchResult:
-    source_samples: NDArray[np.float64]
-    measured_midi: NDArray[np.float64]
-    target_midi: NDArray[np.float64]
-    effective_midi: NDArray[np.float64]
-    voiced: NDArray[np.uint8]
-    has_target: NDArray[np.uint8]
-    def __init__(
-        self,
-        source_samples: NDArray[np.float64],
-        measured_midi: NDArray[np.float64],
-        target_midi: NDArray[np.float64],
-        effective_midi: NDArray[np.float64],
-        voiced: NDArray[np.uint8],
-        has_target: NDArray[np.uint8],
-    ) -> None: ...
-
-class VocalRenderResult:
-    samples: NDArray[np.float32]
-    start_sample: int
-    token: VocalStateToken
-    processed_ranges: tuple[VocalRange, ...]
-    cache_hit_units: int
-    dry_passed_frames: int
-    limited_correction_frames: int
-    def __init__(
-        self,
-        samples: NDArray[np.float32],
-        start_sample: int,
-        token: VocalStateToken,
-        processed_ranges: Sequence[VocalRange],
-        cache_hit_units: int,
-        dry_passed_frames: int,
-        limited_correction_frames: int,
-    ) -> None: ...
-
-class VocalSetNoteEdit:
-    note_id: int
-    edit: VocalNoteEdit
-    def __init__(self, note_id: int, edit: VocalNoteEdit) -> None: ...
-
-class VocalSetNoteSourceSpan:
-    note_id: int
-    source_start_sample: int | None
-    source_end_sample: int | None
-    destination_start_sample: int | None
-    destination_length_samples: int | None
-    source_start_sec: float | None
-    source_end_sec: float | None
-    destination_start_sec: float | None
-    destination_length_sec: float | None
-    def __init__(
-        self,
-        note_id: int,
-        source_start_sample: int | None = ...,
-        source_end_sample: int | None = ...,
-        destination_start_sample: int | None = ...,
-        destination_length_samples: int | None = ...,
-        source_start_sec: float | None = ...,
-        source_end_sec: float | None = ...,
-        destination_start_sec: float | None = ...,
-        destination_length_sec: float | None = ...,
-    ) -> None: ...
-
-class VocalSplitNote:
-    note_id: int
-    cut_source_sample: int | None
-    cut_source_sec: float | None
-    def __init__(
-        self,
-        note_id: int,
-        cut_source_sample: int | None = ...,
-        cut_source_sec: float | None = ...,
-    ) -> None: ...
-
-class VocalMergeNotes:
-    note_ids: tuple[int, ...]
-    merge_policy: VocalMergePolicy
-    def __init__(self, note_ids: Sequence[int], merge_policy: VocalMergePolicy = ...) -> None: ...
-
-class VocalSetTransition:
-    transition: VocalTransition
-    def __init__(self, transition: VocalTransition) -> None: ...
-
-class VocalRemoveTransition:
-    left_note_id: int
-    right_note_id: int
-    def __init__(self, left_note_id: int, right_note_id: int) -> None: ...
-
-class VocalResetNotes:
-    note_ids: tuple[int, ...]
-    def __init__(self, note_ids: Sequence[int]) -> None: ...
-
 VocalOperation: TypeAlias = (
     VocalSetNoteEdit
     | VocalSetNoteSourceSpan
@@ -334,14 +52,6 @@ VocalOperation: TypeAlias = (
     | VocalRemoveTransition
     | VocalResetNotes
 )
-
-class VocalEditError(SonareError):
-    reason: VocalReason
-    field: str
-    expected: int
-    actual: int
-    expected_text: str
-    actual_text: str
 
 class VocalEditSession:
     def __init__(

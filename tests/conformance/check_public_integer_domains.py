@@ -481,7 +481,21 @@ EXCLUSIONS: dict[str, dict[str, tuple[str, str]]] = {
     "analyzer.mastering_assistant_suggest_chain_stereo": {
         "params": _ASSISTANT_BAG,
     },
-    "types.ClipPageRequest.__init__": {
+    # The exception constructors. The library raises them with the status code
+    # and the counts a C call returned; none of the three values is handed to the
+    # core, so nothing past the FFI has a domain to check them against.
+    "__init__.SonareError.__init__": {
+        "code": ("python_only", "the C status code the exception reports; it is never passed back into the core"),
+    },
+    "__init__.SonareValueError.__init__": {
+        "code": ("python_only", "the C status code the exception reports; it is never passed back into the core"),
+    },
+    "vocal_edit.VocalEditError.__init__": {
+        "code": ("python_only", "the C status code the exception reports; it is never passed back into the core"),
+        "expected": ("python_only", "the count the refused edit expected, as the core reported it; read back only"),
+        "actual": ("python_only", "the count the refused edit found, as the core reported it; read back only"),
+    },
+    "__init__.ClipPageRequest.__init__": {
         "sample": (
             "domain_checked",
             (
@@ -677,6 +691,40 @@ def _parameters(node: ast.FunctionDef | ast.AsyncFunctionDef) -> list[ast.arg]:
     return [arg for arg in every if arg.arg not in ("self", "cls")]
 
 
+
+def _published_view(cls: ast.ClassDef) -> ast.ClassDef:
+    """A runtime class as a stub would declare it: public methods, plus a dataclass's
+    generated ``__init__`` built from its annotated fields."""
+    body: list[ast.stmt] = []
+    for node in cls.body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and (
+            node.name == "__init__" or not node.name.startswith("_")
+        ):
+            body.append(node)
+    is_dataclass = any("dataclass" in ast.unparse(d) for d in cls.decorator_list)
+    if is_dataclass and not any(isinstance(n, ast.FunctionDef) and n.name == "__init__" for n in body):
+        args = [ast.arg(arg="self")]
+        for node in cls.body:
+            if not (isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name)):
+                continue
+            if "ClassVar" in ast.unparse(node.annotation):
+                continue
+            if node.value is not None and "init=False" in ast.unparse(node.value):
+                continue
+            arg = ast.arg(arg=node.target.id, annotation=node.annotation)
+            arg.lineno = node.lineno
+            args.append(arg)
+        init = ast.FunctionDef(
+            name="__init__",
+            args=ast.arguments(posonlyargs=[], args=args, vararg=None, kwonlyargs=[], kw_defaults=[], kwarg=None, defaults=[]),
+            body=[ast.Expr(ast.Constant(...))], decorator_list=[], returns=None, type_params=[],
+        )
+        init.lineno = cls.lineno
+        body.append(init)
+    view = ast.ClassDef(name=cls.name, bases=cls.bases, keywords=[], body=body or [ast.Pass()], decorator_list=[], type_params=[])
+    view.lineno = cls.lineno
+    return view
+
 class Surface:
     """The published surface: every `.pyi` function and its integer parameters."""
 
@@ -690,9 +738,46 @@ class Surface:
             path.stem: ast.parse(path.read_text(encoding="utf-8"))
             for path in self.stubs
         }
-        self.aliases, self.alias_conflicts = _alias_table(trees)
+        # A stub re-exporting a runtime class (`from ._x import Name as Name`) publishes
+        # that class's methods; they are visited under the stub module's name.
+        reexported: list[tuple[str, ast.ClassDef]] = []
+        runtime_trees: dict[str, ast.Module] = {}
+
+        def runtime_class(module: str, name: str, depth: int = 0) -> ast.ClassDef | None:
+            # Follow `from ._x import Name` through runtime modules to the defining class.
+            source = binding / f"{module}.py"
+            if depth > 4 or (binding / f"{module}.pyi").exists() or not source.is_file():
+                return None
+            tree = runtime_trees.setdefault(module, ast.parse(source.read_text(encoding="utf-8")))
+            for node in tree.body:
+                if isinstance(node, ast.ClassDef) and node.name == name:
+                    return node
+            for node in tree.body:
+                if isinstance(node, ast.ImportFrom) and node.level == 1 and node.module:
+                    for alias in node.names:
+                        if (alias.asname or alias.name) == name:
+                            return runtime_class(node.module, alias.name, depth + 1)
+            return None
+
+        for module, tree in trees.items():
+            for node in tree.body:
+                if not (isinstance(node, ast.ImportFrom) and node.level == 1 and node.module):
+                    continue
+                for alias in node.names:
+                    if alias.asname != alias.name:
+                        continue
+                    cls = runtime_class(node.module, alias.name)
+                    if cls is not None:
+                        reexported.append((module, cls))
+        self.aliases, self.alias_conflicts = _alias_table({**runtime_trees, **trees})
         for module, tree in trees.items():
             self._visit(module, tree, "")
+        # One visit per class, under the most specific stub publishing it.
+        by_class: dict[int, tuple[str, ast.ClassDef]] = {}
+        for module, cls in sorted(reexported, key=lambda item: item[0] == "__init__"):
+            by_class.setdefault(id(cls), (module, cls))
+        for module, cls in by_class.values():
+            self._visit(module, ast.Module(body=[_published_view(cls)], type_ignores=[]), "")
 
     def _visit(self, module: str, node: ast.AST, prefix: str) -> None:
         for child in getattr(node, "body", []):
@@ -1491,10 +1576,11 @@ class Flow:
     ) -> tuple[str, ast.FunctionDef | ast.AsyncFunctionDef, str | None] | None:
         """The function a call reaches, its module, and the owner to carry on.
 
-        Four routes, because the tree uses all four: a module-level helper, a
+        Five routes, because the tree uses all five: a module-level helper, a
         sibling method as `self.<name>` (which a module-level lookup answers None
-        for), a base-class method as `super().<name>`, and a facade function
-        pulled in by an import written *inside* the function to break a cycle.
+        for), the owner's constructor as `cls(...)` from a classmethod, a
+        base-class method as `super().<name>`, and a facade function pulled in by
+        an import written *inside* the function to break a cycle.
 
         The owner travels with the hop only when the hop lands on a method of
         that owner: past a module-level helper `self` means nothing, and carrying
@@ -1505,7 +1591,10 @@ class Flow:
             return None
         target: object | None = None
         next_owner: str | None = None
-        if _is_self_call(call.func) and scope.owner is not None:
+        if _is_cls_call(call.func) and scope.owner is not None:
+            target = self.tree.method(scope.module, scope.owner, "__init__")
+            next_owner = scope.owner if target is not None else None
+        elif _is_self_call(call.func) and scope.owner is not None:
             target = self.tree.method(scope.module, scope.owner, name)
             next_owner = scope.owner if target is not None else None
         elif _is_super_call(call.func) and scope.owner is not None:
@@ -1578,6 +1667,10 @@ def _is_self_call(callee: ast.AST) -> bool:
         and isinstance(callee.value, ast.Name)
         and callee.value.id == "self"
     )
+
+
+def _is_cls_call(callee: ast.AST) -> bool:
+    return isinstance(callee, ast.Name) and callee.id == "cls"
 
 
 def _is_super_call(callee: ast.AST) -> bool:
