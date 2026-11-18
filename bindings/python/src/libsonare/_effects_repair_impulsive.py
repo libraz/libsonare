@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ctypes
+import math
 from collections.abc import Sequence
 from typing import Any
 
@@ -58,6 +59,9 @@ from .types import (
     DecrackleResult,
     DecrackleStereoResult,
 )
+
+# 0.98 of full scale, in dBFS.
+_DEFAULT_CLIP_THRESHOLD_DB = 20.0 * math.log10(0.98)
 
 _DECRACKLE_MODE_NAMES = {
     "median": SONARE_DECRACKLE_MODE_MEDIAN,  # noqa: F405
@@ -314,7 +318,7 @@ def mastering_repair_declip(
     samples: Sequence[float] | list[float] | np.ndarray,
     sample_rate: int,
     *,
-    clip_threshold: float = 0.98,
+    clip_threshold_db: float = _DEFAULT_CLIP_THRESHOLD_DB,
     lpc_order: int = 36,
     iterations: int = 2,
     lpc_blend: float = 0.65,
@@ -332,7 +336,7 @@ def mastering_repair_declip(
     """
     # Narrowed rather than coerced: int() takes 2.7 as 2, an iteration count nobody asked for.
     config = SonareDeclipConfig(  # noqa: F405
-        clip_threshold=_narrow_double(clip_threshold, "clip_threshold"),
+        clip_threshold_db=_narrow_double(clip_threshold_db, "clip_threshold_db"),
         lpc_order=_narrow_int(
             lpc_order, "mastering_repair_declip: lpc_order", _C_INT_MIN, _C_INT_MAX
         ),
@@ -372,14 +376,14 @@ def mastering_repair_detect_clipping(
     samples: Sequence[float] | list[float] | np.ndarray,
     sample_rate: int,
     *,
-    clip_threshold: float = 0.98,
+    clip_threshold_db: float = _DEFAULT_CLIP_THRESHOLD_DB,
     lpc_order: int = 36,
     iterations: int = 2,
     lpc_blend: float = 0.65,
 ) -> ClipDetection:
     """Measure clipping without repairing it.
 
-    Counts samples at or past ``clip_threshold``; NO other argument reaches the
+    Counts samples at or past ``clip_threshold_db``; NO other argument reaches the
     result. ``lpc_order``, ``iterations`` and ``lpc_blend`` are accepted so one
     set of arguments configures both this call and
     :func:`mastering_repair_declip`, and ``sample_rate`` is validated without
@@ -398,11 +402,11 @@ def mastering_repair_detect_clipping(
     count runs of at least three consecutive bit-identical samples at or above
     -40 dBFS that sit within 1 dB of the flat level (the largest run level once
     the two highest runs are set aside, so louder unclipped audio cannot move
-    it), rather than samples at or past ``clip_threshold``. That lets them fire
+    it), rather than samples at or past ``clip_threshold_db``. That lets them fire
     on material clipped in one tool and attenuated in another, which leaves
     nothing at the threshold and
     so reads as clean on the four fields above. They do NOT read
-    ``clip_threshold`` at all, and a genuinely flat-topped waveform -- a
+    ``clip_threshold_db`` at all, and a genuinely flat-topped waveform -- a
     square or pulse train, or a fully limited master -- counts as clipped
     here too and cannot be told apart from it in the time domain.
 
@@ -417,8 +421,8 @@ def mastering_repair_detect_clipping(
     Args:
         samples: Mono input buffer (any sequence convertible to float32).
         sample_rate: Sample rate in Hz.
-        clip_threshold: Amplitude at or above which a sample counts as clipped
-            (default 0.98).
+        clip_threshold_db: Level in dBFS at or above which a sample counts as clipped
+            (default 20 * log10(0.98)).
         lpc_order: LPC order the repair would use (default 36); not read here.
         iterations: Reconstruction iterations the repair would use (default 2);
             not read here.
@@ -433,7 +437,7 @@ def mastering_repair_detect_clipping(
         SonareError: If the C call rejects the request.
     """
     config = SonareDeclipConfig(  # noqa: F405
-        clip_threshold=_narrow_double(clip_threshold, "clip_threshold"),
+        clip_threshold_db=_narrow_double(clip_threshold_db, "clip_threshold_db"),
         lpc_order=_narrow_int(
             lpc_order, "mastering_repair_detect_clipping: lpc_order", _C_INT_MIN, _C_INT_MAX
         ),
@@ -469,7 +473,7 @@ def mastering_repair_declip_stereo(
     right: Sequence[float] | list[float] | np.ndarray,
     sample_rate: int,
     *,
-    clip_threshold: float = 0.98,
+    clip_threshold_db: float = _DEFAULT_CLIP_THRESHOLD_DB,
     lpc_order: int = 36,
     iterations: int = 2,
     lpc_blend: float = 0.65,
@@ -488,8 +492,8 @@ def mastering_repair_declip_stereo(
         left: Left channel input buffer (any sequence convertible to float32).
         right: Right channel input buffer, same length as ``left``.
         sample_rate: Sample rate in Hz.
-        clip_threshold: Amplitude above which a sample is considered clipped
-            (default 0.98).
+        clip_threshold_db: Level in dBFS above which a sample is considered clipped
+            (default 20 * log10(0.98)).
         lpc_order: LPC order used for prediction (default 36).
         iterations: LPC reconstruction iterations (default 2).
         lpc_blend: LPC vs interpolation blend (default 0.65).
@@ -504,7 +508,7 @@ def mastering_repair_declip_stereo(
     if left_length != right_length:
         raise SonareValueError("left and right channel lengths must match")
     config = SonareDeclipConfig(  # noqa: F405
-        clip_threshold=_narrow_double(clip_threshold, "clip_threshold"),
+        clip_threshold_db=_narrow_double(clip_threshold_db, "clip_threshold_db"),
         lpc_order=_narrow_int(
             lpc_order, "mastering_repair_declip_stereo: lpc_order", _C_INT_MIN, _C_INT_MAX
         ),

@@ -14,7 +14,7 @@ import math
 
 import pytest
 
-from libsonare import SonareError, StreamingRetune
+from libsonare import SonareError, SonareValueError, StreamingRetune
 
 SR = 48000
 BLOCK = 512
@@ -25,66 +25,66 @@ def _sine(count: int, hz: float, offset: int = 0) -> list[float]:
 
 
 def test_streaming_retune_lifecycle() -> None:
-    with StreamingRetune(semitones=12.0, mix=1.0, grain_size=512) as retune:
-        assert retune.grain_size() == 0
+    with StreamingRetune(pitch_semitones=12.0, mix=1.0, grain_size_samples=512) as retune:
+        assert retune.grain_size_samples() == 0
         assert retune.latency_samples() == 0
         retune.prepare(SR, BLOCK)
-        assert retune.grain_size() == 512
+        assert retune.grain_size_samples() == 512
         assert retune.latency_samples() == 512
-        assert retune.config() == {"semitones": 12.0, "mix": 1.0, "grain_size": 512}
+        assert retune.config() == {"pitch_semitones": 12.0, "mix": 1.0, "grain_size_samples": 512}
         retune.reset()
-        assert retune.grain_size() == 512
+        assert retune.grain_size_samples() == 512
 
 
 def test_streaming_retune_derives_grain_from_sample_rate() -> None:
     with StreamingRetune() as retune:
         retune.prepare(SR, BLOCK)
-        assert retune.grain_size() == 2232
+        assert retune.grain_size_samples() == 2232
 
 
 def test_streaming_retune_applies_grain_requested_after_prepare() -> None:
     with StreamingRetune() as retune:
         retune.prepare(SR, BLOCK)
-        derived = retune.grain_size()
-        retune.set_config(grain_size=512)
+        derived = retune.grain_size_samples()
+        retune.set_config(grain_size_samples=512)
         # Structural: the request takes effect at the next prepare, and config()
         # keeps reporting the effective grain until then.
-        assert retune.grain_size() == derived
-        assert retune.config()["grain_size"] == derived
+        assert retune.grain_size_samples() == derived
+        assert retune.config()["grain_size_samples"] == derived
         retune.prepare(SR, BLOCK)
-        assert retune.grain_size() == 512
+        assert retune.grain_size_samples() == 512
 
 
 def test_streaming_retune_rederives_grain_after_an_unrelated_set_config() -> None:
-    # set_config seeded every field from config(), and config()["grain_size"] is
+    # set_config seeded every field from config(), and config()["grain_size_samples"] is
     # the EFFECTIVE grain once prepared -- so touching any other control froze
     # the 0 "derive from the sample rate" sentinel into a literal, and a host
     # re-preparing at 22.05 kHz kept the 48 kHz grain: double the latency and
     # double the transient smear, with no diagnostic saying why.
     with StreamingRetune() as retune:
         retune.prepare(SR, BLOCK)
-        assert retune.grain_size() == 2232
-        retune.set_config(semitones=5.0)
+        assert retune.grain_size_samples() == 2232
+        retune.set_config(pitch_semitones=5.0)
         retune.prepare(22050, BLOCK)
-        assert retune.grain_size() == 1024
+        assert retune.grain_size_samples() == 1024
         # An explicitly requested grain still survives an unrelated update.
-        retune.set_config(grain_size=512)
+        retune.set_config(grain_size_samples=512)
         retune.set_config(mix=0.5)
         retune.prepare(22050, BLOCK)
-        assert retune.grain_size() == 512
+        assert retune.grain_size_samples() == 512
 
 
 def test_streaming_retune_set_config_keeps_unmentioned_keywords() -> None:
-    with StreamingRetune(semitones=5.0, mix=0.25) as retune:
+    with StreamingRetune(pitch_semitones=5.0, mix=0.25) as retune:
         retune.prepare(SR, BLOCK)
         retune.set_config(mix=0.75)
         config = retune.config()
-        assert config["semitones"] == pytest.approx(5.0)
+        assert config["pitch_semitones"] == pytest.approx(5.0)
         assert config["mix"] == pytest.approx(0.75)
 
 
 def test_streaming_retune_shifts_pitch_without_mutating_the_input() -> None:
-    with StreamingRetune(semitones=12.0, mix=1.0, grain_size=512) as retune:
+    with StreamingRetune(pitch_semitones=12.0, mix=1.0, grain_size_samples=512) as retune:
         retune.prepare(SR, BLOCK)
         out: list[float] = []
         for pass_index in range(8):
@@ -100,7 +100,7 @@ def test_streaming_retune_shifts_pitch_without_mutating_the_input() -> None:
 
 def test_streaming_retune_reports_rejections() -> None:
     with pytest.raises(SonareError):
-        StreamingRetune(semitones=float("nan"))
+        StreamingRetune(pitch_semitones=float("nan"))
     with pytest.raises(SonareError):
         StreamingRetune(mix=float("inf"))
 
@@ -115,7 +115,7 @@ def test_streaming_retune_reports_rejections() -> None:
         with pytest.raises(SonareError):
             retune.process_mono([0.0] * 128)
         with pytest.raises(SonareError):
-            retune.set_config(semitones=float("nan"))
+            retune.set_config(pitch_semitones=float("nan"))
 
         block = [0.0] * 64
         block[7] = float("nan")
@@ -127,3 +127,10 @@ def test_streaming_retune_close_is_idempotent() -> None:
     retune = StreamingRetune()
     retune.close()
     retune.close()
+
+
+def test_streaming_retune_refuses_an_explicit_zero_grain() -> None:
+    with pytest.raises(SonareValueError, match="grain_size_samples"):
+        StreamingRetune(grain_size_samples=0)
+    with StreamingRetune() as retune, pytest.raises(SonareValueError, match="grain_size_samples"):
+        retune.set_config(grain_size_samples=0)

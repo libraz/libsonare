@@ -40,7 +40,7 @@ def _tone(count: int = FRAME_COUNT, hz: float = 220.0) -> np.ndarray:
 
 
 def _neutral() -> libsonare.RealtimeVoiceChangerConfig:
-    return libsonare.realtime_voice_changer_preset_config("neutral-monitor")
+    return libsonare.realtime_voice_changer_preset_config("neutralMonitor")
 
 
 def _vocoder(source: str) -> libsonare.RealtimeVoiceChangerConfig:
@@ -59,8 +59,7 @@ def _flat(config: libsonare.RealtimeVoiceChangerConfig) -> dict[str, object]:
         )
         value = getattr(config, field.name)
         if field.name == "harmony_steps":
-            for index, step in enumerate(value, start=1):
-                out[f"harmonyStep{index}"] = step
+            out["harmonySteps"] = list(value)
         elif camel in ("limiterEnableIspLimiter", "vocoderEnabled"):
             out[camel] = bool(value)
         else:

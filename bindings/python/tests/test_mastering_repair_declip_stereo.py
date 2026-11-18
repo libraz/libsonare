@@ -12,6 +12,8 @@ must leave the left channel untouched.
 
 from __future__ import annotations
 
+import math
+
 import numpy as np
 import pytest
 from numpy.typing import NDArray
@@ -124,7 +126,7 @@ class TestMasteringRepairDeclipStereo:
             left,
             right,
             SR,
-            clip_threshold=0.85,
+            clip_threshold_db=20.0 * math.log10(0.85),
             lpc_order=24,
             iterations=1,
             lpc_blend=0.5,

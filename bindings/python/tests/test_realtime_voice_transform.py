@@ -18,12 +18,12 @@ pytestmark = pytest.mark.skipif(not LIB_AVAILABLE, reason="libsonare shared libr
 
 SAMPLE_RATE = 48000
 NEW_PRESETS = [
-    "hard-tune",
-    "robot-monotone",
-    "choir-harmony",
-    "vocoder-strings",
+    "hardTune",
+    "robotMonotone",
+    "choirHarmony",
+    "vocoderStrings",
     "megaphone",
-    "radio-voice",
+    "radioVoice",
 ]
 
 
@@ -32,7 +32,7 @@ def _tone(count: int = 4800, hz: float = 220.0) -> np.ndarray:
 
 
 def _neutral() -> libsonare.RealtimeVoiceChangerConfig:
-    return libsonare.realtime_voice_changer_preset_config("neutral-monitor")
+    return libsonare.realtime_voice_changer_preset_config("neutralMonitor")
 
 
 def _flat(config: libsonare.RealtimeVoiceChangerConfig) -> dict[str, object]:
@@ -43,8 +43,7 @@ def _flat(config: libsonare.RealtimeVoiceChangerConfig) -> dict[str, object]:
         )
         value = getattr(config, f.name)
         if f.name == "harmony_steps":
-            for index, step in enumerate(value, start=1):
-                out[f"harmonyStep{index}"] = step
+            out["harmonySteps"] = list(value)
         elif camel in ("limiterEnableIspLimiter", "vocoderEnabled"):
             out[camel] = bool(value)
         else:
@@ -60,7 +59,7 @@ def _changer(
 
 def test_neutral_preset_selects_the_psola_engine() -> None:
     cfg = _neutral()
-    assert cfg.voice_engine_engine == "psola"
+    assert cfg.voice_engine == "psola"
     assert cfg.pitch_correction_mode == "off"
     assert cfg.vocoder_enabled == 0
     assert len(cfg.harmony_steps) == 3
@@ -92,14 +91,14 @@ def test_new_fields_round_trip_through_the_pod() -> None:
     cfg = dataclasses.replace(
         base,
         pitch_correction_mode="auto",
-        pitch_correction_scale="natural_minor",
+        pitch_correction_scale="naturalMinor",
         pitch_correction_key_root=9,
         pitch_correction_amount=0.75,
         harmony_voices=2,
         harmony_steps=(5, -2, -7),
-        character_type="bbd_chorus",
-        reverb_variation_variation="tempo_delay",
-        reverb_variation_division="dotted_eighth",
+        character_type="bbdChorus",
+        reverb_variation="tempoDelay",
+        reverb_variation_division="dottedEighth",
         vocoder_carrier_wave="ensemble",
         midi_release="input",
     )
@@ -113,8 +112,8 @@ def test_new_fields_round_trip_through_the_pod() -> None:
         changer.set_config_pod(cfg)
         live = changer.config_pod()
         assert live.harmony_steps == (5, -2, -7)
-        assert live.pitch_correction_scale == "natural_minor"
-        assert live.character_type == "bbd_chorus"
+        assert live.pitch_correction_scale == "naturalMinor"
+        assert live.character_type == "bbdChorus"
         assert live.midi_release == "input"
         assert live.pitch_correction_amount == pytest.approx(0.75, abs=1e-6)
 
@@ -128,13 +127,13 @@ def test_pod_mirror_places_harmony_steps_as_a_three_element_int_array() -> None:
 @pytest.mark.parametrize(
     "field",
     [
-        "voice_engine_engine",
+        "voice_engine",
         "pitch_correction_mode",
         "pitch_correction_scale",
         "vocoder_carrier_source",
         "vocoder_carrier_wave",
         "character_type",
-        "reverb_variation_variation",
+        "reverb_variation",
         "reverb_variation_division",
         "midi_release",
     ],
@@ -218,7 +217,7 @@ def test_range_edges_are_accepted() -> None:
 
 
 def test_grain_engine_refuses_pitch_correction_harmony_and_vocoder() -> None:
-    grain = dataclasses.replace(_neutral(), voice_engine_engine="grain")
+    grain = dataclasses.replace(_neutral(), voice_engine="grain")
     for change in (
         {"pitch_correction_mode": "auto"},
         {"pitch_correction_mode": "robot"},
@@ -240,7 +239,7 @@ def test_construction_time_fields_are_fixed_by_set_config_pod() -> None:
     base = _neutral()
     with _changer(base) as changer:
         for change in (
-            {"voice_engine_engine": "grain"},
+            {"voice_engine": "grain"},
             {"voice_engine_f0_min_hz": 80.0},
             {"vocoder_bands": 16},
         ):
@@ -262,7 +261,7 @@ def test_tone_through_hard_tune_style_correction_stays_finite() -> None:
 
 
 def test_note_on_off_hold_notes_on_a_psola_handle() -> None:
-    with libsonare.RealtimeVoiceChanger(SAMPLE_RATE, "hard-tune", max_block_size=128) as changer:
+    with libsonare.RealtimeVoiceChanger(SAMPLE_RATE, "hardTune", max_block_size=128) as changer:
         changer.note_on(60)
         changer.note_on(64, velocity=0.5)
         changer.note_on(64)
@@ -274,14 +273,14 @@ def test_note_on_off_hold_notes_on_a_psola_handle() -> None:
 
 @pytest.mark.parametrize("note", [0, 127])
 def test_note_range_edges_are_accepted(note: int) -> None:
-    with libsonare.RealtimeVoiceChanger(SAMPLE_RATE, "hard-tune") as changer:
+    with libsonare.RealtimeVoiceChanger(SAMPLE_RATE, "hardTune") as changer:
         changer.note_on(note)
         changer.note_off(note)
 
 
 @pytest.mark.parametrize("note", [-1, 128, 2**31, 2**32])
 def test_note_outside_the_midi_range_is_refused(note: int) -> None:
-    with libsonare.RealtimeVoiceChanger(SAMPLE_RATE, "hard-tune") as changer:
+    with libsonare.RealtimeVoiceChanger(SAMPLE_RATE, "hardTune") as changer:
         with pytest.raises(SonareValueError):
             changer.note_on(note)
         with pytest.raises(SonareValueError):
@@ -289,7 +288,7 @@ def test_note_outside_the_midi_range_is_refused(note: int) -> None:
 
 
 def test_note_refuses_a_fraction_and_a_bool() -> None:
-    with libsonare.RealtimeVoiceChanger(SAMPLE_RATE, "hard-tune") as changer:
+    with libsonare.RealtimeVoiceChanger(SAMPLE_RATE, "hardTune") as changer:
         with pytest.raises(SonareValueError):
             changer.note_on(60.5)  # type: ignore[arg-type]
         with pytest.raises(TypeError):
@@ -303,21 +302,21 @@ def test_note_refuses_a_fraction_and_a_bool() -> None:
 @pytest.mark.parametrize("velocity", [0.0, -0.5, 1.5, float("nan"), float("inf")])
 def test_velocity_outside_zero_exclusive_to_one_is_refused(velocity: float) -> None:
     with (
-        libsonare.RealtimeVoiceChanger(SAMPLE_RATE, "hard-tune") as changer,
+        libsonare.RealtimeVoiceChanger(SAMPLE_RATE, "hardTune") as changer,
         pytest.raises(SonareValueError),
     ):
         changer.note_on(60, velocity)
 
 
 def test_velocity_defaults_to_one_and_accepts_the_upper_edge() -> None:
-    with libsonare.RealtimeVoiceChanger(SAMPLE_RATE, "hard-tune") as changer:
+    with libsonare.RealtimeVoiceChanger(SAMPLE_RATE, "hardTune") as changer:
         changer.note_on(60)
         changer.note_on(61, velocity=1.0)
         changer.note_on(62, velocity=1e-3)
 
 
 def test_note_api_on_a_grain_handle_is_invalid_state() -> None:
-    grain = dataclasses.replace(_neutral(), voice_engine_engine="grain")
+    grain = dataclasses.replace(_neutral(), voice_engine="grain")
     with _changer(grain) as changer:
         with pytest.raises(SonareError) as raised:
             changer.note_on(60)
@@ -326,7 +325,7 @@ def test_note_api_on_a_grain_handle_is_invalid_state() -> None:
 
 
 def test_note_api_on_a_closed_handle_is_invalid_state() -> None:
-    changer = libsonare.RealtimeVoiceChanger(SAMPLE_RATE, "hard-tune")
+    changer = libsonare.RealtimeVoiceChanger(SAMPLE_RATE, "hardTune")
     changer.close()
     for call in (lambda: changer.note_on(60), lambda: changer.note_off(60), changer.all_notes_off):
         with pytest.raises(SonareError) as raised:
@@ -391,6 +390,6 @@ def test_carrier_length_must_match_the_input() -> None:
 
 
 def test_voice_change_realtime_renders_a_new_preset() -> None:
-    out = libsonare.voice_change_realtime(_tone(9600), SAMPLE_RATE, "choir-harmony")
+    out = libsonare.voice_change_realtime(_tone(9600), SAMPLE_RATE, "choirHarmony")
     assert out.shape == (9600,)
     assert np.isfinite(out).all()

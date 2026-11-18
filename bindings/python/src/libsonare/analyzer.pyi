@@ -422,8 +422,8 @@ def synthesize_rir(
     ism_order: int = 3,
     prefer_eyring: bool = True,
     seed: int | None = None,  # None = 1; 0 is a seed
-    max_seconds: float = 0.0,  # 0 = natural length
-    mixing_time_ms: float = 0.0,  # 0 = automatic
+    max_sec: float | None = None,
+    mixing_time_ms: float | None = None,
     crossfade_ms: float | None = None,  # None = 5 ms
     air_absorption_enabled: bool = True,
     air_temperature_c: float | None = None,  # None = 20 degC
@@ -466,8 +466,8 @@ def room_morph(
     ism_order: int = 3,
     prefer_eyring: bool = True,
     seed: int | None = None,  # None = 1; 0 is a seed
-    max_seconds: float = 0.0,  # 0 = natural length
-    mixing_time_ms: float = 0.0,  # 0 = automatic
+    max_sec: float | None = None,
+    mixing_time_ms: float | None = None,
     crossfade_ms: float | None = None,  # None = 5 ms
     air_absorption_enabled: bool = True,
     air_temperature_c: float | None = None,  # None = 20 degC
@@ -493,8 +493,8 @@ def room_morph_stereo(
     ism_order: int = 3,
     prefer_eyring: bool = True,
     seed: int | None = None,  # None = 1; 0 is a seed
-    max_seconds: float = 0.0,  # 0 = natural length
-    mixing_time_ms: float = 0.0,  # 0 = automatic
+    max_sec: float | None = None,
+    mixing_time_ms: float | None = None,
     crossfade_ms: float | None = None,  # None = 5 ms
     air_absorption_enabled: bool = True,
     air_temperature_c: float | None = None,  # None = 20 degC
@@ -1033,28 +1033,28 @@ def spectral_edit(
 
 VoiceEngineName: TypeAlias = Literal["grain", "psola"]
 PitchCorrectionModeName: TypeAlias = Literal["off", "auto", "robot"]
-ScaleKindName: TypeAlias = Literal["major", "natural_minor", "chromatic"]
+ScaleKindName: TypeAlias = Literal["major", "naturalMinor", "chromatic"]
 VocoderCarrierSourceName: TypeAlias = Literal["internal", "external"]
 VocoderCarrierWaveName: TypeAlias = Literal["saw", "pulse", "ensemble"]
-CharacterTypeName: TypeAlias = Literal["none", "megaphone", "radio", "bbd_chorus", "strobo"]
-ReverbVariationName: TypeAlias = Literal["reverb", "echo", "tempo_delay", "dub_echo"]
-NoteDivisionName: TypeAlias = Literal["quarter", "eighth", "dotted_eighth", "sixteenth"]
+CharacterTypeName: TypeAlias = Literal["none", "megaphone", "radio", "bbdChorus", "strobo"]
+ReverbVariationName: TypeAlias = Literal["reverb", "echo", "tempoDelay", "dubEcho"]
+NoteDivisionName: TypeAlias = Literal["quarter", "eighth", "dottedEighth", "sixteenth"]
 MidiReleaseName: TypeAlias = Literal["hold", "input"]
 
 class RealtimeVoiceChangerConfig:
     input_gain_db: float
     output_gain_db: float
     wet_mix: float
-    retune_semitones: float
+    retune_pitch_semitones: float
     retune_mix: float
-    retune_grain_size: int
+    retune_grain_size_samples: int
     formant_factor: float
     formant_amount: float
     formant_body: float
     formant_brightness: float
     formant_nasal: float
     formant_mode: Literal["relative", "absolute"]
-    eq_highpass_hz: float
+    eq_high_pass_hz: float
     eq_body_db: float
     eq_presence_db: float
     eq_air_db: float
@@ -1079,7 +1079,7 @@ class RealtimeVoiceChangerConfig:
     limiter_release_ms: float
     limiter_enable_isp_limiter: int
     limiter_isp_ceiling_dbtp: float
-    voice_engine_engine: VoiceEngineName
+    voice_engine: VoiceEngineName
     voice_engine_f0_min_hz: float
     pitch_correction_mode: PitchCorrectionModeName
     pitch_correction_amount: float
@@ -1105,7 +1105,7 @@ class RealtimeVoiceChangerConfig:
     character_type: CharacterTypeName
     character_amount: float
     character_tone: float
-    reverb_variation_variation: ReverbVariationName
+    reverb_variation: ReverbVariationName
     reverb_variation_delay_ms: float
     reverb_variation_feedback: float
     reverb_variation_tempo_bpm: float
@@ -1120,7 +1120,7 @@ class RealtimeVoiceChanger:
     def __init__(
         self,
         sample_rate: int,
-        preset: str | Mapping[str, object] = "neutral-monitor",
+        preset: str | Mapping[str, object] = "neutralMonitor",
         *,
         max_block_size: int = 128,
         channels: int = 1,
@@ -1157,7 +1157,11 @@ class RealtimeVoiceChanger:
 
 class StreamingRetune:
     def __init__(
-        self, *, semitones: float = 0.0, mix: float = 1.0, grain_size: int = 0
+        self,
+        *,
+        pitch_semitones: float = 0.0,
+        mix: float = 1.0,
+        grain_size_samples: int | None = None,
     ) -> None: ...
     def close(self) -> None: ...
     def __enter__(self) -> StreamingRetune: ...
@@ -1167,19 +1171,19 @@ class StreamingRetune:
     def set_config(
         self,
         *,
-        semitones: float | None = None,
+        pitch_semitones: float | None = None,
         mix: float | None = None,
-        grain_size: int | None = None,
+        grain_size_samples: int | None = None,
     ) -> None: ...
     def config(self) -> dict[str, float | int]: ...
-    def grain_size(self) -> int: ...
+    def grain_size_samples(self) -> int: ...
     def latency_samples(self) -> int: ...
     def process_mono(self, samples: Sequence[float]) -> list[float]: ...
 
 def voice_change_realtime(
     samples: FloatSamples,
     sample_rate: int,
-    preset: str | Mapping[str, object] = "neutral-monitor",
+    preset: str | Mapping[str, object] = "neutralMonitor",
     *,
     channels: int = 1,
 ) -> np.ndarray: ...
@@ -2232,7 +2236,7 @@ def mastering_repair_declip(
     samples: FloatSamples,
     sample_rate: int,
     *,
-    clip_threshold: float = 0.98,
+    clip_threshold_db: float = ...,
     lpc_order: int = 36,
     iterations: int = 2,
     lpc_blend: float = 0.65,
@@ -2242,7 +2246,7 @@ def mastering_repair_declip_stereo(
     right: FloatSamples,
     sample_rate: int,
     *,
-    clip_threshold: float = 0.98,
+    clip_threshold_db: float = ...,
     lpc_order: int = 36,
     iterations: int = 2,
     lpc_blend: float = 0.65,
@@ -2395,7 +2399,7 @@ def mastering_repair_detect_clipping(
     samples: FloatSamples,
     sample_rate: int,
     *,
-    clip_threshold: float = 0.98,
+    clip_threshold_db: float = ...,
     lpc_order: int = 36,
     iterations: int = 2,
     lpc_blend: float = 0.65,
@@ -2443,7 +2447,7 @@ def mastering_repair_detect_trim_range(
     samples: FloatSamples,
     sample_rate: int,
     *,
-    threshold: float = 0.001,
+    threshold_db: float = -60.0,
     padding_samples: int | None = None,
     padding_sec: float | None = None,
     mode: int | str = "peak",
@@ -2455,7 +2459,7 @@ def mastering_repair_detect_trim_range_stereo(
     right: FloatSamples,
     sample_rate: int,
     *,
-    threshold: float = 0.001,
+    threshold_db: float = -60.0,
     padding_samples: int | None = None,
     padding_sec: float | None = None,
     mode: int | str = "peak",
@@ -2466,7 +2470,7 @@ def mastering_repair_trim_silence(
     samples: FloatSamples,
     sample_rate: int,
     *,
-    threshold: float = 0.001,
+    threshold_db: float = -60.0,
     padding_samples: int | None = None,
     padding_sec: float | None = None,
     mode: int | str = "peak",
@@ -2478,7 +2482,7 @@ def mastering_repair_trim_silence_stereo(
     right: FloatSamples,
     sample_rate: int,
     *,
-    threshold: float = 0.001,
+    threshold_db: float = -60.0,
     padding_samples: int | None = None,
     padding_sec: float | None = None,
     mode: int | str = "peak",

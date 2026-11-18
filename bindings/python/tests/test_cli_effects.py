@@ -186,9 +186,9 @@ def test_voice_preset_validate_set_delivers_a_json_value_containing_commas() -> 
         normalized = json.loads(json.loads(applied.stdout)["normalized_json"])
         assert normalized["description"] == "Adds warmth, presence, and air"
         # Both members of the object have to arrive: pitch drives
-        # retune.semitones and brightness 0.75 drives presenceDb +3, so either
-        # one alone would leave the other at its fixture value.
-        assert normalized["dsp"]["retune"]["semitones"] == pytest.approx(3.0)
+        # retune.pitchSemitones and brightness 0.75 drives presenceDb +3, so
+        # either one alone would leave the other at its fixture value.
+        assert normalized["dsp"]["retune"]["pitchSemitones"] == pytest.approx(3.0)
         assert normalized["dsp"]["eq"]["presenceDb"] == pytest.approx(3.0)
 
         rejected = _run_cli(
@@ -896,7 +896,7 @@ def test_voice_preset_validate_accepts_a_new_preset_and_a_v1_document() -> None:
     preset = _run_cli(["voice-preset", "--preset", "hard-tune", "--json"])
     assert preset.returncode == 0, preset.stderr
     document = json.loads(preset.stdout)
-    assert document["schemaVersion"] == 2
+    assert document["schemaVersion"] == 3
     legacy = dict(document)
     legacy["schemaVersion"] = 1
     legacy["dsp"] = {

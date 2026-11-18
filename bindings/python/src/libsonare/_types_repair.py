@@ -86,7 +86,7 @@ class ClipDetection:
     fallback instead of the LPC solver.
 
     The flat-top fields answer a different question: ``sample_count`` and
-    ``longest_run_samples`` are read against ``clip_threshold``, so they count
+    ``longest_run_samples`` are read against ``clip_threshold_db``, so they count
     the apex of any waveform that reaches it and miss material clipped before
     it was attenuated. The flat-top fields instead count runs of at least
     three consecutive bit-identical samples, at least -40 dBFS, within 1 dB of the

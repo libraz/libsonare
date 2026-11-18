@@ -21,6 +21,8 @@ would not keep the two outputs the same length.
 
 from __future__ import annotations
 
+import math
+
 import numpy as np
 import pytest
 from numpy.typing import NDArray
@@ -189,34 +191,34 @@ class TestMasteringRepairTrimSilenceStereo:
         assert report.removed_head_samples + result.length + report.removed_tail_samples == N
 
     def test_threshold_is_live_in_peak_mode_and_inert_in_the_gated_one(self) -> None:
-        """``threshold`` is read ONLY by peak mode.
+        """``threshold_db`` is read ONLY by peak mode.
 
         Both halves are needed: the gated half alone would pass against a
-        wrapper that never marshalled ``threshold`` at all, and the peak half
+        wrapper that never marshalled ``threshold_db`` at all, and the peak half
         alone would pass against one that read it in both modes.
         """
         left, right = _offset_pair()
         bursts_at = 0.5
 
         peak_low = libsonare.mastering_repair_trim_silence_stereo(
-            left, right, SR, mode="peak", threshold=0.001
+            left, right, SR, mode="peak", threshold_db=-60.0
         )
         peak_high = libsonare.mastering_repair_trim_silence_stereo(
-            left, right, SR, mode="peak", threshold=bursts_at * 2.0
+            left, right, SR, mode="peak", threshold_db=20.0 * math.log10(bursts_at * 2.0)
         )
         assert peak_low.length == RIGHT_SPAN[1] - LEFT_SPAN[0]
         # Nothing clears a threshold above the bursts, so the pair empties.
         assert peak_high.length == 0
 
         gated_low = libsonare.mastering_repair_trim_silence_stereo(
-            left, right, SR, mode="lufs_gated", threshold=0.001, gate_lufs=-40.0, window_ms=20.0
+            left, right, SR, mode="lufs_gated", threshold_db=-60.0, gate_lufs=-40.0, window_ms=20.0
         )
         gated_high = libsonare.mastering_repair_trim_silence_stereo(
             left,
             right,
             SR,
             mode="lufs_gated",
-            threshold=bursts_at * 2.0,
+            threshold_db=20.0 * math.log10(bursts_at * 2.0),
             gate_lufs=-40.0,
             window_ms=20.0,
         )
@@ -318,7 +320,7 @@ class TestMasteringRepairTrimSilenceStereo:
             left,
             right,
             SR,
-            threshold=0.01,
+            threshold_db=-40.0,
             padding_samples=128,
             mode="peak",
             gate_lufs=-50.0,

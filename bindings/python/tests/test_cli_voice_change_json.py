@@ -202,7 +202,7 @@ def test_voice_change_preset_json_reports_resolved_chain_latency(tmp_path: Path)
         "--set",
         "dsp.voiceEngine.engine=grain",
         "--set",
-        "dsp.retune.grainSize=64",
+        "dsp.retune.grainSizeSamples=64",
         "--json",
     )
     assert overridden.returncode == 0, overridden.stderr
@@ -239,7 +239,7 @@ def test_voice_change_custom_preset_json_omits_inferred_preset_id(tmp_path: Path
     preset["name"] = "Custom Grain"
     preset["category"] = "custom"
     preset["dsp"]["voiceEngine"]["engine"] = "grain"
-    preset["dsp"]["retune"]["grainSize"] = 64
+    preset["dsp"]["retune"]["grainSizeSamples"] = 64
     preset_path.write_text(json.dumps(preset), encoding="utf-8")
 
     result = _run_cli(
@@ -385,7 +385,7 @@ def test_synthesize_rir_json_reports_sample_rate(tmp_path: Path) -> None:
     "preset",
     ["hard-tune", "robot-monotone", "choir-harmony", "vocoder-strings", "megaphone", "radio-voice"],
 )
-def test_voice_change_renders_the_new_presets_and_voice_preset_writes_schema_v2(
+def test_voice_change_renders_the_new_presets_and_voice_preset_writes_schema_v3(
     tmp_path: Path, preset: str
 ) -> None:
     sample_rate = 48_000
@@ -404,4 +404,4 @@ def test_voice_change_renders_the_new_presets_and_voice_preset_writes_schema_v2(
 
     generated = _run_cli("voice-preset", "--preset", preset)
     assert generated.returncode == 0, generated.stderr
-    assert json.loads(generated.stdout)["schemaVersion"] == 2
+    assert json.loads(generated.stdout)["schemaVersion"] == 3

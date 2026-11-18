@@ -5462,3 +5462,293 @@ changed = "returns a float32 ndarray instead of list[float]"
 domain = "effects"
 rule = "array-results"
 test = "bindings/python/tests/test_spectral_edit.py::test_the_result_is_a_float32_array"
+
+[[entry]]
+kind = "option"
+old = "synthesize_rir(max_seconds)"
+changed = "max_seconds -> max_sec; None keeps the natural length and an explicit 0 raises SonareValueError"
+domain = "effects"
+rule = "seconds-suffix"
+test = "bindings/python/tests/test_voice_and_room_spellings.py::test_an_automatic_length_or_mixing_time_is_absence_not_zero"
+
+[[entry]]
+kind = "option"
+old = "synthesize_rir(mixing_time_ms)"
+changed = "None derives the mixing time and an explicit 0 raises SonareValueError"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_voice_and_room_spellings.py::test_an_automatic_length_or_mixing_time_is_absence_not_zero"
+
+[[entry]]
+kind = "option"
+old = "room_morph(max_seconds)"
+changed = "max_seconds -> max_sec; None keeps the natural length and an explicit 0 raises SonareValueError"
+domain = "effects"
+rule = "seconds-suffix"
+test = "bindings/python/tests/test_voice_and_room_spellings.py::test_an_automatic_length_or_mixing_time_is_absence_not_zero"
+
+[[entry]]
+kind = "option"
+old = "room_morph(mixing_time_ms)"
+changed = "None derives the mixing time and an explicit 0 raises SonareValueError"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_voice_and_room_spellings.py::test_an_automatic_length_or_mixing_time_is_absence_not_zero"
+
+[[entry]]
+kind = "option"
+old = "room_morph_stereo(max_seconds)"
+changed = "max_seconds -> max_sec; None keeps the natural length and an explicit 0 raises SonareValueError"
+domain = "effects"
+rule = "seconds-suffix"
+test = "bindings/python/tests/test_voice_and_room_spellings.py::test_an_automatic_length_or_mixing_time_is_absence_not_zero"
+
+[[entry]]
+kind = "option"
+old = "room_morph_stereo(mixing_time_ms)"
+changed = "None derives the mixing time and an explicit 0 raises SonareValueError"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_voice_and_room_spellings.py::test_an_automatic_length_or_mixing_time_is_absence_not_zero"
+
+[[entry]]
+kind = "option"
+old = "mastering_repair_declip(clip_threshold)"
+changed = "clip_threshold -> clip_threshold_db, a level in dBFS (default 20*log10(0.98)) instead of a linear amplitude"
+domain = "effects"
+rule = "unit-in-name"
+test = "bindings/python/tests/test_voice_and_room_spellings.py::test_the_clip_threshold_is_in_dbfs"
+
+[[entry]]
+kind = "option"
+old = "mastering_repair_declip_stereo(clip_threshold)"
+changed = "clip_threshold -> clip_threshold_db, a level in dBFS (default 20*log10(0.98)) instead of a linear amplitude"
+domain = "effects"
+rule = "unit-in-name"
+test = "bindings/python/tests/test_voice_and_room_spellings.py::test_the_clip_threshold_is_in_dbfs"
+
+[[entry]]
+kind = "option"
+old = "mastering_repair_detect_clipping(clip_threshold)"
+changed = "clip_threshold -> clip_threshold_db, a level in dBFS (default 20*log10(0.98)) instead of a linear amplitude"
+domain = "effects"
+rule = "unit-in-name"
+test = "bindings/python/tests/test_voice_and_room_spellings.py::test_the_clip_threshold_is_in_dbfs"
+
+[[entry]]
+kind = "option"
+old = "mastering_repair_trim_silence(threshold)"
+changed = "threshold -> threshold_db, a peak level in dBFS (default -60.0) instead of a linear amplitude (0.001)"
+domain = "effects"
+rule = "unit-in-name"
+test = "bindings/python/tests/test_voice_and_room_spellings.py::test_the_trim_threshold_is_in_dbfs"
+
+[[entry]]
+kind = "option"
+old = "mastering_repair_trim_silence_stereo(threshold)"
+changed = "threshold -> threshold_db, a peak level in dBFS (default -60.0) instead of a linear amplitude (0.001)"
+domain = "effects"
+rule = "unit-in-name"
+test = "bindings/python/tests/test_voice_and_room_spellings.py::test_the_trim_threshold_is_in_dbfs"
+
+[[entry]]
+kind = "option"
+old = "mastering_repair_detect_trim_range(threshold)"
+changed = "threshold -> threshold_db, a peak level in dBFS (default -60.0) instead of a linear amplitude (0.001)"
+domain = "effects"
+rule = "unit-in-name"
+test = "bindings/python/tests/test_voice_and_room_spellings.py::test_the_trim_threshold_is_in_dbfs"
+
+[[entry]]
+kind = "option"
+old = "mastering_repair_detect_trim_range_stereo(threshold)"
+changed = "threshold -> threshold_db, a peak level in dBFS (default -60.0) instead of a linear amplitude (0.001)"
+domain = "effects"
+rule = "unit-in-name"
+test = "bindings/python/tests/test_voice_and_room_spellings.py::test_the_trim_threshold_is_in_dbfs"
+
+[[entry]]
+kind = "option"
+old = "StreamingRetune(semitones)"
+changed = "semitones -> pitch_semitones; the old keyword raises TypeError"
+domain = "effects"
+rule = "pitch-semitones"
+test = "bindings/python/tests/test_voice_and_room_spellings.py::test_streaming_retune_names_its_quantities_with_units"
+
+[[entry]]
+kind = "option"
+old = "StreamingRetune(grain_size)"
+changed = "grain_size -> grain_size_samples; None derives the grain from the sample rate and an explicit 0 raises SonareValueError"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_streaming_retune.py::test_streaming_retune_refuses_an_explicit_zero_grain"
+
+[[entry]]
+kind = "option"
+old = "StreamingRetune.set_config(semitones)"
+new = "StreamingRetune.set_config(pitch_semitones)"
+domain = "effects"
+rule = "pitch-semitones"
+
+[[entry]]
+kind = "option"
+old = "StreamingRetune.set_config(grain_size)"
+changed = "grain_size -> grain_size_samples; None derives the grain from the sample rate and an explicit 0 raises SonareValueError"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_streaming_retune.py::test_streaming_retune_refuses_an_explicit_zero_grain"
+
+[[entry]]
+kind = "method"
+old = "StreamingRetune.grain_size"
+new = "StreamingRetune.grain_size_samples"
+domain = "effects"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "method"
+old = "StreamingRetune.config"
+changed = "returns the keys pitch_semitones, mix and grain_size_samples (was semitones, mix, grain_size)"
+domain = "effects"
+rule = "unit-in-name"
+test = "bindings/python/tests/test_voice_and_room_spellings.py::test_streaming_retune_names_its_quantities_with_units"
+
+[[entry]]
+kind = "field"
+old = "RealtimeVoiceChangerConfig.retune_semitones"
+new = "RealtimeVoiceChangerConfig.retune_pitch_semitones"
+domain = "effects"
+rule = "pitch-semitones"
+
+[[entry]]
+kind = "field"
+old = "RealtimeVoiceChangerConfig.retune_grain_size"
+new = "RealtimeVoiceChangerConfig.retune_grain_size_samples"
+domain = "effects"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "RealtimeVoiceChangerConfig.eq_highpass_hz"
+new = "RealtimeVoiceChangerConfig.eq_high_pass_hz"
+domain = "effects"
+rule = "high-pass"
+
+[[entry]]
+kind = "field"
+old = "RealtimeVoiceChangerConfig.voice_engine_engine"
+new = "RealtimeVoiceChangerConfig.voice_engine"
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "RealtimeVoiceChangerConfig.reverb_variation_variation"
+changed = "renamed reverb_variation; its tokens tempo_delay / dub_echo are tempoDelay / dubEcho"
+domain = "effects"
+rule = "token-case"
+test = "bindings/python/tests/test_voice_and_room_spellings.py::test_config_tokens_are_lower_camel"
+
+[[entry]]
+kind = "field"
+old = "RealtimeVoiceChangerConfig.pitch_correction_scale"
+changed = "lowerCamel tokens (natural_minor -> naturalMinor); the snake spelling raises SonareValueError"
+domain = "effects"
+rule = "token-case"
+test = "bindings/python/tests/test_voice_and_room_spellings.py::test_config_tokens_are_lower_camel"
+
+[[entry]]
+kind = "field"
+old = "RealtimeVoiceChangerConfig.character_type"
+changed = "lowerCamel tokens (bbd_chorus -> bbdChorus); the snake spelling raises SonareValueError"
+domain = "effects"
+rule = "token-case"
+test = "bindings/python/tests/test_voice_and_room_spellings.py::test_config_tokens_are_lower_camel"
+
+[[entry]]
+kind = "field"
+old = "RealtimeVoiceChangerConfig.reverb_variation_division"
+changed = "lowerCamel tokens (dotted_eighth -> dottedEighth); the snake spelling raises SonareValueError"
+domain = "effects"
+rule = "token-case"
+test = "bindings/python/tests/test_voice_and_room_spellings.py::test_config_tokens_are_lower_camel"
+
+[[entry]]
+kind = "function"
+old = "realtime_voice_changer_preset_names"
+changed = "lists the preset ids in lowerCamel (neutralMonitor, brightIdol, ...)"
+domain = "effects"
+rule = "token-case"
+test = "bindings/python/tests/test_voice_and_room_spellings.py::test_every_preset_id_is_lower_camel"
+
+[[entry]]
+kind = "option"
+old = "realtime_voice_changer_preset_config(preset)"
+changed = "takes the lowerCamel preset ids (default neutralMonitor); a kebab id raises"
+domain = "effects"
+rule = "token-case"
+test = "bindings/python/tests/test_voice_and_room_spellings.py::test_a_kebab_preset_id_is_refused"
+
+[[entry]]
+kind = "option"
+old = "realtime_voice_changer_preset_pod(preset)"
+changed = "takes the lowerCamel preset ids (default neutralMonitor); a kebab id raises"
+domain = "effects"
+rule = "token-case"
+test = "bindings/python/tests/test_voice_and_room_spellings.py::test_a_kebab_preset_id_is_refused"
+
+[[entry]]
+kind = "option"
+old = "RealtimeVoiceChanger(preset)"
+changed = "takes the lowerCamel preset ids (default neutralMonitor); a kebab id raises"
+domain = "effects"
+rule = "token-case"
+test = "bindings/python/tests/test_voice_and_room_spellings.py::test_a_kebab_preset_id_is_refused"
+
+[[entry]]
+kind = "option"
+old = "voice_change_realtime(preset)"
+changed = "takes the lowerCamel preset ids (default neutralMonitor); a kebab id raises"
+domain = "effects"
+rule = "token-case"
+test = "bindings/python/tests/test_voice_and_room_spellings.py::test_a_kebab_preset_id_is_refused"
+
+[[entry]]
+kind = "option"
+old = "RealtimeVoiceChanger.set_config(preset)"
+changed = "a flat config document carries harmonySteps (an array of three) instead of harmonyStep1..3, which are refused as unknown fields"
+domain = "effects"
+rule = "config-keys"
+test = "bindings/python/tests/test_voice_and_room_spellings.py::test_the_flat_config_takes_harmony_steps_as_one_array"
+
+[[entry]]
+kind = "option"
+old = "estimate_room(mode)"
+changed = "the impulse-response mode is impulseResponse; impulse_response raises SonareValueError"
+domain = "effects"
+rule = "token-case"
+test = "bindings/python/tests/test_voice_and_room_spellings.py::test_the_room_estimate_mode_is_impulse_response_in_lower_camel"
+
+[[entry]]
+kind = "type"
+old = "AcousticModeName"
+changed = "Literal['auto', 'blind', 'impulseResponse']"
+domain = "effects"
+rule = "token-case"
+test = "bindings/python/tests/test_voice_and_room_spellings.py::test_the_room_estimate_mode_is_impulse_response_in_lower_camel"
+
+[[entry]]
+kind = "option"
+old = "Project.set_clip_fade(fade_in_curve)"
+changed = "a curve name is exactly linear, equalPower, exponential or logarithmic; separator variants and abbreviations raise"
+domain = "project"
+rule = "token-case"
+test = "bindings/python/tests/test_voice_and_room_spellings.py::test_a_fade_curve_outside_the_four_tokens_is_refused"
+
+[[entry]]
+kind = "option"
+old = "Project.set_clip_fade(fade_out_curve)"
+changed = "a curve name is exactly linear, equalPower, exponential or logarithmic; separator variants and abbreviations raise"
+domain = "project"
+rule = "token-case"
+test = "bindings/python/tests/test_voice_and_room_spellings.py::test_a_fade_curve_outside_the_four_tokens_is_refused"
