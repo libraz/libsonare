@@ -1178,8 +1178,10 @@ RULES: list[Rule] = [
             )
         ),
         violation=_midi_function_violation,
-        pending={
-            f"{s}:{f}": "throw RangeError for an unmappable input, or state in the rule why the absent result stays"
+        # These map a valid input through a binding table that need not cover it, so null means
+        # "maps to nothing" (the C ABI's INVALID_STATE, and only that); an invalid argument throws.
+        exempt={
+            f"{s}:{f}": "null is a well-formed input the bindings do not map; invalid arguments throw"
             for s in ("node", "wasm")
             for f in ("midiCcLearn", "midiCcToBreakpoint", "midiParamToCc")
         },

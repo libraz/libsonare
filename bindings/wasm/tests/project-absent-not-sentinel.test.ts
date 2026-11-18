@@ -1,6 +1,9 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
   init,
+  midiCc,
+  midiCcLearn,
+  midiCcToBreakpoint,
   midiNoteOn,
   midiParamToCc,
   midiRouteEvents,
@@ -107,6 +110,36 @@ describe('MIDI CC binding channel is absent for any channel, never 255', () => {
     for (const value of [16, 254, 255]) {
       expectFieldRefusal(() => toCc(value), 'channel');
     }
+  });
+});
+
+describe('MIDI binding lookups return null only for an input the bindings do not map', () => {
+  const binding: ProjectMidiCcBinding = { ccNumber: 7, paramId: 1, minValue: 0, maxValue: 1 };
+  const cc = (controller: number) =>
+    midiCc({ ppq: 0, group: 0, channel: 0, controller, value: 64 });
+
+  it('returns null when nothing maps', () => {
+    expect(midiParamToCc({ bindings: [binding], paramId: 2, unitValue: 0.5, group: 0 })).toBeNull();
+    expect(midiCcToBreakpoint({ bindings: [binding], event: cc(8) })).toBeNull();
+    expect(
+      midiCcToBreakpoint({
+        bindings: [binding],
+        event: midiNoteOn({ ppq: 0, group: 0, channel: 0, note: 60, velocity: 100 }),
+      }),
+    ).toBeNull();
+    expect(midiCcLearn({ events: [], paramId: 1 })).toBeNull();
+  });
+
+  it('throws RangeError for an out-of-domain argument instead of returning null', () => {
+    expect(() =>
+      midiParamToCc({ bindings: [binding], paramId: 0, unitValue: 0.5, group: 0 }),
+    ).toThrow(RangeError);
+    expect(() =>
+      midiParamToCc({ bindings: [binding], paramId: 1, unitValue: 0.5, group: 16 }),
+    ).toThrow(RangeError);
+    expect(() => midiCcLearn({ events: [cc(7)], paramId: 1, minMovement: 128 })).toThrow(
+      RangeError,
+    );
   });
 });
 
