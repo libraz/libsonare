@@ -682,17 +682,84 @@ def test_note_stretch_omitted_offset_resolves_to_the_input_length(
         file="in.wav",
         output=str(tmp_path / "out.wav"),
         json=True,
-        onset=100,
-        offset=None,
+        onset_sample=100,
+        onset_sec=None,
+        offset_sample=None,
+        offset_sec=None,
         ratio=1.5,
     )
     _cli_note_edit.cmd_note_stretch(args)
     assert seen["offset_sample"] == 1000
     assert json.loads(capsys.readouterr().out.strip().splitlines()[-1])["offset_sample"] == 1000
 
-    args.offset = 400
+    args.offset_sample = 400
     _cli_note_edit.cmd_note_stretch(args)
     assert seen["offset_sample"] == 400
+
+
+def test_note_bounds_in_seconds_round_to_the_nearest_sample(monkeypatch, capsys, tmp_path) -> None:
+    import argparse
+
+    import libsonare
+    from libsonare import _cli_note_edit
+
+    seen: dict[str, object] = {}
+
+    def fake_move(samples, **kwargs):
+        seen.update(kwargs)
+        return list(samples)
+
+    monkeypatch.setattr(libsonare, "note_move", fake_move)
+    monkeypatch.setattr(_cli_note_edit, "_load_audio", lambda _path: ([0.0] * 22050, 22050))
+    args = argparse.Namespace(
+        file="in.wav",
+        output=str(tmp_path / "out.wav"),
+        json=True,
+        onset_sample=None,
+        onset_sec=0.1,
+        offset_sample=None,
+        offset_sec=0.5,
+        target_onset_sample=None,
+        # 0.25 s is exactly 5512.5 samples at 22050 Hz; a half rounds up.
+        target_onset_sec=0.25,
+    )
+    _cli_note_edit.cmd_note_move(args)
+    assert seen == {
+        "sample_rate": 22050,
+        "onset_sample": 2205,
+        "offset_sample": 11025,
+        "target_onset_sample": 5513,
+    }
+
+
+@pytest.mark.parametrize(
+    ("command", "options", "message"),
+    [
+        (
+            "note-move",
+            ["--onset-sample", "100", "--onset-sec", "0.01"],
+            "give --onset-sample or --onset-sec, not both",
+        ),
+        (
+            "note-move",
+            ["--target-onset-sample", "0", "--target-onset-sec", "0"],
+            "give --target-onset-sample or --target-onset-sec, not both",
+        ),
+        (
+            "note-stretch",
+            ["--offset-sample", "100", "--offset-sec", "0.01"],
+            "give --offset-sample or --offset-sec, not both",
+        ),
+        ("note-stretch", ["--onset-sec", "-0.01"], "--onset-sec must be non-negative"),
+        ("note-move", ["--offset-sample", "-1"], "--offset-sample must be non-negative"),
+    ],
+)
+def test_note_bounds_refuse_both_spellings_and_negatives(tmp_path, command, options, message):
+    wav = tmp_path / "in.wav"
+    _write_test_wav(str(wav), [0.0] * 2205, 22050)
+    result = _run_cli([command, str(wav), "-o", str(tmp_path / "out.wav"), *options])
+    assert result.returncode == 3, result.stderr
+    assert message in result.stderr
 
 
 @pytest.mark.parametrize(

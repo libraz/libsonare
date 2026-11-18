@@ -2056,22 +2056,68 @@
           "domain": null
         },
         {
-          "name": "offset",
+          "name": "offset-sample",
           "type": "integer",
           "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
         },
         {
-          "name": "onset",
-          "type": "integer",
-          "default": 0,
+          "name": "offset-sec",
+          "type": "number",
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
+        },
+        {
+          "name": "onset-sample",
+          "type": "integer",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
+        },
+        {
+          "name": "onset-sec",
+          "type": "number",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
         },
         {
           "name": "output",
@@ -2085,13 +2131,36 @@
           "domain": null
         },
         {
-          "name": "target-onset",
+          "name": "target-onset-sample",
           "type": "integer",
-          "default": 0,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
+        },
+        {
+          "name": "target-onset-sec",
+          "type": "number",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
         }
       ],
       "note-stretch": [
@@ -2105,22 +2174,68 @@
           "domain": null
         },
         {
-          "name": "offset",
+          "name": "offset-sample",
           "type": "integer",
           "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
         },
         {
-          "name": "onset",
-          "type": "integer",
-          "default": 0,
+          "name": "offset-sec",
+          "type": "number",
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
+        },
+        {
+          "name": "onset-sample",
+          "type": "integer",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
+        },
+        {
+          "name": "onset-sec",
+          "type": "number",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
         },
         {
           "name": "output",
@@ -8843,22 +8958,68 @@
           "domain": null
         },
         {
-          "name": "offset",
+          "name": "offset-sample",
           "type": "integer",
           "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
         },
         {
-          "name": "onset",
-          "type": "integer",
-          "default": 0,
+          "name": "offset-sec",
+          "type": "number",
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
+        },
+        {
+          "name": "onset-sample",
+          "type": "integer",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
+        },
+        {
+          "name": "onset-sec",
+          "type": "number",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
         },
         {
           "name": "output",
@@ -8909,9 +9070,9 @@
             "{audio}",
             "-o",
             "{output}",
-            "--onset",
+            "--onset-sample",
             "0",
-            "--offset",
+            "--offset-sample",
             "4410",
             "--ratio",
             "1.5",
@@ -8930,7 +9091,7 @@
             "{audio}",
             "-o",
             "{output}",
-            "--onset",
+            "--onset-sample",
             "0",
             "--ratio",
             "1.5",
@@ -14907,22 +15068,68 @@
           "domain": null
         },
         {
-          "name": "offset",
+          "name": "offset-sample",
           "type": "integer",
           "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
         },
         {
-          "name": "onset",
-          "type": "integer",
-          "default": 0,
+          "name": "offset-sec",
+          "type": "number",
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
+        },
+        {
+          "name": "onset-sample",
+          "type": "integer",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
+        },
+        {
+          "name": "onset-sec",
+          "type": "number",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
         },
         {
           "name": "output",
@@ -14936,13 +15143,36 @@
           "domain": null
         },
         {
-          "name": "target-onset",
+          "name": "target-onset-sample",
           "type": "integer",
-          "default": 0,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
+        },
+        {
+          "name": "target-onset-sec",
+          "type": "number",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
         }
       ],
       "positionals": [
@@ -14985,11 +15215,11 @@
             "{audio}",
             "-o",
             "{output}",
-            "--onset",
+            "--onset-sample",
             "1000",
-            "--offset",
+            "--offset-sample",
             "3000",
-            "--target-onset",
+            "--target-onset-sample",
             "5000",
             "--json"
           ],
@@ -15006,12 +15236,53 @@
             "{audio}",
             "-o",
             "{output}",
-            "--onset",
+            "--onset-sample",
             "3000",
-            "--offset",
+            "--offset-sample",
             "1000",
-            "--target-onset",
+            "--target-onset-sample",
             "5000",
+            "--json"
+          ],
+          "exit": 3,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        },
+        {
+          "id": "seconds",
+          "argv": [
+            "note-move",
+            "{audio}",
+            "-o",
+            "{output}",
+            "--onset-sec",
+            "0.02",
+            "--offset-sec",
+            "0.06",
+            "--target-onset-sec",
+            "0.1",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "both_spellings",
+          "argv": [
+            "note-move",
+            "{audio}",
+            "-o",
+            "{output}",
+            "--onset-sample",
+            "1000",
+            "--onset-sec",
+            "0.02",
             "--json"
           ],
           "exit": 3,

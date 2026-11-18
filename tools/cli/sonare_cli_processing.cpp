@@ -1,6 +1,9 @@
 #include <sonare/sonare_c_vocal_edit.h>
 
 #include <cmath>
+#include <limits>
+#include <stdexcept>
+#include <string>
 
 #include "analysis/analysis_rate.h"
 #include "c_api/sonare_c_error_mapping.h"
@@ -242,17 +245,34 @@ int cmd_pitch_correct_timevarying(const CliArgs& args, const Audio& audio) {
   return 0;
 }
 
+// Resolves a position the caller gave as `--<bound>-sample` or `--<bound>-sec`
+// (the registry refuses both at once and a negative value), rounding seconds to
+// the nearest sample as the library does. Absent means `fallback`.
+static int note_bound_sample(const CliArgs& args, const std::string& bound, int sample_rate,
+                             int fallback) {
+  const std::string sec = bound + "-sec";
+  if (args.has(sec)) {
+    const double samples = std::floor(args.get_double(sec, 0.0) * sample_rate + 0.5);
+    if (samples > static_cast<double>(std::numeric_limits<int>::max())) {
+      throw std::invalid_argument("--" + sec + " is out of range at " +
+                                  std::to_string(sample_rate) + " Hz");
+    }
+    return static_cast<int>(samples);
+  }
+  const std::string sample = bound + "-sample";
+  return args.has(sample) ? args.get_int(sample, 0) : fallback;
+}
+
 int cmd_note_move(const CliArgs& args, const Audio& audio) {
+  const int sample_rate = audio.sample_rate();
   editing::pitch_editor::NoteRegion region;
-  region.onset_sample = args.get_int("onset", 0);
-  // An absent --offset means the rest of the buffer. The editor reads no
-  // sentinel for it, so the resolution happens here, as it does on the other
-  // front-end, rather than arriving as a zero-length region.
+  region.onset_sample = note_bound_sample(args, "onset", sample_rate, 0);
   region.offset_sample =
-      args.has("offset") ? args.get_int("offset", 0) : static_cast<int>(audio.size());
+      note_bound_sample(args, "offset", sample_rate, static_cast<int>(audio.size()));
+  const int target_onset = note_bound_sample(args, "target-onset", sample_rate, 0);
 
   editing::pitch_editor::NoteEditor editor;
-  Audio result = editor.move_note(audio, region, args.get_int("target-onset", 0));
+  Audio result = editor.move_note(audio, region, target_onset);
   save_wav(args.output_file, result.data(), result.size(), result.sample_rate());
 
   if (args.json_output) {
@@ -271,10 +291,11 @@ int cmd_note_move(const CliArgs& args, const Audio& audio) {
 }
 
 int cmd_note_stretch(const CliArgs& args, const Audio& audio) {
+  const int sample_rate = audio.sample_rate();
   editing::pitch_editor::NoteRegion region;
-  region.onset_sample = args.get_int("onset", 0);
+  region.onset_sample = note_bound_sample(args, "onset", sample_rate, 0);
   region.offset_sample =
-      args.has("offset") ? args.get_int("offset", 0) : static_cast<int>(audio.size());
+      note_bound_sample(args, "offset", sample_rate, static_cast<int>(audio.size()));
   const float ratio = args.get_float("ratio", 1.0f);
 
   editing::pitch_editor::NoteEditor editor;

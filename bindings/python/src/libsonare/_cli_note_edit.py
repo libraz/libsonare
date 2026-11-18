@@ -34,6 +34,8 @@ from ._cli_options import (
     _positive_int,
 )
 from ._effects_note_ops import _UNMATCHED_POLICIES
+from ._errors import SonareValueError
+from ._narrowing import _resolve_sample_bound
 from ._runtime import _C_INT_MAX, _C_INT_MIN
 
 if TYPE_CHECKING:
@@ -96,16 +98,37 @@ def cmd_pitch_correct_timevarying(args: argparse.Namespace) -> int:
     return _emit_effect_result(args, [result], sr, label="Time-varying pitch correct")
 
 
+def _refuse_both_bound_spellings(args: argparse.Namespace, bounds: tuple[str, ...]) -> None:
+    """Refuse a position given both in samples and in seconds, naming the flags."""
+    for bound in bounds:
+        attr = bound.replace("-", "_")
+        if getattr(args, f"{attr}_sample") is not None and getattr(args, f"{attr}_sec") is not None:
+            raise SonareValueError(f"give --{bound}-sample or --{bound}-sec, not both")
+
+
+def _note_bound_sample(args: argparse.Namespace, bound: str, sample_rate: int) -> int | None:
+    """Resolve ``--<bound>-sample`` / ``--<bound>-sec`` to a sample index, or None if absent."""
+    attr = bound.replace("-", "_")
+    return _resolve_sample_bound(
+        getattr(args, f"{attr}_sample"),
+        getattr(args, f"{attr}_sec"),
+        sample_rate,
+        f"--{bound}-sample",
+        f"--{bound}-sec",
+    )
+
+
 def cmd_note_move(args: argparse.Namespace) -> int:
     from . import note_move
 
+    _refuse_both_bound_spellings(args, ("onset", "offset", "target-onset"))
     samples, sr = _load_audio(args.file)
     result = note_move(
         samples,
         sample_rate=sr,
-        onset_sample=args.onset,
-        offset_sample=args.offset,
-        target_onset_sample=args.target_onset,
+        onset_sample=_note_bound_sample(args, "onset", sr),
+        offset_sample=_note_bound_sample(args, "offset", sr),
+        target_onset_sample=_note_bound_sample(args, "target-onset", sr),
     )
     return _emit_effect_result(args, [result], sr, label="Note move")
 
@@ -127,13 +150,17 @@ def cmd_scale_quantize(args: argparse.Namespace) -> int:
 def cmd_note_stretch(args: argparse.Namespace) -> int:
     from . import note_stretch
 
+    _refuse_both_bound_spellings(args, ("onset", "offset"))
     samples, sr = _load_audio(args.file)
-    # An omitted --offset means the end of the buffer, as for note-move.
-    offset = len(samples) if args.offset is None else args.offset
+    onset = _note_bound_sample(args, "onset", sr)
+    onset = 0 if onset is None else onset
+    # An omitted offset means the end of the buffer, as for note-move.
+    offset = _note_bound_sample(args, "offset", sr)
+    offset = len(samples) if offset is None else offset
     result = note_stretch(
         samples,
         sample_rate=sr,
-        onset_sample=args.onset,
+        onset_sample=onset,
         offset_sample=offset,
         stretch_ratio=args.ratio,
     )
@@ -143,7 +170,7 @@ def cmd_note_stretch(args: argparse.Namespace) -> int:
         [result],
         sr,
         extra={
-            "onset_sample": args.onset,
+            "onset_sample": onset,
             "offset_sample": offset,
             "ratio": args.ratio,
         },
@@ -542,6 +569,11 @@ def cmd_polyphonic_render(args: argparse.Namespace) -> int:
     )
 
 
+def _position(action: argparse.Action) -> argparse.Action:
+    """Publish a note-region position's domain; the handler refuses a negative one."""
+    return _cli_domain(action, minimum=0, reject_exit="invalid_parameter")
+
+
 def register_note_edit_parsers(
     sub: argparse._SubParsersAction[_ContractArgumentParser], shared: SharedParsers
 ) -> None:
@@ -626,13 +658,48 @@ def register_note_edit_parsers(
             reject_exit="invalid_parameter",
         )
     note_move_p = sub.add_parser("note-move", parents=[common], help="Move one note region")
-    note_move_p.add_argument("--onset", type=_c_int, default=0)
-    note_move_p.add_argument("--offset", type=_c_int, default=None)
-    # The library's own default, not None: note_move takes an int, so an absent
-    # --target-onset reached ctypes as None and the command could not run with
-    # its own defaults at all. --offset keeps None because the handler resolves
-    # it to the end of the buffer, which is not a number a default can spell.
-    note_move_p.add_argument("--target-onset", type=_c_int, default=0)
+    _position(
+        note_move_p.add_argument(
+            "--onset-sample",
+            type=_c_int,
+            help="Start of the note region (omitted: the start of the input)",
+        )
+    )
+    _position(
+        note_move_p.add_argument(
+            "--onset-sec",
+            type=_finite_float,
+            help="Start of the note region (omitted: the start of the input)",
+        )
+    )
+    _position(
+        note_move_p.add_argument(
+            "--offset-sample",
+            type=_c_int,
+            help="End of the note region (omitted: the end of the input)",
+        )
+    )
+    _position(
+        note_move_p.add_argument(
+            "--offset-sec",
+            type=_finite_float,
+            help="End of the note region (omitted: the end of the input)",
+        )
+    )
+    _position(
+        note_move_p.add_argument(
+            "--target-onset-sample",
+            type=_c_int,
+            help="Where the start of the region moves to (omitted: the start of the input)",
+        )
+    )
+    _position(
+        note_move_p.add_argument(
+            "--target-onset-sec",
+            type=_finite_float,
+            help="Where the start of the region moves to (omitted: the start of the input)",
+        )
+    )
     scale_quantize_p = sub.add_parser(
         "scale-quantize", parents=[stdout_options], help="Quantize one MIDI value to a scale"
     )
@@ -668,14 +735,33 @@ def register_note_edit_parsers(
     note_stretch_p = sub.add_parser(
         "note-stretch", parents=[common], help="Time-stretch a single note region"
     )
-    note_stretch_p.add_argument(
-        "--onset", type=_c_int, default=0, help="Start sample index of the note region"
+    _position(
+        note_stretch_p.add_argument(
+            "--onset-sample",
+            type=_c_int,
+            help="Start of the note region (omitted: the start of the input)",
+        )
     )
-    note_stretch_p.add_argument(
-        "--offset",
-        type=_c_int,
-        default=None,
-        help="End sample index of the note region (default: end of the input)",
+    _position(
+        note_stretch_p.add_argument(
+            "--onset-sec",
+            type=_finite_float,
+            help="Start of the note region (omitted: the start of the input)",
+        )
+    )
+    _position(
+        note_stretch_p.add_argument(
+            "--offset-sample",
+            type=_c_int,
+            help="End of the note region (omitted: the end of the input)",
+        )
+    )
+    _position(
+        note_stretch_p.add_argument(
+            "--offset-sec",
+            type=_finite_float,
+            help="End of the note region (omitted: the end of the input)",
+        )
     )
     note_stretch_p.add_argument(
         "--ratio",

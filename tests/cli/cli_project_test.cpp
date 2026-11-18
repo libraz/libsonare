@@ -18,20 +18,50 @@ TEST_CASE("CLI DAW editing commands", "[cli]") {
 
   SECTION("note-stretch") {
     auto [code, output] =
-        exec_command(CLI + " note-stretch --onset 100 --offset 2000 --ratio 1.2 " + TEST_WAV +
-                     " -o " + TEST_OUT + " --json -q");
+        exec_command(CLI + " note-stretch --onset-sample 100 --offset-sample 2000 --ratio 1.2 " +
+                     TEST_WAV + " -o " + TEST_OUT + " --json -q");
     REQUIRE(code == 0);
     REQUIRE_THAT(output, ContainsSubstring("\"ratio\""));
     std::ifstream f(TEST_OUT);
     REQUIRE(f.good());
   }
 
-  SECTION("note-stretch without --offset stretches to the end of the input") {
-    auto [code, output] = exec_command(CLI + " note-stretch --onset 100 --ratio 1.2 " + TEST_WAV +
-                                       " -o " + TEST_OUT + " --json -q");
+  SECTION("note-stretch without an offset stretches to the end of the input") {
+    auto [code, output] = exec_command(CLI + " note-stretch --onset-sample 100 --ratio 1.2 " +
+                                       TEST_WAV + " -o " + TEST_OUT + " --json -q");
     REQUIRE(code == 0);
     // 0.5 s at 22050 Hz is 11025 samples; the resolved bound is reported.
     REQUIRE_THAT(output, ContainsSubstring("\"offset_sample\": 11025"));
+  }
+
+  SECTION("note-stretch rounds a bound in seconds to the nearest sample") {
+    // 0.25 s is exactly 5512.5 samples at 22050 Hz; a half rounds up.
+    auto [code, output] =
+        exec_command(CLI + " note-stretch --onset-sec 0.1 --offset-sec 0.25 --ratio 1.2 " +
+                     TEST_WAV + " -o " + TEST_OUT + " --json -q");
+    REQUIRE(code == 0);
+    REQUIRE_THAT(output, ContainsSubstring("\"onset_sample\": 2205"));
+    REQUIRE_THAT(output, ContainsSubstring("\"offset_sample\": 5513"));
+  }
+
+  SECTION("note bounds refuse both spellings of one position") {
+    auto [move_code, move_output] =
+        exec_command(CLI + " note-move --target-onset-sample 0 --target-onset-sec 0 " + TEST_WAV +
+                     " -o " + TEST_OUT + " -q");
+    CHECK(move_code == 3);
+    CHECK_THAT(move_output,
+               ContainsSubstring("give --target-onset-sample or --target-onset-sec, not both"));
+    auto [stretch_code, stretch_output] =
+        exec_command(CLI + " note-stretch --offset-sample 100 --offset-sec 0.01 " + TEST_WAV +
+                     " -o " + TEST_OUT + " -q");
+    CHECK(stretch_code == 3);
+    CHECK_THAT(stretch_output, ContainsSubstring("give --offset-sample or --offset-sec, not both"));
+  }
+
+  SECTION("note bounds refuse a negative position") {
+    auto [code, output] =
+        exec_command(CLI + " note-move --onset-sec -0.01 " + TEST_WAV + " -o " + TEST_OUT + " -q");
+    CHECK(code == 3);
   }
 
   SECTION("voice-change reports the requested factor") {

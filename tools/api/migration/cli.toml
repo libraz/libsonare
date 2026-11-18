@@ -78,3 +78,38 @@ to = "chords --no-hmm"
 domain = "analysis"
 rule = "cli-front-end-parity"
 test = "bindings/python/tests/test_cli_option_analysis.py::test_chords_option_flags_override_the_defaults"
+
+[[entry]]
+kind = "flag"
+old = "note-move --onset"
+new = "note-move --onset-sample"
+domain = "effects"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "flag"
+old = "note-move --offset"
+new = "note-move --offset-sample"
+domain = "effects"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "flag"
+old = "note-move --target-onset"
+new = "note-move --target-onset-sample"
+domain = "effects"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "flag"
+old = "note-stretch --onset"
+new = "note-stretch --onset-sample"
+domain = "effects"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "flag"
+old = "note-stretch --offset"
+new = "note-stretch --offset-sample"
+domain = "effects"
+rule = "unit-in-name"

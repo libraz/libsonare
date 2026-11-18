@@ -238,6 +238,12 @@ CliOptionSpec with_domain(CliOptionSpec spec, CliOptionDomain domain) {
   return spec;
 }
 
+// One spelling of a position given in samples or in seconds, from a builder with
+// no default: absence lets the handler apply the library's own.
+CliOptionSpec position(CliOptionSpec spec) {
+  return with_domain(std::move(spec), at_least(0.0, CliOptionDomainStage::Parameter));
+}
+
 // A twelve-bit scale mask the caller may also name by mode. It stays an Integer
 // option in the inventory: the name is another spelling of the same mask.
 CliOptionSpec mode_mask_value(const char* name, int value) {
@@ -354,6 +360,28 @@ CliValidationError validate_boundary_feature_streams(const CliArgs& args) {
       "--no-mfcc and --no-chroma cannot both be given: boundary detection "
       "needs at least one feature stream",
       true};
+}
+
+// A position is spelled in samples or in seconds; both at once is refused by
+// name, as the library refuses the two keyword spellings.
+CliValidationError refuse_both_bound_spellings(const CliArgs& args,
+                                               std::initializer_list<const char*> bounds) {
+  for (const char* bound : bounds) {
+    const std::string sample = std::string(bound) + "-sample";
+    const std::string sec = std::string(bound) + "-sec";
+    if (args.has(sample) && args.has(sec)) {
+      return {"give --" + sample + " or --" + sec + ", not both", true};
+    }
+  }
+  return {};
+}
+
+CliValidationError validate_note_move_bounds(const CliArgs& args) {
+  return refuse_both_bound_spellings(args, {"onset", "offset", "target-onset"});
+}
+
+CliValidationError validate_note_stretch_bounds(const CliArgs& args) {
+  return refuse_both_bound_spellings(args, {"onset", "offset"});
 }
 
 // The tempo search runs between the two bounds, so an inverted pair searches
@@ -654,15 +682,20 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
                  with_domain(number_value("vibrato-threshold-cents", 20.0),
                              at_least(0.0, CliOptionDomainStage::Parameter)),
                  required_output()});
-    // --offset defaults to the end of the buffer rather than to a number, which
-    // no registry default can spell, so it is the null-default overload and the
-    // handler resolves the absent case.
+    // Each bound is given in samples or in seconds, never both, and an omitted
+    // one takes the library's default (0, or the end of the input for an offset),
+    // which the handler resolves.
     add_command(commands, "note-move", true,
-                {int_value("onset", 0), int_value("offset"), int_value("target-onset", 0),
-                 required_output()});
+                {position(int_value("onset-sample")), position(number_value("onset-sec")),
+                 position(int_value("offset-sample")), position(number_value("offset-sec")),
+                 position(int_value("target-onset-sample")),
+                 position(number_value("target-onset-sec")), required_output()},
+                {}, &validate_note_move_bounds);
     add_command(commands, "note-stretch", true,
-                {int_value("onset", 0), int_value("offset"), number_value("ratio", 1.0),
-                 required_output()});
+                {position(int_value("onset-sample")), position(number_value("onset-sec")),
+                 position(int_value("offset-sample")), position(number_value("offset-sec")),
+                 number_value("ratio", 1.0), required_output()},
+                {}, &validate_note_stretch_bounds);
     add_command(commands, "polyphonic-notes", true, {});
     // The analysis settings a vocal-edit session takes at creation, spelled as
     // the session spells them. None carries a default here: an omitted one is
