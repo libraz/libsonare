@@ -409,6 +409,36 @@ class InputTypesRule(unittest.TestCase):
         self.assertEqual([f.key for f in verdict.violations], ["python:Project.set_marker_ex"])
 
 
+class OneInputFormRule(unittest.TestCase):
+    CLEAN = [
+        field("wasm", "SetClipsRequest", "clips", "readonly EngineClip[]"),
+        field("wasm", "ChangerConfig", "harmonySteps", "readonly [number, number, number]"),
+        field("node", "StageResult", "reports", "Report[] | [Report]"),
+        field("python", "Engine", "markers", "Sequence[EngineMarker]"),
+        field("python", "Project", "takes", "Sequence[Mapping[str, object]] | None"),
+    ]
+
+    def test_clean_surface_passes(self) -> None:
+        verdict = run("one-input-form", self.CLEAN)
+        self.assertEqual(verdict.read, 4)
+        self.assertFalse(verdict.failed)
+
+    def test_tuple_beside_record_is_named(self) -> None:
+        planted = field(
+            "wasm",
+            "SetEventsRequest",
+            "events",
+            "readonly (EngineMidiEvent | readonly [number, number])[]",
+        )
+        verdict = run("one-input-form", [*self.CLEAN, planted])
+        self.assertEqual([f.key for f in verdict.violations], ["wasm:SetEventsRequest.events"])
+
+    def test_python_mapping_beside_record_is_named(self) -> None:
+        planted = field("python", "Engine", "clips", "Sequence[EngineClip | Mapping[str, object]]")
+        verdict = run("one-input-form", [*self.CLEAN, planted])
+        self.assertEqual([f.key for f in verdict.violations], ["python:Engine.clips"])
+
+
 class Framework(unittest.TestCase):
     def test_reading_nothing_fails(self) -> None:
         verdict = check.judge(rule("getters"), [])

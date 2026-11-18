@@ -367,6 +367,51 @@ def _construction_violation(r: dict) -> str | None:
 _EX_SUFFIX = re.compile(r"(Ex|_ex)$")
 
 
+_TUPLE = re.compile(r"(?:readonly\s+)?\[\s*[A-Za-z_]")
+_ARRAYISH = re.compile(r"\[\]|Array<|^\s*(?:readonly\s+)?\[")
+_INPUT_OWNER = re.compile(r"(Request|Options|Config|Input|Params)$")
+_BUILTIN_ARRAYS = {
+    "Array",
+    "ReadonlyArray",
+    "Float32Array",
+    "Float64Array",
+    "Uint8Array",
+    "Int16Array",
+    "Int32Array",
+    "Uint32Array",
+    "Uint16Array",
+}
+
+
+_PY_LIST = re.compile(r"\b(Sequence|list|Iterable)\[")
+_PY_PLAIN = {"Sequence", "Iterable", "Mapping", "Any", "None"}
+
+
+def _list_input_population(r: dict) -> bool:
+    if r["surface"] == "python":
+        return r["kind"] in ("field", "option") and _PY_LIST.search(r.get("type", "")) is not None
+    if not _js(r) or r["kind"] not in ("field", "option"):
+        return False
+    if r["kind"] == "field" and not _INPUT_OWNER.search(r.get("owner", "")):
+        return False
+    return _ARRAYISH.search(r.get("type", "")) is not None
+
+
+def _list_input_violation(r: dict) -> str | None:
+    t = r.get("type", "")
+    if r["surface"] == "python":
+        records = [i for i in re.findall(r"[A-Z]\w+", t) if i not in _PY_PLAIN]
+        if "Mapping[" in t and records:
+            return "a list input takes its record class only, no mapping beside it"
+        return None
+    if not _TUPLE.search(t):
+        return None
+    items = [i for i in re.findall(r"[A-Z]\w+", _TUPLE.sub("", t)) if i not in _BUILTIN_ARRAYS]
+    if items:
+        return "a list input takes its record form only, no tuple form beside it"
+    return None
+
+
 RULES: list[Rule] = [
     Rule(
         name="getters",
@@ -512,6 +557,12 @@ RULES: list[Rule] = [
             if _EX_SUFFIX.search(r.get("member") or r["name"])
             else None
         ),
+    ),
+    Rule(
+        name="one-input-form",
+        summary="a list-of-items input takes one item form: no tuple beside the record",
+        population=_list_input_population,
+        violation=_list_input_violation,
     ),
 ]
 
