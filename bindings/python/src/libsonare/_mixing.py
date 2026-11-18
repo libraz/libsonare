@@ -9,6 +9,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
 import numpy as np
+import numpy.typing as npt
 
 from ._errors import _not_supported, _require_open
 from ._ffi import SonareMixGoniometerPoint, SonareSurroundPan
@@ -76,9 +77,9 @@ class MixerStereoResult:
     Mirrors the Node/WASM ``{left, right, sampleRate}`` result shape.
     """
 
-    left: np.ndarray
+    left: npt.NDArray[np.float32]
     """Left channel of the master output."""
-    right: np.ndarray
+    right: npt.NDArray[np.float32]
     """Right channel of the master output."""
     sample_rate: int
     """Sample rate of the output in Hz."""

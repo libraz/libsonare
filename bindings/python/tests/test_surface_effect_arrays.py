@@ -136,7 +136,7 @@ def test_array_records_declare_ndarray_fields_and_compare_by_identity(name: str)
     assert cls.__dataclass_params__.frozen
     declared = {field.name: field.type for field in dataclasses.fields(cls)}
     for field_name in _ARRAY_RECORDS[name]:
-        assert declared[field_name] == "np.ndarray", (name, field_name)
+        assert declared[field_name] == "npt.NDArray[np.float32]", (name, field_name)
     assert cls.__eq__ is object.__eq__
 
 
