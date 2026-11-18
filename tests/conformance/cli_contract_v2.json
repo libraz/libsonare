@@ -6660,7 +6660,7 @@
           "stdout": "json",
           "stdout_contains": [
             "Adds warmth, presence, and air",
-            "\\\"semitones\\\":3",
+            "\\\"pitchSemitones\\\":3",
             "\\\"presenceDb\\\":3"
           ]
         },
