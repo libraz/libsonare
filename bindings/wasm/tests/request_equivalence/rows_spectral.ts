@@ -19,6 +19,7 @@ export const ROWS: Row[] = [
       htk: true,
     },
     invalid: { nFft: 0 },
+    defaults: { sampleRate: 22050 },
   },
   {
     name: 'melToAudio',
@@ -37,12 +38,13 @@ export const ROWS: Row[] = [
       htk: true,
     },
     invalid: { hopLength: 0 },
+    defaults: { sampleRate: 22050 },
   },
   {
     name: 'griffinLim',
     fn: sonare.griffinLim,
     form: 'requestOnly',
-    params: 'magnitude sampleRate? nFft hopLength? nIter? momentum? ...options?',
+    params: 'magnitude sampleRate nFft? hopLength? nIter? momentum? ...options?',
     values: {
       options: { validate: false },
       magnitude: ST1024.magnitude,
@@ -53,7 +55,14 @@ export const ROWS: Row[] = [
       momentum: 0.5,
     },
     invalid: { hopLength: 0 },
-    inert: { sampleRate: 'reconstruction runs in bins and frames' },
+    defaults: { nFft: 1024 },
+    oneOf: [
+      { fields: ['sampleRate'], error: 'TypeError: griffinLim: sampleRate must be a number' },
+    ],
+    inert: {
+      sampleRate: 'reconstruction runs in bins and frames',
+      nFft: 'an omitted size is inferred from the bin count, which is the value given',
+    },
   },
   {
     name: 'mfccToMel',
@@ -88,6 +97,7 @@ export const ROWS: Row[] = [
       lifter: 22,
     },
     invalid: { hopLength: 0 },
+    defaults: { sampleRate: 22050 },
   },
   {
     name: 'phaseVocoder',

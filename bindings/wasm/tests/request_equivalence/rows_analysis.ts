@@ -88,6 +88,12 @@ export const ROWS: Row[] = [
       options: { minDurationSec: 0.6, tuningCents: 0 },
     },
     invalid: { sampleRate: 0 },
+    oneOf: [
+      {
+        fields: ['keyRoot'],
+        error: 'TypeError: chordFunctionalAnalysis: keyRoot must be a pitch class number 0-11',
+      },
+    ],
   },
   {
     name: 'analyze',

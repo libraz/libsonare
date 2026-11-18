@@ -51,8 +51,8 @@ export function chordSymbolFromAnalysis(
   if (typeof chord !== 'object' || chord === null || Array.isArray(chord)) {
     throw new TypeError('chordSymbolFromAnalysis: chord must be an object');
   }
-  const root = pitchClassOrdinal(chord.root, 'root');
-  const bass = pitchClassOrdinal(chord.bass, 'bass');
+  const root = pitchClassOrdinal('chordSymbolFromAnalysis', chord.root, 'root');
+  const bass = pitchClassOrdinal('chordSymbolFromAnalysis', chord.bass, 'bass');
   const quality = chordQualityOrdinal(chord.quality, 'quality');
   const { slashBassPc, ...native } = projectModule().chordSymbolFromAnalysis(root, quality, bass);
   const fields: ChordSymbolFields = { ...native, quality: projectChordQualityName(native.quality) };

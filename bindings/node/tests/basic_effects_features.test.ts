@@ -675,7 +675,7 @@ describe('features', () => {
     expect(vqtAudio.length).toBe(source.length);
     expect(Array.from(vqtAudio).every(Number.isFinite)).toBe(true);
     const truncated = { ...cq.magnitude, data: cq.magnitude.data.subarray(1) };
-    expect(() => cqtToAudio({ magnitude: truncated })).toThrow();
+    expect(() => cqtToAudio({ magnitude: truncated, sampleRate: 8000 })).toThrow();
     expect(() =>
       vqtToAudio({
         magnitude: vq.magnitude,

@@ -101,9 +101,9 @@ export interface MfccToAudioRequest extends GuardedOptions {
 export interface GriffinLimRequest extends GuardedOptions {
   /** Rows are `nFft / 2 + 1` bins, cols are frames. */
   magnitude: Matrix2D;
-  /** Rate of the source audio, in Hz. Default 22050. */
-  sampleRate?: number;
-  /** FFT size. Default 2048. */
+  /** Rate of the source audio, in Hz. */
+  sampleRate: number;
+  /** FFT size the magnitude came from. Omitted, it is inferred as `(rows - 1) * 2`; a size that disagrees with the bin count is a `RangeError`. */
   nFft?: number;
   /** Hop in samples. Default 512. */
   hopLength?: number;
@@ -186,14 +186,24 @@ export function melToAudio(...args: unknown[]): Float32Array {
   );
 }
 
+/** A Griffin-Lim magnitude has `nFft / 2 + 1` rows, so an explicit size must agree with them. */
+function assertGriffinLimFftSize(nBins: number, nFft: number): void {
+  if (nFft !== (nBins - 1) * 2) {
+    throw new RangeError(
+      `griffinLim: nFft must equal (nBins - 1) * 2 (got ${nFft} for ${nBins} bins)`,
+    );
+  }
+}
+
 /** Reconstruct audio from an STFT magnitude matrix via Griffin-Lim. */
 export function griffinLim(request: GriffinLimRequest): Float32Array;
 export function griffinLim(...args: unknown[]): Float32Array {
   const r = requestOnly<GriffinLimRequest>('griffinLim', args);
-  const sampleRate = r.sampleRate ?? 22050;
+  const sampleRate = r.sampleRate;
   assertSampleRate('griffinLim', sampleRate);
   const magnitude = assertMatrix2D('griffinLim', r.magnitude, 'magnitude', r.validate !== false);
-  const fft = resolveFftOptions('griffinLim', r.nFft, r.hopLength);
+  const fft = resolveFftOptions('griffinLim', r.nFft ?? (magnitude.rows - 1) * 2, r.hopLength);
+  assertGriffinLimFftSize(magnitude.rows, fft.nFft);
   const nIter = r.nIter ?? 32;
   validatePositiveIntegers('griffinLim', { nIter });
   return requireModule().griffinLim(

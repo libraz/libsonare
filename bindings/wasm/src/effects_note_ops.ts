@@ -50,6 +50,9 @@ function assertNoteTrack(
     throw new TypeError(`${fnName}: f0Hz must be a Float32Array`);
   }
   assertFiniteScalar(fnName, request.frameRate, 'frameRate');
+  if (request.voiced == null && request.voicedProb == null) {
+    throw new TypeError(`${fnName}: one of voiced or voicedProb is required`);
+  }
   const voicedF32 = request.voiced == null ? undefined : toVoicedFloat32(fnName, request.voiced);
   assertPitchTrackLengths(fnName, request.f0Hz, request.voiced, request.voicedProb);
   return voicedF32;
@@ -624,7 +627,10 @@ export function splitNote(...args: unknown[]): NoteObject[] {
   const voicedF32 = assertNoteTrack('splitNote', request);
   const hasFrame = request.frame !== undefined && request.frame !== null;
   const hasFrameSec = request.frameSec !== undefined && request.frameSec !== null;
-  if (hasFrame === hasFrameSec) {
+  if (!hasFrame && !hasFrameSec) {
+    throw new TypeError('splitNote: frame or frameSec is required');
+  }
+  if (hasFrame && hasFrameSec) {
     throw new RangeError('splitNote: give exactly one of frame or frameSec');
   }
   assertFloatValue(
@@ -636,9 +642,10 @@ export function splitNote(...args: unknown[]): NoteObject[] {
     ? (request.frame as number)
     : Math.round((request.frameSec as number) * request.frameRate);
   assertFloatValue('splitNote', request.index, 'index');
-  const notes = Array.isArray(request.notes)
-    ? resolveEntryTimes('splitNote', request.notes, 'notes', request.sampleRate, false)
-    : request.notes;
+  if (!Array.isArray(request.notes)) {
+    throw new TypeError('splitNote: notes must be an array');
+  }
+  const notes = resolveEntryTimes('splitNote', request.notes, 'notes', request.sampleRate, false);
   return requireModule().splitNote(
     request.samples,
     request.sampleRate,
@@ -704,9 +711,10 @@ export function mergeNotes(...args: unknown[]): NoteObject[] {
   const voicedF32 = assertNoteTrack('mergeNotes', request);
   assertFloatValue('mergeNotes', request.first, 'first');
   assertFloatValue('mergeNotes', request.last, 'last');
-  const notes = Array.isArray(request.notes)
-    ? resolveEntryTimes('mergeNotes', request.notes, 'notes', request.sampleRate, false)
-    : request.notes;
+  if (!Array.isArray(request.notes)) {
+    throw new TypeError('mergeNotes: notes must be an array');
+  }
+  const notes = resolveEntryTimes('mergeNotes', request.notes, 'notes', request.sampleRate, false);
   return requireModule().mergeNotes(
     request.samples,
     request.sampleRate,

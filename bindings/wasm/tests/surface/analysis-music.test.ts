@@ -437,7 +437,7 @@ describe('2-D results are Matrix2D', () => {
     [
       'cqtToAudio',
       'magnitude length',
-      () => cqtToAudio({ magnitude: { data: new Float32Array(5), rows: 2, cols: 3 } }),
+      () => cqtToAudio({ magnitude: { data: new Float32Array(5), rows: 2, cols: 3 }, sampleRate }),
     ],
   ])('%s refuses a matrix whose data length is not rows * cols', (_name, _what, call) => {
     expect(errorOf(call)).toBeInstanceOf(RangeError);
@@ -445,7 +445,9 @@ describe('2-D results are Matrix2D', () => {
 
   it('refuses the old bare-array magnitude', () => {
     expect(
-      errorOf(() => cqtToAudio({ magnitude: new Float32Array(16), nBins: 4, nFrames: 4 } as never)),
+      errorOf(() =>
+        cqtToAudio({ magnitude: new Float32Array(16), sampleRate, nBins: 4, nFrames: 4 } as never),
+      ),
     ).toBeInstanceOf(TypeError);
   });
 });

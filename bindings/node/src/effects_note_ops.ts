@@ -617,7 +617,10 @@ export function splitNote(...args: unknown[]): NoteObject[] {
   const nativeVoiced = assertNoteTrackRequest('splitNote', request);
   const hasFrame = requestFrame !== undefined && requestFrame !== null;
   const hasFrameSec = frameSec !== undefined && frameSec !== null;
-  if (hasFrame === hasFrameSec) {
+  if (!hasFrame && !hasFrameSec) {
+    throw new TypeError('splitNote: frame or frameSec is required');
+  }
+  if (hasFrame && hasFrameSec) {
     throw new RangeError('splitNote: give exactly one of frame or frameSec');
   }
   assertFloatValue(

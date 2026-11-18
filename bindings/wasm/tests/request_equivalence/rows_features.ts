@@ -35,6 +35,7 @@ export const ROWS: Row[] = [
       amplitude: 0.3,
     },
     invalid: { sampleRate: 0 },
+    defaults: { sampleRate: 22050 },
   },
   {
     name: 'chirp',
@@ -43,6 +44,7 @@ export const ROWS: Row[] = [
     params: 'fminHz? fmaxHz? sampleRate? durationSec? linear?',
     values: { fminHz: 200, fmaxHz: 2000, sampleRate: ALT_SR, durationSec: 0.2, linear: true },
     invalid: { sampleRate: 0 },
+    defaults: { sampleRate: 22050 },
   },
   {
     name: 'clicks',
@@ -57,6 +59,8 @@ export const ROWS: Row[] = [
       clickDurationSec: 0.05,
     },
     invalid: { sampleRate: 0 },
+    defaults: { sampleRate: 22050 },
+    oneOf: [{ fields: ['times'], error: 'TypeError: clicks: times must be a Float32Array' }],
   },
   {
     name: 'powerToDb',
@@ -66,6 +70,7 @@ export const ROWS: Row[] = [
     values: { values: SMALL, ref: 0.5, amin: 0.2, topDb: 5 },
     invalid: { amin: -1 },
     controlBase: { amin: { topDb: undefined } },
+    oneOf: [{ fields: ['values'], error: 'TypeError: powerToDb: values must be a Float32Array' }],
   },
   {
     name: 'amplitudeToDb',
@@ -75,6 +80,9 @@ export const ROWS: Row[] = [
     values: { values: SMALL, ref: 0.5, amin: 0.2, topDb: 10 },
     invalid: { amin: -1 },
     controlBase: { amin: { topDb: undefined } },
+    oneOf: [
+      { fields: ['values'], error: 'TypeError: amplitudeToDb: values must be a Float32Array' },
+    ],
   },
   {
     name: 'preemphasis',
@@ -120,6 +128,10 @@ export const ROWS: Row[] = [
     values: { samples: SIG, sampleRate: ALT_SR, frameLength: 1024, hopLength: 256 },
     invalid: { hopLength: 0 },
     inert: { sampleRate: 'frames are counted in samples' },
+    oneOf: [
+      { fields: ['hopLength'], error: 'TypeError: frameSignal: hopLength must be an integer' },
+      { fields: ['frameLength'], error: 'TypeError: frameSignal: frameLength must be an integer' },
+    ],
   },
   {
     name: 'padCenter',
@@ -128,6 +140,10 @@ export const ROWS: Row[] = [
     params: 'values targetSize padValue?',
     values: { values: SMALL, targetSize: 100, padValue: 0.5 },
     invalid: { targetSize: -1 },
+    oneOf: [
+      { fields: ['targetSize'], error: 'TypeError: padCenter: targetSize must be an integer' },
+      { fields: ['values'], error: 'TypeError: padCenter: values must be a Float32Array' },
+    ],
   },
   {
     name: 'fixLength',
@@ -136,6 +152,10 @@ export const ROWS: Row[] = [
     params: 'values targetSize padValue?',
     values: { values: SMALL, targetSize: 100, padValue: 0.5 },
     invalid: { targetSize: -1 },
+    oneOf: [
+      { fields: ['targetSize'], error: 'TypeError: fixLength: targetSize must be an integer' },
+      { fields: ['values'], error: 'TypeError: fixLength: values must be a Float32Array' },
+    ],
   },
   {
     name: 'fixFrames',
@@ -153,6 +173,9 @@ export const ROWS: Row[] = [
     values: { events: new Int32Array([5, 20, 40]), energy: ENV },
     // An event past the curve is clamped to its last frame, so the refusal is a non-finite curve.
     invalid: { energy: ENV.map((v, i) => (i === 3 ? Number.NaN : v)) },
+    oneOf: [
+      { fields: ['energy'], error: 'TypeError: onsetBacktrack: energy must be a Float32Array' },
+    ],
   },
   {
     name: 'peakPick',
@@ -161,6 +184,15 @@ export const ROWS: Row[] = [
     params: 'values preMax postMax preAvg postAvg delta wait',
     values: { values: ENV, preMax: 2, postMax: 2, preAvg: 4, postAvg: 4, delta: 0.05, wait: 3 },
     invalid: { wait: -1 },
+    oneOf: [
+      { fields: ['wait'], error: 'TypeError: peakPick: wait must be an integer' },
+      { fields: ['delta'], error: 'TypeError: peakPick: delta must be a number' },
+      { fields: ['postAvg'], error: 'TypeError: peakPick: postAvg must be an integer' },
+      { fields: ['preAvg'], error: 'TypeError: peakPick: preAvg must be an integer' },
+      { fields: ['postMax'], error: 'TypeError: peakPick: postMax must be an integer' },
+      { fields: ['preMax'], error: 'TypeError: peakPick: preMax must be an integer' },
+      { fields: ['values'], error: 'TypeError: peakPick: values must be a Float32Array' },
+    ],
   },
   {
     name: 'vectorNormalize',
@@ -170,6 +202,9 @@ export const ROWS: Row[] = [
     values: { values: SMALL, norm: 'l1', threshold: 50 },
     invalid: { norm: 'l3' },
     controlBase: { norm: { threshold: undefined } },
+    oneOf: [
+      { fields: ['values'], error: 'TypeError: vectorNormalize: values must be a Float32Array' },
+    ],
   },
   {
     name: 'pcen',
@@ -202,17 +237,24 @@ export const ROWS: Row[] = [
       norm: false,
     },
     invalid: { winLength: 0 },
+    defaults: { sampleRate: 22050 },
     controlBase: { norm: { mode: undefined } },
     inert: {
       sampleRate: 'the lag axis is in frames',
       hopLength: 'the lag axis is in frames',
     },
+    oneOf: [
+      {
+        fields: ['onsetEnvelope'],
+        error: 'TypeError: tempogram: onsetEnvelope must be a Float32Array',
+      },
+    ],
   },
   {
     name: 'cyclicTempogram',
     fn: sonare.cyclicTempogram,
     form: 'requestOnly',
-    params: 'onsetEnvelope sampleRate? hopLength? winLength? bpmMin? nBins?',
+    params: 'onsetEnvelope sampleRate hopLength? winLength? bpmMin? nBins?',
     values: {
       onsetEnvelope: ENV,
       sampleRate: ALT_SR,
@@ -223,6 +265,13 @@ export const ROWS: Row[] = [
       nBins: 24,
     },
     invalid: { winLength: 0 },
+    oneOf: [
+      {
+        fields: ['onsetEnvelope'],
+        error: 'TypeError: cyclicTempogram: onsetEnvelope must be a Float32Array',
+      },
+      { fields: ['sampleRate'], error: 'TypeError: cyclicTempogram: sampleRate must be a number' },
+    ],
   },
   {
     name: 'plp',
@@ -238,6 +287,10 @@ export const ROWS: Row[] = [
       winLength: 128,
     },
     invalid: { winLength: 0 },
+    defaults: { sampleRate: 22050 },
+    oneOf: [
+      { fields: ['onsetEnvelope'], error: 'TypeError: plp: onsetEnvelope must be a Float32Array' },
+    ],
   },
   {
     name: 'decompose',
@@ -423,7 +476,7 @@ export const ROWS: Row[] = [
     name: 'cqtToAudio',
     fn: sonare.cqtToAudio,
     form: 'requestOnly',
-    params: 'magnitude sampleRate? hopLength? fminHz? binsPerOctave? nIter? ...options?',
+    params: 'magnitude sampleRate hopLength? fminHz? binsPerOctave? nIter? ...options?',
     values: {
       options: { validate: false },
       magnitude: CQT.magnitude,
@@ -434,12 +487,15 @@ export const ROWS: Row[] = [
       nIter: 4,
     },
     invalid: { hopLength: 0 },
+    oneOf: [
+      { fields: ['sampleRate'], error: 'TypeError: cqtToAudio: sampleRate must be a number' },
+    ],
   },
   {
     name: 'vqtToAudio',
     fn: sonare.vqtToAudio,
     form: 'requestOnly',
-    params: 'magnitude sampleRate? hopLength? fminHz? binsPerOctave? gamma? nIter? ...options?',
+    params: 'magnitude sampleRate hopLength? fminHz? binsPerOctave? gamma? nIter? ...options?',
     values: {
       options: { validate: false },
       magnitude: VQT.magnitude,
@@ -451,6 +507,9 @@ export const ROWS: Row[] = [
       nIter: 4,
     },
     invalid: { hopLength: 0 },
+    oneOf: [
+      { fields: ['sampleRate'], error: 'TypeError: vqtToAudio: sampleRate must be a number' },
+    ],
   },
   {
     name: 'analyzeSections',
@@ -498,10 +557,17 @@ export const ROWS: Row[] = [
       center: false,
     },
     invalid: { winLength: 0 },
+    defaults: { sampleRate: 22050 },
     inert: {
       sampleRate: 'the frequency axis is in frames',
       hopLength: 'the frequency axis is in frames',
     },
+    oneOf: [
+      {
+        fields: ['onsetEnvelope'],
+        error: 'TypeError: fourierTempogram: onsetEnvelope must be a Float32Array',
+      },
+    ],
   },
   {
     name: 'tempogramRatio',
@@ -516,6 +582,7 @@ export const ROWS: Row[] = [
       factors: new Float32Array([0.5, 1, 2]),
     },
     invalid: { hopLength: 0 },
+    defaults: { sampleRate: 22050 },
     inert: {
       sampleRate: 'the ratio is taken between lag bins',
       hopLength: 'the ratio is taken between lag bins',
@@ -613,6 +680,12 @@ export const ROWS: Row[] = [
     params: 'frequencies resolution? binsPerOctave?',
     values: { frequencies: new Float32Array([224, 448, 672]), resolution: 0.05, binsPerOctave: 24 },
     invalid: { resolution: 0 },
+    oneOf: [
+      {
+        fields: ['frequencies'],
+        error: 'TypeError: pitchTuning: frequencies must be a Float32Array',
+      },
+    ],
   },
   {
     name: 'estimateTuning',

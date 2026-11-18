@@ -5,10 +5,15 @@ import type { OptionsOf } from './validation.js';
 import {
   assertAudioInput,
   assertAudioSamples,
+  assertFloat32Array,
   assertFloatFields,
+  assertFloatValue,
+  assertIntegerValue,
   assertMatrix2D,
+  assertNonNegativeSafeInteger,
   assertNumber,
   assertPositiveInteger,
+  assertSampleRate,
   assertString,
   optionalBoolean,
   requestOnly,
@@ -370,8 +375,8 @@ export interface TempogramRequest {
 export interface CyclicTempogramRequest {
   /** Onset-strength envelope, one value per frame. */
   onsetEnvelope: Float32Array;
-  /** Sample rate in Hz of the audio the envelope came from. Default `22050`. */
-  sampleRate?: number;
+  /** Sample rate in Hz of the audio the envelope came from. */
+  sampleRate: number;
   /** Hop length in samples of the envelope. Default `512`. */
   hopLength?: number;
   /** Analysis window in frames. Default `384`. */
@@ -447,6 +452,7 @@ export function chirp(...args: unknown[]): Float32Array {
 export function clicks(request: ClicksRequest): Float32Array;
 export function clicks(...args: unknown[]): Float32Array {
   const r = requestOnly<ClicksRequest>('clicks', args);
+  assertFloat32Array('clicks', r.times, 'times');
   if (r.length !== undefined && r.length !== null) {
     assertPositiveInteger('clicks', r.length, 'length');
   }
@@ -626,6 +632,7 @@ export function samplesToFrames(samples: number, hopLength = 512, nFft?: number)
 export function powerToDb(request: PowerToDbRequest): Float32Array;
 export function powerToDb(...args: unknown[]): Float32Array {
   const r = requestOnly<PowerToDbRequest>('powerToDb', args);
+  assertFloat32Array('powerToDb', r.values, 'values');
   return requireModule().powerToDb(r.values, r.ref ?? 1.0, r.amin ?? 1e-10, r.topDb ?? 80.0);
 }
 
@@ -633,6 +640,7 @@ export function powerToDb(...args: unknown[]): Float32Array {
 export function amplitudeToDb(request: AmplitudeToDbRequest): Float32Array;
 export function amplitudeToDb(...args: unknown[]): Float32Array {
   const r = requestOnly<AmplitudeToDbRequest>('amplitudeToDb', args);
+  assertFloat32Array('amplitudeToDb', r.values, 'values');
   return requireModule().amplitudeToDb(r.values, r.ref ?? 1.0, r.amin ?? 1e-5, r.topDb ?? 80.0);
 }
 
@@ -787,11 +795,10 @@ export function frameSignal(
 export function frameSignal(...args: unknown[]): Matrix2D {
   const r = sampleOneShot<FrameSignalRequest>('frameSignal', args);
   assertAudioInput('frameSignal', r.samples, r.sampleRate, r);
-  for (const name of ['frameLength', 'hopLength'] as const) {
-    if (typeof r[name] !== 'number') {
-      throw new TypeError(`frameSignal: ${name} is required`);
-    }
-  }
+  assertIntegerValue('frameSignal', r.frameLength, 'frameLength');
+  assertIntegerValue('frameSignal', r.hopLength, 'hopLength');
+  assertPositiveInteger('frameSignal', r.frameLength, 'frameLength');
+  assertPositiveInteger('frameSignal', r.hopLength, 'hopLength');
   const { nFrames, frames } = requireModule().frameSignal(r.samples, r.frameLength, r.hopLength);
   // Native stores one frame after another; the surface puts samples on rows and frames on columns.
   const data = new Float32Array(frames.length);
@@ -807,6 +814,8 @@ export function frameSignal(...args: unknown[]): Matrix2D {
 export function padCenter(request: PadCenterRequest): Float32Array;
 export function padCenter(...args: unknown[]): Float32Array {
   const r = requestOnly<PadCenterRequest>('padCenter', args);
+  assertFloat32Array('padCenter', r.values, 'values');
+  assertIntegerValue('padCenter', r.targetSize, 'targetSize');
   return requireModule().padCenter(r.values, r.targetSize, r.padValue ?? 0.0);
 }
 
@@ -814,6 +823,8 @@ export function padCenter(...args: unknown[]): Float32Array {
 export function fixLength(request: FixLengthRequest): Float32Array;
 export function fixLength(...args: unknown[]): Float32Array {
   const r = requestOnly<FixLengthRequest>('fixLength', args);
+  assertFloat32Array('fixLength', r.values, 'values');
+  assertIntegerValue('fixLength', r.targetSize, 'targetSize');
   return requireModule().fixLength(r.values, r.targetSize, r.padValue ?? 0.0);
 }
 
@@ -834,6 +845,7 @@ export function onsetBacktrack(request: OnsetBacktrackRequest): Int32Array;
 export function onsetBacktrack(...args: unknown[]): Int32Array {
   const r = requestOnly<OnsetBacktrackRequest>('onsetBacktrack', args);
   const events = toInt32Array('onsetBacktrack', r.events, 'events');
+  assertFloat32Array('onsetBacktrack', r.energy, 'energy');
   return requireModule().onsetBacktrack(events, r.energy);
 }
 
@@ -841,6 +853,14 @@ export function onsetBacktrack(...args: unknown[]): Int32Array {
 export function peakPick(request: PeakPickRequest): Int32Array;
 export function peakPick(...args: unknown[]): Int32Array {
   const r = requestOnly<PeakPickRequest>('peakPick', args);
+  assertFloat32Array('peakPick', r.values, 'values');
+  // Each is a frame count that may legitimately be zero.
+  assertNonNegativeSafeInteger('peakPick', r.preMax, 'preMax');
+  assertNonNegativeSafeInteger('peakPick', r.postMax, 'postMax');
+  assertNonNegativeSafeInteger('peakPick', r.preAvg, 'preAvg');
+  assertNonNegativeSafeInteger('peakPick', r.postAvg, 'postAvg');
+  assertNonNegativeSafeInteger('peakPick', r.wait, 'wait');
+  assertFloatValue('peakPick', r.delta, 'delta');
   return requireModule().peakPick(
     r.values,
     r.preMax,
@@ -862,6 +882,7 @@ const NORM_TOKENS = ['max', 'l1', 'l2', 'power'] as const;
 export function vectorNormalize(request: VectorNormalizeRequest): Float32Array;
 export function vectorNormalize(...args: unknown[]): Float32Array {
   const r = requestOnly<VectorNormalizeRequest>('vectorNormalize', args);
+  assertFloat32Array('vectorNormalize', r.values, 'values');
   const norm = requireToken('vectorNormalize', r.norm, 'norm', NORM_TOKENS, 'max');
   return requireModule().vectorNormalize(r.values, NORM_TOKENS.indexOf(norm), r.threshold ?? 0.0);
 }
@@ -919,6 +940,7 @@ const TEMPOGRAM_MODES = ['autocorrelation', 'cosine'] as const;
 export function tempogram(request: TempogramRequest): Matrix2D;
 export function tempogram(...args: unknown[]): Matrix2D {
   const r = requestOnly<TempogramRequest>('tempogram', args);
+  assertFloat32Array('tempogram', r.onsetEnvelope, 'onsetEnvelope');
   const mode = requireToken('tempogram', r.mode, 'mode', TEMPOGRAM_MODES, 'autocorrelation');
   const native = requireModule().tempogram(
     r.onsetEnvelope,
@@ -940,9 +962,11 @@ export function tempogram(...args: unknown[]): Matrix2D {
 export function cyclicTempogram(request: CyclicTempogramRequest): Matrix2D;
 export function cyclicTempogram(...args: unknown[]): Matrix2D {
   const r = requestOnly<CyclicTempogramRequest>('cyclicTempogram', args);
+  assertFloat32Array('cyclicTempogram', r.onsetEnvelope, 'onsetEnvelope');
+  assertSampleRate('cyclicTempogram', r.sampleRate);
   const native = requireModule().cyclicTempogram(
     r.onsetEnvelope,
-    r.sampleRate ?? 22050,
+    r.sampleRate,
     r.hopLength ?? 512,
     r.winLength ?? 384,
     r.bpmMin,
@@ -955,6 +979,7 @@ export function cyclicTempogram(...args: unknown[]): Matrix2D {
 export function plp(request: PlpRequest): Float32Array;
 export function plp(...args: unknown[]): Float32Array {
   const r = requestOnly<PlpRequest>('plp', args);
+  assertFloat32Array('plp', r.onsetEnvelope, 'onsetEnvelope');
   return requireModule().plp(
     r.onsetEnvelope,
     r.sampleRate ?? 22050,

@@ -725,6 +725,8 @@ describe('Node and WASM validators answer one boundary corpus identically', () =
       [fn, f32(), true, 0, 1],
     ],
     assertFiniteScalar: [
+      [fn, undefined, 'gain'],
+      [fn, '1', 'gain'],
       [fn, Number.NaN, 'gain'],
       [fn, Number.NEGATIVE_INFINITY, 'gain'],
       [fn, -1, 'gain'],
@@ -863,6 +865,20 @@ describe('Node and WASM validators answer one boundary corpus identically', () =
       [fn, null, 'validate'],
       [fn, 1, 'validate'],
       [fn, 'true', 'validate'],
+    ],
+    assertFloat32Array: [
+      [fn, f32(1), 'values'],
+      [fn, [1], 'values'],
+      [fn, undefined, 'values'],
+      [fn, new Float64Array(1), 'values'],
+    ],
+    assertNonNegativeSafeInteger: [
+      [fn, 0, 'wait'],
+      [fn, -1, 'wait'],
+      [fn, 1.5, 'wait'],
+      [fn, undefined, 'wait'],
+      [fn, '1', 'wait'],
+      [fn, 2 ** 53, 'wait'],
     ],
     assertString: [
       [fn, 'dynamics.compressor', 'processor'],

@@ -115,8 +115,8 @@ export interface TempogramRatioRequest extends GuardedOptions {
 export interface CqtToAudioRequest extends GuardedOptions {
   /** CQT magnitude as {@link Matrix2D}: rows = CQT bins, cols = frames. */
   magnitude: Matrix2D;
-  /** Output sample rate in Hz. Default `22050`. */
-  sampleRate?: number;
+  /** Output sample rate in Hz. */
+  sampleRate: number;
   /** Hop length in samples. Default `512`. */
   hopLength?: number;
   /** Lowest bin frequency in Hz. Default `32.70319566257483` (C1). */
@@ -131,8 +131,8 @@ export interface CqtToAudioRequest extends GuardedOptions {
 export interface VqtToAudioRequest extends GuardedOptions {
   /** VQT magnitude as {@link Matrix2D}: rows = VQT bins, cols = frames. */
   magnitude: Matrix2D;
-  /** Output sample rate in Hz. Default `22050`. */
-  sampleRate?: number;
+  /** Output sample rate in Hz. */
+  sampleRate: number;
   /** Bandwidth offset; omit for the automatic ERB-derived value, 0 is equivalent to CQT. */
   gamma?: number;
   /** Hop length in samples. Default `512`. */
@@ -316,7 +316,7 @@ function cqtInverseInput(
   request: CqtToAudioRequest | VqtToAudioRequest,
 ) {
   assertMatrix2D(fnName, request.magnitude, 'magnitude', request.validate !== false);
-  const sampleRate = request.sampleRate ?? 22050;
+  const sampleRate = request.sampleRate;
   const hopLength = request.hopLength ?? 512;
   const binsPerOctave = request.binsPerOctave ?? 12;
   const nIter = request.nIter ?? 32;

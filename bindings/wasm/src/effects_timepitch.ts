@@ -277,7 +277,7 @@ export function autoTune(...args: unknown[]): AutoTuneResult {
   let nativeKey: { root: number; mode: string } | null = null;
   if (keyOrDetect !== 'detect') {
     // Checked for the refusal only; native reads the pitch class and mode token as given.
-    pitchClassOrdinal(keyOrDetect.root, 'key.root');
+    pitchClassOrdinal('autoTune', keyOrDetect.root, 'key.root');
     keyModeOrdinal(keyOrDetect.mode, 'key.mode');
     nativeKey = { root: keyOrDetect.root, mode: keyOrDetect.mode };
   }

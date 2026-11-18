@@ -16088,3 +16088,43 @@ changed = "sent to the core as a version 2 chain document: a dotted key names th
 domain = "mastering"
 rule = "config-keys"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::the core refuses %s as InvalidFormat"
+
+[[entry]]
+kind = "field"
+old = "CqtToAudioRequest.sampleRate"
+changed = "required (was optional with a 22050 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/request_object_equivalence.test.ts::TypeError: cqtToAudio: sampleRate must be a number"
+
+[[entry]]
+kind = "field"
+old = "CyclicTempogramRequest.sampleRate"
+changed = "required (was optional with a 22050 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/request_object_equivalence.test.ts::TypeError: cyclicTempogram: sampleRate must be a number"
+
+[[entry]]
+kind = "field"
+old = "GriffinLimRequest.sampleRate"
+changed = "required (was optional with a 22050 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/request_object_equivalence.test.ts::TypeError: griffinLim: sampleRate must be a number"
+
+[[entry]]
+kind = "field"
+old = "VqtToAudioRequest.sampleRate"
+changed = "required (was optional with a 22050 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/request_object_equivalence.test.ts::TypeError: vqtToAudio: sampleRate must be a number"
+
+[[entry]]
+kind = "field"
+old = "GriffinLimRequest.nFft"
+changed = "omitted, inferred from the magnitude's bin count as (rows - 1) * 2 (was a 2048 default); a size that disagrees with the bin count is a RangeError"
+domain = "analysis"
+rule = "individual"
+test = "bindings/node/tests/surface/analysis-features.test.ts::griffinLim: nFft must equal (nBins - 1) * 2"

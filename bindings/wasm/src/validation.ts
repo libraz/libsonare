@@ -105,6 +105,9 @@ export function assertSamplesInWindow(
 }
 
 export function assertFiniteScalar(fnName: string, value: number, argName: string): void {
+  if (typeof value !== 'number') {
+    throw new TypeError(`${fnName}: ${argName} must be a number`);
+  }
   if (!Number.isFinite(value)) {
     throw new RangeError(`${fnName}: ${argName} must be a finite number`);
   }
@@ -233,7 +236,8 @@ export function assertAudioSamples(
   assertSamples(fnName, samples, (options as ValidateOptions).validate !== false, argName);
 }
 
-function assertFloat32Array(
+/** A `Float32Array` argument; anything else is a `TypeError` naming the field. */
+export function assertFloat32Array(
   fnName: string,
   value: unknown,
   argName: string,
@@ -484,6 +488,18 @@ export function assertNibble(fnName: string, value: number, argName: string): nu
     throw new RangeError(`${fnName}: ${argName} must be an integer in [0, 15]`);
   }
   return value;
+}
+
+/** A count that may be zero: `TypeError` unless a number, `RangeError` unless a non-negative safe integer. */
+export function assertNonNegativeSafeInteger(fnName: string, value: number, argName: string): void {
+  if (typeof value !== 'number') {
+    throw new TypeError(`${fnName}: ${argName} must be an integer`);
+  }
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw new RangeError(
+      `${fnName}: ${argName} must be a non-negative integer no greater than Number.MAX_SAFE_INTEGER`,
+    );
+  }
 }
 
 export function assertU32(fnName: string, value: number, argName: string): void {

@@ -548,7 +548,7 @@ export function detectChords(...args: unknown[]): ChordAnalysisResult {
     optionalBoolean('detectChords', request.useHmm, 'useHmm', true),
     request.hmmBeamWidth ?? 24,
     optionalBoolean('detectChords', request.useKeyContext, 'useKeyContext', false),
-    pitchClassOrdinal(request.keyRoot ?? 0, 'keyRoot'),
+    pitchClassOrdinal('detectChords', request.keyRoot ?? 0, 'keyRoot'),
     keyModeOrdinal(request.keyMode ?? 'major', 'keyMode'),
     optionalBoolean('detectChords', request.detectInversions, 'detectInversions', false),
     chordChromaMethodValue(request.chromaMethod ?? 'cqt'),
@@ -581,7 +581,7 @@ export function chordFunctions<T extends ChordFunctionsInput>(
   }));
   const labels = requireModule().chordFunctions(
     nativeEntries,
-    pitchClassOrdinal(request.key.root, 'key.root'),
+    pitchClassOrdinal('chordFunctions', request.key.root, 'key.root'),
     keyModeOrdinal(request.key.mode, 'key.mode'),
   );
   return entries.map((chord, i) => ({
@@ -611,12 +611,13 @@ export function chordFunctionalAnalysis(
 export function chordFunctionalAnalysis(...args: unknown[]): FunctionalChord[] {
   const request = sampleOneShot<ChordFunctionalAnalysisRequest>('chordFunctionalAnalysis', args);
   assertAudioInput('chordFunctionalAnalysis', request.samples, request.sampleRate, request);
+  const keyRoot = pitchClassOrdinal('chordFunctionalAnalysis', request.keyRoot, 'keyRoot');
   const minDurationSec = request.minDurationSec ?? 0.3;
   const smoothingWindowSec = request.smoothingWindowSec ?? 2.0;
   assertFloatFields('chordFunctionalAnalysis', { minDurationSec, smoothingWindowSec });
   const analysed = requireModule().chordFunctionalAnalysis(
     request.samples,
-    pitchClassOrdinal(request.keyRoot, 'keyRoot'),
+    keyRoot,
     keyModeOrdinal(request.keyMode ?? 'major', 'keyMode'),
     request.sampleRate,
     minDurationSec,

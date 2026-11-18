@@ -386,7 +386,7 @@ describe('analysis features: Matrix2D results', () => {
     ['spectralContrast', () => spectralContrast(samples, sr)],
     ['polyFeatures', () => polyFeatures(samples, sr)],
     ['tempogram', () => tempogram({ onsetEnvelope: envelope })],
-    ['cyclicTempogram', () => cyclicTempogram({ onsetEnvelope: envelope })],
+    ['cyclicTempogram', () => cyclicTempogram({ onsetEnvelope: envelope, sampleRate: sr })],
     ['tonnetz', () => tonnetz({ chromagram: matrix(12, 5) })],
     ['pcen', () => pcen({ values: matrix(8, 6) })],
     ['melDelta', () => melDelta({ features: matrix(4, 12) })],
@@ -469,6 +469,11 @@ describe('analysis features: inverse transforms', () => {
     expect(
       griffinLim({ magnitude: stft(samples, sr).magnitude, sampleRate: sr, nIter: 2 }),
     ).toBeInstanceOf(Float32Array);
+    expect(() =>
+      griffinLim({ magnitude: stft(samples, sr).magnitude, sampleRate: sr, nFft: 1024, nIter: 2 }),
+    ).toThrow(
+      new RangeError('griffinLim: nFft must equal (nBins - 1) * 2 (got 1024 for 1025 bins)'),
+    );
   });
 
   it.each([
@@ -692,7 +697,7 @@ describe('analysis features: note segments voicing', () => {
 
   it('refuses a call with neither voiced nor voicedProb by name', () => {
     expect(() => noteSegments({ f0Hz, frameRate: 100 } as never)).toThrow(
-      /one of voiced and voicedProb is required/,
+      /one of voiced or voicedProb is required/,
     );
     expect(() => noteSegments({ f0Hz, frameRate: 100 } as never)).toThrow(TypeError);
   });

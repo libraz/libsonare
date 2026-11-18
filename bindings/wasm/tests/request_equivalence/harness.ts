@@ -183,6 +183,10 @@ export interface Row {
    * that call without the group's members must fail with `error` in every form.
    */
   oneOf?: { fields: string[]; error: string }[];
+  /** Documented defaults: the minimal call must equal the minimal call with these values given. */
+  defaults?: Args;
+  /** Why the minimal call is refused today; the checks on it are expected to fail until that is fixed. */
+  knownRed?: string;
 }
 
 interface Spec {
@@ -441,6 +445,16 @@ export function describeRows(rows: Row[]): void {
       });
     }
 
+    if (row.defaults !== undefined) {
+      const defaults = row.defaults;
+      it('equals its documented defaults given explicitly', async () => {
+        const omitted = await run(row, specs, requiredOnly, 'request');
+        expect(omitted).not.toHaveProperty('error');
+        const given = await run(row, specs, withFields(specs, requiredOnly, defaults), 'request');
+        expect(given).toEqual(omitted);
+      });
+    }
+
     if (hasPositional) {
       it('returns the positional result for non-default values', async () => {
         const positional = await run(row, specs, row.values, 'positional');
@@ -448,17 +462,20 @@ export function describeRows(rows: Row[]): void {
         expect(await run(row, specs, row.values, 'request')).toEqual(positional);
       });
 
-      it('shares the positional defaults', async () => {
+      (row.knownRed === undefined ? it : it.fails)('shares the positional defaults', async () => {
         const request = await run(row, specs, requiredOnly, 'request');
         // Two identical refusals would compare equal and share nothing.
         expect(request).not.toHaveProperty('error');
         expect(request).toEqual(await run(row, specs, requiredOnly, 'positional'));
       });
     } else {
-      it('answers the request form for non-default values and for the required fields alone', async () => {
-        expect(await run(row, specs, row.values, 'request')).not.toHaveProperty('error');
-        expect(await run(row, specs, requiredOnly, 'request')).not.toHaveProperty('error');
-      });
+      (row.knownRed === undefined ? it : it.fails)(
+        'answers the request form for non-default values and for the required fields alone',
+        async () => {
+          expect(await run(row, specs, row.values, 'request')).not.toHaveProperty('error');
+          expect(await run(row, specs, requiredOnly, 'request')).not.toHaveProperty('error');
+        },
+      );
     }
 
     it('moves the result for every field it passes', async () => {

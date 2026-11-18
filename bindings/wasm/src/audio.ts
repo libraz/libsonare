@@ -294,8 +294,8 @@ export function downmix(
   targetLayout: ChannelLayout,
   options: DownmixOptions = {},
 ): Float32Array[] {
-  if (targetLayout === undefined || targetLayout === null) {
-    throw new TypeError('downmix: targetLayout is required');
+  if (typeof targetLayout !== 'string') {
+    throw new TypeError(`downmix: targetLayout must be one of ${CHANNEL_LAYOUTS.join(', ')}`);
   }
   const layout = requireToken('downmix', targetLayout, 'targetLayout', CHANNEL_LAYOUTS, 'mono');
   return getSonareModule().downmix(channels, CHANNEL_LAYOUT_VALUES[layout], options);

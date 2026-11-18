@@ -103,6 +103,7 @@ export const ROWS: Row[] = [
       options: { nFft: 1024 },
     },
     invalid: { sampleRate: 0 },
+    oneOf: [{ fields: ['ops'], error: 'TypeError: spectralEdit: ops must be an array' }],
   },
   {
     name: 'timeStretch',
@@ -490,6 +491,8 @@ export const ROWS: Row[] = [
     },
     invalid: { frame: 0 },
     oneOf: [
+      { fields: ['frame'], error: 'TypeError: splitNote: frame or frameSec is required' },
+      { fields: ['notes'], error: 'TypeError: splitNote: notes must be an array' },
       { fields: ['f0Hz'], error: 'TypeError: splitNote: f0Hz must be a Float32Array' },
       { fields: ['index'], error: 'TypeError: splitNote: index must be a number' },
     ],
@@ -514,6 +517,7 @@ export const ROWS: Row[] = [
     },
     invalid: { last: 0 },
     oneOf: [
+      { fields: ['notes'], error: 'TypeError: mergeNotes: notes must be an array' },
       { fields: ['f0Hz'], error: 'TypeError: mergeNotes: f0Hz must be a Float32Array' },
       { fields: ['first'], error: 'TypeError: mergeNotes: first must be a number' },
       { fields: ['last'], error: 'TypeError: mergeNotes: last must be a number' },
@@ -550,5 +554,8 @@ export const ROWS: Row[] = [
       events: [{ onsetSample: 1000, offsetSample: 3000, edit: { gainDb: -6 } }],
     },
     invalid: { events: 'all' },
+    oneOf: [
+      { fields: ['events'], error: 'TypeError: renderPercussiveEvents: events must be an array' },
+    ],
   },
 ];

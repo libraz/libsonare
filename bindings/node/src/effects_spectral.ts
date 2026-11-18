@@ -82,7 +82,7 @@ export function spectralEdit(...args: unknown[]): Float32Array {
   const { samples: input, sampleRate, ops, validate, ...requestOptions } = request;
   assertAudioInput('spectralEdit', input, sampleRate, { validate });
   if (ops === undefined || ops === null) {
-    throw new TypeError('spectralEdit: ops is required');
+    throw new TypeError('spectralEdit: ops must be an array');
   }
   if (requestOptions.window !== undefined) {
     assertClosedToken('spectralEdit', requestOptions.window, WINDOW_TYPES, 'window');

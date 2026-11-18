@@ -6,6 +6,8 @@ import type { OptionsOf } from './validation.js';
 import {
   assertAudioInput,
   assertFiniteSamples,
+  assertFloat32Array,
+  assertFloatValue,
   assertNonNegativeSafeInteger,
   assertPositiveInteger,
   assertSampleRate,
@@ -61,8 +63,8 @@ export interface TempogramRequest {
 export interface CyclicTempogramRequest {
   /** Onset strength envelope, one value per frame. */
   onsetEnvelope: Float32Array;
-  /** Sample rate of the audio the envelope came from, in Hz. Default `22050`. */
-  sampleRate?: number;
+  /** Sample rate of the audio the envelope came from, in Hz. */
+  sampleRate: number;
   /** Hop length in samples between envelope frames. Default `512`. */
   hopLength?: number;
   /** Autocorrelation window in frames. Default `384`. */
@@ -165,6 +167,7 @@ export interface TempogramRatioRequest {
 export function onsetBacktrack(request: OnsetBacktrackRequest): Int32Array;
 export function onsetBacktrack(...args: unknown[]): Int32Array {
   const r = requestOnly<OnsetBacktrackRequest>('onsetBacktrack', args);
+  assertFloat32Array('onsetBacktrack', r.energy, 'energy');
   return addon.onsetBacktrack(toNativeIndexList('onsetBacktrack', r.events, 'events'), r.energy);
 }
 
@@ -207,12 +210,14 @@ export function onsetBacktrack(...args: unknown[]): Int32Array {
 export function peakPick(request: PeakPickRequest): Int32Array;
 export function peakPick(...args: unknown[]): Int32Array {
   const r = requestOnly<PeakPickRequest>('peakPick', args);
+  assertFloat32Array('peakPick', r.values, 'values');
   // Each is a frame count that may legitimately be zero.
   assertNonNegativeSafeInteger('peakPick', r.preMax, 'preMax');
   assertNonNegativeSafeInteger('peakPick', r.postMax, 'postMax');
   assertNonNegativeSafeInteger('peakPick', r.preAvg, 'preAvg');
   assertNonNegativeSafeInteger('peakPick', r.postAvg, 'postAvg');
   assertNonNegativeSafeInteger('peakPick', r.wait, 'wait');
+  assertFloatValue('peakPick', r.delta, 'delta');
   return addon.peakPick(r.values, r.preMax, r.postMax, r.preAvg, r.postAvg, r.delta, r.wait);
 }
 
@@ -220,6 +225,7 @@ export function peakPick(...args: unknown[]): Int32Array {
 export function tempogram(request: TempogramRequest): Matrix2D;
 export function tempogram(...args: unknown[]): Matrix2D {
   const r = requestOnly<TempogramRequest>('tempogram', args);
+  assertFloat32Array('tempogram', r.onsetEnvelope, 'onsetEnvelope');
   const sampleRate = r.sampleRate ?? 22050;
   assertSampleRate('tempogram', sampleRate);
   assertPositiveInteger('tempogram', r.hopLength ?? 512, 'hopLength');
@@ -240,7 +246,8 @@ export function tempogram(...args: unknown[]): Matrix2D {
 export function cyclicTempogram(request: CyclicTempogramRequest): Matrix2D;
 export function cyclicTempogram(...args: unknown[]): Matrix2D {
   const r = requestOnly<CyclicTempogramRequest>('cyclicTempogram', args);
-  const sampleRate = r.sampleRate ?? 22050;
+  assertFloat32Array('cyclicTempogram', r.onsetEnvelope, 'onsetEnvelope');
+  const sampleRate = r.sampleRate;
   assertSampleRate('cyclicTempogram', sampleRate);
   assertPositiveInteger('cyclicTempogram', r.hopLength ?? 512, 'hopLength');
   assertPositiveInteger('cyclicTempogram', r.winLength ?? 384, 'winLength');
@@ -262,6 +269,7 @@ export function cyclicTempogram(...args: unknown[]): Matrix2D {
 export function plp(request: PlpRequest): Float32Array;
 export function plp(...args: unknown[]): Float32Array {
   const r = requestOnly<PlpRequest>('plp', args);
+  assertFloat32Array('plp', r.onsetEnvelope, 'onsetEnvelope');
   const sampleRate = r.sampleRate ?? 22050;
   assertSampleRate('plp', sampleRate);
   assertPositiveInteger('plp', r.hopLength ?? 512, 'hopLength');
@@ -325,6 +333,7 @@ export function onsetStrengthMulti(...args: unknown[]): Matrix2D {
 export function fourierTempogram(request: FourierTempogramRequest): Matrix2D;
 export function fourierTempogram(...args: unknown[]): Matrix2D {
   const r = requestOnly<FourierTempogramRequest>('fourierTempogram', args);
+  assertFloat32Array('fourierTempogram', r.onsetEnvelope, 'onsetEnvelope');
   const sampleRate = r.sampleRate ?? 22050;
   assertSampleRate('fourierTempogram', sampleRate);
   assertPositiveInteger('fourierTempogram', r.hopLength ?? 512, 'hopLength');

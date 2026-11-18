@@ -89,12 +89,12 @@ export function keyModeOrdinal(mode: unknown, field = 'key mode'): number {
 }
 
 /** Ordinal of a pitch class 0-11; names and non-integers are refused. */
-export function pitchClassOrdinal(root: unknown, field = 'pitch class'): number {
+export function pitchClassOrdinal(fnName: string, root: unknown, field: string): number {
   if (typeof root !== 'number') {
-    throw new TypeError(`${field} must be a pitch class number 0-11`);
+    throw new TypeError(`${fnName}: ${field} must be a pitch class number 0-11`);
   }
   if (!Number.isInteger(root) || root < 0 || root > 11) {
-    throw new RangeError(`${field} must be an integer in [0, 11]`);
+    throw new RangeError(`${fnName}: ${field} must be an integer in [0, 11]`);
   }
   return root;
 }

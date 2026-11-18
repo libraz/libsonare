@@ -6,6 +6,7 @@ import type { OptionsOf, ValidateOptions } from './validation.js';
 import {
   assertAudioInput,
   assertFiniteScalar,
+  assertFloat32Array,
   assertFloatFields,
   assertIntegralSampleRate,
   assertPositiveFloatValue,
@@ -20,8 +21,8 @@ import {
 export interface CqtToAudioRequest {
   /** CQT magnitude: rows = CQT bins, cols = frames. */
   magnitude: Matrix2D;
-  /** Default 22050. */
-  sampleRate?: number;
+  /** Sample rate of the audio the magnitude came from, in Hz. */
+  sampleRate: number;
   /** Hop length in samples. Default `512`. */
   hopLength?: number;
   /** Lowest bin frequency in Hz. Default C1 (32.70 Hz). */
@@ -70,9 +71,9 @@ export interface MelToAudioRequest extends MelToStftRequest {
 export interface GriffinLimRequest {
   /** STFT magnitude: rows = `nFft / 2 + 1` bins, cols = frames. */
   magnitude: Matrix2D;
-  /** Default 22050. */
-  sampleRate?: number;
-  /** FFT size in samples. Default `2048`. */
+  /** Sample rate of the audio the magnitude came from, in Hz. */
+  sampleRate: number;
+  /** FFT size the magnitude came from. Omitted, it is inferred as `(rows - 1) * 2`; a size that disagrees with the bin count is a `RangeError`. */
   nFft?: number;
   /** Hop length in samples. Default `512`. */
   hopLength?: number;
@@ -180,7 +181,7 @@ export function cqtToAudio(request: CqtToAudioRequest): Float32Array;
 export function cqtToAudio(...args: unknown[]): Float32Array {
   const r = requestOnly<CqtToAudioRequest>('cqtToAudio', args);
   assertMatrix2D('cqtToAudio', r.magnitude, 'magnitude', r.validate);
-  const sampleRate = r.sampleRate ?? 22050;
+  const sampleRate = r.sampleRate;
   assertSampleRate('cqtToAudio', sampleRate);
   // Positivity only: the core takes any positive hop and any positive iteration
   // count, and names the Griffin-Lim ceiling itself when one exceeds it.
@@ -205,7 +206,7 @@ export function vqtToAudio(request: VqtToAudioRequest): Float32Array;
 export function vqtToAudio(...args: unknown[]): Float32Array {
   const r = requestOnly<VqtToAudioRequest>('vqtToAudio', args);
   assertMatrix2D('vqtToAudio', r.magnitude, 'magnitude', r.validate);
-  const sampleRate = r.sampleRate ?? 22050;
+  const sampleRate = r.sampleRate;
   assertSampleRate('vqtToAudio', sampleRate);
   const hopLength = resolvePositiveIntegerOption('vqtToAudio', 'hopLength', r.hopLength, 512);
   const nIter = resolvePositiveIntegerOption('vqtToAudio', 'nIter', r.nIter, 32);
@@ -289,17 +290,25 @@ export function melToAudio(...args: unknown[]): Float32Array {
   );
 }
 
+/** A Griffin-Lim magnitude has `nFft / 2 + 1` rows, so an explicit size must agree with them. */
+function assertGriffinLimFftSize(nBins: number, nFft: number): void {
+  if (nFft !== (nBins - 1) * 2) {
+    throw new RangeError(
+      `griffinLim: nFft must equal (nBins - 1) * 2 (got ${nFft} for ${nBins} bins)`,
+    );
+  }
+}
+
 /** Reconstruct audio from an STFT magnitude matrix via Griffin-Lim. */
 export function griffinLim(request: GriffinLimRequest): Float32Array;
 export function griffinLim(...args: unknown[]): Float32Array {
   const r = requestOnly<GriffinLimRequest>('griffinLim', args);
   assertMatrix2D('griffinLim', r.magnitude, 'magnitude', r.validate);
-  const sampleRate = r.sampleRate ?? 22050;
+  const sampleRate = r.sampleRate;
   assertSampleRate('griffinLim', sampleRate);
-  // Positivity only: the core pairs the size with the bin count
-  // (`rows === nFft / 2 + 1`) rather than bounding it, and names that relation
-  // when it does not hold.
-  const nFft = resolvePositiveIntegerOption('griffinLim', 'nFft', r.nFft, 2048);
+  const nBins = r.magnitude.rows;
+  const nFft = resolvePositiveIntegerOption('griffinLim', 'nFft', r.nFft, (nBins - 1) * 2);
+  assertGriffinLimFftSize(nBins, nFft);
   const hopLength = resolvePositiveIntegerOption('griffinLim', 'hopLength', r.hopLength, 512);
   const nIter = resolvePositiveIntegerOption('griffinLim', 'nIter', r.nIter, 32);
   return addon.griffinLim(
@@ -434,6 +443,7 @@ export function chirp(...args: unknown[]): Float32Array {
 export function clicks(request: ClicksRequest): Float32Array;
 export function clicks(...args: unknown[]): Float32Array {
   const r = requestOnly<ClicksRequest>('clicks', args);
+  assertFloat32Array('clicks', r.times, 'times');
   // Integrality only, as `tone`: a generator's rate has no domain in the core.
   const sampleRate = r.sampleRate ?? 22050;
   assertIntegralSampleRate('clicks', sampleRate);

@@ -5,6 +5,7 @@ import type { VoicedFlags } from './public_types_spectral.js';
 import type { OptionsOf } from './validation.js';
 import {
   assertAudioInput,
+  assertFloat32Array,
   assertFrequencyBounds,
   requestOnly,
   sampleOneShot,
@@ -214,7 +215,7 @@ export function noteSegments(request: NoteSegmentsRequest): NoteSegment[];
 export function noteSegments(...args: unknown[]): NoteSegment[] {
   const r = requestOnly<NoteSegmentsRequest>('noteSegments', args);
   if (r.voiced == null && r.voicedProb == null) {
-    throw new TypeError('noteSegments: one of voiced and voicedProb is required');
+    throw new TypeError('noteSegments: one of voiced or voicedProb is required');
   }
   // The embind reader takes 0/1 bytes; voiced wins, so voicedProb is not sent beside it.
   const flags =
@@ -276,6 +277,7 @@ export interface EstimateTuningRequest extends ValidateOptions {
 export function pitchTuning(request: PitchTuningRequest): number;
 export function pitchTuning(...args: unknown[]): number {
   const r = requestOnly<PitchTuningRequest>('pitchTuning', args);
+  assertFloat32Array('pitchTuning', r.frequencies, 'frequencies');
   const binsPerOctave = r.binsPerOctave ?? 12;
   const bins = requireModule().pitchTuning(r.frequencies, r.resolution ?? 0.01, binsPerOctave);
   return tuningCentsFromNative((bins * 12) / binsPerOctave);

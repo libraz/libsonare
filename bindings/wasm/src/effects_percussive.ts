@@ -242,14 +242,15 @@ export function renderPercussiveEvents(...args: unknown[]): Float32Array {
   const samples = asFloat32(request.samples);
   assertAudioInput('renderPercussiveEvents', samples, request.sampleRate, request);
   assertPercussiveSeparation('renderPercussiveEvents', request);
-  const events = Array.isArray(request.events)
-    ? resolveEntryTimes(
-        'renderPercussiveEvents',
-        request.events,
-        'events',
-        request.sampleRate,
-        true,
-      )
-    : request.events;
+  if (!Array.isArray(request.events)) {
+    throw new TypeError('renderPercussiveEvents: events must be an array');
+  }
+  const events = resolveEntryTimes(
+    'renderPercussiveEvents',
+    request.events,
+    'events',
+    request.sampleRate,
+    true,
+  );
   return requireModule().renderPercussiveEvents(samples, request.sampleRate, events, request);
 }

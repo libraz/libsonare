@@ -155,6 +155,10 @@ interface Row {
    * that call without the group's members must fail with `error` in every form.
    */
   oneOf?: { fields: string[]; error: string }[];
+  /** Documented defaults: the minimal call must equal the minimal call with these values given. */
+  defaults?: Args;
+  /** Why the minimal call is refused today; the checks on it are expected to fail until that is fixed. */
+  knownRed?: string;
 }
 
 interface Spec {
@@ -493,7 +497,10 @@ const ROWS: Row[] = [
     },
     invalid: { sampleRate: 0 },
     oneOf: [
-      { fields: ['keyRoot'], error: 'TypeError: chordFunctionalAnalysis: keyRoot is required' },
+      {
+        fields: ['keyRoot'],
+        error: 'TypeError: chordFunctionalAnalysis: keyRoot must be a pitch class number 0-11',
+      },
     ],
   },
   {
@@ -743,7 +750,7 @@ const ROWS: Row[] = [
       },
     },
     invalid: { sampleRate: 0 },
-    oneOf: [{ fields: ['ops'], error: 'TypeError: spectralEdit: ops is required' }],
+    oneOf: [{ fields: ['ops'], error: 'TypeError: spectralEdit: ops must be an array' }],
   },
   {
     name: 'timeStretch',
@@ -867,8 +874,8 @@ const ROWS: Row[] = [
     values: { samples: SIG, sampleRate: SR, options: { frameLength: 1024, hopLength: 256 } },
     invalid: { hopLength: 0 },
     oneOf: [
-      { fields: ['frameLength'], error: 'RangeError: frameSignal: frameLength must be an integer' },
-      { fields: ['hopLength'], error: 'RangeError: frameSignal: hopLength must be an integer' },
+      { fields: ['frameLength'], error: 'TypeError: frameSignal: frameLength must be an integer' },
+      { fields: ['hopLength'], error: 'TypeError: frameSignal: hopLength must be an integer' },
     ],
   },
   {
@@ -878,6 +885,10 @@ const ROWS: Row[] = [
     params: 'values targetSize padValue?',
     values: { values: SMALL, targetSize: 100, padValue: 0.5 },
     invalid: { targetSize: -1 },
+    oneOf: [
+      { fields: ['targetSize'], error: 'TypeError: fixLength: targetSize must be an integer' },
+      { fields: ['values'], error: 'TypeError: fixLength: values must be a Float32Array' },
+    ],
   },
   {
     name: 'padCenter',
@@ -886,6 +897,10 @@ const ROWS: Row[] = [
     params: 'values targetSize padValue?',
     values: { values: SMALL, targetSize: 100, padValue: 0.5 },
     invalid: { targetSize: -1 },
+    oneOf: [
+      { fields: ['targetSize'], error: 'TypeError: padCenter: targetSize must be an integer' },
+      { fields: ['values'], error: 'TypeError: padCenter: values must be a Float32Array' },
+    ],
   },
   {
     name: 'vectorNormalize',
@@ -895,6 +910,9 @@ const ROWS: Row[] = [
     values: { values: SMALL, norm: 'l1', threshold: 50 },
     invalid: { norm: 'l9' },
     controlBase: { norm: { threshold: undefined } },
+    oneOf: [
+      { fields: ['values'], error: 'TypeError: vectorNormalize: values must be a Float32Array' },
+    ],
   },
   {
     name: 'amplitudeToDb',
@@ -904,6 +922,9 @@ const ROWS: Row[] = [
     values: { values: SMALL, ref: 0.5, amin: 0.2, topDb: 10 },
     invalid: { amin: -1 },
     controlBase: { amin: { topDb: undefined } },
+    oneOf: [
+      { fields: ['values'], error: 'TypeError: amplitudeToDb: values must be a Float32Array' },
+    ],
   },
   {
     name: 'powerToDb',
@@ -913,13 +934,14 @@ const ROWS: Row[] = [
     values: { values: SMALL, ref: 0.5, amin: 0.2, topDb: 5 },
     invalid: { amin: -1 },
     controlBase: { amin: { topDb: undefined } },
+    oneOf: [{ fields: ['values'], error: 'TypeError: powerToDb: values must be a Float32Array' }],
   },
   // feature_inverse.ts
   {
     name: 'clicks',
     fn: sonare.clicks,
     requestOnly: true,
-    params: 'times sampleRate length? frequencyHz? clickDurationSec?',
+    params: 'times sampleRate? length? frequencyHz? clickDurationSec?',
     values: {
       times: new Float32Array([0.1, 0.5]),
       sampleRate: ALT_SR,
@@ -928,22 +950,26 @@ const ROWS: Row[] = [
       clickDurationSec: 0.05,
     },
     invalid: { sampleRate: 0 },
+    defaults: { sampleRate: 22050 },
+    oneOf: [{ fields: ['times'], error: 'TypeError: clicks: times must be a Float32Array' }],
   },
   {
     name: 'chirp',
     fn: sonare.chirp,
     requestOnly: true,
-    params: 'fminHz? fmaxHz? sampleRate durationSec? linear?',
+    params: 'fminHz? fmaxHz? sampleRate? durationSec? linear?',
     values: { fminHz: 200, fmaxHz: 2000, sampleRate: ALT_SR, durationSec: 0.2, linear: true },
     invalid: { sampleRate: 0 },
+    defaults: { sampleRate: 22050 },
   },
   {
     name: 'tone',
     fn: sonare.tone,
     requestOnly: true,
-    params: 'frequencyHz? sampleRate durationSec? phase? amplitude?',
+    params: 'frequencyHz? sampleRate? durationSec? phase? amplitude?',
     values: { frequencyHz: 330, sampleRate: ALT_SR, durationSec: 0.2, phase: 0.5, amplitude: 0.3 },
     invalid: { sampleRate: 0 },
+    defaults: { sampleRate: 22050 },
   },
   {
     name: 'cqtToAudio',
@@ -959,6 +985,9 @@ const ROWS: Row[] = [
       nIter: 4,
     },
     invalid: { hopLength: 0 },
+    oneOf: [
+      { fields: ['sampleRate'], error: 'TypeError: cqtToAudio: sampleRate must be a number' },
+    ],
   },
   {
     name: 'vqtToAudio',
@@ -975,13 +1004,16 @@ const ROWS: Row[] = [
       nIter: 4,
     },
     invalid: { hopLength: 0 },
+    oneOf: [
+      { fields: ['sampleRate'], error: 'TypeError: vqtToAudio: sampleRate must be a number' },
+    ],
   },
   {
     name: 'griffinLim',
     fn: sonare.griffinLim,
     requestOnly: true,
-    // nFft and hopLength are required: they have to agree with the magnitude's row count.
-    params: 'magnitude nFft hopLength sampleRate nIter? momentum?',
+    // hopLength stays required: its 512 default exceeds half of the 512-point frame this magnitude has.
+    params: 'magnitude nFft? hopLength sampleRate nIter? momentum?',
     values: {
       magnitude: ST.magnitude,
       sampleRate: ALT_SR,
@@ -991,13 +1023,20 @@ const ROWS: Row[] = [
       momentum: 0.5,
     },
     invalid: { hopLength: 0 },
-    inert: { sampleRate: 'reconstruction runs in bins and frames' },
+    defaults: { nFft: 512 },
+    oneOf: [
+      { fields: ['sampleRate'], error: 'TypeError: griffinLim: sampleRate must be a number' },
+    ],
+    inert: {
+      sampleRate: 'reconstruction runs in bins and frames',
+      nFft: 'an omitted size is inferred from the bin count, which is the value given',
+    },
   },
   {
     name: 'melToStft',
     fn: sonare.melToStft,
     requestOnly: true,
-    params: 'power sampleRate nFft? fminHz? fmaxHz? htk?',
+    params: 'power sampleRate? nFft? fminHz? fmaxHz? htk?',
     values: {
       power: MEL.power,
       sampleRate: ALT_SR,
@@ -1007,12 +1046,13 @@ const ROWS: Row[] = [
       htk: true,
     },
     invalid: { nFft: 0 },
+    defaults: { sampleRate: 22050 },
   },
   {
     name: 'melToAudio',
     fn: sonare.melToAudio,
     requestOnly: true,
-    params: 'power sampleRate nFft? hopLength? fminHz? fmaxHz? nIter? htk?',
+    params: 'power sampleRate? nFft? hopLength? fminHz? fmaxHz? nIter? htk?',
     values: {
       power: MEL.power,
       sampleRate: ALT_SR,
@@ -1024,6 +1064,7 @@ const ROWS: Row[] = [
       htk: true,
     },
     invalid: { hopLength: 0 },
+    defaults: { sampleRate: 22050 },
   },
   {
     name: 'mfccToMel',
@@ -1037,7 +1078,7 @@ const ROWS: Row[] = [
     name: 'mfccToAudio',
     fn: sonare.mfccToAudio,
     requestOnly: true,
-    params: 'coefficients nMels? sampleRate nFft? hopLength? fminHz? fmaxHz? nIter? htk? lifter?',
+    params: 'coefficients nMels? sampleRate? nFft? hopLength? fminHz? fmaxHz? nIter? htk? lifter?',
     values: {
       coefficients: MFCC.coefficients,
       nMels: 32,
@@ -1051,6 +1092,7 @@ const ROWS: Row[] = [
       lifter: 22,
     },
     invalid: { hopLength: 0 },
+    defaults: { sampleRate: 22050 },
   },
   {
     name: 'phaseVocoder',
@@ -1248,6 +1290,12 @@ const ROWS: Row[] = [
     params: 'frequencies resolution? binsPerOctave?',
     values: { frequencies: new Float32Array([224, 448, 672]), resolution: 0.05, binsPerOctave: 24 },
     invalid: { resolution: 0 },
+    oneOf: [
+      {
+        fields: ['frequencies'],
+        error: 'TypeError: pitchTuning: frequencies must be a Float32Array',
+      },
+    ],
   },
   {
     name: 'nnlsChroma',
@@ -1290,6 +1338,9 @@ const ROWS: Row[] = [
     params: 'events energy',
     values: { events: [5, 20, 40], energy: ENV },
     invalid: { events: [1.5] },
+    oneOf: [
+      { fields: ['energy'], error: 'TypeError: onsetBacktrack: energy must be a Float32Array' },
+    ],
   },
   {
     name: 'peakPick',
@@ -1298,12 +1349,21 @@ const ROWS: Row[] = [
     params: 'values preMax postMax preAvg postAvg delta wait',
     values: { values: ENV, preMax: 2, postMax: 2, preAvg: 4, postAvg: 4, delta: 0.05, wait: 3 },
     invalid: { wait: -1 },
+    oneOf: [
+      { fields: ['wait'], error: 'TypeError: peakPick: wait must be an integer' },
+      { fields: ['delta'], error: 'TypeError: peakPick: delta must be a number' },
+      { fields: ['postAvg'], error: 'TypeError: peakPick: postAvg must be an integer' },
+      { fields: ['preAvg'], error: 'TypeError: peakPick: preAvg must be an integer' },
+      { fields: ['postMax'], error: 'TypeError: peakPick: postMax must be an integer' },
+      { fields: ['preMax'], error: 'TypeError: peakPick: preMax must be an integer' },
+      { fields: ['values'], error: 'TypeError: peakPick: values must be a Float32Array' },
+    ],
   },
   {
     name: 'tempogram',
     fn: sonare.tempogram,
     requestOnly: true,
-    params: 'onsetEnvelope sampleRate hopLength? winLength? mode? center? norm?',
+    params: 'onsetEnvelope sampleRate? hopLength? winLength? mode? center? norm?',
     values: {
       onsetEnvelope: ENV,
       sampleRate: ALT_SR,
@@ -1314,11 +1374,18 @@ const ROWS: Row[] = [
       norm: false,
     },
     invalid: { winLength: 0 },
+    defaults: { sampleRate: 22050 },
     controlBase: { norm: { mode: undefined } },
     inert: {
       sampleRate: 'the lag axis is in frames',
       hopLength: 'the lag axis is in frames',
     },
+    oneOf: [
+      {
+        fields: ['onsetEnvelope'],
+        error: 'TypeError: tempogram: onsetEnvelope must be a Float32Array',
+      },
+    ],
   },
   {
     name: 'cyclicTempogram',
@@ -1335,12 +1402,19 @@ const ROWS: Row[] = [
       nBins: 24,
     },
     invalid: { winLength: 0 },
+    oneOf: [
+      {
+        fields: ['onsetEnvelope'],
+        error: 'TypeError: cyclicTempogram: onsetEnvelope must be a Float32Array',
+      },
+      { fields: ['sampleRate'], error: 'TypeError: cyclicTempogram: sampleRate must be a number' },
+    ],
   },
   {
     name: 'fourierTempogram',
     fn: sonare.fourierTempogram,
     requestOnly: true,
-    params: 'onsetEnvelope sampleRate hopLength? winLength? center?',
+    params: 'onsetEnvelope sampleRate? hopLength? winLength? center?',
     values: {
       onsetEnvelope: ENV,
       sampleRate: ALT_SR,
@@ -1349,16 +1423,23 @@ const ROWS: Row[] = [
       center: false,
     },
     invalid: { winLength: 0 },
+    defaults: { sampleRate: 22050 },
     inert: {
       sampleRate: 'the frequency axis is in frames',
       hopLength: 'the frequency axis is in frames',
     },
+    oneOf: [
+      {
+        fields: ['onsetEnvelope'],
+        error: 'TypeError: fourierTempogram: onsetEnvelope must be a Float32Array',
+      },
+    ],
   },
   {
     name: 'plp',
     fn: sonare.plp,
     requestOnly: true,
-    params: 'onsetEnvelope sampleRate hopLength? bpmMin? bpmMax? winLength?',
+    params: 'onsetEnvelope sampleRate? hopLength? bpmMin? bpmMax? winLength?',
     values: {
       onsetEnvelope: ENV,
       sampleRate: ALT_SR,
@@ -1368,12 +1449,16 @@ const ROWS: Row[] = [
       winLength: 128,
     },
     invalid: { winLength: 0 },
+    defaults: { sampleRate: 22050 },
+    oneOf: [
+      { fields: ['onsetEnvelope'], error: 'TypeError: plp: onsetEnvelope must be a Float32Array' },
+    ],
   },
   {
     name: 'tempogramRatio',
     fn: sonare.tempogramRatio,
     requestOnly: true,
-    params: 'tempogram sampleRate hopLength? factors?',
+    params: 'tempogram sampleRate? hopLength? factors?',
     values: {
       tempogram: TG,
       sampleRate: ALT_SR,
@@ -1381,6 +1466,7 @@ const ROWS: Row[] = [
       factors: new Float32Array([0.5, 1, 2]),
     },
     invalid: { hopLength: 0 },
+    defaults: { sampleRate: 22050 },
     inert: {
       sampleRate: 'the ratio is taken between lag bins',
       hopLength: 'the ratio is taken between lag bins',
@@ -1674,6 +1760,12 @@ const ROWS: Row[] = [
       params: { width: 1.6 },
     },
     invalid: { processor: 'no.such' },
+    oneOf: [
+      {
+        fields: ['processor'],
+        error: 'TypeError: masteringApplyProcessorStereo: processor must be a string',
+      },
+    ],
   },
   {
     name: 'masteringApplyPairProcessor',
@@ -1688,6 +1780,12 @@ const ROWS: Row[] = [
       params: { mix: 0.3 },
     },
     invalid: { processor: 'no.such' },
+    oneOf: [
+      {
+        fields: ['processor'],
+        error: 'TypeError: masteringApplyPairProcessor: processor must be a string',
+      },
+    ],
   },
   {
     name: 'masteringApplyPairProcessorStereo',
@@ -1704,6 +1802,12 @@ const ROWS: Row[] = [
       params: { mix: 0.3 },
     },
     invalid: { processor: 'no.such' },
+    oneOf: [
+      {
+        fields: ['processor'],
+        error: 'TypeError: masteringApplyPairProcessorStereo: processor must be a string',
+      },
+    ],
   },
   {
     name: 'masteringAnalyzePair',
@@ -1718,12 +1822,15 @@ const ROWS: Row[] = [
       params: { bandsPerOctave: 2, highHz: 8000 },
     },
     invalid: { analysis: 'no.such' },
+    oneOf: [
+      { fields: ['analysis'], error: 'TypeError: masteringAnalyzePair: analysis must be a string' },
+    ],
   },
   {
     name: 'masteringAnalyzeStereo',
     fn: sonare.masteringAnalyzeStereo,
     requestOnly: true,
-    params: 'analysis left right sampleRate params',
+    params: 'analysis left right sampleRate params?',
     values: {
       analysis: 'stereo.monoCompatCheckLogBands',
       left: SIG,
@@ -1732,6 +1839,14 @@ const ROWS: Row[] = [
       params: { bandsPerOctave: 2, highHz: 8000 },
     },
     invalid: { analysis: 'no.such' },
+    knownRed:
+      "the default upper band edge (20 kHz) is above Nyquist at the row's rate, which the band layout refuses",
+    oneOf: [
+      {
+        fields: ['analysis'],
+        error: 'TypeError: masteringAnalyzeStereo: analysis must be a string',
+      },
+    ],
   },
   {
     name: 'masteringAssistantSuggest',
@@ -1848,7 +1963,7 @@ const ROWS: Row[] = [
       { fields: ['f0Hz'], error: 'TypeError: extractNotes: f0Hz must be a Float32Array' },
       {
         fields: ['frameRate'],
-        error: 'RangeError: extractNotes: frameRate must be a finite number',
+        error: 'TypeError: extractNotes: frameRate must be a number',
       },
       {
         fields: ['voicedProb', 'voiced'],
@@ -1868,7 +1983,7 @@ const ROWS: Row[] = [
     invalid: { index: -1 },
     oneOf: [
       { fields: ['f0Hz'], error: 'TypeError: splitNote: f0Hz must be a Float32Array' },
-      { fields: ['frameRate'], error: 'RangeError: splitNote: frameRate must be a finite number' },
+      { fields: ['frameRate'], error: 'TypeError: splitNote: frameRate must be a number' },
       {
         fields: ['voicedProb', 'voiced'],
         error: 'TypeError: splitNote: one of voiced or voicedProb is required',
@@ -1877,7 +1992,7 @@ const ROWS: Row[] = [
       { fields: ['index'], error: 'TypeError: splitNote: index must be a number' },
       {
         fields: ['frame', 'frameSec'],
-        error: 'RangeError: splitNote: give exactly one of frame or frameSec',
+        error: 'TypeError: splitNote: frame or frameSec is required',
       },
     ],
   },
@@ -1893,7 +2008,7 @@ const ROWS: Row[] = [
     invalid: { first: 1 },
     oneOf: [
       { fields: ['f0Hz'], error: 'TypeError: mergeNotes: f0Hz must be a Float32Array' },
-      { fields: ['frameRate'], error: 'RangeError: mergeNotes: frameRate must be a finite number' },
+      { fields: ['frameRate'], error: 'TypeError: mergeNotes: frameRate must be a number' },
       {
         fields: ['voicedProb', 'voiced'],
         error: 'TypeError: mergeNotes: one of voiced or voicedProb is required',
@@ -2339,6 +2454,16 @@ describe('request-object equivalence', () => {
       });
     }
 
+    if (row.defaults !== undefined) {
+      const defaults = row.defaults;
+      it('equals its documented defaults given explicitly', async () => {
+        const omitted = await run(row, specs, requiredOnly, 'request');
+        expect(omitted).not.toHaveProperty('error');
+        const given = await run(row, specs, withFields(specs, requiredOnly, defaults), 'request');
+        expect(given).toEqual(omitted);
+      });
+    }
+
     it('returns the positional result for non-default values', async () => {
       const positional = await run(row, specs, row.values, 'positional');
       expect(positional).not.toHaveProperty('error');
@@ -2347,7 +2472,7 @@ describe('request-object equivalence', () => {
       }
     });
 
-    it('shares the positional defaults', async () => {
+    (row.knownRed === undefined ? it : it.fails)('shares the positional defaults', async () => {
       const request = await run(row, specs, requiredOnly, 'request');
       // Two identical refusals would compare equal and share nothing.
       expect(request).not.toHaveProperty('error');

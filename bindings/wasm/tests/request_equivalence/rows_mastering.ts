@@ -100,6 +100,12 @@ export const ROWS: Row[] = [
       params: { width: 1.6 },
     },
     invalid: { processor: 'no.such' },
+    oneOf: [
+      {
+        fields: ['processor'],
+        error: 'TypeError: masteringApplyProcessorStereo: processor must be a string',
+      },
+    ],
   },
   {
     name: 'masteringApplyPairProcessor',
@@ -114,6 +120,12 @@ export const ROWS: Row[] = [
       params: { mix: 0.3 },
     },
     invalid: { processor: 'no.such' },
+    oneOf: [
+      {
+        fields: ['processor'],
+        error: 'TypeError: masteringApplyPairProcessor: processor must be a string',
+      },
+    ],
   },
   {
     name: 'masteringApplyPairProcessorStereo',
@@ -130,6 +142,12 @@ export const ROWS: Row[] = [
       params: { mix: 0.3 },
     },
     invalid: { processor: 'no.such' },
+    oneOf: [
+      {
+        fields: ['processor'],
+        error: 'TypeError: masteringApplyPairProcessorStereo: processor must be a string',
+      },
+    ],
   },
   {
     name: 'masteringAnalyzePair',
@@ -144,12 +162,15 @@ export const ROWS: Row[] = [
       params: { bandsPerOctave: 2, highHz: 8000 },
     },
     invalid: { analysis: 'no.such' },
+    oneOf: [
+      { fields: ['analysis'], error: 'TypeError: masteringAnalyzePair: analysis must be a string' },
+    ],
   },
   {
     name: 'masteringAnalyzeStereo',
     fn: sonare.masteringAnalyzeStereo,
     form: 'requestOnly',
-    params: 'analysis left right sampleRate params',
+    params: 'analysis left right sampleRate params?',
     values: {
       analysis: 'stereo.monoCompatCheckLogBands',
       left: SIG,
@@ -158,6 +179,14 @@ export const ROWS: Row[] = [
       params: { bandsPerOctave: 2, highHz: 8000 },
     },
     invalid: { analysis: 'no.such' },
+    knownRed:
+      "the default upper band edge (20 kHz) is above Nyquist at the row's rate, which the band layout refuses",
+    oneOf: [
+      {
+        fields: ['analysis'],
+        error: 'TypeError: masteringAnalyzeStereo: analysis must be a string',
+      },
+    ],
   },
   {
     name: 'masteringAssistantSuggest',

@@ -16,6 +16,7 @@ import type { VoicedFlags } from './types_notes.js';
 import type { OptionsOf } from './validation.js';
 import {
   assertAudioInput,
+  assertFloat32Array,
   assertFrequencyBounds,
   assertPositiveFloatValue,
   assertPositiveInteger,
@@ -490,6 +491,7 @@ export function vqt(...args: unknown[]): CqtResult {
 export function pitchTuning(request: PitchTuningRequest): number;
 export function pitchTuning(...args: unknown[]): number {
   const r = requestOnly<PitchTuningRequest>('pitchTuning', args);
+  assertFloat32Array('pitchTuning', r.frequencies, 'frequencies');
   const binsPerOctave = r.binsPerOctave ?? 12;
   assertPositiveInteger('pitchTuning', binsPerOctave, 'binsPerOctave');
   return nativeTuningToCents(
@@ -647,7 +649,7 @@ export function noteSegments(...args: unknown[]): NoteSegment[] {
     referenceHz !== undefined ||
     voicedThreshold !== undefined;
   if (r.voiced == null && r.voicedProb == null) {
-    throw new TypeError('noteSegments: one of voiced and voicedProb is required');
+    throw new TypeError('noteSegments: one of voiced or voicedProb is required');
   }
   // The native reader takes 0/1 bytes; voiced wins, so voicedProb is not sent beside it.
   const flags = r.voiced != null ? Uint8Array.from(toVoicedInt32('noteSegments', r.voiced)) : null;

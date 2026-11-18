@@ -281,6 +281,7 @@ export function masteringApplyProcessorStereo<P extends SoloProcessor>(
   const r = requestOnly<MasteringApplyProcessorStereoRequest>('masteringApplyProcessorStereo', [
     request,
   ]);
+  assertString('masteringApplyProcessorStereo', r.processor, 'processor');
   assertAudioInput('masteringApplyProcessorStereo', r.left, r.sampleRate, r, 'left');
   assertAudioInput('masteringApplyProcessorStereo', r.right, r.sampleRate, r, 'right');
   if (r.left.length !== r.right.length) {
@@ -331,6 +332,7 @@ export function masteringApplyPairProcessor<P extends PairProcessor>(
     request,
   ]);
   const fn = 'masteringApplyPairProcessor';
+  assertString(fn, r.processor, 'processor');
   const referenceRate = assertPairAudio(fn, r, ['source', r.source], ['reference', r.reference]);
   const result = addon.masteringPairProcess(
     r.processor,
@@ -358,6 +360,7 @@ export function masteringApplyPairProcessorStereo(
     [request],
   );
   const fn = 'masteringApplyPairProcessorStereo';
+  assertString(fn, r.processor, 'processor');
   assertAudioInput(fn, r.sourceLeft, r.sampleRate, r, 'sourceLeft');
   assertAudioInput(fn, r.sourceRight, r.sampleRate, r, 'sourceRight');
   const referenceRate = r.referenceSampleRate ?? r.sampleRate;
@@ -396,6 +399,7 @@ export function masteringAnalyzePair<A extends PairAnalysis>(
 ): PairAnalysisResultMap[A] {
   const r = requestOnly<MasteringAnalyzePairRequest>('masteringAnalyzePair', [request]);
   const fn = 'masteringAnalyzePair';
+  assertString(fn, r.analysis, 'analysis');
   const referenceRate = assertPairAudio(fn, r, ['source', r.source], ['reference', r.reference]);
   return parseRecordJson(
     addon.masteringPairAnalyze(
@@ -421,6 +425,7 @@ export function masteringAnalyzeStereo<A extends StereoAnalysis>(
 ): StereoAnalysisResultMap[A] {
   const r = requestOnly<MasteringAnalyzeStereoRequest>('masteringAnalyzeStereo', [request]);
   const fn = 'masteringAnalyzeStereo';
+  assertString(fn, r.analysis, 'analysis');
   assertAudioInput(fn, r.left, r.sampleRate, r, 'left');
   assertAudioInput(fn, r.right, r.sampleRate, r, 'right');
   return parseRecordJson(

@@ -542,6 +542,19 @@ describe('Matrix2D results and inputs', () => {
         nIter: 2,
       }),
     ).toBeInstanceOf(Float32Array);
+    expect(() =>
+      sonare.griffinLim({
+        magnitude: stftResult.magnitude,
+        sampleRate,
+        nFft: 1024,
+        hopLength: 256,
+        nIter: 2,
+      }),
+    ).toThrow(
+      new RangeError(
+        `griffinLim: nFft must equal (nBins - 1) * 2 (got 1024 for ${stftResult.magnitude.rows} bins)`,
+      ),
+    );
     expect(
       sonare.mfccToAudio({
         coefficients: mfccResult.coefficients,
@@ -566,11 +579,11 @@ describe('Matrix2D results and inputs', () => {
     ['pcen', 'values', {}],
     ['melToStft', 'power', { nFft: 512 }],
     ['melToAudio', 'power', { nFft: 512 }],
-    ['griffinLim', 'magnitude', { nFft: 512 }],
+    ['griffinLim', 'magnitude', { sampleRate, nFft: 512 }],
     ['mfccToMel', 'coefficients', {}],
     ['mfccToAudio', 'coefficients', {}],
-    ['cqtToAudio', 'magnitude', {}],
-    ['vqtToAudio', 'magnitude', {}],
+    ['cqtToAudio', 'magnitude', { sampleRate }],
+    ['vqtToAudio', 'magnitude', { sampleRate }],
     ['tonnetz', 'chromagram', {}],
     ['segmentRecurrenceMatrix', 'data', {}],
     ['segmentAgglomerative', 'data', { k: 2 }],
@@ -598,7 +611,10 @@ describe('Matrix2D results and inputs', () => {
 
   it('refuses the old dimension fields beside a matrix', () => {
     expectThrows(() => api.melDelta({ features, nFeatures: 2, nFrames: 8 }), TypeError);
-    expectThrows(() => api.cqtToAudio({ magnitude: features, nBins: 2, nFrames: 8 }), TypeError);
+    expectThrows(
+      () => api.cqtToAudio({ magnitude: features, sampleRate, nBins: 2, nFrames: 8 }),
+      TypeError,
+    );
     expectThrows(() => api.mfccToMel({ coefficients: features, nMfcc: 2, nFrames: 8 }), TypeError);
     expectThrows(() => api.tonnetz({ chromagram: features, nChroma: 2, nFrames: 8 }), TypeError);
     expectThrows(
@@ -922,7 +938,7 @@ describe('noteSegments voicing input', () => {
 
   it('refuses a call with neither voiced nor voicedProb by name', () => {
     expect(() => api.noteSegments({ f0Hz, frameRate: 100 } as never)).toThrow(
-      /one of voiced and voicedProb is required/,
+      /one of voiced or voicedProb is required/,
     );
     expect(() => api.noteSegments({ f0Hz, frameRate: 100 } as never)).toThrow(TypeError);
   });

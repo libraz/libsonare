@@ -12,6 +12,8 @@ import {
   assertAudioInput,
   assertAudioSamples,
   assertFiniteScalar,
+  assertFloat32Array,
+  assertIntegerValue,
   assertPositiveInteger,
   requestOnly,
   resolveOptionalNonNegative,
@@ -343,6 +345,8 @@ export function frameSignal(...args: unknown[]): Matrix2D {
   const request = sampleOneShot<FrameSignalRequest>('frameSignal', args);
   assertAudioInput('frameSignal', request.samples, request.sampleRate, request);
   // Both positive, as the sibling framing entries; neither has a default.
+  assertIntegerValue('frameSignal', request.frameLength, 'frameLength');
+  assertIntegerValue('frameSignal', request.hopLength, 'hopLength');
   assertPositiveInteger('frameSignal', request.frameLength, 'frameLength');
   assertPositiveInteger('frameSignal', request.hopLength, 'hopLength');
   const r = addon.frameSignal(request.samples, request.frameLength, request.hopLength);
@@ -368,6 +372,8 @@ export function frameSignal(...args: unknown[]): Matrix2D {
 export function padCenter(request: PadCenterRequest): Float32Array;
 export function padCenter(...args: unknown[]): Float32Array {
   const r = requestOnly<PadCenterRequest>('padCenter', args);
+  assertFloat32Array('padCenter', r.values, 'values');
+  assertIntegerValue('padCenter', r.targetSize, 'targetSize');
   return addon.padCenter(r.values, r.targetSize, r.padValue ?? 0);
 }
 
@@ -389,6 +395,8 @@ export function padCenter(...args: unknown[]): Float32Array {
 export function fixLength(request: FixLengthRequest): Float32Array;
 export function fixLength(...args: unknown[]): Float32Array {
   const r = requestOnly<FixLengthRequest>('fixLength', args);
+  assertFloat32Array('fixLength', r.values, 'values');
+  assertIntegerValue('fixLength', r.targetSize, 'targetSize');
   return addon.fixLength(r.values, r.targetSize, r.padValue ?? 0);
 }
 
@@ -412,6 +420,7 @@ export function fixFrames(...args: unknown[]): Int32Array {
 export function vectorNormalize(request: VectorNormalizeRequest): Float32Array;
 export function vectorNormalize(...args: unknown[]): Float32Array {
   const r = requestOnly<VectorNormalizeRequest>('vectorNormalize', args);
+  assertFloat32Array('vectorNormalize', r.values, 'values');
   const norm = r.norm ?? 'max';
   if (typeof norm !== 'string') {
     throw new TypeError('vectorNormalize: norm must be a string');

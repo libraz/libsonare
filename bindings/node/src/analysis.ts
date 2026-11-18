@@ -1387,9 +1387,7 @@ export function chordFunctionalAnalysis(
 ): FunctionalChord[];
 export function chordFunctionalAnalysis(...args: unknown[]): FunctionalChord[] {
   const request = audioCall<ChordFunctionalAnalysisRequest>('chordFunctionalAnalysis', args);
-  if (request.keyRoot === undefined || request.keyRoot === null) {
-    throw new TypeError('chordFunctionalAnalysis: keyRoot is required');
-  }
+  assertPitchClass('chordFunctionalAnalysis', request.keyRoot, 'keyRoot');
   const p = resolveChordParams('chordFunctionalAnalysis', request);
   const analysed: { chords: Native[]; roman: string[]; functions: ChordFunction[] } =
     addon.chordFunctionalAnalysis(

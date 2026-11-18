@@ -151,7 +151,7 @@ describe('an omitted request field resolves to its documented default', () => {
   };
 
   it('vqtToAudio reconstructs identically with every optional field omitted or spelled out', () => {
-    const omitted = vqtToAudio({ magnitude });
+    const omitted = vqtToAudio({ magnitude, sampleRate: 22050 });
     const explicit = vqtToAudio({
       magnitude,
       sampleRate: 22050,
@@ -165,8 +165,8 @@ describe('an omitted request field resolves to its documented default', () => {
   it('vqtToAudio still forwards the fields the request carries', () => {
     // Keeps the equality above from passing for the wrong reason: a field the
     // reconstruction can observe has to change the result.
-    const base = vqtToAudio({ magnitude });
-    const wider = vqtToAudio({ magnitude, binsPerOctave: 24 });
+    const base = vqtToAudio({ magnitude, sampleRate: 22050 });
+    const wider = vqtToAudio({ magnitude, sampleRate: 22050, binsPerOctave: 24 });
     expect(Array.from(wider)).not.toEqual(Array.from(base));
   });
 });

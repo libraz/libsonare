@@ -1,6 +1,6 @@
 import { resolveIntegerOption, resolvePositiveIntegerOption } from './internal/feature_options.js';
 import { addon } from './native.js';
-import { assertPositiveInteger, requestOnly } from './validation.js';
+import { assertFloat32Array, assertPositiveInteger, requestOnly } from './validation.js';
 
 /** Request for {@link powerToDb}. */
 export interface PowerToDbRequest {
@@ -190,6 +190,7 @@ export function samplesToFrames(samples: number, hopLength = 512, nFft?: number)
 export function powerToDb(request: PowerToDbRequest): Float32Array;
 export function powerToDb(...args: unknown[]): Float32Array {
   const r = requestOnly<PowerToDbRequest>('powerToDb', args);
+  assertFloat32Array('powerToDb', r.values, 'values');
   return addon.powerToDb(r.values, r.ref ?? 1, r.amin ?? 1e-10, r.topDb ?? 80);
 }
 
@@ -197,6 +198,7 @@ export function powerToDb(...args: unknown[]): Float32Array {
 export function amplitudeToDb(request: AmplitudeToDbRequest): Float32Array;
 export function amplitudeToDb(...args: unknown[]): Float32Array {
   const r = requestOnly<AmplitudeToDbRequest>('amplitudeToDb', args);
+  assertFloat32Array('amplitudeToDb', r.values, 'values');
   return addon.amplitudeToDb(r.values, r.ref ?? 1, r.amin ?? 1e-5, r.topDb ?? 80);
 }
 

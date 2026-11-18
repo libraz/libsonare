@@ -29380,3 +29380,88 @@ domain = "mastering"
 rule = "config-keys"
 entry = "./analysis"
 test = "bindings/wasm/tests/surface/mastering-chain.test.ts::the core refuses %s as InvalidFormat"
+
+[[entry]]
+kind = "field"
+old = "CqtToAudioRequest.sampleRate"
+changed = "required (was optional with a 22050 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/request_equivalence/rows_features.ts::TypeError: cqtToAudio: sampleRate must be a number"
+
+[[entry]]
+kind = "field"
+old = "CqtToAudioRequest.sampleRate"
+changed = "required (was optional with a 22050 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+entry = "./analysis"
+test = "bindings/wasm/tests/request_equivalence/rows_features.ts::TypeError: cqtToAudio: sampleRate must be a number"
+
+[[entry]]
+kind = "field"
+old = "CyclicTempogramRequest.sampleRate"
+changed = "required (was optional with a 22050 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/request_equivalence/rows_features.ts::TypeError: cyclicTempogram: sampleRate must be a number"
+
+[[entry]]
+kind = "field"
+old = "CyclicTempogramRequest.sampleRate"
+changed = "required (was optional with a 22050 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+entry = "./analysis"
+test = "bindings/wasm/tests/request_equivalence/rows_features.ts::TypeError: cyclicTempogram: sampleRate must be a number"
+
+[[entry]]
+kind = "field"
+old = "GriffinLimRequest.sampleRate"
+changed = "required (was optional with a 22050 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/request_equivalence/rows_spectral.ts::TypeError: griffinLim: sampleRate must be a number"
+
+[[entry]]
+kind = "field"
+old = "GriffinLimRequest.sampleRate"
+changed = "required (was optional with a 22050 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+entry = "./analysis"
+test = "bindings/wasm/tests/request_equivalence/rows_spectral.ts::TypeError: griffinLim: sampleRate must be a number"
+
+[[entry]]
+kind = "field"
+old = "VqtToAudioRequest.sampleRate"
+changed = "required (was optional with a 22050 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/request_equivalence/rows_features.ts::TypeError: vqtToAudio: sampleRate must be a number"
+
+[[entry]]
+kind = "field"
+old = "VqtToAudioRequest.sampleRate"
+changed = "required (was optional with a 22050 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+entry = "./analysis"
+test = "bindings/wasm/tests/request_equivalence/rows_features.ts::TypeError: vqtToAudio: sampleRate must be a number"
+
+[[entry]]
+kind = "field"
+old = "GriffinLimRequest.nFft"
+changed = "omitted, inferred from the magnitude's bin count as (rows - 1) * 2 (was a 2048 default); a size that disagrees with the bin count is a RangeError"
+domain = "analysis"
+rule = "individual"
+test = "bindings/wasm/tests/surface/analysis-features.test.ts::griffinLim: nFft must equal (nBins - 1) * 2"
+
+[[entry]]
+kind = "field"
+old = "GriffinLimRequest.nFft"
+changed = "omitted, inferred from the magnitude's bin count as (rows - 1) * 2 (was a 2048 default); a size that disagrees with the bin count is a RangeError"
+domain = "analysis"
+rule = "individual"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/analysis-features.test.ts::griffinLim: nFft must equal (nBins - 1) * 2"

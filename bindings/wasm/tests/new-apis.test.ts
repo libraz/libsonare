@@ -1616,6 +1616,7 @@ describe('v1.2 feature additions (WASM)', () => {
             rows: cqtResult.magnitude.rows,
             cols: cqtResult.magnitude.cols,
           },
+          sampleRate: SR,
         }),
       ).toThrow(/length/);
       expect(() =>
