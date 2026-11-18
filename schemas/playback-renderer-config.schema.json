@@ -11,14 +11,10 @@
       "additionalProperties": false,
       "properties": {
         "distanceM": {
-          "type": [
-            "number",
-            "null"
-          ],
+          "type": "number",
           "minimum": 0.1,
           "maximum": 30,
-          "default": null,
-          "description": "Listener distance in metres. Prepare key. null disables distance compensation for this speaker."
+          "description": "Listener distance in metres. Prepare key. Absent disables distance compensation for this speaker."
         },
         "trimDb": {
           "type": "number",
@@ -72,18 +68,14 @@
           "description": "Prepare key. auto follows the channel count of each process call (1, 2, 6 or 8)."
         },
         "channelMap": {
-          "type": [
-            "array",
-            "null"
-          ],
+          "type": "array",
           "items": {
             "$ref": "#/$defs/role"
           },
           "minItems": 1,
           "maxItems": 8,
           "uniqueItems": true,
-          "default": null,
-          "description": "Prepare key. Role of each input channel, covering the layout's roles exactly once. null means canonical order. Requires a fixed layout."
+          "description": "Prepare key. Role of each input channel, covering the layout's roles exactly once. Absent means canonical order. Requires a fixed layout."
         }
       },
       "if": {
@@ -102,10 +94,10 @@
         }
       },
       "else": {
-        "properties": {
-          "channelMap": {
-            "type": "null"
-          }
+        "not": {
+          "required": [
+            "channelMap"
+          ]
         }
       }
     },
@@ -305,14 +297,10 @@
       "additionalProperties": false,
       "properties": {
         "programLufs": {
-          "type": [
-            "number",
-            "null"
-          ],
+          "type": "number",
           "minimum": -70,
           "maximum": 0,
-          "default": null,
-          "description": "Realtime key. Measured program loudness; null means no alignment gain."
+          "description": "Realtime key. Measured program loudness; absent means no alignment gain."
         },
         "targetLufs": {
           "type": "number",
@@ -384,12 +372,12 @@
           "default": true,
           "description": "Realtime key. The latency does not change."
         },
-        "ceilingDbtp": {
+        "ceilingDb": {
           "type": "number",
           "minimum": -12,
           "maximum": 0,
           "default": -1,
-          "description": "Realtime key."
+          "description": "Realtime key. Sample-peak ceiling in dBFS."
         }
       }
     }
