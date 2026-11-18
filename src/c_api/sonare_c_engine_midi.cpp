@@ -1231,10 +1231,11 @@ SonareError sonare_engine_drain_external_midi(SonareRealtimeEngine* engine,
                                               SonareExternalMidiEvent* out, size_t max_events,
                                               size_t* out_count) {
   SONARE_C_API_ENTRY;
-  if (!engine || !out || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!engine || !out_count || (max_events > 0 && !out)) return SONARE_ERROR_INVALID_PARAMETER;
   // Initialise the count before any early error return so a defensive consumer
   // never reads an uninitialised value on the rejected-buffer path.
   *out_count = 0;
+  if (max_events == 0) return SONARE_OK;
   // A single queue record lowers to at most this many MIDI-1 messages, so the
   // buffer must hold that many to guarantee forward progress without losing a
   // record. Read from the shared lowering type so it cannot drift from it.

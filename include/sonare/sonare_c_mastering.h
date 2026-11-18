@@ -962,7 +962,8 @@ typedef struct {
 
 /// @brief Creates a prepared equalizer handle.
 /// @param sample_rate Processing sample rate; must be positive.
-/// @param max_block_size Maximum number of frames accepted by @ref sonare_eq_process.
+/// @param max_block_size Maximum number of frames accepted by @ref sonare_eq_process; 0 selects
+///   the library default (512 frames) and a negative value is refused.
 /// @return A handle, or NULL when the arguments are invalid or allocation fails. The caller owns
 ///   it and must release it with @ref sonare_eq_destroy, which is what invalidates it; no other
 ///   call does.
@@ -1131,6 +1132,8 @@ SonareStreamingMasteringChain* sonare_streaming_mastering_chain_create_ex(
     float loudness_static_gain_peak_db);
 
 /// @brief Prepare with sample rate, max block size, and channel count (1 or 2).
+/// @details @p max_block_size 0 selects the library default (128 frames); a negative value
+///          is refused with SONARE_ERROR_INVALID_PARAMETER.
 SonareError sonare_streaming_mastering_chain_prepare(SonareStreamingMasteringChain* handle,
                                                      int sample_rate, int max_block_size,
                                                      int num_channels);

@@ -80,7 +80,7 @@ const REMOVED_FILTERS: ReadonlyArray<{
     file: 'src/wasm/bindings/realtime/engine.cpp',
     fields: ['requested', 'command_capacity', 'telemetry_capacity'],
     reason:
-      'The engine command and telemetry queue depths, whose 0 selects the internal minimum. Reachable only from this surface: the C ABI declares both as size_t, so only the WASM facade can express the negative that used to read as the sentinel.',
+      'The engine command and telemetry queue depths, whose 0 selects the library default. Reachable only from this surface: the C ABI declares both as size_t, so only the WASM facade can express the negative that used to read as the sentinel.',
   },
   {
     file: 'src/wasm/bindings/analysis/room_acoustics.cpp',
@@ -140,7 +140,7 @@ const REMOVED_FILTERS: ReadonlyArray<{
     file: 'src/c_api/project_bounce.cpp',
     fields: ['gain', 'attack_ms', 'decay_ms', 'sustain', 'release_ms', 'polyphony'],
     reason:
-      'The built-in synth patch fields and the SF2 player config, every one documented as "0 => default". clamp_synth_config reads a non-positive or non-finite field as the default and reports nothing, so a request that got that far came back as a successful call at a level the caller never chose. Only these fields are asserted absent: block_size, num_channels and sample_rate filter on `> 0` in this file under a documented `<= 0` contract and are answered in NOT_SENTINEL_FILTERS.',
+      'The built-in synth patch fields and the SF2 player config, every one documented as "0 => default". clamp_synth_config reads a non-positive or non-finite field as the default and reports nothing, so a request that got that far came back as a successful call at a level the caller never chose. Only these fields are asserted absent: block_size, num_channels and sample_rate read only 0 as the default and refuse a negative value.',
   },
 ];
 
@@ -427,18 +427,6 @@ const NOT_SENTINEL_FILTERS: ReadonlyMap<string, string> = new Map([
   [
     'bindings/node/src/addon/sonare_wrap_synth_patch.h:num_mod_routings',
     'The routing count on a patch the core produced, sizing the JS array it is copied into.',
-  ],
-  [
-    'src/c_api/project_bounce.cpp:block_size',
-    'The project bounce documents this one as "<= 0 => 128", so a non-positive value is a documented default request rather than a mis-spelled sentinel.',
-  ],
-  [
-    'src/c_api/project_bounce.cpp:num_channels',
-    'Documented as "<= 0 => 2", and the resolved width is then refused unless it is 1 or 2.',
-  ],
-  [
-    'src/c_api/project_bounce.cpp:sample_rate',
-    'Documented as "<= 0 => the project\'s", and any positive value other than the project\'s own rate is refused.',
   ],
   [
     'src/c_api/project_bounce_mixer.cpp:stage_latency_q8',

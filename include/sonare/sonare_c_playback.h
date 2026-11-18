@@ -75,7 +75,8 @@ void sonare_hrtf_set_destroy(SonareHrtfSet* set);
 ///          SONARE_ERROR_INVALID_PARAMETER. For a headphones target @p hrtf may
 ///          be NULL on native builds (the built-in set is used); WASM builds
 ///          require it. For a speakers target @p hrtf is ignored.
-///          @p max_block_size bounds the frames of every `_process_*` call.
+///          @p max_block_size bounds the frames of every `_process_*` call; 0 selects the
+///          library default (1024 frames) and a negative value is refused.
 /// @note Release @p out with @ref sonare_playback_renderer_destroy; it is a
 ///       handle, not a sonare_free_* buffer.
 SonareError sonare_playback_renderer_create_json(const char* config_json, const SonareHrtfSet* hrtf,

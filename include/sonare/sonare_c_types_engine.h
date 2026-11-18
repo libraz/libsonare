@@ -468,7 +468,11 @@ typedef struct {
 
 typedef struct {
   int64_t total_frames;
+  /* 0 selects the default offline block: 128, capped at the prepared maximum
+     block size. Negative is refused. */
   int block_size;
+  /* Required, positive; mono, stereo, 5.1 or 7.1. Left at 0 by
+     sonare_engine_bounce_options_default, so the caller must set it. */
   int num_channels;
   /* Output sample rate. 0 keeps the source rate, so nothing is resampled; any
      other value resamples to it. The result reports the rate actually returned. */
@@ -504,7 +508,10 @@ typedef struct {
 
 typedef struct {
   int64_t total_frames;
+  /* 0 selects the default offline block: 128, capped at the prepared maximum
+     block size. Negative is refused. */
   int block_size;
+  /* Required, positive. */
   int num_channels;
   uint32_t clip_id;
   double start_ppq;

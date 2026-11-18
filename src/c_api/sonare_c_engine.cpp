@@ -147,6 +147,11 @@ SonareError sonare_engine_prepare(SonareRealtimeEngine* engine, double sample_ra
                                   int max_block_size, size_t command_capacity,
                                   size_t telemetry_capacity) {
   SONARE_C_API_ENTRY;
+  if (max_block_size == 0) max_block_size = engine::RealtimeEngine::kDefaultMaxBlock;
+  if (command_capacity == 0) command_capacity = engine::RealtimeEngine::kDefaultCommandCapacity;
+  if (telemetry_capacity == 0) {
+    telemetry_capacity = engine::RealtimeEngine::kDefaultTelemetryCapacity;
+  }
   if (!engine || !is_supported_sample_rate(sample_rate) ||
       !is_valid_realtime_block_size(max_block_size) ||
       !capacities_in_range(command_capacity, telemetry_capacity)) {
@@ -162,6 +167,12 @@ SonareError sonare_engine_prepare_with_channels(SonareRealtimeEngine* engine, do
                                                 int max_block_size, size_t command_capacity,
                                                 size_t telemetry_capacity, int max_channels) {
   SONARE_C_API_ENTRY;
+  if (max_block_size == 0) max_block_size = engine::RealtimeEngine::kDefaultMaxBlock;
+  if (command_capacity == 0) command_capacity = engine::RealtimeEngine::kDefaultCommandCapacity;
+  if (telemetry_capacity == 0) {
+    telemetry_capacity = engine::RealtimeEngine::kDefaultTelemetryCapacity;
+  }
+  if (max_channels == 0) max_channels = engine::RealtimeEngine::kDefaultMaxChannels;
   if (!engine || !is_supported_sample_rate(sample_rate) ||
       !is_valid_realtime_block_size(max_block_size) || max_channels <= 0 ||
       static_cast<size_t>(max_channels) > engine::RealtimeEngine::kMaxAudioChannels ||
@@ -759,8 +770,9 @@ SonareError sonare_engine_reset_processor_state(SonareRealtimeEngine* engine,
 SonareError sonare_engine_prime_offline_parameters(SonareRealtimeEngine* engine, int num_channels,
                                                    int block_size) {
   SONARE_C_API_ENTRY;
-  if (!engine || num_channels <= 0 || block_size <= 0) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!engine || num_channels <= 0 || block_size < 0) return SONARE_ERROR_INVALID_PARAMETER;
   if (engine->engine.max_block_size() <= 0) return SONARE_ERROR_INVALID_STATE;
+  block_size = resolve_offline_block(engine->engine, block_size);
   if (num_channels > engine->engine.prepared_channels() ||
       block_size > engine->engine.max_block_size()) {
     return SONARE_ERROR_INVALID_PARAMETER;

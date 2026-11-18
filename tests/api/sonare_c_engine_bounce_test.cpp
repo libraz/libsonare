@@ -270,6 +270,7 @@ TEST_CASE("engine-owned offline results reject shapes above the allocation budge
 
   SonareEngineBounceOptions bounce{};
   REQUIRE(sonare_engine_bounce_options_default(&bounce) == SONARE_OK);
+  bounce.num_channels = 2;
   bounce.total_frames = std::numeric_limits<int64_t>::max();
   SonareEngineBounceResult bounce_result{};
   bounce_result.interleaved = reinterpret_cast<float*>(0x1);
@@ -355,6 +356,7 @@ TEST_CASE("the C bounce entry point charges the budget for the dither request", 
 
   SonareEngineBounceOptions options{};
   REQUIRE(sonare_engine_bounce_options_default(&options) == SONARE_OK);
+  options.num_channels = 2;
   options.total_frames = 40'000'000;
 
   SonareEngineBounceResult result{};
@@ -390,6 +392,7 @@ TEST_CASE("offline render/bounce/freeze reject a never-prepared engine", "[c_api
   SonareEngineBounceOptions bounce{};
   REQUIRE(sonare_engine_bounce_options_default(&bounce) == SONARE_OK);
   bounce.total_frames = kFrames;
+  bounce.num_channels = 2;
   SonareEngineBounceResult bounce_result{};
   REQUIRE(sonare_engine_bounce_offline(engine, &bounce, &bounce_result) ==
           SONARE_ERROR_INVALID_STATE);

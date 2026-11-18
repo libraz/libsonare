@@ -2,12 +2,14 @@
 
 #include "c_api/mixing_internal.h"
 #include "mixing/alignment_delay.h"
+#include "mixing/api/scene.h"
 #include "mixing/meter.h"
 
 using namespace sonare_c_mixing_detail;
 
 SonareMixer* sonare_mixer_create(int sample_rate, int max_block_size) {
   SONARE_C_API_ENTRY;
+  if (max_block_size == 0) max_block_size = sonare::mixing::api::kMixerDefaultMaxBlock;
   if (!sonare::is_valid_realtime_sample_rate(static_cast<double>(sample_rate)) ||
       !sonare::is_valid_realtime_block_size(max_block_size)) {
     sonare_c_detail::set_last_error(

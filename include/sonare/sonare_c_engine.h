@@ -99,16 +99,21 @@ void sonare_engine_destroy(SonareRealtimeEngine* engine);
 ///   use is 1024.
 #define SONARE_ENGINE_MAX_TELEMETRY_CAPACITY 16384u
 
-/// @brief Prepares an engine with 64-channel planar scratch.
-/// @details @p command_capacity must not exceed @ref
+/// @brief Prepares an engine with the default 64-channel planar scratch.
+/// @details 0 is the library-default sentinel for every sized argument:
+///          @p max_block_size 0 selects 128, @p command_capacity 0 selects 1024
+///          and @p telemetry_capacity 0 selects 1024. A negative
+///          @p max_block_size is refused. An explicit capacity is rounded up to
+///          a power of two internally, so the smallest queue is reached by
+///          passing a small explicit value such as 1 or 2.
+///          @p command_capacity must not exceed @ref
 ///          SONARE_ENGINE_MAX_COMMAND_CAPACITY and @p telemetry_capacity must
 ///          not exceed @ref SONARE_ENGINE_MAX_TELEMETRY_CAPACITY; a larger
 ///          value returns SONARE_ERROR_INVALID_PARAMETER and leaves the engine
-///          untouched. Both are rounded up to a power of two internally, and 0
-///          selects the internal minimum rather than disabling the queue.
+///          untouched.
 ///          @p sample_rate must be a whole number of hertz in [8000, 384000];
 ///          a fractional rate returns SONARE_ERROR_INVALID_PARAMETER, as does a
-///          @p max_block_size outside [1, 1048576].
+///          @p max_block_size outside [1, 1048576] after the sentinel is applied.
 /// @return SONARE_ERROR_INVALID_STATE when a bound instrument cannot prepare a
 ///         SysEx in the MIDI clips scheduled earlier; the engine is then
 ///         prepared, but its MIDI clip schedule has been cleared.
@@ -123,8 +128,11 @@ SonareError sonare_engine_prepare(SonareRealtimeEngine* engine, double sample_ra
 ///          @p max_channels (1..64) for capture, instrument, PDC, and monitor
 ///          scratch. The host must not pass more channels to process/render
 ///          until it prepares again with a larger bound. Use the legacy prepare
-///          function when the maximum channel count is not known. The two
-///          capacities carry the same bounds as @ref sonare_engine_prepare.
+///          function when the maximum channel count is not known. 0 is the
+///          library-default sentinel for every sized argument, as in @ref
+///          sonare_engine_prepare, and additionally @p max_channels 0 selects
+///          64; a negative @p max_channels is refused. The two capacities carry
+///          the same bounds as @ref sonare_engine_prepare.
 SonareError sonare_engine_prepare_with_channels(SonareRealtimeEngine* engine, double sample_rate,
                                                 int max_block_size, size_t command_capacity,
                                                 size_t telemetry_capacity, int max_channels);
@@ -163,7 +171,8 @@ SonareError sonare_engine_settle_parameters(SonareRealtimeEngine* engine);
 ///   automation and lane gates at the transport position and snaps every
 ///   smoother, all without rendering. A host driving sonare_engine_render_offline
 ///   calls it once before the first chunk. Not safe concurrently with a running
-///   audio thread.
+///   audio thread. @p block_size 0 selects the default offline block: 128, capped at the prepared
+///   maximum block size; a negative value is refused.
 /// @return @c SONARE_ERROR_INVALID_PARAMETER for a NULL engine or a channel
 ///   count or block size above the prepared maximum, @c SONARE_ERROR_INVALID_STATE when
 ///   the engine was never prepared.
@@ -905,11 +914,16 @@ SonareError sonare_engine_process_with_monitor(SonareRealtimeEngine* engine, flo
 ///        ending the timeline: notes still sounding are released and the PDC /
 ///        alignment delay lines are flushed before returning.
 /// @details Equivalent to sonare_engine_render_offline_ex with @c finalize 1.
+///   @p block_size 0 selects the default offline block: 128, capped at the prepared maximum block
+///   size; a negative value is refused.
 SonareError sonare_engine_render_offline(SonareRealtimeEngine* engine, float* const* out,
                                          int num_channels, int64_t total_frames, int block_size);
 /// @brief sonare_engine_render_offline with explicit control over whether this
 ///        call ends the timeline.
-/// @details @p finalize 0 renders one CHUNK of a longer timeline: a note held
+/// @details @p block_size 0 selects the default offline block: 128, capped at the prepared maximum
+/// block size; a negative value is refused.
+///
+///   @p finalize 0 renders one CHUNK of a longer timeline: a note held
 ///   across the chunk boundary keeps sounding into the next call and the delay
 ///   lines carry their history over, so consecutive chunks concatenate to
 ///   exactly what one continuous render of the same span produces. Non-zero
@@ -999,7 +1013,10 @@ SonareError sonare_engine_bounce_offline(SonareRealtimeEngine* engine,
 ///   override only the fields they care about, which guarantees the same
 ///   normalization target (SONARE_DEFAULT_BOUNCE_TARGET_LUFS) across the C,
 ///   Node, Python and WASM facades. Both sample rates are left at 0: the
-///   source is the engine's prepared rate and the output keeps it.
+///   source is the engine's prepared rate and the output keeps it, and
+///   @c block_size is left at 0 (the default offline block: 128, capped at the
+///   prepared maximum). @c num_channels and @c total_frames are required and
+///   are left at 0, so the struct is refused until the caller sets them.
 /// @param options Output struct; must not be NULL.
 /// @return @c SONARE_OK on success or @c SONARE_ERROR_INVALID_PARAMETER if
 ///         @p options is NULL.
@@ -1020,6 +1037,8 @@ void sonare_free_bounce_result(SonareEngineBounceResult* result);
 ///   The clip holds the span aligned to the timeline: the source layer's latency
 ///   (instrument PDC plus the lane and bus alignment) is rendered ahead and
 ///   dropped, because playback passes the clip through that latency again.
+/// @details @c block_size 0 selects the default offline block (128, capped at
+///   the prepared maximum); @c num_channels is required and must be positive.
 /// @return @c SONARE_ERROR_INVALID_PARAMETER when @c block_size exceeds the
 ///   prepared block size or @c num_channels the prepared channel count;
 ///   @c SONARE_ERROR_INVALID_STATE when the engine was never prepared.
@@ -2027,7 +2046,9 @@ SonareError sonare_engine_external_midi_dropped_count(SonareRealtimeEngine* engi
 ///   of output events to @p out_count. @p max_events must be at least 4 (the most
 ///   one record can lower to: a MIDI 2.0 registered or assignable controller
 ///   becomes CC 101/100 or 99/98 plus Data Entry 6/38); call repeatedly until
-///   @p out_count is 0 to fully drain. Host/control-thread only.
+///   @p out_count is 0 to fully drain. @p max_events 0 is a safe no-op that
+///   drains nothing and writes 0 to @p out_count (@p out may then be NULL);
+///   1..3 is refused. Host/control-thread only.
 SonareError sonare_engine_drain_external_midi(SonareRealtimeEngine* engine,
                                               SonareExternalMidiEvent* out, size_t max_events,
                                               size_t* out_count);

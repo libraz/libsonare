@@ -12,6 +12,7 @@
 #include "engine/realtime_engine.h"
 #include "metering/lufs.h"
 #include "metering/normalize.h"
+#include "sonare_c_engine_internal.h"
 #include "sonare_c_internal.h"
 #include "util/constants.h"
 #include "util/resource_limits.h"
@@ -140,7 +141,7 @@ SonareError sonare_engine_render_offline_ex(SonareRealtimeEngine* engine, float*
                                             int num_channels, int64_t total_frames, int block_size,
                                             int finalize) {
   SONARE_C_API_ENTRY;
-  if (!engine || !out || num_channels <= 0 || total_frames < 0 || block_size <= 0) {
+  if (!engine || !out || num_channels <= 0 || total_frames < 0 || block_size < 0) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   // render_offline on a never-prepared engine renders nothing and cannot even
@@ -149,6 +150,7 @@ SonareError sonare_engine_render_offline_ex(SonareRealtimeEngine* engine, float*
   if (engine->engine.max_block_size() <= 0) {
     return SONARE_ERROR_INVALID_STATE;
   }
+  block_size = sonare_c_engine_detail::resolve_offline_block(engine->engine, block_size);
   // sonare_engine_prepare_with_channels bounds capture/instrument/PDC/monitor
   // scratch to prepared_channels(); rendering more planes than that would
   // silently write zeros to every plane past the bound instead of erroring, so
@@ -191,8 +193,8 @@ SonareError sonare_engine_bounce_options_default(SonareEngineBounceOptions* opti
   SONARE_C_API_ENTRY;
   if (!options) return SONARE_ERROR_INVALID_PARAMETER;
   *options = SonareEngineBounceOptions{};
-  options->block_size = 128;
-  options->num_channels = 2;
+  options->block_size = 0;
+  options->num_channels = 0;
   options->target_sample_rate = 0;
   options->source_sample_rate = 0;
   options->normalize_lufs = 0;
@@ -214,7 +216,7 @@ SonareError sonare_engine_bounce_offline(SonareRealtimeEngine* engine,
   if (out) {
     *out = {};
   }
-  if (!engine || !options || !out || options->total_frames <= 0 || options->block_size <= 0 ||
+  if (!engine || !options || !out || options->total_frames <= 0 || options->block_size < 0 ||
       options->num_channels <= 0 || options->target_sample_rate < 0 ||
       options->source_sample_rate < 0 || options->dither_bits < 0) {
     return SONARE_ERROR_INVALID_PARAMETER;
@@ -266,8 +268,10 @@ SonareError sonare_engine_bounce_offline(SonareRealtimeEngine* engine,
   // See sonare_engine_render_offline: bouncing more channels than the engine
   // was prepared for would silently write zeros for every plane past the
   // bound instead of erroring.
+  const int block_size =
+      sonare_c_engine_detail::resolve_offline_block(engine->engine, options->block_size);
   if (options->num_channels > engine->engine.prepared_channels() ||
-      options->block_size > engine->engine.max_block_size()) {
+      block_size > engine->engine.max_block_size()) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   // The render runs at the prepared rate, which an explicit source_sample_rate must name exactly.
@@ -281,9 +285,9 @@ SonareError sonare_engine_bounce_offline(SonareRealtimeEngine* engine,
   // the defaults the way a live stream legitimately does (see
   // RealtimeEngine::prime_offline_parameters, and the same pre-roll in the
   // project bounce path).
-  engine->engine.prime_offline_parameters(options->num_channels, options->block_size);
+  engine->engine.prime_offline_parameters(options->num_channels, block_size);
   std::vector<std::vector<float>> channels = engine->engine.render_offline_aligned(
-      options->num_channels, options->total_frames, options->block_size);
+      options->num_channels, options->total_frames, block_size);
 
   channels = resample_channels(channels, source_sample_rate, target_sample_rate);
   std::vector<float> interleaved = interleave_channels(channels);
@@ -338,7 +342,7 @@ SonareError sonare_engine_freeze_offline(SonareRealtimeEngine* engine,
                                          SonareEngineFreezeResult* out) {
   SONARE_C_API_ENTRY;
   if (out) *out = {};
-  if (!engine || !options || !out || options->total_frames <= 0 || options->block_size <= 0 ||
+  if (!engine || !options || !out || options->total_frames <= 0 || options->block_size < 0 ||
       options->num_channels <= 0 || !std::isfinite(options->start_ppq) ||
       options->start_ppq < 0.0 || !(std::isfinite(options->gain) && options->gain >= 0.0f) ||
       !resource::engine_offline_shape_fits(options->total_frames, options->num_channels, 1)) {
@@ -352,20 +356,21 @@ SonareError sonare_engine_freeze_offline(SonareRealtimeEngine* engine,
   // See sonare_engine_render_offline: freezing more channels than the engine
   // was prepared for would silently write zeros for every plane past the
   // bound instead of erroring.
+  const int block_size =
+      sonare_c_engine_detail::resolve_offline_block(engine->engine, options->block_size);
   if (options->num_channels > engine->engine.prepared_channels() ||
-      options->block_size > engine->engine.max_block_size()) {
+      block_size > engine->engine.max_block_size()) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   SONARE_C_TRY
   // Offline pre-roll, as in sonare_engine_bounce_offline: a freeze captures the
   // lane at its settled values, so the frozen clip does not carry a fade-in that
   // the live lane never had.
-  engine->engine.prime_offline_parameters(options->num_channels, options->block_size);
-  out->clip_id =
-      engine->engine
-          .freeze_offline(options->num_channels, options->total_frames, options->block_size,
-                          options->clip_id, options->start_ppq, options->gain)
-          .id;
+  engine->engine.prime_offline_parameters(options->num_channels, block_size);
+  out->clip_id = engine->engine
+                     .freeze_offline(options->num_channels, options->total_frames, block_size,
+                                     options->clip_id, options->start_ppq, options->gain)
+                     .id;
   out->frames = options->total_frames;
   out->num_channels = options->num_channels;
   return SONARE_OK;

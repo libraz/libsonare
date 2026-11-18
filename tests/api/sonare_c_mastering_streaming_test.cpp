@@ -100,6 +100,40 @@ TEST_CASE("sonare_streaming_loudness_gain matches the offline chain's applied ga
   CHECK_FALSE(std::isfinite(quiet.integrated_lufs));
 }
 
+TEST_CASE("streaming mastering chain prepare resolves a zero block size to its default",
+          "[c_api][mastering][streaming]") {
+  SonareStreamingMasteringChain* chain = sonare_streaming_mastering_chain_create(nullptr, 0);
+  REQUIRE(chain != nullptr);
+  CHECK(sonare_streaming_mastering_chain_prepare(chain, 48000, -1, 1) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_streaming_mastering_chain_prepare(chain, 48000, 0, 1) == SONARE_OK);
+
+  std::vector<float> block(128, 0.1f);
+  CHECK(sonare_streaming_mastering_chain_process_mono(chain, block.data(), block.size()) ==
+        SONARE_OK);
+  std::vector<float> over(129, 0.1f);
+  CHECK(sonare_streaming_mastering_chain_process_mono(chain, over.data(), over.size()) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  sonare_streaming_mastering_chain_destroy(chain);
+}
+
+TEST_CASE("sonare_eq_create resolves a zero block size to its default",
+          "[c_api][mastering][streaming]") {
+  CHECK(sonare_eq_create(48000.0, -1) == nullptr);
+  SonareEq* eq = sonare_eq_create(48000.0, 0);
+  REQUIRE(eq != nullptr);
+
+  std::vector<float> left(512, 0.1f);
+  std::vector<float> right(512, 0.1f);
+  float* channels[] = {left.data(), right.data()};
+  CHECK(sonare_eq_process(eq, channels, 2, 512) == SONARE_OK);
+  std::vector<float> over_left(513, 0.1f);
+  std::vector<float> over_right(513, 0.1f);
+  float* over_channels[] = {over_left.data(), over_right.data()};
+  CHECK(sonare_eq_process(eq, over_channels, 2, 513) == SONARE_ERROR_INVALID_PARAMETER);
+  sonare_eq_destroy(eq);
+}
+
 TEST_CASE("sonare_streaming_loudness_gain refuses bad arguments", "[c_api][mastering][streaming]") {
   std::vector<float> samples(4800, 0.1f);
   SonareStreamingLoudnessGain out{};

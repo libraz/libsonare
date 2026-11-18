@@ -2,6 +2,8 @@
 /// @brief Engine C ABI contract: version, capabilities, feature-flag
 ///        reporting, malformed JSON and the per-thread last-error channel.
 
+#include <vector>
+
 #include "mastering/api/insert_factory.h"
 #include "midi/synth/sf2_player.h"
 #include "sonare_c_engine_test_helpers.h"
@@ -1021,6 +1023,79 @@ TEST_CASE("sonare_engine_prepare refuses a fractional sample rate", "[c_api][eng
   sonare_engine_destroy(engine);
 }
 
+TEST_CASE(
+    "sonare_engine_prepare_with_channels reads 0 as the library default for every sized argument",
+    "[c_api][engine]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare_with_channels(engine, 48000.0, 0, 0, 0, 0) == SONARE_OK);
+
+  // 0 resolves to a 128-frame block and 64 channels: a 128 block renders, 129 does not.
+  constexpr int kChannels = 64;
+  std::vector<std::vector<float>> storage(kChannels, std::vector<float>(256, 0.0f));
+  std::vector<float*> planes;
+  for (auto& plane : storage) planes.push_back(plane.data());
+  REQUIRE(sonare_engine_render_offline(engine, planes.data(), kChannels, 128, 128) == SONARE_OK);
+  REQUIRE(sonare_engine_render_offline(engine, planes.data(), kChannels, 129, 129) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  planes.push_back(nullptr);
+  REQUIRE(sonare_engine_render_offline(engine, planes.data(), kChannels + 1, 128, 128) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+
+  // A negative block or channel count is still refused.
+  REQUIRE(sonare_engine_prepare_with_channels(engine, 48000.0, -1, 0, 0, 0) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_prepare_with_channels(engine, 48000.0, 0, 0, 0, -1) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 0, 0, 0) == SONARE_OK);
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("sonare_engine_bounce_offline resolves block_size 0 against the prepared block",
+          "[c_api][engine]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 64, 8, 8) == SONARE_OK);
+
+  SonareEngineBounceOptions options{};
+  REQUIRE(sonare_engine_bounce_options_default(&options) == SONARE_OK);
+  REQUIRE(options.block_size == 0);
+  options.total_frames = 256;
+
+  // num_channels is required: the default-filled struct is refused until it is set.
+  SonareEngineBounceResult result{};
+  REQUIRE(sonare_engine_bounce_offline(engine, &options, &result) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  sonare_free_bounce_result(&result);
+
+  options.num_channels = 2;
+  REQUIRE(sonare_engine_bounce_offline(engine, &options, &result) == SONARE_OK);
+  REQUIRE(result.frames == 256);
+  sonare_free_bounce_result(&result);
+
+  options.block_size = -1;
+  REQUIRE(sonare_engine_bounce_offline(engine, &options, &result) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  sonare_free_bounce_result(&result);
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("sonare_engine_drain_external_midi accepts max_events 0 as a no-op", "[c_api][engine]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 8, 8) == SONARE_OK);
+
+  size_t count = 789;
+  REQUIRE(sonare_engine_drain_external_midi(engine, nullptr, 0, &count) == SONARE_OK);
+  REQUIRE(count == 0);
+
+  SonareExternalMidiEvent events[2] = {};
+  count = 789;
+  REQUIRE(sonare_engine_drain_external_midi(engine, events, 2, &count) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  sonare_engine_destroy(engine);
+}
+
 TEST_CASE("sonare_engine transport refuses a negative position and never moves the playhead",
           "[c_api][engine]") {
   constexpr int kFrames = 64;
@@ -1137,7 +1212,7 @@ TEST_CASE("Create and prepare entries refuse a rate or block size outside their 
     REQUIRE(sonare_mixer_create(rate, 128) == nullptr);
     REQUIRE(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
   }
-  for (const int block : {0, kBlockCeiling + 1, std::numeric_limits<int>::max()}) {
+  for (const int block : {-1, kBlockCeiling + 1, std::numeric_limits<int>::max()}) {
     CAPTURE(block);
     REQUIRE(sonare_mixer_create(48000, block) == nullptr);
     REQUIRE(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);

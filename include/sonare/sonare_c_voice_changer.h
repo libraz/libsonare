@@ -227,6 +227,8 @@ SonareError sonare_realtime_voice_changer_config_default(SonareRealtimeVoiceChan
 ///        a flat POD config. Pass NULL to start from the neutralMonitor preset. A config
 ///        refused by validation, a @p sample_rate outside the supported range or a
 ///        @p max_block_size outside [1, 1048576] is SONARE_ERROR_INVALID_PARAMETER.
+///        @p max_block_size 0 selects the library default (128 frames) and @p num_channels 0
+///        selects mono; negative values are refused.
 /// @note Release @p out with @ref sonare_realtime_voice_changer_destroy; it is a handle, not a
 ///       sonare_free_* buffer.
 SonareError sonare_realtime_voice_changer_create(const SonareRealtimeVoiceChangerConfig* config,
@@ -258,7 +260,8 @@ SonareError sonare_realtime_voice_changer_get_config(const SonareRealtimeVoiceCh
 ///          out-of-range field, a combination the chain cannot run) is
 ///          SONARE_ERROR_INVALID_FORMAT; a @p sample_rate outside the supported range, a
 ///          @p max_block_size outside [1, 1048576] or a @p num_channels other than 1 or 2 is
-///          SONARE_ERROR_INVALID_PARAMETER.
+///          SONARE_ERROR_INVALID_PARAMETER. @p max_block_size 0 selects the library default
+///          (128 frames) and @p num_channels 0 selects mono; negative values are refused.
 /// @note Release @p out with @ref sonare_realtime_voice_changer_destroy; it is a handle, not a
 ///       sonare_free_* buffer.
 SonareError sonare_realtime_voice_changer_create_json(const char* preset_or_config_json,

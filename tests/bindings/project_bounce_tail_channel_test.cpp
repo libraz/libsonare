@@ -159,3 +159,61 @@ TEST_CASE("project bounce rejects channel counts beyond mono/stereo like engine-
   // silent planes for a count it cannot actually write.
   sonare_project_destroy(project);
 }
+
+TEST_CASE("project bounce reads only zero as the default for block size, width and rate",
+          "[project]") {
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+  uint32_t track = 0;
+  uint32_t clip = 0;
+  REQUIRE(sonare_project_add_midi_clip(project, 0.0, 1.0, &track, &clip) == SONARE_OK);
+  REQUIRE(sonare_project_set_track_midi_destination(project, track, 5) == SONARE_OK);
+
+  SonareProjectBounceOptions options{};
+  options.total_frames = 128;
+  float* out = nullptr;
+  size_t out_len = 0;
+
+  // All-zero options: default block size, the scene's output width, the project's rate.
+  REQUIRE(sonare_project_bounce(project, &options, &out, &out_len) == SONARE_OK);
+  REQUIRE(out != nullptr);
+  CHECK(out_len == 256u);
+  sonare_free_floats(out);
+
+  for (int field = 0; field < 3; ++field) {
+    SonareProjectBounceOptions negative = options;
+    if (field == 0) negative.block_size = -1;
+    if (field == 1) negative.num_channels = -1;
+    if (field == 2) negative.sample_rate = -48000;
+    out = reinterpret_cast<float*>(static_cast<uintptr_t>(0x1));
+    out_len = 123;
+    CHECK(sonare_project_bounce(project, &negative, &out, &out_len) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(out == nullptr);
+    CHECK(out_len == 0);
+  }
+  sonare_project_destroy(project);
+}
+
+TEST_CASE("project bounce defaults its width to a mono master's own width", "[project]") {
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+  REQUIRE(
+      sonare_project_set_mixer_scene_json(
+          project, R"({"version":1,"buses":[{"id":"master","role":"master","layout":"mono"}]})") ==
+      SONARE_OK);
+  uint32_t track = 0;
+  uint32_t clip = 0;
+  REQUIRE(sonare_project_add_midi_clip(project, 0.0, 1.0, &track, &clip) == SONARE_OK);
+
+  SonareProjectBounceOptions options{};
+  options.total_frames = 128;
+  float* out = nullptr;
+  size_t out_len = 0;
+  REQUIRE(sonare_project_bounce(project, &options, &out, &out_len) == SONARE_OK);
+  CHECK(out_len == 128u);
+  sonare_free_floats(out);
+  sonare_project_destroy(project);
+}

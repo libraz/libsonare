@@ -382,6 +382,7 @@ TEST_CASE("sonare_engine_bounce_offline maps non-finite loudness targets to the 
   SonareEngineBounceOptions options{};
   REQUIRE(sonare_engine_bounce_options_default(&options) == SONARE_OK);
   options.total_frames = 4800;
+  options.num_channels = 2;
   options.normalize_lufs = 1;
   options.target_lufs = std::numeric_limits<float>::quiet_NaN();
 

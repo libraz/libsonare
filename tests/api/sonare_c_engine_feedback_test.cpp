@@ -85,10 +85,11 @@ TEST_CASE("sonare_engine_prime_offline_parameters validates its arguments",
   SonareRealtimeEngine* engine = make_prepared();
   CHECK(sonare_engine_prime_offline_parameters(engine, 0, kBlock) == kInvalid);
   CHECK(sonare_engine_prime_offline_parameters(engine, -1, kBlock) == kInvalid);
-  CHECK(sonare_engine_prime_offline_parameters(engine, 1, 0) == kInvalid);
   CHECK(sonare_engine_prime_offline_parameters(engine, 1, -4) == kInvalid);
   CHECK(sonare_engine_prime_offline_parameters(engine, 99, kBlock) == kInvalid);
   CHECK(sonare_engine_prime_offline_parameters(engine, 1, kBlock) == SONARE_OK);
+  // 0 selects the default offline block, capped at the prepared maximum.
+  CHECK(sonare_engine_prime_offline_parameters(engine, 1, 0) == SONARE_OK);
   CHECK(sonare_engine_prime_offline_parameters(engine, 2, kBlock) == SONARE_OK);
   sonare_engine_destroy(engine);
 }

@@ -21,6 +21,7 @@
 #include "c_api/sample_bank_internal.h"
 #include "c_api/synth_patch_common.h"
 #include "core/channel_layout.h"
+#include "engine/realtime_engine.h"
 #include "engine/track_mixer.h"
 #include "mastering/api/insert_factory.h"
 #include "midi/builtin_synth.h"
@@ -109,10 +110,9 @@ bool replay_destination_events(const arr::CompiledTimeline& timeline,
   return true;
 }
 
-// Widest output a scene's master allows: its layout's width, with mono and
-// stereo (and a scene with no master) allowing two. The master is resolved the
-// way the mixer graph resolves it: role "master" first, then id "master".
-int max_output_channels(const sonare::mixing::api::Scene& scene) noexcept {
+// Width of the scene master's layout, or 2 for a scene with no master. The master is
+// resolved the way the mixer graph resolves it: role "master" first, then id "master".
+int master_output_channels(const sonare::mixing::api::Scene& scene) noexcept {
   const sonare::mixing::api::Bus* master = nullptr;
   for (const auto& bus : scene.buses) {
     if (bus.role == "master") {
@@ -128,7 +128,12 @@ int max_output_channels(const sonare::mixing::api::Scene& scene) noexcept {
       }
     }
   }
-  return master == nullptr ? 2 : std::max(2, sonare::channel_count(master->layout));
+  return master == nullptr ? 2 : sonare::channel_count(master->layout);
+}
+
+// Widest output a scene's master allows: its layout's width, with mono allowing two.
+int max_output_channels(const sonare::mixing::api::Scene& scene) noexcept {
+  return std::max(2, master_output_channels(scene));
 }
 
 // Resets the recorded compile result to the empty state a project starts in.
@@ -169,9 +174,14 @@ SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceO
 
   SonareProjectBounceOptions opts{};
   if (options) opts = *options;
-  const int block_size = opts.block_size > 0 ? opts.block_size : 128;
-  const int num_channels = opts.num_channels > 0 ? opts.num_channels : 2;
-  if (block_size <= 0 || num_channels <= 0) return SONARE_ERROR_INVALID_PARAMETER;
+  if (opts.block_size < 0 || opts.num_channels < 0 || opts.sample_rate < 0) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  const int block_size =
+      opts.block_size == 0 ? sonare::engine::RealtimeEngine::kDefaultOfflineBlock : opts.block_size;
+  const int num_channels = opts.num_channels == 0
+                               ? master_output_channels(project->history.project().scene())
+                               : opts.num_channels;
   // The master is built at the requested width, so only a speaker-layout count
   // is meaningful, and the scene's master layout caps it.
   if (num_channels != 1 && num_channels != 2 && !sonare::is_surround_channel_count(num_channels)) {
@@ -182,9 +192,9 @@ SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceO
   }
   const double project_sr = project->history.project().sample_rate();
   const double sample_rate =
-      opts.sample_rate > 0 ? static_cast<double>(opts.sample_rate) : project_sr;
+      opts.sample_rate != 0 ? static_cast<double>(opts.sample_rate) : project_sr;
   if (!sonare::is_supported_sample_rate(sample_rate)) return SONARE_ERROR_INVALID_PARAMETER;
-  if (opts.sample_rate > 0 && std::abs(sample_rate - project_sr) > 1.0e-6) {
+  if (opts.sample_rate != 0 && std::abs(sample_rate - project_sr) > 1.0e-6) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   if (opts.instrument_latency_samples < 0) return SONARE_ERROR_INVALID_PARAMETER;

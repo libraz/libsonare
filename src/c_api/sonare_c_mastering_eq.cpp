@@ -42,6 +42,9 @@ sonare::mastering::eq::StereoPlacement parse_placement(int placement) {
 
 SonareEq* sonare_eq_create(double sample_rate, int max_block_size) {
   SONARE_C_API_ENTRY;
+  if (max_block_size == 0) {
+    max_block_size = sonare::mastering::eq::EqualizerProcessor::kDefaultMaxBlock;
+  }
   // The processor admits an infinite sample_rate, which degenerates every band's biquad design.
   if (!is_valid_realtime_sample_rate(sample_rate) || max_block_size < 0 ||
       max_block_size > kMaxRealtimeBlockSize) {

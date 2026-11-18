@@ -8,6 +8,32 @@
 
 #if defined(SONARE_WITH_MIXING) && defined(SONARE_WITH_GRAPH)
 
+TEST_CASE("C-API mixer resolves a zero block size to its default", "[mixing][capi]") {
+  REQUIRE(sonare_mixer_create(48000, -1) == nullptr);
+  SonareMixer* mixer = sonare_mixer_create(48000, 0);
+  REQUIRE(mixer != nullptr);
+  REQUIRE(sonare_mixer_add_strip(mixer, "lead") != nullptr);
+
+  std::vector<float> left(513, 0.0f);
+  std::vector<float> right(513, 0.0f);
+  REQUIRE(sonare_mixer_drain_tail_stereo(mixer, left.data(), right.data(), 512) == SONARE_OK);
+  REQUIRE(sonare_mixer_drain_tail_stereo(mixer, left.data(), right.data(), 513) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  sonare_mixer_destroy(mixer);
+
+  sonare::mixing::api::Scene scene;
+  sonare::mixing::api::Strip source;
+  source.id = "source";
+  scene.strips.push_back(source);
+  scene.buses.push_back(sonare::mixing::api::Bus{"master", "master"});
+  const std::string json = sonare::mixing::api::scene_to_json(scene);
+  SonareMixer* from_scene = sonare_mixer_from_scene_json(json.c_str(), 48000, 0);
+  REQUIRE(from_scene != nullptr);
+  REQUIRE(sonare_mixer_drain_tail_stereo(from_scene, left.data(), right.data(), 513) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  sonare_mixer_destroy(from_scene);
+}
+
 TEST_CASE("C-API mixer rejects null and duplicate strip ids at insertion", "[mixing][capi]") {
   SonareMixer* mixer = sonare_mixer_create(48000, 64);
   REQUIRE(mixer != nullptr);

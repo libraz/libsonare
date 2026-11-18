@@ -396,7 +396,8 @@ void sonare_streaming_retune_destroy(SonareStreamingRetune* retune);
 /// @brief Allocates the grain / ring buffers for @p sample_rate and resolves the
 ///        grain size. Must be called before processing.
 /// @return SONARE_ERROR_INVALID_PARAMETER for a NULL handle, a non-positive
-///         sample rate, or a negative @p max_block_size.
+///         sample rate, or a @p max_block_size outside [1, 1048576]; there is no default
+///         block size, so 0 is refused.
 SonareError sonare_streaming_retune_prepare(SonareStreamingRetune* retune, double sample_rate,
                                             int max_block_size);
 

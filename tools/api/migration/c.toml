@@ -185,7 +185,7 @@ test = "tests/api/sonare_c_mastering_test.cpp::sonare_mastering_amp_preset_catal
 [[entry]]
 kind = "function"
 old = "sonare_mastering_insert_param_info"
-changed = "returns SonareError and writes a caller-owned document through out_json, released with sonare_free_string; a NULL name is refused instead of answering []"
+changed = "returns SonareError and writes a caller-owned document through out_json, released with sonare_free_string; a NULL insert is refused instead of answering []"
 domain = "mastering"
 rule = "c-free"
 test = "tests/api/sonare_c_engine_strip_test.cpp::sonare_mastering_insert_param_info reports realtime param descriptors"
@@ -193,7 +193,7 @@ test = "tests/api/sonare_c_engine_strip_test.cpp::sonare_mastering_insert_param_
 [[entry]]
 kind = "function"
 old = "sonare_mastering_insert_param_info_at_rate"
-changed = "returns SonareError and writes a caller-owned document through out_json, released with sonare_free_string; a NULL name is refused instead of answering []"
+changed = "returns SonareError and writes a caller-owned document through out_json, released with sonare_free_string; a NULL insert is refused instead of answering []"
 domain = "mastering"
 rule = "c-free"
 test = "tests/mastering/insert_param_metadata_test.cpp::the rate-specific descriptor query refuses a rate outside the supported range"
@@ -1261,3 +1261,27 @@ old = "SonareMixMeterSnapshot.channel_count"
 new = "SonareMixMeterSnapshot.num_channels"
 domain = "mastering"
 rule = "num-channels"
+
+[[entry]]
+kind = "function"
+old = "sonare_engine_bounce_options_default"
+changed = "leaves num_channels and block_size at 0; set num_channels before bouncing or freezing (a 0 width is refused), while block_size 0 selects the default offline block"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "tests/api/sonare_c_engine_contract_test.cpp::sonare_engine_bounce_offline resolves block_size 0 against the prepared block"
+
+[[entry]]
+kind = "function"
+old = "sonare_streaming_retune_prepare"
+changed = "max_block_size 0 is refused; pass the largest block the stream will process"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "tests/editing/voice_changer_preset_capi_test.cpp::sonare_streaming_retune lifecycle and validation"
+
+[[entry]]
+kind = "type"
+old = "SonareProjectBounceOptions"
+changed = "only 0 selects a default for block_size, num_channels and sample_rate, and a negative value is refused; num_channels 0 takes the scene master's layout width (2 with no master) instead of always 2"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "tests/bindings/project_bounce_tail_channel_test.cpp::project bounce reads only zero as the default for block size, width and rate"

@@ -18,6 +18,13 @@
 
 namespace sonare_c_engine_detail {
 
+/// Resolves an offline block size: 0 is the library default, capped at the prepared block.
+inline int resolve_offline_block(const sonare::engine::RealtimeEngine& engine, int block_size) {
+  return block_size == 0 ? std::min(sonare::engine::RealtimeEngine::kDefaultOfflineBlock,
+                                    engine.max_block_size())
+                         : block_size;
+}
+
 /// Realtime page storage backing a clip's paged audio provider. Shared across
 /// the engine C-ABI translation units (the clips TU supplies/clears pages, the
 /// provider lifecycle entry points create/destroy it, and set_clips queries its

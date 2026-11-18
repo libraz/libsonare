@@ -112,7 +112,8 @@ typedef struct {
 } SonareSurroundPan;
 
 // Returns NULL on an invalid argument or an allocation failure; sample_rate must be
-// in [8000, 384000] and max_block_size in [1, 1048576]. A non-NULL
+// in [8000, 384000] and max_block_size in [1, 1048576], or 0 for the library default
+// (512 frames); a negative max_block_size is refused. A non-NULL
 // handle is owned by the caller and stays valid until sonare_mixer_destroy,
 // which must be called exactly once.
 SonareMixer* sonare_mixer_create(int sample_rate, int max_block_size);
@@ -391,6 +392,7 @@ SonareError sonare_strip_schedule_send_automation(SonareStrip* strip, size_t sen
 // Returns NULL when the scene JSON is malformed or a strip cannot be built; the
 // parse-failure message is available from sonare_last_error_message. A non-NULL
 // handle is owned by the caller and stays valid until sonare_mixer_destroy.
+// max_block_size follows sonare_mixer_create: 0 selects the library default (512 frames).
 // Keys the scene reader does not consume (other than `$`- and `x-`-prefixed ones) and
 // insert params no processor reads do not fail the load; each is one Warning entry of
 // sonare_last_diagnostic (codes in the SonareDiagnostic table), e.g. the message

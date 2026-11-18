@@ -67,6 +67,22 @@ TEST_CASE("sonare_hrtf_set_create_from_memory validates SHRF bytes", "[playback]
   sonare_hrtf_set_destroy(nullptr);
 }
 
+TEST_CASE("playback renderer creation resolves a zero block size to its default",
+          "[playback][capi]") {
+  SonarePlaybackRenderer* renderer = nullptr;
+  CHECK(sonare_playback_renderer_create_json("{}", nullptr, 48000, -1, &renderer) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  SonarePlaybackRenderer* handle = create_renderer(headphones_config(), 48000, 0);
+
+  std::vector<float> in(1025 * 2, 0.0f);
+  std::vector<float> out(1025 * 2, 0.0f);
+  CHECK(sonare_playback_renderer_process_interleaved(handle, in.data(), 2, out.data(), 2, 1024) ==
+        SONARE_OK);
+  CHECK(sonare_playback_renderer_process_interleaved(handle, in.data(), 2, out.data(), 2, 1025) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  sonare_playback_renderer_destroy(handle);
+}
+
 TEST_CASE("playback renderer creation rejects malformed configuration", "[playback][capi]") {
   SonarePlaybackRenderer* renderer = reinterpret_cast<SonarePlaybackRenderer*>(uintptr_t{1});
   CHECK(sonare_playback_renderer_create_json(nullptr, nullptr, 48000, 512, &renderer) ==

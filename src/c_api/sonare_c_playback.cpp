@@ -78,6 +78,7 @@ SonareError sonare_playback_renderer_create_json(const char* config_json, const 
   if (out) *out = nullptr;
 #if defined(SONARE_WITH_PLAYBACK)
   if (!out || !config_json) return SONARE_ERROR_INVALID_PARAMETER;
+  if (max_block_size == 0) max_block_size = playback::kPlaybackRendererDefaultMaxBlock;
   SONARE_C_TRY
   const playback::RendererConfig config = playback::parse_renderer_config(config_json);
   const playback::HrtfSet* hrtf_ptr = hrtf ? hrtf->set.get() : nullptr;

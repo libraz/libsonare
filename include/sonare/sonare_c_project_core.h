@@ -124,12 +124,14 @@ static_assert(sizeof(SonareProjectCompileResult) == 3u * sizeof(void*) + sizeof(
 /// @brief Options for @ref sonare_project_bounce. Zero-initialize then override.
 typedef struct {
   int64_t total_frames;           /* render length in frames at @p sample_rate */
-  int block_size;                 /* render block size; <= 0 => 128 */
+  int block_size;                 /* render block size; 0 => 128; negative is refused */
   int num_channels;               /* output channel count: 1, 2, 6 or 8, at most the width of the
                                      scene master's layout (mono/stereo/no master allow 2);
-                                     <= 0 => 2. The master is mixed at this width; 1 folds a
-                                     2-channel master to 0.5(L+R). */
-  int sample_rate;                /* must match the project sample rate; <= 0 => the project's */
+                                     0 => the width of the scene master's layout (2 with no master);
+                                     negative is refused. The master is mixed at this width; 1
+                                     folds a 2-channel master to 0.5(L+R). */
+  int sample_rate;                /* must match the project sample rate; 0 => the project's;
+                                     negative is refused */
   int instrument_latency_samples; /* host-instrument PDC fed to the compiler */
 } SonareProjectBounceOptions;
 
