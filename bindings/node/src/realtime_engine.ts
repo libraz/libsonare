@@ -32,6 +32,7 @@ import type {
   EngineMetronomeConfig,
   EngineMidiClipSchedule,
   EngineParameterInfo,
+  EngineProcessWithMonitorResult,
   EngineScopeTelemetry,
   EngineTelemetry,
   EngineTempoSegment,
@@ -1806,10 +1807,13 @@ export class RealtimeEngine {
     return this.native.process(channels);
   }
 
-  processWithMonitor(channels: Float32Array[]): {
-    output: Float32Array[];
-    monitor: Float32Array[];
-  } {
+  /**
+   * Renders one block in place like {@link process}, and also returns the monitor (cue/listen) bus output.
+   * Audio thread only; each plane must not exceed the prepared block size.
+   *
+   * @returns `output` is the program mix and `monitor` the monitor bus, one buffer per plane.
+   */
+  processWithMonitor(channels: Float32Array[]): EngineProcessWithMonitorResult {
     return this.native.processWithMonitor(channels);
   }
 

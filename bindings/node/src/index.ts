@@ -138,6 +138,7 @@ export type {
   EngineMidiClipSchedule,
   EngineMidiEvent,
   EngineParameterInfo,
+  EngineProcessWithMonitorResult,
   EngineScopeTelemetry,
   EngineTelemetry,
   EngineTelemetryError,

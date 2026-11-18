@@ -485,6 +485,15 @@ export interface EngineCaptureStatus {
   recordOffsetSamples: number;
 }
 
+/** Program and monitor output from {@link RealtimeEngine.processWithMonitor}. */
+export interface EngineProcessWithMonitorResult {
+  /** Program (main mix) output, one buffer per plane. */
+  output: Float32Array[];
+  /** Monitor (cue/listen) output, one buffer per plane. */
+  monitor: Float32Array[];
+}
+
+/** What a capture records: the engine `'output'` or the live `'input'`. */
 export type EngineCaptureSource = EngineCaptureStatus['source'];
 
 export interface EngineBounceOptions {
