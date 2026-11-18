@@ -254,7 +254,7 @@ def _result_count(pointer: Any, count_value: int, name: str) -> int:
     return count
 
 
-def apply_project_vocal_edit(
+def _apply_project_vocal_edit(
     project: Project,
     *,
     clip_id: int,
@@ -274,7 +274,7 @@ def apply_project_vocal_edit(
     """Commit a full-source vocal render to one Project clip or take."""
 
     handle = _project_handle(project)
-    source = _validate_samples("apply_project_vocal_edit", rendered_mono, arg_name="rendered_mono")
+    source = _validate_samples("Project.apply_vocal_edit", rendered_mono, arg_name="rendered_mono")
     expected_count = _narrow_int(
         expected_source_sample_count,
         "expected_source_sample_count",
@@ -344,7 +344,7 @@ def apply_project_vocal_edit(
     return _apply_result(result)
 
 
-def project_vocal_edit_dependencies(
+def _project_vocal_edit_dependencies(
     project: Project,
 ) -> tuple[ProjectVocalEditDependency, ...]:
     """Return copied vocal sidecar dependencies in native storage order."""
@@ -382,7 +382,7 @@ def _original_sources_to_c(
             VOCAL_MAX_SAMPLE_RATE,
         )
         buffer = _validate_samples(
-            "rehydrate_project_vocal_edits",
+            "Project.rehydrate_vocal_edits",
             original.mono,
             arg_name=f"original_sources[{index}].mono",
         )
@@ -423,7 +423,7 @@ def _project_cancel_callback(
     return callback, errors
 
 
-def rehydrate_project_vocal_edits(
+def _rehydrate_project_vocal_edits(
     project: Project,
     original_sources: Sequence[ProjectVocalOriginalSource],
     *,
@@ -470,7 +470,4 @@ __all__ = [
     "ProjectVocalEditApplyResult",
     "ProjectVocalEditDependency",
     "ProjectVocalRehydrateItem",
-    "apply_project_vocal_edit",
-    "project_vocal_edit_dependencies",
-    "rehydrate_project_vocal_edits",
 ]

@@ -7376,9 +7376,23 @@ rule = "loudness-names"
 [[entry]]
 kind = "function"
 old = "get_project_vocal_edit_dependencies"
-new = "project_vocal_edit_dependencies"
+removed = "call the method Project.vocal_edit_dependencies()"
 domain = "project"
-rule = "getters"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "function"
+old = "apply_project_vocal_edit"
+removed = "call the method Project.apply_vocal_edit(...) with the same keywords"
+domain = "project"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "function"
+old = "rehydrate_project_vocal_edits"
+removed = "call the method Project.rehydrate_vocal_edits(original_sources, cancel=...)"
+domain = "project"
+rule = "one-entry-per-operation"
 
 [[entry]]
 kind = "method"

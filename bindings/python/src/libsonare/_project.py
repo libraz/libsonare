@@ -321,9 +321,9 @@ class Project(
         ``rendered_mono`` length other than ``expected_source_sample_count``
         raises ``SonareValueError``.
         """
-        from .vocal_project import apply_project_vocal_edit
+        from .vocal_project import _apply_project_vocal_edit
 
-        return apply_project_vocal_edit(
+        return _apply_project_vocal_edit(
             self,
             clip_id=clip_id,
             expected_source_id=expected_source_id,
@@ -344,9 +344,9 @@ class Project(
         self,
     ) -> tuple[ProjectVocalEditDependency, ...]:
         """Return the sources the project's vocal edits depend on."""
-        from .vocal_project import project_vocal_edit_dependencies
+        from .vocal_project import _project_vocal_edit_dependencies
 
-        return project_vocal_edit_dependencies(self)
+        return _project_vocal_edit_dependencies(self)
 
     def rehydrate_vocal_edits(
         self,
@@ -358,9 +358,9 @@ class Project(
 
         ``cancel`` is polled and returns True to stop early.
         """
-        from .vocal_project import rehydrate_project_vocal_edits
+        from .vocal_project import _rehydrate_project_vocal_edits
 
-        return rehydrate_project_vocal_edits(
+        return _rehydrate_project_vocal_edits(
             self,
             original_sources=original_sources,
             cancel=cancel,

@@ -90,7 +90,7 @@ class ProjectVocalRehydrateItem:
         reason: VocalReason,
     ) -> None: ...
 
-def apply_project_vocal_edit(
+def _apply_project_vocal_edit(
     project: Project,
     *,
     clip_id: int,
@@ -107,10 +107,10 @@ def apply_project_vocal_edit(
     take_id: int = ...,
     rendered_start_sample: int = ...,
 ) -> ProjectVocalEditApplyResult: ...
-def project_vocal_edit_dependencies(
+def _project_vocal_edit_dependencies(
     project: Project,
 ) -> tuple[ProjectVocalEditDependency, ...]: ...
-def rehydrate_project_vocal_edits(
+def _rehydrate_project_vocal_edits(
     project: Project,
     original_sources: Sequence[ProjectVocalOriginalSource],
     *,

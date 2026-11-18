@@ -1335,9 +1335,6 @@ from .vocal_project import (
     ProjectVocalOriginalSource,
     ProjectVocalRehydrateItem,
     ProjectVocalRehydrateStatus,
-    apply_project_vocal_edit,
-    project_vocal_edit_dependencies,
-    rehydrate_project_vocal_edits,
 )
 
 __all__ += [
@@ -1364,7 +1361,4 @@ __all__ += [
     "ProjectVocalEditApplyResult",
     "ProjectVocalEditDependency",
     "ProjectVocalRehydrateItem",
-    "apply_project_vocal_edit",
-    "project_vocal_edit_dependencies",
-    "rehydrate_project_vocal_edits",
 ]

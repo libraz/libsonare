@@ -1563,15 +1563,6 @@ from .vocal_project import (
 from .vocal_project import (
     ProjectVocalRehydrateStatus as ProjectVocalRehydrateStatus,
 )
-from .vocal_project import (
-    apply_project_vocal_edit as apply_project_vocal_edit,
-)
-from .vocal_project import (
-    project_vocal_edit_dependencies as project_vocal_edit_dependencies,
-)
-from .vocal_project import (
-    rehydrate_project_vocal_edits as rehydrate_project_vocal_edits,
-)
 
 __version__: str
 """Installed package version, or the native library version in a source checkout."""

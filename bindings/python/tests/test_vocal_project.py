@@ -33,8 +33,6 @@ from libsonare.vocal_edit import (
 )
 from libsonare.vocal_project import (
     ProjectVocalOriginalSource,
-    project_vocal_edit_dependencies,
-    rehydrate_project_vocal_edits,
 )
 
 
@@ -98,8 +96,8 @@ def test_project_vocal_ffi_layout_matches_header() -> None:
 
 def test_empty_project_dependencies_and_rehydrate_are_owned_results() -> None:
     with Project.create() as project:
-        assert project_vocal_edit_dependencies(project) == ()
-        assert rehydrate_project_vocal_edits(project, ()) == ()
+        assert project.vocal_edit_dependencies() == ()
+        assert project.rehydrate_vocal_edits(()) == ()
 
 
 def test_apply_roundtrip_and_rehydrate_after_project_reload() -> None:
@@ -172,15 +170,13 @@ def test_apply_roundtrip_and_rehydrate_after_project_reload() -> None:
             ),
         )
         with pytest.raises(SonareError) as cancelled:
-            rehydrate_project_vocal_edits(
-                restored,
+            restored.rehydrate_vocal_edits(
                 original_sources,
                 cancel=lambda: True,
             )
         assert cancelled.value.code == 8
         with pytest.raises(SonareError) as truthy_cancel:
-            rehydrate_project_vocal_edits(
-                restored,
+            restored.rehydrate_vocal_edits(
                 original_sources,
                 cancel=lambda: 1,  # type: ignore[arg-type, return-value]
             )
