@@ -477,6 +477,13 @@ CliOptionSpec global_int(const char* name, int value) {
   return int_value(name, value, false, true);
 }
 
+/// An option the handler leaves to the library when absent; @p library_value is what `--help`
+/// states the library takes then.
+CliOptionSpec library_default(CliOptionSpec option, const char* library_value) {
+  option.stated_default = library_value;
+  return option;
+}
+
 CliOptionSpec global_number(const char* name, double value) {
   return number_value(name, value, false, true);
 }
@@ -766,8 +773,10 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
                              choices_of({"random", "nndsvd"}, CliOptionDomainStage::Parameter)),
                  number_value("mask-power", 1.0), required_output(), global_int("n-fft", 2048),
                  global_int("hop-length", 512)});
-    add_command(commands, "preemphasis", true, {number_value("coef", 0.97), required_output()});
-    add_command(commands, "deemphasis", true, {number_value("coef", 0.97), required_output()});
+    add_command(commands, "preemphasis", true,
+                {library_default(number_value("coef"), "0.97"), required_output()});
+    add_command(commands, "deemphasis", true,
+                {library_default(number_value("coef"), "0.97"), required_output()});
     add_command(commands, "trim-silence", true,
                 {number_value("threshold-db"), number_value("top-db"), output_value(),
                  global_int("n-fft", 2048), global_int("hop-length", 512)});
@@ -800,27 +809,36 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     // rest of that family.
     add_command(commands, "tone", false,
                 {number_value("frequency-hz"),
-                 with_domain(int_value("sample-rate", 22050),
-                             between(sonare::kMinAudioSampleRate, sonare::kMaxAudioSampleRate,
-                                     CliOptionDomainStage::Parameter)),
-                 number_value("duration-sec", 1.0), number_value("phase", 0.0),
-                 number_value("amplitude", 1.0), required_output()});
+                 library_default(
+                     with_domain(int_value("sample-rate"),
+                                 between(sonare::kMinAudioSampleRate, sonare::kMaxAudioSampleRate,
+                                         CliOptionDomainStage::Parameter)),
+                     "22050"),
+                 library_default(number_value("duration-sec"), "1.0"),
+                 library_default(number_value("phase"), "0.0"),
+                 library_default(number_value("amplitude"), "1.0"), required_output()});
     add_command(
         commands, "chirp", false,
-        {with_domain(int_value("sample-rate", 22050),
-                     between(sonare::kMinAudioSampleRate, sonare::kMaxAudioSampleRate,
-                             CliOptionDomainStage::Parameter)),
-         number_value("duration-sec", 1.0), required_output(), flag("exponential"),
+        {library_default(
+             with_domain(int_value("sample-rate"),
+                         between(sonare::kMinAudioSampleRate, sonare::kMaxAudioSampleRate,
+                                 CliOptionDomainStage::Parameter)),
+             "22050"),
+         library_default(number_value("duration-sec"), "1.0"), required_output(),
+         flag("exponential"),
          with_domain(global_number("fmin-hz", 0.0), at_least(0.0, CliOptionDomainStage::Parameter)),
          with_domain(number_value("fmax-hz", true, true),
                      greater_than(0.0, CliOptionDomainStage::Usage))});
     add_command(commands, "clicks", false,
                 {string_value("times"),
-                 with_domain(int_value("sample-rate", 22050),
-                             between(sonare::kMinAudioSampleRate, sonare::kMaxAudioSampleRate,
-                                     CliOptionDomainStage::Parameter)),
-                 int_value("length", 0), number_value("frequency-hz", 1000.0),
-                 number_value("click-duration-sec", 0.1), required_output()});
+                 library_default(
+                     with_domain(int_value("sample-rate"),
+                                 between(sonare::kMinAudioSampleRate, sonare::kMaxAudioSampleRate,
+                                         CliOptionDomainStage::Parameter)),
+                     "22050"),
+                 library_default(int_value("length"), "0"),
+                 library_default(number_value("frequency-hz"), "1000.0"),
+                 library_default(number_value("click-duration-sec"), "0.1"), required_output()});
 
 #ifdef SONARE_WITH_MASTERING
     // "--chain-config" names a complete chain config in the core's own
@@ -1072,45 +1090,58 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
                  number_value("low-percentile", 0.10), number_value("high-percentile", 0.95)});
     add_command(commands, "stereo", true, {path_value("reference")});
     add_command(commands, "phase", true, {path_value("reference")});
+    // Without --n-fft the conversion applies no centring offset, as the library does.
     add_command(commands, "frames-to-samples", false,
-                {int_value("frames"), global_int("n-fft", 2048), global_int("hop-length", 512)});
+                {int_value("frames"), library_default(int_value("n-fft", false, true), "0"),
+                 global_int("hop-length", 512)});
     add_command(commands, "samples-to-frames", false,
-                {int_value("samples"), global_int("n-fft", 2048), global_int("hop-length", 512)});
+                {int_value("samples"), library_default(int_value("n-fft", false, true), "0"),
+                 global_int("hop-length", 512)});
     add_command(commands, "power-to-db", false,
-                {string_value("values"), number_value("ref", 1.0), number_value("amin", 1e-10),
-                 number_value("top-db", 80.0)});
+                {string_value("values"), library_default(number_value("ref"), "1.0"),
+                 library_default(number_value("amin"), "1e-10"),
+                 library_default(number_value("top-db"), "80.0")});
     add_command(commands, "amplitude-to-db", false,
-                {string_value("values"), number_value("ref", 1.0), number_value("amin", 1e-5),
-                 number_value("top-db", 80.0)});
-    add_command(commands, "db-to-power", false, {string_value("values"), number_value("ref", 1.0)});
+                {string_value("values"), library_default(number_value("ref"), "1.0"),
+                 library_default(number_value("amin"), "1e-05"),
+                 library_default(number_value("top-db"), "80.0")});
+    add_command(commands, "db-to-power", false,
+                {string_value("values"), library_default(number_value("ref"), "1.0")});
     add_command(commands, "db-to-amplitude", false,
-                {string_value("values"), number_value("ref", 1.0)});
+                {string_value("values"), library_default(number_value("ref"), "1.0")});
     add_command(commands, "frame-signal", false,
                 {string_value("values"), int_value("frame-length"), global_int("n-fft", 2048),
                  global_int("hop-length", 512)});
     add_command(commands, "pad-center", false,
-                {string_value("values"), int_value("size"), number_value("pad-value", 0.0)});
+                {string_value("values"), int_value("size"),
+                 library_default(number_value("pad-value"), "0.0")});
     add_command(commands, "fix-length", false,
-                {string_value("values"), int_value("size"), number_value("pad-value", 0.0)});
-    add_command(
-        commands, "fix-frames", false,
-        {string_value("values"), int_value("x-min", 0), int_value("x-max", -1), flag("no-pad")});
+                {string_value("values"), int_value("size"),
+                 library_default(number_value("pad-value"), "0.0")});
+    add_command(commands, "fix-frames", false,
+                {string_value("values"), library_default(int_value("x-min"), "0"),
+                 library_default(int_value("x-max"), "-1"), flag("no-pad")});
     add_command(commands, "peak-pick", false,
                 {string_value("values"), int_value("pre-max", 1), int_value("post-max", 1),
                  int_value("pre-avg", 1), int_value("post-avg", 1), number_value("delta", 0.0),
                  int_value("wait", 0)});
+    add_command(commands, "vector-normalize", false,
+                {string_value("values"),
+                 // Indexes NormType (inf, L1, L2, power); an index past the end used to
+                 // fall through to the inf norm and report success.
+                 library_default(with_domain(int_value("norm-type"),
+                                             enum_index(0, 3, CliOptionDomainStage::Parameter)),
+                                 "0"),
+                 library_default(number_value("threshold"), "0.0")});
     add_command(
-        commands, "vector-normalize", false,
-        {string_value("values"),
-         // Indexes NormType (inf, L1, L2, power); an index past the end used to
-         // fall through to the inf norm and report success.
-         with_domain(int_value("norm-type", 0), enum_index(0, 3, CliOptionDomainStage::Parameter)),
-         number_value("threshold", 1e-12)});
-    add_command(commands, "pcen", false,
-                {string_value("values"), int_value("sample-rate", 22050),
-                 number_value("time-constant", 0.4), number_value("gain", 0.98),
-                 number_value("bias", 2.0), number_value("power", 0.5), number_value("eps", 1e-6),
-                 int_value("n-bins"), int_value("n-frames"), global_int("hop-length", 512)});
+        commands, "pcen", false,
+        {string_value("values"), library_default(int_value("sample-rate"), "22050"),
+         library_default(number_value("time-constant"), "0.4"),
+         library_default(number_value("gain"), "0.98"),
+         library_default(number_value("bias"), "2.0"),
+         library_default(number_value("power"), "0.5"),
+         library_default(number_value("eps"), "1e-06"), int_value("n-bins"), int_value("n-frames"),
+         library_default(int_value("hop-length", false, true), "512")});
     add_command(commands, "info", true, {});
 
     add_command(commands, "version", false, {});

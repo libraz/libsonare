@@ -597,8 +597,8 @@ int cmd_system_info(const CliArgs& args) {
 int cmd_frames_to_samples(const CliArgs& args, const Audio&) {
   const int frames = args.get_int("frames", 0);
   const int hop_length = args.hop_length;
-  const int n_fft = args.n_fft;
-  const int samples = frames_to_samples(frames, hop_length, n_fft);
+  const int samples = args.has("n-fft") ? frames_to_samples(frames, hop_length, args.n_fft)
+                                        : frames_to_samples(frames, hop_length);
   if (args.json_output) {
     JsonBuilder().begin_object().kv("samples", samples).end_object().print();
   } else {
@@ -610,8 +610,8 @@ int cmd_frames_to_samples(const CliArgs& args, const Audio&) {
 int cmd_samples_to_frames(const CliArgs& args, const Audio&) {
   const int samples = args.get_int("samples", 0);
   const int hop_length = args.hop_length;
-  const int n_fft = args.n_fft;
-  const int frames = samples_to_frames(samples, hop_length, n_fft);
+  const int frames = args.has("n-fft") ? samples_to_frames(samples, hop_length, args.n_fft)
+                                       : samples_to_frames(samples, hop_length);
   if (args.json_output) {
     JsonBuilder().begin_object().kv("frames", frames).end_object().print();
   } else {
@@ -622,29 +622,29 @@ int cmd_samples_to_frames(const CliArgs& args, const Audio&) {
 
 int cmd_power_to_db(const CliArgs& args, const Audio&) {
   auto values = require_float_values(args);
-  print_float_values(
-      args, power_to_db(values, args.get_float("ref", 1.0f), args.get_float("amin", 1e-10f),
-                        args.get_float("top-db", 80.0f)));
+  print_float_values(args, power_to_db(values, args.get_float("ref", kDefaultDbReference),
+                                       args.get_float("amin", constants::kEpsilon),
+                                       args.get_float("top-db", constants::kDefaultTopDb)));
   return 0;
 }
 
 int cmd_amplitude_to_db(const CliArgs& args, const Audio&) {
   auto values = require_float_values(args);
-  print_float_values(
-      args, amplitude_to_db(values, args.get_float("ref", 1.0f), args.get_float("amin", 1e-5f),
-                            args.get_float("top-db", 80.0f)));
+  print_float_values(args, amplitude_to_db(values, args.get_float("ref", kDefaultDbReference),
+                                           args.get_float("amin", kDefaultAmplitudeDbFloor),
+                                           args.get_float("top-db", constants::kDefaultTopDb)));
   return 0;
 }
 
 int cmd_db_to_power(const CliArgs& args, const Audio&) {
   auto values = require_float_values(args);
-  print_float_values(args, db_to_power(values, args.get_float("ref", 1.0f)));
+  print_float_values(args, db_to_power(values, args.get_float("ref", kDefaultDbReference)));
   return 0;
 }
 
 int cmd_db_to_amplitude(const CliArgs& args, const Audio&) {
   auto values = require_float_values(args);
-  print_float_values(args, db_to_amplitude(values, args.get_float("ref", 1.0f)));
+  print_float_values(args, db_to_amplitude(values, args.get_float("ref", kDefaultDbReference)));
   return 0;
 }
 
@@ -671,7 +671,7 @@ int cmd_pad_center(const CliArgs& args, const Audio&) {
   auto values = require_float_values(args);
   const auto size =
       static_cast<size_t>(args.require_int_in_range("size", 1, std::numeric_limits<int>::max()));
-  print_float_values(args, pad_center(values, size, args.get_float("pad-value", 0.0f)));
+  print_float_values(args, pad_center(values, size, args.get_float("pad-value", kDefaultPadValue)));
   return 0;
 }
 
@@ -679,14 +679,15 @@ int cmd_fix_length(const CliArgs& args, const Audio&) {
   auto values = require_float_values(args);
   const auto size =
       static_cast<size_t>(args.require_int_in_range("size", 1, std::numeric_limits<int>::max()));
-  print_float_values(args, fix_length(values, size, args.get_float("pad-value", 0.0f)));
+  print_float_values(args, fix_length(values, size, args.get_float("pad-value", kDefaultPadValue)));
   return 0;
 }
 
 int cmd_fix_frames(const CliArgs& args, const Audio&) {
   auto values = require_int_values(args);
-  print_int_values(args, fix_frames(values, args.get_int("x-min", 0), args.get_int("x-max", -1),
-                                    !args.has("no-pad")));
+  print_int_values(args,
+                   fix_frames(values, args.get_int("x-min", kDefaultFixFramesMin),
+                              args.get_int("x-max", kFixFramesNoUpperBound), !args.has("no-pad")));
   return 0;
 }
 
@@ -700,12 +701,14 @@ int cmd_peak_pick(const CliArgs& args, const Audio&) {
 
 int cmd_vector_normalize(const CliArgs& args, const Audio&) {
   auto values = require_float_values(args);
-  const int norm_type = args.get_int("norm-type", 0);
+  const int norm_type = args.get_int("norm-type", static_cast<int>(NormType::Inf));
   NormType norm = NormType::Inf;
   if (norm_type == 1) norm = NormType::L1;
   if (norm_type == 2) norm = NormType::L2;
   if (norm_type == 3) norm = NormType::Power;
-  print_float_values(args, normalize(values, norm, args.get_float("threshold", 1e-12f)));
+  print_float_values(args, args.has("threshold")
+                               ? normalize(values, norm, args.get_float("threshold", 0.0f))
+                               : normalize(values, norm));
   return 0;
 }
 
@@ -713,7 +716,7 @@ int cmd_pcen(const CliArgs& args, const Audio&) {
   auto values = require_float_values(args);
   PcenConfig config;
   config.sr = args.get_int("sample-rate", config.sr);
-  config.hop_length = args.hop_length;
+  if (args.has("hop-length")) config.hop_length = args.hop_length;
   config.time_constant = args.get_float("time-constant", config.time_constant);
   config.gain = args.get_float("gain", config.gain);
   config.bias = args.get_float("bias", config.bias);

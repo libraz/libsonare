@@ -219,10 +219,10 @@ int cmd_tone(const CliArgs& args, const Audio&) {
     return 1;
   }
   const float frequency = args.get_float("frequency-hz", 0.0f);
-  const int sr = args.get_int("sample-rate", 22050);
-  const float duration = args.get_float("duration-sec", 1.0f);
-  const float phase = args.get_float("phase", 0.0f);
-  const float amplitude = args.get_float("amplitude", 1.0f);
+  const int sr = args.get_int("sample-rate", constants::kDefaultSampleRate);
+  const float duration = args.get_float("duration-sec", kDefaultSynthesisDurationSec);
+  const float phase = args.get_float("phase", kDefaultTonePhase);
+  const float amplitude = args.get_float("amplitude", kDefaultToneAmplitude);
 
   Audio result = tone(frequency, sr, duration, phase, amplitude);
   save_wav(args.output_file, result.data(), result.size(), result.sample_rate());
@@ -252,8 +252,8 @@ int cmd_chirp(const CliArgs& args, const Audio&) {
               << color::reset << "\n";
     return 1;
   }
-  const int sr = args.get_int("sample-rate", 22050);
-  const float duration = args.get_float("duration-sec", 1.0f);
+  const int sr = args.get_int("sample-rate", constants::kDefaultSampleRate);
+  const float duration = args.get_float("duration-sec", kDefaultSynthesisDurationSec);
 
   Audio result = chirp(fmin, fmax, sr, duration, linear);
   save_wav(args.output_file, result.data(), result.size(), result.sample_rate());
@@ -281,10 +281,10 @@ int cmd_clicks(const CliArgs& args, const Audio&) {
     return 1;
   }
   const std::vector<float> times = parse_float_list(args.get_string("times"));
-  const int sr = args.get_int("sample-rate", 22050);
-  const int length = args.get_int("length", 0);
-  const float frequency = args.get_float("frequency-hz", 1000.0f);
-  const float click_duration = args.get_float("click-duration-sec", 0.1f);
+  const int sr = args.get_int("sample-rate", constants::kDefaultSampleRate);
+  const int length = args.get_int("length", kClicksFitLength);
+  const float frequency = args.get_float("frequency-hz", kDefaultClickFrequencyHz);
+  const float click_duration = args.get_float("click-duration-sec", kDefaultClickDurationSec);
 
   Audio result = clicks(times, sr, length, frequency, click_duration);
   save_wav(args.output_file, result.data(), result.size(), result.sample_rate());

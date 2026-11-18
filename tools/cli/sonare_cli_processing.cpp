@@ -1196,7 +1196,7 @@ int cmd_hpss(const CliArgs& args, const Audio& audio) {
 }
 
 int cmd_preemphasis(const CliArgs& args, const Audio& audio) {
-  const float coef = args.get_float("coef", 0.97f);
+  const float coef = args.get_float("coef", kDefaultEmphasisCoef);
   std::vector<float> input(audio.begin(), audio.end());
   std::vector<float> result = preemphasis(input, coef);
   save_wav(args.output_file, result.data(), result.size(), audio.sample_rate());
@@ -1216,7 +1216,7 @@ int cmd_preemphasis(const CliArgs& args, const Audio& audio) {
 }
 
 int cmd_deemphasis(const CliArgs& args, const Audio& audio) {
-  const float coef = args.get_float("coef", 0.97f);
+  const float coef = args.get_float("coef", kDefaultEmphasisCoef);
   std::vector<float> input(audio.begin(), audio.end());
   std::vector<float> result = deemphasis(input, coef);
   save_wav(args.output_file, result.data(), result.size(), audio.sample_rate());

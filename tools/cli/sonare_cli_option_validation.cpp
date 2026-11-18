@@ -216,6 +216,7 @@ std::vector<std::string> cli_options_for_command(const std::string& command) {
       display += " <value>";
     else if (option.arity == CliOptionArity::OptionalValue)
       display += " [value]";
+    if (!option.stated_default.empty()) display += "  (default: " + option.stated_default + ")";
     result.push_back(std::move(display));
   }
   return result;

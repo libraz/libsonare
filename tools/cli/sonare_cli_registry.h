@@ -88,6 +88,9 @@ struct CliOptionSpec {
   /// An Integer option that also reads a mode name (`major`, `dorian`, ...) as
   /// the scale mask of that mode. The domain is checked on the resolved mask.
   bool accepts_mode_name = false;
+  /// What the library takes when the option is left out, as `--help` states it. Set only on an
+  /// option with no registry default, whose handler then keeps the library's own value.
+  std::string stated_default;
 };
 
 /// A command-level check for a constraint that spans two options (for example
