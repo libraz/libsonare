@@ -11,6 +11,9 @@
 #if defined(SONARE_WITH_VOICE_CHANGER)
 #include "editing/voice_changer/streaming_retune.h"
 #endif
+#include "effects/native_spectral_stretch.h"
+#include "effects/pitch_shift.h"
+#include "effects/time_stretch.h"
 #include "feature/inverse.h"
 #include "util/exception.h"
 #include "util/json.h"
@@ -181,6 +184,69 @@ TEST_CASE("mfcc_to_audio refusals are owned by the core function",
     CHECK(sonare_mfcc_to_audio_ex2(mfcc.data(), n_mfcc, n_frames, n_mels, kRate, 2048, 512, 0.0f,
                                    0.0f, 0, 0.0f, n_iter, &audio,
                                    &audio_length) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK_THAT(last_error_message(), Catch::Matchers::ContainsSubstring(message));
+  }
+}
+
+TEST_CASE("native spectral stretch geometry refusals are owned by the core function",
+          "[conformance][core_validation]") {
+  const Value corpus = load_refusal_corpus();
+  const Value& route = corpus["native_spectral_stretch"];
+  const Value& input = route["input"];
+  const int rate = static_cast<int>(input["sample_rate"].as_number());
+  const std::vector<float> samples(static_cast<size_t>(input["length"].as_number()),
+                                   static_cast<float>(input["fill"].as_number()));
+  const sonare::Audio audio = sonare::Audio::from_buffer(samples.data(), samples.size(), rate);
+  const float speed = static_cast<float>(input["speed_ratio"].as_number());
+  const float semitones = static_cast<float>(input["pitch_semitones"].as_number());
+
+  for (const auto& item : route["accepted"].as_array()) {
+    const int n_fft = static_cast<int>(item["n_fft"].as_number());
+    const int hop = static_cast<int>(item["hop_length"].as_number());
+    INFO(item["id"].as_string());
+    CHECK(!sonare::native_spectral_time_stretch(audio, speed, n_fft, hop).empty());
+    sonare::PitchShiftConfig shift;
+    shift.n_fft = n_fft;
+    shift.hop_length = hop;
+    shift.backend = sonare::StretchBackend::NativeSpectral;
+    CHECK(!sonare::pitch_shift(audio, semitones, shift).empty());
+    float* out = nullptr;
+    size_t out_length = 0;
+    REQUIRE(sonare_time_stretch_ex(samples.data(), samples.size(), rate, speed, n_fft, hop, &out,
+                                   &out_length) == SONARE_OK);
+    sonare_free_floats(out);
+    REQUIRE(sonare_pitch_shift_ex(samples.data(), samples.size(), rate, semitones, n_fft, hop, &out,
+                                  &out_length) == SONARE_OK);
+    sonare_free_floats(out);
+  }
+
+  for (const auto& item : route["refused"].as_array()) {
+    const int n_fft = static_cast<int>(item["n_fft"].as_number());
+    const int hop = static_cast<int>(item["hop_length"].as_number());
+    const std::string message = item["message"].as_string();
+    INFO(item["id"].as_string());
+    REQUIRE(item["cause"].as_string() == "argument");
+
+    require_argument_refusal(
+        [&] { sonare::native_spectral_time_stretch(audio, speed, n_fft, hop); }, message);
+    sonare::TimeStretchConfig stretch;
+    stretch.n_fft = n_fft;
+    stretch.hop_length = hop;
+    stretch.backend = sonare::StretchBackend::NativeSpectral;
+    require_argument_refusal([&] { sonare::time_stretch(audio, speed, stretch); }, message);
+    sonare::PitchShiftConfig shift;
+    shift.n_fft = n_fft;
+    shift.hop_length = hop;
+    shift.backend = sonare::StretchBackend::NativeSpectral;
+    require_argument_refusal([&] { sonare::pitch_shift(audio, semitones, shift); }, message);
+
+    float* out = nullptr;
+    size_t out_length = 0;
+    CHECK(sonare_time_stretch_ex(samples.data(), samples.size(), rate, speed, n_fft, hop, &out,
+                                 &out_length) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK_THAT(last_error_message(), Catch::Matchers::ContainsSubstring(message));
+    CHECK(sonare_pitch_shift_ex(samples.data(), samples.size(), rate, semitones, n_fft, hop, &out,
+                                &out_length) == SONARE_ERROR_INVALID_PARAMETER);
     CHECK_THAT(last_error_message(), Catch::Matchers::ContainsSubstring(message));
   }
 }

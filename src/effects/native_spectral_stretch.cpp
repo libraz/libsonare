@@ -7,13 +7,16 @@
 
 #include "effects/phase_vocoder.h"
 #include "effects/pitch_shift.h"
-#include "util/constants.h"
 #include "util/exception.h"
 #include "util/numeric_validation.h"
 
 namespace sonare {
 
 Audio native_spectral_time_stretch(const Audio& audio, float rate, int n_fft, int hop_length) {
+  SONARE_CHECK_MSG(n_fft >= 1, ErrorCode::InvalidParameter,
+                   "native_spectral_time_stretch: n_fft must be >= 1");
+  SONARE_CHECK_MSG(hop_length >= 1, ErrorCode::InvalidParameter,
+                   "native_spectral_time_stretch: hop_length must be >= 1");
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
   std::size_t output_size = 0;
   constexpr std::size_t kMaxOutputSamples =
@@ -22,13 +25,8 @@ Audio native_spectral_time_stretch(const Audio& audio, float rate, int n_fft, in
       numeric::checked_projected_count(audio.size(), rate, kMaxOutputSamples, &output_size),
       ErrorCode::InvalidParameter);
 
-  // Guard invalid analysis sizes by falling back to the librosa-matching
-  // defaults so a malformed config never produces an empty/degenerate STFT.
-  if (n_fft <= 0) n_fft = constants::kDefaultNFft;
-  if (hop_length <= 0) hop_length = constants::kDefaultHopLength;
-  // Checked after the fallback so the substituted defaults are what gets
-  // validated; a caller-supplied geometry that cannot be overlap-added is an
-  // error rather than something to repair.
+  // A caller-supplied geometry that cannot be overlap-added is an error rather than
+  // something to repair.
   validate_cola_geometry(n_fft, hop_length);
 
   Spectrogram spec = phase_vocoder_analysis(audio, n_fft, hop_length);

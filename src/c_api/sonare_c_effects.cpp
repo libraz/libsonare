@@ -178,7 +178,6 @@ SonareError sonare_time_stretch_ex(const float* samples, size_t length, int samp
   if (out != nullptr) *out = nullptr;
   if (out_length != nullptr) *out_length = 0;
   if (out == nullptr || out_length == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
-  if (n_fft <= 0 || hop_length <= 0) return SONARE_ERROR_INVALID_PARAMETER;
 
   TimeStretchConfig config;
   config.n_fft = n_fft;
@@ -205,7 +204,6 @@ SonareError sonare_pitch_shift_ex(const float* samples, size_t length, int sampl
   if (out != nullptr) *out = nullptr;
   if (out_length != nullptr) *out_length = 0;
   if (out == nullptr || out_length == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
-  if (n_fft <= 0 || hop_length <= 0) return SONARE_ERROR_INVALID_PARAMETER;
 
   PitchShiftPlan plan;
   if (!make_pitch_shift_plan(length, sample_rate, pitch_semitones, &plan)) {

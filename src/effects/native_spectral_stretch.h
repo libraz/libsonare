@@ -9,18 +9,16 @@
 namespace sonare {
 
 /// @brief Offline spectral time stretch on the native libsonare path.
-/// @param n_fft FFT size for analysis. Non-positive values fall back to the
-///        default (@c constants::kDefaultNFft).
-/// @param hop_length Hop length for analysis. Non-positive values fall back to
-///        the default (@c constants::kDefaultHopLength).
+/// @param n_fft FFT size for analysis; must be >= 1 (and an even integer >= 4 to overlap-add).
+/// @param hop_length Hop length for analysis; must be >= 1 (and at most n_fft / 2).
+/// @throw sonare::SonareException (InvalidParameter) for a non-positive @p n_fft or
+///        @p hop_length, or a geometry that cannot be overlap-added.
 Audio native_spectral_time_stretch(const Audio& audio, float rate,
                                    int n_fft = constants::kDefaultNFft,
                                    int hop_length = constants::kDefaultHopLength);
 /// @brief Offline spectral pitch shift on the native libsonare path.
-/// @param n_fft FFT size for the internal time stretch (see above; non-positive
-///        falls back to the default).
-/// @param hop_length Hop length for the internal time stretch (non-positive
-///        falls back to the default).
+/// @param n_fft FFT size for the internal time stretch (see above).
+/// @param hop_length Hop length for the internal time stretch (see above).
 Audio native_spectral_pitch_shift_ratio(const Audio& audio, float ratio,
                                         int n_fft = constants::kDefaultNFft,
                                         int hop_length = constants::kDefaultHopLength);

@@ -40,5 +40,18 @@
       { "id": "zero_iter", "n_iter": 0, "cause": "argument", "message": "n_iter must be >= 1" },
       { "id": "negative_iter", "n_iter": -1, "cause": "argument", "message": "n_iter must be >= 1" }
     ]
+  },
+  "native_spectral_stretch": {
+    "input": { "sample_rate": 22050, "length": 2048, "fill": 0.1, "speed_ratio": 1.25, "pitch_semitones": 2 },
+    "accepted": [
+      { "id": "default_geometry", "n_fft": 2048, "hop_length": 512 },
+      { "id": "smallest_geometry", "n_fft": 4, "hop_length": 1 }
+    ],
+    "refused": [
+      { "id": "zero_n_fft", "n_fft": 0, "hop_length": 512, "cause": "argument", "message": "n_fft must be >= 1" },
+      { "id": "negative_n_fft", "n_fft": -1, "hop_length": 512, "cause": "argument", "message": "n_fft must be >= 1" },
+      { "id": "zero_hop", "n_fft": 2048, "hop_length": 0, "cause": "argument", "message": "hop_length must be >= 1" },
+      { "id": "negative_hop", "n_fft": 2048, "hop_length": -5, "cause": "argument", "message": "hop_length must be >= 1" }
+    ]
   }
 }

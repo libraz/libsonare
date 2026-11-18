@@ -23,6 +23,7 @@ _ERROR_CLASS = {"argument": SonareValueError}
 _MFCC = _CORPUS["mfcc_to_mel"]
 _MEL = _CORPUS["mel_to_audio"]
 _MFCC_AUDIO = _CORPUS["mfcc_to_audio"]
+_STRETCH = _CORPUS["native_spectral_stretch"]
 _RETUNE = _CORPUS["streaming_retune_prepare"]
 
 
@@ -78,6 +79,31 @@ def test_mfcc_to_audio_refuses(case: dict) -> None:
     n_mels = _MFCC_AUDIO["input"]["n_mels"]
     with pytest.raises(_ERROR_CLASS[case["cause"]], match=case["message"]):
         libsonare.mfcc_to_audio(_mfcc_audio(), n_mels=n_mels, n_iter=case["n_iter"])
+
+
+def _stretch_samples() -> np.ndarray:
+    count = _STRETCH["input"]["length"]
+    return np.full(count, _STRETCH["input"]["fill"], dtype=np.float32)
+
+
+@pytest.mark.parametrize("case", _STRETCH["accepted"], ids=lambda case: case["id"])
+def test_native_spectral_stretch_accepts(case: dict) -> None:
+    args = (_stretch_samples(), _STRETCH["input"]["sample_rate"])
+    geometry = {"n_fft": case["n_fft"], "hop_length": case["hop_length"]}
+    assert libsonare.time_stretch(*args, _STRETCH["input"]["speed_ratio"], **geometry).size > 0
+    assert libsonare.pitch_shift(*args, _STRETCH["input"]["pitch_semitones"], **geometry).size > 0
+
+
+@pytest.mark.parametrize("case", _STRETCH["refused"], ids=lambda case: case["id"])
+def test_native_spectral_stretch_refuses(case: dict) -> None:
+    # The facade validates the geometry pair itself, so only the error class is pinned here.
+    error_class = _ERROR_CLASS[case["cause"]]
+    args = (_stretch_samples(), _STRETCH["input"]["sample_rate"])
+    geometry = {"n_fft": case["n_fft"], "hop_length": case["hop_length"]}
+    with pytest.raises(error_class):
+        libsonare.time_stretch(*args, _STRETCH["input"]["speed_ratio"], **geometry)
+    with pytest.raises(error_class):
+        libsonare.pitch_shift(*args, _STRETCH["input"]["pitch_semitones"], **geometry)
 
 
 @pytest.mark.parametrize("case", _RETUNE["accepted"], ids=lambda case: case["id"])

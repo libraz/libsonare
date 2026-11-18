@@ -1,6 +1,14 @@
 import { readFileSync } from 'node:fs';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { init, melToAudio, mfccToAudio, mfccToMel, StreamingRetune } from '../src/index';
+import {
+  init,
+  melToAudio,
+  mfccToAudio,
+  mfccToMel,
+  pitchShift,
+  StreamingRetune,
+  timeStretch,
+} from '../src/index';
 import { getSonareModule } from '../src/module_state';
 import { expectRefusalOf } from './_helpers';
 
@@ -16,6 +24,21 @@ type MelCase = { id: string; n_iter: number; cause?: Cause; message?: string };
 type MelRoute = { input: MelInput; accepted: MelCase[]; refused: MelCase[] };
 type MfccAudioInput = { n_mfcc: number; n_frames: number; n_mels: number; fill: number };
 type MfccAudioRoute = { input: MfccAudioInput; accepted: MelCase[]; refused: MelCase[] };
+type StretchInput = {
+  sample_rate: number;
+  length: number;
+  fill: number;
+  speed_ratio: number;
+  pitch_semitones: number;
+};
+type StretchCase = {
+  id: string;
+  n_fft: number;
+  hop_length: number;
+  cause?: Cause;
+  message?: string;
+};
+type StretchRoute = { input: StretchInput; accepted: StretchCase[]; refused: StretchCase[] };
 type RetuneCase = {
   id: string;
   sample_rate: number;
@@ -34,6 +57,7 @@ const corpus = JSON.parse(
   mfcc_to_mel: MfccRoute;
   mel_to_audio: MelRoute;
   mfcc_to_audio: MfccAudioRoute;
+  native_spectral_stretch: StretchRoute;
   streaming_retune_prepare: RetuneRoute;
 };
 
@@ -52,6 +76,8 @@ type RawInverse = {
   };
   mfccToAudio(...args: unknown[]): Float32Array;
   melToAudio(...args: unknown[]): Float32Array;
+  timeStretchEx(...args: unknown[]): Float32Array;
+  pitchShiftEx(...args: unknown[]): Float32Array;
   createStreamingRetune(config: Record<string, unknown>): {
     prepare(sampleRate: number, maxBlockSize: number): void;
     delete(): void;
@@ -187,6 +213,52 @@ describe('mfcc_to_audio refusals come from the core', () => {
         ),
     ];
     for (const call of calls) {
+      expect(expectRefusalOf(call, kind).message).toMatch(text);
+    }
+  });
+});
+
+describe('native spectral stretch geometry refusals come from the core', () => {
+  const { input, accepted, refused } = corpus.native_spectral_stretch;
+  const samples = new Float32Array(input.length).fill(input.fill);
+  const rate = input.sample_rate;
+  const raw = () => getSonareModule() as unknown as RawInverse;
+
+  it.each(accepted)('accepts $id', ({ n_fft, hop_length }) => {
+    const options = { nFft: n_fft, hopLength: hop_length };
+    const stretch = { samples, sampleRate: rate, speedRatio: input.speed_ratio, ...options };
+    const shift = { samples, sampleRate: rate, pitchSemitones: input.pitch_semitones, ...options };
+    expect(timeStretch(stretch).length).toBeGreaterThan(0);
+    expect(pitchShift(shift).length).toBeGreaterThan(0);
+    const viaStretch = raw().timeStretchEx(samples, rate, input.speed_ratio, n_fft, hop_length);
+    const viaShift = raw().pitchShiftEx(samples, rate, input.pitch_semitones, n_fft, hop_length);
+    expect(viaStretch.length).toBeGreaterThan(0);
+    expect(viaShift.length).toBeGreaterThan(0);
+  });
+
+  it.each(refused)('refuses $id', ({ n_fft, hop_length, cause, message }) => {
+    const kind = errorClassFor[cause as Cause];
+    const text = new RegExp(message as string);
+    const options = { nFft: n_fft, hopLength: hop_length };
+    // The facade's own geometry domain refuses first, so only the class is pinned there.
+    const facadeCalls: Array<() => unknown> = [
+      () => timeStretch({ samples, sampleRate: rate, speedRatio: input.speed_ratio, ...options }),
+      () =>
+        pitchShift({
+          samples,
+          sampleRate: rate,
+          pitchSemitones: input.pitch_semitones,
+          ...options,
+        }),
+    ];
+    for (const call of facadeCalls) {
+      expectRefusalOf(call, kind);
+    }
+    const rawCalls: Array<() => unknown> = [
+      () => raw().timeStretchEx(samples, rate, input.speed_ratio, n_fft, hop_length),
+      () => raw().pitchShiftEx(samples, rate, input.pitch_semitones, n_fft, hop_length),
+    ];
+    for (const call of rawCalls) {
       expect(expectRefusalOf(call, kind).message).toMatch(text);
     }
   });
