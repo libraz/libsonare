@@ -550,9 +550,10 @@ export class Project {
   }
 
   /**
-   * Route a track's MIDI to host-instrument `destinationId` (0 = default). The
-   * compiler stamps every MIDI clip on the track with this id so the engine
-   * dispatches its events to the instrument registered for that destination.
+   * Route a track's MIDI to host-instrument `destinationId`. Destination `0`,
+   * which every track starts on, is a real id like any other. The compiler
+   * stamps every MIDI clip on the track with this id so the engine dispatches
+   * its events to the instrument registered for that destination.
    * Routes through an undoable edit command. Builtin, NativeSynth, and SF2
    * instruments retain source-track provenance inside a shared destination
    * voice pool. With only zero-latency instruments bound, live lanes and

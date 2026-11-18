@@ -2854,6 +2854,11 @@ export class RealtimeEngine {
     return this.native.drainTelemetry(maxRecords).map(telemetryFromNative);
   }
 
+  /**
+   * Drains pending meter telemetry records, oldest first.
+   *
+   * @param maxRecords Most records to return (non-negative integer). Omitted: 1024. 0 returns an empty array.
+   */
   drainMeterTelemetry(maxRecords?: number): EngineMeterTelemetry[] {
     return this.native.drainMeterTelemetry(maxRecords).map(meterTelemetryFromNative);
   }

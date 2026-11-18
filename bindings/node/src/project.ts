@@ -840,7 +840,8 @@ export class Project {
   }
 
   /**
-   * Route a track's MIDI clips to a host/instrument destination id.
+   * Route a track's MIDI clips to a host/instrument destination id. Destination
+   * `0`, which every track starts on, is a real id like any other.
    *
    * Builtin, NativeSynth, and SF2 instruments retain source-track provenance
    * inside a shared destination voice pool. With only zero-latency instruments
