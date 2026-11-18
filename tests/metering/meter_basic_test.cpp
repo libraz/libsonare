@@ -6,6 +6,7 @@
 #include <initializer_list>
 #include <iterator>
 #include <limits>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -1830,5 +1831,25 @@ TEST_CASE("the level meters refuse audio they cannot measure", "[meter][numeric]
     // rediscovered as an inconsistency.
     REQUIRE_NOTHROW(metering::clipping_ratio(bad, 0.999f));
     REQUIRE_NOTHROW(metering::silence_ratio(bad, -60.0f, 1024, 512));
+  }
+}
+
+TEST_CASE("true_peak names the oversample factor it refuses", "[metering][true_peak]") {
+  const std::vector<float> samples(256, 0.25f);
+  for (const int factor : {0, -1, 3, 32}) {
+    CAPTURE(factor);
+    try {
+      (void)metering::true_peak(samples.data(), samples.size(), factor);
+      FAIL("expected a refusal");
+    } catch (const SonareException& error) {
+      CHECK(error.code() == ErrorCode::InvalidParameter);
+      CHECK(std::string(error.what()) ==
+            "true_peak: oversample_factor must be one of 1, 2, 4, 8, 16, got " +
+                std::to_string(factor));
+    }
+  }
+  for (const int factor : {1, 2, 4, 8, 16}) {
+    CAPTURE(factor);
+    CHECK(metering::true_peak(samples.data(), samples.size(), factor) > 0.0f);
   }
 }

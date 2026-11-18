@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <string>
 #include <vector>
 
 #include "rt/true_peak_fir.h"
@@ -108,13 +109,11 @@ float upsampled_peak(const float* data, size_t length, int oversample_factor) {
 }  // namespace
 
 float true_peak(const float* data, size_t length, int oversample_factor) {
-  SONARE_CHECK(oversample_factor >= 1, ErrorCode::InvalidParameter);
-  // Reject factors without a dedicated polyphase design instead of silently
-  // falling back to 4x and reporting a result mislabeled with the requested
-  // factor. Supported factors: 1, 2, 4, 8, 16.
+  // A factor without a dedicated polyphase design is refused, never run at another factor.
   SONARE_CHECK_MSG(::sonare::rt::is_supported_polyphase_oversample_factor(oversample_factor),
                    ErrorCode::InvalidParameter,
-                   "true_peak oversample_factor must be one of 1, 2, 4, 8, 16");
+                   "true_peak: oversample_factor must be one of 1, 2, 4, 8, 16, got " +
+                       std::to_string(oversample_factor));
   SONARE_CHECK(data != nullptr || length == 0, ErrorCode::InvalidParameter);
   if (length == 0) return 0.0f;
   // peak_abs absorbs a non-finite sample, and the skip test below compares an
