@@ -211,7 +211,7 @@ _EQ_SHORTCUT_NAMES = (
     "range-db",
     "attack-ms",
     "release-ms",
-    "lookahead-ms",
+    "detector-delay-ms",
     "sidechain-freq-hz",
     "sidechain-q",
     "phase-mode",
@@ -306,9 +306,7 @@ def cmd_mastering(args: argparse.Namespace) -> int:
     # Alongside --assistant, --preset names the base the suggestion starts from
     # rather than a second chain, so only --chain-config excludes the other two.
     if config_raw and (preset or assistant):
-        raise ValueError(
-            "--chain-config (--config) is mutually exclusive with --preset and --assistant"
-        )
+        raise ValueError("--chain-config is mutually exclusive with --preset and --assistant")
     if params_raw and not selectors:
         raise ValueError("--params requires --preset, --chain-config, or --assistant")
     # Every option that only reaches an AssistantConfig field, refused rather
@@ -583,7 +581,7 @@ def cmd_eq(args: argparse.Namespace) -> int:
             "band0.rangeDb": float(getattr(args, "range_db", -6.0)),
             "band0.attackMs": float(getattr(args, "attack_ms", 5.0)),
             "band0.releaseMs": float(getattr(args, "release_ms", 50.0)),
-            "band0.detectorDelayMs": float(getattr(args, "lookahead_ms", 0.0)),
+            "band0.detectorDelayMs": float(args.detector_delay_ms),
             "band0.sidechainFreqHz": float(getattr(args, "sidechain_freq_hz", -1.0)),
             "band0.sidechainQ": float(getattr(args, "sidechain_q", 1.0)),
             "phaseMode": float(getattr(args, "phase_mode", 1)),
@@ -1035,11 +1033,8 @@ def register_mastering_parsers(
         "--preset", type=_token_of(_library_catalog("mastering_preset_names")), default=""
     )
     # "--chain-config" names a complete chain config in the core's own
-    # ``{params, version}`` form. It is the canonical spelling because the bare
-    # ``--config`` carries a second meaning on this CLI (preset overrides on
-    # ``master``); that original spelling stays accepted here as an alias, and
-    # the handler's destination keeps its own name.
-    mastering_p.add_argument("--chain-config", "--config", dest="config", default=None)
+    # ``{params, version}`` form.
+    mastering_p.add_argument("--chain-config", dest="config", default=None)
     mastering_p.add_argument("--target-lufs", type=_finite_float, default=-14.0)
     mastering_p.add_argument("--ceiling-dbtp", type=_finite_float, default=-1.0)
     mastering_p.add_argument("--params", default="")
@@ -1131,16 +1126,7 @@ def register_mastering_parsers(
     eq_p.add_argument("--range-db", type=_finite_float, default=-6.0)
     eq_p.add_argument("--attack-ms", type=_finite_float, default=5.0)
     eq_p.add_argument("--release-ms", type=_finite_float, default=50.0)
-    # "--lookahead-ms" is the flag's former (misleading) spelling; still
-    # accepted, both writing to the same destination, so a stored script
-    # keeps working.
-    eq_p.add_argument(
-        "--detector-delay-ms",
-        "--lookahead-ms",
-        dest="lookahead_ms",
-        type=_finite_float,
-        default=0.0,
-    )
+    eq_p.add_argument("--detector-delay-ms", type=_finite_float, default=0.0)
     eq_p.add_argument("--sidechain-freq-hz", type=_finite_float, default=-1.0)
     eq_p.add_argument("--sidechain-q", type=_finite_float, default=1.0)
     _add_wav_bits_argument(eq_p)

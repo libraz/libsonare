@@ -137,9 +137,8 @@ struct CliValidationError {
   bool empty() const noexcept { return message.empty(); }
 };
 
-/// Maps a core error to the stable native CLI exit-code contract.  The legacy
-/// mode intentionally folds every error to one, matching the Python CLI.
-int cli_exit_code_for_error(sonare::ErrorCode error, bool legacy_mode) noexcept;
+/// Maps a core error to the stable native CLI exit-code contract.
+int cli_exit_code_for_error(sonare::ErrorCode error) noexcept;
 
 class ArgParser {
  public:

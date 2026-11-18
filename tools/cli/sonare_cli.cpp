@@ -340,15 +340,6 @@ constexpr int kExitUsage = 2;
 constexpr int kExitInvalidParameter = 3;
 constexpr int kExitError = 10;
 
-bool legacy_exit_codes() noexcept {
-  const char* value = std::getenv("SONARE_LEGACY_EXIT");
-  return value != nullptr && std::string(value) == "1";
-}
-
-int finalize_exit(int status) noexcept {
-  return status == 0 ? 0 : (legacy_exit_codes() ? 1 : status);
-}
-
 int normalize_handler_exit(const CommandInfo& command, int status) noexcept {
   if (status == 0) return 0;
   (void)command;
@@ -361,12 +352,11 @@ int normalize_handler_exit(const CommandInfo& command, int status) noexcept {
   // project handler that knows its error class now returns that code itself,
   // and anything still returning a plain 1 lands on the same invalid-parameter
   // code as every other command.
-  const int normalized = status == 1 ? kExitInvalidParameter : status;
-  return finalize_exit(normalized);
+  return status == 1 ? kExitInvalidParameter : status;
 }
 
 int exit_code_for(const sonare::SonareException& error) noexcept {
-  return cli_exit_code_for_error(error.code(), legacy_exit_codes());
+  return cli_exit_code_for_error(error.code());
 }
 
 }  // namespace
@@ -376,7 +366,7 @@ int main(int argc, char* argv[]) {
   if (argc < 2) {
     std::cerr << color::red << "Error: No command specified" << color::reset << "\n";
     print_usage_hint();
-    return finalize_exit(kExitUsage);
+    return kExitUsage;
   }
 
   if (argc == 2 && std::string(argv[1]) == "--version") return cmd_version(CliArgs{});
@@ -400,7 +390,7 @@ int main(int argc, char* argv[]) {
     if (args.command.empty()) {
       std::cerr << color::red << "Error: No command specified" << color::reset << "\n";
       print_usage_hint();
-      return finalize_exit(kExitUsage);
+      return kExitUsage;
     }
 
     // Find command
@@ -411,7 +401,7 @@ int main(int argc, char* argv[]) {
       std::cerr << color::red << "Error: Unknown command '" << args.command << "'" << color::reset
                 << "\n";
       print_usage_hint();
-      return finalize_exit(kExitUsage);
+      return kExitUsage;
     }
 
     if (args.help) {
@@ -446,22 +436,22 @@ int main(int argc, char* argv[]) {
       // usage failure, and a domain the Python CLI enforces in its handler is
       // an invalid-parameter failure. The usage banner belongs to the first
       // kind only -- the second is a value the caller spelled correctly.
-      if (argument_error.invalid_parameter) return finalize_exit(kExitInvalidParameter);
+      if (argument_error.invalid_parameter) return kExitInvalidParameter;
       print_usage_hint();
-      return finalize_exit(kExitUsage);
+      return kExitUsage;
     }
 
     // Version/doctor/system-info have no audio and are dispatched only after their
     // empty command schemas and positional arity have been validated.
-    if (args.command == "version") return finalize_exit(cmd_version(args));
-    if (args.command == "doctor") return finalize_exit(cmd_doctor(args));
-    if (args.command == "system-info") return finalize_exit(cmd_system_info(args));
+    if (args.command == "version") return cmd_version(args);
+    if (args.command == "doctor") return cmd_doctor(args);
+    if (args.command == "system-info") return cmd_system_info(args);
 
     // Check for audio file
     if (cmd->requires_audio && args.input_file.empty()) {
       std::cerr << color::red << "Error: Missing audio file" << color::reset << "\n";
       print_usage_hint();
-      return finalize_exit(kExitUsage);
+      return kExitUsage;
     }
 
     if (!cmd->requires_audio) {
@@ -522,12 +512,12 @@ int main(int argc, char* argv[]) {
     return exit_code_for(e);
   } catch (const CliUsageError& e) {
     std::cerr << "\n" << color::red << "Error: " << e.what() << color::reset << "\n";
-    return legacy_exit_codes() ? 1 : kExitUsage;
+    return kExitUsage;
   } catch (const std::invalid_argument& e) {
     std::cerr << "\n" << color::red << "Error: " << e.what() << color::reset << "\n";
-    return legacy_exit_codes() ? 1 : kExitInvalidParameter;
+    return kExitInvalidParameter;
   } catch (const std::exception& e) {
     std::cerr << "\n" << color::red << "Error: " << e.what() << color::reset << "\n";
-    return legacy_exit_codes() ? 1 : kExitError;
+    return kExitError;
   }
 }

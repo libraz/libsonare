@@ -60,7 +60,7 @@ def test_pitch_shift_and_time_stretch_forward_fft_options(
         return [0.3, 0.4]
 
     monkeypatch.setattr(libsonare, "pitch_shift", fake_pitch_shift)
-    assert effects.cmd_pitch_shift(_args(semitones=3.0, n_fft=1024, hop_length=256)) == 0
+    assert effects.cmd_pitch_shift(_args(pitch_semitones=3.0, n_fft=1024, hop_length=256)) == 0
     monkeypatch.setattr(libsonare, "time_stretch", fake_time_stretch)
     assert effects.cmd_time_stretch(_args(rate=1.2, n_fft=1024, hop_length=256)) == 0
 
@@ -267,7 +267,7 @@ def test_acoustic_text_prints_a_dash_for_what_a_blind_estimate_does_not_measure(
     )
     monkeypatch.setattr(libsonare, "detect_acoustic", lambda _samples, **_kwargs: result)
 
-    assert acoustic.cmd_acoustic(_args(ir=False, n_bands=1)) == 0
+    assert acoustic.cmd_acoustic(_args(ir=False, n_octave_bands=1)) == 0
     out = capsys.readouterr().out
     for label in ("EDT", "C50", "C80", "D50"):
         assert f"    {label}:        -\n" in out
@@ -304,13 +304,13 @@ def test_acoustic_handlers_forward_ir_and_blind_controls(
 
     assert (
         acoustic.cmd_acoustic(
-            _args(ir=True, n_bands=4, min_decay_db=24.0, noise_floor_margin_db=8.0)
+            _args(ir=True, n_octave_bands=4, min_decay_db=24.0, noise_floor_margin_db=8.0)
         )
         == 0
     )
     assert (
         acoustic.cmd_acoustic(
-            _args(ir=False, n_bands=5, min_decay_db=18.0, noise_floor_margin_db=6.0)
+            _args(ir=False, n_octave_bands=5, min_decay_db=18.0, noise_floor_margin_db=6.0)
         )
         == 0
     )

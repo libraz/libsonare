@@ -786,8 +786,7 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
                 {string_value("type"), int_value("order", 2), number_value("cutoff-hz", 0.0),
                  number_value("center", 0.0), number_value("bandwidth", 0.0), required_output(),
                  flag("zero-phase")});
-    add_command(commands, "resample", true,
-                {required_int("target-rate", {"target-sr"}), required_output()});
+    add_command(commands, "resample", true, {required_int("target-rate"), required_output()});
     // The generators accept any positive rate, so a rate the library's own decoder
     // refuses produces a file none of these commands can read back. `resample`
     // already bounds its target rate here for the same reason; these three are the
@@ -818,15 +817,13 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
 
 #ifdef SONARE_WITH_MASTERING
     // "--chain-config" names a complete chain config in the core's own
-    // `{params, version}` form. It is the canonical spelling because the bare
-    // `--config` carries a second meaning on the Python CLI (preset overrides on
-    // `master`); that original spelling stays accepted here as an alias.
+    // `{params, version}` form.
     add_command(
         commands, "mastering", true,
-        {string_value("preset"), path_value("chain-config", false, false, true, {"config"}),
-         number_value("target-lufs", -14.0), number_value("ceiling-dbtp", -1.0),
-         string_value("params"), bits_value(), true_peak_oversample_value(), path_value("report"),
-         output_value(), flag("assistant"), flag("enable-repair"), flag("explain"),
+        {string_value("preset"), path_value("chain-config"), number_value("target-lufs", -14.0),
+         number_value("ceiling-dbtp", -1.0), string_value("params"), bits_value(),
+         true_peak_oversample_value(), path_value("report"), output_value(), flag("assistant"),
+         flag("enable-repair"), flag("explain"),
          // The remaining AssistantConfig fields. `prefer_streaming_safe`
          // defaults to true, so the reachable control is the one that
          // turns it off -- a `--prefer-streaming-safe` flag would only
@@ -857,11 +854,7 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
          with_domain(int_value("placement", 0), enum_index(0, 4, CliOptionDomainStage::Parameter)),
          number_value("threshold-db", -24.0), number_value("ratio", 2.0),
          number_value("range-db", -6.0), number_value("attack-ms", 5.0),
-         number_value("release-ms", 50.0),
-         // "--lookahead-ms" is the flag's former (misleading) spelling,
-         // registered as an alias so it still resolves to the same
-         // "detector-delay-ms" storage key (see canonical_option_name()).
-         number_value("detector-delay-ms", 0.0, false, false, true, {"lookahead-ms"}),
+         number_value("release-ms", 50.0), number_value("detector-delay-ms", 0.0),
          number_value("sidechain-freq-hz", -1.0), number_value("sidechain-q", 1.0),
          with_domain(int_value("phase-mode", 1), enum_index(0, 3, CliOptionDomainStage::Parameter)),
          with_domain(int_value("resolution", 0), enum_index(0, 5, CliOptionDomainStage::Parameter)),
@@ -1005,7 +998,7 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
          with_domain(number_value("fmax-hz", false, true),
                      greater_than(0.0, CliOptionDomainStage::Usage))});
     add_command(commands, "acoustic", true,
-                {flag("ir"), int_value("n-bands", 6), number_value("min-decay-db", 30.0),
+                {flag("ir"), int_value("n-octave-bands", 6), number_value("min-decay-db", 30.0),
                  number_value("noise-floor-margin-db", 10.0)});
 
 #ifdef SONARE_WITH_ACOUSTIC_SIM
@@ -1019,8 +1012,7 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     add_command(commands, "estimate-room", true,
                 {number_value("aspect-lw", 1.0), number_value("aspect-lh", 1.0),
                  number_value("reference-absorption", 0.15), flag("sabine"),
-                 make_option("n-octave-bands", CliOptionArity::RequiredValue,
-                             CliOptionScalarType::Integer, null_default(), {"n-bands"})});
+                 library_sized(int_value("n-octave-bands"))});
     // `absorption` reaches uniform_shoebox, which clamps to [0, 0.999] rather than
     // calling validate_material_coefficient beside it, so the C entry point's
     // refusal of anything outside [0, 1] has no counterpart on this path. `seed`

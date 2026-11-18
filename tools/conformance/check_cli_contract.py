@@ -303,12 +303,8 @@ def _emit(report: list[tuple[str, str]]) -> int:
     return 0
 
 
-def _run(
-    surface: str, executable: str, argv: list[str], legacy: bool, timeout: float
-) -> dict[str, Any]:
+def _run(surface: str, executable: str, argv: list[str], timeout: float) -> dict[str, Any]:
     environment = os.environ.copy()
-    if legacy:
-        environment["SONARE_LEGACY_EXIT"] = "1"
     if surface == "native":
         command = [executable, *argv]
         cwd = REPO_ROOT
@@ -355,7 +351,7 @@ def _read_inventory_dump(
 ) -> tuple[Any | None, str | None]:
     """Read one fresh ``--dump-cli-contract`` document for snapshot mode."""
 
-    result = _run(surface, executable, ["--dump-cli-contract"], False, timeout)
+    result = _run(surface, executable, ["--dump-cli-contract"], timeout)
     if result["returncode"] != 0 or not result["stdout"].strip():
         detail = result.get("error") or f"exit {result['returncode']}"
         return (
@@ -387,7 +383,7 @@ def _disabled_features(
     reports nothing disabled -- the same demands as before, which is the
     direction that fails loudly rather than quietly.
     """
-    result = _run(surface, executable, ["doctor", "--json"], False, timeout)
+    result = _run(surface, executable, ["doctor", "--json"], timeout)
     if result["returncode"] != 0 or not result["stdout"].strip():
         detail = result.get("error") or f"exit {result['returncode']}"
         report.append(("expected", f"{surface}: doctor --json is not available ({detail})"))
@@ -429,7 +425,7 @@ def _inventory_checks(
     report: list[tuple[str, str]],
     disabled_features: frozenset[str] = frozenset(),
 ) -> dict[str, dict[str, Any]] | None:
-    result = _run(surface, executable, ["--dump-cli-contract"], False, timeout)
+    result = _run(surface, executable, ["--dump-cli-contract"], timeout)
     if result["returncode"] != 0 or not result["stdout"].strip():
         detail = result.get("error") or f"exit {result['returncode']}"
         report.append(
@@ -570,7 +566,6 @@ def _run_active_cases(
                     surface,
                     executable,
                     _resolve_argv(case["argv"], dict(paths)),
-                    False,
                     timeout,
                 )
                 accepted = _accepted_gated_exits(case["exit"])
@@ -599,7 +594,6 @@ def _run_active_cases(
                 surface,
                 executable,
                 _resolve_argv(case["argv"], normal_paths),
-                False,
                 timeout,
             )
             if result["returncode"] != case["exit"]:
@@ -641,109 +635,6 @@ def _run_active_cases(
                     _validate_case_payload(path, case, parsed, contract, surface, label, report)
                     payloads[(path, case["id"])] = parsed
                     _check_artifact(case["artifact"], contract, parsed, normal_paths, label, report)
-            legacy_paths = dict(paths)
-            if case["artifact"] != "none":
-                artifact = contract["artifacts"][case["artifact"]]
-                legacy_paths[artifact["placeholder"]] = str(
-                    Path(paths[artifact["placeholder"]]).with_name(
-                        f"{surface}_legacy_{Path(paths[artifact['placeholder']]).name}"
-                    )
-                )
-                Path(legacy_paths[artifact["placeholder"]]).unlink(missing_ok=True)
-            legacy_result = _run(
-                surface,
-                executable,
-                _resolve_argv(case["argv"], legacy_paths),
-                True,
-                timeout,
-            )
-            if legacy_result["returncode"] != case["legacy_exit"]:
-                detail = legacy_result.get("error") or f"got exit {legacy_result['returncode']}"
-                report.append(
-                    (
-                        "fail",
-                        f"{label} [legacy]: expected exit {case['legacy_exit']}, {detail}",
-                    )
-                )
-            if expected_stderr is not None and (
-                (expected_stderr == "empty") != (not legacy_result["stderr"].strip())
-            ):
-                report.append(
-                    (
-                        "fail",
-                        (
-                            f"{label} [legacy]: expected {expected_stderr} stderr, "
-                            f"got {legacy_result['stderr'][:160]!r}"
-                        ),
-                    )
-                )
-            _check_text_expectations(case, legacy_result, f"{label} [legacy]", report)
-            if case["stdout"] in {"empty", "text"}:
-                if case["stdout"] == "empty" and legacy_result["stdout"].strip():
-                    message = (
-                        f"{label} [legacy]: expected empty stdout, "
-                        f"got {legacy_result['stdout'][:160]!r}"
-                    )
-                    report.append(
-                        (
-                            "fail",
-                            message,
-                        )
-                    )
-                _check_artifact(
-                    case["artifact"],
-                    contract,
-                    None,
-                    legacy_paths,
-                    f"{label} [legacy]",
-                    report,
-                )
-            else:
-                try:
-                    legacy_payload = parse_single_json(legacy_result["stdout"])
-                    if case["payload"] != "none":
-                        _validate_case_payload(
-                            path,
-                            case,
-                            legacy_payload,
-                            contract,
-                            surface,
-                            f"{label} [legacy]",
-                            report,
-                        )
-                        if parsed is not None:
-                            normal_for_compare = parsed
-                            legacy_for_compare = legacy_payload
-                            if case["artifact"] != "none":
-                                normal_for_compare = dict(parsed)
-                                legacy_for_compare = dict(legacy_payload)
-                                normal_for_compare.pop("output", None)
-                                legacy_for_compare.pop("output", None)
-                            mismatch = _compare_values(
-                                normal_for_compare,
-                                legacy_for_compare,
-                                f"{label} [legacy]",
-                                float(manifest["comparison"]["absolute"]),
-                                float(manifest["comparison"]["relative"]),
-                            )
-                            if mismatch:
-                                report.append(
-                                    (
-                                        "fail",
-                                        mismatch + " (legacy payload must match normal mode)",
-                                    )
-                                )
-                        if case["artifact"] != "none":
-                            _check_artifact(
-                                case["artifact"],
-                                contract,
-                                legacy_payload,
-                                legacy_paths,
-                                f"{label} [legacy]",
-                                report,
-                            )
-                except ValueError as exc:
-                    report.append(("fail", f"{label} [legacy]: {exc}"))
     if any(contract["path"] == "analyze" for contract in manifest["active_paths"]):
         _validate_analyze_case_relationships(surface, payloads, manifest, report)
     if any(contract["path"] == "voice-change" for contract in manifest["active_paths"]):
@@ -817,7 +708,7 @@ def _run_parser_cases(
         gating = disabled_features & set(
             _command_for_argv(manifest, case["argv"]).get("requires") or ()
         )
-        result = _run(surface, executable, argv, False, timeout)
+        result = _run(surface, executable, argv, timeout)
         if gating:
             if result["returncode"] not in _accepted_gated_exits(expected_exit):
                 detail = f"got exit {result['returncode']}"
@@ -834,23 +725,6 @@ def _run_parser_cases(
                 )
             )
         _check_text_expectations(case, result, label, report)
-        legacy = _run(surface, executable, argv, True, timeout)
-        if legacy["returncode"] != case["legacy_exit"]:
-            detail = legacy.get("error") or f"got exit {legacy['returncode']}"
-            report.append(
-                (
-                    "fail",
-                    f"{label} [legacy]: expected exit {case['legacy_exit']}, {detail}",
-                )
-            )
-        if case["stdout"] == "empty" and legacy["stdout"].strip():
-            report.append(
-                (
-                    "fail",
-                    f"{label} [legacy]: expected empty stdout, got {legacy['stdout'][:160]!r}",
-                )
-            )
-        _check_text_expectations(case, legacy, f"{label} [legacy]", report)
 
 
 def _print_listing(manifest: dict[str, Any]) -> None:
@@ -871,7 +745,7 @@ def _print_listing(manifest: dict[str, Any]) -> None:
         print(f"  {contract['path']}: {len(contract['cases'])} cases")
     print("generic parser cases:")
     for case in manifest["parser_cases"]:
-        print(f"  {case['id']}: exit {case['exit']} (legacy {case['legacy_exit']})")
+        print(f"  {case['id']}: exit {case['exit']}")
 
 
 def _build_parser() -> argparse.ArgumentParser:

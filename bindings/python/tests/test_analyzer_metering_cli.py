@@ -232,19 +232,6 @@ def test_project_cli_help_documents_sf2_limitations() -> None:
     assert "--synth-json" in midi_render_help.stdout
 
 
-def _run_cli_env(args: list[str], extra_env: dict[str, str]) -> subprocess.CompletedProcess:
-    src_dir = str(Path(__file__).parent.parent / "src")
-    env = dict(os.environ)
-    env["PYTHONPATH"] = src_dir + os.pathsep + env.get("PYTHONPATH", "")
-    env.update(extra_env)
-    return subprocess.run(
-        [sys.executable, "-m", "libsonare.cli", *args],
-        capture_output=True,
-        text=True,
-        env=env,
-    )
-
-
 def test_cli_exit_codes_distinguish_error_classes() -> None:
     """Failures map to distinct, C-ABI-aligned exit codes (not a blanket 1)."""
     from libsonare.cli import (
@@ -278,15 +265,6 @@ def test_cli_exit_codes_distinguish_error_classes() -> None:
             EXIT_INVALID_FORMAT,
             EXIT_DECODE_FAILED,
         )
-
-
-def test_cli_legacy_exit_code_folds_failures_to_one() -> None:
-    """SONARE_LEGACY_EXIT=1 restores the old all-failures-are-1 contract."""
-    result = _run_cli_env(
-        ["bpm", "/no/such/sonare-test-file.wav"],
-        {"SONARE_LEGACY_EXIT": "1"},
-    )
-    assert result.returncode == 1
 
 
 def test_mastering_pair_analyze_cli_takes_reference_at_its_own_rate(monkeypatch, capsys) -> None:

@@ -15,7 +15,6 @@ from typing import Any, cast
 from ._cli_common import (
     EXIT_INVALID_PARAMETER,
     _fmt_optional,
-    _legacy_exit_codes,
     _load_channels_or_downmix,
     _omit_absent,
     _strict_json_dumps,
@@ -32,6 +31,7 @@ from ._cli_options import (
     _ContractArgumentParser,
     _finite_float,
     _positive_finite_float,
+    _positive_int,
 )
 from ._errors import SonareError
 
@@ -62,9 +62,7 @@ def cmd_acoustic(args: argparse.Namespace) -> int:
     from . import analyze_impulse_response, detect_acoustic
 
     samples, sr = _load_audio(args.file)
-    n_bands = cast(int | None, getattr(args, "n_bands", None))
-    if n_bands is None:
-        n_bands = cast(int, getattr(args, "n_octave_bands", 6))
+    n_bands = cast(int, args.n_octave_bands)
     min_decay_db = getattr(args, "min_decay_db", 30.0)
     noise_floor_margin_db = getattr(args, "noise_floor_margin_db", 10.0)
     if args.ir:
@@ -125,11 +123,12 @@ def cmd_estimate_room(args: argparse.Namespace) -> int:
     from . import estimate_room
 
     samples, sr = _load_audio(args.file)
-    n_bands = cast(int | None, getattr(args, "n_bands", None))
-    if n_bands is None:
-        n_bands = cast(int | None, getattr(args, "n_octave_bands", None))
-    if n_bands is None:
-        n_bands = 0
+    # A setting the caller left out is not passed, so the library chooses it.
+    supplied: dict[str, Any] = {
+        name: getattr(args, name)
+        for name in ("n_octave_bands", "min_decay_db", "noise_floor_margin_db")
+        if getattr(args, name, None) is not None
+    }
     est = estimate_room(
         samples,
         sample_rate=sr,
@@ -137,9 +136,7 @@ def cmd_estimate_room(args: argparse.Namespace) -> int:
         aspect_hint_lh=args.aspect_lh,
         reference_absorption=args.reference_absorption,
         prefer_eyring=not args.sabine,
-        n_octave_bands=n_bands,
-        min_decay_db=getattr(args, "min_decay_db", 0.0),
-        noise_floor_margin_db=getattr(args, "noise_floor_margin_db", 0.0),
+        **supplied,
     )
     if args.json:
         print(
@@ -186,7 +183,7 @@ def cmd_synthesize_rir(args: argparse.Namespace) -> int:
         )
     except SonareError as exc:
         print(f"Error: {exc}", file=sys.stderr)
-        return 1 if _legacy_exit_codes() else EXIT_INVALID_PARAMETER
+        return EXIT_INVALID_PARAMETER
     # Warnings survive a successful synthesis and describe a RIR the caller did
     # not ask for -- a tail cut against max_sec, a cap raised to fit the
     # direct sound, a request reduced to early reflections alone. Dropping them
@@ -283,7 +280,7 @@ def register_acoustic_parsers(
         "acoustic", parents=[stdout_options], help="Estimate acoustic parameters"
     )
     acoustic_p.add_argument("--ir", action="store_true", help="Treat input as an impulse response")
-    acoustic_p.add_argument("--n-bands", type=_c_int, default=6)
+    acoustic_p.add_argument("--n-octave-bands", type=_c_int, default=6)
     acoustic_p.add_argument("--min-decay-db", type=_finite_float, default=30.0)
     acoustic_p.add_argument("--noise-floor-margin-db", type=_finite_float, default=10.0)
 
@@ -345,12 +342,10 @@ def register_acoustic_parsers(
     )
     estimate_room_p.add_argument(
         "--n-octave-bands",
-        "--n-bands",
-        type=_c_int,
+        type=_positive_int,
         default=None,
-        dest="n_octave_bands",
         metavar="N",
-        help="Analyzer octave-band count (0 = library default)",
+        help="Analyzer octave-band count (library default when omitted)",
     )
 
     synth_rir_p = sub.add_parser(

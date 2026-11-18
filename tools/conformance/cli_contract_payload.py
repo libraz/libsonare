@@ -363,12 +363,7 @@ def _validate_case_payload(
     label: str,
     report: list[tuple[str, str]],
 ) -> None:
-    """Validate one successful JSON response, including path-specific invariants.
-
-    The legacy exit compatibility switch changes only exit status.  Keeping all
-    semantic checks here means the normal and legacy runs are deliberately held
-    to the same payload contract rather than merely the same JSON shape.
-    """
+    """Validate one successful JSON response, including path-specific invariants."""
     payload_schema = contract["payloads"][case["payload"]]
     for error in validate_payload(payload, payload_schema, label):
         report.append(("fail", error))

@@ -119,9 +119,9 @@ def test_inventory_exposes_canonical_aliases_and_handler_options() -> None:
     assert _option(commands["chords"], "no-beat-sync")["default"] is False
     assert _option(commands["dynamics"], "window-sec")["default"] == 0.4
     assert _option(commands["rhythm"], "start-bpm")["default"] == 120.0
-    assert _option(commands["acoustic"], "n-bands")["default"] == 6
+    assert _option(commands["acoustic"], "n-octave-bands")["default"] == 6
     room_bands = _option(commands["estimate-room"], "n-octave-bands")
-    assert room_bands["aliases"] == ["n-bands"]
+    assert room_bands["aliases"] == []
     assert room_bands["default"] is None
     assert _option(commands["mastering-processor"], "processor")["required"] is True
     assert _option(commands["mastering-processor"], "processor")["default"] is None
@@ -160,25 +160,13 @@ def test_handler_level_requirements_remain_outside_argparse() -> None:
         ["mastering-pair-analyze", "input.wav", "--reference", "reference.wav"],
     ],
 )
-@pytest.mark.parametrize(
-    ("legacy", "expected_code"),
-    [(False, 2), (True, 1)],
-    ids=["normal", "legacy"],
-)
 def test_mastering_required_options_are_parser_errors(
     monkeypatch: pytest.MonkeyPatch,
     argv: list[str],
-    legacy: bool,
-    expected_code: int,
 ) -> None:
-    if legacy:
-        monkeypatch.setenv("SONARE_LEGACY_EXIT", "1")
-    else:
-        monkeypatch.delenv("SONARE_LEGACY_EXIT", raising=False)
-
     with pytest.raises(SystemExit) as exc_info:
         _parser().parse_args(argv)
-    assert exc_info.value.code == expected_code
+    assert exc_info.value.code == 2
 
 
 def test_output_actions_are_scoped_to_artifact_commands() -> None:
@@ -262,7 +250,6 @@ def test_output_rejection_uses_one_exit_code_for_every_command(
     """
     from libsonare import cli
 
-    monkeypatch.delenv("SONARE_LEGACY_EXIT", raising=False)
     codes = set()
     for command in ("version", "bpm", "mastering-presets", "mixing-preset"):
         monkeypatch.setattr(cli.sys, "argv", ["sonare", command, "in.wav", "-o", "out.wav"])
@@ -303,23 +290,11 @@ def test_trim_silence_selector_defaults_are_dynamic() -> None:
         ["project", "--output", "ignored", "compile", "--in", "project.json"],
     ],
 )
-@pytest.mark.parametrize(
-    ("legacy", "expected_code"),
-    [(False, 2), (True, 1)],
-    ids=["normal", "legacy"],
-)
 def test_stdout_only_output_is_parser_failure_without_dispatch(
     monkeypatch: pytest.MonkeyPatch,
     argv: list[str],
-    legacy: bool,
-    expected_code: int,
 ) -> None:
     from libsonare import cli
-
-    if legacy:
-        monkeypatch.setenv("SONARE_LEGACY_EXIT", "1")
-    else:
-        monkeypatch.delenv("SONARE_LEGACY_EXIT", raising=False)
 
     called = False
 
@@ -333,7 +308,7 @@ def test_stdout_only_output_is_parser_failure_without_dispatch(
     with pytest.raises(SystemExit) as exc_info:
         cli.main()
 
-    assert exc_info.value.code == expected_code
+    assert exc_info.value.code == 2
     assert called is False
 
 
@@ -354,7 +329,6 @@ def test_stdout_only_output_is_parser_failure_without_dispatch(
 def test_analyze_options_have_strict_parser_validation(
     monkeypatch: pytest.MonkeyPatch, extra: list[str]
 ) -> None:
-    monkeypatch.delenv("SONARE_LEGACY_EXIT", raising=False)
     with pytest.raises(SystemExit) as exc_info:
         _parser().parse_args(["analyze", "input.wav", *extra])
     assert exc_info.value.code == 2
@@ -446,7 +420,6 @@ def test_analyze_options_forward_existing_api_keywords(monkeypatch, capsys) -> N
 def test_missing_command_is_usage_error_with_empty_stdout(monkeypatch, capsys) -> None:
     from libsonare import cli
 
-    monkeypatch.delenv("SONARE_LEGACY_EXIT", raising=False)
     monkeypatch.setattr(cli.sys, "argv", ["sonare"])
     with pytest.raises(SystemExit) as exc_info:
         cli.main()

@@ -50,7 +50,6 @@ def _validate_exit_codes(exit_codes: Any, errors: list[str]) -> None:
             "file_not_found",
             "invalid_format",
             "invalid_state",
-            "legacy",
         },
         "manifest.exit_codes",
         errors,
@@ -62,7 +61,6 @@ def _validate_exit_codes(exit_codes: Any, errors: list[str]) -> None:
             "file_not_found": 4,
             "invalid_format": 5,
             "invalid_state": 9,
-            "legacy": 1,
         }
         if exit_codes != expected:
             errors.append(f"manifest.exit_codes: expected {expected!r}")
@@ -305,7 +303,6 @@ def _validate_active_paths(
                             "id",
                             "argv",
                             "exit",
-                            "legacy_exit",
                             "payload",
                             "artifact",
                             "stdout",
@@ -325,10 +322,6 @@ def _validate_active_paths(
                     _argv(case["argv"], f"{case_label}.argv", errors)
                     if case["exit"] not in _EXIT_CODES:
                         errors.append(f"{case_label}.exit: unsupported exit {case['exit']!r}")
-                    if case["legacy_exit"] not in {0, 1}:
-                        errors.append(f"{case_label}.legacy_exit: expected 0 or 1")
-                    elif (case["exit"] == 0) != (case["legacy_exit"] == 0):
-                        errors.append(f"{case_label}: legacy exit must fold non-zero to 1")
                     if case["payload"] != "none" and case["payload"] not in payloads:
                         errors.append(f"{case_label}.payload: unknown payload {case['payload']!r}")
                     if not isinstance(case["artifact"], str):
@@ -447,8 +440,7 @@ def _validate_parser_cases(parser_cases: Any, errors: list[str]) -> None:
             label = f"manifest.parser_cases[{index}]"
             if not _exact(
                 case,
-                {"id", "argv", "exit", "legacy_exit", "stdout", "payload"}
-                | _declared_text_keys(case),
+                {"id", "argv", "exit", "stdout", "payload"} | _declared_text_keys(case),
                 label,
                 errors,
             ):
@@ -461,10 +453,6 @@ def _validate_parser_cases(parser_cases: Any, errors: list[str]) -> None:
             _argv(case["argv"], f"{label}.argv", errors)
             if case["exit"] not in _EXIT_CODES:
                 errors.append(f"{label}.exit: unsupported exit {case['exit']!r}")
-            if case["legacy_exit"] not in {0, 1}:
-                errors.append(f"{label}.legacy_exit: expected 0 or 1")
-            elif (case["exit"] == 0) != (case["legacy_exit"] == 0):
-                errors.append(f"{label}: legacy exit must fold non-zero to 1")
             if case["stdout"] not in {"json", "empty", "text"}:
                 errors.append(f"{label}.stdout: expected json, empty or text")
             _validate_text_expectations(case, label, errors)

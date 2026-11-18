@@ -30,11 +30,8 @@ def _write_tone(path: Path, *, sample_rate: int, length: int) -> None:
         rendered.writeframes(bytes(frames))
 
 
-def _run_cli(*args: str, legacy: bool = False) -> subprocess.CompletedProcess[str]:
+def _run_cli(*args: str) -> subprocess.CompletedProcess[str]:
     environment = dict(os.environ)
-    environment.pop("SONARE_LEGACY_EXIT", None)
-    if legacy:
-        environment["SONARE_LEGACY_EXIT"] = "1"
     source = ROOT / "bindings" / "python" / "src"
     environment["PYTHONPATH"] = str(source) + os.pathsep + environment.get("PYTHONPATH", "")
     if not environment.get("SONARE_LIB_PATH"):
@@ -312,10 +309,7 @@ def test_voice_change_preset_pack_entry_selector_precedes_the_set_rule(tmp_path:
     assert "--preset-pack requires --preset" in result.stderr
 
 
-@pytest.mark.parametrize("legacy, expected_code", [(False, 3), (True, 1)])
-def test_voice_preset_validate_malformed_set_is_preprocessing_error(
-    tmp_path: Path, legacy: bool, expected_code: int
-) -> None:
+def test_voice_preset_validate_malformed_set_is_preprocessing_error(tmp_path: Path) -> None:
     preset = _run_cli("voice-preset", "--preset", "neutral-monitor")
     assert preset.returncode == 0, preset.stderr
     preset_path = tmp_path / "preset.json"
@@ -327,35 +321,28 @@ def test_voice_preset_validate_malformed_set_is_preprocessing_error(
         "--set",
         "malformed-assignment",
         "--json",
-        legacy=legacy,
     )
 
-    assert result.returncode == expected_code
+    assert result.returncode == 3
     assert result.stdout == ""
     assert result.stderr
     assert "ok" not in result.stderr
 
 
-@pytest.mark.parametrize("legacy, expected_code", [(False, 4), (True, 1)])
-def test_voice_preset_validate_missing_input_is_file_error(
-    legacy: bool, expected_code: int
-) -> None:
-    result = _run_cli("voice-preset-validate", "--json", legacy=legacy)
+def test_voice_preset_validate_missing_input_is_file_error() -> None:
+    result = _run_cli("voice-preset-validate", "--json")
 
-    assert result.returncode == expected_code
+    assert result.returncode == 4
     assert result.stdout == ""
     assert result.stderr
     assert "ok" not in result.stderr
 
 
-@pytest.mark.parametrize("legacy, expected_code", [(False, 4), (True, 1)])
-def test_voice_preset_validate_missing_file_is_file_error(
-    tmp_path: Path, legacy: bool, expected_code: int
-) -> None:
+def test_voice_preset_validate_missing_file_is_file_error(tmp_path: Path) -> None:
     missing = tmp_path / "missing-preset.json"
-    result = _run_cli("voice-preset-validate", str(missing), "--json", legacy=legacy)
+    result = _run_cli("voice-preset-validate", str(missing), "--json")
 
-    assert result.returncode == expected_code
+    assert result.returncode == 4
     assert result.stdout == ""
     assert result.stderr
     assert "ok" not in result.stderr

@@ -137,8 +137,8 @@ TEST_CASE("CLI mastering command", "[cli][mastering]") {
                 "\"eq.tilt.tiltDb\":0.25,\"loudness.enabled\":true,"
                 "\"loudness.targetLufs\":-18}}";
     }
-    auto [code, output] =
-        exec_command(CLI + " mastering " + TEST_WAV + " --config " + config_path + " --json -q");
+    auto [code, output] = exec_command(CLI + " mastering " + TEST_WAV + " --chain-config " +
+                                       config_path + " --json -q");
     REQUIRE(code == 0);
     REQUIRE_THAT(output, ContainsSubstring("\"mode\": \"config\""));
     REQUIRE_THAT(output, ContainsSubstring("\"stages\""));

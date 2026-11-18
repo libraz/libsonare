@@ -94,7 +94,7 @@ def test_mastering_config_unwraps_native_wrapper_and_forwards_params(monkeypatch
         [
             "mastering",
             "input.wav",
-            "--config",
+            "--chain-config",
             str(config_path),
             "--params",
             "loudness.ceilingDb=-0.5",
@@ -634,9 +634,7 @@ def test_presence_gated_mastering_options_match_the_native_handler() -> None:
     ):
         assert f'args.has("{name}")' in text or f'"{name}",' in text
 
-    # ``--detector-delay-ms`` is the native spelling of the option argparse keys
-    # as ``lookahead-ms``; every other eq shortcut is named identically.
-    shortcuts = set(_cli_mastering._EQ_SHORTCUT_NAMES) - {"lookahead-ms"}
+    shortcuts = set(_cli_mastering._EQ_SHORTCUT_NAMES)
     assert shortcuts
     for name in shortcuts:
         assert f'"{name}"' in text

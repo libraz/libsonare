@@ -72,9 +72,6 @@ from ._cli_common import (
     _format_time as _format_time,
 )
 from ._cli_common import (
-    _legacy_exit_codes as _legacy_exit_codes,
-)
-from ._cli_common import (
     _load_audio as _load_audio,
 )
 from ._cli_common import (
@@ -447,7 +444,7 @@ def _dispatch() -> None:
     handler = commands.get(args.command)
     if not handler:
         print(f"Unknown command: {args.command}", file=sys.stderr)
-        sys.exit(1 if _legacy_exit_codes() else EXIT_USAGE)
+        sys.exit(EXIT_USAGE)
 
     # `common` supplies -o to every parser for a uniform CLI shape, but an
     # analysis result has no audio artifact to write. That rejection happens at

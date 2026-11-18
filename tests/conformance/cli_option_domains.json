@@ -1103,6 +1103,16 @@
       "exclusiveMaximum": false
     },
     {
+      "command": "estimate-room",
+      "option": "n-octave-bands",
+      "rejectExit": "usage",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusiveMinimum": true,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
       "command": "synthesize-rir",
       "option": "absorption",
       "rejectExit": "invalid_parameter",

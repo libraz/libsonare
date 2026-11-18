@@ -96,25 +96,10 @@ def test_pitch_omitted_options_are_legacy_equivalent(monkeypatch: pytest.MonkeyP
 
 
 @pytest.mark.parametrize("option", ["-o", "--output"])
-@pytest.mark.parametrize(
-    ("legacy", "expected_code"),
-    [(False, 2), (True, 1)],
-    ids=["normal-exit", "legacy-exit"],
-)
-def test_pitch_rejects_output_at_parser_level(
-    monkeypatch: pytest.MonkeyPatch,
-    option: str,
-    legacy: bool,
-    expected_code: int,
-) -> None:
-    if legacy:
-        monkeypatch.setenv("SONARE_LEGACY_EXIT", "1")
-    else:
-        monkeypatch.delenv("SONARE_LEGACY_EXIT", raising=False)
-
+def test_pitch_rejects_output_at_parser_level(option: str) -> None:
     with pytest.raises(SystemExit) as exc_info:
         _pitch_args(option, "ignored.wav")
-    assert exc_info.value.code == expected_code
+    assert exc_info.value.code == 2
 
 
 @pytest.mark.parametrize(
@@ -136,25 +121,10 @@ def test_pitch_rejects_output_at_parser_level(
         ("--f0-min-hz", "100", "--f0-max-hz", "99"),
     ],
 )
-@pytest.mark.parametrize(
-    ("legacy", "expected_code"),
-    [(False, 2), (True, 1)],
-    ids=["normal-exit", "legacy-exit"],
-)
-def test_pitch_rejects_invalid_option_values(
-    monkeypatch: pytest.MonkeyPatch,
-    extra: tuple[str, ...],
-    legacy: bool,
-    expected_code: int,
-) -> None:
-    if legacy:
-        monkeypatch.setenv("SONARE_LEGACY_EXIT", "1")
-    else:
-        monkeypatch.delenv("SONARE_LEGACY_EXIT", raising=False)
-
+def test_pitch_rejects_invalid_option_values(extra: tuple[str, ...]) -> None:
     with pytest.raises(SystemExit) as exc_info:
         _pitch_args(*extra)
-    assert exc_info.value.code == expected_code
+    assert exc_info.value.code == 2
 
 
 @pytest.mark.parametrize("algorithm", ["yin", "pyin"])

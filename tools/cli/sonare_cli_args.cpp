@@ -12,8 +12,7 @@
 #include "sonare_cli_registry.h"
 #include "util/exception.h"
 
-int cli_exit_code_for_error(sonare::ErrorCode error, bool legacy_mode) noexcept {
-  if (legacy_mode) return 1;
+int cli_exit_code_for_error(sonare::ErrorCode error) noexcept {
   switch (error) {
     case sonare::ErrorCode::FileNotFound:
       return 4;

@@ -162,8 +162,7 @@ _CLI_HOST_CHUNK_FRAMES = 4096
 
 # CLI exit codes. Failures map to codes aligned with the C-ABI SonareError so
 # scripts can distinguish usage / missing-file / decode / processing errors.
-# argparse keeps its native exit 2 for usage errors. Set SONARE_LEGACY_EXIT=1 to
-# fold every failure back to 1 for scripts that hardcode the all-failures-are-1 contract.
+# argparse keeps its native exit 2 for usage errors.
 #
 # NOTE: for an undecodable input, whether the CLI reports 5 (INVALID_FORMAT)
 # or 6 (DECODE_FAILED) depends on whether the native library was built with
@@ -322,15 +321,8 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     return EXIT_SUCCESS
 
 
-def _legacy_exit_codes() -> bool:
-    """Whether SONARE_LEGACY_EXIT requests the all-failures-are-1 behaviour."""
-    return os.environ.get("SONARE_LEGACY_EXIT") == "1"
-
-
 def _exit_code_for(exc: BaseException) -> int:
     """Map an exception to a CLI exit code aligned with the C-ABI error codes."""
-    if _legacy_exit_codes():
-        return 1
     if isinstance(exc, SonareError):
         return _SONARE_CODE_TO_EXIT.get(exc.code, EXIT_ERROR)
     # Ctrl-C is the one cancellation this surface can originate, and it carries
@@ -650,7 +642,7 @@ def _emit_effect_result(
     """
     if requires_output and not args.output:
         print(f"Error: {label} requires an output file (-o/--output)", file=sys.stderr)
-        return 1 if _legacy_exit_codes() else EXIT_INVALID_PARAMETER
+        return EXIT_INVALID_PARAMETER
     if args.output:
         _write_channel_output(args.output, channels, sr)
 

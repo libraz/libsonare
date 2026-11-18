@@ -44,25 +44,25 @@ void project_report_error(const std::string& what, SonareError err) {
 int project_exit_code(SonareError err) {
   switch (err) {
     case SONARE_ERROR_FILE_NOT_FOUND:
-      return cli_exit_code_for_error(sonare::ErrorCode::FileNotFound, false);
+      return cli_exit_code_for_error(sonare::ErrorCode::FileNotFound);
     case SONARE_ERROR_INVALID_FORMAT:
-      return cli_exit_code_for_error(sonare::ErrorCode::InvalidFormat, false);
+      return cli_exit_code_for_error(sonare::ErrorCode::InvalidFormat);
     case SONARE_ERROR_DECODE_FAILED:
-      return cli_exit_code_for_error(sonare::ErrorCode::DecodeFailed, false);
+      return cli_exit_code_for_error(sonare::ErrorCode::DecodeFailed);
     case SONARE_ERROR_INVALID_PARAMETER:
-      return cli_exit_code_for_error(sonare::ErrorCode::InvalidParameter, false);
+      return cli_exit_code_for_error(sonare::ErrorCode::InvalidParameter);
     case SONARE_ERROR_OUT_OF_MEMORY:
-      return cli_exit_code_for_error(sonare::ErrorCode::OutOfMemory, false);
+      return cli_exit_code_for_error(sonare::ErrorCode::OutOfMemory);
     case SONARE_ERROR_NOT_SUPPORTED:
-      return cli_exit_code_for_error(sonare::ErrorCode::NotSupported, false);
+      return cli_exit_code_for_error(sonare::ErrorCode::NotSupported);
     case SONARE_ERROR_INVALID_STATE:
       return kExitInvalidState;
     case SONARE_ERROR_CANCELLED:
-      return cli_exit_code_for_error(sonare::ErrorCode::Cancelled, false);
+      return cli_exit_code_for_error(sonare::ErrorCode::Cancelled);
     case SONARE_ERROR_ENCODE_FAILED:
-      return cli_exit_code_for_error(sonare::ErrorCode::EncodeFailed, false);
+      return cli_exit_code_for_error(sonare::ErrorCode::EncodeFailed);
     case SONARE_ERROR_STALE_RESULT:
-      return cli_exit_code_for_error(sonare::ErrorCode::StaleResult, false);
+      return cli_exit_code_for_error(sonare::ErrorCode::StaleResult);
     case SONARE_OK:
     case SONARE_ERROR_UNKNOWN:
     default:

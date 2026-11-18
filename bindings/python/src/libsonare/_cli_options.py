@@ -18,7 +18,7 @@ import sys
 from collections.abc import Callable, Iterable, Sequence
 from typing import Any, NoReturn, cast
 
-from ._cli_common import EXIT_USAGE, _legacy_exit_codes
+from ._cli_common import EXIT_USAGE
 from ._cli_inventory import _cli_domain, _cli_scalar_type, _inventory_subparsers, _token_of
 from ._errors import SonareValueError
 from ._narrowing import _FLOAT32_MAX
@@ -29,11 +29,9 @@ from ._types_enums import KeyMode
 class _ContractArgumentParser(argparse.ArgumentParser):
     """Argument parser with the cross-surface usage exit contract.
 
-    ``argparse`` normally exits with status 2 directly from ``error``.  The
-    native CLI has a compatibility switch that folds every non-zero status to
-    1, so parser errors need to go through the same switch as dispatch errors.
-    Keeping this behavior in the parser class also covers errors raised by
-    nested subparsers and typed options before command dispatch begins.
+    Parser errors exit with the usage status the native CLI reports. Keeping
+    this behavior in the parser class also covers errors raised by nested
+    subparsers and typed options before command dispatch begins.
 
     The class is also the one place two facts about argv are established: which
     options the caller actually spelled (``_supplied_options``, the counterpart
@@ -65,7 +63,7 @@ class _ContractArgumentParser(argparse.ArgumentParser):
     def error(self, message: str) -> NoReturn:
         self.print_usage(sys.stderr)
         self._print_message(f"{self.prog}: error: {message}\n", sys.stderr)
-        raise SystemExit(1 if _legacy_exit_codes() else EXIT_USAGE)
+        raise SystemExit(EXIT_USAGE)
 
     def parse_known_args(
         self,
@@ -399,8 +397,6 @@ def _restore_parser_compat_defaults(args: argparse.Namespace) -> None:
         # Preserve the historical peak default while honoring the RMS
         # normalizer's distinct -20 dB reference level.
         args.target_db = -20.0 if getattr(args, "mode", "peak") == "rms" else 0.0
-    elif command == "estimate-room" and getattr(args, "n_octave_bands", None) is None:
-        args.n_octave_bands = 0
     elif (
         command == "trim-silence"
         and getattr(args, "threshold_db", None) is None

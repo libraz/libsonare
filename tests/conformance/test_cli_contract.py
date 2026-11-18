@@ -415,7 +415,6 @@ class CliContractSelfTest(unittest.TestCase):
         )
         for case in cases.values():
             self.assertEqual(case["exit"], 2)
-            self.assertEqual(case["legacy_exit"], 1)
 
     def test_parser_cases_do_not_allow_surface_specific_exits(self) -> None:
         candidate = copy.deepcopy(self.manifest)
@@ -432,60 +431,12 @@ class CliContractSelfTest(unittest.TestCase):
         self.assertIsNone(CHECKER._compare_values(1.0, 1.0 + 5e-7, "value", 1e-6, 1e-5))
         self.assertIsNotNone(CHECKER._compare_values(1.0, 1.1, "value", 1e-6, 1e-5))
 
-    def test_legacy_exit_folds_every_nonzero_case(self) -> None:
-        cases = list(self.manifest["parser_cases"])
-        for contract in self.manifest["active_paths"]:
-            cases.extend(contract["cases"])
-        for case in cases:
-            if case["exit"] == 0:
-                self.assertEqual(case["legacy_exit"], 0, case)
-            else:
-                self.assertEqual(case["legacy_exit"], 1, case)
-
     def test_fixture_documents_have_the_declared_shape(self) -> None:
         projects = self.manifest["fixtures"]["projects"]
         self.assertIsInstance(json.loads(projects["clean"]), dict)
         self.assertIsInstance(json.loads(projects["warning"]), dict)
         with self.assertRaises(json.JSONDecodeError):
             json.loads(projects["malformed"])
-
-    def test_legacy_payload_mismatch_is_reported(self) -> None:
-        """Legacy mode may fold exits, but it must not forge a different JSON API."""
-        version = next(
-            contract
-            for contract in self.manifest["active_paths"]
-            if contract["path"] == "version"
-        )
-        manifest = {
-            "comparison": self.manifest["comparison"],
-            "active_paths": [version],
-        }
-
-        def fake_run(_surface, _executable, _argv, legacy, _timeout):
-            payload = {
-                "cli": "native",
-                "cli_version": "1.0.0",
-                "lib_version": "1.0.0",
-            }
-            if legacy:
-                payload.update({"cli": "forged-legacy", "cli_version": "9.9.9"})
-            return {
-                "returncode": 0,
-                "stdout": json.dumps(payload),
-                "stderr": "",
-                "error": "",
-            }
-
-        report: list[tuple[str, str]] = []
-        with mock.patch.object(CHECKER, "_run", fake_run):
-            CHECKER._run_active_cases("native", "unused", manifest, {}, 1.0, report)
-        self.assertTrue(
-            any(
-                "legacy payload must match normal mode" in message
-                for _, message in report
-            ),
-            report,
-        )
 
     def test_artifact_digest_rejects_arbitrary_json(self) -> None:
         """A byte count plus parseable JSON is insufficient for a canonical artifact."""
@@ -675,7 +626,7 @@ class CliContractSelfTest(unittest.TestCase):
         version["options"][0]["default"] = "drifted"
         report: list[tuple[str, str]] = []
 
-        def fake_run(_surface, _executable, _argv, _legacy, _timeout):
+        def fake_run(_surface, _executable, _argv, _timeout):
             return {
                 "returncode": 0,
                 "stdout": json.dumps(inventory),
@@ -1092,9 +1043,8 @@ class CliContractSelfTest(unittest.TestCase):
         native = self._fake_inventory(self.manifest, "native")
         python = self._fake_inventory(self.manifest, "python")
 
-        def fake_run(surface, _executable, argv, legacy, _timeout):
+        def fake_run(surface, _executable, argv, _timeout):
             self.assertEqual(argv, ["--dump-cli-contract"])
-            self.assertFalse(legacy)
             return {
                 "returncode": 0,
                 "stdout": json.dumps(native if surface == "native" else python),
@@ -1138,7 +1088,7 @@ class CliContractSelfTest(unittest.TestCase):
         def run_inventory(inventory, surface):
             report: list[tuple[str, str]] = []
 
-            def fake_run(_surface, _executable, _argv, _legacy, _timeout):
+            def fake_run(_surface, _executable, _argv, _timeout):
                 return {
                     "returncode": 0,
                     "stdout": json.dumps(inventory),

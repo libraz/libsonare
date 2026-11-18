@@ -519,7 +519,7 @@ int cmd_acoustic(const CliArgs& args, const Audio& audio) {
   // what the C ABI's sonare_detect_acoustic forces, which is what the Python
   // CLI and every binding run, so the two shipped CLIs agree on the mode.
   config.mode = AcousticConfig::Mode::Blind;
-  config.n_octave_bands = args.get_int("n-bands", config.n_octave_bands);
+  config.n_octave_bands = args.get_int("n-octave-bands", config.n_octave_bands);
   config.min_decay_db = args.get_float("min-decay-db", config.min_decay_db);
   config.noise_floor_margin_db =
       args.get_float("noise-floor-margin-db", config.noise_floor_margin_db);
@@ -660,10 +660,7 @@ int cmd_estimate_room(const CliArgs& args, const Audio& audio) {
   if (cfg.aspect_hint_lh == 0.0f) cfg.aspect_hint_lh = 1.0f;
   cfg.reference_absorption = args.get_float("reference-absorption", cfg.reference_absorption);
   cfg.prefer_eyring = !args.has("sabine");
-  // Accept both --n-bands (native spelling) and --n-octave-bands (Python CLI
-  // spelling) so scripts written against either surface keep working.
-  cfg.acoustic.n_octave_bands =
-      args.get_int("n-bands", args.get_int("n-octave-bands", cfg.acoustic.n_octave_bands));
+  cfg.acoustic.n_octave_bands = args.get_int("n-octave-bands", cfg.acoustic.n_octave_bands);
 
   const sonare::RoomEstimate est = sonare::estimate_room(audio, cfg);
   if (args.json_output) {

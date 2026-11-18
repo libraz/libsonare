@@ -16,7 +16,6 @@ from ._cli_common import (
     _audio_array,
     _cli_token,
     _emit_effect_result,
-    _legacy_exit_codes,
     _library_token,
     _load_channels_or_downmix,
     _load_voice_preset_pack,
@@ -79,7 +78,7 @@ def cmd_hpss(args: argparse.Namespace) -> int:
 
     if not args.output:
         print("Error: hpss requires an output file (-o/--output)", file=sys.stderr)
-        return 1 if _legacy_exit_codes() else EXIT_INVALID_PARAMETER
+        return EXIT_INVALID_PARAMETER
 
     modes = [
         name
@@ -187,7 +186,7 @@ def cmd_decompose_stems(args: argparse.Namespace) -> int:
 
     if not args.output:
         print("Error: decompose-stems requires an output file (-o/--output)", file=sys.stderr)
-        return 1 if _legacy_exit_codes() else EXIT_INVALID_PARAMETER
+        return EXIT_INVALID_PARAMETER
     # The C side reads any other name as its own default rather than refusing it,
     # so an unrecognised initialiser is caught here or not at all.
     if args.init not in {"random", "nndsvd"}:
@@ -467,7 +466,7 @@ def cmd_split_silence(args: argparse.Namespace) -> int:
 def cmd_resample(args: argparse.Namespace) -> int:
     if not args.output:
         print("Error: resample requires an output file (-o/--output)", file=sys.stderr)
-        return 1 if _legacy_exit_codes() else EXIT_INVALID_PARAMETER
+        return EXIT_INVALID_PARAMETER
 
     target_rate = getattr(args, "target_rate", None)
     if target_rate is None:
@@ -653,7 +652,7 @@ def cmd_voice_preset_validate(args: argparse.Namespace) -> int:
         error = str(result.get("error", "invalid voice preset"))
         payload = {"ok": False, "error": error}
         print(_strict_json_dumps(payload) if args.json else error)
-        return 1 if _legacy_exit_codes() else EXIT_INVALID_PARAMETER
+        return EXIT_INVALID_PARAMETER
     payload = {"ok": True, "normalized_json": str(normalized)}
     print(_strict_json_dumps(payload) if args.json else str(normalized))
     return 0
@@ -829,7 +828,6 @@ def register_effects_parsers(
     )
     resample_p.add_argument(
         "--target-rate",
-        "--target-sr",
         dest="target_rate",
         type=_c_int,
         required=True,

@@ -160,9 +160,9 @@ def test_config_out_writes_the_chain_config_the_core_reports(tmp_path, capsys) -
     assert isinstance(written["version"], int)
 
 
-def test_a_written_chain_config_is_read_back_under_both_spellings(tmp_path, capsys) -> None:
-    """``master --chain-config``, ``mastering --chain-config`` and the original
-    ``mastering --config`` render one chain-config file identically."""
+def test_a_written_chain_config_is_read_back_by_both_commands(tmp_path, capsys) -> None:
+    """``master --chain-config`` and ``mastering --chain-config`` render one
+    chain-config file identically."""
     source = tmp_path / "input.wav"
     _write_source(source)
     config = tmp_path / "chain.json"
@@ -172,7 +172,6 @@ def test_a_written_chain_config_is_read_back_under_both_spellings(tmp_path, caps
     for label, argv in (
         ("master.chain-config", ["master", str(source), "--chain-config", str(config)]),
         ("mastering.chain-config", ["mastering", str(source), "--chain-config", str(config)]),
-        ("mastering.config", ["mastering", str(source), "--config", str(config)]),
     ):
         output = tmp_path / f"{label}.wav"
         assert _run([*argv, "--output", str(output), "--json"]) == 0
@@ -340,33 +339,20 @@ def test_the_reported_mode_is_the_token_the_native_cli_reports(tmp_path, capsys)
     assert 'mode = "config";' in _NATIVE_HANDLER.read_text(encoding="utf-8")
 
 
-@pytest.mark.parametrize("spelling", ["--chain-config", "--config"])
-def test_a_loudness_flag_beside_a_chain_config_names_the_canonical_option(
-    tmp_path, spelling
-) -> None:
-    """The refusal names ``--chain-config`` whichever spelling was used.
-
-    Under either one the caller set the same option, so a diagnostic naming the
-    legacy alias would send them looking for a second option.
-    """
+def test_a_loudness_flag_beside_a_chain_config_is_refused(tmp_path) -> None:
+    """The refusal names ``--chain-config``."""
     source = tmp_path / "input.wav"
     _write_source(source)
     config = tmp_path / "chain.json"
     config.write_text(json.dumps({"version": 1, "params": {"loudness.enabled": True}}), "utf-8")
 
     with pytest.raises(ValueError) as caught:
-        _run(["mastering", str(source), spelling, str(config), "--target-lufs", "-12"])
+        _run(["mastering", str(source), "--chain-config", str(config), "--target-lufs", "-12"])
     assert str(caught.value) == "--target-lufs cannot be combined with --chain-config"
 
 
-def test_mastering_chain_config_is_one_option_under_the_canonical_name() -> None:
-    """On ``mastering`` the two spellings are one option, published as one record.
-
-    ``chain-config`` is the published name and ``config`` its alias, not the other
-    way round: the inventory is what a consumer reads, and the ambiguous spelling
-    must not be the one it sees as primary. A second action would read as an
-    option the native CLI does not have.
-    """
+def test_mastering_chain_config_has_no_second_spelling() -> None:
+    """On ``mastering`` the chain config has one spelling, published as one record."""
     from libsonare import cli
     from libsonare._cli_inventory import _inventory_option
 
@@ -376,28 +362,26 @@ def test_mastering_chain_config_is_one_option_under_the_canonical_name() -> None
     actions = [action for action in mastering._actions if "--chain-config" in action.option_strings]
     assert len(actions) == 1
     assert actions[0].dest == "config"
-    assert "--config" in actions[0].option_strings
+    assert actions[0].option_strings == ["--chain-config"]
 
     record = _inventory_option(actions[0])
     assert record is not None
     assert record["name"] == "chain-config"
-    assert record["aliases"] == ["config"]
+    assert record["aliases"] == []
     assert record["type"] == "path"
 
 
-def test_native_front_end_declares_the_same_two_spellings() -> None:
+def test_native_front_end_declares_the_same_spelling() -> None:
     """The native CLI's own declarations, since a Python run cannot exercise them."""
     registry = _NATIVE_REGISTRY.read_text(encoding="utf-8")
-    assert 'path_value("chain-config", false, false, true, {"config"})' in registry
+    assert 'path_value("chain-config")' in registry
     assert 'string_value("config-out", "")' in registry
 
     handler = _NATIVE_HANDLER.read_text(encoding="utf-8")
     # Written through the chain serializer on the config in hand, which is the
     # one form `--chain-config` parses on either front-end.
     assert "mastering::api::chain_config_to_json(suggestion.config)" in handler
-    assert (
-        '"--chain-config (--config) is mutually exclusive with --preset and --assistant"' in handler
-    )
+    assert '"--chain-config is mutually exclusive with --preset and --assistant"' in handler
     # The chain-config selector is read and named under its canonical spelling,
     # matching the Python handler's refusals above.
     assert 'args.has("chain-config")' in handler

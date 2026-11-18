@@ -265,7 +265,7 @@ TEST_CASE("CLI hidden contract inventory is machine-readable", "[cli][contract]"
       found_resample = true;
       REQUIRE(command["options"].size() == 3);
       REQUIRE(command["options"][1]["name"].as_string() == "target-rate");
-      REQUIRE(command["options"][1]["aliases"][0].as_string() == "target-sr");
+      REQUIRE(command["options"][1]["aliases"].as_array().empty());
       REQUIRE(command["options"][1]["required"].as_bool());
       REQUIRE(command["options"][1]["default"].is_null());
 #ifdef SONARE_WITH_ARRANGEMENT
@@ -480,9 +480,9 @@ TEST_CASE("CLI registry exposes immutable leaf contracts", "[cli][registry]") {
   const auto* target_rate = cli_option_spec_for_command("resample", "target-rate");
   REQUIRE(target_rate != nullptr);
   REQUIRE(target_rate->required);
-  REQUIRE(target_rate->aliases == std::vector<std::string>{"target-sr"});
+  REQUIRE(target_rate->aliases.empty());
   REQUIRE(target_rate->default_value.kind == CliOptionDefaultKind::Null);
-  REQUIRE(cli_option_spec_for_command("resample", "target-sr") == target_rate);
+  REQUIRE(cli_option_spec_for_command("resample", "target-sr") == nullptr);
 
   const auto* key_hpss = cli_option_spec_for_command("key", "hpss");
   REQUIRE(key_hpss != nullptr);
@@ -594,9 +594,9 @@ TEST_CASE("CLI registry exposes immutable leaf contracts", "[cli][registry]") {
 #ifdef SONARE_WITH_ACOUSTIC_SIM
   const auto* octave_bands = cli_option_spec_for_command("estimate-room", "n-octave-bands");
   REQUIRE(octave_bands != nullptr);
-  REQUIRE(octave_bands->aliases == std::vector<std::string>{"n-bands"});
+  REQUIRE(octave_bands->aliases.empty());
   REQUIRE(octave_bands->default_value.kind == CliOptionDefaultKind::Null);
-  REQUIRE(cli_option_spec_for_command("estimate-room", "n-bands") == octave_bands);
+  REQUIRE(cli_option_spec_for_command("estimate-room", "n-bands") == nullptr);
 #endif
 
   const auto* set = cli_option_spec_for_command("voice-preset-validate", "set");
@@ -670,7 +670,7 @@ TEST_CASE("CLI registry defaults and hidden controls project through parser", "[
   REQUIRE(validate_cli_arguments(voice, true).empty());
 
 #ifdef SONARE_WITH_ACOUSTIC_SIM
-  const CliArgs estimate = parse({"sonare-cli", "estimate-room", "--n-bands", "8"});
+  const CliArgs estimate = parse({"sonare-cli", "estimate-room", "--n-octave-bands", "8"});
   REQUIRE(estimate.get_int("n-octave-bands", -1) == 8);
   REQUIRE(validate_cli_arguments(estimate, true).empty());
 #endif
@@ -1046,11 +1046,6 @@ TEST_CASE("CLI enforces registry requirements and canonical option aliases",
     auto [code, output] = exec_command(CLI + " project validate --json");
     REQUIRE(code == 2);
     REQUIRE_THAT(output, ContainsSubstring("Missing required option '--in'"));
-
-    auto [legacy_code, legacy_output] =
-        exec_command("SONARE_LEGACY_EXIT=1 " + CLI + " project validate --json");
-    REQUIRE(legacy_code == 1);
-    REQUIRE_THAT(legacy_output, ContainsSubstring("Missing required option '--in'"));
 #endif
   }
 
@@ -1063,17 +1058,20 @@ TEST_CASE("CLI enforces registry requirements and canonical option aliases",
 #endif
   }
 
-  SECTION("resample alias satisfies the one required target option") {
+  SECTION("retired long-option spellings are unknown options") {
     create_test_wav(TEST_WAV);
-    const std::string output_path = unique_temp_path("_resample_alias.wav");
-    auto [code, output] = exec_command(CLI + " resample --target-sr 16000 " + TEST_WAV + " -o " +
-                                       output_path + " -q");
-    REQUIRE(code == 0);
-    REQUIRE(output_path != TEST_WAV);
-    const auto [samples, sample_rate] = load_wav(output_path);
-    REQUIRE_FALSE(samples.empty());
-    REQUIRE(sample_rate == 16000);
-    std::remove(output_path.c_str());
+    const std::string output_path = unique_temp_path("_retired_spelling.wav");
+    for (const std::string& invocation :
+         {" resample --target-sr 16000 " + TEST_WAV + " -o " + output_path,
+          " eq " + TEST_WAV + " --lookahead-ms 1 -o " + output_path,
+          " mastering " + TEST_WAV + " --config " + output_path + ".json -o " + output_path,
+          " estimate-room " + TEST_WAV + " --n-bands 6",
+          " acoustic " + TEST_WAV + " --n-bands 6"}) {
+      auto [code, output] = exec_command(CLI + invocation + " -q");
+      INFO(invocation);
+      REQUIRE(code == 2);
+      REQUIRE_THAT(output, ContainsSubstring("Unknown option"));
+    }
   }
 }
 
@@ -1095,27 +1093,10 @@ TEST_CASE("CLI generic parser failures use the usage exit code", "[cli][argument
     REQUIRE(code == 2);
   }
 
-  SECTION("legacy mode folds parser failures to one") {
+  SECTION("SONARE_LEGACY_EXIT no longer changes the exit status") {
     auto [code, output] = exec_command("SONARE_LEGACY_EXIT=1 " + CLI + " chroma --n-fft");
-    REQUIRE(code == 1);
+    REQUIRE(code == 2);
     REQUIRE_THAT(output, ContainsSubstring("Missing value for option '--n-fft'"));
-  }
-
-  SECTION("legacy mode folds top-level and command early failures to one") {
-    auto [no_args_code, no_args_output] = exec_command("SONARE_LEGACY_EXIT=1 " + CLI);
-    REQUIRE(no_args_code == 1);
-    REQUIRE_THAT(no_args_output, ContainsSubstring("No command specified"));
-    REQUIRE_THAT(no_args_output, ContainsSubstring("Try 'sonare-cli --help'."));
-
-    auto [unknown_code, unknown_output] =
-        exec_command("SONARE_LEGACY_EXIT=1 " + CLI + " no-such-command");
-    REQUIRE(unknown_code == 1);
-    REQUIRE_THAT(unknown_output, ContainsSubstring("Unknown command"));
-
-    auto [missing_audio_code, missing_audio_output] =
-        exec_command("SONARE_LEGACY_EXIT=1 " + CLI + " chroma");
-    REQUIRE(missing_audio_code == 1);
-    REQUIRE_THAT(missing_audio_output, ContainsSubstring("Missing audio file"));
   }
 }
 
@@ -1123,13 +1104,11 @@ TEST_CASE("CLI exception exit codes include cancellation", "[cli][contract]") {
   // This table is intentionally exercised through the same exception-to-exit
   // mapping used by main(), rather than making cancellation a synthetic CLI
   // command.  Cancellation is emitted by cooperative core operations.
-  REQUIRE(cli_exit_code_for_error(sonare::ErrorCode::Cancelled, false) == 11);
-  REQUIRE(cli_exit_code_for_error(sonare::ErrorCode::Cancelled, true) == 1);
+  REQUIRE(cli_exit_code_for_error(sonare::ErrorCode::Cancelled) == 11);
 }
 
 TEST_CASE("CLI exit code for StaleResult is 14, not its error code", "[cli][contract]") {
-  REQUIRE(cli_exit_code_for_error(sonare::ErrorCode::StaleResult, false) == 14);
-  REQUIRE(cli_exit_code_for_error(sonare::ErrorCode::StaleResult, true) == 1);
+  REQUIRE(cli_exit_code_for_error(sonare::ErrorCode::StaleResult) == 14);
 }
 
 #if defined(SONARE_WITH_VOICE_CHANGER)
@@ -1241,10 +1220,11 @@ TEST_CASE("CLI option values do not depend on the option's side of the command w
     // under depended on whether the command was known yet, which is the same
     // position dependence seen from the other end.
     const CliArgs leading =
-        parse({"sonare-cli", "--target-sr", "8000", "resample", "in.wav", "-o", "out.wav"});
+        parse({"sonare-cli", "-o", "out.wav", "resample", "in.wav", "--target-rate", "8000"});
     const CliArgs trailing =
-        parse({"sonare-cli", "resample", "in.wav", "--target-sr", "8000", "-o", "out.wav"});
-    REQUIRE(leading.get_int("target-rate", -1) == 8000);
+        parse({"sonare-cli", "resample", "in.wav", "--target-rate", "8000", "-o", "out.wav"});
+    REQUIRE(leading.output_file == "out.wav");
+    REQUIRE(leading.output_file == trailing.output_file);
     REQUIRE(leading.options == trailing.options);
     REQUIRE(validate_cli_arguments(leading, true).empty());
   }
@@ -1364,8 +1344,7 @@ TEST_CASE("CLI rejects -o for commands that produce no file output", "[cli][argu
   REQUIRE_THAT(long_output, ContainsSubstring("does not produce a file output"));
 
   // Promoted analysis paths must reject both spellings at the parser/schema
-  // boundary, before loading the audio file.  Their contract exit is usage=2
-  // (and the compatibility mode still folds it to legacy=1).
+  // boundary, before loading the audio file.  Their contract exit is usage=2.
   for (const std::string command : {"analyze", "spectral"}) {
     auto [long_analysis_code, long_analysis_output] =
         exec_command(CLI + " " + command + " " + TEST_WAV + " --output " + out + " -q");
@@ -1376,17 +1355,6 @@ TEST_CASE("CLI rejects -o for commands that produce no file output", "[cli][argu
         exec_command(CLI + " " + command + " " + TEST_WAV + " -o " + out + " -q");
     REQUIRE(short_analysis_code == 2);
     REQUIRE_THAT(short_analysis_output, ContainsSubstring("does not produce a file output"));
-
-    auto [legacy_long_code, legacy_long_output] =
-        exec_command("SONARE_LEGACY_EXIT=1 " + CLI + " " + command + " " + TEST_WAV + " --output " +
-                     out + " -q");
-    REQUIRE(legacy_long_code == 1);
-    REQUIRE_THAT(legacy_long_output, ContainsSubstring("does not produce a file output"));
-
-    auto [legacy_short_code, legacy_short_output] = exec_command(
-        "SONARE_LEGACY_EXIT=1 " + CLI + " " + command + " " + TEST_WAV + " -o " + out + " -q");
-    REQUIRE(legacy_short_code == 1);
-    REQUIRE_THAT(legacy_short_output, ContainsSubstring("does not produce a file output"));
   }
 }
 
@@ -1557,13 +1525,6 @@ TEST_CASE("CLI error handling", "[cli]") {
         exec_command(CLI + " pitch-shift " + TEST_WAV + " -o " + TEST_OUT + " -q");
     REQUIRE(code == 3);
     REQUIRE_THAT(output, ContainsSubstring("--pitch-semitones required"));
-  }
-
-  SECTION("legacy mode folds runtime failures") {
-    auto [code, output] =
-        exec_command("SONARE_LEGACY_EXIT=1 " + CLI + " bpm /nonexistent/file.wav -q");
-    REQUIRE(code == 1);
-    REQUIRE_THAT(output, ContainsSubstring("Error"));
   }
 }
 

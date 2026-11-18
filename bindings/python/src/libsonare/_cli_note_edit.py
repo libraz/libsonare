@@ -14,7 +14,6 @@ from ._cli_common import (
     _audio_array,
     _emit_effect_result,
     _fmt_optional,
-    _legacy_exit_codes,
     _omit_absent,
     _read_bounded,
     _strict_json_dumps,
@@ -212,7 +211,7 @@ def cmd_tune_to_midi(args: argparse.Namespace) -> int:
     # command costs: every check below is answerable from argv alone.
     if not args.output:
         print("Error: tune-to-midi requires an output file (-o/--output)", file=sys.stderr)
-        return 1 if _legacy_exit_codes() else EXIT_INVALID_PARAMETER
+        return EXIT_INVALID_PARAMETER
     if args.track < 0:
         raise ValueError(f"--track must be a non-negative track index: {args.track}")
     if args.unmatched_policy not in _UNMATCHED_POLICIES:
@@ -548,7 +547,7 @@ def cmd_polyphonic_render(args: argparse.Namespace) -> int:
     # the expensive part of the command and a missing destination is already known.
     if not args.output:
         print("Error: polyphonic-render requires an output file (-o/--output)", file=sys.stderr)
-        return 1 if _legacy_exit_codes() else EXIT_INVALID_PARAMETER
+        return EXIT_INVALID_PARAMETER
 
     assignments = list(getattr(args, "edit", None) or [])
     samples, sr = _load_audio(args.file)

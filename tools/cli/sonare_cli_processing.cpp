@@ -936,8 +936,8 @@ int cmd_voice_preset_validate(const CliArgs& args, const Audio&) {
   }
   // read_plain_text_file historically reports open failures as
   // std::invalid_argument. Classify the pre-validation missing-file case as
-  // FileNotFound so it maps to exit 4 (or legacy exit 1) and never emits a
-  // JSON validation envelope.
+  // FileNotFound so it maps to exit 4 and never emits a JSON validation
+  // envelope.
   {
     std::ifstream input(path);
     if (!input.is_open()) {

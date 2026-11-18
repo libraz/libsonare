@@ -428,7 +428,7 @@ int cmd_mastering(const CliArgs& args, const Audio& audio) {
       static_cast<int>(has_config) + static_cast<int>(has_preset || has_assistant);
   if (selector_count > 1) {
     throw std::invalid_argument(
-        "--chain-config (--config) is mutually exclusive with --preset and --assistant");
+        "--chain-config is mutually exclusive with --preset and --assistant");
   }
   const std::string params_text = args.get_string("params");
   const bool has_params = args.has("params");
@@ -786,9 +786,6 @@ int cmd_eq(const CliArgs& args, const Audio& audio) {
     params.push_back({"band0.rangeDb", args.get_float("range-db", -6.0f)});
     params.push_back({"band0.attackMs", args.get_float("attack-ms", 5.0f)});
     params.push_back({"band0.releaseMs", args.get_float("release-ms", 50.0f)});
-    // "--lookahead-ms" is registered as an alias of "--detector-delay-ms" (see
-    // sonare_cli_registry.cpp), so this lookup already resolves either spelling; the
-    // constructed key is always the canonical "detectorDelayMs".
     params.push_back({"band0.detectorDelayMs", args.get_float("detector-delay-ms", 0.0f)});
     params.push_back({"band0.sidechainFreqHz", args.get_float("sidechain-freq-hz", -1.0f)});
     params.push_back({"band0.sidechainQ", args.get_float("sidechain-q", 1.0f)});

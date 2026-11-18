@@ -16,7 +16,6 @@ from ._cli_common import (
     EXIT_INVALID_STATE,
     _atomic_write_bytes,
     _cli_token,
-    _legacy_exit_codes,
     _library_token,
     _load_audio_channels,
     _omit_absent,
@@ -525,7 +524,7 @@ def cmd_project(args: argparse.Namespace) -> int:
             for entry in diagnostics:
                 print(f"  warning: {entry}", file=sys.stderr)
         if strict and diagnostics:
-            return 1 if _legacy_exit_codes() else EXIT_INVALID_STATE
+            return EXIT_INVALID_STATE
         return 0
     if subcommand == "compile":
         project = cast(Project, _load_project(args.input))
@@ -562,7 +561,7 @@ def cmd_project(args: argparse.Namespace) -> int:
                 )
             if result.has_timeline:
                 return 0
-            return 1 if _legacy_exit_codes() else EXIT_INVALID_STATE
+            return EXIT_INVALID_STATE
         finally:
             cast(Any, project).close()
     if subcommand == "bounce":

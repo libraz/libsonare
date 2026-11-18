@@ -655,3 +655,18 @@ changed = "values are kebab-case (living-room, home-theater, screening-room), re
 domain = "engine"
 rule = "token-case"
 test = "tests/conformance/cli_contract_v2.json::room_snake_case_refused"
+
+[[entry]]
+kind = "flag"
+old = "acoustic --n-bands"
+new = "acoustic --n-octave-bands"
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "flag"
+old = "estimate-room --n-octave-bands"
+changed = "omitted, the library chooses the band count; an explicit 0 or a negative value is refused as a usage error (exit 2) rather than read as the default"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "tests/cli/cli_effects_test.cpp::leaves an omitted band count to the library and refuses 0"

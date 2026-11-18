@@ -47,7 +47,7 @@ def test_acoustic_omits_what_only_an_impulse_response_measures(
     result = _acoustic_result(blind=blind)
     monkeypatch.setattr(libsonare, "detect_acoustic", lambda _samples, **_kwargs: result)
     monkeypatch.setattr(libsonare, "analyze_impulse_response", lambda _samples, **_kwargs: result)
-    args = argparse.Namespace(file="in.wav", json=True, ir=not blind, n_bands=1)
+    args = argparse.Namespace(file="in.wav", json=True, ir=not blind, n_octave_bands=1)
 
     assert acoustic.cmd_acoustic(args) == 0
     payload = _json_out(capsys)

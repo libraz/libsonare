@@ -214,16 +214,16 @@ TEST_CASE("CLI split-silence --write-takes slices every take at every interval",
 }
 
 #ifdef SONARE_WITH_ACOUSTIC_SIM
-TEST_CASE("CLI estimate-room accepts both band-count spellings", "[cli][argument-contract]") {
-  // Native historically spelled the flag --n-bands; the Python CLI uses
-  // --n-octave-bands. Both must be recognized so scripts against either surface
-  // keep working. Argument validation runs before audio loading, so a missing
-  // input file (usage error) still proves the option itself was accepted.
-  auto [native_code, native_output] = exec_command(CLI + " estimate-room --n-bands 6 -q");
-  REQUIRE_THAT(native_output, !ContainsSubstring("Unknown option"));
+TEST_CASE("CLI estimate-room leaves an omitted band count to the library and refuses 0",
+          "[cli][argument-contract]") {
+  // Argument validation runs before audio loading, so a missing input file
+  // (usage error) still proves the option itself was accepted.
+  auto [code, output] = exec_command(CLI + " estimate-room --n-octave-bands 6 -q");
+  REQUIRE_THAT(output, !ContainsSubstring("Unknown option"));
 
-  auto [alias_code, alias_output] = exec_command(CLI + " estimate-room --n-octave-bands 6 -q");
-  REQUIRE_THAT(alias_output, !ContainsSubstring("Unknown option"));
+  auto [zero_code, zero_output] = exec_command(CLI + " estimate-room --n-octave-bands 0 -q");
+  REQUIRE(zero_code == 2);
+  REQUIRE_THAT(zero_output, ContainsSubstring("--n-octave-bands"));
 }
 
 // Zero keeps the library default because that is how the C ABI spells the same
