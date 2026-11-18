@@ -2,6 +2,11 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   analyze,
+  Mixer,
+  masterAudio,
+  masterAudioAsync,
+  masterAudioStereo,
+  masterAudioStereoAsync,
   midiBankProgram,
   midiCc,
   midiCcLearn,
@@ -10,11 +15,6 @@ import {
   midiNoteOn,
   midiParamToCc,
   midiRouteEvents,
-  Mixer,
-  masterAudio,
-  masterAudioAsync,
-  masterAudioStereo,
-  masterAudioStereoAsync,
   mixingScenePreset,
   mixStereo,
   noteSegments,
@@ -25,8 +25,8 @@ import {
   spectralEdit,
   trim,
 } from '../src/index.js';
-import { addon } from '../src/native.js';
 import type { MixStereoStrip } from '../src/mixing_oneshot.js';
+import { addon } from '../src/native.js';
 
 type CorpusMarker = { id: number | 'uint32_max'; ppq: number | 'nan' | 'inf'; name: string };
 type CorpusCase = {
@@ -252,6 +252,17 @@ describe('shared public-input conformance corpus', () => {
 // a RangeError is this surface refusing a value its target C type cannot hold, a
 // TypeError a value of the wrong JavaScript type. One reader per width, so a
 // consumer's `catch (e) { if (e instanceof RangeError) }` cannot miss one.
+/**
+ * The addon handle behind a Project. The facade refuses every number for a
+ * synth token, so the native resolvers' own ordinal checks are reached here.
+ */
+const nativeBounce = (
+  project: Project,
+): {
+  bounceWithBuiltinInstruments(bindings: unknown[], settings: object): Float32Array;
+  bounceWithSynthInstruments(bindings: unknown[], settings: object): Float32Array;
+} => (project as unknown as { handle: ReturnType<typeof nativeBounce> }).handle;
+
 describe('a number no target C type can hold is a RangeError on every width', () => {
   it('refuses an unrepresentable number with RangeError', () => {
     const project = new Project();
@@ -267,22 +278,19 @@ describe('a number no target C type can hold is a RangeError on every width', ()
       ).toThrow(RangeError);
       // size_t: a negative index would wrap to an enormous positive one.
       expect(() => project.setMaxUndoDepth(-1)).toThrow(RangeError);
-      // int, through the waveform resolver's own pre-narrowing check.
+      // int, through the native waveform resolver's own pre-narrowing check.
       expect(() =>
-        project.bounceWithBuiltinInstruments({
-          instrument: { waveform: (2 ** 31) as unknown as 'sine' },
-        }),
+        nativeBounce(project).bounceWithBuiltinInstruments([{ waveform: 2 ** 31 }], {}),
       ).toThrow(RangeError);
     } finally {
       project.destroy();
     }
   });
 
-  // The waveform resolver refuses three shapes of unresolvable value, and they
-  // answer as one class because the TS-side resolveEnumOrdinal does: an unknown
-  // ordinal and an unknown name are both RangeError there, asserted against the
-  // shared pan-law and automation-curve corpora.
-  it('answers every unresolvable waveform with RangeError, whichever spelling', () => {
+  // The facade takes the waveform by name only: an unknown name is a RangeError
+  // and any number a TypeError. Past the facade the native resolver still reads
+  // an ordinal, and answers every unresolvable one with RangeError.
+  it('answers every unresolvable waveform by its fault, at the facade and past it', () => {
     for (const waveform of ['noise', 4, -1, 2 ** 31, Number.NaN]) {
       const project = new Project();
       try {
@@ -291,7 +299,11 @@ describe('a number no target C type can hold is a RangeError on every width', ()
             project.bounceWithBuiltinInstruments({
               instrument: { waveform: waveform as unknown as 'sine' },
             }),
-          `waveform ${waveform} must be refused as out of range`,
+          `waveform ${waveform} must be refused by the facade`,
+        ).toThrow(typeof waveform === 'string' ? RangeError : TypeError);
+        expect(
+          () => nativeBounce(project).bounceWithBuiltinInstruments([{ waveform }], {}),
+          `waveform ${waveform} must be refused as out of range by the addon`,
         ).toThrow(RangeError);
       } finally {
         project.destroy();
@@ -319,16 +331,19 @@ describe('a number no target C type can hold is a RangeError on every width', ()
     }
   });
 
-  it('still accepts every in-domain waveform, in both spellings', () => {
+  it('still accepts every in-domain waveform, by name and natively by ordinal', () => {
     // Vacuity guard: a resolver that refused everything would satisfy the two
     // cases above.
     const project = new Project();
     try {
-      for (const waveform of ['sine', 'saw', 'sawtooth', 'square', 'triangle', 0, 1, 2, 3]) {
+      for (const waveform of ['sine', 'saw', 'sawtooth', 'square', 'triangle'] as const) {
         expect(() =>
-          project.bounceWithBuiltinInstruments({
-            instrument: { waveform: waveform as unknown as 'sine' },
-          }),
+          project.bounceWithBuiltinInstruments({ instrument: { waveform } }),
+        ).not.toThrow();
+      }
+      for (const waveform of [0, 1, 2, 3]) {
+        expect(() =>
+          nativeBounce(project).bounceWithBuiltinInstruments([{ waveform }], {}),
         ).not.toThrow();
       }
     } finally {
@@ -772,7 +787,10 @@ describe('async entry points reject instead of throwing synchronously', () => {
     [
       'masterAudioStereoAsync refuses a positional call',
       () =>
-        masterAudioStereoAsync(new Float32Array(1024) as never, new Float32Array(1024) as never),
+        (masterAudioStereoAsync as (...args: unknown[]) => Promise<unknown>)(
+          new Float32Array(1024),
+          new Float32Array(1024),
+        ),
       /request must be an object/,
     ],
   ];
@@ -795,6 +813,8 @@ describe('async entry points reject instead of throwing synchronously', () => {
 // not a throw, so these compare rendered output rather than the refusal. A
 // throw-shaped assertion goes green on the fix while staying green on the
 // defect, which is the one thing it must not do.
+// The facade refuses every number for these fields; the addon still reads an
+// ordinal, so its own domain checks are exercised on the handle directly.
 describe('a wrapping ordinal cannot reach a NativeSynth patch enum', () => {
   const bounceOptions = { totalFrames: 4096, numChannels: 1 };
 
@@ -814,11 +834,8 @@ describe('a wrapping ordinal cannot reach a NativeSynth patch enum', () => {
   const outcome = (patch: Record<string, unknown>): string => {
     const project = midiProject();
     try {
-      const audio = project.bounceWithSynthInstruments(
-        { instrument: patch as never },
-        bounceOptions,
-      );
-      return `render:${audio.channels[0].reduce((h, s) => (h * 31 + Math.round(s * 1e6)) | 0, 0)}`;
+      const audio = nativeBounce(project).bounceWithSynthInstruments([patch], bounceOptions);
+      return `render:${audio.reduce((h, s) => (h * 31 + Math.round(s * 1e6)) | 0, 0)}`;
     } catch (error) {
       return (error as Error).constructor.name;
     } finally {

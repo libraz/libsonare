@@ -355,7 +355,7 @@ describe('mixing assistant source classes', () => {
     // Asserted as a structural property of the table rather than against a
     // fixed list of class names, so growing the taxonomy does not fail here.
     expect(names.length).toBeGreaterThan(0);
-    expect(names.every((name) => typeof name === 'string' && name !== '')).toBe(true);
+    expect(names.every((name) => typeof name === 'string' && name.length > 0)).toBe(true);
     for (const name of names) {
       expect(mixingAssistantSourceClassFromName(name), name).toBeGreaterThanOrEqual(0);
     }
