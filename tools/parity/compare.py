@@ -270,6 +270,8 @@ _ALIAS_COVERAGE = {
     # is a lifecycle key, so Python's constructor needs no credit; restore is the classmethod.
     "vocal_session_create": ("create_vocal_edit_session",),
     "vocal_session_restore": ("restore", "restore_vocal_edit_session"),
+    # The loudness helper is the facades' `mastering`; Node and WASM are credited by the core claim.
+    "mastering_process": ("mastering",),
     # With no preset, master_audio runs the configured chain the chain entry runs.
     # Node and WASM are credited by the core claim in _CORE_COVERAGE instead.
     "mastering_chain": ("master_audio",),
@@ -279,15 +281,8 @@ _ALIAS_COVERAGE = {
     "capability_catalog_json": ("capability_catalog",),
     # Named mastering processors and analyses, under the facades' verb-last names.
     # Each facade derives the frame counts, so one name covers the base and _ex calls.
-    "mastering_apply_processor": ("mastering_process",),
-    "mastering_apply_processor_stereo": ("mastering_process_stereo",),
-    "mastering_apply_pair_processor": ("mastering_pair_process",),
-    "mastering_apply_pair_processor_ex": ("mastering_pair_process",),
-    "mastering_apply_pair_processor_stereo": ("mastering_pair_process_stereo",),
-    "mastering_apply_pair_processor_stereo_ex": (
-        "mastering_pair_process_stereo",
-        "mastering_apply_pair_processor_stereo",
-    ),
+    "mastering_apply_pair_processor_ex": ("mastering_apply_pair_processor",),
+    "mastering_apply_pair_processor_stereo_ex": ("mastering_apply_pair_processor_stereo",),
     "mastering_analyze_pair_ex": ("mastering_analyze_pair",),
     # One EQ match method covers the single-length base and the per-buffer _ex.
     "eq_match_ex": ("match",),

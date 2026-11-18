@@ -460,16 +460,16 @@ EXCLUSIONS: dict[str, dict[str, tuple[str, str]]] = {
     # is also why a refusal is the stronger observation of the two here:
     # `eq.linearPhase`'s own `fftSize` control is inert over the first 96 samples,
     # and the refusal is what says the key is read at all.
-    "analyzer.mastering_process": {
+    "analyzer.mastering_apply_processor": {
         "params": _BAG,
     },
-    "analyzer.mastering_process_stereo": {
+    "analyzer.mastering_apply_processor_stereo": {
         "params": _BAG,
     },
-    "analyzer.mastering_pair_process": {
+    "analyzer.mastering_apply_pair_processor": {
         "params": _BAG,
     },
-    "analyzer.mastering_pair_process_stereo": {
+    "analyzer.mastering_apply_pair_processor_stereo": {
         "params": _BAG,
     },
     "analyzer.mastering_analyze_pair": {
@@ -478,7 +478,7 @@ EXCLUSIONS: dict[str, dict[str, tuple[str, str]]] = {
     "analyzer.mastering_analyze_stereo": {
         "params": _BAG,
     },
-    "audio.Audio.mastering_process": {
+    "audio.Audio.mastering_apply_processor": {
         "params": _BAG,
     },
     "analyzer.mastering_audio_profile": {

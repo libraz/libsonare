@@ -1364,12 +1364,6 @@ RULES: list[Rule] = [
         violation=_stereo_pair_violation,
         derive=_stereo_calls,
         pending={
-            "python:mastering_process_stereo": "rename to mastering_apply_processor_stereo (Node/WASM masteringApplyProcessorStereo)",
-            "python:mastering_pair_process_stereo": "rename to mastering_apply_pair_processor_stereo (Node/WASM masteringApplyPairProcessorStereo)",
-            "node:masteringApplyProcessorStereo": "Python spells it mastering_process_stereo",
-            "wasm:masteringApplyProcessorStereo": "Python spells it mastering_process_stereo",
-            "node:masteringApplyPairProcessorStereo": "Python spells it mastering_pair_process_stereo",
-            "wasm:masteringApplyPairProcessorStereo": "Python spells it mastering_pair_process_stereo",
             "node:mixingAssistantSuggest": "MixAssistantTrack carries left/right; a mixing track takes channels",
             "wasm:mixingAssistantSuggest": "MixAssistantTrack carries left/right; a mixing track takes channels",
         },
@@ -1422,10 +1416,6 @@ RULES: list[Rule] = [
             },
             **{
                 f"wasm:Mixer.processStereoInto({side}Channels)": "send the declarations and what they count"
-                for side in ("left", "right")
-            },
-            **{
-                f"python:Mixer.process_stereo({side}_channels)": "send the declarations and what they count"
                 for side in ("left", "right")
             },
         },

@@ -9,12 +9,11 @@
 # ---------------------------------------------------------------------------
 [surface_only]
 # Symbols that exist on multiple bindings but are deliberately binding-only.
-# The `mastering` / `mix_stereo` entries are ERGONOMIC
-# facade free-function names with no C function of the same name. Renaming the
-# public facade API to mirror C is out of scope, so these are intentional, not
+# The `mix_stereo` entry is an ERGONOMIC
+# facade free-function name with no C function of the same name. Renaming the
+# public facade API to mirror C is out of scope, so it is intentional, not
 # drift. (The named mastering processors and analyses are credited through
 # compare.py's _ALIAS_COVERAGE instead.)
-#   mastering                <- high-level convenience wrapper (C mastering_process)
 #   mix_stereo               <- stereo mix convenience
 # The facade validation helpers (`assert_samples`, `assert_u7`, `midi1_event`
 # and the rest of that family) are NOT listed here. They live in modules the
@@ -25,7 +24,6 @@
 # public for real.
 any = [
   "init",                  # WASM async module init
-  "mastering",
   "mix_stereo",
 ]
 
