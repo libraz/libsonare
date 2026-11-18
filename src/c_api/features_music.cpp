@@ -56,12 +56,12 @@ SonareError run_chroma_cqt_family(const float* samples, size_t length, int sampl
 // Features - Onset
 // ============================================================================
 
-SonareError sonare_onset_strength(const float* samples, size_t length, int sr, int n_fft,
+SonareError sonare_onset_strength(const float* samples, size_t length, int sample_rate, int n_fft,
                                   int hop_length, int n_mels, float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
   if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
 
-  return run_offline(samples, length, sr, [&](const Audio& audio) -> SonareError {
+  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     MelConfig mel_config;
     mel_config.n_fft = n_fft;
     mel_config.hop_length = hop_length;
@@ -72,9 +72,9 @@ SonareError sonare_onset_strength(const float* samples, size_t length, int sr, i
   });
 }
 
-SonareError sonare_onset_strength_multi(const float* samples, size_t length, int sr, int n_fft,
-                                        int hop_length, int n_mels, int n_bands, float** out,
-                                        size_t* out_length, int* out_n_frames) {
+SonareError sonare_onset_strength_multi(const float* samples, size_t length, int sample_rate,
+                                        int n_fft, int hop_length, int n_mels, int n_bands,
+                                        float** out, size_t* out_length, int* out_n_frames) {
   SONARE_C_API_ENTRY;
   if (!out || !out_length || !out_n_frames) return SONARE_ERROR_INVALID_PARAMETER;
   *out = nullptr;
@@ -82,7 +82,7 @@ SonareError sonare_onset_strength_multi(const float* samples, size_t length, int
   *out_n_frames = 0;
   if (n_bands <= 0) return SONARE_ERROR_INVALID_PARAMETER;
 
-  return run_offline(samples, length, sr, [&](const Audio& audio) -> SonareError {
+  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     MelConfig mel_config;
     mel_config.n_fft = n_fft;
     mel_config.hop_length = hop_length;
@@ -163,17 +163,17 @@ SonareError sonare_bass_chroma(const float* samples, size_t length, int sample_r
   });
 }
 
-SonareError sonare_nnls_chroma_ex(const float* samples, size_t length, int sr,
+SonareError sonare_nnls_chroma_ex(const float* samples, size_t length, int sample_rate,
                                   int enable_stft_blend, float stft_blend_weight,
                                   int stft_blend_n_fft, float** out, size_t* out_length,
                                   int* out_n_frames) {
   SONARE_C_API_ENTRY;
-  return sonare_nnls_chroma_ex2(samples, length, sr, enable_stft_blend, stft_blend_weight,
+  return sonare_nnls_chroma_ex2(samples, length, sample_rate, enable_stft_blend, stft_blend_weight,
                                 stft_blend_n_fft, constants::kDefaultHopLength, out, out_length,
                                 out_n_frames);
 }
 
-SonareError sonare_nnls_chroma_ex2(const float* samples, size_t length, int sr,
+SonareError sonare_nnls_chroma_ex2(const float* samples, size_t length, int sample_rate,
                                    int enable_stft_blend, float stft_blend_weight,
                                    int stft_blend_n_fft, int hop_length, float** out,
                                    size_t* out_length, int* out_n_frames) {
@@ -194,7 +194,7 @@ SonareError sonare_nnls_chroma_ex2(const float* samples, size_t length, int sr,
     return err;
   }
 
-  return run_offline(samples, length, sr, [&](const Audio& audio) -> SonareError {
+  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     Chroma chroma = nnls_chroma(audio, config);
 
     *out_n_frames = chroma.n_frames();
@@ -208,8 +208,9 @@ SonareError sonare_nnls_chroma_ex2(const float* samples, size_t length, int sr,
   });
 }
 
-SonareError sonare_nnls_chroma(const float* samples, size_t length, int sr, float** out,
+SonareError sonare_nnls_chroma(const float* samples, size_t length, int sample_rate, float** out,
                                size_t* out_length, int* out_n_frames) {
   SONARE_C_API_ENTRY;
-  return sonare_nnls_chroma_ex(samples, length, sr, 1, 0.55f, 4096, out, out_length, out_n_frames);
+  return sonare_nnls_chroma_ex(samples, length, sample_rate, 1, 0.55f, 4096, out, out_length,
+                               out_n_frames);
 }

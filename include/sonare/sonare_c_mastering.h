@@ -219,19 +219,16 @@ SonareError sonare_mastering_process(const float* samples, size_t length, int sa
 ///   that does not substitute reports zero because it has nothing to replace
 ///   with, not because nothing needed replacing.
 /// @param out Receives heap-owned buffers; free with sonare_free_mastering_result.
-SonareError sonare_mastering_apply_processor(const char* processor_name, const float* samples,
+SonareError sonare_mastering_apply_processor(const char* processor, const float* samples,
                                              size_t length, int sample_rate,
                                              const SonareMasteringParam* params, size_t param_count,
                                              SonareMasteringResult* out);
 /// @details See @c sonare_mastering_apply_processor for
 ///   @c non_finite_substitution_count semantics.
 /// @param out Receives heap-owned buffers; free with sonare_free_mastering_stereo_result.
-SonareError sonare_mastering_apply_processor_stereo(const char* processor_name, const float* left,
-                                                    const float* right, size_t length,
-                                                    int sample_rate,
-                                                    const SonareMasteringParam* params,
-                                                    size_t param_count,
-                                                    SonareMasteringStereoResult* out);
+SonareError sonare_mastering_apply_processor_stereo(
+    const char* processor, const float* left, const float* right, size_t length, int sample_rate,
+    const SonareMasteringParam* params, size_t param_count, SonareMasteringStereoResult* out);
 
 /// @brief Run the full mastering chain on a mono buffer.
 /// @details @p params is a flat (key/value) view of the
@@ -326,23 +323,23 @@ SonareError sonare_mastering_preset_params_json(const char* preset, char** json_
 /// configuration, can mistake a steady tone -- a calibration tone, a drone, a
 /// long held note -- for noise and pull it down by the configured reduction
 /// depth. Check for musical sustained tones before applying one.
-/// @param preset_name e.g. "pop", "aiMusic". See @c sonare_mastering_preset_names().
+/// @param preset e.g. "pop", "aiMusic". See @c sonare_mastering_preset_names().
 /// @param overrides   Optional Param overrides (same flat dot-notation as
 ///                    @c sonare_mastering_chain). Pass NULL/0 for preset defaults.
-SonareError sonare_master_audio(const char* preset_name, const float* samples, size_t length,
+SonareError sonare_master_audio(const char* preset, const float* samples, size_t length,
                                 int sample_rate, const SonareMasteringParam* overrides,
                                 size_t override_count, SonareMasteringChainResult* out);
 
 /// @brief Stereo equivalent of @c sonare_master_audio.
-SonareError sonare_master_audio_stereo(const char* preset_name, const float* left,
-                                       const float* right, size_t length, int sample_rate,
+SonareError sonare_master_audio_stereo(const char* preset, const float* left, const float* right,
+                                       size_t length, int sample_rate,
                                        const SonareMasteringParam* overrides, size_t override_count,
                                        SonareMasteringChainStereoResult* out);
 
 /// @brief Same as sonare_master_audio but reports per-stage progress.
 /// @param user_data Passed back to @p callback unchanged. Neither pointer is retained past this
 ///   call: the callback runs on the calling thread and nothing is stored once it returns.
-SonareError sonare_master_audio_with_progress(const char* preset_name, const float* samples,
+SonareError sonare_master_audio_with_progress(const char* preset, const float* samples,
                                               size_t length, int sample_rate,
                                               const SonareMasteringParam* overrides,
                                               size_t override_count,
@@ -355,7 +352,7 @@ SonareError sonare_master_audio_with_progress(const char* preset_name, const flo
 ///   @p cancel_cb. No callback or user pointer is retained past this call: both run on the
 ///   calling thread and nothing is stored once it returns.
 SonareError sonare_master_audio_with_progress_ex(
-    const char* preset_name, const float* samples, size_t length, int sample_rate,
+    const char* preset, const float* samples, size_t length, int sample_rate,
     const SonareMasteringParam* overrides, size_t override_count,
     SonareMasteringProgressCallback callback, void* user_data, SonareMasteringChainResult* out,
     SonareCancelCallback cancel_cb, void* cancel_user_data);
@@ -364,7 +361,7 @@ SonareError sonare_master_audio_with_progress_ex(
 /// @param user_data Passed back to @p callback unchanged. Neither pointer is retained past this
 ///   call: the callback runs on the calling thread and nothing is stored once it returns.
 SonareError sonare_master_audio_stereo_with_progress(
-    const char* preset_name, const float* left, const float* right, size_t length, int sample_rate,
+    const char* preset, const float* left, const float* right, size_t length, int sample_rate,
     const SonareMasteringParam* overrides, size_t override_count,
     SonareMasteringProgressCallback callback, void* user_data,
     SonareMasteringChainStereoResult* out);
@@ -376,7 +373,7 @@ SonareError sonare_master_audio_stereo_with_progress(
 ///   @p cancel_cb. No callback or user pointer is retained past this call: both run on the
 ///   calling thread and nothing is stored once it returns.
 SonareError sonare_master_audio_stereo_with_progress_ex(
-    const char* preset_name, const float* left, const float* right, size_t length, int sample_rate,
+    const char* preset, const float* left, const float* right, size_t length, int sample_rate,
     const SonareMasteringParam* overrides, size_t override_count,
     SonareMasteringProgressCallback callback, void* user_data,
     SonareMasteringChainStereoResult* out, SonareCancelCallback cancel_cb, void* cancel_user_data);
@@ -478,7 +475,7 @@ SonareError sonare_capability_catalog_json(char** out_json);
 const char* sonare_mastering_insert_names(void);
 
 /// @brief Returns the camelCase parameter names a given insert / FX processor
-///        reads, separated by '\n' (empty string when @p name is unknown or its
+///        reads, separated by '\n' (empty string when @p insert is unknown or its
 ///        insert needs an unavailable build feature).
 /// @details For tools/UIs that want to validate a scene insert's params before
 ///   loading it: any supplied key NOT in this list is silently ignored by the
@@ -488,8 +485,8 @@ const char* sonare_mastering_insert_names(void);
 ///   stays valid across later API calls on the calling thread), this pointer is
 ///   thread-local valid only until the next API call on the same thread; the
 ///   caller must NOT free it. Returns NULL if the name list cannot be built.
-/// @param name Insert processor name (see @ref sonare_mastering_insert_names).
-const char* sonare_mastering_insert_param_names(const char* name);
+/// @param insert Insert processor name (see @ref sonare_mastering_insert_names).
+const char* sonare_mastering_insert_param_names(const char* insert);
 
 /// @brief Parameter descriptors for an insert processor: every key its
 ///        construction reads, plus every realtime automation target.
@@ -666,7 +663,7 @@ SonareError sonare_mastering_enum_value(const char* processor, const char* key, 
 ///   that does not substitute reports zero because it has nothing to replace
 ///   with, not because nothing needed replacing.
 /// @param out Receives heap-owned buffers; free with sonare_free_mastering_result.
-SonareError sonare_mastering_apply_pair_processor(const char* processor_name, const float* source,
+SonareError sonare_mastering_apply_pair_processor(const char* processor, const float* source,
                                                   const float* reference, size_t length,
                                                   int sample_rate,
                                                   const SonareMasteringParam* params,
@@ -685,7 +682,7 @@ SonareError sonare_mastering_apply_pair_processor(const char* processor_name, co
 /// @param sample_rate Rate of @p source and of the output; must be > 0.
 /// @param out Receives heap-owned buffers; free with sonare_free_mastering_result.
 SonareError sonare_mastering_apply_pair_processor_ex(
-    const char* processor_name, const float* source, size_t source_length, const float* reference,
+    const char* processor, const float* source, size_t source_length, const float* reference,
     size_t reference_length, int reference_sample_rate, int sample_rate,
     const SonareMasteringParam* params, size_t param_count, SonareMasteringResult* out);
 
@@ -694,7 +691,7 @@ SonareError sonare_mastering_apply_pair_processor_ex(
 /// channels; other pair processor names are rejected. Output length is the
 /// shorter input length. Free the result with sonare_free_mastering_stereo_result.
 SonareError sonare_mastering_apply_pair_processor_stereo(
-    const char* processor_name, const float* source_left, const float* source_right,
+    const char* processor, const float* source_left, const float* source_right,
     const float* reference_left, const float* reference_right, size_t length, int sample_rate,
     const SonareMasteringParam* params, size_t param_count, SonareMasteringStereoResult* out);
 
@@ -706,13 +703,13 @@ SonareError sonare_mastering_apply_pair_processor_stereo(
 /// See sonare_mastering_apply_pair_processor_stereo for supported processors.
 /// Free the result with sonare_free_mastering_stereo_result.
 SonareError sonare_mastering_apply_pair_processor_stereo_ex(
-    const char* processor_name, const float* source_left, const float* source_right,
+    const char* processor, const float* source_left, const float* source_right,
     size_t source_length, const float* reference_left, const float* reference_right,
     size_t reference_length, int reference_sample_rate, int sample_rate,
     const SonareMasteringParam* params, size_t param_count, SonareMasteringStereoResult* out);
 
 /// @note Free @p json_out with @ref sonare_free_string.
-SonareError sonare_mastering_analyze_pair(const char* analysis_name, const float* source,
+SonareError sonare_mastering_analyze_pair(const char* analysis, const float* source,
                                           const float* reference, size_t length, int sample_rate,
                                           const SonareMasteringParam* params, size_t param_count,
                                           char** json_out);
@@ -724,13 +721,13 @@ SonareError sonare_mastering_analyze_pair(const char* analysis_name, const float
 /// @details A reference at another rate is resampled onto @p sample_rate first, so
 ///   @c match.estimateReferenceDelaySamples reports a delay in source-rate samples.
 /// @note Free @p json_out with @ref sonare_free_string.
-SonareError sonare_mastering_analyze_pair_ex(const char* analysis_name, const float* source,
+SonareError sonare_mastering_analyze_pair_ex(const char* analysis, const float* source,
                                              size_t source_length, const float* reference,
                                              size_t reference_length, int reference_sample_rate,
                                              int sample_rate, const SonareMasteringParam* params,
                                              size_t param_count, char** json_out);
 /// @note Free @p json_out with @ref sonare_free_string.
-SonareError sonare_mastering_analyze_stereo(const char* analysis_name, const float* left,
+SonareError sonare_mastering_analyze_stereo(const char* analysis, const float* left,
                                             const float* right, size_t length, int sample_rate,
                                             const SonareMasteringParam* params, size_t param_count,
                                             char** json_out);
@@ -1518,7 +1515,7 @@ void sonare_free_denoise_result(SonareDenoiseResult* result);
 ///   @ref sonare_mastering_repair_denoise_classical_stereo, carrying the same
 ///   guarantee for the whole set: one mask over the channel-summed power, applied
 ///   unchanged to every channel, so no interchannel level or phase difference
-///   moves however many channels there are. A @p channel_count of 1 reproduces
+///   moves however many channels there are. A @p num_channels of 1 reproduces
 ///   @ref sonare_mastering_repair_denoise_classical bit for bit.
 ///
 ///   An input shorter than @c config->n_fft is padded for analysis and the output
@@ -1529,18 +1526,18 @@ void sonare_free_denoise_result(SonareDenoiseResult* result);
 ///   same material as a pair reads about 3 dB above the same material as one
 ///   channel. The attenuation figures on @ref SonareDenoiseReport are fractions
 ///   and do not move.
-/// @param channels @p channel_count buffers of @p length samples each; none NULL.
-/// @param channel_count Number of channels; at least one.
+/// @param channels @p num_channels buffers of @p length samples each; none NULL.
+/// @param num_channels Number of channels; at least one.
 /// @param length Samples per channel. One length for the set: the C form has no
 ///        way to express the disagreement the core rejects.
 /// @param sample_rate Sample rate in Hz, shared by every channel.
 /// @param config Pass NULL to use library defaults.
-/// @param out_channels @p channel_count caller-owned buffers of @p length floats
+/// @param out_channels @p num_channels caller-owned buffers of @p length floats
 ///        each, written in place. Unlike the stereo entry nothing is allocated
 ///        here, so nothing needs releasing; a rejected call leaves them untouched.
 /// @param out_report Receives the one report the set shares. Must not be NULL.
 SonareError sonare_mastering_repair_denoise_classical_linked(
-    const float* const* channels, size_t channel_count, size_t length, int sample_rate,
+    const float* const* channels, size_t num_channels, size_t length, int sample_rate,
     const SonareDenoiseClassicalConfig* config, float* const* out_channels,
     SonareDenoiseReport* out_report);
 
@@ -2001,7 +1998,7 @@ void sonare_free_dereverb_result(SonareDereverbResult* result);
 ///   shared across the whole set rather than just a pair: one mask over the
 ///   channel-summed power, and one WPE predictor set fitted over every channel's
 ///   statistics, so neither can move an interchannel level or phase difference
-///   however many channels there are. A @p channel_count of 1 reproduces
+///   however many channels there are. A @p num_channels of 1 reproduces
 ///   @ref sonare_mastering_repair_dereverb_classical bit for bit.
 ///
 ///   An input shorter than @c config->n_fft is padded for analysis rather than
@@ -2009,20 +2006,20 @@ void sonare_free_dereverb_result(SonareDereverbResult* result);
 ///   @ref sonare_mastering_repair_denoise_classical_linked.
 ///
 ///   Every field of the report is a ratio or a fraction, so unlike the denoise
-///   entry nothing here shifts with @p channel_count and a figure measured over
+///   entry nothing here shifts with @p num_channels and a figure measured over
 ///   a set is comparable against a mono one.
-/// @param channels @p channel_count buffers of @p length samples each; none NULL.
-/// @param channel_count Number of channels; at least one.
+/// @param channels @p num_channels buffers of @p length samples each; none NULL.
+/// @param num_channels Number of channels; at least one.
 /// @param length Samples per channel. One length for the set: the C form has no
 ///        way to express the disagreement the core rejects.
 /// @param sample_rate Sample rate in Hz, shared by every channel.
 /// @param config Pass NULL to use library defaults.
-/// @param out_channels @p channel_count caller-owned buffers of @p length floats
+/// @param out_channels @p num_channels caller-owned buffers of @p length floats
 ///        each, written in place. Unlike the stereo entry nothing is allocated
 ///        here, so nothing needs releasing; a rejected call leaves them untouched.
 /// @param out_report Receives the one report the set shares. Must not be NULL.
 SonareError sonare_mastering_repair_dereverb_classical_linked(
-    const float* const* channels, size_t channel_count, size_t length, int sample_rate,
+    const float* const* channels, size_t num_channels, size_t length, int sample_rate,
     const SonareDereverbClassicalConfig* config, float* const* out_channels,
     SonareDereverbReport* out_report);
 
@@ -2226,13 +2223,13 @@ void sonare_free_trim_silence_result(SonareTrimSilenceResult* result);
 ///   @ref sonare_mastering_repair_apply; and why each stage was or was not
 ///   chosen. Dereverb is never recommended: its statistic does not separate a
 ///   sustaining dry signal from a reverberant one.
-/// @param channels @p channel_count non-null planes of @p length samples.
+/// @param channels @p num_channels non-null planes of @p length samples.
 /// @param request_json NULL for defaults, or a JSON object. Key:
 ///   `preferStreamingSafe` (boolean, default true) makes a recommended denoise
 ///   track its noise frame by frame.
 /// @param json_out Receives the analysis; release with @ref sonare_free_string.
 ///   Set to NULL before any validation.
-SonareError sonare_mastering_repair_analyze(const float* const* channels, size_t channel_count,
+SonareError sonare_mastering_repair_analyze(const float* const* channels, size_t num_channels,
                                             size_t length, int sample_rate,
                                             const char* request_json, char** json_out);
 
@@ -2251,13 +2248,13 @@ SonareError sonare_mastering_repair_analyze(const float* const* channels, size_t
 ///   @p callback is called after each stage with the fraction done and
 ///   `repair.<stage>`; when @p cancel_cb then returns nonzero the call returns
 ///   @c SONARE_ERROR_CANCELLED. The input is copied before the first callback.
-/// @param out_channels @p channel_count caller-owned planes of @p length
+/// @param out_channels @p num_channels caller-owned planes of @p length
 ///   samples, written only on success, so they may alias @p channels.
 /// @param reports_json_out Receives the reports; release with
 ///   @ref sonare_free_string. Set to NULL before any validation.
 /// @param user_data Passed back to @p callback unchanged, as @p cancel_user_data
 ///   is to @p cancel_cb. Either callback may be NULL; neither is retained.
-SonareError sonare_mastering_repair_apply(const float* const* channels, size_t channel_count,
+SonareError sonare_mastering_repair_apply(const float* const* channels, size_t num_channels,
                                           size_t length, int sample_rate, const char* stages_json,
                                           SonareMasteringProgressCallback callback, void* user_data,
                                           float* const* out_channels, char** reports_json_out,

@@ -104,8 +104,8 @@ SonareError sonare_scale_mask_for_mode(int root, SonareMode mode, uint16_t* out_
 // ============================================================================
 
 /// @note Free @p out with @ref sonare_free_floats.
-SonareError sonare_resample(const float* samples, size_t length, int src_sr, int target_sr,
-                            float** out, size_t* out_length);
+SonareError sonare_resample(const float* samples, size_t length, int sample_rate,
+                            int target_sample_rate, float** out, size_t* out_length);
 
 // ============================================================================
 // Memory management for result types

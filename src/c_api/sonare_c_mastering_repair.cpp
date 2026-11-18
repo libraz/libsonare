@@ -543,7 +543,7 @@ SonareError sonare_mastering_repair_denoise_classical_stereo(
 }
 
 SonareError sonare_mastering_repair_denoise_classical_linked(
-    const float* const* channels, size_t channel_count, size_t length, int sample_rate,
+    const float* const* channels, size_t num_channels, size_t length, int sample_rate,
     const SonareDenoiseClassicalConfig* config, float* const* out_channels,
     SonareDenoiseReport* out_report) {
   SONARE_C_API_ENTRY;
@@ -553,10 +553,10 @@ SonareError sonare_mastering_repair_denoise_classical_linked(
   if (!denoise_config_valid(config)) return SONARE_ERROR_INVALID_PARAMETER;
 
   return run_linked(
-      channels, channel_count, length, sample_rate, out_channels, out_report,
+      channels, num_channels, length, sample_rate, out_channels, out_report,
       [&](const Audio* const* inputs, std::vector<Audio>* produced) {
         return to_c_denoise_report(sonare::mastering::repair::denoise_classical_linked(
-            inputs, channel_count, produced, to_cpp_denoise_config(config)));
+            inputs, num_channels, produced, to_cpp_denoise_config(config)));
       });
 }
 
@@ -734,7 +734,7 @@ SonareError sonare_mastering_repair_dereverb_classical_stereo(
 }
 
 SonareError sonare_mastering_repair_dereverb_classical_linked(
-    const float* const* channels, size_t channel_count, size_t length, int sample_rate,
+    const float* const* channels, size_t num_channels, size_t length, int sample_rate,
     const SonareDereverbClassicalConfig* config, float* const* out_channels,
     SonareDereverbReport* out_report) {
   SONARE_C_API_ENTRY;
@@ -744,10 +744,10 @@ SonareError sonare_mastering_repair_dereverb_classical_linked(
   if (!dereverb_config_valid(config)) return SONARE_ERROR_INVALID_PARAMETER;
 
   return run_linked(
-      channels, channel_count, length, sample_rate, out_channels, out_report,
+      channels, num_channels, length, sample_rate, out_channels, out_report,
       [&](const Audio* const* inputs, std::vector<Audio>* produced) {
         return to_c_dereverb_report(sonare::mastering::repair::dereverb_classical_linked(
-            inputs, channel_count, produced, to_cpp_dereverb_config(config)));
+            inputs, num_channels, produced, to_cpp_dereverb_config(config)));
       });
 }
 
@@ -846,26 +846,26 @@ SonareError sonare_mastering_repair_dereverb_apply_room_estimate(
   SONARE_C_CATCH
 }
 
-SonareError sonare_mastering_repair_analyze(const float* const* channels, size_t channel_count,
+SonareError sonare_mastering_repair_analyze(const float* const* channels, size_t num_channels,
                                             size_t length, int sample_rate,
                                             const char* request_json, char** json_out) {
   SONARE_C_API_ENTRY;
   if (!json_out) return SONARE_ERROR_INVALID_PARAMETER;
   *json_out = nullptr;
-  if (!channels || channel_count == 0) return SONARE_ERROR_INVALID_PARAMETER;
-  for (size_t c = 0; c < channel_count; ++c) {
+  if (!channels || num_channels == 0) return SONARE_ERROR_INVALID_PARAMETER;
+  for (size_t c = 0; c < num_channels; ++c) {
     const SonareError err = validate_audio_params(channels[c], length, sample_rate);
     if (err != SONARE_OK) return err;
   }
 
   SONARE_C_TRY
   *json_out = copy_string(sonare::mastering::assistant::repair_analyze_json(
-      channels, channel_count, length, sample_rate, request_json ? request_json : ""));
+      channels, num_channels, length, sample_rate, request_json ? request_json : ""));
   return SONARE_OK;
   SONARE_C_CATCH
 }
 
-SonareError sonare_mastering_repair_apply(const float* const* channels, size_t channel_count,
+SonareError sonare_mastering_repair_apply(const float* const* channels, size_t num_channels,
                                           size_t length, int sample_rate, const char* stages_json,
                                           SonareMasteringProgressCallback callback, void* user_data,
                                           float* const* out_channels, char** reports_json_out,
@@ -873,8 +873,8 @@ SonareError sonare_mastering_repair_apply(const float* const* channels, size_t c
   SONARE_C_API_ENTRY;
   if (!reports_json_out) return SONARE_ERROR_INVALID_PARAMETER;
   *reports_json_out = nullptr;
-  if (!channels || !out_channels || channel_count == 0) return SONARE_ERROR_INVALID_PARAMETER;
-  for (size_t c = 0; c < channel_count; ++c) {
+  if (!channels || !out_channels || num_channels == 0) return SONARE_ERROR_INVALID_PARAMETER;
+  for (size_t c = 0; c < num_channels; ++c) {
     if (!out_channels[c]) return SONARE_ERROR_INVALID_PARAMETER;
     const SonareError err = validate_audio_params(channels[c], length, sample_rate);
     if (err != SONARE_OK) return err;
@@ -892,7 +892,7 @@ SonareError sonare_mastering_repair_apply(const float* const* channels, size_t c
     cancel = [cancel_cb, cancel_user_data] { return cancel_cb(cancel_user_data) != 0; };
   }
   std::string reports;
-  if (!sonare::mastering::assistant::repair_apply_json(channels, channel_count, length, sample_rate,
+  if (!sonare::mastering::assistant::repair_apply_json(channels, num_channels, length, sample_rate,
                                                        stages_json ? stages_json : "", out_channels,
                                                        &reports, progress, cancel)) {
     return SONARE_ERROR_CANCELLED;

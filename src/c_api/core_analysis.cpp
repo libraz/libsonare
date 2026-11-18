@@ -230,8 +230,8 @@ SonareError sonare_analyze_rhythm(const float* samples, size_t length, int sampl
 }
 
 SonareError sonare_analyze_dynamics(const float* samples, size_t length, int sample_rate,
-                                    float window_sec, int hop_length, float compression_threshold,
-                                    SonareDynamicsResult* out) {
+                                    float window_sec, int hop_length,
+                                    float compression_threshold_db, SonareDynamicsResult* out) {
   SONARE_C_API_ENTRY;
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
 
@@ -244,7 +244,7 @@ SonareError sonare_analyze_dynamics(const float* samples, size_t length, int sam
   DynamicsConfig config;
   config.window_sec = window_sec;
   config.hop_length = hop_length;
-  config.compression_threshold = compression_threshold;
+  config.compression_threshold = compression_threshold_db;
   if (const SonareError err = run_validation([&] { validate_dynamics_config(config); });
       err != SONARE_OK) {
     return err;
@@ -344,9 +344,9 @@ SonareError sonare_analyze_timbre(const float* samples, size_t length, int sampl
 }
 
 SonareError sonare_detect_chords(const float* samples, size_t length, int sample_rate,
-                                 float min_duration, float smoothing_window, float threshold,
-                                 int use_triads_only, int n_fft, int hop_length, int use_beat_sync,
-                                 SonareChordAnalysisResult* out) {
+                                 float min_duration_sec, float smoothing_window_sec,
+                                 float threshold, int use_triads_only, int n_fft, int hop_length,
+                                 int use_beat_sync, SonareChordAnalysisResult* out) {
   SONARE_C_API_ENTRY;
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
 
@@ -357,8 +357,8 @@ SonareError sonare_detect_chords(const float* samples, size_t length, int sample
   *out = {};
   out->struct_version = SONARE_CHORD_ANALYSIS_RESULT_VERSION;
   ChordConfig config;
-  config.min_duration = min_duration;
-  config.smoothing_window = smoothing_window;
+  config.min_duration = min_duration_sec;
+  config.smoothing_window = smoothing_window_sec;
   config.threshold = threshold;
   config.use_triads_only = use_triads_only != 0;
   config.n_fft = n_fft;
@@ -644,19 +644,19 @@ SonareError sonare_detect_boundaries(const float* samples, size_t length, int sa
   });
 }
 
-SonareError sonare_analyze_melody(const float* samples, size_t length, int sample_rate, float fmin,
-                                  float fmax, int frame_length, int hop_length, float threshold,
-                                  SonareMelodyResult* out) {
+SonareError sonare_analyze_melody(const float* samples, size_t length, int sample_rate,
+                                  float f0_min_hz, float f0_max_hz, int frame_length,
+                                  int hop_length, float threshold, SonareMelodyResult* out) {
   SONARE_C_API_ENTRY;
   // Preserve the historical default contour: plain per-frame YIN, left-aligned
   // (use_pyin = 0). center is irrelevant when use_pyin is 0.
-  return sonare_analyze_melody_ex(samples, length, sample_rate, fmin, fmax, frame_length,
+  return sonare_analyze_melody_ex(samples, length, sample_rate, f0_min_hz, f0_max_hz, frame_length,
                                   hop_length, threshold, /*use_pyin=*/0, /*center=*/1, out);
 }
 
 SonareError sonare_analyze_melody_ex(const float* samples, size_t length, int sample_rate,
-                                     float fmin, float fmax, int frame_length, int hop_length,
-                                     float threshold, int use_pyin, int center,
+                                     float f0_min_hz, float f0_max_hz, int frame_length,
+                                     int hop_length, float threshold, int use_pyin, int center,
                                      SonareMelodyResult* out) {
   SONARE_C_API_ENTRY;
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
@@ -666,8 +666,8 @@ SonareError sonare_analyze_melody_ex(const float* samples, size_t length, int sa
   // sonare_free_melody_result(&r) would delete[] an uninitialised pointer.
   *out = {};
   MelodyConfig config;
-  config.fmin = fmin;
-  config.fmax = fmax;
+  config.fmin = f0_min_hz;
+  config.fmax = f0_max_hz;
   config.frame_length = frame_length;
   config.hop_length = hop_length;
   config.threshold = threshold;

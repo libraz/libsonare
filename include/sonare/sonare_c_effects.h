@@ -60,14 +60,15 @@ SonareError sonare_harmonic(const float* samples, size_t length, int sample_rate
 SonareError sonare_percussive(const float* samples, size_t length, int sample_rate, float** out,
                               size_t* out_length);
 /// @note Free @p out with @ref sonare_free_floats.
-SonareError sonare_time_stretch(const float* samples, size_t length, int sample_rate, float rate,
-                                float** out, size_t* out_length);
+SonareError sonare_time_stretch(const float* samples, size_t length, int sample_rate,
+                                float speed_ratio, float** out, size_t* out_length);
 /// @brief Native spectral time stretch with explicit FFT/hop configuration.
 /// @details @p n_fft must be an even integer >= 4 and @p hop_length must lie in
 ///          (0, n_fft/2]; see @ref sonare_hpss_ex for why.
 /// @note Free @p out with @ref sonare_free_floats.
-SonareError sonare_time_stretch_ex(const float* samples, size_t length, int sample_rate, float rate,
-                                   int n_fft, int hop_length, float** out, size_t* out_length);
+SonareError sonare_time_stretch_ex(const float* samples, size_t length, int sample_rate,
+                                   float speed_ratio, int n_fft, int hop_length, float** out,
+                                   size_t* out_length);
 /// @note Free @p out with @ref sonare_free_floats.
 SonareError sonare_pitch_shift(const float* samples, size_t length, int sample_rate,
                                float pitch_semitones, float** out, size_t* out_length);
@@ -1090,22 +1091,22 @@ SonareError sonare_decompose_stems(const float* samples, size_t length, int samp
 ///          moves -- the same guarantee @ref sonare_mastering_repair_denoise_classical_linked's
 ///          gain mask gives its channel set.
 ///
-///          A @p channel_count of 1 reproduces @ref sonare_decompose_stems bit
+///          A @p num_channels of 1 reproduces @ref sonare_decompose_stems bit
 ///          for bit: the average over one channel is a division by 1, which
 ///          does not change the bits.
-/// @param channels @p channel_count buffers of @p length samples each; none
+/// @param channels @p num_channels buffers of @p length samples each; none
 ///        NULL. At least one and at most 64 channels.
 /// @param length Samples per channel. One length for the set.
 /// @param sample_rate Sample rate in Hz, shared by every channel.
 /// @param config Optional versioned options; NULL selects the defaults.
 /// @param out Receives one heap buffer holding every (component, channel)
-///        signal, laid out as a single flat array of @p out_component_count * @p out_channel_count
+///        signal, laid out as a single flat array of @p out_component_count * @p out_num_channels
 ///        * @p out_component_length floats: component c, channel ch starts at
-///        (c * @p out_channel_count + ch) * @p out_component_length. Release
+///        (c * @p out_num_channels + ch) * @p out_component_length. Release
 ///        with @ref sonare_free_floats.
 /// @param out_component_count Receives the number of components.
-/// @param out_channel_count Receives the number of channels (equal to
-///        @p channel_count).
+/// @param out_num_channels Receives the number of channels (equal to
+///        @p num_channels).
 /// @param out_component_length Receives the per-(component, channel) sample
 ///        count (equal to @p length).
 /// @param out_w Optional; receives the [n_bins x n_components] component matrix
@@ -1117,10 +1118,10 @@ SonareError sonare_decompose_stems(const float* samples, size_t length, int samp
 ///        matrix. NULL skips it. Release with @ref sonare_free_floats.
 /// @param out_h_length Optional; receives n_components * n_frames. Required
 ///        when @p out_h is non-NULL.
-SonareError sonare_decompose_stems_linked(const float* const* channels, size_t channel_count,
+SonareError sonare_decompose_stems_linked(const float* const* channels, size_t num_channels,
                                           size_t length, int sample_rate,
                                           const SonareDecomposeStemsConfig* config, float** out,
-                                          size_t* out_component_count, size_t* out_channel_count,
+                                          size_t* out_component_count, size_t* out_num_channels,
                                           size_t* out_component_length, float** out_w,
                                           size_t* out_w_length, float** out_h,
                                           size_t* out_h_length);
@@ -1226,7 +1227,7 @@ SonareError sonare_hpss_with_residual(const float* samples, size_t length, int s
 /// @param samples Input audio.
 /// @param length Number of samples.
 /// @param sample_rate Sample rate.
-/// @param rate Time stretch rate (< 1.0 = slower, > 1.0 = faster). Must be > 0.
+/// @param speed_ratio Time stretch rate (< 1.0 = slower, > 1.0 = faster). Must be > 0.
 /// @param n_fft FFT size used for analysis/synthesis: an even integer >= 4.
 /// @param hop_length Hop length used for analysis/synthesis, in (0, n_fft/2];
 ///        see @ref sonare_hpss_ex for why the overlap bound applies.
@@ -1235,8 +1236,9 @@ SonareError sonare_hpss_with_residual(const float* samples, size_t length, int s
 /// @note Positional facades use the same order after the audio buffer:
 /// sample_rate, rate, n_fft, hop_length. Prefer a request object where the
 /// language binding provides one.
-SonareError sonare_phase_vocoder(const float* samples, size_t length, int sample_rate, float rate,
-                                 int n_fft, int hop_length, float** out, size_t* out_length);
+SonareError sonare_phase_vocoder(const float* samples, size_t length, int sample_rate,
+                                 float speed_ratio, int n_fft, int hop_length, float** out,
+                                 size_t* out_length);
 
 /// @brief How a spectral region op modifies the masked STFT bins.
 typedef enum SONARE_ENUM_BASE {

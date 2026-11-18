@@ -858,16 +858,16 @@ uint32_t sonare_voice_changer_abi_version(void) {
 #endif
 }
 
-const char* sonare_voice_character_preset_id(SonareVoiceCharacterPreset preset) {
+const char* sonare_voice_character_preset_id(SonareVoiceCharacterPreset ordinal) {
 #if defined(SONARE_WITH_VOICE_CHANGER)
   for (const auto& row : kVcPresetMapping) {
-    if (row.c_enum == preset) {
+    if (row.c_enum == ordinal) {
       return editing::voice_changer::realtime_voice_changer_preset_id(row.cpp_enum);
     }
   }
   return nullptr;
 #else
-  (void)preset;
+  (void)ordinal;
   return nullptr;
 #endif
 }

@@ -163,16 +163,17 @@ SonareError sonare_percussive(const float* samples, size_t length, int sample_ra
                           [](const Audio& a) { return percussive(a); });
 }
 
-SonareError sonare_time_stretch(const float* samples, size_t length, int sample_rate, float rate,
-                                float** out, size_t* out_length) {
+SonareError sonare_time_stretch(const float* samples, size_t length, int sample_rate,
+                                float speed_ratio, float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
   if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
-  return sonare_time_stretch_ex(samples, length, sample_rate, rate, constants::kDefaultNFft,
+  return sonare_time_stretch_ex(samples, length, sample_rate, speed_ratio, constants::kDefaultNFft,
                                 constants::kDefaultHopLength, out, out_length);
 }
 
-SonareError sonare_time_stretch_ex(const float* samples, size_t length, int sample_rate, float rate,
-                                   int n_fft, int hop_length, float** out, size_t* out_length) {
+SonareError sonare_time_stretch_ex(const float* samples, size_t length, int sample_rate,
+                                   float speed_ratio, int n_fft, int hop_length, float** out,
+                                   size_t* out_length) {
   SONARE_C_API_ENTRY;
   if (out != nullptr) *out = nullptr;
   if (out_length != nullptr) *out_length = 0;
@@ -183,8 +184,9 @@ SonareError sonare_time_stretch_ex(const float* samples, size_t length, int samp
   config.n_fft = n_fft;
   config.hop_length = hop_length;
   config.backend = StretchBackend::NativeSpectral;
-  return run_mono_offline(samples, length, sample_rate, out, out_length,
-                          [rate, config](const Audio& a) { return time_stretch(a, rate, config); });
+  return run_mono_offline(
+      samples, length, sample_rate, out, out_length,
+      [speed_ratio, config](const Audio& a) { return time_stretch(a, speed_ratio, config); });
 }
 
 SonareError sonare_pitch_shift(const float* samples, size_t length, int sample_rate,
@@ -453,24 +455,24 @@ SonareError sonare_decompose_stems(const float* samples, size_t length, int samp
   });
 }
 
-SonareError sonare_decompose_stems_linked(const float* const* channels, size_t channel_count,
+SonareError sonare_decompose_stems_linked(const float* const* channels, size_t num_channels,
                                           size_t length, int sample_rate,
                                           const SonareDecomposeStemsConfig* config, float** out,
-                                          size_t* out_component_count, size_t* out_channel_count,
+                                          size_t* out_component_count, size_t* out_num_channels,
                                           size_t* out_component_length, float** out_w,
                                           size_t* out_w_length, float** out_h,
                                           size_t* out_h_length) {
   SONARE_C_API_ENTRY;
   // Same output-pair guard as sonare_decompose_stems, extended with the
   // channel-count output every caller of this entry must read.
-  if (!out || !out_component_count || !out_channel_count || !out_component_length ||
+  if (!out || !out_component_count || !out_num_channels || !out_component_length ||
       ((out_w != nullptr) != (out_w_length != nullptr)) ||
       ((out_h != nullptr) != (out_h_length != nullptr))) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   *out = nullptr;
   *out_component_count = 0;
-  *out_channel_count = 0;
+  *out_num_channels = 0;
   *out_component_length = 0;
   if (out_w != nullptr) {
     *out_w = nullptr;
@@ -480,8 +482,7 @@ SonareError sonare_decompose_stems_linked(const float* const* channels, size_t c
     *out_h = nullptr;
     *out_h_length = 0;
   }
-  if (channels == nullptr || channel_count == 0 ||
-      channel_count > kMaxDecomposeStemsLinkedChannels) {
+  if (channels == nullptr || num_channels == 0 || num_channels > kMaxDecomposeStemsLinkedChannels) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
 
@@ -495,31 +496,31 @@ SonareError sonare_decompose_stems_linked(const float* const* channels, size_t c
   }
 
   std::vector<Audio> audio;
-  audio.reserve(channel_count);
-  for (size_t c = 0; c < channel_count; ++c) {
+  audio.reserve(num_channels);
+  for (size_t c = 0; c < num_channels; ++c) {
     SonareError err = validate_audio_params(channels[c], length, sample_rate);
     if (err != SONARE_OK) return err;
     audio.push_back(Audio::from_buffer(channels[c], length, sample_rate));
   }
   std::vector<const float*> pointers;
-  pointers.reserve(channel_count);
+  pointers.reserve(num_channels);
   for (const Audio& one : audio) pointers.push_back(one.data());
 
   DecomposeStemsLinkedResult result =
-      decompose_stems_linked(pointers.data(), channel_count, length, sample_rate, core_config);
+      decompose_stems_linked(pointers.data(), num_channels, length, sample_rate, core_config);
   if (result.components.empty()) return SONARE_OK;
   const size_t component_length =
       result.components.front().empty() ? 0 : result.components.front().front().size();
   if (component_length == 0) return SONARE_OK;
   // Overflow-checked the same way as sonare_decompose_stems: reject rather than
   // wrap before the flat [component][channel][sample] allocation is sized.
-  if (channel_count > SIZE_MAX / component_length) return SONARE_ERROR_INVALID_PARAMETER;
-  const size_t per_component = channel_count * component_length;
+  if (num_channels > SIZE_MAX / component_length) return SONARE_ERROR_INVALID_PARAMETER;
+  const size_t per_component = num_channels * component_length;
   if (result.components.size() > SIZE_MAX / per_component) return SONARE_ERROR_INVALID_PARAMETER;
 
   auto flat = std::make_unique<float[]>(result.components.size() * per_component);
   for (size_t component = 0; component < result.components.size(); ++component) {
-    for (size_t c = 0; c < channel_count; ++c) {
+    for (size_t c = 0; c < num_channels; ++c) {
       std::memcpy(flat.get() + component * per_component + c * component_length,
                   result.components[component][c].data(), component_length * sizeof(float));
     }
@@ -529,7 +530,7 @@ SonareError sonare_decompose_stems_linked(const float* const* channels, size_t c
   if (factors_err != SONARE_OK) return factors_err;
   *out = flat.release();
   *out_component_count = result.components.size();
-  *out_channel_count = channel_count;
+  *out_num_channels = num_channels;
   *out_component_length = component_length;
   return SONARE_OK;
   SONARE_C_CATCH
@@ -594,11 +595,12 @@ SonareError sonare_hpss_with_residual(const float* samples, size_t length, int s
   return SONARE_OK;
 }
 
-SonareError sonare_phase_vocoder(const float* samples, size_t length, int sample_rate, float rate,
-                                 int n_fft, int hop_length, float** out, size_t* out_length) {
+SonareError sonare_phase_vocoder(const float* samples, size_t length, int sample_rate,
+                                 float speed_ratio, int n_fft, int hop_length, float** out,
+                                 size_t* out_length) {
   SONARE_C_API_ENTRY;
   if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
-  if (!numeric::finite_positive(rate)) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!numeric::finite_positive(speed_ratio)) return SONARE_ERROR_INVALID_PARAMETER;
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     StftConfig stft_config;
@@ -608,9 +610,10 @@ SonareError sonare_phase_vocoder(const float* samples, size_t length, int sample
 
     PhaseVocoderConfig pv_config;
     pv_config.hop_length = hop_length;
-    Spectrogram stretched = phase_vocoder(spec, rate, pv_config);
+    Spectrogram stretched = phase_vocoder(spec, speed_ratio, pv_config);
 
-    int expected_length = static_cast<int>(std::ceil(static_cast<float>(audio.size()) / rate));
+    int expected_length =
+        static_cast<int>(std::ceil(static_cast<float>(audio.size()) / speed_ratio));
     Audio result = stretched.to_audio(expected_length);
 
     return copy_audio_result(result, out, out_length);

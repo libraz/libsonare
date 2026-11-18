@@ -87,15 +87,15 @@ SonareError sonare_stft_db(const float* samples, size_t length, int sample_rate,
 // ============================================================================
 
 SonareError sonare_mel_spectrogram_ex(const float* samples, size_t length, int sample_rate,
-                                      int n_fft, int hop_length, int n_mels, float fmin, float fmax,
-                                      int htk, SonareMelResult* out) {
+                                      int n_fft, int hop_length, int n_mels, float fmin_hz,
+                                      float fmax_hz, int htk, SonareMelResult* out) {
   SONARE_C_API_ENTRY;
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
 
   *out = {};
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    const MelConfig config = make_mel_config(n_fft, hop_length, n_mels, fmin, fmax, htk);
+    const MelConfig config = make_mel_config(n_fft, hop_length, n_mels, fmin_hz, fmax_hz, htk);
     MelSpectrogram mel = MelSpectrogram::compute(audio, config);
 
     out->struct_version = SONARE_MEL_RESULT_VERSION;
@@ -132,15 +132,15 @@ SonareError sonare_mel_spectrogram(const float* samples, size_t length, int samp
 }
 
 SonareError sonare_mfcc_ex(const float* samples, size_t length, int sample_rate, int n_fft,
-                           int hop_length, int n_mels, int n_mfcc, float fmin, float fmax, int htk,
-                           float lifter, SonareMfccResult* out) {
+                           int hop_length, int n_mels, int n_mfcc, float fmin_hz, float fmax_hz,
+                           int htk, float lifter, SonareMfccResult* out) {
   SONARE_C_API_ENTRY;
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
 
   *out = {};
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    const MelConfig config = make_mel_config(n_fft, hop_length, n_mels, fmin, fmax, htk);
+    const MelConfig config = make_mel_config(n_fft, hop_length, n_mels, fmin_hz, fmax_hz, htk);
     MelSpectrogram mel = MelSpectrogram::compute(audio, config);
     std::vector<float> mfcc_data = mel.mfcc(n_mfcc, lifter);
 

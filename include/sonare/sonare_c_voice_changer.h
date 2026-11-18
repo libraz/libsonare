@@ -397,7 +397,7 @@ const char* sonare_realtime_voice_changer_preset_names(void);
 /// @brief Returns the canonical id string for a @ref SonareVoiceCharacterPreset enum.
 /// @details Returns NULL for unknown enum values. The pointer is static storage
 ///          and must NOT be freed.
-const char* sonare_voice_character_preset_id(SonareVoiceCharacterPreset preset);
+const char* sonare_voice_character_preset_id(SonareVoiceCharacterPreset ordinal);
 /// @brief Returns the canonical JSON document for the named preset.
 /// @note The returned string is heap-allocated and MUST be released with
 ///       @ref sonare_free_string.

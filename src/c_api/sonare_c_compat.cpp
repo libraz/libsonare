@@ -297,16 +297,16 @@ SonareError sonare_peak_pick(const float* values, size_t length, int pre_max, in
   });
 }
 
-SonareError sonare_vector_normalize(const float* values, size_t length, SonareNormType norm_type,
+SonareError sonare_vector_normalize(const float* values, size_t length, SonareNormType norm,
                                     float threshold, float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
   if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
-  NormType norm = NormType::Inf;
-  if (!ordinal_to_enum(static_cast<int>(norm_type), 0, static_cast<int>(NormType::Power), &norm)) {
+  NormType norm_kind = NormType::Inf;
+  if (!ordinal_to_enum(static_cast<int>(norm), 0, static_cast<int>(NormType::Power), &norm_kind)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   return transform_buffer(values, length, out, out_length,
-                          [&] { return normalize(values, length, norm, threshold); });
+                          [&] { return normalize(values, length, norm_kind, threshold); });
 }
 
 SonareError sonare_pcen(const float* values, int n_bins, int n_frames, int sample_rate,
@@ -437,7 +437,7 @@ SonareError sonare_plp(const float* onset_envelope, size_t length, int sample_ra
   SONARE_C_CATCH
 }
 
-SonareError sonare_fourier_tempogram(const float* onset_envelope, size_t length, int sr,
+SonareError sonare_fourier_tempogram(const float* onset_envelope, size_t length, int sample_rate,
                                      int hop_length, int win_length, int center, int norm,
                                      float** out, size_t* out_length, int* out_n_frames) {
   SONARE_C_API_ENTRY;
@@ -453,37 +453,38 @@ SonareError sonare_fourier_tempogram(const float* onset_envelope, size_t length,
   config.center = center != 0;
   config.norm = norm != 0;
   std::vector<float> input(onset_envelope, onset_envelope + length);
-  const std::vector<float> result = fourier_tempogram(input, sr, config);
+  const std::vector<float> result = fourier_tempogram(input, sample_rate, config);
   *out_n_frames = static_cast<int>(result.size() / static_cast<std::size_t>(win_length / 2 + 1));
   return copy_vector(result, out, out_length);
   SONARE_C_CATCH
 }
 
-SonareError sonare_tempogram_ratio(const float* tempogram_data, size_t length, int win_length,
-                                   int sr, int hop_length, const float* factors, size_t n_factors,
-                                   float** out, size_t* out_length) {
+SonareError sonare_tempogram_ratio(const float* tempogram, size_t length, int win_length,
+                                   int sample_rate, int hop_length, const float* factors,
+                                   size_t n_factors, float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
   if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
-  if (validate_buffer(tempogram_data, length) != SONARE_OK) return SONARE_ERROR_INVALID_PARAMETER;
+  if (validate_buffer(tempogram, length) != SONARE_OK) return SONARE_ERROR_INVALID_PARAMETER;
   if (n_factors > 0 && factors == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
-  std::vector<float> input(tempogram_data, tempogram_data + length);
+  std::vector<float> input(tempogram, tempogram + length);
   std::vector<float> result;
   if (factors != nullptr && n_factors > 0) {
     std::vector<float> factor_vec(factors, factors + n_factors);
-    result = tempogram_ratio(input, win_length, sr, hop_length, factor_vec);
+    result = tempogram_ratio(input, win_length, sample_rate, hop_length, factor_vec);
   } else {
-    result = tempogram_ratio(input, win_length, sr, hop_length);
+    result = tempogram_ratio(input, win_length, sample_rate, hop_length);
   }
   return copy_vector(result, out, out_length);
   SONARE_C_CATCH
 }
 
-SonareError sonare_lufs(const float* samples, size_t length, int sr, SonareLufsResult* out) {
+SonareError sonare_lufs(const float* samples, size_t length, int sample_rate,
+                        SonareLufsResult* out) {
   SONARE_C_API_ENTRY;
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
   *out = {};
-  return run_offline(samples, length, sr, [&](const Audio& audio) -> SonareError {
+  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     metering::LufsResult result = metering::lufs(audio);
     out->integrated_lufs = result.integrated_lufs;
     out->momentary_lufs = result.momentary_lufs;
@@ -495,22 +496,22 @@ SonareError sonare_lufs(const float* samples, size_t length, int sr, SonareLufsR
   });
 }
 
-SonareError sonare_momentary_lufs(const float* samples, size_t length, int sr, float** out,
+SonareError sonare_momentary_lufs(const float* samples, size_t length, int sample_rate, float** out,
                                   size_t* out_length) {
   SONARE_C_API_ENTRY;
   if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
-  return run_offline(samples, length, sr, [&](const Audio& audio) -> SonareError {
+  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     return copy_vector(metering::momentary_lufs(audio), out, out_length);
   });
 }
 
-SonareError sonare_short_term_lufs(const float* samples, size_t length, int sr, float** out,
-                                   size_t* out_length) {
+SonareError sonare_short_term_lufs(const float* samples, size_t length, int sample_rate,
+                                   float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
   if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
-  return run_offline(samples, length, sr, [&](const Audio& audio) -> SonareError {
+  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     return copy_vector(metering::short_term_lufs(audio), out, out_length);
   });
 }

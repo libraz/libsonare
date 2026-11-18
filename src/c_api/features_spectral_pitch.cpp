@@ -11,36 +11,38 @@ using sonare::constants::kCentsPerSemitone;
 // Core - Synthetic audio generation
 // ============================================================================
 
-SonareError sonare_tone(float frequency, int sample_rate, float duration, float phase,
+SonareError sonare_tone(float frequency_hz, int sample_rate, float duration_sec, float phase,
                         float amplitude, float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
   if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
-  return fill_audio_samples(tone(frequency, sample_rate, duration, phase, amplitude), out,
+  return fill_audio_samples(tone(frequency_hz, sample_rate, duration_sec, phase, amplitude), out,
                             out_length);
   SONARE_C_CATCH
 }
 
-SonareError sonare_chirp(float fmin, float fmax, int sample_rate, float duration, int linear,
-                         float** out, size_t* out_length) {
+SonareError sonare_chirp(float fmin_hz, float fmax_hz, int sample_rate, float duration_sec,
+                         int linear, float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
   if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
   if (linear != 0 && linear != 1) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
-  return fill_audio_samples(chirp(fmin, fmax, sample_rate, duration, linear != 0), out, out_length);
+  return fill_audio_samples(chirp(fmin_hz, fmax_hz, sample_rate, duration_sec, linear != 0), out,
+                            out_length);
   SONARE_C_CATCH
 }
 
 SonareError sonare_clicks(const float* times, size_t time_count, int sample_rate, int length,
-                          float frequency, float click_duration, float** out, size_t* out_length) {
+                          float frequency_hz, float click_duration_sec, float** out,
+                          size_t* out_length) {
   SONARE_C_API_ENTRY;
   if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
   if (!times && time_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
   std::vector<float> values;
   if (time_count) values.assign(times, times + time_count);
-  return fill_audio_samples(clicks(values, sample_rate, length, frequency, click_duration), out,
-                            out_length);
+  return fill_audio_samples(clicks(values, sample_rate, length, frequency_hz, click_duration_sec),
+                            out, out_length);
   SONARE_C_CATCH
 }
 
@@ -170,7 +172,7 @@ SonareError sonare_rms_energy(const float* samples, size_t length, int sample_ra
 }
 
 SonareError sonare_spectral_contrast(const float* samples, size_t length, int sample_rate,
-                                     int n_fft, int hop_length, int n_bands, float fmin,
+                                     int n_fft, int hop_length, int n_bands, float fmin_hz,
                                      float quantile, float** out, int* out_rows, int* out_cols) {
   SONARE_C_API_ENTRY;
   if (!out || !out_rows || !out_cols) return SONARE_ERROR_INVALID_PARAMETER;
@@ -184,7 +186,7 @@ SonareError sonare_spectral_contrast(const float* samples, size_t length, int sa
     config.hop_length = hop_length;
     Spectrogram spec = Spectrogram::compute(audio, config);
     std::vector<float> result =
-        spectral_contrast(spec, audio.sample_rate(), n_bands, fmin, quantile);
+        spectral_contrast(spec, audio.sample_rate(), n_bands, fmin_hz, quantile);
     int rows = n_bands + 1;
     int cols = spec.n_frames();
     *out_rows = rows;
@@ -354,7 +356,7 @@ SonareError sonare_reference_hz_to_tuning(float reference_hz, float a4_hz,
 }
 
 SonareError sonare_piptrack(const float* samples, size_t length, int sample_rate, int n_fft,
-                            int hop_length, float fmin, float fmax, float threshold,
+                            int hop_length, float fmin_hz, float fmax_hz, float threshold,
                             int* out_n_bins, int* out_n_frames, float** out_pitches,
                             float** out_magnitudes) {
   SONARE_C_API_ENTRY;
@@ -367,7 +369,7 @@ SonareError sonare_piptrack(const float* samples, size_t length, int sample_rate
   *out_magnitudes = nullptr;
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    PiptrackResult result = piptrack(audio, n_fft, hop_length, fmin, fmax, threshold);
+    PiptrackResult result = piptrack(audio, n_fft, hop_length, fmin_hz, fmax_hz, threshold);
     const size_t total = result.pitches.size();
     if (result.magnitudes.size() != total) return SONARE_ERROR_UNKNOWN;
     std::unique_ptr<float[]> pitches(total ? new float[total] : nullptr);
@@ -463,8 +465,8 @@ SonareError run_pitch_track(const float* samples, size_t length, int sample_rate
 }  // namespace
 
 SonareError sonare_pitch_yin(const float* samples, size_t length, int sample_rate, int frame_length,
-                             int hop_length, float fmin, float fmax, float threshold, int fill_na,
-                             SonarePitchResult* out) {
+                             int hop_length, float f0_min_hz, float f0_max_hz, float threshold,
+                             int fill_na, SonarePitchResult* out) {
   SONARE_C_API_ENTRY;
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
 
@@ -473,12 +475,13 @@ SonareError sonare_pitch_yin(const float* samples, size_t length, int sample_rat
   out->voiced_flag = nullptr;
 
   return run_pitch_track(
-      samples, length, sample_rate, frame_length, hop_length, fmin, fmax, threshold, fill_na, out,
+      samples, length, sample_rate, frame_length, hop_length, f0_min_hz, f0_max_hz, threshold,
+      fill_na, out,
       [](const Audio& audio, const PitchConfig& config) { return yin_track(audio, config); });
 }
 
 SonareError sonare_pitch_pyin(const float* samples, size_t length, int sample_rate,
-                              int frame_length, int hop_length, float fmin, float fmax,
+                              int frame_length, int hop_length, float f0_min_hz, float f0_max_hz,
                               float threshold, int fill_na, SonarePitchResult* out) {
   SONARE_C_API_ENTRY;
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
@@ -488,12 +491,13 @@ SonareError sonare_pitch_pyin(const float* samples, size_t length, int sample_ra
   out->voiced_flag = nullptr;
 
   return run_pitch_track(
-      samples, length, sample_rate, frame_length, hop_length, fmin, fmax, threshold, fill_na, out,
+      samples, length, sample_rate, frame_length, hop_length, f0_min_hz, f0_max_hz, threshold,
+      fill_na, out,
       [](const Audio& audio, const PitchConfig& config) { return pyin(audio, config); });
 }
 
 SonareError sonare_note_segments(const float* f0_hz, const float* voiced_prob,
-                                 const int32_t* voiced_flags, size_t n_frames, float frame_rate,
+                                 const int32_t* voiced, size_t n_frames, float frame_rate,
                                  const SonareNoteSegmenterConfig* config,
                                  SonareNoteSegmentsResult* out) {
   SONARE_C_API_ENTRY;
@@ -504,7 +508,7 @@ SonareError sonare_note_segments(const float* f0_hz, const float* voiced_prob,
   out->segments = nullptr;
   out->count = 0;
 #if defined(SONARE_WITH_PITCH_EDITOR)
-  if ((voiced_prob == nullptr) == (voiced_flags == nullptr)) {
+  if ((voiced_prob == nullptr) == (voiced == nullptr)) {
     sonare_c_detail::set_last_error(
         SONARE_ERROR_INVALID_PARAMETER,
         "exactly one of voiced_prob and voiced_flags must be given, not both and not neither");
@@ -551,8 +555,7 @@ SonareError sonare_note_segments(const float* f0_hz, const float* voiced_prob,
   for (size_t i = 0; i < n_frames; ++i) {
     const float f0 = f0_hz[i];
     // A flag reads as the probability it stands for, so flags and 0/1 probabilities agree.
-    const float probability =
-        voiced_flags != nullptr ? (voiced_flags[i] != 0 ? 1.0f : 0.0f) : voiced_prob[i];
+    const float probability = voiced != nullptr ? (voiced[i] != 0 ? 1.0f : 0.0f) : voiced_prob[i];
     // The F0 value is not checked: a frame carrying no pitch is spelled zero,
     // negative or non-finite, and the segmenter reads all three the same way.
     // The probability is, because it is compared against a threshold below and
@@ -629,12 +632,12 @@ int sonare_time_to_frames(float time_sec, int sample_rate, int hop_length) {
   SONARE_C_CATCH_RETURN(0)
 }
 
-SonareError sonare_resample(const float* samples, size_t length, int src_sr, int target_sr,
-                            float** out, size_t* out_length) {
+SonareError sonare_resample(const float* samples, size_t length, int sample_rate,
+                            int target_sample_rate, float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
   if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
-  if (src_sr < kMinSampleRate || src_sr > kMaxSampleRate || target_sr < kMinSampleRate ||
-      target_sr > kMaxSampleRate) {
+  if (sample_rate < kMinSampleRate || sample_rate > kMaxSampleRate ||
+      target_sample_rate < kMinSampleRate || target_sample_rate > kMaxSampleRate) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   // Follow the C-array convention used by the sibling offline APIs: an empty
@@ -642,20 +645,20 @@ SonareError sonare_resample(const float* samples, size_t length, int src_sr, int
   if (length == 0) {
     return SONARE_OK;
   }
-  SonareError err = validate_audio_params(samples, length, src_sr);
+  SonareError err = validate_audio_params(samples, length, sample_rate);
   if (err != SONARE_OK) return err;
   // Bound the projected output size (length * target_sr / src_sr) against
   // kMaxBufferSize, mirroring the input-side ceiling in validate_audio_params.
   // Compute in double so the multiplication cannot overflow before comparison
   // (src_sr is already validated >= kMinSampleRate, so the division is safe).
-  const double projected =
-      static_cast<double>(length) * static_cast<double>(target_sr) / static_cast<double>(src_sr);
+  const double projected = static_cast<double>(length) * static_cast<double>(target_sample_rate) /
+                           static_cast<double>(sample_rate);
   if (projected > static_cast<double>(kMaxBufferSize)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
 
   SONARE_C_TRY
-  std::vector<float> result = resample(samples, length, src_sr, target_sr);
+  std::vector<float> result = resample(samples, length, sample_rate, target_sample_rate);
   return copy_vector(result, out, out_length);
   SONARE_C_CATCH
 }
