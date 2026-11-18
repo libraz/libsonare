@@ -99,10 +99,11 @@ val js_note_segments(val f0_hz, val voiced_prob, val voiced_flags, const val& fr
   }
   SonareNoteSegmenterConfig config{};
   config.struct_version = 2;
-  config.segmentation_threshold_cents = floatProperty(options, "segmentationThresholdCents", 0.0f);
-  config.min_note_ms = floatProperty(options, "minNoteMs", 0.0f);
-  config.reference_hz = floatProperty(options, "referenceHz", 0.0f);
-  config.voiced_threshold = floatProperty(options, "voicedThreshold", 0.0f);
+  config.segmentation_threshold_cents =
+      floatProperty(options, "segmentationThresholdCents", config.segmentation_threshold_cents);
+  config.min_note_ms = floatProperty(options, "minNoteMs", config.min_note_ms);
+  config.reference_hz = floatProperty(options, "referenceHz", config.reference_hz);
+  config.voiced_threshold = floatProperty(options, "voicedThreshold", config.voiced_threshold);
   SonareNoteSegmentsResult result{};
   const SonareError error = sonare_note_segments(
       f0.data(), has_prob ? probabilities.data() : nullptr, has_flags ? flags.data() : nullptr,

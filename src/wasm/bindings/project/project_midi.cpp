@@ -12,8 +12,7 @@
 
 void ProjectWasm::setMidiEvents(const val& clip_id_val, val events) {
   const uint32_t clip_id = checkedUintFromVal(clip_id_val, "clipId");
-  const size_t count =
-      events.isUndefined() || events.isNull() ? 0 : wasmArrayLikeLength(events, "events");
+  const size_t count = wasmArrayLikeLength(events, "events");
   std::vector<SonareMidiEventPod> pods(count);
   for (size_t i = 0; i < count; ++i) {
     val entry = events[i];
@@ -24,7 +23,7 @@ void ProjectWasm::setMidiEvents(const val& clip_id_val, val events) {
     } else {
       pods[i].ppq = numberFromVal(entry["ppq"], "ppq");
       pods[i].word0 = checkedWordFromVal(entry["word0"], "word0");
-      pods[i].word1 = wordProperty(entry, "word1", 0);
+      pods[i].word1 = wordProperty(entry, "word1", pods[i].word1);
     }
   }
   const SonareError err = sonare_project_set_midi_events(
@@ -336,7 +335,7 @@ SonareMidiEventPod js_midi_event_from_val(val event) {
   SonareMidiEventPod out{};
   out.ppq = numberFromVal(event["ppq"], "ppq");
   out.word0 = checkedWordFromVal(event["word0"], "word0");
-  out.word1 = wordProperty(event, "word1", 0);
+  out.word1 = wordProperty(event, "word1", out.word1);
   return out;
 }
 
@@ -380,8 +379,7 @@ val js_cc_binding_to_val(const SonareMidiCcBinding& binding) {
 }
 
 std::vector<SonareMidiCcBinding> js_cc_bindings_from_val(val bindings) {
-  const size_t count =
-      bindings.isUndefined() || bindings.isNull() ? 0 : wasmArrayLikeLength(bindings, "bindings");
+  const size_t count = wasmArrayLikeLength(bindings, "bindings");
   std::vector<SonareMidiCcBinding> out(count);
   for (size_t i = 0; i < count; ++i) {
     out[i] = js_cc_binding_from_val(bindings[i]);
@@ -398,8 +396,7 @@ val js_midi_cc_learn(val events, const val& param_id_val, const val& min_value_v
   if (min_movement > 127) {
     throw WasmRangeError("minMovement must be an integer within [0, 127]");
   }
-  const size_t count =
-      events.isUndefined() || events.isNull() ? 0 : wasmArrayLikeLength(events, "events");
+  const size_t count = wasmArrayLikeLength(events, "events");
   std::vector<SonareMidiEventPod> pods(count);
   for (size_t i = 0; i < count; ++i) {
     pods[i] = js_midi_event_from_val(events[i]);
@@ -455,14 +452,13 @@ val js_midi_param_to_cc(val bindings, val param_id, const val& unit_value_val, c
 }
 
 val js_midi_route_events(val events, val config) {
-  const size_t count =
-      events.isUndefined() || events.isNull() ? 0 : wasmArrayLikeLength(events, "events");
+  const size_t count = wasmArrayLikeLength(events, "events");
   std::vector<SonareMidiEventPod> input(count);
   for (size_t i = 0; i < count; ++i) {
     val entry = events[i];
     input[i].ppq = numberFromVal(entry["ppq"], "ppq");
     input[i].word0 = checkedWordFromVal(entry["word0"], "word0");
-    input[i].word1 = wordProperty(entry, "word1", 0);
+    input[i].word1 = wordProperty(entry, "word1", input[i].word1);
   }
 
   SonareMidiRouteConfig route{-1, -1, -1, 1};

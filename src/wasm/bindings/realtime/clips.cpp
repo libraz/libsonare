@@ -202,7 +202,8 @@ RealtimeEngineWasm::BuiltClip RealtimeEngineWasm::buildClipSchedule(val clip_val
   // clip_offset_samples / fade_*_samples are int64_t in ClipSchedule; read
   // them at full 64-bit precision (like length_samples below) so large
   // offsets above 2^31 samples do not silently truncate/sign-flip.
-  schedule.clip_offset_samples = int64Property(clip_val, "clipOffsetSamples", 0);
+  schedule.clip_offset_samples =
+      int64Property(clip_val, "clipOffsetSamples", schedule.clip_offset_samples);
   const int64_t source_samples = has_page_provider && schedule.page_provider
                                      ? schedule.page_provider->num_samples()
                                      : num_samples;
@@ -217,7 +218,7 @@ RealtimeEngineWasm::BuiltClip RealtimeEngineWasm::buildClipSchedule(val clip_val
   if (schedule.length_samples <= 0) {
     throw WasmRangeError("clip offset or length is outside the source");
   }
-  schedule.loop = boolProperty(clip_val, "loop", false);
+  schedule.loop = boolProperty(clip_val, "loop", schedule.loop);
   schedule.gain = floatProperty(clip_val, "gain", 1.0f);
   if (!(std::isfinite(schedule.gain) && schedule.gain >= 0.0f)) {
     throw WasmRangeError("clip gain must be a finite non-negative number");

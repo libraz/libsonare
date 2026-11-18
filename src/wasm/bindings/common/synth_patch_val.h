@@ -291,14 +291,14 @@ inline SynthPatchStorage synthPatchFromVal(emscripten::val desc) {
   read_float2("ampHoldMs", SONARE_SYNTH_FIELD2_AMP_HOLD_MS, &patch.amp_hold_ms);
   read_float2("filterDelayMs", SONARE_SYNTH_FIELD2_FILTER_DELAY_MS, &patch.filter_delay_ms);
   read_float2("filterHoldMs", SONARE_SYNTH_FIELD2_FILTER_HOLD_MS, &patch.filter_hold_ms);
-  patch.one_shot = boolProperty(desc, "oneShot", false) ? 1 : 0;
+  patch.one_shot = boolProperty(desc, "oneShot", patch.one_shot != 0) ? 1 : 0;
   if (hasProperty(desc, "oneShot")) patch.present_fields2 |= SONARE_SYNTH_FIELD2_ONE_SHOT;
 
   // Sample engine. No presence bits: only a sample patch reads this block, so
   // set 0 stays addressable without one.
-  patch.sample_set = intProperty(desc, "sampleSet", 0);
-  patch.sample_level = floatProperty(desc, "sampleLevel", 0.0f);
-  patch.sample_start_offset = floatProperty(desc, "sampleStartOffset", 0.0f);
+  patch.sample_set = intProperty(desc, "sampleSet", patch.sample_set);
+  patch.sample_level = floatProperty(desc, "sampleLevel", patch.sample_level);
+  patch.sample_start_offset = floatProperty(desc, "sampleStartOffset", patch.sample_start_offset);
   enumProperty(desc, "sampleLoop", kSampleLoopModes, SONARE_SAMPLE_LOOP_MODE_COUNT,
                "sample loop mode", &patch.sample_loop);
   enumProperty(desc, "sampleKeyTrack", kSampleKeyTracks, SONARE_SAMPLE_KEY_TRACK_COUNT,

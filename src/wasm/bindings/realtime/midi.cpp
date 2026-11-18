@@ -82,25 +82,25 @@ void RealtimeEngineWasm::setMidiClips(val clips_val) {
   for (uint32_t i = 0; i < count; ++i) {
     val clip_val = clips_val[i];
     sonare::midi::MidiClipSchedule clip;
-    clip.id = uintProperty(clip_val, "id", 0);
-    clip.track_id = uintProperty(clip_val, "trackId", 0);
-    clip.start_sample = int64Property(clip_val, "startSample", 0);
-    clip.start_ppq = doubleProperty(clip_val, "startPpq", 0.0);
+    clip.id = uintProperty(clip_val, "id", clip.id);
+    clip.track_id = uintProperty(clip_val, "trackId", clip.track_id);
+    clip.start_sample = int64Property(clip_val, "startSample", clip.start_sample);
+    clip.start_ppq = doubleProperty(clip_val, "startPpq", clip.start_ppq);
     // Match the C ABI: reject a non-finite clip start (WASM bypasses the C-ABI
     // guard), otherwise ppq->sample placement is undefined in the sequencer.
     if (!std::isfinite(clip.start_ppq)) {
       throw WasmRangeError("setMidiClips: clip startPpq must be finite");
     }
-    clip.length_samples = int64Property(clip_val, "lengthSamples", 0);
+    clip.length_samples = int64Property(clip_val, "lengthSamples", clip.length_samples);
     // Linear gain envelope over the destination's rendered audio (matches
     // SonareEngineMidiClipSchedule.gain / fade_in_samples / fade_out_samples).
     // Absent gain defaults to unity, absent fades default to none.
-    clip.gain = floatProperty(clip_val, "gain", 1.0f);
+    clip.gain = floatProperty(clip_val, "gain", clip.gain);
     if (!(std::isfinite(clip.gain) && clip.gain >= 0.0f)) {
       throw WasmRangeError("setMidiClips: clip gain must be a finite non-negative number");
     }
-    clip.fade_in_samples = int64Property(clip_val, "fadeInSamples", 0);
-    clip.fade_out_samples = int64Property(clip_val, "fadeOutSamples", 0);
+    clip.fade_in_samples = int64Property(clip_val, "fadeInSamples", clip.fade_in_samples);
+    clip.fade_out_samples = int64Property(clip_val, "fadeOutSamples", clip.fade_out_samples);
     if (clip.fade_in_samples < 0 || clip.fade_out_samples < 0) {
       throw WasmRangeError("setMidiClips: clip fade lengths must be non-negative");
     }
@@ -108,9 +108,12 @@ void RealtimeEngineWasm::setMidiClips(val clips_val) {
     if (clip.fade_out_samples > 0 && clip.length_samples <= 0) {
       throw WasmRangeError("setMidiClips: fade-out requires a bounded clip length");
     }
-    clip.loop_mode = boolProperty(clip_val, "loop", false) ? sonare::midi::MidiLoopMode::kLoop
-                                                           : sonare::midi::MidiLoopMode::kOneShot;
-    clip.loop_length_samples = int64Property(clip_val, "loopLengthSamples", 0);
+    clip.loop_mode =
+        boolProperty(clip_val, "loop", clip.loop_mode == sonare::midi::MidiLoopMode::kLoop)
+            ? sonare::midi::MidiLoopMode::kLoop
+            : sonare::midi::MidiLoopMode::kOneShot;
+    clip.loop_length_samples =
+        int64Property(clip_val, "loopLengthSamples", clip.loop_length_samples);
     clip.destination_id = uintProperty(clip_val, "destinationId", clip.track_id);
     val events_val = clip_val["events"];
     const uint32_t event_count = static_cast<uint32_t>(wasmArrayLikeLength(events_val, "events"));
@@ -118,12 +121,12 @@ void RealtimeEngineWasm::setMidiClips(val clips_val) {
     for (uint32_t j = 0; j < event_count; ++j) {
       val event_val = events_val[j];
       sonare::midi::MidiEvent event;
-      event.render_frame = int64Property(event_val, "renderFrame", 0);
+      event.render_frame = int64Property(event_val, "renderFrame", event.render_frame);
       sonare::midi::Ump ump;
-      ump.words[0] = wordProperty(event_val, "word0", 0);
-      ump.words[1] = wordProperty(event_val, "word1", 0);
-      ump.words[2] = wordProperty(event_val, "word2", 0);
-      ump.words[3] = wordProperty(event_val, "word3", 0);
+      ump.words[0] = wordProperty(event_val, "word0", ump.words[0]);
+      ump.words[1] = wordProperty(event_val, "word1", ump.words[1]);
+      ump.words[2] = wordProperty(event_val, "word2", ump.words[2]);
+      ump.words[3] = wordProperty(event_val, "word3", ump.words[3]);
       const uint32_t word_count = uintProperty(event_val, "wordCount", 0);
       if (word_count >= 1 && word_count <= 4) {
         ump.word_count = static_cast<uint8_t>(word_count);
@@ -149,12 +152,12 @@ void RealtimeEngineWasm::setMidiClips(val clips_val) {
       // conversion yields a self-consistent Ump on its own terms, not because
       // anything downstream depends on it. Anyone changing the sequencer's
       // derivation must not read this line as coverage.
-      const uint32_t group = uintProperty(event_val, "group", 0);
+      const uint32_t group = uintProperty(event_val, "group", ump.group);
       if (group > 15) {
         throw WasmRangeError("setMidiClips: event group must be in [0,15]");
       }
       ump.group = sonare::midi::ump_group_from_word0(ump.words[0]);
-      ump.sysex_handle = uintProperty(event_val, "sysexHandle", 0);
+      ump.sysex_handle = uintProperty(event_val, "sysexHandle", ump.sysex_handle);
       event.ump = ump;
       clip.events.push_back(event);
     }
@@ -191,7 +194,7 @@ void RealtimeEngineWasm::setSynthInstrument(const val& destination_id_val, val p
   // `useGmPrograms` is a binding convenience beside the patch fields. Keep
   // its strict boolean contract here, where realtime and offline synth
   // bindings meet, and leave the NativeSynth default disabled when omitted.
-  cfg.use_gm_programs = boolProperty(patch, "useGmPrograms", false);
+  cfg.use_gm_programs = boolProperty(patch, "useGmPrograms", cfg.use_gm_programs);
   // Same injection as setSf2Instrument: the rig stages need the mastering inserts.
   cfg.insert_factory = [](std::string_view name, std::string_view json) {
     return sonare::mastering::api::make_insert(std::string(name), std::string(json));
@@ -275,9 +278,9 @@ void RealtimeEngineWasm::setSf2Instrument(const val& destination_id_val, val con
       throw WasmRangeError("polyphony must be 0 (the library default) or a positive voice count");
     }
     if (polyphony != 0) cfg.polyphony = polyphony;
-    cfg.prefer_model_for_modeled_families =
-        boolProperty(config, "preferModelForModeledFamilies", false);
-    cfg.bank_rig_binding = !boolProperty(config, "clearBankRig", false);
+    cfg.prefer_model_for_modeled_families = boolProperty(config, "preferModelForModeledFamilies",
+                                                         cfg.prefer_model_for_modeled_families);
+    cfg.bank_rig_binding = !boolProperty(config, "clearBankRig", !cfg.bank_rig_binding);
     if (gsEfxRealizationProperty(config, "gsEfxRealization") == 1) {
       cfg.gs_efx_realization = sonare::midi::synth::GsEfxRealization::kClassic;
     }

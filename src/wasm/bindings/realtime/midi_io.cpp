@@ -467,7 +467,9 @@ ProgramArgs programArgsFromVal(const val& group_val, const val& channel_val, con
   args.group = checkedIntFromVal(group_val, "group");
   args.channel = checkedIntFromVal(channel_val, "channel");
   args.program = checkedIntFromVal(program_val, "program");
-  args.bank_valid = optionalBool(bank_valid_val, "bankValid").value_or(false);
+  const std::optional<bool> bank_valid = optionalBool(bank_valid_val, "bankValid");
+  if (!bank_valid) throw WasmTypeError("bankValid must be a boolean");
+  args.bank_valid = *bank_valid;
   args.bank_msb = bank_msb_val.isUndefined() ? 0 : checkedIntFromVal(bank_msb_val, "bankMsb");
   args.bank_lsb = bank_lsb_val.isUndefined() ? 0 : checkedIntFromVal(bank_lsb_val, "bankLsb");
   return args;

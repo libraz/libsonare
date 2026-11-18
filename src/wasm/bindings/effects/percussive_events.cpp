@@ -70,8 +70,8 @@ PercussiveEvent renderablePercussiveEventFromVal(const val& row) {
     event.edit.time_offset_samples =
         requireInt64Property(edit, "timeOffsetSamples", "renderPercussiveEvents event.edit");
   }
-  event.edit.gain_db = floatProperty(edit, "gainDb", 0.0f);
-  event.edit.muted = boolProperty(edit, "muted", false);
+  event.edit.gain_db = floatProperty(edit, "gainDb", event.edit.gain_db);
+  event.edit.muted = boolProperty(edit, "muted", event.edit.muted);
   return event;
 }
 

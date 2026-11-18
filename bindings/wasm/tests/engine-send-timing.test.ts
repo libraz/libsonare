@@ -6,11 +6,19 @@ beforeAll(async () => {
 });
 
 it('lane pre-fader sends retain their level when the strip fader is lowered', () => {
-  const renderBusPeak = (sendTiming: 'preFader' | 'postFader', faderDb: number): number => {
+  const renderBusPeak = (
+    sendTiming: 'preFader' | 'postFader' | undefined,
+    faderDb: number,
+  ): number => {
     const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 256 });
     try {
       engine.setTrackBuses([{ busId: 1, gainDb: 0 }]);
-      engine.setTrackLanes([{ trackId: 10, sends: [{ busId: 1, sendTiming }] }]);
+      engine.setTrackLanes([
+        {
+          trackId: 10,
+          sends: [{ busId: 1, ...(sendTiming === undefined ? {} : { sendTiming }) }],
+        },
+      ]);
       engine.setStrip(
         10,
         JSON.parse(
@@ -56,4 +64,11 @@ it('lane pre-fader sends retain their level when the strip fader is lowered', ()
   // also includes pan/channel conversion gain that the pre-fader tap omits.
   expect(postReference).toBeGreaterThan(-12);
   expect(postReference - post).toBeCloseTo(60, 2);
+  // An omitted sendTiming is the post-fader tap: the fader moves it like post,
+  // and at -60 dB it sits the fader amount below the pre-fader tap.
+  const omittedReference = renderBusPeak(undefined, 0);
+  const omitted = renderBusPeak(undefined, -60);
+  expect(omittedReference).toBeCloseTo(postReference, 3);
+  expect(omittedReference - omitted).toBeCloseTo(60, 2);
+  expect(pre - omitted).toBeCloseTo(reference - postReference + 60, 2);
 });

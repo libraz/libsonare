@@ -53,7 +53,7 @@ inline sonare::editing::note_model::NoteEdit noteEditFromVal(const val& edit, co
   }
   out.pitch_shift_semitones = floatProperty(edit, "pitchSemitones", 0.0f);
   out.gain_db = floatProperty(edit, "gainDb", 0.0f);
-  const float stretch_ratio = floatProperty(edit, "timeStretchRatio", 0.0f);
+  const float stretch_ratio = floatProperty(edit, "timeStretchRatio", out.time_stretch_ratio);
   // A zeroed edit must be the identity, so 0 reads as 1 (SonareNoteEdit).
   out.time_stretch_ratio = stretch_ratio == 0.0f ? 1.0f : stretch_ratio;
   out.formant_shift_semitones = floatProperty(edit, "formantSemitones", 0.0f);

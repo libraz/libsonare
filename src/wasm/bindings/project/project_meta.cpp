@@ -39,7 +39,7 @@ void ProjectWasm::annotateKeys(val keys) {
       seg.end_ppq = doubleProperty(entry, "endPpq", 0.0);
       seg.tonic_pc =
           static_cast<uint32_t>(intInRangeOrAbsentProperty(entry, "tonicPc", 0, 11, 255));
-      seg.mode = uintProperty(entry, "mode", 0u);
+      seg.mode = uintProperty(entry, "mode", seg.mode);
       segments.push_back(seg);
     }
   }
@@ -67,10 +67,11 @@ void ProjectWasm::annotateChords(val chords) {
       sym.start_ppq = doubleProperty(entry, "startPpq", 0.0);
       sym.end_ppq = doubleProperty(entry, "endPpq", 0.0);
       sym.root_pc = static_cast<uint32_t>(intInRangeOrAbsentProperty(entry, "rootPc", 0, 11, 255));
-      sym.quality = uintProperty(entry, "quality", 0u);
+      sym.quality = uintProperty(entry, "quality", sym.quality);
       sym.slash_bass_pc =
           static_cast<uint32_t>(intInRangeOrAbsentProperty(entry, "slashBassPc", 0, 11, 255));
-      sym.modulation_boundary = boolProperty(entry, "modulationBoundary", false) ? 1 : 0;
+      sym.modulation_boundary =
+          boolProperty(entry, "modulationBoundary", sym.modulation_boundary != 0) ? 1 : 0;
       std::vector<uint8_t> exts;
       if (hasProperty(entry, "extensions")) {
         val ext_arr = entry["extensions"];
@@ -190,10 +191,11 @@ uint32_t ProjectWasm::setMarker(const val& marker_id_val, double ppq, const std:
 
 uint32_t ProjectWasm::setMarkerEx(val marker) {
   SonareProjectMarker desc{};
-  desc.id = uintProperty(marker, "id", 0);
-  desc.kind = static_cast<uint8_t>(intProperty(marker, "kind", 0));
-  desc.key_fifths = static_cast<int8_t>(intProperty(marker, "keyFifths", 0));
-  desc.key_minor = static_cast<uint8_t>(boolProperty(marker, "keyMinor", false) ? 1 : 0);
+  desc.id = uintProperty(marker, "id", desc.id);
+  desc.kind = static_cast<uint8_t>(intProperty(marker, "kind", desc.kind));
+  desc.key_fifths = static_cast<int8_t>(intProperty(marker, "keyFifths", desc.key_fifths));
+  desc.key_minor =
+      static_cast<uint8_t>(boolProperty(marker, "keyMinor", desc.key_minor != 0) ? 1 : 0);
   desc.ppq = numberFromVal(objectProperty(marker, "ppq"), "ppq");
   const std::string name = stringProperty(marker, "name", "");
   uint32_t out_id = 0;

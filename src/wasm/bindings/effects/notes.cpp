@@ -176,11 +176,11 @@ editing::note_model::NoteObject renderableNoteFromVal(const val& row, const std:
     const int frame_start =
         noteFrameArg(hasProperty(row, "frameStart")
                          ? requireNumberProperty(row, "frameStart", "renderNotes note")
-                         : 0.0,
+                         : note.frame_start,
                      "renderNotes note.frameStart");
     const int frame_end = noteFrameArg(
         hasProperty(row, "frameEnd") ? requireNumberProperty(row, "frameEnd", "renderNotes note")
-                                     : 0.0,
+                                     : note.frame_end,
         "renderNotes note.frameEnd");
     if (frame_start < 0 || frame_end < frame_start ||
         static_cast<std::size_t>(frame_end) > f0.size()) {
@@ -188,7 +188,7 @@ editing::note_model::NoteObject renderableNoteFromVal(const val& row, const std:
     }
     note.median_hz = static_cast<float>(
         hasProperty(row, "medianHz") ? requireNumberProperty(row, "medianHz", "renderNotes note")
-                                     : 0.0);
+                                     : note.median_hz);
     note.f0_hz.values.assign(f0.begin() + frame_start, f0.begin() + frame_end);
     note.f0_hz.frame_rate_hz = frame_rate;
     note.f0_hz.frame_offset = frame_start;
@@ -496,7 +496,7 @@ editing::note_model::NoteObject assignableNoteFromVal(const val& row) {
   // 0 or non-finite and the rule reads both the same way, so a NaN here is the
   // caller's own "unvoiced" rather than a bad argument (note_target.h). 0 is
   // also NoteObject::median_hz's own default, so an absent field means the same.
-  note.median_hz = floatOption(row, "medianHz", 0.0f);
+  note.median_hz = floatOption(row, "medianHz", note.median_hz);
   const val edit = objectProperty(row, "edit");
   note.edit.pitch_shift_semitones = floatProperty(edit, "pitchSemitones", 0.0f);
   note.edit.muted = boolProperty(edit, "muted", false);

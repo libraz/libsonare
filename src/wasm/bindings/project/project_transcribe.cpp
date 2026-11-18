@@ -87,7 +87,7 @@ SonareTranscribeConfig transcribeConfigFromVal(val config) {
   SonareTranscribeConfig out = {};
   out.struct_version = 4;
   if (config.isUndefined() || config.isNull()) return out;
-  out.polyphonic = boolProperty(config, "polyphonic", false) ? 1 : 0;
+  out.polyphonic = boolProperty(config, "polyphonic", out.polyphonic != 0) ? 1 : 0;
   // `referenceHz` is a positive number in Hz, or "auto" to measure it from the audio.
   const val reference = config["referenceHz"];
   if (reference.isString()) {

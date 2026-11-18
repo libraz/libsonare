@@ -79,14 +79,18 @@ std::vector<sonare::engine::TrackLaneConfig::Send> readSends(const val& sends) {
   out.reserve(static_cast<size_t>(send_count));
   for (int send_index = 0; send_index < send_count; ++send_index) {
     val send = sends[send_index];
-    const int timing_value = intProperty(send, "sendTiming", 0);
+    const sonare::engine::TrackLaneConfig::Send defaults{};
+    // Wire timing is 0 = post-fader, 1 = pre-fader, the reverse of the core enum's order.
+    const int timing_value = intProperty(
+        send, "sendTiming", defaults.timing == sonare::mixing::SendTiming::PreFader ? 1 : 0);
     if (timing_value != 0 && timing_value != 1) {
       throw WasmRangeError("unknown mixing send timing");
     }
     const sonare::mixing::SendTiming timing = timing_value == 1
                                                   ? sonare::mixing::SendTiming::PreFader
                                                   : sonare::mixing::SendTiming::PostFader;
-    out.push_back({uintProperty(send, "busId", 0), floatProperty(send, "levelDb", 0.0f),
+    out.push_back({uintProperty(send, "busId", 0),
+                   floatProperty(send, "levelDb", defaults.level_db),
                    boolProperty(send, "enabled", true), timing});
   }
   return out;
@@ -150,7 +154,7 @@ void RealtimeEngineWasm::setTrackLanes(val lanes) {
     }
     sonare::engine::TrackLaneConfig config{track_id};
     if (lane_val.typeOf().as<std::string>() == "object") {
-      config.output_bus_id = uintProperty(lane_val, "outputBusId", 0);
+      config.output_bus_id = uintProperty(lane_val, "outputBusId", config.output_bus_id);
       // Absent defaults to stereo, matching the C ABI / Node surfaces. An
       // out-of-range layout is rejected like the C ABI's is_valid check. The
       // full-range bound is checked BEFORE narrowing to uint8_t: narrowing
@@ -270,10 +274,11 @@ void RealtimeEngineWasm::setTrackBuses(val buses) {
         !sonare::is_valid_channel_layout(static_cast<uint8_t>(layout_value))) {
       throw WasmRangeError("invalid bus channel layout");
     }
-    sonare::engine::TrackBusConfig config{uintProperty(bus, "busId", 0),
-                                          floatProperty(bus, "gainDb", 0.0f),
-                                          static_cast<sonare::ChannelLayout>(layout_value)};
-    config.output_bus_id = uintProperty(bus, "outputBusId", 0);
+    sonare::engine::TrackBusConfig config{
+        uintProperty(bus, "busId", 0),
+        floatProperty(bus, "gainDb", sonare::engine::TrackBusConfig{}.gain_db),
+        static_cast<sonare::ChannelLayout>(layout_value)};
+    config.output_bus_id = uintProperty(bus, "outputBusId", config.output_bus_id);
     config.sends = readOptionalSends(bus);
     configs.push_back(std::move(config));
   }
@@ -927,11 +932,11 @@ void RealtimeEngineWasm::setTrackStripSurroundPan(const val& track_id_val, const
   };
 #if defined(SONARE_WITH_MIXING)
   sonare::mixing::SurroundPanParams params;
-  params.azimuth = field("azimuth", 0.0f);
-  params.elevation = field("elevation", 0.0f);
-  params.divergence = field("divergence", 0.0f);
-  params.lfe = field("lfe", 0.0f);
-  params.distance = field("distance", 1.0f);
+  params.azimuth = field("azimuth", params.azimuth);
+  params.elevation = field("elevation", params.elevation);
+  params.divergence = field("divergence", params.divergence);
+  params.lfe = field("lfe", params.lfe);
+  params.distance = field("distance", params.distance);
   if (!(params.azimuth >= -180.0f && params.azimuth <= 180.0f) ||
       !(params.divergence >= 0.0f && params.divergence <= 1.0f) ||
       !(params.lfe >= 0.0f && params.lfe <= 1.0f)) {

@@ -54,7 +54,7 @@ uint32_t ProjectWasm::addClip(val desc) {
   std::vector<float> audio;
   std::string source_uri;
   d.track_id = uintProperty(desc, "trackId", 0);
-  d.is_midi = boolProperty(desc, "isMidi", false) ? 1 : 0;
+  d.is_midi = boolProperty(desc, "isMidi", d.is_midi != 0) ? 1 : 0;
   d.start_ppq = doubleProperty(desc, "startPpq", 0.0);
   d.length_ppq = doubleProperty(desc, "lengthPpq", 0.0);
   d.source_offset_ppq = doubleProperty(desc, "sourceOffsetPpq", 0.0);

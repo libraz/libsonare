@@ -77,7 +77,7 @@ val ProjectWasm::importExternalStems(val request) {
     descriptor.layout = layout;
     descriptor.planar_samples = planes.data();
     descriptor.frame_count = static_cast<int64_t>(frames);
-    descriptor.start_frame = int64Property(stem, "startFrame", 0);
+    descriptor.start_frame = int64Property(stem, "startFrame", descriptor.start_frame);
     descriptors.push_back(descriptor);
   }
   SonareExternalStemImportRequest request_desc{};

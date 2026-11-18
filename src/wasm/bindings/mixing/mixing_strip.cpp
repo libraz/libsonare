@@ -126,11 +126,11 @@ void MixerWasm::setSurroundPan(const val& strip_index_val, val pan) {
     return optionalNumber(pan[key], key).value_or(fallback);
   };
   SonareSurroundPan sp{};
-  sp.azimuth = field("azimuth", 0.0f);
-  sp.elevation = field("elevation", 0.0f);
-  sp.divergence = field("divergence", 0.0f);
-  sp.lfe = field("lfe", 0.0f);
-  sp.distance = field("distance", 1.0f);
+  sp.azimuth = field("azimuth", sp.azimuth);
+  sp.elevation = field("elevation", sp.elevation);
+  sp.divergence = field("divergence", sp.divergence);
+  sp.lfe = field("lfe", sp.lfe);
+  sp.distance = field("distance", sp.distance);
   checkStripError(sonare_strip_set_surround_pan(stripAt(strip_index), &sp),
                   "failed to set surround pan");
 }

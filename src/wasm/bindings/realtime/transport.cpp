@@ -55,9 +55,10 @@ void RealtimeEngineWasm::settleParameters() { engine_.settle_parameters(); }
 void RealtimeEngineWasm::primeOfflineParameters(const val& num_channels_val,
                                                 const val& block_size_val) {
   const int num_channels = checkedIntFromVal(num_channels_val, "numChannels");
-  int block_size = (block_size_val.isUndefined() || block_size_val.isNull())
-                       ? 0
-                       : checkedIntFromVal(block_size_val, "blockSize");
+  int block_size = 0;  // C value 0 = library default offline block
+  if (!block_size_val.isUndefined() && !block_size_val.isNull()) {
+    block_size = checkedIntFromVal(block_size_val, "blockSize");
+  }
   if (num_channels <= 0 || block_size < 0) {
     throw WasmRangeError(
         "primeOfflineParameters: numChannels must be positive and blockSize "
@@ -133,7 +134,7 @@ void RealtimeEngineWasm::setTempoSegments(val segments) {
       sonare::transport::TempoSegment segment{};
       segment.start_ppq = doubleProperty(entry, "startPpq", 0.0);
       segment.bpm = doubleProperty(entry, "bpm", 0.0);
-      segment.end_bpm = doubleProperty(entry, "endBpm", 0.0);
+      segment.end_bpm = doubleProperty(entry, "endBpm", segment.end_bpm);
       if (!sonare::transport::valid_public_tempo_segment(segment)) {
         throw WasmRangeError(
             "setTempoSegments: segments require finite startPpq and positive bpm/endBpm");
@@ -232,7 +233,7 @@ void RealtimeEngineWasm::setMarkers(val markers) {
     prepared.push_back({ppq, id, wasmCString(staged_strings.back(), "name"),
                         static_cast<uint8_t>(intProperty(marker, "kind", 0)),
                         static_cast<int8_t>(intProperty(marker, "keyFifths", 0)),
-                        boolProperty(marker, "keyMinor", false)});
+                        boolProperty(marker, "keyMinor", sonare::transport::Marker{}.key_minor)});
   }
   // Publish while both the old backing store and the staged strings are alive.
   // If snapshot allocation throws, the engine still references the untouched
