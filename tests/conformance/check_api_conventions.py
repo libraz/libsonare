@@ -1222,6 +1222,10 @@ RULES: list[Rule] = [
             else None
         ),
         derive=_key_screen_records,
+        pending={
+            "node:CHAIN_CONFIG_SECTIONS": "goes when the chain document reaches the core as written",
+            "wasm:MasteringChainConfigKeys": "goes when the chain document reaches the core as written",
+        },
     ),
     Rule(
         name="interface-teardown",

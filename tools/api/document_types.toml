@@ -16,3 +16,23 @@
 [[document]]
 type = "PlaybackRendererConfig"
 evidence = "schemas/playback-renderer-config.schema.json:5: the published schema, which gives null a meaning for distanceM, channelMap and programLufs"
+
+[[document]]
+type = "MasteringChainConfig"
+evidence = "src/mastering/api/chain_json.cpp:412: chain_config_from_json reads the chain document; masterAudio overrides are the same document applied over a preset"
+
+[[document]]
+type = "MidiFxConfig"
+evidence = "src/c_api/midi_fx_json.h:118: midi_fx_chain_from_json reads the MIDI-FX config and refuses an unknown key or a value of the wrong kind"
+
+[[document]]
+type = "MixSceneDocument"
+evidence = "src/mixing/api/scene_json.cpp:1009: scene_from_json reads the mix scene document the scene writer emits"
+
+[[document]]
+type = "MixSceneDocumentInput"
+evidence = "src/mixing/api/scene_json.cpp:1009: scene_from_json reads the mix scene document, taking the parser's default for an omitted field"
+
+[[document]]
+type = "RealtimeVoiceChangerPreset"
+evidence = "src/editing/voice_changer/realtime/config_json.cpp:1084: realtime_voice_changer_config_from_input reads the voice preset document the constructor and setConfig take; realtimeVoiceChangerPresetJson and the preset validator are its text form"
