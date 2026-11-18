@@ -761,27 +761,38 @@ def test_reattack_ratio_none_is_no_split_and_zero_is_refused() -> None:
             libsonare.PolyphonicAnalysis.analyze(samples, SR, reattack_ratio=value)
 
 
-def test_note_segments_takes_exactly_one_voicing_input_by_keyword() -> None:
+def test_note_segments_takes_voiced_or_voiced_prob_by_keyword() -> None:
     f0 = [440.0, 441.0, 439.0, 440.0, 0.0, 0.0, 660.0, 661.0, 659.0, 660.0]
     probability = [1.0] * 4 + [0.0] * 2 + [1.0] * 4
     flags = [1, 1, 1, 1, 0, 0, 1, 1, 1, 1]
     spans = [(0, 4), (6, 10)]
     by_probability = libsonare.note_segments(f0, 100.0, voiced_prob=probability)
-    by_flags = libsonare.note_segments(f0, 100.0, voiced_flags=flags)
-    by_bools = libsonare.note_segments(f0, 100.0, voiced_flags=np.array(flags, dtype=bool))
+    by_flags = libsonare.note_segments(f0, 100.0, voiced=flags)
+    by_bools = libsonare.note_segments(f0, 100.0, voiced=np.array(flags, dtype=bool))
     for found in (by_probability, by_flags, by_bools):
         assert [(s.frame_start, s.frame_end) for s in found] == spans
     assert [s.start_sec for s in by_flags] == pytest.approx([0.0, 0.06])
     assert [s.end_sec for s in by_flags] == pytest.approx([0.04, 0.10])
 
-    with pytest.raises(SonareValueError, match="exactly one"):
+    with pytest.raises(TypeError, match="voiced"):
         libsonare.note_segments(f0, 100.0)
-    with pytest.raises(SonareValueError, match="exactly one"):
-        libsonare.note_segments(f0, 100.0, voiced_prob=probability, voiced_flags=flags)
     with pytest.raises(SonareValueError, match="equal length"):
-        libsonare.note_segments(f0, 100.0, voiced_flags=flags[:-1])
+        libsonare.note_segments(f0, 100.0, voiced=flags[:-1])
     with pytest.raises(TypeError):
         libsonare.note_segments(f0, probability, 100.0)  # type: ignore[misc]
+    with pytest.raises(TypeError, match="voiced_flags"):
+        libsonare.note_segments(f0, 100.0, voiced_flags=flags)  # type: ignore[call-arg]
+
+
+def test_note_segments_voiced_wins_over_voiced_prob() -> None:
+    f0 = [440.0, 441.0, 439.0, 440.0, 0.0, 0.0, 660.0, 661.0, 659.0, 660.0]
+    flags = [1, 1, 1, 1, 0, 0, 1, 1, 1, 1]
+    silent = [0.0] * len(f0)
+    by_flags = libsonare.note_segments(f0, 100.0, voiced=flags)
+    both = libsonare.note_segments(f0, 100.0, voiced=flags, voiced_prob=silent)
+    assert libsonare.note_segments(f0, 100.0, voiced_prob=silent) == []
+    assert [(s.frame_start, s.frame_end) for s in both] == [(0, 4), (6, 10)]
+    assert both == by_flags
 
 
 def test_stream_names_carry_their_unit() -> None:

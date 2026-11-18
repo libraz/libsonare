@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import ctypes
 from collections.abc import Sequence
-from typing import Any, cast
 
 import numpy as np
 
@@ -335,8 +334,8 @@ def note_segments(
     f0_hz: Sequence[float] | list[float],
     frame_rate: float,
     *,
+    voiced: Sequence[int] | list[int] | None = None,
     voiced_prob: Sequence[float] | list[float] | None = None,
-    voiced_flags: Sequence[int] | Sequence[bool] | list[int] | None = None,
     segmentation_threshold_cents: float | None = None,
     min_note_ms: float | None = None,
     reference_hz: float | None = None,
@@ -344,32 +343,32 @@ def note_segments(
 ) -> list[NoteSegment]:
     """Segment a monophonic F0 track into stable note regions.
 
-    Zero-Hz F0 frames and unvoiced frames delimit note regions. Exactly one
-    voicing input is given, by keyword: ``voiced_prob`` (a per-frame
-    probability, thresholded at ``voiced_threshold``, default 0.5) or
-    ``voiced_flags`` (a per-frame 0/1 or boolean array, as
-    :func:`pitch_pyin` reports ``voiced_flag``). The F0 and voicing arrays must
-    have equal non-zero length.
+    Zero-Hz F0 frames and unvoiced frames delimit note regions. Voicing comes
+    from ``voiced`` (per-frame voiced flags, non-zero = voiced, as
+    :func:`pitch_pyin` reports ``voiced_flag``) or ``voiced_prob`` (a per-frame
+    probability in ``[0, 1]``, thresholded at ``voiced_threshold``, default
+    0.5). ``voiced_prob`` is used only to derive voicing when ``voiced`` is
+    ``None``. The F0 and voicing arrays must have equal non-zero length.
 
     Do **not** pass :func:`pitch_pyin`'s ``voiced_prob``: that value is the
     frame's voiced observation mass and rises with F0 for a fixed
     ``frame_length``, so a fixed threshold silently returns no segments at all
-    for low-register material. Pass its ``voiced_flag`` as ``voiced_flags``.
+    for low-register material. Pass its ``voiced_flag`` as ``voiced``.
 
     Raises:
-        SonareValueError: If both or neither of ``voiced_prob`` and
-            ``voiced_flags`` is given, or the lengths differ.
+        TypeError: If neither ``voiced`` nor ``voiced_prob`` is given.
+        SonareValueError: If a voicing array's length differs from ``f0_hz``.
     """
-    if (voiced_prob is None) == (voiced_flags is None):
-        raise SonareValueError("note_segments: give exactly one of voiced_prob or voiced_flags")
+    if voiced is None and voiced_prob is None:
+        raise TypeError("note_segments() requires voiced or voiced_prob")
     lib = _get_lib()
     f0_array, f0_count = _to_c_float_array(f0_hz)
     probability_array = None
     flags_array = None
-    if voiced_prob is not None:
-        probability_array, voiced_count = _to_c_float_array(voiced_prob, arg_name="voiced_prob")
+    if voiced is not None:
+        flags_array, voiced_count = _to_c_int_array(voiced, "voiced")
     else:
-        flags_array, voiced_count = _to_c_int_array(cast(Any, voiced_flags), "voiced_flags")
+        probability_array, voiced_count = _to_c_float_array(voiced_prob, arg_name="voiced_prob")
     if voiced_count != f0_count:
         raise SonareValueError(
             f"note_segments: f0_hz and the voicing array must have equal length, "
