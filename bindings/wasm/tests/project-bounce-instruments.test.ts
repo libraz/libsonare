@@ -93,15 +93,19 @@ describe('bounceWithInstruments', () => {
     expect(instrument.renderCalls).toBeGreaterThan(0);
   });
 
-  it('matches across the single-binding and list forms', () => {
+  it('refuses a single binding outside a list and matches an omitted destination inside one', () => {
     using project = midiProject();
     const list = project.bounceWithInstruments(
       [{ destinationId: 0, instrument: new ConstantInstrument(0.1) }],
       OPTIONS,
     );
-    expect(
-      project.bounceWithInstruments({ instrument: new ConstantInstrument(0.1) }, OPTIONS),
-    ).toEqual(list);
+    expect(() =>
+      project.bounceWithInstruments({ instrument: new ConstantInstrument(0.1) } as never, OPTIONS),
+    ).toThrow(
+      new TypeError(
+        'bounceWithInstruments: instruments must be an array of { destinationId?, instrument } pairs',
+      ),
+    );
     expect(
       project.bounceWithInstruments([{ instrument: new ConstantInstrument(0.1) }], OPTIONS),
     ).toEqual(list);
@@ -340,7 +344,14 @@ describe('bounceWithInstruments', () => {
       using project = midiProject();
       expect(() => project.bounceWithInstruments(7 as never, OPTIONS)).toThrow(
         new TypeError(
-          'bounceWithInstruments: instrument must be a { destinationId?, instrument } pair',
+          'bounceWithInstruments: instruments must be an array of { destinationId?, instrument } pairs',
+        ),
+      );
+      expect(() =>
+        project.bounceWithInstruments({ instrument: { render() {} } } as never, OPTIONS),
+      ).toThrow(
+        new TypeError(
+          'bounceWithInstruments: instruments must be an array of { destinationId?, instrument } pairs',
         ),
       );
       expect(() =>

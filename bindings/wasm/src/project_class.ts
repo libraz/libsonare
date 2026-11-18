@@ -997,15 +997,13 @@ export class Project {
    * ```typescript
    * // MIDI-only project -> non-silent stereo audio.
    * const { channels } = project.bounceWithBuiltinInstruments(
-   *   { instrument: { waveform: 'saw' } },
+   *   [{ instrument: { waveform: 'saw' } }],
    *   { numChannels: 2 },
    * );
    * ```
    */
   bounceWithBuiltinInstruments(
-    instruments:
-      | ProjectInstrumentBinding<BuiltinSynthConfig>
-      | ReadonlyArray<ProjectInstrumentBinding<BuiltinSynthConfig>> = [],
+    instruments: ReadonlyArray<ProjectInstrumentBinding<BuiltinSynthConfig>> = [],
     options?: ProjectBounceOptions,
   ): ProjectBounceResult {
     const bindings = normalizeInstrumentBindings(
@@ -1042,9 +1040,7 @@ export class Project {
    * source-track attribution; bind one destination per strip instead.
    */
   bounceWithInstruments(
-    instruments:
-      | ProjectInstrumentBinding<ExternalInstrument>
-      | ReadonlyArray<ProjectInstrumentBinding<ExternalInstrument>> = [],
+    instruments: ReadonlyArray<ProjectInstrumentBinding<ExternalInstrument>> = [],
     options?: ProjectBounceOptions,
   ): ProjectBounceResult {
     const method = 'bounceWithInstruments';
@@ -1099,9 +1095,7 @@ export class Project {
    * and one bound without a bank renders silence.
    */
   bounceWithSynthInstruments(
-    instruments:
-      | ProjectInstrumentBinding<SynthPatch>
-      | ReadonlyArray<ProjectInstrumentBinding<SynthPatch>> = [],
+    instruments: ReadonlyArray<ProjectInstrumentBinding<SynthPatch>> = [],
     options?: ProjectBounceOptions,
   ): ProjectBounceResult {
     const bindings = normalizeInstrumentBindings(
@@ -1160,9 +1154,7 @@ export class Project {
    * renders silence for MIDI tracks.
    */
   bounceWithSf2Instruments(
-    instruments:
-      | ProjectInstrumentBinding<Sf2InstrumentConfig>
-      | ReadonlyArray<ProjectInstrumentBinding<Sf2InstrumentConfig>> = [],
+    instruments: ReadonlyArray<ProjectInstrumentBinding<Sf2InstrumentConfig>> = [],
     options?: ProjectBounceOptions,
   ): ProjectBounceResult {
     const bindings = normalizeInstrumentBindings(

@@ -110,7 +110,7 @@ function bounceSynth(
   options: ProjectBounceOptions,
 ): Float32Array[] {
   const instrument = typeof patch === 'string' ? { preset: patch } : patch;
-  return project.bounceWithSynthInstruments({ instrument }, options).channels;
+  return project.bounceWithSynthInstruments([{ instrument }], options).channels;
 }
 
 function peak(audio: Float32Array | Float32Array[]): number {
@@ -514,7 +514,7 @@ describe('Project.bounceWithSynthInstrument', () => {
         project.bounceWithSynthInstruments('sawLead' as never, { totalFrames: 128 }),
       ).toThrow(TypeError);
       expect(() =>
-        project.bounceWithSynthInstruments({ preset: 'sawLead' } as never, { totalFrames: 128 }),
+        project.bounceWithSynthInstruments([{ preset: 'sawLead' }] as never, { totalFrames: 128 }),
       ).toThrow(TypeError);
     } finally {
       project.destroy();

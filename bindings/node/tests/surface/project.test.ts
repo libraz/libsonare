@@ -465,7 +465,12 @@ describe('compile and bounce', () => {
         expect(name in project).toBe(false);
       }
       const pair = { destinationId: 0, instrument: { waveform: 'saw' as const } };
-      expect(() => project.bounceWithBuiltinInstruments(pair, { totalFrames: 128 })).not.toThrow();
+      expect(() =>
+        project.bounceWithBuiltinInstruments(pair as never, { totalFrames: 128 }),
+      ).toThrow(TypeError);
+      expect(() =>
+        project.bounceWithBuiltinInstruments([pair], { totalFrames: 128 }),
+      ).not.toThrow();
       expect(() =>
         project.bounceWithBuiltinInstruments([pair, { destinationId: 1, instrument: {} }], {
           totalFrames: 128,
@@ -476,14 +481,14 @@ describe('compile and bounce', () => {
       const midi = addMidiNote(project);
       expect(midi).toBeGreaterThan(0);
       const options = { totalFrames: 4096, numChannels: 2 };
-      const builtin = project.bounceWithBuiltinInstruments(pair, options);
+      const builtin = project.bounceWithBuiltinInstruments([pair], options);
       expect(builtin.channels).toHaveLength(2);
       expect(peak(builtin)).toBeGreaterThan(0);
-      expect(peak(project.bounceWithSynthInstruments({ instrument: {} }, options))).toBeGreaterThan(
-        0,
-      );
+      expect(
+        peak(project.bounceWithSynthInstruments([{ instrument: {} }], options)),
+      ).toBeGreaterThan(0);
       const sf2 = project.bounceWithSf2Instruments(
-        { destinationId: 0, instrument: { gain: 0.8 } },
+        [{ destinationId: 0, instrument: { gain: 0.8 } }],
         options,
       );
       expect(sf2.channels).toHaveLength(2);
@@ -505,7 +510,7 @@ describe('compile and bounce', () => {
       expect(peak(called)).toBeCloseTo(0.25, 6);
       expect(() =>
         project.bounceWithBuiltinInstruments(
-          { destinationId: 0, instrument: { destinationId: 1, waveform: 'saw' } } as never,
+          [{ destinationId: 0, instrument: { destinationId: 1, waveform: 'saw' } }] as never,
           { totalFrames: 128 },
         ),
       ).toThrow(/unknown request key 'destinationId'/);

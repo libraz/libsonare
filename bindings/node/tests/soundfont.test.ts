@@ -84,7 +84,7 @@ describe('Project SoundFont (SF2) binding', () => {
         midiNoteOff({ ppq: 1, group: 0, channel: 0, note: 52, velocity: 0 }),
       ]);
       const out = project.bounceWithSf2Instruments(
-        { destinationId: 0, instrument: { gain: 1, clearBankRig } },
+        [{ destinationId: 0, instrument: { gain: 1, clearBankRig } }],
         { totalFrames: 48000, numChannels: 2 },
       );
       project.destroy();
@@ -101,27 +101,30 @@ describe('Project SoundFont (SF2) binding', () => {
     const project = buildMidiOnlyProject();
     // Without a loaded SoundFont the bounce still sounds: the built-in
     // synthesizer GM fallback is the data-free floor.
-    const fallback = project.bounceWithSf2Instruments(
-      { instrument: {} },
-      { totalFrames: 4096, numChannels: 2 },
-    );
+    const fallback = project.bounceWithSf2Instruments([{ instrument: {} }], {
+      totalFrames: 4096,
+      numChannels: 2,
+    });
     expect(peak(fallback.channels)).toBeGreaterThan(0.01);
 
     project.loadSoundFont(sf2Bytes);
     const bound = { destinationId: 0, instrument: { gain: 1 } };
-    const rendered = project.bounceWithSf2Instruments(bound, { totalFrames: 4096, numChannels: 2 });
+    const rendered = project.bounceWithSf2Instruments([bound], {
+      totalFrames: 4096,
+      numChannels: 2,
+    });
     const audio = rendered.channels;
     expect(audio.map((plane) => plane.length)).toEqual([4096, 4096]);
     expect(peak(audio)).toBeGreaterThan(0.01);
 
     // Deterministic: a second bounce is bit-identical.
-    const again = project.bounceWithSf2Instruments(bound, { totalFrames: 4096, numChannels: 2 });
+    const again = project.bounceWithSf2Instruments([bound], { totalFrames: 4096, numChannels: 2 });
     expect(again.channels).toEqual(audio);
 
     // Program 0 is a dedicated piano model. The opt-in must bypass the
     // loaded Piano 1 preset, while the default above remains SF2-first.
     const modeled = project.bounceWithSf2Instruments(
-      { destinationId: 0, instrument: { gain: 1, preferModelForModeledFamilies: true } },
+      [{ destinationId: 0, instrument: { gain: 1, preferModelForModeledFamilies: true } }],
       { totalFrames: 4096, numChannels: 2 },
     );
     expect(peak(modeled.channels)).toBeGreaterThan(0.01);
@@ -213,10 +216,10 @@ describe('SF2 instrument gsEfxRealization', () => {
     engine.destroy();
     const project = new Project();
     expect(() =>
-      project.bounceWithSf2Instruments(
-        { instrument: { gsEfxRealization: 'vintage' as never } },
-        { totalFrames: 128, numChannels: 2 },
-      ),
+      project.bounceWithSf2Instruments([{ instrument: { gsEfxRealization: 'vintage' as never } }], {
+        totalFrames: 128,
+        numChannels: 2,
+      }),
     ).toThrow(/gsEfxRealization/);
     project.destroy();
   });

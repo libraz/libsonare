@@ -268,19 +268,19 @@ export function normalizeSynthInstrument(fnName: string, patch: unknown): Native
  */
 export function normalizeInstrumentBindings<E, R extends object>(
   method: string,
-  value:
-    | ProjectInstrumentBinding<E>
-    | ReadonlyArray<ProjectInstrumentBinding<E>>
-    | null
-    | undefined,
+  value: ReadonlyArray<ProjectInstrumentBinding<E>> | null | undefined,
   entry: (instrument: E) => R,
 ): NativeInstrumentBinding<R>[] {
   if (value === null || value === undefined) {
     return [];
   }
-  const list = Array.isArray(value) ? value : [value];
-  return list.map((pair: unknown, index: number) => {
-    const label = Array.isArray(value) ? `instruments[${index}]` : 'instrument';
+  if (!Array.isArray(value)) {
+    throw new TypeError(
+      `${method}: instruments must be an array of { destinationId?, instrument } pairs`,
+    );
+  }
+  return value.map((pair: unknown, index: number) => {
+    const label = `instruments[${index}]`;
     if (typeof pair !== 'object' || pair === null || Array.isArray(pair)) {
       throw new TypeError(`${method}: ${label} must be a { destinationId?, instrument } pair`);
     }

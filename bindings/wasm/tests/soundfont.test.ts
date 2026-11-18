@@ -35,7 +35,7 @@ function bounceSf2(
 ): Float32Array {
   const { destinationId, ...instrument } = config as { destinationId?: number };
   const { channels } = project.bounceWithSf2Instruments(
-    { destinationId, instrument } as never,
+    [{ destinationId, instrument }] as never,
     options,
   );
   const out = new Float32Array(channels.length * (channels[0]?.length ?? 0));

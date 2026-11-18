@@ -90,7 +90,7 @@ function buildProject(): Built {
 
 function projectBounce(project: Project): Float32Array[] {
   return project.bounceWithBuiltinInstruments(
-    { destinationId: DESTINATION, instrument: { ...SYNTH } },
+    [{ destinationId: DESTINATION, instrument: { ...SYNTH } }],
     { totalFrames: FRAMES, blockSize: BLOCK_SIZE, numChannels: 2 },
   ).channels;
 }

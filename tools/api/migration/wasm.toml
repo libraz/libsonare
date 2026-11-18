@@ -27839,7 +27839,6 @@ domain = "engine"
 rule = "one-input-form"
 test = "bindings/wasm/tests/playback.test.ts::refuses a serialized JSON string as the configuration"
 
-
 [[entry]]
 kind = "field"
 old = "PartRigInsert.params"
@@ -27847,6 +27846,38 @@ changed = "an object only; a JSON string is a TypeError"
 domain = "engine"
 rule = "one-input-form"
 test = "bindings/wasm/tests/part_rig.test.ts::refuses invalid input and leaves the stored rig alone"
+
+[[entry]]
+kind = "method"
+old = "Project.bounceWithInstruments"
+changed = "instruments is an array of { destinationId?, instrument } pairs; a single pair is a TypeError"
+domain = "project"
+rule = "one-input-form"
+test = "bindings/wasm/tests/bounce-binding-forms.test.ts::refuses a single pair"
+
+[[entry]]
+kind = "method"
+old = "Project.bounceWithBuiltinInstruments"
+changed = "instruments is an array of { destinationId?, instrument } pairs; a single pair is a TypeError"
+domain = "project"
+rule = "one-input-form"
+test = "bindings/wasm/tests/bounce-binding-forms.test.ts::refuses a single pair"
+
+[[entry]]
+kind = "method"
+old = "Project.bounceWithSynthInstruments"
+changed = "instruments is an array of { destinationId?, instrument } pairs; a single pair is a TypeError"
+domain = "project"
+rule = "one-input-form"
+test = "bindings/wasm/tests/bounce-binding-forms.test.ts::refuses a single pair"
+
+[[entry]]
+kind = "method"
+old = "Project.bounceWithSf2Instruments"
+changed = "instruments is an array of { destinationId?, instrument } pairs; a single pair is a TypeError"
+domain = "project"
+rule = "one-input-form"
+test = "bindings/wasm/tests/bounce-binding-forms.test.ts::refuses a single pair"
 [[entry]]
 kind = "method"
 old = "HrtfSet.native"

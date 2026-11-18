@@ -11091,34 +11091,34 @@ test = "bindings/node/tests/surface/project.test.ts::bounces to planar channels"
 [[entry]]
 kind = "method"
 old = "Project.bounceWithBuiltinInstruments"
-changed = "takes { destinationId?, instrument } pairs and returns planar audio"
+changed = "takes an array of { destinationId?, instrument } pairs, a single pair outside an array being a TypeError, and returns planar audio"
 domain = "project"
 rule = "one-entry-per-operation"
-test = "bindings/node/tests/surface/project.test.ts::binds each instrument kind through one plural method"
+test = "bindings/node/tests/bounce_binding_forms.test.ts::refuses one bare binding"
 
 [[entry]]
 kind = "method"
 old = "Project.bounceWithSynthInstruments"
-changed = "takes { destinationId?, instrument } pairs and returns planar audio"
+changed = "takes an array of { destinationId?, instrument } pairs, a single pair outside an array being a TypeError, and returns planar audio"
 domain = "project"
 rule = "one-entry-per-operation"
-test = "bindings/node/tests/surface/project.test.ts::binds each instrument kind through one plural method"
+test = "bindings/node/tests/bounce_binding_forms.test.ts::refuses one bare binding"
 
 [[entry]]
 kind = "method"
 old = "Project.bounceWithSf2Instruments"
-changed = "takes { destinationId?, instrument } pairs and returns planar audio"
+changed = "takes an array of { destinationId?, instrument } pairs, a single pair outside an array being a TypeError, and returns planar audio"
 domain = "project"
 rule = "one-entry-per-operation"
-test = "bindings/node/tests/surface/project.test.ts::binds each instrument kind through one plural method"
+test = "bindings/node/tests/bounce_binding_forms.test.ts::refuses one bare binding"
 
 [[entry]]
 kind = "method"
 old = "Project.bounceWithInstruments"
-changed = "takes { destinationId?, instrument } pairs and returns planar audio"
+changed = "takes an array of { destinationId?, instrument } pairs, a single pair outside an array being a TypeError, and returns planar audio"
 domain = "project"
 rule = "one-entry-per-operation"
-test = "bindings/node/tests/surface/project.test.ts::binds each instrument kind through one plural method"
+test = "bindings/node/tests/bounce_binding_forms.test.ts::refuses one bare binding"
 
 [[entry]]
 kind = "method"

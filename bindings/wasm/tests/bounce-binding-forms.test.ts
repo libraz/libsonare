@@ -1,8 +1,9 @@
 /**
  * Pins the bounceWith*Instruments argument contract shared with the Node
- * binding: a single { destinationId?, instrument } pair or a list resolves
- * through one normalizer, and an element that is not a pair (an array or a
- * bare config included) is refused by name before any render starts.
+ * binding: a list of { destinationId?, instrument } pairs resolves through one
+ * normalizer, and anything else (a single pair included) or an element that is
+ * not a pair (an array or a bare config included) is refused by name before
+ * any render starts.
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
@@ -77,17 +78,21 @@ beforeAll(async () => {
 });
 
 describe.each(FAMILIES)('$method', (family) => {
-  it('renders one binding identically as a pair and as a list', () => {
+  it('refuses a single pair and renders the same pair in a list', () => {
     withProject((project) => {
       const pair = { destinationId: 0, instrument: family.instrument };
-      const single = family.run(project, pair);
-      expect(peak(single)).toBeGreaterThan(0);
-      expect(family.run(project, [pair])).toEqual(single);
+      const arrayError = new TypeError(
+        `${family.method}: instruments must be an array of { destinationId?, instrument } pairs`,
+      );
+      expect(() => family.run(project, pair)).toThrow(arrayError);
+      expect(() => family.run(project, { instrument: family.instrument })).toThrow(arrayError);
+      const listed = family.run(project, [pair]);
+      expect(peak(listed)).toBeGreaterThan(0);
       // An omitted destination is destination 0.
-      expect(family.run(project, { instrument: family.instrument })).toEqual(single);
-      // The control: a different instrument moves the render, so the equalities
+      expect(family.run(project, [{ instrument: family.instrument }])).toEqual(listed);
+      // The control: a different instrument moves the render, so the equality
       // above cannot hold because the instrument was dropped.
-      expect(family.run(project, [{ instrument: family.other }])).not.toEqual(single);
+      expect(family.run(project, [{ instrument: family.other }])).not.toEqual(listed);
     });
   });
 
@@ -107,7 +112,9 @@ describe.each(FAMILIES)('$method', (family) => {
         new TypeError(`${family.method}: instruments[1] must be a ${expected}`),
       );
       expect(() => family.run(project, 42)).toThrow(
-        new TypeError(`${family.method}: instrument must be a ${expected}`),
+        new TypeError(
+          `${family.method}: instruments must be an array of { destinationId?, instrument } pairs`,
+        ),
       );
       // A bare config, or a name, must be wrapped as a pair.
       expect(() => family.run(project, [family.instrument])).toThrow(

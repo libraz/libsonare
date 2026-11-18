@@ -205,16 +205,20 @@ type BounceFn =
 /**
  * Resolve the bindings of a `bounceWith*Instruments` call to the list the native
  * layer reads: each pair's `destinationId` is folded into a copy of its instrument.
- * One pair or an array of pairs is accepted.
+ * Anything but an array of pairs is a `TypeError`.
  */
 function bindInstruments<T extends object>(
   fnName: BounceFn,
-  value: ProjectInstrumentBinding<T> | readonly ProjectInstrumentBinding<T>[],
+  value: readonly ProjectInstrumentBinding<T>[],
   entry: (instrument: T) => T,
   withDestination: (instrument: T, destinationId: number) => T,
 ): T[] {
-  const list = Array.isArray(value) ? value : [value];
-  return list.map((pair) => {
+  if (!Array.isArray(value)) {
+    throw new TypeError(
+      `${fnName}: instruments must be an array of { destinationId?, instrument } pairs`,
+    );
+  }
+  return value.map((pair) => {
     const binding = requestObject('ProjectInstrumentBinding', pair, 'binding', true);
     const instrument = binding.instrument as unknown;
     if (typeof instrument !== 'object' || instrument === null || Array.isArray(instrument)) {
@@ -1439,8 +1443,7 @@ export class Project {
   /**
    * Like {@link bounce}, but drives MIDI tracks routed to a destination through
    * instruments you implement in JavaScript. Each pair binds an
-   * {@link ExternalInstrument} to its `destinationId` (default `0`); one pair or an
-   * array is accepted.
+   * {@link ExternalInstrument} to its `destinationId` (default `0`).
    *
    * Every callback runs synchronously on the calling thread while this method
    * is blocked, so there is no async instrument: a callback that returns a
@@ -1458,9 +1461,7 @@ export class Project {
    * source-track attribution; bind one destination per strip instead.
    */
   bounceWithInstruments(
-    instruments:
-      | ProjectInstrumentBinding<ExternalInstrument>
-      | readonly ProjectInstrumentBinding<ExternalInstrument>[] = [],
+    instruments: readonly ProjectInstrumentBinding<ExternalInstrument>[] = [],
     options?: ProjectBounceOptions,
   ): ProjectBounceResult {
     const fnName = 'bounceWithInstruments';
@@ -1479,13 +1480,11 @@ export class Project {
    * Like {@link bounce}, but renders MIDI tracks routed to a destination
    * through the built-in oscillator synth so a MIDI-only arrangement bounces
    * to audible audio. Each pair binds a {@link BuiltinSynthConfig} patch to a
-   * `destinationId` (default `0`); one pair or an array is accepted. An empty
+   * `destinationId` (default `0`). An empty
    * array renders silence, identical to {@link bounce}.
    */
   bounceWithBuiltinInstruments(
-    instruments:
-      | ProjectInstrumentBinding<BuiltinSynthConfig>
-      | readonly ProjectInstrumentBinding<BuiltinSynthConfig>[] = [],
+    instruments: readonly ProjectInstrumentBinding<BuiltinSynthConfig>[] = [],
     options?: ProjectBounceOptions,
   ): ProjectBounceResult {
     const fnName = 'bounceWithBuiltinInstruments';
@@ -1511,7 +1510,7 @@ export class Project {
    * the patch-driven NativeSynth — the full synthesizer (every
    * {@link SynthEngineMode} engine plus the realism layer; the modes are
    * enumerated by {@link SYNTH_ENGINE_MODES}). Each pair binds a {@link SynthPatch}
-   * to a `destinationId` (default `0`); one pair or an array is accepted. Name a
+   * to a `destinationId` (default `0`). Name a
    * catalog preset with `preset` (see {@link synthPresetNames}). A patch may also
    * set `useGmPrograms: true` to follow incoming GM bank/program changes (and use
    * the GM drum map on channel 10); it defaults to `false`, preserving the
@@ -1522,9 +1521,7 @@ export class Project {
    * throw. Deterministic for a fixed project + options + patch.
    */
   bounceWithSynthInstruments(
-    instruments:
-      | ProjectInstrumentBinding<SynthPatch>
-      | readonly ProjectInstrumentBinding<SynthPatch>[] = [],
+    instruments: readonly ProjectInstrumentBinding<SynthPatch>[] = [],
     options?: ProjectBounceOptions,
   ): ProjectBounceResult {
     const fnName = 'bounceWithSynthInstruments';
@@ -1584,9 +1581,7 @@ export class Project {
    * per-program backend). An empty array renders silence.
    */
   bounceWithSf2Instruments(
-    instruments:
-      | ProjectInstrumentBinding<Sf2InstrumentConfig>
-      | readonly ProjectInstrumentBinding<Sf2InstrumentConfig>[] = [],
+    instruments: readonly ProjectInstrumentBinding<Sf2InstrumentConfig>[] = [],
     options?: ProjectBounceOptions,
   ): ProjectBounceResult {
     const fnName = 'bounceWithSf2Instruments';

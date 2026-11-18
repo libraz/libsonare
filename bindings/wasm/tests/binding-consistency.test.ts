@@ -64,7 +64,7 @@ describe('WASM cross-binding consistency', () => {
       const project = buildMidiOnlyProject();
       try {
         return project.bounceWithBuiltinInstruments(
-          { instrument: { waveform: waveform as 'sine' } },
+          [{ instrument: { waveform: waveform as 'sine' } }],
           { totalFrames, numChannels: 1 },
         ).channels[0];
       } finally {
@@ -102,7 +102,7 @@ describe('WASM cross-binding consistency', () => {
       const project = buildMidiOnlyProject();
       try {
         const [audio] = project.bounceWithBuiltinInstruments(
-          { instrument: { waveform: 'sawtooth', gain: 0.5 } },
+          [{ instrument: { waveform: 'sawtooth', gain: 0.5 } }],
           { totalFrames: SR, numChannels: 1 },
         ).channels;
         expect(audio).toBeInstanceOf(Float32Array);
@@ -119,10 +119,10 @@ describe('WASM cross-binding consistency', () => {
         // alias lets portable code share that name (tsc validates the alias
         // accepts the same shape as BuiltinSynthBinding).
         const patch: BuiltinSynthConfig = { waveform: 'square', gain: 0.3 };
-        const [audio] = project.bounceWithBuiltinInstruments(
-          { instrument: patch },
-          { totalFrames: SR, numChannels: 1 },
-        ).channels;
+        const [audio] = project.bounceWithBuiltinInstruments([{ instrument: patch }], {
+          totalFrames: SR,
+          numChannels: 1,
+        }).channels;
         expect(audio).toBeInstanceOf(Float32Array);
         expect(maxAbs(audio)).toBeGreaterThan(0.01);
       } finally {

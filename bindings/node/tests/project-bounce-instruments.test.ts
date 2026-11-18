@@ -106,11 +106,21 @@ describe('bounceWithInstruments', () => {
     expect(instrument.renderCalls).toBeGreaterThan(0);
   });
 
-  it('matches across the bare binding and list forms', () => {
+  it('refuses a bare binding and matches an omitted destination inside a list', () => {
     using project = midiProject();
     const listed = run(project, [new ConstantInstrument(0.1)]);
+    expect(() =>
+      project.bounceWithInstruments({ instrument: new ConstantInstrument(0.1) } as never, OPTIONS),
+    ).toThrow(
+      new TypeError(
+        'bounceWithInstruments: instruments must be an array of { destinationId?, instrument } pairs',
+      ),
+    );
     expect(
-      project.bounceWithInstruments({ instrument: new ConstantInstrument(0.1) }, OPTIONS),
+      project.bounceWithInstruments(
+        [{ destinationId: 0, instrument: new ConstantInstrument(0.1) }],
+        OPTIONS,
+      ),
     ).toEqual(listed);
     expect(run(project, [new ConstantInstrument(0.3)])).not.toEqual(listed);
     expect(run(project, [])).toEqual(project.bounce(OPTIONS));
@@ -320,7 +330,16 @@ describe('bounceWithInstruments', () => {
     it('refuses a non-binding element and a binding without an instrument by name', () => {
       using project = midiProject();
       expect(() => project.bounceWithInstruments(7 as never, OPTIONS)).toThrow(
-        new TypeError('ProjectInstrumentBinding: request must be an object'),
+        new TypeError(
+          'bounceWithInstruments: instruments must be an array of { destinationId?, instrument } pairs',
+        ),
+      );
+      expect(() =>
+        project.bounceWithInstruments({ instrument: { render() {} } } as never, OPTIONS),
+      ).toThrow(
+        new TypeError(
+          'bounceWithInstruments: instruments must be an array of { destinationId?, instrument } pairs',
+        ),
       );
       expect(() => project.bounceWithInstruments([[{ render() {} }]] as never, OPTIONS)).toThrow(
         new TypeError('ProjectInstrumentBinding: request must be an object'),
@@ -465,7 +484,7 @@ describe('every bounce entry point refuses a bad options bag', () => {
     ['bounceWithBuiltinInstruments', (p) => p.bounceWithBuiltinInstruments([], bad)],
     [
       'bounceWithBuiltinInstruments (one binding)',
-      (p) => p.bounceWithBuiltinInstruments({ instrument: {} }, bad),
+      (p) => p.bounceWithBuiltinInstruments([{ instrument: {} }], bad),
     ],
     ['bounceWithSynthInstruments', (p) => p.bounceWithSynthInstruments([], bad)],
     ['bounceWithSf2Instruments', (p) => p.bounceWithSf2Instruments([], bad)],

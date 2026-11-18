@@ -55,7 +55,7 @@ function bounceSynth(
     typeof config === 'string' ? { preset: config } : config
   ) as { destinationId?: number };
   const { channels } = project.bounceWithSynthInstruments(
-    { destinationId, instrument } as never,
+    [{ destinationId, instrument }] as never,
     options,
   );
   const out = new Float32Array(channels.length * (channels[0]?.length ?? 0));

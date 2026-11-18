@@ -307,9 +307,11 @@ describe('a number no target C type can hold is a RangeError on every width', ()
       try {
         expect(
           () =>
-            project.bounceWithBuiltinInstruments({
-              instrument: { waveform: waveform as unknown as 'sine' },
-            }),
+            project.bounceWithBuiltinInstruments([
+              {
+                instrument: { waveform: waveform as unknown as 'sine' },
+              },
+            ]),
           `waveform ${waveform} must be refused by the facade`,
         ).toThrow(typeof waveform === 'string' ? RangeError : TypeError);
         expect(
@@ -333,9 +335,11 @@ describe('a number no target C type can hold is a RangeError on every width', ()
       ).toThrow(TypeError);
       expect(() => project.setMaxUndoDepth('x' as never)).toThrow(TypeError);
       expect(() =>
-        project.bounceWithBuiltinInstruments({
-          instrument: { waveform: true as unknown as 'sine' },
-        }),
+        project.bounceWithBuiltinInstruments([
+          {
+            instrument: { waveform: true as unknown as 'sine' },
+          },
+        ]),
       ).toThrow(TypeError);
     } finally {
       project.destroy();
@@ -349,7 +353,7 @@ describe('a number no target C type can hold is a RangeError on every width', ()
     try {
       for (const waveform of ['sine', 'saw', 'sawtooth', 'square', 'triangle'] as const) {
         expect(() =>
-          project.bounceWithBuiltinInstruments({ instrument: { waveform } }),
+          project.bounceWithBuiltinInstruments([{ instrument: { waveform } }]),
         ).not.toThrow();
       }
       for (const waveform of [0, 1, 2, 3]) {
