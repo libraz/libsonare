@@ -458,6 +458,11 @@ void PsolaShifter::process_voice_sample(Voice& v, const SampleTarget& target, st
 
 void PsolaShifter::process(const float* in, const VoiceTargets& targets, float* const* voice_out,
                            int n) noexcept {
+  process(in, targets, voice_out, n, 0, n);
+}
+
+void PsolaShifter::process(const float* in, const VoiceTargets& targets, float* const* voice_out,
+                           int n, int ramp_offset, int ramp_length) noexcept {
   const int count = std::clamp(targets.count, 0, kMaxVoices);
   for (int i = count; i < kMaxVoices; ++i) voices_[i].active = false;
   for (int i = 0; i < count; ++i) {
@@ -482,7 +487,7 @@ void PsolaShifter::process(const float* in, const VoiceTargets& targets, float* 
     const Estimate* newest = estimate_at(static_cast<double>(t));
     const bool newest_voiced = newest != nullptr && newest->voiced;
 
-    const float frac = static_cast<float>(k + 1) / static_cast<float>(n);
+    const float frac = static_cast<float>(ramp_offset + k + 1) / static_cast<float>(ramp_length);
     for (int i = 0; i < count; ++i) {
       Voice& v = voices_[i];
       if (!v.active) {
@@ -503,8 +508,10 @@ void PsolaShifter::process(const float* in, const VoiceTargets& targets, float* 
       process_voice_sample(v, st, t, crossfade_, newest_voiced, &voice_out[i][k]);
     }
   }
-  for (int i = 0; i < count; ++i) {
-    if (voices_[i].active) voices_[i].previous = targets.voices[i];
+  if (ramp_offset + n >= ramp_length) {
+    for (int i = 0; i < count; ++i) {
+      if (voices_[i].active) voices_[i].previous = targets.voices[i];
+    }
   }
   sample_count_ += n;
 }

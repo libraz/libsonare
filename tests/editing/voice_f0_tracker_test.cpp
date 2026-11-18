@@ -108,14 +108,14 @@ TEST_CASE("f0 tracker hop and decision lag follow the decimated-window emission 
     int hop;
     int lag;
   };
-  for (const Expected& expected : {Expected{48000.0, 96, 768}, Expected{44100.0, 87, 696}}) {
+  for (const Expected& expected : {Expected{48000.0, 96, 711}, Expected{44100.0, 87, 654}}) {
     StreamingF0Tracker tracker;
     tracker.prepare(expected.sr, 512, kF0MinHz);
     const int hop = tracker.hop_input_samples();
     const int needed = window_half(expected.sr, kF0MinHz) + kGroupDelay;
     INFO("sr " << expected.sr << " lag " << tracker.decision_lag_samples());
     CHECK(hop == expected.hop);
-    CHECK(tracker.decision_lag_samples() == (needed + hop - 1) / hop * hop);
+    CHECK(tracker.decision_lag_samples() == needed);
     CHECK(tracker.decision_lag_samples() == expected.lag);
   }
 }
@@ -142,7 +142,7 @@ TEST_CASE("f0 tracker emits each estimate in the block that reaches centre + T_m
       for (std::size_t i = 0; i < run.size(); ++i) {
         const Emitted& e = run[i];
         const std::int64_t centre = e.estimate.centre_sample;
-        const std::int64_t due = (centre + needed + hop - 1) / hop * hop;
+        const std::int64_t due = centre + needed;
         const bool placed = centre == static_cast<std::int64_t>(i) * hop && due - centre == lag &&
                             e.block_start < due && due <= e.block_start + e.block_size;
         if (!placed) ++misplaced;

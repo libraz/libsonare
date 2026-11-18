@@ -498,8 +498,15 @@ class RealtimeVoiceChanger {
     FixedDelay voice_compensation;
     FixedDelay vocoder_compensation;
     bool vocoder_running = false;
-    /// Samples into the current control chunk; chunk edges sit on a fixed absolute grid.
+    /// Samples into the current control segment; segments end where the tracker emits.
     int control_phase = 0;
+    /// Length of the current segment; 0 before the first one.
+    int segment_length = 0;
+    /// Estimates finalised in the current segment, at the front of @c estimates.
+    int pending_estimates = 0;
+    /// Targets of the current segment, and those the shifter renders (fading voices included).
+    VoiceTargets segment_targets;
+    VoiceTargets rendered_targets;
     /// Set when a transformer stage produced a non-finite value, cleared by
     /// discard_non_finite_state, which then resets those stages. Audio thread only.
     bool transform_substituted = false;
@@ -557,9 +564,13 @@ class RealtimeVoiceChanger {
   ///        @c scratch_, leaving the aligned wet signal there.
   void process_transform(ChannelState& state, const RealtimeVoiceChangerConfig& config,
                          const float* carrier, int num_samples) noexcept;
-  /// @brief One control chunk of @ref process_transform, starting @p offset samples into the block.
+  /// @brief Delivers the estimates held since the last segment and advances the voice targets.
+  void begin_transform_segment(ChannelState& state, int length) noexcept;
+  /// @brief A run of @ref process_transform inside one @p length -sample segment, starting
+  ///        @p offset samples into the block.
   void process_transform_chunk(ChannelState& state, const RealtimeVoiceChangerConfig& config,
-                               const float* carrier, int offset, int num_samples) noexcept;
+                               const float* carrier, int offset, int num_samples,
+                               int length) noexcept;
   /// @brief Applies the note events and the all-notes-off request queued since the last block.
   void drain_note_events() noexcept;
   /// @brief Processes a block whose pre-conditions were checked and whose snapshot @p config

@@ -12,7 +12,8 @@
 /// 5 ms grains with no pitch change for unvoiced input; the two are crossfaded over 5 ms on the
 /// voicing of the analysis time. Output sample t synthesizes around input time
 /// t - latency_samples(), and every grain reads only input that has arrived by the sample it
-/// writes, so the result does not depend on the block partition beyond target interpolation.
+/// writes, so the result is fixed by the sample each estimate is pushed at and by the target
+/// ramps, not by how the calls are cut.
 
 #include <cstdint>
 #include <vector>
@@ -22,7 +23,7 @@
 
 namespace sonare::editing::voice_changer {
 
-/// Latency is ceil(sr / f0_min); targets are interpolated linearly across each block.
+/// Latency is ceil(sr / f0_min); targets are interpolated linearly across each ramp.
 class PsolaShifter {
  public:
   void prepare(double sr, int max_block, float f0_min_hz);
@@ -31,6 +32,10 @@ class PsolaShifter {
   /// @param voice_out `targets.count` output buffers of `n` samples.
   void process(const float* in, const VoiceTargets& targets, float* const* voice_out,
                int n) noexcept;
+  /// @brief Renders `n` samples starting `ramp_offset` into a `ramp_length`-sample target ramp;
+  ///        every call of one ramp takes the same `targets`.
+  void process(const float* in, const VoiceTargets& targets, float* const* voice_out, int n,
+               int ramp_offset, int ramp_length) noexcept;
   /// @return ceil(sr / f0_min).
   int latency_samples() const noexcept;
 

@@ -100,7 +100,7 @@ struct MidiConfig {
 
 /// One tracker decision. centre_sample is the absolute input-rate index of the analysis window
 /// centre (reset() of tracker and shifter zeroes the count together). Emitted in the process()
-/// call whose input reaches centre + T_max + decimation group delay, rounded up to the next hop.
+/// call whose input reaches centre + T_max + decimation group delay.
 struct F0Estimate {
   float f0_hz;
   float confidence;

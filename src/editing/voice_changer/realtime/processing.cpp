@@ -20,9 +20,6 @@ using sonare::discard_if_non_finite;
 /// Gain below which a voice that left the count has finished fading and stops rendering.
 constexpr float kVoiceFadeFloor = 1e-3f;
 
-/// Samples between pitch-target updates in the voice stage.
-constexpr int kTransformControlChunk = 128;
-
 float amp_to_db(float amp) noexcept {
   return sonare::linear_to_db(std::max(std::abs(amp), sonare::constants::kAmpEpsilon));
 }
@@ -227,34 +224,29 @@ void RealtimeVoiceChanger::ensure_scratch(int num_samples) noexcept {
 void RealtimeVoiceChanger::process_transform(ChannelState& state,
                                              const RealtimeVoiceChangerConfig& config,
                                              const float* carrier, int num_samples) noexcept {
-  // Targets advance on a fixed absolute grid, so how the host cuts its blocks moves them by at
-  // most one chunk.
+  // Estimates and targets take effect at the samples the tracker emits on, one hop apart on the
+  // sample clock, so the output does not depend on how the host cuts its blocks.
+  const int hop = std::max(1, state.tracker.hop_input_samples());
   for (int done = 0; done < num_samples;) {
-    const int n = std::min(num_samples - done, kTransformControlChunk - state.control_phase);
-    process_transform_chunk(state, config, carrier, done, n);
-    state.control_phase = (state.control_phase + n) % kTransformControlChunk;
+    if (state.control_phase == 0) {
+      // The first segment is cut short so every later one ends on an emission.
+      const int lead = state.tracker.decision_lag_samples() % hop;
+      state.segment_length = state.segment_length == 0 && lead > 0 ? lead : hop;
+      begin_transform_segment(state, state.segment_length);
+    }
+    const int length = state.segment_length;
+    const int n = std::min(num_samples - done, length - state.control_phase);
+    process_transform_chunk(state, config, carrier, done, n, length);
+    state.control_phase = (state.control_phase + n) % length;
     done += n;
   }
 }
 
-void RealtimeVoiceChanger::process_transform_chunk(ChannelState& state,
-                                                   const RealtimeVoiceChangerConfig& config,
-                                                   const float* carrier, int offset,
-                                                   int num_samples) noexcept {
-  float* x = scratch_.data() + offset;
-  if (carrier != nullptr) carrier += offset;
-  // The tracker, the shifter and the vocoder all keep history; keep a non-finite value out. The
-  // substitution is reported for the block, and the stages need no reset: none of them saw it.
-  for (int i = 0; i < num_samples; ++i) {
-    if (!std::isfinite(x[i])) {
-      x[i] = 0.0f;
-      state.voice_input_substituted = true;
-    }
-  }
-  const int estimates = state.tracker.process(x, num_samples, state.estimates.data(),
-                                              static_cast<int>(state.estimates.size()));
-  state.shifter.push_estimates(state.estimates.data(), estimates);
-  const VoiceTargets targets = state.targets.update(state.estimates.data(), estimates, num_samples);
+void RealtimeVoiceChanger::begin_transform_segment(ChannelState& state, int length) noexcept {
+  state.shifter.push_estimates(state.estimates.data(), state.pending_estimates);
+  const VoiceTargets targets =
+      state.targets.update(state.estimates.data(), state.pending_estimates, length);
+  state.pending_estimates = 0;
   const int count = std::clamp(targets.count, 0, kMaxVoices);
   // A harmony voice that left the count keeps rendering until its gain has faded out, so its
   // removal is a decay rather than a step.
@@ -269,10 +261,45 @@ void RealtimeVoiceChanger::process_transform_chunk(ChannelState& state,
     rendered.voices[v].active = true;
     rendered.count = v + 1;
   }
+  for (int v = 0; v < kMaxVoices; ++v) {
+    const VoiceTarget& target = targets.voices[v];
+    state.voice_gain[static_cast<size_t>(v)].set_target(v < count && target.active ? target.gain
+                                                                                   : 0.0f);
+  }
+  for (int h = 0; h < kMaxHarmonyVoices; ++h) {
+    if (h + 1 < count) {
+      state.harmony_delay_samples[static_cast<size_t>(h)].set_target(static_cast<float>(
+          static_cast<double>(targets.voices[h + 1].delay_ms) * 1e-3 * sample_rate_));
+    }
+  }
+  state.segment_targets = targets;
+  state.rendered_targets = rendered;
+}
+
+void RealtimeVoiceChanger::process_transform_chunk(ChannelState& state,
+                                                   const RealtimeVoiceChangerConfig& config,
+                                                   const float* carrier, int offset,
+                                                   int num_samples, int length) noexcept {
+  float* x = scratch_.data() + offset;
+  if (carrier != nullptr) carrier += offset;
+  // The tracker, the shifter and the vocoder all keep history; keep a non-finite value out. The
+  // substitution is reported for the block, and the stages need no reset: none of them saw it.
+  for (int i = 0; i < num_samples; ++i) {
+    if (!std::isfinite(x[i])) {
+      x[i] = 0.0f;
+      state.voice_input_substituted = true;
+    }
+  }
+  // Held back until the next segment starts, so no estimate arrives at a host cut.
+  const int capacity = static_cast<int>(state.estimates.size()) - state.pending_estimates;
+  state.pending_estimates += state.tracker.process(
+      x, num_samples, state.estimates.data() + state.pending_estimates, capacity);
+  const VoiceTargets& targets = state.segment_targets;
+  const VoiceTargets& rendered = state.rendered_targets;
   float* voice_out[kMaxVoices];
   for (int v = 0; v < kMaxVoices; ++v)
     voice_out[v] = state.voice_out[static_cast<size_t>(v)].data() + offset;
-  state.shifter.process(x, rendered, voice_out, num_samples);
+  state.shifter.process(x, rendered, voice_out, num_samples, state.control_phase, length);
 
   const bool vocoder_on = config.vocoder.enabled;
   if (vocoder_on && !state.vocoder_running) {
@@ -285,18 +312,6 @@ void RealtimeVoiceChanger::process_transform_chunk(ChannelState& state,
     const float* external =
         config.vocoder.carrier_source == VocoderCarrierSource::External ? carrier : nullptr;
     state.vocoder.process(x, external, targets, state.vocoder_out.data() + offset, num_samples);
-  }
-
-  for (int v = 0; v < kMaxVoices; ++v) {
-    const VoiceTarget& target = targets.voices[v];
-    state.voice_gain[static_cast<size_t>(v)].set_target(v < count && target.active ? target.gain
-                                                                                   : 0.0f);
-  }
-  for (int h = 0; h < kMaxHarmonyVoices; ++h) {
-    if (h + 1 < count) {
-      state.harmony_delay_samples[static_cast<size_t>(h)].set_target(static_cast<float>(
-          static_cast<double>(targets.voices[h + 1].delay_ms) * 1e-3 * sample_rate_));
-    }
   }
 
   for (int k = 0; k < num_samples; ++k) {
@@ -536,6 +551,10 @@ bool RealtimeVoiceChanger::discard_non_finite_state(ChannelState& state) noexcep
     state.tracker.reset();
     state.shifter.reset();
     state.vocoder.reset();
+    // The segment grid restarts with the tracker's sample count.
+    state.control_phase = 0;
+    state.segment_length = 0;
+    state.pending_estimates = 0;
     discarded = true;
   }
   return discarded;

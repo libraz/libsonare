@@ -595,6 +595,10 @@ void RealtimeVoiceChanger::reset_channel(ChannelState& state) {
   state.vocoder_compensation.clear();
   state.vocoder_running = false;
   state.control_phase = 0;
+  state.pending_estimates = 0;
+  state.segment_length = 0;
+  state.segment_targets = {};
+  state.rendered_targets = {};
   state.held_voice = {};
   state.transform_substituted = false;
   state.voice_input_substituted = false;

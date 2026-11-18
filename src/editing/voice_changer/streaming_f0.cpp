@@ -82,9 +82,8 @@ void StreamingF0Tracker::prepare(double sr, int max_block, float f0_min_hz) {
   tau_max_ = static_cast<int>(std::ceil(analysis_rate_ / static_cast<double>(f0_min_hz)));
   tau_min_ = std::max(2, static_cast<int>(std::floor(analysis_rate_ / kMaxF0Hz)));
   tau_max_ = std::max(tau_max_, tau_min_ + 2);
-  // The window's later half (T_max) plus the FIR group delay, rounded up to the hop grid.
-  const int needed = kDecimation * tau_max_ + kGroupDelayInput;
-  decision_lag_ = (needed + hop_input_ - 1) / hop_input_ * hop_input_;
+  // The window's later half (T_max) plus the FIR group delay; centres stay on the hop grid.
+  decision_lag_ = kDecimation * tau_max_ + kGroupDelayInput;
 
   const std::vector<float> taps = rt::design_windowed_sinc_lowpass(kDecimationTaps, kDecimation);
   fir_taps_.resize(taps.size());
@@ -144,7 +143,7 @@ int StreamingF0Tracker::process(const float* in, int n, F0Estimate* out, int max
     }
     fir_pos_ = fir_pos_ + 1 == taps ? 0 : fir_pos_ + 1;
     ++input_count_;
-    if (input_count_ % hop_input_ == 0 && input_count_ >= decision_lag_) {
+    if (input_count_ >= decision_lag_ && (input_count_ - decision_lag_) % hop_input_ == 0) {
       const F0Estimate estimate = analyse(input_count_ - decision_lag_);
       if (out != nullptr && written < max_out) out[written++] = estimate;
     }
