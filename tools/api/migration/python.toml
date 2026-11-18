@@ -9892,105 +9892,105 @@ rule = "num-channels"
 [[entry]]
 kind = "class"
 old = "SonareEngineMarker"
-removed = "a ctypes mirror of the C struct, never part of the API; use the dataclass the facade returns"
+removed = "a ctypes mirror of the C struct, never part of the API; use the dataclass the libsonare function returns"
 domain = "engine"
 rule = "python-public-names"
 
 [[entry]]
 kind = "class"
 old = "SonareEngineMetronomeConfig"
-removed = "a ctypes mirror of the C struct, never part of the API; use the dataclass the facade returns"
+removed = "a ctypes mirror of the C struct, never part of the API; use the dataclass the libsonare function returns"
 domain = "engine"
 rule = "python-public-names"
 
 [[entry]]
 kind = "class"
 old = "SonareEngineMidiClipSchedule"
-removed = "a ctypes mirror of the C struct, never part of the API; use the dataclass the facade returns"
+removed = "a ctypes mirror of the C struct, never part of the API; use the dataclass the libsonare function returns"
 domain = "engine"
 rule = "python-public-names"
 
 [[entry]]
 kind = "class"
 old = "SonareEngineMidiEvent"
-removed = "a ctypes mirror of the C struct, never part of the API; use the dataclass the facade returns"
+removed = "a ctypes mirror of the C struct, never part of the API; use the dataclass the libsonare function returns"
 domain = "engine"
 rule = "python-public-names"
 
 [[entry]]
 kind = "class"
 old = "SonareExternalMidiEvent"
-removed = "a ctypes mirror of the C struct, never part of the API; use the dataclass the facade returns"
+removed = "a ctypes mirror of the C struct, never part of the API; use the dataclass the libsonare function returns"
 domain = "engine"
 rule = "python-public-names"
 
 [[entry]]
 kind = "class"
 old = "SonareParameterInfo"
-removed = "a ctypes mirror of the C struct, never part of the API; use the dataclass the facade returns"
+removed = "a ctypes mirror of the C struct, never part of the API; use the dataclass the libsonare function returns"
 domain = "engine"
 rule = "python-public-names"
 
 [[entry]]
 kind = "class"
 old = "SonareProjectTempoSegment"
-removed = "a ctypes mirror of the C struct, never part of the API; use the dataclass the facade returns"
+removed = "a ctypes mirror of the C struct, never part of the API; use the dataclass the libsonare function returns"
 domain = "project"
 rule = "python-public-names"
 
 [[entry]]
 kind = "class"
 old = "SonareProjectTimeSignatureSegment"
-removed = "a ctypes mirror of the C struct, never part of the API; use the dataclass the facade returns"
+removed = "a ctypes mirror of the C struct, never part of the API; use the dataclass the libsonare function returns"
 domain = "project"
 rule = "python-public-names"
 
 [[entry]]
 kind = "class"
 old = "SonareTransportState"
-removed = "a ctypes mirror of the C struct, never part of the API; use the dataclass the facade returns"
+removed = "a ctypes mirror of the C struct, never part of the API; use the dataclass the libsonare function returns"
 domain = "engine"
 rule = "python-public-names"
 
 [[entry]]
 kind = "class"
 old = "SonareStreamConfig"
-removed = "a ctypes mirror of the C struct, never part of the API; use the dataclass the facade returns"
+removed = "a ctypes mirror of the C struct, never part of the API; use the dataclass the libsonare function returns"
 domain = "analysis"
 rule = "python-public-names"
 
 [[entry]]
 kind = "class"
 old = "SonareStreamFrames"
-removed = "a ctypes mirror of the C struct, never part of the API; use the dataclass the facade returns"
+removed = "a ctypes mirror of the C struct, never part of the API; use the dataclass the libsonare function returns"
 domain = "analysis"
 rule = "python-public-names"
 
 [[entry]]
 kind = "class"
 old = "SonareStreamFramesI16"
-removed = "a ctypes mirror of the C struct, never part of the API; use the dataclass the facade returns"
+removed = "a ctypes mirror of the C struct, never part of the API; use the dataclass the libsonare function returns"
 domain = "analysis"
 rule = "python-public-names"
 
 [[entry]]
 kind = "class"
 old = "SonareStreamFramesU8"
-removed = "a ctypes mirror of the C struct, never part of the API; use the dataclass the facade returns"
+removed = "a ctypes mirror of the C struct, never part of the API; use the dataclass the libsonare function returns"
 domain = "analysis"
 rule = "python-public-names"
 
 [[entry]]
 kind = "class"
 old = "SonareStreamQuantizeConfig"
-removed = "a ctypes mirror of the C struct, never part of the API; use the dataclass the facade returns"
+removed = "a ctypes mirror of the C struct, never part of the API; use the dataclass the libsonare function returns"
 domain = "analysis"
 rule = "python-public-names"
 
 [[entry]]
 kind = "class"
 old = "SonareStreamStats"
-removed = "a ctypes mirror of the C struct, never part of the API; use the dataclass the facade returns"
+removed = "a ctypes mirror of the C struct, never part of the API; use the dataclass the libsonare function returns"
 domain = "analysis"
 rule = "python-public-names"
 

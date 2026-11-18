@@ -304,7 +304,7 @@ const v = magnitude.data[bin * magnitude.cols + frame];
 [[rule]]
 slug = "no-internal-types"
 title = "Public types never expose Wasm* names"
-summary = "WASM public declarations no longer mention `Wasm*` types or `SonareModule`; public types are declared in `public_types_*.ts` and converted by the facade. The `moduleFactory` option of `init()` is typed as the opaque `SonareModuleHandle`."
+summary = "WASM public declarations no longer mention `Wasm*` types or `SonareModule`; every public function takes and returns those public types. The `moduleFactory` option of `init()` is typed as the opaque `SonareModuleHandle`."
 [[rule.example]]
 surface = "wasm"
 before = '''
@@ -935,6 +935,14 @@ const v = vocalEditAbiVersion();
 slug = "worklet-scope"
 title = "The ./worklet entry exports only the documented surface"
 summary = "`@libraz/libsonare/worklet` keeps the `register*` functions, node and engine classes with their option types, the documented ring-buffer helpers, and the protocol version and record-size constants. Wire-protocol internals (frame codecs, record layouts, message types, `*Scratch*` helpers) move to `src/internal/` and are not exported."
+[[rule.example]]
+surface = "wasm"
+before = '''
+import { opfsClipPageWorkerSource } from '@libraz/libsonare';
+'''
+after = '''
+import { opfsClipPageWorkerSource } from '@libraz/libsonare/worklet';
+'''
 
 [[rule]]
 slug = "engine-vocabulary"
@@ -980,7 +988,7 @@ sonare project export-smf project.json -o song.mid
 [[rule]]
 slug = "cli-front-end-parity"
 title = "Both CLIs share command names, flags, defaults and failures"
-summary = "The native and Python front-ends use the same command names, flags and defaults, and exit 0 on success, 2 for a usage error, 3 for an invalid argument value and 11 when cancelled. With `--json` a failure prints `{\"ok\":false,\"error\":...,\"code\":\"<error code name>\",\"exit_code\":n}`; `system-info` stays separate from `doctor`. CLI `--json` result keys are snake_case; a document passed through (`normalized_json`, a config echoed back) keeps its own camelCase keys inside the string."
+summary = "The native and Python front-ends use the same command names, flags and defaults, and exit 0 on success, 2 for a usage error, 3 for an invalid argument value and 11 when cancelled. With `--json` a failure prints `{\"ok\":false,\"error\":...,\"code\":\"<error code name>\",\"exit_code\":n}`; `system-info` stays separate from `doctor`. CLI `--json` result keys are snake_case; a library document printed as it is keeps its own camelCase keys: the `scene` of `suggest-mix` (read back by `mix --scene`), the scene `mixing-preset` prints, the preset `voice-preset` prints, and the keys inside `chain_config` from `mastering-suggest` (read back by `mastering --chain-config`)."
 [[rule.example]]
 surface = "cli"
 before = '''
@@ -1053,3 +1061,33 @@ from libsonare import ProgressCallback
 slug = "individual"
 title = "Other individual changes"
 summary = "Changes specific to a single symbol that follow no shared convention are listed in the tables below."
+[[rule.example]]
+surface = "wasm"
+before = '''
+// 1.x: cut boundaries stayed where the intervals put them unless alignZeros was passed.
+const out = remix({ samples, sampleRate: 44100, intervals });
+'''
+after = '''
+// 2.0.0: alignZeros defaults to true, as remixAlignedIntervals already did; pass false for the 1.x cut.
+const out = remix({ samples, sampleRate: 44100, intervals, alignZeros: false });
+'''
+[[rule.example]]
+surface = "wasm"
+before = '''
+const id = voiceCharacterPresetId(ordinal);
+if (id === null) { /* unknown ordinal */ }
+'''
+after = '''
+// An unknown ordinal throws RangeError instead of returning null.
+const id = voiceCharacterPresetId(ordinal);
+'''
+[[rule.example]]
+surface = "python"
+before = '''
+segments = note_segments(f0_hz, voiced_prob, frame_rate)
+'''
+after = '''
+segments = note_segments(f0_hz, frame_rate, voiced_prob=voiced_prob)
+# or, from pitch_pyin's per-frame flags, which win when both are given:
+segments = note_segments(f0_hz, frame_rate, voiced=voiced_flag)
+'''

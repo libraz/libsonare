@@ -1,10 +1,11 @@
 """Render UPGRADING.md text from the migration ledgers and rules.toml.
 
-One section per rule (in rules.toml order) that at least one ledger entry cites:
-its title, summary and before/after examples, then one ``| 1.x | 2.0.0 |`` table
-per surface (and per WASM entry) listing each old name with its new name,
-"removed", or the change a caller must make. Entries citing ``individual`` are
-rendered last under that rule's own heading. Output is deterministic.
+One section per rule (in rules.toml order) that a ledger entry cites or that
+carries an example: its title, summary and before/after examples, then one
+``| 1.x | 2.0.0 |`` table per surface (and per WASM entry) listing each old name
+with its new name, "removed", or the change a caller must make. Entries citing
+``individual`` are rendered last under that rule's own heading. Output is
+deterministic.
 """
 
 from __future__ import annotations
@@ -21,10 +22,23 @@ DEFAULT_RULES = HERE / "migration" / "rules.toml"
 LEDGER_SURFACES = ("wasm", "node", "python", "c", "cli")
 SURFACE_TITLES = {"wasm": "WASM", "node": "Node", "python": "Python", "c": "C", "cli": "CLI"}
 FENCES = {"wasm": "ts", "node": "ts", "python": "python", "c": "c", "cli": "sh"}
-INTRO = (
-    "This guide lists every public name 2.0.0 renames, removes or reshapes, grouped by the "
-    "convention that motivated the change."
-)
+TITLE = "# Upgrading from 1.10 to 2.0.0"
+INTRO = [
+    "2.0.0 changes the public interface of every binding, the C ABI and both command-line "
+    "front-ends. No 1.10 spelling is kept as an alias: a renamed function, argument, field, "
+    "flag or token is refused under its old name, and a JSON document written by 1.10 that "
+    "uses a removed key or token is refused with `InvalidFormat` naming the current spelling. "
+    "Nothing converts an old document on load.",
+    "The changes are grouped by the convention behind them. Each section states the "
+    "convention, shows a before and after where the change does not show in a signature, and "
+    "then lists every affected name, one table per surface. WASM tables are split by package "
+    "entry point.",
+    "The examples and tables write 1.10 as 1.x. In each table row the left column is the 1.x "
+    "name and the right column is one of:",
+    "- the 2.0.0 name, when only the name changed;\n"
+    "- `removed:` and what to use instead, or `removed, no replacement:` and why;\n"
+    "- the change a caller has to make, when the name stays.",
+]
 
 
 def _load(path: Path) -> dict:
@@ -61,10 +75,13 @@ def render(ledger_dir: Path, rules_file: Path) -> str:
             entries.setdefault(e.get("rule", ""), []).append((s, e))
     ordered = [r for r in rules if r.get("slug") != "individual"]
     ordered += [r for r in rules if r.get("slug") == "individual"]
-    out = ["# Upgrading to 2.0.0", "", INTRO, ""]
+    out = [TITLE, ""]
+    for paragraph in INTRO:
+        out += [paragraph, ""]
     for rule in ordered:
         rows = entries.get(rule.get("slug"), [])
-        if not rows:
+        # A rule no ledger entry cites still breaks callers when it shows a before and after.
+        if not rows and not rule.get("example"):
             continue
         out += [
             f"## {rule.get('title', rule.get('slug'))}",

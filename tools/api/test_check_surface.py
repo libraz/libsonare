@@ -1995,6 +1995,19 @@ class UpgradeNotes(unittest.TestCase):
         e = {"old": "a", "changed": "takes an object", "to": "b"}
         self.assertEqual(upgrade_notes._target(e), "`b`: takes an object")
 
+    def test_rule_no_entry_cites_renders_when_it_has_an_example(self):
+        base = (TD / "rules.toml").read_text()
+        anchor = 'summary = "Summary of teardown."\n'
+        self.assertIn(anchor, base)
+        example = '[[rule.example]]\nsurface = "wasm"\nbefore = "old()"\nafter = "new()"\n'
+        with tempfile.TemporaryDirectory() as tmp:
+            rules = Path(tmp) / "rules.toml"
+            rules.write_text(base.replace(anchor, anchor + example), encoding="utf-8")
+            text = upgrade_notes.render(TD / "ledgers", rules)
+        self.assertIn("## Title of teardown\n\nSummary of teardown.", text)
+        self.assertIn("```ts\nold()\n```", text)
+        self.assertNotIn("## Title of async-teardown", text)
+
     def test_entry_order_does_not_change_output(self):
         with tempfile.TemporaryDirectory() as tmp:
             d = Path(tmp)
