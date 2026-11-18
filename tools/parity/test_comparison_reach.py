@@ -233,10 +233,6 @@ def _main() -> int:
     return 1 if failures else 0
 
 
-if __name__ == "__main__":
-    raise SystemExit(_main())
-
-
 def test_a_config_struct_before_the_itemized_params_is_the_options_bag() -> None:
     assert compare._order_verdict("k", ["config", "ops"], ["ops"]) == compare.AGREED
     assert compare._order_verdict("k", ["config", "ops", "gain"], ["gain"]) == compare.DIVERGED
@@ -251,3 +247,7 @@ def test_a_count_after_its_array_is_derived_but_matrix_dimensions_are_not() -> N
     assert "frames" in structural("const float* samples, size_t frames, int channels")
     matrix = structural("const float* features, int n_features, int n_frames, int width")
     assert "n_features" not in matrix and "n_frames" not in matrix
+
+
+if __name__ == "__main__":
+    raise SystemExit(_main())
