@@ -330,6 +330,9 @@ const UNSCANNED_SHARED_READERS: ReadonlyMap<string, string> = new Map([
   ['RequiredDoubleProperty', 'Reads a double, and takes an out-pointer rather than a fallback.'],
   ['RequiredFloatProperty', 'Reads a float, and takes an out-pointer rather than a fallback.'],
   ['RequiredStringProperty', 'Reads a string, and takes an out-pointer rather than a fallback.'],
+  ['DbfsAsLinearProperty', 'Reads a float in dBFS; truncation is not in play.'],
+  ['XyzProperty', 'Reads three floats; truncation is not in play.'],
+  ['RefuseUnknownKeys', 'Checks key names and reads no value, so it has no fallback at all.'],
 ]);
 
 const NO_FLOOR = { tagged: 0, sites: 0 };
