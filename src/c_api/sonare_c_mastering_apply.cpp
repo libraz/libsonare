@@ -440,25 +440,25 @@ const char* sonare_mastering_insert_param_names(const char* insert) {
   SONARE_C_CATCH_RETURN(nullptr)
 }
 
-SonareError sonare_mastering_insert_param_info(const char* name, char** out_json) {
+SonareError sonare_mastering_insert_param_info(const char* insert, char** out_json) {
   SONARE_C_API_ENTRY;
   if (!begin_string_output(out_json)) return SONARE_ERROR_INVALID_PARAMETER;
-  if (name == nullptr) {
-    set_last_error(SONARE_ERROR_INVALID_PARAMETER, "name must not be NULL");
+  if (insert == nullptr) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER, "insert must not be NULL");
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   SONARE_C_TRY
-  *out_json = copy_string(sonare::mastering::api::insert_param_info_json(name));
+  *out_json = copy_string(sonare::mastering::api::insert_param_info_json(insert));
   return SONARE_OK;
   SONARE_C_CATCH
 }
 
-SonareError sonare_mastering_insert_param_info_at_rate(const char* name, int sample_rate,
+SonareError sonare_mastering_insert_param_info_at_rate(const char* insert, int sample_rate,
                                                        char** out_json) {
   SONARE_C_API_ENTRY;
   if (!begin_string_output(out_json)) return SONARE_ERROR_INVALID_PARAMETER;
-  if (name == nullptr) {
-    set_last_error(SONARE_ERROR_INVALID_PARAMETER, "name must not be NULL");
+  if (insert == nullptr) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER, "insert must not be NULL");
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   SONARE_C_TRY
@@ -468,12 +468,12 @@ SonareError sonare_mastering_insert_param_info_at_rate(const char* name, int sam
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   *out_json =
-      copy_string(sonare::mastering::api::insert_param_info_json_at_rate(name, sample_rate));
+      copy_string(sonare::mastering::api::insert_param_info_json_at_rate(insert, sample_rate));
   return SONARE_OK;
   SONARE_C_CATCH
 }
 
-SonareError sonare_mastering_insert_timing(const char* name, const char* params, int sample_rate,
+SonareError sonare_mastering_insert_timing(const char* insert, const char* params, int sample_rate,
                                            int* out_latency_samples, int* out_tail_samples) {
   SONARE_C_API_ENTRY;
   SONARE_C_TRY
@@ -491,7 +491,7 @@ SonareError sonare_mastering_insert_timing(const char* name, const char* params,
   }
 
   const auto timing = sonare::mastering::api::insert_timing(
-      name != nullptr ? name : "", params != nullptr ? params : "{}", sample_rate);
+      insert != nullptr ? insert : "", params != nullptr ? params : "{}", sample_rate);
   *out_latency_samples = timing.latency_samples;
   *out_tail_samples = timing.tail_samples;
   return SONARE_OK;

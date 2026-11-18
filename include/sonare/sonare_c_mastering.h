@@ -492,7 +492,7 @@ const char* sonare_mastering_insert_param_names(const char* insert);
 ///        construction reads, plus every realtime automation target.
 /// @details A JSON array
 ///   `[{"name","id","rtSafe","type","min","max","minExclusive","maxExclusive","maxRelativeTo","default","unit","uiMin","uiMax","scale","choices","slot","dependsOn","coupledWith"},
-///   ...]` (UTF-8), `[]` for an unknown @p name.
+///   ...]` (UTF-8), `[]` for an unknown @p insert.
 ///
 ///   Entries come in two runs. The first lists the processor's realtime
 ///   automation targets in id order: `id` is the integer used by @ref
@@ -581,11 +581,11 @@ const char* sonare_mastering_insert_param_names(const char* insert);
 ///   `min` and `max` are measured with them at their defaults. All of these describe
 ///   what construction accepts; the realtime parameter path clamps instead of
 ///   refusing.
-/// @param name Insert processor name (see @ref sonare_mastering_insert_names);
+/// @param insert Insert processor name (see @ref sonare_mastering_insert_names);
 ///   NULL is refused with SONARE_ERROR_INVALID_PARAMETER.
 /// @param[out] out_json Receives the document; the caller releases it with
 ///   @ref sonare_free_string. Set to NULL on failure.
-SonareError sonare_mastering_insert_param_info(const char* name, char** out_json);
+SonareError sonare_mastering_insert_param_info(const char* insert, char** out_json);
 /// @brief @ref sonare_mastering_insert_param_info with the rate-following ceilings
 ///        resolved for one host rate.
 /// @details Identical to the rate-less query except that every key whose
@@ -596,15 +596,15 @@ SonareError sonare_mastering_insert_param_info(const char* name, char** out_json
 ///   an EQ band frequency reaches 48000 for a 96000 Hz host; the rate-less query
 ///   keeps the 24000 cap of the 48 kHz probe and does not depend on earlier
 ///   calls here.
-/// @param name Insert processor name (see @ref sonare_mastering_insert_names);
+/// @param insert Insert processor name (see @ref sonare_mastering_insert_names);
 ///   NULL is refused with SONARE_ERROR_INVALID_PARAMETER.
 /// @param sample_rate Host rate in Hz, within the range the other sample-rate
 ///   arguments of this header accept; outside it the call fails with
 ///   SONARE_ERROR_INVALID_PARAMETER.
 /// @param[out] out_json Receives a document in the layout of
-///   @ref sonare_mastering_insert_param_info (`[]` for an unknown @p name); the
+///   @ref sonare_mastering_insert_param_info (`[]` for an unknown @p insert); the
 ///   caller releases it with @ref sonare_free_string. Set to NULL on failure.
-SonareError sonare_mastering_insert_param_info_at_rate(const char* name, int sample_rate,
+SonareError sonare_mastering_insert_param_info_at_rate(const char* insert, int sample_rate,
                                                        char** out_json);
 /// @brief Latency and tail of one insert built from @p params and prepared at
 ///        @p sample_rate.
@@ -621,7 +621,7 @@ SonareError sonare_mastering_insert_param_info_at_rate(const char* name, int sam
 ///   A key the insert does not read is refused rather than ignored, because an
 ///   ignored key would answer for a configuration the caller did not ask for.
 ///   Both outputs are zeroed on entry and written only on success.
-/// @param name Insert processor name (see @ref sonare_mastering_insert_names).
+/// @param insert Insert processor name (see @ref sonare_mastering_insert_names).
 /// @param params JSON object of flat parameter values, keyed as in @ref
 ///   sonare_mastering_insert_param_info. NULL is the empty object.
 /// @param sample_rate Rate the insert is prepared at.
@@ -629,10 +629,10 @@ SonareError sonare_mastering_insert_param_info_at_rate(const char* name, int sam
 /// @param out_tail_samples Receives the tail in samples at @p sample_rate: an upper bound on
 ///   the time after the last input until the insert's response to a unit impulse stays
 ///   below 1e-5 (-100 dB re the unit input). It may exceed the measured time, never fall short.
-/// @return SONARE_ERROR_INVALID_PARAMETER for an unknown @p name, a key the
+/// @return SONARE_ERROR_INVALID_PARAMETER for an unknown @p insert, a key the
 ///   insert does not read, a value its construction refuses, a sample rate
 ///   outside the supported range, or a NULL output pointer.
-SonareError sonare_mastering_insert_timing(const char* name, const char* params, int sample_rate,
+SonareError sonare_mastering_insert_timing(const char* insert, const char* params, int sample_rate,
                                            int* out_latency_samples, int* out_tail_samples);
 
 /// @brief The number an enum-valued mastering parameter carries for one of its names.
