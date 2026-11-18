@@ -572,8 +572,10 @@ def _validate_case_payload(
                     report.append(
                         (
                             "fail",
-                            f"{label}.diagnostics[{index}].target_id: expected a positive id "
-                            f"or no key, got {target!r}",
+                            (
+                                f"{label}.diagnostics[{index}].target_id: expected a positive id "
+                                f"or no key, got {target!r}"
+                            ),
                         )
                     )
         if case_id == "clean" and (

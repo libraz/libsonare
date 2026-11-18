@@ -10,6 +10,7 @@ import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
 from pathlib import Path
+from typing import ClassVar
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -1412,7 +1413,12 @@ class CliContractSelfTest(unittest.TestCase):
 class ProjectCompileDiagnosticVariantTest(unittest.TestCase):
     """A diagnostic with no target omits ``target_id`` rather than writing 0 or null."""
 
-    FULL = {"code": "integer", "severity": "integer", "target_id": "integer", "message": "string"}
+    FULL: ClassVar[dict[str, str]] = {
+        "code": "integer",
+        "severity": "integer",
+        "target_id": "integer",
+        "message": "string",
+    }
 
     @classmethod
     def setUpClass(cls) -> None:
