@@ -13516,7 +13516,7 @@ rule = "type-names"
 [[entry]]
 kind = "type"
 old = "MixSceneInsert"
-changed = "discriminated union over MasteringInsertName: {slot, processor: P, params: MasteringProcessorParams<P>, sidechainKey?}"
+changed = "discriminated union over MasteringInsertName: {slot: 'pre' | 'post', processor: P, params: MasteringProcessorParams<P>, sidechainKey?}"
 domain = "mastering"
 rule = "individual"
 test = "bindings/node/tests/surface/mastering-mixing.test.ts::MixSceneInsert"

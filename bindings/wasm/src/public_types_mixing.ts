@@ -221,7 +221,9 @@ export interface MixAssistantTrack {
  */
 export type MixSceneInsert = {
   [P in MasteringInsertName]: {
-    slot: string;
+    /** Where the insert sits relative to the fader: `'pre'` before it, `'post'` after it. */
+    slot: 'pre' | 'post';
+    /** Processor catalog name; selects the `params` keys. */
     processor: P;
     /** Parameters keyed by the names the processor's catalog entry declares. */
     params: MasteringProcessorParams<P>;

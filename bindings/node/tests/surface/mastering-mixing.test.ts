@@ -318,6 +318,7 @@ describe('mastering mixing surface', () => {
     it('MixSceneInsert is discriminated by processor', () => {
       type Insert = MixSceneStrip['inserts'][number];
       expectTypeOf<Insert['processor']>().toBeString();
+      expectTypeOf<Insert['slot']>().toEqualTypeOf<'pre' | 'post'>();
       expectTypeOf<Insert>().toHaveProperty('params');
     });
 

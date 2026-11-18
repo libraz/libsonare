@@ -20,6 +20,8 @@ names = [
   "detect_boundaries(threshold)",
   "boundaries --threshold",
   "SectionOptions.threshold",
+  "AnalyzeSectionsOptions.threshold",
+  "AnalyzeSectionsRequest.threshold",
   "analyze_sections(threshold)",
   "sections --threshold",
 ]
