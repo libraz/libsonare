@@ -1563,6 +1563,18 @@ def _enum_drift(indexed, allow, rep: Report) -> None:
             )
 
 
+# Facade tokens that name a core enum member differently: the C ABI and every facade
+# spell NormType::Inf as `max` (SONARE_NORM_MAX), and the rest by their own names.
+_CORE_ENUM_TOKENS = {
+    "NormType": {
+        "max": canonical_core_default("NormType::Inf"),
+        "l1": canonical_core_default("NormType::L1"),
+        "l2": canonical_core_default("NormType::L2"),
+        "power": canonical_core_default("NormType::Power"),
+    },
+}
+
+
 def _core_default_drift(
     indexed,
     core_configs: dict[str, CoreConfig],
@@ -1633,6 +1645,10 @@ def _core_default_drift(
                             "integer, which needs an enum value table to compare",
                         )
                         continue
+                    enum_name = core_def.split("::", 1)[0]
+                    facade_canon = _CORE_ENUM_TOKENS.get(enum_name, {}).get(
+                        facade_canon, facade_canon
+                    )
                     if facade_canon != canonical_core_default(core_def):
                         verdict = DIVERGED
                 elif canonical_default(p.default) != canonical_default(core_def):

@@ -340,5 +340,29 @@ def test_a_keyword_only_parameter_has_no_position() -> None:
     ]
 
 
+def _norm_findings(facade_default: str) -> list:
+    core = {
+        "vector_normalize": CoreConfig(
+            key="vector_normalize",
+            header="core.h",
+            name="normalize",
+            fields={"norm": "NormType::Inf"},
+        )
+    }
+    extractions = {
+        "c": _c("vector_normalize", "norm"),
+        "python": _facade("python", "vector_normalize", "norm", facade_default),
+    }
+    rep = compare.build_report(
+        extractions, allowlist_mod.Allowlist(), ["c", "python"], core_configs=core
+    )
+    return [f for f in rep.active() if f.category == "core_default"]
+
+
+def test_a_norm_token_reads_as_the_core_member_it_selects() -> None:
+    assert _norm_findings("'max'") == []
+    assert [f.key for f in _norm_findings("'l2'")] == ["vector_normalize"]
+
+
 if __name__ == "__main__":
     raise SystemExit(_main())
