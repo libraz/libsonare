@@ -432,6 +432,7 @@ class ConstructionRule(unittest.TestCase):
             sorted(f.key for f in verdict.violations),
             [
                 "python:AliasedOptions",
+                "python:AliasedText",
                 "python:BareMapping",
                 "python:BareOptions",
                 "python:Record",

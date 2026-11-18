@@ -336,10 +336,11 @@ def _python_document_aliases() -> set[str]:
 
 
 def _python_is_document(annotation: ast.expr | None, aliases: set[str]) -> bool:
-    """True when the annotation names a document alias, beside at most its JSON text and None.
+    """True when the annotation names a document alias, optionally beside None.
 
     A bare dict/Mapping annotation is not a document: it is the untyped option bag the
-    construction rule refuses, so only a declared package alias exempts.
+    construction rule refuses, so only a declared package alias exempts. JSON text is not
+    accepted beside it; text enters only through an entry named for it (``*_json``).
     """
     if annotation is None:
         return False
@@ -353,7 +354,7 @@ def _python_is_document(annotation: ast.expr | None, aliases: set[str]) -> bool:
             members.append(node)
     forms = [ast.unparse(m) for m in members]
     documents = [f for f in forms if f in aliases]
-    return bool(documents) and all(f in documents or f in ("str", "None") for f in forms)
+    return bool(documents) and all(f in documents or f == "None" for f in forms)
 
 
 def _python_init_params(path: Path, cls: str) -> tuple[list[str], list[str]] | None:
@@ -1191,7 +1192,7 @@ RULES: list[Rule] = [
         violation=_construction_violation,
         derive=_construction_records,
         pending={
-            "python:PlaybackRenderer": "annotate config with the playback config document alias",
+            "python:PlaybackRenderer": "annotate config with the playback config document alias, no JSON text",
             "python:StreamAnalyzer": "take the stream config as keyword arguments",
             "wasm:ClipPageStreamer": "take one config object holding the engine",
             "wasm:SonarePlaybackWorkletProcessor": "fold port into the options object",
