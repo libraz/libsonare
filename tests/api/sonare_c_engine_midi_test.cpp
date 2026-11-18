@@ -892,6 +892,27 @@ TEST_CASE("sonare_engine exposes live non-destructive MIDI FX inserts", "[c_api]
     REQUIRE(sonare_engine_set_midi_fx(engine, 5, config) == SONARE_ERROR_INVALID_FORMAT);
     CHECK(std::string(sonare_last_error_message()) == message);
   }
+
+  // Every other refusal names the key, or the list element, it is about.
+  const std::pair<const char*, const char*> out_of_domain[] = {
+      {"{\"chordIntervals\":[0,\"x\"]}", "chordIntervals[1] must be a whole number"},
+      {"{\"chordIntervals\":[]}", "chordIntervals must hold 1 to "},
+      {"{\"arpeggiatorIntervals\":[0,7.5],\"arpeggiatorStepPpq\":1}",
+       "arpeggiatorIntervals[1] must be a whole number"},
+      {"{\"arpeggiatorIntervals\":[0]}", "arpeggiatorStepPpq must be a positive PPQ length"},
+      {"{\"quantizePpq\":0}", "quantizePpq must be a positive PPQ length"},
+      {"{\"quantizePpq\":1,\"quantizeStrength\":2}", "quantizeStrength must be in [0, 1]"},
+      {"{\"velocityGamma\":0}", "velocityGamma must be > 0"},
+      {"{\"transposeSemitones\":1.5}", "transposeSemitones must be a whole number"},
+      {"{\"humanizeVelocity\":200}", "humanizeVelocity must be a whole number in [0, 127]"},
+      {"{\"seed\":-1}", "seed must be a non-negative whole number"},
+      {"[]", "MIDI-FX config must be a JSON object"},
+  };
+  for (const auto& [config, prefix] : out_of_domain) {
+    INFO(config);
+    REQUIRE(sonare_engine_set_midi_fx(engine, 5, config) == SONARE_ERROR_INVALID_FORMAT);
+    CHECK(std::string(sonare_last_error_message()).rfind(prefix, 0) == 0);
+  }
 #else
   REQUIRE(sonare_engine_set_midi_fx(engine, 5, "{\"transposeSemitones\":12}") ==
           SONARE_ERROR_NOT_SUPPORTED);
