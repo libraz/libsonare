@@ -6,7 +6,6 @@
 
 import { describe, expect, it } from 'vitest';
 import { registerSonareWorkletProcessor } from '../dist/worklet.js';
-import { mixSceneFromNative } from '../src/internal/mix_scene';
 
 interface Posted {
   type: string;
@@ -39,8 +38,8 @@ describe('mixer worklet embind initialization', () => {
       },
     });
     registerSonareWorkletProcessor('sonare-test-mixer');
-    const nativeScene = (await createModule()).mixingScenePresetJson('vocalReverbSend');
-    const sceneJson = JSON.stringify(mixSceneFromNative(JSON.parse(nativeScene)));
+    // The native document already spells its tokens the way the facade does.
+    const sceneJson = (await createModule()).mixingScenePresetJson('vocalReverbSend');
     const instance = new (registered.ctor as Ctor)({
       processorOptions: { sceneJson, sampleRate: 48000, maxBlockSize: 128, wasmBinary },
     });
