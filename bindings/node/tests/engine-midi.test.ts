@@ -265,7 +265,7 @@ describe('RealtimeEngine native binding', () => {
     const drained = engine.drainExternalMidi(64);
     expect(drained.length).toBe(25);
     for (const event of drained) {
-      expect(event.destinationId).toBe(0xffffffff);
+      expect(event).not.toHaveProperty('destinationId');
       expect(event.bytes.length).toBe(1);
     }
     expect(drained[0].bytes[0]).toBe(0xfa); // Start

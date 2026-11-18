@@ -157,6 +157,32 @@ describe('SonareRealtimeEngineNode', () => {
       }
     });
 
+    it('drains every-port clock bytes from the ring without a destinationId', async () => {
+      const port: { onmessage?: ((event: MessageEvent<unknown>) => void) | null } & Record<
+        string,
+        unknown
+      > = { postMessage: () => undefined };
+      const node = await SonareRealtimeEngineNode.create(fakeContext(), {
+        mode: 'sab',
+        nodeFactory: () => readyWorkletNode(port),
+      });
+      try {
+        const ring = node.externalMidiRing;
+        if (!ring) {
+          throw new Error('expected an external-MIDI ring');
+        }
+        // The ring keeps the C ABI's every-port destination as its wire value.
+        expect(pushSonareExternalMidiRingBuffer(ring, 0xffffffff, 32, 0x000000f8, 1)).toBe(true);
+        expect(pushSonareExternalMidiRingBuffer(ring, 4, 48, 0x00003c80, 3)).toBe(true);
+        const [clock, note] = node.pollMidiOut();
+        expect(clock).toEqual({ renderFrame: 32, bytes: Uint8Array.of(0xf8) });
+        expect(clock).not.toHaveProperty('destinationId');
+        expect(note.destinationId).toBe(4);
+      } finally {
+        node.destroy();
+      }
+    });
+
     it('delivers an instrument change made during playback at once, ahead of the MIDI that follows it', async () => {
       const posted: unknown[] = [];
       const port: { onmessage?: ((event: MessageEvent<unknown>) => void) | null } & Record<

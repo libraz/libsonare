@@ -74,8 +74,8 @@ export type EngineGraphMix = 'replace' | 'add';
 
 /** One external-MIDI event drained from the engine, lowered to MIDI 1.0 bytes. */
 export interface ExternalMidiEvent {
-  /** Originating track destination, or `0xFFFFFFFF` for clock and transport bytes meant for every port. */
-  destinationId: number;
+  /** Originating track destination. Absent on clock and transport bytes, which are meant for every port. */
+  destinationId?: number;
   /** Absolute engine frame at which the event fires, never an offset within a block. */
   renderFrame: number;
   /** MIDI 1.0 status and data bytes (1 to 3). */

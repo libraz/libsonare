@@ -1,5 +1,6 @@
 import { ErrorCode, SonareError } from '../errors.js';
 import type { EngineCaptureStatus, EngineTransportState } from '../index.js';
+import { externalMidiEvent } from '../internal/external_midi.js';
 import { failureFromPayload, isFailurePayload } from '../internal/failure_payload.js';
 import { assertHandleLive, releasedHandleError } from '../internal/handle_guard.js';
 import type {
@@ -731,11 +732,7 @@ export class SonareRealtimeEngineNode {
       for (let index = 0; index < event.byteCount; index++) {
         bytes[index] = (event.byteWord >>> (8 * index)) & 0xff;
       }
-      return {
-        destinationId: event.destinationId,
-        renderFrame: event.renderFrame,
-        bytes,
-      };
+      return externalMidiEvent(event.destinationId, event.renderFrame, bytes);
     });
     if (events.length > 0) {
       this.emitMidiOut(events);

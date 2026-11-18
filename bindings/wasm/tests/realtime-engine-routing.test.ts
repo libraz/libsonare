@@ -1113,9 +1113,9 @@ describe('Sonare WASM Module', () => {
       engine.process([new Float32Array(2400), new Float32Array(2400)]);
       const events = engine.drainExternalMidi(256);
       expect(events.length).toBeGreaterThan(0);
-      // All transport/clock bytes are tagged with the transport sentinel.
+      // Transport/clock bytes are meant for every port, so they carry no destination.
       for (const event of events) {
-        expect(event.destinationId).toBe(0xffffffff);
+        expect(event).not.toHaveProperty('destinationId');
       }
       // Start (0xFA) first, then at least one clock tick (0xF8).
       expect(events[0].bytes).toEqual(Uint8Array.of(0xfa));

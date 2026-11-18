@@ -1,3 +1,4 @@
+import { externalMidiEvent } from '../internal/external_midi.js';
 import type {
   EngineTelemetry,
   EngineTelemetryError,
@@ -31,13 +32,13 @@ export function telemetryFromRecord(record: SonareEngineTelemetryRecord): Engine
 
 /** Normalizes a wire external-MIDI event, whose bytes may arrive as a plain array, into a {@link ExternalMidiEvent}. */
 export function externalMidiEventFromWire(event: {
-  destinationId: number;
+  destinationId?: number;
   renderFrame: number;
   bytes: ArrayLike<number>;
 }): ExternalMidiEvent {
-  return {
-    destinationId: event.destinationId,
-    renderFrame: event.renderFrame,
-    bytes: event.bytes instanceof Uint8Array ? event.bytes : Uint8Array.from(event.bytes),
-  };
+  return externalMidiEvent(
+    event.destinationId,
+    event.renderFrame,
+    event.bytes instanceof Uint8Array ? event.bytes : Uint8Array.from(event.bytes),
+  );
 }

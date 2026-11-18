@@ -12,6 +12,7 @@ import {
 import { ErrorCode, SonareError } from './errors.js';
 import { CHANNEL_LAYOUT_VALUES } from './internal/channel_layout.js';
 import { eqBandJson } from './internal/eq_band_json.js';
+import { externalMidiEvent } from './internal/external_midi.js';
 import { assertHandleLive, releasedHandleError } from './internal/handle_guard.js';
 import { assignMarkerIds } from './internal/marker_ids.js';
 import { midiFxConfigJson } from './internal/midi_fx_config.js';
@@ -1079,11 +1080,11 @@ export class RealtimeEngine {
    * and is rejected with a `RangeError` instead of returning nothing forever.
    */
   drainExternalMidi(maxRecords = 1024): ExternalMidiEvent[] {
-    return this.native.drainExternalMidi(maxRecords).map((event) => ({
-      destinationId: event.destinationId,
-      renderFrame: event.renderFrame,
-      bytes: Uint8Array.from(event.bytes),
-    }));
+    return this.native
+      .drainExternalMidi(maxRecords)
+      .map((event) =>
+        externalMidiEvent(event.destinationId, event.renderFrame, Uint8Array.from(event.bytes)),
+      );
   }
 
   /**

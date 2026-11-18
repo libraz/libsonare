@@ -149,6 +149,8 @@ const SIDECHAIN_SOURCE_KIND = { track: 0, bus: 1 } as const;
 const TRACK_MONITOR_MODE = { off: 0, pfl: 1, afl: 2 } as const;
 const DITHER = { rpdf: 1, tpdf: 2, noiseShaped: 3 } as const;
 const GRAPH_NODE_TYPE = { passThrough: 0, gain: 1 } as const;
+/** The C ABI tags clock and transport bytes with this destination; the facade omits the field. */
+const EVERY_PORT_DESTINATION = 0xffffffff;
 const GRAPH_MIX = { replace: 0, add: 1 } as const;
 const MARKER_KIND = { marker: 0, text: 1, lyric: 2, cuePoint: 3, keySignature: 4 } as const;
 const WARP_MODE = { off: 0, repitch: 1, tempoSync: 2, timeStretch: 3 } as const;
@@ -2777,7 +2779,7 @@ export class RealtimeEngine {
 
   /**
    * Enables forwarding MIDI clock (0xF8) and transport (start/continue/stop)
-   * bytes to the external output queue, tagged with destination `0xFFFFFFFF`,
+   * bytes to the external output queue, drained without a `destinationId`,
    * so external gear stays tempo-synced. Off by default; control-thread only.
    */
   setExternalMidiClockEnabled(externalMidiClockEnabled: boolean): void {
@@ -2820,8 +2822,8 @@ export class RealtimeEngine {
   /**
    * Drains queued external-MIDI events, already lowered to MIDI 1.0 byte
    * messages so the host can write them straight to an output port. Returns one
-   * entry per lowered message; transport/clock bytes carry
-   * `destinationId === 0xFFFFFFFF`. `maxRecords` caps the number of output
+   * entry per lowered message; transport/clock bytes carry no
+   * `destinationId`. `maxRecords` caps the number of output
    * events returned — the shared unit across every surface. Events past the cap
    * stay queued for the next call (lossless); call again to drain the rest.
    *
@@ -2834,7 +2836,12 @@ export class RealtimeEngine {
    * fractional value is likewise a `RangeError`, a non-number a `TypeError`.
    */
   drainExternalMidi(maxRecords = 1024): ExternalMidiEvent[] {
-    return this.native.drainExternalMidi(maxRecords);
+    return this.native
+      .drainExternalMidi(maxRecords)
+      .map(
+        ({ destinationId, ...event }: Required<ExternalMidiEvent>): ExternalMidiEvent =>
+          destinationId === EVERY_PORT_DESTINATION ? event : { destinationId, ...event },
+      );
   }
 
   /** Read the current engine transport state (playing/position/ppq/tempo). */

@@ -109,11 +109,10 @@ export interface EngineMeterTelemetry {
  */
 export interface ExternalMidiEvent {
   /**
-   * Originating track MIDI destination id, or the transport sentinel
-   * `0xFFFFFFFF` (4294967295) for clock / start / continue / stop bytes meant
-   * for every external port.
+   * Originating track MIDI destination id. Absent on clock / start / continue /
+   * stop bytes, which are meant for every external port.
    */
-  destinationId: number;
+  destinationId?: number;
   /**
    * Absolute engine device render frame of the event, for every record
    * (channel-voice, live input and clock/transport bytes alike). It is not an
