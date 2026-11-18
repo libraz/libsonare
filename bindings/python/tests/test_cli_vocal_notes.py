@@ -78,7 +78,7 @@ def test_vocal_notes_omitted_settings_are_not_passed(monkeypatch: pytest.MonkeyP
         calls.append(kwargs)
         return _Session()
 
-    monkeypatch.setattr(libsonare, "create_vocal_edit_session", fake_create)
+    monkeypatch.setattr(libsonare, "VocalEditSession", fake_create)
 
     assert _cli_note_edit.cmd_vocal_notes(_parse()) == 0
     assert (

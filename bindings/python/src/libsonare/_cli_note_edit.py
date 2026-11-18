@@ -453,7 +453,7 @@ def cmd_polyphonic_notes(args: argparse.Namespace) -> int:
 
 
 # Each analysis setting a vocal session takes at creation, as (argparse dest,
-# create_vocal_edit_session keyword). A setting the caller left out is not
+# VocalEditSession keyword). A setting the caller left out is not
 # passed, so the session's own default applies.
 _VOCAL_NOTES_SETTINGS = (
     ("segmentation_threshold_cents", "segmentation_threshold_cents"),
@@ -479,7 +479,7 @@ def _nearest_note(midi: float) -> tuple[str, float]:
 
 def cmd_vocal_notes(args: argparse.Namespace) -> int:
     """List the notes a vocal-edit session finds in a take; nothing is edited or rendered."""
-    from . import create_vocal_edit_session
+    from . import VocalEditSession
 
     settings: dict[str, Any] = {
         keyword: getattr(args, dest)
@@ -490,7 +490,7 @@ def cmd_vocal_notes(args: argparse.Namespace) -> int:
         settings["centered"] = False
 
     samples, sr = _load_audio(args.file)
-    session = create_vocal_edit_session(samples, sr, **settings)
+    session = VocalEditSession(samples, sr, **settings)
     try:
         notes = session.notes().notes
     finally:

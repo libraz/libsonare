@@ -88,7 +88,7 @@ def test_vocal_notes_omit_every_pitch_key_of_an_unpitched_note(
             pass
 
     monkeypatch.setattr(_cli_note_edit, "_load_audio", lambda _path: ([0.0] * 100, 22050))
-    monkeypatch.setattr(libsonare, "create_vocal_edit_session", lambda *_a, **_k: _Session())
+    monkeypatch.setattr(libsonare, "VocalEditSession", lambda *_a, **_k: _Session())
     from libsonare import cli
 
     parser = cli._build_parser()
