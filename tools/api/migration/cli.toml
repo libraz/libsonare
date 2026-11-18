@@ -670,3 +670,11 @@ changed = "omitted, the library chooses the band count; an explicit 0 or a negat
 domain = "analysis"
 rule = "absent-not-sentinel"
 test = "tests/cli/cli_effects_test.cpp::leaves an omitted band count to the library and refuses 0"
+
+[[entry]]
+kind = "command"
+old = "mastering"
+changed = "the JSON mode for a chain read from --chain-config is chainConfig rather than config, naming the option that chose the chain; preset and assistant are unchanged"
+domain = "mastering"
+rule = "token-case"
+test = "tests/cli/cli_mastering_test.cpp::CLI mastering command"

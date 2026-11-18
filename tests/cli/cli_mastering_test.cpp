@@ -140,7 +140,7 @@ TEST_CASE("CLI mastering command", "[cli][mastering]") {
     auto [code, output] = exec_command(CLI + " mastering " + TEST_WAV + " --chain-config " +
                                        config_path + " --json -q");
     REQUIRE(code == 0);
-    REQUIRE_THAT(output, ContainsSubstring("\"mode\": \"config\""));
+    REQUIRE_THAT(output, ContainsSubstring("\"mode\": \"chainConfig\""));
     REQUIRE_THAT(output, ContainsSubstring("\"stages\""));
   }
 

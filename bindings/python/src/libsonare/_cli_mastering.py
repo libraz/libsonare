@@ -373,7 +373,7 @@ def cmd_mastering(args: argparse.Namespace) -> int:
         config = _chain_params_config(_mastering_config(config_raw))
         config.update(params)
         result = _run_chain(config)
-        mode = "config"
+        mode = "chainConfig"
     elif assistant:
         from . import mastering_assistant_suggest, mastering_assistant_suggest_stereo
 
@@ -849,10 +849,9 @@ def cmd_master(args: argparse.Namespace) -> int:
         config = _chain_params_config(_load_json_object(chain_config_path))
         config.update(overrides)
         result, rendered = _run_chain(config)
-        # `mode` names how the chain was chosen, not the option that carried it,
-        # so it is the same token the native CLI reports for a chain read from a
-        # file. The option's canonical spelling only shows up in diagnostics.
-        mode = "config"
+        # `mode` names the option that chose the chain, in lowerCamel like every
+        # closed-set value in output; the native CLI reports the same token.
+        mode = "chainConfig"
     elif assistant:
         # The assistant reads the material to decide the chain, so it is handed
         # the same channels the chain will run over rather than a fold of them.

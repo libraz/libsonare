@@ -454,7 +454,7 @@ int cmd_mastering(const CliArgs& args, const Audio& audio) {
   const bool use_chain = selector_count != 0;
   if (use_chain) {
     mastering::api::MasteringChainConfig chain_config;
-    std::string mode = "config";
+    std::string mode = "chainConfig";
     std::string preset_name;
     std::vector<std::string> explanation;
     // The document's params as written; with --params appended they are one list.
@@ -478,7 +478,7 @@ int cmd_mastering(const CliArgs& args, const Audio& audio) {
           document_params.push_back({std::move(flat.key), flat.value});
         }
       }
-      mode = "config";
+      mode = "chainConfig";
     } else {
       preset_name = catalog_token(args.get_string("preset"), mastering::api::preset_names());
       chain_config = mastering::api::preset_config(mastering::api::preset_from_string(preset_name));
@@ -488,10 +488,10 @@ int cmd_mastering(const CliArgs& args, const Audio& audio) {
     // The preset/config chain is driven entirely by its config (or --params
     // overrides); reject standalone loudness flags instead of silently
     // ignoring them. Use --params to override chain parameters.
-    if (mode == "preset" || mode == "config") {
+    if (mode == "preset" || mode == "chainConfig") {
       // Named by the option rather than by `mode`, which stays the reported
       // payload value: the option's canonical spelling is --chain-config.
-      const std::string selector = mode == "config" ? "chain-config" : mode;
+      const std::string selector = mode == "chainConfig" ? "chain-config" : mode;
       for (const char* loudness_flag : {"target-lufs", "ceiling-dbtp", "true-peak-oversample"}) {
         if (args.has(loudness_flag)) {
           throw std::invalid_argument(std::string("--") + loudness_flag +

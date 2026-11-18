@@ -335,8 +335,8 @@ def test_the_reported_mode_is_the_token_the_native_cli_reports(tmp_path, capsys)
         )
         == 0
     )
-    assert json.loads(capsys.readouterr().out)["mode"] == "config"
-    assert 'mode = "config";' in _NATIVE_HANDLER.read_text(encoding="utf-8")
+    assert json.loads(capsys.readouterr().out)["mode"] == "chainConfig"
+    assert 'mode = "chainConfig";' in _NATIVE_HANDLER.read_text(encoding="utf-8")
 
 
 def test_a_loudness_flag_beside_a_chain_config_is_refused(tmp_path) -> None:
@@ -386,7 +386,7 @@ def test_native_front_end_declares_the_same_spelling() -> None:
     # matching the Python handler's refusals above.
     assert 'args.has("chain-config")' in handler
     assert 'args.get_string("chain-config")' in handler
-    assert 'mode == "config" ? "chain-config" : mode' in handler
+    assert 'mode == "chainConfig" ? "chain-config" : mode' in handler
 
 
 def test_mastering_params_and_chain_config_take_an_enum_name(tmp_path, capsys) -> None:
@@ -417,7 +417,7 @@ def test_mastering_params_and_chain_config_take_an_enum_name(tmp_path, capsys) -
         encoding="utf-8",
     )
     from_file = run(["--chain-config", str(config)])
-    assert from_file["mode"] == "config"
+    assert from_file["mode"] == "chainConfig"
 
     with pytest.raises(Exception, match="unknown name 'nope'"):
         _run(
