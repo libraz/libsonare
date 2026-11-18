@@ -73,8 +73,18 @@ Napi::Object CompileResultToObject(Napi::Env env, SonareProjectCompileResult* re
   Napi::Array diagnostics = Napi::Array::New(env, result->diagnostic_count);
   for (size_t i = 0; i < result->diagnostic_count; ++i) {
     Napi::Object diag = Napi::Object::New(env);
-    diag.Set("code", Napi::Number::New(env, result->diagnostics[i].code));
-    diag.Set("severity", Napi::Number::New(env, result->diagnostics[i].severity));
+    // The library names every code and severity it emits; a NULL would be a library defect,
+    // so it surfaces as the bare number rather than as an invented token.
+    const auto token = [](const char* name, int value) {
+      return name != nullptr ? std::string(name) : std::to_string(value);
+    };
+    const int code = result->diagnostics[i].code;
+    const int severity = result->diagnostics[i].severity;
+    diag.Set("code",
+             Napi::String::New(env, token(sonare_project_diagnostic_code_name(code), code)));
+    diag.Set(
+        "severity",
+        Napi::String::New(env, token(sonare_project_diagnostic_severity_name(severity), severity)));
     diag.Set("targetId", Napi::Number::New(env, result->diagnostics[i].target_id));
     diag.Set("message",
              Napi::String::New(env, i < diagnostic_messages.size() ? diagnostic_messages[i] : ""));
