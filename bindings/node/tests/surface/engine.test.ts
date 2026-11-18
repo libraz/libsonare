@@ -804,7 +804,9 @@ describe('RealtimeEngine capture', () => {
       expect(
         caught(() => configure({ startSample: 0, startSec: 0, endSample: 48 })),
       ).toBeInstanceOf(RangeError);
-      expect(caught(() => configure({ startSample: 0 }))).toBeInstanceOf(RangeError);
+      expect(() => configure({ startSample: 0 })).toThrow(
+        new TypeError('configureCapture: give punch.endPpq, punch.endSample or punch.endSec'),
+      );
       expect(caught(() => configure({ startSample: -1, endSample: 2 }))).toBeInstanceOf(RangeError);
       expect(
         caught(() => configure({ startSample: 0, endSample: 48, enabled: false })),

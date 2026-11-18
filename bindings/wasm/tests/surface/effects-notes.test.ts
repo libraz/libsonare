@@ -299,7 +299,9 @@ describe('effects notes surface', () => {
     expect(thrown(() => splitNote({ ...base, frame, frameSec: frame / frameRate }))).toBeInstanceOf(
       RangeError,
     );
-    expect(thrown(() => splitNote({ ...base }))).toBeInstanceOf(RangeError);
+    expect(() => splitNote({ ...base })).toThrow(
+      new TypeError('splitNote: give frame or frameSec'),
+    );
     const byFrame = splitNote({ ...base, frame });
     const bySec = splitNote({ ...base, frameSec: frame / frameRate });
     expect(bySec).toEqual(byFrame);
