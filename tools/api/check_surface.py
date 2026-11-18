@@ -1756,12 +1756,29 @@ def _metadata_only(doc: str) -> bool:
     return bool(lines) and all(_META_LINE.match(x) for x in lines)
 
 
+# generated-catalog: records generated from the capability catalog, whose fields may be documented
+# by catalog metadata alone. The catalog is the source of truth, and masteringInsertParamInfo
+# returns the same facts at run time.
+_GENERATED_CATALOG = frozenset({"MasteringProcessorParamMap"})
+
+
 def chk_doc_comments(ctx):
     cands = recs(ctx, LANG, ("function", "method", "class", "type", "field", "export"))
+    generated = {
+        _js_declaration(r)
+        for r in cands
+        if r["kind"] == "field" and r["name"].split(".")[0] in _GENERATED_CATALOG
+    } - {None}
+
+    def described(r):
+        if not _metadata_only(r.get("doc_text", "")):
+            return True
+        return r["kind"] == "field" and _js_declaration(r) in generated
+
     bad = [
         (r, "no doc comment") if not r.get("has_doc") else (r, _META_ONLY)
         for r in cands
-        if not r.get("has_doc") or _metadata_only(r.get("doc_text", ""))
+        if not r.get("has_doc") or not described(r)
     ]
     return len(cands), bad
 

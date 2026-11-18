@@ -1342,6 +1342,51 @@ class MetadataOnlyDocs(CheckerCase):
         self.assertIn("    metadata-only doc: 1", lines)
 
 
+class GeneratedCatalogDocs(CheckerCase):
+    """A field generated from the catalog may be documented by catalog metadata alone."""
+
+    def test_a_generated_catalog_field_and_its_projection_take_a_metadata_doc(self):
+        meta = "Unit: dB. Range: [-60, 0]. Default: -18."
+        decl = {"file": "bindings/node/src/types_mastering.ts", "line": 335}
+        self.add(
+            _field(
+                "node",
+                "MasteringProcessorParamMap.dynamics.compressor",
+                "thresholdDb",
+                doc_text=meta,
+                **decl,
+            ),
+            _field("node", "MixSceneInsert.params", "thresholdDb", doc_text=meta, **decl),
+            _field(
+                "node",
+                "MasteringProcessorParamMap.dynamics.gate",
+                "holdMs",
+                has_doc=False,
+                line=340,
+            ),
+            _field("node", "LimiterOptions", "ceilingDb", doc_text=meta, line=12),
+        )
+        _, lines = self.run_check("--surface", "node", "--check", "doc-comments")
+        flagged = sorted(
+            x.strip()
+            for x in lines
+            if x.strip().startswith(
+                (
+                    "node field MasteringProcessorParamMap.",
+                    "node field MixSceneInsert.",
+                    "node field LimiterOptions.",
+                )
+            )
+        )
+        self.assertEqual(
+            flagged,
+            [
+                "node field LimiterOptions.ceilingDb: " + check_surface._META_ONLY,
+                "node field MasteringProcessorParamMap.dynamics.gate.holdMs: no doc comment",
+            ],
+        )
+
+
 class CEnumFields(CheckerCase):
     def enum(self, name, *values):
         recs = [_rec("c", "type", name, c_kind="enum")]
