@@ -10,14 +10,7 @@ import type {
   StreamingMasteringChainConfig,
   StreamingRetuneConfig,
 } from './public_types.js';
-import {
-  assertInt32,
-  assertIntegerValue,
-  assertPositiveInteger,
-  assertSampleRate,
-  requireBoolean,
-  requireToken,
-} from './validation.js';
+import { assertInt32, assertIntegerValue, requireBoolean, requireToken } from './validation.js';
 
 /** Global equalizer phase mode. */
 export type EqPhaseMode = 'zero' | 'natural' | 'linear';
@@ -70,15 +63,6 @@ function assertConfigObject(fnName: string, config: unknown): asserts config is 
 }
 
 /** A given block size as a positive integer; absent (`undefined`) leaves the library default. */
-function optionalBlockSize(fnName: string, value: unknown): number | undefined {
-  if (value === undefined || value === null) {
-    return undefined;
-  }
-  assertIntegerValue(fnName, value, 'maxBlockSize');
-  assertPositiveInteger(fnName, value, 'maxBlockSize');
-  return value;
-}
-
 function optionalIntegerBlockSize(fnName: string, value: unknown): number | undefined {
   if (value === undefined || value === null) {
     return undefined;
@@ -388,8 +372,8 @@ export class StreamingEqualizer {
     const fn = 'StreamingEqualizer';
     assertConfigObject(fn, config);
     const { sampleRate, maxBlockSize } = config;
-    assertSampleRate(fn, sampleRate);
-    const blockSize = optionalBlockSize(fn, maxBlockSize);
+    assertIntegerValue(fn, sampleRate, 'sampleRate');
+    const blockSize = optionalIntegerBlockSize(fn, maxBlockSize);
     const module = getSonareModule();
     this.eqHandle = module.createEqualizer(
       blockSize === undefined ? { sampleRate } : { sampleRate, maxBlockSize: blockSize },

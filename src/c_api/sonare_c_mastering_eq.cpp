@@ -47,13 +47,6 @@ SonareError sonare_eq_create(double sample_rate, int max_block_size, SonareEq** 
   if (max_block_size == 0) {
     max_block_size = sonare::mastering::eq::EqualizerProcessor::kDefaultMaxBlock;
   }
-  // The processor admits an infinite sample_rate, which degenerates every band's biquad design.
-  if (!is_valid_realtime_sample_rate(sample_rate) || max_block_size < 0 ||
-      max_block_size > kMaxRealtimeBlockSize) {
-    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
-                   "EQ: sample_rate and max_block_size must be within the supported range");
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
   SONARE_C_TRY
   auto handle = std::make_unique<SonareEq>();
   handle->sample_rate = sample_rate;

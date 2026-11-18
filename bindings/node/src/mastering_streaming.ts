@@ -25,7 +25,6 @@ import {
   assertClosedToken,
   assertFloatValue,
   assertIntegerValue,
-  assertPositiveInteger,
   assertSampleRate,
   requireBoolean,
 } from './validation.js';
@@ -81,15 +80,6 @@ function assertConfigObject(fnName: string, config: unknown): asserts config is 
 }
 
 /** A given block size as a positive integer; absent (`undefined`) leaves the library default. */
-function optionalBlockSize(fnName: string, value: unknown): number | undefined {
-  if (value === undefined || value === null) {
-    return undefined;
-  }
-  assertIntegerValue(fnName, value, 'maxBlockSize');
-  assertPositiveInteger(fnName, value, 'maxBlockSize');
-  return value;
-}
-
 function optionalIntegerBlockSize(fnName: string, value: unknown): number | undefined {
   if (value === undefined || value === null) {
     return undefined;
@@ -904,8 +894,8 @@ export class StreamingEqualizer {
     const fn = 'StreamingEqualizer';
     assertConfigObject(fn, config);
     const { sampleRate, maxBlockSize } = config;
-    assertSampleRate(fn, sampleRate);
-    const blockSize = optionalBlockSize(fn, maxBlockSize);
+    assertIntegerValue(fn, sampleRate, 'sampleRate');
+    const blockSize = optionalIntegerBlockSize(fn, maxBlockSize);
     this.native = new addon.StreamingEqualizer(
       blockSize === undefined ? { sampleRate } : { sampleRate, maxBlockSize: blockSize },
     );

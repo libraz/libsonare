@@ -5,6 +5,7 @@ import {
   mfccToAudio,
   mfccToMel,
   pitchShift,
+  StreamingEqualizer,
   StreamingMasteringChain,
   StreamingRetune,
   timeStretch,
@@ -51,6 +52,7 @@ type RateBlockRoute = {
   accepted: RateBlockCase[];
   refused: RateBlockCase[];
 };
+type EqualizerRoute = { accepted: RateBlockCase[]; refused: RateBlockCase[] };
 type RetuneCase = {
   id: string;
   sample_rate: number;
@@ -71,6 +73,7 @@ const corpus = JSON.parse(
   mfcc_to_audio: MfccAudioRoute;
   native_spectral_stretch: StretchRoute;
   streaming_mastering_chain_prepare: RateBlockRoute;
+  equalizer_prepare: EqualizerRoute;
   streaming_retune_prepare: RetuneRoute;
 };
 
@@ -292,6 +295,35 @@ describe('streaming mastering chain prepare refusals come from the core', () => 
     } finally {
       raw.destroy();
     }
+  });
+});
+
+describe('equalizer prepare refusals come from the core', () => {
+  const { accepted, refused } = corpus.equalizer_prepare;
+
+  it.each(accepted)('accepts $id', ({ sample_rate, max_block_size }) => {
+    const eq = new StreamingEqualizer({ sampleRate: sample_rate, maxBlockSize: max_block_size });
+    const raw = new addon.StreamingEqualizer({
+      sampleRate: sample_rate,
+      maxBlockSize: max_block_size,
+    });
+    eq.destroy();
+    raw.destroy();
+  });
+
+  it.each(refused)('refuses $id', ({ sample_rate, max_block_size, cause, message }) => {
+    const kind = errorClassFor[cause as Cause];
+    const text = literal(message as string);
+    expectRefusal(
+      () => new StreamingEqualizer({ sampleRate: sample_rate, maxBlockSize: max_block_size }),
+      kind,
+      text,
+    );
+    expectRefusal(
+      () => new addon.StreamingEqualizer({ sampleRate: sample_rate, maxBlockSize: max_block_size }),
+      kind,
+      text,
+    );
   });
 });
 

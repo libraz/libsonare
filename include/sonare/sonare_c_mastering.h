@@ -981,9 +981,9 @@ typedef struct {
 } SonareEqSnapshot;
 
 /// @brief Creates a prepared equalizer handle.
-/// @param sample_rate Processing sample rate; must be positive.
+/// @param sample_rate Processing sample rate in Hz; finite and within [8000, 384000].
 /// @param max_block_size Maximum number of frames accepted by @ref sonare_eq_process; 0 selects
-///   the library default (512 frames) and a negative value is refused.
+///   the library default (512 frames); otherwise it must be within [1, 1048576].
 /// @param out Receives the handle on success, NULL on failure; destroy with
 ///   @ref sonare_eq_destroy, which is what invalidates it; no other call does.
 /// @return SONARE_OK, or SONARE_ERROR_INVALID_PARAMETER when the arguments are invalid (or

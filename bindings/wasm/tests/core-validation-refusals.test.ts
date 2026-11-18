@@ -6,6 +6,7 @@ import {
   mfccToAudio,
   mfccToMel,
   pitchShift,
+  StreamingEqualizer,
   StreamingMasteringChain,
   StreamingRetune,
   timeStretch,
@@ -52,6 +53,7 @@ type RateBlockRoute = {
   accepted: RateBlockCase[];
   refused: RateBlockCase[];
 };
+type EqualizerRoute = { accepted: RateBlockCase[]; refused: RateBlockCase[] };
 type RetuneCase = {
   id: string;
   sample_rate: number;
@@ -72,6 +74,7 @@ const corpus = JSON.parse(
   mfcc_to_audio: MfccAudioRoute;
   native_spectral_stretch: StretchRoute;
   streaming_mastering_chain_prepare: RateBlockRoute;
+  equalizer_prepare: EqualizerRoute;
   streaming_retune_prepare: RetuneRoute;
 };
 
@@ -96,6 +99,7 @@ type RawInverse = {
     prepare(sampleRate: number, maxBlockSize: number, numChannels: number): void;
     delete(): void;
   };
+  createEqualizer(config: Record<string, unknown>): { delete(): void };
   createStreamingRetune(config: Record<string, unknown>): {
     prepare(sampleRate: number, maxBlockSize: number): void;
     delete(): void;
@@ -321,6 +325,32 @@ describe('streaming mastering chain prepare refusals come from the core', () => 
       }
     } finally {
       handle.delete();
+    }
+  });
+});
+
+describe('equalizer prepare refusals come from the core', () => {
+  const { accepted, refused } = corpus.equalizer_prepare;
+  const raw = () => getSonareModule() as unknown as RawInverse;
+
+  it.each(accepted)('accepts $id', ({ sample_rate, max_block_size }) => {
+    const config = { sampleRate: sample_rate, maxBlockSize: max_block_size };
+    const eq = new StreamingEqualizer(config);
+    const handle = raw().createEqualizer(config);
+    eq.destroy();
+    handle.delete();
+  });
+
+  it.each(refused)('refuses $id', ({ sample_rate, max_block_size, cause, message }) => {
+    const kind = errorClassFor[cause as Cause];
+    const text = literal(message as string);
+    const config = { sampleRate: sample_rate, maxBlockSize: max_block_size };
+    const calls: Array<() => unknown> = [
+      () => new StreamingEqualizer(config),
+      () => raw().createEqualizer(config),
+    ];
+    for (const call of calls) {
+      expect(expectRefusalOf(call, kind).message).toMatch(text);
     }
   });
 });

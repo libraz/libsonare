@@ -25,6 +25,7 @@ _MEL = _CORPUS["mel_to_audio"]
 _MFCC_AUDIO = _CORPUS["mfcc_to_audio"]
 _STRETCH = _CORPUS["native_spectral_stretch"]
 _CHAIN = _CORPUS["streaming_mastering_chain_prepare"]
+_EQ = _CORPUS["equalizer_prepare"]
 _RETUNE = _CORPUS["streaming_retune_prepare"]
 
 
@@ -124,6 +125,22 @@ def test_streaming_mastering_chain_prepare_refuses(case: dict) -> None:
             sample_rate=case["sample_rate"],
             num_channels=_CHAIN["input"]["num_channels"],
             max_block_size=case["max_block_size"],
+        )
+
+
+@pytest.mark.parametrize("case", _EQ["accepted"], ids=lambda case: case["id"])
+def test_equalizer_prepare_accepts(case: dict) -> None:
+    with libsonare.StreamingEqualizer(
+        sample_rate=case["sample_rate"], max_block_size=case["max_block_size"]
+    ):
+        pass
+
+
+@pytest.mark.parametrize("case", _EQ["refused"], ids=lambda case: case["id"])
+def test_equalizer_prepare_refuses(case: dict) -> None:
+    with pytest.raises(_ERROR_CLASS[case["cause"]], match=re.escape(case["message"])):
+        libsonare.StreamingEqualizer(
+            sample_rate=case["sample_rate"], max_block_size=case["max_block_size"]
         )
 
 

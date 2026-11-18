@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <string>
 
 #include "mastering/eq/band_frequency.h"
 #include "mastering/eq/parametric.h"
@@ -10,6 +11,7 @@
 #include "mastering/stereo/mid_side.h"
 #include "rt/biquad_design.h"
 #include "rt/tail_budget.h"
+#include "streaming/realtime_limits.h"
 #include "util/constants.h"
 #include "util/db.h"
 #include "util/exception.h"
@@ -60,12 +62,16 @@ EqualizerProcessor::~EqualizerProcessor() {
 }
 
 void EqualizerProcessor::prepare(double sample_rate, int max_block_size) {
-  if (max_block_size < 0) {
+  if (!is_valid_realtime_block_size(max_block_size)) {
     throw SonareException(ErrorCode::InvalidParameter,
-                          "EqualizerProcessor max_block_size must be non-negative");
+                          "EqualizerProcessor::prepare: max_block_size must be within [1, " +
+                              std::to_string(kMaxRealtimeBlockSize) + "]");
   }
-  if (!(sample_rate > 0.0)) {
-    throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
+  if (!is_valid_realtime_sample_rate(sample_rate)) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "EqualizerProcessor::prepare: sample_rate must be finite and within [" +
+                              std::to_string(kMinAudioSampleRate) + ", " +
+                              std::to_string(kMaxAudioSampleRate) + "]");
   }
   // Bands stored before any rate was known meet it here and are refused as
   // set_band() refuses them; once prepared, a later rate designs them at its ceiling.

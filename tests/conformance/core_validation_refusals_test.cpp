@@ -17,6 +17,7 @@
 #include "feature/inverse.h"
 #if defined(SONARE_WITH_MASTERING)
 #include "mastering/api/chain.h"
+#include "mastering/eq/equalizer.h"
 #endif
 #include "util/exception.h"
 #include "util/json.h"
@@ -292,6 +293,39 @@ TEST_CASE("streaming mastering chain prepare refusals are owned by the core func
                                                    channels) == SONARE_ERROR_INVALID_PARAMETER);
     CHECK_THAT(last_error_message(), Catch::Matchers::ContainsSubstring(message));
     sonare_streaming_mastering_chain_destroy(handle);
+  }
+}
+
+TEST_CASE("equalizer prepare refusals are owned by the core function",
+          "[conformance][core_validation]") {
+  const Value corpus = load_refusal_corpus();
+  const Value& route = corpus["equalizer_prepare"];
+
+  for (const auto& item : route["accepted"].as_array()) {
+    const double rate = item["sample_rate"].as_number();
+    const int block = static_cast<int>(item["max_block_size"].as_number());
+    INFO(item["id"].as_string());
+    sonare::mastering::eq::EqualizerProcessor core;
+    CHECK_NOTHROW(core.prepare(rate, block));
+    SonareEq* handle = nullptr;
+    CHECK(sonare_eq_create(rate, block, &handle) == SONARE_OK);
+    sonare_eq_destroy(handle);
+  }
+
+  for (const auto& item : route["refused"].as_array()) {
+    const double rate = item["sample_rate"].as_number();
+    const int block = static_cast<int>(item["max_block_size"].as_number());
+    const std::string message = item["message"].as_string();
+    INFO(item["id"].as_string());
+    REQUIRE(item["cause"].as_string() == "argument");
+
+    sonare::mastering::eq::EqualizerProcessor core;
+    require_argument_refusal([&] { core.prepare(rate, block); }, message);
+
+    SonareEq* handle = nullptr;
+    CHECK(sonare_eq_create(rate, block, &handle) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(handle == nullptr);
+    CHECK_THAT(last_error_message(), Catch::Matchers::ContainsSubstring(message));
   }
 }
 #endif  // defined(SONARE_WITH_MASTERING)
