@@ -9,6 +9,7 @@ that refused everything cannot pass.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 
 import numpy as np
@@ -207,7 +208,7 @@ def test_the_reported_block_is_the_one_each_handle_accepts() -> None:
         assert all(record.error != "maxBlockExceeded" for record in engine.drain_telemetry())
         engine.process([zeros(limit + 1), zeros(limit + 1)])
         assert any(record.error == "maxBlockExceeded" for record in engine.drain_telemetry())
-    scene = ls.mixing_scene_preset_json(ls.mixing_scene_preset_names()[0])
+    scene = json.dumps(ls.mixing_scene_preset(ls.mixing_scene_preset_names()[0]))
     mixer = ls.Mixer.from_scene_json(scene, SR)
     try:
         strips = mixer.strip_count

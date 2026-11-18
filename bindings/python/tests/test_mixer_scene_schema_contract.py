@@ -93,7 +93,7 @@ def _findings(document: dict) -> list[str]:
 
 
 def _preset_scene(name: str) -> dict:
-    document = json.loads(libsonare.mixing_scene_preset_json(name))
+    document = libsonare.mixing_scene_preset(name)
     return document.get("scene", document)
 
 

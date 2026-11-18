@@ -20,6 +20,7 @@ on the refusal its neighbour produced.
 
 from __future__ import annotations
 
+import json
 import re
 from collections.abc import Sequence
 
@@ -221,7 +222,7 @@ def test_a_representable_extreme_is_still_accepted() -> None:
 
 @pytest.fixture
 def mixer_scene():
-    scene = ls.mixing_scene_preset_json(ls.mixing_scene_preset_names()[0])
+    scene = json.dumps(ls.mixing_scene_preset(ls.mixing_scene_preset_names()[0]))
     mixer = ls.Mixer.from_scene_json(scene, sample_rate=48000, max_block_size=256)
     try:
         yield mixer

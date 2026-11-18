@@ -14,6 +14,7 @@ out-of-range value cannot be told from a field the entry point never reads.
 from __future__ import annotations
 
 import ctypes
+import json
 import re
 
 import numpy as np
@@ -154,7 +155,7 @@ def test_a_marker_kind_is_an_exact_token() -> None:
 
 @pytest.fixture
 def mixer_scene():
-    scene = ls.mixing_scene_preset_json(ls.mixing_scene_preset_names()[0])
+    scene = json.dumps(ls.mixing_scene_preset(ls.mixing_scene_preset_names()[0]))
     mixer = ls.Mixer.from_scene_json(scene, sample_rate=48000, max_block_size=256)
     try:
         yield mixer
