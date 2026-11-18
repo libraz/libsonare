@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import ctypes
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, cast
 
 import numpy as np
@@ -13,8 +13,6 @@ from ._errors import _not_supported
 from ._narrowing import _resolve_zero_default
 from ._project_model import *  # noqa: F403
 from ._project_model import (
-    _DIAGNOSTIC_CODES,
-    _DIAGNOSTIC_SEVERITIES,
     ProjectDiagnosticCode,
     ProjectDiagnosticSeverity,
     _make_instrument_callbacks,
@@ -38,7 +36,6 @@ from ._runtime import (
     _check,
     _from_c_float_array,
     _get_lib,
-    _ordinal_token,
     _out_float_array,
     _to_c_size_t,
 )
@@ -68,26 +65,37 @@ def _bounce_options(
     )
 
 
+def _diagnostic_token(name_fn: Callable[[int], bytes | None], ordinal: int, what: str) -> str:
+    """Read a diagnostic ordinal's token from the library's own name table."""
+    token = name_fn(ordinal)
+    if token is None:
+        raise SonareValueError(f"unknown {what} ordinal: {ordinal}")
+    return token.decode("ascii")
+
+
 def _compile_diagnostics(
     result: SonareProjectCompileResult,
 ) -> tuple[ProjectDiagnostic, ...]:
     """Read the diagnostics out of a native compile result, line ``i`` of
     ``messages`` becoming ``diagnostics[i].message``."""
+    lib = _get_lib()
     messages = result.messages.decode("utf-8") if result.messages else ""
     message_lines = messages.splitlines()
     return tuple(
         ProjectDiagnostic(
             code=cast(
                 ProjectDiagnosticCode,
-                _ordinal_token(
-                    int(result.diagnostics[i].code), _DIAGNOSTIC_CODES, "diagnostic code"
+                _diagnostic_token(
+                    lib.sonare_project_diagnostic_code_name,
+                    int(result.diagnostics[i].code),
+                    "diagnostic code",
                 ),
             ),
             severity=cast(
                 ProjectDiagnosticSeverity,
-                _ordinal_token(
+                _diagnostic_token(
+                    lib.sonare_project_diagnostic_severity_name,
                     int(result.diagnostics[i].severity),
-                    _DIAGNOSTIC_SEVERITIES,
                     "diagnostic severity",
                 ),
             ),

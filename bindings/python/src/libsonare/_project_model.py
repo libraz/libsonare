@@ -325,7 +325,6 @@ class AssistSidecar:
 # A token's index is its SonareProjectDiagnostic severity ordinal.
 ProjectDiagnosticSeverity: TypeAlias = Literal["error", "warning"]
 """How serious a compile diagnostic is; an error means no timeline was produced."""
-_DIAGNOSTIC_SEVERITIES: tuple[str, ...] = get_args(ProjectDiagnosticSeverity)
 
 # A token's index is its arrangement Diagnostic::Code ordinal.
 ProjectDiagnosticCode: TypeAlias = Literal[
@@ -350,7 +349,6 @@ ProjectDiagnosticCode: TypeAlias = Literal[
     "automationTargetUnrouted",
 ]
 """What a compile diagnostic reports."""
-_DIAGNOSTIC_CODES: tuple[str, ...] = get_args(ProjectDiagnosticCode)
 
 
 @dataclass(frozen=True)

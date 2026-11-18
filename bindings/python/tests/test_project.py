@@ -12,7 +12,7 @@ from __future__ import annotations
 import ctypes
 import dataclasses
 import json
-from typing import Any
+from typing import Any, get_args
 
 import numpy as np
 import pytest
@@ -22,6 +22,8 @@ from libsonare import (
     ErrorCode,
     ExternalSeparatedStemImportResult,
     Project,
+    ProjectDiagnosticCode,
+    ProjectDiagnosticSeverity,
     ProjectLoopRecordingResult,
     ProjectMarker,
     ProjectMidiClipResult,
@@ -30,6 +32,7 @@ from libsonare import (
     project_abi_version,
 )
 from libsonare._project_model import _EXPECTED_PROJECT_ABI_VERSION
+from libsonare._runtime import _get_lib
 
 from ._helpers import raises_coded
 from ._project_helpers import _build_project, dangling_source_json
@@ -1122,3 +1125,20 @@ def test_replacing_source_audio_carries_its_shape_and_undo_restores_it() -> None
         assert (restored.num_channels, restored.sample_rate_hint) == (1, 48000.0)
     finally:
         project.close()
+
+
+def _library_tokens(name_fn: Any) -> list[str]:
+    tokens: list[str] = []
+    while (token := name_fn(len(tokens))) is not None:
+        tokens.append(token.decode("ascii"))
+    return tokens
+
+
+def test_diagnostic_token_types_list_the_library_tokens_in_order() -> None:
+    lib = _get_lib()
+    assert list(get_args(ProjectDiagnosticCode)) == _library_tokens(
+        lib.sonare_project_diagnostic_code_name
+    )
+    assert list(get_args(ProjectDiagnosticSeverity)) == _library_tokens(
+        lib.sonare_project_diagnostic_severity_name
+    )
