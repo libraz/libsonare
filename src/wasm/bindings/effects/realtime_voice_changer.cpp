@@ -108,7 +108,7 @@ void vcReadHarmonySteps(const val& pod, int (&steps)[editing::voice_changer::kMa
     throw WasmTypeError(path + " must be an array");
   }
   const int count = editing::voice_changer::kMaxHarmonyVoices;
-  if (value["length"].as<int>() != count) {
+  if (wasmArrayLikeLength(value, path.c_str()) != static_cast<std::size_t>(count)) {
     throw WasmRangeError(path + " must have exactly " + std::to_string(count) + " entries");
   }
   for (int i = 0; i < count; ++i) {
