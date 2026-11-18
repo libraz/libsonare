@@ -83,12 +83,12 @@ class FileClipPageProvider(ClipPageProvider):
 class RealtimeEngine:
     def __init__(
         self,
-        sample_rate: float = 48000.0,
-        max_block_size: int = 128,
+        sample_rate: float,
+        max_block_size: int | None = None,
         *,
-        command_capacity: int = 1024,
-        telemetry_capacity: int = 1024,
-        max_channels: int = 64,
+        command_capacity: int | None = None,
+        telemetry_capacity: int | None = None,
+        max_channels: int | None = None,
     ) -> None: ...
     def close(self) -> None: ...
     def destroy(self) -> None: ...
@@ -98,16 +98,20 @@ class RealtimeEngine:
     def prepare(
         self,
         sample_rate: float,
-        max_block_size: int,
-        command_capacity: int = 1024,
-        telemetry_capacity: int = 1024,
-        max_channels: int = 64,
+        max_block_size: int | None = None,
+        command_capacity: int | None = None,
+        telemetry_capacity: int | None = None,
+        max_channels: int | None = None,
     ) -> None: ...
     def play(self, render_frame: int | None = None) -> None: ...
     def stop(self, render_frame: int | None = None) -> None: ...
     def seek_sample(self, timeline_sample: int, render_frame: int | None = None) -> None: ...
     def settle_parameters(self) -> None: ...
-    def prime_offline_parameters(self, num_channels: int, block_size: int) -> None: ...
+    def prime_offline_parameters(
+        self, num_channels: int, block_size: int | None = None
+    ) -> None: ...
+    @property
+    def max_block_size(self) -> int: ...
     @property
     def tail_samples(self) -> int: ...
     def graph_latency_samples_q8(self) -> int: ...
@@ -296,7 +300,7 @@ class RealtimeEngine:
         self,
         channels: PlanarChannels,
         *,
-        block_size: int = 128,
+        block_size: int | None = None,
         finalize: bool = True,
     ) -> list[np.ndarray]: ...
     def finish_offline_render(self) -> None: ...

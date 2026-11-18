@@ -72,7 +72,7 @@ from ._ffi_types_mastering_project import (
     SonareProjectTempoSegment,
     SonareProjectTimeSignatureSegment,
 )
-from ._narrowing import _narrow_double
+from ._narrowing import _narrow_double, _resolve_zero_default
 from ._runtime import (
     _C_INT_MAX,
     _C_INT_MIN,
@@ -85,6 +85,7 @@ from ._runtime import (
     _get_lib,
     _int_refusal,
     _mapping_keys,
+    _max_block_size,
     _narrow_int,
     _require_instance,
     _resolve_render_frame,
@@ -136,13 +137,14 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
 
     def __init__(
         self,
-        sample_rate: float = 48000.0,
-        max_block_size: int = 128,
+        sample_rate: float,
+        max_block_size: int | None = None,
         *,
-        command_capacity: int = 1024,
-        telemetry_capacity: int = 1024,
-        max_channels: int = 64,
+        command_capacity: int | None = None,
+        telemetry_capacity: int | None = None,
+        max_channels: int | None = None,
     ) -> None:
+        """Create and prepare an engine; see :meth:`prepare` for the arguments."""
         # Set first so a failed create -- an ABI mismatch is the reachable one --
         # leaves a valid attribute for __del__/close() instead of raising
         # AttributeError over the real error.
@@ -221,37 +223,36 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
     def prepare(
         self,
         sample_rate: float,
-        max_block_size: int,
-        command_capacity: int = 1024,
-        telemetry_capacity: int = 1024,
-        max_channels: int = 64,
+        max_block_size: int | None = None,
+        command_capacity: int | None = None,
+        telemetry_capacity: int | None = None,
+        max_channels: int | None = None,
     ) -> None:
         """Size the engine's queues and scratch for a sample rate and block size.
 
-        ``command_capacity`` must not exceed 65536 and ``telemetry_capacity``
-        must not exceed 16384; a larger value raises and leaves the engine
-        untouched. The telemetry number is not a queue depth paid for
-        one-for-one: the engine reserves that many meter records per metered
-        lane, so its memory cost is far larger than the number given here.
+        Each size left out takes the library default; an explicit 0 or a
+        negative value is refused. ``command_capacity`` must not exceed 65536
+        and ``telemetry_capacity`` must not exceed 16384; a larger value raises
+        and leaves the engine untouched. The telemetry number is not a queue
+        depth paid for one-for-one: the engine reserves that many meter records
+        per metered lane, so its memory cost is far larger than the number given
+        here.
         """
-        lib = _get_lib()
-        prepare_with_channels = getattr(lib, "sonare_engine_prepare_with_channels", None)
-        supports_max_channels = prepare_with_channels is not None
-        if not supports_max_channels:
-            if max_channels != 64:
-                raise _not_supported(
-                    "The loaded libsonare does not support max_channels; "
-                    "rebuild the native library."
-                )
-            prepare_with_channels = lib.sonare_engine_prepare
         _check(
-            prepare_with_channels(
+            _get_lib().sonare_engine_prepare_with_channels(
                 self._require_handle(),
                 _narrow_double(sample_rate, "sample_rate"),
-                _to_c_int(max_block_size, "max_block_size"),
-                _to_c_size_t(command_capacity, "command_capacity"),
-                _to_c_size_t(telemetry_capacity, "telemetry_capacity"),
-                *(() if not supports_max_channels else (_to_c_int(max_channels, "max_channels"),)),
+                _to_c_int(
+                    _resolve_zero_default(max_block_size, "max_block_size"), "max_block_size"
+                ),
+                _to_c_size_t(
+                    _resolve_zero_default(command_capacity, "command_capacity"), "command_capacity"
+                ),
+                _to_c_size_t(
+                    _resolve_zero_default(telemetry_capacity, "telemetry_capacity"),
+                    "telemetry_capacity",
+                ),
+                _to_c_int(_resolve_zero_default(max_channels, "max_channels"), "max_channels"),
             )
         )
         self._sample_rate = _narrow_double(sample_rate, "sample_rate")
@@ -308,15 +309,17 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         """
         _check(_get_lib().sonare_engine_settle_parameters(self._require_handle()))
 
-    def prime_offline_parameters(self, num_channels: int, block_size: int) -> None:
+    def prime_offline_parameters(self, num_channels: int, block_size: int | None = None) -> None:
         """Bring an offline engine to its start-of-render state without rendering.
 
         Applies queued commands, returns the mixer and effect processors to
         their prepared state, adopts the published snapshots, resolves
         automation and lane gates at the transport position and snaps every
-        smoother. Call once before the first :meth:`render_offline` chunk. Raises
-        for a channel or block count outside the prepared shape or an engine
-        that was never prepared. Not concurrent with processing.
+        smoother. Call once before the first :meth:`render_offline` chunk. An
+        omitted ``block_size`` is the default offline block, capped at the
+        prepared maximum; an explicit 0 is refused. Raises for a channel or block
+        count outside the prepared shape or an engine that was never prepared.
+        Not concurrent with processing.
         """
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_prime_offline_parameters"):
@@ -325,9 +328,14 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
             lib.sonare_engine_prime_offline_parameters(
                 self._require_handle(),
                 _to_c_int(num_channels, "num_channels"),
-                _to_c_int(block_size, "block_size"),
+                _to_c_int(_resolve_zero_default(block_size, "block_size"), "block_size"),
             )
         )
+
+    @property
+    def max_block_size(self) -> int:
+        """The largest block :meth:`process` accepts; 0 before the engine is prepared."""
+        return _max_block_size(_get_lib().sonare_engine_max_block_size, self._require_handle())
 
     @property
     def tail_samples(self) -> int:

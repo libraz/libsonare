@@ -105,7 +105,7 @@ def test_a_refused_warp_mode_never_reaches_the_arrangement() -> None:
     try:
         track = project.add_track("audio", "gtr")
         clip = project.add_clip(
-            track, 0.0, 480.0, audio=[0.1, 0.2, 0.1, 0.0], audio_sample_rate=48000
+            track, 0.0, 480.0, audio=[0.1, 0.2, 0.1, 0.0], audio_channels=1, audio_sample_rate=48000
         )
         project.set_clip_warp_mode(clip, "tempoSync")
         by_name = project.to_json()

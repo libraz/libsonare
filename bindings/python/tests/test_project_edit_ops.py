@@ -21,7 +21,9 @@ def _audio_project() -> tuple[Project, int, int]:
     """A project with one audio track and one short audio clip."""
     p = Project()
     track = p.add_track("audio", "gtr")
-    clip = p.add_clip(track, 0.0, 480.0, audio=[0.1, 0.2, 0.1, 0.0], audio_sample_rate=48000)
+    clip = p.add_clip(
+        track, 0.0, 480.0, audio=[0.1, 0.2, 0.1, 0.0], audio_channels=1, audio_sample_rate=48000
+    )
     return p, track, clip
 
 

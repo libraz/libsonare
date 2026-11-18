@@ -338,14 +338,17 @@ class EngineCaptureStatus:
 class EngineBounceOptions:
     """Offline export options for the realtime engine.
 
-    ``source_sample_rate`` and ``target_sample_rate`` both default to ``0``:
-    the source is the engine's prepared rate, and the target is the source (no
-    resampling). A non-zero ``source_sample_rate`` must equal the prepared rate.
+    ``num_channels`` is required. An omitted ``block_size`` is the default
+    offline block, capped at the engine's prepared maximum; an explicit 0 is
+    refused. ``source_sample_rate`` and ``target_sample_rate`` both default to
+    ``0``: the source is the engine's prepared rate, and the target is the
+    source (no resampling). A non-zero ``source_sample_rate`` must equal the
+    prepared rate.
     """
 
     total_frames: int
-    block_size: int = 128
-    num_channels: int = 2
+    num_channels: int
+    block_size: int | None = None
     target_sample_rate: int = 0
     source_sample_rate: int = 0
     normalize_lufs: bool = False
@@ -368,11 +371,14 @@ class EngineBounceResult:
 
 @dataclass(frozen=True, slots=True)
 class EngineFreezeOptions:
-    """Offline freeze options for replacing current engine output with a clip."""
+    """Offline freeze options for replacing current engine output with a clip.
+
+    ``num_channels`` is required; ``block_size`` is as in :class:`EngineBounceOptions`.
+    """
 
     total_frames: int
-    block_size: int = 128
-    num_channels: int = 2
+    num_channels: int
+    block_size: int | None = None
     clip_id: int = 1
     start_ppq: float = 0.0
     gain: float = 1.0

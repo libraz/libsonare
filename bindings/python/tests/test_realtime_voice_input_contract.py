@@ -75,7 +75,7 @@ def _new_changer(
         SAMPLE_RATE,
         _flat(config),
         max_block_size=BLOCK_SIZE,
-        channels=channels,
+        num_channels=channels,
     )
 
 

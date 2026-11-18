@@ -5545,7 +5545,7 @@ test = "bindings/python/tests/test_metering_absent_defaults.py::test_a_percentil
 [[entry]]
 kind = "class"
 old = "StreamingMasteringChain"
-changed = "builds and prepares at construction; sample_rate is a required keyword, max_block_size defaults to 128 and num_channels to 1; config takes the nested chain config only, and a dotted key such as \"eq.tilt.tiltDb\" raises SonareValueError"
+changed = "builds and prepares at construction; sample_rate and num_channels are required keywords and an omitted max_block_size takes the library default (an explicit 0 raises SonareValueError); config takes the nested chain config only, and a dotted key such as \"eq.tilt.tiltDb\" raises SonareValueError"
 domain = "mastering"
 rule = "construction"
 test = "bindings/python/tests/test_streaming_mastering_shape.py::test_the_chain_is_ready_once_constructed"
@@ -5608,7 +5608,7 @@ test = "bindings/python/tests/test_streaming_mastering_shape.py::test_counters_a
 [[entry]]
 kind = "class"
 old = "StreamingEqualizer"
-changed = "sample_rate is a required keyword (was 48000 by default)"
+changed = "sample_rate is a required keyword (was 48000 by default); an omitted max_block_size takes the library default (was 512), an explicit 0 raises SonareValueError, and the max_block_size attribute reads the handle's effective size rather than echoing the argument"
 domain = "mastering"
 rule = "sample-rate-required"
 test = "bindings/python/tests/test_streaming_mastering_shape.py::test_the_sample_rate_is_required"
@@ -8718,3 +8718,307 @@ changed = "a key mapping takes root and mode only; any other key raises SonareVa
 domain = "effects"
 rule = "snake-case-only"
 test = "bindings/python/tests/test_mapping_keys.py::test_a_helper_mapping_refuses_an_unknown_key"
+
+[[entry]]
+kind = "class"
+old = "RealtimeVoiceChanger"
+changed = "num_channels (was channels, default 1) is a required keyword, and an omitted max_block_size takes the library default (was 128); an explicit 0 raises SonareValueError"
+domain = "effects"
+rule = "num-channels"
+test = "bindings/python/tests/test_block_size_absence.py::test_a_required_channel_count_or_sample_rate_has_no_default"
+
+[[entry]]
+kind = "option"
+old = "RealtimeVoiceChanger.process_interleaved(channels)"
+new = "RealtimeVoiceChanger.process_interleaved(num_channels)"
+domain = "effects"
+rule = "num-channels"
+
+[[entry]]
+kind = "class"
+old = "PlaybackRenderer"
+changed = "sample_rate is a required keyword (was 48000 by default), and an omitted max_block_size takes the library default (was 1024); an explicit 0 raises SonareValueError"
+domain = "engine"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_block_size_absence.py::test_a_required_channel_count_or_sample_rate_has_no_default"
+
+[[entry]]
+kind = "option"
+old = "Mixer.from_scene_json(block_size)"
+to = "Mixer.from_scene_json(max_block_size)"
+changed = "renamed max_block_size after the C parameter; omitted takes the library default (was 512) and an explicit 0 raises SonareValueError"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_block_size_absence.py::test_an_explicit_non_positive_block_size_is_refused"
+
+[[entry]]
+kind = "option"
+old = "Mixer.from_scene_json(sample_rate)"
+changed = "required (was 48000 by default)"
+domain = "engine"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_block_size_absence.py::test_a_required_channel_count_or_sample_rate_has_no_default"
+
+[[entry]]
+kind = "class"
+old = "RealtimeEngine"
+changed = "sample_rate is required (was 48000.0 by default); an omitted max_block_size, command_capacity, telemetry_capacity or max_channels takes the library default and an explicit 0 raises SonareValueError"
+domain = "engine"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_block_size_absence.py::test_a_required_channel_count_or_sample_rate_has_no_default"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.prepare(max_block_size)"
+changed = "optional; omitted takes the library default and an explicit 0 raises SonareValueError"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_block_size_absence.py::test_engine_capacities_take_none_and_refuse_zero"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.prepare(command_capacity)"
+changed = "omitted takes the library default (was 1024) and an explicit 0 raises SonareValueError"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_block_size_absence.py::test_engine_capacities_take_none_and_refuse_zero"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.prepare(telemetry_capacity)"
+changed = "omitted takes the library default (was 1024) and an explicit 0 raises SonareValueError"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_block_size_absence.py::test_engine_capacities_take_none_and_refuse_zero"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.prepare(max_channels)"
+changed = "omitted takes the library default (was 64) and an explicit 0 raises SonareValueError"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_block_size_absence.py::test_engine_capacities_take_none_and_refuse_zero"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.prime_offline_parameters(block_size)"
+changed = "optional; omitted takes the library default and an explicit 0 raises SonareValueError"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_block_size_absence.py::test_engine_offline_block_size_takes_none_and_refuses_zero"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.render_offline(block_size)"
+changed = "omitted takes the library default (was 128) and an explicit 0 raises SonareValueError"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_block_size_absence.py::test_engine_offline_block_size_takes_none_and_refuses_zero"
+
+[[entry]]
+kind = "field"
+old = "EngineBounceOptions.num_channels"
+changed = "required (was 2 by default)"
+domain = "engine"
+rule = "num-channels"
+test = "bindings/python/tests/test_block_size_absence.py::test_a_required_channel_count_or_sample_rate_has_no_default"
+
+[[entry]]
+kind = "field"
+old = "EngineBounceOptions.block_size"
+changed = "omitted takes the library default (was 128) and an explicit 0 raises SonareValueError"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_block_size_absence.py::test_engine_offline_block_size_takes_none_and_refuses_zero"
+
+[[entry]]
+kind = "field"
+old = "EngineFreezeOptions.num_channels"
+changed = "required (was 2 by default)"
+domain = "engine"
+rule = "num-channels"
+test = "bindings/python/tests/test_block_size_absence.py::test_a_required_channel_count_or_sample_rate_has_no_default"
+
+[[entry]]
+kind = "field"
+old = "EngineFreezeOptions.block_size"
+changed = "omitted takes the library default (was 128) and an explicit 0 raises SonareValueError"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_block_size_absence.py::test_an_explicit_non_positive_block_size_is_refused"
+
+[[entry]]
+kind = "option"
+old = "Project.bounce(total_frames)"
+changed = "omitted (None) takes the library default; the 0 sentinel default is gone and an explicit 0 raises SonareValueError"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_block_size_absence.py::test_a_project_bounce_takes_none_for_every_omitted_size_and_refuses_zero"
+
+[[entry]]
+kind = "option"
+old = "Project.bounce(block_size)"
+changed = "omitted (None) takes the library default; the 0 sentinel default is gone and an explicit 0 raises SonareValueError"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_block_size_absence.py::test_a_project_bounce_takes_none_for_every_omitted_size_and_refuses_zero"
+
+[[entry]]
+kind = "option"
+old = "Project.bounce(num_channels)"
+changed = "omitted (None) takes the library default; the 0 sentinel default is gone and an explicit 0 raises SonareValueError"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_block_size_absence.py::test_a_project_bounce_takes_none_for_every_omitted_size_and_refuses_zero"
+
+[[entry]]
+kind = "option"
+old = "Project.bounce(sample_rate)"
+changed = "omitted (None) takes the library default; the 0 sentinel default is gone and an explicit 0 raises SonareValueError"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_block_size_absence.py::test_a_project_bounce_takes_none_for_every_omitted_size_and_refuses_zero"
+
+[[entry]]
+kind = "option"
+old = "Project.bounce_with_builtin_instrument(total_frames)"
+changed = "omitted (None) takes the library default; the 0 sentinel default is gone and an explicit 0 raises SonareValueError"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_block_size_absence.py::test_a_project_bounce_takes_none_for_every_omitted_size_and_refuses_zero"
+
+[[entry]]
+kind = "option"
+old = "Project.bounce_with_builtin_instrument(block_size)"
+changed = "omitted (None) takes the library default; the 0 sentinel default is gone and an explicit 0 raises SonareValueError"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_block_size_absence.py::test_a_project_bounce_takes_none_for_every_omitted_size_and_refuses_zero"
+
+[[entry]]
+kind = "option"
+old = "Project.bounce_with_builtin_instrument(num_channels)"
+changed = "omitted (None) takes the library default; the 0 sentinel default is gone and an explicit 0 raises SonareValueError"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_block_size_absence.py::test_a_project_bounce_takes_none_for_every_omitted_size_and_refuses_zero"
+
+[[entry]]
+kind = "option"
+old = "Project.bounce_with_builtin_instrument(sample_rate)"
+changed = "omitted (None) takes the library default; the 0 sentinel default is gone and an explicit 0 raises SonareValueError"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_block_size_absence.py::test_a_project_bounce_takes_none_for_every_omitted_size_and_refuses_zero"
+
+[[entry]]
+kind = "option"
+old = "Project.bounce_with_synth_instrument(total_frames)"
+changed = "omitted (None) takes the library default; the 0 sentinel default is gone and an explicit 0 raises SonareValueError"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_block_size_absence.py::test_a_project_bounce_takes_none_for_every_omitted_size_and_refuses_zero"
+
+[[entry]]
+kind = "option"
+old = "Project.bounce_with_synth_instrument(block_size)"
+changed = "omitted (None) takes the library default; the 0 sentinel default is gone and an explicit 0 raises SonareValueError"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_block_size_absence.py::test_a_project_bounce_takes_none_for_every_omitted_size_and_refuses_zero"
+
+[[entry]]
+kind = "option"
+old = "Project.bounce_with_synth_instrument(num_channels)"
+changed = "omitted (None) takes the library default; the 0 sentinel default is gone and an explicit 0 raises SonareValueError"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_block_size_absence.py::test_a_project_bounce_takes_none_for_every_omitted_size_and_refuses_zero"
+
+[[entry]]
+kind = "option"
+old = "Project.bounce_with_synth_instrument(sample_rate)"
+changed = "omitted (None) takes the library default; the 0 sentinel default is gone and an explicit 0 raises SonareValueError"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_block_size_absence.py::test_a_project_bounce_takes_none_for_every_omitted_size_and_refuses_zero"
+
+[[entry]]
+kind = "option"
+old = "Project.bounce_with_sf2_instrument(total_frames)"
+changed = "omitted (None) takes the library default; the 0 sentinel default is gone and an explicit 0 raises SonareValueError"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_block_size_absence.py::test_a_project_bounce_takes_none_for_every_omitted_size_and_refuses_zero"
+
+[[entry]]
+kind = "option"
+old = "Project.bounce_with_sf2_instrument(block_size)"
+changed = "omitted (None) takes the library default; the 0 sentinel default is gone and an explicit 0 raises SonareValueError"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_block_size_absence.py::test_a_project_bounce_takes_none_for_every_omitted_size_and_refuses_zero"
+
+[[entry]]
+kind = "option"
+old = "Project.bounce_with_sf2_instrument(num_channels)"
+changed = "omitted (None) takes the library default; the 0 sentinel default is gone and an explicit 0 raises SonareValueError"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_block_size_absence.py::test_a_project_bounce_takes_none_for_every_omitted_size_and_refuses_zero"
+
+[[entry]]
+kind = "option"
+old = "Project.bounce_with_sf2_instrument(sample_rate)"
+changed = "omitted (None) takes the library default; the 0 sentinel default is gone and an explicit 0 raises SonareValueError"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_block_size_absence.py::test_a_project_bounce_takes_none_for_every_omitted_size_and_refuses_zero"
+
+[[entry]]
+kind = "option"
+old = "Project.bounce_with_instruments(total_frames)"
+changed = "omitted (None) takes the library default; the 0 sentinel default is gone and an explicit 0 raises SonareValueError"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_block_size_absence.py::test_a_project_bounce_takes_none_for_every_omitted_size_and_refuses_zero"
+
+[[entry]]
+kind = "option"
+old = "Project.bounce_with_instruments(block_size)"
+changed = "omitted (None) takes the library default; the 0 sentinel default is gone and an explicit 0 raises SonareValueError"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_block_size_absence.py::test_a_project_bounce_takes_none_for_every_omitted_size_and_refuses_zero"
+
+[[entry]]
+kind = "option"
+old = "Project.bounce_with_instruments(num_channels)"
+changed = "omitted (None) takes the library default; the 0 sentinel default is gone and an explicit 0 raises SonareValueError"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_block_size_absence.py::test_a_project_bounce_takes_none_for_every_omitted_size_and_refuses_zero"
+
+[[entry]]
+kind = "option"
+old = "Project.bounce_with_instruments(sample_rate)"
+changed = "omitted (None) takes the library default; the 0 sentinel default is gone and an explicit 0 raises SonareValueError"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_block_size_absence.py::test_a_project_bounce_takes_none_for_every_omitted_size_and_refuses_zero"
+
+[[entry]]
+kind = "option"
+old = "Project.add_clip(audio_channels)"
+changed = "required alongside audio and refused without it (was 1 by default)"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_block_size_absence.py::test_a_clip_states_its_audio_format_only_alongside_audio"
+
+[[entry]]
+kind = "option"
+old = "Project.add_clip(audio_sample_rate)"
+changed = "required alongside audio and refused without it (the 0 default is gone)"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_block_size_absence.py::test_a_clip_states_its_audio_format_only_alongside_audio"

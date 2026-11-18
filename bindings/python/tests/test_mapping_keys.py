@@ -116,7 +116,7 @@ def test_project_mappings_take_one_spelling() -> None:
     try:
         track = project.add_track("audio", "gtr")
         clip = project.add_clip(
-            track, 0.0, 480.0, audio=[0.1, 0.2, 0.1, 0.0], audio_sample_rate=48000
+            track, 0.0, 480.0, audio=[0.1, 0.2, 0.1, 0.0], audio_channels=1, audio_sample_rate=48000
         )
         take = {"id": 1, "source_id": 0, "source_offset_ppq": 0.0, "name": "a"}
         _refuses(lambda m: project.set_clip_takes(clip, [m], active_take_id=1), take, "sourceId")

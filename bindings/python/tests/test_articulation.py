@@ -35,7 +35,7 @@ DESTINATION = 3
 
 def _synth_engine(engine_mode: str) -> RealtimeEngine:
     """An engine with a NativeSynth on DESTINATION running ``engine_mode``."""
-    engine = RealtimeEngine()
+    engine = RealtimeEngine(sample_rate=48000.0)
     engine.prepare(SAMPLE_RATE, BLOCK, 16, 16)
     engine.set_synth_instrument(SynthPatch(engine_mode=engine_mode), destination_id=DESTINATION)
     return engine

@@ -37,7 +37,7 @@ def _assert_invalid_state(fn: Callable[[], object]) -> None:
 def _make_voice_changer() -> Any:
     from libsonare import RealtimeVoiceChanger
 
-    return RealtimeVoiceChanger(48000)
+    return RealtimeVoiceChanger(48000, num_channels=1)
 
 
 def _make_retune() -> Any:
@@ -51,13 +51,15 @@ def _make_retune() -> Any:
 def _make_chain() -> Any:
     from libsonare import StreamingMasteringChain
 
-    return StreamingMasteringChain({"eq": {"tilt": {"tiltDb": 1.0}}}, sample_rate=48000)
+    return StreamingMasteringChain(
+        {"eq": {"tilt": {"tiltDb": 1.0}}}, sample_rate=48000, num_channels=1
+    )
 
 
 def _make_mixer() -> Any:
     from libsonare import Mixer
 
-    return Mixer.from_scene_json(_SCENE)
+    return Mixer.from_scene_json(_SCENE, 48000)
 
 
 _MEMBERS: dict[str, tuple[Callable[[], Any], list[tuple[str, tuple[Any, ...]]]]] = {

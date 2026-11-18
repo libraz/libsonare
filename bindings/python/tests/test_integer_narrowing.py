@@ -159,7 +159,7 @@ def test_a_marker_kind_is_an_exact_token() -> None:
 @pytest.fixture
 def mixer_scene():
     scene = ls.mixing_scene_preset_json(ls.mixing_scene_preset_names()[0])
-    mixer = ls.Mixer.from_scene_json(scene, sample_rate=48000, block_size=256)
+    mixer = ls.Mixer.from_scene_json(scene, sample_rate=48000, max_block_size=256)
     try:
         yield mixer
     finally:
@@ -172,7 +172,9 @@ def two_track_project():
     project = ls.Project()
     tracks = [project.add_track("audio", name) for name in ("a", "b")]
     clips = [
-        project.add_clip(track, 0.0, 480.0, audio=[0.1, 0.2], audio_sample_rate=48000)
+        project.add_clip(
+            track, 0.0, 480.0, audio=[0.1, 0.2], audio_channels=1, audio_sample_rate=48000
+        )
         for track in tracks
     ]
     return project, tracks, clips
@@ -245,7 +247,9 @@ def arrangement_project():
     project = ls.Project()
     tracks = [project.add_track("audio", name) for name in ("a", "b")]
     clips = [
-        project.add_clip(track, 0.0, 480.0, audio=[0.1 * (i + 1)] * 8, audio_sample_rate=48000)
+        project.add_clip(
+            track, 0.0, 480.0, audio=[0.1 * (i + 1)] * 8, audio_channels=1, audio_sample_rate=48000
+        )
         for i, track in enumerate(tracks)
     ]
     spare = [project.add_track("audio", name) for name in ("c", "d")]
@@ -328,7 +332,9 @@ def test_a_wrapped_take_id_is_refused_rather_than_read_as_take_zero() -> None:
     """
     project = ls.Project()
     track = project.add_track("audio", "a")
-    clip = project.add_clip(track, 0.0, 480.0, audio=[0.1] * 8, audio_sample_rate=48000)
+    clip = project.add_clip(
+        track, 0.0, 480.0, audio=[0.1] * 8, audio_channels=1, audio_sample_rate=48000
+    )
 
     def applied(take_id) -> str:
         project.set_clip_takes(clip, [{"id": take_id, "source_id": 1}])
@@ -359,7 +365,12 @@ def test_a_wrapped_source_audio_argument_is_refused_rather_than_replacing_anothe
         for index, name in enumerate(("a", "b")):
             track = project.add_track("audio", name)
             project.add_clip(
-                track, 0.0, 480.0, audio=[0.1 * (index + 1)] * 8, audio_sample_rate=48000
+                track,
+                0.0,
+                480.0,
+                audio=[0.1 * (index + 1)] * 8,
+                audio_channels=1,
+                audio_sample_rate=48000,
             )
         project.set_source_audio(source_id, [0.9, 0.1] * 4, channels, sample_rate)
         return np.asarray(project.bounce(), dtype=np.float64).tobytes()

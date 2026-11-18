@@ -19,6 +19,7 @@ from typing import Any, cast
 import numpy as np
 
 from ._errors import _not_supported, _require_open
+from ._narrowing import _resolve_zero_default
 from ._runtime import (
     _C_INT_MAX,
     _C_INT_MIN,
@@ -28,6 +29,7 @@ from ._runtime import (
     _from_c_float_array,
     _get_lib,
     _guard_buffer,
+    _max_block_size,
     _narrow_int,
     _planar_channel_arrays,
     _to_c_float,
@@ -149,10 +151,15 @@ class PlaybackRenderer:
         self,
         config: Mapping[str, Any] | str,
         *,
+        sample_rate: int,
         hrtf: HrtfSet | None = None,
-        sample_rate: int = 48000,
-        max_block_size: int = 1024,
+        max_block_size: int | None = None,
     ) -> None:
+        """Create a renderer at ``sample_rate``.
+
+        ``max_block_size`` bounds the frames of every ``process_*`` call; omitted,
+        the library default applies.
+        """
         # Set first so a failed create leaves a valid attribute for
         # __del__/close() instead of raising AttributeError.
         self._handle = ctypes.c_void_p()
@@ -163,7 +170,9 @@ class PlaybackRenderer:
                 _playback_config_to_json(config),
                 hrtf._require_handle() if hrtf is not None else None,
                 _to_c_int(sample_rate, "sample_rate"),
-                _to_c_int(max_block_size, "max_block_size"),
+                _to_c_int(
+                    _resolve_zero_default(max_block_size, "max_block_size"), "max_block_size"
+                ),
                 ctypes.byref(self._handle),
             )
         )
@@ -235,6 +244,13 @@ class PlaybackRenderer:
                 _to_c_float(pitch_deg, "pitch_deg"),
                 _to_c_float(roll_deg, "roll_deg"),
             )
+        )
+
+    @property
+    def max_block_size(self) -> int:
+        """The largest frame count one ``process_*`` call accepts."""
+        return _max_block_size(
+            self._lib.sonare_playback_renderer_max_block_size, self._require_handle()
         )
 
     @property

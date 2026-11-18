@@ -733,7 +733,7 @@ def test_drum_kit_preset_plays_the_gm_map() -> None:
 
 
 def test_engine_set_synth_instrument_renders_live_midi() -> None:
-    engine = RealtimeEngine()
+    engine = RealtimeEngine(sample_rate=48000.0)
     try:
         engine.prepare(48000.0, 128, 16, 16)
         engine.set_synth_instrument("sawLead", destination_id=7)
@@ -759,7 +759,7 @@ def test_engine_set_synth_instrument_follows_gm_programs_only_when_enabled() -> 
     block_count = 32
 
     def render(use_gm_programs: bool, program: int) -> np.ndarray:
-        engine = RealtimeEngine()
+        engine = RealtimeEngine(sample_rate=48000.0)
         try:
             engine.prepare(48000.0, block_size, 16, 16)
             engine.set_synth_instrument(
@@ -1041,7 +1041,7 @@ def test_engine_params_survive_garbage_collection_until_the_call_returns() -> No
 
 
 def test_engine_params_reach_the_live_engine_binding() -> None:
-    engine = RealtimeEngine()
+    engine = RealtimeEngine(sample_rate=48000.0)
     try:
         engine.set_synth_instrument(
             SynthPatch(engine_mode="bowedString", engine_params={"bowForce": 0.5}),

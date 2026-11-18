@@ -49,7 +49,7 @@ def test_state_read_is_a_property(class_name: str, name: str) -> None:
 @pytest.mark.parametrize("with_carrier", [False, True])
 def test_process_planar_stereo_returns_a_stereo_block(with_carrier: bool) -> None:
     tone = (0.2 * np.sin(np.arange(512) * 0.05)).astype(np.float32)
-    with libsonare.RealtimeVoiceChanger(48_000, max_block_size=128, channels=2) as changer:
+    with libsonare.RealtimeVoiceChanger(48_000, max_block_size=128, num_channels=2) as changer:
         if with_carrier:
             result = changer.process_planar_stereo_with_carrier(tone, tone, tone)
         else:

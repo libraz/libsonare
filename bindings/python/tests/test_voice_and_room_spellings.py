@@ -52,7 +52,7 @@ def test_a_kebab_preset_id_is_refused(old: str) -> None:
     with pytest.raises(SonareValueError):
         libsonare.realtime_voice_changer_preset_config(old)
     with pytest.raises(libsonare.SonareError):
-        libsonare.RealtimeVoiceChanger(SR, old)
+        libsonare.RealtimeVoiceChanger(SR, old, num_channels=1)
 
 
 def test_the_config_fields_carry_their_unit_and_no_doubled_word() -> None:
@@ -87,7 +87,7 @@ def test_the_config_fields_carry_their_unit_and_no_doubled_word() -> None:
 )
 def test_config_tokens_are_lower_camel(field: str, new: str, old: str) -> None:
     base = libsonare.realtime_voice_changer_preset_config("neutralMonitor")
-    with libsonare.RealtimeVoiceChanger(SR) as changer:
+    with libsonare.RealtimeVoiceChanger(SR, num_channels=1) as changer:
         changer.set_config_pod(dataclasses.replace(base, **{field: new}))
         assert getattr(changer.config_pod(), field) == new
         with pytest.raises(SonareValueError, match="expected one of|must be one of"):
@@ -111,12 +111,12 @@ def test_the_flat_config_takes_harmony_steps_as_one_array() -> None:
     base = libsonare.realtime_voice_changer_preset_config("choirHarmony")
     flat = _flat(dataclasses.replace(base, harmony_steps=(2, 5, -3)))
     assert "harmonySteps" in flat
-    with libsonare.RealtimeVoiceChanger(SR, flat) as changer:
+    with libsonare.RealtimeVoiceChanger(SR, flat, num_channels=1) as changer:
         assert json.loads(changer.config_json())["dsp"]["harmony"]["steps"] == [2, 5, -3]
     split = {k: v for k, v in flat.items() if k != "harmonySteps"}
     split.update(harmonyStep1=2, harmonyStep2=5, harmonyStep3=-3)
     with pytest.raises(libsonare.SonareError, match="harmonyStep1"):
-        libsonare.RealtimeVoiceChanger(SR, split)
+        libsonare.RealtimeVoiceChanger(SR, split, num_channels=1)
 
 
 def test_streaming_retune_names_its_quantities_with_units() -> None:
@@ -194,7 +194,9 @@ def test_the_trim_threshold_is_in_dbfs() -> None:
 def test_a_fade_curve_outside_the_four_tokens_is_refused(old: str) -> None:
     project = libsonare.Project()
     track = project.add_track("audio", "gtr")
-    clip = project.add_clip(track, 0.0, 480.0, audio=[0.1, 0.2, 0.1, 0.0], audio_sample_rate=SR)
+    clip = project.add_clip(
+        track, 0.0, 480.0, audio=[0.1, 0.2, 0.1, 0.0], audio_channels=1, audio_sample_rate=SR
+    )
     for token in ("linear", "equalPower", "exponential", "logarithmic"):
         project.set_clip_fade(clip, 4.0, 4.0, fade_in_curve=token, fade_out_curve=token)
     with pytest.raises(libsonare.SonareError):

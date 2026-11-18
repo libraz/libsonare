@@ -191,13 +191,13 @@ def test_the_schema_and_the_loader_agree_on_where_each_bound_sits(
 
     _place(scene, path, maximum)
     assert _findings(scene) == []  # the schema admits the boundary value
-    libsonare.Mixer.from_scene_json(json.dumps(scene)).close()  # and so does the loader
+    libsonare.Mixer.from_scene_json(json.dumps(scene), 48000).close()  # and so does the loader
 
     _place(scene, path, maximum + 1)
     findings = _findings(scene)
     assert any("over the maximum" in finding for finding in findings), findings
     with raises_coded(ErrorCode.INVALID_FORMAT):
-        libsonare.Mixer.from_scene_json(json.dumps(scene))
+        libsonare.Mixer.from_scene_json(json.dumps(scene), 48000)
 
 
 @pytest.mark.parametrize("factor", [4, 8, 0, 1, 2, 3, 5, 16])
@@ -212,8 +212,8 @@ def test_the_schema_and_the_loader_agree_on_the_true_peak_oversample_set(factor:
     findings = _findings(scene)
     if factor in (4, 8):
         assert findings == []
-        libsonare.Mixer.from_scene_json(json.dumps(scene)).close()
+        libsonare.Mixer.from_scene_json(json.dumps(scene), 48000).close()
     else:
         assert any("is outside [4, 8]" in finding for finding in findings), findings
         with raises_coded(ErrorCode.INVALID_FORMAT):
-            libsonare.Mixer.from_scene_json(json.dumps(scene))
+            libsonare.Mixer.from_scene_json(json.dumps(scene), 48000)

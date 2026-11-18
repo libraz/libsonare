@@ -644,7 +644,7 @@ class TestBufferRankGuards:
         from libsonare import RealtimeVoiceChanger
 
         with (
-            RealtimeVoiceChanger(sample_rate=48000, channels=1, max_block_size=128) as changer,
+            RealtimeVoiceChanger(sample_rate=48000, num_channels=1, max_block_size=128) as changer,
             pytest.raises(SonareValueError, match=r"samples must be a 1-D buffer"),
         ):
             changer.process_mono(_stereo_2d(256))
@@ -694,7 +694,7 @@ class TestRealtimeFailuresDoNotBorrowAnEarlierMessage:
     def test_voice_changer_reports_its_own_code_not_the_previous_failure(self):
         from libsonare._runtime import _get_lib
 
-        with RealtimeVoiceChanger(sample_rate=48000, channels=1, max_block_size=128) as changer:
+        with RealtimeVoiceChanger(sample_rate=48000, num_channels=1, max_block_size=128) as changer:
             with pytest.raises(SonareError):
                 stft(_sine(1024), SR, n_fft=3)
             stale = _get_lib().sonare_last_error_message().decode("utf-8")

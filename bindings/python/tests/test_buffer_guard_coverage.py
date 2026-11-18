@@ -159,13 +159,17 @@ _CLASS_INSTANCES: dict[str, Callable[[], Any]] = {
     "PlaybackLoudnessMeter": lambda: libsonare.PlaybackLoudnessMeter(
         num_channels=1, sample_rate=22050
     ),
-    "PlaybackRenderer": lambda: libsonare.PlaybackRenderer({}, max_block_size=128),
+    "PlaybackRenderer": lambda: libsonare.PlaybackRenderer(
+        {}, max_block_size=128, sample_rate=48000
+    ),
     "Project": lambda: libsonare.Project(),
-    "RealtimeVoiceChanger": lambda: libsonare.RealtimeVoiceChanger(22050, channels=2),
+    "RealtimeVoiceChanger": lambda: libsonare.RealtimeVoiceChanger(22050, num_channels=2),
     "SampleBank": lambda: libsonare.SampleBank(),
     "StreamAnalyzer": lambda: libsonare.StreamAnalyzer(libsonare.StreamConfig(sample_rate=22050)),
     "StreamingEqualizer": lambda: libsonare.StreamingEqualizer(sample_rate=22050),
-    "StreamingMasteringChain": lambda: libsonare.StreamingMasteringChain(sample_rate=22050),
+    "StreamingMasteringChain": lambda: libsonare.StreamingMasteringChain(
+        sample_rate=22050, num_channels=1
+    ),
     "StreamingRetune": lambda: libsonare.StreamingRetune(),
 }
 
@@ -665,7 +669,7 @@ def test_planar_stereo_rank_rejection_names_the_side(bad_side: str) -> None:
 
     with (
         libsonare.RealtimeVoiceChanger(
-            48000, "brightIdol", max_block_size=128, channels=2
+            48000, "brightIdol", max_block_size=128, num_channels=2
         ) as changer,
         pytest.raises(SonareValueError) as excinfo,
     ):

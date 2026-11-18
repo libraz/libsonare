@@ -39,7 +39,7 @@ from ._ffi_types_core import (
     SonareMeterTelemetryRecordWideV2,
     SonareScopeTelemetryRecord,
 )
-from ._narrowing import _narrow_double
+from ._narrowing import _narrow_double, _resolve_zero_default
 from ._runtime import (
     _C_INT_MAX,
     _C_INT_MIN,
@@ -285,12 +285,14 @@ class _EngineIoMixin:
         self,
         channels: Sequence[Sequence[float]],
         *,
-        block_size: int = 128,
+        block_size: int | None = None,
         finalize: bool = True,
     ) -> list[np.ndarray]:
         """Render one offline span from the current transport position.
 
-        ``finalize`` says whether this call ends the timeline. True (the
+        An omitted ``block_size`` is the default offline block, capped at the
+        prepared maximum; an explicit 0 is refused. ``finalize`` says whether
+        this call ends the timeline. True (the
         default, and what a one-shot bounce wants) releases every sounding note
         and flushes the PDC / alignment delay lines before returning. False
         renders one CHUNK of a longer timeline: a note held across the chunk
@@ -314,7 +316,7 @@ class _EngineIoMixin:
                 ptrs,
                 _to_c_int(len(arrays), "num_channels"),
                 _to_c_int64(frame_count, "frame_count"),
-                _to_c_int(block_size, "block_size"),
+                _to_c_int(_resolve_zero_default(block_size, "block_size"), "block_size"),
                 1 if finalize else 0,
             )
         )
@@ -374,7 +376,7 @@ class _EngineIoMixin:
         # value; int() would truncate a fraction past it. normalize_lufs is the
         # one exception -- it is a documented bool, spelled 0/1 here.
         raw_options.total_frames = options.total_frames
-        raw_options.block_size = options.block_size
+        raw_options.block_size = _resolve_zero_default(options.block_size, "options.block_size")
         raw_options.num_channels = options.num_channels
         raw_options.target_sample_rate = options.target_sample_rate
         raw_options.source_sample_rate = options.source_sample_rate
@@ -422,7 +424,7 @@ class _EngineIoMixin:
         # Assigned unconverted so the struct's own narrowing sees each caller
         # value; int() would truncate a fraction past it.
         raw_options.total_frames = options.total_frames
-        raw_options.block_size = options.block_size
+        raw_options.block_size = _resolve_zero_default(options.block_size, "options.block_size")
         raw_options.num_channels = options.num_channels
         raw_options.clip_id = options.clip_id
         raw_options.start_ppq = _narrow_double(options.start_ppq, "options.start_ppq")

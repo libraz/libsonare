@@ -410,7 +410,7 @@ def _play_live(
     close_after_binding: SampleBank | None = None,
 ) -> np.ndarray:
     """Bind a sample patch to a prepared engine and render 8 blocks of one note."""
-    engine = RealtimeEngine()
+    engine = RealtimeEngine(sample_rate=48000.0)
     try:
         engine.prepare(float(SAMPLE_RATE), BLOCK, 16, 16)
         engine.set_synth_instrument(patch, destination_id=DESTINATION, sample_bank=sample_bank)
@@ -465,7 +465,7 @@ def test_a_closed_bank_is_rejected_on_both_hosts() -> None:
     bank = SampleBank()
     bank.add_zone(0, sample_index=bank.add_sample(_tone()))
     bank.close()
-    engine = RealtimeEngine()
+    engine = RealtimeEngine(sample_rate=48000.0)
     try:
         engine.prepare(float(SAMPLE_RATE), BLOCK, 16, 16)
         with raises_coded(ErrorCode.INVALID_STATE, match="SampleBank is closed"):

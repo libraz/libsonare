@@ -65,7 +65,7 @@ def test_no_encode_call_bypasses_the_shared_encoder() -> None:
     [
         lambda: note_to_hz("A\x004"),
         lambda: mixing_scene_preset_json("a\x00b"),
-        lambda: Mixer.from_scene_json('{"version":1}\x00trailing'),
+        lambda: Mixer.from_scene_json('{"version":1}\x00trailing', 48000),
         lambda: mastering_preset_params("pop\x00junk"),
         lambda: master_audio([0.1] * 4096, 44100, "pop\x00junk"),
         lambda: realtime_voice_changer_preset_json("neutralMonitor\x00junk"),
@@ -95,7 +95,7 @@ def test_embedded_nul_is_refused_on_mixer_methods() -> None:
     mixer = Mixer.from_scene_json(
         mixing_scene_preset_json(__import__("libsonare").mixing_scene_preset_names()[0]),
         sample_rate=48000,
-        block_size=256,
+        max_block_size=256,
     )
     try:
         with pytest.raises(SonareValueError, match="strip_id must not contain NUL"):
@@ -158,7 +158,7 @@ def test_mixer_surround_pan_names_the_refused_field(field: str, bad: object) -> 
     mixer = Mixer.from_scene_json(
         mixing_scene_preset_json(libsonare.mixing_scene_preset_names()[0]),
         sample_rate=48000,
-        block_size=256,
+        max_block_size=256,
     )
     try:
         with pytest.raises((SonareValueError, TypeError), match=field):

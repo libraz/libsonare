@@ -154,7 +154,7 @@ def test_part_rig_methods_refuse_missing_native_symbols(
 
 
 def test_engine_refuses_builtin_instrument():
-    with RealtimeEngine() as engine:
+    with RealtimeEngine(sample_rate=48000.0) as engine:
         engine.prepare(48000.0, 128, 16, 16)
         engine.set_builtin_instrument(BuiltinSynthConfig(), DESTINATION)
         with pytest.raises(SonareError) as refusal:
@@ -163,7 +163,7 @@ def test_engine_refuses_builtin_instrument():
 
 
 def test_engine_refuses_unbound_destination():
-    with RealtimeEngine() as engine:
+    with RealtimeEngine(sample_rate=48000.0) as engine:
         engine.prepare(48000.0, 128, 16, 16)
         with pytest.raises(SonareValueError) as refusal:
             engine.set_part_rig(DESTINATION, 0, mode="none")

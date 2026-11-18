@@ -14,6 +14,7 @@ import ast
 import inspect
 import json
 from pathlib import Path
+from typing import is_typeddict
 
 import numpy as np
 import pytest
@@ -413,7 +414,7 @@ def mixer():
     """Build a Mixer from the first preset scene and close it afterwards."""
     from libsonare import Mixer
 
-    mixer = Mixer.from_scene_json(_first_preset_json(), sample_rate=48000, block_size=256)
+    mixer = Mixer.from_scene_json(_first_preset_json(), sample_rate=48000, max_block_size=256)
     try:
         yield mixer
     finally:
@@ -659,10 +660,13 @@ def test_types_stub_typed_dicts_match_runtime() -> None:
     from libsonare import types as runtime_types
 
     stub_fields = _stub_typed_dict_fields()
-    # Floor: the stub is parsed, not imported, so a parser change that stops
-    # matching would otherwise pass by comparing nothing.
-    assert len(stub_fields) >= 8, (
-        f"only {len(stub_fields)} TypedDicts parsed from types.pyi; the collector stopped matching"
+    # The stub is parsed, not imported, so the parsed set is held to the runtime
+    # one: a collector that stops matching cannot pass by comparing nothing.
+    runtime_names = {name for name, value in vars(runtime_types).items() if is_typeddict(value)}
+    assert runtime_names, "libsonare.types declares no TypedDict; the runtime scan matched nothing"
+    assert set(stub_fields) == runtime_names, (
+        f"TypedDicts parsed from types.pyi {sorted(stub_fields)} differ from the runtime's "
+        f"{sorted(runtime_names)}"
     )
 
     compared = 0

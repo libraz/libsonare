@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from ._errors import _not_supported
+from ._narrowing import _resolve_zero_default
 from ._project_model import *  # noqa: F403
 from ._project_model import (
     _make_instrument_callbacks,
@@ -39,10 +40,27 @@ from ._runtime import (
 
 
 def _reshape_bounce(interleaved: np.ndarray, num_channels: int) -> np.ndarray:
-    channels = num_channels if num_channels > 0 else 2
-    if channels > 0 and interleaved.size % channels == 0:
-        return interleaved.reshape(-1, channels)
-    return interleaved.reshape(-1, 1)
+    """Shape an interleaved bounce as ``(frames, channels)`` at the width it was mixed at."""
+    return interleaved.reshape(-1, num_channels)
+
+
+def _bounce_options(
+    total_frames: int | None,
+    block_size: int | None,
+    num_channels: int | None,
+    sample_rate: int | None,
+    instrument_latency_samples: int,
+) -> SonareProjectBounceOptions:
+    """Build the C bounce options, mapping each omitted size onto the C ABI's 0."""
+    # Passed unconverted so the struct's own narrowing sees each caller value;
+    # int() would truncate a fraction past it.
+    return SonareProjectBounceOptions(
+        total_frames=_resolve_zero_default(total_frames, "total_frames"),
+        block_size=_resolve_zero_default(block_size, "block_size"),
+        num_channels=_resolve_zero_default(num_channels, "num_channels"),
+        sample_rate=_resolve_zero_default(sample_rate, "sample_rate"),
+        instrument_latency_samples=instrument_latency_samples,
+    )
 
 
 def _compile_result_fields(
@@ -89,19 +107,21 @@ class _ProjectRenderMixin:
     def bounce(
         self,
         *,
-        total_frames: int = 0,
-        block_size: int = 0,
-        num_channels: int = 0,
-        sample_rate: int = 0,
+        total_frames: int | None = None,
+        block_size: int | None = None,
+        num_channels: int | None = None,
+        sample_rate: int | None = None,
         instrument_latency_samples: int = 0,
     ) -> np.ndarray:
         """Compile + render the project offline to interleaved float audio.
 
-        Returns a ``(frames, channels)`` float32 ndarray. Deterministic: the
-        same project + options yields a bit-identical array within one build.
-        Zero-valued options take native defaults (project sample rate, 2
-        channels, block 128). Omitting ``total_frames`` (or passing <= 0) makes
-        the native layer auto-derive the render length from the arrangement.
+        Returns a ``(frames, channels)`` float32 ndarray at the width the master
+        was mixed at. Deterministic: the same project + options yields a
+        bit-identical array within one build. An omitted option takes the
+        library default: the project's sample rate, the scene master's layout
+        width (2 with no master), the default render block, and a render length
+        derived from the arrangement. An explicit 0 or a negative value is
+        refused.
 
         Note: MIDI tracks render to silence here because no instrument is bound;
         use :meth:`bounce_with_builtin_instrument` to render MIDI through the
@@ -110,13 +130,10 @@ class _ProjectRenderMixin:
         lib = _get_lib()
         # Passed unconverted so the struct's own narrowing sees each caller
         # value; int() would truncate a fraction past it.
-        options = SonareProjectBounceOptions(
-            total_frames=total_frames,
-            block_size=block_size,
-            num_channels=num_channels,
-            sample_rate=sample_rate,
-            instrument_latency_samples=instrument_latency_samples,
+        options = _bounce_options(
+            total_frames, block_size, num_channels, sample_rate, instrument_latency_samples
         )
+        width = ctypes.c_int()
         with _out_float_array(lib) as (out, out_len):
             _check(
                 lib.sonare_project_bounce(
@@ -124,10 +141,11 @@ class _ProjectRenderMixin:
                     ctypes.byref(options),
                     ctypes.byref(out),
                     ctypes.byref(out_len),
+                    ctypes.byref(width),
                 )
             )
             interleaved = _from_c_float_array(out, int(out_len.value))
-        return _reshape_bounce(interleaved, num_channels)
+        return _reshape_bounce(interleaved, width.value)
 
     def bounce_with_builtin_instrument(
         self,
@@ -135,10 +153,10 @@ class _ProjectRenderMixin:
         *,
         destination_id: int = 0,
         instruments: Sequence[tuple[int, BuiltinSynthConfig]] | None = None,
-        total_frames: int = 0,
-        block_size: int = 0,
-        num_channels: int = 0,
-        sample_rate: int = 0,
+        total_frames: int | None = None,
+        block_size: int | None = None,
+        num_channels: int | None = None,
+        sample_rate: int | None = None,
         instrument_latency_samples: int = 0,
     ) -> np.ndarray:
         """Compile + render the project, driving MIDI tracks through the built-in synth.
@@ -156,10 +174,10 @@ class _ProjectRenderMixin:
                 :meth:`set_track_midi_destination`; default 0).
             instruments: Optional explicit list of ``(destination_id, patch)``
                 bindings, overriding ``instrument`` / ``destination_id``.
-            total_frames: Render length in frames; <= 0 auto-derives the length
+            total_frames: Render length in frames; omitted derives the length
                 from the arrangement (musical end + the synth's release tail).
             block_size / num_channels / sample_rate / instrument_latency_samples:
-                As :meth:`bounce` (0 takes native defaults).
+                As :meth:`bounce` (omitted takes the library default).
 
         Returns a ``(frames, channels)`` float32 ndarray. Deterministic for a
         fixed project + options + patch.
@@ -179,13 +197,10 @@ class _ProjectRenderMixin:
             c_bindings[i].config = patch._to_c()
         # Passed unconverted so the struct's own narrowing sees each caller
         # value; int() would truncate a fraction past it.
-        options = SonareProjectBounceOptions(
-            total_frames=total_frames,
-            block_size=block_size,
-            num_channels=num_channels,
-            sample_rate=sample_rate,
-            instrument_latency_samples=instrument_latency_samples,
+        options = _bounce_options(
+            total_frames, block_size, num_channels, sample_rate, instrument_latency_samples
         )
+        width = ctypes.c_int()
         with _out_float_array(lib) as (out, out_len):
             _check(
                 lib.sonare_project_bounce_with_builtin_instruments(
@@ -195,10 +210,11 @@ class _ProjectRenderMixin:
                     _to_c_size_t(count, "count"),
                     ctypes.byref(out),
                     ctypes.byref(out_len),
+                    ctypes.byref(width),
                 )
             )
             interleaved = _from_c_float_array(out, int(out_len.value))
-        return _reshape_bounce(interleaved, num_channels)
+        return _reshape_bounce(interleaved, width.value)
 
     def bounce_with_synth_instrument(
         self,
@@ -207,10 +223,10 @@ class _ProjectRenderMixin:
         destination_id: int = 0,
         instruments: Sequence[tuple[int, SynthPatch | str]] | None = None,
         auto_select_gm: bool = False,
-        total_frames: int = 0,
-        block_size: int = 0,
-        num_channels: int = 0,
-        sample_rate: int = 0,
+        total_frames: int | None = None,
+        block_size: int | None = None,
+        num_channels: int | None = None,
+        sample_rate: int | None = None,
         instrument_latency_samples: int = 0,
     ) -> np.ndarray:
         """Compile + render the project, driving MIDI tracks through the NativeSynth.
@@ -238,10 +254,10 @@ class _ProjectRenderMixin:
                 fixed patch fallback. It applies to every binding that does not
                 state :attr:`SynthPatch.use_gm_programs`, which wins where it is
                 set and is what lets two destinations differ.
-            total_frames: Render length in frames; <= 0 auto-derives the length
+            total_frames: Render length in frames; omitted derives the length
                 from the arrangement (musical end + the patch's release tail).
             block_size / num_channels / sample_rate / instrument_latency_samples:
-                As :meth:`bounce` (0 takes native defaults).
+                As :meth:`bounce` (omitted takes the library default).
 
         A patch whose ``engine_mode`` is ``"sample"`` reads the
         :class:`SampleBank` on its own :attr:`SynthPatch.sample_bank`, so each
@@ -279,13 +295,10 @@ class _ProjectRenderMixin:
             c_bindings[i].sample_bank = bank._require_handle() if bank is not None else None
         # Passed unconverted so the struct's own narrowing sees each caller
         # value; int() would truncate a fraction past it.
-        options = SonareProjectBounceOptions(
-            total_frames=total_frames,
-            block_size=block_size,
-            num_channels=num_channels,
-            sample_rate=sample_rate,
-            instrument_latency_samples=instrument_latency_samples,
+        options = _bounce_options(
+            total_frames, block_size, num_channels, sample_rate, instrument_latency_samples
         )
+        width = ctypes.c_int()
         with _out_float_array(lib) as (out, out_len):
             _check(
                 lib.sonare_project_bounce_with_synth_instruments(
@@ -295,10 +308,11 @@ class _ProjectRenderMixin:
                     _to_c_size_t(count, "count"),
                     ctypes.byref(out),
                     ctypes.byref(out_len),
+                    ctypes.byref(width),
                 )
             )
             interleaved = _from_c_float_array(out, int(out_len.value))
-        return _reshape_bounce(interleaved, num_channels)
+        return _reshape_bounce(interleaved, width.value)
 
     def load_soundfont(self, data: bytes | bytearray | memoryview) -> None:
         """Load (parse) SoundFont 2 bytes into the project.
@@ -379,10 +393,10 @@ class _ProjectRenderMixin:
         *,
         destination_id: int = 0,
         instruments: Sequence[tuple[int, Sf2InstrumentConfig]] | None = None,
-        total_frames: int = 0,
-        block_size: int = 0,
-        num_channels: int = 0,
-        sample_rate: int = 0,
+        total_frames: int | None = None,
+        block_size: int | None = None,
+        num_channels: int | None = None,
+        sample_rate: int | None = None,
         instrument_latency_samples: int = 0,
     ) -> np.ndarray:
         """Compile + render the project, driving MIDI tracks through the SF2 player.
@@ -405,8 +419,8 @@ class _ProjectRenderMixin:
             instruments: Optional explicit list of ``(destination_id, patch)``
                 bindings, overriding ``instrument`` / ``destination_id``.
             total_frames / block_size / num_channels / sample_rate /
-                instrument_latency_samples: As :meth:`bounce` (0 takes native
-                defaults).
+                instrument_latency_samples: As :meth:`bounce` (omitted takes
+                the library default).
 
         Returns a ``(frames, channels)`` float32 ndarray. Deterministic for a
         fixed project + options + SoundFont + patch.
@@ -426,13 +440,10 @@ class _ProjectRenderMixin:
             c_bindings[i].config = patch._to_c()
         # Passed unconverted so the struct's own narrowing sees each caller
         # value; int() would truncate a fraction past it.
-        options = SonareProjectBounceOptions(
-            total_frames=total_frames,
-            block_size=block_size,
-            num_channels=num_channels,
-            sample_rate=sample_rate,
-            instrument_latency_samples=instrument_latency_samples,
+        options = _bounce_options(
+            total_frames, block_size, num_channels, sample_rate, instrument_latency_samples
         )
+        width = ctypes.c_int()
         with _out_float_array(lib) as (out, out_len):
             _check(
                 lib.sonare_project_bounce_with_sf2_instruments(
@@ -442,10 +453,11 @@ class _ProjectRenderMixin:
                     _to_c_size_t(count, "count"),
                     ctypes.byref(out),
                     ctypes.byref(out_len),
+                    ctypes.byref(width),
                 )
             )
             interleaved = _from_c_float_array(out, int(out_len.value))
-        return _reshape_bounce(interleaved, num_channels)
+        return _reshape_bounce(interleaved, width.value)
 
     def bounce_with_instruments(
         self,
@@ -453,10 +465,10 @@ class _ProjectRenderMixin:
         *,
         destination_id: int = 0,
         instruments: Sequence[tuple[int, ExternalInstrument]] | None = None,
-        total_frames: int = 0,
-        block_size: int = 0,
-        num_channels: int = 0,
-        sample_rate: int = 0,
+        total_frames: int | None = None,
+        block_size: int | None = None,
+        num_channels: int | None = None,
+        sample_rate: int | None = None,
         instrument_latency_samples: int = 0,
     ) -> np.ndarray:
         """Compile + render the project, driving MIDI tracks through host instruments.
@@ -475,8 +487,8 @@ class _ProjectRenderMixin:
             instruments: Optional explicit list of ``(destination_id, instrument)``
                 bindings, overriding ``instrument`` / ``destination_id``.
                     total_frames / block_size / num_channels / sample_rate /
-                        instrument_latency_samples: As :meth:`bounce` (0 takes native
-                        defaults; an instrument's own ``latency_samples`` attribute adds
+                        instrument_latency_samples: As :meth:`bounce` (omitted takes
+                        the library default; an instrument's own ``latency_samples`` attribute adds
                         per-instrument PDC; ``tail_samples`` extends auto-length
                         bounces).
 
@@ -514,13 +526,10 @@ class _ProjectRenderMixin:
 
         # Passed unconverted so the struct's own narrowing sees each caller
         # value; int() would truncate a fraction past it.
-        options = SonareProjectBounceOptions(
-            total_frames=total_frames,
-            block_size=block_size,
-            num_channels=num_channels,
-            sample_rate=sample_rate,
-            instrument_latency_samples=instrument_latency_samples,
+        options = _bounce_options(
+            total_frames, block_size, num_channels, sample_rate, instrument_latency_samples
         )
+        width = ctypes.c_int()
         with _out_float_array(lib) as (out, out_len):
             rc = lib.sonare_project_bounce_with_instruments(
                 self._require_handle(),
@@ -529,6 +538,7 @@ class _ProjectRenderMixin:
                 _to_c_size_t(count, "count"),
                 ctypes.byref(out),
                 ctypes.byref(out_len),
+                ctypes.byref(width),
             )
             # `keepalive` pins the ctypes trampolines until the bounce returns.
             keepalive.clear()
@@ -536,4 +546,4 @@ class _ProjectRenderMixin:
             if errors:
                 raise errors[0]
             interleaved = _from_c_float_array(out, int(out_len.value))
-        return _reshape_bounce(interleaved, num_channels)
+        return _reshape_bounce(interleaved, width.value)

@@ -53,9 +53,9 @@ def _flat(config: libsonare.RealtimeVoiceChangerConfig) -> dict[str, object]:
 
 
 def _changer(
-    config: libsonare.RealtimeVoiceChangerConfig, **kwargs
+    config: libsonare.RealtimeVoiceChangerConfig, num_channels: int = 1
 ) -> libsonare.RealtimeVoiceChanger:
-    return libsonare.RealtimeVoiceChanger(SAMPLE_RATE, _flat(config), **kwargs)
+    return libsonare.RealtimeVoiceChanger(SAMPLE_RATE, _flat(config), num_channels=num_channels)
 
 
 def test_neutral_preset_selects_the_psola_engine() -> None:
@@ -75,7 +75,9 @@ def test_new_presets_resolve_by_name_and_id(name: str) -> None:
         libsonare.realtime_voice_changer_preset_config(name), libsonare.RealtimeVoiceChangerConfig
     )
     assert libsonare.voice_character_preset_id(ordinal) == name
-    with libsonare.RealtimeVoiceChanger(SAMPLE_RATE, name, max_block_size=128) as changer:
+    with libsonare.RealtimeVoiceChanger(
+        SAMPLE_RATE, name, max_block_size=128, num_channels=1
+    ) as changer:
         out = changer.process_mono(_tone())
         assert np.isfinite(out).all()
 
@@ -263,7 +265,9 @@ def test_tone_through_hard_tune_style_correction_stays_finite() -> None:
 
 
 def test_note_on_off_hold_notes_on_a_psola_handle() -> None:
-    with libsonare.RealtimeVoiceChanger(SAMPLE_RATE, "hardTune", max_block_size=128) as changer:
+    with libsonare.RealtimeVoiceChanger(
+        SAMPLE_RATE, "hardTune", max_block_size=128, num_channels=1
+    ) as changer:
         changer.note_on(60)
         changer.note_on(64, velocity=0.5)
         changer.note_on(64)
@@ -275,14 +279,14 @@ def test_note_on_off_hold_notes_on_a_psola_handle() -> None:
 
 @pytest.mark.parametrize("note", [0, 127])
 def test_note_range_edges_are_accepted(note: int) -> None:
-    with libsonare.RealtimeVoiceChanger(SAMPLE_RATE, "hardTune") as changer:
+    with libsonare.RealtimeVoiceChanger(SAMPLE_RATE, "hardTune", num_channels=1) as changer:
         changer.note_on(note)
         changer.note_off(note)
 
 
 @pytest.mark.parametrize("note", [-1, 128, 2**31, 2**32])
 def test_note_outside_the_midi_range_is_refused(note: int) -> None:
-    with libsonare.RealtimeVoiceChanger(SAMPLE_RATE, "hardTune") as changer:
+    with libsonare.RealtimeVoiceChanger(SAMPLE_RATE, "hardTune", num_channels=1) as changer:
         with pytest.raises(SonareValueError):
             changer.note_on(note)
         with pytest.raises(SonareValueError):
@@ -290,7 +294,7 @@ def test_note_outside_the_midi_range_is_refused(note: int) -> None:
 
 
 def test_note_refuses_a_fraction_and_a_bool() -> None:
-    with libsonare.RealtimeVoiceChanger(SAMPLE_RATE, "hardTune") as changer:
+    with libsonare.RealtimeVoiceChanger(SAMPLE_RATE, "hardTune", num_channels=1) as changer:
         with pytest.raises(SonareValueError):
             changer.note_on(60.5)  # type: ignore[arg-type]
         with pytest.raises(TypeError):
@@ -304,14 +308,14 @@ def test_note_refuses_a_fraction_and_a_bool() -> None:
 @pytest.mark.parametrize("velocity", [0.0, -0.5, 1.5, float("nan"), float("inf")])
 def test_velocity_outside_zero_exclusive_to_one_is_refused(velocity: float) -> None:
     with (
-        libsonare.RealtimeVoiceChanger(SAMPLE_RATE, "hardTune") as changer,
+        libsonare.RealtimeVoiceChanger(SAMPLE_RATE, "hardTune", num_channels=1) as changer,
         pytest.raises(SonareValueError),
     ):
         changer.note_on(60, velocity)
 
 
 def test_velocity_defaults_to_one_and_accepts_the_upper_edge() -> None:
-    with libsonare.RealtimeVoiceChanger(SAMPLE_RATE, "hardTune") as changer:
+    with libsonare.RealtimeVoiceChanger(SAMPLE_RATE, "hardTune", num_channels=1) as changer:
         changer.note_on(60)
         changer.note_on(61, velocity=1.0)
         changer.note_on(62, velocity=1e-3)
@@ -327,7 +331,7 @@ def test_note_api_on_a_grain_handle_is_invalid_state() -> None:
 
 
 def test_note_api_on_a_closed_handle_is_invalid_state() -> None:
-    changer = libsonare.RealtimeVoiceChanger(SAMPLE_RATE, "hardTune")
+    changer = libsonare.RealtimeVoiceChanger(SAMPLE_RATE, "hardTune", num_channels=1)
     changer.close()
     for call in (lambda: changer.note_on(60), lambda: changer.note_off(60), changer.all_notes_off):
         with pytest.raises(SonareError) as raised:
@@ -342,7 +346,7 @@ def _vocoder(source: str) -> libsonare.RealtimeVoiceChangerConfig:
 
 
 def test_external_carrier_is_required_by_the_carrierless_entries() -> None:
-    with _changer(_vocoder("external"), channels=2) as changer:
+    with _changer(_vocoder("external"), num_channels=2) as changer:
         samples = _tone()
         for call in (
             lambda: changer.process_mono(samples),
@@ -358,7 +362,7 @@ def test_external_carrier_is_required_by_the_carrierless_entries() -> None:
 def test_carrier_entries_render_with_an_external_carrier() -> None:
     samples = _tone()
     carrier = _tone(hz=110.0)
-    with _changer(_vocoder("external"), channels=2) as changer:
+    with _changer(_vocoder("external"), num_channels=2) as changer:
         mono = changer.process_mono_with_carrier(samples, carrier)
         assert mono.shape == samples.shape and mono.dtype == np.float32
         assert np.isfinite(mono).all()
@@ -382,7 +386,7 @@ def test_carrier_is_ignored_by_an_internal_carrier_config() -> None:
 
 def test_carrier_length_must_match_the_input() -> None:
     samples = _tone()
-    with _changer(_vocoder("external"), channels=2) as changer:
+    with _changer(_vocoder("external"), num_channels=2) as changer:
         with pytest.raises(SonareValueError, match="carrier"):
             changer.process_mono_with_carrier(samples, samples[:-1])
         with pytest.raises(SonareValueError, match="carrier"):

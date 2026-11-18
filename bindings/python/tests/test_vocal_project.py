@@ -113,6 +113,7 @@ def test_apply_roundtrip_and_rehydrate_after_project_reload() -> None:
             0.0,
             1.0,
             audio=source,
+            audio_channels=1,
             audio_sample_rate=sample_rate,
         )
         clip = project.clip_by_index(0)
@@ -228,6 +229,7 @@ def test_callback_close_guards_survive_in_isolated_native_process() -> None:
             0.0,
             1.0,
             audio=source,
+            audio_channels=1,
             audio_sample_rate=sample_rate,
         )
         clip = project.clip_by_index(0)
@@ -394,7 +396,9 @@ def test_apply_range_validation_comes_from_the_c_abi(clip_length: float, offset:
     with Project.create() as project:
         project.set_sample_rate(float(sample_rate))
         track_id = project.add_track()
-        clip_id = project.add_clip(track_id, 0.0, 1.0, audio=source, audio_sample_rate=sample_rate)
+        clip_id = project.add_clip(
+            track_id, 0.0, 1.0, audio=source, audio_channels=1, audio_sample_rate=sample_rate
+        )
         clip = project.clip_by_index(0)
         with pytest.raises(SonareError):
             project.apply_vocal_edit(

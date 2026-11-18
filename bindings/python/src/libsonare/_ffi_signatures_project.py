@@ -93,6 +93,7 @@ def configure_project_signatures(lib: ctypes.CDLL) -> None:
             ctypes.POINTER(SonareProjectBounceOptions),
             ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
             ctypes.POINTER(ctypes.c_size_t),
+            ctypes.POINTER(ctypes.c_int),
         ]
 
         if hasattr(lib, "sonare_project_bounce_with_builtin_instruments"):
@@ -104,6 +105,7 @@ def configure_project_signatures(lib: ctypes.CDLL) -> None:
                 ctypes.c_size_t,
                 ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
                 ctypes.POINTER(ctypes.c_size_t),
+                ctypes.POINTER(ctypes.c_int),
             ]
 
         if hasattr(lib, "sonare_synth_preset_names"):
@@ -156,6 +158,7 @@ def configure_project_signatures(lib: ctypes.CDLL) -> None:
                 ctypes.c_size_t,
                 ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
                 ctypes.POINTER(ctypes.c_size_t),
+                ctypes.POINTER(ctypes.c_int),
             ]
 
         if hasattr(lib, "sonare_project_load_soundfont"):
@@ -191,6 +194,7 @@ def configure_project_signatures(lib: ctypes.CDLL) -> None:
                 ctypes.c_size_t,
                 ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
                 ctypes.POINTER(ctypes.c_size_t),
+                ctypes.POINTER(ctypes.c_int),
             ]
 
         if hasattr(lib, "sonare_project_bounce_with_instruments"):
@@ -202,6 +206,7 @@ def configure_project_signatures(lib: ctypes.CDLL) -> None:
                 ctypes.c_size_t,
                 ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
                 ctypes.POINTER(ctypes.c_size_t),
+                ctypes.POINTER(ctypes.c_int),
             ]
 
         # Edit.

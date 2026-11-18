@@ -77,7 +77,7 @@ def mixer():
     """Build a Mixer from the first preset scene and close it afterwards."""
     from libsonare import Mixer
 
-    mixer = Mixer.from_scene_json(_first_preset_json(), sample_rate=48000, block_size=256)
+    mixer = Mixer.from_scene_json(_first_preset_json(), sample_rate=48000, max_block_size=256)
     try:
         yield mixer
     finally:
@@ -225,7 +225,7 @@ def test_strip_non_finite_discard_count_rises_after_an_insert_overflow() -> None
     from libsonare import Mixer
 
     mixer = Mixer.from_scene_json(
-        _scene_with_pre_eq(200.0, on_bus=False), sample_rate=48000, block_size=64
+        _scene_with_pre_eq(200.0, on_bus=False), sample_rate=48000, max_block_size=64
     )
     try:
         block = [[0.3 * math.sin(2 * math.pi * 440 * i / 48000) for i in range(64)]]
@@ -246,7 +246,7 @@ def test_bus_non_finite_discard_count_rises_after_an_insert_overflow() -> None:
     from libsonare import Mixer
 
     mixer = Mixer.from_scene_json(
-        _scene_with_pre_eq(200.0, on_bus=True), sample_rate=48000, block_size=64
+        _scene_with_pre_eq(200.0, on_bus=True), sample_rate=48000, max_block_size=64
     )
     try:
         block = [[0.3 * math.sin(2 * math.pi * 440 * i / 48000) for i in range(64)]]
@@ -425,7 +425,7 @@ def _render_settle_scene(*, settle: bool, length: int = 4096) -> tuple[list[floa
     """
     from libsonare import Mixer
 
-    mixer = Mixer.from_scene_json(_SETTLE_SCENE, sample_rate=48000, block_size=length)
+    mixer = Mixer.from_scene_json(_SETTLE_SCENE, sample_rate=48000, max_block_size=length)
     try:
         if settle:
             mixer.settle("s")
@@ -466,7 +466,7 @@ def test_settle_leaves_the_serialized_scene_unchanged() -> None:
     """settle moves smoothers to values the scene already records, so it clears nothing."""
     from libsonare import Mixer
 
-    mixer = Mixer.from_scene_json(_SETTLE_SCENE, sample_rate=48000, block_size=256)
+    mixer = Mixer.from_scene_json(_SETTLE_SCENE, sample_rate=48000, max_block_size=256)
     try:
         before = json.loads(mixer.to_scene_json())
         mixer.settle("s")
@@ -591,7 +591,7 @@ def _empty_mixer():
     return Mixer.from_scene_json(
         '{"version":1,"strips":[],"buses":[],"connections":[]}',
         sample_rate=48000,
-        block_size=256,
+        max_block_size=256,
     )
 
 
@@ -712,14 +712,18 @@ def test_mixer_is_a_context_manager() -> None:
     """Leaving a with-block closes the native handle, on a normal exit and on a raise."""
     from libsonare import Mixer
 
-    with Mixer.from_scene_json(_first_preset_json(), sample_rate=48000, block_size=256) as mixer:
+    with Mixer.from_scene_json(
+        _first_preset_json(), sample_rate=48000, max_block_size=256
+    ) as mixer:
         assert mixer.strip_count > 0
     with raises_coded(ErrorCode.INVALID_STATE):
         _ = mixer.strip_count
 
     with (
         pytest.raises(KeyError),
-        Mixer.from_scene_json(_first_preset_json(), sample_rate=48000, block_size=256) as raised,
+        Mixer.from_scene_json(
+            _first_preset_json(), sample_rate=48000, max_block_size=256
+        ) as raised,
     ):
         raise KeyError("inside")
     with raises_coded(ErrorCode.INVALID_STATE):
@@ -769,7 +773,7 @@ def test_drain_tail_stereo_enforces_block_count_range(mixer) -> None:
 def test_tail_samples_reports_longest_serial_send_route() -> None:
     from libsonare import Mixer
 
-    mixer = Mixer.from_scene_json(_serial_tail_scene(), sample_rate=48000, block_size=128)
+    mixer = Mixer.from_scene_json(_serial_tail_scene(), sample_rate=48000, max_block_size=128)
     try:
         assert mixer.tail_samples > 1440
     finally:
@@ -817,7 +821,7 @@ def test_scene_warnings_surface_ignored_insert_params() -> None:
 
     # eq.parametric reads only band{i}.* fields, so flat keys take no effect.
     scene = _scene_with_insert_params("eq.parametric", {"highPassHz": 80, "presenceDb": 4})
-    mixer = Mixer.from_scene_json(scene, sample_rate=48000, block_size=256)
+    mixer = Mixer.from_scene_json(scene, sample_rate=48000, max_block_size=256)
     try:
         warnings = mixer.scene_warnings()
         assert len(warnings) == 1
@@ -831,7 +835,7 @@ def test_scene_warnings_surface_ignored_insert_params() -> None:
     clean = _scene_with_insert_params(
         "eq.parametric", {"band0.frequencyHz": 1000, "band0.gainDb": 3}
     )
-    mixer = Mixer.from_scene_json(clean, sample_rate=48000, block_size=256)
+    mixer = Mixer.from_scene_json(clean, sample_rate=48000, max_block_size=256)
     try:
         assert mixer.scene_warnings() == []
     finally:
@@ -855,14 +859,14 @@ def test_scene_warnings_report_unknown_scene_keys() -> None:
             }
         )
 
-    mixer = Mixer.from_scene_json(build({}, {"faderDB": -3}), sample_rate=48000, block_size=256)
+    mixer = Mixer.from_scene_json(build({}, {"faderDB": -3}), sample_rate=48000, max_block_size=256)
     try:
         assert mixer.scene_warnings() == ["unknown scene key 'strips[0].faderDB'"]
     finally:
         mixer.close()
 
     annotated = build({"$schema": "x", "x-note": 1}, {"x-color": "red"})
-    mixer = Mixer.from_scene_json(annotated, sample_rate=48000, block_size=256)
+    mixer = Mixer.from_scene_json(annotated, sample_rate=48000, max_block_size=256)
     try:
         assert mixer.scene_warnings() == []
     finally:

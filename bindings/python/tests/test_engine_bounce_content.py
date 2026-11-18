@@ -61,11 +61,11 @@ def _on_grid(samples: list[float]) -> int:
 
 def test_bounce_defaults_both_rates_to_the_prepared_rate() -> None:
     with RealtimeEngine(sample_rate=44100.0, max_block_size=BLOCK_SIZE) as engine:
-        result = engine.bounce_offline(EngineBounceOptions(total_frames=441))
+        result = engine.bounce_offline(EngineBounceOptions(total_frames=441, num_channels=2))
         assert result.sample_rate == 44100
         assert result.frames == 441
         resampled = engine.bounce_offline(
-            EngineBounceOptions(total_frames=44100, target_sample_rate=48000)
+            EngineBounceOptions(total_frames=44100, num_channels=2, target_sample_rate=48000)
         )
         assert resampled.sample_rate == 48000
         assert resampled.frames == 48000
@@ -76,7 +76,9 @@ def test_bounce_refuses_a_source_rate_other_than_the_prepared_rate() -> None:
         RealtimeEngine(sample_rate=44100.0, max_block_size=BLOCK_SIZE) as engine,
         pytest.raises(SonareError),
     ):
-        engine.bounce_offline(EngineBounceOptions(total_frames=441, source_sample_rate=48000))
+        engine.bounce_offline(
+            EngineBounceOptions(total_frames=441, num_channels=2, source_sample_rate=48000)
+        )
 
 
 def test_bounce_exports_scheduled_clip_content() -> None:
@@ -152,6 +154,8 @@ def test_bounce_dataclass_defaults_match_the_native_defaults() -> None:
     }
     for name, expected in defaults.items():
         actual = getattr(native, name)
+        if expected is None:
+            expected = 0  # an absent field travels as the C default's 0
         if isinstance(expected, bool):
             actual = bool(actual)
         elif isinstance(expected, float):

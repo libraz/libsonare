@@ -182,7 +182,9 @@ def test_a_saturating_project_edit_control_is_refused_on_its_own_argument() -> N
     """
     project = ls.Project()
     track = project.add_track("audio", "a")
-    clip = project.add_clip(track, 0.0, 480.0, audio=[0.1, 0.2], audio_sample_rate=48000)
+    clip = project.add_clip(
+        track, 0.0, 480.0, audio=[0.1, 0.2], audio_channels=1, audio_sample_rate=48000
+    )
 
     def applied(edit, *args) -> str:
         edit(*args)
@@ -218,7 +220,7 @@ def test_a_representable_extreme_is_still_accepted() -> None:
 @pytest.fixture
 def mixer_scene():
     scene = ls.mixing_scene_preset_json(ls.mixing_scene_preset_names()[0])
-    mixer = ls.Mixer.from_scene_json(scene, sample_rate=48000, block_size=256)
+    mixer = ls.Mixer.from_scene_json(scene, sample_rate=48000, max_block_size=256)
     try:
         yield mixer
     finally:

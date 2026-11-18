@@ -188,13 +188,13 @@ def test_bounce_with_instruments_auto_length_includes_tail_samples() -> None:
     try:
         dry = _ConstantInstrument(level=0.0)
         no_tail = project.bounce_with_instruments(
-            dry, total_frames=0, block_size=128, num_channels=2, sample_rate=48000
+            dry, block_size=128, num_channels=2, sample_rate=48000
         )
 
         wet = _ConstantInstrument(level=0.0)
         wet.tail_samples = 4096
         with_tail = project.bounce_with_instruments(
-            wet, total_frames=0, block_size=128, num_channels=2, sample_rate=48000
+            wet, block_size=128, num_channels=2, sample_rate=48000
         )
         assert with_tail.shape[0] == no_tail.shape[0] + wet.tail_samples
     finally:

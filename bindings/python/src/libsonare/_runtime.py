@@ -1236,6 +1236,13 @@ def _token_arg(value: object, tokens: tuple[str, ...], what: str) -> str:
     return tokens[_token_ordinal(value, tokens, what)]
 
 
+def _max_block_size(getter: Callable[..., int], handle: object) -> int:
+    """Read a handle's effective maximum block size through its C getter."""
+    out = ctypes.c_int()
+    _check(getter(handle, ctypes.byref(out)))
+    return int(out.value)
+
+
 def _mapping_keys(mapping: object, keys: tuple[str, ...], where: str) -> Mapping[str, object]:
     """Return a caller-built mapping once every key in it is one of ``keys``.
 

@@ -174,10 +174,20 @@ def test_a_fractional_take_source_id_is_refused_rather_than_read_as_the_clips_ow
         try:
             track = project.add_track("audio", "gtr")
             clip = project.add_clip(
-                track, 0.0, 480.0, audio=[0.1, 0.2, 0.1, 0.0], audio_sample_rate=48000
+                track,
+                0.0,
+                480.0,
+                audio=[0.1, 0.2, 0.1, 0.0],
+                audio_channels=1,
+                audio_sample_rate=48000,
             )
             project.add_clip(
-                track, 480.0, 480.0, audio=[0.3, 0.4, 0.3, 0.0], audio_sample_rate=48000
+                track,
+                480.0,
+                480.0,
+                audio=[0.3, 0.4, 0.3, 0.0],
+                audio_channels=1,
+                audio_sample_rate=48000,
             )
             take = {"id": 1, "source_offset_ppq": 0.0, "name": "A"}
             if source_id is not None:
@@ -205,7 +215,12 @@ def test_a_fractional_active_take_id_is_refused_rather_than_read_as_the_base_sou
         try:
             track = project.add_track("audio", "gtr")
             clip = project.add_clip(
-                track, 0.0, 480.0, audio=[0.1, 0.2, 0.1, 0.0], audio_sample_rate=48000
+                track,
+                0.0,
+                480.0,
+                audio=[0.1, 0.2, 0.1, 0.0],
+                audio_channels=1,
+                audio_sample_rate=48000,
             )
             takes = [
                 {"id": 1, "source_offset_ppq": 0.0, "name": "A"},
@@ -236,7 +251,12 @@ def test_a_fractional_comp_take_id_is_refused_rather_than_read_as_the_base_take(
         try:
             track = project.add_track("audio", "gtr")
             clip = project.add_clip(
-                track, 0.0, 480.0, audio=[0.1, 0.2, 0.1, 0.0], audio_sample_rate=48000
+                track,
+                0.0,
+                480.0,
+                audio=[0.1, 0.2, 0.1, 0.0],
+                audio_channels=1,
+                audio_sample_rate=48000,
             )
             project.set_clip_takes(
                 clip,
@@ -431,7 +451,7 @@ def test_a_fractional_dither_word_length_is_refused_rather_than_read_as_the_defa
             )
             engine.play()
             result = engine.bounce_offline(
-                ls.EngineBounceOptions(total_frames=frames, dither=1, **kwargs)
+                ls.EngineBounceOptions(total_frames=frames, num_channels=2, dither=1, **kwargs)
             )
             return _digest(result.interleaved)
 

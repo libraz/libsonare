@@ -280,9 +280,13 @@ def test_offline_entry_points_refuse_a_block_above_the_prepared_block() -> None:
         with pytest.raises(SonareError):
             engine.prime_offline_parameters(2, 129)
         with pytest.raises(SonareError):
-            engine.bounce_offline(EngineBounceOptions(total_frames=frames, block_size=129))
+            engine.bounce_offline(
+                EngineBounceOptions(total_frames=frames, num_channels=2, block_size=129)
+            )
         with pytest.raises(SonareError):
-            engine.freeze_offline(EngineFreezeOptions(total_frames=frames, block_size=129))
+            engine.freeze_offline(
+                EngineFreezeOptions(total_frames=frames, num_channels=2, block_size=129)
+            )
         # The prepared block and anything smaller still render.
         engine.render_offline([[0.0] * frames, [0.0] * frames], block_size=128)
         engine.render_offline([[0.0] * frames, [0.0] * frames], block_size=64)

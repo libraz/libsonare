@@ -64,7 +64,7 @@ def test_streaming_mastering_chain_processes_mono_block() -> None:
     from libsonare import StreamingMasteringChain
 
     chain = StreamingMasteringChain(
-        {"eq": {"tilt": {"tiltDb": 1.0}}}, sample_rate=44100, max_block_size=512
+        {"eq": {"tilt": {"tiltDb": 1.0}}}, sample_rate=44100, max_block_size=512, num_channels=1
     )
     block = [0.1] * 512
     out = chain.process_mono(block)
@@ -78,7 +78,10 @@ def test_streaming_mastering_chain_flushes_delayed_output() -> None:
     from libsonare import StreamingMasteringChain
 
     with StreamingMasteringChain(
-        {"maximizer": {"truePeakLimiter": {"enabled": 1}}}, sample_rate=48000, max_block_size=64
+        {"maximizer": {"truePeakLimiter": {"enabled": 1}}},
+        sample_rate=48000,
+        max_block_size=64,
+        num_channels=1,
     ) as chain:
         assert chain.latency_samples > 0
         chain.process_mono([0.5] + [0.0] * 63)
@@ -99,7 +102,7 @@ def test_streaming_mastering_chain_preserves_ndarray_input() -> None:
     from libsonare import StreamingMasteringChain
 
     chain = StreamingMasteringChain(
-        {"eq": {"tilt": {"tiltDb": 3.0}}}, sample_rate=44100, max_block_size=256
+        {"eq": {"tilt": {"tiltDb": 3.0}}}, sample_rate=44100, max_block_size=256, num_channels=1
     )
     block = np.full(256, 0.25, dtype=np.float32)
     original = block.copy()
@@ -132,7 +135,7 @@ def test_streaming_mastering_chain_reports_stage_names() -> None:
     from libsonare import StreamingMasteringChain
 
     chain = StreamingMasteringChain(
-        {"eq": {"tilt": {"tiltDb": 1.0}}}, sample_rate=44100, max_block_size=512
+        {"eq": {"tilt": {"tiltDb": 1.0}}}, sample_rate=44100, max_block_size=512, num_channels=1
     )
     names = chain.stage_names()
     assert isinstance(names, list)
@@ -331,9 +334,13 @@ def test_streaming_mastering_chain_rejects_denoise_with_the_quantile_estimator()
 
     with pytest.raises(SonareError, match="quantile"):
         StreamingMasteringChain(
-            {"repair": {"denoise": {"enabled": 1, "noiseEstimator": 0}}}, sample_rate=44100
+            {"repair": {"denoise": {"enabled": 1, "noiseEstimator": 0}}},
+            sample_rate=44100,
+            num_channels=1,
         )
-    StreamingMasteringChain({"repair": {"denoise": {"enabled": 1}}}, sample_rate=44100).close()
+    StreamingMasteringChain(
+        {"repair": {"denoise": {"enabled": 1}}}, sample_rate=44100, num_channels=1
+    ).close()
 
 
 def test_streaming_mastering_chain_accepts_loudness_with_static_gain() -> None:
@@ -342,7 +349,9 @@ def test_streaming_mastering_chain_accepts_loudness_with_static_gain() -> None:
 
     # Without a static gain a loudness target raises (cannot measure online)...
     with raises_coded():
-        StreamingMasteringChain({"loudness": {"targetLufs": -14.0}}, sample_rate=44100)
+        StreamingMasteringChain(
+            {"loudness": {"targetLufs": -14.0}}, sample_rate=44100, num_channels=1
+        )
 
     # ...but supplying a precomputed static gain makes it processable.
     chain = StreamingMasteringChain(
@@ -351,6 +360,7 @@ def test_streaming_mastering_chain_accepts_loudness_with_static_gain() -> None:
         max_block_size=512,
         loudness_static_gain_db=3.0,
         loudness_static_gain_peak_db=-1.0,
+        num_channels=1,
     )
     out = chain.process_mono([0.1] * 512)
     assert len(out) == 512
@@ -368,7 +378,10 @@ def test_streaming_mastering_chain_reports_no_substitution_on_a_clean_stream() -
     from libsonare import StreamingMasteringChain
 
     with StreamingMasteringChain(
-        {"maximizer": {"truePeakLimiter": {"enabled": 1}}}, sample_rate=44100, max_block_size=256
+        {"maximizer": {"truePeakLimiter": {"enabled": 1}}},
+        sample_rate=44100,
+        max_block_size=256,
+        num_channels=1,
     ) as chain:
         assert chain.non_finite_substitution_count == 0
         for _ in range(4):
@@ -392,7 +405,9 @@ def test_streaming_mastering_chain_discard_count_rises_after_a_stage_overflow() 
     """
     from libsonare import StreamingMasteringChain
 
-    with StreamingMasteringChain({"eq": {"tilt": {"tiltDb": 24.0}}}, sample_rate=48000) as chain:
+    with StreamingMasteringChain(
+        {"eq": {"tilt": {"tiltDb": 24.0}}}, sample_rate=48000, num_channels=1
+    ) as chain:
         # Without an enabled recursive stage the chain holds no state to lose,
         # so its count would stay at zero for a reason unrelated to the entry.
         assert chain.non_finite_discard_count == 0
@@ -545,7 +560,9 @@ _DOTTED_KEY_CALLS = {
     "mastering_chain": lambda c: libsonare.mastering_chain([0.1] * 2205, 22050, c),
     "master_audio": lambda c: libsonare.master_audio([0.1] * 2205, 22050, "pop", c),
     "streaming_loudness_gain": lambda c: libsonare.streaming_loudness_gain([0.1] * 2205, 22050, c),
-    "StreamingMasteringChain": lambda c: libsonare.StreamingMasteringChain(c, sample_rate=22050),
+    "StreamingMasteringChain": lambda c: libsonare.StreamingMasteringChain(
+        c, sample_rate=22050, num_channels=1
+    ),
     "mastering_chain_stereo": lambda c: libsonare.mastering_chain_stereo(
         [0.1] * 2205, [0.1] * 2205, 22050, c
     ),

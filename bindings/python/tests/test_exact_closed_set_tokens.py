@@ -101,7 +101,9 @@ def clip_project():
         pytest.skip("libsonare shared library missing")
     project = libsonare.Project()
     track = project.add_track("audio", "gtr")
-    clip = project.add_clip(track, 0.0, 480.0, audio=[0.1, 0.2, 0.1, 0.0], audio_sample_rate=SR)
+    clip = project.add_clip(
+        track, 0.0, 480.0, audio=[0.1, 0.2, 0.1, 0.0], audio_channels=1, audio_sample_rate=SR
+    )
     return project, clip
 
 
@@ -130,7 +132,10 @@ def test_the_loop_mode_is_off_or_loop(clip_project) -> None:
 @pytest.mark.parametrize("field", ["character_type", "voice_engine", "midi_release"])
 def test_a_voice_changer_enum_ordinal_is_a_type_error(field: str) -> None:
     base = libsonare.realtime_voice_changer_preset_config("neutralMonitor")
-    with libsonare.RealtimeVoiceChanger(SR) as changer, pytest.raises(TypeError, match=field):
+    with (
+        libsonare.RealtimeVoiceChanger(SR, num_channels=1) as changer,
+        pytest.raises(TypeError, match=field),
+    ):
         changer.set_config_pod(dataclasses.replace(base, **{field: 1}))
 
 

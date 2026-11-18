@@ -370,7 +370,9 @@ def test_realtime_voice_changer_function_and_class() -> None:
     assert len(result) == len(samples)
     assert all(math.isfinite(x) for x in result)
 
-    with libsonare.RealtimeVoiceChanger(sr, "softWhisper", max_block_size=128) as changer:
+    with libsonare.RealtimeVoiceChanger(
+        sr, "softWhisper", max_block_size=128, num_channels=1
+    ) as changer:
         block = samples[:128]
         out = changer.process_mono(block)
         assert len(out) == len(block)
@@ -462,34 +464,34 @@ def test_realtime_voice_changer_invalid_sample_rate() -> None:
     """Negative or zero sample_rate must be rejected at construction."""
 
     with raises_coded():
-        libsonare.RealtimeVoiceChanger(-1, "neutralMonitor")
+        libsonare.RealtimeVoiceChanger(-1, "neutralMonitor", num_channels=1)
 
     with raises_coded():
-        libsonare.RealtimeVoiceChanger(0, "neutralMonitor")
+        libsonare.RealtimeVoiceChanger(0, "neutralMonitor", num_channels=1)
 
 
 def test_realtime_voice_changer_invalid_channels() -> None:
     """channels > 2 must be rejected at construction."""
 
     with raises_coded():
-        libsonare.RealtimeVoiceChanger(48000, "neutralMonitor", channels=3)
+        libsonare.RealtimeVoiceChanger(48000, "neutralMonitor", num_channels=3)
 
 
 def test_realtime_voice_changer_invalid_max_block_size() -> None:
     """max_block_size <= 0 must be rejected at construction."""
 
     with raises_coded():
-        libsonare.RealtimeVoiceChanger(48000, "neutralMonitor", max_block_size=-1)
+        libsonare.RealtimeVoiceChanger(48000, "neutralMonitor", max_block_size=-1, num_channels=1)
 
     with raises_coded():
-        libsonare.RealtimeVoiceChanger(48000, "neutralMonitor", max_block_size=0)
+        libsonare.RealtimeVoiceChanger(48000, "neutralMonitor", max_block_size=0, num_channels=1)
 
 
 def test_realtime_voice_changer_invalid_preset_id() -> None:
     """An unrecognised preset string must be rejected at construction."""
 
     with raises_coded(ErrorCode.INVALID_FORMAT):
-        libsonare.RealtimeVoiceChanger(48000, "nonexistent-preset-id-xyz")
+        libsonare.RealtimeVoiceChanger(48000, "nonexistent-preset-id-xyz", num_channels=1)
 
 
 def test_realtime_voice_changer_invalid_json_config() -> None:
@@ -513,7 +515,9 @@ def test_realtime_voice_changer_invalid_json_config() -> None:
 def test_realtime_voice_changer_close_then_process() -> None:
     """process_mono after close() must raise (NULL handle returns INVALID_PARAMETER)."""
 
-    changer = libsonare.RealtimeVoiceChanger(48000, "neutralMonitor", max_block_size=128)
+    changer = libsonare.RealtimeVoiceChanger(
+        48000, "neutralMonitor", max_block_size=128, num_channels=1
+    )
     changer.close()
     with raises_coded(ErrorCode.INVALID_STATE):
         changer.process_mono([0.0] * 128)

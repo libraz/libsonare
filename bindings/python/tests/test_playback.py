@@ -72,19 +72,19 @@ def test_require_playback_is_silent_when_the_symbol_is_present() -> None:
 
 
 def test_renderer_reports_its_shape() -> None:
-    with PlaybackRenderer(_speakers_5_1(), max_block_size=BLOCK) as renderer:
+    with PlaybackRenderer(_speakers_5_1(), max_block_size=BLOCK, sample_rate=48000) as renderer:
         assert renderer.num_output_channels == 6
         assert renderer.num_input_channels == 2
         assert renderer.latency_samples == 1312
 
 
 def test_headphones_default_config_is_stereo_out() -> None:
-    with PlaybackRenderer({}, max_block_size=BLOCK) as renderer:
+    with PlaybackRenderer({}, max_block_size=BLOCK, sample_rate=48000) as renderer:
         assert renderer.num_output_channels == 2
 
 
 def test_process_planar_renders_finite_output_of_the_right_shape() -> None:
-    with PlaybackRenderer(_speakers_5_1(), max_block_size=BLOCK) as renderer:
+    with PlaybackRenderer(_speakers_5_1(), max_block_size=BLOCK, sample_rate=48000) as renderer:
         planes = [_sine(BLOCK), _sine(BLOCK, hz=440.0)]
         out = renderer.process_planar(planes)
         assert out.shape == (6, BLOCK)
@@ -96,7 +96,7 @@ def test_process_planar_allocates_the_output_once() -> None:
     import tracemalloc
 
     frames = 16384
-    with PlaybackRenderer(_speakers_5_1(), max_block_size=frames) as renderer:
+    with PlaybackRenderer(_speakers_5_1(), max_block_size=frames, sample_rate=48000) as renderer:
         planes = np.zeros((2, frames), dtype=np.float32)
         renderer.process_planar(planes)
         tracemalloc.start()
@@ -112,7 +112,7 @@ def test_process_planar_allocates_the_output_once() -> None:
 
 
 def test_process_planar_switches_auto_input_layout() -> None:
-    with PlaybackRenderer(_speakers_5_1(), max_block_size=BLOCK) as renderer:
+    with PlaybackRenderer(_speakers_5_1(), max_block_size=BLOCK, sample_rate=48000) as renderer:
         assert renderer.num_input_channels == 2
         planes = [_sine(BLOCK) for _ in range(6)]
         renderer.process_planar(planes)
@@ -120,7 +120,7 @@ def test_process_planar_switches_auto_input_layout() -> None:
 
 
 def test_process_interleaved_renders_finite_output() -> None:
-    with PlaybackRenderer(_speakers_5_1(), max_block_size=BLOCK) as renderer:
+    with PlaybackRenderer(_speakers_5_1(), max_block_size=BLOCK, sample_rate=48000) as renderer:
         samples = np.array(_sine(BLOCK * 2), dtype=np.float32)
         out = renderer.process_interleaved(samples, in_channels=2)
         assert out.shape == (BLOCK * 6,)
@@ -130,7 +130,7 @@ def test_process_interleaved_renders_finite_output() -> None:
 
 def test_process_interleaved_rejects_indivisible_length() -> None:
     with (
-        PlaybackRenderer(_speakers_5_1(), max_block_size=BLOCK) as renderer,
+        PlaybackRenderer(_speakers_5_1(), max_block_size=BLOCK, sample_rate=48000) as renderer,
         pytest.raises(SonareValueError),
     ):
         renderer.process_interleaved([0.0] * 7, in_channels=2)
@@ -138,14 +138,14 @@ def test_process_interleaved_rejects_indivisible_length() -> None:
 
 def test_process_interleaved_rejects_nonpositive_channels() -> None:
     with (
-        PlaybackRenderer(_speakers_5_1(), max_block_size=BLOCK) as renderer,
+        PlaybackRenderer(_speakers_5_1(), max_block_size=BLOCK, sample_rate=48000) as renderer,
         pytest.raises(SonareValueError),
     ):
         renderer.process_interleaved([0.0] * 8, in_channels=0)
 
 
 def test_non_finite_input_is_discarded_and_counted() -> None:
-    with PlaybackRenderer(_speakers_5_1(), max_block_size=BLOCK) as renderer:
+    with PlaybackRenderer(_speakers_5_1(), max_block_size=BLOCK, sample_rate=48000) as renderer:
         assert renderer.non_finite_discard_count == 0
         samples = np.zeros(BLOCK * 2, dtype=np.float32)
         samples[3] = float("nan")
@@ -155,7 +155,7 @@ def test_non_finite_input_is_discarded_and_counted() -> None:
 
 
 def test_config_roundtrip_and_prepare_key_rejection() -> None:
-    with PlaybackRenderer(_speakers_5_1(), max_block_size=BLOCK) as renderer:
+    with PlaybackRenderer(_speakers_5_1(), max_block_size=BLOCK, sample_rate=48000) as renderer:
         config = renderer.config()
         assert config["target"]["kind"] == "speakers"
         assert config["target"]["layout"] == "5.1"
@@ -172,14 +172,14 @@ def test_config_roundtrip_and_prepare_key_rejection() -> None:
 
 
 def test_set_config_accepts_a_json_string() -> None:
-    with PlaybackRenderer(_speakers_5_1(), max_block_size=BLOCK) as renderer:
+    with PlaybackRenderer(_speakers_5_1(), max_block_size=BLOCK, sample_rate=48000) as renderer:
         renderer.set_config('{"target": {"kind": "speakers", "layout": "5.1"}}')
 
 
 def test_set_head_orientation_validates_each_axis_and_float32_range() -> None:
     float32_max = 3.4028234663852886e38
     float32_overflow = float32_max * 2.0
-    with PlaybackRenderer({}, max_block_size=BLOCK) as renderer:
+    with PlaybackRenderer({}, max_block_size=BLOCK, sample_rate=48000) as renderer:
         renderer.set_head_orientation(30.0, -10.0, 5.0)
         invalid_values = (
             float("nan"),
@@ -215,23 +215,23 @@ def test_set_head_orientation_validates_each_axis_and_float32_range() -> None:
 
 
 def test_reset_clears_state() -> None:
-    with PlaybackRenderer({}, max_block_size=BLOCK) as renderer:
+    with PlaybackRenderer({}, max_block_size=BLOCK, sample_rate=48000) as renderer:
         renderer.reset()
 
 
 def test_diagnostics_reports_active_input_layout() -> None:
-    with PlaybackRenderer(_speakers_5_1(), max_block_size=BLOCK) as renderer:
+    with PlaybackRenderer(_speakers_5_1(), max_block_size=BLOCK, sample_rate=48000) as renderer:
         diagnostics = renderer.diagnostics()
         assert "active_input_layout" in diagnostics
 
 
 def test_create_json_rejects_an_unknown_key() -> None:
     with pytest.raises(SonareError):
-        PlaybackRenderer({"not_a_key": 1})
+        PlaybackRenderer({"not_a_key": 1}, sample_rate=48000)
 
 
 def test_closed_renderer_rejects_further_calls() -> None:
-    renderer = PlaybackRenderer({}, max_block_size=BLOCK)
+    renderer = PlaybackRenderer({}, max_block_size=BLOCK, sample_rate=48000)
     renderer.close()
     operations = {
         "reset": lambda: renderer.reset(),
@@ -295,7 +295,7 @@ def test_render_playback_rejects_an_unknown_key() -> None:
 def test_hrtf_set_default_and_lifecycle() -> None:
     with (
         HrtfSet.default() as hrtf,
-        PlaybackRenderer({}, hrtf=hrtf, max_block_size=BLOCK) as renderer,
+        PlaybackRenderer({}, hrtf=hrtf, max_block_size=BLOCK, sample_rate=48000) as renderer,
     ):
         assert renderer.num_output_channels == 2
 
@@ -319,7 +319,7 @@ def test_a_closed_hrtf_set_is_refused_rather_than_silently_falling_back_to_the_d
     hrtf.close()
 
     with raises_coded(ErrorCode.INVALID_STATE, match="closed"):
-        PlaybackRenderer({}, hrtf=hrtf, max_block_size=BLOCK)
+        PlaybackRenderer({}, hrtf=hrtf, max_block_size=BLOCK, sample_rate=48000)
 
     with raises_coded(ErrorCode.INVALID_STATE, match="closed"):
         render_playback(
@@ -348,7 +348,7 @@ def test_loudness_meter_takes_its_shape_by_keyword() -> None:
 
 def test_cli_render_trims_what_the_offline_render_trims_with_unequal_distances() -> None:
     """The CLI's block loop keeps each speaker's distance delay, like the offline render."""
-    from libsonare._cli_playback import _OFFLINE_RENDER_BLOCK_FRAMES, _render_via_reporting_handle
+    from libsonare._cli_playback import _render_via_reporting_handle
 
     config = {
         "input": {"layout": "stereo"},
@@ -365,9 +365,7 @@ def test_cli_render_trims_what_the_offline_render_trims_with_unequal_distances()
     interleaved = np.repeat(burst, 2)
 
     direct = render_playback(interleaved, num_channels=2, sample_rate=SR, config=config)
-    with PlaybackRenderer(
-        config, sample_rate=SR, max_block_size=_OFFLINE_RENDER_BLOCK_FRAMES
-    ) as renderer:
+    with PlaybackRenderer(config, sample_rate=SR) as renderer:
         via_cli = _render_via_reporting_handle(renderer, interleaved, 2)
 
     np.testing.assert_array_equal(via_cli, direct)

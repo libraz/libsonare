@@ -255,8 +255,8 @@ class _ProjectEditMixin:
         source_offset_ppq: float = 0.0,
         gain: float = 1.0,
         audio: Sequence[float] | np.ndarray | None = None,
-        audio_channels: int = 1,
-        audio_sample_rate: int = 0,
+        audio_channels: int | None = None,
+        audio_sample_rate: int | None = None,
         source_uri: str | None = None,
     ) -> int:
         """Add an audio or MIDI clip and return its allocated clip id.
@@ -266,14 +266,24 @@ class _ProjectEditMixin:
         (optionally referenced by ``source_uri``). For a MIDI clip pass
         ``is_midi=True`` and set events later via :meth:`set_midi_events`.
 
-        ``audio_sample_rate`` is required whenever ``audio`` is supplied and
-        must be in ``[8000, 384000]``: its 0 default is not a "use the project
-        rate" sentinel, and leaving it at 0 alongside ``audio`` is rejected.
+        ``audio_channels`` and ``audio_sample_rate`` (in ``[8000, 384000]``)
+        are required whenever ``audio`` is supplied and refused without it: the
+        library has no default for the format of audio the caller decoded.
         """
         c_audio = None
         audio_frames = 0
         backing = None
-        if audio is not None:
+        channels = 0
+        rate = 0
+        if audio is None:
+            if audio_channels is not None or audio_sample_rate is not None:
+                raise SonareValueError(
+                    "audio_channels and audio_sample_rate describe audio; omit them without audio"
+                )
+        else:
+            if audio_channels is None or audio_sample_rate is None:
+                raise SonareValueError("audio requires audio_channels and audio_sample_rate")
+            rate = _narrow_int(audio_sample_rate, "audio_sample_rate", _C_INT_MIN, _C_INT_MAX)
             backing, total = _to_c_float_array(audio, arg_name="audio")
             c_audio = backing
             # Narrowed before the frame count is derived from it, so a fractional
@@ -291,8 +301,8 @@ class _ProjectEditMixin:
             gain=_narrow_double(gain, "gain"),
             audio_interleaved=c_audio,
             audio_frames=audio_frames,
-            audio_channels=channels if audio is not None else 0,
-            audio_sample_rate=audio_sample_rate if audio is not None else 0,
+            audio_channels=channels,
+            audio_sample_rate=rate,
             source_uri=_utf8_arg(source_uri, "source_uri") if source_uri is not None else None,
         )
         out_id = ctypes.c_uint32()

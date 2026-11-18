@@ -9,6 +9,7 @@ from collections.abc import Sequence
 from ._errors import _not_supported, _require_open
 from ._ffi import SonareMixGoniometerPoint, SonareSurroundPan
 from ._ffi_types_analysis import SonareMixerMasterMeterConfig
+from ._narrowing import _resolve_zero_default
 from ._runtime import (
     _C_INT_MAX,
     _C_INT_MIN,
@@ -30,6 +31,7 @@ from ._runtime import (
     _joined_names,
     _last_diagnostics,
     _last_error,
+    _max_block_size,
     _meter_tap_value,
     _mix_meter_from_c,
     _narrow_int,
@@ -121,17 +123,20 @@ class Mixer:
         self,
         handle: int,
         sample_rate: int,
-        block_size: int,
         scene_warnings: list[str] | None = None,
     ) -> None:
         self._handle = handle
         self._sample_rate = sample_rate
-        self._block_size = block_size
         self._scene_warnings: list[str] = scene_warnings or []
 
     @classmethod
-    def from_scene_json(cls, json: str, sample_rate: int = 48000, block_size: int = 512) -> Mixer:
+    def from_scene_json(
+        cls, json: str, sample_rate: int, max_block_size: int | None = None
+    ) -> Mixer:
         """Build a mixer from a scene JSON string.
+
+        ``max_block_size`` bounds the frames of every process and drain call; an
+        omitted value takes the library default and an explicit 0 is refused.
 
         A strip's meters are sized when the strip is built, so this is where
         their configuration is chosen: an optional ``"metering"`` object on the
@@ -146,7 +151,7 @@ class Mixer:
         handle = lib.sonare_mixer_from_scene_json(
             _utf8_arg(json, "json"),
             _narrow_int(sample_rate, "sample_rate", _MIN_SAMPLE_RATE, _MAX_SAMPLE_RATE),
-            _to_c_int(block_size, "block_size"),
+            _to_c_int(_resolve_zero_default(max_block_size, "max_block_size"), "max_block_size"),
         )
         if not handle:
             raise _last_error(
@@ -155,7 +160,7 @@ class Mixer:
         # Capture the load's warnings (e.g. insert params no processor read)
         # immediately, before any later C-ABI call overwrites them.
         warnings = [message for _, message, _ in _last_diagnostics()]
-        return cls(int(handle), sample_rate, block_size, warnings)
+        return cls(int(handle), sample_rate, warnings)
 
     def scene_warnings(self) -> list[str]:
         """Non-fatal warnings captured when this mixer was built from scene JSON.
@@ -174,6 +179,12 @@ class Mixer:
         """Rebuild the graph while preserving automation position and queued events."""
         self._require()
         _check(_get_lib().sonare_mixer_compile(self._handle))
+
+    @property
+    def max_block_size(self) -> int:
+        """The largest ``num_samples`` one process call accepts."""
+        self._require()
+        return _max_block_size(_get_lib().sonare_mixer_max_block_size, self._handle)
 
     @property
     def strip_count(self) -> int:
@@ -1027,25 +1038,15 @@ class Mixer:
         """Drain ``num_samples`` of trailing effect-tail audio with no new input.
 
         Pushes silence through the compiled graph so the stereo master keeps
-        emitting the decaying reverb / delay tails. ``num_samples`` must be an
-        integer in ``[1, block_size]`` (the same range the Node and WASM facades
-        enforce). Returns a :class:`MixerStereoResult` matching
-        :meth:`process_stereo`.
+        emitting the decaying reverb / delay tails. ``num_samples`` must be a
+        positive integer no larger than the mixer's maximum block size; the
+        library refuses a longer drain. Returns a :class:`MixerStereoResult`
+        matching :meth:`process_stereo`.
         """
         self._require()
-        # Unify the accepted range with the Node and WASM facades: an integer in
-        # [1, block_size]. The integrality half is the shared narrowing rather
-        # than a `float` test, which a numpy scalar walks straight past.
-        try:
-            count = _narrow_int(num_samples, "num_samples", _C_INT_MIN, _C_INT_MAX)
-        except TypeError as exc:
-            raise TypeError(f"num_samples must be an integer in [1, {self._block_size}]") from exc
-        except SonareValueError as exc:
-            raise SonareValueError(
-                f"num_samples must be an integer in [1, {self._block_size}]"
-            ) from exc
-        if count < 1 or count > self._block_size:
-            raise SonareValueError(f"num_samples must be an integer in [1, {self._block_size}]")
+        # The integrality half is the shared narrowing rather than a `float`
+        # test, which a numpy scalar walks straight past.
+        count = _narrow_int(num_samples, "num_samples", 1, _C_INT_MAX)
         out_left = (ctypes.c_float * count)()
         out_right = (ctypes.c_float * count)()
         _check(

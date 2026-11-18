@@ -462,9 +462,7 @@ def test_set_clip_warp_ref_round_trips_and_undoes() -> None:
     project = Project()
     try:
         track_id = project.add_track("audio", "audio")
-        clip_id = project.add_clip(
-            track_id=track_id, start_ppq=0.0, length_ppq=4.0, audio_channels=0
-        )
+        clip_id = project.add_clip(track_id=track_id, start_ppq=0.0, length_ppq=4.0)
         before = project.to_json_bytes()
 
         # A warp ref must name a registered warp map.
@@ -501,9 +499,7 @@ def test_removing_warp_map_clears_clip_references_and_undo_restores_them() -> No
     project = Project()
     try:
         track_id = project.add_track("audio", "audio")
-        clip_id = project.add_clip(
-            track_id=track_id, start_ppq=0.0, length_ppq=4.0, audio_channels=0
-        )
+        clip_id = project.add_clip(track_id=track_id, start_ppq=0.0, length_ppq=4.0)
         project.set_warp_map(123, [(0.0, 0.0), (4.0, 4.0)])
         project.set_clip_warp_ref(clip_id, 123)
         mapped = project.to_json_bytes()

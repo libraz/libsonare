@@ -2751,8 +2751,8 @@ class EngineCaptureStatus:
 
 class EngineBounceOptions:
     total_frames: int
-    block_size: int
     num_channels: int
+    block_size: int | None
     # 0 = same as the source (no resampling).
     target_sample_rate: int
     # 0 = the engine's prepared rate; a non-zero value must equal it.
@@ -2765,8 +2765,8 @@ class EngineBounceOptions:
     def __init__(
         self,
         total_frames: int,
-        block_size: int = 128,
-        num_channels: int = 2,
+        num_channels: int,
+        block_size: int | None = None,
         target_sample_rate: int = 0,
         source_sample_rate: int = 0,
         normalize_lufs: bool = False,
@@ -2793,16 +2793,16 @@ class EngineBounceResult:
 
 class EngineFreezeOptions:
     total_frames: int
-    block_size: int
     num_channels: int
+    block_size: int | None
     clip_id: int
     start_ppq: float
     gain: float
     def __init__(
         self,
         total_frames: int,
-        block_size: int = 128,
-        num_channels: int = 2,
+        num_channels: int,
+        block_size: int | None = None,
         clip_id: int = 1,
         start_ppq: float = 0.0,
         gain: float = 1.0,

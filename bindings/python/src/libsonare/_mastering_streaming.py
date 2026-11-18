@@ -17,6 +17,7 @@ from ._ffi import (
     SonareStreamingLoudnessGain,
 )
 from ._mastering_offline import _chain_params
+from ._narrowing import _resolve_zero_default
 from ._runtime import (
     _C_INT_MAX,
     _C_INT_MIN,
@@ -28,6 +29,7 @@ from ._runtime import (
     _get_lib,
     _guard_buffer,
     _last_error,
+    _max_block_size,
     _measured_db,
     _narrow_float,
     _narrow_int,
@@ -87,6 +89,8 @@ def streaming_loudness_gain(
         gain = streaming_loudness_gain(samples, 48000, config)
         chain = StreamingMasteringChain(
             config,
+            sample_rate=48000,
+            num_channels=1,
             loudness_static_gain_db=gain.loudness_static_gain_db,
             loudness_static_gain_peak_db=gain.true_peak_dbtp,
         )
@@ -158,7 +162,7 @@ class StreamingMasteringChain:
 
     ``repair.denoise`` runs here, but only with a noise estimator that is
     recursive in time. A stream defaults it to ``"spp"`` (``3``), so
-    ``{"repair.denoise.enabled": True}`` prepares. The offline default,
+    ``{"repair": {"denoise": {"enabled": True}}}`` prepares. The offline default,
     ``"quantile"`` (``0``), ranks every frame of the whole signal, which a
     stream never reaches the end of, so it is refused by name rather than
     substituted; ``"mcra"`` (``1``) and ``"imcra"`` (``2``) are accepted too.
@@ -173,7 +177,8 @@ class StreamingMasteringChain:
 
     Example::
 
-        with StreamingMasteringChain({"eq.tilt.tiltDb": 1.0}, sample_rate=44100) as chain:
+        config = {"eq": {"tilt": {"tiltDb": 1.0}}}
+        with StreamingMasteringChain(config, sample_rate=44100, num_channels=1) as chain:
             out = chain.process_mono(np.zeros(128, dtype=np.float32))
     """
 
@@ -185,8 +190,8 @@ class StreamingMasteringChain:
         config: MasteringChainConfig | None = None,
         *,
         sample_rate: int,
-        max_block_size: int = 128,
-        num_channels: int = 1,
+        num_channels: int,
+        max_block_size: int | None = None,
         loudness_static_gain_db: float | None = None,
         loudness_static_gain_peak_db: float | None = None,
     ) -> None:
@@ -195,10 +200,11 @@ class StreamingMasteringChain:
         Args:
             config: Nested chain config (see :func:`mastering_chain`).
             sample_rate: Sample rate in Hz.
-            max_block_size: Largest block, in samples, any one
-                :meth:`process_mono` / :meth:`process_stereo` call passes.
             num_channels: 1 (mono) or 2 (stereo). Stereo-only stages
                 (imager, monoMaker) are skipped for mono.
+            max_block_size: Largest block, in samples, any one
+                :meth:`process_mono` / :meth:`process_stereo` call passes;
+                omitted, the library default applies.
             loudness_static_gain_db: Precomputed loudness normalization gain in
                 dB, measured at the loudness stage's input (see
                 :func:`streaming_loudness_gain`). The streaming chain cannot
@@ -221,7 +227,7 @@ class StreamingMasteringChain:
             raise _not_supported("libsonare was built without streaming mastering chain support")
         # Narrowed rather than coerced: int() takes 512.7 as 512, and the block
         # layout remembered here would then differ from the one asked for.
-        max_block_value = _narrow_int(max_block_size, "max_block_size", _C_INT_MIN, _C_INT_MAX)
+        max_block_value = _resolve_zero_default(max_block_size, "max_block_size")
         channels_value = _narrow_int(num_channels, "num_channels", _C_INT_MIN, _C_INT_MAX)
         param_array, param_count = _chain_params(config)
         if loudness_static_gain_db is not None:
@@ -264,7 +270,6 @@ class StreamingMasteringChain:
         except BaseException:
             self.close()
             raise
-        self._max_block_size = max_block_value
 
     def process_mono(self, samples: Sequence[float] | np.ndarray) -> np.ndarray:
         """Process one mono block, returning the processed samples (length unchanged).
@@ -318,12 +323,13 @@ class StreamingMasteringChain:
                 tail; no output is produced.
         """
         self._ensure_flush_ready()
-        block = (ctypes.c_float * self._max_block_size)()
+        capacity = self.max_block_size
+        block = (ctypes.c_float * capacity)()
         written = ctypes.c_size_t()
         rc = self._lib.sonare_streaming_mastering_chain_flush_mono(
             self._handle,
             block,
-            _to_c_size_t(self._max_block_size, "max_block_size"),
+            _to_c_size_t(capacity, "capacity"),
             ctypes.byref(written),
         )
         _check(rc)
@@ -332,14 +338,15 @@ class StreamingMasteringChain:
     def flush_stereo(self) -> StereoBlock:
         """Stereo counterpart of :meth:`flush_mono`."""
         self._ensure_flush_ready()
-        left = (ctypes.c_float * self._max_block_size)()
-        right = (ctypes.c_float * self._max_block_size)()
+        capacity = self.max_block_size
+        left = (ctypes.c_float * capacity)()
+        right = (ctypes.c_float * capacity)()
         written = ctypes.c_size_t()
         rc = self._lib.sonare_streaming_mastering_chain_flush_stereo(
             self._handle,
             left,
             right,
-            _to_c_size_t(self._max_block_size, "max_block_size"),
+            _to_c_size_t(capacity, "capacity"),
             ctypes.byref(written),
         )
         _check(rc)
@@ -379,6 +386,14 @@ class StreamingMasteringChain:
             _to_c_double(value, "value"),
         )
         _check(rc)
+
+    @property
+    def max_block_size(self) -> int:
+        """The largest block :meth:`process_mono` / :meth:`process_stereo` accept."""
+        self._ensure_open()
+        return _max_block_size(
+            self._lib.sonare_streaming_mastering_chain_max_block_size, self._handle
+        )
 
     @property
     def latency_samples(self) -> int:
@@ -494,7 +509,8 @@ class StreamingEqualizer:
     # Declared on the class so close() reads it even when __init__ never ran.
     _handle: ctypes.c_void_p | None = None
 
-    def __init__(self, *, sample_rate: int, max_block_size: int = 512) -> None:
+    def __init__(self, *, sample_rate: int, max_block_size: int | None = None) -> None:
+        """Create an equalizer; an omitted ``max_block_size`` takes the library default."""
         # Set first so a failed create or a missing build leaves a valid
         # attribute for __del__/close() instead of raising AttributeError.
         self._handle = ctypes.c_void_p(0)
@@ -504,7 +520,7 @@ class StreamingEqualizer:
         # Narrowed rather than coerced: the rate reaches the C create as a float
         # but every later call as an int, so int() here would split the two.
         sample_rate_value = _narrow_int(sample_rate, "sample_rate", _C_INT_MIN, _C_INT_MAX)
-        max_block_value = _narrow_int(max_block_size, "max_block_size", _C_INT_MIN, _C_INT_MAX)
+        max_block_value = _resolve_zero_default(max_block_size, "max_block_size")
         handle = lib.sonare_eq_create(
             float(sample_rate_value), _to_c_int(max_block_value, "max_block_size")
         )
@@ -515,7 +531,6 @@ class StreamingEqualizer:
         self._lib = lib
         self._handle = ctypes.c_void_p(handle)
         self.sample_rate = sample_rate_value
-        self.max_block_size = max_block_value
         self._sidechain_refs: object | None = None
 
     def set_band(self, index: int, band: dict[str, Any] | str) -> None:
@@ -769,6 +784,12 @@ class StreamingEqualizer:
             )
         )
         return _from_c_float_array(out, count)
+
+    @property
+    def max_block_size(self) -> int:
+        """The largest block one ``process_*`` call accepts."""
+        self._ensure_open()
+        return _max_block_size(self._lib.sonare_eq_max_block_size, self._handle)
 
     @property
     def latency_samples(self) -> int:
