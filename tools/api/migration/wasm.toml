@@ -8642,6 +8642,246 @@ test = "bindings/wasm/tests/surface/analysis-features.test.ts::requires sampleRa
 
 [[entry]]
 kind = "value"
+old = "EqBandPhase='Inherit'"
+new = "EqBandPhase='inherit'"
+domain = "analysis"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "EqBandPhase='Inherit'"
+new = "EqBandPhase='inherit'"
+domain = "analysis"
+rule = "token-case"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "EqBandPhase='LinearPhase'"
+new = "EqBandPhase='linearPhase'"
+domain = "analysis"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "EqBandPhase='LinearPhase'"
+new = "EqBandPhase='linearPhase'"
+domain = "analysis"
+rule = "token-case"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "EqBandPhase='NaturalPhase'"
+new = "EqBandPhase='naturalPhase'"
+domain = "analysis"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "EqBandPhase='NaturalPhase'"
+new = "EqBandPhase='naturalPhase'"
+domain = "analysis"
+rule = "token-case"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "EqBandPhase='ZeroLatency'"
+new = "EqBandPhase='zeroLatency'"
+domain = "analysis"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "EqBandPhase='ZeroLatency'"
+new = "EqBandPhase='zeroLatency'"
+domain = "analysis"
+rule = "token-case"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "EqBandType='AllPass'"
+new = "EqBandType='allPass'"
+domain = "analysis"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "EqBandType='AllPass'"
+new = "EqBandType='allPass'"
+domain = "analysis"
+rule = "token-case"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "EqBandType='BandPass'"
+new = "EqBandType='bandPass'"
+domain = "analysis"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "EqBandType='BandPass'"
+new = "EqBandType='bandPass'"
+domain = "analysis"
+rule = "token-case"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "EqBandType='FlatTilt'"
+new = "EqBandType='flatTilt'"
+domain = "analysis"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "EqBandType='FlatTilt'"
+new = "EqBandType='flatTilt'"
+domain = "analysis"
+rule = "token-case"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "EqBandType='HighPass'"
+new = "EqBandType='highPass'"
+domain = "analysis"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "EqBandType='HighPass'"
+new = "EqBandType='highPass'"
+domain = "analysis"
+rule = "token-case"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "EqBandType='HighShelf'"
+new = "EqBandType='highShelf'"
+domain = "analysis"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "EqBandType='HighShelf'"
+new = "EqBandType='highShelf'"
+domain = "analysis"
+rule = "token-case"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "EqBandType='LowPass'"
+new = "EqBandType='lowPass'"
+domain = "analysis"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "EqBandType='LowPass'"
+new = "EqBandType='lowPass'"
+domain = "analysis"
+rule = "token-case"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "EqBandType='LowShelf'"
+new = "EqBandType='lowShelf'"
+domain = "analysis"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "EqBandType='LowShelf'"
+new = "EqBandType='lowShelf'"
+domain = "analysis"
+rule = "token-case"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "EqBandType='Notch'"
+new = "EqBandType='notch'"
+domain = "analysis"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "EqBandType='Notch'"
+new = "EqBandType='notch'"
+domain = "analysis"
+rule = "token-case"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "EqBandType='Peak'"
+new = "EqBandType='peak'"
+domain = "analysis"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "EqBandType='Peak'"
+new = "EqBandType='peak'"
+domain = "analysis"
+rule = "token-case"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "EqBandType='TiltShelf'"
+new = "EqBandType='tiltShelf'"
+domain = "analysis"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "EqBandType='TiltShelf'"
+new = "EqBandType='tiltShelf'"
+domain = "analysis"
+rule = "token-case"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "EqCoeffMode='Rbj'"
+new = "EqCoeffMode='rbj'"
+domain = "analysis"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "EqCoeffMode='Rbj'"
+new = "EqCoeffMode='rbj'"
+domain = "analysis"
+rule = "token-case"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "EqCoeffMode='Vicanek'"
+new = "EqCoeffMode='vicanek'"
+domain = "analysis"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "EqCoeffMode='Vicanek'"
+new = "EqCoeffMode='vicanek'"
+domain = "analysis"
+rule = "token-case"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
 old = "SpectralEditWindow='blackman'"
 new = "WindowType='blackman'"
 domain = "analysis"
