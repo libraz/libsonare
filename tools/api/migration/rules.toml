@@ -333,7 +333,7 @@ chroma = result.chroma
 [[rule]]
 slug = "snake-case-only"
 title = "Python keyword arguments and attributes are snake_case only"
-summary = "Python keyword arguments, record attributes and their alias properties are snake_case only; the camelCase spellings are no longer accepted. Keys of a document the core parses or writes (the mastering chain config and its overrides, a platform dict, a profile or analysis result read with `json.loads`) keep the core's camelCase spelling, the same keys every surface uses, and the TypedDicts that describe them spell their keys the same way."
+summary = "Python keyword arguments, record attributes and their alias properties are snake_case only; the camelCase spellings are no longer accepted. The exception is a document: an interchange format the caller authors or persists and the core parses, with a file form that round-trips (the mastering chain config and its overrides, the mix scene, the project). Its keys are the core's on every surface, so they stay camelCase in Python too. Everything else is a record, a result the library returns or a per-call input bag such as a streaming platform, and a Python record is snake_case whatever its wire form looks like."
 [[rule.example]]
 surface = "python"
 before = '''
@@ -351,6 +351,14 @@ master_audio(samples, 44100, overrides={"truePeakLimiter": {"ceilingDb": -1.0}})
 '''
 after = '''
 master_audio(samples, 44100, overrides={"maximizer": {"truePeakLimiter": {"ceilingDbtp": -1.0}}})
+'''
+[[rule.example]]
+surface = "python"
+before = '''
+mastering_streaming_preview(samples, 44100, platforms=[{"name": "radio", "targetLufs": -16.0, "ceilingDb": -2.0}])
+'''
+after = '''
+mastering_streaming_preview(samples, 44100, platforms=[{"name": "radio", "target_lufs": -16.0, "ceiling_dbtp": -2.0}])
 '''
 
 [[rule]]

@@ -1,47 +1,12 @@
-# Python TypedDicts that describe a JSON document the core writes, so their keys are the core's
-# camelCase keys rather than Python attribute names.
+# Python TypedDicts that describe a document, so their keys are the core's camelCase keys.
+#
+# A document is an interchange format the caller authors or persists and the core parses: it has a
+# file form and round-trips (the mastering chain config and its overrides, the mix scene, the
+# project). Everything else is a record, a result the library returns or a per-call input bag, and
+# a Python record has snake_case attributes whatever its wire form looks like. A record member
+# holding a document is covered by declaring the document's own type, not the record.
 #
 # One [[document]] per root type; every TypedDict its fields name is covered with it.
 #   type      the root TypedDict, as the inventory names it
-#   evidence  path:line: where the binding hands the document over as the core's JSON
+#   evidence  path:line: where the core parses the document
 # A root that names no TypedDict, or whose types hold no camelCase key, is a validation problem.
-
-[[document]]
-type = "MasteringAudioProfile"
-evidence = "bindings/python/src/libsonare/_mastering_pair.py:598: the core's profile JSON, parsed by the caller"
-
-[[document]]
-type = "MasteringAssistantResult"
-evidence = "bindings/python/src/libsonare/_mastering_pair.py:512: the core's assistant JSON, parsed by the caller"
-
-[[document]]
-type = "MasteringStreamingPreviewResult"
-evidence = "bindings/python/src/libsonare/_mastering_pair.py:473: the core's preview JSON, parsed by the caller"
-
-[[document]]
-type = "MasteringRepairAnalysis"
-evidence = "bindings/python/src/libsonare/_effects_repair_session.py:157: the core's analysis JSON, returned through json.loads"
-
-[[document]]
-type = "MatchReferenceLoudnessResult"
-evidence = "bindings/python/src/libsonare/_mastering_pair.py:210: the core's match.referenceLoudness JSON"
-
-[[document]]
-type = "MatchTonalBalanceResult"
-evidence = "bindings/python/src/libsonare/_mastering_pair.py:212: the core's match.tonalBalance JSON"
-
-[[document]]
-type = "MatchEqCurveResult"
-evidence = "bindings/python/src/libsonare/_mastering_pair.py:213: the core's match.matchEqCurve JSON"
-
-[[document]]
-type = "MatchEstimateReferenceDelaySamplesResult"
-evidence = "bindings/python/src/libsonare/_mastering_pair.py:215: the core's match.estimateReferenceDelaySamples JSON"
-
-[[document]]
-type = "StereoMonoCompatCheckResult"
-evidence = "bindings/python/src/libsonare/_mastering_pair.py:408: the core's stereo.monoCompatCheck JSON"
-
-[[document]]
-type = "StereoMonoCompatCheckLogBandsResult"
-evidence = "bindings/python/src/libsonare/_mastering_pair.py:409: the core's stereo.monoCompatCheckLogBands JSON"
