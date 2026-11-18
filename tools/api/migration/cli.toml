@@ -762,3 +762,11 @@ changed = "lists the library synth preset ids (sawLead, warmPad, ...) rather tha
 domain = "engine"
 rule = "token-case"
 test = "bindings/python/tests/test_cli_synth_preset_spelling.py::test_the_preset_listing_is_the_library_ids"
+
+[[entry]]
+kind = "flag"
+old = "mastering --chain-config"
+changed = "the Python CLI reads the document through the library's chain-config reader, as the native CLI does: a document it refuses (an unknown or earlier key, a value outside its domain, a version 2 document without a complete multiband block) exits 5 as an invalid format rather than 3, and the chain runs with every parameter the document leaves out at its default"
+domain = "mastering"
+rule = "error-class-by-cause"
+test = "bindings/python/tests/test_cli_mastering_chain_config.py::test_a_document_the_library_refuses_exits_as_an_invalid_format"

@@ -3,15 +3,12 @@
 from __future__ import annotations
 
 import argparse
-import json
 import os
 from typing import TYPE_CHECKING, Any, cast
 
 from ._cli_common import (
     _atomic_write_bytes,
-    _chain_params_config,
     _load_channels_or_downmix,
-    _load_json_object,
     _parse_json_config,
     _parse_json_list,
     _parse_kv_params,
@@ -154,19 +151,17 @@ def _assistant_params_from_args(
     return params
 
 
-def _mastering_config(raw: str | None) -> dict[str, Any]:
-    """Load a mastering chain config from JSON text or a JSON file path."""
-    if not raw:
-        return {}
+def _chain_config_document(raw: str) -> dict[str, Any]:
+    """Read a chain config document, from JSON text or a file path, as flat parameter paths.
+
+    The library reads the document, so a refused one is an invalid format, as on the native CLI.
+    """
+    from . import mastering_chain_config_from_json
+
     if os.path.isfile(raw):
-        return _parse_json_config("", raw)
-    try:
-        loaded = json.loads(raw)
-    except (TypeError, json.JSONDecodeError) as exc:
-        raise ValueError("--config must be a JSON object or an existing JSON file") from exc
-    if not isinstance(loaded, dict):
-        raise ValueError("--config must be a JSON object")
-    return loaded
+        with open(raw, encoding="utf-8") as fh:
+            raw = fh.read()
+    return _chain_config_paths(mastering_chain_config_from_json(raw))
 
 
 def _mastering_chain_payload(
@@ -372,7 +367,7 @@ def cmd_mastering(args: argparse.Namespace) -> int:
             )
         mode = "preset"
     elif config_raw:
-        config = _chain_params_config(_mastering_config(config_raw))
+        config = _chain_config_document(config_raw)
         config.update(params)
         result = _run_chain(config)
         mode = "chainConfig"
@@ -848,7 +843,7 @@ def cmd_master(args: argparse.Namespace) -> int:
     if chain_config_path:
         # A complete chain, so it runs as the chain rather than as overrides over
         # a preset the caller never named -- the file states every stage.
-        config = _chain_params_config(_load_json_object(chain_config_path))
+        config = _chain_config_document(chain_config_path)
         config.update(overrides)
         result, rendered = _run_chain(config)
         # `mode` names the option that chose the chain, in lowerCamel like every

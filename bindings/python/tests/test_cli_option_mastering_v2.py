@@ -73,7 +73,7 @@ def test_mastering_preset_params_and_bits_reach_api_and_writer(
     assert payload["preset"] == "pop"
 
 
-def test_mastering_config_unwraps_native_wrapper_and_forwards_params(monkeypatch, tmp_path) -> None:
+def test_mastering_config_reads_the_document_and_forwards_params(monkeypatch, tmp_path) -> None:
     import libsonare
     from libsonare import _cli_mastering, cli
 
@@ -102,7 +102,12 @@ def test_mastering_config_unwraps_native_wrapper_and_forwards_params(monkeypatch
     )
 
     assert _cli_mastering.cmd_mastering(args) == 0
-    assert calls["config"] == {"loudness": {"targetLufs": -15.0, "ceilingDb": -0.5}}
+    # The library reads the document into a complete chain; --params lands on top of it.
+    config = calls["config"]
+    assert isinstance(config, dict)
+    loudness = config["loudness"]
+    assert loudness["targetLufs"] == -15.0
+    assert loudness["ceilingDb"] == -0.5
 
 
 def test_mastering_assistant_enable_repair_explain_reaches_suggestion_and_chain(

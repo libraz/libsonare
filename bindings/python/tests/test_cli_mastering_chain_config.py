@@ -12,6 +12,8 @@ from __future__ import annotations
 import json
 import math
 import struct
+import subprocess
+import sys
 import wave
 from pathlib import Path
 
@@ -448,6 +450,9 @@ def test_chain_config_takes_a_v2_multiband_document(tmp_path, capsys, channels) 
     from libsonare._mastering_offline import _enum_value
 
     prefix = "dynamics.multibandComp"
+    # A v2 band is a complete compressor record; start from the library's own defaults.
+    defaults = libsonare.mastering_chain_config_from_json(json.dumps({"version": 1, "params": {}}))
+    band_defaults = {k: v for k, v in defaults["dynamics"]["compressor"].items() if k != "enabled"}
     params = {
         prefix: {
             "enabled": True,
@@ -458,7 +463,12 @@ def test_chain_config_takes_a_v2_multiband_document(tmp_path, capsys, channels) 
                 "firKernelSize": 1024,
             },
             "bands": [
-                {"thresholdDb": -40.0 + 4 * i, "ratio": 2.0 + i, "makeupGainDb": 0.5 * i}
+                {
+                    **band_defaults,
+                    "thresholdDb": -40.0 + 4 * i,
+                    "ratio": 2.0 + i,
+                    "makeupGainDb": 0.5 * i,
+                }
                 for i in range(4)
             ],
         }
@@ -502,10 +512,31 @@ def test_chain_config_takes_a_v2_multiband_document(tmp_path, capsys, channels) 
     # The multiband block is read, not skipped: without it the render differs.
     plain = tmp_path / "plain.wav"
     plain_doc = tmp_path / "plain.json"
-    plain_doc.write_text(json.dumps({"version": 2, "params": {"loudness.targetLufs": -14.0}}))
+    plain_doc.write_text(json.dumps({"version": 1, "params": {"loudness.targetLufs": -14.0}}))
     assert (
         _run(["mastering", str(source), "--chain-config", str(plain_doc), "--output", str(plain)])
         == 0
     )
     capsys.readouterr()
     assert plain.read_bytes() != output.read_bytes()
+
+
+@pytest.mark.parametrize(
+    "params",
+    [
+        {"loudness.targetLufs": -14.0, "crossover.cutoff0": 200.0},
+        {"loudness.targetLufs": "loud"},
+    ],
+)
+def test_a_document_the_library_refuses_exits_as_an_invalid_format(tmp_path, params) -> None:
+    source = tmp_path / "input.wav"
+    _write_source(source)
+    document = tmp_path / "chain.json"
+    document.write_text(json.dumps({"version": 1, "params": params}), encoding="utf-8")
+    result = subprocess.run(
+        [sys.executable, "-m", "libsonare.cli", "mastering", str(source)]
+        + ["--chain-config", str(document), "-o", str(tmp_path / "out.wav")],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 5, result.stderr
