@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { normalize, normalizeStereo } from '../src/index.js';
 
@@ -274,4 +275,40 @@ describe('normalizeStereo default target', () => {
     });
     expect(omitted.appliedGainDb).toBeCloseTo(atZero.appliedGainDb, 6);
   });
+});
+
+// The per-mode default target comes from the shared corpus every surface reads, so a
+// default moved on one surface alone fails here.
+describe('normalize default target per mode', () => {
+  const defaults = (
+    JSON.parse(
+      readFileSync(
+        new URL('../../../tests/conformance/binding_defaults.json', import.meta.url),
+        'utf8',
+      ),
+    ) as { defaults: Record<string, number> }
+  ).defaults;
+  const rate = 22050;
+  const tone = Float32Array.from(
+    { length: 4096 },
+    (_, i) => 0.3 * Math.sin((2 * Math.PI * 440 * i) / rate),
+  );
+  const other = Float32Array.from(
+    { length: 4096 },
+    (_, i) => 0.2 * Math.sin((2 * Math.PI * 660 * i) / rate),
+  );
+
+  it.each(['peak', 'rms'] as const)(
+    'omitting targetDb in %s mode renders the corpus default',
+    (mode) => {
+      const targetDb = defaults[`normalize.target_db.${mode}`];
+      expect(targetDb).toBeTypeOf('number');
+      expect(normalize({ samples: tone, sampleRate: rate, mode })).toEqual(
+        normalize({ samples: tone, sampleRate: rate, mode, targetDb }),
+      );
+      expect(normalizeStereo({ left: tone, right: other, sampleRate: rate, mode })).toEqual(
+        normalizeStereo({ left: tone, right: other, sampleRate: rate, mode, targetDb }),
+      );
+    },
+  );
 });
