@@ -61,6 +61,30 @@ bool same_binding_identity(const CcBinding& a, const CcBinding& b) noexcept {
 
 }  // namespace
 
+const char* to_string(CcBindingKind kind) noexcept {
+  switch (kind) {
+    case CcBindingKind::kControlChange7:
+      return "controlChange7";
+    case CcBindingKind::kControlChange14:
+      return "controlChange14";
+    case CcBindingKind::kRpn:
+      return "rpn";
+    case CcBindingKind::kNrpn:
+      return "nrpn";
+  }
+  return "controlChange7";
+}
+
+bool cc_binding_kind_from_string(std::string_view token, CcBindingKind* out) noexcept {
+  for (const CcBindingKind kind : kCcBindingKinds) {
+    if (token == to_string(kind)) {
+      *out = kind;
+      return true;
+    }
+  }
+  return false;
+}
+
 bool cc_number_of(const Ump& ump, uint8_t* out_cc) noexcept {
   if (out_cc == nullptr || !is_control_change(ump)) {
     return false;

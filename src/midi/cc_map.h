@@ -26,6 +26,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <string_view>
 #include <vector>
 
 #include "automation/automation_lane.h"
@@ -47,6 +48,19 @@ enum class CcBindingKind : uint8_t {
   /// Non-Registered Parameter Number selected by CC#99/98 and driven by Data Entry.
   kNrpn = 3,
 };
+
+/// @brief The token a binding document spells @p kind with ("controlChange7",
+///        "controlChange14", "rpn", "nrpn").
+const char* to_string(CcBindingKind kind) noexcept;
+
+/// @brief Read a binding kind token. Returns false for any spelling
+///        @ref to_string does not write.
+bool cc_binding_kind_from_string(std::string_view token, CcBindingKind* out) noexcept;
+
+/// @brief Every binding kind, in ordinal order.
+inline constexpr std::array<CcBindingKind, 4> kCcBindingKinds = {
+    CcBindingKind::kControlChange7, CcBindingKind::kControlChange14, CcBindingKind::kRpn,
+    CcBindingKind::kNrpn};
 
 /// A single MIDI controller <-> parameter binding. Trivially copyable POD so the
 /// table can be scanned on the audio thread without allocation.

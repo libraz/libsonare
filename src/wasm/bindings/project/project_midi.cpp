@@ -6,6 +6,7 @@
 #ifdef __EMSCRIPTEN__
 
 #include "project_wasm.h"
+#include "wasm/bindings/common/midi_cc_kind.h"
 
 #if defined(SONARE_WITH_ARRANGEMENT)
 
@@ -351,7 +352,7 @@ SonareMidiCcBinding js_cc_binding_from_val(val object) {
   SonareMidiCcBinding out{};
   out.cc_number = checkedByteFromVal(object["ccNumber"], "ccNumber");
   out.channel = byteProperty(object, "channel", 0xffu);
-  out.kind = byteProperty(object, "kind", 0u);
+  out.kind = static_cast<uint8_t>(ccBindingKindProperty(object));
   out.cc_lsb_number = byteProperty(object, "ccLsbNumber", 0u);
   out.selector_msb = byteProperty(object, "selectorMsb", 0u);
   out.selector_lsb = byteProperty(object, "selectorLsb", 0u);
@@ -365,7 +366,7 @@ val js_cc_binding_to_val(const SonareMidiCcBinding& binding) {
   val out = val::object();
   out.set("ccNumber", static_cast<double>(binding.cc_number));
   out.set("channel", static_cast<double>(binding.channel));
-  out.set("kind", static_cast<double>(binding.kind));
+  out.set("kind", val(ccBindingKindToken(binding.kind)));
   out.set("ccLsbNumber", static_cast<double>(binding.cc_lsb_number));
   out.set("selectorMsb", static_cast<double>(binding.selector_msb));
   out.set("selectorLsb", static_cast<double>(binding.selector_lsb));

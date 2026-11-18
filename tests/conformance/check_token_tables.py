@@ -361,6 +361,16 @@ ROWS: tuple[TokenSet, ...] = (
             _src("wasm", "bindings/wasm/src/public_types.ts", "ts_union", "MasteringInsertParamUnit"),
         ),
     ),
+    TokenSet(
+        name="MIDI CC binding kind",
+        core=CoreTable("src/midi/cc_map.cpp", "CcBindingKind"),
+        c_enum=("include/sonare/sonare_c_project_midi.h", "SONARE_MIDI_CC_"),
+        sources=(
+            _src("node", "bindings/node/src/types_project.ts", "ts_union", "ProjectMidiCcBindingKind"),
+            _src("python", "bindings/python/src/libsonare/_project_model.py", "py_literal", "ProjectMidiCcBindingKind"),
+            _src("wasm", "bindings/wasm/src/project_types.ts", "ts_union", "ProjectMidiCcBindingKind"),
+        ),
+    ),
 )
 
 

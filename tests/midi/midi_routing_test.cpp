@@ -10,6 +10,7 @@
 #include <cmath>
 #include <cstdint>
 #include <limits>
+#include <string>
 #include <vector>
 
 #include "midi/capture.h"
@@ -281,6 +282,24 @@ TEST_CASE("MidiRouter process performs no allocation", "[midi][rt]") {
 // ===========================================================================
 // cc_map
 // ===========================================================================
+
+TEST_CASE("CcBindingKind tokens round-trip and refuse other spellings", "[midi]") {
+  using sonare::midi::CcBindingKind;
+  const std::array<const char*, 4> expected = {"controlChange7", "controlChange14", "rpn", "nrpn"};
+  for (std::size_t i = 0; i < expected.size(); ++i) {
+    const CcBindingKind kind = sonare::midi::kCcBindingKinds[i];
+    REQUIRE(static_cast<std::size_t>(kind) == i);
+    REQUIRE(std::string(sonare::midi::to_string(kind)) == expected[i]);
+    CcBindingKind read = CcBindingKind::kNrpn;
+    REQUIRE(sonare::midi::cc_binding_kind_from_string(expected[i], &read));
+    REQUIRE(read == kind);
+  }
+  CcBindingKind untouched = CcBindingKind::kRpn;
+  for (const char* other : {"", "cc7", "ControlChange7", "0", "RPN"}) {
+    REQUIRE_FALSE(sonare::midi::cc_binding_kind_from_string(other, &untouched));
+  }
+  REQUIRE(untouched == CcBindingKind::kRpn);
+}
 
 TEST_CASE("CcMap binds CC to parameter and maps value", "[midi]") {
   CcMap map;

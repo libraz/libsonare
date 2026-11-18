@@ -15,6 +15,7 @@
 #include "engine/realtime_engine.h"
 #include "midi/live_push_args.h"
 #include "sonare_wrap_engine.h"
+#include "sonare_wrap_midi_cc.h"
 #include "sonare_wrap_options.h"
 #include "sonare_wrap_sample_bank.h"
 #include "sonare_wrap_synth_patch.h"
@@ -97,33 +98,10 @@ Napi::Value RealtimeEngineWrap::BindMidiCcBinding(const Napi::CallbackInfo& info
     Napi::TypeError::New(env, "Expected a MIDI CC binding object").ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  const Napi::Object object = info[0].As<Napi::Object>();
-  const Napi::Value cc_number = object.Get("ccNumber");
-  const Napi::Value param_id = object.Get("paramId");
-  if (!cc_number.IsNumber() || !param_id.IsNumber()) {
-    Napi::TypeError::New(env, "MIDI CC binding requires numeric ccNumber and paramId")
-        .ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
   SonareMidiCcBinding binding{};
-  // Every byte-wide field goes through the MidiByte readers: the C-ABI struct
-  // stores them as uint8_t, so a plain Uint32Value() would let 256 arrive as 0
-  // and 271 as 15 — inside the range the C ABI's own check accepts.
-  if (!RequiredMidiByteValue(env, cc_number, "ccNumber", &binding.cc_number)) {
+  if (!sonare_node::CcBindingFromObject(env, info[0].As<Napi::Object>(), &binding)) {
     return env.Undefined();
   }
-  // `channel` keeps its "any channel" sentinel for an omitted, null, or
-  // undefined value.
-  binding.channel = MidiByteProperty(env, object, "channel", 0xffu);
-  binding.kind = MidiByteProperty(env, object, "kind", 0u);
-  binding.cc_lsb_number = MidiByteProperty(env, object, "ccLsbNumber", 0u);
-  binding.selector_msb = MidiByteProperty(env, object, "selectorMsb", 0u);
-  binding.selector_lsb = MidiByteProperty(env, object, "selectorLsb", 0u);
-  if (env.IsExceptionPending()) return env.Undefined();
-  binding.param_id = node_narrow_uint32(env, param_id, "paramId");
-  binding.min_value = FloatProperty(object, "minValue", 0.0f);
-  binding.max_value = FloatProperty(object, "maxValue", 1.0f);
-  if (env.IsExceptionPending()) return env.Undefined();
   ThrowIfError(env, sonare_engine_bind_midi_cc_binding(engine_, &binding));
   return env.Undefined();
   SONARE_NODE_CATCH(env)

@@ -14,6 +14,7 @@
 #include "midi/controller_profile.h"
 #include "midi/part_rig.h"
 #include "realtime_engine_wasm.h"
+#include "wasm/bindings/common/midi_cc_kind.h"
 #include "wasm/bindings/common/synth_patch_val.h"
 
 namespace {
@@ -115,6 +116,9 @@ void RealtimeEngineWasm::bindMidiCc(const val& channel_val, const val& controlle
         "bindMidiCc: channel in [0,15], controller in [0,127], paramId "
         "non-zero, maxValue >= minValue");
   }
+  if (sonare::engine::RealtimeEngine::parameter_target_reserved(param_id)) {
+    throw WasmRangeError("bindMidiCc: paramId " + std::to_string(param_id) + " is reserved");
+  }
   if (!engine_.bind_midi_cc(static_cast<uint8_t>(controller), static_cast<uint8_t>(channel),
                             param_id, min_value, max_value)) {
     throwMidiCcBindFailure(engine_, "failed to bind MIDI CC");
@@ -142,7 +146,7 @@ void RealtimeEngineWasm::bindMidiCcBinding(val object) {
   // matching the Node addon reader and the Project-side descriptor reader. A
   // field that IS supplied is still range-checked below, so the leniency covers
   // omission only and a non-finite range is still rejected.
-  binding.kind = static_cast<sonare::midi::CcBindingKind>(byteProperty(object, "kind", 0u));
+  binding.kind = ccBindingKindProperty(object);
   binding.cc_lsb_number = byteProperty(object, "ccLsbNumber", 0u);
   binding.selector_msb = byteProperty(object, "selectorMsb", 0u);
   binding.selector_lsb = byteProperty(object, "selectorLsb", 0u);
@@ -158,6 +162,10 @@ void RealtimeEngineWasm::bindMidiCcBinding(val object) {
       (binding.kind == sonare::midi::CcBindingKind::kControlChange14 &&
        (binding.cc_number > 31 || binding.cc_lsb_number != binding.cc_number + 32u))) {
     throw WasmRangeError("invalid full MIDI CC binding");
+  }
+  if (sonare::engine::RealtimeEngine::parameter_target_reserved(binding.param_id)) {
+    throw WasmRangeError("bindMidiCcBinding: paramId " + std::to_string(binding.param_id) +
+                         " is reserved");
   }
   if (!engine_.bind_midi_cc(binding)) {
     throwMidiCcBindFailure(engine_, "failed to bind full MIDI CC descriptor");

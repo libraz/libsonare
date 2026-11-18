@@ -7,6 +7,7 @@
 #include "sonare_wrap.h"
 #include "sonare_wrap_clip_page_provider.h"
 #include "sonare_wrap_engine.h"
+#include "sonare_wrap_midi_cc.h"
 #include "sonare_wrap_options.h"
 #include "sonare_wrap_playback.h"
 #include "sonare_wrap_polyphony.h"
@@ -227,49 +228,6 @@ bool MidiEventFromObject(Napi::Env env, Napi::Object event, SonareMidiEventPod* 
   return !env.IsExceptionPending();
 }
 
-bool CcBindingFromObject(Napi::Env env, Napi::Object object, SonareMidiCcBinding* out) {
-  const Napi::Value cc_number = object.Get("ccNumber");
-  const Napi::Value param_id = object.Get("paramId");
-  if (!cc_number.IsNumber() || !param_id.IsNumber()) {
-    Napi::TypeError::New(env, "MIDI CC binding requires numeric ccNumber and paramId")
-        .ThrowAsJavaScriptException();
-    return false;
-  }
-  *out = SonareMidiCcBinding{};
-  // Every byte-wide field goes through the MidiByte readers: the C-ABI struct
-  // stores them as uint8_t, so a plain Uint32Value() would let 256 arrive as 0
-  // and 271 as 15 — inside the range the C ABI's own check accepts.
-  if (!sonare_node::RequiredMidiByteValue(env, cc_number, "ccNumber", &out->cc_number)) {
-    return false;
-  }
-  // `channel` keeps its "any channel" sentinel for an omitted, null, or
-  // undefined value.
-  out->channel = sonare_node::MidiByteProperty(env, object, "channel", 0xffu);
-  out->kind = sonare_node::MidiByteProperty(env, object, "kind", 0u);
-  out->cc_lsb_number = sonare_node::MidiByteProperty(env, object, "ccLsbNumber", 0u);
-  out->selector_msb = sonare_node::MidiByteProperty(env, object, "selectorMsb", 0u);
-  out->selector_lsb = sonare_node::MidiByteProperty(env, object, "selectorLsb", 0u);
-  if (env.IsExceptionPending()) return false;
-  out->param_id = sonare_node::node_narrow_uint32(env, param_id, "paramId");
-  out->min_value = sonare_node::FloatProperty(object, "minValue", 0.0f);
-  out->max_value = sonare_node::FloatProperty(object, "maxValue", 1.0f);
-  return !env.IsExceptionPending();
-}
-
-Napi::Object CcBindingToObject(Napi::Env env, const SonareMidiCcBinding& binding) {
-  Napi::Object out = Napi::Object::New(env);
-  out.Set("ccNumber", Napi::Number::New(env, binding.cc_number));
-  out.Set("channel", Napi::Number::New(env, binding.channel));
-  out.Set("kind", Napi::Number::New(env, binding.kind));
-  out.Set("ccLsbNumber", Napi::Number::New(env, binding.cc_lsb_number));
-  out.Set("selectorMsb", Napi::Number::New(env, binding.selector_msb));
-  out.Set("selectorLsb", Napi::Number::New(env, binding.selector_lsb));
-  out.Set("paramId", Napi::Number::New(env, binding.param_id));
-  out.Set("minValue", Napi::Number::New(env, binding.min_value));
-  out.Set("maxValue", Napi::Number::New(env, binding.max_value));
-  return out;
-}
-
 bool CcBindingsFromArray(Napi::Env env, Napi::Array array, std::vector<SonareMidiCcBinding>* out) {
   out->assign(array.Length(), SonareMidiCcBinding{});
   for (uint32_t i = 0; i < array.Length(); ++i) {
@@ -278,7 +236,7 @@ bool CcBindingsFromArray(Napi::Env env, Napi::Array array, std::vector<SonareMid
       Napi::TypeError::New(env, "MIDI CC bindings must be objects").ThrowAsJavaScriptException();
       return false;
     }
-    if (!CcBindingFromObject(env, item.As<Napi::Object>(), &(*out)[i])) return false;
+    if (!sonare_node::CcBindingFromObject(env, item.As<Napi::Object>(), &(*out)[i])) return false;
   }
   return true;
 }
@@ -330,7 +288,7 @@ Napi::Value MidiCcLearn(const Napi::CallbackInfo& info) {
     Napi::RangeError::New(env, "invalid MIDI CC learn arguments").ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  return CcBindingToObject(env, learned);
+  return sonare_node::CcBindingToObject(env, learned);
   SONARE_NODE_CATCH(env)
 }
 
