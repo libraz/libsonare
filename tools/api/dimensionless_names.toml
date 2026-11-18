@@ -186,7 +186,6 @@ names = [
   "VocalAnalysisInput.yinThreshold",
   "VocalCreateRequest.yinThreshold",
   "VocalEditSession.constructor(yin_threshold)",
-  "create_vocal_edit_session(yin_threshold)",
 ]
 class = "normalized"
 range = [0, 1]
@@ -200,7 +199,6 @@ names = [
   "VocalAnalysisInput.voicedThreshold",
   "VocalCreateRequest.voicedThreshold",
   "VocalEditSession.constructor(voiced_threshold)",
-  "create_vocal_edit_session(voiced_threshold)",
 ]
 class = "probability"
 range = [0, 1]
