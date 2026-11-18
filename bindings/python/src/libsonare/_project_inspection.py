@@ -52,7 +52,6 @@ from ._runtime import (
     _check,
     _get_lib,
     _guard_buffer,
-    _last_diagnostics,
     _mapping_keys,
     _narrow_int,
     _ordinal_token,
@@ -625,13 +624,12 @@ class _ProjectInspectionMixin:
             external_stem_role=external_stem_role,
         )
 
-    def set_mixer_scene_json(self, scene_json: str) -> list[str]:
+    def set_mixer_scene_json(self, scene_json: str) -> None:
         """Replace the project's mixer scene from scene JSON.
 
-        Returns one warning per scene key the reader does not recognise (reported as
-        ``unknown scene key 'strips[2].faderDB'``; keys starting with ``$`` or ``x-``
-        are exempt). The scene is still applied; the list is empty when every key was
-        consumed.
+        A scene key the reader does not recognise raises ``SonareError``
+        (``INVALID_FORMAT``) naming its path, e.g. ``strips[2].faderDB``; keys starting
+        with ``$`` or ``x-`` are exempt. The scene is left unchanged on a refusal.
         """
         lib = _get_lib()
         _check(
@@ -640,7 +638,6 @@ class _ProjectInspectionMixin:
                 _utf8_arg(scene_json, "scene_json"),
             )
         )
-        return [message for _, message, _ in _last_diagnostics()]
 
     def set_tempo_segments(
         self,

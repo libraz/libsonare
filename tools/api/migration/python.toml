@@ -10329,3 +10329,11 @@ changed = "a property (was a method)"
 domain = "project"
 rule = "getters"
 test = "bindings/python/tests/test_state_reads_are_properties.py::test_state_read_is_a_property"
+
+[[entry]]
+kind = "method"
+old = "Project.set_mixer_scene_json"
+changed = "returns None; an unknown scene key raises SonareError (INVALID_FORMAT) naming its path instead of being returned as a warning"
+domain = "project"
+rule = "error-class-by-cause"
+test = "bindings/python/tests/test_scene_warnings.py::test_project_set_mixer_scene_json_refuses_an_unknown_key_by_path"

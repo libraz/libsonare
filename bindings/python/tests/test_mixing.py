@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from libsonare import ErrorCode, SonareValueError
+from libsonare import ErrorCode, SonareError, SonareValueError
 from libsonare._runtime import _curve_value, _pan_law_value
 
 from ._helpers import LIB_AVAILABLE, raises_coded
@@ -843,8 +843,8 @@ def test_scene_warnings_surface_ignored_insert_params() -> None:
         mixer.close()
 
 
-def test_scene_warnings_report_unknown_scene_keys() -> None:
-    """A misspelled scene key is reported by path; ``$`` and ``x-`` keys are exempt."""
+def test_from_scene_json_refuses_an_unknown_scene_key_by_path() -> None:
+    """A misspelled scene key is refused by path; ``$`` and ``x-`` keys are exempt."""
     import json
 
     from libsonare import Mixer
@@ -860,11 +860,11 @@ def test_scene_warnings_report_unknown_scene_keys() -> None:
             }
         )
 
-    mixer = Mixer.from_scene_json(build({}, {"faderDB": -3}), sample_rate=48000, max_block_size=256)
-    try:
-        assert mixer.scene_warnings() == ["unknown scene key 'strips[0].faderDB'"]
-    finally:
-        mixer.close()
+    with pytest.raises(SonareError) as refused:
+        Mixer.from_scene_json(build({}, {"faderDB": -3}), sample_rate=48000, max_block_size=256)
+    assert not isinstance(refused.value, SonareValueError)
+    assert refused.value.code == int(ErrorCode.INVALID_FORMAT)
+    assert "unknown scene key 'strips[0].faderDB'" in str(refused.value)
 
     annotated = build({"$schema": "x", "x-note": 1}, {"x-color": "red"})
     mixer = Mixer.from_scene_json(annotated, sample_rate=48000, max_block_size=256)

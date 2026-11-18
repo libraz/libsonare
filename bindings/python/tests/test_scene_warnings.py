@@ -1,4 +1,4 @@
-"""Unknown mixing scene keys: a whole scene reports them, a strip fragment refuses them."""
+"""Unknown mixing scene keys are refused by path, for a whole scene and a strip fragment."""
 
 from __future__ import annotations
 
@@ -12,10 +12,15 @@ _TYPO_SCENE = (
 _TYPO_STRIP = '{"version":1,"strips":[{"id":"s","faderDB":-3}],"buses":[]}'
 
 
-def test_project_set_mixer_scene_json_returns_unknown_key_warnings() -> None:
-    project = Project()
-    assert project.set_mixer_scene_json(_TYPO_SCENE) == ["unknown scene key 'strips[0].faderDB'"]
-    assert project.set_mixer_scene_json('{"version":1,"strips":[{"id":"lead"}]}') == []
+def test_project_set_mixer_scene_json_refuses_an_unknown_key_by_path() -> None:
+    with Project() as project:
+        with pytest.raises(SonareError) as refused:
+            project.set_mixer_scene_json(_TYPO_SCENE)
+        assert not isinstance(refused.value, SonareValueError)
+        assert refused.value.code == int(ErrorCode.INVALID_FORMAT)
+        assert "unknown scene key 'strips[0].faderDB'" in str(refused.value)
+        annotated = '{"version":1,"$schema":"s","strips":[{"id":"lead","x-note":1}],"buses":[]}'
+        assert project.set_mixer_scene_json(annotated) is None
 
 
 def test_engine_strip_setters_refuse_an_unknown_key() -> None:
@@ -29,6 +34,6 @@ def test_engine_strip_setters_refuse_an_unknown_key() -> None:
                 call()
             assert not isinstance(refused.value, SonareValueError)
             assert refused.value.code == int(ErrorCode.INVALID_FORMAT)
-            assert "unknown strip key 'strips[0].faderDB'" in str(refused.value)
+            assert "unknown scene key 'strips[0].faderDB'" in str(refused.value)
         annotated = '{"$schema":"s","version":1,"strips":[{"id":"s","faderDb":-3,"x-t":1}]}'
         engine.set_track_strip_json(10, annotated)
