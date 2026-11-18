@@ -88,22 +88,6 @@ class EngineTelemetry:
     graph_latency_samples_q8: int
     value: int
 
-    @property
-    def renderFrame(self) -> int:  # noqa: N802
-        return self.render_frame
-
-    @property
-    def timelineSample(self) -> int:  # noqa: N802
-        return self.timeline_sample
-
-    @property
-    def audibleTimelineSample(self) -> int:  # noqa: N802
-        return self.audible_timeline_sample
-
-    @property
-    def graphLatencySamplesQ8(self) -> int:  # noqa: N802
-        return self.graph_latency_samples_q8
-
 
 EngineTrackMonitorMode = Literal["off", "pfl", "afl"]
 """Per-track-lane monitor tap mode for the realtime engine."""

@@ -135,8 +135,7 @@ def test_estimate_room_round_trips_a_known_shoebox() -> None:
     assert len(est.rt60_bands) >= 4
     assert len(est.band_absorption) == len(est.rt60_bands)
     assert math.isfinite(est.drr_db)
-    # camelCase aliases mirror the other bindings.
-    assert est.drrDb == est.drr_db
+    assert not hasattr(est, "drrDb")
 
 
 @acoustic
@@ -221,7 +220,7 @@ def test_band_arguments_use_the_node_and_wasm_spelling() -> None:
         rir.rir, sample_rate=48000, mode="impulseResponse", min_decay_db=25.0
     )
     assert not hasattr(est, "absorption_bands")
-    assert est.bandAbsorption == est.band_absorption
+    assert not hasattr(est, "bandAbsorption")
 
 
 @acoustic
@@ -735,7 +734,8 @@ def test_room_morph_stereo_returns_two_different_longer_channels() -> None:
     samples = _impulse()
     result = libsonare.room_morph_stereo(samples, samples, **_STEREO_ROOM)
     assert len(result.left) == len(result.right) > len(samples)
-    assert result.sample_rate == result.sampleRate == 48000
+    assert result.sample_rate == 48000
+    assert not hasattr(result, "sampleRate")
     assert result.left != result.right
     assert all(math.isfinite(s) for s in result.left + result.right)
 

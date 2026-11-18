@@ -81,10 +81,6 @@ class RirResult:
     sample_rate: int
     diagnostics: list[RirDiagnostic] = field(default_factory=list)
 
-    @property
-    def sampleRate(self) -> int:  # noqa: N802
-        return self.sample_rate
-
 
 @dataclass(frozen=True, slots=True)
 class RoomMorphResult:
@@ -110,10 +106,6 @@ class RoomMorphResult:
     sample_rate: int
     diagnostics: list[RirDiagnostic] = field(default_factory=list)
 
-    @property
-    def sampleRate(self) -> int:  # noqa: N802
-        return self.sample_rate
-
 
 @dataclass(frozen=True, slots=True)
 class RoomMorphStereoResult:
@@ -127,10 +119,6 @@ class RoomMorphStereoResult:
     right: list[float]
     sample_rate: int
     diagnostics: list[RirDiagnostic] = field(default_factory=list)
-
-    @property
-    def sampleRate(self) -> int:  # noqa: N802
-        return self.sample_rate
 
 
 @dataclass(frozen=True, slots=True)
@@ -152,18 +140,6 @@ class RoomEstimate:
     confidence: float
     band_absorption: list[float]
     rt60_bands: list[float]
-
-    @property
-    def drrDb(self) -> float:  # noqa: N802
-        return self.drr_db
-
-    @property
-    def bandAbsorption(self) -> list[float]:  # noqa: N802
-        return self.band_absorption
-
-    @property
-    def rt60Bands(self) -> list[float]:  # noqa: N802
-        return self.rt60_bands
 
 
 class DereverbClassicalConfig(TypedDict):

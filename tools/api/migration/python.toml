@@ -7547,3 +7547,75 @@ changed = "None on an unpitched note (was 0.0)"
 domain = "project"
 rule = "absent-not-sentinel"
 test = "bindings/python/tests/test_vocal_edit.py::test_a_note_carries_its_pitch_fields_only_when_pitch_was_measured"
+
+# The camelCase property aliases on Python results are gone; the snake_case attribute is the one name.
+
+[[entry]]
+kind = "method"
+old = "EngineTelemetry.renderFrame"
+removed = "read render_frame"
+domain = "engine"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "EngineTelemetry.timelineSample"
+removed = "read timeline_sample"
+domain = "engine"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "EngineTelemetry.audibleTimelineSample"
+removed = "read audible_timeline_sample"
+domain = "engine"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "EngineTelemetry.graphLatencySamplesQ8"
+removed = "read graph_latency_samples_q8"
+domain = "engine"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "RirResult.sampleRate"
+removed = "read sample_rate"
+domain = "effects"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "RoomMorphResult.sampleRate"
+removed = "read sample_rate"
+domain = "effects"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "RoomMorphStereoResult.sampleRate"
+removed = "read sample_rate"
+domain = "effects"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "RoomEstimate.drrDb"
+removed = "read drr_db"
+domain = "effects"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "RoomEstimate.bandAbsorption"
+removed = "read band_absorption"
+domain = "effects"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "RoomEstimate.rt60Bands"
+removed = "read rt60_bands"
+domain = "effects"
+rule = "aliases-removed"

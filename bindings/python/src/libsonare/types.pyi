@@ -792,12 +792,6 @@ class AcousticResult:
         confidence: float,
         is_blind: bool,
     ) -> None: ...
-    @property
-    def rt60Bands(self) -> list[float]: ...
-    @property
-    def c50Bands(self) -> list[float]: ...
-    @property
-    def c80Bands(self) -> list[float]: ...
 
 class RirDiagnostic:
     code: str
@@ -820,8 +814,6 @@ class RoomMorphResult:
         sample_rate: int,
         diagnostics: list[RirDiagnostic] = ...,
     ) -> None: ...
-    @property
-    def sampleRate(self) -> int: ...
 
 class RoomMorphStereoResult:
     left: list[float]
@@ -835,8 +827,6 @@ class RoomMorphStereoResult:
         sample_rate: int,
         diagnostics: list[RirDiagnostic] = ...,
     ) -> None: ...
-    @property
-    def sampleRate(self) -> int: ...
 
 class RirResult:
     rir: list[float]
@@ -848,8 +838,6 @@ class RirResult:
         sample_rate: int,
         diagnostics: list[RirDiagnostic] = ...,
     ) -> None: ...
-    @property
-    def sampleRate(self) -> int: ...
 
 class RoomEstimate:
     volume: float
@@ -871,12 +859,6 @@ class RoomEstimate:
         band_absorption: list[float],
         rt60_bands: list[float],
     ) -> None: ...
-    @property
-    def drrDb(self) -> float: ...
-    @property
-    def bandAbsorption(self) -> list[float]: ...
-    @property
-    def rt60Bands(self) -> list[float]: ...
 
 MaterialPresetName: TypeAlias = Literal["none", "concrete", "wood", "curtain", "carpet", "glass"]
 AcousticModeName: TypeAlias = Literal["auto", "blind", "impulseResponse"]
@@ -2103,14 +2085,6 @@ class EngineTelemetry:
         graph_latency_samples_q8: int,
         value: int,
     ) -> None: ...
-    @property
-    def renderFrame(self) -> int: ...
-    @property
-    def timelineSample(self) -> int: ...
-    @property
-    def audibleTimelineSample(self) -> int: ...
-    @property
-    def graphLatencySamplesQ8(self) -> int: ...
 
 EngineTrackMonitorMode = Literal["off", "pfl", "afl"]
 
