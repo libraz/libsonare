@@ -564,7 +564,7 @@ export const ROWS: Row[] = [
     name: 'pitchYin',
     fn: sonare.pitchYin,
     form: 'sampleOptions',
-    params: 'samples sampleRate frameLength? hopLength? f0MinHz? f0MaxHz? threshold? fillNa?',
+    params: 'samples sampleRate frameLength? hopLength? f0MinHz? f0MaxHz? threshold?',
     values: {
       samples: TONE_NOISY_TAIL,
       sampleRate: ALT_SR,
@@ -573,10 +573,8 @@ export const ROWS: Row[] = [
       f0MinHz: 250,
       f0MaxHz: 500,
       threshold: 0.5,
-      fillNa: true,
     },
     invalid: { hopLength: 0 },
-    inert: { fillNa: 'the core YIN reads no fill_na; only pYIN does' },
   },
   {
     name: 'pitchPyin',
