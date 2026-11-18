@@ -270,6 +270,10 @@ _ALIAS_COVERAGE = {
     # is a lifecycle key, so Python's constructor needs no credit; restore is the classmethod.
     "vocal_session_create": ("create_vocal_edit_session",),
     "vocal_session_restore": ("restore", "restore_vocal_edit_session"),
+    # With no preset, master_audio runs the configured chain the chain entry runs.
+    # Node and WASM are credited by the core claim in _CORE_COVERAGE instead.
+    "mastering_chain": ("master_audio",),
+    "mastering_chain_stereo": ("master_audio_stereo",),
     # C ABI returns a JSON document; facades parse it into the public descriptor.
     "capabilities_json": ("capabilities",),
     "capability_catalog_json": ("capability_catalog",),
@@ -361,9 +365,8 @@ _ALIAS_COVERAGE = {
     "time_stretch_ex": ("time_stretch",),
     "pitch_shift_ex": ("pitch_shift",),
     "normalize_rms": ("normalize",),
-    # Same fold one channel count up: node and wasm reach both statistics
-    # through one stereo facade with a mode argument, while python keeps the two
-    # as separate functions the way it does for the mono pair.
+    # Same fold one channel count up: every facade reaches both statistics
+    # through one stereo function with a mode argument.
     "normalize_rms_stereo": ("normalize_stereo",),
     "trim_ex": ("trim",),
     "nnls_chroma_ex2": ("nnls_chroma",),
@@ -406,8 +409,9 @@ _ALIAS_COVERAGE = {
     # C cancellation is additive in `_ex` variants; every facade folds it into
     # the same progress-capable method rather than exposing a second spelling.
     "analyze_json_with_progress_ex": ("analyze_with_progress",),
+    # The CLI keeps its mastering-chain command; no binding has that name.
     "mastering_chain_with_progress_ex": ("mastering_chain", "master_audio"),
-    "mastering_chain_stereo_with_progress_ex": ("mastering_chain_stereo", "master_audio_stereo"),
+    "mastering_chain_stereo_with_progress_ex": ("master_audio_stereo",),
     "master_audio_with_progress_ex": ("master_audio",),
     "master_audio_stereo_with_progress_ex": ("master_audio_stereo",),
     # The offline render's `finalize` flag is additive in the `_ex` variant;
@@ -994,7 +998,14 @@ def build_report(
                     alias_symbols = alias_methods | (
                         free_keys.get(s, set()) if prefix else set(indexed.get(s, {}))
                     )
-                covered = bool(aliases) and any(a in alias_symbols for a in aliases)
+                # Where a core claim is the route (node / wasm), it decides, so the
+                # report keeps saying which surfaces skip the entry's own validation.
+                core_route = (
+                    key in _CORE_COVERAGE and bool(native_sources) and s in ("node", "wasm")
+                )
+                covered = (
+                    bool(aliases) and not core_route and any(a in alias_symbols for a in aliases)
+                )
             if not covered and prefix and native_sources and s in _CONSTRUCTOR_SOURCES:
                 # A handle op the facade performs while constructing the object
                 # (the streaming chain prepares in its constructor) is reached

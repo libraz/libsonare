@@ -1318,10 +1318,8 @@ RULES: list[Rule] = [
         violation=_stereo_pair_violation,
         derive=_stereo_calls,
         pending={
-            "python:mastering_chain_stereo": "no Node/WASM counterpart; masterAudioStereo is the entry there, drop the Python-only twin or add the family",
             "python:mastering_process_stereo": "rename to mastering_apply_processor_stereo (Node/WASM masteringApplyProcessorStereo)",
             "python:mastering_pair_process_stereo": "rename to mastering_apply_pair_processor_stereo (Node/WASM masteringApplyPairProcessorStereo)",
-            "python:normalize_rms_stereo": "Node/WASM normalizeStereo takes left/right; no normalizeRmsStereo exists there",
             "python:RealtimeVoiceChanger.process_planar_stereo": "Node/WASM RealtimeVoiceChanger.processPlanar takes channels",
             "python:RealtimeVoiceChanger.process_planar_stereo_with_carrier": "Node/WASM RealtimeVoiceChanger.processPlanarWithCarrier takes channels",
             "node:masteringApplyProcessorStereo": "Python spells it mastering_process_stereo",

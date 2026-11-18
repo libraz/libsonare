@@ -575,6 +575,26 @@ def test_a_core_claim_the_surface_does_not_make_is_a_gap() -> None:
     assert rep.core_reached == []
 
 
+def test_a_core_claim_outranks_an_alias_where_it_is_the_route() -> None:
+    """Node and WASM keep the core claim's verdict; the alias reaches the other surfaces."""
+    saved = compare._ALIAS_COVERAGE
+    compare._ALIAS_COVERAGE = {**saved, "widget_run": ("process_widget",)}
+    try:
+        called = _core_report("auto r = sonare::run_widget(audio, n);\n")
+        skipped = _core_report("// run_widget(audio, n) is not called here\n")
+    finally:
+        compare._ALIAS_COVERAGE = saved
+    assert [(k, s) for k, s, _fn, _site in called.core_reached] == [("widget_run", "node")]
+    assert ("widget_run", "node") in _active(skipped), _active(skipped)
+
+    compare._ALIAS_COVERAGE = {**saved, "widget_run": ("process_widget",)}
+    try:
+        python = _report(_c("widget_run"), _py(frees=["process_widget"]))
+    finally:
+        compare._ALIAS_COVERAGE = saved
+    assert ("widget_run", "python") not in _active(python), _active(python)
+
+
 _TS_CHAIN = """export class StreamingMasteringChain {
   private native: NativeChain;
   constructor(config: StreamingMasteringChainConfig) {
