@@ -3,7 +3,7 @@ import {
   Mixer,
   masteringInsertParamNames,
   meteringTruePeakDb,
-  mixingScenePresetJson,
+  mixingScenePreset,
   mixingScenePresetNames,
   mixStereo,
 } from '../src/index.js';
@@ -11,11 +11,14 @@ import {
 describe('mixing native binding', () => {
   it('exposes scene presets and renders a stereo mix with input trim', () => {
     expect(mixingScenePresetNames()).toContain('vocalReverbSend');
-    expect(mixingScenePresetJson('vocalReverbSend')).toContain('"vocal"');
+    expect(JSON.stringify(mixingScenePreset('vocalReverbSend'))).toContain('"vocal"');
 
     const left = new Float32Array([1, 1]);
     const right = new Float32Array([0, 0]);
-    const result = mixStereo([left], [right], 48000, { inputTrimDb: 6.0206, faderDb: -6.0206 });
+    const result = mixStereo({
+      strips: [{ left, right, inputTrimDb: 6.0206, faderDb: -6.0206 }],
+      sampleRate: 48000,
+    });
     expect(result.left).toBeInstanceOf(Float32Array);
     expect(result.right).toBeInstanceOf(Float32Array);
     // +6.02 dB trim and -6.02 dB fader cancel to unity. With the Balance pan law
@@ -39,41 +42,55 @@ describe('mixing native binding', () => {
     // panMode alone must reach the strip. It used to be read only when `pan`
     // was also supplied, so a preset that changed the mode silently mixed in
     // the default one.
-    const modeOnly = mixStereo([left], [right], 48000, { panMode: 'stereoPan' });
+    const modeOnly = mixStereo({
+      strips: [{ left, right, panMode: 'stereoPan' }],
+      sampleRate: 48000,
+    });
     expect(modeOnly.right[frames - 1]).toBeGreaterThan(0.1);
 
-    const balance = mixStereo([left], [right], 48000, {});
+    const balance = mixStereo({ strips: [{ left, right }], sampleRate: 48000 });
     expect(balance.right[frames - 1]).toBe(0);
 
     // pan alone must not throw: an absent panMode keeps the strip's current
     // mode rather than being rejected as an unknown one.
-    const panOnly = mixStereo([left], [right], 48000, { pan: 0.3 });
-    const panWithDefaultMode = mixStereo([left], [right], 48000, {
-      pan: 0.3,
-      panMode: 'balance',
+    const panOnly = mixStereo({ strips: [{ left, right, pan: 0.3 }], sampleRate: 48000 });
+    const panWithDefaultMode = mixStereo({
+      strips: [{ left, right, pan: 0.3, panMode: 'balance' }],
+      sampleRate: 48000,
     });
     expect(Array.from(panOnly.left)).toEqual(Array.from(panWithDefaultMode.left));
     expect(Array.from(panOnly.right)).toEqual(Array.from(panWithDefaultMode.right));
 
-    // A per-strip array shorter than the strip list leaves the remaining strips
-    // on their current mode instead of failing on the undefined entry.
-    const twoStrips = mixStereo([left, left], [right, right], 48000, {
-      panMode: ['stereoPan'],
+    // A strip that leaves panMode out stays on its current mode while its neighbour sets one.
+    const twoStrips = mixStereo({
+      strips: [
+        { left, right, panMode: 'stereoPan' },
+        { left, right },
+      ],
+      sampleRate: 48000,
     });
     expect(twoStrips.right[frames - 1]).toBeGreaterThan(0.1);
   });
 
-  it('refuses the removed pan-mode alias and unknown names with a RangeError', () => {
+  it('refuses the removed pan-mode spellings and unknown names with a RangeError, and a number with a TypeError', () => {
     const left = new Float32Array([0.5, 0.5]);
     const right = new Float32Array([0.5, 0.5]);
-    for (const panMode of ['pan', 'bogus', 99]) {
-      expect(() => mixStereo([left], [right], 48000, { pan: 0.5, panMode } as never)).toThrow(
-        RangeError,
-      );
+    for (const panMode of ['pan', 'bogus', 'stereo-pan', 'dual-pan', 'stereopan']) {
+      expect(() =>
+        mixStereo({
+          strips: [{ left, right, pan: 0.5, panMode: panMode as never }],
+          sampleRate: 48000,
+        }),
+      ).toThrow(RangeError);
     }
-    expect(() => mixStereo([left], [right], 48000, { pan: 0.5, panMode: {} as never })).toThrow(
-      TypeError,
-    );
+    for (const panMode of [99, 1, {}]) {
+      expect(() =>
+        mixStereo({
+          strips: [{ left, right, pan: 0.5, panMode: panMode as never }],
+          sampleRate: 48000,
+        }),
+      ).toThrow(TypeError);
+    }
   });
 });
 
@@ -84,8 +101,8 @@ describe('insert param validation', () => {
     expect(comp).toContain('ratio');
     // Band-indexed processors expose their band{i}.<field> keys.
     expect(masteringInsertParamNames('eq.parametric')).toContain('band0.frequencyHz');
-    // Unknown name -> empty list (no throw).
-    expect(masteringInsertParamNames('not.a.real.processor')).toEqual([]);
+    // An unknown name is refused rather than answered with an empty list.
+    expect(() => masteringInsertParamNames('not.a.real.processor' as never)).toThrow(RangeError);
   });
 
   it('surfaces silently-ignored insert params as scene warnings', () => {
@@ -162,13 +179,13 @@ describe('insert param validation', () => {
     const left = new Float32Array(4096);
     left.set([0.9, -0.9, 0.9, -0.9], left.length - 4);
     const right = new Float32Array(left);
-    const result = mixStereo([left], [right], 48000, {});
-    expect(result.meters[0].truePeakDbL).toBeCloseTo(meteringTruePeakDb(left, 48000), 4);
-    expect(result.meters[0].truePeakDbL).toBeGreaterThan(-1);
+    const result = mixStereo({ strips: [{ left, right }], sampleRate: 48000 });
+    expect(result.meters[0].truePeakDbtpL).toBeCloseTo(meteringTruePeakDb(left, 48000), 4);
+    expect(result.meters[0].truePeakDbtpL).toBeGreaterThan(-1);
   });
 
   it("flushes a streaming mixer's meters on request", () => {
-    const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
+    const mixer = Mixer.fromJson(JSON.stringify(mixingScenePreset('vocalReverbSend')), {
       sampleRate: 48000,
       maxBlockSize: 256,
     });

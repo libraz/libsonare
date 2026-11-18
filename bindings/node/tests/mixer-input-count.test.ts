@@ -3,7 +3,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { Mixer, mixingScenePresetJson } from '../src/index.js';
+import { Mixer, mixingScenePreset } from '../src/index.js';
 
 const BLOCK = 128;
 
@@ -12,7 +12,7 @@ function inputs(count: number): Float32Array[] {
 }
 
 describe('Mixer input count (Node)', () => {
-  const mixer = Mixer.fromJson(mixingScenePresetJson('commentaryDucking'), {
+  const mixer = Mixer.fromJson(JSON.stringify(mixingScenePreset('commentaryDucking')), {
     sampleRate: 48000,
     maxBlockSize: BLOCK,
   });

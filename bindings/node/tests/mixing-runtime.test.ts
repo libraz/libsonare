@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { Mixer, mixingScenePresetJson } from '../src/index.js';
+import { Mixer, mixingScenePreset } from '../src/index.js';
 import { expectRefusal } from './_helpers.js';
 
 const BLOCK_SIZE = 8;
@@ -11,7 +11,7 @@ const SAMPLE_RATE = 48000;
 const DIRECT_PRESET = 'commentaryDucking';
 
 function buildMixer(): Mixer {
-  return Mixer.fromJson(mixingScenePresetJson(DIRECT_PRESET), {
+  return Mixer.fromJson(JSON.stringify(mixingScenePreset(DIRECT_PRESET)), {
     sampleRate: SAMPLE_RATE,
     maxBlockSize: BLOCK_SIZE,
   });
@@ -34,7 +34,7 @@ function serialTailScene(): string {
       {
         id: 'source',
         inserts: [delay(10)],
-        sends: [{ id: 'to-aux', destinationBusId: 'aux', sendDb: 0, timing: 'post' }],
+        sends: [{ id: 'to-aux', destinationBusId: 'aux', sendDb: 0, timing: 'postFader' }],
       },
     ],
     buses: [
@@ -179,7 +179,7 @@ describe('Mixer runtime methods', () => {
     expect(Number.isFinite(preFader.peakDbL)).toBe(true);
     expect(Number.isFinite(postFader.peakDbL)).toBe(true);
     const master = mixer.busMeter('master');
-    expect(master.channelCount).toBe(2);
+    expect(master.numChannels).toBe(2);
     expect(Number.isFinite(master.peakDb[0])).toBe(true);
   });
 
@@ -221,20 +221,20 @@ describe('Mixer runtime methods', () => {
     mixer.setPan('host', 0.0, 'stereoPan');
     const beforeScene = JSON.parse(mixer.toJson());
     const beforeHost = beforeScene.strips.find((s: { id: string }) => s.id === 'host');
-    expect(beforeHost.panMode).toBe(1); // 1 = stereoPan
+    expect(beforeHost.panMode).toBe('stereoPan');
 
     // A plain pan nudge (no panMode) must NOT reset the mode back to Balance.
     mixer.setPan('host', 0.3);
     const afterScene = JSON.parse(mixer.toJson());
     const afterHost = afterScene.strips.find((s: { id: string }) => s.id === 'host');
-    expect(afterHost.panMode).toBe(1); // still stereoPan
+    expect(afterHost.panMode).toBe('stereoPan'); // still stereoPan
     expect(afterHost.pan).toBeCloseTo(0.3, 5);
 
     // Passing an explicit mode still switches it.
     mixer.setPan('host', 0.3, 'balance');
     const finalScene = JSON.parse(mixer.toJson());
     const finalHost = finalScene.strips.find((s: { id: string }) => s.id === 'host');
-    expect(finalHost.panMode).toBe(0); // 0 = balance
+    expect(finalHost.panMode).toBe('balance');
   });
 
   it('returns an array of goniometer points', () => {
@@ -431,9 +431,9 @@ describe('Mixer argument validation', () => {
     // A wrong-typed BAG would otherwise read as an empty one and put the caller
     // on the full default metering, the field readers' failure mode one level up.
     // @ts-expect-error a non-object metering bag is rejected at runtime
-    expect(() => mixer.addStrip('number-bag', 5)).toThrow(/metering must be a plain object/);
+    expect(() => mixer.addStrip('number-bag', 5)).toThrow(TypeError);
     // @ts-expect-error an array is not a plain object, though `typeof []` is 'object'
-    expect(() => mixer.addStrip('array-bag', [])).toThrow(/metering must be a plain object/);
+    expect(() => mixer.addStrip('array-bag', [])).toThrow(TypeError);
     expect(mixer.stripCount).toBe(before);
 
     // Absent and explicit undefined are the omitted default, which the scene

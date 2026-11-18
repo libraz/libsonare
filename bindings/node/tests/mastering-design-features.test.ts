@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   masteringAbMatchLoudnessStereo,
-  masteringPairProcess,
-  masteringPairProcessStereo,
+  masteringApplyPairProcessor,
+  masteringApplyPairProcessorStereo,
   StreamingMasteringChain,
 } from '../src/index.js';
 import type { StereoPairProcessor } from '../src/types.js';
@@ -24,8 +24,8 @@ describe('stereo mastering design APIs', () => {
     const referenceLeft = channel(384, 0.8);
     const referenceRight = channel(384, 0.45, -0.4);
 
-    const source = masteringPairProcessStereo({
-      processorName: 'match.abCrossfade',
+    const source = masteringApplyPairProcessorStereo({
+      processor: 'match.abCrossfade',
       sourceLeft,
       sourceRight,
       referenceLeft,
@@ -33,15 +33,15 @@ describe('stereo mastering design APIs', () => {
       sampleRate: SR,
       params: { mix: 0 },
     });
-    const reference = masteringPairProcessStereo(
-      'match.abCrossfade',
+    const reference = masteringApplyPairProcessorStereo({
+      processor: 'match.abCrossfade',
       sourceLeft,
       sourceRight,
       referenceLeft,
       referenceRight,
-      SR,
-      { mix: 1 },
-    );
+      sampleRate: SR,
+      params: { mix: 1 },
+    });
 
     expect(source.left).toEqual(sourceLeft);
     expect(source.right).toEqual(sourceRight);
@@ -49,13 +49,13 @@ describe('stereo mastering design APIs', () => {
     expect(reference.right).toEqual(referenceRight.slice(0, sourceRight.length));
   });
 
-  it('applies one stereo crossfade amount per channel and preserves request parity', () => {
+  it('applies one stereo crossfade amount per channel', () => {
     const sourceLeft = channel(128, 0.2);
     const sourceRight = channel(128, -0.35, 0.7);
     const referenceLeft = channel(192, 0.8);
     const referenceRight = channel(192, 0.45, -0.4);
-    const request = masteringPairProcessStereo({
-      processorName: 'match.abCrossfade',
+    const request = masteringApplyPairProcessorStereo({
+      processor: 'match.abCrossfade',
       sourceLeft,
       sourceRight,
       referenceLeft,
@@ -63,90 +63,59 @@ describe('stereo mastering design APIs', () => {
       sampleRate: SR,
       params: { mix: 0.25 },
     });
-    const positional = masteringPairProcessStereo(
-      'match.abCrossfade',
-      sourceLeft,
-      sourceRight,
-      referenceLeft,
-      referenceRight,
-      SR,
-      { mix: 0.25 },
-    );
-    expect(request).toEqual(positional);
     expect(request.left[32]).toBeCloseTo(0.75 * sourceLeft[32] + 0.25 * referenceLeft[32], 5);
     expect(request.right[32]).toBeCloseTo(0.75 * sourceRight[32] + 0.25 * referenceRight[32], 5);
     expect(request.left.length).toBe(sourceLeft.length);
   });
 
-  it('keeps request and positional forms on the same default sample rate', () => {
+  it('requires a sample rate and has no positional form', () => {
     const sourceLeft = channel(128, 0.2);
     const sourceRight = channel(128, -0.3);
     const referenceLeft = channel(160, 0.5);
     const referenceRight = channel(160, -0.6);
-    const request = masteringPairProcessStereo({
-      processorName: 'match.abCrossfade',
-      sourceLeft,
-      sourceRight,
-      referenceLeft,
-      referenceRight,
-      params: { mix: 0.25 },
-    });
-    const positional = masteringPairProcessStereo(
-      'match.abCrossfade',
-      sourceLeft,
-      sourceRight,
-      referenceLeft,
-      referenceRight,
-      undefined,
-      { mix: 0.25 },
-    );
-    expect(request).toEqual(positional);
-    expect(request.sampleRate).toBe(22050);
+    expect(() =>
+      (masteringApplyPairProcessorStereo as (request: unknown) => unknown)({
+        processor: 'match.abCrossfade',
+        sourceLeft,
+        sourceRight,
+        referenceLeft,
+        referenceRight,
+        params: { mix: 0.25 },
+      }),
+    ).toThrow(TypeError);
+    expect(() =>
+      (masteringApplyPairProcessorStereo as (...args: unknown[]) => unknown)(
+        'match.abCrossfade',
+        sourceLeft,
+        sourceRight,
+        referenceLeft,
+        referenceRight,
+        SR,
+        { mix: 0.25 },
+      ),
+    ).toThrow(TypeError);
   });
 
-  it('raises the same errors from request and positional forms', () => {
+  it('raises the same error class for the same defect on every pair input', () => {
     const source = channel(32, 0.2);
     const reference = channel(32, 0.4);
     const short = channel(31, 0.2);
     const cases: Array<[StereoPairProcessor, Float32Array, Float32Array, Float32Array, RegExp]> = [
-      ['match.abCrossfade', short, reference, reference, /sourceLeft and sourceRight/],
-      ['match.abCrossfade', source, reference, short, /referenceLeft and referenceRight/],
+      ['match.abCrossfade', short, reference, reference, /Source left and right/],
+      ['match.abCrossfade', source, reference, short, /Reference left and right/],
       ['match.abSwitch' as StereoPairProcessor, source, reference, reference, /abSwitch/],
     ];
-    for (const [processorName, sourceRight, referenceLeft, referenceRight, message] of cases) {
+    for (const [processor, sourceRight, referenceLeft, referenceRight, message] of cases) {
       const request = () =>
-        masteringPairProcessStereo({
-          processorName,
+        masteringApplyPairProcessorStereo({
+          processor,
           sourceLeft: source,
           sourceRight,
           referenceLeft,
           referenceRight,
           sampleRate: SR,
         });
-      const positional = () =>
-        masteringPairProcessStereo(
-          processorName,
-          source,
-          sourceRight,
-          referenceLeft,
-          referenceRight,
-          SR,
-        );
       expect(request).toThrow(message);
-      expect(positional).toThrow(message);
-      let requestError: unknown;
-      let positionalError: unknown;
-      try {
-        request();
-      } catch (error) {
-        requestError = error;
-      }
-      try {
-        positional();
-      } catch (error) {
-        positionalError = error;
-      }
-      expect((positionalError as Error).constructor).toBe((requestError as Error).constructor);
     }
   });
 
@@ -154,18 +123,18 @@ describe('stereo mastering design APIs', () => {
     const source = channel(32, 0.2);
     const reference = channel(32, 0.4);
     expect(() =>
-      masteringPairProcessStereo(
-        'match.abSwitch' as StereoPairProcessor,
-        source,
-        source,
-        reference,
-        reference,
-        SR,
-      ),
+      masteringApplyPairProcessorStereo({
+        processor: 'match.abSwitch' as StereoPairProcessor,
+        sourceLeft: source,
+        sourceRight: source,
+        referenceLeft: reference,
+        referenceRight: reference,
+        sampleRate: SR,
+      }),
     ).toThrow();
     const sourceMismatch = () =>
-      masteringPairProcessStereo({
-        processorName: 'match.abCrossfade',
+      masteringApplyPairProcessorStereo({
+        processor: 'match.abCrossfade',
         sourceLeft: source,
         sourceRight: channel(31, 0.2),
         referenceLeft: reference,
@@ -173,10 +142,10 @@ describe('stereo mastering design APIs', () => {
         sampleRate: SR,
       });
     expect(sourceMismatch).toThrow(RangeError);
-    expect(sourceMismatch).toThrow(/sourceLeft and sourceRight channel lengths must match/);
+    expect(sourceMismatch).toThrow(/Source left and right channel lengths must match/);
     const referenceMismatch = () =>
-      masteringPairProcessStereo({
-        processorName: 'match.abCrossfade',
+      masteringApplyPairProcessorStereo({
+        processor: 'match.abCrossfade',
         sourceLeft: source,
         sourceRight: source,
         referenceLeft: reference,
@@ -184,12 +153,10 @@ describe('stereo mastering design APIs', () => {
         sampleRate: SR,
       });
     expect(referenceMismatch).toThrow(RangeError);
-    expect(referenceMismatch).toThrow(
-      /referenceLeft and referenceRight channel lengths must match/,
-    );
+    expect(referenceMismatch).toThrow(/Reference left and right channel lengths must match/);
     expect(() =>
-      masteringPairProcessStereo({
-        processorName: 'match.abCrossfade',
+      masteringApplyPairProcessorStereo({
+        processor: 'match.abCrossfade',
         sourceLeft: null as never,
         sourceRight: source,
         referenceLeft: reference,
@@ -203,8 +170,8 @@ describe('stereo mastering design APIs', () => {
     const source = channel(32, 0.2);
     const reference = channel(32, 0.4);
     expect(() =>
-      masteringPairProcessStereo({
-        processorName: 'match.abCrossfade\0junk' as never,
+      masteringApplyPairProcessorStereo({
+        processor: 'match.abCrossfade\0junk' as never,
         sourceLeft: source,
         sourceRight: source,
         referenceLeft: reference,
@@ -213,8 +180,8 @@ describe('stereo mastering design APIs', () => {
       }),
     ).toThrow(/NUL/);
     expect(() =>
-      masteringPairProcessStereo({
-        processorName: 'match.abCrossfade',
+      masteringApplyPairProcessorStereo({
+        processor: 'match.abCrossfade',
         sourceLeft: source,
         sourceRight: source,
         referenceLeft: reference,
@@ -246,41 +213,46 @@ describe('stereo mastering design APIs', () => {
     expect(matched.sampleRate).toBe(SR);
   });
 
-  it('uses the mono default sample rate for stereo loudness matching', () => {
+  it('requires a sample rate for stereo loudness matching', () => {
     const source = channel(512, 0.1);
-    const matched = masteringAbMatchLoudnessStereo({
-      sourceLeft: source,
-      sourceRight: channel(512, -0.1),
-      referenceLeft: channel(768, 0.4),
-      referenceRight: channel(768, -0.4),
-    });
-    expect(matched.sampleRate).toBe(22050);
+    expect(() =>
+      (masteringAbMatchLoudnessStereo as (request: unknown) => unknown)({
+        sourceLeft: source,
+        sourceRight: channel(512, -0.1),
+        referenceLeft: channel(768, 0.4),
+        referenceRight: channel(768, -0.4),
+      }),
+    ).toThrow(TypeError);
   });
 });
 
 describe('StreamingMasteringChain.setParameter', () => {
   it('rejects updates after destroy', () => {
-    const chain = new StreamingMasteringChain({ 'eq.tilt.enabled': true });
-    chain.prepare(SR, 128, 1);
+    const chain = new StreamingMasteringChain({
+      sampleRate: SR,
+      maxBlockSize: 128,
+      eq: { tilt: { enabled: true } },
+    });
     chain.destroy();
     expect(() => chain.setParameter('eq.tilt.tiltDb', 3)).toThrow(/destroyed/);
   });
 
-  it('preserves fractional sample rates accepted by prepare()', () => {
-    const chain = new StreamingMasteringChain({});
-    expect(() => chain.prepare(SR + 0.5, 128, 1)).not.toThrow();
+  it('requires an integer sample rate at construction and has no prepare()', () => {
+    expect(() => new StreamingMasteringChain({ sampleRate: SR + 0.5 })).toThrow(RangeError);
+    expect(() => new StreamingMasteringChain({} as never)).toThrow(TypeError);
+    const chain = new StreamingMasteringChain({ sampleRate: SR });
+    expect((chain as unknown as Record<string, unknown>).prepare).toBeUndefined();
+    chain.destroy();
   });
 
   it('retains state when setting the current value at a block boundary', () => {
     const config = {
-      'dynamics.compressor.enabled': true,
-      'dynamics.compressor.thresholdDb': -24,
-      'dynamics.compressor.ratio': 3,
+      sampleRate: SR,
+      maxBlockSize: 128,
+      dynamics: { compressor: { enabled: true, thresholdDb: -24, ratio: 3 } },
     };
     const edited = new StreamingMasteringChain(config);
     const control = new StreamingMasteringChain(config);
-    edited.prepare(SR, 128, 1);
-    control.prepare(SR, 128, 1);
     const first = channel(128, 0.7);
     edited.processMono(first);
     control.processMono(first);
@@ -291,14 +263,12 @@ describe('StreamingMasteringChain.setParameter', () => {
 
   it('applies a changed value to the running stream', () => {
     const config = {
-      'dynamics.compressor.enabled': true,
-      'dynamics.compressor.thresholdDb': -24,
-      'dynamics.compressor.ratio': 3,
+      sampleRate: SR,
+      maxBlockSize: 128,
+      dynamics: { compressor: { enabled: true, thresholdDb: -24, ratio: 3 } },
     };
     const edited = new StreamingMasteringChain(config);
     const control = new StreamingMasteringChain(config);
-    edited.prepare(SR, 128, 1);
-    control.prepare(SR, 128, 1);
     const first = channel(128, 0.7);
     expect(edited.processMono(first)).toEqual(control.processMono(first));
     edited.setParameter('dynamics.compressor.thresholdDb', -40);
@@ -307,10 +277,12 @@ describe('StreamingMasteringChain.setParameter', () => {
   });
 
   it('rejects unknown and non-realtime parameters', () => {
-    const chain = new StreamingMasteringChain({ 'dynamics.compressor.enabled': true });
-    chain.prepare(SR, 128, 1);
-    const disabled = new StreamingMasteringChain({});
-    disabled.prepare(SR, 128, 1);
+    const chain = new StreamingMasteringChain({
+      sampleRate: SR,
+      maxBlockSize: 128,
+      dynamics: { compressor: { enabled: true } },
+    });
+    const disabled = new StreamingMasteringChain({ sampleRate: SR, maxBlockSize: 128 });
     expect(() => chain.setParameter('does.not.exist', 1)).toThrow();
     expect(() => chain.setParameter('dynamics.compressor.enabled', 0)).toThrow();
     expect(() => disabled.setParameter('dynamics.compressor.thresholdDb', -24)).toThrow();
@@ -323,8 +295,14 @@ describe('existing mono pair controls', () => {
   it('keeps the mono pair API available', () => {
     const source = channel(64, 0.2);
     const reference = channel(64, 0.4);
-    expect(masteringPairProcess('match.abCrossfade', source, reference, SR, { mix: 0 })).toEqual(
-      expect.objectContaining({ samples: source }),
-    );
+    expect(
+      masteringApplyPairProcessor({
+        processor: 'match.abCrossfade',
+        source,
+        reference,
+        sampleRate: SR,
+        params: { mix: 0 },
+      }),
+    ).toEqual(expect.objectContaining({ samples: source }));
   });
 });

@@ -177,6 +177,7 @@ describe('metering spectrum sizes', () => {
       (nFft) => meteringSpectrum({ samples: MIXED, sampleRate: SR, nFft }),
       read,
       512,
+      'refused',
     );
   });
 
@@ -191,14 +192,16 @@ describe('metering spectrum sizes', () => {
         }),
       read,
       12,
+      'refused',
     );
   });
 
   it('refuses a fractional single-frame nFft ahead of the windowed pre-scan', () => {
     expectSentinelRefused(
-      (nFft) => meteringSpectrumFrame({ samples: MIXED, sampleRate: SR, frameOffset: 0, nFft }),
+      (nFft) => meteringSpectrumFrame({ samples: MIXED, sampleRate: SR, startSample: 0, nFft }),
       read,
       512,
+      'refused',
     );
   });
 
@@ -208,12 +211,13 @@ describe('metering spectrum sizes', () => {
         meteringSpectrumFrame({
           samples: MIXED,
           sampleRate: SR,
-          frameOffset: 0,
+          startSample: 0,
           applyOctaveSmoothing: true,
           octaveFraction,
         }),
       read,
       12,
+      'refused',
     );
   });
 });

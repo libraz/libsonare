@@ -1,11 +1,90 @@
+import { mixSceneFromNative } from './internal/mix_scene.js';
 import { addon } from './native.js';
 import type {
-  MixAssistantOptions,
   MixAssistantResult,
   MixAssistantTrack,
-  SuggestMixSceneRequest,
+  MixAssistantTrackProfile,
+  MixSourceClass,
 } from './types.js';
-import { assertPositiveInteger, assertSampleRate, requestObject } from './validation.js';
+import {
+  assertPositiveInteger,
+  assertSampleRate,
+  requestOnly,
+  requireBoolean,
+  type ValidateOptions,
+} from './validation.js';
+
+/**
+ * Inputs for {@link mixingAssistantSuggest}. Every tunable is optional; an omitted field keeps the
+ * native default rather than being sent as an explicit value.
+ *
+ * `validate` is accepted for symmetry with the other one-shots; the assistant never throws on a
+ * non-finite track but reports it as an excluded track.
+ */
+export interface MixingAssistantSuggestRequest extends ValidateOptions {
+  /** Tracks to mix. An empty array yields an empty suggestion. */
+  tracks: MixAssistantTrack[];
+  /**
+   * Analysis rate in Hz, and the rate of every track that does not state its own; a track at
+   * another rate is resampled onto it. Required.
+   */
+  sampleRate: number;
+  /** Absolute integrated-loudness target each track is staged towards, in LUFS. */
+  targetTrackLufs?: number;
+  /**
+   * Overall strength of the suggestion in `[0, 1]`, scaling every level-like
+   * decision: trims, fader offsets, send levels, EQ cut depths, compression
+   * ratios and ranges, and how far a track is spread from the centre.
+   *
+   * `0` is not an empty suggestion. It is every one of those taken and set to
+   * zero, plus the decisions that are not levels and so do not scale: the bus
+   * topology and routing, and the physical corrections for a measured
+   * cancellation (polarity, alignment delay, low-end mono fold). To suggest
+   * nothing, switch the domains off instead — that also skips the work.
+   */
+  suggestionStrength?: number;
+  /** Largest cut a single suggested EQ band may apply, in dB. */
+  eqMaxCutDb?: number;
+  /** Headroom the summed mix is left with on the master bus, in dBTP. */
+  mixBusHeadroomDbtp?: number;
+  /**
+   * Tempo the suggested delay times are voiced against, in BPM.
+   *
+   * Defaults to 0, which selects the transport's own fallback tempo: the
+   * assistant is handed bare stems and cannot measure a tempo the set as a
+   * whole agrees on. Pass the song's tempo and the delay lands on the beat.
+   *
+   * A positive value outside 20–400 BPM is rejected rather than clamped.
+   */
+  tempoBpm?: number;
+  /** Evaluate the bus/structure domain. */
+  enableStructure?: boolean;
+  /** Evaluate the gain-staging domain. */
+  enableGain?: boolean;
+  /** Evaluate the level-balance domain. */
+  enableBalance?: boolean;
+  /** Evaluate the EQ domain. */
+  enableEq?: boolean;
+  /** Evaluate the dynamics domain. */
+  enableDynamics?: boolean;
+  /** Evaluate the stereo-image domain. */
+  enableImage?: boolean;
+  /**
+   * Suggest a high-pass filter on tracks carrying residue below their register.
+   *
+   * Off by default: a survey of mixing best practices found the rule that every
+   * track without low-frequency content should be high-passed to be seldom used
+   * in studio mixing and unsupported by subjective testing. Switched on, the
+   * filter is proposed from the track's measured low-frequency content rather
+   * than from its source class, so a part playing below its class's usual
+   * register keeps what it plays.
+   */
+  enableHighPass?: boolean;
+  /** Shared STFT size for every track. */
+  nFft?: number;
+  /** Shared STFT hop length for every track. */
+  hopLength?: number;
+}
 
 /** Planar parallel arrays in the shape the addon entry points take. */
 interface NativeTrackArrays {
@@ -83,52 +162,58 @@ function normalizeTracks(
   };
 }
 
+const OPTION_KEYS = [
+  'targetTrackLufs',
+  'suggestionStrength',
+  'eqMaxCutDb',
+  'mixBusHeadroomDbtp',
+  'tempoBpm',
+  'enableStructure',
+  'enableGain',
+  'enableBalance',
+  'enableEq',
+  'enableDynamics',
+  'enableImage',
+  'enableHighPass',
+  'nFft',
+  'hopLength',
+] as const;
+
 /** The two analysis-geometry keys, which reach the core as a truncating cast. */
 const INTEGER_OPTION_KEYS = ['nFft', 'hopLength'] as const;
 
 function normalizeOptions(
   fnName: string,
-  options: MixAssistantOptions = {},
+  request: MixingAssistantSuggestRequest,
 ): Record<string, number | boolean> {
-  // Every supplied key is forwarded, so the core refuses a misspelt key or a
-  // wrongly typed value exactly as it does on every other surface. An undefined
-  // value is an omitted key: the native default then stands.
+  // Only the supplied keys are forwarded, so the core refuses a wrongly typed value exactly as it
+  // does on every other surface. An undefined value is an omitted key: the native default stands.
   const params: Record<string, number | boolean> = {};
-  for (const [key, value] of Object.entries(options)) {
-    if (value !== undefined) {
-      params[key] = value as number | boolean;
+  for (const key of OPTION_KEYS) {
+    const value = request[key];
+    if (value !== undefined && value !== null) {
+      params[key] = value;
     }
   }
-  // Only what the caller supplied: an omitted key never reaches the param list,
-  // so resolving a default here would check this file's guess at the core's.
-  // Positivity is the STFT geometry's own rule; the size ceiling stays the
-  // core's, which names it.
+  // Positivity is the STFT geometry's own rule; the size ceiling stays the core's, which names it.
   for (const key of INTEGER_OPTION_KEYS) {
-    const value = options[key];
-    if (value !== undefined) {
+    const value = request[key];
+    if (value !== undefined && value !== null) {
       assertPositiveInteger(fnName, value, key);
     }
   }
   return params;
 }
 
-function suggest(fnName: string, request: SuggestMixSceneRequest, sceneOnly: boolean): string {
-  if (request === null || typeof request !== 'object') {
-    throw new TypeError(`${fnName}: expected a request object`);
-  }
-  assertSampleRate(fnName, request.sampleRate);
-  const tracks = normalizeTracks(fnName, request.tracks, request.sampleRate);
-  const params = normalizeOptions(fnName, request.options);
-  const entry = sceneOnly ? addon.mixingAssistantSuggestSceneJson : addon.mixingAssistantSuggest;
-  return entry(
-    tracks.left,
-    tracks.right,
-    tracks.ids,
-    tracks.names,
-    tracks.sampleRates,
-    request.sampleRate,
-    params,
-  );
+/** The native profile still spells these without the unit and the `PerSecond` / `num` forms. */
+function profileFromNative(native: Record<string, unknown>): MixAssistantTrackProfile {
+  const { channelCount, truePeakDb, attackDensity, ...rest } = native;
+  return {
+    ...rest,
+    numChannels: channelCount,
+    truePeakDbtp: truePeakDb,
+    attackPerSecond: attackDensity,
+  } as unknown as MixAssistantTrackProfile;
 }
 
 /**
@@ -137,34 +222,60 @@ function suggest(fnName: string, request: SuggestMixSceneRequest, sceneOnly: boo
  *
  * The assistant only ever returns parameters: it does not process audio and it
  * does not apply anything. Realising the suggestion is a separate explicit step
- * through {@link Mixer.fromJson} — use {@link suggestMixSceneJson} to get
- * the scene as the JSON text that entry point reads.
+ * through {@link Mixer.fromJson} with `result.scene`.
  *
  * Offline / control thread only: this runs an STFT per track and evaluates
  * every track pair. Tracks may differ in length.
+ *
+ * @param request - Tracks, analysis sample rate and assistant tunables
+ * @throws TypeError for a wrong-typed or missing field or an unknown key; RangeError for an
+ *   out-of-domain rate or tunable
  */
-export function suggestMixScene(request: SuggestMixSceneRequest): MixAssistantResult {
-  requestObject('suggestMixScene', request, 'request', true);
-  return JSON.parse(suggest('suggestMixScene', request, false)) as MixAssistantResult;
+export function mixingAssistantSuggest(request: MixingAssistantSuggestRequest): MixAssistantResult;
+export function mixingAssistantSuggest(...args: unknown[]): MixAssistantResult {
+  const fnName = 'mixingAssistantSuggest';
+  const req = requestOnly<MixingAssistantSuggestRequest>(fnName, args);
+  assertSampleRate(fnName, req.sampleRate);
+  if (req.validate !== undefined && req.validate !== null) {
+    requireBoolean(fnName, req.validate, 'validate');
+  }
+  const tracks = normalizeTracks(fnName, req.tracks, req.sampleRate);
+  const params = normalizeOptions(fnName, req);
+  const json = addon.mixingAssistantSuggest(
+    tracks.left,
+    tracks.right,
+    tracks.ids,
+    tracks.names,
+    tracks.sampleRates,
+    req.sampleRate,
+    params,
+  );
+  const native = JSON.parse(json) as Record<string, unknown>;
+  return {
+    ...native,
+    scene: mixSceneFromNative(native.scene),
+    tracks: (native.tracks as Record<string, unknown>[]).map(profileFromNative),
+  } as unknown as MixAssistantResult;
+}
+
+/** The source-class identifiers the assistant can report, in native ordinal order. */
+export function mixingAssistantSourceClassNames(): MixSourceClass[] {
+  return addon.mixingAssistantSourceClassNames() as MixSourceClass[];
 }
 
 /**
- * As {@link suggestMixScene}, but returns only the suggested scene, as the JSON
- * text {@link Mixer.fromJson} reads. Provided so a caller that wants to
- * apply a suggestion does not have to dig the scene out of the fuller result
- * document and re-serialise it.
+ * Resolve a source-class identifier to its ordinal in {@link mixingAssistantSourceClassNames}.
+ *
+ * @throws TypeError when `name` is not a string; RangeError for an unknown name
  */
-export function suggestMixSceneJson(request: SuggestMixSceneRequest): string {
-  requestObject('suggestMixSceneJson', request, 'request', true);
-  return suggest('suggestMixSceneJson', request, true);
-}
-
-/** The source-class identifiers the assistant can report. */
-export function mixSourceClassNames(): string[] {
-  return addon.mixingAssistantSourceClassNames();
-}
-
-/** Resolve a source-class identifier to its ordinal, or `-1` when unknown. */
-export function mixSourceClassFromName(name: string): number {
-  return addon.mixingAssistantSourceClassFromName(name);
+export function mixingAssistantSourceClassFromName(name: MixSourceClass): number {
+  const fnName = 'mixingAssistantSourceClassFromName';
+  if (typeof name !== 'string') {
+    throw new TypeError(`${fnName}: name must be a string`);
+  }
+  const index: number = addon.mixingAssistantSourceClassFromName(name);
+  if (index < 0) {
+    throw new RangeError(`${fnName}: unknown source class '${name}'`);
+  }
+  return index;
 }

@@ -54,12 +54,12 @@ describe('empty-sample guards (Node)', () => {
     expect(() => lufs(new Float32Array(0), SR)).toThrow(/lufs: samples must not be empty/);
   });
   it('meteringPeakDb rejects empty', () => {
-    expect(() => meteringPeakDb(new Float32Array(0))).toThrow(
+    expect(() => meteringPeakDb(new Float32Array(0), SR)).toThrow(
       /meteringPeakDb: samples must not be empty/,
     );
   });
   it('meteringRmsDb rejects empty', () => {
-    expect(() => meteringRmsDb(new Float32Array(0))).toThrow(
+    expect(() => meteringRmsDb(new Float32Array(0), SR)).toThrow(
       /meteringRmsDb: samples must not be empty/,
     );
   });
@@ -69,9 +69,9 @@ describe('empty-sample guards (Node)', () => {
     );
   });
   it('meteringStereoCorrelation rejects empty left', () => {
-    expect(() => meteringStereoCorrelation(new Float32Array(0), sine())).toThrow(
-      /meteringStereoCorrelation: left must not be empty/,
-    );
+    expect(() =>
+      meteringStereoCorrelation({ left: new Float32Array(0), right: sine(), sampleRate: SR }),
+    ).toThrow(/meteringStereoCorrelation: left must not be empty/);
   });
   it('masteringDynamicsCompressor rejects empty', () => {
     expect(() => masteringDynamicsCompressor(new Float32Array(0), SR)).toThrow(
@@ -122,7 +122,7 @@ describe('NaN/Inf guards (Node)', () => {
     );
   });
   it('meteringPeakDb rejects NaN', () => {
-    expect(() => meteringPeakDb(withNaN())).toThrow(
+    expect(() => meteringPeakDb(withNaN(), SR)).toThrow(
       /meteringPeakDb: samples contains NaN or Inf at index 100/,
     );
   });
@@ -194,24 +194,31 @@ describe('validate=false still has the C-ABI NaN backstop (Node)', () => {
   it('waveformPeaks with validate=false rejects NaN rather than drawing it as silence', () => {
     // The pair is what matters: a silent buffer answers 0/0 and a non-finite
     // one is refused, so the two cannot arrive in the same shape.
-    const quiet = waveformPeaks(new Float32Array(1024), 1, {
+    const quiet = waveformPeaks({
+      channels: [new Float32Array(1024)],
       samplesPerBucket: 256,
       validate: false,
     });
-    expect(quiet.min[0]).toBe(0);
-    expect(quiet.max[0]).toBe(0);
-    expect(() => waveformPeaks(withNaN(), 1, { samplesPerBucket: 256, validate: false })).toThrow();
+    expect(quiet.min[0]?.[0]).toBe(0);
+    expect(quiet.max[0]?.[0]).toBe(0);
+    expect(() =>
+      waveformPeaks({ channels: [withNaN()], samplesPerBucket: 256, validate: false }),
+    ).toThrow();
   });
   it('waveformPeakPyramid with validate=false rejects NaN in the C-ABI', () => {
     expect(() =>
-      waveformPeakPyramid(withNaN(), 1, { samplesPerBucketLevels: [256, 512], validate: false }),
+      waveformPeakPyramid({
+        channels: [withNaN()],
+        samplesPerBucketLevels: [256, 512],
+        validate: false,
+      }),
     ).toThrow();
   });
 });
 
 describe('positive smoke (Node)', () => {
   it('meteringRmsDb returns finite number for short sine', () => {
-    const v = meteringRmsDb(sine(1024));
+    const v = meteringRmsDb(sine(1024), SR);
     expect(Number.isFinite(v)).toBe(true);
   });
   it('masteringDynamicsCompressor returns Float32Array with same length', () => {

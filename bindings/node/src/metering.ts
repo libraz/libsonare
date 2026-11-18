@@ -1,37 +1,48 @@
-import { resolvePositiveIntegerOption } from './internal/feature_options.js';
+import {
+  assertUnitInterval,
+  clipThresholdLinear,
+  clippingReportFromNative,
+  interleaveMeterChannels,
+  refuseZeroSentinel,
+  waveformReportFromNative,
+} from './internal/metering_native.js';
 import { addon } from './native.js';
-import type { ValidateOptions } from './validation.js';
+import type { OptionsOf, ValidateOptions } from './validation.js';
 import {
   assertAudioInput,
   assertInt32,
-  assertInterleavedSamples,
   assertNonNegativeSafeInteger,
+  assertPositiveFloatValue,
   assertPositiveInteger,
-  assertSampleRate,
   assertSamplesInWindow,
-  optionsBag,
-  requestObject,
+  requestOnly,
   resolveOptionalNonNegative,
+  sampleOneShot,
 } from './validation.js';
 
-// The FFT size the library falls back to when `nFft` is 0 or omitted. Mirrored
+// The FFT size the library falls back to when `nFft` is omitted. Mirrored
 // here so the windowed pre-scan covers exactly the span the call will read; a
-// test pins it against the `nFft` the library reports back for a 0 request.
+// test pins it against the `nFft` the library reports back for an omitted request.
 const DEFAULT_SPECTRUM_N_FFT = 2048;
 
+// The linear clip threshold the library applies when none is given, as dBFS (about -0.0087).
+
 /**
- * Check the two spectrum sizes whose zero requests the library default, before
- * the addon narrows them. Truncation lands a fractional size on that zero, so
- * the analysis runs at the default and reports success.
+ * Check the two spectrum sizes the addon would otherwise truncate: a fractional size
+ * must not land on a different one than the caller named.
  */
 function assertSpectrumOptions(fnName: string, options: SpectrumOptions): void {
   for (const field of ['nFft', 'octaveFraction'] as const) {
     const value = options[field];
-    if (value !== undefined) {
+    if (value !== undefined && value !== null) {
       assertInt32(fnName, value, field);
     }
   }
 }
+
+// ============================================================================
+// Metering — basic / true-peak / clipping / dynamic range
+// ============================================================================
 
 /** One contiguous run of clipped samples reported by `meteringDetectClipping`. */
 export interface ClippingRegion {
@@ -41,35 +52,20 @@ export interface ClippingRegion {
   peak: number;
 }
 
-/** Aggregated clipping report (mirrors C SonareClippingResult). */
+/**
+ * Aggregated clipping report of a whole signal: the region report of the metering family.
+ * The repair family's detector record, `ClipDetection`, counts the same two quantities under the same names.
+ */
 export interface ClippingReport {
+  /** Samples at or past the threshold. */
   clippedSamples: number;
-  clippingRatio: number;
+  /** `clippedSamples` divided by the input length. */
+  clippedRatio: number;
   maxClippedPeak: number;
   regions: ClippingRegion[];
 }
 
-/** Options for {@link meteringDetectClipping}. All fields are optional. */
-export interface MeteringDetectClippingOptions extends ValidateOptions {
-  /** Linear absolute threshold. Default 0.999. */
-  threshold?: number;
-  /** Minimum run length to report. Default 1. */
-  minRegionSamples?: number;
-}
-
-/** Options for {@link meteringDynamicRange}. All fields are optional. */
-export interface MeteringDynamicRangeOptions extends ValidateOptions {
-  /** Window length in seconds (0 = library default, 3 s). Default 0. */
-  windowSec?: number;
-  /** Hop length in seconds (0 = library default, 1 s). Default 0. */
-  hopSec?: number;
-  /** Low percentile in [0,1]; omit for the library default (0.10). 0 is a real request; negative is refused. */
-  lowPercentile?: number;
-  /** High percentile in [0,1]; omit for the library default (0.95). 0 is a real request; negative is refused. */
-  highPercentile?: number;
-}
-
-/** Sliding-window dynamic range report (mirrors C SonareDynamicRangeResult). */
+/** Sliding-window dynamic range report. */
 export interface DynamicRangeReport {
   dynamicRangeDb: number;
   lowPercentileDb: number;
@@ -77,140 +73,158 @@ export interface DynamicRangeReport {
   windowRmsDb: Float32Array;
 }
 
-/** Common input for one-shot mono metering functions. */
-export interface MeteringSamplesRequest extends ValidateOptions {
-  samples: Float32Array;
-  sampleRate?: number;
+/** Options for {@link meteringDetectClipping}. All fields are optional. */
+export interface MeteringDetectClippingOptions extends ValidateOptions {
+  /** Clip level in dBFS, at most 0 (0 dBFS is a real level). Absent = about -0.0087 dBFS (0.999 linear). */
+  thresholdDb?: number;
+  /** Minimum run length to report. Absent = 1; an explicit 0 is a `RangeError`. */
+  minRegionSamples?: number;
 }
 
-export interface MeteringTruePeakRequest extends MeteringSamplesRequest {
+/** Options for {@link meteringDynamicRange}. All fields are optional. */
+export interface MeteringDynamicRangeOptions extends ValidateOptions {
+  /** Window length in seconds. Absent = 3 s; an explicit 0 is a `RangeError`. */
+  windowSec?: number;
+  /** Hop length in seconds. Absent = 1 s; an explicit 0 is a `RangeError`. */
+  hopSec?: number;
+  /** Low percentile rank in [0, 1], at most `highPercentile`. Absent = 0.10. */
+  lowPercentile?: number;
+  /** High percentile rank in [0, 1]. Absent = 0.95. */
+  highPercentile?: number;
+}
+
+/** Request form of {@link meteringPeakDb}. */
+export interface MeteringPeakDbRequest extends ValidateOptions {
+  samples: Float32Array;
+  /** Sample rate of `samples` in Hz. Required. */
+  sampleRate: number;
+}
+
+/** Request form of {@link meteringRmsDb}. */
+export interface MeteringRmsDbRequest extends ValidateOptions {
+  samples: Float32Array;
+  /** Sample rate of `samples` in Hz. Required. */
+  sampleRate: number;
+}
+
+/** Request form of {@link meteringCrestFactorDb}. */
+export interface MeteringCrestFactorDbRequest extends ValidateOptions {
+  samples: Float32Array;
+  /** Sample rate of `samples` in Hz. Required. */
+  sampleRate: number;
+}
+
+/** Request form of {@link meteringDcOffset}. */
+export interface MeteringDcOffsetRequest extends ValidateOptions {
+  samples: Float32Array;
+  /** Sample rate of `samples` in Hz. Required. */
+  sampleRate: number;
+}
+
+/** Request form of {@link meteringTruePeakDb}. */
+export interface MeteringTruePeakDbRequest extends ValidateOptions {
+  samples: Float32Array;
+  /** Sample rate of `samples` in Hz. Required. */
+  sampleRate: number;
+  /** Power of two from 1 to 16. Absent = 4; an explicit 0 is a `RangeError`. */
   oversampleFactor?: number;
 }
 
-export interface MeteringDetectClippingRequest
-  extends MeteringSamplesRequest,
-    MeteringDetectClippingOptions {}
-
-export interface MeteringDynamicRangeRequest
-  extends MeteringSamplesRequest,
-    MeteringDynamicRangeOptions {}
-
-export function meteringPeakDb(request: MeteringSamplesRequest): number;
-export function meteringPeakDb(
-  samples: Float32Array,
-  sampleRate?: number,
-  options?: ValidateOptions,
-): number;
-export function meteringPeakDb(
-  samples: Float32Array | MeteringSamplesRequest,
-  sampleRate = 22050,
-  options: ValidateOptions = {},
-): number {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, ...optionsBag('meteringPeakDb', options) }
-      : requestObject('meteringPeakDb', samples);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('meteringPeakDb', request.samples, resolvedSampleRate, request);
-  return addon.meteringPeakDb(request.samples, resolvedSampleRate);
-}
-
-export function meteringRmsDb(request: MeteringSamplesRequest): number;
-export function meteringRmsDb(
-  samples: Float32Array,
-  sampleRate?: number,
-  options?: ValidateOptions,
-): number;
-export function meteringRmsDb(
-  samples: Float32Array | MeteringSamplesRequest,
-  sampleRate = 22050,
-  options: ValidateOptions = {},
-): number {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, ...optionsBag('meteringRmsDb', options) }
-      : requestObject('meteringRmsDb', samples);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('meteringRmsDb', request.samples, resolvedSampleRate, request);
-  return addon.meteringRmsDb(request.samples, resolvedSampleRate);
-}
-
-export interface MeteringSilenceRatioRequest extends MeteringSamplesRequest {
+/** Request form of {@link meteringSilenceRatio}. */
+export interface MeteringSilenceRatioRequest extends ValidateOptions {
+  samples: Float32Array;
+  /** Sample rate of `samples` in Hz. Required. */
+  sampleRate: number;
+  /** Frames below this level in dBFS count as silent. Default -45. */
   thresholdDb?: number;
+  /** Frame length in samples. Default 1024. */
   frameLength?: number;
+  /** Hop in samples. Default 256. */
   hopLength?: number;
 }
 
+/** Request form of {@link meteringDetectClipping}. */
+export interface MeteringDetectClippingRequest extends MeteringDetectClippingOptions {
+  samples: Float32Array;
+  /** Sample rate of `samples` in Hz. Required. */
+  sampleRate: number;
+}
+
+/** Request form of {@link meteringDynamicRange}. */
+export interface MeteringDynamicRangeRequest extends MeteringDynamicRangeOptions {
+  samples: Float32Array;
+  /** Sample rate of `samples` in Hz. Required. */
+  sampleRate: number;
+}
+
+/** Reads one mono level: the preflight, then the native call over `(samples, sampleRate)`. */
+function monoMeter(
+  fnName: 'meteringPeakDb' | 'meteringRmsDb' | 'meteringCrestFactorDb' | 'meteringDcOffset',
+  args: unknown[],
+): number {
+  const r = sampleOneShot<MeteringPeakDbRequest>(fnName, args);
+  assertAudioInput(fnName, r.samples, r.sampleRate, r);
+  return addon[fnName](r.samples, r.sampleRate);
+}
+
+/** Peak level in dBFS. */
+export function meteringPeakDb(request: MeteringPeakDbRequest): number;
+export function meteringPeakDb(
+  samples: Float32Array,
+  sampleRate: number,
+  options?: OptionsOf<MeteringPeakDbRequest>,
+): number;
+export function meteringPeakDb(...args: unknown[]): number {
+  return monoMeter('meteringPeakDb', args);
+}
+
+/** RMS level in dBFS. */
+export function meteringRmsDb(request: MeteringRmsDbRequest): number;
+export function meteringRmsDb(
+  samples: Float32Array,
+  sampleRate: number,
+  options?: OptionsOf<MeteringRmsDbRequest>,
+): number;
+export function meteringRmsDb(...args: unknown[]): number {
+  return monoMeter('meteringRmsDb', args);
+}
+
+/** Fraction of frames below `thresholdDb`. */
 export function meteringSilenceRatio(request: MeteringSilenceRatioRequest): number;
 export function meteringSilenceRatio(
   samples: Float32Array,
-  sampleRate?: number,
-  thresholdDb?: number,
-  frameLength?: number,
-  hopLength?: number,
-  options?: ValidateOptions,
+  sampleRate: number,
+  options?: OptionsOf<MeteringSilenceRatioRequest>,
 ): number;
-export function meteringSilenceRatio(
-  samples: Float32Array | MeteringSilenceRatioRequest,
-  sampleRate = 22050,
-  thresholdDb = -45,
-  frameLength = 1024,
-  hopLength = 256,
-  options: ValidateOptions = {},
-): number {
-  const request =
-    samples instanceof Float32Array
-      ? {
-          samples,
-          sampleRate,
-          thresholdDb,
-          frameLength,
-          hopLength,
-          ...optionsBag('meteringSilenceRatio', options),
-        }
-      : requestObject('meteringSilenceRatio', samples);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('meteringSilenceRatio', request.samples, resolvedSampleRate, request);
-  // Positivity only: the C entry requires both positive and bounds neither.
-  const resolvedFrameLength = resolvePositiveIntegerOption(
-    'meteringSilenceRatio',
-    'frameLength',
-    request.frameLength,
-    1024,
-  );
-  const resolvedHopLength = resolvePositiveIntegerOption(
-    'meteringSilenceRatio',
-    'hopLength',
-    request.hopLength,
-    256,
-  );
+export function meteringSilenceRatio(...args: unknown[]): number {
+  const r = sampleOneShot<MeteringSilenceRatioRequest>('meteringSilenceRatio', args);
+  assertAudioInput('meteringSilenceRatio', r.samples, r.sampleRate, r);
   return addon.meteringSilenceRatio(
-    request.samples,
-    resolvedSampleRate,
-    request.thresholdDb ?? -45,
-    resolvedFrameLength,
-    resolvedHopLength,
+    r.samples,
+    r.sampleRate,
+    r.thresholdDb ?? -45,
+    r.frameLength ?? 1024,
+    r.hopLength ?? 256,
   );
 }
 
-export function meteringCrestFactorDb(request: MeteringSamplesRequest): number;
+/** Crest factor (peak over RMS) in dB. */
+export function meteringCrestFactorDb(request: MeteringCrestFactorDbRequest): number;
 export function meteringCrestFactorDb(
   samples: Float32Array,
-  sampleRate?: number,
-  options?: ValidateOptions,
+  sampleRate: number,
+  options?: OptionsOf<MeteringCrestFactorDbRequest>,
 ): number;
-export function meteringCrestFactorDb(
-  samples: Float32Array | MeteringSamplesRequest,
-  sampleRate = 22050,
-  options: ValidateOptions = {},
-): number {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, ...optionsBag('meteringCrestFactorDb', options) }
-      : requestObject('meteringCrestFactorDb', samples);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('meteringCrestFactorDb', request.samples, resolvedSampleRate, request);
-  return addon.meteringCrestFactorDb(request.samples, resolvedSampleRate);
+export function meteringCrestFactorDb(...args: unknown[]): number {
+  return monoMeter('meteringCrestFactorDb', args);
+}
+
+/** Request form of {@link meteringCrestFactorDbStereo}. */
+export interface MeteringCrestFactorDbStereoRequest extends ValidateOptions {
+  left: Float32Array;
+  right: Float32Array;
+  /** Sample rate of both channels in Hz. Required. */
+  sampleRate: number;
 }
 
 /**
@@ -221,137 +235,114 @@ export function meteringCrestFactorDb(
  * {@link meteringCrestFactorDb} would need, which understates its RMS and so
  * overstates the crest factor.
  */
-export function meteringCrestFactorDbStereo(request: MeteringStereoRequest): number {
-  requestObject('meteringCrestFactorDbStereo', request, 'request', true);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('meteringCrestFactorDbStereo', request.left, resolvedSampleRate, request);
-  assertAudioInput('meteringCrestFactorDbStereo', request.right, resolvedSampleRate, request);
-  return addon.meteringCrestFactorDbStereo(request.left, request.right, resolvedSampleRate);
+export function meteringCrestFactorDbStereo(request: MeteringCrestFactorDbStereoRequest): number;
+export function meteringCrestFactorDbStereo(...args: unknown[]): number {
+  const r = requestOnly<MeteringCrestFactorDbStereoRequest>('meteringCrestFactorDbStereo', args);
+  assertAudioInput('meteringCrestFactorDbStereo', r.left, r.sampleRate, r, 'left');
+  assertAudioInput('meteringCrestFactorDbStereo', r.right, r.sampleRate, r, 'right');
+  return addon.meteringCrestFactorDbStereo(r.left, r.right, r.sampleRate);
 }
 
-export function meteringDcOffset(request: MeteringSamplesRequest): number;
+/** DC offset of the signal (its mean). */
+export function meteringDcOffset(request: MeteringDcOffsetRequest): number;
 export function meteringDcOffset(
   samples: Float32Array,
-  sampleRate?: number,
-  options?: ValidateOptions,
+  sampleRate: number,
+  options?: OptionsOf<MeteringDcOffsetRequest>,
 ): number;
-export function meteringDcOffset(
-  samples: Float32Array | MeteringSamplesRequest,
-  sampleRate = 22050,
-  options: ValidateOptions = {},
-): number {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, ...optionsBag('meteringDcOffset', options) }
-      : requestObject('meteringDcOffset', samples);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('meteringDcOffset', request.samples, resolvedSampleRate, request);
-  return addon.meteringDcOffset(request.samples, resolvedSampleRate);
+export function meteringDcOffset(...args: unknown[]): number {
+  return monoMeter('meteringDcOffset', args);
 }
 
-/**
- * Inter-sample (true) peak in dBFS. `oversampleFactor` must be a power of two
- * in [1, 16]; pass 0 to use the library default (4).
- */
-export function meteringTruePeakDb(request: MeteringTruePeakRequest): number;
+/** Inter-sample (true) peak in dBFS. `oversampleFactor` is a power of two in [1, 16]; omit it for 4. */
+export function meteringTruePeakDb(request: MeteringTruePeakDbRequest): number;
 export function meteringTruePeakDb(
   samples: Float32Array,
-  sampleRate?: number,
-  oversampleFactor?: number,
-  options?: ValidateOptions,
+  sampleRate: number,
+  options?: OptionsOf<MeteringTruePeakDbRequest>,
 ): number;
-export function meteringTruePeakDb(
-  samples: Float32Array | MeteringTruePeakRequest,
-  sampleRate = 22050,
-  oversampleFactor = 4,
-  options: ValidateOptions = {},
-): number {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, oversampleFactor, ...optionsBag('meteringTruePeakDb', options) }
-      : requestObject('meteringTruePeakDb', samples);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('meteringTruePeakDb', request.samples, resolvedSampleRate, request);
-  // 0 is the sentinel for "use the library default", so a value the addon's
-  // truncation would land inside (-1, 1) selects the default and reports
-  // success. The power-of-two rule stays the core's, which names the field.
-  assertNonNegativeSafeInteger(
-    'meteringTruePeakDb',
-    request.oversampleFactor ?? 4,
-    'oversampleFactor',
-  );
-  return addon.meteringTruePeakDb(
-    request.samples,
-    resolvedSampleRate,
-    request.oversampleFactor ?? 4,
-  );
+export function meteringTruePeakDb(...args: unknown[]): number {
+  const r = sampleOneShot<MeteringTruePeakDbRequest>('meteringTruePeakDb', args);
+  assertAudioInput('meteringTruePeakDb', r.samples, r.sampleRate, r);
+  refuseZeroSentinel('meteringTruePeakDb', r, ['oversampleFactor']);
+  const factor = r.oversampleFactor ?? 4;
+  // The power-of-two rule stays the core's, which names the field.
+  assertNonNegativeSafeInteger('meteringTruePeakDb', factor, 'oversampleFactor');
+  return addon.meteringTruePeakDb(r.samples, r.sampleRate, factor);
 }
 
 /**
  * Detect contiguous runs of clipped samples.
  *
- * @param threshold Linear absolute threshold (default 0.999).
- * @param minRegionSamples Minimum run length to report (default 1).
+ * `thresholdDb` is the clip level in dBFS (at most 0; absent = about -0.0087 dBFS);
+ * `minRegionSamples` the shortest run to report (absent = 1).
  */
 export function meteringDetectClipping(request: MeteringDetectClippingRequest): ClippingReport;
 export function meteringDetectClipping(
   samples: Float32Array,
-  sampleRate?: number,
+  sampleRate: number,
   options?: MeteringDetectClippingOptions,
 ): ClippingReport;
-export function meteringDetectClipping(
-  samples: Float32Array | MeteringDetectClippingRequest,
-  sampleRate = 22050,
-  options: MeteringDetectClippingOptions = {},
-): ClippingReport {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, ...optionsBag('meteringDetectClipping', options) }
-      : requestObject('meteringDetectClipping', samples);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('meteringDetectClipping', request.samples, resolvedSampleRate, request);
-  const minRegionSamples = request.minRegionSamples ?? 1;
+export function meteringDetectClipping(...args: unknown[]): ClippingReport {
+  const r = sampleOneShot<MeteringDetectClippingRequest>('meteringDetectClipping', args);
+  assertAudioInput('meteringDetectClipping', r.samples, r.sampleRate, r);
+  refuseZeroSentinel('meteringDetectClipping', r, ['minRegionSamples']);
+  const minRegionSamples = r.minRegionSamples ?? 1;
   assertNonNegativeSafeInteger('meteringDetectClipping', minRegionSamples, 'minRegionSamples');
-  return addon.meteringDetectClipping(
-    request.samples,
-    resolvedSampleRate,
-    request.threshold ?? 0.999,
-    minRegionSamples,
+  // Native still takes the linear threshold.
+  const threshold = clipThresholdLinear('meteringDetectClipping', r.thresholdDb);
+  return clippingReportFromNative(
+    addon.meteringDetectClipping(r.samples, r.sampleRate, threshold, minRegionSamples),
   );
 }
 
 /**
- * Sliding-window dynamic range for mono audio (high_percentile_db - low_percentile_db).
- * Pass 0 for window/hop to use the library default (window=3 s, hop=1 s). An
- * omitted percentile takes the library default (low=0.10, high=0.95); 0 is a
- * literal 0th percentile and a negative one is refused.
+ * Sliding-window dynamic range for mono audio. An omitted window / hop takes the
+ * library default (3 s / 1 s) and an omitted percentile its default (low = 0.10,
+ * high = 0.95); an explicit 0 window or hop is refused.
  */
 export function meteringDynamicRange(request: MeteringDynamicRangeRequest): DynamicRangeReport;
 export function meteringDynamicRange(
   samples: Float32Array,
-  sampleRate?: number,
+  sampleRate: number,
   options?: MeteringDynamicRangeOptions,
 ): DynamicRangeReport;
-export function meteringDynamicRange(
-  samples: Float32Array | MeteringDynamicRangeRequest,
-  sampleRate = 22050,
-  options: MeteringDynamicRangeOptions = {},
-): DynamicRangeReport {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, ...optionsBag('meteringDynamicRange', options) }
-      : requestObject('meteringDynamicRange', samples);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('meteringDynamicRange', request.samples, resolvedSampleRate, request);
+export function meteringDynamicRange(...args: unknown[]): DynamicRangeReport {
+  const r = sampleOneShot<MeteringDynamicRangeRequest>('meteringDynamicRange', args);
+  assertAudioInput('meteringDynamicRange', r.samples, r.sampleRate, r);
+  refuseZeroSentinel('meteringDynamicRange', r, ['windowSec', 'hopSec']);
+  for (const field of ['windowSec', 'hopSec'] as const) {
+    if (r[field] !== undefined && r[field] !== null) {
+      assertPositiveFloatValue('meteringDynamicRange', r[field], field);
+    }
+  }
+  for (const field of ['lowPercentile', 'highPercentile'] as const) {
+    if (r[field] !== undefined && r[field] !== null) {
+      assertUnitInterval('meteringDynamicRange', r[field], field);
+    }
+  }
+  if (
+    r.lowPercentile !== undefined &&
+    r.lowPercentile !== null &&
+    r.highPercentile !== undefined &&
+    r.highPercentile !== null &&
+    r.lowPercentile > r.highPercentile
+  ) {
+    throw new RangeError('meteringDynamicRange: lowPercentile must not exceed highPercentile');
+  }
   return addon.meteringDynamicRange(
-    request.samples,
-    resolvedSampleRate,
-    request.windowSec ?? 0,
-    request.hopSec ?? 0,
-    resolveOptionalNonNegative('meteringDynamicRange', request.lowPercentile, 'lowPercentile'),
-    resolveOptionalNonNegative('meteringDynamicRange', request.highPercentile, 'highPercentile'),
+    r.samples,
+    r.sampleRate,
+    r.windowSec ?? 0,
+    r.hopSec ?? 0,
+    resolveOptionalNonNegative('meteringDynamicRange', r.lowPercentile, 'lowPercentile'),
+    resolveOptionalNonNegative('meteringDynamicRange', r.highPercentile, 'highPercentile'),
   );
 }
+
+// ============================================================================
+// Metering — stereo / phase-scope / spectrum
+// ============================================================================
 
 /** Mid/side vectorscope point series for a (left, right) stereo pair. */
 export interface VectorscopeReport {
@@ -370,21 +361,21 @@ export interface PhaseScopeReport {
   maxRadius: number;
 }
 
-/** Options for `meteringSpectrum`. */
-export interface SpectrumOptions {
-  /** FFT size. Pass 0 / omit for the library default (2048). */
+/** Options for {@link meteringSpectrum}. All fields are optional; an omitted one takes the library default. */
+export interface SpectrumOptions extends ValidateOptions {
+  /** FFT size. Absent = 2048; an explicit 0 is a `RangeError`. */
   nFft?: number;
   /** Apply fractional-octave smoothing to magnitude. */
   applyOctaveSmoothing?: boolean;
-  /** Smoothing fraction (e.g. 3 = 1/3-octave). 0 / omit = library default (3). */
+  /** Smoothing fraction (3 = 1/3-octave). Absent = 3; an explicit 0 is a `RangeError`. */
   octaveFraction?: number;
-  /** Linear reference for the dB conversion. 0 / omit = 1.0. */
+  /** Linear reference for the dB conversion. Absent = 1.0; an explicit 0 is a `RangeError`. */
   dbRef?: number;
-  /** Linear floor used to avoid log(0). 0 / omit = library default. */
+  /** Linear floor used to avoid log(0). Absent = the library epsilon; an explicit 0 is a `RangeError`. */
   dbAmin?: number;
 }
 
-/** Magnitude / power / dB spectrum returned by the metering spectrum functions. */
+/** Single-frame magnitude / power / dB spectrum returned by `meteringSpectrum`. */
 export interface SpectrumReport {
   frequencies: Float32Array;
   magnitude: Float32Array;
@@ -394,82 +385,96 @@ export interface SpectrumReport {
   sampleRate: number;
 }
 
-/** Options for {@link waveformPeaks}. All fields are optional. */
-export interface WaveformPeaksOptions extends ValidateOptions {
-  /** Bucket width in frames. Default 512. */
+/** Request form of {@link meteringStereoCorrelation}. */
+export interface MeteringStereoCorrelationRequest extends ValidateOptions {
+  left: Float32Array;
+  right: Float32Array;
+  /** Sample rate of both channels in Hz. Required. */
+  sampleRate: number;
+}
+
+/** Request form of {@link meteringStereoWidth}. */
+export interface MeteringStereoWidthRequest extends ValidateOptions {
+  left: Float32Array;
+  right: Float32Array;
+  /** Sample rate of both channels in Hz. Required. */
+  sampleRate: number;
+}
+
+/** Request form of {@link meteringVectorscope}. */
+export interface MeteringVectorscopeRequest extends ValidateOptions {
+  left: Float32Array;
+  right: Float32Array;
+  /** Sample rate of both channels in Hz. Required. */
+  sampleRate: number;
+  /**
+   * Upper bound on the returned point count. Absent or `0` (no decimation, a named value
+   * rather than a sentinel) yields one point per input sample; otherwise the point cloud is
+   * deterministically decimated to at most `maxPoints` points for display.
+   */
+  maxPoints?: number;
+}
+
+/** Request form of {@link meteringPhaseScope}. */
+export interface MeteringPhaseScopeRequest extends ValidateOptions {
+  left: Float32Array;
+  right: Float32Array;
+  /** Sample rate of both channels in Hz. Required. */
+  sampleRate: number;
+  /** Upper bound on the returned point count; absent or `0` = every point. */
+  maxPoints?: number;
+}
+
+/** Request form of {@link meteringSpectrum}. */
+export interface MeteringSpectrumRequest extends SpectrumOptions {
+  samples: Float32Array;
+  /** Sample rate of `samples` in Hz. Required. */
+  sampleRate: number;
+}
+
+/** Request form of {@link meteringSpectrumFrame}. */
+export interface MeteringSpectrumFrameRequest extends MeteringSpectrumRequest {
+  /** Sample index where the analysis frame begins (0 = first frame, a real position). Default 0. */
+  startSample?: number;
+}
+
+/** Request form of {@link waveformPeaks}. */
+export interface WaveformPeaksRequest extends ValidateOptions {
+  /** One `Float32Array` per channel, equal lengths. */
+  channels: Float32Array[];
+  /** Bucket width in samples. Default 512. */
   samplesPerBucket?: number;
 }
 
-/** Options for {@link waveformPeakPyramid}. All fields are optional. */
-export interface WaveformPeakPyramidOptions extends ValidateOptions {
-  /** Bucket widths in frames, one per zoom level. Default [512, 1024, 2048, 4096]. */
+/** Request form of {@link waveformPeakPyramid}. */
+export interface WaveformPeakPyramidRequest extends ValidateOptions {
+  /** One `Float32Array` per channel, equal lengths. */
+  channels: Float32Array[];
+  /** Bucket widths in samples, one per zoom level. Default [512, 1024, 2048, 4096]. */
   samplesPerBucketLevels?: number[];
 }
 
-/** Common input for one-shot stereo metering functions. */
-export interface MeteringStereoRequest extends ValidateOptions {
-  left: Float32Array;
-  right: Float32Array;
-  sampleRate?: number;
-}
-
-export interface MeteringScopeRequest extends MeteringStereoRequest, ScopeOptions {}
-export interface MeteringSpectrumRequest extends MeteringSamplesRequest, SpectrumOptions {}
-export interface MeteringSpectrumFrameRequest extends MeteringSpectrumRequest {
-  frameOffset?: number;
-}
-export interface WaveformPeaksRequest extends WaveformPeaksOptions {
-  samples: Float32Array;
-  channels: number;
-}
-export interface WaveformPeakPyramidRequest extends WaveformPeakPyramidOptions {
-  samples: Float32Array;
-  channels: number;
-}
-
-/** Per-channel min/max waveform buckets. Arrays are channel-major. */
+/** Per-channel min/max waveform buckets: `min[c]` and `max[c]` hold `bucketCount` values for channel `c`. */
 export interface WaveformPeaksReport {
-  min: Float32Array;
-  max: Float32Array;
-  channels: number;
+  min: Float32Array[];
+  max: Float32Array[];
   bucketCount: number;
   samplesPerBucket: number;
 }
 
+type StereoMeterFn = 'meteringStereoCorrelation' | 'meteringStereoWidth';
+
+function stereoMeter(fnName: StereoMeterFn, args: unknown[]): number {
+  const r = requestOnly<MeteringStereoCorrelationRequest>(fnName, args);
+  assertAudioInput(fnName, r.left, r.sampleRate, r, 'left');
+  assertAudioInput(fnName, r.right, r.sampleRate, r, 'right');
+  return addon[fnName](r.left, r.right, r.sampleRate);
+}
+
 /** Uncentered correlation (cosine similarity) in [-1, 1] between equal-length channels. */
-export function meteringStereoCorrelation(request: MeteringStereoRequest): number;
-export function meteringStereoCorrelation(
-  left: Float32Array,
-  right: Float32Array,
-  sampleRate?: number,
-  options?: ValidateOptions,
-): number;
-export function meteringStereoCorrelation(
-  left: Float32Array | MeteringStereoRequest,
-  right?: Float32Array,
-  sampleRate = 22050,
-  options: ValidateOptions = {},
-): number {
-  const request: MeteringStereoRequest =
-    left instanceof Float32Array
-      ? {
-          left,
-          right: right as Float32Array,
-          sampleRate,
-          ...optionsBag('meteringStereoCorrelation', options),
-        }
-      : requestObject('meteringStereoCorrelation', left, 'left');
-  const _validate = request.validate !== false;
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('meteringStereoCorrelation', request.left, resolvedSampleRate, request, 'left');
-  assertAudioInput(
-    'meteringStereoCorrelation',
-    request.right,
-    resolvedSampleRate,
-    request,
-    'right',
-  );
-  return addon.meteringStereoCorrelation(request.left, request.right, resolvedSampleRate);
+export function meteringStereoCorrelation(request: MeteringStereoCorrelationRequest): number;
+export function meteringStereoCorrelation(...args: unknown[]): number {
+  return stereoMeter('meteringStereoCorrelation', args);
 }
 
 /**
@@ -482,86 +487,32 @@ export function meteringStereoCorrelation(
  * Convert to dB with `20 * Math.log10(value)`; `10 * Math.log10` would
  * understate the true energy ratio by half.
  */
-export function meteringStereoWidth(request: MeteringStereoRequest): number;
-export function meteringStereoWidth(
-  left: Float32Array,
-  right: Float32Array,
-  sampleRate?: number,
-  options?: ValidateOptions,
-): number;
-export function meteringStereoWidth(
-  left: Float32Array | MeteringStereoRequest,
-  right?: Float32Array,
-  sampleRate = 22050,
-  options: ValidateOptions = {},
-): number {
-  const request: MeteringStereoRequest =
-    left instanceof Float32Array
-      ? {
-          left,
-          right: right as Float32Array,
-          sampleRate,
-          ...optionsBag('meteringStereoWidth', options),
-        }
-      : requestObject('meteringStereoWidth', left, 'left');
-  const _validate = request.validate !== false;
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('meteringStereoWidth', request.left, resolvedSampleRate, request, 'left');
-  assertAudioInput('meteringStereoWidth', request.right, resolvedSampleRate, request, 'right');
-  return addon.meteringStereoWidth(request.left, request.right, resolvedSampleRate);
+export function meteringStereoWidth(request: MeteringStereoWidthRequest): number;
+export function meteringStereoWidth(...args: unknown[]): number {
+  return stereoMeter('meteringStereoWidth', args);
 }
 
-/** Options for the decimated scope functions. */
-export interface ScopeOptions extends ValidateOptions {
-  /**
-   * Upper bound on the returned point count. Omit / `0` (or a value `>= length`)
-   * yields one point per input sample; otherwise the point cloud is
-   * deterministically decimated to at most `maxPoints` points (keeping the
-   * largest-radius sample per bucket) for display-sized output.
-   */
-  maxPoints?: number;
+/** A scope request after the shared preflight, with `maxPoints` resolved. */
+function scopeRequest(
+  fnName: 'meteringVectorscope' | 'meteringPhaseScope',
+  args: unknown[],
+): MeteringVectorscopeRequest & { maxPoints: number } {
+  const r = requestOnly<MeteringVectorscopeRequest>(fnName, args);
+  assertAudioInput(fnName, r.left, r.sampleRate, r, 'left');
+  assertAudioInput(fnName, r.right, r.sampleRate, r, 'right');
+  const maxPoints = r.maxPoints ?? 0;
+  assertNonNegativeSafeInteger(fnName, maxPoints, 'maxPoints');
+  return { ...r, maxPoints };
 }
 
 /**
  * Mid/side vectorscope point series. By default emits one point per input
  * sample; pass `maxPoints` to get a display-sized decimated point set.
  */
-export function meteringVectorscope(request: MeteringScopeRequest): VectorscopeReport;
-export function meteringVectorscope(
-  left: Float32Array,
-  right: Float32Array,
-  sampleRate?: number,
-  options?: ScopeOptions,
-): VectorscopeReport;
-export function meteringVectorscope(
-  left: Float32Array | MeteringScopeRequest,
-  right?: Float32Array,
-  sampleRate = 22050,
-  options: ScopeOptions = {},
-): VectorscopeReport {
-  const request: MeteringScopeRequest =
-    left instanceof Float32Array
-      ? {
-          left,
-          right: right as Float32Array,
-          sampleRate,
-          ...optionsBag('meteringVectorscope', options),
-        }
-      : requestObject('meteringVectorscope', left, 'left');
-  const _validate = request.validate !== false;
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('meteringVectorscope', request.left, resolvedSampleRate, request, 'left');
-  assertAudioInput('meteringVectorscope', request.right, resolvedSampleRate, request, 'right');
-  // 0 is the sentinel for "emit every sample". The addon floors a negative to
-  // that same 0, so an out-of-domain request would select no decimation at all
-  // and come back a success.
-  assertNonNegativeSafeInteger('meteringVectorscope', request.maxPoints ?? 0, 'maxPoints');
-  return addon.meteringVectorscope(
-    request.left,
-    request.right,
-    resolvedSampleRate,
-    request.maxPoints ?? 0,
-  );
+export function meteringVectorscope(request: MeteringVectorscopeRequest): VectorscopeReport;
+export function meteringVectorscope(...args: unknown[]): VectorscopeReport {
+  const r = scopeRequest('meteringVectorscope', args);
+  return addon.meteringVectorscope(r.left, r.right, r.sampleRate, r.maxPoints);
 }
 
 /**
@@ -569,76 +520,58 @@ export function meteringVectorscope(
  * input sample; pass `maxPoints` to decimate the point cloud for display. The
  * summary stats are always computed over the full-resolution signal.
  */
-export function meteringPhaseScope(request: MeteringScopeRequest): PhaseScopeReport;
-export function meteringPhaseScope(
-  left: Float32Array,
-  right: Float32Array,
-  sampleRate?: number,
-  options?: ScopeOptions,
-): PhaseScopeReport;
-export function meteringPhaseScope(
-  left: Float32Array | MeteringScopeRequest,
-  right?: Float32Array,
-  sampleRate = 22050,
-  options: ScopeOptions = {},
-): PhaseScopeReport {
-  const request: MeteringScopeRequest =
-    left instanceof Float32Array
-      ? {
-          left,
-          right: right as Float32Array,
-          sampleRate,
-          ...optionsBag('meteringPhaseScope', options),
-        }
-      : requestObject('meteringPhaseScope', left, 'left');
-  const _validate = request.validate !== false;
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('meteringPhaseScope', request.left, resolvedSampleRate, request, 'left');
-  assertAudioInput('meteringPhaseScope', request.right, resolvedSampleRate, request, 'right');
-  // The sentinel and the flooring are the vectorscope's; see there.
-  assertNonNegativeSafeInteger('meteringPhaseScope', request.maxPoints ?? 0, 'maxPoints');
-  return addon.meteringPhaseScope(
-    request.left,
-    request.right,
-    resolvedSampleRate,
-    request.maxPoints ?? 0,
-  );
+export function meteringPhaseScope(request: MeteringPhaseScopeRequest): PhaseScopeReport;
+export function meteringPhaseScope(...args: unknown[]): PhaseScopeReport {
+  const r = scopeRequest('meteringPhaseScope', args);
+  return addon.meteringPhaseScope(r.left, r.right, r.sampleRate, r.maxPoints);
+}
+
+/** The spectrum options the native call reads: only the given ones, `null` read as absent. */
+function nativeSpectrumOptions(fnName: string, r: SpectrumOptions): Record<string, unknown> {
+  refuseZeroSentinel(fnName, r, ['nFft', 'octaveFraction', 'dbRef', 'dbAmin']);
+  assertSpectrumOptions(fnName, r);
+  const native: Record<string, unknown> = {};
+  for (const key of [
+    'nFft',
+    'applyOctaveSmoothing',
+    'octaveFraction',
+    'dbRef',
+    'dbAmin',
+  ] as const) {
+    if (r[key] !== undefined && r[key] !== null) {
+      native[key] = r[key];
+    }
+  }
+  return native;
 }
 
 /**
- * Welch-averaged magnitude / power / dB spectrum over the WHOLE mono signal. This is
- * NOT a single-frame snapshot: the signal is split into Hann-windowed,
- * 50%-overlapping `nFft`-length frames whose power spectra are averaged across
- * the entire input, so transients are smeared by the averaging. For a true
- * single-frame FFT of one window, use {@link meteringSpectrumFrame}.
+ * Welch-averaged magnitude / power / dB spectrum over the WHOLE mono signal (split
+ * into Hann-windowed, 50%-overlapping `nFft`-length frames whose power spectra
+ * are averaged). For a true single-frame snapshot, use
+ * {@link meteringSpectrumFrame}.
  */
 export function meteringSpectrum(request: MeteringSpectrumRequest): SpectrumReport;
 export function meteringSpectrum(
   samples: Float32Array,
-  sampleRate?: number,
-  options?: SpectrumOptions & ValidateOptions,
+  sampleRate: number,
+  options?: SpectrumOptions,
 ): SpectrumReport;
-export function meteringSpectrum(
-  samples: Float32Array | MeteringSpectrumRequest,
-  sampleRate = 22050,
-  options?: SpectrumOptions & ValidateOptions,
-): SpectrumReport {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, ...optionsBag('meteringSpectrum', options) }
-      : requestObject('meteringSpectrum', samples);
-  const _validate = request.validate !== false;
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('meteringSpectrum', request.samples, resolvedSampleRate, request);
-  assertSpectrumOptions('meteringSpectrum', request);
-  return addon.meteringSpectrum(request.samples, resolvedSampleRate, request);
+export function meteringSpectrum(...args: unknown[]): SpectrumReport {
+  const r = sampleOneShot<MeteringSpectrumRequest>('meteringSpectrum', args);
+  assertAudioInput('meteringSpectrum', r.samples, r.sampleRate, r);
+  return addon.meteringSpectrum(
+    r.samples,
+    r.sampleRate,
+    nativeSpectrumOptions('meteringSpectrum', r),
+  );
 }
 
 /**
  * True single-frame magnitude / power / dB spectrum (one Hann-windowed
  * `nFft`-length FFT), for spectrum-analyzer "moment" snapshots that must not be
  * time-averaged like {@link meteringSpectrum}. The analysis frame spans
- * `[frameOffset, frameOffset + nFft)`; samples past the end are zero-padded.
+ * `[startSample, startSample + nFft)`; samples past the end are zero-padded.
  *
  * The frame is also the only span validated: a non-finite sample inside it is
  * rejected, while one outside it neither reaches the FFT nor refuses the call.
@@ -649,79 +582,45 @@ export function meteringSpectrum(
 export function meteringSpectrumFrame(request: MeteringSpectrumFrameRequest): SpectrumReport;
 export function meteringSpectrumFrame(
   samples: Float32Array,
-  sampleRate?: number,
-  frameOffset?: number,
-  options?: SpectrumOptions & ValidateOptions,
+  sampleRate: number,
+  options?: OptionsOf<MeteringSpectrumFrameRequest>,
 ): SpectrumReport;
-export function meteringSpectrumFrame(
-  samples: Float32Array | MeteringSpectrumFrameRequest,
-  sampleRate = 22050,
-  frameOffset = 0,
-  options?: SpectrumOptions & ValidateOptions,
-): SpectrumReport {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, frameOffset, ...optionsBag('meteringSpectrumFrame', options) }
-      : requestObject('meteringSpectrumFrame', samples);
-  const validate = request.validate !== false;
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertSampleRate('meteringSpectrumFrame', resolvedSampleRate);
-  // Ahead of the pre-scan below, which would otherwise size its window from a
-  // fractional nFft before this saw it.
-  assertSpectrumOptions('meteringSpectrumFrame', request);
-  // The layer assertSamplesInWindow's floor defers to. Without it a fractional
-  // offset reaches the addon, is truncated there, and reads a different frame
-  // than the one asked for.
-  assertNonNegativeSafeInteger('meteringSpectrumFrame', request.frameOffset ?? 0, 'frameOffset');
-  const nFft = request.nFft ?? 0;
+export function meteringSpectrumFrame(...args: unknown[]): SpectrumReport {
+  const r = sampleOneShot<MeteringSpectrumFrameRequest>('meteringSpectrumFrame', args);
+  // The frame is the only span scanned for non-finite samples (below).
+  assertAudioInput('meteringSpectrumFrame', r.samples, r.sampleRate, { validate: false });
+  const native = nativeSpectrumOptions('meteringSpectrumFrame', r);
+  const startSample = r.startSample ?? 0;
+  assertNonNegativeSafeInteger('meteringSpectrumFrame', startSample, 'startSample');
+  const nFft = (native.nFft as number | undefined) ?? DEFAULT_SPECTRUM_N_FFT;
   assertSamplesInWindow(
     'meteringSpectrumFrame',
-    request.samples,
-    validate,
-    request.frameOffset ?? 0,
-    nFft > 0 ? nFft : DEFAULT_SPECTRUM_N_FFT,
+    r.samples,
+    r.validate !== false,
+    startSample,
+    nFft,
   );
-  return addon.meteringSpectrumFrame(
-    request.samples,
-    resolvedSampleRate,
-    request.frameOffset ?? 0,
-    request,
-  );
+  // Native takes the start as the positional `frame_offset`.
+  return addon.meteringSpectrumFrame(r.samples, r.sampleRate, startSample, native);
 }
 
 /**
- * Compute per-channel min/max waveform buckets from interleaved audio.
+ * Compute per-channel min/max waveform buckets from planar audio.
  *
  * A non-finite sample is rejected rather than skipped, and `{ validate: false }`
- * does not change that — it only skips the TypeScript pre-scan that names the
- * offending index. A bucket whose samples are not finite has no min/max to
- * report, and the `0`/`0` it would otherwise carry is what a waveform display
- * draws as silence.
+ * does not change that — it only skips the JS pre-scan that names the offending
+ * index. A bucket whose samples are not finite has no min/max to report, and the
+ * `0`/`0` it would otherwise carry is what a waveform display draws as silence.
+ * Bucket widths are in samples, so the call takes no sample rate.
  */
 export function waveformPeaks(request: WaveformPeaksRequest): WaveformPeaksReport;
-export function waveformPeaks(
-  samples: Float32Array,
-  channels: number,
-  options?: WaveformPeaksOptions,
-): WaveformPeaksReport;
-export function waveformPeaks(
-  samples: Float32Array | WaveformPeaksRequest,
-  channels = 0,
-  options: WaveformPeaksOptions = {},
-): WaveformPeaksReport {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, channels, ...optionsBag('waveformPeaks', options) }
-      : requestObject('waveformPeaks', samples);
-  assertInterleavedSamples(
-    'waveformPeaks',
-    request.samples,
-    request.channels,
-    request.validate !== false,
-  );
-  const samplesPerBucket = request.samplesPerBucket ?? 512;
+export function waveformPeaks(...args: unknown[]): WaveformPeaksReport {
+  const r = requestOnly<WaveformPeaksRequest>('waveformPeaks', args);
+  // Native reads one interleaved buffer and a channel count.
+  const { data, numChannels } = interleaveMeterChannels('waveformPeaks', r.channels, r);
+  const samplesPerBucket = r.samplesPerBucket ?? 512;
   assertPositiveInteger('waveformPeaks', samplesPerBucket, 'samplesPerBucket');
-  return addon.waveformPeaks(request.samples, request.channels, samplesPerBucket);
+  return waveformReportFromNative(addon.waveformPeaks(data, numChannels, samplesPerBucket));
 }
 
 /**
@@ -731,32 +630,15 @@ export function waveformPeaks(
  * rejected here on the same rule.
  */
 export function waveformPeakPyramid(request: WaveformPeakPyramidRequest): WaveformPeaksReport[];
-export function waveformPeakPyramid(
-  samples: Float32Array,
-  channels: number,
-  options?: WaveformPeakPyramidOptions,
-): WaveformPeaksReport[];
-export function waveformPeakPyramid(
-  samples: Float32Array | WaveformPeakPyramidRequest,
-  channels = 0,
-  options: WaveformPeakPyramidOptions = {},
-): WaveformPeaksReport[] {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, channels, ...optionsBag('waveformPeakPyramid', options) }
-      : requestObject('waveformPeakPyramid', samples);
-  assertInterleavedSamples(
-    'waveformPeakPyramid',
-    request.samples,
-    request.channels,
-    request.validate !== false,
-  );
-  const levels = request.samplesPerBucketLevels ?? [512, 1024, 2048, 4096];
+export function waveformPeakPyramid(...args: unknown[]): WaveformPeaksReport[] {
+  const r = requestOnly<WaveformPeakPyramidRequest>('waveformPeakPyramid', args);
+  const { data, numChannels } = interleaveMeterChannels('waveformPeakPyramid', r.channels, r);
+  const levels = r.samplesPerBucketLevels ?? [512, 1024, 2048, 4096];
   if (levels.length === 0) {
     throw new RangeError('waveformPeakPyramid: samplesPerBucketLevels must not be empty');
   }
   levels.forEach((level, index) => {
     assertPositiveInteger('waveformPeakPyramid', level, `samplesPerBucketLevels[${index}]`);
   });
-  return addon.waveformPeakPyramid(request.samples, request.channels, levels);
+  return addon.waveformPeakPyramid(data, numChannels, levels).map(waveformReportFromNative);
 }

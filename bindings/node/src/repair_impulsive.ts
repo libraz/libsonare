@@ -2,6 +2,7 @@
  * Impulsive-defect repair: declick, declip and decrackle, with their detectors.
  */
 
+import { clipDetectionFromNative, declipReportFromNative } from './internal/metering_native.js';
 import { pairedResult, repairNativeOptions } from './internal/repair_common.js';
 import { addon } from './native.js';
 import type {
@@ -129,7 +130,8 @@ export function masteringRepairDeclip(
 export function masteringRepairDeclip(...args: unknown[]): DeclipResult {
   const r = sampleOneShot<MasteringRepairDeclipRequest>('masteringRepairDeclip', args);
   assertAudioInput('masteringRepairDeclip', r.samples, r.sampleRate, r);
-  return addon.masteringRepairDeclip(r.samples, r.sampleRate, repairNativeOptions(r));
+  const native = addon.masteringRepairDeclip(r.samples, r.sampleRate, repairNativeOptions(r));
+  return { samples: native.samples, report: declipReportFromNative(native.report) };
 }
 
 /** Request form of `masteringRepairDeclipStereo`. */
@@ -160,9 +162,15 @@ export function masteringRepairDeclipStereo(...args: unknown[]): MasteringRepair
   const r = requestOnly<MasteringRepairDeclipStereoRequest>('masteringRepairDeclipStereo', args);
   assertAudioInput('masteringRepairDeclipStereo', r.left, r.sampleRate, r, 'left');
   assertAudioInput('masteringRepairDeclipStereo', r.right, r.sampleRate, r, 'right');
-  return pairedResult(
+  const paired = pairedResult(
     addon.masteringRepairDeclipStereo(r.left, r.right, r.sampleRate, repairNativeOptions(r)),
   );
+  return {
+    channels: paired.channels,
+    reports: (paired.reports as Parameters<typeof declipReportFromNative>[0][]).map(
+      declipReportFromNative,
+    ),
+  };
 }
 
 /**
@@ -277,8 +285,8 @@ export interface MasteringRepairDetectClippingRequest
  * run level once the two highest runs are set aside, so louder unclipped audio
  * cannot move it -- so they survive a gain change and
  * do not fire on a sine: measured, a clipped tone attenuated to 0.25 reports
- * `sampleCount: 0` alongside `flatRunCount: 440` and `flatLevel: 0.25`, while
- * an unclipped full-scale sine reports `sampleCount: 2820` alongside
+ * `clippedSamples: 0` alongside `flatRunCount: 440` and `flatLevel: 0.25`, while
+ * an unclipped full-scale sine reports `clippedSamples: 2820` alongside
  * `flatRunCount: 0`. A genuinely flat-topped waveform -- a square or pulse
  * train, a fully limited master -- counts as clipped here too and cannot be
  * told apart from real clipping in the time domain: the false positive.
@@ -294,7 +302,7 @@ export interface MasteringRepairDetectClippingRequest
  * @example
  * ```ts
  * const detected = masteringRepairDetectClipping({ samples, sampleRate: 48000 });
- * console.log(detected.sampleCount, detected.runCount);
+ * console.log(detected.clippedSamples, detected.runCount);
  * ```
  */
 export function masteringRepairDetectClipping(
@@ -311,7 +319,9 @@ export function masteringRepairDetectClipping(...args: unknown[]): ClipDetection
     args,
   );
   assertAudioInput('masteringRepairDetectClipping', r.samples, r.sampleRate, r);
-  return addon.masteringRepairDetectClipping(r.samples, r.sampleRate, repairNativeOptions(r));
+  return clipDetectionFromNative(
+    addon.masteringRepairDetectClipping(r.samples, r.sampleRate, repairNativeOptions(r)),
+  );
 }
 
 /** Request form of `masteringRepairDetectCrackle`. */

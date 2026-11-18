@@ -967,7 +967,7 @@ describe('RealtimeEngine native binding', () => {
     expect(compressor?.category).toBe('dynamics');
     expect(abCrossfade?.category).toBe('reference');
     expect(compressor?.params.map((param) => param.name).sort()).toEqual(
-      masteringInsertParamInfo('dynamics.compressor')
+      masteringInsertParamInfo({ insert: 'dynamics.compressor' })
         .map((param) => param.name)
         .sort(),
     );
@@ -984,7 +984,7 @@ describe('RealtimeEngine native binding', () => {
   });
 
   it('reports realtime insert param descriptors and changes them live', () => {
-    const info = masteringInsertParamInfo('effects.reverb.fdn');
+    const info = masteringInsertParamInfo({ insert: 'effects.reverb.fdn' });
     if (info.length === 0) {
       return; // FX not built in this configuration.
     }
@@ -992,7 +992,7 @@ describe('RealtimeEngine native binding', () => {
     expect(dryWet).toBeDefined();
     expect(dryWet?.rtSafe).toBe(true);
     expect(typeof dryWet?.id).toBe('number');
-    expect(masteringInsertParamInfo('nope.nope')).toEqual([]);
+    expect(masteringInsertParamInfo({ insert: 'nope.nope' as never })).toEqual([]);
 
     const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 256 });
     const frames = 256 * 16;

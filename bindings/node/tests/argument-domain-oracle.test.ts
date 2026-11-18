@@ -14,7 +14,7 @@ import {
   melToStft,
   mfcc,
   mfccToAudio,
-  mixingScenePresetJson,
+  mixingScenePreset,
   spectralEdit,
 } from '../src/index.js';
 import { expectRefusal } from './_helpers.js';
@@ -191,7 +191,7 @@ describe('spectralEdit op fields', () => {
 
 describe('Mixer send index', () => {
   function mixerWithTwoSends(): Mixer {
-    const mixer = Mixer.fromJson(mixingScenePresetJson('commentaryDucking'), {
+    const mixer = Mixer.fromJson(JSON.stringify(mixingScenePreset('commentaryDucking')), {
       sampleRate: 48000,
       maxBlockSize: 8,
     });

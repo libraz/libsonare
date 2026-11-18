@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Mixer, mixingScenePresetJson } from '../../dist/index.js';
+import { Mixer, mixingScenePreset } from '../../dist/index.js';
 
 const SR = 48000;
 const BLOCK = 256;
@@ -15,7 +15,7 @@ function thrown(fn: () => unknown): unknown {
 }
 
 function withPreset(fn: (mixer: Mixer) => void): void {
-  const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
+  const mixer = Mixer.fromJson(JSON.stringify(mixingScenePreset('vocalReverbSend')), {
     sampleRate: SR,
     maxBlockSize: BLOCK,
   });
@@ -37,7 +37,7 @@ describe('mixer construction', () => {
   });
 
   it('builds from a scene document through new Mixer({ scene, sampleRate, maxBlockSize })', () => {
-    const scene = JSON.parse(mixingScenePresetJson('vocalReverbSend'));
+    const scene = mixingScenePreset('vocalReverbSend');
     const mixer = new Mixer({ scene, sampleRate: SR, maxBlockSize: BLOCK });
     try {
       expect(mixer.stripCount).toBeGreaterThan(0);
@@ -59,7 +59,9 @@ describe('mixer construction', () => {
   });
 
   it('fromJson builds from a scene JSON string and defaults the block size', () => {
-    const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), { sampleRate: SR });
+    const mixer = Mixer.fromJson(JSON.stringify(mixingScenePreset('vocalReverbSend')), {
+      sampleRate: SR,
+    });
     try {
       expect(mixer.stripCount).toBeGreaterThan(0);
     } finally {
@@ -68,7 +70,7 @@ describe('mixer construction', () => {
   });
 
   it('fromJson refuses a missing sample rate and an unknown option', () => {
-    const json = mixingScenePresetJson('vocalReverbSend');
+    const json = JSON.stringify(mixingScenePreset('vocalReverbSend'));
     expect(thrown(() => Mixer.fromJson(json, {} as never))).toBeInstanceOf(TypeError);
     expect(
       thrown(() => Mixer.fromJson(json, { sampleRate: SR, block: 1 } as never)),

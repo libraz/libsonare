@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ErrorCode, Mixer, mixingScenePresetJson, RealtimeEngine } from '../src/index.js';
+import { ErrorCode, Mixer, mixingScenePreset, RealtimeEngine } from '../src/index.js';
 
 /** One strip feeding a master bus that carries a peaking band at `gainDb`. */
 function sceneWithBusEq(gainDb: number): string {
@@ -147,7 +147,7 @@ describe('RealtimeEngine', () => {
 
 describe('Mixer (scene-based routing)', () => {
   it('routes a preset scene and schedules insert automation', () => {
-    const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
+    const mixer = Mixer.fromJson(JSON.stringify(mixingScenePreset('vocalReverbSend')), {
       sampleRate: 48000,
       maxBlockSize: 512,
     });
@@ -192,7 +192,7 @@ describe('Mixer (scene-based routing)', () => {
   });
 
   it('reports a non-zero discard count once a strip processes a near-FLT_MAX input', () => {
-    const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
+    const mixer = Mixer.fromJson(JSON.stringify(mixingScenePreset('vocalReverbSend')), {
       sampleRate: 48000,
       maxBlockSize: 512,
     });
@@ -245,7 +245,7 @@ describe('Mixer (scene-based routing)', () => {
   });
 
   it('rejects an uncompiled or unknown bus', () => {
-    const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
+    const mixer = Mixer.fromJson(JSON.stringify(mixingScenePreset('vocalReverbSend')), {
       sampleRate: 48000,
       maxBlockSize: 512,
     });

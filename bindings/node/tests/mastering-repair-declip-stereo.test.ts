@@ -70,11 +70,11 @@ describe('masteringRepairDeclipStereo', () => {
     // clipped samples in its own right. A channel that detected nothing still
     // satisfies loose inequalities and reads exactly like linking working.
     expect(result.reports[0].detected.runCount).toBe(3);
-    expect(result.reports[0].detected.sampleCount).toBe(
+    expect(result.reports[0].detected.clippedSamples).toBe(
       ISOLATED_LEFT_LENGTH + LEFT_NARROW_LENGTH + LEFT_WIDE_LENGTH,
     );
     expect(result.reports[1].detected.runCount).toBe(2);
-    expect(result.reports[1].detected.sampleCount).toBe(RIGHT_WIDE_LENGTH + RIGHT_NARROW_LENGTH);
+    expect(result.reports[1].detected.clippedSamples).toBe(RIGHT_WIDE_LENGTH + RIGHT_NARROW_LENGTH);
 
     // The discriminating property: the narrower side's reconstruction reaches
     // past its own clipped samples because the wider side's run drags the
@@ -82,10 +82,10 @@ describe('masteringRepairDeclipStereo', () => {
     expect(result.reports[0].linkedRuns).toBeGreaterThan(0);
     expect(result.reports[1].linkedRuns).toBeGreaterThan(0);
     expect(result.reports[0].repairedSamples).toBeGreaterThan(
-      result.reports[0].detected.sampleCount,
+      result.reports[0].detected.clippedSamples,
     );
     expect(result.reports[1].repairedSamples).toBeGreaterThan(
-      result.reports[1].detected.sampleCount,
+      result.reports[1].detected.clippedSamples,
     );
 
     // Not one channel restated.

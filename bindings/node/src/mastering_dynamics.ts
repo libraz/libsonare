@@ -1,9 +1,15 @@
 import { addon } from './native.js';
 import type { ValidateOptions } from './validation.js';
-import { assertAudioInput, optionsBag, requestObject } from './validation.js';
+import {
+  assertAudioInput,
+  assertClosedToken,
+  assertNonNegativeFloatValue,
+  assertPositiveFloatValue,
+  sampleOneShot,
+} from './validation.js';
 
 /** Detector mode for `masteringDynamicsCompressor`. */
-export type CompressorDetector = 'peak' | 'rms' | 'log_rms' | 'logRms' | 0 | 1 | 2;
+export type CompressorDetector = 'peak' | 'rms' | 'logRms';
 
 /** Options for `masteringDynamicsCompressor`. */
 export interface CompressorOptions extends ValidateOptions {
@@ -17,8 +23,8 @@ export interface CompressorOptions extends ValidateOptions {
   makeupGainDb?: number;
   autoMakeup?: boolean;
   detector?: CompressorDetector;
-  sidechainHpfEnabled?: boolean;
-  sidechainHpfHz?: number;
+  /** Sidechain high-pass corner in Hz, above 0. Absent = no sidechain high-pass. */
+  sidechainHighPassHz?: number;
   pdrTimeMs?: number;
   pdrReleaseScale?: number;
 }
@@ -33,7 +39,8 @@ export interface GateOptions extends ValidateOptions {
   rangeDb?: number;
   holdMs?: number;
   closeThresholdDb?: number;
-  keyHpfHz?: number;
+  /** Key high-pass corner in Hz. Absent = off; 0 Hz passes everything and is accepted. */
+  keyHighPassHz?: number;
 }
 
 /** Options for `masteringDynamicsTransientShaper`. */
@@ -63,65 +70,83 @@ export interface DynamicsProcessorResult {
 /** Canonical request form for the offline compressor. */
 export interface MasteringDynamicsCompressorRequest extends CompressorOptions {
   samples: Float32Array;
-  sampleRate?: number;
+  /** Sample rate of `samples` in Hz. Required. */
+  sampleRate: number;
 }
 
 /** Canonical request form for the offline noise gate. */
 export interface MasteringDynamicsGateRequest extends GateOptions {
   samples: Float32Array;
-  sampleRate?: number;
+  /** Sample rate of `samples` in Hz. Required. */
+  sampleRate: number;
 }
 
 /** Canonical request form for the offline transient shaper. */
 export interface MasteringDynamicsTransientShaperRequest extends TransientShaperOptions {
   samples: Float32Array;
-  sampleRate?: number;
+  /** Sample rate of `samples` in Hz. Required. */
+  sampleRate: number;
 }
 
-/** Offline feed-forward compressor (soft-knee, optional makeup, sidechain HPF, PDR). */
+const COMPRESSOR_DETECTORS = ['peak', 'rms', 'logRms'] as const;
+
+// The addon reads the detector as an ordinal.
+const COMPRESSOR_DETECTOR_ORDINAL: Record<CompressorDetector, number> = {
+  peak: 0,
+  rms: 1,
+  logRms: 2,
+};
+
+/** Offline feed-forward compressor (soft-knee, optional makeup, sidechain high-pass, PDR). */
 export function masteringDynamicsCompressor(
   request: MasteringDynamicsCompressorRequest,
 ): DynamicsProcessorResult;
 export function masteringDynamicsCompressor(
   samples: Float32Array,
-  sampleRate?: number,
+  sampleRate: number,
   options?: CompressorOptions,
 ): DynamicsProcessorResult;
-export function masteringDynamicsCompressor(
-  samples: Float32Array | MasteringDynamicsCompressorRequest,
-  sampleRate = 22050,
-  options: CompressorOptions = {},
-): DynamicsProcessorResult {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, ...optionsBag('masteringDynamicsCompressor', options) }
-      : requestObject('masteringDynamicsCompressor', samples);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('masteringDynamicsCompressor', request.samples, resolvedSampleRate, request);
-  return addon.masteringDynamicsCompressor(request.samples, resolvedSampleRate, request);
+export function masteringDynamicsCompressor(...args: unknown[]): DynamicsProcessorResult {
+  const r = sampleOneShot<MasteringDynamicsCompressorRequest>('masteringDynamicsCompressor', args);
+  assertAudioInput('masteringDynamicsCompressor', r.samples, r.sampleRate, r);
+  const { sidechainHighPassHz, ...opts } = r as MasteringDynamicsCompressorRequest &
+    Record<string, unknown>;
+  if (r.detector !== undefined && r.detector !== null) {
+    assertClosedToken('masteringDynamicsCompressor', r.detector, COMPRESSOR_DETECTORS, 'detector');
+    opts.detector = COMPRESSOR_DETECTOR_ORDINAL[r.detector] as never;
+  }
+  // The addon still reads an enable flag plus a corner for the sidechain high-pass.
+  if (sidechainHighPassHz !== undefined && sidechainHighPassHz !== null) {
+    assertPositiveFloatValue(
+      'masteringDynamicsCompressor',
+      sidechainHighPassHz,
+      'sidechainHighPassHz',
+    );
+    opts.sidechainHpfEnabled = true;
+    opts.sidechainHpfHz = sidechainHighPassHz;
+  }
+  return addon.masteringDynamicsCompressor(r.samples, r.sampleRate, opts);
 }
 
-/** Offline noise gate with hysteresis, hold, and optional key HPF. */
+/** Offline noise gate with hysteresis, hold, and optional key high-pass. */
 export function masteringDynamicsGate(
   request: MasteringDynamicsGateRequest,
 ): DynamicsProcessorResult;
 export function masteringDynamicsGate(
   samples: Float32Array,
-  sampleRate?: number,
+  sampleRate: number,
   options?: GateOptions,
 ): DynamicsProcessorResult;
-export function masteringDynamicsGate(
-  samples: Float32Array | MasteringDynamicsGateRequest,
-  sampleRate = 22050,
-  options: GateOptions = {},
-): DynamicsProcessorResult {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, ...optionsBag('masteringDynamicsGate', options) }
-      : requestObject('masteringDynamicsGate', samples);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('masteringDynamicsGate', request.samples, resolvedSampleRate, request);
-  return addon.masteringDynamicsGate(request.samples, resolvedSampleRate, request);
+export function masteringDynamicsGate(...args: unknown[]): DynamicsProcessorResult {
+  const r = sampleOneShot<MasteringDynamicsGateRequest>('masteringDynamicsGate', args);
+  assertAudioInput('masteringDynamicsGate', r.samples, r.sampleRate, r);
+  const { keyHighPassHz, ...opts } = r as MasteringDynamicsGateRequest & Record<string, unknown>;
+  // The addon still spells the key high-pass `keyHpfHz`.
+  if (keyHighPassHz !== undefined && keyHighPassHz !== null) {
+    assertNonNegativeFloatValue('masteringDynamicsGate', keyHighPassHz, 'keyHighPassHz');
+    opts.keyHpfHz = keyHighPassHz;
+  }
+  return addon.masteringDynamicsGate(r.samples, r.sampleRate, opts);
 }
 
 /** Offline transient shaper (envelope-difference attack/sustain control). */
@@ -130,24 +155,14 @@ export function masteringDynamicsTransientShaper(
 ): DynamicsProcessorResult;
 export function masteringDynamicsTransientShaper(
   samples: Float32Array,
-  sampleRate?: number,
+  sampleRate: number,
   options?: TransientShaperOptions,
 ): DynamicsProcessorResult;
-export function masteringDynamicsTransientShaper(
-  samples: Float32Array | MasteringDynamicsTransientShaperRequest,
-  sampleRate = 22050,
-  options: TransientShaperOptions = {},
-): DynamicsProcessorResult {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, ...optionsBag('masteringDynamicsTransientShaper', options) }
-      : requestObject('masteringDynamicsTransientShaper', samples);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput(
+export function masteringDynamicsTransientShaper(...args: unknown[]): DynamicsProcessorResult {
+  const r = sampleOneShot<MasteringDynamicsTransientShaperRequest>(
     'masteringDynamicsTransientShaper',
-    request.samples,
-    resolvedSampleRate,
-    request,
+    args,
   );
-  return addon.masteringDynamicsTransientShaper(request.samples, resolvedSampleRate, request);
+  assertAudioInput('masteringDynamicsTransientShaper', r.samples, r.sampleRate, r);
+  return addon.masteringDynamicsTransientShaper(r.samples, r.sampleRate, r);
 }

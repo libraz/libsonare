@@ -14,11 +14,11 @@ import {
   hzToMel,
   hzToMidi,
   hzToNote,
-  mastering,
+  masteringApplyProcessor,
+  masteringApplyProcessorStereo,
+  masteringNormalizeLoudness,
   masteringPresetNames,
-  masteringProcess,
   masteringProcessorNames,
-  masteringProcessStereo,
   melDelta,
   melSpectrogram,
   melToAudio,
@@ -241,13 +241,13 @@ describe('effects', () => {
     expect(peak).toBeLessThanOrEqual(1.01);
   });
 
-  it('mastering returns processed samples and loudness metadata', () => {
+  it('masteringNormalizeLoudness returns processed samples and loudness metadata', () => {
     const quiet = new Float32Array(SR);
     for (let i = 0; i < quiet.length; i++) {
       quiet[i] = 0.2 * Math.sin((2 * Math.PI * 440 * i) / SR);
     }
 
-    const result = mastering(quiet, SR, {
+    const result = masteringNormalizeLoudness(quiet, SR, {
       targetLufs: -18.0,
       ceilingDb: -1.0,
       truePeakOversample: 4,
@@ -261,7 +261,7 @@ describe('effects', () => {
     expect(typeof result.loudnessTargetLimited).toBe('boolean');
     expect(result.outputLufs).toBeCloseTo(-18.0, 1);
 
-    const ceilingLimited = mastering(quiet, SR, {
+    const ceilingLimited = masteringNormalizeLoudness(quiet, SR, {
       targetLufs: -2.0,
       ceilingDb: -1.0,
       truePeakOversample: 4,
@@ -270,7 +270,7 @@ describe('effects', () => {
 
     const audio = Audio.fromBuffer(quiet, SR);
     try {
-      const fromAudio = audio.mastering({
+      const fromAudio = audio.masteringNormalizeLoudness({
         targetLufs: -18.0,
         ceilingDb: -1.0,
         truePeakOversample: 4,
@@ -282,17 +282,20 @@ describe('effects', () => {
     }
   });
 
-  it('reports the same loudnessTargetLimited from mastering and masteringProcess', () => {
+  it('reports the same loudnessTargetLimited from masteringNormalizeLoudness and masteringApplyProcessor', () => {
     // Peak-normalized material asked for -6 LUFS under a -3 dBTP ceiling: the
-    // ceiling, not the target, decides the level. masteringProcess used to
-    // hardcode false here while mastering() reported the computed truth.
+    // ceiling, not the target, decides the level. The named processor has to
+    // report the same computed truth as masteringNormalizeLoudness().
     const peak = new Float32Array(SR);
     for (let i = 0; i < peak.length; i++) {
       peak[i] = Math.sin((2 * Math.PI * 440 * i) / SR);
     }
     const options = { targetLufs: -6, ceilingDb: -3, truePeakOversample: 4 };
-    const simple = mastering(peak, SR, options);
-    const named = masteringProcess('maximizer.loudnessOptimize', peak, SR, options);
+    const simple = masteringNormalizeLoudness(peak, SR, options);
+    const named = masteringApplyProcessor(peak, SR, {
+      processor: 'maximizer.loudnessOptimize',
+      params: options as never,
+    });
     expect(simple.loudnessTargetLimited).toBe(true);
     expect(named.loudnessTargetLimited).toBe(simple.loudnessTargetLimited);
     expect(named.outputLufs).toBeLessThan(options.targetLufs);
@@ -309,25 +312,36 @@ describe('effects', () => {
     }
     peaky[peaky.length >> 1] = 1;
     const params = { targetLufs: -6, ceilingDb: -3, truePeakOversample: 4 };
-    const mono = masteringProcess('maximizer.loudnessOptimize', peaky, SR, params);
-    const stereo = masteringProcessStereo('maximizer.loudnessOptimize', peaky, peaky, SR, params);
+    const mono = masteringApplyProcessor(peaky, SR, {
+      processor: 'maximizer.loudnessOptimize',
+      params: params as never,
+    });
+    const stereo = masteringApplyProcessorStereo({
+      processor: 'maximizer.loudnessOptimize',
+      left: peaky,
+      right: peaky,
+      sampleRate: SR,
+      params: params as never,
+    });
     expect(mono.loudnessTargetLimited).toBe(true);
     expect(stereo.loudnessTargetLimited).toBe(mono.loudnessTargetLimited);
     expect(stereo.outputLufs).toBeLessThan(params.targetLufs);
   });
 
-  it('treats truePeakOversample: 0 as the library default', () => {
+  it('refuses an explicit truePeakOversample of 0 and keeps the default when it is omitted', () => {
     const input = Float32Array.from(
       { length: 4096 },
       (_, i) => 0.3 * Math.sin((2 * Math.PI * 440 * i) / SR),
     );
-    const implicit = mastering(input, SR, { targetLufs: -18, ceilingDb: -1 });
-    const sentinel = mastering(input, SR, {
-      targetLufs: -18,
-      ceilingDb: -1,
-      truePeakOversample: 0,
-    });
-    expect(sentinel.samples).toEqual(implicit.samples);
+    const implicit = masteringNormalizeLoudness(input, SR, { targetLufs: -18, ceilingDb: -1 });
+    expect(implicit.samples.length).toBe(input.length);
+    expect(() =>
+      masteringNormalizeLoudness(input, SR, {
+        targetLufs: -18,
+        ceilingDb: -1,
+        truePeakOversample: 0,
+      }),
+    ).toThrow(RangeError);
   });
 
   it('named mastering processors are available', () => {
@@ -342,58 +356,82 @@ describe('effects', () => {
     expect(names).toContain('saturation.ampSim');
     expect(names).toContain('stereo.imager');
 
-    const result = masteringProcess('dynamics.compressor', quiet, SR, {
-      thresholdDb: -24,
-      ratio: 1.5,
+    const result = masteringApplyProcessor(quiet, SR, {
+      processor: 'dynamics.compressor',
+      params: { thresholdDb: -24, ratio: 1.5 },
     });
     expect(result.samples).toBeInstanceOf(Float32Array);
     expect(result.samples.length).toBe(quiet.length);
 
-    const stereo = masteringProcessStereo('stereo.imager', quiet, quiet, SR, { width: 1.1 });
+    const stereo = masteringApplyProcessorStereo({
+      processor: 'stereo.imager',
+      left: quiet,
+      right: quiet,
+      sampleRate: SR,
+      params: { width: 1.1 },
+    });
     expect(stereo.left).toBeInstanceOf(Float32Array);
     expect(stereo.right.length).toBe(quiet.length);
 
-    const eq = masteringProcess('eq.equalizer', quiet, SR, {
-      'band0.enabled': 1,
-      'band0.frequencyHz': 440,
-      'band0.gainDb': 6,
-      'band0.q': 1,
-      autoGain: 1,
+    const eq = masteringApplyProcessor(quiet, SR, {
+      processor: 'eq.equalizer',
+      params: {
+        'band0.enabled': true,
+        'band0.frequencyHz': 440,
+        'band0.gainDb': 6,
+        'band0.q': 1,
+        autoGain: true,
+      },
     });
     expect(eq.samples).toBeInstanceOf(Float32Array);
     expect(eq.samples.length).toBe(quiet.length);
     expect(Number.isFinite(eq.outputLufs)).toBe(true);
 
-    const amp = masteringProcess('saturation.ampSim', quiet, SR, {
-      drive: 0.8,
-      bassDb: 2,
-      midDb: -3,
-      trebleDb: 1.5,
-      presenceDb: 3,
-      cab: 1,
-      levelDb: -6,
+    const amp = masteringApplyProcessor(quiet, SR, {
+      processor: 'saturation.ampSim',
+      params: {
+        drive: 0.8,
+        bassDb: 2,
+        midDb: -3,
+        trebleDb: 1.5,
+        presenceDb: 3,
+        cab: true,
+        levelDb: -6,
+      },
     });
     expect(amp.samples).toBeInstanceOf(Float32Array);
     expect(amp.samples.length).toBe(quiet.length);
     expect(Number.isFinite(amp.outputLufs)).toBe(true);
 
-    const leftEq = masteringProcessStereo('eq.equalizer', quiet, quiet, SR, {
-      'band0.enabled': 1,
-      'band0.frequencyHz': 440,
-      'band0.gainDb': 12,
-      'band0.q': 1,
-      'band0.placement': 1,
+    const leftEq = masteringApplyProcessorStereo({
+      processor: 'eq.equalizer',
+      left: quiet,
+      right: quiet,
+      sampleRate: SR,
+      params: {
+        'band0.enabled': true,
+        'band0.frequencyHz': 440,
+        'band0.gainDb': 12,
+        'band0.q': 1,
+        'band0.placement': 'left',
+      },
     });
     const leftPeak = Math.max(...leftEq.left.map((sample) => Math.abs(sample)));
     const rightPeak = Math.max(...leftEq.right.map((sample) => Math.abs(sample)));
     expect(leftPeak).toBeGreaterThan(rightPeak * 1.5);
 
-    const linearEq = masteringProcessStereo('eq.equalizer', quiet, quiet, SR, {
-      phaseMode: 3,
-      'band0.enabled': 1,
-      'band0.frequencyHz': 440,
-      'band0.gainDb': 3,
-      'band0.q': 1,
+    const linearEq = masteringApplyProcessorStereo({
+      processor: 'eq.equalizer',
+      left: quiet,
+      right: quiet,
+      sampleRate: SR,
+      params: {
+        phaseMode: 'linearPhase',
+        'band0.enabled': true,
+        'band0.frequencyHz': 440,
+        'band0.gainDb': 3,
+        'band0.q': 1,
+      },
     });
     expect(linearEq.latencySamples).toBeGreaterThan(0);
   });

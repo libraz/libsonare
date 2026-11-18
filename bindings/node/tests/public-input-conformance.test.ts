@@ -2,7 +2,6 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   analyze,
-  lufsInterleaved,
   midiBankProgram,
   midiCc,
   midiCcLearn,
@@ -16,7 +15,7 @@ import {
   masterAudioAsync,
   masterAudioStereo,
   masterAudioStereoAsync,
-  mixingScenePresetJson,
+  mixingScenePreset,
   mixStereo,
   noteSegments,
   Project,
@@ -27,7 +26,7 @@ import {
   trim,
 } from '../src/index.js';
 import { addon } from '../src/native.js';
-import type { MixOptions } from '../src/types.js';
+import type { MixStereoStrip } from '../src/mixing_oneshot.js';
 
 type CorpusMarker = { id: number | 'uint32_max'; ppq: number | 'nan' | 'inf'; name: string };
 type CorpusCase = {
@@ -86,7 +85,9 @@ const mixOptionValue = (value: MixOptionCase['value']): number | string => {
   return value;
 };
 
-const mixOptions = (testCase: MixOptionCase): MixOptions => {
+type MixStripOptions = Omit<MixStereoStrip, 'left' | 'right'>;
+
+const mixOptions = (testCase: MixOptionCase): MixStripOptions => {
   const value = mixOptionValue(testCase.value);
   switch (testCase.field) {
     case 'input_trim_db':
@@ -96,7 +97,7 @@ const mixOptions = (testCase: MixOptionCase): MixOptions => {
     case 'pan':
       return { pan: value as number };
     case 'pan_mode':
-      return { pan: 0, panMode: value as MixOptions['panMode'] };
+      return { pan: 0, panMode: value as MixStripOptions['panMode'] };
     case 'width':
       return { width: value as number };
   }
@@ -130,19 +131,15 @@ describe('shared public-input conformance corpus', () => {
     it(`keeps mix option rejection conformant: ${testCase.id}`, () => {
       const channel = new Float32Array([0.25, -0.25]);
       const options = mixOptions(testCase);
-      expect(() => mixStereo([channel], [channel], 48000, options)).toThrow();
       expect(() =>
         mixStereo({
-          leftChannels: [channel],
-          rightChannels: [channel],
+          strips: [{ left: channel, right: channel, ...options }],
           sampleRate: 48000,
-          ...options,
         }),
       ).toThrow();
-      const positional = mixStereo([channel], [channel], 48000);
-      const request = mixStereo({ leftChannels: [channel], rightChannels: [channel] });
-      expect(Array.from(request.left)).toEqual(Array.from(positional.left));
-      expect(Array.from(request.right)).toEqual(Array.from(positional.right));
+      expect(() =>
+        mixStereo({ strips: [{ left: channel, right: channel }], sampleRate: 48000 }),
+      ).not.toThrow();
     });
   }
 
@@ -729,9 +726,9 @@ describe('async entry points reject instead of throwing synchronously', () => {
     [
       'masterAudioAsync(undefined)',
       () => masterAudioAsync(undefined as never),
-      /Expected \(presetName/,
+      /samples must be a Float32Array/,
     ],
-    ['masterAudioAsync({})', () => masterAudioAsync({} as never), /must be a Float32Array/],
+    ['masterAudioAsync({})', () => masterAudioAsync({} as never), /sampleRate is required/],
     [
       'masterAudioAsync without samples',
       () => masterAudioAsync({ sampleRate: 22050 } as never),
@@ -740,16 +737,18 @@ describe('async entry points reject instead of throwing synchronously', () => {
     [
       'masterAudioStereoAsync(undefined)',
       () => masterAudioStereoAsync(undefined as never),
-      /Expected \(presetName/,
+      /request must be an object/,
     ],
-    [
-      'masterAudioStereoAsync({})',
-      () => masterAudioStereoAsync({} as never),
-      /must be a Float32Array/,
-    ],
+    ['masterAudioStereoAsync({})', () => masterAudioStereoAsync({} as never), /left must be/],
     [
       'masterAudioAsync with a non-numeric override leaf',
-      () => masterAudioAsync({ samples: new Float32Array(1024), overrides: badOverrides }),
+      () =>
+        masterAudioAsync({
+          samples: new Float32Array(1024),
+          sampleRate: 22050,
+          preset: 'pop',
+          overrides: badOverrides,
+        }),
       /must be a number or boolean/,
     ],
     [
@@ -758,26 +757,23 @@ describe('async entry points reject instead of throwing synchronously', () => {
         masterAudioStereoAsync({
           left: new Float32Array(1024),
           right: new Float32Array(1024),
+          sampleRate: 22050,
+          preset: 'pop',
           overrides: badOverrides,
         }),
       /must be a number or boolean/,
     ],
     [
       'masterAudioAsync (positional) with a non-numeric override leaf',
-      () => masterAudioAsync(new Float32Array(1024), 22050, 'pop', badOverrides),
+      () =>
+        masterAudioAsync(new Float32Array(1024), 22050, { preset: 'pop', overrides: badOverrides }),
       /must be a number or boolean/,
     ],
     [
-      'masterAudioStereoAsync (positional) with a non-numeric override leaf',
+      'masterAudioStereoAsync refuses a positional call',
       () =>
-        masterAudioStereoAsync(
-          new Float32Array(1024),
-          new Float32Array(1024),
-          22050,
-          'pop',
-          badOverrides,
-        ),
-      /must be a number or boolean/,
+        masterAudioStereoAsync(new Float32Array(1024) as never, new Float32Array(1024) as never),
+      /request must be an object/,
     ],
   ];
 
@@ -957,19 +953,8 @@ describe('an out-of-domain scalar is a RangeError across the addon readers', () 
     ).toBeInstanceOf(Float32Array);
   });
 
-  it('lufsInterleaved refuses a non-positive channel count with RangeError', () => {
-    expect(() => lufsInterleaved(tone, 0)).toThrow(RangeError);
-    expect(() => lufsInterleaved(tone, -2)).toThrow(RangeError);
-  });
-
-  it('lufsInterleaved keeps TypeError for a non-number, and still measures', () => {
-    expect(() => lufsInterleaved(tone, 'x' as never)).toThrow(TypeError);
-    // Positive control: without it a reader that refused every count would pass.
-    expect(lufsInterleaved(tone, 2).integratedLufs).toBeTypeOf('number');
-  });
-
   it('the mixer refuses a block past its configured size with RangeError', () => {
-    const mixer = Mixer.fromJson(mixingScenePresetJson('commentaryDucking'), {
+    const mixer = Mixer.fromJson(JSON.stringify(mixingScenePreset('commentaryDucking')), {
       sampleRate: 48000,
       maxBlockSize: 8,
     });
@@ -985,7 +970,7 @@ describe('an out-of-domain scalar is a RangeError across the addon readers', () 
   });
 
   it('the mixer keeps TypeError for a non-Float32Array strip', () => {
-    const mixer = Mixer.fromJson(mixingScenePresetJson('commentaryDucking'), {
+    const mixer = Mixer.fromJson(JSON.stringify(mixingScenePreset('commentaryDucking')), {
       sampleRate: 48000,
       maxBlockSize: 8,
     });

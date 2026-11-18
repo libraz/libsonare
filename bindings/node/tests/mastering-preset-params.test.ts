@@ -11,7 +11,6 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
   capabilityCatalog,
-  type MasteringChainConfig,
   masterAudio,
   masteringAssistantSuggestChain,
   masteringPresetNames,
@@ -22,6 +21,16 @@ const nodeRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const repoRoot = resolve(nodeRoot, '..', '..');
 
 const SR = 22050;
+
+/** Dotted paths of every leaf of a nested chain config. */
+function leafPaths(node: unknown, prefix = ''): string[] {
+  if (typeof node !== 'object' || node === null) {
+    return [prefix];
+  }
+  return Object.entries(node).flatMap(([key, value]) =>
+    leafPaths(value, prefix ? `${prefix}.${key}` : key),
+  );
+}
 
 function sine(seconds: number, freq = 440, amp = 0.2): Float32Array {
   const samples = new Float32Array(Math.round(SR * seconds));
@@ -58,22 +67,19 @@ describe('masteringPresetParams', () => {
   it('matches masteringAssistantSuggestChain key set for every preset', () => {
     const samples = sine(0.4);
     const referenceKeys = new Set(
-      Object.keys(masteringAssistantSuggestChain({ samples, sampleRate: SR })),
+      leafPaths(masteringAssistantSuggestChain({ samples, sampleRate: SR })),
     );
     for (const preset of masteringPresetNames()) {
       const params = masteringPresetParams(preset);
-      expect(new Set(Object.keys(params))).toEqual(referenceKeys);
+      expect(new Set(leafPaths(params))).toEqual(referenceKeys);
     }
   });
 
-  it('applies unchanged as masterAudio overrides', () => {
+  it('returns the nested config and applies unchanged as masterAudio overrides', () => {
     const samples = sine(0.4);
     const params = masteringPresetParams('pop');
-    const result = masterAudio({
-      samples,
-      sampleRate: SR,
-      overrides: params as unknown as MasteringChainConfig,
-    });
+    expect(Object.keys(params).some((key) => key.includes('.'))).toBe(false);
+    const result = masterAudio({ samples, sampleRate: SR, preset: 'pop', overrides: params });
     expect(result.samples).toBeInstanceOf(Float32Array);
     expect(result.samples.length).toBe(samples.length);
   });

@@ -9,7 +9,7 @@ import {
 
 describe('insert catalog carries construction-only params, and timing answers per-configuration', () => {
   it('reports softClipper aliasing as a construction-only enum with choices', () => {
-    const info = masteringInsertParamInfo('saturation.softClipper');
+    const info = masteringInsertParamInfo({ insert: 'saturation.softClipper' });
     const aliasing = info.find((param) => param.name === 'aliasing');
     expect(aliasing).toBeDefined();
     expect(aliasing?.type).toBe('enum');
@@ -23,7 +23,7 @@ describe('insert catalog carries construction-only params, and timing answers pe
   });
 
   it('flags a bound the processor itself rejects as exclusive', () => {
-    const hpf = masteringInsertParamInfo('dynamics.compressor').find(
+    const hpf = masteringInsertParamInfo({ insert: 'dynamics.compressor' }).find(
       (param) => param.name === 'sidechainHpfHz',
     );
     expect(hpf?.min).toBe(0);
@@ -31,7 +31,7 @@ describe('insert catalog carries construction-only params, and timing answers pe
     expect(hpf?.minExclusive).toBe(true);
     expect(hpf?.maxExclusive).toBe(false);
     expect(hpf?.maxRelativeTo).toBeNull();
-    const frequency = masteringInsertParamInfo('eq.parametric').find(
+    const frequency = masteringInsertParamInfo({ insert: 'eq.parametric' }).find(
       (param) => param.name === 'band0.frequencyHz',
     );
     expect(frequency?.maxRelativeTo).toBe('nyquist');
@@ -39,7 +39,7 @@ describe('insert catalog carries construction-only params, and timing answers pe
 
   it('resolves a Nyquist-following ceiling for the host rate and leaves other keys alone', () => {
     const frequency = (rate?: number) =>
-      masteringInsertParamInfo('eq.parametric', rate).find(
+      masteringInsertParamInfo({ insert: 'eq.parametric', sampleRate: rate }).find(
         (param) => param.name === 'band0.frequencyHz',
       );
     expect(frequency()?.max).toBe(24000);
@@ -48,13 +48,19 @@ describe('insert catalog carries construction-only params, and timing answers pe
     // An insert built for a known rate reaches that rate's Nyquist frequency.
     expect(frequency(96000)?.max).toBe(48000);
     const ratio = (rate?: number) =>
-      masteringInsertParamInfo('dynamics.compressor', rate).find((param) => param.name === 'ratio');
+      masteringInsertParamInfo({ insert: 'dynamics.compressor', sampleRate: rate }).find(
+        (param) => param.name === 'ratio',
+      );
     expect(ratio(44100)).toEqual(ratio());
-    expect(() => masteringInsertParamInfo('eq.parametric', 0)).toThrow();
+    expect(() => masteringInsertParamInfo({ insert: 'eq.parametric', sampleRate: 0 })).toThrow();
   });
 
   it('reports positive latency once softClipper is built with 4x oversampling', () => {
-    const timing = masteringInsertTiming('saturation.softClipper', { aliasing: 3 }, 48000);
+    const timing = masteringInsertTiming({
+      insert: 'saturation.softClipper',
+      params: { aliasing: 3 } as never,
+      sampleRate: 48000,
+    });
     expect(timing.latencySamples).toBeGreaterThan(0);
   });
 
@@ -63,37 +69,53 @@ describe('insert catalog carries construction-only params, and timing answers pe
       (processor) => processor.id === 'saturation.softClipper',
     );
     expect(catalogEntry).toBeDefined();
-    const timing = masteringInsertTiming('saturation.softClipper', {}, 48000);
+    const timing = masteringInsertTiming({
+      insert: 'saturation.softClipper',
+      params: {},
+      sampleRate: 48000,
+    });
     expect(timing.latencySamples).toBe(catalogEntry?.latencySamples);
     expect(timing.tailSamples).toBe(catalogEntry?.tailSamples);
   });
 
   it('rejects a key the processor does not read, naming the key', () => {
     expect(() =>
-      masteringInsertTiming('saturation.softClipper', { notAKey: 1 }, 48000),
+      masteringInsertTiming({
+        insert: 'saturation.softClipper',
+        params: { notAKey: 1 } as never,
+        sampleRate: 48000,
+      }),
     ).toThrowError(/does not read parameter\(s\).*notAKey/);
   });
 
   it('rejects a non-finite number, naming the key', () => {
     expect(() =>
-      masteringInsertTiming('saturation.softClipper', { driveDb: Number.NaN }, 48000),
+      masteringInsertTiming({
+        insert: 'saturation.softClipper',
+        params: { driveDb: Number.NaN },
+        sampleRate: 48000,
+      }),
     ).toThrowError(/driveDb/);
   });
 
   it('rejects a string value, naming the key', () => {
     expect(() =>
-      masteringInsertTiming(
-        'saturation.softClipper',
-        { driveDb: 'loud' } as unknown as Record<string, number>,
-        48000,
-      ),
+      masteringInsertTiming({
+        insert: 'saturation.softClipper',
+        params: { driveDb: 'loud' } as never,
+        sampleRate: 48000,
+      }),
     ).toThrowError(/driveDb/);
   });
 
   it('rejects an unknown insert processor', () => {
-    expect(() => masteringInsertTiming('nope.nope', {}, 48000)).toThrowError(
-      /unknown insert processor/,
-    );
+    expect(() =>
+      masteringInsertTiming({
+        insert: 'nope.nope' as never,
+        params: {} as never,
+        sampleRate: 48000,
+      }),
+    ).toThrowError(/unknown insert processor/);
   });
 });
 
@@ -123,32 +145,56 @@ describe('mastering amp-sim preset catalog', () => {
 
 describe('the causal repair stages reach the generic insert path', () => {
   it('reports each repair insert latency from its configuration', () => {
-    expect(masteringInsertTiming('repair.decrackle', {}, 48000).latencySamples).toBe(1);
-    expect(masteringInsertTiming('repair.dehum', {}, 48000).latencySamples).toBe(0);
     expect(
-      masteringInsertTiming('repair.dehum', { adaptive: true, frameSize: 1024 }, 48000)
+      masteringInsertTiming({ insert: 'repair.decrackle', params: {}, sampleRate: 48000 })
         .latencySamples,
+    ).toBe(1);
+    expect(
+      masteringInsertTiming({ insert: 'repair.dehum', params: {}, sampleRate: 48000 })
+        .latencySamples,
+    ).toBe(0);
+    expect(
+      masteringInsertTiming({
+        insert: 'repair.dehum',
+        params: { adaptive: true, frameSize: 1024 },
+        sampleRate: 48000,
+      }).latencySamples,
     ).toBe(1024);
     expect(
-      masteringInsertTiming('repair.dereverbClassical', { nFft: 512 }, 48000).latencySamples,
+      masteringInsertTiming({
+        insert: 'repair.dereverbClassical',
+        params: { nFft: 512 },
+        sampleRate: 48000,
+      }).latencySamples,
     ).toBe(511);
     // n_fft - 1 plus the hop the gain smoothing lags by.
-    expect(masteringInsertTiming('repair.denoiseClassical', {}, 48000).latencySamples).toBe(1279);
+    expect(
+      masteringInsertTiming({ insert: 'repair.denoiseClassical', params: {}, sampleRate: 48000 })
+        .latencySamples,
+    ).toBe(1279);
   });
 
   it('publishes only the causal choices and refuses an offline-only setting', () => {
-    const mode = masteringInsertParamInfo('repair.decrackle').find(
+    const mode = masteringInsertParamInfo({ insert: 'repair.decrackle' }).find(
       (param) => param.name === 'mode',
     );
     expect(mode?.choices?.map((choice) => choice.name)).toEqual(['median']);
     expect(() =>
-      masteringInsertTiming('repair.dereverbClassical', { wpeEnabled: true }, 48000),
+      masteringInsertTiming({
+        insert: 'repair.dereverbClassical',
+        params: { wpeEnabled: true },
+        sampleRate: 48000,
+      }),
     ).toThrow(/wpe_enabled must be false/);
     // The quantile estimator (0) ranks a whole signal; the insert defaults to spp.
     expect(() =>
-      masteringInsertTiming('repair.denoiseClassical', { noiseEstimator: 0 }, 48000),
+      masteringInsertTiming({
+        insert: 'repair.denoiseClassical',
+        params: { noiseEstimator: 0 } as never,
+        sampleRate: 48000,
+      }),
     ).toThrow(/noise_estimator must not be Quantile/);
-    const estimator = masteringInsertParamInfo('repair.denoiseClassical').find(
+    const estimator = masteringInsertParamInfo({ insert: 'repair.denoiseClassical' }).find(
       (param) => param.name === 'noiseEstimator',
     );
     expect(estimator?.choices?.map((choice) => choice.name)).not.toContain('quantile');
@@ -178,29 +224,39 @@ describe('insert timing takes the document an insert is built from', () => {
 
   it('matches the constructed insert for an array-typed key', () => {
     const params = { bandAbsorption: [0.1, 0.1, 0.1, 0.1, 0.1, 0.1] };
-    const timing = masteringInsertTiming('effects.acoustic.roomMorph', params, 48000);
+    const timing = masteringInsertTiming({
+      insert: 'effects.acoustic.roomMorph',
+      params,
+      sampleRate: 48000,
+    });
     expect(timing).toEqual(sceneTiming('effects.acoustic.roomMorph', params));
     expect(timing.tailSamples).not.toBe(
-      masteringInsertTiming('effects.acoustic.roomMorph', {}, 48000).tailSamples,
+      masteringInsertTiming({ insert: 'effects.acoustic.roomMorph', params: {}, sampleRate: 48000 })
+        .tailSamples,
     );
   });
 
   it('matches the constructed insert for a string-typed key', () => {
     const params = { cabIrF32Base64: cabIr, cabIrSampleRate: 48000 };
-    const timing = masteringInsertTiming('saturation.ampSim', params, 48000);
+    const timing = masteringInsertTiming({
+      insert: 'saturation.ampSim',
+      params,
+      sampleRate: 48000,
+    });
     expect(timing).toEqual(sceneTiming('saturation.ampSim', params));
     expect(timing.tailSamples).not.toBe(
-      masteringInsertTiming('saturation.ampSim', {}, 48000).tailSamples,
+      masteringInsertTiming({ insert: 'saturation.ampSim', params: {}, sampleRate: 48000 })
+        .tailSamples,
     );
     const named = { preset: 'crunchStack' };
-    expect(masteringInsertTiming('saturation.ampSim', named, 48000)).toEqual(
-      sceneTiming('saturation.ampSim', named),
-    );
+    expect(
+      masteringInsertTiming({ insert: 'saturation.ampSim', params: named, sampleRate: 48000 }),
+    ).toEqual(sceneTiming('saturation.ampSim', named));
   });
 
   it('refuses a value that does not match the key type as a TypeError', () => {
     const timing = (name: string, params: Record<string, unknown>) =>
-      masteringInsertTiming(name, params as never, 48000);
+      masteringInsertTiming({ insert: name as never, params: params as never, sampleRate: 48000 });
     expect(() => timing('effects.acoustic.roomMorph', { bandAbsorption: 0.1 })).toThrow(
       new TypeError('masteringInsertTiming: params.bandAbsorption must be an array of numbers'),
     );
@@ -214,8 +270,18 @@ describe('insert timing takes the document an insert is built from', () => {
 
   it('refuses a non-finite array element as a RangeError and an unknown name by the core', () => {
     expect(() =>
-      masteringInsertTiming('effects.acoustic.roomMorph', { bandAbsorption: [Number.NaN] }, 48000),
+      masteringInsertTiming({
+        insert: 'effects.acoustic.roomMorph',
+        params: { bandAbsorption: [Number.NaN] },
+        sampleRate: 48000,
+      }),
     ).toThrow(RangeError);
-    expect(() => masteringInsertTiming('saturation.ampSim', { preset: 'nope' }, 48000)).toThrow();
+    expect(() =>
+      masteringInsertTiming({
+        insert: 'saturation.ampSim',
+        params: { preset: 'nope' },
+        sampleRate: 48000,
+      }),
+    ).toThrow();
   });
 });

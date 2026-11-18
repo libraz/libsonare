@@ -415,12 +415,12 @@ describe('repair: mono calls return the audio beside the report', () => {
       clipThresholdDb: -10.5,
     });
     expect(dirty.samples).toHaveLength(clipped.length);
-    expect(dirty.report.detected.sampleCount).toBeGreaterThan(0);
+    expect(dirty.report.detected.clippedSamples).toBeGreaterThan(0);
     expect(dirty.report.detected.runCount).toBeGreaterThan(0);
     expect(dirty.report.repairedSamples).toBeGreaterThan(0);
     expect(dirty.report.lpcReconstructedRuns + dirty.report.interpolatedRuns).toBeGreaterThan(0);
     const none = sonare.masteringRepairDeclip({ samples: clean, sampleRate, clipThresholdDb: -3 });
-    expect(none.report.detected.sampleCount).toBe(0);
+    expect(none.report.detected.clippedSamples).toBe(0);
     expect(none.report.repairedSamples).toBe(0);
     expect(none.report.lpcReconstructedRuns + none.report.interpolatedRuns).toBe(0);
   });

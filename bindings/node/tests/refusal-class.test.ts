@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   hzToNote,
   isSonareError,
-  masteringProcess,
-  masteringProcessStereo,
+  masteringApplyProcessor,
+  masteringApplyProcessorStereo,
   noteToHz,
 } from '../src/index.js';
 
@@ -43,14 +43,23 @@ describe('a refused argument is a RangeError', () => {
   it('a one-shot named processor refuses a key it never read', () => {
     const samples = new Float32Array(SR / 2).fill(0.1);
     const mono = capture(() =>
-      masteringProcess('dynamics.compressor', samples, SR, { notAParameter: 1 } as never),
+      masteringApplyProcessor({
+        processor: 'dynamics.compressor',
+        samples,
+        sampleRate: SR,
+        params: { notAParameter: 1 } as never,
+      }),
     );
     expectRefusal(mono);
     expect((mono as Error).message).toMatch(/notAParameter/);
     const stereo = capture(() =>
-      masteringProcessStereo('dynamics.compressor', samples, samples, SR, {
-        notAParameter: 1,
-      } as never),
+      masteringApplyProcessorStereo({
+        processor: 'dynamics.compressor',
+        left: samples,
+        right: samples,
+        sampleRate: SR,
+        params: { notAParameter: 1 } as never,
+      }),
     );
     expectRefusal(stereo);
     expect((stereo as Error).message).toMatch(/notAParameter/);

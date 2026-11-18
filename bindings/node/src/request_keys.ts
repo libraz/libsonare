@@ -542,9 +542,33 @@ const AUTO_TUNE_REQUEST_KEYS = keySet(
   'scaleReferenceMidi',
   'validate',
 );
-const MASTERING_ASSISTANT_SUGGEST_REQUEST_KEYS = keySet('samples', 'sampleRate', 'params');
-const MASTERING_AUDIO_PROFILE_REQUEST_KEYS = keySet('samples', 'sampleRate', 'params');
-const MASTERING_STREAMING_PREVIEW_REQUEST_KEYS = keySet('samples', 'sampleRate', 'platforms');
+const MASTERING_ASSISTANT_SUGGEST_REQUEST_KEYS = keySet(
+  'samples',
+  'sampleRate',
+  'targetLufs',
+  'ceilingDb',
+  'enableRepair',
+  'preferStreamingSafe',
+  'speechMonoAmount',
+  'targetPlatform',
+  'preset',
+  'validate',
+);
+const MASTERING_AUDIO_PROFILE_REQUEST_KEYS = keySet(
+  'samples',
+  'sampleRate',
+  'nFft',
+  'hopLength',
+  'truePeakOversample',
+  'detectDefects',
+  'validate',
+);
+const MASTERING_STREAMING_PREVIEW_REQUEST_KEYS = keySet(
+  'samples',
+  'sampleRate',
+  'platforms',
+  'validate',
+);
 const NORMALIZE_REQUEST_KEYS = keySet('samples', 'sampleRate', 'targetDb', 'mode', 'validate');
 const NORMALIZE_STEREO_REQUEST_KEYS = keySet(
   'left',
@@ -554,7 +578,7 @@ const NORMALIZE_STEREO_REQUEST_KEYS = keySet(
   'mode',
   'validate',
 );
-const MASTERING_REQUEST_KEYS = keySet(
+const MASTERING_NORMALIZE_LOUDNESS_REQUEST_KEYS = keySet(
   'samples',
   'sampleRate',
   'targetLufs',
@@ -562,42 +586,42 @@ const MASTERING_REQUEST_KEYS = keySet(
   'truePeakOversample',
   'releaseMs',
   'applyGainAtInputRate',
+  'validate',
 );
-const MASTERING_PROCESS_REQUEST_KEYS = keySet('processorName', 'samples', 'sampleRate', 'params');
-const MASTERING_PROCESS_STEREO_REQUEST_KEYS = keySet(
-  'processorName',
+const MASTERING_APPLY_PROCESSOR_REQUEST_KEYS = keySet(
+  'processor',
+  'samples',
+  'sampleRate',
+  'params',
+  'validate',
+);
+const MASTERING_APPLY_PROCESSOR_STEREO_REQUEST_KEYS = keySet(
+  'processor',
   'left',
   'right',
   'sampleRate',
   'params',
+  'validate',
 );
-const MASTERING_CHAIN_REQUEST_KEYS = keySet(
-  'samples',
-  'sampleRate',
-  'config',
-  'onProgress',
-  'cancel',
-);
-const MASTERING_CHAIN_STEREO_REQUEST_KEYS = keySet(
+const STREAMING_LOUDNESS_GAIN_REQUEST_KEYS = keySet('samples', 'sampleRate', 'config', 'validate');
+const STREAMING_LOUDNESS_GAIN_STEREO_REQUEST_KEYS = keySet(
   'left',
   'right',
   'sampleRate',
   'config',
-  'onProgress',
-  'cancel',
+  'validate',
 );
-const STREAMING_LOUDNESS_GAIN_REQUEST_KEYS = keySet('samples', 'sampleRate', 'config');
-const STREAMING_LOUDNESS_GAIN_STEREO_REQUEST_KEYS = keySet('left', 'right', 'sampleRate', 'config');
-const MASTERING_PAIR_PROCESS_REQUEST_KEYS = keySet(
-  'processorName',
+const MASTERING_APPLY_PAIR_PROCESSOR_REQUEST_KEYS = keySet(
+  'processor',
   'source',
   'reference',
   'sampleRate',
   'referenceSampleRate',
   'params',
+  'validate',
 );
-const MASTERING_PAIR_PROCESS_STEREO_REQUEST_KEYS = keySet(
-  'processorName',
+const MASTERING_APPLY_PAIR_PROCESSOR_STEREO_REQUEST_KEYS = keySet(
+  'processor',
   'sourceLeft',
   'sourceRight',
   'referenceLeft',
@@ -605,12 +629,14 @@ const MASTERING_PAIR_PROCESS_STEREO_REQUEST_KEYS = keySet(
   'sampleRate',
   'referenceSampleRate',
   'params',
+  'validate',
 );
 const MASTERING_AB_MATCH_LOUDNESS_REQUEST_KEYS = keySet(
   'source',
   'reference',
   'sampleRate',
   'referenceSampleRate',
+  'validate',
 );
 const MASTERING_AB_MATCH_LOUDNESS_STEREO_REQUEST_KEYS = keySet(
   'sourceLeft',
@@ -619,22 +645,27 @@ const MASTERING_AB_MATCH_LOUDNESS_STEREO_REQUEST_KEYS = keySet(
   'referenceRight',
   'sampleRate',
   'referenceSampleRate',
+  'validate',
 );
-const MASTERING_PAIR_ANALYZE_REQUEST_KEYS = keySet(
-  'analysisName',
+const MASTERING_ANALYZE_PAIR_REQUEST_KEYS = keySet(
+  'analysis',
   'source',
   'reference',
   'sampleRate',
   'referenceSampleRate',
   'params',
+  'validate',
 );
-const MASTERING_STEREO_ANALYZE_REQUEST_KEYS = keySet(
-  'analysisName',
+const MASTERING_ANALYZE_STEREO_REQUEST_KEYS = keySet(
+  'analysis',
   'left',
   'right',
   'sampleRate',
   'params',
+  'validate',
 );
+const MASTERING_INSERT_PARAM_INFO_REQUEST_KEYS = keySet('insert', 'sampleRate');
+const MASTERING_INSERT_TIMING_REQUEST_KEYS = keySet('insert', 'params', 'sampleRate');
 const MASTERING_DYNAMICS_COMPRESSOR_REQUEST_KEYS = keySet(
   'samples',
   'sampleRate',
@@ -646,8 +677,7 @@ const MASTERING_DYNAMICS_COMPRESSOR_REQUEST_KEYS = keySet(
   'makeupGainDb',
   'autoMakeup',
   'detector',
-  'sidechainHpfEnabled',
-  'sidechainHpfHz',
+  'sidechainHighPassHz',
   'pdrTimeMs',
   'pdrReleaseScale',
   'validate',
@@ -661,7 +691,7 @@ const MASTERING_DYNAMICS_GATE_REQUEST_KEYS = keySet(
   'rangeDb',
   'holdMs',
   'closeThresholdDb',
-  'keyHpfHz',
+  'keyHighPassHz',
   'validate',
 );
 const MASTERING_DYNAMICS_TRANSIENT_SHAPER_REQUEST_KEYS = keySet(
@@ -1063,8 +1093,8 @@ const PHASE_VOCODER_REQUEST_KEYS = keySet(
   'sampleRate',
   'validate',
 );
-const LUFS_INTERLEAVED_REQUEST_KEYS = keySet('samples', 'sampleRate', 'channels');
-const FEATURE_SAMPLES_REQUEST_KEYS = keySet('samples', 'sampleRate');
+const LUFS_MULTICHANNEL_REQUEST_KEYS = keySet('channels', 'sampleRate', 'validate');
+const FEATURE_SAMPLES_REQUEST_KEYS = keySet('samples', 'sampleRate', 'validate');
 const METERING_SAMPLES_REQUEST_KEYS = keySet('samples', 'sampleRate', 'validate');
 const METERING_SILENCE_RATIO_REQUEST_KEYS = keySet(
   'thresholdDb',
@@ -1085,7 +1115,7 @@ const METERING_DETECT_CLIPPING_REQUEST_KEYS = keySet(
   'samples',
   'sampleRate',
   'validate',
-  'threshold',
+  'thresholdDb',
   'minRegionSamples',
 );
 const METERING_DYNAMIC_RANGE_REQUEST_KEYS = keySet(
@@ -1109,7 +1139,7 @@ const METERING_SPECTRUM_REQUEST_KEYS = keySet(
   'dbAmin',
 );
 const METERING_SPECTRUM_FRAME_REQUEST_KEYS = keySet(
-  'frameOffset',
+  'startSample',
   'samples',
   'sampleRate',
   'validate',
@@ -1119,25 +1149,10 @@ const METERING_SPECTRUM_FRAME_REQUEST_KEYS = keySet(
   'dbRef',
   'dbAmin',
 );
-const WAVEFORM_PEAKS_REQUEST_KEYS = keySet('samples', 'channels', 'samplesPerBucket', 'validate');
-const WAVEFORM_PEAK_PYRAMID_REQUEST_KEYS = keySet(
-  'samples',
-  'channels',
-  'samplesPerBucketLevels',
-  'validate',
-);
+const WAVEFORM_PEAKS_REQUEST_KEYS = keySet('channels', 'samplesPerBucket', 'validate');
+const WAVEFORM_PEAK_PYRAMID_REQUEST_KEYS = keySet('channels', 'samplesPerBucketLevels', 'validate');
 const RESAMPLE_REQUEST_KEYS = keySet('samples', 'sourceSampleRate', 'targetSampleRate');
-const MIX_STEREO_REQUEST_KEYS = keySet(
-  'leftChannels',
-  'rightChannels',
-  'sampleRate',
-  'inputTrimDb',
-  'faderDb',
-  'pan',
-  'panMode',
-  'width',
-  'muted',
-);
+const MIX_STEREO_REQUEST_KEYS = keySet('strips', 'sampleRate', 'validate');
 const ANALYZE_POLYPHONIC_REQUEST_KEYS = keySet(
   'samples',
   'sampleRate',
@@ -1180,7 +1195,25 @@ const ANALYZE_POLYPHONIC_REQUEST_KEYS = keySet(
   'referenceHz',
   'validate',
 );
-const SUGGEST_MIX_SCENE_REQUEST_KEYS = keySet('tracks', 'sampleRate', 'options');
+const MIXING_ASSISTANT_SUGGEST_REQUEST_KEYS = keySet(
+  'tracks',
+  'sampleRate',
+  'targetTrackLufs',
+  'suggestionStrength',
+  'eqMaxCutDb',
+  'mixBusHeadroomDbtp',
+  'tempoBpm',
+  'enableStructure',
+  'enableGain',
+  'enableBalance',
+  'enableEq',
+  'enableDynamics',
+  'enableImage',
+  'enableHighPass',
+  'nFft',
+  'hopLength',
+  'validate',
+);
 const TRANSCRIBE_REQUEST_KEYS = keySet(
   'samples',
   'sampleRate',
@@ -1211,8 +1244,15 @@ const MASTER_AUDIO_REQUEST_KEYS = keySet(
   'overrides',
   'onProgress',
   'cancel',
+  'validate',
 );
-const MASTER_AUDIO_ASYNC_REQUEST_KEYS = keySet('samples', 'sampleRate', 'preset', 'overrides');
+const MASTER_AUDIO_ASYNC_REQUEST_KEYS = keySet(
+  'samples',
+  'sampleRate',
+  'preset',
+  'overrides',
+  'validate',
+);
 const MASTER_AUDIO_STEREO_REQUEST_KEYS = keySet(
   'left',
   'right',
@@ -1221,6 +1261,7 @@ const MASTER_AUDIO_STEREO_REQUEST_KEYS = keySet(
   'overrides',
   'onProgress',
   'cancel',
+  'validate',
 );
 
 const MASTER_AUDIO_STEREO_ASYNC_REQUEST_KEYS = keySet(
@@ -1229,6 +1270,7 @@ const MASTER_AUDIO_STEREO_ASYNC_REQUEST_KEYS = keySet(
   'sampleRate',
   'preset',
   'overrides',
+  'validate',
 );
 
 const VOCAL_SESSION_LIMITS_KEYS = keySet(
@@ -1252,14 +1294,31 @@ const MASTERING_ASSISTANT_SUGGEST_STEREO_REQUEST_KEYS = keySet(
   'left',
   'right',
   'sampleRate',
-  'params',
+  'targetLufs',
+  'ceilingDb',
+  'enableRepair',
+  'preferStreamingSafe',
+  'speechMonoAmount',
+  'targetPlatform',
+  'preset',
+  'validate',
 );
-const MASTERING_AUDIO_PROFILE_STEREO_REQUEST_KEYS = keySet('left', 'right', 'sampleRate', 'params');
+const MASTERING_AUDIO_PROFILE_STEREO_REQUEST_KEYS = keySet(
+  'left',
+  'right',
+  'sampleRate',
+  'nFft',
+  'hopLength',
+  'truePeakOversample',
+  'detectDefects',
+  'validate',
+);
 const MASTERING_STREAMING_PREVIEW_STEREO_REQUEST_KEYS = keySet(
   'left',
   'right',
   'sampleRate',
   'platforms',
+  'validate',
 );
 const ROOM_GEOMETRY_FROM_ESTIMATE_REQUEST_KEYS = keySet('estimate', 'source', 'listener');
 const VOCAL_CREATE_REQUEST_KEYS = keySet(
@@ -1621,19 +1680,19 @@ export const REQUEST_KEYS = {
   masteringStreamingPreview: MASTERING_STREAMING_PREVIEW_REQUEST_KEYS,
   normalize: NORMALIZE_REQUEST_KEYS,
   normalizeStereo: NORMALIZE_STEREO_REQUEST_KEYS,
-  mastering: MASTERING_REQUEST_KEYS,
-  masteringProcess: MASTERING_PROCESS_REQUEST_KEYS,
-  masteringProcessStereo: MASTERING_PROCESS_STEREO_REQUEST_KEYS,
-  masteringChain: MASTERING_CHAIN_REQUEST_KEYS,
-  masteringChainStereo: MASTERING_CHAIN_STEREO_REQUEST_KEYS,
+  masteringNormalizeLoudness: MASTERING_NORMALIZE_LOUDNESS_REQUEST_KEYS,
+  masteringApplyProcessor: MASTERING_APPLY_PROCESSOR_REQUEST_KEYS,
+  masteringApplyProcessorStereo: MASTERING_APPLY_PROCESSOR_STEREO_REQUEST_KEYS,
   streamingLoudnessGain: STREAMING_LOUDNESS_GAIN_REQUEST_KEYS,
   streamingLoudnessGainStereo: STREAMING_LOUDNESS_GAIN_STEREO_REQUEST_KEYS,
-  masteringPairProcess: MASTERING_PAIR_PROCESS_REQUEST_KEYS,
-  masteringPairProcessStereo: MASTERING_PAIR_PROCESS_STEREO_REQUEST_KEYS,
+  masteringApplyPairProcessor: MASTERING_APPLY_PAIR_PROCESSOR_REQUEST_KEYS,
+  masteringApplyPairProcessorStereo: MASTERING_APPLY_PAIR_PROCESSOR_STEREO_REQUEST_KEYS,
   masteringAbMatchLoudness: MASTERING_AB_MATCH_LOUDNESS_REQUEST_KEYS,
   masteringAbMatchLoudnessStereo: MASTERING_AB_MATCH_LOUDNESS_STEREO_REQUEST_KEYS,
-  masteringPairAnalyze: MASTERING_PAIR_ANALYZE_REQUEST_KEYS,
-  masteringStereoAnalyze: MASTERING_STEREO_ANALYZE_REQUEST_KEYS,
+  masteringAnalyzePair: MASTERING_ANALYZE_PAIR_REQUEST_KEYS,
+  masteringAnalyzeStereo: MASTERING_ANALYZE_STEREO_REQUEST_KEYS,
+  masteringInsertParamInfo: MASTERING_INSERT_PARAM_INFO_REQUEST_KEYS,
+  masteringInsertTiming: MASTERING_INSERT_TIMING_REQUEST_KEYS,
   masteringDynamicsCompressor: MASTERING_DYNAMICS_COMPRESSOR_REQUEST_KEYS,
   masteringDynamicsGate: MASTERING_DYNAMICS_GATE_REQUEST_KEYS,
   masteringDynamicsTransientShaper: MASTERING_DYNAMICS_TRANSIENT_SHAPER_REQUEST_KEYS,
@@ -1816,8 +1875,8 @@ export const REQUEST_KEYS = {
   tone: keySet('frequencyHz', 'sampleRate', 'durationSec', 'phase', 'amplitude'),
   chirp: keySet('fminHz', 'fmaxHz', 'sampleRate', 'durationSec', 'linear'),
   clicks: keySet('times', 'sampleRate', 'length', 'frequencyHz', 'clickDurationSec'),
-  lufsInterleaved: LUFS_INTERLEAVED_REQUEST_KEYS,
-  lufsSeriesInterleaved: LUFS_INTERLEAVED_REQUEST_KEYS,
+  lufsMultichannel: LUFS_MULTICHANNEL_REQUEST_KEYS,
+  lufsSeriesMultichannel: LUFS_MULTICHANNEL_REQUEST_KEYS,
   ebur128LoudnessRange: FEATURE_SAMPLES_REQUEST_KEYS,
   lufs: keySet('samples', 'sampleRate', 'validate'),
   momentaryLufs: keySet('samples', 'sampleRate', 'validate'),
@@ -1975,8 +2034,7 @@ export const REQUEST_KEYS = {
   resample: RESAMPLE_REQUEST_KEYS,
   mixStereo: MIX_STEREO_REQUEST_KEYS,
   analyzePolyphonic: ANALYZE_POLYPHONIC_REQUEST_KEYS,
-  suggestMixScene: SUGGEST_MIX_SCENE_REQUEST_KEYS,
-  suggestMixSceneJson: SUGGEST_MIX_SCENE_REQUEST_KEYS,
+  mixingAssistantSuggest: MIXING_ASSISTANT_SUGGEST_REQUEST_KEYS,
   transcribe: TRANSCRIBE_REQUEST_KEYS,
   restoreVocalEditSession: VOCAL_RESTORE_REQUEST_KEYS,
   masterAudio: MASTER_AUDIO_REQUEST_KEYS,
@@ -2006,8 +2064,6 @@ export const NESTED_REQUEST_KEYS = {
 } as const;
 
 export const NESTED_KEY_HINTS: Partial<Record<RequestFn, Record<string, KeySet<string>>>> = {
-  masteringChain: { config: CHAIN_CONFIG_SECTIONS },
-  masteringChainStereo: { config: CHAIN_CONFIG_SECTIONS },
   streamingLoudnessGain: { config: CHAIN_CONFIG_SECTIONS },
   streamingLoudnessGainStereo: { config: CHAIN_CONFIG_SECTIONS },
   masterAudio: { overrides: CHAIN_CONFIG_SECTIONS },

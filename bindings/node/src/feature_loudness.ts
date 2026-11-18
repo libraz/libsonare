@@ -1,7 +1,8 @@
+import { interleaveMeterChannels, lufsSeriesFromNative } from './internal/metering_native.js';
 import { addon } from './native.js';
 import type { LufsResult, LufsSeriesResult } from './types.js';
 import type { OptionsOf } from './validation.js';
-import { assertAudioInput, requestObject, sampleOneShot } from './validation.js';
+import { assertAudioInput, assertSampleRate, requestOnly, sampleOneShot } from './validation.js';
 
 // Native names the loudness range `loudnessRange`; the public field carries its unit.
 function toLufsResult(
@@ -24,114 +25,103 @@ export type MomentaryLufsRequest = LufsRequest;
 /** Request for {@link shortTermLufs}. */
 export type ShortTermLufsRequest = LufsRequest;
 
-/** Request for {@link lufsInterleaved} and {@link lufsSeriesInterleaved}. */
-export interface LufsInterleavedRequest {
-  /** Interleaved `frames * channels` samples. */
-  samples: Float32Array;
-  channels: number;
-  /** Default 22050; pass the buffer's actual rate. */
-  sampleRate?: number;
+/** Request for {@link lufsMultichannel}. */
+export interface LufsMultichannelRequest {
+  /** One `Float32Array` per channel, equal lengths. */
+  channels: Float32Array[];
+  /** Sample rate of the channels in Hz. Required. */
+  sampleRate: number;
+  /** `false` skips the NaN/Inf pre-scan. */
+  validate?: boolean;
+}
+
+/** Request for {@link lufsSeriesMultichannel}. */
+export interface LufsSeriesMultichannelRequest {
+  /** One `Float32Array` per channel, equal lengths. */
+  channels: Float32Array[];
+  /** Sample rate of the channels in Hz. Required. */
+  sampleRate: number;
+  /** `false` skips the NaN/Inf pre-scan. */
+  validate?: boolean;
 }
 
 /** Request for {@link ebur128LoudnessRange}. */
 export interface Ebur128LoudnessRangeRequest {
   samples: Float32Array;
-  /** Default 22050; pass the buffer's actual rate. */
-  sampleRate?: number;
+  /** Sample rate of `samples` in Hz. Required. */
+  sampleRate: number;
+  /** `false` skips the NaN/Inf pre-scan. */
+  validate?: boolean;
 }
 
 /**
- * Channel-weighted multichannel loudness + LRA (BS.1770 / EBU R128) from an
- * interleaved buffer of `frames * channels` samples. The per-channel frame
- * count is derived from the buffer length and `channels`.
+ * Channel-weighted multichannel integrated loudness + LRA (BS.1770 / EBU R128)
+ * over planar channels of equal length.
  *
- * Pass the buffer's actual `sampleRate`: the default (22050) is non-standard for
- * audio, and K-weighting is sample-rate dependent, so a wrong rate yields wrong
- * loudness.
+ * Pass the channels' actual `sampleRate`: K-weighting is sample-rate dependent, so a
+ * wrong rate yields wrong loudness.
  */
-export function lufsInterleaved(request: LufsInterleavedRequest): LufsResult;
-export function lufsInterleaved(
-  samples: Float32Array,
-  channels: number,
-  sampleRate?: number,
-): LufsResult;
-export function lufsInterleaved(
-  samples: Float32Array | LufsInterleavedRequest,
-  channels = 0,
-  sampleRate = 22050,
-): LufsResult {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, channels, sampleRate }
-      : requestObject('lufsInterleaved', samples);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('lufsInterleaved', request.samples, resolvedSampleRate, request);
-  return toLufsResult(addon.lufsInterleaved(request.samples, request.channels, resolvedSampleRate));
+export function lufsMultichannel(request: LufsMultichannelRequest): LufsResult;
+export function lufsMultichannel(...args: unknown[]): LufsResult {
+  const r = requestOnly<LufsMultichannelRequest>('lufsMultichannel', args);
+  assertSampleRate('lufsMultichannel', r.sampleRate);
+  // The addon reads one interleaved buffer and a channel count.
+  const { data, numChannels } = interleaveMeterChannels(
+    'lufsMultichannel',
+    r.channels,
+    r,
+    r.sampleRate,
+  );
+  return toLufsResult(addon.lufsInterleaved(data, numChannels, r.sampleRate));
 }
 
 /**
- * Per-block momentary (400 ms) and short-term (3 s) LUFS series for an
- * interleaved buffer of `frames * channels` samples, measured with ITU-R
- * BS.1770-4 channel summing. The per-channel frame count is derived from the
- * buffer length and `channels`.
+ * Per-block momentary (400 ms) and short-term (3 s) LUFS series for planar
+ * channels of equal length, measured with ITU-R BS.1770-4 channel summing.
  *
  * This is not recoverable from {@link momentaryLufs} / {@link shortTermLufs}:
  * those measure one channel each, and the standard sums the K-weighted
  * per-channel block energies rather than mixing per-channel loudness in dB. Both
- * series come out of one K-weighting pass. For `channels === 1` they match the
+ * series come out of one K-weighting pass. For one channel they match the
  * mono meters element for element.
  *
- * Pass the buffer's actual `sampleRate`: the default (22050) is non-standard for
- * audio, and K-weighting is sample-rate dependent, so a wrong rate yields wrong
- * loudness.
+ * Pass the channels' actual `sampleRate`: K-weighting is sample-rate dependent.
  *
  * @example
  * ```ts
- * const { momentary, shortTerm } = lufsSeriesInterleaved({
- *   samples: interleavedStereo,
- *   channels: 2,
+ * const { momentaryLufs, shortTermLufs } = lufsSeriesMultichannel({
+ *   channels: [left, right],
  *   sampleRate: 48000,
  * });
  * ```
  */
-export function lufsSeriesInterleaved(request: LufsInterleavedRequest): LufsSeriesResult;
-export function lufsSeriesInterleaved(
-  samples: Float32Array,
-  channels: number,
-  sampleRate?: number,
-): LufsSeriesResult;
-export function lufsSeriesInterleaved(
-  samples: Float32Array | LufsInterleavedRequest,
-  channels = 0,
-  sampleRate = 22050,
-): LufsSeriesResult {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, channels, sampleRate }
-      : requestObject('lufsSeriesInterleaved', samples);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('lufsSeriesInterleaved', request.samples, resolvedSampleRate, request);
-  return addon.lufsSeriesInterleaved(request.samples, request.channels, resolvedSampleRate);
+export function lufsSeriesMultichannel(request: LufsSeriesMultichannelRequest): LufsSeriesResult;
+export function lufsSeriesMultichannel(...args: unknown[]): LufsSeriesResult {
+  const r = requestOnly<LufsSeriesMultichannelRequest>('lufsSeriesMultichannel', args);
+  assertSampleRate('lufsSeriesMultichannel', r.sampleRate);
+  const { data, numChannels } = interleaveMeterChannels(
+    'lufsSeriesMultichannel',
+    r.channels,
+    r,
+    r.sampleRate,
+  );
+  return lufsSeriesFromNative(addon.lufsSeriesInterleaved(data, numChannels, r.sampleRate));
 }
 
 /**
  * Standards-compliant EBU R128 loudness range (LRA) in LU. Pass the buffer's
- * actual `sampleRate`: the default (22050) is non-standard and K-weighting is
- * sample-rate dependent.
+ * actual `sampleRate`: K-weighting is sample-rate dependent.
  */
 export function ebur128LoudnessRange(request: Ebur128LoudnessRangeRequest): number;
-export function ebur128LoudnessRange(samples: Float32Array, sampleRate?: number): number;
 export function ebur128LoudnessRange(
-  samples: Float32Array | Ebur128LoudnessRangeRequest,
-  sampleRate = 22050,
-): number {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate }
-      : requestObject('ebur128LoudnessRange', samples);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('ebur128LoudnessRange', request.samples, resolvedSampleRate, request);
-  return addon.ebur128LoudnessRange(request.samples, resolvedSampleRate);
+  samples: Float32Array,
+  sampleRate: number,
+  options?: OptionsOf<Ebur128LoudnessRangeRequest>,
+): number;
+export function ebur128LoudnessRange(...args: unknown[]): number {
+  const r = sampleOneShot<Ebur128LoudnessRangeRequest>('ebur128LoudnessRange', args);
+  assertAudioInput('ebur128LoudnessRange', r.samples, r.sampleRate, r);
+  return addon.ebur128LoudnessRange(r.samples, r.sampleRate);
 }
 
 /**

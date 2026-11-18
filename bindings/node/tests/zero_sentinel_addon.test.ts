@@ -269,7 +269,7 @@ describe('an analysis band count whose zero keeps the library default', () => {
   it('refuses a fractional nOctaveBands', () => {
     const ir = impulseResponse();
     const bands = (value: number | undefined) => {
-      const options: Record<string, unknown> = { mode: 'impulse_response' };
+      const options: Record<string, unknown> = { mode: 'impulseResponse' };
       if (value !== undefined) {
         options.nOctaveBands = value;
       }
@@ -449,11 +449,12 @@ describe('a facade-guarded sentinel key, reached past the facade', () => {
     const rir = (seed?: number) => {
       const options: Record<string, unknown> = {
         sampleRate: 48000,
-        roomWidth: 5,
-        roomDepth: 4,
-        roomHeight: 3,
+        lengthM: 5,
+        widthM: 4,
+        heightM: 3,
+        source: { x: 1, y: 1, z: 1.2 },
+        listener: { x: 3, y: 2, z: 1.2 },
         ismOrder: 1,
-        rt60: 0.4,
       };
       if (seed !== undefined) {
         options.seed = seed;
@@ -520,8 +521,8 @@ describe('a facade-guarded sentinel key, reached past the facade', () => {
     expect(() => new native.Mixer('{"tracks":[]}', 48000, 2 ** 32)).toThrow(RangeError);
     expect(() => new native.RealtimeEngine(48000, 2 ** 32)).toThrow(RangeError);
     expect(() => new native.RealtimeEngine(48000, 128, 2 ** 63)).toThrow(RangeError);
-    expect(() => new native.StreamingRetune({ grainSize: 2 ** 32 })).toThrow(RangeError);
-    expect(() => new native.StreamingRetune({ semitones: 1e40 })).toThrow(RangeError);
+    expect(() => new native.StreamingRetune({ grainSizeSamples: 2 ** 32 })).toThrow(RangeError);
+    expect(() => new native.StreamingRetune({ pitchSemitones: 1e40 })).toThrow(RangeError);
   });
 
   it('refuses a fractional take sourceId', () => {

@@ -9,8 +9,6 @@ import {
   lufs,
   masterAudio,
   masterAudioStereo,
-  masteringChain,
-  masteringChainStereo,
   meteringSilenceRatio,
   momentaryLufs,
   nnlsChroma,
@@ -37,87 +35,84 @@ function generateSine(freq: number, sr: number, duration: number): Float32Array 
 }
 
 describe('progress callback', () => {
-  it('masteringChain invokes onProgress for an empty config', () => {
+  it('masterAudio invokes onProgress for an empty config', () => {
     const progress: Array<[number, string]> = [];
-    masteringChain(new Float32Array(22050).fill(0.1), 22050, {}, (value, stage) => {
-      progress.push([value, stage]);
+    masterAudio(new Float32Array(22050).fill(0.1), 22050, {
+      onProgress: (value, stage) => {
+        progress.push([value, stage]);
+      },
     });
     expect(progress).toEqual([[1, 'complete']]);
   });
 
-  it('masteringChain invokes onProgress for each enabled stage', () => {
+  it('masterAudio invokes onProgress for each enabled stage', () => {
     const samples = new Float32Array(22050).fill(0.1);
     const stages: string[] = [];
     const progresses: number[] = [];
-    masteringChain(
-      samples,
-      22050,
-      {
+    masterAudio(samples, 22050, {
+      overrides: {
         eq: { tilt: { tiltDb: 1.0 } },
         dynamics: { compressor: { thresholdDb: -24 } },
       },
-      (progress, stage) => {
+      onProgress: (progress, stage) => {
         progresses.push(progress);
         stages.push(stage);
       },
-    );
+    });
     expect(stages).toContain('eq.tilt');
     expect(stages).toContain('dynamics.compressor');
     expect(progresses[progresses.length - 1]).toBeCloseTo(1.0, 5);
   });
 
-  it('masteringChain ignores an onProgress false result', () => {
+  it('masterAudio ignores an onProgress false result', () => {
     const progress: number[] = [];
-    const result = masteringChain(
-      new Float32Array(22050).fill(0.1),
-      22050,
-      {
+    const result = masterAudio(new Float32Array(22050).fill(0.1), 22050, {
+      overrides: {
         eq: { tilt: { tiltDb: 1.0 } },
         dynamics: { compressor: { thresholdDb: -24 } },
       },
-      (value) => {
+      onProgress: (value) => {
         progress.push(value);
         return false;
       },
-    );
+    });
 
     expect(progress.some((value) => value > 0.5)).toBe(true);
     expect(result.samples).toBeInstanceOf(Float32Array);
   });
 
-  it('masteringChain cancels through the request cancel callback', () => {
+  it('masterAudio cancels with overrides alone through the request cancel callback', () => {
     expect(() =>
-      masteringChain({
+      masterAudio({
         samples: new Float32Array(22050).fill(0.1),
         sampleRate: 22050,
-        config: { eq: { tilt: { tiltDb: 1.0 } } },
+        overrides: { eq: { tilt: { tiltDb: 1.0 } } },
         cancel: () => true,
       }),
     ).toThrow(expect.objectContaining({ code: ErrorCode.Cancelled, codeName: 'Cancelled' }));
   });
 
-  // The remaining mono/stereo x chain/preset combinations, mirroring
-  // masteringChain's own case above: each forwards `cancel` through its own
-  // _ex C-ABI call, and a forwarding regression on any one of them would ship
-  // green everywhere else while that one variant ran to completion instead of
-  // aborting -- see tests-017.
-  it('masteringChainStereo cancels through the request cancel callback', () => {
+  it('masterAudioStereo cancels with overrides alone through the request cancel callback', () => {
     expect(() =>
-      masteringChainStereo({
+      masterAudioStereo({
         left: new Float32Array(22050).fill(0.1),
         right: new Float32Array(22050).fill(0.1),
         sampleRate: 22050,
-        config: { eq: { tilt: { tiltDb: 1.0 } } },
+        overrides: { eq: { tilt: { tiltDb: 1.0 } } },
         cancel: () => true,
       }),
     ).toThrow(expect.objectContaining({ code: ErrorCode.Cancelled, codeName: 'Cancelled' }));
   });
 
+  // Each variant forwards `cancel` through its own _ex C-ABI call, and a
+  // forwarding regression on any one of them would ship green everywhere else
+  // while that one variant ran to completion instead of aborting.
   it('masterAudio cancels through the request cancel callback', () => {
     expect(() =>
       masterAudio({
         samples: new Float32Array(22050).fill(0.1),
         sampleRate: 22050,
+        preset: 'pop',
         cancel: () => true,
       }),
     ).toThrow(expect.objectContaining({ code: ErrorCode.Cancelled, codeName: 'Cancelled' }));
@@ -129,6 +124,7 @@ describe('progress callback', () => {
         left: new Float32Array(22050).fill(0.1),
         right: new Float32Array(22050).fill(0.1),
         sampleRate: 22050,
+        preset: 'pop',
         cancel: () => true,
       }),
     ).toThrow(expect.objectContaining({ code: ErrorCode.Cancelled, codeName: 'Cancelled' }));
@@ -178,13 +174,19 @@ describe('feature request-object compatibility', () => {
   it('exposes silence ratio metering', () => {
     const samples = new Float32Array(2048);
     samples.fill(1, 1024);
-    expect(meteringSilenceRatio(samples, SR, -45, 1024, 1024)).toBeCloseTo(0.5, 6);
+    expect(
+      meteringSilenceRatio(samples, SR, { thresholdDb: -45, frameLength: 1024, hopLength: 1024 }),
+    ).toBeCloseTo(0.5, 6);
   });
 });
 
 describe('color saturation stages engage only when meaningful', () => {
   const stagesFor = (config: MasteringChainConfig): string[] =>
-    masteringChain(new Float32Array(22050).fill(0.1), 22050, config).stages;
+    masterAudio({
+      samples: new Float32Array(22050).fill(0.1),
+      sampleRate: 22050,
+      overrides: config,
+    }).stages;
 
   it('does not engage the exciter when amount is zero', () => {
     expect(stagesFor({ saturation: { exciter: { amount: 0 } } })).not.toContain(
@@ -218,10 +220,11 @@ describe('color saturation stages engage only when meaningful', () => {
 describe('StreamingMasteringChain', () => {
   it('processes mono blocks and reports stage names', () => {
     const chain = new StreamingMasteringChain({
-      'eq.tilt.tiltDb': 0.5,
-      'dynamics.compressor.thresholdDb': -20,
+      sampleRate: 48000,
+      maxBlockSize: 512,
+      eq: { tilt: { tiltDb: 0.5 } },
+      dynamics: { compressor: { thresholdDb: -20 } },
     });
-    chain.prepare(48000, 512, 1);
     expect(chain.stageNames()).toEqual(expect.arrayContaining(['eq.tilt', 'dynamics.compressor']));
     const out = chain.processMono(new Float32Array(512).fill(0.1));
     expect(out.length).toBe(512);
@@ -230,9 +233,12 @@ describe('StreamingMasteringChain', () => {
   });
 
   it('flushes delayed mono output exactly once', () => {
-    const chain = new StreamingMasteringChain({ 'maximizer.truePeakLimiter.enabled': true });
-    chain.prepare(48000, 64, 1);
-    expect(chain.latencySamples()).toBeGreaterThan(0);
+    const chain = new StreamingMasteringChain({
+      sampleRate: 48000,
+      maxBlockSize: 64,
+      maximizer: { truePeakLimiter: { enabled: true } },
+    });
+    expect(chain.latencySamples).toBeGreaterThan(0);
     chain.processMono(new Float32Array(64).fill(0.5));
     const tail: number[] = [];
     for (;;) {
@@ -242,46 +248,56 @@ describe('StreamingMasteringChain', () => {
       }
       tail.push(...block);
     }
-    expect(tail.length).toBeGreaterThanOrEqual(chain.latencySamples());
+    expect(tail.length).toBeGreaterThanOrEqual(chain.latencySamples);
     expect(chain.flushMono()).toHaveLength(0);
   });
 
   it('accepts denoise by default, refuses its whole-signal estimator and a loudness stage', () => {
-    expect(() => new StreamingMasteringChain({ 'repair.denoise.enabled': true })).not.toThrow();
+    expect(
+      () =>
+        new StreamingMasteringChain({ sampleRate: 48000, repair: { denoise: { enabled: true } } }),
+    ).not.toThrow();
     expect(
       () =>
         new StreamingMasteringChain({
+          sampleRate: 48000,
           repair: { denoise: { enabled: true, noiseEstimator: 'quantile' } },
         }),
     ).toThrow(/quantile/);
-    expect(() => new StreamingMasteringChain({ 'loudness.targetLufs': -14 })).toThrow();
+    expect(
+      () => new StreamingMasteringChain({ sampleRate: 48000, loudness: { targetLufs: -14 } }),
+    ).toThrow();
   });
 
   it('reports the state a discard blocks when a stage produces a non-finite value', () => {
     // A tilt shelf keeps recursive cells; the default chain has no such
     // stage, so its count would sit at zero for a reason unrelated to the
     // method under test. Setting any field under a module enables it.
-    const chain = new StreamingMasteringChain({ 'eq.tilt.tiltDb': 24 });
-    chain.prepare(48000, 128, 1);
+    const chain = new StreamingMasteringChain({
+      sampleRate: 48000,
+      maxBlockSize: 128,
+      eq: { tilt: { tiltDb: 24 } },
+    });
 
     // Control: an ordinary block counts nothing.
     chain.processMono(new Float32Array(128).fill(0.25));
-    expect(chain.nonFiniteDiscardCount()).toBe(0);
+    expect(chain.nonFiniteDiscardCount).toBe(0);
 
     // The chain refuses non-finite input outright, so the poison has to be
     // something a stage produces: a finite value large enough that the
     // tilt shelf's own arithmetic overflows float internally.
     chain.processMono(new Float32Array(128).fill(3.0e38));
-    expect(chain.nonFiniteDiscardCount()).toBe(1);
+    expect(chain.nonFiniteDiscardCount).toBe(1);
   });
 
   it('accepts a loudness stage when a static gain is supplied', () => {
     const chain = new StreamingMasteringChain({
-      'loudness.targetLufs': -14,
+      sampleRate: 48000,
+      maxBlockSize: 512,
+      loudness: { targetLufs: -14 },
       loudnessStaticGainDb: 3.0,
       loudnessStaticGainPeakDb: -1.0,
     });
-    chain.prepare(48000, 512, 1);
     const out = chain.processMono(new Float32Array(512).fill(0.1));
     expect(out.length).toBe(512);
     expect(Number.isFinite(out[0])).toBe(true);
@@ -309,7 +325,7 @@ describe('StreamingEqualizer', () => {
     // Without an enabled band the EQ holds no recursive state, so its count
     // would stay at zero for a reason unrelated to the entry under test.
     eq.setBand(0, { type: 'peak', frequencyHz: 1000, gainDb: 9, q: 2, enabled: true });
-    expect(eq.nonFiniteDiscardCount()).toBe(0);
+    expect(eq.nonFiniteDiscardCount).toBe(0);
 
     const block = 64;
     const left = new Float32Array(block).fill(0.25);
@@ -318,7 +334,7 @@ describe('StreamingEqualizer', () => {
     // Control: an ordinary block counts nothing, so the increment below is
     // attributable to the poison rather than to processing at all.
     eq.processStereo(left, right);
-    expect(eq.nonFiniteDiscardCount()).toBe(0);
+    expect(eq.nonFiniteDiscardCount).toBe(0);
 
     // processStereo scrubs nothing, unlike the mixer's block entry, so the
     // poison goes in as supplied and the recursive cells behind the band
@@ -330,7 +346,7 @@ describe('StreamingEqualizer', () => {
     // two here would report a stereo stream as twice as degraded as a mono
     // one for the same defect, over a width the caller passed rather than
     // asked for.
-    expect(eq.nonFiniteDiscardCount()).toBe(1);
+    expect(eq.nonFiniteDiscardCount).toBe(1);
   });
 
   it('processes stereo blocks and exposes a spectrum snapshot', () => {
@@ -371,12 +387,12 @@ describe('StreamingEqualizer', () => {
       gainDb: 9,
       q: 1.5,
       enabled: true,
-      placement: 'Mid',
+      placement: 'mid',
     });
     const freqs = new Float32Array([1000]);
-    expect(eq.magnitudeResponse(freqs, 'Mid')[0]).toBeGreaterThan(6);
-    expect(Math.abs(eq.magnitudeResponse(freqs, 'Left')[0])).toBeLessThan(0.5);
-    expect(() => eq.magnitudeResponse(freqs, 'Bogus' as unknown as 'Mid')).toThrow();
+    expect(eq.magnitudeResponse(freqs, 'mid')[0]).toBeGreaterThan(6);
+    expect(Math.abs(eq.magnitudeResponse(freqs, 'left')[0])).toBeLessThan(0.5);
+    expect(() => eq.magnitudeResponse(freqs, 'Bogus' as unknown as 'mid')).toThrow();
   });
 
   it('reads an all-pass band as flat while still changing the signal', () => {
@@ -392,12 +408,11 @@ describe('StreamingEqualizer', () => {
     const eq = new StreamingEqualizer({ sampleRate: 48000, maxBlockSize: 512 });
     eq.setBand(0, { type: 'peak', frequencyHz: 1000, gainDb: 3, q: 1, enabled: true });
     eq.setPhaseMode('linear');
-    expect(eq.latencySamples()).toBeGreaterThan(0);
-    eq.setPhaseMode('linear-phase');
-    expect(eq.latencySamples()).toBeGreaterThan(0);
+    expect(eq.latencySamples).toBeGreaterThan(0);
+    expect(() => eq.setPhaseMode('linear-phase' as unknown as 'linear')).toThrow(RangeError);
     eq.setPhaseMode('zero');
-    expect(eq.latencySamples()).toBe(0);
-    expect(() => eq.setPhaseMode('bogus' as unknown as 'zero')).toThrow();
+    expect(eq.latencySamples).toBe(0);
+    expect(() => eq.setPhaseMode('bogus' as unknown as 'zero')).toThrow(RangeError);
   });
 
   it('accepts an external sidechain key for dynamic bands', () => {
@@ -544,7 +559,7 @@ describe('StreamingEqualizer', () => {
       q: 0.9,
       enabled: true,
       slopeDbOct: 24,
-      placement: 'Stereo',
+      placement: 'stereo',
       phase: 'inherit',
       soloed: false,
       bypassed: false,
@@ -691,11 +706,14 @@ describe('streaming handles signal use-after-destroy', () => {
   // throws". A reader that answers with a plausible measurement instead is
   // indistinguishable from a live handle at the call site.
   it('throws from every StreamingMasteringChain reader after destroy()', () => {
-    const chain = new StreamingMasteringChain({ 'maximizer.truePeakLimiter.enabled': true });
-    chain.prepare(48000, 64, 1);
-    expect(chain.latencySamples()).toBeGreaterThan(0);
+    const chain = new StreamingMasteringChain({
+      sampleRate: 48000,
+      maxBlockSize: 64,
+      maximizer: { truePeakLimiter: { enabled: true } },
+    });
+    expect(chain.latencySamples).toBeGreaterThan(0);
     chain.destroy();
-    expect(() => chain.latencySamples()).toThrow(/destroyed/);
+    expect(() => chain.latencySamples).toThrow(/destroyed/);
     expect(() => chain.stageNames()).toThrow(/destroyed/);
     expect(() => chain.processMono(new Float32Array(64))).toThrow(/destroyed/);
     expect(() => chain.reset()).toThrow(/destroyed/);
@@ -706,10 +724,10 @@ describe('streaming handles signal use-after-destroy', () => {
   it('throws from every StreamingEqualizer reader after destroy()', () => {
     const eq = new StreamingEqualizer({ sampleRate: 48000, maxBlockSize: 512 });
     eq.setBand(0, { type: 'peak', frequencyHz: 1000, gainDb: 3, q: 1, enabled: true });
-    expect(eq.lastAutoGainDb()).toBe(0);
+    expect(eq.lastAutoGainDb).toBe(0);
     eq.destroy();
-    expect(() => eq.latencySamples()).toThrow(/destroyed/);
-    expect(() => eq.lastAutoGainDb()).toThrow(/destroyed/);
+    expect(() => eq.latencySamples).toThrow(/destroyed/);
+    expect(() => eq.lastAutoGainDb).toThrow(/destroyed/);
     expect(() => eq.clearSidechain()).toThrow(/destroyed/);
     expect(() => eq.processMono(new Float32Array(512))).toThrow(/destroyed/);
     expect(() => eq.destroy()).not.toThrow();

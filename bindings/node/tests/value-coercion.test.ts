@@ -2,7 +2,6 @@ import { readFileSync } from 'node:fs';
 
 import { describe, expect, it } from 'vitest';
 
-import type { PanLawInput } from '../src/types_mixing.js';
 import type { ProjectAutomationCurve } from '../src/types_project.js';
 import {
   AUTOMATION_CURVE_VALUES,
@@ -53,13 +52,13 @@ describe('enum ordinal coercion', () => {
 
   it('resolves every shared pan-law spelling and conservative normalization', () => {
     for (const { value, ordinal } of [...panLawCorpus.accepted, ...panLawCorpus.normalization]) {
-      expect(panLawValue(value as PanLawInput)).toBe(ordinal);
+      expect(panLawValue(value as never)).toBe(ordinal);
     }
     for (const value of panLawCorpus.numeric) {
       expect(panLawValue(value)).toBe(value);
     }
     for (const value of panLawCorpus.rejected) {
-      expect(() => panLawValue(value as PanLawInput)).toThrow(RangeError);
+      expect(() => panLawValue(value as never)).toThrow(RangeError);
     }
   });
 

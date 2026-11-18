@@ -12,12 +12,10 @@ import {
   masterAudioAsync,
   masterAudioStereo,
   masterAudioStereoAsync,
-  mastering,
-  masteringChain,
-  masteringChainStereo,
-  masteringPairProcess,
-  masteringProcess,
-  masteringProcessStereo,
+  masteringApplyPairProcessor,
+  masteringApplyProcessor,
+  masteringApplyProcessorStereo,
+  masteringNormalizeLoudness,
   StreamingMasteringChain,
 } from '../src/index.js';
 
@@ -32,8 +30,12 @@ function sine(n: number, freq = 220, amp = 0.3): Float32Array {
 }
 
 describe('nonFiniteSubstitutionCount on offline mastering results', () => {
-  it('is zero for the simple loudness-optimizing mastering()', () => {
-    const result = mastering(sine(4096), SR, { targetLufs: -14 });
+  it('is zero for the simple loudness-optimizing masteringNormalizeLoudness()', () => {
+    const result = masteringNormalizeLoudness({
+      samples: sine(4096),
+      sampleRate: SR,
+      targetLufs: -14,
+    });
     expect(result.nonFiniteSubstitutionCount).toBe(0);
   });
 
@@ -43,18 +45,27 @@ describe('nonFiniteSubstitutionCount on offline mastering results', () => {
   it('is zero for a named solo processor, mono and stereo', () => {
     const x = sine(4096);
     const params = { ceilingDb: -1 };
-    const mono = masteringProcess('maximizer.truePeakLimiter', x, SR, params);
+    const processor = 'maximizer.truePeakLimiter' as const;
+    const mono = masteringApplyProcessor({ processor, samples: x, sampleRate: SR, params });
     expect(mono.nonFiniteSubstitutionCount).toBe(0);
 
-    const stereo = masteringProcessStereo('maximizer.truePeakLimiter', x, sine(4096, 330), SR, {
-      ...params,
+    const stereo = masteringApplyProcessorStereo({
+      processor,
+      left: x,
+      right: sine(4096, 330),
+      sampleRate: SR,
+      params,
     });
     expect(stereo.nonFiniteSubstitutionCount).toBe(0);
   });
 
   it('is zero for a two-input pair processor', () => {
-    const paired = masteringPairProcess('match.abCrossfade', sine(4096), sine(4096, 880), SR, {
-      mix: 0.25,
+    const paired = masteringApplyPairProcessor({
+      processor: 'match.abCrossfade',
+      source: sine(4096),
+      reference: sine(4096, 880),
+      sampleRate: SR,
+      params: { mix: 0.25 },
     });
     expect(paired.nonFiniteSubstitutionCount).toBe(0);
   });
@@ -62,42 +73,62 @@ describe('nonFiniteSubstitutionCount on offline mastering results', () => {
   it('is zero for the mono and stereo chains, with and without progress', () => {
     const x = sine(4096);
     const y = sine(4096, 330);
-    const config = {
+    const overrides = {
       dynamics: { compressor: { thresholdDb: -30, ratio: 4 } },
       maximizer: { truePeakLimiter: { enabled: true, ceilingDb: -1 } },
     };
 
-    expect(masteringChain(x, SR, config).nonFiniteSubstitutionCount).toBe(0);
-    expect(masteringChainStereo(x, y, SR, config).nonFiniteSubstitutionCount).toBe(0);
+    expect(masterAudio({ samples: x, sampleRate: SR, overrides }).nonFiniteSubstitutionCount).toBe(
+      0,
+    );
+    expect(
+      masterAudioStereo({ left: x, right: y, sampleRate: SR, overrides })
+        .nonFiniteSubstitutionCount,
+    ).toBe(0);
 
     // The progress path builds its result through the C-ABI chain structs
     // rather than the C++ ones, so it is a separate builder to cover.
-    const withProgress = masteringChain(x, SR, config, () => {});
-    expect(withProgress.nonFiniteSubstitutionCount).toBe(0);
-    const stereoWithProgress = masteringChainStereo(x, y, SR, config, () => {});
-    expect(stereoWithProgress.nonFiniteSubstitutionCount).toBe(0);
+    const onProgress = () => {};
+    expect(
+      masterAudio({ samples: x, sampleRate: SR, overrides, onProgress }).nonFiniteSubstitutionCount,
+    ).toBe(0);
+    expect(
+      masterAudioStereo({ left: x, right: y, sampleRate: SR, overrides, onProgress })
+        .nonFiniteSubstitutionCount,
+    ).toBe(0);
   });
 
   it('is zero for the preset chains, with and without progress', () => {
     const x = sine(4096);
     const y = sine(4096, 330);
+    const preset = 'pop';
+    const onProgress = () => {};
 
-    expect(masterAudio(x, SR, 'pop').nonFiniteSubstitutionCount).toBe(0);
-    expect(masterAudioStereo(x, y, SR, 'pop').nonFiniteSubstitutionCount).toBe(0);
-
-    const withProgress = masterAudio(x, SR, 'pop', {}, () => {});
-    expect(withProgress.nonFiniteSubstitutionCount).toBe(0);
-    const stereoWithProgress = masterAudioStereo(x, y, SR, 'pop', {}, () => {});
-    expect(stereoWithProgress.nonFiniteSubstitutionCount).toBe(0);
+    expect(masterAudio({ samples: x, sampleRate: SR, preset }).nonFiniteSubstitutionCount).toBe(0);
+    expect(
+      masterAudioStereo({ left: x, right: y, sampleRate: SR, preset }).nonFiniteSubstitutionCount,
+    ).toBe(0);
+    expect(
+      masterAudio({ samples: x, sampleRate: SR, preset, onProgress }).nonFiniteSubstitutionCount,
+    ).toBe(0);
+    expect(
+      masterAudioStereo({ left: x, right: y, sampleRate: SR, preset, onProgress })
+        .nonFiniteSubstitutionCount,
+    ).toBe(0);
   });
 
   it('is zero on the async preset chains, which serialize their result separately', async () => {
     const x = sine(4096);
     const y = sine(4096, 330);
 
-    const mono = await masterAudioAsync(x, SR, 'pop');
+    const mono = await masterAudioAsync({ samples: x, sampleRate: SR, preset: 'pop' });
     expect(mono.nonFiniteSubstitutionCount).toBe(0);
-    const stereo = await masterAudioStereoAsync(x, y, SR, 'pop');
+    const stereo = await masterAudioStereoAsync({
+      left: x,
+      right: y,
+      sampleRate: SR,
+      preset: 'pop',
+    });
     expect(stereo.nonFiniteSubstitutionCount).toBe(0);
   });
 });
@@ -105,11 +136,12 @@ describe('nonFiniteSubstitutionCount on offline mastering results', () => {
 describe('StreamingMasteringChain.nonFiniteSubstitutionCount', () => {
   it('is zero across a clean mono stream and its flush', () => {
     const chain = new StreamingMasteringChain({
-      'dynamics.compressor.thresholdDb': -24,
-      'maximizer.truePeakLimiter.enabled': true,
+      sampleRate: SR,
+      maxBlockSize: 512,
+      dynamics: { compressor: { thresholdDb: -24 } },
+      maximizer: { truePeakLimiter: { enabled: true } },
     });
-    chain.prepare(SR, 512, 1);
-    expect(chain.nonFiniteSubstitutionCount()).toBe(0);
+    expect(chain.nonFiniteSubstitutionCount).toBe(0);
 
     const block = sine(512);
     for (let i = 0; i < 4; i++) {
@@ -118,24 +150,26 @@ describe('StreamingMasteringChain.nonFiniteSubstitutionCount', () => {
     while (chain.flushMono().length > 0) {
       // drain the reported latency
     }
-    expect(chain.nonFiniteSubstitutionCount()).toBe(0);
+    expect(chain.nonFiniteSubstitutionCount).toBe(0);
     chain.destroy();
   });
 
   it('is zero across a clean stereo stream', () => {
     const chain = new StreamingMasteringChain({
-      'maximizer.truePeakLimiter.enabled': true,
+      sampleRate: SR,
+      maxBlockSize: 512,
+      numChannels: 2,
+      maximizer: { truePeakLimiter: { enabled: true } },
     });
-    chain.prepare(SR, 512, 2);
     chain.processStereo(sine(512), sine(512, 330));
-    expect(chain.nonFiniteSubstitutionCount()).toBe(0);
+    expect(chain.nonFiniteSubstitutionCount).toBe(0);
     chain.destroy();
   });
 
-  it('reports zero before prepare and throws after destroy', () => {
-    const chain = new StreamingMasteringChain({ 'eq.tilt.tiltDb': 0.5 });
-    expect(chain.nonFiniteSubstitutionCount()).toBe(0);
+  it('reports zero from construction and throws after destroy', () => {
+    const chain = new StreamingMasteringChain({ sampleRate: SR, eq: { tilt: { tiltDb: 0.5 } } });
+    expect(chain.nonFiniteSubstitutionCount).toBe(0);
     chain.destroy();
-    expect(() => chain.nonFiniteSubstitutionCount()).toThrow();
+    expect(() => chain.nonFiniteSubstitutionCount).toThrow();
   });
 });

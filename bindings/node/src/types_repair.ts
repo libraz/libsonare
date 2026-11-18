@@ -83,10 +83,13 @@ export interface MasteringRepairDeclickResult {
  * from real clipping in the time domain.
  */
 export interface ClipDetection {
-  /** Samples at or past the clip threshold. */
-  sampleCount: number;
-  /** `sampleCount` divided by the input length. */
-  sampleFraction: number;
+  /**
+   * Samples at or past `clipThresholdDb`. The metering family's region report,
+   * `ClippingReport`, counts the same two quantities under the same names.
+   */
+  clippedSamples: number;
+  /** `clippedSamples` divided by the input length. */
+  clippedRatio: number;
   /** Runs of consecutive clipped samples. */
   runCount: number;
   /** A run past the 512-sample cap takes the interpolation fallback instead of the solver. */

@@ -4,53 +4,40 @@ import { flattenChainConfig, STREAMING_ONLY_CONFIG_KEYS } from '../src/internal/
 import type { MasteringChainConfig } from '../src/types.js';
 import { streamingSkippedConfigKeys } from './_addon_sources.js';
 
-describe('flattenChainConfig legacy flat aliases', () => {
-  it('leaves legacy flat spellings for the core canonicalizer', () => {
-    // canonical_chain_param_key() in the shared core owns these aliases.  The
-    // facade only flattens object structure, avoiding a duplicated alias table.
-    const flat = flattenChainConfig({
-      repair: {
-        denoise: true,
-        nFft: 2048,
-        hopLength: 512,
-        ddAlpha: 0.98,
-        reductionDb: 20,
-        gainFloor: 0.1,
-      },
-      eq: { tiltDb: 2, pivotHz: 1000 },
-    } as unknown as MasteringChainConfig);
+describe('flattenChainConfig refuses the removed spellings', () => {
+  it.each([
+    ['boolean denoise shorthand', { repair: { denoise: true } }, /repair\.denoise/],
+    ['flat repair.nFft', { repair: { nFft: 2048 } }, /repair\.nFft/],
+    ['flat repair.hopLength', { repair: { hopLength: 512 } }, /repair\.hopLength/],
+    ['flat repair.ddAlpha', { repair: { ddAlpha: 0.98 } }, /repair\.ddAlpha/],
+    ['flat repair.reductionDb', { repair: { reductionDb: 20 } }, /repair\.reductionDb/],
+    ['flat repair.gainFloor', { repair: { gainFloor: 0.1 } }, /repair\.gainFloor/],
+    ['eq.tiltDb', { eq: { tiltDb: 2 } }, /eq\.tiltDb/],
+    ['eq.pivotHz', { eq: { pivotHz: 1000 } }, /eq\.pivotHz/],
+    ['dotted key', { 'loudness.targetLufs': -20 }, /dotted keys are not accepted/],
+    [
+      'dotted key beside a nested one',
+      { loudness: { targetLufs: -20 }, 'eq.tilt.tiltDb': 2 },
+      /eq\.tilt\.tiltDb/,
+    ],
+  ])('%s is a TypeError that names it', (_name, config, message) => {
+    expect(() => flattenChainConfig(config as unknown as MasteringChainConfig)).toThrow(TypeError);
+    expect(() => flattenChainConfig(config as unknown as MasteringChainConfig)).toThrow(message);
+  });
 
-    expect(flat).toMatchObject({
-      'repair.denoise': true,
-      'repair.nFft': 2048,
-      'repair.hopLength': 512,
-      'repair.ddAlpha': 0.98,
-      'repair.reductionDb': 20,
-      'repair.gainFloor': 0.1,
-      'eq.tiltDb': 2,
-      'eq.pivotHz': 1000,
+  it('flattens the nested spelling of the replaced fields', () => {
+    const flat = flattenChainConfig({
+      repair: { denoise: { enabled: false, nFft: 2048, hopLength: 512, ddAlpha: 0.98 } },
+      eq: { tilt: { tiltDb: 2, pivotHz: 1000 } },
     });
-  });
-
-  it('preserves a falsy legacy value for the core canonicalizer', () => {
-    const flat = flattenChainConfig({
-      repair: { denoise: false },
-    } as unknown as MasteringChainConfig);
-    expect(flat['repair.denoise']).toBe(false);
-  });
-
-  // The dot-notation spelling is part of the accepted input, not an accident of
-  // the walk: MasteringChainConfig declares it and the Python binding documents
-  // it, so both surfaces must land on the same core parameter.
-  it('carries a caller-supplied dot-notation key through unchanged', () => {
-    const nested = flattenChainConfig({ loudness: { targetLufs: -20 }, eq: { tiltDb: 2 } });
-    const dotted = flattenChainConfig({ 'loudness.targetLufs': -20, 'eq.tiltDb': 2 });
-    expect(dotted).toEqual(nested);
-  });
-
-  it('merges the two spellings in one config', () => {
-    const mixed = flattenChainConfig({ loudness: { targetLufs: -20 }, 'eq.tiltDb': 2 });
-    expect(mixed).toEqual({ 'loudness.targetLufs': -20, 'eq.tiltDb': 2 });
+    expect(flat).toEqual({
+      'repair.denoise.enabled': false,
+      'repair.denoise.nFft': 2048,
+      'repair.denoise.hopLength': 512,
+      'repair.denoise.ddAlpha': 0.98,
+      'eq.tilt.tiltDb': 2,
+      'eq.tilt.pivotHz': 1000,
+    });
   });
 });
 
@@ -69,8 +56,9 @@ describe('streaming chain config rejects the same leaves as the offline chain', 
   });
 
   it('the streaming constructor rejects it the same way', () => {
-    expect(() => new StreamingMasteringChain(badConfig)).toThrow(TypeError);
-    expect(() => new StreamingMasteringChain(badConfig)).toThrow(
+    const config = { sampleRate: 48000, ...badConfig } as never;
+    expect(() => new StreamingMasteringChain(config)).toThrow(TypeError);
+    expect(() => new StreamingMasteringChain(config)).toThrow(
       /maximizer\.truePeakLimiter\.ceilingDb/,
     );
   });
@@ -81,9 +69,8 @@ describe('streaming chain config rejects the same leaves as the offline chain', 
       'maximizer.truePeakLimiter.enabled': true,
       'maximizer.truePeakLimiter.ceilingDb': -1,
     });
-    const chain = new StreamingMasteringChain(good);
+    const chain = new StreamingMasteringChain({ sampleRate: 48000, maxBlockSize: 512, ...good });
     try {
-      chain.prepare(48000, 512, 1);
       expect(chain.stageNames()).toContain('maximizer.truePeakLimiter');
     } finally {
       chain.destroy();
@@ -92,12 +79,13 @@ describe('streaming chain config rejects the same leaves as the offline chain', 
 
   it('the streaming-only top-level options are not rejected as chain leaves', () => {
     const chain = new StreamingMasteringChain({
+      sampleRate: 48000,
+      maxBlockSize: 512,
       loudnessStaticGainDb: -3,
       loudnessStaticGainPeakDb: -0.5,
       eq: { tilt: { tiltDb: 1 } },
     });
     try {
-      chain.prepare(48000, 512, 1);
       expect(chain.stageNames()).toContain('eq.tilt');
     } finally {
       chain.destroy();

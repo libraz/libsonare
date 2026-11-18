@@ -1,8 +1,7 @@
 /**
- * `masteringAssistantSuggestChain(Stereo)` return the same flat chain-config
- * params `masteringAssistantSuggest(Stereo)` already carries buried inside its
- * `chainConfig.params`, without a JSON round trip on the caller's side, and in
- * a shape that plugs straight into `masterAudio(Stereo)`'s `overrides`.
+ * `masteringAssistantSuggestChain(Stereo)` return the same nested chain config
+ * `masteringAssistantSuggest(Stereo)` carries as its `chainConfig`, in a shape
+ * that plugs straight into `masterAudio(Stereo)`'s `overrides`.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -27,13 +26,13 @@ function sine(seconds: number, freq = 440, amp = 0.2): Float32Array {
 }
 
 describe('masteringAssistantSuggestChain', () => {
-  it('matches the chain config params masteringAssistantSuggest carries', () => {
+  it('matches the chain config masteringAssistantSuggest carries', () => {
     const samples = sine(0.4);
-    const document = JSON.parse(masteringAssistantSuggest({ samples, sampleRate }));
+    const document = masteringAssistantSuggest({ samples, sampleRate });
 
     const chain = masteringAssistantSuggestChain({ samples, sampleRate });
 
-    expect(chain).toEqual(document.chainConfig.params);
+    expect(chain).toEqual(document.chainConfig);
   });
 
   it('can be applied as masterAudio overrides', () => {
@@ -43,7 +42,7 @@ describe('masteringAssistantSuggestChain', () => {
     const result = masterAudio({
       samples,
       sampleRate,
-      overrides: chain as unknown as MasteringChainConfig,
+      overrides: chain as MasteringChainConfig,
     });
 
     expect(result.samples).toBeInstanceOf(Float32Array);
@@ -52,14 +51,14 @@ describe('masteringAssistantSuggestChain', () => {
 });
 
 describe('masteringAssistantSuggestChainStereo', () => {
-  it('matches the chain config params masteringAssistantSuggestStereo carries', () => {
+  it('matches the chain config masteringAssistantSuggestStereo carries', () => {
     const left = sine(0.3, 220);
     const right = sine(0.3, 220, 0.18);
-    const document = JSON.parse(masteringAssistantSuggestStereo({ left, right, sampleRate }));
+    const document = masteringAssistantSuggestStereo({ left, right, sampleRate });
 
     const chain = masteringAssistantSuggestChainStereo({ left, right, sampleRate });
 
-    expect(chain).toEqual(document.chainConfig.params);
+    expect(chain).toEqual(document.chainConfig);
   });
 
   it('can be applied as masterAudioStereo overrides', () => {
@@ -71,7 +70,7 @@ describe('masteringAssistantSuggestChainStereo', () => {
       left,
       right,
       sampleRate,
-      overrides: chain as unknown as MasteringChainConfig,
+      overrides: chain as MasteringChainConfig,
     });
 
     expect(result.left).toBeInstanceOf(Float32Array);

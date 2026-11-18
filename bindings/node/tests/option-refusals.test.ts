@@ -67,10 +67,16 @@ describe('request keys that the entry point does not honour', () => {
     for (const key of ['cancel', 'onProgress']) {
       const extra = { [key]: () => true } as Record<string, unknown>;
       await expect(
-        masterAudioAsync({ samples, sampleRate: 48000, ...extra }),
+        masterAudioAsync({ samples, sampleRate: 48000, preset: 'pop', ...extra }),
       ).rejects.toBeInstanceOf(TypeError);
       await expect(
-        masterAudioStereoAsync({ left: samples, right: samples, sampleRate: 48000, ...extra }),
+        masterAudioStereoAsync({
+          left: samples,
+          right: samples,
+          sampleRate: 48000,
+          preset: 'pop',
+          ...extra,
+        }),
       ).rejects.toBeInstanceOf(TypeError);
     }
   });

@@ -8,7 +8,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { hpss, masterAudio, mastering } from '../src/index.js';
+import { hpss, masterAudio, masteringNormalizeLoudness } from '../src/index.js';
 
 const SR = 44100;
 
@@ -33,33 +33,33 @@ function withInf(n: number): Float32Array {
 }
 
 describe('addon direct-core-call input validation (Node)', () => {
-  describe('mastering()', () => {
+  describe('masteringNormalizeLoudness()', () => {
     it('rejects NaN samples', () => {
-      expect(() => mastering(withNaN(2048), SR)).toThrow();
+      expect(() => masteringNormalizeLoudness(withNaN(2048), SR)).toThrow();
     });
     it('rejects Infinity samples', () => {
-      expect(() => mastering(withInf(2048), SR)).toThrow();
+      expect(() => masteringNormalizeLoudness(withInf(2048), SR)).toThrow();
     });
     it('rejects an out-of-range sample rate', () => {
-      expect(() => mastering(sine(2048), 100)).toThrow();
+      expect(() => masteringNormalizeLoudness(sine(2048), 100)).toThrow();
     });
     it('does not throw on valid input at 44100 Hz', () => {
-      expect(() => mastering(sine(2048), SR)).not.toThrow();
+      expect(() => masteringNormalizeLoudness(sine(2048), SR)).not.toThrow();
     });
   });
 
   describe('masterAudio()', () => {
     it('rejects NaN samples', () => {
-      expect(() => masterAudio(withNaN(4096), SR)).toThrow();
+      expect(() => masterAudio(withNaN(4096), SR, { preset: 'pop' })).toThrow();
     });
     it('rejects Infinity samples', () => {
-      expect(() => masterAudio(withInf(4096), SR)).toThrow();
+      expect(() => masterAudio(withInf(4096), SR, { preset: 'pop' })).toThrow();
     });
     it('rejects an out-of-range sample rate', () => {
-      expect(() => masterAudio(sine(4096), 100)).toThrow();
+      expect(() => masterAudio(sine(4096), 100, { preset: 'pop' })).toThrow();
     });
     it('does not throw on valid input at 44100 Hz', () => {
-      expect(() => masterAudio(sine(4096), SR)).not.toThrow();
+      expect(() => masterAudio(sine(4096), SR, { preset: 'pop' })).not.toThrow();
     });
   });
 

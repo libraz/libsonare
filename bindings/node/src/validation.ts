@@ -375,6 +375,14 @@ export function assertClosedToken<T extends string>(
   }
 }
 
+/** A boolean argument; anything else is a `TypeError`, never a truthy coercion. */
+export function requireBoolean(fnName: string, value: unknown, argName: string): boolean {
+  if (typeof value !== 'boolean') {
+    throw new TypeError(`${fnName}: ${argName} must be a boolean`);
+  }
+  return value;
+}
+
 /** Integer strictly greater than zero, up to the native `int` ceiling. */
 export function assertPositiveInteger(fnName: string, value: number, argName: string): void {
   // Two refusals, not one: 512.7 is positive, so reporting it as non-positive

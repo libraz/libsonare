@@ -69,7 +69,9 @@ describe('Audio handle-form metering', () => {
       // the non-default call and the buffer form must still agree.
       const loudRatio = audio.silenceRatio(-3, 512, 128);
       expect(loudRatio).toBeGreaterThan(0);
-      expect(loudRatio).toBe(meteringSilenceRatio(samples, SR, -3, 512, 128));
+      expect(loudRatio).toBe(
+        meteringSilenceRatio(samples, SR, { thresholdDb: -3, frameLength: 512, hopLength: 128 }),
+      );
     } finally {
       audio.destroy();
     }
@@ -81,7 +83,7 @@ describe('Audio handle-form metering', () => {
     try {
       const tp = audio.truePeakDb();
       expect(tp).toBeGreaterThanOrEqual(audio.peakDb() - 0.1);
-      expect(tp).toBe(meteringTruePeakDb(samples, SR));
+      expect(tp).toBe(meteringTruePeakDb(samples, SR, { oversampleFactor: 4 }));
     } finally {
       audio.destroy();
     }
@@ -94,12 +96,14 @@ describe('Audio handle-form metering', () => {
     }
     const audio = Audio.fromBuffer(samples, SR);
     try {
-      const report = audio.detectClipping({ threshold: 0.999 });
+      const report = audio.detectClipping({ thresholdDb: 20 * Math.log10(0.999) });
       // Non-vacuity: a clean signal would report zero regions regardless of
       // whether the handle form is wired correctly.
       expect(report.regions.length).toBeGreaterThanOrEqual(1);
       expect(report.clippedSamples).toBeGreaterThanOrEqual(1);
-      const bufferReport = meteringDetectClipping(samples, SR, { threshold: 0.999 });
+      const bufferReport = meteringDetectClipping(samples, SR, {
+        thresholdDb: 20 * Math.log10(0.999),
+      });
       expect(report).toEqual(bufferReport);
     } finally {
       audio.destroy();
@@ -122,8 +126,8 @@ describe('Audio handle-form metering', () => {
       expect(report.dynamicRangeDb).toBeGreaterThan(0);
       expect(report).toEqual(meteringDynamicRange(combined, SR));
 
-      // Positive control for the ZeroIsSentinel pitfall: 0 is a real 0th
-      // percentile request here, not "use the library default" (-1).
+      // Positive control: 0 is a real 0th percentile request here, not the
+      // library default.
       const zeroLow = audio.dynamicRange({ lowPercentile: 0 });
       expect(zeroLow.lowPercentileDb).not.toBeCloseTo(report.lowPercentileDb, 1);
       expect(zeroLow).toEqual(meteringDynamicRange(combined, SR, { lowPercentile: 0 }));
@@ -144,7 +148,7 @@ describe('Audio handle-form metering', () => {
     }
   });
 
-  it('spectrumFrame agrees with the buffer form and frameOffset moves the result', () => {
+  it('spectrumFrame agrees with the buffer form and startSample moves the result', () => {
     const samples = makeSine(440, 1);
     const audio = Audio.fromBuffer(samples, SR);
     try {
@@ -153,8 +157,8 @@ describe('Audio handle-form metering', () => {
       // Non-vacuity: two different offsets into a stationary sine must not
       // collapse to the same frame by construction.
       expect(Array.from(first.magnitude)).not.toEqual(Array.from(second.magnitude));
-      expect(first).toEqual(meteringSpectrumFrame(samples, SR, 0));
-      expect(second).toEqual(meteringSpectrumFrame(samples, SR, 2048));
+      expect(first).toEqual(meteringSpectrumFrame(samples, SR, { startSample: 0 }));
+      expect(second).toEqual(meteringSpectrumFrame(samples, SR, { startSample: 2048 }));
     } finally {
       audio.destroy();
     }

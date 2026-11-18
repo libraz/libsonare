@@ -64,9 +64,9 @@ describe('masteringAbMatchLoudness', () => {
     expect(matched.matchedTruePeakDbtp).toBeGreaterThan(meteringTruePeakDb(source, SR));
   });
 
-  it('defaults sampleRate to 22050 when the request omits it', () => {
-    const matched = masteringAbMatchLoudness({ source, reference });
-    expect(matched.sampleRate).toBe(22050);
+  it('refuses a request that omits sampleRate', () => {
+    // biome-ignore lint/suspicious/noExplicitAny: the call drops a required field.
+    expect(() => masteringAbMatchLoudness({ source, reference } as any)).toThrow(TypeError);
   });
 
   it('rejects an invalid sample rate on its own authority, ahead of the core', () => {

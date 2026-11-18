@@ -7,7 +7,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { masteringChain } from '../src/index.js';
+import { masterAudio } from '../src/index.js';
 
 const sampleRate = 22_050;
 const samples = Float32Array.from({ length: 4096 }, (_, i) =>
@@ -30,9 +30,11 @@ describe('mastering chain saturation fields', () => {
     // on this signal: 0.12 between factors 1 and 4, against a repeat-render
     // floor of exactly 0, so the threshold sits well clear of both ends.
     const render = (oversampleFactor: number) =>
-      masteringChain(samples, sampleRate, {
-        saturation: {
-          tape: { enabled: true, driveDb: 12, saturation: 0.9, oversampleFactor },
+      masterAudio(samples, sampleRate, {
+        overrides: {
+          saturation: {
+            tape: { enabled: true, driveDb: 12, saturation: 0.9, oversampleFactor },
+          },
         },
       }).samples;
     const plain = render(1);
@@ -45,8 +47,8 @@ describe('mastering chain saturation fields', () => {
 
   it('rejects a tape oversampling factor the processor does not implement', () => {
     expect(() =>
-      masteringChain(samples, sampleRate, {
-        saturation: { tape: { enabled: true, driveDb: 6, oversampleFactor: 3 } },
+      masterAudio(samples, sampleRate, {
+        overrides: { saturation: { tape: { enabled: true, driveDb: 6, oversampleFactor: 3 } } },
       }),
     ).toThrow(/oversample_factor/);
   });
@@ -56,8 +58,10 @@ describe('mastering chain saturation fields', () => {
     // Measured difference between them on this signal: 0.0028, against a
     // repeat-render floor of exactly 0.
     const render = (aliasing: number) =>
-      masteringChain(samples, sampleRate, {
-        saturation: { exciter: { enabled: true, amount: 1.0, driveDb: 12, aliasing } },
+      masterAudio(samples, sampleRate, {
+        overrides: {
+          saturation: { exciter: { enabled: true, amount: 1.0, driveDb: 12, aliasing } },
+        },
       }).samples;
     const none = render(0);
     expect(none).toHaveLength(samples.length);
@@ -68,8 +72,8 @@ describe('mastering chain saturation fields', () => {
   it('rejects an antialiasing ordinal that names no mode', () => {
     for (const aliasing of [-1, 4, 99]) {
       expect(() =>
-        masteringChain(samples, sampleRate, {
-          saturation: { exciter: { enabled: true, amount: 0.5, aliasing } },
+        masterAudio(samples, sampleRate, {
+          overrides: { saturation: { exciter: { enabled: true, amount: 0.5, aliasing } } },
         }),
       ).toThrow(/out of range/);
     }
@@ -78,8 +82,8 @@ describe('mastering chain saturation fields', () => {
   it('rejects the antialiasing modes the exciter does not implement', () => {
     for (const aliasing of [1, 2]) {
       expect(() =>
-        masteringChain(samples, sampleRate, {
-          saturation: { exciter: { enabled: true, amount: 0.5, aliasing } },
+        masterAudio(samples, sampleRate, {
+          overrides: { saturation: { exciter: { enabled: true, amount: 0.5, aliasing } } },
         }),
       ).toThrow(/ADAA/);
     }

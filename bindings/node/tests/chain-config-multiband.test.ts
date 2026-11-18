@@ -2,14 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   type MasteringChainConfig,
   masterAudio,
-  masteringChain,
-  masteringChainStereo,
+  masterAudioStereo,
   StreamingMasteringChain,
 } from '../src/index.js';
 import { flattenChainConfig } from '../src/internal/chain_config.js';
 import { addon } from '../src/native.js';
-
-type StreamingConfig = ConstructorParameters<typeof StreamingMasteringChain>[0];
 
 /* biome-ignore lint/suspicious/noExplicitAny: the addon is untyped here on purpose. */
 const native = addon as any;
@@ -45,12 +42,13 @@ const TYPED: MasteringChainConfig = {
 };
 
 const P = 'dynamics.multibandComp';
-const FLAT: Record<string, number | boolean | string> = {
+// The flat keys native reads; enum tokens are ordinals there.
+const FLAT: Record<string, number | boolean> = {
   [`${P}.enabled`]: true,
   [`${P}.crossover.cutoffsHz.0`]: 200,
   [`${P}.crossover.cutoffsHz.1`]: 2000,
   [`${P}.crossover.cutoffsHz.2`]: 8000,
-  [`${P}.crossover.slope`]: 'lr8',
+  [`${P}.crossover.slope`]: 2,
   [`${P}.bands.0.thresholdDb`]: -30,
   [`${P}.bands.0.ratio`]: 4,
   [`${P}.bands.1.thresholdDb`]: -28,
@@ -60,7 +58,7 @@ const FLAT: Record<string, number | boolean | string> = {
   [`${P}.bands.2.ratio`]: 2,
   [`${P}.bands.3.thresholdDb`]: -20,
   [`${P}.bands.3.ratio`]: 6,
-  [`${P}.bands.3.detector`]: 'logRms',
+  [`${P}.bands.3.detector`]: 2,
 };
 
 function same(a: Float32Array, b: Float32Array): boolean {
@@ -77,45 +75,57 @@ describe('typed multiband crossover + bands', () => {
     const flat = flattenChainConfig(TYPED);
     expect(flat[`${P}.crossover.cutoffsHz.2`]).toBe(8000);
     expect(flat[`${P}.bands.3.ratio`]).toBe(6);
-    expect(flat).toEqual(flattenChainConfig(FLAT));
+    expect(flat).toEqual(FLAT);
     // Enum names resolved to numbers, on the crossover and on a band detector.
     expect(typeof flat[`${P}.crossover.slope`]).toBe('number');
     expect(typeof flat[`${P}.bands.3.detector`]).toBe('number');
   });
 
-  it('renders typed and flat spellings bit-identically (offline mono)', () => {
+  it('renders the typed form and the native flat keys bit-identically (offline mono)', () => {
     const x = tone(1);
-    const typed = masteringChain(x, SAMPLE_RATE, TYPED);
-    const flat = masteringChain(x, SAMPLE_RATE, FLAT as unknown as MasteringChainConfig);
+    const typed = masterAudio({ samples: x, sampleRate: SAMPLE_RATE, overrides: TYPED });
+    const flat = native.masteringChain(x, SAMPLE_RATE, FLAT);
     expect(same(typed.samples, flat.samples)).toBe(true);
     // Control: the stage is consumed, so dropping the bands changes the output.
-    const bare = masteringChain(x, SAMPLE_RATE, {
-      dynamics: { multibandComp: { enabled: true, crossover: { cutoffsHz: [200, 2000, 8000] } } },
+    const bare = masterAudio({
+      samples: x,
+      sampleRate: SAMPLE_RATE,
+      overrides: {
+        dynamics: { multibandComp: { enabled: true, crossover: { cutoffsHz: [200, 2000, 8000] } } },
+      },
     });
     expect(same(typed.samples, bare.samples)).toBe(false);
   });
 
-  it('renders typed and flat spellings bit-identically (offline stereo)', () => {
+  it('renders the typed form and the native flat keys bit-identically (offline stereo)', () => {
     const l = tone(1);
     const r = tone(1.5);
-    const typed = masteringChainStereo(l, r, SAMPLE_RATE, TYPED);
-    const flat = masteringChainStereo(l, r, SAMPLE_RATE, FLAT as unknown as MasteringChainConfig);
+    const typed = masterAudioStereo({
+      left: l,
+      right: r,
+      sampleRate: SAMPLE_RATE,
+      overrides: TYPED,
+    });
+    const flat = native.masteringChainStereo(l, r, SAMPLE_RATE, FLAT);
     expect(same(typed.left, flat.left)).toBe(true);
     expect(same(typed.right, flat.right)).toBe(true);
   });
 
   it('applies the typed form as masterAudio overrides on a 3-band preset base', () => {
     const x = tone(1);
-    const typed = masterAudio(x, SAMPLE_RATE, 'pop', TYPED);
-    const flat = masterAudio(x, SAMPLE_RATE, 'pop', FLAT as unknown as MasteringChainConfig);
+    const typed = masterAudio(x, SAMPLE_RATE, { preset: 'pop', overrides: TYPED });
+    const flat = native.masterAudio('pop', x, SAMPLE_RATE, FLAT);
     expect(same(typed.samples, flat.samples)).toBe(true);
   });
 
   it('runs identically through StreamingMasteringChain', () => {
     const x = tone(1);
     const run = (config: MasteringChainConfig): Float32Array => {
-      const chain = new StreamingMasteringChain(config as StreamingConfig);
-      chain.prepare(SAMPLE_RATE, 512, 1);
+      const chain = new StreamingMasteringChain({
+        sampleRate: SAMPLE_RATE,
+        maxBlockSize: 512,
+        ...config,
+      });
       const out = new Float32Array(FRAMES);
       for (let at = 0; at + 512 <= FRAMES; at += 512) {
         out.set(chain.processMono(x.slice(at, at + 512)), at);
@@ -123,16 +133,26 @@ describe('typed multiband crossover + bands', () => {
       return out;
     };
     const typed = run(TYPED);
-    expect(same(typed, run(FLAT as unknown as MasteringChainConfig))).toBe(true);
+    const nativeChain = new native.StreamingMasteringChain(FLAT);
+    nativeChain.prepare(SAMPLE_RATE, 512, 1);
+    const viaNative = new Float32Array(FRAMES);
+    for (let at = 0; at + 512 <= FRAMES; at += 512) {
+      viaNative.set(nativeChain.processMono(x.slice(at, at + 512)), at);
+    }
+    expect(same(typed, viaNative)).toBe(true);
     expect(same(typed, run({}))).toBe(false);
   });
 
   it('enables the stage from a typed crossover alone', () => {
     const x = tone(1);
-    const typed = masteringChain(x, SAMPLE_RATE, {
-      dynamics: { multibandComp: { crossover: { cutoffsHz: [200, 2000, 8000] } } },
+    const typed = masterAudio({
+      samples: x,
+      sampleRate: SAMPLE_RATE,
+      overrides: {
+        dynamics: { multibandComp: { crossover: { cutoffsHz: [200, 2000, 8000] } } },
+      },
     });
-    const baseline = masteringChain(x, SAMPLE_RATE, {});
+    const baseline = masterAudio({ samples: x, sampleRate: SAMPLE_RATE });
     expect(typed.stages.length).toBeGreaterThan(baseline.stages.length);
   });
 
@@ -140,10 +160,20 @@ describe('typed multiband crossover + bands', () => {
     const empty = { dynamics: { multibandComp: { crossover: { cutoffsHz: [] } } } };
     const message = `Mastering override '${P}.crossover.cutoffsHz' is an empty list, which has no flat spelling`;
     expect(() => flattenChainConfig(empty)).toThrow(message);
-    expect(() => masteringChain(tone(1), SAMPLE_RATE, empty as MasteringChainConfig)).toThrow(
-      message,
-    );
-    expect(() => new StreamingMasteringChain(empty as StreamingConfig)).toThrow(message);
+    expect(() =>
+      masterAudio({
+        samples: tone(1),
+        sampleRate: SAMPLE_RATE,
+        overrides: empty as MasteringChainConfig,
+      }),
+    ).toThrow(message);
+    expect(
+      () =>
+        new StreamingMasteringChain({
+          sampleRate: SAMPLE_RATE,
+          ...(empty as MasteringChainConfig),
+        }),
+    ).toThrow(message);
     expect(() => new native.StreamingMasteringChain(empty)).toThrow(message);
   });
 });

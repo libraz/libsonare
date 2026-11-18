@@ -538,7 +538,7 @@ describe('editing effects', () => {
     );
     expect(realtimeVoiceChangerPresetNames()).toContain('robotMascot');
     const presetJson = realtimeVoiceChangerPresetJson('brightIdol');
-    expect(presetJson).toContain('bright-idol');
+    expect(presetJson).toContain('brightIdol');
     expect(realtimeVoiceChangerValidatePresetJson(presetJson).ok).toBe(true);
     expect(realtimeVoiceChangerValidatePresetJson('{}').ok).toBe(false);
 

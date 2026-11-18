@@ -201,10 +201,10 @@ describe('a class-method request refuses nested keys through an engine instance'
 describe('reported repros', () => {
   const samples = new Float32Array(2048);
 
-  it('masteringChain refuses a loudness section left at the top level', () => {
+  it('masterAudio refuses a loudness section left at the top level', () => {
     expect(() =>
-      sonare.masteringChain({ samples, sampleRate: 22050, loudness: { targetLufs: -14 } } as never),
-    ).toThrow("masteringChain: unknown request key 'loudness' ('loudness' belongs under 'config')");
+      sonare.masterAudio({ samples, sampleRate: 22050, loudness: { targetLufs: -14 } } as never),
+    ).toThrow("masterAudio: unknown request key 'loudness' ('loudness' belongs under 'overrides')");
   });
 
   it('analyze with onProgress refuses an unknown request key and a nested options object', () => {

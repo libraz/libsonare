@@ -32,70 +32,72 @@ describe('mastering assistant target platform', () => {
     // be rejected by the entry point that consumes it.
     for (const name of names) {
       expect(() =>
-        masteringAssistantSuggest({ samples, sampleRate, params: { targetPlatform: name } }),
+        masteringAssistantSuggest({ samples, sampleRate, targetPlatform: name }),
       ).not.toThrow();
     }
   });
 
   it('returns the streaming default when no target is given', () => {
-    expect(masteringAssistantSuggest({ samples, sampleRate })).toContain(
-      '"loudness.targetLufs":-14',
-    );
+    expect(
+      masteringAssistantSuggest({ samples, sampleRate }).chainConfig.loudness?.targetLufs,
+    ).toBe(-14);
   });
 
   it('follows a named delivery target', () => {
-    const json = masteringAssistantSuggest({
+    const result = masteringAssistantSuggest({
       samples,
       sampleRate,
-      params: { targetPlatform: 'broadcast' },
+      targetPlatform: 'broadcast',
     });
-    expect(json).toContain('"loudness.targetLufs":-23');
+    expect(result.chainConfig.loudness?.targetLufs).toBe(-23);
   });
 
   it('moves the ceiling for a loud delivery format', () => {
     // Broadcast and podcast ask for the ceiling the default already carries, so
     // the ceiling is only observable on the loud formats.
-    const json = masteringAssistantSuggest({
+    const result = masteringAssistantSuggest({
       samples,
       sampleRate,
-      params: { targetPlatform: 'club' },
+      targetPlatform: 'club',
     });
-    expect(json).toContain('"loudness.targetLufs":-9');
-    expect(json).toContain('"loudness.ceilingDb":-0.3');
+    expect(result.chainConfig.loudness?.targetLufs).toBe(-9);
+    expect(result.chainConfig.loudness?.ceilingDb).toBeCloseTo(-0.3, 5);
   });
 
   it('applies the target through the stereo entry point too', () => {
-    const json = masteringAssistantSuggestStereo({
+    const result = masteringAssistantSuggestStereo({
       left: samples,
       right: samples,
       sampleRate,
-      params: { targetPlatform: 'broadcast' },
+      targetPlatform: 'broadcast',
     });
-    expect(json).toContain('"loudness.targetLufs":-23');
+    expect(result.chainConfig.loudness?.targetLufs).toBe(-23);
   });
 
   it('rejects an unknown target instead of silently keeping the default', () => {
     expect(() =>
-      masteringAssistantSuggest({ samples, sampleRate, params: { targetPlatform: 'vinyl' } }),
+      masteringAssistantSuggest({ samples, sampleRate, targetPlatform: 'vinyl' as never }),
     ).toThrow(/vinyl/);
   });
 
   it('rejects a numeric target: the index is a C-ABI transport detail', () => {
     expect(() =>
       // biome-ignore lint/suspicious/noExplicitAny: deliberately passing the wrong type.
-      masteringAssistantSuggest({ samples, sampleRate, params: { targetPlatform: 2 as any } }),
+      masteringAssistantSuggest({ samples, sampleRate, targetPlatform: 2 as any }),
     ).toThrow(/targetPlatform/);
   });
 
   it('leaves the other numeric params working alongside a target', () => {
     // An explicit loudness the caller chose wins over the target's suggestion.
-    const json = masteringAssistantSuggest({
+    const result = masteringAssistantSuggest({
       samples,
       sampleRate,
-      params: { targetPlatform: 'broadcast', targetLufs: -13, ceilingDb: -0.8 },
+      targetPlatform: 'broadcast',
+      targetLufs: -13,
+      ceilingDb: -0.8,
     });
-    expect(json).toContain('"loudness.targetLufs":-13');
-    expect(json).toContain('"loudness.ceilingDb":-0.8');
+    expect(result.chainConfig.loudness?.targetLufs).toBe(-13);
+    expect(result.chainConfig.loudness?.ceilingDb).toBeCloseTo(-0.8, 5);
   });
 
   it('an explicit loudness wins even when it equals the default', () => {
@@ -104,24 +106,27 @@ describe('mastering assistant target platform', () => {
     // before the user touches it -- silently lost to the delivery target while
     // every other position won. -1 is the default ceiling, which is the same
     // collision on the other field.
-    const json = masteringAssistantSuggest({
+    const result = masteringAssistantSuggest({
       samples,
       sampleRate,
-      params: { targetPlatform: 'broadcast', targetLufs: -14, ceilingDb: -1 },
+      targetPlatform: 'broadcast',
+      targetLufs: -14,
+      ceilingDb: -1,
     });
-    expect(json).toContain('"loudness.targetLufs":-14');
-    expect(json).toContain('"loudness.ceilingDb":-1');
+    expect(result.chainConfig.loudness?.targetLufs).toBe(-14);
+    expect(result.chainConfig.loudness?.ceilingDb).toBe(-1);
   });
 
   it('a target still fills in the field the caller left out', () => {
     // Presence, not value: naming one field must not suppress the target on the
     // other.
-    const json = masteringAssistantSuggest({
+    const result = masteringAssistantSuggest({
       samples,
       sampleRate,
-      params: { targetPlatform: 'club', targetLufs: -14 },
+      targetPlatform: 'club',
+      targetLufs: -14,
     });
-    expect(json).toContain('"loudness.targetLufs":-14');
-    expect(json).toContain('"loudness.ceilingDb":-0.3');
+    expect(result.chainConfig.loudness?.targetLufs).toBe(-14);
+    expect(result.chainConfig.loudness?.ceilingDb).toBeCloseTo(-0.3, 5);
   });
 });

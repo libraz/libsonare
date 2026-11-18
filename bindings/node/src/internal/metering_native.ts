@@ -1,0 +1,139 @@
+/**
+ * Facade-to-addon conversions for the metering, loudness, dynamics and clip-detection calls.
+ * The addon still uses the older spellings, so every mapping lives here, one helper per concept.
+ */
+
+import type { ClippingReport } from '../metering.js';
+import type { ClipDetection, DeclipReport } from '../types_repair.js';
+import {
+  assertAudioChannels,
+  assertAudioSamples,
+  assertFloatValue,
+  type ValidateOptions,
+} from '../validation.js';
+import { interleavePlanar } from './planar.js';
+
+/**
+ * An optional numeric field whose addon `0` means "library default": an explicit 0 is refused,
+ * absent and `null` pass, and any other value is left to the addon reader's own checks.
+ */
+export function refuseZeroSentinel(
+  fnName: string,
+  request: object,
+  fields: readonly string[],
+): void {
+  for (const field of fields) {
+    const value = (request as Record<string, unknown>)[field];
+    if (value === undefined || value === null) {
+      continue;
+    }
+    if (value === 0) {
+      throw new RangeError(`${fnName}: ${field} must not be 0 (omit it for the default)`);
+    }
+  }
+}
+
+/** A percentile rank: `TypeError` unless a number, `RangeError` outside [0, 1]. */
+export function assertUnitInterval(fnName: string, value: unknown, argName: string): void {
+  assertFloatValue(fnName, value, argName);
+  if ((value as number) < 0 || (value as number) > 1) {
+    throw new RangeError(`${fnName}: ${argName} must be in [0, 1]`);
+  }
+}
+
+/**
+ * Planar channels as the interleaved buffer the addon's multichannel calls read. With a
+ * `sampleRate` each plane gets the full audio preflight; without one (waveform buckets are in
+ * samples) only the buffer checks run.
+ */
+export function interleaveMeterChannels(
+  fnName: string,
+  channels: unknown,
+  options: ValidateOptions,
+  sampleRate?: unknown,
+): { data: Float32Array; numChannels: number } {
+  if (sampleRate !== undefined) {
+    assertAudioChannels(fnName, channels, sampleRate, options);
+  } else if (Array.isArray(channels)) {
+    channels.forEach((plane, i) => {
+      assertAudioSamples(fnName, plane, options, `channels[${i}]`);
+    });
+  }
+  return interleavePlanar(fnName, channels);
+}
+
+/** The addon's waveform buckets (channel-major flat arrays plus a count) as one array per channel. */
+export function waveformReportFromNative(native: {
+  min: Float32Array;
+  max: Float32Array;
+  channels: number;
+  bucketCount: number;
+  samplesPerBucket: number;
+}): {
+  min: Float32Array[];
+  max: Float32Array[];
+  bucketCount: number;
+  samplesPerBucket: number;
+} {
+  const split = (data: Float32Array): Float32Array[] =>
+    Array.from({ length: native.channels }, (_, c) =>
+      data.slice(c * native.bucketCount, (c + 1) * native.bucketCount),
+    );
+  return {
+    min: split(native.min),
+    max: split(native.max),
+    bucketCount: native.bucketCount,
+    samplesPerBucket: native.samplesPerBucket,
+  };
+}
+
+/** The addon's loudness series, whose keys still lack the unit suffix, under the public names. */
+export function lufsSeriesFromNative(native: {
+  momentary: Float32Array;
+  shortTerm: Float32Array;
+}): {
+  momentaryLufs: Float32Array;
+  shortTermLufs: Float32Array;
+} {
+  return { momentaryLufs: native.momentary, shortTermLufs: native.shortTerm };
+}
+
+/** The addon's clipping report, whose ratio is still called `clippingRatio`, under the public name. */
+export function clippingReportFromNative(
+  native: Omit<ClippingReport, 'clippedRatio'> & { clippingRatio: number },
+): ClippingReport {
+  const { clippingRatio, ...rest } = native;
+  return { ...rest, clippedRatio: clippingRatio };
+}
+
+type NativeClipDetection = Omit<ClipDetection, 'clippedSamples' | 'clippedRatio'> & {
+  sampleCount: number;
+  sampleFraction: number;
+};
+
+/** The linear amplitude the clip detector still reads, from `thresholdDb` in dBFS (absent is the 0.999 default). */
+export function clipThresholdLinear(fnName: string, thresholdDb: unknown): number {
+  if (thresholdDb === undefined || thresholdDb === null) {
+    return 0.999;
+  }
+  if (typeof thresholdDb !== 'number') {
+    throw new TypeError(`${fnName}: thresholdDb must be a number`);
+  }
+  if (Number.isNaN(thresholdDb) || thresholdDb > 0) {
+    throw new RangeError(`${fnName}: thresholdDb must be at most 0 dBFS`);
+  }
+  return 10 ** (thresholdDb / 20);
+}
+
+/** The addon's declip analysis, whose counts are still `sampleCount` / `sampleFraction`, under the public names. */
+export function clipDetectionFromNative(native: NativeClipDetection): ClipDetection {
+  const { sampleCount, sampleFraction, ...rest } = native;
+  return { clippedSamples: sampleCount, clippedRatio: sampleFraction, ...rest };
+}
+
+/** An addon declip report with its analysis renamed through {@link clipDetectionFromNative}. */
+export function declipReportFromNative(
+  native: Omit<DeclipReport, 'detected'> & { detected: NativeClipDetection },
+): DeclipReport {
+  return { ...native, detected: clipDetectionFromNative(native.detected) };
+}

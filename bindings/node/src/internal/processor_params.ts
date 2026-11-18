@@ -1,17 +1,8 @@
 import { addon } from '../native.js';
 import { assertFiniteScalar } from '../validation.js';
 
-/** A per-processor parameter value: an enum-valued key may be given by its name. */
-export type MasteringSoloProcessorParamValue = number | boolean | string;
-
-/** Flat per-processor parameters, keyed as in `masteringInsertParamInfo`. */
-export type MasteringSoloProcessorParams = Record<string, MasteringSoloProcessorParamValue>;
-
-/** An insert parameter value: a solo value, or a list of numbers for an array-typed key. */
-export type MasteringInsertParamValue = MasteringSoloProcessorParamValue | readonly number[];
-
-/** Insert parameters, keyed as in `masteringInsertParamInfo`; the shape an insert is built from. */
-export type MasteringInsertParams = Record<string, MasteringInsertParamValue>;
+/** Params as the caller wrote them: values are checked against the processor's declared types here. */
+type LooseParams = Record<string, number | boolean | string | readonly number[]>;
 
 /**
  * Replaces each enum name in `params` with the number the flat parameter lists
@@ -22,10 +13,10 @@ export type MasteringInsertParams = Record<string, MasteringInsertParamValue>;
  */
 export function resolveProcessorParams(
   processor: string,
-  params: MasteringSoloProcessorParams,
+  params: object,
 ): Record<string, number | boolean> {
   let resolved: Record<string, number | boolean> | undefined;
-  for (const [key, value] of Object.entries(params)) {
+  for (const [key, value] of Object.entries(params as LooseParams)) {
     if (typeof value !== 'string') {
       continue;
     }
@@ -51,16 +42,16 @@ export function resolveProcessorParams(
 export function resolveInsertParams(
   fnName: string,
   processor: string,
-  params: MasteringInsertParams,
+  params: object,
 ): Record<string, number | boolean | string | number[]> {
   const info = JSON.parse(addon.masteringInsertParamInfo(processor) as string) as {
     name: string;
     type: string;
   }[];
   const kinds = new Map(info.map((param) => [param.name, param.type]));
-  const scalars: Record<string, MasteringSoloProcessorParamValue> = {};
+  const scalars: Record<string, number | boolean | string> = {};
   const out: Record<string, number | boolean | string | number[]> = {};
-  for (const [key, value] of Object.entries(params)) {
+  for (const [key, value] of Object.entries(params as LooseParams)) {
     const kind = kinds.get(key);
     if (kind === 'string') {
       if (typeof value !== 'string') {

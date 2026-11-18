@@ -115,7 +115,7 @@ describe('Node async API', () => {
   describe('masterAudioAsync', () => {
     it('mono variant resolves to a mastered MonoChainResult', async () => {
       const samples = generateSine(220, 1);
-      const result = await masterAudioAsync(samples, SR, 'pop');
+      const result = await masterAudioAsync(samples, SR, { preset: 'pop' });
       expect(result.samples.length).toBeGreaterThan(0);
       expect(Number.isFinite(result.outputLufs)).toBe(true);
       expect(Array.isArray(result.stages)).toBe(true);
@@ -125,7 +125,7 @@ describe('Node async API', () => {
     it('rejects a refused preset as RangeError', async () => {
       let caught: unknown;
       try {
-        await masterAudioAsync(generateSine(220, 0.1), SR, 'not-a-preset' as never);
+        await masterAudioAsync(generateSine(220, 0.1), SR, { preset: 'not-a-preset' as never });
       } catch (error) {
         caught = error;
       }
@@ -137,7 +137,7 @@ describe('Node async API', () => {
     it('stereo variant resolves to a mastered StereoChainResult', async () => {
       const left = generateSine(220, 1);
       const right = generateSine(330, 1);
-      const result = await masterAudioStereoAsync(left, right, SR, 'pop');
+      const result = await masterAudioStereoAsync({ left, right, sampleRate: SR, preset: 'pop' });
       expect(result.left.length).toBe(left.length);
       expect(result.right.length).toBe(right.length);
       expect(Array.isArray(result.stages)).toBe(true);
@@ -170,8 +170,8 @@ describe('Node async API', () => {
     it('shape matches the synchronous version on the same input', async () => {
       const samples = generateSine(220, 0.5);
       const [syncResult, asyncResult] = [
-        masterAudio(samples, SR, 'pop'),
-        await masterAudioAsync(samples, SR, 'pop'),
+        masterAudio(samples, SR, { preset: 'pop' }),
+        await masterAudioAsync(samples, SR, { preset: 'pop' }),
       ];
       expect(Object.keys(asyncResult).sort()).toEqual(Object.keys(syncResult).sort());
     });

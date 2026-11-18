@@ -1,5 +1,6 @@
 import { ErrorCode, SonareError } from './errors.js';
 import { midiFxConfigJson } from './internal/midi_fx_config.js';
+import { mixSceneJsonToNative } from './internal/mix_scene.js';
 import { deinterleave, interleavePlanar } from './internal/planar.js';
 import { setTimelineHandle } from './internal/project_handles.js';
 import {
@@ -563,7 +564,9 @@ export class Project {
    *   The scene is still applied; empty when every key was consumed.
    */
   setMixerSceneJson(sceneJson: string): string[] {
-    return this.native.setMixerSceneJson(sceneJson);
+    return this.native.setMixerSceneJson(
+      mixSceneJsonToNative('Project.setMixerSceneJson', sceneJson),
+    );
   }
 
   /**

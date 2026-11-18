@@ -1,13 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
-  type JsonResult,
   type MasteringAssistantResult,
   type MasteringAudioProfile,
   type MasteringStreamingPreviewResult,
+  masteringAnalyzePair,
+  masteringAnalyzeStereo,
   masteringAssistantSuggest,
   masteringAudioProfile,
-  masteringPairAnalyze,
-  masteringStereoAnalyze,
   masteringStreamingPreview,
   type PairAnalysis,
   type PairAnalysisResultMap,
@@ -35,7 +34,7 @@ const stereoMapIsComplete: Exclude<StereoAnalysis, keyof StereoAnalysisResultMap
   ? true
   : false = true;
 
-describe('typed JSON results of the explainable-mastering helpers', () => {
+describe('typed results of the explainable-mastering helpers', () => {
   const source = tones(220, 1760, 0.2);
   const reference = tones(330, 2200, 0.4);
 
@@ -44,59 +43,65 @@ describe('typed JSON results of the explainable-mastering helpers', () => {
   });
 
   it('types the assistant suggestion', () => {
-    const json = masteringAssistantSuggest({ samples: source, sampleRate: SR });
-    const result: MasteringAssistantResult = JSON.parse(json) as JsonResult<typeof json>;
-    expect(result.chainConfig.version).toBeGreaterThanOrEqual(1);
+    const result: MasteringAssistantResult = masteringAssistantSuggest({
+      samples: source,
+      sampleRate: SR,
+    });
+    expect(typeof result.chainConfig).toBe('object');
     expect(result.explanation.length).toBeGreaterThan(0);
     expect(typeof result.profile.durationSec).toBe('number');
   });
 
   it('types the streaming preview', () => {
-    const json = masteringStreamingPreview({ samples: source, sampleRate: SR });
-    const result: MasteringStreamingPreviewResult = JSON.parse(json) as JsonResult<typeof json>;
+    const result: MasteringStreamingPreviewResult = masteringStreamingPreview({
+      samples: source,
+      sampleRate: SR,
+    });
     expect(result.platforms.length).toBeGreaterThan(0);
     expect(typeof result.platforms[0]?.ceilingRisk).toBe('boolean');
   });
 
   it('types the audio profile', () => {
-    const json = masteringAudioProfile({ samples: source, sampleRate: SR });
-    const result: MasteringAudioProfile = JSON.parse(json) as JsonResult<typeof json>;
+    const result: MasteringAudioProfile = masteringAudioProfile({
+      samples: source,
+      sampleRate: SR,
+    });
     expect(typeof result.loudness.integratedLufs).toBe('number');
   });
 
   it('keys the pair analysis result on the analysis name literal', () => {
-    const loudness = masteringPairAnalyze({
-      analysisName: 'match.referenceLoudness',
+    const loudness = masteringAnalyzePair({
+      analysis: 'match.referenceLoudness',
       source,
       reference,
       sampleRate: SR,
     });
-    const gain = (JSON.parse(loudness) as JsonResult<typeof loudness>).gainToMatchDb;
-    expect(typeof gain).toBe('number');
+    expect(typeof loudness.gainToMatchDb).toBe('number');
 
-    const curve = masteringPairAnalyze('match.matchEqCurve', source, reference, SR);
-    const parsed = JSON.parse(curve) as JsonResult<typeof curve>;
-    expect(parsed.frequencies.length).toBe(parsed.gainDb.length);
-
-    const bands = masteringPairAnalyze({
-      analysisName: 'match.tonalBalance',
+    const curve = masteringAnalyzePair({
+      analysis: 'match.matchEqCurve',
       source,
       reference,
       sampleRate: SR,
     });
-    expect((JSON.parse(bands) as JsonResult<typeof bands>).bands[0]?.deviationDb).toBeTypeOf(
-      'number',
-    );
+    expect(curve.frequencies.length).toBe(curve.gainDb.length);
+
+    const bands = masteringAnalyzePair({
+      analysis: 'match.tonalBalance',
+      source,
+      reference,
+      sampleRate: SR,
+    });
+    expect(bands.bands[0]?.deviationDb).toBeTypeOf('number');
   });
 
   it('keys the stereo analysis result on the analysis name literal', () => {
-    const json = masteringStereoAnalyze({
-      analysisName: 'stereo.monoCompatCheck',
+    const result = masteringAnalyzeStereo({
+      analysis: 'stereo.monoCompatCheck',
       left: source,
       right: reference,
       sampleRate: SR,
     });
-    const result = JSON.parse(json) as JsonResult<typeof json>;
     expect(typeof result.likelyMonoCompatible).toBe('boolean');
   });
 });

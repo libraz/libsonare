@@ -123,12 +123,12 @@ const NAMED_OPTIONAL_REFUSALS: Array<[string, string, () => unknown]> = [
   [
     'RealtimeVoiceChanger.prepare',
     'maxBlockSize',
-    () => new addon.RealtimeVoiceChanger('neutral-monitor').prepare(48000, 'x'),
+    () => new addon.RealtimeVoiceChanger('neutralMonitor').prepare(48000, 'x'),
   ],
   [
     'RealtimeVoiceChanger.prepare',
     'channels',
-    () => new addon.RealtimeVoiceChanger('neutral-monitor').prepare(48000, 128, 'x'),
+    () => new addon.RealtimeVoiceChanger('neutralMonitor').prepare(48000, 128, 'x'),
   ],
   ['addon.amplitudeToDb', 'ref', () => addon.amplitudeToDb(readerTone, 'x')],
   ['addon.analyze', 'sampleRate', () => addon.analyze(readerTone, 'x')],
@@ -1746,22 +1746,22 @@ export const CASES: AbortGuardCase[] = [
     rejectsArgument: [
       {
         argument: 'note',
-        call: () => new addon.RealtimeVoiceChanger('neutral-monitor').noteOn('60'),
+        call: () => new addon.RealtimeVoiceChanger('neutralMonitor').noteOn('60'),
         message: /note/,
       },
       {
         argument: 'omitted note',
-        call: () => new addon.RealtimeVoiceChanger('neutral-monitor').noteOn(),
+        call: () => new addon.RealtimeVoiceChanger('neutralMonitor').noteOn(),
         message: /note/,
       },
       {
         argument: 'velocity',
-        call: () => new addon.RealtimeVoiceChanger('neutral-monitor').noteOn(60, true),
+        call: () => new addon.RealtimeVoiceChanger('neutralMonitor').noteOn(60, true),
         message: /velocity/,
       },
       {
         argument: 'note past the signed range',
-        call: () => new addon.RealtimeVoiceChanger('neutral-monitor').noteOn(2 ** 32 + 60),
+        call: () => new addon.RealtimeVoiceChanger('neutralMonitor').noteOn(2 ** 32 + 60),
         error: RangeError,
       },
     ],
@@ -1772,12 +1772,12 @@ export const CASES: AbortGuardCase[] = [
     rejectsArgument: [
       {
         argument: 'note',
-        call: () => new addon.RealtimeVoiceChanger('neutral-monitor').noteOff('60'),
+        call: () => new addon.RealtimeVoiceChanger('neutralMonitor').noteOff('60'),
         message: /note/,
       },
       {
         argument: 'note past the signed range',
-        call: () => new addon.RealtimeVoiceChanger('neutral-monitor').noteOff(2 ** 32 + 60),
+        call: () => new addon.RealtimeVoiceChanger('neutralMonitor').noteOff(2 ** 32 + 60),
         error: RangeError,
       },
     ],
@@ -2495,13 +2495,13 @@ export const CASES: AbortGuardCase[] = [
     missingRequired: [],
     rejectsArgument: [
       {
-        argument: 'grainSize past the int range',
-        call: () => new addon.StreamingRetune({ grainSize: 2 ** 32 }),
+        argument: 'grainSizeSamples past the int range',
+        call: () => new addon.StreamingRetune({ grainSizeSamples: 2 ** 32 }),
         error: RangeError,
       },
       {
-        argument: 'semitones past the 32-bit float range',
-        call: () => new addon.StreamingRetune({ semitones: 1e40 }),
+        argument: 'pitchSemitones past the 32-bit float range',
+        call: () => new addon.StreamingRetune({ pitchSemitones: 1e40 }),
         error: RangeError,
       },
     ],

@@ -23,6 +23,7 @@ import {
   masteringRepairDetectTrimRange,
   masteringRepairDetectTrimRangeStereo,
 } from '../src/index.js';
+import { clipDetectionFromNative } from '../src/internal/metering_native.js';
 import { addon } from '../src/native.js';
 
 const SR = 22050;
@@ -158,12 +159,12 @@ describe('masteringRepairDetectNoiseFloor', () => {
 describe('masteringRepairDetectClipping', () => {
   it('counts samples at or past clipThresholdDb, and none in unclipped material', () => {
     const detected = masteringRepairDetectClipping({ samples: clipped(), sampleRate: SR });
-    expect(detected.sampleCount).toBeGreaterThan(0);
-    expect(detected.sampleFraction).toBeCloseTo(detected.sampleCount / LENGTH, 5);
+    expect(detected.clippedSamples).toBeGreaterThan(0);
+    expect(detected.clippedRatio).toBeCloseTo(detected.clippedSamples / LENGTH, 5);
     expect(detected.runCount).toBeGreaterThan(0);
     expect(detected.longestRunSamples).toBeGreaterThan(0);
     expect(
-      masteringRepairDetectClipping({ samples: tone(LENGTH, 440), sampleRate: SR }).sampleCount,
+      masteringRepairDetectClipping({ samples: tone(LENGTH, 440), sampleRate: SR }).clippedSamples,
     ).toBe(0);
   });
 
@@ -174,7 +175,7 @@ describe('masteringRepairDetectClipping', () => {
       sampleRate: SR,
       clipThresholdDb: 20 * Math.log10(0.999999),
     });
-    expect(raised.sampleCount).toBeLessThan(base.sampleCount);
+    expect(raised.clippedSamples).toBeLessThan(base.clippedSamples);
     // The reconstruction fields describe a repair that does not run here, so
     // they are accepted and change nothing.
     expect(
@@ -193,7 +194,7 @@ describe('masteringRepairDetectClipping', () => {
       samples: clippedThenAttenuated(),
       sampleRate: SR,
     });
-    expect(detected.sampleCount).toBe(0);
+    expect(detected.clippedSamples).toBe(0);
     expect(detected.flatRunCount).toBeGreaterThan(0);
     expect(detected.flatSampleCount).toBeGreaterThan(0);
     expect(detected.longestFlatRunSamples).toBeGreaterThan(0);
@@ -209,7 +210,7 @@ describe('masteringRepairDetectClipping', () => {
       samples: tone(LENGTH, 440, 1.0),
       sampleRate: SR,
     });
-    expect(detected.sampleCount).toBeGreaterThan(0);
+    expect(detected.clippedSamples).toBeGreaterThan(0);
     expect(detected.flatRunCount).toBe(0);
     expect(detected.flatSampleCount).toBe(0);
     expect(detected.flatLevel).toBe(0);
@@ -403,7 +404,7 @@ describe('an omitted config is the library defaults', () => {
     ],
     [
       'masteringRepairDetectClipping',
-      () => addon.masteringRepairDetectClipping(clipped(), SR),
+      () => clipDetectionFromNative(addon.masteringRepairDetectClipping(clipped(), SR)),
       () => masteringRepairDetectClipping({ samples: clipped(), sampleRate: SR }),
     ],
     [

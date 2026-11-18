@@ -14,7 +14,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { mastering, meteringSpectrum } from '../src/index.js';
+import { masteringNormalizeLoudness, meteringSpectrum } from '../src/index.js';
 
 const SR = 44100;
 
@@ -38,20 +38,20 @@ function maxAbsDiff(a: Float32Array, b: Float32Array): number {
   return worst;
 }
 
-// Which layer answers is part of what these assert: a negative release is in
-// domain for a float and reaches the loudness validator, while a non-finite one
-// is refused by the addon's reader and never gets there.
+// The facade refuses every value that is not a positive finite float, an explicit
+// 0 included: the default is reached by omitting the field.
 const NON_SENTINEL_REFUSED: [string, number, RegExp][] = [
-  ['a negative value', -5, /release_ms must be 0 .* or a finite positive value/],
+  ['zero', 0, /releaseMs must be positive/],
+  ['a negative value', -5, /releaseMs must be positive/],
   ['NaN', Number.NaN, /releaseMs must be a finite number/],
   ['positive infinity', Number.POSITIVE_INFINITY, /releaseMs must be a finite number/],
   ['negative infinity', Number.NEGATIVE_INFINITY, /releaseMs must be a finite number/],
 ];
 
-describe('mastering releaseMs', () => {
+describe('masteringNormalizeLoudness releaseMs', () => {
   const samples = bursts(SR);
   const master = (releaseMs?: number) =>
-    mastering(
+    masteringNormalizeLoudness(
       releaseMs === undefined
         ? { samples, sampleRate: SR, targetLufs: -6 }
         : { samples, sampleRate: SR, targetLufs: -6, releaseMs },
@@ -64,15 +64,14 @@ describe('mastering releaseMs', () => {
     },
   );
 
-  it('treats 0 as the library default rather than a release of zero', () => {
+  it('takes the library default when omitted', () => {
     const omitted = master();
-    expect(maxAbsDiff(master(0), omitted)).toBe(0);
-    // 50 ms is the documented default the sentinel resolves to.
+    // 50 ms is the documented default an omitted field resolves to.
     expect(maxAbsDiff(master(50), omitted)).toBe(0);
   });
 
   it('applies a non-sentinel release time', () => {
-    // Without this the equalities above would also hold for a release time the
+    // Without this the equality above would also hold for a release time the
     // limiter ignored.
     const omitted = master();
     expect(maxAbsDiff(master(5), omitted)).toBeGreaterThan(0.1);
@@ -98,9 +97,10 @@ describe('meteringSpectrum optional scalars', () => {
   });
 
   it.each(['nFft', 'octaveFraction', 'dbRef', 'dbAmin'])(
-    'treats 0 for %s as the library default',
+    'refuses an explicit 0 for %s and takes the default when it is omitted',
     (field) => {
-      expect(Array.from(spectrum({ [field]: 0 }))).toEqual(Array.from(spectrum()));
+      expect(() => spectrum({ [field]: 0 })).toThrow(RangeError);
+      expect(Array.from(spectrum({ [field]: undefined as never }))).toEqual(Array.from(spectrum()));
     },
   );
 

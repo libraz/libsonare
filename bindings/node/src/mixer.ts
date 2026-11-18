@@ -1,3 +1,9 @@
+import {
+  assertStripMetering,
+  mixMeterSnapshotFromNative,
+  mixSceneJsonFromNative,
+  mixSceneJsonToNative,
+} from './internal/mix_scene.js';
 import { addon } from './native.js';
 import type {
   AutomationCurve,
@@ -5,22 +11,19 @@ import type {
   MeterTap,
   MixerProcessResult,
   MixMeterSnapshot,
-  MixOptions,
-  MixResult,
   MixSceneDocument,
   PanLawName,
   PanMode,
   SendTiming,
+  StripMeteringOptions,
   StripRef,
   SurroundPan,
 } from './types.js';
 import {
-  assertAudioChannels,
   assertClosedToken,
   assertFloatValue,
   assertIntegerValue,
   assertSampleRate,
-  optionsBag,
   requestObject,
 } from './validation.js';
 import {
@@ -67,37 +70,6 @@ export function resample(...args: unknown[]): Float32Array {
   assertSampleRate('resample', request.sourceSampleRate, 'sourceSampleRate');
   assertSampleRate('resample', request.targetSampleRate, 'targetSampleRate');
   return addon.resample(request.samples, request.sourceSampleRate, request.targetSampleRate);
-}
-
-export function mixingScenePresetNames(): string[] {
-  return addon.mixingScenePresetNames();
-}
-
-export function mixingScenePresetJson(presetName: string): string {
-  return addon.mixingScenePresetJson(presetName);
-}
-
-/**
- * Meter configuration for a strip added with {@link Mixer.addStrip}.
- *
- * The field names and defaults are the scene document's `strips[].metering`
- * object, so a strip added imperatively and one declared in a scene describe the
- * same thing. A strip's meters size their buffers when the strip is built, so
- * this is the only place the configuration can be chosen — there is no setter.
- * A full meter costs about 646 KB at 48 kHz and a strip carries two of them.
- */
-export interface StripMeteringOptions {
-  /** Both meters; `false` drops them (about 145 KB for the strip instead of 1.4 MB). Default `true`. */
-  enabled?: boolean;
-  /** LUFS measurement; `false` takes one meter to about 83 KB. Default `true`. */
-  lufs?: boolean;
-  /** Inter-sample (true) peak measurement. Default `true`. */
-  truePeak?: boolean;
-  /**
-   * True-peak oversampling factor: 4 or 8. `0` selects the library default (4x);
-   * any other value is refused.
-   */
-  truePeakOversample?: number;
 }
 
 /** Role of a bus added with {@link Mixer.addBus}. */
@@ -297,6 +269,7 @@ export class Mixer {
       }
       sceneJson = JSON.stringify(bag.scene ?? { strips: [], buses: [] });
     }
+    sceneJson = mixSceneJsonToNative('Mixer', sceneJson);
     this.native = new addon.Mixer(sceneJson, bag.sampleRate as number, maxBlockSize);
   }
 
@@ -446,9 +419,10 @@ export class Mixer {
    * Marks the routing graph dirty; call {@link compile} (or process) to rebuild.
    *
    * @returns The new strip's index
-   * @throws If the id is already taken, or `truePeakOversample` is not 0 (default), 4 or 8
+   * @throws If the id is already taken; RangeError when `truePeakOversample` is not 4 or 8 (omit it for the default)
    */
   addStrip(id: string, metering?: StripMeteringOptions): number {
+    assertStripMetering('addStrip', metering);
     this.native.addStrip(id, metering);
     return this.stripById(id);
   }
@@ -718,17 +692,19 @@ export class Mixer {
    */
   stripMeter(strip: StripRef, tap?: MeterTap): MixMeterSnapshot {
     if (isAbsent(tap)) {
-      return this.native.stripMeter(strip);
+      return mixMeterSnapshotFromNative(this.native.stripMeter(strip));
     }
-    return this.native.meterTap(
-      strip,
-      tokenArg('stripMeter', tap, 'tap', (token) => meterTapValue(token as MeterTap)),
+    return mixMeterSnapshotFromNative(
+      this.native.meterTap(
+        strip,
+        tokenArg('stripMeter', tap, 'tap', (token) => meterTapValue(token as MeterTap)),
+      ),
     );
   }
 
   /** Read the post-insert meter for a compiled bus, including the master bus. */
   busMeter(busId: string): MixMeterSnapshot {
-    return this.native.busMeter(busId);
+    return mixMeterSnapshotFromNative(this.native.busMeter(busId));
   }
 
   /**
@@ -872,7 +848,7 @@ export class Mixer {
 
   /** Serialize the current scene (strips, buses, sends, connections) to JSON. */
   toJson(): string {
-    return this.native.toSceneJson();
+    return mixSceneJsonFromNative(this.native.toSceneJson());
   }
 
   /** Release the underlying native mixer. Idempotent. */
@@ -894,64 +870,4 @@ export class Mixer {
   [Symbol.dispose](): void {
     this.destroy();
   }
-}
-
-/**
- * Inputs for the one-shot {@link mixStereo} facade, which mixes multiple
- * stereo strips down to one stereo bus.
- *
- * The returned `meters` array carries a per-strip {@link MixMeterSnapshot}.
- * Its LUFS fields (`momentaryLufs`, `shortTermLufs`, `integratedLufs`) are
- * integrators whose windows a short one-shot mix does not fill, so they read the
- * -120 dB floor sentinel. Use {@link Mixer} for meaningful loudness.
- *
- * The true-peak fields are not integrators and need no streaming: each is a
- * max-hold over the block just processed and is valid from the first one,
- * flooring only on silence. This facade mixes the whole input as a single block
- * and flushes the meters after it, so the reading matches `meteringTruePeakDb`
- * over the same signal exactly.
- */
-export interface MixStereoRequest extends MixOptions {
-  leftChannels: Float32Array[];
-  rightChannels: Float32Array[];
-  sampleRate?: number;
-}
-
-export function mixStereo(request: MixStereoRequest): MixResult;
-export function mixStereo(
-  leftChannels: Float32Array[],
-  rightChannels: Float32Array[],
-  sampleRate?: number,
-  options?: MixOptions,
-): MixResult;
-export function mixStereo(
-  leftChannels: Float32Array[] | MixStereoRequest,
-  rightChannels?: Float32Array[],
-  sampleRate = 48000,
-  options: MixOptions = {},
-): MixResult {
-  const request = Array.isArray(leftChannels)
-    ? {
-        leftChannels,
-        rightChannels: rightChannels as Float32Array[],
-        sampleRate,
-        ...optionsBag('mixStereo', options),
-      }
-    : requestObject('mixStereo', leftChannels, 'request', true);
-  const resolvedSampleRate = request.sampleRate ?? 48000;
-  assertAudioChannels(
-    'mixStereo',
-    request.leftChannels,
-    resolvedSampleRate,
-    request,
-    'leftChannels',
-  );
-  assertAudioChannels(
-    'mixStereo',
-    request.rightChannels,
-    resolvedSampleRate,
-    request,
-    'rightChannels',
-  );
-  return addon.mixStereo(request.leftChannels, request.rightChannels, resolvedSampleRate, request);
 }

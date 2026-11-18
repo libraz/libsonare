@@ -7,11 +7,6 @@ export * from './effects_percussive.js';
 export * from './effects_separation.js';
 export * from './effects_spectral.js';
 export * from './effects_timepitch.js';
-export type {
-  MasteringInsertParams,
-  MasteringInsertParamValue,
-  MasteringSoloProcessorParams,
-} from './internal/processor_params.js';
 export * from './mastering_chain.js';
 export * from './mastering_dynamics.js';
 export * from './mastering_streaming.js';

@@ -1,372 +1,458 @@
+import { nestChainConfig } from './internal/chain_config.js';
+import { masteringPlatformNames, masteringPresetNames } from './mastering_catalog.js';
 import { addon } from './native.js';
 import type {
   MasteringAssistantResult,
+  MasteringAudioProfile,
+  MasteringAudioProfileSpectral,
+  MasteringChainConfig,
+  MasteringPlatform,
+  MasteringPreset,
   MasteringStreamingPreviewResult,
   StreamingPlatform,
-  TypedJson,
 } from './types.js';
-import { assertAudioInput, requestObject } from './validation.js';
+import type { OptionsOf, ValidateOptions } from './validation.js';
+import {
+  assertAudioInput,
+  assertClosedToken,
+  assertFloatValue,
+  assertPositiveInteger,
+  requestOnly,
+  sampleOneShot,
+} from './validation.js';
 
-/**
- * Params accepted by the assistant entry points. Every key is numeric except
- * two NAMES: `targetPlatform`, a delivery target (`'broadcast'`, `'podcast'`,
- * `'club'`, ...), and `preset`, the mastering preset the suggestion starts from
- * (default `'streaming'`; restoration presets are refused). The assistant never
- * picks a preset from the audio. A number is rejected for either: the numeric
- * index the C ABI carries is a transport detail for callers that cannot pass a
- * string, not part of the JavaScript vocabulary.
- */
-export type MasteringAssistantParams = Record<string, number | boolean | string>;
+export type { MasteringAudioProfile, MasteringAudioProfileDefects } from './types.js';
 
-export interface MasteringAssistantSuggestRequest {
+/** Request form of {@link masteringAudioProfile}. */
+export interface MasteringAudioProfileRequest extends ValidateOptions {
   samples: Float32Array;
-  sampleRate?: number;
-  params?: MasteringAssistantParams;
+  /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
+  sampleRate: number;
+  /** Analysis window in samples at 48000 Hz, rescaled to the input rate; a positive integer. */
+  nFft?: number;
+  /** Analysis hop in samples at 48000 Hz, rescaled to the input rate; a positive integer. */
+  hopLength?: number;
+  /** True-peak oversampling factor; a positive integer. */
+  truePeakOversample?: number;
+  /** Measure the repair defects. Default true; false leaves `defects` absent. */
+  detectDefects?: boolean;
 }
 
-/** The repair-defect block of {@link MasteringAudioProfile}, and of each channel of a repair analysis. */
-export interface MasteringAudioProfileDefects {
-  measured: boolean;
-  clickCount: number;
-  clickRejected: number;
-  clickLongestRunSamples: number;
-  clickPerSecond: number;
-  crackleSampleCount: number;
-  crackleSampleFraction: number;
-  cracklePerSecond: number;
-  clipSampleCount: number;
-  clipRunCount: number;
-  clipLongestRunSamples: number;
-  clipSampleFraction: number;
-  clipFlatRunCount: number;
-  clipFlatSampleCount: number;
-  clipLongestFlatRunSamples: number;
-  /**
-   * Level the flat runs (at least -40 dBFS) sit at: the largest run level once the two
-   * highest runs are set aside.
-   */
-  clipFlatLevel: number;
-  noiseFloorDbfs: number;
-  noiseBandPeakDbfs: number;
-  noiseBandPeakIndex: number;
-  humFundamentalHz: number;
-  /** Linear energy ratio of the winning hum candidate over the median candidate (not dB); 1.0 means no peak. */
-  humFundamentalProminence: number;
-  humHarmonics: number;
-  humFundamentalDbfs: number;
-  humPeakHarmonicDbfs: number;
-  lateDecayRatioDb: number;
+/** Stereo counterpart of {@link MasteringAudioProfileRequest}. */
+export interface MasteringAudioProfileStereoRequest extends ValidateOptions {
+  left: Float32Array;
+  right: Float32Array;
+  /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
+  sampleRate: number;
+  nFft?: number;
+  hopLength?: number;
+  truePeakOversample?: number;
+  detectDefects?: boolean;
 }
 
-/**
- * The shape {@link masteringAudioProfile}'s JSON parses to.
- *
- * The profile crosses as a string, so nothing type-checks it on arrival; this
- * declaration is what a conformance check compares against the paths the C++
- * writer publishes, so a field added on one side and not the other fails there
- * rather than reaching a caller as `undefined`.
- */
-export interface MasteringAudioProfile {
-  durationSec: number;
-  bpm: number;
-  bpmConfidence: number;
-  loudness: {
-    integratedLufs: number;
-    lraLu: number;
+/** Fields the assistant reads beside the audio. */
+interface MasteringAssistantSettings {
+  /** Integrated loudness target in LUFS. */
+  targetLufs?: number;
+  /** True-peak ceiling in dBFS. */
+  ceilingDb?: number;
+  /** Let the suggestion enable repair stages. */
+  enableRepair?: boolean;
+  /** Prefer settings that survive streaming-service normalization. */
+  preferStreamingSafe?: boolean;
+  /** Blend factor in `[0, 1]` for the speech mono fold. */
+  speechMonoAmount?: number;
+  /** Delivery target the loudness and ceiling follow. */
+  targetPlatform?: MasteringPlatform;
+  /** Mastering preset the suggestion starts from; restoration presets are refused. */
+  preset?: MasteringPreset;
+}
+
+/** Request form of {@link masteringAssistantSuggest} and {@link masteringAssistantSuggestChain}. */
+export interface MasteringAssistantSuggestRequest
+  extends MasteringAssistantSettings,
+    ValidateOptions {
+  samples: Float32Array;
+  /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
+  sampleRate: number;
+}
+
+/** Request form of {@link masteringAssistantSuggestStereo} and {@link masteringAssistantSuggestChainStereo}. */
+export interface MasteringAssistantSuggestStereoRequest
+  extends MasteringAssistantSettings,
+    ValidateOptions {
+  left: Float32Array;
+  right: Float32Array;
+  /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
+  sampleRate: number;
+}
+
+/** Request form of {@link masteringStreamingPreview}. */
+export interface MasteringStreamingPreviewRequest extends ValidateOptions {
+  samples: Float32Array;
+  /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
+  sampleRate: number;
+  /** Delivery targets to preview; absent: the built-in set. */
+  platforms?: StreamingPlatform[];
+}
+
+/** Request form of {@link masteringStreamingPreviewStereo}. */
+export interface MasteringStreamingPreviewStereoRequest extends ValidateOptions {
+  left: Float32Array;
+  right: Float32Array;
+  /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
+  sampleRate: number;
+  platforms?: StreamingPlatform[];
+}
+
+type NativeJson = Record<string, unknown>;
+
+// Native still names the assistant profile's true peak, loudness range and onset rate
+// `truePeakDb`, `lraLu` and `attackDensity`.
+function assistantProfileFromNative(native: NativeJson): MasteringAssistantResult['profile'] {
+  const { truePeakDb, lraLu, attackDensity, ...rest } = native as NativeJson & {
     truePeakDb: number;
-    crestFactorDb: number;
-  };
-  /** Band levels (`*RmsDb`) are dBFS, mean square: a full-scale sine reads -3.01 dBFS in its band. */
-  spectral: {
-    subRmsDb: number;
-    lowRmsDb: number;
-    lowMidRmsDb: number;
-    midRmsDb: number;
-    highMidRmsDb: number;
-    highRmsDb: number;
-    airRmsDb: number;
-    centroidHz: number;
-    flatness: number;
-    rolloffHz: number;
-  };
-  dynamics: {
-    shortTermLufsStd: number;
-    /** Onset peaks per second above a fixed floor of percussive rise; 0 for steady material. */
+    lraLu: number;
     attackDensity: number;
-    /** Share of frames at or above 0.35 of the RMS reference, which sets aside outlying events. */
-    sustainRatio: number;
   };
-  /**
-   * What the repair detectors measured. `measured` is false when nothing ran —
-   * either `detectDefects` was not asked for or the input was too short — and
-   * every other field is then at its default rather than a reading.
-   */
-  defects: MasteringAudioProfileDefects;
+  return {
+    ...rest,
+    loudnessRangeLu: lraLu,
+    truePeakDbtp: truePeakDb,
+    attackPerSecond: attackDensity,
+  } as unknown as MasteringAssistantResult['profile'];
+}
+
+function assistantResultFromNative(json: string): MasteringAssistantResult {
+  const native = JSON.parse(json) as {
+    chainConfig: { params: Record<string, unknown> };
+    explanation: string[];
+    profile: NativeJson;
+  };
+  return {
+    chainConfig: nestChainConfig(native.chainConfig.params),
+    explanation: native.explanation,
+    profile: assistantProfileFromNative(native.profile),
+  };
+}
+
+// Native still names the preview's true peak `truePeakDb`.
+function previewFromNative(json: string): MasteringStreamingPreviewResult {
+  const native = JSON.parse(json) as { platforms: NativeJson[] };
+  return {
+    platforms: native.platforms.map((platform) => {
+      const { truePeakDb, ...rest } = platform as NativeJson & { truePeakDb: number };
+      return { ...rest, truePeakDbtp: truePeakDb };
+    }),
+  } as unknown as MasteringStreamingPreviewResult;
+}
+
+// Native reports the defects as one flat bag with a `measured` flag; the facade groups it per detector.
+function profileFromNative(json: string): MasteringAudioProfile {
+  const native = JSON.parse(json) as {
+    loudness: { integratedLufs: number; lraLu: number; truePeakDb: number; crestFactorDb: number };
+    spectral: MasteringAudioProfileSpectral;
+    dynamics: { shortTermLufsStd: number; attackDensity: number; sustainRatio: number };
+    defects: Record<string, number | boolean>;
+  } & NativeJson;
+  const { loudness, spectral, dynamics, defects, ...rest } = native;
+  const d = defects as Record<string, number>;
+  const profile: MasteringAudioProfile = {
+    ...(rest as unknown as Omit<
+      MasteringAudioProfile,
+      'loudness' | 'spectral' | 'dynamics' | 'defects'
+    >),
+    loudness: {
+      integratedLufs: loudness.integratedLufs,
+      loudnessRangeLu: loudness.lraLu,
+      truePeakDbtp: loudness.truePeakDb,
+      crestFactorDb: loudness.crestFactorDb,
+    },
+    spectral,
+    dynamics: {
+      shortTermLufsStd: dynamics.shortTermLufsStd,
+      attackPerSecond: dynamics.attackDensity,
+      sustainRatio: dynamics.sustainRatio,
+    },
+  };
+  if (defects.measured === true) {
+    profile.defects = {
+      click: {
+        count: d.clickCount,
+        rejected: d.clickRejected,
+        longestRunSamples: d.clickLongestRunSamples,
+        perSecond: d.clickPerSecond,
+      },
+      clip: {
+        clippedSamples: d.clipSampleCount,
+        clippedRatio: d.clipSampleFraction,
+        runCount: d.clipRunCount,
+        longestRunSamples: d.clipLongestRunSamples,
+        flatRunCount: d.clipFlatRunCount,
+        longestFlatRunSamples: d.clipLongestFlatRunSamples,
+        flatSampleCount: d.clipFlatSampleCount,
+        flatLevel: d.clipFlatLevel,
+      },
+      crackle: {
+        sampleCount: d.crackleSampleCount,
+        sampleFraction: d.crackleSampleFraction,
+        perSecond: d.cracklePerSecond,
+      },
+      noise: {
+        floorDbfs: d.noiseFloorDbfs,
+        bandPeakDbfs: d.noiseBandPeakDbfs,
+        bandPeakIndex: d.noiseBandPeakIndex,
+      },
+      hum: {
+        fundamentalHz: d.humFundamentalHz,
+        fundamentalProminence: d.humFundamentalProminence,
+        harmonics: d.humHarmonics,
+        fundamentalDbfs: d.humFundamentalDbfs,
+        peakHarmonicDbfs: d.humPeakHarmonicDbfs,
+      },
+      reverb: { lateDecayRatioDb: d.lateDecayRatioDb },
+    };
+  }
+  return profile;
+}
+
+/** Native params of an audio-profile request; the profile always runs the defect detectors unless told not to. */
+function profileParams(
+  fnName: string,
+  r: Pick<
+    MasteringAudioProfileRequest,
+    'nFft' | 'hopLength' | 'truePeakOversample' | 'detectDefects'
+  >,
+): Record<string, number | boolean> {
+  const params: Record<string, number | boolean> = {};
+  for (const key of ['nFft', 'hopLength', 'truePeakOversample'] as const) {
+    const value = r[key];
+    if (value !== undefined && value !== null) {
+      assertPositiveInteger(fnName, value, key);
+      params[key] = value;
+    }
+  }
+  params.detectDefects = r.detectDefects ?? true;
+  return params;
+}
+
+/** Native params of an assistant request, with the two name-valued fields checked against the library's tables. */
+function assistantParams(
+  fnName: string,
+  r: MasteringAssistantSettings,
+): Record<string, number | boolean | string> {
+  const params: Record<string, number | boolean | string> = {};
+  for (const key of ['targetLufs', 'ceilingDb'] as const) {
+    if (r[key] !== undefined && r[key] !== null) {
+      assertFloatValue(fnName, r[key], key);
+      params[key] = r[key];
+    }
+  }
+  if (r.speechMonoAmount !== undefined && r.speechMonoAmount !== null) {
+    assertFloatValue(fnName, r.speechMonoAmount, 'speechMonoAmount');
+    params.speechMonoAmount = r.speechMonoAmount;
+  }
+  for (const key of ['enableRepair', 'preferStreamingSafe'] as const) {
+    if (r[key] !== undefined && r[key] !== null) {
+      params[key] = r[key] as boolean;
+    }
+  }
+  if (r.targetPlatform !== undefined && r.targetPlatform !== null) {
+    assertClosedToken(fnName, r.targetPlatform, masteringPlatformNames(), 'targetPlatform');
+    params.targetPlatform = r.targetPlatform;
+  }
+  if (r.preset !== undefined && r.preset !== null) {
+    assertClosedToken(fnName, r.preset, masteringPresetNames(), 'preset');
+    params.preset = r.preset;
+  }
+  return params;
 }
 
 /**
- * The profile entry points take numeric params only; they have no target platform.
- * `params.nFft` and `params.hopLength` are the window length and hop in samples at 48000 Hz,
- * rescaled to the input sample rate.
+ * Suggest a mastering chain for mono audio.
+ *
+ * @param samples - Audio samples (mono, float32)
+ * @param sampleRate - Sample rate in Hz, an integer in `[8000, 384000]`
+ * @param options - Assistant settings ({@link MasteringAssistantSuggestRequest}) and `validate`
+ * @returns The suggested chain, one explanation line per decision and the measured profile
+ * @throws {TypeError} when `sampleRate` is missing or a field has the wrong type
+ * @throws {RangeError} on audio out of domain, or an unknown `targetPlatform` or `preset`
  */
-export interface MasteringAudioProfileRequest {
-  samples: Float32Array;
-  sampleRate?: number;
-  params?: Record<string, number | boolean>;
-}
-
-export interface MasteringStreamingPreviewRequest {
-  samples: Float32Array;
-  sampleRate?: number;
-  platforms?: StreamingPlatform[];
-}
-
-/** Request for {@link masteringAssistantSuggestStereo}. */
-export interface MasteringAssistantSuggestStereoRequest {
-  left: Float32Array;
-  right: Float32Array;
-  sampleRate?: number;
-  params?: MasteringAssistantParams;
-}
-
-/**
- * Request for {@link masteringAudioProfileStereo}. `params.nFft` and `params.hopLength` are in
- * samples at 48000 Hz, rescaled to the input sample rate.
- */
-export interface MasteringAudioProfileStereoRequest {
-  left: Float32Array;
-  right: Float32Array;
-  sampleRate?: number;
-  params?: Record<string, number | boolean>;
-}
-
-/** Request for {@link masteringStreamingPreviewStereo}. */
-export interface MasteringStreamingPreviewStereoRequest {
-  left: Float32Array;
-  right: Float32Array;
-  sampleRate?: number;
-  platforms?: StreamingPlatform[];
-}
-
 export function masteringAssistantSuggest(
   request: MasteringAssistantSuggestRequest,
-): TypedJson<MasteringAssistantResult>;
+): MasteringAssistantResult;
 export function masteringAssistantSuggest(
   samples: Float32Array,
-  sampleRate?: number,
-  params?: MasteringAssistantParams,
-): TypedJson<MasteringAssistantResult>;
-export function masteringAssistantSuggest(
-  samples: Float32Array | MasteringAssistantSuggestRequest,
-  sampleRate = 22050,
-  params: MasteringAssistantParams = {},
-): string {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, params }
-      : requestObject('masteringAssistantSuggest', samples);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('masteringAssistantSuggest', request.samples, resolvedSampleRate, request);
-  return addon.masteringAssistantSuggest(request.samples, resolvedSampleRate, request.params ?? {});
+  sampleRate: number,
+  options?: OptionsOf<MasteringAssistantSuggestRequest>,
+): MasteringAssistantResult;
+export function masteringAssistantSuggest(...args: unknown[]): MasteringAssistantResult {
+  const r = sampleOneShot<MasteringAssistantSuggestRequest>('masteringAssistantSuggest', args);
+  assertAudioInput('masteringAssistantSuggest', r.samples, r.sampleRate, r);
+  return assistantResultFromNative(
+    addon.masteringAssistantSuggest(
+      r.samples,
+      r.sampleRate,
+      assistantParams('masteringAssistantSuggest', r),
+    ),
+  );
 }
 
 /**
- * Suggest a mastering chain and return only its flat `{ "module.param": value }`
- * params -- the same values {@link masteringAssistantSuggest}'s parsed
- * `chainConfig.params` carries, without having to dig them out of the full
- * assistant document (explanation, profile) first. The
- * result can be passed directly as {@link masterAudio}'s `overrides`.
+ * Suggest a mastering chain and return it alone, as the nested
+ * {@link MasteringChainConfig} {@link masteringAssistantSuggest} carries as
+ * `chainConfig`. Pass it as `overrides` to {@link masterAudio} unchanged.
  *
- * @throws Error if a suggested param is not a number or boolean (a v2
- *   structured multiband stage); nothing the assistant produces today does
- *   this, but a caller must never see it silently dropped.
+ * @throws {TypeError} when `sampleRate` is missing or a field has the wrong type
+ * @throws {RangeError} on audio out of domain, or an unknown `targetPlatform` or `preset`
  */
 export function masteringAssistantSuggestChain(
   request: MasteringAssistantSuggestRequest,
-): Record<string, number | boolean> {
-  requestObject('masteringAssistantSuggestChain', request, 'request', true);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('masteringAssistantSuggestChain', request.samples, resolvedSampleRate, request);
-  return addon.masteringAssistantSuggestChain(
-    request.samples,
-    resolvedSampleRate,
-    request.params ?? {},
+): MasteringChainConfig;
+export function masteringAssistantSuggestChain(
+  samples: Float32Array,
+  sampleRate: number,
+  options?: OptionsOf<MasteringAssistantSuggestRequest>,
+): MasteringChainConfig;
+export function masteringAssistantSuggestChain(...args: unknown[]): MasteringChainConfig {
+  const r = sampleOneShot<MasteringAssistantSuggestRequest>('masteringAssistantSuggestChain', args);
+  assertAudioInput('masteringAssistantSuggestChain', r.samples, r.sampleRate, r);
+  return nestChainConfig(
+    addon.masteringAssistantSuggestChain(
+      r.samples,
+      r.sampleRate,
+      assistantParams('masteringAssistantSuggestChain', r),
+    ),
   );
 }
 
-export function masteringAudioProfile(
-  request: MasteringAudioProfileRequest,
-): TypedJson<MasteringAudioProfile>;
+/**
+ * Measure the mastering profile of mono audio: loudness, spectral and dynamics
+ * groups, and — unless `detectDefects` is false — the repair detectors' readings
+ * under `defects`.
+ *
+ * @throws {TypeError} when `sampleRate` is missing or a field has the wrong type
+ * @throws {RangeError} on audio out of domain or a non-positive `nFft`, `hopLength` or
+ *   `truePeakOversample`
+ */
+export function masteringAudioProfile(request: MasteringAudioProfileRequest): MasteringAudioProfile;
 export function masteringAudioProfile(
   samples: Float32Array,
-  sampleRate?: number,
-  params?: Record<string, number | boolean>,
-): TypedJson<MasteringAudioProfile>;
-export function masteringAudioProfile(
-  samples: Float32Array | MasteringAudioProfileRequest,
-  sampleRate = 22050,
-  params: Record<string, number | boolean> = {},
-): string {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, params }
-      : requestObject('masteringAudioProfile', samples);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('masteringAudioProfile', request.samples, resolvedSampleRate, request);
-  return addon.masteringAudioProfile(request.samples, resolvedSampleRate, request.params ?? {});
+  sampleRate: number,
+  options?: OptionsOf<MasteringAudioProfileRequest>,
+): MasteringAudioProfile;
+export function masteringAudioProfile(...args: unknown[]): MasteringAudioProfile {
+  const r = sampleOneShot<MasteringAudioProfileRequest>('masteringAudioProfile', args);
+  assertAudioInput('masteringAudioProfile', r.samples, r.sampleRate, r);
+  return profileFromNative(
+    addon.masteringAudioProfile(r.samples, r.sampleRate, profileParams('masteringAudioProfile', r)),
+  );
 }
 
+/**
+ * Preview streaming-platform normalization of mono audio.
+ *
+ * @throws {TypeError} when `sampleRate` is missing or a field has the wrong type
+ * @throws {RangeError} on audio out of domain
+ */
 export function masteringStreamingPreview(
   request: MasteringStreamingPreviewRequest,
-): TypedJson<MasteringStreamingPreviewResult>;
+): MasteringStreamingPreviewResult;
 export function masteringStreamingPreview(
   samples: Float32Array,
-  sampleRate?: number,
-  platforms?: StreamingPlatform[],
-): TypedJson<MasteringStreamingPreviewResult>;
-export function masteringStreamingPreview(
-  samples: Float32Array | MasteringStreamingPreviewRequest,
-  sampleRate = 22050,
-  platforms: StreamingPlatform[] = [],
-): string {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, platforms }
-      : requestObject('masteringStreamingPreview', samples);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('masteringStreamingPreview', request.samples, resolvedSampleRate, request);
-  return addon.masteringStreamingPreview(
-    request.samples,
-    resolvedSampleRate,
-    request.platforms ?? [],
+  sampleRate: number,
+  options?: OptionsOf<MasteringStreamingPreviewRequest>,
+): MasteringStreamingPreviewResult;
+export function masteringStreamingPreview(...args: unknown[]): MasteringStreamingPreviewResult {
+  const r = sampleOneShot<MasteringStreamingPreviewRequest>('masteringStreamingPreview', args);
+  assertAudioInput('masteringStreamingPreview', r.samples, r.sampleRate, r);
+  return previewFromNative(
+    addon.masteringStreamingPreview(r.samples, r.sampleRate, r.platforms ?? []),
   );
 }
 
 /**
- * The stereo helpers below take a request object only. A `Float32Array` in the
- * first position is the positional spelling of the mono helpers, and would
- * otherwise surface as an unrelated complaint about `left`.
- */
-function assertStereoRequest(fnName: string, request: unknown): void {
-  if (request === null || typeof request !== 'object' || ArrayBuffer.isView(request)) {
-    throw new TypeError(`${fnName} takes a request object { left, right, sampleRate }`);
-  }
-}
-
-/**
- * Suggest a mastering chain for a stereo pair, as shared JSON.
+ * Suggest a mastering chain for a stereo pair. Takes a request object only.
  *
  * Profiles through {@link masteringAudioProfileStereo}, so the loudness stage
  * of the suggestion is built on the channel-summed program rather than a
  * downmix that reads roughly 6 dB low.
+ *
+ * @throws {TypeError} when `sampleRate` is missing or a field has the wrong type
+ * @throws {RangeError} on audio out of domain, or an unknown `targetPlatform` or `preset`
  */
 export function masteringAssistantSuggestStereo(
   request: MasteringAssistantSuggestStereoRequest,
-): TypedJson<MasteringAssistantResult> {
-  assertStereoRequest('masteringAssistantSuggestStereo', request);
-  requestObject('masteringAssistantSuggestStereo', request, 'left', true);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput(
-    'masteringAssistantSuggestStereo',
-    request.left,
-    resolvedSampleRate,
+): MasteringAssistantResult {
+  const r = requestOnly<MasteringAssistantSuggestStereoRequest>('masteringAssistantSuggestStereo', [
     request,
-    'left',
-  );
-  assertAudioInput(
-    'masteringAssistantSuggestStereo',
-    request.right,
-    resolvedSampleRate,
-    request,
-    'right',
-  );
-  return addon.masteringAssistantSuggestStereo(
-    request.left,
-    request.right,
-    resolvedSampleRate,
-    request.params ?? {},
+  ]);
+  assertAudioInput('masteringAssistantSuggestStereo', r.left, r.sampleRate, r, 'left');
+  assertAudioInput('masteringAssistantSuggestStereo', r.right, r.sampleRate, r, 'right');
+  return assistantResultFromNative(
+    addon.masteringAssistantSuggestStereo(
+      r.left,
+      r.right,
+      r.sampleRate,
+      assistantParams('masteringAssistantSuggestStereo', r),
+    ),
   );
 }
 
 /**
- * Suggest a mastering chain for a stereo pair and return only its flat
- * `{ "module.param": value }` params, the same values
- * {@link masteringAssistantSuggestStereo}'s parsed `chainConfig.params`
- * carries. The result can be passed directly as {@link masterAudioStereo}'s
- * `overrides`.
- *
- * @throws Error if a suggested param is not a number or boolean (a v2
- *   structured multiband stage); nothing the assistant produces today does
- *   this, but a caller must never see it silently dropped.
+ * Stereo counterpart of {@link masteringAssistantSuggestChain}: the nested
+ * {@link MasteringChainConfig} alone, ready to pass as `overrides` to
+ * {@link masterAudioStereo}.
  */
 export function masteringAssistantSuggestChainStereo(
   request: MasteringAssistantSuggestStereoRequest,
-): Record<string, number | boolean> {
-  assertStereoRequest('masteringAssistantSuggestChainStereo', request);
-  requestObject('masteringAssistantSuggestChainStereo', request, 'left', true);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput(
+): MasteringChainConfig {
+  const r = requestOnly<MasteringAssistantSuggestStereoRequest>(
     'masteringAssistantSuggestChainStereo',
-    request.left,
-    resolvedSampleRate,
-    request,
-    'left',
+    [request],
   );
-  assertAudioInput(
-    'masteringAssistantSuggestChainStereo',
-    request.right,
-    resolvedSampleRate,
-    request,
-    'right',
-  );
-  return addon.masteringAssistantSuggestChainStereo(
-    request.left,
-    request.right,
-    resolvedSampleRate,
-    request.params ?? {},
+  assertAudioInput('masteringAssistantSuggestChainStereo', r.left, r.sampleRate, r, 'left');
+  assertAudioInput('masteringAssistantSuggestChainStereo', r.right, r.sampleRate, r, 'right');
+  return nestChainConfig(
+    addon.masteringAssistantSuggestChainStereo(
+      r.left,
+      r.right,
+      r.sampleRate,
+      assistantParams('masteringAssistantSuggestChainStereo', r),
+    ),
   );
 }
 
 /**
- * Mastering assistant profile of a stereo pair, as shared JSON.
+ * Mastering profile of a stereo pair.
  *
- * The `loudness` block is measured from the two channels: integrated LUFS
- * and LRA come from the channel-summed program and the true peak is the larger
- * of the two. The spectral, dynamics and tempo fields describe shape and timing
- * rather than absolute level and are measured on the downmix, which keeps them
- * comparable with {@link masteringAudioProfile}. Defect detectors run on each
- * channel and their results are aggregated.
+ * The `loudness` group is measured from the two channels: integrated LUFS and
+ * loudness range come from the channel-summed program and the true peak is the
+ * larger of the two. The spectral, dynamics and tempo fields describe shape and
+ * timing rather than absolute level and are measured on the downmix, which keeps
+ * them comparable with {@link masteringAudioProfile}. Defect detectors run on
+ * each channel and their results are aggregated.
  */
 export function masteringAudioProfileStereo(
   request: MasteringAudioProfileStereoRequest,
-): TypedJson<MasteringAudioProfile> {
-  assertStereoRequest('masteringAudioProfileStereo', request);
-  requestObject('masteringAudioProfileStereo', request, 'left', true);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput(
-    'masteringAudioProfileStereo',
-    request.left,
-    resolvedSampleRate,
+): MasteringAudioProfile {
+  const r = requestOnly<MasteringAudioProfileStereoRequest>('masteringAudioProfileStereo', [
     request,
-    'left',
-  );
-  assertAudioInput(
-    'masteringAudioProfileStereo',
-    request.right,
-    resolvedSampleRate,
-    request,
-    'right',
-  );
-  return addon.masteringAudioProfileStereo(
-    request.left,
-    request.right,
-    resolvedSampleRate,
-    request.params ?? {},
+  ]);
+  assertAudioInput('masteringAudioProfileStereo', r.left, r.sampleRate, r, 'left');
+  assertAudioInput('masteringAudioProfileStereo', r.right, r.sampleRate, r, 'right');
+  return profileFromNative(
+    addon.masteringAudioProfileStereo(
+      r.left,
+      r.right,
+      r.sampleRate,
+      profileParams('masteringAudioProfileStereo', r),
+    ),
   );
 }
 
 /**
- * Preview streaming-platform normalization for a stereo pair, as shared JSON.
+ * Preview streaming-platform normalization for a stereo pair.
  *
  * Measures the integrated loudness with BS.1770 channel summing and reports the
  * larger of the two channel true peaks. Passing a `0.5 * (left + right)` downmix
@@ -376,28 +462,13 @@ export function masteringAudioProfileStereo(
  */
 export function masteringStreamingPreviewStereo(
   request: MasteringStreamingPreviewStereoRequest,
-): TypedJson<MasteringStreamingPreviewResult> {
-  assertStereoRequest('masteringStreamingPreviewStereo', request);
-  requestObject('masteringStreamingPreviewStereo', request, 'left', true);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput(
-    'masteringStreamingPreviewStereo',
-    request.left,
-    resolvedSampleRate,
+): MasteringStreamingPreviewResult {
+  const r = requestOnly<MasteringStreamingPreviewStereoRequest>('masteringStreamingPreviewStereo', [
     request,
-    'left',
-  );
-  assertAudioInput(
-    'masteringStreamingPreviewStereo',
-    request.right,
-    resolvedSampleRate,
-    request,
-    'right',
-  );
-  return addon.masteringStreamingPreviewStereo(
-    request.left,
-    request.right,
-    resolvedSampleRate,
-    request.platforms ?? [],
+  ]);
+  assertAudioInput('masteringStreamingPreviewStereo', r.left, r.sampleRate, r, 'left');
+  assertAudioInput('masteringStreamingPreviewStereo', r.right, r.sampleRate, r, 'right');
+  return previewFromNative(
+    addon.masteringStreamingPreviewStereo(r.left, r.right, r.sampleRate, r.platforms ?? []),
   );
 }

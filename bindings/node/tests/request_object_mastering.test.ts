@@ -4,18 +4,17 @@ import {
   masterAudioAsync,
   masterAudioStereo,
   masterAudioStereoAsync,
-  mastering,
+  masteringAnalyzePair,
+  masteringAnalyzeStereo,
+  masteringApplyPairProcessor,
+  masteringApplyProcessor,
+  masteringApplyProcessorStereo,
   masteringAssistantSuggest,
   masteringAudioProfile,
-  masteringChain,
-  masteringChainStereo,
   masteringDynamicsCompressor,
   masteringDynamicsGate,
   masteringDynamicsTransientShaper,
-  masteringPairAnalyze,
-  masteringPairProcess,
-  masteringProcess,
-  masteringProcessStereo,
+  masteringNormalizeLoudness,
   masteringRepairDeclick,
   masteringRepairDeclip,
   masteringRepairDecrackle,
@@ -23,7 +22,6 @@ import {
   masteringRepairDenoiseClassical,
   masteringRepairDereverbClassical,
   masteringRepairTrimSilence,
-  masteringStereoAnalyze,
   masteringStreamingPreview,
   normalize,
 } from '../src/index.js';
@@ -39,19 +37,22 @@ function signal(): Float32Array {
 }
 
 describe('mastering request-object compatibility', () => {
-  it('mastering preserves the positional result', () => {
+  it('masteringNormalizeLoudness preserves the positional result', () => {
     const samples = signal();
-    const positional = mastering(samples, sampleRate, { targetLufs: -18 });
-    const request = mastering({ samples, sampleRate, targetLufs: -18 });
+    const positional = masteringNormalizeLoudness(samples, sampleRate, { targetLufs: -18 });
+    const request = masteringNormalizeLoudness({ samples, sampleRate, targetLufs: -18 });
 
     expect(request).toEqual(positional);
   });
 
   it('named processors preserve positional results', () => {
     const samples = signal();
-    const positional = masteringProcess('dynamics.compressor', samples, sampleRate, { ratio: 2 });
-    const request = masteringProcess({
-      processorName: 'dynamics.compressor',
+    const positional = masteringApplyProcessor(samples, sampleRate, {
+      processor: 'dynamics.compressor',
+      params: { ratio: 2 },
+    });
+    const request = masteringApplyProcessor({
+      processor: 'dynamics.compressor',
       samples,
       sampleRate,
       params: { ratio: 2 },
@@ -61,35 +62,32 @@ describe('mastering request-object compatibility', () => {
     const left = signal();
     const right = signal().map((v, i) => v * (i % 3 === 0 ? -0.5 : 0.8));
     // A width away from the default 1, so a dropped params field cannot pass.
-    const widened = masteringProcessStereo('stereo.imager', left, right, sampleRate, {
-      width: 1.6,
+    const widened = masteringApplyProcessorStereo({
+      processor: 'stereo.imager',
+      left,
+      right,
+      sampleRate,
+      params: { width: 1.6 },
     });
-    expect(
-      masteringProcessStereo({
-        processorName: 'stereo.imager',
-        left,
-        right,
-        sampleRate,
-        params: { width: 1.6 },
-      }),
-    ).toEqual(widened);
-    expect(masteringProcessStereo('stereo.imager', left, right, sampleRate)).not.toEqual(widened);
+    expect(widened).not.toEqual(
+      masteringApplyProcessorStereo({ processor: 'stereo.imager', left, right, sampleRate }),
+    );
   });
 
-  it('mastering chains preserve positional results', () => {
+  it('masterAudio without a preset runs the overrides alone, in either call shape', () => {
     const samples = signal();
-    expect(masteringChain({ samples, sampleRate })).toEqual(masteringChain(samples, sampleRate));
-
-    const left = signal();
-    const right = signal();
-    expect(masteringChainStereo({ left, right, sampleRate })).toEqual(
-      masteringChainStereo(left, right, sampleRate),
+    expect(masterAudio({ samples, sampleRate })).toEqual(masterAudio(samples, sampleRate));
+    const overrides = { loudness: { targetLufs: -14, ceilingDb: -1 } };
+    expect(masterAudio({ samples, sampleRate, overrides })).toEqual(
+      masterAudio(samples, sampleRate, { overrides }),
     );
   });
 
   it('exposes the before and after mastering report', () => {
-    const result = masteringChain(signal(), sampleRate, {
-      loudness: { targetLufs: -14, ceilingDb: -1 },
+    const result = masterAudio({
+      samples: signal(),
+      sampleRate,
+      overrides: { loudness: { targetLufs: -14, ceilingDb: -1 } },
     });
     expect(result.report.before.integratedLufs).toBe(result.inputLufs);
     expect(result.report.after.integratedLufs).toBe(result.outputLufs);
@@ -101,13 +99,13 @@ describe('mastering request-object compatibility', () => {
 
   it('masterAudio preserves the positional result', () => {
     const samples = signal();
-    const positional = masterAudio(samples, sampleRate, 'pop');
+    const positional = masterAudio(samples, sampleRate, { preset: 'pop' });
     const request = masterAudio({ samples, sampleRate, preset: 'pop' });
 
     expect(request).toEqual(positional);
   });
 
-  it('masterAudio accepts either override spelling with the same result', () => {
+  it('masterAudio takes the nested override spelling only', () => {
     const samples = signal();
     const nested = masterAudio({
       samples,
@@ -115,22 +113,19 @@ describe('mastering request-object compatibility', () => {
       preset: 'pop',
       overrides: { loudness: { targetLufs: -20 } },
     });
-    const dotted = masterAudio({
-      samples,
-      sampleRate,
-      preset: 'pop',
-      overrides: { 'loudness.targetLufs': -20 },
-    });
-
-    expect(dotted).toEqual(nested);
     expect(nested.outputLufs).toBeCloseTo(-20, 1);
+    expect(() =>
+      masterAudio({
+        samples,
+        sampleRate,
+        preset: 'pop',
+        overrides: { 'loudness.targetLufs': -20 } as never,
+      }),
+    ).toThrow(TypeError);
   });
 
-  it('rejects an unknown override key in either spelling', () => {
+  it('rejects an unknown override key', () => {
     const samples = signal();
-    expect(() =>
-      masterAudio({ samples, sampleRate, preset: 'pop', overrides: { 'loudness.nope': 1 } }),
-    ).toThrow(/unknown chain config key/);
     expect(() =>
       masterAudio({
         samples,
@@ -141,30 +136,30 @@ describe('mastering request-object compatibility', () => {
     ).toThrow(/unknown chain config key/);
   });
 
-  it('masterAudioStereo preserves the positional result', () => {
+  it('masterAudioStereo takes a request object only', () => {
     const left = signal();
     const right = signal();
-    const positional = masterAudioStereo(left, right, sampleRate, 'pop');
     const request = masterAudioStereo({ left, right, sampleRate, preset: 'pop' });
-
-    expect(request).toEqual(positional);
+    expect(request.left).toHaveLength(left.length);
+    expect(() =>
+      (masterAudioStereo as (...args: unknown[]) => unknown)(left, right, sampleRate),
+    ).toThrow(TypeError);
   });
 
   it('async preset mastering accepts the request form', async () => {
     const samples = signal();
-    const positional = await masterAudioAsync(samples, sampleRate, 'pop');
+    const positional = await masterAudioAsync(samples, sampleRate, { preset: 'pop' });
     const request = await masterAudioAsync({ samples, sampleRate, preset: 'pop' });
 
     expect(request).toEqual(positional);
   });
 
-  it('async stereo preset mastering accepts the request form', async () => {
+  it('async stereo preset mastering takes a request object only', async () => {
     const left = signal();
     const right = signal();
-    const positional = await masterAudioStereoAsync(left, right, sampleRate, 'pop');
     const request = await masterAudioStereoAsync({ left, right, sampleRate, preset: 'pop' });
 
-    expect(request).toEqual(positional);
+    expect(request.left).toHaveLength(left.length);
   });
 
   it('normalization and dynamics processors preserve positional results', () => {
@@ -222,36 +217,19 @@ describe('mastering request-object compatibility', () => {
 
   it('positional and request forms throw identically on invalid input', () => {
     const samples = signal();
-    const source = signal();
-    const reference = signal();
 
     const soloPositional = captureThrow(() =>
-      masteringProcess('does.not.exist' as never, samples, sampleRate),
+      masteringApplyProcessor(samples, sampleRate, { processor: 'does.not.exist' as never }),
     );
     const soloRequest = captureThrow(() =>
-      masteringProcess({ processorName: 'does.not.exist' as never, samples, sampleRate }),
+      masteringApplyProcessor({ processor: 'does.not.exist' as never, samples, sampleRate }),
     );
     expect(soloPositional.threw).toBe(true);
     expect(soloRequest.threw).toBe(true);
     expect(soloRequest.message).toBe(soloPositional.message);
 
-    const pairPositional = captureThrow(() =>
-      masteringPairProcess('does.not.exist' as never, source, reference, sampleRate),
-    );
-    const pairRequest = captureThrow(() =>
-      masteringPairProcess({
-        processorName: 'does.not.exist' as never,
-        source,
-        reference,
-        sampleRate,
-      }),
-    );
-    expect(pairPositional.threw).toBe(true);
-    expect(pairRequest.threw).toBe(true);
-    expect(pairRequest.message).toBe(pairPositional.message);
-
     const presetPositional = captureThrow(() =>
-      masterAudio(samples, sampleRate, 'not-a-preset' as never),
+      masterAudio(samples, sampleRate, { preset: 'not-a-preset' as never }),
     );
     const presetRequest = captureThrow(() =>
       masterAudio({ samples, sampleRate, preset: 'not-a-preset' as never }),
@@ -261,36 +239,64 @@ describe('mastering request-object compatibility', () => {
     expect(presetRequest.message).toBe(presetPositional.message);
   });
 
+  it('pair processors and analyses are request-only and refuse an unknown name', () => {
+    const source = signal();
+    const reference = signal();
+    const pair = captureThrow(() =>
+      masteringApplyPairProcessor({
+        processor: 'does.not.exist' as never,
+        source,
+        reference,
+        sampleRate,
+      }),
+    );
+    expect(pair.threw).toBe(true);
+    expect(() =>
+      (masteringApplyPairProcessor as (...args: unknown[]) => unknown)(
+        'match.abCrossfade',
+        source,
+        reference,
+        sampleRate,
+      ),
+    ).toThrow(TypeError);
+    expect(() =>
+      (masteringAnalyzePair as (...args: unknown[]) => unknown)(
+        'match.referenceLoudness',
+        source,
+        reference,
+        sampleRate,
+      ),
+    ).toThrow(TypeError);
+  });
+
   it('pair, stereo, and recommendation calls preserve positional results', () => {
     const source = signal();
     const reference = signal();
     expect(
-      masteringPairProcess({
-        processorName: 'match.abCrossfade',
+      masteringApplyPairProcessor({
+        processor: 'match.abCrossfade',
         source,
         reference,
         sampleRate,
         params: { mix: 0.5 },
-      }),
-    ).toEqual(
-      masteringPairProcess('match.abCrossfade', source, reference, sampleRate, { mix: 0.5 }),
-    );
+      }).samples,
+    ).toHaveLength(source.length);
     expect(
-      masteringPairAnalyze({
-        analysisName: 'match.referenceLoudness',
+      masteringAnalyzePair({
+        analysis: 'match.referenceLoudness',
         source,
         reference,
         sampleRate,
       }),
-    ).toEqual(masteringPairAnalyze('match.referenceLoudness', source, reference, sampleRate));
+    ).toHaveProperty('sourceLufs');
     expect(
-      masteringStereoAnalyze({
-        analysisName: 'stereo.monoCompatCheck',
+      masteringAnalyzeStereo({
+        analysis: 'stereo.monoCompatCheck',
         left: source,
         right: reference,
         sampleRate,
       }),
-    ).toEqual(masteringStereoAnalyze('stereo.monoCompatCheck', source, reference, sampleRate));
+    ).toHaveProperty('correlation');
     expect(masteringAssistantSuggest({ samples: source, sampleRate })).toEqual(
       masteringAssistantSuggest(source, sampleRate),
     );
@@ -299,7 +305,7 @@ describe('mastering request-object compatibility', () => {
     );
     const platforms = [{ name: 'Test', targetLufs: -14, ceilingDb: -1 }];
     expect(masteringStreamingPreview({ samples: source, sampleRate, platforms })).toEqual(
-      masteringStreamingPreview(source, sampleRate, platforms),
+      masteringStreamingPreview(source, sampleRate, { platforms }),
     );
   });
 });

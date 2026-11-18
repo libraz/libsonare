@@ -70,7 +70,8 @@ import {
   masteringRepairTrimSilence,
   masteringRepairTrimSilenceStereo,
   mergeNotes,
-  mixingScenePresetJson,
+  mixingScenePreset,
+  type MixStereoStrip,
   mixStereo,
   noteSegments,
   Project,
@@ -127,17 +128,6 @@ const facadeKeys = (
     }),
   );
 
-/** Native room keys re-keyed to the facade: placements travel as `source` / `listener` objects. */
-const ROOM_RENAMES: Record<string, string | null> = {
-  sourceX: null,
-  sourceY: null,
-  sourceZ: null,
-  listenerX: null,
-  listenerY: null,
-  listenerZ: null,
-  maxSeconds: 'maxSec',
-};
-
 /**
  * `file:key` reads that may stay in the bare form, each with the reason it is
  * already undefined-safe. Keyed by property name rather than line number so the
@@ -188,6 +178,8 @@ const NON_OPTION_SHARED_READERS: ReadonlySet<string> = new Set([
   // Reads a per-band array off a RESULT record (a room estimate), not off an
   // options bag, so a call to it says nothing about its caller's options.
   'FloatArrayProperty',
+  // Refuses keys outside a declared list; it reads no value, so it makes no caller an options reader.
+  'RefuseUnknownKeys',
   'RequiredIntProperty',
   'RequiredUint32Property',
   'RequiredFloatProperty',
@@ -375,7 +367,7 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
     invoke: (o) =>
       Array.from(
         pitchCorrectTimevarying(sine(4096, 220), SR, {
-          ...facadeKeys(o, { referenceMidi: 'scaleReferenceMidi' }),
+          ...o,
           f0Hz: new Float32Array(16).fill(220),
           hopLength: 256,
         }),
@@ -386,7 +378,7 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
     invoke: (o) =>
       Array.from(
         autoTune({
-          ...facadeKeys(o, { referenceMidi: 'scaleReferenceMidi' }),
+          ...o,
           samples: sine(4096, 220),
           sampleRate: SR,
           key: { root: 9, mode: 'minor' },
@@ -550,18 +542,14 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
   },
   {
     jsName: 'roomMorph',
-    invoke: (o) =>
-      Array.from(roomMorph(sine(4000, 440, 48000), 48000, facadeKeys(o, ROOM_RENAMES)).audio).slice(
-        0,
-        32,
-      ),
+    invoke: (o) => Array.from(roomMorph(sine(4000, 440, 48000), 48000, o).audio).slice(0, 32),
   },
   {
     jsName: 'roomMorphStereo',
     invoke: (o) =>
       Array.from(
         roomMorphStereo({
-          ...facadeKeys(o, ROOM_RENAMES),
+          ...o,
           left: sine(4000, 440, 48000),
           right: sine(4000, 440, 48000),
           sampleRate: 48000,
@@ -571,7 +559,7 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
   {
     jsName: 'synthesizeRir',
     invoke: (o) => {
-      const result = synthesizeRir({ ...facadeKeys(o, ROOM_RENAMES), sampleRate: 48000 });
+      const result = synthesizeRir({ ...o, sampleRate: 48000 });
       return [result.sampleRate, Array.from(result.rir).slice(0, 32)];
     },
   },
@@ -620,18 +608,14 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
   },
   {
     jsName: 'masteringRepairDeclip',
-    invoke: (o) =>
-      Array.from(
-        masteringRepairDeclip(sine(2048), SR, facadeKeys(o, { clipThreshold: 'clipThresholdDb' }))
-          .samples,
-      ).slice(0, 32),
+    invoke: (o) => Array.from(masteringRepairDeclip(sine(2048), SR, o).samples).slice(0, 32),
   },
   {
     jsName: 'masteringRepairDeclipStereo',
     invoke: (o) =>
       Array.from(
         masteringRepairDeclipStereo({
-          ...facadeKeys(o, { clipThreshold: 'clipThresholdDb' }),
+          ...o,
           left: sine(2048),
           right: sine(2048),
           sampleRate: SR,
@@ -672,11 +656,7 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
   },
   {
     jsName: 'masteringRepairTrimSilence',
-    invoke: (o) =>
-      Array.from(
-        masteringRepairTrimSilence(sine(2048), SR, facadeKeys(o, { threshold: 'thresholdDb' }))
-          .samples,
-      ).slice(0, 32),
+    invoke: (o) => Array.from(masteringRepairTrimSilence(sine(2048), SR, o).samples).slice(0, 32),
   },
   {
     // The whole result, not a slice of one channel: this entry's output length
@@ -685,7 +665,7 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
     jsName: 'masteringRepairTrimSilenceStereo',
     invoke: (o) => {
       const result = masteringRepairTrimSilenceStereo({
-        ...facadeKeys(o, { threshold: 'thresholdDb' }),
+        ...o,
         left: sine(2048),
         right: sine(2048),
         sampleRate: SR,
@@ -795,7 +775,7 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
     jsName: 'masteringRepairDetectClipping',
     invoke: (o) =>
       masteringRepairDetectClipping({
-        ...facadeKeys(o, { clipThreshold: 'clipThresholdDb' }),
+        ...o,
         samples: sine(2048),
         sampleRate: SR,
       }),
@@ -816,7 +796,7 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
     jsName: 'masteringRepairDetectTrimRange',
     invoke: (o) =>
       masteringRepairDetectTrimRange({
-        ...facadeKeys(o, { threshold: 'thresholdDb' }),
+        ...o,
         samples: sine(2048),
         sampleRate: SR,
       }),
@@ -825,7 +805,7 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
     jsName: 'masteringRepairDetectTrimRangeStereo',
     invoke: (o) =>
       masteringRepairDetectTrimRangeStereo({
-        ...facadeKeys(o, { threshold: 'thresholdDb' }),
+        ...o,
         left: sine(2048),
         right: sine(2048),
         sampleRate: SR,
@@ -834,14 +814,23 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
   {
     jsName: 'masteringDynamicsCompressor',
     invoke: (o) => {
-      const result = masteringDynamicsCompressor(sine(2048), SR, o);
+      // The addon's flag and corner are one facade field; the flag is implied by the corner.
+      const { sidechainHpfEnabled: _enabled, sidechainHpfHz, ...rest } = o;
+      const result = masteringDynamicsCompressor(sine(2048), SR, {
+        ...rest,
+        sidechainHighPassHz: sidechainHpfHz as number | undefined,
+      });
       return [Array.from(result.samples).slice(0, 32), result.latencySamples];
     },
   },
   {
     jsName: 'masteringDynamicsGate',
     invoke: (o) => {
-      const result = masteringDynamicsGate(sine(2048), SR, o);
+      const { keyHpfHz, ...rest } = o;
+      const result = masteringDynamicsGate(sine(2048), SR, {
+        ...rest,
+        keyHighPassHz: keyHpfHz as number | undefined,
+      });
       return [Array.from(result.samples).slice(0, 32), result.latencySamples];
     },
   },
@@ -865,7 +854,10 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
     jsName: 'mixStereo',
     invoke: (o) => {
       const channel = sine(256);
-      const out = mixStereo([channel], [channel], SR, o);
+      const out = mixStereo({
+        strips: [{ left: channel, right: channel, ...o } as MixStereoStrip],
+        sampleRate: SR,
+      });
       return [Array.from(out.left).slice(0, 8), Array.from(out.right).slice(0, 8)];
     },
   },
@@ -1184,7 +1176,7 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
   {
     jsName: 'StreamingEqualizer',
     invoke: (o) => {
-      const eq = new StreamingEqualizer({ ...o });
+      const eq = new StreamingEqualizer({ ...o, sampleRate: SR });
       try {
         eq.setBand(0, { type: 'peak', frequencyHz: 1000, gainDb: 6, enabled: true });
         const block = sine(512, 1000);
@@ -1198,12 +1190,16 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
   {
     jsName: 'StreamingMasteringChain',
     invoke: (o) => {
-      const chain = new StreamingMasteringChain({ ...o });
+      const chain = new StreamingMasteringChain({
+        sampleRate: SR,
+        maxBlockSize: 512,
+        numChannels: 2,
+        ...o,
+      });
       try {
-        chain.prepare(SR, 512, 2);
         const block = sine(512, 1000);
         const out = chain.processStereo(block, block);
-        return [chain.latencySamples(), chain.stageNames(), Array.from(out.left)];
+        return [chain.latencySamples, chain.stageNames(), Array.from(out.left)];
       } finally {
         chain.destroy();
       }
@@ -1257,7 +1253,7 @@ function withSampleBank<T>(body: (bank: SampleBank) => T): T {
 }
 
 function withMixer<T>(body: (mixer: Mixer) => T): T {
-  const mixer = Mixer.fromJson(mixingScenePresetJson('commentaryDucking'), {
+  const mixer = Mixer.fromJson(JSON.stringify(mixingScenePreset('commentaryDucking')), {
     sampleRate: 48000,
     maxBlockSize: 8,
   });

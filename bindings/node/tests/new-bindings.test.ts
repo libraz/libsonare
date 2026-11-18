@@ -10,8 +10,8 @@ import {
   ebur128LoudnessRange,
   estimateTuning,
   hpssWithResidual,
-  lufsInterleaved,
-  lufsSeriesInterleaved,
+  lufsMultichannel,
+  lufsSeriesMultichannel,
   momentaryLufs,
   nnFilter,
   phaseVocoder,
@@ -49,15 +49,6 @@ function noise(durationSec: number, seed: number, amplitude = 0.25): Float32Arra
   for (let i = 0; i < n; i++) {
     state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
     out[i] = amplitude * ((2 * (state >>> 8)) / (1 << 24) - 1);
-  }
-  return out;
-}
-
-function interleave(left: Float32Array, right: Float32Array): Float32Array {
-  const out = new Float32Array(left.length * 2);
-  for (let i = 0; i < left.length; i++) {
-    out[2 * i] = left[i];
-    out[2 * i + 1] = right[i];
   }
   return out;
 }
@@ -336,26 +327,24 @@ describe('newly exposed Node functions', () => {
     expect(allFinite(r.harmonic)).toBe(true);
   });
 
-  it('lufsInterleaved measures dual-mono loudness', () => {
+  it('lufsMultichannel measures dual-mono loudness', () => {
     const x = sine(1, 440);
-    const interleaved = new Float32Array(x.length * 2);
-    for (let i = 0; i < x.length; i++) {
-      interleaved[2 * i] = x[i];
-      interleaved[2 * i + 1] = x[i];
-    }
-    const r = lufsInterleaved(interleaved, 2, SR);
+    const r = lufsMultichannel({ channels: [x, x], sampleRate: SR });
     expect(Number.isFinite(r.integratedLufs)).toBe(true);
     expect(r.integratedLufs).toBeLessThan(0);
   });
 
-  it('lufsSeriesInterleaved sums channel energies rather than averaging loudness', () => {
+  it('lufsSeriesMultichannel sums channel energies rather than averaging loudness', () => {
     // BS.1770-4 sums the K-weighted per-channel block energies, so two
     // uncorrelated channels at one level read 10*log10(2) above their
     // per-channel mean. A facade that measured each channel and averaged the
     // results in dB would put this difference at exactly 0.
     const left = noise(4, 12345);
     const right = noise(4, 987654321);
-    const { momentary, shortTerm } = lufsSeriesInterleaved(interleave(left, right), 2, SR);
+    const { momentaryLufs: momentary, shortTermLufs: shortTerm } = lufsSeriesMultichannel({
+      channels: [left, right],
+      sampleRate: SR,
+    });
     const monoLeft = momentaryLufs(left, SR);
     const monoRight = momentaryLufs(right, SR);
 
@@ -369,32 +358,33 @@ describe('newly exposed Node functions', () => {
     expect(allFinite(shortTerm)).toBe(true);
   });
 
-  it('lufsSeriesInterleaved matches the mono meters for one channel', () => {
+  it('lufsSeriesMultichannel matches the mono meters for one channel', () => {
     const x = noise(4, 24680);
-    const { momentary, shortTerm } = lufsSeriesInterleaved({
-      samples: x,
-      channels: 1,
+    const { momentaryLufs: momentary, shortTermLufs: shortTerm } = lufsSeriesMultichannel({
+      channels: [x],
       sampleRate: SR,
     });
     expect(Array.from(momentary)).toEqual(Array.from(momentaryLufs(x, SR)));
     expect(shortTerm.length).toBeGreaterThan(0);
   });
 
-  it('lufsSeriesInterleaved returns an empty series below a window', () => {
+  it('lufsSeriesMultichannel returns an empty series below a window', () => {
     // 2 s clears the 400 ms momentary window and not the 3 s short-term one.
     const x = noise(2, 13579);
-    const { momentary, shortTerm } = lufsSeriesInterleaved(interleave(x, x), 2, SR);
+    const { momentaryLufs: momentary, shortTermLufs: shortTerm } = lufsSeriesMultichannel({
+      channels: [x, x],
+      sampleRate: SR,
+    });
     expect(momentary.length).toBeGreaterThan(0);
     expect(shortTerm.length).toBe(0);
   });
 
-  it('lufsSeriesInterleaved rejects a non-positive channel count', () => {
-    const x = noise(1, 555);
-    expect(() => lufsSeriesInterleaved(interleave(x, x), 0, SR)).toThrow();
+  it('lufsSeriesMultichannel rejects an empty plane list', () => {
+    expect(() => lufsSeriesMultichannel({ channels: [], sampleRate: SR })).toThrow(RangeError);
   });
 
   it('ebur128LoudnessRange is finite and non-negative', () => {
-    const lra = ebur128LoudnessRange(sine(1, 440));
+    const lra = ebur128LoudnessRange(sine(1, 440), SR);
     expect(Number.isFinite(lra)).toBe(true);
     expect(lra).toBeGreaterThanOrEqual(0);
   });

@@ -27,16 +27,16 @@ import {
   frameSignal,
   framesToSamples,
   hybridCqt,
+  masteringAnalyzePair,
+  masteringAnalyzeStereo,
+  masteringApplyPairProcessor,
   masteringAssistantSuggest,
   masteringAssistantSuggestStereo,
   masteringAudioProfile,
   masteringAudioProfileStereo,
   masteringPairAnalysisNames,
-  masteringPairAnalyze,
-  masteringPairProcess,
   masteringPairProcessorNames,
   masteringStereoAnalysisNames,
-  masteringStereoAnalyze,
   masteringStreamingPreview,
   masteringStreamingPreviewStereo,
   meteringCrestFactorDb,
@@ -566,23 +566,32 @@ describe('standalone functions', () => {
     expect(masteringPairAnalysisNames()).toContain('match.referenceLoudness');
     expect(masteringStereoAnalysisNames()).toContain('stereo.monoCompatCheck');
 
-    const paired = masteringPairProcess('match.abCrossfade', source, reference, sampleRate, {
-      mix: 0.25,
+    const paired = masteringApplyPairProcessor({
+      processor: 'match.abCrossfade',
+      source,
+      reference,
+      sampleRate,
+      params: { mix: 0.25 },
     });
     expect(paired.samples).toBeInstanceOf(Float32Array);
     expect(paired.samples.length).toBe(source.length);
 
-    const pairJson = masteringPairAnalyze('match.referenceLoudness', source, reference, sampleRate);
-    expect(pairJson).toContain('"sourceLufs"');
-    expect(pairJson).toContain('"referenceLufs"');
-
-    const stereoJson = masteringStereoAnalyze(
-      'stereo.monoCompatCheck',
+    const pairResult = masteringAnalyzePair({
+      analysis: 'match.referenceLoudness',
       source,
       reference,
       sampleRate,
-    );
-    expect(stereoJson).toContain('"correlation"');
+    });
+    expect(pairResult).toHaveProperty('sourceLufs');
+    expect(pairResult).toHaveProperty('referenceLufs');
+
+    const stereoResult = masteringAnalyzeStereo({
+      analysis: 'stereo.monoCompatCheck',
+      left: source,
+      right: reference,
+      sampleRate,
+    });
+    expect(stereoResult).toHaveProperty('correlation');
   });
 
   it('accepts independent source/reference lengths for pair mastering', () => {
@@ -590,27 +599,34 @@ describe('standalone functions', () => {
     const source = generateSine(440, sampleRate, 0.25);
     const reference = generateSine(880, sampleRate, 0.6); // different duration
 
-    const paired = masteringPairProcess('match.abCrossfade', source, reference, sampleRate, {
-      mix: 0.25,
+    const paired = masteringApplyPairProcessor({
+      processor: 'match.abCrossfade',
+      source,
+      reference,
+      sampleRate,
+      params: { mix: 0.25 },
     });
     expect(paired.samples).toBeInstanceOf(Float32Array);
     expect(paired.samples.length).toBe(source.length);
 
-    const pairJson = masteringPairAnalyze('match.referenceLoudness', source, reference, sampleRate);
-    expect(pairJson).toContain('"sourceLufs"');
-    expect(pairJson).toContain('"referenceLufs"');
+    const pairResult = masteringAnalyzePair({
+      analysis: 'match.referenceLoudness',
+      source,
+      reference,
+      sampleRate,
+    });
+    expect(pairResult).toHaveProperty('sourceLufs');
+    expect(pairResult).toHaveProperty('referenceLufs');
   });
 
   it('exposes mastering assistant suggestions', () => {
     const sampleRate = 22050;
     const suggest = (samples: Float32Array) =>
-      JSON.parse(
-        masteringAssistantSuggest(samples, sampleRate, {
-          targetLufs: -13,
-          ceilingDb: -0.8,
-          enableRepair: true,
-        }),
-      );
+      masteringAssistantSuggest(samples, sampleRate, {
+        targetLufs: -13,
+        ceilingDb: -0.8,
+        enableRepair: true,
+      });
 
     const clean = new Float32Array(sampleRate * 3);
     for (let i = 0; i < clean.length; i++) {
@@ -627,45 +643,43 @@ describe('standalone functions', () => {
     expect(result).toHaveProperty('profile');
     expect(Array.isArray(result.explanation)).toBe(true);
     expect(result).not.toHaveProperty('genreCandidates');
-    expect(result.chainConfig.params['loudness.targetLufs']).toBe(-13);
-    expect(result.chainConfig.params['loudness.ceilingDb']).toBeCloseTo(-0.8, 6);
+    expect(result.chainConfig.loudness?.targetLufs).toBe(-13);
+    expect(result.chainConfig.loudness?.ceilingDb).toBeCloseTo(-0.8, 6);
 
     // enableRepair asks for repair; the measured defect profile picks which stages
     // run. Only the clean side would still pass with enableRepair ignored outright,
     // so both are driven. Booleans serialize as JSON true/false (RFC 8259).
-    expect(result.chainConfig.params['repair.declick.enabled']).toBe(false);
-    expect(suggest(clicked).chainConfig.params['repair.declick.enabled']).toBe(true);
+    expect(result.chainConfig.repair?.declick?.enabled).toBe(false);
+    expect(suggest(clicked).chainConfig.repair?.declick?.enabled).toBe(true);
   });
 
   it('exposes mastering audio profiles', () => {
     const sampleRate = 22050;
     const samples = generateSine(330, sampleRate, 2);
-    const json = masteringAudioProfile(samples, sampleRate, {
+    const result = masteringAudioProfile(samples, sampleRate, {
       nFft: 1024,
       hopLength: 256,
     });
-    const result = JSON.parse(json);
 
     expect(typeof result.durationSec).toBe('number');
     expect(result.durationSec).toBeGreaterThan(1.9);
     expect(result).toHaveProperty('loudness.integratedLufs');
     expect(result).toHaveProperty('spectral.centroidHz');
-    expect(result).toHaveProperty('dynamics.attackDensity');
+    expect(result).toHaveProperty('dynamics.attackPerSecond');
     expect(result).not.toHaveProperty('genreCandidates');
   });
 
   it('exposes streaming platform loudness previews', () => {
     const sampleRate = 22050;
     const samples = generateSine(440, sampleRate, 1);
-    const json = masteringStreamingPreview(samples, sampleRate, [
-      { name: 'Unit Test', targetLufs: -12, ceilingDb: -1 },
-    ]);
-    const result = JSON.parse(json);
+    const result = masteringStreamingPreview(samples, sampleRate, {
+      platforms: [{ name: 'Unit Test', targetLufs: -12, ceilingDb: -1 }],
+    });
 
     expect(result.platforms).toHaveLength(1);
     expect(result.platforms[0].name).toBe('Unit Test');
     expect(typeof result.platforms[0].integratedLufs).toBe('number');
-    expect(typeof result.platforms[0].truePeakDb).toBe('number');
+    expect(typeof result.platforms[0].truePeakDbtp).toBe('number');
     expect(typeof result.platforms[0].normalizationGainDb).toBe('number');
     expect(typeof result.platforms[0].ceilingRisk).toBe('boolean');
   });
@@ -679,10 +693,10 @@ describe('standalone functions', () => {
       downmix[i] = 0.5 * (left[i] + right[i]);
     }
 
-    const stereo = JSON.parse(masteringStreamingPreviewStereo({ left, right, sampleRate }));
-    const mono = JSON.parse(masteringStreamingPreview(downmix, sampleRate));
-    const stereoLufs = stereo.platforms[0].integratedLufs;
-    const monoLufs = mono.platforms[0].integratedLufs;
+    const stereo = masteringStreamingPreviewStereo({ left, right, sampleRate });
+    const mono = masteringStreamingPreview(downmix, sampleRate);
+    const stereoLufs = stereo.platforms[0].integratedLufs as number;
+    const monoLufs = mono.platforms[0].integratedLufs as number;
 
     expect(stereo.platforms[0].name).toBe('Spotify');
     // BS.1770 sums the channel powers while the 0.5*(L+R) downmix quarters
@@ -691,11 +705,11 @@ describe('standalone functions', () => {
     expect(stereoLufs - monoLufs).toBeCloseTo(6.02, 1);
     expect(stereo.platforms[0].normalizationGainDb).toBeCloseTo(-14 - stereoLufs, 3);
 
-    const profile = JSON.parse(masteringAudioProfileStereo({ left, right, sampleRate }));
+    const profile = masteringAudioProfileStereo({ left, right, sampleRate });
     expect(profile.loudness.integratedLufs).toBeCloseTo(stereoLufs, 2);
     expect(profile).toHaveProperty('spectral.centroidHz');
 
-    const suggestion = JSON.parse(masteringAssistantSuggestStereo({ left, right, sampleRate }));
+    const suggestion = masteringAssistantSuggestStereo({ left, right, sampleRate });
     expect(suggestion).toHaveProperty('chainConfig');
     expect(Array.isArray(suggestion.explanation)).toBe(true);
   });

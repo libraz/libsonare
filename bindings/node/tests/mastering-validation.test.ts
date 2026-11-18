@@ -8,10 +8,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   masterAudio,
-  mastering,
-  masteringChain,
-  masteringChainStereo,
-  masteringProcess,
+  masterAudioStereo,
+  masteringApplyProcessor,
+  masteringNormalizeLoudness,
 } from '../src/index.js';
 
 const SR = 44100;
@@ -26,48 +25,50 @@ function sine(n: number, freq = 220, amp = 0.5): Float32Array {
 
 describe('mastering offline input validation (inherited from the C++ core)', () => {
   it('rejects empty input', () => {
-    expect(() => masteringChain(new Float32Array(0), SR)).toThrow();
     expect(() => masterAudio(new Float32Array(0), SR)).toThrow();
+    expect(() => masterAudio(new Float32Array(0), SR, { preset: 'pop' })).toThrow();
   });
 
   it('rejects an out-of-range sample rate', () => {
     const x = sine(2048);
-    expect(() => masteringChain(x, 100)).toThrow();
-    expect(() => masteringChain(x, 10_000_000)).toThrow();
+    expect(() => masterAudio(x, 100)).toThrow();
+    expect(() => masterAudio(x, 10_000_000)).toThrow();
   });
 
   it('rejects non-finite samples', () => {
     const x = sine(2048);
     x[10] = Number.NaN;
-    expect(() => masteringChain(x, SR)).toThrow();
+    expect(() => masterAudio(x, SR)).toThrow();
     const y = sine(2048);
     y[5] = Number.POSITIVE_INFINITY;
-    expect(() => masteringChain(y, SR)).toThrow();
+    expect(() => masterAudio(y, SR)).toThrow();
   });
 
   it('rejects bad input on the stereo path (both channels checked)', () => {
     const l = sine(2048);
     const r = sine(2048);
     r[20] = Number.NaN;
-    expect(() => masteringChainStereo(l, r, SR)).toThrow();
+    expect(() => masterAudioStereo({ left: l, right: r, sampleRate: SR })).toThrow();
   });
 
   it('still masters valid input', () => {
     const x = sine(4096);
-    const result = masteringChain(x, SR);
+    const result = masterAudio(x, SR);
     expect(result.samples.length).toBe(x.length);
   });
 
   it('reports output true-peak, LRA, and per-stage gain reductions', () => {
     const x = sine(4096, 220, 0.3);
-    const result = masteringChain(x, SR, {
-      dynamics: { compressor: { thresholdDb: -30, ratio: 4 } },
-      loudness: { targetLufs: -14, ceilingDb: -1 },
+    const result = masterAudio(x, SR, {
+      overrides: {
+        dynamics: { compressor: { thresholdDb: -30, ratio: 4 } },
+        loudness: { targetLufs: -14, ceilingDb: -1 },
+      },
     });
     expect(Number.isFinite(result.outputTruePeakDbtp)).toBe(true);
     expect(result.outputTruePeakDbtp).toBeLessThanOrEqual(0);
-    expect(Number.isFinite(result.outputLra)).toBe(true);
-    expect(result.outputLra).toBeGreaterThanOrEqual(0);
+    expect(Number.isFinite(result.outputLoudnessRangeLu)).toBe(true);
+    expect(result.outputLoudnessRangeLu).toBeGreaterThanOrEqual(0);
 
     const grStages = result.stageGainReductions.map((r) => r.stage);
     expect(grStages).toContain('dynamics.compressor');
@@ -77,17 +78,17 @@ describe('mastering offline input validation (inherited from the C++ core)', () 
     }
 
     // masterAudio (preset path) exposes the same fields.
-    const preset = masterAudio(x, SR, 'pop');
+    const preset = masterAudio(x, SR, { preset: 'pop' });
     expect(Number.isFinite(preset.outputTruePeakDbtp)).toBe(true);
-    expect(Number.isFinite(preset.outputLra)).toBe(true);
+    expect(Number.isFinite(preset.outputLoudnessRangeLu)).toBe(true);
     expect(Array.isArray(preset.stageGainReductions)).toBe(true);
   });
 });
 
-describe('simple mastering() accepts the appended maximizer knobs', () => {
+describe('masteringNormalizeLoudness() accepts the appended maximizer knobs', () => {
   it('accepts releaseMs / applyGainAtInputRate and returns valid output', () => {
     const x = sine(4096, 220, 0.2);
-    const result = mastering(x, SR, {
+    const result = masteringNormalizeLoudness(x, SR, {
       targetLufs: -14,
       releaseMs: 250,
       applyGainAtInputRate: true,
@@ -96,47 +97,49 @@ describe('simple mastering() accepts the appended maximizer knobs', () => {
     expect(result.samples.every((v) => Number.isFinite(v))).toBe(true);
   });
 
-  it('treats releaseMs 0 (or omitted) as the library default', () => {
+  it('refuses an explicit releaseMs of 0 and runs the library default when omitted', () => {
     // A target the peak headroom cannot reach, so the limiter is doing the work
     // and its release time is visible in the output. Without that the three
     // results below would agree because nothing reads releaseMs at all, and the
     // equality would hold for a wrapper that dropped the option entirely.
     const x = sine(4096, 220, 0.2);
     const driven = { targetLufs: 0, ceilingDb: -6 };
-    const omitted = mastering(x, SR, driven);
-    const zero = mastering(x, SR, { ...driven, releaseMs: 0 });
-    const explicit = mastering(x, SR, { ...driven, releaseMs: 50 });
-    const immediate = mastering(x, SR, { ...driven, releaseMs: 1 });
-    expect(zero.samples).toEqual(omitted.samples);
-    expect(zero.samples).toEqual(explicit.samples);
+    const omitted = masteringNormalizeLoudness(x, SR, driven);
+    expect(() => masteringNormalizeLoudness(x, SR, { ...driven, releaseMs: 0 })).toThrow(
+      RangeError,
+    );
+    const explicit = masteringNormalizeLoudness(x, SR, { ...driven, releaseMs: 50 });
+    const immediate = masteringNormalizeLoudness(x, SR, { ...driven, releaseMs: 1 });
+    expect(omitted.samples).toEqual(explicit.samples);
     // The varying control: releaseMs reaches the limiter on this fixture.
-    expect(zero.samples).not.toEqual(immediate.samples);
+    expect(omitted.samples).not.toEqual(immediate.samples);
   });
 
   it('refuses the releaseMs values it cannot honour instead of ignoring them', () => {
     // The wrapper used to apply releaseMs only when it was positive, so a
     // negative or non-finite request silently ran the library default and the
-    // caller never learned its value had been discarded. The shared loudness
-    // validator in the core now sees the value, which is why these throw; 0
-    // stays accepted because it is the documented default sentinel, not a
-    // value the limiter is asked to run.
+    // caller never learned its value had been discarded. The facade now sees the
+    // value, which is why these throw; 0 is refused too, because omitting the
+    // field is how the default is asked for.
     const x = sine(4096, 220, 0.2);
-    const refused = [-1, -0.5, Number.NaN, Number.POSITIVE_INFINITY];
+    const refused = [0, -1, -0.5, Number.NaN, Number.POSITIVE_INFINITY];
     for (const releaseMs of refused) {
-      expect(() => mastering(x, SR, { targetLufs: -14, releaseMs })).toThrow();
+      expect(() => masteringNormalizeLoudness(x, SR, { targetLufs: -14, releaseMs })).toThrow();
     }
     // The controls. A wrapper that had started refusing every releaseMs would
     // pass every assertion above and fail only here.
-    for (const releaseMs of [0, 1, 50, 250]) {
-      expect(() => mastering(x, SR, { targetLufs: -14, releaseMs })).not.toThrow();
+    for (const releaseMs of [1, 50, 250]) {
+      expect(() => masteringNormalizeLoudness(x, SR, { targetLufs: -14, releaseMs })).not.toThrow();
     }
   });
 
   it('rejects non-finite targets and accepts a later finite call', () => {
     const x = sine(4096, 220, 0.2);
-    expect(() => mastering(x, SR, { targetLufs: Number.NaN })).toThrow();
-    expect(() => mastering(x, SR, { ceilingDb: Number.POSITIVE_INFINITY })).toThrow();
-    const recovered = mastering(x, SR, { targetLufs: -14, ceilingDb: -1 });
+    expect(() => masteringNormalizeLoudness(x, SR, { targetLufs: Number.NaN })).toThrow();
+    expect(() =>
+      masteringNormalizeLoudness(x, SR, { ceilingDb: Number.POSITIVE_INFINITY }),
+    ).toThrow();
+    const recovered = masteringNormalizeLoudness(x, SR, { targetLufs: -14, ceilingDb: -1 });
     expect(recovered.samples.every((value) => Number.isFinite(value))).toBe(true);
   });
 });
@@ -144,16 +147,15 @@ describe('simple mastering() accepts the appended maximizer knobs', () => {
 describe('named mastering parameter validation', () => {
   it('rejects non-finite direct parameters before processing', () => {
     const x = sine(2048);
-    expect(() => masteringProcess('dynamics.compressor', x, 0, { ratio: 2 })).toThrow();
+    const processor = 'dynamics.compressor' as const;
+    const apply = (samples: Float32Array, sampleRate: number, params: object) =>
+      masteringApplyProcessor({ processor, samples, sampleRate, params: params as never });
+    expect(() => apply(x, 0, { ratio: 2 })).toThrow();
     const invalidSamples = x.slice();
     invalidSamples[4] = Number.NaN;
-    expect(() =>
-      masteringProcess('dynamics.compressor', invalidSamples, SR, { ratio: 2 }),
-    ).toThrow();
-    expect(() => masteringProcess('dynamics.compressor', x, SR, { ratio: Number.NaN })).toThrow();
-    expect(() =>
-      masteringProcess('dynamics.compressor', x, SR, { ratio: Number.POSITIVE_INFINITY }),
-    ).toThrow();
-    expect(() => masteringProcess('dynamics.compressor', x, SR, { ratio: 2 })).not.toThrow();
+    expect(() => apply(invalidSamples, SR, { ratio: 2 })).toThrow();
+    expect(() => apply(x, SR, { ratio: Number.NaN })).toThrow();
+    expect(() => apply(x, SR, { ratio: Number.POSITIVE_INFINITY })).toThrow();
+    expect(() => apply(x, SR, { ratio: 2 })).not.toThrow();
   });
 });

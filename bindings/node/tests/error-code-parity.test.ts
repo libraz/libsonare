@@ -12,9 +12,9 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import {
   Mixer as WasmMixer,
   init as wasmInit,
-  mixingScenePresetJson as wasmPresetJson,
+  mixingScenePreset as wasmPreset,
 } from '../../wasm/dist/index.js';
-import { ErrorCode, mixingScenePresetJson, Mixer as NodeMixer } from '../src/index.js';
+import { ErrorCode, mixingScenePreset, Mixer as NodeMixer } from '../src/index.js';
 
 const PYTHON_PACKAGE = new URL('../../python/', import.meta.url).pathname;
 
@@ -75,14 +75,16 @@ describe('a library or object-state failure reports one code on every surface', 
   it('a released mixer is InvalidState on Node, WASM and Python', () => {
     const answers = {
       node: codeOf(() => {
-        const mixer = NodeMixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
+        const mixer = NodeMixer.fromJson(JSON.stringify(mixingScenePreset('vocalReverbSend')), {
           sampleRate: 48000,
         });
         mixer.destroy();
         mixer.stripCount;
       }),
       wasm: codeOf(() => {
-        const mixer = WasmMixer.fromJson(wasmPresetJson('vocalReverbSend'), { sampleRate: 48000 });
+        const mixer = WasmMixer.fromJson(JSON.stringify(wasmPreset('vocalReverbSend')), {
+          sampleRate: 48000,
+        });
         mixer.destroy();
         mixer.stripCount;
       }),
@@ -101,11 +103,15 @@ describe('a library or object-state failure reports one code on every surface', 
     // Control: the refusals above come from the input, not from a broken constructor.
     expect(
       codeOf(() =>
-        NodeMixer.fromJson(mixingScenePresetJson('vocalReverbSend'), { sampleRate: 48000 }),
+        NodeMixer.fromJson(JSON.stringify(mixingScenePreset('vocalReverbSend')), {
+          sampleRate: 48000,
+        }),
       ),
     ).toBe('no refusal');
     expect(
-      codeOf(() => WasmMixer.fromJson(wasmPresetJson('vocalReverbSend'), { sampleRate: 48000 })),
+      codeOf(() =>
+        WasmMixer.fromJson(JSON.stringify(wasmPreset('vocalReverbSend')), { sampleRate: 48000 }),
+      ),
     ).toBe('no refusal');
     expect(
       pythonCode(

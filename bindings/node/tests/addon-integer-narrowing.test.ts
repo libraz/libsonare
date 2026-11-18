@@ -54,11 +54,12 @@ describe('the addon refuses a number it cannot hold', () => {
     const rir = (ismOrder: number) => {
       const result = native.synthesizeRir({
         sampleRate: 48000,
-        roomWidth: 5,
-        roomDepth: 4,
-        roomHeight: 3,
+        lengthM: 5,
+        widthM: 4,
+        heightM: 3,
+        source: { x: 1, y: 1, z: 1.2 },
+        listener: { x: 3, y: 2, z: 1.2 },
         ismOrder,
-        rt60: 0.6,
       });
       let energy = 0;
       for (const x of result.rir) {

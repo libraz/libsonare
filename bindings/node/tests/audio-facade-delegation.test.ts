@@ -172,9 +172,8 @@ const DELEGATIONS: Delegation[] = [
   { name: 'noteMove', noIntArgs: 'takes an options object only' },
   { name: 'voiceChange', noIntArgs: 'takes an options object only' },
   { name: 'normalize', noIntArgs: 'targetDb is a float' },
-  { name: 'mastering', noIntArgs: 'takes an options object only' },
-  { name: 'masteringProcess', noIntArgs: 'takes a processor name and a params bag' },
-  { name: 'masteringChain', noIntArgs: 'takes a config object only' },
+  { name: 'masteringNormalizeLoudness', noIntArgs: 'takes an options object only' },
+  { name: 'masteringApplyProcessor', noIntArgs: 'takes a processor name and a params bag' },
   { name: 'masterAudio', noIntArgs: 'takes a preset name and an overrides object' },
   { name: 'trim', noIntArgs: 'thresholdDb is a float; the frame options are not exposed here' },
 

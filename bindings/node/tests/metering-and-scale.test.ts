@@ -31,6 +31,12 @@ function sine(freq: number, durationSec: number): Float32Array {
   return sineWave(freq, durationSec, { sampleRate: SR, amp: 0.5 });
 }
 
+// Two channels of five frames each (the old interleaved fixture, split by channel).
+const STEREO_PLANES = [
+  new Float32Array([-1.0, 0.25, 0.75, -0.5, 0.0]),
+  new Float32Array([0.5, -0.25, 0.1, -0.75, 0.9]),
+];
+
 describe('Offline metering wrappers', () => {
   it('peak / rms / crest / dc agree on a 440 Hz sine', () => {
     const samples = sine(440, 1);
@@ -53,7 +59,8 @@ describe('Offline metering wrappers', () => {
 
   it('true peak rejects non-power-of-two oversample factor', () => {
     const samples = sine(440, 0.1);
-    expect(() => meteringTruePeakDb(samples, SR, 3)).toThrow();
+    expect(() => meteringTruePeakDb(samples, SR, { oversampleFactor: 3 })).toThrow();
+    expect(() => meteringTruePeakDb(samples, SR, { oversampleFactor: 0 })).toThrow(RangeError);
   });
 
   it('detect clipping reports runs and returns plain JS arrays', () => {
@@ -61,7 +68,7 @@ describe('Offline metering wrappers', () => {
     for (let i = 1000; i < 1064; i++) {
       samples[i] = 1.0;
     }
-    const report = meteringDetectClipping(samples, SR, { threshold: 0.999 });
+    const report = meteringDetectClipping(samples, SR, { thresholdDb: 20 * Math.log10(0.999) });
     expect(report.clippedSamples).toBeGreaterThanOrEqual(1);
     expect(report.regions.length).toBeGreaterThanOrEqual(1);
     expect(report.maxClippedPeak).toBeGreaterThanOrEqual(1.0);
@@ -107,24 +114,27 @@ describe('Offline metering wrappers', () => {
     ).toThrow();
   });
 
-  it('waveform peaks bucket interleaved stereo audio', () => {
-    const samples = new Float32Array([-1.0, 0.5, 0.25, -0.25, 0.75, 0.1, -0.5, -0.75, 0.0, 0.9]);
-    const report = waveformPeaks(samples, 2, { samplesPerBucket: 2 });
-    expect(report.channels).toBe(2);
+  it('waveform peaks bucket planar stereo audio', () => {
+    const report = waveformPeaks({ channels: STEREO_PLANES, samplesPerBucket: 2 });
+    expect(report.min).toHaveLength(2);
     expect(report.bucketCount).toBe(3);
     expect(report.samplesPerBucket).toBe(2);
-    expect(Array.from(report.min)).toEqual([
+    expect(Array.from(report.min[0] as Float32Array)).toEqual([
       expect.closeTo(-1.0, 6),
       expect.closeTo(-0.5, 6),
       expect.closeTo(0.0, 6),
+    ]);
+    expect(Array.from(report.min[1] as Float32Array)).toEqual([
       expect.closeTo(-0.25, 6),
       expect.closeTo(-0.75, 6),
       expect.closeTo(0.9, 6),
     ]);
-    expect(Array.from(report.max)).toEqual([
+    expect(Array.from(report.max[0] as Float32Array)).toEqual([
       expect.closeTo(0.25, 6),
       expect.closeTo(0.75, 6),
       expect.closeTo(0.0, 6),
+    ]);
+    expect(Array.from(report.max[1] as Float32Array)).toEqual([
       expect.closeTo(0.5, 6),
       expect.closeTo(0.1, 6),
       expect.closeTo(0.9, 6),
@@ -132,21 +142,22 @@ describe('Offline metering wrappers', () => {
   });
 
   it('waveform peak pyramid returns each requested level', () => {
-    const samples = new Float32Array([-1.0, 0.5, 0.25, -0.25, 0.75, 0.1, -0.5, -0.75, 0.0, 0.9]);
-    const pyramid = waveformPeakPyramid(samples, 2, { samplesPerBucketLevels: [2, 4] });
+    const pyramid = waveformPeakPyramid({
+      channels: STEREO_PLANES,
+      samplesPerBucketLevels: [2, 4],
+    });
     expect(pyramid).toHaveLength(2);
     expect(pyramid[0]?.bucketCount).toBe(3);
     expect(pyramid[1]?.bucketCount).toBe(2);
-    expect(pyramid[1]?.min[0]).toBeCloseTo(-1.0, 6);
-    expect(pyramid[1]?.max[0]).toBeCloseTo(0.75, 6);
+    expect(pyramid[1]?.min[0]?.[0]).toBeCloseTo(-1.0, 6);
+    expect(pyramid[1]?.max[0]?.[0]).toBeCloseTo(0.75, 6);
   });
 
   it('waveform peaks default to 512-frame buckets and the standard zoom pyramid', () => {
-    const samples = new Float32Array([-1.0, 0.5, 0.25, -0.25, 0.75, 0.1, -0.5, -0.75, 0.0, 0.9]);
-    const report = waveformPeaks(samples, 2);
+    const report = waveformPeaks({ channels: STEREO_PLANES });
     expect(report.samplesPerBucket).toBe(512);
     expect(report.bucketCount).toBe(1);
-    const pyramid = waveformPeakPyramid(samples, 2);
+    const pyramid = waveformPeakPyramid({ channels: STEREO_PLANES });
     expect(pyramid.map((level) => level.samplesPerBucket)).toEqual([512, 1024, 2048, 4096]);
   });
 });

@@ -449,7 +449,7 @@ export type EqPhaseMode = 'zero' | 'natural' | 'linear';
  * remaining fields fall back to processor defaults.
  */
 /** Which signal path an EQ band sits on. */
-export type EqStereoPlacement = 'Stereo' | 'Left' | 'Right' | 'Mid' | 'Side';
+export type EqStereoPlacement = 'stereo' | 'left' | 'right' | 'mid' | 'side';
 
 export interface EqBandInput {
   type?: EqBandType;
@@ -556,9 +556,9 @@ export interface LufsResult {
  */
 export interface LufsSeriesResult {
   /** 400 ms momentary series. */
-  momentary: Float32Array;
+  momentaryLufs: Float32Array;
   /** 3 s short-term series. */
-  shortTerm: Float32Array;
+  shortTermLufs: Float32Array;
 }
 
 /**

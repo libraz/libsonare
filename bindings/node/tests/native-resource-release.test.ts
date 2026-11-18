@@ -51,13 +51,15 @@ const CASES: readonly ReleasableCase[] = [
     name: 'StreamingMasteringChain',
     make: () => {
       const chain = new StreamingMasteringChain({
+        sampleRate: 48000,
+        maxBlockSize: 1024,
+        numChannels: 2,
         eq: { tilt: { tiltDb: 1.0 } },
         dynamics: { compressor: { thresholdDb: -18, ratio: 2 } },
         saturation: { tape: { driveDb: 2 } },
         stereo: { imager: { width: 1.1 } },
         maximizer: { truePeakLimiter: { ceilingDb: -1 } },
       });
-      chain.prepare(48000, 1024, 2);
       chain.processStereo(block(1024), block(1024));
       return chain;
     },

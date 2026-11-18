@@ -2,6 +2,7 @@
  * One repair analysis and one repair application over any number of channels.
  */
 
+import { declipReportFromNative } from './internal/metering_native.js';
 import {
   dbFromLinear,
   dehumReport,
@@ -142,13 +143,16 @@ export interface MasteringRepairApplyRequest extends ValidateOptions {
   cancel?: () => boolean;
 }
 
-/** Gives the dehum and denoise detection arrays the Float32Array type the per-stage entries return. */
+/** Gives the dehum and denoise detection arrays the Float32Array type, and declip its public detection names. */
 function typeStageReports(entry: MasteringRepairStageReports): MasteringRepairStageReports {
   if (entry.stage === 'dehum') {
     return { ...entry, reports: entry.reports.map((r) => dehumReport(r as never)) };
   }
   if (entry.stage === 'denoise') {
     return { ...entry, reports: [denoiseReport(entry.reports[0] as never)] };
+  }
+  if (entry.stage === 'declip') {
+    return { ...entry, reports: entry.reports.map((r) => declipReportFromNative(r as never)) };
   }
   return entry;
 }

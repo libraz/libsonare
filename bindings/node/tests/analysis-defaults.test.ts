@@ -8,7 +8,7 @@ import {
   analyzeSections,
   analyzeTimbre,
   detectAcoustic,
-  mastering,
+  masteringNormalizeLoudness,
   meteringDetectClipping,
   meteringDynamicRange,
   noteStretch,
@@ -25,7 +25,7 @@ import type {
   AnalyzeRhythmOptions,
   AnalyzeSectionsOptions,
   AnalyzeTimbreOptions,
-  MasteringOptions,
+  MasteringNormalizeLoudnessOptions,
   MelodyOptions,
 } from '../src/types.js';
 
@@ -145,15 +145,15 @@ describe('analysis options-bag defaults are pinned to the documented values', ()
     expect(voiceChange(x, SR)).toEqual(voiceChange(x, SR, defaults));
   });
 
-  it('mastering', () => {
-    const defaults: Required<MasteringOptions> = {
+  it('masteringNormalizeLoudness', () => {
+    const defaults: Required<Omit<MasteringNormalizeLoudnessOptions, 'validate'>> = {
       targetLufs: -14.0,
       ceilingDb: -1.0,
       truePeakOversample: 4,
-      releaseMs: 0.0,
+      releaseMs: 50,
       applyGainAtInputRate: false,
     };
-    expect(mastering(x, SR)).toEqual(mastering(x, SR, defaults));
+    expect(masteringNormalizeLoudness(x, SR)).toEqual(masteringNormalizeLoudness(x, SR, defaults));
   });
 
   it('noteStretch (stretchRatio is required; the region defaults to the whole input)', () => {
@@ -166,7 +166,7 @@ describe('analysis options-bag defaults are pinned to the documented values', ()
 
   it('meteringDetectClipping', () => {
     const defaults: Required<Omit<MeteringDetectClippingOptions, 'validate'>> = {
-      threshold: 0.999,
+      thresholdDb: 20 * Math.log10(0.999),
       minRegionSamples: 1,
     };
     expect(meteringDetectClipping(x, SR)).toEqual(meteringDetectClipping(x, SR, defaults));
@@ -174,8 +174,8 @@ describe('analysis options-bag defaults are pinned to the documented values', ()
 
   it('meteringDynamicRange', () => {
     const defaults: Required<Omit<MeteringDynamicRangeOptions, 'validate'>> = {
-      windowSec: 0,
-      hopSec: 0,
+      windowSec: 3,
+      hopSec: 1,
       lowPercentile: 0.1,
       highPercentile: 0.95,
     };

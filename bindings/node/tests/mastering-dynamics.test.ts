@@ -51,11 +51,18 @@ describe('masteringDynamicsCompressor (Node)', () => {
     expect(py).toBeLessThan(px * 0.95);
   });
 
-  it('detector accepts string and number', () => {
-    const x = sine(440);
-    const a = masteringDynamicsCompressor(x, SR, { detector: 'peak' }).samples;
-    const b = masteringDynamicsCompressor(x, SR, { detector: 0 }).samples;
-    expect(Array.from(a)).toEqual(Array.from(b));
+  it('detector accepts the tokens and refuses a number', () => {
+    const x = sine(440, 1.0, 0.9);
+    const opts = { thresholdDb: -30, ratio: 10, attackMs: 0.1, releaseMs: 10 };
+    const peakOut = masteringDynamicsCompressor(x, SR, { ...opts, detector: 'peak' }).samples;
+    const rmsOut = masteringDynamicsCompressor(x, SR, { ...opts, detector: 'rms' }).samples;
+    const logRmsOut = masteringDynamicsCompressor(x, SR, { ...opts, detector: 'logRms' }).samples;
+    expect(Array.from(peakOut)).not.toEqual(Array.from(rmsOut));
+    expect(logRmsOut.length).toBe(x.length);
+    expect(() => masteringDynamicsCompressor(x, SR, { detector: 0 as never })).toThrow(TypeError);
+    expect(() => masteringDynamicsCompressor(x, SR, { detector: 'log_rms' as never })).toThrow(
+      RangeError,
+    );
   });
 
   it('rejects an invalid detector type instead of silently falling back', () => {
@@ -64,7 +71,7 @@ describe('masteringDynamicsCompressor (Node)', () => {
     const x = sine(440);
     expect(() => masteringDynamicsCompressor(x, SR, { detector: {} as never })).toThrow();
     expect(() => masteringDynamicsCompressor(x, SR, { detector: 'bogus' as never })).toThrow();
-    expect(() => masteringDynamicsCompressor(x, SR, { detector: 7 as never })).toThrow();
+    expect(() => masteringDynamicsCompressor(x, SR, { detector: 7 as never })).toThrow(TypeError);
   });
 });
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  masteringChain,
-  masteringChainStereo,
+  masterAudio,
+  masterAudioStereo,
   StreamingMasteringChain,
   streamingLoudnessGain,
   streamingLoudnessGainStereo,
@@ -31,10 +31,10 @@ describe('streamingLoudnessGain', () => {
     const samples = program(0.05);
     for (const config of [{ loudness: { targetLufs: -14 } }, STAGED]) {
       const gain = streamingLoudnessGain({ samples, sampleRate: SR, config });
-      const offline = masteringChain({ samples, sampleRate: SR, config });
+      const offline = masterAudio({ samples, sampleRate: SR, overrides: config });
       expect(gain.loudnessStaticGainDb).toBe(offline.appliedGainDb);
       expect(Number.isFinite(gain.integratedLufs)).toBe(true);
-      expect(Number.isFinite(gain.truePeakDb)).toBe(true);
+      expect(Number.isFinite(gain.truePeakDbtp)).toBe(true);
     }
   });
 
@@ -53,7 +53,7 @@ describe('streamingLoudnessGain', () => {
     const left = program(0.04);
     const right = program(0.05, 1.3);
     const gain = streamingLoudnessGainStereo({ left, right, sampleRate: SR, config: STAGED });
-    const offline = masteringChainStereo({ left, right, sampleRate: SR, config: STAGED });
+    const offline = masterAudioStereo({ left, right, sampleRate: SR, overrides: STAGED });
     expect(gain.loudnessStaticGainDb).toBe(offline.appliedGainDb);
   });
 
@@ -67,10 +67,11 @@ describe('streamingLoudnessGain', () => {
     expect(Number.isFinite(gain.integratedLufs)).toBe(false);
     const chain = new StreamingMasteringChain({
       ...STAGED,
+      sampleRate: SR,
+      maxBlockSize: 512,
       loudnessStaticGainDb: gain.loudnessStaticGainDb,
-      loudnessStaticGainPeakDb: gain.truePeakDb,
+      loudnessStaticGainPeakDb: gain.truePeakDbtp,
     });
-    chain.prepare(SR, 512, 1);
     expect(chain.processMono(new Float32Array(512)).length).toBe(512);
   });
 
@@ -86,8 +87,8 @@ describe('streamingLoudnessGain', () => {
       streamingLoudnessGain({
         samples: new Float32Array(SR),
         sampleRate: SR,
-        config: { 'no.such.key': 1 },
+        config: { 'no.such.key': 1 } as never,
       }),
-    ).toThrow();
+    ).toThrow(TypeError);
   });
 });

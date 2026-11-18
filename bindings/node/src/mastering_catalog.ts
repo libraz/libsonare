@@ -1,30 +1,35 @@
-import { type MasteringInsertParams, resolveInsertParams } from './internal/processor_params.js';
+import { nestChainConfig } from './internal/chain_config.js';
+import { resolveInsertParams } from './internal/processor_params.js';
 import { addon } from './native.js';
 import type {
+  MasteringChainConfig,
+  MasteringInsertName,
   MasteringInsertParamInfo,
   MasteringInsertTiming,
+  MasteringPlatform,
   MasteringPreset,
   MasteringProcessorCatalogEntry,
+  MasteringProcessorParams,
   PairAnalysis,
   PairProcessor,
   SoloProcessor,
   StereoAnalysis,
 } from './types.js';
+import { assertClosedToken, assertSampleRate, requestOnly } from './validation.js';
 
 export function masteringPresetNames(): MasteringPreset[] {
   return addon.masteringPresetNames();
 }
 
 /**
- * A built-in preset's chain configuration as a flat `{ "module.param": value }`
- * map -- the same key space {@link masteringAssistantSuggestChain} returns, and
- * a preset applies unchanged when passed straight back as {@link masterAudio}'s
- * `overrides`.
+ * The nested {@link MasteringChainConfig} of preset `preset`'s built-in chain.
+ * Passing it as `overrides` to {@link masterAudio} reproduces the preset.
  *
- * @throws Error for a name not in {@link masteringPresetNames}.
+ * @throws {TypeError} when `preset` is not a string
+ * @throws {RangeError} for an unknown `preset`
  */
-export function masteringPresetParams(preset: MasteringPreset): Record<string, number | boolean> {
-  return addon.masteringPresetParams(preset);
+export function masteringPresetParams(preset: MasteringPreset): MasteringChainConfig {
+  return nestChainConfig(addon.masteringPresetParams(preset));
 }
 
 /**
@@ -33,7 +38,7 @@ export function masteringPresetParams(preset: MasteringPreset): Record<string, n
  * Read from the library rather than from a list kept here, so a target added in
  * the core is discoverable without a binding change.
  */
-export function masteringPlatformNames(): string[] {
+export function masteringPlatformNames(): MasteringPlatform[] {
   return addon.masteringPlatformNames();
 }
 
@@ -54,12 +59,12 @@ export function masteringStereoAnalysisNames(): StereoAnalysis[] {
 }
 
 /**
- * Returns the channel-strip insert / FX processor names that mixing scene
- * inserts can build (includes the creative effects.* reverbs / modulation /
- * delay when FX support is compiled in). Use these to discover valid insert
- * names instead of hardcoding magic strings.
+ * Returns the insert / FX processor names the realtime insert factory can
+ * build (the creative effects.* reverbs / modulation / delay included when FX
+ * support is compiled in). Use these to discover valid insert names instead of
+ * hardcoding magic strings.
  */
-export function masteringInsertNames(): string[] {
+export function masteringInsertNames(): MasteringInsertName[] {
   return addon.masteringInsertNames();
 }
 
@@ -68,13 +73,37 @@ export function masteringInsertNames(): string[] {
  * tooling/validation. Any key NOT in this list is silently ignored by the
  * processor (and would be reported via {@link Mixer.sceneWarnings} when a scene
  * carrying it is loaded). Band/sub-band processors enumerate their indexed
- * `band{i}.<field>` keys. Returns an empty array for an unknown name (or one
- * whose insert needs an unavailable build feature, e.g. FX).
+ * `band{i}.<field>` keys.
  *
- * @param name - Insert processor name (see {@link masteringInsertNames}).
+ * @param insert - Insert processor name (see {@link masteringInsertNames}).
+ * @throws {TypeError} when `insert` is not a string
+ * @throws {RangeError} for an unknown `insert`
  */
-export function masteringInsertParamNames(name: string): string[] {
-  return addon.masteringInsertParamNames(name);
+export function masteringInsertParamNames<N extends MasteringInsertName>(
+  insert: N,
+): (keyof MasteringProcessorParams<N> & string)[] {
+  assertClosedToken('masteringInsertParamNames', insert, masteringInsertNames(), 'insert');
+  return addon.masteringInsertParamNames(insert);
+}
+
+/** Request form of {@link masteringInsertParamInfo}. */
+export interface MasteringInsertParamInfoRequest {
+  /** Insert processor name (see {@link masteringInsertNames}). */
+  insert: MasteringInsertName;
+  /**
+   * Host rate in Hz. Absent: the rate-less catalog view, where a `maxRelativeTo`
+   * of `"nyquist"` keeps the 24000 cap of the 48 kHz probe.
+   */
+  sampleRate?: number;
+}
+
+/** Request form of {@link masteringInsertTiming}. */
+export interface MasteringInsertTimingRequest<N extends MasteringInsertName = MasteringInsertName> {
+  /** Insert processor name (see {@link masteringInsertNames}). */
+  insert: N;
+  params?: MasteringProcessorParams<N>;
+  /** Rate the insert is prepared at, in Hz; there is no default. */
+  sampleRate: number;
 }
 
 /**
@@ -86,24 +115,25 @@ export function masteringInsertParamNames(name: string): string[] {
  * that are not automation targets (`id` null, `rtSafe` false — they take
  * effect only when the insert is built). The names are the same set
  * {@link masteringInsertParamNames} returns, plus any automation target
- * construction does not read. Any id of the processor catalog is served, an
- * offline repair stage (`repair.declick`, `repair.declip`, `repair.trimSilence`)
- * included, with the rows its catalog entry's `params` carries; those rows have
- * a null `id`. Returns an empty array for an unknown name.
+ * construction does not read. Returns an empty array for an unknown name.
  *
- * @param name - Insert processor name (see {@link masteringInsertNames}).
- * @param sampleRate - Optional host rate in Hz. A key whose `maxRelativeTo` is
- *   `"nyquist"` then reports, as `max` and `maxExclusive`, the bound accepted
- *   when the insert is built and prepared at that rate (an EQ band frequency
- *   reaches 48000 for a 96000 Hz host). Omitted, the rate-less answer is
- *   returned, with the 24000 cap of the 48 kHz probe. Throws for a rate outside
- *   the supported range.
+ * With `sampleRate`, a key whose `maxRelativeTo` is `"nyquist"` reports, as
+ * `max` and `maxExclusive`, the bound accepted when the insert is built and
+ * prepared at that rate (an EQ band frequency reaches 48000 for a 96000 Hz
+ * host). Without it the rate-less answer is returned, with the 24000 cap of the
+ * 48 kHz probe.
+ *
+ * @throws {TypeError} when the request is the wrong type or `insert` is not a string
+ * @throws {RangeError} for a `sampleRate` outside the supported range
  */
 export function masteringInsertParamInfo(
-  name: string,
-  sampleRate?: number,
+  request: MasteringInsertParamInfoRequest,
 ): MasteringInsertParamInfo[] {
-  const json = addon.masteringInsertParamInfo(name, sampleRate);
+  const r = requestOnly<MasteringInsertParamInfoRequest>('masteringInsertParamInfo', [request]);
+  if (r.sampleRate !== undefined && r.sampleRate !== null) {
+    assertSampleRate('masteringInsertParamInfo', r.sampleRate);
+  }
+  const json = addon.masteringInsertParamInfo(r.insert, r.sampleRate ?? undefined);
   return JSON.parse(json) as MasteringInsertParamInfo[];
 }
 
@@ -120,24 +150,19 @@ export function masteringInsertParamInfo(
  * A key the insert does not read is refused rather than ignored, because an
  * ignored key would answer for a configuration the caller did not ask for.
  *
- * @param name - Insert processor name (see {@link masteringInsertNames}).
- * @param params - Flat parameter values, keyed as in
- *   {@link masteringInsertParamInfo}. Each value must match the key's declared
- *   `type`: a finite number or boolean, the `choices` name of an `enum` key, a
- *   string for a `string` key, or a list of finite numbers for an `array` key.
- *   The same document a scene or strip insert is built from.
- * @param sampleRate - Rate the insert is prepared at.
+ * @throws {TypeError} for a missing `sampleRate`, or a value of the wrong type or an unknown key
+ * @throws {RangeError} for an unknown insert, a non-finite number or a value the insert refuses
  */
-export function masteringInsertTiming(
-  name: string,
-  params: MasteringInsertParams,
-  sampleRate: number,
+export function masteringInsertTiming<N extends MasteringInsertName>(
+  request: MasteringInsertTimingRequest<N>,
 ): MasteringInsertTiming {
-  const resolved = resolveInsertParams('masteringInsertTiming', name, params);
+  const r = requestOnly<MasteringInsertTimingRequest<N>>('masteringInsertTiming', [request]);
+  assertSampleRate('masteringInsertTiming', r.sampleRate);
+  const resolved = resolveInsertParams('masteringInsertTiming', r.insert, r.params ?? {});
   return addon.masteringInsertTiming(
-    name,
+    r.insert,
     JSON.stringify(resolved),
-    sampleRate,
+    r.sampleRate,
   ) as MasteringInsertTiming;
 }
 

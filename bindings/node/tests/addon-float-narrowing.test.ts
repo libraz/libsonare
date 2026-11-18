@@ -20,7 +20,6 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { mixingScenePresetJson } from '../src/index.js';
 import { addon } from '../src/native.js';
 import { addonSources } from './_addon_sources.js';
 
@@ -184,7 +183,7 @@ function peak(values: Iterable<number>): number {
 }
 
 function newMixer(): unknown {
-  return new native.Mixer(mixingScenePresetJson('commentaryDucking'), 48000, 8);
+  return new native.Mixer(addon.mixingScenePresetJson('commentaryDucking'), 48000, 8);
 }
 
 /** The gated fixture as a handle, for the metering methods that take one. */
@@ -755,6 +754,12 @@ const REQUIRED_FLOAT_ARGUMENTS: FloatArgument[] = [
     call: (v) => native.timeToFrames(v, SAMPLE_RATE, 512),
   },
   {
+    name: 'synthesizeRir source x',
+    site: 'sonare_wrap_acoustic.cpp PositionFromOptions component',
+    control: [1, 2],
+    call: (v) => magnitudeSum(rir({ source: { x: v, y: 1, z: 1.2 } })),
+  },
+  {
     name: 'noteSegments frameRate',
     site: 'sonare_wrap_features.cpp NoteSegments frameRate',
     control: [100, 200],
@@ -917,7 +922,11 @@ function mixerScene(apply: (mixer: Mixer) => void): string {
  * would leave those two rows with no control at all.
  */
 function mixerLevel(apply: (mixer: Mixer) => void): string {
-  const mixer = new native.Mixer(mixingScenePresetJson('commentaryDucking'), 48000, MIX_BLOCK);
+  const mixer = new native.Mixer(
+    addon.mixingScenePresetJson('commentaryDucking'),
+    48000,
+    MIX_BLOCK,
+  );
   apply(mixer);
   mixer.compile();
   const left: Float32Array[] = [];
@@ -976,13 +985,9 @@ function rir(options: Record<string, unknown>): Float32Array {
     widthM: 3,
     heightM: 2.5,
     ismOrder: 1,
-    maxSeconds: 0.2,
-    sourceX: 1,
-    sourceY: 1,
-    sourceZ: 1.2,
-    listenerX: 3,
-    listenerY: 2,
-    listenerZ: 1.2,
+    maxSec: 0.2,
+    source: { x: 1, y: 1, z: 1.2 },
+    listener: { x: 3, y: 2, z: 1.2 },
     ...options,
   }).rir;
 }

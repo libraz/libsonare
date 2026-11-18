@@ -30,10 +30,6 @@ import type { VoiceChangeOptions } from './effects_mastering.js';
 import {
   harmonic as harmonicFn,
   hpss as hpssFn,
-  masterAudio as masterAudioFn,
-  masteringChain as masteringChainFn,
-  mastering as masteringFn,
-  masteringProcess as masteringProcessFn,
   normalize as normalizeFn,
   noteMove as noteMoveFn,
   noteStretch as noteStretchFn,
@@ -91,7 +87,18 @@ import {
   trim as trimFn,
   zeroCrossingRate as zeroCrossingRateFn,
 } from './features.js';
+import { clippingReportFromNative, clipThresholdLinear } from './internal/metering_native.js';
 import { tempoRange } from './internal/tempo_range.js';
+import type {
+  MasterAudioRequest,
+  MasteringApplyProcessorRequest,
+  MasteringNormalizeLoudnessRequest,
+} from './mastering_chain.js';
+import {
+  masterAudio as masterAudioFn,
+  masteringApplyProcessor as masteringApplyProcessorFn,
+  masteringNormalizeLoudness as masteringNormalizeLoudnessFn,
+} from './mastering_chain.js';
 import type { NormalizeRequest } from './mastering_normalize.js';
 import type {
   ClippingReport,
@@ -117,10 +124,8 @@ import type {
   KeyCandidate,
   KeyDetection,
   LufsResult,
-  MasteringChainConfig,
   MasteringChainResult,
-  MasteringOptions,
-  MasteringPreset,
+  MasteringNormalizeLoudnessResult,
   MasteringResult,
   Matrix2D,
   MelSpectrogramResult,
@@ -128,7 +133,6 @@ import type {
   NoteMoveOptions,
   NoteStretchOptions,
   PitchResult,
-  ProgressCallback,
   RhythmResult,
   SoloProcessor,
   StftResult,
@@ -379,7 +383,13 @@ export class Audio {
 
   detectClipping(options: MeteringDetectClippingOptions = {}): ClippingReport {
     this.requireAlive();
-    return this.native.detectClipping(options);
+    const { thresholdDb, ...rest } = options;
+    return clippingReportFromNative(
+      this.native.detectClipping({
+        ...rest,
+        threshold: clipThresholdLinear('detectClipping', thresholdDb),
+      }),
+    );
   }
 
   dynamicRange(options: MeteringDynamicRangeOptions = {}): DynamicRangeReport {
@@ -487,30 +497,29 @@ export class Audio {
     return normalizeFn(audioRequest('normalize', this.data, this.sampleRate, options));
   }
 
-  mastering(options: MasteringOptions = {}): MasteringResult {
-    return masteringFn(this.data, this.sampleRate, options);
+  masteringNormalizeLoudness(
+    options?: OptionsOf<MasteringNormalizeLoudnessRequest>,
+  ): MasteringNormalizeLoudnessResult {
+    return masteringNormalizeLoudnessFn(
+      audioRequest('masteringNormalizeLoudness', this.data, this.sampleRate, options),
+    );
   }
 
-  masteringProcess(
-    processorName: SoloProcessor,
-    params: Record<string, number | boolean> = {},
+  masterAudio(options?: OptionsOf<MasterAudioRequest>): MasteringChainResult {
+    return masterAudioFn(audioRequest('masterAudio', this.data, this.sampleRate, options));
+  }
+
+  masteringApplyProcessor<P extends SoloProcessor>(
+    options: OptionsOf<MasteringApplyProcessorRequest<P>>,
   ): MasteringResult {
-    return masteringProcessFn(processorName, this.data, this.sampleRate, params);
-  }
-
-  masteringChain(
-    config: MasteringChainConfig = {},
-    onProgress?: ProgressCallback,
-  ): MasteringChainResult {
-    return masteringChainFn(this.data, this.sampleRate, config, onProgress);
-  }
-
-  masterAudio(
-    preset: MasteringPreset = 'pop',
-    overrides: MasteringChainConfig = {},
-    onProgress?: ProgressCallback,
-  ): MasteringChainResult {
-    return masterAudioFn(this.data, this.sampleRate, preset, overrides, onProgress);
+    return masteringApplyProcessorFn(
+      audioRequest<MasteringApplyProcessorRequest<P>>(
+        'masteringApplyProcessor',
+        this.data,
+        this.sampleRate,
+        options,
+      ),
+    );
   }
 
   trim(options?: OptionsOf<TrimRequest>): Float32Array {

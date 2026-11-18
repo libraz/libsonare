@@ -3,10 +3,10 @@ import {
   type MixAssistantTrack,
   Mixer,
   type MixSceneDocument,
-  mixSourceClassFromName,
-  mixSourceClassNames,
-  suggestMixScene,
-  suggestMixSceneJson,
+  type MixSourceClass,
+  mixingAssistantSourceClassFromName,
+  mixingAssistantSourceClassNames,
+  mixingAssistantSuggest,
 } from '../src/index.js';
 import { sine } from './_helpers.js';
 
@@ -77,7 +77,7 @@ const HIGH_PASS_REASON = /^high-passed vox at 80 Hz, where /;
 
 describe('mixing assistant native binding', () => {
   it('suggests a scene from mono tracks', () => {
-    const result = suggestMixScene({ tracks: baseTracks(), sampleRate: SR });
+    const result = mixingAssistantSuggest({ tracks: baseTracks(), sampleRate: SR });
 
     // The named lead is sent to the effect buses, whose returns are strips too.
     expect(result.scene.strips.map((strip) => strip.id)).toEqual([
@@ -98,7 +98,7 @@ describe('mixing assistant native binding', () => {
   it('accepts a mix of mono and stereo tracks', () => {
     const stereoLeft = sine(440, 1.0, { sampleRate: SR, amp: 0.3 });
     const stereoRight = sine(441, 1.0, { sampleRate: SR, amp: 0.3 });
-    const result = suggestMixScene({
+    const result = mixingAssistantSuggest({
       tracks: [
         { id: 'mono', left: sine(220, 1.0, { sampleRate: SR }) },
         { id: 'stereo', left: stereoLeft, right: stereoRight },
@@ -106,11 +106,11 @@ describe('mixing assistant native binding', () => {
       sampleRate: SR,
     });
 
-    expect(result.tracks.map((track) => track.channelCount)).toEqual([1, 2]);
+    expect(result.tracks.map((track) => track.numChannels)).toEqual([1, 2]);
   });
 
   it('accepts tracks of different lengths', () => {
-    const result = suggestMixScene({
+    const result = mixingAssistantSuggest({
       tracks: [
         { id: 'short', left: sine(220, 0.4, { sampleRate: SR }) },
         { id: 'long', left: sine(660, 1.2, { sampleRate: SR }) },
@@ -124,7 +124,7 @@ describe('mixing assistant native binding', () => {
   });
 
   it('returns an empty suggestion for zero tracks', () => {
-    const result = suggestMixScene({ tracks: [], sampleRate: SR });
+    const result = mixingAssistantSuggest({ tracks: [], sampleRate: SR });
 
     expect(result.tracks).toEqual([]);
     expect(result.scene.strips).toEqual([]);
@@ -133,7 +133,7 @@ describe('mixing assistant native binding', () => {
   });
 
   it('marks a silent track unusable without failing the request', () => {
-    const result = suggestMixScene({
+    const result = mixingAssistantSuggest({
       tracks: [
         { id: 'silent', left: new Float32Array(SR) },
         { id: 'tone', left: sine(440, 1.0, { sampleRate: SR }) },
@@ -148,7 +148,7 @@ describe('mixing assistant native binding', () => {
   });
 
   it('reports only integratedLufs as null for a silent track, as the types declare', () => {
-    const result = suggestMixScene({
+    const result = mixingAssistantSuggest({
       tracks: [
         { id: 'mono', left: new Float32Array(SR) },
         { id: 'stereo', left: new Float32Array(SR), right: new Float32Array(SR) },
@@ -161,7 +161,7 @@ describe('mixing assistant native binding', () => {
       expect(track.integratedLufs, track.stripId).toBeNull();
       // The true peak and crest factor are floored to finite values, so their
       // plain number types hold even for silence.
-      expect(Number.isFinite(track.truePeakDb), track.stripId).toBe(true);
+      expect(Number.isFinite(track.truePeakDbtp), track.stripId).toBe(true);
       expect(Number.isFinite(track.crestFactorDb), track.stripId).toBe(true);
       const nullFields = Object.entries(track)
         .filter(([, value]) => value === null)
@@ -173,28 +173,26 @@ describe('mixing assistant native binding', () => {
 
 describe('mixing assistant options', () => {
   it('produces no explanation when every decision domain is off', () => {
-    const result = suggestMixScene({
+    const result = mixingAssistantSuggest({
       tracks: baseTracks(),
       sampleRate: SR,
-      options: {
-        enableStructure: false,
-        enableGain: false,
-        enableBalance: false,
-        enableEq: false,
-        enableDynamics: false,
-        enableImage: false,
-      },
+      enableStructure: false,
+      enableGain: false,
+      enableBalance: false,
+      enableEq: false,
+      enableDynamics: false,
+      enableImage: false,
     });
 
     expect(result.explanation).toEqual([]);
   });
 
   it('a zero suggestion strength leaves the staged levels alone', () => {
-    const full = suggestMixScene({ tracks: baseTracks(), sampleRate: SR });
-    const none = suggestMixScene({
+    const full = mixingAssistantSuggest({ tracks: baseTracks(), sampleRate: SR });
+    const none = mixingAssistantSuggest({
       tracks: baseTracks(),
       sampleRate: SR,
-      options: { suggestionStrength: 0 },
+      suggestionStrength: 0,
     });
 
     expect(none.scene.strips.every((strip) => strip.inputTrimDb === 0)).toBe(true);
@@ -205,15 +203,15 @@ describe('mixing assistant options', () => {
     // Gain staging writes the level decision as strip input trim, one static
     // offset from each measured level towards the absolute target, so a higher
     // target must raise every trim.
-    const quiet = suggestMixScene({
+    const quiet = mixingAssistantSuggest({
       tracks: baseTracks(),
       sampleRate: SR,
-      options: { targetTrackLufs: -30 },
+      targetTrackLufs: -30,
     });
-    const loud = suggestMixScene({
+    const loud = mixingAssistantSuggest({
       tracks: baseTracks(),
       sampleRate: SR,
-      options: { targetTrackLufs: -12 },
+      targetTrackLufs: -12,
     });
 
     // Effect returns carry no measured level, so only track strips are staged.
@@ -227,7 +225,7 @@ describe('mixing assistant options', () => {
   });
 
   it('switching one domain off drops only that domain of suggestions', () => {
-    const all = suggestMixScene({ tracks: baseTracks(), sampleRate: SR });
+    const all = mixingAssistantSuggest({ tracks: baseTracks(), sampleRate: SR });
     // The EQ domain is omitted here on purpose: this material provokes no EQ
     // decision even with the domain on, so switching it off would prove nothing.
     // The all-off case above is what covers it.
@@ -240,10 +238,10 @@ describe('mixing assistant options', () => {
     ] as const;
 
     for (const domain of domains) {
-      const off = suggestMixScene({
+      const off = mixingAssistantSuggest({
         tracks: baseTracks(),
         sampleRate: SR,
-        options: { [domain]: false },
+        [domain]: false,
       });
       expect(off.explanation.length, domain).toBeLessThan(all.explanation.length);
       // With structure off there is no master bus, so the headroom trim it would
@@ -264,11 +262,11 @@ describe('mixing assistant options', () => {
   });
 
   it('proposes a high-pass only once the switch is on', () => {
-    const off = suggestMixScene({ tracks: rumblingVoiceTracks(), sampleRate: SR });
-    const on = suggestMixScene({
+    const off = mixingAssistantSuggest({ tracks: rumblingVoiceTracks(), sampleRate: SR });
+    const on = mixingAssistantSuggest({
       tracks: rumblingVoiceTracks(),
       sampleRate: SR,
-      options: { enableHighPass: true },
+      enableHighPass: true,
     });
 
     // Off by default: the measurement is not taken at all, so no filter and no
@@ -282,11 +280,13 @@ describe('mixing assistant options', () => {
   });
 
   it('an omitted option equals an explicit undefined', () => {
-    const omitted = suggestMixScene({ tracks: baseTracks(), sampleRate: SR });
-    const explicit = suggestMixScene({
+    const omitted = mixingAssistantSuggest({ tracks: baseTracks(), sampleRate: SR });
+    const explicit = mixingAssistantSuggest({
       tracks: baseTracks(),
       sampleRate: SR,
-      options: { targetTrackLufs: undefined, nFft: undefined, enableEq: undefined },
+      targetTrackLufs: undefined,
+      nFft: undefined,
+      enableEq: undefined,
     });
 
     expect(explicit).toEqual(omitted);
@@ -296,45 +296,47 @@ describe('mixing assistant options', () => {
 describe('mixing assistant option keys reach the core', () => {
   it('refuses a misspelt key rather than dropping it', () => {
     expect(() =>
-      suggestMixScene({
+      mixingAssistantSuggest({
         tracks: baseTracks(),
         sampleRate: SR,
-        options: { suggestionStrenght: 0.5 } as never,
-      }),
-    ).toThrow(/unknown mixing assistant param: suggestionStrenght/);
+        suggestionStrenght: 0.5,
+      } as never),
+    ).toThrow(TypeError);
   });
 
-  it('forwards a snake_case alias the core accepts', () => {
-    const camel = suggestMixScene({
-      tracks: baseTracks(),
-      sampleRate: SR,
-      options: { suggestionStrength: 0 },
-    });
-    const snake = suggestMixScene({
-      tracks: baseTracks(),
-      sampleRate: SR,
-      options: { suggestion_strength: 0 } as never,
-    });
-    const defaults = suggestMixScene({ tracks: baseTracks(), sampleRate: SR });
-    // Non-vacuity: the value changes the result, so equality means it arrived.
-    expect(camel).not.toEqual(defaults);
-    expect(snake).toEqual(camel);
+  it('refuses a snake_case alias and the removed options bag by name', () => {
+    expect(() =>
+      mixingAssistantSuggest({
+        tracks: baseTracks(),
+        sampleRate: SR,
+        suggestion_strength: 0,
+      } as never),
+    ).toThrow(TypeError);
+    expect(() =>
+      mixingAssistantSuggest({
+        tracks: baseTracks(),
+        sampleRate: SR,
+        options: { suggestionStrength: 0 },
+      } as never),
+    ).toThrow(TypeError);
   });
 
   it('refuses a wrongly typed value', () => {
     expect(() =>
-      suggestMixScene({
+      mixingAssistantSuggest({
         tracks: baseTracks(),
         sampleRate: SR,
-        options: { suggestionStrength: 'strong' } as never,
-      }),
+        suggestionStrength: 'strong',
+      } as never),
     ).toThrow(/suggestionStrength/);
   });
 });
 
-describe('suggestMixSceneJson', () => {
-  it('returns a scene the Mixer can instantiate', () => {
-    const json = suggestMixSceneJson({ tracks: baseTracks(), sampleRate: SR });
+describe('mixingAssistantSuggest scene', () => {
+  it('is a scene the Mixer can instantiate', () => {
+    const json = JSON.stringify(
+      mixingAssistantSuggest({ tracks: baseTracks(), sampleRate: SR }).scene,
+    );
     const mixer = Mixer.fromJson(json, { sampleRate: SR, maxBlockSize: 256 });
     try {
       // Three tracks plus the reverb and delay returns the named lead feeds.
@@ -344,50 +346,48 @@ describe('suggestMixSceneJson', () => {
       mixer.destroy();
     }
   });
-
-  it('matches the scene embedded in the full result', () => {
-    const full = suggestMixScene({ tracks: baseTracks(), sampleRate: SR });
-    const sceneOnly = JSON.parse(suggestMixSceneJson({ tracks: baseTracks(), sampleRate: SR }));
-
-    expect(sceneOnly).toEqual(full.scene);
-  });
 });
 
 describe('mixing assistant source classes', () => {
   it('resolves every reported name to a non-negative ordinal', () => {
-    const names = mixSourceClassNames();
+    const names = mixingAssistantSourceClassNames();
 
     // Asserted as a structural property of the table rather than against a
     // fixed list of class names, so growing the taxonomy does not fail here.
     expect(names.length).toBeGreaterThan(0);
     expect(names.every((name) => typeof name === 'string' && name !== '')).toBe(true);
     for (const name of names) {
-      expect(mixSourceClassFromName(name), name).toBeGreaterThanOrEqual(0);
+      expect(mixingAssistantSourceClassFromName(name), name).toBeGreaterThanOrEqual(0);
     }
     // The ordinals are the table's own indices, so they must be a permutation
     // of [0, names.length).
-    expect(names.map(mixSourceClassFromName).sort((a, b) => a - b)).toEqual(
-      names.map((_, index) => index),
-    );
+    expect(
+      names.map((name) => mixingAssistantSourceClassFromName(name)).sort((a, b) => a - b),
+    ).toEqual(names.map((_, index) => index));
   });
 
-  it('returns -1 for an unknown name', () => {
-    expect(mixSourceClassFromName('definitelyNotASourceClass')).toBe(-1);
-    expect(mixSourceClassFromName('')).toBe(-1);
+  it('refuses an unknown name with a RangeError', () => {
+    expect(() =>
+      mixingAssistantSourceClassFromName('definitelyNotASourceClass' as MixSourceClass),
+    ).toThrow(RangeError);
+    expect(() => mixingAssistantSourceClassFromName('' as MixSourceClass)).toThrow(RangeError);
   });
 });
 
 describe('mixing assistant input validation', () => {
   it('rejects a non-positive sample rate', () => {
-    expect(() => suggestMixScene({ tracks: baseTracks(), sampleRate: 0 })).toThrow(RangeError);
-    expect(() => suggestMixScene({ tracks: baseTracks(), sampleRate: -1 })).toThrow(RangeError);
-    expect(() => suggestMixSceneJson({ tracks: baseTracks(), sampleRate: 0 })).toThrow(RangeError);
+    expect(() => mixingAssistantSuggest({ tracks: baseTracks(), sampleRate: 0 })).toThrow(
+      RangeError,
+    );
+    expect(() => mixingAssistantSuggest({ tracks: baseTracks(), sampleRate: -1 })).toThrow(
+      RangeError,
+    );
   });
 
   it('rejects duplicate track ids', () => {
     const left = sine(440, 0.4, { sampleRate: SR });
     expect(() =>
-      suggestMixScene({
+      mixingAssistantSuggest({
         tracks: [
           { id: 'same', left },
           { id: 'same', left },
@@ -404,7 +404,7 @@ describe('mixing assistant input validation', () => {
     // than about the buffer.
     const left = sine(440, 0.4, { sampleRate: SR });
     left[100] = Number.NaN;
-    const result = suggestMixScene({ tracks: [{ id: 'poisoned', left }], sampleRate: SR });
+    const result = mixingAssistantSuggest({ tracks: [{ id: 'poisoned', left }], sampleRate: SR });
     expect(result.tracks[0].usable).toBe(false);
     expect(result.tracks[0].exclusionReason).toBe('track has non-finite samples');
   });
@@ -412,19 +412,22 @@ describe('mixing assistant input validation', () => {
   it('rejects a missing or empty track id', () => {
     const left = sine(440, 0.4, { sampleRate: SR });
     expect(() =>
-      suggestMixScene({ tracks: [{ left } as MixAssistantTrack], sampleRate: SR }),
+      mixingAssistantSuggest({ tracks: [{ left } as MixAssistantTrack], sampleRate: SR }),
     ).toThrow(TypeError);
-    expect(() => suggestMixScene({ tracks: [{ id: '', left }], sampleRate: SR })).toThrow(
+    expect(() => mixingAssistantSuggest({ tracks: [{ id: '', left }], sampleRate: SR })).toThrow(
       TypeError,
     );
   });
 
   it('rejects a missing left channel and a mismatched right channel', () => {
     expect(() =>
-      suggestMixScene({ tracks: [{ id: 'a' } as unknown as MixAssistantTrack], sampleRate: SR }),
+      mixingAssistantSuggest({
+        tracks: [{ id: 'a' } as unknown as MixAssistantTrack],
+        sampleRate: SR,
+      }),
     ).toThrow(TypeError);
     expect(() =>
-      suggestMixScene({
+      mixingAssistantSuggest({
         tracks: [
           {
             id: 'a',

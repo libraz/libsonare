@@ -14,13 +14,16 @@ describe('mixer and voice request objects', () => {
     );
   });
 
-  it('keeps mixStereo request and positional forms equivalent', () => {
-    const left = [samples];
-    const right = [new Float32Array(samples.length)];
-    const options = { inputTrimDb: 1, faderDb: -1 };
-    expect(mixStereo({ leftChannels: left, rightChannels: right, sampleRate, ...options })).toEqual(
-      mixStereo(left, right, sampleRate, options),
+  it('takes mixStereo as a request only and refuses an extra positional argument', () => {
+    const strips = [{ left: samples, right: new Float32Array(samples.length), faderDb: -1 }];
+    const result = mixStereo({ strips, sampleRate });
+    expect(result.left).toHaveLength(samples.length);
+    expect(() => (mixStereo as (...args: unknown[]) => unknown)({ strips, sampleRate }, 1)).toThrow(
+      TypeError,
     );
+    expect(() =>
+      (mixStereo as (...args: unknown[]) => unknown)([samples], [samples], sampleRate),
+    ).toThrow(TypeError);
   });
 
   it('keeps voiceChange request and positional forms equivalent', () => {

@@ -19,7 +19,7 @@ describe('mastering assistant preset', () => {
   const samples = sine(sampleRate);
 
   it('starts from the streaming preset when none is named', () => {
-    const result = JSON.parse(masteringAssistantSuggest({ samples, sampleRate }));
+    const result = masteringAssistantSuggest({ samples, sampleRate });
     expect(result.explanation).toContain('base preset: streaming');
     expect(result).not.toHaveProperty('genreCandidates');
   });
@@ -28,44 +28,39 @@ describe('mastering assistant preset', () => {
     const omitted = masteringAssistantSuggest({ samples, sampleRate });
     // biome-ignore lint/suspicious/noExplicitAny: null is what a JSON-shaped caller sends.
     for (const preset of [undefined, null as any]) {
-      expect(masteringAssistantSuggest({ samples, sampleRate, params: { preset } })).toEqual(
-        omitted,
-      );
+      expect(masteringAssistantSuggest({ samples, sampleRate, preset })).toEqual(omitted);
     }
   });
 
   it('starts from the named preset', () => {
-    const result = JSON.parse(
-      masteringAssistantSuggest({ samples, sampleRate, params: { preset: 'classical' } }),
-    );
+    const result = masteringAssistantSuggest({ samples, sampleRate, preset: 'classical' });
     expect(result.explanation).toContain('base preset: classical');
   });
 
   it('applies the preset through the stereo entry point too', () => {
-    const result = JSON.parse(
-      masteringAssistantSuggestStereo({
-        left: samples,
-        right: samples,
-        sampleRate,
-        params: { preset: 'jazz' },
-      }),
-    );
+    const result = masteringAssistantSuggestStereo({
+      left: samples,
+      right: samples,
+      sampleRate,
+      preset: 'jazz',
+    });
     expect(result.explanation).toContain('base preset: jazz');
   });
 
   it('rejects an unknown preset and a restoration preset', () => {
     expect(() =>
-      masteringAssistantSuggest({ samples, sampleRate, params: { preset: 'notAPreset' } }),
+      // biome-ignore lint/suspicious/noExplicitAny: deliberately passing an unknown name.
+      masteringAssistantSuggest({ samples, sampleRate, preset: 'notAPreset' as any }),
     ).toThrow(/notAPreset/);
-    expect(() =>
-      masteringAssistantSuggest({ samples, sampleRate, params: { preset: 'vinyl' } }),
-    ).toThrow(/vinyl/);
+    expect(() => masteringAssistantSuggest({ samples, sampleRate, preset: 'vinyl' })).toThrow(
+      /vinyl/,
+    );
   });
 
   it('rejects a numeric preset: the index is a C-ABI transport detail', () => {
     expect(() =>
       // biome-ignore lint/suspicious/noExplicitAny: deliberately passing the wrong type.
-      masteringAssistantSuggest({ samples, sampleRate, params: { preset: 3 as any } }),
-    ).toThrow(/preset/);
+      masteringAssistantSuggest({ samples, sampleRate, preset: 3 as any }),
+    ).toThrow(TypeError);
   });
 });

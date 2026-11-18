@@ -19,7 +19,7 @@ import {
   masterAudioStereo,
   masteringInsertParamNames,
   masteringPresetParams,
-  mixingScenePresetJson,
+  mixingScenePreset,
   noteToHz,
   Project,
   RealtimeEngine,
@@ -104,7 +104,7 @@ describe('embedded NUL refusal, mastering preset names', () => {
     expect(() => masteringPresetParams('pop')).not.toThrow();
     expectNulRefusal(() => masteringPresetParams(preset), 'preset');
     expectNulRefusal(() => masterAudio({ samples, sampleRate: 44100, preset }), 'presetName');
-    expectNulRefusal(() => masterAudio(samples, 44100, preset), 'presetName');
+    expectNulRefusal(() => masterAudio(samples, 44100, { preset }), 'presetName');
     expectNulRefusal(
       () => masterAudioStereo({ left: samples, right: samples, sampleRate: 44100, preset }),
       'presetName',
@@ -115,7 +115,7 @@ describe('embedded NUL refusal, mastering preset names', () => {
 describe('embedded NUL refusal, by reader', () => {
   it('node_narrow_string (positional) names the argument', () => {
     expect(masteringInsertParamNames('utility.gain').length).toBeGreaterThan(0);
-    expectNulRefusal(() => masteringInsertParamNames(`utility.gain${NUL}x`), 'name');
+    expectNulRefusal(() => addon.masteringInsertParamNames(`utility.gain${NUL}x`), 'name');
   });
 
   it('OptionalStringArg names the argument', () => {
@@ -131,7 +131,7 @@ describe('embedded NUL refusal, by reader', () => {
   });
 
   it('RequiredStringValue names the label', () => {
-    const chain = new StreamingMasteringChain();
+    const chain = new StreamingMasteringChain({ sampleRate: 48000 });
     try {
       expectNulRefusal(() => chain.setParameter(`a${NUL}b`, 1), 'key');
     } finally {
@@ -175,7 +175,9 @@ describe('embedded NUL refusal, by reader', () => {
 
 describe('embedded NUL refusal, by handoff kind', () => {
   it('a name lookup (mixer bus id)', () => {
-    const mixer = Mixer.fromJson(mixingScenePresetJson('drumBusSubgroup'), { sampleRate: 48000 });
+    const mixer = Mixer.fromJson(JSON.stringify(mixingScenePreset('drumBusSubgroup')), {
+      sampleRate: 48000,
+    });
     try {
       expect(() => mixer.busMeter('master')).not.toThrow();
       expect(() => mixer.busMeter('masterx')).toThrow();
@@ -189,7 +191,9 @@ describe('embedded NUL refusal, by handoff kind', () => {
     expect(masteringInsertParamNames('utility.gain')).toEqual(
       masteringInsertParamNames('utility.gain'),
     );
-    expectNulRefusal(() => masteringInsertParamNames(`utility.gain${NUL}x`), 'name');
+    expectNulRefusal(() => addon.masteringInsertParamNames(`utility.gain${NUL}x`), 'name');
+    // The facade resolves the closed token set first, so a NUL-bearing name is an unknown name.
+    expect(() => masteringInsertParamNames(`utility.gain${NUL}x` as never)).toThrow(RangeError);
   });
 
   it('a JSON key (EQ band)', () => {
@@ -244,12 +248,13 @@ describe('embedded NUL refusal, text handed to the core as std::string', () => {
   it('a note name, scene preset, voice preset and JSON text are refused', () => {
     const [id] = realtimeVoiceChangerPresetNames();
     expectNulRefusal(() => noteToHz(`A4${NUL}junk`), 'note');
-    expectNulRefusal(() => mixingScenePresetJson(`vocalReverbSend${NUL}junk`), 'preset');
+    expectNulRefusal(() => addon.mixingScenePresetJson(`vocalReverbSend${NUL}junk`), 'preset');
+    expect(() => mixingScenePreset(`vocalReverbSend${NUL}junk` as never)).toThrow(RangeError);
     expectUnknownPresetRefusal(() =>
       realtimeVoiceChangerPresetConfig(`${id}${NUL}junk` as typeof id),
     );
     expectNulRefusal(() => realtimeVoiceChangerValidatePresetJson(`{}${NUL}junk`), 'presetJson');
-    const json = Project.create().toJson();
+    const json = new Project().toJson();
     expectNulRefusal(() => Project.fromJson(`${json}${NUL}junk`), 'json');
   });
 });

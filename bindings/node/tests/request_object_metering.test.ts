@@ -36,12 +36,12 @@ describe('metering request-object compatibility', () => {
       meteringDcOffset(samples, sampleRate),
     );
     expect(meteringTruePeakDb({ samples, sampleRate, oversampleFactor: 2 })).toEqual(
-      meteringTruePeakDb(samples, sampleRate, 2),
+      meteringTruePeakDb(samples, sampleRate, { oversampleFactor: 2 }),
     );
   });
 
   it('preserves report and spectrum options', () => {
-    const clipping = { threshold: 0.4, minRegionSamples: 2 };
+    const clipping = { thresholdDb: -8, minRegionSamples: 2 };
     expect(meteringDetectClipping({ samples, sampleRate, ...clipping })).toEqual(
       meteringDetectClipping(samples, sampleRate, clipping),
     );
@@ -53,8 +53,8 @@ describe('metering request-object compatibility', () => {
     expect(meteringSpectrum({ samples, sampleRate, ...spectrum })).toEqual(
       meteringSpectrum(samples, sampleRate, spectrum),
     );
-    expect(meteringSpectrumFrame({ samples, sampleRate, frameOffset: 32, ...spectrum })).toEqual(
-      meteringSpectrumFrame(samples, sampleRate, 32, spectrum),
+    expect(meteringSpectrumFrame({ samples, sampleRate, startSample: 32, ...spectrum })).toEqual(
+      meteringSpectrumFrame(samples, sampleRate, { startSample: 32, ...spectrum }),
     );
   });
 
@@ -64,35 +64,31 @@ describe('metering request-object compatibility', () => {
     );
   });
 
-  it('preserves all stereo calls', () => {
-    expect(meteringStereoCorrelation({ left, right, sampleRate })).toEqual(
-      meteringStereoCorrelation(left, right, sampleRate),
-    );
-    expect(meteringStereoWidth({ left, right, sampleRate })).toEqual(
-      meteringStereoWidth(left, right, sampleRate),
-    );
-    const scope = { maxPoints: 128 };
-    expect(meteringVectorscope({ left, right, sampleRate, ...scope })).toEqual(
-      meteringVectorscope(left, right, sampleRate, scope),
-    );
-    expect(meteringPhaseScope({ left, right, sampleRate, ...scope })).toEqual(
-      meteringPhaseScope(left, right, sampleRate, scope),
+  it('runs the stereo calls from a request and bounds the scope through maxPoints', () => {
+    expect(Number.isFinite(meteringStereoCorrelation({ left, right, sampleRate }))).toBe(true);
+    expect(Number.isFinite(meteringStereoWidth({ left, right, sampleRate }))).toBe(true);
+    const full = meteringVectorscope({ left, right, sampleRate });
+    expect(full.mid).toHaveLength(left.length);
+    const bounded = meteringVectorscope({ left, right, sampleRate, maxPoints: 128 });
+    expect(bounded.mid.length).toBeLessThanOrEqual(128);
+    const phase = meteringPhaseScope({ left, right, sampleRate, maxPoints: 128 });
+    expect(phase.mid.length).toBeLessThanOrEqual(128);
+    expect(phase.correlation).toBeCloseTo(
+      meteringPhaseScope({ left, right, sampleRate }).correlation,
+      6,
     );
   });
 
-  it('preserves waveform calls', () => {
-    const interleaved = new Float32Array(samples.length * 2);
-    for (let i = 0; i < samples.length; i++) {
-      interleaved[2 * i] = left[i] ?? 0;
-      interleaved[2 * i + 1] = right[i] ?? 0;
-    }
-    expect(waveformPeaks({ samples: interleaved, channels: 2, samplesPerBucket: 64 })).toEqual(
-      waveformPeaks(interleaved, 2, { samplesPerBucket: 64 }),
-    );
-    const levels = [64, 128];
-    expect(
-      waveformPeakPyramid({ samples: interleaved, channels: 2, samplesPerBucketLevels: levels }),
-    ).toEqual(waveformPeakPyramid(interleaved, 2, { samplesPerBucketLevels: levels }));
+  it('preserves waveform calls over planar channels', () => {
+    const report = waveformPeaks({ channels: [left, right], samplesPerBucket: 64 });
+    expect(report.min).toHaveLength(2);
+    expect(report.bucketCount).toBe(left.length / 64);
+    const levels = waveformPeakPyramid({
+      channels: [left, right],
+      samplesPerBucketLevels: [64, 128],
+    });
+    expect(levels).toHaveLength(2);
+    expect(levels[0]?.min[0]).toEqual(report.min[0]);
   });
 
   // Both call shapes funnel through one private normalizer, so an invalid input
@@ -106,7 +102,9 @@ describe('metering request-object compatibility', () => {
     expect(reqEmpty.threw).toBe(true);
     expect(reqEmpty.message).toBe(posEmpty.message);
 
-    const posFactor = captureThrow(() => meteringTruePeakDb(samples, sampleRate, 3));
+    const posFactor = captureThrow(() =>
+      meteringTruePeakDb(samples, sampleRate, { oversampleFactor: 3 }),
+    );
     const reqFactor = captureThrow(() =>
       meteringTruePeakDb({ samples, sampleRate, oversampleFactor: 3 }),
     );
@@ -114,15 +112,10 @@ describe('metering request-object compatibility', () => {
     expect(reqFactor.threw).toBe(true);
     expect(reqFactor.message).toBe(posFactor.message);
 
-    const posPair = captureThrow(() =>
-      meteringStereoCorrelation(left, right.subarray(1), sampleRate),
-    );
     const reqPair = captureThrow(() =>
       meteringStereoCorrelation({ left, right: right.subarray(1), sampleRate }),
     );
-    expect(posPair.threw).toBe(true);
     expect(reqPair.threw).toBe(true);
-    expect(reqPair.message).toBe(posPair.message);
   });
 });
 

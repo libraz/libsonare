@@ -225,15 +225,15 @@ nodeFacade.pseudoCqt({ samples, sampleRate: 22050, gamma: 20 });
 // @ts-expect-error gamma is VQT-only.
 nodeFacade.hybridCqt({ samples, sampleRate: 22050, gamma: 20 });
 nodeFacade.vqt({ samples, sampleRate: 22050, gamma: 20 }).magnitude satisfies Matrix2D;
-masterAudio({ samples, cancel: () => true, onProgress: () => {} }).stages satisfies string[];
+masterAudio({ samples, sampleRate: 48000, cancel: () => true, onProgress: () => {} }).stages satisfies string[];
 // @ts-expect-error callbacks cannot cross the async worker boundary.
-masterAudioAsync({ samples, cancel: () => true });
+masterAudioAsync({ samples, sampleRate: 48000, cancel: () => true });
 // @ts-expect-error callbacks cannot cross the async worker boundary.
-masterAudioAsync({ samples, onProgress: () => {} });
+masterAudioAsync({ samples, sampleRate: 48000, onProgress: () => {} });
 // @ts-expect-error callbacks cannot cross the async worker boundary.
-masterAudioStereoAsync({ left: samples, right: samples, cancel: () => true });
+masterAudioStereoAsync({ left: samples, right: samples, sampleRate: 48000, cancel: () => true });
 // @ts-expect-error callbacks cannot cross the async worker boundary.
-masterAudioStereoAsync({ left: samples, right: samples, onProgress: () => {} });
+masterAudioStereoAsync({ left: samples, right: samples, sampleRate: 48000, onProgress: () => {} });
 nodeFacade.cqtToAudio({
   magnitude: samplesMatrix,
   sampleRate: 22050,
