@@ -248,6 +248,31 @@ def test_resample_accepts_target_sr_alias_as_canonical_target_rate(
     assert writes == [("output.wav", 16000)]
 
 
+def test_acoustic_text_prints_a_dash_for_what_a_blind_estimate_does_not_measure(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(acoustic, "_load_audio", lambda _path: ([0.1], 48000))
+    result = SimpleNamespace(
+        rt60=0.4,
+        edt=None,
+        c50=None,
+        c80=None,
+        d50=None,
+        confidence=0.5,
+        is_blind=True,
+        rt60_bands=[0.4],
+        edt_bands=None,
+        c50_bands=None,
+        c80_bands=None,
+    )
+    monkeypatch.setattr(libsonare, "detect_acoustic", lambda _samples, **_kwargs: result)
+
+    assert acoustic.cmd_acoustic(_args(ir=False, n_bands=1)) == 0
+    out = capsys.readouterr().out
+    for label in ("EDT", "C50", "C80", "D50"):
+        assert f"    {label}:        -\n" in out
+
+
 def test_acoustic_handlers_forward_ir_and_blind_controls(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

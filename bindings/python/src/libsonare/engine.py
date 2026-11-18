@@ -108,6 +108,8 @@ from .types import (
 # binding's _EXPECTED_ENGINE_ABI_VERSION. A mismatch means the loaded native
 # binary lays out engine structs differently than this wrapper expects.
 _EXPECTED_ENGINE_ABI_VERSION = 3
+# The C record's destination_id for a byte meant for every external port.
+_ALL_EXTERNAL_PORTS = 0xFFFFFFFF
 
 # SONARE_ENGINE_MAX_TRACK_LANES: most lanes RealtimeEngine.set_track_lanes accepts.
 MAX_TRACK_LANES = 32
@@ -1093,7 +1095,11 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
                 byte_count = max(0, min(int(event.byte_count), len(event.bytes)))
                 results.append(
                     ExternalMidiEvent(
-                        destination_id=int(event.destination_id),
+                        destination_id=(
+                            None
+                            if int(event.destination_id) == _ALL_EXTERNAL_PORTS
+                            else int(event.destination_id)
+                        ),
                         render_frame=int(event.render_frame),
                         bytes=bytes(event.bytes[:byte_count]),
                     )

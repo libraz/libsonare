@@ -235,6 +235,11 @@ def _sanitize_json_value(value: object) -> object:
     return value
 
 
+def _fmt_optional(value: float | None, spec: str, unit: str = "") -> str:
+    """Format a measured value for text output, or "-" when nothing was measured."""
+    return "-" if value is None else f"{format(value, spec)}{unit}"
+
+
 def _strict_json_dumps(value: object, **kwargs: Any) -> str:
     """Serialize a CLI payload as standards-compliant JSON."""
     return json.dumps(_sanitize_json_value(value), allow_nan=False, **kwargs)

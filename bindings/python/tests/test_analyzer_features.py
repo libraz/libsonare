@@ -731,4 +731,15 @@ def test_time_to_frames() -> None:
     assert f == 22050 // 512
 
 
+@pytest.mark.parametrize("bad", [{"sr": 0}, {"hop_length": 0}, {"sr": -1}])
+def test_frame_time_conversions_refuse_a_non_positive_rate_or_hop(bad) -> None:
+    from libsonare import SonareValueError, frames_to_time, time_to_frames
+
+    with pytest.raises(SonareValueError):
+        frames_to_time(1, **bad)
+    with pytest.raises(SonareValueError):
+        time_to_frames(1.0, **bad)
+    assert time_to_frames(0.0, 22050, 512) == 0
+
+
 ## Resample test

@@ -782,7 +782,7 @@ class NoteObject:
     offset_sample: int | None
     frame_start: int
     frame_end: int
-    median_hz: float
+    median_hz: float | None
     median_cents: float
     f0_stability: float
     amplitude: np.ndarray[Any, Any]
@@ -795,7 +795,7 @@ class NoteObject:
         offset_sample: int | None = None,
         frame_start: int = 0,
         frame_end: int = 0,
-        median_hz: float = 0.0,
+        median_hz: float | None = None,
         median_cents: float = 0.0,
         f0_stability: float = 0.0,
         amplitude: np.ndarray[Any, Any] = ...,
@@ -925,12 +925,12 @@ def render_percussive_events(
 ) -> np.ndarray[Any, Any]: ...
 
 class PitchDecompositionResult:
-    center_hz: float
+    center_hz: float | None
     drift_cents: np.ndarray[Any, Any]
     vibrato_cents: np.ndarray[Any, Any]
     def __init__(
         self,
-        center_hz: float = 0.0,
+        center_hz: float | None = None,
         drift_cents: np.ndarray[Any, Any] = ...,
         vibrato_cents: np.ndarray[Any, Any] = ...,
     ) -> None: ...
@@ -938,7 +938,7 @@ class PitchDecompositionResult:
 def decompose_note_pitch(
     f0_hz: FloatSamples,
     frame_rate: float,
-    median_hz: float,
+    median_hz: float | None,
     *,
     voiced: IntSamples | None = None,
     vibrato_cutoff_hz: float | None = None,

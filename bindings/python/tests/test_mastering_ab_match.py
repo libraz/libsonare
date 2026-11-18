@@ -63,11 +63,12 @@ def test_match_omitted_returns_the_same_audio() -> None:
     np.testing.assert_array_equal(audio_only, matched)
 
 
-def test_silent_source_reports_non_finite_loudness_and_no_gain() -> None:
+def test_silent_source_reports_no_loudness_and_no_gain() -> None:
     silent = np.zeros(SR // 2, dtype=np.float32)
     matched, match = mastering_ab_match_loudness(silent, REFERENCE, SR)
     assert match is not None
-    assert not np.isfinite(match.source_lufs)
+    assert match.source_lufs is None
+    assert match.reference_lufs is not None
     assert match.applied_gain_db == 0.0
     np.testing.assert_array_equal(matched, silent)
 

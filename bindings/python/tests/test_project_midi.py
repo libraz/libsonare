@@ -7,8 +7,10 @@ import json
 import pytest
 
 from libsonare import (
+    MidiCcBinding,
     Project,
     SonareError,
+    SonareValueError,
 )
 
 from ._project_helpers import _build_project
@@ -256,17 +258,30 @@ def test_gm_program_and_cc_name_tables_round_trip() -> None:
     assert Project.gm_instrument_name(0) == "Acoustic Grand Piano"
     assert Project.gm_program_for_name("Acoustic Grand Piano") == 0
     assert Project.gm_instrument_name(9999) is None
-    assert Project.gm_program_for_name("not a real instrument") == -1
     assert isinstance(Project.gm_family_name(0), str)
     assert Project.gm_family_first_program(0) >= 0
     assert isinstance(Project.gm2_instrument_name(0, 0), (str, type(None)))
     assert isinstance(Project.gm_drum_name(35), (str, type(None)))
-    assert Project.gm_drum_note_for_name("not a drum") == -1
     assert isinstance(Project.gm2_drum_set_name(0), (str, type(None)))
     assert isinstance(Project.gm2_drum_name(0, 35), (str, type(None)))
     assert Project.midi_cc_name(7) is not None
-    assert Project.midi_cc_index_for_name("not a cc") == -1
+    assert Project.midi_cc_index_for_name(Project.midi_cc_name(7)) == 7
     assert isinstance(Project.per_note_controller_name(0), (str, type(None)))
+
+
+@pytest.mark.parametrize(
+    ("lookup", "argument"),
+    [
+        (Project.gm_program_for_name, "not a real instrument"),
+        (Project.gm_drum_note_for_name, "not a drum"),
+        (Project.midi_cc_index_for_name, "not a cc"),
+        (Project.gm_family_first_program, 16),
+        (Project.gm_family_first_program, -1),
+    ],
+)
+def test_a_reverse_lookup_that_finds_nothing_is_refused(lookup, argument) -> None:
+    with pytest.raises(SonareValueError, match=lookup.__name__):
+        lookup(argument)
 
 
 def test_midi_bank_program_lowers_to_events() -> None:
@@ -284,6 +299,36 @@ def test_midi_route_events_filters_and_reports_overflow() -> None:
     assert isinstance(result.overflow_count, int)
     # Only the channel-2 event survives the filter.
     assert len(result.events) == 1
+
+
+def test_midi_route_absent_filters_mean_any_and_a_negative_is_refused() -> None:
+    events = [Project.midi_cc(0.0, 0, 2, 1, 64), Project.midi_cc(0.1, 0, 5, 1, 20)]
+    unfiltered = Project.midi_route_events(events, {"filter_channel": None, "remap_channel": None})
+    assert len(unfiltered.events) == 2
+    for key in ("filter_group", "filter_channel", "remap_channel"):
+        with pytest.raises(SonareValueError, match=key):
+            Project.midi_route_events(events, {key: -1})
+        with pytest.raises(SonareValueError, match=key):
+            Project.midi_route_events(events, {key: 16})
+
+
+def test_a_cc_binding_channel_is_absent_for_any_and_0xff_is_refused() -> None:
+    event = Project.midi_cc(0.0, 0, 9, 1, 100)
+    any_channel = MidiCcBinding(
+        cc_number=1,
+        channel=None,
+        kind=0,
+        cc_lsb_number=0,
+        selector_msb=0,
+        selector_lsb=0,
+        param_id=5,
+        min_value=0.0,
+        max_value=1.0,
+    )
+    assert Project.midi_cc_to_breakpoint([any_channel], event) is not None
+    assert Project.midi_cc_to_breakpoint([{"cc_number": 1, "param_id": 5}], event) is not None
+    with pytest.raises(SonareValueError, match="channel"):
+        Project.midi_cc_to_breakpoint([{"cc_number": 1, "channel": 0xFF, "param_id": 5}], event)
 
 
 def test_midi_cc_learn_and_conversion_helpers() -> None:

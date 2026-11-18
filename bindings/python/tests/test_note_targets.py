@@ -43,7 +43,7 @@ A4_HZ = 440.0
 Answer = tuple[int, tuple[float, ...], tuple[bool, ...]]
 
 
-def _note(onset_sample: int, offset_sample: int, median_hz: float = A4_HZ) -> NoteObject:
+def _note(onset_sample: int, offset_sample: int, median_hz: float | None = A4_HZ) -> NoteObject:
     return NoteObject(
         onset_sample=onset_sample,
         offset_sample=offset_sample,
@@ -225,7 +225,7 @@ def test_everything_the_assignment_does_not_write_survives_it() -> None:
 
 def test_a_note_with_no_measured_pitch_is_never_assigned_or_edited() -> None:
     """No policy reaches it: there is no pitch to correct from."""
-    unpitched = [_note(0, HALF_SECOND, median_hz=0.0)]
+    unpitched = [_note(0, HALF_SECOND, median_hz=None)]
     targets = [NoteTarget(0.0, 0.5, 60.0)]
 
     for policy in ("leave", "mute", "nearest"):

@@ -54,7 +54,8 @@ def test_silence_yields_zero_gain_and_builds_a_streaming_chain() -> None:
     silence = np.zeros(SR, dtype=np.float32)
     gain = libsonare.streaming_loudness_gain(silence, SR, STAGED)
     assert gain.loudness_static_gain_db == 0.0
-    assert not math.isfinite(gain.integrated_lufs)
+    assert gain.integrated_lufs is None
+    assert gain.true_peak_dbtp is None
     with libsonare.StreamingMasteringChain(
         STAGED,
         sample_rate=SR,

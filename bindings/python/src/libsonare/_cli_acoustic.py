@@ -14,6 +14,7 @@ from typing import Any, cast
 
 from ._cli_common import (
     EXIT_INVALID_PARAMETER,
+    _fmt_optional,
     _legacy_exit_codes,
     _load_channels_or_downmix,
     _strict_json_dumps,
@@ -83,9 +84,9 @@ def cmd_acoustic(args: argparse.Namespace) -> int:
                     "confidence": result.confidence,
                     "is_blind": result.is_blind,
                     "rt60_bands": [float(value) for value in result.rt60_bands],
-                    "edt_bands": [float(value) for value in result.edt_bands],
-                    "c50_bands": [float(value) for value in result.c50_bands],
-                    "c80_bands": [float(value) for value in result.c80_bands],
+                    "edt_bands": [float(value) for value in result.edt_bands or ()],
+                    "c50_bands": [float(value) for value in result.c50_bands or ()],
+                    "c80_bands": [float(value) for value in result.c80_bands or ()],
                 }
             )
         )
@@ -93,10 +94,10 @@ def cmd_acoustic(args: argparse.Namespace) -> int:
         mode = "impulse response" if args.ir else "blind"
         print(f"  Acoustic ({mode}):")
         print(f"    RT60:       {result.rt60:.3f} s")
-        print(f"    EDT:        {result.edt:.3f} s")
-        print(f"    C50:        {result.c50:.2f} dB")
-        print(f"    C80:        {result.c80:.2f} dB")
-        print(f"    D50:        {result.d50:.3f}")
+        print(f"    EDT:        {_fmt_optional(result.edt, '.3f', ' s')}")
+        print(f"    C50:        {_fmt_optional(result.c50, '.2f', ' dB')}")
+        print(f"    C80:        {_fmt_optional(result.c80, '.2f', ' dB')}")
+        print(f"    D50:        {_fmt_optional(result.d50, '.3f')}")
         print(f"    Confidence: {result.confidence:.1%}")
         print(f"    Blind:      {result.is_blind}")
     return 0

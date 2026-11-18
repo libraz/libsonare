@@ -3631,7 +3631,7 @@ test = "bindings/python/tests/test_surface_analysis.py::test_analysis_arrays_are
 [[entry]]
 kind = "field"
 old = "AcousticResult.edt_bands"
-changed = "float32 ndarray instead of list"
+changed = "float32 ndarray instead of list; None when is_blind (was an array of NaNs)"
 domain = "effects"
 rule = "array-results"
 test = "bindings/python/tests/test_surface_analysis.py::test_analysis_arrays_are_float32_ndarrays"
@@ -3639,7 +3639,7 @@ test = "bindings/python/tests/test_surface_analysis.py::test_analysis_arrays_are
 [[entry]]
 kind = "field"
 old = "AcousticResult.c50_bands"
-changed = "float32 ndarray instead of list"
+changed = "float32 ndarray instead of list; None when is_blind (was empty)"
 domain = "effects"
 rule = "array-results"
 test = "bindings/python/tests/test_surface_analysis.py::test_analysis_arrays_are_float32_ndarrays"
@@ -3647,7 +3647,7 @@ test = "bindings/python/tests/test_surface_analysis.py::test_analysis_arrays_are
 [[entry]]
 kind = "field"
 old = "AcousticResult.c80_bands"
-changed = "float32 ndarray instead of list"
+changed = "float32 ndarray instead of list; None when is_blind (was empty)"
 domain = "effects"
 rule = "array-results"
 test = "bindings/python/tests/test_surface_analysis.py::test_analysis_arrays_are_float32_ndarrays"
@@ -5057,9 +5057,11 @@ rule = "pitch-semitones"
 [[entry]]
 kind = "field"
 old = "PitchDecomposition.centre_hz"
-new = "PitchDecompositionResult.center_hz"
+to = "PitchDecompositionResult.center_hz"
+changed = "None for a note with no usable pitch (was 0.0)"
 domain = "effects"
 rule = "individual"
+test = "bindings/python/tests/test_note_objects.py::test_a_note_pitch_is_none_when_absent_and_zero_is_refused"
 
 [[entry]]
 kind = "option"
@@ -6619,9 +6621,11 @@ rule = "unit-in-name"
 [[entry]]
 kind = "field"
 old = "MelodyPoint.frequency"
-new = "MelodyPoint.frequency_hz"
+to = "MelodyPoint.frequency_hz"
+changed = "None for an unvoiced point (was 0.0)"
 domain = "analysis"
 rule = "unit-in-name"
+test = "bindings/python/tests/test_absent_measurements.py::test_an_unvoiced_melody_point_has_no_frequency"
 
 [[entry]]
 kind = "field"
@@ -6864,9 +6868,11 @@ rule = "unit-in-name"
 [[entry]]
 kind = "field"
 old = "StreamingLoudnessGain.true_peak_db"
-new = "StreamingLoudnessGain.true_peak_dbtp"
+to = "StreamingLoudnessGain.true_peak_dbtp"
+changed = "None for digital silence (was the meter's -120 floor); the StreamingMasteringChain constructor reads None as no measured peak"
 domain = "mastering"
 rule = "unit-in-name"
+test = "bindings/python/tests/test_absent_measurements.py::test_silent_loudness_reads_are_absent"
 
 [[entry]]
 kind = "type"
@@ -7081,3 +7087,179 @@ changed = "takes the nested chain config only; a dotted key such as \"eq.tilt.ti
 domain = "mastering"
 rule = "typed-results"
 test = "bindings/python/tests/test_analyzer_streaming_mastering.py::test_a_dotted_chain_key_is_refused_by_name"
+
+[[entry]]
+kind = "field"
+old = "AcousticResult.edt"
+changed = "None when is_blind (was NaN)"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_absent_measurements.py::test_blind_acoustics_leave_the_direct_sound_measures_absent"
+
+[[entry]]
+kind = "field"
+old = "AcousticResult.c50"
+changed = "None when is_blind (was NaN)"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_absent_measurements.py::test_blind_acoustics_leave_the_direct_sound_measures_absent"
+
+[[entry]]
+kind = "field"
+old = "AcousticResult.c80"
+changed = "None when is_blind (was NaN)"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_absent_measurements.py::test_blind_acoustics_leave_the_direct_sound_measures_absent"
+
+[[entry]]
+kind = "field"
+old = "AcousticResult.d50"
+changed = "None when is_blind (was NaN)"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_absent_measurements.py::test_blind_acoustics_leave_the_direct_sound_measures_absent"
+
+[[entry]]
+kind = "field"
+old = "ClipDetection.flat_level"
+changed = "None when no flat run was found (was 0.0)"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_absent_measurements.py::test_clipping_without_a_flat_run_has_no_flat_level"
+
+[[entry]]
+kind = "field"
+old = "BoundaryResult.novelty_peak"
+changed = "None when the input has no novelty at all (was 0.0)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_absent_measurements.py::test_silence_has_no_novelty_peak"
+
+[[entry]]
+kind = "field"
+old = "NoteObject.median_hz"
+changed = "None for a note with no pitch (was 0.0); None is what a caller writes for no pitch, and 0 or a negative value raises SonareValueError"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_note_objects.py::test_a_note_pitch_is_none_when_absent_and_zero_is_refused"
+
+[[entry]]
+kind = "field"
+old = "MidiCcBinding.channel"
+changed = "None for a binding that answers any channel (was 0xFF); 0xFF or anything outside 0..15 raises SonareValueError"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_project_midi.py::test_a_cc_binding_channel_is_absent_for_any_and_0xff_is_refused"
+
+[[entry]]
+kind = "field"
+old = "ExternalMidiEvent.destination_id"
+changed = "None for a clock/transport byte meant for every external port (was 0xFFFFFFFF)"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_engine_midi.py::test_engine_forwards_midi_clock_transport_to_external_queue"
+
+[[entry]]
+kind = "option"
+old = "decompose_note_pitch(median_hz)"
+changed = "None for a note with no pitch (was 0); 0 or a negative value raises SonareValueError"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_note_objects.py::test_a_note_pitch_is_none_when_absent_and_zero_is_refused"
+
+[[entry]]
+kind = "function"
+old = "chord_symbol_from_analysis"
+changed = "omits slash_bass_pc when the chord has no slash bass (was 255)"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_chord_annotation.py::test_an_unknown_root_or_tonic_and_no_slash_bass_are_absent"
+
+[[entry]]
+kind = "field"
+old = "StreamingLoudnessGain.integrated_lufs"
+changed = "None for a silent or below-gate input (was non-finite)"
+domain = "mastering"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_absent_measurements.py::test_silent_loudness_reads_are_absent"
+
+[[entry]]
+kind = "field"
+old = "LoudnessMatch.reference_lufs"
+changed = "None for a silent or below-gate take (was non-finite)"
+domain = "mastering"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_mastering_ab_match.py::test_silent_source_reports_no_loudness_and_no_gain"
+
+[[entry]]
+kind = "field"
+old = "LoudnessMatch.source_lufs"
+changed = "None for a silent or below-gate take (was non-finite)"
+domain = "mastering"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_mastering_ab_match.py::test_silent_source_reports_no_loudness_and_no_gain"
+
+[[entry]]
+kind = "method"
+old = "PolyphonicAnalysis.note_inharmonicity"
+changed = "NaN for a note whose fit was refused (was -1)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_absent_measurements.py::test_a_refused_inharmonicity_fit_is_nan_and_a_fitted_one_is_not"
+
+[[entry]]
+kind = "method"
+old = "Project.gm_program_for_name"
+changed = "an unknown name raises SonareValueError (returned -1); name is a str, None is TypeError"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_project_midi.py::test_a_reverse_lookup_that_finds_nothing_is_refused"
+
+[[entry]]
+kind = "method"
+old = "Project.gm_drum_note_for_name"
+changed = "an unknown name raises SonareValueError (returned -1); name is a str, None is TypeError"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_project_midi.py::test_a_reverse_lookup_that_finds_nothing_is_refused"
+
+[[entry]]
+kind = "method"
+old = "Project.midi_cc_index_for_name"
+changed = "an unknown name raises SonareValueError (returned -1); name is a str, None is TypeError"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_project_midi.py::test_a_reverse_lookup_that_finds_nothing_is_refused"
+
+[[entry]]
+kind = "method"
+old = "Project.gm_family_first_program"
+changed = "a family outside 0..15 raises SonareValueError (returned -1)"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_project_midi.py::test_a_reverse_lookup_that_finds_nothing_is_refused"
+
+[[entry]]
+kind = "function"
+old = "mix_source_class_from_name"
+changed = "an unknown name raises SonareValueError (returned -1)"
+domain = "mastering"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_mixing_assistant.py::test_an_unknown_source_class_name_is_refused"
+
+[[entry]]
+kind = "function"
+old = "frames_to_time"
+changed = "a non-positive sr or hop_length raises SonareValueError (returned NaN)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_analyzer_features.py::test_frame_time_conversions_refuse_a_non_positive_rate_or_hop"
+
+[[entry]]
+kind = "function"
+old = "time_to_frames"
+changed = "a non-positive sr or hop_length raises SonareValueError (returned 0)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_analyzer_features.py::test_frame_time_conversions_refuse_a_non_positive_rate_or_hop"

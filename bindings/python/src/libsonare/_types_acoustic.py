@@ -25,22 +25,20 @@ class AcousticResult:
 
     Only ``rt60`` (and ``rt60_bands``) is estimated in both modes.
     ``c50``/``c80``/``d50`` and ``edt`` require a known direct-sound arrival
-    time, which only a measured impulse response provides, so they are NaN when
-    ``is_blind`` is true -- ``edt`` measures the 0 to -10 dB decay and the blind
-    estimator only fits the late decay ``rt60`` comes from. ``c50_bands`` and
-    ``c80_bands`` are then empty arrays (not computed), while ``edt_bands`` stays
-    a full-length array of NaNs so it can be indexed by the same band index as
-    ``rt60_bands``."""
+    time, which only a measured impulse response provides, so they are ``None``
+    when ``is_blind`` is true -- ``edt`` measures the 0 to -10 dB decay and the
+    blind estimator only fits the late decay ``rt60`` comes from. ``edt_bands``,
+    ``c50_bands`` and ``c80_bands`` are ``None`` then too."""
 
     rt60: float
-    edt: float
-    c50: float
-    c80: float
-    d50: float
+    edt: float | None
+    c50: float | None
+    c80: float | None
+    d50: float | None
     rt60_bands: np.ndarray
-    edt_bands: np.ndarray
-    c50_bands: np.ndarray
-    c80_bands: np.ndarray
+    edt_bands: np.ndarray | None
+    c50_bands: np.ndarray | None
+    c80_bands: np.ndarray | None
     confidence: float
     is_blind: bool
 

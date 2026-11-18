@@ -176,7 +176,8 @@ class StreamBarChord:
     ``bar_duration_sec`` apart rather than snapped to the analysis frame grid.
 
     In ``voted_pattern`` the fields shift meaning: ``bar_index`` is the pattern
-    position and ``start_sec`` is unused.
+    position and ``start_sec`` is unused; a position no chord was voted for is
+    ``None`` in that list.
     """
 
     bar_index: int
@@ -216,7 +217,7 @@ class StreamProgressiveEstimate:
     bar_chord_progression: list[StreamBarChord]
     current_bar: int | None
     bar_duration_sec: float | None
-    voted_pattern: list[StreamBarChord]
+    voted_pattern: list[StreamBarChord | None]
     pattern_length: int
     detected_pattern_name: str | None
     detected_pattern_score: float | None

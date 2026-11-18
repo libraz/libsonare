@@ -144,10 +144,11 @@ def test_source_class_names_resolve_to_their_index():
         assert mix_source_class_from_name(name) >= 0
 
 
-def test_unknown_source_class_name_resolves_to_minus_one():
-    from libsonare import mix_source_class_from_name
+def test_an_unknown_source_class_name_is_refused():
+    from libsonare import SonareValueError, mix_source_class_from_name
 
-    assert mix_source_class_from_name("not-a-source-class") == -1
+    with pytest.raises(SonareValueError, match="not-a-source-class"):
+        mix_source_class_from_name("not-a-source-class")
 
 
 def test_suggest_over_mono_tracks(mono_tracks, mono_suggestion):

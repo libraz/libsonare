@@ -111,25 +111,40 @@ def note_to_hz(note: str) -> float:
 
 
 def frames_to_time(frames: int, sr: int = 22050, hop_length: int = 512) -> float:
-    """Convert frame count to time in seconds."""
+    """Convert frame count to time in seconds.
+
+    Raises:
+        SonareValueError: If ``sr`` or ``hop_length`` is not positive.
+    """
     lib = _get_lib()
-    return float(
+    seconds = float(
         lib.sonare_frames_to_time(
             _to_c_int(frames, "frames"), _to_c_int(sr, "sr"), _to_c_int(hop_length, "hop_length")
         )
     )
+    if math.isnan(seconds):
+        raise _refused_argument("frames_to_time: sr and hop_length must be positive")
+    return seconds
 
 
 def time_to_frames(time_sec: float, sr: int = 22050, hop_length: int = 512) -> int:
-    """Convert time in seconds to frame count."""
+    """Convert time in seconds to frame count.
+
+    Raises:
+        SonareValueError: If ``sr`` or ``hop_length`` is not positive.
+    """
     lib = _get_lib()
-    return int(
+    frames = int(
         lib.sonare_time_to_frames(
             _to_c_float(time_sec, "time_sec"),
             _to_c_int(sr, "sr"),
             _to_c_int(hop_length, "hop_length"),
         )
     )
+    # 0 is also a real answer, so the refusal is read from the last error.
+    if frames == 0 and int(lib.sonare_last_error_code()) != 0:
+        raise _refused_argument("time_to_frames: sr and hop_length must be positive")
+    return frames
 
 
 def frames_to_samples(frames: int, hop_length: int = 512, n_fft: int | None = None) -> int:

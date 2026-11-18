@@ -83,6 +83,11 @@ def _chords_from_c(out: SonareChordAnalysisResult) -> list[Chord]:
     return chords
 
 
+def _voiced_hz(value: float) -> float | None:
+    """A melody point's frequency, or ``None`` for an unvoiced point (0 in C)."""
+    return float(value) if value > 0.0 else None
+
+
 @_guard_buffer("samples")
 def detect_chords(
     samples: Sequence[float] | list[float],
@@ -481,7 +486,7 @@ def detect_boundaries(
                 for i in range(out.boundary_count)
             ],
             novelty_curve=_from_c_float_array(out.novelty_curve, out.novelty_length),
-            novelty_peak=float(out.novelty_peak),
+            novelty_peak=float(out.novelty_peak) if out.novelty_peak > 0.0 else None,
             sample_rate=int(out.sample_rate),
             hop_length=int(out.hop_length),
             frame_stride=int(out.frame_stride),
@@ -552,7 +557,7 @@ def analyze_melody(
                 points=[
                     MelodyPoint(
                         time_sec=float(out.points[i].time_sec),
-                        frequency_hz=float(out.points[i].frequency_hz),
+                        frequency_hz=_voiced_hz(out.points[i].frequency_hz),
                         confidence=float(out.points[i].confidence),
                     )
                     for i in range(out.point_count)
@@ -587,7 +592,7 @@ def analyze_melody(
             points=[
                 MelodyPoint(
                     time_sec=float(out.points[i].time_sec),
-                    frequency_hz=float(out.points[i].frequency_hz),
+                    frequency_hz=_voiced_hz(out.points[i].frequency_hz),
                     confidence=float(out.points[i].confidence),
                 )
                 for i in range(out.point_count)

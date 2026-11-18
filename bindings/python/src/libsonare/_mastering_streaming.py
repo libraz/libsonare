@@ -28,6 +28,7 @@ from ._runtime import (
     _get_lib,
     _guard_buffer,
     _last_error,
+    _measured_db,
     _narrow_float,
     _narrow_int,
     _to_c_double,
@@ -53,8 +54,8 @@ def _streaming_loudness_gain_result(out: SonareStreamingLoudnessGain) -> Streami
     """Copy the C result into the public dataclass."""
     return StreamingLoudnessGain(
         loudness_static_gain_db=float(out.loudness_static_gain_db),
-        true_peak_dbtp=float(out.true_peak_dbtp),
-        integrated_lufs=float(out.integrated_lufs),
+        true_peak_dbtp=_measured_db(out.true_peak_dbtp),
+        integrated_lufs=_measured_db(out.integrated_lufs),
     )
 
 

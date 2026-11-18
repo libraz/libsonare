@@ -762,35 +762,33 @@ class AcousticResult:
     ``rt60_bands``) is estimated in both modes.
 
     ``c50``/``c80``/``d50`` and ``edt`` require a known direct-sound arrival
-    time, which only a measured impulse response provides, so they are NaN when
-    ``is_blind`` is true -- ``edt`` measures the 0 to -10 dB decay and the blind
-    estimator only fits the late decay ``rt60`` comes from. ``c50_bands`` and
-    ``c80_bands`` are then empty arrays (not computed), while ``edt_bands`` stays
-    a full-length array of NaNs so it can be indexed by the same band index as
-    ``rt60_bands``."""
+    time, which only a measured impulse response provides, so they are ``None``
+    when ``is_blind`` is true -- ``edt`` measures the 0 to -10 dB decay and the
+    blind estimator only fits the late decay ``rt60`` comes from. ``edt_bands``,
+    ``c50_bands`` and ``c80_bands`` are ``None`` then too."""
 
     rt60: float
-    edt: float
-    c50: float
-    c80: float
-    d50: float
+    edt: float | None
+    c50: float | None
+    c80: float | None
+    d50: float | None
     rt60_bands: NDArray[np.float32]
-    edt_bands: NDArray[np.float32]
-    c50_bands: NDArray[np.float32]
-    c80_bands: NDArray[np.float32]
+    edt_bands: NDArray[np.float32] | None
+    c50_bands: NDArray[np.float32] | None
+    c80_bands: NDArray[np.float32] | None
     confidence: float
     is_blind: bool
     def __init__(
         self,
         rt60: float,
-        edt: float,
-        c50: float,
-        c80: float,
-        d50: float,
+        edt: float | None,
+        c50: float | None,
+        c80: float | None,
+        d50: float | None,
         rt60_bands: NDArray[np.float32],
-        edt_bands: NDArray[np.float32],
-        c50_bands: NDArray[np.float32],
-        c80_bands: NDArray[np.float32],
+        edt_bands: NDArray[np.float32] | None,
+        c50_bands: NDArray[np.float32] | None,
+        c80_bands: NDArray[np.float32] | None,
         confidence: float,
         is_blind: bool,
     ) -> None: ...
@@ -1018,7 +1016,7 @@ class ClipDetection:
     flat_run_count: int
     longest_flat_run_samples: int
     flat_sample_count: int
-    flat_level: float  # largest run level once the two highest runs are set aside; 0 if none
+    flat_level: float | None  # largest run level once the two highest runs are set aside
     def __init__(
         self,
         clipped_samples: int,
@@ -1028,7 +1026,7 @@ class ClipDetection:
         flat_run_count: int,
         longest_flat_run_samples: int,
         flat_sample_count: int,
-        flat_level: float,
+        flat_level: float | None,
     ) -> None: ...
 
 class ClippingRegion:
@@ -1742,14 +1740,14 @@ class MasteringStereoResult:
     ) -> None: ...
 
 class LoudnessMatch:
-    reference_lufs: float
-    source_lufs: float
+    reference_lufs: float | None
+    source_lufs: float | None
     applied_gain_db: float
     matched_true_peak_dbtp: float
     def __init__(
         self,
-        reference_lufs: float,
-        source_lufs: float,
+        reference_lufs: float | None,
+        source_lufs: float | None,
         applied_gain_db: float,
         matched_true_peak_dbtp: float,
     ) -> None: ...
@@ -1901,10 +1899,13 @@ class StereoMonoCompatCheckLogBandsResult(TypedDict):
 
 class StreamingLoudnessGain:
     loudness_static_gain_db: float
-    true_peak_dbtp: float
-    integrated_lufs: float
+    true_peak_dbtp: float | None
+    integrated_lufs: float | None
     def __init__(
-        self, loudness_static_gain_db: float, true_peak_dbtp: float, integrated_lufs: float
+        self,
+        loudness_static_gain_db: float,
+        true_peak_dbtp: float | None,
+        integrated_lufs: float | None,
     ) -> None: ...
 
 class MasteringLoudnessSummary:
@@ -2017,7 +2018,7 @@ class MixMeterSnapshot:
     true_peak_dbtp_r: float
     max_true_peak_dbtp: float
     seq: int
-    num_channels: int
+    num_channels: int | None
     peak_db: tuple[float, ...]
     rms_db: tuple[float, ...]
     true_peak_dbtp: tuple[float, ...]
@@ -2040,7 +2041,7 @@ class MixMeterSnapshot:
         true_peak_dbtp_r: float,
         max_true_peak_dbtp: float,
         seq: int,
-        num_channels: int = ...,
+        num_channels: int | None = ...,
         peak_db: tuple[float, ...] = ...,
         rms_db: tuple[float, ...] = ...,
         true_peak_dbtp: tuple[float, ...] = ...,
@@ -2611,12 +2612,12 @@ class ScopeTelemetryRecord:
     ) -> None: ...
 
 class ExternalMidiEvent:
-    destination_id: int
+    destination_id: int | None
     render_frame: int
     bytes: builtins.bytes
     def __init__(
         self,
-        destination_id: int,
+        destination_id: int | None,
         render_frame: int,
         bytes: builtins.bytes,
     ) -> None: ...
@@ -2682,7 +2683,7 @@ class Boundary:
 class BoundaryResult:
     boundaries: list[Boundary]
     novelty_curve: NDArray[np.float32]
-    novelty_peak: float
+    novelty_peak: float | None
     sample_rate: int
     hop_length: int
     frame_stride: int
@@ -2690,7 +2691,7 @@ class BoundaryResult:
         self,
         boundaries: list[Boundary],
         novelty_curve: NDArray[np.float32],
-        novelty_peak: float,
+        novelty_peak: float | None,
         sample_rate: int,
         hop_length: int,
         frame_stride: int,
@@ -2698,9 +2699,9 @@ class BoundaryResult:
 
 class MelodyPoint:
     time_sec: float
-    frequency_hz: float
+    frequency_hz: float | None
     confidence: float
-    def __init__(self, time_sec: float, frequency_hz: float, confidence: float) -> None: ...
+    def __init__(self, time_sec: float, frequency_hz: float | None, confidence: float) -> None: ...
 
 class MelodyResult:
     points: list[MelodyPoint]
@@ -2883,8 +2884,8 @@ class StreamBarChord:
     dropped at the history cap, so group bars by pattern position with
     ``bar_index``. ``start_sec`` is on the same timeline as
     ``StreamFrames.timestamps_sec`` and consecutive bars are ``bar_duration_sec``
-    apart. In ``voted_pattern``, ``bar_index`` is the pattern position and
-    ``start_sec`` is unused."""
+    apart. In ``voted_pattern``, ``bar_index`` is the pattern position,
+    ``start_sec`` is unused, and a position no chord was voted for is ``None``."""
 
     bar_index: int
     root: PitchClass
@@ -2923,7 +2924,7 @@ class StreamProgressiveEstimate:
     bar_chord_progression: list[StreamBarChord]
     current_bar: int | None
     bar_duration_sec: float | None
-    voted_pattern: list[StreamBarChord]
+    voted_pattern: list[StreamBarChord | None]
     pattern_length: int
     detected_pattern_name: str | None
     detected_pattern_score: float | None
@@ -2942,7 +2943,7 @@ class StreamProgressiveEstimate:
         bar_chord_progression: list[StreamBarChord],
         current_bar: int | None,
         bar_duration_sec: float | None,
-        voted_pattern: list[StreamBarChord],
+        voted_pattern: list[StreamBarChord | None],
         pattern_length: int,
         detected_pattern_name: str | None,
         detected_pattern_score: float | None,

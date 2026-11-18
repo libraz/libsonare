@@ -53,14 +53,13 @@ def test_named_qualities_map_to_their_family_and_degrees(
         "root_pc": 7,
         "quality": annotation_quality,
         "extensions": extensions,
-        "slash_bass_pc": 255,
     }
 
 
 def test_a_bass_below_the_root_is_a_slash_and_bass_equal_to_root_is_not() -> None:
     assert chord_symbol_from_analysis(chord("major", root=0, bass=4))["slash_bass_pc"] == 4
-    assert chord_symbol_from_analysis(chord("major", root=0, bass=0))["slash_bass_pc"] == 255
-    assert chord_symbol_from_analysis(chord("major", root=0, bass=None))["slash_bass_pc"] == 255
+    assert "slash_bass_pc" not in chord_symbol_from_analysis(chord("major", root=0, bass=0))
+    assert "slash_bass_pc" not in chord_symbol_from_analysis(chord("major", root=0, bass=None))
 
 
 def test_every_quality_is_accepted_by_annotate_chords_and_survives_serialization() -> None:
@@ -121,3 +120,29 @@ def test_an_unknown_mode_is_refused_naming_the_field(mode: str) -> None:
 def test_a_non_string_mode_is_a_type_error(mode: object) -> None:
     with pytest.raises(TypeError):
         key_mode_from_analysis(mode)  # type: ignore[arg-type]
+
+
+def test_an_unknown_root_or_tonic_and_no_slash_bass_are_absent() -> None:
+    project = Project()
+    project.annotate_chords(
+        [
+            {"start_ppq": 0.0, "end_ppq": 480.0, "quality": 0},
+            {"start_ppq": 480.0, "end_ppq": 960.0, "root_pc": None, "slash_bass_pc": None},
+        ]
+    )
+    project.annotate_keys([(0.0, 480.0, None, 0)])
+
+
+@pytest.mark.parametrize("field", ["root_pc", "slash_bass_pc"])
+@pytest.mark.parametrize("value", [255, 12, -1])
+def test_a_chord_pitch_class_outside_0_to_11_is_refused_by_name(field: str, value: int) -> None:
+    with pytest.raises(SonareValueError, match=f"chords\\[0\\].{field}"):
+        Project().annotate_chords(
+            [{"start_ppq": 0.0, "end_ppq": 480.0, "root_pc": 0, "quality": 0, field: value}]
+        )
+
+
+@pytest.mark.parametrize("value", [255, 12, -1])
+def test_a_key_tonic_outside_0_to_11_is_refused_by_name(value: int) -> None:
+    with pytest.raises(SonareValueError, match="keys\\[0\\].tonic_pc"):
+        Project().annotate_keys([(0.0, 480.0, value, 1)])

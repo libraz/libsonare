@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ctypes
 import dataclasses
+import math
 from collections.abc import Sequence
 from numbers import Integral
 
@@ -167,7 +168,8 @@ class NoteObject:
         offset_sample: One past the last sample of the note.
         frame_start: First F0 frame of the note.
         frame_end: One past the last F0 frame of the note.
-        median_hz: Median pitch of the span in Hz.
+        median_hz: Median pitch of the span in Hz; ``None`` when the span carries
+            no usable pitch.
         median_cents: Median pitch in cents above the extractor's
             ``reference_hz``.
         f0_stability: Pitch steadiness in ``[0, 1]``; 1 is perfectly steady.
@@ -185,7 +187,7 @@ class NoteObject:
     offset_sample: int | None = None
     frame_start: int = 0
     frame_end: int = 0
-    median_hz: float = 0.0
+    median_hz: float | None = None
     median_cents: float = 0.0
     f0_stability: float = 0.0
     # Out of the comparison: an ndarray field makes the generated __eq__ raise
@@ -213,8 +215,8 @@ class PitchDecompositionResult:
     ``f0_hz``, which is exact.
 
     Attributes:
-        center_hz: The note's steady pitch in Hz. 0 when the note carries no
-            usable pitch, and then both curves are empty.
+        center_hz: The note's steady pitch in Hz. ``None`` when the note carries
+            no usable pitch, and then both curves are empty.
         drift_cents: ``float32`` slow deviation from ``center_hz``, in cents.
             Not part of ``==``, which an ndarray field would make raise on an
             ambiguous truth value.
@@ -222,7 +224,7 @@ class PitchDecompositionResult:
             ``==`` for the same reason.
     """
 
-    center_hz: float = 0.0
+    center_hz: float | None = None
     drift_cents: np.ndarray = dataclasses.field(
         default_factory=lambda: np.empty(0, dtype=np.float32), compare=False
     )
@@ -492,7 +494,7 @@ def _note_from_c(row: SonareNoteObject, amplitude: np.ndarray, envelopes: np.nda
         offset_sample=int(row.offset_sample),
         frame_start=int(row.frame_start),
         frame_end=int(row.frame_end),
-        median_hz=float(row.median_hz),
+        median_hz=_pitch_hz_from_c(row.median_hz),
         median_cents=float(row.median_cents),
         f0_stability=float(row.f0_stability),
         amplitude=amplitude[start:stop].copy(),
@@ -508,6 +510,24 @@ def _note_from_c(row: SonareNoteObject, amplitude: np.ndarray, envelopes: np.nda
             amplitude_envelope=envelopes[envelope_start:envelope_stop].copy(),
         ),
     )
+
+
+def _pitch_hz_from_c(value: float) -> float | None:
+    """A note's pitch from the C ABI, where 0 spells "no usable pitch"."""
+    return float(value) if value > 0.0 else None
+
+
+def _note_pitch_hz(value: float | None, name: str) -> float:
+    """Map a note's absent pitch to the C ABI's 0; refuse a non-positive one by name."""
+    if value is None:
+        return 0.0
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise TypeError(f"{name} must be a number or None")
+    if not math.isfinite(value) or value <= 0.0:
+        raise SonareValueError(
+            f"{name} {value!r} must be finite and positive, or None for no pitch"
+        )
+    return float(value)
 
 
 def _notes_to_c(
@@ -563,7 +583,7 @@ def _notes_to_c(
         c_notes[i].frame_end = _narrow_int(
             note.frame_end, f"{fn_name}: notes[{i}].frame_end", _C_INT_MIN, _C_INT_MAX
         )
-        c_notes[i].median_hz = _narrow_double(note.median_hz, "note.median_hz")
+        c_notes[i].median_hz = _note_pitch_hz(note.median_hz, f"{fn_name}: notes[{i}].median_hz")
         c_notes[i].edit = SonareNoteEdit(
             # Narrowed rather than coerced: int(0.5) is 0, which is this field's
             # identity, so a sub-sample shift would render unmoved and report

@@ -714,16 +714,17 @@ def analyze_impulse_response(
     _check(rc)
     try:
         count = out.band_count
+        blind = bool(out.is_blind)
         return AcousticResult(
             rt60=float(out.rt60),
-            edt=float(out.edt),
-            c50=float(out.c50),
-            c80=float(out.c80),
-            d50=float(out.d50),
+            edt=None if blind else float(out.edt),
+            c50=None if blind else float(out.c50),
+            c80=None if blind else float(out.c80),
+            d50=None if blind else float(out.d50),
             rt60_bands=_from_c_float_array(out.rt60_bands, count),
-            edt_bands=_from_c_float_array(out.edt_bands, count),
-            c50_bands=_optional_from_c_float_array(out.c50_bands, count),
-            c80_bands=_optional_from_c_float_array(out.c80_bands, count),
+            edt_bands=None if blind else _from_c_float_array(out.edt_bands, count),
+            c50_bands=None if blind else _optional_from_c_float_array(out.c50_bands, count),
+            c80_bands=None if blind else _optional_from_c_float_array(out.c80_bands, count),
             confidence=float(out.confidence),
             is_blind=bool(out.is_blind),
         )
@@ -757,16 +758,17 @@ def detect_acoustic(
     _check(rc)
     try:
         count = out.band_count
+        blind = bool(out.is_blind)
         return AcousticResult(
             rt60=float(out.rt60),
-            edt=float(out.edt),
-            c50=float(out.c50),
-            c80=float(out.c80),
-            d50=float(out.d50),
+            edt=None if blind else float(out.edt),
+            c50=None if blind else float(out.c50),
+            c80=None if blind else float(out.c80),
+            d50=None if blind else float(out.d50),
             rt60_bands=_from_c_float_array(out.rt60_bands, count),
-            edt_bands=_from_c_float_array(out.edt_bands, count),
-            c50_bands=_optional_from_c_float_array(out.c50_bands, count),
-            c80_bands=_optional_from_c_float_array(out.c80_bands, count),
+            edt_bands=None if blind else _from_c_float_array(out.edt_bands, count),
+            c50_bands=None if blind else _optional_from_c_float_array(out.c50_bands, count),
+            c80_bands=None if blind else _optional_from_c_float_array(out.c80_bands, count),
             confidence=float(out.confidence),
             is_blind=bool(out.is_blind),
         )

@@ -429,25 +429,32 @@ def _chord_changes(ptr: object, count: int) -> list[StreamChordChange]:
     ]
 
 
+def _bar_chord(raw: Any) -> StreamBarChord:
+    token = _chord_quality_token(int(raw.quality))
+    root = PitchClass(int(raw.root))
+    return StreamBarChord(
+        bar_index=int(raw.bar_index),
+        root=root,
+        quality=token,
+        name=_chord_symbol(root, token),
+        start_sec=float(raw.start_sec),
+        confidence=float(raw.confidence),
+    )
+
+
 def _bar_chords(ptr: object, count: int) -> list[StreamBarChord]:
     if not ptr or count <= 0:
         return []
     raw_ptr = cast(Any, ptr)
-    out = []
-    for i in range(count):
-        token = _chord_quality_token(int(raw_ptr[i].quality))
-        root = PitchClass(int(raw_ptr[i].root))
-        out.append(
-            StreamBarChord(
-                bar_index=int(raw_ptr[i].bar_index),
-                root=root,
-                quality=token,
-                name=_chord_symbol(root, token),
-                start_sec=float(raw_ptr[i].start_sec),
-                confidence=float(raw_ptr[i].confidence),
-            )
-        )
-    return out
+    return [_bar_chord(raw_ptr[i]) for i in range(count)]
+
+
+def _voted_pattern(ptr: object, count: int) -> list[StreamBarChord | None]:
+    """One entry per pattern position; ``None`` where no chord was voted (root -1 in C)."""
+    if not ptr or count <= 0:
+        return []
+    raw_ptr = cast(Any, ptr)
+    return [None if int(raw_ptr[i].root) < 0 else _bar_chord(raw_ptr[i]) for i in range(count)]
 
 
 def _pattern_scores(ptr: object, count: int) -> list[StreamPatternScore]:
@@ -526,7 +533,7 @@ def _estimate_from_c(raw: SonareStreamStats) -> StreamProgressiveEstimate:
         ),
         current_bar=int(raw.current_bar) if has_bar else None,
         bar_duration_sec=float(raw.bar_duration_sec) if has_bar else None,
-        voted_pattern=_bar_chords(raw.voted_pattern, int(raw.voted_pattern_count)),
+        voted_pattern=_voted_pattern(raw.voted_pattern, int(raw.voted_pattern_count)),
         pattern_length=int(raw.pattern_length),
         detected_pattern_name=pattern or None,
         detected_pattern_score=float(raw.detected_pattern_score) if pattern else None,

@@ -401,11 +401,15 @@ class AssistSidecar:
 
 @dataclass(frozen=True)
 class ProjectDiagnostic:
-    """One compile diagnostic surfaced by :meth:`Project.compile`."""
+    """One compile diagnostic surfaced by :meth:`Project.compile`.
+
+    ``target_id`` is the affected clip, track or source id, or ``None`` when the
+    diagnostic concerns no single one.
+    """
 
     code: int
     severity: int
-    target_id: int
+    target_id: int | None
     message: str = ""
 
 
@@ -432,10 +436,11 @@ class MidiCcBinding:
     controller; for RPN/NRPN ``selector_msb`` / ``selector_lsb`` carry the
     parameter selector. ``param_id`` is the bound automation parameter; the
     unit-interval automation range maps onto ``[min_value, max_value]``.
+    ``channel`` is 0..15, or ``None`` for a binding that answers any channel.
     """
 
     cc_number: int
-    channel: int
+    channel: int | None
     kind: int
     cc_lsb_number: int
     selector_msb: int
@@ -466,11 +471,24 @@ MIDI_CC_RPN = 2
 MIDI_CC_NRPN = 3
 
 
+# The C ABI's "no pitch class" code; absence on the Python side.
+_NO_PITCH_CLASS = 255
+
+
+def _absent_or_in_range(value: object, name: str, upper: int, absent: int) -> int:
+    """Map ``None`` to the C ABI's ``absent`` code; refuse anything outside 0..``upper`` by name."""
+    if value is None:
+        return absent
+    if isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= upper:
+        raise SonareValueError(f"{name} {value!r} must be in 0..{upper}, or None when absent")
+    return value
+
+
 def _cc_binding_to_c(binding: MidiCcBinding | Mapping[str, object]) -> SonareMidiCcBinding:
     """Marshal a :class:`MidiCcBinding` (or a Mapping with the same keys) into C.
 
-    ``channel`` defaults to ``0xFF`` (any channel) when unset, matching the
-    native binding's "wildcard channel" sentinel.
+    An absent or ``None`` ``channel`` is the any-channel binding; the C
+    ABI's ``0xFF`` spelling of it is refused as a value.
     """
     if isinstance(binding, Mapping):
 
@@ -485,7 +503,7 @@ def _cc_binding_to_c(binding: MidiCcBinding | Mapping[str, object]) -> SonareMid
     # int() would truncate a fraction past it and land on a neighbouring CC.
     return SonareMidiCcBinding(
         cc_number=_get("cc_number", 0),
-        channel=_get("channel", 0xFF),
+        channel=_absent_or_in_range(_get("channel", None), "channel", 15, 0xFF),
         kind=_get("kind", MIDI_CC_CONTROL_CHANGE_7),
         cc_lsb_number=_get("cc_lsb_number", 0),
         selector_msb=_get("selector_msb", 0),
@@ -500,7 +518,7 @@ def _cc_binding_to_c(binding: MidiCcBinding | Mapping[str, object]) -> SonareMid
 def _cc_binding_from_c(b: SonareMidiCcBinding) -> MidiCcBinding:
     return MidiCcBinding(
         cc_number=int(b.cc_number),
-        channel=int(b.channel),
+        channel=None if int(b.channel) == 0xFF else int(b.channel),
         kind=int(b.kind),
         cc_lsb_number=int(b.cc_lsb_number),
         selector_msb=int(b.selector_msb),

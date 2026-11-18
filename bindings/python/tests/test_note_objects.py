@@ -652,9 +652,9 @@ def test_decompose_note_pitch_reports_a_note_with_no_usable_pitch_as_empty() -> 
 
     # A measurement that came up empty is not a bad argument, so it is reported
     # rather than raised: no usable frame, and no centre to measure against.
-    for curve_in, median_hz in ((np.zeros(n_frames, dtype=np.float32), center_hz), (f0_hz, 0.0)):
+    for curve_in, median_hz in ((np.zeros(n_frames, dtype=np.float32), center_hz), (f0_hz, None)):
         curve = libsonare.decompose_note_pitch(curve_in, FRAME_RATE, median_hz)
-        assert curve.center_hz == 0.0
+        assert curve.center_hz is None
         assert curve.drift_cents.size == 0
         assert curve.vibrato_cents.size == 0
 
@@ -719,7 +719,7 @@ def test_decompose_note_pitch_uses_voiced_mask_and_preserves_f0_validity() -> No
     all_unvoiced = libsonare.decompose_note_pitch(
         f0_hz, FRAME_RATE, 220.0, voiced=np.zeros(n_frames, dtype=bool)
     )
-    assert all_unvoiced.center_hz == pytest.approx(0.0, abs=1e-6)
+    assert all_unvoiced.center_hz is None
     assert all_unvoiced.drift_cents.size == 0
     assert all_unvoiced.vibrato_cents.size == 0
 
@@ -798,11 +798,11 @@ def test_decompose_note_pitch_rejects_invalid_arguments() -> None:
         libsonare.decompose_note_pitch(np.zeros(0, dtype=np.float32), FRAME_RATE, center_hz)
 
     # An all-NaN contour is a note with no usable pitch, which the header says
-    # comes back as a zero centre and two empty curves rather than as an error.
+    # comes back as no centre and two empty curves rather than as an error.
     unmeasured = libsonare.decompose_note_pitch(
         np.full(n_frames, np.nan, dtype=np.float32), FRAME_RATE, center_hz
     )
-    assert unmeasured.center_hz == 0.0
+    assert unmeasured.center_hz is None
     assert len(unmeasured.drift_cents) == 0
     assert len(unmeasured.vibrato_cents) == 0
 
@@ -1151,3 +1151,15 @@ def test_the_pitch_decomposition_spells_center() -> None:
     curve = libsonare.decompose_note_pitch(np.full(64, 220.0, np.float32), FRAME_RATE, 220.0)
     assert curve.center_hz == pytest.approx(220.0)
     assert not hasattr(curve, "centre_hz")
+
+
+def test_a_note_pitch_is_none_when_absent_and_zero_is_refused() -> None:
+    f0_hz = np.full(64, 220.0, dtype=np.float32)
+    for bad in (0.0, -1.0, float("nan")):
+        with pytest.raises(libsonare.SonareValueError, match="median_hz"):
+            libsonare.decompose_note_pitch(f0_hz, FRAME_RATE, bad)
+    assert libsonare.decompose_note_pitch(f0_hz, FRAME_RATE, None).center_hz is None
+    audio = np.zeros(SR // 2, dtype=np.float32)
+    span = libsonare.NoteObject(onset_sample=0, offset_sample=len(audio) // 2, median_hz=0.0)
+    with pytest.raises(libsonare.SonareValueError, match=r"notes\[0\]\.median_hz"):
+        libsonare.render_notes(audio, SR, [span])

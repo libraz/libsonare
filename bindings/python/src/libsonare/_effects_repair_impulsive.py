@@ -367,7 +367,7 @@ def _extract_clip_detection(raw: Any) -> ClipDetection:
         flat_run_count=int(raw.flat_run_count),
         longest_flat_run_samples=int(raw.longest_flat_run_samples),
         flat_sample_count=int(raw.flat_sample_count),
-        flat_level=float(raw.flat_level),
+        flat_level=float(raw.flat_level) if raw.flat_run_count else None,
     )
 
 

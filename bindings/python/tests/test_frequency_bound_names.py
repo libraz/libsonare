@@ -40,7 +40,7 @@ def _audio_pitch_yin(**kw: Any) -> np.ndarray:
 
 def _melody(**kw: Any) -> np.ndarray:
     result = libsonare.analyze_melody(_tone(), SR, **kw)
-    return np.asarray([point.frequency_hz for point in result.points])
+    return np.asarray([np.nan if p.frequency_hz is None else p.frequency_hz for p in result.points])
 
 
 PITCH_SEARCHES: dict[str, Callable[..., np.ndarray]] = {

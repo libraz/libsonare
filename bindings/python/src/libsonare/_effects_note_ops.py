@@ -15,11 +15,13 @@ from ._effects_note_model import (
     PitchDecompositionResult,
     TranscribeResult,
     _note_extractor_config,
+    _note_pitch_hz,
     _note_set_edit,
     _note_set_index,
     _note_voicing_arrays,
     _notes_from_c,
     _notes_to_c,
+    _pitch_hz_from_c,
     _transcribe_config,
     _transcribe_positive,
     _transcribe_result_from_c,
@@ -422,7 +424,7 @@ def render_notes(
 def decompose_note_pitch(
     f0_hz: Sequence[float] | list[float] | np.ndarray,
     frame_rate: float,
-    median_hz: float,
+    median_hz: float | None,
     *,
     voiced: Sequence[int] | list[int] | np.ndarray | None = None,
     vibrato_cutoff_hz: float | None = None,
@@ -449,15 +451,15 @@ def decompose_note_pitch(
             when supplied, non-zero is voiced and zero suppresses the F0
             measurement.
         frame_rate: F0 frames per second; must be finite and positive.
-        median_hz: The note's ``median_hz``; must be finite and non-negative. A
-            note with no pitch is spelled 0, so a negative value is a caller bug
-            rather than a second way of saying that.
+        median_hz: The note's ``median_hz``: finite and positive, or ``None`` for
+            a note with no pitch. Zero or a negative value is a caller bug rather
+            than a second way of saying that, and is refused.
         vibrato_cutoff_hz: Boundary between the two curves; ``None`` keeps the
             default (3 Hz).
 
     Returns:
         :class:`PitchDecompositionResult`. A note with no usable pitch is reported as
-        a zero ``center_hz`` and two empty curves rather than as an error.
+        ``center_hz=None`` and two empty curves rather than as an error.
 
     Raises:
         SonareValueError: If ``f0_hz`` is empty or if ``voiced`` has a different
@@ -488,14 +490,14 @@ def decompose_note_pitch(
         voiced_array,
         _to_c_size_t(n_frames, "n_frames"),
         _to_c_float(frame_rate, "frame_rate"),
-        _to_c_float(median_hz, "median_hz"),
+        _to_c_float(_note_pitch_hz(median_hz, "median_hz"), "median_hz"),
         _to_c_float(0.0 if vibrato_cutoff_hz is None else vibrato_cutoff_hz, "vibrato_cutoff_hz"),
         ctypes.byref(out),
     )
     _check(rc)
     try:
         return PitchDecompositionResult(
-            center_hz=float(out.center_hz),
+            center_hz=_pitch_hz_from_c(out.center_hz),
             drift_cents=_from_c_float_array(out.drift_cents, out.count),
             vibrato_cents=_from_c_float_array(out.vibrato_cents, out.count),
         )

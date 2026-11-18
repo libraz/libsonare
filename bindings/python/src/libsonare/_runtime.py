@@ -7,6 +7,7 @@ import contextlib
 import ctypes
 import functools
 import inspect
+import math
 import operator
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from typing import Any, SupportsIndex, TypeVar, cast
@@ -712,6 +713,22 @@ def _to_c_float_array_owned(
     return c_array, length
 
 
+# The meters' -120 dB floor: a reading at or below it measured nothing.
+_METER_FLOOR_DB = -120.0
+
+
+def _finite_or_none(value: float) -> float | None:
+    """A C reading, or ``None`` where it is non-finite (nothing was measured)."""
+    value = float(value)
+    return value if math.isfinite(value) else None
+
+
+def _measured_db(value: float) -> float | None:
+    """A level, or ``None`` at the meter floor or where the reading is non-finite."""
+    value = float(value)
+    return value if math.isfinite(value) and value > _METER_FLOOR_DB else None
+
+
 def _from_c_float_array(array: object, count: int) -> np.ndarray:
     """Copy a C ``float*`` (or fixed-length ``c_float * N`` array) into numpy.
 
@@ -1187,7 +1204,7 @@ def _mix_meter_from_c(snapshot: SonareMixMeterSnapshot) -> MixMeterSnapshot:
         true_peak_dbtp_r=float(snapshot.true_peak_dbtp_r),
         max_true_peak_dbtp=float(snapshot.max_true_peak_dbtp),
         seq=int(snapshot.seq),
-        num_channels=int(snapshot.num_channels),
+        num_channels=int(snapshot.num_channels) or None,
         peak_db=tuple(float(snapshot.peak_db[i]) for i in range(snapshot.num_channels)),
         rms_db=tuple(float(snapshot.rms_db[i]) for i in range(snapshot.num_channels)),
         true_peak_dbtp=tuple(

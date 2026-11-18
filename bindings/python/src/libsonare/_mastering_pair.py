@@ -26,6 +26,7 @@ from ._narrowing import _narrow_double
 from ._runtime import (
     SonareValueError,
     _check,
+    _finite_or_none,
     _float_array_result,
     _from_c_float_array,
     _get_lib,
@@ -314,8 +315,8 @@ def mastering_ab_match_loudness(
     if match is None:
         return matched, None
     return matched, LoudnessMatch(
-        reference_lufs=float(match.reference_lufs),
-        source_lufs=float(match.source_lufs),
+        reference_lufs=_finite_or_none(match.reference_lufs),
+        source_lufs=_finite_or_none(match.source_lufs),
         applied_gain_db=float(match.applied_gain_db),
         matched_true_peak_dbtp=float(match.matched_true_peak_dbtp),
     )
@@ -386,8 +387,8 @@ def mastering_ab_match_loudness_stereo(
     if match is None:
         return matched, None
     return matched, LoudnessMatch(
-        reference_lufs=float(match.reference_lufs),
-        source_lufs=float(match.source_lufs),
+        reference_lufs=_finite_or_none(match.reference_lufs),
+        source_lufs=_finite_or_none(match.source_lufs),
         applied_gain_db=float(match.applied_gain_db),
         matched_true_peak_dbtp=float(match.matched_true_peak_dbtp),
     )

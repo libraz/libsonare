@@ -662,7 +662,9 @@ class _ProjectEditMixin:
         )
 
     def set_track_midi_destination(self, track_id: int, destination_id: int) -> None:
-        """Route a track's MIDI to host-instrument ``destination_id`` (0 = default).
+        """Route a track's MIDI to host-instrument ``destination_id``.
+
+        Destination ``0``, which every track starts on, is a real id like any other.
 
         The compiler stamps every MIDI clip on the track with this id so the
         engine dispatches the clip's events to the instrument registered for that

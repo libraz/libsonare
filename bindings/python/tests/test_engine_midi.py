@@ -447,7 +447,7 @@ def test_engine_forwards_midi_clock_transport_to_external_queue() -> None:
         drained = engine.drain_external_midi()
         assert len(drained) == 25
         for event in drained:
-            assert event.destination_id == 4294967295
+            assert event.destination_id is None
             assert len(event.bytes) == 1
         assert drained[0].bytes[0] == 0xFA  # Start
         assert drained[1].bytes[0] == 0xF8  # Clock

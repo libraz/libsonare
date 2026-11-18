@@ -57,13 +57,13 @@ class LoudnessMatch:
     ``reference_lufs``; it equals ``reference_lufs - source_lufs`` unless the
     gain moves blocks across the absolute gate. It carries no upper bound, so
     ``matched_true_peak_dbtp`` reports where the gain left the peak instead of
-    the match being capped to keep it. A silent or below-gate
-    take reads non-finite on both loudness values, and ``applied_gain_db`` is
-    then 0.
+    the match being capped to keep it. A silent or below-gate take has no
+    loudness: its ``reference_lufs`` or ``source_lufs`` is ``None``, and
+    ``applied_gain_db`` is then 0.
     """
 
-    reference_lufs: float
-    source_lufs: float
+    reference_lufs: float | None
+    source_lufs: float | None
     applied_gain_db: float
     matched_true_peak_dbtp: float
 
@@ -77,13 +77,14 @@ class StreamingLoudnessGain:
     equals the gain :func:`mastering_chain` applies, ceiling clamp included.
     Pass ``loudness_static_gain_db`` and ``true_peak_dbtp`` as the constructor's
     ``loudness_static_gain_db`` and ``loudness_static_gain_peak_db``. A silent or
-    below-gate stage input reads a non-finite ``integrated_lufs`` and a gain of 0;
-    digital silence reads ``true_peak_dbtp`` at the meter's -120 dB floor.
+    below-gate stage input has no ``integrated_lufs`` (``None``) and a gain of 0;
+    digital silence has no ``true_peak_dbtp`` (``None``), which the constructor
+    reads as no measured peak.
     """
 
     loudness_static_gain_db: float
-    true_peak_dbtp: float
-    integrated_lufs: float
+    true_peak_dbtp: float | None
+    integrated_lufs: float | None
 
 
 @dataclass(frozen=True, slots=True)

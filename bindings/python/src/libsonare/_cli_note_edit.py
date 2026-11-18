@@ -13,6 +13,7 @@ from ._cli_common import (
     PITCH_NAMES,
     _audio_array,
     _emit_effect_result,
+    _fmt_optional,
     _legacy_exit_codes,
     _read_bounded,
     _strict_json_dumps,
@@ -441,7 +442,7 @@ def cmd_polyphonic_notes(args: argparse.Namespace) -> int:
                 f"  [{row['index']}] "
                 f"samples {row['onset_sample']}-{row['offset_sample']}  "
                 f"frames {row['frame_start']}-{row['frame_end']}  "
-                f"{cast(float, row['median_hz']):.2f} Hz  "
+                f"{_fmt_optional(cast('float | None', row['median_hz']), '.2f', ' Hz')}  "
                 f"stability {cast(float, row['f0_stability']):.3f}"
             )
     return 0

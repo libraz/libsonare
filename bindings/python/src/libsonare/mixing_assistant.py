@@ -464,6 +464,13 @@ def mix_source_class_names() -> list[str]:
 
 
 def mix_source_class_from_name(name: str) -> int:
-    """Resolve a source-class identifier to its enum value, or ``-1`` if unknown."""
+    """Resolve a source-class identifier to its enum value.
+
+    Raises:
+        SonareValueError: If ``name`` is not one of :func:`mix_source_class_names`.
+    """
     lib = _get_lib()
-    return int(lib.sonare_mixing_assistant_source_class_from_name(_utf8_arg(name, "name")))
+    value = int(lib.sonare_mixing_assistant_source_class_from_name(_utf8_arg(name, "name")))
+    if value < 0:
+        raise SonareValueError(f"mix_source_class_from_name: unknown source class {name!r}")
+    return value

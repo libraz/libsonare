@@ -51,8 +51,8 @@ class MixMeterSnapshot:
     max_true_peak_dbtp: float
     seq: int
     # Per-plane surround meters (5.1/7.1). Each tuple holds num_channels values;
-    # indices 0/1 mirror the *_l/*_r stereo fields above.
-    num_channels: int = 0
+    # indices 0/1 mirror the *_l/*_r stereo fields above. None before any audio.
+    num_channels: int | None = None
     peak_db: tuple[float, ...] = ()
     rms_db: tuple[float, ...] = ()
     true_peak_dbtp: tuple[float, ...] = ()
@@ -549,14 +549,14 @@ class ScopeTelemetryRecord:
 class ExternalMidiEvent:
     """One lowered MIDI 1.0 message drained from the external-MIDI output queue.
 
-    Each event is a single MIDI 1.0 byte message (``bytes`` is 1..3 bytes). A
-    ``destination_id`` of ``0xFFFFFFFF`` (4294967295) tags a clock/transport byte
-    forwarded for external tempo sync; any other value is the MIDI destination id
-    the event was routed to. ``render_frame`` is the absolute engine device render
-    frame for every record, not an offset within a block.
+    Each event is a single MIDI 1.0 byte message (``bytes`` is 1..3 bytes).
+    ``destination_id`` is the MIDI destination id the event was routed to, or
+    ``None`` for a clock/transport byte meant for every external port (forwarded
+    for external tempo sync). ``render_frame`` is the absolute engine device
+    render frame for every record, not an offset within a block.
     """
 
-    destination_id: int
+    destination_id: int | None
     render_frame: int
     bytes: bytes
 
@@ -641,8 +641,8 @@ class BoundaryResult:
     "the most novel frame here" rather than "a large change". Multiply by
     :attr:`novelty_peak` to recover the raw response ``absolute_threshold`` is
     compared against."""
-    novelty_peak: float
-    """0 when nothing rose above the numerical floor."""
+    novelty_peak: float | None
+    """``None`` when nothing rose above the numerical floor."""
     sample_rate: int
     """The rate the analysis ran at, not the input's."""
     hop_length: int
@@ -652,10 +652,10 @@ class BoundaryResult:
 
 @dataclass(frozen=True, slots=True)
 class MelodyPoint:
-    """A single point on a melody contour."""
+    """A single point on a melody contour; ``frequency_hz`` is ``None`` when unvoiced."""
 
     time_sec: float
-    frequency_hz: float
+    frequency_hz: float | None
     confidence: float
 
 

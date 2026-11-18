@@ -12,6 +12,7 @@ import numpy as np
 from ._engine_conversions import _marker_kind_name, _marker_kind_value
 from ._narrowing import _narrow_double
 from ._project_model import *  # noqa: F403
+from ._project_model import _NO_PITCH_CLASS, _absent_or_in_range
 from ._project_synth import (
     SYNTH_ENUM_TABLES as SYNTH_ENUM_TABLES,
 )
@@ -219,12 +220,13 @@ class _ProjectInspectionMixin:
         return float(out_ppq.value)
 
     def annotate_keys(
-        self, keys: Sequence[tuple[float, float, int, int]] | Sequence[Sequence[float]]
+        self,
+        keys: Sequence[tuple[float, float, int | None, int]] | Sequence[Sequence[float | None]],
     ) -> None:
         """Replace the project's key annotation stream via an undoable command.
 
         Each key is ``(start_ppq, end_ppq, tonic_pc, mode)`` where ``tonic_pc``
-        is 0..11 (C=0) or 255 unknown and ``mode`` is the KeyMode ordinal
+        is 0..11 (C=0) or ``None`` when the tonic is unknown and ``mode`` is the KeyMode ordinal
         (0 unknown, 1 major, 2 minor, 3 dorian, 4 phrygian, 5 lydian,
         6 mixolydian, 7 locrian). Pass an empty sequence to clear.
         """
@@ -242,7 +244,9 @@ class _ProjectInspectionMixin:
                 c_keys[i].end_ppq = _narrow_double(seq[1], "seq[1]")
                 # Assigned unconverted so the struct's own narrowing sees each
                 # caller value; int() would truncate a fraction past it.
-                c_keys[i].tonic_pc = seq[2]
+                c_keys[i].tonic_pc = _absent_or_in_range(
+                    seq[2], f"keys[{i}].tonic_pc", 11, _NO_PITCH_CLASS
+                )
                 c_keys[i].mode = seq[3]
         _check(
             _get_lib().sonare_project_annotate_keys(
@@ -254,10 +258,11 @@ class _ProjectInspectionMixin:
         """Replace the project's chord-symbol annotation stream (undoable command).
 
         Each chord is a mapping with keys ``start_ppq``, ``end_ppq``, ``root_pc``
-        (0..11 / 255), ``quality`` (ChordQuality ordinal), optional
-        ``extensions`` (iterable of scale degrees such as 7, 9, 13, up to 32), ``slash_bass_pc``
-        (default 255), ``roman_numeral`` (optional str) and ``modulation_boundary``
-        (bool). Pass an empty sequence to clear.
+        (0..11, absent or ``None`` when the root is unknown), ``quality``
+        (ChordQuality ordinal), optional ``extensions`` (iterable of scale degrees
+        such as 7, 9, 13, up to 32), ``slash_bass_pc`` (0..11, absent or ``None``
+        for a chord that is not a slash chord), ``roman_numeral`` (optional str) and
+        ``modulation_boundary`` (bool). Pass an empty sequence to clear.
         """
         rows = list(chords)
         count = len(rows)
@@ -293,11 +298,15 @@ class _ProjectInspectionMixin:
                 c_chords[i].end_ppq = _narrow_double(c["end_ppq"], "end_ppq")
                 # Assigned unconverted so the struct's own narrowing sees each
                 # caller value; int() would truncate a fraction past it.
-                c_chords[i].root_pc = c.get("root_pc", 255)
+                c_chords[i].root_pc = _absent_or_in_range(
+                    c.get("root_pc"), f"chords[{i}].root_pc", 11, _NO_PITCH_CLASS
+                )
                 c_chords[i].quality = c.get("quality", 0)
                 c_chords[i].extensions = c_ext
                 c_chords[i].extension_count = _to_c_size_t(ext_count, "ext_count")
-                c_chords[i].slash_bass_pc = c.get("slash_bass_pc", 255)
+                c_chords[i].slash_bass_pc = _absent_or_in_range(
+                    c.get("slash_bass_pc"), f"chords[{i}].slash_bass_pc", 11, _NO_PITCH_CLASS
+                )
                 c_chords[i].roman_numeral = roman_bytes
                 c_chords[i].modulation_boundary = 1 if c.get("modulation_boundary") else 0
         _check(
@@ -814,7 +823,7 @@ class _ProjectInspectionMixin:
                 ProjectDiagnostic(
                     code=int(result.diagnostics[i].code),
                     severity=int(result.diagnostics[i].severity),
-                    target_id=int(result.diagnostics[i].target_id),
+                    target_id=int(result.diagnostics[i].target_id) or None,
                     message=message_lines[i] if i < len(message_lines) else "",
                 )
                 for i in range(int(result.diagnostic_count))

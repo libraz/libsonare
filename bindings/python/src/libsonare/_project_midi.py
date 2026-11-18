@@ -20,6 +20,7 @@ from ._effects_note_model import (
 from ._narrowing import _narrow_double
 from ._project_model import *  # noqa: F403
 from ._project_model import (
+    _absent_or_in_range,
     _cc_binding_from_c,
     _cc_binding_to_c,
     _midi_event_tuple,
@@ -57,6 +58,13 @@ from ._runtime import (
     _to_c_uint32,
     _utf8_arg,
 )
+
+
+def _found_index(value: int, message: str) -> int:
+    """A reverse lookup's answer; the C ABI's -1 (nothing found) is refused."""
+    if value < 0:
+        raise SonareValueError(message)
+    return int(value)
 
 
 class _ProjectMidiMixin:
@@ -801,10 +809,15 @@ class _ProjectMidiMixin:
         return r.decode("utf-8") if r else None
 
     @staticmethod
-    def gm_program_for_name(name: str | None) -> int:
-        """Reverse GM instrument lookup; ``-1`` when unknown / ``None``."""
-        return int(
-            _get_lib().sonare_midi_gm_program_for_name(_utf8_arg(name, "name") if name else None)
+    def gm_program_for_name(name: str) -> int:
+        """Reverse GM instrument lookup.
+
+        Raises:
+            SonareValueError: If ``name`` is not a GM instrument name.
+        """
+        return _found_index(
+            _get_lib().sonare_midi_gm_program_for_name(_utf8_arg(name, "name")),
+            f"gm_program_for_name: unknown instrument name {name!r}",
         )
 
     @staticmethod
@@ -815,8 +828,15 @@ class _ProjectMidiMixin:
 
     @staticmethod
     def gm_family_first_program(family: int) -> int:
-        """First GM program in ``family`` [0,15], or ``-1``."""
-        return int(_get_lib().sonare_midi_gm_family_first_program(_to_c_int(family, "family")))
+        """First GM program in ``family`` [0,15].
+
+        Raises:
+            SonareValueError: If ``family`` is outside 0..15.
+        """
+        return _found_index(
+            _get_lib().sonare_midi_gm_family_first_program(_to_c_int(family, "family")),
+            f"gm_family_first_program: family {family!r} is out of range",
+        )
 
     @staticmethod
     def gm2_instrument_name(bank_lsb: int, program: int) -> str | None:
@@ -833,10 +853,15 @@ class _ProjectMidiMixin:
         return r.decode("utf-8") if r else None
 
     @staticmethod
-    def gm_drum_note_for_name(name: str | None) -> int:
-        """Reverse GM drum lookup; ``-1`` when unknown / ``None``."""
-        return int(
-            _get_lib().sonare_midi_gm_drum_note_for_name(_utf8_arg(name, "name") if name else None)
+    def gm_drum_note_for_name(name: str) -> int:
+        """Reverse GM drum lookup.
+
+        Raises:
+            SonareValueError: If ``name`` is not a GM drum name.
+        """
+        return _found_index(
+            _get_lib().sonare_midi_gm_drum_note_for_name(_utf8_arg(name, "name")),
+            f"gm_drum_note_for_name: unknown drum name {name!r}",
         )
 
     @staticmethod
@@ -860,10 +885,15 @@ class _ProjectMidiMixin:
         return r.decode("utf-8") if r else None
 
     @staticmethod
-    def midi_cc_index_for_name(name: str | None) -> int:
-        """Reverse standard MIDI CC lookup; ``-1`` when unknown / ``None``."""
-        return int(
-            _get_lib().sonare_midi_cc_index_for_name(_utf8_arg(name, "name") if name else None)
+    def midi_cc_index_for_name(name: str) -> int:
+        """Reverse standard MIDI CC lookup.
+
+        Raises:
+            SonareValueError: If ``name`` is not a standard MIDI CC name.
+        """
+        return _found_index(
+            _get_lib().sonare_midi_cc_index_for_name(_utf8_arg(name, "name")),
+            f"midi_cc_index_for_name: unknown controller name {name!r}",
         )
 
     @staticmethod
@@ -912,13 +942,15 @@ class _ProjectMidiMixin:
     @staticmethod
     def midi_route_events(
         events: Sequence[tuple[float, int, int]] | Sequence[Sequence[float]],
-        config: Mapping[str, int] | None = None,
+        config: Mapping[str, int | None] | None = None,
     ) -> MidiRouteResult:
         """Route events through the RT MidiRouter filter / remap / thru logic.
 
-        ``config`` is an optional mapping with ``filter_group`` /
-        ``filter_channel`` (``-1`` = any), ``remap_channel`` (``-1`` = no remap)
-        and ``thru`` (1 = pass non-matching events through, default).
+        ``config`` is an optional mapping with ``filter_group`` (0..15) /
+        ``filter_channel`` (0..15), absent or ``None`` for any;
+        ``remap_channel`` (0..15), absent or ``None`` for no remap; and
+        ``thru`` (1 = pass non-matching events through, default). A negative
+        group or channel is refused rather than read as "any".
         """
         lib = _get_lib()
         rows = list(events)
@@ -931,14 +963,16 @@ class _ProjectMidiMixin:
             c_in[i].ppq = _validate_midi_event_ppq(seq[0], f"events[{i}].ppq")
             c_in[i].data0 = _validate_midi_event_word(seq[1], f"events[{i}].data0")
             c_in[i].data1 = _validate_midi_event_word(seq[2], f"events[{i}].data1")
-        cfg_map: Mapping[str, int] = config or {}
-        # Passed unconverted so the struct's own narrowing sees each caller
-        # value; int() truncated 5.9 onto the legal channel 5, which the C ABI's
-        # own -1-or-[0,15] check then accepted as the channel that was asked for.
+        cfg_map: Mapping[str, int | None] = config or {}
+        # The C ABI spells "any" / "no remap" as -1; only absence reaches it.
         cfg = SonareMidiRouteConfig(
-            filter_group=cfg_map.get("filter_group", -1),
-            filter_channel=cfg_map.get("filter_channel", -1),
-            remap_channel=cfg_map.get("remap_channel", -1),
+            filter_group=_absent_or_in_range(cfg_map.get("filter_group"), "filter_group", 15, -1),
+            filter_channel=_absent_or_in_range(
+                cfg_map.get("filter_channel"), "filter_channel", 15, -1
+            ),
+            remap_channel=_absent_or_in_range(
+                cfg_map.get("remap_channel"), "remap_channel", 15, -1
+            ),
             thru=cfg_map.get("thru", 1),
         )
         out = (SonareMidiEventPod * n)()

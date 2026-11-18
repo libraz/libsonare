@@ -256,7 +256,7 @@ class TestDetectClipping:
         assert detected.flat_run_count == 0
         assert detected.flat_sample_count == 0
         assert detected.longest_flat_run_samples == 0
-        assert detected.flat_level == 0.0
+        assert detected.flat_level is None
 
 
 class TestDetectCrackle:

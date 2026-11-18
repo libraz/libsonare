@@ -21,6 +21,7 @@ import numpy as np
 from ._effects_note_model import (
     _NOTE_STRUCT_VERSION,
     _note_set_index,
+    _pitch_hz_from_c,
     _transcribe_reattack,
 )
 from ._errors import _require_open
@@ -455,8 +456,8 @@ class PolyphonicAnalysis:
         """The stretch fitted for each note, where the fit was asked for.
 
         One entry per note, in :meth:`notes`' order: non-negative where the
-        stretch was fitted, and exactly ``-1`` where it was refused, which means
-        that note's claims were placed at ``inharmonicity`` instead. **0 is a
+        stretch was fitted, and NaN where the fit was refused; a refused note's
+        claims were placed at ``inharmonicity`` instead. **0 is a
         fitted result and means the harmonic series**, so it is not the refusal.
 
         The refusal is reported rather than folded away because the value a
@@ -481,7 +482,10 @@ class PolyphonicAnalysis:
                 handle, out, _to_c_size_t(capacity, "capacity"), ctypes.byref(written)
             )
         )
-        return _from_c_float_array(out, int(written.value))
+        stretch = _from_c_float_array(out, int(written.value))
+        # The C ABI spells a refused fit -1; an array element cannot be None.
+        stretch[stretch < 0.0] = np.nan
+        return stretch
 
     def note_f0(self, note: int) -> np.ndarray:
         """One note's F0 in Hz, per frame over its own span.
@@ -750,7 +754,7 @@ class PolyphonicAnalysis:
             offset_sample=int(row.offset_sample),
             frame_start=int(row.frame_start),
             frame_end=int(row.frame_end),
-            median_hz=float(row.median_hz),
+            median_hz=_pitch_hz_from_c(row.median_hz),
             median_cents=float(row.median_cents),
             f0_stability=float(row.f0_stability),
             amplitude=self.note_amplitude(index),

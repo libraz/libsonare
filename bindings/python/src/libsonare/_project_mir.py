@@ -10,6 +10,7 @@ import numpy as np
 
 from ._analysis_music import _CHORD_QUALITY_ORDINALS
 from ._errors import _not_supported
+from ._project_model import _NO_PITCH_CLASS
 from ._runtime import (
     SonareProjectWarpAnchor,
     SonareTakeAlignConfig,
@@ -211,10 +212,10 @@ def chord_symbol_from_analysis(chord: Chord) -> dict[str, object]:
     Times are not converted.
 
     Returns:
-        ``{"root_pc", "quality", "extensions", "slash_bass_pc"}``. The root is kept
-        as given, including for an unknown chord; ``slash_bass_pc`` is 255 when
-        ``chord.bass`` is ``None`` or equals the root. ``extensions`` is a list of
-        scale degrees.
+        ``{"root_pc", "quality", "extensions"}``, plus ``"slash_bass_pc"`` only for
+        a slash chord: the key is absent when ``chord.bass`` is ``None`` or equals
+        the root. The root is kept as given, including for an unknown chord.
+        ``extensions`` is a list of scale degrees.
 
     Raises:
         TypeError: If ``chord`` is not a :class:`Chord`.
@@ -252,12 +253,14 @@ def chord_symbol_from_analysis(chord: Chord) -> dict[str, object]:
             ctypes.byref(out_slash),
         )
     )
-    return {
+    fields: dict[str, object] = {
         "root_pc": int(out_root.value),
         "quality": int(out_quality.value),
         "extensions": [int(extensions[i]) for i in range(out_count.value)],
-        "slash_bass_pc": int(out_slash.value),
     }
+    if int(out_slash.value) != _NO_PITCH_CLASS:
+        fields["slash_bass_pc"] = int(out_slash.value)
+    return fields
 
 
 def key_mode_from_analysis(mode: KeyMode) -> int:

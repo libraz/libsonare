@@ -96,7 +96,7 @@ class ClipDetection:
     pulse train, or a fully limited master -- counts as clipped here too and
     cannot be told apart from it in the time domain. ``flat_level`` is the
     magnitude the counted runs sit at -- the largest run level once the two
-    highest runs are set aside -- 0 when there are none.
+    highest runs are set aside -- ``None`` when there are none.
 
     The reverse also holds, and matters more: anything that moves samples
     independently erases a real flat top, so a zero here is not proof the
@@ -114,7 +114,7 @@ class ClipDetection:
     flat_run_count: int
     longest_flat_run_samples: int
     flat_sample_count: int
-    flat_level: float
+    flat_level: float | None
 
 
 @dataclass(frozen=True, slots=True)

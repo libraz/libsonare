@@ -668,7 +668,8 @@ def test_stream_analyzer_names_agree_with_numeric_fields() -> None:
 
     estimate = stats.estimate
     assert estimate.chord_progression
-    chords = [*estimate.chord_progression, *estimate.bar_chord_progression, *estimate.voted_pattern]
+    chords = [*estimate.chord_progression, *estimate.bar_chord_progression]
+    chords += [chord for chord in estimate.voted_pattern if chord is not None]
     if estimate.chord is not None:
         chords.append(estimate.chord)
     for chord in chords:

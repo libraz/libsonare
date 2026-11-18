@@ -55,7 +55,7 @@ def _compile_result_fields(
         ProjectDiagnostic(
             code=int(result.diagnostics[i].code),
             severity=int(result.diagnostics[i].severity),
-            target_id=int(result.diagnostics[i].target_id),
+            target_id=int(result.diagnostics[i].target_id) or None,
             message=message_lines[i] if i < len(message_lines) else "",
         )
         for i in range(int(result.diagnostic_count))
