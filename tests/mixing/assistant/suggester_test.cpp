@@ -508,8 +508,8 @@ TEST_CASE("the mixing assistant rejects an empty track id on core and C surfaces
   const char* ids[] = {""};
   const size_t lengths[] = {1};
   char* json = nullptr;
-  const auto error = sonare_mixing_assistant_suggest_scene_json(
-      channels, nullptr, ids, nullptr, lengths, nullptr, 1, 48000, nullptr, 0, &json);
+  const auto error = sonare_mixing_assistant_suggest(channels, nullptr, ids, nullptr, lengths,
+                                                     nullptr, 1, 48000, nullptr, 0, &json);
   if (json != nullptr) sonare_free_string(json);
   CHECK(error == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(json == nullptr);
@@ -1286,7 +1286,7 @@ std::vector<float> resampled_by_c_abi(const std::vector<float>& samples, int src
   return result;
 }
 
-// Calls both suggest entry points through the C ABI and returns their documents joined.
+// Calls the suggest entry point through the C ABI and returns its document.
 SonareError suggest_through_c_abi(const sonare::mixing::assistant::test::SyntheticTracks& tracks,
                                   const int* track_sample_rates, int sample_rate,
                                   std::string* out) {
@@ -1308,12 +1308,6 @@ SonareError suggest_through_c_abi(const sonare::mixing::assistant::test::Synthet
                                                       count, sample_rate, nullptr, 0, &json);
   if (error != SONARE_OK) return error;
   *out = json;
-  sonare_free_string(json);
-  error = sonare_mixing_assistant_suggest_scene_json(left.data(), right.data(), ids.data(), nullptr,
-                                                     lengths.data(), track_sample_rates, count,
-                                                     sample_rate, nullptr, 0, &json);
-  if (error != SONARE_OK) return error;
-  *out += json;
   sonare_free_string(json);
   return SONARE_OK;
 }

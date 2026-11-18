@@ -15,7 +15,6 @@
 #include "sonare_c_internal.h"
 
 #if defined(SONARE_WITH_MIXING_ASSISTANT) && SONARE_WITH_MIXING_ASSISTANT
-#include "mixing/api/scene.h"
 #include "mixing/assistant/config_from_params.h"
 #include "mixing/assistant/suggester.h"
 #include "mixing/assistant/track_profile.h"
@@ -101,45 +100,6 @@ SonareError sonare_mixing_assistant_suggest(
                                    track_sample_rates, input_count, sample_rate, resampled);
   const auto result = assistant::suggest_scene(tracks, config);
   *json_out = copy_string(assistant::mix_assistant_result_to_json(result));
-  return SONARE_OK;
-  SONARE_C_CATCH
-#else
-  (void)input_left;
-  (void)input_right;
-  (void)track_ids;
-  (void)track_names;
-  (void)track_lengths;
-  (void)track_sample_rates;
-  (void)input_count;
-  (void)sample_rate;
-  (void)params;
-  (void)param_count;
-  return SONARE_ERROR_NOT_SUPPORTED;
-#endif
-}
-
-SonareError sonare_mixing_assistant_suggest_scene_json(
-    const float* const* input_left, const float* const* input_right, const char* const* track_ids,
-    const char* const* track_names, const size_t* track_lengths, const int* track_sample_rates,
-    size_t input_count, int sample_rate, const SonareMasteringParam* params, size_t param_count,
-    char** json_out) {
-  SONARE_C_API_ENTRY;
-  if (!json_out) return SONARE_ERROR_INVALID_PARAMETER;
-  *json_out = nullptr;
-#if defined(SONARE_WITH_MIXING_ASSISTANT) && SONARE_WITH_MIXING_ASSISTANT
-  const SonareError err =
-      check_track_arrays(input_left, track_ids, track_lengths, track_sample_rates, input_count,
-                         sample_rate, params, param_count);
-  if (err != SONARE_OK) return err;
-
-  SONARE_C_TRY
-  const auto parsed = sonare_c_mastering_detail::to_params(params, param_count);
-  const auto config = assistant::mix_assistant_config_from_params(parsed.data(), parsed.size());
-  std::vector<std::vector<float>> resampled;
-  const auto tracks = build_tracks(input_left, input_right, track_ids, track_names, track_lengths,
-                                   track_sample_rates, input_count, sample_rate, resampled);
-  const auto result = assistant::suggest_scene(tracks, config);
-  *json_out = copy_string(sonare::mixing::api::scene_to_json(result.scene));
   return SONARE_OK;
   SONARE_C_CATCH
 #else

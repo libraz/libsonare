@@ -562,17 +562,6 @@ SonareError sonare_mixing_assistant_suggest(
     size_t input_count, int sample_rate, const SonareMasteringParam* params, size_t param_count,
     char** json_out);
 
-// As sonare_mixing_assistant_suggest, but writes only the suggested scene, in
-// the same schema sonare_mixer_from_scene_json reads. Provided so a caller that
-// wants to apply a suggestion does not have to dig the scene out of the fuller
-// result document and re-serialise it.
-// Free *json_out with sonare_free_string.
-SonareError sonare_mixing_assistant_suggest_scene_json(
-    const float* const* input_left, const float* const* input_right, const char* const* track_ids,
-    const char* const* track_names, const size_t* track_lengths, const int* track_sample_rates,
-    size_t input_count, int sample_rate, const SonareMasteringParam* params, size_t param_count,
-    char** json_out);
-
 // Returns the source-class identifiers the assistant can report, separated by
 // '\n'. Backed by thread-local storage REBUILT ON EVERY CALL, so the pointer is
 // valid only until the next call to this function on the same thread — unlike

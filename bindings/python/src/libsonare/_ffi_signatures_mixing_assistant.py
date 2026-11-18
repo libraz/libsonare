@@ -30,8 +30,6 @@ def configure_mixing_assistant_signatures(lib: ctypes.CDLL) -> None:
     if hasattr(lib, "sonare_mixing_assistant_suggest"):
         lib.sonare_mixing_assistant_suggest.restype = ctypes.c_int32
         lib.sonare_mixing_assistant_suggest.argtypes = list(_SUGGEST_ARGTYPES)
-        lib.sonare_mixing_assistant_suggest_scene_json.restype = ctypes.c_int32
-        lib.sonare_mixing_assistant_suggest_scene_json.argtypes = list(_SUGGEST_ARGTYPES)
         lib.sonare_mixing_assistant_source_class_names.restype = ctypes.c_char_p
         lib.sonare_mixing_assistant_source_class_names.argtypes = []
         lib.sonare_mixing_assistant_source_class_from_name.restype = ctypes.c_int
