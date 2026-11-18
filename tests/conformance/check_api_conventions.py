@@ -571,6 +571,59 @@ def _ref_param_violation(r: dict) -> str | None:
     return None
 
 
+_CAPACITY_PREFIXES = ("max", "min", "in", "out", "input", "output")
+
+
+def _payload_prefix(member: str) -> str | None:
+    """The payload word before ``Channels`` / ``_channels``, or None when the name is not qualified."""
+    if member in ("channels", "numChannels", "num_channels"):
+        return None
+    camel = re.fullmatch(r"([a-z][A-Za-z0-9]*?)Channels", member)
+    snake = re.fullmatch(r"([a-z0-9_]+?)_channels", member)
+    match = camel or snake
+    return match.group(1) if match else None
+
+
+def _payload_channel_records(records: list[dict]) -> list[dict]:
+    siblings: dict[tuple[str, str], set[str]] = {}
+    for r in records:
+        if r["kind"] in ("option", "field") and r["surface"] in ("node", "wasm", "python"):
+            siblings.setdefault((r["surface"], r["owner"]), set()).add(r.get("member", ""))
+    out: list[dict] = []
+    for r in records:
+        if r["kind"] not in ("option", "field") or r["surface"] not in ("node", "wasm", "python"):
+            continue
+        prefix = _payload_prefix(r.get("member", ""))
+        if prefix is None:
+            continue
+        snake = r["surface"] == "python"
+        rate = f"{prefix}_sample_rate" if snake else f"{prefix}SampleRate"
+        out.append(
+            {
+                "surface": r["surface"],
+                "kind": "payload-channels",
+                "name": r["name"],
+                "member": r["member"],
+                "prefix": prefix,
+                "has_rate": rate in siblings[(r["surface"], r["owner"])],
+            }
+        )
+    return out
+
+
+def _payload_channel_violation(r: dict) -> str | None:
+    first = re.split(r"(?=[A-Z])|_", r["prefix"])[0].lower()
+    if (
+        first in _CAPACITY_PREFIXES
+        or r["member"].lower().endswith("numchannels")
+        or r["member"].endswith("_num_channels")
+    ):
+        return None
+    if not r["has_rate"]:
+        return f"a payload-qualified channel count sits beside its {r['prefix']} sample rate"
+    return None
+
+
 RULES: list[Rule] = [
     Rule(
         name="getters",
@@ -788,6 +841,29 @@ RULES: list[Rule] = [
             },
             "python:Mixer.add_strip(strip_id)": "type the strip parameter StripRef, or rename it for a new strip's id",
             "python:Mixer.strip_by_id(strip_id)": "type the strip parameter StripRef",
+        },
+    ),
+    Rule(
+        name="payload-channels",
+        summary="a <payload>Channels count sits beside <payload>SampleRate; capacities are exempt by prefix",
+        population=lambda r: r["kind"] == "payload-channels",
+        violation=_payload_channel_violation,
+        derive=_payload_channel_records,
+        pending={
+            **{
+                f"{s}:Mixer.{m}({side}Channels)": "send the declarations and what they count"
+                for s in ("node", "wasm")
+                for m in ("processStereo",)
+                for side in ("left", "right")
+            },
+            **{
+                f"wasm:Mixer.processStereoInto({side}Channels)": "send the declarations and what they count"
+                for side in ("left", "right")
+            },
+            **{
+                f"python:Mixer.process_stereo({side}_channels)": "send the declarations and what they count"
+                for side in ("left", "right")
+            },
         },
     ),
 ]

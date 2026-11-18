@@ -544,6 +544,44 @@ class StripRefRule(unittest.TestCase):
         self.assertIn("python:Engine.set_bus_gain_db(bus_id)", [f.key for f in verdict.violations])
 
 
+def keyed_field(surface: str, owner: str, member: str, kind: str = "field") -> dict:
+    return {
+        "surface": surface,
+        "kind": kind,
+        "owner": owner,
+        "member": member,
+        "name": f"{owner}.{member}",
+        "type": "number",
+    }
+
+
+class PayloadChannelsRule(unittest.TestCase):
+    CLEAN = [
+        keyed_field("node", "LoopDesc", "audioChannels"),
+        keyed_field("node", "LoopDesc", "audioSampleRate"),
+        keyed_field("node", "EngineConfig", "maxChannels"),
+        keyed_field("wasm", "EngineOptions", "offlineNumChannels"),
+        keyed_field("node", "Bounce", "numChannels"),
+        keyed_field("python", "Loop", "audio_channels"),
+        keyed_field("python", "Loop", "audio_sample_rate"),
+    ]
+
+    def test_clean_surface_passes(self) -> None:
+        verdict = run("payload-channels", self.CLEAN)
+        self.assertEqual(verdict.read, 4)
+        self.assertFalse(verdict.failed)
+
+    def test_payload_count_without_rate_is_named(self) -> None:
+        planted = keyed_field("wasm", "ImportDesc", "sourceChannels")
+        verdict = run("payload-channels", [*self.CLEAN, planted])
+        self.assertEqual([f.key for f in verdict.violations], ["wasm:ImportDesc.sourceChannels"])
+
+    def test_python_payload_count_without_rate_is_named(self) -> None:
+        planted = keyed_field("python", "Import", "source_channels")
+        verdict = run("payload-channels", [*self.CLEAN, planted])
+        self.assertEqual([f.key for f in verdict.violations], ["python:Import.source_channels"])
+
+
 class Framework(unittest.TestCase):
     def test_reading_nothing_fails(self) -> None:
         verdict = check.judge(rule("getters"), [])
