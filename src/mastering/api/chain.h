@@ -651,8 +651,8 @@ std::optional<double> chain_config_parameter_value(const MasteringChainConfig& c
                                                    const std::string& key);
 
 /// @brief Parse a chain configuration serialized by chain_config_to_json.
-/// Throws SonareException(InvalidParameter) for malformed JSON, unsupported
-/// versions, or unknown parameter keys.
+/// Throws SonareException(InvalidFormat) for malformed JSON, an unsupported
+/// version, an unknown or earlier key spelling, or a value outside its domain.
 MasteringChainConfig chain_config_from_json(const std::string& json);
 
 /// @brief One leaf of a chain config document's `params` block, in flat spelling.
@@ -670,7 +670,7 @@ struct ChainFlatParam {
 ///          a string is the name of an enum value, resolved as chain_config_from_json resolves it.
 ///          The document is not otherwise validated; chain_config_from_json is the validating
 ///          reader.
-/// @throws SonareException (InvalidParameter) for malformed JSON, an absent, non-object or empty
+/// @throws SonareException (InvalidFormat) for malformed JSON, an absent, non-object or empty
 ///         `params` block, an empty list, an unknown enum name, or a leaf that is neither a number,
 ///         a boolean nor an enum name.
 std::vector<ChainFlatParam> chain_config_flat_params(const std::string& chain_config_json);

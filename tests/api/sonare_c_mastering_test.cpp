@@ -1122,6 +1122,50 @@ TEST_CASE("sonare_mastering_preset_params_json returns each preset's chain confi
   REQUIRE(json == nullptr);
 }
 
+TEST_CASE("sonare_mastering_chain_config_params_json returns a document in canonical form",
+          "[c_api][mastering]") {
+  char* preset_json = nullptr;
+  REQUIRE(sonare_mastering_preset_params_json("pop", &preset_json) == SONARE_OK);
+  char* json = nullptr;
+  REQUIRE(sonare_mastering_chain_config_params_json(preset_json, &json) == SONARE_OK);
+  REQUIRE(json != nullptr);
+  REQUIRE(std::string(json) == std::string(preset_json));
+  sonare_free_string(json);
+  sonare_free_string(preset_json);
+
+  json = nullptr;
+  REQUIRE(sonare_mastering_chain_config_params_json(
+              R"({"version":1,"params":{"loudness.targetLufs":-9}})", &json) == SONARE_OK);
+  REQUIRE(sonare::util::json::parse_strict(json)["params"]["loudness.targetLufs"].as_number() ==
+          -9.0);
+  sonare_free_string(json);
+}
+
+TEST_CASE("sonare_mastering_chain_config_params_json refuses a document as InvalidFormat",
+          "[c_api][mastering]") {
+  const char* refused[] = {
+      "{",
+      R"({"version":3,"params":{"loudness.targetLufs":-9}})",
+      R"({"version":1,"params":{"loudness.bogusKey":1}})",
+      R"({"version":1,"params":{"eq.tiltDb":1}})",
+  };
+  for (const char* document : refused) {
+    CAPTURE(document);
+    char* json = nullptr;
+    REQUIRE(sonare_mastering_chain_config_params_json(document, &json) ==
+            SONARE_ERROR_INVALID_FORMAT);
+    REQUIRE(json == nullptr);
+  }
+  char* json = nullptr;
+  REQUIRE(sonare_mastering_chain_config_params_json(R"({"version":1,"params":{"eq.tiltDb":1}})",
+                                                    &json) == SONARE_ERROR_INVALID_FORMAT);
+  REQUIRE_THAT(std::string(sonare_last_error_message()),
+               Catch::Matchers::ContainsSubstring("eq.tilt.tiltDb"));
+  REQUIRE(sonare_mastering_chain_config_params_json(nullptr, &json) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(json == nullptr);
+}
+
 TEST_CASE("the capability catalog schema list matches what the writer emits",
           "[c_api][mastering]") {
   const std::string json = sonare_test::c_string(sonare_capability_catalog_json);

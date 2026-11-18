@@ -40,6 +40,19 @@ SonareError sonare_mastering_preset_params_json(const char* preset, char** json_
   SONARE_C_CATCH
 }
 
+SonareError sonare_mastering_chain_config_params_json(const char* document, char** json_out) {
+  SONARE_C_API_ENTRY;
+  if (!json_out) return SONARE_ERROR_INVALID_PARAMETER;
+  *json_out = nullptr;
+  if (!document) return SONARE_ERROR_INVALID_PARAMETER;
+
+  SONARE_C_TRY
+  const auto config = sonare::mastering::api::chain_config_from_json(document);
+  *json_out = copy_string(sonare::mastering::api::chain_config_to_json(config));
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
 const char* sonare_mastering_platform_names(void) {
   SONARE_C_TRY
   static thread_local const std::string names =

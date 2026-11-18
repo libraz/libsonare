@@ -317,6 +317,18 @@ const char* sonare_mastering_preset_names(void);
 /// The returned string must be released with sonare_free_string().
 SonareError sonare_mastering_preset_params_json(const char* preset, char** json_out);
 
+/// @brief Validate a chain configuration document and return it in canonical form.
+/// @details Reads @p document as the native CLI's `--chain-config` reads it and returns the
+///   chain it describes in the shape of @ref sonare_mastering_preset_params_json, so its flat
+///   @c params feed @c sonare_mastering_chain or @c sonare_master_audio as a preset's do. A
+///   document that is malformed, carries a version other than 1 or 2, an unknown or earlier
+///   key spelling, or a value outside its domain returns @c SONARE_ERROR_INVALID_FORMAT and
+///   names the field; @c sonare_last_error_message() names the current spelling of an earlier one.
+/// @param document NUL-terminated chain configuration JSON; NULL returns
+///   @c SONARE_ERROR_INVALID_PARAMETER.
+/// The returned string must be released with sonare_free_string().
+SonareError sonare_mastering_chain_config_params_json(const char* document, char** json_out);
+
 /// @brief Apply a preset chain to mono audio.
 /// Restoration presets' repair stages, like every classical denoise
 /// configuration, can mistake a steady tone -- a calibration tone, a drone, a
