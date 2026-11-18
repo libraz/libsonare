@@ -27,7 +27,7 @@
     },
     {
       "name": "container-length",
-      "argument_pattern": "len\\(.+\\)|.+\\.count|.+ // \\d+|length // channels",
+      "argument_pattern": "len\\(.+\\)|.+\\.count",
       "unsigned_only": true,
       "reason": "Derived from a container this call already holds, so it is bounded by the allocation behind it."
     },

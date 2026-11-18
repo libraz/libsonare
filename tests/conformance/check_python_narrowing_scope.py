@@ -663,6 +663,34 @@ def _width_mask(node: ast.AST) -> int | None:
     return None
 
 
+def _alternatives(pattern: str) -> list[str]:
+    """Split @p pattern at its top-level ``|``, outside groups, classes and escapes."""
+    parts: list[str] = []
+    depth = 0
+    in_class = False
+    start = 0
+    index = 0
+    while index < len(pattern):
+        char = pattern[index]
+        if char == "\\":
+            index += 2
+            continue
+        if in_class:
+            in_class = char != "]"
+        elif char == "[":
+            in_class = True
+        elif char == "(":
+            depth += 1
+        elif char == ")":
+            depth -= 1
+        elif char == "|" and depth == 0:
+            parts.append(pattern[start:index])
+            start = index + 1
+        index += 1
+    parts.append(pattern[start:])
+    return parts
+
+
 class Records:
     """The recorded-benign data, and which of its entries matched anything."""
 
@@ -674,16 +702,28 @@ class Records:
         self.readers = data.get("readers", [])
         self.arguments = data.get("argtype_arguments", [])
         self.used: set[str] = set()
+        # Each top-level alternative of a shape is a record of its own, so one that matches
+        # nothing expires even while its siblings stay in use.
         self._shape_patterns = {
-            shape["name"]: re.compile(shape["argument_pattern"]) for shape in self.shapes
+            shape["name"]: [
+                (alternative, re.compile(alternative))
+                for alternative in _alternatives(shape["argument_pattern"])
+            ]
+            for shape in self.shapes
         }
+
+    def _covers_shape(self, shape: dict, argument: str) -> bool:
+        for alternative, pattern in self._shape_patterns[shape["name"]]:
+            if pattern.fullmatch(argument):
+                self.used.add(f"shape:{shape['name']}:{alternative}")
+                return True
+        return False
 
     def covers(self, site: Site) -> bool:
         for shape in self.shapes:
             if shape.get("unsigned_only") and not site.type.startswith(("c_u", "c_size")):
                 continue
-            if self._shape_patterns[shape["name"]].fullmatch(site.argument):
-                self.used.add(f"shape:{shape['name']}")
+            if self._covers_shape(shape, site.argument):
                 return True
         for entry in self.narrowings:
             if (entry["file"], entry["argument"], entry["type"]) == site.key:
@@ -701,8 +741,7 @@ class Records:
         for shape in self.shapes:
             if shape.get("unsigned_only") and not site.type.startswith(("c_u", "c_size")):
                 continue
-            if self._shape_patterns[shape["name"]].fullmatch(site.argument):
-                self.used.add(f"shape:{shape['name']}")
+            if self._covers_shape(shape, site.argument):
                 return True
         for entry in self.arguments:
             if (entry["file"], entry["argument"], entry["type"]) == site.key:
@@ -732,7 +771,11 @@ class Records:
 
     def unused(self) -> list[str]:
         every = (
-            [f"shape:{s['name']}" for s in self.shapes]
+            [
+                f"shape:{s['name']}:{alternative}"
+                for s in self.shapes
+                for alternative, _ in self._shape_patterns[s["name"]]
+            ]
             + [f"narrowing:{e['file']}:{e['argument']}" for e in self.narrowings]
             + [f"argument:{e['file']}:{e['argument']}" for e in self.arguments]
             + [f"struct:{s}" for s in self.structs]

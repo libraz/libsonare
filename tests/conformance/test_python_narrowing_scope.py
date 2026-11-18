@@ -223,6 +223,21 @@ class FailureClassTest(_SyntheticTree):
         }
         self.only(self.evaluate(root, records=records), "matched nothing")
 
+    def test_a_dead_alternative_of_a_used_shape_is_the_only_report(self) -> None:
+        root = self.tree("import ctypes\nlib.f(ctypes.c_uint32(len(xs)))\n")
+        records = {
+            "shapes": [
+                {
+                    "name": "container-length",
+                    "argument_pattern": "len\\(.+\\)|length // channels",
+                    "reason": "test",
+                }
+            ],
+            "narrowings": [],
+        }
+        lines = self.only(self.evaluate(root, records=records), "matched nothing")
+        self.assertEqual(lines, ["  shape:container-length:length // channels"])
+
     def test_a_shrunken_population_is_the_only_report(self) -> None:
         """Two empty sets agree perfectly, so the floor is asserted first."""
         root = self.tree("import ctypes\n")
