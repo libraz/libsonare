@@ -1419,17 +1419,6 @@ RULES: list[Rule] = [
             else f"{r['screens']} is a document; the core refuses its keys at every depth as InvalidFormat"
         ),
         derive=lambda records: [*_key_screen_records(records), *_document_reader_records(records)],
-        pending={
-            **{
-                key: "goes when the chain document reaches the core as written"
-                for key in (
-                    "node:CHAIN_CONFIG_SECTIONS",
-                    "wasm:MasteringChainConfigKeys",
-                    "node:chain_config.flattenChainConfig",
-                    "wasm:chain_config.flattenChainConfig",
-                )
-            },
-        },
     ),
     Rule(
         name="interface-teardown",
