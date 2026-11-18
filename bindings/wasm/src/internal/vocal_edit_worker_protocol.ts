@@ -1,4 +1,3 @@
-import type { SonareFailurePayload } from './failure_payload.js';
 import type {
   VocalAnalysis,
   VocalCapabilities,
@@ -14,6 +13,7 @@ import type {
   VocalRestoreRequest,
   VocalStateToken,
 } from '../public_types_vocal_edit.js';
+import type { SonareFailurePayload } from './failure_payload.js';
 
 /** An apply request with the generation resolved by the client. */
 export interface VocalWorkerApplyRequest {

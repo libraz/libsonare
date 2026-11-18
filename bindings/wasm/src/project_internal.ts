@@ -24,7 +24,6 @@ import type {
   AlignTakeToReferenceRequest,
   AlignTakeToReferenceResult,
   ProjectAssistSidecar,
-  ProjectAutomationCurve,
   ProjectAutomationLaneDesc,
   ProjectAutomationPoint,
   ProjectAutomationTargetKind,
