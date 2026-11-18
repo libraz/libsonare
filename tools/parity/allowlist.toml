@@ -850,6 +850,9 @@ fields = [
   "chord.name",
   "chord.root_name",
   "chord.bass_name",
+  # The duration is endSec - startSec, derived in the facade as Python's
+  # Chord.duration_sec property derives it (category 4).
+  "chord.duration_sec",
 
   # --- category 1: a shared buffer + per-record offset -> one array per record ---
   # C returns every note's RMS curve concatenated into one `amplitude` array on
@@ -901,6 +904,59 @@ fields = [
   # A project stores musical positions only. The sample start is derived when
   # the project compiles and is never read back.
   "project_tempo_segment.start_sample",
+  # --- Matrix dims folded into Matrix2D rows/cols (category 2) ---
+  # C carries a flat buffer plus its counts; both JS facades return a Matrix2D
+  # whose rows and cols are those counts.
+  "stft_result.n_bins",
+  "stft_result.n_frames",
+  "cqt_result.n_bins",
+  "cqt_result.n_frames",
+  "chroma_result.n_chroma",
+  "chroma_result.n_frames",
+  "mfcc_result.n_mfcc",
+  "mfcc_result.n_frames",
+  "reassigned_spectrogram_result.n_bins",
+  "reassigned_spectrogram_result.n_frames",
+  # --- Stream frame dims and presence word (categories 2 and 1) ---
+  # mel and chroma are Matrix2D whose rows are n_mels / n_chroma, and each
+  # feature array is absent when not computed, which says what feature_flags says.
+  "stream_frames.n_mels",
+  "stream_frames.n_chroma",
+  "stream_frames.feature_flags",
+  "stream_frames_u8.n_mels",
+  "stream_frames_u8.n_chroma",
+  "stream_frames_u8.feature_flags",
+  "stream_frames_i16.n_mels",
+  "stream_frames_i16.n_chroma",
+  "stream_frames_i16.feature_flags",
+  # --- Progressive estimate nested under `estimate` (category 1) ---
+  # Both JS facades group these under estimate: StreamProgressiveEstimate while
+  # C keeps them flat; field-scoped so a new missing counter still gates.
+  "stream_stats.bpm",
+  "stream_stats.bpm_confidence",
+  "stream_stats.key",
+  "stream_stats.key_minor",
+  "stream_stats.key_confidence",
+  "stream_stats.chord_root",
+  "stream_stats.chord_quality",
+  "stream_stats.chord_confidence",
+  "stream_stats.chord_start_sec",
+  "stream_stats.current_bar",
+  "stream_stats.bar_duration_sec",
+  "stream_stats.chord_progression",
+  "stream_stats.bar_chord_progression",
+  "stream_stats.voted_pattern",
+  "stream_stats.detected_pattern_name",
+  "stream_stats.detected_pattern_score",
+  "stream_stats.all_pattern_scores",
+  "stream_stats.accumulated_sec",
+  "stream_stats.used_frames",
+  "stream_stats.updated",
+  "stream_stats.estimate",
+  # --- Beat times folded into beats (categories 2 and 1) ---
+  # C beat_times + beat_count become beats: Beat[], each beat carrying its time
+  # and the count being the array length.
+  "analysis_result.beat_times",
 ]
 
 # Category 4 (intentionally one-sided): the facade record is a RICHER read model
