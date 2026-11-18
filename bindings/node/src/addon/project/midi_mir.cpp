@@ -62,7 +62,7 @@ Napi::Value ProjectWrap::SetMidiEvents(const Napi::CallbackInfo& info) {
         Napi::Object obj = entry.As<Napi::Object>();
         if (!RequiredDoubleProperty(env, obj, "ppq", &ev.ppq)) return env.Undefined();
         if (!RequiredWordValue(env, obj.Get("word0"), "word0", &ev.word0)) return env.Undefined();
-        ev.word1 = WordProperty(obj, "word1", 0u);
+        ev.word1 = WordProperty(obj, "word1", ev.word1);
         if (env.IsExceptionPending()) return env.Undefined();
       } else {
         Napi::TypeError::New(env, "MIDI event must be a [ppq, word0, word1] tuple or object")
@@ -426,7 +426,7 @@ Napi::Value ProjectWrap::AnnotateKeys(const Napi::CallbackInfo& info) {
     }
     seg.tonic_pc =
         static_cast<uint32_t>(sonare_node::IntInRangeOrAbsentProperty(obj, "tonicPc", 0, 11, 255));
-    seg.mode = Uint32Property(obj, "mode", 0);
+    seg.mode = Uint32Property(obj, "mode", seg.mode);
     keys.push_back(seg);
   }
   ThrowIfError(env, sonare_project_annotate_keys(project_, keys.empty() ? nullptr : keys.data(),
@@ -463,7 +463,7 @@ Napi::Value ProjectWrap::AnnotateChords(const Napi::CallbackInfo& info) {
     }
     chord.root_pc =
         static_cast<uint32_t>(sonare_node::IntInRangeOrAbsentProperty(obj, "rootPc", 0, 11, 255));
-    chord.quality = Uint32Property(obj, "quality", 0);
+    chord.quality = Uint32Property(obj, "quality", chord.quality);
     Napi::Value ext = obj.Get("extensions");
     if (!ext.IsUndefined() && !ext.IsNull()) {
       Napi::Array arr;
@@ -487,7 +487,8 @@ Napi::Value ProjectWrap::AnnotateChords(const Napi::CallbackInfo& info) {
       roman[i] = StringProperty(obj, "romanNumeral", "");
       chord.roman_numeral = roman[i].c_str();
     }
-    chord.modulation_boundary = BoolProperty(obj, "modulationBoundary", false) ? 1 : 0;
+    chord.modulation_boundary =
+        BoolProperty(obj, "modulationBoundary", chord.modulation_boundary != 0) ? 1 : 0;
     if (env.IsExceptionPending()) return env.Undefined();
     chords.push_back(chord);
   }

@@ -70,10 +70,6 @@ const ZERO_FALLBACK_REASONS: ReadonlyMap<string, string> = new Map([
     'The optional second word of a packed MIDI 1.0 event; 0 is the empty word an absent one reads as.',
   ],
   [
-    'project/midi_mir.cpp:word1',
-    'The optional second word of a packed MIDI 1.0 event; 0 is the empty word an absent one reads as.',
-  ],
-  [
     'project/render.cpp:destinationId',
     'The C ABI documents the default MIDI destination as 0, so zero addresses a destination rather than standing in for an absent one.',
   ],
@@ -121,8 +117,6 @@ const ZERO_FALLBACK_REASONS: ReadonlyMap<string, string> = new Map([
     'project/external_stems.cpp:sampleRate',
     "The import rejects sample_rate <= 0, and accepts only the project's own rate above it, so 0 selects nothing.",
   ],
-  ['project/midi_mir.cpp:mode', 'Key-segment mode ordinal, where 0 is a named mode.'],
-  ['project/midi_mir.cpp:quality', 'Chord-quality ordinal, where 0 is a named quality.'],
   [
     'project/midi_mir.cpp:schemaVersion',
     'A module-owned sidecar version the core stores verbatim; 0 is the unversioned payload.',
@@ -144,54 +138,17 @@ const ZERO_FALLBACK_REASONS: ReadonlyMap<string, string> = new Map([
     'A spectral-edit op start position in samples; 0 is the first sample of the buffer.',
   ],
   [
-    'engine/midi_instruments.cpp:renderFrame',
-    'The absolute frame an event is scheduled at; 0 is the first frame of the timeline.',
-  ],
-  [
-    'engine/midi_instruments.cpp:word0',
-    'UMP word 0 of an event; 0 is the empty word, and wordCount decides how many words are read.',
-  ],
-  [
-    'engine/midi_instruments.cpp:word1',
-    'UMP word 1 of an event; 0 is the empty word, and wordCount decides how many words are read.',
-  ],
-  [
-    'engine/midi_instruments.cpp:word2',
-    'A trailing UMP word; 0 is the empty word, and wordCount rather than this zero decides how many are read.',
-  ],
-  [
-    'engine/midi_instruments.cpp:word3',
-    'A trailing UMP word; 0 is the empty word, and wordCount rather than this zero decides how many are read.',
-  ],
-  [
     'engine/midi_instruments.cpp:wordCount',
     'Documented as tolerant — anything outside [1,4] lets the C bridge infer the word form. Unsettled: an inferred form and a requested one are not distinguishable from the JS surface, so no control separates them.',
-  ],
-  [
-    'engine/midi_instruments.cpp:sysexHandle',
-    'Unsettled: 0 is the absent-handle spelling, and a control needs a live registered handle, which this entry point cannot produce, so what a truncated handle does has not been observed.',
   ],
   [
     'sonare_wrap_engine.cpp:keyFifths',
     'A signed count of sharps or flats; 0 is C major, a quantity the caller can mean.',
   ],
   [
-    'engine/midi_instruments.cpp:id',
-    'A host-assigned MIDI clip id, where 0 is the unset id rather than a selector for a default clip.',
-  ],
-  [
     'engine/midi_instruments.cpp:trackId',
     'The unassigned track id, and also what destinationId falls back to; the clip player returns on it rather than substituting a track.',
   ],
-  [
-    'engine/midi_instruments.cpp:startSample',
-    'A clip start position on the timeline; 0 is the first frame.',
-  ],
-  [
-    'engine/midi_instruments.cpp:fadeInSamples',
-    'A MIDI clip fade length in samples; 0 is no fade, a length the caller can mean.',
-  ],
-  ['engine/midi_instruments.cpp:fadeOutSamples', 'Fade length, as fadeInSamples.'],
   [
     'sonare_wrap_note_objects.h:timeOffsetSamples',
     'Zero is the identity shift, a displacement a caller can mean rather than a stand-in for absence.',

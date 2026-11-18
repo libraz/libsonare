@@ -55,18 +55,18 @@ std::vector<SonareEngineMidiEvent> ReadEngineMidiEvents(Napi::Env env, Napi::Val
     }
     Napi::Object obj = item.As<Napi::Object>();
     SonareEngineMidiEvent event{};
-    event.render_frame = Int64Property(obj, "renderFrame", 0);
-    event.word0 = WordProperty(obj, "word0", 0);
-    event.word1 = WordProperty(obj, "word1", 0);
-    event.word2 = WordProperty(obj, "word2", 0);
-    event.word3 = WordProperty(obj, "word3", 0);
+    event.render_frame = Int64Property(obj, "renderFrame", event.render_frame);
+    event.word0 = WordProperty(obj, "word0", event.word0);
+    event.word1 = WordProperty(obj, "word1", event.word1);
+    event.word2 = WordProperty(obj, "word2", event.word2);
+    event.word3 = WordProperty(obj, "word3", event.word3);
     // wordCount is documented as tolerant: anything outside [1,4] lets the C
     // bridge infer the word form. Narrow out of range rather than through the
     // uint8_t cast, which would land 257 on a spurious 1 instead of inferring.
     const uint32_t word_count = Uint32Property(obj, "wordCount", 0);
     event.word_count = word_count >= 1 && word_count <= 4 ? static_cast<uint8_t>(word_count) : 0;
-    event.group = MidiByteProperty(env, obj, "group", 0);
-    event.sysex_handle = Uint32Property(obj, "sysexHandle", 0);
+    event.group = MidiByteProperty(env, obj, "group", event.group);
+    event.sysex_handle = Uint32Property(obj, "sysexHandle", event.sysex_handle);
     // Bail on the first wrong-typed field so the next iteration's explicit
     // TypeError is never raised on top of an already-pending exception.
     if (env.IsExceptionPending()) return {};
@@ -100,20 +100,20 @@ Napi::Value RealtimeEngineWrap::SetMidiClips(const Napi::CallbackInfo& info) {
         ReadEngineMidiEvents(env, obj.Has("events") ? obj.Get("events") : env.Null());
     if (env.IsExceptionPending()) return env.Undefined();
     SonareEngineMidiClipSchedule clip{};
-    clip.id = Uint32Property(obj, "id", 0);
-    clip.track_id = Uint32Property(obj, "trackId", 0);
-    clip.start_sample = Int64Property(obj, "startSample", 0);
-    clip.start_ppq = DoubleProperty(obj, "startPpq", 0.0);
+    clip.id = Uint32Property(obj, "id", clip.id);
+    clip.track_id = Uint32Property(obj, "trackId", clip.track_id);
+    clip.start_sample = Int64Property(obj, "startSample", clip.start_sample);
+    clip.start_ppq = DoubleProperty(obj, "startPpq", clip.start_ppq);
     clip.length_samples = Int64Property(obj, "lengthSamples", kZeroIsSentinel);
-    clip.loop = BoolProperty(obj, "loop", false) ? 1 : 0;
+    clip.loop = BoolProperty(obj, "loop", clip.loop != 0) ? 1 : 0;
     clip.loop_length_samples = Int64Property(obj, "loopLengthSamples", kZeroIsSentinel);
     clip.destination_id = Uint32Property(obj, "destinationId", Uint32Property(obj, "trackId", 0));
     // Same defaults as the audio clip's gain/fade fields (SetClips): a
     // zero-initialized struct is silent, so an omitted gain reads as unity here
     // rather than the C ABI's own zero-init default.
     clip.gain = FloatProperty(obj, "gain", 1.0f);
-    clip.fade_in_samples = Int64Property(obj, "fadeInSamples", 0);
-    clip.fade_out_samples = Int64Property(obj, "fadeOutSamples", 0);
+    clip.fade_in_samples = Int64Property(obj, "fadeInSamples", clip.fade_in_samples);
+    clip.fade_out_samples = Int64Property(obj, "fadeOutSamples", clip.fade_out_samples);
     if (env.IsExceptionPending()) return env.Undefined();
     clip.events = event_storage[i].data();
     clip.event_count = event_storage[i].size();
@@ -165,7 +165,8 @@ Napi::Value RealtimeEngineWrap::SetSynthInstrument(const Napi::CallbackInfo& inf
     binding.patch = patch_storage.patch;
     if (info[1].IsObject() && !info[1].IsArray()) {
       Napi::Object obj = info[1].As<Napi::Object>();
-      binding.use_gm_programs = BoolProperty(obj, "useGmPrograms", false) ? 1 : 0;
+      binding.use_gm_programs =
+          BoolProperty(obj, "useGmPrograms", binding.use_gm_programs != 0) ? 1 : 0;
       if (env.IsExceptionPending()) return env.Undefined();
       if (!SampleBankWrap::ReadHandle(env, obj.Get("sampleBank"), &binding.sample_bank)) {
         return env.Undefined();  // exception already pending
@@ -221,14 +222,17 @@ Napi::Value RealtimeEngineWrap::SetSf2Instrument(const Napi::CallbackInfo& info)
     if (!prefer_model.IsUndefined() && !prefer_model.IsNull()) {
       config.struct_version = 2;
       config.prefer_model_for_modeled_families =
-          BoolProperty(obj, "preferModelForModeledFamilies", false) ? 1 : 0;
+          BoolProperty(obj, "preferModelForModeledFamilies",
+                       config.prefer_model_for_modeled_families != 0)
+              ? 1
+              : 0;
     }
     // Version 3 reads version 2's field as well, so raising it here covers both
     // whichever of the two the caller passed.
     const Napi::Value clear_rig = obj.Get("clearBankRig");
     if (!clear_rig.IsUndefined() && !clear_rig.IsNull()) {
       config.struct_version = 3;
-      config.clear_bank_rig = BoolProperty(obj, "clearBankRig", false) ? 1 : 0;
+      config.clear_bank_rig = BoolProperty(obj, "clearBankRig", config.clear_bank_rig != 0) ? 1 : 0;
     }
     config.struct_version = 4;
     config.gs_efx_realization = sonare_node::GsEfxRealizationProperty(obj, "gsEfxRealization");
