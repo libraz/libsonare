@@ -271,6 +271,8 @@ class RealtimeVoiceChangerWrapper {
     changer_.set_config(realtimeVoiceChangerConfigFromPodVal(config));
   }
 
+  val config() const { return realtimeVoiceChangerPodVal(changer_.config()); }
+
   std::string configJson() const {
     return editing::voice_changer::realtime_voice_changer_config_to_json(changer_.config());
   }
@@ -773,6 +775,7 @@ void registerRealtimeVoiceChangerStreamingBindings() {
       .function("reset", &RealtimeVoiceChangerWrapper::reset)
       .function("setConfig", &RealtimeVoiceChangerWrapper::setConfig)
       .function("setPodConfig", &RealtimeVoiceChangerWrapper::setPodConfig)
+      .function("config", &RealtimeVoiceChangerWrapper::config)
       .function("configJson", &RealtimeVoiceChangerWrapper::configJson)
       .function("latencySamples", &RealtimeVoiceChangerWrapper::latencySamples)
       .function("maxBlockSize", &RealtimeVoiceChangerWrapper::maxBlockSize)

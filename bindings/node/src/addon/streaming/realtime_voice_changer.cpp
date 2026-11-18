@@ -55,6 +55,7 @@ Napi::Object RealtimeVoiceChangerWrap::Init(Napi::Env env, Napi::Object exports)
           InstanceMethod<&RealtimeVoiceChangerWrap::Prepare>("prepare"),
           InstanceMethod<&RealtimeVoiceChangerWrap::Reset>("reset"),
           InstanceMethod<&RealtimeVoiceChangerWrap::SetConfig>("setConfig"),
+          InstanceMethod<&RealtimeVoiceChangerWrap::Config>("config"),
           InstanceMethod<&RealtimeVoiceChangerWrap::ConfigJson>("configJson"),
           InstanceMethod<&RealtimeVoiceChangerWrap::LatencySamples>("latencySamples"),
           InstanceMethod<&RealtimeVoiceChangerWrap::MaxBlockSize>("maxBlockSize"),
@@ -178,6 +179,109 @@ Napi::Value RealtimeVoiceChangerWrap::SetConfig(const Napi::CallbackInfo& info) 
   SONARE_NODE_TRY
   changer_->set_config(ConfigFromJs(info[0]));
   return env.Undefined();
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Object RealtimeVoiceChangerConfigObject(
+    Napi::Env env, const sonare::editing::voice_changer::RealtimeVoiceChangerConfig& config) {
+  namespace vc = sonare::editing::voice_changer;
+  Napi::Object out = Napi::Object::New(env);
+  const auto number = [&env](auto value) { return Napi::Number::New(env, value); };
+  const auto name = [&env](const char* value) { return Napi::String::New(env, value); };
+  const auto flag = [&env](bool value) { return Napi::Boolean::New(env, value); };
+  out.Set("inputGainDb", number(config.input_gain_db));
+  out.Set("outputGainDb", number(config.output_gain_db));
+  out.Set("wetMix", number(config.wet_mix));
+  out.Set("retunePitchSemitones", number(config.retune.semitones));
+  out.Set("retuneMix", number(config.retune.mix));
+  out.Set("retuneGrainSizeSamples", number(config.retune.grain_size));
+  out.Set("formantFactor", number(config.formant.factor));
+  out.Set("formantAmount", number(config.formant.amount));
+  out.Set("formantBody", number(config.formant.body));
+  out.Set("formantBrightness", number(config.formant.brightness));
+  out.Set("formantNasal", number(config.formant.nasal));
+  out.Set("formantMode", name(vc::formant_mode_name(config.formant_mode)));
+  out.Set("eqHighPassHz", number(config.eq.highpass_hz));
+  out.Set("eqBodyDb", number(config.eq.body_db));
+  out.Set("eqPresenceDb", number(config.eq.presence_db));
+  out.Set("eqAirDb", number(config.eq.air_db));
+  out.Set("gateThresholdDb", number(config.gate.threshold_db));
+  out.Set("gateAttackMs", number(config.gate.attack_ms));
+  out.Set("gateReleaseMs", number(config.gate.release_ms));
+  out.Set("gateRangeDb", number(config.gate.range_db));
+  out.Set("compressorThresholdDb", number(config.compressor.threshold_db));
+  out.Set("compressorRatio", number(config.compressor.ratio));
+  out.Set("compressorAttackMs", number(config.compressor.attack_ms));
+  out.Set("compressorReleaseMs", number(config.compressor.release_ms));
+  out.Set("compressorMakeupGainDb", number(config.compressor.makeup_gain_db));
+  out.Set("deesserFrequencyHz", number(config.deesser.frequency_hz));
+  out.Set("deesserThresholdDb", number(config.deesser.threshold_db));
+  out.Set("deesserRatio", number(config.deesser.ratio));
+  out.Set("deesserRangeDb", number(config.deesser.range_db));
+  out.Set("reverbMix", number(config.reverb.mix));
+  out.Set("reverbTimeMs", number(config.reverb.time_ms));
+  out.Set("reverbDamping", number(config.reverb.damping));
+  out.Set("reverbSeed", number(config.reverb.seed));
+  out.Set("limiterCeilingDb", number(config.limiter.ceiling_db));
+  out.Set("limiterReleaseMs", number(config.limiter.release_ms));
+  out.Set("limiterEnableIspLimiter", flag(config.limiter.enable_isp_limiter));
+  out.Set("limiterIspCeilingDbtp", number(config.limiter.isp_ceiling_dbtp));
+  // Enums are the lowerCamelCase spellings the flat-config parser reads.
+  static constexpr const char* kEngines[] = {"grain", "psola"};
+  static constexpr const char* kCorrectionModes[] = {"off", "auto", "robot"};
+  static constexpr const char* kScales[] = {"major", "naturalMinor", "chromatic"};
+  static constexpr const char* kCarrierSources[] = {"internal", "external"};
+  static constexpr const char* kCarrierWaves[] = {"saw", "pulse", "ensemble"};
+  static constexpr const char* kCharacters[] = {"none", "megaphone", "radio", "bbdChorus",
+                                                "strobo"};
+  static constexpr const char* kVariations[] = {"reverb", "echo", "tempoDelay", "dubEcho"};
+  static constexpr const char* kDivisions[] = {"quarter", "eighth", "dottedEighth", "sixteenth"};
+  static constexpr const char* kMidiReleases[] = {"hold", "input"};
+  const auto index = [](auto value) { return static_cast<std::size_t>(value); };
+  out.Set("voiceEngine", name(kEngines[index(config.voice_engine.engine)]));
+  out.Set("voiceEngineF0MinHz", number(config.voice_engine.f0_min_hz));
+  out.Set("pitchCorrectionMode", name(kCorrectionModes[index(config.pitch_correction.mode)]));
+  out.Set("pitchCorrectionAmount", number(config.pitch_correction.amount));
+  out.Set("pitchCorrectionSpeedMs", number(config.pitch_correction.speed_ms));
+  out.Set("pitchCorrectionKeyRoot", number(config.pitch_correction.key_root));
+  out.Set("pitchCorrectionScale", name(kScales[index(config.pitch_correction.scale)]));
+  out.Set("pitchCorrectionRobotOctave", number(config.pitch_correction.robot_octave));
+  out.Set("harmonyVoices", number(config.harmony.voices));
+  Napi::Array harmony_steps = Napi::Array::New(env, vc::kMaxHarmonyVoices);
+  for (uint32_t i = 0; i < static_cast<uint32_t>(vc::kMaxHarmonyVoices); ++i) {
+    harmony_steps.Set(i, number(config.harmony.steps[i]));
+  }
+  out.Set("harmonySteps", harmony_steps);
+  out.Set("harmonyLevel", number(config.harmony.level));
+  out.Set("harmonyLeadLevel", number(config.harmony.lead_level));
+  out.Set("harmonyDetuneCents", number(config.harmony.detune_cents));
+  out.Set("harmonyDelayMs", number(config.harmony.delay_ms));
+  out.Set("vocoderEnabled", flag(config.vocoder.enabled));
+  out.Set("vocoderBands", number(config.vocoder.bands));
+  out.Set("vocoderAttackMs", number(config.vocoder.attack_ms));
+  out.Set("vocoderReleaseMs", number(config.vocoder.release_ms));
+  out.Set("vocoderSibilance", number(config.vocoder.sibilance));
+  out.Set("vocoderCarrierSource", name(kCarrierSources[index(config.vocoder.carrier_source)]));
+  out.Set("vocoderCarrierWave", name(kCarrierWaves[index(config.vocoder.carrier_wave)]));
+  out.Set("vocoderEnsembleDetuneCents", number(config.vocoder.ensemble_detune_cents));
+  out.Set("vocoderLevel", number(config.vocoder.level));
+  out.Set("characterType", name(kCharacters[index(config.character.type)]));
+  out.Set("characterAmount", number(config.character.amount));
+  out.Set("characterTone", number(config.character.tone));
+  out.Set("reverbVariation", name(kVariations[index(config.reverb_variation.variation)]));
+  out.Set("reverbVariationDelayMs", number(config.reverb_variation.delay_ms));
+  out.Set("reverbVariationFeedback", number(config.reverb_variation.feedback));
+  out.Set("reverbVariationTempoBpm", number(config.reverb_variation.tempo_bpm));
+  out.Set("reverbVariationDivision", name(kDivisions[index(config.reverb_variation.division)]));
+  out.Set("midiRelease", name(kMidiReleases[index(config.midi.release)]));
+  return out;
+}
+
+Napi::Value RealtimeVoiceChangerWrap::Config(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  if (!EnsureAlive(env)) return env.Undefined();
+  return RealtimeVoiceChangerConfigObject(env, changer_->config());
   SONARE_NODE_CATCH(env)
 }
 

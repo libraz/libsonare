@@ -172,6 +172,7 @@ class RealtimeVoiceChangerWrap : public Napi::ObjectWrap<RealtimeVoiceChangerWra
   Napi::Value Prepare(const Napi::CallbackInfo& info);
   Napi::Value Reset(const Napi::CallbackInfo& info);
   Napi::Value SetConfig(const Napi::CallbackInfo& info);
+  Napi::Value Config(const Napi::CallbackInfo& info);
   Napi::Value ConfigJson(const Napi::CallbackInfo& info);
   Napi::Value LatencySamples(const Napi::CallbackInfo& info);
   Napi::Value MaxBlockSize(const Napi::CallbackInfo& info);
@@ -208,6 +209,10 @@ class RealtimeVoiceChangerWrap : public Napi::ObjectWrap<RealtimeVoiceChangerWra
   std::vector<float> planar_scratch_;
   std::vector<float*> planar_ptrs_;
 };
+
+/// @brief The flat camelCase record native setConfig accepts, so set(get()) is the identity.
+Napi::Object RealtimeVoiceChangerConfigObject(
+    Napi::Env env, const sonare::editing::voice_changer::RealtimeVoiceChangerConfig& config);
 
 Napi::Value RealtimeVoiceChangerPresetNames(const Napi::CallbackInfo& info);
 Napi::Value RealtimeVoiceChangerPresetJson(const Napi::CallbackInfo& info);
