@@ -624,6 +624,9 @@ def _payload_channel_violation(r: dict) -> str | None:
     return None
 
 
+_ERROR_CLASS_REASON = "the error class keeps its Sonare prefix"
+
+
 RULES: list[Rule] = [
     Rule(
         name="getters",
@@ -864,6 +867,72 @@ RULES: list[Rule] = [
                 f"python:Mixer.process_stereo({side}_channels)": "send the declarations and what they count"
                 for side in ("left", "right")
             },
+        },
+    ),
+    Rule(
+        name="type-names",
+        summary="public JS/Python type names carry no Sonare prefix, except the error class",
+        population=lambda r: (
+            r["surface"] in ("node", "wasm", "python") and r["kind"] in ("type", "class")
+        ),
+        violation=lambda r: (
+            "a public type drops the Sonare prefix" if r["name"].startswith("Sonare") else None
+        ),
+        exempt={
+            "node:SonareError": _ERROR_CLASS_REASON,
+            "wasm:SonareError": _ERROR_CLASS_REASON,
+            "python:SonareError": _ERROR_CLASS_REASON,
+            "python:SonareValueError": _ERROR_CLASS_REASON,
+        },
+        pending={
+            key: "drop the Sonare prefix from the worklet types"
+            for key in (
+                "wasm:SonareClipPageRequestRingBuffer",
+                "wasm:SonareClipPageRequestRingReadResult",
+                "wasm:SonareEngine",
+                "wasm:SonareEngineClipPageRequestMessage",
+                "wasm:SonareEngineOptions",
+                "wasm:SonareEngineSyncErrorMessage",
+                "wasm:SonareEngineTelemetryError",
+                "wasm:SonareEngineTelemetryRecord",
+                "wasm:SonareEngineTelemetryRingBuffer",
+                "wasm:SonareEngineTelemetryRingReadResult",
+                "wasm:SonareEngineTelemetryType",
+                "wasm:SonareEngineTransportFacade",
+                "wasm:SonareExternalMidiRingBuffer",
+                "wasm:SonareExternalMidiRingReadResult",
+                "wasm:SonareMeterRingBuffer",
+                "wasm:SonareMeterRingReadResult",
+                "wasm:SonareModuleHandle",
+                "wasm:SonarePlaybackNodeOptions",
+                "wasm:SonarePlaybackWorkletDiagnostics",
+                "wasm:SonarePlaybackWorkletProcessor",
+                "wasm:SonarePlaybackWorkletProcessorOptions",
+                "wasm:SonareRealtimeEngineNode",
+                "wasm:SonareRealtimeEngineNodeCapabilities",
+                "wasm:SonareRealtimeEngineNodeOptions",
+                "wasm:SonareRealtimeEngineWorkletProcessor",
+                "wasm:SonareRealtimeEngineWorkletProcessorOptions",
+                "wasm:SonareRealtimeVoiceChangerWorkletProcessor",
+                "wasm:SonareRealtimeVoiceChangerWorkletProcessorOptions",
+                "wasm:SonareRenderOfflineRequest",
+                "wasm:SonareRingCapacityOptions",
+                "wasm:SonareScopeRingBuffer",
+                "wasm:SonareScopeRingOptions",
+                "wasm:SonareScopeRingReadResult",
+                "wasm:SonareSpectrumRingBuffer",
+                "wasm:SonareSpectrumRingOptions",
+                "wasm:SonareSpectrumRingReadResult",
+                "wasm:SonareStreamAnalyzerNode",
+                "wasm:SonareStreamAnalyzerNodeOptions",
+                "wasm:SonareStreamAnalyzerWorkletProcessor",
+                "wasm:SonareStreamAnalyzerWorkletProcessorOptions",
+                "wasm:SonareWorkletMeterSnapshot",
+                "wasm:SonareWorkletProcessor",
+                "wasm:SonareWorkletProcessorOptions",
+                "wasm:SonareWorkletScopeSnapshot",
+                "wasm:SonareWorkletSpectrumSnapshot",
+            )
         },
     ),
 ]

@@ -582,6 +582,44 @@ class PayloadChannelsRule(unittest.TestCase):
         self.assertEqual([f.key for f in verdict.violations], ["python:Import.source_channels"])
 
 
+class TypeNamesRule(unittest.TestCase):
+    CLEAN = [
+        {"surface": "wasm", "kind": "type", "name": "Capabilities", "owner": "", "member": ""},
+        {"surface": "python", "kind": "class", "name": "Audio", "owner": "", "member": ""},
+    ]
+
+    def judge(self, records):
+        base = dataclasses.replace(
+            rule("type-names"),
+            pending={},
+            exempt={"wasm:SonareError": "the error class"},
+        )
+        return check.judge(base, records)
+
+    def test_clean_surface_passes(self) -> None:
+        planted_error = {
+            "surface": "wasm",
+            "kind": "class",
+            "name": "SonareError",
+            "owner": "",
+            "member": "",
+        }
+        verdict = self.judge([*self.CLEAN, planted_error])
+        self.assertEqual(verdict.read, 3)
+        self.assertFalse(verdict.failed)
+
+    def test_prefixed_type_is_named(self) -> None:
+        planted = {
+            "surface": "wasm",
+            "kind": "type",
+            "name": "SonareCapabilities",
+            "owner": "",
+            "member": "",
+        }
+        verdict = self.judge([*self.CLEAN, planted])
+        self.assertEqual([f.key for f in verdict.violations], ["wasm:SonareCapabilities"])
+
+
 class Framework(unittest.TestCase):
     def test_reading_nothing_fails(self) -> None:
         verdict = check.judge(rule("getters"), [])
