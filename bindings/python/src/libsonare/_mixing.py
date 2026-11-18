@@ -173,11 +173,12 @@ class Mixer:
     def scene_warnings(self) -> list[str]:
         """Non-fatal warnings captured when this mixer was built from scene JSON.
 
-        One entry per channel-strip insert that was handed param keys it does not
-        read (a likely typo, or a key meant for a different processor). The scene
-        still loaded; those keys simply took no effect. Empty when every key was
-        consumed. Use :func:`mastering_insert_param_names` to discover the keys an
-        insert accepts. An unknown scene key is not a warning: :meth:`from_scene_json`
+        One entry per channel-strip insert that was handed param keys no processor
+        reads (a likely typo, or a key meant for a different processor), and one per
+        send to a destination the scene does not declare. The scene still loaded;
+        those keys and sends simply took no effect. Empty when nothing was ignored.
+        Use :func:`mastering_insert_param_names` to discover the keys an insert
+        accepts. An unknown scene key is not a warning: :meth:`from_scene_json`
         raises ``SonareError`` (``INVALID_FORMAT``) naming its path.
         """
         return list(self._scene_warnings)
