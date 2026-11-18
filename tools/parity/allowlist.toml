@@ -237,15 +237,6 @@ node = [
   "mixer_add_strip_ex",
   "mastering_chain_with_progress",
   "mastering_chain_stereo_with_progress",
-  # Node folds these into a base free function via an extra parameter rather than
-  # exposing a separately-named function (Python/WASM expose them by name):
-  #   metering_vectorscope_decimated -> meteringVectorscope(left, right, sr, maxPoints)
-  #   metering_phase_scope_decimated -> meteringPhaseScope(left, right, sr, maxPoints)
-  # (metering_spectrum_frame IS exposed by name as meteringSpectrumFrame.)
-  # (decompose_with_init -> the base decompose() facade, which exposes the `init`
-  #  initialiser argument; credited by _ALIAS_COVERAGE in compare.py.)
-  "metering_phase_scope_decimated",
-  "metering_vectorscope_decimated",
   # Unified-analysis variants folded into the base facade `analyze` (the rich
   # result IS what analyze() returns, serialized via sonare_analyze_json) and
   # `analyzeWithProgress` (the progress-callback variant, which takes the same

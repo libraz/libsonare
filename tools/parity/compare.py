@@ -264,7 +264,10 @@ _ALIAS_COVERAGE = {
     "mastering_apply_pair_processor": ("mastering_pair_process",),
     "mastering_apply_pair_processor_ex": ("mastering_pair_process",),
     "mastering_apply_pair_processor_stereo": ("mastering_pair_process_stereo",),
-    "mastering_apply_pair_processor_stereo_ex": ("mastering_pair_process_stereo",),
+    "mastering_apply_pair_processor_stereo_ex": (
+        "mastering_pair_process_stereo",
+        "mastering_apply_pair_processor_stereo",
+    ),
     "mastering_analyze_pair": ("mastering_pair_analyze",),
     "mastering_analyze_pair_ex": ("mastering_pair_analyze",),
     "mastering_analyze_stereo": ("mastering_stereo_analyze",),
@@ -380,14 +383,22 @@ _ALIAS_COVERAGE = {
     # hand back a string, and every facade parses it into the params mapping
     # masteringPresetParams returns, so the `_json` spelling never appears there.
     "mastering_preset_params_json": ("mastering_preset_params",),
+    # The JS facades name the multichannel LUFS meters by layout, not storage.
+    "lufs_interleaved": ("lufs_multichannel",),
+    "lufs_series_interleaved": ("lufs_series_multichannel",),
+    # The JS scopes take maxPoints and call the decimated entry for every request.
+    "metering_vectorscope_decimated": ("metering_vectorscope",),
+    "metering_phase_scope_decimated": ("metering_phase_scope",),
+    # The JS facades parse the preset document and drop the _json suffix.
+    "mixing_scene_preset_json": ("mixing_scene_preset",),
     "mixing_assistant_source_class_names": ("mix_source_class_names",),
     "mixing_assistant_source_class_from_name": ("mix_source_class_from_name",),
     "master_audio_stereo_with_progress": ("master_audio_stereo",),
     # C cancellation is additive in `_ex` variants; every facade folds it into
     # the same progress-capable method rather than exposing a second spelling.
     "analyze_json_with_progress_ex": ("analyze_with_progress",),
-    "mastering_chain_with_progress_ex": ("mastering_chain",),
-    "mastering_chain_stereo_with_progress_ex": ("mastering_chain_stereo",),
+    "mastering_chain_with_progress_ex": ("mastering_chain", "master_audio"),
+    "mastering_chain_stereo_with_progress_ex": ("mastering_chain_stereo", "master_audio_stereo"),
     "master_audio_with_progress_ex": ("master_audio",),
     "master_audio_stereo_with_progress_ex": ("master_audio_stereo",),
     # The offline render's `finalize` flag is additive in the `_ex` variant;
