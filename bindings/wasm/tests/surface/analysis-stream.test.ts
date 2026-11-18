@@ -243,8 +243,9 @@ describe('stream analyzer surface', () => {
 
   it('returns band-major quantized frames that match the per-frame layout', () => {
     const audio = triad(1);
-    const bulk = analyzer({ computeChroma: true });
-    const single = analyzer({ computeChroma: true });
+    const nMels = 16;
+    const bulk = analyzer({ computeChroma: true, nMels });
+    const single = analyzer({ computeChroma: true, nMels });
     try {
       bulk.process(audio);
       single.process(audio);
@@ -252,14 +253,14 @@ describe('stream analyzer surface', () => {
       const n = u8.nFrames;
       expect(n).toBeGreaterThan(1);
       expect(u8.mel).toBeInstanceOf(Uint8Array);
-      expect(u8.mel?.length).toBe(u8.nMels * n);
+      expect(u8.mel?.length).toBe(nMels * n);
       expect(u8.timestampsSec.length).toBe(n);
       for (let f = 0; f < n; f++) {
         const one = single.readFramesU8(1);
-        for (let r = 0; r < u8.nMels; r++) {
+        for (let r = 0; r < nMels; r++) {
           expect(u8.mel?.[r * n + f]).toBe(one.mel?.[r]);
         }
-        for (let r = 0; r < u8.nChroma; r++) {
+        for (let r = 0; r < 12; r++) {
           expect(u8.chroma?.[r * n + f]).toBe(one.chroma?.[r]);
         }
       }
@@ -267,7 +268,7 @@ describe('stream analyzer surface', () => {
       expect(i16.chroma).toBeInstanceOf(Int16Array);
       expect(i16.chroma?.length).toBe(12 * i16.nFrames);
       for (const frames of [u8, i16]) {
-        for (const key of ['featureFlags', 'timestamps']) {
+        for (const key of ['featureFlags', 'timestamps', 'nMels', 'nChroma']) {
           expect(frames).not.toHaveProperty(key);
         }
       }

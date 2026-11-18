@@ -14632,6 +14632,42 @@ test = "bindings/node/tests/synth-patch.test.ts::describes each engine section"
 
 [[entry]]
 kind = "field"
+old = "StreamFramesU8.nMels"
+removed = true
+domain = "analysis"
+rule = "array-results"
+
+[[entry]]
+kind = "field"
+old = "StreamFramesU8.nChroma"
+removed = true
+domain = "analysis"
+rule = "array-results"
+
+[[entry]]
+kind = "field"
+old = "StreamFramesI16.nMels"
+removed = true
+domain = "analysis"
+rule = "array-results"
+
+[[entry]]
+kind = "field"
+old = "StreamFramesI16.nChroma"
+removed = true
+domain = "analysis"
+rule = "array-results"
+
+[[entry]]
+kind = "method"
+old = "StreamingEqualizer.setAutoGain"
+changed = "setAutoGain(options: { enabled: boolean }); a bare boolean is a TypeError"
+domain = "mastering"
+rule = "no-positional-bools"
+test = "bindings/node/tests/surface/mastering-streaming.test.ts::StreamingEqualizer.setAutoGain"
+
+[[entry]]
+kind = "field"
 old = "BuiltinSynthConfig.waveform"
 changed = "the waveform is a name; a number is refused with TypeError"
 domain = "project"

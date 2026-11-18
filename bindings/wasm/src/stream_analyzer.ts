@@ -113,15 +113,11 @@ function quantizedFrames<T extends Uint8Array | Int16Array>(
 ): StreamFramesU8 | StreamFramesI16 {
   const out: {
     nFrames: number;
-    nMels: number;
-    nChroma: number;
     timestampsSec: Float32Array;
     mel?: T;
     chroma?: T;
   } = {
     nFrames: native.nFrames,
-    nMels: native.nMels,
-    nChroma: native.nChroma,
     timestampsSec: native.timestampsSec,
   };
   if (native.featureFlags & FEATURE_MEL) {

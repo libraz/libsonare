@@ -1154,10 +1154,8 @@ describe('StreamAnalyzer', () => {
               value: FrameArray | { data: { length: number } },
             ): number | undefined =>
               value === undefined ? undefined : 'data' in value ? value.data.length : value.length;
-            if ('nMels' in frames) {
-              expect(frames.nMels).toBe(mask & 1 ? 8 : 0);
-              expect(frames.nChroma).toBe(mask & 2 ? 12 : 0);
-            }
+            expect(frames).not.toHaveProperty('nMels');
+            expect(frames).not.toHaveProperty('nChroma');
             expect(lengthOf(frames.mel)).toBe(mask & 1 ? 8 : undefined);
             expect(lengthOf(frames.chroma)).toBe(mask & 2 ? 12 : undefined);
             expect(lengthOf(frames.onsetStrength)).toBe(mask & 4 ? 1 : undefined);
@@ -1213,7 +1211,7 @@ describe('StreamAnalyzer', () => {
 
         // Omitting the config keeps the default ranges (no throw, same shape).
         const fallback = wide.readFramesU8(4);
-        expect(fallback.nMels).toBe(32);
+        expect(fallback.mel?.length).toBe(32 * fallback.nFrames);
       } finally {
         tight.destroy();
         wide.destroy();

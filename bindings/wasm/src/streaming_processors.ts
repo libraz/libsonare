@@ -14,6 +14,7 @@ import {
   assertIntegerValue,
   assertPositiveInteger,
   assertSampleRate,
+  requireBoolean,
   requireToken,
 } from './validation.js';
 
@@ -47,7 +48,9 @@ function eqPlacementToNative(fnName: string, value: unknown): { name: string; or
 
 /** One block of planar stereo audio: the left and right channels, equal in length. */
 export interface StereoBlock {
+  /** Left channel samples. */
   left: Float32Array;
+  /** Right channel samples, the same length as `left`. */
   right: Float32Array;
 }
 
@@ -418,11 +421,17 @@ export class StreamingEqualizer {
   }
 
   /**
-   * Enable or disable output auto-gain compensation. A single boolean that is
-   * the property the name states, so it stays a method.
+   * Enable or disable output auto-gain compensation.
+   *
+   * @throws TypeError when `options` is not an object or `enabled` is not a boolean
    */
-  setAutoGain(enabled: boolean): void {
-    this.eq.setAutoGain(enabled);
+  setAutoGain(options: { enabled: boolean }): void {
+    if (typeof options !== 'object' || options === null) {
+      throw new TypeError('StreamingEqualizer.setAutoGain: options must be an object');
+    }
+    this.eq.setAutoGain(
+      requireBoolean('StreamingEqualizer.setAutoGain', options.enabled, 'enabled'),
+    );
   }
 
   /** Set all-band EQ gain scale as a 0.0..2.0 multiplier. */

@@ -911,8 +911,8 @@ describe('StreamAnalyzer quantize-config override', () => {
         expect(bandCount(frames.chroma)).toBe(mask & 2 ? 12 : undefined);
         if (readType !== 0) {
           const quantized = frames as StreamFramesU8 | StreamFramesI16;
-          expect(quantized.nMels).toBe(mask & 1 ? 8 : 0);
-          expect(quantized.nChroma).toBe(mask & 2 ? 12 : 0);
+          expect(quantized).not.toHaveProperty('nMels');
+          expect(quantized).not.toHaveProperty('nChroma');
         }
         expect(frames.onsetStrength?.length).toBe(mask & 4 ? 1 : undefined);
         expect(frames.rmsEnergy?.length).toBe(1);
@@ -974,7 +974,7 @@ describe('StreamAnalyzer quantize-config override', () => {
 
     // Omitting the config keeps the default ranges (no throw, same shape).
     const fallback = wide.readFramesU8(4);
-    expect(fallback.nMels).toBe(32);
+    expect(fallback.mel?.length).toBe(32 * fallback.nFrames);
   });
 
   it('rejects malformed config geometry like the C ABI', () => {

@@ -2,12 +2,15 @@ import type { ChordQuality, Key, Matrix2D, PitchClass, WindowType } from './publ
 
 /** A detected chord change in the progression. */
 export interface StreamChordChange {
+  /** Chord root pitch class. */
   root: PitchClass;
+  /** Chord quality token. */
   quality: ChordQuality;
   /** Chord symbol (e.g. `C`, `C#m`), spelled as the batch analysis spells it. */
   name: string;
   /** Start of the chord in seconds. */
   startSec: number;
+  /** Chord detection confidence in `[0, 1]`. */
   confidence: number;
 }
 
@@ -20,7 +23,9 @@ export interface StreamBarChord {
    * index. In `votedPattern` it is the pattern position instead.
    */
   barIndex: number;
+  /** Chord root pitch class. */
   root: PitchClass;
+  /** Chord quality token. */
   quality: ChordQuality;
   /** Chord symbol, spelled as the batch analysis spells it. */
   name: string;
@@ -31,12 +36,15 @@ export interface StreamBarChord {
    * analysis frame grid. Unused in `votedPattern`.
    */
   startSec: number;
+  /** Chord detection confidence in `[0, 1]`. */
   confidence: number;
 }
 
 /** Pattern score for known chord progressions. */
 export interface StreamPatternScore {
+  /** Name of the known chord progression pattern. */
   name: string;
+  /** Match score in `[0, 1]`. */
   score: number;
 }
 
@@ -47,6 +55,7 @@ export interface StreamPatternScore {
 export interface StreamProgressiveEstimate {
   /** Tempo in BPM. */
   bpm?: number;
+  /** BPM confidence in `[0, 1]`; grows as more audio accumulates. */
   bpmConfidence?: number;
   /**
    * Tempo candidates the most recent BPM estimate chose from; 0 until an
@@ -54,22 +63,31 @@ export interface StreamProgressiveEstimate {
    * same name.
    */
   bpmCandidateCount: number;
+  /** Estimated key. */
   key?: Key;
   /** Current chord. */
   chord?: StreamChordChange;
+  /** Chord changes detected so far, including the current chord. */
   chordProgression: StreamChordChange[];
+  /** Chord per bar, beat-synchronized; empty until a bar is detected. */
   barChordProgression: StreamBarChord[];
   /** Index of the bar being played; absent until a bar is detected. */
   currentBar?: number;
   /** Bar length in seconds; absent until a bar is detected. */
   barDurationSec?: number;
+  /** Voted chord for each position of the repeating pattern. */
   votedPattern: StreamBarChord[];
+  /** Length of the repeating chord pattern in bars. */
   patternLength: number;
+  /** Name of the best-matching known progression pattern. */
   detectedPatternName?: string;
+  /** Match score of the best pattern in `[0, 1]`. */
   detectedPatternScore?: number;
+  /** Score of every known progression pattern. */
   allPatternScores: StreamPatternScore[];
   /** Seconds of audio the estimates have accumulated. */
   accumulatedSec: number;
+  /** Number of analysis frames the estimates were computed from. */
   usedFrames: number;
   /**
    * True when the key or BPM was re-estimated since the previous stats
@@ -81,13 +99,19 @@ export interface StreamProgressiveEstimate {
 
 /** Statistics and current state of the analyzer. */
 export interface StreamStats {
+  /** Frames produced so far. */
   totalFrames: number;
+  /** Input samples processed so far. */
   totalSamples: number;
   /** Duration of the audio processed so far, in seconds. */
   durationSec: number;
+  /** Frames produced but not yet read. */
   pendingFrames: number;
+  /** New frames dropped because `maxPendingFrames` unread frames were already pending. */
   droppedOutputFrames: number;
+  /** Chord changes dropped at the `maxProgressionEntries` cap. */
   droppedChordProgressionEntries: number;
+  /** Bar chords dropped at the `maxProgressionEntries` cap. */
   droppedBarProgressionEntries: number;
   /**
    * Blocks in which a non-finite input sample was replaced before it could
@@ -102,6 +126,7 @@ export interface StreamStats {
    * describes a segment rather than the analyzer.
    */
   nonFiniteDiscardBlocks: number;
+  /** Current progressive BPM, key and chord estimates. */
   estimate: StreamProgressiveEstimate;
 }
 
@@ -110,6 +135,7 @@ export interface StreamStats {
  * not computed; the chord arrays follow `computeChroma`.
  */
 export interface StreamFrames {
+  /** Number of frames in this read. */
   nFrames: number;
   /** Per-frame time in seconds. */
   timestampsSec: Float32Array;
@@ -121,14 +147,19 @@ export interface StreamFrames {
   mel?: Matrix2D;
   /** Chromagram: rows are chroma bins, cols are frames. */
   chroma?: Matrix2D;
+  /** Per-frame onset strength. */
   onsetStrength?: Float32Array;
+  /** Per-frame RMS energy. */
   rmsEnergy?: Float32Array;
+  /** Per-frame spectral centroid in Hz. */
   spectralCentroid?: Float32Array;
+  /** Per-frame spectral flatness. */
   spectralFlatness?: Float32Array;
   /** Pitch class of each frame's chord, or -1 where none was detected. */
   chordRoot?: Int32Array;
   /** Chord quality ordinal per frame; `CHORD_QUALITIES[ordinal]` is its token. */
   chordQuality?: Int32Array;
+  /** Per-frame chord confidence in `[0, 1]`. */
   chordConfidence?: Float32Array;
 }
 
@@ -153,35 +184,41 @@ export interface StreamQuantizeConfig {
 
 /** Frames quantized to uint8; a feature array is absent when not computed. */
 export interface StreamFramesU8 {
+  /** Number of frames in this read. */
   nFrames: number;
-  nMels: number;
-  nChroma: number;
   /** Per-frame time in seconds. */
   timestampsSec: Float32Array;
   /** Band-major `[nMels x nFrames]` mel in dB, quantized over `[melDbMin, melDbMax]`. */
   mel?: Uint8Array;
   /** Band-major `[nChroma x nFrames]` chroma. */
   chroma?: Uint8Array;
+  /** Per-frame onset strength, quantized to uint8. */
   onsetStrength?: Uint8Array;
+  /** Per-frame RMS energy, quantized to uint8. */
   rmsEnergy?: Uint8Array;
+  /** Per-frame spectral centroid, quantized to uint8 over `[0, centroidMax]`. */
   spectralCentroid?: Uint8Array;
+  /** Per-frame spectral flatness, quantized to uint8. */
   spectralFlatness?: Uint8Array;
 }
 
 /** Frames quantized to int16; a feature array is absent when not computed. */
 export interface StreamFramesI16 {
+  /** Number of frames in this read. */
   nFrames: number;
-  nMels: number;
-  nChroma: number;
   /** Per-frame time in seconds. */
   timestampsSec: Float32Array;
   /** Band-major `[nMels x nFrames]` mel in dB, quantized over `[melDbMin, melDbMax]`. */
   mel?: Int16Array;
   /** Band-major `[nChroma x nFrames]` chroma. */
   chroma?: Int16Array;
+  /** Per-frame onset strength, quantized to int16. */
   onsetStrength?: Int16Array;
+  /** Per-frame RMS energy, quantized to int16. */
   rmsEnergy?: Int16Array;
+  /** Per-frame spectral centroid, quantized to int16 over `[0, centroidMax]`. */
   spectralCentroid?: Int16Array;
+  /** Per-frame spectral flatness, quantized to int16. */
   spectralFlatness?: Int16Array;
 }
 
@@ -202,7 +239,9 @@ export interface StreamConfig {
    * `nFft / 2 + 1`.
    */
   nFft?: number;
+  /** Hop between frames in samples at the analysis rate. Default `512`. */
   hopLength?: number;
+  /** Number of mel bands. Default `128`. */
   nMels?: number;
   /** Lower edge of the mel band in Hz. */
   fminHz?: number;
@@ -210,17 +249,26 @@ export interface StreamConfig {
   fmaxHz?: number;
   /** A4 reference in Hz. Defaults to 440; must be within 220..880, the same range `setReferenceHz` accepts. */
   referenceHz?: number;
+  /** Compute the mel spectrogram. Default `true`. */
   computeMel?: boolean;
+  /** Compute the chromagram and chords. Default `true`. */
   computeChroma?: boolean;
+  /** Compute onset strength, which also feeds the BPM estimate. Default `true`. */
   computeOnset?: boolean;
+  /** Compute spectral features (centroid, flatness). Default `true`. */
   computeSpectral?: boolean;
+  /** Emit every Nth frame, for throttling. Default `1`. */
   emitEveryNFrames?: number;
+  /** Downsample factor for magnitude. Default `1`. */
   magnitudeDownsample?: number;
   /** Maximum unread frames; overflow drops the newly produced frame. */
   maxPendingFrames?: number;
   /** Maximum retained chord and bar progression entries; overflow drops oldest. */
   maxProgressionEntries?: number;
+  /** Seconds between key re-estimates. Default `5`. */
   keyUpdateIntervalSec?: number;
+  /** Seconds between BPM re-estimates. Default `10`. */
   bpmUpdateIntervalSec?: number;
+  /** Analysis window function. Default `'hann'`. */
   window?: WindowType;
 }

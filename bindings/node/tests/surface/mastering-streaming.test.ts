@@ -67,6 +67,34 @@ describe('StreamingEqualizerConfig.sampleRate', () => {
   });
 });
 
+describe('StreamingEqualizer.setAutoGain', () => {
+  it('takes an options object with a boolean enabled', () => {
+    const eq = new StreamingEqualizer({ sampleRate });
+    try {
+      eq.setAutoGain({ enabled: true });
+      expect(eq.processMono(tone(block)).length).toBe(block);
+      eq.setAutoGain({ enabled: false });
+      expect(eq.processMono(tone(block)).length).toBe(block);
+    } finally {
+      eq.destroy();
+    }
+  });
+
+  it.each([
+    ['a bare boolean', true],
+    ['a non-boolean enabled', { enabled: 1 }],
+    ['an omitted enabled', {}],
+    ['null', null],
+  ] as const)('refuses %s with a TypeError', (_name, value) => {
+    const eq = new StreamingEqualizer({ sampleRate });
+    try {
+      expect(errorOf(() => eq.setAutoGain(value as never))).toBeInstanceOf(TypeError);
+    } finally {
+      eq.destroy();
+    }
+  });
+});
+
 describe('StreamingMasteringChain.constructor', () => {
   it.each([
     ['no config', undefined, TypeError],
