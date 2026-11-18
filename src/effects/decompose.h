@@ -51,12 +51,12 @@ DecomposeResult decompose(const float* S, int n_features, int n_frames, int n_co
 
 /// @brief Options for @ref decompose_stems.
 struct DecomposeStemsConfig {
-  int n_components = 4;         ///< Number of NMF components (k).
-  int n_fft = 2048;             ///< STFT size.
-  int hop_length = 512;         ///< STFT hop.
-  int n_iter = 100;             ///< NMF multiplicative-update iterations.
-  float beta = 2.0f;            ///< Beta divergence: 2 = Frobenius, 1 = KL, 0 = IS.
-  std::string init = "random";  ///< NMF initialisation ("random" or "nndsvd").
+  int n_components = 4;                ///< Number of NMF components (k).
+  int n_fft = 2048;                    ///< STFT size.
+  int hop_length = 512;                ///< STFT hop.
+  int n_iter = 100;                    ///< NMF multiplicative-update iterations.
+  float beta = kDecomposeDefaultBeta;  ///< Beta divergence: 2 = Frobenius, 1 = KL, 0 = IS.
+  std::string init = "random";         ///< NMF initialisation ("random" or "nndsvd").
   /// Soft-mask exponent. 1 keeps the magnitude ratio; 2 is the Wiener-style
   /// power ratio, which separates more aggressively at the cost of more
   /// artefacts on overlapping partials. Values below 1 are rejected.
