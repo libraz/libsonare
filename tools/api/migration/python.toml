@@ -8748,7 +8748,7 @@ test = "bindings/python/tests/test_mapping_keys.py::test_project_mappings_take_o
 [[entry]]
 kind = "option"
 old = "Project.annotate_chords(chords)"
-changed = "a chord mapping takes start_ppq, end_ppq, root_pc, quality, extensions, slash_bass_pc, roman_numeral and modulation_boundary only; any other key raises SonareValueError naming it instead of being ignored. quality is a ProjectChordQuality token (absent or None is 'unknown'); an ordinal is TypeError"
+changed = "a chord mapping takes start_ppq, end_ppq, root_pc, quality, extensions, slash_bass_pc, roman_numeral and modulation_boundary only; any other key raises SonareValueError naming it instead of being ignored. quality is a ProjectChordQuality token (absent or None is 'unknown'); an ordinal is TypeError. An unknown root_pc and a missing slash_bass_pc are absent or None (the 255 default is gone); 255 or any value outside 0..11 raises SonareValueError naming the field"
 domain = "project"
 rule = "snake-case-only"
 test = "bindings/python/tests/test_mapping_keys.py::test_project_mappings_take_one_spelling"
@@ -9194,7 +9194,7 @@ test = "bindings/python/tests/test_engine_midi.py::test_a_cc_binding_mapping_is_
 [[entry]]
 kind = "option"
 old = "Project.annotate_keys(keys)"
-changed = "each key is a mapping with start_ppq, end_ppq, optional tonic_pc and optional mode (a tuple is TypeError); mode is a ProjectKeyMode token ('unknown', 'major', 'minor', 'dorian', 'phrygian', 'lydian', 'mixolydian', 'locrian') instead of an ordinal, and absent or None is 'unknown'"
+changed = "each key is a mapping with start_ppq, end_ppq, optional tonic_pc and optional mode (a tuple is TypeError); mode is a ProjectKeyMode token ('unknown', 'major', 'minor', 'dorian', 'phrygian', 'lydian', 'mixolydian', 'locrian') instead of an ordinal, and absent or None is 'unknown'; an unknown tonic_pc is absent or None, and 255 or any value outside 0..11 raises SonareValueError naming the field"
 domain = "project"
 rule = "one-input-form"
 test = "bindings/python/tests/test_chord_annotation.py::test_a_key_segment_tuple_is_a_type_error"
@@ -10273,3 +10273,11 @@ old = "Project.assist_sidecar_count"
 removed = "len(project.assist_sidecars())"
 domain = "project"
 rule = "collections"
+
+[[entry]]
+kind = "option"
+old = "Project.midi_route_events(config)"
+changed = "filter_group, filter_channel and remap_channel are 0..15, absent or None for any / no remap; -1 and any other value outside 0..15 raise SonareValueError naming the key"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_project_midi.py::test_midi_route_absent_filters_mean_any_and_a_negative_is_refused"
