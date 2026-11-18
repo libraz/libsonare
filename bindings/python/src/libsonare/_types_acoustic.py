@@ -12,10 +12,10 @@ from typing import TYPE_CHECKING, Literal, NotRequired, TypedDict
 if TYPE_CHECKING:
     import numpy as np
 
-#: Names accepted for ``material_preset`` (the ``SONARE_MATERIAL_PRESET_*`` values).
 MaterialPresetName = Literal["none", "concrete", "wood", "curtain", "carpet", "glass"]
-#: Names accepted for the room-estimate ``mode`` (the ``SONARE_ACOUSTIC_MODE_*`` values).
+"""Names accepted for ``material_preset`` (the ``SONARE_MATERIAL_PRESET_*`` values)."""
 AcousticModeName = Literal["auto", "blind", "impulseResponse"]
+"""Names accepted for the room-estimate ``mode`` (the ``SONARE_ACOUSTIC_MODE_*`` values)."""
 
 
 @dataclass(frozen=True, slots=True, eq=False)

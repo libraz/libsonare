@@ -12,12 +12,13 @@ from typing import Any, TypeAlias
 
 from ._ffi import SONARE_OK, SonareCancelCallback
 
-#: ``(progress, stage)`` callable invoked during an offline operation, with
-#: ``progress`` in ``[0, 1]`` and the stage name. Its return value is ignored.
 ProgressCallback: TypeAlias = Callable[[float, str], object]
-#: Zero-argument callable polled by an offline operation; a true return value
-#: requests cancellation.
+"""``(progress, stage)`` callable invoked during an offline operation; ``progress`` in ``[0, 1]``.
+
+Its return value is ignored.
+"""
 CancelCallback: TypeAlias = Callable[[], bool]
+"""Zero-argument callable polled by an offline operation; true requests cancellation."""
 
 
 class CancellationState:

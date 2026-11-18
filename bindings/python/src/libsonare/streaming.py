@@ -125,14 +125,17 @@ class StreamAnalyzer:
         self._handle = handle
 
     def close(self) -> None:
+        """Release the native handle. Idempotent, so a double close is a no-op."""
         if self._handle is not None:
             _get_lib().sonare_stream_analyzer_destroy(self._handle)
             self._handle = None
 
     def __enter__(self) -> StreamAnalyzer:
+        """Return self so the object works as a context manager."""
         return self
 
     def __exit__(self, *_exc: object) -> None:
+        """Close on leaving the ``with`` block; never suppresses an exception."""
         self.close()
 
     def __del__(self) -> None:

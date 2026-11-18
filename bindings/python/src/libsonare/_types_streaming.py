@@ -255,6 +255,8 @@ class StreamBarChord:
 
 @dataclass(frozen=True, slots=True)
 class StreamPatternScore:
+    """Match score of one chord pattern in a streaming analysis."""
+
     name: str
     """Chord pattern name."""
     score: float

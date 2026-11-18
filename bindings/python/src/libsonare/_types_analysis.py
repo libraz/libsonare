@@ -51,10 +51,12 @@ class Key:
 
     @property
     def name(self) -> str:
+        """Key spelled out, e.g. ``"C major"``."""
         return f"{self.root} {self.mode}"
 
     @property
     def short_name(self) -> str:
+        """Compact key spelling: ``"C"`` for major, ``"Cm"`` for minor, the long form otherwise."""
         if self.mode == "major":
             return f"{self.root}"
         if self.mode == "minor":
@@ -326,6 +328,7 @@ class BpmCandidate:
 
 
 BpmCandidateRelation = Literal["primary", "half", "double", "other"]
+"""How a tempo candidate relates to the primary: the primary, half of it, double, or other."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -620,7 +623,6 @@ class TimbreResult:
     """Time-varying timbre metrics, one entry per analysis window."""
 
 
-#: Chord quality tokens, indexed by the C ``SonareChordQuality`` ordinal.
 CHORD_QUALITIES: tuple[str, ...] = (
     "major",
     "minor",
@@ -648,6 +650,7 @@ CHORD_QUALITIES: tuple[str, ...] = (
     "dominant7Flat9",
     "dominant7Sharp9",
 )
+"""Chord quality tokens, indexed by the C ``SonareChordQuality`` ordinal."""
 
 
 def _chord_symbol(root: object, quality: str, bass: object | None = None) -> str:
@@ -711,6 +714,7 @@ class Chord:
 
     @property
     def duration_sec(self) -> float:
+        """Chord length in seconds, ``end_sec - start_sec``."""
         return self.end_sec - self.start_sec
 
     @property
@@ -736,6 +740,7 @@ class AnalysisChord(Chord):
 
 
 ChordFunctionName = Literal["tonic", "subdominant", "dominant", "chromatic", "none"]
+"""Harmonic function of a chord relative to the key."""
 
 
 @dataclass(frozen=True, slots=True)

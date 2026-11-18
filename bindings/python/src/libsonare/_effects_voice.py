@@ -182,14 +182,17 @@ class RealtimeVoiceChanger:
         _check(rc)
 
     def close(self) -> None:
+        """Release the native handle. Idempotent, so a double close is a no-op."""
         if self._handle:
             self._lib.sonare_realtime_voice_changer_destroy(self._handle)
             self._handle = ctypes.c_void_p()
 
     def __enter__(self) -> RealtimeVoiceChanger:
+        """Return self so the object works as a context manager."""
         return self
 
     def __exit__(self, exc_type: object, exc: object, tb: object) -> None:
+        """Close on leaving the ``with`` block; never suppresses an exception."""
         self.close()
 
     def __del__(self) -> None:
@@ -200,10 +203,12 @@ class RealtimeVoiceChanger:
         return _require_open(self._handle, "RealtimeVoiceChanger")
 
     def reset(self) -> None:
+        """Clear the processing state. Raises ``SonareError`` (``InvalidState``) when closed."""
         rc = self._lib.sonare_realtime_voice_changer_reset(self._require_handle())
         _check(rc)
 
     def set_config(self, preset: str | Mapping[str, object]) -> None:
+        """Apply a preset name or config mapping. Raises ``SonareError`` when refused or closed."""
         rc = self._lib.sonare_realtime_voice_changer_set_config_json(
             self._require_handle(), _voice_config_to_json(preset)
         )
@@ -218,6 +223,7 @@ class RealtimeVoiceChanger:
 
     @property
     def latency_samples(self) -> int:
+        """Processing latency in samples."""
         out = ctypes.c_int()
         rc = self._lib.sonare_realtime_voice_changer_latency_samples(
             self._require_handle(), ctypes.byref(out)
@@ -590,6 +596,7 @@ def voice_change_realtime(
 
 
 def realtime_voice_changer_preset_names() -> list[str]:
+    """Return the names of the built-in realtime voice-changer presets."""
     raw = _get_lib().sonare_realtime_voice_changer_preset_names()
     if not raw:
         return []
@@ -599,6 +606,7 @@ def realtime_voice_changer_preset_names() -> list[str]:
 
 
 def realtime_voice_changer_preset_json(name: str) -> str:
+    """Return the JSON text of the named preset. Raises ``SonareError`` for an unknown name."""
     lib = _get_lib()
     out = ctypes.c_char_p()
     rc = lib.sonare_realtime_voice_changer_preset_json(_utf8_arg(name, "name"), ctypes.byref(out))
@@ -611,6 +619,7 @@ def realtime_voice_changer_preset_json(name: str) -> str:
 
 
 def validate_realtime_voice_changer_preset_json(json_text: str) -> dict[str, object]:
+    """Validate a preset JSON text; return the verdict as a dict rather than raising."""
     lib = _get_lib()
     normalized = ctypes.c_char_p()
     error = ctypes.c_char_p()
@@ -1069,14 +1078,17 @@ class StreamingRetune:
         self._requested_grain_size = requested_grain_size
 
     def close(self) -> None:
+        """Release the native handle. Idempotent, so a double close is a no-op."""
         if self._handle:
             self._lib.sonare_streaming_retune_destroy(self._handle)
             self._handle = ctypes.c_void_p()
 
     def __enter__(self) -> StreamingRetune:
+        """Return self so the object works as a context manager."""
         return self
 
     def __exit__(self, exc_type: object, exc: object, tb: object) -> None:
+        """Close on leaving the ``with`` block; never suppresses an exception."""
         self.close()
 
     def __del__(self) -> None:

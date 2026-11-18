@@ -16,8 +16,11 @@ from functools import cache
 from typing import Any, Literal, TypeVar, Union, cast, get_args, get_origin, get_type_hints
 
 MasteringProcessorKind = Literal["realtime", "offline", "pair"]
+"""How a mastering processor runs: as a realtime insert, whole-file only, or on a pair of inputs."""
 MasteringChannelPolicy = Literal["multichannel", "stereoPairOnly", "perChannel", "passthrough"]
+"""How the mixer wraps a processor on a bus with more than two channels."""
 MasteringPresetKind = Literal["mastering", "restoration"]
+"""Which preset family a mastering preset belongs to."""
 MasteringInsertParamUnit = Literal[
     "dB",
     "dBFS",
@@ -44,8 +47,11 @@ MasteringInsertParamUnit = Literal[
     "midiNote",
     "none",
 ]
+"""Unit of a mastering insert parameter value."""
 MasteringInsertParamScale = Literal["linear", "log"]
+"""Axis a control draws a mastering insert parameter on."""
 MasteringInsertParamRelation = Literal["lt", "le", "gt", "ge"]
+"""Ordering of a parameter against a sibling: less than, at most, greater than or at least."""
 
 
 @dataclass(frozen=True)
@@ -332,6 +338,7 @@ MasteringProcessorCategory = Literal[
     "utility",
     "voice",
 ]
+"""Grouping of a mastering processor for a picker."""
 
 
 @dataclass(frozen=True)

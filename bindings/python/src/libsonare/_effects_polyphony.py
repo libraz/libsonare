@@ -359,9 +359,11 @@ class PolyphonicAnalysis:
             self._handle = None
 
     def __enter__(self) -> PolyphonicAnalysis:
+        """Return self so the object works as a context manager."""
         return self
 
     def __exit__(self, *_exc: object) -> None:
+        """Close on leaving the ``with`` block; never suppresses an exception."""
         self.close()
 
     def __del__(self) -> None:
