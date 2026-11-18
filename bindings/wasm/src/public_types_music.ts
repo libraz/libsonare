@@ -153,7 +153,7 @@ export interface KeyDetection extends Key {
 export interface KeyDetectionOptions extends ValidateOptions {
   /** Analysis window in samples at 22050 Hz, rescaled to the input rate. Default `2048`. */
   nFft?: number;
-  /** Hop length in samples of the input buffer. Default `512`. */
+  /** Hop in samples of the analysed signal: the input resampled to 22050 Hz when its rate is above 22050 Hz, the input itself otherwise. Default `512`. */
   hopLength?: number;
   /** Separate the harmonic part before the chroma. Default `false`. */
   useHpss?: boolean;
@@ -199,7 +199,7 @@ export interface ChordDetectionOptions extends ValidateOptions {
   useTriadsOnly?: boolean;
   /** STFT chroma window in samples at 22050 Hz, rescaled to the input rate so its duration is the same at every rate. */
   nFft?: number;
-  /** Hop length in samples of the input buffer. Default `512`. */
+  /** Hop in samples of the caller's buffer, at the sample rate. Default `512`. */
   hopLength?: number;
   /** Detect chords on beat boundaries. Default `true`. */
   useBeatSync?: boolean;
@@ -260,7 +260,7 @@ export interface AnalyzeRhythmOptions extends ValidateOptions {
 export interface AnalyzeDynamicsOptions extends ValidateOptions {
   /** Loudness-curve window length in seconds. Default 0.4. */
   windowSec?: number;
-  /** Hop length for the loudness curve. Default 512. */
+  /** Hop in samples of the caller's buffer, at the sample rate. Default 512. */
   hopLength?: number;
   /** Crest-factor (dB) below which the signal is flagged as compressed. Default 6. */
   compressionThresholdDb?: number;
@@ -282,9 +282,9 @@ export interface AnalyzeTimbreOptions extends ValidateOptions {
 
 /** Options for `analyzeSections`. All fields are optional. */
 export interface AnalyzeSectionsOptions extends ValidateOptions {
-  /** FFT size. Default 2048. */
+  /** Analysis window in samples at 22050 Hz, rescaled to the analysis rate. Default 2048. */
   nFft?: number;
-  /** Hop length. Default 512. */
+  /** Hop in samples of the analysed signal: the input resampled to 22050 Hz when its rate is above 22050 Hz, the input itself otherwise. Default 512. */
   hopLength?: number;
   /** Minimum section duration in seconds. Default 4. */
   minSectionSec?: number;
@@ -439,9 +439,9 @@ export interface Section {
 
 /** Options for `detectBoundaries`. All fields are optional. */
 export interface BoundaryOptions extends ValidateOptions {
-  /** FFT size used for the structural features. Default 2048. */
+  /** Analysis window in samples at 22050 Hz, rescaled to the analysis rate. Default 2048. */
   nFft?: number;
-  /** Hop length in samples. Default 512. */
+  /** Hop in samples of the analysed signal: the input resampled to 22050 Hz when its rate is above 22050 Hz, the input itself otherwise. Default 512. */
   hopLength?: number;
   /** Checkerboard kernel size in frames. Default 64. */
   kernelSize?: number;
