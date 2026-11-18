@@ -931,17 +931,35 @@ def _wrong_unit(name: str) -> str | None:
     return None
 
 
+# A peak or ceiling whose doc says it is a true peak is the same quantity under another name.
+_TRUE_PEAK_DOC = re.compile(r"true[- ]peak|dbtp", re.IGNORECASE)
+
+
+def _peak_in_db(name: str) -> bool:
+    words = snake(name).split("_")
+    unit = next((w for w in reversed(words) if w in _QUANTITY_WORDS), None)
+    return bool({"peak", "ceiling"} & set(words)) and unit == "db"
+
+
 def chk_wrong_unit(ctx):
     cands, bad = 0, []
     for r in recs(ctx, ALL, ("option", "field", "flag", "function", "method")):
         if ctx.mirror(r) or (r["kind"] == "flag" and r.get("boolean")) or not _numeric_type(r):
             continue
         name = bare(r)
-        if not any(q in snake(name) for q, _ in _LOUDNESS_UNITS):
-            continue
-        cands += 1
-        if (msg := _wrong_unit(name)) is not None:
-            bad.append((r, msg))
+        if any(q in snake(name) for q, _ in _LOUDNESS_UNITS):
+            cands += 1
+            if (msg := _wrong_unit(name)) is not None:
+                bad.append((r, msg))
+        elif _peak_in_db(name):
+            cands += 1
+            if _TRUE_PEAK_DOC.search(r.get("doc_text", "")):
+                bad.append(
+                    (
+                        r,
+                        "its doc describes a true peak, which is measured in dbtp; name it ..._dbtp, not ..._db",
+                    )
+                )
     return cands, bad
 
 

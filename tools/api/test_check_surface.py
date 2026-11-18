@@ -1041,6 +1041,26 @@ class WrongUnit(CheckerCase):
         want = sorted(f"{s} {k} {n}" for (s, k, n, _), flag in cases.items() if flag)
         self.assertEqual(bad, want)
 
+    def test_a_peak_or_ceiling_documented_as_true_peak_takes_dbtp(self):
+        cases = {
+            ("node", "A.loudnessStaticGainPeakDb", "True peak (dBFS) of the stage input."): True,
+            ("node", "A.ceilingDb", "Limiter ceiling in dBTP."): True,
+            ("python", "A.ceiling_db", "Ceiling of the true-peak limiter, in dB."): True,
+            ("node", "A.peakDb", "Sample peak in dBFS."): False,
+            ("node", "A.ceilingDbtp", "Limiter ceiling in dBTP."): False,
+            ("node", "A.makeupGainDb", "Gain applied before the true-peak limiter, in dB."): False,
+            ("node", "A.peakHoldMs", "Hold time of the true-peak readout."): False,
+        }
+        recs = [
+            _rec(s, "field", n, owner="A", member=n.split(".")[1], type="number", doc_text=doc)
+            for s, n, doc in cases
+        ]
+        self.add(*recs)
+        _, lines = self.run_check("--check", "unit-in-name:wrong-unit")
+        bad = sorted(x.strip().split(":")[0] for x in lines if "measured in" in x)
+        want = sorted(f"{s} field {n}" for (s, n, _), flag in cases.items() if flag)
+        self.assertEqual(bad, want)
+
 
 class CEnumFields(CheckerCase):
     def enum(self, name, *values):
