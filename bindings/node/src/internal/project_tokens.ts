@@ -6,8 +6,6 @@
 import { ErrorCode, SonareError } from '../errors.js';
 import type {
   ProjectChordQuality,
-  ProjectDiagnosticCode,
-  ProjectDiagnosticSeverity,
   ProjectFadeCurve,
   ProjectKeyMode,
   ProjectLoopMode,
@@ -74,35 +72,6 @@ export const MARKER_KIND = {
   cuePoint: 3,
   keySignature: 4,
 } as const satisfies Record<ProjectMarkerKind, number>;
-
-/** Severity ordinals of `SonareProjectDiagnostic` (0 error, 1 warning). */
-export const DIAGNOSTIC_SEVERITY = { error: 0, warning: 1 } as const satisfies Record<
-  ProjectDiagnosticSeverity,
-  number
->;
-
-/** `arrangement::Diagnostic::Code` ordinals. */
-export const DIAGNOSTIC_CODE = {
-  ok: 0,
-  danglingSourceRef: 1,
-  clipOverlap: 2,
-  invalidTempo: 3,
-  invalidPpq: 4,
-  unsupportedGraph: 5,
-  unsupportedMixing: 6,
-  emptyAudioSource: 7,
-  invalidSampleRate: 8,
-  sourceKindMismatch: 9,
-  midiClipNoInstrument: 10,
-  raggedAudioSource: 11,
-  loopCrossfadeUnavailable: 12,
-  sharedChannelStrip: 13,
-  automationLaneConflict: 14,
-  invalidAutomationTargetKind: 15,
-  automationLaneCapacity: 16,
-  reservedAutomationRouteConflict: 17,
-  automationTargetUnrouted: 18,
-} as const satisfies Record<ProjectDiagnosticCode, number>;
 
 /** Key-annotation mode ordinals (0 unknown, then the seven modes). */
 export const KEY_MODE = {

@@ -6,8 +6,6 @@ import { setTimelineHandle } from './internal/project_handles.js';
 import {
   AUTOMATION_TARGET_KIND,
   CHORD_QUALITY,
-  DIAGNOSTIC_CODE,
-  DIAGNOSTIC_SEVERITY,
   FADE_CURVE,
   KEY_MODE,
   LOOP_MODE,
@@ -264,14 +262,14 @@ function planarBounce(raw: NativeBounce, sampleRate: number): ProjectBounceResul
 
 function diagnosticsFromNative(raw: unknown): ProjectDiagnostic[] {
   const list = raw as Array<{
-    code: number;
-    severity: number;
+    code: ProjectDiagnostic['code'];
+    severity: ProjectDiagnostic['severity'];
     targetId: number;
     message: string;
   }>;
   return list.map((d) => ({
-    code: tokenName(DIAGNOSTIC_CODE, d.code, 'diagnostic code'),
-    severity: tokenName(DIAGNOSTIC_SEVERITY, d.severity, 'diagnostic severity'),
+    code: d.code,
+    severity: d.severity,
     ...(d.targetId === 0 ? {} : { targetId: d.targetId }),
     message: d.message,
   }));

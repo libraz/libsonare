@@ -127,10 +127,10 @@ export function projectTimelineNativeId(owner: unknown): number | undefined {
   return native?.id;
 }
 
-/** One diagnostic as the embind layer returns it: ordinals, with `0` for "no target". */
+/** One diagnostic as the embind layer returns it: the library's tokens, with `0` for "no target". */
 export interface NativeProjectDiagnostic {
-  code: number;
-  severity: number;
+  code: ProjectDiagnosticCode;
+  severity: 'error' | 'warning';
   targetId: number;
   message: string;
 }
@@ -768,27 +768,6 @@ const CHORD_QUALITY_CODES = {
   halfDiminished: 6,
   suspended: 7,
 } as const satisfies Record<ProjectChordQuality, number>;
-const DIAGNOSTIC_CODES = {
-  ok: 0,
-  danglingSourceRef: 1,
-  clipOverlap: 2,
-  invalidTempo: 3,
-  invalidPpq: 4,
-  unsupportedGraph: 5,
-  unsupportedMixing: 6,
-  emptyAudioSource: 7,
-  invalidSampleRate: 8,
-  sourceKindMismatch: 9,
-  midiClipNoInstrument: 10,
-  raggedAudioSource: 11,
-  loopCrossfadeUnavailable: 12,
-  sharedChannelStrip: 13,
-  automationLaneConflict: 14,
-  invalidAutomationTargetKind: 15,
-  automationLaneCapacity: 16,
-  reservedAutomationRouteConflict: 17,
-  automationTargetUnrouted: 18,
-} as const satisfies Record<ProjectDiagnosticCode, number>;
 
 /**
  * A closed-set token to its native ordinal. A non-string is a `TypeError` (an
@@ -957,11 +936,11 @@ export function projectStemLayoutValue(fnName: string, layout: unknown): number 
   return tokenCode(fnName, 'stems[].layout', layout, STEM_LAYOUTS);
 }
 
-/** One native diagnostic as the typed record: tokens for code and severity, no target when `0`. */
+/** One native diagnostic as the typed record, with no target when `0`. */
 export function projectDiagnosticFromNative(native: NativeProjectDiagnostic): ProjectDiagnostic {
   const diagnostic = {
-    code: tokenName(DIAGNOSTIC_CODES, native.code, 'diagnostic code'),
-    severity: native.severity === 0 ? ('error' as const) : ('warning' as const),
+    code: native.code,
+    severity: native.severity,
     message: native.message,
   };
   return native.targetId === 0 ? diagnostic : { ...diagnostic, targetId: native.targetId };
