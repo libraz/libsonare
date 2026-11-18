@@ -366,7 +366,7 @@ export const ROWS: Row[] = [
       kernelHarmonic: 17,
       kernelPercussive: 17,
       nFft: 1024,
-      hopLength: 256,
+      hopLength: 128,
       hardMask: true,
     },
     invalid: { nFft: 0 },

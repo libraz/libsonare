@@ -1,5 +1,6 @@
 import { assertMatrix2D, toMatrix2D } from './internal/feature_matrix.js';
 import { resolveIntegerOption, resolvePositiveIntegerOption } from './internal/feature_options.js';
+import { quarterHop } from './internal/fft_options.js';
 import { addon } from './native.js';
 import type { Matrix2D } from './types.js';
 import type { OptionsOf, ValidateOptions } from './validation.js';
@@ -271,7 +272,7 @@ export function melToAudio(...args: unknown[]): Float32Array {
     'melToAudio',
     'hopLength',
     r.hopLength,
-    inverseHopDefault(nFft),
+    quarterHop(nFft),
   );
   const nIter = resolveIntegerOption('melToAudio', 'nIter', r.nIter, 32);
   const fminHz = r.fminHz ?? 0;
@@ -293,11 +294,6 @@ export function melToAudio(...args: unknown[]): Float32Array {
     nIter,
     r.htk ?? false,
   );
-}
-
-/** The hop an inverse takes when none is given: a quarter of the frame, never below one sample. */
-function inverseHopDefault(nFft: number): number {
-  return Math.max(1, Math.floor(nFft / 4));
 }
 
 /** A Griffin-Lim magnitude has `nFft / 2 + 1` rows, so an explicit size must agree with them. */
@@ -323,7 +319,7 @@ export function griffinLim(...args: unknown[]): Float32Array {
     'griffinLim',
     'hopLength',
     r.hopLength,
-    inverseHopDefault(nFft),
+    quarterHop(nFft),
   );
   const nIter = resolvePositiveIntegerOption('griffinLim', 'nIter', r.nIter, 32);
   return addon.griffinLim(
@@ -367,7 +363,7 @@ export function mfccToAudio(...args: unknown[]): Float32Array {
     'mfccToAudio',
     'hopLength',
     r.hopLength,
-    inverseHopDefault(nFft),
+    quarterHop(nFft),
   );
   const nIter = resolveIntegerOption('mfccToAudio', 'nIter', r.nIter, 32);
   const fminHz = r.fminHz ?? 0;

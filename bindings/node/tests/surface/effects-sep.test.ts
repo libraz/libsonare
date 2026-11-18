@@ -312,6 +312,20 @@ describe('effects separation: renamed and moved fields', () => {
     expect(caught(() => hpss(samples, sr, { hardMask: 1 } as never))).toBeInstanceOf(TypeError);
   });
 
+  it('derives an omitted hop as a quarter of nFft', () => {
+    const common = { samples, sampleRate: sr, nFft: 512 };
+    const calls: Array<[string, (hop?: number) => Float32Array]> = [
+      ['hpss', (hop) => hpss({ ...common, hopLength: hop }).harmonic],
+      ['hpssWithResidual', (hop) => hpssWithResidual({ ...common, hopLength: hop }).residual],
+      ['timeStretch', (hop) => sonare.timeStretch({ ...common, speedRatio: 1.25, hopLength: hop })],
+      ['pitchShift', (hop) => sonare.pitchShift({ ...common, pitchSemitones: 2, hopLength: hop })],
+    ];
+    for (const [name, call] of calls) {
+      expect(Array.from(call()), name).toEqual(Array.from(call(128)));
+      expect(Array.from(call()), name).not.toEqual(Array.from(call(256)));
+    }
+  });
+
   it('remix aligns cuts to zero crossings by default', () => {
     const intervals = [101, 3001];
     const byDefault = remix({ samples, sampleRate: sr, intervals });

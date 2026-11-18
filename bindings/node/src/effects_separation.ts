@@ -35,7 +35,7 @@ export interface HpssRequest extends ValidateOptions {
   kernelPercussive?: number;
   /** FFT size in samples. Default 2048. */
   nFft?: number;
-  /** Hop in samples. Default 512. */
+  /** Hop in samples. Default `nFft / 4`, rounded down. */
   hopLength?: number;
   /** Threshold the masks into binary ones instead of the soft split. Default `false`. */
   hardMask?: boolean;

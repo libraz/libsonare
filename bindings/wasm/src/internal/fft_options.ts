@@ -34,14 +34,27 @@ export function resolveFftOptions(
 
 /**
  * The same pair for an effect that resynthesizes audio: the symmetric Hann
- * synthesis window is all zeros at two points, so the smallest size is 4.
+ * synthesis window is all zeros at two points, so the smallest size is 4, and
+ * an omitted hop is a quarter of the size so overlap-add holds at any size.
  */
 export function resolveEffectFftOptions(
   fnName: string,
   nFft: unknown,
   hopLength: unknown,
 ): { nFft: number; hopLength: number } {
-  return resolveWithMinimum(fnName, nFft, hopLength, 4);
+  const size = nFft === undefined ? 2048 : nFft;
+  assertIntegerValue(fnName, size, 'nFft');
+  return resolveWithMinimum(
+    fnName,
+    size,
+    hopLength === undefined ? quarterHop(size) : hopLength,
+    4,
+  );
+}
+
+/** The hop a resynthesizing call takes when none is given: a quarter of the frame, never below one sample. */
+export function quarterHop(nFft: number): number {
+  return Math.max(1, Math.floor(nFft / 4));
 }
 
 /**
@@ -54,8 +67,12 @@ export function resolveInverseFftOptions(
   hopLength: unknown,
 ): { nFft: number; hopLength: number } {
   assertIntegerValue(fnName, nFft, 'nFft');
-  const hop = hopLength === undefined ? Math.max(1, Math.floor(nFft / 4)) : hopLength;
-  return resolveWithMinimum(fnName, nFft, hop, 2);
+  return resolveWithMinimum(
+    fnName,
+    nFft,
+    hopLength === undefined ? quarterHop(nFft) : hopLength,
+    2,
+  );
 }
 
 function resolveWithMinimum(

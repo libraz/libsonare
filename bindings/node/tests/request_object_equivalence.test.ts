@@ -654,7 +654,7 @@ const ROWS: Row[] = [
         kernelHarmonic: 17,
         kernelPercussive: 17,
         nFft: 1024,
-        hopLength: 256,
+        hopLength: 128,
         hardMask: true,
       },
     },
@@ -671,7 +671,7 @@ const ROWS: Row[] = [
         kernelHarmonic: 17,
         kernelPercussive: 17,
         nFft: 1024,
-        hopLength: 256,
+        hopLength: 128,
         hardMask: true,
       },
     },
@@ -759,7 +759,7 @@ const ROWS: Row[] = [
     values: {
       samples: SIG,
       sampleRate: SR,
-      options: { speedRatio: 1.25, nFft: 1024, hopLength: 256 },
+      options: { speedRatio: 1.25, nFft: 1024, hopLength: 128 },
     },
     invalid: { speedRatio: 0 },
     oneOf: [
@@ -773,7 +773,7 @@ const ROWS: Row[] = [
     values: {
       samples: SIG,
       sampleRate: SR,
-      options: { pitchSemitones: 2, nFft: 1024, hopLength: 256 },
+      options: { pitchSemitones: 2, nFft: 1024, hopLength: 128 },
     },
     invalid: { sampleRate: 0 },
     oneOf: [
