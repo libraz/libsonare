@@ -1021,7 +1021,7 @@ summary = "Each public symbol carries a TSDoc, docstring or Doxygen comment stat
 [[rule]]
 slug = "config-keys"
 title = "Every JSON document uses camelCase keys"
-summary = "Every JSON document the library reads or writes uses camelCase keys, and a loader refuses an unknown key with `InvalidFormat` naming its path. The `playback-renderer-config` document uses camelCase keys (`lfeMixDb`, `nightMode`) and carries a required `version` of 2. Saving always writes version 2; a document without `version`, or containing a snake_case key, is refused with `InvalidFormat` naming the key."
+summary = "Every JSON document the library reads or writes uses camelCase keys, and a loader refuses an unknown key with `InvalidFormat` naming its path. The `playback-renderer-config` document uses camelCase keys (`lfeMixDb`, `nightMode`) and spelled-out speaker roles (`leftSurround`, `lfe`), and carries `version` 2: saving always writes it, an absent `version` reads as the current one, and any other value is refused. A snake_case key or an abbreviated role (`Ls`, `LFE`) is refused with `InvalidFormat` naming the current spelling."
 [[rule.example]]
 surface = "wasm"
 before = '''

@@ -15,4 +15,4 @@
 
 [[document]]
 type = "PlaybackRendererConfig"
-evidence = "schemas/playback-renderer-config.schema.json:5: the published schema, which gives null a meaning for distance_m, channel_map and program_lufs"
+evidence = "schemas/playback-renderer-config.schema.json:5: the published schema, which gives null a meaning for distanceM, channelMap and programLufs"

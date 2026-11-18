@@ -1350,19 +1350,6 @@ const VOCAL_CREATE_REQUEST_KEYS = keySet(
   'validate',
 );
 
-const PLAYBACK_RENDERER_CONFIG_KEYS = keySet(
-  'input',
-  'target',
-  'lfe_mix_db',
-  'upmix',
-  'dialogue_level_db',
-  'loudness',
-  'night_mode',
-  'room',
-  'head_tracking',
-  'output_limiter',
-);
-
 const SET_PART_RIG_REQUEST_KEYS = keySet('destinationId', 'part', 'mode', 'inserts');
 const RENDER_OFFLINE_REQUEST_KEYS = keySet('channels', 'blockSize', 'finalize', 'validate');
 const ENGINE_CONFIG_REQUEST_KEYS = keySet(
@@ -2094,8 +2081,6 @@ export const NESTED_REQUEST_KEYS = {
   midi2Program: { bank: keySet('msb', 'lsb') },
   midiBankProgram: { bank: keySet('msb', 'lsb') },
   configureCapture: { inputMonitor: CAPTURE_INPUT_MONITOR_KEYS, punch: CAPTURE_PUNCH_KEYS },
-  renderPlayback: { config: PLAYBACK_RENDERER_CONFIG_KEYS },
-  PlaybackRenderer: { config: PLAYBACK_RENDERER_CONFIG_KEYS },
   restoreVocalEditSession: { limits: VOCAL_SESSION_LIMITS_KEYS },
   createVocalEditSession: { limits: VOCAL_SESSION_LIMITS_KEYS },
 } as const;

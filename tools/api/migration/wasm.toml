@@ -28652,3 +28652,615 @@ new = "EngineSyncErrorMessage"
 domain = "engine"
 rule = "type-names"
 entry = "./worklet"
+
+[[entry]]
+kind = "field"
+old = "PlaybackBassManagementConfig.crossover_hz"
+new = "PlaybackBassManagementConfig.crossoverHz"
+domain = "engine"
+rule = "config-keys"
+
+[[entry]]
+kind = "field"
+old = "PlaybackBassManagementConfig.crossover_hz"
+new = "PlaybackBassManagementConfig.crossoverHz"
+domain = "engine"
+rule = "config-keys"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "PlaybackBassManagementConfig.lfe_gain_db"
+new = "PlaybackBassManagementConfig.lfeGainDb"
+domain = "engine"
+rule = "config-keys"
+
+[[entry]]
+kind = "field"
+old = "PlaybackBassManagementConfig.lfe_gain_db"
+new = "PlaybackBassManagementConfig.lfeGainDb"
+domain = "engine"
+rule = "config-keys"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "PlaybackDiagnostics.active_input_layout"
+new = "PlaybackDiagnostics.activeInputLayout"
+domain = "engine"
+rule = "config-keys"
+
+[[entry]]
+kind = "field"
+old = "PlaybackDiagnostics.active_input_layout"
+new = "PlaybackDiagnostics.activeInputLayout"
+domain = "engine"
+rule = "config-keys"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "PlaybackDiagnostics.hrtf_ignored"
+new = "PlaybackDiagnostics.hrtfIgnored"
+domain = "engine"
+rule = "config-keys"
+
+[[entry]]
+kind = "field"
+old = "PlaybackDiagnostics.hrtf_ignored"
+new = "PlaybackDiagnostics.hrtfIgnored"
+domain = "engine"
+rule = "config-keys"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "PlaybackDiagnostics.inactive_stages"
+new = "PlaybackDiagnostics.inactiveStages"
+domain = "engine"
+rule = "config-keys"
+
+[[entry]]
+kind = "field"
+old = "PlaybackDiagnostics.inactive_stages"
+new = "PlaybackDiagnostics.inactiveStages"
+domain = "engine"
+rule = "config-keys"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "PlaybackDiagnostics.layout_switches"
+new = "PlaybackDiagnostics.layoutSwitches"
+domain = "engine"
+rule = "config-keys"
+
+[[entry]]
+kind = "field"
+old = "PlaybackDiagnostics.layout_switches"
+new = "PlaybackDiagnostics.layoutSwitches"
+domain = "engine"
+rule = "config-keys"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "PlaybackDiagnostics.limiter_gain_reduction_db"
+new = "PlaybackDiagnostics.limiterGainReductionDb"
+domain = "engine"
+rule = "config-keys"
+
+[[entry]]
+kind = "field"
+old = "PlaybackDiagnostics.limiter_gain_reduction_db"
+new = "PlaybackDiagnostics.limiterGainReductionDb"
+domain = "engine"
+rule = "config-keys"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "PlaybackDiagnostics.loudness_gain_clamped"
+new = "PlaybackDiagnostics.loudnessGainClamped"
+domain = "engine"
+rule = "config-keys"
+
+[[entry]]
+kind = "field"
+old = "PlaybackDiagnostics.loudness_gain_clamped"
+new = "PlaybackDiagnostics.loudnessGainClamped"
+domain = "engine"
+rule = "config-keys"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "PlaybackDiagnostics.loudness_gain_db"
+new = "PlaybackDiagnostics.loudnessGainDb"
+domain = "engine"
+rule = "config-keys"
+
+[[entry]]
+kind = "field"
+old = "PlaybackDiagnostics.loudness_gain_db"
+new = "PlaybackDiagnostics.loudnessGainDb"
+domain = "engine"
+rule = "config-keys"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "PlaybackDiagnostics.non_finite_discards"
+new = "PlaybackDiagnostics.nonFiniteDiscards"
+domain = "engine"
+rule = "config-keys"
+
+[[entry]]
+kind = "field"
+old = "PlaybackDiagnostics.non_finite_discards"
+new = "PlaybackDiagnostics.nonFiniteDiscards"
+domain = "engine"
+rule = "config-keys"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "PlaybackDiagnostics.truncated_drains"
+new = "PlaybackDiagnostics.truncatedDrains"
+domain = "engine"
+rule = "config-keys"
+
+[[entry]]
+kind = "field"
+old = "PlaybackDiagnostics.truncated_drains"
+new = "PlaybackDiagnostics.truncatedDrains"
+domain = "engine"
+rule = "config-keys"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "PlaybackInputConfig.channel_map"
+new = "PlaybackInputConfig.channelMap"
+domain = "engine"
+rule = "config-keys"
+
+[[entry]]
+kind = "field"
+old = "PlaybackInputConfig.channel_map"
+new = "PlaybackInputConfig.channelMap"
+domain = "engine"
+rule = "config-keys"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "PlaybackLoudnessConfig.program_lufs"
+new = "PlaybackLoudnessConfig.programLufs"
+domain = "engine"
+rule = "config-keys"
+
+[[entry]]
+kind = "field"
+old = "PlaybackLoudnessConfig.program_lufs"
+new = "PlaybackLoudnessConfig.programLufs"
+domain = "engine"
+rule = "config-keys"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "PlaybackLoudnessConfig.target_lufs"
+new = "PlaybackLoudnessConfig.targetLufs"
+domain = "engine"
+rule = "config-keys"
+
+[[entry]]
+kind = "field"
+old = "PlaybackLoudnessConfig.target_lufs"
+new = "PlaybackLoudnessConfig.targetLufs"
+domain = "engine"
+rule = "config-keys"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "PlaybackOutputLimiterConfig.ceiling_db"
+new = "PlaybackOutputLimiterConfig.ceilingDbtp"
+domain = "engine"
+rule = "config-keys"
+
+[[entry]]
+kind = "field"
+old = "PlaybackOutputLimiterConfig.ceiling_db"
+new = "PlaybackOutputLimiterConfig.ceilingDbtp"
+domain = "engine"
+rule = "config-keys"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "PlaybackRendererConfig.dialogue_level_db"
+new = "PlaybackRendererConfig.dialogueLevelDb"
+domain = "engine"
+rule = "config-keys"
+
+[[entry]]
+kind = "field"
+old = "PlaybackRendererConfig.dialogue_level_db"
+new = "PlaybackRendererConfig.dialogueLevelDb"
+domain = "engine"
+rule = "config-keys"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "PlaybackRendererConfig.head_tracking"
+new = "PlaybackRendererConfig.headTracking"
+domain = "engine"
+rule = "config-keys"
+
+[[entry]]
+kind = "field"
+old = "PlaybackRendererConfig.head_tracking"
+new = "PlaybackRendererConfig.headTracking"
+domain = "engine"
+rule = "config-keys"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "PlaybackRendererConfig.lfe_mix_db"
+new = "PlaybackRendererConfig.lfeMixDb"
+domain = "engine"
+rule = "config-keys"
+
+[[entry]]
+kind = "field"
+old = "PlaybackRendererConfig.lfe_mix_db"
+new = "PlaybackRendererConfig.lfeMixDb"
+domain = "engine"
+rule = "config-keys"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "PlaybackRendererConfig.night_mode"
+new = "PlaybackRendererConfig.nightMode"
+domain = "engine"
+rule = "config-keys"
+
+[[entry]]
+kind = "field"
+old = "PlaybackRendererConfig.night_mode"
+new = "PlaybackRendererConfig.nightMode"
+domain = "engine"
+rule = "config-keys"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "PlaybackRendererConfig.output_limiter"
+new = "PlaybackRendererConfig.outputLimiter"
+domain = "engine"
+rule = "config-keys"
+
+[[entry]]
+kind = "field"
+old = "PlaybackRendererConfig.output_limiter"
+new = "PlaybackRendererConfig.outputLimiter"
+domain = "engine"
+rule = "config-keys"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "PlaybackRoomConfig.mix_db"
+new = "PlaybackRoomConfig.mixDb"
+domain = "engine"
+rule = "config-keys"
+
+[[entry]]
+kind = "field"
+old = "PlaybackRoomConfig.mix_db"
+new = "PlaybackRoomConfig.mixDb"
+domain = "engine"
+rule = "config-keys"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "PlaybackSpeakerConfig.distance_m"
+new = "PlaybackSpeakerConfig.distanceM"
+domain = "engine"
+rule = "config-keys"
+
+[[entry]]
+kind = "field"
+old = "PlaybackSpeakerConfig.distance_m"
+new = "PlaybackSpeakerConfig.distanceM"
+domain = "engine"
+rule = "config-keys"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "PlaybackSpeakerConfig.trim_db"
+new = "PlaybackSpeakerConfig.trimDb"
+domain = "engine"
+rule = "config-keys"
+
+[[entry]]
+kind = "field"
+old = "PlaybackSpeakerConfig.trim_db"
+new = "PlaybackSpeakerConfig.trimDb"
+domain = "engine"
+rule = "config-keys"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "PlaybackStageLatency.q8"
+removed = "read samples, which carries the fractional stage latency"
+domain = "engine"
+rule = "config-keys"
+
+[[entry]]
+kind = "field"
+old = "PlaybackStageLatency.q8"
+removed = "read samples, which carries the fractional stage latency"
+domain = "engine"
+rule = "config-keys"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "PlaybackTargetConfig.bass_management"
+new = "PlaybackTargetConfig.bassManagement"
+domain = "engine"
+rule = "config-keys"
+
+[[entry]]
+kind = "field"
+old = "PlaybackTargetConfig.bass_management"
+new = "PlaybackTargetConfig.bassManagement"
+domain = "engine"
+rule = "config-keys"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "PlaybackUpmixConfig.center_width"
+new = "PlaybackUpmixConfig.centerWidth"
+domain = "engine"
+rule = "config-keys"
+
+[[entry]]
+kind = "field"
+old = "PlaybackUpmixConfig.center_width"
+new = "PlaybackUpmixConfig.centerWidth"
+domain = "engine"
+rule = "config-keys"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "PlaybackUpmixConfig.front_ambience"
+new = "PlaybackUpmixConfig.frontAmbience"
+domain = "engine"
+rule = "config-keys"
+
+[[entry]]
+kind = "field"
+old = "PlaybackUpmixConfig.front_ambience"
+new = "PlaybackUpmixConfig.frontAmbience"
+domain = "engine"
+rule = "config-keys"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "PlaybackUpmixConfig.lfe_from_upmix"
+new = "PlaybackUpmixConfig.lfeFromUpmix"
+domain = "engine"
+rule = "config-keys"
+
+[[entry]]
+kind = "field"
+old = "PlaybackUpmixConfig.lfe_from_upmix"
+new = "PlaybackUpmixConfig.lfeFromUpmix"
+domain = "engine"
+rule = "config-keys"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "PlaybackChannelRole='C'"
+new = "PlaybackChannelRole='center'"
+domain = "engine"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "PlaybackChannelRole='C'"
+new = "PlaybackChannelRole='center'"
+domain = "engine"
+rule = "token-case"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "PlaybackChannelRole='L'"
+new = "PlaybackChannelRole='left'"
+domain = "engine"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "PlaybackChannelRole='L'"
+new = "PlaybackChannelRole='left'"
+domain = "engine"
+rule = "token-case"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "PlaybackChannelRole='LFE'"
+new = "PlaybackChannelRole='lfe'"
+domain = "engine"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "PlaybackChannelRole='LFE'"
+new = "PlaybackChannelRole='lfe'"
+domain = "engine"
+rule = "token-case"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "PlaybackChannelRole='Ls'"
+new = "PlaybackChannelRole='leftSurround'"
+domain = "engine"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "PlaybackChannelRole='Ls'"
+new = "PlaybackChannelRole='leftSurround'"
+domain = "engine"
+rule = "token-case"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "PlaybackChannelRole='Lss'"
+new = "PlaybackChannelRole='leftSideSurround'"
+domain = "engine"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "PlaybackChannelRole='Lss'"
+new = "PlaybackChannelRole='leftSideSurround'"
+domain = "engine"
+rule = "token-case"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "PlaybackChannelRole='R'"
+new = "PlaybackChannelRole='right'"
+domain = "engine"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "PlaybackChannelRole='R'"
+new = "PlaybackChannelRole='right'"
+domain = "engine"
+rule = "token-case"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "PlaybackChannelRole='Rs'"
+new = "PlaybackChannelRole='rightSurround'"
+domain = "engine"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "PlaybackChannelRole='Rs'"
+new = "PlaybackChannelRole='rightSurround'"
+domain = "engine"
+rule = "token-case"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "PlaybackChannelRole='Rss'"
+new = "PlaybackChannelRole='rightSideSurround'"
+domain = "engine"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "PlaybackChannelRole='Rss'"
+new = "PlaybackChannelRole='rightSideSurround'"
+domain = "engine"
+rule = "token-case"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "SonarePlaybackWorkletDiagnostics.active_input_layout"
+new = "SonarePlaybackWorkletProcessorDiagnostics.activeInputLayout"
+domain = "engine"
+rule = "config-keys"
+entry = "./worklet"
+
+[[entry]]
+kind = "field"
+old = "SonarePlaybackWorkletDiagnostics.hrtf_ignored"
+new = "SonarePlaybackWorkletProcessorDiagnostics.hrtfIgnored"
+domain = "engine"
+rule = "config-keys"
+entry = "./worklet"
+
+[[entry]]
+kind = "field"
+old = "SonarePlaybackWorkletDiagnostics.inactive_stages"
+new = "SonarePlaybackWorkletProcessorDiagnostics.inactiveStages"
+domain = "engine"
+rule = "config-keys"
+entry = "./worklet"
+
+[[entry]]
+kind = "field"
+old = "SonarePlaybackWorkletDiagnostics.layout_switches"
+new = "SonarePlaybackWorkletProcessorDiagnostics.layoutSwitches"
+domain = "engine"
+rule = "config-keys"
+entry = "./worklet"
+
+[[entry]]
+kind = "field"
+old = "SonarePlaybackWorkletDiagnostics.limiter_gain_reduction_db"
+new = "SonarePlaybackWorkletProcessorDiagnostics.limiterGainReductionDb"
+domain = "engine"
+rule = "config-keys"
+entry = "./worklet"
+
+[[entry]]
+kind = "field"
+old = "SonarePlaybackWorkletDiagnostics.loudness_gain_clamped"
+new = "SonarePlaybackWorkletProcessorDiagnostics.loudnessGainClamped"
+domain = "engine"
+rule = "config-keys"
+entry = "./worklet"
+
+[[entry]]
+kind = "field"
+old = "SonarePlaybackWorkletDiagnostics.loudness_gain_db"
+new = "SonarePlaybackWorkletProcessorDiagnostics.loudnessGainDb"
+domain = "engine"
+rule = "config-keys"
+entry = "./worklet"
+
+[[entry]]
+kind = "field"
+old = "SonarePlaybackWorkletDiagnostics.non_finite_discards"
+new = "SonarePlaybackWorkletProcessorDiagnostics.nonFiniteDiscards"
+domain = "engine"
+rule = "config-keys"
+entry = "./worklet"
+
+[[entry]]
+kind = "field"
+old = "SonarePlaybackWorkletDiagnostics.truncated_drains"
+new = "SonarePlaybackWorkletProcessorDiagnostics.truncatedDrains"
+domain = "engine"
+rule = "config-keys"
+entry = "./worklet"

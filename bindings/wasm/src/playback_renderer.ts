@@ -263,7 +263,7 @@ export class PlaybackRenderer {
 /**
  * Integrated-loudness meter for multichannel program material (BS.1770
  * channel weights by channel count: 1, 2, 6 or 8), for measuring
- * `loudness.program_lufs` ahead of a {@link PlaybackRenderer}.
+ * `loudness.programLufs` ahead of a {@link PlaybackRenderer}.
  */
 export class PlaybackLoudnessMeter {
   private nativeHandle: WasmPlaybackLoudnessMeter;

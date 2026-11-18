@@ -269,7 +269,6 @@ import type {
 import type { ChordFunctionsInput } from './public_types_music.js';
 import type {
   PlaybackLoudnessMeterOptions,
-  PlaybackRendererConfig,
   PlaybackRendererOptions,
   RenderPlaybackRequest,
 } from './public_types_playback.js';
@@ -2058,18 +2057,6 @@ const PlaybackLoudnessMeterOptionsKeys = keysOf<PlaybackLoudnessMeterOptions>()(
   'numChannels',
   'sampleRate',
 ]);
-const PlaybackRendererConfigKeys = keysOf<PlaybackRendererConfig>()([
-  'input',
-  'target',
-  'lfe_mix_db',
-  'upmix',
-  'dialogue_level_db',
-  'loudness',
-  'night_mode',
-  'room',
-  'head_tracking',
-  'output_limiter',
-]);
 const ResampleRequestKeys = keysOf<ResampleRequest>()([
   'samples',
   'sampleRate',
@@ -2900,10 +2887,7 @@ export const REQUEST_SHAPES = {
   pushMidiProgram: { keys: MidiBankRequestKeys },
   pushMidiInputProgram: { keys: MidiBankRequestKeys },
   Mixer: { keys: MixerConfigRequestKeys },
-  PlaybackRenderer: {
-    keys: PlaybackRendererOptionsKeys,
-    nested: { config: PlaybackRendererConfigKeys },
-  },
+  PlaybackRenderer: { keys: PlaybackRendererOptionsKeys },
   PlaybackLoudnessMeter: { keys: PlaybackLoudnessMeterOptionsKeys },
   ClipPageProvider: { keys: ClipPageProviderOptionsKeys },
   'Mixer.fromJson': { keys: MixerJsonOptionsRequestKeys },
@@ -3150,10 +3134,7 @@ export const REQUEST_SHAPES = {
   remixAlignedIntervals: { keys: RemixRequestKeys },
   renderNotes: { keys: RenderNotesRequestKeys },
   renderPercussiveEvents: { keys: RenderPercussiveEventsRequestKeys },
-  renderPlayback: {
-    keys: RenderPlaybackRequestKeys,
-    nested: { config: PlaybackRendererConfigKeys },
-  },
+  renderPlayback: { keys: RenderPlaybackRequestKeys },
   resample: { keys: ResampleRequestKeys },
   restoreVocalEditSession: {
     keys: VocalRestoreRequestKeys,
