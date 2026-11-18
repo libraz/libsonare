@@ -8054,3 +8054,35 @@ changed = "audio_channels is required for interleaved audio (1.x defaulted to 1)
 domain = "project"
 rule = "sample-rate-required"
 test = "bindings/python/tests/test_project.py::test_add_loop_recording_takes_requires_the_capture_format"
+
+[[entry]]
+kind = "option"
+old = "metering_vectorscope(max_points)"
+changed = "omitted (None) is full resolution; 0 or a negative raises SonareValueError (0 was the full-resolution sentinel)"
+domain = "mastering"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_stereo_and_spectrum.py::test_a_non_positive_max_points_is_refused"
+
+[[entry]]
+kind = "option"
+old = "metering_vectorscope_decimated(max_points)"
+changed = "omitted (None) is full resolution; 0 or a negative raises SonareValueError (0 was the full-resolution sentinel)"
+domain = "mastering"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_stereo_and_spectrum.py::test_a_non_positive_max_points_is_refused"
+
+[[entry]]
+kind = "option"
+old = "metering_phase_scope(max_points)"
+changed = "omitted (None) is full resolution; 0 or a negative raises SonareValueError (0 was the full-resolution sentinel)"
+domain = "mastering"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_stereo_and_spectrum.py::test_a_non_positive_max_points_is_refused"
+
+[[entry]]
+kind = "option"
+old = "metering_phase_scope_decimated(max_points)"
+changed = "omitted (None) is full resolution; 0 or a negative raises SonareValueError (0 was the full-resolution sentinel)"
+domain = "mastering"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_stereo_and_spectrum.py::test_a_non_positive_max_points_is_refused"

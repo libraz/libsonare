@@ -572,7 +572,7 @@ def _scope_point_columns(
     One shared implementation for every scope read-out, for the same reason the
     planar-channel and clip marshalling paths were each collapsed into one: the
     four entry points here were separate per-point attribute walks, and at the
-    ``max_points=0`` default that is one Python-level attribute access per input
+    omitted-``max_points`` default that is one Python-level attribute access per input
     sample per field. Every field of a scope point is a ``c_float`` and the
     struct carries no padding, so the array is a ``(count, len(fields))``
     float32 matrix and one buffer read replaces the walk.
@@ -595,18 +595,18 @@ def metering_vectorscope(
     left: Sequence[float] | list[float],
     right: Sequence[float] | list[float],
     sample_rate: int,
-    max_points: int = 0,
+    max_points: int | None = None,
     *,
     validate: bool = True,
 ) -> VectorscopeReport:
     """Mid/side point series for a (left, right) stereo pair.
 
-    By default emits one point per input sample. Pass ``max_points`` to
-    deterministically decimate the point cloud to a display size (matching the
-    Node/WASM ``meteringVectorscope`` shape); ``0`` (or a value >= the buffer
-    length) yields full resolution.
+    By default emits one point per input sample. Pass a positive ``max_points``
+    to deterministically decimate the point cloud to a display size (matching
+    the Node/WASM ``meteringVectorscope`` shape); a value >= the buffer length
+    yields full resolution, and 0 or a negative is refused.
     """
-    if max_points:
+    if max_points is not None:
         return metering_vectorscope_decimated(
             left, right, sample_rate, max_points, validate=validate
         )
@@ -641,16 +641,17 @@ def metering_vectorscope_decimated(
     left: Sequence[float] | list[float],
     right: Sequence[float] | list[float],
     sample_rate: int,
-    max_points: int = 0,
+    max_points: int | None = None,
     *,
     validate: bool = True,
 ) -> VectorscopeReport:
     """Display-sized mid/side vectorscope for a (left, right) stereo pair.
 
-    ``max_points`` upper-bounds the returned point count; pass 0 (or a value
-    >= the buffer length) for one point per sample (identical to
-    :func:`metering_vectorscope`). Otherwise the input is deterministically
-    decimated, keeping the largest-radius sample of each contiguous bucket.
+    ``max_points`` upper-bounds the returned point count; omit it (or pass a
+    value >= the buffer length) for one point per sample (identical to
+    :func:`metering_vectorscope`), and 0 or a negative is refused. Otherwise
+    the input is deterministically decimated, keeping the largest-radius
+    sample of each contiguous bucket.
     """
     left_buf = _validate_samples(
         "metering_vectorscope_decimated", left, validate=validate, arg_name="left"
@@ -673,7 +674,7 @@ def metering_vectorscope_decimated(
         right_array,
         _to_c_size_t(left_len, "left_len"),
         _to_c_int(sample_rate, "sample_rate"),
-        _to_c_size_t(max_points, "max_points"),
+        _to_c_size_t(_resolve_zero_default(max_points, "max_points"), "max_points"),
         ctypes.byref(out),
     )
     _check(rc)
@@ -688,19 +689,19 @@ def metering_phase_scope(
     left: Sequence[float] | list[float],
     right: Sequence[float] | list[float],
     sample_rate: int,
-    max_points: int = 0,
+    max_points: int | None = None,
     *,
     validate: bool = True,
 ) -> PhaseScopeReport:
     """Phase-scope point series plus summary stats for a stereo pair.
 
-    By default emits one point per input sample. Pass ``max_points`` to
-    deterministically decimate the point cloud to a display size (matching the
-    Node/WASM ``meteringPhaseScope`` shape); ``0`` (or a value >= the buffer
-    length) yields full resolution. The summary stats are always computed over
-    the full-resolution signal.
+    By default emits one point per input sample. Pass a positive ``max_points``
+    to deterministically decimate the point cloud to a display size (matching
+    the Node/WASM ``meteringPhaseScope`` shape); a value >= the buffer length
+    yields full resolution, and 0 or a negative is refused. The summary stats
+    are always computed over the full-resolution signal.
     """
-    if max_points:
+    if max_points is not None:
         return metering_phase_scope_decimated(
             left, right, sample_rate, max_points, validate=validate
         )
@@ -743,16 +744,17 @@ def metering_phase_scope_decimated(
     left: Sequence[float] | list[float],
     right: Sequence[float] | list[float],
     sample_rate: int,
-    max_points: int = 0,
+    max_points: int | None = None,
     *,
     validate: bool = True,
 ) -> PhaseScopeReport:
     """Display-sized phase-scope (Lissajous + summary stats) for a stereo pair.
 
-    ``max_points`` upper-bounds the returned point count; pass 0 (or a value
-    >= the buffer length) for one point per sample. Otherwise the point cloud is
-    deterministically decimated (largest-radius sample per bucket). The summary
-    stats are always computed over the full-resolution signal.
+    ``max_points`` upper-bounds the returned point count; omit it (or pass a
+    value >= the buffer length) for one point per sample, and 0 or a negative
+    is refused. Otherwise the point cloud is deterministically decimated
+    (largest-radius sample per bucket). The summary stats are always computed
+    over the full-resolution signal.
     """
     left_buf = _validate_samples(
         "metering_phase_scope_decimated", left, validate=validate, arg_name="left"
@@ -775,7 +777,7 @@ def metering_phase_scope_decimated(
         right_array,
         _to_c_size_t(left_len, "left_len"),
         _to_c_int(sample_rate, "sample_rate"),
-        _to_c_size_t(max_points, "max_points"),
+        _to_c_size_t(_resolve_zero_default(max_points, "max_points"), "max_points"),
         ctypes.byref(out),
     )
     _check(rc)

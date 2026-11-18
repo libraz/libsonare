@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import ctypes
 import math
+from typing import Any
 
 import numpy as np
 import pytest
@@ -81,8 +82,26 @@ def test_metering_scope_max_points_folds_into_primary() -> None:
     ps_dec = libsonare.metering_phase_scope_decimated(left, left, SR, max_points)
     assert np.array_equal(ps.radius, ps_dec.radius)
 
-    # max_points=0 stays full resolution.
+    # An omitted max_points stays full resolution.
     assert libsonare.metering_vectorscope(left, left, SR).mid.shape == left.shape
+    assert libsonare.metering_vectorscope_decimated(left, left, SR).mid.shape == left.shape
+
+
+@pytest.mark.parametrize(
+    "fn",
+    [
+        libsonare.metering_vectorscope,
+        libsonare.metering_vectorscope_decimated,
+        libsonare.metering_phase_scope,
+        libsonare.metering_phase_scope_decimated,
+    ],
+)
+@pytest.mark.parametrize("max_points", [0, -1])
+def test_a_non_positive_max_points_is_refused(fn: Any, max_points: int) -> None:
+    """Full resolution is spelled by omission; the C entry's 0 is not a point count."""
+    left = _sine(440.0, 0.1)
+    with pytest.raises(libsonare.SonareValueError, match="max_points"):
+        fn(left, left, SR, max_points)
 
 
 def test_metering_phase_scope_populates_summary_stats() -> None:

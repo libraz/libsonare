@@ -2525,7 +2525,7 @@ def metering_vectorscope(
     left: FloatSamples,
     right: FloatSamples,
     sample_rate: int,
-    max_points: int = 0,
+    max_points: int | None = None,
     *,
     validate: bool = True,
 ) -> VectorscopeReport: ...
@@ -2533,7 +2533,7 @@ def metering_vectorscope_decimated(
     left: FloatSamples,
     right: FloatSamples,
     sample_rate: int,
-    max_points: int = 0,
+    max_points: int | None = None,
     *,
     validate: bool = True,
 ) -> VectorscopeReport: ...
@@ -2541,7 +2541,7 @@ def metering_phase_scope(
     left: FloatSamples,
     right: FloatSamples,
     sample_rate: int,
-    max_points: int = 0,
+    max_points: int | None = None,
     *,
     validate: bool = True,
 ) -> PhaseScopeReport: ...
@@ -2549,7 +2549,7 @@ def metering_phase_scope_decimated(
     left: FloatSamples,
     right: FloatSamples,
     sample_rate: int,
-    max_points: int = 0,
+    max_points: int | None = None,
     *,
     validate: bool = True,
 ) -> PhaseScopeReport: ...
