@@ -680,7 +680,7 @@ TEST_CASE("sonare_mastering_repair_declip_stereo", "[c_api][mastering]") {
 
     // The fixture only witnesses the rule while each channel clips on its own.
     CHECK(out.left_report.detected.run_count == 1);
-    CHECK(out.left_report.detected.sample_count == kSharedEnd - kSharedBegin);
+    CHECK(out.left_report.detected.clipped_samples == kSharedEnd - kSharedBegin);
     CHECK(out.right_report.detected.run_count == 2);
 
     // The asymmetry is the whole point: the left is carried past its own
@@ -1331,6 +1331,7 @@ TEST_CASE("sonare_mastering_repair_dereverb_classical_stereo", "[c_api][masterin
     REQUIRE(sonare_mastering_repair_dereverb_classical_stereo(
                 reverberant.data(), reverberant.data(), reverberant.size(), sr, &base, &off) ==
             SONARE_OK);
+    REQUIRE(off.report.detected.has_late_predictability == 0u);
     REQUIRE(off.report.detected.late_predictability == 0.0f);
     REQUIRE(off.report.wpe_predictor_norm == 0.0f);
     // The rest of the report still has to be alive, or the two zeros above are
@@ -1347,6 +1348,7 @@ TEST_CASE("sonare_mastering_repair_dereverb_classical_stereo", "[c_api][masterin
     REQUIRE(sonare_mastering_repair_dereverb_classical_stereo(
                 reverberant.data(), reverberant.data(), reverberant.size(), sr, &wpe, &on) ==
             SONARE_OK);
+    REQUIRE(on.report.detected.has_late_predictability == 1u);
     REQUIRE(on.report.detected.late_predictability > 0.0f);
     REQUIRE(on.report.wpe_predictor_norm > 0.0f);
     // The applied norm is the pre-clamp one passed through a 0.98 ceiling, so it
@@ -1589,6 +1591,7 @@ TEST_CASE("sonare_mastering_repair_dereverb_classical_linked", "[c_api][masterin
     SonareDereverbReport on{};
     REQUIRE(sonare_mastering_repair_dereverb_classical_linked(in, 3, length, sr, &wpe, outs, &on) ==
             SONARE_OK);
+    REQUIRE(on.detected.has_late_predictability == 1u);
     REQUIRE(on.detected.late_predictability > 0.0f);
     REQUIRE(on.wpe_predictor_norm > 0.0f);
     // The applied norm is the pre-clamp one passed through a ceiling, so it can
@@ -1602,6 +1605,7 @@ TEST_CASE("sonare_mastering_repair_dereverb_classical_linked", "[c_api][masterin
     SonareDereverbReport off{};
     REQUIRE(sonare_mastering_repair_dereverb_classical_linked(in, 3, length, sr, &base, outs,
                                                               &off) == SONARE_OK);
+    REQUIRE(off.detected.has_late_predictability == 0u);
     REQUIRE(off.detected.late_predictability == 0.0f);
     REQUIRE(off.wpe_predictor_norm == 0.0f);
   }

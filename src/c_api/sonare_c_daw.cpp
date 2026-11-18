@@ -754,7 +754,7 @@ SonareError sonare_decompose_note_pitch(const float* f0_hz, const int32_t* voice
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_PITCH_EDITOR)
   if (out == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
-  out->centre_hz = 0.0f;
+  out->center_hz = 0.0f;
   out->drift_cents = nullptr;
   out->vibrato_cents = nullptr;
   out->count = 0;
@@ -782,7 +782,7 @@ SonareError sonare_decompose_note_pitch(const float* f0_hz, const int32_t* voice
   // which marshals to NULL and 0 without a special case.
   std::unique_ptr<float[]> drift(copy_vector(split.drift));
   std::unique_ptr<float[]> vibrato(copy_vector(split.vibrato));
-  out->centre_hz = split.centre_hz;
+  out->center_hz = split.centre_hz;
   out->count = split.drift.size();
   out->drift_cents = drift.release();
   out->vibrato_cents = vibrato.release();
@@ -799,7 +799,7 @@ void sonare_free_pitch_decomposition(SonarePitchDecompositionResult* result) {
   if (result == nullptr) return;
   delete[] result->drift_cents;
   delete[] result->vibrato_cents;
-  result->centre_hz = 0.0f;
+  result->center_hz = 0.0f;
   result->drift_cents = nullptr;
   result->vibrato_cents = nullptr;
   result->count = 0;

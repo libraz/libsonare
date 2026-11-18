@@ -65,7 +65,8 @@ TEST_CASE("sonare_lufs_interleaved", "[c_api]") {
             Catch::Approx(mono_result.integrated_lufs).margin(1e-3f));
     REQUIRE(inter_result.short_term_lufs ==
             Catch::Approx(mono_result.short_term_lufs).margin(1e-3f));
-    REQUIRE(inter_result.loudness_range == Catch::Approx(mono_result.loudness_range).margin(1e-3f));
+    REQUIRE(inter_result.loudness_range_lu ==
+            Catch::Approx(mono_result.loudness_range_lu).margin(1e-3f));
   }
 
   SECTION("stereo interleaved buffer yields finite loudness") {
@@ -79,8 +80,8 @@ TEST_CASE("sonare_lufs_interleaved", "[c_api]") {
     REQUIRE(std::isfinite(result.integrated_lufs));
     REQUIRE(std::isfinite(result.momentary_lufs));
     REQUIRE(std::isfinite(result.short_term_lufs));
-    REQUIRE(std::isfinite(result.loudness_range));
-    REQUIRE(result.loudness_range >= 0.0f);
+    REQUIRE(std::isfinite(result.loudness_range_lu));
+    REQUIRE(result.loudness_range_lu >= 0.0f);
   }
 
   SECTION("rejects invalid parameters") {
@@ -238,12 +239,12 @@ TEST_CASE("sonare_ebur128_loudness_range", "[c_api]") {
   }
 }
 
-TEST_CASE("sonare_metering_true_peak_db oversample factor validation", "[c_api]") {
+TEST_CASE("sonare_metering_true_peak_dbtp oversample factor validation", "[c_api]") {
   auto samples = generate_sine(440.0f, 48000, 1.0f);
 
   SECTION("accepts factor 16") {
     float tp_db = 0.0f;
-    REQUIRE(sonare_metering_true_peak_db(samples.data(), samples.size(), 48000, 16, &tp_db) ==
+    REQUIRE(sonare_metering_true_peak_dbtp(samples.data(), samples.size(), 48000, 16, &tp_db) ==
             SONARE_OK);
     REQUIRE(std::isfinite(tp_db));
   }
@@ -251,21 +252,21 @@ TEST_CASE("sonare_metering_true_peak_db oversample factor validation", "[c_api]"
   SECTION("accepts the other supported power-of-two factors") {
     for (int factor : {1, 2, 4, 8}) {
       float tp_db = 0.0f;
-      REQUIRE(sonare_metering_true_peak_db(samples.data(), samples.size(), 48000, factor, &tp_db) ==
-              SONARE_OK);
+      REQUIRE(sonare_metering_true_peak_dbtp(samples.data(), samples.size(), 48000, factor,
+                                             &tp_db) == SONARE_OK);
       REQUIRE(std::isfinite(tp_db));
     }
   }
 
   SECTION("rejects non-power-of-two factor 3") {
     float tp_db = 0.0f;
-    REQUIRE(sonare_metering_true_peak_db(samples.data(), samples.size(), 48000, 3, &tp_db) ==
+    REQUIRE(sonare_metering_true_peak_dbtp(samples.data(), samples.size(), 48000, 3, &tp_db) ==
             SONARE_ERROR_INVALID_PARAMETER);
   }
 
   SECTION("rejects factor above the supported maximum") {
     float tp_db = 0.0f;
-    REQUIRE(sonare_metering_true_peak_db(samples.data(), samples.size(), 48000, 32, &tp_db) ==
+    REQUIRE(sonare_metering_true_peak_dbtp(samples.data(), samples.size(), 48000, 32, &tp_db) ==
             SONARE_ERROR_INVALID_PARAMETER);
   }
 }
@@ -759,9 +760,9 @@ TEST_CASE(
   SECTION("true_peak_db") {
     float handle_db = 0.0f;
     float buffer_db = 0.0f;
-    REQUIRE(sonare_audio_true_peak_db(audio, 0, &handle_db) == SONARE_OK);
-    REQUIRE(sonare_metering_true_peak_db(samples.data(), samples.size(), kScalarSampleRate, 0,
-                                         &buffer_db) == SONARE_OK);
+    REQUIRE(sonare_audio_true_peak_dbtp(audio, 0, &handle_db) == SONARE_OK);
+    REQUIRE(sonare_metering_true_peak_dbtp(samples.data(), samples.size(), kScalarSampleRate, 0,
+                                           &buffer_db) == SONARE_OK);
     REQUIRE(handle_db > -6.0f);
     CHECK(handle_db == buffer_db);
   }
@@ -1030,9 +1031,9 @@ TEST_CASE("Handle-form and buffer-form metering agree on a null out-pointer",
   CHECK(sonare_metering_silence_ratio(samples.data(), samples.size(), kScalarSampleRate, -40.0f,
                                       1024, 512, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
 
-  CHECK(sonare_audio_true_peak_db(audio, 4, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(sonare_metering_true_peak_db(samples.data(), samples.size(), kScalarSampleRate, 4,
-                                     nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_audio_true_peak_dbtp(audio, 4, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_metering_true_peak_dbtp(samples.data(), samples.size(), kScalarSampleRate, 4,
+                                       nullptr) == SONARE_ERROR_INVALID_PARAMETER);
 
   CHECK(sonare_audio_ebur128_loudness_range(audio, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(sonare_ebur128_loudness_range(samples.data(), samples.size(), kScalarSampleRate, nullptr) ==
@@ -1070,7 +1071,7 @@ TEST_CASE("A NULL handle is refused rather than dereferenced by every handle-for
   CHECK(sonare_audio_crest_factor_db(nullptr, &scalar_out) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(sonare_audio_silence_ratio(nullptr, -40.0f, 1024, 512, &scalar_out) ==
         SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(sonare_audio_true_peak_db(nullptr, 4, &scalar_out) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_audio_true_peak_dbtp(nullptr, 4, &scalar_out) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(sonare_audio_ebur128_loudness_range(nullptr, &scalar_out) ==
         SONARE_ERROR_INVALID_PARAMETER);
 
@@ -1101,11 +1102,11 @@ TEST_CASE("Handle-form and buffer-form metering agree on out-of-domain parameter
       "refused") {
     float handle_default_db = 0.0f;
     float buffer_default_db = 0.0f;
-    REQUIRE(sonare_audio_true_peak_db(audio, 0, &handle_default_db) == SONARE_OK);
-    REQUIRE(sonare_metering_true_peak_db(samples.data(), samples.size(), kScalarSampleRate, 0,
-                                         &buffer_default_db) == SONARE_OK);
+    REQUIRE(sonare_audio_true_peak_dbtp(audio, 0, &handle_default_db) == SONARE_OK);
+    REQUIRE(sonare_metering_true_peak_dbtp(samples.data(), samples.size(), kScalarSampleRate, 0,
+                                           &buffer_default_db) == SONARE_OK);
     float handle_explicit_db = 0.0f;
-    REQUIRE(sonare_audio_true_peak_db(audio, 4, &handle_explicit_db) == SONARE_OK);
+    REQUIRE(sonare_audio_true_peak_dbtp(audio, 4, &handle_explicit_db) == SONARE_OK);
     CHECK(handle_default_db == handle_explicit_db);  // 0 and the explicit default agree
     CHECK(handle_default_db == buffer_default_db);
 
@@ -1113,10 +1114,11 @@ TEST_CASE("Handle-form and buffer-form metering agree on out-of-domain parameter
       CAPTURE(bad_factor);
       float handle_db = 0.0f;
       float buffer_db = 0.0f;
-      CHECK(sonare_audio_true_peak_db(audio, bad_factor, &handle_db) ==
+      CHECK(sonare_audio_true_peak_dbtp(audio, bad_factor, &handle_db) ==
             SONARE_ERROR_INVALID_PARAMETER);
-      CHECK(sonare_metering_true_peak_db(samples.data(), samples.size(), kScalarSampleRate,
-                                         bad_factor, &buffer_db) == SONARE_ERROR_INVALID_PARAMETER);
+      CHECK(sonare_metering_true_peak_dbtp(samples.data(), samples.size(), kScalarSampleRate,
+                                           bad_factor,
+                                           &buffer_db) == SONARE_ERROR_INVALID_PARAMETER);
     }
   }
 

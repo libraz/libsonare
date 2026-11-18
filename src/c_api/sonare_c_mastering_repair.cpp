@@ -214,8 +214,8 @@ SonareDeclickReport to_c_declick_report(const sonare::mastering::repair::Declick
 
 SonareClipDetection to_c_clip_detection(const sonare::mastering::repair::ClipDetection& cpp) {
   SonareClipDetection c{};
-  c.sample_count = cpp.sample_count;
-  c.sample_fraction = cpp.sample_fraction;
+  c.clipped_samples = cpp.sample_count;
+  c.clipped_ratio = cpp.sample_fraction;
   c.run_count = cpp.run_count;
   c.longest_run_samples = cpp.longest_run_samples;
   c.flat_run_count = cpp.flat_run_count;
@@ -296,7 +296,8 @@ SonareDenoiseReport to_c_denoise_report(const sonare::mastering::repair::Denoise
 SonareReverbDetection to_c_reverb_detection(const sonare::mastering::repair::ReverbDetection& cpp) {
   SonareReverbDetection c{};
   c.late_decay_ratio_db = cpp.late_decay_ratio_db;
-  c.late_predictability = cpp.late_predictability;
+  c.has_late_predictability = cpp.late_predictability.has_value() ? 1u : 0u;
+  c.late_predictability = cpp.late_predictability.value_or(0.0f);
   return c;
 }
 

@@ -102,9 +102,9 @@ class StreamAnalyzer:
         raw.n_fft = config.n_fft
         raw.hop_length = config.hop_length
         raw.n_mels = config.n_mels
-        raw.fmin = _narrow_double(config.fmin_hz, "config.fmin_hz")
+        raw.fmin_hz = _narrow_double(config.fmin_hz, "config.fmin_hz")
         # The C ABI reads 0 as Nyquist, so only an absent bound may reach it.
-        raw.fmax = _narrow_double(
+        raw.fmax_hz = _narrow_double(
             _resolve_zero_default(config.fmax_hz, "config.fmax_hz"), "config.fmax_hz"
         )
         raw.reference_hz = _narrow_double(config.reference_hz, "config.reference_hz")

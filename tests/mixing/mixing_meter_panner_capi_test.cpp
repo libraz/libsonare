@@ -272,13 +272,13 @@ TEST_CASE("Mixing C API processes stereo strips and exposes meters", "[mixing][c
 
   // Per-plane meters expose the surround planes; a stereo strip reports two
   // planes whose [0]/[1] mirror the *_l/*_r stereo convenience fields.
-  REQUIRE(snapshot.channel_count == 2);
+  REQUIRE(snapshot.num_channels == 2);
   REQUIRE(snapshot.peak_db[0] == snapshot.peak_db_l);
   REQUIRE(snapshot.peak_db[1] == snapshot.peak_db_r);
   REQUIRE(snapshot.rms_db[0] == snapshot.rms_db_l);
   REQUIRE(snapshot.rms_db[1] == snapshot.rms_db_r);
-  REQUIRE(snapshot.true_peak_db[0] == snapshot.true_peak_db_l);
-  REQUIRE(snapshot.true_peak_db[1] == snapshot.true_peak_db_r);
+  REQUIRE(snapshot.true_peak_dbtp[0] == snapshot.true_peak_dbtp_l);
+  REQUIRE(snapshot.true_peak_dbtp[1] == snapshot.true_peak_dbtp_r);
 
   sonare_mixer_destroy(mixer);
 }
@@ -607,13 +607,13 @@ TEST_CASE("Mixing C API builds strips with a configurable meter", "[mixing][capi
   // The fully-metered strip is the control: the same signal reaches all three.
   CHECK(full_snap.peak_db_l > -40.0f);
   CHECK(full_snap.momentary_lufs > -70.0f);
-  CHECK(full_snap.true_peak_db_l > -40.0f);
+  CHECK(full_snap.true_peak_dbtp_l > -40.0f);
 
   // Peak / RMS keep working with the loudness and true-peak work switched off,
   // and those two fields stay at the floor.
   CHECK(peak_snap.peak_db_l > -40.0f);
   CHECK(peak_snap.momentary_lufs == sonare::constants::kFloorDb);
-  CHECK(peak_snap.true_peak_db_l == sonare::constants::kFloorDb);
+  CHECK(peak_snap.true_peak_dbtp_l == sonare::constants::kFloorDb);
 
   // A strip with metering off publishes no snapshot at all.
   CHECK(silent_snap.seq == 0);
@@ -654,17 +654,17 @@ struct MasterMeterRig {
 void require_same_meter(const SonareMixMeterSnapshot& a, const sonare::mixing::MeterSnapshot& b) {
   SonareMixMeterSnapshot expected{};
   sonare_c_mixing_detail::copy_meter_snapshot(b, &expected);
-  CHECK(a.channel_count == expected.channel_count);
+  CHECK(a.num_channels == expected.num_channels);
   for (int ch = 0; ch < 2; ++ch) {
     CHECK_THAT(a.peak_db[ch], WithinAbs(expected.peak_db[ch], 1e-4f));
     CHECK_THAT(a.rms_db[ch], WithinAbs(expected.rms_db[ch], 1e-4f));
-    CHECK_THAT(a.true_peak_db[ch], WithinAbs(expected.true_peak_db[ch], 1e-4f));
+    CHECK_THAT(a.true_peak_dbtp[ch], WithinAbs(expected.true_peak_dbtp[ch], 1e-4f));
   }
   CHECK_THAT(a.correlation, WithinAbs(expected.correlation, 1e-5f));
   CHECK_THAT(a.momentary_lufs, WithinAbs(expected.momentary_lufs, 1e-4f));
   CHECK_THAT(a.short_term_lufs, WithinAbs(expected.short_term_lufs, 1e-4f));
   CHECK_THAT(a.integrated_lufs, WithinAbs(expected.integrated_lufs, 1e-4f));
-  CHECK_THAT(a.max_true_peak_db, WithinAbs(expected.max_true_peak_db, 1e-4f));
+  CHECK_THAT(a.max_true_peak_dbtp, WithinAbs(expected.max_true_peak_dbtp, 1e-4f));
 }
 
 }  // namespace
@@ -769,7 +769,7 @@ TEST_CASE("Disabling the master meter freezes its reading and enabling resets it
   SonareMixMeterSnapshot again{};
   REQUIRE(sonare_mixer_master_meter(rig.mixer, &again) == SONARE_OK);
   CHECK_THAT(again.peak_db_l, WithinAbs(quiet.peak_db_l, 0.5f));
-  CHECK(again.max_true_peak_db < -6.0f);
+  CHECK(again.max_true_peak_dbtp < -6.0f);
 }
 
 TEST_CASE("Master meter switches leave their measurements at the floor", "[mixing][capi]") {
@@ -784,7 +784,7 @@ TEST_CASE("Master meter switches leave their measurements at the floor", "[mixin
   REQUIRE(sonare_mixer_master_meter(rig.mixer, &snap) == SONARE_OK);
   CHECK(snap.peak_db_l > -7.0f);
   CHECK(snap.momentary_lufs == sonare::constants::kFloorDb);
-  CHECK(snap.true_peak_db_l == sonare::constants::kFloorDb);
+  CHECK(snap.true_peak_dbtp_l == sonare::constants::kFloorDb);
 }
 
 TEST_CASE("Mixing C API exposes scene preset JSON", "[mixing][capi]") {
@@ -1134,7 +1134,7 @@ TEST_CASE("Mixing C API one-shot true peak reads the signal's last samples once 
   left[kLength - 2] = 0.9f;
   left[kLength - 1] = -0.9f;
   float offline_db = 0.0f;
-  REQUIRE(sonare_metering_true_peak_db(left.data(), left.size(), 48000, 4, &offline_db) ==
+  REQUIRE(sonare_metering_true_peak_dbtp(left.data(), left.size(), 48000, 4, &offline_db) ==
           SONARE_OK);
 
   SonareMixer* mixer = sonare_mixer_create(48000, static_cast<int>(kLength));
@@ -1151,21 +1151,21 @@ TEST_CASE("Mixing C API one-shot true peak reads the signal's last samples once 
 
   SonareMixMeterSnapshot before{};
   REQUIRE(sonare_strip_meter(strip, &before) == SONARE_OK);
-  REQUIRE(before.true_peak_db_l < offline_db - 0.01f);
+  REQUIRE(before.true_peak_dbtp_l < offline_db - 0.01f);
   SonareMixMeterSnapshot master_before{};
   REQUIRE(sonare_mixer_bus_meter(mixer, "master", &master_before) == SONARE_OK);
-  REQUIRE(master_before.true_peak_db_l < offline_db - 0.01f);
+  REQUIRE(master_before.true_peak_dbtp_l < offline_db - 0.01f);
 
   REQUIRE(sonare_mixer_flush_meters(mixer) == SONARE_OK);
   SonareMixMeterSnapshot after{};
   REQUIRE(sonare_strip_meter(strip, &after) == SONARE_OK);
-  REQUIRE_THAT(after.true_peak_db_l, WithinAbs(offline_db, 1.0e-4));
-  REQUIRE_THAT(after.max_true_peak_db, WithinAbs(offline_db, 1.0e-4));
+  REQUIRE_THAT(after.true_peak_dbtp_l, WithinAbs(offline_db, 1.0e-4));
+  REQUIRE_THAT(after.max_true_peak_dbtp, WithinAbs(offline_db, 1.0e-4));
   // The master bus meter publishes the same quantity and is flushed with the strips.
   SonareMixMeterSnapshot master_after{};
   REQUIRE(sonare_mixer_bus_meter(mixer, "master", &master_after) == SONARE_OK);
-  REQUIRE_THAT(master_after.true_peak_db_l, WithinAbs(offline_db, 1.0e-4));
-  REQUIRE_THAT(master_after.max_true_peak_db, WithinAbs(offline_db, 1.0e-4));
+  REQUIRE_THAT(master_after.true_peak_dbtp_l, WithinAbs(offline_db, 1.0e-4));
+  REQUIRE_THAT(master_after.max_true_peak_dbtp, WithinAbs(offline_db, 1.0e-4));
 
   REQUIRE(sonare_mixer_flush_meters(nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   sonare_mixer_destroy(mixer);
@@ -1199,12 +1199,12 @@ TEST_CASE("Mixing C API bus meters read an inter-sample over above the sample pe
 
     SonareMixMeterSnapshot master{};
     REQUIRE(sonare_mixer_bus_meter(mixer, "master", &master) == SONARE_OK);
-    INFO("peak " << master.peak_db_l << " dB, true peak " << master.true_peak_db_l << " dB");
+    INFO("peak " << master.peak_db_l << " dB, true peak " << master.true_peak_dbtp_l << " dB");
     REQUIRE(master.peak_db_l > -10.0f);
-    REQUIRE(master.true_peak_db_l >= master.peak_db_l);
-    REQUIRE(master.max_true_peak_db >= master.peak_db_l);
+    REQUIRE(master.true_peak_dbtp_l >= master.peak_db_l);
+    REQUIRE(master.max_true_peak_dbtp >= master.peak_db_l);
     // The reconstruction must actually find the over, not merely tie the sample peak.
-    REQUIRE(master.true_peak_db_l > master.peak_db_l + 2.0f);
+    REQUIRE(master.true_peak_dbtp_l > master.peak_db_l + 2.0f);
     sonare_mixer_destroy(mixer);
   }
 }

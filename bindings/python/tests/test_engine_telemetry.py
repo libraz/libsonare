@@ -374,7 +374,7 @@ def test_telemetry_counts_are_clamped_to_the_mirror_arrays(reader: str) -> None:
     else:
         raw_wide = SonareMeterTelemetryRecordWide()
         max_planes = len(raw_wide.peak_db)
-        raw_wide.channel_count = max_planes + 7
+        raw_wide.num_channels = max_planes + 7
         wide = _meter_telemetry_wide_from_c(raw_wide)
         assert wide.num_channels == max_planes
         assert len(wide.peak_db) == max_planes

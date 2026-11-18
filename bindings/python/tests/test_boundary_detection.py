@@ -175,7 +175,7 @@ def test_reference_window_default_matches_the_c_default() -> None:
         inspect.signature(libsonare.detect_boundaries).parameters["reference_window_sec"].default
     )
     assert default == 60.0
-    assert core.reference_window == default
+    assert core.reference_window_sec == default
     assert ctypes.sizeof(SonareBoundaryOptions) == 44
 
 

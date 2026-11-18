@@ -232,7 +232,7 @@ TEST_CASE("sonare_detect_chords", "[.][slow][c_api]") {
     REQUIRE(result.chords[0].root <= SONARE_PITCH_B);
     REQUIRE(result.chords[0].quality >= SONARE_CHORD_MAJOR);
     REQUIRE(result.chords[0].quality <= SONARE_CHORD_SUS2_ADD4);
-    REQUIRE(result.chords[0].end >= result.chords[0].start);
+    REQUIRE(result.chords[0].end_sec >= result.chords[0].start_sec);
     REQUIRE(result.chords[0].confidence >= 0.0f);
 
     sonare_free_chord_analysis_result(&result);
@@ -280,8 +280,8 @@ TEST_CASE("sonare_detect_chords", "[.][slow][c_api]") {
     REQUIRE(low.chords[0].quality != SONARE_CHORD_UNKNOWN);
     REQUIRE(high.chord_count == 1);
     REQUIRE(high.chords[0].quality == SONARE_CHORD_UNKNOWN);
-    REQUIRE(high.chords[0].start == 0.0f);
-    REQUIRE(high.chords[0].end > high.chords[0].start);
+    REQUIRE(high.chords[0].start_sec == 0.0f);
+    REQUIRE(high.chords[0].end_sec > high.chords[0].start_sec);
     sonare_free_chord_analysis_result(&low);
     sonare_free_chord_analysis_result(&high);
   }
@@ -290,8 +290,8 @@ TEST_CASE("sonare_detect_chords", "[.][slow][c_api]") {
     auto samples = generate_harmonic_chord({82.41f, 261.63f, 329.63f, 392.00f}, 22050, 1.0f);
     SonareChordAnalysisResult result = {};
     SonareChordDetectionOptions options{};
-    options.min_duration = 0.0f;
-    options.smoothing_window = 2.0f;
+    options.min_duration_sec = 0.0f;
+    options.smoothing_window_sec = 2.0f;
     options.threshold = 0.5f;
     options.use_triads_only = 1;
     options.n_fft = 2048;
@@ -333,8 +333,8 @@ TEST_CASE("sonare_detect_chords", "[.][slow][c_api]") {
 TEST_CASE("sonare_detect_chords_ex chroma_method range", "[c_api]") {
   auto samples = generate_chord({261.63f, 329.63f, 392.00f}, 22050, 2.0f);
   SonareChordDetectionOptions options{};
-  options.min_duration = 0.3f;
-  options.smoothing_window = 2.0f;
+  options.min_duration_sec = 0.3f;
+  options.smoothing_window_sec = 2.0f;
   options.threshold = 0.5f;
   options.use_triads_only = 1;
   options.n_fft = 2048;
@@ -365,8 +365,8 @@ TEST_CASE("sonare_detect_chords_ex chroma_method range", "[c_api]") {
 
 TEST_CASE("sonare_chord_functional_analysis", "[c_api]") {
   SonareChordDetectionOptions options{};
-  options.min_duration = 0.3f;
-  options.smoothing_window = 2.0f;
+  options.min_duration_sec = 0.3f;
+  options.smoothing_window_sec = 2.0f;
   options.threshold = 0.5f;
   options.use_triads_only = 1;
   options.n_fft = 2048;
@@ -614,8 +614,8 @@ TEST_CASE(
     SonareChordAnalysisResult result;
     std::memset(&result, 0xAA, sizeof(result));
     SonareChordDetectionOptions options{};
-    options.min_duration = 0.3f;
-    options.smoothing_window = 2.0f;
+    options.min_duration_sec = 0.3f;
+    options.smoothing_window_sec = 2.0f;
     options.threshold = 0.5f;
     options.n_fft = 0;  // invalid
     options.hop_length = 512;
@@ -634,8 +634,8 @@ TEST_CASE(
     std::memset(&roman, 0xAA, sizeof(roman));
     std::memset(&functions, 0xAA, sizeof(functions));
     SonareChordDetectionOptions options{};
-    options.min_duration = -1.0f;  // invalid
-    options.smoothing_window = 2.0f;
+    options.min_duration_sec = -1.0f;  // invalid
+    options.smoothing_window_sec = 2.0f;
     options.threshold = 0.5f;
     options.n_fft = 2048;
     options.hop_length = 512;
@@ -707,9 +707,9 @@ TEST_CASE("sonare_analyze_sections rejects a non-finite min_section_sec", "[c_ap
                                     &result) == SONARE_OK);
     REQUIRE(result.section_count > 0);
     REQUIRE(result.sections != nullptr);
-    REQUIRE(result.sections[0].start == 0.0f);
-    REQUIRE(std::isfinite(result.sections[0].end));
-    REQUIRE(result.sections[0].end > result.sections[0].start);
+    REQUIRE(result.sections[0].start_sec == 0.0f);
+    REQUIRE(std::isfinite(result.sections[0].end_sec));
+    REQUIRE(result.sections[0].end_sec > result.sections[0].start_sec);
     sonare_free_section_result(&result);
   }
 }
@@ -765,7 +765,7 @@ TEST_CASE("sonare_detect_boundaries reference_window", "[c_api][boundaries]") {
   }
 
   SonareBoundaryOptions defaults = sonare_boundary_options_default();
-  REQUIRE(defaults.reference_window == 60.0f);
+  REQUIRE(defaults.reference_window_sec == 60.0f);
 
   auto count = [&](const SonareBoundaryOptions& options, SonareError* err) {
     SonareBoundaryResult result = {};
@@ -780,7 +780,7 @@ TEST_CASE("sonare_detect_boundaries reference_window", "[c_api][boundaries]") {
                          std::numeric_limits<float>::infinity()};
     for (float value : bad) {
       SonareBoundaryOptions options = defaults;
-      options.reference_window = value;
+      options.reference_window_sec = value;
       SonareError err = SONARE_OK;
       count(options, &err);
       REQUIRE(err == SONARE_ERROR_INVALID_PARAMETER);
@@ -791,7 +791,7 @@ TEST_CASE("sonare_detect_boundaries reference_window", "[c_api][boundaries]") {
     SonareBoundaryOptions floor_only = defaults;
     floor_only.absolute_threshold = 0.0f;
     SonareBoundaryOptions frame_ref = floor_only;
-    frame_ref.reference_window = 0.0f;
+    frame_ref.reference_window_sec = 0.0f;
     SonareError err_a = SONARE_OK;
     SonareError err_b = SONARE_OK;
     const size_t with_window = count(floor_only, &err_a);

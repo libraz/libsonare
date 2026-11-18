@@ -26,7 +26,7 @@ class SonareLufsResult(CStruct):
         ("short_term_lufs", ctypes.c_float),
         ("max_momentary_lufs", ctypes.c_float),
         ("max_short_term_lufs", ctypes.c_float),
-        ("loudness_range", ctypes.c_float),
+        ("loudness_range_lu", ctypes.c_float),
     ]
 
 
@@ -47,15 +47,15 @@ class SonareMixMeterSnapshot(CStruct):
         ("short_term_lufs", ctypes.c_float),
         ("integrated_lufs", ctypes.c_float),
         ("gain_reduction_db", ctypes.c_float),
-        ("true_peak_db_l", ctypes.c_float),
-        ("true_peak_db_r", ctypes.c_float),
-        ("max_true_peak_db", ctypes.c_float),
+        ("true_peak_dbtp_l", ctypes.c_float),
+        ("true_peak_dbtp_r", ctypes.c_float),
+        ("max_true_peak_dbtp", ctypes.c_float),
         ("seq", ctypes.c_uint64),
         # Per-plane surround meters (7.1); indices [0, channel_count) are valid.
         ("peak_db", ctypes.c_float * 8),
         ("rms_db", ctypes.c_float * 8),
-        ("true_peak_db", ctypes.c_float * 8),
-        ("channel_count", ctypes.c_int),
+        ("true_peak_dbtp", ctypes.c_float * 8),
+        ("num_channels", ctypes.c_int),
     ]
 
 
@@ -282,7 +282,7 @@ class SonareDynamicsResult(CStruct):
         ("peak_db", ctypes.c_float),
         ("rms_db", ctypes.c_float),
         ("crest_factor", ctypes.c_float),
-        ("loudness_range_db", ctypes.c_float),
+        ("loudness_range_lu", ctypes.c_float),
         ("is_compressed", ctypes.c_int),
         ("loudness_times_sec", ctypes.POINTER(ctypes.c_float)),
         ("loudness_rms_db", ctypes.POINTER(ctypes.c_float)),

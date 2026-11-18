@@ -52,7 +52,7 @@ def _streaming_loudness_gain_result(out: SonareStreamingLoudnessGain) -> Streami
     """Copy the C result into the public dataclass."""
     return StreamingLoudnessGain(
         loudness_static_gain_db=float(out.loudness_static_gain_db),
-        true_peak_dbtp=float(out.true_peak_db),
+        true_peak_dbtp=float(out.true_peak_dbtp),
         integrated_lufs=float(out.integrated_lufs),
     )
 

@@ -534,13 +534,14 @@ TEST_CASE("asking for a report does not move a sample", "[repair][stereo][denois
     CHECK(report.suppressed_fraction > 0.0f);
     CHECK(report.mean_reduction_db > 0.0f);
     CHECK(report.detected.late_decay_ratio_db < 0.0f);
-    // The WPE fields are the pair that shows the 0.98 clamp acting, and they are
-    // zero exactly when the stage did not run.
+    // The WPE fields are the pair that shows the 0.98 clamp acting; the
+    // predictability is absent exactly when the stage did not run.
     if (config.wpe_enabled) {
+      REQUIRE(report.detected.late_predictability.has_value());
       CHECK(report.wpe_predictor_norm > 0.0f);
-      CHECK(report.wpe_predictor_norm <= report.detected.late_predictability + 1.0e-6f);
+      CHECK(report.wpe_predictor_norm <= *report.detected.late_predictability + 1.0e-6f);
     } else {
-      CHECK(report.detected.late_predictability == 0.0f);
+      CHECK_FALSE(report.detected.late_predictability.has_value());
       CHECK(report.wpe_predictor_norm == 0.0f);
     }
   }
@@ -811,17 +812,16 @@ TEST_CASE("the reverb detector separates a tail from a dry offset", "[repair][st
   CHECK(short_decay < long_decay - 1.0f);
   CHECK(dry_decay < 0.0f);
 
-  // Predictability is zero unless the WPE stage ran, and rises with the tail.
+  // Predictability is absent unless the WPE stage ran, and rises with the tail.
   repair::DereverbClassicalConfig wpe;
   wpe.wpe_enabled = true;
-  CHECK(
-      repair::detect_reverb(long_tail.data(), long_tail.size(), kSampleRate).late_predictability ==
-      0.0f);
+  CHECK_FALSE(repair::detect_reverb(long_tail.data(), long_tail.size(), kSampleRate)
+                  .late_predictability.has_value());
   const float dry_predictability =
-      repair::detect_reverb(dry.data(), dry.size(), kSampleRate, wpe).late_predictability;
+      repair::detect_reverb(dry.data(), dry.size(), kSampleRate, wpe).late_predictability.value();
   const float long_predictability =
       repair::detect_reverb(long_tail.data(), long_tail.size(), kSampleRate, wpe)
-          .late_predictability;
+          .late_predictability.value();
   INFO("predictability dry " << dry_predictability << " long " << long_predictability);
   CHECK(long_predictability > dry_predictability);
   // Recorded before the cap, so it is free to sit above it.
@@ -908,7 +908,8 @@ TEST_CASE("the dereverb report describes the mask that ran", "[repair][stereo][d
       repair::dereverb_classical_stereo(audio, audio, wpe).report;
   CHECK(with_wpe.wpe_predictor_norm > 0.0f);
   // The cap is a silent branch; the pair is the only way to see it act.
-  CHECK(with_wpe.wpe_predictor_norm <= with_wpe.detected.late_predictability + 1.0e-6f);
+  REQUIRE(with_wpe.detected.late_predictability.has_value());
+  CHECK(with_wpe.wpe_predictor_norm <= *with_wpe.detected.late_predictability + 1.0e-6f);
   CHECK(all.wpe_predictor_norm == 0.0f);
 }
 

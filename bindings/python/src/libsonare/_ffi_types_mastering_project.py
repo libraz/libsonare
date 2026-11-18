@@ -70,7 +70,7 @@ class SonareMasteringLoudnessSummary(CStruct):
         ("max_momentary_lufs", ctypes.c_float),
         ("max_short_term_lufs", ctypes.c_float),
         ("true_peak_dbtp", ctypes.c_float),
-        ("loudness_range", ctypes.c_float),
+        ("loudness_range_lu", ctypes.c_float),
     ]
 
 
@@ -100,7 +100,7 @@ class SonareMasteringChainResult(CStruct):
         ("stages", ctypes.POINTER(ctypes.c_char_p)),
         ("stages_count", ctypes.c_size_t),
         ("output_true_peak_dbtp", ctypes.c_float),
-        ("output_lra", ctypes.c_float),
+        ("output_loudness_range_lu", ctypes.c_float),
         ("loudness_target_limited", ctypes.c_int),
         ("stage_gain_reduction_stages", ctypes.POINTER(ctypes.c_char_p)),
         ("stage_gain_reduction_values", ctypes.POINTER(ctypes.c_float)),
@@ -124,7 +124,7 @@ class SonareMasteringChainStereoResult(CStruct):
         ("stages", ctypes.POINTER(ctypes.c_char_p)),
         ("stages_count", ctypes.c_size_t),
         ("output_true_peak_dbtp", ctypes.c_float),
-        ("output_lra", ctypes.c_float),
+        ("output_loudness_range_lu", ctypes.c_float),
         ("loudness_target_limited", ctypes.c_int),
         ("stage_gain_reduction_stages", ctypes.POINTER(ctypes.c_char_p)),
         ("stage_gain_reduction_values", ctypes.POINTER(ctypes.c_float)),
@@ -150,7 +150,7 @@ class SonareStreamingLoudnessGain(CStruct):
 
     _fields_ = [
         ("loudness_static_gain_db", ctypes.c_float),
-        ("true_peak_db", ctypes.c_float),
+        ("true_peak_dbtp", ctypes.c_float),
         ("integrated_lufs", ctypes.c_float),
     ]
 

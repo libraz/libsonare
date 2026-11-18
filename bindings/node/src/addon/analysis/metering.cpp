@@ -93,7 +93,7 @@ Napi::Value SonareWrap::Lufs(const Napi::CallbackInfo& info) {
   result.Set("shortTermLufs", Napi::Number::New(env, lufs.short_term_lufs));
   result.Set("maxMomentaryLufs", Napi::Number::New(env, lufs.max_momentary_lufs));
   result.Set("maxShortTermLufs", Napi::Number::New(env, lufs.max_short_term_lufs));
-  result.Set("loudnessRange", Napi::Number::New(env, lufs.loudness_range));
+  result.Set("loudnessRange", Napi::Number::New(env, lufs.loudness_range_lu));
   return result;
   SONARE_NODE_CATCH(env)
 }
@@ -188,7 +188,7 @@ Napi::Value SonareWrap::LufsInterleaved(const Napi::CallbackInfo& info) {
   result.Set("shortTermLufs", Napi::Number::New(env, lufs.short_term_lufs));
   result.Set("maxMomentaryLufs", Napi::Number::New(env, lufs.max_momentary_lufs));
   result.Set("maxShortTermLufs", Napi::Number::New(env, lufs.max_short_term_lufs));
-  result.Set("loudnessRange", Napi::Number::New(env, lufs.loudness_range));
+  result.Set("loudnessRange", Napi::Number::New(env, lufs.loudness_range_lu));
   return result;
   SONARE_NODE_CATCH(env)
 }
@@ -358,8 +358,8 @@ Napi::Value SonareWrap::MeteringTruePeakDb(const Napi::CallbackInfo& info) {
   int oversample{};
   if (!OptionalIntArg(env, info, 2, "oversample", 4, &oversample)) return env.Undefined();
   float out_value = 0.0f;
-  SonareError err =
-      sonare_metering_true_peak_db(typed.Data(), typed.ElementLength(), sr, oversample, &out_value);
+  SonareError err = sonare_metering_true_peak_dbtp(typed.Data(), typed.ElementLength(), sr,
+                                                   oversample, &out_value);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
@@ -912,7 +912,7 @@ Napi::Value SonareWrap::TruePeakDbInstance(const Napi::CallbackInfo& info) {
   int oversample{};
   if (!OptionalIntArg(env, info, 0, "oversample", 4, &oversample)) return env.Undefined();
   float out_value = 0.0f;
-  SonareError err = sonare_audio_true_peak_db(audio_, oversample, &out_value);
+  SonareError err = sonare_audio_true_peak_dbtp(audio_, oversample, &out_value);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();

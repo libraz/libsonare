@@ -45,7 +45,7 @@ def test_wide_input_peak_conversion() -> None:
     from libsonare._ffi_types_core import SonareMeterTelemetryRecordWideV2
 
     raw = SonareMeterTelemetryRecordWideV2()
-    raw.channel_count = 2
+    raw.num_channels = 2
     raw.input_peak_db[0] = -6.0
     raw.input_peak_db[1] = -12.0
     record = _meter_telemetry_wide_from_c(raw)

@@ -145,7 +145,7 @@ describe('masteringRepairDereverbClassicalStereo (WASM)', () => {
     // wpeEnabled is clear by default, so these two zeros are the measurement,
     // not unfilled fields.
     const off = masteringRepairDereverbClassicalStereo({ left, right, sampleRate: SR });
-    expect(off.reports[0].detected.latePredictability).toBe(0);
+    expect(off.reports[0].detected).not.toHaveProperty('latePredictability');
     expect(off.reports[0].wpePredictorNorm).toBe(0);
 
     // The control: with the stage on, both fill in, and the post-clamp figure
@@ -159,7 +159,9 @@ describe('masteringRepairDereverbClassicalStereo (WASM)', () => {
     });
     expect(on.reports[0].detected.latePredictability).toBeGreaterThan(0);
     expect(on.reports[0].wpePredictorNorm).toBeGreaterThan(0);
-    expect(on.reports[0].wpePredictorNorm).toBeLessThan(on.reports[0].detected.latePredictability);
+    expect(on.reports[0].wpePredictorNorm).toBeLessThan(
+      on.reports[0].detected.latePredictability ?? Number.NaN,
+    );
   });
 
   it('validates threshold and attenuation to a closed [0, 1], so 1 is the strongest gate', () => {

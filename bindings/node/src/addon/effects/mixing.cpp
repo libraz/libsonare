@@ -101,9 +101,9 @@ Napi::Object MixMeterToObject(Napi::Env env, const SonareMixMeterSnapshot& snaps
   out.Set("shortTermLufs", snapshot.short_term_lufs);
   out.Set("integratedLufs", snapshot.integrated_lufs);
   out.Set("gainReductionDb", snapshot.gain_reduction_db);
-  out.Set("truePeakDbL", snapshot.true_peak_db_l);
-  out.Set("truePeakDbR", snapshot.true_peak_db_r);
-  out.Set("maxTruePeakDb", snapshot.max_true_peak_db);
+  out.Set("truePeakDbL", snapshot.true_peak_dbtp_l);
+  out.Set("truePeakDbR", snapshot.true_peak_dbtp_r);
+  out.Set("maxTruePeakDb", snapshot.max_true_peak_dbtp);
   out.Set("seq", Napi::Number::New(env, static_cast<double>(snapshot.seq)));
   return out;
 }

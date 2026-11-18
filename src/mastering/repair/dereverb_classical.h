@@ -4,6 +4,7 @@
 /// @brief Classical (non-ML) STFT-domain late-reverberation suppression.
 
 #include <cstddef>
+#include <optional>
 #include <vector>
 
 #include "core/audio.h"
@@ -74,8 +75,8 @@ struct ReverbDetection {
   float late_decay_ratio_db = 0.0f;
   /// Mean WPE predictor norm, recorded BEFORE the 0.98 clamp. Higher means the
   /// frame is more predictable from the lagged one, which is what a late tail
-  /// is. Zero when the WPE stage did not run.
-  float late_predictability = 0.0f;
+  /// is. Empty when the WPE stage did not run.
+  std::optional<float> late_predictability;
 };
 
 /// @brief What a dereverb pass found and what it removed.
@@ -87,7 +88,7 @@ struct DereverbReport {
   /// while the mask still reports a mean, which no other field separates.
   float suppressed_fraction = 0.0f;
   /// Mean WPE predictor norm actually applied, after the 0.98 clamp. Below
-  /// `detected.late_predictability` says the clamp acted, which is otherwise a
+  /// `*detected.late_predictability` says the clamp acted, which is otherwise a
   /// silent branch. Zero when the WPE stage did not run.
   float wpe_predictor_norm = 0.0f;
 };

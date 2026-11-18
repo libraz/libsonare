@@ -412,10 +412,10 @@ class Audio:
             SonareError: If the file cannot be opened, parsed, or probed.
         """
         lib = _get_lib()
-        probe = getattr(lib, "sonare_audio_file_channel_count", None)
+        probe = getattr(lib, "sonare_audio_file_num_channels", None)
         if probe is None:
             raise _not_supported(
-                "loaded libsonare does not expose sonare_audio_file_channel_count; "
+                "loaded libsonare does not expose sonare_audio_file_num_channels; "
                 "rebuild or install a newer native library"
             )
         out_channels = ctypes.c_int()
@@ -1245,7 +1245,7 @@ class Audio:
         ``oversample_factor`` must be a power of two in [1, 16]; omit it for 4.
         """
         return self._audio_float(
-            "sonare_audio_true_peak_db",
+            "sonare_audio_true_peak_dbtp",
             self._require_handle(),
             _to_c_int(_oversample_factor(oversample_factor), "oversample_factor"),
         )

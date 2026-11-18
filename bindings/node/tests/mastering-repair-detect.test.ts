@@ -304,7 +304,9 @@ describe('masteringRepairDetectReverb', () => {
 
   it('runs the WPE analysis only under wpeEnabled', () => {
     const samples = tone(LENGTH, 440);
-    expect(masteringRepairDetectReverb({ samples, sampleRate: SR }).latePredictability).toBe(0);
+    expect(masteringRepairDetectReverb({ samples, sampleRate: SR })).not.toHaveProperty(
+      'latePredictability',
+    );
     expect(
       masteringRepairDetectReverb({ samples, sampleRate: SR, wpeEnabled: true }).latePredictability,
     ).toBeGreaterThan(0);

@@ -174,7 +174,7 @@ int cmd_playback(const CliArgs& args, const Audio&) {
   }
 
   int out_channels = 0;
-  SonareError query_err = sonare_playback_renderer_output_channel_count(renderer, &out_channels);
+  SonareError query_err = sonare_playback_renderer_num_output_channels(renderer, &out_channels);
   if (query_err != SONARE_OK) {
     sonare_playback_renderer_destroy(renderer);
     if (hrtf != nullptr) sonare_hrtf_set_destroy(hrtf);

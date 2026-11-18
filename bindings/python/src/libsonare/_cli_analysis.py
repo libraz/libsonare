@@ -58,7 +58,7 @@ def cmd_info(args: argparse.Namespace) -> int:
     n = int(values.size)
     dur = n / sr if sr else 0.0
     # load_library's strict ABI-version equality check means any dylib that
-    # loads at all already exposes sonare_audio_file_channel_count.
+    # loads at all already exposes sonare_audio_file_num_channels.
     channels = Audio.file_channel_count(args.file)
     if channels <= 0:
         raise _unknown_error("libsonare returned an invalid audio channel count")

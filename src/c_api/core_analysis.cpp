@@ -27,8 +27,8 @@ bool valid_chord_detection_options(const SonareChordDetectionOptions& options) {
 
 ChordConfig chord_config_from_options(const SonareChordDetectionOptions& options) {
   ChordConfig config;
-  config.min_duration = options.min_duration;
-  config.smoothing_window = options.smoothing_window;
+  config.min_duration = options.min_duration_sec;
+  config.smoothing_window = options.smoothing_window_sec;
   config.threshold = options.threshold;
   config.use_triads_only = options.use_triads_only != 0;
   config.n_fft = options.n_fft;
@@ -257,7 +257,7 @@ SonareError sonare_analyze_dynamics(const float* samples, size_t length, int sam
     out->peak_db = dynamics.peak_db;
     out->rms_db = dynamics.rms_db;
     out->crest_factor = dynamics.crest_factor;
-    out->loudness_range_db = dynamics.loudness_range_db;
+    out->loudness_range_lu = dynamics.loudness_range_db;
     out->is_compressed = dynamics.is_compressed ? 1 : 0;
 
     const LoudnessCurve& curve = analyzer.loudness_curve();
@@ -546,8 +546,8 @@ SonareError sonare_analyze_sections(const float* samples, size_t length, int sam
       auto data = std::make_unique<SonareSection[]>(sections.size());
       for (size_t i = 0; i < sections.size(); ++i) {
         data[i].type = static_cast<SonareSectionType>(sections[i].type);
-        data[i].start = sections[i].start;
-        data[i].end = sections[i].end;
+        data[i].start_sec = sections[i].start;
+        data[i].end_sec = sections[i].end;
         data[i].energy_level = sections[i].energy_level;
         data[i].confidence = sections[i].confidence;
         data[i].group = static_cast<int32_t>(sections[i].group);
@@ -570,10 +570,10 @@ SonareBoundaryOptions sonare_boundary_options_default(void) {
   options.absolute_threshold = config.absolute_threshold;
   options.n_mfcc = config.n_mfcc;
   options.n_chroma = config.n_chroma;
-  options.peak_distance = config.peak_distance;
+  options.peak_distance_sec = config.peak_distance;
   options.use_mfcc = config.use_mfcc ? 1 : 0;
   options.use_chroma = config.use_chroma ? 1 : 0;
-  options.reference_window = config.reference_window;
+  options.reference_window_sec = config.reference_window;
   return options;
 }
 
@@ -604,10 +604,10 @@ SonareError sonare_detect_boundaries(const float* samples, size_t length, int sa
   config.absolute_threshold = options->absolute_threshold;
   config.n_mfcc = options->n_mfcc;
   config.n_chroma = options->n_chroma;
-  config.peak_distance = options->peak_distance;
+  config.peak_distance = options->peak_distance_sec;
   config.use_mfcc = options->use_mfcc != 0;
   config.use_chroma = options->use_chroma != 0;
-  config.reference_window = options->reference_window;
+  config.reference_window = options->reference_window_sec;
   if (const SonareError err = run_validation([&] { validate_boundary_config(config); });
       err != SONARE_OK) {
     return err;
@@ -619,7 +619,7 @@ SonareError sonare_detect_boundaries(const float* samples, size_t length, int sa
     if (!boundaries.empty()) {
       auto data = std::make_unique<SonareBoundary[]>(boundaries.size());
       for (size_t i = 0; i < boundaries.size(); ++i) {
-        data[i].time = boundaries[i].time;
+        data[i].time_sec = boundaries[i].time;
         data[i].frame = boundaries[i].frame;
         data[i].strength = boundaries[i].strength;
       }
@@ -683,13 +683,13 @@ SonareError sonare_analyze_melody_ex(const float* samples, size_t length, int sa
     const MelodyContour& contour = analyzer.contour();
     out->pitch_range_octaves = contour.pitch_range_octaves;
     out->pitch_stability = contour.pitch_stability;
-    out->mean_frequency = contour.mean_frequency;
-    out->vibrato_rate = contour.vibrato_rate;
+    out->mean_frequency_hz = contour.mean_frequency;
+    out->vibrato_rate_hz = contour.vibrato_rate;
     if (!contour.pitches.empty()) {
       auto data = std::make_unique<SonareMelodyPoint[]>(contour.pitches.size());
       for (size_t i = 0; i < contour.pitches.size(); ++i) {
-        data[i].time = contour.pitches[i].time;
-        data[i].frequency = contour.pitches[i].frequency;
+        data[i].time_sec = contour.pitches[i].time;
+        data[i].frequency_hz = contour.pitches[i].frequency;
         data[i].confidence = contour.pitches[i].confidence;
       }
       out->points = release_array(data);

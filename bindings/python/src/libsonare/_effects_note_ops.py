@@ -495,7 +495,7 @@ def decompose_note_pitch(
     _check(rc)
     try:
         return PitchDecompositionResult(
-            center_hz=float(out.centre_hz),
+            center_hz=float(out.center_hz),
             drift_cents=_from_c_float_array(out.drift_cents, out.count),
             vibrato_cents=_from_c_float_array(out.vibrato_cents, out.count),
         )

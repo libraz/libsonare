@@ -250,7 +250,7 @@
     "fields": [
       {
         "kind": "float",
-        "name": "time",
+        "name": "time_sec",
         "offset": 0,
         "size": 4
       },
@@ -316,7 +316,7 @@
       },
       {
         "kind": "float",
-        "name": "peak_distance",
+        "name": "peak_distance_sec",
         "offset": 28,
         "size": 4
       },
@@ -334,7 +334,7 @@
       },
       {
         "kind": "float",
-        "name": "reference_window",
+        "name": "reference_window_sec",
         "offset": 40,
         "size": 4
       }
@@ -556,13 +556,13 @@
       },
       {
         "kind": "float",
-        "name": "start",
+        "name": "start_sec",
         "offset": 8,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "end",
+        "name": "end_sec",
         "offset": 12,
         "size": 4
       },
@@ -622,13 +622,13 @@
       },
       {
         "kind": "float",
-        "name": "min_duration",
+        "name": "min_duration_sec",
         "offset": 4,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "smoothing_window",
+        "name": "smoothing_window_sec",
         "offset": 8,
         "size": 4
       },
@@ -796,13 +796,13 @@
     "fields": [
       {
         "kind": "unsigned",
-        "name": "sample_count",
+        "name": "clipped_samples",
         "offset": 0,
         "size": 8
       },
       {
         "kind": "float",
-        "name": "sample_fraction",
+        "name": "clipped_ratio",
         "offset": 8,
         "size": 4
       },
@@ -1950,28 +1950,28 @@
         "kind": "aggregate",
         "name": "detected",
         "offset": 0,
-        "size": 8
+        "size": 12
       },
       {
         "kind": "float",
         "name": "mean_reduction_db",
-        "offset": 8,
-        "size": 4
-      },
-      {
-        "kind": "float",
-        "name": "suppressed_fraction",
         "offset": 12,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "wpe_predictor_norm",
+        "name": "suppressed_fraction",
         "offset": 16,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "wpe_predictor_norm",
+        "offset": 20,
         "size": 4
       }
     ],
-    "size": 20
+    "size": 24
   },
   "SonareDereverbResult": {
     "align": 8,
@@ -1992,7 +1992,7 @@
         "kind": "aggregate",
         "name": "report",
         "offset": 16,
-        "size": 20
+        "size": 24
       }
     ],
     "size": 40
@@ -2022,7 +2022,7 @@
         "kind": "aggregate",
         "name": "report",
         "offset": 24,
-        "size": 20
+        "size": 24
       }
     ],
     "size": 48
@@ -2146,7 +2146,7 @@
       },
       {
         "kind": "float",
-        "name": "loudness_range_db",
+        "name": "loudness_range_lu",
         "offset": 16,
         "size": 4
       },
@@ -2824,7 +2824,7 @@
       },
       {
         "kind": "float",
-        "name": "click_seconds",
+        "name": "click_sec",
         "offset": 16,
         "size": 8
       }
@@ -3646,7 +3646,7 @@
       },
       {
         "kind": "float",
-        "name": "loudness_range",
+        "name": "loudness_range_lu",
         "offset": 20,
         "size": 4
       }
@@ -3712,7 +3712,7 @@
       },
       {
         "kind": "float",
-        "name": "output_lra",
+        "name": "output_loudness_range_lu",
         "offset": 52,
         "size": 4
       },
@@ -3820,7 +3820,7 @@
       },
       {
         "kind": "float",
-        "name": "output_lra",
+        "name": "output_loudness_range_lu",
         "offset": 60,
         "size": 4
       },
@@ -3928,7 +3928,7 @@
       },
       {
         "kind": "float",
-        "name": "loudness_range",
+        "name": "loudness_range_lu",
         "offset": 16,
         "size": 4
       }
@@ -4204,13 +4204,13 @@
     "fields": [
       {
         "kind": "float",
-        "name": "time",
+        "name": "time_sec",
         "offset": 0,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "frequency",
+        "name": "frequency_hz",
         "offset": 4,
         "size": 4
       },
@@ -4252,13 +4252,13 @@
       },
       {
         "kind": "float",
-        "name": "mean_frequency",
+        "name": "mean_frequency_hz",
         "offset": 24,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "vibrato_rate",
+        "name": "vibrato_rate_hz",
         "offset": 28,
         "size": 4
       }
@@ -4360,19 +4360,19 @@
       },
       {
         "kind": "float",
-        "name": "true_peak_db_l",
+        "name": "true_peak_dbtp_l",
         "offset": 40,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "true_peak_db_r",
+        "name": "true_peak_dbtp_r",
         "offset": 44,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "max_true_peak_db",
+        "name": "max_true_peak_dbtp",
         "offset": 48,
         "size": 4
       },
@@ -4468,19 +4468,19 @@
       },
       {
         "kind": "float",
-        "name": "true_peak_db_l",
+        "name": "true_peak_dbtp_l",
         "offset": 40,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "true_peak_db_r",
+        "name": "true_peak_dbtp_r",
         "offset": 44,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "max_true_peak_db",
+        "name": "max_true_peak_dbtp",
         "offset": 48,
         "size": 4
       },
@@ -4564,7 +4564,7 @@
       },
       {
         "kind": "signed",
-        "name": "channel_count",
+        "name": "num_channels",
         "offset": 24,
         "size": 4
       },
@@ -4582,13 +4582,13 @@
       },
       {
         "kind": "aggregate",
-        "name": "true_peak_db",
+        "name": "true_peak_dbtp",
         "offset": 92,
         "size": 32
       },
       {
         "kind": "float",
-        "name": "max_true_peak_db",
+        "name": "max_true_peak_dbtp",
         "offset": 124,
         "size": 4
       },
@@ -4660,7 +4660,7 @@
       },
       {
         "kind": "signed",
-        "name": "channel_count",
+        "name": "num_channels",
         "offset": 24,
         "size": 4
       },
@@ -4678,13 +4678,13 @@
       },
       {
         "kind": "aggregate",
-        "name": "true_peak_db",
+        "name": "true_peak_dbtp",
         "offset": 92,
         "size": 32
       },
       {
         "kind": "float",
-        "name": "max_true_peak_db",
+        "name": "max_true_peak_dbtp",
         "offset": 124,
         "size": 4
       },
@@ -4786,13 +4786,13 @@
       },
       {
         "kind": "float",
-        "name": "fmin",
+        "name": "fmin_hz",
         "offset": 28,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "fmax",
+        "name": "fmax_hz",
         "offset": 32,
         "size": 4
       },
@@ -5044,19 +5044,19 @@
       },
       {
         "kind": "float",
-        "name": "true_peak_db_l",
+        "name": "true_peak_dbtp_l",
         "offset": 52,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "true_peak_db_r",
+        "name": "true_peak_dbtp_r",
         "offset": 56,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "max_true_peak_db",
+        "name": "max_true_peak_dbtp",
         "offset": 60,
         "size": 4
       },
@@ -5080,13 +5080,13 @@
       },
       {
         "kind": "aggregate",
-        "name": "true_peak_db",
+        "name": "true_peak_dbtp",
         "offset": 136,
         "size": 32
       },
       {
         "kind": "signed",
-        "name": "channel_count",
+        "name": "num_channels",
         "offset": 168,
         "size": 4
       }
@@ -6160,7 +6160,7 @@
     "fields": [
       {
         "kind": "float",
-        "name": "centre_hz",
+        "name": "center_hz",
         "offset": 0,
         "size": 4
       },
@@ -7036,7 +7036,7 @@
       },
       {
         "kind": "unsigned",
-        "name": "channel_count",
+        "name": "num_channels",
         "offset": 8,
         "size": 4
       },
@@ -8209,9 +8209,15 @@
         "name": "late_predictability",
         "offset": 4,
         "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "has_late_predictability",
+        "offset": 8,
+        "size": 4
       }
     ],
-    "size": 8
+    "size": 12
   },
   "SonareRhythmResult": {
     "align": 8,
@@ -8926,13 +8932,13 @@
       },
       {
         "kind": "float",
-        "name": "start",
+        "name": "start_sec",
         "offset": 4,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "end",
+        "name": "end_sec",
         "offset": 8,
         "size": 4
       },
@@ -9400,13 +9406,13 @@
       },
       {
         "kind": "float",
-        "name": "fmin",
+        "name": "fmin_hz",
         "offset": 16,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "fmax",
+        "name": "fmax_hz",
         "offset": 20,
         "size": 4
       },
@@ -10006,7 +10012,7 @@
       },
       {
         "kind": "float",
-        "name": "true_peak_db",
+        "name": "true_peak_dbtp",
         "offset": 4,
         "size": 4
       },

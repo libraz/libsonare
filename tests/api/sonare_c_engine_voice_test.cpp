@@ -638,12 +638,12 @@ TEST_CASE("sonare_realtime_engine_c_api_smoke", "[c_api]") {
   metronome.click_samples = 2000000000;
   REQUIRE(sonare_engine_set_metronome(engine, &metronome) == SONARE_ERROR_INVALID_PARAMETER);
   metronome.click_samples = 0;
-  metronome.click_seconds = 2.0;
+  metronome.click_sec = 2.0;
   REQUIRE(sonare_engine_set_metronome(engine, &metronome) == SONARE_ERROR_INVALID_PARAMETER);
-  metronome.click_seconds = std::numeric_limits<double>::quiet_NaN();
+  metronome.click_sec = std::numeric_limits<double>::quiet_NaN();
   REQUIRE(sonare_engine_set_metronome(engine, &metronome) == SONARE_ERROR_INVALID_PARAMETER);
   metronome.click_samples = 16;
-  metronome.click_seconds = 0.0;
+  metronome.click_sec = 0.0;
   int64_t count_in_end = 0;
   REQUIRE(sonare_engine_count_in_end_sample(engine, 0, 2, &count_in_end) == SONARE_OK);
   REQUIRE(count_in_end == 288000);

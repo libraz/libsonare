@@ -2645,7 +2645,7 @@ TEST_CASE("sonare_engine_drain_meter_telemetry_wide reports per-plane meters for
   for (size_t i = 0; i < meter_count; ++i) {
     if (meters[i].target_id != 33) continue;
     found_wide_bus = true;
-    REQUIRE(meters[i].channel_count == 6);
+    REQUIRE(meters[i].num_channels == 6);
     REQUIRE(meters[i].peak_db[4] > meters[i].peak_db[0] + 10.0f);
   }
   REQUIRE(found_wide_bus);

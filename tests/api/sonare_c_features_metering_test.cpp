@@ -569,8 +569,8 @@ TEST_CASE("sonare_lufs", "[c_api]") {
     REQUIRE(std::isfinite(result.integrated_lufs));
     REQUIRE(std::isfinite(result.momentary_lufs));
     REQUIRE(std::isfinite(result.short_term_lufs));
-    REQUIRE(std::isfinite(result.loudness_range));
-    REQUIRE(result.loudness_range >= 0.0f);
+    REQUIRE(std::isfinite(result.loudness_range_lu));
+    REQUIRE(result.loudness_range_lu >= 0.0f);
   }
 
   SECTION("louder signal measures higher integrated LUFS") {
@@ -659,19 +659,19 @@ TEST_CASE("sonare_metering basic offline meters", "[c_api]") {
     float out = 0.0f;
     REQUIRE(sonare_metering_peak_db(samples.data(), samples.size(), 48000, nullptr) ==
             SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(sonare_metering_true_peak_db(samples.data(), samples.size(), 48000, 3, &out) ==
+    REQUIRE(sonare_metering_true_peak_dbtp(samples.data(), samples.size(), 48000, 3, &out) ==
             SONARE_ERROR_INVALID_PARAMETER);  // 3 is not a power of two
   }
 }
 
-TEST_CASE("sonare_metering_true_peak_db", "[c_api]") {
+TEST_CASE("sonare_metering_true_peak_dbtp", "[c_api]") {
   SECTION("matches sample peak within a small margin for low-frequency sine") {
     auto samples = generate_sine(440.0f, 48000, 1.0f);
     float peak_db_value = 0.0f;
     float tp_db = 0.0f;
     REQUIRE(sonare_metering_peak_db(samples.data(), samples.size(), 48000, &peak_db_value) ==
             SONARE_OK);
-    REQUIRE(sonare_metering_true_peak_db(samples.data(), samples.size(), 48000, 0, &tp_db) ==
+    REQUIRE(sonare_metering_true_peak_dbtp(samples.data(), samples.size(), 48000, 0, &tp_db) ==
             SONARE_OK);
     // True peak >= sample peak (inter-sample peaks can only be higher).
     REQUIRE(tp_db >= peak_db_value - 0.1f);
@@ -1196,8 +1196,8 @@ TEST_CASE("mel and MFCC results carry the parameters that invert them", "[c_api]
     CHECK(mfcc.sample_rate == 22050);
     CHECK(mfcc.hop_length == 512);
     CHECK(mfcc.n_fft == 2048);
-    CHECK(mfcc.fmin == 0.0f);
-    CHECK(mfcc.fmax == 8000.0f);
+    CHECK(mfcc.fmin_hz == 0.0f);
+    CHECK(mfcc.fmax_hz == 8000.0f);
     CHECK(mfcc.htk == 0);
     CHECK(mfcc.is_db == 0);
     CHECK(mfcc.lifter == 22.0f);
@@ -1229,13 +1229,13 @@ TEST_CASE("mel and MFCC results carry the parameters that invert them", "[c_api]
     size_t audio_length = 0;
     REQUIRE(sonare_mfcc_to_audio_checked_ex2(mfcc.coefficients, total, mfcc.n_mfcc, mfcc.n_frames,
                                              mfcc.n_mels, mfcc.sample_rate, mfcc.n_fft,
-                                             mfcc.hop_length, mfcc.fmin, mfcc.fmax, mfcc.htk,
+                                             mfcc.hop_length, mfcc.fmin_hz, mfcc.fmax_hz, mfcc.htk,
                                              mfcc.lifter, 2, &audio, &audio_length) == SONARE_OK);
     CHECK(audio_length > 0);
     sonare_free_floats(audio);
     CHECK(sonare_mfcc_to_audio_checked_ex2(
               mfcc.coefficients, total + 1, mfcc.n_mfcc, mfcc.n_frames, mfcc.n_mels,
-              mfcc.sample_rate, mfcc.n_fft, mfcc.hop_length, mfcc.fmin, mfcc.fmax, mfcc.htk,
+              mfcc.sample_rate, mfcc.n_fft, mfcc.hop_length, mfcc.fmin_hz, mfcc.fmax_hz, mfcc.htk,
               mfcc.lifter, 2, &audio, &audio_length) == SONARE_ERROR_INVALID_PARAMETER);
     sonare_free_inverse_result(&checked);
     sonare_free_inverse_result(&unchecked);

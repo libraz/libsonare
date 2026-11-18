@@ -12,8 +12,8 @@ Every field of that report is a ratio or a fraction, so unlike the denoiser's
 below check rather than restate.
 
 Two more things a default-config test cannot witness, and both are covered:
-``wpe_enabled`` is clear by default, which leaves ``late_predictability`` and
-``wpe_predictor_norm`` at exactly zero; and a short input is PADDED here where
+``wpe_enabled`` is clear by default, which leaves ``late_predictability`` None
+and ``wpe_predictor_norm`` at exactly zero; and a short input is PADDED here where
 the denoise pair rejects it.
 """
 
@@ -191,7 +191,7 @@ class TestMasteringRepairDereverbClassicalStereo:
         left, right = _wet_pair()
 
         off = libsonare.mastering_repair_dereverb_classical_stereo(left, right, SR).report
-        assert off.detected.late_predictability == 0.0
+        assert off.detected.late_predictability is None
         assert off.wpe_predictor_norm == 0.0
         # The pass still ran, so the two zeros above are about the stage and
         # not about an inert call.
@@ -200,6 +200,7 @@ class TestMasteringRepairDereverbClassicalStereo:
         on = libsonare.mastering_repair_dereverb_classical_stereo(
             left, right, SR, wpe_enabled=True, wpe_iterations=2, wpe_taps=3
         ).report
+        assert on.detected.late_predictability is not None
         assert on.detected.late_predictability > 0.0
         assert on.wpe_predictor_norm > 0.0
         # after the clamp <= before the clamp, by construction.

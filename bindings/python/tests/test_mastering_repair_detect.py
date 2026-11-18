@@ -365,13 +365,14 @@ class TestDetectReverb:
 
         assert detected.late_decay_ratio_db != 0.0
 
-    def test_late_predictability_is_zero_unless_the_wpe_stage_runs(self) -> None:
+    def test_late_predictability_is_absent_unless_the_wpe_stage_runs(self) -> None:
         tone = _tone()
 
         off = libsonare.mastering_repair_detect_reverb(tone, SR)
         on = libsonare.mastering_repair_detect_reverb(tone, SR, wpe_enabled=True)
 
-        assert off.late_predictability == 0.0
+        assert off.late_predictability is None
+        assert on.late_predictability is not None
         assert on.late_predictability > 0.0
 
     def test_agrees_with_the_analysis_the_repair_reports(self) -> None:
@@ -384,7 +385,8 @@ class TestDetectReverb:
         # The two paths sum in different orders; Linux aarch64 parts by 0.0016 dB.
         reported = repaired.report.detected
         assert detected.late_decay_ratio_db == pytest.approx(reported.late_decay_ratio_db, abs=1e-2)
-        assert detected.late_predictability == pytest.approx(reported.late_predictability, abs=1e-6)
+        assert detected.late_predictability is None
+        assert reported.late_predictability is None
 
     def test_refuses_a_non_power_of_two_window_by_name(self) -> None:
         with pytest.raises(ValueError, match="n_fft"):

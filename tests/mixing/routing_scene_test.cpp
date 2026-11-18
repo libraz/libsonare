@@ -394,7 +394,7 @@ TEST_CASE("Scene-loaded mixer exposes strip meter and goniometer snapshots", "[m
   REQUIRE(sonare_strip_meter(strip, &meter) == SONARE_OK);
   REQUIRE(meter.seq >= static_cast<uint64_t>(kBlocks));
   REQUIRE(meter.gain_reduction_db < -0.1f);
-  REQUIRE(meter.max_true_peak_db > sonare::constants::kFloorDb);
+  REQUIRE(meter.max_true_peak_dbtp > sonare::constants::kFloorDb);
   REQUIRE(std::isfinite(meter.momentary_lufs));
   REQUIRE(meter.momentary_lufs > -70.0f);
   REQUIRE(std::isfinite(meter.integrated_lufs));

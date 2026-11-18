@@ -107,11 +107,11 @@ SonareError sonare_playback_renderer_set_head_orientation(SonarePlaybackRenderer
 /// @brief Channel count of the active input layout.
 /// @details With `input.layout = "auto"` this follows the channel count of the
 ///          most recent non-empty `_process_*` call (2 before the first call).
-SonareError sonare_playback_renderer_input_channel_count(const SonarePlaybackRenderer* renderer,
-                                                         int* out);
+SonareError sonare_playback_renderer_num_input_channels(const SonarePlaybackRenderer* renderer,
+                                                        int* out);
 /// @brief Channel count of the output target.
-SonareError sonare_playback_renderer_output_channel_count(const SonarePlaybackRenderer* renderer,
-                                                          int* out);
+SonareError sonare_playback_renderer_num_output_channels(const SonarePlaybackRenderer* renderer,
+                                                         int* out);
 /// @brief Renders one planar block.
 /// @details @p frames must not exceed the max block size; 0 is a no-op that
 ///          never switches the input layout. With a fixed input layout

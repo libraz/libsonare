@@ -771,7 +771,7 @@ Napi::Value SonareWrap::AnalyzeDynamics(const Napi::CallbackInfo& info) {
   result.Set("peakDb", Napi::Number::New(env, dynamics.peak_db));
   result.Set("rmsDb", Napi::Number::New(env, dynamics.rms_db));
   result.Set("crestFactor", Napi::Number::New(env, dynamics.crest_factor));
-  result.Set("loudnessRangeDb", Napi::Number::New(env, dynamics.loudness_range_db));
+  result.Set("loudnessRangeDb", Napi::Number::New(env, dynamics.loudness_range_lu));
   result.Set("isCompressed", Napi::Boolean::New(env, dynamics.is_compressed != 0));
 
   auto times = Napi::Float32Array::New(env, dynamics.loudness_count);
@@ -935,10 +935,10 @@ Napi::Array ChordsToJs(Napi::Env env, const SonareChordAnalysisResult& analysis)
     chord.Set("bassName", Napi::String::New(env, PitchClassNameLocal(analysis.chords[i].bass)));
     chord.Set("quality", Napi::Number::New(env, static_cast<int>(analysis.chords[i].quality)));
     chord.Set("name", Napi::String::New(env, ChordSymbol(analysis.chords[i])));
-    chord.Set("start", Napi::Number::New(env, analysis.chords[i].start));
-    chord.Set("end", Napi::Number::New(env, analysis.chords[i].end));
+    chord.Set("start", Napi::Number::New(env, analysis.chords[i].start_sec));
+    chord.Set("end", Napi::Number::New(env, analysis.chords[i].end_sec));
     chord.Set("duration",
-              Napi::Number::New(env, analysis.chords[i].end - analysis.chords[i].start));
+              Napi::Number::New(env, analysis.chords[i].end_sec - analysis.chords[i].start_sec));
     chord.Set("confidence", Napi::Number::New(env, analysis.chords[i].confidence));
     chords.Set(static_cast<uint32_t>(i), chord);
   }
@@ -998,8 +998,8 @@ Napi::Value SonareWrap::DetectChords(const Napi::CallbackInfo& info) {
 
   SonareChordAnalysisResult analysis{};
   SonareChordDetectionOptions options{};
-  options.min_duration = min_duration;
-  options.smoothing_window = smoothing_window;
+  options.min_duration_sec = min_duration;
+  options.smoothing_window_sec = smoothing_window;
   options.threshold = threshold;
   options.use_triads_only = use_triads_only ? 1 : 0;
   options.n_fft = n_fft;
@@ -1083,8 +1083,8 @@ Napi::Value SonareWrap::FunctionalAnalysis(const Napi::CallbackInfo& info) {
   if (!OptionalBoolArg(env, info, 17, "tuningAuto", true, &tuning_auto)) return env.Undefined();
 
   SonareChordDetectionOptions options{};
-  options.min_duration = min_duration;
-  options.smoothing_window = smoothing_window;
+  options.min_duration_sec = min_duration;
+  options.smoothing_window_sec = smoothing_window;
   options.threshold = threshold;
   options.use_triads_only = use_triads_only ? 1 : 0;
   options.n_fft = n_fft;

@@ -141,8 +141,8 @@ class SonareChord(CStruct):
     _fields_ = [
         ("root", ctypes.c_int32),
         ("quality", ctypes.c_int32),
-        ("start", ctypes.c_float),
-        ("end", ctypes.c_float),
+        ("start_sec", ctypes.c_float),
+        ("end_sec", ctypes.c_float),
         ("confidence", ctypes.c_float),
         ("bass", ctypes.c_int32),
     ]
@@ -168,8 +168,8 @@ class SonareChordDetectionOptions(CStruct):
 
     _fields_ = [
         ("struct_version", ctypes.c_int),
-        ("min_duration", ctypes.c_float),
-        ("smoothing_window", ctypes.c_float),
+        ("min_duration_sec", ctypes.c_float),
+        ("smoothing_window_sec", ctypes.c_float),
         ("threshold", ctypes.c_float),
         ("use_triads_only", ctypes.c_int),
         ("n_fft", ctypes.c_int),
@@ -201,8 +201,8 @@ class SonareSection(CStruct):
 
     _fields_ = [
         ("type", ctypes.c_int32),
-        ("start", ctypes.c_float),
-        ("end", ctypes.c_float),
+        ("start_sec", ctypes.c_float),
+        ("end_sec", ctypes.c_float),
         ("energy_level", ctypes.c_float),
         ("confidence", ctypes.c_float),
         ("group", ctypes.c_int32),
@@ -222,7 +222,7 @@ class SonareBoundary(CStruct):
     """Maps to SonareBoundary in sonare_c.h."""
 
     _fields_ = [
-        ("time", ctypes.c_float),
+        ("time_sec", ctypes.c_float),
         ("frame", ctypes.c_int32),
         ("strength", ctypes.c_float),
     ]
@@ -255,10 +255,10 @@ class SonareBoundaryOptions(CStruct):
         ("absolute_threshold", ctypes.c_float),
         ("n_mfcc", ctypes.c_int32),
         ("n_chroma", ctypes.c_int32),
-        ("peak_distance", ctypes.c_float),
+        ("peak_distance_sec", ctypes.c_float),
         ("use_mfcc", ctypes.c_int32),
         ("use_chroma", ctypes.c_int32),
-        ("reference_window", ctypes.c_float),
+        ("reference_window_sec", ctypes.c_float),
     ]
 
 
@@ -266,8 +266,8 @@ class SonareMelodyPoint(CStruct):
     """Maps to SonareMelodyPoint in sonare_c.h."""
 
     _fields_ = [
-        ("time", ctypes.c_float),
-        ("frequency", ctypes.c_float),
+        ("time_sec", ctypes.c_float),
+        ("frequency_hz", ctypes.c_float),
         ("confidence", ctypes.c_float),
     ]
 
@@ -280,8 +280,8 @@ class SonareMelodyResult(CStruct):
         ("point_count", ctypes.c_size_t),
         ("pitch_range_octaves", ctypes.c_float),
         ("pitch_stability", ctypes.c_float),
-        ("mean_frequency", ctypes.c_float),
-        ("vibrato_rate", ctypes.c_float),
+        ("mean_frequency_hz", ctypes.c_float),
+        ("vibrato_rate_hz", ctypes.c_float),
     ]
 
 
@@ -316,8 +316,8 @@ class SonareStreamConfig(CStruct):
         ("n_fft", ctypes.c_int32),
         ("hop_length", ctypes.c_int32),
         ("n_mels", ctypes.c_int32),
-        ("fmin", ctypes.c_float),
-        ("fmax", ctypes.c_float),
+        ("fmin_hz", ctypes.c_float),
+        ("fmax_hz", ctypes.c_float),
         ("reference_hz", ctypes.c_float),
         ("compute_magnitude", ctypes.c_int32),
         ("compute_mel", ctypes.c_int32),
@@ -511,8 +511,8 @@ class SonareMfccResult(CStruct):
         ("hop_length", ctypes.c_int32),
         ("n_fft", ctypes.c_int32),
         ("n_mels", ctypes.c_int32),
-        ("fmin", ctypes.c_float),
-        ("fmax", ctypes.c_float),
+        ("fmin_hz", ctypes.c_float),
+        ("fmax_hz", ctypes.c_float),
         ("htk", ctypes.c_int32),
         ("is_db", ctypes.c_int32),
         ("lifter", ctypes.c_float),

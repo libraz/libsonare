@@ -128,7 +128,7 @@ def lufs(
         short_term_lufs=float(out.short_term_lufs),
         max_momentary_lufs=float(out.max_momentary_lufs),
         max_short_term_lufs=float(out.max_short_term_lufs),
-        loudness_range_lu=float(out.loudness_range),
+        loudness_range_lu=float(out.loudness_range_lu),
     )
 
 
@@ -205,7 +205,7 @@ def lufs_interleaved(
         short_term_lufs=float(out.short_term_lufs),
         max_momentary_lufs=float(out.max_momentary_lufs),
         max_short_term_lufs=float(out.max_short_term_lufs),
-        loudness_range_lu=float(out.loudness_range),
+        loudness_range_lu=float(out.loudness_range_lu),
     )
 
 
@@ -437,7 +437,7 @@ def metering_true_peak_db(
     lib = _get_lib()
     c_array, length = _to_c_float_array(sample_buf)
     out = ctypes.c_float(0.0)
-    rc = lib.sonare_metering_true_peak_db(
+    rc = lib.sonare_metering_true_peak_dbtp(
         c_array,
         _to_c_size_t(length, "length"),
         _to_c_int(sample_rate, "sample_rate"),

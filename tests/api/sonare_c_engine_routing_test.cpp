@@ -633,7 +633,7 @@ TEST_CASE("C engine wide meter carries pre-trim input and compressor reduction",
     }
   }
   REQUIRE(found);
-  REQUIRE(master.channel_count >= 1);
+  REQUIRE(master.num_channels >= 1);
   REQUIRE(master.input_peak_db[0] == Catch::Approx(0.0f).margin(0.001f));
   REQUIRE(master.gain_reduction_db < -10.0f);
   REQUIRE(master.peak_db[0] < master.input_peak_db[0] - 10.0f);

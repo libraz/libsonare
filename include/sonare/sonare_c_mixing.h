@@ -76,19 +76,19 @@ typedef struct {
      reconstruction at the strip's configured oversample factor (4 or 8). This is a STREAMING
      measurement that runs one reconstruction-filter group delay (a few samples) behind the block,
      so every value has its whole stencil and the reading does not depend on the block size.
-     sonare_metering_true_peak_db measures a whole signal at once. */
-  float true_peak_db_l;
-  float true_peak_db_r;
-  float max_true_peak_db;
+     sonare_metering_true_peak_dbtp measures a whole signal at once. */
+  float true_peak_dbtp_l;
+  float true_peak_dbtp_r;
+  float max_true_peak_dbtp;
   uint64_t seq;
-  /* Per-plane surround meters (5.1/7.1). Indices [0, channel_count) carry valid
+  /* Per-plane surround meters (5.1/7.1). Indices [0, num_channels) carry valid
      values; index 0 and 1 mirror the _l and _r stereo fields above.
-     channel_count is 0 for a snapshot taken before the meter has seen audio,
+     num_channels is 0 for a snapshot taken before the meter has seen audio,
      else 1..8. */
   float peak_db[SONARE_MAX_METER_CHANNELS];
   float rms_db[SONARE_MAX_METER_CHANNELS];
-  float true_peak_db[SONARE_MAX_METER_CHANNELS];
-  int channel_count;
+  float true_peak_dbtp[SONARE_MAX_METER_CHANNELS];
+  int num_channels;
 } SonareMixMeterSnapshot;
 
 typedef struct {
@@ -481,7 +481,7 @@ SonareError sonare_mixer_master_meter(SonareMixer* mixer, SonareMixMeterSnapshot
 // true-peak reading, which runs one reconstruction-filter group delay behind the
 // block, reads that pending group delay against silence and folds it into the
 // published snapshot. An offline or one-shot caller calls it after its last
-// block so true_peak_db covers the whole signal. A later process call starts a
+// block so true_peak_dbtp covers the whole signal. A later process call starts a
 // new signal. Returns INVALID_PARAMETER for a NULL mixer.
 SonareError sonare_mixer_flush_meters(SonareMixer* mixer);
 // Returns the built-in mixing-scene preset names, separated by '\n'. Same

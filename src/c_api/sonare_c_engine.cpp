@@ -119,13 +119,13 @@ engine::MetronomeConfig metronome_from_c(const SonareEngineMetronomeConfig& conf
   out.enabled = config.enabled != 0;
   out.beat_gain = config.beat_gain;
   out.accent_gain = config.accent_gain;
-  // When click_samples is 0 the engine derives the length from click_seconds and
+  // When click_samples is 0 the engine derives the length from click_sec and
   // the prepared sample rate; a positive click_samples overrides that. Treat a
-  // non-positive click_seconds as "use the default" so older callers that leave
+  // non-positive click_sec as "use the default" so older callers that leave
   // the field zero-initialized keep the 2 ms behavior.
   out.click_samples = config.click_samples;
-  if (config.click_seconds > 0.0) {
-    out.click_seconds = config.click_seconds;
+  if (config.click_sec > 0.0) {
+    out.click_seconds = config.click_sec;
   }
   return out;
 }
@@ -617,8 +617,8 @@ SonareError sonare_engine_set_metronome(SonareRealtimeEngine* engine,
   if (!engine || !config || !std::isfinite(config->beat_gain) || config->beat_gain < 0.0f ||
       !std::isfinite(config->accent_gain) || config->accent_gain < 0.0f ||
       config->click_samples < 0 || config->click_samples > engine::kMaxMetronomeClickSamples ||
-      !std::isfinite(config->click_seconds) || config->click_seconds < 0.0 ||
-      config->click_seconds > engine::kMaxMetronomeClickSeconds) {
+      !std::isfinite(config->click_sec) || config->click_sec < 0.0 ||
+      config->click_sec > engine::kMaxMetronomeClickSeconds) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   engine->engine.set_metronome_config(metronome_from_c(*config));

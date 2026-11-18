@@ -277,8 +277,8 @@ TEST_CASE("C ABI maps tuning and analyzes with options and progress", "[c_api][a
     CHECK(json == nullptr);
 
     SonareChordDetectionOptions chord{};
-    chord.min_duration = 0.3f;
-    chord.smoothing_window = 2.0f;
+    chord.min_duration_sec = 0.3f;
+    chord.smoothing_window_sec = 2.0f;
     chord.threshold = 0.5f;
     chord.n_fft = 2048;
     chord.hop_length = 512;
@@ -455,8 +455,8 @@ TEST_CASE("C ABI auto tuning, tuning converters and the key tuning entry",
 
   SECTION("chord detection reports the tuning it used") {
     SonareChordDetectionOptions options{};
-    options.min_duration = 0.3f;
-    options.smoothing_window = 2.0f;
+    options.min_duration_sec = 0.3f;
+    options.smoothing_window_sec = 2.0f;
     options.threshold = 0.5f;
     options.n_fft = 2048;
     options.hop_length = 512;

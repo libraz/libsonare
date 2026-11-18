@@ -100,8 +100,8 @@ typedef struct {
   int n_fft;
   /* Mel bands the coefficients were taken from. */
   int n_mels;
-  float fmin;
-  float fmax;
+  float fmin_hz;
+  float fmax_hz;
   int htk;
   /* Always 0: the coefficients are a cepstrum, not a dB spectrogram. */
   int is_db;
@@ -185,7 +185,7 @@ typedef struct {
   float short_term_lufs;     /* final complete 3 s window, not Max-S */
   float max_momentary_lufs;  /* maximum 400 ms window (EBU R128 Max-M) */
   float max_short_term_lufs; /* maximum 3 s window (EBU R128 Max-S) */
-  float loudness_range;
+  float loudness_range_lu;
 } SonareLufsResult;
 
 typedef struct {
@@ -218,7 +218,7 @@ typedef struct {
   float peak_db;
   float rms_db;
   float crest_factor;
-  float loudness_range_db;
+  float loudness_range_lu;
   int is_compressed;
   float* loudness_times_sec;
   float* loudness_rms_db;
@@ -255,8 +255,8 @@ typedef struct {
 typedef struct {
   SonarePitchClass root;
   SonareChordQuality quality;
-  float start;
-  float end;
+  float start_sec;
+  float end_sec;
   float confidence;
   SonarePitchClass bass;
 } SonareChord;
@@ -301,8 +301,8 @@ typedef enum SONARE_ENUM_BASE {
 
 typedef struct {
   SonareSectionType type;
-  float start;        /* seconds */
-  float end;          /* seconds */
+  float start_sec;    /* seconds */
+  float end_sec;      /* seconds */
   float energy_level; /* median frame RMS in the section over the loudest section's, [0, 1] */
   float confidence;   /* [0, 1]; 0 exactly when type is SONARE_SECTION_UNKNOWN */
   int32_t group;      /* material group: sections sharing a value repeat the same material,
@@ -320,7 +320,7 @@ typedef struct {
  * picked from, so a caller that wants its own threshold needs this and cannot
  * derive it from the section list. */
 typedef struct {
-  float time; /* seconds; the authoritative output */
+  float time_sec; /* seconds; the authoritative output */
   /* Index into the ANALYSIS grid, which is not the source's STFT grid: input
    * above 22.05 kHz is resampled before any feature is computed, and a long
    * input is additionally mean-pooled (see frame_stride). Use `time` for any
@@ -358,7 +358,7 @@ typedef struct {
   float absolute_threshold; /* applied to the raw response, before scaling */
   int n_mfcc;
   int n_chroma;
-  float peak_distance; /* minimum spacing between peaks, in seconds */
+  float peak_distance_sec; /* minimum spacing between peaks, in seconds */
   int use_mfcc;
   int use_chroma;
   /* One-sided span in seconds of the neighbourhood `threshold` is measured
@@ -366,13 +366,13 @@ typedef struct {
    * no longer applies; a value at least the track length makes the
    * reference whole-track, still with a lone dominant event (one no other event
    * in the window comes within 30% of) set aside. */
-  float reference_window;
+  float reference_window_sec;
 } SonareBoundaryOptions;
 
 typedef struct {
-  float time;       /* seconds */
-  float frequency;  /* Hz (0 if unvoiced) */
-  float confidence; /* [0, 1] */
+  float time_sec;     /* seconds */
+  float frequency_hz; /* Hz (0 if unvoiced) */
+  float confidence;   /* [0, 1] */
 } SonareMelodyPoint;
 
 typedef struct {
@@ -380,8 +380,8 @@ typedef struct {
   size_t point_count;
   float pitch_range_octaves;
   float pitch_stability;
-  float mean_frequency;
-  float vibrato_rate;
+  float mean_frequency_hz;
+  float vibrato_rate_hz;
 } SonareMelodyResult;
 
 /* Layout version of SonareChordDetectionOptions; the caller sets it. 0 reads as
@@ -391,8 +391,8 @@ typedef struct {
 typedef struct {
   /* SONARE_CHORD_DETECTION_OPTIONS_VERSION, or 0 for the same. */
   int struct_version;
-  float min_duration;
-  float smoothing_window;
+  float min_duration_sec;
+  float smoothing_window_sec;
   float threshold; /* final-template correlation threshold [0, 1]; below => UNKNOWN / N.C. */
   int use_triads_only;
   int n_fft; /* STFT chroma window in samples at 22050 Hz, rescaled to the input rate */

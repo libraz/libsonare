@@ -186,9 +186,8 @@ class TestWhatTheChannelCountMoves:
         assert three.report.detected.late_decay_ratio_db == pytest.approx(
             one.report.detected.late_decay_ratio_db, rel=1e-6
         )
-        assert three.report.detected.late_predictability == pytest.approx(
-            one.report.detected.late_predictability, abs=1e-9
-        )
+        assert three.report.detected.late_predictability is None
+        assert one.report.detected.late_predictability is None
 
     @pytest.mark.parametrize(
         "entry",

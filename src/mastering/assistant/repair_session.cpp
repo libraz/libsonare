@@ -372,7 +372,9 @@ json::Object report_of(const repair::DenoiseReport& report) {
 json::Object report_of(const repair::DereverbReport& report) {
   json::Object detected;
   json::put(detected, "lateDecayRatioDb", report.detected.late_decay_ratio_db);
-  json::put(detected, "latePredictability", report.detected.late_predictability);
+  if (report.detected.late_predictability) {
+    json::put(detected, "latePredictability", *report.detected.late_predictability);
+  }
   json::Object out;
   json::put(out, "detected", std::move(detected));
   json::put(out, "meanReductionDb", report.mean_reduction_db);

@@ -246,7 +246,7 @@ class PlaybackRenderer:
         """
         handle = self._require_handle()
         out = ctypes.c_int()
-        _check(self._lib.sonare_playback_renderer_input_channel_count(handle, ctypes.byref(out)))
+        _check(self._lib.sonare_playback_renderer_num_input_channels(handle, ctypes.byref(out)))
         return int(out.value)
 
     @property
@@ -254,7 +254,7 @@ class PlaybackRenderer:
         """Channel count of the output target; fixed for the renderer's lifetime."""
         handle = self._require_handle()
         out = ctypes.c_int()
-        _check(self._lib.sonare_playback_renderer_output_channel_count(handle, ctypes.byref(out)))
+        _check(self._lib.sonare_playback_renderer_num_output_channels(handle, ctypes.byref(out)))
         return int(out.value)
 
     @property

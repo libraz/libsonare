@@ -354,7 +354,7 @@ typedef struct {
 typedef struct {
   uint32_t id;
   uint32_t kind; /* 0 audio, 1 MIDI */
-  uint32_t channel_count;
+  uint32_t num_channels;
   uint32_t storage_handle_id;
   double sample_rate_hint;
   char name_or_uri[128];

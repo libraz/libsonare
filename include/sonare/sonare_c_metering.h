@@ -45,8 +45,8 @@ SonareError sonare_metering_dc_offset(const float* samples, size_t length, int s
 /// @brief Inter-sample (true) peak in dBTP for a mono buffer. Interleaved
 ///        multichannel input is not accepted as channels. @p oversample_factor must be a
 ///        power of two in [1, 16]; pass 0 for the library default (4).
-SonareError sonare_metering_true_peak_db(const float* samples, size_t length, int sample_rate,
-                                         int oversample_factor, float* out_db);
+SonareError sonare_metering_true_peak_dbtp(const float* samples, size_t length, int sample_rate,
+                                           int oversample_factor, float* out_db);
 
 /// @brief A single contiguous run of samples that clipped (or exceeded
 ///        @p threshold). Mirrors @c sonare::metering::ClippingRegion.
@@ -363,9 +363,9 @@ SonareError sonare_lufs_series_interleaved(const float* samples, size_t frames, 
 /// @param length Number of samples.
 /// @param sample_rate Sample rate in Hz; must be in [8000, 384000] (the shared
 ///        offline-input policy), not merely positive.
-/// @param out_lra Receives the loudness range in LU. Must not be null.
+/// @param out_loudness_range_lu Receives the loudness range in LU. Must not be null.
 SonareError sonare_ebur128_loudness_range(const float* samples, size_t length, int sample_rate,
-                                          float* out_lra);
+                                          float* out_loudness_range_lu);
 
 // ============================================================================
 // Metering - handle form
@@ -406,9 +406,9 @@ SonareError sonare_audio_crest_factor_db(const SonareAudio* audio, float* out_db
 SonareError sonare_audio_silence_ratio(const SonareAudio* audio, float threshold_db,
                                        int frame_length, int hop_length, float* out_ratio);
 
-/// @brief Handle form of @ref sonare_metering_true_peak_db.
-SonareError sonare_audio_true_peak_db(const SonareAudio* audio, int oversample_factor,
-                                      float* out_db);
+/// @brief Handle form of @ref sonare_metering_true_peak_dbtp.
+SonareError sonare_audio_true_peak_dbtp(const SonareAudio* audio, int oversample_factor,
+                                        float* out_db);
 
 /// @brief Handle form of @ref sonare_metering_detect_clipping.
 /// @param out Receives heap-owned regions; free with @ref sonare_free_clipping_result.
@@ -437,7 +437,8 @@ SonareError sonare_audio_spectrum_frame(const SonareAudio* audio, size_t frame_o
                                         float db_ref, float db_amin, SonareSpectrumResult* out);
 
 /// @brief Handle form of @ref sonare_ebur128_loudness_range.
-SonareError sonare_audio_ebur128_loudness_range(const SonareAudio* audio, float* out_lra);
+SonareError sonare_audio_ebur128_loudness_range(const SonareAudio* audio,
+                                                float* out_loudness_range_lu);
 
 /// @}
 

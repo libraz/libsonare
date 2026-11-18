@@ -477,9 +477,8 @@ describe('repair detection (WASM)', () => {
       });
 
       expect(Number.isFinite(detected.lateDecayRatioDb)).toBe(true);
-      // The WPE stage runs only under wpeEnabled, which is clear by default, so
-      // 0 here is the measurement rather than an unset field.
-      expect(detected.latePredictability).toBe(0);
+      // The WPE stage runs only under wpeEnabled, which is clear by default.
+      expect(detected).not.toHaveProperty('latePredictability');
     });
 
     it('runs the WPE covariance and solve only under wpeEnabled', () => {
@@ -487,7 +486,7 @@ describe('repair detection (WASM)', () => {
       const off = masteringRepairDetectReverb(samples, TRIM_SR);
       const on = masteringRepairDetectReverb(samples, TRIM_SR, { wpeEnabled: true });
 
-      expect(off.latePredictability).toBe(0);
+      expect(off).not.toHaveProperty('latePredictability');
       expect(on.latePredictability).toBeGreaterThan(0);
       // The decay statistic is the same measurement either way: WPE's
       // prediction is never subtracted here.

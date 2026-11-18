@@ -170,12 +170,12 @@ val MixerWasm::mixMeterSnapshotToVal(const SonareMixMeterSnapshot& snapshot) {
   out.set("shortTermLufs", snapshot.short_term_lufs);
   out.set("integratedLufs", snapshot.integrated_lufs);
   out.set("gainReductionDb", snapshot.gain_reduction_db);
-  out.set("truePeakDbL", snapshot.true_peak_db_l);
-  out.set("truePeakDbR", snapshot.true_peak_db_r);
-  out.set("maxTruePeakDb", snapshot.max_true_peak_db);
+  out.set("truePeakDbL", snapshot.true_peak_dbtp_l);
+  out.set("truePeakDbR", snapshot.true_peak_dbtp_r);
+  out.set("maxTruePeakDb", snapshot.max_true_peak_dbtp);
   out.set("seq", static_cast<double>(snapshot.seq));
-  setPerPlaneMeters(out, snapshot.peak_db, snapshot.rms_db, snapshot.true_peak_db,
-                    snapshot.channel_count);
+  setPerPlaneMeters(out, snapshot.peak_db, snapshot.rms_db, snapshot.true_peak_dbtp,
+                    snapshot.num_channels);
   return out;
 }
 

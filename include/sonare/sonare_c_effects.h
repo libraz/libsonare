@@ -442,8 +442,8 @@ SonareError sonare_render_notes(const float* samples, size_t length, int sample_
 typedef struct {
   /// The note's steady pitch in Hz. 0 when the note carries no usable pitch,
   /// and then both curves are empty.
-  float centre_hz;
-  /// Slow deviation from @c centre_hz in cents, @c count entries.
+  float center_hz;
+  /// Slow deviation from @c center_hz in cents, @c count entries.
   float* drift_cents;
   /// Fast deviation in cents, over the same frames.
   float* vibrato_cents;
@@ -452,7 +452,7 @@ typedef struct {
 
 /// @brief Split one note's pitch curve into a centre, a drift and a vibrato.
 /// @details @c drift_cents[i] + @c vibrato_cents[i] is the note's own pitch at
-///          frame i, in cents above @c centre_hz, to within float rounding, so
+///          frame i, in cents above @c center_hz, to within float rounding, so
 ///          the three parts reconstruct the curve. The drift filter is zero
 ///          phase, so neither curve is shifted in time against the audio.
 ///

@@ -22,6 +22,14 @@ using namespace sonare_node;
 
 namespace {
 
+// The C summary carries the unit in the field name; the core summary does not.
+float LoudnessRangeLu(const SonareMasteringLoudnessSummary& summary) {
+  return summary.loudness_range_lu;
+}
+float LoudnessRangeLu(const sonare::mastering::api::MasteringLoudnessSummary& summary) {
+  return summary.loudness_range;
+}
+
 template <typename Summary>
 Napi::Object MasteringLoudnessSummaryToObject(Napi::Env env, const Summary& summary) {
   Napi::Object out = Napi::Object::New(env);
@@ -29,7 +37,7 @@ Napi::Object MasteringLoudnessSummaryToObject(Napi::Env env, const Summary& summ
   out.Set("maxMomentaryLufs", Napi::Number::New(env, summary.max_momentary_lufs));
   out.Set("maxShortTermLufs", Napi::Number::New(env, summary.max_short_term_lufs));
   out.Set("truePeakDbtp", Napi::Number::New(env, summary.true_peak_dbtp));
-  out.Set("loudnessRange", Napi::Number::New(env, summary.loudness_range));
+  out.Set("loudnessRange", Napi::Number::New(env, LoudnessRangeLu(summary)));
   return out;
 }
 
@@ -103,7 +111,7 @@ int CancellationRequested(void* user_data) {
 template <typename Result>
 void SetCChainMetrics(Napi::Env env, Napi::Object out, const Result& result) {
   out.Set("outputTruePeakDbtp", Napi::Number::New(env, result.output_true_peak_dbtp));
-  out.Set("outputLra", Napi::Number::New(env, result.output_lra));
+  out.Set("outputLra", Napi::Number::New(env, result.output_loudness_range_lu));
   out.Set("loudnessTargetLimited", Napi::Boolean::New(env, result.loudness_target_limited != 0));
   out.Set("nonFiniteSubstitutionCount",
           Napi::Number::New(env, result.non_finite_substitution_count));

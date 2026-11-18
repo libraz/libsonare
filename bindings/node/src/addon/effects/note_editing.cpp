@@ -509,7 +509,7 @@ Napi::Value SonareWrap::DecomposeNotePitch(const Napi::CallbackInfo& info) {
   }
 
   Napi::Object out = Napi::Object::New(env);
-  out.Set("centerHz", Napi::Number::New(env, decomposition.value.centre_hz));
+  out.Set("centerHz", Napi::Number::New(env, decomposition.value.center_hz));
   // A note with no usable pitch comes back as a zero centre and NULL curves,
   // which marshal to two empty arrays rather than to an error.
   out.Set("driftCents",

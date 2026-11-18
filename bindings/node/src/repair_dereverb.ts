@@ -115,9 +115,9 @@ export interface MasteringRepairDereverbClassicalStereoRequest extends DereverbC
  * to the input length, as {@link masteringRepairDenoiseClassicalStereo} does.
  *
  * Two report fields are gated on the WPE stage, which is off unless
- * `wpeEnabled` is set: `detected.latePredictability` and
- * `wpePredictorNorm` are then both exactly 0, which is the measurement rather
- * than an unset field. `detected.lateDecayRatioDb` runs the other way from
+ * `wpeEnabled` is set: `detected.latePredictability` is then absent, and
+ * `wpePredictorNorm` is exactly 0 as its measurement.
+ * `detected.lateDecayRatioDb` runs the other way from
  * what its name suggests — less negative means the material sustains across
  * the module's late lag, so a reverberant input reads *higher* than the same
  * material dry.
@@ -190,8 +190,8 @@ export interface MasteringRepairDereverbClassicalLinkedRequest extends DereverbC
  * set, so a disagreement is refused here rather than silently truncated.
  *
  * Two report fields are gated on the WPE stage, which is off unless
- * `wpeEnabled` is set: `detected.latePredictability` and `wpePredictorNorm` are
- * then both exactly 0, which is the measurement rather than an unset field.
+ * `wpeEnabled` is set: `detected.latePredictability` is then absent, and
+ * `wpePredictorNorm` is exactly 0 as its measurement.
  * `detected.lateDecayRatioDb` runs the other way from what its name suggests —
  * less negative means the material sustains across the module's late lag, so a
  * reverberant input reads *higher* than the same material dry.
@@ -297,8 +297,8 @@ export interface MasteringRepairDetectReverbRequest
  *
  * NOT an ISO 3382 reverberation time; use {@link estimateRoom} for a graded
  * RT60. `latePredictability` comes from the WPE stage, which runs only under
- * `wpeEnabled` and then only its covariance and solve, so it is exactly 0 by
- * default -- the measurement rather than an unset field.
+ * `wpeEnabled` and then only its covariance and solve, so a default-config
+ * call omits it.
  *
  * @example
  * ```ts

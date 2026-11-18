@@ -110,7 +110,7 @@ inline char** copy_stage_array(const std::vector<std::string>& stages) {
 template <typename ChainResultT>
 inline void zero_chain_metrics(ChainResultT* out) {
   out->output_true_peak_dbtp = 0.0f;
-  out->output_lra = 0.0f;
+  out->output_loudness_range_lu = 0.0f;
   out->loudness_target_limited = 0;
   out->non_finite_substitution_count = 0;
   out->stage_gain_reduction_stages = nullptr;
@@ -201,7 +201,7 @@ inline void set_mastering_loudness_summary(
   out->max_momentary_lufs = summary.max_momentary_lufs;
   out->max_short_term_lufs = summary.max_short_term_lufs;
   out->true_peak_dbtp = summary.true_peak_dbtp;
-  out->loudness_range = summary.loudness_range;
+  out->loudness_range_lu = summary.loudness_range;
 }
 
 template <typename ChainResultT>
@@ -226,7 +226,7 @@ template <typename ChainResultT>
 inline void set_chain_metrics(const sonare::mastering::api::ChainMetrics& metrics,
                               ChainResultT* out) {
   out->output_true_peak_dbtp = metrics.output_true_peak_dbtp;
-  out->output_lra = metrics.output_lra;
+  out->output_loudness_range_lu = metrics.output_lra;
   out->loudness_target_limited = metrics.loudness_target_limited ? 1 : 0;
   set_mastering_report(metrics.report, out);
   const auto& reductions = metrics.stage_gain_reductions;

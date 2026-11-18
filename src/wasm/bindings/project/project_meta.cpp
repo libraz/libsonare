@@ -289,7 +289,7 @@ val ProjectWasm::sourceToVal(const SonareProjectSource& d) const {
   val out = val::object();
   out.set("id", d.id);
   out.set("kind", d.kind);
-  out.set("channelCount", d.channel_count);
+  out.set("channelCount", d.num_channels);
   out.set("storageHandleId", d.storage_handle_id);
   out.set("sampleRateHint", d.sample_rate_hint);
   out.set("nameOrUri", std::string(uri.value != nullptr ? uri.value : d.name_or_uri));

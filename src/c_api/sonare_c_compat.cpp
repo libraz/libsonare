@@ -491,7 +491,7 @@ SonareError sonare_lufs(const float* samples, size_t length, int sample_rate,
     out->short_term_lufs = result.short_term_lufs;
     out->max_momentary_lufs = result.max_momentary_lufs;
     out->max_short_term_lufs = result.max_short_term_lufs;
-    out->loudness_range = result.loudness_range;
+    out->loudness_range_lu = result.loudness_range;
     return SONARE_OK;
   });
 }
@@ -530,7 +530,7 @@ SonareError sonare_lufs_interleaved(const float* samples, size_t frames, int cha
   out->short_term_lufs = result.short_term_lufs;
   out->max_momentary_lufs = result.max_momentary_lufs;
   out->max_short_term_lufs = result.max_short_term_lufs;
-  out->loudness_range = result.loudness_range;
+  out->loudness_range_lu = result.loudness_range;
   return SONARE_OK;
   SONARE_C_CATCH
 }
@@ -579,22 +579,23 @@ SonareError sonare_lufs_series_interleaved(const float* samples, size_t frames, 
 }
 
 SonareError sonare_ebur128_loudness_range(const float* samples, size_t length, int sample_rate,
-                                          float* out_lra) {
+                                          float* out_loudness_range_lu) {
   SONARE_C_API_ENTRY;
-  if (!out_lra) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!out_loudness_range_lu) return SONARE_ERROR_INVALID_PARAMETER;
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    *out_lra = metering::ebur128_loudness_range(audio);
+    *out_loudness_range_lu = metering::ebur128_loudness_range(audio);
     return SONARE_OK;
   });
 }
 
 /// Handle form; it follows its buffer twin here rather than joining the other ten
 /// in sonare_c_editing.cpp, which is where the twin lives.
-SonareError sonare_audio_ebur128_loudness_range(const SonareAudio* audio, float* out_lra) {
+SonareError sonare_audio_ebur128_loudness_range(const SonareAudio* audio,
+                                                float* out_loudness_range_lu) {
   SONARE_C_API_ENTRY;
-  if (!audio || !out_lra) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!audio || !out_loudness_range_lu) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
-  *out_lra = metering::ebur128_loudness_range(audio->audio);
+  *out_loudness_range_lu = metering::ebur128_loudness_range(audio->audio);
   return SONARE_OK;
   SONARE_C_CATCH
 }

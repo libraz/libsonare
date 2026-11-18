@@ -157,8 +157,8 @@ SonareError sonare_playback_renderer_set_head_orientation(SonarePlaybackRenderer
 #endif
 }
 
-SonareError sonare_playback_renderer_input_channel_count(const SonarePlaybackRenderer* renderer,
-                                                         int* out) {
+SonareError sonare_playback_renderer_num_input_channels(const SonarePlaybackRenderer* renderer,
+                                                        int* out) {
   SONARE_C_API_ENTRY;
   if (out) *out = 0;
 #if defined(SONARE_WITH_PLAYBACK)
@@ -170,8 +170,8 @@ SonareError sonare_playback_renderer_input_channel_count(const SonarePlaybackRen
 #endif
 }
 
-SonareError sonare_playback_renderer_output_channel_count(const SonarePlaybackRenderer* renderer,
-                                                          int* out) {
+SonareError sonare_playback_renderer_num_output_channels(const SonarePlaybackRenderer* renderer,
+                                                         int* out) {
   SONARE_C_API_ENTRY;
   if (out) *out = 0;
 #if defined(SONARE_WITH_PLAYBACK)

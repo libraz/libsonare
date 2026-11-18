@@ -215,8 +215,8 @@ class SonareClipDetection(CStruct):
     """Maps to SonareClipDetection in sonare_c.h."""
 
     _fields_ = [
-        ("sample_count", ctypes.c_size_t),
-        ("sample_fraction", ctypes.c_float),
+        ("clipped_samples", ctypes.c_size_t),
+        ("clipped_ratio", ctypes.c_float),
         ("run_count", ctypes.c_size_t),
         ("longest_run_samples", ctypes.c_size_t),
         ("flat_run_count", ctypes.c_size_t),
@@ -414,6 +414,7 @@ class SonareReverbDetection(CStruct):
     _fields_ = [
         ("late_decay_ratio_db", ctypes.c_float),
         ("late_predictability", ctypes.c_float),
+        ("has_late_predictability", ctypes.c_uint32),
     ]
 
 
@@ -753,7 +754,7 @@ class SonarePitchDecompositionResult(CStruct):
     """Maps to SonarePitchDecompositionResult in sonare_c_effects.h."""
 
     _fields_ = [
-        ("centre_hz", ctypes.c_float),
+        ("center_hz", ctypes.c_float),
         ("drift_cents", ctypes.POINTER(ctypes.c_float)),
         ("vibrato_cents", ctypes.POINTER(ctypes.c_float)),
         ("count", ctypes.c_size_t),

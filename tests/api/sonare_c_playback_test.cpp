@@ -33,7 +33,7 @@ bool text_contains(const std::string& text, const std::string& needle) {
 TEST_CASE("playback renderer handle reports its shape", "[playback][capi]") {
   SonarePlaybackRenderer* renderer = create_renderer(speakers_5_1_config());
   int out_channels = 0;
-  CHECK(sonare_playback_renderer_output_channel_count(renderer, &out_channels) == SONARE_OK);
+  CHECK(sonare_playback_renderer_num_output_channels(renderer, &out_channels) == SONARE_OK);
   CHECK(out_channels == 6);
   int latency = 0;
   CHECK(sonare_playback_renderer_latency_samples(renderer, &latency) == SONARE_OK);
@@ -180,7 +180,7 @@ TEST_CASE("playback renderer set_head_orientation is realtime-safe", "[playback]
 TEST_CASE("playback renderer input channel count follows auto switches", "[playback][capi]") {
   SonarePlaybackRenderer* renderer = create_renderer(speakers_5_1_config());
   int in_channels = 0;
-  CHECK(sonare_playback_renderer_input_channel_count(renderer, &in_channels) == SONARE_OK);
+  CHECK(sonare_playback_renderer_num_input_channels(renderer, &in_channels) == SONARE_OK);
   CHECK(in_channels == 2);
 
   std::vector<float> planes(6 * 64, 0.0f);
@@ -192,14 +192,14 @@ TEST_CASE("playback renderer input channel count follows auto switches", "[playb
   }
   CHECK(sonare_playback_renderer_process_planar(renderer, in_ptrs.data(), 6, out_ptrs.data(), 6,
                                                 64) == SONARE_OK);
-  CHECK(sonare_playback_renderer_input_channel_count(renderer, &in_channels) == SONARE_OK);
+  CHECK(sonare_playback_renderer_num_input_channels(renderer, &in_channels) == SONARE_OK);
   CHECK(in_channels == 6);
 
   int out_channels = -1;
-  CHECK(sonare_playback_renderer_input_channel_count(nullptr, &in_channels) ==
+  CHECK(sonare_playback_renderer_num_input_channels(nullptr, &in_channels) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(in_channels == 0);
-  CHECK(sonare_playback_renderer_output_channel_count(nullptr, &out_channels) ==
+  CHECK(sonare_playback_renderer_num_output_channels(nullptr, &out_channels) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(out_channels == 0);
 
@@ -236,11 +236,11 @@ TEST_CASE("playback renderer process_planar renders and rejects without advancin
         SONARE_ERROR_INVALID_PARAMETER);
   const float* three[3] = {in_l.data(), in_r.data(), in_l.data()};
   int in_channels_before = 0;
-  REQUIRE(sonare_playback_renderer_input_channel_count(renderer, &in_channels_before) == SONARE_OK);
+  REQUIRE(sonare_playback_renderer_num_input_channels(renderer, &in_channels_before) == SONARE_OK);
   CHECK(sonare_playback_renderer_process_planar(renderer, three, 3, out, 6, kMaxBlock) ==
         SONARE_ERROR_INVALID_PARAMETER);
   int in_channels_after = 0;
-  REQUIRE(sonare_playback_renderer_input_channel_count(renderer, &in_channels_after) == SONARE_OK);
+  REQUIRE(sonare_playback_renderer_num_input_channels(renderer, &in_channels_after) == SONARE_OK);
   CHECK(in_channels_after == in_channels_before);
   CHECK(sonare_playback_renderer_process_planar(nullptr, in, 2, out, 6, kMaxBlock) ==
         SONARE_ERROR_INVALID_PARAMETER);
@@ -248,7 +248,7 @@ TEST_CASE("playback renderer process_planar renders and rejects without advancin
   // frames == 0 is a no-op that ignores a channel-count mismatch and never
   // switches the input layout.
   CHECK(sonare_playback_renderer_process_planar(renderer, three, 3, out, 5, 0) == SONARE_OK);
-  REQUIRE(sonare_playback_renderer_input_channel_count(renderer, &in_channels_after) == SONARE_OK);
+  REQUIRE(sonare_playback_renderer_num_input_channels(renderer, &in_channels_after) == SONARE_OK);
   CHECK(in_channels_after == in_channels_before);
 
   sonare_playback_renderer_destroy(renderer);
@@ -525,11 +525,10 @@ TEST_CASE("playback entry points return NOT_SUPPORTED when compiled out",
   CHECK(sonare_playback_renderer_set_head_orientation(nullptr, 10.0f, 0.0f, 0.0f) ==
         SONARE_ERROR_NOT_SUPPORTED);
   int value = -1;
-  CHECK(sonare_playback_renderer_input_channel_count(nullptr, &value) ==
-        SONARE_ERROR_NOT_SUPPORTED);
+  CHECK(sonare_playback_renderer_num_input_channels(nullptr, &value) == SONARE_ERROR_NOT_SUPPORTED);
   CHECK(value == 0);
   value = -1;
-  CHECK(sonare_playback_renderer_output_channel_count(nullptr, &value) ==
+  CHECK(sonare_playback_renderer_num_output_channels(nullptr, &value) ==
         SONARE_ERROR_NOT_SUPPORTED);
   CHECK(value == 0);
   std::vector<float> plane(16, 0.0f);

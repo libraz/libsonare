@@ -164,7 +164,7 @@ def _metronome_to_c(config: EngineMetronomeConfig) -> SonareEngineMetronomeConfi
     raw.click_samples = _validate_c_int_field(
         "set_metronome", config.click_samples, "click_samples"
     )
-    raw.click_seconds = _narrow_double(config.click_sec, "config.click_sec")
+    raw.click_sec = _narrow_double(config.click_sec, "config.click_sec")
     return raw
 
 
@@ -174,7 +174,7 @@ def _metronome_from_c(raw: SonareEngineMetronomeConfig) -> EngineMetronomeConfig
         beat_gain=float(raw.beat_gain),
         accent_gain=float(raw.accent_gain),
         click_samples=int(raw.click_samples),
-        click_sec=float(raw.click_seconds),
+        click_sec=float(raw.click_sec),
     )
 
 
@@ -322,9 +322,9 @@ def _meter_telemetry_from_c(
         peak_db_r=float(raw.peak_db_r),
         rms_db_l=float(raw.rms_db_l),
         rms_db_r=float(raw.rms_db_r),
-        true_peak_dbtp_l=float(raw.true_peak_db_l),
-        true_peak_dbtp_r=float(raw.true_peak_db_r),
-        max_true_peak_dbtp=float(raw.max_true_peak_db),
+        true_peak_dbtp_l=float(raw.true_peak_dbtp_l),
+        true_peak_dbtp_r=float(raw.true_peak_dbtp_r),
+        max_true_peak_dbtp=float(raw.max_true_peak_dbtp),
         correlation=float(raw.correlation),
         mono_compat_width=float(raw.mono_compat_width),
         momentary_lufs=float(raw.momentary_lufs),
@@ -340,7 +340,7 @@ def _meter_telemetry_from_c(
 def _meter_telemetry_wide_from_c(
     raw: SonareMeterTelemetryRecordWide | SonareMeterTelemetryRecordWideV2,
 ) -> MeterTelemetryRecordWide:
-    planes = max(0, min(int(raw.channel_count), len(raw.peak_db)))
+    planes = max(0, min(int(raw.num_channels), len(raw.peak_db)))
     input_peak_db = getattr(raw, "input_peak_db", ())
     return MeterTelemetryRecordWide(
         target_id=int(raw.target_id),
@@ -349,8 +349,8 @@ def _meter_telemetry_wide_from_c(
         num_channels=planes,
         peak_db=_float_array_result(raw.peak_db, planes),
         rms_db=_float_array_result(raw.rms_db, planes),
-        true_peak_dbtp=_float_array_result(raw.true_peak_db, planes),
-        max_true_peak_dbtp=float(raw.max_true_peak_db),
+        true_peak_dbtp=_float_array_result(raw.true_peak_dbtp, planes),
+        max_true_peak_dbtp=float(raw.max_true_peak_dbtp),
         correlation=float(raw.correlation),
         mono_compat_width=float(raw.mono_compat_width),
         momentary_lufs=float(raw.momentary_lufs),

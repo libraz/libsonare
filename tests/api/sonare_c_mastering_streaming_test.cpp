@@ -80,7 +80,7 @@ TEST_CASE("sonare_streaming_loudness_gain matches the offline chain's applied ga
           SONARE_OK);
   CHECK(mono.loudness_static_gain_db == mono_chain.applied_gain_db);
   CHECK(std::isfinite(mono.integrated_lufs));
-  CHECK(std::isfinite(mono.true_peak_db));
+  CHECK(std::isfinite(mono.true_peak_dbtp));
   sonare_free_mastering_chain_result(&mono_chain);
 
   SonareStreamingLoudnessGain stereo{};

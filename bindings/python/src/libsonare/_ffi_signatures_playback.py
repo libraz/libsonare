@@ -75,16 +75,16 @@ def configure_playback_signatures(lib: ctypes.CDLL) -> None:
             ctypes.c_float,
         ]
 
-    if hasattr(lib, "sonare_playback_renderer_input_channel_count"):
-        lib.sonare_playback_renderer_input_channel_count.restype = ctypes.c_int32
-        lib.sonare_playback_renderer_input_channel_count.argtypes = [
+    if hasattr(lib, "sonare_playback_renderer_num_input_channels"):
+        lib.sonare_playback_renderer_num_input_channels.restype = ctypes.c_int32
+        lib.sonare_playback_renderer_num_input_channels.argtypes = [
             ctypes.c_void_p,
             ctypes.POINTER(ctypes.c_int),
         ]
 
-    if hasattr(lib, "sonare_playback_renderer_output_channel_count"):
-        lib.sonare_playback_renderer_output_channel_count.restype = ctypes.c_int32
-        lib.sonare_playback_renderer_output_channel_count.argtypes = [
+    if hasattr(lib, "sonare_playback_renderer_num_output_channels"):
+        lib.sonare_playback_renderer_num_output_channels.restype = ctypes.c_int32
+        lib.sonare_playback_renderer_num_output_channels.argtypes = [
             ctypes.c_void_p,
             ctypes.POINTER(ctypes.c_int),
         ]

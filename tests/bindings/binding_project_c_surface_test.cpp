@@ -620,7 +620,7 @@ TEST_CASE("project C surface owns and edits audio source metadata", "[project]")
   REQUIRE(sonare_project_source_by_index(project, 0, &after) == SONARE_OK);
   CHECK(after.id == before.id);
   CHECK(after.kind == before.kind);
-  CHECK(after.channel_count == before.channel_count);
+  CHECK(after.num_channels == before.num_channels);
   CHECK(after.storage_handle_id == before.storage_handle_id);
   CHECK(after.sample_rate_hint == before.sample_rate_hint);
   CHECK(std::string(after.name_or_uri) == std::string(before.name_or_uri));

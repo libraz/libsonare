@@ -160,7 +160,7 @@ SonareError sonare_audio_from_file_channel(const char* path, int channel_index, 
   SONARE_C_CATCH
 }
 
-SonareError sonare_audio_file_channel_count(const char* path, int* out_channels) {
+SonareError sonare_audio_file_num_channels(const char* path, int* out_channels) {
   SONARE_C_API_ENTRY;
   if (out_channels != nullptr) *out_channels = 0;
   if (path == nullptr || out_channels == nullptr) {

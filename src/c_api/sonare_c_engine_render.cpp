@@ -73,9 +73,9 @@ SonareMeterTelemetryRecordV2 meter_record_v2(const engine::MeterTelemetryRecord&
   out.peak_db_r = record.peak_db[1];
   out.rms_db_l = record.rms_db[0];
   out.rms_db_r = record.rms_db[1];
-  out.true_peak_db_l = record.true_peak_db[0];
-  out.true_peak_db_r = record.true_peak_db[1];
-  out.max_true_peak_db = record.max_true_peak_db;
+  out.true_peak_dbtp_l = record.true_peak_db[0];
+  out.true_peak_dbtp_r = record.true_peak_db[1];
+  out.max_true_peak_dbtp = record.max_true_peak_db;
   out.correlation = record.correlation;
   out.mono_compat_width = record.mono_compat_width;
   out.momentary_lufs = record.momentary_lufs;
@@ -95,17 +95,17 @@ SonareMeterTelemetryRecordWideV2 meter_record_wide_v2(const engine::MeterTelemet
   out.seq = record.seq;
   const int planes =
       std::clamp(record.channel_count, 0, static_cast<int>(SONARE_METER_MAX_CHANNELS));
-  out.channel_count = planes;
+  out.num_channels = planes;
   for (int ch = 0; ch < SONARE_METER_MAX_CHANNELS; ++ch) {
     const size_t index = static_cast<size_t>(ch);
     const bool valid = ch < planes;
     // Unused planes report the dB floor, so a host ignoring channel_count never reads clipping.
     out.peak_db[ch] = valid ? record.peak_db[index] : constants::kFloorDb;
     out.rms_db[ch] = valid ? record.rms_db[index] : constants::kFloorDb;
-    out.true_peak_db[ch] = valid ? record.true_peak_db[index] : constants::kFloorDb;
+    out.true_peak_dbtp[ch] = valid ? record.true_peak_db[index] : constants::kFloorDb;
     out.input_peak_db[ch] = valid ? record.input_peak_db[index] : constants::kFloorDb;
   }
-  out.max_true_peak_db = record.max_true_peak_db;
+  out.max_true_peak_dbtp = record.max_true_peak_db;
   out.correlation = record.correlation;
   out.mono_compat_width = record.mono_compat_width;
   out.momentary_lufs = record.momentary_lufs;

@@ -142,8 +142,8 @@ SonareError sonare_metering_dc_offset(const float* samples, size_t length, int s
   });
 }
 
-SonareError sonare_metering_true_peak_db(const float* samples, size_t length, int sample_rate,
-                                         int oversample_factor, float* out_db) {
+SonareError sonare_metering_true_peak_dbtp(const float* samples, size_t length, int sample_rate,
+                                           int oversample_factor, float* out_db) {
   SONARE_C_API_ENTRY;
   if (!out_db) return SONARE_ERROR_INVALID_PARAMETER;
   *out_db = 0.0f;
@@ -523,8 +523,8 @@ SonareError sonare_audio_silence_ratio(const SonareAudio* audio, float threshold
   SONARE_C_CATCH
 }
 
-SonareError sonare_audio_true_peak_db(const SonareAudio* audio, int oversample_factor,
-                                      float* out_db) {
+SonareError sonare_audio_true_peak_dbtp(const SonareAudio* audio, int oversample_factor,
+                                        float* out_db) {
   SONARE_C_API_ENTRY;
   if (!audio || !out_db) return SONARE_ERROR_INVALID_PARAMETER;
   *out_db = 0.0f;

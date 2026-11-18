@@ -264,10 +264,10 @@ const REFUSED_OPTION_FIELDS: ReadonlyArray<{
   },
   {
     file: 'src/c_api/sonare_c_engine.cpp',
-    field: 'click_seconds',
+    field: 'click_sec',
     reason:
       'Metronome click duration; 0 keeps the 2 ms default. THE ONE ENTRY HERE WHOSE REFUSAL IS NOT ABOVE ITS FILTER: the filter sits in metronome_from_c and the rejection of anything outside [0, kMaxMetronomeClickSeconds] sits 433 lines below it in sonare_engine_set_metronome, a different function. It holds only because metronome_from_c is in an anonymous namespace with exactly one caller, which is that entry point after it has validated -- a property of the current call graph, not of the code. A second caller added later makes this field unrefused and nothing here would say so, because the check below only asks whether the file states a refusal.',
-    refusedAs: 'config->click_seconds',
+    refusedAs: 'config->click_sec',
   },
   {
     file: 'src/c_api/sonare_c_engine_render.cpp',

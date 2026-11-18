@@ -32,15 +32,15 @@ Napi::Object MeterSnapshotToObject(Napi::Env env, const SonareMixMeterSnapshot& 
   out.Set("shortTermLufs", snapshot.short_term_lufs);
   out.Set("integratedLufs", snapshot.integrated_lufs);
   out.Set("gainReductionDb", snapshot.gain_reduction_db);
-  out.Set("truePeakDbL", snapshot.true_peak_db_l);
-  out.Set("truePeakDbR", snapshot.true_peak_db_r);
-  out.Set("maxTruePeakDb", snapshot.max_true_peak_db);
+  out.Set("truePeakDbL", snapshot.true_peak_dbtp_l);
+  out.Set("truePeakDbR", snapshot.true_peak_dbtp_r);
+  out.Set("maxTruePeakDb", snapshot.max_true_peak_dbtp);
   out.Set("seq", Napi::Number::New(env, static_cast<double>(snapshot.seq)));
 
   // Per-plane surround meters: expose [0, channelCount) as arrays alongside the
   // stereo convenience fields above. Clamp to the array capacity so a
   // future/out-of-range channel_count can never index past the fixed buffers.
-  int channel_count = snapshot.channel_count;
+  int channel_count = snapshot.num_channels;
   if (channel_count < 0) channel_count = 0;
   if (channel_count > SONARE_MAX_METER_CHANNELS) channel_count = SONARE_MAX_METER_CHANNELS;
   out.Set("channelCount", Napi::Number::New(env, channel_count));
@@ -50,7 +50,7 @@ Napi::Object MeterSnapshotToObject(Napi::Env env, const SonareMixMeterSnapshot& 
   for (int ch = 0; ch < channel_count; ++ch) {
     peak_db.Set(ch, Napi::Number::New(env, snapshot.peak_db[ch]));
     rms_db.Set(ch, Napi::Number::New(env, snapshot.rms_db[ch]));
-    true_peak_db.Set(ch, Napi::Number::New(env, snapshot.true_peak_db[ch]));
+    true_peak_db.Set(ch, Napi::Number::New(env, snapshot.true_peak_dbtp[ch]));
   }
   out.Set("peakDb", peak_db);
   out.Set("rmsDb", rms_db);

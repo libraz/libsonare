@@ -360,8 +360,8 @@ def mastering_repair_declip(
 
 def _extract_clip_detection(raw: Any) -> ClipDetection:
     return ClipDetection(
-        clipped_samples=int(raw.sample_count),
-        clipped_ratio=float(raw.sample_fraction),
+        clipped_samples=int(raw.clipped_samples),
+        clipped_ratio=float(raw.clipped_ratio),
         run_count=int(raw.run_count),
         longest_run_samples=int(raw.longest_run_samples),
         flat_run_count=int(raw.flat_run_count),

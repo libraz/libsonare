@@ -326,8 +326,8 @@ def mfcc(
             hop_length=out.hop_length,
             n_fft=out.n_fft,
             n_mels=out.n_mels,
-            fmin_hz=float(out.fmin),
-            fmax_hz=float(out.fmax),
+            fmin_hz=float(out.fmin_hz),
+            fmax_hz=float(out.fmax_hz),
             htk=bool(out.htk),
             lifter=float(out.lifter),
         )

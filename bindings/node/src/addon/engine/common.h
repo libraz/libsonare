@@ -49,7 +49,7 @@ inline Napi::Object MetronomeToObject(Napi::Env env, const SonareEngineMetronome
   out.Set("beatGain", Napi::Number::New(env, config.beat_gain));
   out.Set("accentGain", Napi::Number::New(env, config.accent_gain));
   out.Set("clickSamples", Napi::Number::New(env, config.click_samples));
-  out.Set("clickSeconds", Napi::Number::New(env, config.click_seconds));
+  out.Set("clickSeconds", Napi::Number::New(env, config.click_sec));
   return out;
 }
 
@@ -112,9 +112,9 @@ inline Napi::Object MeterTelemetryV2ToObject(Napi::Env env,
   out.Set("peakDbR", Napi::Number::New(env, record.peak_db_r));
   out.Set("rmsDbL", Napi::Number::New(env, record.rms_db_l));
   out.Set("rmsDbR", Napi::Number::New(env, record.rms_db_r));
-  out.Set("truePeakDbL", Napi::Number::New(env, record.true_peak_db_l));
-  out.Set("truePeakDbR", Napi::Number::New(env, record.true_peak_db_r));
-  out.Set("maxTruePeakDb", Napi::Number::New(env, record.max_true_peak_db));
+  out.Set("truePeakDbL", Napi::Number::New(env, record.true_peak_dbtp_l));
+  out.Set("truePeakDbR", Napi::Number::New(env, record.true_peak_dbtp_r));
+  out.Set("maxTruePeakDb", Napi::Number::New(env, record.max_true_peak_dbtp));
   out.Set("correlation", Napi::Number::New(env, record.correlation));
   out.Set("monoCompatWidth", Napi::Number::New(env, record.mono_compat_width));
   out.Set("momentaryLufs", Napi::Number::New(env, record.momentary_lufs));
@@ -133,7 +133,7 @@ inline Napi::Object MeterTelemetryWideV2ToObject(Napi::Env env,
   out.Set("targetId", Napi::Number::New(env, record.target_id));
   out.Set("renderFrame", Napi::Number::New(env, static_cast<double>(record.render_frame)));
   out.Set("seq", Napi::Number::New(env, static_cast<double>(record.seq)));
-  int planes = record.channel_count;
+  int planes = record.num_channels;
   if (planes < 0) planes = 0;
   if (planes > SONARE_METER_MAX_CHANNELS) planes = SONARE_METER_MAX_CHANNELS;
   out.Set("channelCount", Napi::Number::New(env, planes));
@@ -145,14 +145,14 @@ inline Napi::Object MeterTelemetryWideV2ToObject(Napi::Env env,
     const auto idx = static_cast<uint32_t>(ch);
     peak_db.Set(idx, Napi::Number::New(env, record.peak_db[ch]));
     rms_db.Set(idx, Napi::Number::New(env, record.rms_db[ch]));
-    true_peak_db.Set(idx, Napi::Number::New(env, record.true_peak_db[ch]));
+    true_peak_db.Set(idx, Napi::Number::New(env, record.true_peak_dbtp[ch]));
     input_peak_db.Set(idx, Napi::Number::New(env, record.input_peak_db[ch]));
   }
   out.Set("peakDb", peak_db);
   out.Set("rmsDb", rms_db);
   out.Set("truePeakDb", true_peak_db);
   out.Set("inputPeakDb", input_peak_db);
-  out.Set("maxTruePeakDb", Napi::Number::New(env, record.max_true_peak_db));
+  out.Set("maxTruePeakDb", Napi::Number::New(env, record.max_true_peak_dbtp));
   out.Set("correlation", Napi::Number::New(env, record.correlation));
   out.Set("monoCompatWidth", Napi::Number::New(env, record.mono_compat_width));
   out.Set("momentaryLufs", Napi::Number::New(env, record.momentary_lufs));

@@ -36,8 +36,8 @@ void require_reading(const SonareMixMeterSnapshot& snap, const Value& expected, 
   CHECK_THAT(snap.rms_db_l, WithinAbs(expected["rmsDbL"].as_number(), tol_db));
   CHECK_THAT(snap.rms_db_r, WithinAbs(expected["rmsDbR"].as_number(), tol_db));
   CHECK_THAT(snap.correlation, WithinAbs(expected["correlation"].as_number(), tol_corr));
-  CHECK_THAT(snap.true_peak_db_l, WithinAbs(expected["truePeakDbL"].as_number(), tol_db));
-  CHECK_THAT(snap.true_peak_db_r, WithinAbs(expected["truePeakDbR"].as_number(), tol_db));
+  CHECK_THAT(snap.true_peak_dbtp_l, WithinAbs(expected["truePeakDbL"].as_number(), tol_db));
+  CHECK_THAT(snap.true_peak_dbtp_r, WithinAbs(expected["truePeakDbR"].as_number(), tol_db));
 }
 
 }  // namespace

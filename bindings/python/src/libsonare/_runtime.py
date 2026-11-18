@@ -1183,15 +1183,15 @@ def _mix_meter_from_c(snapshot: SonareMixMeterSnapshot) -> MixMeterSnapshot:
         short_term_lufs=float(snapshot.short_term_lufs),
         integrated_lufs=float(snapshot.integrated_lufs),
         gain_reduction_db=float(snapshot.gain_reduction_db),
-        true_peak_dbtp_l=float(snapshot.true_peak_db_l),
-        true_peak_dbtp_r=float(snapshot.true_peak_db_r),
-        max_true_peak_dbtp=float(snapshot.max_true_peak_db),
+        true_peak_dbtp_l=float(snapshot.true_peak_dbtp_l),
+        true_peak_dbtp_r=float(snapshot.true_peak_dbtp_r),
+        max_true_peak_dbtp=float(snapshot.max_true_peak_dbtp),
         seq=int(snapshot.seq),
-        num_channels=int(snapshot.channel_count),
-        peak_db=tuple(float(snapshot.peak_db[i]) for i in range(snapshot.channel_count)),
-        rms_db=tuple(float(snapshot.rms_db[i]) for i in range(snapshot.channel_count)),
+        num_channels=int(snapshot.num_channels),
+        peak_db=tuple(float(snapshot.peak_db[i]) for i in range(snapshot.num_channels)),
+        rms_db=tuple(float(snapshot.rms_db[i]) for i in range(snapshot.num_channels)),
         true_peak_dbtp=tuple(
-            float(snapshot.true_peak_db[i]) for i in range(snapshot.channel_count)
+            float(snapshot.true_peak_dbtp[i]) for i in range(snapshot.num_channels)
         ),
     )
 

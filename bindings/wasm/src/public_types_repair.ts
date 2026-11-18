@@ -363,10 +363,10 @@ export interface ReverbDetection {
    * across that lag, which a late tail does and a dry offset does not -- so a reverberant
    * input reads HIGHER here than the same material dry. */
   lateDecayRatioDb: number;
-  /** Mean WPE predictor norm, before the clamp. Exactly 0 whenever the WPE stage did not run,
+  /** Mean WPE predictor norm, before the clamp. Absent whenever the WPE stage did not run,
    * which is the case unless `wpeEnabled` is set -- and it is clear by default, so a
-   * default-config pass reports 0 here as its measurement. */
-  latePredictability: number;
+   * default-config pass omits it. */
+  latePredictability?: number;
 }
 
 /**

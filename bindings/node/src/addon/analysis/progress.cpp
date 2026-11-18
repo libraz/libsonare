@@ -169,8 +169,8 @@ Napi::Value SonareWrap::AnalyzeSections(const Napi::CallbackInfo& info) {
     Napi::Object obj = Napi::Object::New(env);
     obj.Set("type", Napi::Number::New(env, static_cast<int>(section.type)));
     obj.Set("name", Napi::String::New(env, SectionTypeName(section.type)));
-    obj.Set("start", Napi::Number::New(env, section.start));
-    obj.Set("end", Napi::Number::New(env, section.end));
+    obj.Set("start", Napi::Number::New(env, section.start_sec));
+    obj.Set("end", Napi::Number::New(env, section.end_sec));
     obj.Set("energyLevel", Napi::Number::New(env, section.energy_level));
     obj.Set("confidence", Napi::Number::New(env, section.confidence));
     obj.Set("group", Napi::Number::New(env, section.group));
@@ -208,9 +208,9 @@ Napi::Value SonareWrap::DetectBoundaries(const Napi::CallbackInfo& info) {
         FiniteFloatProperty(bag, "absoluteThreshold", options.absolute_threshold);
     options.n_mfcc = IntProperty(bag, "nMfcc", options.n_mfcc);
     options.n_chroma = IntProperty(bag, "nChroma", options.n_chroma);
-    options.peak_distance = FiniteFloatProperty(bag, "peakDistance", options.peak_distance);
-    options.reference_window =
-        FiniteFloatProperty(bag, "referenceWindow", options.reference_window);
+    options.peak_distance_sec = FiniteFloatProperty(bag, "peakDistance", options.peak_distance_sec);
+    options.reference_window_sec =
+        FiniteFloatProperty(bag, "referenceWindow", options.reference_window_sec);
     options.use_mfcc = BoolProperty(bag, "useMfcc", options.use_mfcc != 0) ? 1 : 0;
     options.use_chroma = BoolProperty(bag, "useChroma", options.use_chroma != 0) ? 1 : 0;
   }
@@ -227,7 +227,7 @@ Napi::Value SonareWrap::DetectBoundaries(const Napi::CallbackInfo& info) {
   for (size_t i = 0; i < result.boundary_count; ++i) {
     const SonareBoundary& boundary = result.boundaries[i];
     Napi::Object obj = Napi::Object::New(env);
-    obj.Set("time", Napi::Number::New(env, boundary.time));
+    obj.Set("time", Napi::Number::New(env, boundary.time_sec));
     obj.Set("frame", Napi::Number::New(env, boundary.frame));
     obj.Set("strength", Napi::Number::New(env, boundary.strength));
     boundaries.Set(static_cast<uint32_t>(i), obj);
@@ -297,8 +297,8 @@ Napi::Value SonareWrap::AnalyzeMelody(const Napi::CallbackInfo& info) {
   for (size_t i = 0; i < result.point_count; ++i) {
     const SonareMelodyPoint& point = result.points[i];
     Napi::Object obj = Napi::Object::New(env);
-    obj.Set("time", Napi::Number::New(env, point.time));
-    obj.Set("frequency", Napi::Number::New(env, point.frequency));
+    obj.Set("time", Napi::Number::New(env, point.time_sec));
+    obj.Set("frequency", Napi::Number::New(env, point.frequency_hz));
     obj.Set("confidence", Napi::Number::New(env, point.confidence));
     points.Set(static_cast<uint32_t>(i), obj);
   }
@@ -307,8 +307,8 @@ Napi::Value SonareWrap::AnalyzeMelody(const Napi::CallbackInfo& info) {
   out.Set("points", points);
   out.Set("pitchRangeOctaves", Napi::Number::New(env, result.pitch_range_octaves));
   out.Set("pitchStability", Napi::Number::New(env, result.pitch_stability));
-  out.Set("meanFrequency", Napi::Number::New(env, result.mean_frequency));
-  out.Set("vibratoRate", Napi::Number::New(env, result.vibrato_rate));
+  out.Set("meanFrequency", Napi::Number::New(env, result.mean_frequency_hz));
+  out.Set("vibratoRate", Napi::Number::New(env, result.vibrato_rate_hz));
   sonare_free_melody_result(&result);
   return out;
   SONARE_NODE_CATCH(env)

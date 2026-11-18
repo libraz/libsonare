@@ -98,8 +98,8 @@ SonareError sonare_stream_analyzer_config_default(SonareStreamConfig* config) {
   config->n_fft = defaults.n_fft;
   config->hop_length = defaults.hop_length;
   config->n_mels = defaults.n_mels;
-  config->fmin = defaults.fmin;
-  config->fmax = defaults.fmax;
+  config->fmin_hz = defaults.fmin;
+  config->fmax_hz = defaults.fmax;
   config->reference_hz = defaults.tuning_ref_hz;
   // The C ABI streaming surface has no magnitude read path, so the default
   // config advertises it as off (an explicit non-zero is rejected by _create).
@@ -131,8 +131,8 @@ SonareError sonare_stream_analyzer_create(const SonareStreamConfig* config,
       config->max_pending_frames == 0 || config->max_pending_frames > kMaxStreamPendingFrames ||
       config->max_progression_entries == 0 ||
       config->max_progression_entries > kMaxStreamProgressionEntries ||
-      !finite_non_negative(config->fmin) || !finite_non_negative(config->fmax) ||
-      (config->fmax > 0.0f && config->fmax <= config->fmin) ||
+      !finite_non_negative(config->fmin_hz) || !finite_non_negative(config->fmax_hz) ||
+      (config->fmax_hz > 0.0f && config->fmax_hz <= config->fmin_hz) ||
       !finite_positive(config->reference_hz) || config->reference_hz < kMinTuningRefHz ||
       config->reference_hz > kMaxTuningRefHz || !finite_positive(config->key_update_interval_sec) ||
       !finite_positive(config->bpm_update_interval_sec) || !valid_window(config->window) ||
@@ -152,8 +152,8 @@ SonareError sonare_stream_analyzer_create(const SonareStreamConfig* config,
   cfg.n_fft = config->n_fft;
   cfg.hop_length = config->hop_length;
   cfg.n_mels = config->n_mels;
-  cfg.fmin = config->fmin;
-  cfg.fmax = config->fmax;
+  cfg.fmin = config->fmin_hz;
+  cfg.fmax = config->fmax_hz;
   cfg.tuning_ref_hz = config->reference_hz;
   cfg.window = to_window_type(config->window);
   // The SOA read paths (read_frames / read_frames_u8 / read_frames_i16) do not

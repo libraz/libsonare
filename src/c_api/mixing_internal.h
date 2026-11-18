@@ -221,16 +221,16 @@ inline void copy_meter_snapshot(const sonare::mixing::MeterSnapshot& snapshot,
   out->short_term_lufs = snapshot.short_term_lufs;
   out->integrated_lufs = snapshot.integrated_lufs;
   out->gain_reduction_db = snapshot.gain_reduction_db;
-  out->true_peak_db_l = snapshot.true_peak_db[0];
-  out->true_peak_db_r = snapshot.true_peak_db[1];
-  out->max_true_peak_db = snapshot.max_true_peak_db;
+  out->true_peak_dbtp_l = snapshot.true_peak_db[0];
+  out->true_peak_dbtp_r = snapshot.true_peak_db[1];
+  out->max_true_peak_dbtp = snapshot.max_true_peak_db;
   out->seq = snapshot.seq;
   for (int ch = 0; ch < SONARE_MAX_METER_CHANNELS; ++ch) {
     out->peak_db[ch] = snapshot.peak_db[ch];
     out->rms_db[ch] = snapshot.rms_db[ch];
-    out->true_peak_db[ch] = snapshot.true_peak_db[ch];
+    out->true_peak_dbtp[ch] = snapshot.true_peak_db[ch];
   }
-  out->channel_count = snapshot.channel_count;
+  out->num_channels = snapshot.channel_count;
 }
 
 void apply_solo_mutes(SonareMixer* mixer);

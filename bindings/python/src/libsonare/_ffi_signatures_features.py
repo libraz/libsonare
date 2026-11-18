@@ -880,8 +880,8 @@ def configure_features_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(ctypes.c_float),
     ]
 
-    lib.sonare_metering_true_peak_db.restype = ctypes.c_int32
-    lib.sonare_metering_true_peak_db.argtypes = [
+    lib.sonare_metering_true_peak_dbtp.restype = ctypes.c_int32
+    lib.sonare_metering_true_peak_dbtp.argtypes = [
         ctypes.POINTER(ctypes.c_float),
         ctypes.c_size_t,
         ctypes.c_int,

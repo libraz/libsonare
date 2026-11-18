@@ -3,6 +3,7 @@
 
 #include <cstddef>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "core/audio.h"
@@ -90,8 +91,13 @@ SonareDeclickConfig read_declick_config_c(Napi::Env env, const Napi::Object& opt
 template <typename T>
 Napi::Object EmitClipDetection(Napi::Env env, const T& detection) {
   Napi::Object out = Napi::Object::New(env);
-  out.Set("sampleCount", Napi::Number::New(env, static_cast<double>(detection.sample_count)));
-  out.Set("sampleFraction", Napi::Number::New(env, detection.sample_fraction));
+  if constexpr (std::is_same_v<T, SonareClipDetection>) {
+    out.Set("sampleCount", Napi::Number::New(env, static_cast<double>(detection.clipped_samples)));
+    out.Set("sampleFraction", Napi::Number::New(env, detection.clipped_ratio));
+  } else {
+    out.Set("sampleCount", Napi::Number::New(env, static_cast<double>(detection.sample_count)));
+    out.Set("sampleFraction", Napi::Number::New(env, detection.sample_fraction));
+  }
   out.Set("runCount", Napi::Number::New(env, static_cast<double>(detection.run_count)));
   out.Set("longestRunSamples",
           Napi::Number::New(env, static_cast<double>(detection.longest_run_samples)));

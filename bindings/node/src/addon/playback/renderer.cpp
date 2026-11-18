@@ -108,8 +108,8 @@ Napi::Value PlaybackRendererWrap::ProcessPlanar(const Napi::CallbackInfo& info) 
   }
 
   int out_channels = 0;
-  sonare_node::ThrowIfError(
-      env, sonare_playback_renderer_output_channel_count(renderer_, &out_channels));
+  sonare_node::ThrowIfError(env,
+                            sonare_playback_renderer_num_output_channels(renderer_, &out_channels));
   if (env.IsExceptionPending()) return env.Undefined();
 
   Napi::Array outputs = Napi::Array::New(env, static_cast<uint32_t>(out_channels));
@@ -148,8 +148,8 @@ Napi::Value PlaybackRendererWrap::ProcessInterleaved(const Napi::CallbackInfo& i
   const size_t frames = input.ElementLength() / static_cast<size_t>(in_channels);
 
   int out_channels = 0;
-  sonare_node::ThrowIfError(
-      env, sonare_playback_renderer_output_channel_count(renderer_, &out_channels));
+  sonare_node::ThrowIfError(env,
+                            sonare_playback_renderer_num_output_channels(renderer_, &out_channels));
   if (env.IsExceptionPending()) return env.Undefined();
 
   Napi::Float32Array output =
@@ -270,7 +270,7 @@ Napi::Value PlaybackRendererWrap::InputChannels(const Napi::CallbackInfo& info) 
   SONARE_NODE_TRY
   if (!EnsureAlive(env)) return env.Undefined();
   int out = 0;
-  sonare_node::ThrowIfError(env, sonare_playback_renderer_input_channel_count(renderer_, &out));
+  sonare_node::ThrowIfError(env, sonare_playback_renderer_num_input_channels(renderer_, &out));
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Number::New(env, out);
   SONARE_NODE_CATCH(env)
@@ -281,7 +281,7 @@ Napi::Value PlaybackRendererWrap::OutputChannels(const Napi::CallbackInfo& info)
   SONARE_NODE_TRY
   if (!EnsureAlive(env)) return env.Undefined();
   int out = 0;
-  sonare_node::ThrowIfError(env, sonare_playback_renderer_output_channel_count(renderer_, &out));
+  sonare_node::ThrowIfError(env, sonare_playback_renderer_num_output_channels(renderer_, &out));
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Number::New(env, out);
   SONARE_NODE_CATCH(env)

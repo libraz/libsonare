@@ -197,13 +197,12 @@ TEST_CASE("sonare_mastering_repair_detect_clipping", "[c_api][mastering]") {
     SonareClipDetection detection{};
     REQUIRE(sonare_mastering_repair_detect_clipping(samples.data(), samples.size(), kSr, nullptr,
                                                     &detection) == SONARE_OK);
-    REQUIRE(detection.sample_count == starts.size() * kPlateau);
+    REQUIRE(detection.clipped_samples == starts.size() * kPlateau);
     REQUIRE(detection.run_count == starts.size());
     REQUIRE(detection.longest_run_samples == kPlateau);
-    REQUIRE(
-        detection.sample_fraction ==
-        Catch::Approx(static_cast<float>(starts.size() * kPlateau) / static_cast<float>(kLength))
-            .epsilon(1e-6));
+    REQUIRE(detection.clipped_ratio == Catch::Approx(static_cast<float>(starts.size() * kPlateau) /
+                                                     static_cast<float>(kLength))
+                                           .epsilon(1e-6));
   }
 
   SECTION("reads clip_threshold_db, which a lower setting takes the whole buffer at") {
@@ -212,7 +211,7 @@ TEST_CASE("sonare_mastering_repair_detect_clipping", "[c_api][mastering]") {
     SonareClipDetection detection{};
     REQUIRE(sonare_mastering_repair_detect_clipping(samples.data(), samples.size(), kSr, &config,
                                                     &detection) == SONARE_OK);
-    REQUIRE(detection.sample_count == kLength);
+    REQUIRE(detection.clipped_samples == kLength);
     REQUIRE(detection.run_count == 1);
     REQUIRE(detection.longest_run_samples == kLength);
   }
@@ -226,7 +225,7 @@ TEST_CASE("sonare_mastering_repair_detect_clipping", "[c_api][mastering]") {
     SonareClipDetection detection{};
     REQUIRE(sonare_mastering_repair_detect_clipping(levels.data(), levels.size(), kSr, &config,
                                                     &detection) == SONARE_OK);
-    REQUIRE(detection.sample_count == 200);
+    REQUIRE(detection.clipped_samples == 200);
     REQUIRE(detection.run_count == 1);
   }
 
@@ -241,8 +240,8 @@ TEST_CASE("sonare_mastering_repair_detect_clipping", "[c_api][mastering]") {
                                                     &at_default) == SONARE_OK);
     REQUIRE(sonare_mastering_repair_detect_clipping(levels.data(), levels.size(), kSr, &config,
                                                     &explicit_default) == SONARE_OK);
-    REQUIRE(at_default.sample_count == 40);
-    REQUIRE(explicit_default.sample_count == at_default.sample_count);
+    REQUIRE(at_default.clipped_samples == 40);
+    REQUIRE(explicit_default.clipped_samples == at_default.clipped_samples);
     REQUIRE(explicit_default.run_count == at_default.run_count);
   }
 
@@ -284,7 +283,7 @@ TEST_CASE("sonare_mastering_repair_detect_clipping", "[c_api][mastering]") {
     SonareClipDetection detection{};
     REQUIRE(sonare_mastering_repair_detect_clipping(attenuated.data(), attenuated.size(), kSr,
                                                     nullptr, &detection) == SONARE_OK);
-    REQUIRE(detection.sample_count == 0);
+    REQUIRE(detection.clipped_samples == 0);
     REQUIRE(detection.run_count == 0);
     REQUIRE(detection.flat_run_count == starts.size());
     REQUIRE(detection.longest_flat_run_samples == kPlateau);
@@ -299,7 +298,7 @@ TEST_CASE("sonare_mastering_repair_detect_clipping", "[c_api][mastering]") {
                                                     &at_44100) == SONARE_OK);
     REQUIRE(sonare_mastering_repair_detect_clipping(samples.data(), samples.size(), kSr, nullptr,
                                                     &at_48000) == SONARE_OK);
-    REQUIRE(at_44100.sample_count == at_48000.sample_count);
+    REQUIRE(at_44100.clipped_samples == at_48000.clipped_samples);
     REQUIRE(at_44100.run_count == at_48000.run_count);
     SonareClipDetection detection{};
     REQUIRE(sonare_mastering_repair_detect_clipping(samples.data(), samples.size(), -1, nullptr,
@@ -572,7 +571,9 @@ TEST_CASE("sonare_mastering_repair_detect_reverb", "[c_api][mastering]") {
                                                   &from_off) == SONARE_OK);
     REQUIRE(sonare_mastering_repair_detect_reverb(samples.data(), samples.size(), kSr, &on,
                                                   &from_on) == SONARE_OK);
+    REQUIRE(from_off.has_late_predictability == 0u);
     REQUIRE(from_off.late_predictability == 0.0f);
+    REQUIRE(from_on.has_late_predictability == 1u);
     REQUIRE(from_on.late_predictability > 0.0f);
     // The decay statistic is the same measurement either way: WPE adds a term,
     // it does not change what the late-lag ratio reads.
@@ -585,9 +586,11 @@ TEST_CASE("sonare_mastering_repair_detect_reverb", "[c_api][mastering]") {
                                                   nullptr) == SONARE_ERROR_INVALID_PARAMETER);
     SonareReverbDetection detection{};
     detection.late_predictability = 0.9f;
+    detection.has_late_predictability = 1u;
     REQUIRE(sonare_mastering_repair_detect_reverb(nullptr, 0, kSr, nullptr, &detection) ==
             SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(detection.late_predictability == 0.0f);
+    REQUIRE(detection.has_late_predictability == 0u);
 
     SonareDereverbClassicalConfig config = default_dereverb_config();
     config.wpe_taps = 0;

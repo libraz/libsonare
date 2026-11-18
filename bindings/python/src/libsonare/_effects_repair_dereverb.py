@@ -115,7 +115,9 @@ def mastering_repair_dereverb_classical(
 def _extract_reverb_detection(raw: Any) -> ReverbDetection:
     return ReverbDetection(
         late_decay_ratio_db=float(raw.late_decay_ratio_db),
-        late_predictability=float(raw.late_predictability),
+        late_predictability=(
+            float(raw.late_predictability) if raw.has_late_predictability else None
+        ),
     )
 
 
@@ -154,9 +156,8 @@ def mastering_repair_detect_reverb(
     ``late_decay_ratio_db`` less negative means the material sustains across the
     module's own late lag, which a late tail does and a dry offset does not, so a
     reverberant input reads HIGHER here than the same material dry.
-    ``late_predictability`` is exactly zero unless ``wpe_enabled`` is set -- the
-    measurement rather than an unset field -- and under it only the WPE
-    covariance and solve run, never the subtraction.
+    ``late_predictability`` is None unless ``wpe_enabled`` is set, and under it
+    only the WPE covariance and solve run, never the subtraction.
 
     Args:
         samples: Mono input buffer (any sequence convertible to float32).
@@ -264,9 +265,8 @@ def mastering_repair_dereverb_classical_stereo(
     :func:`mastering_repair_denoise_classical_stereo` nothing here shifts with
     the channel count and a stereo figure is comparable against a mono one.
 
-    ``detected.late_predictability`` and ``wpe_predictor_norm`` are both
-    exactly zero unless ``wpe_enabled`` is set, which it is not by default --
-    that is the measurement, not an unset field.
+    ``detected.late_predictability`` is None and ``wpe_predictor_norm`` is
+    zero unless ``wpe_enabled`` is set, which it is not by default.
 
     An input shorter than ``n_fft`` is padded for analysis and the output
     trimmed back to the input length, as
@@ -405,9 +405,8 @@ def mastering_repair_dereverb_classical_linked(
     Every field of the report is a ratio or a fraction, so unlike the denoise
     entry nothing here shifts with the channel count and a figure measured
     over a set is comparable against a mono one.
-    ``detected.late_predictability`` and ``wpe_predictor_norm`` are both
-    exactly zero unless ``wpe_enabled`` is set, which it is not by default --
-    that is the measurement, not an unset field.
+    ``detected.late_predictability`` is None and ``wpe_predictor_norm`` is
+    zero unless ``wpe_enabled`` is set, which it is not by default.
 
     Args:
         channels: One input buffer per channel, in the order the outputs come

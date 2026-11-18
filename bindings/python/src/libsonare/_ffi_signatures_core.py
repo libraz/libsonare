@@ -71,14 +71,14 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
             ctypes.POINTER(ctypes.c_void_p),
         ]
 
-    # sonare_audio_file_channel_count
+    # sonare_audio_file_num_channels
     # This is additive to the audio-file ABI. Keep the signature optional so
     # callers that deliberately load an older feature-gated library still get
     # the usual runtime "missing capability" error instead of a load-time
     # AttributeError while configuring unrelated symbols.
-    if hasattr(lib, "sonare_audio_file_channel_count"):
-        lib.sonare_audio_file_channel_count.restype = ctypes.c_int32
-        lib.sonare_audio_file_channel_count.argtypes = [
+    if hasattr(lib, "sonare_audio_file_num_channels"):
+        lib.sonare_audio_file_num_channels.restype = ctypes.c_int32
+        lib.sonare_audio_file_num_channels.argtypes = [
             ctypes.c_char_p,
             ctypes.POINTER(ctypes.c_int),
         ]
@@ -163,8 +163,8 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(ctypes.c_float),
     ]
 
-    lib.sonare_audio_true_peak_db.restype = ctypes.c_int32
-    lib.sonare_audio_true_peak_db.argtypes = [
+    lib.sonare_audio_true_peak_dbtp.restype = ctypes.c_int32
+    lib.sonare_audio_true_peak_dbtp.argtypes = [
         ctypes.c_void_p,
         ctypes.c_int,
         ctypes.POINTER(ctypes.c_float),

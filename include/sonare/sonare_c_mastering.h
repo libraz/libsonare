@@ -109,7 +109,7 @@ typedef struct {
   float max_momentary_lufs;
   float max_short_term_lufs;
   float true_peak_dbtp;
-  float loudness_range;
+  float loudness_range_lu;
 } SonareMasteringLoudnessSummary;
 
 /// Explanation-oriented before/after measurements for an offline mastering run.
@@ -150,7 +150,7 @@ typedef struct {
   // factor the chain used.
   float output_true_peak_dbtp;
   // EBU Tech 3342 Loudness Range of the output (LU).
-  float output_lra;
+  float output_loudness_range_lu;
   // Non-zero when the requested LUFS gain was reduced to respect the true-peak
   // ceiling. output_lufs is the achieved value, not the requested target.
   int loudness_target_limited;
@@ -197,7 +197,7 @@ typedef struct {
   // See @c SonareMasteringChainResult for field semantics. Released by
   // @c sonare_free_mastering_chain_stereo_result.
   float output_true_peak_dbtp;
-  float output_lra;
+  float output_loudness_range_lu;
   int loudness_target_limited;
   char** stage_gain_reduction_stages;
   float* stage_gain_reduction_values;
@@ -789,7 +789,7 @@ typedef struct {
   /// included. 0 for a silent or below-gate stage input.
   float loudness_static_gain_db;
   /// True peak (dBTP) of the loudness stage's input; -120 for digital silence.
-  float true_peak_db;
+  float true_peak_dbtp;
   /// Integrated loudness (LUFS) of the loudness stage's input; -inf below the
   /// absolute gate.
   float integrated_lufs;
@@ -818,7 +818,7 @@ SonareError sonare_mastering_streaming_preview_stereo(const float* left, const f
 /// @brief Computes the loudness numbers for a streaming mastering chain.
 /// @details Runs the offline chain described by @p params up to its loudness
 /// stage and measures there, so @c loudness_static_gain_db equals the gain the
-/// offline chain applies (ceiling clamp included) and @c true_peak_db is the
+/// offline chain applies (ceiling clamp included) and @c true_peak_dbtp is the
 /// peak that clamp used. Pass them as @p loudness_static_gain_db and
 /// @p loudness_static_gain_peak_db of
 /// @ref sonare_streaming_mastering_chain_create_ex. The gain is computed from
@@ -1552,8 +1552,8 @@ typedef struct {
 
 /// @brief Flat POD mirror of @c mastering::repair::ClipDetection.
 typedef struct {
-  size_t sample_count;         // samples at or past clip_threshold_db
-  float sample_fraction;       // sample_count divided by the input length
+  size_t clipped_samples;      // samples at or past clip_threshold_db
+  float clipped_ratio;         // clipped_samples divided by the input length
   size_t run_count;            // runs of consecutive clipped samples
   size_t longest_run_samples;  // a run past the 512-sample cap takes the
                                // interpolation fallback instead of the solver
@@ -1904,15 +1904,17 @@ typedef struct {
 ///   a free decay. Use @ref sonare_detect_acoustic for a graded RT60; this reports
 ///   what the module itself measured while deciding how much to subtract.
 typedef struct {
-  float late_decay_ratio_db;  // decay across the module's own late lag. Less
-                              // negative means the material sustains across it,
-                              // which a late tail does and a dry offset does not,
-                              // so a reverberant input reads HIGHER here than the
-                              // same material dry
-  float late_predictability;  // mean WPE predictor norm before the clamp. Zero
-                              // when the WPE stage did not run, which is the case
-                              // whenever config.wpe_enabled is clear -- the
-                              // default
+  float late_decay_ratio_db;         // decay across the module's own late lag. Less
+                                     // negative means the material sustains across it,
+                                     // which a late tail does and a dry offset does not,
+                                     // so a reverberant input reads HIGHER here than the
+                                     // same material dry
+  float late_predictability;         // mean WPE predictor norm before the clamp; read it
+                                     // only when has_late_predictability is set
+  uint32_t has_late_predictability;  // 1 when the WPE stage ran and measured
+                                     // late_predictability; 0 (and the value 0)
+                                     // whenever config.wpe_enabled is clear -- the
+                                     // default
 } SonareReverbDetection;
 
 /// @brief Measures reverberation without dereverberating.

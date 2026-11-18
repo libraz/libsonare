@@ -163,8 +163,8 @@ Napi::Value StreamAnalyzerConfigDefault(const Napi::CallbackInfo& info) {
   out.Set("nFft", Napi::Number::New(env, config.n_fft));
   out.Set("hopLength", Napi::Number::New(env, config.hop_length));
   out.Set("nMels", Napi::Number::New(env, config.n_mels));
-  out.Set("fmin", Napi::Number::New(env, config.fmin));
-  out.Set("fmax", Napi::Number::New(env, config.fmax));
+  out.Set("fmin", Napi::Number::New(env, config.fmin_hz));
+  out.Set("fmax", Napi::Number::New(env, config.fmax_hz));
   out.Set("referenceHz", Napi::Number::New(env, config.reference_hz));
   out.Set("computeMagnitude", Napi::Boolean::New(env, config.compute_magnitude != 0));
   out.Set("computeMel", Napi::Boolean::New(env, config.compute_mel != 0));

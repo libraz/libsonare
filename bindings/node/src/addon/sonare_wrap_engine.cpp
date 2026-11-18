@@ -849,7 +849,7 @@ Napi::Value RealtimeEngineWrap::SetMetronome(const Napi::CallbackInfo& info) {
   config.beat_gain = FloatProperty(obj, "beatGain", 0.35f);
   config.accent_gain = FloatProperty(obj, "accentGain", 0.7f);
   config.click_samples = IntProperty(obj, "clickSamples", kZeroIsSentinel);
-  config.click_seconds = DoubleProperty(obj, "clickSeconds", 0.0);
+  config.click_sec = DoubleProperty(obj, "clickSeconds", 0.0);
   if (env.IsExceptionPending()) return env.Undefined();
   ThrowIfError(env, sonare_engine_set_metronome(engine_, &config));
   return env.Undefined();

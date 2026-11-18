@@ -117,7 +117,7 @@ class PlaybackRendererWasm {
                                                        max_block_, &created),
                   "PlaybackRenderer");
     renderer_.reset(created);
-    checkPlayback(sonare_playback_renderer_output_channel_count(renderer_.get(), &out_channels_),
+    checkPlayback(sonare_playback_renderer_num_output_channels(renderer_.get(), &out_channels_),
                   "PlaybackRenderer");
     const auto block = static_cast<size_t>(max_block_);
     in_planes_.assign(kMaxInputChannels, std::vector<float>(block, 0.0f));
@@ -232,7 +232,7 @@ class PlaybackRendererWasm {
 
   int inputChannels() const {
     int out = 0;
-    checkPlayback(sonare_playback_renderer_input_channel_count(renderer_.get(), &out),
+    checkPlayback(sonare_playback_renderer_num_input_channels(renderer_.get(), &out),
                   "PlaybackRenderer.inputChannels");
     return out;
   }
@@ -290,7 +290,7 @@ class PlaybackRendererWasm {
   /// advances without switching the layout.
   ///
   /// Reads the active input channel count from `last_input_channels_` rather
-  /// than sonare_playback_renderer_input_channel_count: that C-ABI entry is
+  /// than sonare_playback_renderer_num_input_channels: that C-ABI entry is
   /// SONARE_C_API_ENTRY-guarded (it clears the thread-local last-error string),
   /// not one of the three entries sonare_c_playback.h documents as realtime-
   /// safe, and this method runs on the AudioWorklet's real-time callback.
@@ -316,7 +316,7 @@ class PlaybackRendererWasm {
   int sample_rate_ = 0;
   int max_block_ = 0;
   int out_channels_ = 0;
-  // Mirrors sonare_playback_renderer_input_channel_count's own documented
+  // Mirrors sonare_playback_renderer_num_input_channels's own documented
   // default ("2 before the first call"); kept current by processPrepared so
   // processPreparedSilence never has to ask the C ABI from the realtime path.
   int last_input_channels_ = 2;

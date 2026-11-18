@@ -229,7 +229,7 @@ TEST_CASE("an offline render's last meter record holds the true peak of its fina
                                                        &count) == SONARE_OK);
         for (size_t i = 0; i < count; ++i) {
           if (records[i].target_id == 0) {
-            max_true_peak = std::max(max_true_peak, records[i].max_true_peak_db);
+            max_true_peak = std::max(max_true_peak, records[i].max_true_peak_dbtp);
           }
         }
       } while (count > 0);
@@ -239,7 +239,8 @@ TEST_CASE("an offline render's last meter record holds the true peak of its fina
     if (chunked) REQUIRE(sonare_engine_finish_offline_render(engine) == SONARE_OK);
     const float after = std::max(before_finish, reported());
     float measured = 0.0f;
-    REQUIRE(sonare_metering_true_peak_db(out.data(), out.size(), 48000, 4, &measured) == SONARE_OK);
+    REQUIRE(sonare_metering_true_peak_dbtp(out.data(), out.size(), 48000, 4, &measured) ==
+            SONARE_OK);
     sonare_engine_destroy(engine);
     return std::array<float, 3>{before_finish, after, measured};
   };

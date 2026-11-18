@@ -138,8 +138,8 @@ void fill_chord_result(const std::vector<Chord>& chords, float tuning,
   for (size_t i = 0; i < chords.size(); ++i) {
     data[i].root = static_cast<SonarePitchClass>(chords[i].root);
     data[i].quality = to_c_chord_quality(chords[i].quality);
-    data[i].start = chords[i].start;
-    data[i].end = chords[i].end;
+    data[i].start_sec = chords[i].start;
+    data[i].end_sec = chords[i].end;
     data[i].confidence = chords[i].confidence;
     data[i].bass = static_cast<SonarePitchClass>(chords[i].bass);
   }

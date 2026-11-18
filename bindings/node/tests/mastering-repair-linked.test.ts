@@ -270,7 +270,10 @@ describe('masteringRepairDereverbClassicalLinked', () => {
 
     expect(one.detected.latePredictability).toBeGreaterThan(0);
     expect(one.wpePredictorNorm).toBeGreaterThan(0);
-    expect(three.detected.latePredictability).toBeCloseTo(one.detected.latePredictability, 3);
+    expect(three.detected.latePredictability).toBeCloseTo(
+      one.detected.latePredictability ?? Number.NaN,
+      3,
+    );
     expect(three.wpePredictorNorm).toBe(one.wpePredictorNorm);
     expect(three.meanReductionDb).toBe(one.meanReductionDb);
     expect(three.suppressedFraction).toBe(one.suppressedFraction);

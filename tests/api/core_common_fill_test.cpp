@@ -37,7 +37,7 @@ TEST_CASE("fill_chord_result populates a non-empty result", "[c_api]") {
   REQUIRE(out.tuning_cents == 25.0f);
   REQUIRE(out.chord_count == 1);
   REQUIRE(out.chords != nullptr);
-  REQUIRE(out.chords[0].start == 0.0f);
+  REQUIRE(out.chords[0].start_sec == 0.0f);
 
   sonare_free_chord_analysis_result(&out);
   REQUIRE(out.chords == nullptr);

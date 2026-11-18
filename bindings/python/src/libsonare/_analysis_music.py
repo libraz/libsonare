@@ -73,8 +73,8 @@ def _chords_from_c(out: SonareChordAnalysisResult) -> list[Chord]:
             Chord(
                 root=root,
                 quality=quality,
-                start_sec=float(out.chords[i].start),
-                end_sec=float(out.chords[i].end),
+                start_sec=float(out.chords[i].start_sec),
+                end_sec=float(out.chords[i].end_sec),
                 confidence=float(out.chords[i].confidence),
                 bass=bass,
                 name=_chord_symbol(root, quality, bass),
@@ -364,8 +364,8 @@ def analyze_sections(
         return [
             Section(
                 type=_section_type_token(int(out.sections[i].type)),
-                start_sec=float(out.sections[i].start),
-                end_sec=float(out.sections[i].end),
+                start_sec=float(out.sections[i].start_sec),
+                end_sec=float(out.sections[i].end_sec),
                 energy_level=float(out.sections[i].energy_level),
                 confidence=float(out.sections[i].confidence),
                 group=int(out.sections[i].group),
@@ -456,8 +456,8 @@ def detect_boundaries(
         absolute_threshold=_to_c_float(absolute_threshold, "absolute_threshold"),
         n_mfcc=_to_c_int(n_mfcc, "n_mfcc"),
         n_chroma=_to_c_int(n_chroma, "n_chroma"),
-        peak_distance=_to_c_float(peak_distance_sec, "peak_distance_sec"),
-        reference_window=_to_c_float(reference_window_sec, "reference_window_sec"),
+        peak_distance_sec=_to_c_float(peak_distance_sec, "peak_distance_sec"),
+        reference_window_sec=_to_c_float(reference_window_sec, "reference_window_sec"),
         use_mfcc=1 if use_mfcc else 0,
         use_chroma=1 if use_chroma else 0,
     )
@@ -474,7 +474,7 @@ def detect_boundaries(
         return BoundaryResult(
             boundaries=[
                 Boundary(
-                    time_sec=float(out.boundaries[i].time),
+                    time_sec=float(out.boundaries[i].time_sec),
                     frame=int(out.boundaries[i].frame),
                     strength=float(out.boundaries[i].strength),
                 )
@@ -551,16 +551,16 @@ def analyze_melody(
             return MelodyResult(
                 points=[
                     MelodyPoint(
-                        time_sec=float(out.points[i].time),
-                        frequency_hz=float(out.points[i].frequency),
+                        time_sec=float(out.points[i].time_sec),
+                        frequency_hz=float(out.points[i].frequency_hz),
                         confidence=float(out.points[i].confidence),
                     )
                     for i in range(out.point_count)
                 ],
                 pitch_range_octaves=float(out.pitch_range_octaves),
                 pitch_stability=float(out.pitch_stability),
-                mean_frequency_hz=float(out.mean_frequency),
-                vibrato_rate_hz=float(out.vibrato_rate),
+                mean_frequency_hz=float(out.mean_frequency_hz),
+                vibrato_rate_hz=float(out.vibrato_rate_hz),
             )
         finally:
             lib.sonare_free_melody_result(ctypes.byref(out))
@@ -586,16 +586,16 @@ def analyze_melody(
         return MelodyResult(
             points=[
                 MelodyPoint(
-                    time_sec=float(out.points[i].time),
-                    frequency_hz=float(out.points[i].frequency),
+                    time_sec=float(out.points[i].time_sec),
+                    frequency_hz=float(out.points[i].frequency_hz),
                     confidence=float(out.points[i].confidence),
                 )
                 for i in range(out.point_count)
             ],
             pitch_range_octaves=float(out.pitch_range_octaves),
             pitch_stability=float(out.pitch_stability),
-            mean_frequency_hz=float(out.mean_frequency),
-            vibrato_rate_hz=float(out.vibrato_rate),
+            mean_frequency_hz=float(out.mean_frequency_hz),
+            vibrato_rate_hz=float(out.vibrato_rate_hz),
         )
     finally:
         lib.sonare_free_melody_result(ctypes.byref(out))

@@ -23,9 +23,9 @@ def test_stream_config_defaults_match_native_config():
     assert cfg.n_fft == raw.n_fft
     assert cfg.hop_length == raw.hop_length
     assert cfg.n_mels == raw.n_mels
-    assert cfg.fmin_hz == raw.fmin
+    assert cfg.fmin_hz == raw.fmin_hz
     # An absent upper edge is the native 0, which the core reads as Nyquist.
-    assert cfg.fmax_hz is None and raw.fmax == 0.0
+    assert cfg.fmax_hz is None and raw.fmax_hz == 0.0
     assert cfg.reference_hz == raw.reference_hz
     assert int(cfg.compute_mel) == raw.compute_mel
     assert int(cfg.compute_chroma) == raw.compute_chroma

@@ -448,7 +448,7 @@ TEST_CASE("sonare_downmix refuses an upmix, an unknown layout and malformed argu
 }
 
 #ifndef __EMSCRIPTEN__
-TEST_CASE("sonare_audio_file_channel_count reports source channels", "[c_api][audio_io]") {
+TEST_CASE("sonare_audio_file_num_channels reports source channels", "[c_api][audio_io]") {
   const std::string mono_path = "test_c_api_channel_count_mono.wav";
   const std::string stereo_path = "test_c_api_channel_count_stereo.wav";
   const std::string invalid_path = "test_c_api_channel_count_invalid.bin";
@@ -473,26 +473,26 @@ TEST_CASE("sonare_audio_file_channel_count reports source channels", "[c_api][au
   }
 
   int channels = -1;
-  REQUIRE(sonare_audio_file_channel_count(mono_path.c_str(), &channels) == SONARE_OK);
+  REQUIRE(sonare_audio_file_num_channels(mono_path.c_str(), &channels) == SONARE_OK);
   REQUIRE(channels == 1);
   channels = -1;
-  REQUIRE(sonare_audio_file_channel_count(stereo_path.c_str(), &channels) == SONARE_OK);
+  REQUIRE(sonare_audio_file_num_channels(stereo_path.c_str(), &channels) == SONARE_OK);
   REQUIRE(channels == 2);
 
   channels = 17;
-  REQUIRE(sonare_audio_file_channel_count("missing-c-api-channel-count.wav", &channels) ==
+  REQUIRE(sonare_audio_file_num_channels("missing-c-api-channel-count.wav", &channels) ==
           SONARE_ERROR_FILE_NOT_FOUND);
   REQUIRE(channels == 0);
 
   channels = 17;
-  REQUIRE(sonare_audio_file_channel_count(invalid_path.c_str(), &channels) ==
+  REQUIRE(sonare_audio_file_num_channels(invalid_path.c_str(), &channels) ==
           SONARE_ERROR_DECODE_FAILED);
   REQUIRE(channels == 0);
 
   channels = 17;
-  REQUIRE(sonare_audio_file_channel_count(nullptr, &channels) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_audio_file_num_channels(nullptr, &channels) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(channels == 0);
-  REQUIRE(sonare_audio_file_channel_count(mono_path.c_str(), nullptr) ==
+  REQUIRE(sonare_audio_file_num_channels(mono_path.c_str(), nullptr) ==
           SONARE_ERROR_INVALID_PARAMETER);
 
   cleanup();
@@ -1005,8 +1005,8 @@ TEST_CASE("sonare_stream_analyzer C API validates config and reads quantized fra
     REQUIRE(sonare_stream_analyzer_create(&bad, &analyzer) == SONARE_ERROR_INVALID_PARAMETER);
 
     bad = config;
-    bad.fmin = 1000.0f;
-    bad.fmax = 500.0f;
+    bad.fmin_hz = 1000.0f;
+    bad.fmax_hz = 500.0f;
     REQUIRE(sonare_stream_analyzer_create(&bad, &analyzer) == SONARE_ERROR_INVALID_PARAMETER);
   }
 
@@ -2053,7 +2053,7 @@ TEST_CASE("sonare_analyze_melody_ex", "[c_api]") {
     REQUIRE(sonare_analyze_melody_ex(samples.data(), samples.size(), 22050, 65.0f, 2093.0f, 2048,
                                      256, 0.1f, /*use_pyin=*/1, /*center=*/1, &pyin) == SONARE_OK);
     // Both produce a usable contour; the pYIN path is genuinely reachable.
-    REQUIRE(pyin.mean_frequency >= 0.0f);
+    REQUIRE(pyin.mean_frequency_hz >= 0.0f);
     sonare_free_melody_result(&plain);
     sonare_free_melody_result(&pyin);
   }
@@ -2089,7 +2089,7 @@ TEST_CASE("sonare_analyze_dynamics", "[c_api]") {
     REQUIRE(result.peak_db <= 1.0f);
     REQUIRE(result.rms_db <= result.peak_db);
     REQUIRE(result.dynamic_range_db >= 0.0f);
-    REQUIRE(result.loudness_range_db >= 0.0f);
+    REQUIRE(result.loudness_range_lu >= 0.0f);
     REQUIRE((result.is_compressed == 0 || result.is_compressed == 1));
     REQUIRE(result.loudness_count > 0);
     REQUIRE(result.loudness_times_sec != nullptr);

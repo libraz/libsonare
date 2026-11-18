@@ -127,8 +127,8 @@ export function masteringRepairDereverbClassical(...args: unknown[]): DereverbRe
  * length, as {@link masteringRepairDenoiseClassicalStereo} does.
  *
  * Two report fields are gated on the WPE stage, which is off unless `wpeEnabled` is set:
- * `detected.latePredictability` and `wpePredictorNorm` are then both exactly 0, which is the
- * measurement rather than an unset field. `detected.lateDecayRatioDb` runs the other way from
+ * `detected.latePredictability` is then absent, and `wpePredictorNorm` is exactly 0 as its
+ * measurement. `detected.lateDecayRatioDb` runs the other way from
  * what its name suggests — less negative means the material sustains across the module's late
  * lag, so a reverberant input reads *higher* than the same material dry.
  *
@@ -191,8 +191,8 @@ export function masteringRepairDereverbClassicalStereo(
  * length, as that entry does.
  *
  * Two report fields are gated on the WPE stage, which is off unless `wpeEnabled` is set:
- * `detected.latePredictability` and `wpePredictorNorm` are then both exactly 0, which is the
- * measurement rather than an unset field.
+ * `detected.latePredictability` is then absent, and `wpePredictorNorm` is exactly 0 as its
+ * measurement.
  *
  * @example
  * ```ts
@@ -302,7 +302,7 @@ export interface MasteringRepairDetectReverbRequest extends DereverbClassicalOpt
  *
  * `latePredictability` comes from the WPE stage, which runs only under `wpeEnabled` — clear by
  * default — and then only its covariance and solve; the prediction is never subtracted. A
- * default-config call therefore reports exactly 0 there as its measurement.
+ * default-config call therefore omits it.
  */
 export function masteringRepairDetectReverb(
   request: MasteringRepairDetectReverbRequest,

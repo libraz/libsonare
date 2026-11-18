@@ -51,7 +51,7 @@ TEST_CASE("C-API scene mixer applies master bus trim polarity and width", "[mixi
 
   SonareMixMeterSnapshot meter{};
   REQUIRE(sonare_mixer_bus_meter(mixer, "master", &meter) == SONARE_OK);
-  REQUIRE(meter.channel_count == 2);
+  REQUIRE(meter.num_channels == 2);
   REQUIRE(std::isfinite(meter.peak_db[0]));
   REQUIRE(meter.peak_db[0] > -1.0f);
   REQUIRE(sonare_mixer_bus_meter(mixer, "missing", &meter) == SONARE_ERROR_INVALID_PARAMETER);

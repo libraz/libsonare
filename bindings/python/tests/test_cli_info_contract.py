@@ -23,7 +23,7 @@ def _source_probe_available() -> bool:
     try:
         from libsonare._runtime import _get_lib
 
-        return hasattr(_get_lib(), "sonare_audio_file_channel_count")
+        return hasattr(_get_lib(), "sonare_audio_file_num_channels")
     except Exception:
         return False
 
@@ -59,7 +59,7 @@ def test_audio_file_channel_count_propagates_probe_failure(tmp_path) -> None:
 
 def test_audio_file_channel_count_reports_missing_optional_symbol(monkeypatch) -> None:
     monkeypatch.setattr(audio_module, "_get_lib", lambda: SimpleNamespace())
-    with raises_coded(ErrorCode.NOT_SUPPORTED, match="sonare_audio_file_channel_count"):
+    with raises_coded(ErrorCode.NOT_SUPPORTED, match="sonare_audio_file_num_channels"):
         Audio.file_channel_count("input.wav")
 
 
@@ -116,13 +116,13 @@ def test_info_reports_the_real_channel_probe_failure_without_a_wav_fallback(
     def missing_probe(path):
         raise SonareError(
             int(ErrorCode.NOT_SUPPORTED),
-            "loaded libsonare does not expose sonare_audio_file_channel_count",
+            "loaded libsonare does not expose sonare_audio_file_num_channels",
         )
 
     monkeypatch.setattr(Audio, "file_channel_count", missing_probe)
 
     with raises_coded(
-        ErrorCode.NOT_SUPPORTED, match="does not expose sonare_audio_file_channel_count"
+        ErrorCode.NOT_SUPPORTED, match="does not expose sonare_audio_file_num_channels"
     ):
         _cli_analysis.cmd_info(SimpleNamespace(file=str(source), json=True))
 

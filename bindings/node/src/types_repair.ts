@@ -386,11 +386,11 @@ export interface ReverbDetection {
    */
   lateDecayRatioDb: number;
   /**
-   * Mean WPE predictor norm before the clamp. Zero whenever the WPE stage did
+   * Mean WPE predictor norm before the clamp. Absent whenever the WPE stage did
    * not run, which is the case unless `wpeEnabled` is set -- and it is clear
-   * by default, so a default-config pass reports 0 here as its measurement.
+   * by default, so a default-config pass omits it.
    */
-  latePredictability: number;
+  latePredictability?: number;
 }
 
 /**

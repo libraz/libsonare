@@ -612,7 +612,7 @@ class _ProjectInspectionMixin:
         return ProjectSource(
             id=int(raw.id),
             kind=int(raw.kind),
-            num_channels=int(raw.channel_count),
+            num_channels=int(raw.num_channels),
             storage_handle_id=int(raw.storage_handle_id),
             sample_rate_hint=float(raw.sample_rate_hint),
             name_or_uri=name_or_uri,

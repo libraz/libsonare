@@ -76,10 +76,10 @@ typedef struct {
      reconstruction at 4x. This is a STREAMING measurement that runs one
      reconstruction-filter group delay (a few samples) behind the block, so every
      value has its whole stencil and the reading does not depend on the block
-     size. sonare_metering_true_peak_db measures a whole signal at once. */
-  float true_peak_db_l;
-  float true_peak_db_r;
-  float max_true_peak_db;
+     size. sonare_metering_true_peak_dbtp measures a whole signal at once. */
+  float true_peak_dbtp_l;
+  float true_peak_dbtp_r;
+  float max_true_peak_dbtp;
   float correlation;
   float mono_compat_width;
   float momentary_lufs;
@@ -94,7 +94,7 @@ typedef struct {
 
 /* Per-plane meter snapshot for a surround mix target. Mirrors
    engine::MeterTelemetryRecord with the per-channel peak/rms/true_peak arrays
-   exposed (planes [0, channel_count)). Drained with
+   exposed (planes [0, num_channels)). Drained with
    sonare_engine_drain_meter_telemetry_wide. The legacy stereo
    SonareMeterTelemetryRecord stays byte-identical for compatibility; the one
    drain to use is sonare_engine_drain_meter_telemetry_wide_v2, where a stereo
@@ -104,16 +104,16 @@ typedef struct {
   uint32_t target_id;
   int64_t render_frame;
   uint64_t seq;
-  int32_t channel_count;
+  int32_t num_channels;
   float peak_db[SONARE_METER_MAX_CHANNELS];
   float rms_db[SONARE_METER_MAX_CHANNELS];
   /* Inter-sample (true) peak in dBFS, from the ITU-R BS.1770-4 polyphase
      reconstruction at 4x. This is a STREAMING measurement that runs one
      reconstruction-filter group delay (a few samples) behind the block, so every
      value has its whole stencil and the reading does not depend on the block
-     size. sonare_metering_true_peak_db measures a whole signal at once. */
-  float true_peak_db[SONARE_METER_MAX_CHANNELS];
-  float max_true_peak_db;
+     size. sonare_metering_true_peak_dbtp measures a whole signal at once. */
+  float true_peak_dbtp[SONARE_METER_MAX_CHANNELS];
+  float max_true_peak_dbtp;
   float correlation;
   float mono_compat_width;
   float momentary_lufs;
@@ -136,9 +136,9 @@ typedef struct {
   float peak_db_r;
   float rms_db_l;
   float rms_db_r;
-  float true_peak_db_l;
-  float true_peak_db_r;
-  float max_true_peak_db;
+  float true_peak_dbtp_l;
+  float true_peak_dbtp_r;
+  float max_true_peak_dbtp;
   float correlation;
   float mono_compat_width;
   float momentary_lufs;
@@ -155,11 +155,11 @@ typedef struct {
   uint32_t target_id;
   int64_t render_frame;
   uint64_t seq;
-  int32_t channel_count;
+  int32_t num_channels;
   float peak_db[SONARE_METER_MAX_CHANNELS];
   float rms_db[SONARE_METER_MAX_CHANNELS];
-  float true_peak_db[SONARE_METER_MAX_CHANNELS];
-  float max_true_peak_db;
+  float true_peak_dbtp[SONARE_METER_MAX_CHANNELS];
+  float max_true_peak_dbtp;
   float correlation;
   float mono_compat_width;
   float momentary_lufs;
@@ -288,13 +288,13 @@ typedef struct {
   float beat_gain;
   float accent_gain;
   /* Explicit click length in samples. 0 means "use the sample-rate-derived
-     default" (the engine derives the length from click_seconds and the prepared
+     default" (the engine derives the length from click_sec and the prepared
      sample rate). Valid range: 0..384000. */
   int click_samples;
   /* Click duration in seconds, used when click_samples is 0 to derive the click
      length from the prepared sample rate. Valid range: 0..1; defaults to 0.002
      (2 ms). */
-  double click_seconds;
+  double click_sec;
 } SonareEngineMetronomeConfig;
 
 typedef enum SONARE_ENUM_BASE {
@@ -576,8 +576,8 @@ static_assert(sizeof(SonareMeterTelemetryRecordWide) == 160u,
               "SonareMeterTelemetryRecordWide layout changed");
 static_assert(offsetof(SonareMeterTelemetryRecordWide, render_frame) == 8u,
               "SonareMeterTelemetryRecordWide render_frame offset changed");
-static_assert(offsetof(SonareMeterTelemetryRecordWide, channel_count) == 24u,
-              "SonareMeterTelemetryRecordWide channel_count offset changed");
+static_assert(offsetof(SonareMeterTelemetryRecordWide, num_channels) == 24u,
+              "SonareMeterTelemetryRecordWide num_channels offset changed");
 static_assert(offsetof(SonareMeterTelemetryRecordWide, peak_db) == 28u,
               "SonareMeterTelemetryRecordWide meter prefix offset changed");
 static_assert(offsetof(SonareMeterTelemetryRecordWide, dropped_records) == 152u,

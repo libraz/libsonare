@@ -203,8 +203,8 @@ val MixerWasm::meterSnapshot() const {
   out.set("rmsDbL", meter.rms_db_l);
   out.set("rmsDbR", meter.rms_db_r);
   out.set("correlation", meter.correlation);
-  out.set("truePeakDbL", meter.true_peak_db_l);
-  out.set("truePeakDbR", meter.true_peak_db_r);
+  out.set("truePeakDbL", meter.true_peak_dbtp_l);
+  out.set("truePeakDbR", meter.true_peak_dbtp_r);
   return out;
 }
 
@@ -227,9 +227,9 @@ float MixerWasm::meterScratchValue(const val& field) const {
     case 4:
       return meter_scratch_.correlation;
     case 5:
-      return meter_scratch_.true_peak_db_l;
+      return meter_scratch_.true_peak_dbtp_l;
     default:
-      return meter_scratch_.true_peak_db_r;
+      return meter_scratch_.true_peak_dbtp_r;
   }
 }
 

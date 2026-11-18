@@ -23,8 +23,8 @@ typedef struct {
                                 that rate, never shorter than the hop */
   int hop_length;            /* Hop length between frames (default 512) */
   int n_mels;                /* Number of Mel bands (default 128) */
-  float fmin;                /* Minimum Mel frequency */
-  float fmax;                /* Maximum Mel frequency (0 = Nyquist) */
+  float fmin_hz;             /* Minimum Mel frequency */
+  float fmax_hz;             /* Maximum Mel frequency (0 = Nyquist) */
   float reference_hz;        /* A4 tuning reference in Hz (default 440; must be
                                  within 220..880, the same range
                                  sonare_stream_analyzer_set_reference_hz

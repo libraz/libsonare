@@ -84,7 +84,7 @@ SonareError sonare_audio_from_file(const char* path, SonareAudio** out);
 /// @details A handle carries one plane, so @ref sonare_audio_from_file downmixes
 ///          a multi-channel source into it. This entry takes the plane the caller
 ///          asks for instead, which is what a stereo render needs: pair it with
-///          @ref sonare_audio_file_channel_count and load each channel in turn.
+///          @ref sonare_audio_file_num_channels and load each channel in turn.
 ///          The file is decoded once per call, so a stereo load costs two
 ///          decodes; the alternative, handing back an interleaved buffer, would
 ///          add an ownership contract for one allocation.
@@ -108,7 +108,7 @@ SonareError sonare_audio_from_file_channel(const char* path, int channel_index, 
 ///          An unknown or unsupported format returns @c SONARE_ERROR_INVALID_FORMAT
 ///          when no FFmpeg decoder is enabled; with FFmpeg enabled, failures
 ///          while probing that format return @c SONARE_ERROR_DECODE_FAILED.
-SonareError sonare_audio_file_channel_count(const char* path, int* out_channels);
+SonareError sonare_audio_file_num_channels(const char* path, int* out_channels);
 #endif
 
 /// @brief Releases @p audio; a NULL @p audio is ignored.
@@ -120,7 +120,7 @@ void sonare_audio_destroy(SonareAudio* audio);
 ///          @ref sonare_audio_length for the element count, which is a sample
 ///          count and not frames times channels: a handle carries one plane, and
 ///          a multi-channel source is downmixed as the handle is built.
-///          @ref sonare_audio_file_channel_count reports the channel count of a
+///          @ref sonare_audio_file_num_channels reports the channel count of a
 ///          file on disk, never the handle's.
 const float* sonare_audio_data(const SonareAudio* audio);
 /// @brief Sample count of @p audio's one plane, or 0 for a NULL @p audio.

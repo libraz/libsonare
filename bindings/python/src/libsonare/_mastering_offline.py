@@ -660,7 +660,7 @@ def _extract_mastering_loudness_summary(raw: object) -> MasteringLoudnessSummary
         max_momentary_lufs=float(summary.max_momentary_lufs),
         max_short_term_lufs=float(summary.max_short_term_lufs),
         true_peak_dbtp=float(summary.true_peak_dbtp),
-        loudness_range_lu=float(summary.loudness_range),
+        loudness_range_lu=float(summary.loudness_range_lu),
     )
 
 
@@ -789,7 +789,7 @@ def mastering_chain(
             applied_gain_db=float(out.applied_gain_db),
             stages=_extract_stages(out.stages, int(out.stages_count)),
             output_true_peak_dbtp=float(out.output_true_peak_dbtp),
-            output_loudness_range_lu=float(out.output_lra),
+            output_loudness_range_lu=float(out.output_loudness_range_lu),
             loudness_target_limited=bool(out.loudness_target_limited),
             stage_gain_reductions=_extract_stage_gain_reductions(
                 out.stage_gain_reduction_stages,
@@ -892,7 +892,7 @@ def mastering_chain_stereo(
             applied_gain_db=float(out.applied_gain_db),
             stages=_extract_stages(out.stages, int(out.stages_count)),
             output_true_peak_dbtp=float(out.output_true_peak_dbtp),
-            output_loudness_range_lu=float(out.output_lra),
+            output_loudness_range_lu=float(out.output_loudness_range_lu),
             loudness_target_limited=bool(out.loudness_target_limited),
             stage_gain_reductions=_extract_stage_gain_reductions(
                 out.stage_gain_reduction_stages,
@@ -1031,7 +1031,7 @@ def master_audio(
             applied_gain_db=float(out.applied_gain_db),
             stages=_extract_stages(out.stages, int(out.stages_count)),
             output_true_peak_dbtp=float(out.output_true_peak_dbtp),
-            output_loudness_range_lu=float(out.output_lra),
+            output_loudness_range_lu=float(out.output_loudness_range_lu),
             loudness_target_limited=bool(out.loudness_target_limited),
             stage_gain_reductions=_extract_stage_gain_reductions(
                 out.stage_gain_reduction_stages,
@@ -1137,7 +1137,7 @@ def master_audio_stereo(
             applied_gain_db=float(out.applied_gain_db),
             stages=_extract_stages(out.stages, int(out.stages_count)),
             output_true_peak_dbtp=float(out.output_true_peak_dbtp),
-            output_loudness_range_lu=float(out.output_lra),
+            output_loudness_range_lu=float(out.output_loudness_range_lu),
             loudness_target_limited=bool(out.loudness_target_limited),
             stage_gain_reductions=_extract_stage_gain_reductions(
                 out.stage_gain_reduction_stages,

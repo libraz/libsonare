@@ -68,7 +68,11 @@ def _stage_reports(entry: Mapping[str, Any]) -> RepairStageReports:
     reports = []
     for report in entry["reports"]:
         fields = _fields(report)
-        fields["detected"] = detection_type(**_fields(report["detected"]))
+        detected = _fields(report["detected"])
+        if detection_type is ReverbDetection:
+            # The document omits the key when the WPE stage did not run.
+            detected.setdefault("late_predictability", None)
+        fields["detected"] = detection_type(**detected)
         reports.append(report_type(**fields))
     return RepairStageReports(stage=entry["stage"], scope=entry["scope"], reports=reports)
 

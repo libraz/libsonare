@@ -737,7 +737,7 @@ Napi::Value SonareWrap::FileChannelCount(const Napi::CallbackInfo& info) {
 
   const std::string path = node_narrow_string(env, info[0], "path");
   int channels = 0;
-  const SonareError err = sonare_audio_file_channel_count(path.c_str(), &channels);
+  const SonareError err = sonare_audio_file_num_channels(path.c_str(), &channels);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();

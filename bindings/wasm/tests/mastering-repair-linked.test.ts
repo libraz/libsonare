@@ -288,7 +288,8 @@ describe('masteringRepairDereverbClassicalLinked (WASM)', () => {
 
     // Non-vacuity first: every field asserted below has a value to be equal
     // about. The WPE stage is enabled so the two predictor fields are
-    // measurements rather than the 0 a default-config pass reports.
+    // measurements rather than what a default-config pass reports (no
+    // latePredictability, a 0 norm).
     expect(one.reports[0].detected.lateDecayRatioDb).not.toBe(0);
     expect(one.reports[0].detected.latePredictability).toBeGreaterThan(0);
     expect(one.reports[0].wpePredictorNorm).toBeGreaterThan(0);
@@ -302,7 +303,7 @@ describe('masteringRepairDereverbClassicalLinked (WASM)', () => {
       6,
     );
     expect(three.reports[0].detected.latePredictability).toBeCloseTo(
-      one.reports[0].detected.latePredictability,
+      one.reports[0].detected.latePredictability ?? Number.NaN,
       6,
     );
     expect(three.reports[0].meanReductionDb).toBeCloseTo(one.reports[0].meanReductionDb, 6);

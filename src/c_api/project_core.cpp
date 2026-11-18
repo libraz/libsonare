@@ -144,7 +144,7 @@ SonareError sonare_project_deserialize(const char* json, size_t len, SonareProje
 namespace {
 void fill_audio_source(SonareProjectSource* out, const arr::AudioSourceRef& audio) {
   out->id = audio.id;
-  out->channel_count = audio.channel_count;
+  out->num_channels = audio.channel_count;
   out->storage_handle_id = audio.storage_handle_id;
   out->sample_rate_hint = audio.sample_rate_hint;
   copy_utf8_prefix(out->name_or_uri, audio.uri);
@@ -463,7 +463,7 @@ SonareError sonare_project_source_by_index(const SonareProject* project, size_t 
   } else {
     const auto& midi = std::get<arr::MidiSourceRef>(source);
     out->id = midi.id;
-    out->channel_count = midi.channel_hint;
+    out->num_channels = midi.channel_hint;
     copy_utf8_prefix(out->name_or_uri, midi.name);
   }
   return SONARE_OK;

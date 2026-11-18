@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <stdexcept>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "analysis/acoustic_analyzer.h"
@@ -47,7 +48,13 @@ template <typename T>
 Napi::Object EmitReverbDetection(Napi::Env env, const T& detection) {
   Napi::Object out = Napi::Object::New(env);
   out.Set("lateDecayRatioDb", Napi::Number::New(env, detection.late_decay_ratio_db));
-  out.Set("latePredictability", Napi::Number::New(env, detection.late_predictability));
+  if constexpr (std::is_same_v<T, SonareReverbDetection>) {
+    if (detection.has_late_predictability != 0) {
+      out.Set("latePredictability", Napi::Number::New(env, detection.late_predictability));
+    }
+  } else if (detection.late_predictability) {
+    out.Set("latePredictability", Napi::Number::New(env, *detection.late_predictability));
+  }
   return out;
 }
 
