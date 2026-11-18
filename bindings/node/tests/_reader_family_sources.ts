@@ -93,6 +93,7 @@ export const READER_FAMILIES: Readonly<
     Int64Property: 'refuse',
     IntProperty: 'refuse',
     NonNegativeSizeTProperty: 'refuse',
+    IntInRangeOrAbsentProperty: 'refuse',
     MidiByteProperty: 'refuse',
     NamedSelectorProperty: 'refuse',
     StringProperty: 'refuse',
@@ -123,6 +124,7 @@ export const READER_FAMILIES: Readonly<
     floatOption: 'refuse',
     floatProperty: 'refuse',
     gsEfxRealizationProperty: 'refuse',
+    intInRangeOrAbsentProperty: 'refuse',
     int64Property: 'refuse',
     intProperty: 'refuse',
     repairEnumOption: 'refuse', // enum strings for the repair options bags

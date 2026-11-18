@@ -148,10 +148,10 @@
         "c_representable": false
       },
       {
-        "id": "channel_any_sentinel",
+        "id": "channel_any_marker_typed",
         "field": "channel",
         "value": 255,
-        "accepted": true,
+        "accepted": false,
         "c_representable": true
       },
       {
