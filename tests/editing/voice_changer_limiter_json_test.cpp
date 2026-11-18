@@ -668,19 +668,19 @@ TEST_CASE("RealtimeVoiceChanger JSON clamps out-of-int-range reverb seed", "[voi
   // invoking UB, and still produce a usable config.
   SECTION("absurdly large positive seed clamps to INT_MAX") {
     const auto config = realtime_voice_changer_config_from_json(
-        "{\"schemaVersion\":1,\"id\":\"x\",\"dsp\":{\"reverb\":{\"seed\":1000000000000}}}");
+        "{\"schemaVersion\":3,\"id\":\"x\",\"dsp\":{\"reverb\":{\"seed\":1000000000000}}}");
     REQUIRE(config.reverb.seed == std::numeric_limits<int>::max());
   }
 
   SECTION("absurdly large negative seed clamps to INT_MIN") {
     const auto config = realtime_voice_changer_config_from_json(
-        "{\"schemaVersion\":1,\"id\":\"x\",\"dsp\":{\"reverb\":{\"seed\":-1000000000000}}}");
+        "{\"schemaVersion\":3,\"id\":\"x\",\"dsp\":{\"reverb\":{\"seed\":-1000000000000}}}");
     REQUIRE(config.reverb.seed == std::numeric_limits<int>::min());
   }
 
   SECTION("clamped-seed config drives the engine without crashing") {
     const auto config = realtime_voice_changer_config_from_json(
-        "{\"schemaVersion\":1,\"id\":\"x\",\"dsp\":{\"reverb\":{\"seed\":9e18,\"mix\":0.3}}}");
+        "{\"schemaVersion\":3,\"id\":\"x\",\"dsp\":{\"reverb\":{\"seed\":9e18,\"mix\":0.3}}}");
     RealtimeVoiceChanger changer(config);
     changer.prepare(48000, 128, 1);
     const auto input = sine(220.0f, 48000, 512);
@@ -872,39 +872,26 @@ std::string transformer_document_as_neutral() {
 
 }  // namespace
 
-TEST_CASE("RealtimeVoiceChanger preset JSON translates a version 2 document on load",
+TEST_CASE("RealtimeVoiceChanger preset JSON refuses a version 2 document",
           "[voice_changer][json]") {
   const std::string current = transformer_document_as_neutral();
   const std::string legacy = as_version_two(current);
   REQUIRE(legacy != current);
-  CHECK_THAT(legacy, Catch::Matchers::ContainsSubstring("\"natural_minor\""));
-  CHECK_THAT(legacy, Catch::Matchers::ContainsSubstring("\"id\":\"neutral-monitor\""));
 
   std::string normalized;
   std::string error;
-  REQUIRE(validate_realtime_voice_changer_preset_json(legacy, &normalized, &error));
-  // Re-saving writes the current version with the current keys, tokens and built-in id.
-  CHECK(normalized == current);
-  CHECK_THAT(normalized, Catch::Matchers::ContainsSubstring("\"schemaVersion\":3"));
-  CHECK_THAT(normalized, Catch::Matchers::ContainsSubstring("\"pitchSemitones\""));
-  CHECK_THAT(normalized, Catch::Matchers::ContainsSubstring("\"grainSizeSamples\""));
-  CHECK_THAT(normalized, Catch::Matchers::ContainsSubstring("\"highPassHz\""));
-  CHECK_THAT(normalized, Catch::Matchers::ContainsSubstring("\"id\":\"neutralMonitor\""));
+  CHECK_FALSE(validate_realtime_voice_changer_preset_json(legacy, &normalized, &error));
+  CHECK_THAT(error, Catch::Matchers::ContainsSubstring("schemaVersion 2"));
+  CHECK_THAT(error, Catch::Matchers::ContainsSubstring("(3)"));
 
-  RealtimeVoiceChangerConfig from_legacy;
-  RealtimeVoiceChangerConfig from_current;
-  REQUIRE(realtime_voice_changer_config_from_input(legacy, &from_legacy, &error));
-  REQUIRE(realtime_voice_changer_config_from_input(current, &from_current, &error));
-  require_same_transformer_fields(from_legacy, from_current);
-  CHECK(from_legacy.retune.grain_size == from_current.retune.grain_size);
-  CHECK(from_legacy.eq.highpass_hz == from_current.eq.highpass_hz);
-  require_same_transformer_fields(realtime_voice_changer_config_from_json(legacy), from_current);
+  RealtimeVoiceChangerConfig config;
+  CHECK_FALSE(realtime_voice_changer_config_from_input(legacy, &config, &error));
+  CHECK_THROWS_AS(realtime_voice_changer_config_from_json(legacy), sonare::SonareException);
 
-  // A custom id is left as written.
-  const std::string custom =
-      replace_all_text(legacy, "\"id\":\"neutral-monitor\"", "\"id\":\"hard-tune-copy\"");
-  REQUIRE(validate_realtime_voice_changer_preset_json(custom, &normalized, &error));
-  CHECK_THAT(normalized, Catch::Matchers::ContainsSubstring("\"id\":\"hard-tune-copy\""));
+  // A current-version document is read; the same document one version newer is refused too.
+  const std::string newer = replace_all_text(current, "\"schemaVersion\":3", "\"schemaVersion\":4");
+  CHECK_FALSE(validate_realtime_voice_changer_preset_json(newer, &normalized, &error));
+  CHECK_THAT(error, Catch::Matchers::ContainsSubstring("schemaVersion 4"));
 }
 
 TEST_CASE("RealtimeVoiceChanger preset JSON round trip is stable at the current version",

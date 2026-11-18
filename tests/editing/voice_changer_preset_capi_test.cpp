@@ -123,7 +123,7 @@ TEST_CASE("Voice changer normalized config JSON is a valid custom preset",
 TEST_CASE("Voice changer preset expands input macros into normalized DSP",
           "[voice_changer][json]") {
   const std::string macro_only = R"json({
-    "schemaVersion":1,"id":"macro-voice","name":"Macro Voice","category":"custom",
+    "schemaVersion":3,"id":"macro-voice","name":"Macro Voice","category":"custom",
     "macros":{"pitch":5,"formant":1.2,"brightness":1,"space":1,
               "intensity":0.5,"noiseControl":1,"sibilance":1}
   })json";
@@ -186,10 +186,8 @@ TEST_CASE("Voice changer schemaVersion validator rejects future versions",
   REQUIRE(error.find("schemaVersion") != std::string::npos);
 }
 
-TEST_CASE("Voice changer preset schema version 1 loads without the transformer sections",
+TEST_CASE("Voice changer preset requires every transformer section and refuses another version",
           "[voice_changer][json]") {
-  // A version 2 document without one transformer section is refused; the same document as
-  // version 1, with every transformer section removed, validates and loads with their defaults.
   auto document = sonare::util::json::parse_strict(
       realtime_voice_changer_preset_json(VoiceCharacterPreset::BrightIdol));
   auto& dsp = document.as_object().at("dsp").as_object();
@@ -199,23 +197,19 @@ TEST_CASE("Voice changer preset schema version 1 loads without the transformer s
                                                             nullptr, &error));
   REQUIRE(error.find("dsp.midi") != std::string::npos);
 
-  for (const char* key :
-       {"voiceEngine", "pitchCorrection", "harmony", "vocoder", "character", "reverbVariation"}) {
-    dsp.erase(key);
+  // An earlier or later schemaVersion is refused by both readers, naming the current one.
+  for (const double version : {1.0, 2.0, 4.0}) {
+    CAPTURE(version);
+    auto other = sonare::util::json::parse_strict(
+        realtime_voice_changer_preset_json(VoiceCharacterPreset::BrightIdol));
+    other.as_object().at("schemaVersion") = sonare::util::json::Value(version);
+    const std::string text = sonare::util::json::dump(other);
+    REQUIRE_FALSE(validate_realtime_voice_changer_preset_json(text, nullptr, &error));
+    CHECK(error.find("schemaVersion") != std::string::npos);
+    RealtimeVoiceChangerConfig loaded;
+    REQUIRE_FALSE(realtime_voice_changer_config_from_input(text, &loaded, &error));
+    CHECK(error.find("(3)") != std::string::npos);
   }
-  document.as_object().at("schemaVersion") = sonare::util::json::Value(1.0);
-  const std::string v1 = sonare::util::json::dump(document);
-  std::string normalized;
-  REQUIRE(validate_realtime_voice_changer_preset_json(v1, &normalized, &error));
-  // The normalized document is written at the current version, sections included.
-  REQUIRE(normalized.find("\"schemaVersion\":3") != std::string::npos);
-  REQUIRE(normalized.find("\"voiceEngine\"") != std::string::npos);
-  RealtimeVoiceChangerConfig loaded;
-  REQUIRE(realtime_voice_changer_config_from_input(v1, &loaded, &error));
-  const RealtimeVoiceChangerConfig expected =
-      realtime_voice_changer_preset(VoiceCharacterPreset::BrightIdol);
-  REQUIRE(realtime_voice_changer_config_to_json(loaded) ==
-          realtime_voice_changer_config_to_json(expected));
 }
 
 TEST_CASE("Voice changer preset validator requires deesser ratio", "[voice_changer][json]") {
@@ -331,7 +325,7 @@ TEST_CASE("preset JSON validator round-trips the caller's full preset identity",
   const std::string dsp_and_tail = baseline.substr(dsp_pos);
 
   const std::string full_identity_json =
-      "{\"schemaVersion\":1,\"id\":\"my.pack.preset-1\",\"name\":\"Warm Tape\","
+      "{\"schemaVersion\":3,\"id\":\"my.pack.preset-1\",\"name\":\"Warm Tape\","
       "\"description\":\"A warm, tape-saturated preset for vocals.\","
       "\"category\":\"bright\"," +
       dsp_and_tail;
@@ -361,7 +355,7 @@ TEST_CASE(
   const std::string dsp_and_tail = baseline.substr(dsp_pos);
 
   const std::string minimal_json =
-      "{\"schemaVersion\":1,\"id\":\"my.pack.preset-1\",\"name\":\"Warm Tape\","
+      "{\"schemaVersion\":3,\"id\":\"my.pack.preset-1\",\"name\":\"Warm Tape\","
       "\"category\":\"custom\"," +
       dsp_and_tail;
 
@@ -860,7 +854,7 @@ TEST_CASE("sonare_realtime_voice_changer_validate_preset_json round-trips preset
   const std::string dsp_and_tail = baseline.substr(dsp_pos);
 
   const std::string full_identity_json =
-      "{\"schemaVersion\":1,\"id\":\"my.pack.preset-1\",\"name\":\"Warm Tape\","
+      "{\"schemaVersion\":3,\"id\":\"my.pack.preset-1\",\"name\":\"Warm Tape\","
       "\"description\":\"A warm, tape-saturated preset for vocals.\","
       "\"category\":\"bright\"," +
       dsp_and_tail;

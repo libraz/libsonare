@@ -597,10 +597,7 @@ bool validate_transform_sections(const sonare::util::json::Value& dsp, std::stri
 constexpr std::array<const char*, 7> kTransformSections = {
     "voiceEngine", "pitchCorrection", "harmony", "vocoder", "character", "reverbVariation", "midi"};
 
-// A version 1 document predates the voice transformer sections and may omit them; version 2
-// requires them.
-bool validate_dsp_section(const sonare::util::json::Value& dsp, int schema_version,
-                          std::string* error) {
+bool validate_dsp_section(const sonare::util::json::Value& dsp, std::string* error) {
   if (!has_allowed_keys(
           dsp,
           {"inputGainDb", "outputGainDb", "wetMix", "retune", "formant", "eq", "gate", "compressor",
@@ -613,10 +610,8 @@ bool validate_dsp_section(const sonare::util::json::Value& dsp, int schema_versi
        {"retune", "formant", "eq", "gate", "compressor", "deesser", "reverb", "limiter"}) {
     if (!require_key(dsp, key, "dsp", error)) return false;
   }
-  if (schema_version >= 2) {
-    for (const char* key : kTransformSections) {
-      if (!require_key(dsp, key, "dsp", error)) return false;
-    }
+  for (const char* key : kTransformSections) {
+    if (!require_key(dsp, key, "dsp", error)) return false;
   }
   if (!validate_transform_sections(dsp, error)) return false;
   if (dsp.find("inputGainDb") && !require_in(dsp, "inputGainDb", kInputGainDb, "dsp", error)) {
@@ -705,76 +700,22 @@ bool is_step_triple(const sonare::util::json::Value& value) {
   return true;
 }
 
-struct Rename {
-  const char* from;
-  const char* to;
-};
+// Message for a preset document whose schemaVersion is not the one this release reads.
+std::string schema_version_refusal(double version) {
+  return "preset schemaVersion " + std::to_string(static_cast<long long>(version)) + " is " +
+         (version < kVoiceChangerPresetSchemaVersion ? "older" : "newer") +
+         " than the version this release reads (" +
+         std::to_string(kVoiceChangerPresetSchemaVersion) + ")";
+}
 
-// Spellings a version 1 or 2 document used, translated to the current ones on load.
-constexpr Rename kLegacyBuiltInIds[] = {{"neutral-monitor", "neutralMonitor"},
-                                        {"bright-idol", "brightIdol"},
-                                        {"soft-whisper", "softWhisper"},
-                                        {"deep-narrator", "deepNarrator"},
-                                        {"robot-mascot", "robotMascot"},
-                                        {"dark-villain", "darkVillain"},
-                                        {"hard-tune", "hardTune"},
-                                        {"robot-monotone", "robotMonotone"},
-                                        {"choir-harmony", "choirHarmony"},
-                                        {"vocoder-strings", "vocoderStrings"},
-                                        {"radio-voice", "radioVoice"}};
-constexpr Rename kLegacyDspKeys[] = {{"retune.semitones", "pitchSemitones"},
-                                     {"retune.grainSize", "grainSizeSamples"},
-                                     {"eq.highpassHz", "highPassHz"}};
-constexpr Rename kLegacyTokenFields[] = {{"pitchCorrection", "scale"},
-                                         {"character", "type"},
-                                         {"reverbVariation", "variation"},
-                                         {"reverbVariation", "division"}};
-constexpr Rename kLegacyTokens[] = {{"natural_minor", "naturalMinor"},
-                                    {"bbd_chorus", "bbdChorus"},
-                                    {"tempo_delay", "tempoDelay"},
-                                    {"dub_echo", "dubEcho"},
-                                    {"dotted_eighth", "dottedEighth"}};
-
-// Rewrites a version 1 or 2 preset document to the current spelling in place; other documents
-// are left alone, so a current document carrying an old spelling is refused by validation.
-void translate_legacy_document(sonare::util::json::Value& root) {
+// Refuses a preset document written for another schema; a bare configuration without a
+// schemaVersion reads as the current one.
+void refuse_other_schema(const sonare::util::json::Value& root) {
   if (!root.is_object()) return;
   const auto* version = root.find("schemaVersion");
-  if (version == nullptr || !version->is_number() ||
-      version->as_number() >= static_cast<double>(kVoiceChangerPresetSchemaVersion)) {
-    return;
-  }
-  auto& members = root.as_object();
-  if (auto it = members.find("id"); it != members.end() && it->second.is_string()) {
-    for (const Rename& row : kLegacyBuiltInIds) {
-      if (it->second.as_string() == row.from) it->second = sonare::util::json::Value(row.to);
-    }
-  }
-  auto dsp = members.find("dsp");
-  if (dsp == members.end() || !dsp->second.is_object()) return;
-  auto& sections = dsp->second.as_object();
-  for (const Rename& row : kLegacyDspKeys) {
-    const std::string_view path = row.from;
-    const auto dot = path.find('.');
-    auto section = sections.find(std::string(path.substr(0, dot)));
-    if (section == sections.end() || !section->second.is_object()) continue;
-    auto& fields = section->second.as_object();
-    auto old_field = fields.find(std::string(path.substr(dot + 1)));
-    if (old_field == fields.end() || fields.count(row.to) != 0) continue;
-    fields.emplace(row.to, std::move(old_field->second));
-    fields.erase(old_field);
-  }
-  for (const Rename& row : kLegacyTokenFields) {
-    auto section = sections.find(row.from);
-    if (section == sections.end() || !section->second.is_object()) continue;
-    auto field = section->second.as_object().find(row.to);
-    if (field == section->second.as_object().end() || !field->second.is_string()) continue;
-    for (const Rename& token : kLegacyTokens) {
-      if (field->second.as_string() == token.from) {
-        field->second = sonare::util::json::Value(token.to);
-        break;
-      }
-    }
+  if (version != nullptr && version->is_number() &&
+      version->as_number() != static_cast<double>(kVoiceChangerPresetSchemaVersion)) {
+    throw SonareException(ErrorCode::InvalidFormat, schema_version_refusal(version->as_number()));
   }
 }
 
@@ -950,7 +891,7 @@ RealtimeVoiceChangerConfig parse_config_value(const sonare::util::json::Value& r
     c.limiter.isp_ceiling_dbtp =
         object_number(*v, "limiter", "ispCeilingDbtp", c.limiter.isp_ceiling_dbtp);
   }
-  // Voice transformer sections; a document without them (schema version 1) keeps the defaults.
+  // Voice transformer sections; a bare configuration without them keeps the defaults.
   if (const auto* v = object_section(object, "voiceEngine")) {
     c.voice_engine.engine = object_enum(*v, "voiceEngine", "engine", c.voice_engine.engine);
     c.voice_engine.f0_min_hz =
@@ -1012,7 +953,7 @@ RealtimeVoiceChangerConfig parse_config_json(std::string_view text) {
   if (input.front() != '{')
     return realtime_voice_changer_preset(preset_from_id_or_throw(input, ErrorCode::InvalidFormat));
   auto root = sonare::util::json::admit(input);
-  translate_legacy_document(root);
+  refuse_other_schema(root);
   return parse_config_value(root);
 }
 
@@ -1053,7 +994,6 @@ bool validate_realtime_voice_changer_preset_json(std::string_view json,
     // as the realtime C-API entry point and must stay maximally tolerant of
     // duplicate keys; both still run under the same resource budget.
     auto root = sonare::util::json::admit_strict(trimmed);
-    translate_legacy_document(root);
     if (!has_allowed_keys(
             root, {"schemaVersion", "id", "name", "description", "category", "macros", "dsp"}, "$",
             error)) {
@@ -1062,7 +1002,7 @@ bool validate_realtime_voice_changer_preset_json(std::string_view json,
     for (const char* key : {"schemaVersion", "id", "name", "category"}) {
       if (!require_key(root, key, "$", error)) return false;
     }
-    // schemaVersion: JSON-Schema "type: integer, enum: [1, 2, 3]" demands an
+    // schemaVersion: JSON-Schema "type: integer, const: 3" demands an
     // *exact* integer. as_int() silently truncates 1.5 -> 1, so check the
     // raw double for both integral-ness and range before comparing.
     const auto* schema = root.find("schemaVersion");
@@ -1070,19 +1010,19 @@ bool validate_realtime_voice_changer_preset_json(std::string_view json,
       if (error) *error = "field is not a valid schemaVersion: $.schemaVersion (must be integer)";
       return false;
     }
-    int schema_version = 0;
     {
       const double n = schema->as_number();
-      if (!std::isfinite(n) || std::floor(n) != n || n < kOldestPresetSchemaVersion ||
-          n > static_cast<double>(kVoiceChangerPresetSchemaVersion)) {
+      if (!std::isfinite(n) || std::floor(n) != n) {
         if (error) {
-          *error = "field is not a valid schemaVersion: $.schemaVersion (must be an integer from " +
-                   std::to_string(kOldestPresetSchemaVersion) + " to " +
-                   std::to_string(kVoiceChangerPresetSchemaVersion) + ")";
+          *error = "field is not a valid schemaVersion: $.schemaVersion (must be an integer, " +
+                   std::to_string(kVoiceChangerPresetSchemaVersion) + " is the version read)";
         }
         return false;
       }
-      schema_version = static_cast<int>(n);
+      if (n != static_cast<double>(kVoiceChangerPresetSchemaVersion)) {
+        if (error) *error = schema_version_refusal(n);
+        return false;
+      }
     }
     // id: schema regex ^[a-z0-9][A-Za-z0-9._-]*$ + length 1..96. The C++ validator
     // historically accepted any non-empty string up to 96 bytes, which let
@@ -1114,7 +1054,7 @@ bool validate_realtime_voice_changer_preset_json(std::string_view json,
       if (error) *error = "preset must contain exactly one of dsp or macros";
       return false;
     }
-    if (dsp != nullptr && !validate_dsp_section(*dsp, schema_version, error)) return false;
+    if (dsp != nullptr && !validate_dsp_section(*dsp, error)) return false;
     RealtimeVoiceChangerConfig macro_config;
     if (macros != nullptr && !apply_macro_section(*macros, &macro_config, error)) return false;
     const auto config = normalize_config(parse_config_value(root));

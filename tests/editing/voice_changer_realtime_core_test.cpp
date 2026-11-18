@@ -1,6 +1,7 @@
 /// @file voice_changer_realtime_core_test.cpp
 /// @brief Realtime voice changer core behavior tests.
 
+#include "editing/voice_changer/voice_changer_insert.h"
 #include "voice_changer_test_helpers.h"
 
 TEST_CASE("RealtimeVoiceChanger processes realtime block sizes and resets deterministically",
@@ -37,7 +38,8 @@ TEST_CASE("RealtimeVoiceChanger processes realtime block sizes and resets determ
 
 TEST_CASE("RealtimeVoiceChanger preset JSON is tolerant and clamps values", "[voice_changer]") {
   const auto config = realtime_voice_changer_config_from_json(
-      "{\"schemaVersion\":1,\"id\":\"x\",\"unknown\":true,\"dsp\":{\"retune\":{\"semitones\":99},"
+      "{\"schemaVersion\":3,\"id\":\"x\",\"unknown\":true,\"dsp\":{\"retune\":{\"pitchSemitones\":"
+      "99},"
       "\"formant\":{\"factor\":9},\"limiter\":{\"ceilingDb\":3},\"reverb\":{\"mix\":2}}}");
 
   REQUIRE(config.retune.semitones == 24.0f);
@@ -61,7 +63,7 @@ TEST_CASE("RealtimeVoiceChanger preset JSON is tolerant and clamps values", "[vo
       realtime_voice_changer_preset_json(VoiceCharacterPreset::BrightIdol), &normalized, &error));
   REQUIRE(normalized.find("retune") != std::string::npos);
   REQUIRE_FALSE(validate_realtime_voice_changer_preset_json(
-      "{\"schemaVersion\":1,\"id\":\"bad\",\"name\":\"bad\",\"dsp\":{\"retune\":{\"semitones\":99}"
+      "{\"schemaVersion\":3,\"id\":\"bad\",\"name\":\"bad\",\"dsp\":{\"retune\":{\"semitones\":99}"
       "}}",
       &normalized, &error));
   REQUIRE_FALSE(error.empty());
@@ -69,7 +71,7 @@ TEST_CASE("RealtimeVoiceChanger preset JSON is tolerant and clamps values", "[vo
 
 TEST_CASE("RealtimeVoiceChanger macro-only preset changes rendered audio", "[voice_changer]") {
   const std::string macro_only = R"json({
-    "schemaVersion":1,"id":"macro-render","name":"Macro Render","category":"custom",
+    "schemaVersion":3,"id":"macro-render","name":"Macro Render","category":"custom",
     "macros":{"pitch":4,"formant":1.15,"brightness":1,"space":0.4,
               "intensity":0.8,"noiseControl":0.7,"sibilance":0.9}
   })json";
@@ -182,7 +184,7 @@ TEST_CASE("RealtimeVoiceChanger C API handle lifecycle works", "[voice_changer]"
   SonareRealtimeVoiceChanger* handle = nullptr;
   REQUIRE(
       sonare_realtime_voice_changer_create_json(
-          R"json({"schemaVersion":1,"id":"partial","name":"Partial","dsp":{"retune":{"semitones":3}}})json",
+          R"json({"schemaVersion":3,"id":"partial","name":"Partial","dsp":{"retune":{"semitones":3}}})json",
           48000, 128, 1, &handle) == SONARE_ERROR_INVALID_FORMAT);
   REQUIRE(handle == nullptr);
   REQUIRE(sonare_realtime_voice_changer_create_json("brightIdol", 48000, 128, 1, &handle) ==
@@ -201,7 +203,7 @@ TEST_CASE("RealtimeVoiceChanger C API handle lifecycle works", "[voice_changer]"
   REQUIRE(
       sonare_realtime_voice_changer_set_config_json(
           handle,
-          R"json({"schemaVersion":1,"id":"partial","name":"Partial","dsp":{"retune":{"semitones":3}}})json") ==
+          R"json({"schemaVersion":3,"id":"partial","name":"Partial","dsp":{"retune":{"semitones":3}}})json") ==
       SONARE_ERROR_INVALID_FORMAT);
   REQUIRE(sonare_realtime_voice_changer_set_config_json(handle, "deepNarrator") == SONARE_OK);
   REQUIRE(sonare_realtime_voice_changer_reset(handle) == SONARE_OK);
@@ -224,7 +226,7 @@ TEST_CASE("RealtimeVoiceChanger C API handle lifecycle works", "[voice_changer]"
   normalized = nullptr;
   error = nullptr;
   REQUIRE(sonare_realtime_voice_changer_validate_preset_json(
-              "{\"schemaVersion\":1,\"id\":\"bad\",\"name\":\"bad\",\"dsp\":{\"retune\":{"
+              "{\"schemaVersion\":3,\"id\":\"bad\",\"name\":\"bad\",\"dsp\":{\"retune\":{"
               "\"semitones\":99}}}",
               &normalized, &error) == SONARE_ERROR_INVALID_FORMAT);
   REQUIRE(normalized == nullptr);
@@ -1697,4 +1699,125 @@ TEST_CASE("RealtimeVoiceChanger pitch correction does not depend on the host blo
   }
   REQUIRE(power > 0.0);
   REQUIRE(std::sqrt(diff / power) < 0.1);
+}
+
+namespace {
+
+// Silence, then a voiced run that steps from 150 to 200 Hz, on every channel.
+std::vector<float> chunk_probe_signal(int sample_rate) {
+  const int lead = sample_rate / 10;
+  const int half = sample_rate / 2;
+  std::vector<float> signal(static_cast<size_t>(lead), 0.0f);
+  const auto first = harmonic_voice(150.0f, sample_rate, half);
+  const auto second = harmonic_voice(200.0f, sample_rate, half, half);
+  signal.insert(signal.end(), first.begin(), first.end());
+  signal.insert(signal.end(), second.begin(), second.end());
+  return signal;
+}
+
+// Renders `input` on `channels` planes, cutting the calls by cycling through `chunks`.
+template <typename Process>
+std::vector<std::vector<float>> render_in_chunks(const std::vector<float>& input, int channels,
+                                                 const std::vector<int>& chunks,
+                                                 Process&& process) {
+  std::vector<std::vector<float>> planes(static_cast<size_t>(channels), input);
+  size_t turn = 0;
+  for (size_t pos = 0; pos < input.size();) {
+    const int n = static_cast<int>(
+        std::min(static_cast<size_t>(chunks[turn++ % chunks.size()]), input.size() - pos));
+    float* pointers[2] = {planes[0].data() + pos, channels > 1 ? planes[1].data() + pos : nullptr};
+    process(pointers, channels, n);
+    pos += static_cast<size_t>(n);
+  }
+  return planes;
+}
+
+float peak_of(const std::vector<std::vector<float>>& planes) {
+  float peak = 0.0f;
+  for (const auto& plane : planes) {
+    for (const float v : plane) peak = std::max(peak, std::abs(v));
+  }
+  return peak;
+}
+
+float largest_difference(const std::vector<std::vector<float>>& a,
+                         const std::vector<std::vector<float>>& b) {
+  float diff = 0.0f;
+  for (size_t ch = 0; ch < a.size(); ++ch) {
+    for (size_t i = 0; i < a[ch].size(); ++i) diff = std::max(diff, std::abs(a[ch][i] - b[ch][i]));
+  }
+  return diff;
+}
+
+constexpr int kChunkProbeMaxBlock = 1024;
+// Share of the reference peak two renders of one input may differ by: float rounding only.
+constexpr float kChunkRelativeTolerance = 1e-5f;
+
+const std::vector<std::vector<int>>& chunk_probe_partitions() {
+  static const std::vector<std::vector<int>> partitions = {
+      {16}, {32}, {100}, {127}, {129}, {1024}, {1, 37, 128, 5, 300, 64, 129, 2, 511, 96, 1000, 17}};
+  return partitions;
+}
+
+constexpr VoiceCharacterPreset kChunkProbePresets[] = {
+    VoiceCharacterPreset::BrightIdol,   VoiceCharacterPreset::DeepNarrator,
+    VoiceCharacterPreset::HardTune,     VoiceCharacterPreset::RobotMonotone,
+    VoiceCharacterPreset::ChoirHarmony, VoiceCharacterPreset::VocoderStrings};
+
+}  // namespace
+
+TEST_CASE("RealtimeVoiceChanger psola output does not depend on how the host cuts its blocks",
+          "[voice_changer][chunk]") {
+  struct Layout {
+    int sample_rate;
+    int channels;
+  };
+  for (const Layout layout : {Layout{48000, 1}, Layout{44100, 1}, Layout{48000, 2}}) {
+    const auto input = chunk_probe_signal(layout.sample_rate);
+    for (const VoiceCharacterPreset preset : kChunkProbePresets) {
+      const auto config = realtime_voice_changer_preset(preset);
+      REQUIRE(config.voice_engine.engine == PitchEngine::Psola);
+      const auto render = [&](const std::vector<int>& chunks) {
+        RealtimeVoiceChanger changer(config);
+        changer.prepare(layout.sample_rate, kChunkProbeMaxBlock, layout.channels);
+        return render_in_chunks(input, layout.channels, chunks,
+                                [&](float* const* planes, int channels, int n) {
+                                  REQUIRE(changer.process_block(planes, channels, n));
+                                });
+      };
+      const auto reference = render({128});
+      const float peak = peak_of(reference);
+      REQUIRE(peak > 0.01f);
+      for (const auto& chunks : chunk_probe_partitions()) {
+        const float difference = largest_difference(render(chunks), reference);
+        CAPTURE(layout.sample_rate, layout.channels, realtime_voice_changer_preset_id(preset),
+                chunks, peak);
+        CHECK(difference <= kChunkRelativeTolerance * peak);
+      }
+    }
+  }
+}
+
+TEST_CASE("VoiceChangerInsert psola output does not depend on how the host cuts its blocks",
+          "[voice_changer][chunk][insert]") {
+  constexpr int sample_rate = 48000;
+  const auto input = chunk_probe_signal(sample_rate);
+  for (const VoiceCharacterPreset preset : kChunkProbePresets) {
+    const auto config = realtime_voice_changer_preset(preset);
+    const auto render = [&](const std::vector<int>& chunks) {
+      VoiceChangerInsert insert(config);
+      insert.prepare(sample_rate, kChunkProbeMaxBlock, 2);
+      return render_in_chunks(input, 2, chunks, [&](float* const* planes, int channels, int n) {
+        insert.process(planes, channels, n);
+      });
+    };
+    const auto reference = render({128});
+    const float peak = peak_of(reference);
+    REQUIRE(peak > 0.01f);
+    for (const auto& chunks : chunk_probe_partitions()) {
+      const float difference = largest_difference(render(chunks), reference);
+      CAPTURE(realtime_voice_changer_preset_id(preset), chunks, peak);
+      CHECK(difference <= kChunkRelativeTolerance * peak);
+    }
+  }
 }

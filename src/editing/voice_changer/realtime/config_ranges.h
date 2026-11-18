@@ -105,9 +105,6 @@ struct Range {
   double hi;
 };
 
-// Version 1 documents predate the voice transformer sections and still validate.
-constexpr int kOldestPresetSchemaVersion = 1;
-
 // The accepted ranges: the one definition behind validation, normalization and the preset schema.
 constexpr Range kUnit{0.0, 1.0};
 constexpr Range kBipolar{-1.0, 1.0};
