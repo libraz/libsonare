@@ -167,17 +167,11 @@ def cmd_lufs(args: argparse.Namespace) -> int:
         "short_term_lufs": r.short_term_lufs,
         "loudness_range": r.loudness_range_lu,
     }
-    momentary_series: list[float] = []
-    short_term_series: list[float] = []
-    if args.series:
-        momentary_series, short_term_series = lufs_series_interleaved(
-            samples, channels, sample_rate=sr
-        )
-
+    series = lufs_series_interleaved(samples, channels, sample_rate=sr) if args.series else None
     if args.json:
-        if args.series:
-            payload["momentary_series"] = [float(value) for value in momentary_series]
-            payload["short_term_series"] = [float(value) for value in short_term_series]
+        if series is not None:
+            payload["momentary_series"] = [float(value) for value in series.momentary_lufs]
+            payload["short_term_series"] = [float(value) for value in series.short_term_lufs]
         print(_strict_json_dumps(payload))
     else:
         print("  Loudness (LUFS):")
@@ -185,9 +179,9 @@ def cmd_lufs(args: argparse.Namespace) -> int:
         print(f"    Momentary:      {r.momentary_lufs:.2f} LUFS")
         print(f"    Short-term:     {r.short_term_lufs:.2f} LUFS")
         print(f"    Loudness range: {r.loudness_range_lu:.2f} LU")
-        if args.series:
-            print(f"    Momentary samples:  {len(momentary_series)}")
-            print(f"    Short-term samples: {len(short_term_series)}")
+        if series is not None:
+            print(f"    Momentary samples:  {len(series.momentary_lufs)}")
+            print(f"    Short-term samples: {len(series.short_term_lufs)}")
     return 0
 
 

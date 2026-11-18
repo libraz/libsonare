@@ -38,9 +38,9 @@ def test_known_channel_decode_is_one_ordered_shared_decode(
 
     monkeypatch.setattr(common, "_source_channel_count", lambda _path: channel_count)
 
-    def decode(data: bytes) -> tuple[np.ndarray, int]:
+    def decode(data: bytes) -> audio.DecodedChannels:
         decode_calls.append(data)
-        return decoded, 48_000
+        return audio.DecodedChannels(sample_rate=48_000, channels=decoded)
 
     monkeypatch.setattr(audio, "decode_channels", decode)
     monkeypatch.setattr(
@@ -159,7 +159,8 @@ def test_stereo_planes_from_a_real_wav_equal_the_per_channel_decode(tmp_path) ->
         writer.setframerate(44_100)
         writer.writeframes(np.stack([left, right], axis=1).tobytes())
 
-    decoded, sample_rate = audio.decode_channels(path.read_bytes())
+    result = audio.decode_channels(path.read_bytes())
+    decoded, sample_rate = result.channels, result.sample_rate
     assert sample_rate == 44_100
     assert decoded.shape == (2, frames)
     for index in range(2):

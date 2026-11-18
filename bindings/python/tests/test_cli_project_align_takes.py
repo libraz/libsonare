@@ -374,9 +374,9 @@ def test_a_take_at_another_rate_is_aligned_and_scaled_to_the_project_rate(
     reference_samples, reference_rate = _load_audio(str(takes.reference))
     take_samples, decoded_take_rate = _load_audio(str(other_rate))
     assert (reference_rate, decoded_take_rate) == (SAMPLE_RATE, take_rate)
-    expected, _ = align_take_to_reference(
+    expected = align_take_to_reference(
         reference_samples, take_samples, reference_rate, take_sample_rate=decoded_take_rate
-    )
+    ).anchors
     scale = project_rate / reference_rate
 
     (warp_map,) = json.loads(output.read_bytes())["warp_maps"]

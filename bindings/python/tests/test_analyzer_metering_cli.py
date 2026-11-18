@@ -328,7 +328,8 @@ def test_project_cli_exports_smf_and_midi_render_smoke() -> None:
         project = Project()
         try:
             project.set_sample_rate(22050)
-            track_id, clip_id = project.add_midi_clip(0.0, 1.0)
+            added = project.add_midi_clip(0.0, 1.0)
+            track_id, clip_id = added.track_id, added.clip_id
             project.set_track_midi_destination(track_id, 0)
             project.set_midi_events(
                 clip_id,

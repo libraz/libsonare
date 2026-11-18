@@ -394,7 +394,7 @@ def _project_align_takes(args: argparse.Namespace) -> int:
         aligned: list[_AlignedTake] = []
         for source_id in take_ids:
             take_samples, take_rate = _load_audio(paths[source_id])
-            anchors, alignment = align_take_to_reference(
+            aligned_take = align_take_to_reference(
                 reference_samples,
                 take_samples,
                 reference_rate,
@@ -402,6 +402,7 @@ def _project_align_takes(args: argparse.Namespace) -> int:
                 hop_length=args.hop_length,
                 bins_per_octave=args.bins_per_octave,
             )
+            anchors, alignment = aligned_take.anchors, aligned_take.alignment
             next_warp_id += 1
             cast(Any, project).set_warp_map(
                 next_warp_id,
@@ -683,7 +684,7 @@ def cmd_transcribe(args: argparse.Namespace) -> int:
         # clip has to span for its last note-off to fall inside it.
         duration = len(samples) / sr if sr > 0 else 0.0
         length_ppq = max(1.0, float(math.ceil(duration * tempo_bpm / 60.0)))
-        _track_id, clip_id = cast(Any, project).add_midi_clip(0.0, length_ppq)
+        clip_id = cast(Any, project).add_midi_clip(0.0, length_ppq).clip_id
         note_count = cast(Any, project).transcribe_to_clip(
             clip_id,
             samples,

@@ -255,13 +255,14 @@ def cmd_tune_to_midi(args: argparse.Namespace) -> int:
         sr / _TUNE_HOP_LENGTH,
         voiced=[int(value) for value in pitch.voiced_flag],
     )
-    tuned, assigned_count = assign_note_targets(
+    assignment = assign_note_targets(
         notes,
         sr,
         targets,
         unmatched_policy=args.unmatched_policy,
         **options,
     )
+    tuned, assigned_count = assignment.notes, assignment.assigned_count
     rendered = render_notes(samples, sr, tuned)
 
     return _emit_effect_result(
@@ -491,7 +492,7 @@ def cmd_vocal_notes(args: argparse.Namespace) -> int:
     samples, sr = _load_audio(args.file)
     session = create_vocal_edit_session(samples, sr, **settings)
     try:
-        notes, _transitions = session.notes()
+        notes = session.notes().notes
     finally:
         session.close()
 

@@ -245,7 +245,7 @@ def _tune_reference_smf(*midi_numbers: int, beats: float = 1.0, offset_beats: fl
 
     project = Project()
     try:
-        _track_id, clip_id = project.add_midi_clip(0.0, 64.0)
+        clip_id = project.add_midi_clip(0.0, 64.0).clip_id
         events = []
         for index, midi in enumerate(midi_numbers):
             start = offset_beats + index * beats

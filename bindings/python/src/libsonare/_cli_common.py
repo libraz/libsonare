@@ -483,7 +483,8 @@ def _load_audio_channels_known(path: str, channels: int) -> tuple[list[list[floa
 
     from .audio import decode_channels
 
-    decoded, sample_rate = decode_channels(_read_audio_bounded(path))
+    result = decode_channels(_read_audio_bounded(path))
+    decoded, sample_rate = result.channels, result.sample_rate
     # Each row is a contiguous NumPy view into ``decoded``. Keeping the parent
     # array alive through the row views makes the planes independently mutable
     # without aliasing one another or copying every channel a second time.
