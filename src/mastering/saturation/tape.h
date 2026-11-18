@@ -19,8 +19,8 @@ namespace sonare::mastering::saturation {
 struct TapeConfig {
   /// Pre-saturation input drive (-12 dB ... +24 dB recommended).
   float drive_db = 3.0f;
-  /// Wet/dry mix and saturation aggressiveness in [0, 1]. Maps to the
-  /// anhysteretic shape parameter `a` (small `a` saturates earlier).
+  /// Saturation aggressiveness in [0, 1]. Maps to the anhysteretic shape
+  /// parameter `a` (small `a` saturates earlier); it does not blend wet and dry.
   float saturation = 0.5f;
   /// Hysteresis loop width in [0, 1]. Maps to the loss/coercivity parameter
   /// `k` (larger value → wider hysteresis loop → more low-end thickening).
