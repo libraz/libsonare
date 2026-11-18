@@ -13691,120 +13691,205 @@ export interface MultibandCompressorBand {
 export interface MasteringChainConfig {
   /** Repair modules (denoise, declip, decrackle, dehum, declick, dereverb). */
   repair?: {
+    /** Broadband noise reduction from a running noise estimate. */
     denoise?: {
+      /** Turns the denoise stage on. Default false. */
       enabled?: boolean;
+      /** Gain function: `logMmse` (log-spectral amplitude, least musical noise; default), `mmseStsa`, or `spectralSubtraction` (cheapest, most prone to musical noise). */
       mode?: 'logMmse' | 'mmseStsa' | 'spectralSubtraction';
       /** `'spp'` is the speech-presence-probability estimator. */
       noiseEstimator?: 'quantile' | 'mcra' | 'imcra' | 'spp';
+      /** STFT frame size in samples, a power of two. Default 1024. */
       nFft?: number;
+      /** STFT hop in samples, at most `nFft / 2`. Default 256. */
       hopLength?: number;
+      /** Decision-directed a priori SNR smoothing in [0, 1]; higher is smoother but adapts more slowly to changing noise. Default 0.98. */
       ddAlpha?: number;
+      /** Deepest attenuation applied to any bin, in dB (0 to 120); the noise is left this far down rather than removed. Default 26. */
       reductionDb?: number;
+      /** Over-subtraction factor (0 to 16) that scales the noise estimate removed. Used only by `spectralSubtraction`. Default 2. */
       overSubtraction?: number;
+      /** Residual floor as a fraction of the noise spectrum (0 to 1). Used only by `spectralSubtraction`. Default 0.05. */
       spectralFloor?: number;
+      /** Fraction of the quietest frames (0 to 1) taken as noise-only by the `quantile` estimator. Default 0.1. */
       noiseEstimationQuantile?: number;
+      /** Weights the gain by the speech-presence probability so active passages are attenuated less. Default true. */
       speechPresenceGain?: boolean;
+      /** Smooths the gain mask across time to suppress musical-noise artefacts. Default true. */
       gainSmoothing?: boolean;
     };
+    /** Reconstruction of clipped peaks. */
     declip?: {
+      /** Turns the declip stage on. Default false. */
       enabled?: boolean;
       /** Clip level in dBFS, at or below 0. */
       clipThresholdDb?: number;
+      /** Order of the linear-predictive model used to reconstruct clipped runs (0 to 2048). Default 36. */
       lpcOrder?: number;
+      /** Outer reconstruction rounds, each re-estimating the model (1 to 8). Default 2. */
       iterations?: number;
+      /** Weight of the predictive reconstruction against the interpolation fallback (0 to 1). Default 0.65. */
       lpcBlend?: number;
     };
+    /** Removal of dense small impulses such as vinyl crackle. */
     decrackle?: {
+      /** Turns the decrackle stage on. Default false. */
       enabled?: boolean;
+      /** Sample magnitude deviating from the local median that counts as crackle (0 to 1000); in `waveletShrinkage` it caps the shrinkage threshold. Default 0.4. */
       threshold?: number;
+      /** Removal method: `median` replaces outlier samples with the local median (default); `waveletShrinkage` shrinks Haar detail coefficients. */
       mode?: 'median' | 'waveletShrinkage';
+      /** Haar decomposition levels used by `waveletShrinkage` (1 to 24). Default 4. */
       levels?: number;
     };
+    /** Removal of mains hum at a fundamental and its harmonics. */
     dehum?: {
+      /** Turns the dehum stage on. Default false. */
       enabled?: boolean;
+      /** Hum fundamental in Hz, typically 50 or 60 (0 to 5000). Default 50. */
       fundamentalHz?: number;
+      /** Number of harmonics of the fundamental removed (1 to 16). Default 4. */
       harmonics?: number;
+      /** Selectivity of the removal (0 to 100); the notch Q in `notch` mode, and the inverse of the cancellation settling time in `subtract` mode. Default 20. */
       q?: number;
+      /** Searches for and tracks the hum frequency around `fundamentalHz` instead of assuming it. Default false. */
       adaptive?: boolean;
+      /** Half-width of the fundamental search in Hz (0 to 100). Used when `adaptive`. Default 2. */
       searchRangeHz?: number;
+      /** How quickly the removal follows changes in the tracked tone (0 to 1). Used when `adaptive`. Default 0.25. */
       adaptation?: number;
+      /** Analysis block and look-ahead in samples (16 to 16384). Used when `adaptive`. Default 2048. */
       frameSize?: number;
+      /** Tracking loop bandwidth as a fraction of the tracked frequency (0 to 1). Used when `adaptive`. Default 0.01. */
       pllBandwidth?: number;
       /** `'subtract'` the tracked harmonics, or `'notch'` (cascaded notches). */
       mode?: 'subtract' | 'notch';
     };
+    /** Removal of isolated clicks and pops. */
     declick?: {
+      /** Turns the declick stage on. Default false. */
       enabled?: boolean;
+      /** Sample magnitude above which a sample is a click candidate (0 to 10; full scale is 1). Default 0.8. */
       threshold?: number;
+      /** How far a click must stand above the sample-to-sample level around it, as a ratio (0 to 100). Default 4. */
       neighborRatio?: number;
+      /** Longest click run, in samples, that is repaired (1 to 512). Default 8. */
       maxClickSamples?: number;
+      /** Order of the linear-predictive model that fills a click (0 to 2048). Default 20. */
       lpcOrder?: number;
+      /** Ratio of the prediction residual to its typical level above which a run is treated as a click (0 to 1000). Default 8. */
       residualRatio?: number;
     };
+    /** Reduction of late reverberation. */
     dereverb?: {
+      /** Turns the dereverb stage on. Default false. */
       enabled?: boolean;
+      /** Late-reverb detection threshold relative to a bin's own power (0 to 1); 0 treats every bin with late energy as reverb. Default 0. */
       threshold?: number;
+      /** Share of the computed suppression that is applied, from 0 (none) to 1 (all). Default 1. */
       attenuation?: number;
+      /** STFT frame size in samples, a power of two. Default 1024. */
       nFft?: number;
+      /** STFT hop in samples, at most `nFft / 2`. Default 256. */
       hopLength?: number;
+      /** Assumed reverberation decay time (RT60) in seconds (0 to 10). Default 0.4. */
       t60Sec?: number;
+      /** Delay after which reverberation counts as late, in ms (0 to 500). Default 50. */
       lateDelayMs?: number;
+      /** Over-subtraction factor (0 to 16) applied to the late-reverb estimate. Default 1. */
       overSubtraction?: number;
+      /** Smallest gain the suppression may apply, as a fraction (0 to 1). Default 0.08. */
       spectralFloor?: number;
+      /** Adds a weighted-prediction-error (WPE) stage that predicts and removes the late tail. Default false. */
       wpeEnabled?: boolean;
+      /** WPE refinement passes (1 to 16). Default 2. */
       wpeIterations?: number;
+      /** WPE predictor length in frames (1 to 32). Default 3. */
       wpeTaps?: number;
+      /** Share of the WPE prediction that is subtracted (0 to 1). Default 0.7. */
       wpeStrength?: number;
     };
   };
   /** EQ modules. */
   eq?: {
+    /** Spectral tilt EQ that raises one end of the spectrum and lowers the other. */
     tilt?: {
+      /** Turns the tilt EQ stage on. Default false. */
       enabled?: boolean;
+      /** Spectral tilt in dB: positive boosts the highs and cuts the lows around `pivotHz`, negative does the reverse. Default 0. */
       tiltDb?: number;
+      /** Frequency in Hz around which the spectrum tilts and the gain is zero; must be above 0. Default 1000. */
       pivotHz?: number;
     };
   };
   /** Dynamics modules (compressor, deesser, transientShaper, multibandComp). */
   dynamics?: {
+    /** Full-band compressor. */
     compressor?: {
+      /** Turns the compressor stage on. Default false. */
       enabled?: boolean;
+      /** Level in dB above which gain reduction starts. Default -18. */
       thresholdDb?: number;
+      /** Compression ratio x:1 (at least 1); 2 reduces a 4 dB overshoot to 2 dB. Default 2. */
       ratio?: number;
       /** Attack in ms: one time constant, about 63% of the way at the set time. */
       attackMs?: number;
       /** Release in ms: one time constant, about 63% of the way at the set time. */
       releaseMs?: number;
+      /** Width in dB of the soft knee around the threshold; 0 is a hard knee. Default 0. */
       kneeDb?: number;
+      /** Gain in dB added after compression. Default 0. */
       makeupGainDb?: number;
+      /** Derives the makeup gain from the threshold and ratio instead of using `makeupGainDb`. Default false. */
       autoMakeup?: boolean;
     };
+    /** Sibilance reduction in a detection band. */
     deesser?: {
+      /** Turns the de-esser stage on. Default false. */
       enabled?: boolean;
+      /** Centre of the sibilance band that is detected and reduced, in Hz. Default 6000. */
       frequencyHz?: number;
+      /** Level in dB of the sibilance band above which reduction starts. Default -24. */
       thresholdDb?: number;
+      /** Reduction ratio x:1 (at least 1) applied above the threshold. Default 4. */
       ratio?: number;
       /** Attack in ms: one time constant, about 63% of the way at the set time. */
       attackMs?: number;
       /** Release in ms: one time constant, about 63% of the way at the set time. */
       releaseMs?: number;
+      /** Largest gain reduction in dB the de-esser may apply (0 or more). Default 12. */
       rangeDb?: number;
+      /** Q of the sibilance detection band; higher is narrower. Default 1.5. */
       bandpassQ?: number;
     };
+    /** Attack and sustain shaping driven by fast and slow envelopes. */
     transientShaper?: {
+      /** Turns the transient shaper stage on. Default false. */
       enabled?: boolean;
+      /** Gain in dB applied to the attack portion of transients; positive sharpens, negative softens. Default 3. */
       attackGainDb?: number;
+      /** Gain in dB applied to the sustain portion after a transient; positive lengthens, negative tightens. Default 0. */
       sustainGainDb?: number;
+      /** Fast envelope follower attack in ms: one time constant, about 63% of the way at the set time. Default 0. */
       fastAttackMs?: number;
+      /** Fast envelope follower release in ms: one time constant, about 63% of the way at the set time. Default 20. */
       fastReleaseMs?: number;
+      /** Slow envelope follower attack in ms: one time constant, about 63% of the way at the set time. Default 15. */
       slowAttackMs?: number;
+      /** Slow envelope follower release in ms: one time constant, about 63% of the way at the set time. Default 200. */
       slowReleaseMs?: number;
+      /** Scales how strongly the difference between the fast and slow envelopes drives the gain (0 or more). Default 1. */
       sensitivity?: number;
+      /** Largest gain change in dB, boost or cut, the shaper may apply (0 or more). Default 12. */
       maxGainDb?: number;
+      /** Smoothing time in ms applied to the gain change; 0 applies it unsmoothed. Default 0. */
       gainSmoothingMs?: number;
+      /** Look-ahead delay in ms that lets the gain act before the transient; adds latency. Default 0. */
       lookaheadMs?: number;
     };
+    /** Compressor applied per crossover band. */
     multibandComp?: {
+      /** Turns the multiband compressor stage on. Default false. */
       enabled?: boolean;
       /**
        * Crossover of the N-band form. `cutoffsHz` replaces the whole cutoff list
@@ -13815,8 +13900,11 @@ export interface MasteringChainConfig {
       crossover?: {
         /** Ascending split frequencies in Hz; N values give N + 1 bands. */
         cutoffsHz?: number[];
+        /** Crossover slope: `lr2`, `lr4` (default) or `lr8`. */
         slope?: 'lr2' | 'lr4' | 'lr8';
+        /** Crossover filter family; `firLinearPhase` is linear-phase and adds latency. Default `linkwitzRiley`. */
         mode?: 'linkwitzRiley' | 'butterworth' | 'bessel' | 'firLinearPhase';
+        /** FIR kernel length in samples (1 to 65535). Used by `firLinearPhase`. Default 513. */
         firKernelSize?: number;
       };
       /**
@@ -13829,25 +13917,42 @@ export interface MasteringChainConfig {
   };
   /** Saturation modules (tape, exciter). */
   saturation?: {
+    /** Magnetic tape saturation model. */
     tape?: {
+      /** Turns the tape saturation stage on. Default false. */
       enabled?: boolean;
+      /** Input drive in dB before saturation; about -12 to +24 is useful. Default 3. */
       driveDb?: number;
+      /** Shape of the anhysteretic magnetization curve (0 to 1); higher saturates at a lower level. Default 0.5. */
       saturation?: number;
+      /** Width of the magnetic hysteresis loop (0 to 1); wider thickens the low end. Default 0.2. */
       hysteresis?: number;
+      /** Output trim in dB after saturation. Default 0. */
       outputGainDb?: number;
+      /** Simulated tape speed in inches per second (above 0), which sets the head-bump and gap-loss filters. Default 15. */
       speedIps?: number;
+      /** Low-frequency head-bump boost in dB (0 or more). Default 1.5. */
       headBumpDb?: number;
+      /** Tape bias offset that adds asymmetry to the saturation. Default 0. */
       bias?: number;
+      /** Strength of the high-frequency loss from the playback head gap (0 to 1). Default 0.2. */
       gapLoss?: number;
       /** Jiles-Atherton core oversampling: 1 (default), 2, or 4. */
       oversampleFactor?: number;
     };
+    /** Harmonic exciter for a high-frequency band. */
     exciter?: {
+      /** Turns the exciter stage on. Default false. */
       enabled?: boolean;
+      /** Centre of the band from which harmonics are generated, in Hz (above 0). Default 3000. */
       frequencyHz?: number;
+      /** Drive in dB into the harmonic generator. Default 6. */
       driveDb?: number;
+      /** Level of the generated harmonics mixed back in (0 or more); 0 adds nothing. Default 0.25. */
       amount?: number;
+      /** Q of the excited band (above 0); higher is narrower. Default 1. */
       q?: number;
+      /** Balance of harmonic content from 0 (even harmonics) to 1 (odd harmonics). Default 0.5. */
       evenOddMix?: number;
       /**
        * Antialiasing mode ordinal: 0 = none, 3 = 4x oversampling, which adds
@@ -13860,50 +13965,76 @@ export interface MasteringChainConfig {
   };
   /** Spectral modules (airBand). */
   spectral?: {
+    /** Level-dependent high-shelf lift. */
     airBand?: {
+      /** Turns the air band stage on. Default false. */
       enabled?: boolean;
+      /** Strength of the high-frequency lift and added harmonic air (0 to 1). Default 0.25. */
       amount?: number;
+      /** Corner frequency of the high shelf in Hz. Default 12000. */
       shelfFrequencyHz?: number;
+      /** Level in dB of the high band above which the shelf gain starts to rise. Default -36. */
       dynamicThresholdDb?: number;
+      /** Largest shelf gain in dB (0 or more) before `amount` scaling. Default 3. */
       dynamicRangeDb?: number;
     };
   };
   /** Stereo modules (imager, monoMaker); applied on the stereo path only. */
   stereo?: {
+    /** Mid/side stereo width control. */
     imager?: {
+      /** Turns the stereo imager stage on. Default false. */
       enabled?: boolean;
+      /** Stereo width (0 to 2): 0 is mono, 1 leaves the image unchanged, 2 doubles the side signal. Default 1. */
       width?: number;
+      /** Output gain in dB applied after widening. Default 0. */
       outputGainDb?: number;
+      /** Share of decorrelated side signal blended in when `width` is above 1 (0 to 1). Default 0. */
       decorrelationAmount?: number;
+      /** Compensates the level so widening does not change overall loudness. Default true. */
       preserveEnergy?: boolean;
     };
+    /** Folds the low end to mono below a cutoff. */
     monoMaker?: {
+      /** Turns the mono maker stage on. Default false. */
       enabled?: boolean;
+      /** How much of the low band is collapsed to mono (0 to 1); 1 is fully mono. Default 1. */
       amount?: number;
+      /** Frequency in Hz below which the signal is made mono. Default 120. */
       frequencyHz?: number;
     };
   };
   /** Maximizer modules (true-peak limiter). */
   maximizer?: {
+    /** Oversampled true-peak limiter. */
     truePeakLimiter?: {
+      /** Turns the true-peak limiter stage on. Default false. */
       enabled?: boolean;
+      /** True-peak ceiling in dBTP (0 or below) that the output does not exceed. Default -1. */
       ceilingDb?: number;
+      /** Look-ahead in ms that lets the gain reduction start before a peak; adds latency. Default 1. */
       lookaheadMs?: number;
       /** Release in ms: one time constant, about 63% of the way at the set time. */
       releaseMs?: number;
+      /** Oversampling used to detect inter-sample peaks: 1, 2, 4, 8 or 16. Default 4. */
       oversampleFactor?: number;
+      /** Applies the gain at the input rate instead of reconstructing at the oversampled rate, which shortens latency. Default false. */
       applyGainAtInputRate?: boolean;
     };
   };
   /** Loudness stage: integrated-loudness target and true-peak ceiling. */
   loudness?: {
+    /** Turns the loudness stage on. Default false. */
     enabled?: boolean;
+    /** Integrated-loudness target in LUFS. Default -14. */
     targetLufs?: number;
     /** Ceiling of the loudness stage; `maximizer.truePeakLimiter.ceilingDb` bounds the limiter, each applies to its own stage. */
     ceilingDb?: number;
+    /** Oversampling factor of the true-peak limiter and meter in this stage: 1, 2, 4, 8 or 16. Default 4. */
     truePeakOversample?: number;
     /** Release in ms: one time constant, about 63% of the way at the set time. */
     releaseMs?: number;
+    /** Applies the limiter gain at the input rate instead of the oversampled rate, which shortens latency. Default false. */
     applyGainAtInputRate?: boolean;
     /**
      * How deep, in dB, the stage may drive its post-gain true-peak limiter to
