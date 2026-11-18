@@ -97,12 +97,24 @@ def test_preset_scene_builds_mixer(mixer) -> None:
 
 
 def test_strip_by_id_returns_index_and_raises_on_unknown(mixer) -> None:
-    """strip_by_id resolves known ids to an int index and raises KeyError otherwise."""
+    """strip_by_id resolves a known id to its index; an unknown id is a refused argument."""
     index = mixer.strip_by_id("vocal")
     assert isinstance(index, int)
     assert 0 <= index < mixer.strip_count
-    with pytest.raises(KeyError):
+    with pytest.raises(SonareValueError, match="does-not-exist"):
         mixer.strip_by_id("does-not-exist")
+    # A strip reference taken by any other method is refused the same way.
+    with pytest.raises(SonareValueError, match="does-not-exist"):
+        mixer.set_soloed("does-not-exist", True)
+    with pytest.raises(SonareValueError, match="out of range"):
+        mixer.set_soloed(mixer.strip_count, True)
+
+
+def test_add_strip_returns_the_new_strip_index(mixer) -> None:
+    """add_strip answers the index strip_by_id would, as the JS addStrip does."""
+    index = mixer.add_strip(id="py-indexed-strip")
+    assert index == mixer.strip_by_id(id="py-indexed-strip")
+    assert index == mixer.strip_count - 1
 
 
 def test_strip_meter_returns_snapshots(mixer) -> None:
@@ -586,6 +598,20 @@ def test_bus_add_remove_and_count(mixer) -> None:
     assert mixer.bus_count == before
 
 
+def test_add_bus_takes_a_role_token(mixer) -> None:
+    """The bus role is a closed token set; the id is passed as ``id``."""
+    before = mixer.bus_count
+    mixer.add_bus(id="py-submix", role="submix")
+    assert mixer.bus_count == before + 1
+    with pytest.raises(SonareValueError, match="role"):
+        mixer.add_bus(id="py-bad-role", role="Aux")  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match="role"):
+        mixer.add_bus(id="py-int-role", role=1)  # type: ignore[arg-type]
+    assert mixer.bus_count == before + 1
+    mixer.remove_bus(id="py-submix")
+    assert mixer.bus_count == before
+
+
 def _empty_mixer():
     from libsonare import Mixer
 
@@ -665,9 +691,9 @@ def test_vca_group_add_remove_and_count(mixer) -> None:
     """add_vca_group / vca_group_count / remove_vca_group manage VCA groups."""
     before = mixer.vca_group_count
     assert isinstance(before, int)
-    mixer.add_vca_group("py-vca", gain_db=-3.0, members=["vocal"])
+    mixer.add_vca_group(id="py-vca", gain_db=-3.0, members=["vocal"])
     assert mixer.vca_group_count == before + 1
-    mixer.set_vca_group_gain_db("py-vca", -7.0)
+    mixer.set_vca_group_gain_db(id="py-vca", gain_db=-7.0)
     mixer.set_vca_group_members("py-vca", ["guest"])
     scene = json.loads(mixer.to_scene_json())
     group = next(group for group in scene["vcaGroups"] if group["id"] == "py-vca")

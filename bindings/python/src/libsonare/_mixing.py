@@ -48,9 +48,11 @@ from ._runtime import (
     _to_c_size_t,
     _to_c_uint,
     _to_c_uint32,
+    _token_arg,
     _utf8_arg,
     _validate_samples,
 )
+from ._types_enums import _MIX_BUS_ROLES, MixBusRole
 from .types import GoniometerPoint
 
 # A strip is addressed either by its index in [0, strip_count()) or by its
@@ -209,13 +211,13 @@ class Mixer:
 
     def add_strip(
         self,
-        strip_id: str,
+        id: str,
         *,
         enabled: bool = True,
         lufs: bool = True,
         true_peak: bool = True,
         true_peak_oversample: int | None = None,
-    ) -> None:
+    ) -> int:
         """Add a channel strip to the mixer topology.
 
         The metering keywords are the strip's ``"metering"`` object from scene
@@ -227,7 +229,7 @@ class Mixer:
         library default (4), and any other value is refused.
 
         The routing graph is marked dirty; call :meth:`compile` (or
-        :meth:`process_stereo`) to rebuild.
+        :meth:`process_stereo`) to rebuild. Returns the new strip's index.
 
         Raises:
             RuntimeError: the id is already taken, or ``true_peak_oversample``
@@ -243,7 +245,7 @@ class Mixer:
         # this facade addresses a strip by index or id.
         handle = lib.sonare_mixer_add_strip_ex(
             self._handle,
-            _utf8_arg(strip_id, "strip_id"),
+            _utf8_arg(id, "id"),
             1 if enabled else 0,
             1 if lufs else 0,
             1 if true_peak else 0,
@@ -253,14 +255,15 @@ class Mixer:
             ),
         )
         if not handle:
-            raise _last_error(int(ErrorCode.INVALID_PARAMETER), f"failed to add strip {strip_id!r}")
+            raise _last_error(int(ErrorCode.INVALID_PARAMETER), f"failed to add strip {id!r}")
+        return self.strip_by_id(id)
 
-    def add_bus(self, bus_id: str, role: str = "aux") -> None:
+    def add_bus(self, id: str, role: MixBusRole = "aux") -> None:
         """Add a bus to the mixer topology.
 
         ``role`` is one of ``"master"``, ``"aux"``, or ``"submix"`` and defaults
-        to ``"aux"`` (the C-API canonical default applied for a null role in
-        ``sonare_mixer_add_bus``). The routing graph is marked dirty; call
+        to ``"aux"``; an unknown token raises :class:`SonareValueError` and a
+        non-string ``TypeError``. The routing graph is marked dirty; call
         :meth:`compile` (or :meth:`process_stereo`) to rebuild.
         """
         self._require()
@@ -270,18 +273,18 @@ class Mixer:
         _check(
             lib.sonare_mixer_add_bus(
                 self._handle,
-                _utf8_arg(bus_id, "bus_id"),
-                _utf8_arg(role, "role") if role is not None else None,
+                _utf8_arg(id, "id"),
+                _utf8_arg(_token_arg(role, _MIX_BUS_ROLES, "role"), "role"),
             )
         )
 
-    def remove_bus(self, bus_id: str) -> None:
+    def remove_bus(self, id: str) -> None:
         """Remove a bus by id from the mixer topology."""
         self._require()
         lib = _get_lib()
         if not hasattr(lib, "sonare_mixer_remove_bus"):
             raise _not_supported("libsonare was built without mixer bus support")
-        _check(lib.sonare_mixer_remove_bus(self._handle, _utf8_arg(bus_id, "bus_id")))
+        _check(lib.sonare_mixer_remove_bus(self._handle, _utf8_arg(id, "id")))
 
     def set_output_bus(self, source_id: str, bus_id: str) -> None:
         """Send a strip or bus into a submix bus, or back to the master.
@@ -324,7 +327,7 @@ class Mixer:
         return int(out.value)
 
     def add_vca_group(
-        self, group_id: str, gain_db: float = 0.0, members: Sequence[str] | None = None
+        self, id: str, gain_db: float = 0.0, members: Sequence[str] | None = None
     ) -> None:
         """Add a VCA group with the given id, gain offset, and strip members."""
         self._require()
@@ -342,22 +345,22 @@ class Mixer:
         _check(
             lib.sonare_mixer_add_vca_group(
                 self._handle,
-                _utf8_arg(group_id, "group_id"),
+                _utf8_arg(id, "id"),
                 _to_c_float(gain_db, "gain_db"),
                 member_ptr,
                 ctypes.c_size_t(len(member_list)),
             )
         )
 
-    def remove_vca_group(self, group_id: str) -> None:
+    def remove_vca_group(self, id: str) -> None:
         """Remove a VCA group by id from the mixer topology."""
         self._require()
         lib = _get_lib()
         if not hasattr(lib, "sonare_mixer_remove_vca_group"):
             raise _not_supported("libsonare was built without mixer VCA support")
-        _check(lib.sonare_mixer_remove_vca_group(self._handle, _utf8_arg(group_id, "group_id")))
+        _check(lib.sonare_mixer_remove_vca_group(self._handle, _utf8_arg(id, "id")))
 
-    def set_vca_group_gain_db(self, group_id: str, gain_db: float) -> None:
+    def set_vca_group_gain_db(self, id: str, gain_db: float) -> None:
         """Set an existing VCA group's gain in dB."""
         self._require()
         lib = _get_lib()
@@ -366,12 +369,12 @@ class Mixer:
         _check(
             lib.sonare_mixer_set_vca_group_gain_db(
                 self._handle,
-                _utf8_arg(group_id, "group_id"),
+                _utf8_arg(id, "id"),
                 _to_c_float(gain_db, "gain_db"),
             )
         )
 
-    def set_vca_group_members(self, group_id: str, members: Sequence[str]) -> None:
+    def set_vca_group_members(self, id: str, members: Sequence[str]) -> None:
         """Replace an existing VCA group's strip membership."""
         self._require()
         lib = _get_lib()
@@ -388,7 +391,7 @@ class Mixer:
         _check(
             lib.sonare_mixer_set_vca_group_members(
                 self._handle,
-                _utf8_arg(group_id, "group_id"),
+                _utf8_arg(id, "id"),
                 member_ptr,
                 ctypes.c_size_t(len(member_list)),
             )
@@ -419,29 +422,29 @@ class Mixer:
         if isinstance(strip, str):
             handle = lib.sonare_mixer_strip_by_id(self._handle, _utf8_arg(strip, "strip"))
             if not handle:
-                raise KeyError(f"mixer strip id not found: {strip}")
+                raise SonareValueError(f"mixer strip id not found: {strip!r}")
         else:
             handle = lib.sonare_mixer_strip_at(self._handle, _to_c_size_t(strip, "strip"))
             if not handle:
-                raise IndexError("mixer strip index out of range")
+                raise SonareValueError(f"mixer strip index out of range: {strip}")
         return ctypes.c_void_p(int(handle))
 
-    def strip_by_id(self, strip_id: str) -> int:
-        """Return the index of the strip with ``strip_id``.
+    def strip_by_id(self, id: str) -> int:
+        """Return the index of the strip with ``id``.
 
-        Raises ``KeyError`` if no strip with that id exists. The returned index
+        Raises :class:`SonareValueError` if no strip with that id exists. The returned index
         is stable for the lifetime of the current topology.
         """
         self._require()
         lib = _get_lib()
-        target = lib.sonare_mixer_strip_by_id(self._handle, _utf8_arg(strip_id, "strip_id"))
+        target = lib.sonare_mixer_strip_by_id(self._handle, _utf8_arg(id, "id"))
         if not target:
-            raise KeyError(f"mixer strip id not found: {strip_id}")
+            raise SonareValueError(f"mixer strip id not found: {id!r}")
         for index in range(self.strip_count):
             handle = lib.sonare_mixer_strip_at(self._handle, _to_c_size_t(index, "index"))
             if handle and int(handle) == int(target):
                 return index
-        raise KeyError(f"mixer strip id not found: {strip_id}")
+        raise SonareValueError(f"mixer strip id not found: {id!r}")
 
     def set_soloed(self, strip: StripRef, soloed: bool) -> None:
         """Set a strip's solo state (takes effect without a recompile)."""

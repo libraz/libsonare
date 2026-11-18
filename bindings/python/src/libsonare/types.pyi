@@ -508,6 +508,7 @@ PanLaw = Literal["const3Db", "const4.5Db", "const6Db", "linear0Db"]
 PanMode = Literal["balance", "stereoPan", "dualPan"]
 ChannelLayout = Literal["mono", "stereo", "5.1", "7.1"]
 MeterTap = Literal["preFader", "postFader"]
+MixBusRole = Literal["master", "aux", "submix"]
 SendTiming = Literal["preFader", "postFader"]
 SidechainSourceKind = Literal["track", "bus"]
 

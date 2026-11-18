@@ -98,9 +98,9 @@ def test_embedded_nul_is_refused_on_mixer_methods() -> None:
         max_block_size=256,
     )
     try:
-        with pytest.raises(SonareValueError, match="strip_id must not contain NUL"):
+        with pytest.raises(SonareValueError, match="id must not contain NUL"):
             mixer.add_strip("lead\x00hidden")
-        with pytest.raises(SonareValueError, match="bus_id must not contain NUL"):
+        with pytest.raises(SonareValueError, match="id must not contain NUL"):
             mixer.add_bus("bus\x00hidden")
         with pytest.raises(SonareValueError, match="must not contain NUL"):
             mixer.add_vca_group("grp", members=["ok", "bad\x00member"])

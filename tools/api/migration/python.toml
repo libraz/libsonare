@@ -9835,6 +9835,110 @@ rule = "absent-not-sentinel"
 test = "bindings/python/tests/test_percussive_events.py::test_fade_ms_reaches_the_render_config"
 
 [[entry]]
+kind = "method"
+old = "Mixer.add_strip"
+changed = "returns the new strip's index, as strip_by_id would"
+domain = "engine"
+rule = "strip-ref"
+test = "bindings/python/tests/test_mixing.py::test_add_strip_returns_the_new_strip_index"
+
+[[entry]]
+kind = "method"
+old = "Mixer.strip_by_id"
+changed = "an unknown id raises SonareValueError instead of KeyError"
+domain = "engine"
+rule = "error-class-by-cause"
+test = "bindings/python/tests/test_mixing.py::test_strip_by_id_returns_index_and_raises_on_unknown"
+
+[[entry]]
+kind = "class"
+old = "Mixer"
+changed = "a strip reference naming an unknown id or an out-of-range index raises SonareValueError instead of KeyError or IndexError"
+domain = "engine"
+rule = "error-class-by-cause"
+test = "bindings/python/tests/test_mixing.py::test_strip_by_id_returns_index_and_raises_on_unknown"
+
+[[entry]]
+kind = "option"
+old = "Mixer.add_strip(strip_id)"
+to = "Mixer.add_strip(id)"
+changed = "renamed id, the name the Node and WASM mixers use"
+domain = "engine"
+rule = "individual"
+test = "bindings/python/tests/test_mixing.py::test_add_strip_returns_the_new_strip_index"
+
+[[entry]]
+kind = "option"
+old = "Mixer.strip_by_id(strip_id)"
+to = "Mixer.strip_by_id(id)"
+changed = "renamed id, the name the Node and WASM mixers use"
+domain = "engine"
+rule = "individual"
+test = "bindings/python/tests/test_mixing.py::test_add_strip_returns_the_new_strip_index"
+
+[[entry]]
+kind = "option"
+old = "Mixer.add_bus(bus_id)"
+to = "Mixer.add_bus(id)"
+changed = "renamed id, the name the Node and WASM mixers use"
+domain = "engine"
+rule = "individual"
+test = "bindings/python/tests/test_mixing.py::test_add_bus_takes_a_role_token"
+
+[[entry]]
+kind = "option"
+old = "Mixer.remove_bus(bus_id)"
+to = "Mixer.remove_bus(id)"
+changed = "renamed id, the name the Node and WASM mixers use"
+domain = "engine"
+rule = "individual"
+test = "bindings/python/tests/test_mixing.py::test_add_bus_takes_a_role_token"
+
+[[entry]]
+kind = "option"
+old = "Mixer.add_vca_group(group_id)"
+to = "Mixer.add_vca_group(id)"
+changed = "renamed id, the name the Node and WASM mixers use"
+domain = "engine"
+rule = "individual"
+test = "bindings/python/tests/test_mixing.py::test_vca_group_add_remove_and_count"
+
+[[entry]]
+kind = "option"
+old = "Mixer.remove_vca_group(group_id)"
+to = "Mixer.remove_vca_group(id)"
+changed = "renamed id, the name the Node and WASM mixers use"
+domain = "engine"
+rule = "individual"
+test = "bindings/python/tests/test_mixing.py::test_vca_group_add_remove_and_count"
+
+[[entry]]
+kind = "option"
+old = "Mixer.set_vca_group_gain_db(group_id)"
+to = "Mixer.set_vca_group_gain_db(id)"
+changed = "renamed id, the name the Node and WASM mixers use"
+domain = "engine"
+rule = "individual"
+test = "bindings/python/tests/test_mixing.py::test_vca_group_add_remove_and_count"
+
+[[entry]]
+kind = "option"
+old = "Mixer.set_vca_group_members(group_id)"
+to = "Mixer.set_vca_group_members(id)"
+changed = "renamed id, the name the Node and WASM mixers use"
+domain = "engine"
+rule = "individual"
+test = "bindings/python/tests/test_mixing.py::test_vca_group_add_remove_and_count"
+
+[[entry]]
+kind = "option"
+old = "Mixer.add_bus(role)"
+changed = "a MixBusRole token (\"master\", \"aux\", \"submix\"); an unknown token raises SonareValueError, a non-string TypeError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_mixing.py::test_add_bus_takes_a_role_token"
+
+[[entry]]
 kind = "option"
 old = "Mixer.add_strip(true_peak_oversample)"
 changed = "absent is None (the library default 4x); an explicit 0 raises SonareValueError"

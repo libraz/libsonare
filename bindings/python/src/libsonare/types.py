@@ -443,6 +443,9 @@ from ._types_enums import (
     MeterTap as MeterTap,
 )
 from ._types_enums import (
+    MixBusRole as MixBusRole,
+)
+from ._types_enums import (
     NormType as NormType,
 )
 from ._types_enums import (

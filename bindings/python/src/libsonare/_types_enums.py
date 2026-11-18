@@ -73,6 +73,10 @@ MeterTap = Literal["preFader", "postFader"]
 """Tap point at which a strip meter snapshot is read."""
 _METER_TAPS: tuple[str, ...] = get_args(MeterTap)
 
+MixBusRole = Literal["master", "aux", "submix"]
+"""Role of a mixer bus."""
+_MIX_BUS_ROLES: tuple[str, ...] = get_args(MixBusRole)
+
 SendTiming = Literal["preFader", "postFader"]
 """Pre/post-fader timing of a mixer strip send."""
 # C ordinal order: post-fader is 0 so a zero-initialized send is post-fader.

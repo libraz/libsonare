@@ -1230,6 +1230,9 @@ from .types import MixAssistantMixProfile as MixAssistantMixProfile
 from .types import MixAssistantResult as MixAssistantResult
 from .types import MixAssistantTrackProfile as MixAssistantTrackProfile
 from .types import MixBandDominance as MixBandDominance
+from .types import (
+    MixBusRole as MixBusRole,
+)
 from .types import MixCrowdedBand as MixCrowdedBand
 from .types import (
     MixMeterSnapshot as MixMeterSnapshot,
