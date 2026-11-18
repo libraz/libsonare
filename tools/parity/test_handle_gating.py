@@ -254,7 +254,9 @@ def test_an_init_suffix_alone_is_not_a_seeder() -> None:
         ["c", "python"],
         native_sources=native,
     )
-    assert ("decompose_with_init", "python") in _active(genuine), _active(genuine)
+    # Called but not a seeder: the binding consumes it, and no seeder credit is taken.
+    assert ("decompose_with_init", "python") not in _active(genuine), _active(genuine)
+    assert genuine.binding_consumed == [("decompose_with_init", "python", "py/x.py:1")]
 
 
 def test_vocal_session_factory_alias_credits_only_its_own_key() -> None:
@@ -593,6 +595,48 @@ def test_a_core_claim_outranks_an_alias_where_it_is_the_route() -> None:
     finally:
         compare._ALIAS_COVERAGE = saved
     assert ("widget_run", "python") not in _active(python), _active(python)
+
+
+def _consumed_report(addon: str, python: str, python_free: list[str] | None = None):
+    return compare.build_report(
+        {
+            "c": _c("widget_name"),
+            "node": Extraction(surface="node"),
+            "python": _py(frees=python_free),
+        },
+        allowlist_mod.Allowlist(),
+        ["c", "node", "python"],
+        native_sources={
+            "node": [("addon/render.cpp", addon)],
+            "python": [
+                (
+                    "libsonare/_ffi_signatures_widget.py",
+                    "lib.sonare_widget_name.restype = ctypes.c_char_p\n",
+                ),
+                ("libsonare/_render.py", python),
+            ],
+        },
+    )
+
+
+def test_an_entry_the_binding_calls_without_a_facade_is_consumed_there() -> None:
+    """Derived per surface: the node addon calls it, Python only declares its signature."""
+    rep = _consumed_report(
+        'out.Set("code", sonare_widget_name(code));\n',
+        'if hasattr(lib, "sonare_widget_name"):\n    pass\n',
+    )
+    assert rep.binding_consumed == [("widget_name", "node", "addon/render.cpp:1")]
+    found = [f for f in rep.findings if f.key == "widget_name" and f.surface == "node"]
+    assert [(f.informational, f.location) for f in found] == [(True, "addon/render.cpp:1")], found
+    assert _active(rep) == {("widget_name", "python")}, _active(rep)
+
+
+def test_an_entry_a_facade_also_exposes_is_not_reclassified() -> None:
+    rep = _consumed_report(
+        "// nothing here\n", "name = lib.sonare_widget_name(code)\n", ["widget_name"]
+    )
+    assert rep.binding_consumed == []
+    assert _active(rep) == {("widget_name", "node")}, _active(rep)
 
 
 _TS_CHAIN = """export class StreamingMasteringChain {

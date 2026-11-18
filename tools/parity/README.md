@@ -178,8 +178,12 @@ files), catching a wiring break the C-anchored checks structurally cannot see.
 
 - **active** — counts toward the non-zero exit code (real, un-triaged drift).
 - **informational** — reported but non-gating: lifecycle helpers (constructors,
-  destructors, `free_*`), CLI-only gaps, and a facade class method with no C
-  counterpart. A handle op a facade does not expose is active, not this.
+  destructors, `free_*`), CLI-only gaps, a facade class method with no C
+  counterpart, and a C entry the surface's own native or ctypes layer calls while
+  no facade exposes it (*consumed by the binding*, printed with its call site and
+  counted in its own summary column). That last one is derived per (key, surface)
+  on every run, so a surface that stops calling the entry gaps again. A handle op
+  a facade does not expose is active, not this.
 - **allowlisted** — suppressed (and counted) via `allowlist.toml`; an
   intentional, reviewed divergence.
 

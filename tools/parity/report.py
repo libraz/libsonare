@@ -47,6 +47,9 @@ def to_json(rep: Report) -> str:
             {"key": k, "surface": s, "core": fn, "site": site}
             for k, s, fn, site in rep.core_reached
         ],
+        "binding_consumed": [
+            {"key": k, "surface": s, "site": site} for k, s, site in rep.binding_consumed
+        ],
         "findings": [asdict(f) for f in rep.findings],
         "allowlist_suppressed": {
             f"{scope}|{pattern}": divergences
@@ -93,6 +96,12 @@ def _summary(rep: Report) -> dict:
         # category actually reached, and how many candidates carried nothing to
         # compare. A category is only as clean as the fraction it looked at.
         "compared_by_category": {c: compared.get(c, 0) for c in CATEGORIES},
+        # Informational findings that are C entries the binding itself calls with no facade;
+        # a sudden jump means facades stopped exposing what their native layer still uses.
+        "consumed_by_binding_by_category": {
+            c: sum(1 for f in info if f.category == c and "consumed_by_binding" in f.detail)
+            for c in CATEGORIES
+        },
         "not_compared_by_category": declined,
     }
 
@@ -249,8 +258,11 @@ def to_markdown(rep: Report) -> str:
     # of verdicts the category reached: `default` reaches one in twenty-five of
     # its candidates, because a default a facade spells inside a request-object
     # normalizer is not in the signature the extractor reads.
-    out.append("| category | compared | not compared | active | informational | allowlisted |")
-    out.append("|---|---|---|---|---|---|")
+    out.append(
+        "| category | compared | not compared | active | informational "
+        "| of which consumed by binding | allowlisted |"
+    )
+    out.append("|---|---|---|---|---|---|---|")
     for c in CATEGORIES:
         compared = summary["compared_by_category"][c]
         declined = summary["not_compared_by_category"][c]
@@ -259,6 +271,7 @@ def to_markdown(rep: Report) -> str:
             f"| {_CAT_TITLE[c]} | {reach} | {declined} "
             f"| {summary['by_category_active'][c]} "
             f"| {summary['by_category_informational'][c]} "
+            f"| {summary['consumed_by_binding_by_category'][c]} "
             f"| {summary['allowlisted_by_category'][c]} |"
         )
     out.append("")

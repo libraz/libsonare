@@ -607,6 +607,9 @@ class Report:
     # (key, surface, core function, native call site). Each bypasses the entry's
     # own validation, so the report lists them apart from the C-symbol credits.
     core_reached: list[tuple[str, str, str, str]] = field(default_factory=list)
+    # C entries a surface calls from its own native or ctypes layer and exposes through no
+    # facade, as (key, surface, call site). Informational coverage, derived on every run.
+    binding_consumed: list[tuple[str, str, str]] = field(default_factory=list)
 
     def decline(
         self, category: str, key: str, surface: str, reason: str, location: str = ""
@@ -747,6 +750,22 @@ def load_native_sources(root: Path) -> dict[str, list[tuple[str, str]]]:
             for f in files
         ]
     return out
+
+
+# A ctypes signature declaration or an availability probe names a C entry without using it.
+_BINDING_DECLARATION = re.compile(r"\.(?:restype|argtypes)\b|\bhasattr\s*\(|#\s*include\b")
+
+
+def _binding_call_site(key: str, surface: str, sources: list[tuple[str, str]]) -> str | None:
+    """Where a surface's own native or ctypes layer uses the C entry ``key``, or None."""
+    use = re.compile(rf"\bsonare_{re.escape(key)}\b")
+    for path, text in sources:
+        if surface == "python" and Path(path).name.startswith("_ffi_signatures"):
+            continue
+        for lineno, code in _code_lines(path, text):
+            if use.search(code) and not _BINDING_DECLARATION.search(code):
+                return f"{path}:{lineno}"
+    return None
 
 
 def _seeder_struct(sig: FunctionSig) -> str | None:
@@ -1059,6 +1078,29 @@ def build_report(
             # facade object model (ctor / GC / RAII), not a free function. Report
             # them informationally, never as an active gap.
             is_lifecycle = _is_lifecycle_key(key)
+            # An entry the surface's own native or ctypes layer calls, with no facade of its
+            # own, is consumed there (a token table read while decoding a result, say). Derived
+            # per (key, surface) on every run, so the surface that stops calling it gaps again.
+            site = (
+                _binding_call_site(key, s, native_sources.get(s, []))
+                if native_sources and s in _CONSTRUCTOR_SOURCES and not is_lifecycle
+                else None
+            )
+            if site is not None:
+                rep.binding_consumed.append((key, s, site))
+                rep.findings.append(
+                    Finding(
+                        category="coverage",
+                        key=key,
+                        surface=s,
+                        message=f"C function '{key}' is consumed by the {s} binding at {site}, "
+                        "with no facade of its own",
+                        location=site,
+                        detail={"consumed_by_binding": site},
+                        informational=True,
+                    )
+                )
+                continue
             # GATING: a handle/class op that is neither aliased, lifecycle, nor
             # allowlisted is a REAL cross-binding gap and counts toward failure --
             # this is what catches a new C op wired on some facades but not others.
