@@ -65,8 +65,11 @@ export type EqBandPhase = 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPh
  * (`'peak'`, 1000 Hz, 0 dB gain, Butterworth Q, disabled).
  */
 export interface EqBand {
+  /** Band shape. Default `'peak'`. */
   type?: EqBandType;
+  /** Centre or corner frequency in Hz. Default `1000`. */
   frequencyHz?: number;
+  /** Band gain in dB. Default `0`. */
   gainDb?: number;
   /**
    * Resonance/slope. Ignored for a `'lowShelf'`/`'highShelf'` band once `phase:
@@ -76,7 +79,9 @@ export interface EqBand {
    * response. Set `coeffMode: 'rbj'` for a Q-controllable shelf.
    */
   q?: number;
+  /** Whether the band processes audio. Default `false`. */
   enabled?: boolean;
+  /** Biquad coefficient design. Default `'rbj'`. */
   coeffMode?: EqCoeffMode;
   /**
    * Slope in dB/octave. 6 selects a first-order section on a pass or shelf
@@ -84,20 +89,30 @@ export interface EqBand {
    * is unused.
    */
   slopeDbOct?: number;
+  /** Signal path the band sits on. Default `'stereo'`. */
   placement?: EqStereoPlacement;
   /**
    * `'naturalPhase'` forces `coeffMode: 'vicanek'` for this band, which
    * ignores `q` for `'lowShelf'`/`'highShelf'` (see `q`'s doc).
    */
   phase?: EqBandPhase;
+  /** Listen to this band alone. Default `false`. */
   soloed?: boolean;
+  /** Skip the band without removing it. Default `false`. */
   bypassed?: boolean;
+  /** Narrow the Q as the gain magnitude grows. Default `false`. */
   proportionalQ?: boolean;
+  /** How strongly the gain magnitude narrows Q when `proportionalQ` is on. Default `0.03`. */
   proportionalQStrength?: number;
+  /** Make the band gain follow the detector level. Default `false`. */
   dynamic?: boolean;
+  /** Detector threshold in dB above which a dynamic band acts. Default `-24`. */
   thresholdDb?: number;
+  /** Derive the dynamic threshold from the signal. Default `false`. */
   autoThreshold?: boolean;
+  /** Dynamic compression ratio. Default `2`. */
   ratio?: number;
+  /** Maximum dynamic gain change in dB; negative compresses. Default `-6`. */
   rangeDb?: number;
   /** Attack in ms: one time constant, about 63% of the way at the set time. */
   attackMs?: number;
@@ -109,8 +124,11 @@ export interface EqBand {
    * true look-ahead, and adds no latency to the audio path.
    */
   detectorDelayMs?: number;
+  /** Drive the detector from the external sidechain input. Default `false`. */
   externalSidechain?: boolean;
+  /** Detector centre frequency in Hz; a non-positive value uses the band frequency. Default `-1`. */
   sidechainFreqHz?: number;
+  /** Detector band-pass Q. Default `1`. */
   sidechainQ?: number;
 }
 

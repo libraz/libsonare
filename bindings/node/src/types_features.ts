@@ -537,7 +537,7 @@ export interface EqBandInput {
   /** Band gain in dB. Default `0`. */
   gainDb?: number;
   /**
-   * Resonance/slope. Ignored for a LowShelf/HighShelf band once `phase:
+   * Resonance/slope. Ignored for a `'lowShelf'`/`'highShelf'` band once `phase:
    * 'naturalPhase'` forces Vicanek coefficients (the Vicanek matched-Z shelf
    * design has no Q/S parameter) -- the value is still stored and read back
    * verbatim, so a reflected `q` on such a band does not describe the applied
@@ -558,7 +558,7 @@ export interface EqBandInput {
   placement?: EqStereoPlacement;
   /**
    * `'naturalPhase'` forces `coeffMode: 'vicanek'` for this band, which
-   * ignores `q` for LowShelf/HighShelf (see `q`'s doc).
+   * ignores `q` for `'lowShelf'`/`'highShelf'` (see `q`'s doc).
    */
   phase?: EqBandPhase;
   /** Listen to this band alone. Default `false`. */
