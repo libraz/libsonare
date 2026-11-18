@@ -155,6 +155,27 @@ ROWS: tuple[TokenSet, ...] = (
         ),
     ),
     TokenSet(
+        name="project diagnostic severity",
+        core=CoreTable("src/arrangement/edit_compiler.cpp", "Diagnostic::Severity", None, "diagnostic_severity_name"),
+        sources=(
+            _src("node", "bindings/node/src/types_project.ts", "ts_union", "ProjectDiagnosticSeverity"),
+            _src("python", "bindings/python/src/libsonare/_project_model.py", "py_literal", "ProjectDiagnosticSeverity"),
+            _src("wasm", "bindings/wasm/src/project_internal.ts", "ts_field", "NativeProjectDiagnostic.severity"),
+            _src("wasm", "bindings/wasm/src/project_types.ts", "ts_field", "ProjectDiagnostic.severity"),
+        ),
+    ),
+    TokenSet(
+        name="room acoustics diagnostic severity",
+        core=CoreTable("src/wasm/bindings/analysis/room_acoustics.cpp", "sonare::Diagnostic::Severity", None, "rirSeverityName"),
+        also_written_by=(
+            CoreTable("bindings/node/src/addon/sonare_wrap_acoustic.cpp", "sonare::Diagnostic::Severity", None, "SeverityName"),
+        ),
+        sources=(
+            _src("node", "bindings/node/src/types_analysis.ts", "ts_field", "RirDiagnostic.severity"),
+            _src("wasm", "bindings/wasm/src/public_types_acoustic.ts", "ts_field", "RirDiagnostic.severity"),
+        ),
+    ),
+    TokenSet(
         name="eq band type",
         core=CoreTable("src/mastering/eq/band_strings.cpp", "EqBandType", None, "band_type_to_string"),
         sources=(
@@ -676,17 +697,6 @@ EXEMPT: typing.Mapping[tuple[str, str], str] = types.MappingProxyType(
                 "bindings/wasm/src/public_types_mixing.ts",
                 "bindings/python/src/libsonare/_types_enums.py",
                 "bindings/python/src/libsonare/types.pyi",
-            )
-        },
-        **{
-            (path, symbol): (
-                "no core writer: the arrangement Severity ordinals are its only core spelling, "
-                "and it shares the room-acoustics diagnostic tokens by name only"
-            )
-            for path, symbol in (
-                ("bindings/node/src/types_project.ts", "ProjectDiagnosticSeverity"),
-                ("bindings/wasm/src/project_types.ts", "ProjectDiagnostic.severity"),
-                ("bindings/python/src/libsonare/_project_model.py", "ProjectDiagnosticSeverity"),
             )
         },
     }
