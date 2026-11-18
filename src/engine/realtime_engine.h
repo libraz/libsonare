@@ -221,6 +221,17 @@ class RealtimeEngine : private ClipPageRequestSink {
   /// @c kMaxClipPageChannels, which currently holds the same value for an
   /// unrelated reason.
   static constexpr size_t kMaxAudioChannels = 64;
+  /// @brief Library defaults for what a caller leaves out of @ref prepare.
+  static constexpr int kDefaultMaxBlock = 128;
+  static constexpr size_t kDefaultCommandCapacity = 1024;
+  static constexpr size_t kDefaultTelemetryCapacity = 1024;
+  static constexpr int kDefaultMaxChannels = 64;
+  /// @brief Offline render, bounce and freeze block when a caller names none,
+  /// capped at the prepared max block.
+  static constexpr int kDefaultOfflineBlock = 128;
+  /// @brief Records a telemetry, meter, scope or external-MIDI drain asks for
+  /// when a caller names no count.
+  static constexpr size_t kDefaultDrainRecords = 1024;
   /// @brief Largest SysEx frame @ref push_midi_sysex accepts, in bytes.
   /// @details Sizes the bounded, allocation-free payload slot the control thread
   /// copies into, so it is also the ceiling the C ABI rejects against rather
@@ -269,8 +280,10 @@ class RealtimeEngine : private ClipPageRequestSink {
   /// each able to fail again, and none of them required to be reversible by an
   /// instrument the engine does not own. Rolling forward to a state the engine
   /// can always reach is honest where a rollback would only sometimes work.
-  void prepare(double sample_rate, int max_block_size, size_t command_capacity = 1024,
-               size_t telemetry_capacity = 1024, int max_channels = 64);
+  void prepare(double sample_rate, int max_block_size,
+               size_t command_capacity = kDefaultCommandCapacity,
+               size_t telemetry_capacity = kDefaultTelemetryCapacity,
+               int max_channels = kDefaultMaxChannels);
   double sample_rate() const noexcept { return sample_rate_; }
   /// Sample rate of the currently installed compiled timeline, or 0 when no
   /// timeline rate is locking preparation. Set by a successful apply; cleared by

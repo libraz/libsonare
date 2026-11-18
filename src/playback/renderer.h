@@ -56,6 +56,9 @@ struct RendererDiagnostics {
 /// `truncated_drains`, `inactive_stages`, `latency.stages`, clamps).
 std::string diagnostics_to_json(const RendererDiagnostics& diagnostics);
 
+/// Block size the renderer is created with when a caller names none.
+inline constexpr int kPlaybackRendererDefaultMaxBlock = 1024;
+
 class PlaybackRenderer {
  public:
   /// Control thread. @p hrtf is copied (resampled if needed) for a headphones

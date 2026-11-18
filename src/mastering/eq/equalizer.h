@@ -31,6 +31,8 @@ struct EqualizerProcessorConfig {
 class EqualizerProcessor : public rt::ProcessorBase {
  public:
   static constexpr size_t kMaxBands = 24;
+  /// @brief Block size a streaming equalizer is prepared with when a caller names none.
+  static constexpr int kDefaultMaxBlock = 512;
 
   explicit EqualizerProcessor(EqualizerProcessorConfig config = {});
   ~EqualizerProcessor() override;

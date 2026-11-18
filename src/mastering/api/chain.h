@@ -268,6 +268,8 @@ struct StereoChainResult : public StereoAudioResult, public ChainMetrics {};
 
 class MasteringChain {
  public:
+  /// @brief Block size a streaming chain is prepared with when a caller names none.
+  static constexpr int kDefaultMaxBlock = 128;
   /// @brief Progress callback. `stage` is the stage identifier just completed
   /// (e.g. "dynamics.compressor").
   ///

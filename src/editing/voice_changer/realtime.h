@@ -193,6 +193,11 @@ inline bool takes_external_carrier(const RealtimeVoiceChangerConfig& config) noe
   return config.vocoder.enabled && config.vocoder.carrier_source == VocoderCarrierSource::External;
 }
 
+/// Block size @ref RealtimeVoiceChanger::prepare is given when a caller names none.
+inline constexpr int kRealtimeVoiceChangerDefaultMaxBlock = 128;
+/// Channel count @ref RealtimeVoiceChanger::prepare is given when a caller names none.
+inline constexpr int kRealtimeVoiceChangerDefaultChannels = 1;
+
 class RealtimeVoiceChanger {
  public:
   /// @brief Maximum reverb decay time (ms) used to size per-channel comb buffers.
@@ -207,7 +212,8 @@ class RealtimeVoiceChanger {
   /// @throws SonareException InvalidParameter when @ref prepare_arguments_error refuses the
   ///         arguments; nothing is modified in that case and the instance keeps its last
   ///         preparation.
-  void prepare(double sample_rate, int max_block_size, int num_channels = 1);
+  void prepare(double sample_rate, int max_block_size,
+               int num_channels = kRealtimeVoiceChangerDefaultChannels);
   /// @brief Clears streaming DSP state.
   /// @details Adopts the latest published configuration first, so the state it
   ///          snaps to is the one @ref set_config last requested. Control-thread

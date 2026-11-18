@@ -55,8 +55,8 @@ void StreamingRetune::prepare(double sample_rate, int max_block_size) {
   if (!numeric::finite_positive(sample_rate)) {
     throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be finite and positive");
   }
-  if (max_block_size < 0) {
-    throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");
+  if (max_block_size < 1) {
+    throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be positive");
   }
   sample_rate_ = sample_rate;
   max_block_size_ = max_block_size;

@@ -23,6 +23,9 @@ class Value;
 
 namespace sonare::mixing::api {
 
+/// Block size a mixer is created with when a caller names none.
+inline constexpr int kMixerDefaultMaxBlock = 512;
+
 enum class InsertSlot {
   PreFader,
   PostFader,
