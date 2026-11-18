@@ -309,11 +309,12 @@ Napi::Value SonareWrap::MasteringRepairNoiseBandBins(const Napi::CallbackInfo& i
   Napi::Env env = info.Env();
 
   SONARE_NODE_TRY
-  // Every field is optional, so an omitted request reads as an empty one.
+  // nFft is optional (an omitted request reads as an empty one); sampleRate is not.
   Napi::Object request = info.Length() >= 1 && info[0].IsObject() ? info[0].As<Napi::Object>()
                                                                   : Napi::Object::New(env);
   const int n_fft = IntProperty(request, "nFft", kDenoiseConfigDefaults.n_fft);
-  const int sample_rate = IntProperty(request, "sampleRate", sonare::constants::kDefaultSampleRate);
+  int sample_rate{};
+  if (!RequiredIntProperty(env, request, "sampleRate", &sample_rate)) return env.Undefined();
   // The C entry writes into the array's own storage; no intermediate buffer.
   auto bins = Napi::Int32Array::New(env, SONARE_REPAIR_NOISE_BAND_EDGE_COUNT);
   SonareError err = sonare_mastering_repair_noise_band_bins(n_fft, sample_rate, bins.Data());

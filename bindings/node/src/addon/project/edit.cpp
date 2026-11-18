@@ -100,10 +100,10 @@ bool ParseClipCompSegments(Napi::Env env, const Napi::Value& value,
   return true;
 }
 
-// Parses a JS automation-point array ([{ppq, value, curve}]) into the flat
-// SonareAutomationPoint vector marshalled by the lane edit commands. `curve`
-// (alias `curveToNext`) is the SonareProjectAutomationCurve ordinal, default 0
-// (Linear). Throws a JS exception (returns false) on a non-object entry.
+// Parses a JS automation-point array ([{ppq, value, curveToNext}]) into the flat
+// SonareAutomationPoint vector marshalled by the lane edit commands.
+// `curveToNext` is the SonareProjectAutomationCurve ordinal, default 0 (Linear).
+// Throws a JS exception (returns false) on a non-object entry.
 bool ParseAutomationPoints(Napi::Env env, const Napi::Value& value,
                            std::vector<SonareAutomationPoint>* points) {
   if (!value.IsArray()) {
@@ -123,11 +123,10 @@ bool ParseAutomationPoints(Napi::Env env, const Napi::Value& value,
     SonareAutomationPoint point{};
     if (!RequiredDoubleProperty(env, obj, "ppq", &point.ppq)) return false;
     if (!RequiredFloatProperty(env, obj, "value", &point.value)) return false;
-    Napi::Value curve = obj.Get("curve");
+    const Napi::Value curve = obj.Get("curveToNext");
     if (env.IsExceptionPending()) return false;
-    if (curve.IsUndefined() || curve.IsNull()) curve = obj.Get("curveToNext");
     point.curve_to_next =
-        curve.IsUndefined() || curve.IsNull() ? 0 : node_narrow_int(env, curve, "curve");
+        curve.IsUndefined() || curve.IsNull() ? 0 : node_narrow_int(env, curve, "curveToNext");
     if (env.IsExceptionPending()) return false;
     points->push_back(point);
   }
@@ -191,7 +190,7 @@ bool ReadAutomationTargetKind(Napi::Env env, const Napi::Object& obj, bool* pres
 bool FillAutomationLaneDesc(Napi::Env env, const Napi::Object& obj,
                             std::vector<SonareAutomationPoint>* points,
                             SonareAutomationLaneDesc* desc) {
-  desc->target_param_id = Uint32Property(obj, "targetParamId", 0);
+  if (!RequiredUint32Property(env, obj, "targetParamId", &desc->target_param_id)) return false;
   if (!ParseAutomationPoints(env, obj.Get("points"), points)) {
     return false;
   }
@@ -240,15 +239,15 @@ Napi::Value ProjectWrap::AddTrack(const Napi::CallbackInfo& info) {
   bool has_name = false;
   if (info.Length() > 0 && info[0].IsObject()) {
     Napi::Object obj = info[0].As<Napi::Object>();
-    desc.kind = IntProperty(obj, "kind", SONARE_TRACK_AUDIO);
+    if (!RequiredIntProperty(env, obj, "kind", &desc.kind)) return env.Undefined();
     Napi::Value name_value = obj.Get("name");
     if (!name_value.IsUndefined() && !name_value.IsNull()) {
       name = sonare_node::node_narrow_string(env, name_value, "name");
       has_name = true;
     }
   } else {
-    uint32_t kind = SONARE_TRACK_AUDIO;
-    if (!OptionalUint32Arg(env, info, 0, "kind", SONARE_TRACK_AUDIO, &kind)) {
+    uint32_t kind = 0;
+    if (!sonare_node::RequiredUint32Arg(env, info, 0, "kind", &kind)) {
       return env.Undefined();
     }
     desc.kind = static_cast<int>(kind);

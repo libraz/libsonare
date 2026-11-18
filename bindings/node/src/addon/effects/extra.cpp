@@ -425,7 +425,7 @@ Napi::Value SonareWrap::Remix(const Napi::CallbackInfo& info) {
   auto arr = info[0].As<Napi::Float32Array>();
   std::vector<int> intervals = ReadRemixIntervals(env, info[1]);
   int sr{};
-  if (!OptionalIntArg(env, info, 2, "sampleRate", 22050, &sr)) return env.Undefined();
+  if (!RequiredIntArg(env, info, 2, "sampleRate", &sr)) return env.Undefined();
   bool align_zeros = true;
   if (!OptionalBoolArg(env, info, 3, "alignZeros", true, &align_zeros)) {
     return env.Undefined();
@@ -450,7 +450,7 @@ Napi::Value SonareWrap::RemixAlignedIntervals(const Napi::CallbackInfo& info) {
   auto arr = info[0].As<Napi::Float32Array>();
   std::vector<int> intervals = ReadRemixIntervals(env, info[1]);
   int sr{};
-  if (!OptionalIntArg(env, info, 2, "sampleRate", 22050, &sr)) return env.Undefined();
+  if (!RequiredIntArg(env, info, 2, "sampleRate", &sr)) return env.Undefined();
   bool align_zeros = true;
   if (!OptionalBoolArg(env, info, 3, "alignZeros", true, &align_zeros)) {
     return env.Undefined();

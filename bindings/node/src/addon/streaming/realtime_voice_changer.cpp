@@ -449,9 +449,8 @@ Napi::Value RealtimeVoiceChangerWrap::NoteOn(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   int note{};
   if (!RequiredIntArg(env, info, 0, "note", &note)) return env.Undefined();
-  // An absent velocity is full strength; a present non-number (a boolean included) is refused.
   float velocity{};
-  if (!OptionalFloatArg(env, info, 1, "velocity", 1.0f, &velocity)) return env.Undefined();
+  if (!RequiredFloatArg(env, info, 1, "velocity", &velocity)) return env.Undefined();
   using Changer = sonare::editing::voice_changer::RealtimeVoiceChanger;
   if (!Changer::is_valid_note(note)) {
     Napi::RangeError::New(env, "note must be within [0, 127]").ThrowAsJavaScriptException();

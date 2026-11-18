@@ -78,7 +78,7 @@ Napi::Value SonareWrap::Lufs(const Napi::CallbackInfo& info) {
   }
   auto typed = info[0].As<Napi::Float32Array>();
   int sr{};
-  if (!OptionalIntArg(env, info, 1, "sampleRate", 22050, &sr)) return env.Undefined();
+  if (!RequiredIntArg(env, info, 1, "sampleRate", &sr)) return env.Undefined();
 
   SonareLufsResult lufs{};
   SonareError err = sonare_lufs(typed.Data(), typed.ElementLength(), sr, &lufs);
@@ -107,7 +107,7 @@ Napi::Value SonareWrap::MomentaryLufs(const Napi::CallbackInfo& info) {
   }
   auto typed = info[0].As<Napi::Float32Array>();
   int sr{};
-  if (!OptionalIntArg(env, info, 1, "sampleRate", 22050, &sr)) return env.Undefined();
+  if (!RequiredIntArg(env, info, 1, "sampleRate", &sr)) return env.Undefined();
 
   float* out = nullptr;
   size_t count = 0;
@@ -134,7 +134,7 @@ Napi::Value SonareWrap::ShortTermLufs(const Napi::CallbackInfo& info) {
   }
   auto typed = info[0].As<Napi::Float32Array>();
   int sr{};
-  if (!OptionalIntArg(env, info, 1, "sampleRate", 22050, &sr)) return env.Undefined();
+  if (!RequiredIntArg(env, info, 1, "sampleRate", &sr)) return env.Undefined();
 
   float* out = nullptr;
   size_t count = 0;
@@ -246,7 +246,7 @@ Napi::Value SonareWrap::Ebur128LoudnessRange(const Napi::CallbackInfo& info) {
   }
   auto typed = info[0].As<Napi::Float32Array>();
   int sr{};
-  if (!OptionalIntArg(env, info, 1, "sampleRate", 22050, &sr)) return env.Undefined();
+  if (!RequiredIntArg(env, info, 1, "sampleRate", &sr)) return env.Undefined();
 
   float out_lra = 0.0f;
   SonareError err =
@@ -274,7 +274,7 @@ Napi::Value MeteringScalar(const Napi::CallbackInfo& info, MeteringScalarFn fn,
   }
   auto typed = info[0].As<Napi::Float32Array>();
   int sr{};
-  if (!OptionalIntArg(env, info, 1, "sampleRate", 22050, &sr)) return env.Undefined();
+  if (!RequiredIntArg(env, info, 1, "sampleRate", &sr)) return env.Undefined();
   float out_value = 0.0f;
   SonareError err = fn(typed.Data(), typed.ElementLength(), sr, &out_value);
   if (err != SONARE_OK) {
@@ -310,7 +310,7 @@ Napi::Value SonareWrap::MeteringSilenceRatio(const Napi::CallbackInfo& info) {
   }
   auto samples = info[0].As<Napi::Float32Array>();
   int sample_rate{};
-  if (!OptionalIntArg(env, info, 1, "sampleRate", 22050, &sample_rate)) return env.Undefined();
+  if (!RequiredIntArg(env, info, 1, "sampleRate", &sample_rate)) return env.Undefined();
   float threshold_db{};
   if (!OptionalFiniteFloatArg(env, info, 2, "thresholdDb", -45.0f, &threshold_db))
     return env.Undefined();
@@ -354,7 +354,7 @@ Napi::Value SonareWrap::MeteringTruePeakDb(const Napi::CallbackInfo& info) {
   }
   auto typed = info[0].As<Napi::Float32Array>();
   int sr{};
-  if (!OptionalIntArg(env, info, 1, "sampleRate", 22050, &sr)) return env.Undefined();
+  if (!RequiredIntArg(env, info, 1, "sampleRate", &sr)) return env.Undefined();
   int oversample{};
   if (!OptionalIntArg(env, info, 2, "oversample", 4, &oversample)) return env.Undefined();
   float out_value = 0.0f;
@@ -378,7 +378,7 @@ Napi::Value SonareWrap::MeteringDetectClipping(const Napi::CallbackInfo& info) {
   }
   auto typed = info[0].As<Napi::Float32Array>();
   int sr{};
-  if (!OptionalIntArg(env, info, 1, "sampleRate", 22050, &sr)) return env.Undefined();
+  if (!RequiredIntArg(env, info, 1, "sampleRate", &sr)) return env.Undefined();
   float threshold{};
   if (!OptionalFiniteFloatArg(env, info, 2, "threshold", 0.999f, &threshold))
     return env.Undefined();
@@ -429,7 +429,7 @@ Napi::Value SonareWrap::MeteringDynamicRange(const Napi::CallbackInfo& info) {
   }
   auto typed = info[0].As<Napi::Float32Array>();
   int sr{};
-  if (!OptionalIntArg(env, info, 1, "sampleRate", 22050, &sr)) return env.Undefined();
+  if (!RequiredIntArg(env, info, 1, "sampleRate", &sr)) return env.Undefined();
   float window_sec{};
   if (!OptionalFiniteFloatArg(env, info, 2, "windowSec", 0.0f, &window_sec)) return env.Undefined();
   float hop_sec{};
@@ -606,7 +606,7 @@ Napi::Value StereoScalar(const Napi::CallbackInfo& info, StereoScalarFn fn, cons
     return env.Undefined();
   }
   int sr{};
-  if (!OptionalIntArg(env, info, 2, "sampleRate", 22050, &sr)) return env.Undefined();
+  if (!RequiredIntArg(env, info, 2, "sampleRate", &sr)) return env.Undefined();
   float out_value = 0.0f;
   SonareError err = fn(left.Data(), right.Data(), left.ElementLength(), sr, &out_value);
   if (err != SONARE_OK) {
@@ -735,7 +735,7 @@ Napi::Value SonareWrap::MeteringSpectrum(const Napi::CallbackInfo& info) {
   }
   auto typed = info[0].As<Napi::Float32Array>();
   int sr{};
-  if (!OptionalIntArg(env, info, 1, "sampleRate", 22050, &sr)) return env.Undefined();
+  if (!RequiredIntArg(env, info, 1, "sampleRate", &sr)) return env.Undefined();
   int n_fft = 0;
   int smooth = 0;
   int octave = 0;

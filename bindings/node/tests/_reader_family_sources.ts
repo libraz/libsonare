@@ -105,6 +105,7 @@ export const READER_FAMILIES: Readonly<
     NodeFloatArrayOption: 'out-of-scope',
     RequiredDoubleProperty: 'out-of-scope',
     RequiredFloatProperty: 'out-of-scope',
+    RequiredInt64Property: 'out-of-scope',
     RequiredIntProperty: 'out-of-scope',
     RequiredStringProperty: 'out-of-scope',
     RequiredUint32Property: 'out-of-scope',
@@ -121,7 +122,6 @@ export const READER_FAMILIES: Readonly<
     enumProperty: 'refuse',
     floatOption: 'refuse',
     floatProperty: 'refuse',
-    linearFromDbfsProperty: 'refuse', // a dBFS value read through floatProperty
     gsEfxRealizationProperty: 'refuse',
     int64Property: 'refuse',
     intProperty: 'refuse',

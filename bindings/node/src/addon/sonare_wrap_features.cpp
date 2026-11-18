@@ -216,9 +216,9 @@ Napi::Value SonareWrap::MelDelta(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   const auto typed = info[0].As<Napi::Float32Array>();
   int n_features{};
-  if (!OptionalIntArg(env, info, 1, "nFeatures", 0, &n_features)) return env.Undefined();
+  if (!RequiredIntArg(env, info, 1, "nFeatures", &n_features)) return env.Undefined();
   int n_frames{};
-  if (!OptionalIntArg(env, info, 2, "nFrames", 0, &n_frames)) return env.Undefined();
+  if (!RequiredIntArg(env, info, 2, "nFrames", &n_frames)) return env.Undefined();
   int width{};
   if (!OptionalIntArg(env, info, 3, "width", 9, &width)) return env.Undefined();
   if (n_features <= 0 || n_frames <= 0 ||

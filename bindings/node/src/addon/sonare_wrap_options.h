@@ -1048,6 +1048,12 @@ inline bool RequiredIntProperty(Napi::Env env, const Napi::Object& obj, const ch
   return RequiredIntValue(env, obj.Get(key), key, out);
 }
 
+/// @brief Read a required int64 property from a JS object.
+inline bool RequiredInt64Property(Napi::Env env, const Napi::Object& obj, const char* key,
+                                  int64_t* out) {
+  return RequiredInt64Value(env, obj.Get(key), key, out);
+}
+
 /// @brief Read a required uint32 property from a JS object.
 inline bool RequiredUint32Property(Napi::Env env, const Napi::Object& obj, const char* key,
                                    uint32_t* out) {

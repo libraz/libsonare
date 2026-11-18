@@ -146,7 +146,7 @@ Napi::Value SonareWrap::AnalyzeSections(const Napi::CallbackInfo& info) {
 
   auto typed = info[0].As<Napi::Float32Array>();
   int sample_rate{};
-  if (!OptionalIntArg(env, info, 1, "sampleRate", 22050, &sample_rate)) return env.Undefined();
+  if (!RequiredIntArg(env, info, 1, "sampleRate", &sample_rate)) return env.Undefined();
   int n_fft{};
   if (!OptionalIntArg(env, info, 2, "nFft", 2048, &n_fft)) return env.Undefined();
   int hop_length{};
@@ -192,7 +192,7 @@ Napi::Value SonareWrap::DetectBoundaries(const Napi::CallbackInfo& info) {
 
   auto typed = info[0].As<Napi::Float32Array>();
   int sample_rate{};
-  if (!OptionalIntArg(env, info, 1, "sampleRate", 22050, &sample_rate)) return env.Undefined();
+  if (!RequiredIntArg(env, info, 1, "sampleRate", &sample_rate)) return env.Undefined();
 
   // Seeded from the C ABI rather than restated, so the facade cannot drift from
   // the core's BoundaryConfig. No field here takes ZeroIsSentinel: the C entry
@@ -262,7 +262,7 @@ Napi::Value SonareWrap::AnalyzeMelody(const Napi::CallbackInfo& info) {
 
   auto typed = info[0].As<Napi::Float32Array>();
   int sample_rate{};
-  if (!OptionalIntArg(env, info, 1, "sampleRate", 22050, &sample_rate)) return env.Undefined();
+  if (!RequiredIntArg(env, info, 1, "sampleRate", &sample_rate)) return env.Undefined();
   float fmin{};
   if (!OptionalFiniteFloatArg(env, info, 2, "fmin", 65.0f, &fmin)) return env.Undefined();
   float fmax{};

@@ -110,10 +110,6 @@ const ZERO_FALLBACK_REASONS: ReadonlyMap<string, string> = new Map([
     'Graph node kind ordinal, where 0 is pass-through — a named member rather than an absent value.',
   ],
   [
-    'engine/graph_offline.cpp:totalFrames',
-    'Both the bounce and the freeze reject total_frames <= 0 as an invalid parameter, so 0 selects nothing.',
-  ],
-  [
     'engine/graph_offline.cpp:dither',
     'Dither kind ordinal, where 0 is none — a named member the caller can ask for.',
   ],
@@ -126,20 +122,12 @@ const ZERO_FALLBACK_REASONS: ReadonlyMap<string, string> = new Map([
     'The vocal project C ABI defines takeId 0 as the clip base binding, resolving clip.source_id and clip.source_offset_ppq; zero is therefore an explicit binding selector rather than omission.',
   ],
   [
-    'project/edit.cpp:targetParamId',
-    'The C ABI reserves 0 as the invalid/unset parameter id and refuses a lane carrying it.',
-  ],
-  [
     'project/edit.cpp:trackId',
     'A host-assigned track id, where 0 is the unset id rather than a selector for a default track.',
   ],
   [
     'project/edit.cpp:audioSampleRate',
     'Taken as a source-rate hint only above 0; without one the clip keeps the project rate, which is also what the omitted field gives.',
-  ],
-  [
-    'project/external_stems.cpp:layout',
-    'Channel-layout ordinals start at 1, so 0 matches none and the read site refuses the stem before the import.',
   ],
   [
     'project/external_stems.cpp:startFrame',
@@ -194,12 +182,12 @@ const ZERO_FALLBACK_REASONS: ReadonlyMap<string, string> = new Map([
     'The absolute frame an event is scheduled at; 0 is the first frame of the timeline.',
   ],
   [
-    'engine/midi_instruments.cpp:data0',
-    'The compatibility alias word0 falls back to; 0 is the empty word, and wordCount decides how many words are read.',
+    'engine/midi_instruments.cpp:word0',
+    'UMP word 0 of an event; 0 is the empty word, and wordCount decides how many words are read.',
   ],
   [
-    'engine/midi_instruments.cpp:data1',
-    'The compatibility alias word1 falls back to; 0 is the empty word, and wordCount decides how many words are read.',
+    'engine/midi_instruments.cpp:word1',
+    'UMP word 1 of an event; 0 is the empty word, and wordCount decides how many words are read.',
   ],
   [
     'engine/midi_instruments.cpp:word2',
@@ -326,6 +314,7 @@ const UNSCANNED_SHARED_READERS: ReadonlyMap<string, string> = new Map([
     'RequiredIntProperty',
     'Takes an out-pointer instead of a fallback: a missing or wrong-typed value is an error, so there is no zero to land on.',
   ],
+  ['RequiredInt64Property', 'Out-pointer rather than a fallback, as RequiredIntProperty.'],
   ['RequiredUint32Property', 'Out-pointer rather than a fallback, as RequiredIntProperty.'],
   ['RequiredDoubleProperty', 'Reads a double, and takes an out-pointer rather than a fallback.'],
   ['RequiredFloatProperty', 'Reads a float, and takes an out-pointer rather than a fallback.'],

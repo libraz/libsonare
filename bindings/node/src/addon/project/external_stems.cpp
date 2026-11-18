@@ -60,7 +60,8 @@ Napi::Value ProjectWrap::ImportExternalStems(const Napi::CallbackInfo& info) {
           .ThrowAsJavaScriptException();
       return env.Undefined();
     }
-    const uint32_t layout = Uint32Property(stem, "layout", 0);
+    uint32_t layout{};
+    if (!RequiredUint32Property(env, stem, "layout", &layout)) return env.Undefined();
     const size_t channels = channel_count(layout);
     const Napi::Array source_planes = samples.As<Napi::Array>();
     if (channels == 0 || source_planes.Length() != channels) {

@@ -1066,7 +1066,7 @@ Napi::Value SonareWrap::FunctionalAnalysis(const Napi::CallbackInfo& info) {
                                   ? SONARE_MODE_MAJOR
                                   : node_mode_from_value(info[2], "keyMode");
   int sample_rate{};
-  if (!OptionalIntArg(env, info, 3, "sampleRate", 22050, &sample_rate)) return env.Undefined();
+  if (!RequiredIntArg(env, info, 3, "sampleRate", &sample_rate)) return env.Undefined();
   float min_duration{};
   if (!OptionalFloatArg(env, info, 4, "minDuration", 0.3f, &min_duration)) return env.Undefined();
   float smoothing_window{};

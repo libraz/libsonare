@@ -56,8 +56,8 @@ std::vector<SonareEngineMidiEvent> ReadEngineMidiEvents(Napi::Env env, Napi::Val
     Napi::Object obj = item.As<Napi::Object>();
     SonareEngineMidiEvent event{};
     event.render_frame = Int64Property(obj, "renderFrame", 0);
-    event.word0 = WordProperty(obj, "word0", WordProperty(obj, "data0", 0));
-    event.word1 = WordProperty(obj, "word1", WordProperty(obj, "data1", 0));
+    event.word0 = WordProperty(obj, "word0", 0);
+    event.word1 = WordProperty(obj, "word1", 0);
     event.word2 = WordProperty(obj, "word2", 0);
     event.word3 = WordProperty(obj, "word3", 0);
     // wordCount is documented as tolerant: anything outside [1,4] lets the C
@@ -155,7 +155,7 @@ Napi::Value RealtimeEngineWrap::SetSynthInstrument(const Napi::CallbackInfo& inf
   SonareSynthInstrumentBinding binding{};
   // Owns the engine-param keys the binding's patch borrows; alive across the C call.
   sonare_node::SynthPatchStorage patch_storage;
-  if (!OptionalUint32Arg(env, info, 0, "destinationId", 0, &binding.destination_id)) {
+  if (!RequiredUint32Arg(env, info, 0, "destinationId", &binding.destination_id)) {
     return env.Undefined();
   }
   if (info.Length() > 1) {

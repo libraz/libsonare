@@ -331,8 +331,8 @@ void ReadPercussiveEvents(const char* fn, const Napi::Array& js_events,
     SonarePercussiveEvent& row = (*events)[i];
     RequireSpanKey(fn, "event", event, "onsetSample");
     RequireSpanKey(fn, "event", event, "offsetSample");
-    row.onset_sample = Int64Property(event, "onsetSample", 0);
-    row.offset_sample = Int64Property(event, "offsetSample", 0);
+    row.onset_sample = node_narrow_int64(event.Env(), event.Get("onsetSample"), "onsetSample");
+    row.offset_sample = node_narrow_int64(event.Env(), event.Get("offsetSample"), "offsetSample");
     ReadPercussiveEventEdit(fn, event, &row.edit);
   }
 }

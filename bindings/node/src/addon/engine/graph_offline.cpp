@@ -280,7 +280,9 @@ Napi::Value RealtimeEngineWrap::BounceOffline(const Napi::CallbackInfo& info) {
   }
   Napi::Object obj = info[0].As<Napi::Object>();
   SonareEngineBounceOptions options{};
-  options.total_frames = Int64Property(obj, "totalFrames", 0);
+  if (!sonare_node::RequiredInt64Property(env, obj, "totalFrames", &options.total_frames)) {
+    return env.Undefined();
+  }
   options.block_size = IntProperty(obj, "blockSize", kZeroIsSentinel);
   if (!RequiredIntProperty(env, obj, "numChannels", &options.num_channels)) {
     return env.Undefined();
@@ -327,7 +329,9 @@ Napi::Value RealtimeEngineWrap::FreezeOffline(const Napi::CallbackInfo& info) {
   }
   Napi::Object obj = info[0].As<Napi::Object>();
   SonareEngineFreezeOptions options{};
-  options.total_frames = Int64Property(obj, "totalFrames", 0);
+  if (!sonare_node::RequiredInt64Property(env, obj, "totalFrames", &options.total_frames)) {
+    return env.Undefined();
+  }
   options.block_size = IntProperty(obj, "blockSize", kZeroIsSentinel);
   if (!RequiredIntProperty(env, obj, "numChannels", &options.num_channels)) {
     return env.Undefined();

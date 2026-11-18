@@ -54,7 +54,7 @@ Napi::Value SonareWrap::Tempogram(const Napi::CallbackInfo& info) {
   }
   auto arr = info[0].As<Napi::Float32Array>();
   int sr{};
-  if (!OptionalIntArg(env, info, 1, "sampleRate", 22050, &sr)) return env.Undefined();
+  if (!RequiredIntArg(env, info, 1, "sampleRate", &sr)) return env.Undefined();
   int hop{};
   if (!OptionalIntArg(env, info, 2, "hop", 512, &hop)) return env.Undefined();
   int win{};
@@ -92,7 +92,7 @@ Napi::Value SonareWrap::CyclicTempogram(const Napi::CallbackInfo& info) {
   }
   auto arr = info[0].As<Napi::Float32Array>();
   int sr{};
-  if (!OptionalIntArg(env, info, 1, "sampleRate", 22050, &sr)) return env.Undefined();
+  if (!RequiredIntArg(env, info, 1, "sampleRate", &sr)) return env.Undefined();
   int hop{};
   if (!OptionalIntArg(env, info, 2, "hop", 512, &hop)) return env.Undefined();
   int win{};
@@ -156,7 +156,7 @@ Napi::Value SonareWrap::OnsetEnvelope(const Napi::CallbackInfo& info) {
   }
   auto arr = info[0].As<Napi::Float32Array>();
   int sr{};
-  if (!OptionalIntArg(env, info, 1, "sampleRate", 22050, &sr)) return env.Undefined();
+  if (!RequiredIntArg(env, info, 1, "sampleRate", &sr)) return env.Undefined();
   int n_fft{};
   if (!OptionalIntArg(env, info, 2, "nFft", 2048, &n_fft)) return env.Undefined();
   int hop{};
@@ -181,7 +181,7 @@ Napi::Value SonareWrap::OnsetStrengthMulti(const Napi::CallbackInfo& info) {
   }
   auto arr = info[0].As<Napi::Float32Array>();
   int sr{};
-  if (!OptionalIntArg(env, info, 1, "sampleRate", 22050, &sr)) return env.Undefined();
+  if (!RequiredIntArg(env, info, 1, "sampleRate", &sr)) return env.Undefined();
   int n_fft{};
   if (!OptionalIntArg(env, info, 2, "nFft", 2048, &n_fft)) return env.Undefined();
   int hop{};
@@ -215,7 +215,7 @@ Napi::Value SonareWrap::FourierTempogram(const Napi::CallbackInfo& info) {
   }
   auto arr = info[0].As<Napi::Float32Array>();
   int sr{};
-  if (!OptionalIntArg(env, info, 1, "sampleRate", 22050, &sr)) return env.Undefined();
+  if (!RequiredIntArg(env, info, 1, "sampleRate", &sr)) return env.Undefined();
   int hop{};
   if (!OptionalIntArg(env, info, 2, "hop", 512, &hop)) return env.Undefined();
   int win{};
@@ -254,7 +254,7 @@ Napi::Value SonareWrap::TempogramRatio(const Napi::CallbackInfo& info) {
   int win{};
   if (!OptionalIntArg(env, info, 1, "win", 384, &win)) return env.Undefined();
   int sr{};
-  if (!OptionalIntArg(env, info, 2, "sampleRate", 22050, &sr)) return env.Undefined();
+  if (!RequiredIntArg(env, info, 2, "sampleRate", &sr)) return env.Undefined();
   int hop{};
   if (!OptionalIntArg(env, info, 3, "hop", 512, &hop)) return env.Undefined();
   std::vector<float> factors;
@@ -281,7 +281,7 @@ Napi::Value SonareWrap::NnlsChroma(const Napi::CallbackInfo& info) {
   }
   auto arr = info[0].As<Napi::Float32Array>();
   int sr{};
-  if (!OptionalIntArg(env, info, 1, "sampleRate", 22050, &sr)) return env.Undefined();
+  if (!RequiredIntArg(env, info, 1, "sampleRate", &sr)) return env.Undefined();
   float* out = nullptr;
   size_t count = 0;
   int n_frames = 0;

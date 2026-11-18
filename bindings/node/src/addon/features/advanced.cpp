@@ -57,7 +57,7 @@ Napi::Value CqtLike(const Napi::CallbackInfo& info, CqtFn fn) {
 
   auto typed = info[0].As<Napi::Float32Array>();
   int sr{};
-  if (!OptionalIntArg(env, info, 1, "sampleRate", 22050, &sr)) return env.Undefined();
+  if (!RequiredIntArg(env, info, 1, "sampleRate", &sr)) return env.Undefined();
   int hop_length{};
   if (!OptionalIntArg(env, info, 2, "hopLength", 512, &hop_length)) return env.Undefined();
   float fmin{};
@@ -113,7 +113,7 @@ Napi::Value SonareWrap::Vqt(const Napi::CallbackInfo& info) {
 
   auto typed = info[0].As<Napi::Float32Array>();
   int sr{};
-  if (!OptionalIntArg(env, info, 1, "sampleRate", 22050, &sr)) return env.Undefined();
+  if (!RequiredIntArg(env, info, 1, "sampleRate", &sr)) return env.Undefined();
   int hop_length{};
   if (!OptionalIntArg(env, info, 2, "hopLength", 512, &hop_length)) return env.Undefined();
   float fmin{};
@@ -347,7 +347,7 @@ Napi::Value SonareWrap::GriffinLim(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   int sample_rate{};
-  if (!OptionalIntArg(env, info, 3, "sampleRate", 22050, &sample_rate)) return env.Undefined();
+  if (!RequiredIntArg(env, info, 3, "sampleRate", &sample_rate)) return env.Undefined();
   int n_fft{};
   if (!OptionalIntArg(env, info, 4, "nFft", 2048, &n_fft)) return env.Undefined();
   int hop_length{};
@@ -470,7 +470,7 @@ Napi::Value SonareWrap::SpectralContrast(const Napi::CallbackInfo& info) {
   }
   auto arr = info[0].As<Napi::Float32Array>();
   int sr{};
-  if (!OptionalIntArg(env, info, 1, "sampleRate", 22050, &sr)) return env.Undefined();
+  if (!RequiredIntArg(env, info, 1, "sampleRate", &sr)) return env.Undefined();
   int n_fft{};
   if (!OptionalIntArg(env, info, 2, "nFft", 2048, &n_fft)) return env.Undefined();
   int hop_length{};
@@ -505,7 +505,7 @@ Napi::Value SonareWrap::PolyFeatures(const Napi::CallbackInfo& info) {
   }
   auto arr = info[0].As<Napi::Float32Array>();
   int sr{};
-  if (!OptionalIntArg(env, info, 1, "sampleRate", 22050, &sr)) return env.Undefined();
+  if (!RequiredIntArg(env, info, 1, "sampleRate", &sr)) return env.Undefined();
   int n_fft{};
   if (!OptionalIntArg(env, info, 2, "nFft", 2048, &n_fft)) return env.Undefined();
   int hop_length{};
@@ -617,7 +617,7 @@ Napi::Value SonareWrap::EstimateTuning(const Napi::CallbackInfo& info) {
   }
   auto arr = info[0].As<Napi::Float32Array>();
   int sr{};
-  if (!OptionalIntArg(env, info, 1, "sampleRate", 22050, &sr)) return env.Undefined();
+  if (!RequiredIntArg(env, info, 1, "sampleRate", &sr)) return env.Undefined();
   int n_fft{};
   if (!OptionalIntArg(env, info, 2, "nFft", 2048, &n_fft)) return env.Undefined();
   int hop_length{};
