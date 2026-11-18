@@ -13,6 +13,7 @@ import numpy as np
 
 from ._cli_common import (
     _cli_token,
+    _json_key_to_snake_case,
     _library_token,
     _load_audio_channels,
     _set_nested_value,
@@ -194,11 +195,11 @@ def _playback_config_document(args: argparse.Namespace) -> dict[str, Any]:
     if args.no_upmix:
         _set_nested_value(document, "upmix.enabled", False)
     if args.night is not None:
-        _set_nested_value(document, "night_mode.amount", args.night)
+        _set_nested_value(document, "nightMode.amount", args.night)
     if args.dialogue_db is not None:
-        _set_nested_value(document, "dialogue_level_db", args.dialogue_db)
+        _set_nested_value(document, "dialogueLevelDb", args.dialogue_db)
     if args.target_lufs is not None:
-        _set_nested_value(document, "loudness.target_lufs", args.target_lufs)
+        _set_nested_value(document, "loudness.targetLufs", args.target_lufs)
     if args.room is not None:
         _set_nested_value(
             document, "room.preset", _library_token("--room", args.room, _ROOM_PRESETS)
@@ -252,7 +253,7 @@ def cmd_playback(args: argparse.Namespace) -> int:
     config = _playback_config_document(args)
     program_lufs = _resolved_program_lufs(args, interleaved, channels, sample_rate)
     if program_lufs is not None:
-        _set_nested_value(config, "loudness.program_lufs", program_lufs)
+        _set_nested_value(config, "loudness.programLufs", program_lufs)
 
     hrtf: HrtfSet | None = None
     if args.hrtf:
@@ -279,7 +280,13 @@ def cmd_playback(args: argparse.Namespace) -> int:
     frames, _ = _write_frame_major_wav(args.output, rendered, sample_rate)
 
     if args.json:
-        print(_strict_json_dumps(diagnostics))
+        # Field names follow CLI stdout; the stage tokens keyed under latency.stages
+        # are values, the same ones inactive_stages lists, so only the top level moves.
+        print(
+            _strict_json_dumps(
+                {_json_key_to_snake_case(key): value for key, value in (diagnostics or {}).items()}
+            )
+        )
     else:
         print(f"  Rendered {frames} frames ({out_channels} ch @ {sample_rate} Hz) to {args.output}")
     return 0

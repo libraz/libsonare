@@ -69,15 +69,15 @@ Value playback_config_document(const CliArgs& args) {
   }
   if (args.has("no-upmix")) set_json_path(root, "upmix.enabled", Value(false));
   if (args.has("night")) {
-    set_json_path(root, "night_mode.amount",
+    set_json_path(root, "nightMode.amount",
                   Value(static_cast<double>(args.get_float("night", 0.0f))));
   }
   if (args.has("dialogue-db")) {
-    set_json_path(root, "dialogue_level_db",
+    set_json_path(root, "dialogueLevelDb",
                   Value(static_cast<double>(args.get_float("dialogue-db", 0.0f))));
   }
   if (args.has("target-lufs")) {
-    set_json_path(root, "loudness.target_lufs",
+    set_json_path(root, "loudness.targetLufs",
                   Value(static_cast<double>(args.get_float("target-lufs", -24.0f))));
   }
   if (args.has("room")) {
@@ -85,6 +85,19 @@ Value playback_config_document(const CliArgs& args) {
                   Value(library_token("--room", args.get_string("room"), kRoomPresets)));
   }
   return root;
+}
+
+/// The renderer's diagnostics with their field names in snake_case, as CLI stdout
+/// is. Only the top level is re-keyed: the keys under `latency.stages` are stage
+/// tokens, the same values `inactive_stages` lists, so they keep their spelling.
+std::string diagnostics_json_for_cli(const std::string& core_json) {
+  namespace json = sonare::util::json;
+  const json::Value parsed = json::parse(core_json);
+  json::Object out;
+  for (const auto& [key, child] : parsed.as_object()) {
+    out.emplace(json_key_to_snake_case(key), child);
+  }
+  return json::dump(json::Value(std::move(out)));
 }
 
 // The program loudness a config document ends up with: the caller's own
@@ -153,7 +166,7 @@ int cmd_playback(const CliArgs& args, const Audio&) {
   const std::optional<float> program_lufs =
       resolved_program_lufs(args, interleaved, in_channels, sample_rate, frames);
   if (program_lufs.has_value()) {
-    set_json_path(config_document, "loudness.program_lufs",
+    set_json_path(config_document, "loudness.programLufs",
                   Value(static_cast<double>(*program_lufs)));
   }
   const std::string config_json = sonare::util::json::dump(config_document);
@@ -212,7 +225,7 @@ int cmd_playback(const CliArgs& args, const Audio&) {
   if (hrtf != nullptr) sonare_hrtf_set_destroy(hrtf);
 
   if (args.json_output) {
-    std::cout << diagnostics_text << "\n";
+    std::cout << diagnostics_json_for_cli(diagnostics_text) << "\n";
   } else if (!args.quiet) {
     std::cout << color::green << "Rendered " << frames << " frames (" << out_channels << " ch @ "
               << sample_rate << " Hz) to " << args.output_file << color::reset << "\n";
