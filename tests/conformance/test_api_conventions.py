@@ -721,6 +721,35 @@ class ErrorClassByCauseRule(unittest.TestCase):
         self.assertEqual([f.key for f in verdict.violations], ["wasm:bindings/wasm/src/m.ts:2"])
 
 
+class WorkletRenderQuantumRule(unittest.TestCase):
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+
+    def judge(self, source: str):
+        root = Path(self._tmp.name)
+        path = root / "bindings" / "wasm" / "src" / "worklet" / "m.ts"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(source)
+        r = dataclasses.replace(rule("worklet-render-quantum"), pending={}, exempt={})
+        return check.judge(r, r.scan(root))
+
+    def test_clean_tree_passes(self) -> None:
+        verdict = self.judge(
+            "export const AUDIO_WORKLET_RENDER_QUANTUM = 128;\n"
+            "const ring = requireIntegerOption(options.commandRingCapacity,\n  128,\n  'x');\n"
+            "// a render quantum of 128\n"
+        )
+        self.assertEqual(verdict.read, 1)
+        self.assertFalse(verdict.failed)
+
+    def test_bare_quantum_is_named(self) -> None:
+        verdict = self.judge("const size = options.maxBlockSize ?? 128;\n")
+        self.assertEqual(
+            [f.key for f in verdict.violations], ["wasm:bindings/wasm/src/worklet/m.ts:1"]
+        )
+
+
 class Framework(unittest.TestCase):
     def test_reading_nothing_fails(self) -> None:
         verdict = check.judge(rule("getters"), [])

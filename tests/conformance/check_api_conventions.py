@@ -749,6 +749,43 @@ def _error_construction_sites(root: Path) -> list[dict]:
     return out
 
 
+_QUANTUM_LITERAL = re.compile(r"(?<![\w.])128(?![\w.])")
+_QUANTUM_DEFINITION = re.compile(r"AUDIO_WORKLET_RENDER_QUANTUM\s*=\s*128")
+_RING_CONTEXT = re.compile(r"capacity|RingOptions|resolveRing", re.I)
+_MIDI_CONTEXT = re.compile(r"midi|velocity|program|controller", re.I)
+
+
+def _worklet_quantum_sites(root: Path) -> list[dict]:
+    """One record per bare 128 in the worklet sources, with the context it sits in."""
+    src = root / "bindings" / "wasm" / "src"
+    files = [*sorted((src / "worklet").rglob("*.ts")), src / "public_types_worklet.ts"]
+    out: list[dict] = []
+    for path in files:
+        if not path.is_file() or path.name.endswith(".d.ts"):
+            continue
+        lines = path.read_text(encoding="utf-8").splitlines()
+        for number, line in enumerate(lines, 1):
+            if _COMMENT_LINE.match(line) or not _QUANTUM_LITERAL.search(line):
+                continue
+            if _QUANTUM_DEFINITION.search(line):
+                continue
+            window = " ".join(lines[max(0, number - 5) : number])
+            context = (
+                "ring-capacity"
+                if _RING_CONTEXT.search(window)
+                else ("midi" if _MIDI_CONTEXT.search(window) else None)
+            )
+            out.append(
+                {
+                    "surface": "wasm",
+                    "kind": "quantum-literal",
+                    "name": f"{path.relative_to(root).as_posix()}:{number}",
+                    "context": context,
+                }
+            )
+    return out
+
+
 RULES: list[Rule] = [
     Rule(
         name="getters",
@@ -1119,6 +1156,21 @@ RULES: list[Rule] = [
                 for n in (297, 368, 389, 395, 410, 488, 727)
             },
             "wasm:bindings/wasm/src/vocal_edit_worker_client.ts:250": "throw SonareError with the code that names the cause",
+        },
+    ),
+    Rule(
+        name="worklet-render-quantum",
+        summary="the 128-frame render quantum is spelled AUDIO_WORKLET_RENDER_QUANTUM in the worklet sources",
+        population=lambda r: r["kind"] == "quantum-literal",
+        violation=lambda r: (
+            "a bare 128 in the worklet sources goes through AUDIO_WORKLET_RENDER_QUANTUM"
+            if r["context"] is None
+            else None
+        ),
+        scan=_worklet_quantum_sites,
+        pending={
+            "wasm:bindings/wasm/src/worklet/playback-processor.ts:87": "default maxBlockSize to AUDIO_WORKLET_RENDER_QUANTUM",
+            "wasm:bindings/wasm/src/worklet/stream-analyzer-processor.ts:14": "define the minimum chunk from AUDIO_WORKLET_RENDER_QUANTUM",
         },
     ),
 ]
