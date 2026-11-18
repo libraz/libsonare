@@ -4,6 +4,7 @@ import type {
   EngineTrackLane,
   RealtimeEngine,
 } from '../index.js';
+import { capturePunchBound } from '../internal/capture_punch.js';
 import { assignMarkerIds } from '../internal/marker_ids.js';
 import type { SonareEngineSyncCaptureMessage } from '../internal/worklet_messages.js';
 import type { CaptureOptions, EngineLoop } from '../public_types_engine.js';
@@ -11,7 +12,6 @@ import {
   assertFloatValue,
   requestObject,
   requireBoolean,
-  resolveSampleBound,
   secondsToSampleCount,
 } from '../validation.js';
 import { commitCommand, type EngineCommitContext, requireQueued } from './engine-commit.js';
@@ -33,40 +33,6 @@ export function requireObject(
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw new TypeError(`${method}: ${what} must be an object`);
   }
-}
-
-function punchBound(
-  ppq: number | undefined,
-  sample: number | undefined,
-  sec: number | undefined,
-  names: readonly [string, string, string],
-  sampleRate: number,
-  sampleAtPpq: (ppq: number) => number,
-): number {
-  const [ppqName, sampleName, secName] = names;
-  if (ppq === undefined || ppq === null) {
-    const bound = resolveSampleBound(
-      'configureCapture',
-      sample,
-      sec,
-      sampleRate,
-      `punch.${sampleName}`,
-      `punch.${secName}`,
-    );
-    if (bound === undefined) {
-      throw new RangeError(`configureCapture: punch needs ${ppqName}, ${sampleName} or ${secName}`);
-    }
-    return bound;
-  }
-  if ((sample !== undefined && sample !== null) || (sec !== undefined && sec !== null)) {
-    throw new RangeError(
-      `configureCapture: give one of punch.${ppqName}, punch.${sampleName} or punch.${secName}`,
-    );
-  }
-  if (typeof ppq !== 'number' || !Number.isFinite(ppq) || ppq < 0) {
-    throw new RangeError(`configureCapture: punch.${ppqName} must be a non-negative number`);
-  }
-  return sampleAtPpq(ppq);
 }
 
 /**
@@ -118,7 +84,7 @@ export function buildCaptureConfig(
     requireObject('configureCapture', 'punch', options.punch);
     const { punch: window } = options;
     punch = {
-      startSample: punchBound(
+      startSample: capturePunchBound(
         window.startPpq,
         window.startSample,
         window.startSec,
@@ -126,7 +92,7 @@ export function buildCaptureConfig(
         sampleRate,
         sampleAtPpq,
       ),
-      endSample: punchBound(
+      endSample: capturePunchBound(
         window.endPpq,
         window.endSample,
         window.endSec,

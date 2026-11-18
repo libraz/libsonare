@@ -294,7 +294,7 @@ describe('engine punch-in window', () => {
         engine.configureCapture({ capacityFrames, punch: { startSample: -1, endSample: 2 } }),
       ).toThrow(RangeError);
       expect(() => engine.configureCapture({ capacityFrames, punch: { startSample: 1 } })).toThrow(
-        RangeError,
+        TypeError,
       );
       expect(() =>
         engine.configureCapture({

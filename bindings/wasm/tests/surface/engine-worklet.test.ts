@@ -386,10 +386,12 @@ describe('SonareEngine shares the RealtimeEngine vocabulary', () => {
       engine.setTrackLanes([{ trackId: 3 }]);
       const id = engine.addClip(3, { id: 1, channels: [new Float32Array(64)], startPpq: 0 });
       expect(id).toBe(1);
-      expect(() => engine.addClip(3, { startPpq: 0 })).toThrow(TypeError);
+      expect(() => engine.addClip(3, { startPpq: 0 })).toThrow(
+        new TypeError('addClip: give clip.channels or clip.pageProvider'),
+      );
       expect(() =>
         loose(engine).addClip(3, { channels: [new Float32Array(8)], pageProvider: 1, startPpq: 0 }),
-      ).toThrow(TypeError);
+      ).toThrow(new RangeError('addClip: give clip.channels or clip.pageProvider, not both'));
       expect(() => loose(engine).addClip(3, [new Float32Array(8)], 0, { id: 2 })).toThrow(
         TypeError,
       );

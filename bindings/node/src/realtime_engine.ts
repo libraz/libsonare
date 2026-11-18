@@ -4,6 +4,7 @@ import { nativeClipPageProviderOf } from './internal/clip_page_native.js';
 import { assignMarkerIds } from './internal/marker_ids.js';
 import { midiFxConfigJson } from './internal/midi_fx_config.js';
 import { mixSceneBusToNative, mixSceneStripToNative } from './internal/mix_scene.js';
+import { requireOneOf } from './internal/one_of.js';
 import { deinterleave } from './internal/planar.js';
 import { timelineHandle } from './internal/project_handles.js';
 import { refuseBuiltinSynthOrdinals } from './internal/synth_tokens.js';
@@ -1773,13 +1774,13 @@ export class RealtimeEngine {
       const ppqName = `${edge}Ppq`;
       const sampleName = `${edge}Sample`;
       const secName = `${edge}Sec`;
-      const given = [ppqName, sampleName, secName].filter((name) => !isAbsent(request[name]));
-      if (given.length !== 1) {
-        throw new RangeError(
-          `${fnName}: punch needs exactly one of ${ppqName}, ${sampleName}, ${secName}`,
-        );
-      }
-      if (given[0] === ppqName) {
+      const names = [ppqName, sampleName, secName];
+      const given = requireOneOf(
+        fnName,
+        names.map((name) => `punch.${name}`),
+        names.map((name) => !isAbsent(request[name])),
+      );
+      if (given === 0) {
         const ppq = requireFinite(fnName, request[ppqName], ppqName);
         if (ppq < 0) {
           throw new RangeError(`${fnName}: ${ppqName} must be non-negative`);

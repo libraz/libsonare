@@ -764,8 +764,14 @@ describe('capture', () => {
       const punch = (p: Record<string, number>) =>
         engine.configureCapture({ capacityFrames: 128, punch: p });
       expect(() => punch({ startPpq: 2, endPpq: 4 })).not.toThrow();
-      expect(() => punch({ startPpq: 1, startSample: 1, endSample: 2 })).toThrow(RangeError);
-      expect(() => punch({ startSample: 1 })).toThrow(RangeError);
+      expect(() => punch({ startPpq: 1, startSample: 1, endSample: 2 })).toThrow(
+        new RangeError(
+          'configureCapture: give punch.startPpq, punch.startSample or punch.startSec, not more than one',
+        ),
+      );
+      expect(() => punch({ startSample: 1 })).toThrow(
+        new TypeError('configureCapture: give punch.endPpq, punch.endSample or punch.endSec'),
+      );
       expect(() => punch({ startSample: -1, endSample: 2 })).toThrow(RangeError);
       expect(() => punch({ startSample: 1, endSample: 2, enabled: 1 })).toThrow(TypeError);
       expect(() => punch({ startSample: 5, endSample: 5 })).toThrow(RangeError);

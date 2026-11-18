@@ -294,10 +294,14 @@ describe('engine punch-in window', () => {
       configure({ startPpq: 2, endPpq: 4 });
       expect(engine.captureStatus().punchEnabled).toBe(true);
       expect(() => configure({ startSample: 1, startSec: 1, endSample: 2 })).toThrow(
-        /startSample, startSec/,
+        new RangeError(
+          'configureCapture: give punch.startPpq, punch.startSample or punch.startSec, not more than one',
+        ),
       );
       expect(() => configure({ startSample: -1, endSample: 2 })).toThrow(RangeError);
-      expect(() => configure({ startSample: 1 })).toThrow(RangeError);
+      expect(() => configure({ startSample: 1 })).toThrow(
+        new TypeError('configureCapture: give punch.endPpq, punch.endSample or punch.endSec'),
+      );
       expect(() => configure({ startSample: 1, endSample: 2, enabled: false } as never)).toThrow(
         /unknown option 'enabled' in 'punch'/,
       );

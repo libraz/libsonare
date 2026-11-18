@@ -10,6 +10,7 @@ import {
   trackMonitorModeCode,
 } from './codes.js';
 import { ErrorCode, SonareError } from './errors.js';
+import { capturePunchBound } from './internal/capture_punch.js';
 import { CHANNEL_LAYOUT_VALUES } from './internal/channel_layout.js';
 import {
   bindNativeClipPageProvider,
@@ -104,7 +105,6 @@ import {
   optionalBoolean,
   requestObject,
   requireBoolean,
-  resolveSampleBound,
   resolveRenderFrame as resolveWireRenderFrame,
 } from './validation.js';
 
@@ -2534,44 +2534,6 @@ export class RealtimeEngine {
   }
 
   /**
-   * Resolves one punch bound spelled as quarter notes, samples or seconds; a
-   * negative value is refused and giving more than one spelling is a `RangeError`.
-   */
-  private punchBound(
-    ppq: number | undefined,
-    sample: number | undefined,
-    sec: number | undefined,
-    names: readonly [string, string, string],
-  ): number {
-    const [ppqName, sampleName, secName] = names;
-    if (ppq === undefined || ppq === null) {
-      const bound = resolveSampleBound(
-        'configureCapture',
-        sample,
-        sec,
-        this.sampleRate,
-        `punch.${sampleName}`,
-        `punch.${secName}`,
-      );
-      if (bound === undefined) {
-        throw new RangeError(
-          `configureCapture: punch needs ${ppqName}, ${sampleName} or ${secName}`,
-        );
-      }
-      return bound;
-    }
-    if ((sample !== undefined && sample !== null) || (sec !== undefined && sec !== null)) {
-      throw new RangeError(
-        `configureCapture: give one of punch.${ppqName}, punch.${sampleName} or punch.${secName}`,
-      );
-    }
-    if (typeof ppq !== 'number' || !Number.isFinite(ppq) || ppq < 0) {
-      throw new RangeError(`configureCapture: punch.${ppqName} must be a non-negative number`);
-    }
-    return this.sampleAtPpq(ppq);
-  }
-
-  /**
    * Sets up capture in one call: buffer, source, record offset, input monitor
    * and punch window. The call states the whole setup, so an omitted field
    * returns to its default and an omitted `punch` clears the punch window. The
@@ -2613,17 +2575,22 @@ export class RealtimeEngine {
     if (options.punch !== undefined && options.punch !== null) {
       requireObject('configureCapture', 'punch', options.punch);
       punch = {
-        start: this.punchBound(
+        start: capturePunchBound(
           options.punch.startPpq,
           options.punch.startSample,
           options.punch.startSec,
           ['startPpq', 'startSample', 'startSec'],
+          this.sampleRate,
+          (ppq) => this.sampleAtPpq(ppq),
         ),
-        end: this.punchBound(options.punch.endPpq, options.punch.endSample, options.punch.endSec, [
-          'endPpq',
-          'endSample',
-          'endSec',
-        ]),
+        end: capturePunchBound(
+          options.punch.endPpq,
+          options.punch.endSample,
+          options.punch.endSec,
+          ['endPpq', 'endSample', 'endSec'],
+          this.sampleRate,
+          (ppq) => this.sampleAtPpq(ppq),
+        ),
       };
     }
     const native = this.native;
