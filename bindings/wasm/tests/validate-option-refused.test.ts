@@ -307,10 +307,10 @@ describe('the validate option is refused', () => {
       SR,
     );
     expect(() => audio.spectrum({ validate: false } as never)).toThrow(
-      new TypeError("meteringSpectrum: unknown option 'validate'"),
+      new TypeError("meteringSpectrum: unknown request key 'validate'"),
     );
     expect(() => audio.spectrumFrame(0, { validate: false } as never)).toThrow(
-      new TypeError("meteringSpectrumFrame: unknown option 'validate'"),
+      new TypeError("meteringSpectrumFrame: unknown request key 'validate'"),
     );
     expect(() => api.Audio.fromBuffer(nanSamples(), SR)).toThrow(RangeError);
   });

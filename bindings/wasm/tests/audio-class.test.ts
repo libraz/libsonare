@@ -7,7 +7,15 @@
  */
 
 import { beforeAll, describe, expect, it, vi } from 'vitest';
-import { Audio, analyze, detectBpm, init, melSpectrogram, stft } from '../dist/index.js';
+import {
+  Audio,
+  analyze,
+  detectBeats,
+  detectBpm,
+  init,
+  melSpectrogram,
+  stft,
+} from '../dist/index.js';
 
 const SR = 22050;
 const DURATION = 2;
@@ -235,6 +243,17 @@ describe('Audio class', () => {
       const audio = Audio.fromBuffer(sineLong(), SR);
       const beats = audio.detectBeats();
       expect(beats).toBeInstanceOf(Float32Array);
+    });
+
+    it('takes the tempo range on detectBpm and detectBeats as the free functions do', () => {
+      const samples = sineLong();
+      const audio = Audio.fromBuffer(samples, SR);
+      const range = { bpmMin: 90, bpmMax: 150 };
+      expect(audio.detectBpm(range)).toBe(detectBpm(samples, SR, range));
+      expect(audio.detectBeats(range)).toEqual(detectBeats(samples, SR, range));
+      expect(() => audio.detectBpm({ bogus: 1 } as never)).toThrow(
+        new TypeError("detectBpm: unknown request key 'bogus'"),
+      );
     });
 
     it('should return complete analysis result', { timeout: 30000 }, () => {
@@ -528,5 +547,14 @@ describe('Audio class', () => {
 
       expect(classBpm).toBe(standaloneBpm);
     });
+  });
+
+  it('refuses a direct construction with a TypeError naming the factories', () => {
+    const Construct = Audio as unknown as new (...args: unknown[]) => Audio;
+    expect(() => new Construct(sine(), SR)).toThrow(
+      new TypeError(
+        'Audio: construct it with Audio.fromBuffer, Audio.fromMemory or Audio.fromMemoryWithBrowserFallback',
+      ),
+    );
   });
 });

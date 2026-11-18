@@ -17,6 +17,7 @@
 
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import * as sonare from '../src/index.js';
 import {
   Audio,
   analyze,
@@ -28,6 +29,10 @@ import {
   detectOnsets,
   hpss,
   melSpectrogram,
+  meteringSilenceRatio,
+  meteringSpectrum,
+  meteringSpectrumFrame,
+  meteringTruePeakDbtp,
   mfcc,
   onsetStrength,
   type PitchClass,
@@ -354,6 +359,53 @@ const DELEGATIONS: Delegation[] = [
   { name: 'lufs', noIntArgs: 'takes no integer argument' },
   { name: 'momentaryLufs', noIntArgs: 'takes no integer argument' },
   { name: 'shortTermLufs', noIntArgs: 'takes no integer argument' },
+  { name: 'detectBpm', noIntArgs: 'the tempo bounds are floats' },
+  { name: 'detectBeats', noIntArgs: 'the tempo bounds are floats' },
+  { name: 'detectDownbeats', noIntArgs: 'takes no argument' },
+  { name: 'meteringPeakDb', noIntArgs: 'takes no argument' },
+  { name: 'meteringRmsDb', noIntArgs: 'takes no argument' },
+  { name: 'meteringDcOffset', noIntArgs: 'takes no argument' },
+  { name: 'meteringCrestFactorDb', noIntArgs: 'takes no argument' },
+  { name: 'ebur128LoudnessRangeLu', noIntArgs: 'takes no argument' },
+  { name: 'meteringDynamicRange', noIntArgs: 'its window and hop are seconds' },
+  {
+    name: 'meteringSilenceRatio',
+    valid: [1024, 256],
+    intArgs: [
+      { index: 0, name: 'frameLength' },
+      { index: 1, name: 'hopLength' },
+    ],
+    method: (audio, [a, b]) => audio.silenceRatio(-45, a, b),
+    facade: (samples, rate, [a, b]) =>
+      meteringSilenceRatio(samples, rate, { thresholdDb: -45, frameLength: a, hopLength: b }),
+  },
+  {
+    name: 'meteringTruePeakDbtp',
+    valid: [4],
+    intArgs: [{ index: 0, name: 'oversampleFactor' }],
+    method: (audio, [a]) => audio.truePeakDbtp(a),
+    facade: (samples, rate, [a]) => meteringTruePeakDbtp(samples, rate, { oversampleFactor: a }),
+  },
+  {
+    name: 'meteringDetectClipping',
+    noIntArgs: 'minRegionSamples is a 64-bit count; a value past the buffer finds no region',
+  },
+  {
+    name: 'meteringSpectrum',
+    valid: [2048],
+    intArgs: [{ index: 0, name: 'nFft' }],
+    method: (audio, [a]) => audio.spectrum({ nFft: a }),
+    facade: (samples, rate, [a]) => meteringSpectrum(samples, rate, { nFft: a }),
+  },
+  {
+    name: 'meteringSpectrumFrame',
+    // startSample is a 64-bit offset (a start past the end reads a zero-padded frame).
+    valid: [2048],
+    intArgs: [{ index: 0, name: 'nFft' }],
+    method: (audio, [a]) => audio.spectrumFrame(0, { nFft: a }),
+    facade: (samples, rate, [a]) =>
+      meteringSpectrumFrame(samples, rate, { startSample: 0, nFft: a }),
+  },
 ];
 
 /** What a call answered: a refusal identified by class and message, or nothing. */
@@ -392,6 +444,45 @@ describe('the delegation roster covers every Audio method that delegates', () =>
       .map((match) => match[1] as string)
       .filter((name) => name !== 'Audio');
     expect(direct).toEqual([]);
+  });
+
+  it('routes every Audio method that has a free-function twin through that twin', () => {
+    const exported = new Set(
+      Object.entries(sonare)
+        .filter(([, value]) => typeof value === 'function')
+        .map(([name]) => name),
+    );
+    const classBody = source.slice(source.indexOf('export class Audio {'));
+    const methods = [
+      ...classBody.matchAll(/\n {2}(?:async )?(\w+)\([^)]*\)[^{\n]*\{\n(.*?)\n {2}\}\n/gs),
+    ];
+    const twinned: string[] = [];
+    const bypassing: string[] = [];
+    for (const [, method, body] of methods) {
+      const name = method as string;
+      const capitalised = `${name.charAt(0).toUpperCase()}${name.slice(1)}`;
+      const twin = [name, `metering${capitalised}`].find((candidate) => exported.has(candidate));
+      if (twin === undefined) {
+        continue;
+      }
+      twinned.push(name);
+      if (!(body as string).includes(`${twin}Fn(`)) {
+        bypassing.push(`${name} does not call ${twin}`);
+      }
+    }
+    expect(twinned.length, 'the method scanner matched no twinned method').toBeGreaterThan(40);
+    expect(bypassing).toEqual([]);
+  });
+
+  it('reaches the native handle only for the buffer accessors and destroy', () => {
+    const used = new Set([...source.matchAll(/this\.native\.(\w+)/g)].map((match) => match[1]));
+    expect([...used].sort()).toEqual([
+      'destroy',
+      'getData',
+      'getDuration',
+      'getLength',
+      'getSampleRate',
+    ]);
   });
 
   it('gives every listed method either integer arguments to drive or a reason', () => {
@@ -440,4 +531,94 @@ describe('both forms answer a wrong integer with one class and one message', () 
       }
     }
   }
+});
+
+describe('Audio is built only by its factories', () => {
+  it('refuses a direct construction with a TypeError naming the factories', () => {
+    const Construct = Audio as unknown as new (...args: unknown[]) => Audio;
+    expect(outcomeOf(() => new Construct(tone, sampleRate))).toEqual({
+      refused: true,
+      errorClass: 'TypeError',
+      message:
+        'Audio: construct it with Audio.fromBuffer, Audio.fromFile, Audio.fromFileChannel or Audio.fromMemory',
+    });
+  });
+});
+
+/**
+ * The metering methods answer an unknown key, a `validate` key and a zero `nFft`
+ * exactly as their facades do; the WASM suite pins the same table.
+ */
+const METERING_REFUSALS: [string, (audio: Audio) => unknown, string, string][] = [
+  [
+    'spectrum unknown key',
+    (a) => a.spectrum({ bogus: 1 } as never),
+    'TypeError',
+    "meteringSpectrum: unknown request key 'bogus'",
+  ],
+  [
+    'spectrum validate',
+    (a) => a.spectrum({ validate: false } as never),
+    'TypeError',
+    "meteringSpectrum: unknown request key 'validate'",
+  ],
+  [
+    'spectrum nFft 0',
+    (a) => a.spectrum({ nFft: 0 }),
+    'RangeError',
+    'meteringSpectrum: nFft must not be 0 (omit it for the default)',
+  ],
+  [
+    'spectrumFrame unknown key',
+    (a) => a.spectrumFrame(0, { bogus: 1 } as never),
+    'TypeError',
+    "meteringSpectrumFrame: unknown request key 'bogus'",
+  ],
+  [
+    'spectrumFrame validate',
+    (a) => a.spectrumFrame(0, { validate: false } as never),
+    'TypeError',
+    "meteringSpectrumFrame: unknown request key 'validate'",
+  ],
+  [
+    'spectrumFrame nFft 0',
+    (a) => a.spectrumFrame(0, { nFft: 0 }),
+    'RangeError',
+    'meteringSpectrumFrame: nFft must not be 0 (omit it for the default)',
+  ],
+  [
+    'dynamicRange unknown key',
+    (a) => a.dynamicRange({ bogus: 1 } as never),
+    'TypeError',
+    "meteringDynamicRange: unknown request key 'bogus'",
+  ],
+  [
+    'dynamicRange validate',
+    (a) => a.dynamicRange({ validate: false } as never),
+    'TypeError',
+    "meteringDynamicRange: unknown request key 'validate'",
+  ],
+  [
+    'detectClipping unknown key',
+    (a) => a.detectClipping({ bogus: 1 } as never),
+    'TypeError',
+    "meteringDetectClipping: unknown request key 'bogus'",
+  ],
+  [
+    'detectClipping validate',
+    (a) => a.detectClipping({ validate: false } as never),
+    'TypeError',
+    "meteringDetectClipping: unknown request key 'validate'",
+  ],
+];
+
+describe('the metering methods refuse as their facades do', () => {
+  it.each(METERING_REFUSALS)('%s', (_label, run, errorClass, message) => {
+    const audio = Audio.fromBuffer(tone, sampleRate);
+    try {
+      expect(outcomeOf(() => run(audio))).toEqual({ refused: true, errorClass, message });
+    } finally {
+      audio.destroy();
+    }
+  });
 });

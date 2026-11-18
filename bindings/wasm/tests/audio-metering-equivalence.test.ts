@@ -180,3 +180,91 @@ describe('Audio metering methods (WASM)', () => {
     expect(audio.peakDb()).not.toBe(meteringPeakDb(mutable, SR));
   });
 });
+
+/**
+ * The metering methods answer an unknown key, a `validate` key and a zero `nFft`
+ * exactly as their facades do; the Node suite pins the same table.
+ */
+const METERING_REFUSALS: [string, (audio: Audio) => unknown, string, string][] = [
+  [
+    'spectrum unknown key',
+    (a) => a.spectrum({ bogus: 1 } as never),
+    'TypeError',
+    "meteringSpectrum: unknown request key 'bogus'",
+  ],
+  [
+    'spectrum validate',
+    (a) => a.spectrum({ validate: false } as never),
+    'TypeError',
+    "meteringSpectrum: unknown request key 'validate'",
+  ],
+  [
+    'spectrum nFft 0',
+    (a) => a.spectrum({ nFft: 0 }),
+    'RangeError',
+    'meteringSpectrum: nFft must not be 0 (omit it for the default)',
+  ],
+  [
+    'spectrumFrame unknown key',
+    (a) => a.spectrumFrame(0, { bogus: 1 } as never),
+    'TypeError',
+    "meteringSpectrumFrame: unknown request key 'bogus'",
+  ],
+  [
+    'spectrumFrame validate',
+    (a) => a.spectrumFrame(0, { validate: false } as never),
+    'TypeError',
+    "meteringSpectrumFrame: unknown request key 'validate'",
+  ],
+  [
+    'spectrumFrame nFft 0',
+    (a) => a.spectrumFrame(0, { nFft: 0 }),
+    'RangeError',
+    'meteringSpectrumFrame: nFft must not be 0 (omit it for the default)',
+  ],
+  [
+    'dynamicRange unknown key',
+    (a) => a.dynamicRange({ bogus: 1 } as never),
+    'TypeError',
+    "meteringDynamicRange: unknown request key 'bogus'",
+  ],
+  [
+    'dynamicRange validate',
+    (a) => a.dynamicRange({ validate: false } as never),
+    'TypeError',
+    "meteringDynamicRange: unknown request key 'validate'",
+  ],
+  [
+    'detectClipping unknown key',
+    (a) => a.detectClipping({ bogus: 1 } as never),
+    'TypeError',
+    "meteringDetectClipping: unknown request key 'bogus'",
+  ],
+  [
+    'detectClipping validate',
+    (a) => a.detectClipping({ validate: false } as never),
+    'TypeError',
+    "meteringDetectClipping: unknown request key 'validate'",
+  ],
+];
+
+describe('the metering methods refuse as their facades do (WASM)', () => {
+  beforeAll(async () => {
+    await init();
+  });
+
+  it.each(METERING_REFUSALS)('%s', (_label, run, errorClass, message) => {
+    const audio = Audio.fromBuffer(sine(440, 0.5), SR);
+    let caught: unknown;
+    try {
+      run(audio);
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught, 'expected the call to throw').toBeInstanceOf(Error);
+    expect({
+      errorClass: (caught as object).constructor.name,
+      message: (caught as Error).message,
+    }).toEqual({ errorClass, message });
+  });
+});

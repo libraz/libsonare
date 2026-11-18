@@ -21,7 +21,10 @@ import {
   analyzeTimbre as analyzeTimbreFn,
   chordFunctionalAnalysis as chordFunctionalAnalysisFn,
   detectAcoustic as detectAcousticFn,
+  detectBeats as detectBeatsFn,
+  detectBpm as detectBpmFn,
   detectChords as detectChordsFn,
+  detectDownbeats as detectDownbeatsFn,
   detectKeyCandidates as detectKeyCandidatesFn,
   detectKey as detectKeyFn,
   detectOnsets as detectOnsetsFn,
@@ -69,6 +72,7 @@ import type {
 } from './feature_spectral.js';
 import {
   chroma as chromaFn,
+  ebur128LoudnessRangeLu as ebur128LoudnessRangeLuFn,
   lufs as lufsFn,
   melSpectrogram as melSpectrogramFn,
   mfcc as mfccFn,
@@ -88,12 +92,6 @@ import {
   trim as trimFn,
   zeroCrossingRate as zeroCrossingRateFn,
 } from './features.js';
-import {
-  clippingReportFromNative,
-  clipThresholdLinear,
-  refuseZeroSentinel,
-} from './internal/metering_native.js';
-import { tempoRange } from './internal/tempo_range.js';
 import type { MasterAudioRequest } from './mastering_chain.js';
 import { masterAudio as masterAudioFn } from './mastering_chain.js';
 import type {
@@ -112,6 +110,18 @@ import type {
   MeteringDynamicRangeOptions,
   SpectrumOptions,
   SpectrumReport,
+} from './metering.js';
+import {
+  meteringCrestFactorDb as meteringCrestFactorDbFn,
+  meteringDcOffset as meteringDcOffsetFn,
+  meteringDetectClipping as meteringDetectClippingFn,
+  meteringDynamicRange as meteringDynamicRangeFn,
+  meteringPeakDb as meteringPeakDbFn,
+  meteringRmsDb as meteringRmsDbFn,
+  meteringSilenceRatio as meteringSilenceRatioFn,
+  meteringSpectrum as meteringSpectrumFn,
+  meteringSpectrumFrame as meteringSpectrumFrameFn,
+  meteringTruePeakDbtp as meteringTruePeakDbtpFn,
 } from './metering.js';
 import { addon } from './native.js';
 import type {
@@ -143,7 +153,7 @@ import type {
   TimbreResult,
 } from './types.js';
 import type { OptionsOf } from './validation.js';
-import { assertPositiveInteger, assertSampleRate } from './validation.js';
+import { assertSampleRate } from './validation.js';
 
 /**
  * The request an {@link Audio} method hands to its module function: the
@@ -167,6 +177,9 @@ function audioRequest<R>(
   return { ...bag, samples, sampleRate } as R;
 }
 
+/** Module-private key: only the static factories below can construct an {@link Audio}. */
+const AUDIO_FACTORY_KEY = Symbol('Audio factory');
+
 /**
  * One channel of decoded audio and its sample rate, held in native memory. A multi-channel
  * source is downmixed as it is loaded; {@link Audio.fromFileChannel} loads one channel instead.
@@ -177,7 +190,12 @@ export class Audio {
   private disposed = false;
   private dataCache?: Float32Array;
 
-  private constructor(native: InstanceType<typeof addon.Audio>) {
+  private constructor(key: symbol, native: InstanceType<typeof addon.Audio>) {
+    if (key !== AUDIO_FACTORY_KEY) {
+      throw new TypeError(
+        'Audio: construct it with Audio.fromBuffer, Audio.fromFile, Audio.fromFileChannel or Audio.fromMemory',
+      );
+    }
     this.native = native;
   }
 
@@ -190,7 +208,7 @@ export class Audio {
    *   or it fails to decode.
    */
   static fromFile(path: string): Audio {
-    return new Audio(addon.Audio.fromFile(path));
+    return new Audio(AUDIO_FACTORY_KEY, addon.Audio.fromFile(path));
   }
 
   /**
@@ -219,7 +237,7 @@ export class Audio {
    * ```
    */
   static fromFileChannel(path: string, channelIndex: number): Audio {
-    return new Audio(addon.Audio.fromFileChannel(path, channelIndex));
+    return new Audio(AUDIO_FACTORY_KEY, addon.Audio.fromFileChannel(path, channelIndex));
   }
 
   /**
@@ -238,7 +256,7 @@ export class Audio {
    */
   static fromBuffer(samples: Float32Array, sampleRate: number): Audio {
     assertSampleRate('Audio.fromBuffer', sampleRate);
-    return new Audio(addon.Audio.fromBuffer(samples, sampleRate));
+    return new Audio(AUDIO_FACTORY_KEY, addon.Audio.fromBuffer(samples, sampleRate));
   }
 
   /**
@@ -248,7 +266,7 @@ export class Audio {
    * @throws SonareError when the format is not supported or the bytes fail to decode.
    */
   static fromMemory(data: Buffer | Uint8Array): Audio {
-    return new Audio(addon.Audio.fromMemory(data));
+    return new Audio(AUDIO_FACTORY_KEY, addon.Audio.fromMemory(data));
   }
 
   private requireAlive(): void {
@@ -325,19 +343,9 @@ export class Audio {
 
   // -- Analysis --
 
-  // The methods below stay on the native handle rather than delegating to their
-  // standalone facade counterparts: the handle reads its own buffer in native
-  // memory, so routing through `data` would copy it out first. Nothing is given
-  // up by not delegating — those facades are plain forwarders with no guard of
-  // their own. The metering group below analyze() additionally skips the
-  // per-call finiteness scan and defensive copy the standalone metering
-  // facades pay, because audio_ passed both once at construction.
-
   /** Tempo of the held audio in BPM. */
   detectBpm(options?: OptionsOf<DetectBpmRequest>): number {
-    this.requireAlive();
-    const [bpmMin, bpmMax] = tempoRange('detectBpm', options ?? {});
-    return this.native.detectBpm(bpmMin, bpmMax);
+    return detectBpmFn(audioRequest('detectBpm', this.data, this.sampleRate, options));
   }
 
   /** Most likely musical key of the held audio. */
@@ -354,15 +362,12 @@ export class Audio {
 
   /** Beat times in seconds. */
   detectBeats(options?: OptionsOf<DetectBeatsRequest>): Float32Array {
-    this.requireAlive();
-    const [bpmMin, bpmMax] = tempoRange('detectBeats', options ?? {});
-    return this.native.detectBeats(bpmMin, bpmMax);
+    return detectBeatsFn(audioRequest('detectBeats', this.data, this.sampleRate, options));
   }
 
   /** Downbeat times in seconds. */
   detectDownbeats(): Float32Array {
-    this.requireAlive();
-    return this.native.detectDownbeats();
+    return detectDownbeatsFn(this.data, this.sampleRate);
   }
 
   /** Onset times in seconds. */
@@ -382,36 +387,33 @@ export class Audio {
 
   /** Sample peak in dBFS. */
   peakDb(): number {
-    this.requireAlive();
-    return this.native.peakDb();
+    return meteringPeakDbFn(this.data, this.sampleRate);
   }
 
   /** RMS level in dBFS. */
   rmsDb(): number {
-    this.requireAlive();
-    return this.native.rmsDb();
+    return meteringRmsDbFn(this.data, this.sampleRate);
   }
 
   /** Mean sample value (DC offset). */
   dcOffset(): number {
-    this.requireAlive();
-    return this.native.dcOffset();
+    return meteringDcOffsetFn(this.data, this.sampleRate);
   }
 
   /** Crest factor (peak over RMS) in dB. */
   crestFactorDb(): number {
-    this.requireAlive();
-    return this.native.crestFactorDb();
+    return meteringCrestFactorDbFn(this.data, this.sampleRate);
   }
 
   /** Fraction of frames whose level is below `thresholdDb` (dBFS, default `-45`), using frames of `frameLength` samples (default `1024`) every `hopLength` samples (default `256`). */
   silenceRatio(thresholdDb = -45, frameLength = 1024, hopLength = 256): number {
-    this.requireAlive();
-    // Positivity only, as the free meteringSilenceRatio: the same C entry, which
-    // requires both positive and bounds neither.
-    assertPositiveInteger('silenceRatio', frameLength, 'frameLength');
-    assertPositiveInteger('silenceRatio', hopLength, 'hopLength');
-    return this.native.silenceRatio(thresholdDb, frameLength, hopLength);
+    return meteringSilenceRatioFn(
+      audioRequest('silenceRatio', this.data, this.sampleRate, {
+        thresholdDb,
+        frameLength,
+        hopLength,
+      }),
+    );
   }
 
   /**
@@ -419,33 +421,28 @@ export class Audio {
    * in [1, 16]; omit it for 4.
    */
   truePeakDbtp(oversampleFactor?: number): number {
-    this.requireAlive();
-    refuseZeroSentinel('Audio.truePeakDbtp', { oversampleFactor }, ['oversampleFactor']);
-    return this.native.truePeakDb(oversampleFactor);
+    return meteringTruePeakDbtpFn(
+      audioRequest('truePeakDbtp', this.data, this.sampleRate, { oversampleFactor }),
+    );
   }
 
   /** Clipping report: clipped-sample count and runs at or above the threshold. */
   detectClipping(options: MeteringDetectClippingOptions = {}): ClippingReport {
-    this.requireAlive();
-    const { thresholdDb, ...rest } = options;
-    return clippingReportFromNative(
-      this.native.detectClipping({
-        ...rest,
-        threshold: clipThresholdLinear('detectClipping', thresholdDb),
-      }),
+    return meteringDetectClippingFn(
+      audioRequest('detectClipping', this.data, this.sampleRate, options),
     );
   }
 
   /** Dynamic-range report of the held audio. */
   dynamicRange(options: MeteringDynamicRangeOptions = {}): DynamicRangeReport {
-    this.requireAlive();
-    return this.native.dynamicRange(options);
+    return meteringDynamicRangeFn(
+      audioRequest('dynamicRange', this.data, this.sampleRate, options),
+    );
   }
 
   /** Magnitude, power and dB spectrum of the held audio. */
   spectrum(options: SpectrumOptions = {}): SpectrumReport {
-    this.requireAlive();
-    return this.native.spectrum(options);
+    return meteringSpectrumFn(audioRequest('spectrum', this.data, this.sampleRate, options));
   }
 
   /**
@@ -453,14 +450,14 @@ export class Audio {
    * See {@link meteringSpectrumFrame} for the frame-validation contract.
    */
   spectrumFrame(startSample = 0, options: SpectrumOptions = {}): SpectrumReport {
-    this.requireAlive();
-    return this.native.spectrumFrame(startSample, options);
+    return meteringSpectrumFrameFn(
+      audioRequest('spectrumFrame', this.data, this.sampleRate, { ...options, startSample }),
+    );
   }
 
   /** EBU R128 loudness range in LU. */
   ebur128LoudnessRangeLu(): number {
-    this.requireAlive();
-    return this.native.ebur128LoudnessRangeLu();
+    return ebur128LoudnessRangeLuFn(this.data, this.sampleRate);
   }
 
   /** Tempo analysis: chosen BPM, confidence and ranked candidates. */
@@ -477,7 +474,7 @@ export class Audio {
 
   /** Room acoustic parameters estimated from the held recording. */
   detectAcoustic(options: AcousticOptions = {}): AcousticResult {
-    return detectAcousticFn(this.data, this.sampleRate, options);
+    return detectAcousticFn(audioRequest('detectAcoustic', this.data, this.sampleRate, options));
   }
 
   /** Rhythm analysis: tempo, time signature, groove type and syncopation. */
@@ -497,7 +494,7 @@ export class Audio {
 
   /** Chord sequence of the held audio. */
   detectChords(options: ChordDetectionOptions = {}): ChordAnalysisResult {
-    return detectChordsFn(this.data, this.sampleRate, options);
+    return detectChordsFn(audioRequest('detectChords', this.data, this.sampleRate, options));
   }
 
   /** Chords with their roman numeral and function in the given key. `keyRoot` is required. */

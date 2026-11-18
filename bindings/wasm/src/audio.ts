@@ -124,6 +124,8 @@ import type {
   AnalyzeTimbreRequest,
   BpmAnalysisResult,
   ChordFunctionalAnalysisRequest,
+  DetectBeatsRequest,
+  DetectBpmRequest,
   DetectOnsetsRequest,
 } from './quick_analysis.js';
 import {
@@ -385,6 +387,9 @@ function audioRequest<R>(
   return { ...bag, samples, sampleRate } as R;
 }
 
+/** Module-private key: only the static factories below can construct an {@link Audio}. */
+const AUDIO_FACTORY_KEY = Symbol('Audio factory');
+
 /**
  * Wrapper around audio data that exposes analysis and feature functions as
  * instance methods.
@@ -411,7 +416,12 @@ export class Audio {
   private _samples: Float32Array | null;
   private readonly _sampleRate: number;
 
-  private constructor(samples: Float32Array, sampleRate: number) {
+  private constructor(key: symbol, samples: Float32Array, sampleRate: number) {
+    if (key !== AUDIO_FACTORY_KEY) {
+      throw new TypeError(
+        'Audio: construct it with Audio.fromBuffer, Audio.fromMemory or Audio.fromMemoryWithBrowserFallback',
+      );
+    }
     this._samples = samples;
     this._sampleRate = sampleRate;
   }
@@ -436,7 +446,7 @@ export class Audio {
    */
   static fromBuffer(samples: Float32Array, sampleRate: number): Audio {
     validateAudioBuffer(samples, sampleRate);
-    return new Audio(samples.slice(), sampleRate);
+    return new Audio(AUDIO_FACTORY_KEY, samples.slice(), sampleRate);
   }
 
   /**
@@ -446,7 +456,7 @@ export class Audio {
    */
   static fromMemory(bytes: Uint8Array): Audio {
     const decoded = getSonareModule().audioFromMemory(bytes);
-    return new Audio(decoded.samples, decoded.sampleRate);
+    return new Audio(AUDIO_FACTORY_KEY, decoded.samples, decoded.sampleRate);
   }
 
   /**
@@ -465,7 +475,7 @@ export class Audio {
     } catch (nativeError) {
       const decoded = await decodeWithBrowserCodec(bytes, options, nativeError, 'Audio.fromMemory');
       const length = decoded.channels[0]?.length ?? 0;
-      return new Audio(foldToMono(decoded.channels, length), decoded.sampleRate);
+      return new Audio(AUDIO_FACTORY_KEY, foldToMono(decoded.channels, length), decoded.sampleRate);
     }
   }
 
@@ -516,18 +526,20 @@ export class Audio {
   // -- Analysis --
 
   /** Tempo of the held audio in BPM. */
-  detectBpm(): number {
-    return detectBpm(this.samples, this.sampleRate);
+  detectBpm(options?: OptionsOf<DetectBpmRequest>): number {
+    return detectBpm(audioRequest('detectBpm', this.samples, this.sampleRate, options));
   }
 
   /** Most likely musical key of the held audio. */
   detectKey(options: KeyDetectionOptions = {}): KeyDetection {
-    return detectKey(this.samples, this.sampleRate, options);
+    return detectKey(audioRequest('detectKey', this.samples, this.sampleRate, options));
   }
 
   /** Ranked key candidates for the held audio. */
   detectKeyCandidates(options: KeyDetectionOptions = {}): KeyCandidate[] {
-    return detectKeyCandidates(this.samples, this.sampleRate, options);
+    return detectKeyCandidates(
+      audioRequest('detectKeyCandidates', this.samples, this.sampleRate, options),
+    );
   }
 
   /** Onset times in seconds. */
@@ -536,8 +548,8 @@ export class Audio {
   }
 
   /** Beat times in seconds. */
-  detectBeats(): Float32Array {
-    return detectBeats(this.samples, this.sampleRate);
+  detectBeats(options?: OptionsOf<DetectBeatsRequest>): Float32Array {
+    return detectBeats(audioRequest('detectBeats', this.samples, this.sampleRate, options));
   }
 
   /** Downbeat times in seconds. */
@@ -547,7 +559,7 @@ export class Audio {
 
   /** Chord sequence of the held audio. */
   detectChords(options: ChordDetectionOptions = {}): ChordAnalysisResult {
-    return detectChords(this.samples, this.sampleRate, options);
+    return detectChords(audioRequest('detectChords', this.samples, this.sampleRate, options));
   }
 
   /** Chords with their roman numeral and function in the given key. `keyRoot` is required. */
@@ -814,11 +826,13 @@ export class Audio {
 
   /** Fraction of frames whose level is below `thresholdDb` (dBFS, default `-45`), using frames of `frameLength` samples (default `1024`) every `hopLength` samples (default `256`). */
   silenceRatio(thresholdDb = -45, frameLength = 1024, hopLength = 256): number {
-    return meteringSilenceRatio(this.samples, this.sampleRate, {
-      thresholdDb,
-      frameLength,
-      hopLength,
-    });
+    return meteringSilenceRatio(
+      audioRequest('silenceRatio', this.samples, this.sampleRate, {
+        thresholdDb,
+        frameLength,
+        hopLength,
+      }),
+    );
   }
 
   /**
@@ -826,22 +840,28 @@ export class Audio {
    * in [1, 16]; omit it for 4.
    */
   truePeakDbtp(oversampleFactor?: number): number {
-    return meteringTruePeakDbtp(this.samples, this.sampleRate, { oversampleFactor });
+    return meteringTruePeakDbtp(
+      audioRequest('truePeakDbtp', this.samples, this.sampleRate, { oversampleFactor }),
+    );
   }
 
   /** Clipping report: clipped-sample count and runs at or above the threshold. */
   detectClipping(options: MeteringDetectClippingOptions = {}): ClippingReport {
-    return meteringDetectClipping(this.samples, this.sampleRate, options);
+    return meteringDetectClipping(
+      audioRequest('detectClipping', this.samples, this.sampleRate, options),
+    );
   }
 
   /** Dynamic-range report of the held audio. */
   dynamicRange(options: MeteringDynamicRangeOptions = {}): DynamicRangeReport {
-    return meteringDynamicRange(this.samples, this.sampleRate, options);
+    return meteringDynamicRange(
+      audioRequest('dynamicRange', this.samples, this.sampleRate, options),
+    );
   }
 
   /** Magnitude, power and dB spectrum of the held audio. */
   spectrum(options: SpectrumOptions = {}): SpectrumReport {
-    return meteringSpectrum(this.samples, this.sampleRate, options);
+    return meteringSpectrum(audioRequest('spectrum', this.samples, this.sampleRate, options));
   }
 
   /**
@@ -849,7 +869,9 @@ export class Audio {
    * `startSample`. See {@link meteringSpectrumFrame} for the frame-validation contract.
    */
   spectrumFrame(startSample = 0, options: SpectrumOptions = {}): SpectrumReport {
-    return meteringSpectrumFrame(this.samples, this.sampleRate, { ...options, startSample });
+    return meteringSpectrumFrame(
+      audioRequest('spectrumFrame', this.samples, this.sampleRate, { ...options, startSample }),
+    );
   }
 
   /** EBU R128 loudness range in LU. */

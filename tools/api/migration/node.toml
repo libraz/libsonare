@@ -14859,6 +14859,38 @@ rule = "num-channels"
 
 [[entry]]
 kind = "method"
+old = "Audio.spectrum"
+changed = "delegates to meteringSpectrum: an unknown option key is a TypeError naming meteringSpectrum; an explicit nFft of 0 is a RangeError, where the method used to read past it"
+domain = "core"
+rule = "individual"
+test = "bindings/node/tests/audio-facade-delegation.test.ts::the metering methods refuse as their facades do"
+
+[[entry]]
+kind = "method"
+old = "Audio.spectrumFrame"
+changed = "delegates to meteringSpectrumFrame: an unknown option key is a TypeError naming meteringSpectrumFrame; an explicit nFft of 0 is a RangeError, where the method used to read past it"
+domain = "core"
+rule = "individual"
+test = "bindings/node/tests/audio-facade-delegation.test.ts::the metering methods refuse as their facades do"
+
+[[entry]]
+kind = "method"
+old = "Audio.dynamicRange"
+changed = "delegates to meteringDynamicRange: an unknown option key is a TypeError naming meteringDynamicRange, where the method used to read past it"
+domain = "core"
+rule = "individual"
+test = "bindings/node/tests/audio-facade-delegation.test.ts::the metering methods refuse as their facades do"
+
+[[entry]]
+kind = "method"
+old = "Audio.detectClipping"
+changed = "delegates to meteringDetectClipping: an unknown option key is a TypeError naming meteringDetectClipping, where the method used to read past it"
+domain = "core"
+rule = "individual"
+test = "bindings/node/tests/audio-facade-delegation.test.ts::the metering methods refuse as their facades do"
+
+[[entry]]
+kind = "method"
 old = "Audio.detectBpm"
 changed = "searches 60-200 BPM by default (was 30-300); bpmMin/bpmMax narrow it"
 domain = "core"
