@@ -9046,3 +9046,58 @@ changed = "takes a band mapping only; a JSON string is TypeError and goes to set
 domain = "engine"
 rule = "aliases-removed"
 test = "bindings/python/tests/test_mapping_keys.py::test_a_positional_tuple_or_descriptor_in_place_of_a_mapping_is_a_type_error"
+
+[[entry]]
+kind = "option"
+old = "PolyphonicAnalysis.analyze(tonality_off)"
+to = "PolyphonicAnalysis.analyze(tonality)"
+changed = "renamed to tonality, stated positively and True by default"
+domain = "analysis"
+rule = "no-positional-bools"
+test = "bindings/python/tests/test_polyphonic_editing.py::test_tonality_reaches_the_library"
+
+[[entry]]
+kind = "option"
+old = "PolyphonicAnalysis.constructor(tonality_off)"
+to = "PolyphonicAnalysis.constructor(tonality)"
+changed = "renamed to tonality, stated positively and True by default"
+domain = "analysis"
+rule = "no-positional-bools"
+test = "bindings/python/tests/test_polyphonic_editing.py::test_tonality_reaches_the_library"
+
+[[entry]]
+kind = "option"
+old = "Audio.analyze(chroma_highpass_hz)"
+new = "Audio.analyze(chroma_high_pass_hz)"
+domain = "core"
+rule = "high-pass"
+
+[[entry]]
+kind = "option"
+old = "Audio.analyze(tuning)"
+new = "Audio.analyze(tuning_cents)"
+domain = "core"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "option"
+old = "Mixer.constructor(block_size)"
+removed = "omit it; the max_block_size property reads the block size from the handle"
+domain = "engine"
+rule = "getters"
+
+[[entry]]
+kind = "option"
+old = "StreamingRetune.constructor(semitones)"
+new = "StreamingRetune.constructor(pitch_semitones)"
+domain = "effects"
+rule = "pitch-semitones"
+
+[[entry]]
+kind = "option"
+old = "StreamingRetune.constructor(grain_size)"
+to = "StreamingRetune.constructor(grain_size_samples)"
+changed = "grain_size -> grain_size_samples; None derives the grain from the sample rate and an explicit 0 raises SonareValueError"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_streaming_retune.py::test_streaming_retune_refuses_an_explicit_zero_grain"
