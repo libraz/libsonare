@@ -45,7 +45,7 @@ typedef struct {
   int sample_rate;    ///< Output sample rate in Hz.
   float input_lufs;   ///< Integrated loudness of the input, LUFS.
   float output_lufs;  ///< Integrated loudness achieved on the output, LUFS.
-  /// Static loudness-normalization gain in dB; limiter gain reduction is not included.
+  /// Sum of the static gains the stages applied, in dB; limiter gain reduction is not included.
   float applied_gain_db;
   /// The processor's own latency in samples. The returned audio is already
   /// compensated for it and is time-aligned with the input, so do not trim it.
@@ -78,7 +78,7 @@ typedef struct {
   int sample_rate;    ///< Output sample rate in Hz.
   float input_lufs;   ///< Integrated loudness of the input, LUFS.
   float output_lufs;  ///< Integrated loudness achieved on the output, LUFS.
-  /// Static loudness-normalization gain in dB; limiter gain reduction is not included.
+  /// Sum of the static gains the stages applied, in dB; limiter gain reduction is not included.
   float applied_gain_db;
   /// The processor's own latency in samples. The returned audio is already
   /// compensated for it and is time-aligned with the input, so do not trim it.
@@ -114,7 +114,8 @@ typedef struct {
 typedef struct {
   SonareMasteringLoudnessSummary before;  ///< Measurements of the input.
   SonareMasteringLoudnessSummary after;   ///< Measurements of the output.
-  float applied_gain_db;                  ///< Sum of the static gains the stages applied, dB.
+  /// Sum of the static gains the stages applied, in dB; limiter gain reduction is not included.
+  float applied_gain_db;
   /// Most negative gain reduction any stage reported, dB; 0 when none ran.
   float max_gain_reduction_db;
   /// Non-zero when the true-peak ceiling prevented reaching the loudness target.
@@ -128,14 +129,15 @@ typedef struct {
 ///   the stage identifier strings and the gain-reduction arrays are allocated by libsonare with
 ///   @c new[]; release the whole result with @ref sonare_free_mastering_chain_result.
 typedef struct {
-  float* samples;         ///< Mono output, heap-allocated.
-  size_t length;          ///< Output length in samples.
-  int sample_rate;        ///< Output sample rate in Hz.
-  float input_lufs;       ///< Integrated loudness of the input, LUFS.
-  float output_lufs;      ///< Integrated loudness achieved on the output, LUFS.
-  float applied_gain_db;  ///< Sum of the static gains the stages applied, dB.
-  char** stages;          ///< newline-free stage identifiers, e.g. "dynamics.compressor"
-  size_t stages_count;    ///< Number of entries in stages.
+  float* samples;     ///< Mono output, heap-allocated.
+  size_t length;      ///< Output length in samples.
+  int sample_rate;    ///< Output sample rate in Hz.
+  float input_lufs;   ///< Integrated loudness of the input, LUFS.
+  float output_lufs;  ///< Integrated loudness achieved on the output, LUFS.
+  /// Sum of the static gains the stages applied, in dB; limiter gain reduction is not included.
+  float applied_gain_db;
+  char** stages;        ///< newline-free stage identifiers, e.g. "dynamics.compressor"
+  size_t stages_count;  ///< Number of entries in stages.
   /// ITU-R BS.1770-4 true peak of the output (dBTP). Lets callers verify a
   /// preset ceiling was met without a second oversampled scan.
   ///
@@ -182,15 +184,16 @@ typedef struct {
 /// @details Same latency compensation and ownership as @ref SonareMasteringChainResult; release
 ///   with @ref sonare_free_mastering_chain_stereo_result.
 typedef struct {
-  float* left;            ///< Left output channel, heap-allocated.
-  float* right;           ///< Right output channel, heap-allocated.
-  size_t length;          ///< Samples per channel.
-  int sample_rate;        ///< Output sample rate in Hz.
-  float input_lufs;       ///< Integrated loudness of the input, LUFS.
-  float output_lufs;      ///< Integrated loudness achieved on the output, LUFS.
-  float applied_gain_db;  ///< Sum of the static gains the stages applied, dB.
-  char** stages;          ///< Stage identifiers, as in the mono result.
-  size_t stages_count;    ///< Number of entries in stages.
+  float* left;        ///< Left output channel, heap-allocated.
+  float* right;       ///< Right output channel, heap-allocated.
+  size_t length;      ///< Samples per channel.
+  int sample_rate;    ///< Output sample rate in Hz.
+  float input_lufs;   ///< Integrated loudness of the input, LUFS.
+  float output_lufs;  ///< Integrated loudness achieved on the output, LUFS.
+  /// Sum of the static gains the stages applied, in dB; limiter gain reduction is not included.
+  float applied_gain_db;
+  char** stages;        ///< Stage identifiers, as in the mono result.
+  size_t stages_count;  ///< Number of entries in stages.
   /// See @c SonareMasteringChainResult for field semantics. Released by
   /// @c sonare_free_mastering_chain_stereo_result.
   float output_true_peak_dbtp;     ///< True peak of the output, dBTP.
