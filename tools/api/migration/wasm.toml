@@ -271,15 +271,6 @@ entry = "./worklet"
 test = "bindings/wasm/tests/surface/core-worklet-errors.test.ts::creates each ring from named options"
 
 [[entry]]
-kind = "type"
-old = "SonareSpectrumRingOptions"
-changed = "new exported options type for the ring helpers"
-domain = "mastering"
-rule = "individual"
-entry = "./worklet"
-test = "bindings/wasm/tests/surface/core-worklet-errors.test.ts::creates each ring from named options"
-
-[[entry]]
 kind = "function"
 old = "createSonare*RingBuffer / ring readers"
 changed = "a malformed ring descriptor or layout throws SonareError InvalidFormat, a protocol version skew AbiMismatch, instead of a plain Error"
@@ -13392,21 +13383,6 @@ entry = "./analysis"
 
 [[entry]]
 kind = "value"
-old = "KeyProfileName='krumhansl-schmuckler'"
-new = "KeyProfile='krumhanslSchmuckler'"
-domain = "analysis"
-rule = "token-case"
-
-[[entry]]
-kind = "value"
-old = "KeyProfileName='krumhansl-schmuckler'"
-new = "KeyProfile='krumhanslSchmuckler'"
-domain = "analysis"
-rule = "token-case"
-entry = "./analysis"
-
-[[entry]]
-kind = "value"
 old = "KeyProfileName='ks'"
 removed = true
 domain = "analysis"
@@ -13937,23 +13913,6 @@ domain = "analysis"
 rule = "aliases-removed"
 
 [[entry]]
-kind = "type"
-old = "VoiceScaleKind"
-changed = "'natural_minor' -> 'naturalMinor'"
-domain = "analysis"
-rule = "token-case"
-test = "bindings/wasm/tests/surface/analysis-stream.test.ts::narrows ScaleKind to the lowerCamel token set"
-
-[[entry]]
-kind = "type"
-old = "VoiceScaleKind"
-changed = "'natural_minor' -> 'naturalMinor'"
-domain = "analysis"
-rule = "token-case"
-entry = "./analysis"
-test = "bindings/wasm/tests/surface/analysis-stream.test.ts::narrows ScaleKind to the lowerCamel token set"
-
-[[entry]]
 kind = "field"
 old = "AnalyzerStats.durationSeconds"
 new = "StreamStats.durationSec"
@@ -14373,21 +14332,6 @@ old = "StreamFramesU8.timestamps"
 new = "StreamFramesU8.timestampsSec"
 domain = "analysis"
 rule = "seconds-suffix"
-
-[[entry]]
-kind = "value"
-old = "VoiceScaleKind='natural_minor'"
-new = "ScaleKind='naturalMinor'"
-domain = "analysis"
-rule = "token-case"
-
-[[entry]]
-kind = "value"
-old = "VoiceScaleKind='natural_minor'"
-new = "ScaleKind='naturalMinor'"
-domain = "analysis"
-rule = "token-case"
-entry = "./analysis"
 
 [[entry]]
 kind = "method"
@@ -20295,10 +20239,9 @@ test = "bindings/wasm/tests/surface/effects-voice.test.ts::names its controls pi
 [[entry]]
 kind = "field"
 old = "VoiceChangeRealtimeRequest.blockSize"
-changed = "blockSize -> maxBlockSize"
+removed = true
 domain = "effects"
 rule = "sample-rate-required"
-test = "bindings/wasm/tests/surface/effects-voice.test.ts::voiceChangeRealtime is request-only and planar"
 
 [[entry]]
 kind = "field"
@@ -20614,14 +20557,6 @@ test = "bindings/wasm/tests/surface/effects-voice.test.ts::preset config uses th
 
 [[entry]]
 kind = "type"
-old = "SonareRealtimeVoiceChangerAllNotesOffMessage"
-removed = true
-domain = "effects"
-rule = "worklet-scope"
-entry = "./worklet"
-
-[[entry]]
-kind = "type"
 old = "SonareRealtimeVoiceChangerDestroyMessage"
 removed = true
 domain = "effects"
@@ -20630,31 +20565,7 @@ entry = "./worklet"
 
 [[entry]]
 kind = "type"
-old = "SonareRealtimeVoiceChangerErrorMessage"
-removed = true
-domain = "effects"
-rule = "worklet-scope"
-entry = "./worklet"
-
-[[entry]]
-kind = "type"
 old = "SonareRealtimeVoiceChangerMessage"
-removed = true
-domain = "effects"
-rule = "worklet-scope"
-entry = "./worklet"
-
-[[entry]]
-kind = "type"
-old = "SonareRealtimeVoiceChangerNoteOffMessage"
-removed = true
-domain = "effects"
-rule = "worklet-scope"
-entry = "./worklet"
-
-[[entry]]
-kind = "type"
-old = "SonareRealtimeVoiceChangerNoteOnMessage"
 removed = true
 domain = "effects"
 rule = "worklet-scope"
@@ -20770,23 +20681,6 @@ test = "bindings/wasm/tests/surface/effects-voice.test.ts::renames the enum type
 
 [[entry]]
 kind = "type"
-old = "VoicePitchCorrectionMode"
-changed = "renamed to PitchCorrectionMode"
-domain = "effects"
-rule = "type-names"
-test = "bindings/wasm/tests/surface/effects-voice.test.ts::renames the enum types and lowers the tokens"
-
-[[entry]]
-kind = "type"
-old = "VoicePitchCorrectionMode"
-changed = "renamed to PitchCorrectionMode"
-domain = "effects"
-rule = "type-names"
-entry = "./analysis"
-test = "bindings/wasm/tests/surface/effects-voice.test.ts::renames the enum types and lowers the tokens"
-
-[[entry]]
-kind = "type"
 old = "VoicePitchEngine"
 changed = "renamed to VoiceEngine"
 domain = "engine"
@@ -20815,23 +20709,6 @@ kind = "type"
 old = "VoiceReverbVariation"
 changed = "renamed to ReverbVariation"
 domain = "core"
-rule = "type-names"
-entry = "./analysis"
-test = "bindings/wasm/tests/surface/effects-voice.test.ts::renames the enum types and lowers the tokens"
-
-[[entry]]
-kind = "type"
-old = "VoiceScaleKind"
-changed = "renamed to ScaleKind"
-domain = "analysis"
-rule = "type-names"
-test = "bindings/wasm/tests/surface/effects-voice.test.ts::renames the enum types and lowers the tokens"
-
-[[entry]]
-kind = "type"
-old = "VoiceScaleKind"
-changed = "renamed to ScaleKind"
-domain = "analysis"
 rule = "type-names"
 entry = "./analysis"
 test = "bindings/wasm/tests/surface/effects-voice.test.ts::renames the enum types and lowers the tokens"
@@ -20923,23 +20800,6 @@ test = "bindings/wasm/tests/surface/effects-voice.test.ts::names the presets in 
 
 [[entry]]
 kind = "value"
-old = "VoicePresetId='choir-harmony'"
-changed = "VoicePresetId='choirHarmony'"
-domain = "core"
-rule = "token-case"
-test = "bindings/wasm/tests/surface/effects-voice.test.ts::names the presets in lowerCamel, in ordinal order"
-
-[[entry]]
-kind = "value"
-old = "VoicePresetId='choir-harmony'"
-changed = "VoicePresetId='choirHarmony'"
-domain = "core"
-rule = "token-case"
-entry = "./analysis"
-test = "bindings/wasm/tests/surface/effects-voice.test.ts::names the presets in lowerCamel, in ordinal order"
-
-[[entry]]
-kind = "value"
 old = "VoicePresetId='dark-villain'"
 changed = "VoicePresetId='darkVillain'"
 domain = "core"
@@ -20974,23 +20834,6 @@ test = "bindings/wasm/tests/surface/effects-voice.test.ts::names the presets in 
 
 [[entry]]
 kind = "value"
-old = "VoicePresetId='hard-tune'"
-changed = "VoicePresetId='hardTune'"
-domain = "core"
-rule = "token-case"
-test = "bindings/wasm/tests/surface/effects-voice.test.ts::names the presets in lowerCamel, in ordinal order"
-
-[[entry]]
-kind = "value"
-old = "VoicePresetId='hard-tune'"
-changed = "VoicePresetId='hardTune'"
-domain = "core"
-rule = "token-case"
-entry = "./analysis"
-test = "bindings/wasm/tests/surface/effects-voice.test.ts::names the presets in lowerCamel, in ordinal order"
-
-[[entry]]
-kind = "value"
 old = "VoicePresetId='neutral-monitor'"
 changed = "VoicePresetId='neutralMonitor'"
 domain = "core"
@@ -21001,23 +20844,6 @@ test = "bindings/wasm/tests/surface/effects-voice.test.ts::names the presets in 
 kind = "value"
 old = "VoicePresetId='neutral-monitor'"
 changed = "VoicePresetId='neutralMonitor'"
-domain = "core"
-rule = "token-case"
-entry = "./analysis"
-test = "bindings/wasm/tests/surface/effects-voice.test.ts::names the presets in lowerCamel, in ordinal order"
-
-[[entry]]
-kind = "value"
-old = "VoicePresetId='radio-voice'"
-changed = "VoicePresetId='radioVoice'"
-domain = "core"
-rule = "token-case"
-test = "bindings/wasm/tests/surface/effects-voice.test.ts::names the presets in lowerCamel, in ordinal order"
-
-[[entry]]
-kind = "value"
-old = "VoicePresetId='radio-voice'"
-changed = "VoicePresetId='radioVoice'"
 domain = "core"
 rule = "token-case"
 entry = "./analysis"
@@ -21042,23 +20868,6 @@ test = "bindings/wasm/tests/surface/effects-voice.test.ts::names the presets in 
 
 [[entry]]
 kind = "value"
-old = "VoicePresetId='robot-monotone'"
-changed = "VoicePresetId='robotMonotone'"
-domain = "core"
-rule = "token-case"
-test = "bindings/wasm/tests/surface/effects-voice.test.ts::names the presets in lowerCamel, in ordinal order"
-
-[[entry]]
-kind = "value"
-old = "VoicePresetId='robot-monotone'"
-changed = "VoicePresetId='robotMonotone'"
-domain = "core"
-rule = "token-case"
-entry = "./analysis"
-test = "bindings/wasm/tests/surface/effects-voice.test.ts::names the presets in lowerCamel, in ordinal order"
-
-[[entry]]
-kind = "value"
 old = "VoicePresetId='soft-whisper'"
 changed = "VoicePresetId='softWhisper'"
 domain = "core"
@@ -21069,23 +20878,6 @@ test = "bindings/wasm/tests/surface/effects-voice.test.ts::names the presets in 
 kind = "value"
 old = "VoicePresetId='soft-whisper'"
 changed = "VoicePresetId='softWhisper'"
-domain = "core"
-rule = "token-case"
-entry = "./analysis"
-test = "bindings/wasm/tests/surface/effects-voice.test.ts::names the presets in lowerCamel, in ordinal order"
-
-[[entry]]
-kind = "value"
-old = "VoicePresetId='vocoder-strings'"
-changed = "VoicePresetId='vocoderStrings'"
-domain = "core"
-rule = "token-case"
-test = "bindings/wasm/tests/surface/effects-voice.test.ts::names the presets in lowerCamel, in ordinal order"
-
-[[entry]]
-kind = "value"
-old = "VoicePresetId='vocoder-strings'"
-changed = "VoicePresetId='vocoderStrings'"
 domain = "core"
 rule = "token-case"
 entry = "./analysis"

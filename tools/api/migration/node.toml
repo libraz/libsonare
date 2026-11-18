@@ -10821,14 +10821,6 @@ test = "bindings/node/tests/surface/effects-voice.test.ts::names the presets in 
 
 [[entry]]
 kind = "value"
-old = "VoicePresetId='choir-harmony'"
-changed = "VoicePresetId='choirHarmony'"
-domain = "core"
-rule = "token-case"
-test = "bindings/node/tests/surface/effects-voice.test.ts::names the presets in lowerCamel, in ordinal order"
-
-[[entry]]
-kind = "value"
 old = "VoicePresetId='dark-villain'"
 changed = "VoicePresetId='darkVillain'"
 domain = "core"
@@ -10845,24 +10837,8 @@ test = "bindings/node/tests/surface/effects-voice.test.ts::names the presets in 
 
 [[entry]]
 kind = "value"
-old = "VoicePresetId='hard-tune'"
-changed = "VoicePresetId='hardTune'"
-domain = "core"
-rule = "token-case"
-test = "bindings/node/tests/surface/effects-voice.test.ts::names the presets in lowerCamel, in ordinal order"
-
-[[entry]]
-kind = "value"
 old = "VoicePresetId='neutral-monitor'"
 changed = "VoicePresetId='neutralMonitor'"
-domain = "core"
-rule = "token-case"
-test = "bindings/node/tests/surface/effects-voice.test.ts::names the presets in lowerCamel, in ordinal order"
-
-[[entry]]
-kind = "value"
-old = "VoicePresetId='radio-voice'"
-changed = "VoicePresetId='radioVoice'"
 domain = "core"
 rule = "token-case"
 test = "bindings/node/tests/surface/effects-voice.test.ts::names the presets in lowerCamel, in ordinal order"
@@ -10877,24 +10853,8 @@ test = "bindings/node/tests/surface/effects-voice.test.ts::names the presets in 
 
 [[entry]]
 kind = "value"
-old = "VoicePresetId='robot-monotone'"
-changed = "VoicePresetId='robotMonotone'"
-domain = "core"
-rule = "token-case"
-test = "bindings/node/tests/surface/effects-voice.test.ts::names the presets in lowerCamel, in ordinal order"
-
-[[entry]]
-kind = "value"
 old = "VoicePresetId='soft-whisper'"
 changed = "VoicePresetId='softWhisper'"
-domain = "core"
-rule = "token-case"
-test = "bindings/node/tests/surface/effects-voice.test.ts::names the presets in lowerCamel, in ordinal order"
-
-[[entry]]
-kind = "value"
-old = "VoicePresetId='vocoder-strings'"
-changed = "VoicePresetId='vocoderStrings'"
 domain = "core"
 rule = "token-case"
 test = "bindings/node/tests/surface/effects-voice.test.ts::names the presets in lowerCamel, in ordinal order"
