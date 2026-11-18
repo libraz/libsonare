@@ -14,7 +14,6 @@ import { CHANNEL_LAYOUT_VALUES } from './internal/channel_layout.js';
 import {
   bindNativeClipPageProvider,
   nativeClipPageProviderOf,
-  registerClipPageProviderClass,
 } from './internal/clip_page_native.js';
 import { eqBandJson } from './internal/eq_band_json.js';
 import { externalMidiEvent } from './internal/external_midi.js';
@@ -2844,5 +2843,3 @@ export class ClipPageProvider {
     this.destroy();
   }
 }
-
-registerClipPageProviderClass(RealtimeEngine, ClipPageProvider);

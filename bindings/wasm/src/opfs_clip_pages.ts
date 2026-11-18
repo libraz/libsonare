@@ -1,7 +1,8 @@
 import type { ClipPageSampleRequest } from './clip_page_streamer.js';
 import { ErrorCode, SonareError } from './errors.js';
+import { registerOpfsClipPageProviderFactory } from './internal/clip_page_native.js';
 import { releasedHandleError } from './internal/handle_guard.js';
-import { ClipPageProvider } from './realtime_engine.js';
+import { ClipPageProvider, RealtimeEngine } from './realtime_engine.js';
 
 /** Source file and paging layout of an OPFS-backed clip page provider. */
 export interface OpfsClipPageProviderOptions {
@@ -225,15 +226,7 @@ export function createOpfsClipPageWorker(): Worker {
 export function createOpfsClipPageProvider(
   options: OpfsClipPageProviderOptions,
 ): OpfsClipPageProviderBinding {
-  return openOpfsClipPageProvider(ClipPageProvider, options);
-}
-
-/** {@link createOpfsClipPageProvider} with the provider built from `providerClass`. */
-export function openOpfsClipPageProvider(
-  providerClass: typeof ClipPageProvider,
-  options: OpfsClipPageProviderOptions,
-): OpfsClipPageProviderBinding {
-  const provider = new providerClass({
+  const provider = new ClipPageProvider({
     numChannels: options.numChannels,
     numSamples: options.numSamples,
     pageFrames: options.pageFrames,
@@ -553,3 +546,5 @@ export async function importOpfsClip(
   const written = await writeOpfsClip(path, channels, options);
   return { ...written, sampleRate };
 }
+
+registerOpfsClipPageProviderFactory(RealtimeEngine, createOpfsClipPageProvider);

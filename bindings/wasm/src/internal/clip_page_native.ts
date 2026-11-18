@@ -1,19 +1,21 @@
 const nativeProviders = new WeakMap<object, unknown>();
 
-// Global symbol, so the worklet bundle can reach the index bundle's class through an engine it was handed.
-const PROVIDER_CLASS = Symbol.for('libsonare.wasm.ClipPageProvider');
+// Global symbol, so the worklet bundle can reach the index bundle's factory through an engine it was handed.
+const OPFS_PROVIDER_FACTORY = Symbol.for('libsonare.wasm.createOpfsClipPageProvider');
 
-/** Records the `ClipPageProvider` class whose natives `engineClass` instances accept. */
-export function registerClipPageProviderClass(engineClass: object, providerClass: unknown): void {
-  Object.defineProperty(engineClass, PROVIDER_CLASS, { value: providerClass });
+/** Records the OPFS provider factory whose providers `engineClass` instances accept. */
+export function registerOpfsClipPageProviderFactory(engineClass: object, factory: unknown): void {
+  Object.defineProperty(engineClass, OPFS_PROVIDER_FACTORY, { value: factory });
 }
 
 /**
- * The `ClipPageProvider` class of the bundle `engine` was built by, or `fallback`. Each bundle
+ * The OPFS provider factory of the bundle `engine` was built by, or `fallback`. Each bundle
  * holds its own module instance, so a provider must come from the engine's bundle.
  */
-export function clipPageProviderClassFor<T>(engine: object, fallback: T): T {
-  const registered = (engine.constructor as { [PROVIDER_CLASS]?: T } | undefined)?.[PROVIDER_CLASS];
+export function opfsClipPageProviderFactoryFor<T>(engine: object, fallback: T): T {
+  const registered = (engine.constructor as { [OPFS_PROVIDER_FACTORY]?: T } | undefined)?.[
+    OPFS_PROVIDER_FACTORY
+  ];
   return registered ?? fallback;
 }
 
