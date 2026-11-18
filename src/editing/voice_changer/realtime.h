@@ -195,8 +195,6 @@ inline bool takes_external_carrier(const RealtimeVoiceChangerConfig& config) noe
 
 /// Block size @ref RealtimeVoiceChanger::prepare is given when a caller names none.
 inline constexpr int kRealtimeVoiceChangerDefaultMaxBlock = 128;
-/// Channel count @ref RealtimeVoiceChanger::prepare is given when a caller names none.
-inline constexpr int kRealtimeVoiceChangerDefaultChannels = 1;
 
 class RealtimeVoiceChanger {
  public:
@@ -212,8 +210,7 @@ class RealtimeVoiceChanger {
   /// @throws SonareException InvalidParameter when @ref prepare_arguments_error refuses the
   ///         arguments; nothing is modified in that case and the instance keeps its last
   ///         preparation.
-  void prepare(double sample_rate, int max_block_size,
-               int num_channels = kRealtimeVoiceChangerDefaultChannels);
+  void prepare(double sample_rate, int max_block_size, int num_channels);
   /// @brief Clears streaming DSP state.
   /// @details Adopts the latest published configuration first, so the state it
   ///          snaps to is the one @ref set_config last requested. Control-thread

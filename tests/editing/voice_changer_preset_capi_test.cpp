@@ -1404,7 +1404,7 @@ TEST_CASE("Realtime voice changer create refuses a rate or block size outside th
             SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(handle == nullptr);
   }
-  for (const int block : {0, -1, (1 << 20) + 1, std::numeric_limits<int>::max()}) {
+  for (const int block : {-1, (1 << 20) + 1, std::numeric_limits<int>::max()}) {
     CAPTURE(block);
     SonareRealtimeVoiceChanger* handle = nullptr;
     REQUIRE(sonare_realtime_voice_changer_create_json("neutralMonitor", 48000, block, 1, &handle) ==
@@ -1416,16 +1416,19 @@ TEST_CASE("Realtime voice changer create refuses a rate or block size outside th
   }
 }
 
-TEST_CASE("Realtime voice changer creation resolves zero block size and channels to defaults",
-          "[voice_changer][c-api][validation]") {
+TEST_CASE(
+    "Realtime voice changer creation defaults a zero block size and requires the channel count",
+    "[voice_changer][c-api][validation]") {
   SonareRealtimeVoiceChanger* handle = nullptr;
   REQUIRE(sonare_realtime_voice_changer_create_json("neutralMonitor", 48000, -1, 1, &handle) ==
           SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_realtime_voice_changer_create_json("neutralMonitor", 48000, 128, -1, &handle) ==
           SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_realtime_voice_changer_create_json("neutralMonitor", 48000, 128, 0, &handle) ==
+          SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(handle == nullptr);
 
-  REQUIRE(sonare_realtime_voice_changer_create_json("neutralMonitor", 48000, 0, 0, &handle) ==
+  REQUIRE(sonare_realtime_voice_changer_create_json("neutralMonitor", 48000, 0, 1, &handle) ==
           SONARE_OK);
   std::vector<float> in(129, 0.0f);
   std::vector<float> out(129, 0.0f);
@@ -1437,7 +1440,9 @@ TEST_CASE("Realtime voice changer creation resolves zero block size and channels
 
   SonareRealtimeVoiceChangerConfig config{};
   REQUIRE(sonare_realtime_voice_changer_config_default(&config) == SONARE_OK);
-  REQUIRE(sonare_realtime_voice_changer_create(&config, 48000, 0, 0, &handle) == SONARE_OK);
+  REQUIRE(sonare_realtime_voice_changer_create(&config, 48000, 128, 0, &handle) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_realtime_voice_changer_create(&config, 48000, 0, 1, &handle) == SONARE_OK);
   CHECK(sonare_realtime_voice_changer_process_mono(handle, in.data(), out.data(), 128) ==
         SONARE_OK);
   CHECK(sonare_realtime_voice_changer_process_mono(handle, in.data(), out.data(), 129) ==

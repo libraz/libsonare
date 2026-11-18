@@ -475,9 +475,6 @@ SonareError sonare_realtime_voice_changer_create(const SonareRealtimeVoiceChange
   if (max_block_size == 0) {
     max_block_size = editing::voice_changer::kRealtimeVoiceChangerDefaultMaxBlock;
   }
-  if (num_channels == 0) {
-    num_channels = editing::voice_changer::kRealtimeVoiceChangerDefaultChannels;
-  }
   if (const char* refused = editing::voice_changer::prepare_arguments_error(
           static_cast<double>(sample_rate), max_block_size, num_channels)) {
     set_last_error(SONARE_ERROR_INVALID_PARAMETER, refused);
@@ -561,9 +558,6 @@ SonareError sonare_realtime_voice_changer_create_json(const char* preset_or_conf
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
   if (max_block_size == 0) {
     max_block_size = editing::voice_changer::kRealtimeVoiceChangerDefaultMaxBlock;
-  }
-  if (num_channels == 0) {
-    num_channels = editing::voice_changer::kRealtimeVoiceChangerDefaultChannels;
   }
   if (const char* refused = editing::voice_changer::prepare_arguments_error(
           static_cast<double>(sample_rate), max_block_size, num_channels)) {
