@@ -24,12 +24,10 @@ from normalize import canonical_field_name, canonical_key, canonical_record_key
 
 from ._tokens import split_top_level_commas, strip_c_comments
 
-# Return types we accept as the start of a real declaration. A closed list, so a
-# declaration returning a type missing from it is not compared and produces no
-# finding of any kind -- indistinguishable from a symbol every surface exposes.
-# Keep it covering every return type the public headers actually spell; the
-# conformance check below asserts that, so a new one fails there rather than
-# going quiet.
+# Return types the tip's public headers spell. extract() adds whatever the read
+# tree's own headers spell (a tagged release can return a type the tip dropped),
+# so this list is the guard that the loose scan still reaches the tip:
+# test_c_return_type_coverage.py fails when a tip return type is missing from it.
 _RETURN_TYPES = (
     "SonareError",
     "void",
@@ -57,11 +55,35 @@ _RETURN_TYPES = (
     "SonareTranscribeConfig",
 )
 
-_DECL_RE = re.compile(
-    r"\b(?P<ret>" + "|".join(re.escape(t) for t in _RETURN_TYPES) + r")\s+"
-    r"(?P<name>sonare_[A-Za-z0-9_]+)\s*\((?P<args>.*?)\)\s*;",
-    re.DOTALL,
+# A declaration at column 0, return type first, read loosely so the return types
+# of whichever tree is extracted (a tagged release included) join the closed list.
+_LOOSE_DECL_RE = re.compile(
+    r"^(?P<ret>(?:const\s+)?[A-Za-z_][A-Za-z0-9_]*(?:\s*\*\s*|\s+))sonare_[A-Za-z0-9_]+\s*\(",
+    re.MULTILINE,
 )
+_NON_RETURN_PREFIXES = frozenset({"typedef", "return", "struct", "enum", "union"})
+
+
+def declared_return_types(text: str) -> set[str]:
+    """Return types a header's column-0 sonare_ declarations spell, normalized."""
+    found: set[str] = set()
+    for m in _LOOSE_DECL_RE.finditer(text):
+        ret = " ".join(m.group("ret").split()).replace(" *", "*")
+        if ret.split()[0] not in _NON_RETURN_PREFIXES:
+            found.add(ret)
+    return found
+
+
+def _decl_re(return_types: set[str]) -> re.Pattern[str]:
+    # Longest first, so "const char*" is tried before a shorter alternative.
+    alts = sorted(return_types, key=len, reverse=True)
+    spelled = [re.escape(t).replace(r"\*", r"\s*\*") for t in alts]
+    return re.compile(
+        r"\b(?P<ret>" + "|".join(spelled) + r")(?:(?<=\*)\s*|\s+)"
+        r"(?P<name>sonare_[A-Za-z0-9_]+)\s*\((?P<args>.*?)\)\s*;",
+        re.DOTALL,
+    )
+
 
 # Out-pointer / length / scalar params that the TS/py facades fold away or
 # represent differently. These are structural, not positional features.
@@ -382,16 +404,18 @@ def _extract_records(text: str, raw: str, path_rel: str, ex: Extraction) -> None
 
 def extract(root: Path) -> Extraction:
     ex = Extraction(surface="c")
-    files = _collect_api_headers(root)
+    files = [p for p in _collect_api_headers(root) if p.exists()]
+    texts = {p: strip_c_comments(p.read_text(encoding="utf-8")) for p in files}
+    return_types = set(_RETURN_TYPES)
+    for text in texts.values():
+        return_types |= declared_return_types(text)
+    decl_re = _decl_re(return_types)
     seen: set[str] = set()
     for path in files:
-        if not path.exists():
-            continue
         raw = path.read_text(encoding="utf-8")
-        # Map char offset -> line number for diagnostics.
-        text = strip_c_comments(raw)
+        text = texts[path]
         _extract_records(text, raw, str(path.relative_to(root)), ex)
-        for m in _DECL_RE.finditer(text):
+        for m in decl_re.finditer(text):
             name = m.group("name")
             key = canonical_key(name, "c")
             if key in seen:
@@ -412,7 +436,7 @@ def extract(root: Path) -> Extraction:
                     surface="c",
                     raw_name=name,
                     params=params,
-                    returns=m.group("ret"),
+                    returns=" ".join(m.group("ret").split()).replace(" *", "*"),
                     file=str(path.relative_to(root)),
                     line=line,
                 )

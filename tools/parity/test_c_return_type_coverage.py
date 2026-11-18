@@ -20,16 +20,32 @@ Stdlib only; no build needed. Run directly:
 from __future__ import annotations
 
 import re
+import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 _HERE = Path(__file__).resolve().parent
 if str(_HERE) not in sys.path:
     sys.path.insert(0, str(_HERE))
 
-from extractors.c_api import _RETURN_TYPES
+from extractors.c_api import _RETURN_TYPES, extract
 
-_INCLUDE_DIR = _HERE.parent.parent / "include" / "sonare"
+_ROOT = _HERE.parent.parent
+_INCLUDE_DIR = _ROOT / "include" / "sonare"
+
+# The release the API ledger compares against, and declarations in it whose
+# return types the tip no longer spells. Read with the tip's closed list alone,
+# they were missing from the baseline and every ledger row for them failed.
+_BASELINE_TAG = "v1.10.0"
+_BASELINE_ONLY_RETURNS = {
+    "sonare_eq_create": "SonareEq*",
+    "sonare_last_diagnostic_severity": "SonareDiagnosticSeverity",
+    "sonare_sample_bank_create": "SonareSampleBank*",
+    "sonare_streaming_mastering_chain_create": "SonareStreamingMasteringChain*",
+    "sonare_streaming_mastering_chain_create_ex": "SonareStreamingMasteringChain*",
+    "sonare_streaming_retune_create": "SonareStreamingRetune*",
+}
 
 # A declaration at column 0: the return type, then a sonare_ name and its
 # argument list. Deliberately looser than the extractor's own pattern, which is
@@ -80,7 +96,49 @@ def test_the_header_scan_reaches_declarations() -> None:
     assert len(declared) >= 16, f"header scan found only {len(declared)} return types"
 
 
+def test_a_return_type_only_the_read_tree_spells_is_extracted() -> None:
+    with tempfile.TemporaryDirectory(prefix="sonare-c-ret-") as d:
+        header = Path(d) / "include" / "sonare" / "sonare_c.h"
+        header.parent.mkdir(parents=True)
+        header.write_text(
+            "typedef struct SonareGone SonareGone;\n"
+            "SonareGone *sonare_gone_create(int sample_rate);\n"
+            "SonareGoneKind sonare_gone_kind(const SonareGone* gone);\n",
+            encoding="utf-8",
+        )
+        returns = {f.raw_name: f.returns for f in extract(Path(d)).functions}
+    assert returns == {
+        "sonare_gone_create": "SonareGone*",
+        "sonare_gone_kind": "SonareGoneKind",
+    }, returns
+
+
+def test_the_baseline_release_extracts_its_own_return_types() -> bool:
+    """Returns False (skipped) when the tag is not in this clone."""
+    probe = subprocess.run(
+        ["git", "-C", str(_ROOT), "rev-parse", "-q", "--verify", f"refs/tags/{_BASELINE_TAG}"],
+        capture_output=True,
+        check=False,
+    )
+    if probe.returncode != 0:
+        return False
+    with tempfile.TemporaryDirectory(prefix="sonare-c-ret-tag-") as d:
+        archive = subprocess.run(
+            ["git", "-C", str(_ROOT), "archive", _BASELINE_TAG, "include"],
+            capture_output=True,
+            check=True,
+        )
+        subprocess.run(["tar", "xf", "-", "-C", d], input=archive.stdout, check=True)
+        returns = {f.raw_name: f.returns for f in extract(Path(d)).functions}
+    found = {name: returns.get(name) for name in _BASELINE_ONLY_RETURNS}
+    assert found == _BASELINE_ONLY_RETURNS, found
+    return True
+
+
 if __name__ == "__main__":
     test_every_declared_return_type_is_extracted()
     test_the_header_scan_reaches_declarations()
+    test_a_return_type_only_the_read_tree_spells_is_extracted()
+    if not test_the_baseline_release_extracts_its_own_return_types():
+        print(f"c return-type coverage: {_BASELINE_TAG} not in this clone, baseline case skipped")
     print(f"c return-type coverage: OK ({len(_declared_return_types())} return types declared)")
