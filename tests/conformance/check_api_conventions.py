@@ -717,6 +717,38 @@ def _collection_records(records: list[dict]) -> list[dict]:
     return out
 
 
+_NEW_ERROR = re.compile(r"\bnew\s+(\w*Error)\(")
+_COMMENT_LINE = re.compile(r"^\s*(//|/\*|\*)")
+
+
+def _ts_sources(root: Path, surface: str) -> list[Path]:
+    return sorted(
+        p
+        for p in (root / "bindings" / surface / "src").rglob("*.ts")
+        if not p.name.endswith(".d.ts")
+    )
+
+
+def _error_construction_sites(root: Path) -> list[dict]:
+    """One record per `new *Error(` site in the Node and WASM TypeScript sources."""
+    out: list[dict] = []
+    for surface in ("node", "wasm"):
+        for path in _ts_sources(root, surface):
+            for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+                if _COMMENT_LINE.match(line) or "cause:" in line:
+                    continue
+                for match in _NEW_ERROR.finditer(line):
+                    out.append(
+                        {
+                            "surface": surface,
+                            "kind": "error-site",
+                            "name": f"{path.relative_to(root).as_posix()}:{number}",
+                            "class": match.group(1),
+                        }
+                    )
+    return out
+
+
 RULES: list[Rule] = [
     Rule(
         name="getters",
@@ -1069,6 +1101,25 @@ RULES: list[Rule] = [
             else None
         ),
         derive=_collection_records,
+    ),
+    Rule(
+        name="error-class-by-cause",
+        summary="a Node/WASM facade raises SonareError, TypeError or RangeError, never a plain Error",
+        population=lambda r: r["kind"] == "error-site",
+        violation=lambda r: (
+            "a failure is a coded SonareError (or TypeError / RangeError for an argument), not a plain Error"
+            if r["class"] == "Error"
+            else None
+        ),
+        scan=_error_construction_sites,
+        pending={
+            "wasm:bindings/wasm/src/opfs_clip_pages.ts:96": "throw SonareError with the code that names the cause",
+            **{
+                f"wasm:bindings/wasm/src/vocal_edit_worker.ts:{n}": "a worker-side failure is a coded SonareError"
+                for n in (297, 368, 389, 395, 410, 488, 727)
+            },
+            "wasm:bindings/wasm/src/vocal_edit_worker_client.ts:250": "throw SonareError with the code that names the cause",
+        },
     ),
 ]
 

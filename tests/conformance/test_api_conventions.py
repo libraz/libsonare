@@ -692,6 +692,35 @@ class CollectionsRule(unittest.TestCase):
         self.assertEqual([f.key for f in verdict.violations], ["python:Project.track_count"])
 
 
+class ErrorClassByCauseRule(unittest.TestCase):
+    def tree(self, wasm_source: str) -> Path:
+        root = Path(self._tmp.name)
+        for surface, text in (("node", "throw new RangeError('bad');\n"), ("wasm", wasm_source)):
+            path = root / "bindings" / surface / "src" / "m.ts"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text)
+        return root
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+
+    def judge(self, wasm_source: str):
+        r = dataclasses.replace(rule("error-class-by-cause"), pending={}, exempt={})
+        return check.judge(r, r.scan(self.tree(wasm_source)))
+
+    def test_clean_tree_passes(self) -> None:
+        verdict = self.judge(
+            "throw new SonareError(1, 'x', {\n  cause: new Error('why'),\n});\n// throw new Error('doc');\n"
+        )
+        self.assertEqual(verdict.read, 2)
+        self.assertFalse(verdict.failed)
+
+    def test_plain_error_is_named(self) -> None:
+        verdict = self.judge("const a = 1;\nthrow new Error('short write');\n")
+        self.assertEqual([f.key for f in verdict.violations], ["wasm:bindings/wasm/src/m.ts:2"])
+
+
 class Framework(unittest.TestCase):
     def test_reading_nothing_fails(self) -> None:
         verdict = check.judge(rule("getters"), [])
