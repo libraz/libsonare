@@ -7578,3 +7578,18 @@ old = "MatchTonalBalanceLogBandsResult"
 removed = true
 domain = "mastering"
 rule = "typed-results"
+
+[[entry]]
+kind = "option"
+old = "PlaybackLoudnessMeter(channels)"
+changed = "channels -> num_channels"
+domain = "engine"
+rule = "num-channels"
+test = "bindings/python/tests/test_playback.py::PlaybackLoudnessMeter(num_channels="
+
+[[entry]]
+kind = "option"
+old = "render_playback(channels)"
+new = "render_playback(num_channels)"
+domain = "engine"
+rule = "num-channels"

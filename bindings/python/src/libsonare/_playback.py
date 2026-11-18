@@ -394,31 +394,31 @@ class PlaybackRenderer:
 def render_playback(
     samples: Sequence[float] | list[float] | np.ndarray,
     *,
-    channels: int,
+    num_channels: int,
     sample_rate: int,
     config: Mapping[str, Any] | str,
     hrtf: HrtfSet | None = None,
 ) -> np.ndarray:
     """Render a whole interleaved buffer offline, time-aligned with the input.
 
-    Returns a ``(frames, channels)`` float32 ndarray -- ``channels`` is the
-    output CHANNEL COUNT, which the caller cannot know in advance (it follows
+    Returns a ``(frames, channels)`` float32 ndarray; the second axis is the
+    output channel count, which the caller cannot know in advance (it follows
     the render target ``config`` names, e.g. a 5.1 source rendered to
     headphones comes back stereo), so the shape itself is how this surface
     carries it, the same way :meth:`Project.bounce` does. Node's
     ``renderPlayback`` and WASM's carry the same fact as an explicit
-    ``{samples, channels}`` result instead, since neither has a reshape-in-
+    ``{samples, numChannels}`` result instead, since neither has a reshape-in-
     place idiom to lean on.
 
     The renderer latency is removed internally, so the result has the same
-    frame count as ``samples`` / ``channels``.
+    frame count as ``samples`` / ``num_channels``.
     """
-    ch = _narrow_int(channels, "channels", _C_INT_MIN, _C_INT_MAX)
+    ch = _narrow_int(num_channels, "num_channels", _C_INT_MIN, _C_INT_MAX)
     if ch <= 0:
-        raise SonareValueError("channels must be positive")
+        raise SonareValueError("num_channels must be positive")
     c_in, total = _to_c_float_array(samples)
     if total % ch != 0:
-        raise SonareValueError("interleaved samples length must be divisible by channels")
+        raise SonareValueError("interleaved samples length must be divisible by num_channels")
     frames = total // ch
     lib = _get_lib()
     _require_playback(lib)
@@ -429,7 +429,7 @@ def render_playback(
         lib.sonare_playback_render_interleaved(
             c_in,
             _to_c_size_t(frames, "frames"),
-            _to_c_int(ch, "channels"),
+            _to_c_int(ch, "num_channels"),
             _to_c_int(sample_rate, "sample_rate"),
             _playback_config_to_json(config),
             hrtf._require_handle() if hrtf is not None else None,
@@ -456,16 +456,16 @@ class PlaybackLoudnessMeter:
     # Declared on the class so close() reads it even when __init__ never ran.
     _handle: ctypes.c_void_p | None = None
 
-    def __init__(self, channels: int, sample_rate: int) -> None:
+    def __init__(self, num_channels: int, sample_rate: int) -> None:
         self._handle = ctypes.c_void_p()
         self._lib = _get_lib()
         _require_playback(self._lib)
-        self._channels = _narrow_int(channels, "channels", _C_INT_MIN, _C_INT_MAX)
+        self._channels = _narrow_int(num_channels, "num_channels", _C_INT_MIN, _C_INT_MAX)
         if self._channels <= 0:
-            raise SonareValueError("channels must be positive")
+            raise SonareValueError("num_channels must be positive")
         _check(
             self._lib.sonare_playback_loudness_meter_create(
-                _to_c_int(self._channels, "channels"),
+                _to_c_int(self._channels, "num_channels"),
                 _to_c_int(sample_rate, "sample_rate"),
                 ctypes.byref(self._handle),
             )
@@ -496,7 +496,7 @@ class PlaybackLoudnessMeter:
         validated = _validate_samples("push_interleaved", samples)
         c_array, total = _to_c_float_array(validated)
         if total % self._channels != 0:
-            raise SonareValueError("interleaved samples length must be divisible by channels")
+            raise SonareValueError("interleaved samples length must be divisible by num_channels")
         frames = total // self._channels
         _check(
             self._lib.sonare_playback_loudness_meter_push_interleaved(

@@ -114,6 +114,7 @@ _EMPTY_INPUT_IS_DEFINED = frozenset(
 _SCALAR_ARGS: dict[str, Any] = {
     "sample_rate": 22050,
     "channels": 1,
+    "num_channels": 1,
     "source_sample_rate": 22050,
     "target_sample_rate": 44100,
     "frame_length": 2048,

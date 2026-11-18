@@ -255,7 +255,7 @@ def test_closed_renderer_rejects_further_calls() -> None:
 
 
 def test_closed_loudness_meter_rejects_further_calls_before_buffer_validation() -> None:
-    meter = PlaybackLoudnessMeter(2, SR)
+    meter = PlaybackLoudnessMeter(num_channels=2, sample_rate=SR)
     meter.close()
     operations = {
         "push_interleaved": lambda: meter.push_interleaved(None),  # type: ignore[arg-type]
@@ -270,7 +270,7 @@ def test_closed_loudness_meter_rejects_further_calls_before_buffer_validation() 
 
 def test_render_playback_is_time_aligned_and_finite() -> None:
     samples = np.array(_sine(256 * 2), dtype=np.float32)
-    out = render_playback(samples, channels=2, sample_rate=SR, config={})
+    out = render_playback(samples, num_channels=2, sample_rate=SR, config={})
     # (frames, channels) -- the shape itself names the output channel count,
     # which the caller cannot know in advance (see render_playback's own
     # docstring): a 2-channel speakers target here keeps 2 channels out.
@@ -282,14 +282,14 @@ def test_render_playback_names_the_output_channel_count_via_shape() -> None:
     """Headphones renders binaural stereo regardless of the source width."""
     samples = np.array(_sine(256 * 6), dtype=np.float32)
     out = render_playback(
-        samples, channels=6, sample_rate=SR, config={"target": {"kind": "headphones"}}
+        samples, num_channels=6, sample_rate=SR, config={"target": {"kind": "headphones"}}
     )
     assert out.shape == (256, 2)
 
 
 def test_render_playback_rejects_an_unknown_key() -> None:
     with pytest.raises(SonareError):
-        render_playback([0.0] * 4, channels=2, sample_rate=SR, config={"bad_key": 1})
+        render_playback([0.0] * 4, num_channels=2, sample_rate=SR, config={"bad_key": 1})
 
 
 def test_hrtf_set_default_and_lifecycle() -> None:
@@ -323,12 +323,12 @@ def test_a_closed_hrtf_set_is_refused_rather_than_silently_falling_back_to_the_d
 
     with raises_coded(ErrorCode.INVALID_STATE, match="closed"):
         render_playback(
-            np.zeros(4, dtype=np.float32), channels=2, sample_rate=SR, config={}, hrtf=hrtf
+            np.zeros(4, dtype=np.float32), num_channels=2, sample_rate=SR, config={}, hrtf=hrtf
         )
 
 
 def test_loudness_meter_integrates_pushed_frames() -> None:
-    with PlaybackLoudnessMeter(2, SR) as meter:
+    with PlaybackLoudnessMeter(num_channels=2, sample_rate=SR) as meter:
         block = _sine(4096 * 2, hz=200.0)
         meter.push_interleaved(block)
         lufs = meter.integrated_lufs
@@ -359,7 +359,7 @@ def test_cli_render_trims_what_the_offline_render_trims_with_unequal_distances()
     burst[:480] = np.array(_sine(480, 1000.0), dtype=np.float32)
     interleaved = np.repeat(burst, 2)
 
-    direct = render_playback(interleaved, channels=2, sample_rate=SR, config=config)
+    direct = render_playback(interleaved, num_channels=2, sample_rate=SR, config=config)
     with PlaybackRenderer(
         config, sample_rate=SR, max_block_size=_OFFLINE_RENDER_BLOCK_FRAMES
     ) as renderer:
@@ -392,7 +392,7 @@ def _offline_burst(frames: int = 2400) -> np.ndarray:
 def test_render_offline_after_processing_equals_render_playback() -> None:
     interleaved = _offline_burst()
     direct = render_playback(
-        interleaved, channels=2, sample_rate=SR, config=_UNEQUAL_DISTANCE_CONFIG
+        interleaved, num_channels=2, sample_rate=SR, config=_UNEQUAL_DISTANCE_CONFIG
     )
     with PlaybackRenderer(_UNEQUAL_DISTANCE_CONFIG, sample_rate=SR, max_block_size=BLOCK) as r:
         r.process_interleaved(np.full(2 * BLOCK, 0.5, dtype=np.float32), 2)
