@@ -257,8 +257,8 @@ export class PlaybackLoudnessMeter {
     return this.nativeHandle;
   }
 
-  constructor(channels: number, sampleRate: number) {
-    this.nativeHandle = getSonareModule().createPlaybackLoudnessMeter(channels, sampleRate);
+  constructor(numChannels: number, sampleRate: number) {
+    this.nativeHandle = getSonareModule().createPlaybackLoudnessMeter(numChannels, sampleRate);
   }
 
   /** Feeds interleaved frames of any length. */
@@ -296,11 +296,12 @@ export class PlaybackLoudnessMeter {
 export function renderPlayback(request: RenderPlaybackRequest): RenderPlaybackResult {
   requestObject('renderPlayback', request, 'request', true);
   assertAudioInput('renderPlayback', request.samples, request.sampleRate);
-  return getSonareModule().renderPlayback(
+  const { samples, channels } = getSonareModule().renderPlayback(
     request.samples,
-    request.channels,
+    request.numChannels,
     request.sampleRate,
     configJsonText(request.config),
     nativeHrtf(request.hrtf),
   );
+  return { samples, numChannels: channels };
 }

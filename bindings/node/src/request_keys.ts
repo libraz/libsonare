@@ -24,7 +24,13 @@ const ALIGN_TAKE_TO_REFERENCE_REQUEST_KEYS = keySet(
   'hopLength',
   'binsPerOctave',
 );
-const RENDER_PLAYBACK_REQUEST_KEYS = keySet('samples', 'channels', 'sampleRate', 'config', 'hrtf');
+const RENDER_PLAYBACK_REQUEST_KEYS = keySet(
+  'samples',
+  'numChannels',
+  'sampleRate',
+  'config',
+  'hrtf',
+);
 const DETECT_TEMPO_REQUEST_KEYS = keySet('samples', 'sampleRate', 'validate');
 const DETECT_BPM_REQUEST_KEYS = keySet('samples', 'sampleRate', 'bpmMin', 'bpmMax', 'validate');
 const DETECT_KEY_REQUEST_KEYS = keySet(

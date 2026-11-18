@@ -294,7 +294,7 @@ describe('PlaybackLoudnessMeter', () => {
     expect(() => meter.pushInterleaved(new Float32Array(3))).toThrow(RangeError);
   });
 
-  it('rejects a non-number channels or sampleRate argument', () => {
+  it('rejects a non-number numChannels or sampleRate argument', () => {
     expect(() => new PlaybackLoudnessMeter('two' as unknown as number, 48000)).toThrow();
     expect(() => new PlaybackLoudnessMeter(2, 'fast' as unknown as number)).toThrow();
     // The addon must still be usable after the rejected construction.
@@ -313,21 +313,21 @@ describe('renderPlayback', () => {
     }
     const result = renderPlayback({
       samples: interleaved,
-      channels: 2,
+      numChannels: 2,
       sampleRate: 48000,
       config: {},
     });
-    expect(result.channels).toBe(2);
-    expect(result.samples).toHaveLength(l.length * result.channels);
+    expect(result.numChannels).toBe(2);
+    expect(result.samples).toHaveLength(l.length * result.numChannels);
     expect(Array.from(result.samples).every((s) => Number.isFinite(s))).toBe(true);
   });
 
-  it('rejects a non-number channels or sampleRate argument and stays usable', () => {
+  it('rejects a non-number numChannels or sampleRate argument and stays usable', () => {
     const samples = new Float32Array(8);
     expect(() =>
       renderPlayback({
         samples,
-        channels: 'two' as unknown as number,
+        numChannels: 'two' as unknown as number,
         sampleRate: 48000,
         config: {},
       }),
@@ -335,13 +335,13 @@ describe('renderPlayback', () => {
     expect(() =>
       renderPlayback({
         samples,
-        channels: 2,
+        numChannels: 2,
         sampleRate: 'fast' as unknown as number,
         config: {},
       }),
     ).toThrow();
-    const result = renderPlayback({ samples, channels: 2, sampleRate: 48000, config: {} });
-    expect(result.channels).toBe(2);
+    const result = renderPlayback({ samples, numChannels: 2, sampleRate: 48000, config: {} });
+    expect(result.numChannels).toBe(2);
   });
 });
 
@@ -369,7 +369,7 @@ describe('PlaybackRenderer.renderOffline', () => {
     const samples = interleavedStereo(4096);
     const expected = renderPlayback({
       samples,
-      channels: 2,
+      numChannels: 2,
       sampleRate: 48000,
       config: unequalSpeakers,
     });

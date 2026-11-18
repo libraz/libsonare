@@ -175,7 +175,7 @@ export interface PlaybackRendererOptions {
 /** Request shape for the one-shot {@link renderPlayback} facade. */
 export interface RenderPlaybackRequest {
   samples: Float32Array;
-  channels: number;
+  numChannels: number;
   sampleRate: number;
   config: PlaybackRendererConfig | string;
   hrtf?: HrtfSet;
@@ -184,5 +184,5 @@ export interface RenderPlaybackRequest {
 /** {@link renderPlayback}'s result: the output has its own channel count, which the caller cannot know in advance. */
 export interface RenderPlaybackResult {
   samples: Float32Array;
-  channels: number;
+  numChannels: number;
 }

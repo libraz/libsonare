@@ -113,7 +113,7 @@ describe('a released handle passed as an argument reports InvalidState', () => {
     const samples = new Float32Array(960);
     const viaRenderer = capture(() => new PlaybackRenderer({ config, hrtf }));
     const viaOffline = capture(() =>
-      renderPlayback({ samples, channels: 1, sampleRate: 48000, config, hrtf }),
+      renderPlayback({ samples, numChannels: 1, sampleRate: 48000, config, hrtf }),
     );
     expect(codeOf(viaRenderer)).toBe(ErrorCode.InvalidState);
     expect(codeOf(viaOffline)).toBe(ErrorCode.InvalidState);

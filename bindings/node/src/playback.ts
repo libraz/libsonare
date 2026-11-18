@@ -217,8 +217,8 @@ export class PlaybackLoudnessMeter {
   private native: NativePlaybackLoudnessMeter;
   private disposed = false;
 
-  constructor(channels: number, sampleRate: number) {
-    this.native = new addon.PlaybackLoudnessMeter(channels, sampleRate);
+  constructor(numChannels: number, sampleRate: number) {
+    this.native = new addon.PlaybackLoudnessMeter(numChannels, sampleRate);
   }
 
   /** Feeds interleaved frames of any length. */
@@ -261,11 +261,12 @@ export class PlaybackLoudnessMeter {
 export function renderPlayback(request: RenderPlaybackRequest): RenderPlaybackResult {
   requestObject('renderPlayback', request, 'request', true);
   assertAudioInput('renderPlayback', request.samples, request.sampleRate, request);
-  return addon.renderPlayback(
+  const { samples, channels } = addon.renderPlayback(
     request.samples,
-    request.channels,
+    request.numChannels,
     request.sampleRate,
     configJsonText(request.config),
     nativeHrtf(request.hrtf),
-  ) as RenderPlaybackResult;
+  ) as { samples: Float32Array; channels: number };
+  return { samples, numChannels: channels };
 }

@@ -180,7 +180,11 @@ describe('argument refusal classes shared with the Node surface', () => {
 
   it('refuses a missing playback config with a TypeError, not an embind error', () => {
     const error = thrown(() =>
-      renderPlayback({ samples: new Float32Array(480), channels: 1, sampleRate: 48000 } as never),
+      renderPlayback({
+        samples: new Float32Array(480),
+        numChannels: 1,
+        sampleRate: 48000,
+      } as never),
     );
     expect(error).toBeInstanceOf(TypeError);
   });

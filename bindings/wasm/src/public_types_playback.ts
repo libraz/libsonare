@@ -180,9 +180,9 @@ export interface PlaybackRendererOptions {
 
 /** Request shape for the one-shot `renderPlayback`. */
 export interface RenderPlaybackRequest {
-  /** Interleaved input, `channels` samples per frame. */
+  /** Interleaved input, `numChannels` samples per frame. */
   samples: Float32Array;
-  channels: number;
+  numChannels: number;
   sampleRate: number;
   config: PlaybackRendererConfig | string;
   /** Required for a headphones target; see {@link PlaybackRendererOptions.hrtf}. */
@@ -192,5 +192,5 @@ export interface RenderPlaybackRequest {
 /** `renderPlayback`'s result: interleaved output with the target's own channel count. */
 export interface RenderPlaybackResult {
   samples: Float32Array;
-  channels: number;
+  numChannels: number;
 }

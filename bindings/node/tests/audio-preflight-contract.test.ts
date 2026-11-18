@@ -325,7 +325,7 @@ const TABLE: Entry[] = [
       fn('mixingAssistantSuggest')({ tracks: [{ id: 'a', left: samples }], sampleRate }),
   },
   mono('renderPlayback', {
-    channels: 1,
+    numChannels: 1,
     config: { input: { layout: 'mono' }, target: { kind: 'speakers', layout: 'stereo' } },
   }),
   {

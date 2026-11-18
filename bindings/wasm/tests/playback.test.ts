@@ -99,7 +99,12 @@ describe('playback renderer (WASM)', () => {
   it('refuses a headphones target without an HRTF set by name', () => {
     expect(() => new PlaybackRenderer({ config: {} })).toThrow(/hrtf required/);
     expect(() =>
-      renderPlayback({ samples: new Float32Array(256), channels: 2, sampleRate: SR, config: {} }),
+      renderPlayback({
+        samples: new Float32Array(256),
+        numChannels: 2,
+        sampleRate: SR,
+        config: {},
+      }),
     ).toThrow(/hrtf required/);
   });
 
@@ -256,7 +261,7 @@ describe('playback renderer (WASM)', () => {
     expect(() =>
       renderPlayback({
         samples: new Float32Array(0),
-        channels: 6,
+        numChannels: 6,
         sampleRate: SR,
         config: SPEAKERS_5_1,
       }),
@@ -270,7 +275,7 @@ describe('playback renderer (WASM)', () => {
     try {
       renderPlayback({
         samples: interleave(planes),
-        channels: 6,
+        numChannels: 6,
         sampleRate: SR,
         config: SPEAKERS_5_1,
       });
@@ -435,11 +440,11 @@ describe('playback renderer (WASM)', () => {
     planes[2][at] = 0.5;
     const result = renderPlayback({
       samples: interleave(planes),
-      channels: 6,
+      numChannels: 6,
       sampleRate: SR,
       config: SPEAKERS_5_1,
     });
-    expect(result.channels).toBe(6);
+    expect(result.numChannels).toBe(6);
     expect(result.samples).toHaveLength(frames * 6);
     const center = new Float32Array(frames);
     for (let i = 0; i < frames; i++) {
@@ -451,12 +456,12 @@ describe('playback renderer (WASM)', () => {
     try {
       const binaural = renderPlayback({
         samples: interleave(noisePlanes(2, 2048)),
-        channels: 2,
+        numChannels: 2,
         sampleRate: SR,
         config: {},
         hrtf,
       });
-      expect(binaural.channels).toBe(2);
+      expect(binaural.numChannels).toBe(2);
       expect(binaural.samples).toHaveLength(2048 * 2);
       expect(binaural.samples.every(Number.isFinite)).toBe(true);
     } finally {
@@ -496,7 +501,7 @@ describe('playback renderer (WASM)', () => {
       output_limiter: { enabled: false },
     };
     const input = interleave(noisePlanes(2, 3000, 11));
-    const expected = renderPlayback({ samples: input, channels: 2, sampleRate: SR, config });
+    const expected = renderPlayback({ samples: input, numChannels: 2, sampleRate: SR, config });
     const renderer = new PlaybackRenderer({ config, sampleRate: SR, maxBlockSize: 512 });
     try {
       renderer.processInterleaved(input.subarray(0, 512 * 2), 2);

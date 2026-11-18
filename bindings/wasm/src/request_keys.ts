@@ -2031,7 +2031,7 @@ const RenderPercussiveEventsRequestKeys = keysOf<RenderPercussiveEventsRequest>(
 ]);
 const RenderPlaybackRequestKeys = keysOf<RenderPlaybackRequest>()([
   'samples',
-  'channels',
+  'numChannels',
   'sampleRate',
   'config',
   'hrtf',

@@ -27698,3 +27698,27 @@ new = "SonareWorkletMeterSnapshot.truePeakDbtp"
 domain = "mastering"
 rule = "loudness-names"
 entry = "./worklet"
+
+[[entry]]
+kind = "option"
+old = "PlaybackLoudnessMeter.constructor(channels)"
+new = "PlaybackLoudnessMeter.constructor(numChannels)"
+domain = "engine"
+rule = "num-channels"
+entry = "."
+
+[[entry]]
+kind = "field"
+old = "RenderPlaybackRequest.channels"
+new = "RenderPlaybackRequest.numChannels"
+domain = "engine"
+rule = "num-channels"
+entry = "."
+
+[[entry]]
+kind = "field"
+old = "RenderPlaybackResult.channels"
+new = "RenderPlaybackResult.numChannels"
+domain = "engine"
+rule = "num-channels"
+entry = "."

@@ -14792,3 +14792,24 @@ changed = "channelCount -> numChannels"
 domain = "engine"
 rule = "num-channels"
 test = "bindings/node/tests/engine-meter-input-and-constructed-value.test.ts::busMeter.numChannels"
+
+[[entry]]
+kind = "option"
+old = "PlaybackLoudnessMeter.constructor(channels)"
+new = "PlaybackLoudnessMeter.constructor(numChannels)"
+domain = "engine"
+rule = "num-channels"
+
+[[entry]]
+kind = "field"
+old = "RenderPlaybackRequest.channels"
+new = "RenderPlaybackRequest.numChannels"
+domain = "engine"
+rule = "num-channels"
+
+[[entry]]
+kind = "field"
+old = "RenderPlaybackResult.channels"
+new = "RenderPlaybackResult.numChannels"
+domain = "engine"
+rule = "num-channels"
