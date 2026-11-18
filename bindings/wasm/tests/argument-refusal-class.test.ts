@@ -168,14 +168,16 @@ describe('argument refusal classes shared with the Node surface', () => {
     expect(thrown(() => timeToFrames(1, 22050, -1))).toBeInstanceOf(RangeError);
   });
 
-  it('refuses a missing frameRate on the note entry points with a RangeError', () => {
+  it('refuses a missing frameRate on the note entry points with a TypeError', () => {
     const request = {
       samples,
       sampleRate: 22050,
       f0Hz: new Float32Array(4),
       voiced: new Uint8Array(4),
     } as unknown as ExtractNotesRequest;
-    expect(thrown(() => extractNotes(request))).toBeInstanceOf(RangeError);
+    const error = thrown(() => extractNotes(request));
+    expect(error).toBeInstanceOf(TypeError);
+    expect((error as Error).message).toBe('extractNotes: frameRate must be a number');
   });
 
   it('refuses a missing playback config with a TypeError, not an embind error', () => {
