@@ -78,6 +78,8 @@ std::vector<float> mel_to_stft(const float* M, int n_mels, int n_frames,
 
 Audio mel_to_audio(const float* M, int n_mels, int n_frames, const MelConfig& mel_config,
                    int n_iter, int sr) {
+  if (n_iter < 1)
+    throw SonareException(ErrorCode::InvalidParameter, "mel_to_audio: n_iter must be >= 1");
   // mel_to_stft already returns a magnitude spectrogram (librosa-compatible), so
   // no additional square root is applied here before Griffin-Lim.
   std::vector<float> magnitude = mel_to_stft(M, n_mels, n_frames, mel_config, sr);

@@ -1,5 +1,5 @@
 import { assertMatrix2D, toMatrix2D } from './internal/feature_matrix.js';
-import { resolvePositiveIntegerOption } from './internal/feature_options.js';
+import { resolveIntegerOption, resolvePositiveIntegerOption } from './internal/feature_options.js';
 import { addon } from './native.js';
 import type { Matrix2D } from './types.js';
 import type { OptionsOf, ValidateOptions } from './validation.js';
@@ -267,7 +267,7 @@ export function melToAudio(...args: unknown[]): Float32Array {
   // is that all three are positive.
   const nFft = resolvePositiveIntegerOption('melToAudio', 'nFft', r.nFft, 2048);
   const hopLength = resolvePositiveIntegerOption('melToAudio', 'hopLength', r.hopLength, 512);
-  const nIter = resolvePositiveIntegerOption('melToAudio', 'nIter', r.nIter, 32);
+  const nIter = resolveIntegerOption('melToAudio', 'nIter', r.nIter, 32);
   const fminHz = r.fminHz ?? 0;
   const fmaxHz = r.fmaxHz ?? 0;
   assertFloatFields('melToAudio', { fminHz, fmaxHz });

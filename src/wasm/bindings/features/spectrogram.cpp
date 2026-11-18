@@ -279,7 +279,6 @@ val js_mel_to_audio(val mel_power, const val& n_mels_val, const val& n_frames_va
       load_validated_matrix("melToAudio", mel_power, n_mels, n_frames, "power", "n_mels");
   validate_positive("melToAudio", n_fft, "n_fft");
   validate_positive("melToAudio", hop_length, "hop_length");
-  validate_positive("melToAudio", n_iter, "n_iter");
   validate_mel_bounds(fmin, fmax);
 
   MelConfig config;

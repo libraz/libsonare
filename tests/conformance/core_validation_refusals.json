@@ -24,5 +24,13 @@
       { "id": "block_above_max", "sample_rate": 48000, "max_block_size": 1048577, "cause": "argument", "message": "max_block_size must be within [1, 1048576]" },
       { "id": "block_2_21", "sample_rate": 48000, "max_block_size": 2097152, "cause": "argument", "message": "max_block_size must be within [1, 1048576]" }
     ]
+  },
+  "mel_to_audio": {
+    "input": { "n_mels": 8, "n_frames": 4, "fill": 0.1 },
+    "accepted": [{ "id": "one_iter", "n_iter": 1 }],
+    "refused": [
+      { "id": "zero_iter", "n_iter": 0, "cause": "argument", "message": "n_iter must be >= 1" },
+      { "id": "negative_iter", "n_iter": -1, "cause": "argument", "message": "n_iter must be >= 1" }
+    ]
   }
 }

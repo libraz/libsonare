@@ -43,7 +43,7 @@ std::vector<float> mel_to_stft(const float* M, int n_mels, int n_frames,
 /// @param sr Sample rate of the original audio (Hz). Used for both the Mel
 ///        filterbank inversion and the Griffin-Lim STFT timing.
 /// @return Reconstructed audio.
-/// @throw sonare::SonareException (InvalidParameter) for everything @ref
+/// @throw sonare::SonareException (InvalidParameter) for @p n_iter < 1 and everything @ref
 ///        mel_to_stft rejects, including a non-finite element of @p M, plus
 ///        anything @ref griffin_lim rejects in the reconstructed magnitudes.
 Audio mel_to_audio(const float* M, int n_mels, int n_frames, const MelConfig& mel_config,

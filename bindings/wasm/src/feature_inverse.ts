@@ -164,7 +164,7 @@ export function melToAudio(...args: unknown[]): Float32Array {
   const power = assertMatrix2D('melToAudio', r.power, 'power', r.validate !== false);
   const fft = resolveFftOptions('melToAudio', r.nFft, r.hopLength);
   const nIter = r.nIter ?? 32;
-  validatePositiveIntegers('melToAudio', { nIter });
+  assertInt32('melToAudio', nIter, 'nIter');
   const fminHz = r.fminHz ?? 0;
   const fmaxHz = r.fmaxHz ?? 0;
   assertFloatFields('melToAudio', { fminHz, fmaxHz });

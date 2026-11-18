@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { init, mfccToAudio, mfccToMel, StreamingRetune } from '../src/index';
+import { init, melToAudio, mfccToAudio, mfccToMel, StreamingRetune } from '../src/index';
 import { getSonareModule } from '../src/module_state';
 import { expectRefusalOf } from './_helpers';
 
@@ -11,6 +11,9 @@ type Cause = 'argument';
 type MfccInput = { n_mfcc: number; n_frames: number; fill: number };
 type MfccCase = { id: string; n_mels: number; cause?: Cause; message?: string };
 type MfccRoute = { input: MfccInput; accepted: MfccCase[]; refused: MfccCase[] };
+type MelInput = { n_mels: number; n_frames: number; fill: number };
+type MelCase = { id: string; n_iter: number; cause?: Cause; message?: string };
+type MelRoute = { input: MelInput; accepted: MelCase[]; refused: MelCase[] };
 type RetuneCase = {
   id: string;
   sample_rate: number;
@@ -25,7 +28,11 @@ const corpus = JSON.parse(
     new URL('../../../tests/conformance/core_validation_refusals.json', import.meta.url),
     'utf8',
   ),
-) as { mfcc_to_mel: MfccRoute; streaming_retune_prepare: RetuneRoute };
+) as {
+  mfcc_to_mel: MfccRoute;
+  mel_to_audio: MelRoute;
+  streaming_retune_prepare: RetuneRoute;
+};
 
 const errorClassFor: Record<Cause, typeof RangeError> = { argument: RangeError };
 const literal = (text: string) => new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
@@ -41,6 +48,7 @@ type RawInverse = {
     nMels: number;
   };
   mfccToAudio(...args: unknown[]): Float32Array;
+  melToAudio(...args: unknown[]): Float32Array;
   createStreamingRetune(config: Record<string, unknown>): {
     prepare(sampleRate: number, maxBlockSize: number): void;
     delete(): void;
@@ -84,6 +92,43 @@ describe('mfcc_to_mel refusals come from the core', () => {
           false,
           0,
         ),
+    ];
+    for (const call of calls) {
+      expect(expectRefusalOf(call, kind).message).toMatch(text);
+    }
+  });
+});
+
+describe('mel_to_audio refusals come from the core', () => {
+  const { input, accepted, refused } = corpus.mel_to_audio;
+  const data = new Float32Array(input.n_mels * input.n_frames).fill(input.fill);
+  const power = { data, rows: input.n_mels, cols: input.n_frames };
+  const raw = () => getSonareModule() as unknown as RawInverse;
+
+  it.each(accepted)('accepts $id', ({ n_iter }) => {
+    expect(melToAudio({ power, nIter: n_iter }).length).toBeGreaterThan(0);
+    const out = raw().melToAudio(
+      data,
+      input.n_mels,
+      input.n_frames,
+      22050,
+      2048,
+      512,
+      0,
+      0,
+      n_iter,
+      false,
+    );
+    expect(out.length).toBeGreaterThan(0);
+  });
+
+  it.each(refused)('refuses $id', ({ n_iter, cause, message }) => {
+    const kind = errorClassFor[cause as Cause];
+    const text = new RegExp(message as string);
+    const calls: Array<() => unknown> = [
+      () => melToAudio({ power, nIter: n_iter }),
+      () =>
+        raw().melToAudio(data, input.n_mels, input.n_frames, 22050, 2048, 512, 0, 0, n_iter, false),
     ];
     for (const call of calls) {
       expect(expectRefusalOf(call, kind).message).toMatch(text);
