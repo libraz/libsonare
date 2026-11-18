@@ -881,9 +881,13 @@ def _minimal_analysis_result(*, sections: list[object] | None = None) -> SimpleN
         downbeat_phase=0,
         chords=[],
         sections=[] if sections is None else sections,
-        timbre=None,
-        dynamics=None,
-        rhythm=None,
+        timbre=SimpleNamespace(
+            brightness=0.5, warmth=0.5, density=0.5, roughness=0.5, complexity=0.5
+        ),
+        dynamics=SimpleNamespace(
+            dynamic_range_db=10.0, loudness_range_lu=5.0, crest_factor=3.0, is_compressed=False
+        ),
+        rhythm=SimpleNamespace(syncopation=0.1, groove_type="straight", pattern_regularity=0.9),
         form="A",
     )
 

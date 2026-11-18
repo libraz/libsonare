@@ -12,7 +12,6 @@ from ._cli_common import (
     PITCH_NAMES,
     _color_enabled,
     _format_time,
-    _omit_absent,
     _parse_key_profile,
     _parse_meter_candidates,
     _parse_mode,
@@ -362,56 +361,45 @@ def cmd_analyze(args: argparse.Namespace) -> int:
         rhythm = r.rhythm
         print(
             _strict_json_dumps(
-                _omit_absent(
-                    {
-                        "bpm": r.bpm,
-                        "bpm_confidence": r.bpm_confidence,
-                        "key": {
-                            "root": r.key.root.value,
-                            "mode": _mode_value(r.key.mode),
-                            "confidence": r.key.confidence,
-                            "name": key_name,
-                        },
-                        "time_signature": {
-                            "numerator": r.time_signature.numerator,
-                            "denominator": r.time_signature.denominator,
-                            "confidence": r.time_signature.confidence,
-                        },
-                        "beats": beats,
-                        "downbeat_indices": downbeat_indices,
-                        "downbeat_phase": r.downbeat_phase,
-                        "chords": chords,
-                        "sections": sections,
-                        "timbre": None
-                        if timbre is None
-                        else {
-                            "brightness": timbre.brightness,
-                            "warmth": timbre.warmth,
-                            "density": timbre.density,
-                            "roughness": timbre.roughness,
-                            "complexity": timbre.complexity,
-                        },
-                        "dynamics": None
-                        if dynamics is None
-                        else {
-                            "dynamic_range_db": dynamics.dynamic_range_db,
-                            "loudness_range_db": dynamics.loudness_range_lu,
-                            "crest_factor": dynamics.crest_factor,
-                            "is_compressed": dynamics.is_compressed,
-                        },
-                        "rhythm": None
-                        if rhythm is None
-                        else {
-                            "syncopation": rhythm.syncopation,
-                            "groove_type": rhythm.groove_type,
-                            "pattern_regularity": rhythm.pattern_regularity,
-                        },
-                        "form": r.form,
+                {
+                    "bpm": r.bpm,
+                    "bpm_confidence": r.bpm_confidence,
+                    "key": {
+                        "root": r.key.root.value,
+                        "mode": _mode_value(r.key.mode),
+                        "confidence": r.key.confidence,
+                        "name": key_name,
                     },
-                    "timbre",
-                    "dynamics",
-                    "rhythm",
-                )
+                    "time_signature": {
+                        "numerator": r.time_signature.numerator,
+                        "denominator": r.time_signature.denominator,
+                        "confidence": r.time_signature.confidence,
+                    },
+                    "beats": beats,
+                    "downbeat_indices": downbeat_indices,
+                    "downbeat_phase": r.downbeat_phase,
+                    "chords": chords,
+                    "sections": sections,
+                    "timbre": {
+                        "brightness": timbre.brightness,
+                        "warmth": timbre.warmth,
+                        "density": timbre.density,
+                        "roughness": timbre.roughness,
+                        "complexity": timbre.complexity,
+                    },
+                    "dynamics": {
+                        "dynamic_range_db": dynamics.dynamic_range_db,
+                        "loudness_range_db": dynamics.loudness_range_lu,
+                        "crest_factor": dynamics.crest_factor,
+                        "is_compressed": dynamics.is_compressed,
+                    },
+                    "rhythm": {
+                        "syncopation": rhythm.syncopation,
+                        "groove_type": rhythm.groove_type,
+                        "pattern_regularity": rhythm.pattern_regularity,
+                    },
+                    "form": r.form,
+                }
             )
         )
     else:
