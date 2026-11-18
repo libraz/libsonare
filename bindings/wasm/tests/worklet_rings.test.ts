@@ -271,7 +271,7 @@ describe('Sonare worklet ring buffers', () => {
           renderFrame: 1,
           timelineSample: 2,
           audibleTimelineSample: 3,
-          graphLatencySamplesQ8: 4,
+          graphLatencySamples: 4 / 256,
           value: 5,
         }),
       ).toThrow(/records without a compatible producer/);
@@ -418,7 +418,7 @@ describe('Sonare worklet ring buffers', () => {
               renderFrame: i,
               timelineSample: i,
               audibleTimelineSample: i,
-              graphLatencySamplesQ8: 0,
+              graphLatencySamples: 0,
               value: i,
             });
           }
@@ -874,7 +874,7 @@ describe('Sonare worklet ring buffers', () => {
         renderFrame: 0,
         timelineSample: 128,
         audibleTimelineSample: 128,
-        graphLatencySamplesQ8: 0,
+        graphLatencySamples: 0,
         value: 128,
       });
       expect(ring.header[1]).toBe(SONARE_ENGINE_TELEMETRY_RING_PROTOCOL_VERSION);
@@ -895,7 +895,7 @@ describe('Sonare worklet ring buffers', () => {
         renderFrame: 128,
         timelineSample: 256,
         audibleTimelineSample: 256,
-        graphLatencySamplesQ8: 0,
+        graphLatencySamples: 0,
         value: 512,
       });
       writeSonareEngineTelemetryRingBuffer(ring, {
@@ -904,7 +904,7 @@ describe('Sonare worklet ring buffers', () => {
         renderFrame: 256,
         timelineSample: 384,
         audibleTimelineSample: 384,
-        graphLatencySamplesQ8: 0,
+        graphLatencySamples: 0,
         value: 128,
       });
 
@@ -926,7 +926,7 @@ describe('Sonare worklet ring buffers', () => {
         renderFrame: 0,
         timelineSample: 0,
         audibleTimelineSample: 0,
-        graphLatencySamplesQ8: 0,
+        graphLatencySamples: 0,
         value: 0,
       } as const;
       writeSonareEngineTelemetryRingBuffer(ring, {
@@ -965,7 +965,7 @@ describe('Sonare worklet ring buffers', () => {
         renderFrame: generation,
         timelineSample: generation + 100,
         audibleTimelineSample: generation + 200,
-        graphLatencySamplesQ8: generation + 300,
+        graphLatencySamples: (generation + 300) / 256,
         value: generation + 400,
       };
     }
@@ -1265,8 +1265,8 @@ describe('Sonare worklet ring buffers', () => {
         get audibleTimelineSample() {
           return 202;
         },
-        get graphLatencySamplesQ8() {
-          return 302;
+        get graphLatencySamples() {
+          return 302 / 256;
         },
         get value() {
           sawUnclaimedA =

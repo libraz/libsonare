@@ -404,7 +404,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         renderFrame: frame,
         timelineSample: 1000 + frame,
         audibleTimelineSample: 2000 + frame,
-        graphLatencySamplesQ8: 256 + frame,
+        graphLatencySamples: (256 + frame) / 256,
         value: 3000 + frame,
       });
       writeSonareEngineTelemetryRingBuffer(ring, telemetry(1));
@@ -455,7 +455,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         renderFrame: frame,
         timelineSample: 1000 + frame,
         audibleTimelineSample: 2000 + frame,
-        graphLatencySamplesQ8: 256 + frame,
+        graphLatencySamples: (256 + frame) / 256,
         value: 3000 + frame,
       });
 
@@ -523,7 +523,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         renderFrame: 1,
         timelineSample: 2,
         audibleTimelineSample: 3,
-        graphLatencySamplesQ8: 4,
+        graphLatencySamples: 4 / 256,
         value: 5,
       });
       const payloadA = recordBytes(
@@ -539,7 +539,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         renderFrame: 6n,
         timelineSample: 7n,
         audibleTimelineSample: 8n,
-        graphLatencySamplesQ8: '9',
+        graphLatencySamples: '0.03515625',
       };
       for (const [key, value] of Object.entries(values)) {
         Object.defineProperty(source, key, {

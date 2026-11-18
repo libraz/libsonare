@@ -1146,7 +1146,7 @@ export class SonareRealtimeEngineWorkletProcessor {
         renderFrame: 0,
         timelineSample: 0,
         audibleTimelineSample: 0,
-        graphLatencySamplesQ8: 0,
+        graphLatencySamples: 0,
         value: Number(command.type),
       });
     }
@@ -1266,7 +1266,7 @@ export class SonareRealtimeEngineWorkletProcessor {
           renderFrame: 0,
           timelineSample: 0,
           audibleTimelineSample: 0,
-          graphLatencySamplesQ8: 0,
+          graphLatencySamples: 0,
           value: Number(command.type),
         });
         break;

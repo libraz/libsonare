@@ -111,8 +111,8 @@ export interface EngineTelemetryRecord {
   timelineSample: number;
   /** `timelineSample` corrected for the graph latency: the position being heard, in samples. */
   audibleTimelineSample: number;
-  /** Graph processing latency in 1/256 sample units. */
-  graphLatencySamplesQ8: number;
+  /** Graph processing latency, in samples. */
+  graphLatencySamples: number;
   /** Frames in the block for a block record; for an error record a count or id that depends on `error`. */
   value: number;
 }
@@ -264,7 +264,7 @@ export function writeSonareEngineTelemetryRingBuffer(
   const renderFrame = toSafeInteger(telemetry.renderFrame, 0);
   const timelineSample = toSafeInteger(telemetry.timelineSample, 0);
   const audibleTimelineSample = toSafeInteger(telemetry.audibleTimelineSample, 0);
-  const graphLatencySamplesQ8 = +telemetry.graphLatencySamplesQ8;
+  const graphLatencySamplesQ8 = Math.round(+telemetry.graphLatencySamples * 256);
   const value = +telemetry.value;
   const writeIndex = tryBeginOverwriteWrite(header, slotStates, capacity);
   if (writeIndex === undefined) {
@@ -599,7 +599,7 @@ function readEngineTelemetryRecord(view: DataView, offset: number): EngineTeleme
     renderFrame: readInt64Words(view, offset + 8),
     timelineSample: readInt64Words(view, offset + 16),
     audibleTimelineSample: readInt64Words(view, offset + 24),
-    graphLatencySamplesQ8: view.getInt32(offset + 32, true),
+    graphLatencySamples: view.getInt32(offset + 32, true) / 256,
     value: view.getUint32(offset + 36, true),
   };
 }
@@ -608,7 +608,7 @@ function upperFirst(name: string): string {
   return name.charAt(0).toUpperCase() + name.slice(1);
 }
 
-/** Converts a drained {@link EngineTelemetry} back to the wire record (ordinals, Q8 latency). */
+/** Converts a drained {@link EngineTelemetry} back to the wire record (ordinals). */
 export function telemetryFromEngine(telemetry: EngineTelemetry): EngineTelemetryRecord {
   return {
     type: SonareEngineTelemetryType[
@@ -621,7 +621,7 @@ export function telemetryFromEngine(telemetry: EngineTelemetry): EngineTelemetry
     renderFrame: telemetry.renderFrame,
     timelineSample: telemetry.timelineSample,
     audibleTimelineSample: telemetry.audibleTimelineSample,
-    graphLatencySamplesQ8: Math.round(telemetry.graphLatencySamples * 256),
+    graphLatencySamples: telemetry.graphLatencySamples,
     value: telemetry.value,
   };
 }

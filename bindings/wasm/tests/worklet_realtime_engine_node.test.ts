@@ -644,7 +644,7 @@ describe('SonareRealtimeEngineNode', () => {
         renderFrame: 0,
         timelineSample: 128,
         audibleTimelineSample: 128,
-        graphLatencySamplesQ8: 0,
+        graphLatencySamples: 0,
         value: 128,
       });
       const seen: unknown[] = [];

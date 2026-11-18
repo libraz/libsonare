@@ -1628,9 +1628,6 @@ RULES: list[Rule] = [
             if _Q8.search(r["name"])
             else None
         ),
-        pending={
-            "wasm:EngineTelemetryRecord.graphLatencySamplesQ8": "expose graph latency in samples as a plain number",
-        },
     ),
     Rule(
         name="derived-summary",

@@ -362,7 +362,7 @@ export function isEngineTelemetryRecord(value: unknown): value is EngineTelemetr
     typeof value.renderFrame === 'number' &&
     typeof value.timelineSample === 'number' &&
     typeof value.audibleTimelineSample === 'number' &&
-    typeof value.graphLatencySamplesQ8 === 'number' &&
+    typeof value.graphLatencySamples === 'number' &&
     typeof value.value === 'number'
   );
 }

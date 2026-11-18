@@ -12,7 +12,7 @@ function lowerCamel(name: string): string {
   return name.charAt(0).toLowerCase() + name.slice(1);
 }
 
-/** Converts a wire telemetry record (ordinals, Q8 latency) into the public {@link EngineTelemetry}. */
+/** Converts a wire telemetry record (ordinals) into the public {@link EngineTelemetry}. */
 export function telemetryFromRecord(record: EngineTelemetryRecord): EngineTelemetry {
   const type = SonareEngineTelemetryType[record.type as number];
   const error = SonareEngineTelemetryError[record.error as number];
@@ -25,7 +25,7 @@ export function telemetryFromRecord(record: EngineTelemetryRecord): EngineTeleme
     renderFrame: record.renderFrame,
     timelineSample: record.timelineSample,
     audibleTimelineSample: record.audibleTimelineSample,
-    graphLatencySamples: record.graphLatencySamplesQ8 / 256,
+    graphLatencySamples: record.graphLatencySamples,
     value: record.value,
   };
 }

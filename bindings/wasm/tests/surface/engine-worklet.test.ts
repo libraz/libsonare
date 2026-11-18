@@ -484,7 +484,7 @@ describe('SonareEngine shares the RealtimeEngine vocabulary', () => {
           renderFrame: 5,
           timelineSample: 6,
           audibleTimelineSample: 7,
-          graphLatencySamplesQ8: 512,
+          graphLatencySamples: 2,
           value: 3,
         },
       } as MessageEvent<unknown>);

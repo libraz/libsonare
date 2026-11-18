@@ -14923,6 +14923,14 @@ rule = "engine-vocabulary"
 
 [[entry]]
 kind = "field"
+old = "SonareEngineTelemetryRecord.graphLatencySamplesQ8"
+new = "EngineTelemetryRecord.graphLatencySamples"
+domain = "engine"
+rule = "engine-vocabulary"
+entry = "./worklet"
+
+[[entry]]
+kind = "field"
 old = "EngineTelemetry.type"
 changed = "'processBlock' | 'error' (was a number)"
 domain = "engine"
