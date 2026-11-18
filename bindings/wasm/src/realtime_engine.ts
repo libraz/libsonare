@@ -1921,17 +1921,14 @@ export class RealtimeEngine {
 
   /**
    * Normalizes each send's pre/post tap point to the integer the native layer
-   * reads (defaults to post-fader when omitted). Shared by track lanes and
-   * buses, which carry the same send shape.
+   * reads; an omitted one stays absent, and embind fills in the default.
+   * Shared by track lanes and buses, which carry the same send shape.
    */
   private static normalizeSends(fnName: string, sends: EngineTrackSend[]): WasmEngineTrackSend[] {
     return sends.map((send) => {
       noOrdinal(fnName, 'sendTiming', send.sendTiming);
-      return {
-        ...send,
-        // Post-fader (0) is the default for an omitted sendTiming.
-        sendTiming: send.sendTiming === undefined ? 0 : sendTimingCode(send.sendTiming),
-      };
+      const { sendTiming, ...rest } = send;
+      return sendTiming === undefined ? rest : { ...rest, sendTiming: sendTimingCode(sendTiming) };
     });
   }
 
