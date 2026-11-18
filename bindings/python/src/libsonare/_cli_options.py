@@ -259,8 +259,9 @@ def _mode_mask(value: str) -> int:
         pass
     from ._features_metering import scale_mask_for_mode
 
+    # The library's mode tokens are exact; the command line reads a mode name in any case.
     try:
-        return scale_mask_for_mode(0, cast(KeyMode, value))
+        return scale_mask_for_mode(0, cast(KeyMode, value.lower()))
     except SonareValueError as exc:
         raise argparse.ArgumentTypeError(
             f"{value!r} is neither an integer mask nor a mode name "
