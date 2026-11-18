@@ -2556,6 +2556,7 @@ SidechainRefusal = Literal[
     "planRefused",
 ]
 EngineCaptureSource = Literal["output", "input"]
+MidiFxConfig = dict[str, Any]
 
 class SidechainCheck:
     ok: bool

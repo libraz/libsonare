@@ -49,6 +49,7 @@ from ._runtime import (
     _from_c_int_array,
     _get_lib,
     _guard_buffer,
+    _midi_fx_config_json,
     _narrow_int,
     _resolve_optional_non_negative,
     _to_c_double,
@@ -62,7 +63,7 @@ from ._runtime import (
     _to_c_uint32,
     _utf8_arg,
 )
-from ._types_engine import AutomationPoint
+from ._types_engine import AutomationPoint, MidiFxConfig
 
 
 def _found_index(value: int, message: str) -> int:
@@ -392,11 +393,11 @@ class _ProjectMidiMixin:
     def bake_midi_fx(
         self,
         clip_id: int,
-        config_json: str,
+        config: MidiFxConfig,
         *,
         with_source_index: bool = False,
     ) -> np.ndarray | None:
-        """Destructively bake a clip's MIDI-FX chain from JSON.
+        """Destructively bake a clip's MIDI-FX chain from a :data:`MidiFxConfig`.
 
         Canonical name matching the Node / WASM ``bakeMidiFx`` surface. Large
         clips are drained without truncation; failure leaves the original clip
@@ -411,22 +412,22 @@ class _ProjectMidiMixin:
         bake. Returns ``None`` otherwise.
         """
         handle = self._require_handle()
-        config = _utf8_arg(config_json, "config_json")
+        config_json = _midi_fx_config_json(config)
         if not with_source_index:
             _check(
                 _get_lib().sonare_project_bake_midi_fx(
-                    handle, _to_c_uint32(clip_id, "clip_id"), config
+                    handle, _to_c_uint32(clip_id, "clip_id"), config_json
                 )
             )
             return None
-        expected = self.preview_midi_fx_count(clip_id, config_json)
+        expected = self.preview_midi_fx_count(clip_id, config)
         buffer = (ctypes.c_int32 * expected)() if expected else None
         written = ctypes.c_size_t(0)
         _check(
             _get_lib().sonare_project_bake_midi_fx_ex(
                 handle,
                 _to_c_uint32(clip_id, "clip_id"),
-                config,
+                config_json,
                 buffer,
                 _to_c_size_t(expected, "expected"),
                 ctypes.byref(written),
@@ -438,14 +439,14 @@ class _ProjectMidiMixin:
             else _from_c_int_array(None, 0)
         )
 
-    def preview_midi_fx_count(self, clip_id: int, config_json: str) -> int:
+    def preview_midi_fx_count(self, clip_id: int, config: MidiFxConfig) -> int:
         """Count the events :meth:`bake_midi_fx` would produce, without baking."""
         count = ctypes.c_size_t(0)
         _check(
             _get_lib().sonare_project_preview_midi_fx_count(
                 self._require_handle(),
                 _to_c_uint32(clip_id, "clip_id"),
-                _utf8_arg(config_json, "config_json"),
+                _midi_fx_config_json(config),
                 ctypes.byref(count),
             )
         )

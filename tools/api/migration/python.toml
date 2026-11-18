@@ -8854,6 +8854,33 @@ test = "bindings/python/tests/test_playback.py::test_the_config_document_is_a_ma
 
 [[entry]]
 kind = "option"
+old = "RealtimeEngine.set_midi_fx(config_json)"
+to = "RealtimeEngine.set_midi_fx(config)"
+changed = "a MidiFxConfig mapping with camelCase keys (transposeSemitones, velocityScale, quantizePpq, chordIntervals, ...) instead of JSON text; JSON text raises TypeError, so parse it with json.loads first, and an earlier snake_case key or an unknown key raises SonareError InvalidFormat naming it"
+domain = "engine"
+rule = "one-input-form"
+test = "bindings/python/tests/test_engine_midi.py::test_engine_set_and_clear_midi_fx_round_trips"
+
+[[entry]]
+kind = "option"
+old = "Project.bake_midi_fx(config_json)"
+to = "Project.bake_midi_fx(config)"
+changed = "a MidiFxConfig mapping with camelCase keys (transposeSemitones, velocityScale, quantizePpq, chordIntervals, ...) instead of JSON text; JSON text raises TypeError, so parse it with json.loads first, and an earlier snake_case key or an unknown key raises SonareError InvalidFormat naming it"
+domain = "project"
+rule = "one-input-form"
+test = "bindings/python/tests/test_project_midi.py::test_a_midi_fx_key_outside_the_document_is_refused_as_invalid_format"
+
+[[entry]]
+kind = "option"
+old = "Project.preview_midi_fx_count(config_json)"
+to = "Project.preview_midi_fx_count(config)"
+changed = "a MidiFxConfig mapping with camelCase keys (transposeSemitones, velocityScale, quantizePpq, chordIntervals, ...) instead of JSON text; JSON text raises TypeError, so parse it with json.loads first, and an earlier snake_case key or an unknown key raises SonareError InvalidFormat naming it"
+domain = "project"
+rule = "one-input-form"
+test = "bindings/python/tests/test_project_midi.py::test_a_midi_fx_key_outside_the_document_is_refused_as_invalid_format"
+
+[[entry]]
+kind = "option"
 old = "Mixer.from_scene_json(block_size)"
 to = "Mixer.from_scene_json(max_block_size)"
 changed = "renamed max_block_size after the C parameter; omitted takes the library default (was 512) and an explicit 0 raises SonareValueError"

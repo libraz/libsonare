@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Literal, TypeAlias, get_args
+from typing import TYPE_CHECKING, Any, Literal, TypeAlias, get_args
 
 import numpy as np
 
@@ -197,6 +197,19 @@ SidechainRefusal = Literal[
 ]
 """Why a ``can_set_*_sidechain`` query refused a binding."""
 _SIDECHAIN_REFUSALS: tuple[str, ...] = get_args(SidechainRefusal)
+
+MidiFxConfig = dict[str, Any]
+"""A MIDI-FX chain configuration document with camelCase keys.
+
+Every key is optional; a stage runs only when one of its keys is given, and stages
+apply in this order: ``transposeSemitones``; ``velocityScale`` / ``velocityOffset`` /
+``velocityGamma``; ``quantizePpq`` / ``quantizeStrength``; ``chordIntervals``;
+``arpeggiatorIntervals`` / ``arpeggiatorStepPpq`` / ``arpeggiatorGatePpq``;
+``humanizePpq`` / ``humanizeVelocity`` / ``seed``. An earlier snake_case key or an
+unknown key raises ``SonareError`` (InvalidFormat) naming it; a non-finite value raises
+InvalidFormat too. JSON text is parsed by the caller (``json.loads``) before it is passed.
+"""
+
 
 EngineCaptureSource = Literal["output", "input"]
 """What the realtime engine's recording sink captures."""

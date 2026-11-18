@@ -43,6 +43,7 @@ from ._runtime import (
     SonareValueError,
     _check,
     _get_lib,
+    _midi_fx_config_json,
     _require_export,
     _resolve_render_frame,
     _to_c_float,
@@ -54,6 +55,7 @@ from ._runtime import (
     _to_c_uint32,
     _utf8_arg,
 )
+from ._types_engine import MidiFxConfig
 
 
 def _ump_words_to_c(words: Iterable[int]) -> tuple[ctypes.Array[ctypes.c_uint32], int]:
@@ -951,10 +953,10 @@ class _EngineMidiMixin:
         _check(lib.sonare_engine_midi_cc_binding_count(self._require_handle(), ctypes.byref(out)))
         return int(out.value)
 
-    def set_midi_fx(self, destination_id: int, config_json: str) -> None:
+    def set_midi_fx(self, destination_id: int, config: MidiFxConfig) -> None:
         """Install/replace a live non-destructive MIDI-FX insert for ``destination_id``.
 
-        ``config_json`` accepts the same fields as the offline MIDI-FX bake, but
+        ``config`` is a :data:`MidiFxConfig` with the same keys as the offline bake, but
         scheduled/live MIDI events are transformed at dispatch time and clip
         contents are left unmodified.
         """
@@ -966,7 +968,7 @@ class _EngineMidiMixin:
             lib.sonare_engine_set_midi_fx(
                 self._require_handle(),
                 _to_c_uint32(destination_id, "destination_id"),
-                _utf8_arg(config_json, "config_json"),
+                _midi_fx_config_json(config),
             )
         )
 

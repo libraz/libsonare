@@ -359,6 +359,9 @@ from ._types_engine import (
     MeterTelemetryRecordWide as MeterTelemetryRecordWide,
 )
 from ._types_engine import (
+    MidiFxConfig as MidiFxConfig,
+)
+from ._types_engine import (
     MixMeterSnapshot as MixMeterSnapshot,
 )
 from ._types_engine import (

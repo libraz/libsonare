@@ -158,8 +158,12 @@ def test_midi_helpers_program_midi_fx_and_sysex_smf_round_trip() -> None:
         )
         project.bake_midi_fx(
             midi_clip,
-            '{"transposeSemitones":12,"quantizePpq":0.25,'
-            '"quantizeStrength":1.0,"velocityScale":0.5}',
+            {
+                "transposeSemitones": 12,
+                "quantizePpq": 0.25,
+                "quantizeStrength": 1.0,
+                "velocityScale": 0.5,
+            },
         )
         project.set_program(midi_clip, program=42)
         project.set_program_on_channel(midi_clip, group=0, channel=3, program=24, bank=0x0123)
@@ -520,7 +524,7 @@ def test_bake_midi_fx_preserves_more_than_512_events() -> None:
         clip = project.add_midi_clip(0.0, 8.0).clip_id
         events = [Project.midi_cc(i / 80, 0, 0, i % 128, (i * 3) % 128) for i in range(600)]
         project.set_midi_events(clip, events)
-        project.bake_midi_fx(clip, "{}")
+        project.bake_midi_fx(clip, {})
         payload = json.loads(project.to_json())
         baked = payload["midiContent"][str(clip)]
         assert baked == [{"word0": e.word0, "word1": e.word1, "ppq": e.ppq} for e in events]
@@ -528,7 +532,7 @@ def test_bake_midi_fx_preserves_more_than_512_events() -> None:
         roundtrip = Project()
         try:
             round_clip = roundtrip.import_smf(project.export_smf())
-            roundtrip.bake_midi_fx(round_clip, "{}")
+            roundtrip.bake_midi_fx(round_clip, {})
             round_payload = json.loads(roundtrip.to_json())
             assert len(round_payload["midiContent"][str(round_clip)]) == 600
         finally:
@@ -549,7 +553,7 @@ def test_bake_midi_fx_reports_source_index() -> None:
             ],
         )
 
-    config = '{"chordIntervals":[0,4,7]}'
+    config = {"chordIntervals": [0, 4, 7]}
     tracked = Project()
     plain = Project()
     try:
@@ -579,10 +583,11 @@ def test_bake_midi_fx_reports_source_index() -> None:
             == json.loads(plain.to_json())["midiContent"][str(plain_clip)]
         )
 
-        with pytest.raises(SonareError):
-            tracked.bake_midi_fx(tracked_clip, "{bad json", with_source_index=True)
-        with pytest.raises(SonareError):
-            tracked.preview_midi_fx_count(tracked_clip, "{bad json")
+        # The config is a mapping; JSON text is the caller's to parse.
+        with pytest.raises(TypeError, match="json.loads"):
+            tracked.bake_midi_fx(tracked_clip, '{"chordIntervals":[0,4,7]}', with_source_index=True)  # type: ignore[arg-type]
+        with pytest.raises(TypeError, match="json.loads"):
+            tracked.preview_midi_fx_count(tracked_clip, '{"chordIntervals":[0,4,7]}')  # type: ignore[arg-type]
     finally:
         tracked.close()
         plain.close()
@@ -600,15 +605,16 @@ def test_project_import_smf_preserves_salvaged_truncation() -> None:
     ("config", "message"),
     [
         (
-            '{"transpose_semitones":12}',
+            {"transpose_semitones": 12},
             "transpose_semitones is an earlier spelling; write transposeSemitones",
         ),
-        ('{"transposeSemitone":12}', "unknown MIDI-FX key 'transposeSemitone'"),
+        ({"transposeSemitone": 12}, "unknown MIDI-FX key 'transposeSemitone'"),
+        ({"velocityScale": float("nan")}, "Invalid format"),
     ],
-    ids=["earlier_spelling", "unknown_key"],
+    ids=["earlier_spelling", "unknown_key", "non_finite_value"],
 )
 def test_a_midi_fx_key_outside_the_document_is_refused_as_invalid_format(
-    config: str, message: str
+    config: dict[str, object], message: str
 ) -> None:
     """The MIDI-FX config names its keys in camelCase; any other key is refused by name."""
     project = Project()

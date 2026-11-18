@@ -41,6 +41,7 @@ from .types import (
     ExternalMidiEvent,
     MeterTelemetryRecord,
     MeterTelemetryRecordWide,
+    MidiFxConfig,
     PanLaw,
     PanMode,
     ParameterInfo,
@@ -731,8 +732,8 @@ class RealtimeEngine:
     def midi_cc_binding_count(self) -> int:
         """Number of live MIDI CC bindings."""
         ...
-    def set_midi_fx(self, destination_id: int, config_json: str) -> None:
-        """Install or replace a live MIDI-FX insert for ``destination_id`` from a JSON config."""
+    def set_midi_fx(self, destination_id: int, config: MidiFxConfig) -> None:
+        """Install or replace a live MIDI-FX insert for ``destination_id`` from a MidiFxConfig."""
         ...
     def clear_midi_fx(self, destination_id: int = 0) -> None:
         """Clear the live MIDI-FX insert for ``destination_id``."""

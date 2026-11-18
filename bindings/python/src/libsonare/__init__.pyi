@@ -1225,6 +1225,9 @@ from .types import (
 from .types import (
     MfccResult as MfccResult,
 )
+from .types import (
+    MidiFxConfig as MidiFxConfig,
+)
 from .types import MixAnalysisBand as MixAnalysisBand
 from .types import MixAssistantMixProfile as MixAssistantMixProfile
 from .types import MixAssistantResult as MixAssistantResult

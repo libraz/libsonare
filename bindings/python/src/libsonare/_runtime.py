@@ -7,6 +7,7 @@ import contextlib
 import ctypes
 import functools
 import inspect
+import json
 import math
 import operator
 from collections.abc import Callable, Iterator, Mapping, Sequence
@@ -1226,6 +1227,13 @@ def _token_ordinal(value: object, tokens: tuple[str, ...], what: str) -> int:
         raise SonareValueError(
             f"invalid {what}: {value!r} (expected one of {list(tokens)})"
         ) from None
+
+
+def _midi_fx_config_json(config: Mapping[str, Any]) -> bytes:
+    """Serialize a MidiFxConfig mapping for the C entry points that take it as JSON."""
+    if not isinstance(config, Mapping):
+        raise TypeError("config must be a mapping (parse JSON text with json.loads first)")
+    return _utf8_arg(json.dumps(dict(config)), "config")
 
 
 def _token_arg(value: object, tokens: tuple[str, ...], what: str) -> str:
