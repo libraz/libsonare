@@ -9899,6 +9899,20 @@ test = "bindings/python/tests/test_mixing.py::test_strip_by_id_returns_index_and
 
 [[entry]]
 kind = "option"
+old = "Mixer.process_stereo(left_channels)"
+new = "Mixer.process_stereo(left_inputs)"
+domain = "engine"
+rule = "individual"
+
+[[entry]]
+kind = "option"
+old = "Mixer.process_stereo(right_channels)"
+new = "Mixer.process_stereo(right_inputs)"
+domain = "engine"
+rule = "individual"
+
+[[entry]]
+kind = "option"
 old = "Mixer.add_strip(strip_id)"
 to = "Mixer.add_strip(id)"
 changed = "renamed id, the name the Node and WASM mixers use"

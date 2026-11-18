@@ -1484,8 +1484,8 @@ class Mixer:
     ) -> None: ...
     def process_stereo(
         self,
-        left_channels: Sequence[Sequence[float]],
-        right_channels: Sequence[Sequence[float]],
+        left_inputs: Sequence[Sequence[float]],
+        right_inputs: Sequence[Sequence[float]],
     ) -> MixerStereoResult: ...
     @property
     def tail_samples(self) -> int: ...

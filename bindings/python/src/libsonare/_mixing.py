@@ -953,12 +953,12 @@ class Mixer:
 
     def process_stereo(
         self,
-        left_channels: Sequence[Sequence[float]],
-        right_channels: Sequence[Sequence[float]],
+        left_inputs: Sequence[Sequence[float]],
+        right_inputs: Sequence[Sequence[float]],
     ) -> MixerStereoResult:
         """Mix one block of per-strip stereo audio into the stereo master.
 
-        ``left_channels[i]`` / ``right_channels[i]`` are strip ``i``'s channels.
+        ``left_inputs[i]`` / ``right_inputs[i]`` are strip ``i``'s left and right planes.
         Returns a :class:`MixerStereoResult` (``left``, ``right``,
         ``sample_rate``) matching the Node/WASM ``{left, right, sampleRate}``
         shape. With no input strips the master is silent (an empty block), to
@@ -966,24 +966,20 @@ class Mixer:
         leave the remaining strips silent; more raise ``SonareValueError``.
         """
         self._require()
-        if len(left_channels) != len(right_channels):
-            raise SonareValueError("left_channels and right_channels must have the same length")
+        if len(left_inputs) != len(right_inputs):
+            raise SonareValueError("left_inputs and right_inputs must have the same length")
         strip_count = self.strip_count
-        if len(left_channels) > strip_count:
-            raise SonareValueError(
-                f"got {len(left_channels)} input channels for a {strip_count}-strip mixer"
-            )
+        if len(left_inputs) > strip_count:
+            raise SonareValueError(f"got {len(left_inputs)} inputs for a {strip_count}-strip mixer")
 
         left_arrays: list[ctypes.Array[ctypes.c_float]] = []
         right_arrays: list[ctypes.Array[ctypes.c_float]] = []
         length: int | None = None
-        for index, (left, right) in enumerate(zip(left_channels, right_channels, strict=True)):
+        for index, (left, right) in enumerate(zip(left_inputs, right_inputs, strict=True)):
             # Name the strip as well as the side: what the caller passed is a
             # sequence of strips, so the position is what locates the bad one.
-            left_array, left_length = _to_c_float_array(left, arg_name=f"left_channels[{index}]")
-            right_array, right_length = _to_c_float_array(
-                right, arg_name=f"right_channels[{index}]"
-            )
+            left_array, left_length = _to_c_float_array(left, arg_name=f"left_inputs[{index}]")
+            right_array, right_length = _to_c_float_array(right, arg_name=f"right_inputs[{index}]")
             if left_length != right_length:
                 raise SonareValueError("left and right channel lengths must match")
             if length is None:

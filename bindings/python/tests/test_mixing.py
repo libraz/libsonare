@@ -1076,6 +1076,10 @@ def test_process_stereo_input_count_rule(mixer) -> None:
     mixer.process_stereo([block], [block])
     mixer.process_stereo([block] * strips, [block] * strips)
     with pytest.raises(
-        SonareValueError, match=f"got {strips + 1} input channels for a {strips}-strip mixer"
+        SonareValueError, match=f"got {strips + 1} inputs for a {strips}-strip mixer"
     ):
-        mixer.process_stereo([block] * (strips + 1), [block] * (strips + 1))
+        mixer.process_stereo(
+            left_inputs=[block] * (strips + 1), right_inputs=[block] * (strips + 1)
+        )
+    with pytest.raises(SonareValueError, match=r"left_inputs\[0\]"):
+        mixer.process_stereo(left_inputs=[[[0.0]]], right_inputs=[[0.0]])
