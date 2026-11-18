@@ -81,7 +81,7 @@ Napi::Object CompileResultToObject(Napi::Env env, SonareProjectCompileResult* re
     diagnostics.Set(static_cast<uint32_t>(i), diag);
   }
   out.Set("diagnostics", diagnostics);
-  sonare_project_free_compile_result(result);
+  sonare_free_project_compile_result(result);
   return out;
 }
 

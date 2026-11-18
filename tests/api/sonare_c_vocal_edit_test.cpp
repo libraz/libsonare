@@ -113,7 +113,7 @@ TEST_CASE("vocal C empty commit returns null range storage", "[vocal_c_api][voca
   CHECK(result.dirty_ranges == nullptr);
   CHECK(result.id_change_count == 0);
   CHECK(result.id_changes == nullptr);
-  sonare_vocal_free_edit_result(&result);
+  sonare_free_vocal_edit_result(&result);
 }
 
 TEST_CASE("vocal C draft exposes provisional notes and stale errors without publication",
@@ -144,7 +144,7 @@ TEST_CASE("vocal C draft exposes provisional notes and stale errors without publ
   CHECK(result.dirty_range_count > 0);
   CHECK(result.id_change_count == 0);
   CHECK(result.id_changes == nullptr);
-  sonare_vocal_free_edit_result(&result);
+  sonare_free_vocal_edit_result(&result);
   CHECK(sonare_vocal_draft_apply(raw, before.generation, &operation, 1, &result) ==
         SONARE_ERROR_INVALID_STATE);
   CHECK(result.dirty_ranges == nullptr);
@@ -158,7 +158,7 @@ TEST_CASE("vocal C draft exposes provisional notes and stale errors without publ
   REQUIRE(sonare_vocal_draft_evaluate_pitch(raw, id, &pitch) == SONARE_OK);
   REQUIRE(pitch.frame_count > 0);
   CHECK(pitch.effective_midi[0] - pitch.measured_midi[0] == 2);
-  sonare_vocal_free_pitch_result(&pitch);
+  sonare_free_vocal_pitch_result(&pitch);
   SonareVocalStateBytes bytes;
   sonare_vocal_state_bytes_init(&bytes);
   CHECK(sonare_vocal_session_export_state(s.get(), &bytes) == SONARE_ERROR_INVALID_STATE);
@@ -166,16 +166,16 @@ TEST_CASE("vocal C draft exposes provisional notes and stale errors without publ
   REQUIRE(sonare_vocal_draft_commit(raw, 0, &result) == SONARE_OK);
   CHECK(result.token.revision == 1);
   CHECK(result.dirty_range_count > 0);
-  sonare_vocal_free_edit_result(&result);
+  sonare_free_vocal_edit_result(&result);
   REQUIRE(sonare_vocal_session_undo(s.get(), 1, &result) == SONARE_OK);
   CHECK(result.token.revision == 2);
   CHECK(result.dirty_range_count > 0);
-  sonare_vocal_free_edit_result(&result);
+  sonare_free_vocal_edit_result(&result);
   REQUIRE(sonare_vocal_session_redo(s.get(), 2, &result) == SONARE_OK);
   CHECK(result.token.revision == 3);
-  sonare_vocal_free_edit_result(&result);
-  sonare_vocal_free_notes(&notes);
-  sonare_vocal_free_notes(&notes);
+  sonare_free_vocal_edit_result(&result);
+  sonare_free_vocal_notes_result(&notes);
+  sonare_free_vocal_notes_result(&notes);
 }
 
 TEST_CASE("vocal C snapshots own PCM after session destruction and jobs cancel safely",
@@ -194,7 +194,7 @@ TEST_CASE("vocal C snapshots own PCM after session destruction and jobs cancel s
   CHECK(full.sample_count == 3200);
   CHECK(full.token.request_id == UINT64_MAX);
   CHECK(std::memcmp(full.samples, f.samples.data(), f.samples.size() * sizeof(float)) == 0);
-  sonare_vocal_free_render_result(&full);
+  sonare_free_vocal_render_result(&full);
   SonareVocalRenderJob* job = nullptr;
   REQUIRE(sonare_vocal_render_job_begin(raw, {17, 501}, 7, &job) == SONARE_OK);
   int complete = 8;
@@ -235,7 +235,7 @@ TEST_CASE("vocal C state restores exact source and reports digest mismatch", "[v
   CHECK(detail.reason == SONARE_VOCAL_REASON_SOURCE_MISMATCH);
   CHECK(std::strlen(detail.expected_text) == 64);
   CHECK(std::strlen(detail.actual_text) == 64);
-  sonare_vocal_free_state_bytes(&state);
+  sonare_free_vocal_state_bytes(&state);
 }
 
 TEST_CASE("vocal C mutations publish only after result allocations succeed",
@@ -269,15 +269,15 @@ TEST_CASE("vocal C mutations publish only after result allocations succeed",
       REQUIRE(sonare_vocal_draft_token(draft, &before) == SONARE_OK);
       if (action != 0 && action != 4) {
         REQUIRE(sonare_vocal_draft_apply(draft, before.generation, &op, 1, &result) == SONARE_OK);
-        sonare_vocal_free_edit_result(&result);
+        sonare_free_vocal_edit_result(&result);
       }
       if (action >= 2 && action != 4) {
         REQUIRE(sonare_vocal_draft_commit(draft, 0, &result) == SONARE_OK);
-        sonare_vocal_free_edit_result(&result);
+        sonare_free_vocal_edit_result(&result);
       }
       if (action == 3) {
         REQUIRE(sonare_vocal_session_undo(session.get(), 1, &result) == SONARE_OK);
-        sonare_vocal_free_edit_result(&result);
+        sonare_free_vocal_edit_result(&result);
       }
       const uint64_t revision = (action < 2 || action == 4) ? 0 : (action == 2 ? 1 : 2);
       SonareError error;
@@ -320,7 +320,7 @@ TEST_CASE("vocal C mutations publish only after result allocations succeed",
                      : sonare_vocal_session_notes(session.get(), &unchanged)) == SONARE_OK);
         REQUIRE(unchanged.note_count == 1);
         CHECK(unchanged.notes[0].edit.gain_db == (action == 2 ? -6 : 0));
-        sonare_vocal_free_notes(&unchanged);
+        sonare_free_vocal_notes_result(&unchanged);
       } else {
         REQUIRE(error == SONARE_OK);
         if (action == 4) {
@@ -330,8 +330,8 @@ TEST_CASE("vocal C mutations publish only after result allocations succeed",
         }
         succeeded = true;
       }
-      sonare_vocal_free_edit_result(&result);
-      sonare_vocal_free_notes(&notes);
+      sonare_free_vocal_edit_result(&result);
+      sonare_free_vocal_notes_result(&notes);
       if (succeeded) break;
     }
     CHECK(failures > 0);
@@ -374,8 +374,8 @@ TEST_CASE("vocal C analysis settings survive authoritative roundtrip",
   sonare_vocal_analysis_result_init(&again);
   REQUIRE(sonare_vocal_session_analysis(roundtrip, &again) == SONARE_OK);
   CHECK(std::strcmp(result.analysis_sha256, again.analysis_sha256) == 0);
-  sonare_vocal_free_analysis(&again);
-  sonare_vocal_free_analysis(&result);
+  sonare_free_vocal_analysis_result(&again);
+  sonare_free_vocal_analysis_result(&result);
   sonare_vocal_session_destroy(roundtrip);
   sonare_vocal_session_destroy(session);
 }
@@ -445,7 +445,7 @@ TEST_CASE("vocal C create and restore enforce the supported sample-rate range",
     }
     CHECK(restored == nullptr);
   }
-  sonare_vocal_free_state_bytes(&state);
+  sonare_free_vocal_state_bytes(&state);
 }
 
 TEST_CASE("vocal C restore options carry runtime limits and validate their header",
@@ -510,7 +510,7 @@ TEST_CASE("vocal C restore options carry runtime limits and validate their heade
       CHECK(restored == nullptr);
     }
   }
-  sonare_vocal_free_state_bytes(&state);
+  sonare_free_vocal_state_bytes(&state);
 }
 #endif
 
@@ -570,6 +570,6 @@ TEST_CASE("vocal C operations refuse a mode ordinal outside its enum", "[vocal_c
   merge.merge_policy = SONARE_VOCAL_MERGE_RESET + 1;
   expect_refused(merge, "merge_policy");
   draft.reset();
-  sonare_vocal_free_notes(&notes);
+  sonare_free_vocal_notes_result(&notes);
 }
 #endif

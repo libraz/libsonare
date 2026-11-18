@@ -775,7 +775,7 @@ Napi::Value SonareWrap::NoteSegments(const Napi::CallbackInfo& info) {
     row.Set("medianCents", Napi::Number::New(env, segment.median_cents));
     segments.Set(static_cast<uint32_t>(i), row);
   }
-  sonare_free_note_segments(&result);
+  sonare_free_note_segments_result(&result);
   return segments;
   SONARE_NODE_CATCH(env)
 }

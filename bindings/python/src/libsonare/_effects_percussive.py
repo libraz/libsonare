@@ -362,7 +362,7 @@ def extract_percussive_events(
     try:
         return [_percussive_event_from_c(out.events[i]) for i in range(out.count)]
     finally:
-        lib.sonare_free_percussive_events(ctypes.byref(out))
+        lib.sonare_free_percussive_events_result(ctypes.byref(out))
 
 
 @_guard_buffer("samples")

@@ -523,7 +523,7 @@ SonareError sonare_align_take_to_reference_ex(
 #endif
 }
 
-void sonare_free_warp_anchors(SonareProjectWarpAnchor* anchors) { delete[] anchors; }
+void sonare_free_project_warp_anchors(SonareProjectWarpAnchor* anchors) { delete[] anchors; }
 
 // ============================================================================
 // Memory management

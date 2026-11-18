@@ -308,7 +308,7 @@ Napi::Value RealtimeEngineWrap::BounceOffline(const Napi::CallbackInfo& info) {
   const int num_channels = result.num_channels;
   const int sample_rate = result.sample_rate;
   const float integrated_lufs = result.integrated_lufs;
-  sonare_free_bounce_result(&result);
+  sonare_free_engine_bounce_result(&result);
   Napi::Object out = Napi::Object::New(env);
   out.Set("interleaved", interleaved);
   out.Set("frames", Napi::Number::New(env, static_cast<double>(frames)));

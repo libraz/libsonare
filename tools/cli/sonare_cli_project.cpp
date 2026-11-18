@@ -305,7 +305,7 @@ int cmd_project_compile(const CliArgs& args) {
   SonareProjectCompileResult result{};
   SonareError err = sonare_project_compile(handle.ptr, &result);
   if (err != SONARE_OK) {
-    sonare_project_free_compile_result(&result);
+    sonare_free_project_compile_result(&result);
     project_report_error("compile project", err);
     return project_exit_code(err);
   }
@@ -343,7 +343,7 @@ int cmd_project_compile(const CliArgs& args) {
       std::cout << result.messages << "\n";
     }
   }
-  sonare_project_free_compile_result(&result);
+  sonare_free_project_compile_result(&result);
   // A project that compiled without a renderable timeline is a project-state
   // failure, the class `project validate --strict` already reports for its own
   // failing outcome. A plain 1 normalizes to the invalid-parameter code, which

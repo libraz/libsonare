@@ -317,7 +317,7 @@ TEST_CASE("public note reshaping preserves repaired centered terminal bounds",
     REQUIRE(merged.notes[0].offset_sample == 5119);
     require_positive_disjoint(merged);
     require_identity_render(merged);
-    sonare_free_note_objects(&merged);
+    sonare_free_note_objects_result(&merged);
   }
 
   SECTION("split preserves the repaired terminal boundary") {
@@ -332,10 +332,10 @@ TEST_CASE("public note reshaping preserves repaired centered terminal bounds",
     REQUIRE(split.notes[2].offset_sample == 5119);
     require_positive_disjoint(split);
     require_identity_render(split);
-    sonare_free_note_objects(&split);
+    sonare_free_note_objects_result(&split);
   }
 
-  sonare_free_note_objects(&extracted);
+  sonare_free_note_objects_result(&extracted);
 }
 
 TEST_CASE("public note reshaping refuses a re-derived empty sample span",
@@ -407,7 +407,7 @@ TEST_CASE("sonare_decompose_note_pitch splits a curve into two parts that add ba
   // 0.5 Hz and 5.5 Hz sit either side of the 3 Hz cut, so each does.
   REQUIRE(drift_peak > 10.0f);
   REQUIRE(vibrato_peak > 10.0f);
-  sonare_free_pitch_decomposition(&out);
+  sonare_free_pitch_decomposition_result(&out);
 }
 
 TEST_CASE("the sonare_decompose_note_pitch cutoff takes its default at 0",
@@ -424,7 +424,7 @@ TEST_CASE("the sonare_decompose_note_pitch cutoff takes its default at 0",
     REQUIRE(out.count == kCurveFrames);
     std::vector<float> both(out.drift_cents, out.drift_cents + out.count);
     both.insert(both.end(), out.vibrato_cents, out.vibrato_cents + out.count);
-    sonare_free_pitch_decomposition(&out);
+    sonare_free_pitch_decomposition_result(&out);
     return both;
   };
 
@@ -465,8 +465,8 @@ TEST_CASE("sonare_decompose_note_pitch applies a voiced mask across a merged gap
     REQUIRE_THAT(masked.drift_cents[i], WithinAbs(zero_baseline.drift_cents[i], 1.0e-6f));
     REQUIRE_THAT(masked.vibrato_cents[i], WithinAbs(zero_baseline.vibrato_cents[i], 1.0e-6f));
   }
-  sonare_free_pitch_decomposition(&masked);
-  sonare_free_pitch_decomposition(&zero_baseline);
+  sonare_free_pitch_decomposition_result(&masked);
+  sonare_free_pitch_decomposition_result(&zero_baseline);
 
   const std::vector<int32_t> all_false(kMergedFrames, 0);
   SonarePitchDecompositionResult empty{};
@@ -491,8 +491,8 @@ TEST_CASE("sonare_decompose_note_pitch applies a voiced mask across a merged gap
     REQUIRE_THAT(inferred.drift_cents[i], WithinAbs(explicit_true.drift_cents[i], 1.0e-6f));
     REQUIRE_THAT(inferred.vibrato_cents[i], WithinAbs(explicit_true.vibrato_cents[i], 1.0e-6f));
   }
-  sonare_free_pitch_decomposition(&inferred);
-  sonare_free_pitch_decomposition(&explicit_true);
+  sonare_free_pitch_decomposition_result(&inferred);
+  sonare_free_pitch_decomposition_result(&explicit_true);
 }
 
 TEST_CASE("sonare_decompose_note_pitch does not resurrect invalid F0 with a true mask",
@@ -551,7 +551,7 @@ TEST_CASE("sonare_decompose_note_pitch reports a note with no usable pitch as an
                                       &usable) == SONARE_OK);
   REQUIRE(usable.count == kCurveFrames);
   REQUIRE(usable.center_hz == kCentre);
-  sonare_free_pitch_decomposition(&usable);
+  sonare_free_pitch_decomposition_result(&usable);
 }
 
 TEST_CASE("sonare_decompose_note_pitch rejects malformed arguments and clears its output",
@@ -595,7 +595,7 @@ TEST_CASE("sonare_decompose_note_pitch rejects malformed arguments and clears it
     SonarePitchDecompositionResult out{};
     REQUIRE(sonare_decompose_note_pitch(track.data(), nullptr, track.size(), kFrameRate, kCentre,
                                         3.0f, &out) == SONARE_OK);
-    sonare_free_pitch_decomposition(&out);
+    sonare_free_pitch_decomposition_result(&out);
   }
 
   for (const float bad_rate : {0.0f, -100.0f, kNaN, kInf}) {
@@ -627,17 +627,17 @@ TEST_CASE("sonare_decompose_note_pitch rejects malformed arguments and clears it
   REQUIRE(sonare_decompose_note_pitch(f0.data(), nullptr, f0.size(), kFrameRate, kCentre, 3.0f,
                                       &ok) == SONARE_OK);
   REQUIRE(ok.count == kCurveFrames);
-  sonare_free_pitch_decomposition(&ok);
+  sonare_free_pitch_decomposition_result(&ok);
 }
 
-TEST_CASE("sonare_free_pitch_decomposition clears the result it releases",
+TEST_CASE("sonare_free_pitch_decomposition_result clears the result it releases",
           "[c_api][note_split_merge]") {
-  sonare_free_pitch_decomposition(nullptr);
+  sonare_free_pitch_decomposition_result(nullptr);
 
   // A zeroed result owns nothing, so releasing it is a no-op rather than a free
   // of an uninitialized pointer.
   SonarePitchDecompositionResult empty{};
-  sonare_free_pitch_decomposition(&empty);
+  sonare_free_pitch_decomposition_result(&empty);
   REQUIRE(empty.drift_cents == nullptr);
   REQUIRE(empty.vibrato_cents == nullptr);
   REQUIRE(empty.count == 0);
@@ -653,14 +653,14 @@ TEST_CASE("sonare_free_pitch_decomposition clears the result it releases",
   REQUIRE(out.drift_cents != nullptr);
   REQUIRE(out.vibrato_cents != nullptr);
 
-  sonare_free_pitch_decomposition(&out);
+  sonare_free_pitch_decomposition_result(&out);
   REQUIRE(out.center_hz == 0.0f);
   REQUIRE(out.drift_cents == nullptr);
   REQUIRE(out.vibrato_cents == nullptr);
   REQUIRE(out.count == 0);
 
   // Releasing the same result twice is safe: the second call has nothing left.
-  sonare_free_pitch_decomposition(&out);
+  sonare_free_pitch_decomposition_result(&out);
   REQUIRE(out.drift_cents == nullptr);
   REQUIRE(out.vibrato_cents == nullptr);
   REQUIRE(out.count == 0);
@@ -726,8 +726,8 @@ TEST_CASE("sonare_split_note keeps every note's amplitude slice pointing at its 
   REQUIRE(split.envelopes == nullptr);
   REQUIRE(split.envelope_count == 0);
 
-  sonare_free_note_objects(&split);
-  sonare_free_note_objects(&extracted);
+  sonare_free_note_objects_result(&split);
+  sonare_free_note_objects_result(&extracted);
 }
 
 TEST_CASE("sonare_split_note normalizes a time_stretch_ratio of 0 to 1",
@@ -754,8 +754,8 @@ TEST_CASE("sonare_split_note normalizes a time_stretch_ratio of 0 to 1",
     REQUIRE(split.notes[i].edit.muted == 0);
     REQUIRE(split.notes[i].edit.envelope_count == 0);
   }
-  sonare_free_note_objects(&split);
-  sonare_free_note_objects(&extracted);
+  sonare_free_note_objects_result(&split);
+  sonare_free_note_objects_result(&extracted);
 }
 
 TEST_CASE("sonare split and merge validate negative stretch on every note",
@@ -769,13 +769,13 @@ TEST_CASE("sonare split and merge validate negative stretch on every note",
     SonareNoteObjectsResult result{};
     CHECK(split_from(source, notes.data(), notes.size(), nullptr, 0, 0, 5, &result) ==
           SONARE_ERROR_INVALID_PARAMETER);
-    if (result.notes != nullptr) sonare_free_note_objects(&result);
+    if (result.notes != nullptr) sonare_free_note_objects_result(&result);
   };
   auto expect_merge_invalid = [&](const std::vector<SonareNoteObject>& notes) {
     SonareNoteObjectsResult result{};
     CHECK(merge_from(source, notes.data(), notes.size(), nullptr, 0, 0, 1, &result) ==
           SONARE_ERROR_INVALID_PARAMETER);
-    if (result.notes != nullptr) sonare_free_note_objects(&result);
+    if (result.notes != nullptr) sonare_free_note_objects_result(&result);
   };
 
   std::vector<SonareNoteObject> selected_invalid(extracted.notes,
@@ -832,7 +832,7 @@ TEST_CASE("sonare split and merge validate negative stretch on every note",
       INFO("split note " << i);
       CHECK(split.notes[i].edit.time_stretch_ratio == 1.0f);
     }
-    sonare_free_note_objects(&split);
+    sonare_free_note_objects_result(&split);
   }
 
   SonareNoteObjectsResult merged{};
@@ -840,10 +840,10 @@ TEST_CASE("sonare split and merge validate negative stretch on every note",
   if (merged.notes != nullptr) {
     CHECK(merged.count == zeroed.size() - 1);
     CHECK(merged.notes[0].edit.time_stretch_ratio == 1.0f);
-    sonare_free_note_objects(&merged);
+    sonare_free_note_objects_result(&merged);
   }
 
-  sonare_free_note_objects(&extracted);
+  sonare_free_note_objects_result(&extracted);
 }
 
 TEST_CASE("sonare_split_note cuts the source note's envelope and returns its own pool",
@@ -890,7 +890,7 @@ TEST_CASE("sonare_split_note cuts the source note's envelope and returns its own
       REQUIRE(split.envelopes[i] >= 0.25f);
       REQUIRE(split.envelopes[i] <= 1.0f);
     }
-    sonare_free_note_objects(&split);
+    sonare_free_note_objects_result(&split);
   }
 
   SECTION("a one-entry envelope is a constant, so both halves get it unchanged") {
@@ -908,13 +908,13 @@ TEST_CASE("sonare_split_note cuts the source note's envelope and returns its own
       REQUIRE(slice.size() == 1);
       REQUIRE(slice[0] == 0.5f);
     }
-    sonare_free_note_objects(&split);
+    sonare_free_note_objects_result(&split);
   }
 
-  sonare_free_note_objects(&extracted);
+  sonare_free_note_objects_result(&extracted);
 }
 
-TEST_CASE("sonare_free_note_objects releases the envelope pool a split result owns",
+TEST_CASE("sonare_free_note_objects_result releases the envelope pool a split result owns",
           "[c_api][note_split_merge]") {
   const Source source = plain_source();
 
@@ -931,7 +931,7 @@ TEST_CASE("sonare_free_note_objects releases the envelope pool a split result ow
   REQUIRE(split.amplitude != nullptr);
   REQUIRE(split.envelopes != nullptr);
 
-  sonare_free_note_objects(&split);
+  sonare_free_note_objects_result(&split);
   REQUIRE(split.notes == nullptr);
   REQUIRE(split.count == 0);
   REQUIRE(split.amplitude == nullptr);
@@ -940,11 +940,11 @@ TEST_CASE("sonare_free_note_objects releases the envelope pool a split result ow
   REQUIRE(split.envelope_count == 0);
 
   // Releasing the same result twice is safe: the second call has nothing left.
-  sonare_free_note_objects(&split);
+  sonare_free_note_objects_result(&split);
   REQUIRE(split.envelopes == nullptr);
   REQUIRE(split.envelope_count == 0);
 
-  sonare_free_note_objects(&extracted);
+  sonare_free_note_objects_result(&extracted);
 }
 
 TEST_CASE("sonare_split_note rejects an out-of-range index and a frame outside the note",
@@ -955,7 +955,7 @@ TEST_CASE("sonare_split_note rejects an out-of-range index and a frame outside t
   REQUIRE(extract_from(source, &extracted) == SONARE_OK);
   REQUIRE(extracted.count == 3);
   const std::vector<SonareNoteObject> notes(extracted.notes, extracted.notes + extracted.count);
-  sonare_free_note_objects(&extracted);
+  sonare_free_note_objects_result(&extracted);
 
   auto rejects = [&](auto&& call) {
     SonareNoteObjectsResult out{};
@@ -1052,7 +1052,7 @@ TEST_CASE("sonare_split_note rejects an out-of-range index and a frame outside t
     REQUIRE(out.count == 4);
     REQUIRE(out.notes[1].frame_end == frame);
     REQUIRE(out.notes[2].frame_start == frame);
-    sonare_free_note_objects(&out);
+    sonare_free_note_objects_result(&out);
   }
 }
 
@@ -1097,8 +1097,8 @@ TEST_CASE("sonare_merge_notes spans the gap it joins over and keeps every slice 
   REQUIRE(merged.envelopes == nullptr);
   REQUIRE(merged.envelope_count == 0);
 
-  sonare_free_note_objects(&merged);
-  sonare_free_note_objects(&extracted);
+  sonare_free_note_objects_result(&merged);
+  sonare_free_note_objects_result(&extracted);
 }
 
 TEST_CASE("sonare_merge_notes takes the first note's edit", "[c_api][note_split_merge]") {
@@ -1121,8 +1121,8 @@ TEST_CASE("sonare_merge_notes takes the first note's edit", "[c_api][note_split_
   // The second note's edit does not survive: the rule is the first note's edit,
   // not a merge of the two.
   REQUIRE(merged.notes[0].edit.muted == 0);
-  sonare_free_note_objects(&merged);
-  sonare_free_note_objects(&extracted);
+  sonare_free_note_objects_result(&merged);
+  sonare_free_note_objects_result(&extracted);
 }
 
 TEST_CASE("a split undone by a merge returns the spans and the curves it started from",
@@ -1155,9 +1155,9 @@ TEST_CASE("a split undone by a merge returns the spans and the curves it started
       std::vector<float>(rejoined.amplitude, rejoined.amplitude + rejoined.amplitude_count),
       before);
 
-  sonare_free_note_objects(&rejoined);
-  sonare_free_note_objects(&split);
-  sonare_free_note_objects(&extracted);
+  sonare_free_note_objects_result(&rejoined);
+  sonare_free_note_objects_result(&split);
+  sonare_free_note_objects_result(&extracted);
 }
 
 TEST_CASE("sonare_merge_notes rejects a first/last pair that is not an ascending in-range run",
@@ -1168,7 +1168,7 @@ TEST_CASE("sonare_merge_notes rejects a first/last pair that is not an ascending
   REQUIRE(extract_from(source, &extracted) == SONARE_OK);
   REQUIRE(extracted.count == 3);
   const std::vector<SonareNoteObject> notes(extracted.notes, extracted.notes + extracted.count);
-  sonare_free_note_objects(&extracted);
+  sonare_free_note_objects_result(&extracted);
 
   auto rejects = [&](auto&& call) {
     SonareNoteObjectsResult out{};
@@ -1263,7 +1263,7 @@ TEST_CASE("sonare_merge_notes rejects a first/last pair that is not an ascending
   REQUIRE(all.count == 1);
   REQUIRE(all.notes[0].frame_start == notes[0].frame_start);
   REQUIRE(all.notes[0].frame_end == notes[2].frame_end);
-  sonare_free_note_objects(&all);
+  sonare_free_note_objects_result(&all);
 }
 
 #else
@@ -1281,7 +1281,7 @@ TEST_CASE("the note reshaping C API reports NOT_SUPPORTED without the pitch edit
   SonarePitchDecompositionResult decomposition{};
   REQUIRE(sonare_decompose_note_pitch(f0.data(), nullptr, f0.size(), 100.0f, 440.0f, 3.0f,
                                       &decomposition) == SONARE_ERROR_NOT_SUPPORTED);
-  sonare_free_pitch_decomposition(&decomposition);
+  sonare_free_pitch_decomposition_result(&decomposition);
 
   SonareNoteObjectsResult out{};
   REQUIRE(sonare_split_note(samples.data(), samples.size(), 16000, f0.data(), nullptr,

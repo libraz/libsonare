@@ -35,7 +35,7 @@ typedef struct SonareProjectTimeline SonareProjectTimeline;
 ///          outputs are zeroed on entry. CONTROL thread.
 /// @param project Project to compile.
 /// @param out_result Receives the diagnostics; free with
-///        @ref sonare_project_free_compile_result.
+///        @ref sonare_free_project_compile_result.
 /// @param out_timeline Receives the new timeline handle, or NULL.
 /// @return @c SONARE_ERROR_INVALID_PARAMETER for a NULL argument.
 SonareError sonare_project_compile_timeline(SonareProject* project,

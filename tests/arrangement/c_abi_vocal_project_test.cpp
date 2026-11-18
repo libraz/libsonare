@@ -78,13 +78,13 @@ struct VocalStateFixture {
       SonareVocalNotesResult notes;
       sonare_vocal_notes_result_init(&notes);
       if (sonare_vocal_session_notes(session.get(), &notes) != SONARE_OK || notes.note_count == 0) {
-        sonare_vocal_free_notes(&notes);
+        sonare_free_vocal_notes_result(&notes);
         throw std::runtime_error("could not read vocal notes for edited fixture");
       }
       SonareVocalEditDraft* raw_draft = nullptr;
       if (sonare_vocal_session_begin_edit(session.get(), 0, &raw_draft) != SONARE_OK ||
           raw_draft == nullptr) {
-        sonare_vocal_free_notes(&notes);
+        sonare_free_vocal_notes_result(&notes);
         throw std::runtime_error("could not begin edited fixture");
       }
       std::unique_ptr<SonareVocalEditDraft, decltype(&sonare_vocal_draft_destroy)> draft(
@@ -101,18 +101,18 @@ struct VocalStateFixture {
       if (sonare_vocal_draft_token(draft.get(), &draft_token) != SONARE_OK ||
           sonare_vocal_draft_apply(draft.get(), draft_token.generation, &operation, 1,
                                    &edit_result) != SONARE_OK) {
-        sonare_vocal_free_edit_result(&edit_result);
-        sonare_vocal_free_notes(&notes);
+        sonare_free_vocal_edit_result(&edit_result);
+        sonare_free_vocal_notes_result(&notes);
         throw std::runtime_error("could not apply edited fixture");
       }
-      sonare_vocal_free_edit_result(&edit_result);
+      sonare_free_vocal_edit_result(&edit_result);
       if (sonare_vocal_draft_commit(draft.get(), 0, &edit_result) != SONARE_OK) {
-        sonare_vocal_free_edit_result(&edit_result);
-        sonare_vocal_free_notes(&notes);
+        sonare_free_vocal_edit_result(&edit_result);
+        sonare_free_vocal_notes_result(&notes);
         throw std::runtime_error("could not commit edited fixture");
       }
-      sonare_vocal_free_edit_result(&edit_result);
-      sonare_vocal_free_notes(&notes);
+      sonare_free_vocal_edit_result(&edit_result);
+      sonare_free_vocal_notes_result(&notes);
     }
     if (sonare_vocal_session_token(session.get(), &token) != SONARE_OK) {
       throw std::runtime_error("could not read vocal state token");
@@ -125,7 +125,7 @@ struct VocalStateFixture {
       throw std::runtime_error("could not export vocal state");
     }
     state.assign(bytes.data, bytes.data + bytes.size);
-    sonare_vocal_free_state_bytes(&bytes);
+    sonare_free_vocal_state_bytes(&bytes);
 
     SonareVocalRenderSnapshot* raw_snapshot = nullptr;
     if (sonare_vocal_session_capture_snapshot(session.get(), &raw_snapshot) != SONARE_OK ||
@@ -139,11 +139,11 @@ struct VocalStateFixture {
     if (sonare_vocal_snapshot_render(snapshot.get(), {0, kSampleCount}, 1, nullptr, nullptr,
                                      &render) != SONARE_OK ||
         render.samples == nullptr || render.sample_count != kSampleCount) {
-      sonare_vocal_free_render_result(&render);
+      sonare_free_vocal_render_result(&render);
       throw std::runtime_error("could not render vocal snapshot");
     }
     rendered.assign(render.samples, render.samples + render.sample_count);
-    sonare_vocal_free_render_result(&render);
+    sonare_free_vocal_render_result(&render);
   }
 };
 
@@ -253,7 +253,7 @@ TEST_CASE("vocal project dependency API has initialized output ownership", "[pro
   REQUIRE(sonare_project_get_vocal_edit_dependencies(project, &result) == SONARE_OK);
   CHECK(result.dependencies == nullptr);
   CHECK(result.dependency_count == 0);
-  sonare_project_free_vocal_edit_dependencies(&result);
+  sonare_free_project_vocal_edit_dependencies_result(&result);
   CHECK(result.dependencies == nullptr);
   CHECK(result.dependency_count == 0);
   CHECK(result.struct_size == sizeof(result));
@@ -282,7 +282,7 @@ TEST_CASE("vocal project descriptor and rehydrate results require ABI initializa
   sonare_project_vocal_rehydrate_result_init(&rehydrate_result);
   CHECK(rehydrate_result.struct_size == sizeof(rehydrate_result));
   CHECK(rehydrate_result.schema_version == 1u);
-  sonare_project_free_vocal_rehydrate_result(&rehydrate_result);
+  sonare_free_project_vocal_rehydrate_result(&rehydrate_result);
 }
 
 #if defined(SONARE_WITH_PITCH_EDITOR)
@@ -367,7 +367,7 @@ TEST_CASE("vocal project persistence reports dependencies and rehydrates derived
   CHECK(dependencies.dependencies[0].take_id == 0);
   CHECK(dependencies.dependencies[0].original_pcm_available == 0);
   CHECK(dependencies.dependencies[0].derived_pcm_available == 0);
-  sonare_project_free_vocal_edit_dependencies(&dependencies);
+  sonare_free_project_vocal_edit_dependencies_result(&dependencies);
 
   SonareProjectVocalOriginalSource original;
   sonare_project_vocal_original_source_init(&original);
@@ -384,7 +384,7 @@ TEST_CASE("vocal project persistence reports dependencies and rehydrates derived
   CHECK(rehydrated.items[0].reason == SONARE_VOCAL_REASON_NONE);
   REQUIRE(loaded->audio.sources.find(applied.derived_source_id) != loaded->audio.sources.end());
   CHECK(loaded->audio.sources.at(applied.derived_source_id).channels[0] == fixture.vocal.rendered);
-  sonare_project_free_vocal_rehydrate_result(&rehydrated);
+  sonare_free_project_vocal_rehydrate_result(&rehydrated);
   sonare_project_destroy(loaded);
 }
 
@@ -418,7 +418,7 @@ TEST_CASE("vocal project accepts empty and opaque original metadata across persi
       CHECK(dependencies.dependencies[0].reason == SONARE_VOCAL_REASON_NONE);
       CHECK(dependencies.dependencies[0].original_pcm_available == 0);
       CHECK(dependencies.dependencies[0].derived_pcm_available == 0);
-      sonare_project_free_vocal_edit_dependencies(&dependencies);
+      sonare_free_project_vocal_edit_dependencies_result(&dependencies);
 
       SonareProjectVocalOriginalSource original;
       sonare_project_vocal_original_source_init(&original);
@@ -436,7 +436,7 @@ TEST_CASE("vocal project accepts empty and opaque original metadata across persi
       REQUIRE(loaded->audio.sources.find(applied.derived_source_id) != loaded->audio.sources.end());
       CHECK(loaded->audio.sources.at(applied.derived_source_id).channels[0] ==
             fixture.vocal.rendered);
-      sonare_project_free_vocal_rehydrate_result(&rehydrated);
+      sonare_free_project_vocal_rehydrate_result(&rehydrated);
       sonare_project_destroy(loaded);
     }
   }
@@ -468,7 +468,7 @@ TEST_CASE("vocal project rejects mismatched derived source metadata during rehyd
   CHECK(result.items[0].reason == SONARE_VOCAL_REASON_SOURCE_MISMATCH);
   CHECK(fixture.project->audio.sources.find(applied.derived_source_id) ==
         fixture.project->audio.sources.end());
-  sonare_project_free_vocal_rehydrate_result(&result);
+  sonare_free_project_vocal_rehydrate_result(&result);
 }
 
 TEST_CASE("vocal project rejects a late PCM collision without partial mutation",
@@ -559,7 +559,7 @@ TEST_CASE("vocal project rejects a mismatching existing original during rehydrat
   CHECK(result.items[0].reason == SONARE_VOCAL_REASON_SOURCE_MISMATCH);
   CHECK(fixture.project->audio.sources.find(applied.derived_source_id) ==
         fixture.project->audio.sources.end());
-  sonare_project_free_vocal_rehydrate_result(&result);
+  sonare_free_project_vocal_rehydrate_result(&result);
 }
 
 TEST_CASE("vocal project cancellation publishes no staged PCM", "[project][vocal][rehydrate]") {
@@ -588,7 +588,7 @@ TEST_CASE("vocal project cancellation publishes no staged PCM", "[project][vocal
   CHECK(fixture.project->history.undo_depth() == history_depth);
   CHECK(fixture.project->audio.sources.find(applied.derived_source_id) ==
         fixture.project->audio.sources.end());
-  sonare_project_free_vocal_rehydrate_result(&result);
+  sonare_free_project_vocal_rehydrate_result(&result);
 }
 
 TEST_CASE("vocal project does not publish original PCM for an invalid SVE1",
@@ -621,7 +621,7 @@ TEST_CASE("vocal project does not publish original PCM for an invalid SVE1",
         fixture.project->audio.sources.end());
   CHECK(fixture.project->audio.sources.find(applied.derived_source_id) ==
         fixture.project->audio.sources.end());
-  sonare_project_free_vocal_rehydrate_result(&result);
+  sonare_free_project_vocal_rehydrate_result(&result);
 }
 
 TEST_CASE("vocal project validates SVE1 before reporting an already-ready entry",
@@ -650,7 +650,7 @@ TEST_CASE("vocal project validates SVE1 before reporting an already-ready entry"
   CHECK(result.items[0].reason == SONARE_VOCAL_REASON_INVALID_STATE);
   CHECK(fixture.project->audio.sources.at(applied.derived_source_id).channels[0] ==
         fixture.vocal.rendered);
-  sonare_project_free_vocal_rehydrate_result(&result);
+  sonare_free_project_vocal_rehydrate_result(&result);
 }
 
 namespace {
@@ -709,11 +709,11 @@ EditedState edit_state(const std::vector<float>& source, const std::vector<uint8
   sonare_vocal_edit_result_init(&result);
   REQUIRE(sonare_vocal_draft_apply(draft, draft_token.generation, &operation, 1, &result) ==
           SONARE_OK);
-  sonare_vocal_free_edit_result(&result);
+  sonare_free_vocal_edit_result(&result);
   REQUIRE(sonare_vocal_draft_commit(draft, revision, &result) == SONARE_OK);
-  sonare_vocal_free_edit_result(&result);
+  sonare_free_vocal_edit_result(&result);
   sonare_vocal_draft_destroy(draft);
-  sonare_vocal_free_notes(&notes);
+  sonare_free_vocal_notes_result(&notes);
 
   EditedState edited;
   REQUIRE(sonare_vocal_session_token(session.get(), &edited.token) == SONARE_OK);
@@ -721,7 +721,7 @@ EditedState edit_state(const std::vector<float>& source, const std::vector<uint8
   sonare_vocal_state_bytes_init(&bytes);
   REQUIRE(sonare_vocal_session_export_state(session.get(), &bytes) == SONARE_OK);
   edited.state.assign(bytes.data, bytes.data + bytes.size);
-  sonare_vocal_free_state_bytes(&bytes);
+  sonare_free_vocal_state_bytes(&bytes);
   SonareVocalRenderSnapshot* snapshot = nullptr;
   REQUIRE(sonare_vocal_session_capture_snapshot(session.get(), &snapshot) == SONARE_OK);
   SonareVocalRenderResult render;
@@ -729,7 +729,7 @@ EditedState edit_state(const std::vector<float>& source, const std::vector<uint8
   REQUIRE(sonare_vocal_snapshot_render(snapshot, {0, kSampleCount}, 1, nullptr, nullptr, &render) ==
           SONARE_OK);
   edited.rendered.assign(render.samples, render.samples + render.sample_count);
-  sonare_vocal_free_render_result(&render);
+  sonare_free_vocal_render_result(&render);
   sonare_vocal_snapshot_destroy(snapshot);
   return edited;
 }
@@ -802,7 +802,7 @@ TEST_CASE("vocal project re-edits a derived binding from its root original",
     CHECK(rehydrated.items[0].status == SONARE_VOCAL_REHYDRATE_REHYDRATED);
     REQUIRE(loaded->audio.sources.find(applied.derived_source_id) != loaded->audio.sources.end());
     CHECK(loaded->audio.sources.at(applied.derived_source_id).channels[0] == second.rendered);
-    sonare_project_free_vocal_rehydrate_result(&rehydrated);
+    sonare_free_project_vocal_rehydrate_result(&rehydrated);
     sonare_project_destroy(loaded);
   }
 
@@ -868,7 +868,7 @@ int reenter_project(void* user_data) {
     sonare_project_vocal_rehydrate_result_init(&result);
     probe->nested = sonare_project_rehydrate_vocal_edits(probe->project, probe->original, 1,
                                                          nullptr, nullptr, &result);
-    sonare_project_free_vocal_rehydrate_result(&result);
+    sonare_free_project_vocal_rehydrate_result(&result);
   }
   return 0;
 }
@@ -1023,7 +1023,7 @@ TEST_CASE("vocal project rehydrate survives a cancel callback that mutates the p
     CHECK(fixture.project->audio.sources.find(applied.derived_source_id) ==
           fixture.project->audio.sources.end());
   }
-  sonare_project_free_vocal_rehydrate_result(&result);
+  sonare_free_project_vocal_rehydrate_result(&result);
 }
 
 TEST_CASE("vocal project apply and rehydrate enforce the supported sample-rate range",
@@ -1065,7 +1065,7 @@ TEST_CASE("vocal project dependency enumeration reports malformed vocal payloads
   REQUIRE(dependencies.dependency_count == 1);
   CHECK(dependencies.dependencies[0].reason == SONARE_VOCAL_REASON_INVALID_STATE);
   CHECK(std::string(dependencies.dependencies[0].sidecar_key) == malformed.module_id);
-  sonare_project_free_vocal_edit_dependencies(&dependencies);
+  sonare_free_project_vocal_edit_dependencies_result(&dependencies);
   sonare_project_destroy(project);
 }
 

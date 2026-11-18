@@ -76,7 +76,7 @@ size_t segment_count(const std::vector<float>& f0, const std::vector<float>& voi
                                static_cast<float>(kSampleRate) / kHopLength, &config,
                                &result) == SONARE_OK);
   const size_t count = result.count;
-  sonare_free_note_segments(&result);
+  sonare_free_note_segments_result(&result);
   return count;
 }
 

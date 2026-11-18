@@ -1,6 +1,6 @@
 /// @file sonare_c_note_objects_test.cpp
 /// @brief Tests for the note-object C API: sonare_extract_notes,
-///        sonare_render_notes and sonare_free_note_objects.
+///        sonare_render_notes and sonare_free_note_objects_result.
 ///
 /// Tracks are hand-built at 16 kHz with 10 ms frames rather than measured with
 /// pYIN, so every expected span, median and metric is predictable.
@@ -239,7 +239,7 @@ TEST_CASE("sonare_extract_notes returns one editable note for a sustained track"
   REQUIRE(out.amplitude != nullptr);
   REQUIRE(out.amplitude_count == 40);
   REQUIRE(out.notes[0].amplitude_offset == 0);
-  sonare_free_note_objects(&out);
+  sonare_free_note_objects_result(&out);
 }
 
 TEST_CASE("sonare_extract_notes places frame bounds and spans on the caller's own track",
@@ -277,7 +277,7 @@ TEST_CASE("sonare_extract_notes places frame bounds and spans on the caller's ow
     }
   }
   REQUIRE_THAT(out.notes[1].median_hz, WithinAbs(587.33f, 1.0f));
-  sonare_free_note_objects(&out);
+  sonare_free_note_objects_result(&out);
 }
 
 TEST_CASE("sonare_extract_notes returns one source RMS per frame of every span",
@@ -317,7 +317,7 @@ TEST_CASE("sonare_extract_notes returns one source RMS per frame of every span",
   // The second note is half the amplitude of the first, so the curve is a level
   // rather than a normalized shape.
   REQUIRE_THAT(out.amplitude[0] / out.amplitude[20], WithinAbs(2.0f, 0.1f));
-  sonare_free_note_objects(&out);
+  sonare_free_note_objects_result(&out);
 }
 
 TEST_CASE("sonare_extract_notes scores pitch steadiness", "[c_api][note_objects]") {
@@ -331,7 +331,7 @@ TEST_CASE("sonare_extract_notes scores pitch steadiness", "[c_api][note_objects]
     REQUIRE(out.count == 1);
     // No deviation to measure, so the metric is at its ceiling.
     REQUIRE(out.notes[0].f0_stability == 1.0f);
-    sonare_free_note_objects(&out);
+    sonare_free_note_objects_result(&out);
   }
 
   SECTION("a +-10 cent spread scores 1 - MAD / threshold") {
@@ -349,7 +349,7 @@ TEST_CASE("sonare_extract_notes scores pitch steadiness", "[c_api][note_objects]
     REQUIRE(out.notes[0].frame_start == 0);
     REQUIRE(out.notes[0].frame_end == 41);
     REQUIRE_THAT(out.notes[0].f0_stability, WithinAbs(0.8f, 0.005f));
-    sonare_free_note_objects(&out);
+    sonare_free_note_objects_result(&out);
   }
 
   SECTION("a vibrato scores below a pitch held flat") {
@@ -367,7 +367,7 @@ TEST_CASE("sonare_extract_notes scores pitch steadiness", "[c_api][note_objects]
     REQUIRE(out.count == 1);
     REQUIRE(out.notes[0].frame_end == 41);
     REQUIRE_THAT(out.notes[0].f0_stability, WithinAbs(0.647f, 0.02f));
-    sonare_free_note_objects(&out);
+    sonare_free_note_objects_result(&out);
   }
 
   SECTION("an unvoiced frame ends the span rather than being taken into it") {
@@ -384,7 +384,7 @@ TEST_CASE("sonare_extract_notes scores pitch steadiness", "[c_api][note_objects]
     REQUIRE(out.notes[0].frame_end == 15);
     REQUIRE(out.notes[1].frame_start == 20);
     REQUIRE(out.notes[1].frame_end == 41);
-    sonare_free_note_objects(&out);
+    sonare_free_note_objects_result(&out);
   }
 }
 
@@ -419,7 +419,7 @@ TEST_CASE("sonare_extract_notes reads voiced_prob only when voiced is NULL",
     REQUIRE(extract_at(samples, f0, silent_prob.data(), voiced.data(), nullptr, &out) == SONARE_OK);
     REQUIRE(out.count == 1);
     REQUIRE(out.notes[0].frame_end == 40);
-    sonare_free_note_objects(&out);
+    sonare_free_note_objects_result(&out);
 
     const std::vector<float> confident_prob(40, 1.0f);
     const std::vector<int32_t> unvoiced(40, 0);
@@ -435,7 +435,7 @@ TEST_CASE("sonare_extract_notes reads voiced_prob only when voiced is NULL",
     REQUIRE(out.count == 1);
     REQUIRE(out.notes[0].frame_start == 0);
     REQUIRE(out.notes[0].frame_end == 40);
-    sonare_free_note_objects(&out);
+    sonare_free_note_objects_result(&out);
 
     // Below the default 0.5 threshold there is nothing to segment.
     prob.assign(40, 0.2f);
@@ -449,7 +449,7 @@ TEST_CASE("sonare_extract_notes reads voiced_prob only when voiced is NULL",
     REQUIRE(out.count == 1);
     REQUIRE(out.notes[0].frame_start == 20);
     REQUIRE(out.notes[0].frame_end == 40);
-    sonare_free_note_objects(&out);
+    sonare_free_note_objects_result(&out);
   }
 }
 
@@ -474,9 +474,9 @@ TEST_CASE("a NULL SonareNoteExtractorConfig and a zeroed one select the same def
   REQUIRE(extract_at(samples, f0, nullptr, voiced.data(), &version_one, &from_v1) == SONARE_OK);
   REQUIRE(same_result(from_null, from_v1));
 
-  sonare_free_note_objects(&from_null);
-  sonare_free_note_objects(&from_zeroed);
-  sonare_free_note_objects(&from_v1);
+  sonare_free_note_objects_result(&from_null);
+  sonare_free_note_objects_result(&from_zeroed);
+  sonare_free_note_objects_result(&from_v1);
 }
 
 TEST_CASE("every SonareNoteExtractorConfig field takes its default at 0", "[c_api][note_objects]") {
@@ -507,9 +507,9 @@ TEST_CASE("every SonareNoteExtractorConfig field takes its default at 0", "[c_ap
     REQUIRE(widened.count == 1);
     REQUIRE(widened.notes[0].frame_end == 40);
 
-    sonare_free_note_objects(&zeroed);
-    sonare_free_note_objects(&explicit_default);
-    sonare_free_note_objects(&widened);
+    sonare_free_note_objects_result(&zeroed);
+    sonare_free_note_objects_result(&explicit_default);
+    sonare_free_note_objects_result(&widened);
   }
 
   SECTION("min_note_ms defaults to 30") {
@@ -539,8 +539,8 @@ TEST_CASE("every SonareNoteExtractorConfig field takes its default at 0", "[c_ap
     REQUIRE(extract_at(samples, f0, nullptr, gated.data(), &config, &strict) == SONARE_OK);
     REQUIRE(strict.count == 0);
 
-    sonare_free_note_objects(&zeroed);
-    sonare_free_note_objects(&explicit_default);
+    sonare_free_note_objects_result(&zeroed);
+    sonare_free_note_objects_result(&explicit_default);
   }
 
   SECTION("reference_hz defaults to A4") {
@@ -566,9 +566,9 @@ TEST_CASE("every SonareNoteExtractorConfig field takes its default at 0", "[c_ap
     REQUIRE_THAT(octave_down.notes[0].median_cents, WithinAbs(1200.0f, 1.0f));
     REQUIRE_THAT(octave_down.notes[0].median_hz, WithinAbs(sonare::constants::kA4Hz, 0.5f));
 
-    sonare_free_note_objects(&zeroed);
-    sonare_free_note_objects(&explicit_default);
-    sonare_free_note_objects(&octave_down);
+    sonare_free_note_objects_result(&zeroed);
+    sonare_free_note_objects_result(&explicit_default);
+    sonare_free_note_objects_result(&octave_down);
   }
 
   SECTION("voiced_threshold defaults to 0.5") {
@@ -590,8 +590,8 @@ TEST_CASE("every SonareNoteExtractorConfig field takes its default at 0", "[c_ap
     REQUIRE(extract_at(samples, f0, prob.data(), nullptr, &config, &strict) == SONARE_OK);
     REQUIRE(strict.count == 0);
 
-    sonare_free_note_objects(&zeroed);
-    sonare_free_note_objects(&explicit_default);
+    sonare_free_note_objects_result(&zeroed);
+    sonare_free_note_objects_result(&explicit_default);
   }
 }
 
@@ -648,7 +648,7 @@ TEST_CASE("sonare_render_notes reproduces the input bit for bit for identity edi
     sonare_free_floats(out);
   }
 
-  sonare_free_note_objects(&extracted);
+  sonare_free_note_objects_result(&extracted);
 }
 
 TEST_CASE("sonare_render_notes applies a gain edit inside the note only", "[c_api][note_objects]") {
@@ -881,7 +881,7 @@ TEST_CASE(
   extracted.notes[0].edit.envelope_count = pool.size();
   REQUIRE(moves_the_output(pool.data(), pool.size()));
 
-  sonare_free_note_objects(&extracted);
+  sonare_free_note_objects_result(&extracted);
 }
 
 TEST_CASE("sonare_render_notes reads each note's envelope at its own offset in the pool",
@@ -1254,7 +1254,7 @@ TEST_CASE("sonare_extract_notes rejects malformed arguments and clears its outpu
     REQUIRE(sonare_extract_notes(samples.data(), samples.size(), kSampleRate, track.data(), nullptr,
                                  voiced.data(), track.size(), kFrameRate, nullptr,
                                  &out) == SONARE_OK);
-    sonare_free_note_objects(&out);
+    sonare_free_note_objects_result(&out);
   }
 
   for (const float bad_prob : {kNaN, kInf, -0.1f, 1.1f}) {
@@ -1306,7 +1306,7 @@ TEST_CASE("sonare_extract_notes rejects malformed arguments and clears its outpu
   SonareNoteObjectsResult ok{};
   REQUIRE(extract_at(samples, f0, prob.data(), voiced.data(), nullptr, &ok) == SONARE_OK);
   REQUIRE(ok.count == 1);
-  sonare_free_note_objects(&ok);
+  sonare_free_note_objects_result(&ok);
 }
 
 TEST_CASE("sonare_render_notes rejects malformed spans, edits and config",
@@ -1494,13 +1494,14 @@ TEST_CASE("sonare_render_notes validates workflow bounds, scalar edits and finit
   }
 }
 
-TEST_CASE("sonare_free_note_objects clears the result it releases", "[c_api][note_objects]") {
-  sonare_free_note_objects(nullptr);
+TEST_CASE("sonare_free_note_objects_result clears the result it releases",
+          "[c_api][note_objects]") {
+  sonare_free_note_objects_result(nullptr);
 
   // A zeroed result owns nothing, so releasing it is a no-op rather than a free
   // of an uninitialized pointer.
   SonareNoteObjectsResult empty{};
-  sonare_free_note_objects(&empty);
+  sonare_free_note_objects_result(&empty);
   REQUIRE(empty.notes == nullptr);
   REQUIRE(empty.amplitude == nullptr);
 
@@ -1512,7 +1513,7 @@ TEST_CASE("sonare_free_note_objects clears the result it releases", "[c_api][not
   REQUIRE(out.notes != nullptr);
   REQUIRE(out.amplitude != nullptr);
 
-  sonare_free_note_objects(&out);
+  sonare_free_note_objects_result(&out);
   REQUIRE(out.notes == nullptr);
   REQUIRE(out.count == 0);
   REQUIRE(out.amplitude == nullptr);

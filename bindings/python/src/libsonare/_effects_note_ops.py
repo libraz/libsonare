@@ -286,7 +286,7 @@ def extract_notes(
     try:
         return _notes_from_c(out)
     finally:
-        lib.sonare_free_note_objects(ctypes.byref(out))
+        lib.sonare_free_note_objects_result(ctypes.byref(out))
 
 
 @_guard_buffer("samples")
@@ -502,7 +502,7 @@ def decompose_note_pitch(
             vibrato_cents=_from_c_float_array(out.vibrato_cents, out.count),
         )
     finally:
-        lib.sonare_free_pitch_decomposition(ctypes.byref(out))
+        lib.sonare_free_pitch_decomposition_result(ctypes.byref(out))
 
 
 @_guard_buffer("samples", shape_only=("f0_hz",))

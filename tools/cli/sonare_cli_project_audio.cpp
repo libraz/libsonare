@@ -587,7 +587,7 @@ int cmd_project_align_takes(const CliArgs& args) {
     desc.anchors = anchors;
     desc.anchor_count = anchor_count;
     err = sonare_project_set_warp_map(handle.ptr, &desc);
-    sonare_free_warp_anchors(anchors);
+    sonare_free_project_warp_anchors(anchors);
     if (err != SONARE_OK) {
       project_report_error("set warp map " + name, err);
       return project_exit_code(err);

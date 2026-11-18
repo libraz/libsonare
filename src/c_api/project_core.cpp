@@ -517,7 +517,7 @@ SonareError sonare_project_get_audio_source_uri(const SonareProject* project, ui
 #endif
 }
 
-void sonare_project_free_audio_source_metadata(SonareProjectAudioSourceMetadata* metadata) {
+void sonare_free_project_audio_source_metadata(SonareProjectAudioSourceMetadata* metadata) {
   if (!metadata) return;
 #if defined(SONARE_WITH_ARRANGEMENT)
   delete[] metadata->content_hash;
@@ -615,7 +615,7 @@ SonareError sonare_project_last_bounce_compile_result(const SonareProject* proje
 #endif
 }
 
-void sonare_project_free_compile_result(SonareProjectCompileResult* result) {
+void sonare_free_project_compile_result(SonareProjectCompileResult* result) {
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (!result) return;
   delete[] result->diagnostics;
@@ -698,7 +698,7 @@ SonareError sonare_project_get_assist_sidecar(const SonareProject* project, size
 #endif
 }
 
-void sonare_project_free_assist_sidecar(SonareProjectAssistSidecar* sidecar) {
+void sonare_free_project_assist_sidecar(SonareProjectAssistSidecar* sidecar) {
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (!sidecar) return;
   delete[] sidecar->module_id;

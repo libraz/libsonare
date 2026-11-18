@@ -1066,17 +1066,17 @@ TEST_CASE("sonare_engine_bounce_offline resolves block_size 0 against the prepar
   SonareEngineBounceResult result{};
   REQUIRE(sonare_engine_bounce_offline(engine, &options, &result) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  sonare_free_bounce_result(&result);
+  sonare_free_engine_bounce_result(&result);
 
   options.num_channels = 2;
   REQUIRE(sonare_engine_bounce_offline(engine, &options, &result) == SONARE_OK);
   REQUIRE(result.frames == 256);
-  sonare_free_bounce_result(&result);
+  sonare_free_engine_bounce_result(&result);
 
   options.block_size = -1;
   REQUIRE(sonare_engine_bounce_offline(engine, &options, &result) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  sonare_free_bounce_result(&result);
+  sonare_free_engine_bounce_result(&result);
   sonare_engine_destroy(engine);
 }
 

@@ -1,6 +1,6 @@
 /// @file sonare_c_percussive_events_test.cpp
 /// @brief Tests for the percussive-event C API: sonare_extract_percussive_events,
-///        sonare_free_percussive_events and sonare_render_percussive_events.
+///        sonare_free_percussive_events_result and sonare_render_percussive_events.
 ///
 /// The model itself is covered in tests/editing/percussive_event_test.cpp. What
 /// is tested here is what only the boundary can get wrong: NULL and zero-count
@@ -352,7 +352,7 @@ TEST_CASE("sonare_extract_percussive_events returns one event per hit with a zer
   REQUIRE(out.events[1].offset_sample == out.events[2].onset_sample);
   REQUIRE(out.events[2].offset_sample - out.events[2].onset_sample == 11025);
 
-  sonare_free_percussive_events(&out);
+  sonare_free_percussive_events_result(&out);
 }
 
 TEST_CASE("sonare_extract_percussive_events returns nothing detected as NULL and a zero count",
@@ -366,7 +366,7 @@ TEST_CASE("sonare_extract_percussive_events returns nothing detected as NULL and
   REQUIRE(from_silence.count == 0);
   // Releasing a result that owns nothing is a no-op rather than a free of an
   // uninitialised pointer.
-  sonare_free_percussive_events(&from_silence);
+  sonare_free_percussive_events_result(&from_silence);
 
   const std::vector<float> samples = two_hits();
   SonarePercussiveEventConfig unreachable{};
@@ -379,7 +379,7 @@ TEST_CASE("sonare_extract_percussive_events returns nothing detected as NULL and
   // A zero-count set renders the input back bit for bit, so the empty result is
   // usable rather than merely legal.
   REQUIRE(first_mismatch(render_ok(samples, none.events, none.count), samples) == kNoMismatch);
-  sonare_free_percussive_events(&none);
+  sonare_free_percussive_events_result(&none);
 }
 
 TEST_CASE("percussive_ratio reads both ends of its range through the C layer",
@@ -404,7 +404,7 @@ TEST_CASE("percussive_ratio reads both ends of its range through the C layer",
   REQUIRE(note_ratio < 0.9f);
   REQUIRE(note_ratio < 0.5f * hit_ratio);
 
-  sonare_free_percussive_events(&out);
+  sonare_free_percussive_events_result(&out);
 }
 
 // --- The zero-is-default rule ---------------------------------------------
@@ -425,9 +425,9 @@ TEST_CASE("a NULL SonarePercussiveEventConfig and a zeroed one select the same d
   SonarePercussiveEventsResult from_v1 = extracted(samples, &version_one);
   REQUIRE(same_events(from_null, from_v1));
 
-  sonare_free_percussive_events(&from_null);
-  sonare_free_percussive_events(&from_zeroed);
-  sonare_free_percussive_events(&from_v1);
+  sonare_free_percussive_events_result(&from_null);
+  sonare_free_percussive_events_result(&from_zeroed);
+  sonare_free_percussive_events_result(&from_v1);
 }
 
 TEST_CASE("every SonarePercussiveEventConfig field takes its default at 0",
@@ -442,7 +442,7 @@ TEST_CASE("every SonarePercussiveEventConfig field takes its default at 0",
     config.hop_length = 512;
     SonarePercussiveEventsResult explicit_default = extracted(samples, &config);
     REQUIRE(same_events(defaults, explicit_default));
-    sonare_free_percussive_events(&explicit_default);
+    sonare_free_percussive_events_result(&explicit_default);
 
     // A hop of exactly half the window is the inclusive end of the overlap-add
     // rule, and one sample past it is not. Both are read against the default
@@ -451,7 +451,7 @@ TEST_CASE("every SonarePercussiveEventConfig field takes its default at 0",
     half.hop_length = 1024;
     SonarePercussiveEventsResult at_half = extracted(samples, &half);
     require_well_formed(at_half, samples.size());
-    sonare_free_percussive_events(&at_half);
+    sonare_free_percussive_events_result(&at_half);
 
     SonarePercussiveEventConfig past_half{};
     past_half.hop_length = 1025;
@@ -465,7 +465,7 @@ TEST_CASE("every SonarePercussiveEventConfig field takes its default at 0",
     config.hpss_kernel_percussive = 31;
     SonarePercussiveEventsResult explicit_default = extracted(samples, &config);
     REQUIRE(same_events(defaults, explicit_default));
-    sonare_free_percussive_events(&explicit_default);
+    sonare_free_percussive_events_result(&explicit_default);
 
     // A single-frame harmonic kernel is the median along time reduced to the
     // identity, so nothing is separated by time any more and a struck sound is
@@ -484,7 +484,7 @@ TEST_CASE("every SonarePercussiveEventConfig field takes its default at 0",
       return highest;
     };
     REQUIRE(largest_ratio(short_kernel) < largest_ratio(defaults));
-    sonare_free_percussive_events(&short_kernel);
+    sonare_free_percussive_events_result(&short_kernel);
   }
 
   SECTION("onset_wait defaults to one frame") {
@@ -492,7 +492,7 @@ TEST_CASE("every SonarePercussiveEventConfig field takes its default at 0",
     config.onset_wait = 1;
     SonarePercussiveEventsResult explicit_default = extracted(samples, &config);
     REQUIRE(same_events(defaults, explicit_default));
-    sonare_free_percussive_events(&explicit_default);
+    sonare_free_percussive_events_result(&explicit_default);
 
     // 200 frames is 4.6 s at this framing, longer than the fixture, so the
     // spacing rule leaves exactly the first onset -- at the sample the default
@@ -502,7 +502,7 @@ TEST_CASE("every SonarePercussiveEventConfig field takes its default at 0",
     SonarePercussiveEventsResult sparse = extracted(samples, &spaced);
     REQUIRE(sparse.count == 1);
     REQUIRE(sparse.events[0].onset_sample == defaults.events[0].onset_sample);
-    sonare_free_percussive_events(&sparse);
+    sonare_free_percussive_events_result(&sparse);
   }
 
   SECTION("onset_delta defaults to 0.06") {
@@ -510,7 +510,7 @@ TEST_CASE("every SonarePercussiveEventConfig field takes its default at 0",
     config.onset_delta = 0.06f;
     SonarePercussiveEventsResult explicit_default = extracted(samples, &config);
     REQUIRE(same_events(defaults, explicit_default));
-    sonare_free_percussive_events(&explicit_default);
+    sonare_free_percussive_events_result(&explicit_default);
 
     // Raising it finds fewer, stronger hits. The threshold is derived from the
     // strengths this fixture actually produced rather than picked by eye: set
@@ -527,7 +527,7 @@ TEST_CASE("every SonarePercussiveEventConfig field takes its default at 0",
     REQUIRE(fewer.count < defaults.count);
     REQUIRE(fewer.count <= 1);
     if (fewer.count == 1) REQUIRE(fewer.events[0].strength == strengths[0]);
-    sonare_free_percussive_events(&fewer);
+    sonare_free_percussive_events_result(&fewer);
   }
 
   SECTION("max_event_ms defaults to 500 ms") {
@@ -535,7 +535,7 @@ TEST_CASE("every SonarePercussiveEventConfig field takes its default at 0",
     config.max_event_ms = 500.0f;
     SonarePercussiveEventsResult explicit_default = extracted(samples, &config);
     REQUIRE(same_events(defaults, explicit_default));
-    sonare_free_percussive_events(&explicit_default);
+    sonare_free_percussive_events_result(&explicit_default);
 
     // 40 ms is 882 samples at this rate, exactly, and shorter than the 400 ms
     // between hits, so it closes every span including the interior ones. The cap
@@ -549,10 +549,10 @@ TEST_CASE("every SonarePercussiveEventConfig field takes its default at 0",
       REQUIRE(capped.events[i].onset_sample == defaults.events[i].onset_sample);
       REQUIRE(capped.events[i].offset_sample - capped.events[i].onset_sample == 882);
     }
-    sonare_free_percussive_events(&capped);
+    sonare_free_percussive_events_result(&capped);
   }
 
-  sonare_free_percussive_events(&defaults);
+  sonare_free_percussive_events_result(&defaults);
 }
 
 TEST_CASE("min_percussive_ratio is assigned at 0 rather than read as a default",
@@ -614,11 +614,11 @@ TEST_CASE("min_percussive_ratio is assigned at 0 rather than read as a default",
     REQUIRE(at_ceiling.events[i].percussive_ratio >= 1.0f);
   }
 
-  sonare_free_percussive_events(&from_null);
-  sonare_free_percussive_events(&zeroed);
-  sonare_free_percussive_events(&from_zero);
-  sonare_free_percussive_events(&kept);
-  sonare_free_percussive_events(&at_ceiling);
+  sonare_free_percussive_events_result(&from_null);
+  sonare_free_percussive_events_result(&zeroed);
+  sonare_free_percussive_events_result(&from_zero);
+  sonare_free_percussive_events_result(&kept);
+  sonare_free_percussive_events_result(&at_ceiling);
 }
 
 // --- Validation, clearing and ownership -----------------------------------
@@ -753,17 +753,17 @@ TEST_CASE("sonare_extract_percussive_events rejects malformed arguments and clea
   // Positive control: the same call with nothing poisoned succeeds.
   SonarePercussiveEventsResult ok = extracted(samples);
   REQUIRE(ok.count == 2);
-  sonare_free_percussive_events(&ok);
+  sonare_free_percussive_events_result(&ok);
 }
 
-TEST_CASE("sonare_free_percussive_events is NULL-safe, clears, and repeats",
+TEST_CASE("sonare_free_percussive_events_result is NULL-safe, clears, and repeats",
           "[c_api][percussive_events]") {
-  sonare_free_percussive_events(nullptr);
+  sonare_free_percussive_events_result(nullptr);
 
   // A zeroed result owns nothing, so releasing it is a no-op rather than a free
   // of an uninitialised pointer.
   SonarePercussiveEventsResult empty{};
-  sonare_free_percussive_events(&empty);
+  sonare_free_percussive_events_result(&empty);
   REQUIRE(empty.events == nullptr);
   REQUIRE(empty.count == 0);
 
@@ -771,13 +771,13 @@ TEST_CASE("sonare_free_percussive_events is NULL-safe, clears, and repeats",
   REQUIRE(out.events != nullptr);
   REQUIRE(out.count == 2);
 
-  sonare_free_percussive_events(&out);
+  sonare_free_percussive_events_result(&out);
   REQUIRE(out.events == nullptr);
   REQUIRE(out.count == 0);
 
   // Cleared on release, so a second call frees nothing: releasing twice is not a
   // double free.
-  sonare_free_percussive_events(&out);
+  sonare_free_percussive_events_result(&out);
   REQUIRE(out.events == nullptr);
   REQUIRE(out.count == 0);
 }
@@ -798,7 +798,7 @@ TEST_CASE("sonare_render_percussive_events reproduces the input bit for bit for 
   REQUIRE(first_mismatch(render_ok(samples, nullptr, 0), samples) == kNoMismatch);
   REQUIRE(first_mismatch(render_ok(samples, out.events, 0), samples) == kNoMismatch);
 
-  sonare_free_percussive_events(&out);
+  sonare_free_percussive_events_result(&out);
 }
 
 TEST_CASE("an extracted set travels back into the renderer with only its edit changed",
@@ -828,7 +828,7 @@ TEST_CASE("an extracted set travels back into the renderer with only its edit ch
   REQUIRE(first_mismatch(render_ok(samples, corrupted.data(), corrupted.size()), rendered) ==
           kNoMismatch);
 
-  sonare_free_percussive_events(&out);
+  sonare_free_percussive_events_result(&out);
 }
 
 TEST_CASE("any non-zero muted silences a hit, not only 1", "[c_api][percussive_events]") {
@@ -869,7 +869,7 @@ TEST_CASE("any non-zero muted silences a hit, not only 1", "[c_api][percussive_e
   audible.edit.time_offset_samples = 5000;
   REQUIRE(first_mismatch(render_ok(samples, &audible, 1), muted) != kNoMismatch);
 
-  sonare_free_percussive_events(&out);
+  sonare_free_percussive_events_result(&out);
 }
 
 TEST_CASE("the SonarePercussiveRenderConfig fields take their defaults at 0",
@@ -1189,7 +1189,7 @@ TEST_CASE("sonare_extract_percussive_events holds its contract across its config
     render_config.hpss_kernel_percussive = row.kernel_percussive;
     REQUIRE(first_mismatch(render_ok(samples, out.events, out.count, &render_config), samples) ==
             kNoMismatch);
-    sonare_free_percussive_events(&out);
+    sonare_free_percussive_events_result(&out);
   }
 }
 
@@ -1280,5 +1280,5 @@ TEST_CASE("sonare_render_percussive_events holds its contract across its edit an
     }
   }
 
-  sonare_free_percussive_events(&out);
+  sonare_free_percussive_events_result(&out);
 }

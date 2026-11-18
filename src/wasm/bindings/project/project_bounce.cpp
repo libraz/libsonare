@@ -339,11 +339,11 @@ val ProjectWasm::compile() {
   SonareProjectCompileResult result{};
   const SonareError err = sonare_project_compile(project_.get(), &result);
   if (err != SONARE_OK) {
-    sonare_project_free_compile_result(&result);
+    sonare_free_project_compile_result(&result);
     throwCError(err, "failed to compile project");
   }
   val out = projectCompileResultToVal(result);
-  sonare_project_free_compile_result(&result);
+  sonare_free_project_compile_result(&result);
   return out;
 }
 
@@ -352,12 +352,12 @@ val ProjectWasm::compileTimeline() {
   SonareProjectTimeline* timeline = nullptr;
   const SonareError err = sonare_project_compile_timeline(project_.get(), &result, &timeline);
   if (err != SONARE_OK) {
-    sonare_project_free_compile_result(&result);
+    sonare_free_project_compile_result(&result);
     sonare_project_timeline_destroy(timeline);
     throwCError(err, "failed to compile project timeline");
   }
   val out = projectCompileResultToVal(result);
-  sonare_project_free_compile_result(&result);
+  sonare_free_project_compile_result(&result);
   if (timeline != nullptr) {
     out.set("timeline", ProjectTimelineWasm(timeline));
   } else {

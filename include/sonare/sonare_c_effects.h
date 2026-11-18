@@ -354,7 +354,7 @@ typedef struct {
   SonareNoteEdit edit;
 } SonareNoteObject;
 
-/// Heap-owned note-object output. Release with @ref sonare_free_note_objects.
+/// Heap-owned note-object output. Release with @ref sonare_free_note_objects_result.
 /// @details The per-note F0 curve is not repeated here: it is the caller's own
 ///          @c f0_hz sliced by @c [frame_start, frame_end). The amplitude curve
 ///          is new, so it is returned -- one RMS per F0 frame over that frame's
@@ -402,7 +402,7 @@ SonareError sonare_extract_notes(const float* samples, size_t length, int sample
                                  SonareNoteObjectsResult* out);
 /// @brief Releases the notes, amplitude and envelope arrays of a result and empties it.
 /// @details NULL and an already-released result are no-ops.
-void sonare_free_note_objects(SonareNoteObjectsResult* result);
+void sonare_free_note_objects_result(SonareNoteObjectsResult* result);
 
 /// @brief Render edited note objects over their source audio.
 /// @details Reads each note's sample span and its @c edit, plus the frame
@@ -458,7 +458,7 @@ SonareError sonare_render_notes(const float* samples, size_t length, int sample_
                                 size_t* out_length);
 
 /// One note's pitch curve split into a centre, a slow drift and a vibrato.
-/// Release with @ref sonare_free_pitch_decomposition.
+/// Release with @ref sonare_free_pitch_decomposition_result.
 typedef struct {
   /// The note's steady pitch in Hz. 0 when the note carries no usable pitch,
   /// and then both curves are empty.
@@ -508,7 +508,7 @@ SonareError sonare_decompose_note_pitch(const float* f0_hz, const int32_t* voice
                                         SonarePitchDecompositionResult* out);
 /// @brief Releases both curves of a @ref SonarePitchDecompositionResult and empties it.
 /// @details NULL and an already-released result are no-ops.
-void sonare_free_pitch_decomposition(SonarePitchDecompositionResult* result);
+void sonare_free_pitch_decomposition_result(SonarePitchDecompositionResult* result);
 
 /// @brief Split one note in two at a track frame.
 /// @details Both halves are re-derived from the audio and the track the way
@@ -823,7 +823,7 @@ typedef struct {
 } SonarePercussiveEvent;
 
 /// Heap-owned percussive-event output. Release with
-/// @ref sonare_free_percussive_events.
+/// @ref sonare_free_percussive_events_result.
 /// @details One allocation, unlike @ref SonareNoteObjectsResult: an event
 ///          carries three scalars and nothing per frame, so there is no
 ///          companion curve array to travel with the set.
@@ -866,7 +866,7 @@ SonareError sonare_extract_percussive_events(const float* samples, size_t length
 /// @details NULL-safe, and clears the struct it releases, so calling it twice on
 ///          the same result is harmless. A result that came back empty owns
 ///          nothing and may still be passed here.
-void sonare_free_percussive_events(SonarePercussiveEventsResult* result);
+void sonare_free_percussive_events_result(SonarePercussiveEventsResult* result);
 
 /// @brief Render edited percussive events over their source audio.
 /// @details Per event the lifted signal is the percussive component over

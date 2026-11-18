@@ -71,7 +71,7 @@ TEST_CASE("sonare_engine bounce scatters a strip's surround pan into a 5.1 maste
   REQUIRE(energy[2] < energy[4] * 1e-3);  // C
   REQUIRE(energy[3] == 0.0);              // LFE
 
-  sonare_free_bounce_result(&result);
+  sonare_free_engine_bounce_result(&result);
   sonare_engine_destroy(engine);
 }
 
@@ -100,7 +100,7 @@ std::array<double, 6> bounce_surround_energy(SonareRealtimeEngine* engine, int f
       energy[static_cast<size_t>(ch)] += static_cast<double>(v) * v;
     }
   }
-  sonare_free_bounce_result(&result);
+  sonare_free_engine_bounce_result(&result);
   return energy;
 }
 
@@ -245,7 +245,7 @@ TEST_CASE("an engine offline render opens at the lane's settled fader", "[c_api]
   REQUIRE(reference.interleaved != nullptr);
   const float unity = reference.interleaved[(kPreRollFrames - 1) * 2];
   REQUIRE(unity > 0.0f);
-  sonare_free_bounce_result(&reference);
+  sonare_free_engine_bounce_result(&reference);
   sonare_engine_destroy(reference_engine);
 
   SonareRealtimeEngine* engine = make_pre_roll_engine(clip_channels, kFaderDb);
@@ -267,7 +267,7 @@ TEST_CASE("an engine offline render opens at the lane's settled fader", "[c_api]
   // ... and that steady level is the requested -12 dB, so the assertion above is
   // not satisfied by a fader that never took effect.
   REQUIRE(steady == Catch::Approx(unity * std::pow(10.0f, kFaderDb / 20.0f)).epsilon(0.02));
-  sonare_free_bounce_result(&result);
+  sonare_free_engine_bounce_result(&result);
   sonare_engine_destroy(engine);
 
   // The freeze path captures the same settled lane.
@@ -385,7 +385,7 @@ TEST_CASE("an engine bounce matches a raw offline render through a biased tape i
     }
     REQUIRE(peak > 0.1f);
     CHECK(max_diff <= peak * 1e-6f);
-    sonare_free_bounce_result(&result);
+    sonare_free_engine_bounce_result(&result);
     sonare_engine_destroy(bounce_engine);
   }
 }

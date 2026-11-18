@@ -900,7 +900,7 @@ typedef struct {
 } SonareNoteSegment;
 
 /// Heap-owned note-segmentation output. Release with
-/// @ref sonare_free_note_segments.
+/// @ref sonare_free_note_segments_result.
 typedef struct {
   SonareNoteSegment* segments;  ///< Note array, @c count entries; NULL when empty.
   size_t count;                 ///< Number of notes.
@@ -933,7 +933,7 @@ SonareError sonare_note_segments(const float* f0_hz, const float* voiced_prob,
                                  const SonareNoteSegmenterConfig* config,
                                  SonareNoteSegmentsResult* out);
 /// @brief Releases the segment array of a note-segmentation result and clears it; NULL is a no-op.
-void sonare_free_note_segments(SonareNoteSegmentsResult* result);
+void sonare_free_note_segments_result(SonareNoteSegmentsResult* result);
 
 // ============================================================================
 // Core - Conversion

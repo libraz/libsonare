@@ -223,7 +223,7 @@ Planar bounce(SonareRealtimeEngine* engine) {
     out.left.push_back(result.interleaved[f * kChannels]);
     out.right.push_back(result.interleaved[f * kChannels + 1]);
   }
-  sonare_free_bounce_result(&result);
+  sonare_free_engine_bounce_result(&result);
   return out;
 }
 

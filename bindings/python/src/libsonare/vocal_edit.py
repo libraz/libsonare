@@ -241,7 +241,7 @@ def _owned_result(lib: ctypes.CDLL, init: str, cls: type[Any], free: str) -> Ite
 
 def _owned_edit_result(lib: ctypes.CDLL) -> contextlib.AbstractContextManager[Any]:
     return _owned_result(
-        lib, "sonare_vocal_edit_result_init", SonareVocalEditResult, "sonare_vocal_free_edit_result"
+        lib, "sonare_vocal_edit_result_init", SonareVocalEditResult, "sonare_free_vocal_edit_result"
     )
 
 
@@ -287,7 +287,7 @@ class _HandleOwner:
     def _owned_notes(self) -> VocalNotesResult:
         lib = _get_lib()
         with _owned_result(
-            lib, "sonare_vocal_notes_result_init", SonareVocalNotesResult, "sonare_vocal_free_notes"
+            lib, "sonare_vocal_notes_result_init", SonareVocalNotesResult, "sonare_free_vocal_notes_result"
         ) as raw:
             _vocal_check(
                 getattr(lib, f"{self._symbol_prefix}_notes")(
@@ -480,7 +480,7 @@ class VocalEditSession(_HandleOwner):
             lib,
             "sonare_vocal_analysis_result_init",
             SonareVocalAnalysisResult,
-            "sonare_vocal_free_analysis",
+            "sonare_free_vocal_analysis_result",
         ) as raw:
             _vocal_check(
                 lib.sonare_vocal_session_analysis(self._require_handle(), ctypes.byref(raw))
@@ -586,7 +586,7 @@ class VocalEditSession(_HandleOwner):
             lib,
             "sonare_vocal_state_bytes_init",
             SonareVocalStateBytes,
-            "sonare_vocal_free_state_bytes",
+            "sonare_free_vocal_state_bytes",
         ) as raw:
             _vocal_check(
                 lib.sonare_vocal_session_export_state(self._require_handle(), ctypes.byref(raw))
@@ -744,7 +744,7 @@ class VocalRenderSnapshot(_HandleOwner):
                 )
                 return _render_result_from_c(raw)
             finally:
-                lib.sonare_vocal_free_render_result(ctypes.byref(raw))
+                lib.sonare_free_vocal_render_result(ctypes.byref(raw))
 
     def begin_render_job(
         self,
@@ -811,7 +811,7 @@ class VocalRenderJob(_HandleOwner):
                     native_succeeded = True
                     result = _render_result_from_c(raw)
                 finally:
-                    lib.sonare_vocal_free_render_result(ctypes.byref(raw))
+                    lib.sonare_free_vocal_render_result(ctypes.byref(raw))
         finally:
             if native_succeeded:
                 self.close()
@@ -831,7 +831,7 @@ def _evaluate_pitch(
         lib,
         "sonare_vocal_pitch_result_init",
         SonareVocalPitchResult,
-        "sonare_vocal_free_pitch_result",
+        "sonare_free_vocal_pitch_result",
     ) as raw:
         _vocal_check(
             getattr(lib, symbol)(

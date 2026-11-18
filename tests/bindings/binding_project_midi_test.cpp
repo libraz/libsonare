@@ -1655,7 +1655,7 @@ TEST_CASE("project C surface keeps an SMF note-off written on the end-of-track t
   SonareProjectCompileResult result{};
   REQUIRE(sonare_project_compile(project, &result) == SONARE_OK);
   REQUIRE(result.has_timeline != 0);
-  sonare_project_free_compile_result(&result);
+  sonare_free_project_compile_result(&result);
 
   sonare_project_destroy(project);
 }
@@ -1692,7 +1692,7 @@ TEST_CASE("project C surface warns that a MIDI-only project bounces to silence",
   REQUIRE(result.messages != nullptr);
   const std::string messages(result.messages);
   REQUIRE(messages.find("project contains MIDI clips") != std::string::npos);
-  sonare_project_free_compile_result(&result);
+  sonare_free_project_compile_result(&result);
 
   SonareProjectBounceOptions options{};
   options.sample_rate = 48000;
@@ -1720,7 +1720,7 @@ TEST_CASE("project C surface warns that a MIDI-only project bounces to silence",
   REQUIRE(bounce_result.messages != nullptr);
   const std::string bounce_messages(bounce_result.messages);
   REQUIRE(bounce_messages.find("project contains MIDI clips") != std::string::npos);
-  sonare_project_free_compile_result(&bounce_result);
+  sonare_free_project_compile_result(&bounce_result);
 
   sonare_project_destroy(project);
 }

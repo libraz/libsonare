@@ -395,7 +395,7 @@ TEST_CASE("sonare_engine_bounce_offline maps non-finite loudness targets to the 
     all_finite = all_finite && std::isfinite(result.interleaved[i]);
   }
   REQUIRE(all_finite);
-  sonare_free_bounce_result(&result);
+  sonare_free_engine_bounce_result(&result);
 
   sonare_engine_destroy(engine);
 }
@@ -1431,7 +1431,7 @@ TEST_CASE("sonare_engine offline bounce and freeze consume paged clip providers"
   for (size_t i = 0; i < bounce.sample_count; ++i) {
     REQUIRE(bounce.interleaved[i] == Catch::Approx(static_cast<float>(i + 1)).margin(0.0001f));
   }
-  sonare_free_bounce_result(&bounce);
+  sonare_free_engine_bounce_result(&bounce);
 
   REQUIRE(sonare_engine_seek_sample(engine, 0, -1) == SONARE_OK);
   REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);

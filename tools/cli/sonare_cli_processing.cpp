@@ -567,8 +567,8 @@ int cmd_vocal_notes(const CliArgs& args, const Audio& audio) {
   SonareVocalNotesResult notes;
   sonare_vocal_notes_result_init(&notes);
   const SonareError read = sonare_vocal_session_notes(session.get(), &notes);
-  std::unique_ptr<SonareVocalNotesResult, decltype(&sonare_vocal_free_notes)> owned(
-      &notes, &sonare_vocal_free_notes);
+  std::unique_ptr<SonareVocalNotesResult, decltype(&sonare_free_vocal_notes_result)> owned(
+      &notes, &sonare_free_vocal_notes_result);
   if (read != SONARE_OK) throw_c_error(read, "vocal note read failed");
 
   const int sample_rate = audio.sample_rate();

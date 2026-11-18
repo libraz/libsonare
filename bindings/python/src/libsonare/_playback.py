@@ -403,7 +403,7 @@ class PlaybackRenderer:
             return _from_c_float_array(out_ptr, int(out_frames.value) * int(out_channels.value))
         finally:
             if out_ptr:
-                self._lib.sonare_free_playback_render(out_ptr)
+                self._lib.sonare_free_floats(out_ptr)
 
 
 @_guard_buffer("samples")
@@ -459,7 +459,7 @@ def render_playback(
         return flat.reshape(int(out_frames.value), int(out_channels.value))
     finally:
         if out_ptr:
-            lib.sonare_free_playback_render(out_ptr)
+            lib.sonare_free_floats(out_ptr)
 
 
 class PlaybackLoudnessMeter:

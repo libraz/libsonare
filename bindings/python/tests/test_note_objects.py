@@ -229,7 +229,7 @@ def test_each_note_carries_its_own_amplitude_slice() -> None:
 
     # The slices must be independent buffers, not views into one array the C
     # side owned: writing to one may not reach another, and none of them may
-    # outlive `sonare_free_note_objects` as a view into freed memory.
+    # outlive `sonare_free_note_objects_result` as a view into freed memory.
     first = notes[0].amplitude.copy()
     notes[-1].amplitude[:] = 0.0
     np.testing.assert_array_equal(notes[0].amplitude, first)

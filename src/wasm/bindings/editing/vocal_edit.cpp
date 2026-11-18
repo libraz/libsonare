@@ -540,32 +540,32 @@ val notesResultToVal(const SonareVocalNotesResult& result) {
 struct NotesGuard {
   SonareVocalNotesResult value{};
   NotesGuard() { sonare_vocal_notes_result_init(&value); }
-  ~NotesGuard() { sonare_vocal_free_notes(&value); }
+  ~NotesGuard() { sonare_free_vocal_notes_result(&value); }
 };
 struct AnalysisGuard {
   SonareVocalAnalysisResult value{};
   AnalysisGuard() { sonare_vocal_analysis_result_init(&value); }
-  ~AnalysisGuard() { sonare_vocal_free_analysis(&value); }
+  ~AnalysisGuard() { sonare_free_vocal_analysis_result(&value); }
 };
 struct EditResultGuard {
   SonareVocalEditResult value{};
   EditResultGuard() { sonare_vocal_edit_result_init(&value); }
-  ~EditResultGuard() { sonare_vocal_free_edit_result(&value); }
+  ~EditResultGuard() { sonare_free_vocal_edit_result(&value); }
 };
 struct PitchGuard {
   SonareVocalPitchResult value{};
   PitchGuard() { sonare_vocal_pitch_result_init(&value); }
-  ~PitchGuard() { sonare_vocal_free_pitch_result(&value); }
+  ~PitchGuard() { sonare_free_vocal_pitch_result(&value); }
 };
 struct RenderGuard {
   SonareVocalRenderResult value{};
   RenderGuard() { sonare_vocal_render_result_init(&value); }
-  ~RenderGuard() { sonare_vocal_free_render_result(&value); }
+  ~RenderGuard() { sonare_free_vocal_render_result(&value); }
 };
 struct StateGuard {
   SonareVocalStateBytes value{};
   StateGuard() { sonare_vocal_state_bytes_init(&value); }
-  ~StateGuard() { sonare_vocal_free_state_bytes(&value); }
+  ~StateGuard() { sonare_free_vocal_state_bytes(&value); }
 };
 
 val editResultToVal(const SonareVocalEditResult& result) {

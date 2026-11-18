@@ -1477,7 +1477,7 @@ def chk_options_struct_size(ctx):
 
 # Library-allocated plain buffers, one releaser per element kind; a closed set.
 _C_PLAIN_BUFFER_RELEASERS = frozenset(
-    {"sonare_free_string", "sonare_free_floats", "sonare_free_ints"}
+    {"sonare_free_string", "sonare_free_floats", "sonare_free_ints", "sonare_free_bytes"}
 )
 
 
@@ -1486,6 +1486,11 @@ def chk_c_free(ctx):
     types = recs(ctx, ("c",), ("type",))
     structs = {_c_snake(t["name"]) for t in types if t.get("c_kind") == "struct"}
     handles = {_c_snake(t["name"]) for t in types if t.get("c_kind") == "opaque"}
+    owning = {
+        _c_snake(f["owner"]) for f in recs(ctx, ("c",), ("field",)) if "*" in f.get("type", "")
+    }
+    # An array of a struct that owns no memory itself is released as one buffer of elements.
+    element_arrays = {s + "s" for s in structs - owning}
     for r in recs(ctx, ("c",), ("function",)):
         toks = r["name"].split("_")
         if not set(toks) & {"free", "destroy", "release"}:
@@ -1495,7 +1500,7 @@ def chk_c_free(ctx):
         if n in _C_PLAIN_BUFFER_RELEASERS:
             continue
         m = re.fullmatch(r"sonare_free_(\w+)", n)
-        if m and m.group(1) in structs:
+        if m and (m.group(1) in structs or m.group(1) in element_arrays):
             continue
         m = re.fullmatch(r"sonare_(\w+)_destroy", n)
         if m and m.group(1) in handles:
@@ -1503,7 +1508,7 @@ def chk_c_free(ctx):
         bad.append(
             (
                 r,
-                "release is sonare_free_<result struct>, sonare_<handle>_destroy or a plain-buffer releaser",
+                "release is sonare_free_<result struct>, sonare_free_<ownerless element>s, sonare_<handle>_destroy or a plain-buffer releaser",
             )
         )
     return cands, bad

@@ -1076,7 +1076,7 @@ SonareError sonare_engine_finish_offline_render(SonareRealtimeEngine* engine);
 ///   When the rates differ both the source and the resampled length are checked,
 ///   so the longer of the two is what binds. Longer material renders in chunks
 ///   through sonare_engine_render_offline_ex.
-/// @param out Receives a heap-owned interleaved buffer; free with sonare_free_bounce_result.
+/// @param out Receives a heap-owned interleaved buffer; free with sonare_free_engine_bounce_result.
 /// @return @c SONARE_ERROR_INVALID_PARAMETER when the requested span exceeds the
 ///         cap above, when a rate is negative, or when a non-zero
 ///         @c source_sample_rate differs from the prepared rate (0 selects the
@@ -1102,7 +1102,7 @@ SonareError sonare_engine_bounce_offline(SonareRealtimeEngine* engine,
 SonareError sonare_engine_bounce_options_default(SonareEngineBounceOptions* options);
 /// @brief Free the heap-allocated buffer held by a bounce result.
 /// @param result Result whose @c interleaved buffer is deleted and nulled.
-void sonare_free_bounce_result(SonareEngineBounceResult* result);
+void sonare_free_engine_bounce_result(SonareEngineBounceResult* result);
 /// @brief Renders the source layer over the span and installs it as the only clip.
 /// @details Bakes every audio clip and hosted MIDI instrument through the lane
 ///   strips, lane inserts and group buses. The master strip, the monitor bus, the

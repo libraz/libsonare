@@ -174,7 +174,7 @@ std::vector<float> engine_bounce(SonareRealtimeEngine* engine) {
   REQUIRE(sonare_engine_bounce_offline(engine, &options, &result) == SONARE_OK);
   REQUIRE(result.sample_count == static_cast<size_t>(kFrames) * 2);
   std::vector<float> interleaved(result.interleaved, result.interleaved + result.sample_count);
-  sonare_free_bounce_result(&result);
+  sonare_free_engine_bounce_result(&result);
   stop_and_rewind(engine);
   return interleaved;
 }
@@ -186,7 +186,7 @@ SonareProjectTimeline* compile_timeline(SonareProject* project) {
   REQUIRE(sonare_project_compile_timeline(project, &result, &timeline) == SONARE_OK);
   REQUIRE(result.has_timeline != 0);
   REQUIRE(timeline != nullptr);
-  sonare_project_free_compile_result(&result);
+  sonare_free_project_compile_result(&result);
   return timeline;
 }
 
@@ -529,8 +529,8 @@ TEST_CASE("compile_timeline returns no handle and the diagnostics when compile f
   }
   REQUIRE(std::string(result.messages) == std::string(expected.messages));
 
-  sonare_project_free_compile_result(&result);
-  sonare_project_free_compile_result(&expected);
+  sonare_free_project_compile_result(&result);
+  sonare_free_project_compile_result(&expected);
   sonare_project_destroy(project);
 }
 

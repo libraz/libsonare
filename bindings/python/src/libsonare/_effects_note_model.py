@@ -683,4 +683,4 @@ def _note_set_edit(
     try:
         return _notes_from_c(out)
     finally:
-        lib.sonare_free_note_objects(ctypes.byref(out))
+        lib.sonare_free_note_objects_result(ctypes.byref(out))

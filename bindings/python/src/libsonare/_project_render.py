@@ -125,7 +125,7 @@ class _ProjectRenderMixin:
         try:
             return ProjectCompileResult(_compile_diagnostics(result))
         finally:
-            lib.sonare_project_free_compile_result(ctypes.byref(result))
+            lib.sonare_free_project_compile_result(ctypes.byref(result))
 
     def bounce(
         self,

@@ -320,8 +320,6 @@ SonareError sonare_playback_renderer_render_offline(SonarePlaybackRenderer* rend
 #endif
 }
 
-void sonare_free_playback_render(float* samples) { delete[] samples; }
-
 SonareError sonare_playback_loudness_meter_create(int channels, int sample_rate,
                                                   SonarePlaybackLoudnessMeter** out) {
   SONARE_C_API_ENTRY;

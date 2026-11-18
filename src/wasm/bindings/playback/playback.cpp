@@ -191,7 +191,7 @@ class PlaybackRendererWasm {
         sonare_playback_renderer_render_offline(renderer_.get(), input.data(), frames, in_channels,
                                                 &rendered, &out_frames, &out_channels),
         "PlaybackRenderer.renderOffline");
-    std::unique_ptr<float, void (*)(float*)> owned(rendered, &sonare_free_playback_render);
+    std::unique_ptr<float, void (*)(float*)> owned(rendered, &sonare_free_floats);
     return vectorToFloat32Array(std::vector<float>(
         owned.get(), owned.get() + out_frames * static_cast<std::size_t>(out_channels)));
   }
@@ -398,7 +398,7 @@ val renderPlayback(val samples, val channels_val, val sample_rate_val,
                                                    hrtfHandleFromVal(hrtf), &rendered, &out_frames,
                                                    &out_channels),
                 "renderPlayback");
-  std::unique_ptr<float, void (*)(float*)> owned(rendered, &sonare_free_playback_render);
+  std::unique_ptr<float, void (*)(float*)> owned(rendered, &sonare_free_floats);
   val out = val::object();
   out.set("samples", val::global("Float32Array")
                          .new_(val(typed_memory_view(out_frames * static_cast<size_t>(out_channels),

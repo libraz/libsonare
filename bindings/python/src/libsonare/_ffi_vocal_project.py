@@ -64,12 +64,12 @@ def configure_vocal_project_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(SonareProjectVocalRehydrateResult),
     ]
 
-    lib.sonare_project_free_vocal_edit_dependencies.restype = None
-    lib.sonare_project_free_vocal_edit_dependencies.argtypes = [
+    lib.sonare_free_project_vocal_edit_dependencies_result.restype = None
+    lib.sonare_free_project_vocal_edit_dependencies_result.argtypes = [
         ctypes.POINTER(SonareProjectVocalEditDependenciesResult)
     ]
-    lib.sonare_project_free_vocal_rehydrate_result.restype = None
-    lib.sonare_project_free_vocal_rehydrate_result.argtypes = [
+    lib.sonare_free_project_vocal_rehydrate_result.restype = None
+    lib.sonare_free_project_vocal_rehydrate_result.argtypes = [
         ctypes.POINTER(SonareProjectVocalRehydrateResult)
     ]
 

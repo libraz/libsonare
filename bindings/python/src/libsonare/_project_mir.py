@@ -201,7 +201,7 @@ def align_take_to_reference(
         # The array is heap-owned, so it is released whether the rows were read
         # or the read raised part-way. A refused call leaves the pointer NULL.
         if out_anchors:
-            lib.sonare_free_warp_anchors(out_anchors)
+            lib.sonare_free_project_warp_anchors(out_anchors)
     return AlignTakeToReferenceResult(
         anchors=anchors,
         alignment=TakeAlignment(

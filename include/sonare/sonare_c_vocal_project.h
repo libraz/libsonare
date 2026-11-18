@@ -81,8 +81,8 @@ typedef struct {
 } SonareProjectVocalEditDependency;
 
 /// @brief One entry per vocal-edit sidecar of a project.
-///   Library-allocated arrays; release them with sonare_project_free_vocal_edit_dependencies, which
-///   also resets the struct.
+///   Library-allocated arrays; release them with
+///   sonare_free_project_vocal_edit_dependencies_result, which also resets the struct.
 typedef struct {
   uint32_t struct_size;     ///< sizeof of this struct; set by the init function.
   uint32_t schema_version;  ///< Layout version; set by the init function.
@@ -114,7 +114,7 @@ typedef struct {
 } SonareProjectVocalRehydrateItem;
 
 /// @brief Per-entry outcome of a rehydrate.
-///   Library-allocated arrays; release them with sonare_project_free_vocal_rehydrate_result, which
+///   Library-allocated arrays; release them with sonare_free_project_vocal_rehydrate_result, which
 ///   also resets the struct.
 typedef struct {
   uint32_t struct_size;                    ///< sizeof of this struct; set by the init function.
@@ -148,7 +148,7 @@ SonareError sonare_project_apply_vocal_edit(SonareProject* project,
 /// @brief Lists every vocal-edit sidecar of the project with its envelope and PCM availability.
 /// @param result Initialized with @ref sonare_project_vocal_edit_dependencies_result_init; on
 ///   success holds a library-allocated array released with
-///   @ref sonare_project_free_vocal_edit_dependencies.
+///   @ref sonare_free_project_vocal_edit_dependencies_result.
 SonareError sonare_project_get_vocal_edit_dependencies(
     const SonareProject* project, SonareProjectVocalEditDependenciesResult* result);
 
@@ -165,9 +165,10 @@ SonareError sonare_project_rehydrate_vocal_edits(SonareProject* project,
                                                  SonareProjectVocalRehydrateResult* result);
 
 /// @brief Releases the array in @p result and resets it; safe on an empty result.
-void sonare_project_free_vocal_edit_dependencies(SonareProjectVocalEditDependenciesResult* result);
+void sonare_free_project_vocal_edit_dependencies_result(
+    SonareProjectVocalEditDependenciesResult* result);
 /// @brief Releases the array in @p result and resets it; safe on an empty result.
-void sonare_project_free_vocal_rehydrate_result(SonareProjectVocalRehydrateResult* result);
+void sonare_free_project_vocal_rehydrate_result(SonareProjectVocalRehydrateResult* result);
 
 #ifdef __cplusplus
 }

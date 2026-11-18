@@ -156,7 +156,7 @@ TEST_CASE("C-ABI add_clip owns decoded audio in one undo transaction", "[project
   SonareProjectCompileResult compile{};
   REQUIRE(sonare_project_compile(project, &compile) == SONARE_OK);
   REQUIRE(compile.has_timeline == 1);
-  sonare_project_free_compile_result(&compile);
+  sonare_free_project_compile_result(&compile);
 
   // Discarding the redo branch releases history-owned detached audio rather
   // than returning it to AudioContentStore as an orphan.
@@ -857,7 +857,7 @@ TEST_CASE("C-ABI loop recording audio is split into clip takes", "[project][c-ab
   SonareProjectCompileResult compile{};
   REQUIRE(sonare_project_compile(project, &compile) == SONARE_OK);
   REQUIRE(compile.has_timeline == 1);
-  sonare_project_free_compile_result(&compile);
+  sonare_free_project_compile_result(&compile);
 
   REQUIRE(sonare_project_undo(project) == SONARE_OK);
   const std::string undone = serialize(project);
@@ -869,7 +869,7 @@ TEST_CASE("C-ABI loop recording audio is split into clip takes", "[project][c-ab
   REQUIRE(project->audio.sources.size() == 2);
   REQUIRE(sonare_project_compile(project, &compile) == SONARE_OK);
   REQUIRE(compile.has_timeline == 1);
-  sonare_project_free_compile_result(&compile);
+  sonare_free_project_compile_result(&compile);
 
   REQUIRE(sonare_project_undo(project) == SONARE_OK);
   REQUIRE(serialize(project) == before);
@@ -1605,7 +1605,7 @@ TEST_CASE("C-ABI move_clip rejects a cross-kind move without mutating state",
   SonareProjectCompileResult result{};
   REQUIRE(sonare_project_compile(project, &result) == SONARE_OK);
   REQUIRE(result.has_timeline == 1);
-  sonare_project_free_compile_result(&result);
+  sonare_free_project_compile_result(&result);
 
   sonare_project_destroy(project);
 }
@@ -1787,7 +1787,7 @@ TEST_CASE("C ABI take alignment produces anchors the project warp map accepts", 
   REQUIRE(sonare_project_set_warp_map(project, &tied_map) == SONARE_ERROR_INVALID_PARAMETER);
 
   sonare_project_destroy(project);
-  sonare_free_warp_anchors(anchors);
+  sonare_free_project_warp_anchors(anchors);
 }
 
 TEST_CASE("C ABI take alignment reads its configuration and refuses unusable input",
@@ -1801,7 +1801,7 @@ TEST_CASE("C ABI take alignment reads its configuration and refuses unusable inp
     const SonareError code =
         sonare_align_take_to_reference(reference.data(), reference.size(), take.data(), take.size(),
                                        sr, config, &anchors, count, nullptr);
-    sonare_free_warp_anchors(anchors);
+    sonare_free_project_warp_anchors(anchors);
     return code;
   };
 
@@ -1900,8 +1900,8 @@ TEST_CASE("C ABI two-rate take alignment at equal rates is the single-rate call"
   REQUIRE(two_rate_alignment.take_frames == single_alignment.take_frames);
   REQUIRE(two_rate_alignment.mean_residual_frames == single_alignment.mean_residual_frames);
 
-  sonare_free_warp_anchors(single);
-  sonare_free_warp_anchors(two_rate);
+  sonare_free_project_warp_anchors(single);
+  sonare_free_project_warp_anchors(two_rate);
 }
 
 TEST_CASE("C ABI two-rate take alignment measures the take on the reference's grid",
@@ -1926,7 +1926,7 @@ TEST_CASE("C ABI two-rate take alignment measures the take on the reference's gr
                                               take.data(), take.size(), declared_take_rate, nullptr,
                                               &rows, &count, alignment) == SONARE_OK);
     anchors->assign(rows, rows + count);
-    sonare_free_warp_anchors(rows);
+    sonare_free_project_warp_anchors(rows);
   };
   // Anchors after the first that sit off the take's half-second lead by more
   // than one hop. The first is skipped: the silence collapses to one boundary

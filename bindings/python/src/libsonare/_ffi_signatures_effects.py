@@ -207,7 +207,7 @@ def configure_effects_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(ctypes.c_size_t),
     ]
 
-    # sonare_extract_notes + sonare_free_note_objects + sonare_render_notes
+    # sonare_extract_notes + sonare_free_note_objects_result + sonare_render_notes
     if hasattr(lib, "sonare_extract_notes"):
         lib.sonare_extract_notes.restype = ctypes.c_int32
         lib.sonare_extract_notes.argtypes = [
@@ -222,8 +222,8 @@ def configure_effects_signatures(lib: ctypes.CDLL) -> None:
             ctypes.POINTER(SonareNoteExtractorConfig),
             ctypes.POINTER(SonareNoteObjectsResult),
         ]
-        lib.sonare_free_note_objects.restype = None
-        lib.sonare_free_note_objects.argtypes = [ctypes.POINTER(SonareNoteObjectsResult)]
+        lib.sonare_free_note_objects_result.restype = None
+        lib.sonare_free_note_objects_result.argtypes = [ctypes.POINTER(SonareNoteObjectsResult)]
         lib.sonare_render_notes.restype = ctypes.c_int32
         lib.sonare_render_notes.argtypes = [
             ctypes.POINTER(ctypes.c_float),
@@ -369,7 +369,7 @@ def configure_effects_signatures(lib: ctypes.CDLL) -> None:
         lib.sonare_free_transcribe_result.restype = None
         lib.sonare_free_transcribe_result.argtypes = [ctypes.POINTER(SonareTranscribeResult)]
 
-    # sonare_extract_percussive_events + sonare_free_percussive_events
+    # sonare_extract_percussive_events + sonare_free_percussive_events_result
     # + sonare_render_percussive_events
     if hasattr(lib, "sonare_extract_percussive_events"):
         lib.sonare_extract_percussive_events.restype = ctypes.c_int32
@@ -380,8 +380,8 @@ def configure_effects_signatures(lib: ctypes.CDLL) -> None:
             ctypes.POINTER(SonarePercussiveEventConfig),
             ctypes.POINTER(SonarePercussiveEventsResult),
         ]
-        lib.sonare_free_percussive_events.restype = None
-        lib.sonare_free_percussive_events.argtypes = [
+        lib.sonare_free_percussive_events_result.restype = None
+        lib.sonare_free_percussive_events_result.argtypes = [
             ctypes.POINTER(SonarePercussiveEventsResult),
         ]
         lib.sonare_render_percussive_events.restype = ctypes.c_int32
@@ -396,7 +396,7 @@ def configure_effects_signatures(lib: ctypes.CDLL) -> None:
             ctypes.POINTER(ctypes.c_size_t),
         ]
 
-    # sonare_decompose_note_pitch + sonare_free_pitch_decomposition
+    # sonare_decompose_note_pitch + sonare_free_pitch_decomposition_result
     if hasattr(lib, "sonare_decompose_note_pitch"):
         lib.sonare_decompose_note_pitch.restype = ctypes.c_int32
         lib.sonare_decompose_note_pitch.argtypes = [
@@ -408,8 +408,8 @@ def configure_effects_signatures(lib: ctypes.CDLL) -> None:
             ctypes.c_float,
             ctypes.POINTER(SonarePitchDecompositionResult),
         ]
-        lib.sonare_free_pitch_decomposition.restype = None
-        lib.sonare_free_pitch_decomposition.argtypes = [
+        lib.sonare_free_pitch_decomposition_result.restype = None
+        lib.sonare_free_pitch_decomposition_result.argtypes = [
             ctypes.POINTER(SonarePitchDecompositionResult),
         ]
 

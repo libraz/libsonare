@@ -222,12 +222,12 @@ def configure_vocal_signatures(lib: ctypes.CDLL) -> None:
     ]
 
     for name, cls in (
-        ("sonare_vocal_free_notes", SonareVocalNotesResult),
-        ("sonare_vocal_free_analysis", SonareVocalAnalysisResult),
-        ("sonare_vocal_free_edit_result", SonareVocalEditResult),
-        ("sonare_vocal_free_pitch_result", SonareVocalPitchResult),
-        ("sonare_vocal_free_render_result", SonareVocalRenderResult),
-        ("sonare_vocal_free_state_bytes", SonareVocalStateBytes),
+        ("sonare_free_vocal_notes_result", SonareVocalNotesResult),
+        ("sonare_free_vocal_analysis_result", SonareVocalAnalysisResult),
+        ("sonare_free_vocal_edit_result", SonareVocalEditResult),
+        ("sonare_free_vocal_pitch_result", SonareVocalPitchResult),
+        ("sonare_free_vocal_render_result", SonareVocalRenderResult),
+        ("sonare_free_vocal_state_bytes", SonareVocalStateBytes),
     ):
         fn = getattr(lib, name)
         fn.restype = None

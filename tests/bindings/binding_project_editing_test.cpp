@@ -34,7 +34,7 @@ TEST_CASE("compile surfaces a renderable timeline for a valid project", "[projec
   SonareProjectCompileResult result{};
   REQUIRE(sonare_project_compile(built.project, &result) == SONARE_OK);
   REQUIRE(result.has_timeline == 1);
-  sonare_project_free_compile_result(&result);
+  sonare_free_project_compile_result(&result);
   REQUIRE(result.diagnostics == nullptr);
   REQUIRE(result.messages == nullptr);
 
@@ -254,7 +254,7 @@ TEST_CASE("project C unresolved source descriptors carry the full URI", "[projec
   REQUIRE(sonare_project_get_audio_source_metadata(project, ids[1], &metadata) == SONARE_OK);
   CHECK(std::string(metadata.content_hash) == "sha256:abc");
   CHECK(std::string(metadata.external_stem_role) == "vocals");
-  sonare_project_free_audio_source_metadata(&metadata);
+  sonare_free_project_audio_source_metadata(&metadata);
 
   SonareProjectSource out{};
   CHECK(sonare_project_unresolved_audio_source_by_index(project, 2, &out) ==

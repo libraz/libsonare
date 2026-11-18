@@ -122,7 +122,7 @@ val js_note_segments(val f0_hz, val voiced_prob, val voiced_flags, const val& fr
     row.set("medianCents", segment.median_cents);
     out.call<void>("push", row);
   }
-  sonare_free_note_segments(&result);
+  sonare_free_note_segments_result(&result);
   return out;
 }
 

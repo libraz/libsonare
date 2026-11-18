@@ -529,7 +529,7 @@ SonareError sonare_project_set_clip_comp_segments(SonareProject* project, uint32
 /// @param sample_rate Sample rate of both buffers; must be > 0.
 /// @param config Optional; NULL or a zeroed struct selects the library values.
 /// @param out_anchors Receives a heap-owned array of @p out_count anchors,
-///   released with @ref sonare_free_warp_anchors. Written on success only.
+///   released with @ref sonare_free_project_warp_anchors. Written on success only.
 /// @param out_alignment Optional; receives how well the alignment was
 ///   conditioned. Zeroed on entry, so a caller may read it after any return code.
 /// @return ::SONARE_ERROR_INVALID_PARAMETER when a buffer is empty, the rate is
@@ -567,7 +567,7 @@ SonareError sonare_align_take_to_reference(const float* reference, size_t refere
 /// @param take_sample_rate Sample rate of @p take; must be > 0.
 /// @param config Optional; NULL or a zeroed struct selects the library values.
 /// @param out_anchors Receives a heap-owned array of @p out_count anchors,
-///   released with @ref sonare_free_warp_anchors. Written on success only.
+///   released with @ref sonare_free_project_warp_anchors. Written on success only.
 /// @param out_alignment Optional; receives how well the alignment was
 ///   conditioned, in hop frames at @p reference_sample_rate. Zeroed on entry, so
 ///   a caller may read it after any return code.
@@ -582,7 +582,7 @@ SonareError sonare_align_take_to_reference_ex(
 
 /// @brief Releases an anchor array from @ref sonare_align_take_to_reference or
 ///        @ref sonare_align_take_to_reference_ex.
-void sonare_free_warp_anchors(SonareProjectWarpAnchor* anchors);
+void sonare_free_project_warp_anchors(SonareProjectWarpAnchor* anchors);
 
 /// @brief Adds or replaces a first-class project warp map via an undoable edit.
 ///        @p desc->id must be non-zero and @p anchors must contain at least two

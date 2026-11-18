@@ -357,8 +357,8 @@ TEST_CASE("sonare_playback_render_interleaved renders offline and validates its 
   for (size_t i = 0; i < out_frames * static_cast<size_t>(out_channels); ++i) {
     CHECK(std::isfinite(out[i]));
   }
-  sonare_free_playback_render(out);
-  sonare_free_playback_render(nullptr);
+  sonare_free_floats(out);
+  sonare_free_floats(nullptr);
 
   out = reinterpret_cast<float*>(uintptr_t{1});
   out_frames = 5;
@@ -440,8 +440,8 @@ TEST_CASE("playback renderer render_offline matches the one-shot render through 
   REQUIRE(out_frames == expected_frames);
   REQUIRE(out_channels == expected_channels);
   CHECK(std::equal(out, out + out_frames * static_cast<size_t>(out_channels), expected));
-  sonare_free_playback_render(out);
-  sonare_free_playback_render(expected);
+  sonare_free_floats(out);
+  sonare_free_floats(expected);
 
   out = reinterpret_cast<float*>(uintptr_t{1});
   out_frames = 5;
@@ -575,7 +575,7 @@ TEST_CASE("playback entry points return NOT_SUPPORTED when compiled out",
   CHECK(rendered == nullptr);
   CHECK(rendered_frames == 0u);
   CHECK(rendered_channels == 0);
-  sonare_free_playback_render(nullptr);
+  sonare_free_floats(nullptr);
   CHECK(sonare_playback_renderer_render_offline(nullptr, plane.data(), 16, 1, &rendered,
                                                 &rendered_frames,
                                                 &rendered_channels) == SONARE_ERROR_NOT_SUPPORTED);

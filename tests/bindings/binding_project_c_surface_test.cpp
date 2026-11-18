@@ -342,7 +342,7 @@ TEST_CASE("project C surface stores and retrieves AssistSidecar", "[project]") {
   REQUIRE(sidecar.payload != nullptr);
   REQUIRE(sidecar.payload_len == sizeof(payload));
   CHECK(std::memcmp(sidecar.payload, payload, sizeof(payload)) == 0);
-  sonare_project_free_assist_sidecar(&sidecar);
+  sonare_free_project_assist_sidecar(&sidecar);
   CHECK(sidecar.module_id == nullptr);
   CHECK(sidecar.payload == nullptr);
 
@@ -354,14 +354,14 @@ TEST_CASE("project C surface stores and retrieves AssistSidecar", "[project]") {
   CHECK(sidecar.schema_version == 4);
   REQUIRE(sidecar.payload_len == sizeof(replacement));
   CHECK(std::memcmp(sidecar.payload, replacement, sizeof(replacement)) == 0);
-  sonare_project_free_assist_sidecar(&sidecar);
+  sonare_free_project_assist_sidecar(&sidecar);
 
   REQUIRE(sonare_project_undo(project) == SONARE_OK);
   REQUIRE(sonare_project_get_assist_sidecar(project, 0, &sidecar) == SONARE_OK);
   CHECK(sidecar.schema_version == 3);
   REQUIRE(sidecar.payload_len == sizeof(payload));
   CHECK(std::memcmp(sidecar.payload, payload, sizeof(payload)) == 0);
-  sonare_project_free_assist_sidecar(&sidecar);
+  sonare_free_project_assist_sidecar(&sidecar);
 
   REQUIRE(sonare_project_redo(project) == SONARE_OK);
   const std::string json = serialize(project);
@@ -372,7 +372,7 @@ TEST_CASE("project C surface stores and retrieves AssistSidecar", "[project]") {
   CHECK(sidecar.schema_version == 4);
   REQUIRE(sidecar.payload_len == sizeof(replacement));
   CHECK(std::memcmp(sidecar.payload, replacement, sizeof(replacement)) == 0);
-  sonare_project_free_assist_sidecar(&sidecar);
+  sonare_free_project_assist_sidecar(&sidecar);
 
   CHECK(sonare_project_get_assist_sidecar(restored, 1, &sidecar) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(sonare_project_set_assist_sidecar(project, "", 1, 0, 0.0, 0.0, nullptr, 0) ==
@@ -572,8 +572,8 @@ TEST_CASE("project C surface owns and edits audio source metadata", "[project]")
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(metadata.content_hash == nullptr);
   CHECK(metadata.external_stem_role == nullptr);
-  sonare_project_free_audio_source_metadata(nullptr);
-  sonare_project_free_audio_source_metadata(&metadata);
+  sonare_free_project_audio_source_metadata(nullptr);
+  sonare_free_project_audio_source_metadata(&metadata);
 
   // A successful read owns both strings, including empty strings.
   REQUIRE(sonare_project_get_audio_source_metadata(project, audio_clip.source_id, &metadata) ==
@@ -582,7 +582,7 @@ TEST_CASE("project C surface owns and edits audio source metadata", "[project]")
   REQUIRE(metadata.external_stem_role != nullptr);
   CHECK(std::string(metadata.content_hash).empty());
   CHECK(std::string(metadata.external_stem_role).empty());
-  sonare_project_free_audio_source_metadata(&metadata);
+  sonare_free_project_audio_source_metadata(&metadata);
   CHECK(metadata.content_hash == nullptr);
   CHECK(metadata.external_stem_role == nullptr);
 
@@ -631,7 +631,7 @@ TEST_CASE("project C surface owns and edits audio source metadata", "[project]")
   REQUIRE(metadata.external_stem_role != nullptr);
   CHECK(std::string(metadata.content_hash) == "sha256:deadbeef");
   CHECK(std::string(metadata.external_stem_role) == "lead");
-  sonare_project_free_audio_source_metadata(&metadata);
+  sonare_free_project_audio_source_metadata(&metadata);
 
   // Both fields are one history command: one undo restores both, and one redo
   // reapplies both. Empty strings clear the fields rather than becoming NULL.
@@ -641,19 +641,19 @@ TEST_CASE("project C surface owns and edits audio source metadata", "[project]")
           SONARE_OK);
   CHECK(std::string(metadata.content_hash).empty());
   CHECK(std::string(metadata.external_stem_role).empty());
-  sonare_project_free_audio_source_metadata(&metadata);
+  sonare_free_project_audio_source_metadata(&metadata);
   REQUIRE(sonare_project_undo(project) == SONARE_OK);
   REQUIRE(sonare_project_get_audio_source_metadata(project, audio_clip.source_id, &metadata) ==
           SONARE_OK);
   CHECK(std::string(metadata.content_hash) == "sha256:deadbeef");
   CHECK(std::string(metadata.external_stem_role) == "lead");
-  sonare_project_free_audio_source_metadata(&metadata);
+  sonare_free_project_audio_source_metadata(&metadata);
   REQUIRE(sonare_project_redo(project) == SONARE_OK);
   REQUIRE(sonare_project_get_audio_source_metadata(project, audio_clip.source_id, &metadata) ==
           SONARE_OK);
   CHECK(std::string(metadata.content_hash).empty());
   CHECK(std::string(metadata.external_stem_role).empty());
-  sonare_project_free_audio_source_metadata(&metadata);
+  sonare_free_project_audio_source_metadata(&metadata);
 
   REQUIRE(sonare_project_set_audio_source_metadata(project, audio_clip.source_id,
                                                    "sha256:roundtrip", "vocals") == SONARE_OK);
@@ -664,7 +664,7 @@ TEST_CASE("project C surface owns and edits audio source metadata", "[project]")
           SONARE_OK);
   CHECK(std::string(metadata.content_hash) == "sha256:roundtrip");
   CHECK(std::string(metadata.external_stem_role) == "vocals");
-  sonare_project_free_audio_source_metadata(&metadata);
+  sonare_free_project_audio_source_metadata(&metadata);
 
   sonare_project_destroy(restored);
   sonare_project_destroy(project);

@@ -16,7 +16,7 @@ namespace {
 struct AudioSourceMetadataGuard {
   SonareProjectAudioSourceMetadata value{};
 
-  ~AudioSourceMetadataGuard() { sonare_project_free_audio_source_metadata(&value); }
+  ~AudioSourceMetadataGuard() { sonare_free_project_audio_source_metadata(&value); }
 };
 
 struct HeapStringGuard {

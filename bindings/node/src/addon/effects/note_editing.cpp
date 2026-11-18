@@ -15,7 +15,7 @@ namespace {
 /// Releases a note-object result however the marshalling below leaves scope.
 struct OwnedNoteObjects {
   SonareNoteObjectsResult value{};
-  ~OwnedNoteObjects() { sonare_free_note_objects(&value); }
+  ~OwnedNoteObjects() { sonare_free_note_objects_result(&value); }
 };
 
 /// Releases a heap-owned note-target array however its marshalling leaves scope.
@@ -27,13 +27,13 @@ struct OwnedNoteTargets {
 /// Releases a percussive-event result however the marshalling below leaves scope.
 struct OwnedPercussiveEvents {
   SonarePercussiveEventsResult value{};
-  ~OwnedPercussiveEvents() { sonare_free_percussive_events(&value); }
+  ~OwnedPercussiveEvents() { sonare_free_percussive_events_result(&value); }
 };
 
 /// Releases a pitch decomposition however the marshalling below leaves scope.
 struct OwnedPitchDecomposition {
   SonarePitchDecompositionResult value{};
-  ~OwnedPitchDecomposition() { sonare_free_pitch_decomposition(&value); }
+  ~OwnedPitchDecomposition() { sonare_free_pitch_decomposition_result(&value); }
 };
 
 /// The options bag extraction, split and merge share: the segmentation knobs

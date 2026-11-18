@@ -952,13 +952,14 @@ SonareError sonare_project_rehydrate_vocal_edits(SonareProject* project,
 #endif
 }
 
-void sonare_project_free_vocal_edit_dependencies(SonareProjectVocalEditDependenciesResult* result) {
+void sonare_free_project_vocal_edit_dependencies_result(
+    SonareProjectVocalEditDependenciesResult* result) {
   if (result == nullptr) return;
   delete[] result->dependencies;
   init_value(result);
 }
 
-void sonare_project_free_vocal_rehydrate_result(SonareProjectVocalRehydrateResult* result) {
+void sonare_free_project_vocal_rehydrate_result(SonareProjectVocalRehydrateResult* result) {
   if (result == nullptr) return;
   delete[] result->items;
   init_value(result);

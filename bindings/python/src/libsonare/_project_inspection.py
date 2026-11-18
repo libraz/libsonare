@@ -407,7 +407,7 @@ class _ProjectInspectionMixin:
                 payload=payload,
             )
         finally:
-            lib.sonare_project_free_assist_sidecar(ctypes.byref(raw))
+            lib.sonare_free_project_assist_sidecar(ctypes.byref(raw))
 
     def assist_sidecars(self) -> list[AssistSidecar]:
         """Return all stored assist sidecars as a list of :class:`AssistSidecar`."""
@@ -581,7 +581,7 @@ class _ProjectInspectionMixin:
             # with an older shared library, where the new fields simply read
             # as their documented empty defaults.
             if hasattr(lib, "sonare_project_get_audio_source_metadata") and hasattr(
-                lib, "sonare_project_free_audio_source_metadata"
+                lib, "sonare_free_project_audio_source_metadata"
             ):
                 metadata = SonareProjectAudioSourceMetadata()
                 try:
@@ -599,7 +599,7 @@ class _ProjectInspectionMixin:
                 finally:
                     # The native getter owns both strings even when it reports
                     # a failure after partially filling the descriptor.
-                    lib.sonare_project_free_audio_source_metadata(ctypes.byref(metadata))
+                    lib.sonare_free_project_audio_source_metadata(ctypes.byref(metadata))
         name_or_uri = raw.name_or_uri.split(b"\0", 1)[0].decode()
         lib = _get_lib()
         if int(raw.kind) == 0 and hasattr(lib, "sonare_project_get_audio_source_uri"):
@@ -794,4 +794,4 @@ class _ProjectInspectionMixin:
                 return None
             return ProjectCompileResult(_compile_diagnostics(result))
         finally:
-            lib.sonare_project_free_compile_result(ctypes.byref(result))
+            lib.sonare_free_project_compile_result(ctypes.byref(result))

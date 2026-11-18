@@ -50,7 +50,7 @@ Napi::Value RenderPlayback(const Napi::CallbackInfo& info) {
   Napi::Float32Array samples =
       Napi::Float32Array::New(env, out_frames * static_cast<size_t>(out_channels));
   std::memcpy(samples.Data(), out, samples.ElementLength() * sizeof(float));
-  sonare_free_playback_render(out);
+  sonare_free_floats(out);
 
   Napi::Object result = Napi::Object::New(env);
   result.Set("samples", samples);

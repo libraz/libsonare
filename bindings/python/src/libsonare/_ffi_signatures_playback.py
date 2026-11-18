@@ -164,10 +164,6 @@ def configure_playback_signatures(lib: ctypes.CDLL) -> None:
             ctypes.POINTER(ctypes.c_int),
         ]
 
-    if hasattr(lib, "sonare_free_playback_render"):
-        lib.sonare_free_playback_render.restype = None
-        lib.sonare_free_playback_render.argtypes = [ctypes.POINTER(ctypes.c_float)]
-
     if hasattr(lib, "sonare_playback_loudness_meter_create"):
         lib.sonare_playback_loudness_meter_create.restype = ctypes.c_int32
         lib.sonare_playback_loudness_meter_create.argtypes = [

@@ -693,7 +693,7 @@ TEST_CASE("an over-capacity opaque automation lane is reported, not truncated", 
     REQUIRE(sonare_project_last_bounce_compile_result(project, &compiled) == SONARE_OK);
     outcome.diagnostics.assign(compiled.diagnostics,
                                compiled.diagnostics + compiled.diagnostic_count);
-    sonare_project_free_compile_result(&compiled);
+    sonare_free_project_compile_result(&compiled);
     sonare_project_destroy(project);
     return outcome;
   };
@@ -1243,7 +1243,7 @@ TEST_CASE("deserialize success returns warnings and failed bounce records missin
   REQUIRE(sonare_project_last_bounce_compile_result(project, &result) == SONARE_OK);
   REQUIRE(result.has_timeline == 0);
   REQUIRE(result.diagnostic_count > 0);
-  sonare_project_free_compile_result(&result);
+  sonare_free_project_compile_result(&result);
   sonare_project_destroy(project);
 }
 
@@ -1260,7 +1260,7 @@ TEST_CASE("a never-bounced project reports a fully empty last-bounce compile res
   REQUIRE(sonare_project_last_bounce_compile_result(created, &fresh) == SONARE_OK);
   REQUIRE(fresh.has_timeline == 0);
   REQUIRE(fresh.diagnostic_count == 0);
-  sonare_project_free_compile_result(&fresh);
+  sonare_free_project_compile_result(&fresh);
 
   char* json = nullptr;
   size_t json_len = 0;
@@ -1274,7 +1274,7 @@ TEST_CASE("a never-bounced project reports a fully empty last-bounce compile res
   REQUIRE(sonare_project_last_bounce_compile_result(loaded, &reloaded) == SONARE_OK);
   REQUIRE(reloaded.has_timeline == 0);
   REQUIRE(reloaded.diagnostic_count == 0);
-  sonare_project_free_compile_result(&reloaded);
+  sonare_free_project_compile_result(&reloaded);
   sonare_project_destroy(loaded);
 }
 
@@ -1307,7 +1307,7 @@ TEST_CASE("a bounce rejected for bad arguments clears the recorded compile resul
   SonareProjectCompileResult recorded{};
   REQUIRE(sonare_project_last_bounce_compile_result(project, &recorded) == SONARE_OK);
   REQUIRE(recorded.diagnostic_count > 0);
-  sonare_project_free_compile_result(&recorded);
+  sonare_free_project_compile_result(&recorded);
 
   // Each of these is rejected on its arguments before the project is compiled.
   SonareInstrumentBinding callback_binding{};
@@ -1321,7 +1321,7 @@ TEST_CASE("a bounce rejected for bad arguments clears the recorded compile resul
   REQUIRE(sonare_project_last_bounce_compile_result(project, &after_callback) == SONARE_OK);
   CHECK(after_callback.diagnostic_count == 0);
   CHECK(after_callback.has_timeline == 0);
-  sonare_project_free_compile_result(&after_callback);
+  sonare_free_project_compile_result(&after_callback);
 
   // The plain entry point routes straight into the shared bounce core with no
   // clear of its own, so it is the one that used to leave the previous result
@@ -1333,7 +1333,7 @@ TEST_CASE("a bounce rejected for bad arguments clears the recorded compile resul
   SonareProjectCompileResult seeded{};
   REQUIRE(sonare_project_last_bounce_compile_result(project, &seeded) == SONARE_OK);
   REQUIRE(seeded.diagnostic_count > 0);
-  sonare_project_free_compile_result(&seeded);
+  sonare_free_project_compile_result(&seeded);
 
   float* rejected_out = reinterpret_cast<float*>(0x1);
   int bounce_channels31 = 0;
@@ -1346,7 +1346,7 @@ TEST_CASE("a bounce rejected for bad arguments clears the recorded compile resul
   REQUIRE(sonare_project_last_bounce_compile_result(project, &after_null) == SONARE_OK);
   CHECK(after_null.diagnostic_count == 0);
   CHECK(after_null.has_timeline == 0);
-  sonare_project_free_compile_result(&after_null);
+  sonare_free_project_compile_result(&after_null);
 
   int bounce_channels32 = 0;
   REQUIRE(sonare_project_bounce(project, &options, &out, &out_len, &bounce_channels32) ==
@@ -1362,7 +1362,7 @@ TEST_CASE("a bounce rejected for bad arguments clears the recorded compile resul
   REQUIRE(sonare_project_last_bounce_compile_result(project, &after_sf2) == SONARE_OK);
   CHECK(after_sf2.diagnostic_count == 0);
   CHECK(after_sf2.has_timeline == 0);
-  sonare_project_free_compile_result(&after_sf2);
+  sonare_free_project_compile_result(&after_sf2);
 
   sonare_project_destroy(project);
 }
@@ -1413,7 +1413,7 @@ TEST_CASE("project bounce exposes unrouted opaque automation diagnostics", "[pro
   REQUIRE(result.messages != nullptr);
   REQUIRE(std::string(result.messages).find("host-defined") != std::string::npos);
   REQUIRE(std::string(result.messages).find("unrouted") != std::string::npos);
-  sonare_project_free_compile_result(&result);
+  sonare_free_project_compile_result(&result);
   sonare_project_destroy(project);
 }
 

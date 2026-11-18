@@ -501,7 +501,7 @@ SonareError sonare_note_segments(const float* f0_hz, const float* voiced_prob,
                                  const SonareNoteSegmenterConfig* config,
                                  SonareNoteSegmentsResult* out) {
   SONARE_C_API_ENTRY;
-  // Refused and zeroed before the gate, so sonare_free_note_segments on a
+  // Refused and zeroed before the gate, so sonare_free_note_segments_result on a
   // NOT_SUPPORTED result deletes a null pointer rather than whatever the
   // caller's stack held.
   if (out == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
@@ -587,7 +587,7 @@ SonareError sonare_note_segments(const float* f0_hz, const float* voiced_prob,
 #endif
 }
 
-void sonare_free_note_segments(SonareNoteSegmentsResult* result) {
+void sonare_free_note_segments_result(SonareNoteSegmentsResult* result) {
   if (result == nullptr) return;
   delete[] result->segments;
   result->segments = nullptr;

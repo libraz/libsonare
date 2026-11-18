@@ -530,9 +530,10 @@ typedef struct {
   uint32_t dither_seed;
 } SonareEngineBounceOptions;
 
-/// Result of sonare_engine_bounce_offline. Release with sonare_free_bounce_result.
+/// Result of sonare_engine_bounce_offline. Release with sonare_free_engine_bounce_result.
 typedef struct {
-  float* interleaved;  ///< Heap-allocated interleaved samples; free with sonare_free_bounce_result.
+  float* interleaved;     ///< Heap-allocated interleaved samples; free with
+                          ///< sonare_free_engine_bounce_result.
   size_t sample_count;    ///< Total floats in interleaved (frames * num_channels).
   int64_t frames;         ///< Frames per channel.
   int num_channels;       ///< Interleaved channel count.

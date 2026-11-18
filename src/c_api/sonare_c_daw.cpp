@@ -675,7 +675,7 @@ SonareError sonare_extract_notes(const float* samples, size_t length, int sample
 #endif
 }
 
-void sonare_free_note_objects(SonareNoteObjectsResult* result) {
+void sonare_free_note_objects_result(SonareNoteObjectsResult* result) {
   if (result == nullptr) return;
   delete[] result->notes;
   delete[] result->amplitude;
@@ -795,7 +795,7 @@ SonareError sonare_decompose_note_pitch(const float* f0_hz, const int32_t* voice
 #endif
 }
 
-void sonare_free_pitch_decomposition(SonarePitchDecompositionResult* result) {
+void sonare_free_pitch_decomposition_result(SonarePitchDecompositionResult* result) {
   if (result == nullptr) return;
   delete[] result->drift_cents;
   delete[] result->vibrato_cents;
@@ -1008,7 +1008,7 @@ SonareError sonare_extract_percussive_events(const float* samples, size_t length
   });
 }
 
-void sonare_free_percussive_events(SonarePercussiveEventsResult* result) {
+void sonare_free_percussive_events_result(SonarePercussiveEventsResult* result) {
   if (result == nullptr) return;
   delete[] result->events;
   clear_percussive_events_result(*result);

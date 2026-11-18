@@ -352,7 +352,7 @@ def project_vocal_edit_dependencies(
         count = _result_count(result.dependencies, result.dependency_count, "dependency")
         return tuple(_dependency(result.dependencies[index]) for index in range(count))
     finally:
-        lib.sonare_project_free_vocal_edit_dependencies(ctypes.byref(result))
+        lib.sonare_free_project_vocal_edit_dependencies_result(ctypes.byref(result))
 
 
 def _original_sources_to_c(
@@ -453,7 +453,7 @@ def rehydrate_project_vocal_edits(
         count = _result_count(result.items, result.item_count, "rehydrate")
         return tuple(_rehydrate_item(result.items[index]) for index in range(count))
     finally:
-        lib.sonare_project_free_vocal_rehydrate_result(ctypes.byref(result))
+        lib.sonare_free_project_vocal_rehydrate_result(ctypes.byref(result))
         project._exit_native_call()
         del buffers
 

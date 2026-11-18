@@ -467,7 +467,7 @@ void sonare_free_string_array(SonareStringArray* result) {
   }
 }
 
-void sonare_free_bounce_result(SonareEngineBounceResult* result) {
+void sonare_free_engine_bounce_result(SonareEngineBounceResult* result) {
   if (!result) return;
   delete[] result->interleaved;
   result->interleaved = nullptr;

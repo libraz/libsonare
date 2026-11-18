@@ -95,7 +95,7 @@ static_assert(offsetof(SonareProjectDiagnostic, target_id) == 8, "Diagnostic.tar
 
 /// @brief Result of @ref sonare_project_compile. @p diagnostics is a
 ///        heap-allocated array of @p diagnostic_count entries (free with
-///        @ref sonare_project_free_compile_result). @p messages is the
+///        @ref sonare_free_project_compile_result). @p messages is the
 ///        newline-joined human-readable detail of every diagnostic (heap C
 ///        string, same free function), with line @c i corresponding to
 ///        @c diagnostics[i]. @p has_timeline is non-zero when compilation
@@ -386,7 +386,7 @@ static_assert(offsetof(SonareProjectSource, name_or_uri) == 24u,
 /// @brief Heap-owned metadata for an audio source.
 ///
 /// The strings are copied from the source and are owned by the returned
-/// descriptor. Release them with @ref sonare_project_free_audio_source_metadata.
+/// descriptor. Release them with @ref sonare_free_project_audio_source_metadata.
 /// MIDI sources do not have this metadata and are rejected by
 /// @ref sonare_project_get_audio_source_metadata.
 typedef struct {
@@ -417,7 +417,7 @@ SonareError sonare_project_source_by_index(const SonareProject* project, size_t 
 /// @brief Reads the owning metadata strings for an audio source id.
 ///
 /// On success both fields are heap-allocated copies, including empty strings,
-/// and must be released with @ref sonare_project_free_audio_source_metadata.
+/// and must be released with @ref sonare_free_project_audio_source_metadata.
 /// The output is zeroed before validation and remains zeroed on every failure.
 /// Unknown ids and MIDI source ids return @c SONARE_ERROR_INVALID_PARAMETER.
 SonareError sonare_project_get_audio_source_metadata(const SonareProject* project,
@@ -443,7 +443,7 @@ SonareError sonare_project_get_audio_source_uri(const SonareProject* project, ui
 /// @brief Frees strings returned by
 ///        @ref sonare_project_get_audio_source_metadata and zeros the struct.
 ///        NULL is safe.
-void sonare_project_free_audio_source_metadata(SonareProjectAudioSourceMetadata* metadata);
+void sonare_free_project_audio_source_metadata(SonareProjectAudioSourceMetadata* metadata);
 
 /// @brief Replaces the project's mixer scene from scene JSON.
 /// @details Keys the scene reader does not consume (other than `$`- and `x-`-prefixed
@@ -478,7 +478,7 @@ SonareError sonare_project_time_signature_count(const SonareProject* project, si
 /// @brief Compiles the project into an RT-readable timeline, surfacing
 ///        diagnostics. Never throws; bad input yields error diagnostics.
 /// @param out Zero-initialized result; free with
-///        @ref sonare_project_free_compile_result.
+///        @ref sonare_free_project_compile_result.
 SonareError sonare_project_compile(SonareProject* project, SonareProjectCompileResult* out);
 
 /// @brief Token of a @ref SonareProjectDiagnostic code ("danglingSourceRef", "clipOverlap", ...),
@@ -503,12 +503,12 @@ const char* sonare_project_diagnostic_severity_name(int severity);
 ///          rejected for invalid arguments before it compiles clears the
 ///          recorded result back to that same empty state; that call reports
 ///          its own error to the caller directly. Free with
-///          @ref sonare_project_free_compile_result.
+///          @ref sonare_free_project_compile_result.
 SonareError sonare_project_last_bounce_compile_result(const SonareProject* project,
                                                       SonareProjectCompileResult* out);
 
 /// @brief Frees the heap buffers held by a compile result and zeroes it.
-void sonare_project_free_compile_result(SonareProjectCompileResult* result);
+void sonare_free_project_compile_result(SonareProjectCompileResult* result);
 
 /// @brief Compiles + renders the project offline to interleaved float audio.
 /// @param options Render options (zero-init then override). May be NULL for

@@ -403,7 +403,7 @@ class _EngineIoMixin:
             interleaved = _from_c_float_array(raw_result.interleaved, int(raw_result.sample_count))
         finally:
             if raw_result.interleaved:
-                lib.sonare_free_bounce_result(ctypes.byref(raw_result))
+                lib.sonare_free_engine_bounce_result(ctypes.byref(raw_result))
         return EngineBounceResult(
             interleaved=interleaved,
             frames=int(raw_result.frames),

@@ -1322,3 +1322,132 @@ changed = "drops the unread fill_na argument: sonare_pitch_yin(samples, length, 
 domain = "analysis"
 rule = "individual"
 test = "tests/api/sonare_c_features_extra_test.cpp::sonare_pitch_yin keeps a finite fallback on unvoiced frames"
+
+# Releasers named after the struct they release, so the name alone says which result it takes.
+
+[[entry]]
+kind = "function"
+old = "sonare_free_bounce_result"
+new = "sonare_free_engine_bounce_result"
+domain = "engine"
+rule = "c-free"
+
+[[entry]]
+kind = "function"
+old = "sonare_free_note_objects"
+new = "sonare_free_note_objects_result"
+domain = "effects"
+rule = "c-free"
+
+[[entry]]
+kind = "function"
+old = "sonare_free_note_segments"
+new = "sonare_free_note_segments_result"
+domain = "analysis"
+rule = "c-free"
+
+[[entry]]
+kind = "function"
+old = "sonare_free_percussive_events"
+new = "sonare_free_percussive_events_result"
+domain = "effects"
+rule = "c-free"
+
+[[entry]]
+kind = "function"
+old = "sonare_free_pitch_decomposition"
+new = "sonare_free_pitch_decomposition_result"
+domain = "effects"
+rule = "c-free"
+
+[[entry]]
+kind = "function"
+old = "sonare_project_free_assist_sidecar"
+new = "sonare_free_project_assist_sidecar"
+domain = "project"
+rule = "c-free"
+
+[[entry]]
+kind = "function"
+old = "sonare_project_free_audio_source_metadata"
+new = "sonare_free_project_audio_source_metadata"
+domain = "project"
+rule = "c-free"
+
+[[entry]]
+kind = "function"
+old = "sonare_project_free_compile_result"
+new = "sonare_free_project_compile_result"
+domain = "project"
+rule = "c-free"
+
+[[entry]]
+kind = "function"
+old = "sonare_project_free_vocal_edit_dependencies"
+new = "sonare_free_project_vocal_edit_dependencies_result"
+domain = "project"
+rule = "c-free"
+
+[[entry]]
+kind = "function"
+old = "sonare_project_free_vocal_rehydrate_result"
+new = "sonare_free_project_vocal_rehydrate_result"
+domain = "project"
+rule = "c-free"
+
+[[entry]]
+kind = "function"
+old = "sonare_vocal_free_analysis"
+new = "sonare_free_vocal_analysis_result"
+domain = "project"
+rule = "c-free"
+
+[[entry]]
+kind = "function"
+old = "sonare_vocal_free_edit_result"
+new = "sonare_free_vocal_edit_result"
+domain = "project"
+rule = "c-free"
+
+[[entry]]
+kind = "function"
+old = "sonare_vocal_free_notes"
+new = "sonare_free_vocal_notes_result"
+domain = "project"
+rule = "c-free"
+
+[[entry]]
+kind = "function"
+old = "sonare_vocal_free_pitch_result"
+new = "sonare_free_vocal_pitch_result"
+domain = "project"
+rule = "c-free"
+
+[[entry]]
+kind = "function"
+old = "sonare_vocal_free_render_result"
+new = "sonare_free_vocal_render_result"
+domain = "project"
+rule = "c-free"
+
+[[entry]]
+kind = "function"
+old = "sonare_vocal_free_state_bytes"
+new = "sonare_free_vocal_state_bytes"
+domain = "project"
+rule = "c-free"
+
+[[entry]]
+kind = "function"
+old = "sonare_free_warp_anchors"
+new = "sonare_free_project_warp_anchors"
+domain = "project"
+rule = "c-free"
+
+[[entry]]
+kind = "function"
+old = "sonare_free_playback_render"
+removed = true
+no_replacement = "the buffers sonare_playback_render_interleaved and sonare_playback_renderer_render_offline return are plain float buffers; release them with sonare_free_floats"
+domain = "engine"
+rule = "c-free"

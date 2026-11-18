@@ -240,7 +240,7 @@ bool sonare_c_detail::vocal_edit_compiled_in() noexcept {
 #endif
 }
 
-void sonare_vocal_free_notes(SonareVocalNotesResult* v) {
+void sonare_free_vocal_notes_result(SonareVocalNotesResult* v) {
   if (!v) return;
   for (uint64_t i = 0; i < v->note_count; ++i) {
     delete[] v->notes[i].amplitude;
@@ -251,20 +251,20 @@ void sonare_vocal_free_notes(SonareVocalNotesResult* v) {
   delete[] v->transitions;
   initialize(v);
 }
-void sonare_vocal_free_analysis(SonareVocalAnalysisResult* v) {
+void sonare_free_vocal_analysis_result(SonareVocalAnalysisResult* v) {
   if (!v) return;
   delete[] v->analysis.f0_hz;
   delete[] v->analysis.voiced;
   delete[] v->analysis.algorithm_id;
   initialize(v);
 }
-void sonare_vocal_free_edit_result(SonareVocalEditResult* v) {
+void sonare_free_vocal_edit_result(SonareVocalEditResult* v) {
   if (!v) return;
   delete[] v->dirty_ranges;
   delete[] v->id_changes;
   initialize(v);
 }
-void sonare_vocal_free_pitch_result(SonareVocalPitchResult* v) {
+void sonare_free_vocal_pitch_result(SonareVocalPitchResult* v) {
   if (!v) return;
   delete[] v->source_samples;
   delete[] v->measured_midi;
@@ -274,13 +274,13 @@ void sonare_vocal_free_pitch_result(SonareVocalPitchResult* v) {
   delete[] v->has_target;
   initialize(v);
 }
-void sonare_vocal_free_render_result(SonareVocalRenderResult* v) {
+void sonare_free_vocal_render_result(SonareVocalRenderResult* v) {
   if (!v) return;
   delete[] v->samples;
   delete[] v->processed_ranges;
   initialize(v);
 }
-void sonare_vocal_free_state_bytes(SonareVocalStateBytes* v) {
+void sonare_free_vocal_state_bytes(SonareVocalStateBytes* v) {
   if (!v) return;
   delete[] v->data;
   initialize(v);
@@ -430,7 +430,7 @@ void map_notes(const Owner& owner, SonareVocalNotesResult* out) {
   initialize(&local);
   struct Cleanup {
     SonareVocalNotesResult* p;
-    ~Cleanup() { sonare_vocal_free_notes(p); }
+    ~Cleanup() { sonare_free_vocal_notes_result(p); }
   } cleanup{&local};
   local.notes = new SonareVocalNote[notes.size()]{};
   local.note_count = notes.size();
@@ -493,7 +493,7 @@ void map_apply(const vocal::DraftApplyResult& change, SonareVocalEditResult* out
 struct PreparedEditResult {
   SonareVocalEditResult value;
   PreparedEditResult() { initialize(&value); }
-  ~PreparedEditResult() { sonare_vocal_free_edit_result(&value); }
+  ~PreparedEditResult() { sonare_free_vocal_edit_result(&value); }
   void publish(SonareVocalEditResult* out) noexcept {
     *out = value;
     initialize(&value);

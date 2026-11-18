@@ -527,7 +527,7 @@ if (err != SONARE_OK) { /* inspect sonare_last_error_message() */ }
 [[rule]]
 slug = "c-free"
 title = "C results are released by a function named after the result"
-summary = "A result struct the library allocates is released with `sonare_free_<result struct>`, a handle with `sonare_<handle>_destroy`, and a plain buffer with the releaser of its element kind: `sonare_free_string`, `sonare_free_floats` or `sonare_free_ints`. Static name tables return `SonareError` with a borrowed `out_names` / `out_count` pair whose lifetime the header states."
+summary = "A result struct the library allocates is released with `sonare_free_<result struct>`, an array of a struct that owns no memory with `sonare_free_<element struct>s`, a handle with `sonare_<handle>_destroy`, and a plain buffer with the releaser of its element kind: `sonare_free_string`, `sonare_free_floats`, `sonare_free_ints` or `sonare_free_bytes`. Static name tables return `SonareError` with a borrowed `out_names` / `out_count` pair whose lifetime the header states."
 [[rule.example]]
 surface = "c"
 before = '''

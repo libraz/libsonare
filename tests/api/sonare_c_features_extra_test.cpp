@@ -52,7 +52,7 @@ TEST_CASE("sonare_note_segments validates and returns frame-accurate regions",
   REQUIRE(out.segments[1].frame_end == 12);
   REQUIRE(out.segments[1].start_sec == Catch::Approx(0.07f));
   REQUIRE(out.segments[1].end_sec == Catch::Approx(0.12f));
-  sonare_free_note_segments(&out);
+  sonare_free_note_segments_result(&out);
   REQUIRE(out.segments == nullptr);
   REQUIRE(out.count == 0);
 
@@ -80,7 +80,7 @@ TEST_CASE("sonare_note_segments validates and returns frame-accurate regions",
   const float non_finite = std::numeric_limits<float>::quiet_NaN();
   REQUIRE(sonare_note_segments(&non_finite, voiced.data(), nullptr, 1, 100.0f, &config, &out) ==
           SONARE_OK);
-  sonare_free_note_segments(&out);
+  sonare_free_note_segments_result(&out);
 
   // The voicing probability is still checked, because it is compared against a
   // threshold and a non-finite one would lose that comparison silently. This is
@@ -114,8 +114,8 @@ TEST_CASE("sonare_note_segments reads voiced flags as 0/1 probabilities", "[c_ap
     CHECK(from_flags.segments[i].end_sec == from_probabilities.segments[i].end_sec);
     CHECK(from_flags.segments[i].median_cents == from_probabilities.segments[i].median_cents);
   }
-  sonare_free_note_segments(&from_flags);
-  sonare_free_note_segments(&from_probabilities);
+  sonare_free_note_segments_result(&from_flags);
+  sonare_free_note_segments_result(&from_probabilities);
 }
 
 TEST_CASE("sonare_note_segments treats an oversized finite duration as empty",

@@ -257,7 +257,7 @@ def parse_declarations(path: Path, text: str) -> list[Declaration]:
 # A release entry point takes the pointer it frees; it does not hand one over.
 # Recognised by its own name shape, which is a property of the declaration, not
 # a list of the functions that happen to exist today.  The verb may sit in the
-# middle of a domain-qualified name (sonare_project_free_compile_result), so it
+# middle of a domain-qualified name (sonare_free_project_compile_result), so it
 # is matched as a whole word rather than only as a prefix or a suffix.
 _RELEASE_ENTRY = re.compile(r"^sonare_(?:\w+_)?(?:free|release|destroy)(?:_\w+)?$")
 

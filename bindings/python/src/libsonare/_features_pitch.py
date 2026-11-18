@@ -401,4 +401,4 @@ def note_segments(
             for i in range(out.count)
         ]
     finally:
-        lib.sonare_free_note_segments(ctypes.byref(out))
+        lib.sonare_free_note_segments_result(ctypes.byref(out))

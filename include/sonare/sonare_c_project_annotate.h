@@ -19,7 +19,7 @@ extern "C" {
 ///        @ref sonare_project_get_assist_sidecar.
 ///
 /// @p module_id is a heap C string (free via
-/// @ref sonare_project_free_assist_sidecar). @p payload is a heap byte array
+/// @ref sonare_free_project_assist_sidecar). @p payload is a heap byte array
 /// of @p payload_len bytes (also freed by the same helper). The core treats the
 /// payload as opaque module-owned bytes.
 typedef struct {
@@ -158,13 +158,13 @@ size_t sonare_project_assist_sidecar_count(const SonareProject* project);
 /// @brief Reads one assist sidecar by stable project order.
 ///
 /// On success @p out owns heap memory and must be released with
-/// @ref sonare_project_free_assist_sidecar. On failure @p out is zeroed.
+/// @ref sonare_free_project_assist_sidecar. On failure @p out is zeroed.
 SonareError sonare_project_get_assist_sidecar(const SonareProject* project, size_t index,
                                               SonareProjectAssistSidecar* out);
 
 /// @brief Frees heap fields returned by @ref sonare_project_get_assist_sidecar
 ///        and zeros the struct. NULL is safe.
-void sonare_project_free_assist_sidecar(SonareProjectAssistSidecar* sidecar);
+void sonare_free_project_assist_sidecar(SonareProjectAssistSidecar* sidecar);
 
 // ============================================================================
 // MIR (offline analysis -> edit commands; deterministic)

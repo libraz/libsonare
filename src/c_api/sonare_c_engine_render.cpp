@@ -212,7 +212,7 @@ SonareError sonare_engine_bounce_offline(SonareRealtimeEngine* engine,
   // Zero the owned out-pointer/lengths BEFORE any validation early-return so a
   // failed validation always leaves a NULL owned pointer (matching the analysis
   // wrappers in sonare_c.cpp). Otherwise the standard
-  // sonare_free_bounce_result(&r) idiom would delete[] an uninitialised pointer.
+  // sonare_free_engine_bounce_result(&r) idiom would delete[] an uninitialised pointer.
   if (out) {
     *out = {};
   }

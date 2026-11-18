@@ -127,7 +127,7 @@ std::vector<float> render_via_reporting_handle(SonarePlaybackRenderer* renderer,
       renderer, interleaved.data(), frames, in_channels, &out, &out_frames, &out_channels);
   if (err != SONARE_OK) throw_playback_error("render playback", err);
   std::vector<float> result(out, out + out_frames * static_cast<size_t>(out_channels));
-  sonare_free_playback_render(out);
+  sonare_free_floats(out);
   return result;
 }
 

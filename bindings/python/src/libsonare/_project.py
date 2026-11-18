@@ -204,7 +204,7 @@ class Project(
             lib.sonare_project_timeline_destroy(timeline)
             raise
         finally:
-            lib.sonare_project_free_compile_result(ctypes.byref(result))
+            lib.sonare_free_project_compile_result(ctypes.byref(result))
 
     def _enter_native_call(self) -> ctypes.c_void_p:
         """Pin the Project handle while a callback-capable native call runs."""

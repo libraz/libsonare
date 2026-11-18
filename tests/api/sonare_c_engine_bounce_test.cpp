@@ -53,7 +53,7 @@ std::vector<float> run_silent_dither_bounce(int num_channels, int dither_type) {
   REQUIRE(result.sample_count == static_cast<size_t>(result.frames * result.num_channels));
 
   std::vector<float> interleaved(result.interleaved, result.interleaved + result.sample_count);
-  sonare_free_bounce_result(&result);
+  sonare_free_engine_bounce_result(&result);
   sonare_engine_destroy(engine);
   return interleaved;
 }
@@ -110,7 +110,7 @@ TEST_CASE("sonare_engine_bounce_offline validates the channel count against a la
     SonareEngineBounceResult result{};
     REQUIRE(sonare_engine_bounce_offline(engine, &options, &result) ==
             SONARE_ERROR_INVALID_PARAMETER);
-    sonare_free_bounce_result(&result);
+    sonare_free_engine_bounce_result(&result);
   }
 
   // 6 (5.1) is a supported surround width.
@@ -118,7 +118,7 @@ TEST_CASE("sonare_engine_bounce_offline validates the channel count against a la
   SonareEngineBounceResult ok{};
   REQUIRE(sonare_engine_bounce_offline(engine, &options, &ok) == SONARE_OK);
   REQUIRE(ok.num_channels == 6);
-  sonare_free_bounce_result(&ok);
+  sonare_free_engine_bounce_result(&ok);
 
   sonare_engine_destroy(engine);
 }
@@ -144,14 +144,14 @@ TEST_CASE("sonare_engine_bounce_offline rejects an out-of-range dither type", "[
     SonareEngineBounceResult result{};
     REQUIRE(sonare_engine_bounce_offline(engine, &options, &result) ==
             SONARE_ERROR_INVALID_PARAMETER);
-    sonare_free_bounce_result(&result);
+    sonare_free_engine_bounce_result(&result);
   }
 
   for (int good : {0, 1, 2, 3}) {
     options.dither = good;
     SonareEngineBounceResult result{};
     REQUIRE(sonare_engine_bounce_offline(engine, &options, &result) == SONARE_OK);
-    sonare_free_bounce_result(&result);
+    sonare_free_engine_bounce_result(&result);
   }
 
   sonare_engine_destroy(engine);
@@ -188,7 +188,7 @@ TEST_CASE("sonare_engine_bounce_offline refuses dither bits before it renders",
   REQUIRE(sonare_engine_bounce_offline(engine, &options, &retried) == SONARE_OK);
   const std::vector<float> after_refusals(retried.interleaved,
                                           retried.interleaved + retried.sample_count);
-  sonare_free_bounce_result(&retried);
+  sonare_free_engine_bounce_result(&retried);
   sonare_engine_destroy(engine);
   REQUIRE(after_refusals == run_silent_dither_bounce(2, 2));
 }
@@ -398,7 +398,7 @@ TEST_CASE("offline render/bounce/freeze reject a never-prepared engine", "[c_api
           SONARE_ERROR_INVALID_STATE);
   REQUIRE(bounce_result.interleaved == nullptr);
   REQUIRE(bounce_result.sample_count == 0u);
-  sonare_free_bounce_result(&bounce_result);
+  sonare_free_engine_bounce_result(&bounce_result);
 
   SonareEngineFreezeOptions freeze{};
   freeze.total_frames = kFrames;
@@ -483,7 +483,7 @@ TEST_CASE("offline render/bounce/freeze reject more channels than the prepared b
   REQUIRE(sonare_engine_bounce_offline(engine, &bounce, &bounce_result) ==
           SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(bounce_result.interleaved == nullptr);
-  sonare_free_bounce_result(&bounce_result);
+  sonare_free_engine_bounce_result(&bounce_result);
 
   SonareEngineFreezeOptions freeze{};
   freeze.total_frames = kFrames;
@@ -586,7 +586,7 @@ TEST_CASE(
   REQUIRE(after.beat == before.beat);
   REQUIRE(after.beat_fraction == before.beat_fraction);
 
-  sonare_free_bounce_result(&result);
+  sonare_free_engine_bounce_result(&result);
   sonare_engine_destroy(engine);
 }
 
@@ -613,7 +613,7 @@ TEST_CASE("engine bounce resamples from the matching prepared source rate",
   REQUIRE(result.num_channels == 2);
   REQUIRE(result.sample_rate == 48000);
 
-  sonare_free_bounce_result(&result);
+  sonare_free_engine_bounce_result(&result);
   sonare_engine_destroy(engine);
 }
 
@@ -635,7 +635,7 @@ TEST_CASE("sonare_engine_bounce_offline defaults both rates to the prepared rate
   REQUIRE(sonare_engine_bounce_offline(engine, &options, &result) == SONARE_OK);
   REQUIRE(result.sample_rate == 44100);
   REQUIRE(result.frames == 441);
-  sonare_free_bounce_result(&result);
+  sonare_free_engine_bounce_result(&result);
 
   // An explicit source naming the prepared rate behaves the same, and a target left at 0
   // keeps that rate instead of resampling.
@@ -644,7 +644,7 @@ TEST_CASE("sonare_engine_bounce_offline defaults both rates to the prepared rate
   REQUIRE(sonare_engine_bounce_offline(engine, &options, &explicit_source) == SONARE_OK);
   REQUIRE(explicit_source.sample_rate == 44100);
   REQUIRE(explicit_source.frames == 441);
-  sonare_free_bounce_result(&explicit_source);
+  sonare_free_engine_bounce_result(&explicit_source);
 
   sonare_engine_destroy(engine);
 }
@@ -692,7 +692,7 @@ TEST_CASE("sonare_engine_bounce_offline resamples when the target differs from t
   REQUIRE(sonare_engine_bounce_offline(engine, &options, &result) == SONARE_OK);
   REQUIRE(result.sample_rate == 48000);
   REQUIRE(result.frames == 48000);
-  sonare_free_bounce_result(&result);
+  sonare_free_engine_bounce_result(&result);
 
   sonare_engine_destroy(engine);
 }
@@ -742,7 +742,7 @@ TEST_CASE("sonare_engine_bounce_offline aligns the mix to the timeline under rep
   // The impulse lands on its own timeline sample, not delayed by the master insert.
   REQUIRE(peak_index(result.interleaved, result.sample_count) == 0u);
   REQUIRE(result.interleaved[0] > 0.5f);
-  sonare_free_bounce_result(&result);
+  sonare_free_engine_bounce_result(&result);
 
   // Control: the plain render of the same span carries the latency, as live output does.
   sonare::rt::Command seek{};
@@ -802,7 +802,7 @@ TEST_CASE("an aligned bounce does not need pages past the span it was asked for"
   for (size_t i = 0; i < result.sample_count; ++i) {
     CHECK(result.interleaved[i] == Catch::Approx(static_cast<float>(i + 1)).margin(1.0e-4f));
   }
-  sonare_free_bounce_result(&result);
+  sonare_free_engine_bounce_result(&result);
 
   // Control: a plain render that itself covers the unsupplied page is refused.
   REQUIRE(sonare_engine_seek_sample(engine, 0, -1) == SONARE_OK);

@@ -77,8 +77,8 @@ def configure_project_signatures(lib: ctypes.CDLL) -> None:
             ctypes.POINTER(SonareProjectCompileResult),
         ]
 
-        lib.sonare_project_free_compile_result.restype = None
-        lib.sonare_project_free_compile_result.argtypes = [
+        lib.sonare_free_project_compile_result.restype = None
+        lib.sonare_free_project_compile_result.argtypes = [
             ctypes.POINTER(SonareProjectCompileResult)
         ]
 
@@ -345,8 +345,8 @@ def configure_project_signatures(lib: ctypes.CDLL) -> None:
                 ctypes.POINTER(ctypes.c_size_t),
                 ctypes.POINTER(SonareTakeAlignment),
             ]
-            lib.sonare_free_warp_anchors.restype = None
-            lib.sonare_free_warp_anchors.argtypes = [ctypes.POINTER(SonareProjectWarpAnchor)]
+            lib.sonare_free_project_warp_anchors.restype = None
+            lib.sonare_free_project_warp_anchors.argtypes = [ctypes.POINTER(SonareProjectWarpAnchor)]
 
         if hasattr(lib, "sonare_align_take_to_reference_ex"):
             lib.sonare_align_take_to_reference_ex.restype = ctypes.c_int32
@@ -832,8 +832,8 @@ def configure_project_signatures(lib: ctypes.CDLL) -> None:
             ctypes.POINTER(SonareProjectAssistSidecar),
         ]
 
-        lib.sonare_project_free_assist_sidecar.restype = None
-        lib.sonare_project_free_assist_sidecar.argtypes = [
+        lib.sonare_free_project_assist_sidecar.restype = None
+        lib.sonare_free_project_assist_sidecar.argtypes = [
             ctypes.POINTER(SonareProjectAssistSidecar)
         ]
 
@@ -1097,9 +1097,9 @@ def _configure_project_extra_signatures(lib: ctypes.CDLL) -> None:
             ctypes.POINTER(SonareProjectAudioSourceMetadata),
         ]
 
-    if hasattr(lib, "sonare_project_free_audio_source_metadata"):
-        lib.sonare_project_free_audio_source_metadata.restype = None
-        lib.sonare_project_free_audio_source_metadata.argtypes = [
+    if hasattr(lib, "sonare_free_project_audio_source_metadata"):
+        lib.sonare_free_project_audio_source_metadata.restype = None
+        lib.sonare_free_project_audio_source_metadata.argtypes = [
             ctypes.POINTER(SonareProjectAudioSourceMetadata),
         ]
 

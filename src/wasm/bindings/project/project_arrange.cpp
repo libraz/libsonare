@@ -263,7 +263,7 @@ val js_align_take_to_reference(val reference, val take, const val& sample_rate_v
   if (rows != nullptr && count != 0) {
     anchors.assign(rows, rows + count);
   }
-  sonare_free_warp_anchors(rows);
+  sonare_free_project_warp_anchors(rows);
 
   val list = val::array();
   for (size_t i = 0; i < anchors.size(); ++i) {

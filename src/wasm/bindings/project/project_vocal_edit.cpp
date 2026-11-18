@@ -283,13 +283,13 @@ val rehydrateItemsToVal(const SonareProjectVocalRehydrateResult& result) {
 struct DependenciesGuard {
   SonareProjectVocalEditDependenciesResult value{};
   DependenciesGuard() { sonare_project_vocal_edit_dependencies_result_init(&value); }
-  ~DependenciesGuard() { sonare_project_free_vocal_edit_dependencies(&value); }
+  ~DependenciesGuard() { sonare_free_project_vocal_edit_dependencies_result(&value); }
 };
 
 struct RehydrateGuard {
   SonareProjectVocalRehydrateResult value{};
   RehydrateGuard() { sonare_project_vocal_rehydrate_result_init(&value); }
-  ~RehydrateGuard() { sonare_project_free_vocal_rehydrate_result(&value); }
+  ~RehydrateGuard() { sonare_free_project_vocal_rehydrate_result(&value); }
 };
 
 struct OriginalStorage {
