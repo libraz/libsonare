@@ -81,6 +81,7 @@ export const READER_FAMILIES: Readonly<
     // Presence + type checked: undefined/null takes the default, anything else
     // of the wrong type is refused by name (node_require_property_type).
     BoolProperty: 'refuse',
+    DbfsAsLinearProperty: 'refuse', // a dBFS value read through FiniteFloatProperty
     DoubleProperty: 'refuse',
     AutoFiniteFloatProperty: 'refuse',
     FiniteFloatProperty: 'refuse',
@@ -120,6 +121,7 @@ export const READER_FAMILIES: Readonly<
     enumProperty: 'refuse',
     floatOption: 'refuse',
     floatProperty: 'refuse',
+    linearFromDbfsProperty: 'refuse', // a dBFS value read through floatProperty
     gsEfxRealizationProperty: 'refuse',
     int64Property: 'refuse',
     intProperty: 'refuse',
