@@ -7,6 +7,7 @@ go blind -- reading nothing, and a table entry that excuses nothing.
 
 from __future__ import annotations
 
+import dataclasses
 import importlib.util
 import sys
 import unittest
@@ -40,13 +41,56 @@ def member(surface: str, owner: str, name: str, *, ts_kind: str, params=(), stat
     }
 
 
+def js_class(surface: str, name: str, *, param_types=()) -> dict:
+    params = [{"name": f"p{i}", "type": t} for i, t in enumerate(param_types)]
+    return {
+        "surface": surface,
+        "kind": "class",
+        "name": name,
+        "owner": "",
+        "member": "",
+        "sigs": [{"params": params}],
+    }
+
+
+def method(surface: str, owner: str, name: str, *, returns: str = "void", params=()) -> dict:
+    return {
+        "surface": surface,
+        "kind": "method",
+        "owner": owner,
+        "member": name,
+        "name": f"{owner}.{name}",
+        "ts_kind": "method",
+        "sigs": [{"params": [{"name": p} for p in params], "returns": returns}],
+        "static": False,
+    }
+
+
+def field(surface: str, owner: str, name: str, type_: str = "number", **extra) -> dict:
+    return {
+        "surface": surface,
+        "kind": "field",
+        "owner": owner,
+        "member": name,
+        "name": f"{owner}.{name}",
+        "type": type_,
+        **extra,
+    }
+
+
+def run(name: str, records: list[dict]):
+    """Judge hand-built records against a rule with its exempt and pending tables emptied."""
+    r = dataclasses.replace(rule(name), exempt={}, pending={})
+    return check.judge(r, r.derive(records) if r.derive else records)
+
+
 class GettersRule(unittest.TestCase):
-    CLEAN = (
+    CLEAN = [
         member("node", "Project", "trackCount", ts_kind="accessor"),
         member("wasm", "Mixer", "stripNonFiniteDiscardCount", ts_kind="method", params=["strip"]),
         member("python", "Project", "track_count", ts_kind="method"),
         member("node", "Project", "toJson", ts_kind="method"),
-    )
+    ]
 
     def test_clean_surface_passes(self) -> None:
         verdict = check.judge(rule("getters"), self.CLEAN)
@@ -62,6 +106,38 @@ class GettersRule(unittest.TestCase):
     def test_static_count_method_is_outside_the_rule(self) -> None:
         factory = member("node", "Pool", "defaultCount", ts_kind="method", static=True)
         self.assertFalse(check.judge(rule("getters"), [*self.CLEAN, factory]).failed)
+
+
+class AsyncTeardownRule(unittest.TestCase):
+    CLEAN = [
+        js_class("wasm", "JobClient", param_types=["JobClientOptions", "Worker"]),
+        method("wasm", "JobClient", "destroy", returns="Promise<void>"),
+        method("wasm", "JobClient", "[Symbol.asyncDispose]", returns="Promise<void>"),
+        js_class("wasm", "NoiseProcessor", param_types=["Options"]),
+        method("wasm", "NoiseProcessor", "destroy"),
+        field("wasm", "JobClientOptions", "terminateWorkerOnDestroy", "boolean | undefined"),
+    ]
+
+    def judge(self, records):
+        return run("async-teardown", records)
+
+    def test_clean_surface_passes(self) -> None:
+        verdict = self.judge(self.CLEAN)
+        self.assertEqual(verdict.read, 2)
+        self.assertFalse(verdict.failed)
+
+    def test_synchronous_destroy_is_named(self) -> None:
+        bad = [r for r in self.CLEAN if r["name"] != "JobClient.destroy"]
+        bad.append(method("wasm", "JobClient", "destroy"))
+        verdict = self.judge(bad)
+        self.assertEqual([f.key for f in verdict.violations], ["wasm:JobClient"])
+
+    def test_dispose_option_name_is_named(self) -> None:
+        planted = field("wasm", "ClientOptions", "terminateWorkerOnDispose", "boolean | undefined")
+        verdict = self.judge([*self.CLEAN, planted])
+        self.assertEqual(
+            [f.key for f in verdict.violations], ["wasm:ClientOptions.terminateWorkerOnDispose"]
+        )
 
 
 class Framework(unittest.TestCase):

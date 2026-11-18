@@ -9,7 +9,7 @@ matching anything looks exactly like a clean surface.
 Two tables sit beside each rule, both keyed by ``surface:name``:
 
 * ``exempt`` -- a symbol the rule's own text places outside it, with the reason.
-* ``pending`` -- a known violation with the owner who fixes it.
+* ``pending`` -- a known violation with the fix it awaits.
 
 An entry in either table that matches no violation fails, so each one expires with
 the divergence it describes.
@@ -21,11 +21,14 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
+import json
+import os
+import re
 import sys
 from collections.abc import Callable, Iterable
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(os.environ.get("LIBSONARE_ROOT") or Path(__file__).resolve().parents[2])
 
 
 @dataclasses.dataclass(frozen=True)
@@ -42,6 +45,10 @@ class Rule:
     violation: Callable[[dict], str | None]
     exempt: dict[str, str] = dataclasses.field(default_factory=dict)
     pending: dict[str, str] = dataclasses.field(default_factory=dict)
+    # Builds synthetic records from source text for a rule the inventory cannot see.
+    scan: Callable[[Path], list[dict]] | None = None
+    # Builds synthetic records from the inventory for a rule that compares records.
+    derive: Callable[[list[dict]], list[dict]] | None = None
 
 
 @dataclasses.dataclass
@@ -77,6 +84,72 @@ def _count_method_is_a_getter(record: dict) -> str | None:
     return None
 
 
+def _members(records: Iterable[dict], kind: str = "method") -> dict[tuple[str, str, str], dict]:
+    """Index member records by (surface, owner, member)."""
+    return {
+        (r["surface"], r["owner"], r.get("member", "")): r for r in records if r["kind"] == kind
+    }
+
+
+def _returns(record: dict | None) -> str | None:
+    sigs = (record or {}).get("sigs") or []
+    return sigs[0].get("returns") if sigs else None
+
+
+_WORKER_TYPE = re.compile(r"Worker|AudioWorkletNode")
+
+
+def _worker_backed(cls: dict) -> bool:
+    """A class whose constructor takes or creates a Worker, or an AudioWorkletNode."""
+    if cls["name"].endswith("Processor"):
+        return False
+    if "Worker" in cls["name"]:
+        return True
+    return any(
+        _WORKER_TYPE.search(p.get("type", ""))
+        for sig in cls.get("sigs") or []
+        for p in sig.get("params", [])
+    )
+
+
+def _worker_teardown_records(records: list[dict]) -> list[dict]:
+    methods = _members(records)
+    out: list[dict] = []
+    for r in records:
+        if not _js(r):
+            continue
+        if r["kind"] == "class" and _worker_backed(r):
+            at = (r["surface"], r["name"])
+            out.append(
+                {
+                    "surface": r["surface"],
+                    "kind": "worker-class",
+                    "name": r["name"],
+                    "destroy": methods.get((*at, "destroy")),
+                    "async_dispose": (*at, "[Symbol.asyncDispose]") in methods,
+                }
+            )
+        elif r["kind"] in ("field", "option") and r.get("member", "").startswith(
+            "terminateWorkerOn"
+        ):
+            out.append(r)
+    return out
+
+
+def _worker_teardown_violation(record: dict) -> str | None:
+    if record["kind"] != "worker-class":
+        if record["member"] != "terminateWorkerOnDestroy":
+            return "the option that ends the worker is named terminateWorkerOnDestroy"
+        return None
+    if record["destroy"] is None:
+        return "a worker-backed class has no destroy()"
+    if _returns(record["destroy"]) != "Promise<void>":
+        return "destroy() of a worker-backed class returns a Promise"
+    if not record["async_dispose"]:
+        return "a worker-backed class implements [Symbol.asyncDispose]()"
+    return None
+
+
 RULES: list[Rule] = [
     Rule(
         name="getters",
@@ -88,6 +161,18 @@ RULES: list[Rule] = [
             and r.get("member", "").endswith("Count")
         ),
         violation=_count_method_is_a_getter,
+    ),
+    Rule(
+        name="async-teardown",
+        summary="worker-backed JS classes destroy() asynchronously and implement asyncDispose",
+        population=lambda r: r["kind"] == "worker-class" or r["kind"] in ("field", "option"),
+        violation=_worker_teardown_violation,
+        derive=_worker_teardown_records,
+        pending={
+            "wasm:VocalEditWorkerDraft": "give the worker draft an async destroy() and [Symbol.asyncDispose]()",
+            "wasm:OpfsClipPageProviderOptions.terminateWorkerOnClose": "rename to terminateWorkerOnDestroy",
+            "wasm:OpfsClipStreamOptions.terminateWorkerOnClose": "rename to terminateWorkerOnDestroy",
+        },
     ),
 ]
 
@@ -149,13 +234,29 @@ def report(verdicts: list[Verdict]) -> int:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--rule", action="append", help="run only this rule (repeatable)")
+    parser.add_argument("--records-json", help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
     rules = [r for r in RULES if not args.rule or r.name in args.rule]
     unknown = set(args.rule or ()) - {r.name for r in RULES}
     if unknown:
         parser.error(f"unknown rule(s): {', '.join(sorted(unknown))}")
-    records = load_records()
-    return report([judge(rule, records) for rule in rules])
+    cached: list[list[dict]] = []
+
+    def inventory_records() -> list[dict]:
+        if not cached:
+            if args.records_json:
+                cached.append(json.loads(Path(args.records_json).read_text())["records"])
+            else:
+                cached.append(load_records())
+        return cached[0]
+
+    def records_for(rule: Rule) -> list[dict]:
+        if rule.scan:
+            return rule.scan(ROOT)
+        records = inventory_records()
+        return rule.derive(records) if rule.derive else records
+
+    return report([judge(rule, records_for(rule)) for rule in rules])
 
 
 if __name__ == "__main__":
