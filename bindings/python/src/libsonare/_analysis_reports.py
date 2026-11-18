@@ -251,7 +251,7 @@ def analyze(
         - ``timbre`` (:class:`TimbreFrame`) — spectral character summary
         - ``dynamics`` (:class:`AnalysisDynamics`) — loudness/dynamics summary
         - ``rhythm`` (:class:`AnalysisRhythm`) — groove/syncopation summary
-        - ``melody`` (:class:`AnalysisMelody`) — melody contour and statistics
+        - ``melody`` (:class:`MelodyResult`) — melody contour and statistics
         - ``form`` (``str``) — overall form classification
 
     Raises:

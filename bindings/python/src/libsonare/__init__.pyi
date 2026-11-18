@@ -850,9 +850,6 @@ from .types import (
     AnalysisDynamics as AnalysisDynamics,
 )
 from .types import (
-    AnalysisMelody as AnalysisMelody,
-)
-from .types import (
     AnalysisResult as AnalysisResult,
 )
 from .types import (

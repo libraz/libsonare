@@ -853,7 +853,7 @@ def test_beats_and_downbeats_are_beat_objects(analysis: libsonare.AnalysisResult
     assert isinstance(analysis.timbre, libsonare.TimbreFrame)
     assert isinstance(analysis.dynamics, libsonare.AnalysisDynamics)
     assert isinstance(analysis.rhythm, libsonare.AnalysisRhythm)
-    assert isinstance(analysis.melody, libsonare.AnalysisMelody)
+    assert isinstance(analysis.melody, libsonare.MelodyResult)
     assert isinstance(analysis.beat_observations, libsonare.BeatObservations)
 
 

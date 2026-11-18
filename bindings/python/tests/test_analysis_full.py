@@ -129,13 +129,13 @@ def test_parse_analysis_json_requires_every_summary_block() -> None:
 
 
 def test_analyze_always_carries_every_summary_block(analyze_result: Any) -> None:
-    from libsonare import AnalysisDynamics, AnalysisMelody, AnalysisRhythm, TimbreFrame
+    from libsonare import AnalysisDynamics, AnalysisRhythm, MelodyResult, TimbreFrame
 
     result = analyze_result
     assert isinstance(result.timbre, TimbreFrame)
     assert isinstance(result.dynamics, AnalysisDynamics)
     assert isinstance(result.rhythm, AnalysisRhythm)
-    assert isinstance(result.melody, AnalysisMelody)
+    assert isinstance(result.melody, MelodyResult)
 
 
 def test_parse_analysis_json_retains_tempo_and_meter_hypotheses() -> None:
@@ -196,10 +196,10 @@ def test_analyze_returns_extended_fields(analyze_result) -> None:
     """analyze() returns the full set of fields with correct types."""
     from libsonare import (
         AnalysisDynamics,
-        AnalysisMelody,
         AnalysisResult,
         AnalysisRhythm,
         Key,
+        MelodyResult,
         TimbreFrame,
         TimeSignature,
     )
@@ -231,7 +231,7 @@ def test_analyze_returns_extended_fields(analyze_result) -> None:
         assert isinstance(result.timbre, TimbreFrame)
         assert isinstance(result.dynamics, AnalysisDynamics)
         assert isinstance(result.rhythm, AnalysisRhythm)
-        assert isinstance(result.melody, AnalysisMelody)
+        assert isinstance(result.melody, MelodyResult)
 
 
 def test_analysis_json_uses_canonical_display_names() -> None:
@@ -296,7 +296,7 @@ def test_analyze_sub_result_types(analyze_result) -> None:
     assert isinstance(result.rhythm.syncopation, float)
     assert isinstance(result.rhythm.groove_type, str)
     assert isinstance(result.melody.mean_frequency_hz, float)
-    assert isinstance(result.melody.pitches, list)
+    assert isinstance(result.melody.points, list)
 
     # Chords map to Chord with enum roots; sections to Section with enum types.
     for chord in result.chords:

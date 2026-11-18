@@ -41,7 +41,6 @@ from .types import (
     CHORD_QUALITIES,
     AnalysisChord,
     AnalysisDynamics,
-    AnalysisMelody,
     AnalysisResult,
     AnalysisRhythm,
     Beat,
@@ -54,6 +53,7 @@ from .types import (
     KeyMode,
     KeyProfile,
     MelodyPoint,
+    MelodyResult,
     PitchClass,
     Section,
     SectionType,
@@ -552,12 +552,8 @@ def _parse_analysis_json(data: dict[str, Any]) -> AnalysisResult:
         tempo_stability=float(rhy_d["tempoStability"]),
     )
     mel_d = data["melody"]
-    melody = AnalysisMelody(
-        pitch_range_octaves=float(mel_d["pitchRangeOctaves"]),
-        pitch_stability=float(mel_d["pitchStability"]),
-        mean_frequency_hz=float(mel_d["meanFrequencyHz"]),
-        vibrato_rate_hz=float(mel_d["vibratoRateHz"]),
-        pitches=[
+    melody = MelodyResult(
+        points=[
             MelodyPoint(
                 time_sec=float(p["timeSec"]),
                 # Omitted for an unvoiced point.
@@ -566,6 +562,10 @@ def _parse_analysis_json(data: dict[str, Any]) -> AnalysisResult:
             )
             for p in mel_d["pitches"]
         ],
+        pitch_range_octaves=float(mel_d["pitchRangeOctaves"]),
+        pitch_stability=float(mel_d["pitchStability"]),
+        mean_frequency_hz=float(mel_d["meanFrequencyHz"]),
+        vibrato_rate_hz=float(mel_d["vibratoRateHz"]),
     )
 
     return AnalysisResult(

@@ -13,7 +13,7 @@ from ._types_enums import KeyMode, PitchClass
 if TYPE_CHECKING:
     from numpy.typing import NDArray
 
-    from ._types_engine import MelodyPoint, Section
+    from ._types_engine import MelodyResult, Section
 
 
 def _empty_float32() -> np.ndarray:
@@ -142,17 +142,6 @@ class AnalysisRhythm:
     tempo_stability: float
 
 
-@dataclass(frozen=True, slots=True)
-class AnalysisMelody:
-    """Melody summary embedded in :class:`AnalysisResult`."""
-
-    pitch_range_octaves: float
-    pitch_stability: float
-    mean_frequency_hz: float
-    vibrato_rate_hz: float
-    pitches: list[MelodyPoint]
-
-
 @dataclass(frozen=True, slots=True, eq=False)
 class BeatObservations:
     """Beat-level evidence behind the downbeat and meter decisions.
@@ -204,7 +193,7 @@ class AnalysisResult:
     timbre: TimbreFrame
     dynamics: AnalysisDynamics
     rhythm: AnalysisRhythm
-    melody: AnalysisMelody
+    melody: MelodyResult
     beats: list[Beat] = dataclasses.field(default_factory=list)
     # The bar starts, drawn from ``beats``: each is the beat that opens a bar.
     downbeats: list[Beat] = dataclasses.field(default_factory=list)

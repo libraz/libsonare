@@ -6804,14 +6804,14 @@ rule = "unit-in-name"
 [[entry]]
 kind = "field"
 old = "AnalysisMelody.mean_frequency"
-new = "AnalysisMelody.mean_frequency_hz"
+new = "MelodyResult.mean_frequency_hz"
 domain = "analysis"
 rule = "unit-in-name"
 
 [[entry]]
 kind = "field"
 old = "AnalysisMelody.vibrato_rate"
-new = "AnalysisMelody.vibrato_rate_hz"
+new = "MelodyResult.vibrato_rate_hz"
 domain = "analysis"
 rule = "unit-in-name"
 
@@ -8110,3 +8110,17 @@ changed = "always present (was Optional, None on the removed flat-struct fallbac
 domain = "analysis"
 rule = "typed-results"
 test = "bindings/python/tests/test_analysis_full.py::test_analyze_always_carries_every_summary_block"
+
+[[entry]]
+kind = "type"
+old = "AnalysisMelody"
+new = "MelodyResult"
+domain = "analysis"
+rule = "type-names"
+
+[[entry]]
+kind = "field"
+old = "AnalysisMelody.pitches"
+new = "MelodyResult.points"
+domain = "analysis"
+rule = "type-names"

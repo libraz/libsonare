@@ -607,21 +607,6 @@ class AnalysisRhythm:
         tempo_stability: float,
     ) -> None: ...
 
-class AnalysisMelody:
-    pitch_range_octaves: float
-    pitch_stability: float
-    mean_frequency_hz: float
-    vibrato_rate_hz: float
-    pitches: list[MelodyPoint]
-    def __init__(
-        self,
-        pitch_range_octaves: float,
-        pitch_stability: float,
-        mean_frequency_hz: float,
-        vibrato_rate_hz: float,
-        pitches: list[MelodyPoint],
-    ) -> None: ...
-
 class BeatObservations:
     """Beat-level evidence the downbeat and meter pass scores, one value per
     beat and parallel to ``AnalysisResult.beats``. An empty stream means the
@@ -656,7 +641,7 @@ class AnalysisResult:
     timbre: TimbreFrame
     dynamics: AnalysisDynamics
     rhythm: AnalysisRhythm
-    melody: AnalysisMelody
+    melody: MelodyResult
     beats: list[Beat]
     downbeats: list[Beat]
     downbeat_phase: int
@@ -677,7 +662,7 @@ class AnalysisResult:
         timbre: TimbreFrame,
         dynamics: AnalysisDynamics,
         rhythm: AnalysisRhythm,
-        melody: AnalysisMelody,
+        melody: MelodyResult,
         beats: list[Beat] = ...,
         downbeats: list[Beat] = ...,
         downbeat_phase: int = 0,

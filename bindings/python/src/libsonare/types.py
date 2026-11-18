@@ -47,9 +47,6 @@ from ._types_analysis import (
     AnalysisDynamics as AnalysisDynamics,
 )
 from ._types_analysis import (
-    AnalysisMelody as AnalysisMelody,
-)
-from ._types_analysis import (
     AnalysisResult as AnalysisResult,
 )
 from ._types_analysis import (
