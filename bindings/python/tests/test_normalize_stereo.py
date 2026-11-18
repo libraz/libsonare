@@ -17,6 +17,8 @@ arithmetic rather than as a measurement of the fixture.
 from __future__ import annotations
 
 import inspect
+import json
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -279,12 +281,25 @@ class TestNormalizeStereoPairRefusals:
         assert call(left, right, SR, validate=False).length == len(left)  # type: ignore[operator]
 
 
+_DEFAULTS = json.loads(
+    (Path(__file__).resolve().parents[3] / "tests/conformance/binding_defaults.json").read_text(
+        encoding="utf-8"
+    )
+)["defaults"]
+
+
 class TestMode:
     """``mode`` picks the statistic; an omitted target is the mode's own default."""
 
-    @pytest.mark.parametrize(("mode", "default_db"), [("peak", 0.0), ("rms", -20.0)])
-    def test_an_omitted_target_is_the_mode_default(self, mode: str, default_db: float) -> None:
+    @pytest.mark.parametrize("mode", ["peak", "rms"])
+    def test_an_omitted_target_is_the_mode_default(self, mode: str) -> None:
+        default_db = _DEFAULTS[f"normalize.target_db.{mode}"]
         left, right = _pair()
+        audio = libsonare.Audio.from_buffer(right, SR)
+        np.testing.assert_array_equal(
+            audio.normalize(mode=mode),  # type: ignore[arg-type]
+            audio.normalize(mode=mode, target_db=default_db),  # type: ignore[arg-type]
+        )
         np.testing.assert_array_equal(
             libsonare.normalize(right, SR, mode=mode),  # type: ignore[arg-type]
             libsonare.normalize(right, SR, mode=mode, target_db=default_db),  # type: ignore[arg-type]
