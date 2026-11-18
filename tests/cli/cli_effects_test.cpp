@@ -574,15 +574,18 @@ TEST_CASE("CLI acoustic routes into IR analysis only through --ir", "[cli][acous
   auto [blind_code, blind_output] = exec_command(CLI + " acoustic " + ir_path + " --json");
   REQUIRE(blind_code == 0);
   REQUIRE_THAT(blind_output, ContainsSubstring("\"is_blind\": true"));
-  // Blind estimation cannot measure clarity, and reports that as null rather
-  // than as a value; the Auto route filled these in instead.
-  REQUIRE_THAT(blind_output, ContainsSubstring("\"c50\": null"));
-  REQUIRE_THAT(blind_output, ContainsSubstring("\"c50_bands\": []"));
+  // Blind estimation cannot measure EDT or clarity, so it omits those keys
+  // rather than reporting a value; the Auto route filled these in instead.
+  for (const char* key : {"\"edt\"", "\"c50\"", "\"c80\"", "\"d50\"", "\"edt_bands\"",
+                          "\"c50_bands\"", "\"c80_bands\""}) {
+    REQUIRE_THAT(blind_output, !ContainsSubstring(key));
+  }
 
   auto [ir_code, ir_output] = exec_command(CLI + " acoustic --ir " + ir_path + " --json");
   REQUIRE(ir_code == 0);
   REQUIRE_THAT(ir_output, ContainsSubstring("\"is_blind\": false"));
-  REQUIRE_THAT(ir_output, !ContainsSubstring("\"c50\": null"));
+  REQUIRE_THAT(ir_output, ContainsSubstring("\"c50\": "));
+  REQUIRE_THAT(ir_output, ContainsSubstring("\"c50_bands\": "));
 
   std::remove(ir_path.c_str());
 }

@@ -1409,5 +1409,73 @@ class CliContractSelfTest(unittest.TestCase):
             )
 
 
+class ProjectCompileDiagnosticVariantTest(unittest.TestCase):
+    """A diagnostic with no target omits ``target_id`` rather than writing 0 or null."""
+
+    FULL = {"code": "integer", "severity": "integer", "target_id": "integer", "message": "string"}
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.manifest = CHECKER.load_manifest(CHECKER.DEFAULT_MANIFEST)
+
+    def _with_items(self, items: object) -> list[str]:
+        candidate = copy.deepcopy(self.manifest)
+        compile_path = next(
+            item for item in candidate["active_paths"] if item["path"] == "project.compile"
+        )
+        compile_path["payloads"]["success"]["keys"]["diagnostics"]["items"] = items
+        return [e for e in CHECKER.validate_manifest(candidate) if "diagnostics.items" in e]
+
+    def _variant(self, *dropped: str) -> dict[str, object]:
+        keys = {k: v for k, v in self.FULL.items() if k not in dropped}
+        return {"type": "object", "keys": keys}
+
+    def test_targetless_variant_is_accepted(self) -> None:
+        self.assertEqual(self._with_items({"one_of": [self._variant(), self._variant("target_id")]}), [])
+
+    def test_variant_union_must_equal_the_canonical_keys(self) -> None:
+        errors = self._with_items({"one_of": [self._variant("target_id")]})
+        self.assertTrue(any("canonical keys differ" in e for e in errors), errors)
+
+    def test_variant_must_be_closed(self) -> None:
+        errors = self._with_items({"one_of": [self._variant(), {"type": "object"}]})
+        self.assertTrue(any("one_of[1]" in e and "closed object schema" in e for e in errors), errors)
+
+    def test_variant_may_drop_only_an_absentable_key(self) -> None:
+        errors = self._with_items({"one_of": [self._variant(), self._variant("code")]})
+        self.assertTrue(any("drops code" in e for e in errors), errors)
+
+    def test_a_stand_in_for_no_target_fails_on_both_front_ends(self) -> None:
+        compile_path = next(
+            item for item in self.manifest["active_paths"] if item["path"] == "project.compile"
+        )
+        case = next(c for c in compile_path["cases"] if c["id"] == "no_timeline")
+
+        def run(target: object, surface: str) -> list[tuple[str, str]]:
+            diagnostic: dict[str, object] = {"code": 1, "severity": 2, "message": "m"}
+            if target is not ...:
+                diagnostic["target_id"] = target
+            payload = {
+                "has_timeline": False,
+                "diagnostic_count": 1,
+                "diagnostics": [diagnostic],
+                "messages": "m",
+            }
+            report: list[tuple[str, str]] = []
+            CHECKER._validate_case_payload(
+                "project.compile", case, payload, compile_path, surface,
+                f"{surface}.project.compile.no_timeline", report,
+            )
+            return [r for r in report if r[0] == "fail"]
+
+        for surface in ("native", "python"):
+            for stand_in in (None, 0):
+                with self.subTest(surface=surface, target_id=stand_in):
+                    self.assertTrue(run(stand_in, surface))
+            # Non-vacuity: an omitted key and a real id both pass.
+            self.assertEqual(run(..., surface), [])
+            self.assertEqual(run(7, surface), [])
+
+
 if __name__ == "__main__":
     unittest.main()

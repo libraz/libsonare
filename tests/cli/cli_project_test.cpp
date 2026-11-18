@@ -221,6 +221,7 @@ TEST_CASE("CLI project command group", "[cli]") {
       file << R"json({
         "version": 1,
         "sample_rate": 48000,
+        "tempo_segments": [{"start_ppq": 0, "bpm": 120, "start_sample": 0, "end_bpm": 90}],
         "sources": [{"kind": 0, "id": 1, "uri": "missing.wav", "channel_count": 1,
                      "sample_rate_hint": 48000, "storage_handle_id": 0}],
         "tracks": [{"id": 1, "name": "audio", "kind": 0, "gain": 1, "mute": false,
@@ -253,6 +254,21 @@ TEST_CASE("CLI project command group", "[cli]") {
       REQUIRE(diagnostic_payload["messages"].as_string().find(diagnostic["message"].as_string()) !=
               std::string::npos);
     }
+    // The trailing-ramp warning is about the project as a whole, so it names no
+    // target and omits the key; a clip diagnostic carries the clip's id.
+    size_t targeted = 0;
+    size_t project_wide = 0;
+    for (const auto& diagnostic : diagnostics.as_array()) {
+      if (diagnostic.contains("target_id")) {
+        REQUIRE(diagnostic["target_id"].as_int() > 0);
+        ++targeted;
+      } else {
+        REQUIRE_THAT(diagnostic["message"].as_string(), ContainsSubstring("trailing tempo"));
+        ++project_wide;
+      }
+    }
+    REQUIRE(targeted > 0);
+    REQUIRE(project_wide == 1);
 
     const std::string clean = unique_temp_path("_compile_clean.json");
     auto [new_code, new_output] = exec_command(CLI + " project new -o " + clean);

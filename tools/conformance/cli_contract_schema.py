@@ -172,6 +172,8 @@ _VOICE_SIMPLE_KEYS = _VOICE_COMMON_KEYS | {"pitch_semitones", "formant_factor", 
 _VOICE_PRESET_KEYS = _VOICE_COMMON_KEYS | {"preset"}
 _PROJECT_COMPILE_KEYS = {"has_timeline", "diagnostic_count", "diagnostics", "messages"}
 _PROJECT_COMPILE_DIAGNOSTIC_KEYS = {"code", "severity", "target_id", "message"}
+# A diagnostic about the project as a whole names no target, so it omits the key.
+_PROJECT_COMPILE_DIAGNOSTIC_ABSENTABLE = {"target_id"}
 _MASTERING_REPORT_KEYS = {
     "input_lufs",
     "output_lufs",
@@ -773,6 +775,39 @@ def _require_schema_keys(
     return schema["keys"]
 
 
+def _require_record_variants(
+    schema: Any, expected: set[str], absentable: set[str], label: str, errors: list[str]
+) -> None:
+    """Require an array item to be the full closed record, or closed variants of it.
+
+    A variant may only leave out keys in ``absentable`` (a value nothing measured
+    is omitted rather than written as a stand-in), and together the variants must
+    spell exactly ``expected``.
+    """
+
+    variants = schema.get("one_of") if isinstance(schema, dict) else None
+    if not isinstance(variants, list):
+        _require_schema_keys(schema, expected, label, errors)
+        return
+    union: set[str] = set()
+    for index, variant in enumerate(variants):
+        fields = _schema_keys(variant)
+        variant_label = f"{label}.one_of[{index}]"
+        if fields is None:
+            errors.append(f"{variant_label}: expected a closed object schema with a keys map")
+            continue
+        union |= fields
+        unexpected = sorted(fields - expected)
+        if unexpected:
+            errors.append(f"{variant_label}: unexpected {', '.join(unexpected)}")
+        dropped = sorted(expected - fields - absentable)
+        if dropped:
+            errors.append(f"{variant_label}: drops {', '.join(dropped)}, which is never absent")
+    if union != expected:
+        missing = sorted(expected - union)
+        errors.append(f"{label}: canonical keys differ (missing {', '.join(missing)})")
+
+
 def _require_array_item_schema(schema: Any, label: str, errors: list[str]) -> Any | None:
     if not isinstance(schema, dict) or schema.get("type") != "array" or "items" not in schema:
         errors.append(f"{label}: expected an array schema with item schema")
@@ -882,9 +917,10 @@ def _validate_canonical_payload_schema(
                 top.get("diagnostics"), f"{label}.success.diagnostics", errors
             )
             if item is not None:
-                _require_schema_keys(
+                _require_record_variants(
                     item,
                     _PROJECT_COMPILE_DIAGNOSTIC_KEYS,
+                    _PROJECT_COMPILE_DIAGNOSTIC_ABSENTABLE,
                     f"{label}.success.diagnostics.items",
                     errors,
                 )

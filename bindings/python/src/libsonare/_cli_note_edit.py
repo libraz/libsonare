@@ -15,6 +15,7 @@ from ._cli_common import (
     _emit_effect_result,
     _fmt_optional,
     _legacy_exit_codes,
+    _omit_absent,
     _read_bounded,
     _strict_json_dumps,
     _window_length_at_rate,
@@ -406,19 +407,22 @@ def cmd_polyphonic_notes(args: argparse.Namespace) -> int:
         frame_count = analysis.frame_count
         polyphony = [int(count) for count in analysis.polyphony()]
         rows: list[dict[str, object]] = [
-            {
-                "index": index,
-                "onset_sample": note.onset_sample,
-                "offset_sample": note.offset_sample,
-                "frame_start": note.frame_start,
-                "frame_end": note.frame_end,
-                "median_hz": note.median_hz,
-                "median_cents": note.median_cents,
-                "f0_stability": note.f0_stability,
-                "f0_hz": [float(value) for value in analysis.note_f0(index)],
-                "amplitude": [float(value) for value in note.amplitude],
-                "salience": [float(value) for value in analysis.note_salience(index)],
-            }
+            _omit_absent(
+                {
+                    "index": index,
+                    "onset_sample": note.onset_sample,
+                    "offset_sample": note.offset_sample,
+                    "frame_start": note.frame_start,
+                    "frame_end": note.frame_end,
+                    "median_hz": note.median_hz,
+                    "median_cents": note.median_cents,
+                    "f0_stability": note.f0_stability,
+                    "f0_hz": [float(value) for value in analysis.note_f0(index)],
+                    "amplitude": [float(value) for value in note.amplitude],
+                    "salience": [float(value) for value in analysis.note_salience(index)],
+                },
+                "median_hz",
+            )
             for index, note in enumerate(analysis.notes())
         ]
 
@@ -494,26 +498,29 @@ def cmd_vocal_notes(args: argparse.Namespace) -> int:
 
     rows: list[dict[str, object]] = []
     for index, note in enumerate(notes):
-        name, cents = _nearest_note(note.center_midi) if note.has_pitch else (None, None)
-        rows.append(
-            {
-                "index": index,
-                "id": note.id,
-                "source_start_sample": note.source_start_sample,
-                "source_end_sample": note.source_end_sample,
-                "start_sec": note.source_start_sample / sr,
-                "end_sec": note.source_end_sample / sr,
-                "analysis_frame_start": note.analysis_frame_start,
-                "analysis_frame_end": note.analysis_frame_end,
-                "has_pitch": note.has_pitch,
-                "median_hz": note.median_hz,
-                "center_midi": note.center_midi,
-                "f0_stability": note.f0_stability,
-                "note_name": name,
-                "cents": cents,
-                "amplitude": [float(value) for value in note.amplitude],
-            }
-        )
+        row: dict[str, object] = {
+            "index": index,
+            "id": note.id,
+            "source_start_sample": note.source_start_sample,
+            "source_end_sample": note.source_end_sample,
+            "start_sec": note.source_start_sample / sr,
+            "end_sec": note.source_end_sample / sr,
+            "analysis_frame_start": note.analysis_frame_start,
+            "analysis_frame_end": note.analysis_frame_end,
+            "has_pitch": note.has_pitch,
+        }
+        # An unpitched note has no pitch to report, so its pitch keys are omitted.
+        if note.has_pitch:
+            name, cents = _nearest_note(note.center_midi)
+            row.update(
+                median_hz=note.median_hz,
+                center_midi=note.center_midi,
+                f0_stability=note.f0_stability,
+                note_name=name,
+                cents=cents,
+            )
+        row["amplitude"] = [float(value) for value in note.amplitude]
+        rows.append(row)
 
     if args.json:
         print(_strict_json_dumps({"sample_rate": sr, "note_count": len(rows), "notes": rows}))

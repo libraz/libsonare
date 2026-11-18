@@ -314,11 +314,15 @@ int cmd_project_compile(const CliArgs& args) {
         .key("diagnostics")
         .begin_array();
     for (size_t i = 0; i < result.diagnostic_count; ++i) {
+      const SonareProjectDiagnostic& diagnostic = result.diagnostics[i];
       builder.begin_object()
-          .kv("code", static_cast<int>(result.diagnostics[i].code))
-          .kv("severity", static_cast<int>(result.diagnostics[i].severity))
-          .kv("target_id", static_cast<int>(result.diagnostics[i].target_id))
-          .kv("message", i < diagnostic_messages.size() ? diagnostic_messages[i] : "")
+          .kv("code", static_cast<int>(diagnostic.code))
+          .kv("severity", static_cast<int>(diagnostic.severity));
+      // Target id 0 means a project-wide diagnostic, which names no target.
+      if (diagnostic.target_id != 0) {
+        builder.kv("target_id", static_cast<int>(diagnostic.target_id));
+      }
+      builder.kv("message", i < diagnostic_messages.size() ? diagnostic_messages[i] : "")
           .end_object();
     }
     builder.end_array().kv("messages", messages);

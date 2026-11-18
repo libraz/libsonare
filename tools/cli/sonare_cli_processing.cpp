@@ -439,9 +439,10 @@ int cmd_polyphonic_notes(const CliArgs& args, const Audio& audio) {
           .kv("onset_sample", static_cast<size_t>(note.onset_sample))
           .kv("offset_sample", static_cast<size_t>(note.offset_sample))
           .kv("frame_start", note.frame_start)
-          .kv("frame_end", note.frame_end)
-          .kv("median_hz", note.median_hz)
-          .kv("median_cents", note.median_cents)
+          .kv("frame_end", note.frame_end);
+      // A note with no usable pitch carries a median of 0, which is not a frequency.
+      if (note.median_hz > 0.0f) json.kv("median_hz", note.median_hz);
+      json.kv("median_cents", note.median_cents)
           .kv("f0_stability", note.f0_stability)
           .key("f0_hz")
           .float_array(note.f0_hz.values)
@@ -457,9 +458,15 @@ int cmd_polyphonic_notes(const CliArgs& args, const Audio& audio) {
     printf("  Frames: %d @ %d Hz\n", frame_count, audio.sample_rate());
     for (size_t i = 0; i < analysis.notes.size(); ++i) {
       const auto& note = analysis.notes[i];
-      printf("  [%zu] samples %lld-%lld  frames %d-%d  %.2f Hz  stability %.3f\n", i,
+      printf("  [%zu] samples %lld-%lld  frames %d-%d  ", i,
              static_cast<long long>(note.onset_sample), static_cast<long long>(note.offset_sample),
-             note.frame_start, note.frame_end, note.median_hz, note.f0_stability);
+             note.frame_start, note.frame_end);
+      if (note.median_hz > 0.0f) {
+        printf("%.2f Hz", note.median_hz);
+      } else {
+        printf("-");
+      }
+      printf("  stability %.3f\n", note.f0_stability);
     }
   }
   return 0;
@@ -582,15 +589,15 @@ int cmd_vocal_notes(const CliArgs& args, const Audio& audio) {
           .kv("end_sec", static_cast<double>(note.source_end_sample) / sample_rate)
           .kv("analysis_frame_start", static_cast<size_t>(note.analysis_frame_start))
           .kv("analysis_frame_end", static_cast<size_t>(note.analysis_frame_end))
-          .kv("has_pitch", note.has_pitch != 0)
-          .kv("median_hz", note.median_hz)
-          .kv("center_midi", note.center_midi)
-          .kv("f0_stability", note.f0_stability);
+          .kv("has_pitch", note.has_pitch != 0);
+      // An unpitched note has no pitch to report, so its pitch keys are omitted.
       if (note.has_pitch != 0) {
         const NearestNote nearest = nearest_note(note.center_midi);
-        json.kv("note_name", nearest.name).kv("cents", nearest.cents);
-      } else {
-        json.key("note_name").null_value().key("cents").null_value();
+        json.kv("median_hz", note.median_hz)
+            .kv("center_midi", note.center_midi)
+            .kv("f0_stability", note.f0_stability)
+            .kv("note_name", nearest.name)
+            .kv("cents", nearest.cents);
       }
       std::vector<float> amplitude(note.amplitude, note.amplitude + note.amplitude_count);
       json.key("amplitude").float_array(amplitude).end_object();

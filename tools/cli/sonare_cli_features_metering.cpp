@@ -530,34 +530,39 @@ int cmd_acoustic(const CliArgs& args, const Audio& audio) {
 
   if (args.json_output) {
     JsonBuilder json;
-    json.begin_object()
-        .kv("rt60", p.rt60)
-        .kv("edt", p.edt)
-        .kv("c50", p.c50)
-        .kv("c80", p.c80)
-        .kv("d50", p.d50)
-        .kv("confidence", p.confidence)
+    json.begin_object().kv("rt60", p.rt60);
+    // EDT and the clarity measures need a direct-sound arrival, which only an
+    // impulse response has, so a blind estimate omits them.
+    if (!p.is_blind) {
+      json.kv("edt", p.edt).kv("c50", p.c50).kv("c80", p.c80).kv("d50", p.d50);
+    }
+    json.kv("confidence", p.confidence)
         .kv("is_blind", p.is_blind)
         .key("rt60_bands")
-        .float_array(p.rt60_bands)
-        .key("edt_bands")
-        .float_array(p.edt_bands)
-        .key("c50_bands")
-        .float_array(p.c50_bands)
-        .key("c80_bands")
-        .float_array(p.c80_bands)
-        .end_object()
-        .print();
+        .float_array(p.rt60_bands);
+    if (!p.is_blind) {
+      json.key("edt_bands")
+          .float_array(p.edt_bands)
+          .key("c50_bands")
+          .float_array(p.c50_bands)
+          .key("c80_bands")
+          .float_array(p.c80_bands);
+    }
+    json.end_object().print();
   } else {
     std::cout << "\n"
               << color::cyan << color::bold << basename(args.input_file) << color::reset << "\n";
     std::cout << "  " << color::blue << "> Acoustic Analysis ("
               << (p.is_blind ? "blind" : "impulse response") << "):" << color::reset << "\n";
     printf("    RT60:       %.3f s\n", p.rt60);
-    printf("    EDT:        %.3f s\n", p.edt);
-    printf("    C50:        %.2f dB\n", p.c50);
-    printf("    C80:        %.2f dB\n", p.c80);
-    printf("    D50:        %.2f\n", p.d50);
+    if (p.is_blind) {
+      std::cout << "    EDT:        -\n    C50:        -\n    C80:        -\n    D50:        -\n";
+    } else {
+      printf("    EDT:        %.3f s\n", p.edt);
+      printf("    C50:        %.2f dB\n", p.c50);
+      printf("    C80:        %.2f dB\n", p.c80);
+      printf("    D50:        %.3f\n", p.d50);
+    }
     printf("    Confidence: %.2f\n", p.confidence);
     if (!p.rt60_bands.empty()) {
       std::cout << "    RT60 bands: ";

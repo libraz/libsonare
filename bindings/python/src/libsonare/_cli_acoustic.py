@@ -17,6 +17,7 @@ from ._cli_common import (
     _fmt_optional,
     _legacy_exit_codes,
     _load_channels_or_downmix,
+    _omit_absent,
     _strict_json_dumps,
     _write_channel_output,
     _write_wav,
@@ -47,6 +48,10 @@ def _print_diagnostic_warnings(result: Any) -> None:
         print(f"warning: {diagnostic.code}: {diagnostic.message}", file=sys.stderr)
 
 
+def _float_list(values: Any) -> list[float] | None:
+    return None if values is None else [float(value) for value in values]
+
+
 def cmd_acoustic(args: argparse.Namespace) -> int:
     from . import analyze_impulse_response, detect_acoustic
 
@@ -75,19 +80,28 @@ def cmd_acoustic(args: argparse.Namespace) -> int:
     if args.json:
         print(
             _strict_json_dumps(
-                {
-                    "rt60": result.rt60,
-                    "edt": result.edt,
-                    "c50": result.c50,
-                    "c80": result.c80,
-                    "d50": result.d50,
-                    "confidence": result.confidence,
-                    "is_blind": result.is_blind,
-                    "rt60_bands": [float(value) for value in result.rt60_bands],
-                    "edt_bands": [float(value) for value in result.edt_bands or ()],
-                    "c50_bands": [float(value) for value in result.c50_bands or ()],
-                    "c80_bands": [float(value) for value in result.c80_bands or ()],
-                }
+                _omit_absent(
+                    {
+                        "rt60": result.rt60,
+                        "edt": result.edt,
+                        "c50": result.c50,
+                        "c80": result.c80,
+                        "d50": result.d50,
+                        "confidence": result.confidence,
+                        "is_blind": result.is_blind,
+                        "rt60_bands": [float(value) for value in result.rt60_bands],
+                        "edt_bands": _float_list(result.edt_bands),
+                        "c50_bands": _float_list(result.c50_bands),
+                        "c80_bands": _float_list(result.c80_bands),
+                    },
+                    "edt",
+                    "c50",
+                    "c80",
+                    "d50",
+                    "edt_bands",
+                    "c50_bands",
+                    "c80_bands",
+                )
             )
         )
     else:

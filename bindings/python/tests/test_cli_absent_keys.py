@@ -1,0 +1,179 @@
+"""JSON output omits a value nothing measured, rather than writing null or 0 for it."""
+
+from __future__ import annotations
+
+import argparse
+import json
+from types import SimpleNamespace
+from typing import Any
+
+import pytest
+
+import libsonare
+import libsonare._cli_acoustic as acoustic
+from libsonare import _cli_note_edit, _cli_project
+
+
+def _json_out(capsys: pytest.CaptureFixture[str]) -> Any:
+    return json.loads(capsys.readouterr().out)
+
+
+def _acoustic_result(*, blind: bool) -> SimpleNamespace:
+    measured = None if blind else 0.3
+    bands = None if blind else [0.3]
+    return SimpleNamespace(
+        rt60=0.4,
+        edt=measured,
+        c50=measured,
+        c80=measured,
+        d50=measured,
+        confidence=0.5,
+        is_blind=blind,
+        rt60_bands=[0.4],
+        edt_bands=bands,
+        c50_bands=bands,
+        c80_bands=bands,
+    )
+
+
+_IR_ONLY_KEYS = ("edt", "c50", "c80", "d50", "edt_bands", "c50_bands", "c80_bands")
+
+
+@pytest.mark.parametrize("blind", [True, False])
+def test_acoustic_omits_what_only_an_impulse_response_measures(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], blind: bool
+) -> None:
+    monkeypatch.setattr(acoustic, "_load_audio", lambda _path: ([0.1], 48000))
+    result = _acoustic_result(blind=blind)
+    monkeypatch.setattr(libsonare, "detect_acoustic", lambda _samples, **_kwargs: result)
+    monkeypatch.setattr(libsonare, "analyze_impulse_response", lambda _samples, **_kwargs: result)
+    args = argparse.Namespace(file="in.wav", json=True, ir=not blind, n_bands=1)
+
+    assert acoustic.cmd_acoustic(args) == 0
+    payload = _json_out(capsys)
+    for key in _IR_ONLY_KEYS:
+        assert (key in payload) is not blind, key
+    assert payload["rt60"] == pytest.approx(0.4)
+
+
+def _vocal_note(*, pitched: bool) -> SimpleNamespace:
+    return SimpleNamespace(
+        id=1,
+        source_start_sample=0,
+        source_end_sample=100,
+        analysis_frame_start=0,
+        analysis_frame_end=2,
+        has_pitch=pitched,
+        median_hz=440.0 if pitched else 0.0,
+        center_midi=69.0 if pitched else 0.0,
+        f0_stability=0.9 if pitched else 0.0,
+        amplitude=[0.5],
+    )
+
+
+_PITCH_KEYS = ("median_hz", "center_midi", "f0_stability", "note_name", "cents")
+
+
+def test_vocal_notes_omit_every_pitch_key_of_an_unpitched_note(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    notes = (_vocal_note(pitched=True), _vocal_note(pitched=False))
+
+    class _Session:
+        def notes(self) -> tuple[tuple[object, ...], tuple[object, ...]]:
+            return notes, ()
+
+        def close(self) -> None:
+            pass
+
+    monkeypatch.setattr(_cli_note_edit, "_load_audio", lambda _path: ([0.0] * 100, 22050))
+    monkeypatch.setattr(libsonare, "create_vocal_edit_session", lambda *_a, **_k: _Session())
+    from libsonare import cli
+
+    parser = cli._build_parser()
+
+    assert (
+        _cli_note_edit.cmd_vocal_notes(parser.parse_args(["vocal-notes", "t.wav", "--json"])) == 0
+    )
+    pitched, unpitched = _json_out(capsys)["notes"]
+    assert all(key in pitched for key in _PITCH_KEYS)
+    assert pitched["note_name"] == "A4"
+    assert not any(key in unpitched for key in _PITCH_KEYS)
+
+
+def test_polyphonic_notes_omit_the_median_of_a_note_with_no_usable_pitch(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def note(median_hz: float | None) -> SimpleNamespace:
+        return SimpleNamespace(
+            onset_sample=0,
+            offset_sample=10,
+            frame_start=0,
+            frame_end=1,
+            median_hz=median_hz,
+            median_cents=0.0,
+            f0_stability=1.0,
+            amplitude=[0.1],
+        )
+
+    class _Analysis:
+        frame_count = 1
+
+        @classmethod
+        def analyze(cls, _samples: object, _sr: int) -> _Analysis:
+            return cls()
+
+        def __enter__(self) -> _Analysis:
+            return self
+
+        def __exit__(self, *_exc: object) -> None:
+            return None
+
+        def polyphony(self) -> list[int]:
+            return [2]
+
+        def notes(self) -> list[SimpleNamespace]:
+            return [note(220.0), note(None)]
+
+        def note_f0(self, _index: int) -> list[float]:
+            return [0.0]
+
+        def note_salience(self, _index: int) -> list[float]:
+            return [0.0]
+
+    monkeypatch.setattr(_cli_note_edit, "_load_audio", lambda _path: ([0.0] * 10, 22050))
+    monkeypatch.setattr(libsonare, "PolyphonicAnalysis", _Analysis)
+
+    assert _cli_note_edit.cmd_polyphonic_notes(argparse.Namespace(file="t.wav", json=True)) == 0
+    measured, unmeasured = _json_out(capsys)["notes"]
+    assert measured["median_hz"] == pytest.approx(220.0)
+    assert "median_hz" not in unmeasured
+
+
+def test_project_compile_omits_the_target_of_a_project_wide_diagnostic(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    result = SimpleNamespace(
+        has_timeline=False,
+        diagnostic_count=2,
+        diagnostics=[
+            SimpleNamespace(code=1, severity=0, target_id=7, message="clip"),
+            SimpleNamespace(code=2, severity=0, target_id=None, message="project"),
+        ],
+        messages="clip\nproject",
+    )
+
+    class _Project:
+        def compile(self) -> SimpleNamespace:
+            return result
+
+        def close(self) -> None:
+            pass
+
+    monkeypatch.setattr(_cli_project, "_load_project", lambda _path: _Project())
+    args = argparse.Namespace(project_command="compile", input="p.json", json=True, output=None)
+
+    assert _cli_project.cmd_project(args) != 0
+    targeted, project_wide = _json_out(capsys)["diagnostics"]
+    assert targeted["target_id"] == 7
+    assert "target_id" not in project_wide

@@ -564,6 +564,18 @@ def _validate_case_payload(
         diagnostic_count = payload.get("diagnostic_count")
         if isinstance(diagnostics, list) and diagnostic_count != len(diagnostics):
             report.append(("fail", f"{label}: diagnostic_count does not equal diagnostics length"))
+        for index, diagnostic in enumerate(diagnostics if isinstance(diagnostics, list) else []):
+            # No target is an omitted key; a 0 would read as an id.
+            if isinstance(diagnostic, dict) and "target_id" in diagnostic:
+                target = diagnostic["target_id"]
+                if not _is_int(target) or target <= 0:
+                    report.append(
+                        (
+                            "fail",
+                            f"{label}.diagnostics[{index}].target_id: expected a positive id "
+                            f"or no key, got {target!r}",
+                        )
+                    )
         if case_id == "clean" and (
             not _is_bool(payload.get("has_timeline")) or diagnostic_count != 0
         ):

@@ -7059,12 +7059,25 @@
             "diagnostics": {
               "type": "array",
               "items": {
-                "keys": {
-                  "code": "integer",
-                  "severity": "integer",
-                  "target_id": "integer",
-                  "message": "string"
-                }
+                "one_of": [
+                  {
+                    "type": "object",
+                    "keys": {
+                      "code": "integer",
+                      "severity": "integer",
+                      "target_id": "integer",
+                      "message": "string"
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "keys": {
+                      "code": "integer",
+                      "severity": "integer",
+                      "message": "string"
+                    }
+                  }
+                ]
               }
             },
             "messages": "string"
@@ -11008,25 +11021,9 @@
         "success": {
           "keys": {
             "rt60": "number|null",
-            "edt": "number|null",
-            "c50": "number|null",
-            "c80": "number|null",
-            "d50": "number|null",
             "confidence": "number",
             "is_blind": "boolean",
             "rt60_bands": {
-              "type": "array",
-              "items": "number|null"
-            },
-            "edt_bands": {
-              "type": "array",
-              "items": "number|null"
-            },
-            "c50_bands": {
-              "type": "array",
-              "items": "number|null"
-            },
-            "c80_bands": {
               "type": "array",
               "items": "number|null"
             }
@@ -11083,28 +11080,57 @@
             "notes": {
               "type": "array",
               "items": {
-                "keys": {
-                  "index": "integer",
-                  "onset_sample": "integer",
-                  "offset_sample": "integer",
-                  "frame_start": "integer",
-                  "frame_end": "integer",
-                  "median_hz": "number",
-                  "median_cents": "number",
-                  "f0_stability": "number",
-                  "f0_hz": {
-                    "type": "array",
-                    "items": "number"
+                "one_of": [
+                  {
+                    "type": "object",
+                    "keys": {
+                      "index": "integer",
+                      "onset_sample": "integer",
+                      "offset_sample": "integer",
+                      "frame_start": "integer",
+                      "frame_end": "integer",
+                      "median_hz": "number",
+                      "median_cents": "number",
+                      "f0_stability": "number",
+                      "f0_hz": {
+                        "type": "array",
+                        "items": "number"
+                      },
+                      "amplitude": {
+                        "type": "array",
+                        "items": "number"
+                      },
+                      "salience": {
+                        "type": "array",
+                        "items": "number"
+                      }
+                    }
                   },
-                  "amplitude": {
-                    "type": "array",
-                    "items": "number"
-                  },
-                  "salience": {
-                    "type": "array",
-                    "items": "number"
+                  {
+                    "type": "object",
+                    "keys": {
+                      "index": "integer",
+                      "onset_sample": "integer",
+                      "offset_sample": "integer",
+                      "frame_start": "integer",
+                      "frame_end": "integer",
+                      "median_cents": "number",
+                      "f0_stability": "number",
+                      "f0_hz": {
+                        "type": "array",
+                        "items": "number"
+                      },
+                      "amplitude": {
+                        "type": "array",
+                        "items": "number"
+                      },
+                      "salience": {
+                        "type": "array",
+                        "items": "number"
+                      }
+                    }
                   }
-                }
+                ]
               }
             }
           }
@@ -11379,26 +11405,49 @@
             "notes": {
               "type": "array",
               "items": {
-                "keys": {
-                  "index": "integer",
-                  "id": "integer",
-                  "source_start_sample": "integer",
-                  "source_end_sample": "integer",
-                  "start_sec": "number",
-                  "end_sec": "number",
-                  "analysis_frame_start": "integer",
-                  "analysis_frame_end": "integer",
-                  "has_pitch": "boolean",
-                  "median_hz": "number|null",
-                  "center_midi": "number|null",
-                  "f0_stability": "number|null",
-                  "note_name": "string|null",
-                  "cents": "number|null",
-                  "amplitude": {
-                    "type": "array",
-                    "items": "number|null"
+                "one_of": [
+                  {
+                    "type": "object",
+                    "keys": {
+                      "index": "integer",
+                      "id": "integer",
+                      "source_start_sample": "integer",
+                      "source_end_sample": "integer",
+                      "start_sec": "number",
+                      "end_sec": "number",
+                      "analysis_frame_start": "integer",
+                      "analysis_frame_end": "integer",
+                      "has_pitch": "boolean",
+                      "median_hz": "number|null",
+                      "center_midi": "number|null",
+                      "f0_stability": "number|null",
+                      "note_name": "string",
+                      "cents": "number",
+                      "amplitude": {
+                        "type": "array",
+                        "items": "number|null"
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "keys": {
+                      "index": "integer",
+                      "id": "integer",
+                      "source_start_sample": "integer",
+                      "source_end_sample": "integer",
+                      "start_sec": "number",
+                      "end_sec": "number",
+                      "analysis_frame_start": "integer",
+                      "analysis_frame_end": "integer",
+                      "has_pitch": "boolean",
+                      "amplitude": {
+                        "type": "array",
+                        "items": "number|null"
+                      }
+                    }
                   }
-                }
+                ]
               }
             }
           }
