@@ -1,5 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 #include <string>
+#include <utility>
 
 #include "playback/config.h"
 #include "playback/renderer.h"
@@ -163,6 +164,30 @@ TEST_CASE("bass management needs a destination for the low band", "[playback][co
                      "speakers": {"Ls": {"size": "small"}},
                      "bass_management": {"enabled": true, "subwoofer": false}}})")
             .empty());
+}
+
+TEST_CASE("room presets are written in lowerCamel and the snake_case form is still read",
+          "[playback][config]") {
+  const std::pair<const char*, RoomPreset> rows[] = {
+      {"livingRoom", RoomPreset::LivingRoom},
+      {"homeTheater", RoomPreset::HomeTheater},
+      {"screeningRoom", RoomPreset::ScreeningRoom},
+      {"living_room", RoomPreset::LivingRoom},
+      {"home_theater", RoomPreset::HomeTheater},
+      {"screening_room", RoomPreset::ScreeningRoom},
+      {"none", RoomPreset::None},
+  };
+  for (const auto& [token, preset] : rows) {
+    CAPTURE(token);
+    const RendererConfig config =
+        parse_renderer_config(std::string(R"({"room": {"preset": ")") + token + R"("}})");
+    CHECK(config.prepare.room_preset == preset);
+    const std::string written = serialize_renderer_config(config);
+    CHECK(mentions(written, std::string("\"preset\":\"") + room_preset_name(preset) + "\""));
+    CHECK_FALSE(mentions(written, "_room"));
+    CHECK_FALSE(mentions(written, "home_theater"));
+  }
+  CHECK(mentions(refusal(R"({"room": {"preset": "cathedral"}})"), "livingRoom"));
 }
 
 TEST_CASE("a complete document round-trips through serialize and parse", "[playback][config]") {

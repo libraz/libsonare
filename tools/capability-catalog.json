@@ -1156,9 +1156,9 @@
     ],
     "playbackRoom": [
       "none",
-      "living_room",
-      "home_theater",
-      "screening_room"
+      "livingRoom",
+      "homeTheater",
+      "screeningRoom"
     ],
     "synth": [
       "sine",

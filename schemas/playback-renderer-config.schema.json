@@ -338,11 +338,11 @@
         "preset": {
           "enum": [
             "none",
-            "living_room",
-            "home_theater",
-            "screening_room"
+            "livingRoom",
+            "homeTheater",
+            "screeningRoom"
           ],
-          "default": "living_room",
+          "default": "livingRoom",
           "description": "Prepare key. Headphones only."
         },
         "mix_db": {

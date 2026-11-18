@@ -1,5 +1,5 @@
 // Per-block cost of the playback renderer on its heaviest target: 7.1 input
-// under input.layout "auto" rendered to headphones with the living_room room,
+// under input.layout "auto" rendered to headphones with the livingRoom room,
 // head yaw changing every block. A second case switches stereo <-> 7.1 every
 // second with upmix on, so the drain blocks (the old front end still running,
 // STFT included) are timed too.
@@ -44,7 +44,7 @@ constexpr float kYawDepthDeg = 60.0f;
 constexpr float kYawRateHz = 0.25f;
 
 constexpr char kConfig[] = R"({"input":{"layout":"auto"},"target":{"kind":"headphones"},)"
-                           R"("room":{"preset":"living_room"},"upmix":{"enabled":true}})";
+                           R"("room":{"preset":"livingRoom"},"upmix":{"enabled":true}})";
 
 volatile float g_sink = 0.0f;
 
