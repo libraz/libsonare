@@ -8,7 +8,7 @@
   "cli-native": 2,
   "cli-python": 2,
   "node": 22,
-  "python": 15,
+  "python": 16,
   "wasm": 17
  },
  "domain_paths": {
@@ -1322,6 +1322,21 @@
    "name": "SonareWindowType.SONARE_WINDOW_TYPE_HANN",
    "owner": "SonareWindowType",
    "surface": "c"
+  },
+  {
+   "domain": "analysis",
+   "domain_path": "inherited",
+   "entries": [],
+   "file": "bindings/python/src/libsonare/_analysis_bpm.py",
+   "has_doc": true,
+   "index": 1,
+   "kind": "field",
+   "line": 1,
+   "member": "integrated_lufs",
+   "name": "BpmResult.integrated_lufs",
+   "owner": "BpmResult",
+   "surface": "python",
+   "type": "float"
   }
  ]
 }

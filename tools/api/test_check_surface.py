@@ -995,6 +995,52 @@ class UnitInName(CheckerCase):
         self.assertEqual(self.flagged(*recs), ["c option f(envelope_offset)", "c option f(offset)"])
 
 
+class WrongUnit(CheckerCase):
+    def test_a_loudness_quantity_takes_its_own_unit(self):
+        cases = {
+            ("node", "field", "A.truePeakDbtp", "number"): False,
+            ("node", "field", "A.truePeakDbtpL", "number"): False,
+            ("node", "field", "A.truePeakDbL", "number"): True,
+            ("python", "field", "A.true_peak_ceiling_db", "float | None"): True,
+            ("python", "field", "A.true_peak_oversample", "int"): False,
+            ("node", "field", "A.truePeak", "boolean | undefined"): False,
+            ("c", "option", "f(measure_true_peak)", "int"): False,
+            ("node", "method", "Audio.truePeakDb", None): True,
+            ("python", "function", "ebur128_loudness_range", None): True,
+            ("c", "option", "f(out_loudness_range_lu)", "float*"): False,
+            ("python", "field", "A.lra_lu", "float"): True,
+            ("node", "field", "A.integratedLufs", "number"): False,
+            ("node", "field", "A.shortTermLufsStd", "number"): False,
+            ("python", "field", "A.momentary_db", "float"): True,
+            ("c", "option", "f(out_short_term)", "float**"): True,
+            ("c", "option", "f(out_short_term_length)", "size_t*"): False,
+        }
+        recs = []
+        for surface, kind, name, ty in cases:
+            owner, _, member = name.rpartition(".") if "." in name else name.partition("(")
+            member = member.rstrip(")")
+            kw = {} if ty is None else {"type": ty}
+            if ty and ty.startswith("boolean"):
+                kw["boolean"] = True
+            if kind in ("function", "method"):
+                kw["sigs"] = []
+            recs.append(
+                _rec(
+                    surface,
+                    kind,
+                    name,
+                    owner=owner,
+                    member=member if kind != "function" else "",
+                    **kw,
+                )
+            )
+        self.add(*recs)
+        _, lines = self.run_check("--check", "unit-in-name:wrong-unit")
+        bad = sorted(x.strip().split(":")[0] for x in lines if "measured in" in x)
+        want = sorted(f"{s} {k} {n}" for (s, k, n, _), flag in cases.items() if flag)
+        self.assertEqual(bad, want)
+
+
 class CEnumFields(CheckerCase):
     def enum(self, name, *values):
         recs = [_rec("c", "type", name, c_kind="enum")]

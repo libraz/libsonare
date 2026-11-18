@@ -894,6 +894,57 @@ def chk_unit_in_name(ctx):
     return cands, bad
 
 
+# A loudness quantity names the one unit it is measured in.
+_LOUDNESS_UNITS = (
+    ("true_peak", "dbtp"),
+    ("loudness_range", "lu"),
+    ("lra", "lu"),
+    ("integrated", "lufs"),
+    ("momentary", "lufs"),
+    ("short_term", "lufs"),
+)
+# A leading verb makes the name a switch that turns the measurement on, not the level itself.
+_SWITCH_VERBS = {"measure", "enable", "use", "compute", "with"}
+
+
+def _wrong_unit(name: str) -> str | None:
+    words = snake(name).split("_")
+    if words[0] in _SWITCH_VERBS:
+        return None
+    for quantity, unit in _LOUDNESS_UNITS:
+        q = quantity.split("_")
+        for i in range(len(words) - len(q) + 1):
+            if words[i : i + len(q)] != q:
+                continue
+            if quantity == "lra":
+                return "spell lra as loudness_range, which is measured in lu"
+            rest = words[i + len(q) :]
+            given = next((w for w in rest if w in _QUANTITY_WORDS), None)
+            if given == unit:
+                return None
+            if given is None and rest not in ([], ["l"], ["r"]):
+                return None
+            label = quantity.replace("_", " ")
+            return f"{label} is measured in {unit}; name it ..._{unit}" + (
+                f", not ..._{given}" if given else ""
+            )
+    return None
+
+
+def chk_wrong_unit(ctx):
+    cands, bad = 0, []
+    for r in recs(ctx, ALL, ("option", "field", "flag", "function", "method")):
+        if ctx.mirror(r) or (r["kind"] == "flag" and r.get("boolean")) or not _numeric_type(r):
+            continue
+        name = bare(r)
+        if not any(q in snake(name) for q, _ in _LOUDNESS_UNITS):
+            continue
+        cands += 1
+        if (msg := _wrong_unit(name)) is not None:
+            bad.append((r, msg))
+    return cands, bad
+
+
 _SR_BAD = {"sr", "sampleRateHz", "rate", "fs", "sample_rate_hz"}
 
 
@@ -1696,6 +1747,7 @@ class Check:
 CHECKS: tuple[Check, ...] = (
     Check("seconds-suffix", ALL, chk_seconds_suffix),
     Check("unit-in-name", ALL, chk_unit_in_name),
+    Check("unit-in-name:wrong-unit", ALL, chk_wrong_unit),
     Check("sample-rate-name", LANG, chk_sample_rate_name),
     Check("sample-rate-name:family", ("python",), chk_sample_rate_family),
     Check("sample-rate-required", BINDINGS, chk_sample_rate_required),
