@@ -194,6 +194,15 @@ export class RealtimeVoiceChanger {
     this.changer.setConfig(nativeVoiceConfig('RealtimeVoiceChanger.setConfig', config));
   }
 
+  /**
+   * The applied configuration as a flat record, in the form {@link setConfig} and the
+   * constructor accept, so `other.setConfig(changer.config())` reproduces it. A retune
+   * grain left at 0 reads back as the grain the changer resolved.
+   */
+  config(): RealtimeVoiceChangerConfig {
+    return this.changer.config();
+  }
+
   /** Current configuration as a JSON preset document. */
   configJson(): string {
     return this.changer.configJson();

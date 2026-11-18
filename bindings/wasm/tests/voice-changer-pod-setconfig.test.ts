@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
   init,
@@ -417,6 +418,70 @@ describe('RealtimeVoiceChanger flat config setConfig', () => {
       } finally {
         changer.destroy();
       }
+    }
+  });
+});
+
+// The same key list the other package's suite reads: the record config() returns
+// is one shape across the two packages, not a table per surface.
+const sharedConfigKeys = (
+  JSON.parse(
+    readFileSync(
+      new URL(
+        '../../../tests/conformance/realtime_voice_changer_config_keys.json',
+        import.meta.url,
+      ),
+      'utf8',
+    ),
+  ) as { keys: string[] }
+).keys;
+
+describe('RealtimeVoiceChanger config read', () => {
+  beforeAll(async () => {
+    await init();
+  });
+
+  it('reads back each preset as its preset record with the grain it resolved', () => {
+    for (const name of realtimeVoiceChangerPresetNames()) {
+      const changer = make(name);
+      try {
+        // A preset leaves the retune grain to the changer, which reports the grain it resolved.
+        const { retuneGrainSizeSamples, ...rest } = changer.config();
+        const { retuneGrainSizeSamples: presetGrain, ...presetRest } =
+          realtimeVoiceChangerPresetConfig(name);
+        expect(rest).toEqual(presetRest);
+        expect(presetGrain).toBe(0);
+        expect(retuneGrainSizeSamples).toBeGreaterThan(0);
+      } finally {
+        changer.destroy();
+      }
+    }
+  });
+
+  it('reads back the key set the other package reads back', () => {
+    const changer = make('brightIdol');
+    try {
+      expect(Object.keys(changer.config()).sort()).toEqual(sharedConfigKeys);
+    } finally {
+      changer.destroy();
+    }
+  });
+
+  it('builds a changer from the record that reproduces the source', () => {
+    const source = make('brightIdol');
+    source.setConfig({ ...source.config(), retunePitchSemitones: 5, wetMix: 0.25 });
+    const viaConstructor = make(source.config());
+    const viaSetter = make('brightIdol');
+    try {
+      expect(source.config().retunePitchSemitones).toBe(5);
+      expect(viaConstructor.configJson()).toBe(source.configJson());
+      viaSetter.setConfig(source.config());
+      expect(viaSetter.configJson()).toBe(source.configJson());
+      expect(viaSetter.config()).toEqual(source.config());
+    } finally {
+      source.destroy();
+      viaConstructor.destroy();
+      viaSetter.destroy();
     }
   });
 });
