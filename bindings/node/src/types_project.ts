@@ -792,8 +792,6 @@ export interface ProjectAutomationPoint {
   /** Parameter value at the breakpoint. */
   value: number;
   /** Curve to the next breakpoint (default `'linear'`). */
-  curve?: ProjectAutomationCurve;
-  /** Alias of {@link ProjectAutomationPoint.curve}; `curve` wins when both are set. */
   curveToNext?: ProjectAutomationCurve;
 }
 

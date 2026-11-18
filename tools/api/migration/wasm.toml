@@ -27523,6 +27523,13 @@ test = "bindings/wasm/tests/playback.test.ts::requires sampleRate, takes an omit
 
 [[entry]]
 kind = "field"
+old = "ProjectAutomationPoint.curve"
+removed = "set curveToNext, the one name for the curve to the next breakpoint"
+domain = "project"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "field"
 old = "ProjectBounceOptions.numChannels"
 changed = "an omitted width follows the scene master's layout (2 with no master) instead of always 2; ProjectBounceResult.numChannels reports the width used"
 domain = "project"

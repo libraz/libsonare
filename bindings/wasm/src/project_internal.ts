@@ -1032,8 +1032,7 @@ export function projectTempoCandidateFromNative(
 }
 
 /** One automation breakpoint as embind reads it: the curve as its ordinal. */
-export type NativeAutomationPoint = Omit<ProjectAutomationPoint, 'curve' | 'curveToNext'> & {
-  curve: number;
+export type NativeAutomationPoint = Omit<ProjectAutomationPoint, 'curveToNext'> & {
   curveToNext: number;
 };
 
@@ -1055,19 +1054,26 @@ export function projectAutomationPointFromNative(native: {
   };
 }
 
-/** Resolve a breakpoint's curve token, folding the `curveToNext` alias onto `curve`. */
+const AUTOMATION_POINT_KEYS: ReadonlySet<string> = new Set(['ppq', 'value', 'curveToNext']);
+
+/** Resolve a breakpoint's curve token; a key outside the point's fields is refused by name. */
 export function projectAutomationPointValue(
   point: ProjectAutomationPoint,
   fnName: string,
 ): NativeAutomationPoint {
-  const curve = tokenCode(
+  for (const key of Object.keys(point)) {
+    if (!AUTOMATION_POINT_KEYS.has(key)) {
+      throw new TypeError(`${fnName}: unknown option '${key}' in 'points'`);
+    }
+  }
+  const curveToNext = tokenCode(
     fnName,
-    'curve',
-    point.curve ?? point.curveToNext,
+    'curveToNext',
+    point.curveToNext,
     AUTOMATION_CURVE_VALUES,
     'linear',
   );
-  return { ...point, curve, curveToNext: curve };
+  return { ...point, curveToNext };
 }
 
 /** Resolve an automation lane's tokens to the ordinals embind reads. */

@@ -495,7 +495,7 @@ describe('Project edit ops (new bindings)', () => {
     const targetParamId = project.addAutomationLane(track, {
       targetParamId: 1,
       points: [
-        { ppq: 0, value: 0, curve: 'linear' },
+        { ppq: 0, value: 0, curveToNext: 'linear' },
         { ppq: 4, value: 1, curveToNext: 'exponential' },
       ],
     });
@@ -580,28 +580,28 @@ describe('Project edit ops (new bindings)', () => {
     project.destroy();
   });
 
-  it('resolves a curve token and its curveToNext alias to one serialized ordinal', () => {
-    // A `curveToNext`-only point must not fall back to Linear at the boundary.
-    const spellings: ProjectAutomationPoint[] = [
-      { ppq: 0, value: 1, curve: 'sCurve' },
-      { ppq: 0, value: 1, curveToNext: 'sCurve' },
-    ];
-    const serialized = spellings.map((point) => {
-      const project = new Project();
-      try {
-        const track = project.addTrack({ kind: 'audio' });
-        project.addAutomationLane(track, { targetParamId: 1, points: [point] });
-        return project.toJson();
-      } finally {
-        project.destroy();
-      }
-    });
-    const lane = JSON.parse(serialized[0]) as {
-      tracks: Array<{ automation_lanes: Array<{ points: Array<{ curve_to_next: number }> }> }>;
-    };
-    expect(lane.tracks[0].automation_lanes[0].points[0].curve_to_next).toBe(3);
-    for (const json of serialized) {
-      expect(json).toBe(serialized[0]);
+  it('serializes a curveToNext token as its ordinal and refuses the curve key by name', () => {
+    const project = new Project();
+    try {
+      const track = project.addTrack({ kind: 'audio' });
+      project.addAutomationLane(track, {
+        targetParamId: 1,
+        points: [{ ppq: 0, value: 1, curveToNext: 'sCurve' }],
+      });
+      const lane = JSON.parse(project.toJson()) as {
+        tracks: Array<{ automation_lanes: Array<{ points: Array<{ curve_to_next: number }> }> }>;
+      };
+      expect(lane.tracks[0].automation_lanes[0].points[0].curve_to_next).toBe(3);
+      const before = project.toJson();
+      expect(() =>
+        project.addAutomationLane(track, {
+          targetParamId: 2,
+          points: [{ ppq: 0, value: 1, curve: 'sCurve' } as unknown as ProjectAutomationPoint],
+        }),
+      ).toThrow(/unknown option 'curve' in 'points'/);
+      expect(project.toJson()).toBe(before);
+    } finally {
+      project.destroy();
     }
   });
 
@@ -612,7 +612,7 @@ describe('Project edit ops (new bindings)', () => {
       const lane = (curve: unknown) =>
         project.addAutomationLane(track, {
           targetParamId: 1,
-          points: [{ ppq: 0, value: 1, curve: curve as never }],
+          points: [{ ppq: 0, value: 1, curveToNext: curve as never }],
         });
       expect(() => lane(3)).toThrow(TypeError);
       expect(() => lane('scurve')).toThrow(RangeError);

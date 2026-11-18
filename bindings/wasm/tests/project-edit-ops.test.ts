@@ -684,8 +684,8 @@ describe('Sonare WASM Project edit ops', () => {
       const targetParamId = project.addAutomationLane(trackId, {
         targetParamId: 1,
         points: [
-          { ppq: 0, value: 0.0, curve: 'linear' },
-          { ppq: 4, value: 1.0, curve: 'exponential' },
+          { ppq: 0, value: 0.0, curveToNext: 'linear' },
+          { ppq: 4, value: 1.0, curveToNext: 'exponential' },
         ],
       });
       expect(targetParamId).toBe(1);
@@ -694,7 +694,7 @@ describe('Sonare WASM Project edit ops', () => {
           targetParamId: 1,
           points: [
             { ppq: 0, value: 0.5 },
-            { ppq: 2, value: 0.25, curve: 'hold' },
+            { ppq: 2, value: 0.25, curveToNext: 'hold' },
           ],
         }),
       ).not.toThrow();
@@ -719,7 +719,7 @@ describe('Sonare WASM Project edit ops', () => {
         const trackId = project.addTrack({ kind: 'audio' });
         project.addAutomationLane(trackId, {
           targetParamId: 1,
-          points: [{ ppq: 0, value: 1, curve: curve as ProjectAutomationCurve }],
+          points: [{ ppq: 0, value: 1, curveToNext: curve as ProjectAutomationCurve }],
         });
         const doc = JSON.parse(project.toJson()) as {
           tracks: Array<{ automation_lanes: Array<{ points: Array<{ curve_to_next: number }> }> }>;
@@ -740,27 +740,21 @@ describe('Sonare WASM Project edit ops', () => {
       expect(() => laneWith(value)).toThrow(RangeError);
     }
 
-    const spellings: ProjectAutomationPoint[] = [
-      { ppq: 0, value: 1, curve: 'sCurve' },
-      { ppq: 0, value: 1, curveToNext: 'sCurve' },
-    ];
-    const serialized = spellings.map((point) => {
-      const project = new Project();
-      try {
-        project.setSampleRate(48000);
-        const trackId = project.addTrack({ kind: 'audio' });
-        project.addAutomationLane(trackId, { targetParamId: 1, points: [point] });
-        return project.toJson();
-      } finally {
-        project.destroy();
-      }
-    });
-    const lane = JSON.parse(serialized[0]) as {
-      tracks: Array<{ automation_lanes: Array<{ points: Array<{ curve_to_next: number }> }> }>;
-    };
-    expect(lane.tracks[0].automation_lanes[0].points[0].curve_to_next).toBe(3);
-    for (const json of serialized) {
-      expect(json).toBe(serialized[0]);
+    // The point's field is `curveToNext`; the `curve` key is refused by name.
+    const project = new Project();
+    try {
+      project.setSampleRate(48000);
+      const trackId = project.addTrack({ kind: 'audio' });
+      const before = project.toJson();
+      expect(() =>
+        project.addAutomationLane(trackId, {
+          targetParamId: 1,
+          points: [{ ppq: 0, value: 1, curve: 'sCurve' } as unknown as ProjectAutomationPoint],
+        }),
+      ).toThrow(/unknown option 'curve' in 'points'/);
+      expect(project.toJson()).toBe(before);
+    } finally {
+      project.destroy();
     }
   });
 
@@ -918,8 +912,8 @@ describe('Sonare WASM Project edit ops', () => {
         project.addAutomationLane(trackId, {
           targetParamId: 1,
           points: [
-            { ppq: 0, value: 0.0, curve: 'sCurve' },
-            { ppq: 4, value: 1.0, curve: 'hold' },
+            { ppq: 0, value: 0.0, curveToNext: 'sCurve' },
+            { ppq: 4, value: 1.0, curveToNext: 'hold' },
           ],
         }),
       ).not.toThrow();
@@ -928,7 +922,7 @@ describe('Sonare WASM Project edit ops', () => {
         project.addAutomationLane(trackId, {
           targetParamId: 1,
           // biome-ignore lint/suspicious/noExplicitAny: exercising an invalid spelling on purpose.
-          points: [{ ppq: 0, value: 0.0, curve: 's_curve' as any }],
+          points: [{ ppq: 0, value: 0.0, curveToNext: 's_curve' as any }],
         }),
       ).toThrow();
     } finally {

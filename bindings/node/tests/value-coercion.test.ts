@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 
 import { describe, expect, it } from 'vitest';
 
-import type { ProjectAutomationCurve } from '../src/types_project.js';
+import type { ProjectAutomationCurve, ProjectAutomationPoint } from '../src/types_project.js';
 import {
   AUTOMATION_CURVE_VALUES,
   meterTapValue,
@@ -70,9 +70,9 @@ describe('enum ordinal coercion', () => {
     );
     const curve = (value: unknown) =>
       projectAutomationPointValue(
-        { ppq: 0, value: 1, curve: value as ProjectAutomationCurve },
+        { ppq: 0, value: 1, curveToNext: value as ProjectAutomationCurve },
         'addAutomationLane',
-      ).curve;
+      ).curveToNext;
     for (const { value, ordinal } of curveCorpus.accepted) {
       expect(curve(value)).toBe(ordinal);
     }
@@ -85,33 +85,25 @@ describe('enum ordinal coercion', () => {
     }
   });
 
-  it('folds the curveToNext alias onto curve, with curve winning', () => {
-    // A breakpoint that carries only `curveToNext` must not fall back to Linear:
-    // the type documents it as an alias and the Python marshaller reads it too.
+  it('resolves curveToNext and refuses the curve key by name', () => {
     expect(
       projectAutomationPointValue(
         { ppq: 1, value: 0.5, curveToNext: 'sCurve' },
         'addAutomationLane',
       ),
-    ).toEqual({
-      ppq: 1,
-      value: 0.5,
-      curve: 3,
-      curveToNext: 3,
-    });
-    expect(
-      projectAutomationPointValue(
-        { ppq: 1, value: 0.5, curve: 'hold', curveToNext: 'sCurve' },
-        'addAutomationLane',
-      ),
-    ).toEqual({ ppq: 1, value: 0.5, curve: 2, curveToNext: 2 });
+    ).toEqual({ ppq: 1, value: 0.5, curveToNext: 3 });
     // An omitted curve is Linear, matching the documented default.
     expect(projectAutomationPointValue({ ppq: 1, value: 0.5 }, 'addAutomationLane')).toEqual({
       ppq: 1,
       value: 0.5,
-      curve: 0,
       curveToNext: 0,
     });
+    expect(() =>
+      projectAutomationPointValue(
+        { ppq: 1, value: 0.5, curve: 'hold' } as unknown as ProjectAutomationPoint,
+        'addAutomationLane',
+      ),
+    ).toThrow(/unknown option 'curve' in 'points'/);
   });
 });
 
