@@ -6,9 +6,12 @@ import argparse
 import json
 import sys
 from collections.abc import Iterable
-from typing import Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 import numpy as np
+
+if TYPE_CHECKING:
+    from .types import VoicePresetId
 
 from ._cli_common import (
     EXIT_INVALID_PARAMETER,
@@ -569,13 +572,14 @@ def cmd_voice_change(args: argparse.Namespace) -> int:
             preset = (
                 json.loads(realtime_voice_changer_preset_json(builtin)) if assignments else builtin
             )
-        preset = _apply_voice_sets(preset, assignments)
+        # A string left here is the catalog-resolved library id; anything else is the document.
+        config = cast("VoicePresetId | dict[str, Any]", _apply_voice_sets(preset, assignments))
         # Probe the same prepared C-ABI configuration used by the one-shot
         # realtime entry point.  Latency depends on the resolved config and
         # sample rate, so it must not be a hard-coded preset constant.
-        with RealtimeVoiceChanger(sr, preset, num_channels=1) as changer:
+        with RealtimeVoiceChanger(sr, num_channels=1, config=config) as changer:
             latency_samples = max(int(changer.latency_samples), 0)
-        result = _audio_array(voice_change_realtime(samples, sample_rate=sr, preset=preset))
+        result = _audio_array(voice_change_realtime(samples, sample_rate=sr, config=config))
         mode_metadata: dict[str, object] = {}
         if preset_id and not preset_json and not preset_pack:
             mode_metadata["preset"] = preset_id
