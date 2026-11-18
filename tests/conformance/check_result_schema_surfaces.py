@@ -362,7 +362,9 @@ def _snake_case(segment: str) -> str:
     return re.sub(r"(?<=[a-z0-9])([A-Z])", r"_\1", segment).lower()
 
 
-def scan_python(paths: list[str], text: str, root: str) -> tuple[list, list, int]:
+def scan_python(
+    paths: list[str], text: str, root: str, imported: tuple[str, ...] = ()
+) -> tuple[list, list, int]:
     """scan() for a Python module of result classes, with the same three return meanings.
 
     Anchored on the root class like the TypeScript walk. A segment is followed
@@ -370,9 +372,17 @@ def scan_python(paths: list[str], text: str, root: str) -> tuple[list, list, int
     `Element | None` both reach `Element`. A dataclass's attribute is the
     snake_case spelling of the published camelCase segment, so the segment is
     converted before it is looked up there; a TypedDict carries the wire key
-    itself and is matched verbatim.
+    itself and is matched verbatim. @p imported holds the texts of the modules
+    @p text imports from; their classes are reachable, and the module's own
+    class wins a name both declare.
     """
-    classes, dataclasses = _class_fields(ast.parse(text))
+    classes: dict[str, dict[str, set[str]]] = {}
+    dataclasses: set[str] = set()
+    for source in (*imported, text):
+        module_classes, module_dataclasses = _class_fields(ast.parse(source))
+        classes.update(module_classes)
+        dataclasses -= module_classes.keys()
+        dataclasses |= module_dataclasses
 
     def field(body: str, segment: str) -> str:
         return _snake_case(segment) if body in dataclasses else segment
@@ -439,8 +449,32 @@ def scan_surface(paths: list[str], path: Path, root: str) -> tuple[list, list, i
     if path.suffix == ".json":
         return scan_json_schema(paths, path.read_text(), root)
     if path.suffix in (".py", ".pyi"):
-        return scan_python(paths, path.read_text(), root)
+        return scan_python(paths, path.read_text(), root, python_imported_modules(path))
     return scan(paths, with_imported_declarations(path), root)
+
+
+def python_imported_modules(path: Path) -> tuple[str, ...]:
+    """The texts of the sibling modules `path` imports names from, one hop deep.
+
+    The Python analogue of with_imported_declarations: a record shared between
+    result families is declared once and imported where the root lives, so a
+    `from ._x import Name` is followed to `_x` (a stub prefers `_x.pyi`).
+    """
+    suffixes = (path.suffix, ".py" if path.suffix == ".pyi" else ".pyi")
+    texts: list[str] = []
+    seen: set[Path] = set()
+    for node in ast.walk(ast.parse(path.read_text())):
+        if not isinstance(node, ast.ImportFrom) or node.level != 1 or not node.module:
+            continue
+        stem = node.module.replace(".", "/")
+        module = next(
+            (m for m in (path.parent / f"{stem}{suffix}" for suffix in suffixes) if m.is_file()),
+            None,
+        )
+        if module is not None and module not in seen:
+            seen.add(module)
+            texts.append(module.read_text())
+    return tuple(texts)
 
 
 _RELATIVE_MODULE = re.compile(

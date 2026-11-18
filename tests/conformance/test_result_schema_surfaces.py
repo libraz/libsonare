@@ -390,5 +390,42 @@ class DataclassSurface(unittest.TestCase):
         self.assertEqual(missing, ["[].depends_on"])
 
 
+class PythonImportedModule(unittest.TestCase):
+    """A record shared between families lives in its own module and is imported
+    where the root is declared; reading the root's file alone leaves every path
+    beneath it unreached."""
+
+    def surface(self, root: Path, imports: str) -> Path:
+        (root / "_shared.py").write_text(
+            "from dataclasses import dataclass\n\n"
+            "@dataclass(frozen=True)\nclass Click:\n    per_second: float\n\n"
+            "@dataclass(frozen=True)\nclass Defects:\n    click: Click | None\n"
+        )
+        surface = root / "_results.py"
+        surface.write_text(
+            "from __future__ import annotations\n"
+            f"{imports}"
+            "from dataclasses import dataclass\n\n"
+            "@dataclass(frozen=True)\nclass Profile:\n    defects: Defects | None\n"
+        )
+        return surface
+
+    PATHS: ClassVar[list[str]] = ["defects.click.perSecond", "defects.click.count"]
+
+    def test_a_class_imported_from_a_sibling_module_is_reached(self):
+        with tempfile.TemporaryDirectory() as directory:
+            surface = self.surface(Path(directory), "from ._shared import Defects\n")
+            missing, unreached, comparisons = check.scan_surface(self.PATHS, surface, "Profile")
+        self.assertEqual((unreached, comparisons), ([], 2))
+        self.assertEqual(missing, ["defects.click.count"])
+
+    def test_without_the_import_the_paths_stay_unreached(self):
+        with tempfile.TemporaryDirectory() as directory:
+            surface = self.surface(Path(directory), "")
+            missing, unreached, comparisons = check.scan_surface(self.PATHS, surface, "Profile")
+        self.assertEqual((missing, comparisons), ([], 0))
+        self.assertEqual(unreached, self.PATHS)
+
+
 if __name__ == "__main__":
     unittest.main()
