@@ -544,7 +544,7 @@ int cmd_analyze(const CliArgs& args, const Audio& audio) {
   MusicAnalyzerConfig config;
   config.use_triads_only = !args.has("with-seventh");
   config.use_hpss = args.has("hpss");
-  config.chroma_highpass_hz = args.get_float("chroma-highpass", config.chroma_highpass_hz);
+  config.chroma_highpass_hz = args.get_float("chroma-high-pass-hz", config.chroma_highpass_hz);
   // Only the shape is parsed here; which numerators are acceptable and how many
   // is validated by the core, so a CLI list is rejected for the same reason a
   // facade list is. An option that was not given leaves the core default in

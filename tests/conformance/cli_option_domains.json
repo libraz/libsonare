@@ -17,7 +17,7 @@
   "domains": [
     {
       "command": "analyze",
-      "option": "chroma-highpass",
+      "option": "chroma-high-pass-hz",
       "rejectExit": "usage",
       "choices": [],
       "minimum": 0.0,

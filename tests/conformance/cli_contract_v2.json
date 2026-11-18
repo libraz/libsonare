@@ -84,7 +84,7 @@
       ],
       "analyze": [
         {
-          "name": "chroma-highpass",
+          "name": "chroma-high-pass-hz",
           "type": "number",
           "default": 80,
           "aliases": [],
@@ -5975,7 +5975,7 @@
       "path": "analyze",
       "options": [
         {
-          "name": "chroma-highpass",
+          "name": "chroma-high-pass-hz",
           "type": "number",
           "default": 80,
           "aliases": [],
@@ -6177,11 +6177,11 @@
           "stdout": "json"
         },
         {
-          "id": "chroma_highpass_explicit",
+          "id": "chroma_high_pass_hz_explicit",
           "argv": [
             "analyze",
             "{audio}",
-            "--chroma-highpass",
+            "--chroma-high-pass-hz",
             "80",
             "--json"
           ],
@@ -17931,11 +17931,11 @@
       "payload": "none"
     },
     {
-      "id": "analyze_reject_negative_chroma_highpass",
+      "id": "analyze_reject_negative_chroma_high_pass_hz",
       "argv": [
         "analyze",
         "{audio}",
-        "--chroma-highpass",
+        "--chroma-high-pass-hz",
         "-5",
         "--json"
       ],

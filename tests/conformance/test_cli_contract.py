@@ -153,7 +153,7 @@ class CliContractSelfTest(unittest.TestCase):
         self.assertEqual(
             [option["name"] for option in contract["options"]],
             [
-                "chroma-highpass",
+                "chroma-high-pass-hz",
                 "hpss",
                 "json",
                 "meter-candidates",
@@ -165,7 +165,7 @@ class CliContractSelfTest(unittest.TestCase):
             next(
                 option
                 for option in contract["options"]
-                if option["name"] == "chroma-highpass"
+                if option["name"] == "chroma-high-pass-hz"
             )["default"],
             80,
         )

@@ -342,13 +342,13 @@ def test_stdout_only_output_is_parser_failure_without_dispatch(
 # was adopted, not a defect. The native parser has always accepted an inline
 # value on every flag-arity option, and the two surfaces now agree; refusing it
 # here is no longer the contract. The numeric cases below are unaffected --
-# --chroma-highpass takes a value, so its domain check is untouched.
+# --chroma-high-pass-hz takes a value, so its domain check is untouched.
 @pytest.mark.parametrize(
     "extra",
     [
-        ["--chroma-highpass", "nan"],
-        ["--chroma-highpass", "inf"],
-        ["--chroma-highpass", "-1"],
+        ["--chroma-high-pass-hz", "nan"],
+        ["--chroma-high-pass-hz", "inf"],
+        ["--chroma-high-pass-hz", "-1"],
     ],
 )
 def test_analyze_options_have_strict_parser_validation(
@@ -368,7 +368,7 @@ def test_analyze_options_forward_existing_api_keywords(monkeypatch, capsys) -> N
     defaults = parser.parse_args(["analyze", "input.wav"])
     assert defaults.with_seventh is False
     assert defaults.hpss is False
-    assert defaults.chroma_highpass == 80.0
+    assert defaults.chroma_high_pass_hz == 80.0
 
     captured: dict[str, object] = {}
 
@@ -402,7 +402,7 @@ def test_analyze_options_forward_existing_api_keywords(monkeypatch, capsys) -> N
             "analyze",
             "--with-seventh",
             "--hpss",
-            "--chroma-highpass",
+            "--chroma-high-pass-hz",
             "123.5",
             "--json",
             "input.wav",

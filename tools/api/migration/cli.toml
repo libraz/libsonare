@@ -204,3 +204,10 @@ changed = "the JSON keys tracks, mix and the keys beside scene in snake_case (st
 domain = "mastering"
 rule = "snake-case-only"
 test = "tests/cli/cli_mastering_test.cpp::CLI suggest-mix keys its measurements in snake_case and keeps the scene verbatim"
+
+[[entry]]
+kind = "flag"
+old = "analyze --chroma-highpass"
+new = "analyze --chroma-high-pass-hz"
+domain = "analysis"
+rule = "high-pass"

@@ -756,7 +756,7 @@ def _validate_analyze_case_relationships(
     """Check fixture-level semantics that cannot be expressed by field types."""
 
     default = payloads.get(("analyze", "default"))
-    explicit = payloads.get(("analyze", "chroma_highpass_explicit"))
+    explicit = payloads.get(("analyze", "chroma_high_pass_hz_explicit"))
     if default is not None and explicit is not None:
         mismatch = _compare_values(
             default,
@@ -769,7 +769,7 @@ def _validate_analyze_case_relationships(
             report.append(
                 (
                     "fail",
-                    mismatch + " (--chroma-highpass default must be canonical 80 Hz)",
+                    mismatch + " (--chroma-high-pass-hz default must be canonical 80 Hz)",
                 )
             )
 

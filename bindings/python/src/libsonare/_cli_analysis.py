@@ -324,7 +324,7 @@ def cmd_analyze(args: argparse.Namespace) -> int:
         sample_rate=sr,
         use_triads_only=not args.with_seventh,
         use_hpss=args.hpss,
-        chroma_high_pass_hz=args.chroma_highpass,
+        chroma_high_pass_hz=args.chroma_high_pass_hz,
         # An empty list means the option was not given: pass None so the core
         # seeds its own default rather than being handed a set it rejects.
         meter_candidate_numerators=candidates or None,
@@ -765,7 +765,7 @@ def register_analysis_parsers(
         "--hpss", action="store_true", help="Apply harmonic-percussive separation to the chroma"
     )
     analyze_p.add_argument(
-        "--chroma-highpass",
+        "--chroma-high-pass-hz",
         type=_nonnegative_finite_float,
         default=80.0,
         help="High-pass cutoff for chroma analysis in Hz (default: 80.0)",

@@ -897,7 +897,7 @@ def test_analyze_flags_are_accepted_and_forwarded(monkeypatch, capsys) -> None:
     defaults = parser.parse_args(["analyze", "input.wav"])
     assert defaults.with_seventh is False
     assert defaults.hpss is False
-    assert defaults.chroma_highpass == 80.0
+    assert defaults.chroma_high_pass_hz == 80.0
     assert defaults.meter_candidates == ""
     assert defaults.meter_denominator == 4
 
@@ -915,7 +915,7 @@ def test_analyze_flags_are_accepted_and_forwarded(monkeypatch, capsys) -> None:
             "analyze",
             "--with-seventh",
             "--hpss",
-            "--chroma-highpass",
+            "--chroma-high-pass-hz",
             "123.5",
             "--json",
             "input.wav",

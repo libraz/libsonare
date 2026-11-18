@@ -514,7 +514,7 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
                  // The Python CLI parses this through a non-negative finite
                  // checker, so the native contract declares the same domain and
                  // the same (parse-time) class.
-                 with_domain(number_value("chroma-highpass", 80.0),
+                 with_domain(number_value("chroma-high-pass-hz", 80.0),
                              at_least(0.0, CliOptionDomainStage::Usage)),
                  // An odd meter is only ever reported if its numerator was
                  // asked for, so without these the CLI cannot reach one. The
