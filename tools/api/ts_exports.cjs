@@ -5,7 +5,8 @@
 // own node_modules. Output is a JSON array on stdout, one object per (entry, export):
 // name, kind, declaring file and line, doc presence, structured call signatures (params
 // with name / optional / type text / boolean / string-literal members, return text),
-// class and interface members (well-known symbols spelled `[Symbol.dispose]`), enum and
+// class and interface members (well-known symbols spelled `[Symbol.dispose]`) with the members
+// of any inline object type under a property (`nested`, recursively), enum and
 // `as const` object members, and the string-literal members of exported type aliases.
 // Paths are relative to the repository root (two levels above the package directory).
 'use strict';
@@ -102,7 +103,38 @@ const isHidden = (md) =>
   !!(ts.getCombinedModifierFlags(md) & (ts.ModifierFlags.Private | ts.ModifierFlags.Protected)) ||
   (md.name && ts.isPrivateIdentifier && ts.isPrivateIdentifier(md.name));
 
-const describeMember = (m, isStatic) => {
+// An object type spelled inline (`loudness: { ceilingDb: number }`), not a named interface.
+const isInlineObject = (t) =>
+  !!(t.flags & ts.TypeFlags.Object) &&
+  !isLibObject(t) &&
+  (t.symbol?.declarations || []).some((d) => ts.isTypeLiteralNode(d));
+
+// The inline object types a property's type is made of: itself, a union arm, or an array element.
+const inlineParts = (t) =>
+  definedParts(t).flatMap((p) =>
+    isInlineObject(p)
+      ? [p]
+      : checker.isArrayType(p)
+        ? checker.getTypeArguments(p).filter(isInlineObject)
+        : [],
+  );
+
+// Members of the inline object types under a property, recursively; a type met twice on one
+// path stops the walk.
+const nestedMembers = (t, seen) => {
+  const out = [];
+  for (const part of inlineParts(t)) {
+    if (seen.has(part)) continue;
+    const path = new Set(seen).add(part);
+    for (const m of checker.getPropertiesOfType(part)) {
+      const r = describeMember(m, false, path);
+      if (r) out.push(r);
+    }
+  }
+  return out;
+};
+
+const describeMember = (m, isStatic, seen = new Set()) => {
   const md = (m.declarations || [])[0];
   if (!md || isHidden(md)) return null;
   const name = memberName(m, md);
@@ -127,6 +159,7 @@ const describeMember = (m, isStatic) => {
     type: typeText(mt),
     boolean: kind !== 'method' && isBoolean(mt),
     literals: kind !== 'method' ? stringLiterals(mt) : [],
+    nested: kind === 'property' ? nestedMembers(mt, seen) : [],
   };
 };
 

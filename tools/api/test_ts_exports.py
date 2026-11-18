@@ -17,6 +17,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 PKG = ROOT / "bindings" / "wasm"
 FIXTURE = HERE / "testdata" / "ts" / "optional_method.ts"
+NESTED = HERE / "testdata" / "ts" / "nested_object.ts"
 
 
 def _extract(fixture: Path) -> list[dict]:
@@ -44,6 +45,40 @@ class OptionalMethods(unittest.TestCase):
                 self.assertEqual(params, ["group", "offsetInBlockSamples"])
         self.assertTrue(members["optional"]["optional"])
         self.assertFalse(members["required"]["optional"])
+
+
+@unittest.skipUnless(
+    shutil.which("node") and (PKG / "node_modules" / "typescript").is_dir(),
+    "node or the WASM package's typescript is not installed",
+)
+class InlineObjectMembers(unittest.TestCase):
+    def test_an_inline_object_member_is_a_field_under_a_dotted_owner(self) -> None:
+        import sys
+
+        sys.path.insert(0, str(HERE))
+        import inventory
+
+        rows = _extract(NESTED)
+        recs = inventory.ts_records("node", rows, {r["entry"]: "." for r in rows})
+        fields = {r["name"]: r for r in recs if r["kind"] == "field"}
+        nested = sorted(n for n in fields if n.count(".") > 1)
+        self.assertEqual(
+            nested,
+            [
+                "NestedHost.bands.gainDb",
+                "NestedHost.loudness.ceilingDb",
+                "NestedHost.loudness.inner",
+                "NestedHost.loudness.inner.depth",
+                "NestedHost.mixed.a",
+                "NestedHost.mixed.b",
+            ],
+        )
+        ceiling = fields["NestedHost.loudness.ceilingDb"]
+        self.assertEqual(
+            (ceiling["owner"], ceiling["member"]), ("NestedHost.loudness", "ceilingDb")
+        )
+        self.assertIn("dBTP", ceiling["doc_text"])
+        self.assertEqual(fields["NestedHost.mixed.a"]["type"], "number | string")
 
 
 if __name__ == "__main__":

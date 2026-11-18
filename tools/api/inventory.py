@@ -153,6 +153,52 @@ def _ts_options(surface, owner_name, sigs, file, line, out):
             )
 
 
+def _ts_nested(surface, owner, members, out):
+    """Members of an inline object type, as fields under the dotted owner path.
+
+    A name several union arms declare is one field whose type joins the arms' types.
+    """
+    merged: dict[str, dict] = {}
+    for m in members:
+        prev = merged.get(m["name"])
+        if prev is None:
+            merged[m["name"]] = {**m, "types": [m["type"]], "nested": list(m.get("nested", []))}
+            continue
+        if m["type"] not in prev["types"]:
+            prev["types"].append(m["type"])
+        prev["literals"] = sorted(set(prev["literals"]) | set(m["literals"]))
+        prev["boolean"] = prev["boolean"] and m["boolean"]
+        prev["optional"] = prev["optional"] or m["optional"]
+        prev["doc"] = prev["doc"] or m["doc"]
+        prev["docText"] = prev.get("docText") or m.get("docText", "")
+        prev["nested"] += m.get("nested", [])
+    for name, m in merged.items():
+        qual = f"{owner}.{name}"
+        ty = " | ".join(m["types"])
+        out.append(
+            _record(
+                surface,
+                "field",
+                qual,
+                m["file"],
+                m["line"],
+                m["doc"],
+                owner=owner,
+                member=name,
+                doc_text=m.get("docText", ""),
+                ts_kind=m["kind"],
+                static=False,
+                optional=m["optional"],
+                type=ty,
+                boolean=m["boolean"],
+                literals=m["literals"],
+                inline_literals="'" in ty or '"' in ty,
+                sigs=[],
+            )
+        )
+        _ts_nested(surface, qual, m["nested"], out)
+
+
 def ts_records(surface: str, rows: list[dict], entry_label: dict[str, str]) -> list[dict]:
     """Turn ts_exports.cjs rows into records, merging re-exports of one declaration."""
     merged: dict[tuple, dict] = {}
@@ -253,6 +299,7 @@ def ts_records(surface: str, rows: list[dict], entry_label: dict[str, str]) -> l
             )
             if mkind == "method" and m["kind"] == "method":
                 _ts_options(surface, qual, m["sigs"], m["file"], m["line"], group)
+            _ts_nested(surface, qual, m.get("nested", []), group)
         for g in group:
             g["entries"] = entries
         out.extend(group)
