@@ -1,5 +1,6 @@
 import type { SonareRealtimeEngineNode } from './worklet.js';
 
+/** Options for {@link bindMicrophoneInput}: the `getUserMedia` constraints plus stream ownership controls. */
 export interface BindMicrophoneInputOptions extends MediaStreamConstraints {
   /**
    * Stream to bind instead of requesting one. Supplying it also transfers
@@ -17,11 +18,15 @@ export interface BindMicrophoneInputOptions extends MediaStreamConstraints {
   stopTracksOnClose?: boolean;
 }
 
+/** Handle returned by {@link bindMicrophoneInput}; call `close` to disconnect. */
 export interface MicrophoneInputBinding {
+  /** The bound microphone stream. */
   stream: MediaStream;
+  /** The source node feeding the engine node; disconnected by `close`. */
   source: MediaStreamAudioSourceNode;
   /** Whether this binding acquired {@link stream} rather than being handed one. */
   ownsStream: boolean;
+  /** Disconnects the source and, when the binding owns the stream (see `stopTracksOnClose`), stops its audio tracks. Safe to call more than once. */
   close(): void;
 }
 

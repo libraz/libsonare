@@ -39,13 +39,19 @@ export type EngineTelemetryError =
 
 /** Telemetry record drained from {@link RealtimeEngine.drainTelemetry}. */
 export interface EngineTelemetry {
+  /** Whether this is a processed-block record or an error record. */
   type: EngineTelemetryType;
+  /** Error reason; `'none'` on a processed-block record. */
   error: EngineTelemetryError;
+  /** Device render-frame counter at publication. */
   renderFrame: number;
+  /** Engine timeline position in samples, before output-latency compensation. */
   timelineSample: number;
+  /** Timeline position in samples that is audible at the output, after latency compensation. */
   audibleTimelineSample: number;
   /** Processing latency of the engine in samples (fractional). */
   graphLatencySamples: number;
+  /** Error-specific payload (an id or an occurrence count, per `error`); `0` otherwise. */
   value: number;
 }
 
@@ -239,7 +245,9 @@ export interface EngineTransportState {
  * `parameterInfo` getters always return a fully populated object.
  */
 export interface EngineParameterInfo {
+  /** Parameter id, unique within the engine. */
   id: number;
+  /** Display name. */
   name: string;
   /** Display unit; omit for an empty string. */
   unit?: string;
@@ -255,6 +263,7 @@ export interface EngineParameterInfo {
   defaultCurve?: AutomationCurve;
 }
 
+/** One breakpoint of an automation lane. */
 export interface EngineAutomationPoint {
   /** Position on the transport timeline, in pulses per quarter note. */
   ppq: number;
@@ -271,9 +280,13 @@ export interface EngineAutomationPoint {
 /** Structured marker kind; mirrors SonareMarkerKind / SmfMarkerKind. */
 export type MarkerKind = 'marker' | 'text' | 'lyric' | 'cuePoint' | 'keySignature';
 
+/** A timeline marker. */
 export interface EngineMarker {
+  /** Marker id, unique within the engine. */
   id: number;
+  /** Position on the transport timeline, in pulses per quarter note. */
   ppq: number;
+  /** Display name. Omitted: empty. */
   name?: string;
   /** Marker kind; defaults to `'marker'`. A number is refused. */
   kind?: MarkerKind;
@@ -290,8 +303,11 @@ export interface EngineMarker {
  * spelling that is in effect.
  */
 export interface EngineMetronomeConfig {
+  /** Whether the click is audible. */
   enabled: boolean;
+  /** Linear gain of a regular beat click. Omitted: 0.35. */
   beatGain?: number;
+  /** Linear gain of the downbeat (accent) click. Omitted: 0.7. */
   accentGain?: number;
   /** Explicit click length in samples (1..384000). */
   clickSamples?: number;
@@ -299,20 +315,33 @@ export interface EngineMetronomeConfig {
   clickSec?: number;
 }
 
+/** A clip of audio placed on the engine timeline. */
 export interface EngineClip {
+  /** Clip identifier (unsigned 32-bit). */
   id: number;
+  /** Track lane the clip belongs to (unsigned 32-bit). Omitted: the clip is not tied to a track lane. */
   trackId?: number;
+  /** Source audio, one plane per channel, all the same length. Exactly one of `channels` and `pageProvider`. */
   channels?: Float32Array[];
+  /** Timeline position of the clip start, in quarter notes. */
   startPpq: number;
+  /** Playback length in frames; must be positive. Omitted: plays to the end of the source (source length minus `clipOffsetSamples`). */
   lengthSamples?: number;
+  /** Offset into the source, in frames, where playback starts. Default `0`. */
   clipOffsetSamples?: number;
+  /** Whether the clip repeats over its playback length. Default `false`. */
   loop?: boolean;
+  /** Linear clip gain. Default `1`. */
   gain?: number;
+  /** Fade-in length in frames. Default `0`. */
   fadeInSamples?: number;
+  /** Fade-out length in frames. Default `0`. */
   fadeOutSamples?: number;
   /** Warp mode; absent is `'off'`. A number is refused. */
   warpMode?: ProjectWarpMode;
+  /** Anchor map between warped and source positions (both in source frames). Used when `warpMode` is not `'off'`. */
   warpAnchors?: ProjectWarpAnchor[];
+  /** Paged source supplying the audio on demand. Exactly one of `channels` and `pageProvider`. */
   pageProvider?: ClipPageProvider;
 }
 
@@ -323,8 +352,11 @@ export interface EngineClip {
  */
 export type ChannelLayout = 'mono' | 'stereo' | '5.1' | '7.1';
 
+/** Per-track lane routing: sends, output bus and source layout. */
 export interface EngineTrackLane {
+  /** Id of the track this lane carries. */
   trackId: number;
+  /** Sends from this lane to buses. Omitted: none. */
   sends?: EngineTrackSend[];
   /**
    * Bus the lane's post-fader output sums into instead of the master mix
@@ -340,9 +372,13 @@ export interface EngineTrackLane {
   sourceChannelLayout?: ChannelLayout;
 }
 
+/** A send from a track lane or bus to another bus. */
 export interface EngineTrackSend {
+  /** Destination bus id; the bus must be declared. */
   busId: number;
+  /** Send level in dB. Omitted: 0 dB (unity). */
   levelDb?: number;
+  /** Whether the send is active. Omitted: `true`. */
   enabled?: boolean;
   /**
    * Tap point for the send relative to the lane fader. Absent defaults to
@@ -351,8 +387,11 @@ export interface EngineTrackSend {
   sendTiming?: SendTiming;
 }
 
+/** A mix bus declared on the engine. */
 export interface EngineBus {
+  /** Bus identifier; positive (`0` is not a bus id). */
   busId: number;
+  /** Bus fader in dB. Default `0`. */
   gainDb?: number;
   /**
    * Channel layout of this bus. Absent defaults to stereo. The master bus
@@ -386,7 +425,9 @@ export type SidechainSourceKind = 'track' | 'bus';
 
 /** A sidechain key source: a track lane or a bus, by id (`id` is never 0; pass `null` to remove a binding). */
 export interface SidechainSource {
+  /** Whether `id` names a track lane or a bus. */
   kind: SidechainSourceKind;
+  /** Track id or bus id, per `kind`; never 0. */
   id: number;
 }
 
@@ -407,7 +448,9 @@ export type SidechainRefusal =
 
 /** Result of a `canSet*Sidechain` query; `reason` is absent exactly when `ok`. */
 export interface SidechainCheck {
+  /** `true` when the binding would be accepted. */
   ok: boolean;
+  /** Why the binding would be refused; absent when `ok`. */
   reason?: SidechainRefusal;
 }
 
@@ -453,6 +496,7 @@ export interface CapturePunch {
  * Input-monitor setting of {@link CaptureOptions}.
  */
 export interface CaptureInputMonitor {
+  /** Whether the live input is monitored through the engine output. */
   enabled: boolean;
   /** Linear monitor gain. Default `1`. */
   gain?: number;
@@ -472,16 +516,25 @@ export interface CaptureOptions {
   source?: EngineCaptureSource;
   /** Delay of the capture relative to the punch window, in samples. Default `0`. */
   recordOffsetSamples?: number;
+  /** Input monitoring. Omitted: enabled at gain `1`. */
   inputMonitor?: CaptureInputMonitor;
+  /** Punch-in window. Omitted: no punch window, capture is not gated. */
   punch?: CapturePunch;
 }
 
+/** Capture state read by {@link RealtimeEngine.captureStatus}. */
 export interface EngineCaptureStatus {
+  /** Frames per channel captured so far. */
   capturedFrames: number;
+  /** Number of times captured input did not fit and was dropped. */
   overflowCount: number;
+  /** Whether capture is armed. */
   armed: boolean;
+  /** Whether a punch window is configured. */
   punchEnabled: boolean;
+  /** What is recorded: the engine output or the live input. */
   source: 'output' | 'input';
+  /** Delay of the capture relative to the punch window, in samples. */
   recordOffsetSamples: number;
 }
 
@@ -496,6 +549,7 @@ export interface EngineProcessWithMonitorResult {
 /** What a capture records: the engine `'output'` or the live `'input'`. */
 export type EngineCaptureSource = EngineCaptureStatus['source'];
 
+/** Offline bounce settings for {@link RealtimeEngine.bounceOffline}. */
 export interface EngineBounceOptions {
   /**
    * Length of the bounce in frames. The whole result is held in memory, so the
@@ -529,6 +583,7 @@ export interface EngineBounceOptions {
    * runs at the prepared rate, and so does an explicit `0`.
    */
   sourceSampleRate?: number;
+  /** Normalize the result to `targetLufs`. Default `false`. */
   normalizeLufs?: boolean;
   /**
    * Target integrated loudness in LUFS when `normalizeLufs` is set. Omitting it
@@ -538,7 +593,9 @@ export interface EngineBounceOptions {
   targetLufs?: number;
   /** Dither applied when reducing bit depth; absent is none. A number is refused. */
   dither?: EngineDither;
+  /** Target bit depth the dither is shaped for. Default `16`. */
   ditherBits?: number;
+  /** Seed of the dither noise (unsigned 32-bit). Omitted: the library's default seed. */
   ditherSeed?: number;
 }
 
@@ -557,20 +614,29 @@ export interface EngineBounceResult {
   readonly integratedLufs: number;
 }
 
+/** Settings for {@link RealtimeEngine.freezeOffline}. */
 export interface EngineFreezeOptions {
+  /** Length of the frozen render in frames. */
   totalFrames: number;
   /** Frames per render block. Omit it for the engine's default block (128, capped at the prepared maximum); an explicit `0` is a `RangeError`. */
   blockSize?: number;
   /** Channel count of the rendered result. Required. */
   numChannels: number;
+  /** Id given to the clip created from the render (unsigned 32-bit). Default `1`. */
   clipId?: number;
+  /** Timeline position of the created clip, in quarter notes. Default `0`. */
   startPpq?: number;
+  /** Linear gain applied to the render. Default `1`. */
   gain?: number;
 }
 
+/** Result of {@link RealtimeEngine.freezeOffline}. */
 export interface EngineFreezeResult {
+  /** Id of the clip created from the render. */
   clipId: number;
+  /** Length of the frozen clip in frames. */
   frames: number;
+  /** Channel count of the frozen clip. */
   numChannels: number;
 }
 
@@ -583,32 +649,53 @@ export type EngineGraphNodeType = 'passThrough' | 'gain';
  */
 export type EngineGraphMix = 'replace' | 'add';
 
+/** A node of an {@link EngineGraphSpec}. */
 export interface EngineGraphNode {
+  /** Node name, unique within the graph (at most 63 characters). */
   id: string;
+  /** Processing of the node. Default `'passThrough'`. */
   type?: EngineGraphNodeType;
+  /** Gain in dB applied when `type` is `'gain'`. Default `0`. */
   gainDb?: number;
+  /** Port count of the node. Omitted: the spec's `numChannels`. */
   numPorts?: number;
 }
 
+/** A connection between two graph node ports. */
 export interface EngineGraphConnection {
+  /** `id` of the node the signal comes from. */
   sourceNode: string;
+  /** Zero-based output port of `sourceNode`. */
   sourcePort: number;
+  /** `id` of the node the signal goes to. */
   destNode: string;
+  /** Zero-based input port of `destNode`. */
   destPort: number;
+  /** How the edge meets others into the same destination port. Default `'add'`. */
   mix?: EngineGraphMix;
 }
 
+/** Binds an automation parameter id to a graph node. */
 export interface EngineGraphParameterBinding {
+  /** Id of the registered automation parameter. */
   paramId: number;
+  /** `id` of the graph node the parameter drives. */
   nodeId: string;
 }
 
+/** The processing graph installed by {@link RealtimeEngine.setGraph}. */
 export interface EngineGraphSpec {
+  /** Nodes of the graph. */
   nodes: EngineGraphNode[];
+  /** Edges between node ports. */
   connections: EngineGraphConnection[];
+  /** `id` of the node that receives the engine input. */
   inputNode: string;
+  /** `id` of the node whose output is the graph result. */
   outputNode: string;
+  /** Channel count the graph runs at. Default `2`. */
   numChannels?: number;
+  /** Automation parameters bound to nodes. */
   parameterBindings?: EngineGraphParameterBinding[];
 }
 
@@ -620,7 +707,9 @@ export interface EngineMidiEvent {
   word0?: number;
   /** Second UMP word. */
   word1?: number;
+  /** Third UMP word. */
   word2?: number;
+  /** Fourth UMP word. */
   word3?: number;
   wordCount?: number;
   /**
@@ -641,14 +730,23 @@ export interface EngineMidiEvent {
 
 /** One compiled realtime MIDI clip schedule accepted by {@link RealtimeEngine.setMidiClips}. */
 export interface EngineMidiClipSchedule {
+  /** Clip id. Omitted: 0. */
   id?: number;
+  /** Id of the track the clip belongs to. Omitted: 0. */
   trackId?: number;
+  /** MIDI destination id the clip's events are sent to. Omitted: destination 0. */
   destinationId?: number;
+  /** Start position in timeline samples. */
   startSample?: number;
+  /** Start position in pulses per quarter note. */
   startPpq?: number;
+  /** Clip length in samples. Omitted: open-ended. */
   lengthSamples?: number;
+  /** Whether the clip repeats. Omitted: `false`. */
   loop?: boolean;
+  /** Length of one loop repeat in samples; meaningful when `loop` is set. */
   loopLengthSamples?: number;
+  /** Events with absolute render frames. */
   events: EngineMidiEvent[];
   /**
    * Linear gain applied to the destination instrument's rendered audio while
@@ -663,6 +761,7 @@ export interface EngineMidiClipSchedule {
    * `fadeOutSamples` must be `0` when `lengthSamples` is `0` (open-ended).
    */
   fadeInSamples?: number;
+  /** Fade-out length in samples; see `fadeInSamples`. */
   fadeOutSamples?: number;
 }
 
@@ -724,7 +823,9 @@ export interface RealtimeEngineConfig {
 
 /** Loop region of {@link RealtimeEngine.setLoop}, in quarter notes. */
 export interface EngineLoop {
+  /** Loop start in quarter notes. */
   startPpq: number;
+  /** Loop end in quarter notes. */
   endPpq: number;
   /** Whether looping is active. Default `true`. */
   enabled?: boolean;

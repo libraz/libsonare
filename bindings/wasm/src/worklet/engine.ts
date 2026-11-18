@@ -134,8 +134,11 @@ function transferableAudioBuffers(channels: readonly Float32Array[]): Transferab
  * Argument refusals are `TypeError` / `RangeError`, as on {@link RealtimeEngine}.
  */
 export class SonareEngine {
+  /** The underlying AudioWorkletNode; connect it into the audio graph. */
   readonly node: AudioWorkletNode;
+  /** Transport mode and feature support detected when the engine was created. */
   readonly capabilities: SonareRealtimeEngineNodeCapabilities;
+  /** Transport control: play, stop, seek and loop, mirrored on the offline engine. */
   readonly transport: SonareEngineTransportFacade;
   private readonly realtimeNode: SonareRealtimeEngineNode;
   private readonly offlineEngine: RealtimeEngine;
@@ -230,6 +233,17 @@ export class SonareEngine {
     });
   }
 
+  /**
+   * Creates the worklet node, waits for the processor to be ready and returns the engine.
+   *
+   * @param context Audio context that owns the node.
+   * @param options Node options plus `offlineEngine`, `offlineBlockSize` and `offlineNumChannels` for the
+   * offline mirror; the mirror block size defaults to `maxBlockSize`, then 128 frames.
+   * @throws TypeError for an unknown option key or a wrong-typed option.
+   * @throws RangeError for an out-of-range option.
+   * @throws SonareError `AbiMismatch` on an engine ABI mismatch, `NotSupported` when `mode: 'sab'` is
+   * requested without SharedArrayBuffer and Atomics, or the worklet's own error if it fails to start.
+   */
   static async create(
     context: BaseAudioContext,
     options: SonareEngineOptions,
@@ -270,6 +284,7 @@ export class SonareEngine {
     return engine;
   }
 
+  /** Suspends the audio context; resolves immediately when the engine is destroyed. */
   async suspend(): Promise<void> {
     if (this.epoch.closed) {
       return;
@@ -277,6 +292,7 @@ export class SonareEngine {
     await this.context.suspend?.();
   }
 
+  /** Resumes the audio context; resolves immediately when the engine is destroyed. */
   async resume(): Promise<void> {
     if (this.epoch.closed) {
       return;
@@ -284,18 +300,22 @@ export class SonareEngine {
     await this.context.resume?.();
   }
 
+  /** Sets one constant tempo, `bpm` in beats per minute (finite, greater than 0, at most 100000), on both engines. */
   setTempo(bpm: number): void {
     tempo.setTempo(this.tempoContext, bpm);
   }
 
+  /** Replaces the tempo map with segments keyed by `startPpq` (quarter notes), on both engines. */
   setTempoSegments(segments: readonly EngineTempoSegment[]): void {
     tempo.setTempoSegments(this.tempoContext, segments);
   }
 
+  /** Sets one constant time signature, on both engines. */
   setTimeSignature(numerator: number, denominator: number): void {
     tempo.setTimeSignature(this.tempoContext, numerator, denominator);
   }
 
+  /** Replaces the time-signature map with segments keyed by position, on both engines. */
   setTimeSignatureSegments(segments: readonly EngineTimeSignatureSegment[]): void {
     tempo.setTimeSignatureSegments(this.tempoContext, segments);
   }
@@ -312,6 +332,11 @@ export class SonareEngine {
     tempo.setLoop(this.tempoContext, loop);
   }
 
+  /**
+   * Sample at which a count-in of `bars` bars from `startSample` ends. Counting starts at the beginning
+   * of the bar containing `startSample` (a mid-bar start gets a short first bar), and every counted bar has
+   * the length of the time signature in effect at `startSample`. Returns `startSample` when `bars <= 0`.
+   */
   countInEndSample(startSample: number, bars: number): number {
     return tempo.countInEndSample(this.tempoContext, startSample, bars);
   }
@@ -591,10 +616,21 @@ export class SonareEngine {
     mixer.setStripSidechain(this.mixerContext, target, insertIndex, source);
   }
 
+  /**
+   * Replaces the sends of one track or the master strip, on both engines; an empty array clears them.
+   *
+   * @throws RangeError for an unknown target, an undeclared bus, a duplicate send bus or a level outside
+   * the send range.
+   */
   setTrackSends(target: string | number, sends: EngineTrackSend[]): void {
     mixer.setTrackSends(this.mixerContext, target, sends);
   }
 
+  /**
+   * Replaces the bus list, on both engines. Each bus names its output bus, channel layout and sends.
+   *
+   * @throws RangeError for an invalid bus id, layout or send.
+   */
   setTrackBuses(buses: EngineBus[]): void {
     mixer.setTrackBuses(this.mixerContext, buses);
   }
@@ -769,16 +805,19 @@ export class SonareEngine {
     strips.setBusPan(this.stripContext, busId, pan);
   }
 
+  /** Sets a bus strip's pan law on both engines; an ordinal is a `TypeError`, an unknown bus a `RangeError`. */
   setBusPanLaw(busId: number, panLaw: PanLaw): void {
     this.ensureBus(busId);
     strips.setBusPanLaw(this.stripContext, busId, panLaw);
   }
 
+  /** Sets a bus strip's pan mode on both engines; an ordinal is a `TypeError`, an unknown bus a `RangeError`. */
   setBusPanMode(busId: number, panMode: PanMode): void {
     this.ensureBus(busId);
     strips.setBusPanMode(this.stripContext, busId, panMode);
   }
 
+  /** Sets a bus strip's dual-pan left and right positions (each -1 to 1, left to right) on both engines; an unknown bus is a `RangeError`. */
   setBusDualPan(busId: number, leftPan: number, rightPan: number): void {
     this.ensureBus(busId);
     strips.setBusDualPan(this.stripContext, busId, leftPan, rightPan);
@@ -951,10 +990,16 @@ export class SonareEngine {
     return clips.addClip(this.clipContext, trackId, clip);
   }
 
+  /**
+   * Removes the clip carrying `clipId`, on both engines.
+   *
+   * @throws RangeError when no clip has that id.
+   */
   removeClip(clipId: number): void {
     clips.removeClip(this.clipContext, clipId);
   }
 
+  /** Replaces the scheduled MIDI clips, on both engines. */
   setMidiClips(schedules: readonly EngineMidiClipSchedule[]): void {
     clips.setMidiClips(this.clipContext, schedules);
   }
@@ -979,6 +1024,10 @@ export class SonareEngine {
     strips.setSynthInstrument(this.stripContext, trackId, patch);
   }
 
+  /**
+   * Loads SoundFont 2 bytes into the offline mirror and the worklet so SF2 instruments can be bound with
+   * {@link setSf2Instrument}. The bytes are copied for the call; a previously loaded SoundFont is replaced.
+   */
   loadSoundFont(data: Uint8Array): void {
     strips.loadSoundFont(this.stripContext, data);
   }
@@ -1029,6 +1078,10 @@ export class SonareEngine {
     strips.clearMidiFx(this.stripContext, trackId);
   }
 
+  /**
+   * Queues a live MIDI note-on to the track's MIDI destination. `renderFrame` is the absolute render frame to fire at; omitted: immediate.
+   * `group` and `channel` are 0 to 15; `note` and `velocity` are 0 to 127.
+   */
   pushMidiNoteOn(
     trackId: string | number,
     group: number,
@@ -1040,6 +1093,10 @@ export class SonareEngine {
     strips.pushMidiNoteOn(this.stripContext, trackId, group, channel, note, velocity, renderFrame);
   }
 
+  /**
+   * Queues a live MIDI note-off to the track's MIDI destination. `renderFrame` is the absolute render frame to fire at; omitted: immediate.
+   * `group` and `channel` are 0 to 15; `note` is 0 to 127; `velocity` is 0 to 127 (omitted: 0).
+   */
   pushMidiNoteOff(
     trackId: string | number,
     group: number,
@@ -1051,6 +1108,10 @@ export class SonareEngine {
     strips.pushMidiNoteOff(this.stripContext, trackId, group, channel, note, velocity, renderFrame);
   }
 
+  /**
+   * Queues a live MIDI control change to the track's MIDI destination. `renderFrame` is the absolute render frame to fire at; omitted: immediate.
+   * `group` and `channel` are 0 to 15; `controller` and `value` are 0 to 127.
+   */
   pushMidiCc(
     trackId: string | number,
     group: number,
@@ -1062,6 +1123,10 @@ export class SonareEngine {
     strips.pushMidiCc(this.stripContext, trackId, group, channel, controller, value, renderFrame);
   }
 
+  /**
+   * Queues a live MIDI pitch bend to the track's MIDI destination. `renderFrame` is the absolute render frame to fire at; omitted: immediate.
+   * `bend14` is unsigned 14-bit with centre 8192 (0 to 16383).
+   */
   pushMidiPitchBend(
     trackId: string | number,
     group: number,
@@ -1072,6 +1137,10 @@ export class SonareEngine {
     strips.pushMidiPitchBend(this.stripContext, trackId, group, channel, bend14, renderFrame);
   }
 
+  /**
+   * Queues a live MIDI channel pressure to the track's MIDI destination. `renderFrame` is the absolute render frame to fire at; omitted: immediate.
+   * `pressure` is 0 to 127.
+   */
   pushMidiChannelPressure(
     trackId: string | number,
     group: number,
@@ -1089,6 +1158,10 @@ export class SonareEngine {
     );
   }
 
+  /**
+   * Queues a live MIDI polyphonic key pressure to the track's MIDI destination. `renderFrame` is the absolute render frame to fire at; omitted: immediate.
+   * `note` and `pressure` are 0 to 127.
+   */
   pushMidiPolyPressure(
     trackId: string | number,
     group: number,
@@ -1135,6 +1208,10 @@ export class SonareEngine {
     strips.pushMidiProgram(this.stripContext, trackId, group, channel, program, bank, renderFrame);
   }
 
+  /**
+   * Queues a live MIDI SysEx frame to the track's MIDI destination. `data` is the full message including
+   * the leading 0xF0 and trailing 0xF7 (1 to 512 bytes). `renderFrame` is the absolute render frame to fire at; omitted: immediate.
+   */
   pushMidiSysex(trackId: string | number, data: Uint8Array, renderFrame?: number): void {
     strips.pushMidiSysex(this.stripContext, trackId, data, renderFrame);
   }
@@ -1145,6 +1222,7 @@ export class SonareEngine {
     this.postSync({ type: 'syncMidiCcBinding', binding: { ...binding } });
   }
 
+  /** Enables the engine-owned live MIDI input source for a destination on both engines; `destinationId` is the MIDI destination (omitted: 0). */
   setMidiInputSource(destinationId = 0): void {
     commitSync(
       this.commitContext,
@@ -1153,6 +1231,7 @@ export class SonareEngine {
     );
   }
 
+  /** Disables the engine-owned live MIDI input source on both engines. */
   clearMidiInputSource(): void {
     commitSync(
       this.commitContext,
@@ -1363,6 +1442,7 @@ export class SonareEngine {
     this.postSync({ type: 'syncMidiInputUmp', words: copiedWords, offsetInBlockSamples });
   }
 
+  /** Queues a MIDI panic (all-notes-off) releasing every sounding note on both engines. `renderFrame` is the absolute render frame to fire at; omitted: immediate. */
   pushMidiPanic(renderFrame?: number): void {
     const frame = resolveRenderFrame('pushMidiPanic', renderFrame);
     this.offlineEngine.pushMidiPanic(renderFrame);
@@ -1384,14 +1464,17 @@ export class SonareEngine {
     capture.armCapture(this.captureContext, state);
   }
 
+  /** Reads the capture state from the worklet; the answer arrives asynchronously. */
   captureStatus(): Promise<EngineCaptureStatus> {
     return capture.captureStatus(this.captureContext);
   }
 
+  /** Reads the audio captured so far from the worklet, one `Float32Array` per channel; the answer arrives asynchronously. */
   capturedAudio(): Promise<Float32Array[]> {
     return capture.capturedAudio(this.captureContext);
   }
 
+  /** Discards the captured audio on both engines; resolves once the worklet has done so. */
   async resetCapture(): Promise<void> {
     return capture.resetCapture(this.captureContext);
   }
@@ -1409,6 +1492,11 @@ export class SonareEngine {
     );
   }
 
+  /**
+   * Adds a marker at `ppq` (quarter notes) and returns its id.
+   *
+   * @param name Marker label (omitted: empty).
+   */
   addMarker(ppq: number, name = ''): number {
     return markerOps.addMarker(this.markerContext, ppq, name);
   }
@@ -1427,6 +1515,7 @@ export class SonareEngine {
     return markerOps.markers(this.markerContext);
   }
 
+  /** One stored marker by id; an unknown id is a `RangeError`. */
   marker(markerId: number): EngineMarker {
     return markerOps.marker(this.markerContext, markerId);
   }
@@ -1503,18 +1592,22 @@ export class SonareEngine {
     return this.realtimeNode.onMidiOut(callback);
   }
 
+  /** Subscribes to meter snapshots from the worklet. Returns a function that removes the subscription. */
   onMeter(callback: (meter: SonareWorkletMeterSnapshot) => void): () => void {
     return this.realtimeNode.onMeter(callback);
   }
 
+  /** Subscribes to scope snapshots (spectrum and goniometer); produced only when `scopeIntervalFrames` is above 0 in SAB mode. Returns a function that removes the subscription. */
   onScope(callback: (scope: SonareWorkletScopeSnapshot) => void): () => void {
     return this.realtimeNode.onScope(callback);
   }
 
+  /** Subscribes to engine telemetry records from the worklet. Returns a function that removes the subscription. */
   onTelemetry(callback: (telemetry: EngineTelemetry) => void): () => void {
     return this.realtimeNode.onTelemetry(callback);
   }
 
+  /** Drains telemetry published since the last poll (SAB mode); empty otherwise. See {@link SonareRealtimeEngineNode.pollTelemetry}. */
   pollTelemetry(): EngineTelemetry[] {
     return this.realtimeNode.pollTelemetry();
   }
@@ -1523,6 +1616,7 @@ export class SonareEngine {
     return this.realtimeNode.pollMeters();
   }
 
+  /** Drains scope snapshots published since the last poll (SAB mode with `scopeIntervalFrames` above 0); empty otherwise. */
   pollScope(): SonareWorkletScopeSnapshot[] {
     return this.realtimeNode.pollScope();
   }
@@ -1532,6 +1626,7 @@ export class SonareEngine {
     return this.realtimeNode.pollInsertGainReduction(targetId);
   }
 
+  /** Stops the engine and releases the worklet node and the offline mirror. Safe to call more than once. */
   destroy(): void {
     if (this.epoch.closed) {
       return;

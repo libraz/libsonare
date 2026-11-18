@@ -759,6 +759,9 @@ export class RealtimeEngine {
     );
   }
 
+  /**
+   * Replaces the realtime MIDI clip schedule. Failure leaves the previously accepted schedule in place.
+   */
   setMidiClips(clips: readonly EngineMidiClipSchedule[]): void {
     this.native.setMidiClips(clips);
   }
@@ -839,6 +842,10 @@ export class RealtimeEngine {
     this.native.setSf2Instrument(destinationId, config);
   }
 
+  /**
+   * Clears the instrument bound to `destinationId` (default 0). Its sounding notes are released and the
+   * output fades out over 10 ms. Do not call concurrently with {@link process}.
+   */
   clearMidiInstrument(destinationId = 0): void {
     this.native.clearMidiInstrument(destinationId);
   }
@@ -858,6 +865,7 @@ export class RealtimeEngine {
     this.native.bindMidiCcBinding(binding);
   }
 
+  /** Removes every live MIDI CC / RPN / NRPN binding. */
   clearMidiCcBindings(): void {
     this.native.clearMidiCcBindings();
   }
@@ -893,6 +901,9 @@ export class RealtimeEngine {
     this.native.clearControllerBindings(destinationId);
   }
 
+  /**
+   * Number of bindings the controller profile of the instrument at `destinationId` currently holds.
+   */
   controllerBindingCount(destinationId: number): number {
     return this.native.controllerBindingCount(destinationId);
   }
@@ -918,6 +929,10 @@ export class RealtimeEngine {
     );
   }
 
+  /**
+   * Reads back whether note-on velocity is expression for the instrument at `destinationId`
+   * (see {@link setControllerVelocityMeaningful}).
+   */
   controllerVelocityMeaningful(destinationId: number): boolean {
     return this.native.controllerVelocityMeaningful(destinationId);
   }
@@ -1020,6 +1035,7 @@ export class RealtimeEngine {
     this.native.setMidiFx(destinationId, midiFxConfigJson(config, 'setMidiFx'));
   }
 
+  /** Removes the live MIDI-FX insert of `destinationId` (default 0). */
   clearMidiFx(destinationId = 0): void {
     this.native.clearMidiFx(destinationId);
   }
@@ -1029,6 +1045,7 @@ export class RealtimeEngine {
     this.native.setMidiInputSource(destinationId);
   }
 
+  /** Disables the engine-owned live MIDI input source. */
   clearMidiInputSource(): void {
     this.native.clearMidiInputSource();
   }
@@ -1202,6 +1219,16 @@ export class RealtimeEngine {
     this.native.pushMidiInputPolyPressure(group, channel, note, pressure, offsetInBlockSamples);
   }
 
+  /**
+   * Queues a live MIDI note-on for a MIDI destination.
+   *
+   * @param destinationId MIDI destination id.
+   * @param group UMP group, 0..15.
+   * @param channel MIDI channel, 0..15.
+   * @param note Note number, 0..127.
+   * @param velocity 7-bit velocity, 0..127.
+   * @param renderFrame Render-frame time to apply. Omitted: immediate. A negative value is refused.
+   */
   pushMidiNoteOn(
     destinationId: number,
     group: number,
@@ -1220,6 +1247,16 @@ export class RealtimeEngine {
     );
   }
 
+  /**
+   * Queues a live MIDI note-off for a MIDI destination.
+   *
+   * @param destinationId MIDI destination id.
+   * @param group UMP group, 0..15.
+   * @param channel MIDI channel, 0..15.
+   * @param note Note number, 0..127.
+   * @param velocity 7-bit release velocity, 0..127. Default 0.
+   * @param renderFrame Render-frame time to apply. Omitted: immediate. A negative value is refused.
+   */
   pushMidiNoteOff(
     destinationId: number,
     group: number,
@@ -1611,18 +1648,36 @@ export class RealtimeEngine {
     this.native.setTempo(bpm);
   }
 
+  /**
+   * Installs a tempo map from ramp segments. Each segment needs a finite non-negative `startPpq` and a
+   * `bpm` in (0, 100000]; a non-zero `endBpm` uses the same range. An empty array clears the map to the
+   * single tempo.
+   */
   setTempoSegments(segments: readonly EngineTempoSegment[]): void {
     this.native.setTempoSegments([...segments]);
   }
 
+  /**
+   * Sets the time signature. `numerator` and `denominator` are positive integers (a `RangeError` otherwise).
+   */
   setTimeSignature(numerator: number, denominator: number): void {
     this.native.setTimeSignature(numerator, denominator);
   }
 
+  /**
+   * Installs a time-signature map. Each segment needs a finite non-negative `startPpq` and a positive
+   * `numerator` / `denominator`.
+   */
   setTimeSignatureSegments(segments: readonly EngineTimeSignatureSegment[]): void {
     this.native.setTimeSignatureSegments([...segments]);
   }
 
+  /**
+   * Converts a quarter-note position to a whole sample position on the engine timeline, through the tempo map.
+   *
+   * @param ppq Position in quarter notes (PPQ).
+   * @returns Sample index.
+   */
   sampleAtPpq(ppq: number): number {
     return Number(this.native.sampleAtPpq(ppq));
   }
@@ -1637,6 +1692,11 @@ export class RealtimeEngine {
     );
   }
 
+  /**
+   * Registers a parameter's metadata (name, unit, range, default curve) for automation. A new `id` adds
+   * a parameter; omitted optional fields take the defaults documented on {@link EngineParameterInfo}.
+   * Control thread only; do not call concurrently with {@link process}.
+   */
   addParameter(info: EngineParameterInfo): void {
     noOrdinal('addParameter', 'defaultCurve', info?.defaultCurve);
     const { defaultCurve, ...rest } = info;
@@ -1720,10 +1780,18 @@ export class RealtimeEngine {
     return markerFromNative(this.native.marker(id));
   }
 
+  /**
+   * Moves the transport to the position of marker `markerId`. An unknown marker is a `RangeError`.
+   * `renderFrame` is the render-frame time to apply; omit it for immediate (a negative value is refused).
+   */
   seekMarker(markerId: number, renderFrame?: number): void {
     this.native.seekMarker(markerId, resolveRenderFrame('seekMarker', renderFrame));
   }
 
+  /**
+   * Sets the loop region from the positions of two markers (start, end) and enables it. An unknown
+   * marker id is a `RangeError`.
+   */
   setLoopFromMarkers(startMarkerId: number, endMarkerId: number): void {
     this.native.setLoopFromMarkers(startMarkerId, endMarkerId);
   }
@@ -1775,6 +1843,10 @@ export class RealtimeEngine {
     return Number(this.native.countInEndSample(startSample, bars));
   }
 
+  /**
+   * Replaces the audio processing graph (nodes and connections). Invalid specs are refused with a
+   * `TypeError` / `RangeError`. Control thread only; do not call concurrently with {@link process}.
+   */
   setGraph(spec: EngineGraphSpec): void {
     requireObject('setGraph', 'spec', spec);
     this.native.setGraph({
@@ -1806,6 +1878,10 @@ export class RealtimeEngine {
     return this.native.graphConnectionCount();
   }
 
+  /**
+   * Replaces the whole published clip set; every entry is validated and copied, and a refused entry
+   * leaves the previous set unchanged. Control thread only.
+   */
   setClips(clips: EngineClip[]): void {
     this.native.setClips(clips.map(nativeClip));
   }
@@ -1962,6 +2038,10 @@ export class RealtimeEngine {
     this.laneOrder = undefined;
   }
 
+  /**
+   * Replaces the bus topology. Refuses (state unchanged) an output or send naming an undeclared bus or
+   * the bus itself, and any routing cycle. Control thread only; do not call concurrently with {@link process}.
+   */
   setTrackBuses(buses: EngineBus[]): void {
     // Array.isArray guards a caller-fabricated array-like (e.g. `{ length }`)
     // meant to probe the native array-length read: passing it through
@@ -2195,6 +2275,10 @@ export class RealtimeEngine {
     }
   }
 
+  /**
+   * Clears the stored base values of the inserts of bus `busId` that automation offsets are applied to.
+   * Not safe concurrently with {@link process}.
+   */
   clearBusInsertParameterBases(busId: number): void {
     this.native.clearBusInsertParameterBases(busId);
   }
@@ -2580,14 +2664,21 @@ export class RealtimeEngine {
     this.native.armCapture(requireBoolean('armCapture', state.armed, 'armed'));
   }
 
+  /** Clears the capture frame counter. Call while capture is not running. */
   resetCapture(): void {
     this.native.resetCapture();
   }
 
+  /**
+   * Reads the capture state: recorded frames, overflow count, armed and punch flags, source and record offset.
+   */
   captureStatus(): EngineCaptureStatus {
     return this.native.captureStatus();
   }
 
+  /**
+   * Reads the recorded samples: one `Float32Array` per capture channel, sliced to the frames recorded so far.
+   */
   capturedAudio(): Float32Array[] {
     return this.native.capturedAudio();
   }
@@ -2659,6 +2750,12 @@ export class RealtimeEngine {
     this.native.processPreparedWithMonitor(numFrames);
   }
 
+  /**
+   * Renders one block in place like {@link process}, and also returns the monitor (cue/listen) bus output.
+   * Audio thread only; each plane must not exceed the prepared block size.
+   *
+   * @returns `output` is the program mix and `monitor` the monitor bus, one buffer per plane.
+   */
   processWithMonitor(channels: Float32Array[]): EngineProcessWithMonitorResult {
     return this.native.processWithMonitor(channels);
   }
@@ -2754,6 +2851,11 @@ export class RealtimeEngine {
     return this.native.freezeOffline(block === undefined ? rest : { ...rest, blockSize: block });
   }
 
+  /**
+   * Drains pending process and error telemetry records, oldest first.
+   *
+   * @param maxRecords Most records to return (non-negative integer). Omitted: 1024. 0 returns an empty array.
+   */
   drainTelemetry(maxRecords?: number): EngineTelemetry[] {
     return this.native.drainTelemetry(maxRecords).map(telemetryFromNative);
   }

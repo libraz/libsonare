@@ -19,6 +19,7 @@ import type {
 } from './worklet/meter-rings.js';
 import type { SonareEngineCommandRecord } from './worklet/protocol.js';
 
+/** Options of the mixer worklet processor (`SonareWorkletProcessor`). */
 export interface SonareWorkletProcessorOptions {
   /**
    * Compiled `sonare.wasm` bytes, for a worklet realm where the module is not
@@ -27,27 +28,44 @@ export interface SonareWorkletProcessorOptions {
    * and the processor posts `{ type: 'ready' }` once it is up.
    */
   wasmBinary?: ArrayBuffer | Uint8Array;
+  /** Mixer scene document as JSON. Required: a missing scene is a TypeError. */
   sceneJson: string;
   /**
    * Defaults to the AudioWorkletGlobalScope `sampleRate`; any other value is
    * refused with a RangeError. Outside a worklet scope it is required.
    */
   sampleRate?: number;
-  /** Largest block the mixer is prepared for, in frames. */
+  /** Largest block the mixer is prepared for, in frames. Default 128. */
   maxBlockSize?: number;
+  /** Strip count the host expects. Omitted: the scene's own. A different value is a RangeError. */
   stripCount?: number;
+  /** Frames between meter publications, an integer of at least 0; 0 switches meters off. Default 2048. */
   meterIntervalFrames?: number;
+  /** Shared memory from `createSonareMeterRingBuffer`. Omitted: meters go to the transport instead. */
   meterSharedBuffer?: SharedArrayBuffer;
+  /** Slots of `meterSharedBuffer`. Omitted: read from the buffer's header; a differing value is a RangeError. */
   meterRingCapacity?: number;
+  /** Frames between spectrum publications, an integer of at least 0; 0 switches the spectrum off. Default 0. */
   spectrumIntervalFrames?: number;
+  /** Spectrum bands per snapshot, an integer of at least 1. Omitted: the ring's count, else 16. */
   spectrumBands?: number;
+  /** Shared memory from `createSonareSpectrumRingBuffer`. Omitted: spectra go to the transport instead. */
   spectrumSharedBuffer?: SharedArrayBuffer;
+  /** Slots of `spectrumSharedBuffer`. Omitted: read from the buffer's header; a differing value is a RangeError. */
   spectrumRingCapacity?: number;
 }
 
+/** Options of the realtime-engine worklet processor. Ring capacities apply together with their shared buffer. */
 export interface SonareRealtimeEngineWorkletProcessorOptions {
+  /**
+   * Compiled `sonare.wasm` bytes, for a worklet realm where the module is not initialized yet; the
+   * processor posts `{ type: 'ready' }` once it is up. Omitted: the module must already be
+   * initialized in the realm, or built from the host's `SonareEmbindModuleFactory`.
+   */
   wasmBinary?: ArrayBuffer | Uint8Array;
+  /** Control-plane syncs applied in order once the module is up, before any queued port message. */
   initialSyncMessages?: SonareEngineSyncMessage[];
+  /** Commands applied in order after `initialSyncMessages`, before any queued port message. */
   initialCommands?: SonareEngineCommandRecord[];
   /**
    * Engine rate. Defaults to the AudioWorkletGlobalScope `sampleRate` and any
@@ -72,19 +90,51 @@ export interface SonareRealtimeEngineWorkletProcessorOptions {
    * counts the planes pass through unchanged in either mode.
    */
   numChannels: number;
+  /** Frames between meter publications, an integer of at least 0; 0 switches meters off. Default 2048. */
   meterIntervalFrames?: number;
+  /**
+   * Shared memory of the command ring (`createSonareEngineCommandRingBuffer`). Omitted: commands
+   * arrive as port messages.
+   */
   commandSharedBuffer?: SharedArrayBuffer;
+  /**
+   * Slots of the command ring, an integer in [1, 65536]. Omitted: read from the buffer's header; a
+   * differing value is a RangeError. Node creation: 128.
+   */
   commandRingCapacity?: number;
+  /**
+   * Shared memory of the telemetry ring (`createSonareEngineTelemetryRingBuffer`). Omitted:
+   * telemetry is posted as port messages.
+   */
   telemetrySharedBuffer?: SharedArrayBuffer;
+  /**
+   * Slots of the telemetry ring, an integer of at least 1. Omitted: read from the buffer's header;
+   * a differing value is a RangeError. Node creation: 128.
+   */
   telemetryRingCapacity?: number;
+  /** Shared memory from `createSonareMeterRingBuffer`. Omitted: meters are posted as port messages. */
   meterSharedBuffer?: SharedArrayBuffer;
+  /**
+   * Slots of the meter ring, an integer of at least 1. Omitted: read from the buffer's header; a
+   * differing value is a RangeError. Node creation: 128.
+   */
   meterRingCapacity?: number;
   // Scope telemetry (FFT spectrum + goniometer): opt-in. The ring is created
   // only when scopeIntervalFrames > 0, since the per-block FFT is heavier than
   // the meter path. scopeBands selects the linear band resolution.
+  /**
+   * Frames between scope publications, an integer of at least 0; 0 switches scope telemetry off.
+   * Omitted: off, or one record per block when a `scopeSharedBuffer` is given.
+   */
   scopeIntervalFrames?: number;
+  /** Spectrum bands per scope record, an integer in [1, 64]. Omitted: 48. */
   scopeBands?: number;
+  /** Shared memory from `createSonareScopeRingBuffer`. Omitted: scope records are posted as port messages. */
   scopeSharedBuffer?: SharedArrayBuffer;
+  /**
+   * Slots of the scope ring, an integer of at least 1. Omitted: read from the buffer's header; a
+   * differing value is a RangeError. Node creation: 64.
+   */
   scopeRingCapacity?: number;
   /**
    * Lock-free SPSC queue for clip-page cache misses. Supplying this is required
@@ -92,15 +142,23 @@ export interface SonareRealtimeEngineWorkletProcessorOptions {
    * postMessage structured cloning from AudioWorklet process().
    */
   clipPageRequestSharedBuffer?: SharedArrayBuffer;
+  /**
+   * Slots of the clip-page request ring, an integer of at least 1. Omitted: read from the buffer's
+   * header; a differing value is a RangeError. Node creation: 128.
+   */
   clipPageRequestRingCapacity?: number;
   /** Lock-free worklet-to-main-thread MIDI-1 output ring. */
   externalMidiSharedBuffer?: SharedArrayBuffer;
+  /**
+   * Slots of the external-MIDI ring, an integer of at least 1. Omitted: read from the buffer's
+   * header; a differing value is a RangeError. Node creation: 256.
+   */
   externalMidiRingCapacity?: number;
   /**
-   * Route the PFL/AFL cue bus to the processor's SECOND output instead of
-   * folding it into the program output. Off by default, so an existing
-   * single-output host keeps its current mix sample for sample. The node must
-   * be constructed with two outputs for the cue to be audible.
+   * Route the PFL/AFL cue bus to the processor's second output instead of
+   * folding it into the program output. Default `false`, so a single-output
+   * host keeps its mix sample for sample. The node must be constructed with
+   * two outputs for the cue to be audible.
    */
   cueOutput?: boolean;
 }
@@ -152,6 +210,7 @@ export interface SonareStreamAnalyzerNodeOptions
   ) => AudioWorkletNode;
 }
 
+/** Options of the playback worklet processor. */
 export interface SonarePlaybackWorkletProcessorOptions {
   /** Renderer configuration; parsed once, in the processor constructor. Default `{}`. */
   config?: PlaybackRendererConfig;
@@ -179,8 +238,11 @@ export interface SonarePlaybackWorkletProcessorOptions {
   wasmBinary?: ArrayBuffer | Uint8Array;
 }
 
+/** Options of `createSonarePlaybackNode`, on top of the processor options. */
 export interface SonarePlaybackNodeOptions extends SonarePlaybackWorkletProcessorOptions {
+  /** Registered processor name. Default `'sonare-playback-processor'`. */
   processorName?: string;
+  /** Creates the `AudioWorkletNode`. Omitted: `new AudioWorkletNode(context, name, options)`. */
   nodeFactory?: (
     context: BaseAudioContext,
     processorName: string,
@@ -199,11 +261,17 @@ export interface SonarePlaybackWorkletDiagnostics extends PlaybackDiagnostics {
   unsupported_input_blocks: number;
 }
 
+/** What the realtime-engine node resolved at creation: transport, platform support and ABI state. */
 export interface SonareRealtimeEngineNodeCapabilities {
+  /** Transport in use: `'sab'` for shared-memory rings, `'postMessage'` for port messages. */
   mode: 'sab' | 'postMessage';
+  /** Runtime behind the processor; always `'embind'`. */
   runtimeTarget: 'embind';
+  /** Whether `SharedArrayBuffer` exists in the creating realm. */
   sharedArrayBuffer: boolean;
+  /** Whether `Atomics` exists in the creating realm. */
   atomics: boolean;
+  /** Whether `AudioWorkletNode` exists in the creating realm or a `nodeFactory` was supplied. */
   audioWorklet: boolean;
   /** True only when clip-page misses use the bounded SAB ring. */
   clipPageRequestsRealtimeSafe: boolean;
@@ -214,21 +282,37 @@ export interface SonareRealtimeEngineNodeCapabilities {
    * false the cue is folded into the program output, as it always was.
    */
   cueOutput: boolean;
+  /** Engine ABI version of the loaded module. Omitted: not detected. */
   engineAbiVersion?: number;
+  /** Engine ABI version the host expects. Omitted: not detected. */
   expectedEngineAbiVersion?: number;
+  /** Whether the two ABI versions agree. Omitted: not detected. */
   abiCompatible?: boolean;
+  /** Why `'postMessage'` was chosen over `'sab'`. Omitted: the transport was not degraded. */
   degradedReason?: string;
+  /** Whether the processor reports readiness with a `ready` or `error` message the node awaits. */
   readyMessage?: boolean;
 }
 
+/** Options of `SonareRealtimeEngineNode.create`, on top of the processor options. */
 export interface SonareRealtimeEngineNodeOptions
   extends SonareRealtimeEngineWorkletProcessorOptions {
+  /** Registered processor name. Default `'sonare-realtime-engine-processor'`. */
   processorName?: string;
+  /** Worklet module loaded with `audioWorklet.addModule` before the node is created. Omitted: no module is added. */
   moduleUrl?: string | URL;
+  /**
+   * Transport. Omitted or `'auto'`: shared-memory rings when `SharedArrayBuffer` and `Atomics`
+   * exist, else port messages. `'sab'` without that support throws `SonareError` `NotSupported`.
+   */
   mode?: 'auto' | 'sab' | 'postMessage';
+  /** Engine ABI version of the loaded module. Omitted: read from the module. */
   engineAbiVersion?: number;
+  /** Engine ABI version the host expects. Omitted: `engineAbiVersion` when given, else the version this package was built for. */
   expectedEngineAbiVersion?: number;
+  /** Omitted or `true`: differing ABI versions throw `SonareError` `AbiMismatch`. `false`: the node is created anyway. */
   requireAbiCompatible?: boolean;
+  /** Creates the `AudioWorkletNode`. Omitted: `new AudioWorkletNode(context, name, options)`. */
   nodeFactory?: (
     context: BaseAudioContext,
     processorName: string,

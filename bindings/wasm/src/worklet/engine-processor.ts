@@ -111,7 +111,9 @@ function wireRenderFrame(frame: number | bigint | undefined): number | undefined
  * Backed by the `sonare.wasm` embind facade.
  */
 export class SonareRealtimeEngineWorkletProcessor {
+  /** Engine sample rate in Hz. */
   readonly sampleRate: number;
+  /** Largest render quantum rendered per `process()` call, in frames. */
   readonly blockSize: number;
   /** Channel count of every input, output and monitor bus, fixed at construction. */
   readonly numChannels: number;
@@ -292,6 +294,12 @@ export class SonareRealtimeEngineWorkletProcessor {
     }
   }
 
+  /**
+   * Renders one quantum: drains pending commands, feeds `inputs[0]` to the engine and writes the
+   * program mix to `outputs[0]`. A quantum longer than `blockSize` renders silence.
+   *
+   * @returns `false` once the processor is destroyed, else `true`.
+   */
   process(inputs: WorkletInput, outputs: WorkletOutput): boolean {
     if (this.closed) {
       return false;
@@ -1093,6 +1101,7 @@ export class SonareRealtimeEngineWorkletProcessor {
     }
   }
 
+  /** Releases the engine and its paged clip providers; later `process()` calls return `false`. Safe to call twice. */
   destroy(): void {
     if (!this.closed) {
       this.clearPagedClipProviders();
