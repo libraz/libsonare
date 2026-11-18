@@ -78,11 +78,11 @@ def main() -> int:
     contract = corpus["streaming_contract"]
     snake_fields = contract["frame_fields"]
     camel_fields = [_camel(field) for field in snake_fields]
-    # The JS facades fold the band counts into Matrix2D rows and report a
-    # disabled feature by absence.
-    facade_fields = [
-        field for field in camel_fields if field not in ("nMels", "nChroma", "featureFlags")
-    ]
+    # The facades fold the band counts into matrix rows and report a disabled
+    # feature by absence (JS) or None (Python).
+    folded = ("n_mels", "n_chroma", "feature_flags")
+    facade_snake_fields = [field for field in snake_fields if field not in folded]
+    facade_fields = [_camel(field) for field in facade_snake_fields]
     # The C++ core buffer keeps the unsuffixed time axis the public surfaces name in seconds.
     core_fields = ["timestamps" if field == "timestamps_sec" else field for field in snake_fields]
 
@@ -153,7 +153,7 @@ def main() -> int:
                 "Python StreamFrames",
                 errors,
             ),
-            snake_fields,
+            facade_snake_fields,
         ),
         (
             "Python StreamFrames stub",
@@ -163,7 +163,7 @@ def main() -> int:
                 "Python StreamFrames stub",
                 errors,
             ),
-            snake_fields,
+            facade_snake_fields,
         ),
     ]
     for label, body, fields in declarations:
@@ -203,7 +203,7 @@ def main() -> int:
     for label, text, phrase in [
         ("C overflow docs", c_header, "overflow drops newest"),
         ("C++ overflow docs", config_header, "newly produced frame"),
-        ("Python disabled-shape docs", python_types, "empty scalar array"),
+        ("Python disabled-shape docs", python_types, "not computed is ``None``"),
     ]:
         if phrase not in text:
             errors.append(f"{label}: missing contract phrase {phrase!r}")
