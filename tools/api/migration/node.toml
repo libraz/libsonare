@@ -15555,3 +15555,17 @@ old = "SoloProcessor='effects.reverb.dattorro'"
 new = "SoloProcessor='effects.reverb.plate'"
 domain = "mastering"
 rule = "aliases-removed"
+
+[[entry]]
+kind = "type"
+old = "CapabilityCatalogChainAlias"
+removed = "the catalog lists no other chain spellings; every chain key has exactly one"
+domain = "core"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "field"
+old = "CapabilityCatalogChain.aliases"
+removed = "the catalog lists no other chain spellings; every chain key has exactly one"
+domain = "core"
+rule = "aliases-removed"

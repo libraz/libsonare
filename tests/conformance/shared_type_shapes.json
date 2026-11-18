@@ -20,8 +20,7 @@
       "processors",
       "version"
     ],
-    "CapabilityCatalogChain": ["aliases", "lists", "params", "stages"],
-    "CapabilityCatalogChainAlias": ["aliases", "key"],
+    "CapabilityCatalogChain": ["lists", "params", "stages"],
     "CapabilityCatalogChainList": ["key", "maxItems", "minItems", "processor"],
     "CapabilityCatalogChainStage": ["enabledKey", "prefix", "processor"],
     "MasteringPresetCatalogEntry": [

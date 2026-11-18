@@ -23,7 +23,6 @@ import { describe, expect, it } from 'vitest';
 import type {
   CapabilityCatalog,
   CapabilityCatalogChain,
-  CapabilityCatalogChainAlias,
   CapabilityCatalogChainList,
   CapabilityCatalogChainStage,
   CapabilityCatalogPresets,
@@ -157,16 +156,10 @@ const catalogChainList = {
   maxItems: 64,
 } satisfies CapabilityCatalogChainList;
 
-const catalogChainAlias = {
-  key: 'eq.tilt.tiltDb',
-  aliases: ['eq.tiltDb'],
-} satisfies CapabilityCatalogChainAlias;
-
 const catalogChain = {
   stages: [catalogChainStage],
   lists: [catalogChainList],
   params: [catalogParameter],
-  aliases: [catalogChainAlias],
 } satisfies CapabilityCatalogChain;
 
 const capabilityCatalog = {
@@ -182,7 +175,6 @@ describe('capability catalog type shapes', () => {
   it.each([
     ['CapabilityCatalog', capabilityCatalog],
     ['CapabilityCatalogChain', catalogChain],
-    ['CapabilityCatalogChainAlias', catalogChainAlias],
     ['CapabilityCatalogChainList', catalogChainList],
     ['CapabilityCatalogChainStage', catalogChainStage],
     ['CapabilityCatalogPresets', catalogPresets],

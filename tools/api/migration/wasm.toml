@@ -27905,3 +27905,33 @@ domain = "analysis"
 rule = "aliases-removed"
 entry = "./analysis"
 test = "bindings/wasm/tests/surface/mastering-streaming.test.ts::refuses the earlier spelling %j"
+
+[[entry]]
+kind = "type"
+old = "CapabilityCatalogChainAlias"
+removed = "the catalog lists no other chain spellings; every chain key has exactly one"
+domain = "core"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "type"
+old = "CapabilityCatalogChainAlias"
+removed = "the catalog lists no other chain spellings; every chain key has exactly one"
+domain = "core"
+rule = "aliases-removed"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "CapabilityCatalogChain.aliases"
+removed = "the catalog lists no other chain spellings; every chain key has exactly one"
+domain = "core"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "field"
+old = "CapabilityCatalogChain.aliases"
+removed = "the catalog lists no other chain spellings; every chain key has exactly one"
+domain = "core"
+rule = "aliases-removed"
+entry = "./analysis"

@@ -396,14 +396,6 @@ export interface CapabilityCatalogChainList {
   readonly maxItems: number;
 }
 
-/** The other spellings of a canonical chain key; `<i>` stands for a list index. */
-export interface CapabilityCatalogChainAlias {
-  /** Canonical chain key. */
-  readonly key: string;
-  /** Other spellings accepted for `key`. */
-  readonly aliases: readonly string[];
-}
-
 /** How each flat mastering chain key is described. */
 export interface CapabilityCatalogChain {
   /** One entry per chain stage. */
@@ -412,8 +404,6 @@ export interface CapabilityCatalogChain {
   readonly lists: readonly CapabilityCatalogChainList[];
   /** Keys no processor describes, with bounds measured through the chain's own validator. */
   readonly params: readonly MasteringInsertParamInfo[];
-  /** Other spellings of chain keys. */
-  readonly aliases: readonly CapabilityCatalogChainAlias[];
 }
 
 /** Complete runtime catalog exposed by {@link capabilityCatalog}. */

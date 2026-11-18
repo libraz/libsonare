@@ -799,7 +799,6 @@ export type {
   Capabilities,
   CapabilityCatalog,
   CapabilityCatalogChain,
-  CapabilityCatalogChainAlias,
   CapabilityCatalogChainList,
   CapabilityCatalogChainStage,
   CapabilityCatalogPresets,
