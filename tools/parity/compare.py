@@ -43,6 +43,7 @@ from pathlib import Path
 
 from allowlist import AGREED, DIVERGED, Allowlist
 from core_defaults import CoreConfig
+from extractors.c_api import matrix_dimensions
 from extractors.wasm_internal import WasmInternal
 from model import Extraction, FunctionSig, RecordShape
 from normalize import (
@@ -78,9 +79,11 @@ DEFAULT_INPUT_ROLES = (
     "mel",
     "mel_power",
     "mfcc",
+    "coefficients",
     "mfcc_coefficients",
     "mfcc_coeffs",
     "onset_envelope",
+    "tempogram",
     "tempogram_data",
     "values",
 )
@@ -1312,6 +1315,7 @@ _EXTENDED_FIELD_TAILS = {
     "chroma_cens": ("bins_per_octave",),
     "chroma_cqt": ("bins_per_octave",),
     "mfcc_to_mel": ("lifter",),
+    "mfcc_to_audio": ("htk", "lifter"),
     "decompose": ("init",),
     # These facade base names expose the corresponding additive C `_ex`
     # variants.  Their trailing request fields intentionally extend the base
@@ -1391,11 +1395,13 @@ def _mirror_order_verdict(key: str, c_cfg: list[str], s_cfg: list[str]) -> str:
 def _order_drift(c_index, indexed, allow, rep: Report, selected, roles: set[str]) -> None:
     for key, csig in c_index.items():
         c_cfg = _config_names(csig, roles)
+        # A matrix's dimensions carry no order: a facade derives them or passes them where C does.
+        dims = matrix_dimensions(csig.params)
         for s in _FACADE_SURFACES:
             if s not in selected or key not in indexed.get(s, {}):
                 continue
             ssig = indexed[s][key]
-            s_cfg = _config_names(ssig, roles)
+            s_cfg = [n for n in _config_names(ssig, roles) if n not in dims]
             declined = _order_not_comparable(c_cfg, s_cfg)
             if declined is not None:
                 rep.decline("order", key, s, declined)

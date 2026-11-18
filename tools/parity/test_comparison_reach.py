@@ -238,15 +238,75 @@ def test_a_config_struct_before_the_itemized_params_is_the_options_bag() -> None
     assert compare._order_verdict("k", ["config", "ops", "gain"], ["gain"]) == compare.DIVERGED
 
 
-def test_a_count_after_its_array_is_derived_but_matrix_dimensions_are_not() -> None:
-    def structural(decl: str) -> list[str]:
-        params = c_api._mark_derived_counts([c_api._parse_param(p) for p in decl.split(",")])
-        return [p.name for p in params if p.structural]
+def _structural(decl: str) -> list[str]:
+    params = c_api._mark_derived_counts([c_api._parse_param(p) for p in decl.split(",")])
+    return [p.name for p in params if p.structural]
 
-    assert "n_ops" in structural("const SonareSpectralEditOp* ops, size_t n_ops, float** out")
-    assert "frames" in structural("const float* samples, size_t frames, int channels")
-    matrix = structural("const float* features, int n_features, int n_frames, int width")
-    assert "n_features" not in matrix and "n_frames" not in matrix
+
+def test_a_count_after_its_array_is_derived() -> None:
+    assert "n_ops" in _structural("const SonareSpectralEditOp* ops, size_t n_ops, float** out")
+    assert "frames" in _structural("const float* samples, size_t frames, int channels")
+
+
+def test_the_dimensions_after_a_matrix_are_derived_and_the_config_after_them_is_not() -> None:
+    matrix = _structural("const float* features, int n_features, int n_frames, int width")
+    assert {"n_features", "n_frames"} <= set(matrix) and "width" not in matrix
+    cqt = _structural(
+        "const float* magnitude, int n_bins, int n_frames, int sample_rate, int hop_length"
+    )
+    assert {"n_bins", "n_frames"} <= set(cqt) and "hop_length" not in cqt
+    gl = _structural(
+        "const float* magnitude, size_t input_length, int n_bins, int n_frames, int n_fft"
+    )
+    assert {"n_bins", "n_frames"} <= set(gl) and "n_fft" not in gl
+    pair = _structural(
+        "const float* x, int x_rows, int x_cols, const float* y, int y_rows, int y_cols, int k"
+    )
+    assert {"x_rows", "x_cols", "y_rows", "y_cols"} <= set(pair) and "k" not in pair
+    assert "n" in _structural("const float* recurrence, int n, int pad")
+    mel = _structural("const float* coefficients, int n_mfcc, int n_frames, int n_mels")
+    assert {"n_mfcc", "n_frames"} <= set(mel) and "n_mels" not in mel
+
+
+def test_a_dimension_name_away_from_its_matrix_stays_config() -> None:
+    cqt = _structural(
+        "const float* samples, size_t length, int sample_rate, int hop_length, int n_bins"
+    )
+    assert "n_bins" not in cqt
+
+
+def _order_findings(facade_params: list[str]) -> list:
+    decl = "const float* s, int n_features, int n_frames, int n_components, int n_iter"
+    c = Extraction(surface="c")
+    c.functions = [
+        FunctionSig(
+            key="decompose",
+            surface="c",
+            raw_name="decompose",
+            params=c_api._mark_derived_counts([c_api._parse_param(p) for p in decl.split(",")]),
+            file="c.h",
+            line=1,
+        )
+    ]
+    py = Extraction(surface="python")
+    py.functions = [
+        FunctionSig(
+            key="decompose",
+            surface="python",
+            raw_name="decompose",
+            params=[Param(name=n, raw_name=n) for n in facade_params],
+            file="py.pyi",
+            line=1,
+        )
+    ]
+    rep = compare.build_report({"c": c, "python": py}, allowlist_mod.Allowlist(), ["c", "python"])
+    return [f for f in rep.active() if f.category == "order"]
+
+
+def test_matrix_dimensions_agree_whether_the_facade_derives_or_passes_them() -> None:
+    assert _order_findings(["s", "n_components", "n_iter"]) == []
+    assert _order_findings(["s", "n_features", "n_frames", "n_components", "n_iter"]) == []
+    assert [f.key for f in _order_findings(["s", "n_iter", "n_components"])] == ["decompose"]
 
 
 if __name__ == "__main__":

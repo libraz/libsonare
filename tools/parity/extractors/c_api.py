@@ -127,16 +127,37 @@ def _parse_param(decl: str) -> Param:
 
 
 # A count right after its array is that array's length, which the facades derive:
-# ``ops, n_ops`` (not ``features, n_features, n_frames``, a matrix's dimensions)
-# and the ``frames, channels`` of an interleaved buffer.
+# ``ops, n_ops``, the ``frames, channels`` of an interleaved buffer, and the run of
+# dimensions after a matrix (``features, n_features, n_frames``), which every facade
+# takes from the array's shape.
 _INTEGER_TYPES = {"int", "int32_t", "size_t", "uint32_t", "int64_t", "uint64_t"}
+_MATRIX_DIMENSION_RE = re.compile(
+    r"^(n|rows|cols|input_length|n_(bins|frames|features|rows|cols|mfcc|chroma|lags)|\w+_(rows|cols))$"
+)
+
+
+def _is_integer(param: Param) -> bool:
+    return param.type.replace("const", "").strip() in _INTEGER_TYPES
+
+
+def matrix_dimensions(params: list[Param]) -> set[str]:
+    """Names of the dimension-named integers that directly follow a pointer."""
+    names: set[str] = set()
+    for i, prev in enumerate(params):
+        if "*" not in prev.type:
+            continue
+        for cur in params[i + 1 :]:
+            if not _is_integer(cur) or not _MATRIX_DIMENSION_RE.match(cur.name):
+                break
+            names.add(cur.name)
+    return names
 
 
 def _mark_derived_counts(params: list[Param]) -> list[Param]:
     """Mark an integer count that directly follows the array it measures as structural."""
     padded = [*params, Param(name="")]
     for prev, cur, nxt in zip(padded, padded[1:], padded[2:]):
-        if "*" not in prev.type or cur.type.replace("const", "").strip() not in _INTEGER_TYPES:
+        if "*" not in prev.type or not _is_integer(cur):
             continue
         if (
             cur.name == f"n_{prev.name}"
@@ -145,6 +166,10 @@ def _mark_derived_counts(params: list[Param]) -> list[Param]:
             and nxt.name == "channels"
         ):
             cur.structural = True
+    dims = matrix_dimensions(params)
+    for p in params:
+        if p.name in dims:
+            p.structural = True
     return params
 
 
