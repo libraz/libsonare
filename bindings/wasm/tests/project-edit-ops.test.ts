@@ -940,7 +940,6 @@ describe('Sonare WASM Project edit ops', () => {
             rootPc: 0,
             quality: 'major',
             extensions: [7],
-            slashBassPc: 255,
             romanNumeral: 'I',
             modulationBoundary: false,
           },
