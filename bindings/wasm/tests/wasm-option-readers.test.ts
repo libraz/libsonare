@@ -205,10 +205,6 @@ describe('mono repair and dynamics sampleRate', () => {
     out[1000] = 1;
     return out;
   };
-  const same = (a: Float32Array, b: Float32Array) => {
-    expect(a.length).toBe(b.length);
-    expect(Array.from(a)).toEqual(Array.from(b));
-  };
 
   it('refuses an omitted rate on the mono repair entries and on the compressor', () => {
     const samples = tone();

@@ -726,9 +726,9 @@ describe('closed sets and catalogs', () => {
   });
 
   it('masteringApplyProcessor params are typed by processor', () => {
-    expectTypeOf<
-      Parameters<typeof sonare.masteringApplyProcessor<'dynamics.compressor'>>[0]
-    >().toHaveProperty('processor');
+    expectTypeOf<sonare.MasteringApplyProcessorRequest<'dynamics.compressor'>>().toHaveProperty(
+      'processor',
+    );
     const result = sonare.masteringApplyProcessor({
       processor: 'dynamics.compressor',
       samples: left,

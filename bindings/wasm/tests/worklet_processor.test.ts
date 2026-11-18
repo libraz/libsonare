@@ -1,3 +1,4 @@
+import type { MixScenePreset } from '../dist/index.js';
 import {
   SONARE_METER_RING_PROTOCOL_VERSION,
   SONARE_SPECTRUM_RING_PROTOCOL_VERSION,
@@ -98,7 +99,7 @@ describe('SonareWorkletProcessor', () => {
   it('reads the realtime views once per callback whatever the strip count', () => {
     const sampleRate = 48000;
     const blockSize = 128;
-    const checksPerCallback = (preset: string, strips: number): number => {
+    const checksPerCallback = (preset: MixScenePreset, strips: number): number => {
       const processor = new SonareWorkletProcessor({
         sceneJson: JSON.stringify(mixingScenePreset(preset)),
         sampleRate,

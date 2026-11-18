@@ -503,7 +503,7 @@ describe('mastering mixing surface', () => {
         'the one-shot mix meter names true peak without the unit and the planes channelCount',
         () =>
           (
-            module().mixStereo([leftOnly()], [silence()], SR, {}) as {
+            module().mixStereo([leftOnly()], [silence()], SR, {}) as unknown as {
               meters: Record<string, unknown>[];
             }
           ).meters[0],
