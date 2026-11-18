@@ -394,7 +394,10 @@ class ConstructionRule(unittest.TestCase):
     def test_python_document_parameter_is_exempt_by_type(self) -> None:
         classes = {
             "Aliased": "config: Doc | None = None",
-            "JsonText": "config: Mapping[str, Any] | str",
+            "AliasedText": "config: Doc | str",
+            "BareMapping": "config: Mapping[str, Any] | str",
+            "BareOptions": "options: dict[str, Any]",
+            "AliasedOptions": "options: Doc",
             "Record": "config: StreamConfig",
             "Text": "config: str",
             "Untyped": "config",
@@ -424,10 +427,17 @@ class ConstructionRule(unittest.TestCase):
                 mock.patch.object(check, "_PY_PACKAGE", Path(tmp)),
             ):
                 verdict = self.judge(records)
-        self.assertEqual(verdict.read, 5)
+        self.assertEqual(verdict.read, 8)
         self.assertEqual(
             sorted(f.key for f in verdict.violations),
-            ["python:Record", "python:Text", "python:Untyped"],
+            [
+                "python:AliasedOptions",
+                "python:BareMapping",
+                "python:BareOptions",
+                "python:Record",
+                "python:Text",
+                "python:Untyped",
+            ],
         )
 
 

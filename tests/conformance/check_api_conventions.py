@@ -336,7 +336,11 @@ def _python_document_aliases() -> set[str]:
 
 
 def _python_is_document(annotation: ast.expr | None, aliases: set[str]) -> bool:
-    """True when every member of the annotation is a document, its JSON text, or None."""
+    """True when the annotation names a document alias, beside at most its JSON text and None.
+
+    A bare dict/Mapping annotation is not a document: it is the untyped option bag the
+    construction rule refuses, so only a declared package alias exempts.
+    """
     if annotation is None:
         return False
     members: list[ast.expr] = []
@@ -348,7 +352,7 @@ def _python_is_document(annotation: ast.expr | None, aliases: set[str]) -> bool:
         else:
             members.append(node)
     forms = [ast.unparse(m) for m in members]
-    documents = [f for f in forms if f in _PY_DOCUMENT_FORMS or f in aliases]
+    documents = [f for f in forms if f in aliases]
     return bool(documents) and all(f in documents or f in ("str", "None") for f in forms)
 
 
@@ -419,8 +423,8 @@ def _construction_violation(r: dict) -> str | None:
     if r["kind"] == "js-create" and not r["returns"].startswith("Promise<"):
         return "static create() exists only for constructions that return a Promise"
     # A library document (mixer scene, playback config, mastering chain) is the value the
-    # object is built from, not an option bag, so a parameter typed as one is exempt by type.
-    documents = r.get("documents", [])
+    # object is built from, not an option bag, so a `config` typed by a document alias is exempt.
+    documents = [p for p in r.get("documents", []) if p == "config"]
     if r["kind"] == "py-ctor" and any(
         p in _PY_CONFIG_PARAMS and p not in documents for p in r["params"]
     ):
@@ -1187,8 +1191,8 @@ RULES: list[Rule] = [
         violation=_construction_violation,
         derive=_construction_records,
         pending={
+            "python:PlaybackRenderer": "annotate config with the playback config document alias",
             "python:StreamAnalyzer": "take the stream config as keyword arguments",
-            "python:VocalEditSession": "drop options= and **option_overrides, take keyword arguments",
             "wasm:ClipPageStreamer": "take one config object holding the engine",
             "wasm:SonarePlaybackWorkletProcessor": "fold port into the options object",
             "wasm:SonareRealtimeEngineWorkletProcessor": "fold transport into the options object",
