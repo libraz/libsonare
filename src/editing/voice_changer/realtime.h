@@ -317,6 +317,8 @@ class RealtimeVoiceChanger {
   ///          samples combined and are intentionally omitted. Returns 0 before
   ///          prepare() has been called.
   int latency_samples() const noexcept;
+  /// @brief Largest block the process entries accept; 0 before prepare().
+  int max_block_size() const noexcept { return max_block_size_; }
   /// @brief How long output keeps sounding past @ref latency_samples() once the input stops.
   /// @details Control thread, from the published configuration. Every stage's owned memory is
   ///          bounded with each live control at the extreme it could still be gliding from, and

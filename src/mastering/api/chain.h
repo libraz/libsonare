@@ -444,6 +444,8 @@ class StreamingMasteringChain {
 
   /// @brief Total reported latency in samples across all active processors.
   int latency_samples() const noexcept;
+  /// @brief Largest block process() and flush() accept; 0 before prepare().
+  int max_block_size() const noexcept { return max_block_size_; }
 
   /// @brief Returns the active configuration.
   const MasteringChainConfig& config() const noexcept { return config_; }
