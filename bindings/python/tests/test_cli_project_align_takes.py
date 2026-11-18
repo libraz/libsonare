@@ -151,18 +151,18 @@ def test_the_written_warp_map_carries_the_anchors_under_the_takes_name(
     aligned: SimpleNamespace,
 ) -> None:
     """The map is named for its source and its anchors place the take under the guide."""
-    (warp_map,) = aligned.document["warp_maps"]
+    (warp_map,) = aligned.document["warpMaps"]
     assert warp_map["id"] == 1
     assert warp_map["name"] == "take-2"
     assert len(warp_map["anchors"]) == aligned.payload["takes"][0]["anchor_count"]
     for index in range(1, len(warp_map["anchors"])):
         previous, current = warp_map["anchors"][index - 1], warp_map["anchors"][index]
-        assert current["warp_sample"] > previous["warp_sample"]
-        assert current["source_sample"] > previous["source_sample"]
+        assert current["warpSample"] > previous["warpSample"]
+        assert current["sourceSample"] > previous["sourceSample"]
     # The take is the longer signal, so its own axis has to advance faster than
     # the reference timeline it is placed under.
     last = warp_map["anchors"][-1]
-    assert last["source_sample"] > last["warp_sample"]
+    assert last["sourceSample"] > last["warpSample"]
 
 
 def test_only_the_takes_clips_are_bound_and_they_are_bound_in_time_stretch(
@@ -170,11 +170,11 @@ def test_only_the_takes_clips_are_bound_and_they_are_bound_in_time_stretch(
 ) -> None:
     """A map without a mode plays unaligned, so the mode is part of the job."""
     clips = {clip["id"]: clip for clip in aligned.document["clips"]}
-    assert clips[2]["warp_ref_id"] == 1
-    assert clips[2]["warp_mode"] == WARP_MODE_TIME_STRETCH
+    assert clips[2]["warpRefId"] == 1
+    assert clips[2]["warpMode"] == WARP_MODE_TIME_STRETCH
     # The reference is not a take: nothing about its clip may move.
-    assert clips[1]["warp_ref_id"] == 0
-    assert clips[1]["warp_mode"] == 0
+    assert clips[1]["warpRefId"] == 0
+    assert clips[1]["warpMode"] == 0
 
 
 def test_text_mode_reports_one_line_per_take_between_the_two_summaries(
@@ -206,14 +206,14 @@ def test_an_existing_warp_map_is_neither_reused_nor_renumbered(takes: SimpleName
         takes,
         "occupied.json",
         lambda doc: doc.__setitem__(
-            "warp_maps",
+            "warpMaps",
             [
                 {
                     "id": 7,
                     "name": "hand-made",
                     "anchors": [
-                        {"warp_sample": 0.0, "source_sample": 0.0},
-                        {"warp_sample": 1000.0, "source_sample": 1000.0},
+                        {"warpSample": 0.0, "sourceSample": 0.0},
+                        {"warpSample": 1000.0, "sourceSample": 1000.0},
                     ],
                 }
             ],
@@ -236,7 +236,7 @@ def test_an_existing_warp_map_is_neither_reused_nor_renumbered(takes: SimpleName
     assert result.returncode == 0, result.stderr
     assert json.loads(result.stdout)["takes"][0]["warp_ref_id"] == 8
     written = json.loads(output.read_bytes())
-    assert [(entry["id"], entry["name"]) for entry in written["warp_maps"]] == [
+    assert [(entry["id"], entry["name"]) for entry in written["warpMaps"]] == [
         (7, "hand-made"),
         (8, "take-2"),
     ]
@@ -306,7 +306,7 @@ def test_a_document_with_no_take_is_a_refused_request_not_an_empty_success(
         takes,
         "no-takes.json",
         lambda doc: doc.__setitem__(
-            "clips", [clip for clip in doc["clips"] if clip["source_id"] == 1]
+            "clips", [clip for clip in doc["clips"] if clip["sourceId"] == 1]
         ),
     )
     output = takes.root / "no-takes-out.json"
@@ -344,7 +344,7 @@ def test_a_take_at_another_rate_is_aligned_and_scaled_to_the_project_rate(
     _write_wav(other_rate, _glide(0.75, take_rate), take_rate)
 
     def mutate(doc: dict) -> None:
-        doc["sample_rate"] = project_rate
+        doc["sampleRate"] = project_rate
         doc["sources"][1]["uri"] = other_rate.as_uri()
 
     variant = _variant(takes, "rate-mismatch.json", mutate)
@@ -370,11 +370,11 @@ def test_a_take_at_another_rate_is_aligned_and_scaled_to_the_project_rate(
     ).anchors
     scale = project_rate / reference_rate
 
-    (warp_map,) = json.loads(output.read_bytes())["warp_maps"]
+    (warp_map,) = json.loads(output.read_bytes())["warpMaps"]
     assert len(warp_map["anchors"]) == len(expected)
     for written, (warp, source) in zip(warp_map["anchors"], expected, strict=True):
-        assert written["warp_sample"] == pytest.approx(warp * scale, abs=1e-6)
-        assert written["source_sample"] == pytest.approx(source * scale, abs=1e-6)
+        assert written["warpSample"] == pytest.approx(warp * scale, abs=1e-6)
+        assert written["sourceSample"] == pytest.approx(source * scale, abs=1e-6)
 
 
 def test_a_reference_that_is_not_an_audio_source_is_refused_under_its_id(

@@ -67,7 +67,7 @@ bool base64_decode(const std::string& text, std::vector<uint8_t>* out, size_t ma
 // known fields: an absent field falls back to the default. A field that is
 // present but carries the wrong JSON type is malformed input and is rejected
 // with InvalidFormat, uniformly for scalars, arrays, objects and array elements
-// -- substituting a default there would let `"sample_rate": "96000"` render the
+// -- substituting a default there would let `"sampleRate": "96000"` render the
 // whole project at the default rate, or `"clips": {}` load an empty arrangement
 // that the next save writes over the user's file.
 // ===========================================================================

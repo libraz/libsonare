@@ -739,11 +739,11 @@ TEST_CASE("project C surface imports SMF time signatures and markers", "[project
   REQUIRE(first_clip != 0);
 
   const std::string json = serialize(project);
-  REQUIRE(json.find("\"time_signatures\":[{\"denominator\":4,\"numerator\":3,\"start_ppq\":0}]") !=
+  REQUIRE(json.find("\"timeSignatures\":[{\"denominator\":4,\"numerator\":3,\"startPpq\":0}]") !=
           std::string::npos);
   REQUIRE(json.find("\"markers\":[{\"id\":1,\"name\":\"verse\",\"ppq\":1}]") != std::string::npos);
-  REQUIRE(json.find("\"tempo_segments\":[{\"bpm\":120") != std::string::npos);
-  REQUIRE(json.find("\"length_ppq\":2") != std::string::npos);
+  REQUIRE(json.find("\"tempoSegments\":[{\"bpm\":120") != std::string::npos);
+  REQUIRE(json.find("\"lengthPpq\":2") != std::string::npos);
 
   REQUIRE(sonare_project_undo(project) == SONARE_OK);
   const std::string after_undo = serialize(project);
@@ -926,13 +926,13 @@ TEST_CASE("project C surface preserves SMF SysEx through project serialization",
 
   REQUIRE(sonare_project_undo(project) == SONARE_OK);
   const std::string after_undo = serialize(project);
-  REQUIRE(after_undo.find("__sysex_payloads") == std::string::npos);
-  REQUIRE(after_undo.find("sysex_handle") == std::string::npos);
+  REQUIRE(after_undo.find("__sysexPayloads") == std::string::npos);
+  REQUIRE(after_undo.find("sysexHandle") == std::string::npos);
   REQUIRE(sonare_project_redo(project) == SONARE_OK);
 
   const std::string json = serialize(project);
-  REQUIRE(json.find("__sysex_payloads") != std::string::npos);
-  REQUIRE(json.find("sysex_handle") != std::string::npos);
+  REQUIRE(json.find("__sysexPayloads") != std::string::npos);
+  REQUIRE(json.find("sysexHandle") != std::string::npos);
 
   SonareProject* restored = nullptr;
   REQUIRE(sonare_project_deserialize(json.data(), json.size(), &restored, nullptr) == SONARE_OK);
@@ -1022,15 +1022,15 @@ TEST_CASE("project C surface rejects saturated SysEx handle allocation", "[proje
 
   std::string json = serialize(project);
   const std::string max_handle = std::to_string(std::numeric_limits<uint32_t>::max());
-  const std::string payload_prefix = "\"__sysex_payloads\":{\"1\":";
+  const std::string payload_prefix = "\"__sysexPayloads\":{\"1\":";
   const size_t payload_pos = json.find(payload_prefix);
   REQUIRE(payload_pos != std::string::npos);
-  json.replace(payload_pos, payload_prefix.size(), "\"__sysex_payloads\":{\"" + max_handle + "\":");
+  json.replace(payload_pos, payload_prefix.size(), "\"__sysexPayloads\":{\"" + max_handle + "\":");
 
-  const std::string event_handle = "\"sysex_handle\":1";
+  const std::string event_handle = "\"sysexHandle\":1";
   const size_t event_pos = json.find(event_handle);
   REQUIRE(event_pos != std::string::npos);
-  json.replace(event_pos, event_handle.size(), "\"sysex_handle\":" + max_handle);
+  json.replace(event_pos, event_handle.size(), "\"sysexHandle\":" + max_handle);
 
   SonareProject* saturated = nullptr;
   REQUIRE(sonare_project_deserialize(json.data(), json.size(), &saturated, nullptr) == SONARE_OK);
@@ -1650,7 +1650,7 @@ TEST_CASE("project C surface keeps an SMF note-off written on the end-of-track t
   // 1.0 quarter; length becomes the next representable double above it) so the
   // event survives compilation. A plain length == note-off ppq would drop it.
   const std::string json = serialize(project);
-  REQUIRE(json.find("\"length_ppq\":1.0000000000000002") != std::string::npos);
+  REQUIRE(json.find("\"lengthPpq\":1.0000000000000002") != std::string::npos);
 
   SonareProjectCompileResult result{};
   REQUIRE(sonare_project_compile(project, &result) == SONARE_OK);

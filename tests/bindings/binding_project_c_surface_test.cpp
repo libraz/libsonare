@@ -16,7 +16,7 @@ TEST_CASE("a successful project load hands back the warnings it collected", "[pr
   // string, so a C embedder that frees it only on failure leaks one per warned
   // load, and one that reads "non-NULL means failure" reports a good load as a
   // bad one.
-  const std::string warned = R"({"version":7,"midi_content":{"not-a-clip-id":[]}})";
+  const std::string warned = R"({"version":7,"midiContent":{"not-a-clip-id":[]}})";
   SonareProject* project = nullptr;
   char* diagnostics = nullptr;
   REQUIRE(sonare_project_deserialize(warned.data(), warned.size(), &project, &diagnostics) ==
@@ -187,7 +187,7 @@ TEST_CASE("project C surface exposes read-only project state without JSON", "[pr
         SONARE_ERROR_INVALID_PARAMETER);
 
   const std::string json = serialize(project);
-  CHECK(json.find("\"overlap_policy\":1") != std::string::npos);
+  CHECK(json.find("\"overlapPolicy\":1") != std::string::npos);
   CHECK(json.find("\"bpm\":132") != std::string::npos);
   CHECK(json.find("\"denominator\":8") != std::string::npos);
   CHECK(json.find("\"name\":\"Chorus\"") != std::string::npos);
@@ -420,18 +420,18 @@ TEST_CASE("project C surface authors MIR key and chord annotations", "[project]"
 
   const std::string json = serialize(project);
   REQUIRE(json.find("\"keys\":[") != std::string::npos);
-  REQUIRE(json.find("\"start_ppq\":0") != std::string::npos);
-  REQUIRE(json.find("\"tonic_pc\":9") != std::string::npos);
-  REQUIRE(json.find("\"roman_numeral\":\"V9/iii\"") != std::string::npos);
+  REQUIRE(json.find("\"startPpq\":0") != std::string::npos);
+  REQUIRE(json.find("\"tonicPc\":9") != std::string::npos);
+  REQUIRE(json.find("\"romanNumeral\":\"V9/iii\"") != std::string::npos);
   REQUIRE(json.find("\"extensions\":[7,9]") != std::string::npos);
-  REQUIRE(json.find("\"slash_bass_pc\":11") != std::string::npos);
-  REQUIRE(json.find("\"modulation_boundary\":true") != std::string::npos);
+  REQUIRE(json.find("\"slashBassPc\":11") != std::string::npos);
+  REQUIRE(json.find("\"modulationBoundary\":true") != std::string::npos);
 
   REQUIRE(sonare_project_undo(project) == SONARE_OK);
   const std::string after_undo = serialize(project);
   REQUIRE(after_undo.find("\"chords\":[]") != std::string::npos);
   REQUIRE(after_undo.find("\"keys\":[") != std::string::npos);
-  REQUIRE(after_undo.find("\"tonic_pc\":9") != std::string::npos);
+  REQUIRE(after_undo.find("\"tonicPc\":9") != std::string::npos);
   REQUIRE(sonare_project_redo(project) == SONARE_OK);
   REQUIRE(serialize(project) == json);
 
@@ -475,22 +475,22 @@ TEST_CASE("project C surface sets a clip warp reference", "[project]") {
   REQUIRE(sonare_project_set_clip_warp_mode(project, clip_id, SONARE_PROJECT_WARP_MODE_REPITCH) ==
           SONARE_OK);
   const std::string warped = serialize(project);
-  REQUIRE(warped.find("\"warp_ref_id\":123") != std::string::npos);
-  REQUIRE(warped.find("\"warp_mode\":1") != std::string::npos);
+  REQUIRE(warped.find("\"warpRefId\":123") != std::string::npos);
+  REQUIRE(warped.find("\"warpMode\":1") != std::string::npos);
 
   REQUIRE(sonare_project_undo(project) == SONARE_OK);
-  REQUIRE(serialize(project).find("\"warp_mode\":0") != std::string::npos);
+  REQUIRE(serialize(project).find("\"warpMode\":0") != std::string::npos);
   REQUIRE(sonare_project_undo(project) == SONARE_OK);
-  REQUIRE(serialize(project).find("\"warp_ref_id\":0") != std::string::npos);
+  REQUIRE(serialize(project).find("\"warpRefId\":0") != std::string::npos);
   REQUIRE(sonare_project_redo(project) == SONARE_OK);
   REQUIRE(sonare_project_redo(project) == SONARE_OK);
   REQUIRE(serialize(project) == warped);
 
   REQUIRE(sonare_project_set_clip_warp_ref(project, clip_id, 0) == SONARE_OK);
-  REQUIRE(serialize(project).find("\"warp_ref_id\":0") != std::string::npos);
+  REQUIRE(serialize(project).find("\"warpRefId\":0") != std::string::npos);
   REQUIRE(sonare_project_set_clip_warp_mode(project, clip_id,
                                             SONARE_PROJECT_WARP_MODE_TEMPO_SYNC) == SONARE_OK);
-  REQUIRE(serialize(project).find("\"warp_mode\":2") != std::string::npos);
+  REQUIRE(serialize(project).find("\"warpMode\":2") != std::string::npos);
   CHECK(sonare_project_set_clip_warp_ref(project, 999999u, 1) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(sonare_project_set_clip_warp_mode(project, 999999u, SONARE_PROJECT_WARP_MODE_REPITCH) ==
         SONARE_ERROR_INVALID_PARAMETER);

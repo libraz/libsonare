@@ -439,33 +439,33 @@ def test_project_validate_strict_writes_canonical_artifact(tmp_path) -> None:
         json.dumps(
             {
                 "version": 7,
-                "sample_rate": 48000,
+                "sampleRate": 48000,
                 "tracks": [
                     {
                         "id": 1,
                         "name": "audio",
                         "kind": 0,
-                        "channel_strip_ref": "",
-                        "output_target": "",
-                        "midi_destination_id": 0,
-                        "automation_lanes": [],
+                        "channelStripRef": "",
+                        "outputTarget": "",
+                        "midiDestinationId": 0,
+                        "automationLanes": [],
                     }
                 ],
                 "clips": [
                     {
                         "id": 1,
-                        "track_id": 1,
-                        "source_id": 99,
-                        "start_ppq": 0,
-                        "length_ppq": 1,
-                        "source_offset_ppq": 0,
+                        "trackId": 1,
+                        "sourceId": 99,
+                        "startPpq": 0,
+                        "lengthPpq": 1,
+                        "sourceOffsetPpq": 0,
                         "gain": 1,
-                        "fade_in": {"length_ppq": 0, "curve": 0},
-                        "fade_out": {"length_ppq": 0, "curve": 0},
-                        "loop_mode": 0,
-                        "loop_length_ppq": 0,
-                        "warp_ref_id": 0,
-                        "warp_mode": 0,
+                        "fadeIn": {"lengthPpq": 0, "curve": 0},
+                        "fadeOut": {"lengthPpq": 0, "curve": 0},
+                        "loopMode": 0,
+                        "loopLengthPpq": 0,
+                        "warpRefId": 0,
+                        "warpMode": 0,
                     }
                 ],
             }

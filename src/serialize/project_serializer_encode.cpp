@@ -22,10 +22,10 @@ namespace detail {
 
 Value tempo_segment_to_json(const transport::TempoSegment& s) {
   Object o;
-  o["start_ppq"] = s.start_ppq;
+  o["startPpq"] = s.start_ppq;
   o["bpm"] = s.bpm;
-  o["start_sample"] = s.start_sample;
-  o["end_bpm"] = s.end_bpm;
+  o["startSample"] = s.start_sample;
+  o["endBpm"] = s.end_bpm;
   // end_ppq is internal (populated during TempoMap normalization), not user
   // input — intentionally not serialized.
   return o;
@@ -33,7 +33,7 @@ Value tempo_segment_to_json(const transport::TempoSegment& s) {
 
 Value time_signature_to_json(const transport::TimeSignatureSegment& s) {
   Object o;
-  o["start_ppq"] = s.start_ppq;
+  o["startPpq"] = s.start_ppq;
   o["numerator"] = s.time_sig.numerator;
   o["denominator"] = s.time_sig.denominator;
   return o;
@@ -41,16 +41,16 @@ Value time_signature_to_json(const transport::TimeSignatureSegment& s) {
 
 Value automation_lane_to_json(const automation::AutomationLane& lane) {
   Object o;
-  o["target_param_id"] = static_cast<double>(lane.target_param_id());
+  o["targetParamId"] = static_cast<double>(lane.target_param_id());
   if (lane.target_kind() != automation::AutomationTargetKind::kOpaque) {
-    o["target_kind"] = static_cast<int>(lane.target_kind());
+    o["targetKind"] = static_cast<int>(lane.target_kind());
   }
   Array points;
   for (const auto& p : lane.points()) {
     Object po;
     po["ppq"] = p.ppq;
     po["value"] = p.value;
-    po["curve_to_next"] = static_cast<int>(p.curve_to_next);
+    po["curveToNext"] = static_cast<int>(p.curve_to_next);
     points.push_back(std::move(po));
   }
   o["points"] = std::move(points);
@@ -66,20 +66,20 @@ Value track_to_json(const arrangement::Track& t) {
   o["mute"] = t.mute;
   o["solo"] = t.solo;
   o["pan"] = static_cast<double>(t.pan);
-  o["channel_strip_ref"] = t.channel_strip_ref;
-  o["output_target"] = t.output_target;
-  o["midi_destination_id"] = static_cast<double>(t.midi_destination_id);
+  o["channelStripRef"] = t.channel_strip_ref;
+  o["outputTarget"] = t.output_target;
+  o["midiDestinationId"] = static_cast<double>(t.midi_destination_id);
   Array lanes;
   for (const auto& lane : t.automation_lanes) {
     lanes.push_back(automation_lane_to_json(lane));
   }
-  o["automation_lanes"] = std::move(lanes);
+  o["automationLanes"] = std::move(lanes);
   return o;
 }
 
 Value fade_to_json(const arrangement::ClipFade& f) {
   Object o;
-  o["length_ppq"] = f.length_ppq;
+  o["lengthPpq"] = f.length_ppq;
   o["curve"] = static_cast<int>(f.curve);
   return o;
 }
@@ -87,11 +87,11 @@ Value fade_to_json(const arrangement::ClipFade& f) {
 Value take_to_json(const arrangement::ClipTake& take) {
   Object o;
   o["id"] = static_cast<double>(take.id);
-  o["source_id"] = static_cast<double>(take.source_id);
-  o["source_offset_ppq"] = take.source_offset_ppq;
+  o["sourceId"] = static_cast<double>(take.source_id);
+  o["sourceOffsetPpq"] = take.source_offset_ppq;
   o["name"] = take.name;
   if (take.source_offset_seconds.has_value()) {
-    o["source_offset_seconds"] = *take.source_offset_seconds;
+    o["sourceOffsetSec"] = *take.source_offset_seconds;
   }
   // Optional; only emitted when set so existing projects round-trip byte-for-byte.
   if (take.partial) o["partial"] = true;
@@ -100,50 +100,50 @@ Value take_to_json(const arrangement::ClipTake& take) {
 
 Value comp_segment_to_json(const arrangement::ClipCompSegment& segment) {
   Object o;
-  o["start_ppq"] = segment.start_ppq;
-  o["end_ppq"] = segment.end_ppq;
-  o["take_id"] = static_cast<double>(segment.take_id);
-  o["crossfade_ppq"] = segment.crossfade_ppq;
+  o["startPpq"] = segment.start_ppq;
+  o["endPpq"] = segment.end_ppq;
+  o["takeId"] = static_cast<double>(segment.take_id);
+  o["crossfadePpq"] = segment.crossfade_ppq;
   return o;
 }
 
 Value comp_render_part_to_json(const arrangement::ClipCompRenderPart& part) {
   Object o;
-  o["visible_start_ppq"] = part.visible_start_ppq;
-  o["visible_end_ppq"] = part.visible_end_ppq;
-  o["reference_start_ppq"] = part.reference_start_ppq;
-  o["reference_end_ppq"] = part.reference_end_ppq;
-  o["take_id"] = static_cast<double>(part.take_id);
-  o["seam_fade_in_ppq"] = part.seam_fade_in_ppq;
-  o["seam_fade_out_ppq"] = part.seam_fade_out_ppq;
-  o["retained_only"] = part.retained_only;
+  o["visibleStartPpq"] = part.visible_start_ppq;
+  o["visibleEndPpq"] = part.visible_end_ppq;
+  o["referenceStartPpq"] = part.reference_start_ppq;
+  o["referenceEndPpq"] = part.reference_end_ppq;
+  o["takeId"] = static_cast<double>(part.take_id);
+  o["seamFadeInPpq"] = part.seam_fade_in_ppq;
+  o["seamFadeOutPpq"] = part.seam_fade_out_ppq;
+  o["retainedOnly"] = part.retained_only;
   return o;
 }
 
 Value clip_to_json(const arrangement::EditClip& c) {
   Object o;
   o["id"] = static_cast<double>(c.id);
-  o["track_id"] = static_cast<double>(c.track_id);
-  o["source_id"] = static_cast<double>(c.source_id);
-  o["start_ppq"] = c.start_ppq;
-  o["length_ppq"] = c.length_ppq;
-  o["source_offset_ppq"] = c.source_offset_ppq;
+  o["trackId"] = static_cast<double>(c.track_id);
+  o["sourceId"] = static_cast<double>(c.source_id);
+  o["startPpq"] = c.start_ppq;
+  o["lengthPpq"] = c.length_ppq;
+  o["sourceOffsetPpq"] = c.source_offset_ppq;
   if (c.source_offset_seconds.has_value()) {
-    o["source_offset_seconds"] = *c.source_offset_seconds;
+    o["sourceOffsetSec"] = *c.source_offset_seconds;
   }
   o["gain"] = c.gain;
-  o["fade_in"] = fade_to_json(c.fade_in);
-  o["fade_out"] = fade_to_json(c.fade_out);
-  o["loop_mode"] = static_cast<int>(c.loop_mode);
-  o["loop_length_ppq"] = c.loop_length_ppq;
+  o["fadeIn"] = fade_to_json(c.fade_in);
+  o["fadeOut"] = fade_to_json(c.fade_out);
+  o["loopMode"] = static_cast<int>(c.loop_mode);
+  o["loopLengthPpq"] = c.loop_length_ppq;
   if (c.loop_anchor.has_value()) {
-    o["loop_period_seconds"] = c.loop_anchor->period_seconds;
-    o["loop_phase_seconds"] = c.loop_anchor->phase_seconds;
+    o["loopPeriodSec"] = c.loop_anchor->period_seconds;
+    o["loopPhaseSec"] = c.loop_anchor->phase_seconds;
   }
   // Optional; only emitted when set so existing projects round-trip byte-for-byte.
-  if (c.loop_crossfade_ppq != 0.0) o["loop_crossfade_ppq"] = c.loop_crossfade_ppq;
-  o["warp_ref_id"] = static_cast<double>(c.warp_ref_id);
-  o["warp_mode"] = static_cast<int>(c.warp_mode);
+  if (c.loop_crossfade_ppq != 0.0) o["loopCrossfadePpq"] = c.loop_crossfade_ppq;
+  o["warpRefId"] = static_cast<double>(c.warp_ref_id);
+  o["warpMode"] = static_cast<int>(c.warp_mode);
   if (!c.takes.empty()) {
     Array takes;
     for (const auto& take : c.takes) {
@@ -152,21 +152,21 @@ Value clip_to_json(const arrangement::EditClip& c) {
     o["takes"] = std::move(takes);
   }
   if (c.active_take_id != 0) {
-    o["active_take_id"] = static_cast<double>(c.active_take_id);
+    o["activeTakeId"] = static_cast<double>(c.active_take_id);
   }
   if (!c.comp_segments.empty()) {
     Array segments;
     for (const auto& segment : c.comp_segments) {
       segments.push_back(comp_segment_to_json(segment));
     }
-    o["comp_segments"] = std::move(segments);
+    o["compSegments"] = std::move(segments);
   }
   if (!c.comp_render_parts.empty()) {
     Array parts;
     for (const auto& part : c.comp_render_parts) {
       parts.push_back(comp_render_part_to_json(part));
     }
-    o["comp_render_parts"] = std::move(parts);
+    o["compRenderParts"] = std::move(parts);
   }
   return o;
 }
@@ -178,8 +178,8 @@ Value warp_map_to_json(const arrangement::WarpMapRef& map) {
   Array anchors;
   for (const auto& anchor : map.anchors) {
     Object ao;
-    ao["warp_sample"] = anchor.warp_sample;
-    ao["source_sample"] = anchor.source_sample;
+    ao["warpSample"] = anchor.warp_sample;
+    ao["sourceSample"] = anchor.source_sample;
     anchors.push_back(std::move(ao));
   }
   o["anchors"] = std::move(anchors);
@@ -207,23 +207,23 @@ Value source_to_json(const arrangement::ClipSource& src) {
     // an unresolved source and re-decode it, rather than silently bouncing
     // silence. We do NOT base64-embed PCM here.
     o["uri"] = audio->uri;
-    o["channel_count"] = static_cast<double>(audio->channel_count);
-    o["sample_rate_hint"] = audio->sample_rate_hint;
-    o["storage_handle_id"] = static_cast<double>(audio->storage_handle_id);
+    o["channelCount"] = static_cast<double>(audio->channel_count);
+    o["sampleRateHint"] = audio->sample_rate_hint;
+    o["storageHandleId"] = static_cast<double>(audio->storage_handle_id);
     // Additive + optional: only emit when set so existing projects without a
     // content hash serialize byte-for-byte identically (no golden churn).
     if (!audio->content_hash.empty()) {
-      o["content_hash"] = audio->content_hash;
+      o["contentHash"] = audio->content_hash;
     }
     if (!audio->external_stem_role.empty()) {
-      o["external_stem_role"] = audio->external_stem_role;
+      o["externalStemRole"] = audio->external_stem_role;
     }
   } else {
     const auto& m = std::get<arrangement::MidiSourceRef>(src);
     o["kind"] = static_cast<int>(arrangement::SourceKind::kMidi);
     o["id"] = static_cast<double>(m.id);
     o["name"] = m.name;
-    o["channel_hint"] = static_cast<double>(m.channel_hint);
+    o["channelHint"] = static_cast<double>(m.channel_hint);
   }
   return o;
 }
@@ -246,39 +246,39 @@ Value marker_to_json(const arrangement::ProjectMarker& m) {
   }
   if (m.kind == static_cast<uint8_t>(arrangement::MarkerKind::kKeySignature) || m.key_fifths != 0 ||
       m.key_minor) {
-    o["key_fifths"] = static_cast<double>(m.key_fifths);
-    o["key_minor"] = m.key_minor;
+    o["keyFifths"] = static_cast<double>(m.key_fifths);
+    o["keyMinor"] = m.key_minor;
   }
   return o;
 }
 
 Value chord_to_json(const arrangement::ChordSymbol& c) {
   Object o;
-  o["start_ppq"] = c.start_ppq;
-  o["end_ppq"] = c.end_ppq;
-  o["root_pc"] = static_cast<double>(c.root_pc);
+  o["startPpq"] = c.start_ppq;
+  o["endPpq"] = c.end_ppq;
+  o["rootPc"] = static_cast<double>(c.root_pc);
   o["quality"] = static_cast<int>(c.quality);
   Array ext;
   for (uint8_t e : c.extensions) ext.push_back(static_cast<double>(e));
   o["extensions"] = std::move(ext);
-  o["slash_bass_pc"] = static_cast<double>(c.slash_bass_pc);
-  o["roman_numeral"] = c.roman_numeral;
-  o["modulation_boundary"] = c.modulation_boundary;
+  o["slashBassPc"] = static_cast<double>(c.slash_bass_pc);
+  o["romanNumeral"] = c.roman_numeral;
+  o["modulationBoundary"] = c.modulation_boundary;
   return o;
 }
 
 Value key_segment_to_json(const arrangement::KeySegment& k) {
   Object o;
-  o["start_ppq"] = k.start_ppq;
-  o["end_ppq"] = k.end_ppq;
-  o["tonic_pc"] = static_cast<double>(k.tonic_pc);
+  o["startPpq"] = k.start_ppq;
+  o["endPpq"] = k.end_ppq;
+  o["tonicPc"] = static_cast<double>(k.tonic_pc);
   o["mode"] = static_cast<int>(k.mode);
   return o;
 }
 
 Value annotation_to_json(const arrangement::ProjectAnnotation& a) {
   Object o;
-  o["tempo_confidence"] = a.tempo_confidence;
+  o["tempoConfidence"] = a.tempo_confidence;
   Array keys;
   for (const auto& k : a.keys) keys.push_back(key_segment_to_json(k));
   o["keys"] = std::move(keys);
@@ -288,8 +288,8 @@ Value annotation_to_json(const arrangement::ProjectAnnotation& a) {
   Array sections;
   for (const auto& s : a.sections) {
     Object so;
-    so["start_ppq"] = s.start_ppq;
-    so["end_ppq"] = s.end_ppq;
+    so["startPpq"] = s.start_ppq;
+    so["endPpq"] = s.end_ppq;
     so["label"] = s.label;
     sections.push_back(std::move(so));
   }
@@ -307,14 +307,14 @@ Value annotation_to_json(const arrangement::ProjectAnnotation& a) {
 
 Value sidecar_to_json(const arrangement::AssistSidecar& s) {
   Object o;
-  o["module_id"] = s.module_id;
-  o["schema_version"] = static_cast<double>(s.schema_version);
+  o["moduleId"] = s.module_id;
+  o["schemaVersion"] = static_cast<double>(s.schema_version);
   // Opaque payload: base64 so arbitrary bytes round-trip verbatim regardless of
   // whether the owning module is registered or the schema_version is known.
-  o["payload_b64"] = base64_encode(s.payload);
-  o["target_track_id"] = static_cast<double>(s.target_track_id);
-  o["region_start_ppq"] = s.region_start_ppq;
-  o["region_end_ppq"] = s.region_end_ppq;
+  o["payloadB64"] = base64_encode(s.payload);
+  o["targetTrackId"] = static_cast<double>(s.target_track_id);
+  o["regionStartPpq"] = s.region_start_ppq;
+  o["regionEndPpq"] = s.region_end_ppq;
   return o;
 }
 
@@ -330,7 +330,7 @@ Value midi_content_to_json(const arrangement::MidiContentStore& midi) {
       eo["word0"] = static_cast<double>(e.word0);
       eo["word1"] = static_cast<double>(e.word1);
       if (e.sysex_handle != 0) {
-        eo["sysex_handle"] = static_cast<double>(e.sysex_handle);
+        eo["sysexHandle"] = static_cast<double>(e.sysex_handle);
       }
       arr.push_back(std::move(eo));
     }
@@ -341,7 +341,7 @@ Value midi_content_to_json(const arrangement::MidiContentStore& midi) {
     for (const auto& [handle, payload] : midi.sysex_payloads) {
       payloads[std::to_string(handle)] = base64_encode(payload);
     }
-    o["__sysex_payloads"] = std::move(payloads);
+    o["__sysexPayloads"] = std::move(payloads);
   }
   return o;
 }

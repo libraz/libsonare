@@ -282,7 +282,7 @@ def test_comp_segment_seam_crossfades_where_the_document_asks_for_one(
     stepped = _rewritten(
         comped,
         "stepped.json",
-        lambda doc: doc["clips"][0]["comp_segments"][1].__setitem__("crossfade_ppq", 0.0),
+        lambda doc: doc["clips"][0]["compSegments"][1].__setitem__("crossfadePpq", 0.0),
     )
 
     rendered = {}

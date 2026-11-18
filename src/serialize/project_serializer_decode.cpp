@@ -88,39 +88,39 @@ float float_or(const Value& value, const char* key, float fallback, const char* 
 
 transport::TempoSegment tempo_segment_from_json(const Value& v) {
   transport::TempoSegment s;
-  s.start_ppq = num_or(v, "start_ppq", 0.0);
+  s.start_ppq = num_or(v, "startPpq", 0.0);
   // The absent-field fallback is the model's own default, so a document with no
   // tempo decodes to the same segment a default-constructed one produces.
   s.bpm = num_or(v, "bpm", kDefaultBpm);
-  s.start_sample = num_or(v, "start_sample", 0.0);
-  s.end_bpm = num_or(v, "end_bpm", 0.0);
+  s.start_sample = num_or(v, "startSample", 0.0);
+  s.end_bpm = num_or(v, "endBpm", 0.0);
   return s;
 }
 
 transport::TimeSignatureSegment time_signature_from_json(const Value& v) {
   transport::TimeSignatureSegment s;
-  s.start_ppq = num_or(v, "start_ppq", 0.0);
+  s.start_ppq = num_or(v, "startPpq", 0.0);
   s.time_sig.numerator = int_or(v, "numerator", 4);
   s.time_sig.denominator = int_or(v, "denominator", 4);
   return s;
 }
 
 automation::AutomationLane automation_lane_from_json(const Value& v) {
-  const uint32_t ordinal = uint_or(v, "target_kind", 0);
+  const uint32_t ordinal = uint_or(v, "targetKind", 0);
   if (ordinal > kMaxSerializedOrdinal<automation::AutomationTargetKind>) {
     throw SonareException(ErrorCode::InvalidFormat,
                           "automation target kind ordinal is out of range");
   }
   const auto target_kind = static_cast<automation::AutomationTargetKind>(ordinal);
-  automation::AutomationLane lane(uint_or(v, "target_param_id", 0), target_kind);
+  automation::AutomationLane lane(uint_or(v, "targetParamId", 0), target_kind);
   std::vector<automation::Breakpoint> points;
   if (const auto* arr = array_at(v, "points")) {
     for (const auto& element : *arr) {
       const Value& pv = object_element(element, "points");
       automation::Breakpoint bp;
       bp.ppq = num_or(pv, "ppq", 0.0);
-      bp.value = float_or(pv, "value", 0.0f, "tracks[].automation_lanes[].points[].value");
-      bp.curve_to_next = enum_or(pv, "curve_to_next", automation::CurveType::Linear);
+      bp.value = float_or(pv, "value", 0.0f, "tracks[].automationLanes[].points[].value");
+      bp.curve_to_next = enum_or(pv, "curveToNext", automation::CurveType::Linear);
       points.push_back(bp);
     }
   }
@@ -141,15 +141,15 @@ arrangement::Track track_from_json(const Value& v) {
     throw SonareException(ErrorCode::InvalidFormat,
                           "tracks[].pan must be within [-1, 1]: " + std::to_string(t.pan));
   }
-  t.channel_strip_ref = str_or(v, "channel_strip_ref", "");
-  t.output_target = str_or(v, "output_target", "");
-  t.midi_destination_id = uint_or(v, "midi_destination_id", 0);
-  if (const auto* arr = array_at(v, "automation_lanes")) {
+  t.channel_strip_ref = str_or(v, "channelStripRef", "");
+  t.output_target = str_or(v, "outputTarget", "");
+  t.midi_destination_id = uint_or(v, "midiDestinationId", 0);
+  if (const auto* arr = array_at(v, "automationLanes")) {
     // Decoded verbatim; the one-lane-per-target invariant is enforced for the
     // whole model by enforce_edit_api_invariants().
     for (const auto& lv : *arr) {
       t.automation_lanes.push_back(
-          automation_lane_from_json(object_element(lv, "automation_lanes")));
+          automation_lane_from_json(object_element(lv, "automationLanes")));
     }
   }
   return t;
@@ -157,7 +157,7 @@ arrangement::Track track_from_json(const Value& v) {
 
 arrangement::ClipFade fade_from_json(const Value& v) {
   arrangement::ClipFade f;
-  f.length_ppq = num_or(v, "length_ppq", 0.0);
+  f.length_ppq = num_or(v, "lengthPpq", 0.0);
   f.curve = enum_or(v, "curve", arrangement::FadeCurve::kLinear);
   return f;
 }
@@ -165,11 +165,11 @@ arrangement::ClipFade fade_from_json(const Value& v) {
 arrangement::ClipTake take_from_json(const Value& v) {
   arrangement::ClipTake take;
   take.id = uint_or(v, "id", 0);
-  take.source_id = uint_or(v, "source_id", 0);
-  take.source_offset_ppq = num_or(v, "source_offset_ppq", 0.0);
+  take.source_id = uint_or(v, "sourceId", 0);
+  take.source_offset_ppq = num_or(v, "sourceOffsetPpq", 0.0);
   take.name = str_or(v, "name", "");
-  if (v.contains("source_offset_seconds")) {
-    take.source_offset_seconds = num_or(v, "source_offset_seconds", 0.0);
+  if (v.contains("sourceOffsetSec")) {
+    take.source_offset_seconds = num_or(v, "sourceOffsetSec", 0.0);
   }
   take.partial = bool_or(v, "partial", false);
   return take;
@@ -177,74 +177,74 @@ arrangement::ClipTake take_from_json(const Value& v) {
 
 arrangement::ClipCompSegment comp_segment_from_json(const Value& v) {
   arrangement::ClipCompSegment segment;
-  segment.start_ppq = num_or(v, "start_ppq", 0.0);
-  segment.end_ppq = num_or(v, "end_ppq", 0.0);
-  segment.take_id = uint_or(v, "take_id", 0);
+  segment.start_ppq = num_or(v, "startPpq", 0.0);
+  segment.end_ppq = num_or(v, "endPpq", 0.0);
+  segment.take_id = uint_or(v, "takeId", 0);
   // Gated read: a document written before comp seams could crossfade has no
   // key here and loads as the butt join it was rendered with.
-  segment.crossfade_ppq = num_or(v, "crossfade_ppq", 0.0);
+  segment.crossfade_ppq = num_or(v, "crossfadePpq", 0.0);
   return segment;
 }
 
 arrangement::ClipCompRenderPart comp_render_part_from_json(const Value& v) {
   arrangement::ClipCompRenderPart part;
-  part.visible_start_ppq = num_or(v, "visible_start_ppq", 0.0);
-  part.visible_end_ppq = num_or(v, "visible_end_ppq", 0.0);
-  part.reference_start_ppq = num_or(v, "reference_start_ppq", 0.0);
-  part.reference_end_ppq = num_or(v, "reference_end_ppq", 0.0);
-  part.take_id = uint_or(v, "take_id", 0);
-  part.seam_fade_in_ppq = num_or(v, "seam_fade_in_ppq", 0.0);
-  part.seam_fade_out_ppq = num_or(v, "seam_fade_out_ppq", 0.0);
-  part.retained_only = bool_or(v, "retained_only", false);
+  part.visible_start_ppq = num_or(v, "visibleStartPpq", 0.0);
+  part.visible_end_ppq = num_or(v, "visibleEndPpq", 0.0);
+  part.reference_start_ppq = num_or(v, "referenceStartPpq", 0.0);
+  part.reference_end_ppq = num_or(v, "referenceEndPpq", 0.0);
+  part.take_id = uint_or(v, "takeId", 0);
+  part.seam_fade_in_ppq = num_or(v, "seamFadeInPpq", 0.0);
+  part.seam_fade_out_ppq = num_or(v, "seamFadeOutPpq", 0.0);
+  part.retained_only = bool_or(v, "retainedOnly", false);
   return part;
 }
 
 arrangement::EditClip clip_from_json(const Value& v) {
   arrangement::EditClip c;
   c.id = uint_or(v, "id", 0);
-  c.track_id = uint_or(v, "track_id", 0);
-  c.source_id = uint_or(v, "source_id", 0);
-  c.start_ppq = num_or(v, "start_ppq", 0.0);
-  c.length_ppq = num_or(v, "length_ppq", 0.0);
-  c.source_offset_ppq = num_or(v, "source_offset_ppq", 0.0);
-  if (v.contains("source_offset_seconds")) {
-    c.source_offset_seconds = num_or(v, "source_offset_seconds", 0.0);
+  c.track_id = uint_or(v, "trackId", 0);
+  c.source_id = uint_or(v, "sourceId", 0);
+  c.start_ppq = num_or(v, "startPpq", 0.0);
+  c.length_ppq = num_or(v, "lengthPpq", 0.0);
+  c.source_offset_ppq = num_or(v, "sourceOffsetPpq", 0.0);
+  if (v.contains("sourceOffsetSec")) {
+    c.source_offset_seconds = num_or(v, "sourceOffsetSec", 0.0);
   }
   c.gain = float_or(v, "gain", 1.0f, "clips[].gain");
-  if (const auto* fi = object_at(v, "fade_in")) c.fade_in = fade_from_json(Value(*fi));
-  if (const auto* fo = object_at(v, "fade_out")) c.fade_out = fade_from_json(Value(*fo));
-  c.loop_mode = enum_or(v, "loop_mode", arrangement::LoopMode::kOff);
-  c.loop_length_ppq = num_or(v, "loop_length_ppq", 0.0);
-  c.loop_crossfade_ppq = num_or(v, "loop_crossfade_ppq", 0.0);
-  const bool has_loop_period = v.contains("loop_period_seconds");
-  const bool has_loop_phase = v.contains("loop_phase_seconds");
+  if (const auto* fi = object_at(v, "fadeIn")) c.fade_in = fade_from_json(Value(*fi));
+  if (const auto* fo = object_at(v, "fadeOut")) c.fade_out = fade_from_json(Value(*fo));
+  c.loop_mode = enum_or(v, "loopMode", arrangement::LoopMode::kOff);
+  c.loop_length_ppq = num_or(v, "loopLengthPpq", 0.0);
+  c.loop_crossfade_ppq = num_or(v, "loopCrossfadePpq", 0.0);
+  const bool has_loop_period = v.contains("loopPeriodSec");
+  const bool has_loop_phase = v.contains("loopPhaseSec");
   if (has_loop_period != has_loop_phase) {
     throw SonareException(ErrorCode::InvalidFormat,
-                          "loop_period_seconds and loop_phase_seconds must be supplied together");
+                          "loopPeriodSec and loopPhaseSec must be supplied together");
   }
   if (has_loop_period) {
     c.loop_anchor = arrangement::LoopAnchor{
-        num_or(v, "loop_period_seconds", 0.0),
-        num_or(v, "loop_phase_seconds", 0.0),
+        num_or(v, "loopPeriodSec", 0.0),
+        num_or(v, "loopPhaseSec", 0.0),
     };
   }
-  c.warp_ref_id = uint_or(v, "warp_ref_id", 0);
-  c.warp_mode = enum_or(v, "warp_mode", arrangement::WarpMode::kOff);
+  c.warp_ref_id = uint_or(v, "warpRefId", 0);
+  c.warp_mode = enum_or(v, "warpMode", arrangement::WarpMode::kOff);
   if (const auto* arr = array_at(v, "takes")) {
     for (const auto& tv : *arr) {
       c.takes.push_back(take_from_json(object_element(tv, "takes")));
     }
   }
-  c.active_take_id = uint_or(v, "active_take_id", 0);
-  if (const auto* arr = array_at(v, "comp_segments")) {
+  c.active_take_id = uint_or(v, "activeTakeId", 0);
+  if (const auto* arr = array_at(v, "compSegments")) {
     for (const auto& sv : *arr) {
-      c.comp_segments.push_back(comp_segment_from_json(object_element(sv, "comp_segments")));
+      c.comp_segments.push_back(comp_segment_from_json(object_element(sv, "compSegments")));
     }
   }
-  if (const auto* arr = array_at(v, "comp_render_parts")) {
+  if (const auto* arr = array_at(v, "compRenderParts")) {
     for (const auto& pv : *arr) {
       c.comp_render_parts.push_back(
-          comp_render_part_from_json(object_element(pv, "comp_render_parts")));
+          comp_render_part_from_json(object_element(pv, "compRenderParts")));
     }
   }
   return c;
@@ -258,8 +258,8 @@ arrangement::WarpMapRef warp_map_from_json(const Value& v) {
     for (const auto& element : *arr) {
       const Value& av = object_element(element, "anchors");
       arrangement::WarpAnchorRef anchor;
-      anchor.warp_sample = num_or(av, "warp_sample", 0.0);
-      anchor.source_sample = num_or(av, "source_sample", 0.0);
+      anchor.warp_sample = num_or(av, "warpSample", 0.0);
+      anchor.source_sample = num_or(av, "sourceSample", 0.0);
       map.anchors.push_back(anchor);
     }
   }
@@ -272,26 +272,26 @@ arrangement::ClipSource source_from_json(const Value& v) {
     arrangement::MidiSourceRef m;
     m.id = uint_or(v, "id", 0);
     m.name = str_or(v, "name", "");
-    m.channel_hint = uint_or(v, "channel_hint", 0);
+    m.channel_hint = uint_or(v, "channelHint", 0);
     return m;
   }
   arrangement::AudioSourceRef a;
   a.id = uint_or(v, "id", 0);
   a.uri = str_or(v, "uri", "");
-  a.channel_count = uint_or(v, "channel_count", 0);
-  a.sample_rate_hint = num_or(v, "sample_rate_hint", 0.0);
-  a.storage_handle_id = uint_or(v, "storage_handle_id", 0);
+  a.channel_count = uint_or(v, "channelCount", 0);
+  a.sample_rate_hint = num_or(v, "sampleRateHint", 0.0);
+  a.storage_handle_id = uint_or(v, "storageHandleId", 0);
   // Gated read: absent content_hash (older documents) loads as empty.
-  a.content_hash = str_or(v, "content_hash", "");
-  a.external_stem_role = str_or(v, "external_stem_role", "");
+  a.content_hash = str_or(v, "contentHash", "");
+  a.external_stem_role = str_or(v, "externalStemRole", "");
   return a;
 }
 
 arrangement::ChordSymbol chord_from_json(const Value& v) {
   arrangement::ChordSymbol c;
-  c.start_ppq = num_or(v, "start_ppq", 0.0);
-  c.end_ppq = num_or(v, "end_ppq", 0.0);
-  c.root_pc = pitch_class_or(v, "root_pc");
+  c.start_ppq = num_or(v, "startPpq", 0.0);
+  c.end_ppq = num_or(v, "endPpq", 0.0);
+  c.root_pc = pitch_class_or(v, "rootPc");
   c.quality = enum_or(v, "quality", arrangement::ChordQuality::kUnknown);
   if (const auto* arr = array_at(v, "extensions")) {
     for (const auto& ev : *arr) {
@@ -306,23 +306,23 @@ arrangement::ChordSymbol chord_from_json(const Value& v) {
       c.extensions.push_back(extension);
     }
   }
-  c.slash_bass_pc = pitch_class_or(v, "slash_bass_pc");
-  c.roman_numeral = str_or(v, "roman_numeral", "");
-  c.modulation_boundary = bool_or(v, "modulation_boundary", false);
+  c.slash_bass_pc = pitch_class_or(v, "slashBassPc");
+  c.roman_numeral = str_or(v, "romanNumeral", "");
+  c.modulation_boundary = bool_or(v, "modulationBoundary", false);
   return c;
 }
 
 arrangement::KeySegment key_segment_from_json(const Value& v) {
   arrangement::KeySegment k;
-  k.start_ppq = num_or(v, "start_ppq", 0.0);
-  k.end_ppq = num_or(v, "end_ppq", 0.0);
-  k.tonic_pc = pitch_class_or(v, "tonic_pc");
+  k.start_ppq = num_or(v, "startPpq", 0.0);
+  k.end_ppq = num_or(v, "endPpq", 0.0);
+  k.tonic_pc = pitch_class_or(v, "tonicPc");
   k.mode = enum_or(v, "mode", arrangement::KeyMode::kUnknown);
   return k;
 }
 
 void annotation_from_json(const Value& v, arrangement::ProjectAnnotation* a) {
-  a->tempo_confidence = float_or(v, "tempo_confidence", 0.0f, "annotation.tempo_confidence");
+  a->tempo_confidence = float_or(v, "tempoConfidence", 0.0f, "annotation.tempoConfidence");
   if (const auto* arr = array_at(v, "keys")) {
     for (const auto& kv : *arr) {
       a->keys.push_back(key_segment_from_json(object_element(kv, "keys")));
@@ -337,8 +337,8 @@ void annotation_from_json(const Value& v, arrangement::ProjectAnnotation* a) {
     for (const auto& element : *arr) {
       const Value& sv = object_element(element, "sections");
       arrangement::SectionSegment s;
-      s.start_ppq = num_or(sv, "start_ppq", 0.0);
-      s.end_ppq = num_or(sv, "end_ppq", 0.0);
+      s.start_ppq = num_or(sv, "startPpq", 0.0);
+      s.end_ppq = num_or(sv, "endPpq", 0.0);
       s.label = str_or(sv, "label", "");
       a->sections.push_back(std::move(s));
     }
@@ -355,11 +355,11 @@ void annotation_from_json(const Value& v, arrangement::ProjectAnnotation* a) {
 }
 
 void sidecar_fields_from_json(const Value& v, arrangement::AssistSidecar* out) {
-  out->module_id = str_or(v, "module_id", "");
-  out->schema_version = uint_or(v, "schema_version", 0);
-  out->target_track_id = uint_or(v, "target_track_id", 0);
-  out->region_start_ppq = num_or(v, "region_start_ppq", 0.0);
-  out->region_end_ppq = num_or(v, "region_end_ppq", 0.0);
+  out->module_id = str_or(v, "moduleId", "");
+  out->schema_version = uint_or(v, "schemaVersion", 0);
+  out->target_track_id = uint_or(v, "targetTrackId", 0);
+  out->region_start_ppq = num_or(v, "regionStartPpq", 0.0);
+  out->region_end_ppq = num_or(v, "regionEndPpq", 0.0);
 }
 
 bool earlier_assist_module_id(const std::string& module_id, std::string* current) {
@@ -387,7 +387,7 @@ bool sidecar_from_borrowed_payload(const std::string& encoded_payload,
 bool sidecar_from_json(const Value& v, arrangement::AssistSidecar* out, size_t max_payload_bytes) {
   sidecar_fields_from_json(v, out);
   static const std::string kEmptyPayload;
-  const std::string* payload = strict_string_field(v, "payload_b64");
+  const std::string* payload = strict_string_field(v, "payloadB64");
   return sidecar_from_borrowed_payload(payload != nullptr ? *payload : kEmptyPayload, out,
                                        max_payload_bytes);
 }
@@ -528,23 +528,23 @@ std::optional<InvariantViolation> enforce_edit_api_invariants(arrangement::Proje
   for (const transport::TempoSegment& s : project->tempo_segments()) {
     if (!valid_position_ppq(s.start_ppq)) {
       return InvariantViolation{"invalid_tempo_start_ppq",
-                                "tempo segment start_ppq must be finite and non-negative"};
+                                "tempo segment startPpq must be finite and non-negative"};
     }
     if (!transport::valid_public_tempo_segment(s)) {
       return InvariantViolation{
           "invalid_tempo_segment",
-          "tempo segment start_ppq or bpm is outside the range the edit API accepts"};
+          "tempo segment startPpq or bpm is outside the range the edit API accepts"};
     }
   }
   for (const transport::TimeSignatureSegment& s : project->time_signatures()) {
     if (!valid_position_ppq(s.start_ppq)) {
       return InvariantViolation{"invalid_time_signature_start_ppq",
-                                "time signature segment start_ppq must be finite and non-negative"};
+                                "time signature segment startPpq must be finite and non-negative"};
     }
     if (!transport::valid_public_time_signature_segment(s)) {
       return InvariantViolation{
           "invalid_time_signature_segment",
-          "time signature segment start_ppq, numerator or denominator is outside the range the "
+          "time signature segment startPpq, numerator or denominator is outside the range the "
           "edit API accepts"};
     }
   }
@@ -568,14 +568,14 @@ std::optional<InvariantViolation> enforce_edit_api_invariants(arrangement::Proje
     if (!valid_annotation_span(key.start_ppq, key.end_ppq)) {
       return InvariantViolation{"invalid_annotation_key_span",
                                 "annotation key segment must have a finite non-negative "
-                                "start_ppq and an end_ppq after it"};
+                                "startPpq and an endPpq after it"};
     }
   }
   for (const arrangement::ChordSymbol& chord : project->annotation().chords) {
     if (!valid_annotation_span(chord.start_ppq, chord.end_ppq)) {
       return InvariantViolation{"invalid_annotation_chord_span",
-                                "annotation chord must have a finite non-negative start_ppq "
-                                "and an end_ppq after it"};
+                                "annotation chord must have a finite non-negative startPpq "
+                                "and an endPpq after it"};
     }
     if (chord.extensions.size() > arrangement::kMaxChordExtensions) {
       return InvariantViolation{"invalid_annotation_chord_extensions",
@@ -599,13 +599,13 @@ std::optional<InvariantViolation> enforce_edit_api_invariants(arrangement::Proje
         !valid_position_ppq(c.source_offset_ppq)) {
       return InvariantViolation{"invalid_clip_ppq",
                                 label +
-                                    "must have a finite non-negative start_ppq and "
-                                    "source_offset_ppq and a finite positive length_ppq"};
+                                    "must have a finite non-negative startPpq and "
+                                    "sourceOffsetPpq and a finite positive lengthPpq"};
     }
     if (c.source_offset_seconds.has_value() &&
         !(std::isfinite(*c.source_offset_seconds) && *c.source_offset_seconds >= 0.0)) {
       return InvariantViolation{"invalid_clip_source_offset_seconds",
-                                label + "source_offset_seconds must be finite and non-negative"};
+                                label + "sourceOffsetSec must be finite and non-negative"};
     }
     if (!valid_position_ppq(c.fade_in.length_ppq) || !valid_position_ppq(c.fade_out.length_ppq)) {
       return InvariantViolation{"invalid_clip_fade_ppq",
@@ -617,15 +617,15 @@ std::optional<InvariantViolation> enforce_edit_api_invariants(arrangement::Proje
         !valid_position_ppq(c.loop_crossfade_ppq)) {
       return InvariantViolation{"invalid_clip_loop_ppq",
                                 label +
-                                    "loop_length_ppq must be finite (and non-negative when "
-                                    "looping) and loop_crossfade_ppq finite and non-negative"};
+                                    "loopLengthPpq must be finite (and non-negative when "
+                                    "looping) and loopCrossfadePpq finite and non-negative"};
     }
     if (c.loop_anchor.has_value() &&
         !(std::isfinite(c.loop_anchor->period_seconds) && c.loop_anchor->period_seconds > 0.0 &&
           std::isfinite(c.loop_anchor->phase_seconds))) {
       return InvariantViolation{
           "invalid_clip_loop_anchor",
-          label + "loop_period_seconds must be positive and phase_seconds must be finite"};
+          label + "loopPeriodSec must be positive and phaseSec must be finite"};
     }
     for (const arrangement::ClipTake& take : c.takes) {
       if (take.id == 0) {
@@ -635,20 +635,20 @@ std::optional<InvariantViolation> enforce_edit_api_invariants(arrangement::Proje
       if (!valid_position_ppq(take.source_offset_ppq)) {
         return InvariantViolation{"invalid_clip_take_ppq",
                                   label + "take " + std::to_string(take.id) +
-                                      " source_offset_ppq must be finite and non-negative"};
+                                      " sourceOffsetPpq must be finite and non-negative"};
       }
       if (take.source_offset_seconds.has_value() &&
           !(std::isfinite(*take.source_offset_seconds) && *take.source_offset_seconds >= 0.0)) {
         return InvariantViolation{"invalid_clip_take_source_offset_seconds",
                                   label + "take " + std::to_string(take.id) +
-                                      " source_offset_seconds must be finite and non-negative"};
+                                      " sourceOffsetSec must be finite and non-negative"};
       }
     }
     if (!arrangement::detail::valid_clip_take_structure(*project, c, c.takes, c.active_take_id)) {
       return InvariantViolation{
           "invalid_clip_take_structure",
           label +
-              "takes must have unique non-zero ids, a valid active_take_id, and no takes on a "
+              "takes must have unique non-zero ids, a valid activeTakeId, and no takes on a "
               "MIDI track"};
     }
     for (const arrangement::ClipCompSegment& segment : c.comp_segments) {
@@ -656,7 +656,7 @@ std::optional<InvariantViolation> enforce_edit_api_invariants(arrangement::Proje
           !(segment.end_ppq > segment.start_ppq)) {
         return InvariantViolation{
             "invalid_clip_comp_segment_ppq",
-            label + "comp segment bounds must be finite with 0 <= start_ppq < end_ppq"};
+            label + "comp segment bounds must be finite with 0 <= startPpq < endPpq"};
       }
     }
     if (!arrangement::detail::valid_comp_segments(c.takes, c.comp_segments, c.length_ppq) ||
@@ -854,15 +854,15 @@ std::optional<InvariantViolation> enforce_edit_api_invariants(arrangement::Proje
     if (sidecar.module_id.empty() || sidecar.module_id.find('\0') != std::string::npos) {
       return InvariantViolation{
           "invalid_assist_sidecar_module_id",
-          "assist sidecar module_id must be non-empty and must not contain an embedded NUL"};
+          "assist sidecar moduleId must be non-empty and must not contain an embedded NUL"};
     }
     if (!valid_position_ppq(sidecar.region_start_ppq)) {
       return InvariantViolation{"invalid_assist_sidecar_region_start_ppq",
-                                "assist sidecar region_start_ppq must be finite and non-negative"};
+                                "assist sidecar regionStartPpq must be finite and non-negative"};
     }
     if (!valid_position_ppq(sidecar.region_end_ppq)) {
       return InvariantViolation{"invalid_assist_sidecar_region_end_ppq",
-                                "assist sidecar region_end_ppq must be finite and non-negative"};
+                                "assist sidecar regionEndPpq must be finite and non-negative"};
     }
   }
 

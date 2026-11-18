@@ -19,7 +19,7 @@ pytestmark = pytest.mark.skipif(not LIB_AVAILABLE, reason="libsonare shared libr
 
 EXIT_INVALID_PARAMETER = 3
 
-_CLEAN_PROJECT = {"version": 7, "sample_rate": 48000, "tracks": [], "clips": []}
+_CLEAN_PROJECT = {"version": 7, "sampleRate": 48000, "tracks": [], "clips": []}
 
 
 def _run_console(*args: str) -> subprocess.CompletedProcess[str]:

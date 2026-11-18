@@ -690,7 +690,7 @@ TEST_CASE("C-ABI set_clip_loop applies and undo restores", "[project][c-abi-edit
   REQUIRE(sonare_project_set_clip_loop(project, fx.clip, SONARE_LOOP_MODE_LOOP, 4.0, 0.5) ==
           SONARE_OK);
   const std::string with_crossfade = serialize(project);
-  REQUIRE(with_crossfade.find("loop_crossfade_ppq") != std::string::npos);
+  REQUIRE(with_crossfade.find("loopCrossfadePpq") != std::string::npos);
   REQUIRE(sonare_project_undo(project) == SONARE_OK);
   REQUIRE(serialize(project) == before);
 
@@ -733,7 +733,7 @@ TEST_CASE("C-ABI set_clip_takes and comp segments apply and undo", "[project][c-
   const std::string with_takes = serialize(project);
   REQUIRE(with_takes != before);
   REQUIRE(with_takes.find("\"takes\"") != std::string::npos);
-  REQUIRE(with_takes.find("\"active_take_id\":1") != std::string::npos);
+  REQUIRE(with_takes.find("\"activeTakeId\":1") != std::string::npos);
 
   SonareProjectClipCompSegment segments[2]{};
   segments[0].start_ppq = 0.0;
@@ -745,7 +745,7 @@ TEST_CASE("C-ABI set_clip_takes and comp segments apply and undo", "[project][c-
   REQUIRE(sonare_project_set_clip_comp_segments(project, fx.clip, segments, 2) == SONARE_OK);
   const std::string with_comp = serialize(project);
   REQUIRE(with_comp != with_takes);
-  REQUIRE(with_comp.find("\"comp_segments\"") != std::string::npos);
+  REQUIRE(with_comp.find("\"compSegments\"") != std::string::npos);
 
   REQUIRE(sonare_project_undo(project) == SONARE_OK);
   REQUIRE(serialize(project) == with_takes);
@@ -851,8 +851,8 @@ TEST_CASE("C-ABI loop recording audio is split into clip takes", "[project][c-ab
 
   const std::string json = serialize(project);
   REQUIRE(json.find("\"takes\"") != std::string::npos);
-  REQUIRE(json.find("\"active_take_id\":2") != std::string::npos);
-  REQUIRE(json.find("\"length_ppq\":1") != std::string::npos);
+  REQUIRE(json.find("\"activeTakeId\":2") != std::string::npos);
+  REQUIRE(json.find("\"lengthPpq\":1") != std::string::npos);
 
   SonareProjectCompileResult compile{};
   REQUIRE(sonare_project_compile(project, &compile) == SONARE_OK);
@@ -951,7 +951,7 @@ TEST_CASE("C-ABI loop recording keeps a partial last take inactive", "[project][
   REQUIRE(partial.take_count == 2);
   REQUIRE(partial.partial_takes() == 1);
   REQUIRE(partial.json.find("\"partial\":true") > partial.json.find("\"name\":\"take 2\""));
-  REQUIRE(partial.json.find("\"active_take_id\":1") != std::string::npos);
+  REQUIRE(partial.json.find("\"activeTakeId\":1") != std::string::npos);
 
   const auto dropped = add_loop_capture(36000, SONARE_PROJECT_LOOP_RECORDING_DROP_PARTIAL_TAIL);
   REQUIRE(dropped.error == SONARE_OK);
@@ -962,7 +962,7 @@ TEST_CASE("C-ABI loop recording keeps a partial last take inactive", "[project][
   REQUIRE(shorter.error == SONARE_OK);
   REQUIRE(shorter.take_count == 1);
   REQUIRE(shorter.partial_takes() == 1);
-  REQUIRE(shorter.json.find("\"active_take_id\":1") != std::string::npos);
+  REQUIRE(shorter.json.find("\"activeTakeId\":1") != std::string::npos);
 
   const auto shorter_dropped =
       add_loop_capture(12000, SONARE_PROJECT_LOOP_RECORDING_DROP_PARTIAL_TAIL);
@@ -975,13 +975,13 @@ TEST_CASE("C-ABI loop recording treats a one-frame remainder as rounding",
   REQUIRE(extra_frame.error == SONARE_OK);
   REQUIRE(extra_frame.take_count == 2);
   REQUIRE(extra_frame.partial_takes() == 0);
-  REQUIRE(extra_frame.json.find("\"active_take_id\":2") != std::string::npos);
+  REQUIRE(extra_frame.json.find("\"activeTakeId\":2") != std::string::npos);
 
   const auto short_frame = add_loop_capture(47999, 0);
   REQUIRE(short_frame.error == SONARE_OK);
   REQUIRE(short_frame.take_count == 2);
   REQUIRE(short_frame.partial_takes() == 0);
-  REQUIRE(short_frame.json.find("\"active_take_id\":2") != std::string::npos);
+  REQUIRE(short_frame.json.find("\"activeTakeId\":2") != std::string::npos);
 }
 
 TEST_CASE("C-ABI loop recording partial mark survives a project JSON round trip",
@@ -1214,16 +1214,16 @@ TEST_CASE("C-ABI set_warp_map/remove_warp_map with clip reference and undo",
   REQUIRE(sonare_project_set_clip_warp_mode(project, fx.clip, SONARE_PROJECT_WARP_MODE_REPITCH) ==
           SONARE_OK);
   const std::string mapped = serialize(project);
-  REQUIRE(mapped.find("\"warp_maps\"") != std::string::npos);
+  REQUIRE(mapped.find("\"warpMaps\"") != std::string::npos);
   REQUIRE(mapped.find("\"id\":77") != std::string::npos);
   REQUIRE(mapped.find("\"name\":\"manual warp\"") != std::string::npos);
-  REQUIRE(mapped.find("\"warp_ref_id\":77") != std::string::npos);
-  REQUIRE(mapped.find("\"warp_mode\":1") != std::string::npos);
+  REQUIRE(mapped.find("\"warpRefId\":77") != std::string::npos);
+  REQUIRE(mapped.find("\"warpMode\":1") != std::string::npos);
 
   REQUIRE(sonare_project_undo(project) == SONARE_OK);
-  REQUIRE(serialize(project).find("\"warp_mode\":0") != std::string::npos);
+  REQUIRE(serialize(project).find("\"warpMode\":0") != std::string::npos);
   REQUIRE(sonare_project_undo(project) == SONARE_OK);
-  REQUIRE(serialize(project).find("\"warp_ref_id\":0") != std::string::npos);
+  REQUIRE(serialize(project).find("\"warpRefId\":0") != std::string::npos);
   REQUIRE(sonare_project_undo(project) == SONARE_OK);
   REQUIRE(serialize(project) == before);
   REQUIRE(sonare_project_redo(project) == SONARE_OK);
@@ -1238,7 +1238,7 @@ TEST_CASE("C-ABI set_warp_map/remove_warp_map with clip reference and undo",
   REQUIRE(sonare_project_remove_warp_map(project, 77) == SONARE_OK);
   const std::string removed = serialize(project);
   REQUIRE(removed.find("\"name\":\"manual warp\"") == std::string::npos);
-  REQUIRE(removed.find("\"warp_ref_id\":0") != std::string::npos);
+  REQUIRE(removed.find("\"warpRefId\":0") != std::string::npos);
   SonareProjectBounceOptions options{};
   options.total_frames = 480;
   options.block_size = 64;
@@ -1255,7 +1255,7 @@ TEST_CASE("C-ABI set_warp_map/remove_warp_map with clip reference and undo",
   REQUIRE(serialize(project) == mapped);
   REQUIRE(sonare_project_set_clip_warp_mode(project, fx.clip,
                                             SONARE_PROJECT_WARP_MODE_TEMPO_SYNC) == SONARE_OK);
-  REQUIRE(serialize(project).find("\"warp_mode\":2") != std::string::npos);
+  REQUIRE(serialize(project).find("\"warpMode\":2") != std::string::npos);
   CHECK(
       sonare_project_set_clip_warp_mode(project, fx.clip, static_cast<SonareProjectWarpMode>(99)) ==
       SONARE_ERROR_INVALID_PARAMETER);
@@ -1498,7 +1498,7 @@ TEST_CASE("C-ABI typed automation lane add/edit preserves legacy compatibility",
   REQUIRE(out_target == 100);
   const std::string with_fader = serialize(project);
   REQUIRE(with_fader.find("\"version\":7") != std::string::npos);
-  REQUIRE(with_fader.find("\"target_kind\":1") != std::string::npos);
+  REQUIRE(with_fader.find("\"targetKind\":1") != std::string::npos);
 
   // The legacy edit descriptor has no kind and must retain the typed target.
   SonareAutomationPoint edited[1] = {{0.0, -6.0f, SONARE_CURVE_HOLD}};
@@ -1508,7 +1508,7 @@ TEST_CASE("C-ABI typed automation lane add/edit preserves legacy compatibility",
   legacy_edit.point_count = 1;
   REQUIRE(sonare_project_edit_automation_lane(project, fx.track, 100, &legacy_edit) == SONARE_OK);
   const std::string after_legacy_edit = serialize(project);
-  REQUIRE(after_legacy_edit.find("\"target_kind\":1") != std::string::npos);
+  REQUIRE(after_legacy_edit.find("\"targetKind\":1") != std::string::npos);
 
   // Opaque lanes continue to coexist with typed mixer lanes.
   SonareAutomationLaneDesc opaque{};
@@ -1563,7 +1563,7 @@ TEST_CASE("C-ABI typed automation lane add/edit preserves legacy compatibility",
   REQUIRE(sonare_project_undo(project) == SONARE_OK);  // undo opaque lane
   REQUIRE(sonare_project_undo(project) == SONARE_OK);  // undo legacy edit
   REQUIRE(sonare_project_undo(project) == SONARE_OK);  // undo fader add
-  REQUIRE(serialize(project).find("\"automation_lanes\":[]") != std::string::npos);
+  REQUIRE(serialize(project).find("\"automationLanes\":[]") != std::string::npos);
 
   sonare_project_destroy(project);
 }

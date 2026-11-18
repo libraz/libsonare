@@ -707,10 +707,10 @@ TEST_CASE("project serialize/deserialize/serialize is byte-identical", "[seriali
   CHECK(s1 == s2);  // Round-trip is byte-for-byte stable.
 }
 
-TEST_CASE("project loader uses the last duplicate sample_rate key", "[serialize]") {
+TEST_CASE("project loader uses the last duplicate sampleRate key", "[serialize]") {
   const auto duplicate =
-      project_from_json(R"({"version":7,"sample_rate":44100,"sample_rate":96000})");
-  const auto canonical = project_from_json(R"({"version":7,"sample_rate":96000})");
+      project_from_json(R"({"version":7,"sampleRate":44100,"sampleRate":96000})");
+  const auto canonical = project_from_json(R"({"version":7,"sampleRate":96000})");
 
   REQUIRE(duplicate.ok());
   REQUIRE(canonical.ok());
@@ -729,8 +729,8 @@ TEST_CASE("opaque automation lanes omit the target kind", "[serialize]") {
   track.automation_lanes.push_back(lane_model);
   REQUIRE(project.add_track(track) != 0);
   const auto root = util::json::parse(project_to_json(project, {}));
-  const auto& lane = root["tracks"].as_array()[0]["automation_lanes"].as_array()[0];
-  CHECK_FALSE(lane.contains("target_kind"));
+  const auto& lane = root["tracks"].as_array()[0]["automationLanes"].as_array()[0];
+  CHECK_FALSE(lane.contains("targetKind"));
 }
 
 TEST_CASE("typed automation lanes round-trip", "[serialize]") {
@@ -744,8 +744,8 @@ TEST_CASE("typed automation lanes round-trip", "[serialize]") {
 
   const std::string json = project_to_json(project, {});
   const auto root = util::json::parse(json);
-  const auto& lane_json = root["tracks"].as_array()[0]["automation_lanes"].as_array()[0];
-  REQUIRE(lane_json["target_kind"].as_int() == 1);
+  const auto& lane_json = root["tracks"].as_array()[0]["automationLanes"].as_array()[0];
+  REQUIRE(lane_json["targetKind"].as_int() == 1);
 
   const auto result = project_from_json(json);
   REQUIRE(result.ok());
@@ -758,7 +758,7 @@ TEST_CASE("typed automation lanes round-trip", "[serialize]") {
 
 TEST_CASE("an unknown automation target kind is rejected", "[serialize]") {
   const auto result = project_from_json(
-      R"({"version":7,"tracks":[{"id":1,"automation_lanes":[{"target_param_id":7,"target_kind":3}]}]})");
+      R"({"version":7,"tracks":[{"id":1,"automationLanes":[{"targetParamId":7,"targetKind":3}]}]})");
   REQUIRE_FALSE(result.ok());
   REQUIRE(result.has_error());
   CHECK(std::any_of(result.diagnostics.begin(), result.diagnostics.end(),
@@ -1066,32 +1066,32 @@ TEST_CASE("a key no record reads is refused by its path at every level", "[seria
     const char* path;
   } kCases[] = {
       {R"({"version":7,"future_feature":1})", "future_feature"},
-      {doc(R"("tempo_segments":[{"start_ppq":0,"bpm":120,"x":1}])"), "tempo_segments[0].x"},
-      {doc(R"("time_signatures":[{"start_ppq":0,"x":1}])"), "time_signatures[0].x"},
+      {doc(R"("tempoSegments":[{"startPpq":0,"bpm":120,"x":1}])"), "tempoSegments[0].x"},
+      {doc(R"("timeSignatures":[{"startPpq":0,"x":1}])"), "timeSignatures[0].x"},
       {doc(R"("sources":[{"kind":0,"id":1,"x":1}])"), "sources[0].x"},
       {doc(R"("sources":[{"kind":1,"id":1,"uri":"a.wav"}])"), "sources[0].uri"},
       {doc(R"("tracks":[{"id":1},{"id":2,"x":1}])"), "tracks[1].x"},
-      {doc(R"("tracks":[{"id":1,"automation_lanes":[{"target_param_id":1,"x":1}]}])"),
-       "tracks[0].automation_lanes[0].x"},
-      {doc(R"("tracks":[{"id":1,"automation_lanes":[{"points":[{"ppq":0,"x":1}]}]}])"),
-       "tracks[0].automation_lanes[0].points[0].x"},
+      {doc(R"("tracks":[{"id":1,"automationLanes":[{"targetParamId":1,"x":1}]}])"),
+       "tracks[0].automationLanes[0].x"},
+      {doc(R"("tracks":[{"id":1,"automationLanes":[{"points":[{"ppq":0,"x":1}]}]}])"),
+       "tracks[0].automationLanes[0].points[0].x"},
       {doc(R"("clips":[{"id":1,"x":1}])"), "clips[0].x"},
-      {doc(R"("clips":[{"id":1,"fade_out":{"curve":0,"x":1}}])"), "clips[0].fade_out.x"},
+      {doc(R"("clips":[{"id":1,"fadeOut":{"curve":0,"x":1}}])"), "clips[0].fadeOut.x"},
       {doc(R"("clips":[{"id":1,"takes":[{"id":1,"x":1}]}])"), "clips[0].takes[0].x"},
-      {doc(R"("clips":[{"id":1,"comp_segments":[{"take_id":1,"x":1}]}])"),
-       "clips[0].comp_segments[0].x"},
-      {doc(R"("clips":[{"id":1,"comp_render_parts":[{"take_id":1,"x":1}]}])"),
-       "clips[0].comp_render_parts[0].x"},
-      {doc(R"("warp_maps":[{"id":1,"anchors":[{"warp_sample":0,"x":1}]}])"),
-       "warp_maps[0].anchors[0].x"},
-      {doc(R"("part_rigs":[{"destination_id":1,"inserts":[{"processor":"a","x":1}]}])"),
-       "part_rigs[0].inserts[0].x"},
+      {doc(R"("clips":[{"id":1,"compSegments":[{"takeId":1,"x":1}]}])"),
+       "clips[0].compSegments[0].x"},
+      {doc(R"("clips":[{"id":1,"compRenderParts":[{"takeId":1,"x":1}]}])"),
+       "clips[0].compRenderParts[0].x"},
+      {doc(R"("warpMaps":[{"id":1,"anchors":[{"warpSample":0,"x":1}]}])"),
+       "warpMaps[0].anchors[0].x"},
+      {doc(R"("partRigs":[{"destinationId":1,"inserts":[{"processor":"a","x":1}]}])"),
+       "partRigs[0].inserts[0].x"},
       {doc(R"("markers":[{"id":1,"x":1}])"), "markers[0].x"},
       {doc(R"("annotation":{"x":1})"), "annotation.x"},
-      {doc(R"("annotation":{"chords":[{"start_ppq":0,"x":1}]})"), "annotation.chords[0].x"},
+      {doc(R"("annotation":{"chords":[{"startPpq":0,"x":1}]})"), "annotation.chords[0].x"},
       {doc(R"("annotation":{"onsets":[{"ppq":0,"x":1}]})"), "annotation.onsets[0].x"},
-      {doc(R"("midi_content":{"4":[{"ppq":0,"x":1}]})"), "midi_content.4[0].x"},
-      {doc(R"("assist_sidecars":[{"module_id":"a.b","x":1}])"), "assist_sidecars[0].x"},
+      {doc(R"("midiContent":{"4":[{"ppq":0,"x":1}]})"), "midiContent.4[0].x"},
+      {doc(R"("assistSidecars":[{"moduleId":"a.b","x":1}])"), "assistSidecars[0].x"},
   };
   for (const auto& c : kCases) {
     CAPTURE(c.document);
@@ -1127,6 +1127,32 @@ TEST_CASE("annotation keys are exempt from the unknown-key refusal", "[serialize
   const auto result = project_from_json(util::json::dump(root));
   REQUIRE(result.ok());
   CHECK_FALSE(result.has_error());
+}
+
+TEST_CASE("a snake_case project key is refused naming the camelCase key to write", "[serialize]") {
+  const struct {
+    const char* document;
+    const char* message;
+  } kCases[] = {
+      {R"({"version":7,"sample_rate":48000})",
+       "sample_rate is an earlier spelling; write sampleRate"},
+      {R"({"version":7,"clips":[{"id":1,"start_ppq":0}]})",
+       "clips[0].start_ppq is an earlier spelling; write startPpq"},
+      {R"({"version":7,"clips":[{"id":1,"loop_period_seconds":1}]})",
+       "clips[0].loop_period_seconds is an earlier spelling; write loopPeriodSec"},
+      {R"({"version":7,"tracks":[{"id":1,"automationLanes":[{"target_kind":1}]}]})",
+       "tracks[0].automationLanes[0].target_kind is an earlier spelling; write targetKind"},
+      {R"({"version":7,"midiContent":{"__sysex_payloads":{}}})",
+       "midiContent.__sysex_payloads is an earlier spelling; write __sysexPayloads"},
+  };
+  for (const auto& c : kCases) {
+    CAPTURE(c.document);
+    const auto refused = project_from_json(c.document);
+    CHECK_FALSE(refused.ok());
+    REQUIRE_FALSE(refused.diagnostics.empty());
+    CHECK(refused.diagnostics.back().code == "invalid_format");
+    CHECK(refused.diagnostics.back().message == c.message);
+  }
 }
 
 TEST_CASE("AssistSidecar with unregistered module + binary payload round-trips losslessly",
@@ -1170,7 +1196,7 @@ TEST_CASE("AudioSourceRef content_hash round-trips when set", "[serialize]") {
 
   const std::string s1 = project_to_json(p, midi);
   // The key is present only because the hash is set.
-  CHECK(s1.find("content_hash") != std::string::npos);
+  CHECK(s1.find("contentHash") != std::string::npos);
 
   auto result = project_from_json(s1);
   REQUIRE(result.ok());
@@ -1192,7 +1218,7 @@ TEST_CASE("AudioSourceRef without content_hash omits the key (byte-stable)", "[s
 
   const std::string s = project_to_json(p, midi);
   // Empty hash must NOT appear so existing projects stay byte-identical.
-  CHECK(s.find("content_hash") == std::string::npos);
+  CHECK(s.find("contentHash") == std::string::npos);
 
   // Absent hash loads back as empty.
   auto result = project_from_json(s);
@@ -1210,17 +1236,17 @@ TEST_CASE("tempo segments are normalized (sorted + deduped) on load", "[serializ
   util::json::Array tempo;
   auto seg = [](double start, double bpm) {
     util::json::Object o;
-    o["start_ppq"] = start;
+    o["startPpq"] = start;
     o["bpm"] = bpm;
-    o["start_sample"] = 0.0;
-    o["end_bpm"] = 0.0;
+    o["startSample"] = 0.0;
+    o["endBpm"] = 0.0;
     return util::json::Value(std::move(o));
   };
   tempo.push_back(seg(1920.0, 140.0));
   tempo.push_back(seg(0.0, 120.0));
   tempo.push_back(seg(960.0, 130.0));
   tempo.push_back(seg(960.0, 131.0));  // duplicate tick: this one wins
-  root["tempo_segments"] = std::move(tempo);
+  root["tempoSegments"] = std::move(tempo);
 
   auto result = project_from_json(util::json::dump(util::json::Value(std::move(root))));
   REQUIRE(result.ok());
@@ -1233,7 +1259,7 @@ TEST_CASE("tempo segments are normalized (sorted + deduped) on load", "[serializ
 }
 
 TEST_CASE("non-positive tempo bpm is rejected with a diagnostic", "[serialize]") {
-  auto result = project_from_json("{\"version\": 7, \"tempo_segments\": [{\"bpm\": -5.0}]}");
+  auto result = project_from_json("{\"version\": 7, \"tempoSegments\": [{\"bpm\": -5.0}]}");
   CHECK_FALSE(result.ok());
   REQUIRE(result.has_error());
   bool found = false;
@@ -1245,9 +1271,8 @@ TEST_CASE("non-positive tempo bpm is rejected with a diagnostic", "[serialize]")
 
 TEST_CASE("invalid project sample rate is rejected with a diagnostic", "[serialize]") {
   for (const char* json :
-       {"{\"version\": 7, \"sample_rate\": 0}", "{\"version\": 7, \"sample_rate\": -48000}",
-        "{\"version\": 7, \"sample_rate\": 500000}",
-        "{\"version\": 7, \"sample_rate\": 44100.5}"}) {
+       {"{\"version\": 7, \"sampleRate\": 0}", "{\"version\": 7, \"sampleRate\": -48000}",
+        "{\"version\": 7, \"sampleRate\": 500000}", "{\"version\": 7, \"sampleRate\": 44100.5}"}) {
     auto result = project_from_json(json);
     CHECK_FALSE(result.ok());
     REQUIRE(result.has_error());
@@ -1262,11 +1287,11 @@ TEST_CASE("invalid project sample rate is rejected with a diagnostic", "[seriali
 TEST_CASE("malformed warp map is dropped with a diagnostic instead of silently", "[serialize]") {
   // The public edit API requires two or more strictly-increasing anchors.
   // Loader input follows that same contract and must retain a diagnostic.
-  for (const char* json : {"{\"version\": 7, \"warp_maps\": [{\"id\": 7, \"anchors\": ["
-                           "{\"warp_sample\": 0.0, \"source_sample\": 0.0}]}]}",
-                           "{\"version\": 7, \"warp_maps\": [{\"id\": 7, \"anchors\": ["
-                           "{\"warp_sample\": 100.0, \"source_sample\": 0.0}, "
-                           "{\"warp_sample\": 50.0, \"source_sample\": 100.0}]}]}"}) {
+  for (const char* json : {"{\"version\": 7, \"warpMaps\": [{\"id\": 7, \"anchors\": ["
+                           "{\"warpSample\": 0.0, \"sourceSample\": 0.0}]}]}",
+                           "{\"version\": 7, \"warpMaps\": [{\"id\": 7, \"anchors\": ["
+                           "{\"warpSample\": 100.0, \"sourceSample\": 0.0}, "
+                           "{\"warpSample\": 50.0, \"sourceSample\": 100.0}]}]}"}) {
     auto result = project_from_json(json);
     bool found = false;
     for (const auto& d : result.diagnostics) {
@@ -1278,8 +1303,8 @@ TEST_CASE("malformed warp map is dropped with a diagnostic instead of silently",
 
 TEST_CASE("clip referencing a missing warp map reports a dangling diagnostic", "[serialize]") {
   auto result = project_from_json(
-      "{\"version\": 7, \"clips\": [{\"id\": 1, \"track_id\": 1, \"source_id\": 1, "
-      "\"length_ppq\": 1.0, \"warp_ref_id\": 99}]}");
+      "{\"version\": 7, \"clips\": [{\"id\": 1, \"trackId\": 1, \"sourceId\": 1, "
+      "\"lengthPpq\": 1.0, \"warpRefId\": 99}]}");
   bool found = false;
   for (const auto& d : result.diagnostics) {
     if (d.code == "dangling_clip_warp") found = true;
@@ -1289,7 +1314,7 @@ TEST_CASE("clip referencing a missing warp map reports a dangling diagnostic", "
 
 TEST_CASE("invalid time signature is rejected with a diagnostic", "[serialize]") {
   auto result = project_from_json(
-      "{\"version\": 7, \"time_signatures\": [{\"start_ppq\": 0.0, \"numerator\": 4, "
+      "{\"version\": 7, \"timeSignatures\": [{\"startPpq\": 0.0, \"numerator\": 4, "
       "\"denominator\": 0}]}");
   CHECK_FALSE(result.ok());
   REQUIRE(result.has_error());
@@ -1318,17 +1343,17 @@ TEST_CASE("duplicate marker id is rejected with a diagnostic", "[serialize]") {
 TEST_CASE("present invalid project integer and enum fields report invalid_format", "[serialize]") {
   const std::vector<std::string> documents = {
       // Finite-but-unrepresentable values must never reach a floating-to-int cast.
-      R"({"version":7,"time_signatures":[{"numerator":1e100,"denominator":4}]})",
-      R"({"version":7,"time_signatures":[{"numerator":2147483648,"denominator":4}]})",
-      R"({"version":7,"time_signatures":[{"numerator":-2147483649,"denominator":4}]})",
+      R"({"version":7,"timeSignatures":[{"numerator":1e100,"denominator":4}]})",
+      R"({"version":7,"timeSignatures":[{"numerator":2147483648,"denominator":4}]})",
+      R"({"version":7,"timeSignatures":[{"numerator":-2147483649,"denominator":4}]})",
       // Integer fields and enum ordinals are exact, not truncating conversions.
-      R"({"version":7,"time_signatures":[{"numerator":4.5,"denominator":4}]})",
+      R"({"version":7,"timeSignatures":[{"numerator":4.5,"denominator":4}]})",
       R"({"version":7,"tracks":[{"id":1,"kind":0.5}]})",
       R"({"version":7,"tracks":[{"id":1,"kind":3}]})",
       R"({"version":7,"scene":{"version":1,"strips":[{"id":"s","panMode":1.5}]}})",
       R"({"version":7,"annotation":{"chords":[{"extensions":[7.5]}]}})",
-      R"({"version":7,"midi_content":{"1":[{"word0":1.5}]}})",
-      R"({"version":7,"overlap_policy":2})",
+      R"({"version":7,"midiContent":{"1":[{"word0":1.5}]}})",
+      R"({"version":7,"overlapPolicy":2})",
   };
 
   for (const auto& document : documents) {
@@ -1341,7 +1366,7 @@ TEST_CASE("present invalid project integer and enum fields report invalid_format
 
   // The representable edge itself remains valid; only INT_MAX + 1 is rejected.
   const auto edge = project_from_json(
-      R"({"version":7,"time_signatures":[{"numerator":2147483647,"denominator":4}]})");
+      R"({"version":7,"timeSignatures":[{"numerator":2147483647,"denominator":4}]})");
   REQUIRE(edge.ok());
   REQUIRE(edge.project->time_signatures().size() == 1);
   CHECK(edge.project->time_signatures()[0].time_sig.numerator == std::numeric_limits<int>::max());
@@ -1367,10 +1392,10 @@ TEST_CASE("project deserialize rejects float narrowing overflow with a field pat
   const std::vector<InvalidFloatField> documents = {
       {R"({"version":7,"tracks":[{"id":1,"gain":1e39}]})", "tracks[].gain"},
       {R"({"version":7,"tracks":[{"id":1,"pan":-1e39}]})", "tracks[].pan"},
-      {R"({"version":7,"tracks":[{"id":1,"automation_lanes":[{"points":[{"value":1e39}]}]}]})",
-       "tracks[].automation_lanes[].points[].value"},
+      {R"({"version":7,"tracks":[{"id":1,"automationLanes":[{"points":[{"value":1e39}]}]}]})",
+       "tracks[].automationLanes[].points[].value"},
       {R"({"version":7,"clips":[{"id":1,"gain":-1e39}]})", "clips[].gain"},
-      {R"({"version":7,"annotation":{"tempo_confidence":1e39}})", "annotation.tempo_confidence"},
+      {R"({"version":7,"annotation":{"tempoConfidence":1e39}})", "annotation.tempoConfidence"},
       {R"({"version":7,"annotation":{"onsets":[{"confidence":-1e39}]}})",
        "annotation.onsets[].confidence"},
       {R"({"version":7,"scene":{"version":1,"strips":[{"inputTrimDb":1e39}]}})",
@@ -1419,10 +1444,10 @@ TEST_CASE("project deserialize accepts finite float boundaries and ordinary valu
   constexpr const char* kFloatMax = "3.4028234663852886e38";
   const std::string document =
       std::string(
-          R"({"version":7,"sources":[{"id":1,"kind":0}],"tracks":[{"id":1,"gain":0.75,"pan":-0.25,"automation_lanes":[{"target_param_id":42,"points":[{"value":)") +
-      kFloatMax + R"(}]}]}],"clips":[{"id":1,"track_id":1,"source_id":1,"length_ppq":1,"gain":-)" +
+          R"({"version":7,"sources":[{"id":1,"kind":0}],"tracks":[{"id":1,"gain":0.75,"pan":-0.25,"automationLanes":[{"targetParamId":42,"points":[{"value":)") +
+      kFloatMax + R"(}]}]}],"clips":[{"id":1,"trackId":1,"sourceId":1,"lengthPpq":1,"gain":-)" +
       kFloatMax +
-      R"(}],"annotation":{"tempo_confidence":0.8,"onsets":[{"confidence":0.6}]},"scene":{"version":1,"strips":[{"id":"s","inputTrimDb":-3.5,"faderDb":2.25,"vcaOffsetDb":0.5,"pan":0.1,"width":1.2,"dualPanLeft":-0.8,"dualPanRight":0.7,"surroundPan":{"azimuth":45,"elevation":-12,"divergence":0.4,"lfe":0.2,"distance":2},"sends":[{"sendDb":-6}]}],"buses":[{"id":"b","inputTrimDb":1.5,"width":0.9}],"vcaGroups":[{"id":"v","gainDb":-2}]}})";
+      R"(}],"annotation":{"tempoConfidence":0.8,"onsets":[{"confidence":0.6}]},"scene":{"version":1,"strips":[{"id":"s","inputTrimDb":-3.5,"faderDb":2.25,"vcaOffsetDb":0.5,"pan":0.1,"width":1.2,"dualPanLeft":-0.8,"dualPanRight":0.7,"surroundPan":{"azimuth":45,"elevation":-12,"divergence":0.4,"lfe":0.2,"distance":2},"sends":[{"sendDb":-6}]}],"buses":[{"id":"b","inputTrimDb":1.5,"width":0.9}],"vcaGroups":[{"id":"v","gainDb":-2}]}})";
 
   const auto result = project_from_json(document);
   REQUIRE(result.ok());
@@ -1451,7 +1476,7 @@ TEST_CASE("project deserialize accepts finite float boundaries and ordinary valu
   const auto serialized = util::json::parse(project_to_json(*result.project, result.midi));
   CHECK(serialized["clips"].as_array()[0]["gain"].is_number());
   CHECK(serialized["tracks"]
-            .as_array()[0]["automation_lanes"]
+            .as_array()[0]["automationLanes"]
             .as_array()[0]["points"]
             .as_array()[0]["value"]
             .is_number());
@@ -1462,28 +1487,27 @@ TEST_CASE("project deserialize rejects clip fields outside the edit contract", "
   // sequence of C ABI edit calls, and each would have suppressed the whole
   // compiled timeline at bounce time rather than at load time.
   const std::string prologue =
-      R"({"version":7,"sources":[{"id":1,"kind":0}],"tracks":[{"id":1}],"clips":[{"id":1,"track_id":1,"source_id":1,)";
+      R"({"version":7,"sources":[{"id":1,"kind":0}],"tracks":[{"id":1}],"clips":[{"id":1,"trackId":1,"sourceId":1,)";
   const std::vector<std::pair<std::string, std::string>> fixtures = {
-      {R"("start_ppq":-1,"length_ppq":0,"source_offset_ppq":-2)", "invalid_clip_ppq"},
-      {R"("length_ppq":0)", "invalid_clip_ppq"},
-      {R"("length_ppq":-4)", "invalid_clip_ppq"},
-      {R"("length_ppq":1,"start_ppq":-1)", "invalid_clip_ppq"},
-      {R"("length_ppq":1,"source_offset_ppq":-1)", "invalid_clip_ppq"},
-      {R"("length_ppq":1,"fade_in":{"length_ppq":-1})", "invalid_clip_fade_ppq"},
-      {R"("length_ppq":1,"fade_out":{"length_ppq":-1})", "invalid_clip_fade_ppq"},
-      {R"("length_ppq":1,"loop_mode":1,"loop_length_ppq":-1)", "invalid_clip_loop_ppq"},
-      {R"("length_ppq":1,"loop_crossfade_ppq":-1)", "invalid_clip_loop_ppq"},
-      {R"("length_ppq":1,"source_offset_seconds":-1)", "invalid_clip_source_offset_seconds"},
-      {R"("length_ppq":1,"loop_period_seconds":1)", "invalid_format"},
-      {R"("length_ppq":1,"loop_period_seconds":0,"loop_phase_seconds":0)",
-       "invalid_clip_loop_anchor"},
-      {R"("length_ppq":1,"takes":[{"id":0,"source_id":1}])", "invalid_clip_take_id"},
-      {R"("length_ppq":1,"takes":[{"id":1,"source_offset_ppq":-1}])", "invalid_clip_take_ppq"},
-      {R"("length_ppq":1,"takes":[{"id":1,"source_offset_seconds":-1}])",
+      {R"("startPpq":-1,"lengthPpq":0,"sourceOffsetPpq":-2)", "invalid_clip_ppq"},
+      {R"("lengthPpq":0)", "invalid_clip_ppq"},
+      {R"("lengthPpq":-4)", "invalid_clip_ppq"},
+      {R"("lengthPpq":1,"startPpq":-1)", "invalid_clip_ppq"},
+      {R"("lengthPpq":1,"sourceOffsetPpq":-1)", "invalid_clip_ppq"},
+      {R"("lengthPpq":1,"fadeIn":{"lengthPpq":-1})", "invalid_clip_fade_ppq"},
+      {R"("lengthPpq":1,"fadeOut":{"lengthPpq":-1})", "invalid_clip_fade_ppq"},
+      {R"("lengthPpq":1,"loopMode":1,"loopLengthPpq":-1)", "invalid_clip_loop_ppq"},
+      {R"("lengthPpq":1,"loopCrossfadePpq":-1)", "invalid_clip_loop_ppq"},
+      {R"("lengthPpq":1,"sourceOffsetSec":-1)", "invalid_clip_source_offset_seconds"},
+      {R"("lengthPpq":1,"loopPeriodSec":1)", "invalid_format"},
+      {R"("lengthPpq":1,"loopPeriodSec":0,"loopPhaseSec":0)", "invalid_clip_loop_anchor"},
+      {R"("lengthPpq":1,"takes":[{"id":0,"sourceId":1}])", "invalid_clip_take_id"},
+      {R"("lengthPpq":1,"takes":[{"id":1,"sourceOffsetPpq":-1}])", "invalid_clip_take_ppq"},
+      {R"("lengthPpq":1,"takes":[{"id":1,"sourceOffsetSec":-1}])",
        "invalid_clip_take_source_offset_seconds"},
-      {R"("length_ppq":1,"comp_segments":[{"start_ppq":-1,"end_ppq":1}])",
+      {R"("lengthPpq":1,"compSegments":[{"startPpq":-1,"endPpq":1}])",
        "invalid_clip_comp_segment_ppq"},
-      {R"("length_ppq":1,"comp_segments":[{"start_ppq":1,"end_ppq":1}])",
+      {R"("lengthPpq":1,"compSegments":[{"startPpq":1,"endPpq":1}])",
        "invalid_clip_comp_segment_ppq"},
   };
 
@@ -1505,12 +1529,12 @@ TEST_CASE("project deserialize accepts the clip fields the edit API admits", "[s
   // produce under LOOP.
   const auto result = project_from_json(
       R"({"version":7,"sources":[{"id":1,"kind":0}],"tracks":[{"id":1}],"clips":[{"id":1,)"
-      R"("track_id":1,"source_id":1,"start_ppq":0,"length_ppq":8,"source_offset_ppq":0,)"
-      R"("fade_in":{"length_ppq":0},"fade_out":{"length_ppq":0},"loop_mode":1,)"
-      R"("loop_length_ppq":0,"loop_crossfade_ppq":0,"takes":[{"id":1,"source_id":1,)"
-      R"("source_offset_ppq":0,"source_offset_seconds":0.5}],"active_take_id":1,)"
-      R"("loop_period_seconds":2,"loop_phase_seconds":0.25,)"
-      R"("comp_segments":[{"start_ppq":0,"end_ppq":8,"take_id":1}]}]})");
+      R"("trackId":1,"sourceId":1,"startPpq":0,"lengthPpq":8,"sourceOffsetPpq":0,)"
+      R"("fadeIn":{"lengthPpq":0},"fadeOut":{"lengthPpq":0},"loopMode":1,)"
+      R"("loopLengthPpq":0,"loopCrossfadePpq":0,"takes":[{"id":1,"sourceId":1,)"
+      R"("sourceOffsetPpq":0,"sourceOffsetSec":0.5}],"activeTakeId":1,)"
+      R"("loopPeriodSec":2,"loopPhaseSec":0.25,)"
+      R"("compSegments":[{"startPpq":0,"endPpq":8,"takeId":1}]}]})");
   REQUIRE(result.ok());
   REQUIRE(result.project->clips().size() == 1);
   CHECK(result.project->clips()[0].takes.size() == 1);
@@ -1544,7 +1568,7 @@ TEST_CASE("an inactive negative loop length set through SetClipLoop round-trips"
 
 TEST_CASE("project deserialize rejects malformed take and comp structure", "[serialize]") {
   const std::string audio_prologue =
-      R"({"version":7,"sources":[{"id":1,"kind":0}],"tracks":[{"id":1,"kind":0}],"clips":[{"id":1,"track_id":1,"source_id":1,"length_ppq":4,)";
+      R"({"version":7,"sources":[{"id":1,"kind":0}],"tracks":[{"id":1,"kind":0}],"clips":[{"id":1,"trackId":1,"sourceId":1,"lengthPpq":4,)";
   const auto expect_invalid = [&](const std::string& fields, const char* expected_code) {
     const auto result = project_from_json(audio_prologue + fields + "}]}");
     INFO(audio_prologue + fields + "}]}");
@@ -1555,32 +1579,32 @@ TEST_CASE("project deserialize rejects malformed take and comp structure", "[ser
   };
 
   expect_invalid(R"("takes":[{"id":1},{"id":1}])", "invalid_clip_take_structure");
-  expect_invalid(R"("takes":[{"id":1}],"active_take_id":2)", "invalid_clip_take_structure");
-  expect_invalid(R"("comp_segments":[{"start_ppq":0,"end_ppq":1,"take_id":2}])",
+  expect_invalid(R"("takes":[{"id":1}],"activeTakeId":2)", "invalid_clip_take_structure");
+  expect_invalid(R"("compSegments":[{"startPpq":0,"endPpq":1,"takeId":2}])",
                  "invalid_clip_comp_segments");
-  expect_invalid(R"("comp_segments":[{"start_ppq":0,"end_ppq":5,"take_id":0}])",
+  expect_invalid(R"("compSegments":[{"startPpq":0,"endPpq":5,"takeId":0}])",
                  "invalid_clip_comp_segments");
   expect_invalid(
-      R"("comp_segments":[{"start_ppq":0,"end_ppq":2,"take_id":0},{"start_ppq":1,"end_ppq":3,"take_id":0}])",
+      R"("compSegments":[{"startPpq":0,"endPpq":2,"takeId":0},{"startPpq":1,"endPpq":3,"takeId":0}])",
       "invalid_clip_comp_segments");
   expect_invalid(
-      R"("comp_segments":[{"start_ppq":2,"end_ppq":3,"take_id":0},{"start_ppq":1,"end_ppq":2,"take_id":0}])",
+      R"("compSegments":[{"startPpq":2,"endPpq":3,"takeId":0},{"startPpq":1,"endPpq":2,"takeId":0}])",
       "invalid_clip_comp_segments");
-  expect_invalid(R"("comp_segments":[{"start_ppq":0,"end_ppq":1,"take_id":0,"crossfade_ppq":-1}])",
+  expect_invalid(R"("compSegments":[{"startPpq":0,"endPpq":1,"takeId":0,"crossfadePpq":-1}])",
                  "invalid_clip_comp_segments");
-  expect_invalid(R"("comp_segments":[{"start_ppq":1,"end_ppq":2,"take_id":0,"crossfade_ppq":2}])",
+  expect_invalid(R"("compSegments":[{"startPpq":1,"endPpq":2,"takeId":0,"crossfadePpq":2}])",
                  "invalid_clip_comp_segments");
-  expect_invalid(R"("loop_mode":1,"comp_segments":[{"start_ppq":0,"end_ppq":2,"take_id":0}])",
+  expect_invalid(R"("loopMode":1,"compSegments":[{"startPpq":0,"endPpq":2,"takeId":0}])",
                  "invalid_clip_comp_segments");
 
   const auto midi_take = project_from_json(
-      R"({"version":7,"sources":[{"id":1,"kind":1}],"tracks":[{"id":1,"kind":1}],"clips":[{"id":1,"track_id":1,"source_id":1,"length_ppq":4,"takes":[{"id":1,"source_id":1}]}]})");
+      R"({"version":7,"sources":[{"id":1,"kind":1}],"tracks":[{"id":1,"kind":1}],"clips":[{"id":1,"trackId":1,"sourceId":1,"lengthPpq":4,"takes":[{"id":1,"sourceId":1}]}]})");
   REQUIRE_FALSE(midi_take.ok());
   REQUIRE_FALSE(midi_take.diagnostics.empty());
   CHECK(midi_take.diagnostics.back().code == "invalid_clip_take_structure");
 
   const auto midi_comp = project_from_json(
-      R"({"version":7,"sources":[{"id":1,"kind":1}],"tracks":[{"id":1,"kind":1}],"clips":[{"id":1,"track_id":1,"source_id":1,"length_ppq":4,"comp_segments":[{"start_ppq":0,"end_ppq":4,"take_id":0}]}]})");
+      R"({"version":7,"sources":[{"id":1,"kind":1}],"tracks":[{"id":1,"kind":1}],"clips":[{"id":1,"trackId":1,"sourceId":1,"lengthPpq":4,"compSegments":[{"startPpq":0,"endPpq":4,"takeId":0}]}]})");
   REQUIRE_FALSE(midi_comp.ok());
   REQUIRE_FALSE(midi_comp.diagnostics.empty());
   CHECK(midi_comp.diagnostics.back().code == "invalid_clip_comp_segments");
@@ -1588,11 +1612,11 @@ TEST_CASE("project deserialize rejects malformed take and comp structure", "[ser
 
 TEST_CASE("schema-v4 rejects malformed comp render geometry", "[serialize]") {
   const std::string prologue =
-      R"({"version":7,"sources":[{"id":1,"kind":0}],"tracks":[{"id":1}],"clips":[{"id":1,"track_id":1,"source_id":1,"length_ppq":4,"takes":[{"id":1,"source_id":1}],"active_take_id":1,"comp_render_parts":)";
+      R"({"version":7,"sources":[{"id":1,"kind":0}],"tracks":[{"id":1}],"clips":[{"id":1,"trackId":1,"sourceId":1,"lengthPpq":4,"takes":[{"id":1,"sourceId":1}],"activeTakeId":1,"compRenderParts":)";
   const std::vector<std::string> malformed = {
-      R"([{"visible_start_ppq":0,"visible_end_ppq":1,"reference_start_ppq":0.5,"reference_end_ppq":1,"take_id":1}])",
-      R"([{"visible_start_ppq":0,"visible_end_ppq":1,"reference_start_ppq":0,"reference_end_ppq":1,"take_id":2}])",
-      R"([{"visible_start_ppq":0,"visible_end_ppq":1,"reference_start_ppq":0,"reference_end_ppq":1,"take_id":1},{"visible_start_ppq":2,"visible_end_ppq":4,"reference_start_ppq":2,"reference_end_ppq":4,"take_id":1}])",
+      R"([{"visibleStartPpq":0,"visibleEndPpq":1,"referenceStartPpq":0.5,"referenceEndPpq":1,"takeId":1}])",
+      R"([{"visibleStartPpq":0,"visibleEndPpq":1,"referenceStartPpq":0,"referenceEndPpq":1,"takeId":2}])",
+      R"([{"visibleStartPpq":0,"visibleEndPpq":1,"referenceStartPpq":0,"referenceEndPpq":1,"takeId":1},{"visibleStartPpq":2,"visibleEndPpq":4,"referenceStartPpq":2,"referenceEndPpq":4,"takeId":1}])",
   };
   for (const std::string& parts : malformed) {
     INFO(parts);
@@ -1605,7 +1629,7 @@ TEST_CASE("schema-v4 rejects malformed comp render geometry", "[serialize]") {
 
 TEST_CASE("schema-v4 defaults an omitted retained flag to an active part", "[serialize]") {
   const auto result = project_from_json(
-      R"({"version":7,"sources":[{"id":1,"kind":0}],"tracks":[{"id":1}],"clips":[{"id":1,"track_id":1,"source_id":1,"length_ppq":2,"takes":[{"id":1,"source_id":1}],"active_take_id":1,"comp_render_parts":[{"visible_start_ppq":0,"visible_end_ppq":2,"reference_start_ppq":0,"reference_end_ppq":2,"take_id":1}]}]})");
+      R"({"version":7,"sources":[{"id":1,"kind":0}],"tracks":[{"id":1}],"clips":[{"id":1,"trackId":1,"sourceId":1,"lengthPpq":2,"takes":[{"id":1,"sourceId":1}],"activeTakeId":1,"compRenderParts":[{"visibleStartPpq":0,"visibleEndPpq":2,"referenceStartPpq":0,"referenceEndPpq":2,"takeId":1}]}]})");
   REQUIRE(result.ok());
   REQUIRE(result.project->clips().size() == 1);
   REQUIRE(result.project->clips()[0].comp_render_parts.size() == 1);
@@ -1614,7 +1638,7 @@ TEST_CASE("schema-v4 defaults an omitted retained flag to an active part", "[ser
 
 TEST_CASE("schema-v4 rejects a loop cache that selects a different authored take", "[serialize]") {
   const auto result = project_from_json(
-      R"({"version":7,"sources":[{"id":1,"kind":0},{"id":2,"kind":0}],"tracks":[{"id":1}],"clips":[{"id":1,"track_id":1,"source_id":1,"length_ppq":2,"loop_mode":1,"takes":[{"id":1,"source_id":1},{"id":2,"source_id":2}],"active_take_id":1,"comp_segments":[{"start_ppq":0,"end_ppq":2,"take_id":1}],"comp_render_parts":[{"visible_start_ppq":0,"visible_end_ppq":2,"reference_start_ppq":0,"reference_end_ppq":2,"take_id":2}]}]})");
+      R"({"version":7,"sources":[{"id":1,"kind":0},{"id":2,"kind":0}],"tracks":[{"id":1}],"clips":[{"id":1,"trackId":1,"sourceId":1,"lengthPpq":2,"loopMode":1,"takes":[{"id":1,"sourceId":1},{"id":2,"sourceId":2}],"activeTakeId":1,"compSegments":[{"startPpq":0,"endPpq":2,"takeId":1}],"compRenderParts":[{"visibleStartPpq":0,"visibleEndPpq":2,"referenceStartPpq":0,"referenceEndPpq":2,"takeId":2}]}]})");
   CHECK_FALSE(result.ok());
   REQUIRE_FALSE(result.diagnostics.empty());
   CHECK(result.diagnostics.back().code == "invalid_clip_comp_render_part");
@@ -1622,9 +1646,9 @@ TEST_CASE("schema-v4 rejects a loop cache that selects a different authored take
 
 TEST_CASE("project deserialize round-trips signed and unwrapped loop phases", "[serialize]") {
   const std::vector<std::pair<std::string, double>> documents = {
-      {R"({"version":7,"sources":[{"id":1,"kind":0}],"tracks":[{"id":1}],"clips":[{"id":1,"track_id":1,"source_id":1,"length_ppq":1,"loop_mode":1,"loop_period_seconds":2,"loop_phase_seconds":-0.5}]})",
+      {R"({"version":7,"sources":[{"id":1,"kind":0}],"tracks":[{"id":1}],"clips":[{"id":1,"trackId":1,"sourceId":1,"lengthPpq":1,"loopMode":1,"loopPeriodSec":2,"loopPhaseSec":-0.5}]})",
        -0.5},
-      {R"({"version":7,"sources":[{"id":1,"kind":0}],"tracks":[{"id":1}],"clips":[{"id":1,"track_id":1,"source_id":1,"length_ppq":1,"loop_mode":1,"loop_period_seconds":2,"loop_phase_seconds":3.5}]})",
+      {R"({"version":7,"sources":[{"id":1,"kind":0}],"tracks":[{"id":1}],"clips":[{"id":1,"trackId":1,"sourceId":1,"lengthPpq":1,"loopMode":1,"loopPeriodSec":2,"loopPhaseSec":3.5}]})",
        3.5},
   };
   for (const auto& [document, expected_phase] : documents) {
@@ -1649,7 +1673,7 @@ TEST_CASE("project deserialize bounds dangling-reference diagnostics", "[seriali
   for (uint32_t id = 1; id <= 130; ++id) {
     if (id > 1) document += ',';
     document +=
-        "{\"id\":" + std::to_string(id) + ",\"track_id\":999,\"source_id\":999,\"length_ppq\":1}";
+        "{\"id\":" + std::to_string(id) + ",\"trackId\":999,\"sourceId\":999,\"lengthPpq\":1}";
   }
   document += "]}";
   const auto result = project_from_json(document);
@@ -1685,8 +1709,8 @@ TEST_CASE("out-of-range MIDI data word is clamped with a warning, not silently z
   // word0 below zero clamps to 0; word1 above uint32 max clamps to 0xFFFFFFFF.
   const std::string in =
       "{\"version\": 7, \"sources\": [{\"id\": 1, \"kind\": 0}], \"tracks\": [{\"id\": 1}], "
-      "\"clips\": [{\"id\": 3, \"track_id\": 1, \"source_id\": 1, \"length_ppq\": 1}], "
-      "\"midi_content\": {\"3\": [{\"ppq\": 0.0, \"word0\": -1.0, "
+      "\"clips\": [{\"id\": 3, \"trackId\": 1, \"sourceId\": 1, \"lengthPpq\": 1}], "
+      "\"midiContent\": {\"3\": [{\"ppq\": 0.0, \"word0\": -1.0, "
       "\"word1\": 5000000000.0}]}}";
   auto result = project_from_json(in);
   REQUIRE(result.ok());
@@ -1705,9 +1729,9 @@ TEST_CASE("out-of-range MIDI data word is clamped with a warning, not silently z
 TEST_CASE("out-of-range MIDI content keys are ignored instead of truncating to uint32",
           "[serialize]") {
   const std::string in =
-      "{\"version\": 7, \"midi_content\": {"
+      "{\"version\": 7, \"midiContent\": {"
       "\"4294967296\": [{\"ppq\": 0.0, \"word0\": 1.0, \"word1\": 2.0}],"
-      "\"__sysex_payloads\": {\"4294967296\": \"AQI=\"}}}";
+      "\"__sysexPayloads\": {\"4294967296\": \"AQI=\"}}}";
   auto result = project_from_json(in);
   REQUIRE(result.ok());
   CHECK(result.midi.events.empty());
@@ -1724,18 +1748,18 @@ TEST_CASE("out-of-range MIDI content keys are ignored instead of truncating to u
 }
 
 TEST_CASE("warp and MIDI key warnings share the bounded decode sink", "[serialize]") {
-  std::string document = R"({"version":7,"warp_maps":[)";
+  std::string document = R"({"version":7,"warpMaps":[)";
   for (uint32_t id = 1; id <= 126; ++id) {
     if (id > 1) document += ',';
     document += "{\"id\":" + std::to_string(id) +
-                ",\"anchors\":[{\"warp_sample\":0.0,\"source_sample\":0.0}]}";
+                ",\"anchors\":[{\"warpSample\":0.0,\"sourceSample\":0.0}]}";
   }
-  document += R"(],"assist_sidecars":[)";
+  document += R"(],"assistSidecars":[)";
   document +=
-      R"({"module_id":"m","schema_version":1,"target_track_id":3,"region_start_ppq":0.0,"region_end_ppq":4.0,"payload_b64":"YQ=="},)";
+      R"({"moduleId":"m","schemaVersion":1,"targetTrackId":3,"regionStartPpq":0.0,"regionEndPpq":4.0,"payloadB64":"YQ=="},)";
   document +=
-      R"({"module_id":"m","schema_version":2,"target_track_id":3,"region_start_ppq":0.0,"region_end_ppq":4.0,"payload_b64":"Yg=="}],)";
-  document += R"("midi_content":{"4294967296":[],"__sysex_payloads":{"4294967296":"AQI="}}})";
+      R"({"moduleId":"m","schemaVersion":2,"targetTrackId":3,"regionStartPpq":0.0,"regionEndPpq":4.0,"payloadB64":"Yg=="}],)";
+  document += R"("midiContent":{"4294967296":[],"__sysexPayloads":{"4294967296":"AQI="}}})";
 
   const auto result = project_from_json(document);
   REQUIRE(result.ok());
@@ -1763,13 +1787,13 @@ TEST_CASE("warp and MIDI key warnings share the bounded decode sink", "[serializ
 }
 
 TEST_CASE("fatal sidecar payload errors skip the shared warning summary", "[serialize]") {
-  std::string document = R"({"version":7,"warp_maps":[)";
+  std::string document = R"({"version":7,"warpMaps":[)";
   for (uint32_t id = 1; id <= 129; ++id) {
     if (id > 1) document += ',';
     document += "{\"id\":" + std::to_string(id) +
-                ",\"anchors\":[{\"warp_sample\":0.0,\"source_sample\":0.0}]}";
+                ",\"anchors\":[{\"warpSample\":0.0,\"sourceSample\":0.0}]}";
   }
-  document += R"(],"assist_sidecars":[{"module_id":"m","payload_b64":"!!!!"}]})";
+  document += R"(],"assistSidecars":[{"moduleId":"m","payloadB64":"!!!!"}]})";
 
   const auto result = project_from_json(document);
   REQUIRE_FALSE(result.ok());
@@ -1793,8 +1817,8 @@ TEST_CASE("out-of-range entity ids are rejected instead of wrapping", "[serializ
       "{\"version\": 7, "
       "\"sources\": [{\"kind\": 0, \"id\": 5000000000.0}], "
       "\"tracks\": [{\"id\": 5000000000.0, \"kind\": 0}], "
-      "\"clips\": [{\"id\": 5000000000.0, \"track_id\": 5000000000.0, "
-      "\"source_id\": 5000000000.0, \"length_ppq\": 1.0}]}";
+      "\"clips\": [{\"id\": 5000000000.0, \"trackId\": 5000000000.0, "
+      "\"sourceId\": 5000000000.0, \"lengthPpq\": 1.0}]}";
   auto result = project_from_json(in);
   CHECK_FALSE(result.ok());
   REQUIRE_FALSE(result.diagnostics.empty());
@@ -1808,8 +1832,8 @@ TEST_CASE("maximum usable entity ids saturate allocators without wrapping", "[se
       "{\"version\":7,"
       "\"sources\":[{\"kind\":0,\"id\":" +
       id + "}],\"tracks\":[{\"id\":" + id + ",\"kind\":0}],\"clips\":[{\"id\":" + id +
-      ",\"track_id\":" + id + ",\"source_id\":" + id +
-      ",\"length_ppq\":1.0}],\"markers\":[{\"id\":" + id + ",\"ppq\":0.0,\"name\":\"last\"}]}";
+      ",\"trackId\":" + id + ",\"sourceId\":" + id +
+      ",\"lengthPpq\":1.0}],\"markers\":[{\"id\":" + id + ",\"ppq\":0.0,\"name\":\"last\"}]}";
 
   auto result = project_from_json(in);
   REQUIRE(result.ok());
@@ -1842,13 +1866,13 @@ TEST_CASE("reserved and duplicate entity ids are rejected", "[serialize]") {
   const std::vector<std::pair<std::string, std::string>> fixtures = {
       {"{\"version\":7,\"sources\":[{\"kind\":0,\"id\":0}]}", "invalid_entity_id"},
       {"{\"version\":7,\"tracks\":[{\"id\":" + max + ",\"kind\":0}]}", "invalid_entity_id"},
-      {"{\"version\":7,\"clips\":[{\"id\":0,\"length_ppq\":1}]}", "invalid_entity_id"},
+      {"{\"version\":7,\"clips\":[{\"id\":0,\"lengthPpq\":1}]}", "invalid_entity_id"},
       {"{\"version\":7,\"markers\":[{\"id\":" + max + "}]}", "invalid_entity_id"},
       {"{\"version\":7,\"sources\":[{\"kind\":0,\"id\":1},{\"kind\":0,\"id\":1}]}",
        "duplicate_entity_id"},
       {"{\"version\":7,\"tracks\":[{\"id\":1,\"kind\":0},{\"id\":1,\"kind\":0}]}",
        "duplicate_entity_id"},
-      {"{\"version\":7,\"clips\":[{\"id\":1,\"length_ppq\":1},{\"id\":1,\"length_ppq\":1}]}",
+      {"{\"version\":7,\"clips\":[{\"id\":1,\"lengthPpq\":1},{\"id\":1,\"lengthPpq\":1}]}",
        "duplicate_entity_id"},
       {"{\"version\":7,\"markers\":[{\"id\":1},{\"id\":1}]}", "duplicate_entity_id"},
   };
@@ -1864,8 +1888,8 @@ TEST_CASE("reserved and duplicate entity ids are rejected", "[serialize]") {
 TEST_CASE("dangling clip references and source-kind mismatch emit diagnostics", "[serialize]") {
   // A clip referencing a non-existent source and track.
   const std::string dangling =
-      "{\"version\": 7, \"clips\": [{\"id\": 1, \"track_id\": 99, \"source_id\": 99, "
-      "\"length_ppq\": 1.0}]}";
+      "{\"version\": 7, \"clips\": [{\"id\": 1, \"trackId\": 99, \"sourceId\": 99, "
+      "\"lengthPpq\": 1.0}]}";
   auto r1 = project_from_json(dangling);
   REQUIRE(r1.ok());  // Verbatim load: warnings, not errors.
   bool dangling_src = false;
@@ -1882,7 +1906,7 @@ TEST_CASE("dangling clip references and source-kind mismatch emit diagnostics", 
       "{\"version\": 7, "
       "\"sources\": [{\"kind\": 1, \"id\": 1}], "  // MIDI source
       "\"tracks\": [{\"id\": 1, \"kind\": 0}], "   // audio track
-      "\"clips\": [{\"id\": 1, \"track_id\": 1, \"source_id\": 1, \"length_ppq\": 1.0}]}";
+      "\"clips\": [{\"id\": 1, \"trackId\": 1, \"sourceId\": 1, \"lengthPpq\": 1.0}]}";
   auto r2 = project_from_json(mismatch);
   REQUIRE(r2.ok());
   bool kind_mismatch = false;
@@ -1894,7 +1918,7 @@ TEST_CASE("dangling clip references and source-kind mismatch emit diagnostics", 
 
 TEST_CASE("dangling take sources remain loadable and round-trip", "[serialize]") {
   const std::string document =
-      R"({"version":7,"sources":[{"id":1,"kind":0}],"tracks":[{"id":1,"kind":0}],"clips":[{"id":1,"track_id":1,"source_id":1,"length_ppq":1,"takes":[{"id":1,"source_id":99}],"active_take_id":1}]})";
+      R"({"version":7,"sources":[{"id":1,"kind":0}],"tracks":[{"id":1,"kind":0}],"clips":[{"id":1,"trackId":1,"sourceId":1,"lengthPpq":1,"takes":[{"id":1,"sourceId":99}],"activeTakeId":1}]})";
   const auto loaded = project_from_json(document);
   REQUIRE(loaded.ok());
   REQUIRE(loaded.project->clips().size() == 1);
@@ -1918,7 +1942,7 @@ TEST_CASE("dangling take sources remain loadable and round-trip", "[serialize]")
 
 TEST_CASE("take source kind mismatches remain loadable with a bounded warning", "[serialize]") {
   const auto result = project_from_json(
-      R"({"version":7,"sources":[{"id":1,"kind":0},{"id":2,"kind":1}],"tracks":[{"id":1,"kind":0}],"clips":[{"id":1,"track_id":1,"source_id":1,"length_ppq":1,"takes":[{"id":1,"source_id":2}],"active_take_id":1}]})");
+      R"({"version":7,"sources":[{"id":1,"kind":0},{"id":2,"kind":1}],"tracks":[{"id":1,"kind":0}],"clips":[{"id":1,"trackId":1,"sourceId":1,"lengthPpq":1,"takes":[{"id":1,"sourceId":2}],"activeTakeId":1}]})");
   REQUIRE(result.ok());
   CHECK(std::any_of(result.diagnostics.begin(), result.diagnostics.end(),
                     [](const serialize::Diagnostic& diagnostic) {
@@ -1928,7 +1952,7 @@ TEST_CASE("take source kind mismatches remain loadable with a bounded warning", 
 
 TEST_CASE("structurally valid takes on a missing track remain loadable", "[serialize]") {
   const auto result = project_from_json(
-      R"({"version":7,"sources":[{"id":1,"kind":0}],"clips":[{"id":1,"track_id":99,"source_id":1,"length_ppq":1,"takes":[{"id":1}],"active_take_id":1}]})");
+      R"({"version":7,"sources":[{"id":1,"kind":0}],"clips":[{"id":1,"trackId":99,"sourceId":1,"lengthPpq":1,"takes":[{"id":1}],"activeTakeId":1}]})");
   REQUIRE(result.ok());
   CHECK(std::any_of(result.diagnostics.begin(), result.diagnostics.end(),
                     [](const serialize::Diagnostic& diagnostic) {
@@ -1942,7 +1966,7 @@ TEST_CASE("structurally valid takes on a missing track remain loadable", "[seria
 
 TEST_CASE("omitted take and comp fields load as their documented defaults", "[serialize]") {
   const auto result = project_from_json(
-      R"({"version":7,"sources":[{"id":1,"kind":0}],"tracks":[{"id":1,"kind":0}],"clips":[{"id":1,"track_id":1,"source_id":1,"length_ppq":1},{"id":2,"track_id":1,"source_id":1,"length_ppq":1,"takes":[{"id":1}],"comp_segments":[{"start_ppq":0,"end_ppq":1,"take_id":1}]}]})");
+      R"({"version":7,"sources":[{"id":1,"kind":0}],"tracks":[{"id":1,"kind":0}],"clips":[{"id":1,"trackId":1,"sourceId":1,"lengthPpq":1},{"id":2,"trackId":1,"sourceId":1,"lengthPpq":1,"takes":[{"id":1}],"compSegments":[{"startPpq":0,"endPpq":1,"takeId":1}]}]})");
   REQUIRE(result.ok());
   REQUIRE(result.project->clips().size() == 2);
   CHECK(result.project->clips()[0].takes.empty());
@@ -1956,11 +1980,11 @@ TEST_CASE("omitted take and comp fields load as their documented defaults", "[se
 
 TEST_CASE("take source diagnostics use the referential warning cap", "[serialize]") {
   std::string document =
-      R"({"version":7,"sources":[{"id":1,"kind":0}],"tracks":[{"id":1,"kind":0}],"clips":[{"id":1,"track_id":1,"source_id":1,"length_ppq":1,"takes":[)";
+      R"({"version":7,"sources":[{"id":1,"kind":0}],"tracks":[{"id":1,"kind":0}],"clips":[{"id":1,"trackId":1,"sourceId":1,"lengthPpq":1,"takes":[)";
   for (uint32_t id = 1; id <= 130; ++id) {
     if (id > 1) document += ',';
     document +=
-        "{\"id\":" + std::to_string(id) + ",\"source_id\":" + std::to_string(1000 + id) + "}";
+        "{\"id\":" + std::to_string(id) + ",\"sourceId\":" + std::to_string(1000 + id) + "}";
   }
   document += "]}]}";
 
@@ -1984,7 +2008,7 @@ TEST_CASE("loader derives the id counters from the live max-id scan", "[serializ
       "{\"version\": 7, "
       "\"sources\": [{\"kind\": 0, \"id\": 7}], "
       "\"tracks\": [{\"id\": 3, \"kind\": 0}], "
-      "\"clips\": [{\"id\": 5, \"track_id\": 3, \"source_id\": 7, \"length_ppq\": 1.0}]}";
+      "\"clips\": [{\"id\": 5, \"trackId\": 3, \"sourceId\": 7, \"lengthPpq\": 1.0}]}";
   auto r = project_from_json(doc);
   REQUIRE(r.ok());
   CHECK(r.project->next_source_id() == 8);
@@ -2026,10 +2050,10 @@ TEST_CASE("a loaded track holds at most one automation lane per target", "[seria
   // remove/edit address a lane by its target id alone, so a document carrying
   // duplicates must be normalized on load rather than producing a model the
   // edit commands can neither address nor delete.
-  const std::string json = R"({"version":7,"tracks":[{"id":1,"automation_lanes":[)"
-                           R"({"target_param_id":7,"points":[{"ppq":0.0,"value":0.25}]},)"
-                           R"({"target_param_id":7,"points":[{"ppq":0.0,"value":0.75}]},)"
-                           R"({"target_param_id":8,"points":[{"ppq":0.0,"value":0.5}]}]}]})";
+  const std::string json = R"({"version":7,"tracks":[{"id":1,"automationLanes":[)"
+                           R"({"targetParamId":7,"points":[{"ppq":0.0,"value":0.25}]},)"
+                           R"({"targetParamId":7,"points":[{"ppq":0.0,"value":0.75}]},)"
+                           R"({"targetParamId":8,"points":[{"ppq":0.0,"value":0.5}]}]}]})";
   const auto result = project_from_json(json);
   REQUIRE(result.ok());
   REQUIRE_FALSE(result.has_error());
@@ -2067,12 +2091,12 @@ TEST_CASE("a loaded track holds at most one automation lane per target", "[seria
 
 TEST_CASE("a loaded track holds at most one lane per typed automation target", "[serialize]") {
   const auto result =
-      project_from_json(R"({"version":7,"tracks":[{"id":1,"automation_lanes":[)"
-                        R"({"target_param_id":7,"target_kind":1,"points":[{"value":0.25}]},)"
-                        R"({"target_param_id":8,"target_kind":1,"points":[{"value":0.75}]},)"
-                        R"({"target_param_id":9,"target_kind":2,"points":[{"value":0.5}]},)"
-                        R"({"target_param_id":10,"target_kind":2,"points":[{"value":0.9}]},)"
-                        R"({"target_param_id":11,"points":[{"value":0.1}]}]}]})");
+      project_from_json(R"({"version":7,"tracks":[{"id":1,"automationLanes":[)"
+                        R"({"targetParamId":7,"targetKind":1,"points":[{"value":0.25}]},)"
+                        R"({"targetParamId":8,"targetKind":1,"points":[{"value":0.75}]},)"
+                        R"({"targetParamId":9,"targetKind":2,"points":[{"value":0.5}]},)"
+                        R"({"targetParamId":10,"targetKind":2,"points":[{"value":0.9}]},)"
+                        R"({"targetParamId":11,"points":[{"value":0.1}]}]}]})");
   REQUIRE(result.ok());
   const Track* track = result.project->find_track(1);
   REQUIRE(track != nullptr);
@@ -2095,12 +2119,12 @@ TEST_CASE("opaque automation slots do not collide with typed target slots", "[se
   // the slot table's empty marker must not equal any slot index, or the typed lane
   // would look unset and lose duplicate retention and its warning.
   const auto result =
-      project_from_json(R"({"version":7,"tracks":[{"id":1,"automation_lanes":[)"
-                        R"({"target_param_id":20,"points":[{"value":0.2}]},)"
-                        R"({"target_param_id":21,"points":[{"value":0.3}]},)"
-                        R"({"target_param_id":22,"points":[{"value":0.4}]},)"
-                        R"({"target_param_id":7,"target_kind":1,"points":[{"value":0.25}]},)"
-                        R"({"target_param_id":8,"target_kind":1,"points":[{"value":0.75}]}]}]})");
+      project_from_json(R"({"version":7,"tracks":[{"id":1,"automationLanes":[)"
+                        R"({"targetParamId":20,"points":[{"value":0.2}]},)"
+                        R"({"targetParamId":21,"points":[{"value":0.3}]},)"
+                        R"({"targetParamId":22,"points":[{"value":0.4}]},)"
+                        R"({"targetParamId":7,"targetKind":1,"points":[{"value":0.25}]},)"
+                        R"({"targetParamId":8,"targetKind":1,"points":[{"value":0.75}]}]}]})");
   REQUIRE(result.ok());
   REQUIRE_FALSE(result.has_error());
 
@@ -2139,13 +2163,13 @@ TEST_CASE("typed lane normalization compares original order per track", "[serial
   // its own typed identity table and must resolve independently.
   const auto result =
       project_from_json(R"({"version":7,"tracks":[)"
-                        R"({"id":1,"automation_lanes":[)"
-                        R"({"target_param_id":7,"target_kind":1,"points":[{"value":0.1}]},)"
-                        R"({"target_param_id":8,"target_kind":1,"points":[{"value":0.2}]},)"
-                        R"({"target_param_id":7,"target_kind":1,"points":[{"value":0.9}]}]},)"
-                        R"({"id":2,"automation_lanes":[)"
-                        R"({"target_param_id":7,"target_kind":1,"points":[{"value":0.3}]},)"
-                        R"({"target_param_id":8,"target_kind":1,"points":[{"value":0.4}]}]}]})");
+                        R"({"id":1,"automationLanes":[)"
+                        R"({"targetParamId":7,"targetKind":1,"points":[{"value":0.1}]},)"
+                        R"({"targetParamId":8,"targetKind":1,"points":[{"value":0.2}]},)"
+                        R"({"targetParamId":7,"targetKind":1,"points":[{"value":0.9}]}]},)"
+                        R"({"id":2,"automationLanes":[)"
+                        R"({"targetParamId":7,"targetKind":1,"points":[{"value":0.3}]},)"
+                        R"({"targetParamId":8,"targetKind":1,"points":[{"value":0.4}]}]}]})");
   REQUIRE(result.ok());
   REQUIRE(result.project->tracks().size() == 2);
   REQUIRE(result.project->tracks()[0].automation_lanes.size() == 1);
@@ -2172,9 +2196,9 @@ TEST_CASE("a loaded automation lane with target id zero is dropped", "[serialize
   // written by earlier versions. The lane cannot be addressed or compiled, but
   // the rest of the project must still load.
   const auto result =
-      project_from_json(R"({"version":7,"tracks":[{"id":1,"name":"kept","automation_lanes":[)"
-                        R"({"target_param_id":0,"points":[{"value":0.25}]},)"
-                        R"({"target_param_id":7,"points":[{"value":0.5}]}]}]})");
+      project_from_json(R"({"version":7,"tracks":[{"id":1,"name":"kept","automationLanes":[)"
+                        R"({"targetParamId":0,"points":[{"value":0.25}]},)"
+                        R"({"targetParamId":7,"points":[{"value":0.5}]}]}]})");
   REQUIRE(result.ok());
   const Track* track = result.project->find_track(1);
   REQUIRE(track != nullptr);
@@ -2188,10 +2212,10 @@ TEST_CASE("a loaded automation lane with target id zero is dropped", "[serialize
 }
 
 TEST_CASE("automation decode warnings retain order and summarize suppression", "[serialize]") {
-  std::string document = R"({"version":7,"tracks":[{"id":1,"automation_lanes":[)";
+  std::string document = R"({"version":7,"tracks":[{"id":1,"automationLanes":[)";
   for (size_t index = 0; index < 130; ++index) {
     if (index != 0) document += ',';
-    document += R"({"target_param_id":0,"points":[{"value":0.5}]})";
+    document += R"({"targetParamId":0,"points":[{"value":0.5}]})";
   }
   document += "]}]}";
 
@@ -2215,9 +2239,9 @@ TEST_CASE("shadowed malformed entries are validated before normalization", "[ser
   // must not disappear merely because the later payload would win the
   // duplicate-target collapse.
   const auto bad_lane =
-      project_from_json(R"({"version":7,"tracks":[{"id":1,"automation_lanes":[)"
-                        R"({"target_param_id":7,"points":[{"ppq":-1.0,"value":0.25}]},)"
-                        R"({"target_param_id":7,"points":[{"ppq":0.0,"value":0.75}]}]}]})");
+      project_from_json(R"({"version":7,"tracks":[{"id":1,"automationLanes":[)"
+                        R"({"targetParamId":7,"points":[{"ppq":-1.0,"value":0.25}]},)"
+                        R"({"targetParamId":7,"points":[{"ppq":0.0,"value":0.75}]}]}]})");
   REQUIRE_FALSE(bad_lane.ok());
   REQUIRE(bad_lane.diagnostics.size() == 1);
   CHECK(bad_lane.diagnostics.front().severity == serialize::DiagnosticSeverity::kError);
@@ -2230,9 +2254,9 @@ TEST_CASE("shadowed malformed entries are validated before normalization", "[ser
   // input. If an implementation first deduplicated by identity, the valid
   // later payload could incorrectly hide this first entry.
   const auto bad_sidecar = project_from_json(
-      R"({"version":7,"assist_sidecars":[)"
-      R"({"module_id":"m","target_track_id":3,"region_start_ppq":0.0,"region_end_ppq":4.0,"payload_b64":"!!!!"},)"
-      R"({"module_id":"m","target_track_id":3,"region_start_ppq":0.0,"region_end_ppq":4.0,"payload_b64":"Yg=="}]})");
+      R"({"version":7,"assistSidecars":[)"
+      R"({"moduleId":"m","targetTrackId":3,"regionStartPpq":0.0,"regionEndPpq":4.0,"payloadB64":"!!!!"},)"
+      R"({"moduleId":"m","targetTrackId":3,"regionStartPpq":0.0,"regionEndPpq":4.0,"payloadB64":"Yg=="}]})");
   REQUIRE_FALSE(bad_sidecar.ok());
   REQUIRE(bad_sidecar.diagnostics.size() == 1);
   CHECK(bad_sidecar.diagnostics.front().severity == serialize::DiagnosticSeverity::kError);
@@ -2252,13 +2276,12 @@ TEST_CASE("a present-but-wrong-typed scalar is rejected whatever its type", "[se
     const char* json;
   };
   const Case cases[] = {
-      {"double", R"({"version":7,"sample_rate":"96000"})"},
-      {"integer", R"({"version":7,"overlap_policy":null})"},
+      {"double", R"({"version":7,"sampleRate":"96000"})"},
+      {"integer", R"({"version":7,"overlapPolicy":null})"},
       {"string", R"({"version":7,"tracks":[{"id":1,"name":5}]})"},
       {"boolean", R"({"version":7,"tracks":[{"id":1,"mute":"true"}]})"},
       {"float", R"({"version":7,"tracks":[{"id":1,"gain":"0.5"}]})"},
-      {"MIDI data word",
-       R"({"version":7,"midi_content":{"1":[{"ppq":0.0,"word0":"0x20903c40"}]}})"},
+      {"MIDI data word", R"({"version":7,"midiContent":{"1":[{"ppq":0.0,"word0":"0x20903c40"}]}})"},
   };
   for (const Case& c : cases) {
     INFO(c.what);
@@ -2305,21 +2328,21 @@ TEST_CASE("serializer borrowed helpers preserve direct ABI controls", "[serializ
   CHECK(wrong_type_threw);
 
   util::json::Object metadata_first;
-  metadata_first["module_id"] = 17.0;
-  metadata_first["payload_b64"] = "!!!!";
+  metadata_first["moduleId"] = 17.0;
+  metadata_first["payloadB64"] = "!!!!";
   AssistSidecar metadata_sidecar;
   bool metadata_threw = false;
   try {
     (void)sidecar_from_json(util::json::Value(std::move(metadata_first)), &metadata_sidecar);
   } catch (const SonareException& error) {
     metadata_threw = true;
-    CHECK(std::string(error.what()) == "string field must be a string: module_id");
+    CHECK(std::string(error.what()) == "string field must be a string: moduleId");
   }
   CHECK(metadata_threw);
 
   util::json::Object malformed_payload;
-  malformed_payload["module_id"] = "malformed.module";
-  malformed_payload["payload_b64"] = "!!!!";
+  malformed_payload["moduleId"] = "malformed.module";
+  malformed_payload["payloadB64"] = "!!!!";
   AssistSidecar malformed_sidecar;
   malformed_sidecar.payload = {0xA5u};
   CHECK_FALSE(
@@ -2329,8 +2352,8 @@ TEST_CASE("serializer borrowed helpers preserve direct ABI controls", "[serializ
 
   const std::vector<uint8_t> two_bytes = {1u, 2u};
   util::json::Object resource_limited;
-  resource_limited["module_id"] = "resource.module";
-  resource_limited["payload_b64"] = base64_encode(two_bytes);
+  resource_limited["moduleId"] = "resource.module";
+  resource_limited["payloadB64"] = base64_encode(two_bytes);
   AssistSidecar limited_sidecar;
   limited_sidecar.payload = {0x5Au};
   CHECK_FALSE(
@@ -2343,19 +2366,19 @@ TEST_CASE("serializer borrowed helpers preserve direct ABI controls", "[serializ
     binary[index] = static_cast<uint8_t>(index);
   }
   util::json::Object binary_object;
-  binary_object["module_id"] = "binary.module";
-  binary_object["payload_b64"] = base64_encode(binary);
+  binary_object["moduleId"] = "binary.module";
+  binary_object["payloadB64"] = base64_encode(binary);
   AssistSidecar binary_sidecar;
   REQUIRE(sidecar_from_json(util::json::Value(std::move(binary_object)), &binary_sidecar));
   CHECK(binary_sidecar.payload == binary);
 
   const auto loader_payload_first =
-      project_from_json(R"({"version":7,"assist_sidecars":[{"module_id":17,"payload_b64":17}]})");
+      project_from_json(R"({"version":7,"assistSidecars":[{"moduleId":17,"payloadB64":17}]})");
   REQUIRE_FALSE(loader_payload_first.ok());
   REQUIRE_FALSE(loader_payload_first.diagnostics.empty());
   CHECK(loader_payload_first.diagnostics.front().code == "invalid_format");
   CHECK(loader_payload_first.diagnostics.front().message ==
-        "string field must be a string: payload_b64");
+        "string field must be a string: payloadB64");
 }
 
 TEST_CASE("an absent annotation loads empty and a non-object one is refused", "[serialize]") {
@@ -2384,34 +2407,34 @@ TEST_CASE("a wrong-typed container or array element is refused, never loaded emp
       R"({"version":7,"tracks":"x"})",
       R"({"version":7,"sources":7})",
       R"({"version":7,"markers":null})",
-      R"({"version":7,"warp_maps":{}})",
-      R"({"version":7,"assist_sidecars":true})",
-      R"({"version":7,"tempo_segments":{}})",
-      R"({"version":7,"time_signatures":"4/4"})",
-      R"({"version":7,"midi_content":[]})",
+      R"({"version":7,"warpMaps":{}})",
+      R"({"version":7,"assistSidecars":true})",
+      R"({"version":7,"tempoSegments":{}})",
+      R"({"version":7,"timeSignatures":"4/4"})",
+      R"({"version":7,"midiContent":[]})",
       R"({"version":7,"scene":[]})",
       // Nested containers.
-      R"({"version":7,"tracks":[{"id":1,"automation_lanes":{}}]})",
-      R"({"version":7,"tracks":[{"id":1,"automation_lanes":[{"target_param_id":7,"points":7}]}]})",
+      R"({"version":7,"tracks":[{"id":1,"automationLanes":{}}]})",
+      R"({"version":7,"tracks":[{"id":1,"automationLanes":[{"targetParamId":7,"points":7}]}]})",
       R"({"version":7,"clips":[{"id":1,"takes":"x"}]})",
-      R"({"version":7,"clips":[{"id":1,"fade_in":[]}]})",
+      R"({"version":7,"clips":[{"id":1,"fadeIn":[]}]})",
       R"({"version":7,"annotation":{"chords":{}}})",
-      R"({"version":7,"midi_content":{"1":{}}})",
-      R"({"version":7,"midi_content":{"__sysex_payloads":[]}})",
-      R"({"version":7,"midi_content":{"__sysex_payloads":{"1":5}}})",
+      R"({"version":7,"midiContent":{"1":{}}})",
+      R"({"version":7,"midiContent":{"__sysexPayloads":[]}})",
+      R"({"version":7,"midiContent":{"__sysexPayloads":{"1":5}}})",
       // Array elements that are not objects.
       R"({"version":7,"clips":["notobject",5]})",
       R"({"version":7,"tracks":[null]})",
       R"({"version":7,"sources":[1]})",
       R"({"version":7,"markers":[[]]})",
-      R"({"version":7,"warp_maps":["w"]})",
-      R"({"version":7,"assist_sidecars":[false]})",
-      R"({"version":7,"tempo_segments":[120]})",
-      R"({"version":7,"tracks":[{"id":1,"automation_lanes":[3]}]})",
-      R"({"version":7,"warp_maps":[{"id":1,"anchors":[0,1]}]})",
+      R"({"version":7,"warpMaps":["w"]})",
+      R"({"version":7,"assistSidecars":[false]})",
+      R"({"version":7,"tempoSegments":[120]})",
+      R"({"version":7,"tracks":[{"id":1,"automationLanes":[3]}]})",
+      R"({"version":7,"warpMaps":[{"id":1,"anchors":[0,1]}]})",
       R"({"version":7,"annotation":{"sections":["verse"]}})",
       R"({"version":7,"annotation":{"chords":[{"extensions":["9"]}]}})",
-      R"({"version":7,"midi_content":{"1":[null]}})",
+      R"({"version":7,"midiContent":{"1":[null]}})",
   };
   for (const char* document : documents) {
     INFO(document);
@@ -2494,75 +2517,74 @@ TEST_CASE("a loaded position is never one the C ABI setters would reject", "[ser
     const char* code;
   };
   const Case cases[] = {
-      {"tempo segment", R"({"version":7,"tempo_segments":[{"start_ppq":-1.0,"bpm":120.0}]})",
+      {"tempo segment", R"({"version":7,"tempoSegments":[{"startPpq":-1.0,"bpm":120.0}]})",
        "invalid_tempo_start_ppq"},
       {"time signature",
-       R"({"version":7,"time_signatures":[{"start_ppq":-1.0,"numerator":4,"denominator":4}]})",
+       R"({"version":7,"timeSignatures":[{"startPpq":-1.0,"numerator":4,"denominator":4}]})",
        "invalid_time_signature_start_ppq"},
       {"marker", R"({"version":7,"markers":[{"id":1,"ppq":-1.0}]})", "invalid_marker_ppq"},
       // Breakpoint positions reach the model through AutomationLane::set_points,
       // which enforces finiteness but not the sign; a negative one is silently
       // pulled to sample 0 by the bounce scheduler rather than reported.
       {"automation breakpoint",
-       R"({"version":7,"tracks":[{"id":1,"automation_lanes":[)"
-       R"({"target_param_id":7,"points":[{"ppq":-1.0,"value":0.5}]}]}]})",
+       R"({"version":7,"tracks":[{"id":1,"automationLanes":[)"
+       R"({"targetParamId":7,"points":[{"ppq":-1.0,"value":0.5}]}]}]})",
        "invalid_automation_breakpoint_ppq"},
       // MIDI clip events live in the content store beside the project, so they
       // are reached only because the invariant pass is handed that store too.
       {"MIDI event position",
-       R"({"version":7,"midi_content":{"1":[{"ppq":-1.0,"word0":546323556,"word1":0}]}})",
+       R"({"version":7,"midiContent":{"1":[{"ppq":-1.0,"word0":546323556,"word1":0}]}})",
        "invalid_midi_event_ppq"},
       // The same setter caps the position at kMaxPublicPpq (1e12); a finite
       // value past it loads and then computes nonsense sample positions.
       {"MIDI event beyond the public ppq ceiling",
-       R"({"version":7,"midi_content":{"1":[{"ppq":1e30,"word0":546323556,"word1":0}]}})",
+       R"({"version":7,"midiContent":{"1":[{"ppq":1e30,"word0":546323556,"word1":0}]}})",
        "invalid_midi_event_ppq"},
       // The tempo and time-signature setters bound more than the position's
       // sign: sonare_project_set_tempo_segments runs valid_public_tempo_segment
       // and _set_time_signatures runs valid_public_time_signature_segment, so
       // each field those predicates reject must fail the load too.
       {"tempo segment beyond the public ppq ceiling",
-       R"({"version":7,"tempo_segments":[{"start_ppq":1e30,"bpm":120.0}]})",
-       "invalid_tempo_segment"},
+       R"({"version":7,"tempoSegments":[{"startPpq":1e30,"bpm":120.0}]})", "invalid_tempo_segment"},
       // Already covered by the decoder's own per-field checks, which run first
       // and report a more specific code. Kept so the field is on the record as
       // covered rather than looking like a gap the next reader re-opens.
       {"tempo segment with a non-positive bpm",
-       R"({"version":7,"tempo_segments":[{"start_ppq":0.0,"bpm":0.0}]})", "invalid_tempo_bpm"},
+       R"({"version":7,"tempoSegments":[{"startPpq":0.0,"bpm":0.0}]})", "invalid_tempo_bpm"},
       {"tempo segment beyond the public tempo ceiling",
-       R"({"version":7,"tempo_segments":[{"start_ppq":0.0,"bpm":100000.1}]})",
+       R"({"version":7,"tempoSegments":[{"startPpq":0.0,"bpm":100000.1}]})",
        "invalid_tempo_segment"},
-      {"tempo ramp with a negative end_bpm",
-       R"({"version":7,"tempo_segments":[{"start_ppq":0.0,"bpm":120.0,"end_bpm":-1.0}]})",
+      {"tempo ramp with a negative endBpm",
+       R"({"version":7,"tempoSegments":[{"startPpq":0.0,"bpm":120.0,"endBpm":-1.0}]})",
        "invalid_tempo_end_bpm"},
       {"tempo ramp beyond the public tempo ceiling",
-       R"({"version":7,"tempo_segments":[{"start_ppq":0.0,"bpm":120.0,"end_bpm":100000.1}]})",
+       R"({"version":7,"tempoSegments":[{"startPpq":0.0,"bpm":120.0,"endBpm":100000.1}]})",
        "invalid_tempo_segment"},
       {"time signature beyond the public ppq ceiling",
-       R"({"version":7,"time_signatures":[{"start_ppq":1e30,"numerator":4,"denominator":4}]})",
+       R"({"version":7,"timeSignatures":[{"startPpq":1e30,"numerator":4,"denominator":4}]})",
        "invalid_time_signature_segment"},
       {"time signature with a non-positive numerator",
-       R"({"version":7,"time_signatures":[{"start_ppq":0.0,"numerator":0,"denominator":4}]})",
+       R"({"version":7,"timeSignatures":[{"startPpq":0.0,"numerator":0,"denominator":4}]})",
        "invalid_time_signature"},
       {"time signature with a non-positive denominator",
-       R"({"version":7,"time_signatures":[{"start_ppq":0.0,"numerator":4,"denominator":0}]})",
+       R"({"version":7,"timeSignatures":[{"startPpq":0.0,"numerator":4,"denominator":0}]})",
        "invalid_time_signature"},
       // The annotation setters admit a span from a non-negative start to an end
       // after it, and at most 32 extensions per chord.
       {"annotation key with a negative start",
-       R"({"version":7,"annotation":{"keys":[{"start_ppq":-1.0,"end_ppq":4.0}]}})",
+       R"({"version":7,"annotation":{"keys":[{"startPpq":-1.0,"endPpq":4.0}]}})",
        "invalid_annotation_key_span"},
       {"annotation key with an empty span",
-       R"({"version":7,"annotation":{"keys":[{"start_ppq":4.0,"end_ppq":4.0}]}})",
+       R"({"version":7,"annotation":{"keys":[{"startPpq":4.0,"endPpq":4.0}]}})",
        "invalid_annotation_key_span"},
       {"annotation chord with a negative start",
-       R"({"version":7,"annotation":{"chords":[{"start_ppq":-1.0,"end_ppq":4.0}]}})",
+       R"({"version":7,"annotation":{"chords":[{"startPpq":-1.0,"endPpq":4.0}]}})",
        "invalid_annotation_chord_span"},
       {"annotation chord ending before it starts",
-       R"({"version":7,"annotation":{"chords":[{"start_ppq":4.0,"end_ppq":2.0}]}})",
+       R"({"version":7,"annotation":{"chords":[{"startPpq":4.0,"endPpq":2.0}]}})",
        "invalid_annotation_chord_span"},
       {"annotation chord with more than 32 extensions",
-       R"({"version":7,"annotation":{"chords":[{"start_ppq":0.0,"end_ppq":4.0,"extensions":[EXT]}]}})",
+       R"({"version":7,"annotation":{"chords":[{"startPpq":0.0,"endPpq":4.0,"extensions":[EXT]}]}})",
        "invalid_annotation_chord_extensions"},
   };
   for (const Case& c : cases) {
@@ -2580,10 +2602,10 @@ TEST_CASE("a loaded position is never one the C ABI setters would reject", "[ser
   // document the edit API would have produced: a ramp at the exact ceilings,
   // and a second segment after it, both load.
   const auto at_bounds =
-      project_from_json(R"({"version":7,"tempo_segments":[)"
-                        R"({"start_ppq":0.0,"bpm":100000.0,"end_bpm":100000.0},)"
-                        R"({"start_ppq":1e12,"bpm":120.0,"end_bpm":0.0}],)"
-                        R"("time_signatures":[{"start_ppq":1e12,"numerator":7,"denominator":8}]})");
+      project_from_json(R"({"version":7,"tempoSegments":[)"
+                        R"({"startPpq":0.0,"bpm":100000.0,"endBpm":100000.0},)"
+                        R"({"startPpq":1e12,"bpm":120.0,"endBpm":0.0}],)"
+                        R"("timeSignatures":[{"startPpq":1e12,"numerator":7,"denominator":8}]})");
   REQUIRE(at_bounds.ok());
   REQUIRE_FALSE(at_bounds.has_error());
   REQUIRE(at_bounds.project->tempo_segments().size() == 2);
@@ -2595,18 +2617,18 @@ TEST_CASE("a loaded position is never one the C ABI setters would reject", "[ser
   // is deliberate; tightening it here would refuse documents the encoder never
   // produces but older hand-edited ones may carry.
   const auto unordered =
-      project_from_json(R"({"version":7,"tempo_segments":[)"
-                        R"({"start_ppq":960.0,"bpm":140.0},{"start_ppq":0.0,"bpm":120.0}]})");
+      project_from_json(R"({"version":7,"tempoSegments":[)"
+                        R"({"startPpq":960.0,"bpm":140.0},{"startPpq":0.0,"bpm":120.0}]})");
   REQUIRE(unordered.ok());
   REQUIRE(unordered.project->tempo_segments().size() == 2);
   REQUIRE(unordered.project->tempo_segments()[0].start_ppq == 0.0);
   REQUIRE(unordered.project->tempo_segments()[1].start_ppq == 960.0);
 
   const auto unordered_signatures =
-      project_from_json(R"({"version":7,"time_signatures":[)"
-                        R"({"start_ppq":8.0,"numerator":3,"denominator":4},)"
-                        R"({"start_ppq":0.0,"numerator":4,"denominator":4},)"
-                        R"({"start_ppq":8.0,"numerator":7,"denominator":8}]})");
+      project_from_json(R"({"version":7,"timeSignatures":[)"
+                        R"({"startPpq":8.0,"numerator":3,"denominator":4},)"
+                        R"({"startPpq":0.0,"numerator":4,"denominator":4},)"
+                        R"({"startPpq":8.0,"numerator":7,"denominator":8}]})");
   REQUIRE(unordered_signatures.ok());
   REQUIRE(unordered_signatures.project->time_signatures().size() == 2);
   REQUIRE(unordered_signatures.project->time_signatures()[0].start_ppq == 0.0);
@@ -2632,12 +2654,12 @@ TEST_CASE("a loaded position is never one the C ABI setters would reject", "[ser
 
   // Zero is a legal position; only negatives are rejected.
   const auto ok =
-      project_from_json(R"({"version":7,"tempo_segments":[{"start_ppq":0.0,"bpm":120.0}],)"
+      project_from_json(R"({"version":7,"tempoSegments":[{"startPpq":0.0,"bpm":120.0}],)"
                         R"("markers":[{"id":1,"ppq":0.0}],"sources":[{"id":1,"kind":0}],)"
-                        R"("tracks":[{"id":1,"automation_lanes":[)"
-                        R"({"target_param_id":7,"points":[{"ppq":0.0,"value":0.5}]}]}],)"
-                        R"("clips":[{"id":1,"track_id":1,"source_id":1,"length_ppq":1}],)"
-                        R"("midi_content":{"1":[{"ppq":0.0,"word0":546323556,"word1":0}]}})");
+                        R"("tracks":[{"id":1,"automationLanes":[)"
+                        R"({"targetParamId":7,"points":[{"ppq":0.0,"value":0.5}]}]}],)"
+                        R"("clips":[{"id":1,"trackId":1,"sourceId":1,"lengthPpq":1}],)"
+                        R"("midiContent":{"1":[{"ppq":0.0,"word0":546323556,"word1":0}]}})");
   REQUIRE(ok.ok());
   REQUIRE_FALSE(ok.has_error());
   REQUIRE(ok.midi.events.at(1).size() == 1);
@@ -2649,13 +2671,13 @@ TEST_CASE("a loaded assist sidecar set has one entry per identity", "[serialize]
   // appending, and the remove command erases the first match. Two entries
   // sharing that identity make the second unreachable: it can be neither
   // updated nor deleted, and it keeps shadowing the first on every save.
-  const std::string json = R"({"version":7,"assist_sidecars":[)"
-                           R"({"module_id":"m","schema_version":1,"target_track_id":3,)"
-                           R"("region_start_ppq":0.0,"region_end_ppq":4.0,"payload_b64":"YQ=="},)"
-                           R"({"module_id":"m","schema_version":2,"target_track_id":3,)"
-                           R"("region_start_ppq":0.0,"region_end_ppq":4.0,"payload_b64":"Yg=="},)"
-                           R"({"module_id":"m","schema_version":9,"target_track_id":4,)"
-                           R"("region_start_ppq":0.0,"region_end_ppq":4.0,"payload_b64":"Yw=="}]})";
+  const std::string json = R"({"version":7,"assistSidecars":[)"
+                           R"({"moduleId":"m","schemaVersion":1,"targetTrackId":3,)"
+                           R"("regionStartPpq":0.0,"regionEndPpq":4.0,"payloadB64":"YQ=="},)"
+                           R"({"moduleId":"m","schemaVersion":2,"targetTrackId":3,)"
+                           R"("regionStartPpq":0.0,"regionEndPpq":4.0,"payloadB64":"Yg=="},)"
+                           R"({"moduleId":"m","schemaVersion":9,"targetTrackId":4,)"
+                           R"("regionStartPpq":0.0,"regionEndPpq":4.0,"payloadB64":"Yw=="}]})";
   const auto result = project_from_json(json);
   REQUIRE(result.ok());
   REQUIRE_FALSE(result.has_error());
@@ -2688,12 +2710,12 @@ TEST_CASE("assist sidecar identity canonicalizes signed zero and keeps first slo
   // region must compare equal to the first entry, while its complete payload
   // and schema replace the first slot rather than moving to the end.
   const auto result = project_from_json(
-      R"({"version":7,"assist_sidecars":[)"
-      R"({"module_id":"m","schema_version":1,"target_track_id":3,"region_start_ppq":0.0,"region_end_ppq":-0.0,"payload_b64":"YQ=="},)"
-      R"({"module_id":"n","schema_version":2,"target_track_id":3,"region_start_ppq":0.0,"region_end_ppq":4.0,"payload_b64":"Yg=="},)"
-      R"({"module_id":"m","schema_version":9,"target_track_id":3,"region_start_ppq":-0.0,"region_end_ppq":0.0,"payload_b64":"Wg=="},)"
-      R"({"module_id":"k","schema_version":4,"target_track_id":4,"region_start_ppq":0.0,"region_end_ppq":4.0,"payload_b64":"aw=="},)"
-      R"({"module_id":"n","schema_version":7,"target_track_id":3,"region_start_ppq":0.0,"region_end_ppq":4.0,"payload_b64":"Tg=="}]})");
+      R"({"version":7,"assistSidecars":[)"
+      R"({"moduleId":"m","schemaVersion":1,"targetTrackId":3,"regionStartPpq":0.0,"regionEndPpq":-0.0,"payloadB64":"YQ=="},)"
+      R"({"moduleId":"n","schemaVersion":2,"targetTrackId":3,"regionStartPpq":0.0,"regionEndPpq":4.0,"payloadB64":"Yg=="},)"
+      R"({"moduleId":"m","schemaVersion":9,"targetTrackId":3,"regionStartPpq":-0.0,"regionEndPpq":0.0,"payloadB64":"Wg=="},)"
+      R"({"moduleId":"k","schemaVersion":4,"targetTrackId":4,"regionStartPpq":0.0,"regionEndPpq":4.0,"payloadB64":"aw=="},)"
+      R"({"moduleId":"n","schemaVersion":7,"targetTrackId":3,"regionStartPpq":0.0,"regionEndPpq":4.0,"payloadB64":"Tg=="}]})");
   REQUIRE(result.ok());
   REQUIRE_FALSE(result.has_error());
   REQUIRE(result.project->assist_sidecars().size() == 3);
@@ -2745,14 +2767,14 @@ TEST_CASE("marker key fields survive a save/load on any marker kind", "[serializ
   Project plain;
   MidiContentStore plain_midi;
   REQUIRE(SetMarker(0, 4.0, "cue").apply(plain, plain_midi));
-  REQUIRE(project_to_json(plain, plain_midi).find("key_fifths") == std::string::npos);
+  REQUIRE(project_to_json(plain, plain_midi).find("keyFifths") == std::string::npos);
 }
 
 TEST_CASE("key-signature marker fifths outside the SMF range are rejected", "[serialize]") {
   for (const int key_fifths : {-8, 8}) {
     INFO("key_fifths=" << key_fifths);
     const auto result =
-        project_from_json(std::string(R"({"version":7,"markers":[{"id":1,"kind":4,"key_fifths":)") +
+        project_from_json(std::string(R"({"version":7,"markers":[{"id":1,"kind":4,"keyFifths":)") +
                           std::to_string(key_fifths) + R"(}]})");
     REQUIRE_FALSE(result.ok());
     REQUIRE(result.has_error());
@@ -2763,7 +2785,7 @@ TEST_CASE("key-signature marker fifths outside the SMF range are rejected", "[se
 
 TEST_CASE("invalid assist sidecar identity and regions are rejected", "[serialize]") {
   const auto empty_module =
-      project_from_json(R"({"version":7,"assist_sidecars":[{"module_id":""}]})");
+      project_from_json(R"({"version":7,"assistSidecars":[{"moduleId":""}]})");
   REQUIRE_FALSE(empty_module.ok());
   REQUIRE(empty_module.has_error());
   CHECK(std::any_of(
@@ -2771,7 +2793,7 @@ TEST_CASE("invalid assist sidecar identity and regions are rejected", "[serializ
       [](const serialize::Diagnostic& d) { return d.code == "invalid_assist_sidecar_module_id"; }));
 
   const auto embedded_nul =
-      project_from_json(R"({"version":7,"assist_sidecars":[{"module_id":"bad\u0000id"}]})");
+      project_from_json(R"({"version":7,"assistSidecars":[{"moduleId":"bad\u0000id"}]})");
   REQUIRE_FALSE(embedded_nul.ok());
   REQUIRE(embedded_nul.has_error());
   CHECK(std::any_of(
@@ -2783,12 +2805,12 @@ TEST_CASE("invalid assist sidecar identity and regions are rejected", "[serializ
     const char* diagnostic_code;
   };
   for (const RegionCase c :
-       {RegionCase{"region_start_ppq", "invalid_assist_sidecar_region_start_ppq"},
-        RegionCase{"region_end_ppq", "invalid_assist_sidecar_region_end_ppq"}}) {
+       {RegionCase{"regionStartPpq", "invalid_assist_sidecar_region_start_ppq"},
+        RegionCase{"regionEndPpq", "invalid_assist_sidecar_region_end_ppq"}}) {
     INFO(c.json_field);
     const auto result =
-        project_from_json(std::string(R"({"version":7,"assist_sidecars":[{"module_id":"m",)") +
-                          "\"" + c.json_field + R"(":-1.0}]})");
+        project_from_json(std::string(R"({"version":7,"assistSidecars":[{"moduleId":"m",)") + "\"" +
+                          c.json_field + R"(":-1.0}]})");
     REQUIRE_FALSE(result.ok());
     REQUIRE(result.has_error());
     CHECK(std::any_of(result.diagnostics.begin(), result.diagnostics.end(),
@@ -2798,7 +2820,7 @@ TEST_CASE("invalid assist sidecar identity and regions are rejected", "[serializ
 
 TEST_CASE("valid empty sidecar region and unknown module survive load", "[serialize]") {
   const auto result = project_from_json(
-      R"({"version":7,"assist_sidecars":[{"module_id":"unknown.module","schema_version":0,"target_track_id":0,"region_start_ppq":4.0,"region_end_ppq":2.0}]})");
+      R"({"version":7,"assistSidecars":[{"moduleId":"unknown.module","schemaVersion":0,"targetTrackId":0,"regionStartPpq":4.0,"regionEndPpq":2.0}]})");
   REQUIRE(result.ok());
   REQUIRE(result.project->assist_sidecars().size() == 1);
   const AssistSidecar& sidecar = result.project->assist_sidecars().front();
@@ -3030,12 +3052,12 @@ TEST_CASE("orphan MIDI event lists and dangling SysEx handles are dropped on loa
   const auto result =
       project_from_json(R"({"version":7,"sources":[{"id":1,"kind":1,"name":""}],)"
                         R"("tracks":[{"id":1,"kind":1}],)"
-                        R"("clips":[{"id":1,"track_id":1,"source_id":1,"length_ppq":4}],)"
-                        R"("midi_content":{"1":[{"ppq":0.0,"word0":546323556,"word1":0},)"
-                        R"({"ppq":0.5,"word0":0,"word1":0,"sysex_handle":7},)"
-                        R"({"ppq":1.0,"word0":0,"word1":0,"sysex_handle":9}],)"
+                        R"("clips":[{"id":1,"trackId":1,"sourceId":1,"lengthPpq":4}],)"
+                        R"("midiContent":{"1":[{"ppq":0.0,"word0":546323556,"word1":0},)"
+                        R"({"ppq":0.5,"word0":0,"word1":0,"sysexHandle":7},)"
+                        R"({"ppq":1.0,"word0":0,"word1":0,"sysexHandle":9}],)"
                         R"("2":[{"ppq":0.0,"word0":546323556,"word1":0}],)"
-                        R"("__sysex_payloads":{"7":"AQI="}}})");
+                        R"("__sysexPayloads":{"7":"AQI="}}})");
   REQUIRE(result.ok());
   int orphan_warnings = 0;
   int dangling_warnings = 0;
@@ -3075,7 +3097,7 @@ TEST_CASE("orphan MIDI event lists and dangling SysEx handles are dropped on loa
 TEST_CASE("a negative track or clip gain loads as silence with one warning each", "[serialize]") {
   const auto result = project_from_json(
       R"({"version":7,"sources":[{"id":1,"kind":0}],"tracks":[{"id":1,"gain":-0.5}],)"
-      R"("clips":[{"id":1,"track_id":1,"source_id":1,"length_ppq":1,"gain":-2}]})");
+      R"("clips":[{"id":1,"trackId":1,"sourceId":1,"lengthPpq":1,"gain":-2}]})");
   REQUIRE(result.ok());
   REQUIRE(result.project->tracks().size() == 1);
   CHECK(result.project->tracks()[0].gain == 0.0f);
@@ -3092,9 +3114,9 @@ namespace {
 
 std::string sidecar_document(int version, const char* module_id) {
   return std::string("{\"version\":") + std::to_string(version) +
-         ",\"assist_sidecars\":[{\"module_id\":\"" + module_id +
-         "\",\"schema_version\":1,\"target_track_id\":0,\"region_start_ppq\":0,"
-         "\"region_end_ppq\":0,\"payload_b64\":\"\"}]}";
+         ",\"assistSidecars\":[{\"moduleId\":\"" + module_id +
+         "\",\"schemaVersion\":1,\"targetTrackId\":0,\"regionStartPpq\":0,"
+         "\"regionEndPpq\":0,\"payloadB64\":\"\"}]}";
 }
 
 }  // namespace
@@ -3132,8 +3154,8 @@ TEST_CASE("a MIDI event word in its earlier spelling is refused naming the curre
           "[serialize]") {
   const auto document = [](const std::string& event) {
     return R"({"version":7,"sources":[{"id":1,"kind":0}],"tracks":[{"id":1}],)"
-           R"("clips":[{"id":1,"track_id":1,"source_id":1,"length_ppq":1}],)"
-           R"("midi_content":{"1":[)" +
+           R"("clips":[{"id":1,"trackId":1,"sourceId":1,"lengthPpq":1}],)"
+           R"("midiContent":{"1":[)" +
            event + "]}}";
   };
   const auto current = project_from_json(document(R"({"ppq":0.0,"word0":546323556,"word1":0})"));

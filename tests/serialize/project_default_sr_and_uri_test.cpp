@@ -6,7 +6,7 @@
 /// These pin two serialization invariants:
 ///   1. The default project sample rate was raised from the lo-fi 22.05 kHz
 ///      analysis default to the conventional 48 kHz DAW render rate. Both the
-///      in-memory Project constructor and the serializer's "sample_rate"
+///      in-memory Project constructor and the serializer's "sampleRate"
 ///      fallback (for a document that omits the field) must agree.
 ///   2. Decoded PCM is intentionally NEVER embedded in the project JSON, so the
 ///      ONLY render-time link to the underlying audio is the audio source's
@@ -43,7 +43,7 @@ TEST_CASE("Project default sample rate is 48 kHz", "[serialize][arrangement]") {
   Project fresh;
   CHECK(fresh.sample_rate() == 48000.0);
 
-  // Serializer fallback: a document that OMITS "sample_rate" must deserialize to
+  // Serializer fallback: a document that OMITS "sampleRate" must deserialize to
   // the same 48 kHz default as an in-memory project (not the old 22.05 kHz).
   const std::string json_without_sr = R"({"version": 7})";
   auto result = project_from_json(json_without_sr);

@@ -1211,12 +1211,12 @@ TEST_CASE("mono project bounce downmixes stereo audio clips instead of dropping 
 TEST_CASE("deserialize success returns warnings and failed bounce records missing timeline",
           "[project]") {
   const std::string json =
-      R"({"version":7,"sample_rate":48000,"tracks":[{"id":1,"name":"audio","kind":0,)"
-      R"("channel_strip_ref":"","output_target":"","midi_destination_id":0,)"
-      R"("automation_lanes":[]}],"clips":[{"id":1,"track_id":1,"source_id":99,)"
-      R"("start_ppq":0,"length_ppq":1,"source_offset_ppq":0,"gain":1,)"
-      R"("fade_in":{"length_ppq":0,"curve":0},"fade_out":{"length_ppq":0,"curve":0},)"
-      R"("loop_mode":0,"loop_length_ppq":0,"warp_ref_id":0}]})";
+      R"({"version":7,"sampleRate":48000,"tracks":[{"id":1,"name":"audio","kind":0,)"
+      R"("channelStripRef":"","outputTarget":"","midiDestinationId":0,)"
+      R"("automationLanes":[]}],"clips":[{"id":1,"trackId":1,"sourceId":99,)"
+      R"("startPpq":0,"lengthPpq":1,"sourceOffsetPpq":0,"gain":1,)"
+      R"("fadeIn":{"lengthPpq":0,"curve":0},"fadeOut":{"lengthPpq":0,"curve":0},)"
+      R"("loopMode":0,"loopLengthPpq":0,"warpRefId":0}]})";
 
   SonareProject* project = nullptr;
   char* diag = nullptr;
@@ -1285,12 +1285,12 @@ TEST_CASE("a bounce rejected for bad arguments clears the recorded compile resul
   // bounce's diagnostics instead would show a host errors for a render that
   // never ran, on a call it already knows failed.
   const std::string json =
-      R"({"version":7,"sample_rate":48000,"tracks":[{"id":1,"name":"audio","kind":0,)"
-      R"("channel_strip_ref":"","output_target":"","midi_destination_id":0,)"
-      R"("automation_lanes":[]}],"clips":[{"id":1,"track_id":1,"source_id":99,)"
-      R"("start_ppq":0,"length_ppq":1,"source_offset_ppq":0,"gain":1,)"
-      R"("fade_in":{"length_ppq":0,"curve":0},"fade_out":{"length_ppq":0,"curve":0},)"
-      R"("loop_mode":0,"loop_length_ppq":0,"warp_ref_id":0}]})";
+      R"({"version":7,"sampleRate":48000,"tracks":[{"id":1,"name":"audio","kind":0,)"
+      R"("channelStripRef":"","outputTarget":"","midiDestinationId":0,)"
+      R"("automationLanes":[]}],"clips":[{"id":1,"trackId":1,"sourceId":99,)"
+      R"("startPpq":0,"lengthPpq":1,"sourceOffsetPpq":0,"gain":1,)"
+      R"("fadeIn":{"lengthPpq":0,"curve":0},"fadeOut":{"lengthPpq":0,"curve":0},)"
+      R"("loopMode":0,"loopLengthPpq":0,"warpRefId":0}]})";
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_deserialize(json.c_str(), json.size(), &project, nullptr) == SONARE_OK);
 
@@ -1523,14 +1523,14 @@ TEST_CASE("bounce renders per-track channel-strip effects", "[project]") {
   // Bind the track to a muted strip; the bounce must now fall silent.
   const std::string json_muted = replace_first(
       replace_first(json_plain, "\"strips\":[]", "\"strips\":[{\"id\":\"s0\",\"muted\":true}]"),
-      "\"channel_strip_ref\":\"\"", "\"channel_strip_ref\":\"s0\"");
+      "\"channelStripRef\":\"\"", "\"channelStripRef\":\"s0\"");
   REQUIRE(builtin_bounce_peak(json_muted) == Catch::Approx(0.0f).margin(1e-6));
 
   // A transparent strip bound to the track must also bind the track automation:
   // the fader lane drives the strip to -80 dB instead of being silently ignored.
   const std::string json_unity = replace_first(
       replace_first(json_plain, "\"strips\":[]", "\"strips\":[{\"id\":\"s0\",\"faderDb\":0.0}]"),
-      "\"channel_strip_ref\":\"\"", "\"channel_strip_ref\":\"s0\"");
+      "\"channelStripRef\":\"\"", "\"channelStripRef\":\"s0\"");
   const float automated_peak = builtin_bounce_peak(json_unity, 12000);
   REQUIRE(automated_peak > 0.0f);
   REQUIRE(automated_peak < direct_peak * 0.001f);

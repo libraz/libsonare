@@ -164,12 +164,12 @@ TEST_CASE("CLI project command group", "[cli]") {
     const std::string wav = unique_temp_path(".wav");
     {
       std::ofstream out(project);
-      out << R"({"version":7,"sample_rate":44100.5,"tracks":[],"clips":[]})";
+      out << R"({"version":7,"sampleRate":44100.5,"tracks":[],"clips":[]})";
     }
     const SplitResult result =
         exec_command_split(CLI + " project bounce " + project + " -o " + wav + " --frames 64");
     CHECK(result.exit_code == 5);
-    CHECK_THAT(result.err, ContainsSubstring("invalid_sample_rate: sample_rate must be a whole "
+    CHECK_THAT(result.err, ContainsSubstring("invalid_sample_rate: sampleRate must be a whole "
                                              "number of hertz within the supported range"));
     CHECK_FALSE(std::ifstream(wav).good());
     std::remove(project.c_str());
@@ -220,16 +220,16 @@ TEST_CASE("CLI project command group", "[cli]") {
       std::ofstream file(invalid);
       file << R"json({
         "version": 7,
-        "sample_rate": 48000,
-        "tempo_segments": [{"start_ppq": 0, "bpm": 120, "start_sample": 0, "end_bpm": 90}],
-        "sources": [{"kind": 0, "id": 1, "uri": "missing.wav", "channel_count": 1,
-                     "sample_rate_hint": 48000, "storage_handle_id": 0}],
+        "sampleRate": 48000,
+        "tempoSegments": [{"startPpq": 0, "bpm": 120, "startSample": 0, "endBpm": 90}],
+        "sources": [{"kind": 0, "id": 1, "uri": "missing.wav", "channelCount": 1,
+                     "sampleRateHint": 48000, "storageHandleId": 0}],
         "tracks": [{"id": 1, "name": "audio", "kind": 0, "gain": 1, "mute": false,
-                    "solo": false, "pan": 0, "channel_strip_ref": "", "output_target": "",
-                    "midi_destination_id": 0, "automation_lanes": []}],
-        "clips": [{"id": 1, "track_id": 1, "source_id": 1, "start_ppq": 0,
-                   "length_ppq": 1, "source_offset_ppq": 0, "gain": 1, "loop_mode": 0,
-                   "loop_length_ppq": 0, "warp_ref_id": 0, "warp_mode": 0}]
+                    "solo": false, "pan": 0, "channelStripRef": "", "outputTarget": "",
+                    "midiDestinationId": 0, "automationLanes": []}],
+        "clips": [{"id": 1, "trackId": 1, "sourceId": 1, "startPpq": 0,
+                   "lengthPpq": 1, "sourceOffsetPpq": 0, "gain": 1, "loopMode": 0,
+                   "loopLengthPpq": 0, "warpRefId": 0, "warpMode": 0}]
       })json";
     }
 
@@ -328,8 +328,8 @@ TEST_CASE("CLI project command group", "[cli]") {
     const std::string canonical = unique_temp_path("_warning_canonical.json");
     {
       std::ofstream file(project);
-      file << R"({"version":7,"clips":[{"id":1,"track_id":99,"source_id":99,)"
-              R"("length_ppq":1.0}]})";
+      file << R"({"version":7,"clips":[{"id":1,"trackId":99,"sourceId":99,)"
+              R"("lengthPpq":1.0}]})";
     }
 
     auto [normal_code, normal_output] =

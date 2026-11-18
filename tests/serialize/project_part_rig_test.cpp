@@ -51,7 +51,7 @@ TEST_CASE("empty project is written at the current schema version", "[serialize]
   ProjectHandle h;
   const std::string text = serialize(h.p);
   CHECK(version_of(text) == sonare::serialize::SONARE_PROJECT_SCHEMA_VERSION);
-  CHECK(json::parse(text).find("part_rigs") == nullptr);
+  CHECK(json::parse(text).find("partRigs") == nullptr);
 }
 
 TEST_CASE("part rigs round-trip", "[serialize][part_rig]") {
@@ -65,12 +65,12 @@ TEST_CASE("part rigs round-trip", "[serialize][part_rig]") {
   CHECK(version_of(text) == sonare::serialize::SONARE_PROJECT_SCHEMA_VERSION);
 
   const json::Value root = json::parse(text);
-  const json::Value* rigs = root.find("part_rigs");
+  const json::Value* rigs = root.find("partRigs");
   REQUIRE(rigs != nullptr);
   REQUIRE(rigs->as_array().size() == 3);
   // Canonical order: (destination_id, part).
   const json::Value& first = rigs->as_array()[0];
-  CHECK(first.find("destination_id")->as_number() == 1.0);
+  CHECK(first.find("destinationId")->as_number() == 1.0);
   CHECK(first.find("part")->as_number() == 0.0);
   CHECK(first.find("mode")->as_string() == "bank");
   CHECK(first.find("inserts") == nullptr);
@@ -232,12 +232,12 @@ TEST_CASE("part rig entries survive without a referencing track", "[serialize][p
 TEST_CASE("part rig decode honours the schema version and shape", "[serialize][part_rig]") {
   using sonare::serialize::project_from_json;
   const char* body =
-      R"("part_rigs":[{"destination_id":3,"part":1,"mode":"none"},)"
-      R"({"destination_id":3,"part":16,"mode":"none"},)"
-      R"({"destination_id":3,"part":2,"mode":"bogus"},)"
-      R"({"destination_id":3,"part":4,"mode":"chain"},)"
-      R"({"destination_id":3,"part":5,"mode":"bank","inserts":[{"processor":"a","params":{}}]},)"
-      R"({"destination_id":3,"part":6,"mode":"chain",)"
+      R"("partRigs":[{"destinationId":3,"part":1,"mode":"none"},)"
+      R"({"destinationId":3,"part":16,"mode":"none"},)"
+      R"({"destinationId":3,"part":2,"mode":"bogus"},)"
+      R"({"destinationId":3,"part":4,"mode":"chain"},)"
+      R"({"destinationId":3,"part":5,"mode":"bank","inserts":[{"processor":"a","params":{}}]},)"
+      R"({"destinationId":3,"part":6,"mode":"chain",)"
       R"("inserts":[{"processor":"x.y","params":{}}]}]})";
 
   const auto v5 = project_from_json(std::string(R"({"version":7,)") + body);
@@ -261,10 +261,10 @@ TEST_CASE("part rig decode honours the schema version and shape", "[serialize][p
 TEST_CASE("part rig decode bounds malformed-entry diagnostics", "[serialize][part_rig]") {
   using sonare::serialize::project_from_json;
 
-  std::string document = R"({"version":7,"part_rigs":[)";
+  std::string document = R"({"version":7,"partRigs":[)";
   for (int i = 0; i < 130; ++i) {
     if (i > 0) document += ",";
-    document += R"({"destination_id":1,"part":16,"mode":"none"})";
+    document += R"({"destinationId":1,"part":16,"mode":"none"})";
   }
   document += "]}";
 

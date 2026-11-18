@@ -356,7 +356,7 @@ def _project_align_takes(args: argparse.Namespace) -> int:
         uris = _audio_source_uris(document)
         clips_by_source: dict[int, list[int]] = {}
         for clip in shape.get("clips", []):
-            clips_by_source.setdefault(int(clip.get("source_id", 0)), []).append(
+            clips_by_source.setdefault(int(clip.get("sourceId", 0)), []).append(
                 int(clip.get("id", 0))
             )
         source_ids = {int(source.get("id", 0)) for source in shape.get("sources", [])}
@@ -389,7 +389,7 @@ def _project_align_takes(args: argparse.Namespace) -> int:
         # warp map reads both at the project rate.
         anchor_scale = project.sample_rate / float(reference_rate)
         # Ids already in the document are never reused and never renumbered.
-        next_warp_id = max([int(entry.get("id", 0)) for entry in shape.get("warp_maps", [])] + [0])
+        next_warp_id = max([int(entry.get("id", 0)) for entry in shape.get("warpMaps", [])] + [0])
         aligned: list[_AlignedTake] = []
         for source_id in take_ids:
             take_samples, take_rate = _load_audio(paths[source_id])

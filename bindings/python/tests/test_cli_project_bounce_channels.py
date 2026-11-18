@@ -16,7 +16,7 @@ from pathlib import Path
 
 EXIT_INVALID_PARAMETER = 3
 
-_CLEAN_PROJECT = {"version": 7, "sample_rate": 48000, "tracks": [], "clips": []}
+_CLEAN_PROJECT = {"version": 7, "sampleRate": 48000, "tracks": [], "clips": []}
 
 
 def _console_script() -> Path:

@@ -37,11 +37,11 @@ std::vector<float> tone(double hz, double seconds) {
 
 /// A one-track project with a single sounding note on destination 0.
 std::string one_note_project() {
-  return R"({"version":7,"sample_rate":48000,
-    "tracks":[{"id":1,"name":"midi","kind":1,"midi_destination_id":0}],
-    "clips":[{"id":1,"track_id":1,"source_id":1,"start_ppq":0,"length_ppq":960}],
+  return R"({"version":7,"sampleRate":48000,
+    "tracks":[{"id":1,"name":"midi","kind":1,"midiDestinationId":0}],
+    "clips":[{"id":1,"trackId":1,"sourceId":1,"startPpq":0,"lengthPpq":960}],
     "sources":[{"id":1,"kind":1,"name":""}],
-    "midi_content":{"1":[{"word0":546323556,"word1":0,"ppq":0},
+    "midiContent":{"1":[{"word0":546323556,"word1":0,"ppq":0},
                      {"word0":545274880,"word1":0,"ppq":480}]}})";
 }
 

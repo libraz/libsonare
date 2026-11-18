@@ -1205,33 +1205,33 @@ def test_project_validate_strict_writes_canonical_artifact_before_exit(tmp_path)
     """Strict mode preserves a parsed payload and writes its canonical JSON."""
     warning = {
         "version": 7,
-        "sample_rate": 48000,
+        "sampleRate": 48000,
         "tracks": [
             {
                 "id": 1,
                 "name": "audio",
                 "kind": 0,
-                "channel_strip_ref": "",
-                "output_target": "",
-                "midi_destination_id": 0,
-                "automation_lanes": [],
+                "channelStripRef": "",
+                "outputTarget": "",
+                "midiDestinationId": 0,
+                "automationLanes": [],
             }
         ],
         "clips": [
             {
                 "id": 1,
-                "track_id": 1,
-                "source_id": 99,
-                "start_ppq": 0,
-                "length_ppq": 1,
-                "source_offset_ppq": 0,
+                "trackId": 1,
+                "sourceId": 99,
+                "startPpq": 0,
+                "lengthPpq": 1,
+                "sourceOffsetPpq": 0,
                 "gain": 1,
-                "fade_in": {"length_ppq": 0, "curve": 0},
-                "fade_out": {"length_ppq": 0, "curve": 0},
-                "loop_mode": 0,
-                "loop_length_ppq": 0,
-                "warp_ref_id": 0,
-                "warp_mode": 0,
+                "fadeIn": {"lengthPpq": 0, "curve": 0},
+                "fadeOut": {"lengthPpq": 0, "curve": 0},
+                "loopMode": 0,
+                "loopLengthPpq": 0,
+                "warpRefId": 0,
+                "warpMode": 0,
             }
         ],
     }
@@ -1298,7 +1298,7 @@ def test_project_bounce_refuses_a_fractional_project_rate(tmp_path, stored_rate)
     proj = tmp_path / "project.sonare"
     wav = tmp_path / "bounce.wav"
     proj.write_text(
-        json.dumps({"version": 7, "sample_rate": stored_rate, "tracks": [], "clips": []}),
+        json.dumps({"version": 7, "sampleRate": stored_rate, "tracks": [], "clips": []}),
         encoding="utf-8",
     )
 
@@ -1307,7 +1307,7 @@ def test_project_bounce_refuses_a_fractional_project_rate(tmp_path, stored_rate)
     )
     assert result.returncode == 5
     assert (
-        "invalid_sample_rate: sample_rate must be a whole number of hertz within the "
+        "invalid_sample_rate: sampleRate must be a whole number of hertz within the "
         "supported range" in result.stderr
     )
     assert not wav.exists()
@@ -1319,7 +1319,7 @@ def test_project_bounce_renders_an_integral_project_rate(tmp_path, stored_rate) 
     proj = tmp_path / "project.sonare"
     wav = tmp_path / "bounce.wav"
     proj.write_text(
-        json.dumps({"version": 7, "sample_rate": stored_rate, "tracks": [], "clips": []}),
+        json.dumps({"version": 7, "sampleRate": stored_rate, "tracks": [], "clips": []}),
         encoding="utf-8",
     )
 

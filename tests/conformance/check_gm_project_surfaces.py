@@ -89,7 +89,7 @@ def _read_fixture() -> tuple[str, bytes]:
             f"cannot read GM project fixture {FIXTURE}: {exc}"
         ) from exc
 
-    if payload.get("version") != 7 or payload.get("sample_rate") != SAMPLE_RATE:
+    if payload.get("version") != 7 or payload.get("sampleRate") != SAMPLE_RATE:
         raise HarnessFailure("fixture must be project version 7 at 48 kHz")
     tracks = payload.get("tracks")
     if not isinstance(tracks, list) or len(tracks) != 1:
@@ -97,12 +97,12 @@ def _read_fixture() -> tuple[str, bytes]:
     track = tracks[0]
     if (
         track.get("kind") != 1
-        or track.get("midi_destination_id") != 0
+        or track.get("midiDestinationId") != 0
         or track.get("id") != 1
     ):
         raise HarnessFailure("fixture track must be MIDI kind with destination 0")
     clips = payload.get("clips")
-    if not isinstance(clips, list) or len(clips) != 1 or clips[0].get("track_id") != 1:
+    if not isinstance(clips, list) or len(clips) != 1 or clips[0].get("trackId") != 1:
         raise HarnessFailure("fixture must contain one MIDI clip on track 1")
     sources = payload.get("sources")
     if (
@@ -112,7 +112,7 @@ def _read_fixture() -> tuple[str, bytes]:
     ):
         raise HarnessFailure("fixture must contain one MIDI source")
 
-    events = payload.get("midi_content", {}).get("1")
+    events = payload.get("midiContent", {}).get("1")
     if not isinstance(events, list) or len(events) != len(EXPECTED_EVENTS):
         raise HarnessFailure("fixture must contain program 4 and one C4 note pair")
     for index, (expected_ppq, expected_word) in enumerate(EXPECTED_EVENTS):

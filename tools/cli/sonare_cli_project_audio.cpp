@@ -111,7 +111,7 @@ ProjectAlignDocumentFacts project_align_document_facts(const std::string& docume
   if (const auto* clips = root.find("clips"); clips != nullptr && clips->is_array()) {
     for (const auto& clip : clips->as_array()) {
       const auto* id = clip.find("id");
-      const auto* source_id = clip.find("source_id");
+      const auto* source_id = clip.find("sourceId");
       if (id == nullptr || !id->is_number()) continue;
       if (source_id == nullptr || !source_id->is_number()) continue;
       facts.clip_ids_by_source[static_cast<uint32_t>(source_id->as_number())].push_back(
@@ -122,7 +122,7 @@ ProjectAlignDocumentFacts project_align_document_facts(const std::string& docume
     (void)source_id;
     std::sort(clip_ids.begin(), clip_ids.end());
   }
-  if (const auto* maps = root.find("warp_maps"); maps != nullptr && maps->is_array()) {
+  if (const auto* maps = root.find("warpMaps"); maps != nullptr && maps->is_array()) {
     for (const auto& map : maps->as_array()) {
       const auto* id = map.find("id");
       if (id == nullptr || !id->is_number()) continue;

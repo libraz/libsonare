@@ -61,15 +61,15 @@ TEST_CASE("malformed and garbage input never crashes and yields diagnostics", "[
       "42",                                               // top-level number
       "null",                                             // top-level null
       "true",                                             // top-level bool
-      "{\"version\": 7, \"sample_rate\": \"x\"}",         // wrong-typed scalar
+      "{\"version\": 7, \"sampleRate\": \"x\"}",          // wrong-typed scalar
       "{\"version\": 7, \"tracks\": \"notarray\"}",       // wrong-typed array
       "{\"version\": 7, \"clips\": [\"notobject\", 5]}",  // bad array elements
       // Sidecar with malformed base64 payload => diagnostic, not crash.
-      "{\"version\": 7, \"assist_sidecars\": [{\"module_id\": \"m\", "
-      "\"payload_b64\": \"!!!notbase64\"}]}",
-      "{\"version\": 7, \"assist_sidecars\": [{\"payload_b64\": \"ABC\"}]}",  // bad length
-      "\xFF\xFE\x00\x01garbage",                                              // raw binary bytes
-      std::string(1, '\0'),                                                   // a single NUL byte
+      "{\"version\": 7, \"assistSidecars\": [{\"moduleId\": \"m\", "
+      "\"payloadB64\": \"!!!notbase64\"}]}",
+      "{\"version\": 7, \"assistSidecars\": [{\"payloadB64\": \"ABC\"}]}",  // bad length
+      "\xFF\xFE\x00\x01garbage",                                            // raw binary bytes
+      std::string(1, '\0'),                                                 // a single NUL byte
   };
 
   for (const auto& input : bad_inputs) {
@@ -89,7 +89,7 @@ TEST_CASE("decode-path warning diagnostics are bounded for a hostile document", 
   // suppression summary is appended, so reporting cannot dwarf the input.
   constexpr int kClipCount = 4000;
   std::string json =
-      "{\"version\": 7, \"sample_rate\": 48000, "
+      "{\"version\": 7, \"sampleRate\": 48000, "
       "\"sources\": [{\"id\": 1, \"kind\": 0, \"uri\": \"file://x.wav\"}], "
       "\"tracks\": [{\"id\": 1, \"kind\": 0, \"name\": \"T\"}], "
       "\"clips\": [";
@@ -98,8 +98,8 @@ TEST_CASE("decode-path warning diagnostics are bounded for a hostile document", 
     // Negative gain triggers a clip_gain_clamped warning; every other field is
     // valid so the source/track references never add referential warnings.
     json += "{\"id\": " + std::to_string(i + 1) +
-            ", \"track_id\": 1, \"source_id\": 1, \"start_ppq\": 0, "
-            "\"length_ppq\": 960, \"gain\": -1}";
+            ", \"trackId\": 1, \"sourceId\": 1, \"startPpq\": 0, "
+            "\"lengthPpq\": 960, \"gain\": -1}";
   }
   json += "]}";
 
@@ -134,10 +134,10 @@ TEST_CASE("deeply nested input is rejected without stack overflow", "[serialize]
 
 TEST_CASE("huge and degenerate numbers do not crash", "[serialize]") {
   const std::vector<std::string> inputs = {
-      "{\"version\": 7, \"sample_rate\": 1e400}",  // overflow -> inf (parser may reject)
-      "{\"version\": 7, \"sample_rate\": -1e400}",
-      "{\"version\": 7, \"sample_rate\": 1e-400}",  // underflow -> 0
-      "{\"version\": 7, \"tempo_segments\": [{\"bpm\": 1e308}]}",
+      "{\"version\": 7, \"sampleRate\": 1e400}",  // overflow -> inf (parser may reject)
+      "{\"version\": 7, \"sampleRate\": -1e400}",
+      "{\"version\": 7, \"sampleRate\": 1e-400}",  // underflow -> 0
+      "{\"version\": 7, \"tempoSegments\": [{\"bpm\": 1e308}]}",
       "{\"version\": 1.0e1}",  // version 10 -> unsupported
   };
   for (const auto& input : inputs) {
