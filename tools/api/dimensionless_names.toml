@@ -167,3 +167,31 @@ names = [
 class = "magnitude"
 range = [-127, 127]
 evidence = "bindings/node/src/types_engine.ts:746 and sonare_c_project_midi.h:474-475: MIDI velocity steps added after scaling"
+
+[[name]]
+names = [
+  "SonareVocalAnalysis.yin_threshold",
+  "SonareVocalCreateOptions.yin_threshold",
+  "vocal-notes --yin-threshold",
+  "VocalAnalysisInput.yinThreshold",
+  "VocalCreateRequest.yinThreshold",
+  "VocalEditSession.constructor(yin_threshold)",
+  "create_vocal_edit_session(yin_threshold)",
+]
+class = "normalized"
+range = [0, 1]
+evidence = "src/editing/vocal_edit/analysis.cpp:431 and :518: the session's pYIN cumulative-mean-normalized-difference threshold, refused outside (0, 1]"
+
+[[name]]
+names = [
+  "SonareVocalAnalysis.voiced_threshold",
+  "SonareVocalCreateOptions.voiced_threshold",
+  "vocal-notes --voiced-threshold",
+  "VocalAnalysisInput.voicedThreshold",
+  "VocalCreateRequest.voicedThreshold",
+  "VocalEditSession.constructor(voiced_threshold)",
+  "create_vocal_edit_session(voiced_threshold)",
+]
+class = "probability"
+range = [0, 1]
+evidence = "src/editing/vocal_edit/analysis.cpp:432: the voicing probability a frame must reach, refused outside [0, 1]"
