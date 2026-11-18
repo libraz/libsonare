@@ -1321,7 +1321,7 @@ _C_ERROR_PATH_PENDING: dict[str, int] = {
     "src/c_api/project_vocal_edit.cpp": 7,
     "src/c_api/sonare_c_acoustic.cpp": 7,
     "src/c_api/sonare_c_assist.cpp": 2,
-    "src/c_api/sonare_c_compat.cpp": 40,
+    "src/c_api/sonare_c_compat.cpp": 35,
     "src/c_api/sonare_c_daw.cpp": 44,
     "src/c_api/sonare_c_editing.cpp": 41,
     "src/c_api/sonare_c_effects.cpp": 40,
