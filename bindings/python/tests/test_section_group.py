@@ -66,3 +66,26 @@ def test_alternating_material_yields_distinct_groups(abab) -> None:
         if first == last:
             by_material[first % 2].add(s.group)
     assert not by_material[0] & by_material[1]
+
+
+def test_analyze_sections_threshold_none_is_the_library_default(abab) -> None:
+    from libsonare._runtime import _get_lib
+
+    default = float(_get_lib().sonare_section_options_default().threshold)
+    omitted = libsonare.analyze_sections(abab, sample_rate=_SR, min_section_sec=4.0)
+    explicit = libsonare.analyze_sections(
+        abab, sample_rate=_SR, min_section_sec=4.0, threshold=default
+    )
+    assert omitted == explicit
+
+
+def test_analyze_sections_threshold_moves_the_boundaries(abab) -> None:
+    loose = libsonare.analyze_sections(abab, sample_rate=_SR, min_section_sec=4.0, threshold=0.0)
+    strict = libsonare.analyze_sections(abab, sample_rate=_SR, min_section_sec=4.0, threshold=1e6)
+    assert len(strict) < len(loose)
+
+
+@pytest.mark.parametrize("bad", [-0.1, float("nan"), float("inf")])
+def test_analyze_sections_refuses_a_negative_or_non_finite_threshold(abab, bad: float) -> None:
+    with pytest.raises(libsonare.SonareValueError, match="threshold"):
+        libsonare.analyze_sections(abab, sample_rate=_SR, min_section_sec=4.0, threshold=bad)
