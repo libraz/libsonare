@@ -1237,6 +1237,17 @@ def _default_drift(indexed, allow, rep: Report, roles: set[str]) -> None:
                 for s, v in declared.items():
                     if canon[s] == "none" or is_empty_collection_default(v):
                         canon[s] = "\0empty-collection\0"
+            # None beside a concrete value is absence: the library resolves it, so it is no second value.
+            if len(set(canon.values()) - {"none"}) and "none" in canon.values():
+                for s in [s for s, c in canon.items() if c == "none"]:
+                    rep.decline(
+                        "default",
+                        f"{key}.{pname}",
+                        s,
+                        "the facade spells its default as absence, which resolves "
+                        "to the library's own value",
+                    )
+                    del declared[s], canon[s]
             if len(declared) < 2:
                 rep.decline(
                     "default",

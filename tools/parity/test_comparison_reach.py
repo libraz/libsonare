@@ -364,5 +364,25 @@ def test_a_norm_token_reads_as_the_core_member_it_selects() -> None:
     assert [f.key for f in _norm_findings("'l2'")] == ["vector_normalize"]
 
 
+def test_a_none_default_beside_a_value_is_absence_and_not_a_second_value() -> None:
+    allow = allowlist_mod.Allowlist()
+    rep = _report(
+        allow,
+        _facade("python", "normalize", "target_db", "None"),
+        _facade("node", "normalize", "target_db", "4"),
+        _facade("wasm", "normalize", "target_db", "4"),
+    )
+    assert [f for f in rep.active() if f.category == "default"] == []
+    declined = [n for n in rep.not_compared if n["category"] == "default"]
+    assert [n["surface"] for n in declined] == ["python"]
+    rep = _report(
+        allow,
+        _facade("python", "normalize", "target_db", "None"),
+        _facade("node", "normalize", "target_db", "4"),
+        _facade("wasm", "normalize", "target_db", "8"),
+    )
+    assert [f.key for f in rep.active() if f.category == "default"] == ["normalize"]
+
+
 if __name__ == "__main__":
     raise SystemExit(_main())
