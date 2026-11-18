@@ -101,7 +101,7 @@ def test_row_counts_and_totals_agree_with_the_findings() -> None:
     missing["cli_python"] = {"mixing_add_bus"}
     missing["cli_native"] = set()
     rows = surface_coverage.build_rows(missing, _headers(c))
-    by_domain = {domain: (total, counts) for domain, total, counts in rows}
+    by_domain = {domain: (total, counts) for domain, total, counts, _core in rows}
     assert by_domain["mastering"][0] == 2
     assert by_domain["mastering"][1]["python"] == 1
     assert by_domain["mastering"][1]["node"] == 2
@@ -110,6 +110,16 @@ def test_row_counts_and_totals_agree_with_the_findings() -> None:
     # split: one column reads 0 and the other 1 for the same C entry point.
     assert by_domain["mixing & routing"][1]["cli_python"] == 0
     assert by_domain["mixing & routing"][1]["cli_native"] == 1
+
+
+def test_a_core_reached_entry_counts_as_reached_and_is_marked() -> None:
+    """A runtime reaching an entry through its core function is told apart in the cell."""
+    headers = {"mastering_apply": "include/sonare/sonare_c_mastering.h"}
+    missing = {column: set() for column in surface_coverage.COLUMNS}
+    missing["python"] = {"mastering_apply"}
+    rendered = surface_coverage.render(missing, headers, {"node": {"mastering_apply"}})
+    row = next(line for line in rendered.splitlines() if line.startswith("| mastering |"))
+    assert row == "| mastering | 1 | 0/1 | 1/1 (1 core) | 1/1 | 1/1 | 1/1 |", row
 
 
 def test_a_command_only_the_native_cli_ships_shows_as_a_python_gap() -> None:

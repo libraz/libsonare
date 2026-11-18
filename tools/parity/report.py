@@ -40,6 +40,10 @@ def to_json(rep: Report) -> str:
         "record_counts": rep.record_counts,
         "matrix": rep.matrix,
         "not_compared": rep.not_compared,
+        "core_reached": [
+            {"key": k, "surface": s, "core": fn, "site": site}
+            for k, s, fn, site in rep.core_reached
+        ],
         "findings": [asdict(f) for f in rep.findings],
         "allowlist_suppressed": {
             f"{scope}|{pattern}": divergences
@@ -140,6 +144,18 @@ def to_markdown(rep: Report) -> str:
         out.append("|---|---|---|")
         for (category, reason), count in sorted(causes.items()):
             out.append(f"| {category} | {count} | {reason} |")
+        out.append("")
+
+    if rep.core_reached:
+        out.append("## Reached through the core, not the C entry\n")
+        out.append(
+            f"**{len(rep.core_reached)}** (key, surface) pairs call the core function "
+            "the C entry wraps, so they skip whatever that entry validates.\n"
+        )
+        out.append("| C entry | surface | core function | native call site |")
+        out.append("|---|---|---|---|")
+        for key, surface, fn, site in sorted(rep.core_reached):
+            out.append(f"| `{key}` | {surface} | `{fn}` | `{site}` |")
         out.append("")
 
     # Allowlist hygiene. An entry whose comparison ran and agreed is not inert: it

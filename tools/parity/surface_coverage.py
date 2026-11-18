@@ -132,22 +132,42 @@ def c_declaration_headers(root: Path) -> dict[str, str]:
     return {sig.key: sig.file for sig in c_api.extract(root).functions}
 
 
-def build_rows(missing, c_signatures: dict[str, str]) -> list[tuple[str, int, dict[str, int]]]:
-    """(domain, C entry points, reachable count per column), domain-sorted."""
+def core_reached_by_column(report) -> dict[str, set[str]]:
+    """Per column, the C keys a surface reaches only through the wrapped core function."""
+    core: dict[str, set[str]] = {column: set() for column in COLUMNS}
+    for key, surface, _fn, _site in report.core_reached:
+        if surface in core:
+            core[surface].add(key)
+    return core
+
+
+def build_rows(
+    missing, c_signatures: dict[str, str], core: dict[str, set[str]] | None = None
+) -> list[tuple[str, int, dict[str, int], dict[str, int]]]:
+    """(domain, C entry points, reachable and core-reached count per column), domain-sorted."""
+    core = core or {}
     totals: dict[str, int] = {}
     reached: dict[str, dict[str, int]] = {}
+    via_core: dict[str, dict[str, int]] = {}
     for key, header in c_signatures.items():
         domain = domain_of(header)
         totals[domain] = totals.get(domain, 0) + 1
         counts = reached.setdefault(domain, {column: 0 for column in COLUMNS})
+        core_counts = via_core.setdefault(domain, {column: 0 for column in COLUMNS})
         for column in COLUMNS:
             if key not in missing[column]:
                 counts[column] += 1
-    return [(domain, totals[domain], reached[domain]) for domain in sorted(totals)]
+                if key in core.get(column, ()):
+                    core_counts[column] += 1
+    return [(d, totals[d], reached[d], via_core[d]) for d in sorted(totals)]
 
 
-def render(missing, c_signatures: dict[str, str]) -> str:
-    rows = build_rows(missing, c_signatures)
+def _cell(reached: int, total: int, via_core: int) -> str:
+    return f"{reached}/{total}" + (f" ({via_core} core)" if via_core else "")
+
+
+def render(missing, c_signatures: dict[str, str], core: dict[str, set[str]] | None = None) -> str:
+    rows = build_rows(missing, c_signatures, core)
     lines = [
         "# Runtime capability matrix",
         "",
@@ -162,7 +182,9 @@ def render(missing, c_signatures: dict[str, str]) -> str:
             "`make surface-coverage-check` fails on a stale copy. The reachability "
             "decision is the parity checker's, so class methods, handle-prefix "
             "renames and verified aliases all count as reached; see "
-            "[README.md](README.md) for how that decision is made."
+            "[README.md](README.md) for how that decision is made. A cell's "
+            "`(n core)` counts entry points that runtime reaches by calling the core "
+            "function the C entry wraps, skipping the entry's own validation."
         ),
         "",
         (
@@ -186,14 +208,16 @@ def render(missing, c_signatures: dict[str, str]) -> str:
     ]
     grand_total = 0
     grand_reached = {column: 0 for column in COLUMNS}
-    for domain, total, counts in rows:
+    grand_core = {column: 0 for column in COLUMNS}
+    for domain, total, counts, core_counts in rows:
         grand_total += total
         cells = []
         for column in COLUMNS:
             grand_reached[column] += counts[column]
-            cells.append(f"{counts[column]}/{total}")
+            grand_core[column] += core_counts[column]
+            cells.append(_cell(counts[column], total, core_counts[column]))
         lines.append(f"| {domain} | {total} | " + " | ".join(cells) + " |")
-    totals_cells = [f"{grand_reached[column]}/{grand_total}" for column in COLUMNS]
+    totals_cells = [_cell(grand_reached[c], grand_total, grand_core[c]) for c in COLUMNS]
     lines.append(
         f"| **all domains** | **{grand_total}** | "
         + " | ".join(f"**{c}**" for c in totals_cells)
@@ -216,7 +240,11 @@ def main() -> int:
     args = parse_args()
     root = _HERE.parent.parent
     report = check_parity.run(root=root)
-    rendered = render(unreachable_by_column(root, report), c_declaration_headers(root))
+    rendered = render(
+        unreachable_by_column(root, report),
+        c_declaration_headers(root),
+        core_reached_by_column(report),
+    )
     if args.check:
         if not args.output.exists():
             print(f"runtime capability matrix is missing: {args.output}", file=sys.stderr)

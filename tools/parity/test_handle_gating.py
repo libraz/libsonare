@@ -533,6 +533,54 @@ def test_a_struct_the_surface_only_receives_needs_no_seeder() -> None:
     assert [f.informational for f in found] == [True], found
 
 
+_C_BODY = """SonareError sonare_widget_run(const float* x, size_t n) {
+  if (!validate_audio_params(x, n)) return SONARE_ERROR_INVALID_PARAMETER;
+  return run_widget(x, n);
+}
+"""
+
+
+def _core_report(addon: str, c_body: str = _C_BODY, claims=None):
+    claims = claims if claims is not None else {"widget_run": ("process_widget", ("run_widget",))}
+    node = Extraction(surface="node")
+    node.functions = [FunctionSig(key="process_widget", surface="node", raw_name="processWidget")]
+    saved = compare._CORE_COVERAGE
+    compare._CORE_COVERAGE = claims
+    try:
+        return compare.build_report(
+            {"c": _c("widget_run"), "node": node},
+            allowlist_mod.Allowlist(),
+            ["c", "node"],
+            native_sources={"c": [("c.cpp", c_body)], "node": [("addon.cpp", addon)]},
+        )
+    finally:
+        compare._CORE_COVERAGE = saved
+
+
+def test_a_core_claim_both_sides_call_is_credited_and_listed() -> None:
+    """The facade reaches the capability through the core the C entry wraps."""
+    rep = _core_report("auto r = sonare::run_widget(audio, n);\n")
+    assert ("widget_run", "node") not in _active(rep), _active(rep)
+    assert [(k, s, fn) for k, s, fn, _ in rep.core_reached] == [
+        ("widget_run", "node", "run_widget")
+    ]
+    assert not any(f.key == "process_widget" for f in rep.findings), rep.findings
+
+
+def test_a_core_claim_the_c_entry_does_not_make_is_refused() -> None:
+    body = "SonareError sonare_widget_run(const float* x, size_t n) { return other(x, n); }\n"
+    rep = _core_report("auto r = sonare::run_widget(audio, n);\n", c_body=body)
+    found = [f for f in rep.active() if f.key == "widget_run"]
+    assert len(found) == 1 and "refused" in found[0].message, rep.findings
+    assert rep.core_reached == []
+
+
+def test_a_core_claim_the_surface_does_not_make_is_a_gap() -> None:
+    rep = _core_report("// run_widget(audio, n) is not called here\n")
+    assert ("widget_run", "node") in _active(rep), _active(rep)
+    assert rep.core_reached == []
+
+
 def _run_all() -> int:
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     failed = 0

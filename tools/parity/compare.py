@@ -175,6 +175,22 @@ _HANDLE_FULL_PREFIXES = (
 # A small number of handle operations are factories on the neighbouring
 # handle that owns the returned object. Keep those aliases class-scoped so a
 # same-named method on an unrelated class cannot satisfy a missing operation.
+# A binding can reach a C entry's capability by calling the core function the
+# entry wraps: c_key -> (facade member, core functions). Credited on a surface only
+# where the C entry's body and that surface's addon or embind code both call one of
+# them (_core_evidence), and listed apart from alias credits because the call skips
+# the entry's own validation. Rows keyed on an `_ex` symbol retire with that symbol.
+_CORE_COVERAGE: dict[str, tuple[str, tuple[str, ...]]] = {
+    "mastering_apply_pair_processor_ex": (
+        "mastering_apply_pair_processor",
+        ("apply_named_pair_processor",),
+    ),
+    "mastering_analyze_pair_ex": ("mastering_analyze_pair", ("analyze_named_pair",)),
+    "mastering_process": ("mastering_normalize_loudness", ("loudness_optimize",)),
+    "mastering_chain": ("master_audio", ("run_chain_mono_params",)),
+    "mastering_chain_stereo": ("master_audio_stereo", ("run_chain_stereo_params",)),
+}
+
 _HANDLE_ALIAS_OWNERS = {
     "vocal_render_job_begin": "VocalRenderSnapshot",
 }
@@ -599,6 +615,10 @@ class Report:
     # what lets the exclusion expire on its own: the facade going back to
     # positional parameters restores the comparison with no edit anywhere.
     not_compared: list[dict[str, str]] = field(default_factory=list)
+    # C entries a surface reaches through the core function the entry wraps, as
+    # (key, surface, core function, native call site). Each bypasses the entry's
+    # own validation, so the report lists them apart from the C-symbol credits.
+    core_reached: list[tuple[str, str, str, str]] = field(default_factory=list)
 
     def decline(self, category: str, key: str, surface: str, reason: str) -> None:
         """Record a comparison that could not be made, and why."""
@@ -717,6 +737,7 @@ _NATIVE_SOURCE_GLOBS = {
     "python": ("bindings/python/src/libsonare", ("*.py",)),
     "node": ("bindings/node/src/addon", ("*.cpp", "*.cc", "*.h")),
     "wasm": ("src/wasm", ("*.cpp", "*.h")),
+    "c": ("src/c_api", ("*.cpp",)),
 }
 
 
@@ -738,6 +759,61 @@ def _seeder_struct(sig: FunctionSig) -> str | None:
         return None
     m = _SEEDER_STRUCT.match(sig.params[0].type.replace(" ", ""))
     return m.group(1) if m else None
+
+
+def _code_lines(path: str, text: str):
+    """(line number, code) with the line comment dropped, so prose is not a call."""
+    marker = "#" if path.endswith(".py") else "//"
+    for lineno, line in enumerate(text.splitlines(), 1):
+        yield lineno, line.split(marker, 1)[0]
+
+
+def _c_entry_bodies(sources: list[tuple[str, str]]) -> dict[str, str]:
+    """C key -> the body of its ``sonare_<key>`` definition in the C-ABI sources."""
+    bodies: dict[str, str] = {}
+    head = re.compile(r"\bsonare_(\w+)\s*\(")
+    for path, text in sources:
+        code = "\n".join(line for _, line in _code_lines(path, text))
+        for m in head.finditer(code):
+            i, depth = m.end() - 1, 0
+            while i < len(code):
+                depth += (code[i] == "(") - (code[i] == ")")
+                i += 1
+                if depth == 0:
+                    break
+            j = i
+            while j < len(code) and code[j].isspace():
+                j += 1
+            if j >= len(code) or code[j] != "{":
+                continue
+            k, depth = j, 0
+            while k < len(code):
+                depth += (code[k] == "{") - (code[k] == "}")
+                k += 1
+                if depth == 0:
+                    break
+            bodies.setdefault(m.group(1), code[j:k])
+    return bodies
+
+
+def _core_evidence(
+    key: str, sources: list[tuple[str, str]], c_body: str | None
+) -> tuple[str | None, str | None, str | None]:
+    """(core function, native call site, refusal) for a ``_CORE_COVERAGE`` claim."""
+    _, core_fns = _CORE_COVERAGE[key]
+    for fn in core_fns:
+        call = re.compile(rf"\b{re.escape(fn)}\s*\(")
+        if c_body is None or not call.search(c_body):
+            return (
+                None,
+                None,
+                f"core claim '{fn}' for '{key}' refused: the C entry does not call it",
+            )
+        for path, text in sources:
+            for lineno, code in _code_lines(path, text):
+                if call.search(code):
+                    return fn, f"{path}:{lineno}", None
+    return None, None, None
 
 
 def _struct_readers(c_index: dict[str, FunctionSig]) -> dict[str, list[str]]:
@@ -763,9 +839,7 @@ def _seeder_evidence(
     )
     calls, read_at = False, None
     for path, text in sources:
-        hash_comments = path.endswith(".py")
-        for lineno, line in enumerate(text.splitlines(), 1):
-            code = line.split("#", 1)[0] if hash_comments else line.split("//", 1)[0]
+        for lineno, code in _code_lines(path, text):
             if call.search(code):
                 calls = True
             elif read_at is None and read is not None and read.search(code):
@@ -806,6 +880,7 @@ def build_report(
     free_keys = {s: _free_keys(extractions.get(s)) for s in selected}
 
     struct_readers = _struct_readers(c_index)
+    c_bodies = _c_entry_bodies((native_sources or {}).get("c", []))
 
     rep.handle_keys = sorted(k for k in c_index if _is_handle_key(k, handle_prefixes))
 
@@ -866,6 +941,16 @@ def build_report(
                         free_keys.get(s, set()) if prefix else set(indexed.get(s, {}))
                     )
                 covered = bool(aliases) and any(a in alias_symbols for a in aliases)
+            core_refused = None
+            if not covered and key in _CORE_COVERAGE and native_sources and s in ("node", "wasm"):
+                facade = _CORE_COVERAGE[key][0]
+                if facade in indexed.get(s, {}):
+                    fn, site, core_refused = _core_evidence(
+                        key, native_sources.get(s, []), c_bodies.get(key)
+                    )
+                    if fn is not None:
+                        rep.core_reached.append((key, s, fn, site))
+                        continue
             # A seeder is reached through the native code that fills its struct.
             seeder = _seeder_struct(c_index[key]) if native_sources else None
             seeder_read_at = None
@@ -915,6 +1000,8 @@ def build_report(
                 )
             elif s == "cli":
                 msg = f"C function '{key}' not exposed by the (curated) CLI"
+            elif core_refused is not None:
+                msg = core_refused
             elif seeder_read_at is not None:
                 msg = f"{s} passes {seeder} in without calling seeder '{key}', so its struct_size is zero"
             elif is_handle:
@@ -944,7 +1031,9 @@ def build_report(
             # facade name. The forward alias above credits C coverage; this
             # reverse check keeps that same facade name out of surface-only
             # findings. Keep it explicit rather than stripping every `_json`.
-            is_c_alias = any(key in aliases for aliases in _ALIAS_COVERAGE.values())
+            is_c_alias = any(key in aliases for aliases in _ALIAS_COVERAGE.values()) or any(
+                key == facade for facade, _ in _CORE_COVERAGE.values()
+            )
             if key in c_index or is_c_alias:
                 allow.surface_only_ok(key, s, AGREED)
                 continue
