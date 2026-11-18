@@ -326,9 +326,9 @@ def test_mastering_pair_analyze_forwards_params(monkeypatch) -> None:
     def analyze(*args, **kwargs):
         calls["args"] = args
         calls["params"] = kwargs["params"]
-        return "{}"
+        return libsonare.MatchEstimateReferenceDelaySamplesResult(delay_samples=0.0)
 
-    monkeypatch.setattr(libsonare, "mastering_pair_analyze", analyze)
+    monkeypatch.setattr(libsonare, "mastering_analyze_pair", analyze)
     args = argparse.Namespace(
         file="source.wav",
         reference="reference.wav",

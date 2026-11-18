@@ -575,7 +575,7 @@ def test_suggest_mix_scene_out_is_what_the_mixer_reads() -> None:
             written = json.load(handle)
         assert written == json.loads(result.stdout)["scene"]
 
-        from libsonare import MixTrackInput, mixing_assistant_suggest
+        from libsonare import MixAssistantTrack, mixing_assistant_suggest
         from libsonare.audio import Audio
 
         # Loaded through the same decoder the CLI uses. Reconstructing the
@@ -592,7 +592,7 @@ def test_suggest_mix_scene_out_is_what_the_mixer_reads() -> None:
         assert (
             written
             == mixing_assistant_suggest(
-                [MixTrackInput("leadVox", samples, name="leadVox")], sample_rate=SR
+                [MixAssistantTrack("leadVox", samples, name="leadVox")], sample_rate=SR
             ).scene
         )
 

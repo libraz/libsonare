@@ -11,7 +11,6 @@ from ._cli_common import (
     _atomic_write_bytes,
     _chain_params_config,
     _json_key_to_snake_case,
-    _json_keys_to_snake_case,
     _load_channels_or_downmix,
     _load_json_object,
     _parse_json_config,
@@ -675,13 +674,13 @@ def cmd_mastering_pair_analyses(args: argparse.Namespace) -> int:
 
 
 def cmd_mastering_pair_analyze(args: argparse.Namespace) -> int:
-    from . import mastering_pair_analyze
+    from . import mastering_analyze_pair
 
     source, sr = _load_audio(args.file)
     reference, ref_sr = _load_audio(args.reference)
     params_raw = getattr(args, "params", "") or ""
     params = _parse_kv_params(params_raw) if params_raw else {}
-    result_json = mastering_pair_analyze(
+    result = mastering_analyze_pair(
         args.analysis,
         source,
         reference,
@@ -689,10 +688,7 @@ def cmd_mastering_pair_analyze(args: argparse.Namespace) -> int:
         reference_sample_rate=ref_sr,
         params=params or None,
     )
-    # The library returns a JSON string regardless of --json, keyed in camelCase
-    # like every other core JSON producer. CLI stdout is snake_case throughout,
-    # so re-key the payload rather than printing the core spelling verbatim.
-    print(_strict_json_dumps(_json_keys_to_snake_case(json.loads(result_json))))
+    print(_strict_json_dumps(_result_to_json_dict(result)))
     return 0
 
 
@@ -739,7 +735,7 @@ def cmd_mastering_pair_processor(args: argparse.Namespace) -> int:
 
 
 def cmd_mastering_stereo_analyze(args: argparse.Namespace) -> int:
-    from . import mastering_stereo_analyze
+    from . import mastering_analyze_stereo
 
     left, sr = _load_audio(args.file)
     right, ref_sr = _load_audio(args.reference)
@@ -749,12 +745,10 @@ def cmd_mastering_stereo_analyze(args: argparse.Namespace) -> int:
         raise ValueError("reference length must match input length")
     params_raw = getattr(args, "params", "") or ""
     params = _parse_kv_params(params_raw) if params_raw else {}
-    result_json = mastering_stereo_analyze(
+    result = mastering_analyze_stereo(
         args.analysis, left, right, sample_rate=sr, params=params or None
     )
-    # Same core JSON producer as mastering-pair-analyze above, so the same
-    # re-keying: the document arrives in camelCase and CLI stdout is snake_case.
-    print(_strict_json_dumps(_json_keys_to_snake_case(json.loads(result_json))))
+    print(_strict_json_dumps(_result_to_json_dict(result)))
     return 0
 
 

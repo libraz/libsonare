@@ -77,7 +77,7 @@ def _mix_assistant_tracks(entries: list[str]) -> list[Any]:
     duplicated across both sides, which would present it to the same domain as a
     stereo track of zero width.
     """
-    from .mixing_assistant import MixTrackInput
+    from .mixing_assistant import MixAssistantTrack
 
     tracks: list[Any] = []
     for entry in entries:
@@ -94,8 +94,8 @@ def _mix_assistant_tracks(entries: list[str]) -> list[Any]:
         left = planes[0]
         right = planes[1] if len(planes) == 2 else None
         tracks.append(
-            MixTrackInput(
-                track_id=track_id, left=left, right=right, name=track_id, sample_rate=track_rate
+            MixAssistantTrack(
+                id=track_id, left=left, right=right, name=track_id, sample_rate=track_rate
             )
         )
     return tracks
