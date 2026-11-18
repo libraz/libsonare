@@ -5,6 +5,7 @@ from __future__ import annotations
 import dataclasses
 import json
 
+import numpy as np
 import pytest
 
 from libsonare import (
@@ -514,7 +515,8 @@ def test_bake_midi_fx_reports_source_index() -> None:
         assert len(json.loads(tracked.to_json())["midi_content"][str(tracked_clip)]) == 4
 
         source_index = tracked.bake_midi_fx(tracked_clip, config, with_source_index=True)
-        assert source_index is not None
+        assert isinstance(source_index, np.ndarray)
+        assert source_index.dtype == np.int32
         assert len(source_index) == 12
         per_input = [0, 0, 0, 0]
         for source in source_index:

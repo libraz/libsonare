@@ -98,8 +98,8 @@ class TestMasteringRepairDereverbClassicalStereo:
         left, right = _wet_pair()
         result = libsonare.mastering_repair_dereverb_classical_stereo(left, right, SR)
 
-        assert isinstance(result.left, list)
-        assert isinstance(result.right, list)
+        assert isinstance(result.left, np.ndarray)
+        assert isinstance(result.right, np.ndarray)
         assert len(result.left) == len(left)
         assert len(result.right) == len(right)
         assert result.length == len(left)
@@ -108,7 +108,7 @@ class TestMasteringRepairDereverbClassicalStereo:
 
         # Not the same data -- the two channels carry different tones, and one
         # shared mask applied to both does not erase that.
-        assert result.left != result.right
+        assert not np.array_equal(result.left, result.right)
 
     def test_result_carries_one_shared_report_not_a_pair(self) -> None:
         """The shape that differs from the four stereo repairs that came first.

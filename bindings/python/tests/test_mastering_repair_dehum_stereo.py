@@ -67,8 +67,8 @@ class TestMasteringRepairDehumStereo:
         left, right = _hum_fixture()
         result = libsonare.mastering_repair_dehum_stereo(left, right, SR)
 
-        assert isinstance(result.left, list)
-        assert isinstance(result.right, list)
+        assert isinstance(result.left, np.ndarray)
+        assert isinstance(result.right, np.ndarray)
         assert len(result.left) == len(left)
         assert len(result.right) == len(right)
         assert result.length == len(left)
@@ -77,7 +77,7 @@ class TestMasteringRepairDehumStereo:
 
         # Not the same data -- the two channels carry different tones and
         # different hum, and the notch filtering does not erase that.
-        assert result.left != result.right
+        assert not np.array_equal(result.left, result.right)
 
     def test_full_harmonic_array_past_nyquist_reads_the_floor(self) -> None:
         """The whole 16-entry array, not just its first slot.

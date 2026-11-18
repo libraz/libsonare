@@ -33,22 +33,28 @@ def _samples() -> np.ndarray:
 def test_transform_options_use_new_symbols(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[tuple[str, tuple[object, ...]]] = []
 
-    def fake_transform(name: str, *args: object) -> list[float]:
+    def fake_transform(name: str, *args: object) -> np.ndarray:
         calls.append((name, args))
-        return [0.0]
+        return np.zeros(1, dtype=np.float32)
 
     stretch = SimpleNamespace(sonare_time_stretch_ex=object())
     shift = SimpleNamespace(sonare_pitch_shift_ex=object())
-    monkeypatch.setattr(timepitch, "_call_float_transform", fake_transform)
+    monkeypatch.setattr(timepitch, "_call_float_array_transform", fake_transform)
 
     monkeypatch.setattr(timepitch, "_get_lib", lambda: stretch)
-    assert timepitch.time_stretch(
-        _samples(), speed_ratio=1.0, n_fft=1024, hop_length=256, sample_rate=22050
-    ) == [0.0]
+    np.testing.assert_array_equal(
+        timepitch.time_stretch(
+            _samples(), speed_ratio=1.0, n_fft=1024, hop_length=256, sample_rate=22050
+        ),
+        [0.0],
+    )
     monkeypatch.setattr(timepitch, "_get_lib", lambda: shift)
-    assert timepitch.pitch_shift(
-        _samples(), pitch_semitones=0.0, n_fft=1024, hop_length=256, sample_rate=22050
-    ) == [0.0]
+    np.testing.assert_array_equal(
+        timepitch.pitch_shift(
+            _samples(), pitch_semitones=0.0, n_fft=1024, hop_length=256, sample_rate=22050
+        ),
+        [0.0],
+    )
 
     assert calls[0][0] == "sonare_time_stretch_ex"
     assert [int(value.value) for value in calls[0][1][3:]] == [1024, 256]
@@ -61,15 +67,15 @@ def test_legacy_transform_defaults_fallback_but_custom_options_are_not_ignored(
 ) -> None:
     calls: list[str] = []
 
-    def fake_transform(name: str, *args: object) -> list[float]:
+    def fake_transform(name: str, *args: object) -> np.ndarray:
         calls.append(name)
-        return [0.0]
+        return np.zeros(1, dtype=np.float32)
 
     legacy = SimpleNamespace(
         sonare_time_stretch=object(),
         sonare_pitch_shift=object(),
     )
-    monkeypatch.setattr(timepitch, "_call_float_transform", fake_transform)
+    monkeypatch.setattr(timepitch, "_call_float_array_transform", fake_transform)
     monkeypatch.setattr(timepitch, "_get_lib", lambda: legacy)
 
     timepitch.time_stretch(_samples(), speed_ratio=1.0, sample_rate=22050)
@@ -144,13 +150,13 @@ def test_trim_and_rms_normalization_symbols(monkeypatch: pytest.MonkeyPatch) -> 
     trim_call = _Call()
     trim_lib = SimpleNamespace(sonare_trim_ex=trim_call)
     monkeypatch.setattr(level, "_get_lib", lambda: trim_lib)
-    assert level.trim(_samples(), frame_length=64, hop_length=16, sample_rate=22050) == []
+    assert level.trim(_samples(), frame_length=64, hop_length=16, sample_rate=22050).size == 0
     assert [int(trim_call.calls[0][index].value) for index in (4, 5)] == [64, 16]
 
     rms_call = _Call()
     rms_lib = SimpleNamespace(sonare_normalize_rms=rms_call)
     monkeypatch.setattr(level, "_get_lib", lambda: rms_lib)
-    assert level.normalize_rms(_samples(), target_db=-12.0, sample_rate=22050) == []
+    assert level.normalize_rms(_samples(), target_db=-12.0, sample_rate=22050).size == 0
     assert float(rms_call.calls[0][3].value) == pytest.approx(-12.0)
 
 
@@ -160,7 +166,7 @@ def test_legacy_trim_fallback_and_rms_normalization_is_explicitly_unsupported(
     trim_call = _Call()
     legacy = SimpleNamespace(sonare_trim=trim_call)
     monkeypatch.setattr(level, "_get_lib", lambda: legacy)
-    assert level.trim(_samples(), sample_rate=22050) == []
+    assert level.trim(_samples(), sample_rate=22050).size == 0
     assert len(trim_call.calls) == 1
     with pytest.raises(SonareError, match="sonare_trim_ex"):
         level.trim(_samples(), frame_length=64, sample_rate=22050)

@@ -80,8 +80,7 @@ _ROUTE_FLOORS = {
     "_validate_samples": 45,
     "_to_c_float_array": 150,
     "_to_c_float_array_owned": 4,
-    "_call_float_transform": 6,
-    "_call_float_array_transform": 15,
+    "_call_float_array_transform": 20,
     "_planar_channel_arrays": 3,
     "_band_array_args": 4,
 }

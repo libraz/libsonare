@@ -1312,29 +1312,11 @@ def _section_type_token(ordinal: int) -> SectionType:
     return cast(SectionType, _ordinal_token(ordinal, _SECTION_TYPES, "analysis section type"))
 
 
-def _float_array_result(out: object, count: int) -> list[float]:
-    # Bulk C-side copy via `_from_c_float_array`, then `.tolist()` to honour the
-    # documented `list[float]` return contract (callers index/iterate as lists).
-    return cast(list[float], _from_c_float_array(out, count).tolist())
-
-
-def _optional_float_array_result(out: object, count: int) -> list[float]:
-    # A null pointer means the array was not computed (e.g. clarity bands in
-    # blind mode); represent that as an empty list rather than crashing.
-    if not out:
-        return []
-    return cast(list[float], _from_c_float_array(out, count).tolist())
-
-
 def _optional_from_c_float_array(out: object, count: int) -> np.ndarray:
     # A null pointer means the array was not computed; it reads as an empty array.
     if not out:
         return np.empty(0, dtype=np.float32)
     return _from_c_float_array(out, count)
-
-
-def _int_array_result(out: object, count: int) -> list[int]:
-    return cast(list[int], _from_c_int_array(out, count).tolist())
 
 
 @contextlib.contextmanager
@@ -1373,17 +1355,6 @@ def _out_int_array(
     finally:
         if out:
             lib.sonare_free_ints(out)
-
-
-def _call_float_transform(
-    fn_name: str,
-    values: Sequence[float] | list[float] | np.ndarray,
-    *args: object,
-    arg_name: str = "samples",
-) -> list[float]:
-    return cast(
-        list[float], _call_float_array_transform(fn_name, values, *args, arg_name=arg_name).tolist()
-    )
 
 
 def _call_float_array_transform(

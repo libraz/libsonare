@@ -28,7 +28,6 @@ from ._runtime import (
     _as_float32_buffer,
     _check,
     _check_realtime,
-    _float_array_result,
     _from_c_float_array,
     _get_lib,
     _last_error,
@@ -92,7 +91,7 @@ def voice_change(
     pitch_semitones: float = 0.0,
     formant_factor: float = 1.0,
     formant_mode: str = "relative",
-) -> list[float]:
+) -> np.ndarray:
     """Apply a voice-change effect with independent pitch and formant control.
 
     Args:
@@ -109,7 +108,7 @@ def voice_change(
             ``formant_factor / 2**(pitch_semitones / 12)``.
 
     Returns:
-        List of voice-changed samples.
+        ``float32`` array of voice-changed samples.
 
     Raises:
         SonareValueError: ``formant_mode`` is not ``"relative"`` or
@@ -142,7 +141,7 @@ def voice_change(
         )
         # A refused factor is an argument refusal in either formant mode.
         _check(rc)
-        return _float_array_result(out, out_length.value)
+        return _from_c_float_array(out, out_length.value)
 
 
 def _voice_config_to_json(preset: str | Mapping[str, object]) -> bytes:
@@ -1177,7 +1176,7 @@ class StreamingRetune:
         )
         return int(out.value)
 
-    def process_mono(self, samples: Sequence[float]) -> list[float]:
+    def process_mono(self, samples: Sequence[float]) -> np.ndarray:
         """Process one mono block, returning the shifted samples (same length)."""
         # The C entry point works in place and _as_float32_buffer is zero-copy
         # for a contiguous float32 ndarray, so copy before handing it over: the
@@ -1191,4 +1190,4 @@ class StreamingRetune:
                 ctypes.c_size_t(len(buffer)),
             )
         )
-        return cast(list[float], buffer.tolist())
+        return buffer

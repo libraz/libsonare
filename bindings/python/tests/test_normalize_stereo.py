@@ -64,8 +64,8 @@ class TestNormalizeStereoBalance:
         left, right = _pair()
         result = libsonare.normalize_stereo(left, right, SR, target_db=-3.0)
 
-        assert isinstance(result.left, list)
-        assert isinstance(result.right, list)
+        assert isinstance(result.left, np.ndarray)
+        assert isinstance(result.right, np.ndarray)
         assert result.length == len(left)
         assert len(result.left) == len(left)
         assert len(result.right) == len(right)

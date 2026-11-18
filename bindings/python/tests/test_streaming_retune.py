@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import math
 
+import numpy as np
 import pytest
 
 from libsonare import SonareError, SonareValueError, StreamingRetune
@@ -86,13 +87,15 @@ def test_streaming_retune_set_config_keeps_unmentioned_keywords() -> None:
 def test_streaming_retune_shifts_pitch_without_mutating_the_input() -> None:
     with StreamingRetune(pitch_semitones=12.0, mix=1.0, grain_size_samples=512) as retune:
         retune.prepare(SR, BLOCK)
-        out: list[float] = []
+        out = np.zeros(0, dtype=np.float32)
         for pass_index in range(8):
             block = _sine(BLOCK, 220.0, pass_index * BLOCK)
             before = list(block)
             out = retune.process_mono(block)
             # The facade copies before the in-place C call.
             assert block == before
+        assert isinstance(out, np.ndarray)
+        assert out.dtype == np.float32
         # Past the one-grain latency the output carries energy; silence would
         # mean the block never reached the core.
         assert sum(value * value for value in out) > 1.0

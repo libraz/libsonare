@@ -24,12 +24,12 @@ from ._ffi import (
     SonareMasteringResult,
     SonareMasteringStereoResult,
 )
-from ._narrowing import _narrow_double
+from ._narrowing import _narrow_double, _resolve_zero_default
 from ._runtime import (
     SonareValueError,
     _call_string,
     _check,
-    _float_array_result,
+    _from_c_float_array,
     _get_lib,
     _guard_buffer,
     _last_error,
@@ -63,15 +63,16 @@ def mastering(
     target_lufs: float = -14.0,
     ceiling_db: float = -1.0,
     true_peak_oversample: int = 4,
-    release_ms: float = 0.0,
+    release_ms: float | None = None,
     apply_gain_at_input_rate: bool = False,
 ) -> MasteringResult:
     """Apply mastering loudness normalization with a true-peak ceiling.
 
     ``release_ms`` tunes the post true-peak limiter release, one time constant
-    (about 63% of the way at the set time); ``0`` keeps the library default
-    (50 ms). ``apply_gain_at_input_rate`` applies the static loudness gain at
-    the input (pre-oversample) rate.
+    (about 63% of the way at the set time); ``None`` keeps the library default
+    (50 ms), and an explicit zero or negative value raises ``SonareValueError``.
+    ``apply_gain_at_input_rate`` applies the static loudness gain at the input
+    (pre-oversample) rate.
 
     ``ceiling_db`` is held on the true peak read at ``true_peak_oversample``
     (4x, the BS.1770 measure, by default); a finer meter can read up to
@@ -86,7 +87,7 @@ def mastering(
         target_lufs=target_lufs,
         ceiling_db=ceiling_db,
         true_peak_oversample=true_peak_oversample,
-        release_ms=release_ms,
+        release_ms=_resolve_zero_default(release_ms, "release_ms"),
         apply_gain_at_input_rate=1 if apply_gain_at_input_rate else 0,
     )
     out = SonareMasteringResult()
@@ -99,7 +100,7 @@ def mastering(
     )
     _check(rc)
     try:
-        processed = _float_array_result(out.samples, out.length)
+        processed = _from_c_float_array(out.samples, out.length)
         return MasteringResult(
             samples=processed,
             sample_rate=int(out.sample_rate),
@@ -483,7 +484,7 @@ def mastering_process(
     _check(rc)
     try:
         return MasteringResult(
-            samples=_float_array_result(out.samples, out.length),
+            samples=_from_c_float_array(out.samples, out.length),
             sample_rate=int(out.sample_rate),
             input_lufs=float(out.input_lufs),
             output_lufs=float(out.output_lufs),
@@ -530,8 +531,8 @@ def mastering_process_stereo(
     _check(rc)
     try:
         return MasteringStereoResult(
-            left=_float_array_result(out.left, out.length),
-            right=_float_array_result(out.right, out.length),
+            left=_from_c_float_array(out.left, out.length),
+            right=_from_c_float_array(out.right, out.length),
             sample_rate=int(out.sample_rate),
             input_lufs=float(out.input_lufs),
             output_lufs=float(out.output_lufs),
@@ -702,7 +703,7 @@ def _extract_stage_gain_reductions(
     if not stages_ptr or not values_ptr or count == 0:
         return []
     raw_stages = cast(Any, stages_ptr)
-    values = _float_array_result(values_ptr, count)
+    values = _from_c_float_array(values_ptr, count)
     result: list[StageGainReduction] = []
     for i in range(count):
         raw = raw_stages[i]
@@ -734,7 +735,7 @@ def _extract_mastering_report(raw: object) -> MasteringReport:
         applied_gain_db=float(report.applied_gain_db),
         max_gain_reduction_db=float(report.max_gain_reduction_db),
         loudness_target_limited=bool(report.loudness_target_limited),
-        band_energy_delta_db=_float_array_result(
+        band_energy_delta_db=_from_c_float_array(
             report.band_energy_delta_db, len(report.band_energy_delta_db)
         ),
     )
@@ -844,7 +845,7 @@ def mastering_chain(
     _check(rc)
     try:
         return MasteringChainResult(
-            samples=_float_array_result(out.samples, out.length),
+            samples=_from_c_float_array(out.samples, out.length),
             sample_rate=int(out.sample_rate),
             input_lufs=float(out.input_lufs),
             output_lufs=float(out.output_lufs),
@@ -946,8 +947,8 @@ def mastering_chain_stereo(
     _check(rc)
     try:
         return MasteringChainStereoResult(
-            left=_float_array_result(out.left, out.length),
-            right=_float_array_result(out.right, out.length),
+            left=_from_c_float_array(out.left, out.length),
+            right=_from_c_float_array(out.right, out.length),
             sample_rate=int(out.sample_rate),
             input_lufs=float(out.input_lufs),
             output_lufs=float(out.output_lufs),
@@ -1086,7 +1087,7 @@ def master_audio(
     _check(rc)
     try:
         return MasteringChainResult(
-            samples=_float_array_result(out.samples, out.length),
+            samples=_from_c_float_array(out.samples, out.length),
             sample_rate=int(out.sample_rate),
             input_lufs=float(out.input_lufs),
             output_lufs=float(out.output_lufs),
@@ -1191,8 +1192,8 @@ def master_audio_stereo(
     _check(rc)
     try:
         return MasteringChainStereoResult(
-            left=_float_array_result(out.left, out.length),
-            right=_float_array_result(out.right, out.length),
+            left=_from_c_float_array(out.left, out.length),
+            right=_from_c_float_array(out.right, out.length),
             sample_rate=int(out.sample_rate),
             input_lufs=float(out.input_lufs),
             output_lufs=float(out.output_lufs),

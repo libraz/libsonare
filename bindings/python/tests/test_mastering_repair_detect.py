@@ -27,6 +27,7 @@ would disagree with the repair it claims to describe.
 
 from __future__ import annotations
 
+import dataclasses
 import math
 from collections.abc import Callable
 from typing import Any
@@ -81,6 +82,17 @@ def _burst() -> NDArray[np.float32]:
     return out
 
 
+def _assert_same_detection(actual: Any, expected: Any) -> None:
+    """Field-wise equality for a detection record, whose array fields compare by value."""
+    assert type(actual) is type(expected)
+    for field in dataclasses.fields(actual):
+        a, e = getattr(actual, field.name), getattr(expected, field.name)
+        if isinstance(e, np.ndarray):
+            np.testing.assert_array_equal(a, e, err_msg=field.name)
+        else:
+            assert a == e, field.name
+
+
 def _silence() -> NDArray[np.float32]:
     return np.zeros(N, dtype=np.float32)
 
@@ -108,8 +120,8 @@ class TestDetectClicks:
         detected = libsonare.mastering_repair_detect_clicks(clicky, SR)
         repaired = libsonare.mastering_repair_declick_stereo(clicky, clicky, SR)
 
-        assert detected == repaired.left_report.detected
-        assert detected == repaired.right_report.detected
+        _assert_same_detection(detected, repaired.left_report.detected)
+        _assert_same_detection(detected, repaired.right_report.detected)
 
     def test_clean_material_measures_zero(self) -> None:
         detected = libsonare.mastering_repair_detect_clicks(_tone(), SR)
@@ -194,7 +206,7 @@ class TestDetectClipping:
         detected = libsonare.mastering_repair_detect_clipping(clipped, SR)
         repaired = libsonare.mastering_repair_declip_stereo(clipped, clipped, SR)
 
-        assert detected == repaired.left_report.detected
+        _assert_same_detection(detected, repaired.left_report.detected)
 
     def test_clip_threshold_is_the_only_config_field_that_reaches_the_result(self) -> None:
         """Both halves are needed.
@@ -295,7 +307,7 @@ class TestDetectCrackle:
         detected = libsonare.mastering_repair_detect_crackle(clicky, SR)
         repaired = libsonare.mastering_repair_decrackle_stereo(clicky, clicky, SR)
 
-        assert detected == repaired.left_report.detected
+        _assert_same_detection(detected, repaired.left_report.detected)
 
     def test_rejects_an_unknown_mode(self) -> None:
         with pytest.raises(ValueError, match="mode"):
@@ -323,7 +335,7 @@ class TestDetectHum:
         off = libsonare.mastering_repair_detect_hum(hummy, SR, adaptive=False)
         on = libsonare.mastering_repair_detect_hum(hummy, SR, adaptive=True)
 
-        assert on == off
+        _assert_same_detection(on, off)
 
     def test_agrees_with_the_analysis_the_repair_reports(self) -> None:
         hummy = _hummy()
@@ -331,7 +343,7 @@ class TestDetectHum:
         detected = libsonare.mastering_repair_detect_hum(hummy, SR)
         repaired = libsonare.mastering_repair_dehum_stereo(hummy, hummy, SR)
 
-        assert detected == repaired.left_report.detected
+        _assert_same_detection(detected, repaired.left_report.detected)
 
     def test_a_harmonic_past_nyquist_reads_the_floor(self) -> None:
         """16 harmonics of a 5 kHz fundamental cannot all fit under Nyquist.
@@ -600,21 +612,24 @@ class TestDefaultsPath:
 
     def test_detect_noise_floor(self) -> None:
         noisy = _noise(0.01)
-        assert libsonare.mastering_repair_detect_noise_floor(
-            noisy,
-            SR,
-            mode="logMmse",
-            noise_estimator="quantile",
-            n_fft=1024,
-            hop_length=256,
-            dd_alpha=0.98,
-            reduction_db=26.0,
-            over_subtraction=2.0,
-            spectral_floor=0.05,
-            noise_estimation_quantile=0.1,
-            speech_presence_gain=True,
-            gain_smoothing=True,
-        ) == libsonare.mastering_repair_detect_noise_floor(noisy, SR)
+        _assert_same_detection(
+            libsonare.mastering_repair_detect_noise_floor(
+                noisy,
+                SR,
+                mode="logMmse",
+                noise_estimator="quantile",
+                n_fft=1024,
+                hop_length=256,
+                dd_alpha=0.98,
+                reduction_db=26.0,
+                over_subtraction=2.0,
+                spectral_floor=0.05,
+                noise_estimation_quantile=0.1,
+                speech_presence_gain=True,
+                gain_smoothing=True,
+            ),
+            libsonare.mastering_repair_detect_noise_floor(noisy, SR),
+        )
 
     def test_detect_clipping(self) -> None:
         clipped = _clipped()
@@ -635,18 +650,21 @@ class TestDefaultsPath:
 
     def test_detect_hum(self) -> None:
         hummy = _hummy()
-        assert libsonare.mastering_repair_detect_hum(
-            hummy,
-            SR,
-            fundamental_hz=50.0,
-            harmonics=4,
-            q=20.0,
-            adaptive=False,
-            search_range_hz=2.0,
-            adaptation=0.25,
-            frame_size=2048,
-            pll_bandwidth=0.01,
-        ) == libsonare.mastering_repair_detect_hum(hummy, SR)
+        _assert_same_detection(
+            libsonare.mastering_repair_detect_hum(
+                hummy,
+                SR,
+                fundamental_hz=50.0,
+                harmonics=4,
+                q=20.0,
+                adaptive=False,
+                search_range_hz=2.0,
+                adaptation=0.25,
+                frame_size=2048,
+                pll_bandwidth=0.01,
+            ),
+            libsonare.mastering_repair_detect_hum(hummy, SR),
+        )
 
     def test_detect_reverb(self) -> None:
         tone = _tone()

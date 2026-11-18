@@ -71,8 +71,8 @@ class TestMasteringRepairDecrackleStereo:
         left, right = _fixture()
         result = libsonare.mastering_repair_decrackle_stereo(left, right, SR)
 
-        assert isinstance(result.left, list)
-        assert isinstance(result.right, list)
+        assert isinstance(result.left, np.ndarray)
+        assert isinstance(result.right, np.ndarray)
         assert len(result.left) == len(left)
         assert len(result.right) == len(right)
         assert result.length == len(left)
@@ -82,7 +82,7 @@ class TestMasteringRepairDecrackleStereo:
         # Not the same data -- the control a "decrackle one channel and
         # return it twice" implementation cannot pass, since the input
         # channels carry different tones and different impulses.
-        assert result.left != result.right
+        assert not np.array_equal(result.left, result.right)
 
     def test_channels_are_independent_with_no_linking(self) -> None:
         """Non-vacuity, and the fact this repair has no linking at all.

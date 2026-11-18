@@ -17,7 +17,7 @@ from collections.abc import Sequence
 from typing import TypeVar
 
 from ._errors import SonareValueError, _not_supported
-from ._narrowing import _narrow_double
+from ._narrowing import _narrow_double, _resolve_zero_default
 from ._runtime import (
     _C_INT_MAX,
     SonareRirSynthConfig,
@@ -27,12 +27,12 @@ from ._runtime import (
     SonareRoomMorphConfig,
     SonareRoomMorphStereoResult,
     _check,
-    _float_array_result,
+    _from_c_float_array,
     _get_lib,
     _guard_buffer,
     _last_diagnostics,
     _narrow_int,
-    _optional_float_array_result,
+    _optional_from_c_float_array,
     _to_c_float_array,
     _to_c_int,
     _to_c_size_t,
@@ -305,7 +305,7 @@ def synthesize_rir(
         # that cut the tail, or a request degraded to early reflections only.
         # Read before any later C ABI call can overwrite the thread-local list.
         return RirResult(
-            rir=_float_array_result(out.rir, out.length),
+            rir=_from_c_float_array(out.rir, out.length),
             sample_rate=int(out.sample_rate),
             diagnostics=_read_diagnostics(),
         )
@@ -320,12 +320,12 @@ def estimate_room(
     *,
     aspect_hint_lw: float = 1.0,
     aspect_hint_lh: float = 1.0,
-    reference_absorption: float = 0.15,
+    reference_absorption: float | None = None,
     prefer_eyring: bool = True,
-    n_octave_bands: int = 0,
+    n_octave_bands: int | None = None,
     mode: AcousticModeName = "auto",
-    min_decay_db: float = 0.0,
-    noise_floor_margin_db: float = 0.0,
+    min_decay_db: float | None = None,
+    noise_floor_margin_db: float | None = None,
 ) -> RoomEstimate:
     """Estimate an equivalent room from a recording (or impulse response).
 
@@ -334,8 +334,8 @@ def estimate_room(
     returned ``confidence`` reports how well the data support the estimate.
 
     Args:
-        reference_absorption: Mean-absorption prior anchoring the volume scale
-            (0 = library default, 0.15). Clamped into ``[0.01, 0.99]`` rather
+        reference_absorption: Mean-absorption prior anchoring the volume scale;
+            ``None`` keeps the library default (0.15). Clamped into ``[0.01, 0.99]`` rather
             than refused: a value outside that range still returns a successful
             estimate, computed from the clamped prior. The reported volume
             scales with the cube of the prior, so the substitution is worth
@@ -343,9 +343,17 @@ def estimate_room(
         mode: Analyzer routing, by name -- ``"auto"`` (impulse-like inputs route
             to IR analysis), ``"blind"`` or ``"impulseResponse"``. An unknown
             name raises ``SonareValueError`` and a number ``TypeError``.
-        min_decay_db: Analyzer decay-fit span in dB (0 = library default).
-        noise_floor_margin_db: Analyzer noise-floor margin in dB (0 = library
-            default).
+        n_octave_bands: Analyzer octave-band count; ``None`` keeps the library
+            default.
+        min_decay_db: Analyzer decay-fit span in dB; ``None`` keeps the library
+            default.
+        noise_floor_margin_db: Analyzer noise-floor margin in dB; ``None`` keeps
+            the library default.
+
+    Raises:
+        SonareValueError: If ``reference_absorption``, ``n_octave_bands``,
+            ``min_decay_db`` or ``noise_floor_margin_db`` is given as zero or a
+            negative value; omit it for the default.
     """
     lib = _get_lib()
     if not hasattr(lib, "sonare_estimate_room"):
@@ -354,11 +362,11 @@ def estimate_room(
     config = SonareRoomEstimateConfig(
         aspect_hint_lw=aspect_hint_lw,
         aspect_hint_lh=aspect_hint_lh,
-        reference_absorption=reference_absorption,
-        min_decay_db=min_decay_db,
-        noise_floor_margin_db=noise_floor_margin_db,
+        reference_absorption=_resolve_zero_default(reference_absorption, "reference_absorption"),
+        min_decay_db=_resolve_zero_default(min_decay_db, "min_decay_db"),
+        noise_floor_margin_db=_resolve_zero_default(noise_floor_margin_db, "noise_floor_margin_db"),
         prefer_eyring=1 if prefer_eyring else 0,
-        n_octave_bands=n_octave_bands,
+        n_octave_bands=_resolve_zero_default(n_octave_bands, "n_octave_bands"),
         mode=_acoustic_mode(mode),
     )
     out = SonareRoomEstimate()
@@ -379,8 +387,8 @@ def estimate_room(
             height_m=float(out.height_m),
             drr_db=float(out.drr_db),
             confidence=float(out.confidence),
-            band_absorption=_optional_float_array_result(out.absorption_bands, count),
-            rt60_bands=_optional_float_array_result(out.rt60_bands, count),
+            band_absorption=_optional_from_c_float_array(out.absorption_bands, count),
+            rt60_bands=_optional_from_c_float_array(out.rt60_bands, count),
         )
     finally:
         lib.sonare_free_room_estimate(ctypes.byref(out))
@@ -455,7 +463,7 @@ def room_geometry_from_estimate(
     if any(math.isfinite(band) for band in estimate.band_absorption):
         geometry["absorption"] = _narrow_double(config.absorption, "config.absorption")
     if config.absorption_band_count > 0:
-        geometry["band_absorption"] = _optional_float_array_result(
+        geometry["band_absorption"] = _optional_from_c_float_array(
             config.absorption_bands, config.absorption_band_count
         )
     if source is not None:
@@ -631,7 +639,7 @@ def room_morph(
         # exactly as synthesize_rir does.
         diagnostics = _read_diagnostics()
         return RoomMorphResult(
-            audio=_float_array_result(out, out_length.value),
+            audio=_from_c_float_array(out, out_length.value),
             sample_rate=sample_rate,
             diagnostics=diagnostics,
         )
@@ -739,8 +747,8 @@ def room_morph_stereo(
         # Read before any later C ABI call can overwrite the thread-local list.
         diagnostics = _read_diagnostics()
         return RoomMorphStereoResult(
-            left=_float_array_result(out.left, out.length),
-            right=_float_array_result(out.right, out.length),
+            left=_from_c_float_array(out.left, out.length),
+            right=_from_c_float_array(out.right, out.length),
             sample_rate=int(out.sample_rate),
             diagnostics=diagnostics,
         )

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import numpy as np
+
 # ruff: noqa: F403,F405
 from ._analyzer_helpers import *
 
@@ -14,7 +16,7 @@ def test_mastering_returns_audio_and_loudness_metadata() -> None:
     samples = [0.2 * math.sin(2 * math.pi * 440 * i / sr) for i in range(sr)]
 
     result = libsonare.mastering(samples, sample_rate=sr, target_lufs=-18.0)
-    assert isinstance(result.samples, list)
+    assert isinstance(result.samples, np.ndarray)
     assert len(result.samples) == len(samples)
     assert result.sample_rate == sr
     assert math.isfinite(result.input_lufs)
@@ -48,12 +50,13 @@ def test_mastering_accepts_release_and_input_rate_knobs() -> None:
     assert len(tuned.samples) == len(samples)
     assert all(math.isfinite(v) for v in tuned.samples)
 
-    # release_ms == 0 (or omitted) must reproduce the library default (50 ms).
+    # An omitted release_ms is the library default (50 ms); an explicit 0 is refused.
     omitted = libsonare.mastering(samples, sample_rate=sr, target_lufs=-14.0)
-    zero = libsonare.mastering(samples, sample_rate=sr, target_lufs=-14.0, release_ms=0.0)
     explicit = libsonare.mastering(samples, sample_rate=sr, target_lufs=-14.0, release_ms=50.0)
-    assert zero.samples == omitted.samples
-    assert zero.samples == explicit.samples
+    np.testing.assert_array_equal(omitted.samples, explicit.samples)
+    for refused in (0.0, -1.0):
+        with pytest.raises(libsonare.SonareValueError, match="release_ms"):
+            libsonare.mastering(samples, sample_rate=sr, release_ms=refused)
 
     with pytest.raises(libsonare.SonareError):
         libsonare.mastering(samples, sample_rate=sr, target_lufs=float("nan"))

@@ -69,7 +69,7 @@ class TestNoteRegions:
         by_seconds = libsonare.note_stretch(
             self.samples, SR, onset_sec=0.1, offset_sec=0.3, stretch_ratio=1.5
         )
-        assert by_samples == by_seconds
+        np.testing.assert_array_equal(by_samples, by_seconds)
 
     def test_note_move_seconds_equal_samples(self) -> None:
         by_samples = libsonare.note_move(
@@ -78,7 +78,7 @@ class TestNoteRegions:
         by_seconds = libsonare.note_move(
             self.samples, SR, onset_sec=0.1, offset_sec=0.2, target_onset_sec=0.3
         )
-        assert by_samples == by_seconds
+        np.testing.assert_array_equal(by_samples, by_seconds)
 
     def test_both_spellings_and_negative_bounds_are_refused(self) -> None:
         with pytest.raises(SonareValueError, match=r"onset_sample.*onset_sec"):
@@ -256,7 +256,10 @@ class TestSentinelsAreAbsence:
         explicit = libsonare.metering_dynamic_range(
             samples, SR, low_percentile=0.1, high_percentile=0.95
         )
-        assert defaults == explicit
+        assert defaults.dynamic_range_db == explicit.dynamic_range_db
+        assert defaults.low_percentile_db == explicit.low_percentile_db
+        assert defaults.high_percentile_db == explicit.high_percentile_db
+        np.testing.assert_array_equal(defaults.window_rms_db, explicit.window_rms_db)
         for field in ("low_percentile", "high_percentile"):
             with pytest.raises(SonareValueError, match=field):
                 libsonare.metering_dynamic_range(samples, SR, **{field: -1.0})

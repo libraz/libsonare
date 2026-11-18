@@ -98,15 +98,15 @@ def test_dotted_key_is_refused_by_name() -> None:
 def test_typed_config_renders_like_flat_keys_mono() -> None:
     nested = mastering_chain(LEFT, SR, TYPED)
     flat = mastering_chain(LEFT, SR, _nest_chain_config(FLAT))
-    assert nested.samples == flat.samples
+    np.testing.assert_array_equal(nested.samples, flat.samples)
     assert MB in " ".join(nested.stages)
 
 
 def test_typed_config_renders_like_flat_keys_stereo() -> None:
     nested = mastering_chain_stereo(LEFT, RIGHT, SR, TYPED)
     flat = mastering_chain_stereo(LEFT, RIGHT, SR, _nest_chain_config(FLAT))
-    assert nested.left == flat.left
-    assert nested.right == flat.right
+    np.testing.assert_array_equal(nested.left, flat.left)
+    np.testing.assert_array_equal(nested.right, flat.right)
 
 
 def test_typed_config_changes_the_render() -> None:
@@ -116,13 +116,15 @@ def test_typed_config_changes_the_render() -> None:
             "multibandComp": {"enabled": True, "lowCutoffHz": 200.0, "highCutoffHz": 5000.0}
         }
     }
-    assert mastering_chain(LEFT, SR, TYPED).samples != mastering_chain(LEFT, SR, three).samples
+    assert not np.array_equal(
+        mastering_chain(LEFT, SR, TYPED).samples, mastering_chain(LEFT, SR, three).samples
+    )
 
 
 def test_typed_overrides_on_a_preset_render_like_flat_keys() -> None:
     nested = master_audio(LEFT, SR, "pop", TYPED)
     flat = master_audio(LEFT, SR, "pop", _nest_chain_config(FLAT))
-    assert nested.samples == flat.samples
+    np.testing.assert_array_equal(nested.samples, flat.samples)
 
 
 def test_streaming_chain_typed_matches_flat_keys() -> None:

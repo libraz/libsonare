@@ -74,8 +74,8 @@ class TestMasteringRepairTrimSilenceStereo:
         assert result.length < N
         assert len(result.left) == kept
         assert len(result.right) == kept
-        assert isinstance(result.left, list)
-        assert isinstance(result.right, list)
+        assert isinstance(result.left, np.ndarray)
+        assert isinstance(result.right, np.ndarray)
 
     def test_both_channels_are_cut_to_the_union_not_to_their_own_range(self) -> None:
         """The rule the contract forbids breaking, checked by content.
@@ -156,8 +156,8 @@ class TestMasteringRepairTrimSilenceStereo:
         result = libsonare.mastering_repair_trim_silence_stereo(silent_left, silent_right, SR)
 
         assert result.length == 0
-        assert result.left == []
-        assert result.right == []
+        assert result.left.size == 0
+        assert result.right.size == 0
 
         left, right = _offset_pair()
         follow_up = libsonare.mastering_repair_trim_silence_stereo(left, right, SR)

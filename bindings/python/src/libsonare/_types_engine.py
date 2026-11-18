@@ -13,6 +13,7 @@ import numpy as np
 
 from ._types_analysis import (
     TimeSignature,
+    _empty_float32,
 )
 from ._types_enums import (
     AutomationCurve,
@@ -93,13 +94,13 @@ class GoniometerPoint:
     """Right sample value."""
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class MixResult:
     """Result of rendering a small stereo mixer scene."""
 
-    left: list[float]
+    left: np.ndarray
     """Left channel samples."""
-    right: list[float]
+    right: np.ndarray
     """Right channel samples."""
     sample_rate: int
     """Sample rate in Hz."""
@@ -680,7 +681,7 @@ class MeterTelemetryRecord:
     """Right input-tap sample peak, in dBFS."""
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class MeterTelemetryRecordWide:
     """A per-plane meter snapshot for a surround mix target.
 
@@ -704,11 +705,11 @@ class MeterTelemetryRecordWide:
     """Sequence number of the record."""
     num_channels: int
     """Number of valid planes."""
-    peak_db: list[float]
+    peak_db: np.ndarray
     """Sample peak per plane, in dBFS."""
-    rms_db: list[float]
+    rms_db: np.ndarray
     """RMS level per plane, in dBFS."""
-    true_peak_dbtp: list[float]
+    true_peak_dbtp: np.ndarray
     """True peak per plane, in dBTP."""
     max_true_peak_dbtp: float
     """Maximum true peak over all planes, in dBTP."""
@@ -726,11 +727,11 @@ class MeterTelemetryRecordWide:
     """Gain reduction applied, in dB."""
     dropped_records: int
     """Records dropped because the telemetry queue was full."""
-    input_peak_db: list[float] = field(default_factory=list)
+    input_peak_db: np.ndarray = field(default_factory=_empty_float32)
     """Input-tap sample peak per plane, in dBFS."""
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class ScopeTelemetryRecord:
     """A spectrum/vectorscope snapshot drained from the realtime engine.
 
@@ -747,7 +748,7 @@ class ScopeTelemetryRecord:
     """Sequence number of the record."""
     dropped_records: int
     """Records dropped because the telemetry queue was full."""
-    bands: list[float]
+    bands: np.ndarray
     """Spectrum band levels."""
     points: list[tuple[float, float]]
     """Vectorscope points as (left, right) tuples."""

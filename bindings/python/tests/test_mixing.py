@@ -573,6 +573,9 @@ def test_strip_can_be_added_to_a_live_mixer(mixer) -> None:
         mixer.add_strip("py-live-strip")
     with raises_coded():
         mixer.add_strip("py-oversampled", true_peak_oversample=99)
+    # Absence is the default (4x); an explicit 0 is refused rather than read as it.
+    with pytest.raises(SonareValueError, match="true_peak_oversample"):
+        mixer.add_strip("py-zero-oversample", true_peak_oversample=0)
 
 
 def test_bus_add_remove_and_count(mixer) -> None:

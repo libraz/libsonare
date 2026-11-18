@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 from typing import get_args
 
+import numpy as np
 import pytest
 
 from libsonare import (
@@ -244,6 +245,9 @@ def test_realtime_engine_process_and_telemetry() -> None:
         assert capture_status.source == "output"
         assert capture_status.record_offset_samples == 0
         captured = engine.captured_audio()
+        assert all(
+            isinstance(plane, np.ndarray) and plane.dtype == np.float32 for plane in captured
+        )
         assert all(math.isclose(sample, 0.75, abs_tol=0.0001) for sample in captured[0])
         assert all(math.isclose(sample, -0.75, abs_tol=0.0001) for sample in captured[1])
         engine.reset_capture()
@@ -395,7 +399,7 @@ def test_scope_telemetry_still_returns_a_count_it_can_serve() -> None:
     raw.points[2], raw.points[3] = 0.5, -0.5
 
     record = _scope_telemetry_from_c(raw)
-    assert record.bands == [1.0, 2.0, 3.0]
+    np.testing.assert_array_equal(record.bands, [1.0, 2.0, 3.0])
     assert record.points == [(0.25, -0.25), (0.5, -0.5)]
 
 

@@ -8,12 +8,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+import numpy as np
 
-@dataclass(frozen=True, slots=True)
+from ._types_analysis import _empty_float32
+
+
+@dataclass(frozen=True, slots=True, eq=False)
 class MasteringResult:
     """Mastering loudness/true-peak processing result."""
 
-    samples: list[float]
+    samples: np.ndarray
     """Mono output samples."""
     sample_rate: int
     """Sample rate of the output in Hz."""
@@ -41,13 +45,13 @@ class MasteringResult:
     """Number of samples the processor replaced with a finite value."""
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class MasteringStereoResult:
     """Stereo mastering processing result."""
 
-    left: list[float]
+    left: np.ndarray
     """Left output channel samples."""
-    right: list[float]
+    right: np.ndarray
     """Right output channel samples."""
     sample_rate: int
     """Sample rate of the output in Hz."""
@@ -142,7 +146,7 @@ class MasteringLoudnessSummary:
     """EBU Tech 3342 loudness range, in LU."""
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class MasteringReport:
     """Compact explanation of how an offline mastering chain changed a program."""
 
@@ -156,15 +160,15 @@ class MasteringReport:
     """Most-negative final dynamics/limiter gain reduction in dB; zero when none ran."""
     loudness_target_limited: bool
     """True when peak headroom prevented the requested LUFS target."""
-    band_energy_delta_db: list[float] = field(default_factory=list)
+    band_energy_delta_db: np.ndarray = field(default_factory=_empty_float32)
     """32 log-spaced after-minus-before spectral energy deltas in dB, 20 Hz to Nyquist."""
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class MasteringChainResult:
     """Result of running a configurable mastering chain on mono audio."""
 
-    samples: list[float]
+    samples: np.ndarray
     """Mono output samples."""
     sample_rate: int
     """Sample rate of the output in Hz."""
@@ -211,13 +215,13 @@ class MasteringChainResult:
     """Number of samples a stage replaced with a finite value."""
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class MasteringChainStereoResult:
     """Result of running a configurable mastering chain on stereo audio."""
 
-    left: list[float]
+    left: np.ndarray
     """Left output channel samples."""
-    right: list[float]
+    right: np.ndarray
     """Right output channel samples."""
     sample_rate: int
     """Sample rate of the output in Hz."""

@@ -60,8 +60,8 @@ class TestMasteringRepairDenoiseClassicalStereo:
         left, right = _pair()
         result = libsonare.mastering_repair_denoise_classical_stereo(left, right, SR)
 
-        assert isinstance(result.left, list)
-        assert isinstance(result.right, list)
+        assert isinstance(result.left, np.ndarray)
+        assert isinstance(result.right, np.ndarray)
         assert len(result.left) == len(left)
         assert len(result.right) == len(right)
         assert result.length == len(left)
@@ -70,7 +70,7 @@ class TestMasteringRepairDenoiseClassicalStereo:
 
         # Not the same data -- the two channels carry different tones, and one
         # shared mask applied to both does not erase that.
-        assert result.left != result.right
+        assert not np.array_equal(result.left, result.right)
 
     def test_result_carries_one_shared_report_not_a_pair(self) -> None:
         """The shape that differs from the four stereo repairs that came first.
@@ -190,8 +190,8 @@ class TestMasteringRepairDenoiseClassicalStereo:
                 left, right, SR, mode=mode, over_subtraction=over_subtraction
             ).left
 
-        assert run("logMmse", 1.0) == run("logMmse", 8.0)
-        assert run("spectralSubtraction", 1.0) != run("spectralSubtraction", 8.0)
+        np.testing.assert_array_equal(run("logMmse", 1.0), run("logMmse", 8.0))
+        assert not np.array_equal(run("spectralSubtraction", 1.0), run("spectralSubtraction", 8.0))
 
     def test_gain_shaping_fields_are_read_only_outside_spectral_subtraction(self) -> None:
         """The converse pair: ``speech_presence_gain`` / ``gain_smoothing``."""
@@ -207,8 +207,10 @@ class TestMasteringRepairDenoiseClassicalStereo:
                 gain_smoothing=enabled,
             ).left
 
-        assert run("spectralSubtraction", enabled=True) == run("spectralSubtraction", enabled=False)
-        assert run("logMmse", enabled=True) != run("logMmse", enabled=False)
+        np.testing.assert_array_equal(
+            run("spectralSubtraction", enabled=True), run("spectralSubtraction", enabled=False)
+        )
+        assert not np.array_equal(run("logMmse", enabled=True), run("logMmse", enabled=False))
 
     def test_pads_an_input_shorter_than_n_fft(self) -> None:
         """Denoise pads a short input, as dereverb does, and keeps its length."""

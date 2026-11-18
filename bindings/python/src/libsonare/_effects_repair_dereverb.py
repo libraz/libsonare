@@ -28,7 +28,7 @@ from ._runtime import (
     _C_INT_MIN,
     SonareValueError,
     _check,
-    _float_array_result,
+    _from_c_float_array,
     _get_lib,
     _guard_buffer,
     _narrow_int,
@@ -352,8 +352,8 @@ def mastering_repair_dereverb_classical_stereo(
         _check(rc)
         n = int(out.length)
         return DereverbStereoResult(
-            left=_float_array_result(out.left, n),
-            right=_float_array_result(out.right, n),
+            left=_from_c_float_array(out.left, n),
+            right=_from_c_float_array(out.right, n),
             length=n,
             report=_extract_dereverb_report(out.report),
         )

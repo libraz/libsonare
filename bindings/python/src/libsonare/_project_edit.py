@@ -134,8 +134,8 @@ class _ProjectEditMixin:
             )
         )
 
-    def unresolved_audio_source_ids(self) -> list[int]:
-        """Return audio source ids that need PCM after deserialization."""
+    def unresolved_audio_source_ids(self) -> np.ndarray:
+        """Return the ``uint32`` ids of audio sources that need PCM after deserialization."""
         count = ctypes.c_size_t()
         lib = _get_lib()
         _check(
@@ -154,7 +154,7 @@ class _ProjectEditMixin:
                 )
             )
             ids.append(int(source_id.value))
-        return ids
+        return np.asarray(ids, dtype=np.uint32)
 
     def unresolved_audio_sources(self) -> list[ProjectSource]:
         """Return descriptors of audio sources that need PCM, with the full URI."""

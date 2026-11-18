@@ -9244,3 +9244,523 @@ changed = "a ProjectSourceKind token ('audio', 'midi') instead of an ordinal"
 domain = "project"
 rule = "string-closed-sets"
 test = "bindings/python/tests/test_project.py::test_project_track_clip_and_source_descriptors_read_as_tokens"
+
+[[entry]]
+kind = "function"
+old = "harmonic"
+changed = "returns a float32 ndarray instead of list[float]"
+domain = "effects"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_effect_arrays.py::test_one_shot_transforms_return_float32_arrays"
+
+[[entry]]
+kind = "function"
+old = "percussive"
+changed = "returns a float32 ndarray instead of list[float]"
+domain = "effects"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_effect_arrays.py::test_one_shot_transforms_return_float32_arrays"
+
+[[entry]]
+kind = "function"
+old = "time_stretch"
+changed = "returns a float32 ndarray instead of list[float]"
+domain = "effects"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_effect_arrays.py::test_one_shot_transforms_return_float32_arrays"
+
+[[entry]]
+kind = "function"
+old = "pitch_shift"
+changed = "returns a float32 ndarray instead of list[float]"
+domain = "effects"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_effect_arrays.py::test_one_shot_transforms_return_float32_arrays"
+
+[[entry]]
+kind = "function"
+old = "pitch_correct_to_midi"
+changed = "returns a float32 ndarray instead of list[float]"
+domain = "effects"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_effect_arrays.py::test_one_shot_transforms_return_float32_arrays"
+
+[[entry]]
+kind = "function"
+old = "pitch_correct_timevarying"
+changed = "returns a float32 ndarray instead of list[float]"
+domain = "effects"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_effect_arrays.py::test_one_shot_transforms_return_float32_arrays"
+
+[[entry]]
+kind = "function"
+old = "note_stretch"
+changed = "returns a float32 ndarray instead of list[float]"
+domain = "effects"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_effect_arrays.py::test_one_shot_transforms_return_float32_arrays"
+
+[[entry]]
+kind = "function"
+old = "note_move"
+changed = "returns a float32 ndarray instead of list[float]"
+domain = "effects"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_effect_arrays.py::test_one_shot_transforms_return_float32_arrays"
+
+[[entry]]
+kind = "function"
+old = "voice_change"
+changed = "returns a float32 ndarray instead of list[float]"
+domain = "effects"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_effect_arrays.py::test_one_shot_transforms_return_float32_arrays"
+
+[[entry]]
+kind = "function"
+old = "normalize"
+changed = "returns a float32 ndarray instead of list[float]"
+domain = "effects"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_effect_arrays.py::test_one_shot_transforms_return_float32_arrays"
+
+[[entry]]
+kind = "function"
+old = "normalize_rms"
+changed = "returns a float32 ndarray instead of list[float]"
+domain = "effects"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_effect_arrays.py::test_one_shot_transforms_return_float32_arrays"
+
+[[entry]]
+kind = "function"
+old = "trim"
+changed = "returns a float32 ndarray instead of list[float]"
+domain = "effects"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_effect_arrays.py::test_one_shot_transforms_return_float32_arrays"
+
+[[entry]]
+kind = "method"
+old = "Audio.harmonic"
+changed = "returns a float32 ndarray instead of list[float]"
+domain = "core"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_effect_arrays.py::test_audio_methods_return_float32_arrays"
+
+[[entry]]
+kind = "method"
+old = "Audio.percussive"
+changed = "returns a float32 ndarray instead of list[float]"
+domain = "core"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_effect_arrays.py::test_audio_methods_return_float32_arrays"
+
+[[entry]]
+kind = "method"
+old = "Audio.time_stretch"
+changed = "returns a float32 ndarray instead of list[float]"
+domain = "core"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_effect_arrays.py::test_audio_methods_return_float32_arrays"
+
+[[entry]]
+kind = "method"
+old = "Audio.pitch_shift"
+changed = "returns a float32 ndarray instead of list[float]"
+domain = "core"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_effect_arrays.py::test_audio_methods_return_float32_arrays"
+
+[[entry]]
+kind = "method"
+old = "Audio.pitch_correct_to_midi"
+changed = "returns a float32 ndarray instead of list[float]"
+domain = "core"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_effect_arrays.py::test_audio_methods_return_float32_arrays"
+
+[[entry]]
+kind = "method"
+old = "Audio.note_stretch"
+changed = "returns a float32 ndarray instead of list[float]"
+domain = "core"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_effect_arrays.py::test_audio_methods_return_float32_arrays"
+
+[[entry]]
+kind = "method"
+old = "Audio.note_move"
+changed = "returns a float32 ndarray instead of list[float]"
+domain = "core"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_effect_arrays.py::test_audio_methods_return_float32_arrays"
+
+[[entry]]
+kind = "method"
+old = "Audio.voice_change"
+changed = "returns a float32 ndarray instead of list[float]"
+domain = "core"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_effect_arrays.py::test_audio_methods_return_float32_arrays"
+
+[[entry]]
+kind = "method"
+old = "Audio.voice_change_realtime"
+changed = "returns a float32 ndarray instead of list[float]"
+domain = "core"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_effect_arrays.py::test_audio_methods_return_float32_arrays"
+
+[[entry]]
+kind = "method"
+old = "Audio.normalize"
+changed = "returns a float32 ndarray instead of list[float]"
+domain = "core"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_effect_arrays.py::test_audio_methods_return_float32_arrays"
+
+[[entry]]
+kind = "method"
+old = "Audio.trim"
+changed = "returns a float32 ndarray instead of list[float]"
+domain = "core"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_effect_arrays.py::test_audio_methods_return_float32_arrays"
+
+[[entry]]
+kind = "function"
+old = "remix_aligned_intervals"
+changed = "takes and returns an (n, 2) int array of (start, end) rows instead of a flat list; a flat sequence raises SonareValueError"
+domain = "effects"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_effect_arrays.py::test_remix_intervals_are_n_by_2_arrays"
+
+[[entry]]
+kind = "function"
+old = "remix"
+changed = "intervals is an (n, 2) array of (start, end) rows instead of a flat list; a flat sequence raises SonareValueError"
+domain = "effects"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_effect_arrays.py::test_remix_refuses_intervals_not_shaped_n_by_2"
+
+[[entry]]
+kind = "function"
+old = "mastering_repair_noise_band_bins"
+changed = "returns an int32 ndarray instead of list[int]"
+domain = "effects"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_effect_arrays.py::test_noise_band_bins_are_an_int32_array"
+
+[[entry]]
+kind = "method"
+old = "Project.bake_midi_fx"
+changed = "with with_source_index returns an int32 ndarray instead of list[int]"
+domain = "project"
+rule = "array-results"
+test = "bindings/python/tests/test_project_midi.py::test_bake_midi_fx_reports_source_index"
+
+[[entry]]
+kind = "method"
+old = "Project.unresolved_audio_source_ids"
+changed = "returns a uint32 ndarray instead of list[int]"
+domain = "project"
+rule = "array-results"
+test = "bindings/python/tests/test_project.py::test_unresolved_audio_sources_carry_full_uri_and_metadata"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.captured_audio"
+changed = "returns one float32 ndarray per channel instead of nested lists"
+domain = "engine"
+rule = "array-results"
+test = "bindings/python/tests/test_engine_telemetry.py::test_realtime_engine_process_and_telemetry"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.meter_target_insert_gain_reduction"
+changed = "returns a float32 ndarray instead of list[float]"
+domain = "engine"
+rule = "array-results"
+test = "bindings/python/tests/test_engine_meter_input_and_constructed_value.py::test_meter_target_insert_gain_reduction"
+
+[[entry]]
+kind = "method"
+old = "StreamingRetune.process_mono"
+changed = "returns a float32 ndarray instead of list[float]"
+domain = "effects"
+rule = "array-results"
+test = "bindings/python/tests/test_streaming_retune.py::test_streaming_retune_shifts_pitch_without_mutating_the_input"
+
+[[entry]]
+kind = "type"
+old = "AutoTuneResult"
+changed = "samples is a float32 ndarray instead of list[float]; the record compares by identity"
+domain = "effects"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_effect_arrays.py::test_array_records_declare_ndarray_fields_and_compare_by_identity"
+
+[[entry]]
+kind = "type"
+old = "DeclickStereoResult"
+changed = "left, right are float32 ndarrays instead of list[float]; the record compares by identity"
+domain = "effects"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_effect_arrays.py::test_array_records_declare_ndarray_fields_and_compare_by_identity"
+
+[[entry]]
+kind = "type"
+old = "DeclipStereoResult"
+changed = "left, right are float32 ndarrays instead of list[float]; the record compares by identity"
+domain = "effects"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_effect_arrays.py::test_array_records_declare_ndarray_fields_and_compare_by_identity"
+
+[[entry]]
+kind = "type"
+old = "DecrackleStereoResult"
+changed = "left, right are float32 ndarrays instead of list[float]; the record compares by identity"
+domain = "effects"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_effect_arrays.py::test_array_records_declare_ndarray_fields_and_compare_by_identity"
+
+[[entry]]
+kind = "type"
+old = "DehumStereoResult"
+changed = "left, right are float32 ndarrays instead of list[float]; the record compares by identity"
+domain = "effects"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_effect_arrays.py::test_array_records_declare_ndarray_fields_and_compare_by_identity"
+
+[[entry]]
+kind = "type"
+old = "DenoiseStereoResult"
+changed = "left, right are float32 ndarrays instead of list[float]; the record compares by identity"
+domain = "effects"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_effect_arrays.py::test_array_records_declare_ndarray_fields_and_compare_by_identity"
+
+[[entry]]
+kind = "type"
+old = "DereverbStereoResult"
+changed = "left, right are float32 ndarrays instead of list[float]; the record compares by identity"
+domain = "effects"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_effect_arrays.py::test_array_records_declare_ndarray_fields_and_compare_by_identity"
+
+[[entry]]
+kind = "type"
+old = "DynamicRangeReport"
+changed = "window_rms_db is a float32 ndarray instead of list[float]; the record compares by identity"
+domain = "mastering"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_effect_arrays.py::test_array_records_declare_ndarray_fields_and_compare_by_identity"
+
+[[entry]]
+kind = "type"
+old = "HpssResult"
+changed = "harmonic, percussive are float32 ndarrays instead of list[float]; the record compares by identity"
+domain = "effects"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_effect_arrays.py::test_array_records_declare_ndarray_fields_and_compare_by_identity"
+
+[[entry]]
+kind = "type"
+old = "HumDetection"
+changed = "harmonic_dbfs is a float32 ndarray instead of list[float]; the record compares by identity"
+domain = "effects"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_effect_arrays.py::test_array_records_declare_ndarray_fields_and_compare_by_identity"
+
+[[entry]]
+kind = "type"
+old = "MasteringChainResult"
+changed = "samples is a float32 ndarray instead of list[float]; the record compares by identity"
+domain = "mastering"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_effect_arrays.py::test_array_records_declare_ndarray_fields_and_compare_by_identity"
+
+[[entry]]
+kind = "type"
+old = "MasteringChainStereoResult"
+changed = "left, right are float32 ndarrays instead of list[float]; the record compares by identity"
+domain = "mastering"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_effect_arrays.py::test_array_records_declare_ndarray_fields_and_compare_by_identity"
+
+[[entry]]
+kind = "type"
+old = "MasteringReport"
+changed = "band_energy_delta_db is a float32 ndarray instead of list[float]; the record compares by identity"
+domain = "mastering"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_effect_arrays.py::test_array_records_declare_ndarray_fields_and_compare_by_identity"
+
+[[entry]]
+kind = "type"
+old = "MasteringResult"
+changed = "samples is a float32 ndarray instead of list[float]; the record compares by identity"
+domain = "mastering"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_effect_arrays.py::test_array_records_declare_ndarray_fields_and_compare_by_identity"
+
+[[entry]]
+kind = "type"
+old = "MasteringStereoResult"
+changed = "left, right are float32 ndarrays instead of list[float]; the record compares by identity"
+domain = "mastering"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_effect_arrays.py::test_array_records_declare_ndarray_fields_and_compare_by_identity"
+
+[[entry]]
+kind = "type"
+old = "MeterTelemetryRecordWide"
+changed = "peak_db, rms_db, true_peak_dbtp, input_peak_db are float32 ndarrays instead of list[float]; the record compares by identity"
+domain = "engine"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_effect_arrays.py::test_array_records_declare_ndarray_fields_and_compare_by_identity"
+
+[[entry]]
+kind = "type"
+old = "MixResult"
+changed = "left, right are float32 ndarrays instead of list[float]; the record compares by identity"
+domain = "mastering"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_effect_arrays.py::test_array_records_declare_ndarray_fields_and_compare_by_identity"
+
+[[entry]]
+kind = "type"
+old = "NoiseDetection"
+changed = "band_floor_dbfs is a float32 ndarray instead of list[float]; the record compares by identity"
+domain = "effects"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_effect_arrays.py::test_array_records_declare_ndarray_fields_and_compare_by_identity"
+
+[[entry]]
+kind = "type"
+old = "NormalizeStereoResult"
+changed = "left, right are float32 ndarrays instead of list[float]; the record compares by identity"
+domain = "effects"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_effect_arrays.py::test_array_records_declare_ndarray_fields_and_compare_by_identity"
+
+[[entry]]
+kind = "type"
+old = "RirResult"
+changed = "rir is a float32 ndarray instead of list[float]; the record compares by identity"
+domain = "effects"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_effect_arrays.py::test_array_records_declare_ndarray_fields_and_compare_by_identity"
+
+[[entry]]
+kind = "type"
+old = "RoomEstimate"
+changed = "band_absorption, rt60_bands are float32 ndarrays instead of list[float]; the record compares by identity"
+domain = "effects"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_effect_arrays.py::test_array_records_declare_ndarray_fields_and_compare_by_identity"
+
+[[entry]]
+kind = "type"
+old = "RoomMorphResult"
+changed = "audio is a float32 ndarray instead of list[float]; the record compares by identity"
+domain = "effects"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_effect_arrays.py::test_array_records_declare_ndarray_fields_and_compare_by_identity"
+
+[[entry]]
+kind = "type"
+old = "RoomMorphStereoResult"
+changed = "left, right are float32 ndarrays instead of list[float]; the record compares by identity"
+domain = "effects"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_effect_arrays.py::test_array_records_declare_ndarray_fields_and_compare_by_identity"
+
+[[entry]]
+kind = "type"
+old = "ScopeTelemetryRecord"
+changed = "bands is a float32 ndarray instead of list[float]; the record compares by identity"
+domain = "engine"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_effect_arrays.py::test_array_records_declare_ndarray_fields_and_compare_by_identity"
+
+[[entry]]
+kind = "type"
+old = "TrimSilenceStereoResult"
+changed = "left, right are float32 ndarrays instead of list[float]; the record compares by identity"
+domain = "effects"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_effect_arrays.py::test_array_records_declare_ndarray_fields_and_compare_by_identity"
+
+[[entry]]
+kind = "type"
+old = "MixerStereoResult"
+changed = "a frozen dataclass instead of a NamedTuple, so it no longer unpacks; left and right are float32 ndarrays"
+domain = "mastering"
+rule = "array-results"
+test = "bindings/python/tests/test_binding_consistency.py::test_process_stereo_returns_named_result"
+
+[[entry]]
+kind = "option"
+old = "estimate_room(reference_absorption)"
+changed = "absent is None (the library default 0.15); an explicit 0 or a negative value raises SonareValueError"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_acoustic.py::test_room_estimate_and_morph_reject_invalid_configuration"
+
+[[entry]]
+kind = "option"
+old = "estimate_room(n_octave_bands)"
+changed = "absent is None (the library default); an explicit 0 or a negative value raises SonareValueError"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_acoustic.py::test_room_estimate_and_morph_reject_invalid_configuration"
+
+[[entry]]
+kind = "option"
+old = "estimate_room(min_decay_db)"
+changed = "absent is None (the library default); an explicit 0 or a negative value raises SonareValueError"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_acoustic.py::test_room_estimate_and_morph_reject_invalid_configuration"
+
+[[entry]]
+kind = "option"
+old = "estimate_room(noise_floor_margin_db)"
+changed = "absent is None (the library default); an explicit 0 or a negative value raises SonareValueError"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_acoustic.py::test_room_estimate_and_morph_reject_invalid_configuration"
+
+[[entry]]
+kind = "option"
+old = "mastering(release_ms)"
+changed = "absent is None (the library default 50 ms); an explicit 0 or a negative value raises SonareValueError"
+domain = "mastering"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_analyzer_mastering_mixing.py::test_mastering_accepts_release_and_input_rate_knobs"
+
+[[entry]]
+kind = "option"
+old = "Audio.mastering(release_ms)"
+changed = "absent is None (the library default 50 ms); an explicit 0 or a negative value raises SonareValueError"
+domain = "core"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_analyzer_mastering_mixing.py::test_mastering_accepts_release_and_input_rate_knobs"
+
+[[entry]]
+kind = "option"
+old = "render_percussive_events(fade_ms)"
+changed = "an explicit 0 or a negative value raises SonareValueError; omit it for the default 5 ms"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_percussive_events.py::test_fade_ms_reaches_the_render_config"
+
+[[entry]]
+kind = "option"
+old = "Mixer.add_strip(true_peak_oversample)"
+changed = "absent is None (the library default 4x); an explicit 0 raises SonareValueError"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_mixing.py::test_strip_can_be_added_to_a_live_mixer"

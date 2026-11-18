@@ -57,10 +57,10 @@ class TestNoiseBandBins:
     def test_is_a_non_decreasing_cover_of_the_one_sided_spectrum(self) -> None:
         bins = libsonare.mastering_repair_noise_band_bins(n_fft=N_FFT, sample_rate=SR)
 
-        assert isinstance(bins, list)
-        assert len(bins) == EDGE_COUNT
-        assert all(isinstance(edge, int) for edge in bins)
-        assert bins == sorted(bins)
+        assert isinstance(bins, np.ndarray)
+        assert bins.dtype == np.int32
+        assert bins.shape == (EDGE_COUNT,)
+        assert np.all(np.diff(bins) >= 0)
         assert bins[0] == 0
         assert bins[-1] == N_FFT // 2 + 1
 
@@ -70,15 +70,16 @@ class TestNoiseBandBins:
         wider = libsonare.mastering_repair_noise_band_bins(n_fft=2 * N_FFT, sample_rate=SR)
         slower = libsonare.mastering_repair_noise_band_bins(n_fft=N_FFT, sample_rate=SR // 2)
 
-        assert wider != base
+        assert not np.array_equal(wider, base)
         assert wider[-1] == N_FFT + 1
         # Same bin count, half the Hz per bin: only the interior can move.
-        assert slower != base
+        assert not np.array_equal(slower, base)
         assert slower[-1] == base[-1]
 
     def test_defaults_to_the_geometry_the_sibling_facades_default_to(self) -> None:
-        assert libsonare.mastering_repair_noise_band_bins(sample_rate=22050) == (
-            libsonare.mastering_repair_noise_band_bins(n_fft=1024, sample_rate=22050)
+        np.testing.assert_array_equal(
+            libsonare.mastering_repair_noise_band_bins(sample_rate=22050),
+            libsonare.mastering_repair_noise_band_bins(n_fft=1024, sample_rate=22050),
         )
 
     def test_refuses_a_non_power_of_two_window_by_name(self) -> None:

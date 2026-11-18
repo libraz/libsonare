@@ -34,7 +34,7 @@ from ._runtime import (
     SonareValueError,
     _as_float32_buffer,
     _check,
-    _float_array_result,
+    _from_c_float_array,
     _get_lib,
     _guard_buffer,
     _narrow_int,
@@ -288,8 +288,8 @@ def mastering_repair_declick_stereo(
         _check(rc)
         n = int(out.length)
         return DeclickStereoResult(
-            left=_float_array_result(out.left, n),
-            right=_float_array_result(out.right, n),
+            left=_from_c_float_array(out.left, n),
+            right=_from_c_float_array(out.right, n),
             length=n,
             left_report=_extract_declick_report(out.left_report),
             right_report=_extract_declick_report(out.right_report),
@@ -515,8 +515,8 @@ def mastering_repair_declip_stereo(
         _check(rc)
         n = int(out.length)
         return DeclipStereoResult(
-            left=_float_array_result(out.left, n),
-            right=_float_array_result(out.right, n),
+            left=_from_c_float_array(out.left, n),
+            right=_from_c_float_array(out.right, n),
             length=n,
             left_report=_extract_declip_report(out.left_report),
             right_report=_extract_declip_report(out.right_report),
@@ -688,8 +688,8 @@ def mastering_repair_decrackle_stereo(
         _check(rc)
         n = int(out.length)
         return DecrackleStereoResult(
-            left=_float_array_result(out.left, n),
-            right=_float_array_result(out.right, n),
+            left=_from_c_float_array(out.left, n),
+            right=_from_c_float_array(out.right, n),
             length=n,
             left_report=_extract_decrackle_report(out.left_report),
             right_report=_extract_decrackle_report(out.right_report),

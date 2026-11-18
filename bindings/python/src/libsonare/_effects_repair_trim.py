@@ -23,7 +23,7 @@ from ._runtime import (
     _SIZE_T_MAX,
     SonareValueError,
     _check,
-    _float_array_result,
+    _from_c_float_array,
     _get_lib,
     _guard_buffer,
     _resolve_sample_bound,
@@ -291,7 +291,7 @@ def mastering_repair_trim_silence_stereo(
     Two things here differ from every other stereo repair on this surface.
     ``result.length`` is the OUTPUT length, not an echo of the input -- trimming
     shortens the pair. And the result can be EMPTY: when neither channel carries
-    signal, ``left`` and ``right`` come back as empty lists with ``length`` 0 and
+    signal, ``left`` and ``right`` come back as empty arrays with ``length`` 0 and
     nothing is raised, because a pair of silent channels is a measurement rather
     than a refusal.
 
@@ -363,8 +363,8 @@ def mastering_repair_trim_silence_stereo(
         # instead would index a NULL pointer and raise on a documented success.
         n = int(out.length)
         return TrimSilenceStereoResult(
-            left=_float_array_result(out.left, n),
-            right=_float_array_result(out.right, n),
+            left=_from_c_float_array(out.left, n),
+            right=_from_c_float_array(out.right, n),
             length=n,
             report=_extract_trim_report(out.report),
             left_range=_extract_trim_range(out.left_range),

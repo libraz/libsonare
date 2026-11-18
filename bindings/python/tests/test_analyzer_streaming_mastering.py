@@ -487,7 +487,7 @@ def test_mastering_chain_false_progress_result_does_not_cancel() -> None:
     )
 
     assert any(progress > 0.5 for progress in calls)
-    assert result.samples
+    assert result.samples.size > 0
 
 
 def test_mastering_chain_cancel_callable_cancels_without_a_result() -> None:

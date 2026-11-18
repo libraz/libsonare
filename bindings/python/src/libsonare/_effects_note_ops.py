@@ -41,7 +41,7 @@ from ._ffi import (
 )
 from ._runtime import (
     SonareValueError,
-    _call_float_transform,
+    _call_float_array_transform,
     _check,
     _from_c_float_array,
     _get_lib,
@@ -106,7 +106,7 @@ def note_stretch(
     *,
     onset_sec: float | None = None,
     offset_sec: float | None = None,
-) -> list[float]:
+) -> np.ndarray:
     """Time-stretch a single note region without changing pitch.
 
     Args:
@@ -124,7 +124,7 @@ def note_stretch(
         offset_sec: End of the note region in seconds, rounded the same way.
 
     Returns:
-        List of samples with the note region stretched.
+        ``float32`` array of samples with the note region stretched.
 
     Raises:
         SonareValueError: If a bound is given in both samples and seconds, or is
@@ -134,7 +134,7 @@ def note_stretch(
     offset = _resolve_sample_bound(
         offset_sample, offset_sec, sample_rate, "offset_sample", "offset_sec"
     )
-    return _call_float_transform(
+    return _call_float_array_transform(
         "sonare_note_stretch",
         samples,
         _to_c_int(sample_rate, "sample_rate"),
@@ -155,7 +155,7 @@ def note_move(
     onset_sec: float | None = None,
     offset_sec: float | None = None,
     target_onset_sec: float | None = None,
-) -> list[float]:
+) -> np.ndarray:
     """Move a note region to a new onset without changing its duration.
 
     Each of ``onset``, ``offset`` and ``target_onset`` is given in samples
@@ -177,7 +177,7 @@ def note_move(
         "target_onset_sample",
         "target_onset_sec",
     )
-    return _call_float_transform(
+    return _call_float_array_transform(
         "sonare_note_move",
         samples,
         _to_c_int(sample_rate, "sample_rate"),

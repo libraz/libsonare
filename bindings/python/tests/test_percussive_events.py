@@ -500,11 +500,11 @@ def test_fade_ms_reaches_the_render_config() -> None:
     np.testing.assert_array_equal(
         libsonare.render_percussive_events(audio, SR, events, fade_ms=5.0), default
     )
-    # 0 is the C ABI's spelling of the default, so it reaches the default rather
-    # than selecting a hard cut -- a zero-length fade is not selectable from here.
-    np.testing.assert_array_equal(
-        libsonare.render_percussive_events(audio, SR, events, fade_ms=0.0), default
-    )
+    # 0 is the C ABI's spelling of the default, so an explicit zero is refused
+    # rather than silently reaching the default.
+    for refused in (0.0, -1.0):
+        with pytest.raises(libsonare.SonareValueError, match="fade_ms"):
+            libsonare.render_percussive_events(audio, SR, events, fade_ms=refused)
     # Both mute the hit rather than one of them being a no-op.
     for rendered in (default, long_fade):
         _assert_edited(rendered, audio)

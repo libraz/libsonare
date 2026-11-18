@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 
+import numpy as np
 import pytest
 
 from libsonare import (
@@ -62,7 +63,7 @@ def test_chain_overrides_master_audio() -> None:
         overrides=suggestion.chain_config,
     )
     assert result.report is not None
-    assert result.samples == by_hand.samples
+    np.testing.assert_array_equal(result.samples, by_hand.samples)
 
 
 def test_chain_stereo_overrides_master_audio_stereo() -> None:

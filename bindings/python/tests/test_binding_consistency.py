@@ -475,23 +475,22 @@ def test_process_stereo_returns_named_result(mixer) -> None:
     result = mixer.process_stereo(block, block)
 
     assert isinstance(result, MixerStereoResult)
-    assert isinstance(result.left, list)
-    assert isinstance(result.right, list)
+    for channel in (result.left, result.right):
+        assert isinstance(channel, np.ndarray)
+        assert channel.dtype == np.float32
+    with pytest.raises(TypeError):
+        _left, _right, _rate = result  # type: ignore[misc]
     assert len(result.left) == 256
     assert len(result.right) == 256
     # sample_rate matches the mixer's configured rate.
     assert result.sample_rate == 48000
-    # NamedTuple field access and positional unpacking are both available.
-    left, right, sr = result
-    assert sr == 48000
-    assert left is result.left and right is result.right
 
 
 def test_process_stereo_empty_input_returns_silent_master(mixer) -> None:
     """No input strips returns a silent (empty) master instead of raising."""
     result = mixer.process_stereo([], [])
-    assert result.left == []
-    assert result.right == []
+    assert result.left.size == 0
+    assert result.right.size == 0
     assert result.sample_rate == 48000
 
 

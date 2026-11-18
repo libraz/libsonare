@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any, Literal, NamedTuple, TypeAlias, overload
+from typing import Any, Literal, TypeAlias, overload
 
 import numpy as np
 import numpy.typing as npt
@@ -137,9 +137,10 @@ FloatSamples: TypeAlias = Sequence[float] | list[float] | np.ndarray[Any, Any]
 PlanarChannels: TypeAlias = Sequence[FloatSamples] | np.ndarray[Any, Any]
 StripRef: TypeAlias = int | str
 
-class MixerStereoResult(NamedTuple):
-    left: list[float]
-    right: list[float]
+@dataclass(frozen=True, slots=True, eq=False)
+class MixerStereoResult:
+    left: np.ndarray[Any, Any]
+    right: np.ndarray[Any, Any]
     sample_rate: int
 
 def abi_version() -> int: ...
@@ -456,12 +457,12 @@ def estimate_room(
     *,
     aspect_hint_lw: float = 1.0,
     aspect_hint_lh: float = 1.0,
-    reference_absorption: float = 0.15,
+    reference_absorption: float | None = None,
     prefer_eyring: bool = True,
-    n_octave_bands: int = 0,
+    n_octave_bands: int | None = None,
     mode: AcousticModeName = "auto",
-    min_decay_db: float = 0.0,
-    noise_floor_margin_db: float = 0.0,
+    min_decay_db: float | None = None,
+    noise_floor_margin_db: float | None = None,
 ) -> RoomEstimate: ...
 def room_geometry_from_estimate(
     estimate: RoomEstimate,
@@ -684,10 +685,12 @@ def hpss(
     *,
     validate: bool = True,
 ) -> HpssResult: ...
-def harmonic(samples: FloatSamples, sample_rate: int, *, validate: bool = True) -> list[float]: ...
+def harmonic(
+    samples: FloatSamples, sample_rate: int, *, validate: bool = True
+) -> np.ndarray[Any, Any]: ...
 def percussive(
     samples: FloatSamples, sample_rate: int, *, validate: bool = True
-) -> list[float]: ...
+) -> np.ndarray[Any, Any]: ...
 def time_stretch(
     samples: FloatSamples,
     sample_rate: int,
@@ -696,7 +699,7 @@ def time_stretch(
     hop_length: int = 512,
     *,
     validate: bool = True,
-) -> list[float]: ...
+) -> np.ndarray[Any, Any]: ...
 def pitch_shift(
     samples: FloatSamples,
     sample_rate: int,
@@ -705,13 +708,13 @@ def pitch_shift(
     hop_length: int = 512,
     *,
     validate: bool = True,
-) -> list[float]: ...
+) -> np.ndarray[Any, Any]: ...
 def pitch_correct_to_midi(
     samples: FloatSamples,
     sample_rate: int,
     current_midi: float = 69.0,
     target_midi: float = 69.0,
-) -> list[float]: ...
+) -> np.ndarray[Any, Any]: ...
 def pitch_correct_timevarying(
     samples: FloatSamples,
     sample_rate: int,
@@ -729,7 +732,7 @@ def pitch_correct_timevarying(
     vibrato_threshold_cents: float | None = None,
     voiced: IntSamples | None = None,
     voiced_prob: FloatSamples | None = None,
-) -> list[float]: ...
+) -> np.ndarray[Any, Any]: ...
 def auto_tune(
     samples: FloatSamples,
     sample_rate: int,
@@ -750,7 +753,7 @@ def note_stretch(
     *,
     onset_sec: float | None = None,
     offset_sec: float | None = None,
-) -> list[float]: ...
+) -> np.ndarray[Any, Any]: ...
 def note_move(
     samples: FloatSamples,
     sample_rate: int,
@@ -761,14 +764,14 @@ def note_move(
     onset_sec: float | None = None,
     offset_sec: float | None = None,
     target_onset_sec: float | None = None,
-) -> list[float]: ...
+) -> np.ndarray[Any, Any]: ...
 def voice_change(
     samples: FloatSamples,
     sample_rate: int,
     pitch_semitones: float = 0.0,
     formant_factor: float = 1.0,
     formant_mode: Literal["relative", "absolute"] = "relative",
-) -> list[float]: ...
+) -> np.ndarray[Any, Any]: ...
 
 class NoteEdit:
     time_offset_samples: int
@@ -1223,14 +1226,14 @@ def normalize(
     target_db: float = 0.0,
     *,
     validate: bool = True,
-) -> list[float]: ...
+) -> np.ndarray[Any, Any]: ...
 def normalize_rms(
     samples: FloatSamples,
     sample_rate: int,
     target_db: float = -20.0,
     *,
     validate: bool = True,
-) -> list[float]: ...
+) -> np.ndarray[Any, Any]: ...
 def normalize_stereo(
     left: FloatSamples,
     right: FloatSamples,
@@ -1253,7 +1256,7 @@ def mastering(
     target_lufs: float = -14.0,
     ceiling_db: float = -1.0,
     true_peak_oversample: int = 4,
-    release_ms: float = 0.0,
+    release_ms: float | None = None,
     apply_gain_at_input_rate: bool = False,
 ) -> MasteringResult: ...
 def mastering_assistant_suggest(
@@ -1383,7 +1386,7 @@ class Mixer:
         enabled: bool = True,
         lufs: bool = True,
         true_peak: bool = True,
-        true_peak_oversample: int = 0,
+        true_peak_oversample: int | None = None,
     ) -> None: ...
     def add_bus(self, bus_id: str, role: str = "aux") -> None: ...
     def remove_bus(self, bus_id: str) -> None: ...
@@ -1734,7 +1737,7 @@ def trim(
     hop_length: int = 512,
     *,
     validate: bool = True,
-) -> list[float]: ...
+) -> np.ndarray[Any, Any]: ...
 def stft(
     samples: FloatSamples, sr: int = 22050, n_fft: int = 2048, hop_length: int = 512
 ) -> StftResult: ...
@@ -2034,16 +2037,16 @@ def nn_filter(
 ) -> np.ndarray[Any, Any]: ...
 def remix(
     samples: FloatSamples,
-    intervals: IntSamples,
+    intervals: npt.ArrayLike,
     sr: int = 22050,
     align_zeros: bool = True,
 ) -> np.ndarray[Any, Any]: ...
 def remix_aligned_intervals(
     samples: FloatSamples,
     sample_rate: int,
-    intervals: IntSamples,
+    intervals: npt.ArrayLike,
     align_zeros: bool = True,
-) -> list[int]: ...
+) -> np.ndarray[Any, Any]: ...
 def hpss_with_residual(
     samples: FloatSamples,
     sample_rate: int,
@@ -2471,7 +2474,7 @@ def mastering_repair_detect_noise_floor(
 def mastering_repair_noise_band_bins(
     sample_rate: int,
     n_fft: int = 1024,
-) -> list[int]: ...
+) -> np.ndarray[Any, Any]: ...
 def mastering_repair_detect_clipping(
     samples: FloatSamples,
     sample_rate: int,

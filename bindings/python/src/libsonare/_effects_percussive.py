@@ -15,7 +15,7 @@ from ._ffi import (
     SonarePercussiveEventsResult,
     SonarePercussiveRenderConfig,
 )
-from ._narrowing import _narrow_double
+from ._narrowing import _narrow_double, _resolve_zero_default
 from ._runtime import (
     SonareValueError,
     _check,
@@ -415,8 +415,8 @@ def render_percussive_events(
             span opens in front of its transient, where the percussive component
             is near-silent, so cutting square there costs nothing and keeps a
             muted hit's attack from surviving inside a fade. A zero-length fade
-            is unreachable here rather than rejected -- 0 selects the default --
-            and a hard cut is not a thing to want anyway, because what the fade
+            is refused with ``SonareValueError`` (omit it for the default), and
+            a hard cut is not a thing to want anyway, because what the fade
             shapes is the signal being subtracted, so squaring it off leaves a
             step.
 
@@ -428,8 +428,7 @@ def render_percussive_events(
             kernel size does not fit in a signed 32-bit integer.
         SonareError: If the C call rejects the request (an empty, reversed or
             out-of-range span, overlapping source spans, a non-finite gain, a
-            framing that breaks overlap-add, or a negative or non-finite
-            ``fade_ms`` -- 0 is the default rather than a rejected value). The
+            framing that breaks overlap-add). The
             framing and every span are validated even when every edit is the
             identity and no separation runs, so an unusable request is an error
             on every set rather than on the ones that reach the separation.
@@ -454,7 +453,7 @@ def render_percussive_events(
             hpss_kernel_harmonic,
             hpss_kernel_percussive,
         ),
-        fade_ms=0.0 if fade_ms is None else _narrow_double(fade_ms, "fade_ms"),
+        fade_ms=_resolve_zero_default(fade_ms, "fade_ms"),
     )
     with _out_float_array(lib) as (out, out_length):
         _check(

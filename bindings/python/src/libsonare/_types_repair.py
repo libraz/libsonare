@@ -73,7 +73,7 @@ class DeclickResult:
     """What the declick pass found and did."""
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class DeclickStereoResult:
     """A declicked stereo pair and what each channel's pass did.
 
@@ -83,9 +83,9 @@ class DeclickStereoResult:
     model, which is why the two reports can differ.
     """
 
-    left: list[float]
+    left: np.ndarray
     """The declicked left channel."""
-    right: list[float]
+    right: np.ndarray
     """The declicked right channel."""
     length: int
     """Length of each output channel, in samples."""
@@ -178,7 +178,7 @@ class DeclipResult:
     """What the declip pass found and did."""
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class DeclipStereoResult:
     """A declipped stereo pair and what each channel's pass did.
 
@@ -188,9 +188,9 @@ class DeclipStereoResult:
     only one channel produces no linking at all.
     """
 
-    left: list[float]
+    left: np.ndarray
     """The declipped left channel."""
-    right: list[float]
+    right: np.ndarray
     """The declipped right channel."""
     length: int
     """Length of each output channel, in samples."""
@@ -254,7 +254,7 @@ class DecrackleResult:
     """What the decrackle pass found and did."""
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class DecrackleStereoResult:
     """A decrackled stereo pair and what each channel's pass did.
 
@@ -264,9 +264,9 @@ class DecrackleStereoResult:
     declick and declip.
     """
 
-    left: list[float]
+    left: np.ndarray
     """The decrackled left channel."""
-    right: list[float]
+    right: np.ndarray
     """The decrackled right channel."""
     length: int
     """Length of each output channel, in samples."""
@@ -276,7 +276,7 @@ class DecrackleStereoResult:
     """What the decrackle pass found and did on the right channel."""
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class HumDetection:
     """What one channel's hum detector found, independent of repair.
 
@@ -297,7 +297,7 @@ class HumDetection:
     no peak."""
     harmonics: int
     """Number of harmonics above the floor; 0 when ``fundamental_prominence`` is 1.0."""
-    harmonic_dbfs: list[float]
+    harmonic_dbfs: np.ndarray
     """Input level in dBFS at each k times the fundamental, k ascending; at most 16 entries."""
 
 
@@ -331,7 +331,7 @@ class DehumResult:
     """What the dehum pass found and did."""
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class DehumStereoResult:
     """A dehummed stereo pair and what each channel's pass did.
 
@@ -345,9 +345,9 @@ class DehumStereoResult:
     channels are filtered independently at the configured frequency.
     """
 
-    left: list[float]
+    left: np.ndarray
     """The dehummed left channel."""
-    right: list[float]
+    right: np.ndarray
     """The dehummed right channel."""
     length: int
     """Length of each output channel, in samples."""
@@ -357,7 +357,7 @@ class DehumStereoResult:
     """What the dehum pass found and did on the right channel."""
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class NoiseDetection:
     """The noise floor a denoise pass estimated, before the mask.
 
@@ -372,7 +372,7 @@ class NoiseDetection:
 
     floor_dbfs: float
     """Broadband estimated noise floor in dBFS."""
-    band_floor_dbfs: list[float]
+    band_floor_dbfs: np.ndarray
     """Noise floor in dBFS per band: 32 entries on a geometric grid from 20 Hz to Nyquist, low to
     high."""
 
@@ -408,7 +408,7 @@ class DenoiseResult:
     """What the denoise pass found and removed."""
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class DenoiseStereoResult:
     """A denoised stereo pair and the one mask that produced it.
 
@@ -419,9 +419,9 @@ class DenoiseStereoResult:
     though the two could differ.
     """
 
-    left: list[float]
+    left: np.ndarray
     """The denoised left channel."""
-    right: list[float]
+    right: np.ndarray
     """The denoised right channel."""
     length: int
     """Length of each output channel, in samples."""
@@ -504,7 +504,7 @@ class DereverbResult:
     """What the dereverb pass found and removed."""
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class DereverbStereoResult:
     """A dereverberated stereo pair and the one mask that produced it.
 
@@ -518,9 +518,9 @@ class DereverbStereoResult:
     stereo figure is comparable against a mono one.
     """
 
-    left: list[float]
+    left: np.ndarray
     """The dereverberated left channel."""
-    right: list[float]
+    right: np.ndarray
     """The dereverberated right channel."""
     length: int
     """Length of each output channel, in samples."""

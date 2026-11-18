@@ -103,11 +103,11 @@ def test_the_fixed_midi_contour_corrector_is_the_default_target_mode() -> None:
     explicit = libsonare.pitch_correct_timevarying(
         samples, SR, f0, HOP, target_mode="midi", target_midi=60.0, voiced=[1] * len(f0)
     )
-    assert implicit == explicit
+    np.testing.assert_array_equal(implicit, explicit)
     scaled = libsonare.pitch_correct_timevarying(
         samples, SR, f0, HOP, target_mode="scale", voiced=[1] * len(f0)
     )
-    assert scaled != implicit
+    assert not np.array_equal(scaled, implicit)
 
 
 @pytest.mark.parametrize("value", ["Scale", "fixed", ""])
@@ -139,7 +139,7 @@ def test_scale_reference_midi_moves_the_scale_grid() -> None:
     detuned = libsonare.pitch_correct_timevarying(
         samples, SR, f0, HOP, scale_reference_midi=69.5, **kw
     )
-    assert default != detuned
+    assert not np.array_equal(default, detuned)
     with pytest.raises(TypeError):
         libsonare.pitch_correct_timevarying(samples, SR, f0, HOP, reference_midi=69.5, **kw)  # type: ignore[call-arg]
 
@@ -149,7 +149,7 @@ def test_auto_tune_takes_scale_reference_midi() -> None:
     key = (libsonare.PitchClass.C, "major")
     default = libsonare.auto_tune(samples, SR, key=key)
     detuned = libsonare.auto_tune(samples, SR, key=key, scale_reference_midi=69.5)
-    assert default.samples != detuned.samples
+    assert not np.array_equal(default.samples, detuned.samples)
     with pytest.raises(TypeError):
         libsonare.auto_tune(samples, SR, key=key, reference_midi=69.5)  # type: ignore[call-arg]
 

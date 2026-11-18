@@ -65,7 +65,7 @@ class Key:
         return self.name
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class AutoTuneResult:
     """Result of :func:`auto_tune`.
 
@@ -76,7 +76,7 @@ class AutoTuneResult:
             (``confidence`` 1).
     """
 
-    samples: list[float]
+    samples: np.ndarray
     key: Key
 
 
@@ -410,7 +410,7 @@ class ClippingReport:
     """The clipped runs, in order."""
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class DynamicRangeReport:
     """Sliding-window dynamic range report (mirrors SonareDynamicRangeResult)."""
 
@@ -420,7 +420,7 @@ class DynamicRangeReport:
     """Window RMS level at the low percentile, in dBFS."""
     high_percentile_db: float
     """Window RMS level at the high percentile, in dBFS."""
-    window_rms_db: list[float]
+    window_rms_db: np.ndarray
     """RMS level of each analysis window, in dBFS."""
 
 
@@ -929,13 +929,13 @@ class NoteSegment:
     """Median pitch of the note, in cents."""
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class HpssResult:
     """Harmonic-percussive source separation result."""
 
-    harmonic: list[float]
+    harmonic: np.ndarray
     """Harmonic component, ``length`` samples."""
-    percussive: list[float]
+    percussive: np.ndarray
     """Percussive component, ``length`` samples."""
     length: int
     """Length of each component, in samples."""
@@ -989,7 +989,7 @@ class TrimSilenceResult:
     """What the pass kept and dropped."""
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class TrimSilenceStereoResult:
     """A trimmed stereo pair, the range both channels were cut to, and the two
     per-channel scans that range is the union of.
@@ -1004,9 +1004,9 @@ class TrimSilenceStereoResult:
     from, so a caller can see which channel decided each edge.
     """
 
-    left: list[float]
+    left: np.ndarray
     """Left channel, cut to the shared range."""
-    right: list[float]
+    right: np.ndarray
     """Right channel, cut to the shared range."""
     length: int
     """Output length of each channel, in samples."""
@@ -1018,7 +1018,7 @@ class TrimSilenceStereoResult:
     """Range the right channel's own scan found."""
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class NormalizeStereoResult:
     """A normalized channel pair and the one gain that produced it.
 
@@ -1028,9 +1028,9 @@ class NormalizeStereoResult:
     back untouched with the gain at 0.
     """
 
-    left: list[float]
+    left: np.ndarray
     """Normalized left channel."""
-    right: list[float]
+    right: np.ndarray
     """Normalized right channel."""
     length: int
     """Length of each channel, in samples."""

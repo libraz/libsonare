@@ -16,7 +16,6 @@ from ._ffi_types_core import SonareDownmixOptions
 from ._runtime import (
     _channel_layout_value,
     _check,
-    _float_array_result,
     _from_c_float_array,
     _get_lib,
     _guard_buffer,
@@ -876,25 +875,25 @@ class Audio:
         """Perform harmonic-percussive source separation."""
         return _hpss(self.data, self.sample_rate, kernel_harmonic, kernel_percussive)
 
-    def harmonic(self) -> list[float]:
+    def harmonic(self) -> np.ndarray:
         """Extract the harmonic component."""
         return _harmonic(self.data, self.sample_rate)
 
-    def percussive(self) -> list[float]:
+    def percussive(self) -> np.ndarray:
         """Extract the percussive component."""
         return _percussive(self.data, self.sample_rate)
 
-    def time_stretch(self, speed_ratio: float) -> list[float]:
+    def time_stretch(self, speed_ratio: float) -> np.ndarray:
         """Time-stretch audio without changing pitch; ``speed_ratio`` > 1 shortens."""
         return _time_stretch(self.data, self.sample_rate, speed_ratio)
 
-    def pitch_shift(self, pitch_semitones: float) -> list[float]:
+    def pitch_shift(self, pitch_semitones: float) -> np.ndarray:
         """Shift the pitch of audio by ``pitch_semitones`` (positive = up)."""
         return _pitch_shift(self.data, self.sample_rate, pitch_semitones)
 
     def pitch_correct_to_midi(
         self, current_midi: float = 69.0, target_midi: float = 69.0
-    ) -> list[float]:
+    ) -> np.ndarray:
         """Pitch-correct audio from a current MIDI note to a target MIDI note."""
         return _pitch_correct_to_midi(self.data, self.sample_rate, current_midi, target_midi)
 
@@ -906,7 +905,7 @@ class Audio:
         *,
         onset_sec: float | None = None,
         offset_sec: float | None = None,
-    ) -> list[float]:
+    ) -> np.ndarray:
         """Time-stretch a single note region without changing pitch."""
         return _note_stretch(
             self.data,
@@ -927,7 +926,7 @@ class Audio:
         onset_sec: float | None = None,
         offset_sec: float | None = None,
         target_onset_sec: float | None = None,
-    ) -> list[float]:
+    ) -> np.ndarray:
         """Move a note region to a new onset without changing its duration."""
         return _note_move(
             self.data,
@@ -945,13 +944,13 @@ class Audio:
         pitch_semitones: float = 0.0,
         formant_factor: float = 1.0,
         formant_mode: str = "relative",
-    ) -> list[float]:
+    ) -> np.ndarray:
         """Apply a voice-change effect with independent pitch and formant control."""
         return _voice_change(
             self.data, self.sample_rate, pitch_semitones, formant_factor, formant_mode
         )
 
-    def voice_change_realtime(self, preset: str = "neutralMonitor") -> list[float]:
+    def voice_change_realtime(self, preset: str = "neutralMonitor") -> np.ndarray:
         """Apply the integrated realtime voice changer chain offline.
 
         The default matches every other entry point for this operation — the
@@ -962,7 +961,7 @@ class Audio:
         """
         return _voice_change_realtime(self.data, self.sample_rate, preset)
 
-    def normalize(self, target_db: float = 0.0) -> list[float]:
+    def normalize(self, target_db: float = 0.0) -> np.ndarray:
         """Normalize audio to a target dB level."""
         return _normalize(self.data, self.sample_rate, target_db)
 
@@ -971,7 +970,7 @@ class Audio:
         target_lufs: float = -14.0,
         ceiling_db: float = -1.0,
         true_peak_oversample: int = 4,
-        release_ms: float = 0.0,
+        release_ms: float | None = None,
         apply_gain_at_input_rate: bool = False,
     ) -> MasteringResult:
         """Apply mastering loudness normalization with a true-peak ceiling."""
@@ -1024,7 +1023,7 @@ class Audio:
             self.data, self.sample_rate, preset, overrides, on_progress=on_progress, cancel=cancel
         )
 
-    def trim(self, threshold_db: float = -60.0) -> list[float]:
+    def trim(self, threshold_db: float = -60.0) -> np.ndarray:
         """Trim silence from the beginning and end."""
         return _trim(self.data, self.sample_rate, threshold_db)
 
@@ -1318,7 +1317,7 @@ class Audio:
         )
         _check(rc)
         try:
-            windows = _float_array_result(out.window_rms_db, int(out.window_count))
+            windows = _from_c_float_array(out.window_rms_db, int(out.window_count))
             return DynamicRangeReport(
                 dynamic_range_db=float(out.dynamic_range_db),
                 low_percentile_db=float(out.low_percentile_db),

@@ -59,7 +59,6 @@ from ._runtime import (
     SonareValueError,
     _check,
     _check_realtime,
-    _float_array_result,
     _from_c_float_array,
     _get_lib,
     _narrow_int,
@@ -194,11 +193,11 @@ class _EngineIoMixin:
             record_offset_samples=int(raw.record_offset_samples),
         )
 
-    def captured_audio(self) -> list[list[float]]:
+    def captured_audio(self) -> list[np.ndarray]:
         status = self.capture_status()
         capacity = len(self._capture_arrays[0]) if self._capture_arrays else 0
         frames = max(0, min(status.captured_frames, capacity))
-        return [_float_array_result(array, frames) for array in self._capture_arrays]
+        return [_from_c_float_array(array, frames) for array in self._capture_arrays]
 
     def set_graph(self, spec: EngineGraphSpec) -> None:
         _require_instance(spec, EngineGraphSpec, "spec")
@@ -580,13 +579,13 @@ class _EngineIoMixin:
         )
         return [_meter_telemetry_wide_from_c(raw[i]) for i in range(written.value)]
 
-    def meter_target_insert_gain_reduction(self, target_id: int) -> list[float]:
+    def meter_target_insert_gain_reduction(self, target_id: int) -> np.ndarray:
         """Return per-insert gain reduction in dB (<= 0) for a meter target's strip.
 
         Entries follow the combined insert order (pre-fader, then post-fader)
         of the last rendered block. ``target_id`` uses the meter-record
         encoding: 0 master, 1..32 lanes, 33..40 buses; the input monitor
-        (0xFFFF) and unused slots give an empty list.
+        (0xFFFF) and unused slots give an empty array.
         """
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_meter_target_insert_gain_reduction"):
@@ -602,7 +601,7 @@ class _EngineIoMixin:
                 ctypes.byref(count),
             )
         )
-        return _float_array_result(raw, min(count.value, SONARE_METER_MAX_INSERTS))
+        return _from_c_float_array(raw, min(count.value, SONARE_METER_MAX_INSERTS))
 
     def insert_parameter_constructed_value(self, param_id: int) -> float:
         """Return an insert parameter's immutable construction value."""

@@ -5,6 +5,9 @@ from __future__ import annotations
 import ctypes
 import typing
 from collections.abc import Sequence
+from dataclasses import dataclass
+
+import numpy as np
 
 from ._errors import _not_supported, _require_open
 from ._ffi import SonareMixGoniometerPoint, SonareSurroundPan
@@ -26,7 +29,7 @@ from ._runtime import (
     _check,
     _check_realtime,
     _curve_value,
-    _float_array_result,
+    _from_c_float_array,
     _get_lib,
     _joined_names,
     _last_diagnostics,
@@ -61,15 +64,16 @@ StripRef = int | str
 _GONIOMETER_READ_CAP = 4096
 
 
-class MixerStereoResult(typing.NamedTuple):
+@dataclass(frozen=True, slots=True, eq=False)
+class MixerStereoResult:
     """Stereo master output of :meth:`Mixer.process_stereo`.
 
     Mirrors the Node/WASM ``{left, right, sampleRate}`` result shape.
     """
 
-    left: list[float]
+    left: np.ndarray
     """Left channel of the master output."""
-    right: list[float]
+    right: np.ndarray
     """Right channel of the master output."""
     sample_rate: int
     """Sample rate of the output in Hz."""
@@ -209,7 +213,7 @@ class Mixer:
         enabled: bool = True,
         lufs: bool = True,
         true_peak: bool = True,
-        true_peak_oversample: int = 0,
+        true_peak_oversample: int | None = None,
     ) -> None:
         """Add a channel strip to the mixer topology.
 
@@ -218,8 +222,8 @@ class Mixer:
         configuration :meth:`from_scene_json` applies to a strip that omits it
         (LUFS + true peak at 4x, about 1.4 MB per strip at 48 kHz).
         ``enabled=False`` drops both meters for a strip whose snapshots are never
-        read. ``true_peak_oversample`` is 4 or 8; 0 selects the library
-        default (4), and any other value is refused.
+        read. ``true_peak_oversample`` is 4 or 8; ``None`` keeps the
+        library default (4), and any other value is refused.
 
         The routing graph is marked dirty; call :meth:`compile` (or
         :meth:`process_stereo`) to rebuild.
@@ -242,7 +246,10 @@ class Mixer:
             1 if enabled else 0,
             1 if lufs else 0,
             1 if true_peak else 0,
-            _to_c_int(true_peak_oversample, "true_peak_oversample"),
+            _to_c_int(
+                _resolve_zero_default(true_peak_oversample, "true_peak_oversample"),
+                "true_peak_oversample",
+            ),
         )
         if not handle:
             raise _last_error(int(ErrorCode.INVALID_PARAMETER), f"failed to add strip {strip_id!r}")
@@ -1007,8 +1014,8 @@ class Mixer:
             )
         )
         return MixerStereoResult(
-            left=_float_array_result(out_left, length),
-            right=_float_array_result(out_right, length),
+            left=_from_c_float_array(out_left, length),
+            right=_from_c_float_array(out_right, length),
             sample_rate=int(self._sample_rate),
         )
 
@@ -1061,8 +1068,8 @@ class Mixer:
             )
         )
         return MixerStereoResult(
-            left=_float_array_result(out_left, count),
-            right=_float_array_result(out_right, count),
+            left=_from_c_float_array(out_left, count),
+            right=_from_c_float_array(out_right, count),
             sample_rate=int(self._sample_rate),
         )
 
@@ -1294,8 +1301,8 @@ def mix_stereo(
             meters.append(_mix_meter_from_c(snapshot))
 
         return MixResult(
-            left=_float_array_result(out_left, length),
-            right=_float_array_result(out_right, length),
+            left=_from_c_float_array(out_left, length),
+            right=_from_c_float_array(out_right, length),
             sample_rate=int(sample_rate),
             meters=meters,
         )

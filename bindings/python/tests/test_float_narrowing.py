@@ -108,7 +108,9 @@ def test_a_saturating_normalization_target_is_refused(tone) -> None:
 
 def test_a_saturating_pitch_shift_is_refused(tone) -> None:
     """The editing path, whose argument is a musical quantity rather than a gain."""
-    assert ls.pitch_shift(tone, SAMPLE_RATE, 2.0) != ls.pitch_shift(tone, SAMPLE_RATE, 4.5)
+    assert not np.array_equal(
+        ls.pitch_shift(tone, SAMPLE_RATE, 2.0), ls.pitch_shift(tone, SAMPLE_RATE, 4.5)
+    )
     for value in REFUSED:
         _refuses("pitch_semitones", (), ls.pitch_shift, tone, SAMPLE_RATE, value)
 

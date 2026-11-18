@@ -6,6 +6,7 @@ import ctypes
 from collections.abc import Sequence
 
 import numpy as np
+import numpy.typing as npt
 
 from ._effects_repair_common import _linked_channel_planes
 from ._errors import _not_supported
@@ -20,13 +21,12 @@ from ._runtime import (
     _DEFAULT_EFFECT_HOP_LENGTH,
     _DEFAULT_EFFECT_N_FFT,
     SonareValueError,
-    _call_float_transform,
+    _call_float_array_transform,
     _check,
-    _float_array_result,
     _from_c_float_array,
+    _from_c_int_array,
     _get_lib,
     _guard_buffer,
-    _int_array_result,
     _out_float_array,
     _out_int_array,
     _planar_channel_arrays,
@@ -430,12 +430,12 @@ def nn_filter(
 
 
 def _remix_interval_array(
-    intervals: Sequence[int] | list[int],
+    intervals: npt.ArrayLike,
 ) -> tuple[ctypes.Array[ctypes.c_int32], int]:
-    """Marshal a flat ``(start, end)`` list, refusing a non-1-D or odd-length one."""
+    """Marshal an ``(n, 2)`` array of ``(start, end)`` rows, refusing any other shape."""
     shape = np.shape(intervals)
-    if len(shape) != 1 or shape[0] % 2 != 0:
-        raise SonareValueError("intervals must be a flat sequence of (start, end) pairs")
+    if len(shape) != 2 or shape[1] != 2:
+        raise SonareValueError("intervals must have shape (n, 2): one (start, end) row per slice")
     array, n_ints = _to_c_int_array(intervals, "intervals")
     return array, n_ints // 2
 
@@ -443,7 +443,7 @@ def _remix_interval_array(
 @_guard_buffer("samples")
 def remix(
     samples: Sequence[float] | list[float],
-    intervals: Sequence[int] | list[int],
+    intervals: npt.ArrayLike,
     sr: int = 22050,
     align_zeros: bool = True,
 ) -> np.ndarray:
@@ -456,7 +456,7 @@ def remix(
 
     Args:
         samples: Input signal.
-        intervals: Flat sequence of ``(start, end)`` pairs (even length).
+        intervals: ``(n, 2)`` array of ``(start, end)`` sample rows.
         sr: Sample rate in Hz (default 22050).
         align_zeros: Snap slice boundaries to zero-crossings (default True).
 
@@ -486,12 +486,12 @@ def remix(
 def remix_aligned_intervals(
     samples: Sequence[float] | list[float],
     sample_rate: int,
-    intervals: Sequence[int] | list[int],
+    intervals: npt.ArrayLike,
     align_zeros: bool = True,
-) -> list[int]:
+) -> np.ndarray:
     """Resolve the cut points :func:`remix` would use, without cutting.
 
-    Returns a flat list of one clamped ``(start, end)`` pair per input interval.
+    Returns one clamped ``(start, end)`` row per input interval.
     With ``align_zeros`` each boundary snaps to the nearest zero-crossing, with
     two guards that stop a slice from vanishing: a signal with no sign change at
     all (silence, a DC offset, any constant) is not snapped, and a slice that
@@ -503,12 +503,13 @@ def remix_aligned_intervals(
 
     Args:
         samples: Input signal.
-        intervals: Flat sequence of ``(start, end)`` pairs (even length).
+        intervals: ``(n, 2)`` array of ``(start, end)`` sample rows.
         sample_rate: Sample rate in Hz.
         align_zeros: Snap slice boundaries to zero-crossings (default True).
 
     Returns:
-        Flat list of resolved ``(start, end)`` pairs.
+        ``int32`` array of shape ``(n, 2)``, one resolved ``(start, end)`` row
+        per input interval.
     """
     lib = _get_lib()
     if not hasattr(lib, "sonare_remix_aligned_intervals"):
@@ -528,7 +529,7 @@ def remix_aligned_intervals(
                 ctypes.byref(out_count),
             )
         )
-        return _int_array_result(out, out_count.value * 2)
+        return _from_c_int_array(out, out_count.value * 2).reshape(-1, 2)
 
 
 def hpss(
@@ -597,8 +598,8 @@ def hpss(
     try:
         n = out.length
         return HpssResult(
-            harmonic=_float_array_result(out.harmonic, n),
-            percussive=_float_array_result(out.percussive, n),
+            harmonic=_from_c_float_array(out.harmonic, n),
+            percussive=_from_c_float_array(out.percussive, n),
             length=int(n),
             sample_rate=int(out.sample_rate),
         )
@@ -628,8 +629,8 @@ def _hpss_legacy(
     try:
         n = out.length
         return HpssResult(
-            harmonic=_float_array_result(out.harmonic, n),
-            percussive=_float_array_result(out.percussive, n),
+            harmonic=_from_c_float_array(out.harmonic, n),
+            percussive=_from_c_float_array(out.percussive, n),
             length=int(n),
             sample_rate=int(out.sample_rate),
         )
@@ -642,7 +643,7 @@ def harmonic(
     sample_rate: int,
     *,
     validate: bool = True,
-) -> list[float]:
+) -> np.ndarray:
     """Extract the harmonic component of audio.
 
     Args:
@@ -652,10 +653,12 @@ def harmonic(
             ``validate=False`` to skip the scan on hot paths.
 
     Returns:
-        List of harmonic component samples.
+        ``float32`` array of harmonic component samples.
     """
     _validate_samples("harmonic", samples, validate=validate)
-    return _call_float_transform("sonare_harmonic", samples, _to_c_int(sample_rate, "sample_rate"))
+    return _call_float_array_transform(
+        "sonare_harmonic", samples, _to_c_int(sample_rate, "sample_rate")
+    )
 
 
 def percussive(
@@ -663,7 +666,7 @@ def percussive(
     sample_rate: int,
     *,
     validate: bool = True,
-) -> list[float]:
+) -> np.ndarray:
     """Extract the percussive component of audio.
 
     Args:
@@ -673,10 +676,10 @@ def percussive(
             ``validate=False`` to skip the scan on hot paths.
 
     Returns:
-        List of percussive component samples.
+        ``float32`` array of percussive component samples.
     """
     _validate_samples("percussive", samples, validate=validate)
-    return _call_float_transform(
+    return _call_float_array_transform(
         "sonare_percussive", samples, _to_c_int(sample_rate, "sample_rate")
     )
 

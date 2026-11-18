@@ -43,6 +43,7 @@ from ._runtime import (
     SonareNotePairValidation,
     SonareValueError,
     _check,
+    _from_c_int_array,
     _get_lib,
     _guard_buffer,
     _narrow_int,
@@ -385,20 +386,20 @@ class _ProjectMidiMixin:
         config_json: str,
         *,
         with_source_index: bool = False,
-    ) -> list[int] | None:
+    ) -> np.ndarray | None:
         """Destructively bake a clip's MIDI-FX chain from JSON.
 
         Canonical name matching the Node / WASM ``bakeMidiFx`` surface. Large
         clips are drained without truncation; failure leaves the original clip
         unchanged.
 
-        With ``with_source_index`` set, returns one entry per transformed event
-        in canonical order: the index of the input event it derives from, or
-        ``-1`` for an event with no originating input. Chord and arpeggiator
-        fan-out makes several outputs share one source index, so a caller that
-        treats the first output per index as the same event and the rest as
-        newly generated can carry a selection across the bake. Returns ``None``
-        otherwise.
+        With ``with_source_index`` set, returns an ``int32`` array with one
+        entry per transformed event in canonical order: the index of the input
+        event it derives from, or ``-1`` for an event with no originating input.
+        Chord and arpeggiator fan-out makes several outputs share one source
+        index, so a caller that treats the first output per index as the same
+        event and the rest as newly generated can carry a selection across the
+        bake. Returns ``None`` otherwise.
         """
         handle = self._require_handle()
         config = _utf8_arg(config_json, "config_json")
@@ -422,7 +423,11 @@ class _ProjectMidiMixin:
                 ctypes.byref(written),
             )
         )
-        return list(buffer[: min(written.value, expected)]) if buffer else []
+        return (
+            _from_c_int_array(buffer, min(written.value, expected))
+            if buffer
+            else _from_c_int_array(None, 0)
+        )
 
     def preview_midi_fx_count(self, clip_id: int, config_json: str) -> int:
         """Count the events :meth:`bake_midi_fx` would produce, without baking."""

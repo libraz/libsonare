@@ -26,13 +26,12 @@ from ._runtime import (
     SonareValueError,
     _call_float_array_transform,
     _check,
-    _float_array_result,
     _from_c_float_array,
     _get_lib,
     _mode_value,
     _narrow_double,
     _narrow_int,
-    _optional_float_array_result,
+    _optional_from_c_float_array,
     _out_float_array,
     _resolve_optional_non_negative,
     _resolve_zero_default,
@@ -260,8 +259,8 @@ def lufs_series_interleaved(
         )
         _check(rc)
         return (
-            _optional_float_array_result(out_momentary, momentary_length.value),
-            _optional_float_array_result(out_short_term, short_term_length.value),
+            _optional_from_c_float_array(out_momentary, momentary_length.value),
+            _optional_from_c_float_array(out_short_term, short_term_length.value),
         )
 
 
@@ -1079,7 +1078,7 @@ def metering_dynamic_range(
     )
     _check(rc)
     try:
-        windows = _float_array_result(out.window_rms_db, int(out.window_count))
+        windows = _from_c_float_array(out.window_rms_db, int(out.window_count))
         return DynamicRangeReport(
             dynamic_range_db=float(out.dynamic_range_db),
             low_percentile_db=float(out.low_percentile_db),

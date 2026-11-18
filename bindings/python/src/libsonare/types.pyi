@@ -579,9 +579,9 @@ class KeyDetection(Key):
     ) -> None: ...
 
 class AutoTuneResult:
-    samples: list[float]
+    samples: NDArray[np.float32]
     key: Key
-    def __init__(self, samples: list[float], key: Key) -> None: ...
+    def __init__(self, samples: NDArray[np.float32], key: Key) -> None: ...
 
 class KeyCandidate:
     key: Key
@@ -826,36 +826,36 @@ class RirDiagnostic:
     ) -> None: ...
 
 class RoomMorphResult:
-    audio: list[float]
+    audio: NDArray[np.float32]
     sample_rate: int
     diagnostics: list[RirDiagnostic]
     def __init__(
         self,
-        audio: list[float],
+        audio: NDArray[np.float32],
         sample_rate: int,
         diagnostics: list[RirDiagnostic] = ...,
     ) -> None: ...
 
 class RoomMorphStereoResult:
-    left: list[float]
-    right: list[float]
+    left: NDArray[np.float32]
+    right: NDArray[np.float32]
     sample_rate: int
     diagnostics: list[RirDiagnostic]
     def __init__(
         self,
-        left: list[float],
-        right: list[float],
+        left: NDArray[np.float32],
+        right: NDArray[np.float32],
         sample_rate: int,
         diagnostics: list[RirDiagnostic] = ...,
     ) -> None: ...
 
 class RirResult:
-    rir: list[float]
+    rir: NDArray[np.float32]
     sample_rate: int
     diagnostics: list[RirDiagnostic]
     def __init__(
         self,
-        rir: list[float],
+        rir: NDArray[np.float32],
         sample_rate: int,
         diagnostics: list[RirDiagnostic] = ...,
     ) -> None: ...
@@ -867,8 +867,8 @@ class RoomEstimate:
     height_m: float
     drr_db: float
     confidence: float
-    band_absorption: list[float]
-    rt60_bands: list[float]
+    band_absorption: NDArray[np.float32]
+    rt60_bands: NDArray[np.float32]
     def __init__(
         self,
         volume: float,
@@ -877,8 +877,8 @@ class RoomEstimate:
         height_m: float,
         drr_db: float,
         confidence: float,
-        band_absorption: list[float],
-        rt60_bands: list[float],
+        band_absorption: NDArray[np.float32],
+        rt60_bands: NDArray[np.float32],
     ) -> None: ...
 
 MaterialPresetName: TypeAlias = Literal["none", "concrete", "wood", "curtain", "carpet", "glass"]
@@ -891,7 +891,7 @@ class RoomGeometry(TypedDict):
     source: tuple[float, float, float]
     listener: tuple[float, float, float]
     absorption: NotRequired[float]
-    band_absorption: NotRequired[list[float]]
+    band_absorption: NotRequired[NDArray[np.float32]]
 
 class DereverbClassicalConfig(TypedDict):
     threshold: float
@@ -1058,13 +1058,13 @@ class DynamicRangeReport:
     dynamic_range_db: float
     low_percentile_db: float
     high_percentile_db: float
-    window_rms_db: list[float]
+    window_rms_db: NDArray[np.float32]
     def __init__(
         self,
         dynamic_range_db: float,
         low_percentile_db: float,
         high_percentile_db: float,
-        window_rms_db: list[float],
+        window_rms_db: NDArray[np.float32],
     ) -> None: ...
 
 class VectorscopeReport:
@@ -1347,12 +1347,16 @@ class NoteSegment:
     ) -> None: ...
 
 class HpssResult:
-    harmonic: list[float]
-    percussive: list[float]
+    harmonic: NDArray[np.float32]
+    percussive: NDArray[np.float32]
     length: int
     sample_rate: int
     def __init__(
-        self, harmonic: list[float], percussive: list[float], length: int, sample_rate: int
+        self,
+        harmonic: NDArray[np.float32],
+        percussive: NDArray[np.float32],
+        length: int,
+        sample_rate: int,
     ) -> None: ...
 
 class DeclickReport:
@@ -1376,15 +1380,15 @@ class DeclickResult:
     def __init__(self, samples: np.ndarray[Any, Any], report: DeclickReport) -> None: ...
 
 class DeclickStereoResult:
-    left: list[float]
-    right: list[float]
+    left: NDArray[np.float32]
+    right: NDArray[np.float32]
     length: int
     left_report: DeclickReport
     right_report: DeclickReport
     def __init__(
         self,
-        left: list[float],
-        right: list[float],
+        left: NDArray[np.float32],
+        right: NDArray[np.float32],
         length: int,
         left_report: DeclickReport,
         right_report: DeclickReport,
@@ -1411,15 +1415,15 @@ class DeclipResult:
     def __init__(self, samples: np.ndarray[Any, Any], report: DeclipReport) -> None: ...
 
 class DeclipStereoResult:
-    left: list[float]
-    right: list[float]
+    left: NDArray[np.float32]
+    right: NDArray[np.float32]
     length: int
     left_report: DeclipReport
     right_report: DeclipReport
     def __init__(
         self,
-        left: list[float],
-        right: list[float],
+        left: NDArray[np.float32],
+        right: NDArray[np.float32],
         length: int,
         left_report: DeclipReport,
         right_report: DeclipReport,
@@ -1453,15 +1457,15 @@ class DecrackleResult:
     def __init__(self, samples: np.ndarray[Any, Any], report: DecrackleReport) -> None: ...
 
 class DecrackleStereoResult:
-    left: list[float]
-    right: list[float]
+    left: NDArray[np.float32]
+    right: NDArray[np.float32]
     length: int
     left_report: DecrackleReport
     right_report: DecrackleReport
     def __init__(
         self,
-        left: list[float],
-        right: list[float],
+        left: NDArray[np.float32],
+        right: NDArray[np.float32],
         length: int,
         left_report: DecrackleReport,
         right_report: DecrackleReport,
@@ -1473,13 +1477,13 @@ class HumDetection:
     # Linear energy ratio (not dB); 1.0 means no peak.
     fundamental_prominence: float
     harmonics: int
-    harmonic_dbfs: list[float]
+    harmonic_dbfs: NDArray[np.float32]
     def __init__(
         self,
         fundamental_hz: float,
         fundamental_prominence: float,
         harmonics: int,
-        harmonic_dbfs: list[float],
+        harmonic_dbfs: NDArray[np.float32],
     ) -> None: ...
 
 class DehumReport:
@@ -1501,15 +1505,15 @@ class DehumResult:
     def __init__(self, samples: np.ndarray[Any, Any], report: DehumReport) -> None: ...
 
 class DehumStereoResult:
-    left: list[float]
-    right: list[float]
+    left: NDArray[np.float32]
+    right: NDArray[np.float32]
     length: int
     left_report: DehumReport
     right_report: DehumReport
     def __init__(
         self,
-        left: list[float],
-        right: list[float],
+        left: NDArray[np.float32],
+        right: NDArray[np.float32],
         length: int,
         left_report: DehumReport,
         right_report: DehumReport,
@@ -1518,11 +1522,11 @@ class DehumStereoResult:
 @dataclass(frozen=True)
 class NoiseDetection:
     floor_dbfs: float
-    band_floor_dbfs: list[float]
+    band_floor_dbfs: NDArray[np.float32]
     def __init__(
         self,
         floor_dbfs: float,
-        band_floor_dbfs: list[float],
+        band_floor_dbfs: NDArray[np.float32],
     ) -> None: ...
 
 class DenoiseReport:
@@ -1544,14 +1548,14 @@ class DenoiseResult:
     def __init__(self, samples: np.ndarray[Any, Any], report: DenoiseReport) -> None: ...
 
 class DenoiseStereoResult:
-    left: list[float]
-    right: list[float]
+    left: NDArray[np.float32]
+    right: NDArray[np.float32]
     length: int
     report: DenoiseReport
     def __init__(
         self,
-        left: list[float],
-        right: list[float],
+        left: NDArray[np.float32],
+        right: NDArray[np.float32],
         length: int,
         report: DenoiseReport,
     ) -> None: ...
@@ -1801,14 +1805,14 @@ class DereverbResult:
     def __init__(self, samples: np.ndarray[Any, Any], report: DereverbReport) -> None: ...
 
 class DereverbStereoResult:
-    left: list[float]
-    right: list[float]
+    left: NDArray[np.float32]
+    right: NDArray[np.float32]
     length: int
     report: DereverbReport
     def __init__(
         self,
-        left: list[float],
-        right: list[float],
+        left: NDArray[np.float32],
+        right: NDArray[np.float32],
         length: int,
         report: DereverbReport,
     ) -> None: ...
@@ -1848,16 +1852,16 @@ class TrimSilenceResult:
     def __init__(self, samples: np.ndarray[Any, Any], report: TrimReport) -> None: ...
 
 class TrimSilenceStereoResult:
-    left: list[float]
-    right: list[float]
+    left: NDArray[np.float32]
+    right: NDArray[np.float32]
     length: int
     report: TrimReport
     left_range: TrimRange
     right_range: TrimRange
     def __init__(
         self,
-        left: list[float],
-        right: list[float],
+        left: NDArray[np.float32],
+        right: NDArray[np.float32],
         length: int,
         report: TrimReport,
         left_range: TrimRange,
@@ -1865,20 +1869,20 @@ class TrimSilenceStereoResult:
     ) -> None: ...
 
 class NormalizeStereoResult:
-    left: list[float]
-    right: list[float]
+    left: NDArray[np.float32]
+    right: NDArray[np.float32]
     length: int
     applied_gain_db: float
     def __init__(
         self,
-        left: list[float],
-        right: list[float],
+        left: NDArray[np.float32],
+        right: NDArray[np.float32],
         length: int,
         applied_gain_db: float,
     ) -> None: ...
 
 class MasteringResult:
-    samples: list[float]
+    samples: NDArray[np.float32]
     sample_rate: int
     input_lufs: float
     output_lufs: float
@@ -1888,7 +1892,7 @@ class MasteringResult:
     non_finite_substitution_count: int
     def __init__(
         self,
-        samples: list[float],
+        samples: NDArray[np.float32],
         sample_rate: int,
         input_lufs: float,
         output_lufs: float,
@@ -1899,8 +1903,8 @@ class MasteringResult:
     ) -> None: ...
 
 class MasteringStereoResult:
-    left: list[float]
-    right: list[float]
+    left: NDArray[np.float32]
+    right: NDArray[np.float32]
     sample_rate: int
     input_lufs: float
     output_lufs: float
@@ -1910,8 +1914,8 @@ class MasteringStereoResult:
     non_finite_substitution_count: int
     def __init__(
         self,
-        left: list[float],
-        right: list[float],
+        left: NDArray[np.float32],
+        right: NDArray[np.float32],
         sample_rate: int,
         input_lufs: float,
         output_lufs: float,
@@ -2324,7 +2328,7 @@ class MasteringReport:
     applied_gain_db: float
     max_gain_reduction_db: float
     loudness_target_limited: bool
-    band_energy_delta_db: list[float]
+    band_energy_delta_db: NDArray[np.float32]
     def __init__(
         self,
         before: MasteringLoudnessSummary,
@@ -2332,11 +2336,11 @@ class MasteringReport:
         applied_gain_db: float,
         max_gain_reduction_db: float,
         loudness_target_limited: bool,
-        band_energy_delta_db: list[float] = ...,
+        band_energy_delta_db: NDArray[np.float32] = ...,
     ) -> None: ...
 
 class MasteringChainResult:
-    samples: list[float]
+    samples: NDArray[np.float32]
     sample_rate: int
     input_lufs: float
     output_lufs: float
@@ -2350,7 +2354,7 @@ class MasteringChainResult:
     non_finite_substitution_count: int
     def __init__(
         self,
-        samples: list[float],
+        samples: NDArray[np.float32],
         sample_rate: int,
         input_lufs: float,
         output_lufs: float,
@@ -2365,8 +2369,8 @@ class MasteringChainResult:
     ) -> None: ...
 
 class MasteringChainStereoResult:
-    left: list[float]
-    right: list[float]
+    left: NDArray[np.float32]
+    right: NDArray[np.float32]
     sample_rate: int
     input_lufs: float
     output_lufs: float
@@ -2380,8 +2384,8 @@ class MasteringChainStereoResult:
     non_finite_substitution_count: int
     def __init__(
         self,
-        left: list[float],
-        right: list[float],
+        left: NDArray[np.float32],
+        right: NDArray[np.float32],
         sample_rate: int,
         input_lufs: float,
         output_lufs: float,
@@ -2448,14 +2452,14 @@ class GoniometerPoint:
     def __init__(self, left: float, right: float) -> None: ...
 
 class MixResult:
-    left: list[float]
-    right: list[float]
+    left: NDArray[np.float32]
+    right: NDArray[np.float32]
     sample_rate: int
     meters: list[MixMeterSnapshot]
     def __init__(
         self,
-        left: list[float],
-        right: list[float],
+        left: NDArray[np.float32],
+        right: NDArray[np.float32],
         sample_rate: int,
         meters: list[MixMeterSnapshot],
     ) -> None: ...
@@ -2786,7 +2790,7 @@ class EngineBounceResult:
     integrated_lufs: float
     def __init__(
         self,
-        interleaved: list[float],
+        interleaved: NDArray[np.float32],
         frames: int,
         num_channels: int,
         sample_rate: int,
@@ -2941,9 +2945,9 @@ class MeterTelemetryRecordWide:
     render_frame: int
     seq: int
     num_channels: int
-    peak_db: list[float]
-    rms_db: list[float]
-    true_peak_dbtp: list[float]
+    peak_db: NDArray[np.float32]
+    rms_db: NDArray[np.float32]
+    true_peak_dbtp: NDArray[np.float32]
     max_true_peak_dbtp: float
     correlation: float
     mono_compat_width: float
@@ -2952,16 +2956,16 @@ class MeterTelemetryRecordWide:
     integrated_lufs: float
     gain_reduction_db: float
     dropped_records: int
-    input_peak_db: list[float]
+    input_peak_db: NDArray[np.float32]
     def __init__(
         self,
         target_id: int,
         render_frame: int,
         seq: int,
         num_channels: int,
-        peak_db: list[float],
-        rms_db: list[float],
-        true_peak_dbtp: list[float],
+        peak_db: NDArray[np.float32],
+        rms_db: NDArray[np.float32],
+        true_peak_dbtp: NDArray[np.float32],
         max_true_peak_dbtp: float,
         correlation: float,
         mono_compat_width: float,
@@ -2970,7 +2974,7 @@ class MeterTelemetryRecordWide:
         integrated_lufs: float,
         gain_reduction_db: float,
         dropped_records: int,
-        input_peak_db: list[float] = ...,
+        input_peak_db: NDArray[np.float32] = ...,
     ) -> None: ...
 
 class ScopeTelemetryRecord:
@@ -2986,7 +2990,7 @@ class ScopeTelemetryRecord:
     render_frame: int
     seq: int
     dropped_records: int
-    bands: list[float]
+    bands: NDArray[np.float32]
     points: list[tuple[float, float]]
     def __init__(
         self,
@@ -2994,7 +2998,7 @@ class ScopeTelemetryRecord:
         render_frame: int,
         seq: int,
         dropped_records: int,
-        bands: list[float],
+        bands: NDArray[np.float32],
         points: list[tuple[float, float]],
     ) -> None: ...
 

@@ -165,6 +165,15 @@ def test_room_estimate_and_morph_reject_invalid_configuration() -> None:
         libsonare.estimate_room(samples, sample_rate=48000, reference_absorption=float("nan"))
     with pytest.raises(libsonare.SonareError):
         libsonare.estimate_room(samples, sample_rate=48000, aspect_hint_lw=float("inf"))
+    # An omitted analyzer knob is the library default; an explicit 0 is refused.
+    for keyword in (
+        "reference_absorption",
+        "n_octave_bands",
+        "min_decay_db",
+        "noise_floor_margin_db",
+    ):
+        with pytest.raises(libsonare.SonareValueError, match=keyword):
+            libsonare.estimate_room(samples, sample_rate=48000, **{keyword: 0})
     with pytest.raises(libsonare.SonareError):
         libsonare.room_morph(samples, 48000, -1.0, 4.0, 3.0)
     with pytest.raises(libsonare.SonareError):
@@ -189,7 +198,7 @@ def test_synthesize_rir_late_model_is_honored() -> None:
     eyring = libsonare.synthesize_rir(
         7.0, 5.0, 3.0, absorption=0.4, max_sec=0.3, prefer_eyring=True, sample_rate=48000
     )
-    assert sabine.rir != eyring.rir
+    assert not np.array_equal(sabine.rir, eyring.rir)
 
 
 @acoustic
@@ -205,7 +214,7 @@ def test_synthesize_rir_honors_per_band_scattering() -> None:
     )
     mirror = libsonare.synthesize_rir(**base, band_scattering=[0.0, 0.0, 0.0, 0.0])
     diffuse = libsonare.synthesize_rir(**base, band_scattering=[0.8, 0.8, 0.8, 0.8])
-    assert diffuse.rir != mirror.rir
+    assert not np.array_equal(diffuse.rir, mirror.rir)
 
 
 @acoustic
@@ -304,21 +313,21 @@ def test_synthesize_rir_routes_air_absorption_through_the_c_abi() -> None:
         air_temperature_c=20.0,
         air_humidity_percent=50.0,
     )
-    assert iso.rir != off.rir
+    assert not np.array_equal(iso.rir, off.rir)
     # Air absorption can only take energy out of the statistical tail; sample
     # 9600 (200 ms) is past the ~100 ms crossover for this room.
     assert sum(v * v for v in iso.rir[9600:]) < sum(v * v for v in off.rir[9600:])
 
     # An absent climate is the ISO reference; an explicit 0 degC / 0 % is a climate.
     implicit = libsonare.synthesize_rir(**hall, air_absorption_enabled=True)
-    assert implicit.rir == iso.rir
+    np.testing.assert_array_equal(implicit.rir, iso.rir)
     freezing = libsonare.synthesize_rir(**hall, air_absorption_enabled=True, air_temperature_c=0.0)
     arid = libsonare.synthesize_rir(**hall, air_absorption_enabled=True, air_humidity_percent=0.0)
-    assert freezing.rir != iso.rir
-    assert arid.rir != iso.rir
+    assert not np.array_equal(freezing.rir, iso.rir)
+    assert not np.array_equal(arid.rir, iso.rir)
 
     # Air absorption is on by default; False is the geometry-only RIR.
-    assert libsonare.synthesize_rir(**hall).rir == iso.rir
+    np.testing.assert_array_equal(libsonare.synthesize_rir(**hall).rir, iso.rir)
 
     # Both climate values are read individually.
     warm = libsonare.synthesize_rir(
@@ -327,9 +336,9 @@ def test_synthesize_rir_routes_air_absorption_through_the_c_abi() -> None:
     humid = libsonare.synthesize_rir(
         **hall, air_absorption_enabled=True, air_temperature_c=20.0, air_humidity_percent=90.0
     )
-    assert warm.rir != iso.rir
-    assert humid.rir != iso.rir
-    assert warm.rir != humid.rir
+    assert not np.array_equal(warm.rir, iso.rir)
+    assert not np.array_equal(humid.rir, iso.rir)
+    assert not np.array_equal(warm.rir, humid.rir)
 
 
 @acoustic
@@ -376,7 +385,7 @@ def test_room_morph_routes_air_absorption_and_rejects_a_bad_climate() -> None:
         air_humidity_percent=50.0,
     ).audio
     assert len(off) == len(on)
-    assert off != on
+    assert not np.array_equal(off, on)
     # The morph validates its config rather than diagnosing, so this raises.
     with pytest.raises(libsonare.SonareError):
         libsonare.room_morph(
@@ -425,7 +434,7 @@ def test_a_single_zero_band_array_is_not_read_as_absent() -> None:
         band_absorption=np.array([0.0], dtype=np.float32), **_BAND_ROOM
     )
     assert max(abs(s) for s in zero_band.rir) > 1e-4
-    assert zero_band.rir != default.rir
+    assert not np.array_equal(zero_band.rir, default.rir)
 
 
 @acoustic
@@ -437,7 +446,7 @@ def test_band_arrays_agree_between_a_list_and_a_numpy_array() -> None:
         from_array = libsonare.synthesize_rir(
             band_absorption=np.array(shape, dtype=np.float32), **_BAND_ROOM
         )
-        assert from_array.rir == from_list.rir
+        np.testing.assert_array_equal(from_array.rir, from_list.rir)
         assert from_array.sample_rate == from_list.sample_rate
 
 
@@ -446,9 +455,11 @@ def test_an_empty_band_array_reads_as_absent() -> None:
     # Empty means absent for a list and must mean the same for a numpy array,
     # whose `bool()` raises rather than answering.
     default = libsonare.synthesize_rir(**_BAND_ROOM)
-    assert libsonare.synthesize_rir(band_absorption=[], **_BAND_ROOM).rir == default.rir
+    np.testing.assert_array_equal(
+        libsonare.synthesize_rir(band_absorption=[], **_BAND_ROOM).rir, default.rir
+    )
     empty = libsonare.synthesize_rir(band_absorption=np.array([], dtype=np.float32), **_BAND_ROOM)
-    assert empty.rir == default.rir
+    np.testing.assert_array_equal(empty.rir, default.rir)
 
 
 @acoustic
@@ -471,17 +482,19 @@ def test_room_morph_accepts_numpy_band_arrays() -> None:
     zero_band = libsonare.room_morph(
         samples, band_absorption=np.array([0.0], dtype=np.float32), **room
     ).audio
-    assert zero_band != default
-    assert (
+    assert not np.array_equal(zero_band, default)
+    np.testing.assert_array_equal(
         libsonare.room_morph(
             samples, band_absorption=np.array([0.0], dtype=np.float32), **room
-        ).audio
-        == libsonare.room_morph(samples, band_absorption=[0.0], **room).audio
+        ).audio,
+        libsonare.room_morph(samples, band_absorption=[0.0], **room).audio,
     )
     scattered = libsonare.room_morph(
         samples, band_scattering=np.array([0.3, 0.4, 0.5], dtype=np.float32), **room
     ).audio
-    assert scattered == libsonare.room_morph(samples, band_scattering=[0.3, 0.4, 0.5], **room).audio
+    np.testing.assert_array_equal(
+        scattered, libsonare.room_morph(samples, band_scattering=[0.3, 0.4, 0.5], **room).audio
+    )
 
 
 @acoustic
@@ -498,7 +511,9 @@ def test_a_seed_the_c_field_cannot_express_is_rejected_rather_than_folded() -> N
 
     # The whole uint32 range stays reachable, and 0 is a seed of its own.
     assert len(libsonare.synthesize_rir(seed=0xFFFF_FFFF, **room).rir) > 0
-    assert libsonare.synthesize_rir(seed=0, **room).rir != libsonare.synthesize_rir(**room).rir
+    assert not np.array_equal(
+        libsonare.synthesize_rir(seed=0, **room).rir, libsonare.synthesize_rir(**room).rir
+    )
 
 
 _ROOM = dict(sample_rate=22050, length_m=7.0, width_m=5.0, height_m=3.0, max_sec=0.2)
@@ -554,20 +569,26 @@ def test_an_absent_room_keyword_is_the_documented_default_and_zero_is_literal(
 ) -> None:
     room = dict(sample_rate=22050, length_m=7.0, width_m=5.0, height_m=3.0, max_sec=0.2)
     absent = libsonare.synthesize_rir(**room).rir
-    assert libsonare.synthesize_rir(**room, **{keyword: default}).rir == absent
-    assert libsonare.synthesize_rir(**room, **{keyword: literal}).rir != absent
+    np.testing.assert_array_equal(
+        libsonare.synthesize_rir(**room, **{keyword: default}).rir, absent
+    )
+    assert not np.array_equal(libsonare.synthesize_rir(**room, **{keyword: literal}).rir, absent)
 
     samples = [0.0] * 2205
     samples[0] = 1.0
     morph_absent = libsonare.room_morph(samples, **room).audio
-    assert libsonare.room_morph(samples, **room, **{keyword: default}).audio == morph_absent
-    assert libsonare.room_morph(samples, **room, **{keyword: literal}).audio != morph_absent
+    np.testing.assert_array_equal(
+        libsonare.room_morph(samples, **room, **{keyword: default}).audio, morph_absent
+    )
+    assert not np.array_equal(
+        libsonare.room_morph(samples, **room, **{keyword: literal}).audio, morph_absent
+    )
 
     stereo_absent = libsonare.room_morph_stereo(samples, samples, **room).left
     stereo_default = libsonare.room_morph_stereo(samples, samples, **room, **{keyword: default})
     stereo_literal = libsonare.room_morph_stereo(samples, samples, **room, **{keyword: literal})
-    assert stereo_default.left == stereo_absent
-    assert stereo_literal.left != stereo_absent
+    np.testing.assert_array_equal(stereo_default.left, stereo_absent)
+    assert not np.array_equal(stereo_literal.left, stereo_absent)
 
 
 @acoustic
@@ -664,7 +685,7 @@ def test_room_geometry_from_estimate_feeds_synthesize_rir() -> None:
         band_absorption=estimate.band_absorption,
         **options,
     )
-    assert mapped.rir == by_hand.rir
+    np.testing.assert_array_equal(mapped.rir, by_hand.rir)
     # Omitted positions take the default placement scaled into the estimated room.
     scaled = libsonare.room_geometry_from_estimate(estimate)
     assert len(scaled["source"]) == 3 and len(scaled["listener"]) == 3
@@ -689,7 +710,10 @@ def test_room_geometry_from_estimate_places_a_small_room_inside_itself() -> None
     for point in (geometry["source"], geometry["listener"]):
         assert all(0.0 < v < 1.33 for v in point)
     assert geometry["absorption"] == pytest.approx(0.25, rel=1e-6)
-    assert libsonare.synthesize_rir(**geometry, max_sec=0.1, ism_order=2, sample_rate=48000).rir
+    assert (
+        libsonare.synthesize_rir(**geometry, max_sec=0.1, ism_order=2, sample_rate=48000).rir.size
+        > 0
+    )
     full = libsonare.RoomEstimate(
         volume=105.0,
         length_m=7.0,
@@ -736,7 +760,7 @@ def test_room_morph_stereo_returns_two_different_longer_channels() -> None:
     assert len(result.left) == len(result.right) > len(samples)
     assert result.sample_rate == 48000
     assert not hasattr(result, "sampleRate")
-    assert result.left != result.right
+    assert not np.array_equal(result.left, result.right)
     assert all(math.isfinite(s) for s in result.left + result.right)
 
 
@@ -745,8 +769,8 @@ def test_room_morph_stereo_default_spacing_equals_explicit_half_metre() -> None:
     samples = _impulse()
     default = libsonare.room_morph_stereo(samples, samples, **_STEREO_ROOM)
     explicit = libsonare.room_morph_stereo(samples, samples, receiver_spacing_m=0.5, **_STEREO_ROOM)
-    assert default.left == explicit.left
-    assert default.right == explicit.right
+    np.testing.assert_array_equal(default.left, explicit.left)
+    np.testing.assert_array_equal(default.right, explicit.right)
 
 
 @acoustic

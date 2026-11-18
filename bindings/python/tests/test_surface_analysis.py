@@ -327,7 +327,7 @@ def test_resample_names_both_rates() -> None:
 
 def test_remix_aligns_to_zero_crossings_by_default() -> None:
     y = _tone()
-    intervals = [100, 3000, 5000, 9000]
+    intervals = [[100, 3000], [5000, 9000]]
     default = np.asarray(libsonare.remix(y, intervals, sr=SR))
     aligned = np.asarray(libsonare.remix(y, intervals, sr=SR, align_zeros=True))
     np.testing.assert_array_equal(default, aligned)

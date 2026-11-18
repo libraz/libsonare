@@ -161,12 +161,12 @@ def test_int_apis_accept_read_only_ndarray() -> None:
     assert len(refined) >= 2
 
     samples = _sine(2048)
-    remixed = libsonare.remix(samples, read_only([0, 512, 1024, 1536]), align_zeros=False)
+    remixed = libsonare.remix(samples, read_only([[0, 512], [1024, 1536]]), align_zeros=False)
     assert remixed.size == 1024
     resolved = libsonare.remix_aligned_intervals(
-        samples, intervals=read_only([0, 512, 1024, 1536]), sample_rate=22050
+        samples, intervals=read_only([[0, 512], [1024, 1536]]), sample_rate=22050
     )
-    assert len(resolved) == 4
+    assert resolved.shape == (2, 2)
 
 
 def test_from_c_float_array_returns_independent_copy() -> None:

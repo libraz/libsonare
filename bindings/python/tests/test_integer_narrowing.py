@@ -473,7 +473,8 @@ def test_a_wrapped_midi_query_argument_is_refused_rather_than_counting_another_c
         ("clip_id", lambda v: project.bake_midi_fx(v, fx, with_source_index=True)),
     )
     for name, query in queries:
-        assert query(clip_a) != query(clip_b), name  # positive control
+        a, b = query(clip_a), query(clip_b)
+        assert not np.array_equal(np.asarray(a), np.asarray(b)), name  # positive control
         for value in WRAPPED_IDS:
             _refuses(name, query, value)
 
@@ -660,19 +661,19 @@ def test_an_interval_boundary_is_refused_rather_than_folded_onto_a_legal_index()
 
     # The control: the boundary selects the result, so a later refusal is not
     # an argument the entry point had stopped reading.
-    assert len(ls.remix(signal, [0, 1000], align_zeros=False)) == 1000
-    assert len(ls.remix(signal, [0, 2000], align_zeros=False)) == 2000
+    assert len(ls.remix(signal, [[0, 1000]], align_zeros=False)) == 1000
+    assert len(ls.remix(signal, [[0, 2000]], align_zeros=False)) == 2000
 
     with pytest.raises(SonareValueError, match=re.escape("intervals[1] must be an integer")):
-        ls.remix(signal, [0, 1000.7])
+        ls.remix(signal, [[0, 1000.7]])
     with pytest.raises(SonareValueError, match=re.escape("intervals[1] must be an integer within")):
-        ls.remix(signal, [0, 2**31])
+        ls.remix(signal, [[0, 2**31]])
     with pytest.raises(SonareValueError, match=re.escape("intervals[1] must be a finite integer")):
-        ls.remix(signal, [0, float("nan")])
+        ls.remix(signal, [[0, float("nan")]])
 
     # A whole-valued float array is not a fraction and stays accepted, so the
     # refusal cannot be passing by rejecting the dtype instead of the value.
-    assert len(ls.remix(signal, np.array([0.0, 1000.0]), align_zeros=False)) == 1000
+    assert len(ls.remix(signal, np.array([[0.0, 1000.0]]), align_zeros=False)) == 1000
 
 
 def test_every_integer_array_argument_names_itself_when_it_refuses() -> None:
@@ -683,7 +684,7 @@ def test_every_integer_array_argument_names_itself_when_it_refuses() -> None:
     """
     signal = np.sin(np.arange(4000) * 0.05).astype(np.float32)
     with pytest.raises(SonareValueError, match=re.escape("intervals[1]")):
-        ls.remix_aligned_intervals(signal, intervals=[0, 1000.7], sample_rate=22050)
+        ls.remix_aligned_intervals(signal, intervals=[[0, 1000.7]], sample_rate=22050)
     rows, cols = 4, 32
     matrix = np.tile(np.arange(cols, dtype=np.float32), (rows, 1))
     with pytest.raises(SonareValueError, match=re.escape("boundaries[1]")):

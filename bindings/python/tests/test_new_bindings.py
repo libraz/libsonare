@@ -158,21 +158,23 @@ def test_decompose_stems_validates_ahead_of_the_c_abi() -> None:
 
 def test_remix_aligned_intervals_resolves_cut_points() -> None:
     x = _tone(440.0, 0.5)
-    pairs = libsonare.remix_aligned_intervals(x, intervals=[0, 1000, 5000, 5500], sample_rate=22050)
-    assert len(pairs) == 4
-    assert pairs[0] >= 0
-    assert pairs[1] > pairs[0]
-    assert pairs[3] > pairs[2]
-    assert pairs[3] <= len(x)
+    pairs = libsonare.remix_aligned_intervals(
+        x, intervals=[[0, 1000], [5000, 5500]], sample_rate=22050
+    )
+    assert pairs.shape == (2, 2)
+    assert pairs[0, 0] >= 0
+    assert pairs[0, 1] > pairs[0, 0]
+    assert pairs[1, 1] > pairs[1, 0]
+    assert pairs[1, 1] <= len(x)
 
 
 def test_remix_aligned_intervals_leaves_a_sign_changeless_signal_unsnapped() -> None:
     # A DC offset has no zero-crossing to snap to; the interval must survive.
     flat = np.full(4096, 0.25, dtype=np.float32)
-    assert libsonare.remix_aligned_intervals(flat, intervals=[100, 200], sample_rate=22050) == [
-        100,
-        200,
-    ]
+    np.testing.assert_array_equal(
+        libsonare.remix_aligned_intervals(flat, intervals=[[100, 200]], sample_rate=22050),
+        [[100, 200]],
+    )
 
 
 def test_nn_filter_preserves_shape() -> None:
@@ -221,13 +223,13 @@ def test_remix_concatenates_intervals() -> None:
     x = _tone(440.0, 0.5)
     half = len(x) // 2
     # Reverse the two halves.
-    out = libsonare.remix(x, [half, len(x), 0, half])
+    out = libsonare.remix(x, [[half, len(x)], [0, half]])
     assert np.asarray(out).size == len(x)
     assert _finite(out)
 
 
-@pytest.mark.parametrize("intervals", [[0, 100, 200], [0], 5, [[0, 100], [200, 300]]])
-def test_remix_refuses_odd_length_or_non_flat_intervals(intervals: Any) -> None:
+@pytest.mark.parametrize("intervals", [[0, 100, 200], [0, 100], 5, [[0, 100, 200]]])
+def test_remix_refuses_intervals_not_shaped_n_by_2(intervals: Any) -> None:
     x = _tone(440.0, 0.5)
     with raises_coded(match="intervals"):
         libsonare.remix(x, intervals)
@@ -320,7 +322,7 @@ def test_lufs_series_interleaved_returns_empty_series_below_a_window() -> None:
     interleaved = np.stack([x, x], axis=1).reshape(-1)
     momentary, short_term = libsonare.lufs_series_interleaved(interleaved, 2, SR)
     assert len(momentary) > 0
-    assert short_term == []
+    assert short_term.size == 0
 
 
 def test_lufs_series_interleaved_rejects_bad_channel_count() -> None:

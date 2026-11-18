@@ -69,7 +69,7 @@ class RirDiagnostic:
     severity: str
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class RirResult:
     """Room impulse response synthesized from shoebox geometry.
 
@@ -88,7 +88,7 @@ class RirResult:
     indistinguishable from a complete one without reading this field.
     """
 
-    rir: list[float]
+    rir: np.ndarray
     """Synthesized impulse response samples."""
     sample_rate: int
     """Sample rate of ``rir`` in Hz."""
@@ -96,7 +96,7 @@ class RirResult:
     """Warnings the synthesizer reported, in its own order; see the class docstring."""
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class RoomMorphResult:
     """Morphed audio and what the target-room synthesis had to change to make it.
 
@@ -116,7 +116,7 @@ class RoomMorphResult:
     unchanged, which is why the floored one reaches a morph at all.
     """
 
-    audio: list[float]
+    audio: np.ndarray
     """Morphed audio samples."""
     sample_rate: int
     """Sample rate of ``audio`` in Hz."""
@@ -124,7 +124,7 @@ class RoomMorphResult:
     """Warnings the target-room synthesis reported, in its own order."""
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class RoomMorphStereoResult:
     """Morphed stereo audio and the target-room synthesis warnings.
 
@@ -132,9 +132,9 @@ class RoomMorphStereoResult:
     codes as :class:`RoomMorphResult`.
     """
 
-    left: list[float]
+    left: np.ndarray
     """Left channel of the morphed audio."""
-    right: list[float]
+    right: np.ndarray
     """Right channel of the morphed audio."""
     sample_rate: int
     """Sample rate of both channels in Hz."""
@@ -142,7 +142,7 @@ class RoomMorphStereoResult:
     """Warnings the target-room synthesis reported, in its own order."""
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class RoomEstimate:
     """Blind equivalent-room estimate (volume/dimensions/absorption/DRR).
 
@@ -165,9 +165,9 @@ class RoomEstimate:
     """Direct-to-reverberant ratio in dB."""
     confidence: float
     """Confidence of the estimate, in [0, 1]; 0 when nothing was measurable."""
-    band_absorption: list[float]
+    band_absorption: np.ndarray
     """Mean wall absorption per octave band; same length as ``rt60_bands``."""
-    rt60_bands: list[float]
+    rt60_bands: np.ndarray
     """RT60 per octave band in seconds; NaN where a band's fit failed."""
 
 

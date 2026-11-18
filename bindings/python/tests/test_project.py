@@ -301,10 +301,12 @@ def test_unresolved_audio_sources_carry_full_uri_and_metadata() -> None:
         restored = Project.from_json(project.to_json())
         try:
             ids = restored.unresolved_audio_source_ids()
+            assert isinstance(ids, np.ndarray)
+            assert ids.dtype == np.uint32
             assert len(ids) == 2
             restored.set_audio_source_metadata(ids[1], "sha256:abc", "vocals")
             sources = restored.unresolved_audio_sources()
-            assert [source.id for source in sources] == ids
+            assert [source.id for source in sources] == ids.tolist()
             assert sources[0].name_or_uri == long_uri
             assert sources[0].kind == "audio"
             assert sources[1].name_or_uri == "asset://stem.wav"
@@ -348,7 +350,7 @@ def test_deserialized_audio_source_can_be_rebound_before_bounce() -> None:
             ids = restored.unresolved_audio_source_ids()
             assert len(ids) == 1
             restored.set_source_audio(ids[0], audio, 1, 48000)
-            assert restored.unresolved_audio_source_ids() == []
+            assert restored.unresolved_audio_source_ids().size == 0
             assert restored.bounce(total_frames=480, num_channels=1).shape == (480, 1)
         finally:
             restored.close()

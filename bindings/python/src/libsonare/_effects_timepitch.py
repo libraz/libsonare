@@ -6,6 +6,8 @@ import ctypes
 from collections.abc import Mapping, Sequence
 from typing import cast
 
+import numpy as np
+
 from ._analysis_music import _key_pair
 from ._errors import _not_supported
 from ._features_metering import scale_mask_for_mode
@@ -24,9 +26,9 @@ from ._runtime import (
     _PITCH_TARGET_MODES,
     _UINT32_MAX,
     SonareValueError,
-    _call_float_transform,
+    _call_float_array_transform,
     _check,
-    _float_array_result,
+    _from_c_float_array,
     _get_lib,
     _guard_buffer,
     _key_mode_token,
@@ -55,7 +57,7 @@ def time_stretch(
     hop_length: int = _DEFAULT_EFFECT_HOP_LENGTH,
     *,
     validate: bool = True,
-) -> list[float]:
+) -> np.ndarray:
     """Time-stretch audio without changing pitch.
 
     Args:
@@ -72,7 +74,7 @@ def time_stretch(
             ``validate=False`` to skip the scan on hot paths.
 
     Returns:
-        List of time-stretched samples.
+        ``float32`` array of time-stretched samples.
     """
     _validate_samples("time_stretch", samples, validate=validate)
     n_fft, hop_length = _validate_effect_fft_options("time_stretch", n_fft, hop_length)
@@ -82,13 +84,13 @@ def time_stretch(
             raise _unsupported_effect_symbol("sonare_time_stretch_ex")
         if not hasattr(lib, "sonare_time_stretch"):
             raise _unsupported_effect_symbol("sonare_time_stretch")
-        return _call_float_transform(
+        return _call_float_array_transform(
             "sonare_time_stretch",
             samples,
             _to_c_int(sample_rate, "sample_rate"),
             _to_c_float(speed_ratio, "speed_ratio"),
         )
-    return _call_float_transform(
+    return _call_float_array_transform(
         "sonare_time_stretch_ex",
         samples,
         _to_c_int(sample_rate, "sample_rate"),
@@ -106,7 +108,7 @@ def pitch_shift(
     hop_length: int = _DEFAULT_EFFECT_HOP_LENGTH,
     *,
     validate: bool = True,
-) -> list[float]:
+) -> np.ndarray:
     """Shift the pitch of audio.
 
     Args:
@@ -121,7 +123,7 @@ def pitch_shift(
             ``validate=False`` to skip the scan on hot paths.
 
     Returns:
-        List of pitch-shifted samples.
+        ``float32`` array of pitch-shifted samples.
     """
     _validate_samples("pitch_shift", samples, validate=validate)
     n_fft, hop_length = _validate_effect_fft_options("pitch_shift", n_fft, hop_length)
@@ -131,13 +133,13 @@ def pitch_shift(
             raise _unsupported_effect_symbol("sonare_pitch_shift_ex")
         if not hasattr(lib, "sonare_pitch_shift"):
             raise _unsupported_effect_symbol("sonare_pitch_shift")
-        return _call_float_transform(
+        return _call_float_array_transform(
             "sonare_pitch_shift",
             samples,
             _to_c_int(sample_rate, "sample_rate"),
             _to_c_float(pitch_semitones, "pitch_semitones"),
         )
-    return _call_float_transform(
+    return _call_float_array_transform(
         "sonare_pitch_shift_ex",
         samples,
         _to_c_int(sample_rate, "sample_rate"),
@@ -153,7 +155,7 @@ def pitch_correct_to_midi(
     sample_rate: int,
     current_midi: float = 69.0,
     target_midi: float = 69.0,
-) -> list[float]:
+) -> np.ndarray:
     """Pitch-correct audio from a current MIDI note to a target MIDI note.
 
     Applies one constant, immediate transpose with no retune glide and preserves
@@ -169,9 +171,9 @@ def pitch_correct_to_midi(
         target_midi: Desired pitch as a MIDI note number.
 
     Returns:
-        List of pitch-corrected samples.
+        ``float32`` array of pitch-corrected samples.
     """
-    return _call_float_transform(
+    return _call_float_array_transform(
         "sonare_pitch_correct_to_midi",
         samples,
         _to_c_int(sample_rate, "sample_rate"),
@@ -198,7 +200,7 @@ def pitch_correct_timevarying(
     vibrato_threshold_cents: float | None = None,
     voiced: Sequence[int] | list[int] | None = None,
     voiced_prob: Sequence[float] | list[float] | None = None,
-) -> list[float]:
+) -> np.ndarray:
     """Contour-following pitch correction toward a fixed MIDI note OR a scale.
 
     Follows the caller-supplied per-frame ``f0_hz`` contour, so vibrato and
@@ -233,7 +235,7 @@ def pitch_correct_timevarying(
             on the correction amount.
 
     Returns:
-        List of pitch-corrected samples.
+        ``float32`` array of pitch-corrected samples.
     """
     target = _token_arg(target_mode, _PITCH_TARGET_MODES, "target_mode")
     lib = _get_lib()
@@ -303,7 +305,7 @@ def pitch_correct_timevarying(
                 ctypes.byref(out_length),
             )
         )
-        return _float_array_result(out, out_length.value)
+        return _from_c_float_array(out, out_length.value)
 
 
 def _auto_tune_key(key: object) -> SonareKey | None:
@@ -391,6 +393,6 @@ def auto_tune(
             )
         )
         return AutoTuneResult(
-            samples=_float_array_result(out, out_length.value),
+            samples=_from_c_float_array(out, out_length.value),
             key=Key(PitchClass(used.root), _key_mode_token(used.mode), float(used.confidence)),
         )

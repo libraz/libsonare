@@ -13,7 +13,7 @@ from ._runtime import (
     _C_INT_MIN,
     SonareValueError,
     _check,
-    _float_array_result,
+    _from_c_float_array,
     _get_lib,
     _guard_buffer,
     _int_refusal,
@@ -106,8 +106,8 @@ def _run_normalize_stereo(
         _check(rc)
         length = int(out.length)
         return NormalizeStereoResult(
-            left=_float_array_result(out.left, length),
-            right=_float_array_result(out.right, length),
+            left=_from_c_float_array(out.left, length),
+            right=_from_c_float_array(out.right, length),
             length=length,
             applied_gain_db=float(out.applied_gain_db),
         )
@@ -121,7 +121,7 @@ def normalize(
     target_db: float = 0.0,
     *,
     validate: bool = True,
-) -> list[float]:
+) -> np.ndarray:
     """Normalize audio to a target dB level.
 
     Args:
@@ -132,7 +132,7 @@ def normalize(
             ``validate=False`` to skip the scan on hot paths.
 
     Returns:
-        List of normalized samples.
+        ``float32`` array of normalized samples.
     """
     _validate_samples("normalize", samples, validate=validate)
     lib = _get_lib()
@@ -147,7 +147,7 @@ def normalize(
             ctypes.byref(out_length),
         )
         _check(rc)
-        return _float_array_result(out, out_length.value)
+        return _from_c_float_array(out, out_length.value)
 
 
 def normalize_rms(
@@ -156,7 +156,7 @@ def normalize_rms(
     target_db: float = -20.0,
     *,
     validate: bool = True,
-) -> list[float]:
+) -> np.ndarray:
     """Normalize audio by RMS level to a target dBFS value.
 
     This is the RMS counterpart to :func:`normalize`, using the native
@@ -188,7 +188,7 @@ def normalize_rms(
                 ctypes.byref(out_length),
             )
         )
-        return _float_array_result(out, out_length.value)
+        return _from_c_float_array(out, out_length.value)
 
 
 @_guard_buffer("left", "right")
@@ -303,7 +303,7 @@ def trim(
     hop_length: int = _DEFAULT_TRIM_HOP_LENGTH,
     *,
     validate: bool = True,
-) -> list[float]:
+) -> np.ndarray:
     """Trim silence from the beginning and end of audio.
 
     Args:
@@ -315,7 +315,7 @@ def trim(
         validate: Reject empty / NaN / Inf input (default ``True``).
 
     Returns:
-        List of trimmed samples.
+        ``float32`` array of trimmed samples.
     """
     _validate_samples("trim", samples, validate=validate)
     frame_length, hop_length = _validate_trim_options(frame_length, hop_length)
@@ -351,4 +351,4 @@ def trim(
                 ctypes.byref(out_length),
             )
         _check(rc)
-        return _float_array_result(out, out_length.value)
+        return _from_c_float_array(out, out_length.value)

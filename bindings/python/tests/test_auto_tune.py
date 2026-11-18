@@ -95,7 +95,7 @@ def test_scale_mode_mask_name_equals_numeric_mask() -> None:
         by_mask = libsonare.pitch_correct_timevarying(
             samples, SR, pitch.f0, target_mode="scale", scale_mode_mask=MASKS[name], voiced=voiced
         )
-        assert by_name == by_mask
+        np.testing.assert_array_equal(by_name, by_mask)
     with pytest.raises(libsonare.SonareValueError):
         libsonare.pitch_correct_timevarying(
             samples, SR, pitch.f0, target_mode="scale", scale_mode_mask="nope", voiced=voiced
@@ -122,15 +122,17 @@ def test_auto_tune_detect_equals_passing_the_detected_key() -> None:
     assert detected.key.mode == reference.mode
     assert detected.key.confidence == pytest.approx(reference.confidence)
     named = libsonare.auto_tune(audio, SR, key=reference)
-    assert named.samples == detected.samples
-    assert libsonare.auto_tune(audio, SR, key="detect").samples == detected.samples
+    np.testing.assert_array_equal(named.samples, detected.samples)
+    np.testing.assert_array_equal(
+        libsonare.auto_tune(audio, SR, key="detect").samples, detected.samples
+    )
 
 
 def test_auto_tune_takes_the_key_in_several_shapes() -> None:
     audio = _detuned_melody(DETUNE_CENTS)
     pair = libsonare.auto_tune(audio, SR, key=(2, "dorian"))
     mapping = libsonare.auto_tune(audio, SR, key={"root": 2, "mode": "dorian"})
-    assert pair.samples == mapping.samples
+    np.testing.assert_array_equal(pair.samples, mapping.samples)
     assert pair.key.mode == "dorian"
 
 

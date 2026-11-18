@@ -217,7 +217,7 @@ def test_pitch_correct_timevarying_voiced_accepts_any_int_sequence() -> None:
         for form in forms
     ]
     for other in results[1:]:
-        assert other == results[0]
+        np.testing.assert_array_equal(other, results[0])
 
     # The companion-length check still runs after the bulk conversion.
     with pytest.raises(ValueError):

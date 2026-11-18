@@ -2,6 +2,7 @@
 
 import math
 
+import numpy as np
 import pytest
 
 from libsonare import EngineClip, RealtimeEngine, SonareError
@@ -82,11 +83,13 @@ def test_meter_target_insert_gain_reduction() -> None:
             engine.process([[0.0] * block, [0.0] * block])
             lane = [r for r in engine.drain_meter_telemetry() if r.target_id == 1] or lane
         reductions = engine.meter_target_insert_gain_reduction(1)
+        assert isinstance(reductions, np.ndarray)
+        assert reductions.dtype == np.float32
         assert len(reductions) == 2
         assert all(value <= 0.0 for value in reductions)
         assert min(reductions) < -1.0
         assert lane
         assert min(reductions) == pytest.approx(lane[-1].gain_reduction_db, abs=0.05)
-        assert engine.meter_target_insert_gain_reduction(0xFFFF) == []
+        assert engine.meter_target_insert_gain_reduction(0xFFFF).size == 0
         with pytest.raises(SonareError):
             engine.meter_target_insert_gain_reduction(41)

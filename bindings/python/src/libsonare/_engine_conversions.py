@@ -41,7 +41,7 @@ from ._runtime import (
     SonareScopeTelemetryRecord,
     SonareValueError,
     _curve_value,
-    _float_array_result,
+    _from_c_float_array,
     _planar_channel_arrays,
     _require_instance,
     _token_ordinal,
@@ -366,9 +366,9 @@ def _meter_telemetry_wide_from_c(
         render_frame=int(raw.render_frame),
         seq=int(raw.seq),
         num_channels=planes,
-        peak_db=_float_array_result(raw.peak_db, planes),
-        rms_db=_float_array_result(raw.rms_db, planes),
-        true_peak_dbtp=_float_array_result(raw.true_peak_dbtp, planes),
+        peak_db=_from_c_float_array(raw.peak_db, planes),
+        rms_db=_from_c_float_array(raw.rms_db, planes),
+        true_peak_dbtp=_from_c_float_array(raw.true_peak_dbtp, planes),
         max_true_peak_dbtp=float(raw.max_true_peak_dbtp),
         correlation=float(raw.correlation),
         mono_compat_width=float(raw.mono_compat_width),
@@ -377,7 +377,7 @@ def _meter_telemetry_wide_from_c(
         integrated_lufs=float(raw.integrated_lufs),
         gain_reduction_db=float(raw.gain_reduction_db),
         dropped_records=int(raw.dropped_records),
-        input_peak_db=_float_array_result(input_peak_db, planes) if input_peak_db else [],
+        input_peak_db=_from_c_float_array(input_peak_db, planes if input_peak_db else 0),
     )
 
 
@@ -389,7 +389,7 @@ def _scope_telemetry_from_c(raw: SonareScopeTelemetryRecord) -> ScopeTelemetryRe
     # many points as it does entries.
     band_count = max(0, min(int(raw.band_count), len(raw.bands)))
     point_count = max(0, min(int(raw.point_count), len(raw.points) // 2))
-    bands = _float_array_result(raw.bands, band_count)
+    bands = _from_c_float_array(raw.bands, band_count)
     points = [(float(raw.points[2 * i]), float(raw.points[2 * i + 1])) for i in range(point_count)]
     return ScopeTelemetryRecord(
         target_id=int(raw.target_id),

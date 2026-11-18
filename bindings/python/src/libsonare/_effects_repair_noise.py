@@ -33,7 +33,8 @@ from ._runtime import (
     SonareValueError,
     _as_float32_buffer,
     _check,
-    _float_array_result,
+    _from_c_float_array,
+    _from_c_int_array,
     _get_lib,
     _guard_buffer,
     _narrow_int,
@@ -161,7 +162,7 @@ def mastering_repair_denoise_classical(
 def _extract_noise_detection(raw: Any) -> NoiseDetection:
     return NoiseDetection(
         floor_dbfs=float(raw.floor_dbfs),
-        band_floor_dbfs=_float_array_result(raw.band_floor_dbfs, len(raw.band_floor_dbfs)),
+        band_floor_dbfs=_from_c_float_array(raw.band_floor_dbfs, len(raw.band_floor_dbfs)),
     )
 
 
@@ -264,7 +265,7 @@ def mastering_repair_detect_noise_floor(
 _NOISE_BAND_EDGE_COUNT = SONARE_REPAIR_NOISE_BAND_COUNT + 1
 
 
-def mastering_repair_noise_band_bins(sample_rate: int, n_fft: int = 1024) -> list[int]:
+def mastering_repair_noise_band_bins(sample_rate: int, n_fft: int = 1024) -> np.ndarray:
     """Bin boundaries of the grid a denoise noise floor is reported on.
 
     Band ``k`` of :attr:`~libsonare.types.NoiseDetection.band_floor_dbfs` covers
@@ -296,7 +297,7 @@ def mastering_repair_noise_band_bins(sample_rate: int, n_fft: int = 1024) -> lis
         sample_rate: Sample rate the bins belong to, in Hz; positive.
 
     Returns:
-        33 bin indices, low to high -- one more than the 32 bands: the first bin
+        ``int32`` array of 33 bin indices, low to high -- one more than the 32 bands: the first bin
         of every band plus the one-past-the-end bin of the last, which is
         ``n_fft // 2 + 1``. The sequence is non-decreasing.
 
@@ -315,7 +316,7 @@ def mastering_repair_noise_band_bins(sample_rate: int, n_fft: int = 1024) -> lis
         out_bins,
     )
     _check(rc)
-    return [int(v) for v in out_bins]
+    return _from_c_int_array(out_bins, _NOISE_BAND_EDGE_COUNT)
 
 
 def _extract_denoise_report(raw: Any) -> DenoiseReport:
@@ -441,8 +442,8 @@ def mastering_repair_denoise_classical_stereo(
         _check(rc)
         n = int(out.length)
         return DenoiseStereoResult(
-            left=_float_array_result(out.left, n),
-            right=_float_array_result(out.right, n),
+            left=_from_c_float_array(out.left, n),
+            right=_from_c_float_array(out.right, n),
             length=n,
             report=_extract_denoise_report(out.report),
         )
@@ -641,7 +642,7 @@ def _extract_hum_detection(raw: Any) -> HumDetection:
         fundamental_hz=float(raw.fundamental_hz),
         fundamental_prominence=float(raw.fundamental_prominence),
         harmonics=int(raw.harmonics),
-        harmonic_dbfs=_float_array_result(raw.harmonic_dbfs, len(raw.harmonic_dbfs)),
+        harmonic_dbfs=_from_c_float_array(raw.harmonic_dbfs, len(raw.harmonic_dbfs)),
     )
 
 
@@ -817,8 +818,8 @@ def mastering_repair_dehum_stereo(
         _check(rc)
         n = int(out.length)
         return DehumStereoResult(
-            left=_float_array_result(out.left, n),
-            right=_float_array_result(out.right, n),
+            left=_from_c_float_array(out.left, n),
+            right=_from_c_float_array(out.right, n),
             length=n,
             left_report=_extract_dehum_report(out.left_report),
             right_report=_extract_dehum_report(out.right_report),
