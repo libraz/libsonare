@@ -17,7 +17,6 @@ const TOKEN = {
 };
 const request = {
   clipId: 7,
-  takeId: 0,
   expectedSourceId: 11,
   expectedSourceSampleRate: 48000,
   expectedSourceSampleCount: 3,
@@ -26,9 +25,8 @@ const request = {
   expectedSourceOffsetPpq: 0,
   renderedMono: new Float32Array([0, 0.25, 0.5]),
   renderedSampleRate: 48000,
-  renderedStartSample: 0,
   renderToken: TOKEN,
-  sve1: new Uint8Array([83, 86, 69, 49]),
+  vocalState: new Uint8Array([83, 86, 69, 49]),
 };
 const native: VocalProjectNative = {
   applyVocalEdit: () => {
@@ -55,7 +53,6 @@ describe('WASM Project vocal input number errors', () => {
     ['clipId', '7'],
     ['takeId', '0'],
     ['expectedSourceId', '11'],
-    ['renderedStartSample', '0'],
     ['renderToken', { ...TOKEN, profileId: '4' }],
   ])('reports TypeError for a non-number %s', (field, value) => {
     expect(() => apply({ [field]: value })).toThrow(TypeError);
@@ -67,10 +64,15 @@ describe('WASM Project vocal input number errors', () => {
     ['expectedSourceSampleRate', Number.NaN],
     ['expectedSourceSampleCount', Number.POSITIVE_INFINITY],
     ['clipId', Number.NaN],
-    ['renderedStartSample', Number.NaN],
     ['renderToken', { ...TOKEN, profileId: Number.NaN }],
   ])('reports RangeError for a numeric value outside the %s domain', (field, value) => {
     expect(() => apply({ [field]: value })).toThrow(RangeError);
+  });
+
+  it('refuses the removed renderedStartSample as an unknown key', () => {
+    expect(() => apply({ renderedStartSample: 0 })).toThrow(
+      new TypeError("applyProjectVocalEdit: unknown request key 'renderedStartSample'"),
+    );
   });
 
   it.each([

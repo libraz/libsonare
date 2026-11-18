@@ -9,7 +9,7 @@ import type {
   ProjectVocalRehydrateOptions,
   ProjectVocalRehydrateStatus,
 } from './public_types_vocal_project.js';
-import { assertSampleRate } from './validation.js';
+import { assertSampleRate, requestObject } from './validation.js';
 
 /** The embind Project object is deliberately structural here. */
 export interface VocalProjectNative {
@@ -157,6 +157,7 @@ interface NativeApplyRequest {
 
 function copyApplyRequest(request: ProjectVocalEditApplyRequest): NativeApplyRequest {
   const source = requireObject(request, 'request');
+  requestObject('applyProjectVocalEdit', request, 'request', true);
   const renderedMono = finiteMono(source.renderedMono, 'renderedMono');
   const expectedSourceSampleCount = positiveSampleCount(
     source.expectedSourceSampleCount,
