@@ -135,7 +135,7 @@ def test_an_alias_may_still_name_a_free_function() -> None:
 def test_a_free_export_does_not_credit_a_handle_op_of_the_same_name() -> None:
     """Against the real facades, not a fixture: a free export is not a method.
 
-    All three export ``ebur128LoudnessRange`` as a free function. With the
+    All three export ``ebur128LoudnessRangeLu`` (formerly ``ebur128LoudnessRange``) as a free function. With the
     matching ``Audio`` member taken out of the extraction, a C
     ``sonare_audio_ebur128_loudness_range`` must still read as a gap — the free
     export cannot carry the claim a handle op makes. Removing the member rather
@@ -146,10 +146,19 @@ def test_a_free_export_does_not_credit_a_handle_op_of_the_same_name() -> None:
         return  # not in the libsonare tree; skip
     import check_parity
 
-    key, tail = "audio_ebur128_loudness_range", "ebur128_loudness_range"
     for surface in ("python", "node", "wasm"):
         ex = check_parity._EXTRACTORS[surface](repo)
-        assert tail in compare._free_keys(ex), surface
+        # The unit-suffixed spelling is the current one; either names the same export.
+        tail = next(
+            (
+                t
+                for t in ("ebur128_loudness_range_lu", "ebur128_loudness_range")
+                if t in compare._free_keys(ex)
+            ),
+            None,
+        )
+        assert tail is not None, surface
+        key = f"audio_{tail}"
         ex.functions = [
             f for f in ex.functions if not (f.raw_name.startswith("Audio.") and f.key == tail)
         ]
