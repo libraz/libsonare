@@ -235,24 +235,6 @@ const FINITE_ARGUMENTS: FloatArgument[] = [
     call: (v) => native.analyzeMelody(BLOCKED, SAMPLE_RATE, 65, 2093, 2048, 256, v).meanFrequency,
   },
   {
-    name: 'cqt fmin',
-    site: 'features/advanced.cpp CqtLike fmin',
-    control: [32.7, 130.81],
-    call: (v) => native.cqt(AUDIO, SAMPLE_RATE, 512, v, 24, 12).frequencies[0],
-  },
-  {
-    name: 'pseudoCqt fmin',
-    site: 'features/advanced.cpp CqtLike fmin',
-    control: [32.7, 130.81],
-    call: (v) => native.pseudoCqt(AUDIO, SAMPLE_RATE, 512, v, 24, 12).frequencies[0],
-  },
-  {
-    name: 'hybridCqt fmin',
-    site: 'features/advanced.cpp CqtLike fmin',
-    control: [32.7, 130.81],
-    call: (v) => native.hybridCqt(AUDIO, SAMPLE_RATE, 512, v, 24, 12).frequencies[0],
-  },
-  {
     name: 'vqt fmin',
     site: 'features/advanced.cpp Vqt fmin',
     control: [32.7, 130.81],
@@ -439,18 +421,6 @@ const FINITE_ARGUMENTS: FloatArgument[] = [
     call: (v) => native.referenceHzToTuning(446, v),
   },
   {
-    name: 'trimSilence topDb',
-    site: 'features/signal.cpp TrimSilence topDb',
-    control: [60, 20],
-    call: (v) => native.trimSilence(GATED, v, 2048, 512).endSample,
-  },
-  {
-    name: 'splitSilence topDb',
-    site: 'features/signal.cpp SplitSilence topDb',
-    control: [60, 20],
-    call: (v) => native.splitSilence(GATED, v, 2048, 512).length,
-  },
-  {
     name: 'splitSilenceCommon topDb',
     site: 'features/signal.cpp SplitSilenceCommon topDb',
     control: [60, 20],
@@ -491,40 +461,6 @@ const FINITE_ARGUMENTS: FloatArgument[] = [
       const audio = newGatedAudio() as any;
       return audio.silenceRatio(v, 1024, 256);
     },
-  },
-  {
-    name: 'meteringDetectClipping threshold',
-    site: 'analysis/metering.cpp MeteringDetectClipping threshold',
-    control: [0.999, 0.2],
-    call: (v) => native.meteringDetectClipping(AUDIO, SAMPLE_RATE, v, 1).clippedSamples,
-  },
-  {
-    name: 'meteringDynamicRange windowSec',
-    site: 'analysis/metering.cpp MeteringDynamicRange windowSec',
-    control: [0.4, 0.05],
-    call: (v) => native.meteringDynamicRange(SWELLING, SAMPLE_RATE, v, 0.1, -1, -1).dynamicRangeDb,
-  },
-  {
-    name: 'meteringDynamicRange hopSec',
-    site: 'analysis/metering.cpp MeteringDynamicRange hopSec',
-    control: [0.2, 0.02],
-    call: (v) =>
-      Object.keys(native.meteringDynamicRange(SWELLING, SAMPLE_RATE, 0.4, v, -1, -1).windowRmsDb)
-        .length,
-  },
-  {
-    name: 'meteringDynamicRange lowPercentile',
-    site: 'analysis/metering.cpp MeteringDynamicRange lowPercentile',
-    control: [0.1, 0.4],
-    call: (v) =>
-      native.meteringDynamicRange(SWELLING, SAMPLE_RATE, 0.4, 0.1, v, 0.95).lowPercentileDb,
-  },
-  {
-    name: 'meteringDynamicRange highPercentile',
-    site: 'analysis/metering.cpp MeteringDynamicRange highPercentile',
-    control: [0.95, 0.6],
-    call: (v) =>
-      native.meteringDynamicRange(SWELLING, SAMPLE_RATE, 0.4, 0.1, 0.1, v).highPercentileDb,
   },
   {
     name: 'scaleQuantizeMidi referenceMidi',
@@ -610,14 +546,6 @@ const FINITE_ARGUMENTS: FloatArgument[] = [
     },
   },
   {
-    name: 'preemphasis coef',
-    site: 'features/signal.cpp Preemphasis coef',
-    // Coefficients outside the usual unit interval remain valid finite input;
-    // the output must still prove that the addon consumed the argument.
-    control: [-1.5, 1.5],
-    call: (v) => magnitudeSum(native.preemphasis(Float32Array.from([1, 2, 3, 4]), v)),
-  },
-  {
     // `init` is pinned to nndsvd: sonare_decompose's default initialiser is
     // "random", which would make the control itself non-deterministic.
     name: 'decompose beta',
@@ -632,12 +560,6 @@ const FINITE_ARGUMENTS: FloatArgument[] = [
     site: 'features/signal.cpp Preemphasis zi',
     control: [0, 1],
     call: (v) => native.preemphasis(Float32Array.from([1, 2, 3, 4]), 0.97, v)[0],
-  },
-  {
-    name: 'deemphasis coef',
-    site: 'features/signal.cpp Deemphasis coef',
-    control: [-1.5, 1.5],
-    call: (v) => magnitudeSum(native.deemphasis(Float32Array.from([1, 2, 3, 4]), v)),
   },
   {
     name: 'deemphasis zi',
@@ -853,13 +775,13 @@ const REQUIRED_FLOAT_ARGUMENTS: FloatArgument[] = [
     name: 'voiceChange pitchSemitones',
     site: 'sonare_wrap_effects.cpp VoiceChange pitchSemitones',
     control: [0, 7],
-    call: (v) => magnitudeSum(native.voiceChange(SHORT, SAMPLE_RATE, v, 1)),
+    call: (v) => magnitudeSum(native.voiceChange(SHORT, SAMPLE_RATE, v, 1, 'relative')),
   },
   {
     name: 'voiceChange formantFactor',
     site: 'sonare_wrap_effects.cpp VoiceChange formantFactor',
     control: [1, 1.5],
-    call: (v) => magnitudeSum(native.voiceChange(SHORT, SAMPLE_RATE, 0, v)),
+    call: (v) => magnitudeSum(native.voiceChange(SHORT, SAMPLE_RATE, 0, v, 'relative')),
   },
   {
     name: 'phaseVocoder rate',
@@ -884,6 +806,84 @@ const REQUIRED_FLOAT_ARGUMENTS: FloatArgument[] = [
     site: 'addon.cpp MidiParamToCc unitValue',
     control: [0, 1],
     call: (v) => native.midiParamToCc([CC_BINDING], 88, v, 0, 0)?.data0,
+  },
+  {
+    name: 'cqt fmin',
+    site: 'features/advanced.cpp CqtLike fmin',
+    control: [32.7, 130.81],
+    call: (v) => native.cqt(AUDIO, SAMPLE_RATE, 512, v, 24, 12).frequencies[0],
+  },
+  {
+    name: 'pseudoCqt fmin',
+    site: 'features/advanced.cpp CqtLike fmin',
+    control: [32.7, 130.81],
+    call: (v) => native.pseudoCqt(AUDIO, SAMPLE_RATE, 512, v, 24, 12).frequencies[0],
+  },
+  {
+    name: 'hybridCqt fmin',
+    site: 'features/advanced.cpp CqtLike fmin',
+    control: [32.7, 130.81],
+    call: (v) => native.hybridCqt(AUDIO, SAMPLE_RATE, 512, v, 24, 12).frequencies[0],
+  },
+  {
+    name: 'trimSilence topDb',
+    site: 'features/signal.cpp TrimSilence topDb',
+    control: [60, 20],
+    call: (v) => native.trimSilence(GATED, v, 2048, 512).endSample,
+  },
+  {
+    name: 'splitSilence topDb',
+    site: 'features/signal.cpp SplitSilence topDb',
+    control: [60, 20],
+    call: (v) => native.splitSilence(GATED, v, 2048, 512).length,
+  },
+  {
+    name: 'meteringDetectClipping threshold',
+    site: 'analysis/metering.cpp MeteringDetectClipping threshold',
+    control: [0.999, 0.2],
+    call: (v) => native.meteringDetectClipping(AUDIO, SAMPLE_RATE, v, 1).clippedSamples,
+  },
+  {
+    name: 'meteringDynamicRange windowSec',
+    site: 'analysis/metering.cpp MeteringDynamicRange windowSec',
+    control: [0.4, 0.05],
+    call: (v) => native.meteringDynamicRange(SWELLING, SAMPLE_RATE, v, 0.1, -1, -1).dynamicRangeDb,
+  },
+  {
+    name: 'meteringDynamicRange hopSec',
+    site: 'analysis/metering.cpp MeteringDynamicRange hopSec',
+    control: [0.2, 0.02],
+    call: (v) =>
+      Object.keys(native.meteringDynamicRange(SWELLING, SAMPLE_RATE, 0.4, v, -1, -1).windowRmsDb)
+        .length,
+  },
+  {
+    name: 'meteringDynamicRange lowPercentile',
+    site: 'analysis/metering.cpp MeteringDynamicRange lowPercentile',
+    control: [0.1, 0.4],
+    call: (v) =>
+      native.meteringDynamicRange(SWELLING, SAMPLE_RATE, 0.4, 0.1, v, 0.95).lowPercentileDb,
+  },
+  {
+    name: 'meteringDynamicRange highPercentile',
+    site: 'analysis/metering.cpp MeteringDynamicRange highPercentile',
+    control: [0.95, 0.6],
+    call: (v) =>
+      native.meteringDynamicRange(SWELLING, SAMPLE_RATE, 0.4, 0.1, 0.1, v).highPercentileDb,
+  },
+  {
+    name: 'preemphasis coef',
+    site: 'features/signal.cpp Preemphasis coef',
+    // Coefficients outside the usual unit interval remain valid finite input;
+    // the output must still prove that the addon consumed the argument.
+    control: [-1.5, 1.5],
+    call: (v) => magnitudeSum(native.preemphasis(Float32Array.from([1, 2, 3, 4]), v)),
+  },
+  {
+    name: 'deemphasis coef',
+    site: 'features/signal.cpp Deemphasis coef',
+    control: [-1.5, 1.5],
+    call: (v) => magnitudeSum(native.deemphasis(Float32Array.from([1, 2, 3, 4]), v)),
   },
 ];
 
@@ -1194,7 +1194,7 @@ const REQUIRED_FLOAT_STATE_ARGUMENTS: FloatArgument[] = [
           numChannels: 2,
           parameterBindings: [{ paramId: 7, nodeId: 'gain' }],
         });
-        engine.setAutomationLane(7, [{ ppq: 0, value: v }]);
+        engine.setAutomationLane(7, [{ ppq: 0, value: v, curveToNext: 0 }]);
         engine.play();
         const block = new Float32Array(128).fill(0.25);
         return magnitudeSum(engine.process([block, new Float32Array(block)])[0]);
@@ -1323,7 +1323,19 @@ const UNCONTROLLED_SITES = ['streaming/stream_analyzer.cpp SetExpectedDuration d
  * `RequiredFiniteFloatValue`, not `node_narrow_finite_float`: driven here for the
  * refusal, but not part of the `node_narrow_finite_float` call-site population.
  */
-const BAILOUT_READER_SITES = new Set(['sonare_wrap_features.cpp NoteSegments frameRate']);
+const BAILOUT_READER_SITES = new Set([
+  'sonare_wrap_features.cpp NoteSegments frameRate',
+  'features/advanced.cpp CqtLike fmin',
+  'features/signal.cpp TrimSilence topDb',
+  'features/signal.cpp SplitSilence topDb',
+  'features/signal.cpp Preemphasis coef',
+  'features/signal.cpp Deemphasis coef',
+  'analysis/metering.cpp MeteringDetectClipping threshold',
+  'analysis/metering.cpp MeteringDynamicRange windowSec',
+  'analysis/metering.cpp MeteringDynamicRange hopSec',
+  'analysis/metering.cpp MeteringDynamicRange lowPercentile',
+  'analysis/metering.cpp MeteringDynamicRange highPercentile',
+]);
 
 /**
  * Sites in the required-argument table whose narrowing call sits inside a shared

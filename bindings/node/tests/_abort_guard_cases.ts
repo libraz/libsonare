@@ -1661,6 +1661,20 @@ export const CASES: AbortGuardCase[] = [
     ],
   },
   {
+    name: 'Audio.detectClipping',
+    missingRequired: [],
+    // The facade always passes an options object carrying the linear threshold;
+    // a call without one is refused rather than measured against a default.
+    rejectsArgument: [
+      { argument: 'options', call: () => readerAudio().detectClipping() },
+      {
+        argument: 'threshold',
+        call: () => readerAudio().detectClipping({}),
+        message: /threshold/,
+      },
+    ],
+  },
+  {
     name: 'Audio.fromFileChannel',
     missingRequired: [],
     // The channel index is read before the file is opened, so these are refused
@@ -1766,8 +1780,8 @@ export const CASES: AbortGuardCase[] = [
   {
     name: 'SonareWrap.voiceChange',
     missingRequired: [],
-    // The optional formant mode is the positional read; a wrong type must not
-    // fall back to 'relative' and render the mode the caller did not ask for.
+    // The formant mode is a required positional read; a wrong type is refused by
+    // name rather than rendering a mode the caller did not ask for.
     rejectsArgument: [
       {
         argument: 'formantMode',

@@ -114,10 +114,6 @@ const ZERO_FALLBACK_REASONS: ReadonlyMap<string, string> = new Map([
     'Dither kind ordinal, where 0 is none — a named member the caller can ask for.',
   ],
   [
-    'project/edit.cpp:takeId',
-    "0 falls back to the clip's active take, which is a take a caller can mean rather than a stand-in for absence.",
-  ],
-  [
     'project/vocal_edit.cpp:takeId',
     'The vocal project C ABI defines takeId 0 as the clip base binding, resolving clip.source_id and clip.source_offset_ppq; zero is therefore an explicit binding selector rather than omission.',
   ],
@@ -128,10 +124,6 @@ const ZERO_FALLBACK_REASONS: ReadonlyMap<string, string> = new Map([
   [
     'project/edit.cpp:audioSampleRate',
     'Taken as a source-rate hint only above 0; without one the clip keeps the project rate, which is also what the omitted field gives.',
-  ],
-  [
-    'project/external_stems.cpp:startFrame',
-    'A placement offset in frames; 0 is the timeline origin, a position the caller can mean.',
   ],
   [
     'project/external_stems.cpp:sampleRate',
@@ -148,30 +140,12 @@ const ZERO_FALLBACK_REASONS: ReadonlyMap<string, string> = new Map([
     '0 is the unset track id, which scopes the sidecar to the project instead of to a track.',
   ],
   [
-    'project/render.cpp:instrumentLatencySamples',
-    'Host-instrument PDC fed to the compiler. Unsettled rather than inert: a control that moves the render needs a latency-reporting host instrument, so what its zero does here has not been observed.',
-  ],
-  [
     'project/render.cpp:latencySamples',
     "A callback instrument's reported delay in samples: a plain quantity whose zero is no latency, not a request for a default.",
   ],
   [
     'project/render.cpp:tailSamples',
     "A callback instrument's reported release tail in samples: a plain quantity whose zero is no tail, not a request for a default.",
-  ],
-  [
-    'effects/note_editing.cpp:onsetSample',
-    'An onset position in samples; 0 is the first sample of the buffer.',
-  ],
-  [
-    'effects/note_editing.cpp:offsetSample',
-    'An end position in samples; 0 is the first sample of the buffer.',
-  ],
-  ['effects/note_editing.cpp:frameStart', 'An analysis frame index; 0 is the first frame.'],
-  ['effects/note_editing.cpp:frameEnd', 'An analysis frame index; 0 is the first frame.'],
-  [
-    'effects/note_editing.cpp:timeOffsetSamples',
-    'Zero is the identity shift, a displacement a caller can mean rather than a stand-in for absence.',
   ],
   [
     'effects/spectral_edit.cpp:startSample',
@@ -205,7 +179,6 @@ const ZERO_FALLBACK_REASONS: ReadonlyMap<string, string> = new Map([
     'engine/midi_instruments.cpp:sysexHandle',
     'Unsettled: 0 is the absent-handle spelling, and a control needs a live registered handle, which this entry point cannot produce, so what a truncated handle does has not been observed.',
   ],
-  ['sonare_wrap_engine.cpp:curveToNext', 'Automation curve ordinal, where 0 is a named curve.'],
   [
     'sonare_wrap_engine.cpp:keyFifths',
     'A signed count of sharps or flats; 0 is C major, a quantity the caller can mean.',
@@ -230,10 +203,6 @@ const ZERO_FALLBACK_REASONS: ReadonlyMap<string, string> = new Map([
   [
     'sonare_wrap_note_objects.h:timeOffsetSamples',
     'Zero is the identity shift, a displacement a caller can mean rather than a stand-in for absence.',
-  ],
-  [
-    'sonare_wrap_project.cpp:id',
-    'A marker id chosen by the caller, where 0 is the unset id rather than a selector for a default marker.',
   ],
   [
     'sonare_wrap_project.cpp:keyFifths',

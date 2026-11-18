@@ -304,10 +304,10 @@ Napi::Value MixerWrap::SetSurroundPan(const Napi::CallbackInfo& info) {
   }
   const Napi::Object obj = info[1].As<Napi::Object>();
   SonareSurroundPan pan{};
-  pan.azimuth = FloatProperty(obj, "azimuth", 0.0f);
-  pan.elevation = FloatProperty(obj, "elevation", 0.0f);
-  pan.divergence = FloatProperty(obj, "divergence", 0.0f);
-  pan.lfe = FloatProperty(obj, "lfe", 0.0f);
+  pan.azimuth = FloatProperty(obj, "azimuth", pan.azimuth);
+  pan.elevation = FloatProperty(obj, "elevation", pan.elevation);
+  pan.divergence = FloatProperty(obj, "divergence", pan.divergence);
+  pan.lfe = FloatProperty(obj, "lfe", pan.lfe);
   pan.distance = FloatProperty(obj, "distance", 1.0f);
   SonareError err = sonare_strip_set_surround_pan(strip, &pan);
   if (err != SONARE_OK) {

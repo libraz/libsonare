@@ -31,7 +31,8 @@ void FillBounceOptions(const Napi::Object& obj, SonareProjectBounceOptions* opti
   options->block_size = IntProperty(obj, "blockSize", kZeroIsSentinel);
   options->num_channels = IntProperty(obj, "numChannels", kZeroIsSentinel);
   options->sample_rate = IntProperty(obj, "sampleRate", kZeroIsSentinel);
-  options->instrument_latency_samples = IntProperty(obj, "instrumentLatencySamples", 0);
+  options->instrument_latency_samples =
+      IntProperty(obj, "instrumentLatencySamples", options->instrument_latency_samples);
 }
 
 // Parses a JS instrument descriptor into a built-in synth binding. Throws a
@@ -533,7 +534,7 @@ Napi::Value ProjectWrap::BounceWithInstruments(const Napi::CallbackInfo& info) {
       }
       slot.render = *render;
       SonareInstrumentBinding binding{};
-      binding.destination_id = Uint32Property(obj, "destinationId", 0u);
+      binding.destination_id = Uint32Property(obj, "destinationId", binding.destination_id);
       binding.callbacks.latency_samples = IntProperty(obj, "latencySamples", 0);
       binding.callbacks.tail_samples = IntProperty(obj, "tailSamples", 0);
       if (env.IsExceptionPending()) return env.Undefined();
@@ -605,7 +606,8 @@ Napi::Value ProjectWrap::BounceWithSynthInstruments(const Napi::CallbackInfo& in
         Napi::Object obj = element.As<Napi::Object>();
         binding.destination_id = sonare_node::Uint32Property(obj, "destinationId", 0u);
         if (env.IsExceptionPending()) return env.Undefined();
-        binding.use_gm_programs = BoolProperty(obj, "useGmPrograms", false) ? 1 : 0;
+        binding.use_gm_programs =
+            BoolProperty(obj, "useGmPrograms", binding.use_gm_programs != 0) ? 1 : 0;
         if (env.IsExceptionPending()) return env.Undefined();
         // Borrowed for the call: the JS bank object stays reachable through the
         // instruments array for the whole synchronous bounce.
@@ -732,7 +734,7 @@ Napi::Value ProjectWrap::BounceWithSf2Instruments(const Napi::CallbackInfo& info
       }
       Napi::Object obj = element.As<Napi::Object>();
       SonareSf2InstrumentBinding binding{};
-      binding.destination_id = Uint32Property(obj, "destinationId", 0);
+      binding.destination_id = Uint32Property(obj, "destinationId", binding.destination_id);
       binding.config.gain = FloatProperty(obj, "gain", 0.0f);
       binding.config.polyphony = IntProperty(obj, "polyphony", kZeroIsSentinel);
       const Napi::Value prefer_model = obj.Get("preferModelForModeledFamilies");

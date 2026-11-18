@@ -303,7 +303,7 @@ RealtimeEngineWrap::RealtimeEngineWrap(const Napi::CallbackInfo& info)
   int64_t command_capacity = 0;
   int64_t telemetry_capacity = 0;
   int max_channels = 0;
-  if (!OptionalIntArg(env, info, 1, "maxBlockSize", 0, &max_block_size) ||
+  if (!OptionalIntArg(env, info, 1, "maxBlockSize", max_block_size, &max_block_size) ||
       !OptionalInt64Arg(env, info, 2, "commandCapacity", 0, &command_capacity) ||
       !OptionalInt64Arg(env, info, 3, "telemetryCapacity", 0, &telemetry_capacity) ||
       !OptionalIntArg(env, info, 4, "maxChannels", 0, &max_channels)) {
@@ -351,7 +351,7 @@ Napi::Value RealtimeEngineWrap::Prepare(const Napi::CallbackInfo& info) {
   int64_t command_capacity = 0;
   int64_t telemetry_capacity = 0;
   int max_channels = 0;
-  if (!OptionalIntArg(env, info, 1, "maxBlockSize", 0, &max_block_size) ||
+  if (!OptionalIntArg(env, info, 1, "maxBlockSize", max_block_size, &max_block_size) ||
       !OptionalInt64Arg(env, info, 2, "commandCapacity", 0, &command_capacity) ||
       !OptionalInt64Arg(env, info, 3, "telemetryCapacity", 0, &telemetry_capacity) ||
       !OptionalIntArg(env, info, 4, "maxChannels", 0, &max_channels)) {
@@ -497,9 +497,9 @@ Napi::Value RealtimeEngineWrap::PrimeOfflineParameters(const Napi::CallbackInfo&
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   int num_channels = 0;
-  int block_size = 0;
+  int block_size = 0;  // C value 0 = library default offline block
   if (!RequiredIntArg(env, info, 0, "numChannels", &num_channels) ||
-      !OptionalIntArg(env, info, 1, "blockSize", 0, &block_size)) {
+      !OptionalIntArg(env, info, 1, "blockSize", block_size, &block_size)) {
     return env.Undefined();
   }
   ThrowIfError(env, sonare_engine_prime_offline_parameters(engine_, num_channels, block_size));
@@ -573,7 +573,7 @@ Napi::Value RealtimeEngineWrap::SetTempoSegments(const Napi::CallbackInfo& info)
     }
     if (!RequiredDoubleProperty(env, obj, "bpm", &segment.bpm)) return env.Undefined();
     segment.start_sample = 0.0;
-    segment.end_bpm = DoubleProperty(obj, "endBpm", 0.0);
+    segment.end_bpm = DoubleProperty(obj, "endBpm", segment.end_bpm);
     if (env.IsExceptionPending()) return env.Undefined();
     segments.push_back(segment);
   }
@@ -715,7 +715,9 @@ Napi::Value RealtimeEngineWrap::SetAutomationLane(const Napi::CallbackInfo& info
     const Napi::Value point_value = obj.Get("value");
     node_require_property_type(env, point_value.IsNumber(), "value", "a number");
     point.value = node_narrow_finite_float(env, point_value, "value");
-    point.curve_to_next = IntProperty(obj, "curveToNext", 0);
+    if (!RequiredIntProperty(env, obj, "curveToNext", &point.curve_to_next)) {
+      return env.Undefined();
+    }
     if (env.IsExceptionPending()) return env.Undefined();
     points.push_back(point);
   }
@@ -759,7 +761,7 @@ Napi::Value RealtimeEngineWrap::SetMarkers(const Napi::CallbackInfo& info) {
     }
     marker.kind = sonare_node::MidiByteProperty(env, obj, "kind", SONARE_MARKER_KIND_MARKER);
     marker.key_fifths = sonare_node::Int8Property(obj, "keyFifths", 0);
-    marker.key_minor = BoolProperty(obj, "keyMinor", false) ? 1 : 0;
+    marker.key_minor = BoolProperty(obj, "keyMinor", marker.key_minor != 0) ? 1 : 0;
     if (!RequiredDoubleProperty(env, obj, "ppq", &marker.ppq)) return env.Undefined();
     CopyString(marker.name, sizeof(marker.name), StringProperty(obj, "name", ""));
     if (env.IsExceptionPending()) return env.Undefined();

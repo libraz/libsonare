@@ -59,14 +59,13 @@ Napi::Value CqtLike(const Napi::CallbackInfo& info, CqtFn fn) {
   int sr{};
   if (!RequiredIntArg(env, info, 1, "sampleRate", &sr)) return env.Undefined();
   int hop_length{};
-  if (!OptionalIntArg(env, info, 2, "hopLength", 512, &hop_length)) return env.Undefined();
+  if (!RequiredIntArg(env, info, 2, "hopLength", &hop_length)) return env.Undefined();
   float fmin{};
-  if (!OptionalFiniteFloatArg(env, info, 3, "fmin", sonare::constants::kC1Hz, &fmin))
-    return env.Undefined();
+  if (!RequiredFiniteFloatValue(env, info[3], "fmin", &fmin)) return env.Undefined();
   int n_bins{};
-  if (!OptionalIntArg(env, info, 4, "nBins", 84, &n_bins)) return env.Undefined();
+  if (!RequiredIntArg(env, info, 4, "nBins", &n_bins)) return env.Undefined();
   int bins_per_octave{};
-  if (!OptionalIntArg(env, info, 5, "binsPerOctave", 12, &bins_per_octave)) return env.Undefined();
+  if (!RequiredIntArg(env, info, 5, "binsPerOctave", &bins_per_octave)) return env.Undefined();
 
   SonareCqtResult result{};
   SonareError err = fn(typed.Data(), typed.ElementLength(), sr, hop_length, fmin, n_bins,
@@ -349,9 +348,9 @@ Napi::Value SonareWrap::GriffinLim(const Napi::CallbackInfo& info) {
   int sample_rate{};
   if (!RequiredIntArg(env, info, 3, "sampleRate", &sample_rate)) return env.Undefined();
   int n_fft{};
-  if (!OptionalIntArg(env, info, 4, "nFft", 2048, &n_fft)) return env.Undefined();
+  if (!RequiredIntArg(env, info, 4, "nFft", &n_fft)) return env.Undefined();
   int hop_length{};
-  if (!OptionalIntArg(env, info, 5, "hopLength", 512, &hop_length)) return env.Undefined();
+  if (!RequiredIntArg(env, info, 5, "hopLength", &hop_length)) return env.Undefined();
   int n_iter{};
   if (!OptionalIntArg(env, info, 6, "nIter", 32, &n_iter)) return env.Undefined();
   float momentum{};
@@ -511,7 +510,7 @@ Napi::Value SonareWrap::PolyFeatures(const Napi::CallbackInfo& info) {
   int hop_length{};
   if (!OptionalIntArg(env, info, 3, "hopLength", 512, &hop_length)) return env.Undefined();
   int order{};
-  if (!OptionalIntArg(env, info, 4, "order", 1, &order)) return env.Undefined();
+  if (!RequiredIntArg(env, info, 4, "order", &order)) return env.Undefined();
   float* out = nullptr;
   int out_rows = 0;
   int out_cols = 0;

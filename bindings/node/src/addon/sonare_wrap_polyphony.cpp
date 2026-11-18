@@ -433,8 +433,8 @@ Napi::Value PolyphonicAnalysisWrap::Render(const Napi::CallbackInfo& info) {
       return env.Undefined();
     }
     Napi::Object opts = options.As<Napi::Object>();
-    config.fade_ms = FloatProperty(opts, "fadeMs", 0.0f);
-    config.vibrato_cutoff_hz = FloatProperty(opts, "vibratoCutoffHz", 0.0f);
+    config.fade_ms = FloatProperty(opts, "fadeMs", config.fade_ms);
+    config.vibrato_cutoff_hz = FloatProperty(opts, "vibratoCutoffHz", config.vibrato_cutoff_hz);
     if (env.IsExceptionPending()) return env.Undefined();
   }
 

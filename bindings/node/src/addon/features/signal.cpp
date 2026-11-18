@@ -24,7 +24,7 @@ Napi::Value SonareWrap::Tone(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   float frequency{};
-  if (!OptionalFloatArg(env, info, 0, "frequency", 440.0f, &frequency)) return env.Undefined();
+  if (!RequiredFloatArg(env, info, 0, "frequency", &frequency)) return env.Undefined();
   int sample_rate{};
   if (!OptionalIntArg(env, info, 1, "sampleRate", 22050, &sample_rate)) return env.Undefined();
   float duration{};
@@ -46,15 +46,15 @@ Napi::Value SonareWrap::Chirp(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   float fmin{};
-  if (!OptionalFloatArg(env, info, 0, "fmin", 440.0f, &fmin)) return env.Undefined();
+  if (!RequiredFloatArg(env, info, 0, "fmin", &fmin)) return env.Undefined();
   float fmax{};
-  if (!OptionalFloatArg(env, info, 1, "fmax", 880.0f, &fmax)) return env.Undefined();
+  if (!RequiredFloatArg(env, info, 1, "fmax", &fmax)) return env.Undefined();
   int sample_rate{};
   if (!OptionalIntArg(env, info, 2, "sampleRate", 22050, &sample_rate)) return env.Undefined();
   float duration{};
   if (!OptionalFloatArg(env, info, 3, "duration", 1.0f, &duration)) return env.Undefined();
   bool linear{};
-  if (!OptionalBoolArg(env, info, 4, "linear", true, &linear)) return env.Undefined();
+  if (!RequiredBoolArg(env, info, 4, "linear", &linear)) return env.Undefined();
   float* out = nullptr;
   size_t out_length = 0;
   const SonareError error =
@@ -98,9 +98,9 @@ Napi::Value SonareWrap::TrimSilence(const Napi::CallbackInfo& info) {
   }
   auto arr = info[0].As<Napi::Float32Array>();
   float top_db{};
-  if (!OptionalFiniteFloatArg(env, info, 1, "topDb", 60.0f, &top_db)) return env.Undefined();
+  if (!RequiredFiniteFloatValue(env, info[1], "topDb", &top_db)) return env.Undefined();
   int frame_length{};
-  if (!OptionalIntArg(env, info, 2, "frameLength", 2048, &frame_length)) return env.Undefined();
+  if (!RequiredIntArg(env, info, 2, "frameLength", &frame_length)) return env.Undefined();
   int hop_length{};
   if (!OptionalIntArg(env, info, 3, "hopLength", 512, &hop_length)) return env.Undefined();
   float* out = nullptr;
@@ -127,9 +127,9 @@ Napi::Value SonareWrap::SplitSilence(const Napi::CallbackInfo& info) {
   }
   auto arr = info[0].As<Napi::Float32Array>();
   float top_db{};
-  if (!OptionalFiniteFloatArg(env, info, 1, "topDb", 60.0f, &top_db)) return env.Undefined();
+  if (!RequiredFiniteFloatValue(env, info[1], "topDb", &top_db)) return env.Undefined();
   int frame_length{};
-  if (!OptionalIntArg(env, info, 2, "frameLength", 2048, &frame_length)) return env.Undefined();
+  if (!RequiredIntArg(env, info, 2, "frameLength", &frame_length)) return env.Undefined();
   int hop_length{};
   if (!OptionalIntArg(env, info, 3, "hopLength", 512, &hop_length)) return env.Undefined();
   int* out = nullptr;
@@ -381,7 +381,7 @@ Napi::Value SonareWrap::VectorNormalize(const Napi::CallbackInfo& info) {
   }
   auto arr = info[0].As<Napi::Float32Array>();
   int norm_type{};
-  if (!OptionalIntArg(env, info, 1, "normType", 0, &norm_type)) return env.Undefined();
+  if (!RequiredIntArg(env, info, 1, "normType", &norm_type)) return env.Undefined();
   float threshold{};
   if (!OptionalFiniteFloatArg(env, info, 2, "threshold", 0.0f, &threshold)) return env.Undefined();
   float* out = nullptr;
@@ -437,7 +437,7 @@ Napi::Value SonareWrap::Preemphasis(const Napi::CallbackInfo& info) {
   }
   auto arr = info[0].As<Napi::Float32Array>();
   float coef{};
-  if (!OptionalFiniteFloatArg(env, info, 1, "coef", 0.97f, &coef)) return env.Undefined();
+  if (!RequiredFiniteFloatValue(env, info[1], "coef", &coef)) return env.Undefined();
   bool use_zi = info.Length() >= 3 && info[2].IsNumber();
   float zi{};
   if (!OptionalFiniteFloatArg(env, info, 2, "zi", 0.0f, &zi)) return env.Undefined();
@@ -458,7 +458,7 @@ Napi::Value SonareWrap::Deemphasis(const Napi::CallbackInfo& info) {
   }
   auto arr = info[0].As<Napi::Float32Array>();
   float coef{};
-  if (!OptionalFiniteFloatArg(env, info, 1, "coef", 0.97f, &coef)) return env.Undefined();
+  if (!RequiredFiniteFloatValue(env, info[1], "coef", &coef)) return env.Undefined();
   bool use_zi = info.Length() >= 3 && info[2].IsNumber();
   float zi{};
   if (!OptionalFiniteFloatArg(env, info, 2, "zi", 0.0f, &zi)) return env.Undefined();

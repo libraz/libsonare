@@ -142,7 +142,7 @@ Napi::Value SonareWrap::FramesToSamples(const Napi::CallbackInfo& info) {
   }
   int frames = node_narrow_int(env, info[0], "frames");
   int hop{};
-  if (!OptionalIntArg(env, info, 1, "hop", 512, &hop)) return env.Undefined();
+  if (!RequiredIntArg(env, info, 1, "hop", &hop)) return env.Undefined();
   int n_fft{};
   if (!OptionalIntArg(env, info, 2, "nFft", 0, &n_fft)) return env.Undefined();
   return Napi::Number::New(env, sonare_frames_to_samples(frames, hop, n_fft));
@@ -158,7 +158,7 @@ Napi::Value SonareWrap::SamplesToFrames(const Napi::CallbackInfo& info) {
   }
   int samples = node_narrow_int(env, info[0], "samples");
   int hop{};
-  if (!OptionalIntArg(env, info, 1, "hop", 512, &hop)) return env.Undefined();
+  if (!RequiredIntArg(env, info, 1, "hop", &hop)) return env.Undefined();
   int n_fft{};
   if (!OptionalIntArg(env, info, 2, "nFft", 0, &n_fft)) return env.Undefined();
   return Napi::Number::New(env, sonare_samples_to_frames(samples, hop, n_fft));
@@ -173,12 +173,11 @@ Napi::Value SonareWrap::PowerToDb(const Napi::CallbackInfo& info) {
   }
   auto arr = info[0].As<Napi::Float32Array>();
   float ref{};
-  if (!OptionalFloatArg(env, info, 1, "ref", 1.0f, &ref)) return env.Undefined();
+  if (!RequiredFloatArg(env, info, 1, "ref", &ref)) return env.Undefined();
   float amin{};
-  if (!OptionalFloatArg(env, info, 2, "amin", sonare::constants::kEpsilon, &amin))
-    return env.Undefined();
+  if (!RequiredFloatArg(env, info, 2, "amin", &amin)) return env.Undefined();
   float top_db{};
-  if (!OptionalFloatArg(env, info, 3, "topDb", 80.0f, &top_db)) return env.Undefined();
+  if (!RequiredFloatArg(env, info, 3, "topDb", &top_db)) return env.Undefined();
   float* out = nullptr;
   size_t count = 0;
   SonareError err =
@@ -196,9 +195,9 @@ Napi::Value SonareWrap::AmplitudeToDb(const Napi::CallbackInfo& info) {
   }
   auto arr = info[0].As<Napi::Float32Array>();
   float ref{};
-  if (!OptionalFloatArg(env, info, 1, "ref", 1.0f, &ref)) return env.Undefined();
+  if (!RequiredFloatArg(env, info, 1, "ref", &ref)) return env.Undefined();
   float amin{};
-  if (!OptionalFloatArg(env, info, 2, "amin", 1e-5f, &amin)) return env.Undefined();
+  if (!RequiredFloatArg(env, info, 2, "amin", &amin)) return env.Undefined();
   float top_db{};
   if (!OptionalFloatArg(env, info, 3, "topDb", 80.0f, &top_db)) return env.Undefined();
   float* out = nullptr;

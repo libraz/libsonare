@@ -97,9 +97,8 @@ Napi::Value SonareWrap::CyclicTempogram(const Napi::CallbackInfo& info) {
   if (!OptionalIntArg(env, info, 2, "hop", 512, &hop)) return env.Undefined();
   int win{};
   if (!OptionalIntArg(env, info, 3, "win", 384, &win)) return env.Undefined();
-  float bpm_min{};
-  if (!OptionalFiniteFloatArg(env, info, 4, "bpmMin", sonare::kCyclicTempogramBpmMin, &bpm_min))
-    return env.Undefined();
+  float bpm_min = sonare::kCyclicTempogramBpmMin;
+  if (!OptionalFiniteFloatArg(env, info, 4, "bpmMin", bpm_min, &bpm_min)) return env.Undefined();
   int n_bins{};
   if (!OptionalIntArg(env, info, 5, "nBins", sonare::kCyclicTempogramBins, &n_bins))
     return env.Undefined();
@@ -252,11 +251,11 @@ Napi::Value SonareWrap::TempogramRatio(const Napi::CallbackInfo& info) {
   }
   auto arr = info[0].As<Napi::Float32Array>();
   int win{};
-  if (!OptionalIntArg(env, info, 1, "win", 384, &win)) return env.Undefined();
+  if (!RequiredIntArg(env, info, 1, "win", &win)) return env.Undefined();
   int sr{};
   if (!RequiredIntArg(env, info, 2, "sampleRate", &sr)) return env.Undefined();
   int hop{};
-  if (!OptionalIntArg(env, info, 3, "hop", 512, &hop)) return env.Undefined();
+  if (!RequiredIntArg(env, info, 3, "hop", &hop)) return env.Undefined();
   std::vector<float> factors;
   if (info.Length() >= 5 && !info[4].IsUndefined() && !info[4].IsNull()) {
     factors = FloatVectorFromValue(info[4], "factors");
@@ -295,7 +294,7 @@ Napi::Value SonareWrap::NnlsChroma(const Napi::CallbackInfo& info) {
   int blend_n_fft{};
   if (!OptionalIntArg(env, info, 4, "blendNFft", 4096, &blend_n_fft)) return env.Undefined();
   int hop_length{};
-  if (!OptionalIntArg(env, info, 5, "hopLength", 512, &hop_length)) return env.Undefined();
+  if (!RequiredIntArg(env, info, 5, "hopLength", &hop_length)) return env.Undefined();
   SonareError err =
       sonare_nnls_chroma_ex2(arr.Data(), arr.ElementLength(), sr, enable_blend ? 1 : 0,
                              blend_weight, blend_n_fft, hop_length, &out, &count, &n_frames);

@@ -537,7 +537,7 @@ Napi::Value SonareWrap::VoiceChange(const Napi::CallbackInfo& info) {
   float pitch_semitones = node_narrow_finite_float(env, info[2], "pitchSemitones");
   float formant_factor = node_narrow_finite_float(env, info[3], "formantFactor");
   std::string formant_mode;
-  if (!OptionalStringArg(env, info, 4, "formantMode", "relative", &formant_mode)) {
+  if (!RequiredStringValue(env, info[4], "formantMode", &formant_mode)) {
     return env.Undefined();
   }
 

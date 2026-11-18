@@ -193,7 +193,7 @@ Napi::Value SonareWrap::SegmentAgglomerative(const Napi::CallbackInfo& info) {
   if (!OptionalIntArg(env, info, 2, "cols", 0, &cols)) return env.Undefined();
   if (!SegmentMatrixInput(env, "segmentAgglomerative", data, rows, cols)) return env.Undefined();
   int k{};
-  if (!OptionalIntArg(env, info, 3, "k", 0, &k)) return env.Undefined();
+  if (!RequiredIntArg(env, info, 3, "k", &k)) return env.Undefined();
   std::string linkage;
   if (!OptionalStringArg(env, info, 4, "linkage", "average", &linkage)) {
     return env.Undefined();
@@ -215,7 +215,7 @@ Napi::Value SonareWrap::SegmentPathEnhance(const Napi::CallbackInfo& info) {
   if (!OptionalIntArg(env, info, 1, "n", 0, &n)) return env.Undefined();
   if (!SegmentMatrixInput(env, "segmentPathEnhance", recurrence, n, n)) return env.Undefined();
   int win{};
-  if (!OptionalIntArg(env, info, 2, "win", 0, &win)) return env.Undefined();
+  if (!RequiredIntArg(env, info, 2, "win", &win)) return env.Undefined();
   int max_ratio{};
   if (!OptionalIntArg(env, info, 3, "maxRatio", 2, &max_ratio)) return env.Undefined();
   int min_ratio{};

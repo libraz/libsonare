@@ -31,7 +31,7 @@ bool ClipFadeFromObject(Napi::Env env, const Napi::Object& obj, SonareProjectCli
       return false;
     }
   } else {
-    fade.curve = Uint32Property(obj, "curve", SONARE_FADE_CURVE_LINEAR);
+    if (!RequiredUint32Property(env, obj, "curve", &fade.curve)) return false;
   }
   if (env.IsExceptionPending()) return false;
   *out = fade;
@@ -60,7 +60,7 @@ bool ParseClipTakes(Napi::Env env, const Napi::Value& value,
     if (!RequiredUint32Property(env, obj, "id", &take.id)) return false;
     take.source_id = Uint32Property(obj, "sourceId", kZeroIsSentinel);
     if (env.IsExceptionPending()) return false;
-    take.source_offset_ppq = DoubleProperty(obj, "sourceOffsetPpq", 0.0);
+    take.source_offset_ppq = DoubleProperty(obj, "sourceOffsetPpq", take.source_offset_ppq);
     std::string name = StringProperty(obj, "name", "");
     if (env.IsExceptionPending()) return false;
     if (!name.empty()) {
@@ -91,9 +91,9 @@ bool ParseClipCompSegments(Napi::Env env, const Napi::Value& value,
     SonareProjectClipCompSegment segment{};
     if (!RequiredDoubleProperty(env, obj, "startPpq", &segment.start_ppq)) return false;
     if (!RequiredDoubleProperty(env, obj, "endPpq", &segment.end_ppq)) return false;
-    segment.take_id = Uint32Property(obj, "takeId", 0);
+    segment.take_id = Uint32Property(obj, "takeId", kZeroIsSentinel);
     if (env.IsExceptionPending()) return false;
-    segment.crossfade_ppq = DoubleProperty(obj, "crossfadePpq", 0.0);
+    segment.crossfade_ppq = DoubleProperty(obj, "crossfadePpq", segment.crossfade_ppq);
     if (env.IsExceptionPending()) return false;
     segments->push_back(segment);
   }
@@ -272,7 +272,7 @@ Napi::Value ProjectWrap::AddClip(const Napi::CallbackInfo& info) {
   Napi::Object obj = info[0].As<Napi::Object>();
   SonareProjectClipDesc desc{};
   desc.track_id = Uint32Property(obj, "trackId", 0);
-  desc.is_midi = BoolProperty(obj, "isMidi", false) ? 1 : 0;
+  desc.is_midi = BoolProperty(obj, "isMidi", desc.is_midi != 0) ? 1 : 0;
   desc.start_ppq = DoubleProperty(obj, "startPpq", 0.0);
   desc.length_ppq = DoubleProperty(obj, "lengthPpq", 0.0);
   desc.source_offset_ppq = DoubleProperty(obj, "sourceOffsetPpq", 0.0);

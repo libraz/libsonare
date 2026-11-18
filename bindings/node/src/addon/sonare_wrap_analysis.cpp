@@ -530,7 +530,7 @@ Napi::Value SonareWrap::AnalyzeBpm(const Napi::CallbackInfo& info) {
   int hop_length{};
   if (!OptionalIntArg(env, info, 6, "hopLength", 512, &hop_length)) return env.Undefined();
   int max_candidates{};
-  if (!OptionalIntArg(env, info, 7, "maxCandidates", 5, &max_candidates)) return env.Undefined();
+  if (!RequiredIntArg(env, info, 7, "maxCandidates", &max_candidates)) return env.Undefined();
 
   SonareBpmAnalysisResult analysis{};
   SonareError err = sonare_analyze_bpm(data, length, sample_rate, bpm_min, bpm_max, start_bpm,
@@ -1010,9 +1010,9 @@ Napi::Value SonareWrap::DetectChords(const Napi::CallbackInfo& info) {
                       &chroma_method))
     return env.Undefined();
   float tuning_cents{};
-  if (!OptionalFloatArg(env, info, 16, "tuningCents", 0.0f, &tuning_cents)) return env.Undefined();
+  if (!RequiredFloatArg(env, info, 16, "tuningCents", &tuning_cents)) return env.Undefined();
   bool tuning_auto{};
-  if (!OptionalBoolArg(env, info, 17, "tuningAuto", true, &tuning_auto)) return env.Undefined();
+  if (!RequiredBoolArg(env, info, 17, "tuningAuto", &tuning_auto)) return env.Undefined();
 
   SonareChordAnalysisResult analysis{};
   SonareChordDetectionOptions options{};
@@ -1101,9 +1101,9 @@ Napi::Value SonareWrap::FunctionalAnalysis(const Napi::CallbackInfo& info) {
                       &chroma_method))
     return env.Undefined();
   float tuning_cents{};
-  if (!OptionalFloatArg(env, info, 16, "tuningCents", 0.0f, &tuning_cents)) return env.Undefined();
+  if (!RequiredFloatArg(env, info, 16, "tuningCents", &tuning_cents)) return env.Undefined();
   bool tuning_auto{};
-  if (!OptionalBoolArg(env, info, 17, "tuningAuto", true, &tuning_auto)) return env.Undefined();
+  if (!RequiredBoolArg(env, info, 17, "tuningAuto", &tuning_auto)) return env.Undefined();
 
   SonareChordDetectionOptions options{};
   options.min_duration_sec = min_duration;

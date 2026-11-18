@@ -474,7 +474,7 @@ Napi::Value RealtimeEngineWrap::PushMidiProgram(const Napi::CallbackInfo& info) 
       !OptionalMidiByteArg(env, info, 1, "group", 0, &group) ||
       !OptionalMidiByteArg(env, info, 2, "channel", 0, &channel) ||
       !OptionalMidiByteArg(env, info, 3, "program", 0, &program) ||
-      !OptionalBoolArg(env, info, 4, "bankValid", false, &bank_valid) ||
+      !RequiredBoolArg(env, info, 4, "bankValid", &bank_valid) ||
       !OptionalMidiByteArg(env, info, 5, "bankMsb", 0, &bank_msb) ||
       !OptionalMidiByteArg(env, info, 6, "bankLsb", 0, &bank_lsb) ||
       !OptionalInt64Arg(env, info, 7, "renderFrame", -1, &deadline)) {
@@ -506,7 +506,7 @@ Napi::Value RealtimeEngineWrap::PushMidiInputProgram(const Napi::CallbackInfo& i
   if (!OptionalMidiByteArg(env, info, 0, "group", 0, &group) ||
       !OptionalMidiByteArg(env, info, 1, "channel", 0, &channel) ||
       !OptionalMidiByteArg(env, info, 2, "program", 0, &program) ||
-      !OptionalBoolArg(env, info, 3, "bankValid", false, &bank_valid) ||
+      !RequiredBoolArg(env, info, 3, "bankValid", &bank_valid) ||
       !OptionalMidiByteArg(env, info, 4, "bankMsb", 0, &bank_msb) ||
       !OptionalMidiByteArg(env, info, 5, "bankLsb", 0, &bank_lsb) ||
       !OptionalInt64Arg(env, info, 6, "offsetInBlockSamples", 0, &port_time)) {

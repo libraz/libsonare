@@ -956,7 +956,7 @@ Napi::Value StreamingRetuneWrap::Prepare(const Napi::CallbackInfo& info) {
   double sample_rate = 0.0;
   int max_block_size = 0;
   if (!OptionalDoubleArg(env, info, 0, "sampleRate", 0.0, &sample_rate) ||
-      !OptionalIntArg(env, info, 1, "maxBlockSize", 0, &max_block_size)) {
+      !RequiredIntArg(env, info, 1, "maxBlockSize", &max_block_size)) {
     return env.Undefined();
   }
   ThrowIfError(env, sonare_streaming_retune_prepare(retune_, sample_rate, max_block_size));

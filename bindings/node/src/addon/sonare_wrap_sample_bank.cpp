@@ -140,7 +140,7 @@ Napi::Value SampleBankWrap::AddSample(const Napi::CallbackInfo& info) {
   Napi::Object obj;
   if (!ReadOptionsBag(env, info[1], "addSample desc", &obj)) return env.Undefined();
   if (!obj.IsEmpty()) {
-    desc.root_key = MidiByteProperty(env, obj, "rootKey", 0);
+    desc.root_key = MidiByteProperty(env, obj, "rootKey", desc.root_key);
     desc.fine_tune_cents = FloatProperty(obj, "fineTuneCents", 0.0f);
     desc.source_rate = DoubleProperty(obj, "sourceRate", 0.0);
     desc.loop_start = Uint32Property(obj, "loopStart", 0u);
@@ -175,13 +175,13 @@ Napi::Value SampleBankWrap::AddZone(const Napi::CallbackInfo& info) {
   if (!ReadOptionsBag(env, info[1], "addZone zone", &obj)) return env.Undefined();
   if (!obj.IsEmpty()) {
     zone.key_lo = MidiByteProperty(env, obj, "keyLo", 0);
-    zone.key_hi = MidiByteProperty(env, obj, "keyHi", 0);
-    zone.vel_lo = MidiByteProperty(env, obj, "velLo", 0);
-    zone.vel_hi = MidiByteProperty(env, obj, "velHi", 0);
+    zone.key_hi = MidiByteProperty(env, obj, "keyHi", zone.key_hi);
+    zone.vel_lo = MidiByteProperty(env, obj, "velLo", zone.vel_lo);
+    zone.vel_hi = MidiByteProperty(env, obj, "velHi", zone.vel_hi);
     zone.sample_index = Uint32Property(obj, "sampleIndex", 0u);
     zone.tune_cents = FloatProperty(obj, "tuneCents", 0.0f);
-    zone.gain = FloatProperty(obj, "gain", 0.0f);
-    zone.pan_units = FloatProperty(obj, "panUnits", 0.0f);
+    zone.gain = FloatProperty(obj, "gain", zone.gain);
+    zone.pan_units = FloatProperty(obj, "panUnits", zone.pan_units);
     if (env.IsExceptionPending()) return env.Undefined();
   }
 

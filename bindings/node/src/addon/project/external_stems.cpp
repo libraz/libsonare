@@ -103,7 +103,7 @@ Napi::Value ProjectWrap::ImportExternalStems(const Napi::CallbackInfo& info) {
     desc.layout = layout;
     desc.planar_samples = stem_planes.data();
     desc.frame_count = static_cast<int64_t>(frame_count);
-    desc.start_frame = Int64Property(stem, "startFrame", 0);
+    desc.start_frame = Int64Property(stem, "startFrame", desc.start_frame);
     descriptors.push_back(desc);
   }
 

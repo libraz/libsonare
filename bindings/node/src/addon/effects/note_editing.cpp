@@ -152,11 +152,11 @@ void ReadNotes(const char* fn, const Napi::Array& js_notes, std::vector<SonareNo
       RequireSpanKey(fn, "note", note, "onsetSample");
       RequireSpanKey(fn, "note", note, "offsetSample");
     }
-    row.onset_sample = Int64Property(note, "onsetSample", 0);
-    row.offset_sample = Int64Property(note, "offsetSample", 0);
-    row.frame_start = IntProperty(note, "frameStart", 0);
-    row.frame_end = IntProperty(note, "frameEnd", 0);
-    row.median_hz = FloatProperty(note, "medianHz", 0.0f);
+    row.onset_sample = Int64Property(note, "onsetSample", row.onset_sample);
+    row.offset_sample = Int64Property(note, "offsetSample", row.offset_sample);
+    row.frame_start = IntProperty(note, "frameStart", row.frame_start);
+    row.frame_end = IntProperty(note, "frameEnd", row.frame_end);
+    row.median_hz = FloatProperty(note, "medianHz", row.median_hz);
     ReadNoteEdit(fn, note, envelopes, &row.edit);
   }
 }
@@ -307,9 +307,9 @@ void ReadPercussiveEventEdit(const char* fn, const Napi::Object& event,
                                std::string(fn) + ": event.edit must be a plain object");
   }
   Napi::Object edit = edit_value.As<Napi::Object>();
-  out->time_offset_samples = Int64Property(edit, "timeOffsetSamples", 0);
-  out->gain_db = FloatProperty(edit, "gainDb", 0.0f);
-  out->muted = BoolProperty(edit, "muted", false) ? 1 : 0;
+  out->time_offset_samples = Int64Property(edit, "timeOffsetSamples", out->time_offset_samples);
+  out->gain_db = FloatProperty(edit, "gainDb", out->gain_db);
+  out->muted = BoolProperty(edit, "muted", out->muted != 0) ? 1 : 0;
 }
 
 /// Reads a JS event array onto the C structs. Only the span and the edit are
@@ -433,8 +433,8 @@ Napi::Value SonareWrap::RenderNotes(const Napi::CallbackInfo& info) {
   float frame_rate = 0.0f;
   if (info[3].IsObject()) {
     Napi::Object opts = info[3].As<Napi::Object>();
-    config.fade_ms = FloatProperty(opts, "fadeMs", 0.0f);
-    config.vibrato_cutoff_hz = FloatProperty(opts, "vibratoCutoffHz", 0.0f);
+    config.fade_ms = FloatProperty(opts, "fadeMs", config.fade_ms);
+    config.vibrato_cutoff_hz = FloatProperty(opts, "vibratoCutoffHz", config.vibrato_cutoff_hz);
     frame_rate = FloatProperty(opts, "frameRate", 0.0f);
     const Napi::Value f0_value = opts.Get("f0Hz");
     if (!f0_value.IsUndefined() && !f0_value.IsNull() && !IsFloat32Array(f0_value)) {

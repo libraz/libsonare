@@ -380,8 +380,7 @@ Napi::Value SonareWrap::MeteringDetectClipping(const Napi::CallbackInfo& info) {
   int sr{};
   if (!RequiredIntArg(env, info, 1, "sampleRate", &sr)) return env.Undefined();
   float threshold{};
-  if (!OptionalFiniteFloatArg(env, info, 2, "threshold", 0.999f, &threshold))
-    return env.Undefined();
+  if (!RequiredFiniteFloatValue(env, info[2], "threshold", &threshold)) return env.Undefined();
   int64_t min_region_value{};
   if (!OptionalInt64Arg(env, info, 3, "minRegionValue", 1, &min_region_value))
     return env.Undefined();
@@ -431,15 +430,15 @@ Napi::Value SonareWrap::MeteringDynamicRange(const Napi::CallbackInfo& info) {
   int sr{};
   if (!RequiredIntArg(env, info, 1, "sampleRate", &sr)) return env.Undefined();
   float window_sec{};
-  if (!OptionalFiniteFloatArg(env, info, 2, "windowSec", 0.0f, &window_sec)) return env.Undefined();
+  if (!RequiredFiniteFloatValue(env, info[2], "windowSec", &window_sec)) return env.Undefined();
   float hop_sec{};
-  if (!OptionalFiniteFloatArg(env, info, 3, "hopSec", 0.0f, &hop_sec)) return env.Undefined();
+  if (!RequiredFiniteFloatValue(env, info[3], "hopSec", &hop_sec)) return env.Undefined();
   // The C ABI treats 0.0 as a literal 0th percentile and a NEGATIVE value as
   // "use the library default", so omitted percentiles pass -1.0f (default).
   float low_p{};
-  if (!OptionalFiniteFloatArg(env, info, 4, "lowP", -1.0f, &low_p)) return env.Undefined();
+  if (!RequiredFiniteFloatValue(env, info[4], "lowP", &low_p)) return env.Undefined();
   float high_p{};
-  if (!OptionalFiniteFloatArg(env, info, 5, "highP", -1.0f, &high_p)) return env.Undefined();
+  if (!RequiredFiniteFloatValue(env, info[5], "highP", &high_p)) return env.Undefined();
   SonareDynamicRangeResult result{};
   SonareError err = sonare_metering_dynamic_range(typed.Data(), typed.ElementLength(), sr,
                                                   window_sec, hop_sec, low_p, high_p, &result);
@@ -928,15 +927,16 @@ Napi::Value SonareWrap::DetectClippingInstance(const Napi::CallbackInfo& info) {
     sonare_node::ThrowHandleClosed(env, "Audio");
     return env.Undefined();
   }
-  float threshold = 0.999f;
-  int64_t min_region_value = 1;
-  if (info.Length() >= 1 && info[0].IsObject()) {
-    Napi::Object opts = info[0].As<Napi::Object>();
-    // threshold's 0.0f is a real value (the library default IS 0.999, not a
-    // sentinel), so read it as a plain fallback rather than ZeroIsSentinel.
-    threshold = FiniteFloatProperty(opts, "threshold", 0.999f);
-    min_region_value = Int64Property(opts, "minRegionSamples", 1);
+  if (info.Length() < 1 || !info[0].IsObject()) {
+    Napi::TypeError::New(env, "expected a detectClipping options object")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
   }
+  Napi::Object opts = info[0].As<Napi::Object>();
+  float threshold{};
+  if (!RequiredFiniteFloatValue(env, opts.Get("threshold"), "threshold", &threshold))
+    return env.Undefined();
+  const int64_t min_region_value = Int64Property(opts, "minRegionSamples", 1);
   if (min_region_value < 0) {
     Napi::RangeError::New(env, "minRegionSamples must be non-negative")
         .ThrowAsJavaScriptException();
@@ -986,10 +986,10 @@ Napi::Value SonareWrap::DynamicRangeInstance(const Napi::CallbackInfo& info) {
   float high_p = -1.0f;
   if (info.Length() >= 1 && info[0].IsObject()) {
     Napi::Object opts = info[0].As<Napi::Object>();
-    window_sec = FiniteFloatProperty(opts, "windowSec", 0.0f);
-    hop_sec = FiniteFloatProperty(opts, "hopSec", 0.0f);
-    low_p = FiniteFloatProperty(opts, "lowPercentile", -1.0f);
-    high_p = FiniteFloatProperty(opts, "highPercentile", -1.0f);
+    window_sec = FiniteFloatProperty(opts, "windowSec", window_sec);
+    hop_sec = FiniteFloatProperty(opts, "hopSec", hop_sec);
+    low_p = FiniteFloatProperty(opts, "lowPercentile", low_p);
+    high_p = FiniteFloatProperty(opts, "highPercentile", high_p);
   }
   SonareDynamicRangeResult result{};
   SonareError err = sonare_audio_dynamic_range(audio_, window_sec, hop_sec, low_p, high_p, &result);
