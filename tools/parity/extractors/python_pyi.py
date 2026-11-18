@@ -102,6 +102,7 @@ def _params_from_args(args: ast.arguments) -> list[Param]:
                 type=ann,
                 enum_values=_enum_values_from_ann(ann),
                 structural=structural,
+                keyword_only=True,
             )
         )
     return params

@@ -1401,15 +1401,22 @@ def _order_drift(c_index, indexed, allow, rep: Report, selected, roles: set[str]
             if s not in selected or key not in indexed.get(s, {}):
                 continue
             ssig = indexed[s][key]
-            s_cfg = [n for n in _config_names(ssig, roles) if n not in dims]
-            declined = _order_not_comparable(c_cfg, s_cfg)
+            # A keyword-only parameter is matched by name, so it has no position on either side.
+            by_name = {p.name for p in ssig.params if p.keyword_only}
+            s_cfg = [n for n in _config_names(ssig, roles) if n not in dims and n not in by_name]
+            c_pos = [n for n in c_cfg if n not in by_name]
+            declined = _order_not_comparable(c_pos, s_cfg)
+            if c_cfg and not c_pos:
+                declined = (
+                    "the facade takes every C config parameter by keyword, which has no order"
+                )
             if declined is not None:
                 rep.decline("order", key, s, declined)
                 continue
             if s == "python" and key in _LIBROSA_MIRRORS:
-                verdict = _mirror_order_verdict(key, c_cfg, s_cfg)
+                verdict = _mirror_order_verdict(key, c_pos, s_cfg)
             else:
-                verdict = _order_verdict(key, c_cfg, s_cfg)
+                verdict = _order_verdict(key, c_pos, s_cfg)
             message = f"config param order/name mismatch vs C for '{key}': C={c_cfg} {s}={s_cfg}"
             if allow.order_ok(key, s, verdict, f"[{s}] {message}") or verdict == AGREED:
                 continue

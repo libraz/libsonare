@@ -309,5 +309,36 @@ def test_matrix_dimensions_agree_whether_the_facade_derives_or_passes_them() -> 
     assert [f.key for f in _order_findings(["s", "n_iter", "n_components"])] == ["decompose"]
 
 
+def _segments_findings(positional: list[str], keyword_only: list[str]) -> list:
+    c = _c("note_segments", "f0_hz")
+    c.functions[0].params = [
+        Param(name=n, raw_name=n) for n in ("f0_hz", "voiced_prob", "voiced", "frame_rate")
+    ]
+    py = Extraction(surface="python")
+    py.functions = [
+        FunctionSig(
+            key="note_segments",
+            surface="python",
+            raw_name="note_segments",
+            params=[Param(name=n, raw_name=n) for n in positional]
+            + [Param(name=n, raw_name=n, keyword_only=True) for n in keyword_only],
+            file="py.pyi",
+            line=1,
+        )
+    ]
+    rep = compare.build_report({"c": c, "python": py}, allowlist_mod.Allowlist(), ["c", "python"])
+    return [f for f in rep.active() if f.category == "order"]
+
+
+def test_a_keyword_only_parameter_has_no_position() -> None:
+    assert _segments_findings(["f0_hz", "frame_rate"], ["voiced", "voiced_prob"]) == []
+    assert [f.key for f in _segments_findings(["frame_rate", "f0_hz"], ["voiced"])] == [
+        "note_segments"
+    ]
+    assert [f.key for f in _segments_findings(["f0_hz", "frame_rate", "voiced"], [])] == [
+        "note_segments"
+    ]
+
+
 if __name__ == "__main__":
     raise SystemExit(_main())

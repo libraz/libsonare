@@ -41,6 +41,8 @@ class Param:
         structural: True when the param is a known structural artifact (an
             options bag, the trailing ``validate`` flag, an out-pointer, length,
             sample-rate-by-convention, ...) that should not be diffed positionally.
+        keyword_only: True when the surface accepts the param by name only
+            (after a Python ``*``), so it has no position to compare.
     """
 
     name: str
@@ -49,6 +51,7 @@ class Param:
     type: str = ""
     enum_values: tuple[str, ...] = ()
     structural: bool = False
+    keyword_only: bool = False
 
 
 @dataclass
