@@ -102,6 +102,7 @@ RULE_SLUGS = (
     "pitch-semitones",
     "type-names",
     "input-types",
+    "one-input-form",
     "aliases-removed",
     "abi-probes",
     "worklet-scope",

@@ -880,6 +880,19 @@ project.setMarker(input);
 '''
 
 [[rule]]
+slug = "one-input-form"
+title = "Each list input takes one item form"
+summary = "An input item that has a public record class is passed as that record, and a mapping in its place raises TypeError (the repair stages, EngineClip, EngineMidiEvent, EngineMarker already work this way); an item with no record class is a snake_case mapping. Each list-of-items input takes exactly one of those two forms: no tuple form and no descriptor mapping beside it."
+[[rule.example]]
+surface = "python"
+before = '''
+engine.set_markers([{"id": 1, "ppq": 0.0, "name": "intro"}])
+'''
+after = '''
+engine.set_markers([EngineMarker(id=1, ppq=0.0, name="intro")])
+'''
+
+[[rule]]
 slug = "aliases-removed"
 title = "Historical aliases are removed"
 summary = "Names kept only for history are deleted, along with fields that never worked (`outputFormat`, `computeMagnitude`) and the public `EXPECTED_PROJECT_ABI_VERSION`. The two clipping detectors both remain and share `clippedSamples` and `clippedRatio`."

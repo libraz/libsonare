@@ -240,6 +240,11 @@ title = "Title of input-types"
 summary = "Summary of input-types."
 
 [[rule]]
+slug = "one-input-form"
+title = "Title of one-input-form"
+summary = "Summary of one-input-form."
+
+[[rule]]
 slug = "aliases-removed"
 title = "Title of aliases-removed"
 summary = "Summary of aliases-removed."
