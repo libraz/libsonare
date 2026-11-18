@@ -6519,6 +6519,21 @@
           "stdout": "empty"
         },
         {
+          "id": "earlier_version",
+          "argv": [
+            "project",
+            "validate",
+            "--in",
+            "{project_earlier}",
+            "--json"
+          ],
+          "exit": 5,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        },
+        {
           "id": "reject_unlisted_frames",
           "argv": [
             "project",
@@ -6577,7 +6592,7 @@
           "placeholder": "project_warning_output",
           "encoding": "utf-8",
           "bytes_key": "bytes",
-          "sha256": "966ed012755915ef361ca575413ed568dc4d4d7038590bacdf52b2e22f9a066c"
+          "sha256": "1b578dcb8d68492242b9f14d3b1c2af9b7cbbc87d3a1b60f42f466bcabe7939e"
         }
       }
     },
@@ -7031,6 +7046,23 @@
           "payload": "custom",
           "artifact": "none",
           "stdout": "json"
+        },
+        {
+          "id": "earlier_preset_version",
+          "argv": [
+            "voice-change",
+            "{audio}",
+            "-o",
+            "{output}",
+            "--preset-json",
+            "{preset_earlier}",
+            "--json"
+          ],
+          "exit": 5,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
         }
       ],
       "artifacts": {
@@ -7038,7 +7070,7 @@
           "placeholder": "voice_change_preset_output",
           "kind": "wav",
           "sample_rate_key": "sample_rate",
-          "sha256": "6a3aa60b3553f18fc6d0e91f84b3dce37a8d22d1b2f814ac075743eb4ae4805f"
+          "sha256": "b5fced3a03da9a7afff7d2334f0c12677af521a595018fdcd167799c33275b27"
         }
       }
     },
@@ -13253,19 +13285,19 @@
           "placeholder": "align_takes_output",
           "encoding": "utf-8",
           "bytes_key": "bytes",
-          "sha256": "06df818b2b075ecc4feeb7a3284d47a399809f15a1ef21120aae841349e21abe"
+          "sha256": "3a9688af5469f4244a46999f357299a0e2aafdde2d90bb9b3d80880369fc2b7c"
         },
         "aligned_project_many": {
           "placeholder": "align_takes_many_output",
           "encoding": "utf-8",
           "bytes_key": "bytes",
-          "sha256": "0b91531dd06e9cdb1350ad87ee4f8e4c24fcc29dcdda4913795d58663ded51a0"
+          "sha256": "cf04cec9ae3c9ec7aff8e98e72c3e696d243feeb9899cb6d0671c23bec708b22"
         },
         "aligned_project_other_rate": {
           "placeholder": "align_takes_other_rate_output",
           "encoding": "utf-8",
           "bytes_key": "bytes",
-          "sha256": "b7ecab4a3c7d7acf2a46a10852e12a9eca2e643d65fe17008e5a384bd8ac98d2"
+          "sha256": "6428dc59292424a048173401f36af25cb4aa466b927f1a5201375134dd0e36be"
         }
       }
     },
@@ -18167,6 +18199,7 @@
       "clean": "{\"version\":7,\"sample_rate\":48000,\"tracks\":[],\"clips\":[]}",
       "warning": "{\"version\":7,\"sample_rate\":48000,\"tracks\":[{\"id\":1,\"name\":\"audio\",\"kind\":0,\"channel_strip_ref\":\"\",\"output_target\":\"\",\"midi_destination_id\":0,\"automation_lanes\":[]}],\"clips\":[{\"id\":1,\"track_id\":1,\"source_id\":99,\"start_ppq\":0,\"length_ppq\":1,\"source_offset_ppq\":0,\"gain\":1,\"fade_in\":{\"length_ppq\":0,\"curve\":0},\"fade_out\":{\"length_ppq\":0,\"curve\":0},\"loop_mode\":0,\"loop_length_ppq\":0,\"warp_ref_id\":0,\"warp_mode\":0}]}",
       "malformed": "{ this is not valid json ",
+      "earlier": "{\"version\":6,\"sample_rate\":48000,\"tracks\":[],\"clips\":[]}",
       "takes": "{\"version\":7,\"sample_rate\":22050,\"sources\":[{\"kind\":0,\"id\":1,\"uri\":\"\",\"channel_count\":1,\"sample_rate_hint\":22050,\"storage_handle_id\":0},{\"kind\":0,\"id\":2,\"uri\":\"\",\"channel_count\":1,\"sample_rate_hint\":22050,\"storage_handle_id\":0}],\"tracks\":[{\"id\":1,\"name\":\"reference\",\"kind\":0,\"channel_strip_ref\":\"\",\"output_target\":\"\",\"midi_destination_id\":0,\"automation_lanes\":[]},{\"id\":2,\"name\":\"take\",\"kind\":0,\"channel_strip_ref\":\"\",\"output_target\":\"\",\"midi_destination_id\":0,\"automation_lanes\":[]}],\"clips\":[{\"id\":1,\"track_id\":1,\"source_id\":1,\"start_ppq\":0,\"length_ppq\":960,\"source_offset_ppq\":0,\"gain\":1,\"fade_in\":{\"length_ppq\":0,\"curve\":0},\"fade_out\":{\"length_ppq\":0,\"curve\":0},\"loop_mode\":0,\"loop_length_ppq\":0,\"warp_ref_id\":0,\"warp_mode\":0},{\"id\":2,\"track_id\":2,\"source_id\":2,\"start_ppq\":0,\"length_ppq\":960,\"source_offset_ppq\":0,\"gain\":1,\"fade_in\":{\"length_ppq\":0,\"curve\":0},\"fade_out\":{\"length_ppq\":0,\"curve\":0},\"loop_mode\":0,\"loop_length_ppq\":0,\"warp_ref_id\":0,\"warp_mode\":0}],\"warp_maps\":[]}",
       "takes_many": "{\"version\":7,\"sample_rate\":22050,\"sources\":[{\"kind\":0,\"id\":3,\"uri\":\"\",\"channel_count\":1,\"sample_rate_hint\":22050,\"storage_handle_id\":0},{\"kind\":0,\"id\":1,\"uri\":\"\",\"channel_count\":1,\"sample_rate_hint\":22050,\"storage_handle_id\":0},{\"kind\":0,\"id\":2,\"uri\":\"\",\"channel_count\":1,\"sample_rate_hint\":22050,\"storage_handle_id\":0}],\"tracks\":[{\"id\":1,\"name\":\"reference\",\"kind\":0,\"channel_strip_ref\":\"\",\"output_target\":\"\",\"midi_destination_id\":0,\"automation_lanes\":[]},{\"id\":2,\"name\":\"take-a\",\"kind\":0,\"channel_strip_ref\":\"\",\"output_target\":\"\",\"midi_destination_id\":0,\"automation_lanes\":[]},{\"id\":3,\"name\":\"take-b\",\"kind\":0,\"channel_strip_ref\":\"\",\"output_target\":\"\",\"midi_destination_id\":0,\"automation_lanes\":[]}],\"clips\":[{\"id\":1,\"track_id\":1,\"source_id\":1,\"start_ppq\":0,\"length_ppq\":960,\"source_offset_ppq\":0,\"gain\":1,\"fade_in\":{\"length_ppq\":0,\"curve\":0},\"fade_out\":{\"length_ppq\":0,\"curve\":0},\"loop_mode\":0,\"loop_length_ppq\":0,\"warp_ref_id\":0,\"warp_mode\":0},{\"id\":2,\"track_id\":2,\"source_id\":3,\"start_ppq\":0,\"length_ppq\":960,\"source_offset_ppq\":0,\"gain\":1,\"fade_in\":{\"length_ppq\":0,\"curve\":0},\"fade_out\":{\"length_ppq\":0,\"curve\":0},\"loop_mode\":0,\"loop_length_ppq\":0,\"warp_ref_id\":0,\"warp_mode\":0},{\"id\":3,\"track_id\":3,\"source_id\":2,\"start_ppq\":0,\"length_ppq\":960,\"source_offset_ppq\":0,\"gain\":1,\"fade_in\":{\"length_ppq\":0,\"curve\":0},\"fade_out\":{\"length_ppq\":0,\"curve\":0},\"loop_mode\":0,\"loop_length_ppq\":0,\"warp_ref_id\":0,\"warp_mode\":0}],\"warp_maps\":[{\"id\":7,\"name\":\"hand-made\",\"anchors\":[{\"warp_sample\":0.0,\"source_sample\":0.0},{\"warp_sample\":100.0,\"source_sample\":120.0}]}]}",
       "takes_single": "{\"version\":7,\"sample_rate\":22050,\"sources\":[{\"kind\":0,\"id\":1,\"uri\":\"\",\"channel_count\":1,\"sample_rate_hint\":22050,\"storage_handle_id\":0}],\"tracks\":[{\"id\":1,\"name\":\"reference\",\"kind\":0,\"channel_strip_ref\":\"\",\"output_target\":\"\",\"midi_destination_id\":0,\"automation_lanes\":[]}],\"clips\":[{\"id\":1,\"track_id\":1,\"source_id\":1,\"start_ppq\":0,\"length_ppq\":960,\"source_offset_ppq\":0,\"gain\":1,\"fade_in\":{\"length_ppq\":0,\"curve\":0},\"fade_out\":{\"length_ppq\":0,\"curve\":0},\"loop_mode\":0,\"loop_length_ppq\":0,\"warp_ref_id\":0,\"warp_mode\":0}],\"warp_maps\":[]}",
@@ -18194,6 +18227,21 @@
         "name": "Invalid",
         "category": "custom",
         "dsp": {}
+      },
+      "earlier": {
+        "schemaVersion": 2,
+        "id": "contract-earlier",
+        "name": "Contract Earlier",
+        "category": "custom",
+        "macros": {
+          "pitch": 0,
+          "formant": 1,
+          "brightness": 0,
+          "space": 0,
+          "intensity": 0.5,
+          "noiseControl": 0,
+          "sibilance": 0
+        }
       },
       "custom": {
         "dsp": {
