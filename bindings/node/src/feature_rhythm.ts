@@ -165,7 +165,7 @@ export interface TempogramRatioRequest {
 export function onsetBacktrack(request: OnsetBacktrackRequest): Int32Array;
 export function onsetBacktrack(...args: unknown[]): Int32Array {
   const r = requestOnly<OnsetBacktrackRequest>('onsetBacktrack', args);
-  return addon.onsetBacktrack(toNativeIndexList(r.events), r.energy);
+  return addon.onsetBacktrack(toNativeIndexList('onsetBacktrack', r.events, 'events'), r.energy);
 }
 
 /**

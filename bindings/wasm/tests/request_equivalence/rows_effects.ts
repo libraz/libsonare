@@ -470,6 +470,7 @@ export const ROWS: Row[] = [
       minNoteMs: 2000,
     },
     invalid: { frameRate: 0 },
+    oneOf: [{ fields: ['f0Hz'], error: 'TypeError: extractNotes: f0Hz must be a Float32Array' }],
     controlBase: { sampleRate: { minNoteMs: undefined } },
   },
   {
@@ -488,6 +489,10 @@ export const ROWS: Row[] = [
       frame: 40,
     },
     invalid: { frame: 0 },
+    oneOf: [
+      { fields: ['f0Hz'], error: 'TypeError: splitNote: f0Hz must be a Float32Array' },
+      { fields: ['index'], error: 'TypeError: splitNote: index must be a number' },
+    ],
   },
   {
     name: 'mergeNotes',
@@ -508,6 +513,11 @@ export const ROWS: Row[] = [
       last: 1,
     },
     invalid: { last: 0 },
+    oneOf: [
+      { fields: ['f0Hz'], error: 'TypeError: mergeNotes: f0Hz must be a Float32Array' },
+      { fields: ['first'], error: 'TypeError: mergeNotes: first must be a number' },
+      { fields: ['last'], error: 'TypeError: mergeNotes: last must be a number' },
+    ],
   },
   {
     name: 'renderNotes',

@@ -178,8 +178,9 @@ export interface Row {
    */
   controlBase?: Record<string, Args>;
   /**
-   * Optional fields of which at least one must be given. The minimal call supplies the first
-   * member of each group, and a call giving none must fail with `error` in every form.
+   * Optional fields of which at least one must be given; a single-member group is a required
+   * field inside the options bag. The minimal call supplies the first member of each group, and
+   * that call without the group's members must fail with `error` in every form.
    */
   oneOf?: { fields: string[]; error: string }[];
 }
@@ -323,6 +324,21 @@ function withFields(specs: Spec[], values: Args, fields: Args): Args {
   return next;
 }
 
+/** `values` without `keys`, each removed from the spread options bag when no parameter owns it. */
+function withoutFields(specs: Spec[], values: Args, keys: string[]): Args {
+  const next: Args = { ...values };
+  const spread = specs.find((spec) => spec.spread);
+  for (const key of keys) {
+    if (specs.some((spec) => !spec.spread && spec.name === key) || spread === undefined) {
+      delete next[key];
+    } else if (next[spread.name] !== undefined) {
+      const { [key]: _, ...rest } = next[spread.name] as Args;
+      next[spread.name] = rest;
+    }
+  }
+  return next;
+}
+
 /** A field's value in the row, read from the spread options bag when no parameter owns it. */
 function fieldValue(specs: Spec[], values: Args, key: string): unknown {
   const spread = specs.find((spec) => spec.spread);
@@ -413,10 +429,14 @@ export function describeRows(rows: Row[]): void {
     const hasPositional = row.form !== 'requestOnly';
 
     for (const group of groups) {
-      it(`refuses a call giving none of ${group.fields.join(' | ')}`, async () => {
+      it(`refuses the minimal call without ${group.fields.join(' | ')}`, async () => {
         const forms = hasPositional ? (['request', 'positional'] as const) : (['request'] as const);
         for (const form of forms) {
-          expect(await run(row, specs, required, form)).toEqual({ error: group.error });
+          expect(
+            await run(row, specs, withoutFields(specs, requiredOnly, group.fields), form),
+          ).toEqual({
+            error: group.error,
+          });
         }
       });
     }

@@ -46,6 +46,9 @@ function assertNoteTrack(
   request: ExtractNotesRequest | NoteSetRequest,
 ): Float32Array | undefined {
   assertAudioInput(fnName, request.samples, request.sampleRate, request);
+  if (!(request.f0Hz instanceof Float32Array)) {
+    throw new TypeError(`${fnName}: f0Hz must be a Float32Array`);
+  }
   assertFiniteScalar(fnName, request.frameRate, 'frameRate');
   const voicedF32 = request.voiced == null ? undefined : toVoicedFloat32(fnName, request.voiced);
   assertPitchTrackLengths(fnName, request.f0Hz, request.voiced, request.voicedProb);
@@ -632,6 +635,7 @@ export function splitNote(...args: unknown[]): NoteObject[] {
   const frame = hasFrame
     ? (request.frame as number)
     : Math.round((request.frameSec as number) * request.frameRate);
+  assertFloatValue('splitNote', request.index, 'index');
   const notes = Array.isArray(request.notes)
     ? resolveEntryTimes('splitNote', request.notes, 'notes', request.sampleRate, false)
     : request.notes;
@@ -698,6 +702,8 @@ export function mergeNotes(
 export function mergeNotes(...args: unknown[]): NoteObject[] {
   const request = sampleOneShot<MergeNotesRequest>('mergeNotes', args);
   const voicedF32 = assertNoteTrack('mergeNotes', request);
+  assertFloatValue('mergeNotes', request.first, 'first');
+  assertFloatValue('mergeNotes', request.last, 'last');
   const notes = Array.isArray(request.notes)
     ? resolveEntryTimes('mergeNotes', request.notes, 'notes', request.sampleRate, false)
     : request.notes;

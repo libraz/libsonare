@@ -273,6 +273,12 @@ export const ROWS: Row[] = [
       alignZeros: false,
     },
     invalid: { intervals: [0] },
+    oneOf: [
+      {
+        fields: ['intervals'],
+        error: 'TypeError: remix: intervals must be an Int32Array or an array of numbers',
+      },
+    ],
     inert: { sampleRate: 'intervals are in samples' },
   },
   {
@@ -287,6 +293,13 @@ export const ROWS: Row[] = [
       alignZeros: false,
     },
     invalid: { intervals: [0] },
+    oneOf: [
+      {
+        fields: ['intervals'],
+        error:
+          'TypeError: remixAlignedIntervals: intervals must be an Int32Array or an array of numbers',
+      },
+    ],
     inert: { sampleRate: 'intervals are in samples' },
   },
   {

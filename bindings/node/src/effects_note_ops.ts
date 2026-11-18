@@ -227,6 +227,9 @@ function assertNoteTrackRequest(
   request: ExtractNotesRequest,
 ): Int32Array | undefined {
   assertAudioInput(fnName, request.samples, request.sampleRate, request);
+  if (!(request.f0Hz instanceof Float32Array)) {
+    throw new TypeError(`${fnName}: f0Hz must be a Float32Array`);
+  }
   assertFiniteScalar(fnName, request.frameRate, 'frameRate');
   if (request.voiced == null && request.voicedProb == null) {
     throw new TypeError(`${fnName}: one of voiced or voicedProb is required`);
@@ -626,6 +629,7 @@ export function splitNote(...args: unknown[]): NoteObject[] {
   if (!Array.isArray(notes)) {
     throw new TypeError('splitNote: notes must be an array');
   }
+  assertFloatValue('splitNote', index, 'index');
   assertNoteSetEntries('splitNote', notes);
   const nativeNotes = resolveEntryTimes('splitNote', notes, 'notes', sampleRate, false);
   const split: NoteObject[] = addon.splitNote(
@@ -711,6 +715,8 @@ export function mergeNotes(...args: unknown[]): NoteObject[] {
   if (!Array.isArray(notes)) {
     throw new TypeError('mergeNotes: notes must be an array');
   }
+  assertFloatValue('mergeNotes', first, 'first');
+  assertFloatValue('mergeNotes', last, 'last');
   assertNoteSetEntries('mergeNotes', notes);
   const nativeNotes = resolveEntryTimes('mergeNotes', notes, 'notes', sampleRate, false);
   const merged: NoteObject[] = addon.mergeNotes(

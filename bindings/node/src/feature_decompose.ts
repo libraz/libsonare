@@ -299,7 +299,7 @@ export function segmentSubsegment(...args: unknown[]): Int32Array {
     r.data.data,
     r.data.rows,
     r.data.cols,
-    toNativeIndexList(r.boundaries),
+    toNativeIndexList('segmentSubsegment', r.boundaries, 'boundaries'),
     r.nSegments ?? 4,
   );
 }
@@ -545,7 +545,7 @@ export function remix(...args: unknown[]): Float32Array {
   const alignZeros = resolveAlignZeros('remix', request.alignZeros);
   return addon.remix(
     request.samples,
-    toNativeIndexList(request.intervals),
+    toNativeIndexList('remix', request.intervals, 'intervals'),
     request.sampleRate,
     alignZeros,
   );
@@ -576,7 +576,7 @@ export function remixAlignedIntervals(...args: unknown[]): Int32Array {
   const alignZeros = resolveAlignZeros('remixAlignedIntervals', request.alignZeros);
   return addon.remixAlignedIntervals(
     request.samples,
-    toNativeIndexList(request.intervals),
+    toNativeIndexList('remixAlignedIntervals', request.intervals, 'intervals'),
     request.sampleRate,
     alignZeros,
   );

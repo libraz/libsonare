@@ -25,6 +25,7 @@ import {
   assertPositiveFloatValue,
   assertPositiveInteger,
   assertSampleRate,
+  assertString,
   requestOnly,
   sampleOneShot,
 } from './validation.js';
@@ -256,6 +257,7 @@ export function masteringApplyProcessor<P extends SoloProcessor>(
 ): MasteringResult;
 export function masteringApplyProcessor(...args: unknown[]): MasteringResult {
   const r = sampleOneShot<MasteringApplyProcessorRequest>('masteringApplyProcessor', args);
+  assertString('masteringApplyProcessor', r.processor, 'processor');
   assertAudioInput('masteringApplyProcessor', r.samples, r.sampleRate, r);
   const result = addon.masteringProcess(
     r.processor,

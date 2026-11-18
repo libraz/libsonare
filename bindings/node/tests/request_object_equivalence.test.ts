@@ -150,8 +150,9 @@ interface Row {
    */
   controlBase?: Record<string, Args>;
   /**
-   * Optional fields of which at least one must be given. The minimal call supplies the first
-   * member of each group, and a call giving none must fail with `error` in every form.
+   * Optional fields of which at least one must be given; a single-member group is a required
+   * field inside the options bag. The minimal call supplies the first member of each group, and
+   * that call without the group's members must fail with `error` in every form.
    */
   oneOf?: { fields: string[]; error: string }[];
 }
@@ -292,6 +293,21 @@ function withFields(specs: Spec[], values: Args, fields: Args): Args {
 /** The row's values with `invalid` applied. */
 function withInvalid(row: Row, specs: Spec[]): Args {
   return withFields(specs, row.values, row.invalid);
+}
+
+/** `values` without `keys`, each removed from the spread options bag when no parameter owns it. */
+function withoutFields(specs: Spec[], values: Args, keys: string[]): Args {
+  const next: Args = { ...values };
+  const spread = specs.find((spec) => spec.spread);
+  for (const key of keys) {
+    if (specs.some((spec) => !spec.spread && spec.name === key) || spread === undefined) {
+      delete next[key];
+    } else if (next[spread.name] !== undefined) {
+      const { [key]: _, ...rest } = next[spread.name] as Args;
+      next[spread.name] = rest;
+    }
+  }
+  return next;
 }
 
 /** A field's value in the row, read from the spread options bag when no parameter owns it. */
@@ -461,8 +477,7 @@ const ROWS: Row[] = [
   {
     name: 'chordFunctionalAnalysis',
     fn: sonare.chordFunctionalAnalysis,
-    // keyRoot is required, so the options travel whole in the required-only calls.
-    params: 'samples sampleRate ...options',
+    params: 'samples sampleRate ...options?',
     values: {
       samples: SIG,
       sampleRate: ALT_SR,
@@ -477,6 +492,9 @@ const ROWS: Row[] = [
       },
     },
     invalid: { sampleRate: 0 },
+    oneOf: [
+      { fields: ['keyRoot'], error: 'TypeError: chordFunctionalAnalysis: keyRoot is required' },
+    ],
   },
   {
     name: 'detectAcoustic',
@@ -677,32 +695,45 @@ const ROWS: Row[] = [
   {
     name: 'remix',
     fn: sonare.remix,
-    params: 'samples sampleRate ...options',
+    params: 'samples sampleRate ...options?',
     values: {
       samples: SIG,
       sampleRate: ALT_SR,
       options: { intervals: [10000, 15001, 0, 5001], alignZeros: false },
     },
     invalid: { intervals: [0] },
+    oneOf: [
+      {
+        fields: ['intervals'],
+        error: 'TypeError: remix: intervals must be an Int32Array or an array of numbers',
+      },
+    ],
     inert: { sampleRate: 'intervals are in samples' },
   },
   {
     name: 'remixAlignedIntervals',
     fn: sonare.remixAlignedIntervals,
-    params: 'samples sampleRate ...options',
+    params: 'samples sampleRate ...options?',
     values: {
       samples: SIG,
       sampleRate: ALT_SR,
       options: { intervals: [10000, 15001, 0, 5001], alignZeros: false },
     },
     invalid: { intervals: [0] },
+    oneOf: [
+      {
+        fields: ['intervals'],
+        error:
+          'TypeError: remixAlignedIntervals: intervals must be an Int32Array or an array of numbers',
+      },
+    ],
     inert: { sampleRate: 'intervals are in samples' },
   },
   // effects_spectral.ts / effects_timepitch.ts
   {
     name: 'spectralEdit',
     fn: sonare.spectralEdit,
-    params: 'samples sampleRate ...options',
+    params: 'samples sampleRate ...options?',
     values: {
       samples: SIG,
       sampleRate: SR,
@@ -712,46 +743,72 @@ const ROWS: Row[] = [
       },
     },
     invalid: { sampleRate: 0 },
+    oneOf: [{ fields: ['ops'], error: 'TypeError: spectralEdit: ops is required' }],
   },
   {
     name: 'timeStretch',
     fn: sonare.timeStretch,
-    params: 'samples sampleRate ...options',
+    params: 'samples sampleRate ...options?',
     values: {
       samples: SIG,
       sampleRate: SR,
       options: { speedRatio: 1.25, nFft: 1024, hopLength: 256 },
     },
     invalid: { speedRatio: 0 },
+    oneOf: [
+      { fields: ['speedRatio'], error: 'TypeError: timeStretch: speedRatio must be a number' },
+    ],
   },
   {
     name: 'pitchShift',
     fn: sonare.pitchShift,
-    params: 'samples sampleRate ...options',
+    params: 'samples sampleRate ...options?',
     values: {
       samples: SIG,
       sampleRate: SR,
       options: { pitchSemitones: 2, nFft: 1024, hopLength: 256 },
     },
     invalid: { sampleRate: 0 },
+    oneOf: [
+      {
+        fields: ['pitchSemitones'],
+        error: 'TypeError: pitchShift: pitchSemitones must be a number',
+      },
+    ],
   },
   {
     name: 'pitchCorrectToMidi',
     fn: sonare.pitchCorrectToMidi,
-    params: 'samples sampleRate ...options',
+    params: 'samples sampleRate ...options?',
     values: { samples: SIG, sampleRate: ALT_SR, options: { currentMidi: 57, targetMidi: 59 } },
     invalid: { sampleRate: 0 },
+    oneOf: [
+      {
+        fields: ['currentMidi'],
+        error: 'TypeError: pitchCorrectToMidi: currentMidi must be a number',
+      },
+      {
+        fields: ['targetMidi'],
+        error: 'TypeError: pitchCorrectToMidi: targetMidi must be a number',
+      },
+    ],
   },
   {
     name: 'pitchCorrectTimevarying',
     fn: sonare.pitchCorrectTimevarying,
-    params: 'samples sampleRate ...options',
+    params: 'samples sampleRate ...options?',
     values: {
       samples: SIG,
       sampleRate: ALT_SR,
       options: { f0Hz: F0, hopLength: 256, targetMidi: 59, retuneAmount: 0.5 },
     },
     invalid: { sampleRate: 0 },
+    oneOf: [
+      {
+        fields: ['f0Hz'],
+        error: 'TypeError: pitchCorrectTimevarying: f0Hz must be a Float32Array',
+      },
+    ],
   },
   // feature_framing.ts / feature_units.ts
   {
@@ -806,9 +863,13 @@ const ROWS: Row[] = [
   {
     name: 'frameSignal',
     fn: sonare.frameSignal,
-    params: 'samples sampleRate ...options',
+    params: 'samples sampleRate ...options?',
     values: { samples: SIG, sampleRate: SR, options: { frameLength: 1024, hopLength: 256 } },
     invalid: { hopLength: 0 },
+    oneOf: [
+      { fields: ['frameLength'], error: 'RangeError: frameSignal: frameLength must be an integer' },
+      { fields: ['hopLength'], error: 'RangeError: frameSignal: hopLength must be an integer' },
+    ],
   },
   {
     name: 'fixLength',
@@ -994,13 +1055,16 @@ const ROWS: Row[] = [
   {
     name: 'phaseVocoder',
     fn: sonare.phaseVocoder,
-    params: 'samples sampleRate ...options',
+    params: 'samples sampleRate ...options?',
     values: {
       samples: SIG,
       sampleRate: SR,
       options: { speedRatio: 1.25, nFft: 1024, hopLength: 256 },
     },
     invalid: { speedRatio: 0 },
+    oneOf: [
+      { fields: ['speedRatio'], error: 'TypeError: phaseVocoder: speedRatio must be a number' },
+    ],
   },
   // feature_loudness.ts
   {
@@ -1583,13 +1647,19 @@ const ROWS: Row[] = [
   {
     name: 'masteringApplyProcessor',
     fn: sonare.masteringApplyProcessor,
-    params: 'samples sampleRate ...options',
+    params: 'samples sampleRate ...options?',
     values: {
       samples: SIG,
       sampleRate: ALT_SR,
       options: { processor: 'dynamics.compressor', params: { ratio: 4, thresholdDb: -30 } },
     },
     invalid: { processor: 'no.such' },
+    oneOf: [
+      {
+        fields: ['processor'],
+        error: 'TypeError: masteringApplyProcessor: processor must be a string',
+      },
+    ],
   },
   {
     name: 'masteringApplyProcessorStereo',
@@ -1761,7 +1831,7 @@ const ROWS: Row[] = [
   {
     name: 'extractNotes',
     fn: sonare.extractNotes,
-    params: 'samples sampleRate ...options',
+    params: 'samples sampleRate ...options?',
     values: {
       samples: TONE,
       sampleRate: SR,
@@ -1774,33 +1844,69 @@ const ROWS: Row[] = [
       },
     },
     invalid: { frameRate: -1 },
+    oneOf: [
+      { fields: ['f0Hz'], error: 'TypeError: extractNotes: f0Hz must be a Float32Array' },
+      {
+        fields: ['frameRate'],
+        error: 'RangeError: extractNotes: frameRate must be a finite number',
+      },
+      {
+        fields: ['voicedProb', 'voiced'],
+        error: 'TypeError: extractNotes: one of voiced or voicedProb is required',
+      },
+    ],
   },
   {
     name: 'splitNote',
     fn: sonare.splitNote,
-    params: 'samples sampleRate ...options',
+    params: 'samples sampleRate ...options?',
     values: {
       samples: TONE,
       sampleRate: SR,
       options: { ...NOTE_TRACK, notes: NOTE_SET, index: 3, frame: 40, referenceHz: 432 },
     },
     invalid: { index: -1 },
+    oneOf: [
+      { fields: ['f0Hz'], error: 'TypeError: splitNote: f0Hz must be a Float32Array' },
+      { fields: ['frameRate'], error: 'RangeError: splitNote: frameRate must be a finite number' },
+      {
+        fields: ['voicedProb', 'voiced'],
+        error: 'TypeError: splitNote: one of voiced or voicedProb is required',
+      },
+      { fields: ['notes'], error: 'TypeError: splitNote: notes must be an array' },
+      { fields: ['index'], error: 'TypeError: splitNote: index must be a number' },
+      {
+        fields: ['frame', 'frameSec'],
+        error: 'RangeError: splitNote: give exactly one of frame or frameSec',
+      },
+    ],
   },
   {
     name: 'mergeNotes',
     fn: sonare.mergeNotes,
-    params: 'samples sampleRate ...options',
+    params: 'samples sampleRate ...options?',
     values: {
       samples: TONE,
       sampleRate: SR,
       options: { ...NOTE_TRACK, notes: NOTE_SET, first: 0, last: 1, referenceHz: 432 },
     },
     invalid: { first: 1 },
+    oneOf: [
+      { fields: ['f0Hz'], error: 'TypeError: mergeNotes: f0Hz must be a Float32Array' },
+      { fields: ['frameRate'], error: 'RangeError: mergeNotes: frameRate must be a finite number' },
+      {
+        fields: ['voicedProb', 'voiced'],
+        error: 'TypeError: mergeNotes: one of voiced or voicedProb is required',
+      },
+      { fields: ['notes'], error: 'TypeError: mergeNotes: notes must be an array' },
+      { fields: ['first'], error: 'TypeError: mergeNotes: first must be a number' },
+      { fields: ['last'], error: 'TypeError: mergeNotes: last must be a number' },
+    ],
   },
   {
     name: 'renderNotes',
     fn: sonare.renderNotes,
-    params: 'samples sampleRate ...options',
+    params: 'samples sampleRate ...options?',
     values: {
       samples: TONE,
       sampleRate: SR,
@@ -1810,6 +1916,7 @@ const ROWS: Row[] = [
       },
     },
     invalid: { notes: 'none' },
+    oneOf: [{ fields: ['notes'], error: 'TypeError: renderNotes: notes must be an array' }],
   },
   {
     name: 'extractPercussiveEvents',
@@ -1825,7 +1932,7 @@ const ROWS: Row[] = [
   {
     name: 'renderPercussiveEvents',
     fn: sonare.renderPercussiveEvents,
-    params: 'samples sampleRate ...options',
+    params: 'samples sampleRate ...options?',
     values: {
       samples: SIG,
       sampleRate: SR,
@@ -1838,6 +1945,9 @@ const ROWS: Row[] = [
       },
     },
     invalid: { events: 'none' },
+    oneOf: [
+      { fields: ['events'], error: 'TypeError: renderPercussiveEvents: events must be an array' },
+    ],
   },
   // repair
   {
@@ -2216,11 +2326,15 @@ describe('request-object equivalence', () => {
     );
 
     for (const group of groups) {
-      it(`refuses a call giving none of ${group.fields.join(' | ')}`, async () => {
+      it(`refuses the minimal call without ${group.fields.join(' | ')}`, async () => {
         const forms =
           row.requestOnly === true ? (['request'] as const) : (['request', 'positional'] as const);
         for (const form of forms) {
-          expect(await run(row, specs, required, form)).toEqual({ error: group.error });
+          expect(
+            await run(row, specs, withoutFields(specs, requiredOnly, group.fields), form),
+          ).toEqual({
+            error: group.error,
+          });
         }
       });
     }

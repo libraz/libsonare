@@ -397,7 +397,7 @@ export function fixFrames(request: FixFramesRequest): Int32Array;
 export function fixFrames(...args: unknown[]): Int32Array {
   const r = requestOnly<FixFramesRequest>('fixFrames', args);
   return addon.fixFrames(
-    toNativeIndexList(r.frames),
+    toNativeIndexList('fixFrames', r.frames, 'frames'),
     r.xMin ?? 0,
     resolveOptionalNonNegative('fixFrames', r.xMax, 'xMax'),
     r.pad ?? true,

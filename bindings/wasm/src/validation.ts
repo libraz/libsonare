@@ -515,7 +515,7 @@ export function toInt32Array(
     !Number.isInteger((values as ArrayLike<number>).length) ||
     (values as ArrayLike<number>).length < 0
   ) {
-    throw new TypeError(`${fnName}: ${argName} must be an Int32Array or number[]`);
+    throw new TypeError(`${fnName}: ${argName} must be an Int32Array or an array of numbers`);
   }
   const out = new Int32Array(values.length);
   for (let i = 0; i < values.length; i++) {

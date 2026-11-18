@@ -44,12 +44,16 @@ export function assertMatrix2D(
 }
 
 /** The index list shapes the addon reads (`Int32Array` or a plain array); other array-likes are copied. */
-export function toNativeIndexList(values: Int32Array | ArrayLike<number>): Int32Array | number[] {
+export function toNativeIndexList(
+  fnName: string,
+  values: Int32Array | ArrayLike<number>,
+  argName: string,
+): Int32Array | number[] {
   if (values instanceof Int32Array || Array.isArray(values)) {
     return values;
   }
   if (typeof values !== 'object' || values === null || typeof values.length !== 'number') {
-    throw new TypeError('expected an Int32Array or an array of numbers');
+    throw new TypeError(`${fnName}: ${argName} must be an Int32Array or an array of numbers`);
   }
   return Array.from(values);
 }

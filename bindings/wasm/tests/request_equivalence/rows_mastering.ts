@@ -80,6 +80,12 @@ export const ROWS: Row[] = [
       params: { ratio: 4, thresholdDb: -30 },
     },
     invalid: { processor: 'no.such' },
+    oneOf: [
+      {
+        fields: ['processor'],
+        error: 'TypeError: masteringApplyProcessor: processor must be a string',
+      },
+    ],
   },
   {
     name: 'masteringApplyProcessorStereo',

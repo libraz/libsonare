@@ -379,6 +379,13 @@ export function requireBoolean(fnName: string, value: unknown, argName: string):
   return value;
 }
 
+/** A string argument the addon reads; anything else is a `TypeError`, never the addon's usage text. */
+export function assertString(fnName: string, value: unknown, argName: string): void {
+  if (typeof value !== 'string') {
+    throw new TypeError(`${fnName}: ${argName} must be a string`);
+  }
+}
+
 /** Integer strictly greater than zero, up to the native `int` ceiling. */
 export function assertPositiveInteger(fnName: string, value: number, argName: string): void {
   // Two refusals, not one: 512.7 is positive, so reporting it as non-positive

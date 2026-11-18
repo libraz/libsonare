@@ -864,6 +864,13 @@ describe('Node and WASM validators answer one boundary corpus identically', () =
       [fn, 1, 'validate'],
       [fn, 'true', 'validate'],
     ],
+    assertString: [
+      [fn, 'dynamics.compressor', 'processor'],
+      [fn, '', 'processor'],
+      [fn, undefined, 'processor'],
+      [fn, null, 'processor'],
+      [fn, 1, 'processor'],
+    ],
   };
 
   type Answer = { value: unknown } | { error: string; message: string; code: unknown };
