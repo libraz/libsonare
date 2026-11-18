@@ -945,8 +945,8 @@ export function cyclicTempogram(...args: unknown[]): Matrix2D {
     r.sampleRate ?? 22050,
     r.hopLength ?? 512,
     r.winLength ?? 384,
-    r.bpmMin ?? 60.0,
-    r.nBins ?? 60,
+    r.bpmMin,
+    r.nBins,
   );
   return toMatrix2DByRows(native.data, native.nBins);
 }
@@ -959,8 +959,8 @@ export function plp(...args: unknown[]): Float32Array {
     r.onsetEnvelope,
     r.sampleRate ?? 22050,
     r.hopLength ?? 512,
-    r.bpmMin ?? 60.0,
-    r.bpmMax ?? 200.0,
+    r.bpmMin,
+    r.bpmMax,
     r.winLength ?? 384,
   );
 }

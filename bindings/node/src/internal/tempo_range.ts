@@ -1,13 +1,11 @@
 import type { TempoRangeOptions } from '../analysis.js';
 import { assertFrequencyBounds } from '../validation.js';
 
-const DEFAULT_BPM_MIN = 60;
-const DEFAULT_BPM_MAX = 200;
-
-/** The search range the addon requires, defaults filled in and checked as one pair. */
-export function tempoRange(fnName: string, options: TempoRangeOptions): [number, number] {
-  const bpmMin = options.bpmMin ?? DEFAULT_BPM_MIN;
-  const bpmMax = options.bpmMax ?? DEFAULT_BPM_MAX;
-  assertFrequencyBounds(fnName, bpmMin, bpmMax, 'bpmMin', 'bpmMax');
-  return [bpmMin, bpmMax];
+/** The search range as given, checked as one pair; an omitted bound is left for the addon to fill with the library default. */
+export function tempoRange(
+  fnName: string,
+  options: TempoRangeOptions,
+): [number | undefined, number | undefined] {
+  assertFrequencyBounds(fnName, options.bpmMin, options.bpmMax, 'bpmMin', 'bpmMax');
+  return [options.bpmMin, options.bpmMax];
 }

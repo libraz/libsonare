@@ -11368,7 +11368,7 @@ entry = "./analysis"
 [[entry]]
 kind = "field"
 old = "AnalyzeBpmOptions.bpmMax"
-changed = "absent = 60 / 200 BPM (was 30 / 300), passed by the facade"
+changed = "absent = 60 / 200 BPM (was 30 / 300), the library default"
 domain = "analysis"
 rule = "tempo-range"
 test = "bindings/wasm/tests/surface/analysis-music.test.ts::analyzeBpm searches 60-200 BPM"
@@ -11376,7 +11376,7 @@ test = "bindings/wasm/tests/surface/analysis-music.test.ts::analyzeBpm searches 
 [[entry]]
 kind = "field"
 old = "AnalyzeBpmOptions.bpmMax"
-changed = "absent = 60 / 200 BPM (was 30 / 300), passed by the facade"
+changed = "absent = 60 / 200 BPM (was 30 / 300), the library default"
 domain = "analysis"
 rule = "tempo-range"
 entry = "./analysis"
@@ -11385,7 +11385,7 @@ test = "bindings/wasm/tests/surface/analysis-music.test.ts::analyzeBpm searches 
 [[entry]]
 kind = "field"
 old = "AnalyzeBpmOptions.bpmMin"
-changed = "absent = 60 / 200 BPM (was 30 / 300), passed by the facade"
+changed = "absent = 60 / 200 BPM (was 30 / 300), the library default"
 domain = "analysis"
 rule = "tempo-range"
 test = "bindings/wasm/tests/surface/analysis-music.test.ts::analyzeBpm searches 60-200 BPM"
@@ -11393,7 +11393,7 @@ test = "bindings/wasm/tests/surface/analysis-music.test.ts::analyzeBpm searches 
 [[entry]]
 kind = "field"
 old = "AnalyzeBpmOptions.bpmMin"
-changed = "absent = 60 / 200 BPM (was 30 / 300), passed by the facade"
+changed = "absent = 60 / 200 BPM (was 30 / 300), the library default"
 domain = "analysis"
 rule = "tempo-range"
 entry = "./analysis"
@@ -11402,7 +11402,7 @@ test = "bindings/wasm/tests/surface/analysis-music.test.ts::analyzeBpm searches 
 [[entry]]
 kind = "field"
 old = "AnalyzeBpmRequest.bpmMax"
-changed = "absent = 60 / 200 BPM (was 30 / 300), passed by the facade"
+changed = "absent = 60 / 200 BPM (was 30 / 300), the library default"
 domain = "analysis"
 rule = "tempo-range"
 test = "bindings/wasm/tests/surface/analysis-music.test.ts::analyzeBpm searches 60-200 BPM"
@@ -11410,7 +11410,7 @@ test = "bindings/wasm/tests/surface/analysis-music.test.ts::analyzeBpm searches 
 [[entry]]
 kind = "field"
 old = "AnalyzeBpmRequest.bpmMax"
-changed = "absent = 60 / 200 BPM (was 30 / 300), passed by the facade"
+changed = "absent = 60 / 200 BPM (was 30 / 300), the library default"
 domain = "analysis"
 rule = "tempo-range"
 entry = "./analysis"
@@ -11419,7 +11419,7 @@ test = "bindings/wasm/tests/surface/analysis-music.test.ts::analyzeBpm searches 
 [[entry]]
 kind = "field"
 old = "AnalyzeBpmRequest.bpmMin"
-changed = "absent = 60 / 200 BPM (was 30 / 300), passed by the facade"
+changed = "absent = 60 / 200 BPM (was 30 / 300), the library default"
 domain = "analysis"
 rule = "tempo-range"
 test = "bindings/wasm/tests/surface/analysis-music.test.ts::analyzeBpm searches 60-200 BPM"
@@ -11427,7 +11427,7 @@ test = "bindings/wasm/tests/surface/analysis-music.test.ts::analyzeBpm searches 
 [[entry]]
 kind = "field"
 old = "AnalyzeBpmRequest.bpmMin"
-changed = "absent = 60 / 200 BPM (was 30 / 300), passed by the facade"
+changed = "absent = 60 / 200 BPM (was 30 / 300), the library default"
 domain = "analysis"
 rule = "tempo-range"
 entry = "./analysis"

@@ -5769,7 +5769,7 @@ test = "bindings/node/tests/surface/analysis-music.test.ts::uses the renamed fie
 [[entry]]
 kind = "field"
 old = "AnalyzeBpmOptions.bpmMax"
-changed = "absent = 60 / 200 BPM (was 30 / 300), passed by the facade"
+changed = "absent = 60 / 200 BPM (was 30 / 300), the library default"
 domain = "analysis"
 rule = "tempo-range"
 test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
@@ -5777,7 +5777,7 @@ test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted s
 [[entry]]
 kind = "field"
 old = "AnalyzeBpmOptions.bpmMin"
-changed = "absent = 60 / 200 BPM (was 30 / 300), passed by the facade"
+changed = "absent = 60 / 200 BPM (was 30 / 300), the library default"
 domain = "analysis"
 rule = "tempo-range"
 test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
@@ -5785,7 +5785,7 @@ test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted s
 [[entry]]
 kind = "field"
 old = "AnalyzeBpmRequest.bpmMax"
-changed = "absent = 60 / 200 BPM (was 30 / 300), passed by the facade"
+changed = "absent = 60 / 200 BPM (was 30 / 300), the library default"
 domain = "analysis"
 rule = "tempo-range"
 test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
@@ -5793,7 +5793,7 @@ test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted s
 [[entry]]
 kind = "field"
 old = "AnalyzeBpmRequest.bpmMin"
-changed = "absent = 60 / 200 BPM (was 30 / 300), passed by the facade"
+changed = "absent = 60 / 200 BPM (was 30 / 300), the library default"
 domain = "analysis"
 rule = "tempo-range"
 test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"

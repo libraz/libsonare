@@ -1143,9 +1143,9 @@ export function analyzeBpm(...args: unknown[]): BpmAnalysisResult {
   return addon.analyzeBpm(
     request.samples,
     request.sampleRate,
-    request.bpmMin ?? 60.0,
-    request.bpmMax ?? 200.0,
-    request.startBpm ?? 120.0,
+    request.bpmMin,
+    request.bpmMax,
+    request.startBpm,
     fft.nFft,
     fft.hopLength,
     request.maxCandidates ?? 5,
@@ -1165,9 +1165,9 @@ export function analyzeRhythm(...args: unknown[]): RhythmResult {
   return addon.analyzeRhythm(
     request.samples,
     request.sampleRate,
-    request.bpmMin ?? 60.0,
-    request.bpmMax ?? 200.0,
-    request.startBpm ?? 120.0,
+    request.bpmMin,
+    request.bpmMax,
+    request.startBpm,
     fft.nFft,
     fft.hopLength,
   );

@@ -244,14 +244,16 @@ export function cyclicTempogram(...args: unknown[]): Matrix2D {
   assertSampleRate('cyclicTempogram', sampleRate);
   assertPositiveInteger('cyclicTempogram', r.hopLength ?? 512, 'hopLength');
   assertPositiveInteger('cyclicTempogram', r.winLength ?? 384, 'winLength');
-  assertPositiveInteger('cyclicTempogram', r.nBins ?? 60, 'nBins');
+  if (r.nBins !== undefined) {
+    assertPositiveInteger('cyclicTempogram', r.nBins, 'nBins');
+  }
   const out = addon.cyclicTempogram(
     r.onsetEnvelope,
     sampleRate,
     r.hopLength ?? 512,
     r.winLength ?? 384,
-    r.bpmMin ?? 60,
-    r.nBins ?? 60,
+    r.bpmMin,
+    r.nBins,
   );
   return toMatrix2D(out.data, out.nBins, out.nFrames);
 }
@@ -268,8 +270,8 @@ export function plp(...args: unknown[]): Float32Array {
     r.onsetEnvelope,
     sampleRate,
     r.hopLength ?? 512,
-    r.bpmMin ?? 60,
-    r.bpmMax ?? 200,
+    r.bpmMin,
+    r.bpmMax,
     r.winLength ?? 384,
   );
 }

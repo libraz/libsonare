@@ -215,15 +215,13 @@ export interface TempoRangeOptions {
   bpmMax?: number;
 }
 
-const DEFAULT_BPM_MIN = 60;
-const DEFAULT_BPM_MAX = 200;
-
-/** The search range the module requires, defaults filled in and checked as one pair. */
-function tempoRange(fnName: string, request: TempoRangeOptions): [number, number] {
-  const bpmMin = request.bpmMin ?? DEFAULT_BPM_MIN;
-  const bpmMax = request.bpmMax ?? DEFAULT_BPM_MAX;
-  assertFrequencyBounds(fnName, bpmMin, bpmMax, 'bpmMin', 'bpmMax');
-  return [bpmMin, bpmMax];
+/** The search range as given, checked as one pair; an omitted bound is left for the module to fill with the library default. */
+function tempoRange(
+  fnName: string,
+  request: TempoRangeOptions,
+): [number | undefined, number | undefined] {
+  assertFrequencyBounds(fnName, request.bpmMin, request.bpmMax, 'bpmMin', 'bpmMax');
+  return [request.bpmMin, request.bpmMax];
 }
 
 /** Canonical request form for {@link detectBpm}. */
@@ -1155,9 +1153,9 @@ export function analyzeBpm(...args: unknown[]): BpmAnalysisResult {
   return requireModule().analyzeBpm(
     request.samples,
     request.sampleRate,
-    request.bpmMin ?? 60.0,
-    request.bpmMax ?? 200.0,
-    request.startBpm ?? 120.0,
+    request.bpmMin,
+    request.bpmMax,
+    request.startBpm,
     request.nFft ?? 2048,
     request.hopLength ?? 512,
     request.maxCandidates ?? 5,
@@ -1179,9 +1177,9 @@ export function analyzeRhythm(...args: unknown[]): RhythmResult {
   const result = requireModule().analyzeRhythm(
     request.samples,
     request.sampleRate,
-    request.bpmMin ?? 60.0,
-    request.bpmMax ?? 200.0,
-    request.startBpm ?? 120.0,
+    request.bpmMin,
+    request.bpmMax,
+    request.startBpm,
     request.nFft ?? 2048,
     request.hopLength ?? 512,
   );
