@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <limits>
 #include <string>
+#include <utility>
 #include <vector>
 
 #if defined(SONARE_WITH_PLAYBACK)
@@ -220,6 +221,54 @@ TEST_CASE("playback renderer input channel count follows auto switches", "[playb
   CHECK(out_channels == 0);
 
   sonare_playback_renderer_destroy(renderer);
+}
+
+TEST_CASE("playback renderer reports the widest input it accepts", "[playback][capi]") {
+  int widest = -1;
+  SonarePlaybackRenderer* automatic = create_renderer(speakers_5_1_config());
+  CHECK(sonare_playback_renderer_max_input_channels(automatic, &widest) == SONARE_OK);
+  CHECK(widest == 8);
+  sonare_playback_renderer_destroy(automatic);
+
+  SonarePlaybackRenderer* fixed = create_renderer(
+      R"({"input": {"layout": "mono"}, "target": {"kind": "speakers", "layout": "5.1"}})");
+  CHECK(sonare_playback_renderer_max_input_channels(fixed, &widest) == SONARE_OK);
+  CHECK(widest == 1);
+  sonare_playback_renderer_destroy(fixed);
+
+  widest = -1;
+  CHECK(sonare_playback_renderer_max_input_channels(nullptr, &widest) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(widest == 0);
+}
+
+TEST_CASE("a playback config reports its output channel count without a renderer",
+          "[playback][capi]") {
+  for (const auto& [config, expected] :
+       {std::pair<std::string, int>{headphones_config(), 2},
+        std::pair<std::string, int>{speakers_5_1_config(), 6},
+        std::pair<std::string, int>{R"({"target": {"kind": "speakers", "layout": "7.1"}})", 8}}) {
+    CAPTURE(config);
+    int from_config = -1;
+    REQUIRE(sonare_playback_config_num_output_channels(config.c_str(), &from_config) == SONARE_OK);
+    CHECK(from_config == expected);
+    SonarePlaybackRenderer* renderer = create_renderer(config);
+    int from_renderer = 0;
+    REQUIRE(sonare_playback_renderer_num_output_channels(renderer, &from_renderer) == SONARE_OK);
+    CHECK(from_config == from_renderer);
+    sonare_playback_renderer_destroy(renderer);
+  }
+
+  const char* bad = R"({"target": {"kind": "speakers"}})";
+  SonarePlaybackRenderer* refused = nullptr;
+  const SonareError create_code =
+      sonare_playback_renderer_create_json(bad, nullptr, 48000, 0, &refused);
+  CHECK(create_code != SONARE_OK);
+  int out = -1;
+  CHECK(sonare_playback_config_num_output_channels(bad, &out) == create_code);
+  CHECK(out == 0);
+  CHECK(sonare_playback_config_num_output_channels(nullptr, &out) ==
+        SONARE_ERROR_INVALID_PARAMETER);
 }
 
 TEST_CASE("playback renderer process_planar renders and rejects without advancing state",

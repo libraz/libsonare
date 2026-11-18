@@ -247,6 +247,13 @@ class PlaybackRendererWasm {
     return out;
   }
 
+  int maxInputChannels() const {
+    int out = 0;
+    checkPlayback(sonare_playback_renderer_max_input_channels(renderer_.get(), &out),
+                  "PlaybackRenderer.maxInputChannels");
+    return out;
+  }
+
   int outputChannels() const { return out_channels_; }
 
   std::string diagnosticsJson() const {
@@ -407,6 +414,14 @@ val renderPlayback(val samples, val channels_val, val sample_rate_val,
   return out;
 }
 
+int playbackConfigOutputChannels(const std::string& config_json) {
+  int out = 0;
+  checkPlayback(
+      sonare_playback_config_num_output_channels(wasmCString(config_json, "configJson"), &out),
+      "playbackConfigOutputChannels");
+  return out;
+}
+
 }  // namespace
 
 void registerPlaybackBindings() {
@@ -422,6 +437,7 @@ void registerPlaybackBindings() {
       .function("latencySamples", &PlaybackRendererWasm::latencySamples)
       .function("maxBlockSize", &PlaybackRendererWasm::maxBlockSize)
       .function("inputChannels", &PlaybackRendererWasm::inputChannels)
+      .function("maxInputChannels", &PlaybackRendererWasm::maxInputChannels)
       .function("outputChannels", &PlaybackRendererWasm::outputChannels)
       .function("diagnosticsJson", &PlaybackRendererWasm::diagnosticsJson)
       .function("nonFiniteDiscardCount", &PlaybackRendererWasm::nonFiniteDiscardCount)
@@ -436,6 +452,7 @@ void registerPlaybackBindings() {
   function("createPlaybackRenderer", &createPlaybackRenderer, allow_raw_pointers());
   function("createPlaybackLoudnessMeter", &createPlaybackLoudnessMeter, allow_raw_pointers());
   function("renderPlayback", &renderPlayback, allow_raw_pointers());
+  function("playbackConfigOutputChannels", &playbackConfigOutputChannels);
 }
 
 #endif  // SONARE_WITH_PLAYBACK

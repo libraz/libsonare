@@ -93,6 +93,9 @@ class PlaybackRenderer {
 
   int latency_samples() const noexcept;
   int input_channel_count() const noexcept;
+  /// Largest input channel count a process call accepts: the fixed layout's
+  /// count, or the widest layout `auto` switches to.
+  int max_input_channel_count() const noexcept;
   int output_channel_count() const noexcept;
   int sample_rate() const noexcept;
   int max_block_size() const noexcept;

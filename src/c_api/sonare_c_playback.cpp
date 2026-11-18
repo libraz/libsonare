@@ -171,6 +171,40 @@ SonareError sonare_playback_renderer_num_input_channels(const SonarePlaybackRend
 #endif
 }
 
+SonareError sonare_playback_renderer_max_input_channels(const SonarePlaybackRenderer* renderer,
+                                                        int* out) {
+  SONARE_C_API_ENTRY;
+  if (out) *out = 0;
+#if defined(SONARE_WITH_PLAYBACK)
+  if (!renderer || !out) {
+    set_last_error_static(SONARE_ERROR_INVALID_PARAMETER, "renderer and out must not be NULL");
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  *out = renderer->renderer->max_input_channel_count();
+  return SONARE_OK;
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(renderer, out);
+#endif
+}
+
+SonareError sonare_playback_config_num_output_channels(const char* config_json, int* out) {
+  SONARE_C_API_ENTRY;
+  if (out) *out = 0;
+#if defined(SONARE_WITH_PLAYBACK)
+  if (!config_json || !out) {
+    set_last_error_static(SONARE_ERROR_INVALID_PARAMETER, "config_json and out must not be NULL");
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  SONARE_C_TRY
+  const playback::RendererConfig config = playback::parse_renderer_config(config_json);
+  *out = playback::output_channel_count(config.prepare);
+  return SONARE_OK;
+  SONARE_C_CATCH
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(config_json, out);
+#endif
+}
+
 SonareError sonare_playback_renderer_num_output_channels(const SonarePlaybackRenderer* renderer,
                                                          int* out) {
   SONARE_C_API_ENTRY;

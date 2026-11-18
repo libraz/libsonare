@@ -550,6 +550,12 @@ int PlaybackRenderer::input_channel_count() const noexcept {
       ->input_channel_count();
 }
 
+int PlaybackRenderer::max_input_channel_count() const noexcept {
+  int widest = 0;
+  for (const auto& fe : impl_->front_ends) widest = std::max(widest, fe->input_channel_count());
+  return widest;
+}
+
 int PlaybackRenderer::output_channel_count() const noexcept { return impl_->out_count; }
 
 int PlaybackRenderer::sample_rate() const noexcept { return impl_->sample_rate; }

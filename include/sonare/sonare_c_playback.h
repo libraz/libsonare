@@ -110,9 +110,18 @@ SonareError sonare_playback_renderer_set_head_orientation(SonarePlaybackRenderer
 ///          most recent non-empty `_process_*` call (2 before the first call).
 SonareError sonare_playback_renderer_num_input_channels(const SonarePlaybackRenderer* renderer,
                                                         int* out);
+/// @brief Largest @p in_channels the process entries accept: the fixed input
+///        layout's channel count, or 8 under `input.layout = "auto"`.
+///        @p out is written 0 first.
+SonareError sonare_playback_renderer_max_input_channels(const SonarePlaybackRenderer* renderer,
+                                                        int* out);
 /// @brief Channel count of the output target.
 SonareError sonare_playback_renderer_num_output_channels(const SonarePlaybackRenderer* renderer,
                                                          int* out);
+/// @brief Output channel count a renderer config document produces, without
+///        creating a renderer. @p out is written 0 first; the document is read
+///        and refused exactly as @ref sonare_playback_renderer_create_json reads it.
+SonareError sonare_playback_config_num_output_channels(const char* config_json, int* out);
 /// @brief Renders one planar block.
 /// @details @p frames must not exceed the max block size; 0 is a no-op that
 ///          never switches the input layout. With a fixed input layout
