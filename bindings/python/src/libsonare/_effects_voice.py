@@ -57,17 +57,17 @@ _VOICE_CHANGE_STRUCT_VERSION = 1
 _FORMANT_MODES = {"relative": 0, "absolute": 1}
 _REALTIME_CONFIG_STRUCT_VERSION = 2
 
-# Enum-valued POD fields: token spellings in the order of the C ordinals.
+# Enum-valued POD fields: snake_case spellings in the order of the C ordinals.
 _ENUM_FIELD_NAMES: dict[str, tuple[str, ...]] = {
     "formant_mode": ("relative", "absolute"),
-    "voice_engine": ("grain", "psola"),
+    "voice_engine_engine": ("grain", "psola"),
     "pitch_correction_mode": ("off", "auto", "robot"),
-    "pitch_correction_scale": ("major", "naturalMinor", "chromatic"),
+    "pitch_correction_scale": ("major", "natural_minor", "chromatic"),
     "vocoder_carrier_source": ("internal", "external"),
     "vocoder_carrier_wave": ("saw", "pulse", "ensemble"),
-    "character_type": ("none", "megaphone", "radio", "bbdChorus", "strobo"),
-    "reverb_variation": ("reverb", "echo", "tempoDelay", "dubEcho"),
-    "reverb_variation_division": ("quarter", "eighth", "dottedEighth", "sixteenth"),
+    "character_type": ("none", "megaphone", "radio", "bbd_chorus", "strobo"),
+    "reverb_variation_variation": ("reverb", "echo", "tempo_delay", "dub_echo"),
+    "reverb_variation_division": ("quarter", "eighth", "dotted_eighth", "sixteenth"),
     "midi_release": ("hold", "input"),
 }
 _HARMONY_STEP_COUNT = 3
@@ -164,7 +164,7 @@ class RealtimeVoiceChanger:
     def __init__(
         self,
         sample_rate: int,
-        preset: str | Mapping[str, object] = "neutralMonitor",
+        preset: str | Mapping[str, object] = "neutral-monitor",
         *,
         max_block_size: int = 128,
         channels: int = 1,
@@ -539,7 +539,7 @@ class RealtimeVoiceChanger:
 def voice_change_realtime(
     samples: Sequence[float] | list[float] | np.ndarray,
     sample_rate: int,
-    preset: str | Mapping[str, object] = "neutralMonitor",
+    preset: str | Mapping[str, object] = "neutral-monitor",
     *,
     channels: int = 1,
 ) -> np.ndarray:
@@ -626,18 +626,18 @@ def validate_realtime_voice_changer_preset_json(json_text: str) -> dict[str, obj
 
 
 _VC_PRESET_NAME_TO_ORDINAL: dict[str, int] = {
-    "neutralMonitor": SONARE_VC_PRESET_NEUTRAL_MONITOR,
-    "brightIdol": SONARE_VC_PRESET_BRIGHT_IDOL,
-    "softWhisper": SONARE_VC_PRESET_SOFT_WHISPER,
-    "deepNarrator": SONARE_VC_PRESET_DEEP_NARRATOR,
-    "robotMascot": SONARE_VC_PRESET_ROBOT_MASCOT,
-    "darkVillain": SONARE_VC_PRESET_DARK_VILLAIN,
-    "hardTune": SONARE_VC_PRESET_HARD_TUNE,
-    "robotMonotone": SONARE_VC_PRESET_ROBOT_MONOTONE,
-    "choirHarmony": SONARE_VC_PRESET_CHOIR_HARMONY,
-    "vocoderStrings": SONARE_VC_PRESET_VOCODER_STRINGS,
+    "neutral-monitor": SONARE_VC_PRESET_NEUTRAL_MONITOR,
+    "bright-idol": SONARE_VC_PRESET_BRIGHT_IDOL,
+    "soft-whisper": SONARE_VC_PRESET_SOFT_WHISPER,
+    "deep-narrator": SONARE_VC_PRESET_DEEP_NARRATOR,
+    "robot-mascot": SONARE_VC_PRESET_ROBOT_MASCOT,
+    "dark-villain": SONARE_VC_PRESET_DARK_VILLAIN,
+    "hard-tune": SONARE_VC_PRESET_HARD_TUNE,
+    "robot-monotone": SONARE_VC_PRESET_ROBOT_MONOTONE,
+    "choir-harmony": SONARE_VC_PRESET_CHOIR_HARMONY,
+    "vocoder-strings": SONARE_VC_PRESET_VOCODER_STRINGS,
     "megaphone": SONARE_VC_PRESET_MEGAPHONE,
-    "radioVoice": SONARE_VC_PRESET_RADIO_VOICE,
+    "radio-voice": SONARE_VC_PRESET_RADIO_VOICE,
 }
 
 
@@ -648,7 +648,7 @@ def voice_character_preset_id(preset: int) -> str | None:
         preset: A ``SONARE_VC_PRESET_*`` enum value.
 
     Returns:
-        The canonical preset id (e.g. ``"brightIdol"``) or ``None`` when the
+        The canonical preset id (e.g. ``"bright-idol"``) or ``None`` when the
         ordinal is out of range. This is the reverse of
         :data:`_VC_PRESET_NAME_TO_ORDINAL`.
     """
@@ -660,7 +660,7 @@ def voice_character_preset_id(preset: int) -> str | None:
 
 @functools.lru_cache(maxsize=1)
 def _neutral_monitor_defaults() -> dict[str, Any]:
-    """Field values of the built-in ``neutralMonitor`` preset.
+    """Field values of the built-in ``neutral-monitor`` preset.
 
     These are the single source of truth for the default-constructed
     :class:`RealtimeVoiceChangerConfig`, so that ``RealtimeVoiceChangerConfig()``
@@ -700,7 +700,7 @@ class RealtimeVoiceChangerConfig:
     """Flat mirror of :class:`SonareRealtimeVoiceChangerConfig`.
 
     Field order matches the C POD struct in ``sonare_c.h``. The default value of
-    every field is seeded from the built-in ``neutralMonitor`` preset (fetched
+    every field is seeded from the built-in ``neutral-monitor`` preset (fetched
     from the library once and cached), so a default-constructed instance is a
     usable neutral voice rather than a bypassed-gate / flat-EQ configuration.
     An out-of-range entry is refused by
@@ -713,13 +713,13 @@ class RealtimeVoiceChangerConfig:
     with a different mode raises. In absolute mode ``formant_factor`` is the
     formant shift relative to the input, ``formant_amount`` is ignored, one
     analysis frame of latency is added, and a configuration whose warp
-    ``formant_factor / 2**(retune_pitch_semitones / 12)`` leaves [0.55, 1.65] is
+    ``formant_factor / 2**(retune_semitones / 12)`` leaves [0.55, 1.65] is
     refused, naming the reachable ``formant_factor`` range, the same way.
 
-    The enum-valued fields hold snake_case spellings: ``voice_engine``
+    The enum-valued fields hold snake_case spellings: ``voice_engine_engine``
     (``"grain"`` or ``"psola"``, fixed at creation), ``pitch_correction_mode``,
     ``pitch_correction_scale``, ``vocoder_carrier_source``,
-    ``vocoder_carrier_wave``, ``character_type``, ``reverb_variation``,
+    ``vocoder_carrier_wave``, ``character_type``, ``reverb_variation_variation``,
     ``reverb_variation_division`` and ``midi_release``. ``harmony_steps`` holds
     exactly three scale-degree offsets. An unknown spelling raises
     ``SonareValueError``.
@@ -731,12 +731,12 @@ class RealtimeVoiceChangerConfig:
     input_gain_db: float = dataclasses.field(default_factory=_neutral_default("input_gain_db"))
     output_gain_db: float = dataclasses.field(default_factory=_neutral_default("output_gain_db"))
     wet_mix: float = dataclasses.field(default_factory=_neutral_default("wet_mix"))
-    retune_pitch_semitones: float = dataclasses.field(
-        default_factory=_neutral_default("retune_pitch_semitones")
+    retune_semitones: float = dataclasses.field(
+        default_factory=_neutral_default("retune_semitones")
     )
     retune_mix: float = dataclasses.field(default_factory=_neutral_default("retune_mix"))
-    retune_grain_size_samples: int = dataclasses.field(
-        default_factory=_neutral_default("retune_grain_size_samples")
+    retune_grain_size: int = dataclasses.field(
+        default_factory=_neutral_default("retune_grain_size")
     )
     formant_factor: float = dataclasses.field(default_factory=_neutral_default("formant_factor"))
     formant_amount: float = dataclasses.field(default_factory=_neutral_default("formant_amount"))
@@ -746,7 +746,7 @@ class RealtimeVoiceChangerConfig:
     )
     formant_nasal: float = dataclasses.field(default_factory=_neutral_default("formant_nasal"))
     formant_mode: str = dataclasses.field(default_factory=_neutral_default("formant_mode"))
-    eq_high_pass_hz: float = dataclasses.field(default_factory=_neutral_default("eq_high_pass_hz"))
+    eq_highpass_hz: float = dataclasses.field(default_factory=_neutral_default("eq_highpass_hz"))
     eq_body_db: float = dataclasses.field(default_factory=_neutral_default("eq_body_db"))
     eq_presence_db: float = dataclasses.field(default_factory=_neutral_default("eq_presence_db"))
     eq_air_db: float = dataclasses.field(default_factory=_neutral_default("eq_air_db"))
@@ -798,7 +798,9 @@ class RealtimeVoiceChangerConfig:
     limiter_isp_ceiling_dbtp: float = dataclasses.field(
         default_factory=_neutral_default("limiter_isp_ceiling_dbtp")
     )
-    voice_engine: str = dataclasses.field(default_factory=_neutral_default("voice_engine"))
+    voice_engine_engine: str = dataclasses.field(
+        default_factory=_neutral_default("voice_engine_engine")
+    )
     voice_engine_f0_min_hz: float = dataclasses.field(
         default_factory=_neutral_default("voice_engine_f0_min_hz")
     )
@@ -860,7 +862,9 @@ class RealtimeVoiceChangerConfig:
         default_factory=_neutral_default("character_amount")
     )
     character_tone: float = dataclasses.field(default_factory=_neutral_default("character_tone"))
-    reverb_variation: str = dataclasses.field(default_factory=_neutral_default("reverb_variation"))
+    reverb_variation_variation: str = dataclasses.field(
+        default_factory=_neutral_default("reverb_variation_variation")
+    )
     reverb_variation_delay_ms: float = dataclasses.field(
         default_factory=_neutral_default("reverb_variation_delay_ms")
     )
@@ -936,7 +940,7 @@ def realtime_voice_changer_preset_config(preset: str | int) -> RealtimeVoiceChan
     """Return the canonical (normalised) config for a built-in preset.
 
     Skips the JSON round-trip that ``realtime_voice_changer_preset_json``
-    incurs. Accepts either the canonical preset id (``"neutralMonitor"``,
+    incurs. Accepts either the canonical preset id (``"neutral-monitor"``,
     ...) or the integer ordinal from :data:`SONARE_VC_PRESET_NEUTRAL_MONITOR`
     and friends.
 
@@ -970,17 +974,6 @@ def realtime_voice_changer_preset_pod(preset: str | int) -> RealtimeVoiceChanger
     return realtime_voice_changer_preset_config(preset)
 
 
-def _retune_grain_size_request(grain_size_samples: int | None) -> int:
-    """Map the caller's grain size to the C argument; ``None`` is automatic (C ``0``)."""
-    if grain_size_samples is None:
-        return 0
-    # Narrowed rather than coerced: int() would take 0.5 as the automatic 0.
-    value = _narrow_int(grain_size_samples, "grain_size_samples", _C_INT_MIN, _C_INT_MAX)
-    if value == 0:
-        raise SonareValueError("grain_size_samples must not be 0; omit it for automatic")
-    return value
-
-
 class StreamingRetune:
     """Block-by-block mono pitch shifter (grain overlap-add).
 
@@ -988,13 +981,10 @@ class StreamingRetune:
     across :meth:`process_mono` calls, so consecutive blocks of a live stream
     join without a seam. Call :meth:`prepare` before processing.
 
-    A non-finite ``pitch_semitones`` / ``mix`` is rejected rather than substituted,
+    A non-finite ``semitones`` / ``mix`` is rejected rather than substituted,
     and a block holding a non-finite sample is rejected rather than zeroed:
     either would otherwise enter the grain history and persist into every
     later block with nothing to tell the caller its input had been altered.
-
-    ``grain_size_samples=None`` derives the grain from the sample rate at
-    :meth:`prepare`; an explicit ``0`` is refused rather than read as that.
     """
 
     # Declared on the class so close() reads it even when __init__ never ran.
@@ -1003,30 +993,29 @@ class StreamingRetune:
     def __init__(
         self,
         *,
-        pitch_semitones: float = 0.0,
+        semitones: float = 0.0,
         mix: float = 1.0,
-        grain_size_samples: int | None = None,
+        grain_size: int = 0,
     ) -> None:
         # Set first so the non-finite rejection below leaves a valid attribute
         # for __del__/close() instead of raising AttributeError over it.
         self._handle = ctypes.c_void_p()
         self._lib = _get_lib()
-        requested_grain_size = _retune_grain_size_request(grain_size_samples)
         handle = self._lib.sonare_streaming_retune_create(
-            _to_c_float(pitch_semitones, "pitch_semitones"),
+            _to_c_float(semitones, "semitones"),
             _to_c_float(mix, "mix"),
-            requested_grain_size,
+            _to_c_int(grain_size, "grain_size"),
         )
         if not handle:
             raise _last_error(int(ErrorCode.INVALID_PARAMETER), "failed to create StreamingRetune")
         self._handle = ctypes.c_void_p(handle)
         # The grain size the caller last ASKED for. ``config()`` reports the
-        # EFFECTIVE grain once prepared, so seeding an omitted ``grain_size_samples``
+        # EFFECTIVE grain once prepared, so seeding an omitted ``grain_size``
         # from it froze the 0 "derive from the sample rate" sentinel into a
         # literal and a re-``prepare`` at another rate kept the first rate's
         # grain. The core draws the same distinction internally, but it is not
         # readable across the C ABI.
-        self._requested_grain_size = requested_grain_size
+        self._requested_grain_size = grain_size
 
     def close(self) -> None:
         if self._handle:
@@ -1063,63 +1052,60 @@ class StreamingRetune:
     def set_config(
         self,
         *,
-        pitch_semitones: float | None = None,
+        semitones: float | None = None,
         mix: float | None = None,
-        grain_size_samples: int | None = None,
+        grain_size: int | None = None,
     ) -> None:
         """Update the live controls; omitted keywords keep their current value.
 
-        ``grain_size_samples`` is structural: it is remembered and applied by the next
+        ``grain_size`` is structural: it is remembered and applied by the next
         :meth:`prepare`, and :meth:`config` keeps reporting the effective grain
-        until then. An omitted ``grain_size_samples`` keeps the last REQUESTED
-        value, including the automatic one, so re-preparing at another sample rate
+        until then. An omitted ``grain_size`` keeps the last REQUESTED value,
+        including the ``0`` sentinel, so re-preparing at another sample rate
         re-derives the grain instead of freezing the first rate's answer.
         """
         current = self.config()
+        # Narrowed rather than coerced: int() takes 0.5 as the 0 this field reads
+        # as "derive the grain from the sample rate".
         requested_grain_size = (
             self._requested_grain_size
-            if grain_size_samples is None
-            else _retune_grain_size_request(grain_size_samples)
+            if grain_size is None
+            else _narrow_int(grain_size, "grain_size", _C_INT_MIN, _C_INT_MAX)
         )
         _check(
             self._lib.sonare_streaming_retune_set_config(
                 self._require_handle(),
-                _to_c_float(
-                    current["pitch_semitones"] if pitch_semitones is None else pitch_semitones,
-                    "pitch_semitones",
-                ),
+                _to_c_float(current["semitones"] if semitones is None else semitones, "semitones"),
                 _to_c_float(current["mix"] if mix is None else mix, "mix"),
-                requested_grain_size,
+                _to_c_int(requested_grain_size, "requested_grain_size"),
             )
         )
         self._requested_grain_size = requested_grain_size
 
     def config(self) -> dict[str, float | int]:
-        """The applied controls; ``grain_size_samples`` is the effective one."""
-        pitch_semitones = ctypes.c_float()
+        """The applied controls; ``grain_size`` is the effective one."""
+        semitones = ctypes.c_float()
         mix = ctypes.c_float()
-        grain_size_samples = ctypes.c_int()
+        grain_size = ctypes.c_int()
         _check(
             self._lib.sonare_streaming_retune_config(
                 self._require_handle(),
-                ctypes.byref(pitch_semitones),
+                ctypes.byref(semitones),
                 ctypes.byref(mix),
-                ctypes.byref(grain_size_samples),
+                ctypes.byref(grain_size),
             )
         )
         return {
-            "pitch_semitones": float(pitch_semitones.value),
+            "semitones": float(semitones.value),
             "mix": float(mix.value),
-            "grain_size_samples": int(grain_size_samples.value),
+            "grain_size": int(grain_size.value),
         }
 
-    def grain_size_samples(self) -> int:
+    def grain_size(self) -> int:
         """Resolved grain length in samples; 0 before :meth:`prepare`."""
         out = ctypes.c_int()
         _check(
-            self._lib.sonare_streaming_retune_grain_size_samples(
-                self._require_handle(), ctypes.byref(out)
-            )
+            self._lib.sonare_streaming_retune_grain_size(self._require_handle(), ctypes.byref(out))
         )
         return int(out.value)
 

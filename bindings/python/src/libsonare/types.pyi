@@ -901,7 +901,7 @@ class RoomEstimate:
     def rt60Bands(self) -> list[float]: ...
 
 MaterialPresetName: TypeAlias = Literal["none", "concrete", "wood", "curtain", "carpet", "glass"]
-AcousticModeName: TypeAlias = Literal["auto", "blind", "impulseResponse"]
+AcousticModeName: TypeAlias = Literal["auto", "blind", "impulse_response"]
 
 class RoomGeometry(TypedDict):
     length_m: float

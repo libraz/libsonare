@@ -27,7 +27,6 @@ would disagree with the repair it claims to describe.
 
 from __future__ import annotations
 
-import math
 from collections.abc import Callable
 from typing import Any
 
@@ -211,12 +210,8 @@ class TestDetectClipping:
         )
         assert other_solver == default
 
-        lenient = libsonare.mastering_repair_detect_clipping(
-            clipped, SR, clip_threshold_db=20.0 * math.log10(0.5)
-        )
-        strict = libsonare.mastering_repair_detect_clipping(
-            clipped, SR, clip_threshold_db=20.0 * math.log10(0.999)
-        )
+        lenient = libsonare.mastering_repair_detect_clipping(clipped, SR, clip_threshold=0.5)
+        strict = libsonare.mastering_repair_detect_clipping(clipped, SR, clip_threshold=0.999)
         assert lenient.sample_count > strict.sample_count
 
     def test_clean_material_measures_zero(self) -> None:
@@ -227,7 +222,7 @@ class TestDetectClipping:
         assert detected.sample_fraction == 0.0
 
     def test_flat_top_fires_on_clipping_attenuated_after_the_fact(self) -> None:
-        """A tone clipped then turned down leaves nothing at ``clip_threshold_db``.
+        """A tone clipped then turned down leaves nothing at ``clip_threshold``.
 
         The threshold-based fields therefore read clean, while the flat-top
         fields still see the runs of bit-identical samples the clipping left
@@ -428,10 +423,10 @@ class TestDetectTrimRange:
         burst = _burst()
 
         assert (
-            libsonare.mastering_repair_detect_trim_range(burst, SR, threshold_db=-60.0).first
+            libsonare.mastering_repair_detect_trim_range(burst, SR, threshold=0.001).first
             == BURST_SPAN[0]
         )
-        above_the_burst = libsonare.mastering_repair_detect_trim_range(burst, SR, threshold_db=0.0)
+        above_the_burst = libsonare.mastering_repair_detect_trim_range(burst, SR, threshold=1.0)
         assert (above_the_burst.first, above_the_burst.last_exclusive) == (N, N)
 
     def test_refuses_a_negative_padding_count_before_it_becomes_a_size_t(self) -> None:
@@ -617,12 +612,7 @@ class TestDefaultsPath:
     def test_detect_clipping(self) -> None:
         clipped = _clipped()
         assert libsonare.mastering_repair_detect_clipping(
-            clipped,
-            SR,
-            clip_threshold_db=20.0 * math.log10(0.98),
-            lpc_order=36,
-            iterations=2,
-            lpc_blend=0.65,
+            clipped, SR, clip_threshold=0.98, lpc_order=36, iterations=2, lpc_blend=0.65
         ) == libsonare.mastering_repair_detect_clipping(clipped, SR)
 
     def test_detect_crackle(self) -> None:
@@ -670,7 +660,7 @@ class TestDefaultsPath:
         spelled = libsonare.mastering_repair_detect_trim_range(
             burst,
             SR,
-            threshold_db=-60.0,
+            threshold=0.001,
             padding_samples=0,
             mode="peak",
             gate_lufs=-60.0,
@@ -685,7 +675,7 @@ class TestDefaultsPath:
             burst,
             silence,
             SR,
-            threshold_db=-60.0,
+            threshold=0.001,
             padding_samples=0,
             mode="peak",
             gate_lufs=-60.0,

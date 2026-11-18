@@ -662,7 +662,7 @@ def test_planar_stereo_rank_rejection_names_the_side(bad_side: str) -> None:
 
     with (
         libsonare.RealtimeVoiceChanger(
-            48000, "brightIdol", max_block_size=128, channels=2
+            48000, "bright-idol", max_block_size=128, channels=2
         ) as changer,
         pytest.raises(SonareValueError) as excinfo,
     ):

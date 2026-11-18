@@ -183,9 +183,6 @@ def _fill_room_config(
     config.air_absorption = _AIR_ABSORPTION_ON if air_absorption_enabled else _AIR_ABSORPTION_OFF
     if seed is not None:
         config.seed = _checked_seed(seed)
-    for name in ("max_sec", "mixing_time_ms"):
-        if fields.get(name) == 0:
-            raise SonareValueError(f"{name} must not be 0; omit it for the automatic value")
     for name, value in fields.items():
         if value is not None:
             setattr(config, name, value)
@@ -207,8 +204,8 @@ def synthesize_rir(
     ism_order: int = 3,
     prefer_eyring: bool = True,
     seed: int | None = None,
-    max_sec: float | None = None,
-    mixing_time_ms: float | None = None,
+    max_seconds: float = 0.0,
+    mixing_time_ms: float = 0.0,
     crossfade_ms: float | None = None,
     air_absorption_enabled: bool = True,
     air_temperature_c: float | None = None,
@@ -244,8 +241,8 @@ def synthesize_rir(
             False selects Sabine.
         seed: Deterministic late-tail seed, in [0, 4294967295]; None = 1.
             Every value, 0 included, is a seed.
-        max_sec: Hard RIR length cap; None keeps the natural length.
-        mixing_time_ms: Early/late crossover in ms; None derives it (~sqrt(V) ms).
+        max_seconds: Hard RIR length cap (0 = natural length).
+        mixing_time_ms: Early/late crossover in ms (0 = auto, ~sqrt(V) ms).
         crossfade_ms: Equal-power crossfade width around the mixing time in ms;
             None = 5 ms, and 0 is a hard switch.
         air_absorption_enabled: Add the ISO 9613-1 atmospheric-absorption term
@@ -294,7 +291,7 @@ def synthesize_rir(
         width_m=width_m,
         height_m=height_m,
         absorption=absorption,
-        max_sec=max_sec,
+        max_seconds=max_seconds,
         mixing_time_ms=mixing_time_ms,
         crossfade_ms=crossfade_ms,
         ism_order=ism_order,
@@ -309,7 +306,7 @@ def synthesize_rir(
     )
     _check(rc)
     try:
-        # Non-fatal diagnostics are recorded on success too -- a max_sec clamp
+        # Non-fatal diagnostics are recorded on success too -- a max_seconds clamp
         # that cut the tail, or a request degraded to early reflections only.
         # Read before any later C ABI call can overwrite the thread-local list.
         return RirResult(
@@ -349,7 +346,7 @@ def estimate_room(
             scales with the cube of the prior, so the substitution is worth
             three orders of magnitude at the low end.
         mode: Analyzer routing, by name -- ``"auto"`` (impulse-like inputs route
-            to IR analysis), ``"blind"`` or ``"impulseResponse"``. An unknown
+            to IR analysis), ``"blind"`` or ``"impulse_response"``. An unknown
             name raises ``SonareValueError`` and a number ``TypeError``.
         min_decay_db: Analyzer decay-fit span in dB (0 = library default).
         noise_floor_margin_db: Analyzer noise-floor margin in dB (0 = library
@@ -489,8 +486,8 @@ def _room_morph_config(
     ism_order: int,
     prefer_eyring: bool,
     seed: int | None,
-    max_sec: float | None,
-    mixing_time_ms: float | None,
+    max_seconds: float,
+    mixing_time_ms: float,
     crossfade_ms: float | None,
     air_absorption_enabled: bool,
     air_temperature_c: float | None,
@@ -528,7 +525,7 @@ def _room_morph_config(
         absorption=absorption,
         source_tail_suppression=source_tail_suppression,
         wet=wet,
-        max_sec=max_sec,
+        max_seconds=max_seconds,
         mixing_time_ms=mixing_time_ms,
         crossfade_ms=crossfade_ms,
         ism_order=ism_order,
@@ -558,8 +555,8 @@ def room_morph(
     ism_order: int = 3,
     prefer_eyring: bool = True,
     seed: int | None = None,
-    max_sec: float | None = None,
-    mixing_time_ms: float | None = None,
+    max_seconds: float = 0.0,
+    mixing_time_ms: float = 0.0,
     crossfade_ms: float | None = None,
     air_absorption_enabled: bool = True,
     air_temperature_c: float | None = None,
@@ -584,7 +581,7 @@ def room_morph(
             :func:`synthesize_rir`). A non-zero preset wins over the bands/scalar.
         prefer_eyring: Use the Eyring statistical late-tail model for the target
             room (default); False selects Sabine.
-        mixing_time_ms: Early/late crossover in ms; None derives it (~sqrt(V) ms).
+        mixing_time_ms: Early/late crossover in ms (0 = auto, ~sqrt(V) ms).
         crossfade_ms: Equal-power crossfade width around the mixing time in ms;
             None = 5 ms, and 0 is a hard switch.
         air_absorption_enabled: Add the ISO 9613-1 atmospheric-absorption term
@@ -616,7 +613,7 @@ def room_morph(
         ism_order=ism_order,
         prefer_eyring=prefer_eyring,
         seed=seed,
-        max_sec=max_sec,
+        max_seconds=max_seconds,
         mixing_time_ms=mixing_time_ms,
         crossfade_ms=crossfade_ms,
         air_absorption_enabled=air_absorption_enabled,
@@ -669,8 +666,8 @@ def room_morph_stereo(
     ism_order: int = 3,
     prefer_eyring: bool = True,
     seed: int | None = None,
-    max_sec: float | None = None,
-    mixing_time_ms: float | None = None,
+    max_seconds: float = 0.0,
+    mixing_time_ms: float = 0.0,
     crossfade_ms: float | None = None,
     air_absorption_enabled: bool = True,
     air_temperature_c: float | None = None,
@@ -725,7 +722,7 @@ def room_morph_stereo(
         ism_order=ism_order,
         prefer_eyring=prefer_eyring,
         seed=seed,
-        max_sec=max_sec,
+        max_seconds=max_seconds,
         mixing_time_ms=mixing_time_ms,
         crossfade_ms=crossfade_ms,
         air_absorption_enabled=air_absorption_enabled,

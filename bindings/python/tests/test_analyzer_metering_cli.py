@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
 from types import SimpleNamespace
 from typing import get_args
 
@@ -642,14 +641,14 @@ def test_declip_cli_writes_repaired_audio(monkeypatch, tmp_path, capsys) -> None
         samples: list[float],
         sample_rate: int,
         *,
-        clip_threshold_db: float,
+        clip_threshold: float,
         lpc_order: int,
         iterations: int,
         lpc_blend: float,
     ) -> SimpleNamespace:
         calls["samples"] = samples
         calls["sample_rate"] = sample_rate
-        calls["clip_threshold_db"] = clip_threshold_db
+        calls["clip_threshold"] = clip_threshold
         calls["lpc_order"] = lpc_order
         calls["iterations"] = iterations
         calls["lpc_blend"] = lpc_blend
@@ -672,7 +671,7 @@ def test_declip_cli_writes_repaired_audio(monkeypatch, tmp_path, capsys) -> None
     assert calls == {
         "samples": [1.0, -1.0, 0.25],
         "sample_rate": 22050,
-        "clip_threshold_db": pytest.approx(20.0 * math.log10(0.9)),
+        "clip_threshold": 0.9,
         "lpc_order": 24,
         "iterations": 3,
         "lpc_blend": 0.5,

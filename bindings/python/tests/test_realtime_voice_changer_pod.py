@@ -39,7 +39,7 @@ def test_pod_dataclass_has_one_field_per_pod_field() -> None:
 
 
 def test_preset_pod_returns_dataclass_for_known_name() -> None:
-    cfg = libsonare.realtime_voice_changer_preset_pod("neutralMonitor")
+    cfg = libsonare.realtime_voice_changer_preset_pod("neutral-monitor")
     assert isinstance(cfg, libsonare.RealtimeVoiceChangerConfig)
     # Neutral monitor is a no-op-ish preset: wet_mix should be 1.0 and the
     # formant factor should be 1.0 (no pitch shift).
@@ -48,7 +48,7 @@ def test_preset_pod_returns_dataclass_for_known_name() -> None:
 
 
 def test_default_constructed_config_matches_neutral_monitor_preset() -> None:
-    """A default-constructed config is the neutralMonitor preset (single source).
+    """A default-constructed config is the neutral-monitor preset (single source).
 
     Regression guard: previously the dataclass carried hand-written literals that
     matched neither the C POD defaults nor any preset, so
@@ -56,21 +56,21 @@ def test_default_constructed_config_matches_neutral_monitor_preset() -> None:
     bypassed-gate / flat-EQ voice instead of a usable neutral one.
     """
     default = libsonare.RealtimeVoiceChangerConfig()
-    preset = libsonare.realtime_voice_changer_preset_config("neutralMonitor")
+    preset = libsonare.realtime_voice_changer_preset_config("neutral-monitor")
     assert default == preset
 
 
 def test_preset_config_is_canonical_alias_of_preset_pod() -> None:
     # realtime_voice_changer_preset_config is the canonical name (matching the
     # other bindings); realtime_voice_changer_preset_pod is the deprecated alias.
-    cfg = libsonare.realtime_voice_changer_preset_config("brightIdol")
-    pod = libsonare.realtime_voice_changer_preset_pod("brightIdol")
+    cfg = libsonare.realtime_voice_changer_preset_config("bright-idol")
+    pod = libsonare.realtime_voice_changer_preset_pod("bright-idol")
     assert isinstance(cfg, libsonare.RealtimeVoiceChangerConfig)
     assert cfg == pod
 
 
 def test_preset_pod_accepts_int_ordinal() -> None:
-    by_name = libsonare.realtime_voice_changer_preset_pod("brightIdol")
+    by_name = libsonare.realtime_voice_changer_preset_pod("bright-idol")
     by_ord = libsonare.realtime_voice_changer_preset_pod(
         libsonare._ffi.SONARE_VC_PRESET_BRIGHT_IDOL
     )
@@ -80,8 +80,8 @@ def test_preset_pod_accepts_int_ordinal() -> None:
 
 
 def test_preset_pod_distinguishes_presets() -> None:
-    neutral = libsonare.realtime_voice_changer_preset_pod("neutralMonitor")
-    bright = libsonare.realtime_voice_changer_preset_pod("brightIdol")
+    neutral = libsonare.realtime_voice_changer_preset_pod("neutral-monitor")
+    bright = libsonare.realtime_voice_changer_preset_pod("bright-idol")
     # The "bright" preset cannot be identical to the neutral one — at least one
     # field must differ.
     assert dataclasses.astuple(neutral) != dataclasses.astuple(bright)
@@ -143,7 +143,7 @@ def test_preset_config_refuses_a_bool_rather_than_reading_it_as_an_ordinal(entry
 
 def _build_changer() -> libsonare.RealtimeVoiceChanger:
     return libsonare.RealtimeVoiceChanger(
-        sample_rate=48000, preset="neutralMonitor", max_block_size=128
+        sample_rate=48000, preset="neutral-monitor", max_block_size=128
     )
 
 
@@ -153,21 +153,21 @@ def test_config_pod_returns_live_normalized_config() -> None:
         cfg = changer.config_pod()
         assert isinstance(cfg, libsonare.RealtimeVoiceChangerConfig)
         # The handle was created from the neutral preset, so its live config
-        # must agree with realtime_voice_changer_preset_pod("neutralMonitor")
+        # must agree with realtime_voice_changer_preset_pod("neutral-monitor")
         # on every field except the retune grain size. Grain size is structural
         # and resolved at prepare() time, so config() reports the effective grain
         # rather than the requested value (0 = "library default") in the preset.
-        preset = libsonare.realtime_voice_changer_preset_pod("neutralMonitor")
+        preset = libsonare.realtime_voice_changer_preset_pod("neutral-monitor")
         for f in dataclasses.fields(libsonare.RealtimeVoiceChangerConfig):
-            if f.name == "retune_grain_size_samples":
+            if f.name == "retune_grain_size":
                 continue
             assert getattr(cfg, f.name) == pytest.approx(getattr(preset, f.name), abs=1e-6), (
                 f"live config drift on {f.name}"
             )
         # The preset requests the library default (0); the live config reports
         # the resolved, non-zero grain that fixes latency for the session.
-        assert preset.retune_grain_size_samples == 0
-        assert cfg.retune_grain_size_samples > 0
+        assert preset.retune_grain_size == 0
+        assert cfg.retune_grain_size > 0
     finally:
         changer.close()
 
@@ -202,7 +202,7 @@ def test_set_config_pod_does_not_break_processing() -> None:
     samples = 0.2 * np.sin(2 * math.pi * 220.0 * np.arange(sr // 4) / sr).astype(np.float32)
     changer = _build_changer()
     try:
-        cfg = libsonare.realtime_voice_changer_preset_pod("brightIdol")
+        cfg = libsonare.realtime_voice_changer_preset_pod("bright-idol")
         changer.set_config_pod(cfg)
         out = changer.process_mono(samples)
         assert out.shape == samples.shape
@@ -213,7 +213,7 @@ def test_set_config_pod_does_not_break_processing() -> None:
 
 
 def test_to_pod_and_from_pod_are_inverses() -> None:
-    cfg = libsonare.realtime_voice_changer_preset_pod("darkVillain")
+    cfg = libsonare.realtime_voice_changer_preset_pod("dark-villain")
     cycled = libsonare.RealtimeVoiceChangerConfig.from_pod(cfg.to_pod())
     assert dataclasses.astuple(cycled) == dataclasses.astuple(cfg)
 
@@ -227,7 +227,8 @@ def _flat(config: libsonare.RealtimeVoiceChangerConfig) -> dict[str, object]:
         )
         value = getattr(config, f.name)
         if f.name == "harmony_steps":
-            out["harmonySteps"] = list(value)
+            for index, step in enumerate(value, start=1):
+                out[f"harmonyStep{index}"] = step
         elif camel in ("limiterEnableIspLimiter", "vocoderEnabled"):
             out[camel] = bool(value)
         else:
@@ -236,7 +237,7 @@ def _flat(config: libsonare.RealtimeVoiceChangerConfig) -> dict[str, object]:
 
 
 def test_formant_mode_is_a_string_field_defaulting_to_relative() -> None:
-    cfg = libsonare.realtime_voice_changer_preset_config("neutralMonitor")
+    cfg = libsonare.realtime_voice_changer_preset_config("neutral-monitor")
     assert cfg.formant_mode == "relative"
     pod = dataclasses.replace(cfg, formant_mode="absolute").to_pod()
     assert pod.struct_version == 2
@@ -250,8 +251,8 @@ def test_formant_mode_is_fixed_when_the_changer_is_created() -> None:
     # The grain engine is selected explicitly: it is the one whose absolute mode adds
     # exactly one analysis frame of latency.
     base = dataclasses.replace(
-        libsonare.realtime_voice_changer_preset_config("neutralMonitor"),
-        voice_engine="grain",
+        libsonare.realtime_voice_changer_preset_config("neutral-monitor"),
+        voice_engine_engine="grain",
     )
     absolute = dataclasses.replace(base, formant_mode="absolute", formant_factor=1.1)
     with (
@@ -269,9 +270,9 @@ def test_formant_mode_is_fixed_when_the_changer_is_created() -> None:
 
 
 def test_unreachable_absolute_warp_is_refused_with_the_reachable_range() -> None:
-    base = libsonare.realtime_voice_changer_preset_config("neutralMonitor")
+    base = libsonare.realtime_voice_changer_preset_config("neutral-monitor")
     unreachable = dataclasses.replace(
-        base, voice_engine="grain", formant_mode="absolute", retune_pitch_semitones=-9.0
+        base, voice_engine_engine="grain", formant_mode="absolute", retune_semitones=-9.0
     )
     # The creation document is a JSON entry point: its content defect is InvalidFormat.
     with pytest.raises(SonareError, match=r"\[0\.55, 0\.9811\]") as refused:
@@ -281,7 +282,7 @@ def test_unreachable_absolute_warp_is_refused_with_the_reachable_range() -> None
 
 
 def test_out_of_range_field_is_refused_and_the_previous_config_kept() -> None:
-    base = libsonare.realtime_voice_changer_preset_config("neutralMonitor")
+    base = libsonare.realtime_voice_changer_preset_config("neutral-monitor")
     with libsonare.RealtimeVoiceChanger(48000, _flat(base)) as changer:
         before = changer.config_pod()
         factor_range = r"formant\.factor out of range \[0\.55, 1\.65\]"

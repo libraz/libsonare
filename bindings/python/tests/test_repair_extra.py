@@ -4,8 +4,6 @@
 
 from __future__ import annotations
 
-import math
-
 import numpy as np
 import pytest
 from numpy.typing import NDArray
@@ -30,12 +28,7 @@ class TestMasteringRepairDeclip:
     def test_explicit_kwargs(self) -> None:
         samples = sine(440.0, 0.2, amp=0.3)
         out = libsonare.mastering_repair_declip(
-            samples,
-            SR,
-            clip_threshold_db=20.0 * math.log10(0.85),
-            lpc_order=24,
-            iterations=1,
-            lpc_blend=0.5,
+            samples, SR, clip_threshold=0.85, lpc_order=24, iterations=1, lpc_blend=0.5
         ).samples
         assert out.shape == samples.shape
 

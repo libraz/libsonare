@@ -83,7 +83,7 @@ def mastering_repair_trim_silence(
     samples: Sequence[float] | list[float] | np.ndarray,
     sample_rate: int,
     *,
-    threshold_db: float = -60.0,
+    threshold: float = 0.001,
     padding_samples: int | None = None,
     padding_sec: float | None = None,
     mode: int | str = "peak",
@@ -96,7 +96,7 @@ def mastering_repair_trim_silence(
     not both.
     """
     config = SonareTrimSilenceConfig(  # noqa: F405
-        threshold_db=_narrow_double(threshold_db, "threshold_db"),
+        threshold=_narrow_double(threshold, "threshold"),
         # Narrowed rather than coerced: int() takes 0.5 as 0, which is "no padding at all".
         padding_samples=_resolve_padding(padding_samples, padding_sec, sample_rate),
         mode=_coerce_trim_silence_mode(mode),
@@ -133,7 +133,7 @@ def mastering_repair_detect_trim_range(
     samples: Sequence[float] | list[float] | np.ndarray,
     sample_rate: int,
     *,
-    threshold_db: float = -60.0,
+    threshold: float = 0.001,
     padding_samples: int | None = None,
     padding_sec: float | None = None,
     mode: int | str = "peak",
@@ -152,7 +152,7 @@ def mastering_repair_detect_trim_range(
     A buffer with nothing above the threshold reports ``(length, length)`` --
     an empty range at the end of the buffer, not at its start.
 
-    Which arguments are live depends on ``mode``: ``threshold_db`` is read only in
+    Which arguments are live depends on ``mode``: ``threshold`` is read only in
     ``"peak"`` mode, and ``gate_lufs`` and ``window_ms`` only in
     ``"lufs_gated"``. That gated mode compares an UNWEIGHTED RMS over a window
     centred on each sample, so the figure it gates on is dBFS rather than a
@@ -161,7 +161,7 @@ def mastering_repair_detect_trim_range(
     Args:
         samples: Mono input buffer (any sequence convertible to float32).
         sample_rate: Sample rate in Hz.
-        threshold_db: Peak threshold in dBFS, ``"peak"`` mode only (default -60.0).
+        threshold: Peak threshold, ``"peak"`` mode only (default 0.001).
         padding_samples: Samples to retain either side of the kept range,
             clamped to the buffer (default 0). A pass that kept nothing is not
             padded. Not together with ``padding_sec``.
@@ -182,7 +182,7 @@ def mastering_repair_detect_trim_range(
         SonareError: If the C call rejects the request.
     """
     config = SonareTrimSilenceConfig(  # noqa: F405
-        threshold_db=_narrow_double(threshold_db, "threshold_db"),
+        threshold=_narrow_double(threshold, "threshold"),
         padding_samples=_resolve_padding(padding_samples, padding_sec, sample_rate),
         mode=_coerce_trim_silence_mode(mode),
         gate_lufs=_narrow_double(gate_lufs, "gate_lufs"),
@@ -205,7 +205,7 @@ def mastering_repair_detect_trim_range_stereo(
     right: Sequence[float] | list[float] | np.ndarray,
     sample_rate: int,
     *,
-    threshold_db: float = -60.0,
+    threshold: float = 0.001,
     padding_samples: int | None = None,
     padding_sec: float | None = None,
     mode: int | str = "peak",
@@ -236,7 +236,7 @@ def mastering_repair_detect_trim_range_stereo(
         left: Left channel input buffer (any sequence convertible to float32).
         right: Right channel input buffer, same length as ``left``.
         sample_rate: Sample rate in Hz.
-        threshold_db: Peak threshold in dBFS, ``"peak"`` mode only (default -60.0).
+        threshold: Peak threshold, ``"peak"`` mode only (default 0.001).
         padding_samples: Samples to retain either side of the kept range,
             clamped to the buffer (default 0). Not together with ``padding_sec``.
         padding_sec: The same margin in seconds, rounded to the nearest sample
@@ -262,7 +262,7 @@ def mastering_repair_detect_trim_range_stereo(
     if left_length != right_length:
         raise SonareValueError("left and right channel lengths must match")
     config = SonareTrimSilenceConfig(  # noqa: F405
-        threshold_db=_narrow_double(threshold_db, "threshold_db"),
+        threshold=_narrow_double(threshold, "threshold"),
         padding_samples=_resolve_padding(padding_samples, padding_sec, sample_rate),
         mode=_coerce_trim_silence_mode(mode),
         gate_lufs=_narrow_double(gate_lufs, "gate_lufs"),
@@ -287,7 +287,7 @@ def mastering_repair_trim_silence_stereo(
     right: Sequence[float] | list[float] | np.ndarray,
     sample_rate: int,
     *,
-    threshold_db: float = -60.0,
+    threshold: float = 0.001,
     padding_samples: int | None = None,
     padding_sec: float | None = None,
     mode: int | str = "peak",
@@ -319,7 +319,7 @@ def mastering_repair_trim_silence_stereo(
         result = libsonare.mastering_repair_trim_silence_stereo(left, right, 44100)
         onset = result.left_range.first, result.right_range.first
 
-    Which config fields are live depends on ``mode``: ``threshold_db`` is read only
+    Which config fields are live depends on ``mode``: ``threshold`` is read only
     in ``"peak"`` mode, and ``gate_lufs`` and ``window_ms`` only in
     ``"lufs_gated"``. That gated mode compares an UNWEIGHTED RMS over a window
     centred on each sample, so the figure it gates on is dBFS rather than a
@@ -329,7 +329,7 @@ def mastering_repair_trim_silence_stereo(
         left: Left channel input buffer (any sequence convertible to float32).
         right: Right channel input buffer, same length as ``left``.
         sample_rate: Sample rate in Hz.
-        threshold_db: Peak threshold in dBFS, ``"peak"`` mode only (default -60.0).
+        threshold: Peak threshold, ``"peak"`` mode only (default 0.001).
         padding_samples: Samples to retain either side of the kept range,
             clamped to the buffer so it can never reach past an end (default 0).
             A pass that kept nothing is not padded. Not together with
@@ -356,7 +356,7 @@ def mastering_repair_trim_silence_stereo(
     if left_length != right_length:
         raise SonareValueError("left and right channel lengths must match")
     config = SonareTrimSilenceConfig(  # noqa: F405
-        threshold_db=_narrow_double(threshold_db, "threshold_db"),
+        threshold=_narrow_double(threshold, "threshold"),
         padding_samples=_resolve_padding(padding_samples, padding_sec, sample_rate),
         mode=_coerce_trim_silence_mode(mode),
         gate_lufs=_narrow_double(gate_lufs, "gate_lufs"),
