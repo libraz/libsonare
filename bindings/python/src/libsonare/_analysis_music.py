@@ -217,7 +217,7 @@ def chord_functional_analysis(
         _to_c_int(sample_rate, "sample_rate"),
         ctypes.byref(options),
         _to_c_int32(key_root, "key_root"),
-        _mode_value(key_mode),
+        _to_c_int32(_mode_value(key_mode), "key_mode"),
         ctypes.byref(detected),
         ctypes.byref(roman),
         ctypes.byref(functions),
@@ -278,7 +278,7 @@ def chord_functions(
     entries = list(chords.chords if isinstance(chords, ChordAnalysisResult) else chords)
     root, mode = _key_pair(key)
     key_root = _to_c_int32(root, "key.root")
-    key_mode = _mode_value(cast(KeyMode, mode))
+    key_mode = _to_c_int32(_mode_value(cast(KeyMode, mode)), "key.mode")
     lib = _get_lib()
     array = (SonareChord * len(entries))()
     for i, chord in enumerate(entries):

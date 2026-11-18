@@ -534,7 +534,7 @@ class StreamingEqualizer:
         """Set the global phase mode: ``"zero"``, ``"natural"`` or ``"linear"``."""
         self._ensure_open()
         value = _token_ordinal(mode, _EQ_PHASE_MODES, "EQ phase mode") + 1
-        _check(self._lib.sonare_eq_set_phase_mode(self._handle, ctypes.c_int(value)))
+        _check(self._lib.sonare_eq_set_phase_mode(self._handle, _to_c_int(value, "mode")))
 
     def set_auto_gain(self, enabled: bool) -> None:
         """Enable or disable auto-gain compensation."""

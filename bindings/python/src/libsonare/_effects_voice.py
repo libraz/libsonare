@@ -1020,7 +1020,7 @@ class StreamingRetune:
         handle = self._lib.sonare_streaming_retune_create(
             _to_c_float(pitch_semitones, "pitch_semitones"),
             _to_c_float(mix, "mix"),
-            requested_grain_size,
+            _to_c_int(requested_grain_size, "grain_size_samples"),
         )
         if not handle:
             raise _last_error(int(ErrorCode.INVALID_PARAMETER), "failed to create StreamingRetune")
@@ -1094,7 +1094,7 @@ class StreamingRetune:
                     "pitch_semitones",
                 ),
                 _to_c_float(current["mix"] if mix is None else mix, "mix"),
-                requested_grain_size,
+                _to_c_int(requested_grain_size, "grain_size_samples"),
             )
         )
         self._requested_grain_size = requested_grain_size

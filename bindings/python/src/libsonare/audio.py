@@ -11,7 +11,7 @@ import numpy as np
 from ._analysis_detection import _DEFAULT_BPM_MAX, _DEFAULT_BPM_MIN
 from ._effects_repair_common import _linked_channel_planes
 from ._errors import SonareValueError, _not_supported, _require_open, _unknown_error
-from ._features_metering import _dynamic_range_args, _oversample_factor_arg, _spectrum_args
+from ._features_metering import _dynamic_range_args, _oversample_factor, _spectrum_args
 from ._ffi_types_core import SonareDownmixOptions
 from ._runtime import (
     _channel_layout_value,
@@ -1247,7 +1247,7 @@ class Audio:
         return self._audio_float(
             "sonare_audio_true_peak_db",
             self._require_handle(),
-            _oversample_factor_arg(oversample_factor),
+            _to_c_int(_oversample_factor(oversample_factor), "oversample_factor"),
         )
 
     def detect_clipping(
@@ -1303,17 +1303,17 @@ class Audio:
         """
         from ._ffi import SonareDynamicRangeResult
 
-        c_window, c_hop, c_low, c_high = _dynamic_range_args(
+        window_value, hop_value, low_value, high_value = _dynamic_range_args(
             window_sec, hop_sec, low_percentile, high_percentile
         )
         handle = self._require_handle()
         out = SonareDynamicRangeResult()
         rc = self._lib.sonare_audio_dynamic_range(
             handle,
-            c_window,
-            c_hop,
-            c_low,
-            c_high,
+            _to_c_float(window_value, "window_sec"),
+            _to_c_float(hop_value, "hop_sec"),
+            _to_c_float(low_value, "low_percentile"),
+            _to_c_float(high_value, "high_percentile"),
             ctypes.byref(out),
         )
         _check(rc)
@@ -1349,18 +1349,18 @@ class Audio:
         """
         from ._ffi import SonareSpectrumResult
 
-        c_n_fft, c_octave_fraction, c_db_ref, c_db_amin = _spectrum_args(
+        n_fft_value, octave_fraction_value, db_ref_value, db_amin_value = _spectrum_args(
             n_fft, octave_fraction, db_ref, db_amin
         )
         handle = self._require_handle()
         out = SonareSpectrumResult()
         rc = self._lib.sonare_audio_spectrum(
             handle,
-            c_n_fft,
+            _to_c_int(n_fft_value, "n_fft"),
             ctypes.c_int(1 if apply_octave_smoothing else 0),
-            c_octave_fraction,
-            c_db_ref,
-            c_db_amin,
+            _to_c_int(octave_fraction_value, "octave_fraction"),
+            _to_c_float(db_ref_value, "db_ref"),
+            _to_c_float(db_amin_value, "db_amin"),
             ctypes.byref(out),
         )
         _check(rc)
@@ -1406,7 +1406,7 @@ class Audio:
         """
         from ._ffi import SonareSpectrumResult
 
-        c_n_fft, c_octave_fraction, c_db_ref, c_db_amin = _spectrum_args(
+        n_fft_value, octave_fraction_value, db_ref_value, db_amin_value = _spectrum_args(
             n_fft, octave_fraction, db_ref, db_amin
         )
         handle = self._require_handle()
@@ -1414,11 +1414,11 @@ class Audio:
         rc = self._lib.sonare_audio_spectrum_frame(
             handle,
             _to_c_size_t(frame_offset, "frame_offset"),
-            c_n_fft,
+            _to_c_int(n_fft_value, "n_fft"),
             ctypes.c_int(1 if apply_octave_smoothing else 0),
-            c_octave_fraction,
-            c_db_ref,
-            c_db_amin,
+            _to_c_int(octave_fraction_value, "octave_fraction"),
+            _to_c_float(db_ref_value, "db_ref"),
+            _to_c_float(db_amin_value, "db_amin"),
             ctypes.byref(out),
         )
         _check(rc)

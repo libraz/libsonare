@@ -63,22 +63,20 @@ from .types import (
 _DEFAULT_SPECTRUM_N_FFT = 2048
 
 
-def _oversample_factor_arg(oversample_factor: int | None) -> ctypes.c_int:
+def _oversample_factor(oversample_factor: int | None) -> int | float:
     """``None`` is the library default (4); an explicit 0 is refused."""
-    return _to_c_int(
-        _resolve_zero_default(oversample_factor, "oversample_factor"), "oversample_factor"
-    )
+    return _resolve_zero_default(oversample_factor, "oversample_factor")
 
 
 def _spectrum_args(
     n_fft: int | None, octave_fraction: int | None, db_ref: float | None, db_amin: float | None
-) -> tuple[ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float]:
-    """The C spectrum arguments, ``None`` mapped to the library default and 0 refused."""
+) -> tuple[int | float, int | float, int | float, int | float]:
+    """The spectrum arguments, ``None`` mapped to the C default and 0 refused."""
     return (
-        _to_c_int(_resolve_zero_default(n_fft, "n_fft"), "n_fft"),
-        _to_c_int(_resolve_zero_default(octave_fraction, "octave_fraction"), "octave_fraction"),
-        _to_c_float(_resolve_zero_default(db_ref, "db_ref"), "db_ref"),
-        _to_c_float(_resolve_zero_default(db_amin, "db_amin"), "db_amin"),
+        _resolve_zero_default(n_fft, "n_fft"),
+        _resolve_zero_default(octave_fraction, "octave_fraction"),
+        _resolve_zero_default(db_ref, "db_ref"),
+        _resolve_zero_default(db_amin, "db_amin"),
     )
 
 
@@ -87,8 +85,8 @@ def _dynamic_range_args(
     hop_sec: float | None,
     low_percentile: float | None,
     high_percentile: float | None,
-) -> tuple[ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float]:
-    """The C dynamic-range arguments; percentiles are ranks in [0, 1] with low <= high."""
+) -> tuple[int | float, int | float, int | float, int | float]:
+    """The dynamic-range arguments; percentiles are ranks in [0, 1] with low <= high."""
     for name, value in (("low_percentile", low_percentile), ("high_percentile", high_percentile)):
         if value is not None and not 0.0 <= _narrow_double(value, name) <= 1.0:
             raise SonareValueError(f"{name} must be within [0, 1]")
@@ -99,14 +97,10 @@ def _dynamic_range_args(
     ):
         raise SonareValueError("low_percentile must not exceed high_percentile")
     return (
-        _to_c_float(_resolve_zero_default(window_sec, "window_sec"), "window_sec"),
-        _to_c_float(_resolve_zero_default(hop_sec, "hop_sec"), "hop_sec"),
-        _to_c_float(
-            _resolve_optional_non_negative(low_percentile, "low_percentile"), "low_percentile"
-        ),
-        _to_c_float(
-            _resolve_optional_non_negative(high_percentile, "high_percentile"), "high_percentile"
-        ),
+        _resolve_zero_default(window_sec, "window_sec"),
+        _resolve_zero_default(hop_sec, "hop_sec"),
+        _resolve_optional_non_negative(low_percentile, "low_percentile"),
+        _resolve_optional_non_negative(high_percentile, "high_percentile"),
     )
 
 
@@ -447,7 +441,7 @@ def metering_true_peak_db(
         c_array,
         _to_c_size_t(length, "length"),
         _to_c_int(sample_rate, "sample_rate"),
-        _oversample_factor_arg(oversample_factor),
+        _to_c_int(_oversample_factor(oversample_factor), "oversample_factor"),
         ctypes.byref(out),
     )
     _check(rc)
@@ -821,7 +815,7 @@ def metering_spectrum(
     Omit ``n_fft`` / ``octave_fraction`` / ``db_ref`` / ``db_amin`` for the
     library defaults (2048 / 3 / 1.0 / kEpsilon); an explicit 0 is refused.
     """
-    c_n_fft, c_octave_fraction, c_db_ref, c_db_amin = _spectrum_args(
+    n_fft_value, octave_fraction_value, db_ref_value, db_amin_value = _spectrum_args(
         n_fft, octave_fraction, db_ref, db_amin
     )
     sample_buf = _validate_samples("metering_spectrum", samples, validate=validate)
@@ -832,11 +826,11 @@ def metering_spectrum(
         c_array,
         _to_c_size_t(length, "length"),
         _to_c_int(sample_rate, "sample_rate"),
-        c_n_fft,
+        _to_c_int(n_fft_value, "n_fft"),
         ctypes.c_int(1 if apply_octave_smoothing else 0),
-        c_octave_fraction,
-        c_db_ref,
-        c_db_amin,
+        _to_c_int(octave_fraction_value, "octave_fraction"),
+        _to_c_float(db_ref_value, "db_ref"),
+        _to_c_float(db_amin_value, "db_amin"),
         ctypes.byref(out),
     )
     _check(rc)
@@ -889,9 +883,10 @@ def metering_spectrum_frame(
     # a value that is not a usable index has to be refused as such rather than
     # slicing the buffer with it.
     c_frame_offset = _to_c_size_t(frame_offset, "frame_offset")
-    c_n_fft, c_octave_fraction, c_db_ref, c_db_amin = _spectrum_args(
+    n_fft_value, octave_fraction_value, db_ref_value, db_amin_value = _spectrum_args(
         n_fft, octave_fraction, db_ref, db_amin
     )
+    c_n_fft = _to_c_int(n_fft_value, "n_fft")
     sample_buf = _validate_samples(
         "metering_spectrum_frame",
         samples,
@@ -910,9 +905,9 @@ def metering_spectrum_frame(
         c_frame_offset,
         c_n_fft,
         ctypes.c_int(1 if apply_octave_smoothing else 0),
-        c_octave_fraction,
-        c_db_ref,
-        c_db_amin,
+        _to_c_int(octave_fraction_value, "octave_fraction"),
+        _to_c_float(db_ref_value, "db_ref"),
+        _to_c_float(db_amin_value, "db_amin"),
         ctypes.byref(out),
     )
     _check(rc)
@@ -1063,7 +1058,7 @@ def metering_dynamic_range(
     are ranks in [0, 1] with low at most high; omitted, they are 0.10 / 0.95, and
     ``0.0`` is a real request for the minimum-RMS window.
     """
-    c_window, c_hop, c_low, c_high = _dynamic_range_args(
+    window_value, hop_value, low_value, high_value = _dynamic_range_args(
         window_sec, hop_sec, low_percentile, high_percentile
     )
     sample_buf = _validate_samples("metering_dynamic_range", samples, validate=validate)
@@ -1074,10 +1069,10 @@ def metering_dynamic_range(
         c_array,
         _to_c_size_t(length, "length"),
         _to_c_int(sample_rate, "sample_rate"),
-        c_window,
-        c_hop,
-        c_low,
-        c_high,
+        _to_c_float(window_value, "window_sec"),
+        _to_c_float(hop_value, "hop_sec"),
+        _to_c_float(low_value, "low_percentile"),
+        _to_c_float(high_value, "high_percentile"),
         ctypes.byref(out),
     )
     _check(rc)

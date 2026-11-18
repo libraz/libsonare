@@ -607,7 +607,7 @@ def vector_normalize(
     return _call_float_array_transform(
         "sonare_vector_normalize",
         values,
-        ctypes.c_int(_token_ordinal(norm, _NORM_TYPES, "norm")),
+        _to_c_int(_token_ordinal(norm, _NORM_TYPES, "norm"), "norm"),
         _to_c_float(threshold, "threshold"),
         arg_name="values",
     )
