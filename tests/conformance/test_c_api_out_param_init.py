@@ -170,6 +170,25 @@ class ClassificationTest(unittest.TestCase):
         self.assertEqual(len(report.unanalysable), 1)
         self.assertIn("sonare_f(out)", report.unanalysable[0])
 
+    def test_the_shared_definers_count_as_the_first_write(self) -> None:
+        report = _scan(
+            "SonareError sonare_f(int n, char** out_json) {\n"
+            "  if (!begin_string_output(out_json)) return SONARE_ERROR_INVALID_PARAMETER;\n"
+            "  if (n <= 0) return SONARE_ERROR_INVALID_PARAMETER;\n"
+            "  *out_json = copy_string(\"x\");\n"
+            "  return SONARE_OK;\n"
+            "}\n"
+            "SonareError sonare_g(int n, SonareConfig* out) {\n"
+            "  if (!out) return SONARE_ERROR_INVALID_PARAMETER;\n"
+            "  sonare_config_init(out);\n"
+            "  if (n <= 0) return SONARE_ERROR_INVALID_PARAMETER;\n"
+            "  out->n = n;\n"
+            "  return SONARE_OK;\n"
+            "}\n"
+        )
+        self.assertEqual(report.findings, [])
+        self.assertEqual(report.resolved, 2)
+
     def test_a_branch_that_never_writes_is_reported_even_though_a_sibling_does(self) -> None:
         report = _scan(
             "SonareError sonare_f(SonareResult* out) {\n"

@@ -52,6 +52,7 @@ SonareError sonare_detect_bpm(const float* samples, size_t length, int sample_ra
                               float bpm_max, float* out_bpm) {
   SONARE_C_API_ENTRY;
   if (out_bpm == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  *out_bpm = 0.0f;
   BpmConfig config;
   config.bpm_min = bpm_min;
   config.bpm_max = bpm_max;

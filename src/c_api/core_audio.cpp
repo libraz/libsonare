@@ -210,6 +210,7 @@ SonareError sonare_audio_detect_bpm(const SonareAudio* audio, float bpm_min, flo
                                     float* out_bpm) {
   SONARE_C_API_ENTRY;
   if (audio == nullptr || out_bpm == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  *out_bpm = 0.0f;
   BpmConfig config;
   config.bpm_min = bpm_min;
   config.bpm_max = bpm_max;
