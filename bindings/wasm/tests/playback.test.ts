@@ -96,6 +96,20 @@ describe('playback renderer (WASM)', () => {
     expect((caught as Error).message).toContain('SHRF data is smaller than the 36-byte header');
   });
 
+  it('refuses an earlier key, an earlier role token or an unknown key at any depth as InvalidFormat', () => {
+    const earlier = [
+      { night_mode: { amount: 0.5 } },
+      { nope: true },
+      { target: { kind: 'speakers', layout: 'stereo', bass_management: { enabled: false } } },
+      { target: { kind: 'speakers', layout: 'stereo', speakers: { L: { trimDb: 0 } } } },
+    ];
+    for (const config of earlier) {
+      expect(() => new PlaybackRenderer({ sampleRate: 48000, config: config as never })).toThrow(
+        expect.objectContaining({ code: ErrorCode.InvalidFormat }),
+      );
+    }
+  });
+
   it('refuses a headphones target without an HRTF set by name', () => {
     expect(() => new PlaybackRenderer({ sampleRate: 48000, config: {} })).toThrow(/hrtf required/);
     expect(() =>
@@ -396,8 +410,8 @@ describe('playback renderer (WASM)', () => {
       expect(() => renderer.processPlanar(noisePlanes(3, 128))).toThrow(RangeError);
       const diagnostics = renderer.diagnostics();
       expect(Object.getPrototypeOf(diagnostics)).toBe(Object.prototype);
-      expect(diagnostics.layout_switches).toBe(2);
-      expect(diagnostics.active_input_layout).toBe('7.1');
+      expect(diagnostics.layoutSwitches).toBe(2);
+      expect(diagnostics.activeInputLayout).toBe('7.1');
       expect(diagnostics.latency.samples).toBe(renderer.latencySamples);
       expect(structuredClone(diagnostics)).toEqual(diagnostics);
     } finally {
@@ -411,12 +425,12 @@ describe('playback renderer (WASM)', () => {
       const config = renderer.config();
       expect(config.target?.kind).toBe('speakers');
       expect(config.target?.layout).toBe('5.1');
-      renderer.setConfig({ ...config, night_mode: { amount: 1 } });
-      expect(renderer.config().night_mode?.amount).toBe(1);
+      renderer.setConfig({ ...config, nightMode: { amount: 1 } });
+      expect(renderer.config().nightMode?.amount).toBe(1);
       expect(() =>
-        renderer.setConfig(JSON.stringify({ ...config, dialogue_level_db: 3 }) as never),
+        renderer.setConfig(JSON.stringify({ ...config, dialogueLevelDb: 3 }) as never),
       ).toThrow(new TypeError('PlaybackRenderer.setConfig: config must be a configuration object'));
-      renderer.setConfig({ ...config, dialogue_level_db: 3 });
+      renderer.setConfig({ ...config, dialogueLevelDb: 3 });
       expect(() =>
         renderer.setConfig({ ...config, target: { ...config.target, layout: '7.1' } }),
       ).toThrow(/requires a new renderer/);
@@ -595,9 +609,9 @@ describe('playback renderer (WASM)', () => {
       target: {
         kind: 'speakers',
         layout: 'stereo',
-        speakers: { L: { distance_m: 1 }, R: { distance_m: 5 } },
+        speakers: { left: { distanceM: 1 }, right: { distanceM: 5 } },
       },
-      output_limiter: { enabled: false },
+      outputLimiter: { enabled: false },
     };
     const input = interleave(noisePlanes(2, 3000, 11));
     const expected = renderPlayback({ samples: input, numChannels: 2, sampleRate: SR, config });
@@ -667,10 +681,10 @@ describe('playback constructors take one options object', () => {
     ).toThrow(new TypeError("PlaybackRenderer: unknown request key 'bogus'"));
   });
 
-  it('refuse an undeclared key inside an object config, and a JSON string config', () => {
+  it('refuse an undeclared key inside an object config as InvalidFormat, and a JSON string config', () => {
     expect(
       () => new PlaybackRenderer({ sampleRate: 48000, config: { bogus: 1 } as never }),
-    ).toThrow(new TypeError("PlaybackRenderer: unknown option 'bogus' in 'config'"));
+    ).toThrow(expect.objectContaining({ code: ErrorCode.InvalidFormat }));
     expect(
       () => new PlaybackRenderer({ sampleRate: 48000, config: '{"bogus":1}' as never }),
     ).toThrow(/config must be a configuration object/);

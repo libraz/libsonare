@@ -85,7 +85,7 @@ describe('SonarePlaybackWorkletProcessor', () => {
       expect(heard).toBe(true);
       const diagnostics = requestDiagnostics(processor, port);
       // 2 -> 6 and 6 -> 2; the empty blocks render silence on the 5.1 layout.
-      expect(diagnostics.layout_switches).toBe(2);
+      expect(diagnostics.layoutSwitches).toBe(2);
       expect(diagnostics.unsupported_input_blocks).toBe(0);
       expect(Object.getPrototypeOf(diagnostics)).toBe(Object.prototype);
       expect(structuredClone(diagnostics)).toEqual(diagnostics);
@@ -112,7 +112,7 @@ describe('SonarePlaybackWorkletProcessor', () => {
         expect(plane.every((v) => v === 0)).toBe(true);
       }
       const diagnostics = requestDiagnostics(processor, port);
-      expect(diagnostics.layout_switches).toBe(0);
+      expect(diagnostics.layoutSwitches).toBe(0);
     } finally {
       processor.destroy();
     }
@@ -141,7 +141,7 @@ describe('SonarePlaybackWorkletProcessor', () => {
       }
       const diagnostics = requestDiagnostics(processor, port);
       expect(diagnostics.unsupported_input_blocks).toBe(1);
-      expect(diagnostics.layout_switches).toBe(1);
+      expect(diagnostics.layoutSwitches).toBe(1);
       const peak = Math.max(...center.map(Math.abs));
       const rise = center.findIndex((v) => Math.abs(v) >= peak * 0.01);
       expect(
@@ -187,7 +187,7 @@ describe('SonarePlaybackWorkletProcessor', () => {
 
       processor.receiveMessage({
         type: 'config',
-        config: { night_mode: { amount: 1 } },
+        config: { nightMode: { amount: 1 } },
       });
       expect(port.messages.filter((m) => m.type === 'error')).toHaveLength(0);
       processor.receiveMessage({
@@ -201,7 +201,7 @@ describe('SonarePlaybackWorkletProcessor', () => {
 
       processor.receiveMessage({ type: 'reset' });
       const diagnostics = requestDiagnostics(processor, port);
-      expect(diagnostics.active_input_layout).toBe('5.1');
+      expect(diagnostics.activeInputLayout).toBe('5.1');
     } finally {
       processor.destroy();
     }

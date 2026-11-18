@@ -10,7 +10,7 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "distance_m": {
+        "distanceM": {
           "type": [
             "number",
             "null"
@@ -20,7 +20,7 @@
           "default": null,
           "description": "Listener distance in metres. Prepare key. null disables distance compensation for this speaker."
         },
-        "trim_db": {
+        "trimDb": {
           "type": "number",
           "minimum": -20,
           "maximum": 20,
@@ -39,18 +39,23 @@
     },
     "role": {
       "enum": [
-        "L",
-        "R",
-        "C",
-        "LFE",
-        "Ls",
-        "Rs",
-        "Lss",
-        "Rss"
+        "left",
+        "right",
+        "center",
+        "lfe",
+        "leftSurround",
+        "rightSurround",
+        "leftSideSurround",
+        "rightSideSurround"
       ]
     }
   },
   "properties": {
+    "version": {
+      "const": 2,
+      "default": 2,
+      "description": "Document version. An absent version reads as the current one; any other value is refused, and so is a key or role token from an earlier version."
+    },
     "input": {
       "type": "object",
       "additionalProperties": false,
@@ -66,7 +71,7 @@
           "default": "auto",
           "description": "Prepare key. auto follows the channel count of each process call (1, 2, 6 or 8)."
         },
-        "channel_map": {
+        "channelMap": {
           "type": [
             "array",
             "null"
@@ -98,7 +103,7 @@
       },
       "else": {
         "properties": {
-          "channel_map": {
+          "channelMap": {
             "type": "null"
           }
         }
@@ -131,18 +136,18 @@
           },
           "propertyNames": {
             "enum": [
-              "L",
-              "R",
-              "C",
-              "Ls",
-              "Rs",
-              "Lss",
-              "Rss"
+              "left",
+              "right",
+              "center",
+              "leftSurround",
+              "rightSurround",
+              "leftSideSurround",
+              "rightSideSurround"
             ]
           },
           "description": "Per-speaker calibration keyed by role. Only non-LFE roles of the output layout."
         },
-        "bass_management": {
+        "bassManagement": {
           "type": "object",
           "additionalProperties": false,
           "properties": {
@@ -151,7 +156,7 @@
               "default": false,
               "description": "Prepare key."
             },
-            "crossover_hz": {
+            "crossoverHz": {
               "type": "number",
               "minimum": 40,
               "maximum": 200,
@@ -161,9 +166,9 @@
             "subwoofer": {
               "type": "boolean",
               "default": true,
-              "description": "Prepare key. false folds the low band and LFE into the large L/R pair; L and R must then be large."
+              "description": "Prepare key. false folds the low band and LFE into the large left/right pair; left and right must then be large."
             },
-            "lfe_gain_db": {
+            "lfeGainDb": {
               "type": "number",
               "minimum": -10,
               "maximum": 15,
@@ -214,8 +219,8 @@
               "speakers": {
                 "propertyNames": {
                   "enum": [
-                    "L",
-                    "R"
+                    "left",
+                    "right"
                   ]
                 }
               }
@@ -238,11 +243,11 @@
               "speakers": {
                 "propertyNames": {
                   "enum": [
-                    "L",
-                    "R",
-                    "C",
-                    "Ls",
-                    "Rs"
+                    "left",
+                    "right",
+                    "center",
+                    "leftSurround",
+                    "rightSurround"
                   ]
                 }
               }
@@ -251,12 +256,12 @@
         }
       ]
     },
-    "lfe_mix_db": {
+    "lfeMixDb": {
       "type": "number",
       "minimum": -60,
       "maximum": 10,
       "default": 0,
-      "description": "Realtime key. LFE level folded into L/R when the output has no LFE plane or no subwoofer."
+      "description": "Realtime key. LFE level folded into left/right when the output has no LFE plane or no subwoofer."
     },
     "upmix": {
       "type": "object",
@@ -267,28 +272,28 @@
           "default": true,
           "description": "Realtime key. Stereo input only; the latency does not change."
         },
-        "center_width": {
+        "centerWidth": {
           "type": "number",
           "minimum": 0.05,
           "maximum": 1,
           "default": 0.2,
           "description": "Realtime key. Width of the centre window on the panning index."
         },
-        "front_ambience": {
+        "frontAmbience": {
           "type": "number",
           "minimum": 0,
           "maximum": 1,
           "default": 0.5,
           "description": "Realtime key. Power share of the ambience kept in the front pair."
         },
-        "lfe_from_upmix": {
+        "lfeFromUpmix": {
           "type": "boolean",
           "default": false,
-          "description": "Realtime key. Derive LFE from the low-passed L/R sum."
+          "description": "Realtime key. Derive LFE from the low-passed left/right sum."
         }
       }
     },
-    "dialogue_level_db": {
+    "dialogueLevelDb": {
       "type": "number",
       "minimum": -12,
       "maximum": 12,
@@ -299,7 +304,7 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "program_lufs": {
+        "programLufs": {
           "type": [
             "number",
             "null"
@@ -309,7 +314,7 @@
           "default": null,
           "description": "Realtime key. Measured program loudness; null means no alignment gain."
         },
-        "target_lufs": {
+        "targetLufs": {
           "type": "number",
           "minimum": -40,
           "maximum": -5,
@@ -318,7 +323,7 @@
         }
       }
     },
-    "night_mode": {
+    "nightMode": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
@@ -345,7 +350,7 @@
           "default": "livingRoom",
           "description": "Prepare key. Headphones only."
         },
-        "mix_db": {
+        "mixDb": {
           "type": "number",
           "minimum": -30,
           "maximum": 6,
@@ -359,7 +364,7 @@
         }
       }
     },
-    "head_tracking": {
+    "headTracking": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
@@ -370,7 +375,7 @@
         }
       }
     },
-    "output_limiter": {
+    "outputLimiter": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
@@ -379,7 +384,7 @@
           "default": true,
           "description": "Realtime key. The latency does not change."
         },
-        "ceiling_db": {
+        "ceilingDbtp": {
           "type": "number",
           "minimum": -12,
           "maximum": 0,

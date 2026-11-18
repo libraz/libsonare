@@ -69,18 +69,26 @@ describe('PlaybackRenderer construction and validation', () => {
     renderer.destroy();
   });
 
-  it('rejects an unknown top-level config key', () => {
-    expect(
-      () => new PlaybackRenderer({ config: { nope: true } as never, sampleRate: 48000 }),
-    ).toThrow();
+  it('refuses an earlier key, an earlier role token or an unknown key at any depth as InvalidFormat', () => {
+    const earlier = [
+      { night_mode: { amount: 0.5 } },
+      { nope: true },
+      { target: { kind: 'speakers', layout: 'stereo', bass_management: { enabled: false } } },
+      { target: { kind: 'speakers', layout: 'stereo', speakers: { L: { trimDb: 0 } } } },
+    ];
+    for (const config of earlier) {
+      expect(() => new PlaybackRenderer({ sampleRate: 48000, config: config as never })).toThrow(
+        expect.objectContaining({ code: ErrorCode.InvalidFormat }),
+      );
+    }
   });
 
-  it('rejects input.channel_map combined with input.layout "auto"', () => {
+  it('rejects input.channelMap combined with input.layout "auto"', () => {
     expect(
       () =>
         new PlaybackRenderer({
           sampleRate: 48000,
-          config: { input: { layout: 'auto', channel_map: ['L', 'R'] } },
+          config: { input: { layout: 'auto', channelMap: ['left', 'right'] } },
         }),
     ).toThrow();
   });
@@ -218,10 +226,10 @@ describe('PlaybackRenderer latency, config and diagnostics', () => {
       config: { target: { kind: 'speakers', layout: 'stereo' } },
     });
     const config = renderer.config();
-    expect(config.night_mode?.amount ?? 0).toBe(0);
+    expect(config.nightMode?.amount ?? 0).toBe(0);
 
-    renderer.setConfig({ ...config, night_mode: { amount: 0.5 } });
-    expect(renderer.config().night_mode?.amount).toBeCloseTo(0.5, 5);
+    renderer.setConfig({ ...config, nightMode: { amount: 0.5 } });
+    expect(renderer.config().nightMode?.amount).toBeCloseTo(0.5, 5);
 
     expect(() =>
       renderer.setConfig({ ...config, target: { kind: 'speakers', layout: '5.1' } }),
@@ -310,14 +318,14 @@ describe('PlaybackRenderer latency, config and diagnostics', () => {
       config: { target: { kind: 'speakers', layout: 'stereo' } },
     });
     const diagnostics = renderer.diagnostics();
-    expect(diagnostics.active_input_layout).toBe('stereo');
-    expect(diagnostics.layout_switches).toBe(0);
-    expect(diagnostics.truncated_drains).toBe(0);
-    expect(Array.isArray(diagnostics.inactive_stages)).toBe(true);
-    expect(diagnostics.inactive_stages).toContain('roomEarly');
+    expect(diagnostics.activeInputLayout).toBe('stereo');
+    expect(diagnostics.layoutSwitches).toBe(0);
+    expect(diagnostics.truncatedDrains).toBe(0);
+    expect(Array.isArray(diagnostics.inactiveStages)).toBe(true);
+    expect(diagnostics.inactiveStages).toContain('roomEarly');
     expect(typeof diagnostics.latency.samples).toBe('number');
-    expect(typeof diagnostics.loudness_gain_db).toBe('number');
-    expect(typeof diagnostics.hrtf_ignored).toBe('boolean');
+    expect(typeof diagnostics.loudnessGainDb).toBe('number');
+    expect(typeof diagnostics.hrtfIgnored).toBe('boolean');
     expect(renderer.nonFiniteDiscardCount).toBe(0);
   });
 
@@ -459,9 +467,9 @@ describe('PlaybackRenderer.renderOffline', () => {
     target: {
       kind: 'speakers' as const,
       layout: 'stereo' as const,
-      speakers: { L: { distance_m: 1 }, R: { distance_m: 5 } },
+      speakers: { left: { distanceM: 1 }, right: { distanceM: 5 } },
     },
-    output_limiter: { enabled: false },
+    outputLimiter: { enabled: false },
   };
 
   function interleavedStereo(frames: number): Float32Array {
@@ -557,10 +565,10 @@ describe('playback constructors take one options object', () => {
     ).toThrow(new TypeError("PlaybackRenderer: unknown request key 'bogus'"));
   });
 
-  it('refuse an undeclared key inside an object config, and a JSON string config', () => {
+  it('refuse an undeclared key inside an object config as InvalidFormat, and a JSON string config', () => {
     expect(
       () => new PlaybackRenderer({ sampleRate: 48000, config: { bogus: 1 } as never }),
-    ).toThrow(new TypeError("PlaybackRenderer: unknown option 'bogus' in 'config'"));
+    ).toThrow(expect.objectContaining({ code: ErrorCode.InvalidFormat }));
     expect(
       () => new PlaybackRenderer({ sampleRate: 48000, config: '{"bogus":1}' as never }),
     ).toThrow(new TypeError('PlaybackRenderer: config must be a configuration object'));
