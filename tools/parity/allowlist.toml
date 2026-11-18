@@ -825,10 +825,6 @@ fields = [
   "room_morph_stereo_result.diagnostics",
 
   # --- category 4: intentionally one-sided facade additions ---
-  # Documented MIDI 1.0 aliases for the first two UMP words; the comments in
-  # bindings/node/src/types_engine.ts call them "Project-style alias".
-  "engine_midi_event.data0",
-  "engine_midi_event.data1",
   # Human-readable text derived from the diagnostic `code`; the C POD carries
   # the ordinal only.
   "project_diagnostic.message",
