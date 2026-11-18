@@ -18,6 +18,7 @@ import { nativeTranscribeOptions } from './internal/transcribe_request.js';
 import {
   assertProjectMidiEvents,
   interleaveChannels,
+  type NativeProjectBounce,
   type NativeProjectBounceOptions,
   type NativeSynthBinding,
   normalizeInstrumentBindings,
@@ -934,11 +935,8 @@ export class Project {
     };
   }
 
-  /** The native options and output channel count of one bounce, after the sentinel refusals. */
-  private bounceRequest(options: ProjectBounceOptions | undefined): {
-    native: NativeProjectBounceOptions;
-    numChannels: number;
-  } {
+  /** The native options of one bounce, after the sentinel refusals. */
+  private bounceRequest(options: ProjectBounceOptions | undefined): NativeProjectBounceOptions {
     const request = optionsObject('Project.bounce', options);
     const native: NativeProjectBounceOptions = {};
     const totalFrames = optionalPositiveInt('bounce', 'totalFrames', request.totalFrames);
@@ -960,11 +958,11 @@ export class Project {
       }
       native.instrumentLatencySamples = latency;
     }
-    return { native, numChannels: numChannels ?? 2 };
+    return native;
   }
 
-  private bounceResult(interleaved: Float32Array, numChannels: number): ProjectBounceResult {
-    return projectBounceResult(interleaved, numChannels, this.native.getSampleRate());
+  private bounceResult(raw: NativeProjectBounce): ProjectBounceResult {
+    return projectBounceResult(raw, this.native.getSampleRate());
   }
 
   /**
@@ -983,8 +981,8 @@ export class Project {
    * ```
    */
   bounce(options?: ProjectBounceOptions): ProjectBounceResult {
-    const { native, numChannels } = this.bounceRequest(options);
-    return this.bounceResult(this.native.bounce(native), numChannels);
+    const native = this.bounceRequest(options);
+    return this.bounceResult(this.native.bounce(native));
   }
 
   /**
@@ -1021,11 +1019,8 @@ export class Project {
         return instrument;
       },
     );
-    const { native, numChannels } = this.bounceRequest(options);
-    return this.bounceResult(
-      this.native.bounceWithBuiltinInstrument(bindings, native),
-      numChannels,
-    );
+    const native = this.bounceRequest(options);
+    return this.bounceResult(this.native.bounceWithBuiltinInstrument(bindings, native));
   }
 
   /**
@@ -1073,7 +1068,7 @@ export class Project {
       }
     });
     const bindings = normalizeInstrumentBindings(method, instruments, externalInstrumentBinding);
-    const { native: nativeOptions, numChannels } = this.bounceRequest(options);
+    const nativeOptions = this.bounceRequest(options);
     const native = this.native;
     this.instrumentBounceActive = true;
     let result: ReturnType<WasmProject['bounceWithInstruments']>;
@@ -1084,10 +1079,10 @@ export class Project {
     }
     // The adapter reports a throwing callback as data instead of throwing
     // through C++ frames, whose destructors a JS exception would skip.
-    if (!(result instanceof Float32Array)) {
+    if ('instrumentFailure' in result) {
       throw result.instrumentFailure;
     }
-    return this.bounceResult(result, numChannels);
+    return this.bounceResult(result);
   }
 
   /**
@@ -1118,8 +1113,8 @@ export class Project {
       (instrument) =>
         normalizeSynthInstrument('bounceWithSynthInstruments', instrument) as NativeSynthBinding,
     );
-    const { native, numChannels } = this.bounceRequest(options);
-    return this.bounceResult(this.native.bounceWithSynthInstrument(bindings, native), numChannels);
+    const native = this.bounceRequest(options);
+    return this.bounceResult(this.native.bounceWithSynthInstrument(bindings, native));
   }
 
   /**
@@ -1178,8 +1173,8 @@ export class Project {
       instruments,
       (instrument) => instrument,
     );
-    const { native, numChannels } = this.bounceRequest(options);
-    return this.bounceResult(this.native.bounceWithSf2Instrument(bindings, native), numChannels);
+    const native = this.bounceRequest(options);
+    return this.bounceResult(this.native.bounceWithSf2Instrument(bindings, native));
   }
 
   /** Remove a clip (undoable). */

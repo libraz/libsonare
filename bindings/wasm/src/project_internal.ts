@@ -210,6 +210,12 @@ export interface NativeProjectBounceOptions {
   instrumentLatencySamples?: number;
 }
 
+/** A native bounce: the interleaved render and the width it was mixed at. */
+export interface NativeProjectBounce {
+  interleaved: Float32Array;
+  numChannels: number;
+}
+
 /** A native instrument binding: the instrument's fields with its destination beside them. */
 export type NativeInstrumentBinding<T> = T & { destinationId: number };
 
@@ -497,19 +503,19 @@ export interface WasmProject {
   snapToGrid: (ppq: number, strength: number, division: number) => number;
   compile: () => NativeProjectCompileResult;
   compileTimeline: () => NativeProjectCompileTimelineResult;
-  bounce: (options: NativeProjectBounceOptions) => Float32Array;
+  bounce: (options: NativeProjectBounceOptions) => NativeProjectBounce;
   bounceWithBuiltinInstrument: (
     bindings: ReadonlyArray<NativeInstrumentBinding<BuiltinSynthConfig>>,
     options: NativeProjectBounceOptions,
-  ) => Float32Array;
+  ) => NativeProjectBounce;
   bounceWithInstruments: (
     bindings: ReadonlyArray<NativeInstrumentBinding<ExternalInstrument>>,
     options: NativeProjectBounceOptions,
-  ) => Float32Array | { instrumentFailure: unknown };
+  ) => NativeProjectBounce | { instrumentFailure: unknown };
   bounceWithSynthInstrument: (
     bindings: ReadonlyArray<NativeInstrumentBinding<NativeSynthBinding>>,
     options: NativeProjectBounceOptions,
-  ) => Float32Array;
+  ) => NativeProjectBounce;
   loadSoundFont: (data: Uint8Array) => void;
   clearSoundFont: () => void;
   soundFontPresetCount: () => number;
@@ -517,7 +523,7 @@ export interface WasmProject {
   bounceWithSf2Instrument: (
     bindings: ReadonlyArray<NativeInstrumentBinding<Sf2InstrumentConfig>>,
     options: NativeProjectBounceOptions,
-  ) => Float32Array;
+  ) => NativeProjectBounce;
   removeClip: (clipId: number) => void;
   setClipGain: (clipId: number, gain: number) => void;
   setClipFade: (
@@ -1004,10 +1010,10 @@ export function interleaveChannels(
 
 /** Native interleaved bounce output as the planar result. */
 export function projectBounceResult(
-  interleaved: Float32Array,
-  numChannels: number,
+  raw: NativeProjectBounce,
   sampleRate: number,
 ): ProjectBounceResult {
+  const { interleaved, numChannels } = raw;
   return { channels: deinterleavePlanes(interleaved, numChannels), sampleRate, numChannels };
 }
 

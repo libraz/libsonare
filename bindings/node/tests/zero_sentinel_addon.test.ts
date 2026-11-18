@@ -133,7 +133,9 @@ describe('an instrument polyphony whose zero keeps the library default', () => {
     }
     const project = midiProject([60, 64, 67]);
     try {
-      return digest(project.bounceWithBuiltinInstruments([config], { totalFrames: 24000 }));
+      return digest(
+        project.bounceWithBuiltinInstruments([config], { totalFrames: 24000 }).interleaved,
+      );
     } finally {
       project.destroy();
     }
@@ -147,7 +149,7 @@ describe('an instrument polyphony whose zero keeps the library default', () => {
     const project = midiProject([60, 64, 67]);
     project.loadSoundFont(sf2Bytes);
     try {
-      return digest(project.bounceWithSf2Instruments([config], { totalFrames: 24000 }));
+      return digest(project.bounceWithSf2Instruments([config], { totalFrames: 24000 }).interleaved);
     } finally {
       project.destroy();
     }
@@ -225,7 +227,9 @@ describe('a bounce option whose zero derives the value', () => {
     }
     const project = midiProject([60]);
     try {
-      return digest(project.bounceWithSynthInstruments([{ preset: 'sawLead' }], options));
+      return digest(
+        project.bounceWithSynthInstruments([{ preset: 'sawLead' }], options).interleaved,
+      );
     } finally {
       project.destroy();
     }

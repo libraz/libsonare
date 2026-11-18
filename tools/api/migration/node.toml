@@ -15431,3 +15431,11 @@ changed = "the facade default is gone: omit it for the library default; an expli
 domain = "engine"
 rule = "absent-not-sentinel"
 test = "bindings/node/tests/playback.test.ts::requires sampleRate, takes an omitted maxBlockSize as the default and refuses 0"
+
+[[entry]]
+kind = "field"
+old = "ProjectBounceOptions.numChannels"
+changed = "an omitted width follows the scene master's layout (2 with no master) instead of always 2; ProjectBounceResult.numChannels reports the width used"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/project.test.ts::bounces at the width of the scene master when numChannels is omitted, and reports it"

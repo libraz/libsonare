@@ -933,6 +933,33 @@ describe('Project native binding', () => {
     project.destroy();
   });
 
+  it('bounces at the width of the scene master when numChannels is omitted, and reports it', () => {
+    const cases: ReadonlyArray<[string | undefined, number]> = [
+      [undefined, 2],
+      ['mono', 1],
+      ['stereo', 2],
+      ['5.1', 6],
+      ['7.1', 8],
+    ];
+    for (const [layout, width] of cases) {
+      const project = new Project();
+      project.setSampleRate(48000);
+      if (layout !== undefined) {
+        project.setMixerSceneJson(
+          JSON.stringify({ version: 1, buses: [{ id: 'master', role: 'master', layout }] }),
+        );
+      }
+      project.addMidiClip(0, 1);
+      const audio = project.bounce({ totalFrames: 128 });
+      expect(audio.numChannels, layout ?? 'none').toBe(width);
+      expect(audio.channels, layout ?? 'none').toHaveLength(width);
+      for (const plane of audio.channels) {
+        expect(plane).toHaveLength(128);
+      }
+      project.destroy();
+    }
+  });
+
   it('bounces MIDI through the built-in synth to non-silent audio (instrument-first)', () => {
     const project = buildMidiOnlyProject();
     const audio = project.bounceWithBuiltinInstruments(
@@ -1045,10 +1072,13 @@ describe('Project native binding', () => {
     (
       project as unknown as {
         handle: {
-          bounceWithBuiltinInstruments(bindings: unknown[], settings: object): Float32Array;
+          bounceWithBuiltinInstruments(
+            bindings: unknown[],
+            settings: object,
+          ): { interleaved: Float32Array };
         };
       }
-    ).handle.bounceWithBuiltinInstruments([{ waveform }], {});
+    ).handle.bounceWithBuiltinInstruments([{ waveform }], {}).interleaved;
 
   it('refuses a numeric waveform at the facade, in range or not', () => {
     for (const waveform of [0, 3, 4, -1, Number.NaN]) {

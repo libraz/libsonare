@@ -628,7 +628,8 @@ export interface ProjectBounceOptions {
   /**
    * Output channel count: 1, 2, 6 or 8, and at most the width of the scene
    * master's layout (mono/stereo/no master allow 2). The master is mixed at
-   * this width; 1 folds a 2-channel master to 0.5(L+R). Default 2.
+   * this width; 1 folds a 2-channel master to 0.5(L+R). Omit it for the
+   * master's own width (2 with no master); the result reports the width used.
    */
   numChannels?: number;
   /** Host-instrument plugin delay compensation, in samples, fed to the compiler. Default 0. */

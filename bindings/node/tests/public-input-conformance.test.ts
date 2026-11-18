@@ -264,11 +264,14 @@ describe('shared public-input conformance corpus', () => {
  * The addon handle behind a Project. The facade refuses every number for a
  * synth token, so the native resolvers' own ordinal checks are reached here.
  */
+/** A native project bounce: the interleaved render and the width it was mixed at. */
+type NativeBounce = { interleaved: Float32Array; numChannels: number };
+
 const nativeBounce = (
   project: Project,
 ): {
-  bounceWithBuiltinInstruments(bindings: unknown[], settings: object): Float32Array;
-  bounceWithSynthInstruments(bindings: unknown[], settings: object): Float32Array;
+  bounceWithBuiltinInstruments(bindings: unknown[], settings: object): NativeBounce;
+  bounceWithSynthInstruments(bindings: unknown[], settings: object): NativeBounce;
 } => (project as unknown as { handle: ReturnType<typeof nativeBounce> }).handle;
 
 describe('a number no target C type can hold is a RangeError on every width', () => {
@@ -842,7 +845,10 @@ describe('a wrapping ordinal cannot reach a NativeSynth patch enum', () => {
   const outcome = (patch: Record<string, unknown>): string => {
     const project = midiProject();
     try {
-      const audio = nativeBounce(project).bounceWithSynthInstruments([patch], bounceOptions);
+      const audio = nativeBounce(project).bounceWithSynthInstruments(
+        [patch],
+        bounceOptions,
+      ).interleaved;
       return `render:${audio.reduce((h, s) => (h * 31 + Math.round(s * 1e6)) | 0, 0)}`;
     } catch (error) {
       return (error as Error).constructor.name;

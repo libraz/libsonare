@@ -669,6 +669,33 @@ describe('Sonare WASM Project', () => {
     return peak;
   }
 
+  it('bounces at the width of the scene master when numChannels is omitted, and reports it', () => {
+    const cases: ReadonlyArray<[string | undefined, number]> = [
+      [undefined, 2],
+      ['mono', 1],
+      ['stereo', 2],
+      ['5.1', 6],
+      ['7.1', 8],
+    ];
+    for (const [layout, width] of cases) {
+      const project = new Project();
+      project.setSampleRate(48000);
+      if (layout !== undefined) {
+        project.setMixerSceneJson(
+          JSON.stringify({ version: 1, buses: [{ id: 'master', role: 'master', layout }] }),
+        );
+      }
+      project.addMidiClip(0, 1);
+      const audio = project.bounce({ totalFrames: 128 });
+      expect(audio.numChannels, layout ?? 'none').toBe(width);
+      expect(audio.channels, layout ?? 'none').toHaveLength(width);
+      for (const plane of audio.channels) {
+        expect(plane).toHaveLength(128);
+      }
+      project.destroy();
+    }
+  });
+
   it('bounces a MIDI-only project through the built-in instrument to non-silent audio', () => {
     const project = buildMidiOnlyProject();
     try {

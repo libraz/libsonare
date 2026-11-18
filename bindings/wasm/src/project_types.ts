@@ -29,8 +29,10 @@ export interface ProjectBounceOptions {
   /** Render block size in frames. Omit for the engine default (128). */
   blockSize?: number;
   /**
-   * Output channel count: `1` folds the stereo master to 0.5(L+R), `2` is the
-   * stereo master. Omit for `2`.
+   * Output channel count: 1, 2, 6 or 8, and at most the width of the scene
+   * master's layout (mono/stereo/no master allow 2). `1` folds a 2-channel
+   * master to 0.5(L+R). Omit it for the master's own width (2 with no master);
+   * the result reports the width used.
    */
   numChannels?: number;
   /** Host-instrument PDC (latency) fed to the compiler, in samples. */

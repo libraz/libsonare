@@ -170,11 +170,11 @@ function optionalNonZero(
   return number;
 }
 
-/** Render settings the native bounce reads, plus the channel count of its result. */
+/** Render settings the native bounce reads. */
 function bounceSettings(
   fnName: BounceFn,
   options: ProjectBounceOptions | undefined,
-): { native: Record<string, unknown>; numChannels: number } {
+): Record<string, unknown> {
   const request = requestObject(fnName, options ?? {}, 'options', true);
   const native: Record<string, unknown> = {};
   const totalFrames = optionalNonZero(fnName, request.totalFrames, 'totalFrames', assertInt64);
@@ -192,7 +192,7 @@ function bounceSettings(
   if (!isAbsent(request.instrumentLatencySamples)) {
     native.instrumentLatencySamples = request.instrumentLatencySamples;
   }
-  return { native, numChannels: numChannels ?? DEFAULT_BOUNCE_CHANNELS };
+  return native;
 }
 
 type BounceFn =
@@ -201,9 +201,6 @@ type BounceFn =
   | 'bounceWithSynthInstruments'
   | 'bounceWithSf2Instruments'
   | 'bounceWithInstruments';
-
-/** Output width when `numChannels` is omitted. */
-const DEFAULT_BOUNCE_CHANNELS = 2;
 
 /**
  * Resolve the bindings of a `bounceWith*Instruments` call to the list the native
@@ -250,12 +247,15 @@ const withDestinationCopy = <T extends object>(instrument: T, destinationId: num
 const withDestinationLayer = <T extends object>(instrument: T, destinationId: number): T =>
   Object.assign(Object.create(instrument) as T, { destinationId });
 
-function planarBounce(
-  data: Float32Array,
-  numChannels: number,
-  sampleRate: number,
-): ProjectBounceResult {
-  return { channels: deinterleave(data, numChannels), sampleRate, numChannels };
+/** A native bounce: interleaved samples and the width the render was mixed at. */
+interface NativeBounce {
+  interleaved: Float32Array;
+  numChannels: number;
+}
+
+function planarBounce(raw: NativeBounce, sampleRate: number): ProjectBounceResult {
+  const { interleaved, numChannels } = raw;
+  return { channels: deinterleave(interleaved, numChannels), sampleRate, numChannels };
 }
 
 function diagnosticsFromNative(raw: unknown): ProjectDiagnostic[] {
@@ -1441,8 +1441,8 @@ export class Project {
    * {@link bounceWithBuiltinInstruments}.
    */
   bounce(options?: ProjectBounceOptions): ProjectBounceResult {
-    const { native, numChannels } = bounceSettings('bounce', options);
-    return planarBounce(this.native.bounce(native), numChannels, this.sampleRate);
+    const native = bounceSettings('bounce', options);
+    return planarBounce(this.native.bounce(native), this.sampleRate);
   }
 
   /**
@@ -1473,16 +1473,12 @@ export class Project {
     options?: ProjectBounceOptions,
   ): ProjectBounceResult {
     const fnName = 'bounceWithInstruments';
-    const { native: settings, numChannels } = bounceSettings(fnName, options);
+    const settings = bounceSettings(fnName, options);
     const bindings = bindInstruments(fnName, instruments, (i) => i, withDestinationLayer);
     const native = this.native;
     this.instrumentBounceActive = true;
     try {
-      return planarBounce(
-        native.bounceWithInstruments(bindings, settings),
-        numChannels,
-        native.getSampleRate(),
-      );
+      return planarBounce(native.bounceWithInstruments(bindings, settings), native.getSampleRate());
     } finally {
       this.instrumentBounceActive = false;
     }
@@ -1502,7 +1498,7 @@ export class Project {
     options?: ProjectBounceOptions,
   ): ProjectBounceResult {
     const fnName = 'bounceWithBuiltinInstruments';
-    const { native: settings, numChannels } = bounceSettings(fnName, options);
+    const settings = bounceSettings(fnName, options);
     const bindings = bindInstruments(
       fnName,
       instruments,
@@ -1515,7 +1511,6 @@ export class Project {
     const native = this.native;
     return planarBounce(
       native.bounceWithBuiltinInstruments(bindings, settings),
-      numChannels,
       native.getSampleRate(),
     );
   }
@@ -1542,7 +1537,7 @@ export class Project {
     options?: ProjectBounceOptions,
   ): ProjectBounceResult {
     const fnName = 'bounceWithSynthInstruments';
-    const { native: settings, numChannels } = bounceSettings(fnName, options);
+    const settings = bounceSettings(fnName, options);
     const bindings = bindInstruments(
       fnName,
       instruments,
@@ -1552,7 +1547,6 @@ export class Project {
     const native = this.native;
     return planarBounce(
       native.bounceWithSynthInstruments(bindings, settings),
-      numChannels,
       native.getSampleRate(),
     );
   }
@@ -1605,12 +1599,11 @@ export class Project {
     options?: ProjectBounceOptions,
   ): ProjectBounceResult {
     const fnName = 'bounceWithSf2Instruments';
-    const { native: settings, numChannels } = bounceSettings(fnName, options);
+    const settings = bounceSettings(fnName, options);
     const bindings = bindInstruments(fnName, instruments, (i) => i, withDestinationCopy);
     const native = this.native;
     return planarBounce(
       native.bounceWithSf2Instruments(bindings, settings),
-      numChannels,
       native.getSampleRate(),
     );
   }
