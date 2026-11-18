@@ -1379,3 +1379,44 @@ TEST_CASE("griffinlim_vqt matches the oracle on a single-frame and single-bin in
                             oracle_griffinlim_vqt(magnitude.data(), 1, n_frames, config, sr, 0));
   }
 }
+
+TEST_CASE("VQT filter_scale moves the magnitudes and the bandwidth", "[vqt]") {
+  const Audio audio = generate_sine(440.0f, 0.5f, 22050);
+  VqtConfig wide;
+  wide.fmin = 110.0f;
+  wide.n_bins = 48;
+  wide.filter_scale = 1.0f;
+  VqtConfig narrow = wide;
+  narrow.filter_scale = 0.5f;
+
+  const VqtResult a = vqt(audio, wide);
+  const VqtResult b = vqt(audio, narrow);
+  REQUIRE(a.n_bins() == b.n_bins());
+  REQUIRE(a.n_frames() == b.n_frames());
+  REQUIRE(a.frequencies().size() == b.frequencies().size());
+  for (std::size_t k = 0; k < a.frequencies().size(); ++k) {
+    CHECK_THAT(a.frequencies()[k], WithinRel(b.frequencies()[k], 1e-6f));
+  }
+
+  const std::vector<float>& ma = a.magnitude();
+  const std::vector<float>& mb = b.magnitude();
+  REQUIRE(ma.size() == mb.size());
+  const float peak = *std::max_element(ma.begin(), ma.end());
+  REQUIRE(peak > 0.0f);
+  float max_diff = 0.0f;
+  for (std::size_t i = 0; i < ma.size(); ++i)
+    max_diff = std::max(max_diff, std::abs(ma[i] - mb[i]));
+  CHECK(max_diff > 1e-2f * peak);
+
+  // A shorter filter is a wider band, so the semitone next to the tone leaks more of it.
+  constexpr int kToneBin = 24;  // 440 Hz is two octaves above fmin
+  const int frame = a.n_frames() / 2;
+  auto leakage = [frame](const VqtResult& r) {
+    const std::vector<float>& m = r.magnitude();
+    const auto at = [&](int bin) {
+      return m[static_cast<std::size_t>(bin) * r.n_frames() + frame];
+    };
+    return (at(kToneBin - 1) + at(kToneBin + 1)) / at(kToneBin);
+  };
+  CHECK(leakage(b) > leakage(a));
+}
