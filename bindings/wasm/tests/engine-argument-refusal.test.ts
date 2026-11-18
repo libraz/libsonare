@@ -91,7 +91,7 @@ describe('RealtimeEngine value refusals are RangeErrors', () => {
       const strip = thrown(() => engine.setStrip(10, JSON.parse(typo).strips[0]));
       expect(isSonareError(strip)).toBe(true);
       expect((strip as { code: number }).code).toBe(ErrorCode.InvalidFormat);
-      expect((strip as Error).message).toContain("unknown strip key 'strips[0].faderDB'");
+      expect((strip as Error).message).toContain("unknown scene key 'strips[0].faderDB'");
     });
   });
 

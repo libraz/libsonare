@@ -1371,14 +1371,12 @@ export class Project {
   /**
    * Replace the project's mixer scene from a scene JSON string.
    *
-   * @returns One warning per key the scene reader does not recognise (e.g.
-   *   `unknown scene key 'strips[2].faderDB'`; `$`- and `x-`-prefixed keys are exempt).
-   *   The scene is still applied; empty when every key was consumed.
+   * @throws SonareError `InvalidFormat` naming the first key the scene reader does not
+   *   recognise (e.g. `unknown scene key 'strips[2].faderDB'`; `$`- and `x-`-prefixed keys are
+   *   exempt); the project's scene is left unchanged.
    */
-  setMixerSceneJson(sceneJson: string): string[] {
-    return this.native.setMixerSceneJson(
-      mixSceneJsonToNative('Project.setMixerSceneJson', sceneJson),
-    );
+  setMixerSceneJson(sceneJson: string): void {
+    this.native.setMixerSceneJson(mixSceneJsonToNative('Project.setMixerSceneJson', sceneJson));
   }
 
   /**

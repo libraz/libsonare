@@ -6,13 +6,23 @@ describe('unknown mixing scene keys (WASM)', () => {
     await init();
   });
 
-  it('Project.setMixerSceneJson returns one warning per unknown key', () => {
+  it('Project.setMixerSceneJson refuses an unknown key by name as InvalidFormat', () => {
     const project = new Project();
     try {
       const typo =
         '{"version":1,"$schema":"s","strips":[{"id":"lead","faderDB":-3,"x-note":1}],"buses":[]}';
-      expect(project.setMixerSceneJson(typo)).toEqual(["unknown scene key 'strips[0].faderDB'"]);
-      expect(project.setMixerSceneJson('{"version":1,"strips":[{"id":"lead"}]}')).toEqual([]);
+      let error: unknown;
+      try {
+        project.setMixerSceneJson(typo);
+      } catch (caught) {
+        error = caught;
+      }
+      expect(isSonareError(error)).toBe(true);
+      expect((error as { code: number }).code).toBe(ErrorCode.InvalidFormat);
+      expect((error as Error).message).toContain("unknown scene key 'strips[0].faderDB'");
+      // `$`- and `x-`-prefixed keys are annotations, not unknown keys.
+      const annotated = '{"version":1,"$schema":"s","strips":[{"id":"lead","x-note":1}]}';
+      expect(project.setMixerSceneJson(annotated)).toBeUndefined();
     } finally {
       project.destroy();
     }
@@ -35,7 +45,7 @@ describe('unknown mixing scene keys (WASM)', () => {
         }
         expect(isSonareError(error)).toBe(true);
         expect((error as { code: number }).code).toBe(ErrorCode.InvalidFormat);
-        expect((error as Error).message).toContain("unknown strip key 'strips[0].faderDB'");
+        expect((error as Error).message).toContain("unknown scene key 'strips[0].faderDB'");
       }
       const annotated = '{"$schema":"s","version":1,"strips":[{"id":"s","faderDb":-3,"x-t":1}]}';
       expect(() => engine.setStrip(10, JSON.parse(annotated).strips[0])).not.toThrow();

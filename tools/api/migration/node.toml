@@ -10808,6 +10808,15 @@ domain = "project"
 rule = "getters"
 test = "bindings/node/tests/soundfont.test.ts::reads the preset count as a getter"
 
+
+[[entry]]
+kind = "method"
+old = "Project.setMixerSceneJson"
+changed = "returns void (was one warning string per unknown key); an unknown scene key is refused as InvalidFormat naming the key"
+domain = "project"
+rule = "individual"
+test = "bindings/node/tests/scene-warnings.test.ts::Project.setMixerSceneJson refuses an unknown key by name as InvalidFormat"
+
 [[entry]]
 kind = "method"
 old = "Project.getPartRig"
