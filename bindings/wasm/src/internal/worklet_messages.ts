@@ -586,25 +586,12 @@ export interface SonareEngineSyncMidiCcMessage {
   renderFrame: number;
 }
 
-export interface SonareEngineSyncMidiUmpWordMessage {
+export interface SonareEngineSyncMidiUmpMessage {
   type: 'syncMidiUmp';
   destinationId: number;
-  word0: number;
-  words?: never;
-  renderFrame: number;
-}
-
-export interface SonareEngineSyncMidiUmpWordsMessage {
-  type: 'syncMidiUmp';
-  destinationId: number;
-  word0?: never;
   words: UmpWords;
   renderFrame: number;
 }
-
-export type SonareEngineSyncMidiUmpMessage =
-  | SonareEngineSyncMidiUmpWordMessage
-  | SonareEngineSyncMidiUmpWordsMessage;
 
 /**
  * One of the three per-note expression dimensions, addressed to a destination.

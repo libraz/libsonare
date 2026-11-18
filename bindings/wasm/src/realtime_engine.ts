@@ -1373,14 +1373,12 @@ export class RealtimeEngine {
    * width; SysEx7 / data messages (MT 0x3 / 0x5) are refused, use
    * {@link pushMidiSysex}. Throws when the slot ring or command queue is full
    * (retry after a process block). `renderFrame` is the render-frame time to
-   * apply (omit for immediate). A bare number is accepted as a one-word
-   * message.
+   * apply (omit for immediate).
    */
-  pushMidiUmp(destinationId: number, words: UmpWords | number, renderFrame?: number): void {
-    const list = typeof words === 'number' ? [words] : words;
+  pushMidiUmp(destinationId: number, words: UmpWords, renderFrame?: number): void {
     this.native.pushMidiUmp(
       destinationId,
-      assertUmpWords('pushMidiUmp', list),
+      assertUmpWords('pushMidiUmp', words),
       resolveRenderFrame('pushMidiUmp', renderFrame),
     );
   }

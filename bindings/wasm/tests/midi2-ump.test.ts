@@ -307,9 +307,15 @@ describe('RealtimeEngine raw UMP push', () => {
       expect(() => engine.pushMidiUmp(0, new Uint32Array(NOTE_ON_2W))).not.toThrow();
       expect(() => engine.pushMidiUmp(0, NOTE_ON_2W)).not.toThrow();
       expect(() => engine.pushMidiUmp(0, [0x00000000])).not.toThrow();
-      expect(() => engine.pushMidiUmp(0, 0x20903c64)).not.toThrow();
+      expect(() => engine.pushMidiUmp(0, [0x20903c64])).not.toThrow();
       // Bit 31 written as the signed spelling of a shift expression.
       expect(() => engine.pushMidiUmp(0, [(0x4 << 28) | 0x00930000, 0])).not.toThrow();
+    });
+  });
+
+  it('pushMidiUmp refuses a bare number instead of reading it as a one-word message', () => {
+    withEngine((engine) => {
+      expect(() => engine.pushMidiUmp(0, 0x20903c64 as unknown as number[])).toThrow(TypeError);
     });
   });
 

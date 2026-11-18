@@ -1420,7 +1420,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
       }
     });
 
-    it('applies multiword destination UMP and preserves legacy one-word sync', () => {
+    it('applies multiword and one-word destination UMP sync messages', () => {
       const processor = new SonareRealtimeEngineWorkletProcessor({
         sampleRate: 48000,
         maxBlockSize: 128,
@@ -1448,7 +1448,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         processor.receiveSync({
           type: 'syncMidiUmp',
           destinationId: 4,
-          word0: 0x20903c64,
+          words: [0x20903c64],
           renderFrame: 512,
         });
 

@@ -911,7 +911,7 @@ export class SonareRealtimeEngineWorkletProcessor {
       case 'syncMidiUmp':
         this.engine.pushMidiUmp(
           message.destinationId,
-          message.words ?? [message.word0],
+          message.words,
           wireRenderFrame(message.renderFrame),
         );
         break;

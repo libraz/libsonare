@@ -1181,7 +1181,12 @@ export class SonareEngine {
     );
   }
 
-  pushMidiUmp(trackId: string | number, words: number | UmpWords, renderFrame?: number): void {
+  /**
+   * Queues a live raw UMP message to the track's MIDI destination. `words` is 1 to 4 words, most
+   * significant first, with a length matching the message type of `words[0]`. SysEx7 and data messages
+   * (MT 0x3 / 0x5) are refused; use {@link pushMidiSysex}. `renderFrame` is the absolute render frame to fire at; omitted: immediate.
+   */
+  pushMidiUmp(trackId: string | number, words: UmpWords, renderFrame?: number): void {
     strips.pushMidiUmp(this.stripContext, trackId, words, renderFrame);
   }
 

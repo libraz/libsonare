@@ -619,21 +619,18 @@ export function pushMidiPolyPressure(
 export function pushMidiUmp(
   ctx: EngineStripContext,
   trackId: string | number,
-  word0: number | UmpWords,
+  umpWords: UmpWords,
   renderFrame: number | undefined,
 ): void {
   const destinationId = ctx.resolveTargetId(trackId);
-  if (typeof word0 === 'number') {
-    ctx.offlineEngine.pushMidiUmp(destinationId, word0, renderFrame);
-    ctx.postSync({
-      type: 'syncMidiUmp',
-      destinationId,
-      word0,
-      renderFrame: resolveRenderFrame('pushMidiUmp', renderFrame),
-    });
-    return;
-  }
-  const words = word0 instanceof Uint32Array ? new Uint32Array(word0) : word0.slice();
+  // A copy, so a caller reusing its buffer cannot change what was posted; the
+  // offline engine refuses anything that is not a word array before the post.
+  const words =
+    umpWords instanceof Uint32Array
+      ? new Uint32Array(umpWords)
+      : Array.isArray(umpWords)
+        ? umpWords.slice()
+        : umpWords;
   ctx.offlineEngine.pushMidiUmp(destinationId, words, renderFrame);
   ctx.postSync({
     type: 'syncMidiUmp',

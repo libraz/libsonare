@@ -207,7 +207,7 @@ describe('SonareRealtimeEngineNode', () => {
         engine.setSynthInstrument(3, { preset: 'sawLead' });
         engine.setSf2Instrument(3, { gain: 0.5 });
         // Program Change 5 on group 0, channel 0: it must reach the new instrument.
-        engine.pushMidiUmp(3, 0x20c00500);
+        engine.pushMidiUmp(3, [0x20c00500]);
         engine.setMidiFx(3, { transposeSemitones: 12 });
         engine.clearMidiFx(3);
         expect(posted.map((message) => (message as { type?: unknown }).type)).toEqual([
@@ -889,7 +889,7 @@ describe('SonareRealtimeEngineNode', () => {
       }
     });
 
-    it('mirrors scalar and multiword UMP plus raw input without aliasing caller buffers', async () => {
+    it('mirrors array and typed-array UMP plus raw input without aliasing caller buffers, and refuses a bare number', async () => {
       const posted: unknown[] = [];
       const offline = new (await import('../dist/index.js')).RealtimeEngine({
         sampleRate: 48000,
@@ -909,7 +909,7 @@ describe('SonareRealtimeEngineNode', () => {
       });
       try {
         const words = new Uint32Array([0x41923c00, 0x12345678]);
-        engine.pushMidiUmp(3, 0x20903c64, 128);
+        engine.pushMidiUmp(3, [0x20903c64], 128);
         engine.pushMidiUmp(3, words, 256);
         words[1] = 0;
 
@@ -918,7 +918,7 @@ describe('SonareRealtimeEngineNode', () => {
         engine.pushMidiInputUmp(inputWords, 512);
         inputWords[1] = 0;
 
-        expect(destinationUmp).toHaveBeenCalledWith(3, 0x20903c64, 128);
+        expect(destinationUmp).toHaveBeenCalledWith(3, [0x20903c64], 128);
         expect(destinationUmp).toHaveBeenCalledWith(
           3,
           Uint32Array.from([0x41923c00, 0x12345678]),
@@ -927,7 +927,7 @@ describe('SonareRealtimeEngineNode', () => {
         expect(inputUmp).toHaveBeenCalledWith(Uint32Array.from([0x41923c00, 0x87654321]), 512);
         expect(posted).toEqual(
           expect.arrayContaining([
-            { type: 'syncMidiUmp', destinationId: 3, word0: 0x20903c64, renderFrame: 128 },
+            { type: 'syncMidiUmp', destinationId: 3, words: [0x20903c64], renderFrame: 128 },
             {
               type: 'syncMidiUmp',
               destinationId: 3,
@@ -942,6 +942,11 @@ describe('SonareRealtimeEngineNode', () => {
             },
           ]),
         );
+
+        destinationUmp.mockRestore();
+        posted.length = 0;
+        expect(() => engine.pushMidiUmp(3, 0x20903c64 as unknown as number[])).toThrow(TypeError);
+        expect(posted).toEqual([]);
       } finally {
         engine.destroy();
       }

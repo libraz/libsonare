@@ -27878,6 +27878,15 @@ changed = "instruments is an array of { destinationId?, instrument } pairs; a si
 domain = "project"
 rule = "one-input-form"
 test = "bindings/wasm/tests/bounce-binding-forms.test.ts::refuses a single pair"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.pushMidiUmp"
+changed = "words is a Uint32Array or number array; a bare number is a TypeError"
+domain = "engine"
+rule = "one-input-form"
+test = "bindings/wasm/tests/midi2-ump.test.ts::pushMidiUmp refuses a bare number"
+
 [[entry]]
 kind = "method"
 old = "HrtfSet.native"
