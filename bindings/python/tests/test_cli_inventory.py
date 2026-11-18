@@ -438,7 +438,7 @@ def test_project_validate_strict_writes_canonical_artifact(tmp_path) -> None:
     source.write_text(
         json.dumps(
             {
-                "version": 1,
+                "version": 7,
                 "sample_rate": 48000,
                 "tracks": [
                     {

@@ -151,7 +151,7 @@ def test_voice_preset_validate_set_delivers_a_json_value_containing_commas() -> 
     available to the caller.
     """
     preset = {
-        "schemaVersion": 1,
+        "schemaVersion": 3,
         "id": "set-fixture",
         "name": "Set Fixture",
         "category": "custom",
@@ -662,7 +662,7 @@ def test_chords_json_reports_c_bass_not_root(monkeypatch, capsys) -> None:
 
     args = argparse.Namespace(
         file="unused.wav",
-        min_duration=0.0,
+        min_duration_sec=0.0,
         smoothing_window=0,
         threshold=0.0,
         with_seventh=True,
@@ -866,36 +866,26 @@ def test_voice_preset_validate_normalizes_a_preset_file() -> None:
         assert isinstance(payload, dict)
 
 
-def test_voice_preset_validate_accepts_a_new_preset_and_a_v1_document() -> None:
-    """A new preset validates, and a schema v1 document without the new sections still does."""
+def test_voice_preset_validate_refuses_an_earlier_schema_version() -> None:
+    """A current preset validates; the same document at an earlier schemaVersion is refused."""
     preset = _run_cli(["voice-preset", "--preset", "hard-tune", "--json"])
     assert preset.returncode == 0, preset.stderr
     document = json.loads(preset.stdout)
     assert document["schemaVersion"] == 3
-    legacy = dict(document)
-    legacy["schemaVersion"] = 1
-    legacy["dsp"] = {
-        key: value
-        for key, value in document["dsp"].items()
-        if key
-        not in (
-            "voiceEngine",
-            "pitchCorrection",
-            "harmony",
-            "vocoder",
-            "character",
-            "reverbVariation",
-            "midi",
-        )
-    }
-    legacy["category"] = "custom"
+    earlier = {**document, "schemaVersion": 2}
     with tempfile.TemporaryDirectory() as tmpdir:
-        for name, content in (("v2.json", document), ("v1.json", legacy)):
+        outcomes = {}
+        for name, content in (("current.json", document), ("earlier.json", earlier)):
             preset_path = os.path.join(tmpdir, name)
             with open(preset_path, "w", encoding="utf-8") as fh:
                 json.dump(content, fh)
-            result = _run_cli(["voice-preset-validate", preset_path, "--json"])
-            assert result.returncode == 0, (name, result.stderr)
+            outcomes[name] = _run_cli(["voice-preset-validate", preset_path, "--json"])
+    assert outcomes["current.json"].returncode == 0, outcomes["current.json"].stderr
+    refused = outcomes["earlier.json"]
+    assert refused.returncode == 3
+    report = json.loads(refused.stdout)
+    assert report["ok"] is False
+    assert "schemaVersion 2 is older than the version this release reads (3)" in report["error"]
 
 
 def test_voice_preset_validate_accepts_native_preset_json_alias() -> None:

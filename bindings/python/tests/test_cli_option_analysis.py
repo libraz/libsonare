@@ -48,7 +48,7 @@ def _key_result() -> SimpleNamespace:
     )
 
 
-def test_key_hpss_canonical_and_legacy_spellings_forward_identically(
+def test_key_hpss_forwards_and_the_earlier_spelling_is_unknown(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import libsonare
@@ -63,11 +63,11 @@ def test_key_hpss_canonical_and_legacy_spellings_forward_identically(
 
     monkeypatch.setattr(libsonare, "detect_key", fake_detect_key)
 
-    assert _cli_analysis.cmd_key(_key_args(use_hpss=True)) == 0
-    assert _cli_analysis.cmd_key(_key_args(hpss=True)) == 0
-
-    assert calls[0] == calls[1]
+    assert _cli_analysis.cmd_key(_parser().parse_args(["key", "input.wav", "--hpss"])) == 0
     assert calls[0]["use_hpss"] is True
+    with pytest.raises(SystemExit) as refused:
+        _parser().parse_args(["key", "input.wav", "--use-hpss"])
+    assert refused.value.code == 2
 
 
 @pytest.mark.parametrize(

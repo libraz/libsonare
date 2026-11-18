@@ -331,7 +331,7 @@ def test_acoustic_handlers_forward_ir_and_blind_controls(
     ]
 
 
-def test_estimate_room_forwards_band_controls_and_uses_zero_default(
+def test_estimate_room_leaves_omitted_band_controls_to_the_library(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(acoustic, "_load_audio", lambda _path: ([0.1], 48000))
@@ -367,9 +367,6 @@ def test_estimate_room_forwards_band_controls_and_uses_zero_default(
             "aspect_hint_lh": 1.0,
             "reference_absorption": 0.15,
             "prefer_eyring": True,
-            "n_octave_bands": 0,
-            "min_decay_db": 0.0,
-            "noise_floor_margin_db": 0.0,
         }
     ]
 

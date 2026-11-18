@@ -1179,7 +1179,7 @@ def test_project_validate_surfaces_diagnostics_field(tmp_path) -> None:
 def test_project_validate_strict_writes_canonical_artifact_before_exit(tmp_path) -> None:
     """Strict mode preserves a parsed payload and writes its canonical JSON."""
     warning = {
-        "version": 1,
+        "version": 7,
         "sample_rate": 48000,
         "tracks": [
             {
@@ -1274,7 +1274,7 @@ def test_project_bounce_refuses_a_fractional_project_rate(tmp_path, stored_rate)
     proj = tmp_path / "project.sonare"
     wav = tmp_path / "bounce.wav"
     proj.write_text(
-        json.dumps({"version": 1, "sample_rate": stored_rate, "tracks": [], "clips": []}),
+        json.dumps({"version": 7, "sample_rate": stored_rate, "tracks": [], "clips": []}),
         encoding="utf-8",
     )
 
@@ -1295,7 +1295,7 @@ def test_project_bounce_renders_an_integral_project_rate(tmp_path, stored_rate) 
     proj = tmp_path / "project.sonare"
     wav = tmp_path / "bounce.wav"
     proj.write_text(
-        json.dumps({"version": 1, "sample_rate": stored_rate, "tracks": [], "clips": []}),
+        json.dumps({"version": 7, "sample_rate": stored_rate, "tracks": [], "clips": []}),
         encoding="utf-8",
     )
 
