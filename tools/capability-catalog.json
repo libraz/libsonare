@@ -100,6 +100,76 @@
         "unit": "samples"
       },
       {
+        "choices": [
+          {
+            "name": "linkwitzRiley",
+            "value": 0
+          },
+          {
+            "name": "butterworth",
+            "value": 1
+          },
+          {
+            "name": "bessel",
+            "value": 2
+          },
+          {
+            "name": "firLinearPhase",
+            "value": 3
+          }
+        ],
+        "coupledWith": [],
+        "default": 0,
+        "dependsOn": [],
+        "id": null,
+        "max": null,
+        "maxExclusive": false,
+        "maxRelativeTo": null,
+        "min": null,
+        "minExclusive": false,
+        "name": "dynamics.multibandComp.crossover.mode",
+        "rtSafe": false,
+        "scale": "linear",
+        "slot": null,
+        "type": "enum",
+        "uiMax": null,
+        "uiMin": null,
+        "unit": null
+      },
+      {
+        "choices": [
+          {
+            "name": "lr2",
+            "value": 0
+          },
+          {
+            "name": "lr4",
+            "value": 1
+          },
+          {
+            "name": "lr8",
+            "value": 2
+          }
+        ],
+        "coupledWith": [],
+        "default": 1,
+        "dependsOn": [],
+        "id": null,
+        "max": null,
+        "maxExclusive": false,
+        "maxRelativeTo": null,
+        "min": null,
+        "minExclusive": false,
+        "name": "dynamics.multibandComp.crossover.slope",
+        "rtSafe": false,
+        "scale": "linear",
+        "slot": null,
+        "type": "enum",
+        "uiMax": null,
+        "uiMin": null,
+        "unit": null
+      },
+      {
         "choices": null,
         "coupledWith": [],
         "default": false,

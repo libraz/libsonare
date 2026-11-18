@@ -173,6 +173,15 @@ bool read_chain_only_config(const ParamMap& params) {
   int fir_kernel_size = defaults.dynamics.multiband_comp.config.crossover.fir_kernel_size;
   detail::read_field(params, fir_key.c_str(), fir_kernel_size, detail::kSamples);
   supply_if_given(fir_key, fir_key, fir_kernel_size);
+  // The crossover's slope and mode are chain keys too, read as the multiband insert reads them.
+  const auto& crossover = defaults.dynamics.multiband_comp.config.crossover;
+  const std::string slope_key = "dynamics.multibandComp.crossover.slope";
+  const std::string mode_key = "dynamics.multibandComp.crossover.mode";
+  supply_if_given(
+      slope_key, slope_key,
+      static_cast<double>(detail::read_enum(params, slope_key.c_str(), crossover.slope)));
+  supply_if_given(mode_key, mode_key,
+                  static_cast<double>(detail::read_enum(params, mode_key.c_str(), crossover.mode)));
   // A cutoff element and the legacy linear floor have no single default: declared, not read.
   const std::pair<std::string, detail::ParamMeta> undefaulted[] = {
       {kChainCutoffList, detail::kHzLog}, {"repair.denoise.gainFloor", detail::kNone}};
