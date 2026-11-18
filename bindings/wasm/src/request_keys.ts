@@ -2041,6 +2041,7 @@ const RenderPlaybackRequestKeys = keysOf<RenderPlaybackRequest>()([
   'sampleRate',
   'config',
   'hrtf',
+  'validate',
 ]);
 const PlaybackRendererOptionsKeys = keysOf<PlaybackRendererOptions>()([
   'config',

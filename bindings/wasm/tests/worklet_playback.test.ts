@@ -187,12 +187,12 @@ describe('SonarePlaybackWorkletProcessor', () => {
 
       processor.receiveMessage({
         type: 'config',
-        config: JSON.stringify({ night_mode: { amount: 1 } }),
+        config: { night_mode: { amount: 1 } },
       });
       expect(port.messages.filter((m) => m.type === 'error')).toHaveLength(0);
       processor.receiveMessage({
         type: 'config',
-        config: JSON.stringify({ target: { kind: 'speakers', layout: '5.1' } }),
+        config: { target: { kind: 'speakers', layout: '5.1' } },
       });
       const error = port.messages.at(-1);
       expect(error?.type).toBe('error');
@@ -295,6 +295,18 @@ describe('SonarePlaybackWorkletProcessor', () => {
     );
   });
 
+  it('refuses a serialized JSON string as the configuration', () => {
+    const context = { sampleRate: 44100 } as BaseAudioContext;
+    const nodeFactory = () => ({}) as AudioWorkletNode;
+    const text = JSON.stringify(SPEAKERS_5_1_AUTO);
+    expect(() => createSonarePlaybackNode(context, { config: text as never, nodeFactory })).toThrow(
+      new TypeError('config must be a configuration object'),
+    );
+    expect(
+      () => new SonarePlaybackWorkletProcessor({ config: text as never, sampleRate: 48000 }),
+    ).toThrow(/config must be a configuration object/);
+  });
+
   it('creates a node whose input follows its source without browser remixing', () => {
     const calls: Array<{ name: string; options: AudioWorkletNodeOptions }> = [];
     const nodeFactory = (
@@ -319,7 +331,7 @@ describe('SonarePlaybackWorkletProcessor', () => {
       channelInterpretation: 'discrete',
     });
     expect(calls[0].options.processorOptions.sampleRate).toBe(44100);
-    expect(typeof calls[0].options.processorOptions.config).toBe('string');
+    expect(calls[0].options.processorOptions.config).toEqual(SPEAKERS_5_1_AUTO);
     expect(calls[1].name).toBe('custom');
     expect(calls[1].options.outputChannelCount).toEqual([2]);
     expect(calls[1].options.processorOptions.hrtf).toBe(hrtf);

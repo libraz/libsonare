@@ -34,7 +34,7 @@ describe('HrtfSet', () => {
 });
 
 describe('PlaybackRenderer construction and validation', () => {
-  it('requires sampleRate, takes an omitted maxBlockSize as the default and refuses 0', () => {
+  it('requires sampleRate, reports the default block size when maxBlockSize is omitted and refuses 0', () => {
     const config = { target: { kind: 'speakers', layout: 'stereo' } } as const;
     expect(() => new PlaybackRenderer({ config } as never)).toThrow(TypeError);
     expect(() => new PlaybackRenderer({ sampleRate: 48000, config, maxBlockSize: 0 })).toThrow(
@@ -42,10 +42,22 @@ describe('PlaybackRenderer construction and validation', () => {
     );
     const renderer = new PlaybackRenderer({ sampleRate: 48000, config });
     try {
-      const block = new Float32Array(1024);
+      const max = renderer.maxBlockSize;
+      expect(max).toBeGreaterThan(0);
+      const block = new Float32Array(max);
       expect(renderer.processPlanar([block, block])).toHaveLength(2);
-      const over = new Float32Array(1025);
-      expect(() => renderer.processPlanar([over, over])).toThrow();
+      const over = new Float32Array(max + 1);
+      expect(() => renderer.processPlanar([over, over])).toThrow(RangeError);
+    } finally {
+      renderer.destroy();
+    }
+  });
+
+  it('reports the given block size', () => {
+    const config = { target: { kind: 'speakers', layout: 'stereo' } } as const;
+    const renderer = new PlaybackRenderer({ sampleRate: 48000, config, maxBlockSize: 256 });
+    try {
+      expect(renderer.maxBlockSize).toBe(256);
     } finally {
       renderer.destroy();
     }
@@ -373,6 +385,34 @@ describe('PlaybackLoudnessMeter', () => {
 });
 
 describe('renderPlayback', () => {
+  it('refuses a serialized JSON string as the configuration', () => {
+    expect(() =>
+      renderPlayback({
+        samples: new Float32Array(8),
+        numChannels: 2,
+        sampleRate: 48000,
+        config: '{}' as never,
+      }),
+    ).toThrow(new TypeError('renderPlayback: config must be a configuration object'));
+  });
+
+  it('scans the samples for NaN unless validate is false', () => {
+    const samples = new Float32Array(8);
+    samples[3] = Number.NaN;
+    const request = {
+      samples,
+      numChannels: 2,
+      sampleRate: 48000,
+      config: { target: { kind: 'speakers' as const, layout: 'stereo' as const } },
+    };
+    expect(() => renderPlayback(request)).toThrow(
+      new RangeError('renderPlayback: samples contains NaN or Inf at index 3'),
+    );
+    expect(() => renderPlayback({ ...request, validate: false })).not.toThrow(
+      /contains NaN or Inf/,
+    );
+  });
+
   it('renders a whole stereo buffer offline to a headphones target', () => {
     const [l, r] = stereoBlock(4096);
     const interleaved = new Float32Array(l.length * 2);
@@ -517,17 +557,20 @@ describe('playback constructors take one options object', () => {
     ).toThrow(new TypeError("PlaybackRenderer: unknown request key 'bogus'"));
   });
 
-  it('refuse an undeclared key inside an object config, and leave a JSON string to the parser', () => {
+  it('refuse an undeclared key inside an object config, and a JSON string config', () => {
     expect(
       () => new PlaybackRenderer({ sampleRate: 48000, config: { bogus: 1 } as never }),
     ).toThrow(new TypeError("PlaybackRenderer: unknown option 'bogus' in 'config'"));
-    let renderer: PlaybackRenderer | undefined;
+    expect(
+      () => new PlaybackRenderer({ sampleRate: 48000, config: '{"bogus":1}' as never }),
+    ).toThrow(new TypeError('PlaybackRenderer: config must be a configuration object'));
+    const renderer = new PlaybackRenderer({ sampleRate: 48000, config: {} });
     try {
-      renderer = new PlaybackRenderer({ sampleRate: 48000, config: '{"bogus":1}' });
-    } catch (error) {
-      expect((error as Error).message).not.toMatch(/unknown (request key|option)/);
+      expect(() => renderer.setConfig('{}' as never)).toThrow(
+        new TypeError('PlaybackRenderer.setConfig: config must be a configuration object'),
+      );
     } finally {
-      renderer?.destroy();
+      renderer.destroy();
     }
   });
 

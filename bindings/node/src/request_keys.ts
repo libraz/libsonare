@@ -30,6 +30,7 @@ const RENDER_PLAYBACK_REQUEST_KEYS = keySet(
   'sampleRate',
   'config',
   'hrtf',
+  'validate',
 );
 const DETECT_TEMPO_REQUEST_KEYS = keySet('samples', 'sampleRate', 'validate');
 const DETECT_BPM_REQUEST_KEYS = keySet('samples', 'sampleRate', 'bpmMin', 'bpmMax', 'validate');

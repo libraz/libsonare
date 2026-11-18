@@ -19,8 +19,11 @@ type NativeHrtfSet = InstanceType<typeof addon.HrtfSet>;
 type NativePlaybackRenderer = InstanceType<typeof addon.PlaybackRenderer>;
 type NativePlaybackLoudnessMeter = InstanceType<typeof addon.PlaybackLoudnessMeter>;
 
-function configJsonText(config: PlaybackRendererConfig | string): string {
-  return typeof config === 'string' ? config : JSON.stringify(config);
+function configJsonText(fnName: string, config: PlaybackRendererConfig): string {
+  if (typeof config !== 'object' || config === null || Array.isArray(config)) {
+    throw new TypeError(`${fnName}: config must be a configuration object`);
+  }
+  return JSON.stringify(config);
 }
 
 /**
@@ -95,9 +98,7 @@ export class HrtfSet {
  *
  * `config` follows `schemas/playback-renderer-config.schema.json`: every key
  * is either fixed at construction ("prepare") or adopted at the next
- * processed block ("realtime") — see {@link PlaybackRendererConfig}. Passing
- * the document as an already-serialized string is also accepted, matching
- * {@link setConfig}.
+ * processed block ("realtime") — see {@link PlaybackRendererConfig}.
  */
 export class PlaybackRenderer {
   private native: NativePlaybackRenderer;
@@ -118,7 +119,7 @@ export class PlaybackRenderer {
       assertPositiveInteger(fnName, maxBlockSize, 'maxBlockSize');
     }
     this.native = new addon.PlaybackRenderer(
-      configJsonText(options.config),
+      configJsonText('PlaybackRenderer', options.config),
       nativeHrtf(options.hrtf),
       options.sampleRate,
       maxBlockSize ?? undefined,
@@ -147,8 +148,8 @@ export class PlaybackRenderer {
   }
 
   /** Applies a complete configuration document; a changed prepare key throws. */
-  setConfig(config: PlaybackRendererConfig | string): void {
-    this.native.setConfig(configJsonText(config));
+  setConfig(config: PlaybackRendererConfig): void {
+    this.native.setConfig(configJsonText('PlaybackRenderer.setConfig', config));
   }
 
   /** The current complete configuration document. */
@@ -192,6 +193,11 @@ export class PlaybackRenderer {
   /** Channel count of the output target. */
   get numOutputChannels(): number {
     return this.native.outputChannels();
+  }
+
+  /** Largest block a process call accepts, as the native side resolved it (the library default when `maxBlockSize` was omitted). */
+  get maxBlockSize(): number {
+    return this.native.maxBlockSize();
   }
 
   /**
@@ -286,7 +292,7 @@ export function renderPlayback(request: RenderPlaybackRequest): RenderPlaybackRe
     request.samples,
     request.numChannels,
     request.sampleRate,
-    configJsonText(request.config),
+    configJsonText('renderPlayback', request.config),
     nativeHrtf(request.hrtf),
   ) as { samples: Float32Array; channels: number };
   return { samples, numChannels: channels };

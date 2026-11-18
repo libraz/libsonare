@@ -16,6 +16,7 @@ import type {
 } from '../index.js';
 import type { AutomationCurve, SurroundPan } from '../public_types.js';
 import type { ExternalMidiEvent, MidiFxConfig } from '../public_types_engine.js';
+import type { PlaybackRendererConfig } from '../public_types_playback.js';
 import type {
   SonareEngineClipPageRequestMessage,
   SonarePlaybackWorkletDiagnostics,
@@ -53,8 +54,8 @@ export type {
 
 export interface SonarePlaybackConfigMessage {
   type: 'config';
-  /** A complete configuration document, serialized on the main thread. */
-  config: string;
+  /** A complete configuration document. */
+  config: PlaybackRendererConfig;
 }
 
 export interface SonarePlaybackOrientationMessage {

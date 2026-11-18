@@ -17,17 +17,11 @@ import {
   requestObject,
 } from './validation.js';
 
-function configJsonText(config: PlaybackRendererConfig | string): string {
-  if (typeof config === 'string') {
-    return config;
+function configJsonText(fnName: string, config: PlaybackRendererConfig): string {
+  if (typeof config !== 'object' || config === null || Array.isArray(config)) {
+    throw new TypeError(`${fnName}: config must be a configuration object`);
   }
-  // `JSON.stringify` yields `undefined` for a missing or function config, which embind
-  // would report as a raw binding error.
-  const text: unknown = JSON.stringify(config);
-  if (typeof text !== 'string') {
-    throw new TypeError('config must be a configuration object or a JSON string');
-  }
-  return text;
+  return JSON.stringify(config);
 }
 
 const FLOAT32_MAX = 3.4028234663852886e38;
@@ -52,8 +46,13 @@ function nativeHrtf(hrtf: HrtfSet | undefined): WasmHrtfSet | null {
   if (!(hrtf instanceof HrtfSet)) {
     throw new TypeError('hrtf must be an HrtfSet');
   }
-  return hrtf.native;
+  const handle = hrtfHandles.get(hrtf);
+  assertHandleLive(handle === undefined, 'HrtfSet');
+  return handle as WasmHrtfSet;
 }
+
+/** Live native handles by set; a destroyed set has no entry. */
+const hrtfHandles = new WeakMap<HrtfSet, WasmHrtfSet>();
 
 /**
  * An HRTF set (SHRF v1): the direct-sound impulse responses and inter-aural
@@ -67,6 +66,7 @@ function nativeHrtf(hrtf: HrtfSet | undefined): WasmHrtfSet | null {
  *
  * @example
  * ```ts
+ * const hrtfUrl = '/assets/hrtf/default.shrf'; // where the app serves the packaged asset
  * const bytes = new Uint8Array(await (await fetch(hrtfUrl)).arrayBuffer());
  * const hrtf = HrtfSet.fromBytes(bytes);
  * const renderer = new PlaybackRenderer({ config: {}, hrtf, sampleRate: 48000 });
@@ -74,17 +74,8 @@ function nativeHrtf(hrtf: HrtfSet | undefined): WasmHrtfSet | null {
  * ```
  */
 export class HrtfSet {
-  private nativeHandle: WasmHrtfSet;
-  private released = false;
-
-  /** @internal */
-  get native(): WasmHrtfSet {
-    assertHandleLive(this.released, 'HrtfSet');
-    return this.nativeHandle;
-  }
-
   private constructor(native: WasmHrtfSet) {
-    this.nativeHandle = native;
+    hrtfHandles.set(this, native);
   }
 
   /** Builds an HRTF set from SHRF v1 bytes; malformed data throws. */
@@ -94,11 +85,12 @@ export class HrtfSet {
 
   /** Releases the native handle. Idempotent, as the Node facade is. */
   destroy(): void {
-    if (this.released) {
+    const handle = hrtfHandles.get(this);
+    if (handle === undefined) {
       return;
     }
-    this.released = true;
-    this.nativeHandle.delete();
+    hrtfHandles.delete(this);
+    handle.delete();
   }
 
   /** Releases the handle through {@link destroy}, so the instance works with `using`. */
@@ -145,7 +137,7 @@ export class PlaybackRenderer {
       assertPositiveInteger(fnName, maxBlockSize, 'maxBlockSize');
     }
     this.nativeHandle = getSonareModule().createPlaybackRenderer(
-      configJsonText(options.config),
+      configJsonText('PlaybackRenderer', options.config),
       nativeHrtf(options.hrtf),
       options.sampleRate,
       maxBlockSize,
@@ -181,8 +173,8 @@ export class PlaybackRenderer {
   }
 
   /** Applies a complete configuration document; a changed prepare key throws. */
-  setConfig(config: PlaybackRendererConfig | string): void {
-    this.native.setConfig(configJsonText(config));
+  setConfig(config: PlaybackRendererConfig): void {
+    this.native.setConfig(configJsonText('PlaybackRenderer.setConfig', config));
   }
 
   /** The current complete configuration document. */
@@ -233,6 +225,11 @@ export class PlaybackRenderer {
   /** Channel count of the output target. */
   get numOutputChannels(): number {
     return this.native.outputChannels();
+  }
+
+  /** Largest block a process call accepts, as the native side resolved it (the library default when `maxBlockSize` was omitted). */
+  get maxBlockSize(): number {
+    return this.native.maxBlockSize();
   }
 
   /**
@@ -319,12 +316,12 @@ export class PlaybackLoudnessMeter {
  */
 export function renderPlayback(request: RenderPlaybackRequest): RenderPlaybackResult {
   requestObject('renderPlayback', request, 'request', true);
-  assertAudioInput('renderPlayback', request.samples, request.sampleRate);
+  assertAudioInput('renderPlayback', request.samples, request.sampleRate, request);
   const { samples, channels } = getSonareModule().renderPlayback(
     request.samples,
     request.numChannels,
     request.sampleRate,
-    configJsonText(request.config),
+    configJsonText('renderPlayback', request.config),
     nativeHrtf(request.hrtf),
   );
   return { samples, numChannels: channels };

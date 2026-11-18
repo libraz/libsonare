@@ -16,6 +16,7 @@ import { REQUEST_SHAPES, type RequestFn, type RequestShape } from './request_key
  * throws, just with a generic native message instead of the indexed JS one.
  */
 export interface ValidateOptions {
+  /** Scan the samples for NaN and infinity before the call. Default `true`. */
   validate?: boolean;
 }
 

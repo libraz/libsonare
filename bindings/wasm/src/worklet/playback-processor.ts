@@ -32,11 +32,14 @@ import {
 const MAX_INPUT_CHANNELS = 8;
 const SPEAKER_LAYOUT_CHANNELS: Readonly<Record<string, number>> = { stereo: 2, '5.1': 6, '7.1': 8 };
 
-function configObject(config: PlaybackRendererConfig | string | undefined): PlaybackRendererConfig {
+function configObject(config: PlaybackRendererConfig | undefined): PlaybackRendererConfig {
   if (config === undefined) {
     return {};
   }
-  return typeof config === 'string' ? (JSON.parse(config) as PlaybackRendererConfig) : config;
+  if (typeof config !== 'object' || config === null || Array.isArray(config)) {
+    throw new TypeError('config must be a configuration object');
+  }
+  return config;
 }
 
 /** The target's channel count, known before any renderer exists (headphones: 2). */
@@ -150,6 +153,12 @@ export class SonarePlaybackWorkletProcessor {
     };
   }
 
+  /**
+   * Renders one quantum from `inputs[0]` through the playback renderer into `outputs[0]`. A block
+   * the renderer refuses renders silence and the timeline still advances; nothing throws.
+   *
+   * @returns `false` once the processor is destroyed, else `true`.
+   */
   process(inputs: WorkletInput, outputs: WorkletOutput): boolean {
     if (this.destroyed) {
       return false;
@@ -201,6 +210,7 @@ export class SonarePlaybackWorkletProcessor {
     return true;
   }
 
+  /** Releases the renderer; later `process()` calls return `false`. Safe to call twice. */
   destroy(): void {
     if (this.destroyed) {
       return;
@@ -243,6 +253,12 @@ export class SonarePlaybackWorkletProcessor {
   }
 }
 
+/**
+ * Registers the playback processor in an AudioWorkletGlobalScope.
+ *
+ * @param name Processor name. Default `'sonare-playback-processor'`.
+ * @throws SonareError `NotSupported` outside an AudioWorkletGlobalScope.
+ */
 export function registerSonarePlaybackWorkletProcessor(name = 'sonare-playback-processor'): void {
   const scope = globalThis as unknown as {
     AudioWorkletProcessor?: new () => object;
@@ -330,6 +346,9 @@ export function registerSonarePlaybackWorkletProcessor(name = 'sonare-playback-p
  *
  * @example
  * ```ts
+ * const playbackWorkletUrl = '/assets/playback-worklet.js'; // the app's worklet bundle
+ * const hrtfUrl = '/assets/hrtf/default.shrf'; // where the app serves the packaged asset
+ * const video = document.querySelector('video') as HTMLVideoElement;
  * await context.audioWorklet.addModule(playbackWorkletUrl);
  * const hrtf = await (await fetch(hrtfUrl)).arrayBuffer();
  * const node = createSonarePlaybackNode(context, { config: {}, hrtf });
@@ -348,7 +367,7 @@ export function createSonarePlaybackNode(
     ((ctx: BaseAudioContext, name: string, nodeOptions: AudioWorkletNodeOptions) =>
       new AudioWorkletNode(ctx, name, nodeOptions));
   const processorOptions: SonarePlaybackWorkletProcessorOptions = {
-    config: JSON.stringify(config),
+    config,
     hrtf: options.hrtf,
     maxBlockSize: options.maxBlockSize,
     sampleRate: resolveContextSampleRate(options.sampleRate, context, 'createSonarePlaybackNode'),

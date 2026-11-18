@@ -154,7 +154,7 @@ export interface SonareStreamAnalyzerNodeOptions
 
 export interface SonarePlaybackWorkletProcessorOptions {
   /** Renderer configuration; parsed once, in the processor constructor. Default `{}`. */
-  config?: PlaybackRendererConfig | string;
+  config?: PlaybackRendererConfig;
   /**
    * SHRF v1 bytes, required for a headphones target (e.g. the package asset
    * `./hrtf/default.shrf`). Copied into the renderer at construction.

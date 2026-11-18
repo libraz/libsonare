@@ -3967,6 +3967,7 @@ export interface WasmPlaybackRenderer {
   setHeadOrientation: (yawDeg: number, pitchDeg: number, rollDeg: number) => void;
   reset: () => void;
   latencySamples: () => number;
+  maxBlockSize: () => number;
   inputChannels: () => number;
   outputChannels: () => number;
   diagnosticsJson: () => string;

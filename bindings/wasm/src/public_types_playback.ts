@@ -16,24 +16,32 @@ import type { HrtfSet } from './playback_renderer.js';
  * documented on each field below.
  */
 export interface PlaybackRendererConfig {
+  /** Input layout and channel mapping. Omitted: layout `"auto"`, canonical channel order. */
   input?: PlaybackInputConfig;
+  /** Output target. Omitted: headphones with the default room preset. */
   target?: PlaybackTargetConfig;
   /** LFE level folded into L/R when the output has no LFE plane or no subwoofer. Realtime, default 0. */
   lfe_mix_db?: number;
+  /** Stereo-to-surround upmix settings. Omitted: schema defaults. */
   upmix?: PlaybackUpmixConfig;
   /** Static gain on the discrete centre of 5.1 / 7.1 input. Realtime, [-12, 12], default 0. */
   dialogue_level_db?: number;
+  /** Program loudness alignment. Omitted: no alignment gain. */
   loudness?: PlaybackLoudnessConfig;
+  /** Night-mode dynamic range control. Omitted: disabled (amount 0). */
   night_mode?: PlaybackNightModeConfig;
   /** Room simulation for a headphones target. Omitted: schema defaults (`livingRoom`, -6 dB). */
   room?: PlaybackRoomConfig;
+  /** Head-tracking settings. Omitted: enabled. */
   head_tracking?: PlaybackHeadTrackingConfig;
+  /** Final output limiter. Omitted: enabled with a -1 dB ceiling. */
   output_limiter?: PlaybackOutputLimiterConfig;
 }
 
 /** A speaker role name (`schemas/playback-renderer-config.schema.json` `$defs.role`). */
 export type PlaybackChannelRole = 'L' | 'R' | 'C' | 'LFE' | 'Ls' | 'Rs' | 'Lss' | 'Rss';
 
+/** Input layout settings of {@link PlaybackRendererConfig}; all keys are optional. */
 export interface PlaybackInputConfig {
   /** Prepare. `"auto"` follows the channel count of each processed block (1, 2, 6 or 8). Default `"auto"`. */
   layout?: 'auto' | 'mono' | 'stereo' | '5.1' | '7.1';
@@ -45,6 +53,7 @@ export interface PlaybackInputConfig {
   channel_map?: PlaybackChannelRole[] | null;
 }
 
+/** Calibration of one speaker of the output layout; all keys are optional. */
 export interface PlaybackSpeakerConfig {
   /** Prepare. Listener distance in metres, [0.1, 30]; `null` disables distance compensation. Default `null`; `config()` returns the key for each speaker of the layout, `null` when unset. */
   distance_m?: number | null;
@@ -54,6 +63,7 @@ export interface PlaybackSpeakerConfig {
   size?: 'large' | 'small';
 }
 
+/** Bass management of a speakers target; all keys are optional. */
 export interface PlaybackBassManagementConfig {
   /** Prepare. Default false. */
   enabled?: boolean;
@@ -65,6 +75,7 @@ export interface PlaybackBassManagementConfig {
   lfe_gain_db?: number;
 }
 
+/** Output target of {@link PlaybackRendererConfig}; all keys are optional. */
 export interface PlaybackTargetConfig {
   /** Prepare. Default `"headphones"`. */
   kind?: 'headphones' | 'speakers';
@@ -72,9 +83,11 @@ export interface PlaybackTargetConfig {
   layout?: 'stereo' | '5.1' | '7.1';
   /** Per-speaker calibration keyed by role; only the non-LFE roles of the output layout. */
   speakers?: Partial<Record<Exclude<PlaybackChannelRole, 'LFE'>, PlaybackSpeakerConfig>>;
+  /** Bass management. Omitted: disabled (`enabled` false) with the defaults of the other keys. */
   bass_management?: PlaybackBassManagementConfig;
 }
 
+/** Stereo upmix settings; all keys are optional and realtime. */
 export interface PlaybackUpmixConfig {
   /** Realtime. Stereo input only; the latency does not change. Default true. */
   enabled?: boolean;
@@ -86,6 +99,7 @@ export interface PlaybackUpmixConfig {
   lfe_from_upmix?: boolean;
 }
 
+/** Loudness alignment settings; all keys are optional and realtime. */
 export interface PlaybackLoudnessConfig {
   /** Realtime. Measured program loudness, [-70, 0]; `null` means no alignment gain. Default `null`; `config()` always returns the key, `null` when unset. */
   program_lufs?: number | null;
@@ -93,11 +107,13 @@ export interface PlaybackLoudnessConfig {
   target_lufs?: number;
 }
 
+/** Night-mode dynamic range control settings; the key is optional and realtime. */
 export interface PlaybackNightModeConfig {
   /** Realtime. 0 disables the dynamic range control. [0, 1]. Default 0. */
   amount?: number;
 }
 
+/** Room simulation settings for a headphones target; all keys are optional. */
 export interface PlaybackRoomConfig {
   /** Prepare. Headphones only. Default `"livingRoom"`. */
   preset?: 'none' | 'livingRoom' | 'homeTheater' | 'screeningRoom';
@@ -107,11 +123,13 @@ export interface PlaybackRoomConfig {
   enabled?: boolean;
 }
 
+/** Head-tracking settings; the key is optional and realtime. */
 export interface PlaybackHeadTrackingConfig {
   /** Realtime. false treats the head pose as zero. Default true. */
   enabled?: boolean;
 }
 
+/** Output limiter settings; all keys are optional and realtime. */
 export interface PlaybackOutputLimiterConfig {
   /** Realtime. The latency does not change. Default true. */
   enabled?: boolean;
@@ -136,7 +154,9 @@ export type PlaybackStageName =
 
 /** Per-stage reported latency, in samples and in Q8 fixed-point. */
 export interface PlaybackStageLatency {
+  /** Stage latency in samples, rounded from `q8`. */
   samples: number;
+  /** Stage latency in samples as 8-bit fixed point (`samples * 256`). */
   q8: number;
 }
 
@@ -146,28 +166,37 @@ export interface PlaybackStageLatency {
  * pass-through convention as {@link PlaybackRendererConfig}.
  */
 export interface PlaybackDiagnostics {
+  /** Input layout the renderer is currently processing; follows the channel count under `"auto"`. */
   active_input_layout: 'mono' | 'stereo' | '5.1' | '7.1';
+  /** Number of input layout changes handled since construction. */
   layout_switches: number;
+  /** Number of layout switches that cut a previous layout's tail short with a fade-out. */
   truncated_drains: number;
   /** Stages this configuration does not exercise (e.g. `roomEarly` for a speakers target). */
   inactive_stages: PlaybackStageName[];
+  /** Reported latency of the active signal path. */
   latency: {
+    /** Total latency in samples at the renderer's sample rate. */
     samples: number;
     /** Every stage name reports an entry, whether or not it is currently active. */
     stages: Record<PlaybackStageName, PlaybackStageLatency>;
   };
+  /** Alignment gain currently applied by the loudness stage, in dB. */
   loudness_gain_db: number;
+  /** True when the loudness alignment gain was limited to its allowed range. */
   loudness_gain_clamped: boolean;
   /** True when an `hrtf` was supplied to a speakers target, which ignores it. */
   hrtf_ignored: boolean;
   /** Deepest last-block gain reduction across the main and LFE limiters, in dB (<= 0). */
   limiter_gain_reduction_db: number;
+  /** Count of NaN/Inf output samples replaced by silence since construction. */
   non_finite_discards: number;
 }
 
 /** Request shape for the {@link PlaybackRenderer} constructor. */
 export interface PlaybackRendererOptions {
-  config: PlaybackRendererConfig | string;
+  /** Renderer configuration document; see {@link PlaybackRendererConfig}. */
+  config: PlaybackRendererConfig;
   /**
    * Required for a headphones target: this build embeds no HRTF data. Load the
    * package asset `./hrtf/default.shrf` (or any SHRF v1 file) and pass it
@@ -190,17 +219,24 @@ export interface PlaybackLoudnessMeterOptions {
 
 /** Request shape for the one-shot `renderPlayback`. */
 export interface RenderPlaybackRequest {
-  /** Interleaved input, `numChannels` samples per frame. */
+  /** Interleaved input, `numChannels` samples per frame; must be finite unless `validate` is false. */
   samples: Float32Array;
+  /** Interleaved channel count of the input: 1, 2, 6 or 8; the configured input layout must accept it. */
   numChannels: number;
+  /** Sample rate of the input, in Hz; integer in `[8000, 384000]`. Required. */
   sampleRate: number;
-  config: PlaybackRendererConfig | string;
+  /** Renderer configuration document; see {@link PlaybackRendererConfig}. */
+  config: PlaybackRendererConfig;
   /** Required for a headphones target; see {@link PlaybackRendererOptions.hrtf}. */
   hrtf?: HrtfSet;
+  /** Set `false` to skip the NaN/Inf pre-scan of the samples. Default `true`. */
+  validate?: boolean;
 }
 
 /** `renderPlayback`'s result: interleaved output with the target's own channel count. */
 export interface RenderPlaybackResult {
+  /** Interleaved output, `numChannels` samples per frame, at the input sample rate. */
   samples: Float32Array;
+  /** Output channel count: that of the target layout (2 for headphones). */
   numChannels: number;
 }

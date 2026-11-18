@@ -12,6 +12,7 @@ import type { ProjectMidiEvent } from './types.js';
  * O(n) NaN/Inf scan on hot paths where the caller already controls the data.
  */
 export interface ValidateOptions {
+  /** Scan the samples for NaN and infinity before the call. Default `true`. */
   validate?: boolean;
 }
 

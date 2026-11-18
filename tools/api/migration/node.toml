@@ -15422,7 +15422,7 @@ old = "PlaybackRendererOptions.sampleRate"
 changed = "required (was optional with a 48000 default)"
 domain = "engine"
 rule = "sample-rate-required"
-test = "bindings/node/tests/playback.test.ts::requires sampleRate, takes an omitted maxBlockSize as the default and refuses 0"
+test = "bindings/node/tests/playback.test.ts::requires sampleRate, reports the default block size when maxBlockSize is omitted and refuses 0"
 
 [[entry]]
 kind = "field"
@@ -15430,7 +15430,7 @@ old = "PlaybackRendererOptions.maxBlockSize"
 changed = "the facade default is gone: omit it for the library default; an explicit 0 is a RangeError"
 domain = "engine"
 rule = "absent-not-sentinel"
-test = "bindings/node/tests/playback.test.ts::requires sampleRate, takes an omitted maxBlockSize as the default and refuses 0"
+test = "bindings/node/tests/playback.test.ts::requires sampleRate, reports the default block size when maxBlockSize is omitted and refuses 0"
 
 [[entry]]
 kind = "field"
@@ -15469,6 +15469,30 @@ domain = "engine"
 rule = "token-case"
 test = "bindings/node/tests/playback.test.ts::takes a room preset as a lowerCamel token and refuses the snake_case spelling"
 
+
+[[entry]]
+kind = "method"
+old = "PlaybackRenderer.setConfig"
+changed = "config is a PlaybackRendererConfig object only; a JSON string is a TypeError"
+domain = "engine"
+rule = "one-input-form"
+test = "bindings/node/tests/playback.test.ts::and a JSON string config"
+
+[[entry]]
+kind = "field"
+old = "PlaybackRendererOptions.config"
+changed = "PlaybackRendererConfig object only; a JSON string is a TypeError"
+domain = "engine"
+rule = "one-input-form"
+test = "bindings/node/tests/playback.test.ts::and a JSON string config"
+
+[[entry]]
+kind = "field"
+old = "RenderPlaybackRequest.config"
+changed = "PlaybackRendererConfig object only; a JSON string is a TypeError"
+domain = "engine"
+rule = "one-input-form"
+test = "bindings/node/tests/playback.test.ts::refuses a serialized JSON string as the configuration"
 [[entry]]
 kind = "value"
 old = "PlaybackStageName='bass_management'"
