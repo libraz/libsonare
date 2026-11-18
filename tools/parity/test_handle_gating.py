@@ -263,7 +263,7 @@ def test_vocal_project_helpers_use_explicit_aliases() -> None:
         ("project_apply_vocal_edit", "apply_project_vocal_edit", False),
         (
             "project_get_vocal_edit_dependencies",
-            "get_project_vocal_edit_dependencies",
+            "project_vocal_edit_dependencies",
             False,
         ),
         ("project_rehydrate_vocal_edits", "rehydrate_project_vocal_edits", False),
