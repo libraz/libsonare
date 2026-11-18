@@ -1,11 +1,11 @@
 """Accept the mixing assistant's scene suggestion across the language surfaces.
 
-The C ABI is the oracle.  Python drives
-``sonare_mixing_assistant_suggest_scene_json`` through the existing ctypes
-declarations, then the public Python, Node, and WASM facades are handed the same
-tracks and the same options, and the ``scene`` of the suggestion each returns
-must be the very same document.  This is
-what a request-object migration or a per-binding option-name table can break
+The C ABI is the oracle.  Python drives ``sonare_mixing_assistant_suggest``
+through the existing ctypes declarations and takes the ``scene`` out of the
+document it returns, then the public Python, Node, and WASM facades are handed
+the same tracks and the same options, and the ``scene`` of the suggestion each
+returns must be the very same document.  This is what a request-object
+migration or a per-binding option-name table can break
 without the C-ABI parity checker seeing anything: parity compares signatures,
 not the document a facade produces.
 
@@ -290,7 +290,7 @@ def _suggest_c(
         to_c_float_array,
     ) = binding
     lib = get_lib()
-    if not hasattr(lib, "sonare_mixing_assistant_suggest_scene_json"):
+    if not hasattr(lib, "sonare_mixing_assistant_suggest"):
         raise HarnessFailure(
             "the shared library was built without mixing assistant support "
             "(rebuild with BUILD_MIXING_ASSISTANT=ON)"
@@ -330,7 +330,7 @@ def _suggest_c(
 
     json_ptr = ctypes.c_char_p()
     check(
-        lib.sonare_mixing_assistant_suggest_scene_json(
+        lib.sonare_mixing_assistant_suggest(
             left_ptrs,
             right_ptrs,
             id_ptrs,
@@ -345,10 +345,13 @@ def _suggest_c(
         )
     )
     try:
-        return ctypes.string_at(json_ptr).decode("utf-8") if json_ptr.value else ""
+        document = ctypes.string_at(json_ptr).decode("utf-8") if json_ptr.value else ""
     finally:
         if json_ptr.value:
             lib.sonare_free_string(json_ptr)
+    if not document:
+        raise HarnessFailure("the C ABI returned no suggestion document")
+    return json.dumps(json.loads(document)["scene"])
 
 
 def _suggest_python(
