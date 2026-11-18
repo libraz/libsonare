@@ -1975,11 +1975,18 @@ _MARKER_NUM = r"`*(?:255|4294967295|0x(?:[fF]{2}){1,4})(?![\w.])`*"
 _DOC_SENTINEL = re.compile(
     rf"(?<![\w.]){_SENTINEL_NUM}\s*(?:for|=|means|to mean)\s+(?:an?\s+|the\s+)?"
     r"(?:any|none|unknown|unset|no|not|all|every|auto|default|disabled?|off|the end|now|missing)\b"
-    rf"|\bsentinel\W+(?:\w+\W+){{0,2}}?{_SENTINEL_NUM}|(?<![\w.]){_SENTINEL_NUM}\s+sentinel"
-    # An all-ones marker given a meaning ("`0xFFFFFFFF` for clock bytes", "255 tags ...").
-    rf"|(?<![\w.]){_MARKER_NUM}\s*(?:\([^)]*\)\s*)?"
+    rf"|\bsentinel\W+(?:\w+\W+){{0,2}}?{_SENTINEL_NUM}|(?<![\w.]){_SENTINEL_NUM}\s+sentinel",
+    re.IGNORECASE,
+)
+# An all-ones marker given a meaning ("`0xFFFFFFFF` for clock bytes", "255 tags ...").
+_DOC_MARKER = re.compile(
+    rf"(?<![\w.]){_MARKER_NUM}\s*(?:\([^)]*\)\s*)?"
     r"(?:for|=|means|to mean|tags|marks|denotes|signals|indicates|is|the|as)\b",
     re.IGNORECASE,
+)
+# A C constant whose name says absence does not make its value an identifier.
+_ABSENCE_NAME = re.compile(
+    r"(?:^|_)(?:NONE|ANY|ALL|UNSET|UNKNOWN|INVALID|DEFAULT|AUTO|NO|NULL)(?:_|$)"
 )
 # Zero standing for a default the library or project picks; "0 = no fade" is a real quantity.
 _DOC_ZERO_DEFAULT = re.compile(
@@ -1991,13 +1998,35 @@ _DOC_ZERO_DEFAULT = re.compile(
 _DOC_NEGATED = re.compile(r"\b(?:no|never|not|nor)\b[^.;]*$", re.IGNORECASE)
 
 
+def _c_identifier_values(ctx) -> set[int]:
+    """Values the C ABI names as a constant, other than one whose name means absence."""
+    out = set()
+    for r in ctx.all_records:
+        if r["surface"] != "c" or r.get("c_kind") != "macro" or _ABSENCE_NAME.search(r["name"]):
+            continue
+        try:
+            out.add(int(r.get("type", "").rstrip("uUlL"), 0))
+        except ValueError:
+            pass
+    return out
+
+
 def chk_doc_sentinel(ctx):
-    """A binding's docs never offer a magic number for "not given"; absence says it."""
+    """A binding's docs never offer a magic number for "not given"; absence says it.
+
+    An all-ones marker the C ABI names as a constant is an identifier, not a marker.
+    """
     cands = [r for r in recs(ctx, BINDINGS + ("cli-python",), KINDS) if r.get("doc_text")]
+    named = _c_identifier_values(ctx)
     bad = []
     for r in cands:
         text = r["doc_text"]
-        for m in [*_DOC_SENTINEL.finditer(text), *_DOC_ZERO_DEFAULT.finditer(text)]:
+        markers = [
+            m
+            for m in _DOC_MARKER.finditer(text)
+            if int(re.search(r"0x\w+|\d+", m.group(0)).group(0), 0) not in named
+        ]
+        for m in [*_DOC_SENTINEL.finditer(text), *markers, *_DOC_ZERO_DEFAULT.finditer(text)]:
             if not _DOC_NEGATED.search(text[max(0, m.start() - 40) : m.start()]):
                 bad.append(
                     (r, f"doc offers a sentinel ({m.group(0)!r}); document the omitted value")

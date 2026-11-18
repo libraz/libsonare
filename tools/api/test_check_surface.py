@@ -1473,6 +1473,24 @@ class DocSentinel(CheckerCase):
                 self.assertEqual(len(bad), 1, bad)
                 self.assertIn("doc offers a sentinel", bad[0])
 
+    def c_macro(self, name, value):
+        self.add(_rec("c", "export", name, c_kind="macro", type=value))
+
+    def test_a_marker_the_c_abi_names_as_an_identifier_passes(self):
+        self.c_macro("SONARE_TARGET_INPUT_MONITOR", "0xFFFFu")
+        tap = "`0` is the master mix, `33..40` the buses, and `0xFFFF` the input-monitor tap."
+        self.assertEqual(self.run_doc("wasm", tap), [])
+
+    def test_a_c_constant_does_not_excuse_an_absence_meaning(self):
+        for name, text in (
+            ("SONARE_TARGET_NONE", "`0` is the master mix and `0xFFFF` the unrouted case."),
+            ("SONARE_TARGET_INPUT_MONITOR", "Target id, or `0xFFFF` for none."),
+        ):
+            with self.subTest(name=name, text=text):
+                self.setUp()
+                self.c_macro(name, "0xFFFFu")
+                self.assertEqual(len(self.run_doc("wasm", text)), 1)
+
     def test_absence_negation_and_real_quantities_pass(self):
         for text in (
             "Root pitch class 0..11 (C=0). Omit when the root is unknown.",
