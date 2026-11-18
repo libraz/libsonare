@@ -36,3 +36,7 @@ evidence = "src/mixing/api/scene_json.cpp:1009: scene_from_json reads the mix sc
 [[document]]
 type = "RealtimeVoiceChangerPreset"
 evidence = "src/editing/voice_changer/realtime/config_json.cpp:1084: realtime_voice_changer_config_from_input reads the voice preset document the constructor and setConfig take; realtimeVoiceChangerPresetJson and the preset validator are its text form"
+
+[[document]]
+type = "MasteringRepairStage"
+evidence = "src/mastering/assistant/repair_session.cpp:176: read_settings reads each repair stage through the stage's declared key set and refuses its content as InvalidFormat; the analysis emits the same records as recommended"
