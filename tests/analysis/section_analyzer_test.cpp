@@ -157,6 +157,26 @@ Audio create_sine(float freq, int sr = 22050, float duration = 10.0f) {
   return Audio::from_vector(std::move(samples), sr);
 }
 
+/// @brief 30 s of six 5 s pure tones (220, 330, 330, @p interior, 330, 330 Hz) at 22050 Hz.
+/// @param pulse_bpm Rate of a decaying amplitude pulse under the tones; 0 leaves them steady.
+Audio six_tone_audio(float interior, float pulse_bpm) {
+  constexpr int sr = 22050;
+  const std::array<float, 6> hz = {220.0f, 330.0f, 330.0f, interior, 330.0f, 330.0f};
+  std::vector<float> samples(static_cast<size_t>(sr) * 30);
+  for (size_t i = 0; i < samples.size(); ++i) {
+    const float time = static_cast<float>(i) / static_cast<float>(sr);
+    const size_t seg = std::min<size_t>(hz.size() - 1, static_cast<size_t>(time / 5.0f));
+    float envelope = 1.0f;
+    if (pulse_bpm > 0.0f) {
+      const float phase =
+          std::fmod(time, static_cast<float>(sonare::constants::kSecondsPerMinute) / pulse_bpm);
+      envelope = 0.3f + 0.7f * std::exp(-phase / 0.05f);
+    }
+    samples[i] = 0.4f * envelope * std::sin(sonare::constants::kTwoPi * hz[seg] * time);
+  }
+  return Audio::from_vector(samples, sr);
+}
+
 }  // namespace
 
 TEST_CASE("A section analysis handed its STFT matches one that built its own",
@@ -532,24 +552,52 @@ TEST_CASE("a bridge reaches the caller instead of being demoted to Unknown", "[s
   // branch, so the confidence is asserted as well: a Bridge has to arrive with
   // a score that came from its own vocal likelihood rather than with the
   // constant that used to be there.
-  constexpr int sr = 22050;
+  //
   // Interior, non-repeating, and inside the vocal band, which is the exact
-  // shape the branch claims. The repeated tone around it is what leaves this
-  // one segment without a repeat to match.
-  const std::array<float, 6> hz = {220.0f, 330.0f, 330.0f, 880.0f, 330.0f, 330.0f};
-  std::vector<float> samples(static_cast<size_t>(sr) * 30);
-  for (size_t i = 0; i < samples.size(); ++i) {
-    const float time = static_cast<float>(i) / static_cast<float>(sr);
-    const size_t seg = std::min<size_t>(hz.size() - 1, static_cast<size_t>(time / 5.0f));
-    samples[i] = 0.4f * std::sin(sonare::constants::kTwoPi * hz[seg] * time);
-  }
-  SectionAnalyzer analyzer(Audio::from_vector(samples, sr));
+  // shape the branch claims. The interior tone is F#, a pitch class no other
+  // segment carries, so it has no repeat to match in chroma either. A 120 BPM
+  // pulse under the tones gives the tracker a tempo to find, so the sections
+  // are laid on a beat grid rather than on whatever a pulse-less input yields.
+  const Audio audio = six_tone_audio(740.0f, 120.0f);
+  BeatConfig beat_config;
+  beat_config.n_fft = SectionConfig{}.n_fft;
+  beat_config.hop_length = SectionConfig{}.hop_length;
+  REQUIRE(BeatAnalyzer(audio, beat_config).beat_times().size() >=
+          static_cast<size_t>(section_structure::kMinGridBeats));
+  SectionAnalyzer analyzer(audio);
 
   const auto& sections = analyzer.sections();
   const auto bridge = std::find_if(sections.begin(), sections.end(),
                                    [](const Section& s) { return s.type == SectionType::Bridge; });
   REQUIRE(bridge != sections.end());
   REQUIRE(bridge->confidence > 0.5f);
+}
+
+TEST_CASE("a pulse-less input still isolates its interior segment on the fallback grid",
+          "[section_analyzer]") {
+  // Pure tones carry no tempo, so the tracker returns too few beats to lay a
+  // grid and the fixed-time fallback grid is used. That path has to cut the
+  // interior segment out as its own span, not merge it into a neighbour.
+  //
+  // No label is asserted: the 880 Hz interior shares pitch class A with the
+  // 220 Hz opening, so grouping it with the opening is a legitimate reading.
+  const Audio audio = six_tone_audio(880.0f, 0.0f);
+  BeatConfig beat_config;
+  beat_config.n_fft = SectionConfig{}.n_fft;
+  beat_config.hop_length = SectionConfig{}.hop_length;
+  REQUIRE(BeatAnalyzer(audio, beat_config).beat_times().size() <
+          static_cast<size_t>(section_structure::kMinGridBeats));
+  SectionAnalyzer analyzer(audio);
+
+  // The span opening within one fallback column of the 15 s change has to
+  // reach the 20 s change and stop before the track ends.
+  const auto& sections = analyzer.sections();
+  const auto interior = std::find_if(sections.begin(), sections.end(), [](const Section& s) {
+    return std::abs(s.start - 15.0f) <= section_structure::kFallbackGridSec;
+  });
+  REQUIRE(interior != sections.end());
+  REQUIRE(interior->end >= 20.0f - section_structure::kFallbackGridSec);
+  REQUIRE(interior->end < 30.0f);
 }
 
 TEST_CASE("an unclassified edge segment is not labelled as a verse", "[section_analyzer]") {
