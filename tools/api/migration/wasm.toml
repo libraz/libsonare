@@ -22060,7 +22060,7 @@ old = "Project.previewMidiFxCount"
 changed = "takes a MidiFxConfig object in the request's config field instead of a configJson string; a non-object config is a TypeError, and the core refuses an unknown key or a wrong-typed field as InvalidFormat"
 domain = "project"
 rule = "typed-results"
-test = "bindings/wasm/tests/project.test.ts::refuses a malformed MIDI-FX config"
+test = "bindings/wasm/tests/project.test.ts::refuses a non-object MIDI-FX config and leaves its content to the core"
 
 [[entry]]
 kind = "method"
