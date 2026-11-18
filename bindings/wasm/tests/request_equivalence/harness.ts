@@ -177,6 +177,11 @@ export interface Row {
    * field another passed field can mask (a floor that hides a clamp).
    */
   controlBase?: Record<string, Args>;
+  /**
+   * Optional fields of which at least one must be given. The minimal call supplies the first
+   * member of each group, and a call giving none must fail with `error` in every form.
+   */
+  oneOf?: { fields: string[]; error: string }[];
 }
 
 interface Spec {
@@ -368,10 +373,24 @@ export function overloadedFunctions(): string[] {
 export function describeRows(rows: Row[]): void {
   describe.each(rows)('$name', (row) => {
     const specs = specsOf(row);
-    const requiredOnly = Object.fromEntries(
+    const groups = row.oneOf ?? [];
+    const required = Object.fromEntries(
       specs.filter((spec) => !spec.optional).map((spec) => [spec.name, row.values[spec.name]]),
     );
+    const requiredOnly: Args = { ...required };
+    for (const group of groups) {
+      requiredOnly[group.fields[0]] = row.values[group.fields[0]];
+    }
     const hasPositional = row.form !== 'requestOnly';
+
+    for (const group of groups) {
+      it(`refuses a call giving none of ${group.fields.join(' | ')}`, async () => {
+        const forms = hasPositional ? (['request', 'positional'] as const) : (['request'] as const);
+        for (const form of forms) {
+          expect(await run(row, specs, required, form)).toEqual({ error: group.error });
+        }
+      });
+    }
 
     if (hasPositional) {
       it('returns the positional result for non-default values', async () => {

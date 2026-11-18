@@ -32,6 +32,12 @@ export const ROWS: Row[] = [
       onProgress: PROGRESS,
     },
     invalid: { preset: 'no-such-preset' },
+    oneOf: [
+      {
+        fields: ['preset', 'overrides'],
+        error: 'TypeError: masterAudio: give a preset or overrides',
+      },
+    ],
   },
   {
     name: 'masterAudioStereo',
@@ -47,6 +53,12 @@ export const ROWS: Row[] = [
       onProgress: PROGRESS,
     },
     invalid: { preset: 'no-such-preset' },
+    oneOf: [
+      {
+        fields: ['preset', 'overrides'],
+        error: 'TypeError: masterAudioStereo: give a preset or overrides',
+      },
+    ],
   },
   {
     name: 'masteringNormalizeLoudness',
