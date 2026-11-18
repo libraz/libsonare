@@ -678,3 +678,31 @@ changed = "the JSON mode for a chain read from --chain-config is chainConfig rat
 domain = "mastering"
 rule = "token-case"
 test = "tests/cli/cli_mastering_test.cpp::CLI mastering command"
+
+[[entry]]
+kind = "flag"
+old = "resample --target-sr"
+removed = "use --target-rate"
+domain = "effects"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "flag"
+old = "eq --lookahead-ms"
+removed = "use --detector-delay-ms"
+domain = "mastering"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "flag"
+old = "estimate-room --n-bands"
+removed = "use --n-octave-bands"
+domain = "effects"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "flag"
+old = "mastering --config"
+removed = "use --chain-config"
+domain = "mastering"
+rule = "aliases-removed"
