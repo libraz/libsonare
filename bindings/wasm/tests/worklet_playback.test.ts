@@ -457,11 +457,13 @@ describe('SonarePlaybackWorkletProcessor', () => {
       const instance = new Ctor({
         processorOptions: { config: SPEAKERS_5_1_AUTO, sampleRate: 48000 },
       });
+      // An already initialized module starts the processor synchronously, and it says so.
+      expect(posted).toEqual([{ type: 'ready', runtimeTarget: 'embind' }]);
       expect(instance.process([noiseBlock(2, 3)], [outputBlock(6)])).toBe(true);
       listener?.({ data: { type: 'diagnostics' } });
       listener?.({ data: { type: 'unknown' } });
-      expect(posted).toHaveLength(1);
-      expect((posted[0] as Posted).type).toBe('diagnostics');
+      expect(posted).toHaveLength(2);
+      expect((posted[1] as Posted).type).toBe('diagnostics');
       listener?.({ data: { type: 'destroy' } });
     } finally {
       delete scope.AudioWorkletProcessor;
