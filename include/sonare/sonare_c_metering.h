@@ -51,20 +51,20 @@ SonareError sonare_metering_true_peak_dbtp(const float* samples, size_t length, 
 /// @brief A single contiguous run of samples that clipped (or exceeded
 ///        @p threshold). Mirrors @c sonare::metering::ClippingRegion.
 typedef struct {
-  size_t start_sample;
-  size_t end_sample;
-  size_t length;
-  float peak;
+  size_t start_sample;  ///< Index of the first clipped sample of the run.
+  size_t end_sample;    ///< One past the last clipped sample of the run (exclusive).
+  size_t length;        ///< Run length in samples (end_sample - start_sample).
+  float peak;           ///< Largest absolute linear amplitude inside the run.
 } SonareClippingRegion;
 
 /// @brief Aggregated clipping report for a buffer. @c regions is heap-allocated
 ///        by libsonare; free with @ref sonare_free_clipping_result.
 typedef struct {
-  size_t clipped_samples;
-  float clipping_ratio;
-  float max_clipped_peak;
-  SonareClippingRegion* regions;
-  size_t region_count;
+  size_t clipped_samples;  ///< Total clipped samples, including runs shorter than the minimum.
+  float clipping_ratio;    ///< clipped_samples divided by the buffer length, in [0, 1].
+  float max_clipped_peak;  ///< Largest absolute linear amplitude among clipped samples.
+  SonareClippingRegion* regions;  ///< Reported runs; NULL when region_count is 0.
+  size_t region_count;            ///< Number of entries in regions.
 } SonareClippingResult;
 
 /// @brief Detects clipped sample runs.
@@ -79,16 +79,17 @@ SonareError sonare_metering_detect_clipping(const float* samples, size_t length,
                                             float threshold, size_t min_region_samples,
                                             SonareClippingResult* out);
 
+/// @brief Frees the regions of a result and zeroes it. Safe on NULL.
 void sonare_free_clipping_result(SonareClippingResult* result);
 
 /// @brief Offline dynamic-range result. @c window_rms_db is heap-allocated;
 ///        free with @ref sonare_free_dynamic_range_result.
 typedef struct {
-  float dynamic_range_db;
-  float low_percentile_db;
-  float high_percentile_db;
-  float* window_rms_db;
-  size_t window_count;
+  float dynamic_range_db;    ///< high_percentile_db - low_percentile_db, in dB.
+  float low_percentile_db;   ///< Window RMS level at the low percentile, in dBFS.
+  float high_percentile_db;  ///< Window RMS level at the high percentile, in dBFS.
+  float* window_rms_db;      ///< Per-window RMS levels in dBFS, in time order.
+  size_t window_count;       ///< Number of entries in window_rms_db.
 } SonareDynamicRangeResult;
 
 /// @brief Sliding-window dynamic range (high_percentile_db - low_percentile_db)
@@ -107,6 +108,7 @@ SonareError sonare_metering_dynamic_range(const float* samples, size_t length, i
                                           float window_sec, float hop_sec, float low_percentile,
                                           float high_percentile, SonareDynamicRangeResult* out);
 
+/// @brief Frees the window levels of a result. Safe on NULL.
 void sonare_free_dynamic_range_result(SonareDynamicRangeResult* result);
 
 // ============================================================================
@@ -131,15 +133,15 @@ SonareError sonare_metering_stereo_width(const float* left, const float* right, 
 
 /// @brief Single point of a mid/side vectorscope.
 typedef struct {
-  float mid;
-  float side;
+  float mid;   ///< (left + right) / sqrt(2).
+  float side;  ///< (left - right) / sqrt(2).
 } SonareVectorscopePoint;
 
 /// @brief Heap-allocated vectorscope result. Free with
 ///        @ref sonare_free_vectorscope_result.
 typedef struct {
-  SonareVectorscopePoint* points;
-  size_t point_count;
+  SonareVectorscopePoint* points;  ///< Heap-owned points in time order.
+  size_t point_count;              ///< Number of entries in points.
 } SonareVectorscopeResult;
 
 /// @brief Per-sample mid/side point series for the (left, right) buffer.
@@ -161,24 +163,25 @@ SonareError sonare_metering_vectorscope_decimated(const float* left, const float
                                                   size_t length, int sample_rate, size_t max_points,
                                                   SonareVectorscopeResult* out);
 
+/// @brief Frees the points of a result. Safe on NULL.
 void sonare_free_vectorscope_result(SonareVectorscopeResult* result);
 
 /// @brief Single phase-scope point. @c angle_rad is atan2(side, mid).
 typedef struct {
-  float mid;
-  float side;
-  float radius;
-  float angle_rad;
+  float mid;        ///< (left + right) / sqrt(2).
+  float side;       ///< (left - right) / sqrt(2).
+  float radius;     ///< sqrt(mid^2 + side^2).
+  float angle_rad;  ///< Angle in radians, in [-pi, pi].
 } SonarePhaseScopePoint;
 
 /// @brief Heap-allocated phase-scope result. @c points is freed via
 ///        @ref sonare_free_phase_scope_result.
 typedef struct {
-  SonarePhaseScopePoint* points;
-  size_t point_count;
-  float correlation;
-  float average_abs_angle_rad;
-  float max_radius;
+  SonarePhaseScopePoint* points;  ///< Heap-owned points in time order.
+  size_t point_count;             ///< Number of entries in points.
+  float correlation;              ///< Stereo correlation in [-1, 1] over the full signal.
+  float average_abs_angle_rad;    ///< Mean of |angle_rad| over the full signal.
+  float max_radius;               ///< Largest point radius over the full signal.
 } SonarePhaseScopeResult;
 
 /// @brief Phase-scope (Lissajous + summary stats) for a stereo pair.
@@ -200,18 +203,19 @@ SonareError sonare_metering_phase_scope_decimated(const float* left, const float
                                                   size_t length, int sample_rate, size_t max_points,
                                                   SonarePhaseScopeResult* out);
 
+/// @brief Frees the points of a result. Safe on NULL.
 void sonare_free_phase_scope_result(SonarePhaseScopeResult* result);
 
 /// @brief Spectrum-meter result. All four arrays have length @c bin_count
 ///        (@c n_fft / 2 + 1). Free with @ref sonare_free_spectrum_result.
 typedef struct {
-  float* frequencies;
-  float* magnitude;
-  float* power;
-  float* db;
-  size_t bin_count;
-  int n_fft;
-  int sample_rate;
+  float* frequencies;  ///< Bin center frequencies in Hz.
+  float* magnitude;    ///< Linear magnitude per bin.
+  float* power;        ///< Power per bin.
+  float* db;           ///< Level per bin in dB, relative to db_ref and floored at db_amin.
+  size_t bin_count;    ///< Number of bins (n_fft / 2 + 1).
+  int n_fft;           ///< FFT size used.
+  int sample_rate;     ///< Sample rate of the analyzed signal in Hz.
 } SonareSpectrumResult;
 
 /// @brief Welch-averaged magnitude / power / dB spectrum over the WHOLE mono buffer.
@@ -265,6 +269,7 @@ SonareError sonare_metering_spectrum_frame(const float* samples, size_t length, 
                                            int apply_octave_smoothing, int octave_fraction,
                                            float db_ref, float db_amin, SonareSpectrumResult* out);
 
+/// @brief Frees the bin arrays of a result. Safe on NULL.
 void sonare_free_spectrum_result(SonareSpectrumResult* result);
 
 /// @brief Per-channel min/max waveform buckets. @c min and @c max are
@@ -272,17 +277,17 @@ void sonare_free_spectrum_result(SonareSpectrumResult* result);
 ///        index = channel * bucket_count + bucket. Free with
 ///        @ref sonare_free_waveform_peaks_result.
 typedef struct {
-  float* min;
-  float* max;
-  int channels;
-  size_t bucket_count;
-  size_t samples_per_bucket;
+  float* min;                 ///< Per-bucket minimum sample, channel-major.
+  float* max;                 ///< Per-bucket maximum sample, channel-major.
+  int channels;               ///< Channel count of the analyzed buffer.
+  size_t bucket_count;        ///< Buckets per channel.
+  size_t samples_per_bucket;  ///< Bucket width in frames.
 } SonareWaveformPeaksResult;
 
 /// @brief A set of waveform peak levels for multiple zoom resolutions.
 typedef struct {
-  SonareWaveformPeaksResult* levels;
-  size_t level_count;
+  SonareWaveformPeaksResult* levels;  ///< Heap-owned levels, one per requested bucket width.
+  size_t level_count;                 ///< Number of entries in levels.
 } SonareWaveformPeakPyramidResult;
 
 /// @brief Compute per-channel min/max buckets from interleaved audio.
@@ -305,7 +310,10 @@ SonareError sonare_waveform_peak_pyramid(const float* samples, size_t length, in
                                          const size_t* samples_per_bucket_levels,
                                          size_t level_count, SonareWaveformPeakPyramidResult* out);
 
+/// @brief Frees the bucket arrays of a result. Safe on NULL.
 void sonare_free_waveform_peaks_result(SonareWaveformPeaksResult* result);
+
+/// @brief Frees every level and the level array of a result. Safe on NULL.
 void sonare_free_waveform_peak_pyramid_result(SonareWaveformPeakPyramidResult* result);
 
 // ============================================================================

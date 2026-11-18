@@ -133,6 +133,7 @@ float sonare_audio_duration_sec(const SonareAudio* audio);
 /// @details @p bpm_min and @p bpm_max follow @ref sonare_detect_bpm.
 SonareError sonare_audio_detect_bpm(const SonareAudio* audio, float bpm_min, float bpm_max,
                                     float* out_bpm);
+/// @brief Detects the key of @p audio, measuring the recording's tuning first.
 SonareError sonare_audio_detect_key(const SonareAudio* audio, SonareKey* out_key);
 /// @details @p bpm_min and @p bpm_max follow @ref sonare_detect_bpm.
 /// @note Free @p out_times with @ref sonare_free_floats.
@@ -144,8 +145,8 @@ SonareError sonare_audio_detect_downbeats(const SonareAudio* audio, float** out_
 /// @note Free @p out_times with @ref sonare_free_floats.
 SonareError sonare_audio_detect_onsets(const SonareAudio* audio, float** out_times,
                                        size_t* out_count);
-// Runs the full quick analysis pipeline and fills the flat C result. Use the
-// single-purpose sonare_audio_detect_* helpers for cheaper queries.
+/// @brief Runs the full quick analysis pipeline and fills the flat C result.
+/// @details Use the single-purpose sonare_audio_detect_* helpers for cheaper queries.
 /// @param out Receives heap-owned arrays; free with sonare_free_analysis_result.
 SonareError sonare_audio_analyze(const SonareAudio* audio, SonareAnalysisResult* out);
 
@@ -163,16 +164,30 @@ SonareError sonare_detect_bpm(const float* samples, size_t length, int sample_ra
 ///   @ref sonare_detect_key_candidates_with_tuning take a given one (0 is concert A440).
 SonareError sonare_detect_key(const float* samples, size_t length, int sample_rate,
                               SonareKey* out_key);
+/// @brief Detects the key with explicit chroma settings, measuring the tuning first.
+/// @param n_fft FFT size in samples at 22050 Hz, rescaled to the input rate.
+/// @param hop_length Hop in samples at the input rate.
+/// @param use_hpss Non-zero applies harmonic-percussive separation before the chroma.
+/// @param loudness_weighted Non-zero weights chroma frames by loudness.
+/// @param chroma_high_pass_hz High-pass cutoff for the chroma in Hz; 0 disables it.
 SonareError sonare_detect_key_with_options(const float* samples, size_t length, int sample_rate,
                                            int n_fft, int hop_length, int use_hpss,
                                            int loudness_weighted, float chroma_high_pass_hz,
                                            SonareKey* out_key);
+/// @brief Detects the key with explicit chroma settings and a restricted mode set.
+/// @details Chroma parameters follow @ref sonare_detect_key_with_options.
+/// @param modes Modes the key may take, @p mode_count entries.
 SonareError sonare_detect_key_with_options_and_modes(const float* samples, size_t length,
                                                      int sample_rate, int n_fft, int hop_length,
                                                      int use_hpss, int loudness_weighted,
                                                      float chroma_high_pass_hz,
                                                      const SonareMode* modes, size_t mode_count,
                                                      SonareKey* out_key);
+/// @brief Detects the key with a mode set, a key-profile family and an optional genre hint.
+/// @details Chroma parameters and @p modes follow
+///   @ref sonare_detect_key_with_options_and_modes.
+/// @param profile_type Key-profile family the chroma is correlated against.
+/// @param genre_hint Optional genre name biasing the profile choice; may be NULL.
 SonareError sonare_detect_key_with_extended_options(
     const float* samples, size_t length, int sample_rate, int n_fft, int hop_length, int use_hpss,
     int loudness_weighted, float chroma_high_pass_hz, const SonareMode* modes, size_t mode_count,
@@ -240,27 +255,38 @@ SonareError sonare_detect_onsets(const float* samples, size_t length, int sample
 ///          carries, and filling this struct with the values listed as defaults
 ///          reproduces @ref sonare_detect_onsets exactly.
 typedef struct {
+  /// FFT window length in samples at 22050 Hz, rescaled to the input rate. Default 2048.
   int32_t n_fft;
+  /// Hop in samples at the analysis rate. Default 512.
   int32_t hop_length;
-  /* Minimum onset strength a peak must reach; 0 selects the adaptive path.
-     Expressed in the units of the onset envelope this call computes internally,
-     which is not normalized, so the usable range depends on the magnitudes the
-     caller's own audio produces and cannot be derived from the signature. The
-     envelope is the same one sonare_onset_strength returns, so run that on
-     representative audio to see the scale before setting this. */
+  /// Minimum onset strength a peak must reach; 0 selects the adaptive path.
+  /// Expressed in the units of the onset envelope this call computes internally,
+  /// which is not normalized, so the usable range depends on the magnitudes the
+  /// caller's own audio produces and cannot be derived from the signature. The
+  /// envelope is the same one sonare_onset_strength returns, so run that on
+  /// representative audio to see the scale before setting this.
   float threshold;
+  /// Frames before a peak that must not exceed it. Default 1.
   int32_t pre_max;
+  /// Frames after a peak that must not exceed it. Default 1.
   int32_t post_max;
+  /// Frames before a peak averaged for the adaptive threshold. Default 3.
   int32_t pre_avg;
+  /// Frames after a peak averaged for the adaptive threshold. Default 4.
   int32_t post_avg;
-  /* Offset added to the running mean of the onset envelope, in that envelope's
-     own units -- the same quantity and the same caveat as sonare_peak_pick's
-     delta, which this field ultimately feeds. Not a normalized or dB value.
-     Take a small fraction of the envelope's mean or median and adjust. */
+  /// Offset added to the running mean of the onset envelope, in that envelope's
+  /// own units -- the same quantity and the same caveat as sonare_peak_pick's
+  /// delta, which this field ultimately feeds. Not a normalized or dB value.
+  /// Take a small fraction of the envelope's mean or median and adjust. Default 0.06.
   float delta;
+  /// Minimum frames between consecutive onsets. Default 1.
   int32_t wait;
+  /// Non-zero moves each onset back to the preceding local minimum of the envelope; only 0 and 1
+  /// are accepted. Default 0.
   uint8_t backtrack;
+  /// Padding; set to 0.
   uint8_t reserved[3];
+  /// Search range in frames for the backtracking. Default 10.
   int32_t backtrack_range;
 } SonareOnsetDetectConfig;
 
@@ -278,152 +304,173 @@ SonareError sonare_detect_onsets_ex(const float* samples, size_t length, int sam
                                     const SonareOnsetDetectConfig* config, float** out_times,
                                     size_t* out_count);
 
-// Runs the full quick analysis pipeline and fills the flat C result. Use the
-// single-purpose sonare_detect_* helpers for cheaper queries.
+/// @brief Runs the full quick analysis pipeline and fills the flat C result.
+/// @details Use the single-purpose sonare_detect_* helpers for cheaper queries.
 /// @param out Receives heap-owned arrays; free with sonare_free_analysis_result.
 SonareError sonare_analyze(const float* samples, size_t length, int sample_rate,
                            SonareAnalysisResult* out);
 
-/* Progress callback for the JSON analysis variants: progress in [0,1] plus a
-   stage label. user_data is the opaque pointer passed to the analyze call. */
+/// Progress callback for the JSON analysis variants: progress in [0,1] plus a
+/// stage label. user_data is the opaque pointer passed to the analyze call.
 typedef void (*SonareAnalyzeProgressCallback)(float progress, const char* stage, void* user_data);
 
 /// Cooperative cancellation callback for long-running offline operations.
 /// Return nonzero to stop after the current progress-report boundary.
 typedef int (*SonareCancelCallback)(void* user_data);
 
-/* Full analysis serialized to a camelCase JSON object. Unlike sonare_analyze
-   (which fills only the flat bpm/key/beats struct), this returns the complete
-   result: chords, sections, timbre, dynamics, rhythm, melody and form, with
-   per-beat strength. *out_json is heap-allocated and MUST be released with
-   sonare_free_string. */
+/// @brief Full analysis serialized to a camelCase JSON object.
+/// @details Unlike sonare_analyze (which fills only the flat bpm/key/beats struct), this returns
+///   the complete result: chords, sections, timbre, dynamics, rhythm, melody and form, with
+///   per-beat strength.
+/// @param out_json Receives a heap-allocated string; release it with @ref sonare_free_string.
 SonareError sonare_analyze_json(const float* samples, size_t length, int sample_rate,
                                 char** out_json);
-/* Capacity of SonareMusicAnalyzeOptions::meter_candidate_numerators. Part of
-   the public contract: a caller cannot request more numerators than this, and
-   every binding rejects an over-long list rather than truncating it. */
+/// Capacity of SonareMusicAnalyzeOptions::meter_candidate_numerators. Part of
+/// the public contract: a caller cannot request more numerators than this, and
+/// every binding rejects an over-long list rather than truncating it.
 #define SONARE_MAX_METER_CANDIDATE_NUMERATORS 16
 
-/* Layout version of SonareMusicAnalyzeOptions, written by
-   sonare_music_analyze_options_default(). sonare_analyze_json_ex refuses any
-   other value, so a caller built against the layout that had no version field
-   is refused rather than read at the wrong offsets. */
+/// Layout version of SonareMusicAnalyzeOptions, written by
+/// sonare_music_analyze_options_default(). sonare_analyze_json_ex refuses any
+/// other value, so a caller built against the layout that had no version field
+/// is refused rather than read at the wrong offsets.
 #define SONARE_MUSIC_ANALYZE_OPTIONS_VERSION 2
 
-/* Options for sonare_analyze_json_ex. Boolean fields are 0/1 ints. Always
-   start from sonare_music_analyze_options_default() rather than zeroing the
-   struct: a zeroed meter_candidate_numerator_count is rejected, not treated as
-   "use the default set". */
+/// @brief Options for sonare_analyze_json_ex. Boolean fields are 0/1 ints.
+/// @details Always start from sonare_music_analyze_options_default() rather than zeroing the
+///   struct: a zeroed meter_candidate_numerator_count is rejected, not treated as "use the
+///   default set". Defaults below are those of that function.
 typedef struct {
-  /* Must be SONARE_MUSIC_ANALYZE_OPTIONS_VERSION. */
+  /// Must be SONARE_MUSIC_ANALYZE_OPTIONS_VERSION.
   int struct_version;
+  /// Analysis window in samples at 22050 Hz, rescaled to the analysis rate. Default 2048.
   int n_fft;
+  /// Hop length in samples. Default 512.
   int hop_length;
+  /// Lower bound of the tempo search in BPM. Default 60.
   float bpm_min;
+  /// Upper bound of the tempo search in BPM. Default 200.
   float bpm_max;
+  /// Prior tempo estimate in BPM. Default 120.
   float start_bpm;
+  /// Non-zero restricts chord detection to triads, with no seventh chords. Default 1.
   int use_triads_only;
+  /// Non-zero applies harmonic-percussive separation before the chord chroma. Default 0.
   int use_hpss;
+  /// High-pass cutoff for the chroma in Hz; 0 disables it. Default 80.
   float chroma_high_pass_hz;
+  /// Non-zero weights the chord chroma toward the bass.
   int use_bass_weighted;
+  /// Multiplier on hop_length for the chroma; larger is faster. Default 4.
   int chroma_hop_multiplier;
+  /// Non-zero smooths chords with a Viterbi HMM. Default 1.
   int use_chord_hmm;
+  /// Non-zero biases the chord HMM transitions using the detected key. Default 0.
   int use_chord_key_context;
+  /// Candidate beam width of the chord HMM smoothing. Default 24.
   int chord_hmm_beam_width;
+  /// Non-zero estimates slash-chord bass notes. Default 0.
   int detect_chord_inversions;
-  /* Track a locally updated tempo prior through beat tracking. */
+  /// Non-zero tracks a locally updated tempo prior through beat tracking. Default 0.
   int adaptive_tempo;
-  /* Local tempo context length in beats; used only when adaptive_tempo is 1. */
+  /// Local tempo context length in beats; used only when adaptive_tempo is 1. Default 8.
   int tempo_update_interval_beats;
-  /* Decode a per-beat local tempo curve into the result's beatLocalBpm array.
-     Off by default: it is an extra output rather than a better analysis, so a
-     caller that does not read the curve would pay a decode over the beat grid
-     for nothing. The curve describes the beat grid it was decoded from, and
-     beat tracking holds a fixed tempo prior unless adaptive_tempo is also 1, so
-     measuring a tempo that moves needs both set. The values are continuous,
-     each a weighted average in log tempo of the surrounding beat intervals: a
-     steady tempo reads within about 1% at every beat, and a moving one is
-     followed a few beats late. */
+  /// Non-zero decodes a per-beat local tempo curve into the result's beatLocalBpm array.
+  /// Off by default: it is an extra output rather than a better analysis, so a
+  /// caller that does not read the curve would pay a decode over the beat grid
+  /// for nothing. The curve describes the beat grid it was decoded from, and
+  /// beat tracking holds a fixed tempo prior unless adaptive_tempo is also 1, so
+  /// measuring a tempo that moves needs both set. The values are continuous,
+  /// each a weighted average in log tempo of the surrounding beat intervals: a
+  /// steady tempo reads within about 1% at every beat, and a moving one is
+  /// followed a few beats late.
   int compute_tempo_curve;
-  /* Meter numerators the estimator scores. Only the first
-     meter_candidate_numerator_count entries are read; each must be in [2, 32].
-     Widening the set does not force a wider meter — the default {3, 4, 6}
-     reproduces the historical result. */
+  /// Meter numerators the estimator scores. Only the first
+  /// meter_candidate_numerator_count entries are read; each must be in [2, 32].
+  /// Widening the set does not force a wider meter; the default {3, 4, 6}
+  /// reproduces the library's standard result.
   int meter_candidate_numerators[SONARE_MAX_METER_CANDIDATE_NUMERATORS];
+  /// Number of entries of meter_candidate_numerators that are read; at least 1.
   int meter_candidate_numerator_count;
-  /* Beat unit reported for the detected meter; a power of two in [1, 32]. The
-     estimator still reports 8 on its own when it resolves a compound meter. */
+  /// Beat unit reported for the detected meter; a power of two in [1, 32]. The
+  /// estimator still reports 8 on its own when it resolves a compound meter. Default 4.
   int meter_denominator;
-  /* Tuning offset of the recording in cents; 0 is concert A440. Must be in
-     [-50, 50). Every chroma the analysis builds (key, chords, sections) is
-     shifted by it. sonare_reference_hz_to_tuning converts a reference pitch
-     to this unit. */
+  /// Tuning offset of the recording in cents; 0 is concert A440. Must be in
+  /// [-50, 50). Every chroma the analysis builds (key, chords, sections) is
+  /// shifted by it. sonare_reference_hz_to_tuning converts a reference pitch
+  /// to this unit.
   float tuning_cents;
-  /* Non-zero measures the tuning from the audio instead of reading
-     @c tuning_cents. sonare_music_analyze_options_default sets it to 1; a
-     zeroed struct reads @c tuning_cents. The value used, given or measured, is
-     the result's "tuningCents". */
+  /// Non-zero measures the tuning from the audio instead of reading
+  /// tuning_cents. sonare_music_analyze_options_default sets it to 1; a
+  /// zeroed struct reads tuning_cents. The value used, given or measured, is
+  /// the result's "tuningCents".
   int tuning_auto;
 } SonareMusicAnalyzeOptions;
 
+/// @brief Returns the library defaults for every field, with struct_version set.
 SonareMusicAnalyzeOptions sonare_music_analyze_options_default(void);
 /// @note Free @p out_json with @ref sonare_free_string.
 SonareError sonare_analyze_json_ex(const float* samples, size_t length, int sample_rate,
                                    const SonareMusicAnalyzeOptions* options, char** out_json);
 
-/* Scoring options for sonare_estimate_meter_json. Always start from
-   sonare_meter_options_default() rather than zeroing the struct: a zeroed
-   candidate_numerator_count is rejected, not treated as "use the default set". */
+/// @brief Scoring options for sonare_estimate_meter_json.
+/// @details Always start from sonare_meter_options_default() rather than zeroing the struct: a
+///   zeroed candidate_numerator_count is rejected, not treated as "use the default set".
 typedef struct {
-  /* Meter numerators to score. Only the first candidate_numerator_count
-     entries are read; each must be in [2, 32] and the count must be at least
-     one. */
+  /// Meter numerators to score. Only the first candidate_numerator_count
+  /// entries are read; each must be in [2, 32].
   int candidate_numerators[SONARE_MAX_METER_CANDIDATE_NUMERATORS];
+  /// Number of entries of candidate_numerators that are read; at least 1.
   int candidate_numerator_count;
-  /* Beat unit reported for the detected meter; a power of two in [1, 32].
-     Reported as requested: whether a beat divides into three is measured from
-     energy between the beats, which per-beat accents do not carry, so a
-     compound meter is not resolvable on this path. A six whose beats accent
-     3+3 comes back with this denominator and the grouping {3, 3}. */
+  /// Beat unit reported for the detected meter; a power of two in [1, 32]. Default 4.
+  /// Reported as requested: whether a beat divides into three is measured from
+  /// energy between the beats, which per-beat accents do not carry, so a
+  /// compound meter is not resolvable on this path. A six whose beats accent
+  /// 3+3 comes back with this denominator and the grouping {3, 3}.
   int denominator;
+  /// Weight of the downbeat accent in a candidate's score. Default 1.
   float downbeat_weight;
+  /// Weight of the bar-to-bar consistency in a candidate's score. Default 0.5.
   float measure_weight;
+  /// Weight of the subdivision support in a candidate's score. Default 0.15.
   float subdivision_weight;
-  /* Subdivision support at which a meter is resolved as compound. Consulted
-     only where there is a subdivision to measure, so it has no effect on
-     sonare_estimate_meter_json. */
+  /// Subdivision support at which a meter is resolved as compound. Default 0.85. Consulted
+  /// only where there is a subdivision to measure, so it has no effect on
+  /// sonare_estimate_meter_json.
   float compound_subdivision_threshold;
 } SonareMeterOptions;
 
+/// @brief Returns the library defaults for every field.
 SonareMeterOptions sonare_meter_options_default(void);
 
-/* Estimates meter over a caller-supplied beat series, without audio and
-   without re-running analysis. beat_times and beat_strengths are parallel
-   arrays of beat_count entries; beat_times must be non-decreasing.
-   AnalysisResult beatObservations.onsetStrength is the intended strength
-   source, being the windowed value the library's own downbeat pass scores;
-   beats[].strength also works but is a single unwindowed envelope frame.
-   Neither needs pre-scaling: the series is divided by its own maximum before
-   scoring, so only the accent contrast within it is read.
-   A series assembled by hand from an onset envelope -- one frame read at each
-   beat time -- is neither of those, and it carries a sample-rate dependence
-   neither of them has: a hop counted in samples frames a different amount of
-   time at each rate, so one waveform sampled at 32000, 44100 and 48000 Hz has
-   produced three different winning numerators off beat times identical to the
-   sample. Widening the read to a window around the beat does not remove it.
-   The result carries a grouping alongside the numerator: how the bar divides
-   into accent groups of two and three beats, so a seven comes back as 3+2+2 or
-   2+2+3 rather than as a bare seven.
-   Read "searched" before treating any field as a detection: a beat series too
-   short to score any candidate reports a fixed fallback instead, whose
-   confidence is 0 rather than a middling value a caller could mistake for a
-   measurement.
-   The name "confidence" covers two quantities: on "timeSignature" it is the
-   margin over the runner-up, on a "candidates" entry the candidate's share of
-   the summed support. They are not comparable.
-   Emits the schema documented on meter_result_to_json. On any error *out_json
-   is set to NULL, so a caller may check it instead of the return code.
-   Free *out_json with sonare_free_string. */
+/// @brief Estimates meter over a caller-supplied beat series, without audio and
+///   without re-running analysis.
+/// @details beat_times and beat_strengths are parallel
+/// arrays of beat_count entries; beat_times must be non-decreasing.
+/// AnalysisResult beatObservations.onsetStrength is the intended strength
+/// source, being the windowed value the library's own downbeat pass scores;
+/// beats[].strength also works but is a single unwindowed envelope frame.
+/// Neither needs pre-scaling: the series is divided by its own maximum before
+/// scoring, so only the accent contrast within it is read.
+/// A series assembled by hand from an onset envelope -- one frame read at each
+/// beat time -- is neither of those, and it carries a sample-rate dependence
+/// neither of them has: a hop counted in samples frames a different amount of
+/// time at each rate, so one waveform sampled at 32000, 44100 and 48000 Hz has
+/// produced three different winning numerators off beat times identical to the
+/// sample. Widening the read to a window around the beat does not remove it.
+/// The result carries a grouping alongside the numerator: how the bar divides
+/// into accent groups of two and three beats, so a seven comes back as 3+2+2 or
+/// 2+2+3 rather than as a bare seven.
+/// Read "searched" before treating any field as a detection: a beat series too
+/// short to score any candidate reports a fixed fallback instead, whose
+/// confidence is 0 rather than a middling value a caller could mistake for a
+/// measurement.
+/// The name "confidence" covers two quantities: on "timeSignature" it is the
+/// margin over the runner-up, on a "candidates" entry the candidate's share of
+/// the summed support. They are not comparable.
+/// Emits the schema documented on meter_result_to_json. On any error *out_json
+/// is set to NULL, so a caller may check it instead of the return code.
+/// Free *out_json with sonare_free_string.
 SonareError sonare_estimate_meter_json(const float* beat_times, const float* beat_strengths,
                                        size_t beat_count, const SonareMeterOptions* options,
                                        char** out_json);
@@ -445,7 +492,9 @@ void sonare_free_floats(float* ptr);
 void sonare_free_ints(int* ptr);
 /// @brief Releases a string the library handed to the caller; NULL is ignored.
 void sonare_free_string(char* ptr);
+/// @brief Releases a key-candidate array; NULL is ignored.
 void sonare_free_key_candidates(SonareKeyCandidate* ptr);
+/// @brief Releases the arrays of an analysis result and zeroes their counts; NULL is ignored.
 void sonare_free_analysis_result(SonareAnalysisResult* result);
 
 // Error handling

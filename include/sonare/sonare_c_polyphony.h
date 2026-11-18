@@ -53,99 +53,132 @@ typedef struct SonarePolyphonicAnalysis SonarePolyphonicAnalysis;
 ///          one framing, so a second way to state it would be a second thing to keep
 ///          in agreement.
 typedef struct {
-  /* sizeof(SonarePolyphonicConfig), set by sonare_polyphonic_config_init. A smaller
-   * value is refused with SONARE_ERROR_INVALID_PARAMETER. */
+  /// Size of this struct in bytes, set by @ref sonare_polyphonic_config_init. A smaller value is
+  /// refused with SONARE_ERROR_INVALID_PARAMETER.
   uint32_t struct_size;
 
-  /* --- Framing. One STFT serves the extraction, the claims, the apportionment and
-     the render, so it is stated once. --- */
-  /* n_fft, hop_length and win_length are samples at 44100 Hz, converted to the
-     input's sample rate. */
-  int32_t n_fft;      /* default 4096, the size this chain is tuned at; positive */
-  int32_t hop_length; /* default 512; positive */
-  int32_t win_length; /* default 0, which means n_fft; otherwise in [1, n_fft] */
+  // Framing. One STFT serves the extraction, the claims, the apportionment and the render, so
+  // it is stated once. n_fft, hop_length and win_length are samples at 44100 Hz, converted to
+  // the input's sample rate.
 
-  /* --- The cent axis the salience is folded onto. --- */
-  float cent_ref_hz;   /* bottom of the axis; default 55, positive */
-  float cents_per_bin; /* axis resolution; default 100/3, at least 1 */
-  float cent_max_hz;   /* top of the axis; default 8000, above cent_ref_hz */
-  int32_t tonality;    /* weight bins by tonality; default 1, non-zero is on */
+  /// STFT size in samples at 44100 Hz. Default 4096, the size this chain is tuned at; positive.
+  int32_t n_fft;
+  /// STFT hop in samples at 44100 Hz. Default 512; positive.
+  int32_t hop_length;
+  /// Analysis window length in samples at 44100 Hz. Default 0, which means n_fft; otherwise in
+  /// [1, n_fft].
+  int32_t win_length;
 
-  /* --- Salience: what an f0 candidate is worth. --- */
-  int32_t salience_harmonics;   /* partials summed per candidate; default 20, in [1, 128] */
-  float f0_min_hz;              /* default 55, positive */
-  float f0_max_hz;              /* default 1760, above f0_min_hz */
-  float salience_alpha_hz;      /* harmonic weighting offset; default 27, finite */
-  float salience_beta_hz;       /* harmonic weighting scale; default 320, positive */
-  float salience_inharmonicity; /* stretch assumed while scoring; default 0, non-negative */
+  // The cent axis the salience is folded onto.
 
-  /* --- Estimation: how many voices a frame is allowed and when to stop. --- */
-  int32_t max_polyphony;      /* default 4, in [1, 64] */
-  float min_frame_peak_ratio; /* stop iterating below this share; default 0.20, in [0, 1] */
-  float min_separation_cents; /* closest two candidates may sit; default 50, non-negative */
-  float subtraction_factor;   /* share of a found voice removed; default 1, in (0, 1] */
+  /// Frequency of the bottom of the cent axis in Hz. Default 55; positive.
+  float cent_ref_hz;
+  /// Axis resolution in cents per bin. Default 100/3; at least 1.
+  float cents_per_bin;
+  /// Frequency of the top of the cent axis in Hz. Default 8000; above cent_ref_hz.
+  float cent_max_hz;
+  /// Non-zero weights bins by tonality. Default 1.
+  int32_t tonality;
 
-  /* --- Tracking: which frames become one ridge. --- */
-  float max_jump_cents;        /* a larger jump breaks the ridge; default 50, positive */
-  float min_ridge_peak_ratio;  /* a fade below this share of the ridge's own peak breaks it;
-                                  default 0.10, in [0, 1] */
-  float min_ridge_duration_ms; /* shorter ridges are dropped; default 140, non-negative */
-  /* Splits a ridge where its salience climbs past this multiple of the level just
-     before, the same pitch struck again while it sounds. Default 0, which means no
-     split; otherwise above 1. */
+  // Salience: what an f0 candidate is worth.
+
+  /// Partials summed per f0 candidate. Default 20, in [1, 128].
+  int32_t salience_harmonics;
+  /// Lowest f0 candidate in Hz. Default 55; positive.
+  float f0_min_hz;
+  /// Highest f0 candidate in Hz. Default 1760; above f0_min_hz.
+  float f0_max_hz;
+  /// Offset of the harmonic weighting in Hz. Default 27; finite.
+  float salience_alpha_hz;
+  /// Scale of the harmonic weighting in Hz. Default 320; positive.
+  float salience_beta_hz;
+  /// Partial-series stretch assumed while scoring candidates. Default 0; non-negative.
+  float salience_inharmonicity;
+
+  // Estimation: how many voices a frame is allowed and when to stop.
+
+  /// Most voices estimated in one frame. Default 4, in [1, 64].
+  int32_t max_polyphony;
+  /// Iteration stops once the next voice falls below this share of the frame's peak. Default
+  /// 0.20, in [0, 1].
+  float min_frame_peak_ratio;
+  /// Closest two candidates of one frame may sit, in cents. Default 50; non-negative.
+  float min_separation_cents;
+  /// Share of a found voice removed before the next is sought. Default 1, in (0, 1].
+  float subtraction_factor;
+
+  // Tracking: which frames become one ridge.
+
+  /// A pitch jump larger than this many cents breaks the ridge. Default 50; positive.
+  float max_jump_cents;
+  /// A fade below this share of the ridge's own peak breaks it. Default 0.10, in [0, 1].
+  float min_ridge_peak_ratio;
+  /// Ridges shorter than this many milliseconds are dropped. Default 140; non-negative.
+  float min_ridge_duration_ms;
+  /// Splits a ridge where its salience climbs past this multiple of the level just before, the
+  /// same pitch struck again while it sounds. Default 0, which means no split; otherwise above 1.
   float reattack_ratio;
 
-  /* --- Claims: which bins a note asks for. A claim is predicted from the note's f0
-     and harmonic number and never read from the spectrum, so a note claims bins its
-     own partials never reached. --- */
-  int32_t mask_harmonics; /* partials claimed per note; default 20, in [1, 128] */
-  float claim_lobes;      /* claim half-width in Hann main lobes; default 1, in (0, 64] */
-  /* Stretch of the partial series, B in f_h = h*f0*sqrt(1 + B*h^2); default 0,
-     non-negative. Leaving it at 0 for material that is stretched costs more than a
-     widened claim would: at a piano's 1e-4 the highest partial of a twenty-harmonic
-     claim sits outside the claim entirely, and a partial outside every claim is
-     residual, which is carried unedited and so keeps sounding at the old pitch after
-     its note is moved. */
+  // Claims: which bins a note asks for. A claim is predicted from the note's f0 and harmonic
+  // number and never read from the spectrum, so a note claims bins its own partials never
+  // reached.
+
+  /// Partials claimed per note. Default 20, in [1, 128].
+  int32_t mask_harmonics;
+  /// Claim half-width in Hann main lobes. Default 1, in (0, 64].
+  float claim_lobes;
+  /// Stretch of the partial series, B in f_h = h*f0*sqrt(1 + B*h^2). Default 0; non-negative.
+  /// Leaving it at 0 for material that is stretched costs more than a widened claim would: at a
+  /// piano's 1e-4 the highest partial of a twenty-harmonic claim sits outside the claim
+  /// entirely, and a partial outside every claim is residual, which is carried unedited and so
+  /// keeps sounding at the old pitch after its note is moved.
   float inharmonicity;
-  /* Fit a stretch per note from the spectrum instead of spending the field above on
-     every one of them; default 0, non-zero turns it on. Off by default because of
-     what it reaches rather than what it costs: at this framing the fit takes an
-     isolated note in the middle register and refuses a chord. A refused note keeps
-     the declared stretch, so the fit only ever replaces a guess with a measurement --
-     @ref sonare_polyphonic_note_inharmonicity reports which notes it reached. The
-     three fields after it are read only while it is on. */
+  /// Non-zero fits a stretch per note from the spectrum instead of using the field above for
+  /// every note. Default 0. Off by default because of what it reaches rather than what it
+  /// costs: at this framing the fit takes an isolated note in the middle register and refuses a
+  /// chord. A refused note keeps the declared stretch, so the fit only ever replaces a guess
+  /// with a measurement; @ref sonare_polyphonic_note_inharmonicity reports which notes it
+  /// reached. The three fields after it are read only while it is on.
   int32_t estimate_inharmonicity;
-  int32_t inharmonicity_min_partials;    /* usable partials a fit needs; default 3, in [2, 128] */
-  float inharmonicity_max_residual_bins; /* largest per-partial misfit kept; default 0.5,
-                                            positive */
-  float inharmonicity_max_stretch;       /* a fit above this is refused; default 0.03125,
-                                            positive */
+  /// Usable partials a stretch fit needs. Default 3, in [2, 128].
+  int32_t inharmonicity_min_partials;
+  /// Largest per-partial misfit kept by a stretch fit, in bins. Default 0.5; positive.
+  float inharmonicity_max_residual_bins;
+  /// A fitted stretch above this is refused. Default 0.03125; positive.
+  float inharmonicity_max_stretch;
 
-  /* --- Apportionment: what the fit refuses rather than guesses, at a bin two notes
-     both claimed. A refused bin keeps the equal share. --- */
-  int32_t window_frames;        /* frames per fit; default 8, in [4, 64] */
-  float min_partial_separation; /* rad/frame two partials must differ by; default 0.01,
-                                   in (0, pi] */
-  float max_fit_residual;       /* relative misfit ceiling; default 0.02, in (0, 1] */
-  /* Ceiling on one weight's modulus. A weight is a fitted component over the observed
-     bin, so where two partials nearly cancel it exceeds one and the residual carries
-     several times the input there. While every edit is identity that is inaudible --
-     the notes and the residual still sum to the input. Lowering it trades separation
-     for a quieter residual. Default 8, at least 1. */
+  // Apportionment: what the fit refuses rather than guesses, at a bin two notes both claimed. A
+  // refused bin keeps the equal share.
+
+  /// Frames per apportionment fit. Default 8, in [4, 64].
+  int32_t window_frames;
+  /// Two partials must differ by at least this many radians per frame. Default 0.01, in
+  /// (0, pi].
+  float min_partial_separation;
+  /// Relative misfit ceiling of an apportionment fit. Default 0.02, in (0, 1].
+  float max_fit_residual;
+  /// Ceiling on one weight's modulus. A weight is a fitted component over the observed bin, so
+  /// where two partials nearly cancel it exceeds one and the residual carries several times the
+  /// input there. While every edit is identity that is inaudible: the notes and the residual
+  /// still sum to the input. Lowering it trades separation for a quieter residual. Default 8; at
+  /// least 1.
   float max_weight_modulus;
-  float max_refine_hz;      /* highest partial usable to refine f0; default 0, which derives
-                               one; otherwise positive */
-  float f0_tolerance_cents; /* worst f0 error tolerated; default 50, in (0, 1200] */
+  /// Highest partial frequency in Hz usable to refine f0. Default 0, which derives one;
+  /// otherwise positive.
+  float max_refine_hz;
+  /// Worst f0 error tolerated, in cents. Default 50, in (0, 1200].
+  float f0_tolerance_cents;
 
-  /* --- Note spans. One note per tracked ridge; the span itself is the
-     ridge's, not cut by these fields (see min_ridge_duration_ms above to
-     filter short ridges instead). --- */
-  float segmentation_threshold_cents; /* scales the reported f0 stability figure
-                                          only -- a mid-ridge pitch jump is never
-                                          split into two notes; default 50, finite */
-  float min_note_ms;                  /* not read: one note per ridge means nothing here
-                                          filters a short one; default 30, finite */
-  float reference_hz;                 /* cents reference; default 440, positive */
+  // Note spans. One note per tracked ridge; the span itself is the ridge's, not cut by these
+  // fields (see min_ridge_duration_ms above to filter short ridges instead).
+
+  /// Scales the reported f0 stability figure only, in cents; a mid-ridge pitch jump is never
+  /// split into two notes. Default 50; finite.
+  float segmentation_threshold_cents;
+  /// Not read: one note per ridge means nothing here filters a short one. Default 30; finite.
+  float min_note_ms;
+  /// Reference frequency for cents in Hz. Default 440; positive.
+  float reference_hz;
 } SonarePolyphonicConfig;
 
 /// @brief Sets @c struct_size and the library default of every field of @p config.
