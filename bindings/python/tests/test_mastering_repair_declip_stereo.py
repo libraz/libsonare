@@ -54,8 +54,8 @@ class TestMasteringRepairDeclipStereo:
         left, right = _fixture()
         result = libsonare.mastering_repair_declip_stereo(left, right, SR)
 
-        assert isinstance(result.left, list)
-        assert isinstance(result.right, list)
+        assert isinstance(result.left, np.ndarray)
+        assert isinstance(result.right, np.ndarray)
         assert len(result.left) == len(left)
         assert len(result.right) == len(right)
         assert result.length == len(left)
@@ -65,7 +65,7 @@ class TestMasteringRepairDeclipStereo:
         # Not the same data -- the control a "declip one channel and return
         # it twice" implementation cannot pass, since the input channels
         # carry different tones.
-        assert result.left != result.right
+        assert not np.array_equal(result.left, result.right)
 
     def test_wider_run_links_the_narrower_channel(self) -> None:
         left, right = _fixture()

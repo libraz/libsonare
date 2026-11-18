@@ -49,8 +49,8 @@ class TestMasteringRepairDeclickStereo:
         left, right = _fixture()
         result = libsonare.mastering_repair_declick_stereo(left, right, SR)
 
-        assert isinstance(result.left, list)
-        assert isinstance(result.right, list)
+        assert isinstance(result.left, np.ndarray)
+        assert isinstance(result.right, np.ndarray)
         assert len(result.left) == len(left)
         assert len(result.right) == len(right)
         assert result.length == len(left)
@@ -60,7 +60,7 @@ class TestMasteringRepairDeclickStereo:
         # Not the same data -- the control a "declick one channel and return
         # it twice" implementation cannot pass, since the input channels
         # carry different tones.
-        assert result.left != result.right
+        assert not np.array_equal(result.left, result.right)
 
     def test_shared_run_is_repaired_in_both_channels(self) -> None:
         left, right = _fixture()
