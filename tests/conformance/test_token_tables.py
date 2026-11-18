@@ -33,7 +33,7 @@ const char* to_string(Law law) {
 }
 
 Law law_from_string(const std::string& value) {
-  if (value == "softKnee" || value == "soft") return Law::SoftKnee;
+  if (value == "softKnee") return Law::SoftKnee;
   if (value == "hard4.5") return Law::Hard45;
   throw SonareException(ErrorCode::InvalidFormat, "unknown law: " + value);
 }
@@ -50,7 +50,7 @@ typedef enum { SONARE_LAW_SOFT_KNEE = 0, SONARE_LAW_HARD_4P5 = 1 } SonareLaw;
 _ROW = check.TokenSet(
     name="law",
     core=check.CoreTable("src/core.cpp", "Law", "law_from_string"),
-    earlier_forms=("soft",),
+    refused_forms=("soft",),
     c_enum=("include/c.h", "SONARE_LAW_"),
     c_aliases={"hard4.5": "HARD_4P5"},
     sources=(
@@ -133,19 +133,21 @@ class TokenTableTests(unittest.TestCase):
 
     def test_an_undeclared_third_spelling_is_named(self) -> None:
         problems, _, _ = self.run_with(
-            {"src/core.cpp": ('value == "soft")', 'value == "soft" || value == "s")')}
+            {"src/core.cpp": ('value == "softKnee")', 'value == "softKnee" || value == "s")')}
         )
         self.assertEqual(problems, ["law: law_from_string accepts undeclared 's'"])
 
-    def test_an_earlier_form_no_longer_read_is_named(self) -> None:
-        problems, _, _ = self.run_with({"src/core.cpp": (' || value == "soft"', "")})
-        self.assertEqual(problems, ["law: law_from_string does not accept 'soft'"])
+    def test_a_refused_form_still_accepted_is_named(self) -> None:
+        problems, _, _ = self.run_with(
+            {"src/core.cpp": ('value == "softKnee")', 'value == "softKnee" || value == "soft")')}
+        )
+        self.assertEqual(problems, ["law: law_from_string still accepts refused form 'soft'"])
 
-    def test_an_earlier_form_still_written_is_named(self) -> None:
+    def test_a_refused_form_still_written_is_named(self) -> None:
         problems, _, _ = self.run_with(
             {"src/core.cpp": ('return "softKnee";\n    case', 'return "soft";\n    case')}
         )
-        self.assertIn("law: earlier form 'soft' is still written", problems)
+        self.assertIn("law: refused form 'soft' is still written", problems)
 
     def test_a_missing_source_is_named(self) -> None:
         problems, _, compared = self.run_with({"ts/list.ts": ("const LAWS", "const OTHER")})
@@ -173,18 +175,8 @@ const char* room_name(Room room) {
   return "livingRoom";
 }
 
-const char* legacy_room_name(Room room) {
-  switch (room) {
-    case Room::Living:
-      return "living_room";
-    case Room::Theater:
-      return "home_theater";
-  }
-  return "living_room";
-}
-
 Room room_from_text(const std::string& value) {
-  if (value == room_name(Room::Living) || value == legacy_room_name(Room::Living)) return Room::Living;
+  if (value == room_name(Room::Living)) return Room::Living;
   return Room::Theater;
 }
 """,
@@ -213,7 +205,7 @@ _KIND_ROW = check.TokenSet(
 
 
 class SourceKindTests(unittest.TestCase):
-    """Field unions, annotated aliases, subset sources, legacy writers and second writers."""
+    """Field unions, annotated aliases, subset sources, a left-over legacy writer and second writers."""
 
     def run_with(self, edits: dict[str, tuple[str, str]] | None = None) -> tuple[list[str], int, int]:
         with tempfile.TemporaryDirectory() as d:
@@ -254,11 +246,22 @@ class SourceKindTests(unittest.TestCase):
         problems, _, _ = self.run_with({"ts/narrow.ts": ("'livingRoom';", "'livingRoom' | 'cinema';")})
         self.assertEqual(problems, ["room: node NarrowRoom (ts/narrow.ts): extra token 'cinema'"])
 
-    def test_a_legacy_writer_nobody_reads_is_named(self) -> None:
-        problems, _, _ = self.run_with(
-            {"src/room.cpp": (" || value == legacy_room_name(Room::Living)", "")}
+    def test_a_legacy_writer_left_in_the_core_is_named(self) -> None:
+        legacy = (
+            "\nRoom room_from_text(",
+            '\nconst char* legacy_room_name(Room room) {\n  return "living_room";\n}\n\nRoom room_from_text(',
         )
-        self.assertEqual(problems, ["room: src/room.cpp does not read what legacy_room_name writes"])
+        problems, _, _ = self.run_with({"src/room.cpp": legacy})
+        self.assertEqual(
+            problems, ["room: src/room.cpp still has legacy_room_name; an earlier form is refused"]
+        )
+
+    def test_a_fallback_past_a_switch_is_not_a_token(self) -> None:
+        # room_name returns "livingRoom" past its switch; an "unknown" there names no enumerator.
+        problems, _, _ = self.run_with(
+            {"src/room.cpp": ('  }\n  return "livingRoom";', '  }\n  return "unknown";')}
+        )
+        self.assertEqual(problems, [])
 
     def test_a_second_writer_that_drifts_is_named(self) -> None:
         problems, _, _ = self.run_with({"src/bed.cpp": ('"homeTheater"', '"theater"')})
@@ -359,11 +362,21 @@ class PopulationTests(unittest.TestCase):
             ],
         )
 
-    def test_an_earlier_spelling_still_draws_on_its_writer(self) -> None:
+    def test_a_derived_const_tuple_is_a_set(self) -> None:
+        tuple_set = "export const ROOMS = ['livingRoom', 'homeTheater'] as const;\n"
         problems, sets, _ = self.run_with(
-            {"bindings/node/src/config.ts": ("'homeTheater'", "'home_theater'")}
+            {"bindings/node/src/law.ts": ("export type Tap", tuple_set + "export type Tap")}
         )
-        self.assertEqual((problems, sets), ([], 3))
+        self.assertEqual(sets, 4)
+        self.assertEqual(
+            problems,
+            [
+                (
+                    "ROOMS (bindings/node/src/law.ts) spells the tokens of room_name(Room) in "
+                    "src/room.cpp and no row pins it"
+                )
+            ],
+        )
 
     def test_a_writer_no_row_names_is_named(self) -> None:
         rows = (_POP_ROWS[0], _POP_ROWS[1]._replace(core=check.CoreTable("src/law.cpp", "Law")))
@@ -390,14 +403,14 @@ class PopulationTests(unittest.TestCase):
 _KEY_FILES = {
     "src/scene.cpp": """
 Insert insert_from_value(const JsonValue& object, const std::string& path) {
-  static const KeySet kKnown = known_keys("inserts[]", {"processor_name"});
-  insert.processor = string_or_legacy(object, path, "processor", "processor_name", "");
+  static const KeySet kKnown = known_keys("inserts[]");
+  insert.processor = string_or_earlier(object, path, "processor", "processor_name", "");
 }
 void insert_to_value(JsonValue& object, const Insert& insert) {
   util::json::put(object, "processor", insert.processor);
 }
 """,
-    "bindings/wasm/src/mirror.ts": "const processor = aliasedValue(object, 'processor', 'processor_name');\n",
+    "bindings/wasm/src/mirror.ts": "const processor = typeof object.processor === 'string' ? object.processor : '';\n",
 }
 
 _KEY_FORM = check.KeyForm(
@@ -405,7 +418,7 @@ _KEY_FORM = check.KeyForm(
 )
 
 
-class EarlierKeyTests(unittest.TestCase):
+class RefusedKeyTests(unittest.TestCase):
     def run_with(
         self, edits: dict[str, tuple[str, str]] | None = None, extra: dict[str, str] | None = None
     ) -> tuple[list[str], int, int]:
@@ -423,56 +436,197 @@ class EarlierKeyTests(unittest.TestCase):
     def test_clean_tree_passes_and_matches_core_and_mirror(self) -> None:
         self.assertEqual(self.run_with(), ([], 1, 2))
 
-    def test_an_earlier_key_no_longer_read_is_named(self) -> None:
+    def test_a_core_that_stops_refusing_is_named(self) -> None:
         problems, _, matched = self.run_with(
             {"src/scene.cpp": ('"processor", "processor_name", ""', '"processor", ""')}
         )
-        self.assertIn(
-            "insert processor: src/scene.cpp does not read 'processor_name' beside 'processor'",
+        self.assertEqual(
             problems,
+            ["insert processor: src/scene.cpp does not refuse 'processor_name' beside 'processor'"],
         )
         self.assertEqual(matched, 1)
+
+    def test_a_core_that_reads_the_earlier_key_again_is_named(self) -> None:
+        problems, _, _ = self.run_with({"src/scene.cpp": ("string_or_earlier(", "string_or_legacy(")})
+        self.assertIn("insert processor: src/scene.cpp still reads 'processor_name'", problems)
+        self.assertIn(
+            "insert processor: src/scene.cpp does not refuse 'processor_name' beside 'processor'",
+            problems,
+        )
+
+    def test_an_earlier_key_declared_known_is_named(self) -> None:
+        problems, _, _ = self.run_with(
+            {"src/scene.cpp": ('known_keys("inserts[]")', 'known_keys("inserts[]", {"processor_name"})')}
+        )
+        self.assertEqual(
+            problems,
+            ["insert processor: 'processor_name' appears outside the refusal at src/scene.cpp:3"],
+        )
 
     def test_an_earlier_key_written_by_the_core_is_named(self) -> None:
         problems, _, _ = self.run_with(
             {"src/scene.cpp": ('put(object, "processor",', 'put(object, "processor_name",')}
         )
-        self.assertIn("insert processor: src/scene.cpp writes no 'processor'", problems)
-        self.assertIn(
-            "insert processor: 'processor_name' appears outside a reader at src/scene.cpp:7",
+        self.assertEqual(
             problems,
+            [
+                "insert processor: src/scene.cpp writes no 'processor'",
+                "insert processor: 'processor_name' appears outside the refusal at src/scene.cpp:7",
+            ],
         )
 
-    def test_an_earlier_key_written_by_a_facade_is_named(self) -> None:
+    def test_an_earlier_key_read_by_a_facade_is_named(self) -> None:
         problems, _, _ = self.run_with(
-            extra={"bindings/node/src/scene.ts": "out['processor_name'] = name;\n"}
+            extra={"bindings/node/src/scene.ts": "const name = object['processor_name'];\n"}
         )
         self.assertEqual(
             problems,
             [
                 (
-                    "insert processor: 'processor_name' appears outside a reader at "
+                    "insert processor: 'processor_name' appears outside the refusal at "
                     "bindings/node/src/scene.ts:1"
                 )
             ],
         )
 
-    def test_a_mirror_that_drops_the_earlier_key_is_named(self) -> None:
+    def test_a_mirror_that_reads_the_earlier_key_is_named(self) -> None:
         problems, _, _ = self.run_with(
-            {"bindings/wasm/src/mirror.ts": ("aliasedValue(object, 'processor', 'processor_name')", "object.processor")}
+            {"bindings/wasm/src/mirror.ts": ("object.processor : ''", "object.processor : object['processor_name']")}
         )
         self.assertEqual(
             problems,
             [
                 (
-                    "insert processor: bindings/wasm/src/mirror.ts does not read "
-                    "'processor_name' beside 'processor'"
+                    "insert processor: 'processor_name' appears outside the refusal at "
+                    "bindings/wasm/src/mirror.ts:1"
                 )
             ],
         )
 
+    def test_a_mirror_that_drops_the_current_key_is_named(self) -> None:
+        problems, _, matched = self.run_with(
+            {"bindings/wasm/src/mirror.ts": ("typeof object.processor === 'string' ? object.processor : ''", "''")}
+        )
+        self.assertEqual(
+            problems, ["insert processor: bindings/wasm/src/mirror.ts does not read 'processor'"]
+        )
+        self.assertEqual(matched, 1)
+
     def test_the_shipped_key_forms_are_not_empty(self) -> None:
         self.assertGreater(len(check.KEY_FORMS), 0)
+
+
+class NotComparedTests(unittest.TestCase):
+    def test_an_entry_a_row_now_names_is_named(self) -> None:
+        declared = {("src/law.cpp", "law_text", "Law"): "fixture"}
+        problems, lines = check.not_compared(Path("."), _POP_ROWS, declared)
+        self.assertEqual(problems, ["not-compared entry law_text(Law) in src/law.cpp is named by a row"])
+        self.assertEqual(lines, ["law_text(Law) in src/law.cpp: fixture"])
+
+    def test_the_shipped_entries_carry_a_reason_and_name_no_row(self) -> None:
+        problems, _ = check.not_compared(Path("."))
+        self.assertEqual(problems, [])
+        for key, reason in check.NOT_COMPARED.items():
+            self.assertTrue(reason.strip(), key)
+
+
+_FAMILY_FILES = {
+    "src/tables.h": """
+constexpr const char* enum_choice_name(sonare::fx::Shape value) {
+  switch (value) {
+    case sonare::fx::Shape::Sine:
+      return "sine";
+    case sonare::fx::Shape::SawUp:
+      return "sawUp";
+    case sonare::fx::Shape::Square:
+      return "square";
+  }
+  return "sine";
+}
+constexpr const char* enum_choice_name(
+    sonare::fx::Config::Detector value) {
+  switch (value) {
+    case sonare::fx::Config::Detector::Peak:
+      return "peak";
+    case sonare::fx::Config::Detector::Rms:
+      return "rms";
+  }
+  return "peak";
+}
+""",
+    "bindings/node/src/fx.ts": (
+        "export type Shape = 'sine' | 'sawUp' | 'square';\n"
+        "export type Detector = 'peak' | 'rms';\n"
+        "export type Synth = 'sine' | 'noise' | 'default';\n"
+    ),
+    "bindings/python/src/pkg/fx.py": 'Shape = Literal["sine", "sawUp", "square"]\n',
+}
+
+
+class FamilyTests(unittest.TestCase):
+    def run_with(
+        self,
+        edits: dict[str, tuple[str, str]] | None = None,
+        exempt: dict[tuple[str, str], str] | None = None,
+    ) -> tuple[list[str], int, int]:
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            for rel, text in _FAMILY_FILES.items():
+                old, new = (edits or {}).get(rel, ("", ""))
+                if old:
+                    self.assertIn(old, text, f"fixture edit does not apply to {rel}")
+                    text = text.replace(old, new)
+                (root / rel).parent.mkdir(parents=True, exist_ok=True)
+                (root / rel).write_text(text)
+            return check.evaluate_family(root, (), exempt or {})
+
+    def test_clean_tree_compares_every_set_drawing_on_a_qualified_overload(self) -> None:
+        # Synth shares one token only and is a different vocabulary, so it draws on nothing.
+        self.assertEqual(self.run_with(), ([], 3, 2))
+
+    def test_a_respelled_union_is_named(self) -> None:
+        problems, _, _ = self.run_with({"bindings/node/src/fx.ts": ("'sawUp' | 'square'", "'saw_up' | 'square'")})
+        self.assertEqual(
+            problems,
+            [
+                (
+                    "Shape (bindings/node/src/fx.ts) disagrees with enum_choice_name(sonare::fx::Shape) in "
+                    "src/tables.h: missing ['sawUp'], extra ['saw_up']"
+                )
+            ],
+        )
+
+    def test_a_union_missing_a_token_is_named(self) -> None:
+        problems, _, _ = self.run_with({"bindings/python/src/pkg/fx.py": (', "square"', "")})
+        self.assertEqual(
+            problems,
+            [
+                (
+                    "Shape (bindings/python/src/pkg/fx.py) disagrees with enum_choice_name(sonare::fx::Shape) in "
+                    "src/tables.h: missing ['square'], extra []"
+                )
+            ],
+        )
+
+    def test_a_generated_block_is_not_read(self) -> None:
+        generated = (
+            "// BEGIN GENERATED fx (make processor-types)\n"
+            "export type Generated = 'sine' | 'sawUp';\n"
+            "// END GENERATED fx\n"
+        )
+        problems, sets, _ = self.run_with({"bindings/node/src/fx.ts": ("export type Synth", generated + "export type Synth")})
+        self.assertEqual((problems, sets), ([], 3))
+
+    def test_an_exempt_set_is_not_compared_and_a_stale_exemption_is_named(self) -> None:
+        exempt = {("bindings/node/src/fx.ts", "Detector"): "fixture", ("bindings/node/src/fx.ts", "Synth"): "fixture"}
+        problems, sets, _ = self.run_with(exempt=exempt)
+        self.assertEqual(sets, 2)
+        self.assertEqual(problems, ["family exemption for Synth (bindings/node/src/fx.ts) excuses nothing"])
+
+    def test_the_shipped_family_exemptions_carry_a_reason(self) -> None:
+        for key, reason in check.FAMILY_EXEMPT.items():
+            self.assertTrue(reason.strip(), key)
+
 
 if __name__ == "__main__":
     unittest.main()
