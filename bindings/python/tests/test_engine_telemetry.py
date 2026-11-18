@@ -149,8 +149,8 @@ def test_realtime_engine_process_and_telemetry() -> None:
         engine.set_tempo(60.0)
         engine.set_time_signature(3, 4)
         engine.set_markers([EngineMarker(11, 1.0, "intro"), EngineMarker(12, 2.0, "out")])
-        assert engine.marker_count() == 2
-        assert engine.marker_by_index(0).name == "intro"
+        assert len(engine.markers()) == 2
+        assert engine.markers()[0].name == "intro"
         assert engine.marker(12).ppq == 2.0
         engine.set_loop_from_markers(11, 12)
         engine.set_metronome(

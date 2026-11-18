@@ -6364,7 +6364,7 @@ old = "ProjectMarker.kind"
 changed = "a MarkerKind token, default 'marker'; an ordinal is TypeError"
 domain = "project"
 rule = "string-closed-sets"
-test = "bindings/python/tests/test_project.py::test_project_marker_ex_round_trips_kind_and_key"
+test = "bindings/python/tests/test_project.py::test_project_marker_round_trips_kind_and_key"
 
 [[entry]]
 kind = "type"
@@ -10121,3 +10121,116 @@ changed = "a list of ProjectMidiEvent records instead of (ppq, data0, data1) tup
 domain = "analysis"
 rule = "typed-results"
 test = "bindings/python/tests/test_transcribe.py::test_transcribe_events_are_project_midi_event_records"
+
+[[entry]]
+kind = "method"
+old = "Project.marker_count"
+removed = "len(project.markers())"
+domain = "project"
+rule = "collections"
+
+[[entry]]
+kind = "method"
+old = "Project.marker_by_index"
+removed = "project.markers()[index], or iterate project.markers()"
+domain = "project"
+rule = "collections"
+
+[[entry]]
+kind = "method"
+old = "Project.track_count"
+removed = "len(project.tracks())"
+domain = "project"
+rule = "collections"
+
+[[entry]]
+kind = "method"
+old = "Project.track_by_index"
+removed = "project.tracks()[index], or iterate project.tracks()"
+domain = "project"
+rule = "collections"
+
+[[entry]]
+kind = "method"
+old = "Project.clip_count"
+removed = "len(project.clips())"
+domain = "project"
+rule = "collections"
+
+[[entry]]
+kind = "method"
+old = "Project.clip_by_index"
+removed = "project.clips()[index], or iterate project.clips()"
+domain = "project"
+rule = "collections"
+
+[[entry]]
+kind = "method"
+old = "Project.source_count"
+removed = "len(project.sources())"
+domain = "project"
+rule = "collections"
+
+[[entry]]
+kind = "method"
+old = "Project.source_by_index"
+removed = "project.sources()[index], or iterate project.sources()"
+domain = "project"
+rule = "collections"
+
+[[entry]]
+kind = "method"
+old = "Project.tempo_segment_count"
+removed = "len(project.tempo_segments())"
+domain = "project"
+rule = "collections"
+
+[[entry]]
+kind = "method"
+old = "Project.tempo_segment_by_index"
+removed = "project.tempo_segments()[index], or iterate project.tempo_segments()"
+domain = "project"
+rule = "collections"
+
+[[entry]]
+kind = "method"
+old = "Project.time_signature_count"
+removed = "len(project.time_signatures())"
+domain = "project"
+rule = "collections"
+
+[[entry]]
+kind = "method"
+old = "Project.time_signature_by_index"
+removed = "project.time_signatures()[index], or iterate project.time_signatures()"
+domain = "project"
+rule = "collections"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.marker_count"
+removed = "len(engine.markers())"
+domain = "engine"
+rule = "collections"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.marker_by_index"
+removed = "engine.markers()[index], or iterate engine.markers()"
+domain = "engine"
+rule = "collections"
+
+[[entry]]
+kind = "method"
+old = "Project.set_marker_ex"
+removed = "project.set_marker(ppq, marker_id=..., name=..., kind=..., key_fifths=..., key_minor=...)"
+domain = "project"
+rule = "input-types"
+
+[[entry]]
+kind = "option"
+old = "Project.set_marker(marker_id)"
+changed = "set_marker(ppq, *, marker_id=None, name=None, kind=None, key_fifths=None, key_minor=None): ppq first, the rest keyword-only; an omitted marker_id allocates and an explicit 0 raises SonareValueError"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_project.py::test_project_marker_refuses_an_explicit_zero_id_and_a_numeric_kind"

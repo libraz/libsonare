@@ -24,8 +24,7 @@ def _marker_value(raw: dict[str, Any]) -> EngineMarker:
 
 def _snapshot(engine: RealtimeEngine) -> bytes:
     values = []
-    for index in range(engine.marker_count()):
-        marker = engine.marker_by_index(index)
+    for marker in engine.markers():
         values.append(
             [
                 marker.id,
@@ -58,9 +57,9 @@ def test_shared_marker_transaction_corpus(case: dict[str, Any]) -> None:
         before = _snapshot(engine)
         if case["accepted"]:
             engine.set_markers(candidate)
-            assert engine.marker_count() == len(candidate)
-            for index, expected in enumerate(candidate):
-                actual = engine.marker_by_index(index)
+            stored = engine.markers()
+            assert len(stored) == len(candidate)
+            for actual, expected in zip(stored, candidate, strict=True):
                 assert (actual.id, actual.ppq, actual.name) == (
                     expected.id,
                     expected.ppq,

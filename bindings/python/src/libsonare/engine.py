@@ -584,19 +584,22 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
             _get_lib().sonare_engine_set_markers(self._require_handle(), raw_markers, len(markers))
         )
 
-    def marker_count(self) -> int:
-        out = ctypes.c_size_t()
-        _check(_get_lib().sonare_engine_marker_count(self._require_handle(), ctypes.byref(out)))
-        return int(out.value)
-
-    def marker_by_index(self, index: int) -> EngineMarker:
-        raw = _ffi_core.SonareEngineMarker()
-        _check(
-            _get_lib().sonare_engine_marker_by_index(
-                self._require_handle(), _to_c_size_t(index, "index"), ctypes.byref(raw)
+    def markers(self) -> list[EngineMarker]:
+        """Every marker, in stored order."""
+        lib = _get_lib()
+        handle = self._require_handle()
+        count = ctypes.c_size_t()
+        _check(lib.sonare_engine_marker_count(handle, ctypes.byref(count)))
+        out: list[EngineMarker] = []
+        for index in range(int(count.value)):
+            raw = _ffi_core.SonareEngineMarker()
+            _check(
+                lib.sonare_engine_marker_by_index(
+                    handle, _to_c_size_t(index, "index"), ctypes.byref(raw)
+                )
             )
-        )
-        return _marker_from_c(raw)
+            out.append(_marker_from_c(raw))
+        return out
 
     def marker(self, id: int) -> EngineMarker:
         raw = _ffi_core.SonareEngineMarker()

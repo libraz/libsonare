@@ -56,7 +56,6 @@ from ._runtime import (
     _mapping_keys,
     _narrow_int,
     _ordinal_token,
-    _require_instance,
     _to_c_float_array,
     _to_c_int,
     _to_c_size_t,
@@ -65,6 +64,7 @@ from ._runtime import (
     _token_ordinal,
     _utf8_arg,
 )
+from ._types_engine import MarkerKind
 from .types import ProjectClip, ProjectMarker, ProjectSource, ProjectTrack
 
 _KEY_SEGMENT_KEYS = ("start_ppq", "end_ppq", "tonic_pc", "mode")
@@ -199,8 +199,7 @@ class _ProjectInspectionMixin:
         The scoring arguments mean what they do on :meth:`analyze_tempo`, and
         ``candidate_index`` indexes the ranking that method returns, so pair the
         two on the same values rather than mixing two option sets. Read the
-        installed map back with :meth:`tempo_segment_count` and
-        :meth:`tempo_segment_by_index`.
+        installed map back with :meth:`tempo_segments`.
 
         Returns:
             The BPM of the installed map's first segment.
@@ -449,51 +448,52 @@ class _ProjectInspectionMixin:
             )
         )
 
-    def set_marker(self, marker_id: int, ppq: float, name: str) -> int:
-        """Add or replace a marker; return its (possibly newly allocated) id.
+    def set_marker(
+        self,
+        ppq: float,
+        *,
+        marker_id: int | None = None,
+        name: str | None = None,
+        kind: MarkerKind | None = None,
+        key_fifths: int | None = None,
+        key_minor: bool | None = None,
+    ) -> int:
+        """Add or replace a marker; return its id.
 
-        Pass ``marker_id == 0`` to allocate a new marker id.
+        ``marker_id`` names the marker to replace; omitted, a new id is
+        allocated. A field left as ``None`` takes the library default.
+        ``key_fifths`` (-7..7) and ``key_minor`` describe the key-signature kind.
+
+        Raises:
+            SonareValueError: If ``marker_id`` is 0 (omit it to allocate) or a
+                field is out of range.
+            TypeError: If ``kind`` is not a string token.
         """
-        out_id = ctypes.c_uint32()
-        _check(
-            _get_lib().sonare_project_set_marker(
-                self._require_handle(),
-                _to_c_uint32(marker_id, "marker_id"),
-                _narrow_double(ppq, "ppq"),
-                _utf8_arg(name, "name") if name is not None else None,
-                ctypes.byref(out_id),
-            )
-        )
-        return int(out_id.value)
-
-    def set_marker_ex(self, marker: ProjectMarker) -> int:
-        """Add or replace a marker from a full :class:`ProjectMarker`.
-
-        Carries the marker ``kind`` and (for the key-signature kind) the
-        structured key. Pass ``marker.id == 0`` to allocate a new marker id;
-        the affected id is returned.
-        """
-        _require_instance(marker, ProjectMarker, "marker")
         raw = SonareProjectMarker()
-        # Assigned unconverted so the struct's own narrowing sees each caller
-        # value; int() would truncate a fraction past it.
-        raw.id = marker.id
-        raw.kind = _marker_kind_value(marker.kind)
-        raw.key_fifths = marker.key_fifths
-        raw.key_minor = 1 if marker.key_minor else 0
-        raw.ppq = _narrow_double(marker.ppq, "marker.ppq")
+        if marker_id is not None:
+            if marker_id == 0:
+                raise SonareValueError("marker_id must not be 0 (omit it to allocate a new id)")
+            raw.id = _to_c_uint32(marker_id, "marker_id")
+        raw.ppq = _narrow_double(ppq, "ppq")
+        if kind is not None:
+            raw.kind = _marker_kind_value(kind)
+        if key_fifths is not None:
+            # Assigned unconverted so the struct's own narrowing sees the value.
+            raw.key_fifths = key_fifths
+        if key_minor is not None:
+            raw.key_minor = 1 if key_minor else 0
         out_id = ctypes.c_uint32()
         _check(
             _get_lib().sonare_project_set_marker_ex_name(
                 self._require_handle(),
                 ctypes.byref(raw),
-                _utf8_arg(marker.name or "", "name"),
+                _utf8_arg(name if name is not None else "", "name"),
                 ctypes.byref(out_id),
             )
         )
         return int(out_id.value)
 
-    def marker_by_index(self, index: int) -> ProjectMarker:
+    def _marker_by_index(self, index: int) -> ProjectMarker:
         """Read a marker by 0-based stored index, including its kind / key."""
         raw = SonareProjectMarker()
         _check(
@@ -521,7 +521,7 @@ class _ProjectInspectionMixin:
             key_minor=bool(raw.key_minor),
         )
 
-    def track_by_index(self, index: int) -> ProjectTrack:
+    def _track_by_index(self, index: int) -> ProjectTrack:
         """Read a stored project track by 0-based index."""
         raw = SonareProjectTrack()
         _check(
@@ -540,7 +540,7 @@ class _ProjectInspectionMixin:
             name=raw.name.split(b"\0", 1)[0].decode(),
         )
 
-    def clip_by_index(self, index: int) -> ProjectClip:
+    def _clip_by_index(self, index: int) -> ProjectClip:
         """Read a stored project clip by 0-based index."""
         raw = SonareProjectClip()
         _check(
@@ -561,7 +561,7 @@ class _ProjectInspectionMixin:
             loop_length_ppq=float(raw.loop_length_ppq),
         )
 
-    def source_by_index(self, index: int) -> ProjectSource:
+    def _source_by_index(self, index: int) -> ProjectSource:
         """Read a stored project source by 0-based index."""
         raw = SonareProjectSource()
         _check(
@@ -703,27 +703,33 @@ class _ProjectInspectionMixin:
         _check(getattr(_get_lib(), fn_name)(self._require_handle(), ctypes.byref(out)))
         return int(out.value)
 
-    def marker_count(self) -> int:
-        """Number of timeline markers in the project."""
-        return self._count("sonare_project_marker_count")
+    def markers(self) -> list[ProjectMarker]:
+        """Every marker, in stored order, including its kind and key."""
+        return [self._marker_by_index(i) for i in range(self._count("sonare_project_marker_count"))]
 
-    def clip_count(self) -> int:
-        """Number of clips in the project."""
-        return self._count("sonare_project_clip_count")
+    def tracks(self) -> list[ProjectTrack]:
+        """Every track, in stored order."""
+        return [self._track_by_index(i) for i in range(self._count("sonare_project_track_count"))]
 
-    def source_count(self) -> int:
-        """Number of registered audio sources in the project."""
-        return self._count("sonare_project_source_count")
+    def clips(self) -> list[ProjectClip]:
+        """Every clip, in stored order."""
+        return [self._clip_by_index(i) for i in range(self._count("sonare_project_clip_count"))]
 
-    def tempo_segment_count(self) -> int:
-        """Number of tempo-map segments in the project."""
-        return self._count("sonare_project_tempo_segment_count")
+    def sources(self) -> list[ProjectSource]:
+        """Every registered source, in stored order."""
+        return [self._source_by_index(i) for i in range(self._count("sonare_project_source_count"))]
 
-    def time_signature_count(self) -> int:
-        """Number of time-signature segments in the project."""
-        return self._count("sonare_project_time_signature_count")
+    def tempo_segments(self) -> list[dict[str, float]]:
+        """Every tempo-map segment in stored order, as :meth:`set_tempo_segments` takes it."""
+        count = self._count("sonare_project_tempo_segment_count")
+        return [self._tempo_segment_by_index(i) for i in range(count)]
 
-    def tempo_segment_by_index(self, index: int) -> dict[str, float]:
+    def time_signatures(self) -> list[dict[str, float | int]]:
+        """Every time-signature segment in stored order, as :meth:`set_time_signatures` takes it."""
+        count = self._count("sonare_project_time_signature_count")
+        return [self._time_signature_by_index(i) for i in range(count)]
+
+    def _tempo_segment_by_index(self, index: int) -> dict[str, float]:
         """Read a tempo-map segment by 0-based stored index.
 
         Returns the keys :meth:`set_tempo_segments` accepts, so a segment read
@@ -732,7 +738,7 @@ class _ProjectInspectionMixin:
         positions are derived when it is compiled.
 
         Raises:
-            SonareValueError: If ``index`` is at or past :meth:`tempo_segment_count`.
+            SonareValueError: If ``index`` is past the stored segments.
         """
         raw = SonareProjectTempoSegment()
         _check(
@@ -746,11 +752,11 @@ class _ProjectInspectionMixin:
             "end_bpm": float(raw.end_bpm),
         }
 
-    def time_signature_by_index(self, index: int) -> dict[str, float | int]:
+    def _time_signature_by_index(self, index: int) -> dict[str, float | int]:
         """Read a time-signature segment by 0-based stored index.
 
         Raises:
-            SonareValueError: If ``index`` is at or past :meth:`time_signature_count`.
+            SonareValueError: If ``index`` is past the stored segments.
         """
         raw = SonareProjectTimeSignatureSegment()
         _check(
@@ -763,10 +769,6 @@ class _ProjectInspectionMixin:
             "numerator": int(raw.numerator),
             "denominator": int(raw.denominator),
         }
-
-    def track_count(self) -> int:
-        """Number of tracks in the project."""
-        return self._count("sonare_project_track_count")
 
     # -- compile / render ---------------------------------------------------
 

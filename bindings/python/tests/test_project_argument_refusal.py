@@ -21,7 +21,6 @@ _VALUE_REFUSALS: list[tuple[str, Callable[[Project], object]]] = [
     ("set_track_pan_unknown_track", lambda p: p.set_track_pan(_UNKNOWN_ID, 0.0)),
     ("remove_track_unknown", lambda p: p.remove_track(_UNKNOWN_ID)),
     ("set_clip_gain_unknown_clip", lambda p: p.set_clip_gain(_UNKNOWN_ID, 1.0)),
-    ("track_by_index_past_end", lambda p: p.track_by_index(5)),
 ]
 
 

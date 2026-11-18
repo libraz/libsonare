@@ -95,8 +95,8 @@ def test_wrong_argument_type_is_type_error(
         call(engine)
 
 
-def test_set_marker_ex_wrong_type_is_type_error() -> None:
+def test_set_marker_kind_wrong_type_is_type_error() -> None:
     from libsonare import Project
 
-    with Project() as project, pytest.raises(TypeError, match="marker must be a ProjectMarker"):
-        project.set_marker_ex(object())  # type: ignore[arg-type]
+    with Project() as project, pytest.raises(TypeError, match="marker kind"):
+        project.set_marker(1.0, kind=object())  # type: ignore[arg-type]

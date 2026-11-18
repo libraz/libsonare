@@ -197,9 +197,9 @@ def test_engine_marker_kind_and_key_signature_round_trip() -> None:
                 ),
             ]
         )
-        assert engine.marker_count() == 3
+        assert len(engine.markers()) == 3
 
-        cue = engine.marker_by_index(0)
+        cue = engine.markers()[0]
         assert cue.kind == "cuePoint"
         assert cue.name == "verse"
         assert cue.key_fifths == 0

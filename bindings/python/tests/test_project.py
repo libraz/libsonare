@@ -25,7 +25,6 @@ from libsonare import (
     ProjectDiagnosticCode,
     ProjectDiagnosticSeverity,
     ProjectLoopRecordingResult,
-    ProjectMarker,
     ProjectMidiClipResult,
     SonareError,
     SonareValueError,
@@ -56,13 +55,13 @@ def test_create_factory_matches_constructor() -> None:
         created.set_sample_rate(48000.0)
         track_id = created.add_track("audio", "factory")
         assert track_id > 0
-        assert created.track_by_index(0).id == track_id
+        assert created.tracks()[0].id == track_id
     finally:
         created.close()
         constructed.close()
 
 
-def test_reads_stored_tracks_clips_and_sources_by_index() -> None:
+def test_lists_stored_tracks_clips_and_sources() -> None:
     project = Project()
     try:
         track_id = project.add_track("audio", "readback")
@@ -75,7 +74,7 @@ def test_reads_stored_tracks_clips_and_sources_by_index() -> None:
             source_uri="asset://readback.wav",
         )
 
-        track = project.track_by_index(0)
+        track = project.tracks()[0]
         assert track.id == track_id
         assert track.kind == "audio"
         assert track.name == "readback"
@@ -84,7 +83,7 @@ def test_reads_stored_tracks_clips_and_sources_by_index() -> None:
         assert not track.mute
         assert not track.solo
 
-        clip = project.clip_by_index(0)
+        clip = project.clips()[0]
         assert clip.id == clip_id
         assert clip.track_id == track_id
         assert clip.source_kind == "audio"
@@ -95,19 +94,14 @@ def test_reads_stored_tracks_clips_and_sources_by_index() -> None:
         assert clip.loop_mode == "off"
         assert clip.loop_length_ppq == 0.0
 
-        source = project.source_by_index(0)
+        source = project.sources()[0]
         assert source.id == clip.source_id
         assert source.kind == "audio"
         assert source.name_or_uri == "asset://readback.wav"
         assert source.content_hash == ""
         assert source.external_stem_role == ""
 
-        with pytest.raises(SonareError):
-            project.track_by_index(1)
-        with pytest.raises(SonareError):
-            project.clip_by_index(1)
-        with pytest.raises(SonareError):
-            project.source_by_index(1)
+        assert len(project.tracks()) == len(project.clips()) == len(project.sources()) == 1
     finally:
         project.close()
 
@@ -117,35 +111,35 @@ def test_audio_source_metadata_roundtrips_clears_and_undoes() -> None:
     try:
         track_id = project.add_track("audio", "metadata")
         clip_id = project.add_clip(track_id, 0.0, 1.0, source_uri="asset://metadata.wav")
-        source_id = project.clip_by_index(0).source_id
+        source_id = project.clips()[0].source_id
         assert clip_id != 0
 
         project.set_audio_source_metadata(source_id, "sha256:deadbeef", "lead")
-        source = project.source_by_index(0)
+        source = project.sources()[0]
         assert source.content_hash == "sha256:deadbeef"
         assert source.external_stem_role == "lead"
 
         # Empty values clear each field while preserving the source itself.
         project.set_audio_source_metadata(source_id, "", "")
-        source = project.source_by_index(0)
+        source = project.sources()[0]
         assert source.id == source_id
         assert source.name_or_uri == "asset://metadata.wav"
         assert source.content_hash == ""
         assert source.external_stem_role == ""
 
         project.undo()
-        source = project.source_by_index(0)
+        source = project.sources()[0]
         assert source.content_hash == "sha256:deadbeef"
         assert source.external_stem_role == "lead"
         project.redo()
-        source = project.source_by_index(0)
+        source = project.sources()[0]
         assert source.content_hash == ""
         assert source.external_stem_role == ""
 
         project.set_audio_source_metadata(source_id, "sha256:roundtrip", "vocals")
         restored = Project.from_json(project.to_json())
         try:
-            source = restored.source_by_index(0)
+            source = restored.sources()[0]
             assert source.content_hash == "sha256:roundtrip"
             assert source.external_stem_role == "vocals"
         finally:
@@ -162,11 +156,11 @@ def test_project_track_clip_and_source_descriptors_read_as_tokens() -> None:
         midi_track = _midi.track_id
         midi_clip = _midi.clip_id
         project.set_clip_loop(midi_clip, "loop", 2.0)
-        kinds = {project.track_by_index(i).id: project.track_by_index(i).kind for i in range(2)}
+        kinds = {track.id: track.kind for track in project.tracks()}
         assert kinds == {aux: "aux", midi_track: "midi"}
-        clip = project.clip_by_index(0)
+        clip = project.clips()[0]
         assert (clip.source_kind, clip.loop_mode) == ("midi", "loop")
-        assert project.source_by_index(0).kind == "midi"
+        assert project.sources()[0].kind == "midi"
     finally:
         project.close()
 
@@ -177,7 +171,7 @@ def test_audio_source_metadata_rejects_midi_and_unknown_sources() -> None:
         audio_track = project.add_track("audio", "audio")
         project.add_clip(audio_track, 0.0, 1.0, source_uri="asset://audio.wav")
         midi_clip = project.add_midi_clip(0.0, 1.0).clip_id
-        midi_source_id = project.clip_by_index(1).source_id
+        midi_source_id = project.clips()[1].source_id
 
         with pytest.raises(SonareError):
             project.set_audio_source_metadata(midi_source_id, "sha256:bad", "lead")
@@ -186,11 +180,11 @@ def test_audio_source_metadata_rejects_midi_and_unknown_sources() -> None:
 
         # The invalid edits do not alter the valid audio source or MIDI model.
         assert midi_clip != 0
-        assert project.source_by_index(0).content_hash == ""
-        assert project.source_by_index(1).content_hash == ""
+        assert project.sources()[0].content_hash == ""
+        assert project.sources()[1].content_hash == ""
         with pytest.raises(TypeError):
             project.set_audio_source_metadata(
-                project.source_by_index(0).id,
+                project.sources()[0].id,
                 None,
                 "lead",  # type: ignore[arg-type]
             )
@@ -229,8 +223,8 @@ def test_import_external_stems_creates_normal_audio_tracks() -> None:
         assert imported.clip_ids.dtype == np.uint32
         assert len(imported.track_ids) == 2
         assert len(imported.clip_ids) == 2
-        assert project.track_count() == 2
-        assert project.clip_count() == 2
+        assert len(project.tracks()) == 2
+        assert len(project.clips()) == 2
         with raises_coded():
             project.import_external_stems(
                 48000,
@@ -247,8 +241,8 @@ def test_import_external_stems_creates_normal_audio_tracks() -> None:
                     },
                 ],
             )
-        assert project.track_count() == 2
-        assert project.clip_count() == 2
+        assert len(project.tracks()) == 2
+        assert len(project.clips()) == 2
     finally:
         project.close()
 
@@ -313,7 +307,7 @@ def test_unresolved_audio_sources_carry_full_uri_and_metadata() -> None:
             assert sources[1].name_or_uri == "asset://stem.wav"
             assert sources[1].content_hash == "sha256:abc"
             assert sources[1].external_stem_role == "vocals"
-            assert restored.source_by_index(0).name_or_uri == long_uri
+            assert restored.sources()[0].name_or_uri == long_uri
             restored.set_source_audio(ids[0], np.full(480, 0.25, dtype=np.float32), 1, 48000)
             assert [s.id for s in restored.unresolved_audio_sources()] == [ids[1]]
         finally:
@@ -385,7 +379,7 @@ def test_from_json_with_diagnostics_returns_success_warnings() -> None:
     result = Project.from_json_with_diagnostics(dangling_source_json())
     try:
         assert "dangling_clip_source" in result.diagnostics
-        assert result.project.track_count() == 1
+        assert len(result.project.tracks()) == 1
     finally:
         result.project.close()
 
@@ -454,21 +448,21 @@ def test_add_midi_clip_is_one_undo_transaction() -> None:
         with pytest.raises(TypeError):
             iter(added)
         added = project.to_json_bytes()
-        assert project.track_count() == 1
-        assert project.source_count() == 1
-        assert project.clip_count() == 1
+        assert len(project.tracks()) == 1
+        assert len(project.sources()) == 1
+        assert len(project.clips()) == 1
 
         project.undo()
         assert project.to_json_bytes() == before
-        assert project.track_count() == 0
-        assert project.source_count() == 0
-        assert project.clip_count() == 0
+        assert len(project.tracks()) == 0
+        assert len(project.sources()) == 0
+        assert len(project.clips()) == 0
 
         project.redo()
         assert project.to_json_bytes() == added
-        assert project.track_count() == 1
-        assert project.source_count() == 1
-        assert project.clip_count() == 1
+        assert len(project.tracks()) == 1
+        assert len(project.sources()) == 1
+        assert len(project.clips()) == 1
     finally:
         project.close()
 
@@ -656,14 +650,14 @@ def test_add_loop_recording_takes_splits_capture_into_active_take() -> None:
         assert b'"takes"' in json
         assert b'"partial"' not in json
         assert b'"active_take_id":2' in json
-        assert project.source_count() == 2
+        assert len(project.sources()) == 2
 
         project.undo()
         assert project.to_json_bytes() == before
-        assert project.source_count() == 0
+        assert len(project.sources()) == 0
         project.redo()
         assert project.to_json_bytes() == json
-        assert project.source_count() == 2
+        assert len(project.sources()) == 2
     finally:
         project.close()
 
@@ -924,16 +918,11 @@ def test_project_getters_setters_and_counts() -> None:
         project.set_tempo_segments(
             [{"start_ppq": 0.0, "bpm": 120.0}, {"start_ppq": 480.0, "bpm": 140.0}]
         )
-        assert project.tempo_segment_count() == 2
-        # The count is only usable alongside a way to read the segments it counts.
-        assert project.tempo_segment_by_index(0) == {
-            "start_ppq": 0.0,
-            "bpm": 120.0,
-            "end_bpm": 0.0,
-        }
-        assert project.tempo_segment_by_index(1)["bpm"] == 140.0
-        with pytest.raises(SonareError):
-            project.tempo_segment_by_index(2)
+        # A segment read back is in the shape set_tempo_segments takes.
+        assert project.tempo_segments() == [
+            {"start_ppq": 0.0, "bpm": 120.0, "end_bpm": 0.0},
+            {"start_ppq": 480.0, "bpm": 140.0, "end_bpm": 0.0},
+        ]
 
         project.set_time_signatures(
             [
@@ -941,86 +930,80 @@ def test_project_getters_setters_and_counts() -> None:
                 {"start_ppq": 1920.0, "numerator": 3, "denominator": 4},
             ]
         )
-        assert project.time_signature_count() == 2
-        assert project.time_signature_by_index(1) == {
-            "start_ppq": 1920.0,
-            "numerator": 3,
-            "denominator": 4,
-        }
-        with pytest.raises(SonareError):
-            project.time_signature_by_index(2)
+        assert project.time_signatures() == [
+            {"start_ppq": 0.0, "numerator": 4, "denominator": 4},
+            {"start_ppq": 1920.0, "numerator": 3, "denominator": 4},
+        ]
 
-        marker_id = project.set_marker(0, 1.0, "intro")
+        marker_id = project.set_marker(1.0, name="intro")
         assert marker_id > 0
 
-        assert project.track_count() == 0
-        assert project.clip_count() == 0
-        assert project.source_count() == 0
+        assert project.tracks() == []
+        assert project.clips() == []
+        assert project.sources() == []
 
         track_id = project.add_track("midi", "notes")
         clip_id = project.add_clip(track_id, 0.0, 4.0, is_midi=True)
-        assert project.clip_count() == 1
+        assert [clip.id for clip in project.clips()] == [clip_id]
         restored = Project.from_json(project.to_json())
         try:
-            assert restored.clip_count() == 1
+            assert [clip.id for clip in restored.clips()] == [clip_id]
         finally:
             restored.close()
         project.remove_clip(clip_id)
-        assert project.clip_count() == 0
+        assert project.clips() == []
     finally:
         project.close()
 
 
-def test_project_marker_ex_round_trips_kind_and_key() -> None:
+def test_project_marker_round_trips_kind_and_key() -> None:
     project = Project()
     try:
-        plain_id = project.set_marker_ex(ProjectMarker(0, 1.0, "intro"))
+        plain_id = project.set_marker(1.0, name="intro")
         assert plain_id > 0
-        key_id = project.set_marker_ex(
-            ProjectMarker(
-                0,
-                2.0,
-                "E flat major",
-                kind="keySignature",
-                key_fifths=-3,
-                key_minor=False,
-            )
+        key_id = project.set_marker(
+            2.0, name="E flat major", kind="keySignature", key_fifths=-3, key_minor=False
         )
         assert key_id > 0 and key_id != plain_id
-        assert project.marker_count() == 2
 
-        # marker_by_index iterates every stored marker in [0, marker_count).
-        ids = [project.marker_by_index(i).id for i in range(project.marker_count())]
-        assert ids == [plain_id, key_id]
-
-        plain = project.marker_by_index(0)
+        plain, key = project.markers()
         assert plain.id == plain_id
         assert plain.kind == "marker"
         assert plain.name == "intro"
         assert plain.key_fifths == 0
         assert plain.key_minor is False
 
-        key = project.marker_by_index(1)
         assert key.id == key_id
         assert key.kind == "keySignature"
         assert key.name == "E flat major"
         assert key.key_fifths == -3
         assert key.key_minor is False
 
-        with pytest.raises(SonareError):
-            project.marker_by_index(2)
+        # Naming an existing id replaces that marker rather than adding one.
+        assert project.set_marker(3.0, marker_id=plain_id, name="verse") == plain_id
+        replaced = {m.id: (m.ppq, m.name) for m in project.markers()}
+        assert replaced == {plain_id: (3.0, "verse"), key_id: (2.0, "E flat major")}
     finally:
         project.close()
 
 
-def test_project_marker_ex_round_trips_long_utf8_name() -> None:
+def test_project_marker_refuses_an_explicit_zero_id_and_a_numeric_kind() -> None:
+    with Project() as project:
+        with pytest.raises(SonareValueError, match="marker_id"):
+            project.set_marker(1.0, marker_id=0)
+        with pytest.raises(TypeError, match="kind"):
+            project.set_marker(1.0, kind=1)  # type: ignore[arg-type]
+        assert project.markers() == []
+
+
+def test_project_marker_round_trips_long_utf8_name() -> None:
     project = Project()
     try:
         name = "あいうえお" * 7
         assert len(name) == 35
-        marker_id = project.set_marker_ex(ProjectMarker(0, 1.0, name))
+        marker_id = project.set_marker(1.0, name=name)
         assert marker_id > 0
-        assert project.marker_by_index(0).name == name
+        assert project.markers()[0].name == name
         assert json.loads(project.to_json())["markers"][0]["name"] == name
     finally:
         project.close()
@@ -1048,7 +1031,7 @@ def _segments(audio: np.ndarray, sample_rate: int = 22050, **options: object) ->
     project = Project()
     try:
         project.auto_tempo(audio, sample_rate, **options)
-        return [project.tempo_segment_by_index(i) for i in range(project.tempo_segment_count())]
+        return project.tempo_segments()
     finally:
         project.close()
 
@@ -1113,15 +1096,15 @@ def test_replacing_source_audio_carries_its_shape_and_undo_restores_it() -> None
     try:
         track_id = project.add_track("audio", "lead")
         project.add_clip(track_id, 0.0, 1.0, source_uri="asset://take.wav")
-        source_id = project.source_by_index(0).id
+        source_id = project.sources()[0].id
         project.set_source_audio(source_id, np.full(480, 0.25, dtype=np.float32), 1, 48000)
-        mono = project.source_by_index(0)
+        mono = project.sources()[0]
         assert (mono.num_channels, mono.sample_rate_hint) == (1, 48000.0)
         project.set_source_audio(source_id, np.full(2 * 441, 0.25, dtype=np.float32), 2, 44100)
-        stereo = project.source_by_index(0)
+        stereo = project.sources()[0]
         assert (stereo.num_channels, stereo.sample_rate_hint) == (2, 44100.0)
         project.undo()
-        restored = project.source_by_index(0)
+        restored = project.sources()[0]
         assert (restored.num_channels, restored.sample_rate_hint) == (1, 48000.0)
     finally:
         project.close()

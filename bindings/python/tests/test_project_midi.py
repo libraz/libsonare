@@ -439,13 +439,9 @@ def test_project_import_smf_surfaces_key_signature_marker() -> None:
     project = Project()
     try:
         project.import_smf(_make_key_signature_smf())
-        kinds = [project.marker_by_index(i).kind for i in range(project.marker_count())]
-        assert "keySignature" in kinds
-        key = next(
-            project.marker_by_index(i)
-            for i in range(project.marker_count())
-            if project.marker_by_index(i).kind == "keySignature"
-        )
+        markers = project.markers()
+        assert "keySignature" in [marker.kind for marker in markers]
+        key = next(marker for marker in markers if marker.kind == "keySignature")
         assert key.key_fifths == 1
         assert key.key_minor is False
     finally:
