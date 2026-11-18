@@ -823,9 +823,9 @@ export class Audio {
 
   /**
    * Inter-sample (true) peak in dBTP. `oversampleFactor` must be a power of two
-   * in [1, 16].
+   * in [1, 16]; omit it for 4.
    */
-  truePeakDbtp(oversampleFactor = 4): number {
+  truePeakDbtp(oversampleFactor?: number): number {
     return meteringTruePeakDbtp(this.samples, this.sampleRate, { oversampleFactor });
   }
 

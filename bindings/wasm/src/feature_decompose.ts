@@ -16,8 +16,8 @@ import {
   assertNonNegativeInteger,
   assertPositiveInteger,
   optionalBoolean,
+  optionalToken,
   requestOnly,
-  requireToken,
   sampleOneShot,
   toInt32Array,
   toMatrix2D,
@@ -28,7 +28,7 @@ function requireModule() {
 }
 
 /** NMF initialisation: a deterministic random start or an SVD-based warm start. */
-type NmfInit = 'random' | 'nndsvd';
+export type NmfInit = 'random' | 'nndsvd';
 
 const NMF_INITS: readonly NmfInit[] = ['random', 'nndsvd'];
 
@@ -216,7 +216,8 @@ export function decompose(...args: unknown[]): DecomposeResult {
   const s = assertMatrix2D('decompose', r.s, 's');
   assertIntegerValue('decompose', r.nComponents, 'nComponents');
   assertPositiveInteger('decompose', r.nComponents, 'nComponents');
-  const init = requireToken('decompose', r.init, 'init', NMF_INITS, 'random');
+  // An empty token is the embind reader's spelling of the library's initialiser.
+  const init = optionalToken('decompose', r.init, 'init', NMF_INITS) ?? '';
   const native = requireModule().decomposeWithInit(
     s.data,
     s.rows,
@@ -249,7 +250,7 @@ export interface DecomposeStemsRequest extends ValidateOptions {
   /** Beta divergence: 2 = Frobenius (default), 1 = Kullback-Leibler. */
   beta?: number;
   /** NMF initialisation (default `'random'`). */
-  init?: 'random' | 'nndsvd';
+  init?: NmfInit;
   /**
    * Soft-mask exponent (default 1). 1 keeps the magnitude ratio; 2 is the
    * Wiener-style power ratio, which separates harder at the cost of more
@@ -319,7 +320,7 @@ export interface DecomposeStemsLinkedRequest extends ValidateOptions {
   /** Beta divergence: 2 = Frobenius (default), 1 = Kullback-Leibler. */
   beta?: number;
   /** NMF initialisation (default `'random'`). */
-  init?: 'random' | 'nndsvd';
+  init?: NmfInit;
   /** Soft-mask exponent (default 1); see {@link DecomposeStemsRequest.maskPower}. */
   maskPower?: number;
 }
@@ -376,13 +377,8 @@ export function nnFilter(request: NnFilterRequest): Matrix2D;
 export function nnFilter(...args: unknown[]): Matrix2D {
   const r = requestOnly<NnFilterRequest>('nnFilter', args);
   const s = assertMatrix2D('nnFilter', r.s, 's');
-  const aggregate = requireToken(
-    'nnFilter',
-    r.aggregate,
-    'aggregate',
-    NN_FILTER_AGGREGATES,
-    'mean',
-  );
+  // An empty token is the embind reader's spelling of the library's aggregate.
+  const aggregate = optionalToken('nnFilter', r.aggregate, 'aggregate', NN_FILTER_AGGREGATES) ?? '';
   return requireModule().nnFilter(s.data, s.rows, s.cols, aggregate, r.k, r.width);
 }
 

@@ -1,3 +1,4 @@
+import { refuseZeroSentinel } from './internal/metering_native.js';
 import { resolveProcessorParams } from './internal/processor_params.js';
 import { parseRecordJson } from './internal/record_json.js';
 import { addon } from './native.js';
@@ -22,8 +23,8 @@ import type { OptionsOf, ValidateOptions } from './validation.js';
 import {
   assertAudioInput,
   assertFloatValue,
+  assertIntegerValue,
   assertPositiveFloatValue,
-  assertPositiveInteger,
   assertSampleRate,
   assertString,
   requestOnly,
@@ -182,7 +183,7 @@ export interface MasteringAnalyzeStereoRequest<A extends StereoAnalysis = Stereo
   params?: MasteringPairParams;
 }
 
-// `releaseMs` and `truePeakOversample` read 0 as "library default" natively; the facade omits instead.
+// `releaseMs` and `truePeakOversample` read 0 as "library default" natively, so an omitted one is passed as that 0.
 function nativeLoudnessArgs(fnName: string, r: MasteringNormalizeLoudnessRequest) {
   if (r.targetLufs !== undefined && r.targetLufs !== null) {
     assertFloatValue(fnName, r.targetLufs, 'targetLufs');
@@ -190,8 +191,9 @@ function nativeLoudnessArgs(fnName: string, r: MasteringNormalizeLoudnessRequest
   if (r.ceilingDbtp !== undefined && r.ceilingDbtp !== null) {
     assertFloatValue(fnName, r.ceilingDbtp, 'ceilingDbtp');
   }
+  refuseZeroSentinel(fnName, r, ['truePeakOversample']);
   if (r.truePeakOversample !== undefined && r.truePeakOversample !== null) {
-    assertPositiveInteger(fnName, r.truePeakOversample, 'truePeakOversample');
+    assertIntegerValue(fnName, r.truePeakOversample, 'truePeakOversample');
   }
   if (r.releaseMs !== undefined && r.releaseMs !== null) {
     assertPositiveFloatValue(fnName, r.releaseMs, 'releaseMs');
@@ -199,7 +201,7 @@ function nativeLoudnessArgs(fnName: string, r: MasteringNormalizeLoudnessRequest
   return [
     r.targetLufs ?? -14.0,
     r.ceilingDbtp ?? -1.0,
-    r.truePeakOversample ?? 4,
+    r.truePeakOversample ?? 0,
     r.releaseMs ?? 0,
     r.applyGainAtInputRate ?? false,
   ] as const;

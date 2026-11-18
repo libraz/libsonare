@@ -298,6 +298,7 @@ export type {
   DecomposeStemsResult,
   HpssWithResidualRequest,
   HpssWithResidualResult,
+  NmfInit,
   NnFilterAggregate,
   NnFilterRequest,
   RemixRequest,

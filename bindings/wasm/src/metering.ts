@@ -81,9 +81,9 @@ export interface DynamicRangeReport {
 
 /** Options for {@link meteringDetectClipping}. All fields are optional. */
 export interface MeteringDetectClippingOptions extends ValidateOptions {
-  /** Clip level in dBFS, at most 0 (0 dBFS is a real level). Absent = about -0.0087 dBFS (0.999 linear). */
+  /** Clip level in dBFS, at most 0 (0 dBFS is a real level). Absent = the library's, about -0.0087 dBFS (0.999 linear); a level too small to reach the detector is a `RangeError`. */
   thresholdDb?: number;
-  /** Minimum run length to report. Absent = 1; an explicit 0 is a `RangeError`. */
+  /** Minimum run length to report. Absent = 1 (the library's); an explicit 0 is a `RangeError`. */
   minRegionSamples?: number;
 }
 
@@ -141,7 +141,7 @@ export interface MeteringTruePeakDbtpRequest extends ValidateOptions {
   samples: Float32Array;
   /** Sample rate of `samples` in Hz. Required. */
   sampleRate: number;
-  /** Power of two from 1 to 16. Absent = 4; an explicit 0 is a `RangeError`. */
+  /** Power of two from 1 to 16. Absent = 4 (the library's); an explicit 0 is a `RangeError`. */
   oversampleFactor?: number;
 }
 
@@ -285,9 +285,11 @@ export function meteringTruePeakDbtp(...args: unknown[]): number {
   const r = sampleOneShot<MeteringTruePeakDbtpRequest>('meteringTruePeakDbtp', args);
   assertAudioInput('meteringTruePeakDbtp', r.samples, r.sampleRate, r);
   refuseZeroSentinel('meteringTruePeakDbtp', r, ['oversampleFactor']);
-  const factor = r.oversampleFactor ?? 4;
-  assertOversampleFactor('meteringTruePeakDbtp', factor);
-  return requireModule().meteringTruePeakDb(r.samples, r.sampleRate, factor);
+  if (r.oversampleFactor !== undefined && r.oversampleFactor !== null) {
+    assertOversampleFactor('meteringTruePeakDbtp', r.oversampleFactor);
+  }
+  // 0 is the embind reader's spelling of the library's factor.
+  return requireModule().meteringTruePeakDb(r.samples, r.sampleRate, r.oversampleFactor ?? 0);
 }
 
 /**
@@ -306,12 +308,19 @@ export function meteringDetectClipping(...args: unknown[]): ClippingReport {
   const r = sampleOneShot<MeteringDetectClippingRequest>('meteringDetectClipping', args);
   assertAudioInput('meteringDetectClipping', r.samples, r.sampleRate, r);
   refuseZeroSentinel('meteringDetectClipping', r, ['minRegionSamples']);
-  const minRegionSamples = r.minRegionSamples ?? 1;
-  assertNonNegativeInteger('meteringDetectClipping', minRegionSamples, 'minRegionSamples');
+  if (r.minRegionSamples !== undefined && r.minRegionSamples !== null) {
+    assertNonNegativeInteger('meteringDetectClipping', r.minRegionSamples, 'minRegionSamples');
+  }
   // Native still takes the linear threshold.
   const threshold = clipThresholdLinear('meteringDetectClipping', r.thresholdDb);
   return clippingReportFromNative(
-    requireModule().meteringDetectClipping(r.samples, r.sampleRate, threshold, minRegionSamples),
+    // 0 is the embind reader's spelling of the library's shortest run.
+    requireModule().meteringDetectClipping(
+      r.samples,
+      r.sampleRate,
+      threshold,
+      r.minRegionSamples ?? 0,
+    ),
   );
 }
 

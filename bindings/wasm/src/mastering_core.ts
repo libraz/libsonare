@@ -1,4 +1,5 @@
 import { chainConfigFromDocument, chainConfigFromJson } from './internal/chain_config.js';
+import { refuseZeroSentinel } from './internal/metering_native.js';
 import { resolveInsertParams, resolveProcessorParams } from './internal/processor_params.js';
 import { parseRecordJson } from './internal/record_json.js';
 import { audioDefectsFromNative } from './internal/repair_common.js';
@@ -42,6 +43,7 @@ import type { OptionsOf, ValidateOptions } from './validation.js';
 import {
   assertAudioInput,
   assertFloatValue,
+  assertIntegerValue,
   assertPositiveFloatValue,
   assertPositiveInteger,
   assertSampleRate,
@@ -334,7 +336,7 @@ export interface MasteringInsertTimingRequest<N extends MasteringInsertName = Ma
   sampleRate: number;
 }
 
-// `releaseMs` and `truePeakOversample` read 0 as "library default" natively; the facade omits instead.
+// `releaseMs` and `truePeakOversample` read 0 as "library default" natively, so an omitted one is passed as that 0.
 function nativeLoudnessArgs(fnName: string, r: MasteringNormalizeLoudnessRequest) {
   if (r.targetLufs !== undefined && r.targetLufs !== null) {
     assertFloatValue(fnName, r.targetLufs, 'targetLufs');
@@ -342,8 +344,9 @@ function nativeLoudnessArgs(fnName: string, r: MasteringNormalizeLoudnessRequest
   if (r.ceilingDbtp !== undefined && r.ceilingDbtp !== null) {
     assertFloatValue(fnName, r.ceilingDbtp, 'ceilingDbtp');
   }
+  refuseZeroSentinel(fnName, r, ['truePeakOversample']);
   if (r.truePeakOversample !== undefined && r.truePeakOversample !== null) {
-    assertPositiveInteger(fnName, r.truePeakOversample, 'truePeakOversample');
+    assertIntegerValue(fnName, r.truePeakOversample, 'truePeakOversample');
   }
   if (r.releaseMs !== undefined && r.releaseMs !== null) {
     assertPositiveFloatValue(fnName, r.releaseMs, 'releaseMs');
@@ -351,7 +354,7 @@ function nativeLoudnessArgs(fnName: string, r: MasteringNormalizeLoudnessRequest
   return [
     r.targetLufs ?? -14.0,
     r.ceilingDbtp ?? -1.0,
-    r.truePeakOversample ?? 4,
+    r.truePeakOversample ?? 0,
     r.releaseMs ?? 0,
     optionalBoolean(fnName, r.applyGainAtInputRate, 'applyGainAtInputRate', false),
   ] as const;

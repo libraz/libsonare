@@ -122,6 +122,17 @@ describe('Audio handle-form metering', () => {
     }
   });
 
+  it('detectClipping refuses a threshold the detector would read as 0', () => {
+    const samples = new Float32Array(8000).fill(0.1);
+    // A level the detector reads as 0 would select the library threshold silently, so it is refused.
+    const below = 'thresholdDb is below the smallest level the detector can hold';
+    expect(() => meteringDetectClipping(samples, SR, { thresholdDb: -890 })).not.toThrow();
+    expect(() => meteringDetectClipping(samples, SR, { thresholdDb: -910 })).toThrow(below);
+    expect(() =>
+      meteringDetectClipping(samples, SR, { thresholdDb: Number.NEGATIVE_INFINITY }),
+    ).toThrow(RangeError);
+  });
+
   it('dynamicRange agrees with the buffer form, and lowPercentile 0 differs from default', () => {
     const loud = makeSine(440, 3.5);
     const quiet = makeSine(440, 3.5);

@@ -12446,9 +12446,9 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::explicit 0 on a def
 kind = "field"
 old = "MasteringOptions.truePeakOversample"
 to = "MasteringNormalizeLoudnessOptions.truePeakOversample"
-changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\")"
+changed = "absent = the library's default, no longer restated by the binding; explicit 0 -> RangeError (\"omit for the default\")"
 domain = "mastering"
-rule = "absent-not-sentinel"
+rule = "library-owned-defaults"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::explicit 0 on a default-bearing field"
 
 [[entry]]
@@ -12604,9 +12604,9 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::requires sampleRate
 [[entry]]
 kind = "field"
 old = "MeteringDetectClippingOptions.minRegionSamples"
-changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\")"
+changed = "absent = the library's default, no longer restated by the binding; explicit 0 -> RangeError (\"omit for the default\")"
 domain = "mastering"
-rule = "absent-not-sentinel"
+rule = "library-owned-defaults"
 test = "bindings/node/tests/surface/mastering-metering.test.ts::MeteringDetectClippingOptions.minRegionSamples"
 
 [[entry]]
@@ -12664,9 +12664,9 @@ test = "bindings/node/tests/surface/mastering-metering.test.ts::MeteringSpectrum
 kind = "field"
 old = "MeteringTruePeakRequest.oversampleFactor"
 to = "MeteringTruePeakDbtpRequest.oversampleFactor"
-changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\")"
+changed = "absent = the library's default, no longer restated by the binding; explicit 0 -> RangeError (\"omit for the default\")"
 domain = "mastering"
-rule = "absent-not-sentinel"
+rule = "library-owned-defaults"
 test = "bindings/node/tests/surface/mastering-metering.test.ts::MeteringTruePeakRequest.oversampleFactor"
 
 [[entry]]

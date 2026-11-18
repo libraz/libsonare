@@ -17,7 +17,7 @@ import {
 } from './validation.js';
 
 /** NMF initialisation: a deterministic random start or an SVD-based warm start. */
-type NmfInit = 'random' | 'nndsvd';
+export type NmfInit = 'random' | 'nndsvd';
 
 const NMF_INITS: readonly NmfInit[] = ['random', 'nndsvd'];
 
@@ -148,7 +148,7 @@ export interface DecomposeStemsRequest extends ValidateOptions {
   /** Beta divergence: 2 = Frobenius (default), 1 = Kullback-Leibler. */
   beta?: number;
   /** NMF initialisation (default `'random'`). */
-  init?: 'random' | 'nndsvd';
+  init?: NmfInit;
   /**
    * Soft-mask exponent (default 1). 1 keeps the magnitude ratio; 2 is the
    * Wiener-style power ratio, which separates harder at the cost of more
@@ -354,15 +354,7 @@ export function decompose(...args: unknown[]): DecomposeResult {
   if (r.init !== undefined) {
     assertClosedToken('decompose', r.init, NMF_INITS, 'init');
   }
-  return addon.decompose(
-    r.s.data,
-    r.s.rows,
-    r.s.cols,
-    r.nComponents,
-    r.nIter,
-    r.beta ?? 2,
-    r.init ?? 'random',
-  );
+  return addon.decompose(r.s.data, r.s.rows, r.s.cols, r.nComponents, r.nIter, r.beta ?? 2, r.init);
 }
 
 /**
@@ -422,7 +414,7 @@ export interface DecomposeStemsLinkedRequest extends ValidateOptions {
   /** Beta divergence: 2 = Frobenius (default), 1 = Kullback-Leibler. */
   beta?: number;
   /** NMF initialisation (default `'random'`). */
-  init?: 'random' | 'nndsvd';
+  init?: NmfInit;
   /**
    * Soft-mask exponent (default 1). 1 keeps the magnitude ratio; 2 is the
    * Wiener-style power ratio, which separates harder at the cost of more
@@ -497,7 +489,7 @@ export function nnFilter(...args: unknown[]): Matrix2D {
   if (r.aggregate !== undefined) {
     assertClosedToken('nnFilter', r.aggregate, NN_FILTER_AGGREGATES, 'aggregate');
   }
-  return addon.nnFilter(r.s.data, r.s.rows, r.s.cols, r.aggregate ?? 'mean', r.k, r.width);
+  return addon.nnFilter(r.s.data, r.s.rows, r.s.cols, r.aggregate, r.k, r.width);
 }
 
 /** Request for {@link remix} and {@link remixAlignedIntervals}. */

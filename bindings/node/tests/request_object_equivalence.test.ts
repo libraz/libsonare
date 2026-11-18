@@ -690,6 +690,7 @@ const ROWS: Row[] = [
       init: 'nndsvd',
     },
     invalid: { nComponents: -1 },
+    defaults: { init: 'random' },
   },
   {
     name: 'nnFilter',
@@ -698,6 +699,7 @@ const ROWS: Row[] = [
     params: 's aggregate? k? width?',
     values: { s: { data: SMALL, rows: 8, cols: 10 }, aggregate: 'median', k: 3, width: 2 },
     invalid: { s: { data: SMALL, rows: 1000, cols: 1000 } },
+    defaults: { aggregate: 'mean' },
   },
   {
     name: 'remix',
@@ -1649,6 +1651,7 @@ const ROWS: Row[] = [
     params: 'samples sampleRate ...options?',
     values: { samples: SIG, sampleRate: ALT_SR, options: { targetLufs: -18, ceilingDbtp: -3 } },
     invalid: { sampleRate: 0 },
+    defaults: { truePeakOversample: 4 },
   },
   {
     name: 'masterAudio',
@@ -2252,6 +2255,7 @@ const ROWS: Row[] = [
     },
     invalid: { oversampleFactor: 3 },
     inert: { sampleRate: 'oversampling is rate-relative' },
+    defaults: { oversampleFactor: 4 },
   },
   {
     name: 'meteringDetectClipping',
@@ -2264,6 +2268,7 @@ const ROWS: Row[] = [
     },
     invalid: { sampleRate: 0 },
     inert: { sampleRate: 'clipped regions are counted in samples' },
+    defaults: { thresholdDb: 20 * Math.log10(0.999), minRegionSamples: 1 },
   },
   {
     name: 'meteringDynamicRange',

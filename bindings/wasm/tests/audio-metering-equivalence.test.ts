@@ -101,6 +101,13 @@ describe('Audio metering methods (WASM)', () => {
     // 0 dBFS is a real level, not a sentinel; a level above it is out of domain.
     expect(() => audio.detectClipping({ thresholdDb: 0 })).not.toThrow();
     expect(() => audio.detectClipping({ thresholdDb: 1 })).toThrow(RangeError);
+    // A level the detector reads as 0 would select the library threshold silently, so it is refused.
+    const below = 'thresholdDb is below the smallest level the detector can hold';
+    expect(() => meteringDetectClipping(samples, SR, { thresholdDb: -890 })).not.toThrow();
+    expect(() => meteringDetectClipping(samples, SR, { thresholdDb: -910 })).toThrow(below);
+    expect(() =>
+      meteringDetectClipping(samples, SR, { thresholdDb: Number.NEGATIVE_INFINITY }),
+    ).toThrow(RangeError);
   });
 
   it('dynamicRange matches, and lowPercentile 0 is a real 0th-percentile request distinct from the default', () => {

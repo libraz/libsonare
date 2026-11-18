@@ -124,10 +124,14 @@ export function clippingReportFromNative(
   return { ...rest, clippedRatio: clippingRatio };
 }
 
-/** The linear amplitude the clip detector still reads, from `thresholdDb` in dBFS (absent is the 0.999 default). */
+/**
+ * The linear amplitude the clip detector still reads, from `thresholdDb` in dBFS.
+ * Absent is the native 0, which selects the library's threshold; a level that
+ * would reach the detector as 0 is refused, since it would select it silently.
+ */
 export function clipThresholdLinear(fnName: string, thresholdDb: unknown): number {
   if (thresholdDb === undefined || thresholdDb === null) {
-    return 0.999;
+    return 0;
   }
   if (typeof thresholdDb !== 'number') {
     throw new TypeError(`${fnName}: thresholdDb must be a number`);
@@ -135,7 +139,13 @@ export function clipThresholdLinear(fnName: string, thresholdDb: unknown): numbe
   if (Number.isNaN(thresholdDb) || thresholdDb > 0) {
     throw new RangeError(`${fnName}: thresholdDb must be at most 0 dBFS`);
   }
-  return 10 ** (thresholdDb / 20);
+  const linear = Math.fround(10 ** (thresholdDb / 20));
+  if (linear === 0) {
+    throw new RangeError(
+      `${fnName}: thresholdDb is below the smallest level the detector can hold`,
+    );
+  }
+  return linear;
 }
 
 /** The native declip analysis, whose counts are still `sampleCount` / `sampleFraction`, under the public names. */

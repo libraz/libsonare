@@ -305,6 +305,7 @@ export const ROWS: Row[] = [
       init: 'nndsvd',
     },
     invalid: { nComponents: -1 },
+    defaults: { init: 'random' },
   },
   {
     name: 'nnFilter',
@@ -313,6 +314,7 @@ export const ROWS: Row[] = [
     params: 's aggregate? k? width?',
     values: { s: { data: SMALL, rows: 8, cols: 10 }, aggregate: 'median', k: 3, width: 2 },
     invalid: { aggregate: 'loudest' },
+    defaults: { aggregate: 'mean' },
   },
   {
     name: 'remix',

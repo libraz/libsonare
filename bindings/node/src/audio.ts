@@ -421,7 +421,7 @@ export class Audio {
   truePeakDbtp(oversampleFactor?: number): number {
     this.requireAlive();
     refuseZeroSentinel('Audio.truePeakDbtp', { oversampleFactor }, ['oversampleFactor']);
-    return this.native.truePeakDb(oversampleFactor ?? 4);
+    return this.native.truePeakDb(oversampleFactor);
   }
 
   /** Clipping report: clipped-sample count and runs at or above the threshold. */

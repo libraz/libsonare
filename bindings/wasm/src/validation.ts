@@ -836,8 +836,18 @@ export function requireToken<T extends string>(
   tokens: readonly T[],
   fallback: T,
 ): T {
+  return optionalToken(fnName, value, argName, tokens) ?? fallback;
+}
+
+/** {@link requireToken} for a field whose default the library owns: absent stays `undefined`. */
+export function optionalToken<T extends string>(
+  fnName: string,
+  value: unknown,
+  argName: string,
+  tokens: readonly T[],
+): T | undefined {
   if (value === undefined || value === null) {
-    return fallback;
+    return undefined;
   }
   assertString(fnName, value, argName);
   if (!(tokens as readonly string[]).includes(value as string)) {

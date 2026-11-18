@@ -64,9 +64,16 @@ export const ROWS: Row[] = [
     name: 'masteringNormalizeLoudness',
     fn: sonare.masteringNormalizeLoudness,
     form: 'sampleOptions',
-    params: 'samples sampleRate targetLufs? ceilingDbtp?',
-    values: { samples: SIG, sampleRate: ALT_SR, targetLufs: -18, ceilingDbtp: -3 },
+    params: 'samples sampleRate targetLufs? ceilingDbtp? truePeakOversample?',
+    values: {
+      samples: SIG,
+      sampleRate: ALT_SR,
+      targetLufs: -18,
+      ceilingDbtp: -3,
+      truePeakOversample: 2,
+    },
     invalid: { sampleRate: 0 },
+    defaults: { truePeakOversample: 4 },
   },
   {
     name: 'masteringApplyProcessor',
@@ -338,6 +345,7 @@ export const ROWS: Row[] = [
     },
     invalid: { options: { oversampleFactor: 3 } },
     inert: { sampleRate: 'oversampling is rate-relative' },
+    defaults: { oversampleFactor: 4 },
   },
   {
     name: 'meteringDetectClipping',
@@ -351,6 +359,7 @@ export const ROWS: Row[] = [
     },
     invalid: { sampleRate: 0 },
     inert: { sampleRate: 'clipped regions are counted in samples' },
+    defaults: { thresholdDb: 20 * Math.log10(0.999), minRegionSamples: 1 },
   },
   {
     name: 'meteringDynamicRange',

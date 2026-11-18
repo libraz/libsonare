@@ -1409,7 +1409,7 @@
 "music_analyze_options": {"domain": "analysis", "surfaces": ["c", "node", "wasm"]},
 "music_analyze_options_default": {"domain": "analysis", "surfaces": ["c"]},
 "music_analyze_options_version": {"domain": "analysis", "surfaces": ["c"]},
-"nmf_init": {"domain": "effects", "surfaces": ["python"]},
+"nmf_init": {"domain": "effects", "surfaces": ["node", "python", "wasm"]},
 "nn_filter": {"domain": "effects", "surfaces": ["c", "node", "python", "wasm"]},
 "nn_filter_aggregate": {"domain": "effects", "surfaces": ["node", "wasm"]},
 "nn_filter_request": {"domain": "effects", "surfaces": ["node", "wasm"]},
