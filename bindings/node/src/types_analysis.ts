@@ -453,6 +453,14 @@ export interface AnalyzeSectionsOptions {
   hopLength?: number;
   /** Minimum section length in seconds. Default 4. */
   minSectionSec?: number;
+  /**
+   * Section boundary threshold: the relative threshold a structural boundary must reach
+   * to start a new section, as {@link BoundaryOptions.threshold}. A finite value of 0 or
+   * more; a negative one is a RangeError. Omit it for the library default 0.22, which sits
+   * below {@link detectBoundaries}' own default of 0.3 because sections also snap to
+   * downbeats and keep a minimum length.
+   */
+  threshold?: number;
   /** Set `false` to skip the NaN/Inf pre-scan of the samples. Default true. */
   validate?: boolean;
 }

@@ -372,8 +372,17 @@ const ROWS: Row[] = [
     name: 'analyzeSections',
     fn: sonare.analyzeSections,
     params: 'samples sampleRate ...options?',
-    values: { samples: LONG8, sampleRate: ALT_SR, options: { hopLength: 1024, minSectionSec: 1 } },
+    values: {
+      samples: LONG8,
+      sampleRate: ALT_SR,
+      options: { hopLength: 1024, minSectionSec: 1, threshold: 1 },
+    },
     invalid: { sampleRate: 0 },
+    // A threshold high enough to move the result leaves one section, which no hop or minimum length moves.
+    controlBase: {
+      hopLength: { options: { hopLength: 1024, minSectionSec: 1 } },
+      minSectionSec: { options: { hopLength: 1024, minSectionSec: 1 } },
+    },
   },
   {
     name: 'analyzeTimbre',

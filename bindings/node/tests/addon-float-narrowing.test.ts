@@ -224,6 +224,12 @@ const FINITE_ARGUMENTS: FloatArgument[] = [
     call: (v) => native.analyzeSections(BLOCKED, SAMPLE_RATE, 2048, 512, v).length,
   },
   {
+    name: 'analyzeSections threshold',
+    site: 'analysis/progress.cpp AnalyzeSections threshold',
+    control: [0, 5],
+    call: (v) => JSON.stringify(native.analyzeSections(BLOCKED, SAMPLE_RATE, 2048, 512, 0.5, v)),
+  },
+  {
     name: 'analyzeMelody fmin',
     site: 'analysis/progress.cpp fmin',
     control: [65, 500],
@@ -237,7 +243,7 @@ const FINITE_ARGUMENTS: FloatArgument[] = [
   },
   {
     name: 'analyzeMelody threshold',
-    site: 'analysis/progress.cpp threshold',
+    site: 'analysis/progress.cpp AnalyzeMelody threshold',
     control: [0.1, 0.95],
     call: (v) => native.analyzeMelody(BLOCKED, SAMPLE_RATE, 65, 2093, 2048, 256, v).meanFrequency,
   },

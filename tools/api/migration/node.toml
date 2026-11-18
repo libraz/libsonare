@@ -5502,7 +5502,7 @@ test = "bindings/node/tests/surface/analysis-music.test.ts::scans for NaN by def
 [[entry]]
 kind = "type"
 old = "AnalyzeSectionsRequest"
-changed = "sampleRate: number required (inherited optional from the shared base; was 22050/44100 default)"
+changed = "sampleRate: number required (inherited optional from the shared base; was 22050/44100 default); gains threshold?: number, the section boundary threshold (omitted = the library default)"
 domain = "analysis"
 rule = "sample-rate-required"
 test = "bindings/node/tests/surface/analysis-music.test.ts::scans for NaN by default and declares validate"

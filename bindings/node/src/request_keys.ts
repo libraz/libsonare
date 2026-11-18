@@ -230,6 +230,7 @@ const ANALYZE_SECTIONS_REQUEST_KEYS = keySet(
   'nFft',
   'hopLength',
   'minSectionSec',
+  'threshold',
   'samples',
   'sampleRate',
   'validate',

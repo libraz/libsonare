@@ -119,6 +119,7 @@ describe('analysis options-bag defaults are pinned to the documented values', ()
       nFft: 2048,
       hopLength: 512,
       minSectionSec: 4.0,
+      threshold: 0.22,
     };
     expect(analyzeSections(x, SR)).toEqual(analyzeSections(x, SR, defaults));
   });

@@ -677,6 +677,7 @@ const AnalyzeSectionsRequestKeys = keysOf<AnalyzeSectionsRequest>()([
   'nFft',
   'hopLength',
   'minSectionSec',
+  'threshold',
   'validate',
 ]);
 const AnalyzeTimbreRequestKeys = keysOf<AnalyzeTimbreRequest>()([

@@ -1020,6 +1020,7 @@ export function analyzeSections(...args: unknown[]): Section[] {
     fft.nFft,
     fft.hopLength,
     request.minSectionSec ?? 4.0,
+    request.threshold,
   );
   return sections.map(sectionFromNative);
 }

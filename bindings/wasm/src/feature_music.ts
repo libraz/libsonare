@@ -409,7 +409,7 @@ export function analyzeSections(...args: unknown[]): Section[] {
     request.nFft ?? 2048,
     request.hopLength ?? 512,
     request.minSectionSec ?? 4.0,
-    undefined,
+    request.threshold,
   );
   return Array.from(sections, convertSection);
 }
