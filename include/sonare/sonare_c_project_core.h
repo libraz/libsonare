@@ -481,6 +481,16 @@ SonareError sonare_project_time_signature_count(const SonareProject* project, si
 ///        @ref sonare_project_free_compile_result.
 SonareError sonare_project_compile(SonareProject* project, SonareProjectCompileResult* out);
 
+/// @brief Token of a @ref SonareProjectDiagnostic code ("danglingSourceRef", "clipOverlap", ...),
+///        or NULL when @p code is not one. Contiguous from 0, so a caller lists the codes by
+///        counting up until NULL. Static storage, never invalidated; do not free.
+const char* sonare_project_diagnostic_code_name(int code);
+
+/// @brief Token of a @ref SonareProjectDiagnostic severity ("error" or "warning"), or NULL when
+///        @p severity is not one. Contiguous from 0. Static storage, never invalidated; do not
+///        free.
+const char* sonare_project_diagnostic_severity_name(int severity);
+
 /// @brief Returns compile diagnostics produced by the most recent
 ///        @ref sonare_project_bounce / instrument bounce on this project.
 /// @details This surfaces non-fatal warnings from the bounce's internal compile

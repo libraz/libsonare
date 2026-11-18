@@ -333,6 +333,12 @@ struct Diagnostic {
   std::string message;
 };
 
+/// lowerCamel token of a diagnostic code ("danglingSourceRef"), or nullptr when @p code is not one.
+const char* diagnostic_code_name(Diagnostic::Code code) noexcept;
+
+/// Token of a diagnostic severity ("error" / "warning"), or nullptr when @p severity is not one.
+const char* diagnostic_severity_name(Diagnostic::Severity severity) noexcept;
+
 struct CompileResult {
   /// Present only when compilation produced NO error diagnostics (warnings are
   /// allowed alongside a present timeline).

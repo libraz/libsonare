@@ -533,3 +533,39 @@ TEST_CASE("compile_timeline returns no handle and the diagnostics when compile f
   sonare_project_free_compile_result(&expected);
   sonare_project_destroy(project);
 }
+
+TEST_CASE("project diagnostic codes and severities are named by their facade tokens",
+          "[c_api][project]") {
+  const std::vector<std::string> codes = {"ok",
+                                          "danglingSourceRef",
+                                          "clipOverlap",
+                                          "invalidTempo",
+                                          "invalidPpq",
+                                          "unsupportedGraph",
+                                          "unsupportedMixing",
+                                          "emptyAudioSource",
+                                          "invalidSampleRate",
+                                          "sourceKindMismatch",
+                                          "midiClipNoInstrument",
+                                          "raggedAudioSource",
+                                          "loopCrossfadeUnavailable",
+                                          "sharedChannelStrip",
+                                          "automationLaneConflict",
+                                          "invalidAutomationTargetKind",
+                                          "automationLaneCapacity",
+                                          "reservedAutomationRouteConflict",
+                                          "automationTargetUnrouted"};
+  for (int i = 0; i < static_cast<int>(codes.size()); ++i) {
+    REQUIRE(sonare_project_diagnostic_code_name(i) != nullptr);
+    CHECK(std::string(sonare_project_diagnostic_code_name(i)) == codes[i]);
+  }
+  CHECK(sonare_project_diagnostic_code_name(static_cast<int>(codes.size())) == nullptr);
+  CHECK(sonare_project_diagnostic_code_name(-1) == nullptr);
+
+  REQUIRE(sonare_project_diagnostic_severity_name(0) != nullptr);
+  CHECK(std::string(sonare_project_diagnostic_severity_name(0)) == "error");
+  REQUIRE(sonare_project_diagnostic_severity_name(1) != nullptr);
+  CHECK(std::string(sonare_project_diagnostic_severity_name(1)) == "warning");
+  CHECK(sonare_project_diagnostic_severity_name(2) == nullptr);
+  CHECK(sonare_project_diagnostic_severity_name(-1) == nullptr);
+}

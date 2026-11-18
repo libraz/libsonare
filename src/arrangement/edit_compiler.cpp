@@ -1444,4 +1444,44 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
   return result;
 }
 
+const char* diagnostic_code_name(Diagnostic::Code code) noexcept {
+  // Indexed by Code ordinal; the facades' token tables mirror this order.
+  static constexpr std::array<const char*, 19> kNames = {
+      "ok",
+      "danglingSourceRef",
+      "clipOverlap",
+      "invalidTempo",
+      "invalidPpq",
+      "unsupportedGraph",
+      "unsupportedMixing",
+      "emptyAudioSource",
+      "invalidSampleRate",
+      "sourceKindMismatch",
+      "midiClipNoInstrument",
+      "raggedAudioSource",
+      "loopCrossfadeUnavailable",
+      "sharedChannelStrip",
+      "automationLaneConflict",
+      "invalidAutomationTargetKind",
+      "automationLaneCapacity",
+      "reservedAutomationRouteConflict",
+      "automationTargetUnrouted",
+  };
+  static_assert(
+      kNames.size() == static_cast<std::size_t>(Diagnostic::Code::kAutomationTargetUnrouted) + 1,
+      "every diagnostic code has a token");
+  const auto index = static_cast<std::size_t>(code);
+  return index < kNames.size() ? kNames[index] : nullptr;
+}
+
+const char* diagnostic_severity_name(Diagnostic::Severity severity) noexcept {
+  switch (severity) {
+    case Diagnostic::Severity::kError:
+      return "error";
+    case Diagnostic::Severity::kWarning:
+      return "warning";
+  }
+  return nullptr;
+}
+
 }  // namespace sonare::arrangement
