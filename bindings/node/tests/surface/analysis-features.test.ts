@@ -467,6 +467,20 @@ describe('Matrix2D results and inputs', () => {
     ).toBeInstanceOf(Int32Array);
   });
 
+  it('segment similarity refuses a zero or negative k and takes the librosa default when it is omitted', () => {
+    const data: Matrix2D = {
+      data: Float32Array.from({ length: 32 }, (_, i) => Math.sin(i)),
+      rows: 4,
+      cols: 8,
+    };
+    expect(sonare.segmentRecurrenceMatrix({ data }).rows).toBe(8);
+    expect(sonare.segmentRecurrenceMatrix({ data, k: 2 }).rows).toBe(8);
+    for (const k of [0, -1]) {
+      expect(() => sonare.segmentRecurrenceMatrix({ data, k })).toThrow(RangeError);
+      expect(() => sonare.segmentCrossSimilarity({ x: data, y: data, k })).toThrow(RangeError);
+    }
+  });
+
   it('carries every 2-D result field as a Matrix2D and no loose dimensions', () => {
     const loose: ReadonlyArray<[unknown, string[]]> = [
       [stftResult, ['nBins', 'nFrames']],

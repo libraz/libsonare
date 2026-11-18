@@ -77,7 +77,7 @@ export interface SegmentCrossSimilarityRequest {
   x: Matrix2D;
   /** Rows are features, cols are frames; the feature count must match `x`. */
   y: Matrix2D;
-  /** Nearest neighbours kept per frame. Absent: the librosa default, `min(n, 2 * ceil(sqrt(n)))` for `n` frames of `y`. */
+  /** Nearest neighbours kept per frame, a positive integer. Absent: the librosa default, `min(n, 2 * ceil(sqrt(n)))` for `n` frames of `y`. */
   k?: number;
   /** Distance metric. Default `'cosine'`. */
   metric?: 'cosine' | 'euclidean';
@@ -89,7 +89,7 @@ export interface SegmentCrossSimilarityRequest {
 export interface SegmentRecurrenceMatrixRequest {
   /** Rows are features, cols are frames. */
   data: Matrix2D;
-  /** Nearest neighbours kept per frame. Absent: the librosa default, `min(n - 1, 2 * ceil(sqrt(n)))` for `n` frames. */
+  /** Nearest neighbours kept per frame, a positive integer. Absent: the librosa default, `min(n - 1, 2 * ceil(sqrt(n)))` for `n` frames. */
   k?: number;
   /** Frames either side of a frame excluded from its neighbours. Default `1`. */
   width?: number;
@@ -504,7 +504,9 @@ export function segmentCrossSimilarity(...args: unknown[]): Matrix2D {
   if (x.rows !== y.rows) {
     throw new RangeError('segmentCrossSimilarity: feature dimensions must match');
   }
-  assertNonNegativeInteger('segmentCrossSimilarity', r.k ?? 0, 'k');
+  if (r.k !== undefined) {
+    assertPositiveInteger('segmentCrossSimilarity', r.k, 'k');
+  }
   const native = requireModule().segmentCrossSimilarity(
     x.data,
     x.rows,
@@ -528,7 +530,9 @@ export function segmentRecurrenceMatrix(request: SegmentRecurrenceMatrixRequest)
 export function segmentRecurrenceMatrix(...args: unknown[]): Matrix2D {
   const r = requestOnly<SegmentRecurrenceMatrixRequest>('segmentRecurrenceMatrix', args);
   const data = assertMatrix2D('segmentRecurrenceMatrix', r.data, 'data');
-  assertNonNegativeInteger('segmentRecurrenceMatrix', r.k ?? 0, 'k');
+  if (r.k !== undefined) {
+    assertPositiveInteger('segmentRecurrenceMatrix', r.k, 'k');
+  }
   assertNonNegativeInteger('segmentRecurrenceMatrix', r.width ?? 1, 'width');
   const native = requireModule().segmentRecurrenceMatrix(
     data.data,

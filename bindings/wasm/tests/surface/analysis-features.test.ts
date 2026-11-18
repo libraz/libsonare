@@ -616,6 +616,22 @@ describe('analysis features: segmentation matrices', () => {
     ).toBeGreaterThan(0);
   });
 
+  it('segment similarity refuses a zero or negative k and takes the librosa default when it is omitted', () => {
+    const data: Matrix2D = {
+      data: Float32Array.from({ length: 32 }, (_, i) => Math.sin(i)),
+      rows: 4,
+      cols: 8,
+    };
+    expect(segmentRecurrenceMatrix({ data }).rows).toBe(8);
+    expect(segmentRecurrenceMatrix({ data, k: 2 }).rows).toBe(8);
+    for (const k of [0, -1]) {
+      expect(caught(() => segmentRecurrenceMatrix({ data, k }))).toBeInstanceOf(RangeError);
+      expect(caught(() => segmentCrossSimilarity({ x: data, y: data, k }))).toBeInstanceOf(
+        RangeError,
+      );
+    }
+  });
+
   it('refuses the flat array with explicit dimensions', () => {
     expect(
       caught(() => segmentRecurrenceMatrix({ data: features.data, rows: 4, cols: 12 } as never)),

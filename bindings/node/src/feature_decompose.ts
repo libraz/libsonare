@@ -37,7 +37,7 @@ export interface SegmentCrossSimilarityRequest {
   x: Matrix2D;
   /** Feature matrix: rows = features, cols = frames. */
   y: Matrix2D;
-  /** Nearest neighbours kept per frame. Absent: the librosa default, `min(n, 2 * ceil(sqrt(n)))` for `n` frames of `y`. */
+  /** Nearest neighbours kept per frame, a positive integer. Absent: the librosa default, `min(n, 2 * ceil(sqrt(n)))` for `n` frames of `y`. */
   k?: number;
   /** Distance metric. Default `'cosine'`. */
   metric?: 'cosine' | 'euclidean';
@@ -49,7 +49,7 @@ export interface SegmentCrossSimilarityRequest {
 export interface SegmentRecurrenceMatrixRequest {
   /** Feature matrix: rows = features, cols = frames. */
   data: Matrix2D;
-  /** Nearest neighbours kept per frame. Absent: the librosa default, derived from the frame count. */
+  /** Nearest neighbours kept per frame, a positive integer. Absent: the librosa default, derived from the frame count. */
   k?: number;
   /** Frames either side of a frame excluded from its neighbours. Default `1`. */
   width?: number;
@@ -231,6 +231,9 @@ export function segmentCrossSimilarity(...args: unknown[]): Matrix2D {
   if (r.x.rows !== r.y.rows) {
     throw new RangeError('segmentCrossSimilarity: x and y must have the same number of rows');
   }
+  if (r.k !== undefined) {
+    assertPositiveInteger('segmentCrossSimilarity', r.k, 'k');
+  }
   return toSegmentMatrix(
     addon.segmentCrossSimilarity(
       r.x.data,
@@ -251,6 +254,9 @@ export function segmentRecurrenceMatrix(request: SegmentRecurrenceMatrixRequest)
 export function segmentRecurrenceMatrix(...args: unknown[]): Matrix2D {
   const r = requestOnly<SegmentRecurrenceMatrixRequest>('segmentRecurrenceMatrix', args);
   assertMatrix2D('segmentRecurrenceMatrix', r.data, 'data');
+  if (r.k !== undefined) {
+    assertPositiveInteger('segmentRecurrenceMatrix', r.k, 'k');
+  }
   return toSegmentMatrix(
     addon.segmentRecurrenceMatrix(
       r.data.data,

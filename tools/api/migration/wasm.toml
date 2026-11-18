@@ -27271,3 +27271,37 @@ changed = "T | null -> optional: a value the result cannot give is an absent fie
 domain = "project"
 rule = "absent-not-sentinel"
 test = "bindings/wasm/tests/result-absence-types.test.ts::the engine and project checks"
+
+[[entry]]
+kind = "field"
+old = "SegmentCrossSimilarityRequest.k"
+changed = "0 or a negative k is refused with RangeError; 0 used to select the librosa default. Omit k for the default"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/surface/analysis-features.test.ts::segment similarity refuses a zero or negative k"
+
+[[entry]]
+kind = "field"
+old = "SegmentCrossSimilarityRequest.k"
+changed = "0 or a negative k is refused with RangeError; 0 used to select the librosa default. Omit k for the default"
+domain = "analysis"
+rule = "absent-not-sentinel"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/analysis-features.test.ts::segment similarity refuses a zero or negative k"
+
+[[entry]]
+kind = "field"
+old = "SegmentRecurrenceMatrixRequest.k"
+changed = "0 or a negative k is refused with RangeError; 0 used to select the librosa default. Omit k for the default"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/surface/analysis-features.test.ts::segment similarity refuses a zero or negative k"
+
+[[entry]]
+kind = "field"
+old = "SegmentRecurrenceMatrixRequest.k"
+changed = "0 or a negative k is refused with RangeError; 0 used to select the librosa default. Omit k for the default"
+domain = "analysis"
+rule = "absent-not-sentinel"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/analysis-features.test.ts::segment similarity refuses a zero or negative k"
