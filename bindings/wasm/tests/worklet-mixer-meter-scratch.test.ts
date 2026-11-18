@@ -133,8 +133,8 @@ describe('SonareWorkletProcessor meter scratch', () => {
           meter.rmsDbL,
           meter.rmsDbR,
           meter.correlation,
-          meter.truePeakDbL,
-          meter.truePeakDbR,
+          meter.truePeakDbtpL,
+          meter.truePeakDbtpR,
         ]).toEqual(calls.valuesPerLatch[index]);
         // The mixer worklet runs no K-weighting filters, so LUFS and gain
         // reduction stay declared-unavailable across a reused record.
@@ -158,8 +158,8 @@ describe('SonareWorkletProcessor meter scratch', () => {
         rmsDbL: measured.rmsDbL,
         rmsDbR: measured.rmsDbR,
         correlation: measured.correlation,
-        truePeakDbL: measured.truePeakDbL,
-        truePeakDbR: measured.truePeakDbR,
+        truePeakDbtpL: measured.truePeakDbL,
+        truePeakDbtpR: measured.truePeakDbR,
       });
     } finally {
       calls.restore();

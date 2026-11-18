@@ -45,3 +45,27 @@ describe('isMeterSnapshot input peak fields', () => {
     },
   );
 });
+
+describe('isMeterSnapshot per-plane fields', () => {
+  const planes = (n: number, value: number): number[] => Array.from({ length: n }, () => value);
+  const wide = (numChannels: number, length: number): Record<string, unknown> => ({
+    ...meterSnapshot(),
+    numChannels,
+    peakDb: planes(length, -3),
+    rmsDb: planes(length, -18),
+    truePeakDbtp: planes(length, -2.5),
+    inputPeakDb: planes(length, -3),
+  });
+
+  it('accepts per-plane arrays as long as numChannels', () => {
+    expect(isMeterSnapshot(wide(6, 6))).toBe(true);
+  });
+
+  it('rejects per-plane arrays whose length is not numChannels', () => {
+    expect(isMeterSnapshot(wide(6, 2))).toBe(false);
+  });
+
+  it('rejects numChannels without the per-plane arrays', () => {
+    expect(isMeterSnapshot({ ...meterSnapshot(), numChannels: 6 })).toBe(false);
+  });
+});

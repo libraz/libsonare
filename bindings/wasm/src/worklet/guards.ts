@@ -389,6 +389,16 @@ export function isClipPageRequestMessage(
   );
 }
 
+// Each per-plane array must hold exactly one value per metered plane.
+function hasMeterPlanes(value: Record<string, unknown>, numChannels: unknown): boolean {
+  return (
+    typeof numChannels === 'number' &&
+    [value.peakDb, value.rmsDb, value.truePeakDbtp, value.inputPeakDb].every(
+      (plane) => Array.isArray(plane) && plane.length === numChannels,
+    )
+  );
+}
+
 export function isMeterSnapshot(value: unknown): value is SonareWorkletMeterSnapshot {
   return (
     isRecord(value) &&
@@ -401,12 +411,7 @@ export function isMeterSnapshot(value: unknown): value is SonareWorkletMeterSnap
     typeof value.correlation === 'number' &&
     Number.isFinite(value.inputPeakDbL) &&
     Number.isFinite(value.inputPeakDbR) &&
-    (value.channelCount === undefined ||
-      (typeof value.channelCount === 'number' &&
-        Array.isArray(value.peakDb) &&
-        Array.isArray(value.rmsDb) &&
-        Array.isArray(value.truePeakDb) &&
-        Array.isArray(value.inputPeakDb))) &&
+    (value.numChannels === undefined || hasMeterPlanes(value, value.numChannels)) &&
     (typeof value.targetId === 'number' || value.targetId === undefined)
   );
 }

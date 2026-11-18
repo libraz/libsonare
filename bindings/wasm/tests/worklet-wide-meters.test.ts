@@ -106,7 +106,7 @@ describe('wide meters on the live worklet engine', () => {
       expect(bus?.numChannels).toBe(6);
       expectPlanes(bus?.peakDb, reference.peakDb);
       expectPlanes(bus?.rmsDb, reference.rmsDb);
-      expectPlanes(bus?.truePeakDb, reference.truePeakDbtp);
+      expectPlanes(bus?.truePeakDbtp, reference.truePeakDbtp);
       expectPlanes(bus?.inputPeakDb, reference.inputPeakDb);
       expect(bus?.peakDbL).toBeCloseTo(reference.peakDb[0], 4);
       expect(bus?.peakDbR).toBeCloseTo(reference.peakDb[1], 4);
@@ -138,7 +138,7 @@ describe('wide meters on the live worklet engine', () => {
       expect(bus?.numChannels).toBe(6);
       expectPlanes(bus?.peakDb, reference.peakDb);
       expectPlanes(bus?.rmsDb, reference.rmsDb);
-      expectPlanes(bus?.truePeakDb, reference.truePeakDbtp);
+      expectPlanes(bus?.truePeakDbtp, reference.truePeakDbtp);
       expectPlanes(bus?.inputPeakDb, reference.inputPeakDb);
       expect(bus?.peakDbL).toBeCloseTo(reference.peakDb[0], 4);
     } finally {
@@ -178,7 +178,7 @@ describe('wide meters on the live worklet engine', () => {
         expect(meter?.peakDbL).toBeCloseTo(reference.peakDb[0], 4);
         expect(meter?.peakDbR).toBeCloseTo(reference.peakDb[1], 4);
         expect(meter?.rmsDbL).toBeCloseTo(reference.rmsDb[0], 4);
-        expect(meter?.truePeakDbR).toBeCloseTo(reference.truePeakDbtp[1], 4);
+        expect(meter?.truePeakDbtpR).toBeCloseTo(reference.truePeakDbtp[1], 4);
         expect(meter?.inputPeakDbL).toBeCloseTo(reference.inputPeakDb[0], 4);
       }
       expect(message?.peakDbL).toBeCloseTo(shared?.peakDbL ?? Number.NaN, 5);

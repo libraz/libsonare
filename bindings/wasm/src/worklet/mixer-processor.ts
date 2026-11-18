@@ -72,8 +72,8 @@ export class SonareWorkletProcessor {
     rmsDbL: 0,
     rmsDbR: 0,
     correlation: 0,
-    truePeakDbL: 0,
-    truePeakDbR: 0,
+    truePeakDbtpL: 0,
+    truePeakDbtpR: 0,
     momentaryLufs: Number.NaN,
     shortTermLufs: Number.NaN,
     integratedLufs: Number.NaN,
@@ -256,7 +256,7 @@ export class SonareWorkletProcessor {
     // about 23 per second at the default — no matter what this file then does
     // with the result. Scratch field order, shared with the engine's
     // meterScratchValue: 0 peakDbL, 1 peakDbR, 2 rmsDbL, 3 rmsDbR,
-    // 4 correlation, 5 truePeakDbL, 6 truePeakDbR.
+    // 4 correlation, 5 truePeakDbtpL, 6 truePeakDbtpR.
     if (!this.mixer.latchMeterSnapshot()) {
       // The meter has never been enabled, so there is no reading to publish.
       return;
@@ -273,8 +273,8 @@ export class SonareWorkletProcessor {
       meter.rmsDbL = this.mixer.meterScratchValue(2);
       meter.rmsDbR = this.mixer.meterScratchValue(3);
       meter.correlation = this.mixer.meterScratchValue(4);
-      meter.truePeakDbL = this.mixer.meterScratchValue(5);
-      meter.truePeakDbR = this.mixer.meterScratchValue(6);
+      meter.truePeakDbtpL = this.mixer.meterScratchValue(5);
+      meter.truePeakDbtpR = this.mixer.meterScratchValue(6);
       this.writeMeterRing(meter);
       return;
     }
@@ -291,8 +291,8 @@ export class SonareWorkletProcessor {
       rmsDbL: this.mixer.meterScratchValue(2),
       rmsDbR: this.mixer.meterScratchValue(3),
       correlation: this.mixer.meterScratchValue(4),
-      truePeakDbL: this.mixer.meterScratchValue(5),
-      truePeakDbR: this.mixer.meterScratchValue(6),
+      truePeakDbtpL: this.mixer.meterScratchValue(5),
+      truePeakDbtpR: this.mixer.meterScratchValue(6),
       // Declared unavailable rather than floored: the mixer worklet does not run
       // the K-weighting filters, and a floor value would read as silence.
       momentaryLufs: Number.NaN,
@@ -333,8 +333,8 @@ export class SonareWorkletProcessor {
     const rmsDbL = +meter.rmsDbL;
     const rmsDbR = +meter.rmsDbR;
     const correlation = +meter.correlation;
-    const truePeakDbL = +meter.truePeakDbL;
-    const truePeakDbR = +meter.truePeakDbR;
+    const truePeakDbtpL = +meter.truePeakDbtpL;
+    const truePeakDbtpR = +meter.truePeakDbtpR;
     const momentaryLufs = +meter.momentaryLufs;
     const shortTermLufs = +meter.shortTermLufs;
     const integratedLufs = +meter.integratedLufs;
@@ -355,8 +355,8 @@ export class SonareWorkletProcessor {
     records[offset + 5] = rmsDbL;
     records[offset + 6] = rmsDbR;
     records[offset + 7] = correlation;
-    records[offset + 8] = truePeakDbL;
-    records[offset + 9] = truePeakDbR;
+    records[offset + 8] = truePeakDbtpL;
+    records[offset + 9] = truePeakDbtpR;
     records[offset + 10] = momentaryLufs;
     records[offset + 11] = shortTermLufs;
     records[offset + 12] = integratedLufs;

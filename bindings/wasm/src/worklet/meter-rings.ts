@@ -41,14 +41,14 @@ export interface SonareWorkletMeterSnapshot {
   /** Inter-channel correlation in `[-1, 1]`. */
   correlation: number;
   /**
-   * Left-channel inter-sample (true) peak in dB, from the ITU-R BS.1770-4 polyphase reconstruction
+   * Left-channel inter-sample (true) peak in dBTP, from the ITU-R BS.1770-4 polyphase reconstruction
    * at 4x. A streaming measurement that runs one reconstruction-filter group delay (a few samples)
    * behind the block, so every value has its whole stencil and the reading does not depend on the
    * block size. Use `meteringTruePeakDb` over the whole signal for an exact dBTP number.
    */
-  truePeakDbL: number;
-  /** Right-channel inter-sample (true) peak in dB. See {@link truePeakDbL}. */
-  truePeakDbR: number;
+  truePeakDbtpL: number;
+  /** Right-channel inter-sample (true) peak in dBTP. See {@link truePeakDbtpL}. */
+  truePeakDbtpR: number;
   /** Momentary loudness in LUFS. */
   momentaryLufs: number;
   /** Short-term loudness in LUFS. */
@@ -81,8 +81,8 @@ export interface SonareWorkletMeterSnapshot {
   peakDb?: number[];
   /** Per-plane RMS in dBFS (length `numChannels`). */
   rmsDb?: number[];
-  /** Per-plane inter-sample (true) peak in dB (length `numChannels`). See {@link truePeakDbL}. */
-  truePeakDb?: number[];
+  /** Per-plane inter-sample (true) peak in dBTP (length `numChannels`). See {@link truePeakDbtpL}. */
+  truePeakDbtp?: number[];
   /** Per-plane pre-trim input peak in dBFS (length `numChannels`). */
   inputPeakDb?: number[];
 }
@@ -101,9 +101,9 @@ export interface SonareWorkletSpectrumSnapshot {
 export const SONARE_METER_RING_HEADER_INTS = 4;
 
 // Record layout: [frameLo, frameHi, targetId, peakDbL, peakDbR, rmsDbL, rmsDbR,
-// correlation, truePeakDbL, truePeakDbR, momentaryLufs, shortTermLufs,
+// correlation, truePeakDbtpL, truePeakDbtpR, momentaryLufs, shortTermLufs,
 // integratedLufs, gainReductionDb, inputPeakDbL, inputPeakDbR, channelCount,
-// peakDb[0..7], rmsDb[0..7], truePeakDb[0..7], inputPeakDb[0..7]].
+// peakDb[0..7], rmsDb[0..7], truePeakDbtp[0..7], inputPeakDb[0..7]].
 // Header slot 3 holds SONARE_METER_RING_PROTOCOL_VERSION; older records stopped
 // after inputPeakDbR (16 floats) and carried no per-plane data.
 // The sample-frame index is monotonically increasing and quickly exceeds the
@@ -293,8 +293,8 @@ export function readSonareMeterRingBuffer(
         rmsDbL: records[offset + 5],
         rmsDbR: records[offset + 6],
         correlation: records[offset + 7],
-        truePeakDbL: records[offset + 8],
-        truePeakDbR: records[offset + 9],
+        truePeakDbtpL: records[offset + 8],
+        truePeakDbtpR: records[offset + 9],
         momentaryLufs: records[offset + 10],
         shortTermLufs: records[offset + 11],
         integratedLufs: records[offset + 12],
@@ -318,7 +318,7 @@ export function readSonareMeterRingBuffer(
         meter.numChannels = planes;
         meter.peakDb = plane(0);
         meter.rmsDb = plane(1);
-        meter.truePeakDb = plane(2);
+        meter.truePeakDbtp = plane(2);
         meter.inputPeakDb = plane(3);
       }
       meters.push(meter);
@@ -585,8 +585,8 @@ export function meterFromEngine(meter: EngineMeterTelemetryWide): SonareWorkletM
     rmsDbL: meter.rmsDb[0] ?? SONARE_FLOOR_DB,
     rmsDbR: meter.rmsDb[1] ?? SONARE_FLOOR_DB,
     correlation: meter.correlation,
-    truePeakDbL: meter.truePeakDbtp[0] ?? SONARE_FLOOR_DB,
-    truePeakDbR: meter.truePeakDbtp[1] ?? SONARE_FLOOR_DB,
+    truePeakDbtpL: meter.truePeakDbtp[0] ?? SONARE_FLOOR_DB,
+    truePeakDbtpR: meter.truePeakDbtp[1] ?? SONARE_FLOOR_DB,
     momentaryLufs: meter.momentaryLufs,
     shortTermLufs: meter.shortTermLufs,
     integratedLufs: meter.integratedLufs,
@@ -598,7 +598,7 @@ export function meterFromEngine(meter: EngineMeterTelemetryWide): SonareWorkletM
     snapshot.numChannels = meter.numChannels;
     snapshot.peakDb = meter.peakDb;
     snapshot.rmsDb = meter.rmsDb;
-    snapshot.truePeakDb = meter.truePeakDbtp;
+    snapshot.truePeakDbtp = meter.truePeakDbtp;
     snapshot.inputPeakDb = meter.inputPeakDb;
   }
   return snapshot;

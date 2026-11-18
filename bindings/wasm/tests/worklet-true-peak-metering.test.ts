@@ -1,7 +1,7 @@
 /**
  * The mixer worklet's meter must report the quantity its field names claim.
  *
- * `truePeakDb*` is an inter-sample peak: ITU-R BS.1770-4 Annex 2 defines it as
+ * `truePeakDbtp*` is an inter-sample peak: ITU-R BS.1770-4 Annex 2 defines it as
  * measured after at least 4x oversampling, because the continuous waveform
  * routinely rises above every sample it was reconstructed from. A sample peak
  * published under that name under-reports precisely the headroom a ceiling
@@ -123,8 +123,8 @@ function dbFields(meter: SonareWorkletMeterSnapshot): number[] {
     meter.peakDbR,
     meter.rmsDbL,
     meter.rmsDbR,
-    meter.truePeakDbL,
-    meter.truePeakDbR,
+    meter.truePeakDbtpL,
+    meter.truePeakDbtpR,
   ];
 }
 
@@ -141,8 +141,8 @@ describe('mixer worklet true-peak metering', () => {
     // The construction puts the inter-sample peak 3.01 dB above the sample peak.
     // A sample-peak implementation reports the two as the same number, so this
     // margin cannot be met by relabelling one as the other.
-    expect(meter.truePeakDbL).toBeGreaterThan(meter.peakDbL + 1.5);
-    expect(meter.truePeakDbR).toBeGreaterThan(meter.peakDbR + 1.5);
+    expect(meter.truePeakDbtpL).toBeGreaterThan(meter.peakDbL + 1.5);
+    expect(meter.truePeakDbtpR).toBeGreaterThan(meter.peakDbR + 1.5);
   });
 
   it('agrees with the offline true-peak measurement of the same audio', () => {
@@ -156,7 +156,7 @@ describe('mixer worklet true-peak metering', () => {
     // same standard, which is what makes this a cross-check rather than a
     // restatement of the worklet's own arithmetic.
     const lastBlock = output.subarray((blocks - 1) * BLOCK, blocks * BLOCK);
-    expect(meter.truePeakDbL).toBeCloseTo(
+    expect(meter.truePeakDbtpL).toBeCloseTo(
       meteringTruePeakDb(lastBlock, SR, { oversampleFactor: 4 }),
       0,
     );
@@ -236,8 +236,8 @@ describe('mixer worklet true-peak metering', () => {
         throw new Error('expected the engine to publish meter telemetry');
       }
 
-      expect(mixerMeter.truePeakDbL).toBeCloseTo(engineMeter.truePeakDbtpL, 3);
-      expect(mixerMeter.truePeakDbR).toBeCloseTo(engineMeter.truePeakDbtpR, 3);
+      expect(mixerMeter.truePeakDbtpL).toBeCloseTo(engineMeter.truePeakDbtpL, 3);
+      expect(mixerMeter.truePeakDbtpR).toBeCloseTo(engineMeter.truePeakDbtpR, 3);
       // The construction places the inter-sample peak 3.01 dB above the sample
       // peak, so agreeing on the sample peak or on the floor cannot satisfy this.
       expect(engineMeter.truePeakDbtpL).toBeGreaterThan(engineMeter.peakDbL + 1.5);
