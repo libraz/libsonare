@@ -87,23 +87,10 @@ function nativeTuning(cents: number | 'auto' | undefined | null): number | 'auto
   return cents;
 }
 
-type NamedSelectors<T> = Omit<T, 'materialPreset' | 'mode' | 'source' | 'listener' | 'maxSec'> & {
+type NamedSelectors<T> = Omit<T, 'materialPreset' | 'mode'> & {
   materialPreset?: number;
   mode?: number;
-  maxSeconds?: number;
 };
-
-// The native room options still spell the analyzer mode `impulse_response`.
-const ACOUSTIC_MODE_NATIVE: Readonly<Record<string, string>> = {
-  impulseResponse: 'impulse_response',
-};
-
-function publicAcousticMode(nativeName: string): string {
-  return (
-    Object.entries(ACOUSTIC_MODE_NATIVE).find(([, native]) => native === nativeName)?.[0] ??
-    nativeName
-  );
-}
 
 /** Fields whose 0 the core reads as "use the library default": absent is the default, 0 is refused. */
 const ZERO_IS_DEFAULT_FIELDS = [
@@ -149,10 +136,9 @@ function checkedPlacement(
 }
 
 /**
- * Turns the public room options into the module's: `source` / `listener` become
- * the flat position fields, `maxSec` becomes `maxSeconds`, the `materialPreset`
- * and `mode` names become their integer values (a number is refused), and an
- * explicit 0 on a zero-means-default field is refused. The names are the core's,
+ * Turns the public room options into the module's: the `materialPreset` and
+ * `mode` names become their integer values (a number is refused), a `source` /
+ * `listener` is checked, and an explicit 0 on a zero-means-default field is refused. The names are the core's,
  * read from the module so no second table exists here.
  */
 function nativeRoomOptions<T extends object>(fnName: string, options: T): NamedSelectors<T> {
@@ -167,26 +153,18 @@ function nativeRoomOptions<T extends object>(fnName: string, options: T): NamedS
   if (seed !== undefined) {
     assertU32(fnName, seed, 'seed');
   }
-  const maxSec = optionalRoomNumber(fnName, options, 'maxSec');
-  delete resolved.maxSec;
-  if (maxSec !== undefined) {
-    resolved.maxSeconds = maxSec;
-  }
   for (const name of ['source', 'listener'] as const) {
     const placement = checkedPlacement(fnName, name, (options as Record<string, unknown>)[name]);
     delete resolved[name];
     if (placement !== undefined) {
-      resolved[`${name}X`] = placement.x;
-      resolved[`${name}Y`] = placement.y;
-      resolved[`${name}Z`] = placement.z;
+      resolved[name] = placement;
     }
   }
   const { materialPreset, mode } = options as { materialPreset?: unknown; mode?: unknown };
   if (materialPreset !== undefined || mode !== undefined) {
     const tables = requireModule().acousticSelectorNames();
     const resolve = (key: 'materialPreset' | 'mode', value: unknown) => {
-      const names =
-        key === 'mode' ? tables.mode.map((name: string) => publicAcousticMode(name)) : tables[key];
+      const names = tables[key];
       const valid = names.map((name: string) => `'${name}'`).join(', ');
       if (typeof value !== 'string') {
         throw new TypeError(`${fnName}: ${key} must be one of ${valid} (a name, not a number)`);
@@ -205,16 +183,6 @@ function nativeRoomOptions<T extends object>(fnName: string, options: T): NamedS
     }
   }
   return resolved as NamedSelectors<T>;
-}
-
-/** The module's flat estimate geometry as the public `source` / `listener` placements. */
-function publicRoomGeometry(native: Record<string, unknown>): RoomGeometryOptions {
-  const { sourceX, sourceY, sourceZ, listenerX, listenerY, listenerZ, ...rest } = native;
-  return {
-    ...rest,
-    source: { x: sourceX, y: sourceY, z: sourceZ },
-    listener: { x: listenerX, y: listenerY, z: listenerZ },
-  } as RoomGeometryOptions;
 }
 
 /** Runs a room call whose refusal of its arguments is a `RangeError`, whatever layer refused. */
@@ -1029,16 +997,12 @@ export function roomGeometryFromEstimate(...args: unknown[]): RoomGeometryOption
     throw new TypeError('roomGeometryFromEstimate: estimate must be an object');
   }
   const { bandAbsorption, lengthM, widthM, heightM } = request.estimate;
-  const geometry = publicRoomGeometry(
-    module.roomGeometryFromEstimate({
-      lengthM,
-      widthM,
-      heightM,
-      ...(bandAbsorption === undefined
-        ? {}
-        : { bandAbsorption: Float32Array.from(bandAbsorption) }),
-    }),
-  );
+  const geometry = module.roomGeometryFromEstimate({
+    lengthM,
+    widthM,
+    heightM,
+    ...(bandAbsorption === undefined ? {} : { bandAbsorption: Float32Array.from(bandAbsorption) }),
+  }) as RoomGeometryOptions;
   for (const name of ['source', 'listener'] as const) {
     const placement = checkedPlacement('roomGeometryFromEstimate', name, request[name]);
     if (placement !== undefined) {

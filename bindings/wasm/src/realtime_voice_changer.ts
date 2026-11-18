@@ -1,14 +1,8 @@
 import { assertHandleLive } from './internal/handle_guard.js';
+import { deinterleavePlanes, interleavePlanes, nativeVoiceConfig } from './internal/pod_config.js';
 import {
-  deinterleavePlanes,
-  interleavePlanes,
-  nativeVoiceConfig,
-  podConfigFromNative,
-} from './internal/pod_config.js';
-import {
+  checkedVoicePresetId,
   VOICE_PRESET_IDS,
-  voicePresetIdFromNative,
-  voicePresetIdToNative,
   voicePresetOrdinal,
 } from './internal/voice_preset_ids.js';
 import { getSonareModule } from './module_state.js';
@@ -499,13 +493,7 @@ const CONSTRUCTOR_KEYS: readonly string[] = ['sampleRate', 'maxBlockSize', 'numC
 /** The built-in preset ids, in preset-ordinal order. */
 export function realtimeVoiceChangerPresetNames(): VoicePresetId[] {
   // Array.from re-roots embind's vector as a plain, structured-cloneable Array.
-  return Array.from(getSonareModule().realtimeVoiceChangerPresetNames(), (native) => {
-    const id = voicePresetIdFromNative(native as string);
-    if (id === undefined) {
-      throw new RangeError(`realtimeVoiceChangerPresetNames: unknown native preset '${native}'`);
-    }
-    return id;
-  });
+  return Array.from(getSonareModule().realtimeVoiceChangerPresetNames() as VoicePresetId[]);
 }
 
 /**
@@ -515,7 +503,7 @@ export function realtimeVoiceChangerPresetNames(): VoicePresetId[] {
  */
 export function realtimeVoiceChangerPresetJson(name: VoicePresetId): string {
   return getSonareModule().realtimeVoiceChangerPresetJson(
-    voicePresetIdToNative('realtimeVoiceChangerPresetJson', name, 'name'),
+    checkedVoicePresetId('realtimeVoiceChangerPresetJson', name, 'name'),
   );
 }
 
@@ -545,8 +533,7 @@ export function voiceCharacterPresetId(ordinal: number): VoicePresetId {
       `voiceCharacterPresetId: ordinal must be an integer in [0, ${VOICE_PRESET_IDS.length - 1}]`,
     );
   }
-  const id = voicePresetIdFromNative(getSonareModule().voiceCharacterPresetId(ordinal));
-  return id as VoicePresetId;
+  return getSonareModule().voiceCharacterPresetId(ordinal) as VoicePresetId;
 }
 
 /**
@@ -558,9 +545,7 @@ export function voiceCharacterPresetId(ordinal: number): VoicePresetId {
 export function realtimeVoiceChangerPresetConfig(
   preset: VoicePresetId,
 ): RealtimeVoiceChangerConfig {
-  return podConfigFromNative(
-    getSonareModule().realtimeVoiceChangerPresetConfig(
-      voicePresetOrdinal('realtimeVoiceChangerPresetConfig', preset),
-    ),
+  return getSonareModule().realtimeVoiceChangerPresetConfig(
+    voicePresetOrdinal('realtimeVoiceChangerPresetConfig', preset),
   );
 }

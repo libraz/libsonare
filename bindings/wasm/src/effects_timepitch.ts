@@ -7,41 +7,17 @@ import { keyModeName, keyModeOrdinal, pitchClassOrdinal } from './analysis_helpe
 import { assertPitchTrackLengths, toVoicedFloat32 } from './internal/effects_common.js';
 import { resolveEffectFftOptions } from './internal/fft_options.js';
 import { getSonareModule } from './module_state.js';
-import type {
-  AutoTuneOptions,
-  AutoTuneResult,
-  PitchCorrectOptions,
-  PitchTargetMode,
-} from './public_types.js';
+import type { AutoTuneOptions, AutoTuneResult, PitchCorrectOptions } from './public_types.js';
 import type { OptionsOf, ValidateOptions } from './validation.js';
 import {
   assertAudioInput,
   assertFloatValue,
   assertPositiveFloatValue,
-  requireToken,
   sampleOneShot,
 } from './validation.js';
 
 function requireModule() {
   return getSonareModule();
-}
-
-const PITCH_TARGET_MODES: readonly PitchTargetMode[] = ['midi', 'scale'];
-
-// Native still spells these `mode` and `referenceMidi`.
-function nativePitchOptions(
-  fnName: string,
-  options: { targetMode?: PitchTargetMode | null; scaleReferenceMidi?: number | null },
-): Record<string, unknown> {
-  const { targetMode, scaleReferenceMidi, ...rest } = options;
-  const native: Record<string, unknown> = { ...rest };
-  if (targetMode !== undefined && targetMode !== null) {
-    native.mode = requireToken(fnName, targetMode, 'targetMode', PITCH_TARGET_MODES, 'midi');
-  }
-  if (scaleReferenceMidi !== undefined && scaleReferenceMidi !== null) {
-    native.referenceMidi = scaleReferenceMidi;
-  }
-  return native;
 }
 
 /**
@@ -238,7 +214,7 @@ export function pitchCorrectTimevarying(...args: unknown[]): Float32Array {
     ...rest
   } = r;
   const nativeOptions = {
-    ...nativePitchOptions('pitchCorrectTimevarying', rest),
+    ...rest,
     voiced: voicedF32,
     voicedProb: r.voiced == null ? (voicedProb ?? undefined) : undefined,
   };
@@ -295,12 +271,10 @@ export function autoTune(...args: unknown[]): AutoTuneResult {
     keyModeOrdinal(keyOrDetect.mode, 'key.mode');
     nativeKey = { root: keyOrDetect.root, mode: keyOrDetect.mode };
   }
-  const result = requireModule().autoTune(
-    samples,
-    sampleRate,
-    nativeKey,
-    nativePitchOptions('autoTune', options),
-  ) as Omit<AutoTuneResult, 'key'> & {
+  const result = requireModule().autoTune(samples, sampleRate, nativeKey, options) as Omit<
+    AutoTuneResult,
+    'key'
+  > & {
     key: Omit<AutoTuneResult['key'], 'mode'> & { mode: number };
   };
   return { ...result, key: { ...result.key, mode: keyModeName(result.key.mode) } };

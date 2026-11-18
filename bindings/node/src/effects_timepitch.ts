@@ -8,7 +8,12 @@ import { resolvePositiveIntegerOption } from './internal/feature_options.js';
 import { resolveEffectFftOptions } from './internal/fft_options.js';
 import { KEY_MODES } from './internal/key_modes.js';
 import { addon } from './native.js';
-import type { AutoTuneOptions, AutoTuneResult, PitchCorrectOptions } from './types.js';
+import type {
+  AutoTuneOptions,
+  AutoTuneResult,
+  PitchCorrectOptions,
+  PitchTargetMode,
+} from './types.js';
 import type { OptionsOf, ValidateOptions } from './validation.js';
 import {
   assertAudioInput,
@@ -18,6 +23,25 @@ import {
   assertPositiveFloatValue,
   sampleOneShot,
 } from './validation.js';
+
+const PITCH_TARGET_MODES: readonly PitchTargetMode[] = ['midi', 'scale'];
+
+// The addon still spells these `mode` and `referenceMidi`.
+function nativePitchOptions(
+  fnName: string,
+  options: { targetMode?: PitchTargetMode | null; scaleReferenceMidi?: number | null },
+): Record<string, unknown> {
+  const { targetMode, scaleReferenceMidi, ...rest } = options;
+  const native: Record<string, unknown> = { ...rest };
+  if (targetMode !== undefined && targetMode !== null) {
+    assertClosedToken(fnName, targetMode, PITCH_TARGET_MODES, 'targetMode');
+    native.mode = targetMode;
+  }
+  if (scaleReferenceMidi !== undefined && scaleReferenceMidi !== null) {
+    native.referenceMidi = scaleReferenceMidi;
+  }
+  return native;
+}
 
 /**
  * Time-stretch request. `sampleRate` (Hz) and `speedRatio` are required; a
@@ -213,7 +237,7 @@ export function pitchCorrectTimevarying(...args: unknown[]): Float32Array {
     512,
   );
   return addon.pitchCorrectTimevarying(samples, sampleRate, f0Hz, resolvedHopLength, {
-    ...rest,
+    ...nativePitchOptions('pitchCorrectTimevarying', rest),
     voiced: nativeVoiced,
     voicedProb: voicedProb ?? undefined,
   });
@@ -262,5 +286,5 @@ export function autoTune(...args: unknown[]): AutoTuneResult {
     assertClosedToken('autoTune', keyOrDetect.mode, KEY_MODES, 'key.mode');
     nativeKey = { root: keyOrDetect.root, mode: keyOrDetect.mode };
   }
-  return addon.autoTune(samples, sampleRate, nativeKey, options);
+  return addon.autoTune(samples, sampleRate, nativeKey, nativePitchOptions('autoTune', options));
 }

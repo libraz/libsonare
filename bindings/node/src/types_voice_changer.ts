@@ -31,7 +31,7 @@ export type VoicePresetCategory =
   | 'custom';
 
 export interface RealtimeVoiceChangerPresetMetadata {
-  schemaVersion: 3;
+  schemaVersion: 1 | 2;
   id: string;
   name: string;
   description?: string;

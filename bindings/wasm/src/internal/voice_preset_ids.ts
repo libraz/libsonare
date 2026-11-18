@@ -16,22 +16,6 @@ export const VOICE_PRESET_IDS: readonly VoicePresetId[] = [
   'radioVoice',
 ];
 
-// Native still spells the preset ids in kebab case; same order as VOICE_PRESET_IDS.
-const NATIVE_PRESET_IDS: readonly string[] = [
-  'neutral-monitor',
-  'bright-idol',
-  'soft-whisper',
-  'deep-narrator',
-  'robot-mascot',
-  'dark-villain',
-  'hard-tune',
-  'robot-monotone',
-  'choir-harmony',
-  'vocoder-strings',
-  'megaphone',
-  'radio-voice',
-];
-
 /**
  * The native preset ordinal of a public id.
  *
@@ -48,13 +32,15 @@ export function voicePresetOrdinal(fnName: string, id: unknown, argName = 'prese
   return ordinal;
 }
 
-/** The native (kebab) spelling of a public preset id. */
-export function voicePresetIdToNative(fnName: string, id: unknown, argName = 'preset'): string {
-  return NATIVE_PRESET_IDS[voicePresetOrdinal(fnName, id, argName)] as string;
-}
-
-/** The public id of a native preset id, or `undefined` for one this binding does not know. */
-export function voicePresetIdFromNative(native: string): VoicePresetId | undefined {
-  const ordinal = NATIVE_PRESET_IDS.indexOf(native);
-  return ordinal < 0 ? undefined : VOICE_PRESET_IDS[ordinal];
+/**
+ * A public preset id after the same checks as {@link voicePresetOrdinal}.
+ *
+ * @throws TypeError unless `id` is a string; RangeError for an unknown id.
+ */
+export function checkedVoicePresetId(
+  fnName: string,
+  id: unknown,
+  argName = 'preset',
+): VoicePresetId {
+  return VOICE_PRESET_IDS[voicePresetOrdinal(fnName, id, argName)] as VoicePresetId;
 }

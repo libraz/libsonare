@@ -105,9 +105,9 @@ describe('RealtimeVoiceChanger flat config setConfig', () => {
         outputGainDb: f32(pod.outputGainDb),
         wetMix: f32(pod.wetMix),
         retune: {
-          semitones: f32(pod.retunePitchSemitones),
+          pitchSemitones: f32(pod.retunePitchSemitones),
           mix: f32(pod.retuneMix),
-          grainSize: pod.retuneGrainSizeSamples,
+          grainSizeSamples: pod.retuneGrainSizeSamples,
         },
         formant: {
           factor: f32(pod.formantFactor),
@@ -118,7 +118,7 @@ describe('RealtimeVoiceChanger flat config setConfig', () => {
           mode: pod.formantMode,
         },
         eq: {
-          highpassHz: f32(pod.eqHighPassHz),
+          highPassHz: f32(pod.eqHighPassHz),
           bodyDb: f32(pod.eqBodyDb),
           presenceDb: f32(pod.eqPresenceDb),
           airDb: f32(pod.eqAirDb),
@@ -160,8 +160,7 @@ describe('RealtimeVoiceChanger flat config setConfig', () => {
           amount: f32(pod.pitchCorrectionAmount),
           speedMs: f32(pod.pitchCorrectionSpeedMs),
           keyRoot: pod.pitchCorrectionKeyRoot,
-          // The serialised document keeps the native scale spelling.
-          scale: 'natural_minor',
+          scale: pod.pitchCorrectionScale,
           robotOctave: pod.pitchCorrectionRobotOctave,
         },
         harmony: {
@@ -184,17 +183,16 @@ describe('RealtimeVoiceChanger flat config setConfig', () => {
           level: f32(pod.vocoderLevel),
         },
         character: {
-          // The serialised document keeps the native token spellings.
-          type: 'bbd_chorus',
+          type: pod.characterType,
           amount: f32(pod.characterAmount),
           tone: f32(pod.characterTone),
         },
         reverbVariation: {
-          variation: 'tempo_delay',
+          variation: pod.reverbVariation,
           delayMs: f32(pod.reverbVariationDelayMs),
           feedback: f32(pod.reverbVariationFeedback),
           tempoBpm: f32(pod.reverbVariationTempoBpm),
-          division: 'dotted_eighth',
+          division: pod.reverbVariationDivision,
         },
         midi: { release: pod.midiRelease },
       });
@@ -206,10 +204,10 @@ describe('RealtimeVoiceChanger flat config setConfig', () => {
   it('applies a complete nested preset document', () => {
     const vc = make('neutralMonitor');
     const preset = JSON.parse(realtimeVoiceChangerPresetJson('neutralMonitor'));
-    preset.dsp.retune.semitones = 3;
+    preset.dsp.retune.pitchSemitones = 3;
     vc.setConfig(preset);
     const applied = JSON.parse(vc.configJson()).dsp;
-    expect(applied.retune.semitones).toBeCloseTo(3, 4);
+    expect(applied.retune.pitchSemitones).toBeCloseTo(3, 4);
     vc.destroy();
   });
 
@@ -217,7 +215,7 @@ describe('RealtimeVoiceChanger flat config setConfig', () => {
     const vc = make('neutralMonitor');
     expect(() =>
       // @ts-expect-error preset metadata is deliberately omitted; the runtime rejects it
-      vc.setConfig({ schemaVersion: 1, dsp: { retune: { semitones: 3 } } }),
+      vc.setConfig({ schemaVersion: 3, dsp: { retune: { pitchSemitones: 3 } } }),
     ).toThrow(/missing field|field must/i);
     vc.destroy();
   });
@@ -230,7 +228,7 @@ describe('RealtimeVoiceChanger flat config setConfig', () => {
     }
     pod.retunePitchSemitones = -9;
     const vc = make(pod);
-    expect(JSON.parse(vc.configJson()).dsp.retune.semitones).toBeCloseTo(-9, 4);
+    expect(JSON.parse(vc.configJson()).dsp.retune.pitchSemitones).toBeCloseTo(-9, 4);
     vc.destroy();
   });
 

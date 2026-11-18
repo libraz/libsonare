@@ -70,7 +70,7 @@ export function masteringRepairDeclickStereo(...args: unknown[]): MasteringRepai
       r.left,
       r.right,
       r.sampleRate,
-      repairNativeOptions('masteringRepairDeclickStereo', r),
+      repairNativeOptions(r),
     ),
   );
 }
@@ -85,11 +85,7 @@ export function masteringRepairDeclick(
 export function masteringRepairDeclick(...args: unknown[]): DeclickResult {
   const r = sampleOneShot<MasteringRepairDeclickRequest>('masteringRepairDeclick', args);
   assertAudioInput('masteringRepairDeclick', r.samples, r.sampleRate, r);
-  return requireModule().masteringRepairDeclick(
-    r.samples,
-    r.sampleRate,
-    repairNativeOptions('masteringRepairDeclick', r),
-  );
+  return requireModule().masteringRepairDeclick(r.samples, r.sampleRate, repairNativeOptions(r));
 }
 
 /** Options for `masteringRepairDeclip`. */
@@ -155,11 +151,7 @@ export function masteringRepairDeclip(
 export function masteringRepairDeclip(...args: unknown[]): DeclipResult {
   const r = sampleOneShot<MasteringRepairDeclipRequest>('masteringRepairDeclip', args);
   assertAudioInput('masteringRepairDeclip', r.samples, r.sampleRate, r);
-  return requireModule().masteringRepairDeclip(
-    r.samples,
-    r.sampleRate,
-    repairNativeOptions('masteringRepairDeclip', r),
-  );
+  return requireModule().masteringRepairDeclip(r.samples, r.sampleRate, repairNativeOptions(r));
 }
 
 /**
@@ -185,7 +177,7 @@ export function masteringRepairDeclipStereo(...args: unknown[]): MasteringRepair
       r.left,
       r.right,
       r.sampleRate,
-      repairNativeOptions('masteringRepairDeclipStereo', r),
+      repairNativeOptions(r),
     ),
   );
 }
@@ -200,11 +192,7 @@ export function masteringRepairDecrackle(
 export function masteringRepairDecrackle(...args: unknown[]): DecrackleResult {
   const r = sampleOneShot<MasteringRepairDecrackleRequest>('masteringRepairDecrackle', args);
   assertAudioInput('masteringRepairDecrackle', r.samples, r.sampleRate, r);
-  return requireModule().masteringRepairDecrackle(
-    r.samples,
-    r.sampleRate,
-    repairNativeOptions('masteringRepairDecrackle', r),
-  );
+  return requireModule().masteringRepairDecrackle(r.samples, r.sampleRate, repairNativeOptions(r));
 }
 
 /**
@@ -231,7 +219,7 @@ export function masteringRepairDecrackleStereo(...args: unknown[]): MasteringRep
       r.left,
       r.right,
       r.sampleRate,
-      repairNativeOptions('masteringRepairDecrackleStereo', r),
+      repairNativeOptions(r),
     ),
   );
 }
@@ -283,7 +271,7 @@ export function masteringRepairDetectClicks(...args: unknown[]): ClickDetection 
   return requireModule().masteringRepairDetectClicks(
     r.samples,
     r.sampleRate,
-    repairNativeOptions('masteringRepairDetectClicks', r),
+    repairNativeOptions(r),
   );
 }
 
@@ -334,7 +322,7 @@ export function masteringRepairDetectClipping(...args: unknown[]): ClipDetection
   return requireModule().masteringRepairDetectClipping(
     r.samples,
     r.sampleRate,
-    repairNativeOptions('masteringRepairDetectClipping', r),
+    repairNativeOptions(r),
   );
 }
 
@@ -363,6 +351,6 @@ export function masteringRepairDetectCrackle(...args: unknown[]): CrackleDetecti
   return requireModule().masteringRepairDetectCrackle(
     r.samples,
     r.sampleRate,
-    repairNativeOptions('masteringRepairDetectCrackle', r),
+    repairNativeOptions(r),
   );
 }

@@ -55,22 +55,22 @@ export interface WasmKeyCandidateResult {
   correlation: number;
 }
 
-// Flat POD mirror of SonareRealtimeVoiceChangerConfig. Keys are camelCase to
-// match the Node addon getter (the underlying C ABI / Python POD is snake_case).
+// Flat POD mirror of SonareRealtimeVoiceChangerConfig. Keys are camelCase
+// (the underlying C ABI / Python POD is snake_case).
 export interface WasmRealtimeVoiceChangerPodConfig {
   inputGainDb: number;
   outputGainDb: number;
   wetMix: number;
-  retuneSemitones: number;
+  retunePitchSemitones: number;
   retuneMix: number;
-  retuneGrainSize: number;
+  retuneGrainSizeSamples: number;
   formantFactor: number;
   formantAmount: number;
   formantBody: number;
   formantBrightness: number;
   formantNasal: number;
   formantMode: 'relative' | 'absolute';
-  eqHighpassHz: number;
+  eqHighPassHz: number;
   eqBodyDb: number;
   eqPresenceDb: number;
   eqAirDb: number;
@@ -95,18 +95,16 @@ export interface WasmRealtimeVoiceChangerPodConfig {
   limiterReleaseMs: number;
   limiterEnableIspLimiter: boolean;
   limiterIspCeilingDbtp: number;
-  voiceEngineEngine: 'grain' | 'psola';
+  voiceEngine: 'grain' | 'psola';
   voiceEngineF0MinHz: number;
   pitchCorrectionMode: 'off' | 'auto' | 'robot';
   pitchCorrectionAmount: number;
   pitchCorrectionSpeedMs: number;
   pitchCorrectionKeyRoot: number;
-  pitchCorrectionScale: 'major' | 'natural_minor' | 'chromatic';
+  pitchCorrectionScale: 'major' | 'naturalMinor' | 'chromatic';
   pitchCorrectionRobotOctave: number;
   harmonyVoices: number;
-  harmonyStep1: number;
-  harmonyStep2: number;
-  harmonyStep3: number;
+  harmonySteps: [number, number, number];
   harmonyLevel: number;
   harmonyLeadLevel: number;
   harmonyDetuneCents: number;
@@ -120,14 +118,14 @@ export interface WasmRealtimeVoiceChangerPodConfig {
   vocoderCarrierWave: 'saw' | 'pulse' | 'ensemble';
   vocoderEnsembleDetuneCents: number;
   vocoderLevel: number;
-  characterType: 'none' | 'megaphone' | 'radio' | 'bbd_chorus' | 'strobo';
+  characterType: 'none' | 'megaphone' | 'radio' | 'bbdChorus' | 'strobo';
   characterAmount: number;
   characterTone: number;
-  reverbVariationVariation: 'reverb' | 'echo' | 'tempo_delay' | 'dub_echo';
+  reverbVariation: 'reverb' | 'echo' | 'tempoDelay' | 'dubEcho';
   reverbVariationDelayMs: number;
   reverbVariationFeedback: number;
   reverbVariationTempoBpm: number;
-  reverbVariationDivision: 'quarter' | 'eighth' | 'dotted_eighth' | 'sixteenth';
+  reverbVariationDivision: 'quarter' | 'eighth' | 'dottedEighth' | 'sixteenth';
   midiRelease: 'hold' | 'input';
 }
 
@@ -354,15 +352,11 @@ export interface WasmRoomGeometryOptions {
   materialPreset?: number;
   bandAbsorption?: Float32Array | number[];
   bandScattering?: Float32Array | number[];
-  sourceX?: number;
-  sourceY?: number;
-  sourceZ?: number;
-  listenerX?: number;
-  listenerY?: number;
-  listenerZ?: number;
+  source?: { x: number; y: number; z: number };
+  listener?: { x: number; y: number; z: number };
   ismOrder?: number;
   seed?: number;
-  maxSeconds?: number;
+  maxSec?: number;
   airAbsorptionEnabled?: boolean;
   airTemperatureC?: number;
   airHumidityPercent?: number;
@@ -2338,13 +2332,13 @@ export interface SonareModule {
     root: number,
     modeMask: number,
     midi: number,
-    referenceMidi: number,
+    scaleReferenceMidi: number,
   ) => number;
   scaleCorrectionSemitones: (
     root: number,
     modeMask: number,
     midi: number,
-    referenceMidi: number,
+    scaleReferenceMidi: number,
   ) => number;
   scalePitchClassEnabled: (root: number, modeMask: number, pitchClass: number) => boolean;
 
@@ -2469,11 +2463,11 @@ export interface SonareModule {
     nFft: number,
     hopLength: number,
   ) => Float32Array;
-  pitchShift: (samples: Float32Array, sampleRate: number, semitones: number) => Float32Array;
+  pitchShift: (samples: Float32Array, sampleRate: number, pitchSemitones: number) => Float32Array;
   pitchShiftEx: (
     samples: Float32Array,
     sampleRate: number,
-    semitones: number,
+    pitchSemitones: number,
     nFft: number,
     hopLength: number,
   ) => Float32Array;
@@ -2498,11 +2492,11 @@ export interface SonareModule {
     f0Hz: Float32Array,
     hopLength: number,
     options: {
-      mode?: string;
+      targetMode?: string;
       targetMidi?: number;
       scaleRoot?: number;
       scaleModeMask?: number | string;
-      referenceMidi?: number;
+      scaleReferenceMidi?: number;
       retuneAmount?: number;
       maxCorrectionSemitones?: number;
       retuneSpeedMs?: number;
@@ -2520,7 +2514,7 @@ export interface SonareModule {
       retuneSpeedMs?: number;
       vibratoThresholdCents?: number;
       maxCorrectionSemitones?: number;
-      referenceMidi?: number;
+      scaleReferenceMidi?: number;
     },
   ) => {
     samples: Float32Array;
@@ -3873,8 +3867,8 @@ export interface WasmStreamingRetune {
   prepare: (sampleRate: number, maxBlockSize: number) => void;
   reset: () => void;
   setConfig: (config: Record<string, unknown>) => void;
-  config: () => { semitones: number; mix: number; grainSize: number };
-  grainSize: () => number;
+  config: () => { pitchSemitones: number; mix: number; grainSizeSamples: number };
+  grainSizeSamples: () => number;
   latencySamples: () => number;
   processMono: (samples: Float32Array) => Float32Array;
   delete: () => void;

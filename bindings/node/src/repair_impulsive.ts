@@ -46,7 +46,11 @@ export function masteringRepairDeclick(
 export function masteringRepairDeclick(...args: unknown[]): DeclickResult {
   const r = sampleOneShot<MasteringRepairDeclickRequest>('masteringRepairDeclick', args);
   assertAudioInput('masteringRepairDeclick', r.samples, r.sampleRate, r);
-  return addon.masteringRepairDeclick(r.samples, r.sampleRate, repairNativeOptions(r));
+  return addon.masteringRepairDeclick(
+    r.samples,
+    r.sampleRate,
+    repairNativeOptions('masteringRepairDeclick', r),
+  );
 }
 
 /** Request form of `masteringRepairDeclickStereo`. */
@@ -78,7 +82,12 @@ export function masteringRepairDeclickStereo(...args: unknown[]): MasteringRepai
   assertAudioInput('masteringRepairDeclickStereo', r.left, r.sampleRate, r, 'left');
   assertAudioInput('masteringRepairDeclickStereo', r.right, r.sampleRate, r, 'right');
   return pairedResult(
-    addon.masteringRepairDeclickStereo(r.left, r.right, r.sampleRate, repairNativeOptions(r)),
+    addon.masteringRepairDeclickStereo(
+      r.left,
+      r.right,
+      r.sampleRate,
+      repairNativeOptions('masteringRepairDeclickStereo', r),
+    ),
   );
 }
 
@@ -129,7 +138,11 @@ export function masteringRepairDeclip(
 export function masteringRepairDeclip(...args: unknown[]): DeclipResult {
   const r = sampleOneShot<MasteringRepairDeclipRequest>('masteringRepairDeclip', args);
   assertAudioInput('masteringRepairDeclip', r.samples, r.sampleRate, r);
-  return addon.masteringRepairDeclip(r.samples, r.sampleRate, repairNativeOptions(r));
+  return addon.masteringRepairDeclip(
+    r.samples,
+    r.sampleRate,
+    repairNativeOptions('masteringRepairDeclip', r),
+  );
 }
 
 /** Request form of `masteringRepairDeclipStereo`. */
@@ -161,7 +174,12 @@ export function masteringRepairDeclipStereo(...args: unknown[]): MasteringRepair
   assertAudioInput('masteringRepairDeclipStereo', r.left, r.sampleRate, r, 'left');
   assertAudioInput('masteringRepairDeclipStereo', r.right, r.sampleRate, r, 'right');
   return pairedResult(
-    addon.masteringRepairDeclipStereo(r.left, r.right, r.sampleRate, repairNativeOptions(r)),
+    addon.masteringRepairDeclipStereo(
+      r.left,
+      r.right,
+      r.sampleRate,
+      repairNativeOptions('masteringRepairDeclipStereo', r),
+    ),
   );
 }
 
@@ -178,7 +196,11 @@ export function masteringRepairDecrackle(
 export function masteringRepairDecrackle(...args: unknown[]): DecrackleResult {
   const r = sampleOneShot<MasteringRepairDecrackleRequest>('masteringRepairDecrackle', args);
   assertAudioInput('masteringRepairDecrackle', r.samples, r.sampleRate, r);
-  return addon.masteringRepairDecrackle(r.samples, r.sampleRate, repairNativeOptions(r));
+  return addon.masteringRepairDecrackle(
+    r.samples,
+    r.sampleRate,
+    repairNativeOptions('masteringRepairDecrackle', r),
+  );
 }
 
 /** Request form of `masteringRepairDecrackleStereo`. */
@@ -210,7 +232,12 @@ export function masteringRepairDecrackleStereo(...args: unknown[]): MasteringRep
   assertAudioInput('masteringRepairDecrackleStereo', r.left, r.sampleRate, r, 'left');
   assertAudioInput('masteringRepairDecrackleStereo', r.right, r.sampleRate, r, 'right');
   return pairedResult(
-    addon.masteringRepairDecrackleStereo(r.left, r.right, r.sampleRate, repairNativeOptions(r)),
+    addon.masteringRepairDecrackleStereo(
+      r.left,
+      r.right,
+      r.sampleRate,
+      repairNativeOptions('masteringRepairDecrackleStereo', r),
+    ),
   );
 }
 
@@ -246,7 +273,11 @@ export function masteringRepairDetectClicks(
 export function masteringRepairDetectClicks(...args: unknown[]): ClickDetection {
   const r = sampleOneShot<MasteringRepairDetectClicksRequest>('masteringRepairDetectClicks', args);
   assertAudioInput('masteringRepairDetectClicks', r.samples, r.sampleRate, r);
-  return addon.masteringRepairDetectClicks(r.samples, r.sampleRate, repairNativeOptions(r));
+  return addon.masteringRepairDetectClicks(
+    r.samples,
+    r.sampleRate,
+    repairNativeOptions('masteringRepairDetectClicks', r),
+  );
 }
 
 /** Request form of `masteringRepairDetectClipping`. */
@@ -311,7 +342,11 @@ export function masteringRepairDetectClipping(...args: unknown[]): ClipDetection
     args,
   );
   assertAudioInput('masteringRepairDetectClipping', r.samples, r.sampleRate, r);
-  return addon.masteringRepairDetectClipping(r.samples, r.sampleRate, repairNativeOptions(r));
+  return addon.masteringRepairDetectClipping(
+    r.samples,
+    r.sampleRate,
+    repairNativeOptions('masteringRepairDetectClipping', r),
+  );
 }
 
 /** Request form of `masteringRepairDetectCrackle`. */
@@ -346,5 +381,9 @@ export function masteringRepairDetectCrackle(...args: unknown[]): CrackleDetecti
     args,
   );
   assertAudioInput('masteringRepairDetectCrackle', r.samples, r.sampleRate, r);
-  return addon.masteringRepairDetectCrackle(r.samples, r.sampleRate, repairNativeOptions(r));
+  return addon.masteringRepairDetectCrackle(
+    r.samples,
+    r.sampleRate,
+    repairNativeOptions('masteringRepairDetectCrackle', r),
+  );
 }

@@ -59,9 +59,9 @@ describe('Realtime Voice Changer preset JSON Schema contract', () => {
     }
   });
 
-  it('accepts schema versions 1 and 2, and a version 2 document needs the transformer sections', () => {
+  it('accepts schema version 3, which needs the transformer sections, and translates an older document on load', () => {
     const preset = JSON.parse(realtimeVoiceChangerPresetJson('neutralMonitor')) as {
-      dsp: Record<string, unknown>;
+      dsp: Record<string, Record<string, unknown>>;
       schemaVersion: number;
     };
     expect(validateSchema(preset), JSON.stringify(validateSchema.errors)).toBe(true);
@@ -79,22 +79,37 @@ describe('Realtime Voice Changer preset JSON Schema contract', () => {
     const legacyDsp = Object.fromEntries(
       Object.entries(preset.dsp).filter(([key]) => !transformerSections.includes(key)),
     );
-    const legacy = { ...preset, schemaVersion: 1, dsp: legacyDsp };
-    expect(validateSchema(legacy), JSON.stringify(validateSchema.errors)).toBe(true);
-    expect(realtimeVoiceChangerValidatePresetJson(JSON.stringify(legacy)).ok).toBe(true);
-
     expectBothValidatorsToReject({ ...preset, dsp: legacyDsp });
+
+    // A version 1 document in the old spellings is read by the library, not by the schema.
+    const { pitchSemitones, grainSizeSamples, ...retune } = preset.dsp.retune as {
+      pitchSemitones: number;
+      grainSizeSamples: number;
+    };
+    const { highPassHz, ...eq } = preset.dsp.eq as { highPassHz: number };
+    const old = {
+      ...preset,
+      schemaVersion: 1,
+      id: 'neutral-monitor',
+      dsp: {
+        ...legacyDsp,
+        retune: { ...retune, semitones: pitchSemitones, grainSize: grainSizeSamples },
+        eq: { ...eq, highpassHz: highPassHz },
+      },
+    };
+    expect(validateSchema(old)).toBe(false);
+    expect(realtimeVoiceChangerValidatePresetJson(JSON.stringify(old)).ok).toBe(true);
   });
 
   it('rejects representative schema violations through both validators', () => {
     const factoryPreset = JSON.parse(realtimeVoiceChangerPresetJson('neutralMonitor')) as {
-      dsp: { retune: { grainSize: number } };
+      dsp: { retune: { grainSizeSamples: number } };
       id: string;
       schemaVersion: number;
     };
 
-    expect(factoryPreset.schemaVersion).toBe(2);
-    expectBothValidatorsToReject({ ...factoryPreset, schemaVersion: 3 });
+    expect(factoryPreset.schemaVersion).toBe(3);
+    expectBothValidatorsToReject({ ...factoryPreset, schemaVersion: 4 });
     expectBothValidatorsToReject({ ...factoryPreset, schemaVersion: 0 });
     expectBothValidatorsToReject({ ...factoryPreset, id: 'Invalid ID' });
     expectBothValidatorsToReject({ ...factoryPreset, unexpected: true });
@@ -102,7 +117,7 @@ describe('Realtime Voice Changer preset JSON Schema contract', () => {
       ...factoryPreset,
       dsp: {
         ...factoryPreset.dsp,
-        retune: { ...factoryPreset.dsp.retune, grainSize: 1.5 },
+        retune: { ...factoryPreset.dsp.retune, grainSizeSamples: 1.5 },
       },
     });
   });

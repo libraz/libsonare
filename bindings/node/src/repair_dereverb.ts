@@ -73,7 +73,11 @@ export function masteringRepairDereverbClassical(...args: unknown[]): DereverbRe
   );
   assertAudioInput('masteringRepairDereverbClassical', r.samples, r.sampleRate, r);
   assertRepairGeometry('masteringRepairDereverbClassical', r);
-  return addon.masteringRepairDereverbClassical(r.samples, r.sampleRate, repairNativeOptions(r));
+  return addon.masteringRepairDereverbClassical(
+    r.samples,
+    r.sampleRate,
+    repairNativeOptions('masteringRepairDereverbClassical', r),
+  );
 }
 
 /** Request form of `masteringRepairDereverbClassicalStereo`. */
@@ -136,7 +140,7 @@ export function masteringRepairDereverbClassicalStereo(
       r.left,
       r.right,
       r.sampleRate,
-      repairNativeOptions(r),
+      repairNativeOptions('masteringRepairDereverbClassicalStereo', r),
     ),
   );
 }
@@ -203,7 +207,11 @@ export function masteringRepairDereverbClassicalLinked(
   assertAudioChannels('masteringRepairDereverbClassicalLinked', r.channels, r.sampleRate, r);
   assertRepairGeometry('masteringRepairDereverbClassicalLinked', r);
   return sharedReportResult(
-    addon.masteringRepairDereverbClassicalLinked(r.channels, r.sampleRate, repairNativeOptions(r)),
+    addon.masteringRepairDereverbClassicalLinked(
+      r.channels,
+      r.sampleRate,
+      repairNativeOptions('masteringRepairDereverbClassicalLinked', r),
+    ),
   );
 }
 
@@ -302,5 +310,9 @@ export function masteringRepairDetectReverb(...args: unknown[]): ReverbDetection
   const r = sampleOneShot<MasteringRepairDetectReverbRequest>('masteringRepairDetectReverb', args);
   assertAudioInput('masteringRepairDetectReverb', r.samples, r.sampleRate, r);
   assertRepairGeometry('masteringRepairDetectReverb', r);
-  return addon.masteringRepairDetectReverb(r.samples, r.sampleRate, repairNativeOptions(r));
+  return addon.masteringRepairDetectReverb(
+    r.samples,
+    r.sampleRate,
+    repairNativeOptions('masteringRepairDetectReverb', r),
+  );
 }

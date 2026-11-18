@@ -89,7 +89,7 @@ export function masteringRepairDereverbClassical(...args: unknown[]): DereverbRe
   return requireModule().masteringRepairDereverbClassical(
     r.samples,
     r.sampleRate,
-    repairNativeOptions('masteringRepairDereverbClassical', r),
+    repairNativeOptions(r),
   );
 }
 
@@ -145,7 +145,7 @@ export function masteringRepairDereverbClassicalStereo(
       r.left,
       r.right,
       r.sampleRate,
-      repairNativeOptions('masteringRepairDereverbClassicalStereo', r),
+      repairNativeOptions(r),
     ),
   );
 }
@@ -201,7 +201,7 @@ export function masteringRepairDereverbClassicalLinked(
     requireModule().masteringRepairDereverbClassicalLinked(
       r.channels,
       r.sampleRate,
-      repairNativeOptions('masteringRepairDereverbClassicalLinked', r),
+      repairNativeOptions(r),
     ),
   );
 }
@@ -298,6 +298,6 @@ export function masteringRepairDetectReverb(...args: unknown[]): ReverbDetection
   return requireModule().masteringRepairDetectReverb(
     r.samples,
     r.sampleRate,
-    repairNativeOptions('masteringRepairDetectReverb', r),
+    repairNativeOptions(r),
   );
 }

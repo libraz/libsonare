@@ -509,6 +509,17 @@ export class StreamingEqualizer {
 // StreamingRetune Class
 // ============================================================================
 
+// Native refuses unknown keys, wrong types and an explicit 0 `grainSizeSamples` itself.
+function assertRetuneConfig(
+  fnName: string,
+  config: StreamingRetuneConfig,
+): Record<string, unknown> {
+  if (typeof config !== 'object' || config === null || Array.isArray(config)) {
+    throw new TypeError(`${fnName}: config must be an object`);
+  }
+  return config as Record<string, unknown>;
+}
+
 /**
  * Block-by-block mono voice retune / pitch shifter.
  *
@@ -516,38 +527,6 @@ export class StreamingEqualizer {
  * before processing, and call {@link destroy} (or use `try/finally`) to release
  * the underlying WASM object.
  */
-// Native still spells these controls `semitones` and `grainSize`.
-function retuneConfigToNative(
-  fnName: string,
-  config: StreamingRetuneConfig,
-): Record<string, unknown> {
-  if (typeof config !== 'object' || config === null || Array.isArray(config)) {
-    throw new TypeError(`${fnName}: config must be an object`);
-  }
-  const out: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(config)) {
-    if (value === undefined || value === null) {
-      continue;
-    }
-    if (key === 'pitchSemitones') {
-      out.semitones = value;
-    } else if (key === 'grainSizeSamples') {
-      if (typeof value !== 'number') {
-        throw new TypeError(`${fnName}: grainSizeSamples must be a number`);
-      }
-      if (value === 0) {
-        throw new RangeError(`${fnName}: grainSizeSamples must not be 0 (omit it for the default)`);
-      }
-      out.grainSize = value;
-    } else if (key === 'mix') {
-      out.mix = value;
-    } else {
-      throw new TypeError(`${fnName}: unknown config key '${key}'`);
-    }
-  }
-  return out;
-}
-
 export class StreamingRetune {
   private retuneHandle: import('./sonare.js').WasmStreamingRetune;
   private released = false;
@@ -559,9 +538,7 @@ export class StreamingRetune {
 
   constructor(config: StreamingRetuneConfig = {}) {
     const module = getSonareModule();
-    this.retuneHandle = module.createStreamingRetune(
-      retuneConfigToNative('StreamingRetune', config),
-    );
+    this.retuneHandle = module.createStreamingRetune(assertRetuneConfig('StreamingRetune', config));
   }
 
   /**
@@ -587,22 +564,22 @@ export class StreamingRetune {
    *   `grainSizeSamples` or a non-finite control.
    */
   setConfig(config: StreamingRetuneConfig): void {
-    this.retune.setConfig(retuneConfigToNative('StreamingRetune.setConfig', config));
+    this.retune.setConfig(assertRetuneConfig('StreamingRetune.setConfig', config));
   }
 
   /** The currently applied controls, with `grainSizeSamples` as the effective one. */
   config(): Required<StreamingRetuneConfig> {
     const native = this.retune.config();
     return {
-      pitchSemitones: native.semitones,
+      pitchSemitones: native.pitchSemitones,
       mix: native.mix,
-      grainSizeSamples: native.grainSize,
+      grainSizeSamples: native.grainSizeSamples,
     };
   }
 
   /** Resolved grain size in samples after {@link prepare}; 0 before. */
   get grainSizeSamples(): number {
-    return this.retune.grainSize();
+    return this.retune.grainSizeSamples();
   }
 
   /** Fixed overlap-add latency in samples (one grain); 0 before prepare. */

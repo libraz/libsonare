@@ -309,12 +309,12 @@ describe('voice changer surface', () => {
       ['retuneSemitones', 0],
       ['retuneGrainSize', 0],
       ['harmonyStep1', 0],
-    ])('refuses the retired config key %s', (key, value) => {
+    ])('refuses the native-only config key %s', (key, value) => {
       const config = { ...realtimeVoiceChangerPresetConfig('neutralMonitor'), [key]: value };
       const a = changer();
       try {
         expect(caught(() => a.setConfig(config as RealtimeVoiceChangerConfig)).name).toBe(
-          'RangeError',
+          'TypeError',
         );
       } finally {
         a.destroy();

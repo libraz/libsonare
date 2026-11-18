@@ -17,7 +17,7 @@ describe('RealtimeVoiceChanger flat POD setConfig', () => {
     const applied = JSON.parse(vc.configJson()).dsp;
     // The mutated field and the preset's sections survive instead of reverting
     // to config defaults, which a flat POD through the nested parser would do.
-    expect(applied.retune.pitchSemitones).toBeCloseTo(5, 4);
+    expect(applied.retune.semitones).toBeCloseTo(5, 4);
     expect(applied.retune.mix).toBeCloseTo(pod.retuneMix, 4);
     expect(applied.formant.factor).toBeCloseTo(pod.formantFactor, 4);
     expect(applied.eq.presenceDb).toBeCloseTo(pod.eqPresenceDb, 4);
@@ -28,24 +28,24 @@ describe('RealtimeVoiceChanger flat POD setConfig', () => {
   it('applies a complete nested preset document', () => {
     const vc = new RealtimeVoiceChanger({ sampleRate: 48000 });
     const preset = JSON.parse(realtimeVoiceChangerPresetJson('neutralMonitor'));
-    preset.dsp.retune.pitchSemitones = 3;
+    preset.dsp.retune.semitones = 3;
     vc.setConfig(preset);
     const applied = JSON.parse(vc.configJson()).dsp;
-    expect(applied.retune.pitchSemitones).toBeCloseTo(3, 4);
+    expect(applied.retune.semitones).toBeCloseTo(3, 4);
     vc.destroy();
   });
 
   it('rejects a partial nested preset instead of applying defaults', () => {
     const vc = new RealtimeVoiceChanger({ sampleRate: 48000 });
     // @ts-expect-error deliberately partial nested preset; setConfig must reject it, not fill in defaults.
-    expect(() =>
-      vc.setConfig({ schemaVersion: 3, dsp: { retune: { pitchSemitones: 3 } } }),
-    ).toThrow(/missing field|field must/i);
+    expect(() => vc.setConfig({ schemaVersion: 1, dsp: { retune: { semitones: 3 } } })).toThrow(
+      /missing field|field must/i,
+    );
     vc.destroy();
   });
 
   it('reports a refused preset-or-config document as InvalidFormat', () => {
-    const partial = { schemaVersion: 3, dsp: { retune: { pitchSemitones: 3 } } } as never;
+    const partial = { schemaVersion: 1, dsp: { retune: { semitones: 3 } } } as never;
     expectRefusal(
       () => new RealtimeVoiceChanger({ sampleRate: 48000, config: partial }),
       ErrorCode.InvalidFormat,
@@ -62,7 +62,7 @@ describe('RealtimeVoiceChanger flat POD setConfig', () => {
     const pod = realtimeVoiceChangerPresetConfig('brightIdol');
     pod.retunePitchSemitones = -9;
     const vc = new RealtimeVoiceChanger({ sampleRate: 48000, config: pod });
-    expect(JSON.parse(vc.configJson()).dsp.retune.pitchSemitones).toBeCloseTo(-9, 4);
+    expect(JSON.parse(vc.configJson()).dsp.retune.semitones).toBeCloseTo(-9, 4);
     vc.destroy();
   });
 

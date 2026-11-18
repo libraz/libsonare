@@ -76,7 +76,11 @@ export function masteringRepairDenoiseClassical(...args: unknown[]): DenoiseResu
   );
   assertAudioInput('masteringRepairDenoiseClassical', r.samples, r.sampleRate, r);
   assertRepairGeometry('masteringRepairDenoiseClassical', r);
-  return addon.masteringRepairDenoiseClassical(r.samples, r.sampleRate, repairNativeOptions(r));
+  return addon.masteringRepairDenoiseClassical(
+    r.samples,
+    r.sampleRate,
+    repairNativeOptions('masteringRepairDenoiseClassical', r),
+  );
 }
 
 /** Request form of `masteringRepairDenoiseClassicalStereo`. */
@@ -139,7 +143,7 @@ export function masteringRepairDenoiseClassicalStereo(
       r.left,
       r.right,
       r.sampleRate,
-      repairNativeOptions(r),
+      repairNativeOptions('masteringRepairDenoiseClassicalStereo', r),
     ),
     denoiseReport,
   );
@@ -206,7 +210,11 @@ export function masteringRepairDenoiseClassicalLinked(
   assertAudioChannels('masteringRepairDenoiseClassicalLinked', r.channels, r.sampleRate, r);
   assertRepairGeometry('masteringRepairDenoiseClassicalLinked', r);
   return sharedReportResult(
-    addon.masteringRepairDenoiseClassicalLinked(r.channels, r.sampleRate, repairNativeOptions(r)),
+    addon.masteringRepairDenoiseClassicalLinked(
+      r.channels,
+      r.sampleRate,
+      repairNativeOptions('masteringRepairDenoiseClassicalLinked', r),
+    ),
     denoiseReport,
   );
 }
@@ -247,7 +255,11 @@ export function masteringRepairDehum(
 export function masteringRepairDehum(...args: unknown[]): DehumResult {
   const r = sampleOneShot<MasteringRepairDehumRequest>('masteringRepairDehum', args);
   assertAudioInput('masteringRepairDehum', r.samples, r.sampleRate, r);
-  return addon.masteringRepairDehum(r.samples, r.sampleRate, repairNativeOptions(r));
+  return addon.masteringRepairDehum(
+    r.samples,
+    r.sampleRate,
+    repairNativeOptions('masteringRepairDehum', r),
+  );
 }
 
 /** Request form of `masteringRepairDehumStereo`. */
@@ -280,7 +292,12 @@ export function masteringRepairDehumStereo(...args: unknown[]): MasteringRepairD
   assertAudioInput('masteringRepairDehumStereo', r.left, r.sampleRate, r, 'left');
   assertAudioInput('masteringRepairDehumStereo', r.right, r.sampleRate, r, 'right');
   return pairedResult(
-    addon.masteringRepairDehumStereo(r.left, r.right, r.sampleRate, repairNativeOptions(r)),
+    addon.masteringRepairDehumStereo(
+      r.left,
+      r.right,
+      r.sampleRate,
+      repairNativeOptions('masteringRepairDehumStereo', r),
+    ),
     dehumReport,
   );
 }
@@ -325,7 +342,11 @@ export function masteringRepairDetectNoiseFloor(...args: unknown[]): NoiseDetect
   assertAudioInput('masteringRepairDetectNoiseFloor', r.samples, r.sampleRate, r);
   assertRepairGeometry('masteringRepairDetectNoiseFloor', r);
   return noiseDetection(
-    addon.masteringRepairDetectNoiseFloor(r.samples, r.sampleRate, repairNativeOptions(r)),
+    addon.masteringRepairDetectNoiseFloor(
+      r.samples,
+      r.sampleRate,
+      repairNativeOptions('masteringRepairDetectNoiseFloor', r),
+    ),
   );
 }
 
@@ -418,6 +439,10 @@ export function masteringRepairDetectHum(...args: unknown[]): HumDetection {
   const r = sampleOneShot<MasteringRepairDetectHumRequest>('masteringRepairDetectHum', args);
   assertAudioInput('masteringRepairDetectHum', r.samples, r.sampleRate, r);
   return humDetection(
-    addon.masteringRepairDetectHum(r.samples, r.sampleRate, repairNativeOptions(r)),
+    addon.masteringRepairDetectHum(
+      r.samples,
+      r.sampleRate,
+      repairNativeOptions('masteringRepairDetectHum', r),
+    ),
   );
 }

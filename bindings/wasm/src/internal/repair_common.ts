@@ -12,12 +12,6 @@ const NON_NATIVE_FIELDS = new Set([
   'validate',
 ]);
 
-/** Public dBFS field and the linear field the native side still reads for it. */
-const DB_THRESHOLD_FIELDS: ReadonlyArray<readonly [string, string]> = [
-  ['thresholdDb', 'threshold'],
-  ['clipThresholdDb', 'clipThreshold'],
-];
-
 /** A dBFS level at or below 0 as a linear amplitude; `TypeError` unless a number, `RangeError` above 0 dBFS or NaN. */
 export function linearFromDb(fnName: string, field: string, db: unknown): number {
   if (typeof db !== 'number') {
@@ -36,20 +30,13 @@ export function dbFromLinear(linear: number): number {
 
 /**
  * The options object the native repair call reads: the request without audio, rate and
- * `validate`, with the dBFS thresholds converted (native still takes the linear spelling).
- * `null` on an optional field is absence.
+ * `validate`. `null` on an optional field is absence.
  */
-export function repairNativeOptions(fnName: string, request: object): Record<string, unknown> {
+export function repairNativeOptions(request: object): Record<string, unknown> {
   const native: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(request)) {
     if (!NON_NATIVE_FIELDS.has(key) && value !== undefined && value !== null) {
       native[key] = value;
-    }
-  }
-  for (const [field, nativeField] of DB_THRESHOLD_FIELDS) {
-    if (field in native) {
-      native[nativeField] = linearFromDb(fnName, field, native[field]);
-      delete native[field];
     }
   }
   return native;

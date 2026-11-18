@@ -5,14 +5,10 @@
  * table there and this file in the same change.
  */
 import { readFileSync } from 'node:fs';
-import { beforeAll, describe, expect, it } from 'vitest';
-import { init, masteringRepairDetectClipping } from '../src/index';
+import { describe, expect, it } from 'vitest';
+import { masteringRepairDetectClipping } from '../src/index.js';
 
 const HEADER = new URL('../../../include/sonare/sonare_c_mastering.h', import.meta.url).pathname;
-
-beforeAll(async () => {
-  await init();
-});
 
 /** The body of the C struct typedef'd as `name`. */
 function structBody(text: string, name: string): string {

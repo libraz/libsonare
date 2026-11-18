@@ -420,7 +420,7 @@ describe('RealtimeVoiceChanger.setConfig rejects a partial POD instead of zero-f
     const vc = new RealtimeVoiceChanger({ sampleRate: 48000, config: 'neutralMonitor' });
     let caught: unknown;
     try {
-      vc.setConfig({ schemaVersion: 1, dsp: { retune: { semitones: 3 } } } as never);
+      vc.setConfig({ schemaVersion: 3, dsp: { retune: { pitchSemitones: 3 } } } as never);
     } catch (error) {
       caught = error;
     }
