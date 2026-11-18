@@ -424,6 +424,35 @@ describe('PolyphonicAnalysis config', () => {
     );
     expect(error.message).toBe('Invalid parameter');
   });
+
+  it('reads 0 on a floor field as the value 0 and refuses a negative', () => {
+    const floors = analyzePolyphonic({
+      samples,
+      sampleRate,
+      minRidgeDurationMs: 0,
+      minSeparationCents: 0,
+    });
+    try {
+      expect(floors.noteCount).toBeGreaterThanOrEqual(expectedNoteCount);
+    } finally {
+      floors.destroy();
+    }
+    for (const field of ['minRidgeDurationMs', 'minSeparationCents'] as const) {
+      expectRefusalOf(() => analyzePolyphonic({ samples, sampleRate, [field]: -1 }));
+    }
+  });
+
+  it('keeps a named zero by absence and refuses an explicit 0', () => {
+    for (const [field, meaning] of [
+      ['winLength', 'nFft'],
+      ['maxRefineHz', 'a derived ceiling'],
+    ] as const) {
+      const error = expectRefusalOf(() => analyzePolyphonic({ samples, sampleRate, [field]: 0 }));
+      expect(error.message).toBe(
+        `analyzePolyphonic: ${field} must not be 0 (omit it for ${meaning})`,
+      );
+    }
+  });
 });
 
 describe('PolyphonicAnalysis reattackRatio', () => {

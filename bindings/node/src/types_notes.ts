@@ -71,6 +71,7 @@ export interface PitchCorrectOptions extends ValidateOptions {
 export interface AutoTuneKey {
   /** Pitch class of the tonic (C = 0). */
   root: PitchClass;
+  /** Mode of the key. */
   mode: KeyMode;
 }
 
@@ -220,6 +221,7 @@ export interface NoteEdit {
  * written out by hand needs no conversion; it comes back as a `Float32Array`.
  */
 export type NoteEditInput = Partial<Omit<NoteEdit, 'amplitudeEnvelope'>> & {
+  /** Per-sample gain curve; a plain number array or a `Float32Array`. */
   amplitudeEnvelope?: readonly number[] | Float32Array;
   /**
    * {@link NoteEdit.timeOffsetSamples} in seconds, rounded to the nearest sample
@@ -372,7 +374,12 @@ export interface PolyphonicAnalysisOptions {
    * explicit values are converted too.
    */
   nFft?: number;
+  /** STFT hop in samples at 44100 Hz, converted to the input rate. Default `512`. */
   hopLength?: number;
+  /**
+   * STFT window length in samples at 44100 Hz, converted to the input rate. Absent
+   * means `nFft`; an explicit 0 is a `RangeError`.
+   */
   winLength?: number;
 
   /** Bottom of the cent axis the salience is folded onto, in Hz. Default 55. */
@@ -391,9 +398,11 @@ export interface PolyphonicAnalysisOptions {
   salienceHarmonics?: number;
   /** Range a candidate may be found in, in Hz. Default 55 and 1760. */
   f0MinHz?: number;
+  /** Top of the F0 candidate range, in Hz. Default `1760`. */
   f0MaxHz?: number;
   /** Offset and scale of the harmonic weighting, in Hz. Default 27 and 320. */
   salienceAlphaHz?: number;
+  /** Scale of the harmonic weighting, in Hz. Default `320`. */
   salienceBetaHz?: number;
   /**
    * Partial-series stretch assumed while scoring a candidate. 0 is both the
@@ -477,7 +486,7 @@ export interface PolyphonicAnalysisOptions {
    * Lowering it trades separation for a quieter residual. Default 8.
    */
   maxWeightModulus?: number;
-  /** Highest partial usable to refine an F0, in Hz. 0 derives one. */
+  /** Highest partial usable to refine an F0, in Hz. Absent derives one; an explicit 0 is a `RangeError`. */
   maxRefineHz?: number;
   /** Worst F0 error tolerated while refining, in cents. Default 50. */
   f0ToleranceCents?: number;

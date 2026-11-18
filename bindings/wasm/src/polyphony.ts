@@ -11,7 +11,6 @@ import type { OptionsOf, ValidateOptions } from './validation.js';
 import {
   assertAudioInput,
   assertFloatValue,
-  assertNumber,
   requestObject,
   resolveSampleBound,
   sampleOneShot,
@@ -19,6 +18,7 @@ import {
 
 /** Canonical request form for {@link analyzePolyphonic}. */
 export interface AnalyzePolyphonicRequest extends PolyphonicAnalysisOptions, ValidateOptions {
+  /** Source audio; must be non-empty. */
   samples: Float32Array;
   /**
    * Sample rate in Hz. Required: every duration in the chain — the ridge
@@ -28,13 +28,11 @@ export interface AnalyzePolyphonicRequest extends PolyphonicAnalysisOptions, Val
   sampleRate: number;
 }
 
-/** Fields whose native `0` means "library default" and whose native negative means a real 0. */
-const FLOOR_FIELDS = [
-  'minFramePeakRatio',
-  'minSeparationCents',
-  'minRidgePeakRatio',
-  'minRidgeDurationMs',
-] as const;
+/** Fields whose absence keeps a named meaning, so an explicit 0 is refused rather than read as it. */
+const NAMED_ZERO_FIELDS = {
+  winLength: 'nFft',
+  maxRefineHz: 'a derived ceiling',
+} as const;
 
 /** The native config of a request: the fields native reads, in its own spellings. */
 function nativePolyphonicConfig(request: AnalyzePolyphonicRequest): Record<string, unknown> {
@@ -53,26 +51,13 @@ function nativePolyphonicConfig(request: AnalyzePolyphonicRequest): Record<strin
       }
     }
   }
-  for (const key of FLOOR_FIELDS) {
-    const value = config[key];
-    if (value === undefined || value === null) {
-      delete config[key];
-      continue;
-    }
-    assertNumber('analyzePolyphonic', value, key);
-    if ((value as number) < 0) {
-      throw new RangeError(`analyzePolyphonic: ${key} must not be negative`);
-    }
-    // Native reads a written 0 as "default" and a negative as the real 0.
-    if (value === 0) {
-      config[key] = -1;
+  for (const [key, meaning] of Object.entries(NAMED_ZERO_FIELDS)) {
+    if (config[key] === 0) {
+      throw new RangeError(`analyzePolyphonic: ${key} must not be 0 (omit it for ${meaning})`);
     }
   }
   const reattack = config.reattackRatio;
-  if (reattack === undefined || reattack === null) {
-    // Absent is "no split"; native reads 0 as exactly that.
-    config.reattackRatio = 0;
-  } else {
+  if (reattack !== undefined && reattack !== null) {
     assertFloatValue('analyzePolyphonic', reattack, 'reattackRatio');
     if ((reattack as number) <= 1) {
       throw new RangeError(

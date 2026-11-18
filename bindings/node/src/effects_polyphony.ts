@@ -8,7 +8,6 @@ import type {
 import type { OptionsOf } from './validation.js';
 import {
   assertAudioInput,
-  assertFiniteScalar,
   assertFloatValue,
   assertInt32,
   assertInt64,
@@ -30,16 +29,11 @@ export interface AnalyzePolyphonicRequest extends PolyphonicAnalysisOptions {
   validate?: boolean;
 }
 
-/**
- * Fields whose C zero means "use the default". An explicit 0 is a real zero, which
- * the C ABI spells as a negative number; a negative from the caller is refused.
- */
-const ZERO_IS_REAL_FIELDS = [
-  'minFramePeakRatio',
-  'minSeparationCents',
-  'minRidgePeakRatio',
-  'minRidgeDurationMs',
-] as const;
+/** Fields whose absence keeps a named meaning, so an explicit 0 is refused rather than read as it. */
+const NAMED_ZERO_FIELDS = {
+  winLength: 'nFft',
+  maxRefineHz: 'a derived ceiling',
+} as const;
 
 /** The analysis tuning in the addon's spelling. */
 function nativePolyphonicOptions(
@@ -48,26 +42,13 @@ function nativePolyphonicOptions(
 ): Record<string, unknown> {
   const { tonality, ...rest } = options;
   const out: Record<string, unknown> = { ...rest };
-  for (const field of ZERO_IS_REAL_FIELDS) {
-    const value = options[field];
-    if (value === undefined || value === null) {
-      delete out[field];
-      continue;
+  for (const [field, meaning] of Object.entries(NAMED_ZERO_FIELDS)) {
+    if (options[field as keyof typeof NAMED_ZERO_FIELDS] === 0) {
+      throw new RangeError(`${fnName}: ${field} must not be 0 (omit it for ${meaning})`);
     }
-    if (typeof value !== 'number') {
-      throw new TypeError(`${fnName}: ${field} must be a number`);
-    }
-    assertFiniteScalar(fnName, value, field);
-    if (value < 0) {
-      throw new RangeError(`${fnName}: ${field} must not be negative (omit it for the default)`);
-    }
-    out[field] = value === 0 ? -1 : value;
   }
   const { reattackRatio } = options;
-  if (reattackRatio === undefined || reattackRatio === null) {
-    // Absent is "no split"; the addon reads 0 as exactly that.
-    out.reattackRatio = 0;
-  } else {
+  if (reattackRatio !== undefined && reattackRatio !== null) {
     assertFloatValue(fnName, reattackRatio, 'reattackRatio');
     if (reattackRatio <= 1) {
       throw new RangeError(

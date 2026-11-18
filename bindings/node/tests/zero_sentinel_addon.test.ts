@@ -490,9 +490,10 @@ describe('a facade-guarded sentinel key, reached past the facade', () => {
       }
     };
 
-    expect(notes({ nFft: 0 })).toBe(notes({}));
+    // A written 0 is read literally, so it is refused rather than taken as the default.
+    expect(() => notes({ nFft: 0 })).toThrow(RangeError);
     expect(notes({ nFft: 1024 })).not.toBe(notes({})); // positive control
-    expect(notes({ maxPolyphony: 0 })).toBe(notes({}));
+    expect(() => notes({ maxPolyphony: 0 })).toThrow(RangeError);
     expect(notes({ maxPolyphony: 1 })).not.toBe(notes({})); // positive control
 
     for (const key of [

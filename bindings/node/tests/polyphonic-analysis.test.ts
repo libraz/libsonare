@@ -207,6 +207,17 @@ describe('analyzePolyphonic', () => {
     }
   });
 
+  it('keeps a named zero by absence and refuses an explicit 0', () => {
+    for (const [field, meaning] of [
+      ['winLength', 'nFft'],
+      ['maxRefineHz', 'a derived ceiling'],
+    ] as const) {
+      expect(() => withAnalysis((analysis) => analysis.noteCount, { [field]: 0 })).toThrow(
+        `analyzePolyphonic: ${field} must not be 0 (omit it for ${meaning})`,
+      );
+    }
+  });
+
   it('refuses an empty buffer and a sample rate out of range', () => {
     expect(() => analyzePolyphonic({ samples: new Float32Array(0), sampleRate: SR })).toThrow(
       RangeError,

@@ -58,6 +58,7 @@ export interface PitchCorrectOptions extends ValidateOptions {
 
 /** A key as `detectKey` reports it, which is what `autoTune` takes to name one. */
 export interface AutoTuneKey {
+  /** Pitch class of the key root, an integer 0-11 (C = 0). */
   root: PitchClass;
   /** The mode name `detectKey` reports. */
   mode: KeyMode;
@@ -221,6 +222,7 @@ export interface NoteEdit {
  * {@link NoteEdit} is always a `Float32Array`.
  */
 export type NoteEditInput = Omit<Partial<NoteEdit>, 'amplitudeEnvelope'> & {
+  /** Per-frame linear gain points over the note's span, as a `Float32Array` or a plain number array; omitted is no envelope. */
   amplitudeEnvelope?: Float32Array | readonly number[];
   /**
    * `NoteEdit.timeOffsetSamples` in seconds, rounded to the nearest sample at the
@@ -400,7 +402,7 @@ export interface PolyphonicAnalysisOptions {
   nFft?: number;
   /** STFT hop in samples at 44100 Hz. Default 512. */
   hopLength?: number;
-  /** Window length in samples at 44100 Hz. Defaults to `nFft`. */
+  /** Window length in samples at 44100 Hz. Absent means `nFft`; an explicit 0 is a `RangeError`. */
   winLength?: number;
   /** Bottom of the cent axis the salience is folded onto, in Hz. Default 55. */
   centRefHz?: number;
@@ -507,7 +509,7 @@ export interface PolyphonicAnalysisOptions {
    * Lowering it trades separation for a quieter residual. Default 8.
    */
   maxWeightModulus?: number;
-  /** Highest partial usable to refine an F0, in Hz. Default 0, which derives one. */
+  /** Highest partial usable to refine an F0, in Hz. Absent derives one; an explicit 0 is a `RangeError`. */
   maxRefineHz?: number;
   /** Worst F0 error tolerated by the fit, in cents. Default 50. */
   f0ToleranceCents?: number;
@@ -699,8 +701,11 @@ export interface CqtResult {
  * STFT (Short-Time Fourier Transform) result
  */
 export interface StftResult {
+  /** FFT size in samples. */
   nFft: number;
+  /** Hop length in samples of the analysis. */
   hopLength: number;
+  /** Sample rate in Hz of the analysed audio. */
   sampleRate: number;
   /** Rows are `nFft / 2 + 1` bins, cols are frames. */
   magnitude: Matrix2D;
@@ -714,7 +719,9 @@ export interface StftResult {
  * `{ result }`.
  */
 export interface MelSpectrogramResult {
+  /** Sample rate in Hz of the analysed audio. */
   sampleRate: number;
+  /** Hop length in samples of the analysis. */
   hopLength: number;
   /** FFT size of the source STFT. */
   nFft: number;
@@ -736,14 +743,19 @@ export interface MelSpectrogramResult {
  * `mfccToAudio` take it as `{ result }`.
  */
 export interface MfccResult {
+  /** Sample rate in Hz of the analysed audio. */
   sampleRate: number;
+  /** Hop length in samples of the analysis. */
   hopLength: number;
+  /** FFT size in samples of the source STFT. */
   nFft: number;
   /** Mel bands the coefficients were taken from. */
   nMels: number;
+  /** Lower Mel band edge in Hz as applied. */
   fminHz: number;
   /** Upper Mel band edge in Hz as applied: the Nyquist when the request left it at 0. */
   fmaxHz: number;
+  /** `true` for the HTK Mel formula, `false` for Slaney. */
   htk: boolean;
   /** Cepstral lifter applied to the coefficients; 0 means none. */
   lifter: number;
@@ -755,10 +767,13 @@ export interface MfccResult {
  * Chroma features result
  */
 export interface ChromaResult {
+  /** Sample rate in Hz of the analysed audio. */
   sampleRate: number;
+  /** Hop length in samples of the analysis. */
   hopLength: number;
   /** Rows are chroma bins, cols are frames. */
   features: Matrix2D;
+  /** Mean energy of each chroma bin over all frames. */
   meanEnergy: number[];
 }
 
@@ -766,6 +781,7 @@ export interface ChromaResult {
  * Pitch detection result
  */
 export interface PitchResult {
+  /** Per-frame fundamental frequency in Hz; unvoiced frames are NaN. */
   f0: Float32Array;
   /**
    * pYIN's per-frame voiced **observation mass**, exactly as librosa returns
@@ -786,8 +802,11 @@ export interface PitchResult {
   voicedProb: Float32Array;
   /** Per-frame voicing decision from the Viterbi path — the voicing oracle. */
   voicedFlag: boolean[];
+  /** Number of frames in the track. */
   nFrames: number;
+  /** Median F0 in Hz over the voiced frames. */
   medianF0: number;
+  /** Mean F0 in Hz over the voiced frames. */
   meanF0: number;
 }
 
@@ -811,10 +830,15 @@ export interface ReassignedSpectrogramResult {
 
 /** One stable monophonic note region segmented from an F0 track. */
 export interface NoteSegment {
+  /** First F0 frame of the note. */
   frameStart: number;
+  /** End of the note in F0 frames (exclusive). */
   frameEnd: number;
+  /** Note start in seconds. */
   startSec: number;
+  /** Note end in seconds. */
   endSec: number;
+  /** Median pitch of the note in cents. */
   medianCents: number;
 }
 
@@ -822,6 +846,7 @@ export interface NoteSegment {
  * Loudness measurement result (EBU R128 / ITU-R BS.1770)
  */
 export interface LufsResult {
+  /** Integrated loudness over the whole signal, in LUFS. */
   integratedLufs: number;
   /** Final complete 400 ms window, not Max-M. */
   momentaryLufs: number;
@@ -831,6 +856,7 @@ export interface LufsResult {
   maxMomentaryLufs: number;
   /** Maximum 3 s window (EBU R128 Max-S). */
   maxShortTermLufs: number;
+  /** Loudness range in LU. */
   loudnessRangeLu: number;
 }
 
@@ -849,7 +875,10 @@ export interface LufsSeriesResult {
  * HPSS (Harmonic-Percussive Source Separation) result
  */
 export interface HpssResult {
+  /** Harmonic component, the same length as the input. */
   harmonic: Float32Array;
+  /** Percussive component, the same length as the input. */
   percussive: Float32Array;
+  /** Sample rate in Hz of both components. */
   sampleRate: number;
 }
