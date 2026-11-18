@@ -918,7 +918,7 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
         engine.clearControllerBindings(0);
         engine.bindController(0, {
           ...o,
-          input: 'control-change',
+          input: 'controlChange',
           index: 2,
           axis: 'excitation',
         });

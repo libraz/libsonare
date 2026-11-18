@@ -1226,7 +1226,7 @@ export const CASES: AbortGuardCase[] = [
     badTransportArguments: [
       {
         argument: 'destinationId',
-        call: (e) => e.bindController('x', { input: 'channel-pressure', axis: 'none' }),
+        call: (e) => e.bindController('x', { input: 'channelPressure', axis: 'none' }),
       },
     ],
   },

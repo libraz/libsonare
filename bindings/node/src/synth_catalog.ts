@@ -2,8 +2,8 @@ import { addon } from './native.js';
 import type { SynthEngineMode, SynthEnumTables, SynthParamInfo, SynthPatch } from './types.js';
 
 /**
- * NativeSynth preset catalog names (`'sine'`, `'saw-lead'`, `'e-piano'`,
- * `'drum-kit'`, ...). Use these to discover valid {@link SynthPatch} preset
+ * NativeSynth preset catalog names (`'sine'`, `'sawLead'`, `'ePiano'`,
+ * `'drumKit'`, ...). Use these to discover valid {@link SynthPatch} preset
  * names instead of hardcoding magic strings.
  */
 export function synthPresetNames(): string[] {
@@ -77,7 +77,7 @@ export function synthPresetPatch(name: string): SynthPatch {
 }
 
 /**
- * Controller-profile preset names (`'gm'`, `'breath'`, `'breath-aftertouch'`,
+ * Controller-profile preset names (`'gm'`, `'breath'`, `'breathAftertouch'`,
  * `'mpe'`). Use these with {@link RealtimeEngine.setControllerProfile} instead
  * of hardcoding magic strings; an unknown name throws.
  */

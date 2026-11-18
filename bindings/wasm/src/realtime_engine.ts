@@ -742,8 +742,8 @@ export class RealtimeEngine {
 
   /**
    * Bind the patch-driven NativeSynth to a realtime MIDI destination. `patch`
-   * is a {@link SynthPatch} or a preset-name string (`'saw-lead'` /
-   * `'va:saw-lead'`; see {@link synthPresetNames}), resolving exactly like
+   * is a {@link SynthPatch} or a preset-name string (`'sawLead'` /
+   * `'va:sawLead'`; see {@link synthPresetNames}), resolving exactly like
    * {@link Project.bounceWithSynthInstrument}. Live note/CC commands and
    * scheduled MIDI clips routed to that destination render through the synth.
    * Unknown preset names throw.
@@ -918,12 +918,12 @@ export class RealtimeEngine {
   /**
    * Set how one MIDI channel (0–15) of a destination's instrument treats a
    * note-on while another note on that channel is still held: `'poly'` takes a
-   * new voice each time, `'mono-retrigger'` stops and restarts the note (what
-   * GS MONO MODE and CC126 mean), `'mono-legato'` carries the sounding voice
+   * new voice each time, `'monoRetrigger'` stops and restarts the note (what
+   * GS MONO MODE and CC126 mean), `'monoLegato'` carries the sounding voice
    * and only moves its pitch — a wind player's slur, which no MIDI message can
    * reach by design.
    *
-   * `'mono-legato'` is a request, not a guarantee: an engine whose exciter is
+   * `'monoLegato'` is a request, not a guarantee: an engine whose exciter is
    * spent at the onset — anything struck or plucked — and a target pitch below
    * what the engine's delay line can hold both fall back to an ordinary note,
    * which {@link legatoFallbackCount} counts. A channel outside [0,15] and an
@@ -1317,7 +1317,7 @@ export class RealtimeEngine {
    * program under its own RX PROGRAM CHANGE / RX BANK SELECT gates; a NativeSynth
    * bound with `useGmPrograms: true` (`setSynthInstrument`) resolves each
    * channel's voice from the bank and program; a NativeSynth whose patch plays
-   * the GM kit (the `drum-kit` preset, or a percussion patch with `gmKit` on)
+   * the GM kit (the `drumKit` preset, or a percussion patch with `gmKit` on)
    * takes the program as the GS drum-set select on every channel. Every other
    * receiver accepts the message and ignores it: the built-in synth, any other
    * NativeSynth patch, a part with RX PROGRAM CHANGE off, and an MPE member
@@ -1522,7 +1522,7 @@ export class RealtimeEngine {
    * Longest audible tail after the last input, in samples: an upper bound made
    * of the longest instrument tail plus the longest route through lane strips
    * (channel delay included), buses, sends, the graph and the master strip.
-   * An instrument lane whose patch is not known yet (a drum-kit lane or a General
+   * An instrument lane whose patch is not known yet (a drumKit lane or a General
    * MIDI program lane before any note sounds) contributes a conservative
    * worst-case bound that narrows once a patch has sounded.
    * `2147483647` means the tail is unbounded. Control-thread only: must not be

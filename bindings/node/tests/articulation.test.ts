@@ -75,7 +75,7 @@ describe('articulation catalog', () => {
     // truncated on its way through the split reads as a failure rather than as
     // a shorter enum.
     expect(synthEnumTables().articulations).toHaveLength(3);
-    expect([...ARTICULATIONS]).toEqual(['poly', 'mono-retrigger', 'mono-legato']);
+    expect([...ARTICULATIONS]).toEqual(['poly', 'monoRetrigger', 'monoLegato']);
   });
 });
 
@@ -84,16 +84,16 @@ describe('RealtimeEngine articulation', () => {
     const engine = synthEngine('reed');
     expect(engine.articulation(3, 0)).toBe('poly');
 
-    engine.setArticulation(3, 0, 'mono-legato');
-    expect(engine.articulation(3, 0)).toBe('mono-legato');
+    engine.setArticulation(3, 0, 'monoLegato');
+    expect(engine.articulation(3, 0)).toBe('monoLegato');
 
     // A second channel is untouched by the first, so the mode is per channel
     // rather than per instrument — a host slurring one part must not slur the
     // rest of the rack.
     expect(engine.articulation(3, 1)).toBe('poly');
-    engine.setArticulation(3, 1, 'mono-retrigger');
-    expect(engine.articulation(3, 1)).toBe('mono-retrigger');
-    expect(engine.articulation(3, 0)).toBe('mono-legato');
+    engine.setArticulation(3, 1, 'monoRetrigger');
+    expect(engine.articulation(3, 1)).toBe('monoRetrigger');
+    expect(engine.articulation(3, 0)).toBe('monoLegato');
 
     // Nothing has been asked for and declined yet, so the counter starts where
     // a later case can see it move.
@@ -110,7 +110,7 @@ describe('RealtimeEngine articulation', () => {
 
   it('refuses an unknown mode rather than resolving it to poly', () => {
     const engine = synthEngine('reed');
-    // poly substituted for a misspelled mono-legato plays every note and slurs
+    // poly substituted for a misspelled monoLegato plays every note and slurs
     // none of them, which the caller cannot tell from a request that took.
     expect(() => engine.setArticulation(3, 0, 'legato' as never)).toThrow(
       /Unknown articulation name/,
@@ -135,14 +135,14 @@ describe('RealtimeEngine articulation', () => {
     // Nothing is bound to destination 5 yet. Both answers would otherwise read
     // as "the call worked" to a caller that only checks for a return, and both
     // read as one answer to a caller that only checks that something threw.
-    expect(codeNameOf(() => engine.setArticulation(5, 0, 'mono-legato'))).toBe('RangeError');
+    expect(codeNameOf(() => engine.setArticulation(5, 0, 'monoLegato'))).toBe('RangeError');
     expect(codeNameOf(() => engine.articulation(5, 0))).toBe('RangeError');
     expect(codeNameOf(() => engine.legatoFallbackCount(5))).toBe('RangeError');
 
     // The built-in oscillator synth has no articulation of its own, which is a
     // different answer from having no instrument at all.
     engine.setBuiltinInstrument(5, {});
-    expect(codeNameOf(() => engine.setArticulation(5, 0, 'mono-legato'))).toBe('NotSupported');
+    expect(codeNameOf(() => engine.setArticulation(5, 0, 'monoLegato'))).toBe('NotSupported');
     expect(codeNameOf(() => engine.articulation(5, 0))).toBe('NotSupported');
     // The counter refuses on the same terms rather than answering zero. All
     // three are asked together by a host, and a zero here would read as "every
@@ -154,8 +154,8 @@ describe('RealtimeEngine articulation', () => {
 
 describe('an articulation set through the Node facade reaches the sound', () => {
   it('renders a slur differently from a retrigger, against a bit-identical repeat', () => {
-    const slurred = renderSlur('reed', 'mono-legato');
-    const retriggered = renderSlur('reed', 'mono-retrigger');
+    const slurred = renderSlur('reed', 'monoLegato');
+    const retriggered = renderSlur('reed', 'monoRetrigger');
 
     // The renders carry energy, so "they differ" is not two kinds of silence.
     expect(peak(retriggered.audio)).toBeGreaterThan(0);
@@ -167,13 +167,13 @@ describe('an articulation set through the Node facade reaches the sound', () => 
 
     // And the same call twice is bit-identical, so the difference above is the
     // articulation rather than anything free-running in the render.
-    expect([...renderSlur('reed', 'mono-retrigger').audio]).toEqual([...retriggered.audio]);
+    expect([...renderSlur('reed', 'monoRetrigger').audio]).toEqual([...retriggered.audio]);
   });
 
   it('counts an engine that declines to be carried, and counts nothing under poly', () => {
     // A struck string cannot be slurred: its exciter is spent before the second
     // sample. The note still sounds, so the counter is the only evidence.
-    const declined = renderSlur('piano', 'mono-legato');
+    const declined = renderSlur('piano', 'monoLegato');
     expect(declined.fallbacks).toBeGreaterThanOrEqual(1);
     expect(peak(declined.audio)).toBeGreaterThan(0);
 

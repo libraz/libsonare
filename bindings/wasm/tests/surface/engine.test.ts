@@ -804,7 +804,7 @@ describe('instruments and MIDI', () => {
         TypeError,
       );
       expect(() =>
-        engine.bindController(0, { input: 'control-change', index: 2, axis: 3 as never }),
+        engine.bindController(0, { input: 'controlChange', index: 2, axis: 3 as never }),
       ).toThrow(TypeError);
     });
   });

@@ -149,7 +149,7 @@ export interface Sf2ProgramStatus {
  * sets only `engineMode`, every mode sounds except `'sample'`, which has
  * nothing to voice until a {@link SampleBank} is supplied: the engine section
  * is the named preset's when that preset uses the selected engine, otherwise
- * the engine's base preset's (`'fm'` the e-piano's, `'percussion'` the GM drum
+ * the engine's base preset's (`'fm'` the ePiano's, `'percussion'` the GM drum
  * kit, ...). A bare mode therefore follows that preset's bank version. The
  * fields of the section are set through {@link SynthPatch.engineParams} and
  * described by {@link synthEngineParamInfo}.
@@ -158,25 +158,25 @@ export const SYNTH_ENGINE_MODES = [
   'default',
   'subtractive',
   'fm',
-  'karplus-strong',
+  'karplusStrong',
   'modal',
   'additive',
   'percussion',
   'piano',
-  'pipe-organ',
-  'bowed-string',
+  'pipeOrgan',
+  'bowedString',
   'reed',
   'brass',
   'flute',
-  'plucked-string',
+  'pluckedString',
   'vocal',
-  'free-reed',
+  'freeReed',
   'harpsichord',
   'sample',
   'singing',
 ] as const;
 
-export const SAMPLE_LOOP_MODES = ['default', 'none', 'continuous', 'key-down'] as const;
+export const SAMPLE_LOOP_MODES = ['default', 'none', 'continuous', 'keyDown'] as const;
 
 export const SAMPLE_KEY_TRACKS = ['default', 'on', 'off'] as const;
 
@@ -196,10 +196,10 @@ export const SYNTH_OSC_WAVEFORMS = [
 export const SYNTH_FILTER_MODELS = [
   'default',
   'svf',
-  'transistor-ladder',
-  'diode-ladder',
-  'sallen-key',
-  'svf-4-pole',
+  'transistorLadder',
+  'diodeLadder',
+  'sallenKey',
+  'svf4Pole',
 ] as const;
 
 export const SYNTH_FILTER_OUTPUTS = ['default', 'lowpass', 'bandpass', 'highpass'] as const;
@@ -209,49 +209,49 @@ export const SYNTH_BODY_TYPES = [
   'none',
   'guitar',
   'violin',
-  'wood-tube',
-  'brass-bell',
+  'woodTube',
+  'brassBell',
   'vocal',
 ] as const;
 
 export const SYNTH_MOD_SOURCES = [
   'none',
-  'amp-env',
-  'filter-env',
+  'ampEnv',
+  'filterEnv',
   'lfo1',
   'lfo2',
   'velocity',
-  'key-track',
-  'mod-wheel',
+  'keyTrack',
+  'modWheel',
   'random',
   'breath',
   'aftertouch',
-  'expression-cc',
-  'pitch-bend',
+  'expressionCc',
+  'pitchBend',
 ] as const;
 
 export const SYNTH_MOD_DESTINATIONS = [
   'none',
-  'pitch-cents',
-  'cutoff-cents',
-  'amp-gain',
-  'pan-units',
-  'resonance-q',
-  'vibrato-depth-cents',
-  'filter-env-depth',
-  'lfo1-rate-scale',
-  'excitation-force',
-  'excitation-position',
-  'excitation-brightness',
-  'spectrum-morph',
+  'pitchCents',
+  'cutoffCents',
+  'ampGain',
+  'panUnits',
+  'resonanceQ',
+  'vibratoDepthCents',
+  'filterEnvDepth',
+  'lfo1RateScale',
+  'excitationForce',
+  'excitationPosition',
+  'excitationBrightness',
+  'spectrumMorph',
 ] as const;
 
 /** How a device spells a gesture (see {@link ControllerBinding}). */
 export const CONTROLLER_INPUTS = [
-  'control-change',
-  'channel-pressure',
-  'poly-pressure',
-  'pitch-bend',
+  'controlChange',
+  'channelPressure',
+  'polyPressure',
+  'pitchBend',
   'velocity',
 ] as const;
 
@@ -263,17 +263,17 @@ export const CONTROLLER_AXES = [
   'brightness',
   'morph',
   'loudness',
-  'pitch-cents',
-  'vibrato-depth',
+  'pitchCents',
+  'vibratoDepth',
 ] as const;
 
 /**
  * What a channel does with a note-on while another note on that channel is
- * still held. `'mono-legato'` carries the sounding voice and only moves its
+ * still held. `'monoLegato'` carries the sounding voice and only moves its
  * pitch — a wind player's slur — and is deliberately out of reach of any MIDI
  * message: CC126 names a monophonic mode but not this one.
  */
-export const ARTICULATIONS = ['poly', 'mono-retrigger', 'mono-legato'] as const;
+export const ARTICULATIONS = ['poly', 'monoRetrigger', 'monoLegato'] as const;
 
 /**
  * How a part's signal path is built. `'bank'` keeps whatever the instrument's
@@ -424,7 +424,7 @@ export type SynthLfoShape = (typeof SYNTH_LFO_SHAPES)[number];
  * three states. There is no `'default'`: a sample's own loop mode is where the
  * default comes from.
  */
-export type SampleDescLoopMode = 'none' | 'continuous' | 'key-down';
+export type SampleDescLoopMode = 'none' | 'continuous' | 'keyDown';
 
 /**
  * Tuning and looping of one sample, in units relative to that sample
@@ -565,14 +565,14 @@ export type NoteTracking = (typeof NOTE_TRACKINGS)[number];
  *
  * @example
  * ```ts
- * engine.bindController(0, { input: 'control-change', index: 2, axis: 'excitation' });
+ * engine.bindController(0, { input: 'controlChange', index: 2, axis: 'excitation' });
  * ```
  */
 export interface ControllerBinding {
   /** How the device spells the gesture. */
   input: ControllerInput | number;
   /**
-   * CC number 0-127 for `'control-change'`. Every other input is identified by
+   * CC number 0-127 for `'controlChange'`. Every other input is identified by
    * its message status alone and ignores this. Default `0`.
    */
   index?: number;
@@ -614,29 +614,29 @@ export interface SynthModRouting {
    * Destination units at full source deflection, summed onto whatever the
    * patch or a CC already set and then handled per destination:
    *
-   * - `pan-units`: SF2 pan units, clamped to `[-500, 500]` — `1` moves the
+   * - `panUnits`: SF2 pan units, clamped to `[-500, 500]` — `1` moves the
    *   image by about 0.2% of a side.
-   * - `amp-gain` / `filter-env-depth`: multiplicative. Each routing's amount
+   * - `ampGain` / `filterEnvDepth`: multiplicative. Each routing's amount
    *   composes onto a running multiplier that clamps to `[0, 4]`.
-   *   `filter-env-depth` has nothing to scale while the patch's
+   *   `filterEnvDepth` has nothing to scale while the patch's
    *   `envToCutoffCents` is `0` — the filter envelope contributes no cents for
    *   it to multiply.
-   * - `resonance-q`: added to the patch's own Q, then floored at a fixed
+   * - `resonanceQ`: added to the patch's own Q, then floored at a fixed
    *   `0.5` (not at that patch's own Q).
-   * - `lfo1-rate-scale`: multiplicative, clamped to `[1/16, 16]`. Audible only
+   * - `lfo1RateScale`: multiplicative, clamped to `[1/16, 16]`. Audible only
    *   once something else already reads LFO1's output — vibrato depth, the
    *   filter's LFO amount, tremolo — since it retunes LFO1 rather than
-   *   sounding on its own; the bare patch's built-in mod-wheel vibrato is the
+   *   sounding on its own; the bare patch's built-in modWheel vibrato is the
    *   usual path.
-   * - The three `excitation-*` destinations and `spectrum-morph`: an offset in
+   * - The three `excitation*` destinations and `spectrumMorph`: an offset in
    *   the engine's own normalized `[0, 1]` axis units, the same scale the
    *   live-control CCs drive, clamped to `[-1, 1]`. Reach is per engine and not
-   *   uniform across the three: `excitation-force` reaches pipe organ, bowed
-   *   string, reed, brass, flute and free reed; `excitation-position` reaches
-   *   bowed string only; `excitation-brightness` reaches pipe organ, reed,
+   *   uniform across the three: `excitationForce` reaches pipe organ, bowed
+   *   string, reed, brass, flute and free reed; `excitationPosition` reaches
+   *   bowed string only; `excitationBrightness` reaches pipe organ, reed,
    *   brass, flute, free reed and vocal. An engine outside a destination's list
    *   ignores it — its exciter is finished before the second sample renders, or
-   *   it has none. `spectrum-morph` travels between the two spectral tables an
+   *   it has none. `spectrumMorph` travels between the two spectral tables an
    *   additive patch carries; a patch needs an explicit `drawbars_b` distinct
    *   from `drawbars` to have a second table to travel to, and no catalog
    *   preset ships one, so the destination is currently unreachable from a
@@ -675,7 +675,7 @@ export interface SynthModRouting {
  *   `drive`, `hpCutoffHz`, `sampleHoldHz` / `bitDepth`, `stereoSpread`.
  * - every engine and a percussion channel: `gain`, `polyphony`, `busDrive`. On
  *   a percussion channel (a percussion patch voicing a GM kit, as the
- *   `'drum-kit'` preset does) each note runs its per-note kit patch and every
+ *   `'drumKit'` preset does) each note runs its per-note kit patch and every
  *   other field is discarded.
  */
 export interface SynthPatch {
@@ -686,7 +686,7 @@ export interface SynthPatch {
   engineMode?: SynthEngineMode | number;
   /**
    * Fields of the selected engine's own model section, by key (for example
-   * `{ bowForce: 0.6 }` on `'bowed-string'`). {@link synthEngineParamInfo} lists
+   * `{ bowForce: 0.6 }` on `'bowedString'`). {@link synthEngineParamInfo} lists
    * the keys an engine accepts with their ranges, units and defaults. Unlike
    * the wrapper fields, nothing is clamped or ignored: an unknown key, a key of
    * another engine's section, a non-finite value, a fractional value for a
@@ -742,7 +742,7 @@ export interface SynthPatch {
    * 2^(envelope × envToCutoffCents / 1200), so the response moves by exactly
    * that interval wherever the corner sits well below Nyquist; near the top the
    * `svf` moves slightly less and the ladders slightly more. `cutoffHz` is the
-   * −3 dB corner only for `svf` and `svf-4-pole` at `resonanceQ` 0.707: with
+   * −3 dB corner only for `svf` and `svf4Pole` at `resonanceQ` 0.707: with
    * resonance their corner sits above it, and the ladder and Sallen-Key models put their
    * resonant peak on it with the −3 dB point one to three octaves lower, so
    * measure a depth as a ratio of corners rather than against `cutoffHz`.
@@ -816,7 +816,7 @@ export interface SynthPatch {
    * same samples; `'free'` (the built-in patches' choice) varies them per note.
    * State outside the voice is reset by neither: controllers, the bus DC
    * blocker, a piano's shared soundboard, a plucked string's sympathetic halo,
-   * an organ's wind chest and effect tails. The `'drum-kit'` preset's per-note
+   * an organ's wind chest and effect tails. The `'drumKit'` preset's per-note
    * pieces keep their own mode.
    */
   retrigger?: SynthRetrigger | number;

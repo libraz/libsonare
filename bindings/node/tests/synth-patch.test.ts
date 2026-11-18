@@ -131,30 +131,30 @@ describe('NativeSynth preset catalog', () => {
     const names = synthPresetNames();
     for (const expected of [
       'sine',
-      'saw-lead',
-      'warm-pad',
-      'e-piano',
-      'electric-guitar',
+      'sawLead',
+      'warmPad',
+      'ePiano',
+      'electricGuitar',
       'harp',
       'marimba',
       'organ',
-      'drum-kit',
-      'acoustic-piano',
+      'drumKit',
+      'acousticPiano',
     ]) {
       expect(names).toContain(expected);
     }
   });
 
   it('fetches preset patches with canonical enum names', () => {
-    const pad = synthPresetPatch('warm-pad');
-    expect(pad.preset).toBe('warm-pad');
+    const pad = synthPresetPatch('warmPad');
+    expect(pad.preset).toBe('warmPad');
     expect(pad.engineMode).toBe('subtractive');
     expect(pad.waveform).toBe('saw');
     expect(pad.unison).toBe(2);
     expect(pad.stereoSpread).toBeGreaterThan(0);
     // The "va:" routing prefix is accepted.
-    expect(synthPresetPatch('va:e-piano').engineMode).toBe('fm');
-    expect(synthPresetPatch('acoustic-piano').engineMode).toBe('piano');
+    expect(synthPresetPatch('va:ePiano').engineMode).toBe('fm');
+    expect(synthPresetPatch('acousticPiano').engineMode).toBe('piano');
     expect(synthPresetPatch('clarinet').engineMode).toBe('reed');
     expect(() => synthPresetPatch('no-such-preset')).toThrow();
   });
@@ -179,7 +179,7 @@ describe('NativeSynth preset catalog', () => {
       retriggers: [...SYNTH_RETRIGGERS],
       lfoShapes: [...SYNTH_LFO_SHAPES],
       partRigModes: [...PART_RIG_MODES],
-      sampleDescLoopModes: ['none', 'continuous', 'key-down'],
+      sampleDescLoopModes: ['none', 'continuous', 'keyDown'],
     });
 
     for (const [ordinal, name] of SYNTH_ENGINE_MODES.entries()) {
@@ -194,11 +194,10 @@ describe('NativeSynth preset catalog', () => {
       expect(synthPatchRoundTripForTest({ filterModel: name }).filterModel).toBe(name);
       expect(synthPatchRoundTripForTest({ filterModel: ordinal }).filterModel).toBe(name);
     }
-    // The pre-rename spelling is still read, and reads back under the current one.
-    expect(
-      synthPatchRoundTripForTest({ filterModel: 'moog-ladder' } as unknown as SynthPatch)
-        .filterModel,
-    ).toBe('transistor-ladder');
+    // The pre-rename spelling is refused like any other unknown name.
+    expect(() =>
+      synthPatchRoundTripForTest({ filterModel: 'moog-ladder' } as unknown as SynthPatch),
+    ).toThrow(RangeError);
     for (const [ordinal, name] of SYNTH_FILTER_OUTPUTS.entries()) {
       expect(synthPatchRoundTripForTest({ filterOutput: name }).filterOutput).toBe(name);
       expect(synthPatchRoundTripForTest({ filterOutput: ordinal }).filterOutput).toBe(name);
@@ -209,10 +208,10 @@ describe('NativeSynth preset catalog', () => {
     }
     for (const [ordinal, name] of SYNTH_MOD_SOURCES.entries()) {
       const byName = synthPatchRoundTripForTest({
-        modRoutings: [{ source: name, destination: 'pitch-cents', depth: 1 }],
+        modRoutings: [{ source: name, destination: 'pitchCents', depth: 1 }],
       });
       const byOrdinal = synthPatchRoundTripForTest({
-        modRoutings: [{ source: ordinal, destination: 'pitch-cents', depth: 1 }],
+        modRoutings: [{ source: ordinal, destination: 'pitchCents', depth: 1 }],
       });
       expect(byName.modRoutings?.[0]?.source).toBe(name);
       expect(byOrdinal.modRoutings?.[0]?.source).toBe(name);
@@ -241,7 +240,7 @@ describe('NativeSynth preset catalog', () => {
     expect(() => synthPatchRoundTripForTest({ retrigger: SYNTH_RETRIGGERS.length })).toThrow(
       RangeError,
     );
-    expect(synthPresetPatch('saw-lead').retrigger).toBe('free');
+    expect(synthPresetPatch('sawLead').retrigger).toBe('free');
   });
 
   it('round-trips the LFO shape by name and ordinal and refuses unknown values', () => {
@@ -257,7 +256,7 @@ describe('NativeSynth preset catalog', () => {
     expect(() => synthPatchRoundTripForTest({ lfoShape: SYNTH_LFO_SHAPES.length })).toThrow(
       RangeError,
     );
-    expect(synthPresetPatch('saw-lead').lfoShape).toBe('triangle');
+    expect(synthPresetPatch('sawLead').lfoShape).toBe('triangle');
   });
 
   it('reads a null enum field as absent and refuses a wrong type by name', () => {
@@ -291,13 +290,13 @@ describe('Project.bounceWithSynthInstrument', () => {
   it('renders preset patches deterministically', () => {
     const project = buildMidiOnlyProject();
     try {
-      for (const preset of ['va:saw-lead', 'e-piano', 'harp']) {
+      for (const preset of ['va:sawLead', 'ePiano', 'harp']) {
         const audio = bounceSynth(project, preset, { totalFrames: 24000 });
         expect(audio.map((plane) => plane.length)).toEqual([24000, 24000]);
         expect(peak(audio)).toBeGreaterThan(0);
       }
-      const first = bounceSynth(project, 'saw-lead', { totalFrames: 24000 });
-      const second = bounceSynth(project, 'saw-lead', { totalFrames: 24000 });
+      const first = bounceSynth(project, 'sawLead', { totalFrames: 24000 });
+      const second = bounceSynth(project, 'sawLead', { totalFrames: 24000 });
       expect(first).toEqual(second);
     } finally {
       project.destroy();
@@ -307,44 +306,44 @@ describe('Project.bounceWithSynthInstrument', () => {
   it('takes an explicit zero as an override, not as "keep the base"', () => {
     const project = buildMidiOnlyProject();
     try {
-      // warm-pad carries a non-zero stereo spread and bus drive, so turning
+      // warmPad carries a non-zero stereo spread and bus drive, so turning
       // either off is a real edit. Before the patch carried presence bits a
       // zero was indistinguishable from an omitted key and the render was
       // unchanged, which made "no spread" impossible to ask for.
-      const reference = bounceSynth(project, 'warm-pad', { totalFrames: 24000 });
+      const reference = bounceSynth(project, 'warmPad', { totalFrames: 24000 });
       expect(peak(reference)).toBeGreaterThan(0);
 
       const noSpread = bounceSynth(
         project,
-        { preset: 'warm-pad', stereoSpread: 0 },
+        { preset: 'warmPad', stereoSpread: 0 },
         { totalFrames: 24000 },
       );
       expect(noSpread).not.toEqual(reference);
 
       const noDrive = bounceSynth(
         project,
-        { preset: 'warm-pad', busDrive: 0 },
+        { preset: 'warmPad', busDrive: 0 },
         { totalFrames: 24000 },
       );
       expect(noDrive).not.toEqual(reference);
 
       // Omitting the key still keeps the base value.
-      const untouched = bounceSynth(project, { preset: 'warm-pad' }, { totalFrames: 24000 });
+      const untouched = bounceSynth(project, { preset: 'warmPad' }, { totalFrames: 24000 });
       expect(untouched).toEqual(reference);
 
       // An empty routing array clears the base matrix; omitting it keeps it.
       const wobble = bounceSynth(
         project,
         {
-          preset: 'warm-pad',
+          preset: 'warmPad',
           lfoRateHz: 6,
-          modRoutings: [{ source: 'lfo1', destination: 'pitch-cents', depth: 80 }],
+          modRoutings: [{ source: 'lfo1', destination: 'pitchCents', depth: 80 }],
         },
         { totalFrames: 24000 },
       );
       const cleared = bounceSynth(
         project,
-        { preset: 'warm-pad', lfoRateHz: 6, modRoutings: [] },
+        { preset: 'warmPad', lfoRateHz: 6, modRoutings: [] },
         { totalFrames: 24000 },
       );
       expect(cleared).not.toEqual(wobble);
@@ -354,7 +353,7 @@ describe('Project.bounceWithSynthInstrument', () => {
   });
 
   it('sets drift rate, envelope delay and hold and one-shot, and reads them back', () => {
-    const preset = synthPresetPatch('saw-lead');
+    const preset = synthPresetPatch('sawLead');
     expect(preset.driftRateHz).toBeGreaterThan(0);
     for (const key of ['ampDelayMs', 'ampHoldMs', 'filterDelayMs', 'filterHoldMs'] as const) {
       expect(typeof preset[key]).toBe('number');
@@ -370,7 +369,7 @@ describe('Project.bounceWithSynthInstrument', () => {
       // Long enough to pass the note-off, so a one-shot that ignores it differs.
       const frames = { totalFrames: 72000 };
       const base: SynthPatch = {
-        preset: 'saw-lead',
+        preset: 'sawLead',
         driftCents: 40,
         ampDecayMs: 200,
         ampSustain: 0.5,
@@ -406,17 +405,13 @@ describe('Project.bounceWithSynthInstrument', () => {
   it('takes gain: 0 as silence, not the base level', () => {
     const project = buildMidiOnlyProject();
     try {
-      const reference = bounceSynth(project, 'warm-pad', { totalFrames: 24000 });
+      const reference = bounceSynth(project, 'warmPad', { totalFrames: 24000 });
       expect(peak(reference)).toBeGreaterThan(0);
 
-      const silent = bounceSynth(project, { preset: 'warm-pad', gain: 0 }, { totalFrames: 24000 });
+      const silent = bounceSynth(project, { preset: 'warmPad', gain: 0 }, { totalFrames: 24000 });
       expect(peak(silent)).toBe(0);
 
-      const quiet = bounceSynth(
-        project,
-        { preset: 'warm-pad', gain: 0.01 },
-        { totalFrames: 24000 },
-      );
+      const quiet = bounceSynth(project, { preset: 'warmPad', gain: 0.01 }, { totalFrames: 24000 });
       expect(peak(quiet)).toBeGreaterThan(0);
     } finally {
       project.destroy();
@@ -462,7 +457,7 @@ describe('Project.bounceWithSynthInstrument', () => {
       expect(() =>
         bounceSynth(
           project,
-          { modRoutings: [{ source: 'none', destination: 'pitch-cents', depth: 80 }] },
+          { modRoutings: [{ source: 'none', destination: 'pitchCents', depth: 80 }] },
           { totalFrames: 128 },
         ),
       ).toThrow();
@@ -476,7 +471,7 @@ describe('Project.bounceWithSynthInstrument', () => {
       // Not vacuous: a real routing on both ends still passes.
       const audio = bounceSynth(
         project,
-        { modRoutings: [{ source: 'lfo1', destination: 'pitch-cents', depth: 80 }] },
+        { modRoutings: [{ source: 'lfo1', destination: 'pitchCents', depth: 80 }] },
         { totalFrames: 24000 },
       );
       expect(peak(audio)).toBeGreaterThan(0);
@@ -496,7 +491,7 @@ describe('Project.bounceWithSynthInstrument', () => {
         project,
         {
           lfoRateHz: 6,
-          modRoutings: [{ source: 'lfo1', destination: 'pitch-cents', depth: 80 }],
+          modRoutings: [{ source: 'lfo1', destination: 'pitchCents', depth: 80 }],
         },
         { totalFrames: 24000 },
       );
@@ -515,10 +510,10 @@ describe('Project.bounceWithSynthInstrument', () => {
     const project = buildMidiOnlyProject();
     try {
       expect(() =>
-        project.bounceWithSynthInstruments('saw-lead' as never, { totalFrames: 128 }),
+        project.bounceWithSynthInstruments('sawLead' as never, { totalFrames: 128 }),
       ).toThrow(TypeError);
       expect(() =>
-        project.bounceWithSynthInstruments({ preset: 'saw-lead' } as never, { totalFrames: 128 }),
+        project.bounceWithSynthInstruments({ preset: 'sawLead' } as never, { totalFrames: 128 }),
       ).toThrow(TypeError);
     } finally {
       project.destroy();
@@ -529,8 +524,8 @@ describe('Project.bounceWithSynthInstrument', () => {
     const project = buildRepeatedNoteProject();
     try {
       const options = { totalFrames: 48000 * 6 };
-      const note = bounceSynth(project, { preset: 'saw-lead', retrigger: 'note' }, options);
-      const free = bounceSynth(project, { preset: 'saw-lead', retrigger: 'free' }, options);
+      const note = bounceSynth(project, { preset: 'sawLead', retrigger: 'note' }, options);
+      const free = bounceSynth(project, { preset: 'sawLead', retrigger: 'free' }, options);
       expect(peak(note)).toBeGreaterThan(0.01);
       expect(repeatedNoteDiff(note)).toBe(0);
       expect(repeatedNoteDiff(free)).toBeGreaterThan(1e-3);
@@ -539,11 +534,11 @@ describe('Project.bounceWithSynthInstrument', () => {
     }
   });
 
-  it('plays the GM drum map through the drum-kit preset', () => {
+  it('plays the GM drum map through the drumKit preset', () => {
     // Note 38 = acoustic snare in the GM drum map.
     const project = buildMidiOnlyProject(38);
     try {
-      const audio = bounceSynth(project, 'drum-kit', { totalFrames: 24000 });
+      const audio = bounceSynth(project, 'drumKit', { totalFrames: 24000 });
       expect(peak(audio)).toBeGreaterThan(0);
     } finally {
       project.destroy();
@@ -602,7 +597,7 @@ describe('RealtimeEngine.setSynthInstrument', () => {
         commandCapacity: 16,
         telemetryCapacity: 16,
       });
-      engine.setSynthInstrument(7, 'saw-lead');
+      engine.setSynthInstrument(7, 'sawLead');
       engine.pushMidiNoteOn(7, 0, 0, 60, 100);
       const out = engine.process([new Float32Array(128), new Float32Array(128)]);
       let p = 0;
@@ -629,7 +624,7 @@ describe('RealtimeEngine.setSynthInstrument', () => {
         commandCapacity: 16,
         telemetryCapacity: 16,
       });
-      engine.setSynthInstrument(7, { preset: 'warm-pad', gain: 0 });
+      engine.setSynthInstrument(7, { preset: 'warmPad', gain: 0 });
       engine.pushMidiNoteOn(7, 0, 0, 60, 100);
       const out = engine.process([new Float32Array(4096), new Float32Array(4096)]);
       let p = 0;
@@ -663,7 +658,7 @@ describe('RealtimeEngine.setSynthInstrument', () => {
     const renderProgram = (useGmPrograms: boolean, program: number): Float32Array => {
       const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: blockSize });
       try {
-        engine.setSynthInstrument(1, { preset: 'saw-lead', useGmPrograms });
+        engine.setSynthInstrument(1, { preset: 'sawLead', useGmPrograms });
         engine.setMidiClips([
           {
             id: 1,
@@ -705,7 +700,7 @@ describe('RealtimeEngine.setSynthInstrument', () => {
       expect(() =>
         engine.setSynthInstrument(
           7, // @ts-expect-error Runtime validation intentionally covers a wrong JS type.
-          { preset: 'saw-lead', useGmPrograms: 1 },
+          { preset: 'sawLead', useGmPrograms: 1 },
         ),
       ).toThrow(/useGmPrograms/);
     } finally {
@@ -775,12 +770,12 @@ describe('SynthPatch.engineParams', () => {
   });
 
   it('changes a render when an engine field is set', () => {
-    const bare = bounce({ engineMode: 'bowed-string' });
-    const stronger = bounce({ engineMode: 'bowed-string', engineParams: { bowForce: 0.9 } });
+    const bare = bounce({ engineMode: 'bowedString' });
+    const stronger = bounce({ engineMode: 'bowedString', engineParams: { bowForce: 0.9 } });
     expect(peak(stronger)).toBeGreaterThan(0);
     expect(stronger).not.toEqual(bare);
     // The same params through the realtime-free bounce path are deterministic.
-    expect(bounce({ engineMode: 'bowed-string', engineParams: { bowForce: 0.9 } })).toEqual(
+    expect(bounce({ engineMode: 'bowedString', engineParams: { bowForce: 0.9 } })).toEqual(
       stronger,
     );
     // Several bindings each keep their own keys alive.
@@ -790,11 +785,11 @@ describe('SynthPatch.engineParams', () => {
         [
           {
             destinationId: 0,
-            instrument: { engineMode: 'bowed-string', engineParams: { bowForce: 0.9 } },
+            instrument: { engineMode: 'bowedString', engineParams: { bowForce: 0.9 } },
           },
           {
             destinationId: 1,
-            instrument: { engineMode: 'bowed-string', engineParams: { bowForce: 0.2 } },
+            instrument: { engineMode: 'bowedString', engineParams: { bowForce: 0.2 } },
           },
         ],
         { totalFrames: 24000 },
@@ -806,17 +801,17 @@ describe('SynthPatch.engineParams', () => {
   });
 
   it('refuses a bad key or value with a RangeError naming the key', () => {
-    const unknown = rejection({ engineMode: 'bowed-string', engineParams: { noSuchField: 1 } });
+    const unknown = rejection({ engineMode: 'bowedString', engineParams: { noSuchField: 1 } });
     expect(unknown.name).toBe('RangeError');
     expect(unknown.message).toContain('noSuchField');
 
-    const info = synthEngineParamInfo('bowed-string');
+    const info = synthEngineParamInfo('bowedString');
     const otherEngine = synthEngineParamInfo('brass').find(
       (field) => !info.some((own) => own.name === field.name),
     );
     expect(otherEngine).toBeDefined();
     const wrongEngine = rejection({
-      engineMode: 'bowed-string',
+      engineMode: 'bowedString',
       engineParams: { [otherEngine?.name as string]: 0.5 },
     });
     expect(wrongEngine.name).toBe('RangeError');
@@ -825,14 +820,14 @@ describe('SynthPatch.engineParams', () => {
     const bounded = info.find((field) => field.min !== undefined && field.max !== undefined);
     expect(bounded).toBeDefined();
     const outOfRange = rejection({
-      engineMode: 'bowed-string',
+      engineMode: 'bowedString',
       engineParams: { [bounded?.name as string]: (bounded?.max as number) + 1000 },
     });
     expect(outOfRange.name).toBe('RangeError');
     expect(outOfRange.message).toContain(bounded?.name as string);
 
     const nonFinite = rejection({
-      engineMode: 'bowed-string',
+      engineMode: 'bowedString',
       engineParams: { bowForce: Number.NaN },
     });
     expect(nonFinite.name).toBe('RangeError');
@@ -840,30 +835,30 @@ describe('SynthPatch.engineParams', () => {
   });
 
   it('refuses a non-number value by key before the call', () => {
-    const wrongType = { engineMode: 'bowed-string', engineParams: { bowForce: '0.5' } };
+    const wrongType = { engineMode: 'bowedString', engineParams: { bowForce: '0.5' } };
     expect(() => bounce(wrongType as unknown as SynthPatch)).toThrow(/engineParams\.bowForce/);
     expect(() =>
-      bounce({ engineMode: 'bowed-string', engineParams: [1] } as unknown as SynthPatch),
+      bounce({ engineMode: 'bowedString', engineParams: [1] } as unknown as SynthPatch),
     ).toThrow(/engineParams/);
   });
 
   it('is write-only: preset and round-trip reads carry no engineParams', () => {
     expect(synthPresetPatch('violin').engineParams).toBeUndefined();
     const read = synthPatchRoundTripForTest({
-      engineMode: 'bowed-string',
+      engineMode: 'bowedString',
       engineParams: { bowForce: 0.5 },
     });
-    expect(read.engineMode).toBe('bowed-string');
+    expect(read.engineMode).toBe('bowedString');
     expect(read.engineParams).toBeUndefined();
   });
 
   it('binds engineParams on a realtime engine and surfaces a refusal', () => {
     const engine = new RealtimeEngine({ sampleRate: 48000 });
     try {
-      engine.setSynthInstrument(0, { engineMode: 'bowed-string', engineParams: { bowForce: 0.5 } });
+      engine.setSynthInstrument(0, { engineMode: 'bowedString', engineParams: { bowForce: 0.5 } });
       expect(() =>
         engine.setSynthInstrument(0, {
-          engineMode: 'bowed-string',
+          engineMode: 'bowedString',
           engineParams: { noSuchField: 1 },
         }),
       ).toThrow(
@@ -883,9 +878,9 @@ describe('synth parameter descriptors', () => {
     for (const mode of ['default', 'sample'] as const) {
       expect(synthEngineParamInfo(mode)).toEqual([]);
     }
-    const bowed = synthEngineParamInfo('bowed-string');
+    const bowed = synthEngineParamInfo('bowedString');
     // biome-ignore lint/suspicious/noExplicitAny: direct JS callers bypass TypeScript unions.
-    expect(() => synthEngineParamInfo(SYNTH_ENGINE_MODES.indexOf('bowed-string') as any)).toThrow(
+    expect(() => synthEngineParamInfo(SYNTH_ENGINE_MODES.indexOf('bowedString') as any)).toThrow(
       TypeError,
     );
     const force = bowed.find((field) => field.name === 'bowForce');
@@ -916,8 +911,7 @@ describe('synth parameter descriptors', () => {
       ],
     ]);
     expect(
-      synthEngineParamInfo('bowed-string').find((field) => field.name === 'corpusScale')
-        ?.activeWhen,
+      synthEngineParamInfo('bowedString').find((field) => field.name === 'corpusScale')?.activeWhen,
     ).toEqual([
       [
         { key: 'body', scope: 'patch', relation: 'eq', value: 'violin' },

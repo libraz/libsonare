@@ -90,7 +90,7 @@ function renderEngine(engine: any): string {
 
 describe('a synth patch field whose zero keeps the base preset', () => {
   const roundTrip = (key: string, value: number | undefined) => {
-    const patch: Record<string, unknown> = { preset: 'saw-lead' };
+    const patch: Record<string, unknown> = { preset: 'sawLead' };
     if (value !== undefined) {
       patch[key] = value;
     }
@@ -225,7 +225,7 @@ describe('a bounce option whose zero derives the value', () => {
     }
     const project = midiProject([60]);
     try {
-      return digest(project.bounceWithSynthInstruments([{ preset: 'saw-lead' }], options));
+      return digest(project.bounceWithSynthInstruments([{ preset: 'sawLead' }], options));
     } finally {
       project.destroy();
     }

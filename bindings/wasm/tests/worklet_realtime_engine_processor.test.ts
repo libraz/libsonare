@@ -3010,7 +3010,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         ],
       },
       syncSf2Instrument: { type: 'syncSf2Instrument', destinationId: 4, config: { gain: 0.5 } },
-      syncSynthInstrument: { type: 'syncSynthInstrument', destinationId: 4, patch: 'saw-lead' },
+      syncSynthInstrument: { type: 'syncSynthInstrument', destinationId: 4, patch: 'sawLead' },
       syncTempo: {
         type: 'syncTempo',
         bpm: 120,

@@ -906,7 +906,7 @@ describe('RealtimeEngine instruments and MIDI', () => {
 
   it('refuses an ordinal for an articulation and a note-tracking name', () => {
     withEngine((engine) => {
-      engine.setSynthInstrument(3, { engineMode: 'karplus-strong' });
+      engine.setSynthInstrument(3, { engineMode: 'karplusStrong' });
       expect(caught(() => engine.setArticulation(3, 0, 1 as never))).toBeInstanceOf(TypeError);
       expect(caught(() => engine.setControllerNoteTracking(3, 0 as never, 'last'))).toBeInstanceOf(
         TypeError,
@@ -918,7 +918,7 @@ describe('RealtimeEngine instruments and MIDI', () => {
         caught(() => engine.bindController(3, { input: 1 as never, axis: 'excitation' })),
       ).toBeInstanceOf(TypeError);
       expect(
-        caught(() => engine.bindController(3, { input: 'control-change', axis: 2 as never })),
+        caught(() => engine.bindController(3, { input: 'controlChange', axis: 2 as never })),
       ).toBeInstanceOf(TypeError);
     });
   });

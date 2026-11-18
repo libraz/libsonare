@@ -32,7 +32,7 @@ function maxAbsDifference(left: Float32Array, right: Float32Array): number {
 function renderProgram(useGmPrograms: boolean, program: number): Float32Array {
   const engine = new RealtimeEngine({ sampleRate: SAMPLE_RATE, maxBlockSize: BLOCK_SIZE });
   try {
-    engine.setSynthInstrument(0, { preset: 'saw-lead', useGmPrograms });
+    engine.setSynthInstrument(0, { preset: 'sawLead', useGmPrograms });
     engine.pushMidiUmp(0, [midi1Word(0xc, 0, program, 0)]);
     engine.pushMidiNoteOn(0, 0, 0, 60, 100);
     const rendered = new Float32Array(BLOCK_SIZE * BLOCK_COUNT);
@@ -70,7 +70,7 @@ describe('RealtimeEngine NativeSynth GM program routing', () => {
         engine.setSynthInstrument(
           0,
           // @ts-expect-error Runtime validation intentionally covers a wrong JS type.
-          { preset: 'saw-lead', useGmPrograms: 1 },
+          { preset: 'sawLead', useGmPrograms: 1 },
         ),
       ).toThrow(/useGmPrograms/);
     } finally {

@@ -43,14 +43,14 @@ describe('Sonare WASM Module', () => {
     it('describes a NativeSynth continuous parameter', () => {
       const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 256 });
       try {
-        engine.setSynthInstrument(1, 'saw-lead');
+        engine.setSynthInstrument(1, 'sawLead');
         const id = engine.resolveInstrumentAutomationId(1, 'cutoffHz');
         expect(id).toBeGreaterThanOrEqual(0);
         // An unknown name or an unbound destination is a RangeError, never -1.
         expect(() => engine.resolveInstrumentAutomationId(1, 'noSuchParam')).toThrow(RangeError);
         expect(() => engine.resolveInstrumentAutomationId(9, 'cutoffHz')).toThrow(RangeError);
 
-        // Reads the built-in patch default, not whatever 'saw-lead' loaded --
+        // Reads the built-in patch default, not whatever 'sawLead' loaded --
         // the control thread cannot read the audio thread's live patch.
         const info = engine.parameterInfo(id);
         expect(info).toMatchObject({

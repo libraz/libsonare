@@ -746,7 +746,7 @@ describe('Sonare WASM Project', () => {
 
       // A short envelope pinned in all three renders keeps the tail window past the
       // decay stage however the preset's own envelope is voiced.
-      const envelope = { preset: 'warm-pad', ampAttackMs: 20, ampDecayMs: 150 };
+      const envelope = { preset: 'warmPad', ampAttackMs: 20, ampDecayMs: 150 };
       const base = interleaved(
         project.bounceWithSynthInstruments({ instrument: envelope }, options),
       );

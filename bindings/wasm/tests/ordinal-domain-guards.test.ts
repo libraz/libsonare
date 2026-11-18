@@ -193,14 +193,14 @@ describe('a synth patch mod routing refuses an ordinal outside its enum', () => 
     render({ source, destination: 2, depth: 4800 });
 
   it('separates the destinations it is given', () => {
-    // pitch-cents, cutoff-cents, amp-gain, resonance-q and vibrato-depth-cents
+    // pitchCents, cutoffCents, ampGain, resonanceQ and vibratoDepthCents
     // all move the rendered note by a different amount.
     const rendered = [1, 2, 3, 5, 6].map(toDestination);
     expect(new Set(rendered).size).toBe(rendered.length);
   });
 
   it('separates the sources it is given', () => {
-    // amp-env and filter-env are excluded: the two envelopes are identical under
+    // ampEnv and filterEnv are excluded: the two envelopes are identical under
     // this patch's defaults, so they render the same and would read as a failure
     // to distinguish rather than as the degeneracy they are.
     const rendered = [3, 4, 5, 8].map(fromSource);
@@ -219,18 +219,18 @@ describe('a synth patch mod routing refuses an ordinal outside its enum', () => 
     // pins which member each ordinal selected.
     const sources = [
       'none',
-      'amp-env',
-      'filter-env',
+      'ampEnv',
+      'filterEnv',
       'lfo1',
       'lfo2',
       'velocity',
-      'key-track',
-      'mod-wheel',
+      'keyTrack',
+      'modWheel',
       'random',
       'breath',
       'aftertouch',
-      'expression-cc',
-      'pitch-bend',
+      'expressionCc',
+      'pitchBend',
     ];
     // Ordinal 0 is none, which is refused rather than rendered.
     for (let ordinal = 1; ordinal < sources.length; ordinal++) {
@@ -238,18 +238,18 @@ describe('a synth patch mod routing refuses an ordinal outside its enum', () => 
     }
     const destinations = [
       'none',
-      'pitch-cents',
-      'cutoff-cents',
-      'amp-gain',
-      'pan-units',
-      'resonance-q',
-      'vibrato-depth-cents',
-      'filter-env-depth',
-      'lfo1-rate-scale',
-      'excitation-force',
-      'excitation-position',
-      'excitation-brightness',
-      'spectrum-morph',
+      'pitchCents',
+      'cutoffCents',
+      'ampGain',
+      'panUnits',
+      'resonanceQ',
+      'vibratoDepthCents',
+      'filterEnvDepth',
+      'lfo1RateScale',
+      'excitationForce',
+      'excitationPosition',
+      'excitationBrightness',
+      'spectrumMorph',
     ];
     for (let ordinal = 1; ordinal < destinations.length; ordinal++) {
       expect(toDestination(ordinal), `destination ordinal ${ordinal}`).toBe(

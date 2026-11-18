@@ -110,7 +110,7 @@ describe('SampleBank', () => {
       for (const [name, sf2Mode] of [
         ['none', 0],
         ['continuous', 1],
-        ['key-down', 3],
+        ['keyDown', 3],
       ] as const) {
         expect(bank.addSample(pcm, { loopMode: name, loopStart: 0, loopEnd: 512 })).toBeTypeOf(
           'number',
@@ -370,7 +370,7 @@ describe('bouncing a project through a sample patch', () => {
         expect(peak(missingSet)).toBe(0);
 
         // The three enum spellings resolve; a bad one is rejected by name.
-        for (const sampleLoop of ['default', 'none', 'continuous', 'key-down'] as const) {
+        for (const sampleLoop of ['default', 'none', 'continuous', 'keyDown'] as const) {
           const audio = project.bounceWithSynthInstruments(
             {
               instrument: {

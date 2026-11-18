@@ -39,7 +39,7 @@ function renderCcRamp(bindCc2ToExcitation: boolean): Float32Array {
     engine.setSynthInstrument(0, REED_PRESET);
     engine.clearControllerBindings(0);
     if (bindCc2ToExcitation) {
-      engine.bindController(0, { input: 'control-change', index: 2, axis: 'excitation' });
+      engine.bindController(0, { input: 'controlChange', index: 2, axis: 'excitation' });
     }
     engine.pushMidiNoteOn(0, 0, 0, 60, 100);
     const out = new Float32Array(32 * 128);
@@ -61,7 +61,7 @@ describe('Sonare WASM controller profile', () => {
 
   it('lists the controller-profile preset catalog', () => {
     const names = controllerProfileNames();
-    for (const expected of ['gm', 'breath', 'breath-aftertouch', 'mpe']) {
+    for (const expected of ['gm', 'breath', 'breathAftertouch', 'mpe']) {
       expect(names).toContain(expected);
     }
   });
@@ -96,9 +96,9 @@ describe('Sonare WASM controller profile', () => {
       engine.setSynthInstrument(0, REED_PRESET);
       engine.clearControllerBindings(0);
       expect(engine.controllerBindingCount(0)).toBe(0);
-      engine.bindController(0, { input: 'control-change', index: 2, axis: 'excitation' });
+      engine.bindController(0, { input: 'controlChange', index: 2, axis: 'excitation' });
       expect(engine.controllerBindingCount(0)).toBe(1);
-      engine.bindController(0, { input: 'channel-pressure', axis: 'brightness' });
+      engine.bindController(0, { input: 'channelPressure', axis: 'brightness' });
       expect(engine.controllerBindingCount(0)).toBe(2);
       engine.clearControllerBindings(0);
       expect(engine.controllerBindingCount(0)).toBe(0);
@@ -138,7 +138,7 @@ describe('Sonare WASM controller profile', () => {
   it('refuses a binding rather than clamping or substituting it', () => {
     withEngine((engine) => {
       engine.setSynthInstrument(0, REED_PRESET);
-      const base = { input: 'control-change', index: 2, axis: 'excitation' } as const;
+      const base = { input: 'controlChange', index: 2, axis: 'excitation' } as const;
       expect(() =>
         // @ts-expect-error unknown axis name is rejected at runtime
         engine.bindController(0, { ...base, axis: 'resonance' }),
@@ -148,9 +148,7 @@ describe('Sonare WASM controller profile', () => {
         engine.bindController(0, { ...base, input: 'breath' }),
       ).toThrow();
       // Loudness is channel-level state, so a per-note input cannot reach it.
-      expect(() =>
-        engine.bindController(0, { input: 'poly-pressure', axis: 'loudness' }),
-      ).toThrow();
+      expect(() => engine.bindController(0, { input: 'polyPressure', axis: 'loudness' })).toThrow();
       // An axis that means nothing is a caller mistake, not an empty slot.
       expect(() => engine.bindController(0, { ...base, axis: 'none' })).toThrow();
       expect(() => engine.bindController(0, { ...base, hi: Number.POSITIVE_INFINITY })).toThrow();
@@ -169,7 +167,7 @@ describe('Sonare WASM controller profile', () => {
       // @ts-expect-error input is required
       expect(() => engine.bindController(0, { axis: 'excitation' })).toThrow();
       // @ts-expect-error axis is required
-      expect(() => engine.bindController(0, { input: 'control-change' })).toThrow();
+      expect(() => engine.bindController(0, { input: 'controlChange' })).toThrow();
     });
   });
 
@@ -185,7 +183,7 @@ describe('Sonare WASM controller profile', () => {
         expect(() => engine.controllerBindingCount(0)).toThrow();
         expect(() => engine.setControllerProfile(0, 'gm')).toThrow();
         expect(() =>
-          engine.bindController(0, { input: 'control-change', index: 2, axis: 'excitation' }),
+          engine.bindController(0, { input: 'controlChange', index: 2, axis: 'excitation' }),
         ).toThrow();
         expect(() => engine.clearControllerBindings(0)).toThrow();
         expect(() => engine.setControllerVelocityMeaningful(0, true)).toThrow();
@@ -210,7 +208,7 @@ describe('Sonare WASM controller profile', () => {
       expect(message(() => engine.setControllerProfile(3, 'gm'))).not.toBe('');
       expect(
         message(() =>
-          engine.bindController(0, { input: 'control-change', index: 256, axis: 'excitation' }),
+          engine.bindController(0, { input: 'controlChange', index: 256, axis: 'excitation' }),
         ),
       ).not.toBe('');
       expect(message(() => engine.setControllerProfile(0, 'no-such-profile'))).toContain(

@@ -49,7 +49,7 @@ const FAMILIES: Family[] = [
     name: 'bounceWithSynthInstruments',
     call: (p, v) => planes(p.bounceWithSynthInstruments(v as never, OPTIONS)),
     binding: { destinationId: 0, instrument: {} },
-    other: { destinationId: 0, instrument: { preset: 'saw-lead' } },
+    other: { destinationId: 0, instrument: { preset: 'sawLead' } },
   },
   {
     name: 'bounceWithSf2Instruments',

@@ -22,8 +22,8 @@ export function projectAbiVersion(): number | undefined {
 }
 
 /**
- * NativeSynth preset catalog names (`'sine'`, `'saw-lead'`, `'e-piano'`,
- * `'drum-kit'`, ...). Use these to discover valid {@link SynthPatch} preset
+ * NativeSynth preset catalog names (`'sine'`, `'sawLead'`, `'ePiano'`,
+ * `'drumKit'`, ...). Use these to discover valid {@link SynthPatch} preset
  * names instead of hardcoding magic strings.
  */
 export function synthPresetNames(): string[] {
@@ -88,7 +88,7 @@ export function synthGsVariationIsVoicedApart(bank: number, program: number): bo
 }
 
 /**
- * Controller-profile preset names (`'gm'`, `'breath'`, `'breath-aftertouch'`,
+ * Controller-profile preset names (`'gm'`, `'breath'`, `'breathAftertouch'`,
  * `'mpe'`). These are the names {@link RealtimeEngine.setControllerProfile}
  * accepts; an unknown one throws rather than resolving to a default.
  */

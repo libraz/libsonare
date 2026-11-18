@@ -133,7 +133,7 @@ describe('Sonare WASM sample bank', () => {
       expectRangeRefusal(() => bank.addSample(pcm, { loopMode: 'sometimes' as unknown as number }));
       expectRangeRefusal(() => bank.addSample(pcm, { loopMode: 'default' as unknown as number }));
       expect(bank.addSample(pcm, { loopMode: 3 })).toBe(1);
-      expect(bank.addSample(pcm, { loopMode: 'key-down' })).toBe(2);
+      expect(bank.addSample(pcm, { loopMode: 'keyDown' })).toBe(2);
       expect(bank.sampleCount()).toBe(3);
 
       expectCoreRefusal(() => bank.addZone({ sampleIndex: 9 }));

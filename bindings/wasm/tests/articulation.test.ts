@@ -86,7 +86,7 @@ describe('Sonare WASM articulation', () => {
   it('exposes the articulation enum table', () => {
     const tables = synthEnumTables();
     expect(tables.articulations).toEqual([...ARTICULATIONS]);
-    expect(tables.articulations).toEqual(['poly', 'mono-retrigger', 'mono-legato']);
+    expect(tables.articulations).toEqual(['poly', 'monoRetrigger', 'monoLegato']);
   });
 
   it('round-trips per channel', () => {
@@ -94,16 +94,16 @@ describe('Sonare WASM articulation', () => {
       engine.setSynthInstrument(0, { engineMode: 'reed' });
       expect(engine.articulation(0, 0)).toBe('poly');
 
-      engine.setArticulation(0, 0, 'mono-legato');
-      expect(engine.articulation(0, 0)).toBe('mono-legato');
+      engine.setArticulation(0, 0, 'monoLegato');
+      expect(engine.articulation(0, 0)).toBe('monoLegato');
 
       // A second channel is untouched by the first, so the mode is per channel
       // rather than per instrument — a host slurring one part must not slur the
       // rest of the rack.
       expect(engine.articulation(0, 1)).toBe('poly');
-      engine.setArticulation(0, 1, 'mono-retrigger');
-      expect(engine.articulation(0, 1)).toBe('mono-retrigger');
-      expect(engine.articulation(0, 0)).toBe('mono-legato');
+      engine.setArticulation(0, 1, 'monoRetrigger');
+      expect(engine.articulation(0, 1)).toBe('monoRetrigger');
+      expect(engine.articulation(0, 0)).toBe('monoLegato');
 
       // An ordinal is not a spelling of the enum: it is a TypeError.
       expect(() => engine.setArticulation(0, 2, 2 as never)).toThrow(TypeError);
@@ -119,7 +119,7 @@ describe('Sonare WASM articulation', () => {
     withEngine((engine) => {
       engine.setSynthInstrument(0, { engineMode: 'reed' });
       // An ordinal is refused rather than clamped or substituted: poly
-      // substituted for a misspelled mono-legato plays every note and slurs
+      // substituted for a misspelled monoLegato plays every note and slurs
       // none of them, which the caller cannot tell from a request that took.
       expect(() => engine.setArticulation(0, 0, ARTICULATIONS.length as never)).toThrow(TypeError);
       expect(() => engine.setArticulation(0, 0, -1 as never)).toThrow(TypeError);
@@ -140,7 +140,7 @@ describe('Sonare WASM articulation', () => {
     // the message is what a host has to read, and each entry has to name the
     // same cause as its two siblings.
     const entries: Array<[string, (engine: RealtimeEngine) => unknown]> = [
-      ['setArticulation', (engine) => engine.setArticulation(5, 0, 'mono-legato')],
+      ['setArticulation', (engine) => engine.setArticulation(5, 0, 'monoLegato')],
       ['articulation', (engine) => engine.articulation(5, 0)],
       ['legatoFallbackCount', (engine) => engine.legatoFallbackCount(5)],
     ];
@@ -163,8 +163,8 @@ describe('Sonare WASM articulation', () => {
   });
 
   it('renders a slur differently from a retrigger', () => {
-    const slurred = renderSlur('reed', 'mono-legato');
-    const retriggered = renderSlur('reed', 'mono-retrigger');
+    const slurred = renderSlur('reed', 'monoLegato');
+    const retriggered = renderSlur('reed', 'monoRetrigger');
 
     // The renders carry energy, so "they differ" is not two kinds of silence.
     expect(peak(retriggered.audio)).toBeGreaterThan(0);
@@ -181,13 +181,13 @@ describe('Sonare WASM articulation', () => {
 
     // And the same call twice is bit-identical, so the difference above is the
     // articulation rather than anything free-running in the render.
-    expect(renderSlur('reed', 'mono-retrigger').audio).toEqual(retriggered.audio);
+    expect(renderSlur('reed', 'monoRetrigger').audio).toEqual(retriggered.audio);
   });
 
   it('counts an engine that declines to be carried', () => {
     // A struck string cannot be slurred: its exciter is spent before the second
     // sample. The note still sounds, so the counter is the only evidence.
-    const declined = renderSlur('piano', 'mono-legato');
+    const declined = renderSlur('piano', 'monoLegato');
     expect(declined.fallbacks).toBeGreaterThanOrEqual(1);
     expect(peak(declined.audio)).toBeGreaterThan(0);
 

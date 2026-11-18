@@ -121,7 +121,7 @@ export interface Sf2InstrumentConfig {
  * Selecting a mode blanks every engine section but its own. Every mode but
  * `'sample'` voices from an otherwise default patch: the engine section is the
  * named preset's when the preset uses the selected engine, else the engine's
- * base preset's, so a bare `'fm'` sounds the e-piano's operators and the bare
+ * base preset's, so a bare `'fm'` sounds the ePiano's operators and the bare
  * `'percussion'` is the GM drum kit. `'sample'` renders silence until a bank is
  * supplied through {@link SynthPatch.sampleBank}. Set the selected engine's own
  * fields with {@link SynthPatch.engineParams}; {@link synthEngineParamInfo}
@@ -131,25 +131,25 @@ export const SYNTH_ENGINE_MODES = [
   'default',
   'subtractive',
   'fm',
-  'karplus-strong',
+  'karplusStrong',
   'modal',
   'additive',
   'percussion',
   'piano',
-  'pipe-organ',
-  'bowed-string',
+  'pipeOrgan',
+  'bowedString',
   'reed',
   'brass',
   'flute',
-  'plucked-string',
+  'pluckedString',
   'vocal',
-  'free-reed',
+  'freeReed',
   'harpsichord',
   'sample',
   'singing',
 ] as const;
 
-export const SAMPLE_LOOP_MODES = ['default', 'none', 'continuous', 'key-down'] as const;
+export const SAMPLE_LOOP_MODES = ['default', 'none', 'continuous', 'keyDown'] as const;
 
 export const SAMPLE_KEY_TRACKS = ['default', 'on', 'off'] as const;
 
@@ -169,10 +169,10 @@ export const SYNTH_OSC_WAVEFORMS = [
 export const SYNTH_FILTER_MODELS = [
   'default',
   'svf',
-  'transistor-ladder',
-  'diode-ladder',
-  'sallen-key',
-  'svf-4-pole',
+  'transistorLadder',
+  'diodeLadder',
+  'sallenKey',
+  'svf4Pole',
 ] as const;
 
 export const SYNTH_FILTER_OUTPUTS = ['default', 'lowpass', 'bandpass', 'highpass'] as const;
@@ -182,48 +182,48 @@ export const SYNTH_BODY_TYPES = [
   'none',
   'guitar',
   'violin',
-  'wood-tube',
-  'brass-bell',
+  'woodTube',
+  'brassBell',
   'vocal',
 ] as const;
 
 export const SYNTH_MOD_SOURCES = [
   'none',
-  'amp-env',
-  'filter-env',
+  'ampEnv',
+  'filterEnv',
   'lfo1',
   'lfo2',
   'velocity',
-  'key-track',
-  'mod-wheel',
+  'keyTrack',
+  'modWheel',
   'random',
   'breath',
   'aftertouch',
-  'expression-cc',
-  'pitch-bend',
+  'expressionCc',
+  'pitchBend',
 ] as const;
 
 export const SYNTH_MOD_DESTINATIONS = [
   'none',
-  'pitch-cents',
-  'cutoff-cents',
-  'amp-gain',
-  'pan-units',
-  'resonance-q',
-  'vibrato-depth-cents',
-  'filter-env-depth',
-  'lfo1-rate-scale',
-  'excitation-force',
-  'excitation-position',
-  'excitation-brightness',
-  'spectrum-morph',
+  'pitchCents',
+  'cutoffCents',
+  'ampGain',
+  'panUnits',
+  'resonanceQ',
+  'vibratoDepthCents',
+  'filterEnvDepth',
+  'lfo1RateScale',
+  'excitationForce',
+  'excitationPosition',
+  'excitationBrightness',
+  'spectrumMorph',
 ] as const;
 
 export const CONTROLLER_INPUTS = [
-  'control-change',
-  'channel-pressure',
-  'poly-pressure',
-  'pitch-bend',
+  'controlChange',
+  'channelPressure',
+  'polyPressure',
+  'pitchBend',
   'velocity',
 ] as const;
 
@@ -234,11 +234,11 @@ export const CONTROLLER_AXES = [
   'brightness',
   'morph',
   'loudness',
-  'pitch-cents',
-  'vibrato-depth',
+  'pitchCents',
+  'vibratoDepth',
 ] as const;
 
-export const ARTICULATIONS = ['poly', 'mono-retrigger', 'mono-legato'] as const;
+export const ARTICULATIONS = ['poly', 'monoRetrigger', 'monoLegato'] as const;
 
 /** How a part's rig is chosen: the instrument's own bank rig, no rig, or an explicit insert chain. */
 export const PART_RIG_MODES = ['bank', 'none', 'chain'] as const;
@@ -302,7 +302,7 @@ export type SynthBodyType = (typeof SYNTH_BODY_TYPES)[number];
  * `'default'` keeps whatever the bank recorded for that sample.
  *
  * The NUMBERS here are not the ones {@link SampleDescLoopMode} uses. This is
- * the patch's own scale, `0` default / `1` none / `2` continuous / `3` key-down;
+ * the patch's own scale, `0` default / `1` none / `2` continuous / `3` keyDown;
  * the sample's own loop mode is SoundFont `sampleModes`, where continuous is
  * `1` and there is no default. Use the names on both and the two cannot be
  * confused; a number read for the wrong one turns "continuous" into "no loop".
@@ -344,7 +344,7 @@ export type SynthLfoShape = (typeof SYNTH_LFO_SHAPES)[number];
  * Prefer the names — a number read for the wrong scale turns "continuous" into
  * "no loop" silently.
  */
-export type SampleDescLoopMode = 'none' | 'continuous' | 'key-down';
+export type SampleDescLoopMode = 'none' | 'continuous' | 'keyDown';
 
 /**
  * Tuning and looping of one sample, in units relative to that sample
@@ -431,29 +431,29 @@ export interface SynthModRouting {
    * Destination units at full source deflection, summed onto whatever the
    * patch or a CC already set and then handled per destination:
    *
-   * - `pan-units`: SF2 pan units, clamped to `[-500, 500]` — `1` moves the
+   * - `panUnits`: SF2 pan units, clamped to `[-500, 500]` — `1` moves the
    *   image by about 0.2% of a side.
-   * - `amp-gain` / `filter-env-depth`: multiplicative. Each routing's amount
+   * - `ampGain` / `filterEnvDepth`: multiplicative. Each routing's amount
    *   composes onto a running multiplier that clamps to `[0, 4]`.
-   *   `filter-env-depth` has nothing to scale while the patch's
+   *   `filterEnvDepth` has nothing to scale while the patch's
    *   `envToCutoffCents` is `0` — the filter envelope contributes no cents for
    *   it to multiply.
-   * - `resonance-q`: added to the patch's own Q, then floored at a fixed
+   * - `resonanceQ`: added to the patch's own Q, then floored at a fixed
    *   `0.5` (not at that patch's own Q).
-   * - `lfo1-rate-scale`: multiplicative, clamped to `[1/16, 16]`. Audible only
+   * - `lfo1RateScale`: multiplicative, clamped to `[1/16, 16]`. Audible only
    *   once something else already reads LFO1's output — vibrato depth, the
    *   filter's LFO amount, tremolo — since it retunes LFO1 rather than
-   *   sounding on its own; the bare patch's built-in mod-wheel vibrato is the
+   *   sounding on its own; the bare patch's built-in modWheel vibrato is the
    *   usual path.
-   * - The three `excitation-*` destinations and `spectrum-morph`: an offset in
+   * - The three `excitation*` destinations and `spectrumMorph`: an offset in
    *   the engine's own normalized `[0, 1]` axis units, the same scale the
    *   live-control CCs drive, clamped to `[-1, 1]`. Reach is per engine and not
-   *   uniform across the three: `excitation-force` reaches pipe organ, bowed
-   *   string, reed, brass, flute and free reed; `excitation-position` reaches
-   *   bowed string only; `excitation-brightness` reaches pipe organ, reed,
+   *   uniform across the three: `excitationForce` reaches pipe organ, bowed
+   *   string, reed, brass, flute and free reed; `excitationPosition` reaches
+   *   bowed string only; `excitationBrightness` reaches pipe organ, reed,
    *   brass, flute, free reed and vocal. An engine outside a destination's list
    *   ignores it — its exciter is finished before the second sample renders, or
-   *   it has none. `spectrum-morph` travels between the two spectral tables an
+   *   it has none. `spectrumMorph` travels between the two spectral tables an
    *   additive patch carries; a patch needs an explicit `drawbars_b` distinct
    *   from `drawbars` to have a second table to travel to, and no catalog
    *   preset ships one, so the destination is currently unreachable from a
@@ -481,21 +481,21 @@ export type ControllerAxis = (typeof CONTROLLER_AXES)[number];
  *
  * `lo` / `hi` are the axis value at zero and at full deflection, in the axis's
  * own unit: normalized `[0, 1]` for the excitation axes and `loudness`, cents
- * for `pitch-cents` and `vibrato-depth`. `lo > hi` inverts the gesture. `curve`
+ * for `pitchCents` and `vibratoDepth`. `lo > hi` inverts the gesture. `curve`
  * is the exponent applied to the normalized input before that range maps it;
  * keep the default `1` unless the device sends an unshaped gesture, since a
  * wind controller has already applied the curve its player chose.
  *
  * `axis: 'none'` is refused rather than treated as an empty slot, and a
- * `poly-pressure` binding may only name one of the four excitation axes —
- * `loudness`, `pitch-cents` and `vibrato-depth` are channel-level state, so a
+ * `polyPressure` binding may only name one of the four excitation axes —
+ * `loudness`, `pitchCents` and `vibratoDepth` are channel-level state, so a
  * per-note value applied channel-wide would look to the caller like a binding
  * that took.
  */
 export interface ControllerBinding {
   /** Gesture the device sends (name or C ordinal). */
   input: ControllerInput | number;
-  /** CC number 0..127 for `'control-change'`; every other input ignores it. */
+  /** CC number 0..127 for `'controlChange'`; every other input ignores it. */
   index?: number;
   /** Expression axis the gesture means (name or C ordinal). */
   axis: ControllerAxis | number;
@@ -512,16 +512,16 @@ export interface ControllerBinding {
  * on that channel is still held, for {@link RealtimeEngine.setArticulation}.
  *
  * - `'poly'` — every note-on takes its own voice.
- * - `'mono-retrigger'` — one note at a time; a new note-on stops the previous
+ * - `'monoRetrigger'` — one note at a time; a new note-on stops the previous
  *   note and starts over. This is what GS MONO MODE and CC126 mean, and it is
  *   all they can reach.
- * - `'mono-legato'` — one note at a time, carried: a new note-on re-tunes the
+ * - `'monoLegato'` — one note at a time, carried: a new note-on re-tunes the
  *   sounding voice instead of starting one, so the exciter and the amplitude
  *   envelope never restart. This is a wind player's slur, and no MIDI message
  *   reaches it by design — reading CC126 as this one would change what a
  *   spec-compliant GS file sounds like.
  *
- * `'mono-legato'` is a request, not a guarantee: an engine whose exciter is
+ * `'monoLegato'` is a request, not a guarantee: an engine whose exciter is
  * spent at the onset — anything struck or plucked — and a target pitch below
  * what the engine's delay line holds both fall back to an ordinary note, which
  * {@link RealtimeEngine.legatoFallbackCount} counts.
@@ -560,7 +560,7 @@ export type NoteTracking = (typeof NOTE_TRACKINGS)[number];
  *   `drive`, `hpCutoffHz`, `sampleHoldHz` / `bitDepth`, `stereoSpread`.
  * - every engine and a percussion channel: `gain`, `polyphony`, `busDrive`. On
  *   a percussion channel (a percussion patch voicing a GM kit, as the
- *   `'drum-kit'` preset does) each note runs its per-note kit patch and every
+ *   `'drumKit'` preset does) each note runs its per-note kit patch and every
  *   other field is discarded.
  */
 export interface SynthPatch {
@@ -643,7 +643,7 @@ export interface SynthPatch {
    * 2^(envelope × envToCutoffCents / 1200), so the response moves by exactly
    * that interval wherever the corner sits well below Nyquist; near the top the
    * `svf` moves slightly less and the ladders slightly more. `cutoffHz` is the
-   * −3 dB corner only for `svf` and `svf-4-pole` at `resonanceQ` 0.707: with
+   * −3 dB corner only for `svf` and `svf4Pole` at `resonanceQ` 0.707: with
    * resonance their corner sits above it, and the ladder and Sallen-Key models put their
    * resonant peak on it with the −3 dB point one to three octaves lower, so
    * measure a depth as a ratio of corners rather than against `cutoffHz`.
@@ -720,7 +720,7 @@ export interface SynthPatch {
    * same samples; `'free'` (the built-in patches' choice) varies them per note.
    * State outside the voice is reset by neither: controllers, the bus DC
    * blocker, a piano's shared soundboard, a plucked string's sympathetic halo,
-   * an organ's wind chest and effect tails. The `'drum-kit'` preset's per-note
+   * an organ's wind chest and effect tails. The `'drumKit'` preset's per-note
    * pieces keep their own mode.
    */
   retrigger?: SynthRetrigger | number;

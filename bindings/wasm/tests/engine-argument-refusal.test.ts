@@ -79,7 +79,7 @@ describe('RealtimeEngine value refusals are RangeErrors', () => {
       engine.setTrackLanes([{ trackId: 10 }]);
       const patch = thrown(() =>
         engine.setSynthInstrument(8, {
-          engineMode: 'bowed-string',
+          engineMode: 'bowedString',
           engineParams: { noSuchKey: 1 },
         }),
       );
@@ -100,11 +100,11 @@ describe('RealtimeEngine value refusals are RangeErrors', () => {
       expectRefusalOf(() => engine.setPartRig({ destinationId: 0, part: 0, mode: 'none' }));
       engine.setSynthInstrument(0, 'clarinet');
       expectRefusalOf(() =>
-        engine.bindController(0, { input: 'control-change', index: 2, axis: 'none' }),
+        engine.bindController(0, { input: 'controlChange', index: 2, axis: 'none' }),
       );
       // The control: the same binding with an axis is accepted.
       expect(() =>
-        engine.bindController(0, { input: 'control-change', index: 2, axis: 'excitation' }),
+        engine.bindController(0, { input: 'controlChange', index: 2, axis: 'excitation' }),
       ).not.toThrow();
     });
   });

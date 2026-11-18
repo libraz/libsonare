@@ -62,7 +62,7 @@ const FAMILIES: Family[] = [
     method: 'bounceWithSynthInstruments',
     run: (p, v) => p.bounceWithSynthInstruments(v as never, OPTIONS),
     instrument: {},
-    other: { preset: 'saw-lead' },
+    other: { preset: 'sawLead' },
   },
   {
     method: 'bounceWithSf2Instruments',

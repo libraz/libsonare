@@ -15,7 +15,7 @@ import { controllerProfileNames, RealtimeEngine, synthEnumTables } from '../src/
 
 describe('controller profile catalog', () => {
   it('lists the profile presets the core ships', () => {
-    expect(controllerProfileNames()).toEqual(['gm', 'breath', 'breath-aftertouch', 'mpe']);
+    expect(controllerProfileNames()).toEqual(['gm', 'breath', 'breathAftertouch', 'mpe']);
   });
 
   it('exposes every controller enumerator the C ABI declares', () => {
@@ -41,14 +41,14 @@ describe('RealtimeEngine controller bindings', () => {
   it('refuses an unknown axis name rather than resolving it to none', () => {
     const engine = reedEngine();
     expect(() =>
-      engine.bindController(0, { input: 'control-change', index: 2, axis: 'excitement' as never }),
+      engine.bindController(0, { input: 'controlChange', index: 2, axis: 'excitement' as never }),
     ).toThrow(/Unknown controller axis name/);
     engine.destroy();
   });
 
-  it('refuses a poly-pressure binding on a channel-level axis', () => {
+  it('refuses a polyPressure binding on a channel-level axis', () => {
     const engine = reedEngine();
-    expect(() => engine.bindController(0, { input: 'poly-pressure', axis: 'loudness' })).toThrow();
+    expect(() => engine.bindController(0, { input: 'polyPressure', axis: 'loudness' })).toThrow();
     engine.destroy();
   });
 
@@ -56,7 +56,7 @@ describe('RealtimeEngine controller bindings', () => {
     const engine = reedEngine();
     expect(() =>
       engine.bindController(0, {
-        input: 'control-change',
+        input: 'controlChange',
         index: 2,
         axis: 'excitation',
         hi: Number.POSITIVE_INFINITY,
@@ -68,7 +68,7 @@ describe('RealtimeEngine controller bindings', () => {
   it('counts a bound gesture and drops every binding on clear', () => {
     const engine = reedEngine();
     const before = engine.controllerBindingCount(0);
-    engine.bindController(0, { input: 'channel-pressure', axis: 'excitation' });
+    engine.bindController(0, { input: 'channelPressure', axis: 'excitation' });
     expect(engine.controllerBindingCount(0)).toBe(before + 1);
     engine.clearControllerBindings(0);
     expect(engine.controllerBindingCount(0)).toBe(0);
@@ -131,7 +131,7 @@ describe('RealtimeEngine controller bindings reach the audio', () => {
     // them is the one binding under test rather than the gm default's three.
     engine.clearControllerBindings(0);
     if (bindBreath) {
-      engine.bindController(0, { input: 'control-change', index: 2, axis: 'excitation' });
+      engine.bindController(0, { input: 'controlChange', index: 2, axis: 'excitation' });
     }
     engine.play();
     engine.pushMidiNoteOn(0, 0, 0, 60, 100);

@@ -753,7 +753,7 @@ export class RealtimeEngine {
    * Longest audible tail after the last input, in samples: an upper bound made
    * of the longest instrument tail plus the longest route through lane strips
    * (channel delay included), buses, sends, the graph and the master strip.
-   * An instrument lane whose patch is not known yet (a drum-kit lane or a General
+   * An instrument lane whose patch is not known yet (a drumKit lane or a General
    * MIDI program lane before any note sounds) contributes a conservative
    * worst-case bound that narrows once a patch has sounded.
    * `2147483647` means the tail is unbounded. Control-thread only: must not be
@@ -2099,8 +2099,8 @@ export class RealtimeEngine {
 
   /**
    * Bind the patch-driven NativeSynth to a realtime MIDI destination. `patch`
-   * is a {@link SynthPatch} or a preset-name string (`'saw-lead'` /
-   * `'va:saw-lead'`; see {@link synthPresetNames}), resolving exactly like
+   * is a {@link SynthPatch} or a preset-name string (`'sawLead'` /
+   * `'va:sawLead'`; see {@link synthPresetNames}), resolving exactly like
    * {@link Project.bounceWithSynthInstrument}. Live note/CC commands and
    * scheduled MIDI clips routed to that destination render through the synth.
    * Unknown preset names throw.
@@ -2185,7 +2185,7 @@ export class RealtimeEngine {
   /**
    * Add one {@link ControllerBinding} on top of the destination instrument's
    * current profile. Throws a `RangeError` when the axis is `'none'`, when a
-   * `poly-pressure` binding names a channel-level axis, or when the range or curve
+   * `polyPressure` binding names a channel-level axis, or when the range or curve
    * is not finite, and an `InvalidState` `SonareError` when the table is full.
    */
   bindController(destinationId: number, binding: ControllerBinding): void {
@@ -2319,7 +2319,7 @@ export class RealtimeEngine {
   }
 
   /**
-   * How many times a `'mono-legato'` continuation was asked for and refused, so
+   * How many times a `'monoLegato'` continuation was asked for and refused, so
    * the note started a voice of its own instead. Counted rather than inferred:
    * a refusal sounds like an ordinary note, so nothing in the audio separates
    * "this engine declines legato" from "the mode was never set". Saturates at
@@ -2681,7 +2681,7 @@ export class RealtimeEngine {
    * program under its own RX PROGRAM CHANGE / RX BANK SELECT gates; a
    * NativeSynth bound with `useGmPrograms: true` (`setSynthInstrument`)
    * resolves each channel's voice from the bank and program; a NativeSynth
-   * whose patch plays the GM kit (the `drum-kit` preset, or a percussion patch
+   * whose patch plays the GM kit (the `drumKit` preset, or a percussion patch
    * with `gmKit` on) takes the program as the GS drum-set select on every
    * channel. Every other receiver accepts the message and ignores it: the
    * built-in synth, any other NativeSynth patch, a part with RX PROGRAM CHANGE
