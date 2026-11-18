@@ -1,6 +1,6 @@
 .PHONY: all build fixtures release install test-install test test-cxx test-voicematch test-audition-e2e test-slow test-golden test-optional-fixtures test-librosa-live clean rebuild format format-check lint wasm coverage \
        coverage-build coverage-clean build-shared build-node build-wasm-binding \
-       test-python test-python-slow test-node test-wasm parity conformance test-gm-cross-surface test-mix-assistant-cross-surface abi-layout abi-layout-check check-abi-version \
+       test-python test-python-slow test-node test-wasm parity conformance conformance-checks test-gm-cross-surface test-mix-assistant-cross-surface abi-layout abi-layout-check check-abi-version \
        capability-catalog capability-catalog-check processor-types processor-types-check ci-local \
        build-bank-shared build-head-shared baseline bank-versions bank-versions-check \
        surface-coverage surface-coverage-check surface-check upgrade-notes \
@@ -690,10 +690,21 @@ build-feature-matrix:
 	fi; \
 	exit $$rc
 
+# `conformance` and `parity` run every check to the end and fail once, at the
+# summary, so a failing check never hides the report of a later one. The list is
+# named by this make's pid (the parent of `$(shell)`), so concurrent runs keep apart.
+CHECK_FAILURES := $(BUILD_DIR)/.check-failures-$(shell echo $$PPID)
+CHECK = @run() { echo "$$*"; "$$@" || echo "$$*" >> "$(CHECK_FAILURES)"; }; run
+CHECK_REPORT = @if test -s "$(CHECK_FAILURES)"; then \
+	  echo; echo "checks that failed:"; sed 's/^/  /' "$(CHECK_FAILURES)"; \
+	  rm -f "$(CHECK_FAILURES)"; exit 1; \
+	fi; rm -f "$(CHECK_FAILURES)"
+
 # Cross-binding parity gate (C API is canonical). Stdlib-only, no build needed:
 # it reads the binding sources directly and exits non-zero on active drift.
-parity: conformance
-	python3 tools/parity/check_parity.py
+parity: conformance-checks
+	$(CHECK) python3 tools/parity/check_parity.py
+	$(CHECK_REPORT)
 
 # Tracked per-runtime capability matrix, derived from the same reachability
 # decision the parity checker makes. The check variant leaves the worktree
@@ -883,88 +894,95 @@ gs-efx-coverage: gs-efx-archive-set
 # Makefile for lint, so the ruff target, the clang-format pathspec and every
 # pinned tool version each live in three files at once; widening one and not the
 # others leaves the gate that runs on a push as narrow as it was, and green.
-conformance:
-	python3 -m unittest tests/conformance/test_measure_accuracy_matching.py tests/conformance/test_size_and_report_tolerances.py
-	python3 tools/conformance/check_public_contracts.py
-	python3 tools/api/check_request_object_coverage.py
-	python3 tools/conformance/check_cli_contract.py --schema
-	python3 tools/conformance/check_repair_cli_param_keys.py
-	python3 tools/conformance/check_lint_scope.py
-	python3 -m unittest tests/conformance/test_cli_contract.py tests/conformance/test_cli_artifact_defaults.py
-	python3 -m unittest tests/conformance/test_playback_cli.py
-	python3 -m unittest tests/conformance/test_wasm_exception_scope.py
-	python3 -m unittest tests/conformance/test_wasm_feature_gate_scope.py
-	python3 -m unittest tests/conformance/test_capability_feature_gates.py
-	python3 -m unittest tests/conformance/test_binding_warning_flags.py
-	python3 tests/conformance/check_wasm_narrowing_scope.py
-	python3 -m unittest tests/conformance/test_wasm_narrowing_scope.py tests/conformance/test_wasm_pointer_return_scope.py
-	python3 tests/conformance/check_python_narrowing_scope.py
-	python3 -m unittest tests/conformance/test_python_narrowing_scope.py
-	python3 tests/conformance/check_public_integer_domains.py
-	python3 -m unittest tests/conformance/test_public_integer_domains.py
-	python3 tests/conformance/check_zero_sentinel_filter.py
-	python3 -m unittest tests/conformance/test_zero_sentinel_filter.py
-	python3 tests/conformance/check_goniometer_capacity_mirrors.py
-	python3 -m unittest tests/conformance/test_goniometer_capacity_mirrors.py
-	python3 tests/conformance/check_chord_quality_tables.py
-	python3 -m unittest tests/conformance/test_chord_quality_tables.py
-	python3 tests/conformance/check_documented_bound_mirrors.py
-	python3 -m unittest tests/conformance/test_documented_bound_mirrors.py
-	python3 tests/conformance/check_rir_diagnostic_codes.py
-	python3 -m unittest tests/conformance/test_rir_diagnostic_codes.py
-	python3 tests/conformance/check_synth_param_surface.py
-	python3 -m unittest tests/conformance/test_synth_param_surface.py
-	python3 -m unittest tests/conformance/test_ts_surface_walk.py
-	python3 tests/conformance/check_mastering_param_surfaces.py
-	python3 -m unittest tests/conformance/test_mastering_param_surfaces.py
-	python3 tests/conformance/check_result_schema_surfaces.py
-	python3 -m unittest tests/conformance/test_result_schema_surfaces.py
-	python3 -m unittest tests/conformance/test_bank_versions.py
-	python3 tests/conformance/check_bank_policy.py
-	python3 -m unittest tests/conformance/test_bank_policy.py
-	python3 -m unittest tests/conformance/test_gs_program_census.py
-	python3 -m unittest tests/conformance/test_gs_efx_coverage.py
-	python3 -m unittest tests/conformance/test_gs_classic_models.py
-	python3 -m unittest tests/conformance/test_gs_classic_overlays.py
-	python3 -m unittest tests/conformance/test_c_api_out_param_init.py
-	python3 -m unittest tests/conformance/test_c_api_pointer_contracts.py
-	python3 -m unittest tests/conformance/test_c_api_header_self_contained.py
-	python3 -m unittest tests/conformance/test_c_api_feature_off_compile.py
-	python3 -m unittest tests/conformance/test_c_api_type_home.py
-	python3 -m unittest tests/conformance/test_c_api_entry_guard.py
-	python3 tests/conformance/check_c_api_out_param_init.py --floor 250
-	python3 tests/conformance/check_c_api_entry_guard.py --floor 900
-	python3 tests/conformance/check_c_api_pointer_contracts.py --floor 250
-	python3 tests/conformance/check_c_api_header_self_contained.py --floor 20
-	python3 tests/conformance/check_c_api_type_home.py --floor 150
-	python3 -m unittest tests/conformance/test_error_code_mapping.py
-	python3 tools/conformance/test_lint_scope.py
-	python3 tools/parity/test_handle_gating.py
-	python3 tools/parity/test_record_shape.py
-	python3 tools/parity/test_ts_reexport.py
-	python3 tools/parity/test_surface_coverage.py
-	python3 tools/parity/test_allowlist_audit.py
-	python3 tools/parity/test_comparison_reach.py
-	python3 tools/parity/test_c_return_type_coverage.py
-	python3 tools/eval/test_summarize_accuracy.py
-	python3 tools/eval/test_prepare_vocadito.py
-	python3 tools/eval/test_timed_keys.py
-	python3 tools/eval/test_key_regions.py
-	python3 tools/eval/test_key_transpositions.py
-	python3 tools/eval/test_temporal_keys.py
-	python3 tools/eval/test_continuous_keys.py
-	python3 tools/eval/test_export_key_windows.py
-	python3 tools/eval/test_note_oracle.py
-	python3 -m unittest tests/conformance/test_report_input_validation.py
-	python3 tools/audition/test_serve.py
-	cd tools/audition/web && yarn test
-	python3 tools/audition/test_wizard.py
-	python3 tools/parity/surface_coverage.py --check
-	python3 tools/parity/check_parity.py --audit-allowlist
+conformance: conformance-checks
+	$(CHECK_REPORT)
+
+conformance-checks:
+	@mkdir -p $(dir $(CHECK_FAILURES)) && : > $(CHECK_FAILURES)
+	$(CHECK) python3 -m unittest tests/conformance/test_measure_accuracy_matching.py tests/conformance/test_size_and_report_tolerances.py
+	$(CHECK) python3 tools/conformance/check_public_contracts.py
+	$(CHECK) python3 -m unittest tools/api/test_check_request_object_coverage.py
+	$(CHECK) python3 tools/api/check_request_object_coverage.py
+	$(CHECK) python3 tools/conformance/check_cli_contract.py --schema
+	$(CHECK) python3 tools/conformance/check_repair_cli_param_keys.py
+	$(CHECK) python3 tools/conformance/check_lint_scope.py
+	$(CHECK) python3 -m unittest tests/conformance/test_cli_contract.py tests/conformance/test_cli_artifact_defaults.py
+	$(CHECK) python3 -m unittest tests/conformance/test_playback_cli.py
+	$(CHECK) python3 -m unittest tests/conformance/test_wasm_exception_scope.py
+	$(CHECK) python3 -m unittest tests/conformance/test_wasm_feature_gate_scope.py
+	$(CHECK) python3 -m unittest tests/conformance/test_capability_feature_gates.py
+	$(CHECK) python3 -m unittest tests/conformance/test_binding_warning_flags.py
+	$(CHECK) python3 tests/conformance/check_wasm_narrowing_scope.py
+	$(CHECK) python3 -m unittest tests/conformance/test_wasm_narrowing_scope.py tests/conformance/test_wasm_pointer_return_scope.py
+	$(CHECK) python3 tests/conformance/check_python_narrowing_scope.py
+	$(CHECK) python3 -m unittest tests/conformance/test_python_narrowing_scope.py
+	$(CHECK) python3 tests/conformance/check_public_integer_domains.py
+	$(CHECK) python3 -m unittest tests/conformance/test_public_integer_domains.py
+	$(CHECK) python3 tests/conformance/check_zero_sentinel_filter.py
+	$(CHECK) python3 -m unittest tests/conformance/test_zero_sentinel_filter.py
+	$(CHECK) python3 tests/conformance/check_goniometer_capacity_mirrors.py
+	$(CHECK) python3 -m unittest tests/conformance/test_goniometer_capacity_mirrors.py
+	$(CHECK) python3 tests/conformance/check_chord_quality_tables.py
+	$(CHECK) python3 -m unittest tests/conformance/test_chord_quality_tables.py
+	$(CHECK) python3 tests/conformance/check_documented_bound_mirrors.py
+	$(CHECK) python3 -m unittest tests/conformance/test_documented_bound_mirrors.py
+	$(CHECK) python3 tests/conformance/check_rir_diagnostic_codes.py
+	$(CHECK) python3 -m unittest tests/conformance/test_rir_diagnostic_codes.py
+	$(CHECK) python3 tests/conformance/check_synth_param_surface.py
+	$(CHECK) python3 -m unittest tests/conformance/test_synth_param_surface.py
+	$(CHECK) python3 -m unittest tests/conformance/test_ts_surface_walk.py
+	$(CHECK) python3 tests/conformance/check_mastering_param_surfaces.py
+	$(CHECK) python3 -m unittest tests/conformance/test_mastering_param_surfaces.py
+	$(CHECK) python3 tests/conformance/check_result_schema_surfaces.py
+	$(CHECK) python3 -m unittest tests/conformance/test_result_schema_surfaces.py
+	$(CHECK) python3 -m unittest tests/conformance/test_bank_versions.py
+	$(CHECK) python3 tests/conformance/check_bank_policy.py
+	$(CHECK) python3 -m unittest tests/conformance/test_bank_policy.py
+	$(CHECK) python3 -m unittest tests/conformance/test_gs_program_census.py
+	$(CHECK) python3 -m unittest tests/conformance/test_gs_efx_coverage.py
+	$(CHECK) python3 -m unittest tests/conformance/test_gs_classic_models.py
+	$(CHECK) python3 -m unittest tests/conformance/test_gs_classic_overlays.py
+	$(CHECK) python3 -m unittest tests/conformance/test_c_api_out_param_init.py
+	$(CHECK) python3 -m unittest tests/conformance/test_c_api_pointer_contracts.py
+	$(CHECK) python3 -m unittest tests/conformance/test_c_api_header_self_contained.py
+	$(CHECK) python3 -m unittest tests/conformance/test_c_api_feature_off_compile.py
+	$(CHECK) python3 -m unittest tests/conformance/test_c_api_type_home.py
+	$(CHECK) python3 -m unittest tests/conformance/test_c_api_entry_guard.py
+	$(CHECK) python3 tests/conformance/check_c_api_out_param_init.py --floor 250
+	$(CHECK) python3 tests/conformance/check_c_api_entry_guard.py --floor 900
+	$(CHECK) python3 tests/conformance/check_c_api_pointer_contracts.py --floor 250
+	$(CHECK) python3 tests/conformance/check_c_api_header_self_contained.py --floor 20
+	$(CHECK) python3 tests/conformance/check_c_api_type_home.py --floor 150
+	$(CHECK) python3 -m unittest tests/conformance/test_error_code_mapping.py
+	$(CHECK) python3 tools/conformance/test_lint_scope.py
+	$(CHECK) python3 tools/parity/test_handle_gating.py
+	$(CHECK) python3 tools/parity/test_record_shape.py
+	$(CHECK) python3 tools/parity/test_ts_reexport.py
+	$(CHECK) python3 tools/parity/test_surface_coverage.py
+	$(CHECK) python3 tools/parity/test_allowlist_audit.py
+	$(CHECK) python3 tools/parity/test_comparison_reach.py
+	$(CHECK) python3 tools/parity/test_c_return_type_coverage.py
+	$(CHECK) python3 tools/eval/test_summarize_accuracy.py
+	$(CHECK) python3 tools/eval/test_prepare_vocadito.py
+	$(CHECK) python3 tools/eval/test_timed_keys.py
+	$(CHECK) python3 tools/eval/test_key_regions.py
+	$(CHECK) python3 tools/eval/test_key_transpositions.py
+	$(CHECK) python3 tools/eval/test_temporal_keys.py
+	$(CHECK) python3 tools/eval/test_continuous_keys.py
+	$(CHECK) python3 tools/eval/test_export_key_windows.py
+	$(CHECK) python3 tools/eval/test_note_oracle.py
+	$(CHECK) python3 -m unittest tests/conformance/test_report_input_validation.py
+	$(CHECK) python3 tools/audition/test_serve.py
+	$(CHECK) sh -c 'cd tools/audition/web && yarn test'
+	$(CHECK) python3 tools/audition/test_wizard.py
+	$(CHECK) python3 tools/parity/surface_coverage.py --check
+	$(CHECK) python3 tools/parity/check_parity.py --audit-allowlist
 	@if test -x "$(BUILD_DIR)/bin/sonare-cli" && test -x "bindings/python/.venv/bin/python"; then \
+		echo "python3 tools/conformance/check_cli_contract.py --native $(BUILD_DIR)/bin/sonare-cli --python bindings/python/.venv/bin/python"; \
 		python3 tools/conformance/check_cli_contract.py \
 			--native "$(BUILD_DIR)/bin/sonare-cli" \
-			--python "bindings/python/.venv/bin/python"; \
+			--python "bindings/python/.venv/bin/python" \
+			|| echo "python3 tools/conformance/check_cli_contract.py --native --python" >> $(CHECK_FAILURES); \
 	else \
 		echo "conformance: live CLI check skipped (build/bin/sonare-cli or bindings/python/.venv/bin/python is unavailable)"; \
 	fi

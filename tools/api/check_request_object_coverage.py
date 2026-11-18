@@ -133,43 +133,96 @@ OBJECT_SHAPED = {"synthesizeRir"}
 # final argument is already the semantic options object; wrapping those opaque
 # stateful handles in a one-shot request would only add a second API shape.
 STATEFUL_ATTACH_HELPERS = {"attachOpfsClipStream"}
-FUNCTION = re.compile(r"export function (\w+)\s*\(")
+DECLARATION = re.compile(r"export function (\w+)\s*")
 
 
-def functions(path: Path) -> list[str]:
-    text = path.read_text()
-    names = []
-    for match in FUNCTION.finditer(text):
-        name = match.group(1)
-        # Discovery/version/scalar helpers are not one-shot audio APIs. The
-        # remaining candidates are reviewed through the migration manifest.
+def _close_type_parameters(text: str, i: int) -> int:
+    """Index just past the `>` closing the `<` at `i`; an arrow's `>` closes nothing."""
+    depth = 0
+    for j in range(i, len(text)):
+        char = text[j]
+        if char == "<":
+            depth += 1
+        elif char == ">" and text[j - 1] != "=":
+            depth -= 1
+            if depth == 0:
+                return j + 1
+    return -1
+
+
+def _close_parameters(text: str, i: int) -> int:
+    """Index of the `)` closing the `(` at `i`."""
+    depth = 0
+    for j in range(i, len(text)):
+        if text[j] == "(":
+            depth += 1
+        elif text[j] == ")":
+            depth -= 1
+            if depth == 0:
+                return j
+    return -1
+
+
+def declarations(text: str) -> list[tuple[str, str | None]]:
+    """(name, parameter list) for every `export function`, type parameters skipped.
+
+    The parameter list is None where the declaration cannot be read, so a caller
+    treats it as unknown rather than as empty.
+    """
+    found: list[tuple[str, str | None]] = []
+    for match in DECLARATION.finditer(text):
+        i = match.end()
+        if text.startswith("<", i):
+            i = _close_type_parameters(text, i)
+            if i < 0:
+                found.append((match.group(1), None))
+                continue
+            while i < len(text) and text[i].isspace():
+                i += 1
+        if not text.startswith("(", i) or (end := _close_parameters(text, i)) < 0:
+            found.append((match.group(1), None))
+            continue
+        found.append((match.group(1), text[i + 1 : end]))
+    return found
+
+
+def function_names(text: str) -> list[str]:
+    names: list[str] = []
+    for name, _ in declarations(text):
         if name not in names:
             names.append(name)
     return names
 
 
+def functions(path: Path) -> list[str]:
+    # Discovery/version/scalar helpers are not one-shot audio APIs. The remaining
+    # candidates are reviewed through the migration manifest.
+    return function_names(path.read_text())
+
+
+CANONICAL_FIRST_PARAMETER = re.compile(r"\s*\w+\??\s*:\s*\w+Request\b")
+
+
 def has_request_overload(text: str, name: str) -> bool:
-    # Canonical overloads are adjacent to legacy overloads and use a Request
-    # type. Keeping this simple makes deviations visible during review. The
+    # The canonical overload takes its *Request as the first parameter. The
     # parameter is optional wherever every request field has a default, so `?`
     # is part of the canonical shape rather than a deviation from it.
-    return bool(
-        re.search(
-            rf"export function {re.escape(name)}\(\s*\w+\??:\s*[^)]*Request",
-            text,
-        )
+    return any(
+        params is not None and CANONICAL_FIRST_PARAMETER.match(params)
+        for declared, params in declarations(text)
+        if declared == name
     )
 
 
 def takes_no_arguments(text: str, name: str) -> bool:
     """True when every exported declaration of `name` has an empty parameter list.
 
-    Deliberately conservative: a signature the pattern cannot read counts as
+    Deliberately conservative: a signature the reader cannot parse counts as
     taking arguments, so an unreadable declaration is reviewed rather than
     exempted.
     """
-    declarations = re.findall(rf"export function {re.escape(name)}\s*\(([^)]*)\)", text)
-    return bool(declarations) and all(not params.strip() for params in declarations)
+    params = [p for declared, p in declarations(text) if declared == name]
+    return bool(params) and all(p is not None and not p.strip() for p in params)
 
 
 def exemption(path: Path, name: str, text: str) -> str | None:
