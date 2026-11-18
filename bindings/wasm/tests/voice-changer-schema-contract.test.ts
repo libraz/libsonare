@@ -59,7 +59,7 @@ describe('Realtime Voice Changer preset JSON Schema contract', () => {
     }
   });
 
-  it('accepts schema version 3, which needs the transformer sections, and translates an older document on load', () => {
+  it('accepts schema version 3, which needs the transformer sections, and refuses an older document', () => {
     const preset = JSON.parse(realtimeVoiceChangerPresetJson('neutralMonitor')) as {
       dsp: Record<string, Record<string, unknown>>;
       schemaVersion: number;
@@ -81,7 +81,7 @@ describe('Realtime Voice Changer preset JSON Schema contract', () => {
     );
     expectBothValidatorsToReject({ ...preset, dsp: legacyDsp });
 
-    // A version 1 document in the old spellings is read by the library, not by the schema.
+    // A version 1 document in the old spellings is refused by the library as well as the schema.
     const { pitchSemitones, grainSizeSamples, ...retune } = preset.dsp.retune as {
       pitchSemitones: number;
       grainSizeSamples: number;
@@ -98,7 +98,9 @@ describe('Realtime Voice Changer preset JSON Schema contract', () => {
       },
     };
     expect(validateSchema(old)).toBe(false);
-    expect(realtimeVoiceChangerValidatePresetJson(JSON.stringify(old)).ok).toBe(true);
+    const refused = realtimeVoiceChangerValidatePresetJson(JSON.stringify(old));
+    expect(refused.ok).toBe(false);
+    expect(refused.ok ? '' : refused.error).toContain('schemaVersion 1 is older');
   });
 
   it('rejects representative schema violations through both validators', () => {
