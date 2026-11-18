@@ -27448,6 +27448,7 @@ domain = "analysis"
 rule = "absent-not-sentinel"
 entry = "./analysis"
 test = "bindings/wasm/tests/surface/mastering-streaming.test.ts::builds with only a sampleRate and processes a block"
+
 [[entry]]
 kind = "field"
 old = "EngineBounceOptions.numChannels"
@@ -27455,6 +27456,7 @@ changed = "required; the facade no longer picks a channel count"
 domain = "engine"
 rule = "absent-not-sentinel"
 test = "bindings/wasm/tests/surface/engine.test.ts::takes an omitted block size or record count as the library default and refuses 0"
+
 [[entry]]
 kind = "field"
 old = "EngineBounceOptions.blockSize"
@@ -27462,6 +27464,7 @@ changed = "the facade default is gone: omit it for the library default; an expli
 domain = "engine"
 rule = "absent-not-sentinel"
 test = "bindings/wasm/tests/surface/engine.test.ts::takes an omitted block size or record count as the library default and refuses 0"
+
 [[entry]]
 kind = "field"
 old = "EngineFreezeOptions.numChannels"
@@ -27469,6 +27472,7 @@ changed = "required; the facade no longer picks a channel count"
 domain = "engine"
 rule = "absent-not-sentinel"
 test = "bindings/wasm/tests/surface/engine.test.ts::takes an omitted block size or record count as the library default and refuses 0"
+
 [[entry]]
 kind = "field"
 old = "EngineFreezeOptions.blockSize"
@@ -27476,6 +27480,7 @@ changed = "the facade default is gone: omit it for the library default; an expli
 domain = "engine"
 rule = "absent-not-sentinel"
 test = "bindings/wasm/tests/surface/engine.test.ts::takes an omitted block size or record count as the library default and refuses 0"
+
 [[entry]]
 kind = "field"
 old = "RenderOfflineRequest.blockSize"
@@ -27483,6 +27488,7 @@ changed = "the facade default is gone: omit it for the library default; an expli
 domain = "engine"
 rule = "absent-not-sentinel"
 test = "bindings/wasm/tests/surface/engine.test.ts::takes an omitted block size or record count as the library default and refuses 0"
+
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.primeOfflineParameters"
@@ -27490,6 +27496,7 @@ changed = "blockSize is optional: omit it for the library default; an explicit 0
 domain = "engine"
 rule = "absent-not-sentinel"
 test = "bindings/wasm/tests/surface/engine.test.ts::takes an omitted block size or record count as the library default and refuses 0"
+
 [[entry]]
 kind = "class"
 old = "Mixer"
@@ -27497,3 +27504,19 @@ changed = "maxBlockSize: the facade default is gone: omit it for the library def
 domain = "engine"
 rule = "absent-not-sentinel"
 test = "bindings/wasm/tests/mixer-input-count.test.ts::takes an omitted maxBlockSize as the library default and refuses an explicit 0"
+
+[[entry]]
+kind = "field"
+old = "PlaybackRendererOptions.sampleRate"
+changed = "required (was optional with a 48000 default)"
+domain = "engine"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/playback.test.ts::requires sampleRate, takes an omitted maxBlockSize as the default and refuses 0"
+
+[[entry]]
+kind = "field"
+old = "PlaybackRendererOptions.maxBlockSize"
+changed = "the facade default is gone: omit it for the library default; an explicit 0 is a RangeError"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/playback.test.ts::requires sampleRate, takes an omitted maxBlockSize as the default and refuses 0"

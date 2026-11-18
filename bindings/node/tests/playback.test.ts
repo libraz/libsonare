@@ -33,8 +33,25 @@ describe('HrtfSet', () => {
 });
 
 describe('PlaybackRenderer construction and validation', () => {
+  it('requires sampleRate, takes an omitted maxBlockSize as the default and refuses 0', () => {
+    const config = { target: { kind: 'speakers', layout: 'stereo' } } as const;
+    expect(() => new PlaybackRenderer({ config } as never)).toThrow(TypeError);
+    expect(() => new PlaybackRenderer({ sampleRate: 48000, config, maxBlockSize: 0 })).toThrow(
+      RangeError,
+    );
+    const renderer = new PlaybackRenderer({ sampleRate: 48000, config });
+    try {
+      const block = new Float32Array(1024);
+      expect(renderer.processPlanar([block, block])).toHaveLength(2);
+      const over = new Float32Array(1025);
+      expect(() => renderer.processPlanar([over, over])).toThrow();
+    } finally {
+      renderer.destroy();
+    }
+  });
+
   it('defaults a headphones target without an explicit HrtfSet (native built-in)', () => {
-    using renderer = new PlaybackRenderer({ config: {} });
+    using renderer = new PlaybackRenderer({ sampleRate: 48000, config: {} });
     expect(renderer.numOutputChannels).toBe(2);
     renderer.destroy();
   });
@@ -49,13 +66,16 @@ describe('PlaybackRenderer construction and validation', () => {
     expect(
       () =>
         new PlaybackRenderer({
+          sampleRate: 48000,
           config: { input: { layout: 'auto', channel_map: ['L', 'R'] } },
         }),
     ).toThrow();
   });
 
   it('rejects a speakers target with no target.layout', () => {
-    expect(() => new PlaybackRenderer({ config: { target: { kind: 'speakers' } } })).toThrow();
+    expect(
+      () => new PlaybackRenderer({ sampleRate: 48000, config: { target: { kind: 'speakers' } } }),
+    ).toThrow();
   });
 });
 
@@ -95,6 +115,7 @@ describe('PlaybackRenderer processing', () => {
 
   it('rejects a non-number inChannels argument to processInterleaved and stays usable', () => {
     using renderer = new PlaybackRenderer({
+      sampleRate: 48000,
       config: { target: { kind: 'speakers', layout: 'stereo' } },
     });
     expect(() =>
@@ -106,6 +127,7 @@ describe('PlaybackRenderer processing', () => {
 
   it('rejects a planar call whose planes have mismatched lengths', () => {
     using renderer = new PlaybackRenderer({
+      sampleRate: 48000,
       config: { target: { kind: 'speakers', layout: 'stereo' } },
     });
     const l = new Float32Array(64);
@@ -115,6 +137,7 @@ describe('PlaybackRenderer processing', () => {
 
   it('rejects an unsupported input channel count under input.layout "auto"', () => {
     using renderer = new PlaybackRenderer({
+      sampleRate: 48000,
       config: { target: { kind: 'speakers', layout: 'stereo' } },
     });
     const planes = [new Float32Array(32), new Float32Array(32), new Float32Array(32)];
@@ -142,6 +165,7 @@ describe('PlaybackRenderer latency, config and diagnostics', () => {
 
   it('round-trips a realtime key through setConfig/config and rejects a changed prepare key', () => {
     using renderer = new PlaybackRenderer({
+      sampleRate: 48000,
       config: { target: { kind: 'speakers', layout: 'stereo' } },
     });
     const config = renderer.config();
@@ -156,11 +180,12 @@ describe('PlaybackRenderer latency, config and diagnostics', () => {
   });
 
   it('accepts setHeadOrientation and reset without throwing on both target kinds', () => {
-    using headphones = new PlaybackRenderer({ config: {} });
+    using headphones = new PlaybackRenderer({ sampleRate: 48000, config: {} });
     expect(() => headphones.setHeadOrientation(30, 0, 0)).not.toThrow();
     expect(() => headphones.reset()).not.toThrow();
 
     using speakers = new PlaybackRenderer({
+      sampleRate: 48000,
       config: { target: { kind: 'speakers', layout: 'stereo' } },
     });
     // Ignored by a speakers target, but the call itself must not throw.
@@ -168,7 +193,7 @@ describe('PlaybackRenderer latency, config and diagnostics', () => {
   });
 
   it('rejects wrong orientation types and stays usable', () => {
-    using renderer = new PlaybackRenderer({ config: {} });
+    using renderer = new PlaybackRenderer({ sampleRate: 48000, config: {} });
     const expectWrongType = (axis: string, invoke: () => void) => {
       expect(invoke).toThrow(TypeError);
       expect(invoke).toThrow(new RegExp(axis));
@@ -189,7 +214,7 @@ describe('PlaybackRenderer latency, config and diagnostics', () => {
   });
 
   it('rejects non-finite and float32-overflow orientation values in yaw-pitch-roll order', () => {
-    using renderer = new PlaybackRenderer({ config: {} });
+    using renderer = new PlaybackRenderer({ sampleRate: 48000, config: {} });
     const float32Max = 3.4028234663852886e38;
     const float32Overflow = float32Max * 2;
 
@@ -232,6 +257,7 @@ describe('PlaybackRenderer latency, config and diagnostics', () => {
 
   it('reports a diagnostics document with the documented shape', () => {
     using renderer = new PlaybackRenderer({
+      sampleRate: 48000,
       config: { target: { kind: 'speakers', layout: 'stereo' } },
     });
     const diagnostics = renderer.diagnostics();
@@ -248,6 +274,7 @@ describe('PlaybackRenderer latency, config and diagnostics', () => {
 
   it('rejects use after destroy', () => {
     const renderer = new PlaybackRenderer({
+      sampleRate: 48000,
       config: { target: { kind: 'speakers', layout: 'stereo' } },
     });
     renderer.destroy();
@@ -424,7 +451,7 @@ describe('PlaybackRenderer.renderOffline', () => {
 
 describe('playback scalar reads', () => {
   it('reads cheap scalar state as getters', () => {
-    using renderer = new PlaybackRenderer({ config: {} });
+    using renderer = new PlaybackRenderer({ sampleRate: 48000, config: {} });
     using meter = new PlaybackLoudnessMeter({ numChannels: 2, sampleRate: 48000 });
     const getter = (target: object, name: string) =>
       Object.getOwnPropertyDescriptor(Object.getPrototypeOf(target), name)?.get;
@@ -448,18 +475,18 @@ describe('playback constructors take one options object', () => {
     expect(
       () => new PlaybackLoudnessMeter({ numChannels: 2, sampleRate: 48000, bogus: 1 } as never),
     ).toThrow(new TypeError("PlaybackLoudnessMeter: unknown request key 'bogus'"));
-    expect(() => new PlaybackRenderer({ config: {}, bogus: 1 } as never)).toThrow(
-      new TypeError("PlaybackRenderer: unknown request key 'bogus'"),
-    );
+    expect(
+      () => new PlaybackRenderer({ sampleRate: 48000, config: {}, bogus: 1 } as never),
+    ).toThrow(new TypeError("PlaybackRenderer: unknown request key 'bogus'"));
   });
 
   it('refuse an undeclared key inside an object config, and leave a JSON string to the parser', () => {
-    expect(() => new PlaybackRenderer({ config: { bogus: 1 } as never })).toThrow(
-      new TypeError("PlaybackRenderer: unknown option 'bogus' in 'config'"),
-    );
+    expect(
+      () => new PlaybackRenderer({ sampleRate: 48000, config: { bogus: 1 } as never }),
+    ).toThrow(new TypeError("PlaybackRenderer: unknown option 'bogus' in 'config'"));
     let renderer: PlaybackRenderer | undefined;
     try {
-      renderer = new PlaybackRenderer({ config: '{"bogus":1}' });
+      renderer = new PlaybackRenderer({ sampleRate: 48000, config: '{"bogus":1}' });
     } catch (error) {
       expect((error as Error).message).not.toMatch(/unknown (request key|option)/);
     } finally {

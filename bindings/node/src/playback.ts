@@ -7,7 +7,13 @@ import type {
   RenderPlaybackRequest,
   RenderPlaybackResult,
 } from './types_playback.js';
-import { assertAudioInput, assertAudioSamples, requestObject } from './validation.js';
+import {
+  assertAudioInput,
+  assertAudioSamples,
+  assertPositiveInteger,
+  assertSampleRate,
+  requestObject,
+} from './validation.js';
 
 type NativeHrtfSet = InstanceType<typeof addon.HrtfSet>;
 type NativePlaybackRenderer = InstanceType<typeof addon.PlaybackRenderer>;
@@ -98,12 +104,24 @@ export class PlaybackRenderer {
   private disposed = false;
 
   constructor(options: PlaybackRendererOptions) {
-    requestObject('PlaybackRenderer', options, 'options', true);
+    const fnName = 'PlaybackRenderer';
+    requestObject(fnName, options, 'options', true);
+    assertSampleRate(fnName, options.sampleRate);
+    const maxBlockSize = options.maxBlockSize;
+    if (maxBlockSize !== undefined && maxBlockSize !== null) {
+      if (typeof maxBlockSize !== 'number') {
+        throw new TypeError(`${fnName}: maxBlockSize must be a number`);
+      }
+      if (maxBlockSize === 0) {
+        throw new RangeError(`${fnName}: maxBlockSize must not be 0 (omit it for the default)`);
+      }
+      assertPositiveInteger(fnName, maxBlockSize, 'maxBlockSize');
+    }
     this.native = new addon.PlaybackRenderer(
       configJsonText(options.config),
       nativeHrtf(options.hrtf),
-      options.sampleRate ?? 48000,
-      options.maxBlockSize ?? 1024,
+      options.sampleRate,
+      maxBlockSize ?? undefined,
     );
   }
 

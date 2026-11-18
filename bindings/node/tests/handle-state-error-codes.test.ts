@@ -111,7 +111,7 @@ describe('a released handle passed as an argument reports InvalidState', () => {
     hrtf.destroy();
     const config = { target: { kind: 'headphones' } } as never;
     const samples = new Float32Array(960);
-    const viaRenderer = capture(() => new PlaybackRenderer({ config, hrtf }));
+    const viaRenderer = capture(() => new PlaybackRenderer({ sampleRate: 48000, config, hrtf }));
     const viaOffline = capture(() =>
       renderPlayback({ samples, numChannels: 1, sampleRate: 48000, config, hrtf }),
     );
@@ -121,7 +121,9 @@ describe('a released handle passed as an argument reports InvalidState', () => {
 
   it('a non-HrtfSet stays a TypeError', () => {
     const config = { target: { kind: 'headphones' } } as never;
-    const error = capture(() => new PlaybackRenderer({ config, hrtf: {} as never }));
+    const error = capture(
+      () => new PlaybackRenderer({ sampleRate: 48000, config, hrtf: {} as never }),
+    );
     expect(error).toBeInstanceOf(TypeError);
   });
 
@@ -277,7 +279,7 @@ describe('voiceChange maps an argument refusal to RangeError in both formant mod
 
 describe('PlaybackRenderer.renderOffline refuses bad samples like its siblings', () => {
   it('RangeError naming samples for empty and NaN input', () => {
-    const renderer = new PlaybackRenderer({ config: {} });
+    const renderer = new PlaybackRenderer({ sampleRate: 48000, config: {} });
     try {
       const empty = capture(() => renderer.renderOffline(new Float32Array(0), 2));
       expect(empty).toBeInstanceOf(RangeError);

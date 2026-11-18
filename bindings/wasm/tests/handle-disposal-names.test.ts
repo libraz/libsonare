@@ -84,7 +84,12 @@ describe('WASM handle teardown names', () => {
     ['HrtfSet', () => HrtfSet.fromBytes(hrtfBytes())],
     [
       'PlaybackRenderer',
-      () => new PlaybackRenderer({ config: {}, hrtf: HrtfSet.fromBytes(hrtfBytes()) }),
+      () =>
+        new PlaybackRenderer({
+          sampleRate: 48000,
+          config: {},
+          hrtf: HrtfSet.fromBytes(hrtfBytes()),
+        }),
     ],
     [
       'PlaybackLoudnessMeter',

@@ -169,7 +169,9 @@ export interface PlaybackRendererOptions {
   config: PlaybackRendererConfig | string;
   /** Required for a headphones target on WASM; optional (defaults to the built-in set) elsewhere. */
   hrtf?: HrtfSet;
-  sampleRate?: number;
+  /** Sample rate in Hz, integer in `[8000, 384000]`. Required. */
+  sampleRate: number;
+  /** Largest block per call, in frames. Omit it for the renderer's default (1024); `0` is a `RangeError`. */
   maxBlockSize?: number;
 }
 

@@ -9,7 +9,13 @@ import type {
   RenderPlaybackResult,
 } from './public_types_playback.js';
 import type { WasmHrtfSet, WasmPlaybackLoudnessMeter, WasmPlaybackRenderer } from './sonare.js';
-import { assertAudioInput, assertFiniteScalar, requestObject } from './validation.js';
+import {
+  assertAudioInput,
+  assertFiniteScalar,
+  assertPositiveInteger,
+  assertSampleRate,
+  requestObject,
+} from './validation.js';
 
 function configJsonText(config: PlaybackRendererConfig | string): string {
   if (typeof config === 'string') {
@@ -125,12 +131,24 @@ export class PlaybackRenderer {
   }
 
   constructor(options: PlaybackRendererOptions) {
-    requestObject('PlaybackRenderer', options, 'options', true);
+    const fnName = 'PlaybackRenderer';
+    requestObject(fnName, options, 'options', true);
+    assertSampleRate(fnName, options.sampleRate);
+    const maxBlockSize = options.maxBlockSize ?? undefined;
+    if (maxBlockSize !== undefined) {
+      if (typeof maxBlockSize !== 'number') {
+        throw new TypeError(`${fnName}: maxBlockSize must be a number`);
+      }
+      if (maxBlockSize === 0) {
+        throw new RangeError(`${fnName}: maxBlockSize must not be 0 (omit it for the default)`);
+      }
+      assertPositiveInteger(fnName, maxBlockSize, 'maxBlockSize');
+    }
     this.nativeHandle = getSonareModule().createPlaybackRenderer(
       configJsonText(options.config),
       nativeHrtf(options.hrtf),
-      options.sampleRate ?? 48000,
-      options.maxBlockSize ?? 1024,
+      options.sampleRate,
+      maxBlockSize,
     );
   }
 

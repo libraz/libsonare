@@ -3783,7 +3783,7 @@ export interface SonareModule {
     configJson: string,
     hrtf: WasmHrtfSet | null,
     sampleRate: number,
-    maxBlockSize: number,
+    maxBlockSize: number | undefined,
   ) => WasmPlaybackRenderer;
   createPlaybackLoudnessMeter: (channels: number, sampleRate: number) => WasmPlaybackLoudnessMeter;
   renderPlayback: (

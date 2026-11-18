@@ -173,9 +173,9 @@ export interface PlaybackRendererOptions {
    * through `HrtfSet.fromBytes`. Ignored by a speakers target.
    */
   hrtf?: HrtfSet;
-  /** Default 48000. */
-  sampleRate?: number;
-  /** Upper bound on the frames of every process call. Default 1024. */
+  /** Sample rate in Hz, integer in `[8000, 384000]`. Required. */
+  sampleRate: number;
+  /** Largest block per call, in frames. Omit it for the renderer's default (1024); `0` is a `RangeError`. */
   maxBlockSize?: number;
 }
 

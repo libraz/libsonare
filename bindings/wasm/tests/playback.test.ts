@@ -97,7 +97,7 @@ describe('playback renderer (WASM)', () => {
   });
 
   it('refuses a headphones target without an HRTF set by name', () => {
-    expect(() => new PlaybackRenderer({ config: {} })).toThrow(/hrtf required/);
+    expect(() => new PlaybackRenderer({ sampleRate: 48000, config: {} })).toThrow(/hrtf required/);
     expect(() =>
       renderPlayback({
         samples: new Float32Array(256),
@@ -106,6 +106,23 @@ describe('playback renderer (WASM)', () => {
         config: {},
       }),
     ).toThrow(/hrtf required/);
+  });
+
+  it('requires sampleRate, takes an omitted maxBlockSize as the default and refuses 0', () => {
+    const config = { target: { kind: 'speakers', layout: 'stereo' } } as const;
+    expect(() => new PlaybackRenderer({ config } as never)).toThrow(TypeError);
+    expect(() => new PlaybackRenderer({ sampleRate: SR, config, maxBlockSize: 0 })).toThrow(
+      RangeError,
+    );
+    const renderer = new PlaybackRenderer({ sampleRate: SR, config });
+    try {
+      const block = new Float32Array(1024);
+      expect(renderer.processPlanar([block, block])).toHaveLength(2);
+      const over = new Float32Array(1025);
+      expect(() => renderer.processPlanar([over, over])).toThrow();
+    } finally {
+      renderer.destroy();
+    }
   });
 
   it('reads cheap scalar state as getters', () => {
@@ -563,18 +580,18 @@ describe('playback constructors take one options object', () => {
     expect(
       () => new PlaybackLoudnessMeter({ numChannels: 2, sampleRate: 48000, bogus: 1 } as never),
     ).toThrow(new TypeError("PlaybackLoudnessMeter: unknown request key 'bogus'"));
-    expect(() => new PlaybackRenderer({ config: {}, bogus: 1 } as never)).toThrow(
-      new TypeError("PlaybackRenderer: unknown request key 'bogus'"),
-    );
+    expect(
+      () => new PlaybackRenderer({ sampleRate: 48000, config: {}, bogus: 1 } as never),
+    ).toThrow(new TypeError("PlaybackRenderer: unknown request key 'bogus'"));
   });
 
   it('refuse an undeclared key inside an object config, and leave a JSON string to the parser', () => {
-    expect(() => new PlaybackRenderer({ config: { bogus: 1 } as never })).toThrow(
-      new TypeError("PlaybackRenderer: unknown option 'bogus' in 'config'"),
-    );
+    expect(
+      () => new PlaybackRenderer({ sampleRate: 48000, config: { bogus: 1 } as never }),
+    ).toThrow(new TypeError("PlaybackRenderer: unknown option 'bogus' in 'config'"));
     let renderer: PlaybackRenderer | undefined;
     try {
-      renderer = new PlaybackRenderer({ config: '{"bogus":1}' });
+      renderer = new PlaybackRenderer({ sampleRate: 48000, config: '{"bogus":1}' });
     } catch (error) {
       expect((error as Error).message).not.toMatch(/unknown (request key|option)/);
     } finally {
