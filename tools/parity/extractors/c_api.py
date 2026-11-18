@@ -127,7 +127,7 @@ def _parse_param(decl: str) -> Param:
 
 
 # A count right after its array is that array's length, which the facades derive:
-# ``ops, n_ops``, the ``frames, channels`` of an interleaved buffer, and the run of
+# ``ops, n_ops`` / ``channels, num_channels``, the ``frames, channels`` of an interleaved buffer, and the run of
 # dimensions after a matrix (``features, n_features, n_frames``), which every facade
 # takes from the array's shape.
 _INTEGER_TYPES = {"int", "int32_t", "size_t", "uint32_t", "int64_t", "uint64_t"}
@@ -160,7 +160,7 @@ def _mark_derived_counts(params: list[Param]) -> list[Param]:
         if "*" not in prev.type or not _is_integer(cur):
             continue
         if (
-            cur.name == f"n_{prev.name}"
+            cur.name in (f"n_{prev.name}", f"num_{prev.name}")
             and not nxt.name.startswith("n_")
             or cur.name == "frames"
             and nxt.name == "channels"

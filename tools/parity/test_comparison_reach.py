@@ -246,6 +246,10 @@ def _structural(decl: str) -> list[str]:
 def test_a_count_after_its_array_is_derived() -> None:
     assert "n_ops" in _structural("const SonareSpectralEditOp* ops, size_t n_ops, float** out")
     assert "frames" in _structural("const float* samples, size_t frames, int channels")
+    linked = _structural(
+        "const float* const* channels, size_t num_channels, size_t length, int sample_rate"
+    )
+    assert "num_channels" in linked
 
 
 def test_the_dimensions_after_a_matrix_are_derived_and_the_config_after_them_is_not() -> None:
