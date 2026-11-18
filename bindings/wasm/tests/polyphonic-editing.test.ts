@@ -442,6 +442,24 @@ describe('PolyphonicAnalysis config', () => {
     }
   });
 
+  it('reaches the analysis with tonality, whose absence means on', () => {
+    const render = (tonality?: boolean) => {
+      const handle = analyzePolyphonic({
+        samples,
+        sampleRate,
+        ...(tonality === undefined ? {} : { tonality }),
+      });
+      try {
+        return Array.from(handle.render());
+      } finally {
+        handle.destroy();
+      }
+    };
+    const fallback = render();
+    expect(render(true)).toEqual(fallback);
+    expect(render(false)).not.toEqual(fallback);
+  });
+
   it('keeps a named zero by absence and refuses an explicit 0', () => {
     for (const [field, meaning] of [
       ['winLength', 'nFft'],

@@ -40,8 +40,7 @@ function nativePolyphonicOptions(
   fnName: string,
   options: PolyphonicAnalysisOptions,
 ): Record<string, unknown> {
-  const { tonality, ...rest } = options;
-  const out: Record<string, unknown> = { ...rest };
+  const out: Record<string, unknown> = { ...options };
   for (const [field, meaning] of Object.entries(NAMED_ZERO_FIELDS)) {
     if (options[field as keyof typeof NAMED_ZERO_FIELDS] === 0) {
       throw new RangeError(`${fnName}: ${field} must not be 0 (omit it for ${meaning})`);
@@ -55,12 +54,6 @@ function nativePolyphonicOptions(
         `${fnName}: reattackRatio must be greater than 1 (omit it for no split)`,
       );
     }
-  }
-  if (tonality !== undefined && tonality !== null) {
-    if (typeof tonality !== 'boolean') {
-      throw new TypeError(`${fnName}: tonality must be a boolean`);
-    }
-    out.tonalityOff = !tonality;
   }
   return out;
 }

@@ -1137,7 +1137,7 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
     jsName: 'PolyphonicAnalysis',
     invoke: (o) => {
       const analysis = analyzePolyphonic({
-        ...facadeKeys(o, { tonalityOff: 'tonality' }),
+        ...o,
         samples: sine(8192, 220),
         sampleRate: SR,
       });

@@ -207,6 +207,14 @@ describe('analyzePolyphonic', () => {
     }
   });
 
+  it('reaches the analysis with tonality, whose absence means on', () => {
+    const render = (options: PolyphonicAnalysisOptions) =>
+      withAnalysis((analysis) => Array.from(analysis.render()), options);
+    const fallback = render({});
+    expect(render({ tonality: true })).toEqual(fallback);
+    expect(render({ tonality: false })).not.toEqual(fallback);
+  });
+
   it('keeps a named zero by absence and refuses an explicit 0', () => {
     for (const [field, meaning] of [
       ['winLength', 'nFft'],

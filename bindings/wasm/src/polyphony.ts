@@ -38,19 +38,6 @@ const NAMED_ZERO_FIELDS = {
 function nativePolyphonicConfig(request: AnalyzePolyphonicRequest): Record<string, unknown> {
   const { samples, sampleRate, validate, ...rest } = request as unknown as Record<string, unknown>;
   const config = rest;
-  // `tonality: false` is native's `tonalityOff`.
-  if ('tonality' in config) {
-    const { tonality } = config;
-    delete config.tonality;
-    if (tonality !== undefined && tonality !== null) {
-      if (typeof tonality !== 'boolean') {
-        throw new TypeError('analyzePolyphonic: tonality must be a boolean');
-      }
-      if (!tonality) {
-        config.tonalityOff = true;
-      }
-    }
-  }
   for (const [key, meaning] of Object.entries(NAMED_ZERO_FIELDS)) {
     if (config[key] === 0) {
       throw new RangeError(`analyzePolyphonic: ${key} must not be 0 (omit it for ${meaning})`);
