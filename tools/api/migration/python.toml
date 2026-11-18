@@ -8778,7 +8778,7 @@ test = "bindings/python/tests/test_mapping_keys.py::test_engine_tempo_and_meter_
 [[entry]]
 kind = "option"
 old = "Project.set_clip_takes(takes)"
-changed = "each take is a mapping (a tuple is TypeError) taking id, source_id, source_offset_ppq and name only; sourceId and sourceOffsetPpq raise SonareValueError naming the key; takes is required and None raises TypeError, pass [] to clear"
+changed = "each take is a mapping (a tuple is TypeError) taking id, source_id, source_offset_ppq and name only; sourceId and sourceOffsetPpq raise SonareValueError naming the key; takes is required and None raises TypeError, pass [] to clear; id is required and non-zero, a source_id absent or None uses the clip's source and 0 raises SonareValueError, a name absent or None leaves the take unnamed, an empty name raises SonareValueError and a non-string name raises TypeError instead of being converted with str()"
 domain = "project"
 rule = "one-input-form"
 test = "bindings/python/tests/test_mapping_keys.py::test_project_mappings_take_one_spelling"
@@ -8786,7 +8786,7 @@ test = "bindings/python/tests/test_mapping_keys.py::test_project_mappings_take_o
 [[entry]]
 kind = "option"
 old = "Project.set_clip_comp_segments(segments)"
-changed = "each segment is a mapping (a 3- or 4-tuple is TypeError) taking start_ppq, end_ppq, take_id and crossfade_ppq only; startPpq, endPpq, takeId and crossfadePpq raise SonareValueError naming the key; segments is required and None raises TypeError, pass [] to clear"
+changed = "each segment is a mapping (a 3- or 4-tuple is TypeError) taking start_ppq, end_ppq, take_id and crossfade_ppq only; startPpq, endPpq, takeId and crossfadePpq raise SonareValueError naming the key; segments is required and None raises TypeError, pass [] to clear; a take_id absent or None plays the base/active take and 0 raises SonareValueError"
 domain = "project"
 rule = "one-input-form"
 test = "bindings/python/tests/test_mapping_keys.py::test_project_mappings_take_one_spelling"
@@ -12007,7 +12007,7 @@ test = "bindings/python/tests/test_empty_is_not_absent.py::test_engine_fixed_ide
 [[entry]]
 kind = "field"
 old = "EngineGraphSpec.input_node"
-changed = "a value over 63 UTF-8 bytes raises SonareValueError instead of being cut to fit"
+changed = "a value over 63 UTF-8 bytes raises SonareValueError instead of being cut to fit, and an empty string raises SonareValueError naming set_graph"
 domain = "engine"
 rule = "absent-not-sentinel"
 test = "bindings/python/tests/test_empty_is_not_absent.py::test_engine_fixed_identifiers_are_refused_rather_than_cut"
@@ -12015,7 +12015,71 @@ test = "bindings/python/tests/test_empty_is_not_absent.py::test_engine_fixed_ide
 [[entry]]
 kind = "field"
 old = "EngineGraphSpec.output_node"
-changed = "a value over 63 UTF-8 bytes raises SonareValueError instead of being cut to fit"
+changed = "a value over 63 UTF-8 bytes raises SonareValueError instead of being cut to fit, and an empty string raises SonareValueError naming set_graph"
 domain = "engine"
 rule = "absent-not-sentinel"
 test = "bindings/python/tests/test_empty_is_not_absent.py::test_engine_fixed_identifiers_are_refused_rather_than_cut"
+
+[[entry]]
+kind = "option"
+old = "Project.set_clip_takes(active_take_id)"
+changed = "int | None, default None: None plays the clip's base source and an explicit 0 raises SonareValueError"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_empty_is_not_absent.py::test_take_ids_and_names_are_none_when_absent_and_never_zero_or_empty"
+
+[[entry]]
+kind = "option"
+old = "Project.add_track(name)"
+changed = "an empty string raises SonareValueError; omit the name or pass None for an unnamed track"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_empty_is_not_absent.py::test_track_name_and_graph_endpoints_refuse_an_empty_string"
+
+[[entry]]
+kind = "option"
+old = "Project.apply_vocal_edit(take_id)"
+changed = "int | None, default None: None edits the clip's base source and an explicit 0 raises SonareValueError"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_vocal_project.py::test_apply_roundtrip_and_rehydrate_after_project_reload"
+
+[[entry]]
+kind = "field"
+old = "ProjectVocalEditApplyResult.take_id"
+changed = "int | None: None when the edit belongs to the clip's base source (was 0)"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_vocal_project.py::test_apply_roundtrip_and_rehydrate_after_project_reload"
+
+[[entry]]
+kind = "field"
+old = "ProjectVocalEditDependency.take_id"
+changed = "int | None: None when the edit belongs to the clip's base source (was 0)"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_vocal_project.py::test_apply_roundtrip_and_rehydrate_after_project_reload"
+
+[[entry]]
+kind = "field"
+old = "ProjectVocalRehydrateItem.take_id"
+changed = "int | None: None when the edit belongs to the clip's base source (was 0)"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_vocal_project.py::test_apply_roundtrip_and_rehydrate_after_project_reload"
+
+[[entry]]
+kind = "option"
+old = "align_take_to_reference(hop_length)"
+changed = "an explicit 0 (or any value below 1) raises SonareValueError instead of being read as the library value; omit it or pass None for that"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_take_alignment.py::test_omission_is_the_library_value_and_zero_is_refused"
+
+[[entry]]
+kind = "option"
+old = "align_take_to_reference(bins_per_octave)"
+changed = "an explicit 0 (or any value below 1) raises SonareValueError instead of being read as the library value; omit it or pass None for that"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_take_alignment.py::test_omission_is_the_library_value_and_zero_is_refused"

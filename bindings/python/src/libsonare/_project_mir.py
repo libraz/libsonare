@@ -11,6 +11,7 @@ import numpy as np
 
 from ._analysis_music import _CHORD_QUALITY_ORDINALS
 from ._errors import _not_supported
+from ._narrowing import _narrow_int
 from ._project_model import (
     _NO_PITCH_CLASS,
     _PROJECT_CHORD_QUALITIES,
@@ -18,6 +19,7 @@ from ._project_model import (
     ProjectKeyMode,
 )
 from ._runtime import (
+    _C_INT_MAX,
     SonareProjectWarpAnchor,
     SonareTakeAlignConfig,
     SonareTakeAlignment,
@@ -116,11 +118,9 @@ def align_take_to_reference(
         take_sample_rate: Sample rate of ``take`` in Hz; ``None`` reads it at
             ``sample_rate``. Refused like ``sample_rate`` when not positive.
         hop_length: Chroma hop in samples, which sets the time resolution of the
-            anchors. ``None`` keeps the library value, and so does ``0``: the
-            field has no meaning at 0, so there is no separate default to fill
-            in first.
-        bins_per_octave: Chroma bins per octave, ``None`` / ``0`` as above. Must
-            be a positive **multiple of 12**, because the chroma folds the CQT
+            anchors. ``None`` keeps the library value; a value below 1 is refused.
+        bins_per_octave: Chroma bins per octave; ``None`` keeps the library value.
+            Must be a positive **multiple of 12**, because the chroma folds the CQT
             grid onto twelve pitch classes: 12, 24 and 36 are in domain and 13 or
             18 are refused.
 
@@ -158,15 +158,16 @@ def align_take_to_reference(
         )
     if take_sample_rate is None:
         take_sample_rate = sample_rate
-    # Left at 0 when the caller supplied nothing, which is what the C entry reads
-    # as "library value"; neither field has a meaning at 0, so there is no
-    # default-filling call to make first. Assigned unconverted so the struct's
-    # own narrowing sees the caller's value rather than a truncation of it.
+    # Left at 0, the C spelling of "library value", when the caller supplied nothing.
     config = SonareTakeAlignConfig()
     if hop_length is not None:
-        config.hop_length = hop_length
+        config.hop_length = _narrow_int(
+            hop_length, "align_take_to_reference: hop_length", 1, _C_INT_MAX
+        )
     if bins_per_octave is not None:
-        config.bins_per_octave = bins_per_octave
+        config.bins_per_octave = _narrow_int(
+            bins_per_octave, "align_take_to_reference: bins_per_octave", 1, _C_INT_MAX
+        )
 
     reference_array, reference_len = _to_c_float_array(
         reference, fn_name="align_take_to_reference", arg_name="reference"

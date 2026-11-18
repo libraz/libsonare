@@ -134,7 +134,7 @@ def test_apply_roundtrip_and_rehydrate_after_project_reload() -> None:
             sve1=state,
         )
         assert result.clip_id == clip_id
-        assert result.take_id == 0
+        assert result.take_id is None
         assert result.original_source_id == clip.source_id
         assert result.derived_source_id != result.original_source_id
         assert result.sidecar_key == f"libsonare.vocal-edit/clip/{clip_id}/take/0"

@@ -23,7 +23,7 @@ class ProjectVocalOriginalSource:
 
 class ProjectVocalEditApplyResult:
     clip_id: int
-    take_id: int
+    take_id: int | None
     original_source_id: int
     derived_source_id: int
     committed_revision: int
@@ -33,7 +33,7 @@ class ProjectVocalEditApplyResult:
     def __init__(
         self,
         clip_id: int,
-        take_id: int,
+        take_id: int | None,
         original_source_id: int,
         derived_source_id: int,
         committed_revision: int,
@@ -44,7 +44,7 @@ class ProjectVocalEditApplyResult:
 
 class ProjectVocalEditDependency:
     clip_id: int
-    take_id: int
+    take_id: int | None
     original_source_id: int
     derived_source_id: int
     source_sample_rate: int
@@ -60,7 +60,7 @@ class ProjectVocalEditDependency:
     def __init__(
         self,
         clip_id: int,
-        take_id: int,
+        take_id: int | None,
         original_source_id: int,
         derived_source_id: int,
         source_sample_rate: int,
@@ -77,14 +77,14 @@ class ProjectVocalEditDependency:
 
 class ProjectVocalRehydrateItem:
     clip_id: int
-    take_id: int
+    take_id: int | None
     derived_source_id: int
     status: ProjectVocalRehydrateStatus
     reason: VocalReason
     def __init__(
         self,
         clip_id: int,
-        take_id: int,
+        take_id: int | None,
         derived_source_id: int,
         status: ProjectVocalRehydrateStatus,
         reason: VocalReason,
@@ -104,7 +104,7 @@ def _apply_project_vocal_edit(
     rendered_sample_rate: int,
     render_token: VocalStateToken,
     sve1: bytes | bytearray | memoryview,
-    take_id: int = ...,
+    take_id: int | None = ...,
     rendered_start_sample: int = ...,
 ) -> ProjectVocalEditApplyResult: ...
 def _project_vocal_edit_dependencies(

@@ -167,7 +167,7 @@ def test_a_fractional_decompose_count_is_refused_rather_than_read_as_the_default
 
 
 def test_a_fractional_take_source_id_is_refused_rather_than_read_as_the_clips_own_source() -> None:
-    """0 on ClipTake.source_id means "use the clip's current source"."""
+    """An absent ClipTake.source_id uses the clip's current source; 0 is refused, not read so."""
 
     def takes_json(source_id) -> bytes:
         project = ls.Project()
@@ -198,7 +198,8 @@ def test_a_fractional_take_source_id_is_refused_rather_than_read_as_the_clips_ow
             project.close()
 
     omitted = takes_json(None)
-    assert takes_json(0) == omitted
+    with pytest.raises(SonareValueError, match="source_id"):
+        takes_json(0)
     assert takes_json(2) != omitted  # positive control: source 2 is the second clip's
     with pytest.raises(SonareValueError, match="source_id"):
         takes_json(0.5)
@@ -235,16 +236,15 @@ def test_a_fractional_active_take_id_is_refused_rather_than_read_as_the_base_sou
             project.close()
 
     omitted = takes_json(None)
-    assert takes_json(0) == omitted  # 0 is also this argument's own default
     assert takes_json(2) != omitted  # positive control
-    for value in (0.5, 2.5):
+    for value in (0, 0.5, 2.5):
         with pytest.raises(SonareValueError, match="active_take_id"):
             takes_json(value)
     assert takes_json(None) == omitted
 
 
 def test_a_fractional_comp_take_id_is_refused_rather_than_read_as_the_base_take() -> None:
-    """0 on ClipCompSegment.take_id selects the base/active fallback."""
+    """An absent ClipCompSegment.take_id selects the base/active fallback; 0 is refused."""
 
     def comp_json(take_id) -> bytes:
         project = ls.Project()
@@ -275,8 +275,9 @@ def test_a_fractional_comp_take_id_is_refused_rather_than_read_as_the_base_take(
             project.close()
 
     omitted = comp_json(None)
-    assert comp_json(0) == omitted
     assert comp_json(2) != omitted  # positive control
+    with pytest.raises(SonareValueError, match="take_id"):
+        comp_json(0)
     with pytest.raises(SonareValueError, match="take_id"):
         comp_json(0.5)
     with pytest.raises(SonareValueError, match="take_id"):

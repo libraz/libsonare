@@ -312,10 +312,12 @@ class Project(
         rendered_sample_rate: int,
         render_token: VocalStateToken,
         sve1: bytes | bytearray | memoryview,
-        take_id: int = 0,
+        take_id: int | None = None,
         rendered_start_sample: int = 0,
     ) -> ProjectVocalEditApplyResult:
         """Commit a full-source vocal render to one clip or take.
+
+        ``take_id`` ``None`` edits the clip's base source; 0 is refused.
 
         The ``expected_*`` fields must match the clip's current source; a
         ``rendered_mono`` length other than ``expected_source_sample_count``

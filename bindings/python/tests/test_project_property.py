@@ -23,7 +23,7 @@ import pytest
 from libsonare import Project
 
 SAMPLE_RATES = (44100.0, 48000.0, 96000.0)
-TRACK_NAMES = ("lead", "bass", "drums", "pad", "fx", "vox-é", "ベース", "")
+TRACK_NAMES = ("lead", "bass", "drums", "pad", "fx", "vox-é", "ベース")
 
 
 def _random_name(rng: random.Random) -> str | None:

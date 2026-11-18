@@ -74,8 +74,8 @@ class ProjectVocalEditApplyResult:
 
     clip_id: int
     """Id of the clip that was edited."""
-    take_id: int
-    """Id of the take that was edited; 0 when the clip's base source was."""
+    take_id: int | None
+    """Id of the take that was edited; ``None`` when the clip's base source was."""
     original_source_id: int
     """Id of the source the edit was made from."""
     derived_source_id: int
@@ -96,8 +96,8 @@ class ProjectVocalEditDependency:
 
     clip_id: int
     """Id of the clip the edit belongs to."""
-    take_id: int
-    """Id of the take the edit belongs to; 0 for the clip's base source."""
+    take_id: int | None
+    """Id of the take the edit belongs to; ``None`` for the clip's base source."""
     original_source_id: int
     """Id of the source the edit was made from."""
     derived_source_id: int
@@ -131,8 +131,8 @@ class ProjectVocalRehydrateItem:
 
     clip_id: int
     """Id of the clip the edit belongs to."""
-    take_id: int
-    """Id of the take the edit belongs to; 0 for the clip's base source."""
+    take_id: int | None
+    """Id of the take the edit belongs to; ``None`` for the clip's base source."""
     derived_source_id: int
     """Id of the source carrying the edited audio."""
     status: ProjectVocalRehydrateStatus
@@ -184,8 +184,8 @@ def _project_handle(project: Project) -> ctypes.c_void_p:
     return project._require_handle()
 
 
-def _id(value: object, name: str, *, allow_zero: bool = False) -> int:
-    return _narrow_int(value, name, 0 if allow_zero else 1, _MAX_U32_ID)
+def _id(value: object, name: str) -> int:
+    return _narrow_int(value, name, 1, _MAX_U32_ID)
 
 
 def _token_to_c(token: VocalStateToken) -> SonareVocalStateToken:
@@ -206,7 +206,7 @@ def _token_to_c(token: VocalStateToken) -> SonareVocalStateToken:
 def _apply_result(raw: SonareProjectVocalEditApplyResult) -> ProjectVocalEditApplyResult:
     return ProjectVocalEditApplyResult(
         clip_id=int(raw.clip_id),
-        take_id=int(raw.take_id),
+        take_id=int(raw.take_id) or None,
         original_source_id=int(raw.original_source_id),
         derived_source_id=int(raw.derived_source_id),
         committed_revision=int(raw.committed_revision),
@@ -219,7 +219,7 @@ def _apply_result(raw: SonareProjectVocalEditApplyResult) -> ProjectVocalEditApp
 def _dependency(raw: SonareProjectVocalEditDependency) -> ProjectVocalEditDependency:
     return ProjectVocalEditDependency(
         clip_id=int(raw.clip_id),
-        take_id=int(raw.take_id),
+        take_id=int(raw.take_id) or None,
         original_source_id=int(raw.original_source_id),
         derived_source_id=int(raw.derived_source_id),
         source_sample_rate=int(raw.source_sample_rate),
@@ -238,7 +238,7 @@ def _dependency(raw: SonareProjectVocalEditDependency) -> ProjectVocalEditDepend
 def _rehydrate_item(raw: SonareProjectVocalRehydrateItem) -> ProjectVocalRehydrateItem:
     return ProjectVocalRehydrateItem(
         clip_id=int(raw.clip_id),
-        take_id=int(raw.take_id),
+        take_id=int(raw.take_id) or None,
         derived_source_id=int(raw.derived_source_id),
         status=_rehydrate_status_token(int(raw.status)),
         reason=_reason_token(int(raw.reason)),
@@ -268,7 +268,7 @@ def _apply_project_vocal_edit(
     rendered_sample_rate: int,
     render_token: VocalStateToken,
     sve1: bytes | bytearray | memoryview,
-    take_id: int = 0,
+    take_id: int | None = None,
     rendered_start_sample: int = 0,
 ) -> ProjectVocalEditApplyResult:
     """Commit a full-source vocal render to one Project clip or take."""
@@ -317,7 +317,8 @@ def _apply_project_vocal_edit(
     lib = _get_lib()
     lib.sonare_project_vocal_edit_apply_desc_init(ctypes.byref(desc))
     desc.clip_id = _id(clip_id, "clip_id")
-    desc.take_id = _id(take_id, "take_id", allow_zero=True)
+    # None binds the clip's base source (C 0); no take is allocated id 0.
+    desc.take_id = 0 if take_id is None else _id(take_id, "take_id")
     desc.expected_source_id = _id(expected_source_id, "expected_source_id")
     desc.expected_source_sample_rate = expected_rate
     desc.expected_source_sample_count = expected_count

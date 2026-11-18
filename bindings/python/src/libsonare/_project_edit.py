@@ -98,6 +98,18 @@ if TYPE_CHECKING:
 _LOOP_RECORDING_DROP_PARTIAL_TAIL = 1
 _TAKE_KEYS = ("id", "source_id", "source_offset_ppq", "name")
 _COMP_SEGMENT_KEYS = ("start_ppq", "end_ppq", "take_id", "crossfade_ppq")
+
+
+def _optional_id(value: object, name: str) -> int:
+    """Map an optional take or source id to the C field; ``None`` is the C ``0`` (none).
+
+    Neither id space allocates 0, so an explicit 0 is refused rather than read as none.
+    """
+    if value is None:
+        return 0
+    return _narrow_int(value, name, 1, _UINT32_MAX)
+
+
 _STEM_KEYS = ("name", "layout", "planar_samples", "role", "start_frame")
 
 
@@ -243,6 +255,8 @@ class _ProjectEditMixin:
             kind: ``"audio"`` (default), ``"midi"`` or ``"aux"``.
             name: Optional track name.
         """
+        if name == "":
+            raise SonareValueError("add_track: name must not be empty; omit it for no name")
         desc = SonareProjectTrackDesc(
             kind=_track_kind_value(kind),
             name=_utf8_arg(name, "name") if name is not None else None,
@@ -578,34 +592,38 @@ class _ProjectEditMixin:
         self,
         clip_id: int,
         takes: Sequence[Mapping[str, object]],
-        active_take_id: int = 0,
+        active_take_id: int | None = None,
     ) -> None:
-        """Replace a clip's take list and active take via an undoable edit; ``[]`` clears it."""
+        """Replace a clip's take list and active take via an undoable edit; ``[]`` clears it.
+
+        Each take mapping needs a non-zero ``id``; ``source_id`` absent or ``None`` uses the
+        clip's current source, and ``name`` absent or ``None`` leaves the take unnamed.
+        ``active_take_id`` ``None`` plays the clip's base source.
+        """
         if takes is None:
             raise TypeError("set_clip_takes: takes must be a sequence; pass [] to clear the takes")
         take_items = list(takes)
         c_takes = (SonareProjectClipTake * len(take_items))()
         name_backing: list[bytes] = []
         for i, item in enumerate(take_items):
-            take = _mapping_keys(item, _TAKE_KEYS, f"set_clip_takes: takes[{i}]")
-            take_id = take.get("id", 0)
-            source_id = take.get("source_id", 0)
-            source_offset = take.get("source_offset_ppq", 0.0)
-            name = take.get("name", "")
-            # Narrowed rather than coerced, for the reason source_id gives below:
-            # int(0.5) is a 0 the take list then carries as a real take id.
-            c_takes[i].id = _narrow_int(take_id, f"set_clip_takes: takes[{i}].id", 0, _UINT32_MAX)
-            # Narrowed rather than coerced: int(0.5) is the 0 this field reads as
-            # "use the clip's current source", so a fractional source id would
-            # attach the clip's own source and report success.
-            c_takes[i].source_id = _narrow_int(
-                source_id, f"set_clip_takes: takes[{i}].source_id", 0, _UINT32_MAX
-            )
+            where = f"set_clip_takes: takes[{i}]"
+            take = _mapping_keys(item, _TAKE_KEYS, where)
+            if take.get("id") is None:
+                raise SonareValueError(f"{where}.id is required")
+            c_takes[i].id = _optional_id(take["id"], f"{where}.id")
+            c_takes[i].source_id = _optional_id(take.get("source_id"), f"{where}.source_id")
             c_takes[i].source_offset_ppq = _narrow_double(
-                source_offset, f"set_clip_takes: takes[{i}].source_offset_ppq"
+                take.get("source_offset_ppq", 0.0), f"{where}.source_offset_ppq"
             )
-            if name:
-                encoded = _utf8_arg(str(name), "name")
+            name = take.get("name")
+            if name is not None:
+                if not isinstance(name, str):
+                    raise TypeError(f"{where}.name must be a string or None")
+                if not name:
+                    raise SonareValueError(
+                        f"{where}.name must not be empty; omit it for an unnamed take"
+                    )
+                encoded = _utf8_arg(name, "name")
                 name_backing.append(encoded)
                 c_takes[i].name = encoded
         _check(
@@ -614,11 +632,10 @@ class _ProjectEditMixin:
                 _to_c_uint32(clip_id, "clip_id"),
                 c_takes if take_items else None,
                 len(take_items),
-                # Narrowed rather than coerced, like takes[].source_id above:
-                # int(0.5) is the 0 this argument reads as "use the clip's base
-                # source", so a fractional take id would select that and report
-                # success.
-                _to_c_uint32(active_take_id, "set_clip_takes: active_take_id"),
+                _to_c_uint32(
+                    _optional_id(active_take_id, "set_clip_takes: active_take_id"),
+                    "set_clip_takes: active_take_id",
+                ),
             )
         )
         del name_backing
@@ -628,7 +645,10 @@ class _ProjectEditMixin:
         clip_id: int,
         segments: Sequence[Mapping[str, object]],
     ) -> None:
-        """Replace a clip's comp lane via an undoable edit; ``[]`` clears it."""
+        """Replace a clip's comp lane via an undoable edit; ``[]`` clears it.
+
+        A segment's ``take_id`` absent or ``None`` plays the base/active take; 0 is refused.
+        """
         if segments is None:
             raise TypeError(
                 "set_clip_comp_segments: segments must be a sequence; pass [] to clear the lane"
@@ -641,7 +661,6 @@ class _ProjectEditMixin:
             )
             start_ppq = segment.get("start_ppq", 0.0)
             end_ppq = segment.get("end_ppq", 0.0)
-            take_id = segment.get("take_id", 0)
             crossfade_ppq = segment.get("crossfade_ppq", 0.0)
             c_segments[i].start_ppq = _narrow_double(
                 start_ppq, f"set_clip_comp_segments: segments[{i}].start_ppq"
@@ -649,11 +668,9 @@ class _ProjectEditMixin:
             c_segments[i].end_ppq = _narrow_double(
                 end_ppq, f"set_clip_comp_segments: segments[{i}].end_ppq"
             )
-            # Narrowed rather than coerced: int(0.5) is the 0 this field reads as
-            # "fall back to the base/active take", so a fractional take id would
-            # select that fallback and report success.
-            c_segments[i].take_id = _narrow_int(
-                take_id, f"set_clip_comp_segments: segments[{i}].take_id", 0, _UINT32_MAX
+            # Absent or None falls back to the base/active take.
+            c_segments[i].take_id = _optional_id(
+                segment.get("take_id"), f"set_clip_comp_segments: segments[{i}].take_id"
             )
             c_segments[i].crossfade_ppq = _narrow_double(
                 crossfade_ppq, f"set_clip_comp_segments: segments[{i}].crossfade_ppq"

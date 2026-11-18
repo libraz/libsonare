@@ -249,6 +249,9 @@ class _EngineIoMixin:
         raw.connection_count = len(spec.connections)
         raw.parameter_bindings = parameter_bindings
         raw.parameter_binding_count = len(bindings)
+        for field in ("input_node", "output_node"):
+            if getattr(spec, field) == "":
+                raise SonareValueError(f"set_graph: {field} must not be empty")
         raw.input_node = _fixed_bytes(spec.input_node, 64, "input_node")
         raw.output_node = _fixed_bytes(spec.output_node, 64, "output_node")
         # Assigned unconverted so the struct's own narrowing sees the caller's

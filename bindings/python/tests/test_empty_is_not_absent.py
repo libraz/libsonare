@@ -13,6 +13,7 @@ import pytest
 import libsonare
 from libsonare import (
     EngineGraphNode,
+    EngineGraphSpec,
     EngineMarker,
     ParameterInfo,
     Project,
@@ -62,6 +63,14 @@ def test_project_marker_name_is_none_when_unnamed_and_empty_is_refused() -> None
             project.set_marker(3.0, name="")
 
 
+def test_project_marker_name_has_no_byte_limit() -> None:
+    # The core stores a project marker name unbounded; only engine fields pass a char[N].
+    long_name = "m" * 64 + "é" * 40
+    with Project() as project:
+        marker = project.set_marker(1.0, name=long_name)
+        assert {m.id: m.name for m in project.markers()}[marker] == long_name
+
+
 def test_engine_marker_name_is_none_when_unnamed_and_is_never_cut() -> None:
     assert EngineMarker(1, 0.0).name is None
     longest = "m" * 63
@@ -108,3 +117,40 @@ def test_clip_take_and_comp_lists_are_required_and_empty_clears() -> None:
             project.set_clip_takes(clip, None)  # type: ignore[arg-type]
         with pytest.raises(TypeError, match="^set_clip_comp_segments: segments must be a sequence"):
             project.set_clip_comp_segments(clip, None)  # type: ignore[arg-type]
+
+
+def test_take_ids_and_names_are_none_when_absent_and_never_zero_or_empty() -> None:
+    with Project() as project:
+        track = project.add_track("audio", "gtr")
+        clip = project.add_clip(
+            track, 0.0, 480.0, audio=[0.1, 0.2, 0.1, 0.0], audio_channels=1, audio_sample_rate=SR
+        )
+        project.set_clip_takes(clip, [{"id": 1}, {"id": 2, "name": "B"}], active_take_id=None)
+        with pytest.raises(SonareValueError, match=r"^set_clip_takes: takes\[0\]\.id is required$"):
+            project.set_clip_takes(clip, [{"name": "A"}])
+        with pytest.raises(SonareValueError, match=r"takes\[0\]\.id must be"):
+            project.set_clip_takes(clip, [{"id": 0}])
+        with pytest.raises(SonareValueError, match="active_take_id"):
+            project.set_clip_takes(clip, [{"id": 1}], active_take_id=0)
+        with pytest.raises(
+            SonareValueError,
+            match=r"^set_clip_takes: takes\[0\]\.name must not be empty; omit it for an unnamed",
+        ):
+            project.set_clip_takes(clip, [{"id": 1, "name": ""}])
+        with pytest.raises(TypeError, match=r"^set_clip_takes: takes\[0\]\.name must be a string"):
+            project.set_clip_takes(clip, [{"id": 1, "name": 7}])
+
+
+def test_track_name_and_graph_endpoints_refuse_an_empty_string() -> None:
+    with Project() as project:
+        assert project.add_track("audio", None) > 0
+        with pytest.raises(SonareValueError, match="^add_track: name must not be empty"):
+            project.add_track("audio", "")
+    spec = EngineGraphSpec(
+        nodes=[EngineGraphNode(id="n")], connections=[], input_node="", output_node="n"
+    )
+    with (
+        RealtimeEngine(sample_rate=SR, max_block_size=128) as engine,
+        pytest.raises(SonareValueError, match="^set_graph: input_node must not be empty$"),
+    ):
+        engine.set_graph(spec)

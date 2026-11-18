@@ -93,7 +93,7 @@ def test_project_mappings_take_one_spelling() -> None:
         clip = project.add_clip(
             track, 0.0, 480.0, audio=[0.1, 0.2, 0.1, 0.0], audio_channels=1, audio_sample_rate=48000
         )
-        take = {"id": 1, "source_id": 0, "source_offset_ppq": 0.0, "name": "a"}
+        take = {"id": 1, "source_id": None, "source_offset_ppq": 0.0, "name": "a"}
         _refuses(lambda m: project.set_clip_takes(clip, [m], active_take_id=1), take, "sourceId")
         segment = {"start_ppq": 0.0, "end_ppq": 1.0, "take_id": 1, "crossfade_ppq": 0.0}
         _refuses(lambda m: project.set_clip_comp_segments(clip, [m]), segment, "takeId")

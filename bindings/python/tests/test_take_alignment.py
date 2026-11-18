@@ -123,13 +123,17 @@ def test_the_bins_per_octave_reaches_the_measurement(
     assert finer != default
 
 
-def test_zero_asks_for_the_library_value_as_omitting_it_does(
-    pair: tuple[np.ndarray, np.ndarray],
+@pytest.mark.parametrize("field", ["hop_length", "bins_per_octave"])
+@pytest.mark.parametrize("value", [0, -1])
+def test_omission_is_the_library_value_and_zero_is_refused(
+    pair: tuple[np.ndarray, np.ndarray], field: str, value: int
 ) -> None:
     reference, take = pair
-    omitted = align_take_to_reference(reference, take, SR).anchors
-    zeroed = align_take_to_reference(reference, take, SR, hop_length=0, bins_per_octave=0).anchors
-    assert zeroed == omitted
+    assert len(align_take_to_reference(reference, take, SR, **{field: None}).anchors) >= 2
+    with pytest.raises(
+        SonareValueError, match=rf"^align_take_to_reference: {field} must be an integer"
+    ):
+        align_take_to_reference(reference, take, SR, **{field: value})
 
 
 def test_alignment_metadata_is_named_for_the_arguments_the_caller_passed(
