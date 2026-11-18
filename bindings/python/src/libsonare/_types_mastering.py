@@ -167,7 +167,7 @@ class MasteringResult:
     output_lufs: float
     """Integrated loudness of the output in LUFS."""
     applied_gain_db: float
-    """Gain applied to the input, in dB."""
+    """Sum of the static gains the stages applied, in dB; limiter gain reduction is not included."""
     latency_samples: int = 0
     """Processor latency in samples; the output is already compensated for it."""
     loudness_target_limited: bool = False
@@ -201,7 +201,7 @@ class MasteringStereoResult:
     output_lufs: float
     """Integrated loudness of the output in LUFS."""
     applied_gain_db: float
-    """Gain applied to the input, in dB."""
+    """Sum of the static gains the stages applied, in dB; limiter gain reduction is not included."""
     latency_samples: int = 0
     """Processor latency in samples; the output is already compensated for it."""
     loudness_target_limited: bool = False
@@ -330,7 +330,7 @@ class MasteringReport:
     after: MasteringLoudnessSummary
     """Measurements of the output."""
     applied_gain_db: float
-    """Gain applied by the chain, in dB."""
+    """Sum of the static gains the stages applied, in dB; limiter gain reduction is not included."""
     max_gain_reduction_db: float
     """Most-negative final dynamics/limiter gain reduction in dB; zero when none ran."""
     loudness_target_limited: bool
@@ -352,7 +352,7 @@ class MasteringChainResult:
     output_lufs: float
     """Integrated loudness of the output in LUFS; the achieved value, not the target."""
     applied_gain_db: float
-    """Gain applied by the chain, in dB."""
+    """Sum of the static gains the stages applied, in dB; limiter gain reduction is not included."""
     stages: list[str]
     """Identifiers of the stages the chain applied."""
     #: ITU-R BS.1770-4 true peak of the output (dBTP). The oversample factor
@@ -405,7 +405,7 @@ class MasteringChainStereoResult:
     output_lufs: float
     """Integrated loudness of the output in LUFS; the achieved value, not the target."""
     applied_gain_db: float
-    """Gain applied by the chain, in dB."""
+    """Sum of the static gains the stages applied, in dB; limiter gain reduction is not included."""
     stages: list[str]
     """Identifiers of the stages the chain applied."""
     #: See :class:`MasteringChainResult` for field semantics.
