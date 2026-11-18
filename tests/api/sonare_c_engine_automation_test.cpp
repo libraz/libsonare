@@ -50,7 +50,7 @@ TEST_CASE("sonare_engine validates realtime queue error classes", "[c_api][engin
   REQUIRE(sonare_engine_prepare(engine, 7999.0, 128, 1, 1) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_engine_prepare(engine, 384001.0, 128, 1, 1) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_engine_prepare_with_channels(engine, 48000.0, 128, 1, 1, 2) == SONARE_OK);
-  REQUIRE(sonare_engine_prepare_with_channels(engine, 48000.0, 128, 1, 1, 0) ==
+  REQUIRE(sonare_engine_prepare_with_channels(engine, 48000.0, 128, 1, 1, -1) ==
           SONARE_ERROR_INVALID_PARAMETER);
   // Driven from the engine constant, so raising it moves the boundary here too.
   constexpr int max_channels = static_cast<int>(sonare::engine::RealtimeEngine::kMaxAudioChannels);

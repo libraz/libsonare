@@ -629,6 +629,7 @@ TEST_CASE("sonare_engine_bounce_offline defaults both rates to the prepared rate
   REQUIRE(options.target_sample_rate == 0);
   options.total_frames = 441;
   options.block_size = 128;
+  options.num_channels = 2;
 
   SonareEngineBounceResult result{};
   REQUIRE(sonare_engine_bounce_offline(engine, &options, &result) == SONARE_OK);
@@ -684,6 +685,7 @@ TEST_CASE("sonare_engine_bounce_offline resamples when the target differs from t
   options.total_frames = 44100;
   options.block_size = 128;
   options.target_sample_rate = 48000;
+  options.num_channels = 2;
 
   // source left at 0 resolves to the prepared 44.1 kHz and the output is resampled.
   SonareEngineBounceResult result{};
