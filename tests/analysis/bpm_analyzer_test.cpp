@@ -8,7 +8,11 @@
 #include <cmath>
 #include <vector>
 
+#include "analysis/beat_analyzer.h"
 #include "analysis/music_analyzer.h"
+#include "analysis/rhythm_analyzer.h"
+#include "analysis/tempo_curve.h"
+#include "feature/rhythm.h"
 #include "support/drum_groove.h"
 #include "support/rate_material.h"
 #include "util/constants.h"
@@ -509,4 +513,35 @@ TEST_CASE("smart_choice keeps the beat over a two-thirds relative with more vote
   const std::vector<BpmHistogramBin> evidence = {{240.2f, 75}, {60.4f, 80}};
   CHECK_THAT(smart_choice(narrow, 166, evidence).first, WithinAbs(121.5f, 0.1f));
   CHECK_THAT(smart_choice(narrow, 166, evidence).second, WithinAbs(100.0f, 0.1f));
+}
+
+// The bindings leave an absent tempo bound out of the native call, so these
+// defaults are the band every public tempo entry searches when none is given.
+TEST_CASE("Every tempo search defaults to the 60 to 200 BPM band", "[analysis][bpm]") {
+  const BpmConfig bpm;
+  CHECK(bpm.bpm_min == 60.0f);
+  CHECK(bpm.bpm_max == 200.0f);
+  const BeatConfig beat;
+  CHECK(beat.bpm_min == 60.0f);
+  CHECK(beat.bpm_max == 200.0f);
+  const RhythmConfig rhythm;
+  CHECK(rhythm.bpm_min == 60.0f);
+  CHECK(rhythm.bpm_max == 200.0f);
+  const PlpConfig plp;
+  CHECK(plp.tempo_min == 60.0f);
+  CHECK(plp.tempo_max == 200.0f);
+  const TempoCurveConfig curve;
+  CHECK(curve.bpm_min == 60.0f);
+  CHECK(curve.bpm_max == 200.0f);
+}
+
+TEST_CASE("An inverted tempo band is refused, not reordered", "[analysis][bpm]") {
+  BpmConfig bpm;
+  bpm.bpm_min = 200.0f;
+  bpm.bpm_max = 60.0f;
+  CHECK_THROWS_AS(validate_bpm_config(bpm), SonareException);
+  RhythmConfig rhythm;
+  rhythm.bpm_min = 200.0f;
+  rhythm.bpm_max = 60.0f;
+  CHECK_THROWS_AS(validate_rhythm_config(rhythm), SonareException);
 }
