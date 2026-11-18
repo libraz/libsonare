@@ -708,7 +708,12 @@ FAMILY_EXEMPT: typing.Mapping[tuple[str, str], str] = types.MappingProxyType(
     {
         **{
             (path, "NormalizeMode"): "the level statistic normalize targets, not the detector mode it shares two tokens with"
-            for path in ("bindings/node/src/mastering_normalize.ts", "bindings/wasm/src/mastering_chain.ts")
+            for path in (
+                "bindings/node/src/mastering_normalize.ts",
+                "bindings/wasm/src/mastering_chain.ts",
+                "bindings/python/src/libsonare/_effects_level.py",
+                "bindings/python/src/libsonare/analyzer.pyi",
+            )
         },
         **{
             (path, "EngineDither"): "an omitted dither means none, so the bounce options spell no 'none' token"
