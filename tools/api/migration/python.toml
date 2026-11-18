@@ -8050,7 +8050,7 @@ test = "bindings/python/tests/test_project.py::test_add_loop_recording_takes_req
 [[entry]]
 kind = "option"
 old = "Project.add_loop_recording_takes(audio_channels)"
-changed = "audio_channels is required for interleaved audio (1.x defaulted to 1); planar audio derives it, and a disagreeing value raises SonareValueError"
+changed = "audio_channels is required for interleaved audio (1.x defaulted to 1); planar audio derives it, and an audio_channels beside planar audio raises SonareValueError"
 domain = "project"
 rule = "sample-rate-required"
 test = "bindings/python/tests/test_project.py::test_add_loop_recording_takes_requires_the_capture_format"

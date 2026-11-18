@@ -782,15 +782,17 @@ def test_add_loop_recording_takes_requires_the_capture_format() -> None:
             project.add_loop_recording_takes(
                 track_id, 0.0, 1.0, mono, audio_channels=1, audio_sample_rate=0
             )
-        with pytest.raises(SonareValueError, match="audio_channels"):
-            project.add_loop_recording_takes(
-                track_id,
-                0.0,
-                1.0,
-                np.zeros((2, 2400), dtype=np.float32),
-                audio_channels=1,
-                audio_sample_rate=48000,
-            )
+        for given in (1, 2):
+            # The shape carries the count, so a second spelling is refused even when it agrees.
+            with pytest.raises(SonareValueError, match="audio_channels"):
+                project.add_loop_recording_takes(
+                    track_id,
+                    0.0,
+                    1.0,
+                    np.zeros((2, 2400), dtype=np.float32),
+                    audio_channels=given,
+                    audio_sample_rate=48000,
+                )
     finally:
         project.close()
 

@@ -387,7 +387,7 @@ class _ProjectEditMixin:
         ``audio`` is either interleaved float32 capture data, which requires
         ``audio_channels``, or planar: a channels-first 2-D array or a sequence
         of equal-length per-channel sequences, whose channel count is the number
-        of rows (an ``audio_channels`` given beside it must agree). The capture's
+        of rows (``audio_channels`` is then refused). The capture's
         ``audio_sample_rate`` is required: the library has no default for the
         format of audio the caller recorded. Each loop-length
         span becomes a separate take and the last take is made active, except
@@ -412,13 +412,11 @@ class _ProjectEditMixin:
                 raise SonareValueError("audio must not be empty")
             if any(plane.shape[0] != planar[0].shape[0] for plane in planar):
                 raise SonareValueError("planar audio channels must have equal lengths")
-            channels = len(planar)
-            if audio_channels is not None and (
-                _narrow_int(audio_channels, "audio_channels", _C_INT_MIN, _C_INT_MAX) != channels
-            ):
+            if audio_channels is not None:
                 raise SonareValueError(
-                    f"audio_channels {audio_channels} disagrees with the {channels} planar channels"
+                    "audio_channels must be omitted for planar audio, whose shape carries it"
                 )
+            channels = len(planar)
             audio = np.stack(planar, axis=1).reshape(-1)
         else:
             if audio_channels is None:
