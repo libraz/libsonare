@@ -111,11 +111,17 @@ SonareError sonare_resample(const float* samples, size_t length, int sample_rate
 // Memory management for result types
 // ============================================================================
 
+/// Releases the arrays of an STFT result and sets them to NULL; NULL is a no-op.
 void sonare_free_stft_result(SonareStftResult* result);
+/// Releases the arrays of a mel spectrogram result and sets them to NULL; NULL is a no-op.
 void sonare_free_mel_result(SonareMelResult* result);
+/// Releases the arrays of an MFCC result and sets them to NULL; NULL is a no-op.
 void sonare_free_mfcc_result(SonareMfccResult* result);
+/// Releases the arrays of a chroma result and sets them to NULL; NULL is a no-op.
 void sonare_free_chroma_result(SonareChromaResult* result);
+/// Releases the arrays of a pitch-tracking result and sets them to NULL; NULL is a no-op.
 void sonare_free_pitch_result(SonarePitchResult* result);
+/// Releases the arrays of an HPSS result and sets them to NULL; NULL is a no-op.
 void sonare_free_hpss_result(SonareHpssResult* result);
 
 #ifdef __cplusplus

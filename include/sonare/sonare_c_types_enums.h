@@ -77,7 +77,7 @@ typedef enum SONARE_ENUM_BASE {
   SONARE_CHROMA_METHOD_CQT = 2
 } SonareChromaMethod;
 
-// Pitch class enum
+/// Pitch class, C = 0 through B = 11; the `S` suffix is a sharp.
 typedef enum SONARE_ENUM_BASE {
   SONARE_PITCH_C = 0,
   SONARE_PITCH_CS = 1,
@@ -104,6 +104,7 @@ typedef enum SONARE_ENUM_BASE {
   SONARE_MODE_LOCRIAN = 6
 } SonareMode;
 
+/// Key-finding profile the chroma is correlated against.
 typedef enum SONARE_ENUM_BASE {
   /** No profile pinned: the genre hint chooses one, or the chroma when the hint is "auto". */
   SONARE_KEY_PROFILE_AUTO = -1,
@@ -116,6 +117,7 @@ typedef enum SONARE_ENUM_BASE {
   SONARE_KEY_PROFILE_BELLMAN_BUDGE = 6
 } SonareKeyProfileType;
 
+/// How a tempogram is computed from the onset envelope: autocorrelation or cosine (Fourier).
 typedef enum SONARE_ENUM_BASE {
   SONARE_TEMPOGRAM_AUTOCORRELATION = 0,
   SONARE_TEMPOGRAM_COSINE = 1
@@ -142,17 +144,22 @@ typedef enum SONARE_ENUM_BASE {
 
 /* Realtime voice changer selectors. Ordinals mirror the enums of
    sonare::editing::voice_changer (voice_transform_types.h); do not reorder. */
+
+/// Pitch-shifting algorithm of the voice changer: granular or PSOLA.
 typedef enum SONARE_ENUM_BASE {
   SONARE_PITCH_ENGINE_GRAIN = 0,
   SONARE_PITCH_ENGINE_PSOLA = 1
 } SonarePitchEngine;
 
+/// How the voice changer chooses its target pitch. AUTO pulls toward the nearest note of
+/// the scale by the correction amount; ROBOT holds the scale's tonic in the chosen octave.
 typedef enum SONARE_ENUM_BASE {
   SONARE_PITCH_CORRECTION_OFF = 0,
   SONARE_PITCH_CORRECTION_AUTO = 1,
   SONARE_PITCH_CORRECTION_ROBOT = 2
 } SonarePitchCorrectionMode;
 
+/// Scale used by automatic pitch correction and harmony voices.
 typedef enum SONARE_ENUM_BASE {
   SONARE_SCALE_MAJOR = 0,
   SONARE_SCALE_NATURAL_MINOR = 1,
@@ -197,6 +204,8 @@ typedef enum SONARE_ENUM_BASE {
   SONARE_NOTE_DIVISION_SIXTEENTH = 3
 } SonareNoteDivision;
 
+/// What MIDI-driven voices do once every held note is released: HOLD keeps the last
+/// note's pitch, INPUT returns to the pitch the input and correction give.
 typedef enum SONARE_ENUM_BASE {
   SONARE_MIDI_RELEASE_HOLD = 0,
   SONARE_MIDI_RELEASE_INPUT = 1
@@ -205,20 +214,28 @@ typedef enum SONARE_ENUM_BASE {
 // Opaque types
 /// Decoded mono audio and its sample rate; released with sonare_audio_destroy.
 typedef struct SonareAudio SonareAudio;
+/// Opaque handle that no function of this ABI creates or accepts.
 typedef struct SonareAnalyzer SonareAnalyzer;
+/// Mixer of channel strips and buses; released with sonare_mixer_destroy.
 typedef struct SonareMixer SonareMixer;
 /// One mixer channel strip, borrowed from its SonareMixer.
 typedef struct SonareStrip SonareStrip;
 /// Realtime multi-band equalizer.
 typedef struct SonareEq SonareEq;
+/// Realtime playback and mixing engine; released with sonare_engine_destroy.
 typedef struct SonareRealtimeEngine SonareRealtimeEngine;
+/// Realtime voice changer; released with sonare_realtime_voice_changer_destroy.
 typedef struct SonareRealtimeVoiceChanger SonareRealtimeVoiceChanger;
+/// Block-by-block analyzer of a live stream; released with sonare_stream_analyzer_destroy.
 typedef struct SonareStreamAnalyzer SonareStreamAnalyzer;
+/// Supplies audio pages of a clip on demand; released with sonare_clip_page_provider_destroy.
 typedef struct SonareClipPageProvider SonareClipPageProvider;
 
 /// Most bands one SonareEq holds.
 #define SONARE_EQ_MAX_BANDS 24
+/// Capacity of each decimated time-domain scope array in SonareEqSnapshot.
 #define SONARE_EQ_SPECTRUM_STREAM_CAPACITY 256
+/// Number of 20 Hz to 20 kHz bands in SonareEqSnapshot.profile_db.
 #define SONARE_EQ_SPECTRUM_PROFILE_BANDS 16
 
 /// Phase response of a SonareEq. Values match the offline `phaseMode` param and
@@ -229,7 +246,7 @@ typedef enum SONARE_ENUM_BASE {
   SONARE_EQ_PHASE_LINEAR = 3
 } SonareEqPhaseMode;
 
-/* Key structure.
+/** Detected key.
 
    confidence is the share of the model's belief that this key is the answer,
    in [0, 1): a softmax over the profile correlations of every candidate that
@@ -243,14 +260,15 @@ typedef enum SONARE_ENUM_BASE {
    recordings. A confident wrong answer is entirely possible, so a pipeline that
    branches on it must choose its own threshold against its own material. */
 typedef struct {
-  SonarePitchClass root;
-  SonareMode mode;
-  float confidence;
+  SonarePitchClass root;  ///< Tonic pitch class.
+  SonareMode mode;        ///< Scale mode.
+  float confidence;       ///< Belief in this key over the scored candidates, in [0, 1); see above.
 } SonareKey;
 
+/// One scored key hypothesis.
 typedef struct {
-  SonareKey key;
-  float correlation;
+  SonareKey key;      ///< The candidate key.
+  float correlation;  ///< Pearson correlation of the mean chroma with the key profile, in [-1, 1].
 } SonareKeyCandidate;
 
 /// Detected time signature.
@@ -260,7 +278,7 @@ typedef struct {
   float confidence;  ///< Belief in this meter over the other candidates, in [0, 1].
 } SonareTimeSignature;
 
-/* Relationship between a tempo candidate and SonareAnalysisResult.bpm. */
+/** Relationship between a tempo candidate and SonareAnalysisResult.bpm. */
 typedef enum SONARE_ENUM_BASE {
   SONARE_BPM_CANDIDATE_PRIMARY = 0,
   SONARE_BPM_CANDIDATE_HALF = 1,
@@ -268,28 +286,29 @@ typedef enum SONARE_ENUM_BASE {
   SONARE_BPM_CANDIDATE_OTHER = 3
 } SonareBpmCandidateRelation;
 
+/// One tempo hypothesis of SonareAnalysisResult.
 typedef struct {
-  float value;
-  float confidence;
-  SonareBpmCandidateRelation relation;
+  float value;                          ///< Tempo in BPM.
+  float confidence;                     ///< Candidate confidence in [0, 1].
+  SonareBpmCandidateRelation relation;  ///< How this tempo relates to the reported bpm.
 } SonareAnalysisBpmCandidate;
 
-// Flat analysis result structure. Producing this result runs the full quick
-// analysis pipeline because the flat result still includes meter/beat data;
-// use sonare_detect_bpm/key/beats for cheaper single-purpose queries.
+/// Flat analysis result of sonare_analyze / sonare_audio_analyze; release its arrays with
+/// sonare_free_analysis_result. Producing it runs the full quick analysis pipeline because it
+/// includes meter and beat data; use sonare_detect_bpm/key/beats for cheaper single queries.
 typedef struct {
-  float bpm;
-  /* Winning tempo cluster's vote share within 60-200 BPM, searched at 22050 Hz. sonare_analyze_bpm
+  float bpm;  ///< Estimated tempo in BPM.
+  /** Winning tempo cluster's vote share within 60-200 BPM, searched at 22050 Hz. sonare_analyze_bpm
      searches its own range at the input rate, so pass 60/200 and 22050 Hz input to compare. */
   float bpm_confidence;
-  SonareKey key;
-  SonareTimeSignature time_signature;
-  float* beat_times;
-  size_t beat_count;
-  SonareAnalysisBpmCandidate* bpm_candidates;
-  size_t bpm_candidate_count;
-  SonareTimeSignature* time_signature_candidates;
-  size_t time_signature_candidate_count;
+  SonareKey key;                       ///< Detected key.
+  SonareTimeSignature time_signature;  ///< Detected meter.
+  float* beat_times;                   ///< Beat times in seconds; NULL when beat_count is 0.
+  size_t beat_count;                   ///< Number of entries in beat_times.
+  SonareAnalysisBpmCandidate* bpm_candidates;      ///< Tempo hypotheses; NULL when the count is 0.
+  size_t bpm_candidate_count;                      ///< Number of entries in bpm_candidates.
+  SonareTimeSignature* time_signature_candidates;  ///< Meter hypotheses; NULL when the count is 0.
+  size_t time_signature_candidate_count;  ///< Number of entries in time_signature_candidates.
 } SonareAnalysisResult;
 
 #ifdef __cplusplus
