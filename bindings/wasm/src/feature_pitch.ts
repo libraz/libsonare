@@ -21,7 +21,9 @@ function requireModule() {
 
 /** YIN pitch request. */
 export interface PitchYinRequest extends ValidateOptions {
+  /** Mono audio samples. */
   samples: Float32Array;
+  /** Sample rate of `samples` in Hz. */
   sampleRate: number;
   /** Frame length in samples. Default 2048. */
   frameLength?: number;
@@ -39,7 +41,9 @@ export interface PitchYinRequest extends ValidateOptions {
 
 /** pYIN pitch request. */
 export interface PitchPyinRequest extends ValidateOptions {
+  /** Mono audio samples. */
   samples: Float32Array;
+  /** Sample rate of `samples` in Hz. */
   sampleRate: number;
   /** Frame length in samples. Default 2048. */
   frameLength?: number;
@@ -57,7 +61,9 @@ export interface PitchPyinRequest extends ValidateOptions {
 
 /** Spectral pitch-candidate request. */
 export interface PiptrackRequest extends ValidateOptions {
+  /** Mono audio samples. */
   samples: Float32Array;
+  /** Sample rate of `samples` in Hz. */
   sampleRate: number;
   /** FFT size. Default 2048. */
   nFft?: number;
@@ -158,6 +164,7 @@ export function pitchPyin(...args: unknown[]): PitchResult {
  * exactly one of `voicedProb` and `voicedFlags`.
  */
 export interface NoteSegmentsRequest {
+  /** Per-frame F0 track in Hz, one value per frame, at `frameRate` frames per second. */
   f0Hz: Float32Array;
   /**
    * Per-frame voicing values in `[0, 1]`; anything below `voicedThreshold` is
@@ -177,6 +184,7 @@ export interface NoteSegmentsRequest {
    * `voicedProb` and `voicedFlags` is given, or the length differs.
    */
   voicedFlags?: Uint8Array;
+  /** Frames per second of the F0 track. */
   frameRate: number;
   /** Cents of pitch change that start a new segment. Default 50. */
   segmentationThresholdCents?: number;
@@ -235,6 +243,7 @@ export function noteSegments(...args: unknown[]): NoteSegment[] {
 
 /** Tuning-offset request over a set of frequencies. */
 export interface PitchTuningRequest {
+  /** Frequencies in Hz to estimate the tuning offset from. */
   frequencies: Float32Array;
   /** Resolution of the search, as a fraction of a bin. Default 0.01. */
   resolution?: number;
@@ -244,7 +253,9 @@ export interface PitchTuningRequest {
 
 /** Tuning-offset request over an audio signal. */
 export interface EstimateTuningRequest extends ValidateOptions {
+  /** Mono audio samples. */
   samples: Float32Array;
+  /** Sample rate of `samples` in Hz. */
   sampleRate: number;
   /** Resolution of the search, as a fraction of a bin. Default 0.01. */
   resolution?: number;

@@ -34,7 +34,9 @@ function requireModule() {
 
 /** STFT request. */
 export interface StftRequest extends GuardedOptions {
+  /** Mono audio samples. */
   samples: Float32Array;
+  /** Sample rate of `samples` in Hz. */
   sampleRate: number;
   /** FFT size. Default 2048. */
   nFft?: number;
@@ -44,7 +46,9 @@ export interface StftRequest extends GuardedOptions {
 
 /** STFT-in-dB request. */
 export interface StftDbRequest extends GuardedOptions {
+  /** Mono audio samples. */
   samples: Float32Array;
+  /** Sample rate of `samples` in Hz. */
   sampleRate: number;
   /** FFT size. Default 2048. */
   nFft?: number;
@@ -54,7 +58,9 @@ export interface StftDbRequest extends GuardedOptions {
 
 /** STFT chromagram request. */
 export interface ChromaRequest extends GuardedOptions {
+  /** Mono audio samples. */
   samples: Float32Array;
+  /** Sample rate of `samples` in Hz. */
   sampleRate: number;
   /** FFT size. Default 2048. */
   nFft?: number;
@@ -67,7 +73,9 @@ export interface ChromaRequest extends GuardedOptions {
  * constant-Q transform, which has no FFT size to set.
  */
 export interface ChromaCensRequest extends GuardedOptions {
+  /** Mono audio samples. */
   samples: Float32Array;
+  /** Sample rate of `samples` in Hz. */
   sampleRate: number;
   /** Hop in samples. Default 512. */
   hopLength?: number;
@@ -79,7 +87,9 @@ export interface ChromaCensRequest extends GuardedOptions {
 
 /** Constant-Q chromagram request. Carries no `nFft`, like {@link ChromaCensRequest}. */
 export interface ChromaCqtRequest extends GuardedOptions {
+  /** Mono audio samples. */
   samples: Float32Array;
+  /** Sample rate of `samples` in Hz. */
   sampleRate: number;
   /** Hop in samples. Default 512. */
   hopLength?: number;
@@ -94,7 +104,9 @@ export interface ChromaCqtRequest extends GuardedOptions {
  * its bin count and its lowest frequency together.
  */
 export interface BassChromaRequest extends GuardedOptions {
+  /** Mono audio samples. */
   samples: Float32Array;
+  /** Sample rate of `samples` in Hz. */
   sampleRate: number;
   /** Hop in samples. Default 512. */
   hopLength?: number;
@@ -104,7 +116,9 @@ export interface BassChromaRequest extends GuardedOptions {
 
 /** Mel spectrogram request. */
 export interface MelSpectrogramRequest extends GuardedOptions {
+  /** Mono audio samples. */
   samples: Float32Array;
+  /** Sample rate of `samples` in Hz. */
   sampleRate: number;
   /** FFT size. Default 2048. */
   nFft?: number;
@@ -122,7 +136,9 @@ export interface MelSpectrogramRequest extends GuardedOptions {
 
 /** MFCC request. */
 export interface MfccRequest extends GuardedOptions {
+  /** Mono audio samples. */
   samples: Float32Array;
+  /** Sample rate of `samples` in Hz. */
   sampleRate: number;
   /** FFT size. Default 2048. */
   nFft?: number;
@@ -152,7 +168,9 @@ export interface MelDeltaRequest extends GuardedOptions {
 
 /** Reassigned spectrogram request. */
 export interface ReassignedSpectrogramRequest extends GuardedOptions {
+  /** Mono audio samples. */
   samples: Float32Array;
+  /** Sample rate of `samples` in Hz. */
   sampleRate: number;
   /** FFT size. Default 2048. */
   nFft?: number;
@@ -166,6 +184,7 @@ export interface ReassignedSpectrogramRequest extends GuardedOptions {
 
 /** Request for {@link trim}. */
 export interface TrimRequest extends GuardedOptions {
+  /** Mono audio samples. */
   samples: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
@@ -179,8 +198,11 @@ export interface TrimRequest extends GuardedOptions {
 
 /** Trimmed signal and its bounds, in samples of the input. */
 export interface TrimResult {
+  /** The trimmed samples. */
   audio: Float32Array;
+  /** Index in the input of the first kept sample. */
   startSample: number;
+  /** Index in the input where the kept range ends (exclusive). */
   endSample: number;
 }
 

@@ -268,6 +268,7 @@ export function mfccToAudio(...args: unknown[]): Float32Array {
 
 /** Request for {@link phaseVocoder}. */
 export interface PhaseVocoderRequest extends GuardedOptions {
+  /** Mono audio samples. */
   samples: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;

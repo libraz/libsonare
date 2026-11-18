@@ -39,6 +39,7 @@ type GuardedOptions = ValidateOptions;
 
 /** The audio and its sample rate, which every one-shot over samples takes. */
 interface SampleInput {
+  /** Mono audio samples. */
   samples: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
@@ -70,67 +71,101 @@ export interface VqtRequest extends CqtRequest {
 
 /** Canonical request form for {@link onsetStrength}. */
 export interface OnsetStrengthRequest extends SampleInput, GuardedOptions {
+  /** FFT size in samples. Default `2048`. */
   nFft?: number;
+  /** Hop length in samples. Default `512`. */
   hopLength?: number;
+  /** Mel bands the flux is taken over. Default `128`. */
   nMels?: number;
 }
 
+/** Canonical request form for {@link onsetStrengthMulti}. */
 export interface OnsetStrengthMultiRequest extends OnsetStrengthRequest {
   /** Number of onset bands; default 3. */
   nBands?: number;
 }
 
+/** Canonical request form for {@link fourierTempogram}. */
 export interface FourierTempogramRequest extends GuardedOptions {
+  /** Onset strength envelope, one value per frame. */
   onsetEnvelope: Float32Array;
   /** Sample rate in Hz of the audio the envelope came from; default 22050. */
   sampleRate?: number;
+  /** Hop length in samples between envelope frames. Default `512`. */
   hopLength?: number;
+  /** Analysis window in frames. Default `384`. */
   winLength?: number;
+  /** Centre the windows. Default `true`. */
   center?: boolean;
 }
 
+/** Canonical request form for {@link tempogramRatio}. */
 export interface TempogramRatioRequest extends GuardedOptions {
   /** Tempogram as {@link Matrix2D}: rows = tempogram lags, cols = frames. */
   tempogram: Matrix2D;
+  /** Sample rate in Hz of the audio the tempogram came from. Default `22050`. */
   sampleRate?: number;
+  /** Hop length in samples between frames. Default `512`. */
   hopLength?: number;
   /** Lag ratios to evaluate. When omitted or empty, the library default {0.5, 1, 2, 3, 4} is used. */
   factors?: Float32Array | number[];
 }
 
+/** Canonical request form for {@link cqtToAudio}. */
 export interface CqtToAudioRequest extends GuardedOptions {
   /** CQT magnitude as {@link Matrix2D}: rows = CQT bins, cols = frames. */
   magnitude: Matrix2D;
+  /** Output sample rate in Hz. Default `22050`. */
   sampleRate?: number;
+  /** Hop length in samples. Default `512`. */
   hopLength?: number;
+  /** Lowest bin frequency in Hz. Default `32.70319566257483` (C1). */
   fminHz?: number;
+  /** CQT bins per octave. Default `12`. */
   binsPerOctave?: number;
   /** Griffin-Lim iterations, at most 256; default 32. */
   nIter?: number;
 }
 
+/** Canonical request form for {@link vqtToAudio}. */
 export interface VqtToAudioRequest extends GuardedOptions {
   /** VQT magnitude as {@link Matrix2D}: rows = VQT bins, cols = frames. */
   magnitude: Matrix2D;
+  /** Output sample rate in Hz. Default `22050`. */
   sampleRate?: number;
+  /** Bandwidth offset; omit for the automatic ERB-derived value, 0 is equivalent to CQT. */
   gamma?: number;
+  /** Hop length in samples. Default `512`. */
   hopLength?: number;
+  /** Lowest bin frequency in Hz. Default `32.70319566257483` (C1). */
   fminHz?: number;
+  /** VQT bins per octave. Default `12`. */
   binsPerOctave?: number;
+  /** Griffin-Lim iterations, at most 256. Default `32`. */
   nIter?: number;
 }
 
+/** Canonical request form for {@link analyzeSections}. */
 export interface AnalyzeSectionsRequest extends SampleInput, AnalyzeSectionsOptions {}
 /** Canonical (and positional) call form for {@link detectBoundaries}. */
 export interface DetectBoundariesRequest extends SampleInput, BoundaryOptions {}
+/** Canonical request form for {@link analyzeMelody}. */
 export interface AnalyzeMelodyRequest extends SampleInput, MelodyOptions {}
+/** Canonical request form for {@link lufs}. */
 export interface LufsRequest extends SampleInput, GuardedOptions {}
+/** Canonical request form for {@link momentaryLufs}. */
 export interface MomentaryLufsRequest extends SampleInput, GuardedOptions {}
+/** Canonical request form for {@link shortTermLufs}. */
 export interface ShortTermLufsRequest extends SampleInput, GuardedOptions {}
+/** Canonical request form for {@link nnlsChroma}. */
 export interface NnlsChromaRequest extends SampleInput, GuardedOptions {
+  /** Blend an STFT chroma into the NNLS chroma. Default `true`. */
   enableStftBlend?: boolean;
+  /** Weight of the blended STFT chroma. Default `0.55`. */
   stftBlendWeight?: number;
+  /** FFT size in samples of the blended STFT chroma. Default `4096`. */
   stftBlendNFft?: number;
+  /** Hop length in samples. Default `512`. */
   hopLength?: number;
 }
 

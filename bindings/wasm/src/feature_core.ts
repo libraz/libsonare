@@ -70,6 +70,7 @@ export interface ClicksRequest {
 
 /** Power-to-dB conversion request. */
 export interface PowerToDbRequest {
+  /** Power values to convert. */
   values: Float32Array;
   /** Reference power. Default 1. */
   ref?: number;
@@ -81,6 +82,7 @@ export interface PowerToDbRequest {
 
 /** Amplitude-to-dB conversion request. */
 export interface AmplitudeToDbRequest {
+  /** Amplitude values to convert. */
   values: Float32Array;
   /** Reference amplitude. Default 1. */
   ref?: number;
@@ -92,6 +94,7 @@ export interface AmplitudeToDbRequest {
 
 /** dB-to-power conversion request. */
 export interface DbToPowerRequest {
+  /** Decibel values to convert to power. */
   values: Float32Array;
   /** Reference power. Default 1. */
   ref?: number;
@@ -99,6 +102,7 @@ export interface DbToPowerRequest {
 
 /** dB-to-amplitude conversion request. */
 export interface DbToAmplitudeRequest {
+  /** Decibel values to convert to amplitude. */
   values: Float32Array;
   /** Reference amplitude. Default 1. */
   ref?: number;
@@ -106,7 +110,9 @@ export interface DbToAmplitudeRequest {
 
 /** Pre-emphasis filter request. */
 export interface PreemphasisRequest extends ValidateOptions {
+  /** Mono audio samples. */
   samples: Float32Array;
+  /** Sample rate of `samples` in Hz. */
   sampleRate: number;
   /** Filter coefficient. Default 0.97. */
   coef?: number;
@@ -116,7 +122,9 @@ export interface PreemphasisRequest extends ValidateOptions {
 
 /** De-emphasis filter request. */
 export interface DeemphasisRequest extends ValidateOptions {
+  /** Mono audio samples. */
   samples: Float32Array;
+  /** Sample rate of `samples` in Hz. */
   sampleRate: number;
   /** Filter coefficient. Default 0.97. */
   coef?: number;
@@ -126,7 +134,9 @@ export interface DeemphasisRequest extends ValidateOptions {
 
 /** Silence trim request. */
 export interface TrimSilenceRequest extends ValidateOptions {
+  /** Mono audio samples. */
   samples: Float32Array;
+  /** Sample rate of `samples` in Hz. */
   sampleRate: number;
   /** Threshold below the peak, in dB. Default 60. */
   topDb?: number;
@@ -138,7 +148,9 @@ export interface TrimSilenceRequest extends ValidateOptions {
 
 /** Non-silent interval request for one signal. */
 export interface SplitSilenceRequest extends ValidateOptions {
+  /** Mono audio samples. */
   samples: Float32Array;
+  /** Sample rate of `samples` in Hz. */
   sampleRate: number;
   /** Threshold below the peak, in dB. Default 60. */
   topDb?: number;
@@ -150,17 +162,25 @@ export interface SplitSilenceRequest extends ValidateOptions {
 
 /** Canonical request form for the common-silence union of several signals. */
 export interface SplitSilenceCommonRequest {
+  /** Signals to compare; lengths may differ. */
   signals: Float32Array[];
+  /** Threshold below each signal's peak, in dB. Default `60`. */
   topDb?: number;
+  /** Framing window in samples. Default `2048`. */
   frameLength?: number;
+  /** Hop in samples. Default `512`. */
   hopLength?: number;
 }
 
 /** Request form of {@link splitSilenceCommonWithReport}; the fields of {@link SplitSilenceCommonRequest}. */
 export interface SplitSilenceCommonWithReportRequest {
+  /** Signals to compare; lengths may differ. */
   signals: Float32Array[];
+  /** Threshold below each signal's peak, in dB. Default `60`. */
   topDb?: number;
+  /** Framing window in samples. Default `2048`. */
   frameLength?: number;
+  /** Hop in samples. Default `512`. */
   hopLength?: number;
 }
 
@@ -224,7 +244,9 @@ export interface SplitSilenceCommonWithReportResult {
 
 /** Overlapping frames of a signal. The rate is validated but does not change the result. */
 export interface FrameSignalRequest extends ValidateOptions {
+  /** Mono audio samples. */
   samples: Float32Array;
+  /** Sample rate of `samples` in Hz. */
   sampleRate: number;
   /** Frame size in samples. */
   frameLength: number;
@@ -234,48 +256,69 @@ export interface FrameSignalRequest extends ValidateOptions {
 
 /** Canonical request form for centering or extending a vector. */
 export interface PadCenterRequest {
+  /** Input values. */
   values: Float32Array;
+  /** Length of the result in elements. */
   targetSize: number;
+  /** Value written into every added element. Default `0`. */
   padValue?: number;
 }
 
 /** Canonical request form for resizing a vector. */
 export interface FixLengthRequest {
+  /** Input values. */
   values: Float32Array;
+  /** Length of the result in elements. */
   targetSize: number;
+  /** Value written into every added element. Default `0`. */
   padValue?: number;
 }
 
 /** Canonical request form for bounding a frame-index vector. */
 export interface FixFramesRequest {
+  /** Frame indices to bound. */
   frames: Int32Array | ArrayLike<number>;
+  /** Lower bound. Default `0`. */
   xMin?: number;
   /** Upper bound; omit for none. Negative is refused. */
   xMax?: number;
+  /** Pad to the bounds instead of clipping. Default `true`. */
   pad?: boolean;
 }
 
+/** Request for {@link onsetBacktrack}. */
 export interface OnsetBacktrackRequest {
+  /** Onset event indices in frames. */
   events: Int32Array | ArrayLike<number>;
+  /** Energy curve the events are rolled back along. */
   energy: Float32Array;
 }
 
 /** Canonical request form for peak selection. */
 export interface PeakPickRequest {
+  /** Onset-strength-like vector to pick peaks from. */
   values: Float32Array;
+  /** Frames before a candidate over which it must be the maximum. */
   preMax: number;
+  /** Frames after a candidate over which it must be the maximum. */
   postMax: number;
+  /** Frames before a candidate averaged for the threshold. */
   preAvg: number;
+  /** Frames after a candidate averaged for the threshold. */
   postAvg: number;
+  /** Offset above the local mean a peak must exceed, in the units of `values`. */
   delta: number;
+  /** Minimum frames between two picked peaks. */
   wait: number;
 }
 
 /** Canonical request form for vector normalization. */
 export interface VectorNormalizeRequest {
+  /** Values to normalize. */
   values: Float32Array;
   /** Default `'max'`. */
   norm?: NormType;
+  /** Magnitude below which a norm is treated as zero and the value left unscaled. Default `0`. */
   threshold?: number;
 }
 
@@ -285,44 +328,73 @@ export interface TonnetzRequest {
   chromagram: Matrix2D;
 }
 
+/** Request for {@link pcen}. */
 export interface PcenRequest {
   /** Rows are bins, cols are frames. */
   values: Matrix2D;
+  /** Sample rate in Hz used to derive the smoothing time constant. Default `22050`. */
   sampleRate?: number;
+  /** Hop length in samples used to derive the smoothing time constant. Default `512`. */
   hopLength?: number;
+  /** Smoothing filter time constant in seconds. Default `0.4`. */
   timeConstant?: number;
+  /** Gain exponent applied to the smoothed energy. Default `0.98`. */
   gain?: number;
+  /** Bias added before the power compression. Default `2.0`. */
   bias?: number;
+  /** Power exponent of the final compression. Default `0.5`. */
   power?: number;
+  /** Numerical floor against division by zero. Default `1e-06`. */
   eps?: number;
 }
 
+/** Request for {@link tempogram}. */
 export interface TempogramRequest {
+  /** Onset-strength envelope, one value per frame. */
   onsetEnvelope: Float32Array;
+  /** Sample rate in Hz of the audio the envelope came from. Default `22050`. */
   sampleRate?: number;
+  /** Hop length in samples of the envelope. Default `512`. */
   hopLength?: number;
+  /** Analysis window in frames. Default `384`. */
   winLength?: number;
+  /** Tempogram method, `'autocorrelation'` or `'cosine'`. Default `'autocorrelation'`. */
   mode?: TempogramMode;
+  /** Pad so frames are centred on their time stamps. Default `true`. */
   center?: boolean;
+  /** Normalize each frame. Default `true`. */
   norm?: boolean;
 }
 
+/** Request for {@link cyclicTempogram}. */
 export interface CyclicTempogramRequest {
+  /** Onset-strength envelope, one value per frame. */
   onsetEnvelope: Float32Array;
+  /** Sample rate in Hz of the audio the envelope came from. Default `22050`. */
   sampleRate?: number;
+  /** Hop length in samples of the envelope. Default `512`. */
   hopLength?: number;
+  /** Analysis window in frames. Default `384`. */
   winLength?: number;
+  /** Lowest tempo of the folded octave, in BPM. Default `60`. */
   bpmMin?: number;
+  /** Tempo bins in the folded octave. Default `60`. */
   nBins?: number;
 }
 
 /** Predominant local pulse request. The tempo range defaults to 60-200 BPM, narrower than librosa's. */
 export interface PlpRequest {
+  /** Onset-strength envelope, one value per frame. */
   onsetEnvelope: Float32Array;
+  /** Sample rate in Hz of the audio the envelope came from. Default `22050`. */
   sampleRate?: number;
+  /** Hop length in samples of the envelope. Default `512`. */
   hopLength?: number;
+  /** Lowest tempo considered, in BPM. Default `60`. */
   bpmMin?: number;
+  /** Highest tempo considered, in BPM. Default `200`. */
   bpmMax?: number;
+  /** Analysis window in frames. Default `384`. */
   winLength?: number;
 }
 

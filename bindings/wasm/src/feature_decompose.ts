@@ -77,8 +77,11 @@ export interface SegmentCrossSimilarityRequest {
   x: Matrix2D;
   /** Rows are features, cols are frames; the feature count must match `x`. */
   y: Matrix2D;
+  /** Nearest neighbours kept per frame. Absent: the librosa default, `min(n, 2 * ceil(sqrt(n)))` for `n` frames of `y`. */
   k?: number;
+  /** Distance metric. Default `'cosine'`. */
   metric?: 'cosine' | 'euclidean';
+  /** `'connectivity'` for a binary matrix or `'affinity'` for weighted similarity. Default `'connectivity'`. */
   mode?: 'connectivity' | 'affinity';
 }
 
@@ -86,10 +89,15 @@ export interface SegmentCrossSimilarityRequest {
 export interface SegmentRecurrenceMatrixRequest {
   /** Rows are features, cols are frames. */
   data: Matrix2D;
+  /** Nearest neighbours kept per frame. Absent: the librosa default, `min(n - 1, 2 * ceil(sqrt(n)))` for `n` frames. */
   k?: number;
+  /** Frames either side of a frame excluded from its neighbours. Default `1`. */
   width?: number;
+  /** Make the matrix symmetric. Default `false`. */
   sym?: boolean;
+  /** Distance metric. Default `'euclidean'`. */
   metric?: 'cosine' | 'euclidean';
+  /** `'connectivity'` for a binary matrix or `'affinity'` for weighted similarity. Default `'connectivity'`. */
   mode?: 'connectivity' | 'affinity';
 }
 
@@ -111,7 +119,9 @@ export interface SegmentLagToRecurrenceRequest {
 export interface SegmentSubsegmentRequest {
   /** Rows are features, cols are frames. */
   data: Matrix2D;
+  /** Segment boundaries as frame indices. */
   boundaries: Int32Array | ArrayLike<number>;
+  /** Sub-segments per segment. Default `4`. */
   nSegments?: number;
 }
 
@@ -119,7 +129,9 @@ export interface SegmentSubsegmentRequest {
 export interface SegmentAgglomerativeRequest {
   /** Rows are features, cols are frames. */
   data: Matrix2D;
+  /** Number of segments to produce. */
   k: number;
+  /** Cluster linkage. Default `'average'`. */
   linkage?: 'average' | 'single' | 'complete' | 'ward';
 }
 
@@ -127,9 +139,13 @@ export interface SegmentAgglomerativeRequest {
 export interface SegmentPathEnhanceRequest {
   /** Square: rows = cols = frames. */
   recurrence: Matrix2D;
+  /** Smoothing window length in frames; positive. */
   win: number;
+  /** Largest diagonal slope tried, as a ratio. Default `2`. */
   maxRatio?: number;
+  /** Smallest diagonal slope tried, as a ratio. Default `0`. */
   minRatio?: number;
+  /** Number of diagonal filters. Default `7`. */
   nFilters?: number;
 }
 
@@ -141,6 +157,7 @@ function assertSquare(fnName: string, matrix: Matrix2D, argName: string): void {
 
 /** Request for {@link remix} and {@link remixAlignedIntervals}. */
 export interface RemixRequest extends ValidateOptions {
+  /** Mono audio samples. */
   samples: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
@@ -152,6 +169,7 @@ export interface RemixRequest extends ValidateOptions {
 
 /** Request for {@link hpssWithResidual}. */
 export interface HpssWithResidualRequest extends ValidateOptions {
+  /** Mono audio samples. */
   samples: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
@@ -173,9 +191,13 @@ export interface HpssWithResidualRequest extends ValidateOptions {
 
 /** Harmonic / percussive / residual signals from {@link hpssWithResidual}. */
 export interface HpssWithResidualResult {
+  /** Harmonic component, the length of the input. */
   harmonic: Float32Array;
+  /** Percussive component, the length of the input. */
   percussive: Float32Array;
+  /** Remainder of the input after subtracting the harmonic and percussive components. */
   residual: Float32Array;
+  /** Sample rate of the returned signals in Hz. */
   sampleRate: number;
 }
 
@@ -212,6 +234,7 @@ export function decompose(...args: unknown[]): DecomposeResult {
 
 /** Options for {@link decomposeStems}. */
 export interface DecomposeStemsRequest extends ValidateOptions {
+  /** Mono audio samples. */
   samples: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
@@ -243,6 +266,7 @@ export interface DecomposeStemsResult {
   w: Float32Array;
   /** Activation matrix [nComponents x nFrames], row-major. */
   h: Float32Array;
+  /** Sample rate of the component signals in Hz. */
   sampleRate: number;
 }
 
@@ -311,6 +335,7 @@ export interface DecomposeStemsLinkedResult {
   w: Float32Array;
   /** Activation matrix [nComponents x nFrames], row-major. */
   h: Float32Array;
+  /** Sample rate of the component signals in Hz. */
   sampleRate: number;
 }
 

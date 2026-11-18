@@ -85,6 +85,7 @@ export class SonareStreamAnalyzerWorkletProcessor {
     }
   }
 
+  /** Downmixes the first input to mono and forwards it in chunks of `chunkFrames`; returns `false` once destroyed. */
   process(inputs: WorkletInput, _outputs: WorkletOutput): boolean {
     if (this.destroyed) {
       return false;

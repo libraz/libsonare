@@ -31,6 +31,7 @@ export interface LufsSeriesMultichannelRequest extends ValidateOptions {
 
 /** Request form of {@link ebur128LoudnessRange}. */
 export interface Ebur128LoudnessRangeRequest extends ValidateOptions {
+  /** Mono audio samples. */
   samples: Float32Array;
   /** Sample rate of `samples` in Hz. Required. */
   sampleRate: number;

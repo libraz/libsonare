@@ -43,6 +43,7 @@ export function scaleQuantizeMidi(
   return getSonareModule().scaleQuantizeMidi(root, modeMask, midi, reference);
 }
 
+/** The signed correction in semitones that moves `midi` onto the scale; `scaleReferenceMidi` as in {@link scaleQuantizeMidi}. */
 export function scaleCorrectionSemitones(
   root: number,
   modeMask: number,
@@ -54,6 +55,7 @@ export function scaleCorrectionSemitones(
   return getSonareModule().scaleCorrectionSemitones(root, modeMask, midi, reference);
 }
 
+/** Whether `pitchClass` (0-11, absolute) is enabled by `modeMask` relative to `root`. */
 export function scalePitchClassEnabled(
   root: number,
   modeMask: number,

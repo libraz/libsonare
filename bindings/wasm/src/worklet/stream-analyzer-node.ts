@@ -35,7 +35,9 @@ import { resolveStreamAnalyzerChunkFrames } from './stream-analyzer-processor.js
  * ```
  */
 export class SonareStreamAnalyzerNode {
+  /** AudioWorkletNode that receives the audio; connect a source to it. */
   readonly node: AudioWorkletNode;
+  /** Resolves once the processor has started; rejects if the worklet reports an error. */
   readonly ready: Promise<void>;
   private readonly analyzer: StreamAnalyzer;
   private readonly frameListeners = new Set<(frames: StreamFrames) => void>();
@@ -70,6 +72,7 @@ export class SonareStreamAnalyzerNode {
     };
   }
 
+  /** Creates the analyzer and its AudioWorkletNode on `context`. The processor module must already be registered, or `options.moduleUrl` names it. */
   static async create(
     context: BaseAudioContext,
     options: SonareStreamAnalyzerNodeOptions = {},

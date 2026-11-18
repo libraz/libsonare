@@ -20,7 +20,9 @@ function requireModule() {
 
 /** Spectral centroid request. */
 export interface SpectralCentroidRequest extends ValidateOptions {
+  /** Mono audio samples. */
   samples: Float32Array;
+  /** Sample rate of `samples` in Hz. */
   sampleRate: number;
   /** FFT size. Default 2048. */
   nFft?: number;
@@ -30,7 +32,9 @@ export interface SpectralCentroidRequest extends ValidateOptions {
 
 /** Spectral bandwidth request. */
 export interface SpectralBandwidthRequest extends ValidateOptions {
+  /** Mono audio samples. */
   samples: Float32Array;
+  /** Sample rate of `samples` in Hz. */
   sampleRate: number;
   /** FFT size. Default 2048. */
   nFft?: number;
@@ -42,7 +46,9 @@ export interface SpectralBandwidthRequest extends ValidateOptions {
 
 /** Spectral rolloff request. */
 export interface SpectralRolloffRequest extends ValidateOptions {
+  /** Mono audio samples. */
   samples: Float32Array;
+  /** Sample rate of `samples` in Hz. */
   sampleRate: number;
   /** FFT size. Default 2048. */
   nFft?: number;
@@ -54,7 +60,9 @@ export interface SpectralRolloffRequest extends ValidateOptions {
 
 /** Spectral flatness request. */
 export interface SpectralFlatnessRequest extends ValidateOptions {
+  /** Mono audio samples. */
   samples: Float32Array;
+  /** Sample rate of `samples` in Hz. */
   sampleRate: number;
   /** FFT size. Default 2048. */
   nFft?: number;
@@ -64,7 +72,9 @@ export interface SpectralFlatnessRequest extends ValidateOptions {
 
 /** Spectral flux request. */
 export interface SpectralFluxRequest extends ValidateOptions {
+  /** Mono audio samples. */
   samples: Float32Array;
+  /** Sample rate of `samples` in Hz. */
   sampleRate: number;
   /** FFT size. Default 2048. */
   nFft?: number;
@@ -76,7 +86,9 @@ export interface SpectralFluxRequest extends ValidateOptions {
 
 /** Spectral contrast request. */
 export interface SpectralContrastRequest extends ValidateOptions {
+  /** Mono audio samples. */
   samples: Float32Array;
+  /** Sample rate of `samples` in Hz. */
   sampleRate: number;
   /** FFT size. Default 2048. */
   nFft?: number;
@@ -92,7 +104,9 @@ export interface SpectralContrastRequest extends ValidateOptions {
 
 /** Polynomial feature request. */
 export interface PolyFeaturesRequest extends ValidateOptions {
+  /** Mono audio samples. */
   samples: Float32Array;
+  /** Sample rate of `samples` in Hz. */
   sampleRate: number;
   /** FFT size. Default 2048. */
   nFft?: number;
@@ -104,7 +118,9 @@ export interface PolyFeaturesRequest extends ValidateOptions {
 
 /** Zero-crossing rate request. */
 export interface ZeroCrossingRateRequest extends ValidateOptions {
+  /** Mono audio samples. */
   samples: Float32Array;
+  /** Sample rate of `samples` in Hz. */
   sampleRate: number;
   /** Frame length in samples. Default 2048. */
   frameLength?: number;
@@ -114,7 +130,9 @@ export interface ZeroCrossingRateRequest extends ValidateOptions {
 
 /** RMS energy request. */
 export interface RmsEnergyRequest extends ValidateOptions {
+  /** Mono audio samples. */
   samples: Float32Array;
+  /** Sample rate of `samples` in Hz. */
   sampleRate: number;
   /** Frame length in samples. Default 2048. */
   frameLength?: number;
@@ -124,13 +142,17 @@ export interface RmsEnergyRequest extends ValidateOptions {
 
 /** Zero-crossing index request. The rate is validated but does not change the result. */
 export interface ZeroCrossingsRequest extends ValidateOptions {
+  /** Mono audio samples. */
   samples: Float32Array;
+  /** Sample rate of `samples` in Hz. */
   sampleRate: number;
   /** Magnitude below which a sample counts as zero. Default 1e-10. */
   threshold?: number;
+  /** Scale `threshold` by the maximum absolute sample. Default `false`. */
   refMagnitude?: boolean;
   /** Count a crossing at index 0. Default `true`. */
   pad?: boolean;
+  /** Treat the sign of zero as positive. Default `true`. */
   zeroPos?: boolean;
 }
 

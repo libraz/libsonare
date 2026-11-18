@@ -151,6 +151,7 @@ import { requireToken, validateAudioBuffer } from './validation.js';
 
 type BrowserDecodeContext = Pick<BaseAudioContext, 'decodeAudioData' | 'sampleRate'>;
 
+/** Options for decoding with the browser codec fallback. */
 export interface BrowserAudioDecodeOptions {
   /**
    * AudioContext/OfflineAudioContext used for browser codec fallback. Its
@@ -514,30 +515,37 @@ export class Audio {
 
   // -- Analysis --
 
+  /** Tempo of the held audio in BPM. */
   detectBpm(): number {
     return detectBpm(this.samples, this.sampleRate);
   }
 
+  /** Most likely musical key of the held audio. */
   detectKey(options: KeyDetectionOptions = {}): KeyDetection {
     return detectKey(this.samples, this.sampleRate, options);
   }
 
+  /** Ranked key candidates for the held audio. */
   detectKeyCandidates(options: KeyDetectionOptions = {}): KeyCandidate[] {
     return detectKeyCandidates(this.samples, this.sampleRate, options);
   }
 
+  /** Onset times in seconds. */
   detectOnsets(options?: OptionsOf<DetectOnsetsRequest>): Float32Array {
     return detectOnsets(audioRequest('detectOnsets', this.samples, this.sampleRate, options));
   }
 
+  /** Beat times in seconds. */
   detectBeats(): Float32Array {
     return detectBeats(this.samples, this.sampleRate);
   }
 
+  /** Downbeat times in seconds. */
   detectDownbeats(): Float32Array {
     return detectDownbeats(this.samples, this.sampleRate);
   }
 
+  /** Chord sequence of the held audio. */
   detectChords(options: ChordDetectionOptions = {}): ChordAnalysisResult {
     return detectChords(this.samples, this.sampleRate, options);
   }
@@ -557,22 +565,27 @@ export class Audio {
     return analyze(audioRequest('analyze', this.samples, this.sampleRate, options));
   }
 
+  /** Tempo analysis: chosen BPM, confidence and ranked candidates. */
   analyzeBpm(options?: OptionsOf<AnalyzeBpmRequest>): BpmAnalysisResult {
     return analyzeBpm(audioRequest('analyzeBpm', this.samples, this.sampleRate, options));
   }
 
+  /** Rhythm analysis: tempo, time signature, groove type and syncopation. */
   analyzeRhythm(options?: OptionsOf<AnalyzeRhythmRequest>): RhythmResult {
     return analyzeRhythm(audioRequest('analyzeRhythm', this.samples, this.sampleRate, options));
   }
 
+  /** Dynamics analysis: dynamic range, peak, RMS, crest factor and loudness curve. */
   analyzeDynamics(options?: OptionsOf<AnalyzeDynamicsRequest>): DynamicsResult {
     return analyzeDynamics(audioRequest('analyzeDynamics', this.samples, this.sampleRate, options));
   }
 
+  /** Timbre analysis: brightness, warmth, density, roughness, complexity and per-frame spectral curves. */
   analyzeTimbre(options?: OptionsOf<AnalyzeTimbreRequest>): TimbreResult {
     return analyzeTimbre(audioRequest('analyzeTimbre', this.samples, this.sampleRate, options));
   }
 
+  /** Room acoustic parameters (RT60, EDT, clarity, definition) of the held audio treated as an impulse response. */
   analyzeImpulseResponse(options?: OptionsOf<AnalyzeImpulseResponseRequest>): AcousticResult {
     return analyzeImpulseResponse(
       audioRequest('analyzeImpulseResponse', this.samples, this.sampleRate, options),
@@ -581,48 +594,59 @@ export class Audio {
 
   // -- Effects --
 
+  /** Harmonic/percussive separation; returns both parts. */
   hpss(options?: OptionsOf<HpssRequest>): HpssResult {
     return hpss(audioRequest('hpss', this.samples, this.sampleRate, options));
   }
 
+  /** Harmonic component of the held audio. */
   harmonic(options?: OptionsOf<HarmonicRequest>): Float32Array {
     return harmonic(audioRequest('harmonic', this.samples, this.sampleRate, options));
   }
 
+  /** Percussive component of the held audio. */
   percussive(options?: OptionsOf<PercussiveRequest>): Float32Array {
     return percussive(audioRequest('percussive', this.samples, this.sampleRate, options));
   }
 
+  /** Time-stretched copy of the held audio. */
   timeStretch(options: OptionsOf<TimeStretchRequest>): Float32Array {
     return timeStretch(audioRequest('timeStretch', this.samples, this.sampleRate, options));
   }
 
+  /** Pitch-shifted copy of the held audio. */
   pitchShift(options: OptionsOf<PitchShiftRequest>): Float32Array {
     return pitchShift(audioRequest('pitchShift', this.samples, this.sampleRate, options));
   }
 
+  /** Copy of the held audio with its pitch corrected to the nearest MIDI notes. */
   pitchCorrectToMidi(options: OptionsOf<PitchCorrectToMidiRequest>): Float32Array {
     return pitchCorrectToMidi(
       audioRequest('pitchCorrectToMidi', this.samples, this.sampleRate, options),
     );
   }
 
+  /** Copy of the held audio with the given notes time-stretched. */
   noteStretch(options: NoteStretchOptions): Float32Array {
     return noteStretch(audioRequest('noteStretch', this.samples, this.sampleRate, options));
   }
 
+  /** Copy of the held audio with the given notes moved in time. */
   noteMove(options: NoteMoveOptions): Float32Array {
     return noteMove(audioRequest('noteMove', this.samples, this.sampleRate, options));
   }
 
+  /** Voice-changed copy of the held audio. */
   voiceChange(options?: VoiceChangeOptions): Float32Array {
     return voiceChange(audioRequest('voiceChange', this.samples, this.sampleRate, options));
   }
 
+  /** Normalized copy of the held audio. */
   normalize(options?: OptionsOf<NormalizeRequest>): Float32Array {
     return normalize(audioRequest('normalize', this.samples, this.sampleRate, options));
   }
 
+  /** Normalizes the held audio to a target loudness and reports the applied gain. */
   masteringNormalizeLoudness(
     options?: OptionsOf<MasteringNormalizeLoudnessRequest>,
   ): MasteringNormalizeLoudnessResult {
@@ -631,10 +655,12 @@ export class Audio {
     );
   }
 
+  /** Runs the mastering chain on the held audio. */
   masterAudio(options?: OptionsOf<MasterAudioRequest>): MasteringChainResult {
     return masterAudio(audioRequest('masterAudio', this.samples, this.sampleRate, options));
   }
 
+  /** Applies one mastering processor to the held audio. */
   masteringApplyProcessor<P extends SoloProcessor>(
     options: OptionsOf<MasteringApplyProcessorRequest<P>>,
   ): MasteringResult {
@@ -648,12 +674,14 @@ export class Audio {
     );
   }
 
+  /** Copy of the held audio with leading and trailing silence removed. */
   trim(options?: OptionsOf<TrimRequest>): Float32Array {
     return trim(audioRequest('trim', this.samples, this.sampleRate, options));
   }
 
   // -- Features --
 
+  /** Short-time Fourier transform of the held audio. */
   stft(options?: OptionsOf<StftRequest>): StftResult {
     return stft(audioRequest('stft', this.samples, this.sampleRate, options));
   }
@@ -663,14 +691,17 @@ export class Audio {
     return stftDb(audioRequest('stftDb', this.samples, this.sampleRate, options));
   }
 
+  /** Mel spectrogram of the held audio. */
   melSpectrogram(options?: OptionsOf<MelSpectrogramRequest>): MelSpectrogramResult {
     return melSpectrogram(audioRequest('melSpectrogram', this.samples, this.sampleRate, options));
   }
 
+  /** MFCCs of the held audio. */
   mfcc(options?: OptionsOf<MfccRequest>): MfccResult {
     return mfcc(audioRequest('mfcc', this.samples, this.sampleRate, options));
   }
 
+  /** STFT chromagram of the held audio. */
   chroma(options?: OptionsOf<ChromaRequest>): ChromaResult {
     return chroma(audioRequest('chroma', this.samples, this.sampleRate, options));
   }
@@ -680,62 +711,75 @@ export class Audio {
     return nnlsChroma(audioRequest('nnlsChroma', this.samples, this.sampleRate, options));
   }
 
+  /** Onset strength envelope, one value per frame. */
   onsetStrength(options?: OptionsOf<OnsetStrengthRequest>): Float32Array {
     return onsetStrength(audioRequest('onsetStrength', this.samples, this.sampleRate, options));
   }
 
+  /** Integrated loudness (LUFS) and loudness range of the held audio. */
   lufs(): LufsResult {
     return lufs(this.samples, this.sampleRate);
   }
 
+  /** Momentary (400 ms) loudness series in LUFS. */
   momentaryLufs(): Float32Array {
     return momentaryLufs(this.samples, this.sampleRate);
   }
 
+  /** Short-term (3 s) loudness series in LUFS. */
   shortTermLufs(): Float32Array {
     return shortTermLufs(this.samples, this.sampleRate);
   }
 
+  /** Spectral centroid per frame, in Hz. */
   spectralCentroid(options?: OptionsOf<SpectralCentroidRequest>): Float32Array {
     return spectralCentroid(
       audioRequest('spectralCentroid', this.samples, this.sampleRate, options),
     );
   }
 
+  /** Spectral bandwidth per frame, in Hz. */
   spectralBandwidth(options?: OptionsOf<SpectralBandwidthRequest>): Float32Array {
     return spectralBandwidth(
       audioRequest('spectralBandwidth', this.samples, this.sampleRate, options),
     );
   }
 
+  /** Spectral rolloff frequency per frame, in Hz. */
   spectralRolloff(options?: OptionsOf<SpectralRolloffRequest>): Float32Array {
     return spectralRolloff(audioRequest('spectralRolloff', this.samples, this.sampleRate, options));
   }
 
+  /** Spectral flatness per frame. */
   spectralFlatness(options?: OptionsOf<SpectralFlatnessRequest>): Float32Array {
     return spectralFlatness(
       audioRequest('spectralFlatness', this.samples, this.sampleRate, options),
     );
   }
 
+  /** Zero-crossing rate per frame. */
   zeroCrossingRate(options?: OptionsOf<ZeroCrossingRateRequest>): Float32Array {
     return zeroCrossingRate(
       audioRequest('zeroCrossingRate', this.samples, this.sampleRate, options),
     );
   }
 
+  /** RMS energy per frame. */
   rmsEnergy(options?: OptionsOf<RmsEnergyRequest>): Float32Array {
     return rmsEnergy(audioRequest('rmsEnergy', this.samples, this.sampleRate, options));
   }
 
+  /** YIN fundamental-frequency track of the held audio. */
   pitchYin(options?: OptionsOf<PitchYinRequest>): PitchResult {
     return pitchYin(audioRequest('pitchYin', this.samples, this.sampleRate, options));
   }
 
+  /** pYIN fundamental-frequency track of the held audio. */
   pitchPyin(options?: OptionsOf<PitchPyinRequest>): PitchResult {
     return pitchPyin(audioRequest('pitchPyin', this.samples, this.sampleRate, options));
   }
 
+  /** Copy of the held audio resampled to `targetSampleRate` (Hz). */
   resample(targetSampleRate: number): Float32Array {
     return resample(this.samples, this.sampleRate, targetSampleRate);
   }
@@ -748,22 +792,27 @@ export class Audio {
   // measurement. The methods exist for call-shape parity with Node/Python,
   // which do hold a native handle here.
 
+  /** Sample peak in dBFS. */
   peakDb(): number {
     return meteringPeakDb(this.samples, this.sampleRate);
   }
 
+  /** RMS level in dBFS. */
   rmsDb(): number {
     return meteringRmsDb(this.samples, this.sampleRate);
   }
 
+  /** Mean sample value (DC offset). */
   dcOffset(): number {
     return meteringDcOffset(this.samples, this.sampleRate);
   }
 
+  /** Crest factor (peak over RMS) in dB. */
   crestFactorDb(): number {
     return meteringCrestFactorDb(this.samples, this.sampleRate);
   }
 
+  /** Fraction of frames whose level is below `thresholdDb` (dBFS, default `-45`), using frames of `frameLength` samples (default `1024`) every `hopLength` samples (default `256`). */
   silenceRatio(thresholdDb = -45, frameLength = 1024, hopLength = 256): number {
     return meteringSilenceRatio(this.samples, this.sampleRate, {
       thresholdDb,
@@ -780,14 +829,17 @@ export class Audio {
     return meteringTruePeakDb(this.samples, this.sampleRate, { oversampleFactor });
   }
 
+  /** Clipping report: clipped-sample count and runs at or above the threshold. */
   detectClipping(options: MeteringDetectClippingOptions = {}): ClippingReport {
     return meteringDetectClipping(this.samples, this.sampleRate, options);
   }
 
+  /** Dynamic-range report of the held audio. */
   dynamicRange(options: MeteringDynamicRangeOptions = {}): DynamicRangeReport {
     return meteringDynamicRange(this.samples, this.sampleRate, options);
   }
 
+  /** Magnitude, power and dB spectrum of the held audio. */
   spectrum(options: SpectrumOptions & ValidateOptions = {}): SpectrumReport {
     return meteringSpectrum(this.samples, this.sampleRate, options);
   }
@@ -800,6 +852,7 @@ export class Audio {
     return meteringSpectrumFrame(this.samples, this.sampleRate, { ...options, startSample });
   }
 
+  /** EBU R128 loudness range in LU. */
   ebur128LoudnessRange(): number {
     return ebur128LoudnessRange(this.samples, this.sampleRate);
   }

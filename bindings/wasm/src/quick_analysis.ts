@@ -201,6 +201,7 @@ type GuardedOptions = ValidateOptions;
 
 /** The audio and its sample rate, which every one-shot over samples takes. */
 interface SampleInput {
+  /** Mono audio samples. */
   samples: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
@@ -236,23 +237,35 @@ export interface DetectDownbeatsRequest extends SampleInput, GuardedOptions {}
 
 /** Peak-picking configuration for {@link detectOnsets}. */
 export interface OnsetDetectOptions extends GuardedOptions {
+  /** FFT window in samples. Default `2048`. */
   nFft?: number;
+  /** Hop length in samples. Default `512`. */
   hopLength?: number;
   /** Peak-picking threshold on the normalised onset envelope. */
   threshold?: number;
+  /** Frames before a peak over which it must be the maximum. Default `1`. */
   preMax?: number;
+  /** Frames after a peak over which it must be the maximum. Default `1`. */
   postMax?: number;
+  /** Frames before a peak averaged for the local mean. Default `3`. */
   preAvg?: number;
+  /** Frames after a peak averaged for the local mean. Default `4`. */
   postAvg?: number;
+  /** Offset added to the local mean, in onset-envelope units. Default `0.06`. */
   delta?: number;
+  /** Minimum frames between consecutive onsets. Default `1`. */
   wait?: number;
+  /** Move each onset back to the preceding envelope minimum. Default `false`. */
   backtrack?: boolean;
+  /** Frames searched backwards when `backtrack` is set. Default `10`. */
   backtrackRange?: number;
 }
+/** Request for {@link detectOnsets}. */
 export interface DetectOnsetsRequest extends SampleInput, OnsetDetectOptions {}
 
 /** Canonical request form for key detection functions. */
 export interface DetectKeyRequest extends SampleInput, KeyDetectionOptions {}
+/** Request for {@link detectKeyCandidates}. */
 export interface DetectKeyCandidatesRequest extends SampleInput, KeyDetectionOptions {}
 
 /** Canonical request form for chord detection. */
@@ -270,6 +283,7 @@ export interface ChordFunctionalAnalysisRequest extends DetectChordsRequest {
 export interface ChordFunctionsRequest<T extends ChordFunctionsInput = Chord> {
   /** `detectChords`' timed result or its `chords` array, or the same shape built by hand. */
   chords: readonly T[] | { chords: readonly T[] };
+  /** Key the chords are labelled against. */
   key: ChordFunctionsKey;
 }
 
@@ -289,11 +303,13 @@ export interface EstimateRoomRequest extends SampleInput, RoomEstimateOptions {}
 
 /** The room fields of an estimate that {@link roomGeometryFromEstimate} reads. */
 export type RoomGeometryEstimate = Pick<RoomEstimateResult, 'lengthM' | 'widthM' | 'heightM'> & {
+  /** Per-band absorption coefficients of the estimated room. */
   bandAbsorption?: Float32Array | number[];
 };
 
 /** Canonical request form for {@link roomGeometryFromEstimate}. */
 export interface RoomGeometryFromEstimateRequest {
+  /** The room estimate to read the geometry from. */
   estimate: RoomGeometryEstimate;
   /** Replaces the source placement scaled into the estimated room. */
   source?: RoomPlacement;
@@ -306,7 +322,9 @@ export interface RoomMorphRequest extends SampleInput, RoomMorphOptions {}
 
 /** Canonical request form for stereo room-reverb morphing. */
 export interface RoomMorphStereoRequest extends RoomMorphOptions {
+  /** Left channel samples. */
   left: Float32Array;
+  /** Right channel samples; same length as `left`. */
   right: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
@@ -316,8 +334,11 @@ export interface RoomMorphStereoRequest extends RoomMorphOptions {
 
 /** Canonical request forms for detailed music-analysis APIs. */
 export interface AnalyzeBpmRequest extends SampleInput, AnalyzeBpmOptions {}
+/** Request for {@link analyzeRhythm}. */
 export interface AnalyzeRhythmRequest extends SampleInput, AnalyzeRhythmOptions {}
+/** Request for {@link analyzeDynamics}. */
 export interface AnalyzeDynamicsRequest extends SampleInput, AnalyzeDynamicsOptions {}
+/** Request for {@link analyzeTimbre}. */
 export interface AnalyzeTimbreRequest extends SampleInput, AnalyzeTimbreOptions {}
 
 // ============================================================================
@@ -621,22 +642,33 @@ export function chordFunctionalAnalysis(...args: unknown[]): FunctionalChord[] {
  * core default when omitted.
  */
 export interface MusicAnalyzeOptions extends GuardedOptions {
+  /** FFT window in samples at 22050 Hz, rescaled to the input rate. Default `2048`. */
   nFft?: number;
+  /** Hop length in samples. Default `512`. */
   hopLength?: number;
   /** Lowest tempo searched in BPM; default 60. */
   bpmMin?: number;
   /** Highest tempo searched in BPM; default 200. */
   bpmMax?: number;
+  /** Prior tempo estimate in BPM. Default `120`. */
   startBpm?: number;
+  /** Detect triads only, with no seventh chords. Default `true`. */
   useTriadsOnly?: boolean;
+  /** Apply harmonic-percussive separation before the chord chroma. Default `false`. */
   useHpss?: boolean;
   /** Chroma high-pass cutoff in Hz; absent = 80, 0 = no filter. */
   chromaHighPassHz?: number;
+  /** Combine the chroma with a bass weighting. Default `true`. */
   useBassWeighted?: boolean;
+  /** Chroma hop as a multiple of `hopLength`; larger is faster. Default `4`. */
   chromaHopMultiplier?: number;
+  /** Smooth the chord sequence with a Viterbi HMM. Default `true`. */
   useChordHmm?: boolean;
+  /** Bias the chord HMM transitions with the detected key. Default `false`. */
   useChordKeyContext?: boolean;
+  /** Candidate beam width of the chord HMM. Default `24`. */
   chordHmmBeamWidth?: number;
+  /** Estimate slash-chord bass notes. Default `false`. */
   detectChordInversions?: boolean;
   /**
    * Track a locally updated tempo prior during beat tracking (default: false).
@@ -1087,7 +1119,9 @@ export function roomMorphStereo(...args: unknown[]): RoomMorphStereoResult {
   );
 }
 
+/** Result of {@link analyzeBpm}: the chosen tempo with its alternatives and tempo curves. */
 export interface BpmAnalysisResult {
+  /** Detected tempo in BPM. */
   bpm: number;
   /**
    * Winning tempo cluster's vote share within `bpmMin`–`bpmMax` (60–200 by default), searched at
@@ -1099,7 +1133,9 @@ export interface BpmAnalysisResult {
    * bins by descending vote share.
    */
   candidates: BpmCandidate[];
+  /** Autocorrelation of the onset envelope over tempo lags. */
   autocorrelation: Float32Array;
+  /** Tempogram of the onset envelope. */
   tempogram: Float32Array;
 }
 
