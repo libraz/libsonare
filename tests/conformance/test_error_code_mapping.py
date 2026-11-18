@@ -211,9 +211,9 @@ def python_mapping(root: Path) -> dict[str, int]:
 
     Two declarations have to agree before the surface answers at all: the
     ``ErrorCode`` IntEnum carries the numbers under SCREAMING_CASE members, and
-    the ``code_name`` table carries the canonical spelling for each.  Joining
-    them here is deliberate -- a member with no entry in the table is a surface
-    that cannot name its own code.
+    ``code_name`` spells each as the PascalCase of its member, which has to be
+    listed in the ``ErrorCodeName`` literal.  A member whose spelling the
+    literal leaves out is a surface that cannot name its own code.
     """
     text = _read(root, PYTHON_ERRORS)
     enum_body = text[text.index("class ErrorCode(IntEnum):") :]
@@ -222,11 +222,12 @@ def python_mapping(root: Path) -> dict[str, int]:
         m.group(1): int(m.group(2))
         for m in re.finditer(r"^\s{4}([A-Z][A-Z_0-9]*)\s*=\s*(-?\d+)\s*$", enum_body, re.MULTILINE)
     }
-    names = {
-        m.group(1): m.group(2)
-        for m in re.finditer(r'ErrorCode\.([A-Z][A-Z_0-9]*)\s*:\s*"(\w+)"', text)
-    }
-    return {names[member]: value for member, value in members.items() if member in names}
+    literal = re.search(r"ErrorCodeName\s*=\s*Literal\[(.*?)\]", text, re.DOTALL)
+    if literal is None:
+        raise ValueError(f"{PYTHON_ERRORS}: no ErrorCodeName literal")
+    declared = set(re.findall(r'"(\w+)"', literal.group(1)))
+    names = {member: "".join(w.capitalize() for w in member.split("_")) for member in members}
+    return {names[member]: value for member, value in members.items() if names[member] in declared}
 
 
 class Tables:
