@@ -1006,6 +1006,7 @@ class WrongUnit(CheckerCase):
             ("node", "field", "A.truePeak", "boolean | undefined"): False,
             ("c", "option", "f(measure_true_peak)", "int"): False,
             ("node", "method", "Audio.truePeakDb", None): True,
+            ("wasm", "function", "meteringTruePeakDb", ""): True,
             ("python", "function", "ebur128_loudness_range", None): True,
             ("c", "option", "f(out_loudness_range_lu)", "float*"): False,
             ("python", "field", "A.lra_lu", "float"): True,

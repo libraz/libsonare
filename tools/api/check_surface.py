@@ -806,7 +806,7 @@ _NUMERIC_WORD = re.compile(
 def _numeric_type(r: dict) -> bool:
     """False when the declared type cannot hold a number (a token, a flag, an object, a record list)."""
     ty = r.get("type")
-    if ty is None:
+    if not ty:
         return True
     if r.get("boolean") or r.get("enum_ref") or ty.lstrip().startswith("{"):
         return False
