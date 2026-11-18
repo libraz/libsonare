@@ -806,7 +806,14 @@ export interface AnalysisBpmCandidate extends BpmCandidate {
 /** Result of `analyzeRhythm`. */
 export interface RhythmResult {
   /** Estimated time signature. */
-  timeSignature: TimeSignature;
+  timeSignature: {
+    /** Beats per bar. */
+    numerator: number;
+    /** Note value of one beat: `4` is a quarter note. */
+    denominator: number;
+    /** Support for this signature in `[0, 1]`. */
+    confidence: number;
+  };
   /** Syncopation level in `[0, 1]`. */
   syncopation: number;
   /** Rhythmic feel of the track. */
