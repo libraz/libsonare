@@ -394,14 +394,17 @@ describe('the automation curve refuses an ordinal the embind path used to take',
     }
   };
 
-  it('accepts all four legal ordinals and all five documented spellings', () => {
+  it('accepts all four legal ordinals and the four documented spellings only', () => {
     // The control. Without it every assertion below would also hold for a
     // reader that refused every curve it was given.
     for (const ordinal of [0, 1, 2, 3]) {
       expect(refused(ordinal), `ordinal ${ordinal} is a legal curve`).toBe(false);
     }
-    for (const name of ['linear', 'exponential', 'hold', 's-curve', 'scurve']) {
+    for (const name of ['linear', 'exponential', 'hold', 'sCurve']) {
       expect(refused(name), `'${name}' is a documented spelling`).toBe(false);
+    }
+    for (const name of ['s-curve', 'scurve']) {
+      expect(refused(name), `'${name}' is not a documented spelling`).toBe(true);
     }
   });
 
