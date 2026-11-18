@@ -439,6 +439,34 @@ class OneInputFormRule(unittest.TestCase):
         self.assertEqual([f.key for f in verdict.violations], ["python:Engine.clips"])
 
 
+class AbiProbesRule(unittest.TestCase):
+    CLEAN = [
+        function("node", "engineAbiVersion", "number"),
+        function("python", "voice_changer_abi_version", "int"),
+        function("wasm", "abiVersion", "number"),
+    ]
+
+    def test_clean_surface_passes(self) -> None:
+        verdict = run("abi-probes", self.CLEAN)
+        self.assertEqual(verdict.read, 3)
+        self.assertFalse(verdict.failed)
+
+    def test_bare_api_version_is_named(self) -> None:
+        planted = function("wasm", "vocalEditApiVersion", "number")
+        verdict = run("abi-probes", [*self.CLEAN, planted])
+        self.assertEqual([f.key for f in verdict.violations], ["wasm:vocalEditApiVersion"])
+
+    def test_feature_probe_is_named(self) -> None:
+        planted = function("node", "hasFfmpegSupport", "boolean")
+        verdict = run("abi-probes", [*self.CLEAN, planted])
+        self.assertEqual([f.key for f in verdict.violations], ["node:hasFfmpegSupport"])
+
+    def test_library_feature_available_probe_is_named(self) -> None:
+        planted = function("python", "vocal_edit_available", "bool")
+        verdict = run("abi-probes", [*self.CLEAN, planted])
+        self.assertEqual([f.key for f in verdict.violations], ["python:vocal_edit_available"])
+
+
 class Framework(unittest.TestCase):
     def test_reading_nothing_fails(self) -> None:
         verdict = check.judge(rule("getters"), [])

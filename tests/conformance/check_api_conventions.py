@@ -412,6 +412,19 @@ def _list_input_violation(r: dict) -> str | None:
     return None
 
 
+_PROBE_NAME = re.compile(r"(Version|_version|Support|_support|Available|_available)$")
+_ABI_OK = re.compile(r"^version$|[Aa]biVersion$|abi_version$")
+
+
+def _probe_violation(r: dict) -> str | None:
+    name = r["name"]
+    if name.endswith(("Version", "_version")):
+        if _ABI_OK.search(name):
+            return None
+        return "a version probe is *AbiVersion(); features come from capabilities().features"
+    return "a feature probe is capabilities().features.<name>, not has*Support / *Available"
+
+
 RULES: list[Rule] = [
     Rule(
         name="getters",
@@ -563,6 +576,17 @@ RULES: list[Rule] = [
         summary="a list-of-items input takes one item form: no tuple beside the record",
         population=_list_input_population,
         violation=_list_input_violation,
+    ),
+    Rule(
+        name="abi-probes",
+        summary="versions are *AbiVersion(); feature presence comes from capabilities().features",
+        population=lambda r: (
+            r["surface"] in ("node", "wasm", "python")
+            and r["kind"] == "function"
+            and _PROBE_NAME.search(r["name"]) is not None
+        ),
+        violation=_probe_violation,
+        exempt={"wasm:isWebMidiAvailable": "probes the host, not the library"},
     ),
 ]
 
