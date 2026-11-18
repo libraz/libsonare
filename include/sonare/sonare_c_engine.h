@@ -85,6 +85,8 @@ extern "C" {
 ///   `sonare_engine_drain_telemetry`, `sonare_engine_drain_meter_telemetry`.
 ///   The drain functions are single-consumer: drive them from one thread only.
 SonareError sonare_engine_create(SonareRealtimeEngine** out);
+/// @brief Destroys an engine and everything it owns. NULL is a no-op. Neither thread may still be
+///        using the handle.
 void sonare_engine_destroy(SonareRealtimeEngine* engine);
 
 /// @brief Largest @p command_capacity the prepare entry points accept.
@@ -136,12 +138,18 @@ SonareError sonare_engine_prepare(SonareRealtimeEngine* engine, double sample_ra
 SonareError sonare_engine_prepare_with_channels(SonareRealtimeEngine* engine, double sample_rate,
                                                 int max_block_size, size_t command_capacity,
                                                 size_t telemetry_capacity, int max_channels);
+/// @brief Queues a transport start at @p render_frame (negative or past: the next block head).
+/// @return SONARE_ERROR_OUT_OF_MEMORY when the command queue is full.
 SonareError sonare_engine_play(SonareRealtimeEngine* engine, int64_t render_frame);
+/// @brief Queues a transport stop at @p render_frame (negative or past: the next block head).
+/// @return SONARE_ERROR_OUT_OF_MEMORY when the command queue is full.
 SonareError sonare_engine_stop(SonareRealtimeEngine* engine, int64_t render_frame);
 /// @brief Queues a playhead move to @p timeline_sample.
 /// @return @ref SONARE_ERROR_INVALID_PARAMETER for a negative @p timeline_sample.
 SonareError sonare_engine_seek_sample(SonareRealtimeEngine* engine, int64_t timeline_sample,
                                       int64_t render_frame);
+/// @brief Queues a playhead move to @p ppq quarter notes, applied at @p render_frame.
+/// @return @ref SONARE_ERROR_INVALID_PARAMETER for a non-finite @p ppq or one outside [0, 1e12].
 SonareError sonare_engine_seek_ppq(SonareRealtimeEngine* engine, double ppq, int64_t render_frame);
 /// @brief Queues an integrated-loudness reset for the master meter.
 /// @details The command clears integrated loudness at @p render_frame while
@@ -220,6 +228,7 @@ SonareError sonare_engine_apply_commands_due_now_preserving_future(SonareRealtim
 /// @return @ref SONARE_ERROR_INVALID_PARAMETER for a non-finite, non-positive,
 ///         or greater-than-100000 value.
 SonareError sonare_engine_set_tempo(SonareRealtimeEngine* engine, double bpm);
+/// @brief Sets the time signature; @p numerator and @p denominator must be positive.
 SonareError sonare_engine_set_time_signature(SonareRealtimeEngine* engine, int numerator,
                                              int denominator);
 /// @brief Installs a tempo map from @p segment_count ramp segments (control
@@ -237,8 +246,14 @@ SonareError sonare_engine_set_tempo_segments(SonareRealtimeEngine* engine,
 SonareError sonare_engine_set_time_signature_segments(
     SonareRealtimeEngine* engine, const SonareProjectTimeSignatureSegment* segments,
     size_t segment_count);
+/// @brief Converts a position in quarter notes to a timeline sample through the tempo map.
+/// @return @ref SONARE_ERROR_INVALID_PARAMETER for a NULL @p out_sample, or a non-finite @p ppq or
+///         one outside [0, 1e12].
 SonareError sonare_engine_sample_at_ppq(SonareRealtimeEngine* engine, double ppq,
                                         int64_t* out_sample);
+/// @brief Sets the loop region in quarter notes and turns looping on (@p enabled non-zero) or off.
+/// @return @ref SONARE_ERROR_INVALID_PARAMETER for a non-finite position or one outside [0, 1e12],
+///         or for an enabled region whose @p end_ppq is not after @p start_ppq.
 SonareError sonare_engine_set_loop(SonareRealtimeEngine* engine, double start_ppq, double end_ppq,
                                    int enabled);
 /// @brief Registers a parameter's metadata for automation UIs.
@@ -259,7 +274,10 @@ SonareError sonare_engine_add_parameter(SonareRealtimeEngine* engine,
 ///   removes a lane. Not realtime-safe; do not call concurrently with
 ///   @ref sonare_engine_process.
 SonareError sonare_engine_clear_parameters(SonareRealtimeEngine* engine);
+/// @brief Number of host-registered parameters (see @ref sonare_engine_add_parameter).
 SonareError sonare_engine_parameter_count(SonareRealtimeEngine* engine, size_t* out_count);
+/// @brief Reads the metadata of the host-registered parameter at @p index.
+/// @return @ref SONARE_ERROR_INVALID_PARAMETER for an out-of-range @p index.
 SonareError sonare_engine_parameter_info_by_index(SonareRealtimeEngine* engine, size_t index,
                                                   SonareParameterInfo* out);
 /// @brief Reads metadata for @p id: a host-registered parameter (see
@@ -295,6 +313,7 @@ SonareError sonare_engine_parameter_info(SonareRealtimeEngine* engine, uint32_t 
 SonareError sonare_engine_set_automation_lane(SonareRealtimeEngine* engine, uint32_t param_id,
                                               const SonareAutomationPoint* points,
                                               size_t point_count);
+/// @brief Number of automation lanes currently installed.
 SonareError sonare_engine_automation_lane_count(SonareRealtimeEngine* engine, size_t* out_count);
 /// @brief Atomically replaces all realtime-engine markers.
 /// @details Marker ids must be positive and unique, and PPQ positions must be
@@ -303,13 +322,22 @@ SonareError sonare_engine_automation_lane_count(SonareRealtimeEngine* engine, si
 ///   unchanged.
 SonareError sonare_engine_set_markers(SonareRealtimeEngine* engine,
                                       const SonareEngineMarker* markers, size_t marker_count);
+/// @brief Number of markers currently set.
 SonareError sonare_engine_marker_count(SonareRealtimeEngine* engine, size_t* out_count);
+/// @brief Reads the marker at @p index in the marker map.
+/// @return @ref SONARE_ERROR_INVALID_PARAMETER for an out-of-range @p index.
 SonareError sonare_engine_marker_by_index(SonareRealtimeEngine* engine, size_t index,
                                           SonareEngineMarker* out);
+/// @brief Reads the marker with id @p id.
+/// @return @ref SONARE_ERROR_INVALID_PARAMETER when no marker has that id.
 SonareError sonare_engine_marker(SonareRealtimeEngine* engine, uint32_t id,
                                  SonareEngineMarker* out);
+/// @brief Queues a playhead move to the marker @p marker_id, applied at @p render_frame.
 SonareError sonare_engine_seek_marker(SonareRealtimeEngine* engine, uint32_t marker_id,
                                       int64_t render_frame);
+/// @brief Enables looping between two markers.
+/// @return @ref SONARE_ERROR_INVALID_PARAMETER when either marker is unknown or the end marker is
+///         not after the start marker.
 SonareError sonare_engine_set_loop_from_markers(SonareRealtimeEngine* engine,
                                                 uint32_t start_marker_id, uint32_t end_marker_id);
 /// @brief Sets the metronome configuration.
@@ -320,6 +348,7 @@ SonareError sonare_engine_set_loop_from_markers(SonareRealtimeEngine* engine,
 ///         negative durations, or durations above the documented limits.
 SonareError sonare_engine_set_metronome(SonareRealtimeEngine* engine,
                                         const SonareEngineMetronomeConfig* config);
+/// @brief Reads the current metronome configuration.
 SonareError sonare_engine_metronome(SonareRealtimeEngine* engine, SonareEngineMetronomeConfig* out);
 /// @brief Returns the sample at which a count-in of @p bars bars starting at @p start_sample ends.
 /// @details Counting starts at the beginning of the bar containing @p start_sample, so a
@@ -329,6 +358,10 @@ SonareError sonare_engine_metronome(SonareRealtimeEngine* engine, SonareEngineMe
 /// @return @ref SONARE_ERROR_INVALID_PARAMETER for a negative @p start_sample.
 SonareError sonare_engine_count_in_end_sample(SonareRealtimeEngine* engine, int64_t start_sample,
                                               int bars, int64_t* out_sample);
+/// @brief Replaces the whole clip set with @p clip_count clips (control thread).
+/// @details Each clip is validated and its audio copied unless it names a page provider. A refused
+///   clip returns its error and leaves the published set unchanged. @p clips may be NULL only when
+///   @p clip_count is 0, which clears the set.
 SonareError sonare_engine_set_clips(SonareRealtimeEngine* engine, const SonareEngineClip* clips,
                                     size_t clip_count);
 /// @brief Replaces the clip whose id is @p clip->id, or adds it when no clip has
@@ -340,6 +373,7 @@ SonareError sonare_engine_upsert_clip(SonareRealtimeEngine* engine, const Sonare
 /// @brief Removes the clip @p clip_id, leaving every other clip as it was published.
 /// @return @ref SONARE_ERROR_INVALID_PARAMETER when no clip has that id.
 SonareError sonare_engine_remove_clip(SonareRealtimeEngine* engine, uint32_t clip_id);
+/// @brief Number of clips in the published set.
 SonareError sonare_engine_clip_count(SonareRealtimeEngine* engine, size_t* out_count);
 /// @brief Most lanes @ref sonare_engine_set_track_lanes accepts.
 #define SONARE_ENGINE_MAX_TRACK_LANES 32u
@@ -806,16 +840,32 @@ SonareError sonare_engine_set_bus_strip_dual_pan(SonareRealtimeEngine* engine, u
 SonareError sonare_engine_set_track_strip_channel_delay_samples(SonareRealtimeEngine* engine,
                                                                 uint32_t track_id,
                                                                 int delay_samples);
+/// @brief Creates a provider of audio pages for a clip whose samples the host streams in.
+/// @param num_channels Channel count of the source audio.
+/// @param num_samples Length of the source audio in frames.
+/// @param page_frames Frames per page.
 /// @note Release @p out_provider with @ref sonare_clip_page_provider_destroy; it is a handle, not a
 ///       sonare_free_* buffer.
 SonareError sonare_clip_page_provider_create(int num_channels, int64_t num_samples,
                                              int64_t page_frames,
                                              SonareClipPageProvider** out_provider);
+/// @brief Destroys a page provider and the pages it holds. NULL is a no-op.
 void sonare_clip_page_provider_destroy(SonareClipPageProvider* provider);
+/// @brief Copies one page of source audio into the provider, replacing any page already resident.
+/// @details @p num_channels must equal the provider's channel count and @p frames the page's length
+///   (the full page length, or the remainder for the last page). Every channel pointer must be
+///   non-NULL. The data is copied, so @p channels may be freed after the call.
+/// @return SONARE_ERROR_INVALID_PARAMETER for a NULL provider or channel, a page outside the
+///   source, or a mismatched channel or frame count.
 SonareError sonare_clip_page_provider_supply(SonareClipPageProvider* provider, int64_t page_index,
                                              const float* const* channels, int num_channels,
                                              int64_t frames);
+/// @brief Drops one resident page so the audio thread reports it missing again.
+/// @return SONARE_ERROR_INVALID_PARAMETER for a NULL provider or a page outside the source.
 SonareError sonare_clip_page_provider_clear(SonareClipPageProvider* provider, int64_t page_index);
+/// @brief Takes the oldest queued clip-page request, if any (control thread).
+/// @param out_request Receives the request; zeroed when none is queued.
+/// @param out_has_request Receives 1 when a request was taken, else 0.
 SonareError sonare_engine_pop_clip_page_request(SonareRealtimeEngine* engine,
                                                 SonareClipPageRequest* out_request,
                                                 int* out_has_request);
@@ -874,8 +924,13 @@ SonareError sonare_engine_set_clip_page_prefetch_frames(SonareRealtimeEngine* en
 /// @brief Reads back the clip-page look-ahead window in timeline frames.
 SonareError sonare_engine_clip_page_prefetch_frames(SonareRealtimeEngine* engine,
                                                     int64_t* out_frames);
+/// @brief Sets the caller-owned buffer capture records into.
+/// @return SONARE_ERROR_INVALID_PARAMETER for a NULL buffer or channel, or a non-positive channel
+///         count or capacity.
 SonareError sonare_engine_set_capture_buffer(SonareRealtimeEngine* engine,
                                              const SonareEngineCaptureBuffer* buffer);
+/// @brief Arms (non-zero) or disarms (0) capture into the buffer set by
+///        @ref sonare_engine_set_capture_buffer.
 SonareError sonare_engine_arm_capture(SonareRealtimeEngine* engine, int armed);
 /// @brief Sets the half-open capture punch window [@p start_sample, @p end_sample).
 /// @return @ref SONARE_ERROR_INVALID_PARAMETER for a negative @p start_sample, an
@@ -883,6 +938,8 @@ SonareError sonare_engine_arm_capture(SonareRealtimeEngine* engine, int armed);
 ///         (@p end_sample == @p start_sample).
 SonareError sonare_engine_set_capture_punch(SonareRealtimeEngine* engine, int64_t start_sample,
                                             int64_t end_sample, int enabled);
+/// @brief Chooses which signal capture records.
+/// @param source A @ref SonareEngineCaptureSource; any other value is refused.
 SonareError sonare_engine_set_capture_source(SonareRealtimeEngine* engine,
                                              SonareEngineCaptureSource source);
 /** Shift the recording window in timeline samples. A positive value delays
@@ -891,13 +948,26 @@ SonareError sonare_engine_set_capture_source(SonareRealtimeEngine* engine,
  * played before it, so every pass captures the whole loop range. */
 SonareError sonare_engine_set_record_offset_samples(SonareRealtimeEngine* engine,
                                                     int64_t offset_samples);
+/// @brief Turns the live input monitor on (@p enabled non-zero) or off with the given @p gain.
+/// @return SONARE_ERROR_INVALID_PARAMETER for a non-finite @p gain.
 SonareError sonare_engine_set_input_monitor(SonareRealtimeEngine* engine, int enabled, float gain);
+/// @brief Clears the captured-frame counter. Issue it while not capturing.
 SonareError sonare_engine_reset_capture(SonareRealtimeEngine* engine);
+/// @brief Reads the capture state: frames recorded, overflow count, arming, punch and source.
 SonareError sonare_engine_capture_status(SonareRealtimeEngine* engine,
                                          SonareEngineCaptureStatus* out);
+/// @brief Replaces the engine's processing graph from @p spec (control thread, allocates).
+/// @return SONARE_ERROR_INVALID_PARAMETER for a NULL or empty spec, a non-positive channel count,
+/// an
+///         unknown node type, id or connection, or a graph that does not compile;
+///         SONARE_ERROR_NOT_SUPPORTED when the graph feature is compiled out.
 SonareError sonare_engine_set_graph(SonareRealtimeEngine* engine,
                                     const SonareEngineGraphSpec* spec);
+/// @brief Number of nodes in the installed graph. SONARE_ERROR_NOT_SUPPORTED when the graph
+///        feature is compiled out.
 SonareError sonare_engine_graph_node_count(SonareRealtimeEngine* engine, size_t* out_count);
+/// @brief Number of connections in the installed graph. SONARE_ERROR_NOT_SUPPORTED when the graph
+///        feature is compiled out.
 SonareError sonare_engine_graph_connection_count(SonareRealtimeEngine* engine, size_t* out_count);
 /// @brief Renders one block in place, adding engine audio to @p channels.
 /// @details The input contents are preserved and engine sources are mixed with
@@ -912,6 +982,10 @@ SonareError sonare_engine_graph_connection_count(SonareRealtimeEngine* engine, s
 /// @c SONARE_ENGINE_TELEMETRY_ERROR_MAX_BLOCK_EXCEEDED.
 SonareError sonare_engine_process(SonareRealtimeEngine* engine, float* const* channels,
                                   int num_channels, int num_frames);
+/// @brief Renders one block in place like @ref sonare_engine_process, and also copies the cue
+///        (monitor) bus to @p monitor_out instead of folding it into @p channels.
+/// @details Audio-thread only. @p monitor_out holds @p num_channels planes of @p num_frames floats;
+///   a NULL plane is skipped.
 SonareError sonare_engine_process_with_monitor(SonareRealtimeEngine* engine, float* const* channels,
                                                float* const* monitor_out, int num_channels,
                                                int num_frames);
@@ -1106,8 +1180,8 @@ SonareError sonare_engine_drain_meter_telemetry_v2(SonareRealtimeEngine* engine,
 SonareError sonare_engine_drain_meter_telemetry_wide_v2(SonareRealtimeEngine* engine,
                                                         SonareMeterTelemetryRecordWideV2* out,
                                                         size_t max_records, size_t* out_count);
-/* Upper bound on the inserts one meter target's strip carries: a track or master
-   strip's pre-fader plus post-fader inserts. A bus strip carries at most half. */
+/// Upper bound on the inserts one meter target's strip carries: a track or master
+/// strip's pre-fader plus post-fader inserts. A bus strip carries at most half.
 #define SONARE_METER_MAX_INSERTS 128u
 /// @brief Reads the gain reduction of each insert on one meter target's strip.
 /// @details @p target_id uses the meter record encoding (see
@@ -1228,15 +1302,15 @@ SonareError sonare_engine_set_track_monitor_mode(SonareRealtimeEngine* engine, u
 ///          address the endpoint rather than a group, so packing a group into
 ///          them has no effect.
 typedef struct {
-  int64_t render_frame;
-  uint32_t word0;
-  uint32_t word1;
-  uint32_t word2;
-  uint32_t word3;
-  uint8_t word_count;
-  uint8_t group;
-  uint16_t reserved;
-  uint32_t sysex_handle;
+  int64_t render_frame;   ///< Absolute sample position of the event on the engine timeline
+  uint32_t word0;         ///< First UMP word
+  uint32_t word1;         ///< Second UMP word, used when @c word_count is at least 2
+  uint32_t word2;         ///< Third UMP word, used when @c word_count is at least 3
+  uint32_t word3;         ///< Fourth UMP word, used when @c word_count is 4
+  uint8_t word_count;     ///< Number of UMP words in use, 1..4; 0 infers it from the non-zero words
+  uint8_t group;          ///< Redundant with @c word0 bits 24..27 and not read; at most 15
+  uint16_t reserved;      ///< Must be 0
+  uint32_t sysex_handle;  ///< Handle identifying the event's SysEx payload, carried into the UMP
 } SonareEngineMidiEvent;
 
 /// @brief One compiled realtime MIDI clip schedule.
@@ -1244,23 +1318,25 @@ typedef struct {
 ///          midi::MidiClipSchedule: PPQ has already been compiled to absolute
 ///          sample frames in @ref SonareEngineMidiEvent.render_frame.
 typedef struct {
-  uint32_t id;
-  uint32_t track_id;
-  int64_t start_sample;
-  double start_ppq;
-  int64_t length_samples;
-  int loop;
-  int64_t loop_length_samples;
-  uint32_t destination_id;
-  const SonareEngineMidiEvent* events;
-  size_t event_count;
-  /* Linear gain applied to the destination instrument's rendered audio while
-     this clip is the most recently started active clip on it. A
-     zero-initialized struct is silent; set 1.0 for unity. */
+  uint32_t id;                  ///< Stable clip id
+  uint32_t track_id;            ///< Id of the source track; 0 is unset
+  int64_t start_sample;         ///< Clip start on the render timeline, in samples
+  double start_ppq;             ///< Clip start in quarter notes; must be finite, informational
+  int64_t length_samples;       ///< Clip length in samples; 0 is open-ended
+  int loop;                     ///< Non-zero loops the clip; negative is refused
+  int64_t loop_length_samples;  ///< Loop length in samples, used when @c loop is set and positive
+  uint32_t destination_id;      ///< Id of the instrument destination the events are sent to
+  const SonareEngineMidiEvent*
+      events;          ///< Events of the clip; may be NULL when @c event_count is 0
+  size_t event_count;  ///< Number of entries in @c events
+  /// Linear gain applied to the destination instrument's rendered audio while
+  /// this clip is the most recently started active clip on it. A
+  /// zero-initialized struct is silent; set 1.0 for unity.
   float gain;
-  /* Linear fade lengths over the clip's full length (not per internal loop);
-     fade_out_samples must be 0 when length_samples <= 0 (open-ended). */
+  /// Linear fade length in samples over the clip's full length (not per internal loop).
   int64_t fade_in_samples;
+  /// Fade-out length in samples, over the clip's full length; must be 0 when
+  /// length_samples <= 0 (open-ended).
   int64_t fade_out_samples;
 } SonareEngineMidiClipSchedule;
 
@@ -1278,17 +1354,18 @@ SonareError sonare_engine_set_midi_clips(SonareRealtimeEngine* engine,
 /// @details Same zero-init contract as project bounce built-in instruments:
 ///          non-positive fields use the default sine patch values.
 typedef struct {
-  int waveform;     /* SonareSynthWaveform: 0=sine, 1=saw, 2=square, 3=triangle.
-                       Anything else fails with SONARE_ERROR_INVALID_PARAMETER. */
-  float gain;       /* 0 => 0.2 */
-  float attack_ms;  /* 0 => 5. Linear ramp, full level at the set time */
-  float decay_ms;   /* 0 => 60. Linear ramp: the set time is a full 0 to 1 sweep */
-  float sustain;    /* 0 => 0.7 */
-  float release_ms; /* 0 => 120. Linear ramp, as decay */
-  int polyphony;    /* 0 => 16, clamped to [1,64] */
-  /* Every field above takes 0 as "use the default". A negative or non-finite
-     value is rejected with SONARE_ERROR_INVALID_PARAMETER rather than resolving
-     to the default, which is what it used to do without saying so. */
+  /// A @ref SonareSynthWaveform: 0=sine, 1=saw, 2=square, 3=triangle.
+  /// Anything else fails with SONARE_ERROR_INVALID_PARAMETER.
+  int waveform;
+  float gain;        ///< Linear output gain; 0 => 0.2
+  float attack_ms;   ///< Attack in ms; 0 => 5. Linear ramp, full level at the set time
+  float decay_ms;    ///< Decay in ms; 0 => 60. Linear ramp: the set time is a full 0 to 1 sweep
+  float sustain;     ///< Sustain level; 0 => 0.7
+  float release_ms;  ///< Release in ms; 0 => 120. Linear ramp, as decay
+  int polyphony;     ///< Maximum simultaneous voices; 0 => 16, clamped to [1,64]
+  // Every field above takes 0 as "use the default". A negative or non-finite
+  // value is rejected with SONARE_ERROR_INVALID_PARAMETER rather than resolving
+  // to the default.
 } SonareEngineBuiltinSynthConfig;
 
 /// @brief Binds/replaces a built-in synth on a realtime MIDI destination.
@@ -1424,21 +1501,24 @@ SonareError sonare_engine_load_soundfont(SonareRealtimeEngine* engine, const uin
 ///          Version 2 adds @c prefer_model_for_modeled_families; version 3 adds
 ///          @c clear_bank_rig; version 4 adds @c gs_efx_realization.
 typedef struct {
-  int struct_version; /* 0 or 1 => version 1; 4 => current version */
-  float gain;         /* master output gain (linear); 0 => 0.5. A negative or non-finite gain is
-                         rejected with SONARE_ERROR_INVALID_PARAMETER, not promoted to the default */
-  int polyphony;      /* max simultaneous voices; 0 => 48, clamped to [1, 64]. A negative count is
-                         rejected with SONARE_ERROR_INVALID_PARAMETER rather than promoted to 48 */
-  int prefer_model_for_modeled_families; /* v2: non-zero selects the dedicated model for
-                                            covered melodic GM programs; drums stay SF2-first */
-  int clear_bank_rig;                    /* v3: non-zero renders the instrument alone, without the
-                                            amplifier the bank binds after an electric guitar's
-                                            voice; 0 keeps it, so a file that asks for nothing
-                                            still sounds complete */
-  int gs_efx_realization;                /* v4: how the GS insertion effects are realised --
-                                            0 modern (the library's own inserts), 1 classic
-                                            (the measured hardware models); any other value is
-                                            rejected with SONARE_ERROR_INVALID_PARAMETER */
+  /// Layout version: 0 or 1 => version 1; 4 => current version.
+  int struct_version;
+  /// Master output gain (linear); 0 => 0.5. A negative or non-finite gain is
+  /// rejected with SONARE_ERROR_INVALID_PARAMETER, not promoted to the default.
+  float gain;
+  /// Maximum simultaneous voices; 0 => 48, clamped to [1, 64]. A negative count is
+  /// rejected with SONARE_ERROR_INVALID_PARAMETER rather than promoted to 48.
+  int polyphony;
+  /// v2: non-zero selects the dedicated model for covered melodic GM programs; drums stay
+  /// SF2-first.
+  int prefer_model_for_modeled_families;
+  /// v3: non-zero renders the instrument alone, without the amplifier the bank binds after an
+  /// electric guitar's voice; 0 keeps it, so a file that asks for nothing still sounds complete.
+  int clear_bank_rig;
+  /// v4: how the GS insertion effects are realised -- 0 modern (the library's own inserts),
+  /// 1 classic (the measured hardware models); any other value is rejected with
+  /// SONARE_ERROR_INVALID_PARAMETER.
+  int gs_efx_realization;
 } SonareEngineSf2InstrumentConfig;
 
 /// @brief Binds/replaces a GS-compatible SoundFont player on a realtime MIDI
@@ -1477,6 +1557,8 @@ SonareError sonare_engine_set_sf2_instrument(SonareRealtimeEngine* engine, uint3
 ///         allocate.
 SonareError sonare_engine_clear_midi_instrument(SonareRealtimeEngine* engine,
                                                 uint32_t destination_id);
+/// @brief Number of MIDI instruments currently bound. SONARE_ERROR_NOT_SUPPORTED when the
+///        arrangement feature is compiled out.
 SonareError sonare_engine_midi_instrument_count(SonareRealtimeEngine* engine, size_t* out_count);
 
 /// @brief Controller-profile input ordinals. Mirrors midi::ControllerInput.
@@ -1506,8 +1588,9 @@ typedef enum SONARE_ENUM_BASE {
   SONARE_CONTROLLER_AXIS_VIBRATO_DEPTH = 7
 } SonareControllerAxis;
 
-/// @brief Values in @ref SonareControllerInput and @ref SonareControllerAxis.
+/// @brief Number of values in @ref SonareControllerInput.
 #define SONARE_CONTROLLER_INPUT_COUNT 5
+/// @brief Number of values in @ref SonareControllerAxis.
 #define SONARE_CONTROLLER_AXIS_COUNT 8
 /// @brief Bindings one profile holds. Binding past it is refused rather than
 ///        grown, so the audio thread scans a fixed table.
@@ -1518,21 +1601,21 @@ typedef enum SONARE_ENUM_BASE {
 ///          gesture reaches two of them, which is what a breath controller
 ///          driving both excitation and loudness needs.
 typedef struct {
-  /// One of @ref SonareControllerInput.
+  /// A @ref SonareControllerInput naming the gesture's source.
   uint8_t input;
   /// CC number 0-127 for SONARE_CONTROLLER_INPUT_CONTROL_CHANGE. Every other
   /// input is identified by its message status alone and ignores this.
   uint8_t index;
-  /// One of @ref SonareControllerAxis. SONARE_CONTROLLER_AXIS_NONE is refused:
+  /// A @ref SonareControllerAxis naming the axis it drives. SONARE_CONTROLLER_AXIS_NONE is refused:
   /// a binding that means nothing is a caller mistake, not an empty slot.
   uint8_t axis;
-  uint8_t reserved;
+  uint8_t reserved;  ///< Padding; ignored.
   /// Axis value at zero deflection, in the axis's own unit — normalized [0,1]
   /// for the excitation axes and loudness, cents for pitch and vibrato depth.
   float lo;
   /// Axis value at full deflection. lo > hi inverts the gesture.
   float hi;
-  /// Exponent applied to the normalized input before the range maps it. 1 is
+  /// Exponent applied to the normalized input before the range maps it; finite and positive. 1 is
   /// linear and is the default a caller should keep: a wind controller has
   /// already applied the curve its player chose, and a second one on this side
   /// bends a gesture that was already shaped.

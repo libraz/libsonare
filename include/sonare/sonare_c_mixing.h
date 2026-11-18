@@ -19,207 +19,228 @@ extern "C" {
 // Mixing
 // ============================================================================
 
-// How a strip's pan position is applied to a stereo pair. Balance keeps the
-// stereo image and is unity at center under every pan law. StereoPan folds the
-// pair to mono and takes the law's center attenuation (-3.01 / -4.52 / -6.02 /
-// 0 dB). DualPan pans the left and right inputs independently (defaults -1 and
-// +1, a pass-through) with the same center attenuation.
+/// How a strip's pan position is applied to a stereo pair. Balance keeps the
+/// stereo image and is unity at center under every pan law. StereoPan folds the
+/// pair to mono and takes the law's center attenuation (-3.01 / -4.52 / -6.02 /
+/// 0 dB). DualPan pans the left and right inputs independently (defaults -1 and
+/// +1, a pass-through) with the same center attenuation.
 typedef enum SONARE_ENUM_BASE {
-  SONARE_PAN_MODE_BALANCE = 0,
-  SONARE_PAN_MODE_STEREO_PAN = 1,
-  SONARE_PAN_MODE_DUAL_PAN = 2
+  SONARE_PAN_MODE_BALANCE = 0,     ///< Balance: keeps the stereo image
+  SONARE_PAN_MODE_STEREO_PAN = 1,  ///< StereoPan: folds to mono and pans it
+  SONARE_PAN_MODE_DUAL_PAN = 2     ///< DualPan: pans left and right independently
 } SonarePanMode;
 
-// Sentinel for sonare_strip_set_pan's pan_mode argument: keep the strip's
-// current pan mode and only move the pan position (see sonare_strip_set_pan).
+/// Sentinel for sonare_strip_set_pan's pan_mode argument: keep the strip's
+/// current pan mode and only move the pan position (see sonare_strip_set_pan).
 #define SONARE_PAN_MODE_KEEP (-1)
 
+/// Far-channel taper of a strip's pan law; see @ref sonare_strip_set_pan_law.
 typedef enum SONARE_ENUM_BASE {
-  SONARE_PAN_LAW_CONST_3DB = 0,
-  SONARE_PAN_LAW_CONST_4P5DB = 1,
-  SONARE_PAN_LAW_CONST_6DB = 2,
-  SONARE_PAN_LAW_LINEAR_0DB = 3
+  SONARE_PAN_LAW_CONST_3DB = 0,    ///< Constant power, -3 dB at center
+  SONARE_PAN_LAW_CONST_4P5DB = 1,  ///< -4.5 dB at center
+  SONARE_PAN_LAW_CONST_6DB = 2,    ///< -6 dB at center
+  SONARE_PAN_LAW_LINEAR_0DB = 3    ///< Linear, 0 dB at center
 } SonarePanLaw;
 
+/// Where a send taps its strip: before or after the fader.
 typedef enum SONARE_ENUM_BASE {
   /* Post-fader is value 0 so a zero-initialized SonareEngineTrackSend defaults to
      the historical lane-send behavior (post-fader) instead of silently flipping
      to pre-fader. The integer is an in-memory ABI detail only -- scene/project
      JSON serializes send timing as the strings "pre"/"post", never this enum. */
-  SONARE_SEND_TIMING_POST_FADER = 0,
-  SONARE_SEND_TIMING_PRE_FADER = 1
+  SONARE_SEND_TIMING_POST_FADER = 0,  ///< Send taps the signal after the fader
+  SONARE_SEND_TIMING_PRE_FADER = 1    ///< Send taps the signal before the fader
 } SonareSendTiming;
 
+/// Point in a strip at which a meter snapshot is read.
 typedef enum SONARE_ENUM_BASE {
-  SONARE_METER_TAP_PRE_FADER = 0,
-  SONARE_METER_TAP_POST_FADER = 1
+  SONARE_METER_TAP_PRE_FADER = 0,  ///< Before the fader
+  SONARE_METER_TAP_POST_FADER = 1  ///< After the fader
 } SonareMeterTap;
 
-/* Maximum number of surround planes a meter snapshot can report (7.1). */
+/// Maximum number of surround planes a meter snapshot can report (7.1).
 #define SONARE_MAX_METER_CHANNELS 8
 
+/// One reading of a strip, bus or master meter, describing the most recently metered block. Level
+/// fields sit at -120 dB when nothing has been measured or the measurement is switched off.
 typedef struct {
-  float peak_db_l;
-  float peak_db_r;
-  float rms_db_l;
-  float rms_db_r;
-  float correlation;
-  float mono_compat_width;
-  float mono_compat_peak;
-  float mono_compat_side_rms;
-  int likely_mono_compatible;
-  float momentary_lufs;
-  float short_term_lufs;
-  float integrated_lufs;
-  float gain_reduction_db;
+  float peak_db_l;    ///< Left sample peak in dBFS
+  float peak_db_r;    ///< Right sample peak in dBFS
+  float rms_db_l;     ///< Left RMS in dBFS
+  float rms_db_r;     ///< Right RMS in dBFS
+  float correlation;  ///< Left/right correlation, -1 (anti-phase) to 1 (identical); 0 if silent
+  float mono_compat_width;     ///< RMS ratio of side to mid; 0 is mono, about 1 decorrelated
+  float mono_compat_peak;      ///< Peak of the mono sum 0.5 * (L + R), linear
+  float mono_compat_side_rms;  ///< RMS of the side signal 0.5 * (L - R), linear
+  int likely_mono_compatible;  ///< Non-zero when the correlation is not below the meter's threshold
+  float momentary_lufs;        ///< Momentary (400 ms) loudness in LUFS
+  float short_term_lufs;       ///< Short-term (3 s) loudness in LUFS
+  float integrated_lufs;       ///< Gated integrated loudness in LUFS since the meter was reset
+  float gain_reduction_db;  ///< Gain reduction in dB the strip's dynamics last reported; 0 if none
   /* Inter-sample (true) peak in dBFS, from the ITU-R BS.1770-4 polyphase
      reconstruction at the strip's configured oversample factor (4 or 8). This is a STREAMING
      measurement that runs one reconstruction-filter group delay (a few samples) behind the block,
      so every value has its whole stencil and the reading does not depend on the block size.
      sonare_metering_true_peak_dbtp measures a whole signal at once. */
-  float true_peak_dbtp_l;
-  float true_peak_dbtp_r;
-  float max_true_peak_dbtp;
-  uint64_t seq;
+  float true_peak_dbtp_l;    ///< Left true peak in dBTP; see sonare_metering_true_peak_dbtp
+  float true_peak_dbtp_r;    ///< Right true peak in dBTP
+  float max_true_peak_dbtp;  ///< Largest true peak over every plane in dBTP
+  uint64_t seq;              ///< Counter of published snapshots, advancing once per metered block
   /* Per-plane surround meters (5.1/7.1). Indices [0, num_channels) carry valid
      values; index 0 and 1 mirror the _l and _r stereo fields above.
      num_channels is 0 for a snapshot taken before the meter has seen audio,
      else 1..8. */
-  float peak_db[SONARE_MAX_METER_CHANNELS];
-  float rms_db[SONARE_MAX_METER_CHANNELS];
-  float true_peak_dbtp[SONARE_MAX_METER_CHANNELS];
-  int num_channels;
+  float peak_db[SONARE_MAX_METER_CHANNELS];         ///< Per-plane sample peak in dBFS
+  float rms_db[SONARE_MAX_METER_CHANNELS];          ///< Per-plane RMS in dBFS
+  float true_peak_dbtp[SONARE_MAX_METER_CHANNELS];  ///< Per-plane true peak in dBTP
+  int num_channels;  ///< Number of planes carrying valid per-plane values, 0..8
 } SonareMixMeterSnapshot;
 
+/// One goniometer (vectorscope) sample of a strip.
 typedef struct {
-  float left;
-  float right;
+  float left;   ///< Left sample value, linear
+  float right;  ///< Right sample value, linear
 } SonareMixGoniometerPoint;
 
-// Surround pan position for a strip feeding a >2-channel bus. Phase 1 honors
-// azimuth (-180..180 deg, 0 = front-center, + = right), divergence (0 = point
-// source, 1 = spread across the front) and lfe (0..1 scalar send into the LFE
-// plane); elevation and distance are reserved (0 / 1 in phase 1). Applied when
-// the engine's track mixer feeds the strip's lane into a destination with more
-// than two channels; ignored by sonare_mixer_process_stereo and
-// sonare_mixer_drain_tail_stereo, which are stereo-only.
+/// Surround pan position for a strip feeding a >2-channel bus. Phase 1 honors
+/// azimuth (-180..180 deg, 0 = front-center, + = right), divergence (0 = point
+/// source, 1 = spread across the front) and lfe (0..1 scalar send into the LFE
+/// plane); elevation and distance are reserved (0 / 1 in phase 1). Applied when
+/// the engine's track mixer feeds the strip's lane into a destination with more
+/// than two channels; ignored by sonare_mixer_process_stereo and
+/// sonare_mixer_drain_tail_stereo, which are stereo-only.
 typedef struct {
-  float azimuth;
-  float elevation;
-  float divergence;
-  float lfe;
-  float distance;
+  float azimuth;     ///< Angle in degrees, -180..180; 0 is front-center, positive is right
+  float elevation;   ///< Reserved; must be finite, has no effect
+  float divergence;  ///< 0 is a point source, 1 spreads across the front; range 0..1
+  float lfe;         ///< Scalar send into the LFE plane, 0..1
+  float distance;    ///< Reserved; must be finite, a value of 0 or less is stored as 1
 } SonareSurroundPan;
 
-// Returns NULL on an invalid argument or an allocation failure; sample_rate must be
-// in [8000, 384000] and max_block_size in [1, 1048576], or 0 for the library default
-// (512 frames); a negative max_block_size is refused. A non-NULL
-// handle is owned by the caller and stays valid until sonare_mixer_destroy,
-// which must be called exactly once.
+/// Returns NULL on an invalid argument or an allocation failure; sample_rate must be
+/// in [8000, 384000] and max_block_size in [1, 1048576], or 0 for the library default
+/// (512 frames); a negative max_block_size is refused. A non-NULL
+/// handle is owned by the caller and stays valid until sonare_mixer_destroy,
+/// which must be called exactly once.
 SonareMixer* sonare_mixer_create(int sample_rate, int max_block_size);
-// Adds a strip carrying the full meter configuration (LUFS + true peak at 4x).
-// Equivalent to sonare_mixer_add_strip_ex(mixer, id, 1, 1, 1, 0).
-//
-// Returns NULL on failure. A non-NULL strip is owned by the mixer, NOT the
-// caller: it stays valid until sonare_mixer_destroy and must never be freed
-// separately.
+/// Adds a strip carrying the full meter configuration (LUFS + true peak at 4x).
+/// Equivalent to sonare_mixer_add_strip_ex(mixer, id, 1, 1, 1, 0).
+///
+/// Returns NULL on failure. A non-NULL strip is owned by the mixer, NOT the
+/// caller: it stays valid until sonare_mixer_destroy and must never be freed
+/// separately.
 SonareStrip* sonare_mixer_add_strip(SonareMixer* mixer, const char* id);
-// Adds a strip whose pre/post meters are configured up front.
-//
-// A strip's meters size their buffers when the strip is built, so this is the
-// only place the configuration can be chosen: there is no setter, and changing
-// it later would have to rebuild the strip's storage. A full meter costs about
-// 646 KB at 48 kHz and a strip carries two of them; measure_lufs = 0 takes one
-// meter to about 83 KB, and enable_metering = 0 drops both (about 1.4 MB to
-// 145 KB for the strip) for strips whose snapshots are never read.
-//
-// enable_metering, measure_lufs and measure_true_peak are booleans (0 / non-0).
-// true_peak_oversample is 4 or 8, the factors the realtime meter implements;
-// 0 selects the default (4, the BS.1770-4 minimum). Returns NULL with
-// sonare_last_error_message() set for a NULL handle or id, a duplicate id, or
-// any other factor.
-//
-// A non-NULL strip is owned by the mixer, NOT the caller: it stays valid until
-// sonare_mixer_destroy and must never be freed separately. Adding further strips
-// does not invalidate it.
-//
-// The same configuration travels in scene JSON as the strip's optional
-// "metering" object, which is how a mixer built with
-// sonare_mixer_from_scene_json chooses it.
+/// Adds a strip whose pre/post meters are configured up front.
+///
+/// A strip's meters size their buffers when the strip is built, so this is the
+/// only place the configuration can be chosen: there is no setter, and changing
+/// it later would have to rebuild the strip's storage. A full meter costs about
+/// 646 KB at 48 kHz and a strip carries two of them; measure_lufs = 0 takes one
+/// meter to about 83 KB, and enable_metering = 0 drops both (about 1.4 MB to
+/// 145 KB for the strip) for strips whose snapshots are never read.
+///
+/// enable_metering, measure_lufs and measure_true_peak are booleans (0 / non-0).
+/// true_peak_oversample is 4 or 8, the factors the realtime meter implements;
+/// 0 selects the default (4, the BS.1770-4 minimum). Returns NULL with
+/// sonare_last_error_message() set for a NULL handle or id, a duplicate id, or
+/// any other factor.
+///
+/// A non-NULL strip is owned by the mixer, NOT the caller: it stays valid until
+/// sonare_mixer_destroy and must never be freed separately. Adding further strips
+/// does not invalidate it.
+///
+/// The same configuration travels in scene JSON as the strip's optional
+/// "metering" object, which is how a mixer built with
+/// sonare_mixer_from_scene_json chooses it.
 SonareStrip* sonare_mixer_add_strip_ex(SonareMixer* mixer, const char* id, int enable_metering,
                                        int measure_lufs, int measure_true_peak,
                                        int true_peak_oversample);
+/// @brief Sets the strip's input trim in dB, applied before the strip's processing. Refused with
+///        SONARE_ERROR_INVALID_PARAMETER for a NULL strip or a non-finite value.
 SonareError sonare_strip_set_input_trim_db(SonareStrip* strip, float db);
+/// @brief Sets the strip's fader gain in dB. Refused with SONARE_ERROR_INVALID_PARAMETER for a
+///        NULL strip or a non-finite value.
 SonareError sonare_strip_set_fader_db(SonareStrip* strip, float db);
-// Sets the strip's pan position. pan_mode < 0 (SONARE_PAN_MODE_KEEP) keeps the
-// strip's current pan mode (only the pan position changes); otherwise it selects
-// the mode: 0 = Balance, 1 = StereoPan, 2 = DualPan. A pan outside [-1, 1] is refused
-// with SONARE_ERROR_INVALID_PARAMETER and leaves the strip unchanged.
+/// Sets the strip's pan position. pan_mode < 0 (SONARE_PAN_MODE_KEEP) keeps the
+/// strip's current pan mode (only the pan position changes); otherwise it selects
+/// the mode: 0 = Balance, 1 = StereoPan, 2 = DualPan. A pan outside [-1, 1] is refused
+/// with SONARE_ERROR_INVALID_PARAMETER and leaves the strip unchanged.
 SonareError sonare_strip_set_pan(SonareStrip* strip, float pan, int pan_mode);
-// Both pans must lie in [-1, 1]; otherwise SONARE_ERROR_INVALID_PARAMETER, strip unchanged.
+/// Both pans must lie in [-1, 1]; otherwise SONARE_ERROR_INVALID_PARAMETER, strip unchanged.
 SonareError sonare_strip_set_dual_pan(SonareStrip* strip, float left_pan, float right_pan);
-// Sets the strip's surround pan position (used when the strip feeds a >2-channel
-// bus). Returns SONARE_ERROR_INVALID_PARAMETER if strip or pan is NULL. The
-// values are stored on the strip/scene and applied when the engine's track
-// mixer renders this strip's lane into a destination with more than two
-// channels; the stereo-only mixer block entry points ignore them.
+/// Sets the strip's surround pan position (used when the strip feeds a >2-channel
+/// bus). Returns SONARE_ERROR_INVALID_PARAMETER if strip or pan is NULL, an azimuth is outside
+/// -180..180, divergence or lfe is outside 0..1, or elevation or distance is not finite. The
+/// values are stored on the strip/scene and applied when the engine's track
+/// mixer renders this strip's lane into a destination with more than two
+/// channels; the stereo-only mixer block entry points ignore them.
 SonareError sonare_strip_set_surround_pan(SonareStrip* strip, const SonareSurroundPan* pan);
-// A width outside [0, 2] is refused with SONARE_ERROR_INVALID_PARAMETER, strip unchanged.
+/// A width outside [0, 2] is refused with SONARE_ERROR_INVALID_PARAMETER, strip unchanged.
 SonareError sonare_strip_set_width(SonareStrip* strip, float width);
+/// @brief Mutes (non-zero) or unmutes (0) the strip.
 SonareError sonare_strip_set_muted(SonareStrip* strip, int muted);
-// Sets the strip's solo state. Solo changes take effect on the next process
-// without a graph recompile (implied mutes are recomputed across the mixer).
+/// Sets the strip's solo state. Solo changes take effect on the next process
+/// without a graph recompile (implied mutes are recomputed across the mixer).
 SonareError sonare_strip_set_soloed(SonareStrip* strip, int soloed);
-// Marks a strip as solo-safe so it is never implied-muted by another strip's
-// solo. Takes effect on the next process without a graph recompile.
+/// Marks a strip as solo-safe so it is never implied-muted by another strip's
+/// solo. Takes effect on the next process without a graph recompile.
 SonareError sonare_strip_set_solo_safe(SonareStrip* strip, int solo_safe);
-// Inverts the polarity of the left and/or right channel. Does not change
-// latency or topology.
+/// Inverts the polarity of the left and/or right channel. Does not change
+/// latency or topology.
 SonareError sonare_strip_set_polarity_invert(SonareStrip* strip, int invert_left, int invert_right);
-// Sets the far-channel taper used by the strip's pan law. @c pan_law:
-// 0 = -3 dB, 1 = -4.5 dB, 2 = -6 dB, 3 = linear (0 dB). In Balance mode the
-// center remains unity and only the far channel is tapered. StereoPan folds the
-// pair to mono (0.5 * (L + R)) and applies the law's gains, so center takes
-// -3.01 / -4.52 / -6.02 / 0 dB for the four laws; DualPan pans each input with
-// the law's gains and takes the same center attenuation. A mono source is unity
-// at center under every law through this API: the mixer always feeds two
-// planes, and the law changes a mono strip's center gain only for a C++
-// ChannelStrip built without mono_pan_centre_unity. Returns
-// @c SONARE_ERROR_INVALID_PARAMETER if strip is NULL or pan_law is unknown.
+/// Sets the far-channel taper used by the strip's pan law. @c pan_law:
+/// 0 = -3 dB, 1 = -4.5 dB, 2 = -6 dB, 3 = linear (0 dB). In Balance mode the
+/// center remains unity and only the far channel is tapered. StereoPan folds the
+/// pair to mono (0.5 * (L + R)) and applies the law's gains, so center takes
+/// -3.01 / -4.52 / -6.02 / 0 dB for the four laws; DualPan pans each input with
+/// the law's gains and takes the same center attenuation. A mono source is unity
+/// at center under every law through this API: the mixer always feeds two
+/// planes, and the law changes a mono strip's center gain only for a C++
+/// ChannelStrip built without mono_pan_centre_unity. Returns
+/// @c SONARE_ERROR_INVALID_PARAMETER if strip is NULL or pan_law is unknown.
 SonareError sonare_strip_set_pan_law(SonareStrip* strip, int pan_law);
-// Sets a per-strip channel delay in samples, moving the strip later relative to the
-// others. It is not latency: latency compensation does not undo it and the mixer's
-// reported latency is unchanged, while the mixer tail grows by the delay.
+/// Sets a per-strip channel delay in samples, moving the strip later relative to the
+/// others. It is not latency: latency compensation does not undo it and the mixer's
+/// reported latency is unchanged, while the mixer tail grows by the delay.
 SonareError sonare_strip_set_channel_delay_samples(SonareStrip* strip, int delay_samples);
-// Sets the strip's direct VCA trim in dB. It is persisted as the strip's
-// vcaOffsetDb scene field, separately from the offsets its VCA groups add.
+/// Sets the strip's direct VCA trim in dB. It is persisted as the strip's
+/// vcaOffsetDb scene field, separately from the offsets its VCA groups add.
 SonareError sonare_strip_set_vca_offset_db(SonareStrip* strip, float offset_db);
-// Snaps the strip's input-trim, fader, pan and width smoothers to the values
-// already set on it, so the next processed block opens at those values instead
-// of gliding to them over the smoothing window (~5 ms by default).
-//
-// Call it after configuring a strip and before rendering a finite buffer: a
-// strip is smoothed for a live fader, and an offline render that does not
-// settle carries that glide as a level and image sweep across the head of its
-// output. Unlike a reset it clears nothing -- automation, meters and insert
-// state are untouched.
-//
-// Returns @c SONARE_ERROR_INVALID_PARAMETER if strip is NULL.
+/// Snaps the strip's input-trim, fader, pan and width smoothers to the values
+/// already set on it, so the next processed block opens at those values instead
+/// of gliding to them over the smoothing window (~5 ms by default).
+///
+/// Call it after configuring a strip and before rendering a finite buffer: a
+/// strip is smoothed for a live fader, and an offline render that does not
+/// settle carries that glide as a level and image sweep across the head of its
+/// output. Unlike a reset it clears nothing -- automation, meters and insert
+/// state are untouched.
+///
+/// Returns @c SONARE_ERROR_INVALID_PARAMETER if strip is NULL.
 SonareError sonare_strip_settle(SonareStrip* strip);
+/// @brief Adds a send from the strip to a destination bus.
+/// @param id Optional send identifier; NULL is stored as the empty string.
+/// @param destination_bus_id Id of the bus the send feeds; must not be NULL.
+/// @param send_db Send level in dB; must be finite.
+/// @param timing A @ref SonareSendTiming; any other value is refused.
+/// @param index_out Receives the send's index in add order; may be NULL. Written 0 on failure.
 SonareError sonare_strip_add_send(SonareStrip* strip, const char* id,
                                   const char* destination_bus_id, float send_db, int timing,
                                   size_t* index_out);
+/// @brief Sets the level in dB of the send at @p index (in add order).
 SonareError sonare_strip_set_send_db(SonareStrip* strip, size_t index, float send_db);
-// Removes the send at @c index (in add order) from the strip. Higher sends shift
-// down by one index. The send is dropped from both the live strip and the scene
-// mirror, and the routing graph is marked dirty (recompile before processing).
-// Returns @c SONARE_ERROR_INVALID_PARAMETER if strip is NULL or @c index is out
-// of range.
+/// Removes the send at @c index (in add order) from the strip. Higher sends shift
+/// down by one index. The send is dropped from both the live strip and the scene
+/// mirror, and the routing graph is marked dirty (recompile before processing).
+/// Returns @c SONARE_ERROR_INVALID_PARAMETER if strip is NULL or @c index is out
+/// of range.
 SonareError sonare_strip_remove_send(SonareStrip* strip, unsigned int index);
+/// @brief Reads the strip's meter snapshot into @p out. Refused with
+///        SONARE_ERROR_INVALID_PARAMETER if strip or out is NULL.
 SonareError sonare_strip_meter(const SonareStrip* strip, SonareMixMeterSnapshot* out);
-// Reads a meter snapshot at the given tap point. @c tap: 0 = pre-fader,
-// 1 = post-fader (see SonareMeterTap). Returns @c SONARE_ERROR_INVALID_PARAMETER
-// if strip or out is NULL, or tap is unknown.
+/// Reads a meter snapshot at the given tap point. @c tap: 0 = pre-fader,
+/// 1 = post-fader (see SonareMeterTap). Returns @c SONARE_ERROR_INVALID_PARAMETER
+/// if strip or out is NULL, or tap is unknown.
 SonareError sonare_strip_meter_tap(const SonareStrip* strip, int tap, SonareMixMeterSnapshot* out);
 /// @brief Reads the post-insert meter for a compiled bus (including master).
 SonareError sonare_mixer_bus_meter(SonareMixer* mixer, const char* bus_id,
@@ -239,6 +260,11 @@ SonareError sonare_mixer_bus_meter(SonareMixer* mixer, const char* bus_id,
 ///   NULL, or if no compiled bus has that id. Realtime-safe.
 SonareError sonare_mixer_bus_non_finite_discard_count(const SonareMixer* mixer, const char* bus_id,
                                                       uint32_t* out_count);
+/// @brief Copies the most recent goniometer points of the strip into @p out.
+/// @param out Buffer of @p max_points points.
+/// @param max_points Capacity of @p out.
+/// @return Number of points written; 0 if strip or out is NULL or @p max_points is 0.
+///         Realtime-safe, does not allocate.
 size_t sonare_strip_read_goniometer_latest(const SonareStrip* strip, SonareMixGoniometerPoint* out,
                                            size_t max_points);
 /// @brief Number of blocks in which the strip discarded recursive state because
@@ -261,21 +287,21 @@ size_t sonare_strip_read_goniometer_latest(const SonareStrip* strip, SonareMixGo
 ///   NULL. Realtime-safe.
 SonareError sonare_strip_non_finite_discard_count(const SonareStrip* strip, uint32_t* out_count);
 
-// Number of strips in the mixer (e.g. strips loaded from a scene). Returns 0 if
-// mixer is NULL.
+/// Number of strips in the mixer (e.g. strips loaded from a scene). Returns 0 if
+/// mixer is NULL.
 size_t sonare_mixer_strip_count(const SonareMixer* mixer);
-// Number of strips, distinguishing a NULL mixer from an empty one. Returns
-// @c SONARE_ERROR_INVALID_PARAMETER if mixer or out_count is NULL, otherwise
-// @c SONARE_OK with the count written to @p out_count.
+/// Number of strips, distinguishing a NULL mixer from an empty one. Returns
+/// @c SONARE_ERROR_INVALID_PARAMETER if mixer or out_count is NULL, otherwise
+/// @c SONARE_OK with the count written to @p out_count.
 SonareError sonare_mixer_get_strip_count(const SonareMixer* mixer, size_t* out_count);
-// Adds a bus to the mixer topology. @c role is one of "master", "aux", "submix"
-// (NULL defaults to "aux"). Mark the routing graph dirty; call
-// sonare_mixer_compile (or process) to rebuild. Returns
-// @c SONARE_ERROR_INVALID_PARAMETER if mixer or id is NULL, or a bus with the
-// same id already exists.
+/// Adds a bus to the mixer topology. @c role is one of "master", "aux", "submix"
+/// (NULL defaults to "aux"). Mark the routing graph dirty; call
+/// sonare_mixer_compile (or process) to rebuild. Returns
+/// @c SONARE_ERROR_INVALID_PARAMETER if mixer or id is NULL, or a bus with the
+/// same id already exists.
 SonareError sonare_mixer_add_bus(SonareMixer* mixer, const char* id, const char* role);
-// Removes a bus by id. Returns @c SONARE_ERROR_INVALID_PARAMETER if mixer or id
-// is NULL or no bus with that id exists.
+/// Removes a bus by id. Returns @c SONARE_ERROR_INVALID_PARAMETER if mixer or id
+/// is NULL or no bus with that id exists.
 SonareError sonare_mixer_remove_bus(SonareMixer* mixer, const char* id);
 /// @brief Routes a strip or bus into a destination bus.
 /// @details Removes every connection whose source is @p source_id -- including a
@@ -298,152 +324,157 @@ SonareError sonare_mixer_remove_bus(SonareMixer* mixer, const char* id);
 ///   close a cycle through connections or sends.
 SonareError sonare_mixer_set_output_bus(SonareMixer* mixer, const char* source_id,
                                         const char* bus_id);
-// Number of buses in the mixer topology. Returns
-// @c SONARE_ERROR_INVALID_PARAMETER if mixer or out_count is NULL.
+/// Number of buses in the mixer topology. Returns
+/// @c SONARE_ERROR_INVALID_PARAMETER if mixer or out_count is NULL.
 SonareError sonare_mixer_bus_count(const SonareMixer* mixer, size_t* out_count);
-// Adds a VCA group with the given id and gain offset. @c members is an array of
-// @c member_count strip-id C strings (may be NULL when member_count is 0).
-// Returns @c SONARE_ERROR_INVALID_PARAMETER if mixer or id is NULL, members is
-// NULL while member_count > 0, or a group with the same id already exists.
+/// Adds a VCA group with the given id and gain offset. @c members is an array of
+/// @c member_count strip-id C strings (may be NULL when member_count is 0).
+/// Returns @c SONARE_ERROR_INVALID_PARAMETER if mixer or id is NULL, members is
+/// NULL while member_count > 0, or a group with the same id already exists.
 SonareError sonare_mixer_add_vca_group(SonareMixer* mixer, const char* id, float gain_db,
                                        const char* const* members, size_t member_count);
-// Sets an existing VCA group's gain in dB. The live member strips receive only
-// the delta from the previous group gain, preserving direct strip VCA trims and
-// other VCA-group contributions. The stored scene gain is updated so
-// sonare_mixer_to_scene_json round-trips the new value.
+/// Sets an existing VCA group's gain in dB. The live member strips receive only
+/// the delta from the previous group gain, preserving direct strip VCA trims and
+/// other VCA-group contributions. The stored scene gain is updated so
+/// sonare_mixer_to_scene_json round-trips the new value.
 SonareError sonare_mixer_set_vca_group_gain_db(SonareMixer* mixer, const char* id, float gain_db);
-// Replaces an existing VCA group's strip membership. Removed members lose this
-// group's current gain contribution; added members receive it immediately.
+/// Replaces an existing VCA group's strip membership. Removed members lose this
+/// group's current gain contribution; added members receive it immediately.
 SonareError sonare_mixer_set_vca_group_members(SonareMixer* mixer, const char* id,
                                                const char* const* members, size_t member_count);
-// Removes a VCA group by id. Returns @c SONARE_ERROR_INVALID_PARAMETER if mixer
-// or id is NULL or no group with that id exists.
+/// Removes a VCA group by id. Returns @c SONARE_ERROR_INVALID_PARAMETER if mixer
+/// or id is NULL or no group with that id exists.
 SonareError sonare_mixer_remove_vca_group(SonareMixer* mixer, const char* id);
-// Number of VCA groups in the mixer topology. Returns
-// @c SONARE_ERROR_INVALID_PARAMETER if mixer or out_count is NULL.
+/// Number of VCA groups in the mixer topology. Returns
+/// @c SONARE_ERROR_INVALID_PARAMETER if mixer or out_count is NULL.
 SonareError sonare_mixer_vca_group_count(const SonareMixer* mixer, size_t* out_count);
-// Borrowed strip handle by index in [0, count). Returns NULL if out of range or
-// mixer is NULL. The handle is owned by the mixer; do not free it. It stays
-// valid until sonare_mixer_destroy — adding strips does not invalidate it, and
-// there is no entry point that removes one.
+/// Borrowed strip handle by index in [0, count). Returns NULL if out of range or
+/// mixer is NULL. The handle is owned by the mixer; do not free it. It stays
+/// valid until sonare_mixer_destroy — adding strips does not invalidate it, and
+/// there is no entry point that removes one.
 SonareStrip* sonare_mixer_strip_at(SonareMixer* mixer, size_t index);
-// Borrowed strip handle by strip id. Returns NULL if not found or mixer/id NULL.
-// The handle is owned by the mixer; do not free it. Same validity as
-// sonare_mixer_strip_at: it remains usable until sonare_mixer_destroy.
+/// Borrowed strip handle by strip id. Returns NULL if not found or mixer/id NULL.
+/// The handle is owned by the mixer; do not free it. Same validity as
+/// sonare_mixer_strip_at: it remains usable until sonare_mixer_destroy.
 SonareStrip* sonare_mixer_strip_by_id(SonareMixer* mixer, const char* id);
-// Schedules sample-accurate insert-parameter automation on a strip's insert.
-// @c insert_index addresses the combined insert sequence
-// [pre-inserts... post-inserts...]. @c param_id is processor-specific (see each
-// processor's set_parameter doc). @c sample_pos is in absolute samples from the
-// start of processing: the mixer advances an internal sample position from 0 on
-// the first sonare_mixer_process_stereo call. Explicit and lazy graph
-// recompilation preserve this absolute timeline position; they do not restart
-// automation at sample 0.
-//
-// AUTOMATION CURVE ORDINALS (canonical, shared across paths):
-//   0 = Linear (default), 1 = Exponential, 2 = Hold, 3 = SCurve
-//
-// This is the SAME canonical ordinal scheme used by the PPQ-domain
-// SonareAutomationPoint.curve_to_next (sonare_engine_set_automation_lane). Both
-// paths resolve to the single sonare::AutomationCurve enum (mixing::
-// AutomationCurveType and automation::CurveType are aliases of it), so no
-// per-path "translation" of curve ordinals is needed when moving between the
-// engine-automation and mixer-automation APIs. Each call site pins the ordinals
-// with static_assert.
-//
-// Returns @c SONARE_OK on success; @c SONARE_ERROR_INVALID_PARAMETER for a NULL
-// strip, unknown curve/param_id, or out-of-range insert; @c
-// SONARE_ERROR_NOT_SUPPORTED when the parameter exists but is not realtime-safe;
-// or @c SONARE_ERROR_OUT_OF_MEMORY when the fixed automation-lane/event capacity
-// is exhausted.
+/// Schedules sample-accurate insert-parameter automation on a strip's insert.
+/// @c insert_index addresses the combined insert sequence
+/// [pre-inserts... post-inserts...]. @c param_id is processor-specific (see each
+/// processor's set_parameter doc). @c sample_pos is in absolute samples from the
+/// start of processing: the mixer advances an internal sample position from 0 on
+/// the first sonare_mixer_process_stereo call. Explicit and lazy graph
+/// recompilation preserve this absolute timeline position; they do not restart
+/// automation at sample 0.
+///
+/// AUTOMATION CURVE ORDINALS (canonical, shared across paths):
+///   0 = Linear (default), 1 = Exponential, 2 = Hold, 3 = SCurve
+///
+/// This is the SAME canonical ordinal scheme used by the PPQ-domain
+/// SonareAutomationPoint.curve_to_next (sonare_engine_set_automation_lane). Both
+/// paths resolve to the single sonare::AutomationCurve enum (mixing::
+/// AutomationCurveType and automation::CurveType are aliases of it), so no
+/// per-path "translation" of curve ordinals is needed when moving between the
+/// engine-automation and mixer-automation APIs. Each call site pins the ordinals
+/// with static_assert.
+///
+/// Returns @c SONARE_OK on success; @c SONARE_ERROR_INVALID_PARAMETER for a NULL
+/// strip, unknown curve/param_id, or out-of-range insert; @c
+/// SONARE_ERROR_NOT_SUPPORTED when the parameter exists but is not realtime-safe;
+/// or @c SONARE_ERROR_OUT_OF_MEMORY when the fixed automation-lane/event capacity
+/// is exhausted.
 SonareError sonare_strip_schedule_insert_automation(SonareStrip* strip, unsigned int insert_index,
                                                     unsigned int param_id, int64_t sample_pos,
                                                     float value, int curve);
-// Schedules sample-accurate fader/pan/width automation on a strip. @c sample_pos
-// uses the same absolute-sample timeline as sonare_strip_schedule_insert_automation.
-//
-// @c curve uses the canonical automation-curve ordinal scheme:
-//   0 = Linear (default), 1 = Exponential, 2 = Hold, 3 = SCurve
-// (This is the same scheme used by the PPQ-domain
-// SonareAutomationPoint.curve_to_next; see the ordinal note above
-// sonare_strip_schedule_insert_automation.)
-//
-// Returns @c SONARE_OK on success, @c SONARE_ERROR_OUT_OF_MEMORY if the event
-// lane is full, or @c SONARE_ERROR_INVALID_PARAMETER for a NULL strip, an
-// unknown curve, a non-finite value, or a non-monotonic @c sample_pos.
+/// Schedules sample-accurate fader/pan/width automation on a strip. @c sample_pos
+/// uses the same absolute-sample timeline as sonare_strip_schedule_insert_automation.
+///
+/// @c curve uses the canonical automation-curve ordinal scheme:
+///   0 = Linear (default), 1 = Exponential, 2 = Hold, 3 = SCurve
+/// (This is the same scheme used by the PPQ-domain
+/// SonareAutomationPoint.curve_to_next; see the ordinal note above
+/// sonare_strip_schedule_insert_automation.)
+///
+/// Returns @c SONARE_OK on success, @c SONARE_ERROR_OUT_OF_MEMORY if the event
+/// lane is full, or @c SONARE_ERROR_INVALID_PARAMETER for a NULL strip, an
+/// unknown curve, a non-finite value, or a non-monotonic @c sample_pos.
 SonareError sonare_strip_schedule_fader_automation(SonareStrip* strip, int64_t sample_pos,
                                                    float fader_db, int curve);
+/// @brief Schedules sample-accurate pan automation on a strip; @p pan is the pan position and
+///        @p curve the automation-curve ordinal described at
+///        @ref sonare_strip_schedule_fader_automation.
 SonareError sonare_strip_schedule_pan_automation(SonareStrip* strip, int64_t sample_pos, float pan,
                                                  int curve);
+/// @brief Schedules sample-accurate stereo-width automation on a strip; @p curve is the
+///        automation-curve ordinal described at @ref sonare_strip_schedule_fader_automation.
 SonareError sonare_strip_schedule_width_automation(SonareStrip* strip, int64_t sample_pos,
                                                    float width, int curve);
-// Schedules sample-accurate send-level automation on a strip's send. @c send_index
-// addresses the strip's sends in add order. See the schedulers above for timeline
-// and @c curve semantics (same sample-accurate mixing ordinal scheme:
-// 0 = Linear, 1 = Exponential, 2 = Hold, 3 = SCurve).
-//
-// Returns @c SONARE_OK on success, @c SONARE_ERROR_INVALID_PARAMETER if strip is
-// NULL, curve is unknown, or @c send_index is out of range, or
-// @c SONARE_ERROR_OUT_OF_MEMORY if the send's event lane is full (matching the
-// fader/pan/width schedulers, so callers can distinguish a bad argument from a
-// capacity condition).
+/// Schedules sample-accurate send-level automation on a strip's send. @c send_index
+/// addresses the strip's sends in add order. See the schedulers above for timeline
+/// and @c curve semantics (same sample-accurate mixing ordinal scheme:
+/// 0 = Linear, 1 = Exponential, 2 = Hold, 3 = SCurve).
+///
+/// Returns @c SONARE_OK on success, @c SONARE_ERROR_INVALID_PARAMETER if strip is
+/// NULL, curve is unknown, or @c send_index is out of range, or
+/// @c SONARE_ERROR_OUT_OF_MEMORY if the send's event lane is full (matching the
+/// fader/pan/width schedulers, so callers can distinguish a bad argument from a
+/// capacity condition).
 SonareError sonare_strip_schedule_send_automation(SonareStrip* strip, size_t send_index,
                                                   int64_t sample_pos, float db, int curve);
-// Returns NULL when the scene JSON is malformed or a strip cannot be built; the
-// parse-failure message is available from sonare_last_error_message. A non-NULL
-// handle is owned by the caller and stays valid until sonare_mixer_destroy.
-// max_block_size follows sonare_mixer_create: 0 selects the library default (512 frames).
-// Keys the scene reader does not consume (other than `$`- and `x-`-prefixed ones) and
-// insert params no processor reads do not fail the load; each is one Warning entry of
-// sonare_last_diagnostic (codes in the SonareDiagnostic table), e.g. the message
-// `unknown scene key 'strips[2].faderDB'`.
+/// Returns NULL when the scene JSON is malformed or a strip cannot be built; the
+/// parse-failure message is available from sonare_last_error_message. A non-NULL
+/// handle is owned by the caller and stays valid until sonare_mixer_destroy.
+/// max_block_size follows sonare_mixer_create: 0 selects the library default (512 frames).
+/// Keys the scene reader does not consume (other than `$`- and `x-`-prefixed ones) and
+/// insert params no processor reads do not fail the load; each is one Warning entry of
+/// sonare_last_diagnostic (codes in the SonareDiagnostic table), e.g. the message
+/// `unknown scene key 'strips[2].faderDB'`.
 SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int max_block_size);
-// Free *json_out with sonare_free_string.
+/// Free *json_out with sonare_free_string.
 SonareError sonare_mixer_to_scene_json(const SonareMixer* mixer, char** json_out);
-// Rebuilds and compiles the internal routing graph from the current topology
-// (strips, sends, buses, connections). Call after manual topology changes
-// (e.g. sonare_mixer_add_strip / sonare_strip_add_send) before processing.
-// sonare_mixer_process_stereo also compiles lazily as a fallback when the
-// topology is dirty. Recompilation preserves the mixer's absolute automation
-// sample position and the queued strip automation lanes.
+/// Rebuilds and compiles the internal routing graph from the current topology
+/// (strips, sends, buses, connections). Call after manual topology changes
+/// (e.g. sonare_mixer_add_strip / sonare_strip_add_send) before processing.
+/// sonare_mixer_process_stereo also compiles lazily as a fallback when the
+/// topology is dirty. Recompilation preserves the mixer's absolute automation
+/// sample position and the queued strip automation lanes.
 SonareError sonare_mixer_compile(SonareMixer* mixer);
-// Reports the compiled mixer's latency at the master output. Lazily compiles if
-// the topology is dirty. Returns INVALID_PARAMETER for NULL arguments.
+/// Reports the compiled mixer's latency at the master output. Lazily compiles if
+/// the topology is dirty. Returns INVALID_PARAMETER for NULL arguments.
 SonareError sonare_mixer_latency_samples(SonareMixer* mixer, int* out_latency_samples);
-// Reports the largest block sonare_mixer_process_stereo and sonare_mixer_drain_tail_stereo
-// accept: the max_block_size given at creation, or the library default when 0 was given.
-// The out-parameter is written 0 first.
+/// Reports the largest block sonare_mixer_process_stereo and sonare_mixer_drain_tail_stereo
+/// accept: the max_block_size given at creation, or the library default when 0 was given.
+/// The out-parameter is written 0 first.
 SonareError sonare_mixer_max_block_size(const SonareMixer* mixer, int* out_max_block_size);
-// Reports the longest audible processor-tail path to the compiled master:
-// serial processor/node tails add, while parallel main/send branches take the
-// maximum. Lazily compiles if the topology is dirty.
+/// Reports the longest audible processor-tail path to the compiled master:
+/// serial processor/node tails add, while parallel main/send branches take the
+/// maximum. Lazily compiles if the topology is dirty.
 SonareError sonare_mixer_tail_samples(SonareMixer* mixer, int* out_tail_samples);
-// Processes one stereo block through the compiled mixer graph.
-//
-// Buffers:
-// - @c input_left and @c input_right are arrays of @c input_count planar channel
-//   pointers, one L/R buffer pair per strip in strip order.
-// - @c output_left and @c output_right receive the master bus.
-// - @c num_samples must not exceed the @c max_block_size passed to
-//   sonare_mixer_create.
-//
-// REAL-TIME SAFETY: NOT guaranteed real-time safe. This is a block-convenience
-// entry point. If the topology is dirty (strips/sends/buses changed since the
-// last compile), it lazily rebuilds and compiles the routing graph, which can
-// allocate. To keep the audio thread allocation-free, call sonare_mixer_compile
-// once after each topology change and before the first process call. The
-// steady-state path with an already-compiled graph performs no heap allocation.
-//
-// Returns @c SONARE_OK on success, or @c SONARE_ERROR_INVALID_PARAMETER if any
-// required pointer is NULL, @c input_count exceeds the strip count, a per-strip
-// channel pointer is NULL, or @c num_samples exceeds @c max_block_size.
+/// Processes one stereo block through the compiled mixer graph.
+///
+/// Buffers:
+/// - @c input_left and @c input_right are arrays of @c input_count planar channel
+///   pointers, one L/R buffer pair per strip in strip order.
+/// - @c output_left and @c output_right receive the master bus.
+/// - @c num_samples must not exceed the @c max_block_size passed to
+///   sonare_mixer_create.
+///
+/// REAL-TIME SAFETY: NOT guaranteed real-time safe. This is a block-convenience
+/// entry point. If the topology is dirty (strips/sends/buses changed since the
+/// last compile), it lazily rebuilds and compiles the routing graph, which can
+/// allocate. To keep the audio thread allocation-free, call sonare_mixer_compile
+/// once after each topology change and before the first process call. The
+/// steady-state path with an already-compiled graph performs no heap allocation.
+///
+/// Returns @c SONARE_OK on success, or @c SONARE_ERROR_INVALID_PARAMETER if any
+/// required pointer is NULL, @c input_count exceeds the strip count, a per-strip
+/// channel pointer is NULL, or @c num_samples exceeds @c max_block_size.
 SonareError sonare_mixer_process_stereo(SonareMixer* mixer, const float* const* input_left,
                                         const float* const* input_right, size_t input_count,
                                         float* output_left, float* output_right,
                                         size_t num_samples);
-// Processes a zero-input block through the mixer to drain delayed/tail audio
-// after the host has stopped feeding strip inputs. Equivalent to process_stereo
-// with input_count=0 and NULL input arrays, but explicit for offline renderers.
+/// Processes a zero-input block through the mixer to drain delayed/tail audio
+/// after the host has stopped feeding strip inputs. Equivalent to process_stereo
+/// with input_count=0 and NULL input arrays, but explicit for offline renderers.
 SonareError sonare_mixer_drain_tail_stereo(SonareMixer* mixer, float* output_left,
                                            float* output_right, size_t num_samples);
 /// @brief Configuration of the mixer's master-output meter.
@@ -452,13 +483,13 @@ SonareError sonare_mixer_drain_tail_stereo(SonareMixer* mixer, float* output_lef
 /// field's library default; every field is then read literally. The measurement switches and
 /// the oversample factor mean what they mean on sonare_mixer_add_strip_ex.
 typedef struct {
-  /* sizeof(SonareMixerMasterMeterConfig), set by sonare_mixer_master_meter_config_init. A
-   * smaller value is refused with SONARE_ERROR_INVALID_PARAMETER. */
+  /// sizeof(SonareMixerMasterMeterConfig), set by sonare_mixer_master_meter_config_init. A
+  /// smaller value is refused with SONARE_ERROR_INVALID_PARAMETER.
   uint32_t struct_size;
-  int32_t enabled;              /* meter the master output; default 1, non-zero is on */
-  int32_t measure_lufs;         /* default 1, non-zero is on */
-  int32_t measure_true_peak;    /* default 1, non-zero is on */
-  int32_t true_peak_oversample; /* default 4; 4 or 8 */
+  int32_t enabled;               ///< Meter the master output; default 1, non-zero is on
+  int32_t measure_lufs;          ///< Measure loudness; default 1, non-zero is on
+  int32_t measure_true_peak;     ///< Measure true peak; default 1, non-zero is on
+  int32_t true_peak_oversample;  ///< True-peak oversample factor, 4 (default) or 8
 } SonareMixerMasterMeterConfig;
 
 /// @brief Sets struct_size and every SonareMixerMasterMeterConfig default. NULL is a no-op.
@@ -483,21 +514,23 @@ SonareError sonare_mixer_configure_master_meter(SonareMixer* mixer,
 ///   the master meter has never been enabled.
 SonareError sonare_mixer_master_meter(SonareMixer* mixer, SonareMixMeterSnapshot* out);
 
-// Marks the end of the signal for every strip, bus and master-output meter: the
-// true-peak reading, which runs one reconstruction-filter group delay behind the
-// block, reads that pending group delay against silence and folds it into the
-// published snapshot. An offline or one-shot caller calls it after its last
-// block so true_peak_dbtp covers the whole signal. A later process call starts a
-// new signal. Returns INVALID_PARAMETER for a NULL mixer.
+/// Marks the end of the signal for every strip, bus and master-output meter: the
+/// true-peak reading, which runs one reconstruction-filter group delay behind the
+/// block, reads that pending group delay against silence and folds it into the
+/// published snapshot. An offline or one-shot caller calls it after its last
+/// block so true_peak_dbtp covers the whole signal. A later process call starts a
+/// new signal. Returns INVALID_PARAMETER for a NULL mixer.
 SonareError sonare_mixer_flush_meters(SonareMixer* mixer);
-// Returns the built-in mixing-scene preset names, separated by '\n'. Same
-// storage contract as sonare_mixing_assistant_source_class_names: thread-local,
-// rebuilt on every call, so the pointer is valid only until the next call to
-// this function on the same thread. Copy it to hold it; never free it. Never
-// NULL: an empty set comes back as the empty string.
+/// Returns the built-in mixing-scene preset names, separated by '\n'. Same
+/// storage contract as sonare_mixing_assistant_source_class_names: thread-local,
+/// rebuilt on every call, so the pointer is valid only until the next call to
+/// this function on the same thread. Copy it to hold it; never free it. Never
+/// NULL: an empty set comes back as the empty string.
 const char* sonare_mixing_scene_preset_names(void);
-// Free *json_out with sonare_free_string.
+/// Free *json_out with sonare_free_string.
 SonareError sonare_mixing_scene_preset_json(const char* preset_name, char** json_out);
+/// @brief Destroys a mixer and every strip it owns. NULL is a no-op. Strip handles obtained from
+///        the mixer are invalid afterwards.
 void sonare_mixer_destroy(SonareMixer* mixer);
 
 // ============================================================================
@@ -520,58 +553,58 @@ void sonare_mixer_destroy(SonareMixer* mixer);
 // array rather than one shared count; truncating every track to the shortest
 // would delete a part that only enters late in the song.
 
-// Analyses @c input_count tracks and writes a suggested scene, the measurements
-// behind it and a human-readable explanation as a JSON object.
-//
-// @param input_left   Per-track left/mono channel pointers; @c input_count entries.
-// @param input_right  Per-track right channel pointers, or NULL for an all-mono
-//                     set. Individual entries may be NULL for a mono track.
-// @param track_ids    Per-track strip identifiers; @c input_count entries, each
-//                     non-NULL, nonempty and unique. A NULL, empty or repeated
-//                     id returns @c SONARE_ERROR_INVALID_PARAMETER.
-// @param track_names  Optional per-track display names used only as a
-//                     classification hint, or NULL. Individual entries may be NULL.
-// @param track_lengths Per-track frame counts; @c input_count entries.
-// @param track_sample_rates Per-track sample rates, or NULL when every track is
-//                     at @c sample_rate. A track at another rate is resampled
-//                     onto @c sample_rate before analysis; an entry <= 0 returns
-//                     @c SONARE_ERROR_INVALID_PARAMETER.
-// @param input_count  Number of tracks. Zero yields an empty suggestion.
-// @param sample_rate  Analysis rate every track is brought to; must be > 0.
-// @param params       Flat configuration; accepts targetTrackLufs,
-//                     suggestionStrength, eqMaxCutDb, mixBusHeadroomDbtp,
-//                     tempoBpm, enableStructure,
-//                     enableGain, enableBalance, enableEq, enableDynamics,
-//                     enableImage, enableHighPass, nFft and hopLength.
-//                     tempoBpm is the tempo the suggested delay times are voiced
-//                     against; 0 (the default) selects the transport's own
-//                     fallback tempo, and a positive value outside 20..400 BPM
-//                     is refused rather than clamped.
-// @param param_count  Number of entries in @c params.
-// @param json_out     Receives the result JSON. Release with sonare_free_string().
-//
-// A track carrying a NaN or an infinity is not an error: it comes back in the
-// result document as unusable, with "track has non-finite samples" as its
-// exclusionReason, so the buffer is named rather than diagnosed as silence.
-//
-// Returns @c SONARE_ERROR_NOT_SUPPORTED when the library was built without the
-// mixing assistant.
+/// Analyses @c input_count tracks and writes a suggested scene, the measurements
+/// behind it and a human-readable explanation as a JSON object.
+///
+/// @param input_left   Per-track left/mono channel pointers; @c input_count entries.
+/// @param input_right  Per-track right channel pointers, or NULL for an all-mono
+///                     set. Individual entries may be NULL for a mono track.
+/// @param track_ids    Per-track strip identifiers; @c input_count entries, each
+///                     non-NULL, nonempty and unique. A NULL, empty or repeated
+///                     id returns @c SONARE_ERROR_INVALID_PARAMETER.
+/// @param track_names  Optional per-track display names used only as a
+///                     classification hint, or NULL. Individual entries may be NULL.
+/// @param track_lengths Per-track frame counts; @c input_count entries.
+/// @param track_sample_rates Per-track sample rates, or NULL when every track is
+///                     at @c sample_rate. A track at another rate is resampled
+///                     onto @c sample_rate before analysis; an entry <= 0 returns
+///                     @c SONARE_ERROR_INVALID_PARAMETER.
+/// @param input_count  Number of tracks. Zero yields an empty suggestion.
+/// @param sample_rate  Analysis rate every track is brought to; must be > 0.
+/// @param params       Flat configuration; accepts targetTrackLufs,
+///                     suggestionStrength, eqMaxCutDb, mixBusHeadroomDbtp,
+///                     tempoBpm, enableStructure,
+///                     enableGain, enableBalance, enableEq, enableDynamics,
+///                     enableImage, enableHighPass, nFft and hopLength.
+///                     tempoBpm is the tempo the suggested delay times are voiced
+///                     against; 0 (the default) selects the transport's own
+///                     fallback tempo, and a positive value outside 20..400 BPM
+///                     is refused rather than clamped.
+/// @param param_count  Number of entries in @c params.
+/// @param json_out     Receives the result JSON. Release with sonare_free_string().
+///
+/// A track carrying a NaN or an infinity is not an error: it comes back in the
+/// result document as unusable, with "track has non-finite samples" as its
+/// exclusionReason, so the buffer is named rather than diagnosed as silence.
+///
+/// Returns @c SONARE_ERROR_NOT_SUPPORTED when the library was built without the
+/// mixing assistant.
 SonareError sonare_mixing_assistant_suggest(
     const float* const* input_left, const float* const* input_right, const char* const* track_ids,
     const char* const* track_names, const size_t* track_lengths, const int* track_sample_rates,
     size_t input_count, int sample_rate, const SonareMasteringParam* params, size_t param_count,
     char** json_out);
 
-// Returns the source-class identifiers the assistant can report, separated by
-// '\n'. Backed by thread-local storage REBUILT ON EVERY CALL, so the pointer is
-// valid only until the next call to this function on the same thread — unlike
-// the mastering *_names getters, whose storage is built once and stays valid
-// for the thread's lifetime. Copy the string if you need to hold it across
-// another call. Do NOT cache it across threads or free it. Never NULL: a build
-// without the assistant returns the empty string.
+/// Returns the source-class identifiers the assistant can report, separated by
+/// '\n'. Backed by thread-local storage REBUILT ON EVERY CALL, so the pointer is
+/// valid only until the next call to this function on the same thread — unlike
+/// the mastering *_names getters, whose storage is built once and stays valid
+/// for the thread's lifetime. Copy the string if you need to hold it across
+/// another call. Do NOT cache it across threads or free it. Never NULL: a build
+/// without the assistant returns the empty string.
 const char* sonare_mixing_assistant_source_class_names(void);
 
-// Resolves a source-class identifier to its enum value, or -1 when unknown.
+/// Resolves a source-class identifier to its enum value, or -1 when unknown.
 int sonare_mixing_assistant_source_class_from_name(const char* name);
 
 #ifdef __cplusplus

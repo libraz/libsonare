@@ -31,16 +31,16 @@ typedef struct SonareSampleBank SonareSampleBank;
 /// Zero-initialize then override: a zero-init desc is an unlooped sample rooted
 /// at middle C and played at the render's own rate.
 typedef struct {
-  uint8_t root_key; /* key at which it sounds at its recorded pitch; 0 => 60 */
-  float fine_tune_cents;
-  double source_rate;  /* rate it was recorded at; 0 => the render's */
-  uint32_t loop_start; /* frame offsets inside this sample */
-  uint32_t loop_end;
-  /* SoundFont sampleModes, the same values an SF2 zone carries: 0 = no loop,
-     1 = continuous, 3 = loop while the key is held, and 2, which the SoundFont
-     spec defines as unused and read as no loop. Any other value is refused
-     with SONARE_ERROR_INVALID_PARAMETER. This is the sample's own looping;
-     SonareSynthPatch.sample_loop overrides it per patch. */
+  uint8_t root_key;       ///< MIDI key at which the sample sounds at its recorded pitch; 0 => 60
+  float fine_tune_cents;  ///< Fine tuning of the whole sample in cents; must be finite
+  double source_rate;     ///< Rate in Hz the sample was recorded at; 0 => the render's own rate
+  uint32_t loop_start;    ///< Loop start as a frame offset inside this sample
+  uint32_t loop_end;      ///< Loop end as a frame offset inside this sample
+  /// SoundFont sampleModes, the same values an SF2 zone carries: 0 = no loop,
+  /// 1 = continuous, 3 = loop while the key is held, and 2, which the SoundFont
+  /// spec defines as unused and read as no loop. Any other value is refused
+  /// with SONARE_ERROR_INVALID_PARAMETER. This is the sample's own looping;
+  /// SonareSynthPatch.sample_loop overrides it per patch.
   int loop_mode;
 } SonareSampleDesc;
 
@@ -53,14 +53,14 @@ typedef struct {
 /// untouched rectangle is the whole keyboard. The one rectangle this cannot
 /// express is the single key 0.
 typedef struct {
-  uint8_t key_lo;
-  uint8_t key_hi;
-  uint8_t vel_lo;
-  uint8_t vel_hi;
-  uint32_t sample_index; /* as returned by sonare_sample_bank_add_sample */
-  float tune_cents;      /* added to the sample's own fine tuning */
-  float gain;            /* linear; 0 => 1.0 */
-  float pan_units;       /* -500..500, the scale the voice mixer uses */
+  uint8_t key_lo;         ///< Lowest MIDI key covered (inclusive); 0 is the lowest key
+  uint8_t key_hi;         ///< Highest MIDI key covered (inclusive); 0 => 127
+  uint8_t vel_lo;         ///< Lowest velocity covered (inclusive); 0 => 1
+  uint8_t vel_hi;         ///< Highest velocity covered (inclusive); 0 => 127
+  uint32_t sample_index;  ///< Index of the sample, as returned by sonare_sample_bank_add_sample
+  float tune_cents;       ///< Tuning in cents added to the sample's own fine tuning
+  float gain;             ///< Linear gain applied to the sample; 0 => 1.0
+  float pan_units;        ///< Pan in the voice mixer's units, -500..500; finite values are clamped
 } SonareSampleZoneDesc;
 
 /// @brief Creates an empty bank. NULL on allocation failure, and when the library was built
