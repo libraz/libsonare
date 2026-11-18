@@ -593,11 +593,11 @@ Napi::Value RealtimeEngineWrap::SetTrackStripSurroundPan(const Napi::CallbackInf
   }
   const Napi::Object obj = info[1].As<Napi::Object>();
   SonareSurroundPan pan{};
-  pan.azimuth = FloatProperty(obj, "azimuth", 0.0f);
-  pan.elevation = FloatProperty(obj, "elevation", 0.0f);
-  pan.divergence = FloatProperty(obj, "divergence", 0.0f);
-  pan.lfe = FloatProperty(obj, "lfe", 0.0f);
-  pan.distance = FloatProperty(obj, "distance", 1.0f);
+  pan.azimuth = FloatProperty(obj, "azimuth", pan.azimuth);
+  pan.elevation = FloatProperty(obj, "elevation", pan.elevation);
+  pan.divergence = FloatProperty(obj, "divergence", pan.divergence);
+  pan.lfe = FloatProperty(obj, "lfe", pan.lfe);
+  pan.distance = FloatProperty(obj, "distance", pan.distance);
   if (env.IsExceptionPending()) return env.Undefined();
   ThrowIfError(env, sonare_engine_set_track_strip_surround_pan(engine_, track_id, &pan));
   return env.Undefined();

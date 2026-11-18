@@ -341,7 +341,7 @@ Napi::Value MixerWrap::ScheduleInsertAutomation(const Napi::CallbackInfo& info) 
   const int64_t sample_pos = sonare_node::node_narrow_int64(env, info[3], "samplePos");
   const float value = sonare_node::node_narrow_finite_float(env, info[4], "value");
   int curve{};
-  if (!OptionalIntArg(env, info, 5, "curve", 0, &curve)) return env.Undefined();
+  if (!RequiredIntArg(env, info, 5, "curve", &curve)) return env.Undefined();
 
   SonareStrip* strip = sonare_mixer_strip_at(mixer_, strip_index);
   if (strip == nullptr) {

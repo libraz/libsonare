@@ -34,7 +34,7 @@ inline void ReadNoteEditFields(const Napi::Object& edit, std::vector<float>* env
   out->time_offset_samples = Int64Property(edit, "timeOffsetSamples", 0);
   out->pitch_semitones = FloatProperty(edit, "pitchSemitones", 0.0f);
   out->gain_db = FloatProperty(edit, "gainDb", 0.0f);
-  out->time_stretch_ratio = FloatProperty(edit, "timeStretchRatio", 0.0f);
+  out->time_stretch_ratio = FloatProperty(edit, "timeStretchRatio", out->time_stretch_ratio);
   out->formant_semitones = FloatProperty(edit, "formantSemitones", 0.0f);
   out->vibrato_depth_change = FloatProperty(edit, "vibratoDepthChange", 0.0f);
   out->drift_change = FloatProperty(edit, "driftChange", 0.0f);

@@ -396,6 +396,15 @@ describe('renderNotes', () => {
       }),
     ).toThrow(TypeError);
     expect(() => renderNotes({ samples: tone.samples, sampleRate: 0, notes })).toThrow(RangeError);
+    // 0 is the default fade, so only a negative or non-finite one is refused.
+    for (const fadeMs of [-1, Number.NaN]) {
+      expect(() => renderNotes({ samples: tone.samples, sampleRate: SR, notes, fadeMs })).toThrow(
+        RangeError,
+      );
+    }
+    expect(renderNotes({ samples: tone.samples, sampleRate: SR, notes, fadeMs: 0 })).toHaveLength(
+      tone.samples.length,
+    );
     expect(() =>
       renderNotes({
         samples: tone.samples,
@@ -682,7 +691,7 @@ describe('renderNotes pitch curve edits', () => {
 
   it('rejects a cutoff that cannot be one', () => {
     for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, -1]) {
-      expect(() => renderWith({ vibratoDepthChange: -1 }, bad)).toThrow();
+      expect(() => renderWith({ vibratoDepthChange: -1 }, bad)).toThrow(RangeError);
     }
   });
 
@@ -922,7 +931,7 @@ describe('decomposeNotePitch', () => {
     // is rejected.
     expect(() => decomposeNotePitch({ f0Hz, frameRate: CURVE_RATE, medianHz: -1 })).toThrow();
     for (const badCutoff of [-1, Number.NaN]) {
-      expect(() => decomposeAt(badCutoff)).toThrow();
+      expect(() => decomposeAt(badCutoff)).toThrow(RangeError);
     }
     // A frame carrying no pitch is spelled zero, negative or non-finite, and
     // all three are read rather than refused. The rejections above are what

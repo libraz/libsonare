@@ -68,12 +68,12 @@ bool ReadSends(Napi::Env env, const Napi::Array& sends,
     Napi::Object send_obj = sends.Get(send_index).As<Napi::Object>();
     SonareEngineTrackSend send{};
     if (!RequiredUint32Property(env, send_obj, "busId", &send.bus_id)) return false;
-    send.level_db = FloatProperty(send_obj, "levelDb", 0.0f);
+    send.level_db = FloatProperty(send_obj, "levelDb", send.level_db);
     send.enabled = BoolProperty(send_obj, "enabled", true) ? 1 : 0;
     // Default to post-fader when sendTiming is absent to preserve the
     // historical behavior before the field existed (post-fader is the zero
     // value of SonareSendTiming).
-    send.send_timing = IntProperty(send_obj, "sendTiming", SONARE_SEND_TIMING_POST_FADER);
+    send.send_timing = IntProperty(send_obj, "sendTiming", send.send_timing);
     if (env.IsExceptionPending()) return false;
     out_sends->push_back(send);
   }
@@ -171,9 +171,9 @@ bool ReadClip(Napi::Env env, const Napi::Value& entry, ClipStorage* out_storage,
     clip.num_samples = static_cast<int64_t>(num_samples);
   }
   if (!RequiredDoubleProperty(env, obj, "startPpq", &clip.start_ppq)) return false;
-  clip.clip_offset_samples = Int64Property(obj, "clipOffsetSamples", 0);
+  clip.clip_offset_samples = Int64Property(obj, "clipOffsetSamples", clip.clip_offset_samples);
   clip.length_samples = Int64Property(obj, "lengthSamples", kZeroIsSentinel);
-  clip.loop = BoolProperty(obj, "loop", false) ? 1 : 0;
+  clip.loop = BoolProperty(obj, "loop", clip.loop != 0) ? 1 : 0;
   clip.gain = FloatProperty(obj, "gain", 1.0f);
   clip.fade_in_samples = Int64Property(obj, "fadeInSamples", 0);
   clip.fade_out_samples = Int64Property(obj, "fadeOutSamples", 0);
@@ -416,7 +416,7 @@ Napi::Value RealtimeEngineWrap::SetTrackBuses(const Napi::CallbackInfo& info) {
     Napi::Object obj = input.Get(i).As<Napi::Object>();
     SonareEngineBus bus{};
     if (!RequiredUint32Property(env, obj, "busId", &bus.bus_id)) return env.Undefined();
-    bus.gain_db = FloatProperty(obj, "gainDb", 0.0f);
+    bus.gain_db = FloatProperty(obj, "gainDb", bus.gain_db);
     // Zero-init leaves channel_layout at 0 (mono); default to stereo so existing
     // callers that omit it keep the prior stereo behavior. The full-range
     // value is checked BEFORE narrowing to the uint8_t C-ABI field, the same

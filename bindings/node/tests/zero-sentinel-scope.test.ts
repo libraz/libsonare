@@ -61,10 +61,6 @@ const ZERO_FALLBACK_REASONS: ReadonlyMap<string, string> = new Map([
     '0 is the unassigned track id: the clip player returns on it rather than substituting a track of its own.',
   ],
   [
-    'engine/clips_capture.cpp:clipOffsetSamples',
-    "A read offset into the clip's source; 0 is its first sample, a position the caller can mean.",
-  ],
-  [
     'engine/clips_capture.cpp:fadeInSamples',
     'A fade length in samples; 0 is no fade, a length the caller can mean.',
   ],
@@ -108,10 +104,6 @@ const ZERO_FALLBACK_REASONS: ReadonlyMap<string, string> = new Map([
   [
     'engine/graph_offline.cpp:type',
     'Graph node kind ordinal, where 0 is pass-through — a named member rather than an absent value.',
-  ],
-  [
-    'engine/graph_offline.cpp:dither',
-    'Dither kind ordinal, where 0 is none — a named member the caller can ask for.',
   ],
   [
     'project/vocal_edit.cpp:takeId',
@@ -207,10 +199,6 @@ const ZERO_FALLBACK_REASONS: ReadonlyMap<string, string> = new Map([
   [
     'sonare_wrap_project.cpp:keyFifths',
     'A signed count of sharps or flats; 0 is C major, a quantity the caller can mean.',
-  ],
-  [
-    'sonare_wrap_synth_patch.h:sampleSet',
-    'A keymap set index that is addressable as a plain zero by design: the sample block carries no presence bits precisely so set 0 stays reachable.',
   ],
 ]);
 

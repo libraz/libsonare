@@ -466,7 +466,7 @@ Napi::Value SonareWrap::SpectralBandwidth(const Napi::CallbackInfo& info) {
   FrameAnalysisArgs args;
   if (!ReadFrameAnalysisArgs(env, info, &args)) return env.Undefined();
   float p{};
-  if (!OptionalFloatArg(env, info, 4, "p", 2.0f, &p)) return env.Undefined();
+  if (!RequiredFloatArg(env, info, 4, "p", &p)) return env.Undefined();
 
   sonare::validate_offline_audio_input(data, length, args.sample_rate);
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, args.sample_rate);
@@ -495,7 +495,7 @@ Napi::Value SonareWrap::SpectralRolloff(const Napi::CallbackInfo& info) {
   FrameAnalysisArgs args;
   if (!ReadFrameAnalysisArgs(env, info, &args)) return env.Undefined();
   float roll_percent{};
-  if (!OptionalFloatArg(env, info, 4, "rollPercent", 0.85f, &roll_percent)) return env.Undefined();
+  if (!RequiredFloatArg(env, info, 4, "rollPercent", &roll_percent)) return env.Undefined();
 
   sonare::validate_offline_audio_input(data, length, args.sample_rate);
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, args.sample_rate);
@@ -545,7 +545,7 @@ Napi::Value SonareWrap::SpectralFlux(const Napi::CallbackInfo& info) {
   FrameAnalysisArgs args;
   if (!ReadFrameAnalysisArgs(env, info, &args)) return env.Undefined();
   int lag{};
-  if (!OptionalIntArg(env, info, 4, "lag", 1, &lag)) return env.Undefined();
+  if (!RequiredIntArg(env, info, 4, "lag", &lag)) return env.Undefined();
   sonare::validate_offline_audio_input(typed.Data(), typed.ElementLength(), args.sample_rate);
   sonare::StftConfig config;
   config.n_fft = args.frame_length;
@@ -750,10 +750,10 @@ Napi::Value SonareWrap::NoteSegments(const Napi::CallbackInfo& info) {
     // `undefined` reads as the documented default and a wrong-typed value is
     // refused by name rather than silently taking it.
     config.segmentation_threshold_cents =
-        FloatProperty(options, "segmentationThresholdCents", 0.0f);
-    config.min_note_ms = FloatProperty(options, "minNoteMs", 0.0f);
-    config.reference_hz = FloatProperty(options, "referenceHz", 0.0f);
-    config.voiced_threshold = FloatProperty(options, "voicedThreshold", 0.0f);
+        FloatProperty(options, "segmentationThresholdCents", config.segmentation_threshold_cents);
+    config.min_note_ms = FloatProperty(options, "minNoteMs", config.min_note_ms);
+    config.reference_hz = FloatProperty(options, "referenceHz", config.reference_hz);
+    config.voiced_threshold = FloatProperty(options, "voicedThreshold", config.voiced_threshold);
   }
 
   SonareNoteSegmentsResult result{};

@@ -433,6 +433,17 @@ describe('the polyphonic surface refuses what it cannot do', () => {
     });
   });
 
+  it('rejects a negative fade or vibrato cutoff as out of range', () => {
+    withAnalysis((analysis) => {
+      for (const bad of [-1, Number.NaN]) {
+        expect(() => analysis.render({ fadeMs: bad })).toThrow(RangeError);
+        expect(() => analysis.render({ vibratoCutoffHz: bad })).toThrow(RangeError);
+      }
+      // Positive control: 0 is the default on both.
+      expect(analysis.render({ fadeMs: 0, vibratoCutoffHz: 0 })).toHaveLength(LENGTH);
+    });
+  });
+
   it('refuses every method once destroyed, and destroys idempotently', () => {
     const analysis = analyzePolyphonic({ samples: CHORD, sampleRate: SR });
     expect(analysis.noteCount).toBe(2);

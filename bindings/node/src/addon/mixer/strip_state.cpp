@@ -308,7 +308,7 @@ Napi::Value MixerWrap::SetSurroundPan(const Napi::CallbackInfo& info) {
   pan.elevation = FloatProperty(obj, "elevation", pan.elevation);
   pan.divergence = FloatProperty(obj, "divergence", pan.divergence);
   pan.lfe = FloatProperty(obj, "lfe", pan.lfe);
-  pan.distance = FloatProperty(obj, "distance", 1.0f);
+  pan.distance = FloatProperty(obj, "distance", pan.distance);
   SonareError err = sonare_strip_set_surround_pan(strip, &pan);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err, "failed to set strip surround pan: ");

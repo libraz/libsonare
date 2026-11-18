@@ -94,7 +94,7 @@ describe('RealtimeEngine bus routing and sends', () => {
     const x = settled(direct);
     direct.destroy();
 
-    const run = (timing: 'preFader' | 'postFader'): number => {
+    const run = (timing?: 'preFader' | 'postFader'): number => {
       const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: BLOCK });
       engine.setClips([
         {
@@ -106,7 +106,13 @@ describe('RealtimeEngine bus routing and sends', () => {
         },
       ]);
       engine.setTrackBuses([
-        { busId: 1, gainDb: -12, sends: [{ busId: 2, levelDb: 0, sendTiming: timing }] },
+        {
+          busId: 1,
+          gainDb: -12,
+          sends: [
+            { busId: 2, levelDb: 0, ...(timing === undefined ? {} : { sendTiming: timing }) },
+          ],
+        },
         { busId: 2, gainDb: 0 },
       ]);
       engine.setTrackLanes([{ trackId: 10, outputBusId: 1 }]);
@@ -120,6 +126,11 @@ describe('RealtimeEngine bus routing and sends', () => {
     expect(run('preFader')).toBeCloseTo(x * (g1 + 1.0), 3);
     // Post-fader: the send taps after gainDb, so both paths carry g1.
     expect(run('postFader')).toBeCloseTo(x * 2 * g1, 3);
+    // An omitted sendTiming is the post-fader tap, and sits below the
+    // pre-fader render by the send path's lost fader gain, x * (1 - g1).
+    const omitted = run();
+    expect(omitted).toBeCloseTo(x * 2 * g1, 3);
+    expect(run('preFader') - omitted).toBeCloseTo(x * (1 - g1), 3);
   });
 });
 

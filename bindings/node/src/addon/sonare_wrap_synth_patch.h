@@ -217,15 +217,15 @@ inline bool ReadSynthPatchFields(Napi::Env env, const Napi::Value& desc, SonareS
   read_float2("ampHoldMs", SONARE_SYNTH_FIELD2_AMP_HOLD_MS, &patch->amp_hold_ms);
   read_float2("filterDelayMs", SONARE_SYNTH_FIELD2_FILTER_DELAY_MS, &patch->filter_delay_ms);
   read_float2("filterHoldMs", SONARE_SYNTH_FIELD2_FILTER_HOLD_MS, &patch->filter_hold_ms);
-  patch->one_shot = BoolProperty(obj, "oneShot", false) ? 1 : 0;
+  patch->one_shot = BoolProperty(obj, "oneShot", patch->one_shot != 0) ? 1 : 0;
   if (SynthFieldPresent(obj, "oneShot")) patch->present_fields2 |= SONARE_SYNTH_FIELD2_ONE_SHOT;
 
   // Sample engine (struct_version 3). No presence bits: only a sample patch
   // reads this block, which is what keeps keymap set 0 addressable as a plain
   // zero, and the other three keep the usual "0 => base".
-  patch->sample_set = IntProperty(obj, "sampleSet", 0);
-  patch->sample_level = FloatProperty(obj, "sampleLevel", 0.0f);
-  patch->sample_start_offset = FloatProperty(obj, "sampleStartOffset", 0.0f);
+  patch->sample_set = IntProperty(obj, "sampleSet", patch->sample_set);
+  patch->sample_level = FloatProperty(obj, "sampleLevel", patch->sample_level);
+  patch->sample_start_offset = FloatProperty(obj, "sampleStartOffset", patch->sample_start_offset);
   if (env.IsExceptionPending()) return false;
 
   Napi::Value routings = obj.Get("modRoutings");

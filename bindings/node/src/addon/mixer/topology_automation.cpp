@@ -255,7 +255,7 @@ Napi::Value MixerWrap::ScheduleFaderAutomation(const Napi::CallbackInfo& info) {
   const int64_t sample_pos = sonare_node::node_narrow_int64(env, info[1], "samplePos");
   const float fader_db = node_narrow_finite_float(env, info[2], "faderDb");
   int curve{};
-  if (!OptionalIntArg(env, info, 3, "curve", 0, &curve)) return env.Undefined();
+  if (!RequiredIntArg(env, info, 3, "curve", &curve)) return env.Undefined();
   SonareError err = sonare_strip_schedule_fader_automation(strip, sample_pos, fader_db, curve);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err, "failed to schedule fader automation: ");
@@ -280,7 +280,7 @@ Napi::Value MixerWrap::SchedulePanAutomation(const Napi::CallbackInfo& info) {
   const int64_t sample_pos = sonare_node::node_narrow_int64(env, info[1], "samplePos");
   const float pan = node_narrow_finite_float(env, info[2], "pan");
   int curve{};
-  if (!OptionalIntArg(env, info, 3, "curve", 0, &curve)) return env.Undefined();
+  if (!RequiredIntArg(env, info, 3, "curve", &curve)) return env.Undefined();
   SonareError err = sonare_strip_schedule_pan_automation(strip, sample_pos, pan, curve);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err, "failed to schedule pan automation: ");
@@ -305,7 +305,7 @@ Napi::Value MixerWrap::ScheduleWidthAutomation(const Napi::CallbackInfo& info) {
   const int64_t sample_pos = sonare_node::node_narrow_int64(env, info[1], "samplePos");
   const float width = node_narrow_finite_float(env, info[2], "width");
   int curve{};
-  if (!OptionalIntArg(env, info, 3, "curve", 0, &curve)) return env.Undefined();
+  if (!RequiredIntArg(env, info, 3, "curve", &curve)) return env.Undefined();
   SonareError err = sonare_strip_schedule_width_automation(strip, sample_pos, width, curve);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err, "failed to schedule width automation: ");
@@ -331,7 +331,7 @@ Napi::Value MixerWrap::ScheduleSendAutomation(const Napi::CallbackInfo& info) {
   const int64_t sample_pos = sonare_node::node_narrow_int64(env, info[2], "samplePos");
   const float db = node_narrow_finite_float(env, info[3], "db");
   int curve{};
-  if (!OptionalIntArg(env, info, 4, "curve", 0, &curve)) return env.Undefined();
+  if (!RequiredIntArg(env, info, 4, "curve", &curve)) return env.Undefined();
   SonareError err = sonare_strip_schedule_send_automation(strip, send_index, sample_pos, db, curve);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err, "failed to schedule send automation: ");
