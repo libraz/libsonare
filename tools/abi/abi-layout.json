@@ -1264,7 +1264,7 @@
     "fields": [
       {
         "kind": "float",
-        "name": "clip_threshold",
+        "name": "clip_threshold_db",
         "offset": 0,
         "size": 4
       },
@@ -7726,7 +7726,7 @@
       },
       {
         "kind": "float",
-        "name": "retune_semitones",
+        "name": "retune_pitch_semitones",
         "offset": 16,
         "size": 4
       },
@@ -7738,7 +7738,7 @@
       },
       {
         "kind": "signed",
-        "name": "retune_grain_size",
+        "name": "retune_grain_size_samples",
         "offset": 24,
         "size": 4
       },
@@ -7780,7 +7780,7 @@
       },
       {
         "kind": "float",
-        "name": "eq_highpass_hz",
+        "name": "eq_high_pass_hz",
         "offset": 52,
         "size": 4
       },
@@ -7930,7 +7930,7 @@
       },
       {
         "kind": "signed",
-        "name": "voice_engine_engine",
+        "name": "voice_engine",
         "offset": 152,
         "size": 4
       },
@@ -8086,7 +8086,7 @@
       },
       {
         "kind": "signed",
-        "name": "reverb_variation_variation",
+        "name": "reverb_variation",
         "offset": 264,
         "size": 4
       },
@@ -8302,7 +8302,7 @@
       },
       {
         "kind": "float",
-        "name": "max_seconds",
+        "name": "max_sec",
         "offset": 44,
         "size": 4
       },
@@ -8608,7 +8608,7 @@
       },
       {
         "kind": "float",
-        "name": "max_seconds",
+        "name": "max_sec",
         "offset": 52,
         "size": 4
       },
@@ -11020,7 +11020,7 @@
     "fields": [
       {
         "kind": "float",
-        "name": "threshold",
+        "name": "threshold_db",
         "offset": 0,
         "size": 4
       },

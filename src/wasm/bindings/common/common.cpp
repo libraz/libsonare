@@ -357,6 +357,24 @@ bool hasProperty(val object, const char* key) {
   return !object[key].isUndefined() && !object[key].isNull();
 }
 
+void refuseUnknownKeys(val object, const char* subject, const std::vector<const char*>& allowed,
+                       std::initializer_list<const char*> extra) {
+  if (object.isNull() || object.isUndefined() || object.typeOf().as<std::string>() != "object") {
+    return;
+  }
+  const val keys = val::global("Object").call<val>("keys", object);
+  const unsigned count = keys["length"].as<unsigned>();
+  for (unsigned i = 0; i < count; ++i) {
+    const std::string key = keys[i].as<std::string>();
+    const auto matches = [&key](const char* name) { return key == name; };
+    if (std::any_of(allowed.begin(), allowed.end(), matches) ||
+        std::any_of(extra.begin(), extra.end(), matches)) {
+      continue;
+    }
+    throw WasmTypeError(std::string(subject) + ": unknown option '" + key + "'");
+  }
+}
+
 val requireTypedProperty(const val& object, const char* key, const char* subject,
                          const char* js_type, const char* article_type) {
   if (!hasProperty(object, key)) {

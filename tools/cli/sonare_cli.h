@@ -123,6 +123,13 @@ std::vector<float> parse_float_list(const std::string& text);
 std::vector<int> parse_int_list(const std::string& text);
 int print_name_catalog(const CliArgs& args, std::string_view key,
                        const std::vector<std::string>& names);
+/// Spells a library token (lowerCamel) the way a CLI flag value and `--json` output spell it:
+/// kebab-case, with a digit run as its own word ("neutralMonitor" -> "neutral-monitor").
+std::string cli_token(std::string_view library_token);
+/// Resolves a kebab-case flag value to the library token among `library_tokens` it spells.
+/// @throws std::invalid_argument naming `flag` and listing the accepted kebab values.
+std::string library_token(std::string_view flag, std::string_view value,
+                          const std::vector<std::string>& library_tokens);
 std::string read_plain_text_file(const std::string& path);
 bool write_binary_file(const std::string& path, const uint8_t* data, size_t len);
 /// Upper bound on any file the CLI loads into memory (project JSON, SMF, MIDI 2.0, config and

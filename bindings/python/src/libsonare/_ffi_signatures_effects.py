@@ -527,8 +527,8 @@ def configure_effects_signatures(lib: ctypes.CDLL) -> None:
             ctypes.POINTER(ctypes.c_float),
             ctypes.c_size_t,
         ]
-        lib.sonare_streaming_retune_grain_size.restype = ctypes.c_int32
-        lib.sonare_streaming_retune_grain_size.argtypes = [
+        lib.sonare_streaming_retune_grain_size_samples.restype = ctypes.c_int32
+        lib.sonare_streaming_retune_grain_size_samples.argtypes = [
             ctypes.c_void_p,
             ctypes.POINTER(ctypes.c_int),
         ]

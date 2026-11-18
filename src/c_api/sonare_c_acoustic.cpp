@@ -153,7 +153,7 @@ void sonare_rir_synth_config_init(SonareRirSynthConfig* config) {
   config->struct_size = sizeof(*config);
   init_room_fields(config);
   const sonare::acoustic::RirSynthConfig defaults;
-  config->max_seconds = defaults.max_seconds;
+  config->max_sec = defaults.max_seconds;
   config->mixing_time_ms = defaults.mixing_time_ms;
   config->crossfade_ms = defaults.crossfade_ms;
   config->ism_order = defaults.ism_order;
@@ -171,7 +171,7 @@ void sonare_room_morph_config_init(SonareRoomMorphConfig* config) {
   const sonare::effects::acoustic::RoomMorphConfig defaults;
   config->source_tail_suppression = defaults.source_tail_suppression;
   config->wet = defaults.wet;
-  config->max_seconds = defaults.max_seconds;
+  config->max_sec = defaults.max_seconds;
   config->mixing_time_ms = defaults.mixing_time_ms;
   config->crossfade_ms = defaults.crossfade_ms;
   config->ism_order = defaults.ism_order;
@@ -247,8 +247,8 @@ SonareError sonare_synthesize_rir(const SonareRirSynthConfig* config, int sample
   if (!finite(config->length_m) || !finite(config->width_m) || !finite(config->height_m) ||
       !finite(config->source_x) || !finite(config->source_y) || !finite(config->source_z) ||
       !finite(config->listener_x) || !finite(config->listener_y) || !finite(config->listener_z) ||
-      !unit(config->absorption) || config->ism_order < 0 || !std::isfinite(config->max_seconds) ||
-      config->max_seconds < 0.0f || config->max_seconds > sonare::acoustic::kMaxRirSeconds ||
+      !unit(config->absorption) || config->ism_order < 0 || !std::isfinite(config->max_sec) ||
+      config->max_sec < 0.0f || config->max_sec > sonare::acoustic::kMaxRirSeconds ||
       !std::isfinite(config->mixing_time_ms) || config->mixing_time_ms < 0.0f ||
       config->mixing_time_ms > sonare::acoustic::kMaxRirMixingTimeMs ||
       !std::isfinite(config->crossfade_ms) || config->crossfade_ms < 0.0f ||
@@ -281,7 +281,7 @@ SonareError sonare_synthesize_rir(const SonareRirSynthConfig* config, int sample
                                  {config->listener_x, config->listener_y, config->listener_z}};
   rc.ism_order = config->ism_order;
   rc.seed = config->seed;
-  rc.max_seconds = config->max_seconds;
+  rc.max_seconds = config->max_sec;
   rc.mixing_time_ms = config->mixing_time_ms;
   rc.crossfade_ms = config->crossfade_ms;
   // An implausible climate is left for the core to diagnose (acoustic.invalid_air_absorption).
@@ -438,7 +438,7 @@ sonare::effects::acoustic::RoomMorphConfig room_morph_config_from(
   cfg.wet = config.wet;
   cfg.ism_order = config.ism_order;
   cfg.seed = config.seed;
-  cfg.max_seconds = config.max_seconds;
+  cfg.max_seconds = config.max_sec;
   cfg.mixing_time_ms = config.mixing_time_ms;
   cfg.crossfade_ms = config.crossfade_ms;
   // room_morph_config_is_valid admitted both selectors.

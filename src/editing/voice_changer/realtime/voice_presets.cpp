@@ -14,18 +14,18 @@ using namespace detail;
 namespace {
 
 constexpr std::array<PresetMetadata, 12> kPresetMetadata = {{
-    {VoiceCharacterPreset::NeutralMonitor, "neutral-monitor", "Neutral Monitor", "monitor"},
-    {VoiceCharacterPreset::BrightIdol, "bright-idol", "Bright Idol", "bright"},
-    {VoiceCharacterPreset::SoftWhisper, "soft-whisper", "Soft Whisper", "soft"},
-    {VoiceCharacterPreset::DeepNarrator, "deep-narrator", "Deep Narrator", "deep"},
-    {VoiceCharacterPreset::RobotMascot, "robot-mascot", "Robot Mascot", "robot"},
-    {VoiceCharacterPreset::DarkVillain, "dark-villain", "Dark Villain", "dark"},
-    {VoiceCharacterPreset::HardTune, "hard-tune", "Hard Tune", "tune"},
-    {VoiceCharacterPreset::RobotMonotone, "robot-monotone", "Robot Monotone", "tune"},
-    {VoiceCharacterPreset::ChoirHarmony, "choir-harmony", "Choir Harmony", "harmony"},
-    {VoiceCharacterPreset::VocoderStrings, "vocoder-strings", "Vocoder Strings", "vocoder"},
+    {VoiceCharacterPreset::NeutralMonitor, "neutralMonitor", "Neutral Monitor", "monitor"},
+    {VoiceCharacterPreset::BrightIdol, "brightIdol", "Bright Idol", "bright"},
+    {VoiceCharacterPreset::SoftWhisper, "softWhisper", "Soft Whisper", "soft"},
+    {VoiceCharacterPreset::DeepNarrator, "deepNarrator", "Deep Narrator", "deep"},
+    {VoiceCharacterPreset::RobotMascot, "robotMascot", "Robot Mascot", "robot"},
+    {VoiceCharacterPreset::DarkVillain, "darkVillain", "Dark Villain", "dark"},
+    {VoiceCharacterPreset::HardTune, "hardTune", "Hard Tune", "tune"},
+    {VoiceCharacterPreset::RobotMonotone, "robotMonotone", "Robot Monotone", "tune"},
+    {VoiceCharacterPreset::ChoirHarmony, "choirHarmony", "Choir Harmony", "harmony"},
+    {VoiceCharacterPreset::VocoderStrings, "vocoderStrings", "Vocoder Strings", "vocoder"},
     {VoiceCharacterPreset::Megaphone, "megaphone", "Megaphone", "character"},
-    {VoiceCharacterPreset::RadioVoice, "radio-voice", "Radio Voice", "character"},
+    {VoiceCharacterPreset::RadioVoice, "radioVoice", "Radio Voice", "character"},
 }};
 
 // Compile-time check that every enumerator gets a metadata row. Adding a new

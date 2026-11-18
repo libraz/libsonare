@@ -35,9 +35,9 @@ TEST_CASE("Factory presets JSON matches in-code definitions", "[voice_changer][p
     REQUIRE(field(dsp, "wetMix") == code.wet_mix);
 
     const auto& retune = dsp["retune"];
-    REQUIRE(field(retune, "semitones") == code.retune.semitones);
+    REQUIRE(field(retune, "pitchSemitones") == code.retune.semitones);
     REQUIRE(field(retune, "mix") == code.retune.mix);
-    REQUIRE(retune["grainSize"].as_int() == code.retune.grain_size);
+    REQUIRE(retune["grainSizeSamples"].as_int() == code.retune.grain_size);
 
     const auto& formant = dsp["formant"];
     REQUIRE(field(formant, "factor") == code.formant.factor);
@@ -47,7 +47,7 @@ TEST_CASE("Factory presets JSON matches in-code definitions", "[voice_changer][p
     REQUIRE(field(formant, "nasal") == code.formant.nasal);
 
     const auto& eq = dsp["eq"];
-    REQUIRE(field(eq, "highpassHz") == code.eq.highpass_hz);
+    REQUIRE(field(eq, "highPassHz") == code.eq.highpass_hz);
     REQUIRE(field(eq, "bodyDb") == code.eq.body_db);
     REQUIRE(field(eq, "presenceDb") == code.eq.presence_db);
     REQUIRE(field(eq, "airDb") == code.eq.air_db);
@@ -96,7 +96,7 @@ TEST_CASE("Voice changer schemaVersion constant matches emitted JSON", "[voice_c
   // The constant in realtime_voice_changer.h is the single source of truth for
   // the preset schema version. Any change here MUST be accompanied by an update
   // of the JSON Schema files under schemas/ and by a binding-side migration.
-  REQUIRE(kVoiceChangerPresetSchemaVersion == 2);
+  REQUIRE(kVoiceChangerPresetSchemaVersion == 3);
 
   const auto json = realtime_voice_changer_preset_json(VoiceCharacterPreset::NeutralMonitor);
   const auto root = sonare::util::json::parse(json);
@@ -174,11 +174,11 @@ TEST_CASE("Voice changer schemaVersion validator rejects future versions",
   // The validator should reject it rather than silently accepting (bindings
   // depend on this to refuse incompatible third-party preset packs).
   const auto baseline = realtime_voice_changer_preset_json(VoiceCharacterPreset::NeutralMonitor);
-  const std::string needle = "\"schemaVersion\":2";
+  const std::string needle = "\"schemaVersion\":3";
   REQUIRE(baseline.find(needle) != std::string::npos);
   std::string bumped = baseline;
   const auto pos = bumped.find(needle);
-  bumped.replace(pos, needle.size(), "\"schemaVersion\":3");
+  bumped.replace(pos, needle.size(), "\"schemaVersion\":4");
 
   std::string normalized;
   std::string error;
@@ -208,7 +208,7 @@ TEST_CASE("Voice changer preset schema version 1 loads without the transformer s
   std::string normalized;
   REQUIRE(validate_realtime_voice_changer_preset_json(v1, &normalized, &error));
   // The normalized document is written at the current version, sections included.
-  REQUIRE(normalized.find("\"schemaVersion\":2") != std::string::npos);
+  REQUIRE(normalized.find("\"schemaVersion\":3") != std::string::npos);
   REQUIRE(normalized.find("\"voiceEngine\"") != std::string::npos);
   RealtimeVoiceChangerConfig loaded;
   REQUIRE(realtime_voice_changer_config_from_input(v1, &loaded, &error));
@@ -235,12 +235,12 @@ TEST_CASE("Voice changer preset validator requires deesser ratio", "[voice_chang
 }
 
 TEST_CASE("preset JSON validator rejects invalid id patterns", "[voice_changer][json]") {
-  // The JSON Schema declares `id` as `^[a-z0-9][a-z0-9._-]*$` with length 1..96.
+  // The JSON Schema declares `id` as `^[a-z0-9][A-Za-z0-9._-]*$` with length 1..96.
   // The C++ validator used to accept anything non-empty up to 96 bytes, which
   // let uppercase / whitespace / punctuation slip through and break downstream
   // consumers that treat the id as a TS enum literal or comparison key.
   const auto baseline = realtime_voice_changer_preset_json(VoiceCharacterPreset::NeutralMonitor);
-  const std::string id_needle = "\"id\":\"neutral-monitor\"";
+  const std::string id_needle = "\"id\":\"neutralMonitor\"";
   REQUIRE(baseline.find(id_needle) != std::string::npos);
 
   // 97-char id: max length is 96, so this must be rejected.
@@ -276,7 +276,7 @@ TEST_CASE("preset JSON validator rejects non-integer schemaVersion", "[voice_cha
   // check let fractional values through. Also exercises the type-check path
   // when schemaVersion is a string rather than a number.
   const auto baseline = realtime_voice_changer_preset_json(VoiceCharacterPreset::NeutralMonitor);
-  const std::string needle = "\"schemaVersion\":2";
+  const std::string needle = "\"schemaVersion\":3";
   REQUIRE(baseline.find(needle) != std::string::npos);
 
   {
@@ -301,7 +301,7 @@ TEST_CASE("preset JSON validator rejects duplicate top-level keys", "[voice_chan
   // entries is almost certainly a user-config bug rather than a legitimate
   // "last-write-wins" override — fail fast with a clear error.
   const auto baseline = realtime_voice_changer_preset_json(VoiceCharacterPreset::NeutralMonitor);
-  const std::string id_needle = "\"id\":\"neutral-monitor\"";
+  const std::string id_needle = "\"id\":\"neutralMonitor\"";
   REQUIRE(baseline.find(id_needle) != std::string::npos);
   // Splice in a second "id" key right after the first so the document is
   // syntactically valid JSON but contains a duplicate.
@@ -564,15 +564,15 @@ TEST_CASE("Voice changer POD ↔ C++ round-trip preserves every field", "[voice_
   pod_in.input_gain_db = 1.5f;
   pod_in.output_gain_db = -2.25f;
   pod_in.wet_mix = 0.875f;
-  pod_in.retune_semitones = 3.0f;
+  pod_in.retune_pitch_semitones = 3.0f;
   pod_in.retune_mix = 0.625f;
-  pod_in.retune_grain_size = 1024;
+  pod_in.retune_grain_size_samples = 1024;
   pod_in.formant_factor = 1.125f;
   pod_in.formant_amount = 0.75f;
   pod_in.formant_body = 0.125f;
   pod_in.formant_brightness = -0.25f;
   pod_in.formant_nasal = 0.0625f;
-  pod_in.eq_highpass_hz = 90.0f;
+  pod_in.eq_high_pass_hz = 90.0f;
   pod_in.eq_body_db = 1.25f;
   pod_in.eq_presence_db = 2.5f;
   pod_in.eq_air_db = 0.75f;
@@ -609,15 +609,15 @@ TEST_CASE("Voice changer POD ↔ C++ round-trip preserves every field", "[voice_
   REQUIRE(pod_out.input_gain_db == pod_in.input_gain_db);
   REQUIRE(pod_out.output_gain_db == pod_in.output_gain_db);
   REQUIRE(pod_out.wet_mix == pod_in.wet_mix);
-  REQUIRE(pod_out.retune_semitones == pod_in.retune_semitones);
+  REQUIRE(pod_out.retune_pitch_semitones == pod_in.retune_pitch_semitones);
   REQUIRE(pod_out.retune_mix == pod_in.retune_mix);
-  REQUIRE(pod_out.retune_grain_size == pod_in.retune_grain_size);
+  REQUIRE(pod_out.retune_grain_size_samples == pod_in.retune_grain_size_samples);
   REQUIRE(pod_out.formant_factor == pod_in.formant_factor);
   REQUIRE(pod_out.formant_amount == pod_in.formant_amount);
   REQUIRE(pod_out.formant_body == pod_in.formant_body);
   REQUIRE(pod_out.formant_brightness == pod_in.formant_brightness);
   REQUIRE(pod_out.formant_nasal == pod_in.formant_nasal);
-  REQUIRE(pod_out.eq_highpass_hz == pod_in.eq_highpass_hz);
+  REQUIRE(pod_out.eq_high_pass_hz == pod_in.eq_high_pass_hz);
   REQUIRE(pod_out.eq_body_db == pod_in.eq_body_db);
   REQUIRE(pod_out.eq_presence_db == pod_in.eq_presence_db);
   REQUIRE(pod_out.eq_air_db == pod_in.eq_air_db);
@@ -646,7 +646,7 @@ TEST_CASE("Voice changer POD ↔ C++ round-trip preserves every field", "[voice_
 }
 
 TEST_CASE(
-    "sonare_voice_change_realtime neutral-monitor reports fixed latency and preserves short "
+    "sonare_voice_change_realtime neutralMonitor reports fixed latency and preserves short "
     "signals",
     "[voice_changer][c-api][regression]") {
   // retune.mix == 0 bypasses pitch shifting, not its fixed OLA alignment.
@@ -660,7 +660,7 @@ TEST_CASE(
           SONARE_OK);
   REQUIRE(config.retune_mix == 0.0f);
   // The OLA alignment belongs to the grain engine; psola aligns to its own, shorter delay.
-  config.voice_engine_engine = SONARE_PITCH_ENGINE_GRAIN;
+  config.voice_engine = SONARE_PITCH_ENGINE_GRAIN;
 
   SonareRealtimeVoiceChanger* handle = nullptr;
   REQUIRE(sonare_realtime_voice_changer_create(&config, sample_rate, 256, 1, &handle) == SONARE_OK);
@@ -681,8 +681,8 @@ TEST_CASE(
 
   float* out = nullptr;
   size_t out_length = 0;
-  REQUIRE(sonare_voice_change_realtime(input.data(), length, sample_rate, "neutral-monitor", 1,
-                                       &out, &out_length) == SONARE_OK);
+  REQUIRE(sonare_voice_change_realtime(input.data(), length, sample_rate, "neutralMonitor", 1, &out,
+                                       &out_length) == SONARE_OK);
   REQUIRE(out != nullptr);
   REQUIRE(out_length == length);
 
@@ -693,7 +693,7 @@ TEST_CASE(
   }
   sonare_free_floats(out);
 
-  // Core regression: the output is NOT silenced. neutral-monitor is a near-unity
+  // Core regression: the output is NOT silenced. neutralMonitor is a near-unity
   // monitoring path, so its energy must be a substantial fraction of the input's
   // (broad band tolerates the preset's mild EQ/limiting).
   REQUIRE(out_energy > 0.25 * in_energy);
@@ -951,9 +951,10 @@ TEST_CASE("sonare_streaming_retune lifecycle and validation", "[voice_changer][c
     REQUIRE(sonare_streaming_retune_set_config(nullptr, 0.0f, 1.0f, 0) ==
             SONARE_ERROR_INVALID_PARAMETER);
     int scratch = 0;
-    REQUIRE(sonare_streaming_retune_grain_size(nullptr, &scratch) ==
+    REQUIRE(sonare_streaming_retune_grain_size_samples(nullptr, &scratch) ==
             SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(sonare_streaming_retune_grain_size(retune, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_streaming_retune_grain_size_samples(retune, nullptr) ==
+            SONARE_ERROR_INVALID_PARAMETER);
     sonare_streaming_retune_destroy(nullptr);  // no-op
   }
 
@@ -1010,11 +1011,11 @@ TEST_CASE("sonare_streaming_retune reports and applies grain size", "[voice_chan
 
   int grain = -1;
   int latency = -1;
-  REQUIRE(sonare_streaming_retune_grain_size(retune, &grain) == SONARE_OK);
+  REQUIRE(sonare_streaming_retune_grain_size_samples(retune, &grain) == SONARE_OK);
   REQUIRE(grain == 0);  // Nothing resolved before prepare.
 
   REQUIRE(sonare_streaming_retune_prepare(retune, 48000.0, 256) == SONARE_OK);
-  REQUIRE(sonare_streaming_retune_grain_size(retune, &grain) == SONARE_OK);
+  REQUIRE(sonare_streaming_retune_grain_size_samples(retune, &grain) == SONARE_OK);
   REQUIRE(sonare_streaming_retune_latency_samples(retune, &latency) == SONARE_OK);
   REQUIRE(grain == 2232);
   REQUIRE(latency == grain);
@@ -1032,7 +1033,7 @@ TEST_CASE("sonare_streaming_retune reports and applies grain size", "[voice_chan
   REQUIRE(reported_grain == 2232);
 
   REQUIRE(sonare_streaming_retune_prepare(retune, 48000.0, 256) == SONARE_OK);
-  REQUIRE(sonare_streaming_retune_grain_size(retune, &grain) == SONARE_OK);
+  REQUIRE(sonare_streaming_retune_grain_size_samples(retune, &grain) == SONARE_OK);
   REQUIRE(grain == 512);
 
   // Out pointers are individually optional.
@@ -1074,7 +1075,7 @@ TEST_CASE("The POD config carries the formant mode, fixed at creation",
   CHECK(config.struct_version == 2);
   CHECK(config.formant_mode == SONARE_FORMANT_MODE_RELATIVE);
   // The formant warp ahead of the retune belongs to the grain engine.
-  config.voice_engine_engine = SONARE_PITCH_ENGINE_GRAIN;
+  config.voice_engine = SONARE_PITCH_ENGINE_GRAIN;
 
   SonareRealtimeVoiceChanger* relative = nullptr;
   REQUIRE(sonare_realtime_voice_changer_create(&config, 48000, 128, 1, &relative) == SONARE_OK);
@@ -1102,7 +1103,7 @@ TEST_CASE("The POD config carries the formant mode, fixed at creation",
              Catch::Matchers::ContainsSubstring("formant mode"));
 
   // JSON updates are held to the same rule.
-  CHECK(sonare_realtime_voice_changer_set_config_json(absolute, "bright-idol") ==
+  CHECK(sonare_realtime_voice_changer_set_config_json(absolute, "brightIdol") ==
         SONARE_ERROR_INVALID_PARAMETER);
 
   sonare_realtime_voice_changer_destroy(relative);
@@ -1113,9 +1114,9 @@ TEST_CASE("The POD config refuses an unreachable warp, a bad mode and a bad layo
           "[voice_changer][c-api][formant_mode]") {
   SonareRealtimeVoiceChangerConfig config{};
   REQUIRE(sonare_realtime_voice_changer_config_default(&config) == SONARE_OK);
-  config.voice_engine_engine = SONARE_PITCH_ENGINE_GRAIN;
+  config.voice_engine = SONARE_PITCH_ENGINE_GRAIN;
   config.formant_mode = SONARE_FORMANT_MODE_ABSOLUTE;
-  config.retune_semitones = -9.0f;
+  config.retune_pitch_semitones = -9.0f;
   config.formant_factor = 1.0f;
   SonareRealtimeVoiceChanger* handle = nullptr;
   CHECK(sonare_realtime_voice_changer_create(&config, 48000, 128, 1, &handle) ==
@@ -1124,7 +1125,7 @@ TEST_CASE("The POD config refuses an unreachable warp, a bad mode and a bad layo
   CHECK_THAT(std::string(sonare_last_error_message()),
              Catch::Matchers::ContainsSubstring("[0.55, 0.9811]"));
 
-  config.retune_semitones = 0.0f;
+  config.retune_pitch_semitones = 0.0f;
   config.formant_mode = 7;
   CHECK(sonare_realtime_voice_changer_create(&config, 48000, 128, 1, &handle) ==
         SONARE_ERROR_INVALID_PARAMETER);
@@ -1184,7 +1185,7 @@ TEST_CASE("sonare_streaming_retune config grain matches the grain in use",
     int grain = -1;
     int latency = -1;
     int reported = -1;
-    REQUIRE(sonare_streaming_retune_grain_size(retune, &grain) == SONARE_OK);
+    REQUIRE(sonare_streaming_retune_grain_size_samples(retune, &grain) == SONARE_OK);
     REQUIRE(sonare_streaming_retune_latency_samples(retune, &latency) == SONARE_OK);
     REQUIRE(sonare_streaming_retune_config(retune, nullptr, nullptr, &reported) == SONARE_OK);
     REQUIRE(grain == expected);
@@ -1203,7 +1204,7 @@ TEST_CASE("sonare_streaming_retune config grain matches the grain in use",
   check_consistent(2232);
   REQUIRE(sonare_streaming_retune_prepare(retune, 96000.0, 256) == SONARE_OK);
   int grain = 0;
-  REQUIRE(sonare_streaming_retune_grain_size(retune, &grain) == SONARE_OK);
+  REQUIRE(sonare_streaming_retune_grain_size_samples(retune, &grain) == SONARE_OK);
   REQUIRE(grain > 2232);
   check_consistent(grain);
   sonare_streaming_retune_destroy(retune);
@@ -1214,22 +1215,22 @@ TEST_CASE("Realtime voice changer config JSON round-trips grain and latency at e
   for (const int rate : {48000, 96000, 176400, 192000}) {
     CAPTURE(rate);
     SonareRealtimeVoiceChanger* first = nullptr;
-    REQUIRE(sonare_realtime_voice_changer_create_json("bright-idol", rate, 256, 1, &first) ==
+    REQUIRE(sonare_realtime_voice_changer_create_json("brightIdol", rate, 256, 1, &first) ==
             SONARE_OK);
     SonareRealtimeVoiceChangerConfig pod{};
     REQUIRE(sonare_realtime_voice_changer_get_config(first, &pod) == SONARE_OK);
     int latency = 0;
     REQUIRE(sonare_realtime_voice_changer_latency_samples(first, &latency) == SONARE_OK);
-    REQUIRE(pod.retune_grain_size > 0);
-    REQUIRE(pod.retune_grain_size <= 8192);
+    REQUIRE(pod.retune_grain_size_samples > 0);
+    REQUIRE(pod.retune_grain_size_samples <= 8192);
 
     // The serialized document carries the same grain get_config reports.
     char* json = nullptr;
     REQUIRE(sonare_realtime_voice_changer_config_json(first, &json) == SONARE_OK);
     const std::string document(json);
     sonare_free_string(json);
-    REQUIRE(sonare::util::json::parse(document)["dsp"]["retune"]["grainSize"].as_int() ==
-            pod.retune_grain_size);
+    REQUIRE(sonare::util::json::parse(document)["dsp"]["retune"]["grainSizeSamples"].as_int() ==
+            pod.retune_grain_size_samples);
 
     // Recreating from it at the same rate lands on the same grain and latency.
     SonareRealtimeVoiceChanger* second = nullptr;
@@ -1239,7 +1240,7 @@ TEST_CASE("Realtime voice changer config JSON round-trips grain and latency at e
     REQUIRE(sonare_realtime_voice_changer_get_config(second, &pod2) == SONARE_OK);
     int latency2 = 0;
     REQUIRE(sonare_realtime_voice_changer_latency_samples(second, &latency2) == SONARE_OK);
-    REQUIRE(pod2.retune_grain_size == pod.retune_grain_size);
+    REQUIRE(pod2.retune_grain_size_samples == pod.retune_grain_size_samples);
     REQUIRE(latency2 == latency);
 
     sonare_realtime_voice_changer_destroy(first);
@@ -1305,7 +1306,7 @@ namespace {
 
 std::string neutral_preset_document() {
   char* raw = nullptr;
-  REQUIRE(sonare_realtime_voice_changer_preset_json("neutral-monitor", &raw) == SONARE_OK);
+  REQUIRE(sonare_realtime_voice_changer_preset_json("neutralMonitor", &raw) == SONARE_OK);
   std::string text = raw;
   sonare_free_string(raw);
   return text;
@@ -1329,7 +1330,7 @@ TEST_CASE("The preset validator, create_json and set_config_json answer one rule
   const std::string grain_vocoder = with_replaced(grain, "\"enabled\":false", "\"enabled\":true");
 
   SonareRealtimeVoiceChanger* live = nullptr;
-  REQUIRE(sonare_realtime_voice_changer_create_json("neutral-monitor", 48000, 128, 1, &live) ==
+  REQUIRE(sonare_realtime_voice_changer_create_json("neutralMonitor", 48000, 128, 1, &live) ==
           SONARE_OK);
 
   struct Case {
@@ -1395,7 +1396,7 @@ TEST_CASE("Realtime voice changer create refuses a rate or block size outside th
   for (const int rate : {0, 7999, 384001, 1000000000}) {
     CAPTURE(rate);
     SonareRealtimeVoiceChanger* handle = nullptr;
-    REQUIRE(sonare_realtime_voice_changer_create_json("neutral-monitor", rate, 128, 1, &handle) ==
+    REQUIRE(sonare_realtime_voice_changer_create_json("neutralMonitor", rate, 128, 1, &handle) ==
             SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(handle == nullptr);
     REQUIRE(sonare_realtime_voice_changer_create(nullptr, rate, 128, 1, &handle) ==
@@ -1405,8 +1406,8 @@ TEST_CASE("Realtime voice changer create refuses a rate or block size outside th
   for (const int block : {0, -1, (1 << 20) + 1, std::numeric_limits<int>::max()}) {
     CAPTURE(block);
     SonareRealtimeVoiceChanger* handle = nullptr;
-    REQUIRE(sonare_realtime_voice_changer_create_json("neutral-monitor", 48000, block, 1,
-                                                      &handle) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_realtime_voice_changer_create_json("neutralMonitor", 48000, block, 1, &handle) ==
+            SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(handle == nullptr);
     REQUIRE(sonare_realtime_voice_changer_create(nullptr, 48000, block, 1, &handle) ==
             SONARE_ERROR_INVALID_PARAMETER);

@@ -56,9 +56,9 @@ typedef struct {
   float output_gain_db;
   float wet_mix;
 
-  float retune_semitones;
+  float retune_pitch_semitones;
   float retune_mix;
-  int retune_grain_size;
+  int retune_grain_size_samples;
 
   float formant_factor;
   float formant_amount;
@@ -70,12 +70,12 @@ typedef struct {
   ///        @ref formant_factor times the input's ahead of the retune, adds one analysis frame of
   ///        latency and ignores @ref formant_amount. Fixed when the handle is created: a
   ///        set_config carrying a different mode is SONARE_ERROR_INVALID_PARAMETER. Absolute
-  ///        mode needs formant_factor / 2^(retune_semitones / 12) within [0.55, 1.65]; the call
-  ///        is refused otherwise, with the reachable formant-factor range in
+  ///        mode needs formant_factor / 2^(retune_pitch_semitones / 12) within [0.55, 1.65]; the
+  ///        call is refused otherwise, with the reachable formant-factor range in
   ///        sonare_last_error_message().
   int32_t formant_mode;
 
-  float eq_highpass_hz;
+  float eq_high_pass_hz;
   float eq_body_db;
   float eq_presence_db;
   float eq_air_db;
@@ -119,7 +119,7 @@ typedef struct {
 
   /// @brief A @ref SonarePitchEngine. Psola (the default) tracks f0; grain is the f0-less SOLA
   ///        retune and refuses pitch correction, harmony and the vocoder. Fixed at creation.
-  int32_t voice_engine_engine;
+  int32_t voice_engine;
   /// @brief Lowest tracked f0 in Hz, [50, 200]; sets the psola latency. Fixed at creation.
   float voice_engine_f0_min_hz;
 
@@ -163,7 +163,7 @@ typedef struct {
   float character_tone;
 
   /// @brief A @ref SonareReverbVariation; every variation shares @ref reverb_mix.
-  int32_t reverb_variation_variation;
+  int32_t reverb_variation;
   float reverb_variation_delay_ms;
   float reverb_variation_feedback;
   float reverb_variation_tempo_bpm;
@@ -218,13 +218,13 @@ SonareError sonare_realtime_voice_changer_preset_config(SonareVoiceCharacterPres
 
 /// @brief Populates @p out with the default configuration used by
 ///        @ref sonare_realtime_voice_changer_create when its config is NULL.
-/// @details This is the normalized neutral-monitor preset. Do not use a
+/// @details This is the normalized neutralMonitor preset. Do not use a
 ///          zero-initialized POD as a default: in particular, zero disables
 ///          the ISP limiter whereas the library default enables it.
 SonareError sonare_realtime_voice_changer_config_default(SonareRealtimeVoiceChangerConfig* out);
 
 /// @brief Same as @ref sonare_realtime_voice_changer_create_json but accepts
-///        a flat POD config. Pass NULL to start from the neutral-monitor preset. A config
+///        a flat POD config. Pass NULL to start from the neutralMonitor preset. A config
 ///        refused by validation, a @p sample_rate outside the supported range or a
 ///        @p max_block_size outside [1, 1048576] is SONARE_ERROR_INVALID_PARAMETER.
 /// @note Release @p out with @ref sonare_realtime_voice_changer_destroy; it is a handle, not a
@@ -382,18 +382,18 @@ const char* sonare_realtime_voice_changer_preset_names(void);
 ///          macro instead of hand-copying the literal strings. The separator
 ///          mirrors @ref sonare_realtime_voice_changer_preset_names.
 #define SONARE_REALTIME_VOICE_CHANGER_PRESET_IDS \
-  "neutral-monitor\n"                            \
-  "bright-idol\n"                                \
-  "soft-whisper\n"                               \
-  "deep-narrator\n"                              \
-  "robot-mascot\n"                               \
-  "dark-villain\n"                               \
-  "hard-tune\n"                                  \
-  "robot-monotone\n"                             \
-  "choir-harmony\n"                              \
-  "vocoder-strings\n"                            \
+  "neutralMonitor\n"                             \
+  "brightIdol\n"                                 \
+  "softWhisper\n"                                \
+  "deepNarrator\n"                               \
+  "robotMascot\n"                                \
+  "darkVillain\n"                                \
+  "hardTune\n"                                   \
+  "robotMonotone\n"                              \
+  "choirHarmony\n"                               \
+  "vocoderStrings\n"                             \
   "megaphone\n"                                  \
-  "radio-voice"
+  "radioVoice"
 /// @brief Returns the canonical id string for a @ref SonareVoiceCharacterPreset enum.
 /// @details Returns NULL for unknown enum values. The pointer is static storage
 ///          and must NOT be freed.

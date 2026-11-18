@@ -1,5 +1,6 @@
 #include <sonare/sonare_c.h>
 
+#include <cmath>
 #include <cstring>
 #include <functional>
 #include <memory>
@@ -20,6 +21,7 @@
 #include "mastering/repair/trim_silence.h"
 #include "sonare_c_internal.h"
 #include "sonare_c_mastering_helpers.h"
+#include "util/db.h"
 #include "util/exception.h"
 #include "util/math_utils.h"
 
@@ -29,6 +31,15 @@ using sonare_c_mastering_detail::copy_stereo_channels;
 using sonare_c_mastering_detail::validate_stereo_audio_params;
 
 namespace {
+
+/// Converts a dBFS threshold to linear amplitude; it must be finite and at most 0 dBFS.
+float threshold_db_to_linear(float threshold_db, const char* field) {
+  if (!std::isfinite(threshold_db) || threshold_db > 0.0f) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  std::string(field) + " must be finite and at most 0 dBFS");
+  }
+  return sonare::db_to_linear(threshold_db);
+}
 
 sonare::mastering::repair::DeclickConfig to_cpp_declick_config(const SonareDeclickConfig* config) {
   sonare::mastering::repair::DeclickConfig cpp;
@@ -89,7 +100,7 @@ sonare::mastering::repair::DenoiseClassicalConfig to_cpp_denoise_config(
 sonare::mastering::repair::DeclipConfig to_cpp_declip_config(const SonareDeclipConfig* config) {
   sonare::mastering::repair::DeclipConfig cpp;
   if (!config) return cpp;
-  cpp.clip_threshold = config->clip_threshold;
+  cpp.clip_threshold = threshold_db_to_linear(config->clip_threshold_db, "clip_threshold_db");
   cpp.lpc_order = config->lpc_order;
   cpp.iterations = config->iterations;
   cpp.lpc_blend = config->lpc_blend;
@@ -174,7 +185,7 @@ sonare::mastering::repair::TrimSilenceConfig to_cpp_trim_silence_config(
     const SonareTrimSilenceConfig* config) {
   sonare::mastering::repair::TrimSilenceConfig cpp;
   if (!config) return cpp;
-  cpp.threshold = config->threshold;
+  cpp.threshold = threshold_db_to_linear(config->threshold_db, "threshold_db");
   cpp.padding_samples = config->padding_samples;
   cpp.mode = to_cpp_trim_silence_mode(config->mode);
   cpp.gate_lufs = config->gate_lufs;

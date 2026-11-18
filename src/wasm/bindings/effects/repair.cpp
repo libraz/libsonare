@@ -27,6 +27,15 @@ bool repairEnumOption(const val& options, const char* key, std::string* name) {
   return true;
 }
 
+// Reads a dBFS threshold into the linear amplitude the core config holds. An absent key leaves
+// @p linear_fallback untouched, so the library default is not round-tripped through decibels.
+float linearFromDbfsProperty(const val& options, const char* key, float linear_fallback) {
+  if (!hasProperty(options, key)) return linear_fallback;
+  const float db = floatProperty(options, key, 0.0f);
+  if (db > 0.0f) throw WasmRangeError(std::string(key) + " must be at most 0 dBFS");
+  return db_to_linear(db);
+}
+
 // Read a dereverb options bag over `config`, leaving absent keys alone.
 mastering::repair::DereverbClassicalConfig readDereverbConfig(
     const val& options, mastering::repair::DereverbClassicalConfig config) {
@@ -113,10 +122,11 @@ mastering::repair::DeclickConfig readMasteringRepairDeclick(const val& options, 
   return cfg;
 }
 
-mastering::repair::DeclipConfig readMasteringRepairDeclip(const val& options) {
+mastering::repair::DeclipConfig readMasteringRepairDeclip(const val& options, const char* entry) {
   mastering::repair::DeclipConfig cfg;
   if (options.isUndefined() || options.isNull()) return cfg;
-  cfg.clip_threshold = floatProperty(options, "clipThreshold", cfg.clip_threshold);
+  refuseUnknownKeys(options, entry, {"clipThresholdDb", "lpcOrder", "iterations", "lpcBlend"});
+  cfg.clip_threshold = linearFromDbfsProperty(options, "clipThresholdDb", cfg.clip_threshold);
   cfg.lpc_order = intProperty(options, "lpcOrder", cfg.lpc_order);
   cfg.iterations = intProperty(options, "iterations", cfg.iterations);
   cfg.lpc_blend = floatProperty(options, "lpcBlend", cfg.lpc_blend);
@@ -459,7 +469,8 @@ val declipReportToVal(const mastering::repair::DeclipReport& report) {
 
 val js_mastering_repair_declip(val samples, const val& sample_rate, val options) {
   Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
-  const mastering::repair::DeclipConfig cfg = readMasteringRepairDeclip(options);
+  const mastering::repair::DeclipConfig cfg =
+      readMasteringRepairDeclip(options, "masteringRepairDeclip");
   mastering::repair::DeclipReport report;
   Audio result = mastering::repair::declip(audio, cfg, &report);
   return monoResultToVal(result, declipReportToVal(report));
@@ -477,7 +488,8 @@ val js_mastering_repair_declip_stereo(val left_samples, val right_samples,
                                       const val& sample_rate_val, val options) {
   const StereoInput in =
       loadStereoInput(left_samples, right_samples, sample_rate_val, "masteringRepairDeclipStereo");
-  const mastering::repair::DeclipConfig cfg = readMasteringRepairDeclip(options);
+  const mastering::repair::DeclipConfig cfg =
+      readMasteringRepairDeclip(options, "masteringRepairDeclipStereo");
   mastering::repair::DeclipStereoResult result =
       mastering::repair::declip_stereo(in.left, in.right, cfg);
   val out = stereoResultToVal(result.left, result.right);
@@ -530,7 +542,9 @@ mastering::repair::TrimSilenceMode parseTrimSilenceMode(const std::string& name)
 mastering::repair::TrimSilenceConfig readTrimSilenceConfig(
     const val& options, mastering::repair::TrimSilenceConfig config, const char* entry) {
   if (options.isUndefined() || options.isNull()) return config;
-  config.threshold = floatProperty(options, "threshold", config.threshold);
+  refuseUnknownKeys(options, entry,
+                    {"thresholdDb", "paddingSamples", "mode", "gateLufs", "windowMs"});
+  config.threshold = linearFromDbfsProperty(options, "thresholdDb", config.threshold);
   if (hasProperty(options, "paddingSamples")) {
     const int v = intProperty(options, "paddingSamples", static_cast<int>(config.padding_samples));
     if (v < 0) {
@@ -865,11 +879,12 @@ val js_mastering_repair_noise_band_bins(const val& n_fft_val, const val& sample_
   return vectorToInt32Array(bins);
 }
 
-// clipThreshold is the only field that reaches the result; the rest are read so
+// clipThresholdDb is the only field that reaches the result; the rest are read so
 // the same config validation runs here as at the repair.
 val js_mastering_repair_detect_clipping(val samples, const val& sample_rate, val options) {
   Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
-  const mastering::repair::DeclipConfig cfg = readMasteringRepairDeclip(options);
+  const mastering::repair::DeclipConfig cfg =
+      readMasteringRepairDeclip(options, "masteringRepairDetectClipping");
   return declipDetectionToVal(
       mastering::repair::detect_clipping(audio.data(), audio.size(), audio.sample_rate(), cfg));
 }

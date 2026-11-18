@@ -115,11 +115,11 @@ class StreamingEqualizerWrap : public Napi::ObjectWrap<StreamingEqualizerWrap> {
 };
 
 /// Block-by-block streaming pitch shifter. JS surface (mirrors the WASM class):
-///   const r = new sonare.StreamingRetune({ semitones, mix, grainSize });
+///   const r = new sonare.StreamingRetune({ pitchSemitones, mix, grainSizeSamples });
 ///   r.prepare(sampleRate, maxBlockSize);
 ///   const out = r.processMono(samples);
-///   r.setConfig({ semitones: 3 });
-///   r.config(); r.grainSize(); r.latencySamples(); r.reset(); r.destroy();
+///   r.setConfig({ pitchSemitones: 3 });
+///   r.config(); r.grainSizeSamples(); r.latencySamples(); r.reset(); r.destroy();
 ///
 /// Routed through the C ABI (sonare_streaming_retune_*) rather than the core
 /// class, so every validation this surface reports is the oracle's.
@@ -139,7 +139,7 @@ class StreamingRetuneWrap : public Napi::ObjectWrap<StreamingRetuneWrap> {
   Napi::Value Reset(const Napi::CallbackInfo& info);
   Napi::Value SetConfig(const Napi::CallbackInfo& info);
   Napi::Value Config(const Napi::CallbackInfo& info);
-  Napi::Value GrainSize(const Napi::CallbackInfo& info);
+  Napi::Value GrainSizeSamples(const Napi::CallbackInfo& info);
   Napi::Value LatencySamples(const Napi::CallbackInfo& info);
   Napi::Value ProcessMono(const Napi::CallbackInfo& info);
   Napi::Value Destroy(const Napi::CallbackInfo& info);
@@ -147,7 +147,7 @@ class StreamingRetuneWrap : public Napi::ObjectWrap<StreamingRetuneWrap> {
   SonareStreamingRetune* retune_ = nullptr;
   /// The grain size the caller last ASKED for, which is not what
   /// sonare_streaming_retune_config reports once prepared: that reports the
-  /// EFFECTIVE grain. Seeding an omitted grainSize from the effective value
+  /// EFFECTIVE grain. Seeding an omitted grainSizeSamples from the effective value
   /// froze the 0 "derive from the sample rate" sentinel into a literal, so a
   /// re-prepare at another rate kept the first rate's grain. The core keeps the
   /// same distinction in StreamingRetune::requested_grain_size_, which has no

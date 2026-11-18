@@ -360,7 +360,7 @@ bool vc_preset_in_range(int preset) {
 }
 
 // Maps a voice-character preset ordinal to its canonical id string (e.g.
-// "bright-idol"). Returns null for an out-of-range / unknown ordinal.
+// "brightIdol"). Returns null for an out-of-range / unknown ordinal.
 val js_voice_character_preset_id(const val& preset_val) {
   const int preset = checkedIntFromVal(preset_val, "preset");
   if (!vc_preset_in_range(preset)) {

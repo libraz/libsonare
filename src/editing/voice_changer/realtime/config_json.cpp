@@ -193,9 +193,9 @@ void dump_dsp_section(std::string& out, const RealtimeVoiceChangerConfig& c) {
   dump_field(out, "outputGainDb", c.output_gain_db);
   dump_field(out, "wetMix", c.wet_mix);
   out += "\"retune\":{";
-  dump_field(out, "semitones", c.retune.semitones);
+  dump_field(out, "pitchSemitones", c.retune.semitones);
   dump_field(out, "mix", c.retune.mix);
-  dump_int_field(out, "grainSize", c.retune.grain_size, true);
+  dump_int_field(out, "grainSizeSamples", c.retune.grain_size, true);
   out += "},\"formant\":{";
   dump_field(out, "factor", c.formant.factor);
   dump_field(out, "amount", c.formant.amount);
@@ -205,7 +205,7 @@ void dump_dsp_section(std::string& out, const RealtimeVoiceChangerConfig& c) {
   out += "\"mode\":\"";
   out += formant_mode_name(c.formant_mode);
   out += "\"},\"eq\":{";
-  dump_field(out, "highpassHz", c.eq.highpass_hz);
+  dump_field(out, "highPassHz", c.eq.highpass_hz);
   dump_field(out, "bodyDb", c.eq.body_db);
   dump_field(out, "presenceDb", c.eq.presence_db);
   dump_field(out, "airDb", c.eq.air_db, true);
@@ -327,7 +327,7 @@ bool require_in(const sonare::util::json::Value& object, const char* key, const 
   return require_number(object, key, range.lo, range.hi, path, error, integer);
 }
 
-/// Verifies the preset id matches the schema regex `^[a-z0-9][a-z0-9._-]*$` and
+/// Verifies the preset id matches the schema regex `^[a-z0-9][A-Za-z0-9._-]*$` and
 /// is within the 1..96 length bound. Kept inline because @c require_string in
 /// util/json_schema.h is intentionally regex-free — only this one field needs
 /// the slug constraint, so embedding a generic regex matcher there would be
@@ -339,8 +339,8 @@ inline bool is_valid_preset_id(std::string_view s) noexcept {
   if (!first_ok) return false;
   for (std::size_t i = 1; i < s.size(); ++i) {
     const auto c = static_cast<unsigned char>(s[i]);
-    const bool ok =
-        (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '.' || c == '_' || c == '-';
+    const bool ok = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') ||
+                    c == '.' || c == '_' || c == '-';
     if (!ok) return false;
   }
   return true;
@@ -467,9 +467,9 @@ bool validate_optional_section(const sonare::util::json::Value& parent, const ch
 }
 
 constexpr FieldSpec kRetuneFields[] = {
-    range_field("semitones", kSemitones),
+    range_field("pitchSemitones", kSemitones),
     range_field("mix", kUnit),
-    range_field("grainSize", kGrainSize, true),
+    range_field("grainSizeSamples", kGrainSize, true),
 };
 constexpr FieldSpec kFormantFields[] = {
     range_field("factor", kFormantFactor), range_field("amount", kUnit),
@@ -477,7 +477,7 @@ constexpr FieldSpec kFormantFields[] = {
     range_field("nasal", kBipolar),        {"mode", &require_formant_mode, {}, false, false},
 };
 constexpr FieldSpec kEqFields[] = {
-    range_field("highpassHz", kHighpassHz),
+    range_field("highPassHz", kHighpassHz),
     range_field("bodyDb", kEqGainDb),
     range_field("presenceDb", kEqGainDb),
     range_field("airDb", kEqGainDb),
@@ -691,14 +691,95 @@ bool apply_macro_section(const sonare::util::json::Value& macros,
   return true;
 }
 
-// Parses without range handling; callers decide between clamping and refusing.
-RealtimeVoiceChangerConfig parse_config_json(std::string_view text) {
-  const std::string input = trim_copy(text);
-  if (input.empty()) return realtime_voice_changer_preset(VoiceCharacterPreset::NeutralMonitor);
-  if (input.front() != '{')
-    return realtime_voice_changer_preset(preset_from_id_or_throw(input, ErrorCode::InvalidFormat));
+// A flat POD's harmonySteps: exactly kMaxHarmonyVoices whole numbers that fit an int.
+bool is_step_triple(const sonare::util::json::Value& value) {
+  if (!value.is_array() || value.as_array().size() != static_cast<std::size_t>(kMaxHarmonyVoices)) {
+    return false;
+  }
+  for (const auto& item : value.as_array()) {
+    if (!item.is_number() || std::floor(item.as_number()) != item.as_number() ||
+        item.as_number() < kReverbSeed.lo || item.as_number() > kReverbSeed.hi) {
+      return false;
+    }
+  }
+  return true;
+}
 
-  const auto root = sonare::util::json::admit(input);
+struct Rename {
+  const char* from;
+  const char* to;
+};
+
+// Spellings a version 1 or 2 document used, translated to the current ones on load.
+constexpr Rename kLegacyBuiltInIds[] = {{"neutral-monitor", "neutralMonitor"},
+                                        {"bright-idol", "brightIdol"},
+                                        {"soft-whisper", "softWhisper"},
+                                        {"deep-narrator", "deepNarrator"},
+                                        {"robot-mascot", "robotMascot"},
+                                        {"dark-villain", "darkVillain"},
+                                        {"hard-tune", "hardTune"},
+                                        {"robot-monotone", "robotMonotone"},
+                                        {"choir-harmony", "choirHarmony"},
+                                        {"vocoder-strings", "vocoderStrings"},
+                                        {"radio-voice", "radioVoice"}};
+constexpr Rename kLegacyDspKeys[] = {{"retune.semitones", "pitchSemitones"},
+                                     {"retune.grainSize", "grainSizeSamples"},
+                                     {"eq.highpassHz", "highPassHz"}};
+constexpr Rename kLegacyTokenFields[] = {{"pitchCorrection", "scale"},
+                                         {"character", "type"},
+                                         {"reverbVariation", "variation"},
+                                         {"reverbVariation", "division"}};
+constexpr Rename kLegacyTokens[] = {{"natural_minor", "naturalMinor"},
+                                    {"bbd_chorus", "bbdChorus"},
+                                    {"tempo_delay", "tempoDelay"},
+                                    {"dub_echo", "dubEcho"},
+                                    {"dotted_eighth", "dottedEighth"}};
+
+// Rewrites a version 1 or 2 preset document to the current spelling in place; other documents
+// are left alone, so a current document carrying an old spelling is refused by validation.
+void translate_legacy_document(sonare::util::json::Value& root) {
+  if (!root.is_object()) return;
+  const auto* version = root.find("schemaVersion");
+  if (version == nullptr || !version->is_number() ||
+      version->as_number() >= static_cast<double>(kVoiceChangerPresetSchemaVersion)) {
+    return;
+  }
+  auto& members = root.as_object();
+  if (auto it = members.find("id"); it != members.end() && it->second.is_string()) {
+    for (const Rename& row : kLegacyBuiltInIds) {
+      if (it->second.as_string() == row.from) it->second = sonare::util::json::Value(row.to);
+    }
+  }
+  auto dsp = members.find("dsp");
+  if (dsp == members.end() || !dsp->second.is_object()) return;
+  auto& sections = dsp->second.as_object();
+  for (const Rename& row : kLegacyDspKeys) {
+    const std::string_view path = row.from;
+    const auto dot = path.find('.');
+    auto section = sections.find(std::string(path.substr(0, dot)));
+    if (section == sections.end() || !section->second.is_object()) continue;
+    auto& fields = section->second.as_object();
+    auto old_field = fields.find(std::string(path.substr(dot + 1)));
+    if (old_field == fields.end() || fields.count(row.to) != 0) continue;
+    fields.emplace(row.to, std::move(old_field->second));
+    fields.erase(old_field);
+  }
+  for (const Rename& row : kLegacyTokenFields) {
+    auto section = sections.find(row.from);
+    if (section == sections.end() || !section->second.is_object()) continue;
+    auto field = section->second.as_object().find(row.to);
+    if (field == section->second.as_object().end() || !field->second.is_string()) continue;
+    for (const Rename& token : kLegacyTokens) {
+      if (field->second.as_string() == token.from) {
+        field->second = sonare::util::json::Value(token.to);
+        break;
+      }
+    }
+  }
+}
+
+// Parses without range handling; callers decide between clamping and refusing.
+RealtimeVoiceChangerConfig parse_config_value(const sonare::util::json::Value& root) {
   RealtimeVoiceChangerConfig c;
   const auto* dsp = root.find("dsp");
   const auto* macros = root.find("macros");
@@ -722,17 +803,17 @@ RealtimeVoiceChangerConfig parse_config_json(std::string_view text) {
   // JS bindings expose preset configs as a flat POD for efficient FFI. Accept
   // that camelCase shape here, at the one parser shared by C ABI, Node, and
   // WASM, rather than making every binding hand-expand it into nested JSON.
-  if (object.find("retuneSemitones") != nullptr) {
-    c.retune.semitones = object_number(object, "", "retuneSemitones", c.retune.semitones);
+  if (object.find("retunePitchSemitones") != nullptr) {
+    c.retune.semitones = object_number(object, "", "retunePitchSemitones", c.retune.semitones);
     c.retune.mix = object_number(object, "", "retuneMix", c.retune.mix);
-    c.retune.grain_size = object_int(object, "", "retuneGrainSize", c.retune.grain_size);
+    c.retune.grain_size = object_int(object, "", "retuneGrainSizeSamples", c.retune.grain_size);
     c.formant.factor = object_number(object, "", "formantFactor", c.formant.factor);
     c.formant.amount = object_number(object, "", "formantAmount", c.formant.amount);
     c.formant.body = object_number(object, "", "formantBody", c.formant.body);
     c.formant.brightness = object_number(object, "", "formantBrightness", c.formant.brightness);
     c.formant.nasal = object_number(object, "", "formantNasal", c.formant.nasal);
     c.formant_mode = object_formant_mode(object, "", "formantMode", c.formant_mode);
-    c.eq.highpass_hz = object_number(object, "", "eqHighpassHz", c.eq.highpass_hz);
+    c.eq.highpass_hz = object_number(object, "", "eqHighPassHz", c.eq.highpass_hz);
     c.eq.body_db = object_number(object, "", "eqBodyDb", c.eq.body_db);
     c.eq.presence_db = object_number(object, "", "eqPresenceDb", c.eq.presence_db);
     c.eq.air_db = object_number(object, "", "eqAirDb", c.eq.air_db);
@@ -765,7 +846,7 @@ RealtimeVoiceChangerConfig parse_config_json(std::string_view text) {
         object_bool(object, "", "limiterEnableIspLimiter", c.limiter.enable_isp_limiter);
     c.limiter.isp_ceiling_dbtp =
         object_number(object, "", "limiterIspCeilingDbtp", c.limiter.isp_ceiling_dbtp);
-    c.voice_engine.engine = object_enum(object, "", "voiceEngineEngine", c.voice_engine.engine);
+    c.voice_engine.engine = object_enum(object, "", "voiceEngine", c.voice_engine.engine);
     c.voice_engine.f0_min_hz =
         object_number(object, "", "voiceEngineF0MinHz", c.voice_engine.f0_min_hz);
     c.pitch_correction.mode =
@@ -781,9 +862,7 @@ RealtimeVoiceChangerConfig parse_config_json(std::string_view text) {
     c.pitch_correction.robot_octave =
         object_int(object, "", "pitchCorrectionRobotOctave", c.pitch_correction.robot_octave);
     c.harmony.voices = object_int(object, "", "harmonyVoices", c.harmony.voices);
-    c.harmony.steps[0] = object_int(object, "", "harmonyStep1", c.harmony.steps[0]);
-    c.harmony.steps[1] = object_int(object, "", "harmonyStep2", c.harmony.steps[1]);
-    c.harmony.steps[2] = object_int(object, "", "harmonyStep3", c.harmony.steps[2]);
+    object_steps(object, "", "harmonySteps", c.harmony.steps);
     c.harmony.level = object_number(object, "", "harmonyLevel", c.harmony.level);
     c.harmony.lead_level = object_number(object, "", "harmonyLeadLevel", c.harmony.lead_level);
     c.harmony.detune_cents =
@@ -804,7 +883,7 @@ RealtimeVoiceChangerConfig parse_config_json(std::string_view text) {
     c.character.amount = object_number(object, "", "characterAmount", c.character.amount);
     c.character.tone = object_number(object, "", "characterTone", c.character.tone);
     c.reverb_variation.variation =
-        object_enum(object, "", "reverbVariationVariation", c.reverb_variation.variation);
+        object_enum(object, "", "reverbVariation", c.reverb_variation.variation);
     c.reverb_variation.delay_ms =
         object_number(object, "", "reverbVariationDelayMs", c.reverb_variation.delay_ms);
     c.reverb_variation.feedback =
@@ -818,9 +897,9 @@ RealtimeVoiceChangerConfig parse_config_json(std::string_view text) {
   }
 
   if (const auto* v = object_section(object, "retune")) {
-    c.retune.semitones = object_number(*v, "retune", "semitones", c.retune.semitones);
+    c.retune.semitones = object_number(*v, "retune", "pitchSemitones", c.retune.semitones);
     c.retune.mix = object_number(*v, "retune", "mix", c.retune.mix);
-    c.retune.grain_size = object_int(*v, "retune", "grainSize", c.retune.grain_size);
+    c.retune.grain_size = object_int(*v, "retune", "grainSizeSamples", c.retune.grain_size);
   }
   if (const auto* v = object_section(object, "formant")) {
     c.formant.factor = object_number(*v, "formant", "factor", c.formant.factor);
@@ -831,7 +910,7 @@ RealtimeVoiceChangerConfig parse_config_json(std::string_view text) {
     c.formant_mode = object_formant_mode(*v, "formant", "mode", c.formant_mode);
   }
   if (const auto* v = object_section(object, "eq")) {
-    c.eq.highpass_hz = object_number(*v, "eq", "highpassHz", c.eq.highpass_hz);
+    c.eq.highpass_hz = object_number(*v, "eq", "highPassHz", c.eq.highpass_hz);
     c.eq.body_db = object_number(*v, "eq", "bodyDb", c.eq.body_db);
     c.eq.presence_db = object_number(*v, "eq", "presenceDb", c.eq.presence_db);
     c.eq.air_db = object_number(*v, "eq", "airDb", c.eq.air_db);
@@ -927,6 +1006,16 @@ RealtimeVoiceChangerConfig parse_config_json(std::string_view text) {
   return c;
 }
 
+RealtimeVoiceChangerConfig parse_config_json(std::string_view text) {
+  const std::string input = trim_copy(text);
+  if (input.empty()) return realtime_voice_changer_preset(VoiceCharacterPreset::NeutralMonitor);
+  if (input.front() != '{')
+    return realtime_voice_changer_preset(preset_from_id_or_throw(input, ErrorCode::InvalidFormat));
+  auto root = sonare::util::json::admit(input);
+  translate_legacy_document(root);
+  return parse_config_value(root);
+}
+
 }  // namespace
 
 RealtimeVoiceChangerConfig realtime_voice_changer_config_from_json(std::string_view text) {
@@ -963,7 +1052,8 @@ bool validate_realtime_voice_changer_preset_json(std::string_view json,
     // path below keeps using `admit` (not `admit_strict`) because it doubles
     // as the realtime C-API entry point and must stay maximally tolerant of
     // duplicate keys; both still run under the same resource budget.
-    const auto root = sonare::util::json::admit_strict(trimmed);
+    auto root = sonare::util::json::admit_strict(trimmed);
+    translate_legacy_document(root);
     if (!has_allowed_keys(
             root, {"schemaVersion", "id", "name", "description", "category", "macros", "dsp"}, "$",
             error)) {
@@ -972,7 +1062,7 @@ bool validate_realtime_voice_changer_preset_json(std::string_view json,
     for (const char* key : {"schemaVersion", "id", "name", "category"}) {
       if (!require_key(root, key, "$", error)) return false;
     }
-    // schemaVersion: JSON-Schema "type: integer, enum: [1, 2]" demands an
+    // schemaVersion: JSON-Schema "type: integer, enum: [1, 2, 3]" demands an
     // *exact* integer. as_int() silently truncates 1.5 -> 1, so check the
     // raw double for both integral-ness and range before comparing.
     const auto* schema = root.find("schemaVersion");
@@ -994,7 +1084,7 @@ bool validate_realtime_voice_changer_preset_json(std::string_view json,
       }
       schema_version = static_cast<int>(n);
     }
-    // id: schema regex ^[a-z0-9][a-z0-9._-]*$ + length 1..96. The C++ validator
+    // id: schema regex ^[a-z0-9][A-Za-z0-9._-]*$ + length 1..96. The C++ validator
     // historically accepted any non-empty string up to 96 bytes, which let
     // upper-case / whitespace / punctuation slip through and break downstream
     // consumers that treat the id as a TS enum literal or comparison key.
@@ -1027,7 +1117,7 @@ bool validate_realtime_voice_changer_preset_json(std::string_view json,
     if (dsp != nullptr && !validate_dsp_section(*dsp, schema_version, error)) return false;
     RealtimeVoiceChangerConfig macro_config;
     if (macros != nullptr && !apply_macro_section(*macros, &macro_config, error)) return false;
-    const auto config = realtime_voice_changer_config_from_json(trimmed);
+    const auto config = normalize_config(parse_config_value(root));
     // What only the whole configuration can say; the same rule create and set_config apply.
     if (!validate_realtime_voice_changer_config(config, nullptr, error)) return false;
     if (normalized_json) {
@@ -1077,20 +1167,20 @@ bool realtime_voice_changer_config_from_input(std::string_view text,
     // document, but must be complete and type-correct so a partial object
     // cannot silently fall back to unrelated defaults.
     const auto root = sonare::util::json::admit_strict(input);
-    if (root.is_object() && root.find("retuneSemitones") != nullptr) {
+    if (root.is_object() && root.find("retunePitchSemitones") != nullptr) {
       static constexpr std::array<const char*, 36> kFlatPodKeys = {
           "inputGainDb",
           "outputGainDb",
           "wetMix",
-          "retuneSemitones",
+          "retunePitchSemitones",
           "retuneMix",
-          "retuneGrainSize",
+          "retuneGrainSizeSamples",
           "formantFactor",
           "formantAmount",
           "formantBody",
           "formantBrightness",
           "formantNasal",
-          "eqHighpassHz",
+          "eqHighPassHz",
           "eqBodyDb",
           "eqPresenceDb",
           "eqAirDb",
@@ -1119,8 +1209,8 @@ bool realtime_voice_changer_config_from_input(std::string_view text,
       // The voice transformer keys are part of the same complete shape: the bindings build
       // this object at runtime from the whole POD and never persist it, so a missing key is
       // refused like any other. Each carries its own type.
-      static constexpr std::array<const char*, 34> kTransformKeys = {
-          "voiceEngineEngine",
+      static constexpr std::array<const char*, 32> kTransformKeys = {
+          "voiceEngine",
           "voiceEngineF0MinHz",
           "pitchCorrectionMode",
           "pitchCorrectionAmount",
@@ -1129,9 +1219,7 @@ bool realtime_voice_changer_config_from_input(std::string_view text,
           "pitchCorrectionScale",
           "pitchCorrectionRobotOctave",
           "harmonyVoices",
-          "harmonyStep1",
-          "harmonyStep2",
-          "harmonyStep3",
+          "harmonySteps",
           "harmonyLevel",
           "harmonyLeadLevel",
           "harmonyDetuneCents",
@@ -1148,7 +1236,7 @@ bool realtime_voice_changer_config_from_input(std::string_view text,
           "characterType",
           "characterAmount",
           "characterTone",
-          "reverbVariationVariation",
+          "reverbVariation",
           "reverbVariationDelayMs",
           "reverbVariationFeedback",
           "reverbVariationTempoBpm",
@@ -1156,13 +1244,12 @@ bool realtime_voice_changer_config_from_input(std::string_view text,
           "midiRelease",
       };
       static constexpr std::array<std::string_view, 9> kTransformEnumKeys = {
-          "voiceEngineEngine",        "pitchCorrectionMode",     "pitchCorrectionScale",
-          "vocoderCarrierSource",     "vocoderCarrierWave",      "characterType",
-          "reverbVariationVariation", "reverbVariationDivision", "midiRelease"};
-      static constexpr std::array<std::string_view, 9> kIntegerKeys = {
-          "retuneGrainSize", "reverbSeed",   "pitchCorrectionKeyRoot", "pitchCorrectionRobotOctave",
-          "harmonyVoices",   "harmonyStep1", "harmonyStep2",           "harmonyStep3",
-          "vocoderBands"};
+          "voiceEngine",          "pitchCorrectionMode",     "pitchCorrectionScale",
+          "vocoderCarrierSource", "vocoderCarrierWave",      "characterType",
+          "reverbVariation",      "reverbVariationDivision", "midiRelease"};
+      static constexpr std::array<std::string_view, 6> kIntegerKeys = {
+          "retuneGrainSizeSamples",     "reverbSeed",    "pitchCorrectionKeyRoot",
+          "pitchCorrectionRobotOctave", "harmonyVoices", "vocoderBands"};
       const auto listed = [](const auto& keys, std::string_view key) {
         return std::find(keys.begin(), keys.end(), key) != keys.end();
       };
@@ -1178,6 +1265,7 @@ bool realtime_voice_changer_config_from_input(std::string_view text,
           if (key != transform_key) continue;
           const bool typed = listed(kTransformEnumKeys, key) ? _value.is_string()
                              : key == "vocoderEnabled"       ? _value.is_bool()
+                             : key == "harmonySteps"         ? is_step_triple(_value)
                                                              : _value.is_number();
           if (!typed) {
             if (error) *error = "flat voice changer POD has an invalid field: $." + key;

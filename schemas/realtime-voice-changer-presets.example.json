@@ -25,7 +25,7 @@
         "eq": {
           "airDb": 0.5,
           "bodyDb": 0,
-          "highpassHz": 75,
+          "highPassHz": 75,
           "presenceDb": 1.2
         },
         "formant": {
@@ -71,9 +71,9 @@
           "speedMs": 20
         },
         "retune": {
-          "grainSize": 0,
+          "grainSizeSamples": 0,
           "mix": 0,
-          "semitones": 0
+          "pitchSemitones": 0
         },
         "reverb": {
           "damping": 0.55,
@@ -105,10 +105,10 @@
         },
         "wetMix": 1
       },
-      "id": "neutral-monitor",
+      "id": "neutralMonitor",
       "name": "Neutral Monitor",
       "category": "monitor",
-      "schemaVersion": 2
+      "schemaVersion": 3
     },
     {
       "dsp": {
@@ -133,7 +133,7 @@
         "eq": {
           "airDb": 3.5,
           "bodyDb": -2.5,
-          "highpassHz": 160,
+          "highPassHz": 160,
           "presenceDb": 4.5
         },
         "formant": {
@@ -179,9 +179,9 @@
           "speedMs": 20
         },
         "retune": {
-          "grainSize": 0,
+          "grainSizeSamples": 0,
           "mix": 1,
-          "semitones": 4
+          "pitchSemitones": 4
         },
         "reverb": {
           "damping": 0.35,
@@ -213,10 +213,10 @@
         },
         "wetMix": 1
       },
-      "id": "bright-idol",
+      "id": "brightIdol",
       "name": "Bright Idol",
       "category": "bright",
-      "schemaVersion": 2
+      "schemaVersion": 3
     },
     {
       "dsp": {
@@ -241,7 +241,7 @@
         "eq": {
           "airDb": 2.5,
           "bodyDb": 1,
-          "highpassHz": 110,
+          "highPassHz": 110,
           "presenceDb": -2
         },
         "formant": {
@@ -287,9 +287,9 @@
           "speedMs": 20
         },
         "retune": {
-          "grainSize": 0,
+          "grainSizeSamples": 0,
           "mix": 1,
-          "semitones": 2
+          "pitchSemitones": 2
         },
         "reverb": {
           "damping": 0.65,
@@ -321,10 +321,10 @@
         },
         "wetMix": 1
       },
-      "id": "soft-whisper",
+      "id": "softWhisper",
       "name": "Soft Whisper",
       "category": "soft",
-      "schemaVersion": 2
+      "schemaVersion": 3
     },
     {
       "dsp": {
@@ -349,7 +349,7 @@
         "eq": {
           "airDb": -1.5,
           "bodyDb": 4,
-          "highpassHz": 70,
+          "highPassHz": 70,
           "presenceDb": 2
         },
         "formant": {
@@ -395,9 +395,9 @@
           "speedMs": 20
         },
         "retune": {
-          "grainSize": 0,
+          "grainSizeSamples": 0,
           "mix": 1,
-          "semitones": -5
+          "pitchSemitones": -5
         },
         "reverb": {
           "damping": 0.8,
@@ -429,10 +429,10 @@
         },
         "wetMix": 1
       },
-      "id": "deep-narrator",
+      "id": "deepNarrator",
       "name": "Deep Narrator",
       "category": "deep",
-      "schemaVersion": 2
+      "schemaVersion": 3
     },
     {
       "dsp": {
@@ -457,7 +457,7 @@
         "eq": {
           "airDb": 0,
           "bodyDb": -6,
-          "highpassHz": 240,
+          "highPassHz": 240,
           "presenceDb": 4.5
         },
         "formant": {
@@ -503,9 +503,9 @@
           "speedMs": 20
         },
         "retune": {
-          "grainSize": 0,
+          "grainSizeSamples": 0,
           "mix": 1,
-          "semitones": 7
+          "pitchSemitones": 7
         },
         "reverb": {
           "damping": 0.3,
@@ -537,10 +537,10 @@
         },
         "wetMix": 1
       },
-      "id": "robot-mascot",
+      "id": "robotMascot",
       "name": "Robot Mascot",
       "category": "robot",
-      "schemaVersion": 2
+      "schemaVersion": 3
     },
     {
       "dsp": {
@@ -565,7 +565,7 @@
         "eq": {
           "airDb": -5,
           "bodyDb": 5.5,
-          "highpassHz": 80,
+          "highPassHz": 80,
           "presenceDb": -2
         },
         "formant": {
@@ -611,9 +611,9 @@
           "speedMs": 20
         },
         "retune": {
-          "grainSize": 0,
+          "grainSizeSamples": 0,
           "mix": 1,
-          "semitones": -9
+          "pitchSemitones": -9
         },
         "reverb": {
           "damping": 0.9,
@@ -645,10 +645,10 @@
         },
         "wetMix": 1
       },
-      "id": "dark-villain",
+      "id": "darkVillain",
       "name": "Dark Villain",
       "category": "dark",
-      "schemaVersion": 2
+      "schemaVersion": 3
     },
     {
       "dsp": {
@@ -673,7 +673,7 @@
         "eq": {
           "airDb": 2,
           "bodyDb": 0,
-          "highpassHz": 90,
+          "highPassHz": 90,
           "presenceDb": 2.5
         },
         "formant": {
@@ -721,9 +721,9 @@
           "speedMs": 0
         },
         "retune": {
-          "grainSize": 0,
+          "grainSizeSamples": 0,
           "mix": 1,
-          "semitones": 0
+          "pitchSemitones": 0
         },
         "reverb": {
           "damping": 0.4,
@@ -755,10 +755,10 @@
         },
         "wetMix": 1
       },
-      "id": "hard-tune",
+      "id": "hardTune",
       "name": "Hard Tune",
       "category": "tune",
-      "schemaVersion": 2
+      "schemaVersion": 3
     },
     {
       "dsp": {
@@ -783,7 +783,7 @@
         "eq": {
           "airDb": 1,
           "bodyDb": -3,
-          "highpassHz": 180,
+          "highPassHz": 180,
           "presenceDb": 4
         },
         "formant": {
@@ -831,9 +831,9 @@
           "speedMs": 0
         },
         "retune": {
-          "grainSize": 0,
+          "grainSizeSamples": 0,
           "mix": 1,
-          "semitones": 0
+          "pitchSemitones": 0
         },
         "reverb": {
           "damping": 0.4,
@@ -865,10 +865,10 @@
         },
         "wetMix": 1
       },
-      "id": "robot-monotone",
+      "id": "robotMonotone",
       "name": "Robot Monotone",
       "category": "tune",
-      "schemaVersion": 2
+      "schemaVersion": 3
     },
     {
       "dsp": {
@@ -893,7 +893,7 @@
         "eq": {
           "airDb": 2,
           "bodyDb": 0.5,
-          "highpassHz": 100,
+          "highPassHz": 100,
           "presenceDb": 1.5
         },
         "formant": {
@@ -941,9 +941,9 @@
           "speedMs": 60
         },
         "retune": {
-          "grainSize": 0,
+          "grainSizeSamples": 0,
           "mix": 1,
-          "semitones": 0
+          "pitchSemitones": 0
         },
         "reverb": {
           "damping": 0.6,
@@ -975,10 +975,10 @@
         },
         "wetMix": 1
       },
-      "id": "choir-harmony",
+      "id": "choirHarmony",
       "name": "Choir Harmony",
       "category": "harmony",
-      "schemaVersion": 2
+      "schemaVersion": 3
     },
     {
       "dsp": {
@@ -1003,7 +1003,7 @@
         "eq": {
           "airDb": 1,
           "bodyDb": 0,
-          "highpassHz": 120,
+          "highPassHz": 120,
           "presenceDb": 1.5
         },
         "formant": {
@@ -1051,9 +1051,9 @@
           "speedMs": 20
         },
         "retune": {
-          "grainSize": 0,
+          "grainSizeSamples": 0,
           "mix": 1,
-          "semitones": 0
+          "pitchSemitones": 0
         },
         "reverb": {
           "damping": 0.5,
@@ -1085,10 +1085,10 @@
         },
         "wetMix": 1
       },
-      "id": "vocoder-strings",
+      "id": "vocoderStrings",
       "name": "Vocoder Strings",
       "category": "vocoder",
-      "schemaVersion": 2
+      "schemaVersion": 3
     },
     {
       "dsp": {
@@ -1113,7 +1113,7 @@
         "eq": {
           "airDb": -6,
           "bodyDb": -4,
-          "highpassHz": 300,
+          "highPassHz": 300,
           "presenceDb": 3
         },
         "formant": {
@@ -1161,9 +1161,9 @@
           "speedMs": 20
         },
         "retune": {
-          "grainSize": 0,
+          "grainSizeSamples": 0,
           "mix": 1,
-          "semitones": 0
+          "pitchSemitones": 0
         },
         "reverb": {
           "damping": 0.5,
@@ -1198,7 +1198,7 @@
       "id": "megaphone",
       "name": "Megaphone",
       "category": "character",
-      "schemaVersion": 2
+      "schemaVersion": 3
     },
     {
       "dsp": {
@@ -1223,7 +1223,7 @@
         "eq": {
           "airDb": -4,
           "bodyDb": -2,
-          "highpassHz": 200,
+          "highPassHz": 200,
           "presenceDb": 2
         },
         "formant": {
@@ -1271,9 +1271,9 @@
           "speedMs": 20
         },
         "retune": {
-          "grainSize": 0,
+          "grainSizeSamples": 0,
           "mix": 1,
-          "semitones": 0
+          "pitchSemitones": 0
         },
         "reverb": {
           "damping": 0.5,
@@ -1305,11 +1305,11 @@
         },
         "wetMix": 1
       },
-      "id": "radio-voice",
+      "id": "radioVoice",
       "name": "Radio Voice",
       "category": "character",
-      "schemaVersion": 2
+      "schemaVersion": 3
     }
   ],
-  "schemaVersion": 2
+  "schemaVersion": 3
 }

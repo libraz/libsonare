@@ -6,7 +6,7 @@
 #include "wasm/bindings/common/common.h"
 
 std::string realtimeVoiceChangerConfigTextFromVal(val config) {
-  if (config.isNull() || config.isUndefined()) return "neutral-monitor";
+  if (config.isNull() || config.isUndefined()) return "neutralMonitor";
   if (config.typeOf().as<std::string>() == "string") return config.as<std::string>();
   return val::global("JSON").call<std::string>("stringify", config);
 }
@@ -18,15 +18,15 @@ std::string realtimeVoiceChangerConfigTextFromVal(val config) {
   X(input_gain_db, inputGainDb)                        \
   X(output_gain_db, outputGainDb)                      \
   X(wet_mix, wetMix)                                   \
-  X(retune.semitones, retuneSemitones)                 \
+  X(retune.semitones, retunePitchSemitones)            \
   X(retune.mix, retuneMix)                             \
-  X(retune.grain_size, retuneGrainSize)                \
+  X(retune.grain_size, retuneGrainSizeSamples)         \
   X(formant.factor, formantFactor)                     \
   X(formant.amount, formantAmount)                     \
   X(formant.body, formantBody)                         \
   X(formant.brightness, formantBrightness)             \
   X(formant.nasal, formantNasal)                       \
-  X(eq.highpass_hz, eqHighpassHz)                      \
+  X(eq.highpass_hz, eqHighPassHz)                      \
   X(eq.body_db, eqBodyDb)                              \
   X(eq.presence_db, eqPresenceDb)                      \
   X(eq.air_db, eqAirDb)                                \
@@ -75,16 +75,13 @@ std::string realtimeVoiceChangerConfigTextFromVal(val config) {
   X(pitch_correction.key_root, pitchCorrectionKeyRoot)         \
   X(pitch_correction.robot_octave, pitchCorrectionRobotOctave) \
   X(harmony.voices, harmonyVoices)                             \
-  X(harmony.steps[0], harmonyStep1)                            \
-  X(harmony.steps[1], harmonyStep2)                            \
-  X(harmony.steps[2], harmonyStep3)                            \
   X(vocoder.bands, vocoderBands)
 
 namespace {
 
 constexpr char kVcPodSubject[] = "voice changer POD config";
 
-// Spellings of the string enums in the flat POD: each enumerator in snake_case.
+// Spellings of the string enums in the flat POD: each enumerator in lowerCamelCase.
 struct VcEnumName {
   int value;
   const char* name;
@@ -92,16 +89,32 @@ struct VcEnumName {
 
 constexpr VcEnumName kVcEngineNames[] = {{0, "grain"}, {1, "psola"}};
 constexpr VcEnumName kVcCorrectionModeNames[] = {{0, "off"}, {1, "auto"}, {2, "robot"}};
-constexpr VcEnumName kVcScaleNames[] = {{0, "major"}, {1, "natural_minor"}, {2, "chromatic"}};
+constexpr VcEnumName kVcScaleNames[] = {{0, "major"}, {1, "naturalMinor"}, {2, "chromatic"}};
 constexpr VcEnumName kVcCarrierSourceNames[] = {{0, "internal"}, {1, "external"}};
 constexpr VcEnumName kVcCarrierWaveNames[] = {{0, "saw"}, {1, "pulse"}, {2, "ensemble"}};
 constexpr VcEnumName kVcCharacterNames[] = {
-    {0, "none"}, {1, "megaphone"}, {2, "radio"}, {3, "bbd_chorus"}, {4, "strobo"}};
+    {0, "none"}, {1, "megaphone"}, {2, "radio"}, {3, "bbdChorus"}, {4, "strobo"}};
 constexpr VcEnumName kVcVariationNames[] = {
-    {0, "reverb"}, {1, "echo"}, {2, "tempo_delay"}, {3, "dub_echo"}};
+    {0, "reverb"}, {1, "echo"}, {2, "tempoDelay"}, {3, "dubEcho"}};
 constexpr VcEnumName kVcDivisionNames[] = {
-    {0, "quarter"}, {1, "eighth"}, {2, "dotted_eighth"}, {3, "sixteenth"}};
+    {0, "quarter"}, {1, "eighth"}, {2, "dottedEighth"}, {3, "sixteenth"}};
 constexpr VcEnumName kVcMidiReleaseNames[] = {{0, "hold"}, {1, "input"}};
+
+// harmonySteps: an array of exactly kMaxHarmonyVoices whole numbers.
+void vcReadHarmonySteps(const val& pod, int (&steps)[editing::voice_changer::kMaxHarmonyVoices]) {
+  const val value = requireTypedProperty(pod, "harmonySteps", kVcPodSubject, "object", "an array");
+  const std::string path = std::string(kVcPodSubject) + ".harmonySteps";
+  if (!val::global("Array").call<bool>("isArray", value)) {
+    throw WasmTypeError(path + " must be an array");
+  }
+  const int count = editing::voice_changer::kMaxHarmonyVoices;
+  if (value["length"].as<int>() != count) {
+    throw WasmRangeError(path + " must have exactly " + std::to_string(count) + " entries");
+  }
+  for (int i = 0; i < count; ++i) {
+    steps[i] = checkedIntFromVal(value[i], (path + "[" + std::to_string(i) + "]").c_str());
+  }
+}
 
 template <typename Enum, size_t N>
 Enum vcParseEnum(const val& pod, const char* key, const VcEnumName (&names)[N]) {
@@ -137,9 +150,14 @@ val realtimeVoiceChangerPodVal(const editing::voice_changer::RealtimeVoiceChange
   SONARE_WASM_VC_POD_TRANSFORM_FLOAT_FIELDS(X)
   SONARE_WASM_VC_POD_TRANSFORM_INT_FIELDS(X)
 #undef X
+  val steps = val::array();
+  for (int i = 0; i < editing::voice_changer::kMaxHarmonyVoices; ++i) {
+    steps.call<void>("push", cfg.harmony.steps[i]);
+  }
+  out.set("harmonySteps", steps);
   out.set("limiterEnableIspLimiter", cfg.limiter.enable_isp_limiter);
   out.set("formantMode", std::string(editing::voice_changer::formant_mode_name(cfg.formant_mode)));
-  out.set("voiceEngineEngine", std::string(vcEnumName(kVcEngineNames, cfg.voice_engine.engine)));
+  out.set("voiceEngine", std::string(vcEnumName(kVcEngineNames, cfg.voice_engine.engine)));
   out.set("pitchCorrectionMode",
           std::string(vcEnumName(kVcCorrectionModeNames, cfg.pitch_correction.mode)));
   out.set("pitchCorrectionScale",
@@ -150,7 +168,7 @@ val realtimeVoiceChangerPodVal(const editing::voice_changer::RealtimeVoiceChange
   out.set("vocoderCarrierWave",
           std::string(vcEnumName(kVcCarrierWaveNames, cfg.vocoder.carrier_wave)));
   out.set("characterType", std::string(vcEnumName(kVcCharacterNames, cfg.character.type)));
-  out.set("reverbVariationVariation",
+  out.set("reverbVariation",
           std::string(vcEnumName(kVcVariationNames, cfg.reverb_variation.variation)));
   out.set("reverbVariationDivision",
           std::string(vcEnumName(kVcDivisionNames, cfg.reverb_variation.division)));
@@ -177,12 +195,13 @@ editing::voice_changer::RealtimeVoiceChangerConfig realtimeVoiceChangerConfigFro
 #define X(cpp_path, js_key) parsed.cpp_path = requireIntProperty(pod, #js_key, kVcPodSubject);
   SONARE_WASM_VC_POD_TRANSFORM_INT_FIELDS(X)
 #undef X
+  vcReadHarmonySteps(pod, parsed.harmony.steps);
   parsed.limiter.enable_isp_limiter =
       requireProperty<bool>(pod, "limiterEnableIspLimiter", kVcPodSubject);
   parsed.formant_mode = parse_formant_mode(
       requireTypedProperty(pod, "formantMode", kVcPodSubject, "string", "a string")
           .as<std::string>());
-  parsed.voice_engine.engine = vcParseEnum<PitchEngine>(pod, "voiceEngineEngine", kVcEngineNames);
+  parsed.voice_engine.engine = vcParseEnum<PitchEngine>(pod, "voiceEngine", kVcEngineNames);
   parsed.pitch_correction.mode =
       vcParseEnum<PitchCorrectionMode>(pod, "pitchCorrectionMode", kVcCorrectionModeNames);
   parsed.pitch_correction.scale =
@@ -194,7 +213,7 @@ editing::voice_changer::RealtimeVoiceChangerConfig realtimeVoiceChangerConfigFro
       vcParseEnum<VocoderCarrierWave>(pod, "vocoderCarrierWave", kVcCarrierWaveNames);
   parsed.character.type = vcParseEnum<CharacterType>(pod, "characterType", kVcCharacterNames);
   parsed.reverb_variation.variation =
-      vcParseEnum<ReverbVariation>(pod, "reverbVariationVariation", kVcVariationNames);
+      vcParseEnum<ReverbVariation>(pod, "reverbVariation", kVcVariationNames);
   parsed.reverb_variation.division =
       vcParseEnum<NoteDivision>(pod, "reverbVariationDivision", kVcDivisionNames);
   parsed.midi.release = vcParseEnum<MidiRelease>(pod, "midiRelease", kVcMidiReleaseNames);
@@ -206,14 +225,14 @@ editing::voice_changer::RealtimeVoiceChangerConfig realtimeVoiceChangerConfigFro
 }
 
 // A refused preset id or nested document is InvalidFormat; the flat POD (recognised by its
-// `retuneSemitones` key) is a per-call parameter bag and stays InvalidParameter.
+// `retunePitchSemitones` key) is a per-call parameter bag and stays InvalidParameter.
 editing::voice_changer::RealtimeVoiceChangerConfig realtimeVoiceChangerConfigFromVal(val config) {
   editing::voice_changer::RealtimeVoiceChangerConfig parsed;
   std::string error;
   if (!editing::voice_changer::realtime_voice_changer_config_from_input(
           realtimeVoiceChangerConfigTextFromVal(config), &parsed, &error)) {
     const bool flat_pod = config.typeOf().as<std::string>() == "object" && !config.isNull() &&
-                          !config["retuneSemitones"].isUndefined();
+                          !config["retunePitchSemitones"].isUndefined();
     throw sonare::SonareException(
         flat_pod ? sonare::ErrorCode::InvalidParameter : sonare::ErrorCode::InvalidFormat, error);
   }

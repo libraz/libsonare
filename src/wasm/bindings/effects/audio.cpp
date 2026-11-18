@@ -209,6 +209,10 @@ val js_pitch_correct_timevarying(val samples, const val& sample_rate_val, val f0
                                  const val& hop_length_val, val options) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
+  refuseUnknownKeys(options, "pitchCorrectTimevarying",
+                    {"targetMode", "targetMidi", "scaleRoot", "scaleModeMask", "scaleReferenceMidi",
+                     "retuneAmount", "maxCorrectionSemitones", "retuneSpeedMs",
+                     "vibratoThresholdCents", "voiced", "voicedProb"});
   val voiced = val::undefined();
   val voiced_prob = val::undefined();
   bool has_voiced = false;
@@ -242,16 +246,16 @@ val js_pitch_correct_timevarying(val samples, const val& sample_rate_val, val f0
   std::vector<float> voiced_vec;
   std::vector<float> prob_vec;
   if (!options.isUndefined() && !options.isNull()) {
-    if (hasProperty(options, "mode")) {
-      const val mode_value = options["mode"];
+    if (hasProperty(options, "targetMode")) {
+      const val mode_value = options["targetMode"];
       if (mode_value.typeOf().as<std::string>() != "string") {
-        throw WasmRangeError("pitch correction mode must be 'midi' or 'scale'");
+        throw WasmTypeError("pitch correction targetMode must be 'midi' or 'scale'");
       }
       const std::string mode = mode_value.as<std::string>();
       if (mode == "scale") {
         scale_mode = true;
       } else if (mode != "midi") {
-        throw WasmRangeError("unknown pitch correction mode");
+        throw WasmRangeError("unknown pitch correction targetMode");
       }
     }
     target_midi = floatProperty(options, "targetMidi", target_midi);
@@ -267,7 +271,7 @@ val js_pitch_correct_timevarying(val samples, const val& sample_rate_val, val f0
     }
     config.scale.mode_mask = static_cast<uint16_t>(scale_mode_mask);
     config.scale.reference_midi =
-        floatProperty(options, "referenceMidi", config.scale.reference_midi);
+        floatProperty(options, "scaleReferenceMidi", config.scale.reference_midi);
     config.retune_amount = floatProperty(options, "retuneAmount", config.retune_amount);
     config.max_correction_semitones =
         floatProperty(options, "maxCorrectionSemitones", config.max_correction_semitones);
@@ -305,11 +309,14 @@ val js_auto_tune(val samples, const val& sample_rate_val, const val& key_val, va
     named = Key{static_cast<PitchClass>(root), modeFromVal(key_val["mode"], "key.mode"), 1.0f};
   }
 
+  refuseUnknownKeys(options, "autoTune",
+                    {"strength", "scaleReferenceMidi", "maxCorrectionSemitones", "retuneSpeedMs",
+                     "vibratoThresholdCents"});
   editing::pitch_editor::PitchCorrectionConfig config{};
   if (!options.isUndefined() && !options.isNull()) {
     config.retune_amount = floatProperty(options, "strength", config.retune_amount);
     config.scale.reference_midi =
-        floatProperty(options, "referenceMidi", config.scale.reference_midi);
+        floatProperty(options, "scaleReferenceMidi", config.scale.reference_midi);
     config.max_correction_semitones =
         floatProperty(options, "maxCorrectionSemitones", config.max_correction_semitones);
     config.retune_speed_ms = floatProperty(options, "retuneSpeedMs", config.retune_speed_ms);

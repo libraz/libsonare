@@ -320,18 +320,24 @@ Napi::Value SonareWrap::PitchCorrectTimevarying(const Napi::CallbackInfo& info) 
   const float* prob_ptr = nullptr;
   if (info.Length() > 4 && info[4].IsObject()) {
     Napi::Object opts = info[4].As<Napi::Object>();
-    const Napi::Value mode_value = opts.Get("mode");
+    sonare_node::RefuseUnknownKeys(
+        opts, "pitchCorrectTimevarying",
+        {"targetMode", "targetMidi", "scaleRoot", "scaleModeMask", "scaleReferenceMidi",
+         "retuneAmount", "maxCorrectionSemitones", "retuneSpeedMs", "vibratoThresholdCents",
+         "voiced", "voicedProb"});
+    const Napi::Value mode_value = opts.Get("targetMode");
     if (!mode_value.IsUndefined() && !mode_value.IsNull()) {
       if (!mode_value.IsString()) {
-        Napi::TypeError::New(env, "pitch correction mode must be 'midi' or 'scale'")
+        Napi::TypeError::New(env, "pitch correction targetMode must be 'midi' or 'scale'")
             .ThrowAsJavaScriptException();
         return env.Undefined();
       }
-      std::string mode = node_narrow_string(env, mode_value, "mode");
+      std::string mode = node_narrow_string(env, mode_value, "targetMode");
       if (mode == "scale") {
         config.target_mode = SONARE_PITCH_TARGET_SCALE;
       } else if (mode != "midi") {
-        Napi::RangeError::New(env, "unknown pitch correction mode").ThrowAsJavaScriptException();
+        Napi::RangeError::New(env, "unknown pitch correction targetMode")
+            .ThrowAsJavaScriptException();
         return env.Undefined();
       }
     }
@@ -352,7 +358,7 @@ Napi::Value SonareWrap::PitchCorrectTimevarying(const Napi::CallbackInfo& info) 
           sonare_node::Uint32Property(opts, "scaleModeMask", config.scale_mode_mask);
     }
     config.scale_reference_midi =
-        sonare_node::FloatProperty(opts, "referenceMidi", config.scale_reference_midi);
+        sonare_node::FloatProperty(opts, "scaleReferenceMidi", config.scale_reference_midi);
     config.retune_amount = sonare_node::FloatProperty(opts, "retuneAmount", config.retune_amount);
     config.max_correction_semitones =
         sonare_node::FloatProperty(opts, "maxCorrectionSemitones", config.max_correction_semitones);
@@ -428,9 +434,12 @@ Napi::Value SonareWrap::AutoTune(const Napi::CallbackInfo& info) {
   sonare_pitch_correction_config_default(&config);
   if (info.Length() > 3 && info[3].IsObject()) {
     const Napi::Object opts = info[3].As<Napi::Object>();
+    sonare_node::RefuseUnknownKeys(opts, "autoTune",
+                                   {"strength", "scaleReferenceMidi", "maxCorrectionSemitones",
+                                    "retuneSpeedMs", "vibratoThresholdCents"});
     config.retune_amount = sonare_node::FloatProperty(opts, "strength", config.retune_amount);
     config.scale_reference_midi =
-        sonare_node::FloatProperty(opts, "referenceMidi", config.scale_reference_midi);
+        sonare_node::FloatProperty(opts, "scaleReferenceMidi", config.scale_reference_midi);
     config.max_correction_semitones =
         sonare_node::FloatProperty(opts, "maxCorrectionSemitones", config.max_correction_semitones);
     config.retune_speed_ms =

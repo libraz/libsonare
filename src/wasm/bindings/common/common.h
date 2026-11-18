@@ -356,6 +356,12 @@ std::vector<int32_t> int32ArrayToVector(val arr);
 std::vector<uint8_t> uint8ArrayToVector(val arr);
 bool hasProperty(val object, const char* key);
 val objectProperty(val object, const char* key);
+/// @brief Refuses an own enumerable key of @p object that is in neither @p allowed nor
+///        @p extra, so a renamed key cannot be silently read as absent.
+/// @details An absent or non-object @p object is left to the property readers.
+/// @throws WasmTypeError naming @p subject and the key.
+void refuseUnknownKeys(val object, const char* subject, const std::vector<const char*>& allowed,
+                       std::initializer_list<const char*> extra = {});
 /// @brief Presence- AND type-checked float reader: an absent field -- omitted,
 ///        `undefined` or `null` -- takes @p default_value, a present one must be
 ///        a JS number validated by @ref checkedFloatFromVal.

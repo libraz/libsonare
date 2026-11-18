@@ -70,7 +70,7 @@ bool validate_realtime_voice_changer_config(const RealtimeVoiceChangerConfig& co
     ok = false;
     if (error) {
       char text[160];
-      std::snprintf(text, sizeof(text), "retune.grainSize out of range [0, %d], got %d",
+      std::snprintf(text, sizeof(text), "retune.grainSizeSamples out of range [0, %d], got %d",
                     kMaxRetuneGrainSize, config.retune.grain_size);
       *error = text;
     }

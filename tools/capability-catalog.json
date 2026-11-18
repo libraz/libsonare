@@ -1234,18 +1234,18 @@
       "singing-voice"
     ],
     "voiceChanger": [
-      "neutral-monitor",
-      "bright-idol",
-      "soft-whisper",
-      "deep-narrator",
-      "robot-mascot",
-      "dark-villain",
-      "hard-tune",
-      "robot-monotone",
-      "choir-harmony",
-      "vocoder-strings",
+      "neutralMonitor",
+      "brightIdol",
+      "softWhisper",
+      "deepNarrator",
+      "robotMascot",
+      "darkVillain",
+      "hardTune",
+      "robotMonotone",
+      "choirHarmony",
+      "vocoderStrings",
       "megaphone",
-      "radio-voice"
+      "radioVoice"
     ]
   },
   "processors": [

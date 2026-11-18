@@ -256,10 +256,10 @@ TEST_CASE("RealtimeVoiceChanger C API interleaved stereo process", "[voice_chang
   constexpr int sample_rate = 48000;
   constexpr int block = 256;
 
-  // Use bright-idol which has reverb mix > 0 so L/R diverge via per-channel seed.
+  // Use brightIdol which has reverb mix > 0 so L/R diverge via per-channel seed.
   SonareRealtimeVoiceChanger* handle = nullptr;
-  REQUIRE(sonare_realtime_voice_changer_create_json("bright-idol", sample_rate, block, 2,
-                                                    &handle) == SONARE_OK);
+  REQUIRE(sonare_realtime_voice_changer_create_json("brightIdol", sample_rate, block, 2, &handle) ==
+          SONARE_OK);
   REQUIRE(handle != nullptr);
 
   // Build interleaved (L,R,L,R,...) sine at -12 dBFS.
@@ -282,7 +282,7 @@ TEST_CASE("RealtimeVoiceChanger C API interleaved stereo process", "[voice_chang
   // Output has the same length as input.
   REQUIRE(output.size() == input.size());
 
-  // L and R channels must not be bit-identical: bright-idol has reverb.mix > 0,
+  // L and R channels must not be bit-identical: brightIdol has reverb.mix > 0,
   // and per-channel seeds decorrelate the reverb tails across channels.
   // We allow them to match for the very first block (no tail yet), but check
   // that the block as a whole is not byte-for-byte identical.

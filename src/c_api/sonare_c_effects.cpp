@@ -188,15 +188,16 @@ SonareError sonare_time_stretch_ex(const float* samples, size_t length, int samp
 }
 
 SonareError sonare_pitch_shift(const float* samples, size_t length, int sample_rate,
-                               float semitones, float** out, size_t* out_length) {
+                               float pitch_semitones, float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
   if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
-  return sonare_pitch_shift_ex(samples, length, sample_rate, semitones, constants::kDefaultNFft,
-                               constants::kDefaultHopLength, out, out_length);
+  return sonare_pitch_shift_ex(samples, length, sample_rate, pitch_semitones,
+                               constants::kDefaultNFft, constants::kDefaultHopLength, out,
+                               out_length);
 }
 
 SonareError sonare_pitch_shift_ex(const float* samples, size_t length, int sample_rate,
-                                  float semitones, int n_fft, int hop_length, float** out,
+                                  float pitch_semitones, int n_fft, int hop_length, float** out,
                                   size_t* out_length) {
   SONARE_C_API_ENTRY;
   if (out != nullptr) *out = nullptr;
@@ -205,7 +206,7 @@ SonareError sonare_pitch_shift_ex(const float* samples, size_t length, int sampl
   if (n_fft <= 0 || hop_length <= 0) return SONARE_ERROR_INVALID_PARAMETER;
 
   PitchShiftPlan plan;
-  if (!make_pitch_shift_plan(length, sample_rate, semitones, &plan)) {
+  if (!make_pitch_shift_plan(length, sample_rate, pitch_semitones, &plan)) {
     set_last_error_static(SONARE_ERROR_INVALID_PARAMETER, kPitchShiftPlanError);
     return SONARE_ERROR_INVALID_PARAMETER;
   }
@@ -214,9 +215,10 @@ SonareError sonare_pitch_shift_ex(const float* samples, size_t length, int sampl
   config.n_fft = n_fft;
   config.hop_length = hop_length;
   config.backend = StretchBackend::NativeSpectral;
-  return run_mono_offline(
-      samples, length, sample_rate, out, out_length,
-      [semitones, config](const Audio& a) { return pitch_shift(a, semitones, config); });
+  return run_mono_offline(samples, length, sample_rate, out, out_length,
+                          [pitch_semitones, config](const Audio& a) {
+                            return pitch_shift(a, pitch_semitones, config);
+                          });
 }
 
 SonareError sonare_normalize(const float* samples, size_t length, int sample_rate, float target_db,

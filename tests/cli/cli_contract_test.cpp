@@ -1192,7 +1192,7 @@ TEST_CASE("CLI applies every repeated --set assignment, not just the last",
 
   auto [code, output] =
       exec_command(CLI + " voice-preset-validate " + preset_path +
-                   " --set dsp.retune.semitones=-9.375 --set dsp.formant.factor=1.5");
+                   " --set dsp.retune.pitchSemitones=-9.375 --set dsp.formant.factor=1.5");
   std::remove(preset_path.c_str());
   REQUIRE(code == 0);
   // Both assignments must land in the normalized config. The first (-9.375) is the
@@ -1251,7 +1251,8 @@ TEST_CASE("CLI --set applies identically on either side of the command word",
   auto [gen_code, gen_output] = exec_command(CLI + " voice-preset > " + preset_path);
   REQUIRE(gen_code == 0);
 
-  const std::string assignments = " --set dsp.retune.semitones=-9.375 --set dsp.formant.factor=1.5";
+  const std::string assignments =
+      " --set dsp.retune.pitchSemitones=-9.375 --set dsp.formant.factor=1.5";
   auto [trailing_code, trailing_output] =
       exec_command(CLI + " voice-preset-validate " + preset_path + assignments + " --json");
   auto [leading_code, leading_output] =
@@ -1288,10 +1289,10 @@ TEST_CASE("CLI --set delivers a JSON value that contains commas intact",
                                        " --set 'macros={\"pitch\":3,\"brightness\":0.75}' --json");
     REQUIRE(code == 0);
     REQUIRE_THAT(output, ContainsSubstring("Adds warmth, presence, and air"));
-    // Both members of the object have to arrive: pitch drives retune.semitones
+    // Both members of the object have to arrive: pitch drives retune.pitchSemitones
     // and brightness 0.75 drives presenceDb +3, so either one alone would leave
     // the other at its fixture value.
-    REQUIRE_THAT(output, ContainsSubstring("\\\"semitones\\\":3"));
+    REQUIRE_THAT(output, ContainsSubstring("\\\"pitchSemitones\\\":3"));
     REQUIRE_THAT(output, ContainsSubstring("\\\"presenceDb\\\":3"));
   }
 
@@ -1320,7 +1321,7 @@ TEST_CASE("CLI voice-preset-validate rejects an invalid preset document",
   REQUIRE(input.good());
   const std::string baseline((std::istreambuf_iterator<char>(input)),
                              std::istreambuf_iterator<char>());
-  const std::string needle = "\"schemaVersion\":2";
+  const std::string needle = "\"schemaVersion\":3";
   const auto version = baseline.find(needle);
   REQUIRE(version != std::string::npos);
   {

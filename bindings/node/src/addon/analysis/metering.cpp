@@ -479,7 +479,7 @@ bool ParseScaleArgs(const Napi::CallbackInfo& info, int* root, uint16_t* mode_ma
   }
   *mode_mask = static_cast<uint16_t>(mask_int);
   *midi = node_narrow_finite_float(info.Env(), info[2], "midi");
-  return OptionalFiniteFloatArg(info.Env(), info, 3, "referenceMidi", 0.0f, reference_midi);
+  return OptionalFiniteFloatArg(info.Env(), info, 3, "scaleReferenceMidi", 0.0f, reference_midi);
 }
 
 }  // namespace
@@ -493,7 +493,8 @@ Napi::Value SonareWrap::ScaleQuantizeMidi(const Napi::CallbackInfo& info) {
   float midi = 0.0f;
   if (!ParseScaleArgs(info, &root, &mask, &ref, &midi)) {
     if (env.IsExceptionPending()) return env.Undefined();
-    Napi::TypeError::New(env, "scaleQuantizeMidi: expected (root, modeMask, midi, referenceMidi?)")
+    Napi::TypeError::New(env,
+                         "scaleQuantizeMidi: expected (root, modeMask, midi, scaleReferenceMidi?)")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
@@ -536,7 +537,7 @@ Napi::Value SonareWrap::ScaleCorrectionSemitones(const Napi::CallbackInfo& info)
   if (!ParseScaleArgs(info, &root, &mask, &ref, &midi)) {
     if (env.IsExceptionPending()) return env.Undefined();
     Napi::TypeError::New(
-        env, "scaleCorrectionSemitones: expected (root, modeMask, midi, referenceMidi?)")
+        env, "scaleCorrectionSemitones: expected (root, modeMask, midi, scaleReferenceMidi?)")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }

@@ -59,6 +59,22 @@ TEST_CASE("CLI DAW editing commands", "[cli]") {
     REQUIRE_THAT(output, ContainsSubstring("formant factor must be in [0.55, 1.65]"));
   }
 
+  SECTION("voice presets are named in kebab-case on the command line") {
+    auto [list_code, list] = exec_command(CLI + " voice-presets --json");
+    REQUIRE(list_code == 0);
+    REQUIRE_THAT(list, ContainsSubstring("\"neutral-monitor\""));
+    REQUIRE_THAT(list, ContainsSubstring("\"hard-tune\""));
+    REQUIRE_THAT(list, !ContainsSubstring("neutralMonitor"));
+
+    auto [code, output] = exec_command(CLI + " voice-preset --preset hard-tune");
+    REQUIRE(code == 0);
+    REQUIRE_THAT(output, ContainsSubstring("\"id\":\"hardTune\""));
+
+    auto [camel_code, camel] = exec_command(CLI + " voice-preset --preset hardTune");
+    REQUIRE(camel_code == 3);
+    REQUIRE_THAT(camel, ContainsSubstring("expected one of: neutral-monitor"));
+  }
+
   SECTION("voice-change preset rejects simple knob conflicts") {
     auto [code, output] = exec_command(
         CLI + " voice-change --preset neutral-monitor --pitch-semitones 5 --formant-factor 1.1 " +

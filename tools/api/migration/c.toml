@@ -774,3 +774,168 @@ changed = "writes a SonareTrimSilenceResult (samples, length and the pass's repo
 domain = "effects"
 rule = "typed-results"
 test = "tests/api/sonare_c_mastering_repair_test.cpp::mono repair returns its report beside the audio"
+
+
+[[entry]]
+kind = "field"
+old = "SonareRealtimeVoiceChangerConfig.voice_engine_engine"
+new = "SonareRealtimeVoiceChangerConfig.voice_engine"
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "SonareRealtimeVoiceChangerConfig.reverb_variation_variation"
+new = "SonareRealtimeVoiceChangerConfig.reverb_variation"
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "SonareRealtimeVoiceChangerConfig.eq_highpass_hz"
+new = "SonareRealtimeVoiceChangerConfig.eq_high_pass_hz"
+domain = "effects"
+rule = "high-pass"
+
+[[entry]]
+kind = "field"
+old = "SonareRealtimeVoiceChangerConfig.retune_semitones"
+new = "SonareRealtimeVoiceChangerConfig.retune_pitch_semitones"
+domain = "effects"
+rule = "pitch-semitones"
+
+[[entry]]
+kind = "field"
+old = "SonareRealtimeVoiceChangerConfig.retune_grain_size"
+new = "SonareRealtimeVoiceChangerConfig.retune_grain_size_samples"
+domain = "effects"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "option"
+old = "sonare_streaming_retune_create(semitones)"
+new = "sonare_streaming_retune_create(pitch_semitones)"
+domain = "effects"
+rule = "pitch-semitones"
+
+[[entry]]
+kind = "option"
+old = "sonare_streaming_retune_create(grain_size)"
+new = "sonare_streaming_retune_create(grain_size_samples)"
+domain = "effects"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "option"
+old = "sonare_streaming_retune_set_config(semitones)"
+new = "sonare_streaming_retune_set_config(pitch_semitones)"
+domain = "effects"
+rule = "pitch-semitones"
+
+[[entry]]
+kind = "option"
+old = "sonare_streaming_retune_set_config(grain_size)"
+new = "sonare_streaming_retune_set_config(grain_size_samples)"
+domain = "effects"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "option"
+old = "sonare_streaming_retune_config(out_semitones)"
+new = "sonare_streaming_retune_config(out_pitch_semitones)"
+domain = "effects"
+rule = "pitch-semitones"
+
+[[entry]]
+kind = "option"
+old = "sonare_streaming_retune_config(out_grain_size)"
+new = "sonare_streaming_retune_config(out_grain_size_samples)"
+domain = "effects"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "function"
+old = "sonare_streaming_retune_grain_size"
+new = "sonare_streaming_retune_grain_size_samples"
+domain = "effects"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "option"
+old = "sonare_pitch_shift(semitones)"
+new = "sonare_pitch_shift(pitch_semitones)"
+domain = "effects"
+rule = "pitch-semitones"
+
+[[entry]]
+kind = "option"
+old = "sonare_pitch_shift_ex(semitones)"
+new = "sonare_pitch_shift_ex(pitch_semitones)"
+domain = "effects"
+rule = "pitch-semitones"
+
+[[entry]]
+kind = "option"
+old = "sonare_scale_quantize_midi(reference_midi)"
+new = "sonare_scale_quantize_midi(scale_reference_midi)"
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "option"
+old = "sonare_scale_correction_semitones(reference_midi)"
+new = "sonare_scale_correction_semitones(scale_reference_midi)"
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "SonareRirSynthConfig.max_seconds"
+new = "SonareRirSynthConfig.max_sec"
+domain = "effects"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "SonareRoomMorphConfig.max_seconds"
+new = "SonareRoomMorphConfig.max_sec"
+domain = "effects"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "SonareDeclipConfig.clip_threshold"
+new = "SonareDeclipConfig.clip_threshold_db"
+domain = "mastering"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "SonareTrimSilenceConfig.threshold"
+new = "SonareTrimSilenceConfig.threshold_db"
+domain = "mastering"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "function"
+old = "sonare_project_fade_curve_from_name"
+changed = "accepts exactly linear, equalPower, exponential and logarithmic; case and separator variants and the exp / log abbreviations are refused with SONARE_ERROR_INVALID_PARAMETER"
+domain = "project"
+rule = "token-case"
+test = "tests/arrangement/c_abi_edit_ops_test.cpp::C-ABI resolves canonical clip fade curve names"
+
+[[entry]]
+kind = "export"
+old = "SONARE_REALTIME_VOICE_CHANGER_PRESET_IDS"
+changed = "lists the built-in preset ids in lowerCamel (neutralMonitor, brightIdol, ...); the kebab ids are accepted only inside a version 1 or 2 preset document"
+domain = "effects"
+rule = "token-case"
+test = "tests/editing/voice_changer_preset_capi_test.cpp::Voice preset metadata table is consistent across surfaces"
+
+[[entry]]
+kind = "function"
+old = "sonare_acoustic_mode_name"
+changed = "names the impulse-response mode impulseResponse instead of impulse_response"
+domain = "effects"
+rule = "token-case"
+test = "tests/api/sonare_c_acoustic_test.cpp::sonare acoustic C API names its material presets and modes"

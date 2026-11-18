@@ -162,14 +162,14 @@ def cmd_synthesize_rir(args: argparse.Namespace) -> int:
             sample_rate=args.sample_rate,
             ism_order=args.ism_order,
             seed=args.seed,
-            max_seconds=args.max_seconds,
+            max_sec=args.max_seconds or None,
             prefer_eyring=not args.sabine,
         )
     except SonareError as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1 if _legacy_exit_codes() else EXIT_INVALID_PARAMETER
     # Warnings survive a successful synthesis and describe a RIR the caller did
-    # not ask for -- a tail cut against max_seconds, a cap raised to fit the
+    # not ask for -- a tail cut against max_sec, a cap raised to fit the
     # direct sound, a request reduced to early reflections alone. Dropping them
     # made a truncated RIR indistinguishable from a complete one. They go to
     # stderr in every mode so the JSON document on stdout stays exactly the
@@ -218,7 +218,7 @@ def cmd_room_morph(args: argparse.Namespace) -> int:
         "wet": args.wet,
         "ism_order": args.ism_order,
         "seed": args.seed,
-        "max_seconds": args.max_seconds,
+        "max_sec": args.max_seconds or None,
         "prefer_eyring": not args.sabine,
     }
     geometry = (args.length, args.width, args.height)

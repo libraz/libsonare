@@ -53,7 +53,7 @@ TEST_CASE("RealtimeVoiceChanger preset JSON is tolerant and clamps values", "[vo
   REQUIRE(roundtrip.retune.semitones == config.retune.semitones);
 
   REQUIRE(realtime_voice_changer_preset_names().size() == 12);
-  REQUIRE_NOTHROW(realtime_voice_changer_config_from_json("bright-idol"));
+  REQUIRE_NOTHROW(realtime_voice_changer_config_from_json("brightIdol"));
 
   std::string normalized;
   std::string error;
@@ -106,10 +106,10 @@ TEST_CASE("RealtimeVoiceChanger macro-only preset changes rendered audio", "[voi
 TEST_CASE("RealtimeVoiceChanger parser expands every flat POD field", "[voice_changer]") {
   const std::string flat_pod_json = R"json({
     "inputGainDb": 1, "outputGainDb": -2, "wetMix": 0.75,
-    "retuneSemitones": 3, "retuneMix": 0.5, "retuneGrainSize": 128,
+    "retunePitchSemitones": 3, "retuneMix": 0.5, "retuneGrainSizeSamples": 128,
     "formantFactor": 1.1, "formantAmount": 0.2, "formantBody": -0.1,
     "formantBrightness": 0.3, "formantNasal": 0.4,
-    "eqHighpassHz": 100, "eqBodyDb": 1, "eqPresenceDb": 2, "eqAirDb": 3,
+    "eqHighPassHz": 100, "eqBodyDb": 1, "eqPresenceDb": 2, "eqAirDb": 3,
     "gateThresholdDb": -45, "gateAttackMs": 2, "gateReleaseMs": 30, "gateRangeDb": 20,
     "compressorThresholdDb": -24, "compressorRatio": 3, "compressorAttackMs": 5,
     "compressorReleaseMs": 80, "compressorMakeupGainDb": 2,
@@ -185,7 +185,7 @@ TEST_CASE("RealtimeVoiceChanger C API handle lifecycle works", "[voice_changer]"
           R"json({"schemaVersion":1,"id":"partial","name":"Partial","dsp":{"retune":{"semitones":3}}})json",
           48000, 128, 1, &handle) == SONARE_ERROR_INVALID_FORMAT);
   REQUIRE(handle == nullptr);
-  REQUIRE(sonare_realtime_voice_changer_create_json("bright-idol", 48000, 128, 1, &handle) ==
+  REQUIRE(sonare_realtime_voice_changer_create_json("brightIdol", 48000, 128, 1, &handle) ==
           SONARE_OK);
   REQUIRE(handle != nullptr);
 
@@ -203,11 +203,11 @@ TEST_CASE("RealtimeVoiceChanger C API handle lifecycle works", "[voice_changer]"
           handle,
           R"json({"schemaVersion":1,"id":"partial","name":"Partial","dsp":{"retune":{"semitones":3}}})json") ==
       SONARE_ERROR_INVALID_FORMAT);
-  REQUIRE(sonare_realtime_voice_changer_set_config_json(handle, "deep-narrator") == SONARE_OK);
+  REQUIRE(sonare_realtime_voice_changer_set_config_json(handle, "deepNarrator") == SONARE_OK);
   REQUIRE(sonare_realtime_voice_changer_reset(handle) == SONARE_OK);
 
   char* json = nullptr;
-  REQUIRE(sonare_realtime_voice_changer_preset_json("soft-whisper", &json) == SONARE_OK);
+  REQUIRE(sonare_realtime_voice_changer_preset_json("softWhisper", &json) == SONARE_OK);
   REQUIRE(json != nullptr);
   sonare_free_string(json);
 
@@ -260,12 +260,12 @@ TEST_CASE("sonare_realtime_voice_changer_create_json refuses config exceeding th
 
   // An ordinary preset id still creates a handle, so the refusal above is the
   // size and not some other change to config handling.
-  REQUIRE(sonare_realtime_voice_changer_create_json("bright-idol", 48000, 128, 1, &handle) ==
+  REQUIRE(sonare_realtime_voice_changer_create_json("brightIdol", 48000, 128, 1, &handle) ==
           SONARE_OK);
   REQUIRE(handle != nullptr);
   REQUIRE(sonare_realtime_voice_changer_set_config_json(handle, oversized.c_str()) ==
           SONARE_ERROR_INVALID_FORMAT);
-  REQUIRE(sonare_realtime_voice_changer_set_config_json(handle, "deep-narrator") == SONARE_OK);
+  REQUIRE(sonare_realtime_voice_changer_set_config_json(handle, "deepNarrator") == SONARE_OK);
   sonare_realtime_voice_changer_destroy(handle);
 }
 
@@ -379,7 +379,7 @@ TEST_CASE("RealtimeVoiceChanger preset JSON exposes human-readable names", "[voi
   const std::string bright_json =
       realtime_voice_changer_preset_json(VoiceCharacterPreset::BrightIdol);
   // The display name should not equal the kebab id.
-  REQUIRE(bright_json.find("\"id\":\"bright-idol\"") != std::string::npos);
+  REQUIRE(bright_json.find("\"id\":\"brightIdol\"") != std::string::npos);
   REQUIRE(bright_json.find("\"name\":\"Bright Idol\"") != std::string::npos);
 
   const std::string robot_json =
@@ -499,7 +499,7 @@ TEST_CASE("validate_realtime_voice_changer_config refuses finite out-of-range va
   std::string error;
   RealtimeVoiceChangerConfig normalized;
   REQUIRE_FALSE(validate_realtime_voice_changer_config(config, &normalized, &error));
-  REQUIRE(error == "retune.semitones out of range [-24, 24], got 1000");
+  REQUIRE(error == "retune.pitchSemitones out of range [-24, 24], got 1000");
 
   config = {};
   config.formant.factor = 3.0f;
@@ -514,7 +514,7 @@ TEST_CASE("validate_realtime_voice_changer_config refuses finite out-of-range va
   config = {};
   config.retune.grain_size = 100000;
   REQUIRE_FALSE(validate_realtime_voice_changer_config(config, &normalized, &error));
-  REQUIRE(error.find("retune.grainSize out of range") != std::string::npos);
+  REQUIRE(error.find("retune.grainSizeSamples out of range") != std::string::npos);
 
   config = {};
   config.formant_mode = static_cast<FormantMode>(7);
@@ -560,9 +560,9 @@ TEST_CASE("realtime_voice_changer_config_from_input refuses an out-of-range flat
   RealtimeVoiceChangerConfig parsed;
   std::string error;
   // A flat POD built from the neutral preset with one field pushed out of range.
-  const std::string flat = R"({"inputGainDb":0,"outputGainDb":0,"wetMix":1,"retuneSemitones":0,
-    "retuneMix":1,"retuneGrainSize":0,"formantFactor":3,"formantAmount":1,"formantBody":0,
-    "formantBrightness":0,"formantNasal":0,"eqHighpassHz":80,"eqBodyDb":0,"eqPresenceDb":1,
+  const std::string flat = R"({"inputGainDb":0,"outputGainDb":0,"wetMix":1,"retunePitchSemitones":0,
+    "retuneMix":1,"retuneGrainSizeSamples":0,"formantFactor":3,"formantAmount":1,"formantBody":0,
+    "formantBrightness":0,"formantNasal":0,"eqHighPassHz":80,"eqBodyDb":0,"eqPresenceDb":1,
     "eqAirDb":0,"gateThresholdDb":-55,"gateAttackMs":2,"gateReleaseMs":100,"gateRangeDb":18,
     "compressorThresholdDb":-22,"compressorRatio":2.5,"compressorAttackMs":6,
     "compressorReleaseMs":90,"compressorMakeupGainDb":1,"deesserFrequencyHz":7200,

@@ -374,20 +374,21 @@ void sonare_free_stream_frames_i16(SonareStreamFramesI16* frames);
 typedef struct SonareStreamingRetune SonareStreamingRetune;
 
 /// @brief Creates a streaming retune stage. Returns NULL on allocation failure
-///        or for a non-finite @p semitones / @p mix.
-/// @param semitones Pitch shift in semitones. Finite; the core clamps the
+///        or for a non-finite @p pitch_semitones / @p mix.
+/// @param pitch_semitones Pitch shift in semitones. Finite; the core clamps the
 ///        applied value to +/- 24. A non-finite value is REJECTED (NULL), not
 ///        substituted, so a NaN reaching the control cannot pass as a request.
 /// @param mix Dry/wet blend. Finite; the core clamps the applied value to
 ///        [0, 1]. A non-finite value is REJECTED.
-/// @param grain_size Grain length in samples, or 0 to derive roughly a 46 ms
+/// @param grain_size_samples Grain length in samples, or 0 to derive roughly a 46 ms
 ///        grain from the sample rate at prepare() time. Structural: it takes
 ///        effect at the NEXT prepare(), and re-preparing at a different sample
 ///        rate re-derives it when it is 0. Values above the 8192 ceiling are
 ///        clamped by the core.
 /// @details The caller owns the handle and must release it with
 ///        @ref sonare_streaming_retune_destroy, which is what invalidates it; no other call does.
-SonareStreamingRetune* sonare_streaming_retune_create(float semitones, float mix, int grain_size);
+SonareStreamingRetune* sonare_streaming_retune_create(float pitch_semitones, float mix,
+                                                      int grain_size_samples);
 
 /// @brief Destroys a streaming retune stage. NULL is a no-op.
 void sonare_streaming_retune_destroy(SonareStreamingRetune* retune);
@@ -403,17 +404,18 @@ SonareError sonare_streaming_retune_prepare(SonareStreamingRetune* retune, doubl
 ///        SONARE_ERROR_INVALID_PARAMETER.
 SonareError sonare_streaming_retune_reset(SonareStreamingRetune* retune);
 
-/// @brief Updates the live controls. @p grain_size is remembered but only
+/// @brief Updates the live controls. @p grain_size_samples is remembered but only
 ///        applied by the next prepare() (see create); the value reported back by
-///        sonare_streaming_retune_grain_size stays the effective one until then.
+///        sonare_streaming_retune_grain_size_samples stays the effective one until then.
 /// @return SONARE_ERROR_INVALID_PARAMETER for a NULL handle or a non-finite
-///         @p semitones / @p mix.
-SonareError sonare_streaming_retune_set_config(SonareStreamingRetune* retune, float semitones,
-                                               float mix, int grain_size);
+///         @p pitch_semitones / @p mix.
+SonareError sonare_streaming_retune_set_config(SonareStreamingRetune* retune, float pitch_semitones,
+                                               float mix, int grain_size_samples);
 
 /// @brief Reads the currently applied controls. Any out pointer may be NULL.
-SonareError sonare_streaming_retune_config(SonareStreamingRetune* retune, float* out_semitones,
-                                           float* out_mix, int* out_grain_size);
+SonareError sonare_streaming_retune_config(SonareStreamingRetune* retune,
+                                           float* out_pitch_semitones, float* out_mix,
+                                           int* out_grain_size_samples);
 
 /// @brief Processes one mono block in place.
 /// @details @p samples is read and overwritten with the retuned output.
@@ -428,7 +430,8 @@ SonareError sonare_streaming_retune_process_mono(SonareStreamingRetune* retune, 
                                                  size_t num_samples);
 
 /// @brief Effective grain length in samples, 0 before prepare().
-SonareError sonare_streaming_retune_grain_size(SonareStreamingRetune* retune, int* out_grain_size);
+SonareError sonare_streaming_retune_grain_size_samples(SonareStreamingRetune* retune,
+                                                       int* out_grain_size_samples);
 
 /// @brief Fixed overlap-add latency in samples (one grain), 0 before prepare().
 SonareError sonare_streaming_retune_latency_samples(SonareStreamingRetune* retune,

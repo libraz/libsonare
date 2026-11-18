@@ -197,7 +197,7 @@ val js_mastering_dynamics_transient_shaper(val samples, const val& sample_rate_v
 namespace {
 
 editing::pitch_editor::ScaleQuantizerConfig makeScaleConfig(int root, int mode_mask,
-                                                            float reference_midi) {
+                                                            float scale_reference_midi) {
   if (root < 0 || root > 11) {
     throw WasmRangeError("scaleQuantizer: root must be in [0, 11]");
   }
@@ -210,9 +210,9 @@ editing::pitch_editor::ScaleQuantizerConfig makeScaleConfig(int root, int mode_m
   editing::pitch_editor::ScaleQuantizerConfig cfg;
   cfg.root = root;
   cfg.mode_mask = static_cast<uint16_t>(mode_mask);
-  cfg.reference_midi = ZeroIsDefault(reference_midi)
+  cfg.reference_midi = ZeroIsDefault(scale_reference_midi)
                            .checked(cfg.reference_midi, 0.0f,
-                                    editing::pitch_editor::kMaxReferenceMidi, "reference_midi");
+                                    editing::pitch_editor::kMaxReferenceMidi, "scaleReferenceMidi");
   return cfg;
 }
 
@@ -228,7 +228,7 @@ int js_scale_mask_for_mode(const val& root_val, const val& mode_val) {
 
 float js_scale_quantize_midi(const val& root, const val& mode_mask, const val& midi,
                              const val& reference_midi_val) {
-  const float reference_midi = checkedFloatFromVal(reference_midi_val, "referenceMidi");
+  const float reference_midi = checkedFloatFromVal(reference_midi_val, "scaleReferenceMidi");
   editing::pitch_editor::ScaleQuantizer q(makeScaleConfig(
       checkedIntFromVal(root, "root"), checkedIntFromVal(mode_mask, "modeMask"), reference_midi));
   return q.quantize_midi(checkedFloatFromVal(midi, "midi"));
@@ -236,7 +236,7 @@ float js_scale_quantize_midi(const val& root, const val& mode_mask, const val& m
 
 float js_scale_correction_semitones(const val& root, const val& mode_mask, const val& midi,
                                     const val& reference_midi_val) {
-  const float reference_midi = checkedFloatFromVal(reference_midi_val, "referenceMidi");
+  const float reference_midi = checkedFloatFromVal(reference_midi_val, "scaleReferenceMidi");
   editing::pitch_editor::ScaleQuantizer q(makeScaleConfig(
       checkedIntFromVal(root, "root"), checkedIntFromVal(mode_mask, "modeMask"), reference_midi));
   return q.correction_semitones(checkedFloatFromVal(midi, "midi"));

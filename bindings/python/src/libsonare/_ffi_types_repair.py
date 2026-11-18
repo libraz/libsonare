@@ -204,7 +204,7 @@ class SonareDeclipConfig(CStruct):
     """Maps to SonareDeclipConfig in sonare_c.h."""
 
     _fields_ = [
-        ("clip_threshold", ctypes.c_float),
+        ("clip_threshold_db", ctypes.c_float),
         ("lpc_order", ctypes.c_int),
         ("iterations", ctypes.c_int),
         ("lpc_blend", ctypes.c_float),
@@ -462,7 +462,7 @@ class SonareTrimSilenceConfig(CStruct):
     """Maps to SonareTrimSilenceConfig in sonare_c.h."""
 
     _fields_ = [
-        ("threshold", ctypes.c_float),
+        ("threshold_db", ctypes.c_float),
         ("padding_samples", ctypes.c_size_t),
         ("mode", ctypes.c_int),
         ("gate_lufs", ctypes.c_float),

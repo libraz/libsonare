@@ -22,7 +22,7 @@ namespace sonare_node {
 namespace {
 
 std::string JsonTextFromJs(const Napi::Value& value) {
-  if (value.IsUndefined() || value.IsNull()) return "neutral-monitor";
+  if (value.IsUndefined() || value.IsNull()) return "neutralMonitor";
   if (value.IsString()) return node_narrow_string(value.Env(), value, "config");
   Napi::Env env = value.Env();
   Napi::Object json = env.Global().Get("JSON").As<Napi::Object>();
@@ -32,14 +32,14 @@ std::string JsonTextFromJs(const Napi::Value& value) {
 
 /// @brief The one place a refused preset-or-config document is coded.
 /// @details A preset id or nested document is InvalidFormat; the flat POD (recognised by its
-///   `retuneSemitones` key) is a per-call parameter bag and stays InvalidParameter.
+///   `retunePitchSemitones` key) is a per-call parameter bag and stays InvalidParameter.
 sonare::editing::voice_changer::RealtimeVoiceChangerConfig ConfigFromJs(const Napi::Value& value) {
   sonare::editing::voice_changer::RealtimeVoiceChangerConfig config;
   std::string error;
   if (!sonare::editing::voice_changer::realtime_voice_changer_config_from_input(
           JsonTextFromJs(value), &config, &error)) {
     const bool flat_pod =
-        value.IsObject() && !value.As<Napi::Object>().Get("retuneSemitones").IsUndefined();
+        value.IsObject() && !value.As<Napi::Object>().Get("retunePitchSemitones").IsUndefined();
     throw sonare::SonareException(
         flat_pod ? sonare::ErrorCode::InvalidParameter : sonare::ErrorCode::InvalidFormat, error);
   }

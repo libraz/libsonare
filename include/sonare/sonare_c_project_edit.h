@@ -258,9 +258,8 @@ typedef enum SONARE_ENUM_BASE {
 } SonareProjectFadeCurve;
 
 /// @brief Resolves a clip fade-curve name to a @ref SonareProjectFadeCurve
-/// ordinal. Names are ASCII case-insensitive; `-` and `_` are interchangeable.
-/// Accepted names are linear, equal-power/equalpower, exponential/exp, and
-/// logarithmic/log.
+/// ordinal. Accepts exactly linear, equalPower, exponential and logarithmic;
+/// any other spelling is SONARE_ERROR_INVALID_PARAMETER.
 SonareError sonare_project_fade_curve_from_name(const char* name, uint32_t* out_curve);
 
 /// @brief Clip loop-mode ordinals; mirror sonare::arrangement::LoopMode.

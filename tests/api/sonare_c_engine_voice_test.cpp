@@ -198,7 +198,7 @@ TEST_CASE("sonare_voice_change_realtime processes mono and interleaved stereo bu
 
   float* out = nullptr;
   size_t out_length = 0;
-  REQUIRE(sonare_voice_change_realtime(mono.data(), mono.size(), 48000, "neutral-monitor", 1, &out,
+  REQUIRE(sonare_voice_change_realtime(mono.data(), mono.size(), 48000, "neutralMonitor", 1, &out,
                                        &out_length) == SONARE_OK);
   REQUIRE(out != nullptr);
   REQUIRE(out_length == mono.size());
@@ -214,7 +214,7 @@ TEST_CASE("sonare_voice_change_realtime processes mono and interleaved stereo bu
   }
   out = nullptr;
   out_length = 0;
-  REQUIRE(sonare_voice_change_realtime(stereo.data(), stereo.size(), 48000, "soft-whisper", 2, &out,
+  REQUIRE(sonare_voice_change_realtime(stereo.data(), stereo.size(), 48000, "softWhisper", 2, &out,
                                        &out_length) == SONARE_OK);
   REQUIRE(out != nullptr);
   REQUIRE(out_length == stereo.size());
@@ -225,7 +225,7 @@ TEST_CASE("sonare_voice_change_realtime processes mono and interleaved stereo bu
 
   out = nullptr;
   out_length = 0;
-  REQUIRE(sonare_voice_change_realtime(stereo.data(), stereo.size() - 1, 48000, "soft-whisper", 2,
+  REQUIRE(sonare_voice_change_realtime(stereo.data(), stereo.size() - 1, 48000, "softWhisper", 2,
                                        &out, &out_length) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(out == nullptr);
   REQUIRE(out_length == 0);
@@ -233,7 +233,7 @@ TEST_CASE("sonare_voice_change_realtime processes mono and interleaved stereo bu
   float poison = 0.0f;
   out = &poison;
   out_length = 7;
-  REQUIRE(sonare_voice_change_realtime(mono.data(), mono.size(), 48000, "neutral-monitor", 3, &out,
+  REQUIRE(sonare_voice_change_realtime(mono.data(), mono.size(), 48000, "neutralMonitor", 3, &out,
                                        &out_length) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(out == nullptr);
   REQUIRE(out_length == 0);
@@ -241,7 +241,7 @@ TEST_CASE("sonare_voice_change_realtime processes mono and interleaved stereo bu
 
 TEST_CASE("sonare_voice_change_realtime compensates chain latency (no silent pre-roll)",
           "[c_api][voice_changer]") {
-  // A character preset (soft-whisper) carries retune-grain latency. A naive
+  // A character preset (softWhisper) carries retune-grain latency. A naive
   // length-in/length-out render would prepend ~latency samples of silent
   // pre-roll and truncate the tail. The offline wrapper now skips the pre-roll
   // and flushes the tail, so a steady full-amplitude tone has real signal right
@@ -254,7 +254,7 @@ TEST_CASE("sonare_voice_change_realtime compensates chain latency (no silent pre
 
   float* out = nullptr;
   size_t out_length = 0;
-  REQUIRE(sonare_voice_change_realtime(tone.data(), tone.size(), 48000, "soft-whisper", 1, &out,
+  REQUIRE(sonare_voice_change_realtime(tone.data(), tone.size(), 48000, "softWhisper", 1, &out,
                                        &out_length) == SONARE_OK);
   REQUIRE(out != nullptr);
   REQUIRE(out_length == tone.size());

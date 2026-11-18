@@ -846,17 +846,23 @@ namespace {
 
 // Reads the three scalar controls out of a JS options object using ONLY the
 // shared reader families, so this file keeps no reader of its own -- the
-// reader-shape scan in the Node test suite rejects one. The bag reads two ways:
-// mix refuses a wrong-typed value by name, semitones and grainSize answer one
-// with the default.
-void ReadRetuneConfig(const Napi::Value& value, float* semitones, float* mix, int* grain_size) {
+// reader-shape scan in the Node test suite rejects one. A wrong-typed value is
+// refused by name. grainSizeSamples is absent for "automatic": an explicit 0 is
+// refused so the sentinel is never typed by accident.
+void ReadRetuneConfig(const Napi::Value& value, float* pitch_semitones, float* mix,
+                      int* grain_size_samples) {
   if (!value.IsObject()) return;
   const Napi::Object object = value.As<Napi::Object>();
-  *semitones = FloatProperty(object, "semitones", *semitones);
+  RefuseUnknownKeys(object, "StreamingRetune", {"pitchSemitones", "mix", "grainSizeSamples"});
+  *pitch_semitones = FloatProperty(object, "pitchSemitones", *pitch_semitones);
   *mix = FloatProperty(object, "mix", *mix);
-  // "grain_size" is the snake_case spelling the WASM surface also accepts; the
-  // camelCase key wins when both are present.
-  *grain_size = IntProperty(object, "grainSize", IntProperty(object, "grain_size", *grain_size));
+  const int grain = IntProperty(object, "grainSizeSamples", *grain_size_samples);
+  const Napi::Value given = object.Get("grainSizeSamples");
+  if (!given.IsUndefined() && !given.IsNull() && grain == 0) {
+    throw Napi::RangeError::New(
+        object.Env(), "grainSizeSamples must be positive; omit it for an automatic grain size");
+  }
+  *grain_size_samples = grain;
 }
 
 }  // namespace
@@ -869,7 +875,7 @@ Napi::Object StreamingRetuneWrap::Init(Napi::Env env, Napi::Object exports) {
                       InstanceMethod<&StreamingRetuneWrap::Reset>("reset"),
                       InstanceMethod<&StreamingRetuneWrap::SetConfig>("setConfig"),
                       InstanceMethod<&StreamingRetuneWrap::Config>("config"),
-                      InstanceMethod<&StreamingRetuneWrap::GrainSize>("grainSize"),
+                      InstanceMethod<&StreamingRetuneWrap::GrainSizeSamples>("grainSizeSamples"),
                       InstanceMethod<&StreamingRetuneWrap::LatencySamples>("latencySamples"),
                       InstanceMethod<&StreamingRetuneWrap::ProcessMono>("processMono"),
                       InstanceMethod<&StreamingRetuneWrap::Destroy>("destroy"),
@@ -949,7 +955,7 @@ Napi::Value StreamingRetuneWrap::SetConfig(const Napi::CallbackInfo& info) {
   ThrowIfError(env,
                sonare_streaming_retune_config(retune_, &semitones, &mix, &effective_grain_size));
   if (env.IsExceptionPending()) return env.Undefined();
-  // grainSize is the exception: it is seeded from the last REQUESTED value, not
+  // grainSizeSamples is the exception: it is seeded from the last REQUESTED value, not
   // from the effective one config() reports, so an omitted key preserves the 0
   // sentinel and the next prepare re-derives the grain from its sample rate.
   int grain_size = requested_grain_size_;
@@ -973,19 +979,19 @@ Napi::Value StreamingRetuneWrap::Config(const Napi::CallbackInfo& info) {
   ThrowIfError(env, sonare_streaming_retune_config(retune_, &semitones, &mix, &grain_size));
   if (env.IsExceptionPending()) return env.Undefined();
   Napi::Object out = Napi::Object::New(env);
-  out.Set("semitones", Napi::Number::New(env, semitones));
+  out.Set("pitchSemitones", Napi::Number::New(env, semitones));
   out.Set("mix", Napi::Number::New(env, mix));
-  out.Set("grainSize", Napi::Number::New(env, grain_size));
+  out.Set("grainSizeSamples", Napi::Number::New(env, grain_size));
   return out;
   SONARE_NODE_CATCH(env)
 }
 
-Napi::Value StreamingRetuneWrap::GrainSize(const Napi::CallbackInfo& info) {
+Napi::Value StreamingRetuneWrap::GrainSizeSamples(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, retune_, "StreamingRetune");
   int grain_size = 0;
-  ThrowIfError(env, sonare_streaming_retune_grain_size(retune_, &grain_size));
+  ThrowIfError(env, sonare_streaming_retune_grain_size_samples(retune_, &grain_size));
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Number::New(env, grain_size);
   SONARE_NODE_CATCH(env)

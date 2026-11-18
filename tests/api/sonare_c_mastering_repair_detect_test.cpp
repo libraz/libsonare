@@ -1,9 +1,12 @@
 /// @file sonare_c_mastering_repair_detect_test.cpp
 /// @brief Mastering repair detection C API tests.
 
+#include <cmath>
+#include <limits>
 #include <random>
 
 #include "sonare_c_test_helpers.h"
+#include "util/db.h"
 
 #ifdef SONARE_WITH_MASTERING
 namespace {
@@ -23,7 +26,7 @@ SonareDeclickConfig default_declick_config() {
 
 SonareDeclipConfig default_declip_config() {
   SonareDeclipConfig config{};
-  config.clip_threshold = 0.98f;
+  config.clip_threshold_db = sonare::linear_to_db(0.98f);
   config.lpc_order = 36;
   config.iterations = 2;
   config.lpc_blend = 0.65f;
@@ -86,7 +89,7 @@ SonareDereverbClassicalConfig default_dereverb_config() {
 
 SonareTrimSilenceConfig default_trim_config() {
   SonareTrimSilenceConfig config{};
-  config.threshold = 0.001f;
+  config.threshold_db = -60.0f;
   config.padding_samples = 0;
   config.mode = SONARE_TRIM_SILENCE_MODE_PEAK;
   config.gate_lufs = -60.0f;
@@ -203,9 +206,9 @@ TEST_CASE("sonare_mastering_repair_detect_clipping", "[c_api][mastering]") {
             .epsilon(1e-6));
   }
 
-  SECTION("reads clip_threshold, which a lower setting takes the whole buffer at") {
+  SECTION("reads clip_threshold_db, which a lower setting takes the whole buffer at") {
     SonareDeclipConfig config = default_declip_config();
-    config.clip_threshold = 0.4f;
+    config.clip_threshold_db = sonare::linear_to_db(0.4f);
     SonareClipDetection detection{};
     REQUIRE(sonare_mastering_repair_detect_clipping(samples.data(), samples.size(), kSr, &config,
                                                     &detection) == SONARE_OK);
@@ -214,11 +217,51 @@ TEST_CASE("sonare_mastering_repair_detect_clipping", "[c_api][mastering]") {
     REQUIRE(detection.longest_run_samples == kLength);
   }
 
-  SECTION("reports the plateaus as flat tops without reading clip_threshold") {
+  SECTION("counts the samples at or above a threshold given in dBFS") {
+    // 0.6 sits above and 0.4 below 0.5, so the count does not hang on rounding at the edge.
+    std::vector<float> levels(kLength, 0.4f);
+    for (size_t i = 5000; i < 5200; ++i) levels[i] = (i % 2 == 0) ? 0.6f : -0.6f;
+    SonareDeclipConfig config = default_declip_config();
+    config.clip_threshold_db = 20.0f * std::log10(0.5f);
+    SonareClipDetection detection{};
+    REQUIRE(sonare_mastering_repair_detect_clipping(levels.data(), levels.size(), kSr, &config,
+                                                    &detection) == SONARE_OK);
+    REQUIRE(detection.sample_count == 200);
+    REQUIRE(detection.run_count == 1);
+  }
+
+  SECTION("an explicit dB default detects what the library default does") {
+    std::vector<float> levels(kLength, 0.5f);
+    for (size_t i = 3000; i < 3040; ++i) levels[i] = 0.99f;
+    for (size_t i = 9000; i < 9040; ++i) levels[i] = 0.96f;
+    const SonareDeclipConfig config = default_declip_config();
+    SonareClipDetection at_default{};
+    SonareClipDetection explicit_default{};
+    REQUIRE(sonare_mastering_repair_detect_clipping(levels.data(), levels.size(), kSr, nullptr,
+                                                    &at_default) == SONARE_OK);
+    REQUIRE(sonare_mastering_repair_detect_clipping(levels.data(), levels.size(), kSr, &config,
+                                                    &explicit_default) == SONARE_OK);
+    REQUIRE(at_default.sample_count == 40);
+    REQUIRE(explicit_default.sample_count == at_default.sample_count);
+    REQUIRE(explicit_default.run_count == at_default.run_count);
+  }
+
+  SECTION("refuses a threshold above 0 dBFS or non-finite") {
+    SonareDeclipConfig config = default_declip_config();
+    SonareClipDetection detection{};
+    config.clip_threshold_db = 1.0f;
+    REQUIRE(sonare_mastering_repair_detect_clipping(samples.data(), samples.size(), kSr, &config,
+                                                    &detection) == SONARE_ERROR_INVALID_PARAMETER);
+    config.clip_threshold_db = std::numeric_limits<float>::quiet_NaN();
+    REQUIRE(sonare_mastering_repair_detect_clipping(samples.data(), samples.size(), kSr, &config,
+                                                    &detection) == SONARE_ERROR_INVALID_PARAMETER);
+  }
+
+  SECTION("reports the plateaus as flat tops without reading clip_threshold_db") {
     // The DC background is a longer bit-identical run than any plateau and sits
     // 6 dB under the peak, so it is the negative side of the peak window.
     SonareDeclipConfig config = default_declip_config();
-    config.clip_threshold = 0.4f;
+    config.clip_threshold_db = sonare::linear_to_db(0.4f);
     SonareClipDetection at_default{};
     SonareClipDetection at_low{};
     REQUIRE(sonare_mastering_repair_detect_clipping(samples.data(), samples.size(), kSr, nullptr,
@@ -565,6 +608,47 @@ TEST_CASE("sonare_mastering_repair_detect_trim_range", "[c_api][mastering]") {
                                                       &range) == SONARE_OK);
     REQUIRE(range.first == kFirst);
     REQUIRE(range.last_exclusive == kEnd);
+  }
+
+  SECTION("a -40 dBFS threshold keeps the range a 0.01 amplitude threshold would") {
+    // 0.005 is under 0.01 but over the 0.001 default, so only the stated level trims it.
+    std::vector<float> levels(kLength, 0.005f);
+    fill_burst(levels, kFirst, kEnd);
+    SonareTrimSilenceConfig config = default_trim_config();
+    config.threshold_db = -40.0f;
+    SonareTrimRange range{};
+    REQUIRE(sonare_mastering_repair_detect_trim_range(levels.data(), levels.size(), kSr, &config,
+                                                      &range) == SONARE_OK);
+    REQUIRE(range.first == kFirst);
+    REQUIRE(range.last_exclusive == kEnd);
+    REQUIRE(sonare_mastering_repair_detect_trim_range(levels.data(), levels.size(), kSr, nullptr,
+                                                      &range) == SONARE_OK);
+    REQUIRE(range.first == 0);
+    REQUIRE(range.last_exclusive == kLength);
+  }
+
+  SECTION("an explicit dB default detects what the library default does") {
+    std::vector<float> levels(kLength, 0.0005f);
+    for (size_t i = 2000; i < kLength - 2000; ++i) levels[i] = 0.002f;
+    fill_burst(levels, kFirst, kEnd);
+    const SonareTrimSilenceConfig config = default_trim_config();
+    SonareTrimRange at_default{};
+    SonareTrimRange explicit_default{};
+    REQUIRE(sonare_mastering_repair_detect_trim_range(levels.data(), levels.size(), kSr, nullptr,
+                                                      &at_default) == SONARE_OK);
+    REQUIRE(sonare_mastering_repair_detect_trim_range(levels.data(), levels.size(), kSr, &config,
+                                                      &explicit_default) == SONARE_OK);
+    REQUIRE(at_default.first == 2000);
+    REQUIRE(explicit_default.first == at_default.first);
+    REQUIRE(explicit_default.last_exclusive == at_default.last_exclusive);
+  }
+
+  SECTION("refuses a threshold above 0 dBFS") {
+    SonareTrimSilenceConfig config = default_trim_config();
+    config.threshold_db = 3.0f;
+    SonareTrimRange range{};
+    REQUIRE(sonare_mastering_repair_detect_trim_range(samples.data(), samples.size(), kSr, &config,
+                                                      &range) == SONARE_ERROR_INVALID_PARAMETER);
   }
 
   SECTION("returns the range the repair would cut to, padding included") {

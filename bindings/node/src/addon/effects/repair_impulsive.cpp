@@ -34,7 +34,8 @@ sonare::mastering::repair::DecrackleMode parse_decrackle_mode(
 constexpr SonareDeclickConfig kDeclickConfigDefaults{0.8f, 4.0f, 8, 20, 8.0f};
 
 // The library default (sonare_c_mastering.h), the base an options bag is read over.
-constexpr SonareDeclipConfig kDeclipConfigDefaults{0.98f, 36, 2, 0.65f};
+// clip_threshold_db is 20*log10(0.98) dBFS.
+constexpr SonareDeclipConfig kDeclipConfigDefaults{-0.17547849f, 36, 2, 0.65f};
 
 // The library default (sonare_c_mastering.h), the base an options bag is read over.
 constexpr SonareDecrackleConfig kDecrackleConfigDefaults{0.4f, SONARE_DECRACKLE_MODE_MEDIAN, 4};
@@ -120,8 +121,11 @@ Napi::Object EmitDeclipReport(Napi::Env env, const T& report) {
 ///        and defaults as the mono facade's C++ DeclipConfig mapping above --
 ///        the two structs share their shape, this is the C-ABI mirror of that
 ///        reading.
-SonareDeclipConfig read_declip_config_c(const Napi::Object& options, SonareDeclipConfig config) {
-  config.clip_threshold = FloatProperty(options, "clipThreshold", config.clip_threshold);
+SonareDeclipConfig read_declip_config_c(const Napi::Object& options, SonareDeclipConfig config,
+                                        const char* entry) {
+  RefuseUnknownKeys(options, entry, {"clipThresholdDb", "lpcOrder", "iterations", "lpcBlend"});
+  config.clip_threshold_db =
+      FiniteFloatProperty(options, "clipThresholdDb", config.clip_threshold_db);
   config.lpc_order = IntProperty(options, "lpcOrder", config.lpc_order);
   config.iterations = IntProperty(options, "iterations", config.iterations);
   config.lpc_blend = FloatProperty(options, "lpcBlend", config.lpc_blend);
@@ -273,7 +277,9 @@ Napi::Value SonareWrap::MasteringRepairDeclip(const Napi::CallbackInfo& info) {
   sonare::mastering::repair::DeclipConfig config;
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object options = info[2].As<Napi::Object>();
-    config.clip_threshold = FloatProperty(options, "clipThreshold", config.clip_threshold);
+    RefuseUnknownKeys(options, "masteringRepairDeclip",
+                      {"clipThresholdDb", "lpcOrder", "iterations", "lpcBlend"});
+    config.clip_threshold = DbfsAsLinearProperty(options, "clipThresholdDb", config.clip_threshold);
     config.lpc_order = IntProperty(options, "lpcOrder", config.lpc_order);
     config.iterations = IntProperty(options, "iterations", config.iterations);
     config.lpc_blend = FloatProperty(options, "lpcBlend", config.lpc_blend);
@@ -307,9 +313,10 @@ Napi::Value SonareWrap::MasteringRepairDeclipStereo(const Napi::CallbackInfo& in
   const int sr = node_narrow_int(env, info[2], "sampleRate");
   // Library defaults (sonare_c_mastering.h SonareDeclipConfig), applied before
   // any options key overrides a field.
-  SonareDeclipConfig config{0.98f, 36, 2, 0.65f};
+  SonareDeclipConfig config = kDeclipConfigDefaults;
   if (info.Length() >= 4 && info[3].IsObject()) {
-    config = read_declip_config_c(info[3].As<Napi::Object>(), config);
+    config =
+        read_declip_config_c(info[3].As<Napi::Object>(), config, "masteringRepairDeclipStereo");
   }
   SonareDeclipStereoResult result{};
   SonareError err = sonare_mastering_repair_declip_stereo(
@@ -335,7 +342,10 @@ Napi::Value SonareWrap::MasteringRepairDetectClipping(const Napi::CallbackInfo& 
   const int sr = node_narrow_int(env, info[1], "sampleRate");
   SonareDeclipConfig config = kDeclipConfigDefaults;
   const bool has_options = info.Length() >= 3 && info[2].IsObject();
-  if (has_options) config = read_declip_config_c(info[2].As<Napi::Object>(), config);
+  if (has_options) {
+    config =
+        read_declip_config_c(info[2].As<Napi::Object>(), config, "masteringRepairDetectClipping");
+  }
   SonareClipDetection detection{};
   SonareError err = sonare_mastering_repair_detect_clipping(
       typed.Data(), typed.ElementLength(), sr, has_options ? &config : nullptr, &detection);

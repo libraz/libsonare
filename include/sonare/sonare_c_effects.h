@@ -70,13 +70,13 @@ SonareError sonare_time_stretch_ex(const float* samples, size_t length, int samp
                                    int n_fft, int hop_length, float** out, size_t* out_length);
 /// @note Free @p out with @ref sonare_free_floats.
 SonareError sonare_pitch_shift(const float* samples, size_t length, int sample_rate,
-                               float semitones, float** out, size_t* out_length);
+                               float pitch_semitones, float** out, size_t* out_length);
 /// @brief Native spectral pitch shift with explicit FFT/hop configuration.
 /// @details @p n_fft must be an even integer >= 4 and @p hop_length must lie in
 ///          (0, n_fft/2]; see @ref sonare_hpss_ex for why.
 /// @note Free @p out with @ref sonare_free_floats.
 SonareError sonare_pitch_shift_ex(const float* samples, size_t length, int sample_rate,
-                                  float semitones, int n_fft, int hop_length, float** out,
+                                  float pitch_semitones, int n_fft, int hop_length, float** out,
                                   size_t* out_length);
 /// Applies a single CONSTANT transposition: the whole buffer is treated as one
 /// note at @p current_midi and shifted by (target_midi - current_midi). This is
@@ -910,7 +910,7 @@ SonareError sonare_voice_change_ex(const float* samples, size_t length, int samp
 /// @details Creates a temporary @ref SonareRealtimeVoiceChanger from @p preset,
 ///          processes the whole mono or interleaved stereo buffer in realtime-
 ///          sized blocks, and destroys the handle before returning. @p preset
-///          may be NULL/empty (neutral-monitor), a preset id, or a full JSON
+///          may be NULL/empty (neutralMonitor), a preset id, or a full JSON
 ///          config document accepted by @ref sonare_realtime_voice_changer_create_json.
 ///          @p channels must be 1 (mono) or 2 (interleaved stereo).
 /// @details The chain's processing latency (retune grain + ISP-limiter lookahead)

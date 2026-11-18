@@ -34,12 +34,17 @@ if TYPE_CHECKING:
     from .analyzer import MasteringPreset
 
 
+def _amplitude_to_db(amplitude: float) -> float:
+    """Linear amplitude to dBFS; a non-positive amplitude maps to -inf and is refused downstream."""
+    return 20.0 * math.log10(amplitude) if amplitude > 0.0 else float("-inf")
+
+
 def cmd_declip(args: argparse.Namespace) -> int:
     from . import mastering_repair_declip, mastering_repair_declip_stereo
 
     planes, sr = _load_channels_or_downmix(args.file)
     knobs = {
-        "clip_threshold": args.clip_threshold,
+        "clip_threshold_db": _amplitude_to_db(args.clip_threshold),
         "lpc_order": args.lpc_order,
         "iterations": args.iterations,
         "lpc_blend": args.lpc_blend,

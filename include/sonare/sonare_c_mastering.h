@@ -1546,15 +1546,16 @@ SonareError sonare_mastering_repair_denoise_classical_linked(
 
 /// @brief Flat POD mirror of @c mastering::repair::DeclipConfig.
 typedef struct {
-  float clip_threshold;  // amplitude above which a sample is considered clipped (default 0.98)
-  int lpc_order;         // LPC order used for prediction (default 36)
-  int iterations;        // LPC reconstruction iterations (default 2)
-  float lpc_blend;       // LPC vs interpolation blend (default 0.65)
+  float clip_threshold_db;  // level in dBFS at or above which a sample counts as clipped
+                            // (default 20*log10(0.98), about -0.175 dBFS)
+  int lpc_order;            // LPC order used for prediction (default 36)
+  int iterations;           // LPC reconstruction iterations (default 2)
+  float lpc_blend;          // LPC vs interpolation blend (default 0.65)
 } SonareDeclipConfig;
 
 /// @brief Flat POD mirror of @c mastering::repair::ClipDetection.
 typedef struct {
-  size_t sample_count;         // samples at or past clip_threshold
+  size_t sample_count;         // samples at or past clip_threshold_db
   float sample_fraction;       // sample_count divided by the input length
   size_t run_count;            // runs of consecutive clipped samples
   size_t longest_run_samples;  // a run past the 512-sample cap takes the
@@ -1563,7 +1564,7 @@ typedef struct {
   // largest run level once the two highest runs are set aside; candidates are
   // at least -40 dBFS). These answer
   // a different question from the four fields above, which are read against
-  // clip_threshold and therefore both count the apex of any waveform that
+  // clip_threshold_db and therefore both count the apex of any waveform that
   // reaches it and miss material clipped before it was attenuated.
   size_t flat_run_count;
   size_t longest_flat_run_samples;
@@ -1573,10 +1574,10 @@ typedef struct {
 } SonareClipDetection;
 
 /// @brief Measures clipping without repairing.
-/// @details Counts samples at or past @c config.clip_threshold; no other config
+/// @details Counts samples at or past @c config.clip_threshold_db; no other config
 ///   field reaches the result, and @p sample_rate is validated without being read,
 ///   since no field here is a rate. The flat-top fields do not read
-///   @c clip_threshold at all, so they report clipping that a later gain change
+///   @c clip_threshold_db at all, so they report clipping that a later gain change
 ///   has carried below it -- and, in the other direction, do not fire on an
 ///   unclipped waveform whose peak merely reaches the threshold. A genuinely
 ///   flat-topped waveform, such as a square or pulse train, counts as clipped
@@ -2070,7 +2071,7 @@ SonareError sonare_mastering_repair_dereverb_apply_room_estimate(
 
 /// @brief Flat POD mirror of @c mastering::repair::TrimSilenceConfig.
 typedef struct {
-  float threshold;         // peak threshold (default 0.001 for Peak mode)
+  float threshold_db;      // peak threshold in dBFS (default -60 for Peak mode)
   size_t padding_samples;  // leading/trailing samples to retain (default 0)
   int mode;                // SONARE_TRIM_SILENCE_MODE_*
   float gate_lufs;         // LUFS gate threshold (default -60 for LufsGated mode)
@@ -2154,7 +2155,7 @@ typedef struct {
 ///   can see which channel decided each edge. A channel carrying nothing reports
 ///   an empty range and contributes nothing to the union.
 ///
-///   Which config fields are live depends on @c mode: @c threshold is read only
+///   Which config fields are live depends on @c mode: @c threshold_db is read only
 ///   by SONARE_TRIM_SILENCE_MODE_PEAK, and @c gate_lufs and @c window_ms only by
 ///   SONARE_TRIM_SILENCE_MODE_LUFS_GATED.
 ///

@@ -728,7 +728,7 @@ editing::pitch_editor::ScaleQuantizerConfig make_scale_config(int root, uint16_t
 
 }  // namespace
 
-SonareError sonare_scale_quantize_midi(int root, uint16_t mode_mask, float reference_midi,
+SonareError sonare_scale_quantize_midi(int root, uint16_t mode_mask, float scale_reference_midi,
                                        float midi, float* out_quantized_midi) {
   SONARE_C_API_ENTRY;
   // Refused and zeroed before the gate: the stub below returns without reaching
@@ -741,17 +741,18 @@ SonareError sonare_scale_quantize_midi(int root, uint16_t mode_mask, float refer
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   SONARE_C_TRY
-  editing::pitch_editor::ScaleQuantizer q(make_scale_config(root, mode_mask, reference_midi));
+  editing::pitch_editor::ScaleQuantizer q(make_scale_config(root, mode_mask, scale_reference_midi));
   *out_quantized_midi = q.quantize_midi(midi);
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(root, mode_mask, reference_midi, midi, out_quantized_midi);
+  SONARE_C_STUB_NOT_SUPPORTED(root, mode_mask, scale_reference_midi, midi, out_quantized_midi);
 #endif
 }
 
-SonareError sonare_scale_correction_semitones(int root, uint16_t mode_mask, float reference_midi,
-                                              float midi, float* out_semitones) {
+SonareError sonare_scale_correction_semitones(int root, uint16_t mode_mask,
+                                              float scale_reference_midi, float midi,
+                                              float* out_semitones) {
   SONARE_C_API_ENTRY;
   // Refused and zeroed before the gate: the stub below returns without reaching
   // the real body, and a caller that frees or reads the slot on a failure code
@@ -763,12 +764,12 @@ SonareError sonare_scale_correction_semitones(int root, uint16_t mode_mask, floa
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   SONARE_C_TRY
-  editing::pitch_editor::ScaleQuantizer q(make_scale_config(root, mode_mask, reference_midi));
+  editing::pitch_editor::ScaleQuantizer q(make_scale_config(root, mode_mask, scale_reference_midi));
   *out_semitones = q.correction_semitones(midi);
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(root, mode_mask, reference_midi, midi, out_semitones);
+  SONARE_C_STUB_NOT_SUPPORTED(root, mode_mask, scale_reference_midi, midi, out_semitones);
 #endif
 }
 

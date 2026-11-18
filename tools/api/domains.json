@@ -2150,7 +2150,7 @@
 "streaming_retune_config": {"domain": "effects", "surfaces": ["c", "node", "wasm"]},
 "streaming_retune_create": {"domain": "effects", "surfaces": ["c"]},
 "streaming_retune_destroy": {"domain": "effects", "surfaces": ["c"]},
-"streaming_retune_grain_size": {"domain": "effects", "surfaces": ["c"]},
+"streaming_retune_grain_size_samples": {"domain": "effects", "surfaces": ["c"]},
 "streaming_retune_latency_samples": {"domain": "effects", "surfaces": ["c"]},
 "streaming_retune_prepare": {"domain": "effects", "surfaces": ["c"]},
 "streaming_retune_process_mono": {"domain": "effects", "surfaces": ["c"]},

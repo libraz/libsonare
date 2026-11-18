@@ -57,14 +57,13 @@ struct RirSynthFieldNames {
 };
 
 /// @brief Field names as the C ABI and Python spell them.
-constexpr RirSynthFieldNames kRirSynthFieldNames{"ism_order",         "max_seconds",
+constexpr RirSynthFieldNames kRirSynthFieldNames{"ism_order",         "max_sec",
                                                  "mixing_time_ms",    "crossfade_ms",
                                                  "air_temperature_c", "air_humidity_percent"};
 
 /// @brief Field names as the JavaScript surfaces (Node, WASM) spell them.
-constexpr RirSynthFieldNames kRirSynthJsFieldNames{"ismOrder",        "maxSeconds",
-                                                   "mixingTimeMs",    "crossfadeMs",
-                                                   "airTemperatureC", "airHumidityPercent"};
+constexpr RirSynthFieldNames kRirSynthJsFieldNames{
+    "ismOrder", "maxSec", "mixingTimeMs", "crossfadeMs", "airTemperatureC", "airHumidityPercent"};
 
 /// @brief Validate the non-geometry half of a RIR synthesis configuration.
 ///

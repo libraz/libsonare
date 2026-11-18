@@ -795,7 +795,7 @@ TEST_CASE("RealtimeVoiceChanger config JSON round-trips the effective grain and 
       REQUIRE(grain <= kMaxRetuneGrainSize);
 
       const std::string json = realtime_voice_changer_config_to_json(first.config());
-      REQUIRE(json.find("\"grainSize\":" + std::to_string(grain)) != std::string::npos);
+      REQUIRE(json.find("\"grainSizeSamples\":" + std::to_string(grain)) != std::string::npos);
 
       RealtimeVoiceChanger second(realtime_voice_changer_config_from_json(json));
       second.prepare(rate, 256, 1);

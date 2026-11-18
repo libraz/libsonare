@@ -205,7 +205,7 @@ SonareError sonare_voice_change_realtime(const float* samples, size_t length, in
   constexpr int kBlockSize = 128;
   SonareRealtimeVoiceChanger* raw_handle = nullptr;
   err = sonare_realtime_voice_changer_create_json(
-      preset && preset[0] != '\0' ? preset : "neutral-monitor", sample_rate, kBlockSize, channels,
+      preset && preset[0] != '\0' ? preset : "neutralMonitor", sample_rate, kBlockSize, channels,
       &raw_handle);
   if (err != SONARE_OK) return err;
   std::unique_ptr<SonareRealtimeVoiceChanger, decltype(&sonare_realtime_voice_changer_destroy)>
@@ -247,15 +247,15 @@ namespace {
   X(input_gain_db, input_gain_db)                                 \
   X(output_gain_db, output_gain_db)                               \
   X(wet_mix, wet_mix)                                             \
-  X(retune.semitones, retune_semitones)                           \
+  X(retune.semitones, retune_pitch_semitones)                     \
   X(retune.mix, retune_mix)                                       \
-  X(retune.grain_size, retune_grain_size)                         \
+  X(retune.grain_size, retune_grain_size_samples)                 \
   X(formant.factor, formant_factor)                               \
   X(formant.amount, formant_amount)                               \
   X(formant.body, formant_body)                                   \
   X(formant.brightness, formant_brightness)                       \
   X(formant.nasal, formant_nasal)                                 \
-  X(eq.highpass_hz, eq_highpass_hz)                               \
+  X(eq.highpass_hz, eq_high_pass_hz)                              \
   X(eq.body_db, eq_body_db)                                       \
   X(eq.presence_db, eq_presence_db)                               \
   X(eq.air_db, eq_air_db)                                         \
@@ -303,7 +303,7 @@ namespace {
 
 // X(cpp_path, pod_field, CppEnum, last_ordinal): enum members carried as int32 ordinals.
 #define SONARE_VC_ENUM_FIELDS(X)                                                                  \
-  X(voice_engine.engine, voice_engine_engine, PitchEngine, SONARE_PITCH_ENGINE_PSOLA)             \
+  X(voice_engine.engine, voice_engine, PitchEngine, SONARE_PITCH_ENGINE_PSOLA)                    \
   X(pitch_correction.mode, pitch_correction_mode, PitchCorrectionMode,                            \
     SONARE_PITCH_CORRECTION_ROBOT)                                                                \
   X(pitch_correction.scale, pitch_correction_scale, ScaleKind, SONARE_SCALE_CHROMATIC)            \
@@ -311,7 +311,7 @@ namespace {
     SONARE_VOCODER_CARRIER_EXTERNAL)                                                              \
   X(vocoder.carrier_wave, vocoder_carrier_wave, VocoderCarrierWave, SONARE_VOCODER_WAVE_ENSEMBLE) \
   X(character.type, character_type, CharacterType, SONARE_CHARACTER_STROBO)                       \
-  X(reverb_variation.variation, reverb_variation_variation, ReverbVariation,                      \
+  X(reverb_variation.variation, reverb_variation, ReverbVariation,                                \
     SONARE_REVERB_VARIATION_DUB_ECHO)                                                             \
   X(reverb_variation.division, reverb_variation_division, NoteDivision,                           \
     SONARE_NOTE_DIVISION_SIXTEENTH)                                                               \
@@ -561,7 +561,7 @@ SonareError sonare_realtime_voice_changer_create_json(const char* preset_or_conf
   SONARE_C_TRY
   const std::string config_text = preset_or_config_json && preset_or_config_json[0] != '\0'
                                       ? preset_or_config_json
-                                      : "neutral-monitor";
+                                      : "neutralMonitor";
   editing::voice_changer::RealtimeVoiceChangerConfig config;
   std::string error;
   if (!editing::voice_changer::realtime_voice_changer_config_from_input(config_text, &config,

@@ -11,18 +11,14 @@ SonareError sonare_project_fade_curve_from_name(const char* name, uint32_t* out_
   SONARE_C_TRY
   if (name == nullptr || out_curve == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
 
-  std::string normalized;
-  for (const unsigned char* p = reinterpret_cast<const unsigned char*>(name); *p != '\0'; ++p) {
-    if (*p == '-' || *p == '_') continue;
-    normalized.push_back(static_cast<char>(*p >= 'A' && *p <= 'Z' ? *p + ('a' - 'A') : *p));
-  }
-  if (normalized == "linear") {
+  const std::string token(name);
+  if (token == "linear") {
     *out_curve = SONARE_FADE_CURVE_LINEAR;
-  } else if (normalized == "equalpower") {
+  } else if (token == "equalPower") {
     *out_curve = SONARE_FADE_CURVE_EQUAL_POWER;
-  } else if (normalized == "exponential" || normalized == "exp") {
+  } else if (token == "exponential") {
     *out_curve = SONARE_FADE_CURVE_EXPONENTIAL;
-  } else if (normalized == "logarithmic" || normalized == "log") {
+  } else if (token == "logarithmic") {
     *out_curve = SONARE_FADE_CURVE_LOGARITHMIC;
   } else {
     return SONARE_ERROR_INVALID_PARAMETER;

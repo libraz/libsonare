@@ -28,7 +28,7 @@ void filters_coefficients(double sample_rate, float raw_factor, float raw_body,
                           std::array<rt::BiquadState, 4>& filters) noexcept {
   // `amount` controls only the formant-frequency displacement. Body,
   // brightness, and nasal are independent tonal controls and must still work
-  // at amount=0 (the neutral-monitor preset intentionally relies on this).
+  // at amount=0 (the neutralMonitor preset intentionally relies on this).
   const float factor = clamp_factor(raw_factor);
   const float shift = factor - 1.0f;
   const float body = std::clamp(raw_body, -1.0f, 1.0f);

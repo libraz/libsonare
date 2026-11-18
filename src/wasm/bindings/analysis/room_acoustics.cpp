@@ -78,6 +78,30 @@ val js_detect_acoustic(val samples, const val& sample_rate_val, const val& n_oct
 // which is why the guard has to be reachable from the core rather than sitting
 // in the C-ABI translation unit.
 
+// The room and synthesis keys synthesizeRir, roomMorph and roomMorphStereo share; each entry point
+// adds its own on top.
+const std::vector<const char*>& roomKeys() {
+  static const std::vector<const char*> keys = {"lengthM",
+                                                "widthM",
+                                                "heightM",
+                                                "absorption",
+                                                "bandAbsorption",
+                                                "bandScattering",
+                                                "materialPreset",
+                                                "source",
+                                                "listener",
+                                                "ismOrder",
+                                                "seed",
+                                                "maxSec",
+                                                "preferEyring",
+                                                "mixingTimeMs",
+                                                "crossfadeMs",
+                                                "airAbsorptionEnabled",
+                                                "airTemperatureC",
+                                                "airHumidityPercent"};
+  return keys;
+}
+
 // Builds a uniform shoebox from a JS options object, honouring the same wall-
 // material precedence as the C ABI: materialPreset (non-zero) > per-band
 // bandAbsorption (Float32Array/number[]) > scalar absorption.
@@ -107,14 +131,26 @@ sonare::acoustic::ShoeboxRoom roomFromVal(val opts, float def_absorption) {
   return make_uniform_room(dims, request);
 }
 
+// Reads `{ x, y, z }` under @p key: an absent key takes @p fallback, anything else must be an
+// object whose three components are finite numbers, each refused by name.
+sonare::acoustic::Vec3 positionFromVal(val opts, const char* key,
+                                       const sonare::acoustic::Vec3& fallback) {
+  val position = objectProperty(opts, key);
+  if (position.isUndefined()) return fallback;
+  if (position.typeOf().as<std::string>() != "object" || position.isArray()) {
+    throw WasmTypeError(std::string(key) + " must be an object with x, y and z");
+  }
+  const std::string name = key;
+  const auto component = [&](const char* axis) {
+    const std::string label = name + "." + axis;
+    return checkedFloatFromVal(position[axis], label.c_str());
+  };
+  return {component("x"), component("y"), component("z")};
+}
+
 sonare::acoustic::SourceListener placementFromVal(val opts) {
-  const auto& source = sonare::acoustic::kDefaultPlacement.source;
-  const auto& listener = sonare::acoustic::kDefaultPlacement.listener;
-  return {
-      {floatProperty(opts, "sourceX", source.x), floatProperty(opts, "sourceY", source.y),
-       floatProperty(opts, "sourceZ", source.z)},
-      {floatProperty(opts, "listenerX", listener.x), floatProperty(opts, "listenerY", listener.y),
-       floatProperty(opts, "listenerZ", listener.z)}};
+  return {positionFromVal(opts, "source", sonare::acoustic::kDefaultPlacement.source),
+          positionFromVal(opts, "listener", sonare::acoustic::kDefaultPlacement.listener)};
 }
 
 // Acoustic sample-rate bounds, sourced from the shared core limits
@@ -186,6 +222,7 @@ val diagnosticsArray(const std::vector<sonare::Diagnostic>& diagnostics) {
 }
 
 val js_synthesize_rir(val opts) {
+  refuseUnknownKeys(opts, "synthesizeRir", roomKeys(), {"sampleRate"});
   const int sample_rate = intProperty(opts, "sampleRate", 48000);
   validateAcousticSampleRate(sample_rate);
   sonare::acoustic::RirSynthConfig config;
@@ -194,7 +231,7 @@ val js_synthesize_rir(val opts) {
                           ? sonare::acoustic::ReverbModel::Eyring
                           : sonare::acoustic::ReverbModel::Sabine;
   config.seed = uintProperty(opts, "seed", config.seed);
-  config.max_seconds = floatProperty(opts, "maxSeconds", config.max_seconds);
+  config.max_seconds = floatProperty(opts, "maxSec", config.max_seconds);
   config.mixing_time_ms = floatProperty(opts, "mixingTimeMs", config.mixing_time_ms);
   config.crossfade_ms = floatProperty(opts, "crossfadeMs", config.crossfade_ms);
   config.air_absorption_enabled =
@@ -222,6 +259,11 @@ val js_synthesize_rir(val opts) {
 val js_estimate_room(val samples, const val& sample_rate_val, val opts) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   validateAcousticSampleRate(sample_rate);
+  // samples, sampleRate and validate ride along from the request object and are not read here.
+  refuseUnknownKeys(
+      opts, "estimateRoom",
+      {"aspectHintLw", "aspectHintLh", "referenceAbsorption", "preferEyring", "nOctaveBands",
+       "minDecayDb", "noiseFloorMarginDb", "mode", "samples", "sampleRate", "validate"});
   Audio audio = loadAcousticAudio(samples, sample_rate);
   sonare::RoomEstimateConfig config;
   // Match the C ABI: an explicit 0 aspect hint means "use the default 1.0", so
@@ -282,7 +324,7 @@ static sonare::effects::acoustic::RoomMorphConfig roomMorphConfigFromVal(val opt
   config.wet = floatProperty(opts, "wet", config.wet);
   config.ism_order = intProperty(opts, "ismOrder", config.ism_order);
   config.seed = uintProperty(opts, "seed", config.seed);
-  config.max_seconds = floatProperty(opts, "maxSeconds", config.max_seconds);
+  config.max_seconds = floatProperty(opts, "maxSec", config.max_seconds);
   config.late_model = boolProperty(opts, "preferEyring", true)
                           ? sonare::acoustic::ReverbModel::Eyring
                           : sonare::acoustic::ReverbModel::Sabine;
@@ -302,6 +344,8 @@ static sonare::effects::acoustic::RoomMorphConfig roomMorphConfigFromVal(val opt
 val js_room_morph(val samples, const val& sample_rate_val, val opts) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   validateAcousticSampleRate(sample_rate);
+  refuseUnknownKeys(opts, "roomMorph", roomKeys(),
+                    {"wet", "sourceTailSuppression", "samples", "sampleRate", "validate"});
   Audio audio = loadAcousticAudio(samples, sample_rate);
   const auto config = roomMorphConfigFromVal(opts);
 
@@ -320,6 +364,9 @@ val js_room_morph(val samples, const val& sample_rate_val, val opts) {
 val js_room_morph_stereo(val left, val right, const val& sample_rate_val, val opts) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   validateAcousticSampleRate(sample_rate);
+  refuseUnknownKeys(opts, "roomMorphStereo", roomKeys(),
+                    {"wet", "sourceTailSuppression", "receiverSpacingM", "left", "right",
+                     "sampleRate", "validate"});
   std::vector<float> left_data = float32ArrayToVector(left);
   std::vector<float> right_data = float32ArrayToVector(right);
   if (left_data.size() != right_data.size()) {
@@ -357,12 +404,16 @@ val js_room_geometry_from_estimate(val estimate) {
   out.set("heightM", height);
   const sonare::acoustic::SourceListener placement =
       sonare::acoustic::scaled_default_placement(length, width, height);
-  out.set("sourceX", placement.source.x);
-  out.set("sourceY", placement.source.y);
-  out.set("sourceZ", placement.source.z);
-  out.set("listenerX", placement.listener.x);
-  out.set("listenerY", placement.listener.y);
-  out.set("listenerZ", placement.listener.z);
+  val source = val::object();
+  source.set("x", placement.source.x);
+  source.set("y", placement.source.y);
+  source.set("z", placement.source.z);
+  out.set("source", source);
+  val listener = val::object();
+  listener.set("x", placement.listener.x);
+  listener.set("y", placement.listener.y);
+  listener.set("z", placement.listener.z);
+  out.set("listener", listener);
   if (hasProperty(estimate, "bandAbsorption")) {
     const std::vector<float> bands = float32ArrayToVector(estimate["bandAbsorption"]);
     const float mean = sonare::acoustic::mean_finite_absorption(bands.data(), bands.size());

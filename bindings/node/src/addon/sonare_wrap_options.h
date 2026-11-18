@@ -15,12 +15,15 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <initializer_list>
 #include <limits>
 #include <stdexcept>
 #include <string>
 #include <system_error>
 #include <utility>
 #include <vector>
+
+#include "util/db.h"
 
 namespace sonare_node {
 
@@ -297,6 +300,24 @@ inline void node_require_property_type(Napi::Env env, bool ok, const char* key,
   throw Napi::TypeError::New(env, std::string(key) + " must be " + expected);
 }
 
+/// @brief Refuses an own enumerable key of @p obj that is in neither @p allowed nor @p extra,
+///        so a renamed key cannot be silently read as absent.
+/// @throws Napi::TypeError naming @p subject and the key.
+inline void RefuseUnknownKeys(const Napi::Object& obj, const char* subject,
+                              const std::vector<const char*>& allowed,
+                              std::initializer_list<const char*> extra = {}) {
+  const Napi::Array names = obj.GetPropertyNames();
+  for (uint32_t i = 0; i < names.Length(); ++i) {
+    const std::string key = names.Get(i).ToString().Utf8Value();
+    const auto matches = [&key](const char* name) { return key == name; };
+    if (std::any_of(allowed.begin(), allowed.end(), matches) ||
+        std::any_of(extra.begin(), extra.end(), matches)) {
+      continue;
+    }
+    throw Napi::TypeError::New(obj.Env(), std::string(subject) + ": unknown option '" + key + "'");
+  }
+}
+
 /// @brief Read an int property: undefined/null returns the fallback, any other
 ///        non-number is refused by name (see note above).
 inline int IntProperty(const Napi::Object& obj, const char* key, int fallback) {
@@ -428,6 +449,40 @@ inline float FiniteFloatProperty(const Napi::Object& obj, const char* key, float
   if (value.IsUndefined() || value.IsNull()) return fallback;
   node_require_property_type(obj.Env(), value.IsNumber(), key, "a number");
   return node_narrow_finite_float(obj.Env(), value, key);
+}
+
+/// @brief Read a dBFS level property as the linear amplitude a core config holds.
+/// @details An absent key returns @p linear_fallback untouched, so a library default is not
+///   round-tripped through decibels. A level above 0 dBFS is refused by name.
+inline float DbfsAsLinearProperty(const Napi::Object& obj, const char* key, float linear_fallback) {
+  Napi::Value value = obj.Get(key);
+  if (value.IsUndefined() || value.IsNull()) return linear_fallback;
+  const float db = FiniteFloatProperty(obj, key, 0.0f);
+  if (db > 0.0f) {
+    throw Napi::RangeError::New(obj.Env(), std::string(key) + " must be at most 0 dBFS");
+  }
+  return sonare::db_to_linear(db);
+}
+
+/// @brief Read a `{ x, y, z }` property of three finite numbers.
+/// @details An absent key returns @p fallback; a non-object or a component that is not a
+///   finite number is refused by its dotted name (`source.x`).
+inline std::array<float, 3> XyzProperty(const Napi::Object& obj, const char* key,
+                                        const std::array<float, 3>& fallback) {
+  Napi::Value value = obj.Get(key);
+  if (value.IsUndefined() || value.IsNull()) return fallback;
+  node_require_property_type(obj.Env(), value.IsObject() && !value.IsArray(), key,
+                             "an object with x, y and z");
+  const Napi::Object xyz = value.As<Napi::Object>();
+  std::array<float, 3> out{};
+  const char* const axes[] = {"x", "y", "z"};
+  for (size_t i = 0; i < 3; ++i) {
+    const std::string name = std::string(key) + "." + axes[i];
+    const Napi::Value part = xyz.Get(axes[i]);
+    node_require_property_type(obj.Env(), part.IsNumber(), name.c_str(), "a number");
+    out[i] = node_narrow_finite_float(obj.Env(), part, name.c_str());
+  }
+  return out;
 }
 
 /// @brief Read a finite float property that also accepts the string `"auto"`.

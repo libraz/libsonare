@@ -8,7 +8,7 @@
   "oneOf": [{"required": ["dsp"]}, {"required": ["macros"]}],
   "allOf": [
     {
-      "if": {"properties": {"schemaVersion": {"const": 2}}, "required": ["schemaVersion", "dsp"]},
+      "if": {"properties": {"schemaVersion": {"const": 3}}, "required": ["schemaVersion", "dsp"]},
       "then": {
         "properties": {
           "dsp": {
@@ -21,12 +21,12 @@
   "properties": {
     "schemaVersion": {
       "type": "integer",
-      "enum": [1, 2],
-      "description": "Preset schema version. 2 is current and requires the voice transformer sections of dsp (voiceEngine, pitchCorrection, harmony, vocoder, character, reverbVariation, midi). 1 predates them: a version 1 document omits them and loads with their defaults. Writers emit 2."
+      "enum": [3],
+      "description": "Preset schema version. 3 is current and requires the voice transformer sections of dsp (voiceEngine, pitchCorrection, harmony, vocoder, character, reverbVariation, midi). This schema describes version 3 only. Version 1 and 2 documents (old key spellings retune.semitones, retune.grainSize, eq.highpassHz; snake_case enum tokens; kebab-case built-in ids; version 1 without the transformer sections) are translated on load and are not valid against this schema. Writers emit 3."
     },
     "id": {
       "type": "string",
-      "pattern": "^[a-z0-9][a-z0-9._-]*$",
+      "pattern": "^[a-z0-9][A-Za-z0-9._-]*$",
       "minLength": 1,
       "maxLength": 96
     },
@@ -60,11 +60,11 @@
         "retune": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["semitones", "mix", "grainSize"],
+          "required": ["pitchSemitones", "mix", "grainSizeSamples"],
           "properties": {
-            "semitones": { "type": "number", "minimum": -24.0, "maximum": 24.0 },
+            "pitchSemitones": { "type": "number", "minimum": -24.0, "maximum": 24.0 },
             "mix": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
-            "grainSize": { "type": "integer", "minimum": 0, "maximum": 8192 }
+            "grainSizeSamples": { "type": "integer", "minimum": 0, "maximum": 8192 }
           }
         },
         "formant": {
@@ -88,9 +88,9 @@
         "eq": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["highpassHz", "bodyDb", "presenceDb", "airDb"],
+          "required": ["highPassHz", "bodyDb", "presenceDb", "airDb"],
           "properties": {
-            "highpassHz": { "type": "number", "minimum": 20.0, "maximum": 300.0 },
+            "highPassHz": { "type": "number", "minimum": 20.0, "maximum": 300.0 },
             "bodyDb": { "type": "number", "minimum": -12.0, "maximum": 12.0 },
             "presenceDb": { "type": "number", "minimum": -12.0, "maximum": 12.0 },
             "airDb": { "type": "number", "minimum": -12.0, "maximum": 12.0 }
@@ -171,7 +171,7 @@
             "amount": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
             "speedMs": { "type": "number", "minimum": 0.0, "maximum": 400.0 },
             "keyRoot": { "type": "integer", "minimum": 0, "maximum": 11 },
-            "scale": { "type": "string", "enum": ["major", "natural_minor", "chromatic"] },
+            "scale": { "type": "string", "enum": ["major", "naturalMinor", "chromatic"] },
             "robotOctave": { "type": "integer", "minimum": -1, "maximum": 1 }
           }
         },
@@ -214,7 +214,7 @@
           "additionalProperties": false,
           "required": ["type", "amount", "tone"],
           "properties": {
-            "type": { "type": "string", "enum": ["none", "megaphone", "radio", "bbd_chorus", "strobo"] },
+            "type": { "type": "string", "enum": ["none", "megaphone", "radio", "bbdChorus", "strobo"] },
             "amount": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
             "tone": { "type": "number", "minimum": -1.0, "maximum": 1.0 }
           }
@@ -223,13 +223,13 @@
           "type": "object",
           "additionalProperties": false,
           "required": ["variation", "delayMs", "feedback", "tempoBpm", "division"],
-          "description": "Every variation mixes at reverb.mix. A computed delay (tempo_delay: 60000 / tempoBpm times the note value) beyond 3000 ms is refused.",
+          "description": "Every variation mixes at reverb.mix. A computed delay (tempoDelay: 60000 / tempoBpm times the note value) beyond 3000 ms is refused.",
           "properties": {
-            "variation": { "type": "string", "enum": ["reverb", "echo", "tempo_delay", "dub_echo"] },
+            "variation": { "type": "string", "enum": ["reverb", "echo", "tempoDelay", "dubEcho"] },
             "delayMs": { "type": "number", "minimum": 1.0, "maximum": 3000.0 },
             "feedback": { "type": "number", "minimum": 0.0, "maximum": 0.95 },
             "tempoBpm": { "type": "number", "minimum": 30.0, "maximum": 300.0 },
-            "division": { "type": "string", "enum": ["quarter", "eighth", "dotted_eighth", "sixteenth"] }
+            "division": { "type": "string", "enum": ["quarter", "eighth", "dottedEighth", "sixteenth"] }
           }
         },
         "midi": {

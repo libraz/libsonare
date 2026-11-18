@@ -757,14 +757,42 @@ def _mean_abs(values: Sequence[float] | np.ndarray) -> float:
     return float(np.mean(np.abs(np.asarray(values)), dtype=np.float64))
 
 
+def _cli_token(library_token: str) -> str:
+    """Spell a lowerCamel library token as a CLI value: kebab-case, digit runs as words."""
+    out: list[str] = []
+    previous_digit = False
+    for i, ch in enumerate(library_token):
+        digit = ch.isdigit() or ch == "."
+        if i > 0 and (ch.isupper() or digit != previous_digit):
+            out.append("-")
+        out.append(ch.lower())
+        previous_digit = digit
+    return "".join(out)
+
+
+def _library_token(flag: str, value: str, library_tokens: Sequence[str]) -> str:
+    """Resolve a kebab-case flag value to the library token it spells, or refuse it by name."""
+    for token in library_tokens:
+        if _cli_token(token) == value:
+            return token
+    accepted = ", ".join(_cli_token(token) for token in library_tokens)
+    raise ValueError(f"{flag}: unknown value {value!r}; expected one of: {accepted}")
+
+
 def _load_voice_preset_pack(path: str, preset_id: str) -> dict[str, Any]:
     with open(path, encoding="utf-8") as fh:
         pack = json.load(fh)
     presets = pack.get("presets")
     if not isinstance(presets, list):
         raise ValueError("preset pack must contain a presets array")
+    # An entry id is matched as written or by its kebab spelling, so a pack holding the
+    # built-in presets is addressed the way --preset names them.
     matches = [
-        preset for preset in presets if isinstance(preset, dict) and preset.get("id") == preset_id
+        preset
+        for preset in presets
+        if isinstance(preset, dict)
+        and isinstance(preset.get("id"), str)
+        and preset_id in (preset["id"], _cli_token(preset["id"]))
     ]
     if len(matches) > 1:
         raise ValueError(f"duplicate preset id in preset pack: {preset_id}")

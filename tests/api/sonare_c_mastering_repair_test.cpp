@@ -758,7 +758,7 @@ TEST_CASE("sonare_mastering_repair_declip", "[.][slow][c_api][mastering]") {
 
   SECTION("explicit config") {
     SonareDeclipConfig config = {};
-    config.clip_threshold = 0.85f;
+    config.clip_threshold_db = 20.0f * std::log10(0.85f);
     config.lpc_order = 24;
     config.iterations = 1;
     config.lpc_blend = 0.5f;
@@ -770,7 +770,7 @@ TEST_CASE("sonare_mastering_repair_declip", "[.][slow][c_api][mastering]") {
 
   SECTION("invalid config returns invalid parameter and clears output") {
     SonareDeclipConfig config = {};
-    config.clip_threshold = 2.0f;
+    config.clip_threshold_db = 6.0f;  // above full scale
     config.lpc_order = 24;
     config.iterations = 1;
     config.lpc_blend = 0.5f;
@@ -1761,7 +1761,7 @@ TEST_CASE("sonare_mastering_repair_trim_silence", "[c_api][mastering]") {
 
   SECTION("LUFS-gated mode with padding") {
     SonareTrimSilenceConfig config = {};
-    config.threshold = 0.001f;
+    config.threshold_db = -60.0f;
     config.padding_samples = 1200;
     config.mode = SONARE_TRIM_SILENCE_MODE_LUFS_GATED;
     config.gate_lufs = -40.0f;
@@ -1776,7 +1776,7 @@ TEST_CASE("sonare_mastering_repair_trim_silence", "[c_api][mastering]") {
 
   SECTION("invalid config returns invalid parameter and clears output") {
     SonareTrimSilenceConfig config = {};
-    config.threshold = -1.0f;
+    config.threshold_db = 6.0f;  // above full scale
     config.mode = SONARE_TRIM_SILENCE_MODE_PEAK;
     config.window_ms = 400.0f;
     SonareTrimSilenceResult result{};
@@ -1790,7 +1790,7 @@ TEST_CASE("sonare_mastering_repair_trim_silence", "[c_api][mastering]") {
 
   SECTION("rejects unknown mode enum") {
     SonareTrimSilenceConfig config = {};
-    config.threshold = 0.001f;
+    config.threshold_db = -60.0f;
     config.padding_samples = 0;
     config.mode = 999;
     config.gate_lufs = -60.0f;
@@ -2054,7 +2054,7 @@ TEST_CASE("sonare_mastering_repair_trim_silence_stereo", "[c_api][mastering]") {
   fill_burst(right, kRightFirst, kRightEnd);
 
   SonareTrimSilenceConfig peak = {};
-  peak.threshold = 0.001f;
+  peak.threshold_db = -60.0f;
   peak.padding_samples = 0;
   peak.mode = SONARE_TRIM_SILENCE_MODE_PEAK;
   peak.gate_lufs = -60.0f;
@@ -2191,9 +2191,9 @@ TEST_CASE("sonare_mastering_repair_trim_silence_stereo", "[c_api][mastering]") {
   }
 
   SECTION("reads threshold only in peak mode and gate_lufs only in the gated one") {
-    // Nothing in the fixture reaches 0.9, so in peak mode this empties the pair.
+    // Nothing in the fixture reaches -1 dBFS, so in peak mode this empties the pair.
     SonareTrimSilenceConfig deaf_peak = peak;
-    deaf_peak.threshold = 0.9f;
+    deaf_peak.threshold_db = -1.0f;
     SonareTrimSilenceStereoResult out{};
     REQUIRE(sonare_mastering_repair_trim_silence_stereo(left.data(), right.data(), kLength, sr,
                                                         &deaf_peak, &out) == SONARE_OK);
@@ -2214,7 +2214,7 @@ TEST_CASE("sonare_mastering_repair_trim_silence_stereo", "[c_api][mastering]") {
     // gated mode and does nothing at all in peak mode. The burst is +-0.5, so
     // its windowed RMS sits near -6 dBFS and a gate at 0 is out of reach.
     SonareTrimSilenceConfig shut = gated;
-    shut.threshold = 0.001f;
+    shut.threshold_db = -60.0f;
     shut.gate_lufs = 0.0f;
     REQUIRE(sonare_mastering_repair_trim_silence_stereo(left.data(), right.data(), kLength, sr,
                                                         &shut, &out) == SONARE_OK);
@@ -2326,7 +2326,7 @@ TEST_CASE("sonare_mastering_repair_trim_silence_stereo", "[c_api][mastering]") {
     require_cleared();
 
     SonareTrimSilenceConfig bad_threshold = peak;
-    bad_threshold.threshold = -1.0f;
+    bad_threshold.threshold_db = 6.0f;
     dirty();
     REQUIRE(sonare_mastering_repair_trim_silence_stereo(left.data(), right.data(), kLength, sr,
                                                         &bad_threshold,

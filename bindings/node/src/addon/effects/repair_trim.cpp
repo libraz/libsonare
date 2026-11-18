@@ -30,7 +30,7 @@ sonare::mastering::repair::TrimSilenceMode parse_trim_silence_mode(
 
 // The library default (sonare_c_mastering.h), the base an options bag is read over.
 constexpr SonareTrimSilenceConfig kTrimSilenceConfigDefaults{
-    0.001f, 0, SONARE_TRIM_SILENCE_MODE_PEAK, -60.0f, 400.0f};
+    -60.0f, 0, SONARE_TRIM_SILENCE_MODE_PEAK, -60.0f, 400.0f};
 
 template <typename T>
 Napi::Object EmitTrimRange(Napi::Env env, const T& range) {
@@ -58,11 +58,14 @@ Napi::Object EmitTrimReport(Napi::Env env, const T& report) {
 ///   above the core's padding bound, where it reads as an out-of-range
 ///   padding rather than as the negative the caller wrote. Refusing it by name
 ///   here reports what was actually wrong, and the false return is why this
-///   reports success rather than returning the config.
+///   reports success rather than returning the config. @p entry names the caller in the
+///   unknown-key refusal.
 /// @return false with a JS exception pending; the caller must bail.
 bool ReadTrimSilenceConfig(Napi::Env env, const Napi::Object& options,
-                           SonareTrimSilenceConfig* config) {
-  config->threshold = FloatProperty(options, "threshold", config->threshold);
+                           SonareTrimSilenceConfig* config, const char* entry) {
+  RefuseUnknownKeys(options, entry,
+                    {"thresholdDb", "paddingSamples", "mode", "gateLufs", "windowMs"});
+  config->threshold_db = FiniteFloatProperty(options, "thresholdDb", config->threshold_db);
   if (!NonNegativeSizeTProperty(env, options, "paddingSamples", config->padding_samples,
                                 &config->padding_samples)) {
     return false;
@@ -93,7 +96,9 @@ Napi::Value SonareWrap::MasteringRepairTrimSilence(const Napi::CallbackInfo& inf
   sonare::mastering::repair::TrimSilenceConfig config;
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object options = info[2].As<Napi::Object>();
-    config.threshold = FloatProperty(options, "threshold", config.threshold);
+    RefuseUnknownKeys(options, "masteringRepairTrimSilence",
+                      {"thresholdDb", "paddingSamples", "mode", "gateLufs", "windowMs"});
+    config.threshold = DbfsAsLinearProperty(options, "thresholdDb", config.threshold);
     if (options.Has("paddingSamples")) {
       const int padding_samples =
           IntProperty(options, "paddingSamples", static_cast<int>(config.padding_samples));
@@ -136,11 +141,12 @@ Napi::Value SonareWrap::MasteringRepairTrimSilenceStereo(const Napi::CallbackInf
     return env.Undefined();
   }
   const int sr = node_narrow_int(env, info[2], "sampleRate");
-  // Library defaults (sonare_c_mastering.h SonareTrimSilenceConfig), applied
-  // before any options key overrides a field.
-  SonareTrimSilenceConfig config{0.001f, 0, SONARE_TRIM_SILENCE_MODE_PEAK, -60.0f, 400.0f};
+  SonareTrimSilenceConfig config = kTrimSilenceConfigDefaults;
   if (info.Length() >= 4 && info[3].IsObject()) {
-    if (!ReadTrimSilenceConfig(env, info[3].As<Napi::Object>(), &config)) return env.Undefined();
+    if (!ReadTrimSilenceConfig(env, info[3].As<Napi::Object>(), &config,
+                               "masteringRepairTrimSilenceStereo")) {
+      return env.Undefined();
+    }
   }
   SonareTrimSilenceStereoResult result{};
   SonareError err = sonare_mastering_repair_trim_silence_stereo(
@@ -169,7 +175,8 @@ Napi::Value SonareWrap::MasteringRepairDetectTrimRange(const Napi::CallbackInfo&
   const int sr = node_narrow_int(env, info[1], "sampleRate");
   SonareTrimSilenceConfig config = kTrimSilenceConfigDefaults;
   const bool has_options = info.Length() >= 3 && info[2].IsObject();
-  if (has_options && !ReadTrimSilenceConfig(env, info[2].As<Napi::Object>(), &config)) {
+  if (has_options && !ReadTrimSilenceConfig(env, info[2].As<Napi::Object>(), &config,
+                                            "masteringRepairDetectTrimRange")) {
     return env.Undefined();
   }
   SonareTrimRange range{};
@@ -205,7 +212,8 @@ Napi::Value SonareWrap::MasteringRepairDetectTrimRangeStereo(const Napi::Callbac
   const int sr = node_narrow_int(env, info[2], "sampleRate");
   SonareTrimSilenceConfig config = kTrimSilenceConfigDefaults;
   const bool has_options = info.Length() >= 4 && info[3].IsObject();
-  if (has_options && !ReadTrimSilenceConfig(env, info[3].As<Napi::Object>(), &config)) {
+  if (has_options && !ReadTrimSilenceConfig(env, info[3].As<Napi::Object>(), &config,
+                                            "masteringRepairDetectTrimRangeStereo")) {
     return env.Undefined();
   }
   SonareTrimRange range{};

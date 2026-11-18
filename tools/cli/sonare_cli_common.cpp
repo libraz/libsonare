@@ -49,6 +49,32 @@ int print_name_catalog(const CliArgs& args, std::string_view key,
   return 0;
 }
 
+std::string cli_token(std::string_view library_token) {
+  std::string out;
+  out.reserve(library_token.size() + 4);
+  auto is_digit = [](char c) { return (c >= '0' && c <= '9') || c == '.'; };
+  for (size_t i = 0; i < library_token.size(); ++i) {
+    const char c = library_token[i];
+    const bool upper = c >= 'A' && c <= 'Z';
+    const bool boundary = i > 0 && (upper || is_digit(c) != is_digit(library_token[i - 1]));
+    if (boundary) out.push_back('-');
+    out.push_back(upper ? static_cast<char>(c - 'A' + 'a') : c);
+  }
+  return out;
+}
+
+std::string library_token(std::string_view flag, std::string_view value,
+                          const std::vector<std::string>& library_tokens) {
+  std::string accepted;
+  for (const auto& token : library_tokens) {
+    const std::string spelled = cli_token(token);
+    if (spelled == value) return token;
+    accepted += accepted.empty() ? spelled : ", " + spelled;
+  }
+  throw std::invalid_argument(std::string(flag) + ": unknown value '" + std::string(value) +
+                              "'; expected one of: " + accepted);
+}
+
 std::vector<float> parse_float_list(const std::string& text) {
   return parse_number_list<float>(
       text, [](const std::string& item, size_t* consumed) { return std::stof(item, consumed); },
@@ -324,7 +350,9 @@ std::string find_voice_preset_in_pack(const std::string& pack_json, const std::s
   for (const auto& item : presets->as_array()) {
     const auto* id = item.find("id");
     if (id == nullptr || !id->is_string()) continue;
-    if (id->as_string() == preset_id) {
+    // An entry id is matched as written or by its kebab spelling, so a pack holding the
+    // built-in presets is addressed the way --preset names them.
+    if (id->as_string() == preset_id || cli_token(id->as_string()) == preset_id) {
       if (match != nullptr)
         throw std::invalid_argument("duplicate preset id in preset pack: " + preset_id);
       match = &item;

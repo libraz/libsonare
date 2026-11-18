@@ -62,23 +62,24 @@ uint32_t sonare_abi_version(void);
 // ============================================================================
 
 /// @brief Quantize a MIDI note number to the nearest pitch class enabled by
-///        @p mode_mask, anchored to @p reference_midi.
+///        @p mode_mask, anchored to @p scale_reference_midi.
 /// @param root Root pitch class in [0, 11] (0 = C, ... 11 = B).
 /// @param mode_mask 12-bit mask. Bit i (LSB = 0) is the i-th pitch class
 ///                  relative to @p root. E.g. 0b101010110101 = natural major.
-/// @param reference_midi MIDI number used as the chromatic origin (e.g. 69 for
+/// @param scale_reference_midi MIDI number used as the chromatic origin (e.g. 69 for
 ///                  A4 = 440 Hz). Pass 0.0f for the library default. Anything
 ///                  outside [0, 127], and anything non-finite, is rejected with
 ///                  @c SONARE_ERROR_INVALID_PARAMETER rather than resolving to
 ///                  the default.
 /// @param midi Input MIDI value (may be fractional).
 /// @param out_quantized_midi Receives the quantized MIDI value.
-SonareError sonare_scale_quantize_midi(int root, uint16_t mode_mask, float reference_midi,
+SonareError sonare_scale_quantize_midi(int root, uint16_t mode_mask, float scale_reference_midi,
                                        float midi, float* out_quantized_midi);
 
 /// @brief Returns the quantization correction in semitones (quantized - input).
-SonareError sonare_scale_correction_semitones(int root, uint16_t mode_mask, float reference_midi,
-                                              float midi, float* out_semitones);
+SonareError sonare_scale_correction_semitones(int root, uint16_t mode_mask,
+                                              float scale_reference_midi, float midi,
+                                              float* out_semitones);
 
 /// @brief Returns 1 if @p pitch_class is enabled by @p mode_mask (relative to
 ///        @p root), 0 otherwise. Returns @c SONARE_ERROR_INVALID_PARAMETER for

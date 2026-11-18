@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "core/audio.h"
+#include "sonare_wrap_options.h"
 #include "sonare_wrap_utils.h"
 
 namespace sonare_node::repair_detail {

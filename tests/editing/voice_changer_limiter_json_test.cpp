@@ -708,7 +708,7 @@ TEST_CASE("RealtimeVoiceChanger JSON refuses a present field of the wrong type",
       {R"({"dsp":{"formant":{"mode":3}}})", "formant.mode"},
       {R"({"dsp":{"eq":[]}})", "eq must be an object"},
       {R"({"dsp":5})", "dsp must be an object"},
-      {R"({"retuneSemitones":0,"retuneMix":"x"})", "retuneMix"},
+      {R"({"retunePitchSemitones":0,"retuneMix":"x"})", "retuneMix"},
   };
   for (const auto& c : cases) {
     CAPTURE(c.json);
@@ -826,10 +826,10 @@ TEST_CASE("RealtimeVoiceChanger JSON round-trips the voice transformer sections"
   const RealtimeVoiceChangerConfig config = transformer_config();
   REQUIRE(validate_realtime_voice_changer_config(config, nullptr, nullptr));
   const std::string json = realtime_voice_changer_config_to_json(config);
-  CHECK_THAT(json, Catch::Matchers::ContainsSubstring("\"schemaVersion\":2"));
-  CHECK_THAT(json, Catch::Matchers::ContainsSubstring("\"scale\":\"natural_minor\""));
-  CHECK_THAT(json, Catch::Matchers::ContainsSubstring("\"type\":\"bbd_chorus\""));
-  CHECK_THAT(json, Catch::Matchers::ContainsSubstring("\"division\":\"dotted_eighth\""));
+  CHECK_THAT(json, Catch::Matchers::ContainsSubstring("\"schemaVersion\":3"));
+  CHECK_THAT(json, Catch::Matchers::ContainsSubstring("\"scale\":\"naturalMinor\""));
+  CHECK_THAT(json, Catch::Matchers::ContainsSubstring("\"type\":\"bbdChorus\""));
+  CHECK_THAT(json, Catch::Matchers::ContainsSubstring("\"division\":\"dottedEighth\""));
   CHECK_THAT(json, Catch::Matchers::ContainsSubstring("\"steps\":[-2,5,7]"));
   RealtimeVoiceChangerConfig strict;
   std::string error;
@@ -839,14 +839,125 @@ TEST_CASE("RealtimeVoiceChanger JSON round-trips the voice transformer sections"
   CHECK(realtime_voice_changer_config_to_json(strict) == json);
 }
 
+namespace {
+
+std::string replace_all_text(std::string text, const std::string& from, const std::string& to) {
+  for (auto at = text.find(from); at != std::string::npos; at = text.find(from, at + to.size())) {
+    text.replace(at, from.size(), to);
+  }
+  return text;
+}
+
+// The version 2 spelling of a current document: old keys, tokens, built-in id and version.
+std::string as_version_two(std::string document) {
+  const std::pair<const char*, const char*> renames[] = {
+      {"\"schemaVersion\":3", "\"schemaVersion\":2"},
+      {"\"pitchSemitones\"", "\"semitones\""},
+      {"\"grainSizeSamples\"", "\"grainSize\""},
+      {"\"highPassHz\"", "\"highpassHz\""},
+      {"\"naturalMinor\"", "\"natural_minor\""},
+      {"\"bbdChorus\"", "\"bbd_chorus\""},
+      {"\"tempoDelay\"", "\"tempo_delay\""},
+      {"\"dottedEighth\"", "\"dotted_eighth\""},
+      {"\"id\":\"neutralMonitor\"", "\"id\":\"neutral-monitor\""},
+  };
+  for (const auto& [from, to] : renames) document = replace_all_text(document, from, to);
+  return document;
+}
+
+std::string transformer_document_as_neutral() {
+  const std::string json = realtime_voice_changer_config_to_json(transformer_config());
+  return replace_all_text(json, "\"id\":\"custom\"", "\"id\":\"neutralMonitor\"");
+}
+
+}  // namespace
+
+TEST_CASE("RealtimeVoiceChanger preset JSON translates a version 2 document on load",
+          "[voice_changer][json]") {
+  const std::string current = transformer_document_as_neutral();
+  const std::string legacy = as_version_two(current);
+  REQUIRE(legacy != current);
+  CHECK_THAT(legacy, Catch::Matchers::ContainsSubstring("\"natural_minor\""));
+  CHECK_THAT(legacy, Catch::Matchers::ContainsSubstring("\"id\":\"neutral-monitor\""));
+
+  std::string normalized;
+  std::string error;
+  REQUIRE(validate_realtime_voice_changer_preset_json(legacy, &normalized, &error));
+  // Re-saving writes the current version with the current keys, tokens and built-in id.
+  CHECK(normalized == current);
+  CHECK_THAT(normalized, Catch::Matchers::ContainsSubstring("\"schemaVersion\":3"));
+  CHECK_THAT(normalized, Catch::Matchers::ContainsSubstring("\"pitchSemitones\""));
+  CHECK_THAT(normalized, Catch::Matchers::ContainsSubstring("\"grainSizeSamples\""));
+  CHECK_THAT(normalized, Catch::Matchers::ContainsSubstring("\"highPassHz\""));
+  CHECK_THAT(normalized, Catch::Matchers::ContainsSubstring("\"id\":\"neutralMonitor\""));
+
+  RealtimeVoiceChangerConfig from_legacy;
+  RealtimeVoiceChangerConfig from_current;
+  REQUIRE(realtime_voice_changer_config_from_input(legacy, &from_legacy, &error));
+  REQUIRE(realtime_voice_changer_config_from_input(current, &from_current, &error));
+  require_same_transformer_fields(from_legacy, from_current);
+  CHECK(from_legacy.retune.grain_size == from_current.retune.grain_size);
+  CHECK(from_legacy.eq.highpass_hz == from_current.eq.highpass_hz);
+  require_same_transformer_fields(realtime_voice_changer_config_from_json(legacy), from_current);
+
+  // A custom id is left as written.
+  const std::string custom =
+      replace_all_text(legacy, "\"id\":\"neutral-monitor\"", "\"id\":\"hard-tune-copy\"");
+  REQUIRE(validate_realtime_voice_changer_preset_json(custom, &normalized, &error));
+  CHECK_THAT(normalized, Catch::Matchers::ContainsSubstring("\"id\":\"hard-tune-copy\""));
+}
+
+TEST_CASE("RealtimeVoiceChanger preset JSON round trip is stable at the current version",
+          "[voice_changer][json]") {
+  const std::string saved = transformer_document_as_neutral();
+  std::string once;
+  std::string twice;
+  std::string error;
+  REQUIRE(validate_realtime_voice_changer_preset_json(saved, &once, &error));
+  REQUIRE(validate_realtime_voice_changer_preset_json(once, &twice, &error));
+  CHECK(once == saved);
+  CHECK(twice == once);
+}
+
+TEST_CASE("RealtimeVoiceChanger preset JSON refuses an old spelling in a version 3 document",
+          "[voice_changer][json]") {
+  const std::string current = transformer_document_as_neutral();
+  const std::pair<const char*, const char*> stale[] = {
+      {"\"naturalMinor\"", "\"natural_minor\""}, {"\"bbdChorus\"", "\"bbd_chorus\""},
+      {"\"tempoDelay\"", "\"tempo_delay\""},     {"\"dottedEighth\"", "\"dotted_eighth\""},
+      {"\"pitchSemitones\"", "\"semitones\""},   {"\"grainSizeSamples\"", "\"grainSize\""},
+      {"\"highPassHz\"", "\"highpassHz\""},
+  };
+  for (const auto& [from, to] : stale) {
+    CAPTURE(to);
+    const std::string document = replace_all_text(current, from, to);
+    REQUIRE(document != current);
+    std::string normalized;
+    std::string error;
+    CHECK_FALSE(validate_realtime_voice_changer_preset_json(document, &normalized, &error));
+    CHECK_FALSE(error.empty());
+    SonareRealtimeVoiceChanger* handle = nullptr;
+    CHECK(sonare_realtime_voice_changer_create_json(document.c_str(), 48000, 128, 1, &handle) ==
+          SONARE_ERROR_INVALID_FORMAT);
+    CHECK(handle == nullptr);
+    char* out_normalized = nullptr;
+    char* out_error = nullptr;
+    CHECK(sonare_realtime_voice_changer_validate_preset_json(
+              document.c_str(), &out_normalized, &out_error) == SONARE_ERROR_INVALID_FORMAT);
+    CHECK(out_normalized == nullptr);
+    CHECK(out_error != nullptr);
+    sonare_free_string(out_error);
+  }
+}
+
 TEST_CASE("RealtimeVoiceChanger flat POD carries the voice transformer keys",
           "[voice_changer][json]") {
   const std::string base = R"json({
     "inputGainDb": 0, "outputGainDb": 0, "wetMix": 1,
-    "retuneSemitones": 0, "retuneMix": 1, "retuneGrainSize": 0,
+    "retunePitchSemitones": 0, "retuneMix": 1, "retuneGrainSizeSamples": 0,
     "formantFactor": 1, "formantAmount": 1, "formantBody": 0,
     "formantBrightness": 0, "formantNasal": 0,
-    "eqHighpassHz": 80, "eqBodyDb": 0, "eqPresenceDb": 1, "eqAirDb": 0,
+    "eqHighPassHz": 80, "eqBodyDb": 0, "eqPresenceDb": 1, "eqAirDb": 0,
     "gateThresholdDb": -55, "gateAttackMs": 2, "gateReleaseMs": 100, "gateRangeDb": 18,
     "compressorThresholdDb": -22, "compressorRatio": 2.5, "compressorAttackMs": 6,
     "compressorReleaseMs": 90, "compressorMakeupGainDb": 1,
@@ -855,19 +966,19 @@ TEST_CASE("RealtimeVoiceChanger flat POD carries the voice transformer keys",
     "reverbSeed": 1, "limiterCeilingDb": -1, "limiterReleaseMs": 50,
     "limiterEnableIspLimiter": true, "limiterIspCeilingDbtp": -1)json";
   const std::string transformer = R"json(,
-    "voiceEngineEngine": "psola", "voiceEngineF0MinHz": 90,
+    "voiceEngine": "psola", "voiceEngineF0MinHz": 90,
     "pitchCorrectionMode": "robot", "pitchCorrectionAmount": 0.75, "pitchCorrectionSpeedMs": 35,
-    "pitchCorrectionKeyRoot": 7, "pitchCorrectionScale": "natural_minor",
+    "pitchCorrectionKeyRoot": 7, "pitchCorrectionScale": "naturalMinor",
     "pitchCorrectionRobotOctave": -1,
-    "harmonyVoices": 2, "harmonyStep1": -2, "harmonyStep2": 5, "harmonyStep3": 7,
+    "harmonyVoices": 2, "harmonySteps": [-2, 5, 7],
     "harmonyLevel": 0.4, "harmonyLeadLevel": 0.9, "harmonyDetuneCents": 11, "harmonyDelayMs": 30,
     "vocoderEnabled": true, "vocoderBands": 24, "vocoderAttackMs": 1.5, "vocoderReleaseMs": 80,
     "vocoderSibilance": 0.6, "vocoderCarrierSource": "external", "vocoderCarrierWave": "ensemble",
     "vocoderEnsembleDetuneCents": 20, "vocoderLevel": 0.8,
-    "characterType": "bbd_chorus", "characterAmount": 0.25, "characterTone": -0.5,
-    "reverbVariationVariation": "tempo_delay", "reverbVariationDelayMs": 400,
+    "characterType": "bbdChorus", "characterAmount": 0.25, "characterTone": -0.5,
+    "reverbVariation": "tempoDelay", "reverbVariationDelayMs": 400,
     "reverbVariationFeedback": 0.6, "reverbVariationTempoBpm": 96,
-    "reverbVariationDivision": "dotted_eighth", "midiRelease": "input")json";
+    "reverbVariationDivision": "dottedEighth", "midiRelease": "input")json";
 
   RealtimeVoiceChangerConfig parsed;
   std::string error;
@@ -876,7 +987,7 @@ TEST_CASE("RealtimeVoiceChanger flat POD carries the voice transformer keys",
   require_same_transformer_fields(parsed, transformer_config());
   // The flat shape is complete or refused: a 36-key object misses the transformer keys.
   REQUIRE_FALSE(realtime_voice_changer_config_from_input(base + "}", &parsed, &error));
-  CHECK(error == "missing field: $.voiceEngineEngine");
+  CHECK(error == "missing field: $.voiceEngine");
   SonareRealtimeVoiceChanger* handle = nullptr;
   CHECK(sonare_realtime_voice_changer_create_json((base + "}").c_str(), 48000, 128, 1, &handle) ==
         SONARE_ERROR_INVALID_FORMAT);
@@ -890,13 +1001,15 @@ TEST_CASE("RealtimeVoiceChanger flat POD carries the voice transformer keys",
   };
   const Refusal refusals[] = {
       {R"("vocoderEnabled": true)", R"("vocoderEnabled": 1)", "vocoderEnabled"},
-      {R"("characterType": "bbd_chorus")", R"("characterType": 2)", "characterType"},
-      {R"("characterType": "bbd_chorus")", R"("characterType": "telephone")", "characterType"},
-      {R"("harmonyStep2": 5)", R"("harmonyStep2": "5")", "harmonyStep2"},
+      {R"("characterType": "bbdChorus")", R"("characterType": 2)", "characterType"},
+      {R"("characterType": "bbdChorus")", R"("characterType": "telephone")", "characterType"},
+      {R"("harmonySteps": [-2, 5, 7])", R"("harmonySteps": [-2, "5", 7])", "harmonySteps"},
+      {R"("harmonySteps": [-2, 5, 7])", R"("harmonySteps": [-2, 5])", "harmonySteps"},
+      {R"("harmonySteps": [-2, 5, 7])", R"("harmonySteps": 5)", "harmonySteps"},
       {R"("vocoderBands": 24)", R"("vocoderBands": 20.5)", "vocoderBands"},
       {R"("harmonyVoices": 2)", R"("harmonyVoices": 4)", "harmony.voices"},
       {R"("voiceEngineF0MinHz": 90)", R"("voiceEngineF0MinHz": 40)", "voiceEngine.f0MinHz"},
-      {R"("dotted_eighth", "midiRelease": "input")", R"("dotted_eighth")",
+      {R"("dottedEighth", "midiRelease": "input")", R"("dottedEighth")",
        "missing field: $.midiRelease"},
   };
   for (const Refusal& r : refusals) {
@@ -928,7 +1041,7 @@ TEST_CASE("RealtimeVoiceChanger JSON refuses a malformed transformer section as 
       {R"({"dsp":{"character":null}})", "character must be an object"},
       {R"({"dsp":{"reverbVariation":[]}})", "reverbVariation must be an object"},
       {R"({"dsp":{"midi":{"release":null}}})", "midi.release"},
-      {R"({"retuneSemitones":0,"reverbVariationVariation":"spring"})", "reverbVariationVariation"},
+      {R"({"retunePitchSemitones":0,"reverbVariation":"spring"})", "reverbVariation"},
   };
   for (const auto& c : cases) {
     CAPTURE(c.json);

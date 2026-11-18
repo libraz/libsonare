@@ -167,14 +167,13 @@ struct EnumField {
 };
 
 const EnumField kEnumFields[] = {
-    {"voice_engine_engine", &Config::voice_engine_engine, SONARE_PITCH_ENGINE_PSOLA},
+    {"voice_engine", &Config::voice_engine, SONARE_PITCH_ENGINE_PSOLA},
     {"pitch_correction_mode", &Config::pitch_correction_mode, SONARE_PITCH_CORRECTION_ROBOT},
     {"pitch_correction_scale", &Config::pitch_correction_scale, SONARE_SCALE_CHROMATIC},
     {"vocoder_carrier_source", &Config::vocoder_carrier_source, SONARE_VOCODER_CARRIER_EXTERNAL},
     {"vocoder_carrier_wave", &Config::vocoder_carrier_wave, SONARE_VOCODER_WAVE_ENSEMBLE},
     {"character_type", &Config::character_type, SONARE_CHARACTER_STROBO},
-    {"reverb_variation_variation", &Config::reverb_variation_variation,
-     SONARE_REVERB_VARIATION_DUB_ECHO},
+    {"reverb_variation", &Config::reverb_variation, SONARE_REVERB_VARIATION_DUB_ECHO},
     {"reverb_variation_division", &Config::reverb_variation_division,
      SONARE_NOTE_DIVISION_SIXTEENTH},
     {"midi_release", &Config::midi_release, SONARE_MIDI_RELEASE_INPUT},
@@ -192,7 +191,7 @@ constexpr SonareVoiceCharacterPreset kAllPresets[] = {
 /// A configuration whose every transformer field differs from the default.
 Config distinctive_config() {
   Config c = default_config();
-  c.voice_engine_engine = SONARE_PITCH_ENGINE_PSOLA;
+  c.voice_engine = SONARE_PITCH_ENGINE_PSOLA;
   c.voice_engine_f0_min_hz = 85.5f;
   c.pitch_correction_mode = SONARE_PITCH_CORRECTION_AUTO;
   c.pitch_correction_amount = 0.75f;
@@ -220,7 +219,7 @@ Config distinctive_config() {
   c.character_type = SONARE_CHARACTER_BBD_CHORUS;
   c.character_amount = 0.375f;
   c.character_tone = -0.5f;
-  c.reverb_variation_variation = SONARE_REVERB_VARIATION_ECHO;
+  c.reverb_variation = SONARE_REVERB_VARIATION_ECHO;
   c.reverb_variation_delay_ms = 640.0f;
   c.reverb_variation_feedback = 0.625f;
   c.reverb_variation_tempo_bpm = 96.0f;
@@ -303,7 +302,7 @@ TEST_CASE("get_config round-trips every transformer field, harmony steps include
   const Handle h = make(in);
   const Config out = read_config(h);
 
-  CHECK(out.voice_engine_engine == in.voice_engine_engine);
+  CHECK(out.voice_engine == in.voice_engine);
   CHECK(out.voice_engine_f0_min_hz == in.voice_engine_f0_min_hz);
   CHECK(out.pitch_correction_mode == in.pitch_correction_mode);
   CHECK(out.pitch_correction_amount == in.pitch_correction_amount);
@@ -331,7 +330,7 @@ TEST_CASE("get_config round-trips every transformer field, harmony steps include
   CHECK(out.character_type == in.character_type);
   CHECK(out.character_amount == in.character_amount);
   CHECK(out.character_tone == in.character_tone);
-  CHECK(out.reverb_variation_variation == in.reverb_variation_variation);
+  CHECK(out.reverb_variation == in.reverb_variation);
   CHECK(out.reverb_variation_delay_ms == in.reverb_variation_delay_ms);
   CHECK(out.reverb_variation_feedback == in.reverb_variation_feedback);
   CHECK(out.reverb_variation_tempo_bpm == in.reverb_variation_tempo_bpm);
@@ -352,7 +351,7 @@ TEST_CASE("get_config round-trips every transformer field, harmony steps include
   }
   for (const auto& f : kEnumFields) {
     INFO(f.name);
-    if (f.member == &Config::voice_engine_engine) continue;
+    if (f.member == &Config::voice_engine) continue;
     CHECK(in.*f.member != def.*f.member);
   }
   for (int i = 0; i < 3; ++i) CHECK(in.harmony_steps[i] != def.harmony_steps[i]);
@@ -361,10 +360,10 @@ TEST_CASE("get_config round-trips every transformer field, harmony steps include
 
 TEST_CASE("get_config reads the grain engine back from a grain handle", "[capi][voice_transform]") {
   Config grain = default_config();
-  REQUIRE(grain.voice_engine_engine == SONARE_PITCH_ENGINE_PSOLA);
-  grain.voice_engine_engine = SONARE_PITCH_ENGINE_GRAIN;
+  REQUIRE(grain.voice_engine == SONARE_PITCH_ENGINE_PSOLA);
+  grain.voice_engine = SONARE_PITCH_ENGINE_GRAIN;
   const Handle h = make(grain);
-  CHECK(read_config(h).voice_engine_engine == SONARE_PITCH_ENGINE_GRAIN);
+  CHECK(read_config(h).voice_engine == SONARE_PITCH_ENGINE_GRAIN);
 }
 
 TEST_CASE("Every preset round-trips through the POD and agrees with its JSON form",
@@ -378,7 +377,7 @@ TEST_CASE("Every preset round-trips through the POD and agrees with its JSON for
     // The POD read back is the POD that went in, bar the grain size prepare() resolves (the
     // struct has no padding, so a byte comparison covers every field).
     Config expected = pod;
-    expected.retune_grain_size = read_config(from_pod).retune_grain_size;
+    expected.retune_grain_size_samples = read_config(from_pod).retune_grain_size_samples;
     CHECK(same_bytes(read_config(from_pod), expected));
 
     // The POD route and the preset-id route build the same chain configuration.
@@ -533,7 +532,7 @@ TEST_CASE("An unknown enum ordinal is refused and the previous config is kept",
     // The last declared ordinal itself is a value, not a refusal, on a fresh handle.
     Config c = good;
     c.*(f.member) = f.last;
-    if (f.member == &Config::voice_engine_engine) continue;  // psola is the default already
+    if (f.member == &Config::voice_engine) continue;  // psola is the default already
     Handle ok;
     const SonareError err = create(c, &ok);
     INFO("last ordinal " << f.last);
@@ -548,7 +547,7 @@ TEST_CASE("An unknown enum ordinal is refused and the previous config is kept",
 TEST_CASE("The grain engine refuses auto, robot, harmony and the vocoder",
           "[capi][voice_transform]") {
   Config grain = default_config();
-  grain.voice_engine_engine = SONARE_PITCH_ENGINE_GRAIN;
+  grain.voice_engine = SONARE_PITCH_ENGINE_GRAIN;
   {
     Handle h;
     REQUIRE(create(grain, &h) == SONARE_OK);  // the grain engine itself is valid
@@ -586,7 +585,7 @@ TEST_CASE("engine, f0_min_hz and vocoder bands are fixed at creation", "[capi][v
   const Config before = read_config(h);
 
   Config c = base;
-  c.voice_engine_engine = SONARE_PITCH_ENGINE_GRAIN;
+  c.voice_engine = SONARE_PITCH_ENGINE_GRAIN;
   CHECK(sonare_realtime_voice_changer_set_config(h.get(), &c) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK_THAT(std::string(sonare_last_error_message()), ContainsSubstring("prepare"));
 
@@ -605,7 +604,7 @@ TEST_CASE("engine, f0_min_hz and vocoder bands are fixed at creation", "[capi][v
   // The same values are a live update; a grain handle refuses a switch to psola the same way.
   CHECK(sonare_realtime_voice_changer_set_config(h.get(), &base) == SONARE_OK);
   Config grain = base;
-  grain.voice_engine_engine = SONARE_PITCH_ENGINE_GRAIN;
+  grain.voice_engine = SONARE_PITCH_ENGINE_GRAIN;
   const Handle g = make(grain);
   CHECK(sonare_realtime_voice_changer_set_config(g.get(), &base) == SONARE_ERROR_INVALID_PARAMETER);
 }
@@ -613,7 +612,7 @@ TEST_CASE("engine, f0_min_hz and vocoder bands are fixed at creation", "[capi][v
 TEST_CASE("The echo delay is capped at 3000 ms and a slow tempo delay stays inside it",
           "[capi][voice_transform]") {
   Config echo = default_config();
-  echo.reverb_variation_variation = SONARE_REVERB_VARIATION_ECHO;
+  echo.reverb_variation = SONARE_REVERB_VARIATION_ECHO;
   echo.reverb_variation_delay_ms = 3000.0f;
   Handle h;
   CHECK(create(echo, &h) == SONARE_OK);
@@ -624,7 +623,7 @@ TEST_CASE("The echo delay is capped at 3000 ms and a slow tempo delay stays insi
 
   // Slowest tempo, longest note value: 2000 ms, accepted.
   Config tempo = default_config();
-  tempo.reverb_variation_variation = SONARE_REVERB_VARIATION_TEMPO_DELAY;
+  tempo.reverb_variation = SONARE_REVERB_VARIATION_TEMPO_DELAY;
   tempo.reverb_variation_tempo_bpm = 30.0f;
   tempo.reverb_variation_division = SONARE_NOTE_DIVISION_QUARTER;
   CHECK(create(tempo, &h) == SONARE_OK);
@@ -757,7 +756,7 @@ TEST_CASE("A full note queue gives INVALID_STATE, and all_notes_off still succee
 
 TEST_CASE("The note entries on a grain handle give INVALID_STATE", "[capi][voice_transform]") {
   Config grain = default_config();
-  grain.voice_engine_engine = SONARE_PITCH_ENGINE_GRAIN;
+  grain.voice_engine = SONARE_PITCH_ENGINE_GRAIN;
   const Handle h = make(grain);
   CHECK(sonare_realtime_voice_changer_note_on(h.get(), 60, 1.0f) == SONARE_ERROR_INVALID_STATE);
   CHECK(sonare_realtime_voice_changer_note_off(h.get(), 60) == SONARE_ERROR_INVALID_STATE);

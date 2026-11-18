@@ -6,10 +6,10 @@
   "additionalProperties": false,
   "required": ["schemaVersion", "presets"],
   "properties": {
-    "schemaVersion": { "type": "integer", "enum": [1, 2] },
+    "schemaVersion": { "type": "integer", "enum": [3] },
     "packId": {
       "type": "string",
-      "pattern": "^[a-z0-9][a-z0-9._-]*$",
+      "pattern": "^[a-z0-9][A-Za-z0-9._-]*$",
       "minLength": 1,
       "maxLength": 96
     },

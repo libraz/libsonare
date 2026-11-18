@@ -32,7 +32,7 @@ struct EnumNames<PitchCorrectionMode> {
 template <>
 struct EnumNames<ScaleKind> {
   static constexpr std::array<EnumName, 3> kNames = {
-      {{0, "major"}, {1, "natural_minor"}, {2, "chromatic"}}};
+      {{0, "major"}, {1, "naturalMinor"}, {2, "chromatic"}}};
 };
 template <>
 struct EnumNames<VocoderCarrierSource> {
@@ -45,17 +45,17 @@ struct EnumNames<VocoderCarrierWave> {
 template <>
 struct EnumNames<CharacterType> {
   static constexpr std::array<EnumName, 5> kNames = {
-      {{0, "none"}, {1, "megaphone"}, {2, "radio"}, {3, "bbd_chorus"}, {4, "strobo"}}};
+      {{0, "none"}, {1, "megaphone"}, {2, "radio"}, {3, "bbdChorus"}, {4, "strobo"}}};
 };
 template <>
 struct EnumNames<ReverbVariation> {
   static constexpr std::array<EnumName, 4> kNames = {
-      {{0, "reverb"}, {1, "echo"}, {2, "tempo_delay"}, {3, "dub_echo"}}};
+      {{0, "reverb"}, {1, "echo"}, {2, "tempoDelay"}, {3, "dubEcho"}}};
 };
 template <>
 struct EnumNames<NoteDivision> {
   static constexpr std::array<EnumName, 4> kNames = {
-      {{0, "quarter"}, {1, "eighth"}, {2, "dotted_eighth"}, {3, "sixteenth"}}};
+      {{0, "quarter"}, {1, "eighth"}, {2, "dottedEighth"}, {3, "sixteenth"}}};
 };
 template <>
 struct EnumNames<MidiRelease> {
@@ -162,14 +162,14 @@ void visit_scalar_fields(Config& c, Visit&& v) {
   v("inputGainDb", c.input_gain_db, kInputGainDb, 0.0f);
   v("outputGainDb", c.output_gain_db, kOutputGainDb, 0.0f);
   v("wetMix", c.wet_mix, kUnit, 1.0f);
-  v("retune.semitones", c.retune.semitones, kSemitones, 0.0f);
+  v("retune.pitchSemitones", c.retune.semitones, kSemitones, 0.0f);
   v("retune.mix", c.retune.mix, kUnit, 1.0f);
   v("formant.factor", c.formant.factor, kFormantFactor, 1.0f);
   v("formant.amount", c.formant.amount, kUnit, 1.0f);
   v("formant.body", c.formant.body, kBipolar, 0.0f);
   v("formant.brightness", c.formant.brightness, kBipolar, 0.0f);
   v("formant.nasal", c.formant.nasal, kBipolar, 0.0f);
-  v("eq.highpassHz", c.eq.highpass_hz, kHighpassHz, 80.0f);
+  v("eq.highPassHz", c.eq.highpass_hz, kHighpassHz, 80.0f);
   v("eq.bodyDb", c.eq.body_db, kEqGainDb, 0.0f);
   v("eq.presenceDb", c.eq.presence_db, kEqGainDb, 0.0f);
   v("eq.airDb", c.eq.air_db, kEqGainDb, 0.0f);

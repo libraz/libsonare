@@ -15,7 +15,7 @@
 
 /// @brief Applies the keys present in @p config on top of @p seed.
 /// @details The seed is what makes a partial object a MERGE rather than a
-///          replacement: `setConfig({mix: 0.5})` after `setConfig({semitones:
+///          replacement: `setConfig({mix: 0.5})` after `setConfig({pitchSemitones:
 ///          7})` used to start from a default-constructed config and silently
 ///          reset the pitch shift to 0. Node and Python seed from the current
 ///          values; the construction path passes no seed, so it still starts
@@ -26,14 +26,16 @@ editing::voice_changer::StreamingRetuneConfig streamingRetuneConfigFromVal(
   if (config.isNull() || config.isUndefined()) {
     return result;
   }
+  refuseUnknownKeys(config, "StreamingRetune", {"pitchSemitones", "mix", "grainSizeSamples"});
   // A non-finite control is a caller error, not a request to clamp: silently
   // dropping it here left a NaN request looking like an omitted key, and made
   // this the one surface that answered differently from the C ABI. Finite
   // out-of-range values stay clamped -- that is the documented contract.
-  if (const auto semitones = optionalNumber(objectProperty(config, "semitones"), "semitones");
+  if (const auto semitones =
+          optionalNumber(objectProperty(config, "pitchSemitones"), "pitchSemitones");
       semitones) {
     if (!std::isfinite(*semitones)) {
-      throw WasmRangeError("StreamingRetune: semitones must be finite");
+      throw WasmRangeError("StreamingRetune: pitchSemitones must be finite");
     }
     result.semitones = std::clamp(*semitones, -24.0f, 24.0f);
   }
@@ -43,13 +45,16 @@ editing::voice_changer::StreamingRetuneConfig streamingRetuneConfigFromVal(
     }
     result.mix = std::clamp(*mix, 0.0f, 1.0f);
   }
-  const auto grain_size = optionalNumber(objectProperty(config, "grainSize"), "grainSize");
-  const auto snake_case_grain_size =
-      optionalNumber(objectProperty(config, "grain_size"), "grain_size");
-  const auto grain = snake_case_grain_size ? snake_case_grain_size : grain_size;
-  if (grain) {
+  if (const auto grain =
+          optionalNumber(objectProperty(config, "grainSizeSamples"), "grainSizeSamples");
+      grain) {
     if (!std::isfinite(*grain)) {
-      throw WasmRangeError("StreamingRetune: grainSize must be finite");
+      throw WasmRangeError("StreamingRetune: grainSizeSamples must be finite");
+    }
+    if (*grain == 0.0f) {
+      throw WasmRangeError(
+          "StreamingRetune: grainSizeSamples must be positive; omit it for an automatic grain "
+          "size");
     }
     result.grain_size = static_cast<int>(std::lround(std::clamp(*grain, 0.0f, 8192.0f)));
   }
@@ -58,9 +63,9 @@ editing::voice_changer::StreamingRetuneConfig streamingRetuneConfigFromVal(
 
 val streamingRetuneConfigToVal(const editing::voice_changer::StreamingRetuneConfig& config) {
   val out = val::object();
-  out.set("semitones", config.semitones);
+  out.set("pitchSemitones", config.semitones);
   out.set("mix", config.mix);
-  out.set("grainSize", config.grain_size);
+  out.set("grainSizeSamples", config.grain_size);
   return out;
 }
 
@@ -80,7 +85,7 @@ class StreamingRetuneWrapper {
 
   void setConfig(val config) {
     // Seed from the applied controls so an object carrying one key leaves the
-    // others alone, matching Node and Python. grainSize is seeded from the last
+    // others alone, matching Node and Python. grainSizeSamples is seeded from the last
     // REQUESTED value rather than from config(): once prepared, config()
     // reports the effective grain, and seeding with that would freeze the 0
     // "derive from the sample rate" sentinel into a literal, so re-preparing at
@@ -95,7 +100,7 @@ class StreamingRetuneWrapper {
 
   val config() const { return streamingRetuneConfigToVal(retune_.config()); }
 
-  int grainSize() const { return retune_.grain_size(); }
+  int grainSizeSamples() const { return retune_.grain_size(); }
 
   int latencySamples() const { return retune_.latency_samples(); }
 
@@ -154,7 +159,7 @@ void registerStreamingRetuneBindings() {
       .function("reset", &StreamingRetuneWrapper::reset)
       .function("setConfig", &StreamingRetuneWrapper::setConfig)
       .function("config", &StreamingRetuneWrapper::config)
-      .function("grainSize", &StreamingRetuneWrapper::grainSize)
+      .function("grainSizeSamples", &StreamingRetuneWrapper::grainSizeSamples)
       .function("latencySamples", &StreamingRetuneWrapper::latencySamples)
       .function("processMono", &StreamingRetuneWrapper::processMono);
   function("createStreamingRetune", &createStreamingRetune, allow_raw_pointers());

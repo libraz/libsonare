@@ -1328,7 +1328,8 @@ TEST_CASE("sonare streaming retune exports deterministic feature-off stubs",
   REQUIRE(sonare_streaming_retune_process_mono(nullptr, &sample, 1) == SONARE_ERROR_NOT_SUPPORTED);
 
   grain = 123;
-  REQUIRE(sonare_streaming_retune_grain_size(nullptr, &grain) == SONARE_ERROR_NOT_SUPPORTED);
+  REQUIRE(sonare_streaming_retune_grain_size_samples(nullptr, &grain) ==
+          SONARE_ERROR_NOT_SUPPORTED);
   CHECK(grain == 0);
   int latency = 456;
   REQUIRE(sonare_streaming_retune_latency_samples(nullptr, &latency) == SONARE_ERROR_NOT_SUPPORTED);

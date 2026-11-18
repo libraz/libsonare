@@ -86,7 +86,7 @@ typedef struct {
   float listener_y;
   float listener_z;
   float absorption;     /* uniform wall absorption, clamped to [0, 0.999] */
-  float max_seconds;    /* hard RIR length cap; 0 = natural length */
+  float max_sec;        /* hard RIR length cap; 0 = natural length */
   float mixing_time_ms; /* early/late crossover (ms); 0 = auto (~sqrt(V) ms) */
   float crossfade_ms;   /* equal-power crossfade width around the mixing time (ms) */
   int ism_order;        /* image-source reflection order (>= 0) */
@@ -197,7 +197,7 @@ typedef struct {
   float absorption;              /* target uniform wall absorption */
   float source_tail_suppression; /* [0,1] gentle source-reverb reduction */
   float wet;                     /* [0,1] target-room mix */
-  float max_seconds;             /* target RIR length cap; 0 = natural */
+  float max_sec;                 /* target RIR length cap; 0 = natural */
   float mixing_time_ms;          /* early/late crossover (ms); 0 = auto (~sqrt(V) ms) */
   float crossfade_ms;            /* equal-power crossfade width around mixing time (ms) */
   int ism_order;
@@ -283,7 +283,7 @@ static_assert(offsetof(SonareRoomMorphConfig, receiver_spacing_m) ==
 
 /// @brief Fill @p config with struct_size and the library default of every field: a
 ///   7 x 5 x 3 m room, source (1, 1, 1.2), listener (5, 4, 1.7), absorption 0.2, no
-///   length cap (max_seconds 0), automatic mixing time (mixing_time_ms 0), crossfade
+///   length cap (max_sec 0), automatic mixing time (mixing_time_ms 0), crossfade
 ///   5 ms, ism_order 3, EYRING, seed 1, no band arrays, MATERIAL_PRESET_NONE, air
 ///   absorption ON at 20 degC / 50 %. No-op on NULL.
 void sonare_rir_synth_config_init(SonareRirSynthConfig* config);
@@ -332,7 +332,7 @@ void sonare_free_room_morph_stereo_result(SonareRoomMorphStereoResult* result);
 ///        its value by position. Static storage.
 const char* sonare_material_preset_name(int preset);
 
-/// @brief Name of a SONARE_ACOUSTIC_MODE_* value ("auto", "blind", "impulse_response"), or NULL
+/// @brief Name of a SONARE_ACOUSTIC_MODE_* value ("auto", "blind", "impulseResponse"), or NULL
 ///        when @p mode is not one. Contiguous from 0, enumerated as sonare_material_preset_name.
 ///        Static storage, never invalidated; do not free.
 const char* sonare_acoustic_mode_name(int mode);

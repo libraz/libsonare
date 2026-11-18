@@ -34,7 +34,7 @@ SonareRirSynthConfig valid_rir_config() {
   cfg.listener_y = 4.0f;
   cfg.listener_z = 1.7f;
   cfg.absorption = 0.15f;
-  cfg.max_seconds = 0.1f;
+  cfg.max_sec = 0.1f;
   return cfg;
 }
 
@@ -82,7 +82,7 @@ TEST_CASE("sonare acoustic C API rejects non-finite and out-of-range RIR inputs"
 
   for (float invalid : {nan, inf, -inf}) {
     SonareRirSynthConfig cfg = valid_rir_config();
-    cfg.max_seconds = invalid;
+    cfg.max_sec = invalid;
     SonareRirSynthResult result{};
     REQUIRE(sonare_synthesize_rir(&cfg, 48000, &result) == SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(result.rir == nullptr);
@@ -119,7 +119,7 @@ TEST_CASE("sonare acoustic C API refuses invalid RIR geometry with its diagnosti
 
 TEST_CASE("sonare acoustic C API publishes recoverable RIR diagnostics", "[c_api][acoustic]") {
   SonareRirSynthConfig cfg = valid_rir_config();
-  cfg.max_seconds = 0.001f;
+  cfg.max_sec = 0.001f;
   SonareRirSynthResult result{};
 
   REQUIRE(sonare_synthesize_rir(&cfg, 48000, &result) == SONARE_OK);
@@ -133,7 +133,7 @@ TEST_CASE("sonare acoustic C API publishes recoverable RIR diagnostics", "[c_api
 TEST_CASE("sonare acoustic C API publishes every RIR diagnostic", "[c_api][acoustic]") {
   // A request that trips several at once.
   SonareRirSynthConfig cfg = valid_rir_config();
-  cfg.max_seconds = 0.005f;
+  cfg.max_sec = 0.005f;
   SonareRirSynthResult result{};
   REQUIRE(sonare_synthesize_rir(&cfg, 22050, &result) == SONARE_OK);
 
@@ -154,7 +154,7 @@ TEST_CASE("sonare acoustic C API publishes every RIR diagnostic", "[c_api][acous
   // A later clean call clears the list, so a count read after it is that call's
   // rather than a slot nothing resets.
   SonareRirSynthConfig clean = valid_rir_config();
-  clean.max_seconds = 3.0f;
+  clean.max_sec = 3.0f;
   SonareRirSynthResult clean_result{};
   REQUIRE(sonare_synthesize_rir(&clean, 22050, &clean_result) == SONARE_OK);
   CHECK(sonare_last_diagnostic_count() == 0);
@@ -168,7 +168,7 @@ TEST_CASE("sonare acoustic C API honors the late-tail model selector", "[c_api][
   // for alpha-bar above ~0.2); the two models must produce different tails.
   SonareRirSynthConfig sabine = valid_rir_config();
   sabine.absorption = 0.4f;
-  sabine.max_seconds = 0.3f;
+  sabine.max_sec = 0.3f;
   sabine.late_model = SONARE_REVERB_MODEL_SABINE;
   SonareRirSynthConfig eyring = sabine;
   eyring.late_model = SONARE_REVERB_MODEL_EYRING;
@@ -207,7 +207,7 @@ TEST_CASE("sonare acoustic C API config init sets struct_size and the library de
   CHECK(rir.listener_y == 4.0f);
   CHECK(rir.listener_z == 1.7f);
   CHECK(rir.absorption == 0.2f);
-  CHECK(rir.max_seconds == 0.0f);
+  CHECK(rir.max_sec == 0.0f);
   CHECK(rir.mixing_time_ms == 0.0f);
   CHECK(rir.crossfade_ms == 5.0f);
   CHECK(rir.ism_order == 3);
@@ -230,7 +230,7 @@ TEST_CASE("sonare acoustic C API config init sets struct_size and the library de
   CHECK(morph.absorption == 0.2f);
   CHECK(morph.source_tail_suppression == 0.5f);
   CHECK(morph.wet == 0.5f);
-  CHECK(morph.max_seconds == 0.0f);
+  CHECK(morph.max_sec == 0.0f);
   CHECK(morph.mixing_time_ms == 0.0f);
   CHECK(morph.crossfade_ms == 5.0f);
   CHECK(morph.ism_order == 3);
@@ -264,7 +264,7 @@ TEST_CASE("sonare acoustic C API refuses a room config below its struct_size",
   input[0] = 1.0f;
   SonareRoomMorphConfig morph;
   sonare_room_morph_config_init(&morph);
-  morph.max_seconds = 0.1f;
+  morph.max_sec = 0.1f;
   morph.struct_size = sizeof(SonareRoomMorphConfig) - 1;
   float* out = nullptr;
   size_t out_length = 0;
@@ -291,7 +291,7 @@ TEST_CASE("sonare acoustic C API refuses a late_model or air_absorption of 0",
   input[0] = 1.0f;
   SonareRoomMorphConfig morph;
   sonare_room_morph_config_init(&morph);
-  morph.max_seconds = 0.1f;
+  morph.max_sec = 0.1f;
   float* out = nullptr;
   size_t out_length = 0;
   morph.late_model = 0;
@@ -308,7 +308,7 @@ TEST_CASE("sonare acoustic C API reads seed 0 as a seed", "[c_api][acoustic]") {
   // from the default seed 1.
   SonareRirSynthConfig base = valid_rir_config();
   base.absorption = 0.3f;
-  base.max_seconds = 0.4f;  // long enough that the seeded late tail contributes
+  base.max_sec = 0.4f;  // long enough that the seeded late tail contributes
 
   SonareRirSynthConfig zero_seed = base;
   zero_seed.seed = 0u;
@@ -358,7 +358,7 @@ TEST_CASE("sonare acoustic C API publishes the morph's own RIR diagnostics", "[c
   cfg.listener_z = 1.7f;
   cfg.absorption = 0.4f;
   cfg.wet = 1.0f;
-  cfg.max_seconds = 0.3f;
+  cfg.max_sec = 0.3f;
   cfg.seed = 1u;
   // Well above the synthesizer's safe maximum rather than one past it: this case
   // is about the channel the warning travels on, not about where the clamp sits.
@@ -405,7 +405,7 @@ TEST_CASE("sonare acoustic C API morph honours the mixing-time / crossfade contr
   base.absorption = 0.2f;
   base.source_tail_suppression = 0.0f;
   base.wet = 1.0f;
-  base.max_seconds = 0.3f;
+  base.max_sec = 0.3f;
   base.ism_order = 3;
   base.seed = 1u;
   base.late_model = SONARE_REVERB_MODEL_EYRING;
@@ -454,7 +454,7 @@ TEST_CASE("sonare acoustic C API refuses a source outside the room", "[c_api][ac
 
 TEST_CASE("sonare acoustic C API estimates a room from a synthesized RIR", "[c_api][acoustic]") {
   SonareRirSynthConfig synth_cfg = valid_rir_config();
-  synth_cfg.max_seconds = 0.0f;
+  synth_cfg.max_sec = 0.0f;
   SonareRirSynthResult rir{};
   REQUIRE(sonare_synthesize_rir(&synth_cfg, 48000, &rir) == SONARE_OK);
   REQUIRE(rir.rir != nullptr);
@@ -486,7 +486,7 @@ TEST_CASE("sonare acoustic C API estimates a room from a synthesized RIR", "[c_a
 TEST_CASE("sonare acoustic room estimates publish atomically on allocation failure",
           "[c_api][acoustic][allocation]") {
   SonareRirSynthConfig synth_cfg = valid_rir_config();
-  synth_cfg.max_seconds = 0.1f;
+  synth_cfg.max_sec = 0.1f;
   SonareRirSynthResult rir{};
   REQUIRE(sonare_synthesize_rir(&synth_cfg, 48000, &rir) == SONARE_OK);
   REQUIRE(rir.rir != nullptr);
@@ -630,7 +630,7 @@ TEST_CASE("sonare acoustic C API room morph appends a target tail", "[c_api][aco
   cfg.absorption = 0.08f;
   cfg.source_tail_suppression = 0.5f;
   cfg.wet = 0.7f;
-  cfg.max_seconds = 0.1f;
+  cfg.max_sec = 0.1f;
   cfg.ism_order = 3;
   cfg.seed = 1u;
 
@@ -657,7 +657,7 @@ TEST_CASE("sonare acoustic C API uses per-band wall absorption", "[c_api][acoust
   banded.absorption_bands = bands;
   banded.absorption_band_count = 6;
   banded.material_preset = SONARE_MATERIAL_PRESET_NONE;  // bands apply
-  banded.max_seconds = 0.3f;
+  banded.max_sec = 0.3f;
 
   SonareRirSynthConfig scalar = banded;
   scalar.absorption_bands = nullptr;  // fall back to the scalar 0.05 absorption
@@ -693,7 +693,7 @@ TEST_CASE("sonare acoustic C API uses per-band wall scattering", "[c_api][acoust
   smooth.scattering_bands = smooth_scattering;
   smooth.scattering_band_count = 6;
   smooth.material_preset = SONARE_MATERIAL_PRESET_NONE;
-  smooth.max_seconds = 0.3f;
+  smooth.max_sec = 0.3f;
   smooth.mixing_time_ms = 0.0f;
 
   SonareRirSynthConfig rough = smooth;
@@ -722,7 +722,7 @@ TEST_CASE("sonare acoustic C API selects a material preset", "[c_api][acoustic]"
   // distinct presets must yield distinct RIRs from the same geometry.
   SonareRirSynthConfig curtain = valid_rir_config();
   curtain.material_preset = SONARE_MATERIAL_PRESET_CURTAIN;  // heavy HF absorption
-  curtain.max_seconds = 0.3f;
+  curtain.max_sec = 0.3f;
   SonareRirSynthConfig concrete = curtain;
   concrete.material_preset = SONARE_MATERIAL_PRESET_CONCRETE;  // near-rigid
 
@@ -735,7 +735,7 @@ TEST_CASE("sonare acoustic C API selects a material preset", "[c_api][acoustic]"
 
   // Concrete (near-rigid) and curtain (heavy HF absorption) imprint very
   // different reflection coefficients and decay, so the synthesized RIRs differ
-  // in CONTENT. Compare sample-by-sample (max_seconds caps both to the same
+  // in CONTENT. Compare sample-by-sample (max_sec caps both to the same
   // length, so a length comparison alone would be vacuous).
   bool differs = concrete_rir.length != curtain_rir.length;
   const size_t common =
@@ -767,7 +767,7 @@ TEST_CASE("sonare acoustic C API morph honours the new tail controls", "[c_api][
   base.absorption = 0.4f;  // absorptive enough that Sabine/Eyring diverge
   base.source_tail_suppression = 0.0f;
   base.wet = 1.0f;
-  base.max_seconds = 0.3f;
+  base.max_sec = 0.3f;
   base.ism_order = 3;
   base.seed = 1u;
   base.late_model = SONARE_REVERB_MODEL_SABINE;
@@ -819,7 +819,7 @@ SonareRirSynthConfig air_hall_config() {
   cfg.listener_y = 8.0f;
   cfg.listener_z = 1.7f;
   cfg.absorption = 0.2f;
-  cfg.max_seconds = 0.5f;
+  cfg.max_sec = 0.5f;
   cfg.ism_order = 2;
   cfg.seed = 3u;
   return cfg;
@@ -957,7 +957,7 @@ TEST_CASE("sonare acoustic C API reports an implausible air climate", "[c_api][a
     cfg.absorption = 0.08f;
     cfg.source_tail_suppression = 0.5f;
     cfg.wet = 0.7f;
-    cfg.max_seconds = 0.1f;
+    cfg.max_sec = 0.1f;
     cfg.ism_order = 2;
     cfg.air_absorption = SONARE_AIR_ABSORPTION_ON;
     cfg.air_humidity_percent = 150.0f;  // outside [0, 100]
@@ -988,7 +988,7 @@ TEST_CASE("sonare acoustic C API routes air absorption into the morph target roo
   base.absorption = 0.2f;
   base.source_tail_suppression = 0.5f;
   base.wet = 1.0f;
-  base.max_seconds = 0.5f;
+  base.max_sec = 0.5f;
   base.ism_order = 2;
   base.seed = 3u;
 
@@ -1063,7 +1063,7 @@ TEST_CASE("sonare acoustic C API air absorption selector", "[c_api][acoustic]") 
     morph_cfg.listener_y = 6.0f;
     morph_cfg.listener_z = 1.7f;
     morph_cfg.absorption = 0.08f;
-    morph_cfg.max_seconds = 0.1f;
+    morph_cfg.max_sec = 0.1f;
     morph_cfg.ism_order = 2;
     morph_cfg.air_absorption = 3;
     float* morphed = nullptr;
@@ -1083,7 +1083,7 @@ TEST_CASE("sonare acoustic C API zero-init estimate config matches the binding d
   // 0.01 floor, and the Eyring volume goes as the cube of the prior, so the room
   // came back three orders of magnitude too small with full confidence.
   SonareRirSynthConfig synth_cfg = valid_rir_config();
-  synth_cfg.max_seconds = 0.0f;
+  synth_cfg.max_sec = 0.0f;
   SonareRirSynthResult rir{};
   REQUIRE(sonare_synthesize_rir(&synth_cfg, 48000, &rir) == SONARE_OK);
   REQUIRE(rir.length > 0);
@@ -1130,7 +1130,7 @@ TEST_CASE("sonare acoustic C API applies wall scattering without per-band absorp
   const float rough[6] = {0.75f, 0.75f, 0.75f, 0.75f, 0.75f, 0.75f};
 
   SonareRirSynthConfig smooth = valid_rir_config();
-  smooth.max_seconds = 0.3f;
+  smooth.max_sec = 0.3f;
   smooth.mixing_time_ms = 0.0f;
   SonareRirSynthConfig scattered = smooth;
   scattered.scattering_bands = rough;
@@ -1181,7 +1181,7 @@ TEST_CASE("sonare acoustic C API names its material presets and modes", "[c_api]
   CHECK(sonare_material_preset_name(6) == nullptr);
   CHECK(sonare_material_preset_name(-1) == nullptr);
 
-  const char* modes[] = {"auto", "blind", "impulse_response"};
+  const char* modes[] = {"auto", "blind", "impulseResponse"};
   for (int i = 0; i < 3; ++i) {
     REQUIRE(sonare_acoustic_mode_name(i) != nullptr);
     CHECK(std::string(sonare_acoustic_mode_name(i)) == modes[i]);
@@ -1213,7 +1213,7 @@ TEST_CASE("sonare_room_geometry_from_estimate maps an estimate onto the synthesi
 
   SECTION("feeds the synthesizer with the placement it returns") {
     geometry.ism_order = 2;
-    geometry.max_seconds = 0.1f;
+    geometry.max_sec = 0.1f;
     SonareRirSynthResult rir{};
     REQUIRE(sonare_synthesize_rir(&geometry, 22050, &rir) == SONARE_OK);
     CHECK(rir.length > 0);
@@ -1249,7 +1249,7 @@ TEST_CASE("sonare_room_geometry_from_estimate maps an estimate onto the synthesi
       CHECK(v < 1.33f);
     }
     geometry.ism_order = 2;
-    geometry.max_seconds = 0.1f;
+    geometry.max_sec = 0.1f;
     SonareRirSynthResult rir{};
     REQUIRE(sonare_synthesize_rir(&geometry, 22050, &rir) == SONARE_OK);
     CHECK(rir.length > 0);
@@ -1300,7 +1300,7 @@ SonareRoomMorphConfig stereo_morph_config() {
   cfg.listener_z = 1.5f;
   cfg.absorption = 0.15f;
   cfg.wet = 1.0f;
-  cfg.max_seconds = 0.3f;
+  cfg.max_sec = 0.3f;
   return cfg;
 }
 
@@ -1397,7 +1397,7 @@ TEST_CASE("sonare acoustic C API refuses a selector outside its documented set",
   morph.listener_z = 1.7f;
   morph.absorption = 0.3f;
   morph.wet = 1.0f;
-  morph.max_seconds = 0.1f;
+  morph.max_sec = 0.1f;
   morph.ism_order = 2;
 
   const auto rir_result = [](const SonareRirSynthConfig& cfg) {
@@ -1460,7 +1460,7 @@ TEST_CASE("sonare acoustic C API refuses a selector outside its documented set",
 
   // The estimator's routing mode is refused the same way, before any analysis.
   SonareRirSynthConfig source = valid_rir_config();
-  source.max_seconds = 0.5f;
+  source.max_sec = 0.5f;
   SonareRirSynthResult rir{};
   REQUIRE(sonare_synthesize_rir(&source, 48000, &rir) == SONARE_OK);
   for (int mode : {-1, SONARE_ACOUSTIC_MODE_IMPULSE_RESPONSE + 1}) {

@@ -14,8 +14,10 @@ from ._cli_common import (
     EXIT_INVALID_PARAMETER,
     _apply_voice_sets,
     _audio_array,
+    _cli_token,
     _emit_effect_result,
     _legacy_exit_codes,
+    _library_token,
     _load_channels_or_downmix,
     _load_voice_preset_pack,
     _mean_abs,
@@ -498,6 +500,7 @@ def cmd_voice_change(args: argparse.Namespace) -> int:
     from . import (
         RealtimeVoiceChanger,
         realtime_voice_changer_preset_json,
+        realtime_voice_changer_preset_names,
         voice_change,
         voice_change_realtime,
     )
@@ -562,10 +565,12 @@ def cmd_voice_change(args: argparse.Namespace) -> int:
                 preset = json.load(fh)
         elif preset_pack:
             preset = _load_voice_preset_pack(preset_pack, preset_id)
-        elif assignments:
-            preset = json.loads(realtime_voice_changer_preset_json(preset_id))
         else:
-            preset = preset_id
+            # A built-in preset is named in kebab-case on the command line.
+            builtin = _library_token("--preset", preset_id, realtime_voice_changer_preset_names())
+            preset = (
+                json.loads(realtime_voice_changer_preset_json(builtin)) if assignments else builtin
+            )
         preset = _apply_voice_sets(preset, assignments)
         # Probe the same prepared C-ABI configuration used by the one-shot
         # realtime entry point.  Latency depends on the resolved config and
@@ -609,7 +614,7 @@ def cmd_voice_change(args: argparse.Namespace) -> int:
 def cmd_voice_presets(args: argparse.Namespace) -> int:
     from . import realtime_voice_changer_preset_names
 
-    names = realtime_voice_changer_preset_names()
+    names = [_cli_token(name) for name in realtime_voice_changer_preset_names()]
     if args.json:
         print(_strict_json_dumps({"presets": names}))
     else:
@@ -619,10 +624,11 @@ def cmd_voice_presets(args: argparse.Namespace) -> int:
 
 
 def cmd_voice_preset(args: argparse.Namespace) -> int:
-    from . import realtime_voice_changer_preset_json
+    from . import realtime_voice_changer_preset_json, realtime_voice_changer_preset_names
 
     # The library returns a JSON preset regardless of --json; print it as-is.
-    print(realtime_voice_changer_preset_json(args.preset))
+    names = realtime_voice_changer_preset_names()
+    print(realtime_voice_changer_preset_json(_library_token("--preset", args.preset, names)))
     return 0
 
 

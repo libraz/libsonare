@@ -44,8 +44,8 @@ using sonare_c_detail::set_last_error;
 // substitutes a default for it, which would let a NaN arrive here and leave as
 // a silent 0 semitones. Reject it at this boundary instead, the way every other
 // scalar C entry point does.
-bool finite_controls(float semitones, float mix) noexcept {
-  return std::isfinite(semitones) && std::isfinite(mix);
+bool finite_controls(float pitch_semitones, float mix) noexcept {
+  return std::isfinite(pitch_semitones) && std::isfinite(mix);
 }
 
 #endif
@@ -53,27 +53,28 @@ bool finite_controls(float semitones, float mix) noexcept {
 
 extern "C" {
 
-SonareStreamingRetune* sonare_streaming_retune_create(float semitones, float mix, int grain_size) {
+SonareStreamingRetune* sonare_streaming_retune_create(float pitch_semitones, float mix,
+                                                      int grain_size_samples) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_VOICE_CHANGER)
-  if (!finite_controls(semitones, mix)) {
+  if (!finite_controls(pitch_semitones, mix)) {
     set_last_error(SONARE_ERROR_INVALID_PARAMETER,
-                   "streaming retune: semitones and mix must be finite");
+                   "streaming retune: pitch_semitones and mix must be finite");
     return nullptr;
   }
   SONARE_C_TRY
   StreamingRetuneConfig config;
-  config.semitones = semitones;
+  config.semitones = pitch_semitones;
   config.mix = mix;
-  config.grain_size = grain_size;
+  config.grain_size = grain_size_samples;
   auto handle = std::make_unique<SonareStreamingRetune>();
   handle->retune = std::make_unique<StreamingRetune>(config);
   return handle.release();
   SONARE_C_CATCH_RETURN(nullptr)
 #else
-  (void)semitones;
+  (void)pitch_semitones;
   (void)mix;
-  (void)grain_size;
+  (void)grain_size_samples;
   sonare_c_detail::set_last_error(SONARE_ERROR_NOT_SUPPORTED,
                                   "streaming retune: voice changer support is not built");
   return nullptr;
@@ -128,44 +129,45 @@ SonareError sonare_streaming_retune_reset(SonareStreamingRetune* retune) {
 #endif
 }
 
-SonareError sonare_streaming_retune_set_config(SonareStreamingRetune* retune, float semitones,
-                                               float mix, int grain_size) {
+SonareError sonare_streaming_retune_set_config(SonareStreamingRetune* retune, float pitch_semitones,
+                                               float mix, int grain_size_samples) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_VOICE_CHANGER)
   if (!retune || !retune->retune) return SONARE_ERROR_INVALID_PARAMETER;
-  if (!finite_controls(semitones, mix)) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!finite_controls(pitch_semitones, mix)) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
   StreamingRetuneConfig config;
-  config.semitones = semitones;
+  config.semitones = pitch_semitones;
   config.mix = mix;
-  config.grain_size = grain_size;
+  config.grain_size = grain_size_samples;
   retune->retune->set_config(config);
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(retune, semitones, mix, grain_size);
+  SONARE_C_STUB_NOT_SUPPORTED(retune, pitch_semitones, mix, grain_size_samples);
 #endif
 }
 
-SonareError sonare_streaming_retune_config(SonareStreamingRetune* retune, float* out_semitones,
-                                           float* out_mix, int* out_grain_size) {
+SonareError sonare_streaming_retune_config(SonareStreamingRetune* retune,
+                                           float* out_pitch_semitones, float* out_mix,
+                                           int* out_grain_size_samples) {
   SONARE_C_API_ENTRY;
   SONARE_C_TRY
 #if defined(SONARE_WITH_VOICE_CHANGER)
-  if (out_semitones) *out_semitones = 0.0f;
+  if (out_pitch_semitones) *out_pitch_semitones = 0.0f;
   if (out_mix) *out_mix = 0.0f;
-  if (out_grain_size) *out_grain_size = 0;
+  if (out_grain_size_samples) *out_grain_size_samples = 0;
   if (!retune || !retune->retune) return SONARE_ERROR_INVALID_PARAMETER;
   const StreamingRetuneConfig& config = retune->retune->config();
-  if (out_semitones) *out_semitones = config.semitones;
+  if (out_pitch_semitones) *out_pitch_semitones = config.semitones;
   if (out_mix) *out_mix = config.mix;
-  if (out_grain_size) *out_grain_size = config.grain_size;
+  if (out_grain_size_samples) *out_grain_size_samples = config.grain_size;
   return SONARE_OK;
 #else
-  if (out_semitones) *out_semitones = 0.0f;
+  if (out_pitch_semitones) *out_pitch_semitones = 0.0f;
   if (out_mix) *out_mix = 0.0f;
-  if (out_grain_size) *out_grain_size = 0;
-  SONARE_C_STUB_NOT_SUPPORTED(retune, out_semitones, out_mix, out_grain_size);
+  if (out_grain_size_samples) *out_grain_size_samples = 0;
+  SONARE_C_STUB_NOT_SUPPORTED(retune, out_pitch_semitones, out_mix, out_grain_size_samples);
 #endif
   SONARE_C_CATCH
 }
@@ -200,15 +202,16 @@ SonareError sonare_streaming_retune_process_mono(SonareStreamingRetune* retune, 
   SONARE_C_CATCH
 }
 
-SonareError sonare_streaming_retune_grain_size(SonareStreamingRetune* retune, int* out_grain_size) {
+SonareError sonare_streaming_retune_grain_size_samples(SonareStreamingRetune* retune,
+                                                       int* out_grain_size_samples) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_VOICE_CHANGER)
-  if (!retune || !retune->retune || !out_grain_size) return SONARE_ERROR_INVALID_PARAMETER;
-  *out_grain_size = retune->retune->grain_size();
+  if (!retune || !retune->retune || !out_grain_size_samples) return SONARE_ERROR_INVALID_PARAMETER;
+  *out_grain_size_samples = retune->retune->grain_size();
   return SONARE_OK;
 #else
-  if (out_grain_size) *out_grain_size = 0;
-  SONARE_C_STUB_NOT_SUPPORTED(retune, out_grain_size);
+  if (out_grain_size_samples) *out_grain_size_samples = 0;
+  SONARE_C_STUB_NOT_SUPPORTED(retune, out_grain_size_samples);
 #endif
 }
 

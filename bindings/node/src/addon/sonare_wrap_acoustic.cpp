@@ -102,6 +102,30 @@ std::vector<float> NodeFloatArrayOption(const Napi::Object& opts, const char* ke
   return {};
 }
 
+// The room and synthesis keys synthesizeRir, roomMorph and roomMorphStereo share; each entry point
+// adds its own on top.
+const std::vector<const char*>& RoomKeys() {
+  static const std::vector<const char*> keys = {"lengthM",
+                                                "widthM",
+                                                "heightM",
+                                                "absorption",
+                                                "bandAbsorption",
+                                                "bandScattering",
+                                                "materialPreset",
+                                                "source",
+                                                "listener",
+                                                "ismOrder",
+                                                "seed",
+                                                "maxSec",
+                                                "preferEyring",
+                                                "mixingTimeMs",
+                                                "crossfadeMs",
+                                                "airAbsorptionEnabled",
+                                                "airTemperatureC",
+                                                "airHumidityPercent"};
+  return keys;
+}
+
 // Builds a uniform shoebox + placement from a JS options object, honouring the
 // same wall-material precedence as the C ABI: materialPreset (non-zero) >
 // per-band bandAbsorption > scalar absorption.
@@ -129,14 +153,12 @@ sonare::acoustic::ShoeboxRoom RoomFromOptions(const Napi::Object& opts, float de
 }
 
 sonare::acoustic::SourceListener PlacementFromOptions(const Napi::Object& opts) {
-  const auto& source = sonare::acoustic::kDefaultPlacement.source;
-  const auto& listener = sonare::acoustic::kDefaultPlacement.listener;
-  return {{FiniteFloatProperty(opts, "sourceX", source.x),
-           FiniteFloatProperty(opts, "sourceY", source.y),
-           FiniteFloatProperty(opts, "sourceZ", source.z)},
-          {FiniteFloatProperty(opts, "listenerX", listener.x),
-           FiniteFloatProperty(opts, "listenerY", listener.y),
-           FiniteFloatProperty(opts, "listenerZ", listener.z)}};
+  const auto position = [&](const char* key, const sonare::acoustic::Vec3& fallback) {
+    const auto xyz = XyzProperty(opts, key, {fallback.x, fallback.y, fallback.z});
+    return sonare::acoustic::Vec3{xyz[0], xyz[1], xyz[2]};
+  };
+  return {position("source", sonare::acoustic::kDefaultPlacement.source),
+          position("listener", sonare::acoustic::kDefaultPlacement.listener)};
 }
 
 std::vector<float> AudioToVector(const sonare::Audio& audio) {
@@ -183,6 +205,7 @@ Napi::Value SonareWrap::SynthesizeRir(const Napi::CallbackInfo& info) {
 
   SONARE_NODE_TRY
   Napi::Object opts = info[0].As<Napi::Object>();
+  RefuseUnknownKeys(opts, "synthesizeRir", RoomKeys(), {"sampleRate"});
   const int sample_rate = IntProperty(opts, "sampleRate", 48000);
   if (!ValidateAcousticSampleRate(env, sample_rate)) return env.Undefined();
   sonare::acoustic::RirSynthConfig cfg;
@@ -196,7 +219,7 @@ Napi::Value SonareWrap::SynthesizeRir(const Napi::CallbackInfo& info) {
   cfg.late_model = BoolProperty(opts, "preferEyring", true) ? sonare::acoustic::ReverbModel::Eyring
                                                             : sonare::acoustic::ReverbModel::Sabine;
   cfg.seed = Uint32Property(opts, "seed", cfg.seed);
-  cfg.max_seconds = FiniteFloatProperty(opts, "maxSeconds", cfg.max_seconds);
+  cfg.max_seconds = FiniteFloatProperty(opts, "maxSec", cfg.max_seconds);
   cfg.mixing_time_ms = FiniteFloatProperty(opts, "mixingTimeMs", cfg.mixing_time_ms);
   cfg.crossfade_ms = FiniteFloatProperty(opts, "crossfadeMs", cfg.crossfade_ms);
   cfg.air_absorption_enabled =
@@ -240,6 +263,11 @@ Napi::Value SonareWrap::EstimateRoom(const Napi::CallbackInfo& info) {
       sonare::Audio::from_buffer(typed.Data(), typed.ElementLength(), sample_rate);
   Napi::Object opts = info.Length() >= 3 && info[2].IsObject() ? info[2].As<Napi::Object>()
                                                                : Napi::Object::New(env);
+  // samples, sampleRate and validate ride along from the request object and are not read here.
+  RefuseUnknownKeys(
+      opts, "estimateRoom",
+      {"aspectHintLw", "aspectHintLh", "referenceAbsorption", "preferEyring", "nOctaveBands",
+       "minDecayDb", "noiseFloorMarginDb", "mode", "samples", "sampleRate", "validate"});
 
   sonare::RoomEstimateConfig cfg;
   // Match the C ABI: an explicit 0 aspect hint means "use the default 1.0", so
@@ -326,12 +354,16 @@ Napi::Value SonareWrap::RoomGeometryFromEstimate(const Napi::CallbackInfo& info)
   out.Set("lengthM", Napi::Number::New(env, geometry.length_m));
   out.Set("widthM", Napi::Number::New(env, geometry.width_m));
   out.Set("heightM", Napi::Number::New(env, geometry.height_m));
-  out.Set("sourceX", Napi::Number::New(env, geometry.source_x));
-  out.Set("sourceY", Napi::Number::New(env, geometry.source_y));
-  out.Set("sourceZ", Napi::Number::New(env, geometry.source_z));
-  out.Set("listenerX", Napi::Number::New(env, geometry.listener_x));
-  out.Set("listenerY", Napi::Number::New(env, geometry.listener_y));
-  out.Set("listenerZ", Napi::Number::New(env, geometry.listener_z));
+  Napi::Object source = Napi::Object::New(env);
+  source.Set("x", Napi::Number::New(env, geometry.source_x));
+  source.Set("y", Napi::Number::New(env, geometry.source_y));
+  source.Set("z", Napi::Number::New(env, geometry.source_z));
+  out.Set("source", source);
+  Napi::Object listener = Napi::Object::New(env);
+  listener.Set("x", Napi::Number::New(env, geometry.listener_x));
+  listener.Set("y", Napi::Number::New(env, geometry.listener_y));
+  listener.Set("z", Napi::Number::New(env, geometry.listener_z));
+  out.Set("listener", listener);
   if (std::any_of(bands.begin(), bands.end(), [](float b) { return std::isfinite(b); })) {
     out.Set("absorption", Napi::Number::New(env, geometry.absorption));
   }
@@ -355,7 +387,7 @@ sonare::effects::acoustic::RoomMorphConfig RoomMorphConfigFromOptions(const Napi
   cfg.wet = FiniteFloatProperty(opts, "wet", cfg.wet);
   cfg.ism_order = IntProperty(opts, "ismOrder", cfg.ism_order);
   cfg.seed = Uint32Property(opts, "seed", cfg.seed);
-  cfg.max_seconds = FiniteFloatProperty(opts, "maxSeconds", cfg.max_seconds);
+  cfg.max_seconds = FiniteFloatProperty(opts, "maxSec", cfg.max_seconds);
   cfg.late_model = BoolProperty(opts, "preferEyring", true) ? sonare::acoustic::ReverbModel::Eyring
                                                             : sonare::acoustic::ReverbModel::Sabine;
   cfg.mixing_time_ms = FiniteFloatProperty(opts, "mixingTimeMs", cfg.mixing_time_ms);
@@ -383,6 +415,8 @@ Napi::Value SonareWrap::RoomMorph(const Napi::CallbackInfo& info) {
   if (!ValidateAcousticInput(env, typed.Data(), typed.ElementLength())) return env.Undefined();
   const sonare::Audio audio = sonare::Audio::from_buffer(typed.Data(), typed.ElementLength(), sr);
   Napi::Object opts = info[2].As<Napi::Object>();
+  RefuseUnknownKeys(opts, "roomMorph", RoomKeys(),
+                    {"wet", "sourceTailSuppression", "samples", "sampleRate", "validate"});
 
   const sonare::effects::acoustic::RoomMorphConfig cfg = RoomMorphConfigFromOptions(opts);
 
@@ -426,6 +460,9 @@ Napi::Value SonareWrap::RoomMorphStereo(const Napi::CallbackInfo& info) {
   const sonare::Audio right_audio =
       sonare::Audio::from_buffer(right.Data(), right.ElementLength(), sr);
   Napi::Object opts = info[3].As<Napi::Object>();
+  RefuseUnknownKeys(opts, "roomMorphStereo", RoomKeys(),
+                    {"wet", "sourceTailSuppression", "receiverSpacingM", "left", "right",
+                     "sampleRate", "validate"});
 
   sonare::effects::acoustic::RoomMorphConfig cfg = RoomMorphConfigFromOptions(opts);
   cfg.receiver_spacing_m = FiniteFloatProperty(opts, "receiverSpacingM", cfg.receiver_spacing_m);

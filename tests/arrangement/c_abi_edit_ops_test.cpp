@@ -649,14 +649,24 @@ TEST_CASE("C-ABI set_clip_fade applies and undo restores", "[project][c-abi-edit
 }
 
 TEST_CASE("C-ABI resolves canonical clip fade curve names", "[project][c-abi-edit]") {
-  uint32_t curve = 99;
-  REQUIRE(sonare_project_fade_curve_from_name("Equal_Power", &curve) == SONARE_OK);
-  REQUIRE(curve == SONARE_FADE_CURVE_EQUAL_POWER);
-  REQUIRE(sonare_project_fade_curve_from_name("EXP", &curve) == SONARE_OK);
-  REQUIRE(curve == SONARE_FADE_CURVE_EXPONENTIAL);
-  REQUIRE(sonare_project_fade_curve_from_name("log", &curve) == SONARE_OK);
-  REQUIRE(curve == SONARE_FADE_CURVE_LOGARITHMIC);
-  REQUIRE(sonare_project_fade_curve_from_name("unknown", &curve) == SONARE_ERROR_INVALID_PARAMETER);
+  const struct {
+    const char* name;
+    uint32_t curve;
+  } kCanonical[] = {{"linear", SONARE_FADE_CURVE_LINEAR},
+                    {"equalPower", SONARE_FADE_CURVE_EQUAL_POWER},
+                    {"exponential", SONARE_FADE_CURVE_EXPONENTIAL},
+                    {"logarithmic", SONARE_FADE_CURVE_LOGARITHMIC}};
+  for (const auto& row : kCanonical) {
+    uint32_t curve = 99;
+    REQUIRE(sonare_project_fade_curve_from_name(row.name, &curve) == SONARE_OK);
+    CHECK(curve == row.curve);
+  }
+  // One spelling per value: case variants, separators and abbreviations are refused.
+  for (const char* other :
+       {"Equal_Power", "equal-power", "equalpower", "EXP", "exp", "log", "Linear", "unknown"}) {
+    uint32_t curve = 99;
+    CHECK(sonare_project_fade_curve_from_name(other, &curve) == SONARE_ERROR_INVALID_PARAMETER);
+  }
 }
 
 TEST_CASE("C-ABI set_clip_loop applies and undo restores", "[project][c-abi-edit]") {

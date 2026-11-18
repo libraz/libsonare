@@ -16,7 +16,7 @@ inline constexpr std::array<const char*, 6> kMaterialPresetSelectorNames = {
 
 /// @brief Acoustic analyzer mode selector names, in AcousticConfig::Mode order.
 inline constexpr std::array<const char*, 3> kAcousticModeSelectorNames = {"auto", "blind",
-                                                                          "impulse_response"};
+                                                                          "impulseResponse"};
 
 /// @brief Position of @p name in @p names, or -1 when it is not one of them.
 template <std::size_t N>

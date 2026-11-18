@@ -211,16 +211,12 @@ void ProjectWasm::setTrackRoute(const val& track_id_val, const std::string& chan
 
 namespace {
 
-/// Resolve one breakpoint curve spelling to its SonareAutomationCurve ordinal.
+/// Resolve one breakpoint curve to its SonareAutomationCurve ordinal.
 ///
-/// The TS facade normalizes `curve` to an ordinal before it reaches embind, so
-/// this only runs for a caller that drives the embind class directly. It still
-/// accepts the same spellings the facade documents — the canonical 's-curve'
-/// plus the legacy 'scurve' — because a spelling the facade takes must not
-/// become a different curve here. Neither spelling may name a curve outside the
-/// enum: an unrecognised name and an out-of-range, fractional or non-finite
-/// ordinal are all rejected rather than silently coerced to a neighbouring
-/// curve, which had quietly changed the curve shape.
+/// The TS facade hands embind the ordinal; a direct embind caller may also pass
+/// the canonical token ("linear", "exponential", "hold", "sCurve") and nothing
+/// else. An unknown token and an out-of-range, fractional or non-finite ordinal
+/// are refused rather than coerced onto a neighbouring curve.
 int automationCurveFromVal(val curve) {
   if (curve.typeOf().as<std::string>() != "string") {
     // The numeric path is the one the direct caller above actually takes, and it
@@ -242,7 +238,7 @@ int automationCurveFromVal(val curve) {
   if (s == "hold") {
     return SONARE_CURVE_HOLD;
   }
-  if (s == "s-curve" || s == "scurve") {
+  if (s == "sCurve") {
     return SONARE_CURVE_SCURVE;
   }
   throw WasmRangeError("unknown automation curve: " + s);
