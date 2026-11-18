@@ -104,22 +104,20 @@ describe('SampleBank', () => {
     });
   });
 
-  it('accepts both loop-mode spellings for the same three states', () => {
+  it('takes the loop mode by name and refuses the raw SoundFont number', () => {
     withBank((bank) => {
       const pcm = sampleSine(1024);
-      for (const [name, sf2Mode] of [
-        ['none', 0],
-        ['continuous', 1],
-        ['keyDown', 3],
-      ] as const) {
+      for (const name of ['none', 'continuous', 'keyDown'] as const) {
         expect(bank.addSample(pcm, { loopMode: name, loopStart: 0, loopEnd: 512 })).toBeTypeOf(
           'number',
         );
-        expect(bank.addSample(pcm, { loopMode: sf2Mode, loopStart: 0, loopEnd: 512 })).toBeTypeOf(
-          'number',
-        );
       }
-      expect(bank.sampleCount()).toBe(6);
+      for (const sf2Mode of [0, 1, 3]) {
+        expect(() =>
+          bank.addSample(pcm, { loopMode: sf2Mode as never, loopStart: 0, loopEnd: 512 }),
+        ).toThrow(new TypeError('addSample: loopMode must be a name'));
+      }
+      expect(bank.sampleCount()).toBe(3);
     });
   });
 

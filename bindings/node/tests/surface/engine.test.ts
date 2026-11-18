@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { ErrorCode, isSonareError, RealtimeEngine } from '../../dist/index.js';
+import { ErrorCode, isSonareError, RealtimeEngine, SampleBank } from '../../dist/index.js';
 import type { EngineLoop, MixSceneStrip, RealtimeEngineConfig } from '../../dist/types.js';
 
 interface MarkerIdStep {
@@ -405,6 +405,54 @@ describe('RealtimeEngine closed sets are names', () => {
         TypeError,
       );
     });
+  });
+  it('takes every synth closed set by name and refuses a number, in range or not', () => {
+    withEngine((engine) => {
+      const patch = {
+        engineMode: 'subtractive' as const,
+        waveform: 'saw' as const,
+        filterModel: 'svf' as const,
+        modRoutings: [{ source: 'lfo1' as const, destination: 'cutoffCents' as const, depth: 100 }],
+      };
+      expect(() => engine.setSynthInstrument(3, patch)).not.toThrow();
+      for (const field of ['engineMode', 'waveform', 'filterModel', 'lfoShape', 'sampleLoop']) {
+        const refused = caught(() =>
+          engine.setSynthInstrument(3, { ...patch, [field]: 1 } as never),
+        );
+        expect(refused, field).toBeInstanceOf(TypeError);
+        expect(String(refused)).toContain(field);
+      }
+      for (const end of ['source', 'destination'] as const) {
+        const routing = { ...patch.modRoutings[0], [end]: 2 };
+        expect(
+          caught(() => engine.setSynthInstrument(3, { ...patch, modRoutings: [routing] } as never)),
+          end,
+        ).toBeInstanceOf(TypeError);
+      }
+      expect(
+        caught(() => engine.setSynthInstrument(3, { ...patch, engineMode: 'analog' } as never)),
+      ).toBeInstanceOf(RangeError);
+      expect(() => engine.setBuiltinInstrument(4, { waveform: 'sawtooth' })).not.toThrow();
+      expect(caught(() => engine.setBuiltinInstrument(4, { waveform: 1 as never }))).toBeInstanceOf(
+        TypeError,
+      );
+      const binding = { input: 'channelPressure', axis: 'brightness' } as const;
+      expect(() => engine.bindController(3, binding)).not.toThrow();
+      for (const field of ['input', 'axis'] as const) {
+        expect(
+          caught(() => engine.bindController(3, { ...binding, [field]: 1 } as never)),
+          field,
+        ).toBeInstanceOf(TypeError);
+      }
+    });
+    const bank = new SampleBank();
+    try {
+      const pcm = new Float32Array(256);
+      expect(() => bank.addSample(pcm, { loopMode: 'keyDown' })).not.toThrow();
+      expect(caught(() => bank.addSample(pcm, { loopMode: 3 as never }))).toBeInstanceOf(TypeError);
+    } finally {
+      bank.destroy();
+    }
   });
 });
 

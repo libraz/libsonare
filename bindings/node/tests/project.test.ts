@@ -1038,7 +1038,31 @@ describe('Project native binding', () => {
     project.destroy();
   });
 
-  it('rejects a numeric waveform outside the enum, in the same words as a name', () => {
+  // The facade takes a waveform by name only and refuses every number as a
+  // TypeError; the native resolver behind it still reads an ordinal, so its
+  // domain checks are driven on the handle directly.
+  const nativeBuiltinBounce = (project: Project, waveform: unknown): Float32Array =>
+    (
+      project as unknown as {
+        handle: {
+          bounceWithBuiltinInstruments(bindings: unknown[], settings: object): Float32Array;
+        };
+      }
+    ).handle.bounceWithBuiltinInstruments([{ waveform }], {});
+
+  it('refuses a numeric waveform at the facade, in range or not', () => {
+    for (const waveform of [0, 3, 4, -1, Number.NaN]) {
+      const project = buildMidiOnlyProject();
+      expect(() =>
+        project.bounceWithBuiltinInstruments({
+          instrument: { waveform: waveform as unknown as 'sine' },
+        }),
+      ).toThrow(new TypeError('bounceWithBuiltinInstruments: waveform must be a name'));
+      project.destroy();
+    }
+  });
+
+  it('natively rejects a numeric waveform outside the enum, in the same words as a name', () => {
     // The numeric spelling used to fall through unchecked and land on sine, and
     // the first value past a four-value enum is 4 - what an off-by-one or a
     // 1-based mirror emits - so the silent fallback sat immediately beside the
@@ -1047,17 +1071,14 @@ describe('Project native binding', () => {
     for (const waveform of [4, -1, 5]) {
       const project = buildMidiOnlyProject();
       expect(
-        () =>
-          project.bounceWithBuiltinInstruments({
-            instrument: { waveform: waveform as unknown as 'sine' },
-          }),
+        () => nativeBuiltinBounce(project, waveform),
         `waveform ${waveform} must be rejected, not resolved to sine`,
       ).toThrow(/sawtooth/);
       project.destroy();
     }
   });
 
-  it('rejects a waveform outside the integer range before naming the enum', () => {
+  it('natively rejects a waveform outside the integer range before naming the enum', () => {
     // A value the int cannot hold is refused as out of range, not as an unknown
     // ordinal. Asserting the enum wording here would be asserting a lie: the
     // ordinal in that message would be the wrapped -2147483648, a number the
@@ -1065,29 +1086,21 @@ describe('Project native binding', () => {
     for (const waveform of [2 ** 31, -(2 ** 31) - 1, Number.POSITIVE_INFINITY, Number.NaN]) {
       const project = buildMidiOnlyProject();
       expect(
-        () =>
-          project.bounceWithBuiltinInstruments({
-            instrument: { waveform: waveform as unknown as 'sine' },
-          }),
+        () => nativeBuiltinBounce(project, waveform),
         `waveform ${waveform} must be rejected as out of range`,
       ).toThrow(/32-bit integer range/);
       project.destroy();
     }
   });
 
-  it('accepts every in-domain waveform ordinal and they stay distinct', () => {
+  it('natively accepts every in-domain waveform ordinal and they stay distinct', () => {
     // Vacuity guard for the rejection above: a fix that rejected everything
     // would satisfy it. Four ordinals, four different renders.
     const renders = [0, 1, 2, 3].map((waveform) => {
       const project = buildMidiOnlyProject();
-      const audio = project.bounceWithBuiltinInstruments({
-        instrument: { waveform: waveform as unknown as 'sine' },
-      });
+      const audio = nativeBuiltinBounce(project, waveform);
       project.destroy();
-      return audio.channels[0].reduce(
-        (hash, sample) => (hash * 31 + Math.round(sample * 1e6)) | 0,
-        0,
-      );
+      return audio.reduce((hash, sample) => (hash * 31 + Math.round(sample * 1e6)) | 0, 0);
     });
     expect(new Set(renders).size, 'the four waveforms must render differently').toBe(4);
   });

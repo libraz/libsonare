@@ -6,6 +6,7 @@ import {
   isSonareError,
   PART_RIG_ALL_PARTS,
   RealtimeEngine,
+  SampleBank,
 } from '../../dist/index.js';
 
 interface MarkerIdStep {
@@ -408,6 +409,57 @@ describe('closed-set tokens', () => {
         engine.configureCapture({ capacityFrames: 128, source: 'both' as never }),
       ).toThrow(RangeError);
     });
+  });
+  it('takes every synth closed set by name and refuses a number, in range or not', () => {
+    withEngine((engine) => {
+      const patch = {
+        engineMode: 'subtractive' as const,
+        waveform: 'saw' as const,
+        filterModel: 'svf' as const,
+        modRoutings: [{ source: 'lfo1' as const, destination: 'cutoffCents' as const, depth: 100 }],
+      };
+      expect(() => engine.setSynthInstrument(3, patch)).not.toThrow();
+      for (const field of ['engineMode', 'waveform', 'filterModel', 'lfoShape', 'sampleLoop']) {
+        const refused = caught(() =>
+          engine.setSynthInstrument(3, { ...patch, [field]: 1 } as never),
+        );
+        expect(refused, field).toBeInstanceOf(TypeError);
+        expect(String(refused)).toContain(field);
+      }
+      for (const end of ['source', 'destination'] as const) {
+        const routing = { ...patch.modRoutings[0], [end]: 2 };
+        expect(
+          caught(() => engine.setSynthInstrument(3, { ...patch, modRoutings: [routing] } as never)),
+          end,
+        ).toBeInstanceOf(TypeError);
+      }
+      expect(
+        caught(() => engine.setSynthInstrument(3, { ...patch, engineMode: 'analog' } as never)),
+      ).toBeInstanceOf(RangeError);
+      expect(() => engine.setBuiltinInstrument(4, { waveform: 'sawtooth' })).not.toThrow();
+      expect(caught(() => engine.setBuiltinInstrument(4, { waveform: 1 as never }))).toBeInstanceOf(
+        TypeError,
+      );
+      const binding = { input: 'channelPressure', axis: 'brightness' } as const;
+      expect(() => engine.bindController(3, binding)).not.toThrow();
+      for (const field of ['input', 'axis'] as const) {
+        expect(
+          caught(() => engine.bindController(3, { ...binding, [field]: 1 } as never)),
+          field,
+        ).toBeInstanceOf(TypeError);
+      }
+      const rig = caught(() => engine.setPartRig({ destinationId: 3, part: 0, mode: 1 as never }));
+      expect(rig).toBeInstanceOf(TypeError);
+      expect(String(rig)).toContain('mode');
+    });
+    const bank = new SampleBank();
+    try {
+      const pcm = new Float32Array(256);
+      expect(() => bank.addSample(pcm, { loopMode: 'keyDown' })).not.toThrow();
+      expect(caught(() => bank.addSample(pcm, { loopMode: 3 as never }))).toBeInstanceOf(TypeError);
+    } finally {
+      bank.destroy();
+    }
   });
 });
 

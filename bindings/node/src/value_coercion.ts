@@ -1,4 +1,5 @@
 import { tokenName, tokenOrdinal } from './internal/project_tokens.js';
+import { refuseSynthPatchOrdinals } from './internal/synth_tokens.js';
 import { SampleBank } from './sample_bank.js';
 import type {
   AutomationCurve,
@@ -168,7 +169,11 @@ export function sendTimingValue(timing: SendTiming): number {
  * the offline bounce and the realtime engine, so `sampleBank` means the same
  * thing on both.
  */
-export function normalizeSynthInstrument(patch: SynthPatch | string): SynthPatch | string {
+export function normalizeSynthInstrument(
+  fnName: string,
+  patch: SynthPatch | string,
+): SynthPatch | string {
+  refuseSynthPatchOrdinals(fnName, patch);
   if (typeof patch === 'string' || !(patch.sampleBank instanceof SampleBank)) {
     // Anything else passes through untouched: an omitted bank for the native
     // layer to read as "no bank", and a value that is not a bank at all for it
@@ -221,7 +226,7 @@ function partRigInsertsJson(inserts: PartRigInsert[] | undefined): string | unde
 export interface NormalizedPartRig {
   destinationId: number;
   part: number;
-  mode: PartRigMode | number | undefined;
+  mode: PartRigMode | undefined;
   insertsJson: string | undefined;
 }
 
@@ -235,7 +240,7 @@ export function normalizePartRig(
   method: string,
   requestOrDestinationId: PartRigRequest | PartRigKey | number,
   part?: number,
-  mode?: PartRigMode | number,
+  mode?: PartRigMode,
   inserts?: PartRigInsert[],
 ): NormalizedPartRig {
   if (typeof requestOrDestinationId === 'object' && requestOrDestinationId !== null) {

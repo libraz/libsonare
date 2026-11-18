@@ -18,6 +18,7 @@ import type {
 } from './instrument_types.js';
 import { releasedHandleError } from './internal/handle_guard.js';
 import { deinterleavePlanes, interleavePlanes } from './internal/pod_config.js';
+import { refuseSynthPatchOrdinals } from './internal/synth_tokens.js';
 import { assertEventPpq, umpWord0 } from './internal/ump_events.js';
 import { getSonareModule } from './module_state.js';
 import type {
@@ -226,7 +227,11 @@ export type NativeInstrumentBinding<T> = T & { destinationId: number };
  * private is a compile-time rule, so reading it once here beats widening the
  * class with a method the parity tool would then read as a facade op.
  */
-export function normalizeSynthInstrument(patch: unknown): NativeSynthBinding | string {
+export function normalizeSynthInstrument(
+  fnName: string,
+  patch: unknown,
+): NativeSynthBinding | string {
+  refuseSynthPatchOrdinals(fnName, patch);
   if (patch === null || typeof patch !== 'object') {
     // A preset-name string — and, at runtime, anything else — reaches the
     // embind layer unchanged, which is where such a value is validated.
@@ -339,7 +344,7 @@ function partRigInsertsJson(inserts: PartRigInsert[] | undefined): string | unde
 export interface NormalizedPartRig {
   destinationId: number;
   part: number;
-  mode: PartRigMode | number | undefined;
+  mode: PartRigMode | undefined;
   insertsJson: string | undefined;
 }
 
@@ -353,7 +358,7 @@ export function normalizePartRig(
   method: string,
   requestOrDestinationId: PartRigRequest | PartRigKey | number,
   part?: number,
-  mode?: PartRigMode | number,
+  mode?: PartRigMode,
   inserts?: PartRigInsert[],
 ): NormalizedPartRig {
   if (typeof requestOrDestinationId === 'object' && requestOrDestinationId !== null) {
@@ -438,7 +443,7 @@ export interface WasmProject {
   setPartRig: (
     destinationId: number,
     part: number,
-    mode: PartRigMode | number,
+    mode: PartRigMode,
     insertsJson: string | undefined,
   ) => void;
   getPartRig: (

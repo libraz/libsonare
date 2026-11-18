@@ -17,6 +17,7 @@ import { assignMarkerIds } from './internal/marker_ids.js';
 import { midiFxConfigJson } from './internal/midi_fx_config.js';
 import { mixSceneBusToNative, mixSceneStripToNative } from './internal/mix_scene.js';
 import { deinterleavePlanes } from './internal/pod_config.js';
+import { refuseBuiltinSynthOrdinals } from './internal/synth_tokens.js';
 import { getSonareModule } from './module_state.js';
 import type {
   Articulation,
@@ -741,6 +742,7 @@ export class RealtimeEngine {
         "setBuiltinInstrument: unknown config key 'destinationId' (pass it as the first argument)",
       );
     }
+    refuseBuiltinSynthOrdinals('setBuiltinInstrument', config);
     this.native.setBuiltinInstrument(destinationId, config);
   }
 
@@ -763,7 +765,10 @@ export class RealtimeEngine {
    * current position's state resends it with {@link pushMidiUmp} after this call.
    */
   setSynthInstrument(destinationId: number, patch: SynthPatch | string = {}): void {
-    this.native.setSynthInstrument(destinationId, normalizeSynthInstrument(patch));
+    this.native.setSynthInstrument(
+      destinationId,
+      normalizeSynthInstrument('setSynthInstrument', patch),
+    );
   }
 
   /**

@@ -33,7 +33,8 @@ import {
 import { addon } from '../src/native.js';
 import type { SynthPatch } from '../src/types.js';
 
-function synthPatchRoundTripForTest(patch: SynthPatch): SynthPatch {
+/** The addon's own patch reader, which still takes an ordinal the facades refuse. */
+function synthPatchRoundTripForTest(patch: object): SynthPatch {
   return addon._synthPatchRoundTrip(patch);
 }
 

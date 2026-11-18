@@ -20,6 +20,7 @@ import {
   tokenOrdinal,
   WARP_MODE,
 } from './internal/project_tokens.js';
+import { refuseBuiltinSynthOrdinals } from './internal/synth_tokens.js';
 import { nativeTranscribeRequest } from './internal/transcribe_request.js';
 import { addon } from './native.js';
 import type {
@@ -1499,7 +1500,15 @@ export class Project {
   ): ProjectBounceResult {
     const fnName = 'bounceWithBuiltinInstruments';
     const { native: settings, numChannels } = bounceSettings(fnName, options);
-    const bindings = bindInstruments(fnName, instruments, (i) => i, withDestinationCopy);
+    const bindings = bindInstruments(
+      fnName,
+      instruments,
+      (i) => {
+        refuseBuiltinSynthOrdinals(fnName, i);
+        return i;
+      },
+      withDestinationCopy,
+    );
     const native = this.native;
     return planarBounce(
       native.bounceWithBuiltinInstruments(bindings, settings),
@@ -1534,7 +1543,7 @@ export class Project {
     const bindings = bindInstruments(
       fnName,
       instruments,
-      (i) => normalizeSynthInstrument(i) as SynthPatch,
+      (i) => normalizeSynthInstrument(fnName, i) as SynthPatch,
       withDestinationCopy,
     );
     const native = this.native;

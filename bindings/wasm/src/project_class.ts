@@ -13,6 +13,7 @@ import type {
 import { assertHandleLive } from './internal/handle_guard.js';
 import { midiFxConfigJson } from './internal/midi_fx_config.js';
 import { mixSceneJsonToNative } from './internal/mix_scene.js';
+import { refuseBuiltinSynthOrdinals } from './internal/synth_tokens.js';
 import { nativeTranscribeOptions } from './internal/transcribe_request.js';
 import {
   assertProjectMidiEvents,
@@ -1009,7 +1010,10 @@ export class Project {
     const bindings = normalizeInstrumentBindings(
       'bounceWithBuiltinInstruments',
       instruments,
-      (instrument) => instrument,
+      (instrument) => {
+        refuseBuiltinSynthOrdinals('bounceWithBuiltinInstruments', instrument);
+        return instrument;
+      },
     );
     const { native, numChannels } = this.bounceRequest(options);
     return this.bounceResult(
@@ -1105,7 +1109,8 @@ export class Project {
     const bindings = normalizeInstrumentBindings(
       'bounceWithSynthInstruments',
       instruments,
-      (instrument) => normalizeSynthInstrument(instrument) as NativeSynthBinding,
+      (instrument) =>
+        normalizeSynthInstrument('bounceWithSynthInstruments', instrument) as NativeSynthBinding,
     );
     const { native, numChannels } = this.bounceRequest(options);
     return this.bounceResult(this.native.bounceWithSynthInstrument(bindings, native), numChannels);

@@ -1,5 +1,6 @@
 import type { SampleDesc, SampleZoneDesc } from './instrument_types.js';
 import { assertHandleLive } from './internal/handle_guard.js';
+import { refuseSampleDescOrdinals } from './internal/synth_tokens.js';
 import { projectModule, type WasmSampleBank } from './project_internal.js';
 
 /**
@@ -75,6 +76,7 @@ export class SampleBank {
    * a bad tuning offset renders the voice silent with no error raised.
    */
   addSample(data: Float32Array, desc: SampleDesc = {}): number {
+    refuseSampleDescOrdinals('addSample', desc);
     return this.native.addSample(data, desc);
   }
 

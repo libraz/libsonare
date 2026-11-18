@@ -9,6 +9,7 @@ import { midiFxConfigJson } from './internal/midi_fx_config.js';
 import { mixSceneBusToNative, mixSceneStripToNative } from './internal/mix_scene.js';
 import { deinterleave } from './internal/planar.js';
 import { timelineHandle } from './internal/project_handles.js';
+import { refuseBuiltinSynthOrdinals } from './internal/synth_tokens.js';
 import { addon } from './native.js';
 import type { ProjectTimeline } from './project.js';
 import type {
@@ -2080,6 +2081,7 @@ export class RealtimeEngine {
     destinationId: number,
     config: Omit<BuiltinSynthConfig, 'destinationId'> = {},
   ): void {
+    refuseBuiltinSynthOrdinals('setBuiltinInstrument', config);
     this.native.setBuiltinInstrument(
       destinationId,
       withoutDestinationId('setBuiltinInstrument', config),
@@ -2109,6 +2111,7 @@ export class RealtimeEngine {
     this.native.setSynthInstrument(
       destinationId,
       normalizeSynthInstrument(
+        'setSynthInstrument',
         typeof patch === 'string' ? patch : withoutDestinationId('setSynthInstrument', patch),
       ),
     );

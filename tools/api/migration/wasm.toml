@@ -27680,3 +27680,131 @@ changed = "takes the engine mode name only; an ordinal is a TypeError"
 domain = "engine"
 rule = "string-closed-sets"
 test = "bindings/wasm/tests/synth-patch.test.ts::describes engine sections and wrapper fields"
+
+[[entry]]
+kind = "field"
+old = "BuiltinSynthConfig.waveform"
+changed = "the waveform is a name; a number is refused with TypeError"
+domain = "project"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/surface/engine.test.ts::takes every synth closed set by name and refuses a number"
+
+[[entry]]
+kind = "field"
+old = "SampleDesc.loopMode"
+changed = "type SampleDescLoopMode ('none'|'continuous'|'keyDown'); the raw SoundFont sampleModes number is refused with TypeError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/surface/engine.test.ts::takes every synth closed set by name and refuses a number"
+
+[[entry]]
+kind = "field"
+old = "SynthModRouting.source"
+changed = "type SynthModSource only; a number is refused with TypeError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/surface/engine.test.ts::takes every synth closed set by name and refuses a number"
+
+[[entry]]
+kind = "field"
+old = "SynthModRouting.destination"
+changed = "type SynthModDestination only; a number is refused with TypeError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/surface/engine.test.ts::takes every synth closed set by name and refuses a number"
+
+[[entry]]
+kind = "field"
+old = "ControllerBinding.input"
+changed = "type ControllerInput only; a number is refused with TypeError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/surface/engine.test.ts::takes every synth closed set by name and refuses a number"
+
+[[entry]]
+kind = "field"
+old = "ControllerBinding.axis"
+changed = "type ControllerAxis only; a number is refused with TypeError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/surface/engine.test.ts::takes every synth closed set by name and refuses a number"
+
+[[entry]]
+kind = "field"
+old = "SynthPatch.engineMode"
+changed = "type SynthEngineMode only; a number is refused with TypeError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/surface/engine.test.ts::takes every synth closed set by name and refuses a number"
+
+[[entry]]
+kind = "field"
+old = "SynthPatch.waveform"
+changed = "type SynthOscWaveform only; a number is refused with TypeError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/surface/engine.test.ts::takes every synth closed set by name and refuses a number"
+
+[[entry]]
+kind = "field"
+old = "SynthPatch.filterModel"
+changed = "type SynthFilterModel only; a number is refused with TypeError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/surface/engine.test.ts::takes every synth closed set by name and refuses a number"
+
+[[entry]]
+kind = "field"
+old = "SynthPatch.filterOutput"
+changed = "type SynthFilterOutput only; a number is refused with TypeError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/surface/engine.test.ts::takes every synth closed set by name and refuses a number"
+
+[[entry]]
+kind = "field"
+old = "SynthPatch.lfoShape"
+changed = "type SynthLfoShape only; a number is refused with TypeError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/surface/engine.test.ts::takes every synth closed set by name and refuses a number"
+
+[[entry]]
+kind = "field"
+old = "SynthPatch.body"
+changed = "type SynthBodyType only; a number is refused with TypeError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/surface/engine.test.ts::takes every synth closed set by name and refuses a number"
+
+[[entry]]
+kind = "field"
+old = "SynthPatch.retrigger"
+changed = "type SynthRetrigger only; a number is refused with TypeError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/surface/engine.test.ts::takes every synth closed set by name and refuses a number"
+
+[[entry]]
+kind = "field"
+old = "SynthPatch.sampleLoop"
+changed = "type SampleLoopMode only; a number is refused with TypeError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/surface/engine.test.ts::takes every synth closed set by name and refuses a number"
+
+[[entry]]
+kind = "field"
+old = "SynthPatch.sampleKeyTrack"
+changed = "type SampleKeyTrack only; a number is refused with TypeError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/surface/engine.test.ts::takes every synth closed set by name and refuses a number"
+
+[[entry]]
+kind = "field"
+old = "PartRigRequest.mode"
+changed = "type PartRigMode only; a number is refused with TypeError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/surface/engine.test.ts::takes every synth closed set by name and refuses a number"

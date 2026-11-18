@@ -124,7 +124,7 @@ describe('Sonare WASM NativeSynth', () => {
     expect(() => synthPresetPatch('no-such-preset')).toThrow();
   });
 
-  it('keeps every NativeSynth enum table in parity with native round-trip ordinals', () => {
+  it('keeps every NativeSynth enum table in parity with native round-trip names', () => {
     expect(synthEnumTables()).toEqual({
       engineModes: [...SYNTH_ENGINE_MODES],
       waveforms: [...SYNTH_OSC_WAVEFORMS],
@@ -147,89 +147,76 @@ describe('Sonare WASM NativeSynth', () => {
       sampleDescLoopModes: ['none', 'continuous', 'keyDown'],
     });
 
-    for (const [ordinal, name] of SYNTH_ENGINE_MODES.entries()) {
+    for (const name of SYNTH_ENGINE_MODES) {
       expect(synthPatchRoundTripForTest({ engineMode: name }).engineMode).toBe(name);
-      expect(synthPatchRoundTripForTest({ engineMode: ordinal }).engineMode).toBe(name);
     }
-    for (const [ordinal, name] of SYNTH_OSC_WAVEFORMS.entries()) {
+    for (const name of SYNTH_OSC_WAVEFORMS) {
       expect(synthPatchRoundTripForTest({ waveform: name }).waveform).toBe(name);
-      expect(synthPatchRoundTripForTest({ waveform: ordinal }).waveform).toBe(name);
     }
-    for (const [ordinal, name] of SYNTH_FILTER_MODELS.entries()) {
+    for (const name of SYNTH_FILTER_MODELS) {
       expect(synthPatchRoundTripForTest({ filterModel: name }).filterModel).toBe(name);
-      expect(synthPatchRoundTripForTest({ filterModel: ordinal }).filterModel).toBe(name);
     }
     // The pre-rename spelling is refused like any other unknown name.
     expect(() =>
       synthPatchRoundTripForTest({ filterModel: 'moog-ladder' } as unknown as SynthPatch),
     ).toThrow(RangeError);
-    for (const [ordinal, name] of SYNTH_FILTER_OUTPUTS.entries()) {
+    for (const name of SYNTH_FILTER_OUTPUTS) {
       expect(synthPatchRoundTripForTest({ filterOutput: name }).filterOutput).toBe(name);
-      expect(synthPatchRoundTripForTest({ filterOutput: ordinal }).filterOutput).toBe(name);
     }
-    for (const [ordinal, name] of SYNTH_BODY_TYPES.entries()) {
+    for (const name of SYNTH_BODY_TYPES) {
       expect(synthPatchRoundTripForTest({ body: name }).body).toBe(name);
-      expect(synthPatchRoundTripForTest({ body: ordinal }).body).toBe(name);
     }
-    for (const [ordinal, name] of SYNTH_MOD_SOURCES.entries()) {
-      const byName = synthPatchRoundTripForTest({
+    for (const name of SYNTH_MOD_SOURCES) {
+      const echoed = synthPatchRoundTripForTest({
         modRoutings: [{ source: name, destination: 'pitchCents', depth: 1 }],
       });
-      const byOrdinal = synthPatchRoundTripForTest({
-        modRoutings: [{ source: ordinal, destination: 'pitchCents', depth: 1 }],
-      });
-      expect(byName.modRoutings?.[0]?.source).toBe(name);
-      expect(byOrdinal.modRoutings?.[0]?.source).toBe(name);
+      expect(echoed.modRoutings?.[0]?.source).toBe(name);
     }
-    for (const [ordinal, name] of SYNTH_MOD_DESTINATIONS.entries()) {
-      const byName = synthPatchRoundTripForTest({
+    for (const name of SYNTH_MOD_DESTINATIONS) {
+      const echoed = synthPatchRoundTripForTest({
         modRoutings: [{ source: 'lfo1', destination: name, depth: 1 }],
       });
-      const byOrdinal = synthPatchRoundTripForTest({
-        modRoutings: [{ source: 'lfo1', destination: ordinal, depth: 1 }],
-      });
-      expect(byName.modRoutings?.[0]?.destination).toBe(name);
-      expect(byOrdinal.modRoutings?.[0]?.destination).toBe(name);
+      expect(echoed.modRoutings?.[0]?.destination).toBe(name);
     }
   });
 
-  it('round-trips the retrigger mode by name and ordinal and refuses unknown values', () => {
-    for (const [ordinal, name] of SYNTH_RETRIGGERS.entries()) {
+  it('round-trips the retrigger mode by name and refuses unknown values', () => {
+    for (const name of SYNTH_RETRIGGERS) {
       expect(synthPatchRoundTripForTest({ retrigger: name }).retrigger).toBe(name);
-      expect(synthPatchRoundTripForTest({ retrigger: ordinal }).retrigger).toBe(name);
     }
     expect(synthPatchRoundTripForTest({}).retrigger).toBe('default');
     expect(() =>
       synthPatchRoundTripForTest({ retrigger: 'phase' } as unknown as SynthPatch),
     ).toThrow();
-    expect(() => synthPatchRoundTripForTest({ retrigger: SYNTH_RETRIGGERS.length })).toThrow();
+    expect(() =>
+      synthPatchRoundTripForTest({ retrigger: SYNTH_RETRIGGERS.length } as never),
+    ).toThrow(TypeError);
     expect(synthPresetPatch('sawLead').retrigger).toBe('free');
   });
 
-  it('round-trips the LFO shape by name and ordinal and refuses unknown values', () => {
+  it('round-trips the LFO shape by name and refuses unknown values', () => {
     expect([...SYNTH_LFO_SHAPES]).toEqual(['default', 'triangle', 'sine', 'random']);
-    for (const [ordinal, name] of SYNTH_LFO_SHAPES.entries()) {
+    for (const name of SYNTH_LFO_SHAPES) {
       expect(synthPatchRoundTripForTest({ lfoShape: name }).lfoShape).toBe(name);
-      expect(synthPatchRoundTripForTest({ lfoShape: ordinal }).lfoShape).toBe(name);
     }
     expect(synthPatchRoundTripForTest({}).lfoShape).toBe('default');
     expect(() =>
       synthPatchRoundTripForTest({ lfoShape: 'square' } as unknown as SynthPatch),
     ).toThrow();
-    expect(() => synthPatchRoundTripForTest({ lfoShape: SYNTH_LFO_SHAPES.length })).toThrow();
+    expect(() =>
+      synthPatchRoundTripForTest({ lfoShape: SYNTH_LFO_SHAPES.length } as never),
+    ).toThrow(TypeError);
     expect(synthPresetPatch('sawLead').lfoShape).toBe('triangle');
   });
 
-  it('round-trips the sample-engine block by name and by ordinal', () => {
+  it('round-trips the sample-engine block by name', () => {
     // The sample block has no presence bits: only a sample patch reads it, so
     // set 0 stays addressable and a plain zero is not a "keep the base" sentinel.
-    for (const [ordinal, name] of SAMPLE_LOOP_MODES.entries()) {
+    for (const name of SAMPLE_LOOP_MODES) {
       expect(synthPatchRoundTripForTest({ sampleLoop: name }).sampleLoop).toBe(name);
-      expect(synthPatchRoundTripForTest({ sampleLoop: ordinal }).sampleLoop).toBe(name);
     }
-    for (const [ordinal, name] of SAMPLE_KEY_TRACKS.entries()) {
+    for (const name of SAMPLE_KEY_TRACKS) {
       expect(synthPatchRoundTripForTest({ sampleKeyTrack: name }).sampleKeyTrack).toBe(name);
-      expect(synthPatchRoundTripForTest({ sampleKeyTrack: ordinal }).sampleKeyTrack).toBe(name);
     }
     expect(
       synthPatchRoundTripForTest({
@@ -314,27 +301,15 @@ describe('Sonare WASM NativeSynth', () => {
   it('reads a null enum field as absent and refuses a wrong type by name', () => {
     // The reader family's contract: only undefined/null take the default.
     const base = synthPatchRoundTripForTest({});
-    const fields = [
-      ['engineMode', 'synth engine mode'],
-      ['waveform', 'oscillator waveform'],
-      ['filterModel', 'filter model'],
-      ['filterOutput', 'filter output'],
-    ] as const;
-    for (const [field, label] of fields) {
+    for (const field of ['engineMode', 'waveform', 'filterModel', 'filterOutput'] as const) {
       const absent = synthPatchRoundTripForTest({ [field]: null } as unknown as SynthPatch);
       expect(absent[field], field).toBe(base[field]);
-      expect(() => synthPatchRoundTripForTest({ [field]: true } as unknown as SynthPatch)).toThrow(
-        label,
-      );
+      for (const wrong of [true, {}, 1]) {
+        expect(() =>
+          synthPatchRoundTripForTest({ [field]: wrong } as unknown as SynthPatch),
+        ).toThrow(new TypeError(`synthPatchRoundTripForTest: ${field} must be a name`));
+      }
     }
-  });
-
-  it('rejects a non-number, non-string enum field instead of coercing it', () => {
-    // A boolean (or any non-number/non-string) for an enum field must throw,
-    // matching the Node addon's enum reader, rather than silently coercing
-    // `true` to ordinal 1 (a bogus oscillator).
-    expect(() => synthPatchRoundTripForTest({ waveform: true } as unknown as SynthPatch)).toThrow();
-    expect(() => synthPatchRoundTripForTest({ engineMode: {} } as unknown as SynthPatch)).toThrow();
   });
 
   it('bounces preset patches deterministically', () => {

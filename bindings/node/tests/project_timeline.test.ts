@@ -16,7 +16,7 @@ const SAMPLE_RATE = 48000;
 const BLOCK_SIZE = 128;
 const FRAMES = BLOCK_SIZE * 500;
 const DESTINATION = 9;
-const SYNTH = { waveform: 1, gain: 0.3, attackMs: 1, releaseMs: 20, polyphony: 4 };
+const SYNTH = { waveform: 'saw' as const, gain: 0.3, attackMs: 1, releaseMs: 20, polyphony: 4 };
 
 function stereoTone(frames: number): Float32Array[] {
   const left = new Float32Array(frames);

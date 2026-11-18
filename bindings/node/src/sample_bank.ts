@@ -1,3 +1,4 @@
+import { refuseSampleDescOrdinals } from './internal/synth_tokens.js';
 import { addon } from './native.js';
 import type { SampleDesc, SampleZoneDesc } from './types.js';
 
@@ -59,6 +60,7 @@ export class SampleBank {
    * a bad tuning offset renders the voice silent with no error raised.
    */
   addSample(data: Float32Array, desc: SampleDesc = {}): number {
+    refuseSampleDescOrdinals('addSample', desc);
     return this.native.addSample(data, desc);
   }
 

@@ -127,12 +127,13 @@ describe('Sonare WASM sample bank', () => {
       expectRangeRefusal(() => bank.addSample(pcm, { rootKey: -1 }));
       expectTypeRefusal(() => bank.addSample(pcm, { fineTuneCents: 'flat' as unknown as number }));
       expectRangeRefusal(() => bank.addSample(pcm, { sourceRate: Number.NaN }));
-      // loopMode is the raw SoundFont sampleModes number or one of its three
-      // names — not the patch's SonareSampleLoopMode, which numbers them
-      // differently and has a 'default' the recording itself cannot have.
-      expectRangeRefusal(() => bank.addSample(pcm, { loopMode: 'sometimes' as unknown as number }));
-      expectRangeRefusal(() => bank.addSample(pcm, { loopMode: 'default' as unknown as number }));
-      expect(bank.addSample(pcm, { loopMode: 3 })).toBe(1);
+      // loopMode is one of the SoundFont sampleModes names — not the patch's
+      // SonareSampleLoopMode, which has a 'default' the recording cannot have —
+      // and a number is refused, including the raw sampleModes value.
+      expectRangeRefusal(() => bank.addSample(pcm, { loopMode: 'sometimes' as never }));
+      expectRangeRefusal(() => bank.addSample(pcm, { loopMode: 'default' as never }));
+      expectTypeRefusal(() => bank.addSample(pcm, { loopMode: 3 as never }));
+      expect(bank.addSample(pcm, { loopMode: 'continuous' })).toBe(1);
       expect(bank.addSample(pcm, { loopMode: 'keyDown' })).toBe(2);
       expect(bank.sampleCount()).toBe(3);
 

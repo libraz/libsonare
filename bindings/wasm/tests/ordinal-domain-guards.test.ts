@@ -162,14 +162,18 @@ describe('extractPercussiveEvents reads onsetWait through the same guard', () =>
 // Ordinal domain: synth patch mod routings
 // ---------------------------------------------------------------------------
 
-describe('a synth patch mod routing refuses an ordinal outside its enum', () => {
-  const base = { engineMode: 1, waveform: 2, cutoffHz: 600, resonanceQ: 6 };
+describe('a synth patch mod routing takes names and refuses every number', () => {
+  const base = {
+    engineMode: 'subtractive',
+    waveform: 'saw',
+    cutoffHz: 600,
+    resonanceQ: 6,
+  } as const;
 
   const render = (routing: Record<string, unknown>): string => {
     const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 4096 });
     try {
-      // The out-of-domain ordinals under test are what the declared type exists
-      // to forbid; the C++ reader, not the type, is the subject here.
+      // The numbers under test are what the declared type exists to forbid.
       engine.setSynthInstrument(0, {
         ...base,
         modRoutings: [routing as unknown as SynthModRouting],
@@ -187,15 +191,20 @@ describe('a synth patch mod routing refuses an ordinal outside its enum', () => 
     }
   };
 
-  const toDestination = (destination: number | string): string =>
-    render({ source: 1, destination, depth: 4800 });
-  const fromSource = (source: number | string): string =>
-    render({ source, destination: 2, depth: 4800 });
+  const toDestination = (destination: unknown): string =>
+    render({ source: 'ampEnv', destination, depth: 4800 });
+  const fromSource = (source: unknown): string =>
+    render({ source, destination: 'cutoffCents', depth: 4800 });
 
   it('separates the destinations it is given', () => {
-    // pitchCents, cutoffCents, ampGain, resonanceQ and vibratoDepthCents
-    // all move the rendered note by a different amount.
-    const rendered = [1, 2, 3, 5, 6].map(toDestination);
+    // Each of these moves the rendered note by a different amount.
+    const rendered = [
+      'pitchCents',
+      'cutoffCents',
+      'ampGain',
+      'resonanceQ',
+      'vibratoDepthCents',
+    ].map(toDestination);
     expect(new Set(rendered).size).toBe(rendered.length);
   });
 
@@ -203,76 +212,25 @@ describe('a synth patch mod routing refuses an ordinal outside its enum', () => 
     // ampEnv and filterEnv are excluded: the two envelopes are identical under
     // this patch's defaults, so they render the same and would read as a failure
     // to distinguish rather than as the degeneracy they are.
-    const rendered = [3, 4, 5, 8].map(fromSource);
+    const rendered = ['lfo1', 'lfo2', 'velocity', 'modWheel'].map(fromSource);
     expect(new Set(rendered).size).toBe(rendered.length);
   });
 
-  it('refuses none on either end, by ordinal and by name', () => {
-    for (const none of [0, 'none']) {
-      expect(() => fromSource(none)).toThrow(/none/);
-      expect(() => toDestination(none)).toThrow(/none/);
+  it('refuses none on either end', () => {
+    expect(() => fromSource('none')).toThrow(/none/);
+    expect(() => toDestination('none')).toThrow(/none/);
+  });
+
+  it('refuses a number on either end, in range or not, as a TypeError naming the field', () => {
+    for (const value of [0, 1, 13, -1, 1.5, Number.NaN]) {
+      expectRefusalNaming('modRoutings[0].source', () => fromSource(value), TypeError);
+      expectRefusalNaming('modRoutings[0].destination', () => toDestination(value), TypeError);
     }
   });
 
-  it('renders each ordinal bit-identically to the name for the same member', () => {
-    // Distinctness alone would also hold under a mapping shifted by one; this
-    // pins which member each ordinal selected.
-    const sources = [
-      'none',
-      'ampEnv',
-      'filterEnv',
-      'lfo1',
-      'lfo2',
-      'velocity',
-      'keyTrack',
-      'modWheel',
-      'random',
-      'breath',
-      'aftertouch',
-      'expressionCc',
-      'pitchBend',
-    ];
-    // Ordinal 0 is none, which is refused rather than rendered.
-    for (let ordinal = 1; ordinal < sources.length; ordinal++) {
-      expect(fromSource(ordinal), `source ordinal ${ordinal}`).toBe(fromSource(sources[ordinal]));
-    }
-    const destinations = [
-      'none',
-      'pitchCents',
-      'cutoffCents',
-      'ampGain',
-      'panUnits',
-      'resonanceQ',
-      'vibratoDepthCents',
-      'filterEnvDepth',
-      'lfo1RateScale',
-      'excitationForce',
-      'excitationPosition',
-      'excitationBrightness',
-      'spectrumMorph',
-    ];
-    for (let ordinal = 1; ordinal < destinations.length; ordinal++) {
-      expect(toDestination(ordinal), `destination ordinal ${ordinal}`).toBe(
-        toDestination(destinations[ordinal]),
-      );
-    }
-  });
-
-  it('refuses an ordinal past the end of the table instead of rendering silence', () => {
-    // 13, 99 and -1 all used to be accepted and render exactly what 'none'
-    // renders, so the caller got a working patch with their routing dropped.
-    // Both tables hold 13 values, so 13 is the first ordinal past either end.
-    for (const value of [13, 99, -1]) {
-      expectRefusalNaming('mod source', () => fromSource(value));
-      expectRefusalNaming('mod destination', () => toDestination(value));
-    }
-  });
-
-  it('refuses a fractional ordinal, which selects a member that was not named', () => {
-    for (const value of [1.5, 0.5, Number.NaN, Number.POSITIVE_INFINITY]) {
-      expectRefusalNaming('mod source', () => fromSource(value));
-      expectRefusalNaming('mod destination', () => toDestination(value));
-    }
+  it('refuses an unknown name on either end', () => {
+    expectRefusalNaming('mod source', () => fromSource('noSuchSource'));
+    expectRefusalNaming('mod destination', () => toDestination('noSuchDestination'));
   });
 });
 

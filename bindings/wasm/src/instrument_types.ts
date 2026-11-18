@@ -22,8 +22,8 @@ export type BuiltinSynthWaveform = (typeof BUILTIN_SYNTH_WAVEFORMS)[number] | 0 
 export interface BuiltinSynthConfig {
   /**
    * Oscillator waveform (default `'sine'`). The one field with no nearest
-   * sensible value — a name or an ordinal outside the set throws rather than
-   * falling back to sine.
+   * sensible value — an unknown name throws rather than falling back to sine,
+   * and a number is a `TypeError`.
    */
   waveform?: BuiltinSynthWaveform;
   /** Master output gain, linear (0 => 0.2). */
@@ -142,7 +142,7 @@ export interface Sf2ProgramStatus {
 }
 
 /**
- * Every NativeSynth engine selector, by ordinal.
+ * Every NativeSynth engine selector, by name, in the library's enum order.
  *
  * @remarks
  * Selecting a mode blanks every engine section but its own. From a patch that
@@ -390,7 +390,7 @@ export interface SynthParamInfo {
  * bank recorded for the sample the zone names).
  *
  * A different set of values from {@link SampleDesc.loopMode}, which is the
- * SoundFont `sampleModes` number describing the recording itself.
+ * SoundFont `sampleModes` name describing the recording itself.
  */
 export type SampleLoopMode = (typeof SAMPLE_LOOP_MODES)[number];
 
@@ -416,13 +416,9 @@ export type SynthRetrigger = (typeof SYNTH_RETRIGGERS)[number];
 export type SynthLfoShape = (typeof SYNTH_LFO_SHAPES)[number];
 
 /**
- * Loop behaviour recorded for one sample in a {@link SampleBank}.
- *
- * A number is the raw SoundFont `sampleModes` value the C struct carries
- * (`0` no loop, `1` continuous, `3` while the key is held), so SF2-derived data
- * passes through untranslated; the names are the readable spellings of the same
- * three states. There is no `'default'`: a sample's own loop mode is where the
- * default comes from.
+ * Loop behaviour recorded for one sample in a {@link SampleBank}: the three
+ * SoundFont `sampleModes` states by name. There is no `'default'`: a sample's
+ * own loop mode is where the default comes from.
  */
 export type SampleDescLoopMode = 'none' | 'continuous' | 'keyDown';
 
@@ -450,7 +446,7 @@ export interface SampleDesc {
    * dropped, so a malformed loop plays unlooped rather than wrapping over
    * nothing. {@link SynthPatch.sampleLoop} overrides this per patch.
    */
-  loopMode?: SampleDescLoopMode | number;
+  loopMode?: SampleDescLoopMode;
 }
 
 /**
@@ -532,7 +528,7 @@ export interface PartRigKey {
 
 /** Request for {@link Project.setPartRig} and {@link RealtimeEngine.setPartRig}. */
 export interface PartRigRequest extends PartRigKey {
-  mode: PartRigMode | number;
+  mode: PartRigMode;
   /** 1-8 inserts; required for `'chain'` and refused for the other modes. */
   inserts?: PartRigInsert[];
 }
@@ -560,7 +556,7 @@ export type NoteTracking = (typeof NOTE_TRACKINGS)[number];
  * Binding the same input twice with different axes is how a single gesture
  * reaches two of them, which is what a breath controller driving both
  * excitation and loudness needs. `input` and `axis` are required and are the
- * canonical names (or their C ordinals); an unknown name throws rather than
+ * canonical names; a number is a `TypeError`, and an unknown name throws rather than
  * resolving to the first member.
  *
  * @example
@@ -570,7 +566,7 @@ export type NoteTracking = (typeof NOTE_TRACKINGS)[number];
  */
 export interface ControllerBinding {
   /** How the device spells the gesture. */
-  input: ControllerInput | number;
+  input: ControllerInput;
   /**
    * CC number 0-127 for `'controlChange'`. Every other input is identified by
    * its message status alone and ignores this. Default `0`.
@@ -580,7 +576,7 @@ export interface ControllerBinding {
    * Which expression axis the gesture means. `'none'` is refused: a binding
    * that means nothing is a caller mistake, not an empty slot.
    */
-  axis: ControllerAxis | number;
+  axis: ControllerAxis;
   /**
    * Axis value at zero deflection, in the axis's own unit — normalized `[0,1]`
    * for the excitation axes and loudness, cents for pitch and vibrato depth.
@@ -598,18 +594,18 @@ export interface ControllerBinding {
   curve?: number;
 }
 
-/** One {@link SynthPatch} mod-matrix routing (name or C ordinal per field). */
+/** One {@link SynthPatch} mod-matrix routing; each field is a name, and a number is a `TypeError`. */
 export interface SynthModRouting {
   /**
    * Mod-matrix source. `'none'` is refused: a routing driven by nothing is a
    * caller mistake, not an empty slot.
    */
-  source: SynthModSource | number;
+  source: SynthModSource;
   /**
    * Mod-matrix destination. `'none'` is refused, for the same reason as
    * `source`.
    */
-  destination: SynthModDestination | number;
+  destination: SynthModDestination;
   /**
    * Destination units at full source deflection, summed onto whatever the
    * patch or a CC already set and then handled per destination:
@@ -683,7 +679,7 @@ export interface SynthPatch {
   useGmPrograms?: boolean;
   /** Base preset name (see {@link synthPresetNames}); omit for the init patch. */
   preset?: string;
-  engineMode?: SynthEngineMode | number;
+  engineMode?: SynthEngineMode;
   /**
    * Fields of the selected engine's own model section, by key (for example
    * `{ bowForce: 0.6 }` on `'bowedString'`). {@link synthEngineParamInfo} lists
@@ -697,7 +693,7 @@ export interface SynthPatch {
    */
   engineParams?: Record<string, number>;
   /** Oscillator waveform. Read by the subtractive engine only; every other engine ignores it. */
-  waveform?: SynthOscWaveform | number;
+  waveform?: SynthOscWaveform;
   /** Detuned-stack width [1, 7]. */
   unison?: number;
   detuneCents?: number;
@@ -707,8 +703,8 @@ export interface SynthPatch {
   driftRateHz?: number;
   /** Pre-filter drive [0, 1]. */
   drive?: number;
-  filterModel?: SynthFilterModel | number;
-  filterOutput?: SynthFilterOutput | number;
+  filterModel?: SynthFilterModel;
+  filterOutput?: SynthFilterOutput;
   cutoffHz?: number;
   /**
    * Series 12 dB/oct highpass after the main filter, in Hz; 0 disables the
@@ -800,11 +796,11 @@ export interface SynthPatch {
   oneShot?: boolean;
   lfoRateHz?: number;
   /** The patch's LFO waveform (vibrato and tremolo LFOs) at every destination; see {@link SynthLfoShape}. */
-  lfoShape?: SynthLfoShape | number;
+  lfoShape?: SynthLfoShape;
   lfoToPitchCents?: number;
   lfo2RateHz?: number;
   glideMs?: number;
-  body?: SynthBodyType | number;
+  body?: SynthBodyType;
   /** Body resonance mix [0, 1]. */
   bodyMix?: number;
   /** Seeded per-voice pan scatter [0, 1]. */
@@ -819,7 +815,7 @@ export interface SynthPatch {
    * an organ's wind chest and effect tails. The `'drumKit'` preset's per-note
    * pieces keep their own mode.
    */
-  retrigger?: SynthRetrigger | number;
+  retrigger?: SynthRetrigger;
   /** Mod matrix (at most 8 routings; REPLACES the base matrix when non-empty). */
   modRoutings?: SynthModRouting[];
   /** Master output gain (linear). */
@@ -842,8 +838,8 @@ export interface SynthPatch {
   sampleSet?: number;
   /** Linear gain on the sample. */
   sampleLevel?: number;
-  sampleLoop?: SampleLoopMode | number;
+  sampleLoop?: SampleLoopMode;
   /** Attack skip, as a fraction of the mapped region. */
   sampleStartOffset?: number;
-  sampleKeyTrack?: SampleKeyTrack | number;
+  sampleKeyTrack?: SampleKeyTrack;
 }

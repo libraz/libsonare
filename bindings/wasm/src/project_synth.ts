@@ -6,6 +6,7 @@ import {
   type SynthParamInfo,
   type SynthPatch,
 } from './instrument_types.js';
+import { refuseSynthPatchOrdinals } from './internal/synth_tokens.js';
 import { getSonareModule } from './module_state.js';
 import { type ProjectModule, projectModule } from './project_internal.js';
 import { assertString } from './validation.js';
@@ -150,5 +151,6 @@ export function synthEnumTables(): SynthEnumTables {
 }
 
 export function synthPatchRoundTripForTest(patch: SynthPatch): SynthPatch {
+  refuseSynthPatchOrdinals('synthPatchRoundTripForTest', patch);
   return projectModule()._synthPatchRoundTrip(patch);
 }
