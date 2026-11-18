@@ -327,23 +327,31 @@ export interface ExternalSeparatedStemImportResult {
  * A partial take is marked `"partial": true` in its `takes[]` entry of the project
  * JSON (`toJson()`).
  */
-export interface ProjectLoopRecordingDesc {
+export type ProjectLoopRecordingDesc = ProjectLoopRecordingCommon &
+  (
+    | {
+        /** Interleaved capture. */
+        audio: Float32Array;
+        /** Channel count of the interleaved `audio`. */
+        audioChannels: number;
+      }
+    | {
+        /** Planar capture: one `Float32Array` per channel, all the same length; their count is the channel count. */
+        audio: Float32Array[];
+        audioChannels?: never;
+      }
+  );
+
+/** Fields of {@link ProjectLoopRecordingDesc} shared by interleaved and planar audio. */
+export interface ProjectLoopRecordingCommon {
   /** Track the clip is added to. */
   trackId: number;
   /** Clip start in PPQ. Default `0`. */
   startPpq?: number;
   /** Length of one loop in PPQ; also the length of the added clip. */
   loopLengthPpq: number;
-  /**
-   * Interleaved capture (with `audioChannels`), or planar: one `Float32Array`
-   * per channel, all the same length, whose count is the channel count and
-   * makes `audioChannels` irrelevant.
-   */
-  audio: Float32Array | Float32Array[];
-  /** Channel count of an interleaved `audio`. Default `1`. */
-  audioChannels?: number;
-  /** Sample rate of `audio` in Hz. Default `48000`. */
-  audioSampleRate?: number;
+  /** Sample rate of `audio` in Hz. */
+  audioSampleRate: number;
   /** `'keep'` (default) keeps a partial last take; `'drop'` does not create it. */
   partialTail?: 'keep' | 'drop';
 }

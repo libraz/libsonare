@@ -106,6 +106,7 @@ export type {
   ProjectKeyMode,
   ProjectKeySegment,
   ProjectLoopMode,
+  ProjectLoopRecordingCommon,
   ProjectLoopRecordingDesc,
   ProjectLoopRecordingResult,
   ProjectMarker,

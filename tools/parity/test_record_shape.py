@@ -259,6 +259,32 @@ def test_ts_intersection_alias_is_a_record() -> None:
     assert {"n_bins", "magnitude", "sample_rate"} <= names
 
 
+def test_ts_discriminated_union_term_merges_its_arms() -> None:
+    """``A & ( | { x: T; n: number } | { x: U[]; n?: never } )`` is one record.
+
+    A field every arm requires stays required; one an arm omits or marks
+    ``never`` reads as optional, so the record keeps the C field it maps to.
+    """
+    src = (
+        "export interface Base { trackId: number; }\n"
+        "export type Take = Base &\n"
+        "  (\n"
+        "    | { audio: Float32Array; audioChannels: number }\n"
+        "    | { audio: Float32Array[]; audioChannels?: never }\n"
+        "  );\n"
+    )
+    fields = {f.name: f for f in _ts_records(src)["Take"].fields}
+    assert set(fields) == {"track_id", "audio", "audio_channels"}
+    assert not fields["audio"].optional
+    assert fields["audio_channels"].optional
+    assert fields["audio_channels"].type == "number"
+
+
+def test_ts_union_term_with_a_non_object_arm_is_not_a_record() -> None:
+    recs = _ts_records("export type Take = { a: number } & ( | { b: number } | string );\n")
+    assert "Take" not in recs
+
+
 def test_ts_union_alias_is_not_a_record() -> None:
     """A non-record alias must not be reported as a record with no fields."""
     recs = _ts_records("export type Mode = 'a' | 'b';\n")

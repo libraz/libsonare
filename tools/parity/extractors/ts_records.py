@@ -205,11 +205,49 @@ def _alias_rhs(text: str, start: int) -> tuple[str, int] | None:
     return None
 
 
+def _object_union_arms(body: str) -> list[list[RecordField]] | None:
+    """Members of each arm of ``| { ... } | { ... }``; None unless every arm is an object literal."""
+    arms: list[str] = []
+    cur: list[str] = []
+    depth = 0
+    for ch in body:
+        if ch in "([{<":
+            depth += 1
+        elif ch in ")]}>":
+            depth -= 1
+        if ch == "|" and depth == 0:
+            arms.append("".join(cur).strip())
+            cur = []
+        else:
+            cur.append(ch)
+    arms.append("".join(cur).strip())
+    arms = [a for a in arms if a]
+    if len(arms) < 2 or not all(a.startswith("{") and a.endswith("}") for a in arms):
+        return None
+    return [_parse_members(a[1:-1]) for a in arms]
+
+
+def _merge_arms(arms: list[list[RecordField]]) -> list[RecordField]:
+    """One field per name across a discriminated union; optional unless every arm requires it."""
+    out: dict[str, RecordField] = {}
+    for arm in arms:
+        for f in arm:
+            out.setdefault(f.name, f)
+    for name, f in out.items():
+        arm_fields = [next((x for x in arm if x.name == name), None) for arm in arms]
+        if any(x is None or x.optional for x in arm_fields):
+            f.optional = True
+        types = [x.type for x in arm_fields if x is not None and x.type != "never"]
+        f.type = " | ".join(dict.fromkeys(types)) or f.type
+    return list(out.values())
+
+
 def _parse_intersection(rhs: str) -> tuple[list[str], list[RecordField]] | None:
     """Split a type-alias RHS into ``(base_names, own_fields)``.
 
     Accepts the record spellings only: ``{ ... }``, ``A``, ``A & B``,
-    ``A & { ... }``. Returns ``None`` for anything else (a union, a function
+    ``A & { ... }``, and a parenthesised union of object literals as one term
+    (a discriminated request), whose arms merge into one field set. Returns ``None`` for anything else (a union, a function
     type, a generic reference, a mapped type) so a non-record alias is never
     mistaken for an empty record.
     """
@@ -236,6 +274,11 @@ def _parse_intersection(rhs: str) -> tuple[list[str], list[RecordField]] | None:
             return None
         if term.startswith("{") and term.endswith("}"):
             fields.extend(_parse_members(term[1:-1]))
+        elif term.startswith("(") and term.endswith(")"):
+            arms = _object_union_arms(term[1:-1])
+            if arms is None:
+                return None
+            fields.extend(_merge_arms(arms))
         elif _BARE_TYPE_REF.match(term):
             bases.append(term)
         else:

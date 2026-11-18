@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import type { ProjectAutomationPoint, ProjectFadeCurve } from '../src/index.js';
+import type {
+  ProjectAutomationPoint,
+  ProjectFadeCurve,
+  ProjectLoopRecordingDesc,
+} from '../src/index.js';
 import { masteringInsertNames, Project, RealtimeEngine } from '../src/index.js';
+import { expectRefusal } from './_helpers.js';
 
 /** Per clip, the ids of the takes the project JSON marks partial. */
 function partialTakeIds(project: { toJson(): string }): number[][] {
@@ -246,7 +251,13 @@ describe('Project edit ops (new bindings)', () => {
     const project = new Project();
     project.setSampleRate(48000);
     const track = project.addTrack({ kind: 'audio', name: 'record' });
-    const base = { trackId: track, startPpq: 0, loopLengthPpq: 1, audioSampleRate: 48000 };
+    const base = {
+      trackId: track,
+      startPpq: 0,
+      loopLengthPpq: 1,
+      audioChannels: 1,
+      audioSampleRate: 48000,
+    };
     const kept = project.addLoopRecordingTakes({
       ...base,
       startPpq: 0,
@@ -285,7 +296,7 @@ describe('Project edit ops (new bindings)', () => {
     const project = new Project();
     project.setSampleRate(48000);
     const track = project.addTrack({ kind: 'audio', name: 'record' });
-    const base = { trackId: track, loopLengthPpq: 1, audioSampleRate: 48000 };
+    const base = { trackId: track, loopLengthPpq: 1, audioChannels: 1, audioSampleRate: 48000 };
     const extra = project.addLoopRecordingTakes({
       ...base,
       startPpq: 0,
@@ -313,7 +324,9 @@ describe('Project edit ops (new bindings)', () => {
       interleaved[2 * i] = left[i];
       interleaved[2 * i + 1] = right[i];
     }
-    const run = (audio: Float32Array | Float32Array[], audioChannels?: number) => {
+    const run = (
+      capture: { audio: Float32Array; audioChannels: number } | { audio: Float32Array[] },
+    ) => {
       const project = new Project();
       project.setSampleRate(48000);
       const track = project.addTrack({ kind: 'audio', name: 'record' });
@@ -321,15 +334,14 @@ describe('Project edit ops (new bindings)', () => {
         trackId: track,
         startPpq: 0,
         loopLengthPpq: 1,
-        audio,
-        audioChannels,
+        ...capture,
         audioSampleRate: 48000,
       });
       const json = project.toJson();
       project.destroy();
       return json;
     };
-    expect(run([left, right])).toBe(run(interleaved, 2));
+    expect(run({ audio: [left, right] })).toBe(run({ audio: interleaved, audioChannels: 2 }));
   });
 
   it('addLoopRecordingTakes refuses planar channels of different lengths', () => {
@@ -341,8 +353,20 @@ describe('Project edit ops (new bindings)', () => {
         startPpq: 0,
         loopLengthPpq: 1,
         audio: [new Float32Array(100), new Float32Array(99)],
+        audioSampleRate: 48000,
       }),
     ).toThrow(RangeError);
+    project.destroy();
+  });
+
+  it('addLoopRecordingTakes refuses interleaved audio without its channel count or sample rate', () => {
+    const project = new Project();
+    const track = project.addTrack({ kind: 'audio', name: 'record' });
+    const desc = { trackId: track, loopLengthPpq: 1, audio: new Float32Array(100) };
+    const add = (partial: object) => () =>
+      project.addLoopRecordingTakes(partial as unknown as ProjectLoopRecordingDesc);
+    expectRefusal(add({ ...desc, audioSampleRate: 48000 }), TypeError, /audioChannels/);
+    expectRefusal(add({ ...desc, audioChannels: 1 }), TypeError, /audioSampleRate/);
     project.destroy();
   });
 

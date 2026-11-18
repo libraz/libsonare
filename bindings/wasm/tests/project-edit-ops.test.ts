@@ -8,7 +8,11 @@
 import { readFileSync } from 'node:fs';
 
 import { beforeAll, describe, expect, it } from 'vitest';
-import type { ProjectAutomationCurve, ProjectAutomationPoint } from '../dist/index.js';
+import type {
+  ProjectAutomationCurve,
+  ProjectAutomationPoint,
+  ProjectLoopRecordingDesc,
+} from '../dist/index.js';
 import {
   ErrorCode,
   init,
@@ -413,7 +417,13 @@ describe('Sonare WASM Project edit ops', () => {
     try {
       project.setSampleRate(48000);
       const trackId = project.addTrack({ kind: 'audio', name: 'record' });
-      const base = { trackId, startPpq: 0, loopLengthPpq: 1, audioSampleRate: 48000 };
+      const base = {
+        trackId,
+        startPpq: 0,
+        loopLengthPpq: 1,
+        audioChannels: 1,
+        audioSampleRate: 48000,
+      };
       const kept = project.addLoopRecordingTakes({
         ...base,
         startPpq: 0,
@@ -455,7 +465,7 @@ describe('Sonare WASM Project edit ops', () => {
     try {
       project.setSampleRate(48000);
       const trackId = project.addTrack({ kind: 'audio', name: 'record' });
-      const base = { trackId, loopLengthPpq: 1, audioSampleRate: 48000 };
+      const base = { trackId, loopLengthPpq: 1, audioChannels: 1, audioSampleRate: 48000 };
       const extra = project.addLoopRecordingTakes({
         ...base,
         startPpq: 0,
@@ -488,7 +498,9 @@ describe('Sonare WASM Project edit ops', () => {
       interleaved[2 * i] = left[i];
       interleaved[2 * i + 1] = right[i];
     }
-    const run = (audio: Float32Array | Float32Array[], audioChannels?: number) => {
+    const run = (
+      capture: { audio: Float32Array; audioChannels: number } | { audio: Float32Array[] },
+    ) => {
       const project = new Project();
       try {
         project.setSampleRate(48000);
@@ -497,8 +509,7 @@ describe('Sonare WASM Project edit ops', () => {
           trackId,
           startPpq: 0,
           loopLengthPpq: 1,
-          audio,
-          audioChannels,
+          ...capture,
           audioSampleRate: 48000,
         });
         return project.toJson();
@@ -506,7 +517,7 @@ describe('Sonare WASM Project edit ops', () => {
         project.destroy();
       }
     };
-    expect(run([left, right])).toBe(run(interleaved, 2));
+    expect(run({ audio: [left, right] })).toBe(run({ audio: interleaved, audioChannels: 2 }));
   });
 
   it('addLoopRecordingTakes refuses planar channels of different lengths', () => {
@@ -519,8 +530,34 @@ describe('Sonare WASM Project edit ops', () => {
           startPpq: 0,
           loopLengthPpq: 1,
           audio: [new Float32Array(100), new Float32Array(99)],
+          audioSampleRate: 48000,
         }),
       ).toThrow(RangeError);
+    } finally {
+      project.destroy();
+    }
+  });
+
+  it('addLoopRecordingTakes refuses interleaved audio without its channel count or sample rate', () => {
+    const project = new Project();
+    try {
+      const trackId = project.addTrack({ kind: 'audio', name: 'record' });
+      const desc = { trackId, loopLengthPpq: 1, audio: new Float32Array(100) };
+      const refusal = (partial: object): unknown => {
+        try {
+          project.addLoopRecordingTakes(partial as unknown as ProjectLoopRecordingDesc);
+        } catch (err) {
+          return err;
+        }
+        return undefined;
+      };
+      const noChannels = expectArgumentRefusal(
+        refusal({ ...desc, audioSampleRate: 48000 }),
+        TypeError,
+      );
+      expect(noChannels.message).toMatch(/audioChannels/);
+      const noRate = expectArgumentRefusal(refusal({ ...desc, audioChannels: 1 }), TypeError);
+      expect(noRate.message).toMatch(/audioSampleRate/);
     } finally {
       project.destroy();
     }
