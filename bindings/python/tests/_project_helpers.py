@@ -66,5 +66,5 @@ def dangling_source_json() -> str:
         document = json.loads(project.to_json())
     finally:
         project.close()
-    document["clips"][0]["source_id"] = 99
+    document["clips"][0]["sourceId"] = 99
     return json.dumps(document)

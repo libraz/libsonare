@@ -177,7 +177,7 @@ def test_midi_helpers_program_midi_fx_and_sysex_smf_round_trip() -> None:
             first_clip = sysex_project.import_smf(_make_sysex_smf())
             assert first_clip != 0
             json_before = sysex_project.to_json()
-            assert "__sysex_payloads" in json_before
+            assert "__sysexPayloads" in json_before
             restored = Project.from_json(json_before)
             try:
                 assert bytes([0xF0, 0x05, 0x7E, 0x7F, 0x09, 0x01, 0xF7]) in restored.export_smf()
@@ -519,7 +519,7 @@ def test_bake_midi_fx_preserves_more_than_512_events() -> None:
         project.set_midi_events(clip, events)
         project.bake_midi_fx(clip, "{}")
         payload = json.loads(project.to_json())
-        baked = payload["midi_content"][str(clip)]
+        baked = payload["midiContent"][str(clip)]
         assert baked == [{"word0": e.word0, "word1": e.word1, "ppq": e.ppq} for e in events]
 
         roundtrip = Project()
@@ -527,7 +527,7 @@ def test_bake_midi_fx_preserves_more_than_512_events() -> None:
             round_clip = roundtrip.import_smf(project.export_smf())
             roundtrip.bake_midi_fx(round_clip, "{}")
             round_payload = json.loads(roundtrip.to_json())
-            assert len(round_payload["midi_content"][str(round_clip)]) == 600
+            assert len(round_payload["midiContent"][str(round_clip)]) == 600
         finally:
             roundtrip.close()
     finally:
@@ -554,7 +554,7 @@ def test_bake_midi_fx_reports_source_index() -> None:
         seed(tracked, tracked_clip)
         assert tracked.preview_midi_fx_count(tracked_clip, config) == 12
         # The preview must leave the clip alone.
-        assert len(json.loads(tracked.to_json())["midi_content"][str(tracked_clip)]) == 4
+        assert len(json.loads(tracked.to_json())["midiContent"][str(tracked_clip)]) == 4
 
         source_index = tracked.bake_midi_fx(tracked_clip, config, with_source_index=True)
         assert isinstance(source_index, np.ndarray)
@@ -572,8 +572,8 @@ def test_bake_midi_fx_reports_source_index() -> None:
         seed(plain, plain_clip)
         assert plain.bake_midi_fx(plain_clip, config) is None
         assert (
-            json.loads(tracked.to_json())["midi_content"][str(tracked_clip)]
-            == json.loads(plain.to_json())["midi_content"][str(plain_clip)]
+            json.loads(tracked.to_json())["midiContent"][str(tracked_clip)]
+            == json.loads(plain.to_json())["midiContent"][str(plain_clip)]
         )
 
         with pytest.raises(SonareError):

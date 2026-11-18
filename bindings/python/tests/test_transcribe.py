@@ -356,7 +356,7 @@ def test_transcribe_rejects_bad_input(
 
 def _clip_events(project: libsonare.Project, clip_id: int) -> list[tuple[float, int, int]]:
     """The clip's stored events, read back through the project's own serializer."""
-    content = json.loads(project.to_json())["midi_content"]
+    content = json.loads(project.to_json())["midiContent"]
     return [
         (float(event["ppq"]), int(event["word0"]), int(event["word1"]))
         for event in content.get(str(clip_id), [])

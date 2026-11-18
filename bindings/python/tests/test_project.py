@@ -476,7 +476,7 @@ def test_set_track_midi_destination_round_trips_and_undoes() -> None:
         project.set_track_midi_destination(track_id, 7)
         after = project.to_json_bytes()
         assert after != before
-        assert b'"midi_destination_id":7' in after
+        assert b'"midiDestinationId":7' in after
 
         # Routes through the edit history, so undo restores the prior routing.
         project.undo()
@@ -501,8 +501,8 @@ def test_set_clip_warp_ref_round_trips_and_undoes() -> None:
         project.set_clip_warp_mode(clip_id, "repitch")
         after = project.to_json_bytes()
         assert after != before
-        assert b'"warp_ref_id":123' in after
-        assert b'"warp_mode":1' in after
+        assert b'"warpRefId":123' in after
+        assert b'"warpMode":1' in after
         restored = Project.from_json(after)
         try:
             assert restored.to_json_bytes() == after
@@ -510,14 +510,14 @@ def test_set_clip_warp_ref_round_trips_and_undoes() -> None:
             restored.close()
 
         project.undo()
-        assert b'"warp_mode":0' in project.to_json_bytes()
+        assert b'"warpMode":0' in project.to_json_bytes()
         project.undo()
-        assert b'"warp_ref_id":0' in project.to_json_bytes()
+        assert b'"warpRefId":0' in project.to_json_bytes()
         project.undo()
         assert project.to_json_bytes() == before
 
         project.set_clip_warp_mode(clip_id, "tempoSync")
-        assert b'"warp_mode":2' in project.to_json_bytes()
+        assert b'"warpMode":2' in project.to_json_bytes()
     finally:
         project.close()
 
@@ -532,7 +532,7 @@ def test_removing_warp_map_clears_clip_references_and_undo_restores_them() -> No
         mapped = project.to_json_bytes()
 
         project.remove_warp_map(123)
-        assert b'"warp_ref_id":0' in project.to_json_bytes()
+        assert b'"warpRefId":0' in project.to_json_bytes()
         project.undo()
         assert project.to_json_bytes() == mapped
         with pytest.raises(SonareError):
@@ -557,7 +557,7 @@ def test_set_clip_takes_and_comp_segments_round_trip_and_undo() -> None:
         with_takes = project.to_json_bytes()
         assert with_takes != before
         assert b'"takes"' in with_takes
-        assert b'"active_take_id":1' in with_takes
+        assert b'"activeTakeId":1' in with_takes
 
         project.set_clip_comp_segments(
             audio_clip,
@@ -567,7 +567,7 @@ def test_set_clip_takes_and_comp_segments_round_trip_and_undo() -> None:
             ],
         )
         with_comp = project.to_json_bytes()
-        assert b'"comp_segments"' in with_comp
+        assert b'"compSegments"' in with_comp
 
         project.undo()
         assert project.to_json_bytes() == with_takes
@@ -616,9 +616,9 @@ def test_comp_segment_crossfade_ppq_reaches_the_library() -> None:
             ],
         )
         as_dict = json.loads(project.to_json_bytes())
-        segments = as_dict["clips"][0]["comp_segments"]
-        assert segments[0]["crossfade_ppq"] == 0.0
-        assert segments[1]["crossfade_ppq"] == 0.25
+        segments = as_dict["clips"][0]["compSegments"]
+        assert segments[0]["crossfadePpq"] == 0.0
+        assert segments[1]["crossfadePpq"] == 0.25
     finally:
         project.close()
 
@@ -649,7 +649,7 @@ def test_add_loop_recording_takes_splits_capture_into_active_take() -> None:
         json = project.to_json_bytes()
         assert b'"takes"' in json
         assert b'"partial"' not in json
-        assert b'"active_take_id":2' in json
+        assert b'"activeTakeId":2' in json
         assert len(project.sources()) == 2
 
         project.undo()
@@ -663,7 +663,7 @@ def test_add_loop_recording_takes_splits_capture_into_active_take() -> None:
 
 
 def _loop_recording_active_take(project: Project) -> int:
-    return int(json.loads(project.to_json_bytes())["clips"][0]["active_take_id"])
+    return int(json.loads(project.to_json_bytes())["clips"][0]["activeTakeId"])
 
 
 def _partial_take_ids(project: Project) -> list[int]:
@@ -1125,3 +1125,15 @@ def test_diagnostic_token_types_list_the_library_tokens_in_order() -> None:
     assert list(get_args(ProjectDiagnosticSeverity)) == _library_tokens(
         lib.sonare_project_diagnostic_severity_name
     )
+
+
+@pytest.mark.parametrize("earlier", ["time_signatures", "midi_content", "tempo_segments"])
+def test_project_document_refuses_an_earlier_snake_case_key(earlier: str) -> None:
+    project = Project()
+    try:
+        document = json.loads(project.to_json())
+    finally:
+        project.close()
+    document[earlier] = []
+    with raises_coded(ErrorCode.INVALID_FORMAT, match=earlier):
+        Project.from_json(json.dumps(document))

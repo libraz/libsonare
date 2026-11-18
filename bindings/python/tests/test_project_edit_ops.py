@@ -64,7 +64,7 @@ def test_set_clip_fade_and_loop_round_trip() -> None:
     assert p.to_json() == before
     # An optional loop crossfade round-trips through serialization and undo.
     p.set_clip_loop(clip, "loop", 240.0, loop_crossfade_ppq=12.0)
-    assert "loop_crossfade_ppq" in p.to_json()
+    assert "loopCrossfadePpq" in p.to_json()
     p.undo()
     assert p.to_json() == before
     # loop_length_ppq == 0 while looping means "loop the entire clip" (the
@@ -267,7 +267,7 @@ def test_automation_lane_typed_kind_roundtrip_and_legacy_edit_preservation() -> 
     legacy_target = p.add_automation_lane(track, 1, [AutomationPoint(0.0, 0.0, "linear")])
     legacy_doc = json.loads(p.to_json())
     assert legacy_doc["version"] == 7
-    assert "target_kind" not in legacy_doc["tracks"][0]["automation_lanes"][0]
+    assert "targetKind" not in legacy_doc["tracks"][0]["automationLanes"][0]
     p.remove_automation_lane(track, legacy_target)
 
     typed_target = p.add_automation_lane(
@@ -282,14 +282,14 @@ def test_automation_lane_typed_kind_roundtrip_and_legacy_edit_preservation() -> 
     typed_before_edit = p.to_json()
     typed_doc = json.loads(typed_before_edit)
     assert typed_doc["version"] == 7
-    assert typed_doc["tracks"][0]["automation_lanes"][0]["target_kind"] == 1
+    assert typed_doc["tracks"][0]["automationLanes"][0]["targetKind"] == 1
 
     # The absent kind must stay on the legacy C edit path; native semantics
     # preserve the existing typed classification while replacing points.
     p.edit_automation_lane(track, typed_target, [AutomationPoint(0.0, 0.5, "hold")])
     edited_doc = json.loads(p.to_json())
     assert edited_doc["version"] == 7
-    assert edited_doc["tracks"][0]["automation_lanes"][0]["target_kind"] == 1
+    assert edited_doc["tracks"][0]["automationLanes"][0]["targetKind"] == 1
 
     restored = Project.from_json(p.to_json())
     assert restored.to_json() == p.to_json()
