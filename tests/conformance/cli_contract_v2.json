@@ -13748,7 +13748,7 @@
           "argv": [
             "voice-preset",
             "--preset",
-            "Bright-Idol",
+            "BRIGHTIDOL",
             "--json"
           ],
           "exit": 0,
