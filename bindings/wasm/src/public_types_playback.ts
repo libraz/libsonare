@@ -38,13 +38,14 @@ export interface PlaybackInputConfig {
   layout?: 'auto' | 'mono' | 'stereo' | '5.1' | '7.1';
   /**
    * Prepare. Role of each input channel, covering the fixed layout's roles
-   * exactly once; requires a fixed `layout`. `null` means canonical order.
+   * exactly once; requires a fixed `layout`. `null` means canonical order, and
+   * `config()` returns the key as `null` when no map is set.
    */
   channel_map?: PlaybackChannelRole[] | null;
 }
 
 export interface PlaybackSpeakerConfig {
-  /** Prepare. Listener distance in metres, [0.1, 30]; `null` disables distance compensation. Default `null`. */
+  /** Prepare. Listener distance in metres, [0.1, 30]; `null` disables distance compensation. Default `null`; `config()` returns the key for each speaker of the layout, `null` when unset. */
   distance_m?: number | null;
   /** Realtime. Level trim in dB, [-20, 20]. Default 0. */
   trim_db?: number;
@@ -85,7 +86,7 @@ export interface PlaybackUpmixConfig {
 }
 
 export interface PlaybackLoudnessConfig {
-  /** Realtime. Measured program loudness, [-70, 0]; `null` means no alignment gain. Default `null`. */
+  /** Realtime. Measured program loudness, [-70, 0]; `null` means no alignment gain. Default `null`; `config()` always returns the key, `null` when unset. */
   program_lufs?: number | null;
   /** Realtime. [-40, -5]. Default -24. */
   target_lufs?: number;
