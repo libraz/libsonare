@@ -27,6 +27,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import types
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -589,7 +590,10 @@ def extract_python(root: Path) -> tuple[list[dict], dict[str, int], dict]:
         common = {"in_all": in_all, "modules": modules}
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             f = pick_sig(name, files_pref)
-            out.extend(_py_function("python", name, f, node, stub, file, line, common))
+            kw = _py_kwargs(pkg, stem, None, node, {p["name"] for p in _py_params(f)})
+            out.extend(
+                _py_function("python", name, f, node, stub, file, line, common, kw_params=kw)
+            )
         elif isinstance(node, ast.ClassDef):
             out.extend(_py_class(pkg, name, node, stub, stem, file, pick_sig, sigs, common))
         else:
@@ -642,24 +646,163 @@ def extract_python(root: Path) -> tuple[list[dict], dict[str, int], dict]:
     return out, {"python": pkg.files}, meta
 
 
-def _py_params(f) -> list[dict]:
-    if f is None:
-        return []
+def _param_dicts(params, optional: bool = False) -> list[dict]:
     return [
         {
             "name": p.raw_name,
             "type": p.type,
-            "optional": p.default is not None,
+            "optional": optional or p.default is not None,
             "default": p.default,
             "boolean": p.type.replace(" ", "") in ("bool", "bool|None"),
             "literals": _literal_tokens(p.type),
         }
-        for p in f.params
+        for p in params
         if p.raw_name not in ("self", "cls")
     ]
 
 
-def _py_function(surface, qual, f, node, stub, file, line, extra, kind="function", owner=""):
+def _py_params(f) -> list[dict]:
+    return [] if f is None else _param_dicts(f.params)
+
+
+def _own_init(pkg: _PyPackage, node: ast.ClassDef):
+    """The `__init__` a class defines or inherits from an in-package base, or None."""
+    for c in node.body:
+        if isinstance(c, (ast.FunctionDef, ast.AsyncFunctionDef)) and c.name == "__init__":
+            return c
+    return _inherited_method(pkg, node, "__init__")
+
+
+def _local_import(fn: ast.AST, name: str) -> tuple[str, str] | None:
+    """(module stem, original name) of a relative `from .x import name` inside a function body."""
+    for n in ast.walk(fn):
+        if isinstance(n, ast.ImportFrom) and n.level >= 1 and n.module:
+            for a in n.names:
+                if (a.asname or a.name) == name:
+                    return n.module.split(".")[0], a.name
+    return None
+
+
+def _field_params(pkg: _PyPackage, node: ast.ClassDef, seen: set[str] | None = None) -> list:
+    """A dataclass's generated constructor parameters: its annotated fields, bases first."""
+    seen = seen or set()
+    out = []
+    for b in node.bases:
+        bn = _unparse(b)
+        bnode, _ = pkg.class_node(bn) if bn not in seen else (None, None)
+        if bnode is not None:
+            seen.add(bn)
+            out += _field_params(pkg, bnode, seen)
+    for c in node.body:
+        if isinstance(c, ast.AnnAssign) and isinstance(c.target, ast.Name):
+            ann = _unparse(c.annotation)
+            if ann.startswith("ClassVar") or c.target.id.startswith("_"):
+                continue
+            out.append(
+                types.SimpleNamespace(
+                    raw_name=c.target.id,
+                    type=ann,
+                    default=_unparse(c.value) if c.value is not None else None,
+                    keyword_only=False,
+                )
+            )
+    return out
+
+
+def _class_target(pkg: _PyPackage, node: ast.ClassDef):
+    init = _own_init(pkg, node)
+    if init is not None:
+        return python_pyi._params_from_args(init.args), init, node, True
+    if any(d.split("(")[0].split(".")[-1] == "dataclass" for d in _decorators(node)):
+        return _field_params(pkg, node), None, node, False
+    return None
+
+
+def _forward_target(pkg: _PyPackage, stem: str, owner: ast.ClassDef | None, fn, func: ast.expr):
+    """(parameters, definition, owning class, is_method) of the callable a call names, or None."""
+    if isinstance(func, ast.Name):
+        if func.id == "cls" and owner is not None:
+            return _class_target(pkg, owner)
+        local = _local_import(fn, func.id)
+        hit = pkg.resolve(*local) if local else pkg.resolve(stem, func.id)
+        node = hit[1] if hit else None
+        if isinstance(node, ast.ClassDef):
+            return _class_target(pkg, node)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            return python_pyi._params_from_args(node.args), node, None, False
+        return None
+    if (
+        isinstance(func, ast.Attribute)
+        and isinstance(func.value, ast.Name)
+        and func.value.id in ("self", "cls")
+        and owner is not None
+    ):
+        found = next(
+            (
+                c
+                for c in owner.body
+                if isinstance(c, (ast.FunctionDef, ast.AsyncFunctionDef)) and c.name == func.attr
+            ),
+            None,
+        ) or _inherited_method(pkg, owner, func.attr)
+        if found is None:
+            return None
+        return python_pyi._params_from_args(found.args), found, owner, True
+    return None
+
+
+def _py_kwargs(pkg, stem, owner, fn, bound: set[str], depth: int = 0) -> list[dict] | None:
+    """The keywords a `**name` parameter accepts, or None when they cannot be resolved.
+
+    They are the keys of an `Unpack[TypedDict]` annotation, or the keyword parameters of
+    the callable the body forwards `**name` to, less what the call already binds.
+    """
+    kw = fn.args.kwarg if fn is not None else None
+    if kw is None:
+        return []
+    if depth > 4:
+        return None
+    ann = kw.annotation
+    if isinstance(ann, ast.Subscript) and _unparse(ann.value).split(".")[-1] == "Unpack":
+        td, _ = pkg.class_node(_unparse(ann.slice).split(".")[-1], stem)
+        if td is None:
+            return None
+        fields = [p for p in _field_params(pkg, td) if p.raw_name not in bound]
+        return _param_dicts(fields, optional=True)
+    for call in ast.walk(fn):
+        if not isinstance(call, ast.Call) or not any(
+            k.arg is None and isinstance(k.value, ast.Name) and k.value.id == kw.arg
+            for k in call.keywords
+        ):
+            continue
+        target = _forward_target(pkg, stem, owner, fn, call.func)
+        if target is None:
+            return None
+        params, tnode, towner, is_method = target
+        positional = [p for p in params if not p.keyword_only]
+        if is_method and positional and positional[0].raw_name in ("self", "cls"):
+            positional = positional[1:]
+        taken = {p.raw_name for p in positional[: len(call.args)]}
+        taken |= {k.arg for k in call.keywords if k.arg is not None}
+        rest = [
+            p
+            for p in params
+            if p.raw_name not in taken
+            and p.raw_name not in bound
+            and p.raw_name not in ("self", "cls")
+            and not p.raw_name.startswith("_")
+        ]
+        names = bound | {p.raw_name for p in rest}
+        deeper = _py_kwargs(pkg, stem, towner, tnode, names, depth + 1)
+        if deeper is None:
+            return None
+        return _param_dicts(rest) + deeper
+    return None
+
+
+def _py_function(
+    surface, qual, f, node, stub, file, line, extra, kind="function", owner="", kw_params=()
+):
     params = _py_params(f)
     returns = f.returns if f is not None else _unparse(getattr(node, "returns", None))
     has_doc = _docstring(node) or _docstring(stub)
@@ -676,8 +819,10 @@ def _py_function(surface, qual, f, node, stub, file, line, extra, kind="function
         member=qual.split(".")[-1] if owner else "",
         **extra,
     )
+    if kw_params is None:
+        rec["kwargs_unresolved"] = True
     group = [rec]
-    for p in params:
+    for p in params + list(kw_params or ()):
         group.append(
             _record(
                 surface,
@@ -812,6 +957,7 @@ def _py_class(pkg, name, node, stub, stem, file, pick_sig, sig_names, common):
             mnode = _inherited_method(pkg, node, meth)
         line = f.line if f else (mnode.lineno if mnode else node.lineno)
         extra = {"decorators": [_unparse(d) for d in getattr(mnode, "decorator_list", [])]}
+        kw = _py_kwargs(pkg, stem, node, mnode, {p["name"] for p in _py_params(f)})
         out.extend(
             _py_function(
                 "python",
@@ -824,9 +970,56 @@ def _py_class(pkg, name, node, stub, stem, file, pick_sig, sig_names, common):
                 extra,
                 kind="method",
                 owner=name,
+                kw_params=kw,
             )
         )
+    if kind == "class":
+        options, resolved = _py_constructor(pkg, name, node, stub, stem, file)
+        out.extend(options)
+        if not resolved:
+            top["kwargs_unresolved"] = True
     return out
+
+
+def _py_constructor(pkg, name, node, stub, stem, file) -> tuple[list[dict], bool]:
+    """The constructor's keyword surface as `Name.constructor(param)` options, as on the JS side,
+    and whether a `**name` parameter of it resolved.
+
+    The constructor itself is keyed through its class; a parameter whose name starts with an
+    underscore is internal and not listed.
+    """
+    init = _own_init(pkg, node)
+    if init is None:
+        return [], True
+    sinit = None
+    if isinstance(stub, ast.ClassDef):
+        sinit = next(
+            (
+                c
+                for c in stub.body
+                if isinstance(c, (ast.FunctionDef, ast.AsyncFunctionDef)) and c.name == "__init__"
+            ),
+            None,
+        )
+    sig = python_pyi._params_from_args((sinit or init).args)
+    params = [p for p in sig if not p.raw_name.startswith("_")]
+    bound = {p.raw_name for p in params}
+    kw = _py_kwargs(pkg, stem, node, init, bound)
+    qual = f"{name}.constructor"
+    group = _py_function(
+        "python",
+        qual,
+        types.SimpleNamespace(params=params, returns="None", file=file, line=init.lineno),
+        init,
+        sinit,
+        file,
+        init.lineno,
+        {},
+        kind="method",
+        owner=name,
+        kw_params=kw,
+    )
+    return group[1:], kw is not None
 
 
 _NODE_CACHE: dict[str, dict[int, ast.AST]] = {}

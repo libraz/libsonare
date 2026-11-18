@@ -1067,6 +1067,91 @@ class WrongUnit(CheckerCase):
         self.assertEqual(bad, want)
 
 
+class PythonKeywordSurface(CheckerCase):
+    """A constructor's parameters and a forwarded `**config` are named options in the inventory."""
+
+    TIP = """
+from dataclasses import dataclass
+from typing import TypedDict, Unpack
+from .other import external
+
+
+@dataclass
+class Opts:
+    depth: int = 1
+    width: float = 2.0
+
+
+class Keys(TypedDict, total=False):
+    alpha: float
+    beta: int
+
+
+class A:
+    def __init__(self, rate: int, *, gain: float = 1.0, _token: object = None) -> None:
+        pass
+
+    @classmethod
+    def make(cls, rate: int, **config: object) -> A:
+        return cls(rate, **config)
+
+    def tune(self, **opts: object) -> None:
+        Opts(**opts)
+
+    def keyed(self, **keys: Unpack[Keys]) -> None:
+        pass
+
+    def lost(self, **rest: object) -> None:
+        external(**rest)
+"""
+
+    def records(self, source: str) -> list[dict]:
+
+        import inventory
+
+        pkg_dir = self.dir / "pkg" / inventory.PY_PACKAGE
+        pkg_dir.mkdir(parents=True, exist_ok=True)
+        (pkg_dir / "mod.py").write_text(source, encoding="utf-8")
+        pkg = inventory._PyPackage(self.dir / "pkg")
+        node = pkg.py["mod"].defs["A"]
+        recs = inventory._py_class(
+            pkg, "A", node, None, "mod", "mod.py", lambda *_: None, {}, {"in_all": True}
+        )
+        for r in recs:
+            r["domain"], r["domain_path"] = "analysis", "declaring-file"
+        return recs
+
+    def test_constructor_and_forwarded_keywords_are_options(self):
+        recs = self.records(self.TIP)
+        opts = {r["name"] for r in recs if r["kind"] == "option"}
+        self.assertLessEqual(
+            {
+                "A.constructor(rate)",
+                "A.constructor(gain)",
+                "A.make(gain)",
+                "A.tune(depth)",
+                "A.tune(width)",
+                "A.keyed(alpha)",
+                "A.keyed(beta)",
+            },
+            opts,
+        )
+        self.assertNotIn("A.constructor(_token)", opts)
+        self.assertNotIn("A.make(rate)", opts)
+        lost = [r["name"] for r in recs if r.get("kwargs_unresolved")]
+        self.assertEqual(lost, ["A.lost"])
+
+    def test_a_constructor_keyword_gone_since_the_base_release_is_reported(self):
+        base = copy.deepcopy(BASE)
+        base["records"] += self.records(self.TIP)
+        self.add(*self.records(self.TIP.replace(", *, gain: float = 1.0", "")))
+        path = self.dir / "base.json"
+        path.write_text(json.dumps(base), encoding="utf-8")
+        _, lines = self.run_check("--baseline-inventory-file", str(path))
+        gone = [x.strip() for x in lines if x.startswith("  python option A.")]
+        self.assertEqual(gone, ["python option A.constructor(gain)", "python option A.make(gain)"])
+
+
 class CatalogUnitSuffix(CheckerCase):
     def test_a_catalog_parameter_name_states_the_unit_the_catalog_gives(self):
         params = {
