@@ -2903,7 +2903,7 @@ export interface SonareModule {
     samples: Float32Array,
     sampleRate: number,
     options: object,
-  ) => { samples: Float32Array; report: WasmTrimSilenceReport };
+  ) => { samples: Float32Array; report: WasmTrimReport };
   masteringRepairTrimSilenceStereo: (
     left: Float32Array,
     right: Float32Array,
