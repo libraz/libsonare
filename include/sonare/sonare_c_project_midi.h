@@ -31,9 +31,9 @@ extern "C" {
 /// position within the clip source timeline (quarter notes). Prefer the
 /// sonare_midi_* helpers below over hand-packing words.
 typedef struct {
-  double ppq;
-  uint32_t data0;
-  uint32_t data1;
+  double ppq;      ///< Position in quarter notes within the clip source timeline.
+  uint32_t data0;  ///< First UMP word of the channel-voice message.
+  uint32_t data1;  ///< Second UMP word; 0 for a MIDI 1.0 channel-voice message.
 } SonareMidiEventPod;
 
 #ifdef __cplusplus
@@ -48,10 +48,10 @@ static_assert(offsetof(SonareMidiEventPod, data1) == 12, "MidiEventPod.data1 off
 /// @details `-1` means any group/channel for filters and no remap for
 ///          `remap_channel`. Otherwise values must be in [0, 15].
 typedef struct {
-  int filter_group;
-  int filter_channel;
-  int remap_channel;
-  int thru;
+  int filter_group;    ///< UMP group 0..15 the route accepts, or -1 for any group.
+  int filter_channel;  ///< MIDI channel 0..15 the route accepts, or -1 for any channel.
+  int remap_channel;   ///< Channel 0..15 matching events are rewritten to, or -1 for no remap.
+  int thru;            ///< Nonzero passes events through the route; 0 consumes them.
 } SonareMidiRouteConfig;
 
 #ifdef __cplusplus
@@ -81,17 +81,17 @@ typedef enum SONARE_ENUM_BASE {
 
 /// @brief MIDI CC <-> automation binding descriptor for pure conversion helpers.
 typedef struct {
-  uint8_t cc_number;
+  uint8_t cc_number;  ///< Controller number 0..127 (MSB controller for 14-bit bindings).
   /// MIDI channel 0-15, or SONARE_MIDI_CC_ANY_CHANNEL to match any channel.
   uint8_t channel;
-  uint8_t kind;
-  uint8_t cc_lsb_number;
-  uint8_t selector_msb;
-  uint8_t selector_lsb;
-  uint16_t reserved;
-  uint32_t param_id;
-  float min_value;
-  float max_value;
+  uint8_t kind;           ///< A @ref SonareMidiCcBindingKind.
+  uint8_t cc_lsb_number;  ///< LSB controller of a 14-bit binding; must be cc_number + 32.
+  uint8_t selector_msb;   ///< RPN/NRPN selector MSB; 0 for plain controller kinds.
+  uint8_t selector_lsb;   ///< RPN/NRPN selector LSB; 0 for plain controller kinds.
+  uint16_t reserved;      ///< Padding; set to 0.
+  uint32_t param_id;      ///< Automation parameter id the binding drives; must be nonzero.
+  float min_value;        ///< Parameter value at controller minimum; finite.
+  float max_value;        ///< Parameter value at controller maximum; finite, not below min_value.
 } SonareMidiCcBinding;
 
 #ifdef __cplusplus
@@ -114,9 +114,9 @@ static_assert(sizeof(SonareMidiCcBinding) == 20, "SonareMidiCcBinding layout dri
 ///        every note-on in the clip has a matching note-off and vice versa, else
 ///        0; the unmatched counts are diagnostic.
 typedef struct {
-  int ok;
-  uint32_t unmatched_note_ons;
-  uint32_t unmatched_note_offs;
+  int ok;                        ///< 1 when every note-on and note-off is paired, else 0.
+  uint32_t unmatched_note_ons;   ///< Note-ons with no matching note-off.
+  uint32_t unmatched_note_offs;  ///< Note-offs with no matching note-on.
 } SonareNotePairValidation;
 
 // ============================================================================

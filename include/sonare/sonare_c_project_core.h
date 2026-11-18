@@ -17,18 +17,18 @@ extern "C" {
 ///        (owning the Project + MIDI content store) plus an audio content store.
 typedef struct SonareProject SonareProject;
 
-/// Track kind ordinals; mirror sonare::arrangement::Track::Kind. Pinned by a
+/// @brief Track kind ordinals; mirror sonare::arrangement::Track::Kind. Pinned by a
 /// static_assert in the .cpp so reordering the C++ enum is caught.
 typedef enum SONARE_ENUM_BASE {
-  SONARE_TRACK_AUDIO = 0,
-  SONARE_TRACK_MIDI = 1,
-  SONARE_TRACK_AUX = 2
+  SONARE_TRACK_AUDIO = 0,  ///< Carries audio clips.
+  SONARE_TRACK_MIDI = 1,   ///< Carries MIDI clips routed to an instrument destination.
+  SONARE_TRACK_AUX = 2     ///< Auxiliary (bus) track.
 } SonareProjectTrackKind;
 
-/// Project clip-overlap policy ordinals.
+/// @brief Project clip-overlap policy ordinals.
 typedef enum SONARE_ENUM_BASE {
-  SONARE_PROJECT_OVERLAP_DISALLOW = 0,
-  SONARE_PROJECT_OVERLAP_ALLOW = 1
+  SONARE_PROJECT_OVERLAP_DISALLOW = 0,  ///< Clips on one track may not overlap.
+  SONARE_PROJECT_OVERLAP_ALLOW = 1      ///< Clips on one track may overlap.
 } SonareProjectOverlapPolicy;
 
 /// @brief Project tempo segment descriptor for @ref sonare_project_set_tempo_segments.
@@ -38,10 +38,10 @@ typedef enum SONARE_ENUM_BASE {
 /// derives sample positions from @p start_ppq / @p bpm during tempo-map
 /// normalization.
 typedef struct {
-  double start_ppq;
-  double bpm;
-  double start_sample;
-  double end_bpm; /* 0 = constant tempo */
+  double start_ppq;     ///< Segment start in quarter notes, [0, 1e12].
+  double bpm;           ///< Tempo in beats per minute, in (0, 100000].
+  double start_sample;  ///< Derived timeline sample position; ignored by the setter, 0 when read.
+  double end_bpm;       ///< Tempo reached at the segment end in BPM; 0 = constant tempo.
 } SonareProjectTempoSegment;
 
 #ifdef __cplusplus
@@ -56,9 +56,9 @@ static_assert(sizeof(SonareProjectTempoSegment) == 4u * sizeof(double),
 
 /// @brief Project time-signature segment descriptor.
 typedef struct {
-  double start_ppq;
-  int numerator;
-  int denominator;
+  double start_ppq;  ///< Segment start in quarter notes, [0, 1e12].
+  int numerator;     ///< Beats per bar; positive.
+  int denominator;   ///< Beat unit (4 = quarter note); positive.
 } SonareProjectTimeSignatureSegment;
 
 #ifdef __cplusplus
@@ -80,9 +80,9 @@ static_assert(sizeof(SonareProjectTimeSignatureSegment) == 2u * sizeof(double),
 ///        embedded CR/LF normalized to spaces to preserve this frozen POD layout
 ///        across the C ABI boundary.
 typedef struct {
-  uint32_t code;      /* sonare::arrangement::Diagnostic::Code ordinal */
-  uint32_t severity;  /* 0 = error, 1 = warning */
-  uint32_t target_id; /* affected clip / track / source id (0 = n/a) */
+  uint32_t code;       ///< sonare::arrangement::Diagnostic::Code ordinal.
+  uint32_t severity;   ///< 0 = error, 1 = warning.
+  uint32_t target_id;  ///< Affected clip / track / source id; 0 = not applicable.
 } SonareProjectDiagnostic;
 
 #ifdef __cplusplus
@@ -101,10 +101,11 @@ static_assert(offsetof(SonareProjectDiagnostic, target_id) == 8, "Diagnostic.tar
 ///        @c diagnostics[i]. @p has_timeline is non-zero when compilation
 ///        produced a renderable timeline (no error diagnostics).
 typedef struct {
-  SonareProjectDiagnostic* diagnostics;
-  size_t diagnostic_count;
-  char* messages;
-  int has_timeline;
+  SonareProjectDiagnostic*
+      diagnostics;          ///< Heap array of @p diagnostic_count entries; may be NULL.
+  size_t diagnostic_count;  ///< Number of entries in @p diagnostics.
+  char* messages;           ///< Heap C string, one line per diagnostic; may be NULL.
+  int has_timeline;         ///< Non-zero when a renderable timeline was produced.
 } SonareProjectCompileResult;
 
 #ifdef __cplusplus
@@ -123,16 +124,20 @@ static_assert(sizeof(SonareProjectCompileResult) == 3u * sizeof(void*) + sizeof(
 
 /// @brief Options for @ref sonare_project_bounce. Zero-initialize then override.
 typedef struct {
-  int64_t total_frames;           /* render length in frames at @p sample_rate */
-  int block_size;                 /* render block size; 0 => 128; negative is refused */
-  int num_channels;               /* output channel count: 1, 2, 6 or 8, at most the width of the
-                                     scene master's layout (mono/stereo/no master allow 2);
-                                     0 => the width of the scene master's layout (2 with no master);
-                                     negative is refused. The master is mixed at this width; 1
-                                     folds a 2-channel master to 0.5(L+R). */
-  int sample_rate;                /* must match the project sample rate; 0 => the project's;
-                                     negative is refused */
-  int instrument_latency_samples; /* host-instrument PDC fed to the compiler */
+  /// Render length in frames at @p sample_rate; positive is used as-is, <= 0 derives it.
+  int64_t total_frames;
+  /// Render block size in frames; 0 => 128; negative is refused.
+  int block_size;
+  /// Output channel count: 1, 2, 6 or 8, at most the width of the scene master's layout
+  /// (mono/stereo/no master allow 2); 0 => the width of the scene master's layout (2 with no
+  /// master); negative is refused. The master is mixed at this width; 1 folds a 2-channel master
+  /// to 0.5(L+R).
+  int num_channels;
+  /// Sample rate in Hz; must match the project sample rate; 0 => the project's; negative is
+  /// refused.
+  int sample_rate;
+  /// Host-instrument latency compensation in samples fed to the compiler; negative is refused.
+  int instrument_latency_samples;
 } SonareProjectBounceOptions;
 
 #ifdef __cplusplus
@@ -277,12 +282,12 @@ SonareError sonare_project_time_signature_by_index(const SonareProject* project,
 ///        apply only to the key-signature kind. The layout mirrors
 ///        SonareEngineMarker so one binding shape serves both.
 typedef struct {
-  uint32_t id;
-  uint8_t kind;      /* SonareMarkerKind */
-  int8_t key_fifths; /* key signature only: -7..7 (sharps positive) */
-  uint8_t key_minor; /* key signature only: 0 major / 1 minor */
-  double ppq;
-  char name[64];
+  uint32_t id;        ///< Stable marker id; 0 on input allocates a new one.
+  uint8_t kind;       ///< A @ref SonareMarkerKind ordinal.
+  int8_t key_fifths;  ///< Key signature only: -7..7 (sharps positive).
+  uint8_t key_minor;  ///< Key signature only: 0 major / 1 minor.
+  double ppq;         ///< Position in quarter notes.
+  char name[64];      ///< NUL-terminated UTF-8 name, truncated to 63 bytes.
 } SonareProjectMarker;
 
 #ifdef __cplusplus
@@ -329,39 +334,39 @@ SonareError sonare_project_marker_name_by_index(const SonareProject* project, si
 
 /// @brief Flat, read-only track descriptor returned by @ref sonare_project_track_by_index.
 typedef struct {
-  uint32_t id;
-  uint32_t kind; /* SonareProjectTrackKind */
-  uint32_t midi_destination_id;
-  float gain;
-  float pan;
-  uint8_t mute;
-  uint8_t solo;
-  uint8_t reserved[2];
-  char name[64];
+  uint32_t id;                   ///< Stable track id.
+  uint32_t kind;                 ///< A @ref SonareProjectTrackKind ordinal.
+  uint32_t midi_destination_id;  ///< Host-instrument destination for MIDI clips; 0 = default.
+  float gain;                    ///< Linear playback gain, >= 0 (1 = unity).
+  float pan;                     ///< Stereo balance in [-1, +1] (0 = center).
+  uint8_t mute;                  ///< Non-zero when muted.
+  uint8_t solo;                  ///< Non-zero when soloed.
+  uint8_t reserved[2];           ///< Padding; always 0.
+  char name[64];                 ///< NUL-terminated UTF-8 name, truncated to 63 bytes.
 } SonareProjectTrack;
 
 /// @brief Flat, read-only clip descriptor returned by @ref sonare_project_clip_by_index.
 typedef struct {
-  uint32_t id;
-  uint32_t track_id;
-  uint32_t source_id;
-  uint32_t source_kind; /* 0 audio, 1 MIDI */
-  double start_ppq;
-  double length_ppq;
-  double source_offset_ppq;
-  float gain;
-  uint32_t loop_mode;
-  double loop_length_ppq;
+  uint32_t id;               ///< Stable clip id.
+  uint32_t track_id;         ///< Id of the owning track.
+  uint32_t source_id;        ///< Id of the audio or MIDI source the clip plays.
+  uint32_t source_kind;      ///< 0 = audio source, 1 = MIDI source.
+  double start_ppq;          ///< Clip start on the timeline in quarter notes.
+  double length_ppq;         ///< Clip length in quarter notes.
+  double source_offset_ppq;  ///< Offset into the source in quarter notes.
+  float gain;                ///< Linear playback gain, >= 0 (0 = silent).
+  uint32_t loop_mode;        ///< A @ref SonareProjectLoopMode ordinal.
+  double loop_length_ppq;    ///< Loop length in quarter notes; 0 = loop the whole clip.
 } SonareProjectClip;
 
 /// @brief Flat, read-only source descriptor returned by @ref sonare_project_source_by_index.
 typedef struct {
-  uint32_t id;
-  uint32_t kind; /* 0 audio, 1 MIDI */
-  uint32_t num_channels;
-  uint32_t storage_handle_id;
-  double sample_rate_hint;
-  char name_or_uri[128];
+  uint32_t id;                 ///< Stable source id.
+  uint32_t kind;               ///< 0 = audio, 1 = MIDI.
+  uint32_t num_channels;       ///< Audio channel count; 0 when unknown.
+  uint32_t storage_handle_id;  ///< Host storage handle id for audio referenced by id; 0 = none.
+  double sample_rate_hint;     ///< Source sample rate in Hz; 0 when unknown.
+  char name_or_uri[128];       ///< NUL-terminated UTF-8 name or URI, truncated to 127 bytes.
 } SonareProjectSource;
 
 #ifdef __cplusplus
@@ -385,8 +390,9 @@ static_assert(offsetof(SonareProjectSource, name_or_uri) == 24u,
 /// MIDI sources do not have this metadata and are rejected by
 /// @ref sonare_project_get_audio_source_metadata.
 typedef struct {
-  char* content_hash;
-  char* external_stem_role;
+  char* content_hash;  ///< Heap C string: host-supplied content digest; empty = unset.
+  char*
+      external_stem_role;  ///< Heap C string: stem role from an external separator; empty = unset.
 } SonareProjectAudioSourceMetadata;
 
 #ifdef __cplusplus
@@ -454,12 +460,19 @@ SonareError sonare_project_get_sample_rate(const SonareProject* project, double*
 SonareError sonare_project_get_overlap_policy(const SonareProject* project,
                                               uint32_t* out_overlap_policy);
 
-/// @brief Counts value-model entities without requiring JSON serialization.
+/// @brief Counts tracks without requiring JSON serialization.
 SonareError sonare_project_track_count(const SonareProject* project, size_t* out_count);
+/// @brief Counts clips without requiring JSON serialization.
 SonareError sonare_project_clip_count(const SonareProject* project, size_t* out_count);
+/// @brief Counts sources (audio and MIDI) without requiring JSON serialization.
 SonareError sonare_project_source_count(const SonareProject* project, size_t* out_count);
+/// @brief Counts markers without requiring JSON serialization.
 SonareError sonare_project_marker_count(const SonareProject* project, size_t* out_count);
+/// @brief Counts tempo segments; the valid index range for
+///        @ref sonare_project_tempo_segment_by_index.
 SonareError sonare_project_tempo_segment_count(const SonareProject* project, size_t* out_count);
+/// @brief Counts time-signature segments; the valid index range for
+///        @ref sonare_project_time_signature_by_index.
 SonareError sonare_project_time_signature_count(const SonareProject* project, size_t* out_count);
 
 /// @brief Compiles the project into an RT-readable timeline, surfacing
