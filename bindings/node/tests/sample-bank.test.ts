@@ -88,7 +88,9 @@ describe('the sample engine joins the patch enum tables', () => {
 describe('SampleBank', () => {
   it('reads the counts as getters', () => {
     for (const name of ['sampleCount', 'setCount']) {
-      expect(typeof Object.getOwnPropertyDescriptor(SampleBank.prototype, name)?.get).toBe('function');
+      expect(typeof Object.getOwnPropertyDescriptor(SampleBank.prototype, name)?.get).toBe(
+        'function',
+      );
     }
   });
 
