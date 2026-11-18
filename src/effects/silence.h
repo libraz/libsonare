@@ -12,6 +12,12 @@
 
 namespace sonare {
 
+/// Silence threshold, in dB under the peak RMS, when a caller gives none (librosa's trim/split).
+inline constexpr float kDefaultSilenceTopDb = 60.0f;
+/// RMS frame and hop of the silence detectors when a caller gives none (librosa's trim/split).
+inline constexpr int kDefaultSilenceFrameLength = 2048;
+inline constexpr int kDefaultSilenceHopLength = 512;
+
 /// @brief Result of trim().
 struct TrimResult {
   std::vector<float> audio;  ///< Trimmed audio (between start_sample and end_sample)
@@ -34,10 +40,12 @@ struct TrimResult {
 /// @note Empty input is rejected instead of returning `{{}, 0, 0}`, which is
 ///       reserved for the all-silent result; sharing one value between the two
 ///       would leave a caller unable to tell them apart.
-TrimResult trim(const float* x, std::size_t n, float top_db = 60.0f, int frame_length = 2048,
-                int hop_length = 512);
-TrimResult trim(const std::vector<float>& x, float top_db = 60.0f, int frame_length = 2048,
-                int hop_length = 512);
+TrimResult trim(const float* x, std::size_t n, float top_db = kDefaultSilenceTopDb,
+                int frame_length = kDefaultSilenceFrameLength,
+                int hop_length = kDefaultSilenceHopLength);
+TrimResult trim(const std::vector<float>& x, float top_db = kDefaultSilenceTopDb,
+                int frame_length = kDefaultSilenceFrameLength,
+                int hop_length = kDefaultSilenceHopLength);
 
 /// @brief Split a signal into non-silent intervals.
 /// @return Vector of (start_sample, end_sample) pairs (end exclusive). Empty
@@ -47,10 +55,14 @@ TrimResult trim(const std::vector<float>& x, float top_db = 60.0f, int frame_len
 ///        non-positive frame/hop, or a non-finite/non-positive `top_db`.
 /// @note Empty input is rejected for the same reason as in trim(): an empty
 ///       interval list already means "the whole signal is silent".
-std::vector<std::pair<int, int>> split(const float* x, std::size_t n, float top_db = 60.0f,
-                                       int frame_length = 2048, int hop_length = 512);
-std::vector<std::pair<int, int>> split(const std::vector<float>& x, float top_db = 60.0f,
-                                       int frame_length = 2048, int hop_length = 512);
+std::vector<std::pair<int, int>> split(const float* x, std::size_t n,
+                                       float top_db = kDefaultSilenceTopDb,
+                                       int frame_length = kDefaultSilenceFrameLength,
+                                       int hop_length = kDefaultSilenceHopLength);
+std::vector<std::pair<int, int>> split(const std::vector<float>& x,
+                                       float top_db = kDefaultSilenceTopDb,
+                                       int frame_length = kDefaultSilenceFrameLength,
+                                       int hop_length = kDefaultSilenceHopLength);
 
 /// @brief split() plus the threshold headroom the same pass already measured.
 struct SplitReport {
@@ -68,8 +80,9 @@ struct SplitReport {
 
 /// @brief split() with its report; split() is this without the second field.
 /// @throw Identical to split() — the checks and their messages are shared.
-SplitReport split_with_report(const float* x, std::size_t n, float top_db = 60.0f,
-                              int frame_length = 2048, int hop_length = 512);
+SplitReport split_with_report(const float* x, std::size_t n, float top_db = kDefaultSilenceTopDb,
+                              int frame_length = kDefaultSilenceFrameLength,
+                              int hop_length = kDefaultSilenceHopLength);
 
 /// @brief The union of several takes' sounding intervals, plus its report.
 struct CommonSplitReport {
@@ -93,7 +106,9 @@ struct CommonSplitReport {
 /// @throw sonare::SonareException for @p signal_count == 0, a null array, or
 ///        whatever split_with_report() refuses in any one signal.
 CommonSplitReport split_common_with_report(const float* const* signals, const std::size_t* lengths,
-                                           std::size_t signal_count, float top_db = 60.0f,
-                                           int frame_length = 2048, int hop_length = 512);
+                                           std::size_t signal_count,
+                                           float top_db = kDefaultSilenceTopDb,
+                                           int frame_length = kDefaultSilenceFrameLength,
+                                           int hop_length = kDefaultSilenceHopLength);
 
 }  // namespace sonare

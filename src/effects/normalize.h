@@ -4,8 +4,17 @@
 /// @brief Audio normalization and silence trimming.
 
 #include "core/audio.h"
+#include "effects/silence.h"
 
 namespace sonare {
+
+/// Peak level of normalize() when a caller gives none (full scale).
+inline constexpr float kDefaultPeakTargetDb = 0.0f;
+/// RMS level of normalize_rms() when a caller gives none.
+inline constexpr float kDefaultRmsTargetDb = -20.0f;
+/// Absolute dBFS level under which trim_absolute() reads a frame as silence when a caller gives
+/// none.
+inline constexpr float kDefaultAbsoluteSilenceDb = -60.0f;
 
 /// @brief Normalizes audio to a target peak level.
 /// @details Internally applies a gain via @ref apply_gain. With the default
@@ -17,7 +26,7 @@ namespace sonare {
 /// @param clip If true (default), the output is hard-clipped to [-1, 1]; pass
 ///        false to leave the signal unclipped.
 /// @return Normalized audio
-Audio normalize(const Audio& audio, float target_db = 0.0f, bool clip = true);
+Audio normalize(const Audio& audio, float target_db = kDefaultPeakTargetDb, bool clip = true);
 
 /// @brief Normalizes audio using RMS level.
 /// @details Applies a uniform gain to bring the signal RMS to @p target_db. Note
@@ -30,7 +39,7 @@ Audio normalize(const Audio& audio, float target_db = 0.0f, bool clip = true);
 /// @param target_db Target RMS level in dB
 /// @param clip If true (default), hard-clip the output to [-1, 1]
 /// @return Normalized audio
-Audio normalize_rms(const Audio& audio, float target_db = -20.0f, bool clip = true);
+Audio normalize_rms(const Audio& audio, float target_db = kDefaultRmsTargetDb, bool clip = true);
 
 /// @brief A normalized channel pair and the gain that produced it.
 struct NormalizeStereoResult {
@@ -53,7 +62,7 @@ struct NormalizeStereoResult {
 ///   not processable together (see @ref require_stereo_pair), and for the
 ///   arguments @ref normalize rejects.
 NormalizeStereoResult normalize_stereo(const Audio& left, const Audio& right,
-                                       float target_db = 0.0f, bool clip = true);
+                                       float target_db = kDefaultPeakTargetDb, bool clip = true);
 
 /// @brief Two-channel @ref normalize_rms.
 /// @details The RMS is taken over both channels together — the root mean square
@@ -61,7 +70,7 @@ NormalizeStereoResult normalize_stereo(const Audio& left, const Audio& right,
 ///   goes to both, for the same reason @ref normalize_stereo shares its gain.
 /// @throws SonareException as @ref normalize_stereo does.
 NormalizeStereoResult normalize_rms_stereo(const Audio& left, const Audio& right,
-                                           float target_db = -20.0f, bool clip = true);
+                                           float target_db = kDefaultRmsTargetDb, bool clip = true);
 
 /// @brief Trims silence from the beginning and end of audio using an ABSOLUTE
 ///        RMS threshold.
@@ -77,8 +86,9 @@ NormalizeStereoResult normalize_rms_stereo(const Audio& left, const Audio& right
 /// @param frame_length Frame length for silence detection in samples
 /// @param hop_length Hop length for silence detection in samples
 /// @return Trimmed audio
-Audio trim_absolute(const Audio& audio, float threshold_db = -60.0f, int frame_length = 2048,
-                    int hop_length = 512);
+Audio trim_absolute(const Audio& audio, float threshold_db = kDefaultAbsoluteSilenceDb,
+                    int frame_length = kDefaultSilenceFrameLength,
+                    int hop_length = kDefaultSilenceHopLength);
 
 /// @brief Finds the start and end indices of non-silent audio.
 /// @param audio Input audio
@@ -86,8 +96,10 @@ Audio trim_absolute(const Audio& audio, float threshold_db = -60.0f, int frame_l
 /// @param frame_length Frame length for silence detection
 /// @param hop_length Hop length for silence detection
 /// @return Pair of (start_sample, end_sample) indices
-std::pair<size_t, size_t> detect_silence_boundaries(const Audio& audio, float threshold_db = -60.0f,
-                                                    int frame_length = 2048, int hop_length = 512);
+std::pair<size_t, size_t> detect_silence_boundaries(const Audio& audio,
+                                                    float threshold_db = kDefaultAbsoluteSilenceDb,
+                                                    int frame_length = kDefaultSilenceFrameLength,
+                                                    int hop_length = kDefaultSilenceHopLength);
 
 /// @brief Applies gain to audio.
 ///
