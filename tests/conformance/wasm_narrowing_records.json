@@ -81,7 +81,7 @@
           "uint64_t"
         ],
         "parameter_pattern": ".",
-        "count": 17,
+        "count": 15,
         "status": "benign",
         "defect": "refuses",
         "mechanism": [

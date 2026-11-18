@@ -723,7 +723,7 @@ def class_spans(code: str, braces: dict[int, int] | None = None) -> list[tuple[s
     if braces is None:
         braces = bracket_map(code, "{", "}")
     spans = []
-    for match in re.finditer(r"\b(?:class|struct)\s+([A-Za-z_]\w*)\s*(?::[^{;]*)?\{", code):
+    for match in re.finditer(r"\b(?:class|struct)\s+([A-Za-z_]\w*)\s*(?:final\s*)?(?::[^{;]*)?\{", code):
         brace = code.index("{", match.end() - 1)
         end = braces.get(brace, -1)
         if end > 0:

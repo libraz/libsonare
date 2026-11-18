@@ -871,6 +871,35 @@ EMSCRIPTEN_BINDINGS(unit) {
                 ["Engine::reset(val)", "reset(int)"],
             )
 
+    def test_a_final_class_still_qualifies_its_inline_methods(self) -> None:
+        source = """
+#include <emscripten/val.h>
+using emscripten::val;
+
+struct Other {
+  void clear() {}
+};
+
+class Provider final : public Base {
+ public:
+  void clear(int64_t page_index) {}
+};
+
+EMSCRIPTEN_BINDINGS(unit) {
+  class_<Provider>("Provider").function("clear", &Provider::clear);
+}
+"""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = Path(tmp) / "src" / "wasm"
+            _write(tree / "bindings" / "domain" / "unit.cpp", source)
+            with mock.patch.multiple(CHECKER, ROOT=Path(tmp), WASM_TREE=tree):
+                scan = CHECKER.PositionalScan(tree)
+            self.assertEqual(scan.conflicting, [])
+            self.assertEqual(
+                [r.declaration.signature for r in scan.registrations],
+                ["Provider::clear(int64_t)"],
+            )
+
 
 class RecordsTest(unittest.TestCase):
     def test_every_record_carries_a_reason(self) -> None:
