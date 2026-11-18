@@ -48,10 +48,12 @@ import { assertAudioInput, requestObject } from './validation.js';
  *
  * @example
  * ```typescript
+ * const guide = new Float32Array(sampleRate * 8); // the reference performance, decoded
+ * const take = new Float32Array(sampleRate * 8); // the take to align
  * const { anchors } = alignTakeToReference({ reference: guide, take, sampleRate });
  * const project = new Project();
  * const trackId = project.addTrack({ kind: 'audio' });
- * const clipId = project.addClip({ trackId, lengthPpq: 64, audio: take, audioSampleRate: sampleRate }); // 16 bars at 4/4, in quarter notes (PPQ)
+ * const clipId = project.addClip({ trackId, lengthPpq: 64, channels: [take], sampleRate }); // 16 bars at 4/4, in quarter notes (PPQ)
  * project.setWarpMap({ id: 1, anchors });
  * project.setClipWarpRef(clipId, 1);
  * ```

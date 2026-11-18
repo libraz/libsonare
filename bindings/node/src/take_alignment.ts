@@ -33,6 +33,8 @@ import { assertAudioInput, assertSampleRate, requestObject } from './validation.
  *
  * @example
  * ```typescript
+ * const guide = new Float32Array(48000 * 8); // the reference performance, decoded
+ * const comp = new Float32Array(48000 * 8); // the take to align
  * const { anchors, alignment } = alignTakeToReference({
  *   reference: guide,
  *   take: comp,
@@ -40,6 +42,8 @@ import { assertAudioInput, assertSampleRate, requestObject } from './validation.
  * });
  * console.log(alignment.meanResidualFrames);
  * project.setWarpMap({ id: 1, name: 'comp', anchors });
+ * const trackId = project.addTrack({ kind: 'audio' });
+ * const takeClipId = project.addClip({ trackId, lengthPpq: 64, channels: [comp], sampleRate: 48000 });
  * project.setClipWarpRef(takeClipId, 1);
  * ```
  *

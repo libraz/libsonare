@@ -29,6 +29,7 @@ export type ChordSymbolFields = Required<
  *
  * @example
  * ```typescript
+ * const [chord] = detectChords({ samples, sampleRate }).chords;
  * project.annotateChords([{ startPpq: 0, endPpq: 4, ...chordSymbolFromAnalysis(chord) }]);
  * ```
  */
