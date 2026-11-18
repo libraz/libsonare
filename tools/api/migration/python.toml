@@ -5891,10 +5891,9 @@ test = "bindings/python/tests/test_state_reads_are_properties.py::test_state_rea
 [[entry]]
 kind = "method"
 old = "RealtimeVoiceChanger.process_planar_stereo"
-changed = "returns a StereoBlock named tuple instead of a bare tuple"
+removed = "call process_planar([left, right]), which takes 1 or 2 equal-length planes (or a 2-D (channels, frames) array) and returns a list of float32 planes; process_planar_with_carrier(channels, carrier) adds the external vocoder carrier"
 domain = "effects"
-rule = "typed-results"
-test = "bindings/python/tests/test_state_reads_are_properties.py::test_process_planar_stereo_returns_a_stereo_block"
+rule = "one-entry-per-operation"
 
 [[entry]]
 kind = "type"

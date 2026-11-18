@@ -351,7 +351,7 @@ def test_external_carrier_is_required_by_the_carrierless_entries() -> None:
         for call in (
             lambda: changer.process_mono(samples),
             lambda: changer.process_interleaved(np.tile(samples, 2)),
-            lambda: changer.process_planar_stereo(samples, samples),
+            lambda: changer.process_planar([samples, samples]),
         ):
             with pytest.raises(SonareError) as raised:
                 call()
@@ -371,7 +371,7 @@ def test_carrier_entries_render_with_an_external_carrier() -> None:
         assert interleaved.shape == (2 * samples.shape[0],)
         assert np.isfinite(interleaved).all()
         changer.reset()
-        left, right = changer.process_planar_stereo_with_carrier(samples, samples, carrier)
+        left, right = changer.process_planar_with_carrier([samples, samples], carrier)
         assert left.shape == right.shape == samples.shape
         assert np.isfinite(left).all() and np.isfinite(right).all()
 
@@ -392,10 +392,41 @@ def test_carrier_length_must_match_the_input() -> None:
         with pytest.raises(SonareValueError, match="carrier"):
             changer.process_interleaved_with_carrier(np.tile(samples, 2), samples[:-1])
         with pytest.raises(SonareValueError, match="carrier"):
-            changer.process_planar_stereo_with_carrier(samples, samples, samples[:-1])
+            changer.process_planar_with_carrier([samples, samples], samples[:-1])
 
 
 def test_voice_change_realtime_renders_a_new_preset() -> None:
     out = libsonare.voice_change_realtime(_tone(9600), SAMPLE_RATE, "choirHarmony")
     assert out.shape == (9600,)
     assert np.isfinite(out).all()
+
+
+def test_one_planar_channel_takes_the_mono_path() -> None:
+    samples = _tone()
+    with (
+        _changer(_neutral(), num_channels=1) as planar,
+        _changer(_neutral(), num_channels=1) as mono,
+    ):
+        (out,) = planar.process_planar([samples])
+        np.testing.assert_array_equal(out, mono.process_mono(samples))
+
+
+def test_two_planar_channels_leave_the_inputs_untouched() -> None:
+    left, right = _tone(), _tone(hz=330.0)
+    before = (left.copy(), right.copy())
+    with _changer(_neutral(), num_channels=2) as changer:
+        out = changer.process_planar(np.stack([left, right]))
+    assert len(out) == 2 and out[0].shape == left.shape
+    np.testing.assert_array_equal(left, before[0])
+    np.testing.assert_array_equal(right, before[1])
+
+
+def test_planar_channel_count_and_lengths_are_refused() -> None:
+    samples = _tone()
+    with _changer(_neutral(), num_channels=2) as changer:
+        with pytest.raises(SonareValueError, match="1 or 2 planes"):
+            changer.process_planar([samples, samples, samples])
+        with pytest.raises(SonareValueError, match="same length"):
+            changer.process_planar([samples, samples[:-1]])
+        with pytest.raises(SonareValueError, match="1 or 2 planes"):
+            changer.process_planar([])

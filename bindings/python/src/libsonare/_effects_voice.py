@@ -31,6 +31,7 @@ from ._runtime import (
     _get_lib,
     _max_block_size,
     _narrow_int,
+    _not_planar_channels,
     _out_float_array,
     _to_c_double,
     _to_c_float,
@@ -41,7 +42,7 @@ from ._runtime import (
     _utf8_arg,
     _validate_samples,
 )
-from ._types_analysis import StereoBlock
+from ._types_engine import PlanarChannels
 from ._types_enums import _VOICE_PRESET_IDS, VoicePresetId
 
 _VOICE_CHANGE_STRUCT_VERSION = 1
@@ -451,56 +452,60 @@ class RealtimeVoiceChanger:
             _check_realtime(rc)
         return out_buf
 
-    def process_planar_stereo(
-        self,
-        left: Sequence[float] | list[float] | np.ndarray,
-        right: Sequence[float] | list[float] | np.ndarray,
-    ) -> StereoBlock:
-        """Process planar (non-interleaved) stereo audio block-by-block.
+    def process_planar(self, channels: PlanarChannels) -> list[np.ndarray]:
+        """Process planar audio (one buffer per channel, 1 or 2, equal lengths) block-by-block.
 
-        ``left`` and ``right`` are separate channel buffers of equal length.
-        The handle must have been prepared with at least 2 channels. Returns a
-        :class:`StereoBlock` (``left``, ``right``) of ``numpy.ndarray``
-        (dtype ``float32``) processed in place.
+        One channel takes the mono path and two the stereo path; the inputs are not
+        modified, and the processed planes come back as ``float32`` ndarrays in the
+        input order. Another channel count or unequal lengths raise
+        ``SonareValueError``; two channels on a changer prepared for one raise
+        ``SonareError`` (invalid state).
         """
-        return self._process_planar_stereo(left, right, None)
+        return self._process_planar(channels, None)
 
-    def process_planar_stereo_with_carrier(
+    def process_planar_with_carrier(
         self,
-        left: Sequence[float] | list[float] | np.ndarray,
-        right: Sequence[float] | list[float] | np.ndarray,
+        channels: PlanarChannels,
         carrier: Sequence[float] | list[float] | np.ndarray,
-    ) -> StereoBlock:
-        """Process planar stereo with a mono external vocoder ``carrier``.
+    ) -> list[np.ndarray]:
+        """Process planar audio with a mono external vocoder ``carrier``.
 
-        ``carrier`` is shared by both channels and must match their length.
+        ``carrier`` holds one sample per frame and is shared by every channel; a
+        different length raises ``SonareValueError``.
         """
-        return self._process_planar_stereo(left, right, carrier)
+        return self._process_planar(channels, carrier)
 
-    def _process_planar_stereo(
+    def _process_planar(
         self,
-        left: Sequence[float] | list[float] | np.ndarray,
-        right: Sequence[float] | list[float] | np.ndarray,
+        channels: PlanarChannels,
         carrier: Sequence[float] | list[float] | np.ndarray | None,
-    ) -> StereoBlock:
-        left_buf = _as_float32_buffer(left, arg_name="left")
-        right_buf = _as_float32_buffer(right, arg_name="right")
-        total = int(left_buf.shape[0])
-        if total != int(right_buf.shape[0]):
-            raise SonareValueError("left and right channels must have equal length")
+    ) -> list[np.ndarray]:
+        if isinstance(channels, np.ndarray) and channels.ndim != 2:
+            raise _not_planar_channels(channels, "channels")
+        if not isinstance(channels, (Sequence, np.ndarray)):
+            raise _not_planar_channels(channels, "channels")
+        # Private copies the C call may write into; the caller's buffers stay untouched.
+        # Zero frames is a no-op here, as on the mono and interleaved paths.
+        planes = [
+            np.array(_as_float32_buffer(plane, arg_name="channels"), dtype=np.float32, copy=True)
+            for plane in channels
+        ]
+        if len(planes) not in (1, 2):
+            raise SonareValueError(f"channels must hold 1 or 2 planes, got {len(planes)}")
+        total = int(planes[0].shape[0])
+        if any(int(plane.shape[0]) != total for plane in planes):
+            raise SonareValueError("all channels must have the same length")
         carrier_buf = None if carrier is None else _as_float32_buffer(carrier, arg_name="carrier")
         if carrier_buf is not None and int(carrier_buf.shape[0]) != total:
             raise SonareValueError("carrier must have the same length as the channels")
-        # Copy into fresh contiguous output buffers; the C call mutates in place.
-        out_left = np.array(left_buf, dtype=np.float32, copy=True)
-        out_right = np.array(right_buf, dtype=np.float32, copy=True)
+        if len(planes) == 1:
+            return [self._process_mono(planes[0], carrier_buf)]
+        out_left, out_right = planes
         step = self.max_block_size
         for pos in range(0, total, step):
             length = min(step, total - pos)
-            l_block = out_left[pos : pos + length]
-            r_block = out_right[pos : pos + length]
-            c_left = (ctypes.c_float * length).from_buffer(l_block)
-            c_right = (ctypes.c_float * length).from_buffer(r_block)
+            c_left = (ctypes.c_float * length).from_buffer(out_left[pos : pos + length])
+            c_right = (ctypes.c_float * length).from_buffer(out_right[pos : pos + length])
             if carrier_buf is None:
                 rc = self._lib.sonare_realtime_voice_changer_process_planar_stereo(
                     self._require_handle(), c_left, c_right, _to_c_size_t(length, "length")
@@ -515,7 +520,7 @@ class RealtimeVoiceChanger:
                     _to_c_size_t(length, "length"),
                 )
             _check_realtime(rc)
-        return StereoBlock(out_left, out_right)
+        return planes
 
     def note_on(self, note: int, velocity: float = 1.0) -> None:
         """Hold MIDI ``note`` from the start of the next processed block.

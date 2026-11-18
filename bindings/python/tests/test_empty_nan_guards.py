@@ -702,8 +702,8 @@ class TestRealtimeFailuresDoNotBorrowAnEarlierMessage:
 
             block = np.zeros(128, dtype=np.float32)
             with pytest.raises(SonareValueError) as exc_info:
-                # A mono handle cannot serve the planar-stereo entry point.
-                changer.process_planar_stereo(block, block.copy())
+                # A mono handle cannot serve two planar channels.
+                changer.process_planar([block, block.copy()])
         assert exc_info.value.code == 4
         assert str(exc_info.value) == "Invalid parameter"
         assert "FFT size" not in str(exc_info.value)

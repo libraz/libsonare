@@ -73,7 +73,7 @@ _MEMBERS: dict[str, tuple[Callable[[], Any], list[tuple[str, tuple[Any, ...]]]]]
             ("config_pod", ()),
             ("process_mono", (_BLOCK,)),
             ("process_interleaved", (_BLOCK,)),
-            ("process_planar_stereo", (_BLOCK, _BLOCK)),
+            ("process_planar", ([_BLOCK, _BLOCK],)),
             ("latency_samples", ()),
         ],
     ),

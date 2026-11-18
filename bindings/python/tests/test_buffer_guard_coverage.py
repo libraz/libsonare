@@ -472,8 +472,12 @@ def test_buffer_entry_point_floor() -> None:
 
 
 def test_realtime_voice_process_profiles_match_discovered_methods() -> None:
-    """The six profiled raw process methods stay in the derived, guarded family."""
-    assert len(_DISCOVERED_REALTIME_VOICE_PROCESS_ENTRY_POINTS) == 6
+    """The four flat-buffer process methods stay in the derived, guarded family.
+
+    ``process_planar`` and its carrier variant take ``PlanarChannels`` rather than
+    one flat buffer, so their input contract lives in the realtime voice tests.
+    """
+    assert len(_DISCOVERED_REALTIME_VOICE_PROCESS_ENTRY_POINTS) == 4
     assert set(_GUARDED) >= _DISCOVERED_REALTIME_VOICE_PROCESS_ENTRY_POINTS
     assert _DISCOVERED_REALTIME_VOICE_PROCESS_ENTRY_POINTS.isdisjoint(
         set(_EMPTY_INPUT_IS_DEFINED) | _NO_PITCH_IS_A_VALUE
@@ -660,12 +664,12 @@ def test_empty_planar_axis_is_rejected_by_length(drive, subject, channels) -> No
     assert str(excinfo.value) == f"{subject} must not be empty"
 
 
-@pytest.mark.parametrize("bad_side", ["left", "right"])
-def test_planar_stereo_rank_rejection_names_the_side(bad_side: str) -> None:
-    """Each planar-stereo channel reports its own parameter name."""
+@pytest.mark.parametrize("bad_side", ["first", "second"])
+def test_planar_rank_rejection_names_the_channels_argument(bad_side: str) -> None:
+    """A 2-D plane in either position is refused under the argument's own name."""
     good = np.zeros(128, dtype=np.float32)
     bad = np.zeros((2, 64), dtype=np.float32)
-    arguments = (bad, good) if bad_side == "left" else (good, bad)
+    arguments = [bad, good] if bad_side == "first" else [good, bad]
 
     with (
         libsonare.RealtimeVoiceChanger(
@@ -673,6 +677,6 @@ def test_planar_stereo_rank_rejection_names_the_side(bad_side: str) -> None:
         ) as changer,
         pytest.raises(SonareValueError) as excinfo,
     ):
-        changer.process_planar_stereo(*arguments)
+        changer.process_planar(arguments)
     message = str(excinfo.value)
-    assert message.startswith(f"{bad_side} must be a 1-D buffer"), message
+    assert message.startswith("channels must be a 1-D buffer"), message

@@ -252,15 +252,15 @@ def test_process_interleaved_returns_ndarray() -> None:
     np.testing.assert_array_equal(out[0::2], out[1::2])
 
 
-def test_process_planar_stereo_returns_ndarray_pair() -> None:
-    """``process_planar_stereo`` must return a ``(left, right)`` float32 pair."""
+def test_process_planar_returns_one_ndarray_per_channel() -> None:
+    """``process_planar`` must return one float32 ndarray per input channel."""
     sr = 48000
     n_frames = 512
     left = _sine(n_frames, sr=sr)
     right = _sine(n_frames, sr=sr)
 
     with libsonare.RealtimeVoiceChanger(sr, "brightIdol", max_block_size=128, num_channels=2) as ch:
-        out_left, out_right = ch.process_planar_stereo(left, right)
+        out_left, out_right = ch.process_planar([left, right])
 
     assert isinstance(out_left, np.ndarray)
     assert isinstance(out_right, np.ndarray)

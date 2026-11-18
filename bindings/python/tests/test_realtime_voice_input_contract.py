@@ -27,8 +27,8 @@ REALTIME_VOICE_PROCESS_PROFILES: dict[str, tuple[str, bool]] = {
     "RealtimeVoiceChanger.process_interleaved_with_carrier": ("interleaved", True),
     "RealtimeVoiceChanger.process_mono": ("mono", False),
     "RealtimeVoiceChanger.process_mono_with_carrier": ("mono", True),
-    "RealtimeVoiceChanger.process_planar_stereo": ("planar_stereo", False),
-    "RealtimeVoiceChanger.process_planar_stereo_with_carrier": ("planar_stereo", True),
+    "RealtimeVoiceChanger.process_planar": ("planar", False),
+    "RealtimeVoiceChanger.process_planar_with_carrier": ("planar", True),
 }
 _CARRIER_PROFILES = tuple(
     name for name, (_, with_carrier) in REALTIME_VOICE_PROCESS_PROFILES.items() if with_carrier
@@ -98,7 +98,7 @@ def _process(
     *,
     include_carrier: bool | None = None,
     raw_main: bool = False,
-) -> np.ndarray | tuple[np.ndarray, np.ndarray]:
+) -> np.ndarray | list[np.ndarray]:
     layout, profile_uses_carrier = REALTIME_VOICE_PROCESS_PROFILES[profile_name]
     use_carrier = profile_uses_carrier if include_carrier is None else include_carrier
     audio = samples if raw_main or layout != "interleaved" else _interleaved(samples)
@@ -108,7 +108,7 @@ def _process(
         args = [audio]
     else:
         right = np.zeros(FRAME_COUNT, dtype=np.float32) if raw_main else _stereo_right(samples)
-        args = [audio, right]
+        args = [[audio, right]]
     if use_carrier:
         args.append(carrier)
 
@@ -116,16 +116,14 @@ def _process(
     return getattr(changer, method)(*args)
 
 
-def _output_arrays(output: np.ndarray | tuple[np.ndarray, np.ndarray]) -> tuple[np.ndarray, ...]:
-    return output if isinstance(output, tuple) else (output,)
+def _output_arrays(output: np.ndarray | list[np.ndarray]) -> tuple[np.ndarray, ...]:
+    return tuple(output) if isinstance(output, list) else (output,)
 
 
-def _assert_render(
-    output: np.ndarray | tuple[np.ndarray, np.ndarray], layout: str, frames: int
-) -> None:
+def _assert_render(output: np.ndarray | list[np.ndarray], layout: str, frames: int) -> None:
     arrays = _output_arrays(output)
     expected_count = frames * 2 if layout == "interleaved" else frames
-    expected_arrays = 2 if layout == "planar_stereo" else 1
+    expected_arrays = 2 if layout == "planar" else 1
     assert len(arrays) == expected_arrays
     for array in arrays:
         assert array.shape == (expected_count,)
@@ -307,7 +305,7 @@ def test_every_process_method_keeps_main_buffer_type_and_rank_checks(
     """The realtime value policy still rejects inputs it cannot marshal as 1-D audio."""
     layout, _ = REALTIME_VOICE_PROCESS_PROFILES[profile_name]
     carrier = _tone(hz=110.0)
-    parameter_name = "left" if layout == "planar_stereo" else "samples"
+    parameter_name = "channels" if layout == "planar" else "samples"
 
     with _new_changer(_neutral(), layout) as changer:
         with pytest.raises(SonareValueError) as excinfo:
