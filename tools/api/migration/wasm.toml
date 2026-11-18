@@ -27841,6 +27841,15 @@ old = "HrtfSet.native"
 removed = "the internal native handle, no longer public; pass the HrtfSet itself as the hrtf option"
 domain = "engine"
 rule = "no-internal-types"
+
+[[entry]]
+kind = "field"
+old = "SonareRealtimeEngineWorkletProcessor.channelCount"
+new = "SonareRealtimeEngineWorkletProcessor.numChannels"
+domain = "engine"
+rule = "num-channels"
+entry = "./worklet"
+
 [[entry]]
 kind = "value"
 old = "PlaybackStageName='bass_management'"

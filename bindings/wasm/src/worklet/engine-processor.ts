@@ -113,7 +113,8 @@ function wireRenderFrame(frame: number | bigint | undefined): number | undefined
 export class SonareRealtimeEngineWorkletProcessor {
   readonly sampleRate: number;
   readonly blockSize: number;
-  readonly channelCount: number;
+  /** Channel count of every input, output and monitor bus, fixed at construction. */
+  readonly numChannels: number;
   private engine: RealtimeEngine;
   /** The embind object behind `engine`: scratch reads and the code-carrying sync messages. */
   private native: ReturnType<typeof engineNativeHandle>;
@@ -206,7 +207,7 @@ export class SonareRealtimeEngineWorkletProcessor {
     );
     this.clipPageRepostFrames = Math.max(1, Math.round(this.sampleRate * CLIP_PAGE_REPOST_SECONDS));
     this.blockSize = options.maxBlockSize ?? AUDIO_WORKLET_RENDER_QUANTUM;
-    this.channelCount = requireChannelCount(options.numChannels, 'numChannels');
+    this.numChannels = requireChannelCount(options.numChannels, 'numChannels');
     this.transport = transport;
     // Zero is the off switch for meter publication, so the floor is 0.
     this.meterIntervalFrames = requireIntegerOption(
@@ -264,21 +265,21 @@ export class SonareRealtimeEngineWorkletProcessor {
       maxBlockSize: this.blockSize,
       commandCapacity: Math.max(1024, this.commandRing?.capacity ?? 0),
       telemetryCapacity: 1024,
-      maxChannels: this.channelCount,
+      maxChannels: this.numChannels,
     });
     this.native = engineNativeHandle(this.engine);
-    // Allocate persistent WASM-heap scratch (worst case: channelCount channels x
+    // Allocate persistent WASM-heap scratch (worst case: numChannels channels x
     // blockSize frames) and acquire the per-channel heap views once.
-    this.engine.prepareChannels(this.channelCount, this.blockSize);
-    this.channelBuffers = new Array(this.channelCount);
-    for (let ch = 0; ch < this.channelCount; ch++) {
+    this.engine.prepareChannels(this.numChannels, this.blockSize);
+    this.channelBuffers = new Array(this.numChannels);
+    for (let ch = 0; ch < this.numChannels; ch++) {
       this.channelBuffers[ch] = this.engine.channelBuffer(ch, this.blockSize);
     }
     this.cueOutput = options.cueOutput === true;
     if (this.cueOutput) {
-      this.engine.prepareMonitorChannels(this.channelCount, this.blockSize);
-      this.monitorBuffers = new Array(this.channelCount);
-      for (let ch = 0; ch < this.channelCount; ch++) {
+      this.engine.prepareMonitorChannels(this.numChannels, this.blockSize);
+      this.monitorBuffers = new Array(this.numChannels);
+      for (let ch = 0; ch < this.numChannels; ch++) {
         this.monitorBuffers[ch] = this.engine.monitorChannelBuffer(ch, this.blockSize);
       }
     }
@@ -327,7 +328,7 @@ export class SonareRealtimeEngineWorkletProcessor {
     const input = inputs[0];
     // Write the AudioWorklet input straight into the engine's WASM-heap views;
     // no per-block heap allocation.
-    for (let ch = 0; ch < this.channelCount; ch++) {
+    for (let ch = 0; ch < this.numChannels; ch++) {
       const dst = this.channelBuffers[ch];
       const source = input?.[ch];
       if (source && source.length === frames) {
@@ -362,13 +363,13 @@ export class SonareRealtimeEngineWorkletProcessor {
   }
 
   private reacquireChannelBuffers(): void {
-    for (let ch = 0; ch < this.channelCount; ch++) {
+    for (let ch = 0; ch < this.numChannels; ch++) {
       this.channelBuffers[ch] = this.engine.channelBuffer(ch, this.blockSize);
     }
   }
 
   private reacquireMonitorBuffers(): void {
-    for (let ch = 0; ch < this.channelCount; ch++) {
+    for (let ch = 0; ch < this.numChannels; ch++) {
       this.monitorBuffers[ch] = this.engine.monitorChannelBuffer(ch, this.blockSize);
     }
   }
