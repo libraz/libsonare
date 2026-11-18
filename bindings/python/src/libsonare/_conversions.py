@@ -986,17 +986,17 @@ def _resample_float32(
 @_guard_buffer("samples")
 def resample(
     samples: Sequence[float] | list[float],
-    source_sample_rate: int,
+    sample_rate: int,
     target_sample_rate: int,
 ) -> np.ndarray:
     """Resample audio to a different sample rate.
 
     Args:
         samples: Audio samples.
-        source_sample_rate: Source sample rate in Hz.
+        sample_rate: Sample rate of ``samples`` in Hz.
         target_sample_rate: Target sample rate in Hz.
 
     Returns:
         A float32 array of resampled audio samples.
     """
-    return _resample_float32(samples, source_sample_rate, target_sample_rate)
+    return _resample_float32(samples, sample_rate, target_sample_rate)

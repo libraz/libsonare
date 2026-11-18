@@ -18,7 +18,7 @@ def test_resample() -> None:
     from libsonare import resample
 
     tone = _generate_sine(440, 22050, 1.0)
-    result = resample(tone, source_sample_rate=22050, target_sample_rate=44100)
+    result = resample(tone, sample_rate=22050, target_sample_rate=44100)
     assert len(result) > len(tone) * 1.8
     assert len(result) < len(tone) * 2.2
 

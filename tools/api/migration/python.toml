@@ -1970,7 +1970,7 @@ rule = "onset-strength"
 [[entry]]
 kind = "option"
 old = "resample(src_sr)"
-new = "resample(source_sample_rate)"
+new = "resample(sample_rate)"
 domain = "analysis"
 rule = "sample-rate-name"
 

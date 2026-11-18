@@ -2744,5 +2744,5 @@ def mastering_dynamics_transient_shaper(
     validate: bool = True,
 ) -> tuple[np.ndarray[Any, Any], int]: ...
 def resample(
-    samples: FloatSamples, source_sample_rate: int, target_sample_rate: int
+    samples: FloatSamples, sample_rate: int, target_sample_rate: int
 ) -> np.ndarray[Any, Any]: ...

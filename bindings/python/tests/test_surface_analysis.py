@@ -319,7 +319,7 @@ def test_mirror_absent_is_none_not_zero() -> None:
 
 
 def test_resample_names_both_rates() -> None:
-    out = np.asarray(libsonare.resample(_tone(), source_sample_rate=SR, target_sample_rate=2 * SR))
+    out = np.asarray(libsonare.resample(_tone(), sample_rate=SR, target_sample_rate=2 * SR))
     assert abs(out.size - 2 * int(SR * 0.5)) <= 2
     audio = libsonare.Audio.from_buffer(_tone(), SR)
     assert np.asarray(audio.resample(target_sample_rate=2 * SR)).size == out.size
