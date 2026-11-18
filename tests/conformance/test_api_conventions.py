@@ -13,6 +13,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from typing import ClassVar
 from unittest import mock
 
 _SPEC = importlib.util.spec_from_file_location(
@@ -87,7 +88,7 @@ def run(name: str, records: list[dict]):
 
 
 class GettersRule(unittest.TestCase):
-    CLEAN = [
+    CLEAN: ClassVar[list[dict]] = [
         member("node", "Project", "trackCount", ts_kind="accessor"),
         member("wasm", "Mixer", "stripNonFiniteDiscardCount", ts_kind="method", params=["strip"]),
         member("python", "Project", "track_count", ts_kind="method"),
@@ -111,7 +112,7 @@ class GettersRule(unittest.TestCase):
 
 
 class AsyncTeardownRule(unittest.TestCase):
-    CLEAN = [
+    CLEAN: ClassVar[list[dict]] = [
         js_class("wasm", "JobClient", param_types=["JobClientOptions", "Worker"]),
         method("wasm", "JobClient", "destroy", returns="Promise<void>"),
         method("wasm", "JobClient", "[Symbol.asyncDispose]", returns="Promise<void>"),
@@ -143,7 +144,7 @@ class AsyncTeardownRule(unittest.TestCase):
 
 
 class LoudnessNamesRule(unittest.TestCase):
-    CLEAN = [
+    CLEAN: ClassVar[list[dict]] = [
         field("wasm", "AnalysisDynamics", "loudnessRangeLu"),
         field("wasm", "LufsResult", "momentaryLufs"),
         field("node", "MeterTelemetry", "truePeakDbtpL"),
@@ -169,12 +170,12 @@ class LoudnessNamesRule(unittest.TestCase):
 
 
 class StringClosedSetsRule(unittest.TestCase):
-    CLEAN = [
+    CLEAN: ClassVar[list[dict]] = [
         field("wasm", "PanOptions", "law", "'stereoPan' | 'balance' | undefined"),
         field("wasm", "ChangerOptions", "numChannels", "1 | 2"),
         {"surface": "python", "kind": "class", "name": "Frame", "owner": "", "bases": []},
     ]
-    COUNT = {"wasm:ChangerOptions.numChannels": "a count"}
+    COUNT: ClassVar[dict[str, str]] = {"wasm:ChangerOptions.numChannels": "a count"}
 
     def judge(self, records):
         base = dataclasses.replace(rule("string-closed-sets"), pending={}, exempt=self.COUNT)
@@ -209,7 +210,7 @@ def call(surface: str, owner: str, name: str, returns: str, *param_types: str) -
 
 
 class CancellationRule(unittest.TestCase):
-    CLEAN = [
+    CLEAN: ClassVar[list[dict]] = [
         field("wasm", "RenderRequest", "cancel", "(() => boolean) | undefined"),
         field("wasm", "CallOptions", "signal", "AbortSignal | undefined"),
         call("wasm", "Engine", "render", "Result", "RenderRequest"),
@@ -240,7 +241,7 @@ class CancellationRule(unittest.TestCase):
 
 
 class TempoRangeRule(unittest.TestCase):
-    CLEAN = [
+    CLEAN: ClassVar[list[dict]] = [
         field(
             "wasm",
             "AnalyzeRequest",
@@ -303,7 +304,7 @@ def function(surface: str, name: str, returns: str, *params: tuple[str, str]) ->
 
 
 class MidiModuleFunctionsRule(unittest.TestCase):
-    CLEAN = [
+    CLEAN: ClassVar[list[dict]] = [
         function("node", "midiNoteOn", "ProjectMidiEvent", ("request", "MidiNoteOnRequest")),
         function("node", "gmProgramForName", "number", ("name", "string")),
         function("node", "toJson", "string"),
@@ -334,7 +335,7 @@ class MidiModuleFunctionsRule(unittest.TestCase):
 
 
 class ConstructionRule(unittest.TestCase):
-    CLEAN = [
+    CLEAN: ClassVar[list[dict]] = [
         js_class("wasm", "Mixer", param_types=["MixerConfig"]),
         {**js_class("wasm", "SonareError", param_types=["code", "message"]), "bases": ["Error"]},
         {
@@ -392,7 +393,7 @@ class ConstructionRule(unittest.TestCase):
 
 
 class InputTypesRule(unittest.TestCase):
-    CLEAN = [
+    CLEAN: ClassVar[list[dict]] = [
         method("wasm", "Project", "setMarker"),
         method("python", "Project", "set_marker"),
         function("node", "exposure", "number"),
@@ -410,7 +411,7 @@ class InputTypesRule(unittest.TestCase):
 
 
 class OneInputFormRule(unittest.TestCase):
-    CLEAN = [
+    CLEAN: ClassVar[list[dict]] = [
         field("wasm", "SetClipsRequest", "clips", "readonly EngineClip[]"),
         field("wasm", "ChangerConfig", "harmonySteps", "readonly [number, number, number]"),
         field("node", "StageResult", "reports", "Report[] | [Report]"),
@@ -440,7 +441,7 @@ class OneInputFormRule(unittest.TestCase):
 
 
 class AbiProbesRule(unittest.TestCase):
-    CLEAN = [
+    CLEAN: ClassVar[list[dict]] = [
         function("node", "engineAbiVersion", "number"),
         function("python", "voice_changer_abi_version", "int"),
         function("wasm", "abiVersion", "number"),
@@ -474,7 +475,7 @@ def stereo_fn(surface: str, name: str, *params: str, owner: str = "") -> dict:
 
 
 class StereoPairRule(unittest.TestCase):
-    CLEAN = [
+    CLEAN: ClassVar[list[dict]] = [
         stereo_fn("node", "normalizeStereo", "left", "right"),
         stereo_fn("wasm", "normalizeStereo", "left", "right"),
         stereo_fn("python", "normalize_stereo", "left", "right"),
@@ -515,7 +516,7 @@ def ref_param(surface: str, owner: str, member: str, type_: str) -> dict:
 
 
 class StripRefRule(unittest.TestCase):
-    CLEAN = [
+    CLEAN: ClassVar[list[dict]] = [
         ref_param("node", "Mixer.setFaderDb", "strip", "StripRef"),
         ref_param("node", "Mixer.busMeter", "busId", "string"),
         ref_param("python", "Mixer.bus_meter", "bus_id", "str"),
@@ -556,7 +557,7 @@ def keyed_field(surface: str, owner: str, member: str, kind: str = "field") -> d
 
 
 class PayloadChannelsRule(unittest.TestCase):
-    CLEAN = [
+    CLEAN: ClassVar[list[dict]] = [
         keyed_field("node", "LoopDesc", "audioChannels"),
         keyed_field("node", "LoopDesc", "audioSampleRate"),
         keyed_field("node", "EngineConfig", "maxChannels"),
@@ -583,7 +584,7 @@ class PayloadChannelsRule(unittest.TestCase):
 
 
 class TypeNamesRule(unittest.TestCase):
-    CLEAN = [
+    CLEAN: ClassVar[list[dict]] = [
         {"surface": "wasm", "kind": "type", "name": "Capabilities", "owner": "", "member": ""},
         {"surface": "python", "kind": "class", "name": "Audio", "owner": "", "member": ""},
     ]
@@ -621,7 +622,7 @@ class TypeNamesRule(unittest.TestCase):
 
 
 class EngineVocabularyRule(unittest.TestCase):
-    CLEAN = [
+    CLEAN: ClassVar[list[dict]] = [
         field("wasm", "EngineTelemetryRecord", "graphLatencySamples"),
         field("python", "Telemetry", "graph_latency_samples"),
     ]
@@ -640,7 +641,7 @@ class EngineVocabularyRule(unittest.TestCase):
 
 
 class DerivedSummaryRule(unittest.TestCase):
-    CLEAN = [
+    CLEAN: ClassVar[list[dict]] = [
         field("node", "BounceResult", "channels", "Float32Array[]"),
         field("node", "BounceResult", "sampleRate"),
         field("node", "RenderResult", "numChannels"),
@@ -664,7 +665,7 @@ class DerivedSummaryRule(unittest.TestCase):
 
 
 class CollectionsRule(unittest.TestCase):
-    CLEAN = [
+    CLEAN: ClassVar[list[dict]] = [
         method("node", "Project", "markers"),
         method("node", "Mixer", "stripCount"),
         method("python", "Mixer", "strip_count"),
@@ -751,7 +752,7 @@ class WorkletRenderQuantumRule(unittest.TestCase):
 
 
 class Matrix2dRule(unittest.TestCase):
-    CLEAN = [
+    CLEAN: ClassVar[list[dict]] = [
         field("node", "StftResult", "magnitude", "Matrix2D"),
         field("node", "StftResult", "nFft"),
         field("node", "Matrix2D", "data", "Float32Array"),
@@ -837,7 +838,10 @@ class CErrorPathRule(unittest.TestCase):
         self.assertIn("holds 2 sites and the source has 1", verdict.violations[0].detail)
 
     def test_new_site_in_a_pending_file_fails(self) -> None:
-        grown = self.BAD.replace("  return SONARE_OK;", "  if (*out == 3) return SONARE_ERROR_INVALID_PARAMETER;\n  return SONARE_OK;")
+        grown = self.BAD.replace(
+            "  return SONARE_OK;",
+            "  if (*out == 3) return SONARE_ERROR_INVALID_PARAMETER;\n  return SONARE_OK;",
+        )
         verdict = self.judge({"c:src/c_api/bad.cpp": 1}, bad=grown)
         self.assertEqual([f.key for f in verdict.violations], ["c:src/c_api/bad.cpp"])
         self.assertIn("source has 2", verdict.violations[0].detail)
