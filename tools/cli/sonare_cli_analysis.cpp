@@ -62,7 +62,7 @@ int cmd_key(const CliArgs& args, const Audio& audio) {
   config.hop_length = args.hop_length;
   config.use_hpss = args.has("hpss");
   config.loudness_weighted = args.has("loudness-weighted");
-  config.high_pass_hz = args.get_float("high-pass-hz", 80.0f);
+  config.high_pass_hz = args.get_float("high-pass-hz", config.high_pass_hz);
   if (args.has("genre-hint")) {
     config.genre_hint = args.get_string("genre-hint");
   }
@@ -192,29 +192,32 @@ int cmd_onsets(const CliArgs& args, const Audio& audio) {
 
 int cmd_chords(const CliArgs& args, const Audio& audio) {
   ChordConfig config;
-  config.min_duration = args.get_float("min-duration-sec", 0.3f);
-  config.smoothing_window = args.get_float("smoothing-window", 2.0f);
-  config.threshold = args.get_float("threshold", 0.5f);
+  config.min_duration = args.get_float("min-duration-sec", config.min_duration);
+  config.smoothing_window = args.get_float("smoothing-window", config.smoothing_window);
+  config.threshold = args.get_float("threshold", config.threshold);
   config.use_triads_only = !args.has("with-seventh");
   config.n_fft = args.n_fft;
   config.hop_length = args.hop_length;
   config.use_beat_sync = !args.has("no-beat-sync");
   // The registry has already refused any value outside cqt, stft and nnls.
-  const std::string chroma_method = args.get_string("chroma-method", "cqt");
-  if (chroma_method == "stft") {
-    config.chroma_method = ChromaMethod::STFT;
-  } else if (chroma_method == "nnls") {
-    config.chroma_method = ChromaMethod::NNLS;
-  } else {
-    config.chroma_method = ChromaMethod::CQT;
+  if (args.has("chroma-method")) {
+    const std::string chroma_method = args.get_string("chroma-method");
+    if (chroma_method == "stft") {
+      config.chroma_method = ChromaMethod::STFT;
+    } else if (chroma_method == "nnls") {
+      config.chroma_method = ChromaMethod::NNLS;
+    } else {
+      config.chroma_method = ChromaMethod::CQT;
+    }
   }
   config.use_hmm = !args.has("no-hmm");
   config.hmm_beam_width = args.get_int("hmm-beam-width", config.hmm_beam_width);
   config.detect_inversions = args.has("detect-inversions");
   config.use_key_context = args.has("key-context");
   if (config.use_key_context) {
-    config.key_root = parse_pitch_class_option(args.get_string("key-root", "C"));
-    config.key_mode = parse_mode_option(args.get_string("key-mode", "major"));
+    if (args.has("key-root"))
+      config.key_root = parse_pitch_class_option(args.get_string("key-root"));
+    if (args.has("key-mode")) config.key_mode = parse_mode_option(args.get_string("key-mode"));
   }
 
   ChordAnalyzer analyzer(audio, config);
@@ -260,7 +263,7 @@ int cmd_chords(const CliArgs& args, const Audio& audio) {
 
 int cmd_sections(const CliArgs& args, const Audio& audio) {
   SectionConfig config;
-  config.min_section_sec = args.get_float("min-duration-sec", 4.0f);
+  config.min_section_sec = args.get_float("min-duration-sec", config.min_section_sec);
   config.boundary_threshold = args.get_float("threshold", config.boundary_threshold);
   config.n_fft = args.n_fft;
   config.hop_length = args.hop_length;
@@ -357,7 +360,7 @@ int cmd_timbre(const CliArgs& args, const Audio& audio) {
 
 int cmd_dynamics(const CliArgs& args, const Audio& audio) {
   DynamicsConfig config;
-  config.window_sec = args.get_float("window-sec", 0.4f);
+  config.window_sec = args.get_float("window-sec", config.window_sec);
   // The C ABI the other surfaces call refuses a non-positive hop; reaching the
   // analyzer directly skipped that and silently clamped to 1, so the same
   // argument ran here and was rejected everywhere else. Rejecting through
@@ -396,9 +399,9 @@ int cmd_dynamics(const CliArgs& args, const Audio& audio) {
 
 int cmd_rhythm(const CliArgs& args, const Audio& audio) {
   RhythmConfig config;
-  config.start_bpm = args.get_float("start-bpm", 120.0f);
-  config.bpm_min = args.get_float("bpm-min", 60.0f);
-  config.bpm_max = args.get_float("bpm-max", 200.0f);
+  config.start_bpm = args.get_float("start-bpm", config.start_bpm);
+  config.bpm_min = args.get_float("bpm-min", config.bpm_min);
+  config.bpm_max = args.get_float("bpm-max", config.bpm_max);
   config.n_fft = args.n_fft;
   config.hop_length = args.hop_length;
 
@@ -548,9 +551,9 @@ int cmd_analyze(const CliArgs& args, const Audio& audio) {
   // Only the shape is parsed here; which numerators are acceptable and how many
   // is validated by the core, so a CLI list is rejected for the same reason a
   // facade list is. An option that was not given leaves the core default in
-  // place rather than replacing it with an empty set, which the core rejects.
-  const std::string meter_candidates = args.get_string("meter-candidates");
-  if (!meter_candidates.empty()) {
+  // place; one given empty is passed on as the empty set, which the core rejects.
+  if (args.has("meter-candidates")) {
+    const std::string meter_candidates = args.get_string("meter-candidates");
     std::vector<int> numerators;
     std::stringstream stream(meter_candidates);
     std::string item;

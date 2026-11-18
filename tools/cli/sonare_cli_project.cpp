@@ -189,9 +189,9 @@ int cmd_project_new(const CliArgs& args) {
     project_report_error("create project", err);
     return project_exit_code(err);
   }
-  const double sample_rate = args.get_float("sample-rate", 0.0f);
-  if (sample_rate > 0.0) {
-    err = sonare_project_set_sample_rate(handle.ptr, sample_rate);
+  // Only a rate the caller spelled is set; an explicit 0 reaches the library as written.
+  if (args.has("sample-rate")) {
+    err = sonare_project_set_sample_rate(handle.ptr, args.get_double("sample-rate", 0.0));
     if (err != SONARE_OK) {
       project_report_error("set sample rate", err);
       return project_exit_code(err);

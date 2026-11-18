@@ -72,7 +72,7 @@ from ._cli_note_edit import (
 from ._cli_note_edit import (
     register_note_edit_parsers,
 )
-from ._cli_options import SharedParsers, _c_int, _ContractArgumentParser, _finite_float
+from ._cli_options import SharedParsers, _c_int, _ContractArgumentParser, _finite_float, _given
 
 
 def cmd_hpss(args: argparse.Namespace) -> int:
@@ -90,11 +90,11 @@ def cmd_hpss(args: argparse.Namespace) -> int:
     if len(modes) > 1:
         raise ValueError("hpss output modes are mutually exclusive: " + ", ".join(modes))
 
-    kernel_harmonic = getattr(args, "kernel_harmonic", 31)
-    kernel_percussive = getattr(args, "kernel_percussive", 31)
-    n_fft = getattr(args, "n_fft", 2048)
-    hop_length = getattr(args, "hop_length", 512)
-    hard_mask = bool(getattr(args, "hard_mask", False))
+    # A setting the caller left out is not passed, so the library chooses it.
+    separation = {
+        "hard_mask": bool(getattr(args, "hard_mask", False)),
+        **_given(args, "kernel_harmonic", "kernel_percussive", "n_fft", "hop_length"),
+    }
 
     samples, sr = _load_audio(args.file)
 
@@ -102,11 +102,7 @@ def cmd_hpss(args: argparse.Namespace) -> int:
         separated = hpss_with_residual(
             samples,
             sample_rate=sr,
-            kernel_harmonic=kernel_harmonic,
-            kernel_percussive=kernel_percussive,
-            n_fft=n_fft,
-            hop_length=hop_length,
-            hard_mask=hard_mask,
+            **separation,
         )
         harmonic = _audio_array(separated["harmonic"])
         percussive = _audio_array(separated["percussive"])
@@ -116,11 +112,7 @@ def cmd_hpss(args: argparse.Namespace) -> int:
         result = hpss(
             samples,
             sample_rate=sr,
-            kernel_harmonic=kernel_harmonic,
-            kernel_percussive=kernel_percussive,
-            n_fft=n_fft,
-            hop_length=hop_length,
-            hard_mask=hard_mask,
+            **separation,
         )
         harmonic = _audio_array(result.harmonic)
         percussive = _audio_array(result.percussive)
@@ -191,20 +183,16 @@ def cmd_decompose_stems(args: argparse.Namespace) -> int:
         return EXIT_INVALID_PARAMETER
     # The C side reads any other name as its own default rather than refusing it,
     # so an unrecognised initialiser is caught here or not at all.
-    if args.init not in {"random", "nndsvd"}:
+    if args.init is not None and args.init not in {"random", "nndsvd"}:
         raise ValueError("--init must be 'random' or 'nndsvd'")
 
     samples, sr = _load_audio(args.file)
     result = decompose_stems(
         samples,
         sample_rate=sr,
-        n_components=args.n_components,
-        n_fft=args.n_fft,
-        hop_length=args.hop_length,
-        n_iter=args.n_iter,
-        beta=args.beta,
-        init=args.init,
-        mask_power=args.mask_power,
+        **_given(
+            args, "n_components", "n_fft", "hop_length", "n_iter", "beta", "init", "mask_power"
+        ),
     )
     components = [
         _audio_array(component) for component in cast(Iterable[Any], result["components"])
@@ -250,8 +238,7 @@ def cmd_pitch_shift(args: argparse.Namespace) -> int:
         samples,
         sample_rate=sr,
         pitch_semitones=args.pitch_semitones,
-        n_fft=getattr(args, "n_fft", 2048),
-        hop_length=getattr(args, "hop_length", 512),
+        **_given(args, "n_fft", "hop_length"),
     )
 
     return _emit_effect_result(
@@ -273,8 +260,7 @@ def cmd_time_stretch(args: argparse.Namespace) -> int:
         samples,
         sample_rate=sr,
         speed_ratio=args.rate,
-        n_fft=getattr(args, "n_fft", 2048),
-        hop_length=getattr(args, "hop_length", 512),
+        **_given(args, "n_fft", "hop_length"),
     )
 
     return _emit_effect_result(
@@ -506,10 +492,10 @@ def cmd_voice_change(args: argparse.Namespace) -> int:
         voice_change_realtime,
     )
 
-    raw_preset_id: object = getattr(args, "preset", "")
+    raw_preset_id: object = getattr(args, "preset", None)
     raw_preset_json: object = getattr(args, "preset_json", None)
     raw_preset_pack: object = getattr(args, "preset_pack", None)
-    preset_id = raw_preset_id if isinstance(raw_preset_id, str) else ""
+    preset_id = raw_preset_id if isinstance(raw_preset_id, str) else None
     preset_json = raw_preset_json if isinstance(raw_preset_json, str) and raw_preset_json else None
     preset_pack = raw_preset_pack if isinstance(raw_preset_pack, str) and raw_preset_pack else None
     assignments = list(getattr(args, "set", None) or [])
@@ -519,7 +505,7 @@ def cmd_voice_change(args: argparse.Namespace) -> int:
             ("--preset", preset_id),
             ("--preset-json", preset_json),
         )
-        if value
+        if value is not None
     ]
     if len(selectors) > 1:
         raise ValueError(
@@ -532,7 +518,7 @@ def cmd_voice_change(args: argparse.Namespace) -> int:
     # one selector. This check precedes the ones below so that a pack without an
     # entry reports the missing --preset rather than a downstream rule that
     # reads as if no selector had been given at all.
-    if preset_pack and not preset_id:
+    if preset_pack and preset_id is None:
         raise ValueError("--preset-pack requires --preset to select an entry")
     pitch_semitones = getattr(args, "pitch_semitones", None)
     formant_factor = getattr(args, "formant_factor", None)
@@ -565,8 +551,10 @@ def cmd_voice_change(args: argparse.Namespace) -> int:
             with open(preset_json, encoding="utf-8") as fh:
                 preset = json.load(fh)
         elif preset_pack:
+            assert preset_id is not None  # a pack without --preset was refused above
             preset = _load_voice_preset_pack(preset_pack, preset_id)
         else:
+            assert preset_id is not None  # --preset is the only selector left
             # A built-in preset is named by its library id in any letter case.
             builtin = _catalog_token(preset_id, realtime_voice_changer_preset_names())
             preset = (
@@ -581,7 +569,7 @@ def cmd_voice_change(args: argparse.Namespace) -> int:
             latency_samples = max(int(changer.latency_samples), 0)
         result = _audio_array(voice_change_realtime(samples, sample_rate=sr, config=config))
         mode_metadata: dict[str, object] = {}
-        if preset_id and not preset_json and not preset_pack:
+        if preset_id is not None and not preset_json and not preset_pack:
             mode_metadata["preset"] = preset_id
     else:
         result = voice_change(
@@ -661,6 +649,24 @@ def cmd_voice_preset_validate(args: argparse.Namespace) -> int:
     return 0
 
 
+def _add_spectral_geometry(parser: argparse.ArgumentParser) -> None:
+    """Declare ``--n-fft`` and ``--hop-length`` for a spectral effect."""
+    _cli_domain(
+        parser.add_argument("--n-fft", type=_c_int, default=2048, help="FFT size (default: 2048)"),
+        minimum=0,
+        exclusive_minimum=True,
+        reject_exit="invalid_parameter",
+    )
+    _cli_domain(
+        parser.add_argument(
+            "--hop-length", type=_c_int, default=512, help="Hop length (default: 512)"
+        ),
+        minimum=0,
+        exclusive_minimum=True,
+        reject_exit="invalid_parameter",
+    )
+
+
 def register_effects_parsers(
     sub: argparse._SubParsersAction[_ContractArgumentParser], shared: SharedParsers
 ) -> None:
@@ -672,10 +678,16 @@ def register_effects_parsers(
 
     hpss_p = sub.add_parser("hpss", parents=[fft_options], help="Harmonic-percussive separation")
     hpss_p.add_argument(
-        "--kernel-harmonic", type=_c_int, default=31, help="Harmonic median-filter kernel"
+        "--kernel-harmonic",
+        type=_c_int,
+        default=None,
+        help="Harmonic median-filter kernel (default: 31)",
     )
     hpss_p.add_argument(
-        "--kernel-percussive", type=_c_int, default=31, help="Percussive median-filter kernel"
+        "--kernel-percussive",
+        type=_c_int,
+        default=None,
+        help="Percussive median-filter kernel (default: 31)",
     )
     hpss_p.add_argument("--harmonic-only", action="store_true")
     hpss_p.add_argument("--percussive-only", action="store_true")
@@ -697,21 +709,21 @@ def register_effects_parsers(
         help="Separate into NMF components that keep the original phase",
     )
     stems_p.add_argument(
-        "--n-components", type=_c_int, default=4, help="Number of NMF components (default: 4)"
+        "--n-components", type=_c_int, default=None, help="Number of NMF components (default: 4)"
     )
     stems_p.add_argument(
-        "--n-iter", type=_c_int, default=100, help="NMF update iterations (default: 100)"
+        "--n-iter", type=_c_int, default=None, help="NMF update iterations (default: 100)"
     )
     stems_p.add_argument(
         "--beta",
         type=_finite_float,
-        default=2.0,
+        default=None,
         help="Beta divergence: 2 Frobenius, 1 Kullback-Leibler (default: 2.0)",
     )
     _cli_domain(
         stems_p.add_argument(
             "--init",
-            default="random",
+            default=None,
             help="NMF initialisation: random or nndsvd (default: random)",
         ),
         choices=("random", "nndsvd"),
@@ -720,7 +732,7 @@ def register_effects_parsers(
     stems_p.add_argument(
         "--mask-power",
         type=_finite_float,
-        default=1.0,
+        default=None,
         help="Soft-mask exponent, >= 1; 2 is the Wiener-style power ratio (default: 1.0)",
     )
 
@@ -737,26 +749,14 @@ def register_effects_parsers(
     # The spectral backend repairs a non-positive geometry into the librosa
     # defaults instead of refusing it, so the refusal a caller gets is the
     # handler's; these two commands are where it is reachable from a command line.
-    for _geometry_option, _geometry_default in (("--n-fft", 2048), ("--hop-length", 512)):
-        _cli_domain(
-            pitch_shift_p.add_argument(_geometry_option, type=_c_int, default=_geometry_default),
-            minimum=0,
-            exclusive_minimum=True,
-            reject_exit="invalid_parameter",
-        )
+    _add_spectral_geometry(pitch_shift_p)
     time_stretch_p = sub.add_parser(
         "time-stretch", parents=[common], help="Time-stretch without changing pitch"
     )
     time_stretch_p.add_argument(
         "--rate", type=_finite_float, help="Stretch factor (>1 speeds up, <1 slows down)"
     )
-    for _geometry_option, _geometry_default in (("--n-fft", 2048), ("--hop-length", 512)):
-        _cli_domain(
-            time_stretch_p.add_argument(_geometry_option, type=_c_int, default=_geometry_default),
-            minimum=0,
-            exclusive_minimum=True,
-            reject_exit="invalid_parameter",
-        )
+    _add_spectral_geometry(time_stretch_p)
     normalize_p = sub.add_parser(
         "normalize", parents=[common], help="Peak-normalize audio to a target dB level"
     )
@@ -848,7 +848,9 @@ def register_effects_parsers(
         choices=("relative", "absolute"),
         reject_exit="invalid_parameter",
     )
-    voice_change_p.add_argument("--preset", default="", help="Realtime voice changer preset id")
+    voice_change_p.add_argument(
+        "--preset", default=None, help="Realtime voice changer preset id (default: none)"
+    )
     voice_change_p.add_argument("--preset-json", help="Realtime voice changer preset JSON file")
     voice_change_p.add_argument(
         "--preset-pack", help="Realtime voice changer preset pack JSON file"

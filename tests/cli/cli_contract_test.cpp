@@ -501,8 +501,8 @@ TEST_CASE("CLI registry exposes immutable leaf contracts", "[cli][registry]") {
   const auto* smoothing_window = cli_option_spec_for_command("chords", "smoothing-window");
   REQUIRE(smoothing_window != nullptr);
   REQUIRE(smoothing_window->scalar_type == CliOptionScalarType::Number);
-  REQUIRE(smoothing_window->default_value.kind == CliOptionDefaultKind::Number);
-  REQUIRE(smoothing_window->default_value.number_value == 2.0);
+  REQUIRE(smoothing_window->default_value.kind == CliOptionDefaultKind::Null);
+  REQUIRE(smoothing_window->stated_default == "2.0");
   const auto* no_beat_sync = cli_option_spec_for_command("chords", "no-beat-sync");
   REQUIRE(no_beat_sync != nullptr);
   REQUIRE(no_beat_sync->scalar_type == CliOptionScalarType::Boolean);
@@ -511,8 +511,8 @@ TEST_CASE("CLI registry exposes immutable leaf contracts", "[cli][registry]") {
   const auto* chroma_method = cli_option_spec_for_command("chords", "chroma-method");
   REQUIRE(chroma_method != nullptr);
   REQUIRE(chroma_method->scalar_type == CliOptionScalarType::String);
-  REQUIRE(chroma_method->default_value.kind == CliOptionDefaultKind::String);
-  REQUIRE(chroma_method->default_value.string_value == "cqt");
+  REQUIRE(chroma_method->default_value.kind == CliOptionDefaultKind::Null);
+  REQUIRE(chroma_method->stated_default == "cqt");
   REQUIRE(chroma_method->domain.choices == std::vector<std::string>{"cqt", "stft", "nnls"});
   REQUIRE(cli_option_spec_for_command("chords", "no-hmm") != nullptr);
   REQUIRE(cli_option_spec_for_command("chords", "with-seventh") != nullptr);
@@ -536,20 +536,20 @@ TEST_CASE("CLI registry exposes immutable leaf contracts", "[cli][registry]") {
 
   const auto* pitch_threshold = cli_option_spec_for_command("pitch", "threshold");
   REQUIRE(pitch_threshold != nullptr);
-  REQUIRE(pitch_threshold->default_value.kind == CliOptionDefaultKind::Number);
-  REQUIRE(pitch_threshold->default_value.number_value == 0.1);
+  REQUIRE(pitch_threshold->default_value.kind == CliOptionDefaultKind::Null);
+  REQUIRE(pitch_threshold->stated_default == "0.1");
   const auto* pitch_hop = cli_option_spec_for_command("pitch", "hop-length");
   REQUIRE(pitch_hop != nullptr);
   REQUIRE(pitch_hop->default_value.kind == CliOptionDefaultKind::Integer);
   REQUIRE(pitch_hop->default_value.integer_value == 512);
   const auto* pitch_fmin = cli_option_spec_for_command("pitch", "f0-min-hz");
   REQUIRE(pitch_fmin != nullptr);
-  REQUIRE(pitch_fmin->default_value.kind == CliOptionDefaultKind::Number);
-  REQUIRE(pitch_fmin->default_value.number_value == 65.0);
+  REQUIRE(pitch_fmin->default_value.kind == CliOptionDefaultKind::Null);
+  REQUIRE(pitch_fmin->stated_default == "65.0");
   const auto* pitch_fmax = cli_option_spec_for_command("pitch", "f0-max-hz");
   REQUIRE(pitch_fmax != nullptr);
-  REQUIRE(pitch_fmax->default_value.kind == CliOptionDefaultKind::Number);
-  REQUIRE(pitch_fmax->default_value.number_value == 2093.0);
+  REQUIRE(pitch_fmax->default_value.kind == CliOptionDefaultKind::Null);
+  REQUIRE(pitch_fmax->stated_default == "2093.0");
 
   const auto* mel_htk = cli_option_spec_for_command("mel", "htk");
   REQUIRE(mel_htk != nullptr);
@@ -568,8 +568,7 @@ TEST_CASE("CLI registry exposes immutable leaf contracts", "[cli][registry]") {
 
   const auto* voice_preset = cli_option_spec_for_command("voice-change", "preset");
   REQUIRE(voice_preset != nullptr);
-  REQUIRE(voice_preset->default_value.kind == CliOptionDefaultKind::String);
-  REQUIRE(voice_preset->default_value.string_value.empty());
+  REQUIRE(voice_preset->default_value.kind == CliOptionDefaultKind::Null);
   const auto* voice_formant = cli_option_spec_for_command("voice-change", "formant-factor");
   REQUIRE(voice_formant != nullptr);
   REQUIRE(voice_formant->scalar_type == CliOptionScalarType::Number);
@@ -653,11 +652,12 @@ TEST_CASE("CLI registry defaults and hidden controls project through parser", "[
   REQUIRE(chords.has("no-beat-sync"));
   REQUIRE(validate_cli_arguments(chords, true).empty());
 
+  // The pYIN settings are the library's, so the parse leaves them unset.
   const CliArgs pitch = parse({"sonare-cli", "pitch"});
-  REQUIRE(pitch.get_float("threshold", -1.0f) == 0.1f);
+  REQUIRE(pitch.get_float("threshold", -1.0f) == -1.0f);
   REQUIRE(pitch.get_int("hop-length", -1) == 512);
-  REQUIRE(pitch.get_float("f0-min-hz", -1.0f) == 65.0f);
-  REQUIRE(pitch.get_float("f0-max-hz", -1.0f) == 2093.0f);
+  REQUIRE(pitch.get_float("f0-min-hz", -1.0f) == -1.0f);
+  REQUIRE(pitch.get_float("f0-max-hz", -1.0f) == -1.0f);
   REQUIRE(validate_cli_arguments(pitch, true).empty());
 
   const CliArgs trim = parse({"sonare-cli", "trim-silence"});
@@ -666,7 +666,8 @@ TEST_CASE("CLI registry defaults and hidden controls project through parser", "[
   REQUIRE(validate_cli_arguments(trim, true).empty());
 
   const CliArgs voice = parse({"sonare-cli", "voice-change", "-o", "out.wav"});
-  REQUIRE(voice.get_string("preset", "sentinel") == "");
+  // No preset is a preset left out, not an empty id.
+  REQUIRE_FALSE(voice.has("preset"));
   REQUIRE(voice.get_float("formant-factor", 1.0f) == 1.0f);
   REQUIRE(validate_cli_arguments(voice, true).empty());
 
@@ -1650,12 +1651,33 @@ TEST_CASE("CLI options left to the library reproduce their stated default", "[cl
   const std::string stepped_wav = unique_temp_path("_stated_stepped.wav");
   const std::string noisy_wav = unique_temp_path("_stated_noisy.wav");
   const std::string out = unique_temp_path("_stated_out.wav");
+  const std::string project_json = unique_temp_path("_stated_project.json");
+  const std::string reference_smf = unique_temp_path("_stated_reference.mid");
+  const std::string rir_wav = unique_temp_path("_stated_rir.wav");
+  const std::string click_wav = unique_temp_path("_stated_clicks.wav");
   create_test_wav(tone_wav, 1.0f);
   create_clipped_wav(clipped_wav);
   create_stepped_level_wav(stepped_wav);
   create_noisy_wav(noisy_wav);
+  // A click every 0.4 s, so a narrowed tempo search moves the reported tempo.
+  std::string click_times = "0";
+  for (int i = 1; i < 20; ++i) click_times += "," + std::to_string(0.4 * i);
+  REQUIRE(exec_command(CLI + " clicks --times " + click_times + " --click-duration-sec 0.03 -o " +
+                       click_wav + " -q")
+              .first == 0);
+#ifdef SONARE_WITH_ACOUSTIC_SIM
+  // A tone has no decay to measure, so the room analyses read a synthesized impulse response.
+  REQUIRE(exec_command(CLI + " synthesize-rir -o " + rir_wav + " --max-sec 1.0 -q").first == 0);
+#endif
+#ifdef SONARE_WITH_ARRANGEMENT
+  REQUIRE(exec_command(CLI + " project new -o " + project_json + " -q").first == 0);
+#ifdef SONARE_WITH_PITCH_EDITOR
+  create_reference_smf(reference_smf, {{0.0, 1.0, 60}}, 4.0);
+#endif
+#endif
 
   struct Row {
+    // As typed on the command line; a project leaf is spelled `project bounce`.
     std::string command;
     std::string arguments;
     std::string option;
@@ -1717,6 +1739,102 @@ TEST_CASE("CLI options left to the library reproduce their stated default", "[cl
       {"dynamic-range", stepped_wav + " --window-sec 0.5 --json -q", "hop-sec", "0.25"},
       {"dynamic-range", stepped_wav + " --window-sec 0.5 --json -q", "low-percentile", "0.5"},
       {"dynamic-range", stepped_wav + " --window-sec 0.5 --json -q", "high-percentile", "0.5"},
+      // The analysis options below are read against a one-second tone, so an option whose
+      // effect a single steady tone cannot show carries "" instead of a second value.
+      {"analyze", tone_wav + " --json -q", "chroma-high-pass-hz", "4000"},
+      {"analyze", tone_wav + " --json -q", "meter-denominator", "8"},
+      {"key", tone_wav + " --json -q", "high-pass-hz", "4000"},
+      {"chords", tone_wav + " --json -q", "min-duration-sec", ""},
+      {"chords", tone_wav + " --json -q", "smoothing-window", ""},
+      {"chords", tone_wav + " --json -q", "threshold", "0.99"},
+      {"chords", tone_wav + " --json -q", "chroma-method", "stft"},
+      {"chords", tone_wav + " --json -q", "hmm-beam-width", ""},
+      {"chords", tone_wav + " --key-context --json -q", "key-root", ""},
+      {"chords", tone_wav + " --key-context --json -q", "key-mode", ""},
+      {"sections", tone_wav + " --json -q", "min-duration-sec", ""},
+      {"dynamics", tone_wav + " --json -q", "window-sec", "0.1"},
+      {"rhythm", tone_wav + " --json -q", "start-bpm", ""},
+      {"rhythm", click_wav + " --json -q", "bpm-min", "160"},
+      {"rhythm", click_wav + " --json -q", "bpm-max", "100"},
+      {"pitch", noisy_wav + " --json -q", "threshold", "0.9"},
+      {"pitch", tone_wav + " --json -q", "f0-min-hz", "500"},
+      {"pitch", tone_wav + " --json -q", "f0-max-hz", "300"},
+      {"tempogram", tone_wav + " --json -q", "win-length", "128"},
+      {"plp", tone_wav + " --json -q", "win-length", "128"},
+      {"acoustic", tone_wav + " --json -q", "n-octave-bands", "3"},
+      {"hpss", tone_wav + " --harmonic-only" + to_out, "kernel-harmonic", "7"},
+      {"hpss", tone_wav + " --harmonic-only" + to_out, "kernel-percussive", "7"},
+      {"decompose-stems", tone_wav + to_out, "n-components", "2"},
+      {"decompose-stems", tone_wav + to_out, "n-iter", "5"},
+      {"decompose-stems", tone_wav + to_out, "beta", "1"},
+      {"decompose-stems", tone_wav + to_out, "init", "nndsvd"},
+      {"decompose-stems", tone_wav + to_out, "mask-power", "2"},
+#ifdef SONARE_WITH_ACOUSTIC_SIM
+      {"acoustic", rir_wav + " --json -q", "min-decay-db", "20"},
+      {"acoustic", rir_wav + " --json -q", "noise-floor-margin-db", "60"},
+      {"estimate-room", rir_wav + " --json -q", "aspect-lw", "2"},
+      {"estimate-room", rir_wav + " --json -q", "aspect-lh", "2"},
+      {"estimate-room", rir_wav + " --json -q", "reference-absorption", "0.5"},
+      {"synthesize-rir", "--max-sec 0.3" + to_out, "length", "10"},
+      {"synthesize-rir", "--max-sec 0.3" + to_out, "width", "8"},
+      {"synthesize-rir", "--max-sec 0.3" + to_out, "height", "4"},
+      {"synthesize-rir", "--max-sec 0.3" + to_out, "absorption", "0.5"},
+      {"synthesize-rir", "--max-sec 0.3" + to_out, "source-x", "2"},
+      {"synthesize-rir", "--max-sec 0.3" + to_out, "source-y", "2"},
+      {"synthesize-rir", "--max-sec 0.3" + to_out, "source-z", "1.5"},
+      {"synthesize-rir", "--max-sec 0.3" + to_out, "listener-x", "4"},
+      {"synthesize-rir", "--max-sec 0.3" + to_out, "listener-y", "3"},
+      {"synthesize-rir", "--max-sec 0.3" + to_out, "listener-z", "1.2"},
+      {"synthesize-rir", "--max-sec 0.3" + to_out, "ism-order", "1"},
+      {"synthesize-rir", "--max-sec 0.3" + to_out, "seed", "7"},
+      {"room-morph", tone_wav + " --max-sec 0.3" + to_out, "absorption", "0.5"},
+      {"room-morph", tone_wav + " --max-sec 0.3" + to_out, "source-x", "2"},
+      {"room-morph", tone_wav + " --max-sec 0.3" + to_out, "source-y", "2"},
+      {"room-morph", tone_wav + " --max-sec 0.3" + to_out, "source-z", "1.5"},
+      {"room-morph", tone_wav + " --max-sec 0.3" + to_out, "listener-x", "4"},
+      {"room-morph", tone_wav + " --max-sec 0.3" + to_out, "listener-y", "3"},
+      {"room-morph", tone_wav + " --max-sec 0.3" + to_out, "listener-z", "1.2"},
+      {"room-morph", tone_wav + " --max-sec 0.3" + to_out, "suppression", "1"},
+      {"room-morph", tone_wav + " --max-sec 0.3" + to_out, "wet", "0"},
+      {"room-morph", tone_wav + " --max-sec 0.3" + to_out, "ism-order", "1"},
+      {"room-morph", tone_wav + " --max-sec 0.3" + to_out, "seed", "7"},
+      // Only a stereo input is heard through the receiver pair, and the take is mono.
+      {"room-morph", tone_wav + " --max-sec 0.3" + to_out, "receiver-spacing", ""},
+#endif
+#ifdef SONARE_WITH_PITCH_EDITOR
+      // A target three semitones up makes every correction setting audible; the scale
+      // options act only in scale mode, where a root or mask off the tone puts it off-grid.
+      {"pitch-correct-timevarying", tone_wav + " --target-midi 72" + to_out, "hop-length", "256"},
+      {"pitch-correct-timevarying", tone_wav + " --target-midi 72" + to_out, "retune-amount",
+       "0.5"},
+      {"pitch-correct-timevarying", tone_wav + " --target-midi 72" + to_out,
+       "max-correction-semitones", "1"},
+      {"pitch-correct-timevarying", tone_wav + " --target-midi 72" + to_out, "retune-speed-ms",
+       "500"},
+      {"pitch-correct-timevarying", tone_wav + " --target-midi 72" + to_out,
+       "vibrato-threshold-cents", ""},
+      {"pitch-correct-timevarying", tone_wav + " --mode scale" + to_out, "scale-root", "1"},
+      {"pitch-correct-timevarying", tone_wav + " --mode scale" + to_out, "scale-mode-mask", "1"},
+      {"pitch-correct-timevarying", tone_wav + " --mode scale" + to_out, "reference-midi", "69.5"},
+#ifdef SONARE_WITH_ARRANGEMENT
+      {"tune-to-midi", tone_wav + " --reference-smf " + reference_smf + to_out, "unmatched-policy",
+       ""},
+#endif
+#endif
+#ifdef SONARE_WITH_ARRANGEMENT
+      // An empty project renders silence, so no second value shows in what is written.
+      {"project bounce", project_json + " --frames 128" + to_out, "instrument-latency-samples", ""},
+      {"midi-render", project_json + " --frames 128" + to_out, "instrument-latency-samples", ""},
+      {"transcribe", tone_wav + to_out, "group", ""},
+      {"transcribe", tone_wav + to_out, "channel", ""},
+      {"transcribe", tone_wav + to_out, "monophonic-model", ""},
+#endif
+  };
+
+  // The registry spells a project leaf `project.bounce`.
+  const auto registry_path = [](std::string command) {
+    std::replace(command.begin(), command.end(), ' ', '.');
+    return command;
   };
 
   // stdout plus the written file, if any, so a generator is compared by what it rendered.
@@ -1734,14 +1852,14 @@ TEST_CASE("CLI options left to the library reproduce their stated default", "[cl
       if (option.stated_default.empty()) continue;
       CAPTURE(command.path, option.name);
       CHECK(std::any_of(rows.begin(), rows.end(), [&](const Row& row) {
-        return row.command == command.path && row.option == option.name;
+        return registry_path(row.command) == command.path && row.option == option.name;
       }));
     }
   }
 
   for (const Row& row : rows) {
     CAPTURE(row.command, row.option);
-    const auto* spec = cli_option_spec_for_command(row.command, row.option);
+    const auto* spec = cli_option_spec_for_command(registry_path(row.command), row.option);
     REQUIRE(spec != nullptr);
     REQUIRE(spec->default_value.kind == CliOptionDefaultKind::Null);
     REQUIRE_FALSE(spec->stated_default.empty());
@@ -1754,7 +1872,8 @@ TEST_CASE("CLI options left to the library reproduce their stated default", "[cl
     }
   }
 
-  for (const std::string& path : {tone_wav, clipped_wav, stepped_wav, noisy_wav, out})
+  for (const std::string& path : {tone_wav, clipped_wav, stepped_wav, noisy_wav, out, project_json,
+                                  reference_smf, rir_wav, click_wav})
     std::remove(path.c_str());
 }
 

@@ -215,20 +215,14 @@ def test_chords_forwards_smoothing_window_and_beat_sync_flag(
     assert calls == [
         {
             "sample_rate": 22050,
-            "min_duration_sec": 0.3,
             "smoothing_window_sec": 1.25,
-            "threshold": 0.5,
             "use_triads_only": True,
             "n_fft": 2048,
             "hop_length": 512,
             "use_beat_sync": False,
             "use_hmm": True,
-            "hmm_beam_width": 24,
             "use_key_context": False,
-            "key_root": 0,
-            "key_mode": "major",
             "detect_inversions": False,
-            "chroma_method": "cqt",
         }
     ]
 

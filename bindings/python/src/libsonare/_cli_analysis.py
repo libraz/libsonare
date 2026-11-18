@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import math
 import statistics
+from typing import Any
 
 import numpy as np
 
@@ -30,6 +31,7 @@ from ._cli_options import (
     _candidate_count,
     _ContractArgumentParser,
     _finite_float,
+    _given,
     _nonnegative_finite_float,
     _pitch_threshold,
     _positive_finite_float,
@@ -104,17 +106,19 @@ def cmd_key(args: argparse.Namespace) -> int:
     from . import detect_key, detect_key_candidates
 
     samples, sr = _load_audio(args.file)
-    key_options = {
+    key_options: dict[str, Any] = {
         "sample_rate": sr,
         "n_fft": args.n_fft,
         "hop_length": args.hop_length,
         "use_hpss": args.hpss,
         "loudness_weighted": args.loudness_weighted,
-        "chroma_high_pass_hz": args.high_pass_hz,
-        "modes": _parse_modes(args.modes) if args.modes else None,
-        "profile": _parse_key_profile(args.profile) if args.profile else None,
-        "genre_hint": args.genre_hint or None,
+        **_given(args, chroma_high_pass_hz="high_pass_hz", genre_hint="genre_hint"),
     }
+    # A value the caller spelled reaches the library as written, an empty one included.
+    if args.modes is not None:
+        key_options["modes"] = _parse_modes(args.modes)
+    if args.profile is not None:
+        key_options["profile"] = _parse_key_profile(args.profile)
     key = detect_key(samples, **key_options)
     name = f"{PITCH_NAMES[key.root.value]} {key.mode}"
     # The ``true`` shorthand is resolved to a count by the parser, the one place
@@ -209,23 +213,30 @@ def cmd_chords(args: argparse.Namespace) -> int:
     from . import detect_chords
 
     samples, sr = _load_audio(args.file)
+    key_context: dict[str, Any] = {}
+    if args.key_root is not None:
+        key_context["key_root"] = _parse_pitch_class(args.key_root)
+    if args.key_mode is not None:
+        key_context["key_mode"] = _parse_mode(args.key_mode)
     result = detect_chords(
         samples,
         sample_rate=sr,
-        min_duration_sec=args.min_duration_sec,
-        smoothing_window_sec=args.smoothing_window,
-        threshold=args.threshold,
         use_triads_only=not args.with_seventh,
         n_fft=args.n_fft,
         hop_length=args.hop_length,
         use_beat_sync=not args.no_beat_sync,
         use_hmm=not args.no_hmm,
-        hmm_beam_width=args.hmm_beam_width,
         use_key_context=args.key_context,
-        key_root=_parse_pitch_class(args.key_root),
-        key_mode=_parse_mode(args.key_mode),
         detect_inversions=args.detect_inversions,
-        chroma_method=args.chroma_method,
+        **_given(
+            args,
+            "min_duration_sec",
+            "threshold",
+            "hmm_beam_width",
+            "chroma_method",
+            smoothing_window_sec="smoothing_window",
+        ),
+        **key_context,
     )
     if args.json:
         print(
@@ -272,8 +283,8 @@ def cmd_sections(args: argparse.Namespace) -> int:
         sample_rate=sr,
         n_fft=args.n_fft,
         hop_length=args.hop_length,
-        min_section_sec=args.min_duration_sec,
         threshold=args.threshold,
+        **_given(args, min_section_sec="min_duration_sec"),
     )
     sections = result
     if args.json:
@@ -314,17 +325,17 @@ def cmd_analyze(args: argparse.Namespace) -> int:
     from . import analyze
 
     samples, sr = _load_audio(args.file)
-    candidates = _parse_meter_candidates(args.meter_candidates)
+    # A list the caller spelled reaches the library as written, an empty one included.
+    candidates: dict[str, Any] = {}
+    if args.meter_candidates is not None:
+        candidates["meter_candidate_numerators"] = _parse_meter_candidates(args.meter_candidates)
     r = analyze(
         samples,
         sample_rate=sr,
         use_triads_only=not args.with_seventh,
         use_hpss=args.hpss,
-        chroma_high_pass_hz=args.chroma_high_pass_hz,
-        # An empty list means the option was not given: pass None so the core
-        # seeds its own default rather than being handed a set it rejects.
-        meter_candidate_numerators=candidates or None,
-        meter_denominator=args.meter_denominator,
+        **_given(args, "chroma_high_pass_hz", "meter_denominator"),
+        **candidates,
     )
     key_name = f"{PITCH_NAMES[r.key.root.value]} {r.key.mode}"
 
@@ -551,38 +562,22 @@ def cmd_pitch(args: argparse.Namespace) -> int:
         raise ValueError("--algorithm must be 'yin' or 'pyin'")
     # Keep direct callers that construct the historical three-field Namespace
     # on the old call shape; parser-built pitch invocations always carry the
-    # four explicit analysis fields and therefore forward them to the core.
+    # analysis fields and forward the ones the caller spelled.
     use_pitch_options = any(
         hasattr(args, name) for name in ("hop_length", "f0_min_hz", "f0_max_hz", "threshold")
     )
     hop_length = int(getattr(args, "hop_length", 512))
-    fmin = float(getattr(args, "f0_min_hz", 65.0))
-    fmax = float(getattr(args, "f0_max_hz", 2093.0))
-    threshold = float(getattr(args, "threshold", 0.1))
-    if algo == "yin":
-        if use_pitch_options:
-            result = pitch_yin(
-                samples,
-                sample_rate=sr,
-                hop_length=hop_length,
-                f0_min_hz=fmin,
-                f0_max_hz=fmax,
-                threshold=threshold,
-            )
-        else:
-            result = pitch_yin(samples, sample_rate=sr)
+    track = pitch_yin if algo == "yin" else pitch_pyin
+    if use_pitch_options:
+        # A bound the caller left out is not passed, so the library chooses it.
+        result = track(
+            samples,
+            sample_rate=sr,
+            hop_length=hop_length,
+            **_given(args, "threshold", "f0_min_hz", "f0_max_hz"),
+        )
     else:
-        if use_pitch_options:
-            result = pitch_pyin(
-                samples,
-                sample_rate=sr,
-                hop_length=hop_length,
-                f0_min_hz=fmin,
-                f0_max_hz=fmax,
-                threshold=threshold,
-            )
-        else:
-            result = pitch_pyin(samples, sample_rate=sr)
+        result = track(samples, sample_rate=sr)
 
     if args.json:
         n_frames = len(result.f0)
@@ -647,26 +642,29 @@ def register_analysis_parsers(
     key_p.add_argument(
         "--high-pass-hz",
         type=_finite_float,
-        default=80.0,
-        help="High-pass cutoff before key analysis (default: 80)",
+        default=None,
+        help="High-pass cutoff before key analysis (default: 80.0)",
     )
     key_p.add_argument(
         "--modes",
         type=str,
-        default="",
-        help="Candidate modes: major-minor, all, or comma-separated mode names",
+        default=None,
+        help="Candidate modes: major-minor, all, or comma-separated mode names "
+        "(default: major and minor)",
     )
     key_p.add_argument(
         "--profile",
         type=str,
-        default="",
-        help="Key profile: ks, temperley, shaath, edmt, edma, edmm, or bellman",
+        default=None,
+        help="Key profile: ks, temperley, shaath, edmt, edma, edmm, or bellman "
+        "(default: chosen by --genre-hint)",
     )
     _cli_domain(
         key_p.add_argument(
             "--genre-hint",
-            default="",
-            help="Genre hint for key profile selection, e.g. auto, edm, pop, classical, jazz",
+            default=None,
+            help="Genre hint for key profile selection, e.g. auto, edm, pop, classical, jazz "
+            "(default: auto)",
         ),
         choices=_GENRE_HINTS,
         reject_exit="invalid_parameter",
@@ -680,22 +678,25 @@ def register_analysis_parsers(
     chords_p.add_argument(
         "--min-duration-sec",
         type=_finite_float,
-        default=0.3,
-        help="Minimum chord duration in seconds",
+        default=None,
+        help="Minimum chord duration in seconds (default: 0.3)",
     )
     _cli_domain(
         chords_p.add_argument(
             "--smoothing-window",
             type=_finite_float,
-            default=2.0,
-            help="Chroma smoothing window in seconds",
+            default=None,
+            help="Chroma smoothing window in seconds (default: 2.0)",
         ),
         minimum=0,
         exclusive_minimum=True,
         reject_exit="invalid_parameter",
     )
     chords_p.add_argument(
-        "--threshold", type=_finite_float, default=0.5, help="Chord detection confidence threshold"
+        "--threshold",
+        type=_finite_float,
+        default=None,
+        help="Chord detection confidence threshold (default: 0.5)",
     )
     chords_p.add_argument(
         "--with-seventh", action="store_true", help="Include seventh chords in the output"
@@ -703,7 +704,7 @@ def register_analysis_parsers(
     _cli_domain(
         chords_p.add_argument(
             "--chroma-method",
-            default="cqt",
+            default=None,
             help="Chroma extraction: cqt, stft or nnls (default: cqt)",
         ),
         choices=("cqt", "stft", "nnls"),
@@ -719,7 +720,10 @@ def register_analysis_parsers(
     # closed at the bottom and only a negative width is refused.
     _cli_domain(
         chords_p.add_argument(
-            "--hmm-beam-width", type=_c_int, default=24, help="HMM decoder beam width"
+            "--hmm-beam-width",
+            type=_c_int,
+            default=None,
+            help="HMM decoder beam width (default: 24)",
         ),
         minimum=0,
         reject_exit="invalid_parameter",
@@ -728,10 +732,14 @@ def register_analysis_parsers(
         "--key-context", action="store_true", help="Bias detection with a key context"
     )
     chords_p.add_argument(
-        "--key-root", default="C", help="Key-context root pitch class (e.g. C, F#)"
+        "--key-root",
+        default=None,
+        help="Key-context root pitch class, e.g. C, F# (default: C)",
     )
     chords_p.add_argument(
-        "--key-mode", default="major", help="Key-context mode (e.g. major, minor)"
+        "--key-mode",
+        default=None,
+        help="Key-context mode, e.g. major, minor (default: major)",
     )
     chords_p.add_argument(
         "--detect-inversions", action="store_true", help="Report chord inversions (bass note)"
@@ -742,7 +750,7 @@ def register_analysis_parsers(
     sections_p.add_argument(
         "--min-duration-sec",
         type=_finite_float,
-        default=4.0,
+        default=None,
         help="Minimum section duration in seconds (default: 4.0)",
     )
     sections_p.add_argument(
@@ -761,7 +769,7 @@ def register_analysis_parsers(
     analyze_p.add_argument(
         "--chroma-high-pass-hz",
         type=_nonnegative_finite_float,
-        default=80.0,
+        default=None,
         help="High-pass cutoff for chroma analysis in Hz (default: 80.0)",
     )
     # An odd meter is only ever reported if its numerator was asked for, so
@@ -769,13 +777,13 @@ def register_analysis_parsers(
     analyze_p.add_argument(
         "--meter-candidates",
         type=str,
-        default="",
+        default=None,
         help="Comma-separated meter numerators to score, e.g. 3,4,5,7 (default: 3,4,6)",
     )
     analyze_p.add_argument(
         "--meter-denominator",
         type=_positive_int,
-        default=4,
+        default=None,
         help="Beat unit reported for the detected meter (default: 4)",
     )
     mel_p = sub.add_parser("mel", parents=[mel_options], help="Compute mel spectrogram")
@@ -819,8 +827,8 @@ def register_analysis_parsers(
     pitch_p.add_argument(
         "--threshold",
         type=_pitch_threshold,
-        default=0.1,
-        help="YIN threshold (> 0 and <= 1; default: 0.1)",
+        default=None,
+        help="YIN threshold, above 0 and at most 1 (default: 0.1)",
     )
     pitch_p.add_argument(
         "--hop-length",
@@ -831,12 +839,12 @@ def register_analysis_parsers(
     pitch_p.add_argument(
         "--f0-min-hz",
         type=_positive_pitch_frequency,
-        default=65.0,
+        default=None,
         help="Minimum frequency in Hz (default: 65.0)",
     )
     pitch_p.add_argument(
         "--f0-max-hz",
         type=_positive_pitch_frequency,
-        default=2093.0,
+        default=None,
         help="Maximum frequency in Hz (default: 2093.0)",
     )

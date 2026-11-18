@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import importlib
+import inspect
 import math
 import sys
 from collections.abc import Callable, Iterable, Sequence
@@ -199,6 +200,20 @@ def _tempo_bpm(value: str) -> float:
     return _positive_finite_float(value)
 
 
+def _given(args: argparse.Namespace, *same: str, **renamed: str) -> dict[str, Any]:
+    """The facade keywords for the options the caller spelled; the library owns the rest.
+
+    ``same`` names options whose destination is also the facade keyword;
+    ``renamed`` maps a facade keyword to the option destination.
+    """
+    mapping = {name: name for name in same} | renamed
+    return {
+        keyword: getattr(args, dest)
+        for keyword, dest in mapping.items()
+        if getattr(args, dest, None) is not None
+    }
+
+
 def _library_catalog(name: str) -> Callable[[], Sequence[str]]:
     """The package's catalog function ``name``, imported only when it is read."""
 
@@ -295,6 +310,8 @@ _cli_scalar_type(_positive_finite_float, "number")
 _cli_scalar_type(_tempo_bpm, "number")
 _cli_scalar_type(_closed_unit_float, "number")
 _cli_scalar_type(_pitch_threshold, "number")
+_cli_scalar_type(_nonnegative_finite_float, "number")
+_cli_scalar_type(_positive_pitch_frequency, "number")
 _cli_scalar_type(_c_int, "integer")
 _cli_scalar_type(_positive_int, "integer")
 
@@ -348,7 +365,16 @@ def _option_supplied(args: argparse.Namespace, name: str) -> bool:
 def _validate_pitch_namespace(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
     fmin = getattr(args, "f0_min_hz", None)
     fmax = getattr(args, "f0_max_hz", None)
-    if fmin is not None and fmax is not None and fmax <= fmin:
+    if fmin is None and fmax is None:
+        return
+    # The bound the caller left out is the tracker's own default, read from its
+    # signature so the rule is checked against the value the library will use.
+    from . import pitch_pyin
+
+    defaults = inspect.signature(pitch_pyin).parameters
+    fmin = defaults["f0_min_hz"].default if fmin is None else fmin
+    fmax = defaults["f0_max_hz"].default if fmax is None else fmax
+    if fmax <= fmin:
         # The effective values, not just the rule: the offending half is
         # commonly the option the caller never typed, and `--f0-min-hz 3000`
         # against the 2093 Hz default `--f0-max-hz` reads as an unexplained

@@ -19,6 +19,7 @@ from ._cli_options import (
     _c_int,
     _ContractArgumentParser,
     _finite_float,
+    _given,
     _tempo_bpm,
 )
 
@@ -27,12 +28,11 @@ def cmd_rhythm(args: argparse.Namespace) -> int:
     from . import analyze_rhythm
 
     samples, sr = _load_audio(args.file)
-    rhythm_options = {
-        name: getattr(args, name)
-        for name in ("start_bpm", "bpm_min", "bpm_max", "n_fft", "hop_length")
-        if hasattr(args, name)
-    }
-    r = analyze_rhythm(samples, sample_rate=sr, **rhythm_options)
+    r = analyze_rhythm(
+        samples,
+        sample_rate=sr,
+        **_given(args, "start_bpm", "bpm_min", "bpm_max", "n_fft", "hop_length"),
+    )
 
     if args.json:
         print(
@@ -84,12 +84,7 @@ def cmd_dynamics(args: argparse.Namespace) -> int:
     from . import analyze_dynamics
 
     samples, sr = _load_audio(args.file)
-    dynamics_options = {}
-    if hasattr(args, "window_sec"):
-        dynamics_options["window_sec"] = args.window_sec
-    if hasattr(args, "hop_length"):
-        dynamics_options["hop_length"] = args.hop_length
-    r = analyze_dynamics(samples, sample_rate=sr, **dynamics_options)
+    r = analyze_dynamics(samples, sample_rate=sr, **_given(args, "window_sec", "hop_length"))
 
     if args.json:
         print(
@@ -219,10 +214,7 @@ def cmd_nnls_chroma(args: argparse.Namespace) -> int:
     from ._conversions import nnls_chroma
 
     samples, sr = _load_audio(args.file)
-    nnls_options = {}
-    if hasattr(args, "hop_length"):
-        nnls_options["hop_length"] = args.hop_length
-    chroma_rows = nnls_chroma(samples, sample_rate=sr, **nnls_options)
+    chroma_rows = nnls_chroma(samples, sample_rate=sr, **_given(args, "hop_length"))
     n_chroma = 12
     n_frames = chroma_rows.shape[1]
     # One row per pitch class; mean energy per bin.
@@ -256,13 +248,10 @@ def cmd_tempogram(args: argparse.Namespace) -> int:
     env = onset_strength(
         samples, sr=sr, n_fft=args.n_fft, hop_length=args.hop_length, n_mels=args.n_mels
     )
-    tempogram_options = {}
-    if hasattr(args, "win_length"):
-        tempogram_options["win_length"] = args.win_length
-    matrix = tempogram(env, sr=sr, hop_length=args.hop_length, **tempogram_options)
+    matrix = tempogram(env, sr=sr, hop_length=args.hop_length, **_given(args, "win_length"))
     n_frames = matrix.shape[1]
     data = matrix.ravel().tolist()
-    win_length = args.win_length if hasattr(args, "win_length") else matrix.shape[0]
+    win_length = args.win_length if args.win_length is not None else matrix.shape[0]
 
     if args.json:
         print(
@@ -292,13 +281,11 @@ def cmd_plp(args: argparse.Namespace) -> int:
         samples, sr=sr, n_fft=args.n_fft, hop_length=args.hop_length, n_mels=args.n_mels
     )
     # plp keeps librosa's keyword names; an omitted bound keeps the library's range.
-    tempo_bounds: dict[str, float] = {}
-    if args.bpm_min is not None:
-        tempo_bounds["tempo_min"] = args.bpm_min
-    if args.bpm_max is not None:
-        tempo_bounds["tempo_max"] = args.bpm_max
     pulse = plp(
-        env, sr=sr, hop_length=args.hop_length, win_length=args.win_length, **tempo_bounds
+        env,
+        sr=sr,
+        hop_length=args.hop_length,
+        **_given(args, "win_length", tempo_min="bpm_min", tempo_max="bpm_max"),
     ).tolist()
 
     if args.json:
@@ -330,17 +317,25 @@ def register_advanced_parsers(
     rhythm_p = sub.add_parser(
         "rhythm", parents=[fft_stdout_options], help="Analyze rhythm primitives"
     )
-    for _tempo_option, _tempo_default in (
-        ("--start-bpm", 120.0),
-        ("--bpm-min", 60.0),
-        ("--bpm-max", 200.0),
-    ):
-        rhythm_p.add_argument(_tempo_option, type=_tempo_bpm, default=_tempo_default)
+    rhythm_p.add_argument(
+        "--start-bpm", type=_tempo_bpm, default=None, help="Starting tempo in BPM (default: 120.0)"
+    )
+    rhythm_p.add_argument(
+        "--bpm-min", type=_tempo_bpm, default=None, help="Lowest tempo in BPM (default: 60.0)"
+    )
+    rhythm_p.add_argument(
+        "--bpm-max", type=_tempo_bpm, default=None, help="Highest tempo in BPM (default: 200.0)"
+    )
     dynamics_p = sub.add_parser(
         "dynamics", parents=[stdout_options], help="Analyze dynamics/loudness"
     )
     _cli_domain(
-        dynamics_p.add_argument("--window-sec", type=_finite_float, default=0.4),
+        dynamics_p.add_argument(
+            "--window-sec",
+            type=_finite_float,
+            default=None,
+            help="Loudness window in seconds (default: 0.4)",
+        ),
         minimum=0,
         exclusive_minimum=True,
         reject_exit="invalid_parameter",
@@ -363,7 +358,9 @@ def register_advanced_parsers(
     tempogram_p = sub.add_parser(
         "tempogram", parents=[mel_options], help="Compute autocorrelation tempogram"
     )
-    tempogram_p.add_argument("--win-length", type=_c_int, default=384)
+    tempogram_p.add_argument(
+        "--win-length", type=_c_int, default=None, help="Autocorrelation window (default: 384)"
+    )
     plp_p = sub.add_parser("plp", parents=[mel_options], help="Compute predominant local pulse")
     plp_p.add_argument(
         "--bpm-min",
@@ -375,4 +372,6 @@ def register_advanced_parsers(
         type=_tempo_bpm,
         help="Upper bound of the tempo search (omitted: the library's range)",
     )
-    plp_p.add_argument("--win-length", type=_c_int, default=384)
+    plp_p.add_argument(
+        "--win-length", type=_c_int, default=None, help="Autocorrelation window (default: 384)"
+    )

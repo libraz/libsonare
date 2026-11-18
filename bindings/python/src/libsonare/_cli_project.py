@@ -31,6 +31,7 @@ from ._cli_options import (
     _c_int,
     _ContractArgumentParser,
     _finite_float,
+    _given,
     _positive_int,
     _tempo_bpm,
 )
@@ -198,9 +199,13 @@ def _resolve_bounce_audio_sources(project: object, args: argparse.Namespace) -> 
         )
 
 
-def _synth_preset(value: str | None) -> str | None:
-    """Resolve ``--synth`` to a library preset id in any letter case; empty means GM auto-select."""
-    if not value:
+def _synth_preset(value: str | None, *, bare_flag: bool) -> str | None:
+    """Resolve ``--synth`` to a library preset id in any letter case.
+
+    Absent means GM auto-select, and so does the bare flag where there is one; a value
+    spelled empty anywhere else is looked up like any other.
+    """
+    if value is None or (bare_flag and value == ""):
         return None
     from . import synth_preset_names
 
@@ -216,7 +221,7 @@ def _project_bounce(
 ) -> int:
     if not args.output:
         raise ValueError(f"{command_name} requires --output")
-    preset = _synth_preset(args.synth)
+    preset = _synth_preset(args.synth, bare_flag=not force_synth)
     project = _load_project(args.input)
     try:
         if binds_source_audio:
@@ -239,7 +244,7 @@ def _project_bounce(
             # A project rate is a whole number of hertz (loading refuses anything
             # else), so the WAV header carries it exactly.
             sample_rate = int(project_sample_rate)
-        kwargs: dict[str, Any] = {"instrument_latency_samples": args.instrument_latency_samples}
+        kwargs: dict[str, Any] = _given(args, "instrument_latency_samples")
         # What is left out stays with the library: the derived length, the project's rate and
         # the master's width.
         if args.frames is not None:
@@ -471,7 +476,8 @@ def cmd_project(args: argparse.Namespace) -> int:
             raise ValueError("project new requires --output")
         project = Project()
         try:
-            if args.sample_rate > 0:
+            # A rate the caller spelled reaches the library as written, a zero included.
+            if args.sample_rate is not None:
                 project.set_sample_rate(args.sample_rate)
             bytes_written = _write_project_json(project, args.output)
         finally:
@@ -696,14 +702,13 @@ def cmd_transcribe(args: argparse.Namespace) -> int:
             segmentation_threshold_cents=args.segmentation_threshold_cents,
             velocity_floor_db=args.velocity_floor_db,
             fixed_velocity=args.fixed_velocity,
-            group=args.group,
-            channel=args.channel,
             max_polyphony=args.max_polyphony,
             min_frame_peak_ratio=args.min_frame_peak_ratio,
             min_ridge_peak_ratio=args.min_ridge_peak_ratio,
             reattack_ratio=args.reattack_ratio,
             min_note_division=args.min_note_division,
             monophonic_model=args.monophonic_model,
+            **_given(args, "group", "channel"),
         )
         data = cast(Any, project).export_smf()
     finally:
@@ -753,7 +758,12 @@ def register_project_parsers(
     pnew = project_sub.add_parser(
         "new", parents=[project_common], help="Create an empty project JSON"
     )
-    pnew.add_argument("--sample-rate", type=_c_int, default=0, help="Project sample rate")
+    pnew.add_argument(
+        "--sample-rate",
+        type=_c_int,
+        default=None,
+        help="Project sample rate (default: the project's own)",
+    )
     for pname in ("validate", "compile"):
         if pname == "validate":
             # Keep the active validation route's action order aligned with the
@@ -809,7 +819,12 @@ def register_project_parsers(
             "(default: the scene master's width)"
         ),
     )
-    pbounce.add_argument("--instrument-latency-samples", type=_c_int, default=0)
+    pbounce.add_argument(
+        "--instrument-latency-samples",
+        type=_c_int,
+        default=None,
+        help="Instrument latency to compensate, in samples (default: 0)",
+    )
     # One assignment per occurrence, as --set / --edit / suggest-mix --input do:
     # the id written with the path keeps the pairing in one token, so no second
     # repeatable option has to be kept in step with this one.
@@ -947,10 +962,15 @@ def register_project_parsers(
             "(default: the scene master's width)"
         ),
     )
-    midi_render_p.add_argument("--instrument-latency-samples", type=_c_int, default=0)
+    midi_render_p.add_argument(
+        "--instrument-latency-samples",
+        type=_c_int,
+        default=None,
+        help="Instrument latency to compensate, in samples (default: 0)",
+    )
     midi_render_p.add_argument(
         "--synth",
-        default="",
+        default=None,
         help=(
             "NativeSynth preset (default: GM program/channel routing); "
             "no --sf2 or --synth-json CLI wiring"
@@ -1041,10 +1061,11 @@ def register_project_parsers(
     _cli_domain(
         transcribe_p.add_argument(
             "--monophonic-model",
-            default="segments",
+            default=None,
             metavar="{segments,singing}",
-            help="Monophonic note model: segments (default) cuts the pitch track where it "
-            "moves, singing holds vibrato and drift within a note; not with --polyphonic",
+            help="Monophonic note model (default: segments): segments cuts the pitch track "
+            "where it moves, singing holds vibrato and drift within a note; not with "
+            "--polyphonic",
         ),
         choices=["segments", "singing"],
         reject_exit="invalid_parameter",
@@ -1063,11 +1084,14 @@ def register_project_parsers(
         help="Give every note velocity N (1-127) and skip the level measurement",
     )
     transcribe_p.add_argument(
-        "--group", type=_c_int, default=0, help="UMP group the events are emitted on (default: 0)"
+        "--group",
+        type=_c_int,
+        default=None,
+        help="UMP group the events are emitted on (default: 0)",
     )
     transcribe_p.add_argument(
         "--channel",
         type=_c_int,
-        default=0,
+        default=None,
         help="MIDI channel the events are emitted on (default: 0)",
     )

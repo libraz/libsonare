@@ -9,6 +9,7 @@ impulse responses back out.
 from __future__ import annotations
 
 import argparse
+import inspect
 import sys
 from typing import Any, cast
 
@@ -30,6 +31,7 @@ from ._cli_options import (
     _c_int,
     _ContractArgumentParser,
     _finite_float,
+    _given,
     _positive_finite_float,
     _positive_int,
 )
@@ -58,27 +60,42 @@ def _float_list(values: Any) -> list[float] | None:
     return None if values is None else [float(value) for value in values]
 
 
+def _placement(args: argparse.Namespace) -> dict[str, Any]:
+    """The source and listener positions, each passed only when one of its axes was spelled.
+
+    An axis left out keeps the library's coordinate: the missing ones are read from
+    the library's own default position, never restated here.
+    """
+    from ._acoustic import synthesize_rir
+
+    defaults = inspect.signature(synthesize_rir).parameters
+    placement: dict[str, tuple[float, float, float]] = {}
+    for keyword in ("source", "listener"):
+        axes = [getattr(args, f"{keyword}_{axis}") for axis in "xyz"]
+        if all(value is None for value in axes):
+            continue
+        base = defaults[keyword].default
+        placement[keyword] = cast(
+            tuple[float, float, float],
+            tuple(base[i] if value is None else value for i, value in enumerate(axes)),
+        )
+    return placement
+
+
 def cmd_acoustic(args: argparse.Namespace) -> int:
     from . import analyze_impulse_response, detect_acoustic
 
     samples, sr = _load_audio(args.file)
-    n_bands = cast(int, args.n_octave_bands)
-    min_decay_db = getattr(args, "min_decay_db", 30.0)
-    noise_floor_margin_db = getattr(args, "noise_floor_margin_db", 10.0)
+    # A setting the caller left out is not passed, so the library chooses it.
     if args.ir:
         result = analyze_impulse_response(
-            samples,
-            sample_rate=sr,
-            n_octave_bands=n_bands,
-            min_decay_db=min_decay_db,
+            samples, sample_rate=sr, **_given(args, "n_octave_bands", "min_decay_db")
         )
     else:
         result = detect_acoustic(
             samples,
             sample_rate=sr,
-            n_octave_bands=n_bands,
-            min_decay_db=min_decay_db,
-            noise_floor_margin_db=noise_floor_margin_db,
+            **_given(args, "n_octave_bands", "min_decay_db", "noise_floor_margin_db"),
         )
 
     if args.json:
@@ -124,19 +141,19 @@ def cmd_estimate_room(args: argparse.Namespace) -> int:
 
     samples, sr = _load_audio(args.file)
     # A setting the caller left out is not passed, so the library chooses it.
-    supplied: dict[str, Any] = {
-        name: getattr(args, name)
-        for name in ("n_octave_bands", "min_decay_db", "noise_floor_margin_db")
-        if getattr(args, name, None) is not None
-    }
     est = estimate_room(
         samples,
         sample_rate=sr,
-        aspect_hint_lw=args.aspect_lw,
-        aspect_hint_lh=args.aspect_lh,
-        reference_absorption=args.reference_absorption,
         prefer_eyring=not args.sabine,
-        **supplied,
+        **_given(
+            args,
+            "n_octave_bands",
+            "min_decay_db",
+            "noise_floor_margin_db",
+            aspect_hint_lw="aspect_lw",
+            aspect_hint_lh="aspect_lh",
+            reference_absorption="reference_absorption",
+        ),
     )
     if args.json:
         print(
@@ -169,17 +186,19 @@ def cmd_synthesize_rir(args: argparse.Namespace) -> int:
         raise ValueError("synthesize-rir requires --output")
     try:
         result = synthesize_rir(
-            args.length,
-            args.width,
-            args.height,
-            source=(args.source_x, args.source_y, args.source_z),
-            listener=(args.listener_x, args.listener_y, args.listener_z),
-            absorption=args.absorption,
             sample_rate=args.sample_rate,
-            ism_order=args.ism_order,
-            seed=args.seed,
             max_sec=args.max_sec,
             prefer_eyring=not args.sabine,
+            **_given(
+                args,
+                "absorption",
+                "ism_order",
+                "seed",
+                length_m="length",
+                width_m="width",
+                height_m="height",
+            ),
+            **_placement(args),
         )
     except SonareError as exc:
         print(f"Error: {exc}", file=sys.stderr)
@@ -219,7 +238,7 @@ def cmd_room_morph(args: argparse.Namespace) -> int:
     # Ahead of the audio load, matching the native CLI, which enforces every
     # declared option domain before dispatching the handler.
     spacing = args.receiver_spacing
-    if not 0.0 < spacing <= _MAX_RECEIVER_SPACING_M:
+    if spacing is not None and not 0.0 < spacing <= _MAX_RECEIVER_SPACING_M:
         raise ValueError(
             f"invalid value for --receiver-spacing: {spacing} "
             f"(expected above 0 and at most {_MAX_RECEIVER_SPACING_M:g})"
@@ -227,30 +246,32 @@ def cmd_room_morph(args: argparse.Namespace) -> int:
     planes, sr = _load_channels_or_downmix(args.file)
     use_stereo = len(planes) == 2
     options: dict[str, Any] = {
-        "source": (args.source_x, args.source_y, args.source_z),
-        "listener": (args.listener_x, args.listener_y, args.listener_z),
-        "absorption": args.absorption,
-        "source_tail_suppression": args.suppression,
-        "wet": args.wet,
-        "ism_order": args.ism_order,
-        "seed": args.seed,
         "max_sec": args.max_sec,
         "prefer_eyring": not args.sabine,
+        **_given(
+            args,
+            "absorption",
+            "wet",
+            "ism_order",
+            "seed",
+            source_tail_suppression="suppression",
+        ),
+        **_placement(args),
     }
-    geometry = (args.length, args.width, args.height)
+    geometry = {"length_m": args.length, "width_m": args.width, "height_m": args.height}
     channels: list[list[float]]
     if use_stereo:
         result: Any = room_morph_stereo(
             planes[0],
             planes[1],
             sr,
-            *geometry,
-            receiver_spacing_m=spacing,
+            **geometry,
+            **_given(args, receiver_spacing_m="receiver_spacing"),
             **options,
         )
         channels = [list(result.left), list(result.right)]
     else:
-        result = room_morph(planes[0], sr, *geometry, **options)
+        result = room_morph(planes[0], sr, **geometry, **options)
         channels = [list(result.audio)]
     # The target RIR is synthesized by the code synthesize-rir uses, so the same
     # clamps fire and each one says the morph went through a room the caller did
@@ -280,35 +301,105 @@ def register_acoustic_parsers(
         "acoustic", parents=[stdout_options], help="Estimate acoustic parameters"
     )
     acoustic_p.add_argument("--ir", action="store_true", help="Treat input as an impulse response")
-    acoustic_p.add_argument("--n-octave-bands", type=_c_int, default=6)
-    acoustic_p.add_argument("--min-decay-db", type=_finite_float, default=30.0)
-    acoustic_p.add_argument("--noise-floor-margin-db", type=_finite_float, default=10.0)
+    acoustic_p.add_argument(
+        "--n-octave-bands", type=_c_int, default=None, help="Octave-band count (default: 6)"
+    )
+    acoustic_p.add_argument(
+        "--min-decay-db",
+        type=_finite_float,
+        default=None,
+        help="Minimum decay range for the regression, in dB (default: 30.0)",
+    )
+    acoustic_p.add_argument(
+        "--noise-floor-margin-db",
+        type=_finite_float,
+        default=None,
+        help="Margin above the noise floor, in dB; unused with --ir (default: 10.0)",
+    )
 
-    def _add_room_geometry(p: argparse.ArgumentParser) -> None:
-        p.add_argument("--length", type=_finite_float, default=7.0, help="Room length (m)")
-        p.add_argument("--width", type=_finite_float, default=5.0, help="Room width (m)")
-        p.add_argument("--height", type=_finite_float, default=3.0, help="Room height (m)")
+    def _add_room_geometry(p: argparse.ArgumentParser, *, library_geometry: bool) -> None:
+        # room-morph takes the room's size as required arguments of its facade, so
+        # its three dimensions keep the CLI's own values; synthesize-rir leaves
+        # them to the library.
+        p.add_argument(
+            "--length",
+            type=_finite_float,
+            default=None if library_geometry else 7.0,
+            help="Room length (m) (default: 7.0)",
+        )
+        p.add_argument(
+            "--width",
+            type=_finite_float,
+            default=None if library_geometry else 5.0,
+            help="Room width (m) (default: 5.0)",
+        )
+        p.add_argument(
+            "--height",
+            type=_finite_float,
+            default=None if library_geometry else 3.0,
+            help="Room height (m) (default: 3.0)",
+        )
         # The room builder clamps rather than validates, so the refusal comes from
         # the material check beside it -- an invalid parameter, not a usage error.
         _cli_domain(
             p.add_argument(
-                "--absorption", type=_finite_float, default=0.2, help="Uniform wall absorption"
+                "--absorption",
+                type=_finite_float,
+                default=None,
+                help="Uniform wall absorption (default: 0.2)",
             ),
             minimum=0,
             maximum=1,
             reject_exit="invalid_parameter",
         )
-        p.add_argument("--source-x", type=_finite_float, default=1.0)
-        p.add_argument("--source-y", type=_finite_float, default=1.0)
-        p.add_argument("--source-z", type=_finite_float, default=1.2)
-        p.add_argument("--listener-x", type=_finite_float, default=5.0)
-        p.add_argument("--listener-y", type=_finite_float, default=4.0)
-        p.add_argument("--listener-z", type=_finite_float, default=1.7)
-        p.add_argument("--ism-order", type=_c_int, default=3, help="Image-source reflection order")
+        p.add_argument(
+            "--source-x",
+            type=_finite_float,
+            default=None,
+            help="Source x position (m) (default: 1.0)",
+        )
+        p.add_argument(
+            "--source-y",
+            type=_finite_float,
+            default=None,
+            help="Source y position (m) (default: 1.0)",
+        )
+        p.add_argument(
+            "--source-z",
+            type=_finite_float,
+            default=None,
+            help="Source z position (m) (default: 1.2)",
+        )
+        p.add_argument(
+            "--listener-x",
+            type=_finite_float,
+            default=None,
+            help="Listener x position (m) (default: 5.0)",
+        )
+        p.add_argument(
+            "--listener-y",
+            type=_finite_float,
+            default=None,
+            help="Listener y position (m) (default: 4.0)",
+        )
+        p.add_argument(
+            "--listener-z",
+            type=_finite_float,
+            default=None,
+            help="Listener z position (m) (default: 1.7)",
+        )
+        p.add_argument(
+            "--ism-order",
+            type=_c_int,
+            default=None,
+            help="Image-source reflection order (default: 3)",
+        )
         # The C field is a uint32 and 0 is its library-default sentinel, so the
         # range is closed at both ends rather than refusing only a negative.
         _cli_domain(
-            p.add_argument("--seed", type=int, default=1, help="Deterministic late-tail seed"),
+            p.add_argument(
+                "--seed", type=int, default=None, help="Deterministic late-tail seed (default: 1)"
+            ),
             minimum=0,
             maximum=0xFFFFFFFF,
             reject_exit="invalid_parameter",
@@ -329,13 +420,16 @@ def register_acoustic_parsers(
         "estimate-room", parents=[stdout_options], help="Estimate equivalent room from a recording"
     )
     estimate_room_p.add_argument(
-        "--aspect-lw", type=_finite_float, default=1.0, help="length/width prior"
+        "--aspect-lw", type=_finite_float, default=None, help="length/width prior (default: 1.0)"
     )
     estimate_room_p.add_argument(
-        "--aspect-lh", type=_finite_float, default=1.0, help="length/height prior"
+        "--aspect-lh", type=_finite_float, default=None, help="length/height prior (default: 1.0)"
     )
     estimate_room_p.add_argument(
-        "--reference-absorption", type=_finite_float, default=0.15, help="absorption prior"
+        "--reference-absorption",
+        type=_finite_float,
+        default=None,
+        help="absorption prior (default: 0.15)",
     )
     estimate_room_p.add_argument(
         "--sabine", action="store_true", help="Use the Sabine model (default Eyring)"
@@ -351,26 +445,29 @@ def register_acoustic_parsers(
     synth_rir_p = sub.add_parser(
         "synthesize-rir", parents=[common], help="Synthesize a room impulse response from geometry"
     )
-    _add_room_geometry(synth_rir_p)
+    _add_room_geometry(synth_rir_p, library_geometry=True)
     synth_rir_p.add_argument("--sample-rate", type=_c_int, default=48000, help="Output sample rate")
 
     room_morph_p = sub.add_parser(
         "room-morph", parents=[common], help="Morph reverberation toward a target room"
     )
-    _add_room_geometry(room_morph_p)
+    _add_room_geometry(room_morph_p, library_geometry=False)
     room_morph_p.add_argument(
-        "--wet", type=_finite_float, default=0.5, help="Target-room mix [0,1]"
+        "--wet", type=_finite_float, default=None, help="Target-room mix [0,1] (default: 0.5)"
     )
     room_morph_p.add_argument(
-        "--suppression", type=_finite_float, default=0.5, help="Source-tail suppression [0,1]"
+        "--suppression",
+        type=_finite_float,
+        default=None,
+        help="Source-tail suppression [0,1] (default: 0.5)",
     )
     # A two-channel input is morphed as a pair heard by two receivers this far apart.
     _cli_domain(
         room_morph_p.add_argument(
             "--receiver-spacing",
             type=_finite_float,
-            default=0.5,
-            help="Receiver spacing for a stereo input, in metres (0,4]",
+            default=None,
+            help="Receiver spacing for a stereo input, in metres (0,4] (default: 0.5)",
         ),
         minimum=0,
         exclusive_minimum=True,

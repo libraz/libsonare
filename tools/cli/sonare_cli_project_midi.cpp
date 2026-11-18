@@ -136,8 +136,8 @@ int cmd_transcribe(const CliArgs& args, const Audio& audio) {
   config.segmentation_threshold_cents = args.get_float("segmentation-threshold-cents", 0.0f);
   config.velocity_floor_db = args.get_float("velocity-floor-db", 0.0f);
   config.fixed_velocity = args.get_int("fixed-velocity", 0);
-  config.group = args.get_int("group", 0);
-  config.channel = args.get_int("channel", 0);
+  config.group = args.get_int("group", config.group);
+  config.channel = args.get_int("channel", config.channel);
 
   // A written 0 means a real zero (ratios), which the C ABI spells as a negative
   // value (its own 0 would mean the default); reattack's own 0 is "no split".

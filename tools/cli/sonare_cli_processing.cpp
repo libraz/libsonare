@@ -204,18 +204,20 @@ int cmd_pitch_correct_timevarying(const CliArgs& args, const Audio& audio) {
   // The contour comes from pYIN at the requested hop and otherwise library
   // defaults, which is the track the Python CLI measures for the same command.
   PitchConfig pitch_config;
-  pitch_config.hop_length = args.get_int("hop-length", 512);
+  pitch_config.hop_length = args.get_int("hop-length", pitch_config.hop_length);
   // The pYIN frame is 2048 samples at 22050 Hz, held as a duration.
   pitch_config.frame_length = window_length_at_rate(pitch_config.frame_length, audio.sample_rate());
   const editing::pitch_editor::F0Track track =
       editing::pitch_editor::pyin_f0_track(audio, pitch_config);
 
   editing::pitch_editor::PitchCorrectionConfig config;
-  config.scale.root = args.get_int("scale-root", 0);
-  config.scale.mode_mask = static_cast<uint16_t>(mode_mask_option(args, "scale-mode-mask"));
+  config.scale.root = args.get_int("scale-root", config.scale.root);
+  if (args.has("scale-mode-mask")) {
+    config.scale.mode_mask = static_cast<uint16_t>(mode_mask_option(args, "scale-mode-mask"));
+  }
   // Assigned as given, with no zero-is-default sentinel: this path validates the
   // anchor for finiteness only, so an explicit 0 anchors the grid at MIDI 0.
-  config.scale.reference_midi = args.get_float("reference-midi", 69.0f);
+  config.scale.reference_midi = args.get_float("reference-midi", config.scale.reference_midi);
   // The registry holds the library defaults and the ranges the correction
   // config refuses outside of, so these are read as given.
   config.retune_amount = args.get_float("retune-amount", config.retune_amount);
@@ -702,7 +704,9 @@ int cmd_tune_to_midi(const CliArgs& args, const Audio& audio) {
   // Only what the caller spelled is written: 0 is a legal value for both bounds,
   // so neither can double as the sentinel that asks for the core default.
   editing::note_model::NoteTargetAssignConfig config;
-  config.unmatched_policy = parse_unmatched_policy(args.get_string("unmatched-policy", "leave"));
+  if (args.has("unmatched-policy")) {
+    config.unmatched_policy = parse_unmatched_policy(args.get_string("unmatched-policy"));
+  }
   if (args.has("min-overlap-ratio")) {
     config.min_overlap_ratio = args.get_float("min-overlap-ratio", config.min_overlap_ratio);
   }
@@ -818,7 +822,8 @@ int cmd_voice_change(const CliArgs& args, const Audio& audio) {
     } else if (args.has("preset-pack")) {
       config_text = find_voice_preset_in_pack(read_plain_text_file(args.get_string("preset-pack")),
                                               requested_preset);
-    } else if (args.has("set")) {
+    } else {
+      // A built-in id is a parameter, so an unknown or empty one is refused as one.
       const auto id =
           editing::voice_changer::realtime_voice_changer_preset_from_id(requested_preset);
       config_text = editing::voice_changer::realtime_voice_changer_preset_json(id);
@@ -998,13 +1003,13 @@ int cmd_voice_preset_validate(const CliArgs&, const Audio&) {
 
 int cmd_decompose_stems(const CliArgs& args, const Audio& audio) {
   DecomposeStemsConfig config;
-  config.n_components = args.get_int("n-components", 4);
+  config.n_components = args.get_int("n-components", config.n_components);
   config.n_fft = args.n_fft;
   config.hop_length = args.hop_length;
-  config.n_iter = args.get_int("n-iter", 100);
-  config.beta = args.get_float("beta", 2.0f);
-  config.init = args.get_string("init", "random");
-  config.mask_power = args.get_float("mask-power", 1.0f);
+  config.n_iter = args.get_int("n-iter", config.n_iter);
+  config.beta = args.get_float("beta", config.beta);
+  config.init = args.get_string("init", config.init);
+  config.mask_power = args.get_float("mask-power", config.mask_power);
 
   if (!args.quiet) {
     std::cerr << color::blue << "Decomposing into components..." << color::reset << "\n";
@@ -1084,8 +1089,8 @@ int cmd_hpss(const CliArgs& args, const Audio& audio) {
   }
 
   HpssConfig config;
-  config.kernel_size_harmonic = args.get_int("kernel-harmonic", 31);
-  config.kernel_size_percussive = args.get_int("kernel-percussive", 31);
+  config.kernel_size_harmonic = args.get_int("kernel-harmonic", config.kernel_size_harmonic);
+  config.kernel_size_percussive = args.get_int("kernel-percussive", config.kernel_size_percussive);
   config.use_soft_mask = !args.has("hard-mask");
 
   StftConfig stft{args.n_fft, args.hop_length};

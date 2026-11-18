@@ -906,9 +906,9 @@ def test_analyze_flags_are_accepted_and_forwarded(monkeypatch, capsys) -> None:
     defaults = parser.parse_args(["analyze", "input.wav"])
     assert defaults.with_seventh is False
     assert defaults.hpss is False
-    assert defaults.chroma_high_pass_hz == 80.0
-    assert defaults.meter_candidates == ""
-    assert defaults.meter_denominator == 4
+    assert defaults.chroma_high_pass_hz is None
+    assert defaults.meter_candidates is None
+    assert defaults.meter_denominator is None
 
     captured: dict[str, object] = {}
 
@@ -937,10 +937,6 @@ def test_analyze_flags_are_accepted_and_forwarded(monkeypatch, capsys) -> None:
         "use_triads_only": False,
         "use_hpss": True,
         "chroma_high_pass_hz": 123.5,
-        # Omitted on the command line, so the core keeps its own default set
-        # rather than receiving an empty one, which it rejects.
-        "meter_candidate_numerators": None,
-        "meter_denominator": 4,
     }
 
 

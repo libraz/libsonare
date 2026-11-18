@@ -289,8 +289,11 @@ int resolve_bounce_audio_sources(const CliArgs& args, SonareProject* project) {
 int project_bounce_impl(const CliArgs& args, bool use_synth, bool binds_source_audio = true) {
   SonareSynthInstrumentBinding synth_binding{};
   if (use_synth) {
+    // `project bounce` spells GM routing as the bare flag; `midi-render` as leaving the
+    // flag out, so a preset it was given empty is looked up like any other.
     const std::string requested = args.get_string("synth");
-    const bool auto_select_gm = requested.empty() || requested == "true";
+    const bool auto_select_gm =
+        binds_source_audio ? requested.empty() || requested == "true" : !args.has("synth");
     if (auto_select_gm) {
       // GM routing replaces the patch at every note-on, so a base preset named
       // here would assert thirty field values the caller never chose and that
@@ -335,7 +338,8 @@ int project_bounce_impl(const CliArgs& args, bool use_synth, bool binds_source_a
   SonareProjectBounceOptions options{};
   options.total_frames = static_cast<int64_t>(args.get_int("frames", 0));
   options.num_channels = args.get_int("channels", 0);
-  options.instrument_latency_samples = args.get_int("instrument-latency-samples", 0);
+  options.instrument_latency_samples =
+      args.get_int("instrument-latency-samples", options.instrument_latency_samples);
   // CRITICAL: the WAV header MUST be tagged with the SAME sample rate the render
   // actually used, or the file plays back at the wrong pitch. Default to the
   // project's own rate (queried above via sonare_project_get_sample_rate) rather

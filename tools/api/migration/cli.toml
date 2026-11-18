@@ -265,7 +265,7 @@ test = "tests/conformance/cli_contract_v2.json::zero_tempo"
 [[entry]]
 kind = "flag"
 old = "key --genre-hint"
-changed = "a value that names no genre hint (auto, edm, electronic, dance, pop, classical, jazz) is refused as an invalid parameter (exit 3) on the native CLI too, rather than read as auto; any letter case is accepted"
+changed = "a value that names no genre hint (auto, edm, electronic, dance, pop, classical, jazz), an empty one included, is refused as an invalid parameter (exit 3) on the native CLI too, rather than read as auto or as not given; any letter case is accepted"
 domain = "analysis"
 rule = "token-case"
 test = "tests/conformance/cli_contract_v2.json::genre_hint_unknown"
@@ -740,7 +740,7 @@ test = "tests/cli/cli_effects_test.cpp::CLI voice-change rejects a realtime pres
 [[entry]]
 kind = "flag"
 old = "voice-change --preset"
-changed = "a built-in preset is named by its library id (neutralMonitor, brightIdol, hardTune, ...) in any letter case, and the JSON preset field reports that id; the kebab-case spellings are refused as an invalid parameter (exit 3); a --preset-pack entry is matched by its id exactly as written"
+changed = "a built-in preset is named by its library id (neutralMonitor, brightIdol, hardTune, ...) in any letter case, and the JSON preset field reports that id; the kebab-case spellings, an unknown id and an empty value are refused as an invalid parameter (exit 3) on both CLIs, the empty value no longer read as not given; a --preset-pack entry is matched by its id exactly as written"
 domain = "effects"
 rule = "token-case"
 test = "tests/cli/cli_project_test.cpp::CLI DAW editing commands"
@@ -922,3 +922,43 @@ changed = "the --json result names the loudness range loudness_range_lu rather t
 domain = "mastering"
 rule = "unit-in-name"
 test = "tests/cli/cli_contract_test.cpp::CLI loudness range keys carry the LU unit"
+
+[[entry]]
+kind = "flag"
+old = "key --modes"
+changed = "omitted, the library's candidate modes apply; an explicit empty value is refused as an invalid parameter (exit 3) rather than read as not given"
+domain = "analysis"
+rule = "library-owned-defaults"
+test = "tests/conformance/cli_contract_v2.json::modes_empty_refused"
+
+[[entry]]
+kind = "flag"
+old = "key --profile"
+changed = "omitted, the genre hint chooses the profile; an explicit empty value is refused as an invalid parameter (exit 3) rather than read as not given"
+domain = "analysis"
+rule = "library-owned-defaults"
+test = "tests/conformance/cli_contract_v2.json::profile_empty_refused"
+
+[[entry]]
+kind = "flag"
+old = "analyze --meter-candidates"
+changed = "omitted, the core's candidate set (3,4,6) applies; an explicit empty value is refused as an invalid parameter (exit 3) rather than read as not given"
+domain = "analysis"
+rule = "library-owned-defaults"
+test = "tests/conformance/cli_contract_v2.json::meter_candidates_empty_refused"
+
+[[entry]]
+kind = "flag"
+old = "project.new --sample-rate"
+changed = "omitted, the project keeps its own rate; an explicit 0 is refused as an invalid parameter (exit 3) rather than read as not given"
+domain = "project"
+rule = "library-owned-defaults"
+test = "tests/conformance/cli_contract_v2.json::sample_rate_zero_refused"
+
+[[entry]]
+kind = "flag"
+old = "midi-render --synth"
+changed = "omitted, notes follow GM program and channel routing; an explicit empty value is refused as an invalid parameter (exit 3) rather than read as GM routing"
+domain = "project"
+rule = "library-owned-defaults"
+test = "tests/conformance/cli_contract_v2.json::synth_empty_refused"

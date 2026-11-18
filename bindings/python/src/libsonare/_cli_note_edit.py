@@ -29,6 +29,7 @@ from ._cli_options import (
     _closed_unit_float,
     _ContractArgumentParser,
     _finite_float,
+    _given,
     _mode_mask,
     _pitch_threshold,
     _positive_finite_float,
@@ -73,26 +74,32 @@ def cmd_pitch_correct_timevarying(args: argparse.Namespace) -> int:
     from . import pitch_correct_timevarying, pitch_pyin
 
     samples, sr = _load_audio(args.file)
+    # A setting the caller left out is not passed, so the library chooses it. The
+    # contour and the correction share one hop, as the same flag names both.
+    hop = _given(args, "hop_length")
     track = pitch_pyin(
         samples,
         sample_rate=sr,
         frame_length=_window_length_at_rate(_PYIN_FRAME_LENGTH, sr),
-        hop_length=args.hop_length,
+        **hop,
     )
     result = pitch_correct_timevarying(
         samples,
         f0_hz=track.f0,
         sample_rate=sr,
-        hop_length=args.hop_length,
         target_mode=args.mode,
         target_midi=args.target_midi,
-        scale_root=args.scale_root,
-        scale_mode_mask=args.scale_mode_mask,
-        scale_reference_midi=args.reference_midi,
-        retune_amount=args.retune_amount,
-        max_correction_semitones=args.max_correction_semitones,
-        retune_speed_ms=args.retune_speed_ms,
-        vibrato_threshold_cents=args.vibrato_threshold_cents,
+        **hop,
+        **_given(
+            args,
+            "scale_root",
+            "scale_mode_mask",
+            "retune_amount",
+            "max_correction_semitones",
+            "retune_speed_ms",
+            "vibrato_threshold_cents",
+            scale_reference_midi="reference_midi",
+        ),
         voiced=[int(value) for value in track.voiced_flag],
         voiced_prob=track.voiced_prob,
     )
@@ -214,7 +221,7 @@ def cmd_tune_to_midi(args: argparse.Namespace) -> int:
         return EXIT_INVALID_PARAMETER
     if args.track < 0:
         raise ValueError(f"--track must be a non-negative track index: {args.track}")
-    if args.unmatched_policy not in _UNMATCHED_POLICIES:
+    if args.unmatched_policy is not None and args.unmatched_policy not in _UNMATCHED_POLICIES:
         raise ValueError(
             f"--unmatched-policy must be one of {', '.join(_UNMATCHED_POLICY_NAMES)}: "
             f"{args.unmatched_policy}"
@@ -228,7 +235,7 @@ def cmd_tune_to_midi(args: argparse.Namespace) -> int:
 
     # Only what the caller spelled is forwarded: 0 is legal for both, so neither
     # can double as the sentinel that asks for the library default.
-    options: dict[str, float] = {}
+    options: dict[str, Any] = _given(args, "unmatched_policy")
     if args.min_overlap_ratio is not None:
         options["min_overlap_ratio"] = args.min_overlap_ratio
     if args.max_correction_semitones is not None:
@@ -259,7 +266,6 @@ def cmd_tune_to_midi(args: argparse.Namespace) -> int:
         notes,
         sr,
         targets,
-        unmatched_policy=args.unmatched_policy,
         **options,
     )
     tuned, assigned_count = assignment.notes, assignment.assigned_count
@@ -623,13 +629,17 @@ def register_note_edit_parsers(
         reject_exit="invalid_parameter",
     )
     _cli_domain(
-        pitch_tv_p.add_argument("--hop-length", type=_c_int, default=512),
+        pitch_tv_p.add_argument(
+            "--hop-length", type=_c_int, default=None, help="Hop length (default: 512)"
+        ),
         minimum=0,
         exclusive_minimum=True,
         reject_exit="invalid_parameter",
     )
     _cli_domain(
-        pitch_tv_p.add_argument("--scale-root", type=_c_int, default=0),
+        pitch_tv_p.add_argument(
+            "--scale-root", type=_c_int, default=None, help="Scale root pitch class (default: 0)"
+        ),
         minimum=0,
         maximum=11,
         reject_exit="invalid_parameter",
@@ -638,32 +648,62 @@ def register_note_edit_parsers(
         pitch_tv_p.add_argument(
             "--scale-mode-mask",
             type=_mode_mask,
-            default=0xAB5,
-            help="12-bit scale mask or a mode name such as major or dorian",
+            default=None,
+            help="12-bit scale mask or a mode name such as major or dorian (default: 2741)",
         ),
         minimum=1,
         maximum=4095,
         reject_exit="invalid_parameter",
     )
-    pitch_tv_p.add_argument("--reference-midi", type=_finite_float, default=69.0)
+    pitch_tv_p.add_argument(
+        "--reference-midi",
+        type=_finite_float,
+        default=None,
+        help="MIDI note the scale grid is anchored at (default: 69.0)",
+    )
     # The library refuses these outside the ranges below, so each is declared
     # with the class of exit that refusal carries.
     _cli_domain(
-        pitch_tv_p.add_argument("--retune-amount", type=_finite_float, default=1.0),
+        pitch_tv_p.add_argument(
+            "--retune-amount",
+            type=_finite_float,
+            default=None,
+            help="Correction strength, 0 to 1 (default: 1.0)",
+        ),
         minimum=0,
         maximum=1,
         reject_exit="invalid_parameter",
     )
-    for option, default in (
-        ("--max-correction-semitones", 12.0),
-        ("--retune-speed-ms", 50.0),
-        ("--vibrato-threshold-cents", 20.0),
-    ):
-        _cli_domain(
-            pitch_tv_p.add_argument(option, type=_finite_float, default=default),
-            minimum=0,
-            reject_exit="invalid_parameter",
-        )
+    _cli_domain(
+        pitch_tv_p.add_argument(
+            "--max-correction-semitones",
+            type=_finite_float,
+            default=None,
+            help="Largest correction in semitones (default: 12.0)",
+        ),
+        minimum=0,
+        reject_exit="invalid_parameter",
+    )
+    _cli_domain(
+        pitch_tv_p.add_argument(
+            "--retune-speed-ms",
+            type=_finite_float,
+            default=None,
+            help="Retune time constant in ms (default: 50.0)",
+        ),
+        minimum=0,
+        reject_exit="invalid_parameter",
+    )
+    _cli_domain(
+        pitch_tv_p.add_argument(
+            "--vibrato-threshold-cents",
+            type=_finite_float,
+            default=None,
+            help="Vibrato below this depth is preserved, in cents (default: 20.0)",
+        ),
+        minimum=0,
+        reject_exit="invalid_parameter",
+    )
     note_move_p = sub.add_parser("note-move", parents=[common], help="Move one note region")
     _position(
         note_move_p.add_argument(
@@ -807,7 +847,7 @@ def register_note_edit_parsers(
         tune_to_midi_p.add_argument(
             "--unmatched-policy",
             type=_token_of(_UNMATCHED_POLICY_NAMES),
-            default=_DEFAULT_UNMATCHED_POLICY,
+            default=None,
             metavar="{" + ",".join(_UNMATCHED_POLICY_NAMES) + "}",
             help=(
                 "What to do with a note that has a pitch and no target: "

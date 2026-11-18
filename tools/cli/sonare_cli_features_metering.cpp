@@ -207,9 +207,9 @@ int cmd_pitch(const CliArgs& args, const Audio& audio) {
   // passed, so an out-of-range frequency is no longer substituted with the
   // default it happens to sit next to.
   PitchConfig config;
-  config.fmin = args.get_float("f0-min-hz", 65.0f);
-  config.fmax = args.get_float("f0-max-hz", 2093.0f);
-  config.threshold = args.get_float("threshold", 0.1f);
+  config.fmin = args.get_float("f0-min-hz", config.fmin);
+  config.fmax = args.get_float("f0-max-hz", config.fmax);
+  config.threshold = args.get_float("threshold", config.threshold);
   config.hop_length = args.get_int("hop-length", 512);
 
   const std::string algo = args.get_string("algorithm", "pyin");
@@ -309,7 +309,7 @@ int cmd_tempogram(const CliArgs& args, const Audio& audio) {
 
   TempogramConfig config;
   config.hop_length = args.hop_length;
-  config.win_length = args.get_int("win-length", 384);
+  config.win_length = args.get_int("win-length", config.win_length);
   auto values = tempogram(envelope, audio.sample_rate(), config);
   const int n_frames =
       config.win_length > 0 ? static_cast<int>(values.size()) / config.win_length : 0;
@@ -354,7 +354,7 @@ int cmd_plp(const CliArgs& args, const Audio& audio) {
   // An omitted bound keeps the library's search range.
   if (args.has("bpm-min")) config.tempo_min = args.get_float("bpm-min", config.tempo_min);
   if (args.has("bpm-max")) config.tempo_max = args.get_float("bpm-max", config.tempo_max);
-  config.win_length = args.get_int("win-length", 384);
+  config.win_length = args.get_int("win-length", config.win_length);
   auto values = plp(envelope, config);
   Stats stats = Stats::compute(values);
 
@@ -578,18 +578,21 @@ int cmd_acoustic(const CliArgs& args, const Audio& audio) {
 namespace {
 
 // Builds a uniform-absorption shoebox + placement from CLI flags.
-sonare::acoustic::ShoeboxRoom cli_room(const CliArgs& args, float def_absorption) {
+sonare::acoustic::ShoeboxRoom cli_room(const CliArgs& args) {
+  const sonare::RoomDimensions& room = sonare::acoustic::kDefaultRoomDims;
   return sonare::acoustic::uniform_shoebox(
-      {args.get_float("length", 7.0f), args.get_float("width", 5.0f),
-       args.get_float("height", 3.0f)},
-      args.get_float("absorption", def_absorption));
+      {args.get_float("length", room.length), args.get_float("width", room.width),
+       args.get_float("height", room.height)},
+      args.get_float("absorption", sonare::acoustic::kDefaultWallAbsorption));
 }
 
 sonare::acoustic::SourceListener cli_placement(const CliArgs& args) {
-  return {{args.get_float("source-x", 1.0f), args.get_float("source-y", 1.0f),
-           args.get_float("source-z", 1.2f)},
-          {args.get_float("listener-x", 5.0f), args.get_float("listener-y", 4.0f),
-           args.get_float("listener-z", 1.7f)}};
+  const sonare::acoustic::SourceListener& place = sonare::acoustic::kDefaultPlacement;
+  return {{args.get_float("source-x", place.source.x), args.get_float("source-y", place.source.y),
+           args.get_float("source-z", place.source.z)},
+          {args.get_float("listener-x", place.listener.x),
+           args.get_float("listener-y", place.listener.y),
+           args.get_float("listener-z", place.listener.z)}};
 }
 
 }  // namespace
@@ -609,7 +612,7 @@ int cmd_synthesize_rir(const CliArgs& args, const Audio&) {
                                       : sonare::acoustic::ReverbModel::Eyring;
 
   const auto result =
-      sonare::acoustic::synthesize_rir(cli_room(args, 0.2f), cli_placement(args), sample_rate, cfg);
+      sonare::acoustic::synthesize_rir(cli_room(args), cli_placement(args), sample_rate, cfg);
   if (sonare::has_error(result.diagnostics)) {
     for (const sonare::Diagnostic& diagnostic : result.diagnostics) {
       if (diagnostic.severity == sonare::Diagnostic::Severity::Error) {
@@ -703,7 +706,7 @@ int cmd_estimate_room(const CliArgs& args, const Audio& audio) {
 
 int cmd_room_morph(const CliArgs& args, const Audio& audio) {
   sonare::effects::acoustic::RoomMorphConfig cfg;
-  cfg.target = cli_room(args, 0.2f);
+  cfg.target = cli_room(args);
   cfg.placement = cli_placement(args);
   cfg.source_tail_suppression = args.get_float("suppression", cfg.source_tail_suppression);
   cfg.wet = args.get_float("wet", cfg.wet);

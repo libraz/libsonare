@@ -417,7 +417,7 @@ def test_transcribe_leaves_the_polyphonic_limits_unsent_by_default(
     for name in ("max_polyphony", "min_frame_peak_ratio", "min_ridge_peak_ratio", "reattack_ratio"):
         assert seen[name] is None
     assert seen["min_note_division"] is None
-    assert seen["monophonic_model"] == "segments"
+    assert seen["monophonic_model"] is None
 
 
 def test_transcribe_forwards_the_monophonic_model(

@@ -33,10 +33,10 @@ def _pitch_result() -> SimpleNamespace:
 def test_pitch_parser_accepts_and_defaults_analysis_options() -> None:
     defaults = _pitch_args()
     assert defaults.algorithm == "pyin"
-    assert defaults.threshold == 0.1
+    assert defaults.threshold is None
     assert defaults.hop_length == 512
-    assert defaults.f0_min_hz == 65.0
-    assert defaults.f0_max_hz == 2093.0
+    assert defaults.f0_min_hz is None
+    assert defaults.f0_max_hz is None
     assert not hasattr(defaults, "output")
 
     explicit = _pitch_args(
@@ -58,7 +58,7 @@ def test_pitch_parser_accepts_and_defaults_analysis_options() -> None:
     assert explicit.f0_max_hz == 1000.0
 
 
-def test_pitch_omitted_options_are_legacy_equivalent(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_pitch_omitted_options_are_left_to_the_library(monkeypatch: pytest.MonkeyPatch) -> None:
     import libsonare
     from libsonare import _cli_analysis
 
@@ -85,8 +85,9 @@ def test_pitch_omitted_options_are_legacy_equivalent(monkeypatch: pytest.MonkeyP
         )
     )
 
-    assert calls[0] == calls[1]
-    assert calls[0][1] == {
+    # Left out, nothing is passed; spelling the library's own values passes them.
+    assert calls[0][1] == {"sample_rate": 22050, "hop_length": 512}
+    assert calls[1][1] == {
         "sample_rate": 22050,
         "hop_length": 512,
         "f0_min_hz": 65.0,

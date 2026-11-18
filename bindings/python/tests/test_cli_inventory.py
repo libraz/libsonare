@@ -90,7 +90,8 @@ def test_inventory_preserves_required_repeatable_and_none_defaults() -> None:
 
     key_n_fft = _option(commands["key"], "n-fft")
     assert key_n_fft["default"] == 2048
-    assert _option(commands["key"], "high-pass-hz")["default"] == 80
+    # Left to the library, which states its own value in --help.
+    assert _option(commands["key"], "high-pass-hz")["default"] is None
     bounce_rate = _option(commands["project.bounce"], "sample-rate")
     assert bounce_rate["default"] is None
     assert bounce_rate["required"] is False
@@ -115,11 +116,11 @@ def test_inventory_exposes_canonical_aliases_and_handler_options() -> None:
     commands = {record["path"]: record for record in build_cli_contract(_parser())["commands"]}
 
     assert _option(commands["key"], "hpss")["aliases"] == []
-    assert _option(commands["chords"], "smoothing-window")["default"] == 2.0
+    assert _option(commands["chords"], "smoothing-window")["default"] is None
     assert _option(commands["chords"], "no-beat-sync")["default"] is False
-    assert _option(commands["dynamics"], "window-sec")["default"] == 0.4
-    assert _option(commands["rhythm"], "start-bpm")["default"] == 120.0
-    assert _option(commands["acoustic"], "n-octave-bands")["default"] == 6
+    assert _option(commands["dynamics"], "window-sec")["default"] is None
+    assert _option(commands["rhythm"], "start-bpm")["default"] is None
+    assert _option(commands["acoustic"], "n-octave-bands")["default"] is None
     room_bands = _option(commands["estimate-room"], "n-octave-bands")
     assert room_bands["aliases"] == []
     assert room_bands["default"] is None
@@ -342,7 +343,9 @@ def test_analyze_options_forward_existing_api_keywords(monkeypatch, capsys) -> N
     defaults = parser.parse_args(["analyze", "input.wav"])
     assert defaults.with_seventh is False
     assert defaults.hpss is False
-    assert defaults.chroma_high_pass_hz == 80.0
+    assert defaults.chroma_high_pass_hz is None
+    assert defaults.meter_candidates is None
+    assert defaults.meter_denominator is None
 
     captured: dict[str, object] = {}
 
@@ -393,10 +396,6 @@ def test_analyze_options_forward_existing_api_keywords(monkeypatch, capsys) -> N
         "use_triads_only": False,
         "use_hpss": True,
         "chroma_high_pass_hz": 123.5,
-        # Not given, so the core seeds its own candidate set rather than being
-        # handed an empty one.
-        "meter_candidate_numerators": None,
-        "meter_denominator": 4,
     }
 
     captured.clear()
