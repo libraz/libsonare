@@ -760,9 +760,8 @@ def mastering_chain(
     """Apply a configurable mastering chain to mono audio.
 
     The chain composes (in fixed order) repair, EQ, dynamics, saturation,
-    spectral, maximizer, and loudness stages. Each stage is enabled either
-    by passing ``"<stage>.enabled": True`` or by setting any field under
-    ``"<stage>.*"``. Unknown keys raise ``RuntimeError``.
+    spectral, maximizer, and loudness stages; ``config`` is the nested camelCase
+    chain document described below. An unknown key raises SonareValueError naming it.
 
     Args:
         samples: Mono audio samples.
