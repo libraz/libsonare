@@ -205,7 +205,7 @@ describe('clip fields refuse a handle or an ordinal that is not whole', () => {
   });
 });
 
-describe('synth patch enum ordinals refuse a fractional or non-finite value', () => {
+describe('synth patch enum fields take a name and refuse every number', () => {
   const render = (patch: Record<string, unknown>): number => {
     const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 512 });
     try {
@@ -223,12 +223,13 @@ describe('synth patch enum ordinals refuse a fractional or non-finite value', ()
     }
   };
 
-  it('renders two legal engine modes differently and refuses the values between them', () => {
-    expect(render({ engineMode: 1 })).not.toBeCloseTo(render({ engineMode: 2 }), 8);
+  it('renders two legal engine modes differently and refuses a number or an unknown name', () => {
+    expect(render({ engineMode: 'subtractive' })).not.toBeCloseTo(render({ engineMode: 'fm' }), 8);
     for (const key of ['engineMode', 'waveform', 'filterModel', 'body']) {
-      for (const value of [...NON_FINITE, 1.5]) {
-        expectRangeRefusal(() => render({ [key]: value }));
+      for (const value of [1, 2, ...SATURATING, ...NON_FINITE, 1.5]) {
+        expect(() => render({ [key]: value }), `${key} ${value}`).toThrow(TypeError);
       }
+      expect(() => render({ [key]: 'noSuchName' }), key).toThrow(RangeError);
     }
   });
 });

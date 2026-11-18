@@ -60,82 +60,42 @@ describe('WASM cross-binding consistency', () => {
   });
 
   describe('built-in synth waveform contract', () => {
-    it('throws on an unknown waveform name (matching Node/Python)', () => {
+    const bounceWaveform = (waveform: unknown, totalFrames = 4800): Float32Array => {
       const project = buildMidiOnlyProject();
       try {
-        expect(() =>
-          project.bounceWithBuiltinInstruments(
-            { instrument: { waveform: 'bogus' as unknown as 'sine' } },
-            { totalFrames: 4800, numChannels: 1 },
-          ),
-        ).toThrow();
+        return project.bounceWithBuiltinInstruments(
+          { instrument: { waveform: waveform as 'sine' } },
+          { totalFrames, numChannels: 1 },
+        ).channels[0];
       } finally {
         project.destroy();
       }
+    };
+
+    it('refuses an unknown waveform name with RangeError (matching Node/Python)', () => {
+      expect(() => bounceWaveform('bogus')).toThrow(RangeError);
     });
 
-    it('rejects a numeric waveform outside the enum, in the same words as a name', () => {
-      // The numeric spelling used to fall through unchecked and land on sine,
-      // and the first value past a four-value enum is 4 - what an off-by-one or
-      // a 1-based mirror emits - so the silent fallback sat immediately beside
-      // the valid range. -1 is the other one that matters: it is the sentinel a
-      // generated binding reaches for. A test driving only large values passes
-      // against a fix that starts checking at 5.
-      for (const waveform of [4, -1, 5]) {
-        const project = buildMidiOnlyProject();
-        try {
-          expect(
-            () =>
-              project.bounceWithBuiltinInstruments(
-                { instrument: { waveform: waveform as unknown as 'sine' } },
-                { totalFrames: 4800, numChannels: 1 },
-              ),
-            `waveform ${waveform} must be rejected, not resolved to sine`,
-          ).toThrow(/sawtooth/);
-        } finally {
-          project.destroy();
-        }
+    it('refuses a numeric waveform with TypeError, in range or not', () => {
+      // The waveform is a closed set of names; an ordinal is not one of its
+      // spellings, so the in-domain 0..3 are refused exactly like 4, -1 or NaN.
+      for (const waveform of [0, 3, 4, -1, 2 ** 31, Number.POSITIVE_INFINITY, Number.NaN]) {
+        expect(() => bounceWaveform(waveform), `waveform ${waveform}`).toThrow(
+          new TypeError('bounceWithBuiltinInstruments: waveform must be a name'),
+        );
       }
     });
 
-    it('rejects a waveform outside the integer range before naming the enum', () => {
-      // A value the int cannot hold is refused as out of range, not as an
-      // unknown ordinal. Asserting the enum wording here would be asserting a
-      // lie: the ordinal in that message would be a saturated or wrapped number
-      // the caller never wrote. Node answers in these same words.
-      for (const waveform of [2 ** 31, -(2 ** 31) - 1, Number.POSITIVE_INFINITY, Number.NaN]) {
-        const project = buildMidiOnlyProject();
-        try {
-          expect(
-            () =>
-              project.bounceWithBuiltinInstruments(
-                { instrument: { waveform: waveform as unknown as 'sine' } },
-                { totalFrames: 4800, numChannels: 1 },
-              ),
-            `waveform ${waveform} must be rejected as out of range`,
-          ).toThrow(/32-bit integer range/);
-        } finally {
-          project.destroy();
-        }
-      }
-    });
-
-    it('accepts every in-domain waveform ordinal and they stay distinct', () => {
-      // Vacuity guard for the rejection above: a fix that rejected everything
-      // would satisfy it. Four ordinals, four different renders.
-      const renders = [0, 1, 2, 3].map((waveform) => {
-        const project = buildMidiOnlyProject();
-        try {
-          const [audio] = project.bounceWithBuiltinInstruments(
-            { instrument: { waveform: waveform as unknown as 'sine' } },
-            { totalFrames: SR, numChannels: 1 },
-          ).channels;
-          return audio.reduce((hash, sample) => (hash * 31 + Math.round(sample * 1e6)) | 0, 0);
-        } finally {
-          project.destroy();
-        }
-      });
+    it('accepts every waveform name and they stay distinct', () => {
+      // Vacuity guard for the refusals above: four names, four different renders,
+      // and the 'sawtooth' alias renders as 'saw'.
+      const hash = (audio: Float32Array): number =>
+        audio.reduce((h, sample) => (h * 31 + Math.round(sample * 1e6)) | 0, 0);
+      const renders = (['sine', 'saw', 'square', 'triangle'] as const).map((waveform) =>
+        hash(bounceWaveform(waveform, SR)),
+      );
       expect(new Set(renders).size, 'the four waveforms must render differently').toBe(4);
+      expect(hash(bounceWaveform('sawtooth', SR))).toBe(renders[1]);
     });
 
     it('accepts "sawtooth" as an alias of "saw"', () => {
