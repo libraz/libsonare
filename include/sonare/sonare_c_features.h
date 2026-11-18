@@ -176,15 +176,35 @@ SonareError sonare_analyze_melody_ex(const float* samples, size_t length, int sa
                                      float f0_min_hz, float f0_max_hz, int frame_length,
                                      int hop_length, float threshold, int use_pyin, int center,
                                      SonareMelodyResult* out);
+/// @brief Releases the arrays of a BPM-analysis result and resets its pointers and counts.
+/// @details NULL is a no-op.
 void sonare_free_bpm_analysis_result(SonareBpmAnalysisResult* result);
+/// @brief Releases the band arrays of an acoustic result and resets its pointers and counts.
+/// @details NULL is a no-op.
 void sonare_free_acoustic_result(SonareAcousticResult* result);
+/// @brief Releases the arrays of a rhythm result and resets its pointers and counts.
+/// @details NULL is a no-op.
 void sonare_free_rhythm_result(SonareRhythmResult* result);
+/// @brief Releases the arrays of a dynamics result and resets its pointers and counts.
+/// @details NULL is a no-op.
 void sonare_free_dynamics_result(SonareDynamicsResult* result);
+/// @brief Releases the arrays of a timbre result and resets its pointers and counts.
+/// @details NULL is a no-op.
 void sonare_free_timbre_result(SonareTimbreResult* result);
+/// @brief Releases the array of a chord-analysis result and resets its pointers and counts.
+/// @details NULL is a no-op.
 void sonare_free_chord_analysis_result(SonareChordAnalysisResult* result);
+/// @brief Releases every string and the item array of a string array and resets it.
+/// @details NULL is a no-op.
 void sonare_free_string_array(SonareStringArray* result);
+/// @brief Releases the array of a section result and resets its pointers and counts.
+/// @details NULL is a no-op.
 void sonare_free_section_result(SonareSectionResult* result);
+/// @brief Releases the arrays of a boundary result and resets its pointers and counts.
+/// @details NULL is a no-op.
 void sonare_free_boundary_result(SonareBoundaryResult* result);
+/// @brief Releases the array of a melody result and resets its pointers and counts.
+/// @details NULL is a no-op.
 void sonare_free_melody_result(SonareMelodyResult* result);
 
 // ============================================================================
@@ -206,16 +226,16 @@ SonareError sonare_clicks(const float* times, size_t time_count, int sample_rate
 // Features - Constant-Q / Variable-Q transforms
 // ============================================================================
 
-/* Forward CQT/VQT magnitude result. @c magnitude is [n_bins x n_frames]
-   row-major and @c frequencies has @c n_bins center frequencies (Hz). Free both
-   arrays with sonare_free_cqt_result. */
+/// @brief Forward CQT/VQT magnitude result.
+/// @details @c magnitude is [n_bins x n_frames] row-major and @c frequencies has @c n_bins
+///   center frequencies (Hz). Free both arrays with @ref sonare_free_cqt_result.
 typedef struct {
-  int n_bins;
-  int n_frames;
-  int hop_length;
-  int sample_rate;
-  float* magnitude;   /* n_bins * n_frames */
-  float* frequencies; /* n_bins */
+  int n_bins;          ///< Number of frequency bins.
+  int n_frames;        ///< Number of time frames.
+  int hop_length;      ///< Hop between frames, in samples.
+  int sample_rate;     ///< Sample rate of the analysed audio (Hz).
+  float* magnitude;    ///< Magnitude matrix, n_bins * n_frames, row-major.
+  float* frequencies;  ///< Bin center frequencies in Hz, n_bins entries.
 } SonareCqtResult;
 
 /// @brief Computes the Constant-Q Transform magnitude.
@@ -233,6 +253,8 @@ SonareError sonare_hybrid_cqt(const float* samples, size_t length, int sample_ra
 SonareError sonare_vqt(const float* samples, size_t length, int sample_rate, int hop_length,
                        float fmin_hz, int n_bins, int bins_per_octave, float gamma,
                        SonareCqtResult* out);
+/// @brief Releases the magnitude and frequency arrays of a CQT/VQT result and sets them to NULL.
+/// @details NULL is a no-op.
 void sonare_free_cqt_result(SonareCqtResult* result);
 
 /// @brief Reconstructs mono audio from row-major CQT magnitude with Griffin-Lim.
@@ -327,13 +349,13 @@ SonareError sonare_mel_delta(const float* features, int n_features, int n_frames
 // Features - Inverse reconstruction (Mel/MFCC -> spectrogram -> audio)
 // ============================================================================
 
-/* Result of an inverse spectrogram reconstruction. @c data is a row-major
-   [rows x n_frames] matrix (rows = n_bins for mel_to_stft, n_mels for
-   mfcc_to_mel). Free @c data with sonare_free_inverse_result. */
+/// @brief Result of an inverse spectrogram reconstruction.
+/// @details @c data is a row-major [rows x n_frames] matrix (rows = n_bins for mel_to_stft,
+///   n_mels for mfcc_to_mel). Free @c data with @ref sonare_free_inverse_result.
 typedef struct {
-  int rows;     /* Number of rows (frequency/Mel bins) */
-  int n_frames; /* Number of time frames */
-  float* data;  /* rows * n_frames, row-major */
+  int rows;      ///< Number of rows (frequency or Mel bins).
+  int n_frames;  ///< Number of time frames.
+  float* data;   ///< Matrix values, rows * n_frames, row-major.
 } SonareInverseResult;
 
 /* UNCHECKED-LENGTH CONTRACT (the four inverse functions below):
@@ -464,6 +486,8 @@ SonareError sonare_mfcc_to_audio_ex2(const float* coefficients, int n_mfcc, int 
 SonareError sonare_mel_to_stft_checked(const float* mel, size_t input_length, int n_mels,
                                        int n_frames, int sample_rate, int n_fft, float fmin_hz,
                                        float fmax_hz, SonareInverseResult* out);
+/// @brief Length-checked sonare_mel_to_stft_ex. @p input_length must equal
+///        n_mels * n_frames.
 SonareError sonare_mel_to_stft_checked_ex(const float* mel, size_t input_length, int n_mels,
                                           int n_frames, int sample_rate, int n_fft, float fmin_hz,
                                           float fmax_hz, int htk, SonareInverseResult* out);
@@ -707,11 +731,11 @@ SonareError sonare_piptrack(const float* samples, size_t length, int sample_rate
 /// @details All three arrays are row-major [n_bins x n_frames] and are released
 ///          together with @ref sonare_free_reassigned_spectrogram_result.
 typedef struct SonareReassignedSpectrogramResult {
-  int n_bins;
-  int n_frames;
-  float* magnitude;
-  float* times;
-  float* frequencies;
+  int n_bins;          ///< Number of frequency bins (n_fft / 2 + 1).
+  int n_frames;        ///< Number of time frames.
+  float* magnitude;    ///< STFT magnitude, [n_bins x n_frames] row-major.
+  float* times;        ///< Reassigned time of each cell in seconds, same layout.
+  float* frequencies;  ///< Reassigned frequency of each cell in Hz, same layout.
 } SonareReassignedSpectrogramResult;
 
 /// @brief Computes an Auger-Flandrin reassigned spectrogram.
@@ -729,15 +753,15 @@ void sonare_free_reassigned_spectrogram_result(SonareReassignedSpectrogramResult
 
 /// @brief Heap-owned row-major float matrix returned by segmentation APIs.
 typedef struct SonareSegmentMatrix {
-  int rows;
-  int cols;
-  float* values;
+  int rows;       ///< Number of rows.
+  int cols;       ///< Number of columns.
+  float* values;  ///< Matrix values, rows * cols, row-major.
 } SonareSegmentMatrix;
 
 /// @brief Heap-owned integer vector returned by segmentation APIs.
 typedef struct SonareSegmentIndices {
-  int* values;
-  size_t count;
+  int* values;   ///< Index values.
+  size_t count;  ///< Number of entries in @c values.
 } SonareSegmentIndices;
 
 /// @brief Cross-similarity of column-feature matrices. `metric` is `cosine` or
@@ -772,7 +796,9 @@ SonareError sonare_segment_agglomerative(const float* data, int rows, int cols, 
 /// @param out Receives a heap-owned matrix; free with sonare_free_segment_matrix.
 SonareError sonare_segment_path_enhance(const float* recurrence, int n, int win, int max_ratio,
                                         int min_ratio, int n_filters, SonareSegmentMatrix* out);
+/// @brief Releases the value array of a segment matrix and zeroes the struct; NULL is a no-op.
 void sonare_free_segment_matrix(SonareSegmentMatrix* result);
+/// @brief Releases the value array of an index vector and zeroes the struct; NULL is a no-op.
 void sonare_free_segment_indices(SonareSegmentIndices* result);
 
 // ============================================================================
@@ -846,39 +872,39 @@ SonareError sonare_pitch_pyin(const float* samples, size_t length, int sample_ra
 ///          voiced threshold 0.5). @c struct_version 0 and 1 select the
 ///          version-1 layout; 2 additionally honours @c voiced_threshold.
 typedef struct {
-  int struct_version;
-  float segmentation_threshold_cents;
-  float min_note_ms;
-  float reference_hz;
+  int struct_version;  ///< 0 and 1 select the version-1 layout; 2 adds voiced_threshold.
+  float segmentation_threshold_cents;  ///< Pitch change in cents that starts a new note (0: 50).
+  float min_note_ms;                   ///< Shortest note in milliseconds (0: 30).
+  float reference_hz;                  ///< Reference pitch in Hz for median_cents (0: 440).
   /* --- struct_version 2 --- */
-  /* Value of voiced_prob at or above which a frame counts as voiced. 0 keeps
-     the default 0.5. Ignored unless struct_version is 2, so a caller passing a
-     version-1 struct is unaffected.
-
-     Raise or lower this when the caller's probability track is not a 0/1 flag.
-     In particular, pYIN's voiced_prob is a frame's voiced observation mass and
-     rises with F0 for a fixed frame_length, so the 0.5 default silently drops
-     low-register material: see sonare_pitch_pyin. Passing the pYIN voiced_flag
-     through the @c voiced argument is the recommended form and needs no
-     threshold change. */
+  /// Value of voiced_prob at or above which a frame counts as voiced. 0 keeps
+  /// the default 0.5. Ignored unless struct_version is 2, so a caller passing a
+  /// version-1 struct is unaffected.
+  ///
+  /// Raise or lower this when the caller's probability track is not a 0/1 flag.
+  /// In particular, pYIN's voiced_prob is a frame's voiced observation mass and
+  /// rises with F0 for a fixed frame_length, so the 0.5 default silently drops
+  /// low-register material: see sonare_pitch_pyin. Passing the pYIN voiced_flag
+  /// through the @c voiced argument is the recommended form and needs no
+  /// threshold change.
   float voiced_threshold;
 } SonareNoteSegmenterConfig;
 
 /// One monophonic note region detected from an F0 track. Frame bounds are
 /// half-open (@c [frame_start, frame_end)); seconds use the supplied frame rate.
 typedef struct {
-  int frame_start;
-  int frame_end;
-  float start_sec;
-  float end_sec;
-  float median_cents;
+  int frame_start;     ///< First frame of the note (inclusive).
+  int frame_end;       ///< One past the last frame of the note.
+  float start_sec;     ///< Note start in seconds.
+  float end_sec;       ///< Note end in seconds.
+  float median_cents;  ///< Median pitch of the voiced frames, in cents above the reference pitch.
 } SonareNoteSegment;
 
 /// Heap-owned note-segmentation output. Release with
 /// @ref sonare_free_note_segments.
 typedef struct {
-  SonareNoteSegment* segments;
-  size_t count;
+  SonareNoteSegment* segments;  ///< Note array, @c count entries; NULL when empty.
+  size_t count;                 ///< Number of notes.
 } SonareNoteSegmentsResult;
 
 /// @brief Segment a monophonic F0 track into stable note regions.
@@ -907,15 +933,20 @@ SonareError sonare_note_segments(const float* f0_hz, const float* voiced_prob,
                                  const int32_t* voiced, size_t n_frames, float frame_rate,
                                  const SonareNoteSegmenterConfig* config,
                                  SonareNoteSegmentsResult* out);
+/// @brief Releases the segment array of a note-segmentation result and clears it; NULL is a no-op.
 void sonare_free_note_segments(SonareNoteSegmentsResult* result);
 
 // ============================================================================
 // Core - Conversion
 // ============================================================================
 
+/// @brief Converts Hz to Mel (Slaney formula: linear below 1000 Hz, logarithmic above).
 float sonare_hz_to_mel(float hz);
+/// @brief Converts Mel (Slaney formula) to Hz.
 float sonare_mel_to_hz(float mel);
+/// @brief Converts Hz to a MIDI note number (A4 = 440 Hz = 69); non-positive Hz gives -infinity.
 float sonare_hz_to_midi(float hz);
+/// @brief Converts a MIDI note number to Hz.
 float sonare_midi_to_hz(float midi);
 /// @brief Nearest note name for @p hz (e.g. "A4", "C#5").
 /// @param[out] out_string Receives the name; the caller releases it with
@@ -935,7 +966,9 @@ float sonare_frames_to_time(int frames, int sample_rate, int hop_length);
 ///   (detail in @ref sonare_last_error_message).
 int sonare_time_to_frames(float time_sec, int sample_rate, int hop_length);
 
+/// @brief Frame index to sample index; a positive @p n_fft is the offset of n_fft / 2 samples.
 int sonare_frames_to_samples(int frames, int hop_length, int n_fft);
+/// @brief Sample index to frame index (floor); a positive @p n_fft subtracts n_fft / 2 first.
 int sonare_samples_to_frames(int samples, int hop_length, int n_fft);
 
 /* INPUT-BUFFER POLICY for the compat / transform functions below
@@ -1063,7 +1096,7 @@ typedef struct {
   ///   take has an interior gap at all (>= 2) and whether the takes differ in how
   ///   broken up they are (max != min).
   int32_t max_signal_intervals;
-  int32_t min_signal_intervals;
+  int32_t min_signal_intervals;  ///< Intervals the least fragmented signal produced alone.
 } SonareSilenceCommonReport;
 
 /// @brief @ref sonare_split_silence_common plus the report above.
