@@ -491,8 +491,6 @@ export interface EngineMidiEvent {
    */
   group?: number;
   sysexHandle?: number;
-  data0?: number;
-  data1?: number;
 }
 
 export interface EngineMidiClipSchedule {

@@ -15441,6 +15441,20 @@ rule = "aliases-removed"
 
 [[entry]]
 kind = "field"
+old = "EngineMidiEvent.data0"
+removed = "set word0"
+domain = "engine"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "field"
+old = "EngineMidiEvent.data1"
+removed = "set word1"
+domain = "engine"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "field"
 old = "ProjectBounceOptions.numChannels"
 changed = "an omitted width follows the scene master's layout (2 with no master) instead of always 2; ProjectBounceResult.numChannels reports the width used"
 domain = "project"

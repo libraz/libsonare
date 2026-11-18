@@ -607,9 +607,9 @@ export interface EngineGraphSpec {
 export interface EngineMidiEvent {
   /** Absolute render frame for this event. Default `0`. */
   renderFrame?: number;
-  /** First UMP word. `data0` is accepted by native wrappers as an alias. */
+  /** First UMP word. */
   word0?: number;
-  /** Second UMP word. `data1` is accepted by native wrappers as an alias. */
+  /** Second UMP word. */
   word1?: number;
   word2?: number;
   word3?: number;
@@ -628,10 +628,6 @@ export interface EngineMidiEvent {
   group?: number;
   /** Optional SysEx side-store handle for native hosts. */
   sysexHandle?: number;
-  /** Project-style alias for one-word MIDI 1.0 events. */
-  data0?: number;
-  /** Project-style alias for the second UMP word. */
-  data1?: number;
 }
 
 /** One compiled realtime MIDI clip schedule accepted by {@link RealtimeEngine.setMidiClips}. */
