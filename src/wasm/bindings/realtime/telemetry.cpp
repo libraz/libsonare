@@ -59,6 +59,7 @@ int32_t RealtimeEngineWasm::telemetryScratchGraphLatencySamplesQ8() const {
 }
 
 int RealtimeEngineWasm::tailSamples() const { return engine_.tail_samples(); }
+int RealtimeEngineWasm::maxBlockSize() const { return engine_.max_block_size(); }
 
 int RealtimeEngineWasm::graphLatencySamplesQ8() const { return engine_.graph_latency_samples_q8(); }
 
@@ -351,6 +352,7 @@ void registerRealtimeEngineTelemetry(class_<RealtimeEngineWasm>& cls) {
       .function("telemetryScratchGraphLatencySamplesQ8",
                 &RealtimeEngineWasm::telemetryScratchGraphLatencySamplesQ8)
       .function("tailSamples", &RealtimeEngineWasm::tailSamples)
+      .function("maxBlockSize", &RealtimeEngineWasm::maxBlockSize)
       .function("graphLatencySamplesQ8", &RealtimeEngineWasm::graphLatencySamplesQ8)
       .function("telemetryScratchValue", &RealtimeEngineWasm::telemetryScratchValue)
       .function("drainMeterTelemetry", &RealtimeEngineWasm::drainMeterTelemetry)

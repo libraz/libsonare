@@ -114,6 +114,7 @@ class StreamingMasteringChainWrapper {
   }
 
   int latencySamples() const { return chain_.latency_samples(); }
+  int maxBlockSize() const { return chain_.max_block_size(); }
 
   val stageNames() const {
     val out = val::array();
@@ -170,6 +171,7 @@ void registerStreamingMasteringChainBindings() {
       .function("reset", &StreamingMasteringChainWrapper::reset)
       .function("setParameter", &StreamingMasteringChainWrapper::setParameter)
       .function("latencySamples", &StreamingMasteringChainWrapper::latencySamples)
+      .function("maxBlockSize", &StreamingMasteringChainWrapper::maxBlockSize)
       .function("stageNames", &StreamingMasteringChainWrapper::stageNames)
       .function("nonFiniteSubstitutionCount",
                 &StreamingMasteringChainWrapper::nonFiniteSubstitutionCount)

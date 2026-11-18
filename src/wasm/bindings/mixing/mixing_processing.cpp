@@ -258,6 +258,17 @@ int MixerWasm::latencySamples() {
   return out;
 }
 
+int MixerWasm::maxBlockSize() {
+  int out = 0;
+  SonareError err = sonare_mixer_max_block_size(mixer_, &out);
+  if (err != SONARE_OK) {
+    throw sonare::SonareException(
+        sonare::ErrorCode::InvalidState,
+        std::string("failed to read mixer max block size: ") + sonare_error_message(err));
+  }
+  return out;
+}
+
 // Drains delayed/tail audio by processing a zero-input block of num_samples
 // frames. Returns { left, right, sampleRate } mirroring processStereo.
 val MixerWasm::drainTailStereo(double num_samples) {
@@ -307,6 +318,7 @@ void registerMixerProcessing(class_<MixerWasm>& cls) {
       .function("meterScratchValue", &MixerWasm::meterScratchValue)
       .function("tailSamples", &MixerWasm::tailSamples)
       .function("latencySamples", &MixerWasm::latencySamples)
+      .function("maxBlockSize", &MixerWasm::maxBlockSize)
       .function("drainTailStereo", &MixerWasm::drainTailStereo)
       .function("flushMeters", &MixerWasm::flushMeters);
 }

@@ -233,6 +233,13 @@ class PlaybackRendererWasm {
     return out;
   }
 
+  int maxBlockSize() const {
+    int out = 0;
+    checkPlayback(sonare_playback_renderer_max_block_size(renderer_.get(), &out),
+                  "PlaybackRenderer.maxBlockSize");
+    return out;
+  }
+
   int inputChannels() const {
     int out = 0;
     checkPlayback(sonare_playback_renderer_num_input_channels(renderer_.get(), &out),
@@ -413,6 +420,7 @@ void registerPlaybackBindings() {
       .function("setHeadOrientation", &PlaybackRendererWasm::setHeadOrientation)
       .function("reset", &PlaybackRendererWasm::reset)
       .function("latencySamples", &PlaybackRendererWasm::latencySamples)
+      .function("maxBlockSize", &PlaybackRendererWasm::maxBlockSize)
       .function("inputChannels", &PlaybackRendererWasm::inputChannels)
       .function("outputChannels", &PlaybackRendererWasm::outputChannels)
       .function("diagnosticsJson", &PlaybackRendererWasm::diagnosticsJson)

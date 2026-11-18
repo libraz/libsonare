@@ -276,6 +276,7 @@ class RealtimeVoiceChangerWrapper {
   }
 
   int latencySamples() const { return changer_.latency_samples(); }
+  int maxBlockSize() const { return changer_.max_block_size(); }
   uint32_t nonFiniteDiscardCount() const { return changer_.non_finite_discard_count(); }
   uint32_t bufferGeneration() const { return buffer_generation_; }
 
@@ -774,6 +775,7 @@ void registerRealtimeVoiceChangerStreamingBindings() {
       .function("setPodConfig", &RealtimeVoiceChangerWrapper::setPodConfig)
       .function("configJson", &RealtimeVoiceChangerWrapper::configJson)
       .function("latencySamples", &RealtimeVoiceChangerWrapper::latencySamples)
+      .function("maxBlockSize", &RealtimeVoiceChangerWrapper::maxBlockSize)
       .function("nonFiniteDiscardCount", &RealtimeVoiceChangerWrapper::nonFiniteDiscardCount)
       .function("bufferGeneration", &RealtimeVoiceChangerWrapper::bufferGeneration)
       .function("processMono", &RealtimeVoiceChangerWrapper::processMono)

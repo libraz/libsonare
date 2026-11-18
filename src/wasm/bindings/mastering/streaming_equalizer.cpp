@@ -192,6 +192,7 @@ class EqualizerWrapper {
   float lastAutoGainDb() const { return processor_.last_auto_gain_db(); }
 
   int latencySamples() const { return processor_.latency_samples(); }
+  int maxBlockSize() const { return processor_.max_block_size(); }
 
   // Number of blocks in which the EQ discarded recursive state because a
   // non-finite value had reached it. See sonare_eq_non_finite_discard_count.
@@ -333,6 +334,7 @@ void registerStreamingEqualizerBindings() {
       .function("clearSidechain", &EqualizerWrapper::clearSidechain)
       .function("lastAutoGainDb", &EqualizerWrapper::lastAutoGainDb)
       .function("latencySamples", &EqualizerWrapper::latencySamples)
+      .function("maxBlockSize", &EqualizerWrapper::maxBlockSize)
       .function("nonFiniteDiscardCount", &EqualizerWrapper::nonFiniteDiscardCount)
       .function("processMono", &EqualizerWrapper::processMono)
       .function("processStereo", &EqualizerWrapper::processStereo)

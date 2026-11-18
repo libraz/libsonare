@@ -415,6 +415,7 @@ class RealtimeEngineWasm {
   int32_t telemetryScratchGraphLatencySamplesQ8() const;
   /// Matches sonare_engine_tail_samples; 2147483647 means unbounded.
   int tailSamples() const;
+  int maxBlockSize() const;
   /// Matches sonare_engine_graph_latency_samples_q8.
   int graphLatencySamplesQ8() const;
   uint32_t telemetryScratchValue() const;

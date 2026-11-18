@@ -260,6 +260,7 @@ class MixerWasm {
   // Reports the compiled mixer graph's latency (samples) for aligning dry/wet
   // material. Lazily compiles if the topology is dirty.
   int latencySamples();
+  int maxBlockSize();
 
   // Drains delayed/tail audio by processing a zero-input block of num_samples
   // frames. Returns { left, right, sampleRate } mirroring processStereo.
