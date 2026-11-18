@@ -1,17 +1,13 @@
 import type { ProjectMidiCcBinding, ProjectProgramBank } from './types_project.js';
 
-/** Fields shared by every packed channel-voice message. */
-interface MidiMessageAddress {
+/** Request of {@link midiNoteOn}. */
+export interface MidiNoteOnRequest {
   /** Position in quarter notes, finite and `>= 0`. */
   ppq: number;
   /** UMP group, `0`..`15`. */
   group: number;
   /** MIDI channel, `0`..`15`. */
   channel: number;
-}
-
-/** Request of {@link midiNoteOn}. */
-export interface MidiNoteOnRequest extends MidiMessageAddress {
   /** Note number, `0`..`127`. */
   note: number;
   /** Velocity, `0`..`127`. */
@@ -19,7 +15,13 @@ export interface MidiNoteOnRequest extends MidiMessageAddress {
 }
 
 /** Request of {@link midiNoteOff}. */
-export interface MidiNoteOffRequest extends MidiMessageAddress {
+export interface MidiNoteOffRequest {
+  /** Position in quarter notes, finite and `>= 0`. */
+  ppq: number;
+  /** UMP group, `0`..`15`. */
+  group: number;
+  /** MIDI channel, `0`..`15`. */
+  channel: number;
   /** Note number, `0`..`127`. */
   note: number;
   /** Release velocity, `0`..`127`. Default `0`. */
@@ -27,7 +29,13 @@ export interface MidiNoteOffRequest extends MidiMessageAddress {
 }
 
 /** Request of {@link midiCc}. */
-export interface MidiCcRequest extends MidiMessageAddress {
+export interface MidiCcRequest {
+  /** Position in quarter notes, finite and `>= 0`. */
+  ppq: number;
+  /** UMP group, `0`..`15`. */
+  group: number;
+  /** MIDI channel, `0`..`15`. */
+  channel: number;
   /** Controller number, `0`..`127`. */
   controller: number;
   /** Controller value, `0`..`127`. */
@@ -35,7 +43,13 @@ export interface MidiCcRequest extends MidiMessageAddress {
 }
 
 /** Request of {@link midiPolyPressure}. */
-export interface MidiPolyPressureRequest extends MidiMessageAddress {
+export interface MidiPolyPressureRequest {
+  /** Position in quarter notes, finite and `>= 0`. */
+  ppq: number;
+  /** UMP group, `0`..`15`. */
+  group: number;
+  /** MIDI channel, `0`..`15`. */
+  channel: number;
   /** Note number, `0`..`127`. */
   note: number;
   /** Pressure, `0`..`127`. */
@@ -43,25 +57,49 @@ export interface MidiPolyPressureRequest extends MidiMessageAddress {
 }
 
 /** Request of {@link midiProgram}. */
-export interface MidiProgramRequest extends MidiMessageAddress {
+export interface MidiProgramRequest {
+  /** Position in quarter notes, finite and `>= 0`. */
+  ppq: number;
+  /** UMP group, `0`..`15`. */
+  group: number;
+  /** MIDI channel, `0`..`15`. */
+  channel: number;
   /** Program number, `0`..`127`. */
   program: number;
 }
 
 /** Request of {@link midiChannelPressure}. */
-export interface MidiChannelPressureRequest extends MidiMessageAddress {
+export interface MidiChannelPressureRequest {
+  /** Position in quarter notes, finite and `>= 0`. */
+  ppq: number;
+  /** UMP group, `0`..`15`. */
+  group: number;
+  /** MIDI channel, `0`..`15`. */
+  channel: number;
   /** Pressure, `0`..`127`. */
   pressure: number;
 }
 
 /** Request of {@link midiPitchBend}. */
-export interface MidiPitchBendRequest extends MidiMessageAddress {
+export interface MidiPitchBendRequest {
+  /** Position in quarter notes, finite and `>= 0`. */
+  ppq: number;
+  /** UMP group, `0`..`15`. */
+  group: number;
+  /** MIDI channel, `0`..`15`. */
+  channel: number;
   /** Unsigned 14-bit bend, `0`..`16383`; center is `8192`. */
   bend: number;
 }
 
 /** Request of {@link midi2NoteOn}. */
-export interface Midi2NoteOnRequest extends MidiMessageAddress {
+export interface Midi2NoteOnRequest {
+  /** Position in quarter notes, finite and `>= 0`. */
+  ppq: number;
+  /** UMP group, `0`..`15`. */
+  group: number;
+  /** MIDI channel, `0`..`15`. */
+  channel: number;
   /** Note number, `0`..`127`. */
   note: number;
   /** Full 16-bit velocity, `0`..`65535`; `0` is a sounding note-on. */
@@ -73,7 +111,13 @@ export interface Midi2NoteOnRequest extends MidiMessageAddress {
 }
 
 /** Request of {@link midi2NoteOff}. */
-export interface Midi2NoteOffRequest extends MidiMessageAddress {
+export interface Midi2NoteOffRequest {
+  /** Position in quarter notes, finite and `>= 0`. */
+  ppq: number;
+  /** UMP group, `0`..`15`. */
+  group: number;
+  /** MIDI channel, `0`..`15`. */
+  channel: number;
   /** Note number, `0`..`127`. */
   note: number;
   /** Full 16-bit release velocity, `0`..`65535`. Default `0`. */
@@ -81,7 +125,13 @@ export interface Midi2NoteOffRequest extends MidiMessageAddress {
 }
 
 /** Request of {@link midi2Cc}. */
-export interface Midi2CcRequest extends MidiMessageAddress {
+export interface Midi2CcRequest {
+  /** Position in quarter notes, finite and `>= 0`. */
+  ppq: number;
+  /** UMP group, `0`..`15`. */
+  group: number;
+  /** MIDI channel, `0`..`15`. */
+  channel: number;
   /** Controller number, `0`..`127`. */
   controller: number;
   /** Full 32-bit value, `0`..`4294967295`. */
@@ -89,7 +139,13 @@ export interface Midi2CcRequest extends MidiMessageAddress {
 }
 
 /** Request of {@link midi2PolyPressure}. */
-export interface Midi2PolyPressureRequest extends MidiMessageAddress {
+export interface Midi2PolyPressureRequest {
+  /** Position in quarter notes, finite and `>= 0`. */
+  ppq: number;
+  /** UMP group, `0`..`15`. */
+  group: number;
+  /** MIDI channel, `0`..`15`. */
+  channel: number;
   /** Note number, `0`..`127`. */
   note: number;
   /** Full 32-bit pressure, `0`..`4294967295`. */
@@ -97,27 +153,51 @@ export interface Midi2PolyPressureRequest extends MidiMessageAddress {
 }
 
 /** Request of {@link midi2ChannelPressure}. */
-export interface Midi2ChannelPressureRequest extends MidiMessageAddress {
+export interface Midi2ChannelPressureRequest {
+  /** Position in quarter notes, finite and `>= 0`. */
+  ppq: number;
+  /** UMP group, `0`..`15`. */
+  group: number;
+  /** MIDI channel, `0`..`15`. */
+  channel: number;
   /** Full 32-bit pressure, `0`..`4294967295`. */
   pressure32: number;
 }
 
 /** Request of {@link midi2PitchBend}. */
-export interface Midi2PitchBendRequest extends MidiMessageAddress {
+export interface Midi2PitchBendRequest {
+  /** Position in quarter notes, finite and `>= 0`. */
+  ppq: number;
+  /** UMP group, `0`..`15`. */
+  group: number;
+  /** MIDI channel, `0`..`15`. */
+  channel: number;
   /** Unsigned 32-bit bend, `0`..`4294967295`; center is `0x80000000`. */
   bend32: number;
 }
 
 /** Request of {@link midi2Program}. */
-export interface Midi2ProgramRequest extends MidiMessageAddress {
+export interface Midi2ProgramRequest {
+  /** Position in quarter notes, finite and `>= 0`. */
+  ppq: number;
+  /** UMP group, `0`..`15`. */
+  group: number;
+  /** MIDI channel, `0`..`15`. */
+  channel: number;
   /** Program number, `0`..`127`. */
   program: number;
   /** Bank Select applied with the program. Omitted, the message carries no bank. */
   bank?: ProjectProgramBank;
 }
 
-/** Request of {@link midi2RegisteredController} and {@link midi2AssignableController}. */
-interface Midi2ControllerRequest extends MidiMessageAddress {
+/** Request of {@link midi2RegisteredController}. */
+export interface Midi2RegisteredControllerRequest {
+  /** Position in quarter notes, finite and `>= 0`. */
+  ppq: number;
+  /** UMP group, `0`..`15`. */
+  group: number;
+  /** MIDI channel, `0`..`15`. */
+  channel: number;
   /** Controller bank (MSB), `0`..`127`. */
   bank: number;
   /** Controller index (LSB), `0`..`127`. */
@@ -126,14 +206,30 @@ interface Midi2ControllerRequest extends MidiMessageAddress {
   value32: number;
 }
 
-/** Request of {@link midi2RegisteredController}. */
-export type Midi2RegisteredControllerRequest = Midi2ControllerRequest;
-
 /** Request of {@link midi2AssignableController}. */
-export type Midi2AssignableControllerRequest = Midi2ControllerRequest;
+export interface Midi2AssignableControllerRequest {
+  /** Position in quarter notes, finite and `>= 0`. */
+  ppq: number;
+  /** UMP group, `0`..`15`. */
+  group: number;
+  /** MIDI channel, `0`..`15`. */
+  channel: number;
+  /** Controller bank (MSB), `0`..`127`. */
+  bank: number;
+  /** Controller index (LSB), `0`..`127`. */
+  index: number;
+  /** Full 32-bit value, `0`..`4294967295`. */
+  value32: number;
+}
 
-/** Request of {@link midi2RelativeRegisteredController} and {@link midi2RelativeAssignableController}. */
-interface Midi2RelativeControllerRequest extends MidiMessageAddress {
+/** Request of {@link midi2RelativeRegisteredController}. */
+export interface Midi2RelativeRegisteredControllerRequest {
+  /** Position in quarter notes, finite and `>= 0`. */
+  ppq: number;
+  /** UMP group, `0`..`15`. */
+  group: number;
+  /** MIDI channel, `0`..`15`. */
+  channel: number;
   /** Controller bank (MSB), `0`..`127`. */
   bank: number;
   /** Controller index (LSB), `0`..`127`. */
@@ -142,14 +238,30 @@ interface Midi2RelativeControllerRequest extends MidiMessageAddress {
   delta32: number;
 }
 
-/** Request of {@link midi2RelativeRegisteredController}. */
-export type Midi2RelativeRegisteredControllerRequest = Midi2RelativeControllerRequest;
-
 /** Request of {@link midi2RelativeAssignableController}. */
-export type Midi2RelativeAssignableControllerRequest = Midi2RelativeControllerRequest;
+export interface Midi2RelativeAssignableControllerRequest {
+  /** Position in quarter notes, finite and `>= 0`. */
+  ppq: number;
+  /** UMP group, `0`..`15`. */
+  group: number;
+  /** MIDI channel, `0`..`15`. */
+  channel: number;
+  /** Controller bank (MSB), `0`..`127`. */
+  bank: number;
+  /** Controller index (LSB), `0`..`127`. */
+  index: number;
+  /** Signed 32-bit change. */
+  delta32: number;
+}
 
-/** Request of {@link midi2RegisteredPerNoteController} and {@link midi2AssignablePerNoteController}. */
-interface Midi2PerNoteControllerRequest extends MidiMessageAddress {
+/** Request of {@link midi2RegisteredPerNoteController}. */
+export interface Midi2RegisteredPerNoteControllerRequest {
+  /** Position in quarter notes, finite and `>= 0`. */
+  ppq: number;
+  /** UMP group, `0`..`15`. */
+  group: number;
+  /** MIDI channel, `0`..`15`. */
+  channel: number;
   /** Note number, `0`..`127`. */
   note: number;
   /** Controller index, `0`..`255`. */
@@ -158,14 +270,30 @@ interface Midi2PerNoteControllerRequest extends MidiMessageAddress {
   value32: number;
 }
 
-/** Request of {@link midi2RegisteredPerNoteController}. */
-export type Midi2RegisteredPerNoteControllerRequest = Midi2PerNoteControllerRequest;
-
 /** Request of {@link midi2AssignablePerNoteController}. */
-export type Midi2AssignablePerNoteControllerRequest = Midi2PerNoteControllerRequest;
+export interface Midi2AssignablePerNoteControllerRequest {
+  /** Position in quarter notes, finite and `>= 0`. */
+  ppq: number;
+  /** UMP group, `0`..`15`. */
+  group: number;
+  /** MIDI channel, `0`..`15`. */
+  channel: number;
+  /** Note number, `0`..`127`. */
+  note: number;
+  /** Controller index, `0`..`255`. */
+  index: number;
+  /** Full 32-bit value, `0`..`4294967295`. */
+  value32: number;
+}
 
 /** Request of {@link midi2PerNotePitchBend}. */
-export interface Midi2PerNotePitchBendRequest extends MidiMessageAddress {
+export interface Midi2PerNotePitchBendRequest {
+  /** Position in quarter notes, finite and `>= 0`. */
+  ppq: number;
+  /** UMP group, `0`..`15`. */
+  group: number;
+  /** MIDI channel, `0`..`15`. */
+  channel: number;
   /** Note number, `0`..`127`. */
   note: number;
   /** Unsigned 32-bit bend, `0`..`4294967295`; center is `0x80000000`. */
@@ -173,7 +301,13 @@ export interface Midi2PerNotePitchBendRequest extends MidiMessageAddress {
 }
 
 /** Request of {@link midi2PerNoteManagement}. */
-export interface Midi2PerNoteManagementRequest extends MidiMessageAddress {
+export interface Midi2PerNoteManagementRequest {
+  /** Position in quarter notes, finite and `>= 0`. */
+  ppq: number;
+  /** UMP group, `0`..`15`. */
+  group: number;
+  /** MIDI channel, `0`..`15`. */
+  channel: number;
   /** Note number, `0`..`127`. */
   note: number;
   /** Detach per-note controllers from voices already sounding on `note`. Default `false`. */
@@ -183,7 +317,13 @@ export interface Midi2PerNoteManagementRequest extends MidiMessageAddress {
 }
 
 /** Request of {@link midiBankProgram}. */
-export interface MidiBankProgramRequest extends MidiMessageAddress {
+export interface MidiBankProgramRequest {
+  /** Position in quarter notes, finite and `>= 0`. */
+  ppq: number;
+  /** UMP group, `0`..`15`. */
+  group: number;
+  /** MIDI channel, `0`..`15`. */
+  channel: number;
   /** Program number, `0`..`127`. */
   program: number;
   /** Bank Select sent before the program. */
