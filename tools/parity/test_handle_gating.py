@@ -437,6 +437,25 @@ def test_real_repo_has_zero_active_coverage_gaps() -> None:
     assert active_cov == [], [f"{f.key}/{f.surface}: {f.message}" for f in active_cov]
 
 
+def test_a_get_accessor_is_reached_by_its_getter() -> None:
+    """`project_get_x` is read by a `Project.x` getter; another class's `x` does not count."""
+    rep = _report(_c("project_get_overlap_policy"), _py(methods={"overlap_policy": "Project"}))
+    assert ("project_get_overlap_policy", "python") not in _active(rep), _active(rep)
+    other = _report(_c("project_get_overlap_policy"), _py(methods={"overlap_policy": "Mixer"}))
+    assert ("project_get_overlap_policy", "python") in _active(other), _active(other)
+
+
+def test_a_count_and_by_index_pair_is_reached_by_its_collection() -> None:
+    """Both halves of a count / by-index pair are read by the plural collection member."""
+    keys = ("project_track_count", "project_track_by_index")
+    rep = _report(_c(*keys), _py(methods={"tracks": "Project"}))
+    for key in keys:
+        assert (key, "python") not in _active(rep), _active(rep)
+    missing = _report(_c(*keys), _py(methods={"track_names": "Project"}))
+    for key in keys:
+        assert (key, "python") in _active(missing), _active(missing)
+
+
 def _run_all() -> int:
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     failed = 0

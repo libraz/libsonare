@@ -440,13 +440,6 @@ wasm = [
   # dependency as audio_from_file above; a WASM caller already holds the samples
   # and builds each channel through Audio.fromBuffer.
   "audio_from_file_channel",
-  # WASM exposes a zero-copy planar realtime path (getPlanarChannelBuffer +
-  # processPreparedPlanar) suited to AudioWorklet instead of a copy-in
-  # process_planar_stereo(left, right); same capability, AudioWorklet-shaped API.
-  "realtime_voice_changer_process_planar_stereo",
-  # The external-carrier variant of the same zero-copy planar path
-  # (getCarrierBuffer + processPreparedPlanarWithCarrier).
-  "realtime_voice_changer_process_planar_stereo_with_carrier",
   # See the Node note: this C enum parser is internal to typed facade inputs.
   "synth_builtin_waveform_from_name",
   # See the Node note: WASM also takes the delivery target by name and resolves
@@ -795,22 +788,7 @@ python = [
 # normalize.canonical_default, so they are NOT allowlisted per-key here. That
 # covers mastering_streaming_preview.platforms, add_vca_group.members, and the
 # add_send/meter_tap/strip_meter/schedule_*_automation enum defaults generally.
-#
-# set_builtin_instrument.destination_id: all three facades default it to 0.
-# Node/WASM read it from the config object (`config.destinationId ?? 0`) while
-# Python takes it as a separate `destination_id=0` keyword arg (the dataclass
-# config is the synth patch; the routing target is a distinct concern). Same
-# default, idiomatic representation difference — not behavioural drift.
-# set_sf2_instrument.destination_id: identical situation for the SF2 player
-# entry (same 0 default, same config-object vs keyword-arg representation).
-# set_synth_instrument.destination_id: identical situation for the NativeSynth
-# entry (same 0 default; Node/WASM read patch.destinationId when the patch is
-# an object — preset-name strings carry no routing — Python keyword arg).
-params = [
-  "set_builtin_instrument.destination_id",
-  "set_sf2_instrument.destination_id",
-  "set_synth_instrument.destination_id",
-]
+params = []
 
 # ---------------------------------------------------------------------------
 # [core_default] — "key.param" entries whose facade default is ALLOWED to differ
@@ -985,12 +963,14 @@ fields = [
   "mastering_chain_stereo_result.stage_gain_reduction_values",
   "mastering_chain_stereo_result.stage_gain_reductions",
 
-  # --- category 2 + 1: interleaved buffer + frame count -> one typed array ---
-  # C takes `audio_interleaved` (const float*) with `audio_frames`; both JS
-  # facades pass `audio: Float32Array` and derive the frame count from it.
+  # --- category 2 + 1: interleaved buffer + counts -> planar channels ---
+  # C takes `audio_interleaved` (const float*) with `audio_frames` and
+  # `audio_channels`; both JS facades pass `channels: Float32Array[]` and derive
+  # the frame and channel counts from the arrays.
   "project_clip_desc.audio_interleaved",
   "project_clip_desc.audio_frames",
-  "project_clip_desc.audio",
+  "project_clip_desc.audio_channels",
+  "project_clip_desc.channels",
   "project_loop_recording_desc.audio_interleaved",
   "project_loop_recording_desc.audio_frames",
   "project_loop_recording_desc.audio",
@@ -1001,27 +981,18 @@ fields = [
   "project_loop_recording_desc.flags",
   "project_loop_recording_desc.partial_tail",
 
-  # --- category 1: ordinal -> string union, and a clearer field name ---
+  # --- category 1: ordinal -> string union ---
   # C `kind` (SonareProjectTempoCandidateKind ordinal) is spelled `label`
-  # ('primary' | 'half' | 'double'); C `first_time_signature` is `timeSignature`.
+  # ('primary' | 'half' | 'double').
   "project_tempo_candidate.kind",
   "project_tempo_candidate.label",
-  "project_tempo_candidate.first_time_signature",
-  "project_tempo_candidate.time_signature",
 
   # --- category 1: a C function argument folded into the facade config bag ---
-  # The C ABI passes the MIDI destination id (and, for the synth patch, the
-  # GM-program follow flag) as separate arguments to the bounce entry points;
-  # every facade folds them into the config object. bindings/node/src/project.ts
-  # states this in the bounceWithSynthInstrument docs ("`destinationId` and
-  # `useGmPrograms` are JS binding" fields).
-  "builtin_synth_config.destination_id",
-  "sf2_instrument_config.destination_id",
-  "synth_patch.destination_id",
+  # The C ABI passes the GM-program follow flag as a separate argument to the
+  # synth bounce entry point; every facade folds it into the patch object.
   "synth_patch.use_gm_programs",
   # Same fold, same struct: the sample bank is a field of the C binding rather
-  # than of the C patch, and the facades that already carry destination_id on
-  # their patch object carry it there too.
+  # than of the C patch, and the facades carry it on the patch object.
   "synth_patch.sample_bank",
 
   # --- category 1: a C call argument folded into the facade's request object ---
@@ -1091,6 +1062,28 @@ fields = [
   # function every surface shares; C keeps the numeric fields only.
   "stream_chord_change.name",
   "stream_bar_chord.name",
+  # --- Planar audio in place of an interleaved buffer (categories 1 and 2) ---
+  # Node and WASM return a bounce as one Float32Array per channel: the
+  # interleaved pointer becomes `channels` and the frame count is their length.
+  "engine_bounce_result.interleaved",
+  "engine_bounce_result.frames",
+  "engine_bounce_result.channels",
+  # --- Same quantity, another representation (category 1) ---
+  # Telemetry reports graph latency in fractional samples; C carries it as
+  # Q8 fixed point. Expires when the two units meet.
+  "engine_telemetry.graph_latency_samples_q8",
+  "engine_telemetry.graph_latency_samples",
+  # --- Fields a facade deliberately leaves out (category 4) ---
+  # A bounce renders at the project's own rate, the only rate C accepts, so the
+  # facades have no sample rate to pass.
+  "project_bounce_options.sample_rate",
+  # A compile result carries the structured diagnostics only. The message text
+  # is those diagnostics joined, and the timeline is compileTimeline()'s.
+  "project_compile_result.messages",
+  "project_compile_result.has_timeline",
+  # A project stores musical positions only. The sample start is derived when
+  # the project compiles and is never read back.
+  "project_tempo_segment.start_sample",
 ]
 
 # Category 4 (intentionally one-sided): the facade record is a RICHER read model

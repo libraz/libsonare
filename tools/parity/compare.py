@@ -415,14 +415,14 @@ _ALIAS_COVERAGE = {
     # The Project facade presents aggregate descriptors rather than the C ABI's
     # component accessors / name resolver.
     "project_fade_curve_from_name": ("set_clip_fade",),
-    "project_marker_name_by_index": ("marker_by_index",),
-    "project_set_marker_ex_name": ("set_marker_ex",),
+    "project_marker_name_by_index": ("marker_by_index", "markers"),
+    "project_set_marker_ex_name": ("set_marker_ex", "set_marker"),
     "project_unresolved_audio_source_count": ("unresolved_audio_source_ids",),
     "project_unresolved_audio_source_id_by_index": ("unresolved_audio_source_ids",),
     "project_unresolved_audio_source_by_index": ("unresolved_audio_sources",),
     # The full URI feeds the ProjectSource builder behind source_by_index and
     # unresolved_audio_sources.
-    "project_get_audio_source_uri": ("source_by_index", "unresolved_audio_sources"),
+    "project_get_audio_source_uri": ("source_by_index", "sources", "unresolved_audio_sources"),
     # Typed automation is an additive C descriptor overload. Each facade keeps
     # one add/edit method and dispatches to `_ex` only when targetKind is
     # supplied, so coverage belongs to that canonical public method rather than
@@ -431,7 +431,7 @@ _ALIAS_COVERAGE = {
     "project_edit_automation_lane_ex": ("edit_automation_lane",),
     # ProjectSource is the facade's aggregate read model; its source-by-index
     # projection includes the owning audio metadata strings for audio sources.
-    "project_get_audio_source_metadata": ("source_by_index",),
+    "project_get_audio_source_metadata": ("source_by_index", "sources"),
     # prepare() accepts maxChannels and routes to this C entry point when it is
     # available, retaining a fallback for older native libraries in Python.
     "engine_prepare_with_channels": ("prepare",),
@@ -472,6 +472,80 @@ _ALIAS_COVERAGE = {
     # `channel` to plural, identically on all three facades.
     "playback_renderer_input_channel_count": ("input_channels",),
     "playback_renderer_output_channel_count": ("output_channels",),
+    # Members of a collection the count / by-index rule does not name: the
+    # sidecar lookup by name and the parameter descriptors read by index.
+    "project_get_assist_sidecar": ("assist_sidecars",),
+    "engine_parameter_info_by_index": ("parameters",),
+    # The fixed-point latency is read in (fractional) samples.
+    "engine_graph_latency_samples_q8": ("graph_latency_samples",),
+    # One marker setter carries the optional name the `_ex` variant adds.
+    "project_set_marker_ex": ("set_marker",),
+    # Deprecated C alias of project_bake_midi_fx; the facades expose the bake only.
+    "project_set_midi_fx": ("bake_midi_fx",),
+    # One strip family addressed by a strip reference: a track id or 'master'
+    # selects the track or master strip, and buses keep a family of their own.
+    # The `_json` / `_by_name` spellings take the object or the named parameter.
+    "engine_set_track_strip_json": ("set_strip",),
+    "engine_set_master_strip_json": ("set_strip",),
+    "engine_set_bus_strip_json": ("set_bus_strip",),
+    "engine_set_track_strip_pan": ("set_strip_pan",),
+    "engine_set_track_strip_pan_law": ("set_strip_pan_law",),
+    "engine_set_track_strip_pan_mode": ("set_strip_pan_mode",),
+    "engine_set_track_strip_dual_pan": ("set_strip_dual_pan",),
+    "engine_set_track_strip_surround_pan": ("set_strip_surround_pan",),
+    "engine_set_track_strip_channel_delay_samples": ("set_strip_channel_delay_samples",),
+    "engine_set_bus_strip_pan": ("set_bus_pan",),
+    "engine_set_bus_strip_pan_law": ("set_bus_pan_law",),
+    "engine_set_bus_strip_pan_mode": ("set_bus_pan_mode",),
+    "engine_set_bus_strip_dual_pan": ("set_bus_dual_pan",),
+    "engine_set_track_strip_eq_band_json": ("set_strip_eq_band",),
+    "engine_set_master_strip_eq_band_json": ("set_strip_eq_band",),
+    "engine_set_bus_strip_eq_band_json": ("set_bus_eq_band",),
+    "engine_set_track_strip_insert_bypassed": ("set_strip_insert_bypassed",),
+    "engine_set_master_strip_insert_bypassed": ("set_strip_insert_bypassed",),
+    "engine_set_bus_strip_insert_bypassed": ("set_bus_insert_bypassed",),
+    "engine_set_track_strip_insert_param_by_name": ("set_strip_insert_param",),
+    "engine_set_master_strip_insert_param_by_name": ("set_strip_insert_param",),
+    "engine_set_bus_strip_insert_param_by_name": ("set_bus_insert_param",),
+    "engine_apply_track_strip_insert_param_by_name_now": ("apply_strip_insert_param_now",),
+    "engine_apply_master_strip_insert_param_by_name_now": ("apply_strip_insert_param_now",),
+    "engine_apply_bus_strip_insert_param_by_name_now": ("apply_bus_insert_param_now",),
+    "engine_restore_track_strip_insert_param_by_name": ("restore_strip_insert_param",),
+    "engine_restore_master_strip_insert_param_by_name": ("restore_strip_insert_param",),
+    "engine_restore_bus_strip_insert_param_by_name": ("restore_bus_insert_param",),
+    "engine_clear_track_insert_parameter_bases": ("clear_strip_insert_parameter_bases",),
+    "engine_clear_master_insert_parameter_bases": ("clear_strip_insert_parameter_bases",),
+    "engine_resolve_track_lane_automation_id": ("resolve_strip_automation_id",),
+    "engine_resolve_master_automation_id": ("resolve_strip_automation_id",),
+    "engine_resolve_track_insert_automation_id": ("resolve_strip_insert_automation_id",),
+    "engine_resolve_master_insert_automation_id": ("resolve_strip_insert_automation_id",),
+    "engine_set_lane_sidechain": ("set_strip_sidechain",),
+    "engine_set_master_sidechain": ("set_strip_sidechain",),
+    "engine_can_set_lane_sidechain": ("can_set_strip_sidechain",),
+    "engine_can_set_master_sidechain": ("can_set_strip_sidechain",),
+    # Solo/mute is addressed by track id; the facade resolves the lane.
+    "engine_set_solo_mute": ("set_track_solo_mute",),
+    "engine_bind_midi_cc_binding": ("bind_midi_cc",),
+    # Capture is configured in one call carrying buffer, punch, source, input
+    # monitor and record offset.
+    "engine_set_capture_buffer": ("configure_capture",),
+    "engine_set_capture_punch": ("configure_capture",),
+    "engine_set_capture_source": ("configure_capture",),
+    "engine_set_input_monitor": ("configure_capture",),
+    "engine_set_record_offset_samples": ("configure_capture",),
+    # A mixer scene is the mixer's document: the facades read and load it as JSON.
+    "mixer_to_scene_json": ("to_json",),
+    "mixer_from_scene_json": ("from_json",),
+    # One strip-meter read takes the optional tap.
+    "strip_meter_tap": ("strip_meter",),
+    # The voice changer processes planar channels or writes interleaved audio
+    # into a caller buffer; the stereo pair is the two-channel planar case.
+    "realtime_voice_changer_process_interleaved": ("process_interleaved_into",),
+    "realtime_voice_changer_process_interleaved_with_carrier": (
+        "process_interleaved_with_carrier_into",
+    ),
+    "realtime_voice_changer_process_planar_stereo": ("process_planar",),
+    "realtime_voice_changer_process_planar_stereo_with_carrier": ("process_planar_with_carrier",),
 }
 
 
@@ -583,6 +657,18 @@ def _handle_prefix(key: str) -> str | None:
     return None
 
 
+def _accessor_forms(tail: str) -> list[str]:
+    """Handle-class members that read what a C accessor tail reads.
+
+    A `get_x` accessor is the `x` getter, and both halves of an `x_count` /
+    `x_by_index` pair are the `xs` collection. Matched on the handle's own class
+    only, like the prefix strip.
+    """
+    forms = [tail[len("get_") :]] if tail.startswith("get_") else []
+    forms += [tail[: -len(s)] + "s" for s in ("_count", "_by_index") if tail.endswith(s)]
+    return forms
+
+
 def _free_keys(ex: Extraction | None) -> set[str]:
     """Canonical keys exposed as free functions rather than class members."""
     if ex is None:
@@ -677,7 +763,10 @@ def build_report(
                 # the one claim the tier makes. An op the facades deliberately
                 # expose as a free function is named in ``_ALIAS_COVERAGE`` below.
                 if prefix:
-                    covered = key[len(prefix) :] in candidate_methods
+                    tail = key[len(prefix) :]
+                    covered = tail in candidate_methods or any(
+                        form in candidate_methods for form in _accessor_forms(tail)
+                    )
             if not covered:
                 # Idiomatic rename: the capability is exposed under a different
                 # canonical name (verified alias). Credit it when any listed alias
