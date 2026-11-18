@@ -770,3 +770,11 @@ changed = "the Python CLI reads the document through the library's chain-config 
 domain = "mastering"
 rule = "error-class-by-cause"
 test = "bindings/python/tests/test_cli_mastering_chain_config.py::test_a_document_the_library_refuses_exits_as_an_invalid_format"
+
+[[entry]]
+kind = "command"
+old = "project.compile"
+changed = "the native CLI's --json diagnostics carry code and severity as the library's tokens (\"danglingSourceRef\", \"warning\", ...) rather than integers, as the Python CLI does"
+domain = "project"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_project_test.cpp::compile JSON keeps one human message per diagnostic"

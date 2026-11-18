@@ -7149,8 +7149,8 @@
                   {
                     "type": "object",
                     "keys": {
-                      "code": "integer",
-                      "severity": "integer",
+                      "code": "string",
+                      "severity": "string",
                       "target_id": "integer",
                       "message": "string"
                     }
@@ -7158,8 +7158,8 @@
                   {
                     "type": "object",
                     "keys": {
-                      "code": "integer",
-                      "severity": "integer",
+                      "code": "string",
+                      "severity": "string",
                       "message": "string"
                     }
                   }

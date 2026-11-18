@@ -5,6 +5,8 @@
 #ifdef SONARE_WITH_ARRANGEMENT
 
 #include <cstdint>
+#include <stdexcept>
+#include <string>
 
 // Every subcommand here reports its result on stdout and keeps stderr for
 // errors, usage, and advisory output, matching the rest of this CLI. The
@@ -124,6 +126,12 @@ bool load_project_from_args(const CliArgs& args, ProjectHandle* handle, std::str
   if (diagnostics != nullptr && diag != nullptr) *diagnostics = diag;
   sonare_free_string(diag);
   return true;
+}
+
+// The library names every code and severity it reports, so an unnamed one is a library defect.
+std::string diagnostic_token(const char* name) {
+  if (name == nullptr) throw std::logic_error("project diagnostic without a token");
+  return name;
 }
 
 size_t project_diagnostic_count(const std::string& diagnostics) {
@@ -314,8 +322,10 @@ int cmd_project_compile(const CliArgs& args) {
     for (size_t i = 0; i < result.diagnostic_count; ++i) {
       const SonareProjectDiagnostic& diagnostic = result.diagnostics[i];
       builder.begin_object()
-          .kv("code", static_cast<int>(diagnostic.code))
-          .kv("severity", static_cast<int>(diagnostic.severity));
+          .kv("code", diagnostic_token(
+                          sonare_project_diagnostic_code_name(static_cast<int>(diagnostic.code))))
+          .kv("severity", diagnostic_token(sonare_project_diagnostic_severity_name(
+                              static_cast<int>(diagnostic.severity))));
       // Target id 0 means a project-wide diagnostic, which names no target.
       if (diagnostic.target_id != 0) {
         builder.kv("target_id", static_cast<int>(diagnostic.target_id));

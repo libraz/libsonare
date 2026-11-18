@@ -1408,7 +1408,7 @@ class ProjectCompileDiagnosticVariantTest(unittest.TestCase):
         case = next(c for c in compile_path["cases"] if c["id"] == "no_timeline")
 
         def run(target: object, surface: str) -> list[tuple[str, str]]:
-            diagnostic: dict[str, object] = {"code": 1, "severity": 2, "message": "m"}
+            diagnostic: dict[str, object] = {"code": "clipOverlap", "severity": "warning", "message": "m"}
             if target is not ...:
                 diagnostic["target_id"] = target
             payload = {

@@ -248,6 +248,10 @@ TEST_CASE("CLI project command group", "[cli]") {
     REQUIRE(diagnostics.size() ==
             static_cast<size_t>(diagnostic_payload["diagnostic_count"].as_int()));
     for (const auto& diagnostic : diagnostics.as_array()) {
+      // Code and severity are the library's tokens, as on the Python CLI.
+      REQUIRE(diagnostic["code"].is_string());
+      const std::string severity = diagnostic["severity"].as_string();
+      REQUIRE((severity == "error" || severity == "warning"));
       REQUIRE(diagnostic.contains("message"));
       REQUIRE(diagnostic["message"].is_string());
       REQUIRE_FALSE(diagnostic["message"].as_string().empty());
