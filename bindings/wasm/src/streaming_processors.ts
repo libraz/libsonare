@@ -352,7 +352,7 @@ export class StreamingMasteringChain {
  * ```typescript
  * const eq = new StreamingEqualizer({ sampleRate: 48000, maxBlockSize: 512 });
  * try {
- *   eq.setBand(0, { type: 'HighShelf', frequencyHz: 8000, gainDb: 6, enabled: true });
+ *   eq.setBand(0, { type: 'highShelf', frequencyHz: 8000, gainDb: 6, enabled: true });
  *   const out = eq.processStereo(left, right);
  *   const snapshot = eq.spectrum();
  * } finally {
