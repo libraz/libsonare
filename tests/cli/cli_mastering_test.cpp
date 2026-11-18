@@ -197,6 +197,14 @@ TEST_CASE("CLI mastering command", "[cli][mastering]") {
     CHECK(loud["chain_config"]["params"]["loudness.ceilingDb"].as_number() == -2.0);
   }
 
+  SECTION("mastering-suggest refuses an earlier --params spelling naming the current key") {
+    auto [code, output] = exec_command(CLI + " mastering-suggest " + TEST_WAV +
+                                       " --params target_platform=broadcast --json 2>&1");
+    CHECK(code == 3);
+    CHECK_THAT(output, ContainsSubstring("target_platform"));
+    CHECK_THAT(output, ContainsSubstring("targetPlatform"));
+  }
+
   SECTION("mastering-suggest refuses a contradiction, an unknown key and an index") {
     for (const std::string extra :
          {" --preset jazz --params preset=jazz", " --target-lufs -12 --params targetLufs=-12",
