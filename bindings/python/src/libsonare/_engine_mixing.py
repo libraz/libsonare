@@ -132,6 +132,8 @@ def _marshal_sends(
 
 
 class _EngineMixingMixin:
+    _lane_order: list[int] | Literal["timeline"]
+
     if TYPE_CHECKING:
 
         def _require_handle(self) -> ctypes.c_void_p: ...
@@ -171,6 +173,7 @@ class _EngineMixingMixin:
                     cast(ChannelLayout, lane["source_channel_layout"])
                 )
         _check(_get_lib().sonare_engine_set_track_lanes(self._require_handle(), raw, len(lanes)))
+        self._lane_order = [int(raw[i].track_id) for i in range(len(lanes))]
 
     def set_track_sends(self, track_id: int, sends: Sequence[Mapping[str, object]]) -> None:
         """Replace one track lane's sends, leaving its output bus and every other lane as published.

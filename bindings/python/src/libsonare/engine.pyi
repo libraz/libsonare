@@ -483,12 +483,12 @@ class RealtimeEngine:
         self, param_id: int, value: float, render_frame: int | None = None
     ) -> None: ...
     def set_param_smoothing_ms(self, smoothing_ms: float) -> None: ...
-    def set_solo_mute(
-        self, lane_index: int, solo: bool, mute: bool, render_frame: int | None = None
+    def set_track_solo_mute(
+        self, track_id: int, *, solo: bool, mute: bool, render_frame: int | None = None
     ) -> None: ...
     def set_track_monitor_mode(
         self,
-        lane_index: int,
+        track_id: int,
         mode: EngineTrackMonitorMode,
         render_frame: int | None = None,
     ) -> None: ...

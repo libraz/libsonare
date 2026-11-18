@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import ctypes
 from collections.abc import Mapping, Sequence
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from . import _ffi_types_core as _ffi_core
 from . import _ffi_types_mastering_project as _ffi_project
@@ -60,7 +60,7 @@ from ._engine_midi import _EngineMidiMixin
 from ._engine_mixing import _EngineMixingMixin
 from ._engine_pages import ClipPageProvider as ClipPageProvider
 from ._engine_pages import FileClipPageProvider as FileClipPageProvider
-from ._errors import ErrorCode, SonareError, _not_supported, _require_open
+from ._errors import ErrorCode, SonareError, _invalid_state, _not_supported, _require_open
 from ._facade import rebind_facade_exports as _rebind_facade_exports
 from ._mixing import StripRef
 from ._narrowing import _narrow_double, _resolve_zero_default
@@ -70,6 +70,7 @@ from ._runtime import (
     _METER_SEGMENT_KEYS,
     _TEMPO_SEGMENT_KEYS,
     _UINT8_MAX,
+    _UINT32_MAX,
     SonareValueError,
     _check,
     _curve_value,
@@ -155,6 +156,9 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         self._handle = handle
         self._capture_arrays: list[ctypes.Array[ctypes.c_float]] = []
         self._capture_ptrs: ctypes.Array[Any] | None = None
+        # Track ids in lane order as set_track_lanes declared them; "timeline" once a
+        # project timeline installed lanes this facade cannot see.
+        self._lane_order: list[int] | Literal["timeline"] = []
         # Page providers the published clips read from, kept alive by clip id.
         self._clip_page_providers: dict[int, list[ClipPageProvider]] = {}
         self.prepare(
@@ -204,6 +208,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
                 self._require_handle(), timeline._require_handle()
             )
         )
+        self._lane_order = "timeline"
 
     def prepare(
         self,
@@ -788,16 +793,31 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
             )
         )
 
-    def set_solo_mute(
-        self, lane_index: int, solo: bool, mute: bool, render_frame: int | None = None
-    ) -> None:
-        """Queue a lane's solo/mute state.
+    def _lane_index_of(self, fn: str, track_id: int) -> int:
+        """Lane index of ``track_id`` in set_track_lanes order; an unknown id is refused."""
+        track = _narrow_int(track_id, "track_id", 0, _UINT32_MAX)
+        if self._lane_order == "timeline":
+            raise _invalid_state(
+                f"{fn}: the lanes were installed by a project timeline; "
+                "declare them with set_track_lanes"
+            )
+        try:
+            return self._lane_order.index(track)
+        except ValueError:
+            raise SonareValueError(f"{fn}: unknown track id {track}") from None
 
-        An armed PFL/AFL cue (:meth:`set_track_monitor_mode`) is folded into the
-        program output by ``process`` and kept separate by
-        the ``*_with_monitor`` variants; offline renders, bounces and freezes
-        never include it.
+    def set_track_solo_mute(
+        self, track_id: int, *, solo: bool, mute: bool, render_frame: int | None = None
+    ) -> None:
+        """Queue a track's solo/mute state.
+
+        ``track_id`` is a track declared through :meth:`set_track_lanes`; an unknown id
+        raises ``SonareValueError`` and lanes installed by a project timeline raise
+        ``INVALID_STATE``. An armed PFL/AFL cue (:meth:`set_track_monitor_mode`) is folded
+        into the program output by ``process`` and kept separate by the ``*_with_monitor``
+        variants; offline renders, bounces and freezes never include it.
         """
+        lane_index = self._lane_index_of("set_track_solo_mute", track_id)
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_set_solo_mute"):
             raise _not_supported("libsonare was built without realtime mixer support")
@@ -813,21 +833,21 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
 
     def set_track_monitor_mode(
         self,
-        lane_index: int,
+        track_id: int,
         mode: EngineTrackMonitorMode,
         render_frame: int | None = None,
     ) -> None:
-        """Schedule a PFL/AFL monitor tap for a configured track lane.
+        """Schedule a PFL/AFL monitor tap for a track at a render-frame boundary.
 
-        ``mode`` is ``"off"``, ``"pfl"`` or ``"afl"``. Unknown lane indices
-        are reported asynchronously by engine
-        telemetry, matching the native command contract.
+        ``mode`` is ``"off"``, ``"pfl"`` or ``"afl"``. ``track_id`` is a track declared
+        through :meth:`set_track_lanes`; an unknown id raises ``SonareValueError``.
 
         ``process`` fold the armed cue into the program
         output, so the tapped lane is counted twice there; the
         ``*_with_monitor`` variants keep the cue separate. Offline renders,
         bounces and freezes never include the cue.
         """
+        lane_index = self._lane_index_of("set_track_monitor_mode", track_id)
         mode_value = _track_monitor_mode_value(mode)
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_set_track_monitor_mode"):

@@ -11171,3 +11171,30 @@ old = "RealtimeEngine.bind_midi_cc_binding"
 new = "RealtimeEngine.bind_midi_cc"
 domain = "engine"
 rule = "one-input-form"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.set_solo_mute"
+to = "RealtimeEngine.set_track_solo_mute"
+changed = "set_track_solo_mute(track_id, *, solo, mute, render_frame=None) addresses a track declared through set_track_lanes instead of a lane index; an unknown track id raises SonareValueError and lanes installed by a project timeline raise SonareError (INVALID_STATE)"
+domain = "engine"
+rule = "strip-ref"
+test = "bindings/python/tests/test_engine_mixer.py::test_track_solo_mute_and_monitor_mode_address_a_declared_track_id"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.set_solo_mute(lane_index)"
+to = "RealtimeEngine.set_track_solo_mute(track_id)"
+changed = "a track id declared through set_track_lanes instead of a lane index; an unknown id raises SonareValueError"
+domain = "engine"
+rule = "strip-ref"
+test = "bindings/python/tests/test_engine_mixer.py::test_track_solo_mute_and_monitor_mode_address_a_declared_track_id"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.set_track_monitor_mode(lane_index)"
+to = "RealtimeEngine.set_track_monitor_mode(track_id)"
+changed = "a track id declared through set_track_lanes instead of a lane index; an unknown id raises SonareValueError rather than reaching telemetry"
+domain = "engine"
+rule = "strip-ref"
+test = "bindings/python/tests/test_engine_mixer.py::test_track_solo_mute_and_monitor_mode_address_a_declared_track_id"

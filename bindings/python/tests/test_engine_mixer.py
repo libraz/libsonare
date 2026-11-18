@@ -14,6 +14,7 @@ from libsonare import (
     EngineClip,
     EngineProcessWithMonitorResult,
     ErrorCode,
+    Project,
     RealtimeEngine,
     SonareError,
     SonareValueError,
@@ -75,7 +76,7 @@ def test_engine_track_monitor_mode_pfl_and_afl() -> None:
             scene_strip('{"version":1,"strips":[{"id":"track-10"}],"buses":[],"connections":[]}'),
         )
         engine.play()
-        engine.set_track_monitor_mode(0, "pfl", render_frame=block // 2)
+        engine.set_track_monitor_mode(10, "pfl", render_frame=block // 2)
         processed = engine.process_with_monitor([[0.0] * block])
         main, monitor = processed.output, processed.monitor
         assert main[0][-1] == pytest.approx(1.0, abs=0.01)
@@ -90,7 +91,7 @@ def test_engine_track_monitor_mode_pfl_and_afl() -> None:
         assert 0.4 < main[0][-1] < 0.7
         assert monitor[0][-1] == pytest.approx(1.0, abs=0.01)
 
-        engine.set_track_monitor_mode(0, "afl")
+        engine.set_track_monitor_mode(10, "afl")
         processed = engine.process_with_monitor([[0.0] * block])
         main, monitor = processed.output, processed.monitor
         assert monitor[0][-1] == pytest.approx(main[0][-1], abs=0.01)
@@ -129,7 +130,7 @@ def test_engine_track_lanes_route_clips_and_lane_commands() -> None:
         assert processed[0][-1] == pytest.approx(2.0)
         assert processed[1][-1] == pytest.approx(2.0)
 
-        engine.set_solo_mute(0, solo=True, mute=False)
+        engine.set_track_solo_mute(10, solo=True, mute=False)
         for _ in range(4):
             processed = engine.process([[0.0] * 256, [0.0] * 256])
         assert 0.75 < processed[0][-1] < 1.25
@@ -808,3 +809,47 @@ def test_engine_track_lane_send_timing_is_optional() -> None:
                 },
             ]
         )
+
+
+def test_track_solo_mute_and_monitor_mode_address_a_declared_track_id() -> None:
+    frames = 256 * 8
+    with RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
+        engine.set_clips(
+            [
+                EngineClip(
+                    id=1,
+                    track_id=10,
+                    channels=[[1.0] * frames],
+                    start_ppq=0.0,
+                    length_samples=frames,
+                )
+            ]
+        )
+        # Track 10 is lane 1, so muting lane 0 instead would leave it sounding.
+        engine.set_track_lanes([{"track_id": 20}, {"track_id": 10}])
+        engine.play()
+        assert engine.process([[0.0] * 256])[0][-1] == pytest.approx(1.0, abs=0.01)
+        engine.set_track_solo_mute(10, solo=False, mute=True)
+        for _ in range(16):
+            out = engine.process([[0.0] * 256])
+        assert abs(out[0][-1]) < 0.01
+        engine.set_track_monitor_mode(10, "pfl")
+        for call in (
+            lambda: engine.set_track_solo_mute(1, solo=True, mute=False),
+            lambda: engine.set_track_monitor_mode(1, "pfl"),
+        ):
+            with pytest.raises(SonareValueError, match="unknown track id 1"):
+                call()
+        with pytest.raises(TypeError):
+            engine.set_track_solo_mute(None, solo=True, mute=False)  # type: ignore[arg-type]
+
+
+def test_track_solo_mute_after_a_project_timeline_is_coded_invalid_state() -> None:
+    with Project() as project, RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
+        result = project.compile_timeline()
+        assert result.timeline is not None
+        with result.timeline as timeline:
+            engine.apply_project_timeline(timeline)
+        with pytest.raises(SonareError) as refused:
+            engine.set_track_solo_mute(10, solo=True, mute=False)
+        assert refused.value.code == int(ErrorCode.INVALID_STATE)
