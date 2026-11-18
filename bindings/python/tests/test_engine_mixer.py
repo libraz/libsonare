@@ -12,6 +12,7 @@ from libsonare import (
     MAX_TRACK_LANES,
     AutomationPoint,
     EngineClip,
+    EngineProcessWithMonitorResult,
     RealtimeEngine,
     SonareError,
     SonareValueError,
@@ -72,7 +73,8 @@ def test_engine_track_monitor_mode_pfl_and_afl() -> None:
         )
         engine.play()
         engine.set_track_monitor_mode(0, "pfl", render_frame=block // 2)
-        main, monitor = engine.process_with_monitor([[0.0] * block])
+        processed = engine.process_with_monitor([[0.0] * block])
+        main, monitor = processed.output, processed.monitor
         assert main[0][-1] == pytest.approx(1.0, abs=0.01)
         assert monitor[0][0] == pytest.approx(0.0, abs=0.01)
         assert monitor[0][block // 2] == pytest.approx(1.0, abs=0.01)
@@ -80,12 +82,14 @@ def test_engine_track_monitor_mode_pfl_and_afl() -> None:
 
         engine.set_parameter(engine.resolve_track_lane_automation_id(10, "faderDb"), -6.0)
         for _ in range(9):
-            main, monitor = engine.process_with_monitor([[0.0] * block])
+            processed = engine.process_with_monitor([[0.0] * block])
+            main, monitor = processed.output, processed.monitor
         assert 0.4 < main[0][-1] < 0.7
         assert monitor[0][-1] == pytest.approx(1.0, abs=0.01)
 
         engine.set_track_monitor_mode(0, "afl")
-        main, monitor = engine.process_with_monitor([[0.0] * block])
+        processed = engine.process_with_monitor([[0.0] * block])
+        main, monitor = processed.output, processed.monitor
         assert monitor[0][-1] == pytest.approx(main[0][-1], abs=0.01)
         assert 0.4 < monitor[0][-1] < 0.7
 
@@ -503,7 +507,11 @@ def test_engine_master_strip_eq_band_updates_embedded_eq() -> None:
 
 def test_realtime_engine_process_with_monitor_returns_separate_bus() -> None:
     with RealtimeEngine(sample_rate=48000.0, max_block_size=16) as engine:
-        output, monitor = engine.process_with_monitor([[0.25] * 16, [-0.25] * 16])
+        result = engine.process_with_monitor([[0.25] * 16, [-0.25] * 16])
+        assert isinstance(result, EngineProcessWithMonitorResult)
+        with pytest.raises(TypeError):
+            iter(result)
+        output, monitor = result.output, result.monitor
         assert output[0][0] == pytest.approx(0.25)
         assert output[1][0] == pytest.approx(-0.25)
         assert monitor[0][0] == pytest.approx(0.0)

@@ -57,6 +57,16 @@ class TakeAlignment:
     """Chroma frames the take produced, at the reference sample rate."""
 
 
+@dataclass(frozen=True, slots=True)
+class AlignTakeToReferenceResult:
+    """Result of :func:`align_take_to_reference`."""
+
+    anchors: tuple[tuple[float, float], ...]
+    """``(warp_sample, source_sample)`` pairs in increasing order."""
+    alignment: TakeAlignment
+    """How well the alignment was conditioned."""
+
+
 @_guard_buffer("reference", "take")
 def align_take_to_reference(
     reference: Sequence[float] | list[float] | np.ndarray,
@@ -67,7 +77,7 @@ def align_take_to_reference(
     hop_length: int | None = None,
     bins_per_octave: int | None = None,
     validate: bool = True,
-) -> tuple[list[tuple[float, float]], TakeAlignment]:
+) -> AlignTakeToReferenceResult:
     """Align a take to a reference timeline and return anchors placing it under it.
 
     A chromagram is measured for each signal and the two are aligned, then the
@@ -117,8 +127,9 @@ def align_take_to_reference(
         validate: Reject empty / NaN / Inf input (default True).
 
     Returns:
-        ``(anchors, alignment)`` -- the ``(warp_sample, source_sample)`` pairs in
-        increasing order, and a :class:`TakeAlignment` describing how well the
+        An :class:`AlignTakeToReferenceResult` whose ``anchors`` are the
+        ``(warp_sample, source_sample)`` pairs in increasing order, and whose
+        ``alignment`` is a :class:`TakeAlignment` describing how well the
         alignment was conditioned, its frame counts being hop frames at the
         reference rate (``take_frames`` counts the resampled take). The metadata
         is how a caller tells a take the reference genuinely fits from one it
@@ -137,8 +148,8 @@ def align_take_to_reference(
             arrangement subsystem.
 
     Example:
-        >>> anchors, alignment = libsonare.align_take_to_reference(guide, take, 44100)
-        >>> project.set_warp_map(1, anchors)
+        >>> result = libsonare.align_take_to_reference(guide, take, 44100)
+        >>> project.set_warp_map(1, result.anchors)
         >>> project.set_clip_warp_ref(take_clip, 1)
     """
     lib = _get_lib()
@@ -182,19 +193,22 @@ def align_take_to_reference(
     )
     try:
         _check(rc)
-        anchors = [
+        anchors = tuple(
             (out_anchors[i].warp_sample, out_anchors[i].source_sample)
             for i in range(out_count.value)
-        ]
+        )
     finally:
         # The array is heap-owned, so it is released whether the rows were read
         # or the read raised part-way. A refused call leaves the pointer NULL.
         if out_anchors:
             lib.sonare_free_warp_anchors(out_anchors)
-    return anchors, TakeAlignment(
-        mean_residual_frames=out_alignment.mean_residual_frames,
-        reference_frames=int(out_alignment.reference_frames),
-        take_frames=int(out_alignment.take_frames),
+    return AlignTakeToReferenceResult(
+        anchors=anchors,
+        alignment=TakeAlignment(
+            mean_residual_frames=out_alignment.mean_residual_frames,
+            reference_frames=int(out_alignment.reference_frames),
+            take_frames=int(out_alignment.take_frames),
+        ),
     )
 
 

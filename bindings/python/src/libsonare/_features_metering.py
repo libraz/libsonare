@@ -50,6 +50,7 @@ from .types import (
     DynamicRangeReport,
     KeyMode,
     LufsResult,
+    LufsSeriesResult,
     PhaseScopeReport,
     SpectrumReport,
     VectorscopeReport,
@@ -214,7 +215,7 @@ def lufs_series_interleaved(
     sample_rate: int,
     *,
     validate: bool = True,
-) -> tuple[list[float], list[float]]:
+) -> LufsSeriesResult:
     """Momentary and short-term LUFS series for an interleaved multi-channel buffer.
 
     Measured with ITU-R BS.1770-4 channel summing, so this is not recoverable
@@ -230,8 +231,9 @@ def lufs_series_interleaved(
         validate: Reject empty / NaN / Inf input (default ``True``).
 
     Returns:
-        ``(momentary, short_term)`` — the 400 ms and 3 s series in LUFS. A signal
-        shorter than a window yields an empty series for it, not an error.
+        A :class:`LufsSeriesResult` holding the 400 ms and 3 s series in LUFS as
+        float32 arrays. A signal shorter than a window yields an empty series for
+        it, not an error.
     """
     sample_buf = _validate_samples("lufs_series_interleaved", samples, validate=validate)
     if channels <= 0:
@@ -258,9 +260,9 @@ def lufs_series_interleaved(
             ctypes.byref(short_term_length),
         )
         _check(rc)
-        return (
-            _optional_from_c_float_array(out_momentary, momentary_length.value),
-            _optional_from_c_float_array(out_short_term, short_term_length.value),
+        return LufsSeriesResult(
+            momentary_lufs=_optional_from_c_float_array(out_momentary, momentary_length.value),
+            short_term_lufs=_optional_from_c_float_array(out_short_term, short_term_length.value),
         )
 
 

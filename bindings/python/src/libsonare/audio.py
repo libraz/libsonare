@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ctypes
 from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -192,7 +193,17 @@ if TYPE_CHECKING:
 _LAYOUT_CHANNEL_COUNTS = {"mono": 1, "stereo": 2, "5.1": 6, "7.1": 8}
 
 
-def decode_channels(data: bytes) -> tuple[np.ndarray, int]:
+@dataclass(frozen=True, slots=True, eq=False)
+class DecodedChannels:
+    """Result of :func:`decode_channels`."""
+
+    sample_rate: int
+    """Sample rate of the decoded audio in Hz."""
+    channels: np.ndarray
+    """Channel-planar float32 array of shape ``(channel_count, frames)``."""
+
+
+def decode_channels(data: bytes) -> DecodedChannels:
     """Decode audio bytes once and keep every source channel.
 
     :meth:`Audio.from_memory` folds a multi-channel source to mono as it
@@ -205,7 +216,7 @@ def decode_channels(data: bytes) -> tuple[np.ndarray, int]:
             ``-DSONARE_WITH_FFMPEG=ON``).
 
     Returns:
-        ``(channels, sample_rate)``. ``channels`` is a channel-planar 2-D
+        A :class:`DecodedChannels`. ``channels`` is a channel-planar 2-D
         ``float32`` array of shape ``(channel_count, frames)`` in the source's
         own channel order (5.1 is L R C LFE Ls Rs), the shape the N-channel
         entry points take.
@@ -240,7 +251,10 @@ def decode_channels(data: bytes) -> tuple[np.ndarray, int]:
             )
         )
         planar = _from_c_float_array(out, channels.value * frames.value)
-        return planar.reshape(channels.value, frames.value), int(sample_rate.value)
+        return DecodedChannels(
+            sample_rate=int(sample_rate.value),
+            channels=planar.reshape(channels.value, frames.value),
+        )
 
 
 def downmix(

@@ -31,7 +31,9 @@ def _tone(freq: float = 440.0, frames: int = 4800) -> np.ndarray:
 def _one_note_project(note: int) -> Project:
     project = Project()
     project.set_sample_rate(float(SAMPLE_RATE))
-    track, clip = project.add_midi_clip(0.0, 1.0)
+    _midi = project.add_midi_clip(0.0, 1.0)
+    track = _midi.track_id
+    clip = _midi.clip_id
     project.set_track_midi_destination(track, 0)
     project.set_midi_events(
         clip,
@@ -234,7 +236,9 @@ def test_each_binding_carries_its_own_bank() -> None:
     try:
         project.set_sample_rate(float(SAMPLE_RATE))
         for destination, note in ((0, 60), (1, 72)):
-            track, clip = project.add_midi_clip(0.0, 1.0)
+            _midi = project.add_midi_clip(0.0, 1.0)
+            track = _midi.track_id
+            clip = _midi.clip_id
             project.set_track_midi_destination(track, destination)
             project.set_midi_events(
                 clip,
@@ -360,7 +364,9 @@ def test_a_looped_sample_outlasts_the_frames_it_holds() -> None:
     def render(loop_mode: str | int) -> np.ndarray:
         project = Project()
         project.set_sample_rate(float(SAMPLE_RATE))
-        track, clip = project.add_midi_clip(0.0, 4.0)
+        _midi = project.add_midi_clip(0.0, 4.0)
+        track = _midi.track_id
+        clip = _midi.clip_id
         project.set_track_midi_destination(track, 0)
         project.set_midi_events(
             clip,
@@ -489,7 +495,9 @@ def test_the_sample_loop_mode_token_reaches_the_render() -> None:
     def render(loop_mode: SampleDescLoopMode) -> np.ndarray:
         project = Project()
         project.set_sample_rate(float(sample_rate))
-        track, clip = project.add_midi_clip(0.0, 4.0)
+        _midi = project.add_midi_clip(0.0, 4.0)
+        track = _midi.track_id
+        clip = _midi.clip_id
         project.set_track_midi_destination(track, 0)
         project.set_midi_events(
             clip,

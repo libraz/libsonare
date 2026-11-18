@@ -212,9 +212,9 @@ class MasteringStereoResult:
     """Number of samples the processor replaced with a finite value."""
 
 
-@dataclass(frozen=True, slots=True)
-class LoudnessMatch:
-    """What gain-matching one take to another's loudness took, and produced.
+@dataclass(frozen=True, slots=True, eq=False)
+class LoudnessMatchResult:
+    """Result of :func:`mastering_ab_match_loudness`: the matched take and the match.
 
     ``applied_gain_db`` is the gain that lands the remeasured source on
     ``reference_lufs``; it equals ``reference_lufs - source_lufs`` unless the
@@ -225,6 +225,10 @@ class LoudnessMatch:
     ``applied_gain_db`` is then 0.
     """
 
+    samples: np.ndarray
+    """The matched take as float32."""
+    sample_rate: int
+    """Sample rate of ``samples`` in Hz."""
     reference_lufs: float | None
     """Integrated loudness of the reference in LUFS; None for a silent or below-gate take."""
     source_lufs: float | None
@@ -233,6 +237,36 @@ class LoudnessMatch:
     """Gain applied to the source, in dB; 0 when either loudness is None."""
     matched_true_peak_dbtp: float
     """True peak of the matched take after the gain, in dBTP."""
+
+
+@dataclass(frozen=True, slots=True, eq=False)
+class LoudnessMatchStereoResult:
+    """Result of :func:`mastering_ab_match_loudness_stereo`; see :class:`LoudnessMatchResult`."""
+
+    left: np.ndarray
+    """The matched left channel as float32."""
+    right: np.ndarray
+    """The matched right channel as float32."""
+    sample_rate: int
+    """Sample rate of both channels in Hz."""
+    reference_lufs: float | None
+    """Integrated loudness of the reference in LUFS; None for a silent or below-gate take."""
+    source_lufs: float | None
+    """Integrated loudness of the source in LUFS; None for a silent or below-gate take."""
+    applied_gain_db: float
+    """Shared gain applied to both channels, in dB; 0 when either loudness is None."""
+    matched_true_peak_dbtp: float
+    """True peak of the matched take after the gain, in dBTP."""
+
+
+@dataclass(frozen=True, slots=True, eq=False)
+class DynamicsProcessorResult:
+    """Result of a mastering dynamics processor."""
+
+    samples: np.ndarray
+    """The processed audio as float32."""
+    latency_samples: int
+    """Processor latency in samples."""
 
 
 @dataclass(frozen=True, slots=True)

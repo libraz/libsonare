@@ -36,7 +36,12 @@ from .types import (
     TimbreResult,
 )
 
-def decode_channels(data: bytes) -> tuple[np.ndarray, int]: ...
+class DecodedChannels:
+    sample_rate: int
+    channels: np.ndarray
+    def __init__(self, sample_rate: int, channels: np.ndarray) -> None: ...
+
+def decode_channels(data: bytes) -> DecodedChannels: ...
 def downmix(
     channels: Sequence[Sequence[float] | np.ndarray] | np.ndarray,
     target_layout: ChannelLayout,

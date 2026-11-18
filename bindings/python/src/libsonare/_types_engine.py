@@ -31,6 +31,16 @@ PlanarChannels: TypeAlias = Sequence[Sequence[float] | np.ndarray] | np.ndarray
 """Planar audio: one buffer per channel, or a 2-D ``(channels, frames)`` array."""
 
 
+@dataclass(frozen=True, slots=True, eq=False)
+class EngineProcessWithMonitorResult:
+    """Result of ``Engine.process_with_monitor``: the program and monitor planes."""
+
+    output: tuple[np.ndarray, ...]
+    """Processed program channel planes, one float32 array per channel."""
+    monitor: tuple[np.ndarray, ...]
+    """Monitor-bus channel planes, one float32 array per channel."""
+
+
 @dataclass(frozen=True, slots=True)
 class MixMeterSnapshot:
     """Realtime mixer meter snapshot for one strip.

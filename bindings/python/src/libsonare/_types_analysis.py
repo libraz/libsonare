@@ -382,6 +382,16 @@ class LufsResult:
     """Loudness range, in LU."""
 
 
+@dataclass(frozen=True, slots=True, eq=False)
+class LufsSeriesResult:
+    """Momentary and short-term loudness series; a window the signal is too short for is empty."""
+
+    momentary_lufs: np.ndarray
+    """400 ms window loudness in LUFS as float32."""
+    short_term_lufs: np.ndarray
+    """3 s window loudness in LUFS as float32."""
+
+
 @dataclass(frozen=True, slots=True)
 class ClippingRegion:
     """One contiguous run of clipped samples reported by detect_clipping."""

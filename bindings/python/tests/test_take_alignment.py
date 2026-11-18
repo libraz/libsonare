@@ -16,7 +16,13 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from libsonare import Project, SonareError, SonareValueError, align_take_to_reference
+from libsonare import (
+    AlignTakeToReferenceResult,
+    Project,
+    SonareError,
+    SonareValueError,
+    align_take_to_reference,
+)
 
 from ._helpers import LIB_AVAILABLE
 
@@ -52,7 +58,7 @@ def test_anchors_place_a_longer_take_under_the_reference(
     pair: tuple[np.ndarray, np.ndarray],
 ) -> None:
     reference, take = pair
-    anchors, _ = align_take_to_reference(reference, take, SR)
+    anchors = align_take_to_reference(reference, take, SR).anchors
 
     assert len(anchors) >= 2
     for i in range(1, len(anchors)):
@@ -79,7 +85,8 @@ def test_swapping_the_two_signals_inverts_the_orientation(
     the direction the anchors were built for.
     """
     reference, take = pair
-    anchors, alignment = align_take_to_reference(take, reference, SR)
+    result = align_take_to_reference(take, reference, SR)
+    anchors, alignment = result.anchors, result.alignment
 
     last_warp, last_source = anchors[-1]
     assert last_source < last_warp
@@ -94,8 +101,8 @@ def test_the_hop_reaches_the_measurement(pair: tuple[np.ndarray, np.ndarray]) ->
     itself is the assertion.
     """
     reference, take = pair
-    coarse, _ = align_take_to_reference(reference, take, SR, hop_length=1024)
-    fine, _ = align_take_to_reference(reference, take, SR, hop_length=256)
+    coarse = align_take_to_reference(reference, take, SR, hop_length=1024).anchors
+    fine = align_take_to_reference(reference, take, SR, hop_length=256).anchors
     assert len(fine) > len(coarse), (
         f"hop did not reach the measurement: {len(fine)} vs {len(coarse)}"
     )
@@ -111,8 +118,8 @@ def test_the_bins_per_octave_reaches_the_measurement(
     moves the anchors, not merely one that is accepted.
     """
     reference, take = pair
-    default, _ = align_take_to_reference(reference, take, SR)
-    finer, _ = align_take_to_reference(reference, take, SR, bins_per_octave=36)
+    default = align_take_to_reference(reference, take, SR).anchors
+    finer = align_take_to_reference(reference, take, SR, bins_per_octave=36).anchors
     assert finer != default
 
 
@@ -120,8 +127,8 @@ def test_zero_asks_for_the_library_value_as_omitting_it_does(
     pair: tuple[np.ndarray, np.ndarray],
 ) -> None:
     reference, take = pair
-    omitted, _ = align_take_to_reference(reference, take, SR)
-    zeroed, _ = align_take_to_reference(reference, take, SR, hop_length=0, bins_per_octave=0)
+    omitted = align_take_to_reference(reference, take, SR).anchors
+    zeroed = align_take_to_reference(reference, take, SR, hop_length=0, bins_per_octave=0).anchors
     assert zeroed == omitted
 
 
@@ -130,7 +137,7 @@ def test_alignment_metadata_is_named_for_the_arguments_the_caller_passed(
 ) -> None:
     """The C entry inverts its own arguments internally; the counts must not follow it."""
     reference, take = pair
-    _, alignment = align_take_to_reference(reference, take, SR)
+    alignment = align_take_to_reference(reference, take, SR).alignment
 
     assert alignment.reference_frames > 0
     # The take is the longer signal, so a swap of the two counts shows up here.
@@ -150,7 +157,7 @@ def test_the_anchors_are_accepted_as_a_project_warp_map(
     pass merely because the check stopped running.
     """
     reference, take = pair
-    anchors, _ = align_take_to_reference(reference, take, SR)
+    anchors = align_take_to_reference(reference, take, SR).anchors
 
     with Project() as project:
         project.set_warp_map(101, anchors, "aligned take")
@@ -216,7 +223,7 @@ def test_the_rate_a_resolution_needs_rises_with_it() -> None:
     reference = glide(0.5, sr=8000)
     take = glide(0.75, sr=8000)
 
-    anchors, _ = align_take_to_reference(reference, take, 8000)
+    anchors = align_take_to_reference(reference, take, 8000).anchors
     assert len(anchors) >= 2
     with pytest.raises(SonareError):
         align_take_to_reference(reference, take, 8000, bins_per_octave=24)
@@ -255,9 +262,8 @@ def test_a_take_at_another_rate_is_measured_on_the_reference_grid(
     two_rate_pair: tuple[np.ndarray, np.ndarray],
 ) -> None:
     reference, take = two_rate_pair
-    anchors, alignment = align_take_to_reference(
-        reference, take, SR, take_sample_rate=TAKE_SR, hop_length=HOP
-    )
+    result = align_take_to_reference(reference, take, SR, take_sample_rate=TAKE_SR, hop_length=HOP)
+    anchors, alignment = result.anchors, result.alignment
 
     # Primary proof the take rate is used: the frame count follows the take
     # resampled to the reference rate, not its raw length. This does not go
@@ -279,10 +285,12 @@ def test_declaring_the_take_at_the_reference_rate_does_not_find_the_lead(
 ) -> None:
     """The control for the case above: the same buffers at one rate fail it."""
     reference, take = two_rate_pair
-    right, right_alignment = align_take_to_reference(
+    right_result = align_take_to_reference(
         reference, take, SR, take_sample_rate=TAKE_SR, hop_length=HOP
     )
-    wrong, wrong_alignment = align_take_to_reference(reference, take, SR, hop_length=HOP)
+    wrong_result = align_take_to_reference(reference, take, SR, hop_length=HOP)
+    right, right_alignment = right_result.anchors, right_result.alignment
+    wrong, wrong_alignment = wrong_result.anchors, wrong_result.alignment
 
     assert wrong_alignment.take_frames > 1.2 * right_alignment.take_frames
     lead = LEAD_SEC * SR
@@ -296,6 +304,9 @@ def test_an_omitted_take_rate_is_the_reference_rate(pair: tuple[np.ndarray, np.n
     omitted = align_take_to_reference(reference, take, SR)
     explicit = align_take_to_reference(reference, take, SR, take_sample_rate=SR)
     assert explicit == omitted
+    assert isinstance(omitted, AlignTakeToReferenceResult)
+    with pytest.raises(TypeError):
+        iter(omitted)
 
 
 @pytest.mark.parametrize("take_sample_rate", [0, -1])

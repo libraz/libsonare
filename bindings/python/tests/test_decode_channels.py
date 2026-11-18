@@ -9,7 +9,14 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from libsonare import Audio, SonareError, SonareValueError, decode_channels, downmix
+from libsonare import (
+    Audio,
+    DecodedChannels,
+    SonareError,
+    SonareValueError,
+    decode_channels,
+    downmix,
+)
 
 SAMPLE_RATE = 22050
 FRAMES = 64
@@ -40,7 +47,11 @@ def _pcm16_wav(channels: int) -> bytes:
 def test_decode_channels_matches_the_core_decoder(channel_count: int, tmp_path: Path) -> None:
     """Every channel and sample equals what the core path loader reads."""
     wav = _pcm16_wav(channel_count)
-    channels, sample_rate = decode_channels(wav)
+    decoded = decode_channels(wav)
+    assert isinstance(decoded, DecodedChannels)
+    with pytest.raises(TypeError):
+        iter(decoded)
+    channels, sample_rate = decoded.channels, decoded.sample_rate
     assert sample_rate == SAMPLE_RATE
     assert channels.dtype == np.float32
     assert channels.shape == (channel_count, FRAMES)
@@ -57,7 +68,7 @@ def test_decode_channels_matches_the_core_decoder(channel_count: int, tmp_path: 
 def test_downmix_to_mono_equals_the_mono_decoder(channel_count: int) -> None:
     """Folding the decoded channels lands on the samples Audio.from_memory returns."""
     wav = _pcm16_wav(channel_count)
-    channels, _ = decode_channels(wav)
+    channels = decode_channels(wav).channels
     mono = downmix(channels, "mono")
     assert mono.shape == (1, FRAMES)
     with Audio.from_memory(wav) as audio:

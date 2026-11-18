@@ -162,6 +162,9 @@ from ._vocal_edit_model import (
     VocalFormantMode as VocalFormantMode,
 )
 from ._vocal_edit_model import (
+    VocalHistory as VocalHistory,
+)
+from ._vocal_edit_model import (
     VocalIdChange as VocalIdChange,
 )
 from ._vocal_edit_model import (
@@ -175,6 +178,9 @@ from ._vocal_edit_model import (
 )
 from ._vocal_edit_model import (
     VocalNoteEdit as VocalNoteEdit,
+)
+from ._vocal_edit_model import (
+    VocalNotesResult as VocalNotesResult,
 )
 from ._vocal_edit_model import (
     VocalOperation as VocalOperation,
@@ -278,7 +284,7 @@ class _HandleOwner:
             if self._active_native_calls == 0 and getattr(self, "_close_pending", False):
                 self._destroy_handle()
 
-    def _owned_notes(self) -> tuple[tuple[VocalNote, ...], tuple[VocalTransition, ...]]:
+    def _owned_notes(self) -> VocalNotesResult:
         lib = _get_lib()
         with _owned_result(
             lib, "sonare_vocal_notes_result_init", SonareVocalNotesResult, "sonare_vocal_free_notes"
@@ -465,7 +471,7 @@ class VocalEditSession(_HandleOwner):
             raise
         return obj
 
-    def notes(self) -> tuple[tuple[VocalNote, ...], tuple[VocalTransition, ...]]:
+    def notes(self) -> VocalNotesResult:
         return self._owned_notes()
 
     def analysis(self) -> VocalAnalysisResult:
@@ -507,7 +513,7 @@ class VocalEditSession(_HandleOwner):
     def output_length_samples(self) -> int:
         return self._output_length
 
-    def history(self) -> tuple[bool, bool]:
+    def history(self) -> VocalHistory:
         lib = _get_lib()
         can_undo = ctypes.c_int()
         can_redo = ctypes.c_int()
@@ -516,15 +522,15 @@ class VocalEditSession(_HandleOwner):
                 self._require_handle(), ctypes.byref(can_undo), ctypes.byref(can_redo)
             )
         )
-        return bool(can_undo.value), bool(can_redo.value)
+        return VocalHistory(can_undo=bool(can_undo.value), can_redo=bool(can_redo.value))
 
     @property
     def can_undo(self) -> bool:
-        return self.history()[0]
+        return self.history().can_undo
 
     @property
     def can_redo(self) -> bool:
-        return self.history()[1]
+        return self.history().can_redo
 
     def begin_edit(self, expected_revision: int | None = None) -> VocalEditDraft:
         lib = _get_lib()
@@ -626,7 +632,7 @@ class VocalEditDraft(_HandleOwner):
         self._handle = handle
         self._output_length = session.output_length_samples
 
-    def notes(self) -> tuple[tuple[VocalNote, ...], tuple[VocalTransition, ...]]:
+    def notes(self) -> VocalNotesResult:
         return self._owned_notes()
 
     def token(self) -> VocalStateToken:
@@ -926,6 +932,8 @@ __all__ = [
     "VocalNoteEdit",
     "VocalNote",
     "VocalTransition",
+    "VocalNotesResult",
+    "VocalHistory",
     "VocalStateToken",
     "VocalAnalysis",
     "VocalAnalysisResult",

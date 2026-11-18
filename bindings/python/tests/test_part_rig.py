@@ -12,6 +12,7 @@ from libsonare import (
     PART_RIG_ALL_PARTS,
     BuiltinSynthConfig,
     ErrorCode,
+    PartRigEntry,
     Project,
     RealtimeEngine,
     SonareError,
@@ -44,11 +45,11 @@ def test_absent_entry_reads_none():
 def test_set_get_clear_round_trip():
     with _project() as project:
         project.set_part_rig(DESTINATION, 0, mode="none")
-        assert project.part_rig(DESTINATION, 0) == ("none", None)
+        assert project.part_rig(DESTINATION, 0) == PartRigEntry("none", None)
 
         # A bank entry is kept explicitly so it can override the destination default.
         project.set_part_rig(DESTINATION, PART_RIG_ALL_PARTS, mode="bank")
-        assert project.part_rig(DESTINATION, PART_RIG_ALL_PARTS) == ("bank", None)
+        assert project.part_rig(DESTINATION, PART_RIG_ALL_PARTS) == PartRigEntry("bank", None)
 
         project.clear_part_rig(DESTINATION, 0)
         assert project.part_rig(DESTINATION, 0) is None
@@ -58,8 +59,13 @@ def test_set_get_clear_round_trip():
 def test_chain_round_trip():
     with _project() as project:
         project.set_part_rig(DESTINATION, 1, mode="chain", inserts=CHAIN)
-        mode, inserts = project.part_rig(DESTINATION, 1)
-        assert mode == "chain"
+        entry = project.part_rig(DESTINATION, 1)
+        assert isinstance(entry, PartRigEntry)
+        with pytest.raises(TypeError):
+            iter(entry)
+        assert entry.mode == "chain"
+        inserts = entry.inserts
+        assert inserts is not None
         assert [i["processor"] for i in inserts] == ["saturation.softClipper"]
         assert inserts[0]["params"] == {}
 
@@ -72,7 +78,7 @@ def test_params_accepts_json_string():
             mode="chain",
             inserts=[{"processor": "saturation.softClipper", "params": "{}"}],
         )
-        assert project.part_rig(DESTINATION, 1)[0] == "chain"
+        assert project.part_rig(DESTINATION, 1).mode == "chain"
 
 
 def test_undo_restores():
@@ -80,11 +86,11 @@ def test_undo_restores():
         project.set_part_rig(DESTINATION, 0, mode="none")
         project.set_part_rig(DESTINATION, 0, mode="bank")
         project.undo()
-        assert project.part_rig(DESTINATION, 0) == ("none", None)
+        assert project.part_rig(DESTINATION, 0) == PartRigEntry("none", None)
         project.undo()
         assert project.part_rig(DESTINATION, 0) is None
         project.redo()
-        assert project.part_rig(DESTINATION, 0) == ("none", None)
+        assert project.part_rig(DESTINATION, 0) == PartRigEntry("none", None)
 
 
 def test_invalid_input_is_refused():

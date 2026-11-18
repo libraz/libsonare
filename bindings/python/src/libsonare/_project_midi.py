@@ -226,7 +226,7 @@ class _ProjectMidiMixin:
 
         Example:
             >>> project.auto_tempo(samples, sample_rate=sr)
-            >>> _track_id, clip_id = project.add_midi_clip(0.0, 8.0)
+            >>> clip_id = project.add_midi_clip(0.0, 8.0).clip_id
             >>> project.transcribe_to_clip(clip_id, samples, sr)
             4
         """

@@ -141,7 +141,9 @@ EXPECTED_SYNTH_ENUM_TABLES = {
 def _build_midi_only_project(note: int = 60) -> Project:
     project = Project()
     project.set_sample_rate(48000.0)
-    track, clip = project.add_midi_clip(0.0, 4.0)
+    _midi = project.add_midi_clip(0.0, 4.0)
+    track = _midi.track_id
+    clip = _midi.clip_id
     project.set_track_midi_destination(track, 0)
     project.set_midi_events(
         clip,
@@ -156,7 +158,9 @@ def _build_midi_only_project(note: int = 60) -> Project:
 def _build_gm_program_project(program: int) -> Project:
     project = Project()
     project.set_sample_rate(48000.0)
-    track, clip = project.add_midi_clip(0.0, 1.0)
+    _midi = project.add_midi_clip(0.0, 1.0)
+    track = _midi.track_id
+    clip = _midi.clip_id
     project.set_track_midi_destination(track, 0)
     project.set_midi_events(
         clip,
@@ -413,7 +417,9 @@ def test_note_retrigger_renders_a_repeated_note_identically() -> None:
     project = Project()
     try:
         project.set_sample_rate(48000.0)
-        track, clip = project.add_midi_clip(0.0, 16.0)
+        _midi = project.add_midi_clip(0.0, 16.0)
+        track = _midi.track_id
+        clip = _midi.clip_id
         project.set_track_midi_destination(track, 0)
         project.set_midi_events(
             clip,
@@ -627,7 +633,9 @@ def _build_two_destination_gm_project(program: int = 40) -> Project:
     project = Project()
     project.set_sample_rate(48000.0)
     for destination, note in ((0, 60), (1, 72)):
-        track, clip = project.add_midi_clip(0.0, 1.0)
+        _midi = project.add_midi_clip(0.0, 1.0)
+        track = _midi.track_id
+        clip = _midi.clip_id
         project.set_track_midi_destination(track, destination)
         project.set_midi_events(
             clip,

@@ -493,9 +493,9 @@ class TestPositiveSmoke:
 
     def test_mastering_dynamics_compressor_returns_same_length(self):
         sig = _sine(SR)
-        out, latency = mastering_dynamics_compressor(sig, SR)
-        assert len(out) == len(sig)
-        assert isinstance(latency, int)
+        result = mastering_dynamics_compressor(sig, SR)
+        assert len(result.samples) == len(sig)
+        assert isinstance(result.latency_samples, int)
 
 
 class TestDocumentedBufferInputForms:

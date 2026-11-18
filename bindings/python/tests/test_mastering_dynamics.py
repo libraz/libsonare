@@ -12,6 +12,7 @@ import numpy as np
 import pytest
 
 from libsonare import (
+    DynamicsProcessorResult,
     SonareValueError,
     mastering_dynamics_compressor,
     mastering_dynamics_gate,
@@ -28,7 +29,11 @@ SR = 44100
 class TestCompressor:
     def test_default_params_runs(self) -> None:
         x = sine(440.0, 1.0, sr=SR, amp=0.8)
-        y, latency = mastering_dynamics_compressor(x, SR)
+        result = mastering_dynamics_compressor(x, SR)
+        assert isinstance(result, DynamicsProcessorResult)
+        with pytest.raises(TypeError):
+            iter(result)
+        y, latency = result.samples, result.latency_samples
         assert isinstance(y, np.ndarray)
         assert y.dtype == np.float32
         assert y.shape == x.shape
@@ -37,9 +42,9 @@ class TestCompressor:
 
     def test_reduces_peak_above_threshold(self) -> None:
         x = sine(440.0, 1.0, sr=SR, amp=0.9)
-        y, _ = mastering_dynamics_compressor(
+        y = mastering_dynamics_compressor(
             x, SR, threshold_db=-30.0, ratio=10.0, attack_ms=0.1, release_ms=10.0
-        )
+        ).samples
         # After the attack settles, the steady-state peak should be below the
         # input peak. Skip the first half to avoid the transient.
         half = len(x) // 2
@@ -61,10 +66,10 @@ class TestCompressor:
 
     def test_sidechain_high_pass_eases_compression_of_a_low_tone(self) -> None:
         x = sine(60.0, 0.5, sr=SR, amp=0.8)
-        plain, _ = mastering_dynamics_compressor(x, SR, threshold_db=-30.0, ratio=8.0)
-        keyed, _ = mastering_dynamics_compressor(
+        plain = mastering_dynamics_compressor(x, SR, threshold_db=-30.0, ratio=8.0).samples
+        keyed = mastering_dynamics_compressor(
             x, SR, threshold_db=-30.0, ratio=8.0, sidechain_high_pass_hz=2000.0
-        )
+        ).samples
         assert float(np.max(np.abs(keyed))) > float(np.max(np.abs(plain)))
 
     @pytest.mark.parametrize("corner", [0.0, -1.0])
@@ -81,7 +86,8 @@ class TestCompressor:
 class TestGate:
     def test_default_params_runs(self) -> None:
         x = sine(440.0, 1.0, sr=SR, amp=0.8)
-        y, latency = mastering_dynamics_gate(x, SR)
+        result = mastering_dynamics_gate(x, SR)
+        y, latency = result.samples, result.latency_samples
         assert isinstance(y, np.ndarray)
         assert y.dtype == np.float32
         assert y.shape == x.shape
@@ -92,7 +98,7 @@ class TestGate:
         # A signal well below the threshold should be attenuated by the gate's
         # closed-state range.
         x = sine(440.0, 0.5, sr=SR, amp=0.001)
-        y, _ = mastering_dynamics_gate(x, SR, threshold_db=-20.0, range_db=-60.0)
+        y = mastering_dynamics_gate(x, SR, threshold_db=-20.0, range_db=-60.0).samples
         # Tail half: the envelope should have settled below the input level.
         half = len(x) // 2
         x_peak = float(np.max(np.abs(x[half:])))
@@ -101,7 +107,7 @@ class TestGate:
 
     def test_explicit_kwargs(self) -> None:
         x = sine(440.0, 0.3, sr=SR, amp=0.8)
-        y, _ = mastering_dynamics_gate(
+        y = mastering_dynamics_gate(
             x,
             SR,
             threshold_db=-40.0,
@@ -111,13 +117,13 @@ class TestGate:
             hold_ms=10.0,
             close_threshold_db=-45.0,
             key_high_pass_hz=120.0,
-        )
+        ).samples
         assert y.shape == x.shape
 
     def test_a_zero_key_high_pass_is_the_unfiltered_key(self) -> None:
         x = sine(440.0, 0.3, sr=SR, amp=0.8)
-        omitted, _ = mastering_dynamics_gate(x, SR)
-        zero, _ = mastering_dynamics_gate(x, SR, key_high_pass_hz=0.0)
+        omitted = mastering_dynamics_gate(x, SR).samples
+        zero = mastering_dynamics_gate(x, SR, key_high_pass_hz=0.0).samples
         np.testing.assert_array_equal(zero, omitted)
 
     def test_refuses_a_negative_key_high_pass(self) -> None:
@@ -129,7 +135,8 @@ class TestGate:
 class TestTransientShaper:
     def test_default_params_runs(self) -> None:
         x = sine(440.0, 1.0, sr=SR, amp=0.8)
-        y, latency = mastering_dynamics_transient_shaper(x, SR)
+        result = mastering_dynamics_transient_shaper(x, SR)
+        y, latency = result.samples, result.latency_samples
         assert isinstance(y, np.ndarray)
         assert y.dtype == np.float32
         assert y.shape == x.shape
@@ -138,13 +145,17 @@ class TestTransientShaper:
 
     def test_different_gains_change_output(self) -> None:
         x = sine(440.0, 1.0, sr=SR, amp=0.8)
-        ya, _ = mastering_dynamics_transient_shaper(x, SR, attack_gain_db=6.0, sustain_gain_db=0.0)
-        yb, _ = mastering_dynamics_transient_shaper(x, SR, attack_gain_db=0.0, sustain_gain_db=-6.0)
+        ya = mastering_dynamics_transient_shaper(
+            x, SR, attack_gain_db=6.0, sustain_gain_db=0.0
+        ).samples
+        yb = mastering_dynamics_transient_shaper(
+            x, SR, attack_gain_db=0.0, sustain_gain_db=-6.0
+        ).samples
         assert not np.array_equal(ya, yb)
 
     def test_explicit_kwargs(self) -> None:
         x = sine(440.0, 0.3, sr=SR, amp=0.8)
-        y, _ = mastering_dynamics_transient_shaper(
+        y = mastering_dynamics_transient_shaper(
             x,
             SR,
             attack_gain_db=3.0,
@@ -157,5 +168,5 @@ class TestTransientShaper:
             max_gain_db=10.0,
             gain_smoothing_ms=1.0,
             lookahead_ms=2.0,
-        )
+        ).samples
         assert y.shape == x.shape

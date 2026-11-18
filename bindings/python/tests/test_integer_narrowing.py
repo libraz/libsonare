@@ -401,7 +401,7 @@ def test_a_wrapped_source_audio_argument_is_refused_rather_than_replacing_anothe
 def two_midi_clip_project():
     """Two MIDI clips carrying different note content."""
     project = ls.Project()
-    clips = [project.add_midi_clip(0.0, 480.0)[1] for _ in range(2)]
+    clips = [project.add_midi_clip(0.0, 480.0).clip_id for _ in range(2)]
     for clip, note in zip(clips, (60, 67), strict=True):
         project.set_midi_events(
             clip,

@@ -26,8 +26,10 @@ from libsonare._runtime import _get_lib
 from libsonare.vocal_edit import (
     VocalAnalysis,
     VocalEditError,
+    VocalHistory,
     VocalMergeNotes,
     VocalNoteEdit,
+    VocalNotesResult,
     VocalReason,
     VocalSetNoteEdit,
     VocalSetTransition,
@@ -119,7 +121,11 @@ def test_supplied_analysis_rejects_nul_algorithm_id() -> None:
 def test_context_lifetime_and_owned_note_arrays() -> None:
     source, analysis = _source_and_analysis()
     with create_vocal_edit_session(source, 16_000, analysis=analysis) as session:
-        notes, transitions = session.notes()
+        found = session.notes()
+        assert isinstance(found, VocalNotesResult)
+        with pytest.raises(TypeError):
+            iter(found)
+        notes, transitions = found.notes, found.transitions
         snapshot = session.capture_render_snapshot()
     try:
         # The snapshot owns native source/state independently of its session.
@@ -163,10 +169,12 @@ def test_extended_output_length_survives_export_restore_and_snapshot() -> None:
 def test_history_flags_follow_commit_undo_and_redo() -> None:
     source, analysis = _source_and_analysis()
     with create_vocal_edit_session(source, 16_000, analysis=analysis) as session:
-        assert session.history() == (False, False)
+        assert session.history() == VocalHistory(False, False)
+        with pytest.raises(TypeError):
+            iter(session.history())
         assert session.can_undo is False
         assert session.can_redo is False
-        notes, _ = session.notes()
+        notes = session.notes().notes
         assert notes
         with session.begin_edit() as draft:
             draft.apply(
@@ -186,21 +194,21 @@ def test_history_flags_follow_commit_undo_and_redo() -> None:
                 expected_generation=draft.token().generation,
             )
             draft.commit()
-        assert session.history() == (True, False)
+        assert session.history() == VocalHistory(True, False)
         assert session.can_undo is True
         assert session.can_redo is False
         session.undo()
-        assert session.history() == (False, True)
+        assert session.history() == VocalHistory(False, True)
         assert session.can_undo is False
         assert session.can_redo is True
         session.redo()
-        assert session.history() == (True, False)
+        assert session.history() == VocalHistory(True, False)
 
 
 def test_draft_edit_evaluate_commit_and_restore() -> None:
     source, analysis = _source_and_analysis()
     with create_vocal_edit_session(source, 16_000, analysis=analysis) as session:
-        notes, _ = session.notes()
+        notes = session.notes().notes
         assert notes
         note = notes[0]
         with session.begin_edit() as draft:
@@ -225,7 +233,7 @@ def test_draft_edit_evaluate_commit_and_restore() -> None:
         state = session.export_state()
         assert state.startswith(b"SVE1")
     with restore_vocal_edit_session(source, 16_000, state) as restored:
-        restored_notes, _ = restored.notes()
+        restored_notes = restored.notes().notes
         assert restored_notes[0].id == notes[0].id
         assert restored.token().revision == revision
         assert restored_notes[0].edit.target_mode == "center"
@@ -239,7 +247,7 @@ def test_draft_edit_evaluate_commit_and_restore() -> None:
 def test_a_vocal_note_edit_mode_is_an_exact_token(field: str, accepted: str) -> None:
     source, analysis = _source_and_analysis()
     with create_vocal_edit_session(source, 16_000, analysis=analysis) as session:
-        note = session.notes()[0][0]
+        note = session.notes().notes[0]
         with session.begin_edit() as draft:
             for value, error in ((1, TypeError), (True, TypeError), ("Center", SonareValueError)):
                 operation = VocalSetNoteEdit(note.id, VocalNoteEdit(**{field: value}))
@@ -256,7 +264,7 @@ def test_a_vocal_note_edit_mode_is_an_exact_token(field: str, accepted: str) -> 
 def test_a_merge_policy_is_an_exact_token() -> None:
     source, analysis = _source_and_analysis()
     with create_vocal_edit_session(source, 16_000, analysis=analysis) as session:
-        notes, _ = session.notes()
+        notes = session.notes().notes
         ids = tuple(note.id for note in notes[:2])
         with session.begin_edit() as draft:
             for value, error in ((0, TypeError), ("Preserve", SonareValueError)):
@@ -336,7 +344,7 @@ def test_close_from_cancel_probe_is_deferred_until_the_call_returns() -> None:
 def test_coordinate_mapping_round_trip_for_note() -> None:
     source, analysis = _source_and_analysis()
     with create_vocal_edit_session(source, 16_000, analysis=analysis) as session:
-        notes, _ = session.notes()
+        notes = session.notes().notes
         assert notes
         note = notes[0]
         source_sample = float(note.source_start_sample)

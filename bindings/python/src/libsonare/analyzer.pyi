@@ -48,6 +48,7 @@ from .types import (
     DereverbResult,
     DereverbStereoResult,
     DynamicRangeReport,
+    DynamicsProcessorResult,
     DynamicsResult,
     EqPhaseMode,
     EqSpectrumSnapshot,
@@ -62,8 +63,10 @@ from .types import (
     KeyDetection,
     KeyMode,
     KeyProfile,
-    LoudnessMatch,
+    LoudnessMatchResult,
+    LoudnessMatchStereoResult,
     LufsResult,
+    LufsSeriesResult,
     MasteringAmpPresetCatalogEntry,
     MasteringAssistantResult,
     MasteringAudioProfile,
@@ -1012,6 +1015,12 @@ class NoteTarget:
         target_midi: float,
     ) -> None: ...
 
+@dataclass(frozen=True)
+class AssignNoteTargetsResult:
+    notes: tuple[NoteObject, ...]
+    assigned_count: int
+    def __init__(self, notes: tuple[NoteObject, ...], assigned_count: int) -> None: ...
+
 def note_targets_from_smf(
     data: bytes | bytearray,
     *,
@@ -1025,7 +1034,7 @@ def assign_note_targets(
     unmatched_policy: str = "leave",
     min_overlap_ratio: float | None = None,
     max_correction_semitones: float | None = None,
-) -> tuple[list[NoteObject], int]: ...
+) -> AssignNoteTargetsResult: ...
 
 class SpectralRegionOp:
     start_sample: int | None
@@ -1691,9 +1700,8 @@ def mastering_ab_match_loudness(
     reference: FloatSamples,
     sample_rate: int,
     *,
-    with_match: bool = True,
     reference_sample_rate: int | None = None,
-) -> tuple[np.ndarray[Any, Any], LoudnessMatch | None]: ...
+) -> LoudnessMatchResult: ...
 def mastering_ab_match_loudness_stereo(
     source_left: FloatSamples,
     source_right: FloatSamples,
@@ -1701,9 +1709,8 @@ def mastering_ab_match_loudness_stereo(
     reference_right: FloatSamples,
     sample_rate: int,
     *,
-    with_match: bool = True,
     reference_sample_rate: int | None = None,
-) -> tuple[tuple[np.ndarray[Any, Any], np.ndarray[Any, Any]], LoudnessMatch | None]: ...
+) -> LoudnessMatchStereoResult: ...
 @overload
 def mastering_analyze_stereo(
     analysis: Literal["stereo.monoCompatCheck"],
@@ -1979,13 +1986,20 @@ def lufs_series_interleaved(
     sample_rate: int,
     *,
     validate: bool = True,
-) -> tuple[list[float], list[float]]: ...
+) -> LufsSeriesResult: ...
 def ebur128_loudness_range_lu(
     samples: FloatSamples,
     sample_rate: int,
     *,
     validate: bool = True,
 ) -> float: ...
+
+@dataclass(frozen=True, eq=False)
+class DecomposeResult:
+    w: np.ndarray[Any, Any]
+    h: np.ndarray[Any, Any]
+    def __init__(self, w: np.ndarray[Any, Any], h: np.ndarray[Any, Any]) -> None: ...
+
 def decompose(
     s: FloatSamples,
     n_features: int,
@@ -1993,7 +2007,7 @@ def decompose(
     n_components: int,
     n_iter: int | None = None,
     beta: float = 2.0,
-) -> tuple[np.ndarray[Any, Any], np.ndarray[Any, Any]]: ...
+) -> DecomposeResult: ...
 def decompose_with_init(
     s: FloatSamples,
     n_features: int,
@@ -2002,7 +2016,7 @@ def decompose_with_init(
     n_iter: int | None = None,
     beta: float = 2.0,
     init: str = "random",
-) -> tuple[np.ndarray[Any, Any], np.ndarray[Any, Any]]: ...
+) -> DecomposeResult: ...
 def decompose_stems(
     samples: FloatSamples,
     sample_rate: int,
@@ -2788,7 +2802,7 @@ def mastering_dynamics_compressor(
     pdr_time_ms: float = 0.0,
     pdr_release_scale: float = 1.0,
     validate: bool = True,
-) -> tuple[np.ndarray[Any, Any], int]: ...
+) -> DynamicsProcessorResult: ...
 def mastering_dynamics_gate(
     samples: FloatSamples,
     sample_rate: int,
@@ -2801,7 +2815,7 @@ def mastering_dynamics_gate(
     close_threshold_db: float = -50.0,
     key_high_pass_hz: float | None = None,
     validate: bool = True,
-) -> tuple[np.ndarray[Any, Any], int]: ...
+) -> DynamicsProcessorResult: ...
 def mastering_dynamics_transient_shaper(
     samples: FloatSamples,
     sample_rate: int,
@@ -2817,7 +2831,7 @@ def mastering_dynamics_transient_shaper(
     gain_smoothing_ms: float = 0.0,
     lookahead_ms: float = 0.0,
     validate: bool = True,
-) -> tuple[np.ndarray[Any, Any], int]: ...
+) -> DynamicsProcessorResult: ...
 def resample(
     samples: FloatSamples, sample_rate: int, target_sample_rate: int
 ) -> np.ndarray[Any, Any]: ...

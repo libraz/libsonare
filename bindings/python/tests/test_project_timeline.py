@@ -44,7 +44,9 @@ def _build_project() -> tuple[Project, int]:
         audio_channels=2,
         audio_sample_rate=_RATE,
     )
-    midi_track, midi_clip = project.add_midi_clip(0.0, 0.9)
+    _midi = project.add_midi_clip(0.0, 0.9)
+    midi_track = _midi.track_id
+    midi_clip = _midi.clip_id
     project.set_midi_events(
         midi_clip,
         [

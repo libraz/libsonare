@@ -27,7 +27,9 @@ _SF2_BYTES = _FIXTURE.read_bytes()
 def _build_midi_only_project() -> Project:
     project = Project()
     project.set_sample_rate(48000.0)
-    track, clip = project.add_midi_clip(0.0, 4.0)
+    _midi = project.add_midi_clip(0.0, 4.0)
+    track = _midi.track_id
+    clip = _midi.clip_id
     project.set_track_midi_destination(track, 0)
     project.set_midi_events(
         clip,
@@ -153,7 +155,9 @@ def test_clear_bank_rig_gives_back_the_instrument_alone() -> None:
     """
     project = Project()
     project.set_sample_rate(48000.0)
-    track, clip = project.add_midi_clip(0.0, 2.0)
+    _midi = project.add_midi_clip(0.0, 2.0)
+    track = _midi.track_id
+    clip = _midi.clip_id
     project.set_track_midi_destination(track, 0)
 
     def render(program: int, clear: bool) -> np.ndarray:

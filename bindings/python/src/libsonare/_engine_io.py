@@ -73,7 +73,7 @@ from ._runtime import (
     _to_c_uint,
     _validate_c_int_field,
 )
-from ._types_engine import EngineCaptureSource
+from ._types_engine import EngineCaptureSource, EngineProcessWithMonitorResult
 
 
 def _plane_arrays(arrays: Sequence[Any], frame_count: int) -> list[np.ndarray]:
@@ -261,7 +261,8 @@ class _EngineIoMixin:
 
     def process_with_monitor(
         self, channels: Sequence[Sequence[float]]
-    ) -> tuple[list[np.ndarray], list[np.ndarray]]:
+    ) -> EngineProcessWithMonitorResult:
+        """Render one block and return the program planes and the monitor planes."""
         arrays, ptrs, frame_count = self._channel_arrays(channels)
         # `(c_float * N)()` already zero-initialises; the previous
         # `*([0.0] * N)` built a throwaway Python list and varargs-marshalled it.
@@ -278,7 +279,10 @@ class _EngineIoMixin:
                 _to_c_int(frame_count, "frame_count"),
             )
         )
-        return _plane_arrays(arrays, frame_count), _plane_arrays(monitor_arrays, frame_count)
+        return EngineProcessWithMonitorResult(
+            output=tuple(_plane_arrays(arrays, frame_count)),
+            monitor=tuple(_plane_arrays(monitor_arrays, frame_count)),
+        )
 
     def render_offline(
         self,

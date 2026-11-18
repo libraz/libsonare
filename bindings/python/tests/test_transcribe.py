@@ -363,7 +363,7 @@ def _clip_events(project: libsonare.Project, clip_id: int) -> list[tuple[float, 
 def test_transcribe_to_clip_writes_events_that_read_back(melody: np.ndarray) -> None:
     project = libsonare.Project()
     try:
-        _track_id, clip_id = project.add_midi_clip(0.0, 16.0)
+        clip_id = project.add_midi_clip(0.0, 16.0).clip_id
         note_count = project.transcribe_to_clip(clip_id, melody, SR)
         assert note_count == len(_EXPECTED_NOTES)
 
@@ -380,7 +380,7 @@ def test_transcribe_to_clip_replaces_rather_than_appends(melody: np.ndarray) -> 
     """The clip's whole event list is replaced, as ``set_midi_events`` does."""
     project = libsonare.Project()
     try:
-        _track_id, clip_id = project.add_midi_clip(0.0, 16.0)
+        clip_id = project.add_midi_clip(0.0, 16.0).clip_id
         project.set_midi_events(
             clip_id,
             [
@@ -409,7 +409,7 @@ def test_transcribe_to_clip_reads_the_project_tempo_map(melody: np.ndarray) -> N
         project = libsonare.Project()
         try:
             project.set_tempo_segments([{"start_ppq": 0.0, "bpm": bpm}])
-            _track_id, clip_id = project.add_midi_clip(0.0, 64.0)
+            clip_id = project.add_midi_clip(0.0, 64.0).clip_id
             project.transcribe_to_clip(clip_id, melody, SR)
             written.append(_clip_events(project, clip_id))
         finally:
@@ -437,7 +437,7 @@ def test_transcribe_to_clip_rejects_out_of_domain_options(
 ) -> None:
     project = libsonare.Project()
     try:
-        _track_id, clip_id = project.add_midi_clip(0.0, 16.0)
+        clip_id = project.add_midi_clip(0.0, 16.0).clip_id
         with pytest.raises(_refusal_type(options)) as excinfo:
             project.transcribe_to_clip(clip_id, melody, SR, **options)
         assert fragment in str(excinfo.value)
@@ -473,7 +473,7 @@ def test_transcribe_to_clip_rejects_bad_input(
 ) -> None:
     project = libsonare.Project()
     try:
-        _track_id, clip_id = project.add_midi_clip(0.0, 16.0)
+        clip_id = project.add_midi_clip(0.0, 16.0).clip_id
         with pytest.raises(SonareValueError) as excinfo:
             project.transcribe_to_clip(clip_id, samples, sample_rate)
         assert fragment in str(excinfo.value)
@@ -594,7 +594,7 @@ def test_reattack_ratio_splits_a_restruck_tone(restruck_tone: np.ndarray) -> Non
 def test_to_clip_forwards_the_polyphonic_limits(four_note_chord: np.ndarray) -> None:
     project = libsonare.Project()
     try:
-        _track_id, clip_id = project.add_midi_clip(0.0, 8.0)
+        clip_id = project.add_midi_clip(0.0, 8.0).clip_id
         count = project.transcribe_to_clip(
             clip_id,
             four_note_chord.astype(np.float32),
@@ -654,7 +654,7 @@ def test_min_note_division_with_min_note_ms_is_refused_by_the_core(melody: np.nd
 def test_to_clip_forwards_min_note_division(melody: np.ndarray) -> None:
     project = libsonare.Project()
     try:
-        _track_id, clip_id = project.add_midi_clip(0.0, 8.0)
+        clip_id = project.add_midi_clip(0.0, 8.0).clip_id
         assert project.transcribe_to_clip(clip_id, melody, SR, min_note_division=1) == 0
         assert project.transcribe_to_clip(clip_id, melody, SR, min_note_division=32) == len(
             _EXPECTED_NOTES
@@ -712,7 +712,7 @@ def test_singing_model_with_polyphonic_is_refused(melody: np.ndarray) -> None:
 def test_to_clip_forwards_monophonic_model(vibrato_tone: np.ndarray) -> None:
     project = libsonare.Project()
     try:
-        _track_id, clip_id = project.add_midi_clip(0.0, 8.0)
+        clip_id = project.add_midi_clip(0.0, 8.0).clip_id
         assert (
             project.transcribe_to_clip(clip_id, vibrato_tone, SR, monophonic_model="singing") == 1
         )

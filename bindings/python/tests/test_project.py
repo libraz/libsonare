@@ -20,8 +20,11 @@ import pytest
 import libsonare
 from libsonare import (
     ErrorCode,
+    ExternalSeparatedStemImportResult,
     Project,
+    ProjectLoopRecordingResult,
     ProjectMarker,
+    ProjectMidiClipResult,
     SonareError,
     SonareValueError,
     project_abi_version,
@@ -166,7 +169,9 @@ def test_project_track_clip_and_source_descriptors_read_as_tokens() -> None:
     project = Project()
     try:
         aux = project.add_track("aux", "fx")
-        midi_track, midi_clip = project.add_midi_clip(0.0, 4.0)
+        _midi = project.add_midi_clip(0.0, 4.0)
+        midi_track = _midi.track_id
+        midi_clip = _midi.clip_id
         project.set_clip_loop(midi_clip, "loop", 2.0)
         kinds = {project.track_by_index(i).id: project.track_by_index(i).kind for i in range(2)}
         assert kinds == {aux: "aux", midi_track: "midi"}
@@ -182,7 +187,7 @@ def test_audio_source_metadata_rejects_midi_and_unknown_sources() -> None:
     try:
         audio_track = project.add_track("audio", "audio")
         project.add_clip(audio_track, 0.0, 1.0, source_uri="asset://audio.wav")
-        _, midi_clip = project.add_midi_clip(0.0, 1.0)
+        midi_clip = project.add_midi_clip(0.0, 1.0).clip_id
         midi_source_id = project.clip_by_index(1).source_id
 
         with pytest.raises(SonareError):
@@ -208,7 +213,7 @@ def test_import_external_stems_creates_normal_audio_tracks() -> None:
     project = Project()
     try:
         project.set_sample_rate(48000)
-        track_ids, clip_ids = project.import_external_stems(
+        imported = project.import_external_stems(
             sample_rate=48000,
             stems=[
                 {
@@ -228,8 +233,13 @@ def test_import_external_stems_creates_normal_audio_tracks() -> None:
                 },
             ],
         )
-        assert len(track_ids) == 2
-        assert len(clip_ids) == 2
+        assert isinstance(imported, ExternalSeparatedStemImportResult)
+        with pytest.raises(TypeError):
+            iter(imported)
+        assert imported.track_ids.dtype == np.uint32
+        assert imported.clip_ids.dtype == np.uint32
+        assert len(imported.track_ids) == 2
+        assert len(imported.clip_ids) == 2
         assert project.track_count() == 2
         assert project.clip_count() == 2
         with raises_coded():
@@ -437,7 +447,10 @@ def test_add_midi_clip_is_one_undo_transaction() -> None:
     project = Project()
     try:
         before = project.to_json_bytes()
-        project.add_midi_clip(2.0, 4.0)
+        added = project.add_midi_clip(2.0, 4.0)
+        assert isinstance(added, ProjectMidiClipResult)
+        with pytest.raises(TypeError):
+            iter(added)
         added = project.to_json_bytes()
         assert project.track_count() == 1
         assert project.source_count() == 1
@@ -461,7 +474,7 @@ def test_add_midi_clip_is_one_undo_transaction() -> None:
 def test_set_track_midi_destination_round_trips_and_undoes() -> None:
     project = Project()
     try:
-        track_id, _clip_id = project.add_midi_clip(0.0, 4.0)
+        track_id = project.add_midi_clip(0.0, 4.0).track_id
         before = project.to_json_bytes()
 
         project.set_track_midi_destination(track_id, 7)
@@ -624,7 +637,7 @@ def test_add_loop_recording_takes_splits_capture_into_active_take() -> None:
         audio[:24000] = 0.25
         audio[24000:] = 0.75
 
-        clip_id, take_count = project.add_loop_recording_takes(
+        recorded = project.add_loop_recording_takes(
             track_id,
             start_ppq=0.0,
             loop_length_ppq=1.0,
@@ -632,8 +645,11 @@ def test_add_loop_recording_takes_splits_capture_into_active_take() -> None:
             audio_channels=1,
             audio_sample_rate=48000,
         )
-        assert clip_id != 0
-        assert take_count == 2
+        assert isinstance(recorded, ProjectLoopRecordingResult)
+        with pytest.raises(TypeError):
+            iter(recorded)
+        assert recorded.clip_id != 0
+        assert recorded.take_count == 2
         json = project.to_json_bytes()
         assert b'"takes"' in json
         assert b'"partial"' not in json
@@ -674,7 +690,7 @@ def _capture(frames: int, **kwargs: Any) -> tuple[int, list[int], int]:
             audio_sample_rate=48000,
             **kwargs,
         )
-        return result[1], _partial_take_ids(project), _loop_recording_active_take(project)
+        return result.take_count, _partial_take_ids(project), _loop_recording_active_take(project)
     finally:
         project.close()
 
@@ -746,7 +762,7 @@ def test_add_loop_recording_takes_planar_matches_interleaved() -> None:
                 result = project.add_loop_recording_takes(
                     track_id, 0.0, 1.0, np.stack([left, right]), audio_sample_rate=48000
                 )
-            assert result[1] == 2
+            assert result.take_count == 2
             outputs.append(project.to_json_bytes())
         finally:
             project.close()

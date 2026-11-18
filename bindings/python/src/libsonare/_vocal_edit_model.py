@@ -148,6 +148,26 @@ class VocalTransition:
 
 
 @dataclass(frozen=True, slots=True)
+class VocalNotesResult:
+    """The notes of a vocal session or draft and the transitions between them."""
+
+    notes: tuple[VocalNote, ...]
+    """Every note, in order."""
+    transitions: tuple[VocalTransition, ...]
+    """Every transition between adjacent notes."""
+
+
+@dataclass(frozen=True, slots=True)
+class VocalHistory:
+    """Whether the session has an edit to undo or redo."""
+
+    can_undo: bool
+    """True when an edit can be undone."""
+    can_redo: bool
+    """True when an undone edit can be redone."""
+
+
+@dataclass(frozen=True, slots=True)
 class VocalStateToken:
     session_epoch: int
     """Counter naming the session instance."""

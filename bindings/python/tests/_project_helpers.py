@@ -41,7 +41,9 @@ def _build_project() -> tuple[Project, int, int, int]:
     )
     assert audio_clip != 0
 
-    midi_track, midi_clip = project.add_midi_clip(0.0, 4.0)
+    _midi = project.add_midi_clip(0.0, 4.0)
+    midi_track = _midi.track_id
+    midi_clip = _midi.clip_id
     assert midi_clip != 0
 
     project.set_midi_events(

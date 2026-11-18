@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
+from ._project_mir import AlignTakeToReferenceResult as AlignTakeToReferenceResult
 from ._project_mir import TakeAlignment as TakeAlignment
 from ._project_mir import align_take_to_reference as align_take_to_reference
 from ._project_mir import chord_symbol_from_analysis as chord_symbol_from_analysis
@@ -317,14 +318,15 @@ class _ProjectEditMixin:
         self,
         sample_rate: int,
         stems: Sequence[Mapping[str, object]],
-    ) -> tuple[list[int], list[int]]:
+    ) -> ExternalSeparatedStemImportResult:
         """Import host-separated planar PCM as normal audio tracks and clips.
 
         Each mapping supplies ``name``, ``layout`` (a :data:`ProjectStemLayout`
         token), ``planar_samples`` (one float array per channel), and optional
         ``role`` / ``start_frame``; any other key is refused by name. Input is
         copied by the native project; it is never resampled, retimed,
-        phase-aligned, or gain-compensated.
+        phase-aligned, or gain-compensated. Returns the created track and clip ids
+        as ``uint32`` arrays.
         """
         descs: list[SonareExternalStemDesc] = []
         names: list[bytes] = []
@@ -380,9 +382,13 @@ class _ProjectEditMixin:
             )
         )
         try:
-            return (
-                [int(result.track_ids[index]) for index in range(result.count)],
-                [int(result.clip_ids[index]) for index in range(result.count)],
+            return ExternalSeparatedStemImportResult(
+                track_ids=np.array(
+                    [result.track_ids[index] for index in range(result.count)], dtype=np.uint32
+                ),
+                clip_ids=np.array(
+                    [result.clip_ids[index] for index in range(result.count)], dtype=np.uint32
+                ),
             )
         finally:
             lib.sonare_free_external_stem_import_result(ctypes.byref(result))
@@ -397,7 +403,7 @@ class _ProjectEditMixin:
         audio_channels: int | None = None,
         audio_sample_rate: int,
         partial_tail: str = "keep",
-    ) -> tuple[int, int]:
+    ) -> ProjectLoopRecordingResult:
         """Split a captured loop recording into takes and add one clip.
 
         ``audio`` is either interleaved float32 capture data, which requires
@@ -412,7 +418,7 @@ class _ProjectEditMixin:
         shorter than one loop has only the partial take, which stays active.
 
         ``partial_tail`` is ``"keep"`` (default) to keep the partial take, or
-        ``"drop"`` to not create it. Returns ``(clip_id, take_count)``; a partial
+        ``"drop"`` to not create it. Returns a :class:`ProjectLoopRecordingResult`; a partial
         take is marked ``"partial": true`` in its ``takes`` entry of
         :meth:`to_json`.
         """
@@ -468,10 +474,12 @@ class _ProjectEditMixin:
             )
         )
         del backing
-        return int(out_clip.value), int(out_take_count.value)
+        return ProjectLoopRecordingResult(
+            clip_id=int(out_clip.value), take_count=int(out_take_count.value)
+        )
 
-    def add_midi_clip(self, start_ppq: float, length_ppq: float) -> tuple[int, int]:
-        """Create a MIDI track + clip; return ``(track_id, clip_id)``.
+    def add_midi_clip(self, start_ppq: float, length_ppq: float) -> ProjectMidiClipResult:
+        """Create a MIDI track + clip; return a :class:`ProjectMidiClipResult`.
 
         The clip window is half-open, ``[0, length_ppq)``: an event at exactly
         ``length_ppq`` is outside it. Export and validation close a note
@@ -488,7 +496,7 @@ class _ProjectEditMixin:
                 ctypes.byref(out_clip),
             )
         )
-        return int(out_track.value), int(out_clip.value)
+        return ProjectMidiClipResult(track_id=int(out_track.value), clip_id=int(out_clip.value))
 
     def split_clip(self, clip_id: int, split_ppq: float) -> int:
         """Split a clip at ``split_ppq`` (absolute PPQ); return the new clip id."""
@@ -745,12 +753,10 @@ class _ProjectEditMixin:
             )
         )
 
-    def part_rig(
-        self, destination_id: int, part: int
-    ) -> tuple[PartRigMode, list[dict[str, object]] | None] | None:
-        """Read back :meth:`set_part_rig` as ``(mode, inserts)``, or ``None`` if unset.
+    def part_rig(self, destination_id: int, part: int) -> PartRigEntry | None:
+        """Read back :meth:`set_part_rig` as a :class:`PartRigEntry`, or ``None`` if unset.
 
-        ``mode`` is the :data:`PartRigMode` token. ``inserts`` is a list of
+        ``mode`` is the :data:`PartRigMode` token. ``inserts`` is a tuple of
         ``{"processor", "params"}`` dicts with ``params`` decoded to a dict for a
         ``"chain"`` entry and ``None`` otherwise.
         """
@@ -783,7 +789,7 @@ class _ProjectEditMixin:
             return None
         mode_out = _part_rig_mode_name(int(mode.value))
         if raw is None:
-            return mode_out, None
+            return PartRigEntry(mode=mode_out, inserts=None)
         inserts = []
         for entry in json.loads(raw.decode("utf-8")):
             params = entry.get("params", "{}")
@@ -793,7 +799,7 @@ class _ProjectEditMixin:
                     "params": json.loads(params) if isinstance(params, str) else params,
                 }
             )
-        return mode_out, inserts
+        return PartRigEntry(mode=mode_out, inserts=tuple(inserts))
 
     def clear_part_rig(self, destination_id: int, part: int) -> None:
         """Remove one part-rig entry via an undoable edit (absent entries are a no-op)."""

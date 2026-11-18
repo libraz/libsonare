@@ -58,6 +58,7 @@ from ._vocal_edit_model import (
     VocalMergeNotes,
     VocalNote,
     VocalNoteEdit,
+    VocalNotesResult,
     VocalOperation,
     VocalPitchPoint,
     VocalPitchResult,
@@ -624,7 +625,7 @@ def _note_from_c(raw: SonareVocalNote) -> VocalNote:
 
 def _notes_from_result(
     raw: SonareVocalNotesResult,
-) -> tuple[tuple[VocalNote, ...], tuple[VocalTransition, ...]]:
+) -> VocalNotesResult:
     notes = (
         tuple(_note_from_c(raw.notes[i]) for i in range(int(raw.note_count))) if raw.notes else ()
     )
@@ -642,7 +643,7 @@ def _notes_from_result(
         if raw.transitions
         else ()
     )
-    return notes, transitions
+    return VocalNotesResult(notes=notes, transitions=transitions)
 
 
 def _analysis_from_result(raw: SonareVocalAnalysisResult) -> VocalAnalysisResult:

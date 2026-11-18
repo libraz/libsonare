@@ -509,7 +509,7 @@ def test_set_program_default_bank_is_none() -> None:
     project = Project()
     try:
         project.set_sample_rate(48000.0)
-        _, clip = project.add_midi_clip(0.0, 4.0)
+        clip = project.add_midi_clip(0.0, 4.0).clip_id
 
         # Default bank (None) emits program only; explicit bank>=0 emits Bank Select.
         project.set_program(clip, 40)
@@ -574,9 +574,9 @@ def test_public_analysis_and_catalog_helpers_return_usable_values() -> None:
     assert tempogram.shape[1] > 0
     assert tempogram.shape[0] == 60
 
-    w, h = decompose_with_init([1.0, 2.0, 3.0, 4.0], 2, 2, 1, n_iter=2, init="nndsvd")
-    assert w.shape == (2, 1)
-    assert h.shape == (1, 2)
+    factors = decompose_with_init([1.0, 2.0, 3.0, 4.0], 2, 2, 1, n_iter=2, init="nndsvd")
+    assert factors.w.shape == (2, 1)
+    assert factors.h.shape == (1, 2)
     assert "pop" in mastering_preset_names()
     assert mastering_insert_param_info("dynamics.compressor")
 

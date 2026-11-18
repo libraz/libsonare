@@ -31,7 +31,7 @@ def test_project_ppq_arguments_refuse_non_numbers(bad: object) -> None:
             project.add_midi_clip(bad, 4.0)  # type: ignore[arg-type]
         with pytest.raises(TypeError):
             project.add_midi_clip(0.0, bad)  # type: ignore[arg-type]
-        _, clip = project.add_midi_clip(0.0, 4.0)
+        clip = project.add_midi_clip(0.0, 4.0).clip_id
         with pytest.raises(TypeError):
             project.split_clip(clip, bad)  # type: ignore[arg-type]
         with pytest.raises(TypeError):
@@ -51,7 +51,7 @@ def test_project_ppq_arguments_refuse_non_finite(bad: float) -> None:
     with Project() as project:
         with pytest.raises(SonareValueError):
             project.add_midi_clip(bad, 4.0)
-        _, clip = project.add_midi_clip(0.0, 4.0)
+        clip = project.add_midi_clip(0.0, 4.0).clip_id
         with pytest.raises(SonareValueError):
             project.split_clip(clip, bad)
         with pytest.raises(SonareValueError):

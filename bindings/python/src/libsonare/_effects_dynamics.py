@@ -26,6 +26,7 @@ from ._runtime import (
     _validate_samples,
 )
 from ._types_enums import _COMPRESSOR_DETECTORS, CompressorDetector
+from ._types_mastering import DynamicsProcessorResult
 
 
 def _coerce_compressor_detector(value: CompressorDetector) -> int:
@@ -54,9 +55,9 @@ def _run_dynamics(
     *,
     fn_name: str = "mastering_dynamics",
     validate: bool = True,
-) -> tuple[np.ndarray, int]:
+) -> DynamicsProcessorResult:
     """Invoke a dynamics ``(samples, sr, &config, &out, &out_length, &out_latency)``
-    C call and return ``(output ndarray, latency_samples)``.
+    C call and return its :class:`DynamicsProcessorResult`.
     """
     lib = _get_lib()
     in_buf = _validate_samples(fn_name, samples, validate=validate)
@@ -74,7 +75,10 @@ def _run_dynamics(
             ctypes.byref(latency),
         )
         _check(rc)
-        return _from_c_float_array(out, out_length.value), int(latency.value)
+        return DynamicsProcessorResult(
+            samples=_from_c_float_array(out, out_length.value),
+            latency_samples=int(latency.value),
+        )
 
 
 def mastering_dynamics_compressor(
@@ -93,7 +97,7 @@ def mastering_dynamics_compressor(
     pdr_time_ms: float = 0.0,
     pdr_release_scale: float = 1.0,
     validate: bool = True,
-) -> tuple[np.ndarray, int]:
+) -> DynamicsProcessorResult:
     """Apply the offline feed-forward compressor.
 
     Args:
@@ -114,8 +118,8 @@ def mastering_dynamics_compressor(
         pdr_release_scale: PDR release multiplier (default 1.0).
 
     Returns:
-        Tuple of ``(output ndarray, latency_samples)``. The output is a
-        ``numpy.ndarray`` of ``float32`` with ``shape == samples.shape``.
+        A :class:`DynamicsProcessorResult`; ``samples`` is a ``numpy.ndarray`` of
+        ``float32`` with ``shape == input.shape``.
     """
     config = SonareCompressorConfig(
         threshold_db=_narrow_double(threshold_db, "threshold_db"),
@@ -155,7 +159,7 @@ def mastering_dynamics_gate(
     close_threshold_db: float = -50.0,
     key_high_pass_hz: float | None = None,
     validate: bool = True,
-) -> tuple[np.ndarray, int]:
+) -> DynamicsProcessorResult:
     """Apply the offline noise gate.
 
     Args:
@@ -173,7 +177,7 @@ def mastering_dynamics_gate(
             default) leaves the key unfiltered, as does 0 Hz.
 
     Returns:
-        Tuple of ``(output ndarray, latency_samples)``.
+        A :class:`DynamicsProcessorResult`.
     """
     config = SonareGateConfig(
         threshold_db=_narrow_double(threshold_db, "threshold_db"),
@@ -211,7 +215,7 @@ def mastering_dynamics_transient_shaper(
     gain_smoothing_ms: float = 0.0,
     lookahead_ms: float = 0.0,
     validate: bool = True,
-) -> tuple[np.ndarray, int]:
+) -> DynamicsProcessorResult:
     """Apply the offline envelope-difference transient shaper.
 
     Args:
@@ -230,7 +234,7 @@ def mastering_dynamics_transient_shaper(
         lookahead_ms: Lookahead time in ms (default 0 = disabled).
 
     Returns:
-        Tuple of ``(output ndarray, latency_samples)``.
+        A :class:`DynamicsProcessorResult`.
     """
     config = SonareTransientShaperConfig(
         attack_gain_db=_narrow_double(attack_gain_db, "attack_gain_db"),

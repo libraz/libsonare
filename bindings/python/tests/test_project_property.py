@@ -61,7 +61,7 @@ def _add_random_audio_track(project: Project, rng: random.Random) -> None:
 
 def _add_random_midi_track(project: Project, rng: random.Random) -> None:
     length = round(rng.uniform(1.0, 16.0), 3)
-    _track, clip = project.add_midi_clip(round(rng.uniform(0.0, 8.0), 3), length)
+    clip = project.add_midi_clip(round(rng.uniform(0.0, 8.0), 3), length).clip_id
     events: list[tuple[float, int, int]] = []
     for _ in range(rng.randint(0, 12)):
         ppq = round(rng.uniform(0.0, length), 4)
@@ -145,7 +145,7 @@ def test_boundary_values_round_trip() -> None:
             audio_channels=2,
             audio_sample_rate=48000,
         )
-        _midi_track, clip = project.add_midi_clip(0.0, 256.0)
+        clip = project.add_midi_clip(0.0, 256.0).clip_id
         events: list[tuple[float, int, int]] = []
         for i in range(256):
             events.append(Project.midi_note_on(float(i), 0, i % 16, i % 128, 1 + (i % 127)))

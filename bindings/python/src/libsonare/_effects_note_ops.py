@@ -720,6 +720,16 @@ class NoteTarget:
     target_midi: float
 
 
+@dataclasses.dataclass(frozen=True, slots=True)
+class AssignNoteTargetsResult:
+    """Result of :func:`assign_note_targets`."""
+
+    notes: tuple[NoteObject, ...]
+    """The notes carrying the assigned edits."""
+    assigned_count: int
+    """How many notes got a target."""
+
+
 def _unmatched_policy_value(fn_name: str, policy: str) -> int:
     """Resolve the policy name to its ordinal, refusing an unknown one by name.
 
@@ -813,7 +823,7 @@ def note_targets_from_smf(data: bytes | bytearray, *, track_index: int = 0) -> l
 
     Example:
         >>> targets = libsonare.note_targets_from_smf(Path("melody.mid").read_bytes())
-        >>> notes, assigned = libsonare.assign_note_targets(notes, sr, targets)
+        >>> result = libsonare.assign_note_targets(notes, sr, targets)
     """
     lib = _get_lib()
     if not hasattr(lib, "sonare_note_targets_from_smf"):
@@ -854,7 +864,7 @@ def assign_note_targets(
     unmatched_policy: str = "leave",
     min_overlap_ratio: float | None = None,
     max_correction_semitones: float | None = None,
-) -> tuple[list[NoteObject], int]:
+) -> AssignNoteTargetsResult:
     """Write each note's ``pitch_semitones`` from the target it overlaps.
 
     This is what makes a take follow a written melody rather than a single stated
@@ -899,8 +909,9 @@ def assign_note_targets(
             targets and moves no note.
 
     Returns:
-        ``(notes, assigned)`` -- a new list of :class:`NoteObject` carrying the
-        edits, and how many of them got a target. Zero is a legitimate answer,
+        An :class:`AssignNoteTargetsResult`: ``notes`` is a new tuple of
+        :class:`NoteObject` carrying the edits, and ``assigned_count`` is how many
+        of them got a target. Zero is a legitimate answer,
         a reference that does not line up with the take, so it is reported rather
         than left implicit in the notes.
 
@@ -916,10 +927,10 @@ def assign_note_targets(
     Example:
         >>> notes = libsonare.extract_notes(audio, sr, f0_hz, sr / 512, voiced=voiced)
         >>> targets = libsonare.note_targets_from_smf(melody_bytes)
-        >>> notes, assigned = libsonare.assign_note_targets(
+        >>> result = libsonare.assign_note_targets(
         ...     notes, sr, targets, unmatched_policy="mute"
         ... )
-        >>> corrected = libsonare.render_notes(audio, sr, notes)
+        >>> corrected = libsonare.render_notes(audio, sr, result.notes)
     """
     lib = _get_lib()
     if not hasattr(lib, "sonare_assign_note_targets"):
@@ -959,8 +970,8 @@ def assign_note_targets(
     # The shared marshaller hands the array back as `object`, which is all its
     # other callers need; this is the one entry point that reads the rows again.
     rows = cast("Sequence[SonareNoteObject]", c_notes)
-    edited = [_note_with_assigned_edit(note, rows[i]) for i, note in enumerate(notes)]
-    return edited, int(assigned.value)
+    edited = tuple(_note_with_assigned_edit(note, rows[i]) for i, note in enumerate(notes))
+    return AssignNoteTargetsResult(notes=edited, assigned_count=int(assigned.value))
 
 
 @_guard_buffer("samples")
@@ -1104,7 +1115,7 @@ def transcribe(
         >>> result.note_count
         4
         >>> project = libsonare.Project()
-        >>> _track_id, clip_id = project.add_midi_clip(0.0, 4.0)
+        >>> clip_id = project.add_midi_clip(0.0, 4.0).clip_id
         >>> project.set_midi_events(clip_id, result.events)
 
         Off A440, measure the reference rather than letting the notes land a

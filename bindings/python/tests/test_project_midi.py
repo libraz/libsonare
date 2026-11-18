@@ -101,7 +101,7 @@ def test_export_smf_returns_bytes() -> None:
 def test_midi_loop_export_rejects_expansion_above_budget() -> None:
     project = Project()
     try:
-        _track_id, clip_id = project.add_midi_clip(0.0, 4.0)
+        clip_id = project.add_midi_clip(0.0, 4.0).clip_id
         project.set_midi_events(clip_id, [Project.midi_note_on(0.0, 0, 0, 60, 100)])
         project.set_clip_loop(clip_id, "loop", 1e-9)
         with pytest.raises(SonareError):
@@ -191,7 +191,7 @@ def test_validate_midi_notes_flags_hanging_note_on() -> None:
     """A well-paired clip validates ``ok``; a lone note-on is flagged hanging."""
     project = Project()
     try:
-        _track_id, clip_id = project.add_midi_clip(0.0, 4.0)
+        clip_id = project.add_midi_clip(0.0, 4.0).clip_id
 
         # Well-paired note-on / note-off: nothing hanging.
         project.set_midi_events(
@@ -219,7 +219,7 @@ def test_validate_midi_notes_flags_hanging_note_on() -> None:
         # The clip window is half-open [source_offset, source_offset + length), so
         # an off exactly at length_ppq lies outside it; export closes the note at
         # the clip end, so it validates as a matched pair.
-        _boundary_track, boundary_clip = project.add_midi_clip(0.0, 1.0)
+        boundary_clip = project.add_midi_clip(0.0, 1.0).clip_id
         project.set_midi_events(
             boundary_clip,
             [
@@ -238,7 +238,7 @@ def test_validate_midi_notes_flags_hanging_note_on() -> None:
 def test_set_midi_events_validates_event_shape_and_words() -> None:
     project = Project()
     try:
-        _track_id, clip_id = project.add_midi_clip(0.0, 1.0)
+        clip_id = project.add_midi_clip(0.0, 1.0).clip_id
         with pytest.raises(ValueError, match="ppq"):
             project.set_midi_events(clip_id, [(float("nan"), 0, 0)])
         with pytest.raises(ValueError, match="data0"):
@@ -452,7 +452,7 @@ def test_bake_midi_fx_and_last_bounce_compile_result() -> None:
     project = Project()
     try:
         project.set_sample_rate(48000.0)
-        _track, clip = project.add_midi_clip(0.0, 4.0)
+        clip = project.add_midi_clip(0.0, 4.0).clip_id
         project.set_midi_events(
             clip,
             [Project.midi_note_on(0.0, 0, 0, 60, 100), Project.midi_note_off(2.0, 0, 0, 60, 0)],
@@ -470,7 +470,7 @@ def test_bake_midi_fx_and_last_bounce_compile_result() -> None:
 def test_bake_midi_fx_preserves_more_than_512_events() -> None:
     project = Project()
     try:
-        _track, clip = project.add_midi_clip(0.0, 8.0)
+        clip = project.add_midi_clip(0.0, 8.0).clip_id
         events = [Project.midi_cc(i / 80, 0, 0, i % 128, (i * 3) % 128) for i in range(600)]
         project.set_midi_events(clip, events)
         project.bake_midi_fx(clip, "{}")
@@ -508,7 +508,7 @@ def test_bake_midi_fx_reports_source_index() -> None:
     tracked = Project()
     plain = Project()
     try:
-        _track, tracked_clip = tracked.add_midi_clip(0.0, 4.0)
+        tracked_clip = tracked.add_midi_clip(0.0, 4.0).clip_id
         seed(tracked, tracked_clip)
         assert tracked.preview_midi_fx_count(tracked_clip, config) == 12
         # The preview must leave the clip alone.
@@ -526,7 +526,7 @@ def test_bake_midi_fx_reports_source_index() -> None:
 
         # Without the flag the call keeps returning None and produces the same
         # bytes, so the provenance path cannot drift from the plain one.
-        _plain_track, plain_clip = plain.add_midi_clip(0.0, 4.0)
+        plain_clip = plain.add_midi_clip(0.0, 4.0).clip_id
         seed(plain, plain_clip)
         assert plain.bake_midi_fx(plain_clip, config) is None
         assert (

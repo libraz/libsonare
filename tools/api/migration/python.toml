@@ -7196,6 +7196,7 @@ test = "bindings/python/tests/test_absent_measurements.py::test_silent_loudness_
 [[entry]]
 kind = "field"
 old = "LoudnessMatch.reference_lufs"
+to = "LoudnessMatchResult.reference_lufs"
 changed = "None for a silent or below-gate take (was non-finite)"
 domain = "mastering"
 rule = "absent-not-sentinel"
@@ -7204,10 +7205,46 @@ test = "bindings/python/tests/test_mastering_ab_match.py::test_silent_source_rep
 [[entry]]
 kind = "field"
 old = "LoudnessMatch.source_lufs"
+to = "LoudnessMatchResult.source_lufs"
 changed = "None for a silent or below-gate take (was non-finite)"
 domain = "mastering"
 rule = "absent-not-sentinel"
 test = "bindings/python/tests/test_mastering_ab_match.py::test_silent_source_reports_no_loudness_and_no_gain"
+
+[[entry]]
+kind = "field"
+old = "LoudnessMatch.applied_gain_db"
+new = "LoudnessMatchResult.applied_gain_db"
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "LoudnessMatch.matched_true_peak_dbtp"
+new = "LoudnessMatchResult.matched_true_peak_dbtp"
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "type"
+old = "LoudnessMatch"
+removed = "mastering_ab_match_loudness returns LoudnessMatchResult, which carries the matched samples and sample_rate beside the measurements; the stereo form returns LoudnessMatchStereoResult"
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "option"
+old = "mastering_ab_match_loudness(with_match)"
+removed = "the match is always measured and returned in the LoudnessMatchResult; read samples for the audio alone"
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "option"
+old = "mastering_ab_match_loudness_stereo(with_match)"
+removed = "the match is always measured and returned in the LoudnessMatchStereoResult; read left and right for the audio alone"
+domain = "mastering"
+rule = "typed-results"
 
 [[entry]]
 kind = "method"

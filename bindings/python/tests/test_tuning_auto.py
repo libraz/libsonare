@@ -175,7 +175,7 @@ def test_transcribe_reference_auto_reports_the_tuning_used() -> None:
 
 def test_transcribe_to_clip_accepts_auto() -> None:
     project = libsonare.Project()
-    _track_id, clip_id = project.add_midi_clip(0.0, 4.0)
+    clip_id = project.add_midi_clip(0.0, 4.0).clip_id
     notes = project.transcribe_to_clip(clip_id, _tones(1.0), _SR, reference_hz="auto")
     assert notes > 0
 

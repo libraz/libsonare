@@ -88,7 +88,11 @@ def test_decompose_factorizes_spectrogram() -> None:
     n_features, n_frames, n_components = 16, 24, 3
     rng = np.random.default_rng(0)
     spec = np.abs(rng.standard_normal((n_features, n_frames))).astype(np.float32).ravel()
-    w, h = libsonare.decompose(spec, n_features, n_frames, n_components, n_iter=20)
+    factors = libsonare.decompose(spec, n_features, n_frames, n_components, n_iter=20)
+    assert isinstance(factors, libsonare.DecomposeResult)
+    with pytest.raises(TypeError):
+        iter(factors)
+    w, h = factors.w, factors.h
     assert np.asarray(w).size == n_features * n_components
     assert np.asarray(h).size == n_components * n_frames
     assert _finite(w) and _finite(h)
@@ -198,8 +202,8 @@ def test_nn_filter_and_decompose_take_none_for_the_library_default() -> None:
     for fn in (libsonare.decompose, libsonare.decompose_with_init):
         omitted = fn(spec, n_features, n_frames, 2)
         stated = fn(spec, n_features, n_frames, 2, n_iter=50)
-        np.testing.assert_array_equal(omitted[0], stated[0])
-        np.testing.assert_array_equal(omitted[1], stated[1])
+        np.testing.assert_array_equal(omitted.w, stated.w)
+        np.testing.assert_array_equal(omitted.h, stated.h)
 
 
 @pytest.mark.parametrize(
@@ -295,7 +299,11 @@ def test_lufs_series_interleaved_sums_channel_energies() -> None:
     right = _noise(987654321)
     interleaved = np.stack([left, right], axis=1).reshape(-1)
 
-    momentary, short_term = libsonare.lufs_series_interleaved(interleaved, 2, SR)
+    series = libsonare.lufs_series_interleaved(interleaved, 2, SR)
+    assert isinstance(series, libsonare.LufsSeriesResult)
+    with pytest.raises(TypeError):
+        iter(series)
+    momentary, short_term = series.momentary_lufs, series.short_term_lufs
     mono_left = np.asarray(libsonare.momentary_lufs(left, SR), dtype=np.float64)
     mono_right = np.asarray(libsonare.momentary_lufs(right, SR), dtype=np.float64)
 
@@ -310,7 +318,8 @@ def test_lufs_series_interleaved_sums_channel_energies() -> None:
 
 def test_lufs_series_interleaved_matches_mono_meters_for_one_channel() -> None:
     x = _noise(24680, seconds=4.0)
-    momentary, short_term = libsonare.lufs_series_interleaved(x, 1, SR)
+    series = libsonare.lufs_series_interleaved(x, 1, SR)
+    momentary, short_term = series.momentary_lufs, series.short_term_lufs
     assert momentary == pytest.approx(libsonare.momentary_lufs(x, SR))
     assert short_term == pytest.approx(libsonare.short_term_lufs(x, SR))
 
@@ -320,7 +329,8 @@ def test_lufs_series_interleaved_returns_empty_series_below_a_window() -> None:
     # short window is empty rather than an error.
     x = _noise(13579, seconds=2.0)
     interleaved = np.stack([x, x], axis=1).reshape(-1)
-    momentary, short_term = libsonare.lufs_series_interleaved(interleaved, 2, SR)
+    series = libsonare.lufs_series_interleaved(interleaved, 2, SR)
+    momentary, short_term = series.momentary_lufs, series.short_term_lufs
     assert len(momentary) > 0
     assert short_term.size == 0
 

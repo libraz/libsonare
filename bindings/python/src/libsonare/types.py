@@ -119,6 +119,9 @@ from ._types_analysis import (
     LufsResult as LufsResult,
 )
 from ._types_analysis import (
+    LufsSeriesResult as LufsSeriesResult,
+)
+from ._types_analysis import (
     MelSpectrogramResult as MelSpectrogramResult,
 )
 from ._types_analysis import (
@@ -329,6 +332,9 @@ from ._types_engine import (
     EngineMidiEvent as EngineMidiEvent,
 )
 from ._types_engine import (
+    EngineProcessWithMonitorResult as EngineProcessWithMonitorResult,
+)
+from ._types_engine import (
     EngineTelemetry as EngineTelemetry,
 )
 from ._types_engine import (
@@ -482,7 +488,13 @@ from ._types_enums import (
     WindowType as WindowType,
 )
 from ._types_mastering import (
-    LoudnessMatch as LoudnessMatch,
+    DynamicsProcessorResult as DynamicsProcessorResult,
+)
+from ._types_mastering import (
+    LoudnessMatchResult as LoudnessMatchResult,
+)
+from ._types_mastering import (
+    LoudnessMatchStereoResult as LoudnessMatchStereoResult,
 )
 from ._types_mastering import (
     MasteringChainResult as MasteringChainResult,

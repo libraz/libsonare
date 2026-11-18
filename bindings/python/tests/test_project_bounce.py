@@ -43,7 +43,7 @@ def _build_midi_only_project() -> Project:
     """A MIDI-only arrangement: one MIDI track + clip with a sustained note."""
     project = Project()
     project.set_sample_rate(48000.0)
-    _track, clip = project.add_midi_clip(0.0, 4.0)
+    clip = project.add_midi_clip(0.0, 4.0).clip_id
     project.set_midi_events(
         clip,
         [

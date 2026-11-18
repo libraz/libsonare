@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any, Self
 
 from ._errors import _invalid_state, _require_open
 from ._facade import rebind_facade_exports as _rebind_facade_exports
+from ._project_edit import AlignTakeToReferenceResult as AlignTakeToReferenceResult
 from ._project_edit import TakeAlignment as TakeAlignment
 from ._project_edit import _ProjectEditMixin
 from ._project_edit import align_take_to_reference as align_take_to_reference

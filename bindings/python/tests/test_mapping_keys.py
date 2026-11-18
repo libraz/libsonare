@@ -126,8 +126,8 @@ def test_an_external_stem_takes_one_spelling_and_a_layout_token() -> None:
         with pytest.raises(SonareValueError, match="'mono'"):
             project.import_external_stems(48000, [{**stem, "layout": "Mono"}])
         assert project.to_json() == before
-        tracks, _clips = project.import_external_stems(48000, [stem])
-        assert len(tracks) == 1
+        imported = project.import_external_stems(48000, [stem])
+        assert len(imported.track_ids) == 1
     finally:
         project.close()
 

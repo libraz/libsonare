@@ -79,6 +79,8 @@ from ._conversions import (
     vector_normalize,
 )
 from ._effects import (
+    AssignNoteTargetsResult,
+    DecomposeResult,
     NoteEdit,
     NoteObject,
     NoteTarget,
@@ -344,6 +346,8 @@ __all__ = [
     "NoteEdit",
     "NoteObject",
     "NoteTarget",
+    "AssignNoteTargetsResult",
+    "DecomposeResult",
     "PitchDecompositionResult",
     "transcribe",
     "TranscribeResult",

@@ -39,7 +39,8 @@ from ._runtime import (
     _utf8_arg,
 )
 from .types import (
-    LoudnessMatch,
+    LoudnessMatchResult,
+    LoudnessMatchStereoResult,
     MasteringAssistantProfile,
     MasteringAssistantResult,
     MasteringAudioProfile,
@@ -268,13 +269,12 @@ def mastering_ab_match_loudness(
     reference: Sequence[float] | list[float] | np.ndarray,
     sample_rate: int,
     *,
-    with_match: bool = True,
     reference_sample_rate: int | None = None,
-) -> tuple[np.ndarray, LoudnessMatch | None]:
+) -> LoudnessMatchResult:
     """Gain-match ``source`` to ``reference``'s integrated loudness.
 
     An A/B between two takes is otherwise decided by whichever is louder. The
-    gain is applied with no upper bound and :attr:`LoudnessMatch.
+    gain is applied with no upper bound and :attr:`LoudnessMatchResult.
     matched_true_peak_dbtp` reports where that left the peak, rather than the
     call capping it: a headroom clamp would return ``source`` at its own
     loudness whenever it started near full scale, which is the one thing a
@@ -290,19 +290,17 @@ def mastering_ab_match_loudness(
         source: Mono take to be matched (any sequence convertible to float32).
         reference: Mono take whose loudness ``source`` is brought to.
         sample_rate: Sample rate of ``source`` and of the result, in Hz.
-        with_match: Whether to measure the match alongside the audio
-            (default True). Pass False to take only the matched samples.
         reference_sample_rate: Sample rate of ``reference``, in Hz; omitted
             means ``sample_rate``.
 
     Returns:
-        Tuple of ``(matched ndarray, match)``. The audio is a
-        ``numpy.ndarray`` of ``float32`` as long as ``source``; ``match`` is a
-        :class:`LoudnessMatch`, or ``None`` when ``with_match`` is False.
+        A :class:`LoudnessMatchResult`: ``samples`` is a ``float32``
+        ``numpy.ndarray`` as long as ``source`` at ``sample_rate``, beside the
+        measured loudnesses, the applied gain and the matched true peak.
 
     Example:
-        >>> matched, match = mastering_ab_match_loudness(take, ref, 48000)
-        >>> match.applied_gain_db  # doctest: +SKIP
+        >>> result = mastering_ab_match_loudness(take, ref, 48000)
+        >>> result.applied_gain_db  # doctest: +SKIP
         -3.2
     """
     lib = _get_lib()
@@ -310,7 +308,7 @@ def mastering_ab_match_loudness(
         raise _not_supported("libsonare was built without mastering support")
     source_array, source_length = _to_c_float_array(source, arg_name="source")
     reference_array, reference_length = _to_c_float_array(reference, arg_name="reference")
-    match = SonareLoudnessMatch() if with_match else None
+    match = SonareLoudnessMatch()
     with _out_float_array(lib) as (out, out_length):
         rc = lib.sonare_mastering_ab_match_loudness(
             source_array,
@@ -324,13 +322,13 @@ def mastering_ab_match_loudness(
             _to_c_int(sample_rate, "sample_rate"),
             ctypes.byref(out),
             ctypes.byref(out_length),
-            ctypes.byref(match) if match is not None else None,
+            ctypes.byref(match),
         )
         _check(rc)
         matched = _from_c_float_array(out, out_length.value)
-    if match is None:
-        return matched, None
-    return matched, LoudnessMatch(
+    return LoudnessMatchResult(
+        samples=matched,
+        sample_rate=sample_rate,
         reference_lufs=_finite_or_none(match.reference_lufs),
         source_lufs=_finite_or_none(match.source_lufs),
         applied_gain_db=float(match.applied_gain_db),
@@ -346,17 +344,16 @@ def mastering_ab_match_loudness_stereo(
     reference_right: Sequence[float] | list[float] | np.ndarray,
     sample_rate: int,
     *,
-    with_match: bool = True,
     reference_sample_rate: int | None = None,
-) -> tuple[tuple[np.ndarray, np.ndarray], LoudnessMatch | None]:
+) -> LoudnessMatchStereoResult:
     """Gain-match a stereo source to a stereo reference with one shared gain.
 
     Each source/reference pair must have equal left/right lengths, while the
     source and reference may have different lengths and rates; a reference at
     ``reference_sample_rate`` (default: ``sample_rate``) is resampled onto
-    ``sample_rate`` before it is measured. The returned tuple is
-    ``((matched_left, matched_right), match)``; both planes are ``float32``
-    arrays and ``match`` is ``None`` when ``with_match`` is false.
+    ``sample_rate`` before it is measured. Returns a
+    :class:`LoudnessMatchStereoResult` whose ``left`` and ``right`` planes are
+    ``float32`` arrays.
     """
     lib = _get_lib()
     if not hasattr(lib, "sonare_mastering_ab_match_loudness_stereo"):
@@ -376,7 +373,7 @@ def mastering_ab_match_loudness_stereo(
     if reference_left_length != reference_right_length:
         raise SonareValueError("reference_left and reference_right channel lengths must match")
     out = SonareMasteringStereoResult()
-    match = SonareLoudnessMatch() if with_match else None
+    match = SonareLoudnessMatch()
     try:
         rc = lib.sonare_mastering_ab_match_loudness_stereo(
             source_left_array,
@@ -391,7 +388,7 @@ def mastering_ab_match_loudness_stereo(
             ),
             _to_c_int(sample_rate, "sample_rate"),
             ctypes.byref(out),
-            ctypes.byref(match) if match is not None else None,
+            ctypes.byref(match),
         )
         _check(rc)
         matched = (
@@ -400,9 +397,10 @@ def mastering_ab_match_loudness_stereo(
         )
     finally:
         lib.sonare_free_mastering_stereo_result(ctypes.byref(out))
-    if match is None:
-        return matched, None
-    return matched, LoudnessMatch(
+    return LoudnessMatchStereoResult(
+        left=matched[0],
+        right=matched[1],
+        sample_rate=sample_rate,
         reference_lufs=_finite_or_none(match.reference_lufs),
         source_lufs=_finite_or_none(match.source_lufs),
         applied_gain_db=float(match.applied_gain_db),

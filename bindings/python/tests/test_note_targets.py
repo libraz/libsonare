@@ -20,6 +20,7 @@ import pytest
 
 import libsonare
 from libsonare import (
+    AssignNoteTargetsResult,
     ErrorCode,
     NoteEdit,
     NoteObject,
@@ -56,7 +57,8 @@ def _answer(
     notes: list[NoteObject], targets: list[NoteTarget], **options: object
 ) -> tuple[Answer, list[NoteObject]]:
     """Run one assignment and reduce it to a comparable answer."""
-    edited, assigned = libsonare.assign_note_targets(notes, SR, targets, **options)  # type: ignore[arg-type]
+    result = libsonare.assign_note_targets(notes, SR, targets, **options)  # type: ignore[arg-type]
+    edited, assigned = list(result.notes), result.assigned_count
     answer = (
         assigned,
         tuple(round(note.edit.pitch_semitones, 4) for note in edited),
@@ -69,7 +71,7 @@ def _two_quarter_notes_smf() -> bytes:
     """C4 over 0-0.5 s and G4 over 0.5-1.0 s, at the project's default 120 BPM."""
     project = Project()
     try:
-        _track_id, clip_id = project.add_midi_clip(0.0, 4.0)
+        clip_id = project.add_midi_clip(0.0, 4.0).clip_id
         project.set_midi_events(
             clip_id,
             [
@@ -127,8 +129,12 @@ def test_the_melody_a_file_carries_is_what_gets_assigned() -> None:
     targets = libsonare.note_targets_from_smf(_two_quarter_notes_smf())
     notes = [_note(0, HALF_SECOND), _note(HALF_SECOND, 2 * HALF_SECOND)]
 
-    edited, assigned = libsonare.assign_note_targets(notes, SR, targets)
+    result = libsonare.assign_note_targets(notes, SR, targets)
+    edited, assigned = result.notes, result.assigned_count
 
+    assert isinstance(result, AssignNoteTargetsResult)
+    with pytest.raises(TypeError):
+        iter(result)
     assert assigned == 2
     # C4 and G4 against a 440 Hz take: 60 - 69 and 67 - 69.
     assert [note.edit.pitch_semitones for note in edited] == pytest.approx([-9.0, -2.0], abs=1e-4)
@@ -155,9 +161,9 @@ def test_the_callers_notes_are_not_rewritten() -> None:
     notes = [_note(0, HALF_SECOND)]
     targets = [NoteTarget(0.0, 0.5, 60.0)]
 
-    edited, _assigned = libsonare.assign_note_targets(
+    edited = libsonare.assign_note_targets(
         notes, SR, targets, unmatched_policy="mute", max_correction_semitones=1.0
-    )
+    ).notes
 
     assert notes[0].edit.pitch_semitones == 0.0
     assert notes[0].edit.muted is False
@@ -175,8 +181,9 @@ def test_assigned_note_curves_are_independent_of_the_source(curve: str) -> None:
         amplitude=np.array([0.2, 0.4], dtype=np.float32),
         edit=NoteEdit(amplitude_envelope=np.array([1.0, 0.5], dtype=np.float32)),
     )
-    edited, assigned = libsonare.assign_note_targets([note], SR, [NoteTarget(0.0, 0.5, 60.0)])
-    assert assigned == 1
+    result = libsonare.assign_note_targets([note], SR, [NoteTarget(0.0, 0.5, 60.0)])
+    edited = result.notes
+    assert result.assigned_count == 1
     edited[0].amplitude[0] = 0.9
     edited[0].edit.amplitude_envelope[0] = 0.1
     if curve == "amplitude":
@@ -206,10 +213,10 @@ def test_everything_the_assignment_does_not_write_survives_it() -> None:
         ),
     )
 
-    edited, assigned = libsonare.assign_note_targets([note], SR, [NoteTarget(0.0, 0.5, 60.0)])
+    assigned_result = libsonare.assign_note_targets([note], SR, [NoteTarget(0.0, 0.5, 60.0)])
 
-    assert assigned == 1
-    result = edited[0]
+    assert assigned_result.assigned_count == 1
+    result = assigned_result.notes[0]
     assert result.edit.pitch_semitones == pytest.approx(-9.0, abs=1e-4)
     assert (result.onset_sample, result.offset_sample) == (0, HALF_SECOND)
     assert (result.frame_start, result.frame_end) == (3, 24)
@@ -234,7 +241,7 @@ def test_a_note_with_no_measured_pitch_is_never_assigned_or_edited() -> None:
 
 
 def test_an_empty_note_set_and_an_empty_reference_are_both_answers() -> None:
-    assert libsonare.assign_note_targets([], SR, []) == ([], 0)
+    assert libsonare.assign_note_targets([], SR, []) == AssignNoteTargetsResult((), 0)
 
     notes = [_note(0, HALF_SECOND)]
     (assigned, shifts, mutes), _edited = _answer(notes, [], unmatched_policy="mute")

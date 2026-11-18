@@ -268,7 +268,7 @@ class TestSentinelsAreAbsence:
         project = libsonare.Project()
         try:
             project.set_sample_rate(48000)
-            _, clip_id = project.add_midi_clip(0.0, 4.0)
+            clip_id = project.add_midi_clip(0.0, 4.0).clip_id
             project.set_program(clip_id, 24)
             project.set_program(clip_id, 24, 0)
             with pytest.raises(SonareValueError, match="bank"):

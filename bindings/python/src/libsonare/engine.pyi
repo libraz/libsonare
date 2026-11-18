@@ -35,6 +35,7 @@ from .types import (
     EngineMarker,
     EngineMetronomeConfig,
     EngineMidiClipSchedule,
+    EngineProcessWithMonitorResult,
     EngineTelemetry,
     EngineTrackMonitorMode,
     ExternalMidiEvent,
@@ -284,9 +285,7 @@ class RealtimeEngine:
     @property
     def graph_connection_count(self) -> int: ...
     def process(self, channels: PlanarChannels) -> list[np.ndarray]: ...
-    def process_with_monitor(
-        self, channels: PlanarChannels
-    ) -> tuple[list[np.ndarray], list[np.ndarray]]: ...
+    def process_with_monitor(self, channels: PlanarChannels) -> EngineProcessWithMonitorResult: ...
     def render_offline(
         self,
         channels: PlanarChannels,

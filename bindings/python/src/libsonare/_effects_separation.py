@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ctypes
 from collections.abc import Sequence
+from dataclasses import dataclass
 
 import numpy as np
 import numpy.typing as npt
@@ -49,6 +50,16 @@ from .types import HpssResult
 # ============================================================================
 
 
+@dataclass(frozen=True, slots=True, eq=False)
+class DecomposeResult:
+    """Result of :func:`decompose` and :func:`decompose_with_init`."""
+
+    w: np.ndarray
+    """Component matrix of shape ``(n_features, n_components)`` as float32."""
+    h: np.ndarray
+    """Activation matrix of shape ``(n_components, n_frames)`` as float32."""
+
+
 @_guard_buffer("s")
 def decompose(
     s: Sequence[float] | list[float],
@@ -57,7 +68,7 @@ def decompose(
     n_components: int,
     n_iter: int | None = None,
     beta: float = 2.0,
-) -> tuple[np.ndarray, np.ndarray]:
+) -> DecomposeResult:
     """Non-negative matrix factorisation (librosa.decompose.decompose).
 
     Args:
@@ -70,9 +81,9 @@ def decompose(
         beta: Beta divergence (2 = Frobenius, 1 = KL, 0 = Itakura-Saito).
 
     Returns:
-        Tuple ``(w, h)`` of float32 arrays: ``w`` is the component matrix of
-        shape ``(n_features, n_components)`` and ``h`` is the activation matrix
-        of shape ``(n_components, n_frames)``.
+        A :class:`DecomposeResult` of float32 arrays: ``w`` is the component
+        matrix of shape ``(n_features, n_components)`` and ``h`` is the
+        activation matrix of shape ``(n_components, n_frames)``.
     """
     lib = _get_lib()
     c_array, length = _to_c_float_array(s)
@@ -98,7 +109,7 @@ def decompose(
         )
         w = _from_c_float_array(out_w, out_w_length.value).reshape(n_features, n_components)
         h = _from_c_float_array(out_h, out_h_length.value).reshape(n_components, n_frames)
-        return (w, h)
+        return DecomposeResult(w=w, h=h)
 
 
 @_guard_buffer("s")
@@ -110,7 +121,7 @@ def decompose_with_init(
     n_iter: int | None = None,
     beta: float = 2.0,
     init: str = "random",
-) -> tuple[np.ndarray, np.ndarray]:
+) -> DecomposeResult:
     """NMF with a selectable initialiser (librosa.decompose.decompose, ``init``).
 
     Identical to :func:`decompose` but exposes the initialisation strategy:
@@ -118,7 +129,7 @@ def decompose_with_init(
     to converge in fewer iterations).
 
     Returns:
-        Tuple ``(w, h)`` of float32 arrays: ``w`` of shape
+        A :class:`DecomposeResult` of float32 arrays: ``w`` of shape
         ``(n_features, n_components)`` and ``h`` of shape
         ``(n_components, n_frames)``.
     """
@@ -149,7 +160,7 @@ def decompose_with_init(
         )
         w = _from_c_float_array(out_w, out_w_length.value).reshape(n_features, n_components)
         h = _from_c_float_array(out_h, out_h_length.value).reshape(n_components, n_frames)
-        return (w, h)
+        return DecomposeResult(w=w, h=h)
 
 
 def decompose_stems(

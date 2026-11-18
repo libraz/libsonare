@@ -117,24 +117,24 @@ def test_ab_match_resamples_the_reference() -> None:
     source = sine(220.0, 1.0, sr=SR, amp=0.05)
     reference = _noise(48000, 5, 0.8)
     resampled = np.asarray(resample(reference, REF_SR, SR), dtype=np.float32)
-    expected, expected_match = mastering_ab_match_loudness(source, resampled, SR)
-    actual, actual_match = mastering_ab_match_loudness(
-        source, reference, SR, reference_sample_rate=REF_SR
-    )
-    assert np.array_equal(actual, expected)
-    assert actual_match == expected_match
-    _, misread_match = mastering_ab_match_loudness(source, reference, SR)
-    assert misread_match != expected_match
+    expected = mastering_ab_match_loudness(source, resampled, SR)
+    actual = mastering_ab_match_loudness(source, reference, SR, reference_sample_rate=REF_SR)
+    assert np.array_equal(actual.samples, expected.samples)
+    assert actual.applied_gain_db == expected.applied_gain_db
+    assert actual.reference_lufs == expected.reference_lufs
+    misread = mastering_ab_match_loudness(source, reference, SR)
+    assert misread.applied_gain_db != expected.applied_gain_db
 
-    (left, right), stereo_match = mastering_ab_match_loudness_stereo(
+    stereo = mastering_ab_match_loudness_stereo(
         source, -0.5 * source, reference, reference, SR, reference_sample_rate=REF_SR
     )
-    (expected_left, expected_right), expected_stereo = mastering_ab_match_loudness_stereo(
+    expected_stereo = mastering_ab_match_loudness_stereo(
         source, -0.5 * source, resampled, resampled, SR
     )
-    assert np.array_equal(left, expected_left)
-    assert np.array_equal(right, expected_right)
-    assert stereo_match == expected_stereo
+    assert np.array_equal(stereo.left, expected_stereo.left)
+    assert np.array_equal(stereo.right, expected_stereo.right)
+    assert stereo.applied_gain_db == expected_stereo.applied_gain_db
+    assert stereo.reference_lufs == expected_stereo.reference_lufs
 
 
 def _eq_probe(**match_kwargs: object) -> np.ndarray:

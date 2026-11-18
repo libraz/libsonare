@@ -9,7 +9,7 @@ import pytest
 
 from libsonare import (
     ErrorCode,
-    LoudnessMatch,
+    LoudnessMatchStereoResult,
     MasteringStereoResult,
     SonareError,
     SonareValueError,
@@ -138,14 +138,18 @@ def test_stereo_loudness_match_uses_one_gain_for_antiphase_asymmetric_planes() -
     reference_left = sine(440.0, 0.75, sr=sample_rate, amp=0.25)
     reference_right = -sine(660.0, 0.75, sr=sample_rate, amp=0.25)
 
-    (matched_left, matched_right), match = libsonare.mastering_ab_match_loudness_stereo(
+    match = libsonare.mastering_ab_match_loudness_stereo(
         source_left,
         source_right,
         reference_left,
         reference_right,
         sample_rate=sample_rate,
     )
-    assert isinstance(match, LoudnessMatch)
+    assert isinstance(match, LoudnessMatchStereoResult)
+    with pytest.raises(TypeError):
+        iter(match)
+    matched_left, matched_right = match.left, match.right
+    assert match.sample_rate == sample_rate
     assert matched_left.dtype == np.float32
     assert matched_right.dtype == np.float32
     assert matched_left.shape == source_left.shape
@@ -163,25 +167,13 @@ def test_stereo_loudness_match_uses_one_gain_for_antiphase_asymmetric_planes() -
     assert math.isfinite(match.matched_true_peak_dbtp)
 
 
-def test_stereo_loudness_match_supports_without_match_and_rejects_bad_planes() -> None:
+def test_stereo_loudness_match_rejects_bad_planes() -> None:
     import libsonare
 
     source_left = sine(220.0, 0.8, sr=48000, amp=0.05)
     source_right = -sine(220.0, 0.8, sr=48000, amp=0.05)
     reference_left = sine(330.0, 0.6, sr=48000, amp=0.2)
     reference_right = -sine(330.0, 0.6, sr=48000, amp=0.2)
-    (left, right), match = libsonare.mastering_ab_match_loudness_stereo(
-        source_left,
-        source_right,
-        reference_left,
-        reference_right,
-        sample_rate=48000,
-        with_match=False,
-    )
-    assert match is None
-    assert left.shape == source_left.shape
-    assert right.shape == source_right.shape
-
     with pytest.raises(SonareValueError, match="reference_left and reference_right"):
         libsonare.mastering_ab_match_loudness_stereo(
             source_left,

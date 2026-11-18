@@ -55,7 +55,7 @@ def _source_and_render() -> tuple[np.ndarray, int, bytes, np.ndarray, object]:
         algorithm_version=1,
     )
     with create_vocal_edit_session(source, sample_rate, analysis=analysis) as session:
-        notes, _ = session.notes()
+        notes = session.notes().notes
         assert notes
         note = notes[0]
         with session.begin_edit() as draft:

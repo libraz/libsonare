@@ -7,17 +7,20 @@ from ._playback import HrtfSet as HrtfSet
 from ._playback import PlaybackLoudnessMeter as PlaybackLoudnessMeter
 from ._playback import PlaybackRenderer as PlaybackRenderer
 from ._playback import render_playback as render_playback
+from ._project import AlignTakeToReferenceResult as AlignTakeToReferenceResult
 from ._project import Articulation as Articulation
 from ._project import AssistSidecar as AssistSidecar
 from ._project import BuiltinSynthConfig as BuiltinSynthConfig
 from ._project import ControllerAxis as ControllerAxis
 from ._project import ControllerInput as ControllerInput
 from ._project import ExternalInstrument as ExternalInstrument
+from ._project import ExternalSeparatedStemImportResult as ExternalSeparatedStemImportResult
 from ._project import MidiCcBinding as MidiCcBinding
 from ._project import MidiRouteResult as MidiRouteResult
 from ._project import MpeDimension as MpeDimension
 from ._project import NotePairValidation as NotePairValidation
 from ._project import NoteTracking as NoteTracking
+from ._project import PartRigEntry as PartRigEntry
 from ._project import PartRigMode as PartRigMode
 from ._project import Project as Project
 from ._project import ProjectAutomationTargetKind as ProjectAutomationTargetKind
@@ -26,7 +29,9 @@ from ._project import ProjectDeserializeResult as ProjectDeserializeResult
 from ._project import ProjectFadeCurve as ProjectFadeCurve
 from ._project import ProjectKeyMode as ProjectKeyMode
 from ._project import ProjectLoopMode as ProjectLoopMode
+from ._project import ProjectLoopRecordingResult as ProjectLoopRecordingResult
 from ._project import ProjectMidiCcBindingKind as ProjectMidiCcBindingKind
+from ._project import ProjectMidiClipResult as ProjectMidiClipResult
 from ._project import ProjectOverlapPolicy as ProjectOverlapPolicy
 from ._project import ProjectSourceKind as ProjectSourceKind
 from ._project import ProjectStemLayout as ProjectStemLayout
@@ -76,6 +81,8 @@ from ._runtime import ErrorCode as ErrorCode
 from ._runtime import ErrorCodeName as ErrorCodeName
 from ._runtime import SonareError as SonareError
 from ._runtime import SonareValueError as SonareValueError
+from .analyzer import AssignNoteTargetsResult as AssignNoteTargetsResult
+from .analyzer import DecomposeResult as DecomposeResult
 from .analyzer import MasteringAssistantParams as MasteringAssistantParams
 from .analyzer import MasteringParams as MasteringParams
 from .analyzer import MasteringParamValue as MasteringParamValue
@@ -842,6 +849,7 @@ from .analyzer import (
     zero_crossings as zero_crossings,
 )
 from .audio import Audio as Audio
+from .audio import DecodedChannels as DecodedChannels
 from .audio import decode_channels as decode_channels
 from .audio import downmix as downmix
 from .engine import MAX_TRACK_LANES as MAX_TRACK_LANES
@@ -1000,6 +1008,7 @@ from .types import (
     DereverbStereoResult as DereverbStereoResult,
 )
 from .types import DynamicRangeReport as DynamicRangeReport
+from .types import DynamicsProcessorResult as DynamicsProcessorResult
 from .types import (
     DynamicsResult as DynamicsResult,
 )
@@ -1054,6 +1063,7 @@ from .types import (
 from .types import (
     EngineMidiEvent as EngineMidiEvent,
 )
+from .types import EngineProcessWithMonitorResult as EngineProcessWithMonitorResult
 from .types import (
     EngineTelemetry as EngineTelemetry,
 )
@@ -1108,10 +1118,10 @@ from .types import (
 from .types import (
     KeyProfile as KeyProfile,
 )
-from .types import (
-    LoudnessMatch as LoudnessMatch,
-)
+from .types import LoudnessMatchResult as LoudnessMatchResult
+from .types import LoudnessMatchStereoResult as LoudnessMatchStereoResult
 from .types import LufsResult as LufsResult
+from .types import LufsSeriesResult as LufsSeriesResult
 from .types import (
     MarkerKind as MarkerKind,
 )
@@ -1469,6 +1479,7 @@ from .vocal_edit import (
 from .vocal_edit import (
     VocalFormantMode as VocalFormantMode,
 )
+from .vocal_edit import VocalHistory as VocalHistory
 from .vocal_edit import (
     VocalIdChange as VocalIdChange,
 )
@@ -1484,6 +1495,7 @@ from .vocal_edit import (
 from .vocal_edit import (
     VocalNoteEdit as VocalNoteEdit,
 )
+from .vocal_edit import VocalNotesResult as VocalNotesResult
 from .vocal_edit import (
     VocalOperation as VocalOperation,
 )

@@ -24,6 +24,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal, SupportsFloat, TypeAlias, cast, get_args
 
+import numpy as np
+
 if TYPE_CHECKING:
     from ._project import Project, ProjectTimeline
 
@@ -520,6 +522,46 @@ class ProjectDeserializeResult:
     """The loaded :class:`Project`."""
     diagnostics: str
     """Warning text from the load; empty when there were none."""
+
+
+@dataclass(frozen=True, slots=True)
+class ProjectLoopRecordingResult:
+    """Result of :meth:`Project.add_loop_recording_takes`."""
+
+    clip_id: int
+    """Id of the clip that holds the takes."""
+    take_count: int
+    """Number of takes the capture was split into."""
+
+
+@dataclass(frozen=True, slots=True)
+class ProjectMidiClipResult:
+    """Result of :meth:`Project.add_midi_clip`."""
+
+    track_id: int
+    """Id of the new MIDI track."""
+    clip_id: int
+    """Id of the new MIDI clip."""
+
+
+@dataclass(frozen=True, slots=True, eq=False)
+class ExternalSeparatedStemImportResult:
+    """Result of :meth:`Project.import_external_stems`; entry ``i`` of each array is stem ``i``."""
+
+    track_ids: np.ndarray
+    """Ids of the tracks created, as ``uint32``."""
+    clip_ids: np.ndarray
+    """Ids of the clips created, as ``uint32``."""
+
+
+@dataclass(frozen=True, slots=True)
+class PartRigEntry:
+    """A part-rig entry read back by :meth:`Project.part_rig`."""
+
+    mode: PartRigMode
+    """The :data:`PartRigMode` token."""
+    inserts: tuple[dict[str, object], ...] | None
+    """``{"processor", "params"}`` dicts for a ``"chain"`` entry; ``None`` otherwise."""
 
 
 def project_abi_version() -> int | None:

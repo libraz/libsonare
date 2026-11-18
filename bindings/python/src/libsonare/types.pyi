@@ -907,6 +907,15 @@ class DereverbClassicalConfig(TypedDict):
     wpe_taps: int
     wpe_strength: float
 
+class LufsSeriesResult:
+    momentary_lufs: NDArray[np.float32]
+    short_term_lufs: NDArray[np.float32]
+    def __init__(
+        self,
+        momentary_lufs: NDArray[np.float32],
+        short_term_lufs: NDArray[np.float32],
+    ) -> None: ...
+
 class LufsResult:
     integrated_lufs: float
     momentary_lufs: float
@@ -1925,18 +1934,46 @@ class MasteringStereoResult:
         non_finite_substitution_count: int = 0,
     ) -> None: ...
 
-class LoudnessMatch:
+class LoudnessMatchResult:
+    samples: NDArray[np.float32]
+    sample_rate: int
     reference_lufs: float | None
     source_lufs: float | None
     applied_gain_db: float
     matched_true_peak_dbtp: float
     def __init__(
         self,
+        samples: NDArray[np.float32],
+        sample_rate: int,
         reference_lufs: float | None,
         source_lufs: float | None,
         applied_gain_db: float,
         matched_true_peak_dbtp: float,
     ) -> None: ...
+
+class LoudnessMatchStereoResult:
+    left: NDArray[np.float32]
+    right: NDArray[np.float32]
+    sample_rate: int
+    reference_lufs: float | None
+    source_lufs: float | None
+    applied_gain_db: float
+    matched_true_peak_dbtp: float
+    def __init__(
+        self,
+        left: NDArray[np.float32],
+        right: NDArray[np.float32],
+        sample_rate: int,
+        reference_lufs: float | None,
+        source_lufs: float | None,
+        applied_gain_db: float,
+        matched_true_peak_dbtp: float,
+    ) -> None: ...
+
+class DynamicsProcessorResult:
+    samples: NDArray[np.float32]
+    latency_samples: int
+    def __init__(self, samples: NDArray[np.float32], latency_samples: int) -> None: ...
 
 class StageGainReduction:
     stage: str
@@ -2780,6 +2817,15 @@ class EngineBounceOptions:
         dither: int = 0,
         dither_bits: int = 16,
         dither_seed: int = 0,
+    ) -> None: ...
+
+class EngineProcessWithMonitorResult:
+    output: tuple[NDArray[np.float32], ...]
+    monitor: tuple[NDArray[np.float32], ...]
+    def __init__(
+        self,
+        output: tuple[NDArray[np.float32], ...],
+        monitor: tuple[NDArray[np.float32], ...],
     ) -> None: ...
 
 class EngineBounceResult:
