@@ -101,17 +101,29 @@ describe('StreamingEqualizer.setAutoGain', () => {
 
 describe('StreamingMasteringChain.constructor', () => {
   it.each([
-    ['no config', undefined, TypeError],
-    ['no sampleRate', { eq: { tilt: { tiltDb: 1 } } }, TypeError],
-    ['fractional sampleRate', { sampleRate: 48000.5 }, RangeError],
-    ['zero maxBlockSize', { sampleRate, maxBlockSize: 0 }, RangeError],
-    ['string maxBlockSize', { sampleRate, maxBlockSize: '128' }, TypeError],
-    ['no numChannels', { sampleRate }, TypeError],
-    ['three channels', { sampleRate, numChannels: 3 }, RangeError],
-    ['zero channels', { sampleRate, numChannels: 0 }, RangeError],
-    ['string channels', { sampleRate, numChannels: '2' }, TypeError],
-  ] as const)('refuses %s', (_name, config, errorClass) => {
-    expect(errorOf(() => new StreamingMasteringChain(config as never))).toBeInstanceOf(errorClass);
+    ['no config', undefined, TypeError, /config/],
+    ['no sampleRate', { eq: { tilt: { tiltDb: 1 } }, numChannels: 1 }, TypeError, /sampleRate/],
+    ['fractional sampleRate', { sampleRate: 48000.5, numChannels: 1 }, RangeError, /sampleRate/],
+    [
+      'zero maxBlockSize',
+      { sampleRate, numChannels: 1, maxBlockSize: 0 },
+      RangeError,
+      /maxBlockSize|max_block_size/,
+    ],
+    [
+      'string maxBlockSize',
+      { sampleRate, numChannels: 1, maxBlockSize: '128' },
+      TypeError,
+      /maxBlockSize/,
+    ],
+    ['no numChannels', { sampleRate }, TypeError, /numChannels/],
+    ['three channels', { sampleRate, numChannels: 3 }, RangeError, /numChannels|num_channels/],
+    ['zero channels', { sampleRate, numChannels: 0 }, RangeError, /numChannels|num_channels/],
+    ['string channels', { sampleRate, numChannels: '2' }, TypeError, /numChannels/],
+  ] as const)('refuses %s', (_name, config, errorClass, field) => {
+    const error = errorOf(() => new StreamingMasteringChain(config as never));
+    expect(error).toBeInstanceOf(errorClass);
+    expect((error as Error).message).toMatch(field);
   });
 
   it('prepares in the constructor for the requested channel count', () => {
