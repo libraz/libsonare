@@ -64,7 +64,7 @@ EXPECTED_SYNTH_ENUM_TABLES = {
         "sallenKey",
         "svf4Pole",
     ),
-    "filter_outputs": ("default", "lowpass", "bandpass", "highpass"),
+    "filter_outputs": ("default", "lowPass", "bandPass", "highPass"),
     "body_types": ("default", "none", "guitar", "violin", "woodTube", "brassBell", "vocal"),
     "mod_sources": (
         "none",

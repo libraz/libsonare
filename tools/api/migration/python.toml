@@ -6173,6 +6173,14 @@ test = "bindings/python/tests/test_synth_patch.py::test_synth_patch_enum_tables_
 
 [[entry]]
 kind = "field"
+old = "SynthPatch.filter_output"
+changed = "takes lowPass, bandPass or highPass instead of lowpass, bandpass or highpass"
+domain = "engine"
+rule = "high-pass"
+test = "bindings/python/tests/test_synth_patch.py::test_synth_patch_enum_tables_round_trip_names_and_refuse_ordinals"
+
+[[entry]]
+kind = "field"
 old = "SynthPatch.body"
 changed = "takes the exact lowerCamel body type token (woodTube, brassBell)"
 domain = "engine"

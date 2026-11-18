@@ -157,9 +157,9 @@ _SYNTH_FILTER_MODELS = {
 }
 _SYNTH_FILTER_OUTPUTS = {
     "default": 0,
-    "lowpass": 1,
-    "bandpass": 2,
-    "highpass": 3,
+    "lowPass": 1,
+    "bandPass": 2,
+    "highPass": 3,
 }
 _SYNTH_BODY_TYPES = {
     "default": 0,
@@ -281,7 +281,7 @@ SynthFilterModel = Literal[
 ]
 """NativeSynth filter model."""
 
-SynthFilterOutput = Literal["default", "lowpass", "bandpass", "highpass"]
+SynthFilterOutput = Literal["default", "lowPass", "bandPass", "highPass"]
 """NativeSynth filter output tap."""
 
 SynthBodyType = Literal["default", "none", "guitar", "violin", "woodTube", "brassBell", "vocal"]

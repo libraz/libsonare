@@ -609,20 +609,28 @@ def test_project_import_smf_preserves_salvaged_truncation() -> None:
             "transpose_semitones is an earlier spelling; write transposeSemitones",
         ),
         ({"transposeSemitone": 12}, "unknown MIDI-FX key 'transposeSemitone'"),
-        ({"velocityScale": float("nan")}, "Invalid format"),
+        ({"velocityScale": float("nan")}, None),
     ],
     ids=["earlier_spelling", "unknown_key", "non_finite_value"],
 )
 def test_a_midi_fx_key_outside_the_document_is_refused_as_invalid_format(
-    config: dict[str, object], message: str
+    config: dict[str, object], message: str | None
 ) -> None:
-    """The MIDI-FX config names its keys in camelCase; any other key is refused by name."""
+    """The MIDI-FX config names its keys in camelCase; any other key is refused by name.
+
+    A non-finite value fails the JSON parse, whose message carries no detail, so only
+    its code is pinned.
+    """
     project = Project()
     try:
         clip = project.add_midi_clip(0.0, 4.0).clip_id
-        with raises_coded(ErrorCode.INVALID_FORMAT, match=re.escape(message)):
+        with raises_coded(
+            ErrorCode.INVALID_FORMAT, match=None if message is None else re.escape(message)
+        ):
             project.preview_midi_fx_count(clip, config)
-        with raises_coded(ErrorCode.INVALID_FORMAT, match=re.escape(message)):
+        with raises_coded(
+            ErrorCode.INVALID_FORMAT, match=None if message is None else re.escape(message)
+        ):
             project.bake_midi_fx(clip, config)
     finally:
         project.close()
