@@ -12,10 +12,15 @@ import { REQUEST_SHAPES, type RequestFn } from '../src/request_keys';
 
 type Entry = (request: unknown, ...rest: unknown[]) => unknown;
 
+// A class whose constructor takes the request (ClipPageStreamer) is constructed, not called.
 function entry(name: string): Entry {
   const fn = (api as unknown as Record<string, unknown>)[name];
   if (typeof fn !== 'function') {
     throw new Error(`${name} is not exported`);
+  }
+  if (/^class\b/.test(Function.prototype.toString.call(fn))) {
+    const Ctor = fn as new (...args: unknown[]) => unknown;
+    return (request, ...rest) => new Ctor(request, ...rest);
   }
   return fn as Entry;
 }
