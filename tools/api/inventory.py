@@ -1328,6 +1328,9 @@ _NATIVE_FIXED = {
     "target_platform_value": "target-platform",
 }
 _NATIVE_CALL = re.compile(r"\b(add_command|add_project_command)\s*\(")
+_NATIVE_BUILDER = re.compile(rf"\b(?:{_NATIVE_BUILDERS})\s*\(")
+# The only string-literal brace list a builder takes is its alias list.
+_NATIVE_ALIASES = re.compile(r'\{\s*("[^"]+"(?:\s*,\s*"[^"]+")*)\s*\}')
 _NATIVE_LOOP = re.compile(r"for\s*\(\s*const\s+char\s*\*\s*(\w+)\s*:\s*\{([^}]*)\}\s*\)\s*$")
 
 
@@ -1346,6 +1349,26 @@ def _balanced(text: str, open_idx: int) -> int:
                 return i
         i += 1
     return -1
+
+
+def _native_aliases(call: str) -> dict[str, list[str]]:
+    """Long alias spellings of each option a command's builder calls declare, by primary name."""
+    out: dict[str, list[str]] = {}
+    for b in _NATIVE_BUILDER.finditer(call):
+        close = _balanced(call, b.end() - 1)
+        body = call[b.end() : close]
+        head = re.match(r'\s*"([^"]+)"', body)
+        if not head:
+            continue
+        spellings = [
+            s
+            for group in _NATIVE_ALIASES.findall(body[head.end() :])
+            for s in re.findall(r'"([^"]+)"', group)
+            if len(s) > 1
+        ]
+        if spellings:
+            out.setdefault(head.group(1), []).extend(spellings)
+    return out
 
 
 def _native_cli(root: Path) -> tuple[dict[str, dict], int]:
@@ -1384,12 +1407,26 @@ def _native_cli(root: Path) -> tuple[dict[str, dict], int]:
             flags = ["json"] + _NATIVE_OPTION.findall(call)
             flags += [v for k, v in _NATIVE_FIXED.items() if re.search(rf"\b{k}\s*\(", call)]
             switches = {"json", *_NATIVE_SWITCH.findall(call)}
+            aliases = _native_aliases(call)
+            for primary, spellings in aliases.items():
+                flags += spellings
+                if primary in switches:
+                    switches |= set(spellings)
             for n in names:
                 entry = commands.setdefault(
                     n,
-                    {"file": rel, "line": _line_of(raw, m.start()), "flags": [], "switches": set()},
+                    {
+                        "file": rel,
+                        "line": _line_of(raw, m.start()),
+                        "flags": [],
+                        "switches": set(),
+                        "aliases": {},
+                    },
                 )
                 entry["switches"] |= switches
+                for primary, spellings in aliases.items():
+                    for a in spellings:
+                        entry["aliases"][a] = primary
                 for fl in flags:
                     if fl not in entry["flags"]:
                         entry["flags"].append(fl)
@@ -1412,6 +1449,8 @@ class _PyCliScan:
         self.commands: dict[str, dict] = {}
         self.switches: set[str] = set()
         self.help: dict[str, list[str]] = collections.defaultdict(list)
+        # Every later long spelling of one add_argument, mapped to its first.
+        self.alias_of: dict[str, str] = {}
 
     @staticmethod
     def _loops(tree: ast.AST) -> dict[str, list[str]]:
@@ -1442,7 +1481,7 @@ class _PyCliScan:
         opts = [
             a.value for a in call.args if isinstance(a, ast.Constant) and isinstance(a.value, str)
         ]
-        return [o[2:] for o in opts if o.startswith("--")][:1]
+        return [o[2:] for o in opts if o.startswith("--")]
 
     @staticmethod
     def _parent_key(fname: str, node: ast.AST) -> str:
@@ -1474,6 +1513,9 @@ class _PyCliScan:
                 )
                 names = self._long_flags(c, loops)
                 bucket.update(names)
+                if not (c.args and isinstance(c.args[0], ast.Name)):
+                    for alias in names[1:]:
+                        self.alias_of[alias] = names[0]
                 text = next((k.value for k in c.keywords if k.arg == "help"), None)
                 if isinstance(text, ast.Constant) and isinstance(text.value, str):
                     for n in names:
@@ -1670,6 +1712,11 @@ def extract_cli(root: Path) -> tuple[list[dict], dict[str, int], dict]:
         for name in sorted(cmds):
             c = cmds[name]
             switches = c["switches"] if surface == "cli-native" else scan.switches
+            aliases = (
+                c["aliases"]
+                if surface == "cli-native"
+                else {a: p for a, p in scan.alias_of.items() if p in c["flags"]}
+            )
             group = any(other.startswith(name + ".") for other in cmds)
             out.append(_record(surface, "command", name, c["file"], c["line"], True, group=group))
             for fl in sorted(c["flags"]):
@@ -1684,6 +1731,7 @@ def extract_cli(root: Path) -> tuple[list[dict], dict[str, int], dict]:
                         owner=name,
                         member=fl,
                         boolean=fl in switches,
+                        alias_of=aliases.get(fl, ""),
                         doc_text="\n".join(scan.help.get(fl, []))
                         if surface == "cli-python"
                         else "",

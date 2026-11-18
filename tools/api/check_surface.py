@@ -719,7 +719,8 @@ def check_completeness(entries, lookup, baseline, selected, base_records=(), rec
 
     A name is accounted for by its own row of the same kind, or by a row on an owner:
     a removed or changed owner speaks for its members, while a plain rename (new)
-    claims the members moved with it, so each must exist under the new owner.
+    claims the members moved with it, so each must exist under the new owner. A
+    command's flags are independent options, so only a removed command speaks for them.
     """
     rows = collections.defaultdict(list)
     for le in entries:
@@ -755,7 +756,10 @@ def check_completeness(entries, lookup, baseline, selected, base_records=(), rec
             if not rows[(s, o)]:
                 continue
             hit = rows[(s, o)][0]
-            covered = "new" not in hit or (s, hit["new"] + name[len(o) :]) in present
+            if "new" in hit:
+                covered = (s, hit["new"] + name[len(o) :]) in present
+            else:
+                covered = kind != "flag" or "removed" in hit
             break
         if not covered:
             orphans.append(

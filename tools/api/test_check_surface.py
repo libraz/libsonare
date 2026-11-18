@@ -426,6 +426,25 @@ class LedgerAgainstBaseline(CheckerCase):
         code, lines = self.run_base()
         self.assertEqual(code, 0, "\n".join(lines))
 
+    def test_a_changed_command_does_not_speak_for_a_gone_flag(self):
+        self.base["records"].append(
+            _rec("cli-native", "flag", "bpm --tempo", owner="bpm", member="tempo")
+        )
+        fixture = (TD / "ledgers" / "cli.toml").read_text(encoding="utf-8")
+        row = (
+            '[[entry]]\nkind = "command"\nold = "bpm"\nchanged = "x"\n'
+            'domain = "analysis"\nrule = "individual"\n' + self.CHANGED
+        )
+        led = self.ledgers(
+            wasm=(TD / "ledgers" / "wasm.toml").read_text(encoding="utf-8"),
+            node=(TD / "ledgers" / "node.toml").read_text(encoding="utf-8"),
+            python=(TD / "ledgers" / "python.toml").read_text(encoding="utf-8"),
+            cli=f"{fixture}\n{row}",
+        )
+        code, lines = self.run_base(ledger_dir=led)
+        self.assertEqual(code, 1)
+        self.assertIn("  cli-native flag bpm --tempo", lines)
+
     def test_a_plain_rename_claims_its_members_moved(self):
         self.base["records"].append(_rec("wasm", "option", "getBpm(window)", owner="getBpm"))
         code, lines = self.run_base()
@@ -2418,6 +2437,41 @@ class AllowCategories(CheckerCase):
             "surface_allowlist.toml allow 1: category scalar does not apply to token-case",
             self.report["problems"],
         )
+
+
+class CliAliases(unittest.TestCase):
+    """Every long spelling of a CLI option is inventoried, later ones naming the first."""
+
+    def test_native_alias_lists_are_read_by_primary_name(self):
+        import inventory
+
+        call = (
+            '"resample", {required_int("target-rate", {"target-sr"}),'
+            ' flag("quiet", true, false, {"q"}), string_value("mode")}'
+        )
+        self.assertEqual(inventory._native_aliases(call), {"target-rate": ["target-sr"]})
+
+    def test_python_option_strings_after_the_first_are_aliases(self):
+        import inventory
+
+        with tempfile.TemporaryDirectory() as d:
+            pkg = Path(d) / inventory.PY_PACKAGE
+            pkg.mkdir(parents=True)
+            (pkg / "cli.py").write_text(
+                "import argparse\n"
+                "p = argparse.ArgumentParser()\n"
+                "sub = p.add_subparsers()\n"
+                'r = sub.add_parser("resample")\n'
+                'r.add_argument("--target-rate", "--target-sr", type=int)\n'
+                'r.add_argument("--quiet", "-q", action="store_true")\n',
+                encoding="utf-8",
+            )
+            scan = inventory._PyCliScan(Path(d))
+            scan.scan()
+        self.assertEqual(
+            sorted(scan.commands["resample"]["flags"]), ["quiet", "target-rate", "target-sr"]
+        )
+        self.assertEqual(scan.alias_of, {"target-sr": "target-rate"})
 
 
 if __name__ == "__main__":
