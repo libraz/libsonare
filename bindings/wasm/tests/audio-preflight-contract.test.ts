@@ -363,6 +363,7 @@ const NOT_AUDIO: string[] = [
   ...[
     'controllerProfileNames',
     'masteringAmpPresetCatalog',
+    'masteringChainConfigFromJson',
     'masteringInsertNames',
     'masteringInsertParamInfo',
     'masteringInsertParamNames',
