@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from collections.abc import Callable
 from pathlib import Path
@@ -21,16 +22,20 @@ from _repo import REPO_ROOT
 
 CATALOG_PATH = REPO_ROOT / "tools/capability-catalog.json"
 
-BEGIN_MARKER = "BEGIN GENERATED SoloProcessor (make processor-types)"
-END_MARKER = "END GENERATED SoloProcessor"
+
+class Block(NamedTuple):
+    """One generated block of a declaration file, named by its marker pair."""
+
+    name: str
+    render: Callable[[Any], str]
 
 
 class Target(NamedTuple):
-    """One declaration file and how its generated block is spelled."""
+    """One declaration file and the generated blocks it carries."""
 
     path: Path
     comment: str
-    render: Callable[[list[str]], str]
+    blocks: tuple[Block, ...]
 
 
 def parse_args() -> argparse.Namespace:
@@ -70,11 +75,12 @@ def solo_processor_names(catalog: Any) -> list[str]:
     return names
 
 
-def render_typescript(names: list[str]) -> str:
+def render_solo_typescript(catalog: Any) -> str:
+    names = solo_processor_names(catalog)
     lines = [
         "/**",
         " * Every processor name `masteringProcessorNames()` can return, and therefore",
-        " * every name `masteringProcess` / `masteringProcessStereo` accept.",
+        " * every name `masteringApplyProcessor` / `masteringApplyProcessorStereo` accept.",
         " */",
         "export const SOLO_PROCESSORS = [",
     ]
@@ -87,7 +93,8 @@ def render_typescript(names: list[str]) -> str:
     return "\n".join(lines)
 
 
-def render_pyi(names: list[str]) -> str:
+def render_solo_pyi(catalog: Any) -> str:
+    names = solo_processor_names(catalog)
     lines = [
         "# Every processor name mastering_processor_names() can return, and therefore",
         "# every name mastering_process() / mastering_process_stereo() accept.",
@@ -98,17 +105,144 @@ def render_pyi(names: list[str]) -> str:
     return "\n".join(lines)
 
 
+def insert_processor_names(catalog: Any) -> list[str]:
+    """Return every processor id the realtime insert factory builds, in catalog order."""
+    names = [
+        str(processor["id"])
+        for processor in catalog["processors"]
+        if processor.get("realtimeInsertable")
+    ]
+    if not names:
+        raise ValueError("catalog lists no insertable processors")
+    return names
+
+
+def render_insert_names(catalog: Any) -> str:
+    lines = [
+        "/** Every processor id the realtime insert factory can build. */",
+        "export const MASTERING_INSERT_NAMES = [",
+    ]
+    lines += [f"  '{name}'," for name in insert_processor_names(catalog)]
+    lines += [
+        "] as const;",
+        "",
+        "export type MasteringInsertName = (typeof MASTERING_INSERT_NAMES)[number];",
+    ]
+    return "\n".join(lines)
+
+
+def mixing_scene_presets(catalog: Any) -> list[str]:
+    presets = catalog.get("presets", {}).get("mixingScene")
+    if not isinstance(presets, list) or not presets:
+        raise ValueError("catalog lists no mixing scene presets")
+    return [str(name) for name in presets]
+
+
+def render_scene_presets(catalog: Any) -> str:
+    lines = [
+        "/** Every built-in mixing scene `mixingScenePreset` can return. */",
+        "export const MIX_SCENE_PRESETS = [",
+    ]
+    lines += [f"  '{name}'," for name in mixing_scene_presets(catalog)]
+    lines += [
+        "] as const;",
+        "",
+        "export type MixScenePreset = (typeof MIX_SCENE_PRESETS)[number];",
+    ]
+    return "\n".join(lines)
+
+
+def ts_key(name: str) -> str:
+    """Return @p name as an object-literal key, quoted when it is not an identifier."""
+    return name if re.fullmatch(r"[A-Za-z_$][A-Za-z0-9_$]*", name) else f"'{name}'"
+
+
+def ts_param_type(param: dict[str, Any]) -> str:
+    kind = param["type"]
+    if kind == "number":
+        return "number"
+    if kind == "boolean":
+        return "boolean"
+    if kind == "string":
+        return "string"
+    if kind == "array":
+        return "readonly number[]"
+    if kind == "enum":
+        choices = param.get("choices") or []
+        if not choices:
+            raise ValueError(f"enum param {param['name']} lists no choices")
+        return " | ".join(f"'{choice['name']}'" for choice in choices)
+    raise ValueError(f"unknown param type {kind} for {param['name']}")
+
+
+TS_LINE_WIDTH = 100
+
+
+def ts_member(param: dict[str, Any]) -> list[str]:
+    """Render one optional member, wrapping a long union the way the formatter does."""
+    key = ts_key(param["name"])
+    kind = ts_param_type(param)
+    line = f"    {key}?: {kind};"
+    if len(line) <= TS_LINE_WIDTH or " | " not in kind:
+        return [line]
+    alternatives = kind.split(" | ")
+    return (
+        [f"    {key}?:"]
+        + [f"      | {alt}" for alt in alternatives[:-1]]
+        + [f"      | {alternatives[-1]};"]
+    )
+
+
+def render_param_map(catalog: Any) -> str:
+    lines = [
+        "/**",
+        " * Parameters of each catalog processor id, keyed as in `masteringInsertParamInfo`.",
+        " * Every key is optional; an enum-valued key takes one of its `choices` names.",
+        " */",
+        "export interface MasteringProcessorParamMap {",
+    ]
+    for processor in catalog["processors"]:
+        params = processor["params"]
+        if not params:
+            lines.append(f"  '{processor['id']}': Record<string, never>;")
+            continue
+        lines.append(f"  '{processor['id']}': {{")
+        for p in params:
+            lines += ts_member(p)
+        lines.append("  };")
+    lines += [
+        "}",
+        "",
+        "/** The params object of processor `P`. */",
+        "export type MasteringProcessorParams<P extends keyof MasteringProcessorParamMap> =",
+        "  MasteringProcessorParamMap[P];",
+    ]
+    return "\n".join(lines)
+
+
+TYPESCRIPT_BLOCKS = (
+    Block("SoloProcessor", render_solo_typescript),
+    Block("MasteringInsertName", render_insert_names),
+    Block("MasteringProcessorParamMap", render_param_map),
+    Block("MixScenePreset", render_scene_presets),
+)
+
 TARGETS = (
-    Target(REPO_ROOT / "bindings/node/src/types_mastering.ts", "//", render_typescript),
-    Target(REPO_ROOT / "bindings/wasm/src/public_types_mastering.ts", "//", render_typescript),
-    Target(REPO_ROOT / "bindings/python/src/libsonare/analyzer.pyi", "#", render_pyi),
+    Target(REPO_ROOT / "bindings/node/src/types_mastering.ts", "//", TYPESCRIPT_BLOCKS),
+    Target(REPO_ROOT / "bindings/wasm/src/public_types_mastering.ts", "//", TYPESCRIPT_BLOCKS),
+    Target(
+        REPO_ROOT / "bindings/python/src/libsonare/analyzer.pyi",
+        "#",
+        (Block("SoloProcessor", render_solo_pyi),),
+    ),
 )
 
 
-def splice(text: str, target: Target, body: str) -> str:
-    """Replace the generated block in @p text, keeping the marker lines."""
-    begin = f"{target.comment} {BEGIN_MARKER}"
-    end = f"{target.comment} {END_MARKER}"
+def splice(text: str, target: Target, block: Block, catalog: Any) -> str:
+    """Replace one generated block in @p text, keeping the marker lines."""
+    body = block.render(catalog)
+    begin = f"{target.comment} BEGIN GENERATED {block.name} (make processor-types)"
+    end = f"{target.comment} END GENERATED {block.name}"
     start = text.find(begin)
     if start < 0:
         raise ValueError(f"{target.path} is missing the marker: {begin}")
@@ -122,7 +256,7 @@ def main() -> int:
     args = parse_args()
     try:
         catalog = json.loads(args.catalog.read_text(encoding="utf-8"))
-        names = solo_processor_names(catalog)
+        solo_processor_names(catalog)
     except (OSError, ValueError, json.JSONDecodeError) as exc:
         print(f"could not read the capability catalog: {exc}", file=sys.stderr)
         return 2
@@ -131,7 +265,9 @@ def main() -> int:
     for target in TARGETS:
         try:
             current = target.path.read_text(encoding="utf-8")
-            rendered = splice(current, target, target.render(names))
+            rendered = current
+            for block in target.blocks:
+                rendered = splice(rendered, target, block, catalog)
         except (OSError, ValueError) as exc:
             print(f"could not generate processor types: {exc}", file=sys.stderr)
             return 2
@@ -152,7 +288,7 @@ def main() -> int:
                     file=sys.stderr,
                 )
             return 1
-        print(f"processor types are current: {len(names)} solo processors")
+        print("processor types are current")
     return 0
 
 
