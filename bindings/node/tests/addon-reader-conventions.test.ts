@@ -161,10 +161,6 @@ const FILE_LOCAL_READER_ALLOWLIST: ReadonlyMap<string, string> = new Map([
     'Reads a fixed-capacity list into a C array and reports the count, with its own overflow and non-numeric rejection. Shared from the other addon-wide header, not a per-file copy.',
   ],
   ['sonare_wrap_utils.cpp:ReadMeterCandidateNumerators', 'Definition of the declaration above.'],
-  [
-    'sonare_wrap_streaming.cpp:FlattenChainConfig',
-    'Not a key reader: its second parameter is the accumulated dot-path prefix for the recursion, not a key to look up. Matched only because the shape check is deliberately loose about the key parameter type.',
-  ],
 ]);
 
 /**
