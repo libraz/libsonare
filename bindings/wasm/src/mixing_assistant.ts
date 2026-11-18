@@ -53,11 +53,12 @@ export interface MixingAssistantSuggestRequest extends ValidateOptions {
   /**
    * Tempo the suggested delay times are voiced against, in BPM.
    *
-   * Defaults to 0, which selects the transport's own fallback tempo: the
-   * assistant is handed bare stems and cannot measure a tempo the set as a
-   * whole agrees on. Pass the song's tempo and the delay lands on the beat.
+   * Omit it to use the transport's own fallback tempo: the assistant is handed
+   * bare stems and cannot measure a tempo the set as a whole agrees on. Pass the
+   * song's tempo and the delay lands on the beat.
    *
-   * A positive value outside 20–400 BPM is rejected rather than clamped.
+   * Zero or a negative value is refused, and a value outside 20–400 BPM is
+   * rejected rather than clamped.
    */
   tempoBpm?: number;
   /** Evaluate the structure domain. Defaults to true. */
@@ -169,6 +170,15 @@ const OPTION_KEYS = [
   'hopLength',
 ] as const;
 
+/** Absence is the transport fallback; the C entry's `0` for it is not a value a caller may pass. */
+function assertTempo(fnName: string, value: unknown): void {
+  if (typeof value === 'number' && !(value > 0)) {
+    throw new RangeError(
+      `${fnName}: tempoBpm must be positive; omit it to use the transport's fallback tempo`,
+    );
+  }
+}
+
 /**
  * Analyze a set of tracks and suggest a mixer scene.
  *
@@ -199,6 +209,7 @@ export function mixingAssistantSuggest(...args: unknown[]): MixAssistantResult {
     requireBoolean(fnName, req.validate, 'validate');
   }
   const { left, right, ids, names, sampleRates } = planarTracks(fnName, req.tracks, req.sampleRate);
+  assertTempo(fnName, req.tempoBpm);
   const params: Record<string, number | boolean> = {};
   for (const key of OPTION_KEYS) {
     if (req[key] !== undefined && req[key] !== null) {

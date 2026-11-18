@@ -27025,3 +27025,12 @@ changed = "required: the rate of the caller's samples has no default (was 48000)
 domain = "core"
 rule = "sample-rate-required"
 test = "bindings/wasm/tests/surface/core-audio.test.ts::requires the sample rate of the caller"
+
+[[entry]]
+kind = "field"
+old = "MixAssistantOptions.tempoBpm"
+to = "MixingAssistantSuggestRequest.tempoBpm"
+changed = "0 or a negative tempo is refused with RangeError; omit tempoBpm for the transport fallback tempo (0 used to select it)"
+domain = "mastering"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/mixing-assistant.test.ts::refuses a zero or negative tempo by name instead of reading it as the fallback"

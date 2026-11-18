@@ -375,6 +375,16 @@ describe('mixing assistant source classes', () => {
 });
 
 describe('mixing assistant input validation', () => {
+  it('refuses a zero or negative tempo by name instead of reading it as the fallback', () => {
+    for (const tempoBpm of [0, -120]) {
+      expect(() =>
+        mixingAssistantSuggest({ tracks: baseTracks(), sampleRate: SR, tempoBpm }),
+      ).toThrow(
+        expect.objectContaining({ name: 'RangeError', message: expect.stringMatching(/tempoBpm/) }),
+      );
+    }
+  });
+
   it('rejects a non-positive sample rate', () => {
     expect(() => mixingAssistantSuggest({ tracks: baseTracks(), sampleRate: 0 })).toThrow(
       RangeError,
