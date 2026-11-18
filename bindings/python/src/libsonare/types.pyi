@@ -1595,11 +1595,11 @@ class RepairApplyResult:
 
 class ReverbDetection:
     late_decay_ratio_db: float
-    late_predictability: float
+    late_predictability: float | None
     def __init__(
         self,
         late_decay_ratio_db: float,
-        late_predictability: float,
+        late_predictability: float | None,
     ) -> None: ...
 
 class DereverbReport:
