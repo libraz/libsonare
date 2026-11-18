@@ -13030,10 +13030,10 @@ test = "bindings/node/tests/core-validation-refusals.test.ts::in every synchrono
 [[entry]]
 kind = "function"
 old = "masterAudioAsync"
-changed = "one positional form (masterAudioAsync(samples, sampleRate, options: OptionsOf<MasterAudioAsyncRequest>)); request form takes MasterAudioAsyncRequest; returns Promise<MasteringChainResult>"
+changed = "one positional form (masterAudioAsync(samples, sampleRate, options: OptionsOf<MasterAudioAsyncRequest>)); request form takes MasterAudioAsyncRequest; returns Promise<MasteringChainResult>; the preset is optional as on the synchronous call, and a call giving neither preset nor overrides rejects with TypeError, so pass overrides: {} for an empty chain"
 domain = "mastering"
 rule = "one-positional-form"
-test = "bindings/node/tests/surface/mastering-chain.test.ts::masterAudioAsync: preset required"
+test = "bindings/node/tests/core-validation-refusals.test.ts::in every asynchronous form"
 
 [[entry]]
 kind = "function"
@@ -13046,10 +13046,10 @@ test = "bindings/node/tests/core-validation-refusals.test.ts::in every synchrono
 [[entry]]
 kind = "function"
 old = "masterAudioStereoAsync"
-changed = "request-only: masterAudioStereoAsync(request: MasterAudioStereoAsyncRequest): Promise<MasteringChainStereoResult>"
+changed = "request-only: masterAudioStereoAsync(request: MasterAudioStereoAsyncRequest): Promise<MasteringChainStereoResult>; the preset is optional as on the synchronous call, and a call giving neither preset nor overrides rejects with TypeError, so pass overrides: {} for an empty chain"
 domain = "mastering"
 rule = "one-positional-form"
-test = "bindings/node/tests/surface/mastering-chain.test.ts::masterAudioAsync: preset required"
+test = "bindings/node/tests/core-validation-refusals.test.ts::in every asynchronous form"
 
 [[entry]]
 kind = "function"

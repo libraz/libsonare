@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest';
 import {
   Audio,
   masterAudio,
+  masterAudioAsync,
   masterAudioStereo,
+  masterAudioStereoAsync,
   melToAudio,
   mfccToAudio,
   mfccToMel,
@@ -479,6 +481,19 @@ describe('masterAudio refuses a call giving neither a preset nor overrides', () 
     expect(audio.masterAudio({ overrides }).samples).toEqual(samples);
   });
 
+  it.each(accepted)('accepts $id asynchronously', async ({ overrides }) => {
+    expect((await masterAudioAsync({ samples, sampleRate, overrides })).samples).toEqual(samples);
+    expect((await masterAudioAsync(samples, sampleRate, { overrides })).samples).toEqual(samples);
+    const stereo = await masterAudioStereoAsync({
+      left: samples,
+      right: samples,
+      sampleRate,
+      overrides,
+    });
+    expect(stereo.left).toEqual(samples);
+    expect(stereo.right).toEqual(samples);
+  });
+
   const forms: Array<[string, () => unknown]> = [
     ['masterAudio', () => masterAudio({ samples, sampleRate })],
     ['masterAudio', () => masterAudio(samples, sampleRate)],
@@ -502,6 +517,28 @@ describe('masterAudio refuses a call giving neither a preset nor overrides', () 
     for (const [name, call] of forms) {
       const text = new RegExp(`^${literal(`${name}: ${item.message as string}`).source}$`);
       expectRefusal(call, kind, text);
+    }
+  });
+
+  const asyncForms: Array<[string, () => Promise<unknown>]> = [
+    ['masterAudioAsync', () => masterAudioAsync({ samples, sampleRate } as never)],
+    ['masterAudioAsync', () => masterAudioAsync(samples, sampleRate, {})],
+    [
+      'masterAudioStereoAsync',
+      () => masterAudioStereoAsync({ left: samples, right: samples, sampleRate }),
+    ],
+  ];
+
+  it.each(refused)('rejects $id in every asynchronous form', async (item) => {
+    const kind = errorClassFor[item.cause as Cause];
+    for (const [name, call] of asyncForms) {
+      const text = new RegExp(`^${literal(`${name}: ${item.message as string}`).source}$`);
+      const error = await call().then(
+        () => undefined,
+        (reason: unknown) => reason,
+      );
+      expect(error, name).toBeInstanceOf(kind);
+      expect((error as Error).message, name).toMatch(text);
     }
   });
 });

@@ -298,9 +298,15 @@ export interface MasterAudioAsyncRequest extends ValidateOptions {
   samples: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
-  /** Built-in preset to start from; required because the worker resolves a preset. */
-  preset: MasteringPreset;
-  /** Chain config applied over the preset. */
+  /**
+   * Built-in preset to start from. Absent: the chain runs `overrides` alone. Giving
+   * neither `preset` nor `overrides` is refused with a `TypeError`.
+   */
+  preset?: MasteringPreset;
+  /**
+   * Chain config applied over the preset, or run alone when `preset` is absent. An
+   * explicit `{}` without a preset runs an empty chain and returns the input unchanged.
+   */
   overrides?: MasteringChainConfig;
 }
 
@@ -312,21 +318,26 @@ export interface MasterAudioStereoAsyncRequest extends ValidateOptions {
   right: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
-  /** Built-in preset to start from; required because the worker resolves a preset. */
-  preset: MasteringPreset;
-  /** Chain config applied over the preset. */
+  /**
+   * Built-in preset to start from. Absent: the chain runs `overrides` alone. Giving
+   * neither `preset` nor `overrides` is refused with a `TypeError`.
+   */
+  preset?: MasteringPreset;
+  /**
+   * Chain config applied over the preset, or run alone when `preset` is absent. An
+   * explicit `{}` without a preset runs an empty chain and returns the input unchanged.
+   */
   overrides?: MasteringChainConfig;
 }
 
 /**
  * Asynchronous variant of {@link masterAudio}. Runs the full chain on a libuv
- * worker thread and resolves with the same shape as the synchronous call. A
- * `preset` is required and there is no progress or cancellation; use the
- * synchronous `masterAudio` for those. Every validation failure is a rejected
- * promise, never a synchronous throw.
+ * worker thread and resolves with the same shape as the synchronous call; there
+ * is no progress or cancellation, so use the synchronous `masterAudio` for those.
+ * Every validation failure is a rejected promise, never a synchronous throw.
  *
- * @throws {TypeError} (rejection) when `sampleRate` or `preset` is missing or a field has the
- *   wrong type
+ * @throws {TypeError} (rejection) when `sampleRate` is missing, neither `preset` nor `overrides`
+ *   is given, or a field has the wrong type
  * @throws {RangeError} (rejection) on audio out of domain, an unknown `preset` or an invalid override
  */
 export function masterAudioAsync(request: MasterAudioAsyncRequest): Promise<MasteringChainResult>;
@@ -339,11 +350,19 @@ export function masterAudioAsync(...args: unknown[]): Promise<MasteringChainResu
   try {
     const r = sampleOneShot<MasterAudioAsyncRequest>('masterAudioAsync', args);
     assertAudioInput('masterAudioAsync', r.samples, r.sampleRate, r);
-    if (r.preset === undefined || r.preset === null) {
-      throw new TypeError('masterAudioAsync: preset is required');
+    if (
+      (r.preset === undefined || r.preset === null) &&
+      (r.overrides === undefined || r.overrides === null)
+    ) {
+      throw new TypeError('masterAudioAsync: give a preset or overrides');
     }
     return addon
-      .masterAudioAsync(r.preset, r.samples, r.sampleRate, flattenChainConfig(r.overrides ?? {}))
+      .masterAudioAsync(
+        r.preset ?? null,
+        r.samples,
+        r.sampleRate,
+        flattenChainConfig(r.overrides ?? {}),
+      )
       .then((result: object) => chainResultFromNative<MasteringChainResult>(result));
   } catch (error) {
     return Promise.reject(error);
@@ -361,12 +380,15 @@ export function masterAudioStereoAsync(
     if (r.left.length !== r.right.length) {
       throw new RangeError('Stereo channel lengths must match.');
     }
-    if (r.preset === undefined || r.preset === null) {
-      throw new TypeError('masterAudioStereoAsync: preset is required');
+    if (
+      (r.preset === undefined || r.preset === null) &&
+      (r.overrides === undefined || r.overrides === null)
+    ) {
+      throw new TypeError('masterAudioStereoAsync: give a preset or overrides');
     }
     return addon
       .masterAudioStereoAsync(
-        r.preset,
+        r.preset ?? null,
         r.left,
         r.right,
         r.sampleRate,
