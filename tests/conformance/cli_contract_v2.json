@@ -15626,17 +15626,17 @@
             "explanation": "array:string",
             "profile": {
               "keys": {
-                "attack_density": "number",
+                "attack_per_second": "number",
                 "bpm": "number",
                 "bpm_confidence": "number",
                 "crest_factor_db": "number",
                 "duration_sec": "number",
                 "integrated_lufs": "number",
-                "lra_lu": "number",
+                "loudness_range_lu": "number",
                 "spectral_centroid_hz": "number",
                 "spectral_flatness": "number",
                 "sustain_ratio": "number",
-                "true_peak_db": "number"
+                "true_peak_dbtp": "number"
               }
             },
             "chain_config": {
