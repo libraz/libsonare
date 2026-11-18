@@ -25630,7 +25630,8 @@ test = "bindings/wasm/tests/playback.test.ts::reads cheap scalar state as getter
 [[entry]]
 kind = "method"
 old = "PlaybackRenderer.inputChannels"
-changed = "readonly getter (was a method)"
+changed = "renamed to numInputChannels, a readonly getter (was a method)"
+to = "PlaybackRenderer.numInputChannels"
 domain = "engine"
 rule = "getters"
 test = "bindings/wasm/tests/playback.test.ts::reads cheap scalar state as getters"
@@ -25638,7 +25639,8 @@ test = "bindings/wasm/tests/playback.test.ts::reads cheap scalar state as getter
 [[entry]]
 kind = "method"
 old = "PlaybackRenderer.outputChannels"
-changed = "readonly getter (was a method)"
+changed = "renamed to numOutputChannels, a readonly getter (was a method)"
+to = "PlaybackRenderer.numOutputChannels"
 domain = "engine"
 rule = "getters"
 test = "bindings/wasm/tests/playback.test.ts::reads cheap scalar state as getters"
