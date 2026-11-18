@@ -971,6 +971,7 @@ class DynamicsResult:
         loudness_rms_db: NDArray[np.float32],
     ) -> None: ...
 
+@dataclass(frozen=True)
 class ClickDetection:
     count: int
     rejected: int
@@ -980,6 +981,7 @@ class ClickDetection:
         self, count: int, rejected: int, longest_run_samples: int, per_second: float
     ) -> None: ...
 
+@dataclass(frozen=True)
 class ClipDetection:
     clipped_samples: int
     clipped_ratio: float
@@ -1392,6 +1394,7 @@ class DeclipStereoResult:
         right_report: DeclipReport,
     ) -> None: ...
 
+@dataclass(frozen=True)
 class CrackleDetection:
     sample_count: int
     sample_fraction: float
@@ -1433,6 +1436,7 @@ class DecrackleStereoResult:
         right_report: DecrackleReport,
     ) -> None: ...
 
+@dataclass(frozen=True)
 class HumDetection:
     fundamental_hz: float
     # Linear energy ratio (not dB); 1.0 means no peak.
@@ -1480,6 +1484,7 @@ class DehumStereoResult:
         right_report: DehumReport,
     ) -> None: ...
 
+@dataclass(frozen=True)
 class NoiseDetection:
     floor_dbfs: float
     band_floor_dbfs: list[float]
@@ -1563,6 +1568,7 @@ class RepairApplyResult:
         reports: list[RepairStageReports],
     ) -> None: ...
 
+@dataclass(frozen=True)
 class AudioDefects:
     click: ClickDetection
     clip: ClipDetection
@@ -1735,6 +1741,7 @@ class MasteringRepairAnalysis:
         explanation: list[str],
     ) -> None: ...
 
+@dataclass(frozen=True)
 class ReverbDetection:
     late_decay_ratio_db: float
     late_predictability: float | None
@@ -2035,6 +2042,7 @@ class MixAssistantResult:
         explanation: list[str],
     ) -> None: ...
 
+@dataclass(frozen=True)
 class MasteringAudioProfileLoudness:
     integrated_lufs: float | None
     loudness_range_lu: float
@@ -2048,6 +2056,7 @@ class MasteringAudioProfileLoudness:
         crest_factor_db: float,
     ) -> None: ...
 
+@dataclass(frozen=True)
 class MasteringAudioProfileSpectral:
     sub_rms_db: float
     low_rms_db: float
@@ -2073,6 +2082,7 @@ class MasteringAudioProfileSpectral:
         rolloff_hz: float,
     ) -> None: ...
 
+@dataclass(frozen=True)
 class MasteringAudioProfileDynamics:
     short_term_lufs_std: float
     attack_per_second: float
@@ -2084,6 +2094,7 @@ class MasteringAudioProfileDynamics:
         sustain_ratio: float,
     ) -> None: ...
 
+@dataclass(frozen=True)
 class MasteringAudioProfile:
     duration_sec: float
     bpm: float
@@ -2105,6 +2116,7 @@ class MasteringAudioProfile:
 
 MasteringChainConfig: TypeAlias = dict[str, Any]
 
+@dataclass(frozen=True)
 class MasteringAssistantProfile:
     duration_sec: float
     bpm: float
@@ -2132,6 +2144,7 @@ class MasteringAssistantProfile:
         sustain_ratio: float,
     ) -> None: ...
 
+@dataclass(frozen=True)
 class MasteringAssistantResult:
     chain_config: MasteringChainConfig
     explanation: list[str]
@@ -2148,6 +2161,7 @@ class StreamingPlatform(TypedDict):
     target_lufs: float
     ceiling_dbtp: float
 
+@dataclass(frozen=True)
 class MasteringStreamingPreviewPlatform:
     name: str
     integrated_lufs: float | None
@@ -2163,10 +2177,12 @@ class MasteringStreamingPreviewPlatform:
         ceiling_risk: bool,
     ) -> None: ...
 
+@dataclass(frozen=True)
 class MasteringStreamingPreviewResult:
     platforms: list[MasteringStreamingPreviewPlatform]
     def __init__(self, platforms: list[MasteringStreamingPreviewPlatform]) -> None: ...
 
+@dataclass(frozen=True)
 class MatchReferenceLoudnessResult:
     source_lufs: float | None
     reference_lufs: float | None
@@ -2178,6 +2194,7 @@ class MatchReferenceLoudnessResult:
         gain_to_match_db: float | None,
     ) -> None: ...
 
+@dataclass(frozen=True)
 class MatchTonalBalanceBand:
     low_hz: float
     high_hz: float
@@ -2193,19 +2210,23 @@ class MatchTonalBalanceBand:
         deviation_db: float,
     ) -> None: ...
 
+@dataclass(frozen=True)
 class MatchTonalBalanceResult:
     bands: list[MatchTonalBalanceBand]
     def __init__(self, bands: list[MatchTonalBalanceBand]) -> None: ...
 
+@dataclass(frozen=True)
 class MatchEqCurveResult:
     frequencies: NDArray[np.float32]
     gain_db: NDArray[np.float32]
     def __init__(self, frequencies: NDArray[np.float32], gain_db: NDArray[np.float32]) -> None: ...
 
+@dataclass(frozen=True)
 class MatchEstimateReferenceDelaySamplesResult:
     delay_samples: float
     def __init__(self, delay_samples: float) -> None: ...
 
+@dataclass(frozen=True)
 class StereoMonoCompatCheckResult:
     correlation: float
     width: float | None
@@ -2221,6 +2242,7 @@ class StereoMonoCompatCheckResult:
         likely_mono_compatible: bool,
     ) -> None: ...
 
+@dataclass(frozen=True)
 class StereoMonoCompatBand:
     low_hz: float
     high_hz: float
@@ -2234,6 +2256,7 @@ class StereoMonoCompatBand:
         side_rms: float,
     ) -> None: ...
 
+@dataclass(frozen=True)
 class StereoMonoCompatCheckLogBandsResult:
     bands: list[StereoMonoCompatBand]
     def __init__(self, bands: list[StereoMonoCompatBand]) -> None: ...
