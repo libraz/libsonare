@@ -63,7 +63,8 @@ extern "C" {
 /// uniform wall material applied to all six walls. The wall material is chosen by
 /// this precedence: a named `material_preset` (non-zero) wins; otherwise a
 /// non-NULL `absorption_bands` per-octave-band array; otherwise the scalar
-/// `absorption`.
+/// `absorption`. The band arrays stay the caller's and are read during the call
+/// only; the library never frees them.
 ///
 /// NOTE: this C ABI exposes only uniform (single-material) shoebox rooms — one
 /// material on every wall, selected as uniform scalar, per-band, or preset
@@ -180,7 +181,9 @@ typedef struct {
 /// The target wall material follows the same precedence as SonareRirSynthConfig
 /// (material_preset > absorption_bands > scalar absorption); only uniform
 /// (single-material) target rooms are reachable through this ABI. Prepare one with
-/// sonare_room_morph_config_init; every field is then read literally.
+/// sonare_room_morph_config_init; every field is then read literally. The band
+/// arrays stay the caller's and are read during the call only; the library
+/// never frees them.
 typedef struct {
   /* sizeof(SonareRoomMorphConfig), set by sonare_room_morph_config_init. A smaller
    * value is refused with SONARE_ERROR_INVALID_PARAMETER. */
