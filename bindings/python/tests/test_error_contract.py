@@ -63,7 +63,7 @@ def test_bad_scene_json_carries_oracle_code_and_detail() -> None:
 
 
 def test_closed_mixer_raises_invalid_state() -> None:
-    mixer = Mixer.from_scene_json('{"sampleRate":48000,"strips":[]}', 48000)
+    mixer = Mixer.from_scene_json('{"strips":[]}', 48000)
     mixer.close()
     with pytest.raises(SonareError) as raised:
         mixer.add_bus("b")

@@ -116,7 +116,7 @@ def test_apply_roundtrip_and_rehydrate_after_project_reload() -> None:
             audio_channels=1,
             audio_sample_rate=sample_rate,
         )
-        clip = project.clip_by_index(0)
+        clip = project.clips()[0]
         project.set_audio_source_metadata(
             clip.source_id,
             f"sha256:{source_sha256.hex()}",
@@ -232,7 +232,7 @@ def test_callback_close_guards_survive_in_isolated_native_process() -> None:
             audio_channels=1,
             audio_sample_rate=sample_rate,
         )
-        clip = project.clip_by_index(0)
+        clip = project.clips()[0]
         project.set_audio_source_metadata(
             clip.source_id,
             f"sha256:{source_sha256.hex()}",
@@ -399,7 +399,7 @@ def test_apply_range_validation_comes_from_the_c_abi(clip_length: float, offset:
         clip_id = project.add_clip(
             track_id, 0.0, 1.0, audio=source, audio_channels=1, audio_sample_rate=sample_rate
         )
-        clip = project.clip_by_index(0)
+        clip = project.clips()[0]
         with pytest.raises(SonareError):
             project.apply_vocal_edit(
                 clip_id=clip_id,
