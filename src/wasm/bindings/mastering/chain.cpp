@@ -51,31 +51,36 @@ val js_mastering(val samples, const val& sample_rate_val, const val& target_lufs
 // TypeScript facade sends.
 // ---------------------------------------------------------------------------
 
-mastering::api::MasteringChainConfig masteringChainConfigFromVal(val config, bool streaming) {
-  // The facade flattens its nested config to canonical dotted parameters and
-  // sends them in this private envelope. Parsing them with the core parser is
-  // what keeps WASM in lockstep with the C ABI, Node and Python: a second
-  // reader here would be a second set of accepted names and defaults.
+// The facade flattens its nested config to canonical dotted parameters and
+// sends them in this private envelope. Parsing them with the core parser is
+// what keeps WASM in lockstep with the C ABI, Node and Python: a second
+// reader here would be a second set of accepted names and defaults.
+namespace {
+
+std::vector<mastering::api::Param> masteringChainParamsFromVal(val config) {
   val flat_params = objectProperty(config, "__flatParams");
-  if (!flat_params.isUndefined()) {
-    const std::vector<mastering::api::Param> params = masteringParamsFromObject(flat_params);
-    return streaming
-               ? mastering::api::parse_streaming_chain_config_params(params.data(), params.size())
-               : mastering::api::parse_chain_config_params(params.data(), params.size());
-  }
+  if (!flat_params.isUndefined()) return masteringParamsFromObject(flat_params);
   throw WasmRangeError(
       "mastering chain config must be the flattened parameter map the facade "
       "builds; a nested config object passed straight to the module is not read");
+}
+
+}  // namespace
+
+mastering::api::MasteringChainConfig masteringChainConfigFromVal(val config, bool streaming) {
+  const std::vector<mastering::api::Param> params = masteringChainParamsFromVal(config);
+  return streaming
+             ? mastering::api::parse_streaming_chain_config_params(params.data(), params.size())
+             : mastering::api::parse_chain_config_params(params.data(), params.size());
 }
 
 val js_mastering_chain(val samples, const val& sample_rate_val, val config) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   std::vector<float> data = float32ArrayToVector(samples);
   validate_offline_audio_input(data.data(), data.size(), sample_rate);
-  mastering::api::MasteringChain chain(masteringChainConfigFromVal(config));
-  auto result = chain.process_mono(data.data(), data.size(), sample_rate);
-
-  return masteringMonoResultToVal(result);
+  const std::vector<mastering::api::Param> params = masteringChainParamsFromVal(config);
+  return masteringMonoResultToVal(mastering::api::run_chain_mono_params(
+      params.data(), params.size(), data.data(), data.size(), sample_rate));
 }
 
 val js_mastering_chain_stereo(val left_samples, val right_samples, const val& sample_rate_val,
@@ -88,10 +93,9 @@ val js_mastering_chain_stereo(val left_samples, val right_samples, const val& sa
   validate_offline_audio_input(left.data(), left.size(), sample_rate);
   validate_offline_audio_input(right.data(), right.size(), sample_rate);
 
-  mastering::api::MasteringChain chain(masteringChainConfigFromVal(config));
-  auto result = chain.process_stereo(left.data(), right.data(), left.size(), sample_rate);
-
-  return masteringStereoResultToVal(result);
+  const std::vector<mastering::api::Param> params = masteringChainParamsFromVal(config);
+  return masteringStereoResultToVal(mastering::api::run_chain_stereo_params(
+      params.data(), params.size(), left.data(), right.data(), left.size(), sample_rate));
 }
 
 val streamingLoudnessGainToVal(const mastering::api::StreamingLoudnessGain& gain) {
