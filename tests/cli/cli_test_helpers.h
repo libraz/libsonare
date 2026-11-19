@@ -435,8 +435,9 @@ inline void create_overdriven_wav(const std::string& path, int sample_rate = 220
 ///   selects nothing and cannot show whether a flag reached the suggester. The
 ///   noise is loud enough that the floor lands well inside the rule rather than
 ///   at its edge, so the fixture does not become a threshold test by accident.
-inline void create_noisy_wav(const std::string& path, int sample_rate = 22050) {
-  const size_t n_samples = static_cast<size_t>(sample_rate * 3);
+inline void create_noisy_wav(const std::string& path, float duration = 3.0f,
+                             int sample_rate = 22050) {
+  const size_t n_samples = static_cast<size_t>(duration * static_cast<float>(sample_rate));
   std::vector<float> samples(n_samples);
   std::mt19937 rng(7);
   std::uniform_real_distribution<float> noise(-0.3f, 0.3f);
@@ -602,18 +603,22 @@ inline void create_stereo_delayed_wav(const std::string& path, int sample_rate =
 ///
 /// A single-bin correlation rather than an FFT, so the probe frequency does not
 /// have to fall on a bin center: a transposition test compares magnitudes at
-/// frequencies chosen by the interval under test, not by the transform size.
+/// frequencies chosen by the interval under test, not by the transform size. Goertzel's
+/// recurrence yields the same magnitude without a sine and cosine per sample.
 inline float tone_magnitude(const std::vector<float>& samples, int sample_rate, float frequency) {
   if (samples.empty()) return 0.0f;
-  const double omega = 2.0 * sonare::constants::kPiD * frequency / sample_rate;
-  double real = 0.0;
-  double imag = 0.0;
-  for (size_t i = 0; i < samples.size(); ++i) {
-    const double phase = omega * static_cast<double>(i);
-    real += samples[i] * std::cos(phase);
-    imag += samples[i] * std::sin(phase);
+  const double coefficient =
+      2.0 * std::cos(2.0 * sonare::constants::kPiD * frequency / sample_rate);
+  double previous = 0.0;
+  double before_previous = 0.0;
+  for (const float sample : samples) {
+    const double current = sample + coefficient * previous - before_previous;
+    before_previous = previous;
+    previous = current;
   }
-  return static_cast<float>(2.0 * std::sqrt(real * real + imag * imag) /
+  const double power = previous * previous + before_previous * before_previous -
+                       coefficient * previous * before_previous;
+  return static_cast<float>(2.0 * std::sqrt(std::max(power, 0.0)) /
                             static_cast<double>(samples.size()));
 }
 

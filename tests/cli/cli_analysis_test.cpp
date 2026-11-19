@@ -7,7 +7,6 @@
 #include "analysis/section_analyzer.h"
 #include "cli/cli_test_helpers.h"
 #include "metering/lufs.h"
-#include "support/structure_song.h"
 #include "util/constants.h"
 
 TEST_CASE("CLI info command", "[cli]") {
@@ -387,18 +386,18 @@ TEST_CASE("CLI sections command", "[cli]") {
 }
 
 TEST_CASE("CLI sections defaults to the core boundary threshold", "[cli][sections]") {
-  const Audio& source = sonare::test::structure_song::rendered_audio();
   const std::string path = unique_temp_path("_sections_default.wav");
-  save_wav(path, std::vector<float>(source.data(), source.data() + source.size()),
-           source.sample_rate());
+  create_section_triads_wav(path);
 
+  // A 1 s minimum lets the 8 s fixture keep more than one section, so a boundary can move.
   const auto run_sections = [&](const std::string& options) {
-    return exec_command(CLI + " sections " + path + " " + options + " --json -q");
+    return exec_command(CLI + " sections " + path + " --min-duration-sec 1 " + options +
+                        " --json -q");
   };
   const auto default_command = run_sections("");
   const auto core_threshold_command =
       run_sections("--threshold " + std::to_string(sonare::kSectionBoundaryThreshold));
-  const auto higher_threshold_command = run_sections("--threshold 0.3");
+  const auto higher_threshold_command = run_sections("--threshold 0.9");
 
   auto [samples, sample_rate] = load_audio(path);
   std::remove(path.c_str());
@@ -413,9 +412,12 @@ TEST_CASE("CLI sections defaults to the core boundary threshold", "[cli][section
   const auto higher_threshold_result =
       sonare::util::json::parse_strict(higher_threshold_command.second);
 
-  sonare::SectionAnalyzer direct(audio);
+  sonare::SectionConfig config;
+  config.min_section_sec = 1.0f;
+  sonare::SectionAnalyzer direct(audio, config);
   const auto& expected = direct.sections();
   const auto& actual = default_result["sections"].as_array();
+  REQUIRE(expected.size() > 1);
   REQUIRE(actual.size() == expected.size());
   REQUIRE(core_threshold_result["sections"].as_array().size() == expected.size());
   CHECK(default_result["form"].as_string() == core_threshold_result["form"].as_string());

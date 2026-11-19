@@ -33,8 +33,6 @@ size_t count_cli_temp_files(const std::string& destination) {
 #ifdef SONARE_WITH_MASTERING
 TEST_CASE("CLI mastering command", "[cli][mastering]") {
   create_test_wav(TEST_WAV);
-  const std::string ref = unique_temp_path("_reference.wav");
-  create_test_wav(ref, 3.0f, 880.0f);
   const std::string out = unique_temp_path("_mastered.wav");
   std::remove(out.c_str());
 
@@ -95,6 +93,10 @@ TEST_CASE("CLI mastering command", "[cli][mastering]") {
     std::remove(report.c_str());
     std::remove(preset_report.c_str());
   }
+}
+
+TEST_CASE("CLI mastering chains report how they reached the level", "[cli][mastering]") {
+  create_test_wav(TEST_WAV);
 
   SECTION("loudness_target_limited reports whether the ceiling decided the level") {
     // The field is the only machine-readable answer to "did the master reach the
@@ -157,6 +159,10 @@ TEST_CASE("CLI mastering command", "[cli][mastering]") {
     REQUIRE_THAT(output, ContainsSubstring("\"mode\": \"chainConfig\""));
     REQUIRE_THAT(output, ContainsSubstring("\"stages\""));
   }
+}
+
+TEST_CASE("CLI mastering assistant explains the chain it chose", "[cli][mastering]") {
+  create_test_wav(TEST_WAV);
 
   SECTION("runs assistant mastering chain with explanations") {
     auto [code, output] =
@@ -184,6 +190,10 @@ TEST_CASE("CLI mastering command", "[cli][mastering]") {
     REQUIRE(restoration_code != 0);
     REQUIRE_THAT(restoration_output, ContainsSubstring("vinyl"));
   }
+}
+
+TEST_CASE("CLI mastering-suggest options", "[cli][mastering]") {
+  create_test_wav(TEST_WAV);
 
   SECTION("mastering-suggest takes the assistant options by name") {
     // As an option or a --params key, a delivery target and a preset are names.
@@ -230,6 +240,12 @@ TEST_CASE("CLI mastering command", "[cli][mastering]") {
       REQUIRE(code == 3);
     }
   }
+}
+
+TEST_CASE("CLI named mastering processors and pair analyses", "[cli][mastering]") {
+  create_test_wav(TEST_WAV);
+  const std::string ref = unique_temp_path("_reference.wav");
+  create_test_wav(ref, 3.0f, 880.0f);
 
   SECTION("lists named processors") {
     auto [code, output] = exec_command(CLI + " mastering-processors --json");
@@ -345,8 +361,14 @@ TEST_CASE("CLI mastering command", "[cli][mastering]") {
     REQUIRE(code == 0);
     REQUIRE_THAT(output, ContainsSubstring("\"correlation\""));
   }
+}
+
+TEST_CASE("CLI mastering assistant delivery targets", "[cli][mastering]") {
+  create_test_wav(TEST_WAV);
 
   SECTION("--target-platform moves the loudness the assistant masters to") {
+    const std::string tone = unique_temp_path("_platform_in.wav");
+    create_test_wav(tone, 1.0f);
     // The delivery target is the whole point of the option, so this reads the
     // rendered output loudness rather than a flag round-trip: with the target
     // unreachable from the CLI, someone mastering for EBU R128 broadcast
@@ -354,7 +376,7 @@ TEST_CASE("CLI mastering command", "[cli][mastering]") {
     const auto master_to = [&](const std::string& platform) {
       const std::string out_path = unique_temp_path("_platform.wav");
       const std::string option = platform.empty() ? "" : " --target-platform " + platform;
-      auto [code, output] = exec_command(CLI + " mastering " + TEST_WAV + " --assistant" + option +
+      auto [code, output] = exec_command(CLI + " mastering " + tone + " --assistant" + option +
                                          " -o " + out_path + " --json -q");
       REQUIRE(code == 0);
       const auto payload = sonare::util::json::parse_strict(output);
@@ -376,6 +398,7 @@ TEST_CASE("CLI mastering command", "[cli][mastering]") {
     const double club = master_to("club");
     CHECK(club < -8.5);
     CHECK(club > -9.5);
+    std::remove(tone.c_str());
   }
 
   SECTION(
@@ -398,60 +421,62 @@ TEST_CASE("CLI mastering command", "[cli][mastering]") {
       REQUIRE_THAT(output, ContainsSubstring("requires --assistant"));
     }
   }
+}
 
-  SECTION("--no-streaming-safe reaches the suggester") {
-    // prefer_streaming_safe defaults to true, so the reachable control is the one
-    // that turns it off. Both settings now select denoise; what the flag decides
-    // is the noise estimator, because the default one ranks every frame of the
-    // whole signal and a stream has no whole signal. The material has to carry the
-    // defect the flag governs: repair is selected from measurement, so on a clean
-    // tone neither branch says anything and the flag looks unreachable.
-    const std::string noisy = unique_temp_path("_noisy.wav");
-    create_noisy_wav(noisy);
+TEST_CASE("CLI mastering --no-streaming-safe reaches the suggester", "[cli][mastering]") {
+  // prefer_streaming_safe defaults to true, so the reachable control is the one
+  // that turns it off. Both settings now select denoise; what the flag decides
+  // is the noise estimator, because the default one ranks every frame of the
+  // whole signal and a stream has no whole signal. The material has to carry the
+  // defect the flag governs: repair is selected from measurement, so on a clean
+  // tone neither branch says anything and the flag looks unreachable.
+  const std::string noisy = unique_temp_path("_noisy.wav");
+  create_noisy_wav(noisy, 1.0f);
 
-    auto [safe_code, safe_output] = exec_command(
-        CLI + " mastering " + noisy + " --assistant --enable-repair --explain --json -q");
-    REQUIRE(safe_code == 0);
-    REQUIRE_THAT(safe_output, ContainsSubstring("streaming-safe was asked for"));
-    // The stage list is where this output reports what ran. Which estimator it
-    // ran with is not in this JSON at all; assistant_test covers that.
-    REQUIRE_THAT(safe_output, ContainsSubstring("\"repair.denoise\""));
+  auto [safe_code, safe_output] = exec_command(CLI + " mastering " + noisy +
+                                               " --assistant --enable-repair --explain --json -q");
+  REQUIRE(safe_code == 0);
+  REQUIRE_THAT(safe_output, ContainsSubstring("streaming-safe was asked for"));
+  // The stage list is where this output reports what ran. Which estimator it
+  // ran with is not in this JSON at all; assistant_test covers that.
+  REQUIRE_THAT(safe_output, ContainsSubstring("\"repair.denoise\""));
 
-    auto [open_code, open_output] =
-        exec_command(CLI + " mastering " + noisy +
-                     " --assistant --enable-repair --no-streaming-safe --explain --json -q");
-    REQUIRE(open_code == 0);
-    REQUIRE_THAT(open_output, !ContainsSubstring("streaming-safe was asked for"));
-    REQUIRE_THAT(open_output, ContainsSubstring("the noise floor is loud under the programme"));
-    REQUIRE_THAT(open_output, ContainsSubstring("\"repair.denoise\""));
-    std::remove(noisy.c_str());
-  }
+  auto [open_code, open_output] =
+      exec_command(CLI + " mastering " + noisy +
+                   " --assistant --enable-repair --no-streaming-safe --explain --json -q");
+  REQUIRE(open_code == 0);
+  REQUIRE_THAT(open_output, !ContainsSubstring("streaming-safe was asked for"));
+  REQUIRE_THAT(open_output, ContainsSubstring("the noise floor is loud under the programme"));
+  REQUIRE_THAT(open_output, ContainsSubstring("\"repair.denoise\""));
+  std::remove(noisy.c_str());
+}
 
-  SECTION("a --params key the processor does not read is named and refused") {
-    // insert_param_names() reports every key the processor's config builder
-    // probes, so a key outside that set took no effect at all: a typo used to
-    // ship a chain containing none of the edit the caller asked for, under exit
-    // 0 and a normal --json payload.
-    const std::string eq_out = unique_temp_path("_eq_params.wav");
-    auto [code, output] =
-        exec_command(CLI + " eq " + TEST_WAV + " --params band0.bogusKey=42 -o " + eq_out + " -q");
-    REQUIRE(code == 3);
-    REQUIRE_THAT(output, ContainsSubstring("unknown --params key for eq.equalizer"));
-    REQUIRE_THAT(output, ContainsSubstring("band0.bogusKey"));
+TEST_CASE("CLI mastering --params keys the processor does not read", "[cli][mastering]") {
+  create_test_wav(TEST_WAV);
 
-    // A key the processor does read still runs.
-    auto [ok_code, ok_output] =
-        exec_command(CLI + " eq " + TEST_WAV + " --params band0.gainDb=3 -o " + eq_out + " -q");
-    REQUIRE(ok_code == 0);
+  // insert_param_names() reports every key the processor's config builder
+  // probes, so a key outside that set took no effect at all: a typo used to
+  // ship a chain containing none of the edit the caller asked for, under exit
+  // 0 and a normal --json payload.
+  const std::string eq_out = unique_temp_path("_eq_params.wav");
+  auto [code, output] =
+      exec_command(CLI + " eq " + TEST_WAV + " --params band0.bogusKey=42 -o " + eq_out + " -q");
+  REQUIRE(code == 3);
+  REQUIRE_THAT(output, ContainsSubstring("unknown --params key for eq.equalizer"));
+  REQUIRE_THAT(output, ContainsSubstring("band0.bogusKey"));
 
-    // The same check applies to the named-processor entry point.
-    auto [processor_code, processor_output] =
-        exec_command(CLI + " mastering-processor " + TEST_WAV +
-                     " --processor dynamics.compressor --params bogusKey=1 -q");
-    REQUIRE(processor_code == 3);
-    REQUIRE_THAT(processor_output, ContainsSubstring("unknown --params key"));
-    std::remove(eq_out.c_str());
-  }
+  // A key the processor does read still runs.
+  auto [ok_code, ok_output] =
+      exec_command(CLI + " eq " + TEST_WAV + " --params band0.gainDb=3 -o " + eq_out + " -q");
+  REQUIRE(ok_code == 0);
+
+  // The same check applies to the named-processor entry point.
+  auto [processor_code, processor_output] =
+      exec_command(CLI + " mastering-processor " + TEST_WAV +
+                   " --processor dynamics.compressor --params bogusKey=1 -q");
+  REQUIRE(processor_code == 3);
+  REQUIRE_THAT(processor_output, ContainsSubstring("unknown --params key"));
+  std::remove(eq_out.c_str());
 }
 
 #ifdef SONARE_WITH_MASTERING
@@ -1029,7 +1054,7 @@ TEST_CASE("CLI mastering carries a stereo input through as a stereo pair", "[cli
 }
 
 TEST_CASE("CLI repair command", "[cli][mastering][repair]") {
-  create_noisy_wav(TEST_WAV);
+  create_noisy_wav(TEST_WAV, 1.0f);
 
   SECTION("default path measures, repairs and reports the defects it found") {
     const std::string out = unique_temp_path("_repaired.wav");
@@ -1089,6 +1114,11 @@ TEST_CASE("CLI repair command", "[cli][mastering][repair]") {
     REQUIRE(f.good());
     std::remove(out.c_str());
   }
+}
+
+TEST_CASE("CLI repair fits its output to full scale only when it must",
+          "[cli][mastering][repair]") {
+  create_noisy_wav(TEST_WAV, 1.0f);
 
   SECTION("a repair that rebuilds peaks past full scale is fitted, not clamped") {
     // Declipping restores the peaks a clipper cut off, so its output routinely
@@ -1145,6 +1175,10 @@ TEST_CASE("CLI repair command", "[cli][mastering][repair]") {
     REQUIRE(payload["output_gain_db"].as_number() == 0.0);
     std::remove(out.c_str());
   }
+}
+
+TEST_CASE("CLI repair --detect and the options it refuses", "[cli][mastering][repair]") {
+  create_noisy_wav(TEST_WAV, 1.0f);
 
   SECTION("--detect measures and reports without writing anything") {
     const std::string out = unique_temp_path("_detect_should_not_exist.wav");
@@ -1196,19 +1230,21 @@ TEST_CASE("CLI repair command", "[cli][mastering][repair]") {
     REQUIRE(detect_code == 3);
     REQUIRE_THAT(detect_output, ContainsSubstring("--explain requires the default"));
   }
+}
 
-  SECTION("--params overrides must stay inside the repair config") {
-    auto [code, output] = exec_command(CLI + " repair " + TEST_WAV +
-                                       " --params loudness.enabled=1 "
-                                       "-o " +
-                                       TEST_OUT + " -q");
-    REQUIRE(code == 3);
-    REQUIRE_THAT(output, ContainsSubstring("--params key for repair must start with 'repair.'"));
+TEST_CASE("CLI repair --params stays inside the repair config", "[cli][mastering][repair]") {
+  create_noisy_wav(TEST_WAV, 1.0f);
 
-    auto [ok_code, ok_output] = exec_command(
-        CLI + " repair " + TEST_WAV + " --params repair.denoise.enabled=1 -o " + TEST_OUT + " -q");
-    REQUIRE(ok_code == 0);
-  }
+  auto [code, output] = exec_command(CLI + " repair " + TEST_WAV +
+                                     " --params loudness.enabled=1 "
+                                     "-o " +
+                                     TEST_OUT + " -q");
+  REQUIRE(code == 3);
+  REQUIRE_THAT(output, ContainsSubstring("--params key for repair must start with 'repair.'"));
+
+  auto [ok_code, ok_output] = exec_command(
+      CLI + " repair " + TEST_WAV + " --params repair.denoise.enabled=1 -o " + TEST_OUT + " -q");
+  REQUIRE(ok_code == 0);
 }
 #endif
 

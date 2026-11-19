@@ -1705,7 +1705,6 @@ struct StatedDefaultTables {
 
 StatedDefaultTables build_stated_default_tables(const StatedDefaultPaths& p) {
   const std::string to_out = " -o " + p.out + " --json -q";
-  [[maybe_unused]] const std::string speakers_out = " --target 5.1" + to_out;
   // Two recordings of one progression at different tempi, so the alignment has a path to find.
   const std::string takes_arguments =
       p.takes_project + " --reference-source 1 --audio 1=" + p.sine_chords_fast_wav +
@@ -1942,14 +1941,13 @@ StatedDefaultTables build_stated_default_tables(const StatedDefaultPaths& p) {
 #endif
 #ifdef SONARE_WITH_PLAYBACK
       {"playback", p.stereo_wav + to_out, "target", "5.1"},
-      // The rows below render to speakers: preparing the headphone renderer costs most of a run.
       // Auto takes the layout from the channel count; a fixed layout that does not match is
       // refused.
-      {"playback", p.tone_wav + speakers_out, "input-layout", "stereo"},
-      {"playback", p.stereo_wav + speakers_out, "night", "0.8"},
+      {"playback", p.tone_wav + to_out, "input-layout", "stereo"},
+      {"playback", p.stereo_wav + to_out, "night", "0.8"},
       // A stereo input has no centre channel for the dialogue gain to reach.
-      {"playback", p.stereo_wav + speakers_out, "dialogue-db", ""},
-      {"playback", p.stereo_wav + speakers_out, "target-lufs", "-14"},
+      {"playback", p.stereo_wav + to_out, "dialogue-db", ""},
+      {"playback", p.stereo_wav + to_out, "target-lufs", "-14"},
 #endif
   };
   tables.derived = {
@@ -1984,7 +1982,7 @@ StatedDefaultTables build_stated_default_tables(const StatedDefaultPaths& p) {
 #ifdef SONARE_WITH_PLAYBACK
       // Auto renders the input in its own layout: mono on a mono input, stereo on a stereo one,
       // and each of those fixed layouts is refused on the other input.
-      {"playback", speakers_out, "input-layout", {{p.tone_wav, "mono"}, {p.stereo_wav, "stereo"}}},
+      {"playback", to_out, "input-layout", {{p.tone_wav, "mono"}, {p.stereo_wav, "stereo"}}},
 #endif
   };
   tables.prose = {
