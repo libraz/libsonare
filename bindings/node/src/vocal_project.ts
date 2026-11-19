@@ -108,6 +108,17 @@ function requestProjectId(value: unknown, field: string, allowZero = false): num
   return requestSafeInteger(value, field, allowZero ? 0 : 1, MAX_PROJECT_ID);
 }
 
+/** A take id of an apply request: a number, and never `0`, which is spelt by leaving it out. */
+function requestTakeId(value: unknown): number {
+  if (typeof value !== 'number') {
+    throw new TypeError('applyVocalEdit: takeId must be a number');
+  }
+  if (value === 0) {
+    throw new RangeError('applyVocalEdit: takeId must not be 0 (omit it for the base source)');
+  }
+  return requestProjectId(value, 'request.takeId');
+}
+
 function projectId(value: unknown, field: string, allowZero = false): number {
   return safeInteger(value, field, allowZero ? 0 : 1, MAX_PROJECT_ID);
 }
@@ -202,9 +213,9 @@ function normalizeApplyRequest(request: ProjectVocalEditApplyRequest): NativeApp
   }
   return {
     clipId: requestProjectId(input.clipId, 'request.clipId'),
-    ...(input.takeId === undefined
+    ...(input.takeId === undefined || input.takeId === null
       ? {}
-      : { takeId: requestProjectId(input.takeId, 'request.takeId') }),
+      : { takeId: requestTakeId(input.takeId) }),
     expectedSourceId: requestProjectId(input.expectedSourceId, 'request.expectedSourceId'),
     expectedSourceSampleRate,
     expectedSourceSampleCount,

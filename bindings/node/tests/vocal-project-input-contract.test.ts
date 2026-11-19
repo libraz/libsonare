@@ -65,6 +65,20 @@ describe('Node Project vocal input number errors', () => {
     expect(() => apply({ [field]: value })).toThrow(RangeError);
   });
 
+  it('reads an omitted or null takeId as the base source and refuses 0 by name', () => {
+    const reached = /native apply reached/;
+    expect(() => apply({})).toThrow(reached);
+    expect(() => apply({ takeId: undefined })).toThrow(reached);
+    expect(() => apply({ takeId: null })).toThrow(reached);
+    expect(() => apply({ takeId: 1 })).toThrow(reached);
+    expect(() => apply({ takeId: 0 })).toThrow(
+      new RangeError('applyVocalEdit: takeId must not be 0 (omit it for the base source)'),
+    );
+    expect(() => apply({ takeId: '1' })).toThrow(
+      new TypeError('applyVocalEdit: takeId must be a number'),
+    );
+  });
+
   it('refuses the removed renderedStartSample as an unknown key', () => {
     expect(() => apply({ renderedStartSample: 0 })).toThrow(
       new TypeError("applyProjectVocalEdit: unknown request key 'renderedStartSample'"),

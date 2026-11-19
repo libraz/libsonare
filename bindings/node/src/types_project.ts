@@ -31,7 +31,7 @@ export type ProjectOverlapPolicy = 'disallow' | 'allow';
 export interface ProjectTrackDesc {
   /** Track kind. Default `'audio'`. */
   kind?: ProjectTrackKind;
-  /** Optional track name. */
+  /** Optional track name. Omit it for no name; an empty string is refused. */
   name?: string;
 }
 
@@ -93,10 +93,10 @@ export interface ProjectSource {
   readonly sampleRateHint: number;
   /** Source name or host-local URI. */
   readonly nameOrUri: string;
-  /** Owning content hash for audio sources; empty for MIDI sources. */
-  readonly contentHash: string;
-  /** External source-separation role for audio sources; empty for MIDI sources. */
-  readonly externalStemRole: string;
+  /** Owning content hash of an audio source; absent when none is set. */
+  readonly contentHash?: string;
+  /** External source-separation role of an audio source; absent when none is set. */
+  readonly externalStemRole?: string;
 }
 
 /** What a {@link ProjectMarker} marks. */
@@ -108,8 +108,8 @@ export interface ProjectMarker {
   readonly id: number;
   /** Position in PPQ. */
   readonly ppq: number;
-  /** Marker text. */
-  readonly name: string;
+  /** Marker text; absent when unnamed. */
+  readonly name?: string;
   /** What the marker marks. */
   readonly kind: ProjectMarkerKind;
   /** Key signature only: -7..7 (sharps positive); `0` otherwise. */
@@ -124,7 +124,7 @@ export interface ProjectMarkerInput {
   id?: number;
   /** Position in PPQ. */
   ppq: number;
-  /** Marker text. Default empty. */
+  /** Marker text. Omit it for an unnamed marker; an empty string is refused. */
   name?: string;
   /** What the marker marks. Default `'marker'`. */
   kind?: ProjectMarkerKind;
@@ -151,7 +151,7 @@ export interface ProjectWarpAnchor {
 export interface ProjectWarpMapDesc {
   /** Warp-map id, referenced by a clip's `warpRefId`. */
   id: number;
-  /** Optional display name. */
+  /** Optional display name. Omit it for no name; an empty string is refused. */
   name?: string;
   /** Anchors of the map, in order. */
   anchors: ProjectWarpAnchor[];
@@ -715,14 +715,14 @@ export interface ProjectSourceAudioRequest {
 
 /**
  * Request of {@link Project.setAudioSourceMetadata}. Both strings are replaced;
- * an omitted one is stored empty.
+ * an omitted one is cleared, and an empty string is refused.
  */
 export interface ProjectAudioSourceMetadataRequest {
   /** Id of an existing audio source. */
   sourceId: number;
-  /** Owning content hash. */
+  /** Owning content hash. Omit it to clear it. */
   contentHash?: string;
-  /** External source-separation role such as `'vocals'`. */
+  /** External source-separation role such as `'vocals'`. Omit it to clear it. */
   externalStemRole?: string;
 }
 
@@ -748,13 +748,13 @@ export interface ProjectProgramBank {
 
 /** One alternate take for {@link Project.setClipTakes}. */
 export interface ProjectClipTake {
-  /** Non-zero take id unique within the clip. */
+  /** Take id unique within the clip. Required; `0` is refused. */
   id: number;
-  /** Source id for this take; omitted reuses the clip's current source. */
+  /** Source id for this take. Omit it to reuse the clip's current source; `0` is refused. */
   sourceId?: number;
   /** Offset into the take source in PPQ. */
   sourceOffsetPpq?: number;
-  /** Optional UI/display name. */
+  /** Optional UI/display name. Omit it for an unnamed take; an empty string is refused. */
   name?: string;
 }
 
@@ -764,7 +764,7 @@ export interface ProjectClipCompSegment {
   startPpq: number;
   /** Segment end in PPQ. */
   endPpq: number;
-  /** Take id to play in this range; omitted falls back to the active/default take. */
+  /** Take id to play in this range. Omit it to fall back to the clip's active take; `0` is refused. */
   takeId?: number;
   /**
    * Equal-power crossfade length in PPQ, fading this segment in over the part

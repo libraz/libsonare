@@ -258,7 +258,9 @@ describe('setBuiltinInstrument optional scalars', () => {
     // point that rejects everything, and the equality by one that ignores it.
     const byDefault = chordPeak(undefined);
     expect(byDefault).toBeGreaterThan(0);
-    expect(chordPeak({ gain: 0, polyphony: 0 })).toBe(byDefault);
+    expect(chordPeak({ gain: 0 })).toBe(byDefault);
+    // The voice count has no zero of its own: the default is spelt by omission.
+    expect(() => chordPeak({ polyphony: 0 })).toThrow(/polyphony must not be 0/);
     expect(chordPeak({ gain: 0.8 })).toBeGreaterThan(byDefault);
     // One voice cannot sound four notes. Two against the default's sixteen is
     // not asserted: past the point where every note sounds, more voices move

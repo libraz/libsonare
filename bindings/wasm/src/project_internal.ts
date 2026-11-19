@@ -819,6 +819,7 @@ export function optionalId(
   argName: string,
   value: unknown,
   allowZero = false,
+  hint = 'for the default',
 ): number | undefined {
   if (value === undefined || value === null) {
     return undefined;
@@ -827,12 +828,93 @@ export function optionalId(
     throw new TypeError(`${fnName}: ${argName} must be a number`);
   }
   if (value === 0 && !allowZero) {
-    throw new RangeError(`${fnName}: ${argName} must not be 0 (omit it for the default)`);
+    throw new RangeError(`${fnName}: ${argName} must not be 0 (omit it ${hint})`);
   }
   if (!Number.isInteger(value) || value < 0 || value > 0xffff_ffff) {
     throw new RangeError(`${fnName}: ${argName} must be an unsigned 32-bit integer`);
   }
   return value;
+}
+
+/**
+ * An optional string field whose empty form would read as "not given": absent stays absent and
+ * `""` is refused by name. `hint` finishes "omit it ...".
+ */
+export function optionalName(
+  fnName: string,
+  argName: string,
+  value: unknown,
+  hint: string,
+): string | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  if (typeof value !== 'string') {
+    throw new TypeError(`${fnName}: ${argName} must be a string`);
+  }
+  if (value === '') {
+    throw new RangeError(`${fnName}: ${argName} must not be empty; omit it ${hint}`);
+  }
+  return value;
+}
+
+/** The take list as the native layer reads it, each take checked by name; absent fields are missing keys. */
+export function takesToNative(fnName: string, takes: unknown): Array<Record<string, unknown>> {
+  if (!Array.isArray(takes)) {
+    throw new TypeError(`${fnName}: takes must be an array`);
+  }
+  return takes.map((entry: unknown, index) => {
+    const where = `takes[${index}]`;
+    if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) {
+      throw new TypeError(`${fnName}: ${where} must be an object`);
+    }
+    const { id, sourceId, name, ...rest } = entry as Record<string, unknown>;
+    if (typeof id !== 'number') {
+      throw new TypeError(`${fnName}: ${where}.id must be a number`);
+    }
+    if (id === 0) {
+      throw new RangeError(`${fnName}: ${where}.id must not be 0`);
+    }
+    const takeId = optionalId(fnName, `${where}.id`, id);
+    const source = optionalId(
+      fnName,
+      `${where}.sourceId`,
+      sourceId,
+      false,
+      "for the clip's source",
+    );
+    const label = optionalName(fnName, `${where}.name`, name, 'for an unnamed take');
+    return {
+      ...rest,
+      id: takeId,
+      ...(source === undefined ? {} : { sourceId: source }),
+      ...(label === undefined ? {} : { name: label }),
+    };
+  });
+}
+
+/** The comp segments as the native layer reads them; an absent `takeId` is a missing key. */
+export function compSegmentsToNative(
+  fnName: string,
+  segments: unknown,
+): Array<Record<string, unknown>> {
+  if (!Array.isArray(segments)) {
+    throw new TypeError(`${fnName}: segments must be an array`);
+  }
+  return segments.map((entry: unknown, index) => {
+    if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) {
+      throw new TypeError(`${fnName}: segments[${index}] must be an object`);
+    }
+    const { takeId, ...rest } = entry as Record<string, unknown>;
+    const take = optionalId(
+      fnName,
+      `segments[${index}].takeId`,
+      takeId,
+      false,
+      'for the active take',
+    );
+    return { ...rest, ...(take === undefined ? {} : { takeId: take }) };
+  });
 }
 
 /** An optional strictly positive integer count: absent is `undefined`, an explicit `0` is refused. */
@@ -982,8 +1064,13 @@ export function projectBounceResult(
 
 /** A native source with its kind as a token. */
 export function projectSourceFromNative(native: NativeProjectSource): ProjectSource {
-  const { kind, ...rest } = native;
-  return { ...rest, kind: projectSourceKindName(kind) };
+  const { kind, contentHash, externalStemRole, ...rest } = native;
+  return {
+    ...rest,
+    ...(contentHash === '' ? {} : { contentHash }),
+    ...(externalStemRole === '' ? {} : { externalStemRole }),
+    kind: projectSourceKindName(kind),
+  };
 }
 
 /** The native tempo candidate with the meter's first segment under its public name. */

@@ -153,25 +153,28 @@ it('reads and edits audio source metadata without mutating input', () => {
       id: sourceId,
       kind: 'audio',
       nameOrUri: 'asset://metadata.wav',
-      contentHash: '',
-      externalStemRole: '',
     });
+    expect(project.sources()[0]).not.toHaveProperty('contentHash');
+    expect(project.sources()[0]).not.toHaveProperty('externalStemRole');
 
     project.setAudioSourceMetadata({ sourceId, ...metadata });
     expect(metadata).toEqual({ contentHash: 'sha256:deadbeef', externalStemRole: 'lead' });
     expect(project.sources()[0]).toMatchObject(metadata);
 
-    project.setAudioSourceMetadata({ sourceId, contentHash: '', externalStemRole: '' });
+    expect(() => project.setAudioSourceMetadata({ sourceId, contentHash: '' })).toThrow(
+      /contentHash must not be empty/,
+    );
+    project.setAudioSourceMetadata({ sourceId });
     expect(project.sources()[0]).toMatchObject({
       id: sourceId,
       nameOrUri: 'asset://metadata.wav',
-      contentHash: '',
-      externalStemRole: '',
     });
+    expect(project.sources()[0]).not.toHaveProperty('contentHash');
+    expect(project.sources()[0]).not.toHaveProperty('externalStemRole');
     project.undo();
     expect(project.sources()[0]).toMatchObject(metadata);
     project.redo();
-    expect(project.sources()[0]).toMatchObject({ contentHash: '', externalStemRole: '' });
+    expect(project.sources()[0]).not.toHaveProperty('contentHash');
 
     project.setAudioSourceMetadata({ sourceId, ...metadata });
     const restored = Project.fromJson(project.toJson());
@@ -188,9 +191,9 @@ it('reads and edits audio source metadata without mutating input', () => {
     expect(project.sources()[1]).toMatchObject({
       id: midiSourceId,
       kind: 'midi',
-      contentHash: '',
-      externalStemRole: '',
     });
+    expect(project.sources()[1]).not.toHaveProperty('contentHash');
+    expect(project.sources()[1]).not.toHaveProperty('externalStemRole');
   } finally {
     project.destroy();
   }
@@ -1025,13 +1028,19 @@ describe('Project native binding', () => {
             decayMs: 0,
             sustain: 0,
             releaseMs: 0,
-            polyphony: 0,
           },
         },
       ],
       options,
     );
     expect(explicitZero).toEqual(base);
+    // The voice count has no zero of its own: the default is spelt by omission.
+    expect(() =>
+      project.bounceWithBuiltinInstruments(
+        [{ instrument: { waveform: 'saw', polyphony: 0 } }],
+        options,
+      ),
+    ).toThrow(/polyphony must not be 0/);
     // Guard against a vacuous pass: a non-default value must move the render,
     // otherwise the equality above would hold for an unrelated reason.
     const moved = project.bounceWithBuiltinInstruments(
@@ -1300,7 +1309,7 @@ describe('Project value-model accessors', () => {
     const names: string[] = [];
     for (const m of project.markers()) {
       expect(typeof m.id).toBe('number');
-      names.push(m.name);
+      names.push(m.name ?? '');
     }
     expect(names).toContain('E minor');
     expect(names).toContain('chorus');

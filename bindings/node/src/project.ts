@@ -18,7 +18,7 @@ import {
   tokenOrdinal,
   WARP_MODE,
 } from './internal/project_tokens.js';
-import { refuseBuiltinSynthOrdinals } from './internal/synth_tokens.js';
+import { refuseBuiltinPolyphonyZero, refuseBuiltinSynthOrdinals } from './internal/synth_tokens.js';
 import { nativeTranscribeRequest } from './internal/transcribe_request.js';
 import { addon } from './native.js';
 import type {
@@ -168,6 +168,88 @@ function optionalNonZero(
   return number;
 }
 
+/**
+ * An optional id whose `0` would read as "not given": absent (`undefined` or `null`) stays
+ * absent, and an explicit `0` is refused by name.
+ */
+function optionalId(
+  fnName: string,
+  argName: string,
+  value: unknown,
+  hint = 'for the default',
+): number | undefined {
+  if (isAbsent(value)) {
+    return undefined;
+  }
+  const number = requireNumber(fnName, value, argName);
+  assertU32(fnName, number, argName);
+  if (number === 0) {
+    throw new RangeError(`${fnName}: ${argName} must not be 0 (omit it ${hint})`);
+  }
+  return number;
+}
+
+/** An optional string field whose empty form would read as "not given": absent stays absent, `""` is refused. */
+function optionalName(
+  fnName: string,
+  argName: string,
+  value: unknown,
+  hint: string,
+): string | undefined {
+  if (isAbsent(value)) {
+    return undefined;
+  }
+  if (typeof value !== 'string') {
+    throw new TypeError(`${fnName}: ${argName} must be a string`);
+  }
+  if (value === '') {
+    throw new RangeError(`${fnName}: ${argName} must not be empty; omit it ${hint}`);
+  }
+  return value;
+}
+
+/** The take list as the native layer reads it, each take checked by name; absent fields are missing keys. */
+function takesToNative(fnName: string, takes: unknown): Array<Record<string, unknown>> {
+  if (!Array.isArray(takes)) {
+    throw new TypeError(`${fnName}: takes must be an array`);
+  }
+  return takes.map((entry: unknown, index) => {
+    const where = `takes[${index}]`;
+    if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) {
+      throw new TypeError(`${fnName}: ${where} must be an object`);
+    }
+    const { id, sourceId, name, ...rest } = entry as Record<string, unknown>;
+    const takeId = requireNumber(fnName, id, `${where}.id`);
+    assertU32(fnName, takeId, `${where}.id`);
+    if (takeId === 0) {
+      throw new RangeError(`${fnName}: ${where}.id must not be 0`);
+    }
+    const source = optionalId(fnName, `${where}.sourceId`, sourceId, "for the clip's source");
+    const label = optionalName(fnName, `${where}.name`, name, 'for an unnamed take');
+    return {
+      ...rest,
+      id: takeId,
+      ...(source === undefined ? {} : { sourceId: source }),
+      ...(label === undefined ? {} : { name: label }),
+    };
+  });
+}
+
+/** The comp segments as the native layer reads them; an absent `takeId` is a missing key. */
+function compSegmentsToNative(fnName: string, segments: unknown): Array<Record<string, unknown>> {
+  if (!Array.isArray(segments)) {
+    throw new TypeError(`${fnName}: segments must be an array`);
+  }
+  return segments.map((entry: unknown, index) => {
+    if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) {
+      throw new TypeError(`${fnName}: segments[${index}] must be an object`);
+    }
+    const { takeId, ...rest } = entry as Record<string, unknown>;
+    const take = optionalId(fnName, `segments[${index}].takeId`, takeId, 'for the active take');
+    return { ...rest, ...(take === undefined ? {} : { takeId: take }) };
+  });
+}
+
 /** Render settings the native bounce reads. */
 function bounceSettings(
   fnName: BounceFn,
@@ -288,9 +370,13 @@ function clipFromNative(raw: Record<string, unknown>): ProjectClip {
   } as ProjectClip;
 }
 
+/** An unset metadata string reads back as an absent key, so a source record never carries `""`. */
 function sourceFromNative(raw: Record<string, unknown>): ProjectSource {
+  const { contentHash, externalStemRole, ...rest } = raw;
   return {
-    ...raw,
+    ...rest,
+    ...(contentHash === '' ? {} : { contentHash }),
+    ...(externalStemRole === '' ? {} : { externalStemRole }),
     kind: tokenName(SOURCE_KIND, raw.kind as number, 'source kind'),
   } as ProjectSource;
 }
@@ -299,7 +385,7 @@ function markerFromNative(raw: Record<string, unknown>): ProjectMarker {
   return {
     id: raw.id,
     ppq: raw.ppq,
-    name: raw.name,
+    ...(raw.name === '' ? {} : { name: raw.name }),
     kind: tokenName(MARKER_KIND, raw.kind as number, 'marker kind'),
     keyFifths: raw.keyFifths,
     keyMinor: raw.keyMinor,
@@ -585,14 +671,17 @@ export class Project {
     const marker: Record<string, unknown> = {
       ppq: requireNumber(fnName, request.ppq, 'ppq'),
     };
-    if (!isAbsent(request.id)) {
-      assertU32(fnName, requireNumber(fnName, request.id, 'id'), 'id');
-      if (request.id === 0) {
-        throw new RangeError(`${fnName}: id must not be 0 (omit it for the default)`);
-      }
-      marker.id = request.id;
+    const id = optionalId(fnName, 'id', request.id);
+    if (id !== undefined) {
+      marker.id = id;
     }
     if (!isAbsent(request.name)) {
+      if (typeof request.name !== 'string') {
+        throw new TypeError(`${fnName}: name must be a string`);
+      }
+      if (request.name === '') {
+        throw new RangeError('marker name must not be empty; omit it for an unnamed marker');
+      }
       marker.name = request.name;
     }
     if (!isAbsent(request.kind)) {
@@ -695,15 +784,13 @@ export class Project {
   setAudioSourceMetadata(request: ProjectAudioSourceMetadataRequest): void {
     const fnName = 'setAudioSourceMetadata';
     const record = requestObject(fnName, request, 'request', true);
-    for (const field of ['contentHash', 'externalStemRole'] as const) {
-      if (!isAbsent(record[field]) && typeof record[field] !== 'string') {
-        throw new TypeError(`${fnName}: ${field} must be a string`);
-      }
-    }
+    const [contentHash, externalStemRole] = (['contentHash', 'externalStemRole'] as const).map(
+      (field) => optionalName(fnName, field, record[field], 'to clear it'),
+    );
     this.native.setAudioSourceMetadata(
       requireNumber(fnName, record.sourceId, 'sourceId'),
-      record.contentHash ?? '',
-      record.externalStemRole ?? '',
+      contentHash ?? '',
+      externalStemRole ?? '',
     );
   }
 
@@ -711,9 +798,12 @@ export class Project {
 
   /** Add a track and return its allocated stable id. */
   addTrack(desc: ProjectTrackDesc = {}): number {
+    const { name, ...rest } = desc;
+    const label = optionalName('addTrack', 'name', name, 'for no name');
     return this.native.addTrack({
-      ...desc,
+      ...rest,
       kind: tokenOrdinal('addTrack', desc.kind ?? 'audio', TRACK_KIND, 'kind'),
+      ...(label === undefined ? {} : { name: label }),
     });
   }
 
@@ -725,6 +815,9 @@ export class Project {
   addClip(desc: ProjectClipDesc): number {
     const fnName = 'addClip';
     const { channels, sampleRate, ...rest } = requestObject(fnName, desc, 'desc', true);
+    if (requireNumber(fnName, rest.trackId, 'trackId') === 0) {
+      throw new RangeError(`${fnName}: trackId must not be 0; a clip needs an existing track`);
+    }
     if (channels === undefined) {
       return this.native.addClip(rest);
     }
@@ -803,15 +896,8 @@ export class Project {
   moveClip(clipId: number, newStartPpq: number, options?: ProjectClipMoveOptions): void {
     const fnName = 'moveClip';
     const record = options === undefined ? {} : requestObject(fnName, options, 'options', true);
-    let trackId = 0;
-    if (!isAbsent(record.trackId)) {
-      assertU32(fnName, requireNumber(fnName, record.trackId, 'trackId'), 'trackId');
-      if (record.trackId === 0) {
-        throw new RangeError(`${fnName}: trackId must not be 0 (omit it to keep the track)`);
-      }
-      trackId = record.trackId;
-    }
-    this.native.moveClip(clipId, newStartPpq, trackId);
+    const trackId = optionalId(fnName, 'trackId', record.trackId, 'to keep the track');
+    this.native.moveClip(clipId, newStartPpq, trackId ?? 0);
   }
 
   /** Change a track kind via an undoable edit. */
@@ -831,7 +917,12 @@ export class Project {
 
   /** Add or replace a first-class warp map referenced by clip warp ids. */
   setWarpMap(map: import('./types.js').ProjectWarpMapDesc): void {
-    this.native.setWarpMap(map);
+    if (typeof map !== 'object' || map === null || Array.isArray(map)) {
+      throw new TypeError('setWarpMap: map must be an object');
+    }
+    const { name, ...rest } = map;
+    const label = optionalName('setWarpMap', 'name', name, 'for no name');
+    this.native.setWarpMap(label === undefined ? rest : { ...rest, name: label });
   }
 
   /** Remove a first-class warp map by id. */
@@ -850,8 +941,8 @@ export class Project {
    * latency-bearing instrument cannot be separated back into strip inputs; its
    * channel-strip bounce throws `NOT_SUPPORTED`.
    */
-  setTrackMidiDestination(trackId: number, destinationId: number): void {
-    this.native.setTrackMidiDestination(trackId, destinationId);
+  setTrackMidiDestination(trackId: number, destinationId?: number | null): void {
+    this.native.setTrackMidiDestination(trackId, destinationId ?? 0);
   }
 
   /**
@@ -992,32 +1083,17 @@ export class Project {
   ): void {
     const fnName = 'setClipTakes';
     const record = options === undefined ? {} : requestObject(fnName, options, 'options', true);
-    takes.forEach((take, index) => {
-      if (take.sourceId !== undefined) {
-        // 0 reuses the clip's current source, and the addon truncates onto it.
-        assertU32(fnName, take.sourceId, `takes[${index}].sourceId`);
-      }
-    });
-    let activeTakeId = 0;
-    if (!isAbsent(record.activeTakeId)) {
-      assertU32(fnName, requireNumber(fnName, record.activeTakeId, 'activeTakeId'), 'activeTakeId');
-      if (record.activeTakeId === 0) {
-        throw new RangeError(`${fnName}: activeTakeId must not be 0 (omit it for the default)`);
-      }
-      activeTakeId = record.activeTakeId;
-    }
-    this.native.setClipTakes(clipId, takes, activeTakeId);
+    const nativeTakes = takesToNative(fnName, takes);
+    const activeTakeId = optionalId(fnName, 'activeTakeId', record.activeTakeId);
+    this.native.setClipTakes(clipId, nativeTakes as never, activeTakeId ?? 0);
   }
 
   /** Replace a clip's comp segments via an undoable edit. */
   setClipCompSegments(clipId: number, segments: ReadonlyArray<ProjectClipCompSegment>): void {
-    segments.forEach((segment, index) => {
-      if (segment.takeId !== undefined) {
-        // 0 falls back to the active/default take, and the addon truncates onto it.
-        assertU32('setClipCompSegments', segment.takeId, `segments[${index}].takeId`);
-      }
-    });
-    this.native.setClipCompSegments(clipId, segments);
+    this.native.setClipCompSegments(
+      clipId,
+      compSegmentsToNative('setClipCompSegments', segments) as never,
+    );
   }
 
   /** Set a clip's loop mode and loop length via an undoable edit; see {@link ProjectClipLoopRequest}. */
@@ -1038,7 +1114,7 @@ export class Project {
 
   /** Rebind a clip to a different already-registered source via an undoable edit. */
   setClipSource(clipId: number, sourceId: number): void {
-    this.native.setClipSource(clipId, sourceId);
+    this.native.setClipSource(clipId, requireNumber('setClipSource', sourceId, 'sourceId'));
   }
 
   /**
@@ -1491,6 +1567,7 @@ export class Project {
       instruments,
       (i) => {
         refuseBuiltinSynthOrdinals(fnName, i);
+        refuseBuiltinPolyphonyZero(fnName, i);
         return i;
       },
       withDestinationCopy,

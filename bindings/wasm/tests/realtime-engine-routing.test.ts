@@ -40,7 +40,8 @@ describe('Sonare WASM Module', () => {
       engine.setMetronome({ enabled: true, beatGain: 0.25, accentGain: 0.75, clickSamples: 16 });
       expect(engine.metronome().enabled).toBe(true);
       engine.setMetronome({ enabled: true });
-      expect(engine.metronome().clickSamples).toBe(0);
+      expect(engine.metronome()).not.toHaveProperty('clickSamples');
+      expect(engine.metronome().clickSec).toBeGreaterThan(0);
       expect(engine.countInEndSample(0, 2)).toBe(288000);
       expect(engine.sampleAtPpq(1.5)).toBe(72000);
       engine.setTempoSegments([
@@ -761,26 +762,27 @@ describe('Sonare WASM Module', () => {
       engine.destroy();
     });
 
-    it('treats an explicit numPorts of 0 as a fallback to numChannels like the C ABI', () => {
+    it('refuses an explicit numPorts of 0 and takes an omitted one as numChannels', () => {
       const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
-      // The C ABI resolves a non-positive num_ports to num_channels; a plain-JS
-      // caller who writes numPorts:0 must get the same fallback, not a throw.
-      expect(() =>
-        engine.setGraph({
-          nodes: [
-            { id: 'in', numPorts: 0 },
-            { id: 'gain', type: 'gain', gainDb: 0, numPorts: 0 },
-            { id: 'out', numPorts: 0 },
-          ],
-          connections: [
-            { sourceNode: 'in', sourcePort: 0, destNode: 'gain', destPort: 0 },
-            { sourceNode: 'gain', sourcePort: 0, destNode: 'out', destPort: 0 },
-          ],
-          inputNode: 'in',
-          outputNode: 'out',
-          numChannels: 2,
-        }),
-      ).not.toThrow();
+      const graph = (numPorts: number | undefined) => ({
+        nodes: [
+          { id: 'in', numPorts },
+          { id: 'gain', type: 'gain' as const, gainDb: 0, numPorts },
+          { id: 'out', numPorts },
+        ],
+        connections: [
+          { sourceNode: 'in', sourcePort: 0, destNode: 'gain', destPort: 0 },
+          { sourceNode: 'gain', sourcePort: 0, destNode: 'out', destPort: 0 },
+        ],
+        inputNode: 'in',
+        outputNode: 'out',
+        numChannels: 2,
+      });
+      expect(() => engine.setGraph(graph(0))).toThrow(
+        /setGraph: nodes\[0\]\.numPorts must not be 0 \(omit it for the default\)/,
+      );
+      expect(() => engine.setGraph(graph(-1))).toThrow(/numPorts must be a positive integer/);
+      expect(() => engine.setGraph(graph(undefined))).not.toThrow();
       expect(engine.graphNodeCount).toBe(3);
       engine.destroy();
     });

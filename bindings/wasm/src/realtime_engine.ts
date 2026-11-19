@@ -23,7 +23,7 @@ import { assignMarkerIds } from './internal/marker_ids.js';
 import { midiFxConfigJson } from './internal/midi_fx_config.js';
 import { mixSceneBusToNative, mixSceneStripToNative } from './internal/mix_scene.js';
 import { deinterleavePlanes } from './internal/pod_config.js';
-import { refuseBuiltinSynthOrdinals } from './internal/synth_tokens.js';
+import { refuseBuiltinPolyphonyZero, refuseBuiltinSynthOrdinals } from './internal/synth_tokens.js';
 import { getSonareModule } from './module_state.js';
 import type {
   Articulation,
@@ -286,6 +286,16 @@ function optionalCount(fnName: string, argName: string, value: unknown): number 
   return value;
 }
 
+/** A graph node name: a string, and never empty. */
+function graphName(path: string, value: unknown): void {
+  if (typeof value !== 'string') {
+    throw new TypeError(`setGraph: ${path} must be a string`);
+  }
+  if (value === '') {
+    throw new RangeError(`setGraph: ${path} must not be empty`);
+  }
+}
+
 /** An optional id that names a bus: absent routes to the master mix, so an explicit `0` is refused. */
 function optionalBusId(fnName: string, argName: string, value: unknown): number {
   if (value === undefined || value === null) {
@@ -392,11 +402,66 @@ function nativeClip(clip: EngineClip): WasmEngineClip {
   };
 }
 
+/**
+ * A sample count on a MIDI clip schedule whose `0` would read as "not given": absent stays
+ * absent, and `0`, a negative or a fraction is refused by name.
+ */
+function scheduleSampleCount(
+  index: number,
+  field: string,
+  value: unknown,
+  meaning: string,
+): number | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  const where = `setMidiClips: clips[${index}].${field}`;
+  if (typeof value !== 'number') {
+    throw new TypeError(`${where} must be a number`);
+  }
+  if (value === 0) {
+    throw new RangeError(`${where} must not be 0 (omit it for ${meaning})`);
+  }
+  if (!Number.isInteger(value) || value < 0) {
+    throw new RangeError(`${where} must be a positive integer`);
+  }
+  return value;
+}
+
+/** The schedule as the native layer reads it: an absent length is a missing key, never a `0`. */
+function midiClipsToNative(clips: ReadonlyArray<EngineMidiClipSchedule>): unknown {
+  if (!Array.isArray(clips)) {
+    return clips;
+  }
+  return clips.map((clip, index) => {
+    if (typeof clip !== 'object' || clip === null) {
+      return clip;
+    }
+    const { lengthSamples, loopLengthSamples, ...rest } = clip;
+    const length = scheduleSampleCount(index, 'lengthSamples', lengthSamples, 'open-ended');
+    const loopLength = scheduleSampleCount(
+      index,
+      'loopLengthSamples',
+      loopLengthSamples,
+      'no loop length',
+    );
+    return {
+      ...rest,
+      ...(length === undefined ? {} : { lengthSamples: length }),
+      ...(loopLength === undefined ? {} : { loopLengthSamples: loopLength }),
+    };
+  });
+}
+
 function nativeMarker(marker: EngineMarker): Record<string, unknown> {
-  const { kind, ...rest } = marker;
+  const { kind, name, ...rest } = marker;
+  if (name === '') {
+    throw new RangeError('marker name must not be empty; omit it for an unnamed marker');
+  }
+  const named = name === undefined || name === null ? rest : { ...rest, name };
   return kind === undefined
-    ? rest
-    : { ...rest, kind: tokenCode('setMarkers', 'kind', kind, MARKER_KINDS) };
+    ? named
+    : { ...named, kind: tokenCode('setMarkers', 'kind', kind, MARKER_KINDS) };
 }
 
 function markerFromNative(marker: {
@@ -407,7 +472,12 @@ function markerFromNative(marker: {
   keyFifths?: number;
   keyMinor?: boolean;
 }): EngineMarker {
-  return { ...marker, kind: tokenName(MARKER_KINDS, marker.kind ?? 0) };
+  const { name, ...rest } = marker;
+  return {
+    ...rest,
+    ...(name === undefined || name === '' ? {} : { name }),
+    kind: tokenName(MARKER_KINDS, marker.kind ?? 0),
+  };
 }
 
 function curveFromNative(ordinal: number): NonNullable<EngineAutomationPoint['curveToNext']> {
@@ -612,7 +682,6 @@ export class RealtimeEngine {
     return this.nativeHandle;
   }
   private sampleRate: number;
-  private metronomeSpelling: 'samples' | 'sec' = 'samples';
   private captureBuffer: { numChannels: number; capacityFrames: number } | undefined;
   // Track ids in lane order, as the last `setTrackLanes` declared them; unknown once a
   // project timeline installed its own lanes.
@@ -759,12 +828,12 @@ export class RealtimeEngine {
    * Replaces the realtime MIDI clip schedule. Failure leaves the previously accepted schedule in place.
    */
   setMidiClips(clips: readonly EngineMidiClipSchedule[]): void {
-    this.native.setMidiClips(clips);
+    this.native.setMidiClips(midiClipsToNative(clips) as never);
   }
 
   /** Bind the built-in synth to a MIDI destination; `config` defaults to a sine patch. */
   setBuiltinInstrument(
-    destinationId: number,
+    destinationId?: number | null,
     config: Omit<BuiltinSynthConfig, 'destinationId'> = {},
   ): void {
     if (typeof config === 'object' && config !== null && 'destinationId' in config) {
@@ -773,7 +842,8 @@ export class RealtimeEngine {
       );
     }
     refuseBuiltinSynthOrdinals('setBuiltinInstrument', config);
-    this.native.setBuiltinInstrument(destinationId, config);
+    refuseBuiltinPolyphonyZero('setBuiltinInstrument', config);
+    this.native.setBuiltinInstrument(destinationId ?? 0, config);
   }
 
   /**
@@ -794,9 +864,9 @@ export class RealtimeEngine {
    * default channel state (program, bank, controllers); a host that needs the
    * current position's state resends it with {@link pushMidiUmp} after this call.
    */
-  setSynthInstrument(destinationId: number, patch: SynthPatch = {}): void {
+  setSynthInstrument(destinationId?: number | null, patch: SynthPatch = {}): void {
     this.native.setSynthInstrument(
-      destinationId,
+      destinationId ?? 0,
       normalizeSynthInstrument('setSynthInstrument', patch),
     );
   }
@@ -827,7 +897,7 @@ export class RealtimeEngine {
    * current position's state resends it with {@link pushMidiUmp} after this call.
    */
   setSf2Instrument(
-    destinationId: number,
+    destinationId?: number | null,
     config: Omit<Sf2InstrumentConfig, 'destinationId'> = {},
   ): void {
     if (typeof config === 'object' && config !== null && 'destinationId' in config) {
@@ -835,15 +905,15 @@ export class RealtimeEngine {
         "setSf2Instrument: unknown config key 'destinationId' (pass it as the first argument)",
       );
     }
-    this.native.setSf2Instrument(destinationId, config);
+    this.native.setSf2Instrument(destinationId ?? 0, config);
   }
 
   /**
    * Clears the instrument bound to `destinationId` (default 0). Its sounding notes are released and the
    * output fades out over 10 ms. Do not call concurrently with {@link process}.
    */
-  clearMidiInstrument(destinationId = 0): void {
-    this.native.clearMidiInstrument(destinationId);
+  clearMidiInstrument(destinationId?: number | null): void {
+    this.native.clearMidiInstrument(destinationId ?? 0);
   }
 
   /** Number of bound MIDI instruments. */
@@ -1800,9 +1870,6 @@ export class RealtimeEngine {
     const { clickSamples, clickSec, ...rest } = config;
     const hasSamples = clickSamples !== undefined && clickSamples !== null;
     const hasSec = clickSec !== undefined && clickSec !== null;
-    if (hasSamples && hasSec) {
-      throw new RangeError('setMetronome: give clickSamples or clickSec, not both');
-    }
     for (const [name, value] of [
       ['clickSamples', clickSamples],
       ['clickSec', clickSec],
@@ -1811,20 +1878,20 @@ export class RealtimeEngine {
         throw new RangeError(`setMetronome: ${name} must not be 0 (omit it for the default)`);
       }
     }
+    if (hasSamples && hasSec) {
+      throw new RangeError('setMetronome: give clickSamples or clickSec, not both');
+    }
     this.native.setMetronome({
       ...rest,
       ...(hasSamples ? { clickSamples } : {}),
       ...(hasSec ? { clickSeconds: clickSec } : {}),
     });
-    this.metronomeSpelling = hasSec ? 'sec' : 'samples';
   }
 
   /** The metronome config, carrying only the click-length spelling that was set. */
   metronome(): EngineMetronomeConfig {
     const { clickSamples, clickSeconds, ...rest } = this.native.metronome();
-    return this.metronomeSpelling === 'sec'
-      ? { ...rest, clickSec: clickSeconds }
-      : { ...rest, clickSamples };
+    return clickSamples > 0 ? { ...rest, clickSamples } : { ...rest, clickSec: clickSeconds };
   }
 
   /**
@@ -1843,21 +1910,45 @@ export class RealtimeEngine {
    */
   setGraph(spec: EngineGraphSpec): void {
     requireObject('setGraph', 'spec', spec);
+    graphName('inputNode', spec.inputNode);
+    graphName('outputNode', spec.outputNode);
+    const { numChannels: requestedChannels, ...base } = spec;
+    const numChannels = optionalCount('setGraph', 'numChannels', requestedChannels);
     this.native.setGraph({
-      ...spec,
+      ...base,
+      ...(numChannels === undefined ? {} : { numChannels }),
       nodes: Array.isArray(spec.nodes)
-        ? spec.nodes.map(({ type, ...node }) => ({
-            ...node,
-            ...(type === undefined
-              ? {}
-              : { type: tokenCode('setGraph', 'node type', type, GRAPH_NODE_TYPES) }),
-          }))
+        ? spec.nodes.map((entry, i) => {
+            if (typeof entry !== 'object' || entry === null) {
+              return entry;
+            }
+            graphName(`nodes[${i}].id`, entry.id);
+            const { type, numPorts, ...node } = entry;
+            const ports = optionalCount('setGraph', `nodes[${i}].numPorts`, numPorts);
+            return {
+              ...node,
+              ...(type === undefined || type === null
+                ? {}
+                : { type: tokenCode('setGraph', 'node type', type, GRAPH_NODE_TYPES) }),
+              ...(ports === undefined ? {} : { numPorts: ports }),
+            };
+          })
         : spec.nodes,
       connections: Array.isArray(spec.connections)
-        ? spec.connections.map(({ mix, ...connection }) => ({
-            ...connection,
-            ...(mix === undefined ? {} : { mix: tokenCode('setGraph', 'mix', mix, GRAPH_MIXES) }),
-          }))
+        ? spec.connections.map((entry, i) => {
+            if (typeof entry !== 'object' || entry === null) {
+              return entry;
+            }
+            graphName(`connections[${i}].sourceNode`, entry.sourceNode);
+            graphName(`connections[${i}].destNode`, entry.destNode);
+            const { mix, ...connection } = entry;
+            return {
+              ...connection,
+              ...(mix === undefined || mix === null
+                ? {}
+                : { mix: tokenCode('setGraph', 'mix', mix, GRAPH_MIXES) }),
+            };
+          })
         : spec.connections,
     } as never);
   }
@@ -2758,7 +2849,7 @@ export class RealtimeEngine {
    * source rate, the engine rate, -14 LUFS); an explicit `0` is a `RangeError`.
    */
   bounceOffline(options: EngineBounceOptions): EngineBounceResult {
-    requireObject('bounceOffline', 'options', options);
+    requestObject('bounceOffline', options, 'options', true);
     noOrdinal('bounceOffline', 'dither', options.dither);
     for (const name of [
       'blockSize',
@@ -2802,10 +2893,15 @@ export class RealtimeEngine {
    * throws a `RangeError`.
    */
   freezeOffline(options: EngineFreezeOptions): EngineFreezeResult {
-    requireObject('freezeOffline', 'options', options);
-    const { blockSize, ...rest } = options;
+    requestObject('freezeOffline', options, 'options', true);
+    const { blockSize, clipId, ...rest } = options;
     const block = optionalCount('freezeOffline', 'blockSize', blockSize);
-    return this.native.freezeOffline(block === undefined ? rest : { ...rest, blockSize: block });
+    const clip = optionalCount('freezeOffline', 'clipId', clipId);
+    return this.native.freezeOffline({
+      ...rest,
+      ...(block === undefined ? {} : { blockSize: block }),
+      ...(clip === undefined ? {} : { clipId: clip }),
+    });
   }
 
   /**

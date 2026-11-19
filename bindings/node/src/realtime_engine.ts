@@ -7,7 +7,7 @@ import { mixSceneBusToNative, mixSceneStripToNative } from './internal/mix_scene
 import { requireOneOf } from './internal/one_of.js';
 import { deinterleave } from './internal/planar.js';
 import { timelineHandle } from './internal/project_handles.js';
-import { refuseBuiltinSynthOrdinals } from './internal/synth_tokens.js';
+import { refuseBuiltinPolyphonyZero, refuseBuiltinSynthOrdinals } from './internal/synth_tokens.js';
 import { addon } from './native.js';
 import type { ProjectTimeline } from './project.js';
 import type {
@@ -118,6 +118,31 @@ function optionalNonZero(fnName: string, value: unknown, argName: string): numbe
     throw new RangeError(`${fnName}: ${argName} must not be 0 (omit it for the default)`);
   }
   return number;
+}
+
+/** An optional positive integer count: absent stays `undefined`, and an explicit `0` is refused. */
+function optionalCount(fnName: string, argName: string, value: unknown): number | undefined {
+  if (isAbsent(value)) {
+    return undefined;
+  }
+  const number = requireFinite(fnName, value, argName);
+  if (number === 0) {
+    throw new RangeError(`${fnName}: ${argName} must not be 0 (omit it for the default)`);
+  }
+  if (number < 0 || !Number.isInteger(number)) {
+    throw new RangeError(`${fnName}: ${argName} must be a positive integer`);
+  }
+  return number;
+}
+
+/** A graph node name: a string, and never empty. */
+function graphName(path: string, value: unknown): void {
+  if (typeof value !== 'string') {
+    throw new TypeError(`setGraph: ${path} must be a string`);
+  }
+  if (value === '') {
+    throw new RangeError(`setGraph: ${path} must not be empty`);
+  }
 }
 
 function requireToken<T extends string>(
@@ -445,16 +470,78 @@ function parameterFromNative(native: Record<string, unknown>): Required<EnginePa
   } as Required<EngineParameterInfo>;
 }
 
-function markerToNative(marker: EngineMarker): unknown {
-  if (typeof marker !== 'object' || marker === null || isAbsent(marker.kind)) {
-    return marker;
+/**
+ * A sample count on a MIDI clip schedule whose `0` would read as "not given": absent stays
+ * absent, and `0`, a negative or a fraction is refused by name.
+ */
+function scheduleSampleCount(
+  index: number,
+  field: string,
+  value: unknown,
+  meaning: string,
+): number | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
   }
-  return { ...marker, kind: requireToken('setMarkers', marker.kind, MARKER_KIND, 'kind') };
+  const where = `setMidiClips: clips[${index}].${field}`;
+  if (typeof value !== 'number') {
+    throw new TypeError(`${where} must be a number`);
+  }
+  if (value === 0) {
+    throw new RangeError(`${where} must not be 0 (omit it for ${meaning})`);
+  }
+  if (!Number.isInteger(value) || value < 0) {
+    throw new RangeError(`${where} must be a positive integer`);
+  }
+  return value;
 }
 
+/** The schedule as the native layer reads it: an absent length is a missing key, never a `0`. */
+function midiClipsToNative(clips: ReadonlyArray<EngineMidiClipSchedule>): unknown {
+  if (!Array.isArray(clips)) {
+    return clips;
+  }
+  return clips.map((clip, index) => {
+    if (typeof clip !== 'object' || clip === null) {
+      return clip;
+    }
+    const { lengthSamples, loopLengthSamples, ...rest } = clip;
+    const length = scheduleSampleCount(index, 'lengthSamples', lengthSamples, 'open-ended');
+    const loopLength = scheduleSampleCount(
+      index,
+      'loopLengthSamples',
+      loopLengthSamples,
+      'no loop length',
+    );
+    return {
+      ...rest,
+      ...(length === undefined ? {} : { lengthSamples: length }),
+      ...(loopLength === undefined ? {} : { loopLengthSamples: loopLength }),
+    };
+  });
+}
+
+function markerToNative(marker: EngineMarker): unknown {
+  if (typeof marker !== 'object' || marker === null) {
+    return marker;
+  }
+  const { name, ...rest } = marker;
+  if (name === '') {
+    throw new RangeError('marker name must not be empty; omit it for an unnamed marker');
+  }
+  const named = isAbsent(name) ? rest : { ...rest, name };
+  if (isAbsent(marker.kind)) {
+    return named;
+  }
+  return { ...named, kind: requireToken('setMarkers', marker.kind, MARKER_KIND, 'kind') };
+}
+
+/** An unnamed marker reads back without a `name` key, so the record can be passed to `setMarkers` again. */
 function markerFromNative(native: Record<string, unknown>): EngineMarker {
+  const { name, ...rest } = native;
   return {
-    ...native,
+    ...rest,
+    ...(name === '' ? {} : { name }),
     kind: tokenOf(MARKER_KIND, native.kind as number, 'marker kind'),
   } as EngineMarker;
 }
@@ -501,27 +588,45 @@ function graphToNative(spec: EngineGraphSpec): unknown {
   const connections = Array.isArray(record.connections)
     ? (record.connections as unknown as Array<Record<string, unknown>>)
     : record.connections;
+  graphName('inputNode', record.inputNode);
+  graphName('outputNode', record.outputNode);
+  const numChannels = optionalCount('setGraph', 'numChannels', record.numChannels);
+  const { numChannels: _numChannels, ...base } = record;
   return {
-    ...record,
+    ...base,
+    ...(numChannels === undefined ? {} : { numChannels }),
     nodes: Array.isArray(nodes)
-      ? nodes.map((node, i) =>
-          isAbsent(node?.type)
-            ? node
-            : {
-                ...node,
-                type: requireToken('setGraph', node.type, GRAPH_NODE_TYPE, `nodes[${i}].type`),
-              },
-        )
+      ? nodes.map((node, i) => {
+          if (typeof node !== 'object' || node === null) {
+            return node;
+          }
+          graphName(`nodes[${i}].id`, node.id);
+          const { type, numPorts, ...rest } = node;
+          const ports = optionalCount('setGraph', `nodes[${i}].numPorts`, numPorts);
+          return {
+            ...rest,
+            ...(isAbsent(type)
+              ? {}
+              : { type: requireToken('setGraph', type, GRAPH_NODE_TYPE, `nodes[${i}].type`) }),
+            ...(ports === undefined ? {} : { numPorts: ports }),
+          };
+        })
       : nodes,
     connections: Array.isArray(connections)
-      ? connections.map((connection, i) =>
-          isAbsent(connection?.mix)
-            ? connection
-            : {
-                ...connection,
-                mix: requireToken('setGraph', connection.mix, GRAPH_MIX, `connections[${i}].mix`),
-              },
-        )
+      ? connections.map((connection, i) => {
+          if (typeof connection !== 'object' || connection === null) {
+            return connection;
+          }
+          graphName(`connections[${i}].sourceNode`, connection.sourceNode);
+          graphName(`connections[${i}].destNode`, connection.destNode);
+          const { mix, ...rest } = connection;
+          return {
+            ...rest,
+            ...(isAbsent(mix)
+              ? {}
+              : { mix: requireToken('setGraph', mix, GRAPH_MIX, `connections[${i}].mix`) }),
+          };
+        })
       : connections,
   };
 }
@@ -1936,6 +2041,9 @@ export class RealtimeEngine {
     if (optionalNonZero(fnName, native.blockSize, 'blockSize') === undefined) {
       delete native.blockSize;
     }
+    if (optionalCount(fnName, 'clipId', native.clipId) === undefined) {
+      delete native.clipId;
+    }
     return this.native.freezeOffline(native);
   }
 
@@ -2122,7 +2230,7 @@ export class RealtimeEngine {
    * UMP events compiled for the engine timeline.
    */
   setMidiClips(clips: ReadonlyArray<EngineMidiClipSchedule>): void {
-    this.native.setMidiClips(clips);
+    this.native.setMidiClips(midiClipsToNative(clips) as never);
   }
 
   /**
@@ -2130,12 +2238,13 @@ export class RealtimeEngine {
    * and scheduled MIDI clips routed to that destination render through it.
    */
   setBuiltinInstrument(
-    destinationId: number,
+    destinationId?: number | null,
     config: Omit<BuiltinSynthConfig, 'destinationId'> = {},
   ): void {
     refuseBuiltinSynthOrdinals('setBuiltinInstrument', config);
+    refuseBuiltinPolyphonyZero('setBuiltinInstrument', config);
     this.native.setBuiltinInstrument(
-      destinationId,
+      destinationId ?? 0,
       withoutDestinationId('setBuiltinInstrument', config),
     );
   }
@@ -2156,9 +2265,12 @@ export class RealtimeEngine {
    * channel 10 through the GM drum map, exactly like the same-named bounce
    * binding key; the patch stays the fallback for any unsupported mapping.
    */
-  setSynthInstrument(destinationId: number, patch: Omit<SynthPatch, 'destinationId'> = {}): void {
+  setSynthInstrument(
+    destinationId?: number | null,
+    patch: Omit<SynthPatch, 'destinationId'> = {},
+  ): void {
     this.native.setSynthInstrument(
-      destinationId,
+      destinationId ?? 0,
       normalizeSynthInstrument(
         'setSynthInstrument',
         withoutDestinationId('setSynthInstrument', patch),
@@ -2186,18 +2298,21 @@ export class RealtimeEngine {
    * synthesizer GM fallback bank (the data-free floor).
    */
   setSf2Instrument(
-    destinationId: number,
+    destinationId?: number | null,
     config: Omit<Sf2InstrumentConfig, 'destinationId'> = {},
   ): void {
-    this.native.setSf2Instrument(destinationId, withoutDestinationId('setSf2Instrument', config));
+    this.native.setSf2Instrument(
+      destinationId ?? 0,
+      withoutDestinationId('setSf2Instrument', config),
+    );
   }
 
   /**
    * Clears the instrument bound to `destinationId` (default 0). Its sounding notes are released and the
    * output fades out over 10 ms. Do not call concurrently with {@link process}.
    */
-  clearMidiInstrument(destinationId = 0): void {
-    this.native.clearMidiInstrument(destinationId);
+  clearMidiInstrument(destinationId?: number | null): void {
+    this.native.clearMidiInstrument(destinationId ?? 0);
   }
 
   /** Number of bound MIDI instruments. */

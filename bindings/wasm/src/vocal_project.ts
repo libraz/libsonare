@@ -48,6 +48,17 @@ function requestUint32(value: unknown, field: string, allowZero = true): number 
   return uint32(value, field, allowZero);
 }
 
+/** A take id of an apply request: a number, and never `0`, which is spelt by leaving it out. */
+function requestTakeId(value: unknown): number {
+  if (typeof value !== 'number') {
+    throw new TypeError('applyVocalEdit: takeId must be a number');
+  }
+  if (value === 0) {
+    throw new RangeError('applyVocalEdit: takeId must not be 0 (omit it for the base source)');
+  }
+  return requestUint32(value, 'takeId', false);
+}
+
 function nativeUint32(value: unknown, field: string): number {
   if (
     typeof value !== 'number' ||
@@ -184,7 +195,8 @@ function copyApplyRequest(request: ProjectVocalEditApplyRequest): NativeApplyReq
   }
   return {
     clipId: requestUint32(source.clipId, 'clipId', false),
-    takeId: source.takeId === undefined ? 0 : requestUint32(source.takeId, 'takeId', false),
+    takeId:
+      source.takeId === undefined || source.takeId === null ? 0 : requestTakeId(source.takeId),
     expectedSourceId: requestUint32(source.expectedSourceId, 'expectedSourceId', false),
     expectedSourceSampleRate,
     expectedSourceSampleCount,

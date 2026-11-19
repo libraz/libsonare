@@ -417,6 +417,7 @@ describe('project bounce and take selection', () => {
         }),
       (json) => json.match(/"takes":\[[^\]]*\]/)?.[0] ?? 'absent',
       control,
+      'refused',
     );
   });
 
@@ -460,6 +461,7 @@ describe('project bounce and take selection', () => {
         }),
       (json) => json.match(/"compSegments":\[[^\]]*\]/)?.[0] ?? 'absent',
       2,
+      'refused',
     );
   });
 });

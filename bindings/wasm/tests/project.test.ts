@@ -97,11 +97,9 @@ describe('Sonare WASM Project', () => {
       });
       const sourceId = project.clips()[0].sourceId;
 
-      expect(project.sources()[0]).toMatchObject({
-        id: sourceId,
-        contentHash: '',
-        externalStemRole: '',
-      });
+      expect(project.sources()[0]).toMatchObject({ id: sourceId });
+      expect(project.sources()[0]).not.toHaveProperty('contentHash');
+      expect(project.sources()[0]).not.toHaveProperty('externalStemRole');
 
       project.setAudioSourceMetadata({
         sourceId,
@@ -115,11 +113,12 @@ describe('Sonare WASM Project', () => {
         externalStemRole: 'lead',
       });
 
+      expect(() => project.setAudioSourceMetadata({ sourceId, contentHash: '' })).toThrow(
+        /contentHash must not be empty/,
+      );
       project.setAudioSourceMetadata({ sourceId });
-      expect(project.sources()[0]).toMatchObject({
-        contentHash: '',
-        externalStemRole: '',
-      });
+      expect(project.sources()[0]).not.toHaveProperty('contentHash');
+      expect(project.sources()[0]).not.toHaveProperty('externalStemRole');
 
       project.undo();
       expect(project.sources()[0]).toMatchObject({
@@ -127,10 +126,8 @@ describe('Sonare WASM Project', () => {
         externalStemRole: 'lead',
       });
       project.redo();
-      expect(project.sources()[0]).toMatchObject({
-        contentHash: '',
-        externalStemRole: '',
-      });
+      expect(project.sources()[0]).not.toHaveProperty('contentHash');
+      expect(project.sources()[0]).not.toHaveProperty('externalStemRole');
 
       project.setAudioSourceMetadata({
         sourceId,
@@ -199,10 +196,8 @@ describe('Sonare WASM Project', () => {
         contentHash: 'sha256:valid',
         externalStemRole: 'lead',
       });
-      expect(project.sources()[1]).toMatchObject({
-        contentHash: '',
-        externalStemRole: '',
-      });
+      expect(project.sources()[1]).not.toHaveProperty('contentHash');
+      expect(project.sources()[1]).not.toHaveProperty('externalStemRole');
     } finally {
       project.destroy();
     }

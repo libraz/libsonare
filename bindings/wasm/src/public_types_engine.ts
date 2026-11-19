@@ -166,7 +166,7 @@ export interface EngineMarker {
   id: number;
   /** Position on the transport timeline, in pulses per quarter note. */
   ppq: number;
-  /** Display name. Omitted: empty. */
+  /** Display name. Omitted: unnamed (read back without the key); an empty string is refused. */
   name?: string;
   /** Default `'marker'`. */
   kind?: MarkerKind;
@@ -201,7 +201,7 @@ export interface EngineGraphNode {
   type?: EngineGraphNodeType;
   /** Gain in dB applied when `type` is `'gain'`. Default `0`. */
   gainDb?: number;
-  /** Port count of the node. Omitted: the spec's `numChannels`. */
+  /** Port count of the node. Omitted: the spec's `numChannels`; `0` and a negative or fractional value are refused. */
   numPorts?: number;
 }
 
@@ -237,8 +237,8 @@ export interface EngineGraphSpec {
   inputNode: string;
   /** `id` of the node whose output is the graph result. */
   outputNode: string;
-  /** Channel count the graph runs at. */
-  numChannels: number;
+  /** Channel count the graph runs at. Default `2`; `0` is refused. */
+  numChannels?: number;
   /** Automation parameters bound to nodes. */
   parameterBindings?: EngineGraphParameterBinding[];
 }
@@ -654,11 +654,11 @@ export interface EngineMidiClipSchedule {
   startSample?: number;
   /** Start position in pulses per quarter note. */
   startPpq?: number;
-  /** Clip length in samples. Omitted: open-ended. */
+  /** Clip length in samples. Omitted: open-ended; `0` and a negative or fractional value are refused. */
   lengthSamples?: number;
   /** Whether the clip repeats. Omitted: `false`. */
   loop?: boolean;
-  /** Length of one loop repeat in samples; meaningful when `loop` is set. */
+  /** Length of one loop repeat in samples; meaningful when `loop` is set. Omitted: no loop length; `0` and a negative or fractional value are refused. */
   loopLengthSamples?: number;
   /** Events with absolute render frames. */
   events: EngineMidiEvent[];

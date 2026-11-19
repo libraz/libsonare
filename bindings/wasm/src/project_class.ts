@@ -13,10 +13,11 @@ import type {
 import { assertHandleLive } from './internal/handle_guard.js';
 import { midiFxConfigJson } from './internal/midi_fx_config.js';
 import { mixSceneJsonToNative } from './internal/mix_scene.js';
-import { refuseBuiltinSynthOrdinals } from './internal/synth_tokens.js';
+import { refuseBuiltinPolyphonyZero, refuseBuiltinSynthOrdinals } from './internal/synth_tokens.js';
 import { nativeTranscribeOptions } from './internal/transcribe_request.js';
 import {
   assertProjectMidiEvents,
+  compSegmentsToNative,
   interleaveChannels,
   type NativeProjectBounce,
   type NativeProjectBounceOptions,
@@ -25,6 +26,7 @@ import {
   normalizePartRig,
   normalizeSynthInstrument,
   optionalId,
+  optionalName,
   optionalPositiveInt,
   partRigFromNative,
   projectAutomationLaneValue,
@@ -48,6 +50,7 @@ import {
   projectTrackKindValue,
   projectWarpModeValue,
   registerProjectTimeline,
+  takesToNative,
   unregisterProjectTimeline,
   type WasmProject,
   type WasmProjectTimeline,
@@ -429,9 +432,12 @@ export class Project {
 
   /** Add a track and return its allocated stable id. */
   addTrack(desc: ProjectTrackDesc = {}): number {
+    const { name, ...rest } = desc;
+    const label = optionalName('addTrack', 'name', name, 'for no name');
     return this.native.addTrack({
-      ...desc,
+      ...rest,
       kind: projectTrackKindValue(desc.kind ?? 'audio', 'addTrack'),
+      ...(label === undefined ? {} : { name: label }),
     });
   }
 
@@ -442,6 +448,12 @@ export class Project {
    */
   addClip(desc: ProjectClipDesc): number {
     const { channels, sampleRate, ...rest } = requestObject('Project.addClip', desc, 'desc', true);
+    if (typeof rest.trackId !== 'number') {
+      throw new TypeError('addClip: trackId must be a number');
+    }
+    if (rest.trackId === 0) {
+      throw new RangeError('addClip: trackId must not be 0; a clip needs an existing track');
+    }
     if (channels === undefined) {
       return this.native.addClip(rest);
     }
@@ -520,6 +532,8 @@ export class Project {
       'moveClip',
       'trackId',
       optionsObject('Project.moveClip', options).trackId,
+      false,
+      'to keep the track',
     );
     this.native.moveClip(clipId, newStartPpq, trackId ?? 0);
   }
@@ -541,7 +555,12 @@ export class Project {
 
   /** Add or replace a first-class warp map referenced by clip warp ids. */
   setWarpMap(map: ProjectWarpMapDesc): void {
-    this.native.setWarpMap(map);
+    if (typeof map !== 'object' || map === null || Array.isArray(map)) {
+      throw new TypeError('setWarpMap: map must be an object');
+    }
+    const { name, ...rest } = map;
+    const label = optionalName('setWarpMap', 'name', name, 'for no name');
+    this.native.setWarpMap(label === undefined ? rest : { ...rest, name: label });
   }
 
   /** Remove a first-class warp map by id. */
@@ -560,8 +579,8 @@ export class Project {
    * channel-strip bounces remain aligned. Configure one live lane per source
    * track that needs strip processing.
    */
-  setTrackMidiDestination(trackId: number, destinationId: number): void {
-    this.native.setTrackMidiDestination(trackId, destinationId);
+  setTrackMidiDestination(trackId: number, destinationId?: number | null): void {
+    this.native.setTrackMidiDestination(trackId, destinationId ?? 0);
   }
 
   /**
@@ -1012,6 +1031,7 @@ export class Project {
       instruments,
       (instrument) => {
         refuseBuiltinSynthOrdinals('bounceWithBuiltinInstruments', instrument);
+        refuseBuiltinPolyphonyZero('bounceWithBuiltinInstruments', instrument);
         return instrument;
       },
     );
@@ -1216,6 +1236,9 @@ export class Project {
       'input',
       true,
     );
+    if (typeof sourceId !== 'number') {
+      throw new TypeError('setSourceAudio: sourceId must be a number');
+    }
     const planar = interleaveChannels('setSourceAudio', channels, sampleRate);
     this.native.setSourceAudio(sourceId, planar.audio, planar.numChannels, sampleRate);
   }
@@ -1228,7 +1251,15 @@ export class Project {
       'input',
       true,
     );
-    this.native.setAudioSourceMetadata(sourceId, contentHash ?? '', externalStemRole ?? '');
+    if (typeof sourceId !== 'number') {
+      throw new TypeError('setAudioSourceMetadata: sourceId must be a number');
+    }
+    this.native.setAudioSourceMetadata(
+      sourceId,
+      optionalName('setAudioSourceMetadata', 'contentHash', contentHash, 'to clear it') ?? '',
+      optionalName('setAudioSourceMetadata', 'externalStemRole', externalStemRole, 'to clear it') ??
+        '',
+    );
   }
 
   /**
@@ -1240,17 +1271,21 @@ export class Project {
     takes: ReadonlyArray<ProjectClipTake>,
     options?: ProjectClipTakesOptions,
   ): void {
+    const nativeTakes = takesToNative('setClipTakes', takes);
     const activeTakeId = optionalId(
       'setClipTakes',
       'activeTakeId',
       optionsObject('Project.setClipTakes', options).activeTakeId,
     );
-    this.native.setClipTakes(clipId, takes, activeTakeId ?? 0);
+    this.native.setClipTakes(clipId, nativeTakes as never, activeTakeId ?? 0);
   }
 
   /** Replace a clip's comp segments (undoable). */
   setClipCompSegments(clipId: number, segments: ReadonlyArray<ProjectClipCompSegment>): void {
-    this.native.setClipCompSegments(clipId, segments);
+    this.native.setClipCompSegments(
+      clipId,
+      compSegmentsToNative('setClipCompSegments', segments) as never,
+    );
   }
 
   /**
@@ -1275,6 +1310,9 @@ export class Project {
 
   /** Rebind a clip to a different (already-registered) source (undoable). */
   setClipSource(clipId: number, sourceId: number): void {
+    if (typeof sourceId !== 'number') {
+      throw new TypeError('setClipSource: sourceId must be a number');
+    }
     this.native.setClipSource(clipId, sourceId);
   }
 
@@ -1290,6 +1328,9 @@ export class Project {
 
   /** Rename a track (undoable). */
   renameTrack(trackId: number, name: string): void {
+    if (typeof name !== 'string') {
+      throw new TypeError('renameTrack: name must be a string');
+    }
     this.native.renameTrack(trackId, name);
   }
 
@@ -1391,8 +1432,11 @@ export class Project {
       'input',
       true,
     );
-    if (name !== undefined && typeof name !== 'string') {
+    if (name !== undefined && name !== null && typeof name !== 'string') {
       throw new TypeError('setMarker: name must be a string');
+    }
+    if (name === '') {
+      throw new RangeError('marker name must not be empty; omit it for an unnamed marker');
     }
     return this.native.setMarkerEx({
       id: optionalId('setMarker', 'id', id) ?? 0,
@@ -1407,8 +1451,12 @@ export class Project {
   /** Every marker, in stored order. */
   markers(): ProjectMarker[] {
     return this.readAll(this.native.markerCount(), (index) => {
-      const marker = this.native.markerByIndex(index);
-      return { ...marker, kind: projectMarkerKindName(marker.kind) };
+      const { name, ...marker } = this.native.markerByIndex(index);
+      return {
+        ...marker,
+        ...(name === '' ? {} : { name }),
+        kind: projectMarkerKindName(marker.kind),
+      };
     });
   }
 

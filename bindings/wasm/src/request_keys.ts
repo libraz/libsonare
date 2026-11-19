@@ -230,6 +230,8 @@ import type {
   CapturePunch,
   ClipPageProviderOptions,
   EngineAutomationPoint,
+  EngineBounceOptions,
+  EngineFreezeOptions,
   EngineLoop,
   EngineMetronomeConfig,
   RealtimeEngineConfig,
@@ -2245,6 +2247,26 @@ const SonareEngineRenderOfflineRequestKeys = keysOf<SonareEngineRenderOfflineReq
   'blockSize',
   'finalize',
 ]);
+const BounceOfflineRequestKeys = keysOf<EngineBounceOptions>()([
+  'totalFrames',
+  'blockSize',
+  'numChannels',
+  'targetSampleRate',
+  'sourceSampleRate',
+  'normalizeLufs',
+  'targetLufs',
+  'dither',
+  'ditherBits',
+  'ditherSeed',
+]);
+const FreezeOfflineRequestKeys = keysOf<EngineFreezeOptions>()([
+  'totalFrames',
+  'blockSize',
+  'numChannels',
+  'clipId',
+  'startPpq',
+  'gain',
+]);
 const SetLoopRequestKeys = keysOf<EngineLoop>()(['startPpq', 'endPpq', 'enabled']);
 const SetMetronomeRequestKeys = keysOf<EngineMetronomeConfig>()([
   'enabled',
@@ -2668,6 +2690,8 @@ export const REQUEST_SHAPES = {
   armCapture: { keys: ArmCaptureRequestKeys },
   scheduleParam: { keys: ScheduleParamRequestKeys },
   'SonareEngine.renderOffline': { keys: SonareEngineRenderOfflineRequestKeys },
+  bounceOffline: { keys: BounceOfflineRequestKeys },
+  freezeOffline: { keys: FreezeOfflineRequestKeys },
   setLoop: { keys: SetLoopRequestKeys },
   setMetronome: { keys: SetMetronomeRequestKeys },
   setTrackSoloMute: { keys: SetTrackSoloMuteRequestKeys },
