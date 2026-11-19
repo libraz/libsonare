@@ -1,4 +1,10 @@
-import { entryClass, invalidState, refuse, refuseType } from './internal/entry.js';
+import {
+  entryClass,
+  invalidState,
+  refuse,
+  refuseType,
+  refuseUnknownKey,
+} from './internal/entry.js';
 import { midiFxConfigJson } from './internal/midi_fx_config.js';
 import { mixSceneJsonToNative } from './internal/mix_scene.js';
 import { deinterleave, interleavePlanar } from './internal/planar.js';
@@ -278,24 +284,50 @@ function bindInstruments<T extends object>(
   if (!Array.isArray(value)) {
     throw refuseType(`instruments must be an array of { destinationId?, instrument } pairs`);
   }
-  return value.map((pair) => {
-    const binding = requestObject('ProjectInstrumentBinding', pair, 'binding', true);
-    const instrument = binding.instrument as unknown;
-    if (typeof instrument !== 'object' || instrument === null || Array.isArray(instrument)) {
-      throw refuseType(`binding.instrument must be an object`);
-    }
-    if ('destinationId' in instrument) {
-      throw refuseType(
-        `unknown request key 'destinationId' in 'instrument' (give it on the binding)`,
-      );
-    }
-    const resolved = entry(instrument as T);
+  return value.map((pair: unknown, index: number) => {
+    const label = `instruments[${index}]`;
+    const binding = instrumentBinding(pair, label);
+    const instrument = binding.instrument as T;
+    const resolved = entry(instrument);
     if (isAbsent(binding.destinationId)) {
       return resolved;
     }
-    assertU32(requireNumber(binding.destinationId, 'destinationId'), 'destinationId');
-    return withDestination(resolved, binding.destinationId);
+    const where = `${label}.destinationId`;
+    assertU32(requireNumber(binding.destinationId, where), where);
+    return withDestination(resolved, binding.destinationId as number);
   });
+}
+
+/** The keys of a `{ destinationId?, instrument }` pair. */
+const INSTRUMENT_BINDING_KEYS = ['destinationId', 'instrument'];
+
+/**
+ * One `{ destinationId?, instrument }` pair, refused by its path: an undeclared key
+ * (a bare config's own key points under `instrument`), a missing or non-object
+ * instrument, and a `destinationId` given inside the instrument instead of beside it.
+ */
+function instrumentBinding(pair: unknown, label: string): Record<string, unknown> {
+  if (typeof pair !== 'object' || pair === null || Array.isArray(pair)) {
+    throw refuseType(`${label} must be a { destinationId?, instrument } pair`);
+  }
+  const record = pair as Record<string, unknown>;
+  for (const key of Object.keys(record)) {
+    if (!INSTRUMENT_BINDING_KEYS.includes(key)) {
+      const also = 'instrument' in record ? undefined : `${label}.instrument.${key}`;
+      throw refuseUnknownKey(`${label}.${key}`, INSTRUMENT_BINDING_KEYS, also);
+    }
+  }
+  if (isAbsent(record.instrument)) {
+    throw refuseType(`${label}.instrument must be given`);
+  }
+  const instrument = record.instrument;
+  if (typeof instrument !== 'object' || Array.isArray(instrument)) {
+    throw refuseType(`${label}.instrument must be an object`);
+  }
+  if ('destinationId' in instrument) {
+    throw refuseUnknownKey(`${label}.instrument.destinationId`, [`${label}.destinationId`]);
+  }
+  return record;
 }
 
 const withDestinationCopy = <T extends object>(instrument: T, destinationId: number): T => ({

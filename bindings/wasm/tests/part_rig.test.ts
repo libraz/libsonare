@@ -260,11 +260,13 @@ describe('Sonare WASM part rig request form', () => {
     const project = new Project();
     try {
       expect(() => project.partRig({ destinationId: 4, part: 0, mode: 'none' } as never)).toThrow(
-        /unknown request key 'mode'/,
+        new TypeError('Project.partRig: unknown key key.mode (expected destinationId, part)'),
       );
       expect(() =>
         project.clearPartRig({ destinationId: 4, part: 0, mode: 'none' } as never),
-      ).toThrow(/unknown request key 'mode'/);
+      ).toThrow(
+        new TypeError('Project.clearPartRig: unknown key key.mode (expected destinationId, part)'),
+      );
       expect(() => project.partRig(4 as never)).toThrow(TypeError);
     } finally {
       project.destroy();

@@ -17,6 +17,7 @@ import {
   SonareStreamAnalyzerNode,
   SonareStreamAnalyzerWorkletProcessor,
 } from '../dist/worklet.js';
+import { unknownKeyError } from './_helpers';
 
 type Ctor = new (options: unknown) => object;
 
@@ -65,11 +66,11 @@ describe('processorOptions refuses undeclared keys', () => {
     ])('the processor constructor refuses the retired %s by name', (key, value) => {
       const Processor = registered(registerSonareRealtimeVoiceChangerWorkletProcessor, 'vc-test');
       expect(() => new Processor({ processorOptions: { ...base, [key]: value } })).toThrow(
-        new TypeError(`unknown option '${key}'`),
+        unknownKeyError(`unknown key ${key}`),
       );
       expect(
         () => new SonareRealtimeVoiceChangerWorkletProcessor({ ...base, [key]: value } as never),
-      ).toThrow(new TypeError(`unknown option '${key}'`));
+      ).toThrow(unknownKeyError(`unknown key ${key}`));
     });
 
     it('accepts every declared key', () => {
@@ -90,14 +91,14 @@ describe('processorOptions refuses undeclared keys', () => {
     ])('the node factory and the processor refuse the retired %s by name', async (key, value) => {
       await expect(
         SonarePlaybackNode.create(context, { nodeFactory, [key]: value } as never),
-      ).rejects.toThrow(new TypeError(`SonarePlaybackNode.create: unknown option '${key}'`));
+      ).rejects.toThrow(unknownKeyError(`SonarePlaybackNode.create: unknown key ${key}`));
       const Processor = registered(registerSonarePlaybackWorkletProcessor, 'pb-test');
       expect(
         () => new Processor({ processorOptions: { sampleRate: 48000, [key]: value } }),
-      ).toThrow(new TypeError(`unknown option '${key}'`));
+      ).toThrow(unknownKeyError(`unknown key ${key}`));
       expect(
         () => new SonarePlaybackWorkletProcessor({ sampleRate: 48000, [key]: value } as never),
-      ).toThrow(new TypeError(`unknown option '${key}'`));
+      ).toThrow(unknownKeyError(`unknown key ${key}`));
     });
 
     it('refuses processorOptions that are not an object', () => {
@@ -112,15 +113,13 @@ describe('processorOptions refuses undeclared keys', () => {
     it('the node factory and the processor refuse an undeclared key by name', async () => {
       await expect(
         SonareStreamAnalyzerNode.create(context, { nodeFactory, bufferSize: 4096 } as never),
-      ).rejects.toThrow(
-        new TypeError("SonareStreamAnalyzerNode.create: unknown option 'bufferSize'"),
-      );
+      ).rejects.toThrow(unknownKeyError('SonareStreamAnalyzerNode.create: unknown key bufferSize'));
       const Processor = registered(registerSonareStreamAnalyzerWorkletProcessor, 'sa-test');
       expect(() => new Processor({ processorOptions: { bufferSize: 4096 } })).toThrow(
-        new TypeError("unknown option 'bufferSize'"),
+        unknownKeyError('unknown key bufferSize'),
       );
       expect(() => new SonareStreamAnalyzerWorkletProcessor({ bufferSize: 4096 } as never)).toThrow(
-        new TypeError("unknown option 'bufferSize'"),
+        unknownKeyError('unknown key bufferSize'),
       );
     });
   });
@@ -134,7 +133,7 @@ describe('processorOptions refuses undeclared keys', () => {
     ] as const)('the %s processorOptions refuse %s by name', (_label, key, register) => {
       const Processor = registered(register, 'carry-test');
       expect(() => new Processor({ processorOptions: { [key]: {} } })).toThrow(
-        new TypeError(`unknown option '${key}'`),
+        unknownKeyError(`unknown key ${key}`),
       );
     });
 
@@ -145,11 +144,11 @@ describe('processorOptions refuses undeclared keys', () => {
       expect(posted).toEqual([{ type: 'ready' }]);
       expect(analyzer).toBeInstanceOf(SonareStreamAnalyzerWorkletProcessor);
       expect(() => new SonareStreamAnalyzerWorkletProcessor({ transport: port } as never)).toThrow(
-        new TypeError("unknown option 'transport'"),
+        unknownKeyError('unknown key transport'),
       );
       expect(
         () => new SonarePlaybackWorkletProcessor({ sampleRate: 48000, transport: port } as never),
-      ).toThrow(new TypeError("unknown option 'transport'"));
+      ).toThrow(unknownKeyError('unknown key transport'));
     });
   });
 });

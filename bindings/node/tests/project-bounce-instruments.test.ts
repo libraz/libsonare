@@ -342,13 +342,21 @@ describe('bounceWithInstruments', () => {
         ),
       );
       expect(() => project.bounceWithInstruments([[{ render() {} }]] as never, OPTIONS)).toThrow(
-        new TypeError('Project.bounceWithInstruments: request must be an object'),
+        new TypeError(
+          'Project.bounceWithInstruments: instruments[0] must be a { destinationId?, instrument } pair',
+        ),
       );
       expect(() => project.bounceWithInstruments([{ destinationId: 0 }] as never, OPTIONS)).toThrow(
-        new TypeError('Project.bounceWithInstruments: binding.instrument must be an object'),
+        new TypeError('Project.bounceWithInstruments: instruments[0].instrument must be given'),
       );
       expect(() => bounceOne(project, [{ render() {} }])).toThrow(
-        new TypeError('Project.bounceWithInstruments: binding.instrument must be an object'),
+        new TypeError('Project.bounceWithInstruments: instruments[0].instrument must be an object'),
+      );
+      // A bare instrument must be wrapped as a pair.
+      expect(() => project.bounceWithInstruments([{ render() {} }] as never, OPTIONS)).toThrow(
+        new TypeError(
+          'Project.bounceWithInstruments: unknown key instruments[0].render (expected destinationId, instrument, or instruments[0].instrument.render)',
+        ),
       );
     });
   });

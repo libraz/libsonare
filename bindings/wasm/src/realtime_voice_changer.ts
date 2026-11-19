@@ -1,4 +1,11 @@
-import { entryClass, nameNativeError, refuse, refuseType, withEntry } from './internal/entry.js';
+import {
+  entryClass,
+  nameNativeError,
+  refuse,
+  refuseType,
+  refuseUnknownKey,
+  withEntry,
+} from './internal/entry.js';
 import { assertHandleLive } from './internal/handle_guard.js';
 import { deinterleavePlanes, interleavePlanes, nativeVoiceConfig } from './internal/pod_config.js';
 import {
@@ -160,7 +167,7 @@ export class RealtimeVoiceChanger {
     }
     for (const key of Object.keys(options)) {
       if (!CONSTRUCTOR_KEYS.includes(key)) {
-        throw refuseType(`unknown option '${key}'`);
+        throw refuseUnknownKey(key, CONSTRUCTOR_KEYS);
       }
     }
     assertSampleRate(options.sampleRate);

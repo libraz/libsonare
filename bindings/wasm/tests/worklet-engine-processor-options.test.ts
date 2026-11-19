@@ -13,6 +13,7 @@ import {
   SonareRealtimeEngineWorkletProcessor,
   SonareWorkletProcessor,
 } from '../dist/worklet.js';
+import { unknownKeyError } from './_helpers';
 import { mixingScenePreset } from './_worklet_helpers';
 
 type Ctor = new (options: unknown) => object;
@@ -61,7 +62,7 @@ describe('engine and mixer processorOptions refuse undeclared keys', () => {
     ])('the processor constructor refuses %s by name', (key, value) => {
       const Processor = registered(registerSonareRealtimeEngineWorkletProcessor, 'engine-test');
       expect(() => new Processor({ processorOptions: { ...base, [key]: value } })).toThrow(
-        new TypeError(`unknown option '${key}'`),
+        unknownKeyError(`unknown key ${key}`),
       );
       expect(
         () =>
@@ -70,7 +71,7 @@ describe('engine and mixer processorOptions refuse undeclared keys', () => {
             ...base,
             [key]: value,
           } as never),
-      ).toThrow(new TypeError(`unknown option '${key}'`));
+      ).toThrow(unknownKeyError(`unknown key ${key}`));
     });
 
     it('accepts the renamed maxBlockSize and numChannels', () => {
@@ -100,7 +101,7 @@ describe('engine and mixer processorOptions refuse undeclared keys', () => {
           nodeFactory,
           [key]: value,
         } as never),
-      ).rejects.toThrow(new TypeError(`SonareRealtimeEngineNode.create: unknown option '${key}'`));
+      ).rejects.toThrow(unknownKeyError(`SonareRealtimeEngineNode.create: unknown key ${key}`));
       expect(nodes).toBe(0);
     });
   });
@@ -114,10 +115,10 @@ describe('engine and mixer processorOptions refuse undeclared keys', () => {
     it('the processor constructor refuses an undeclared key by name', () => {
       const Processor = registered(registerSonareWorkletProcessor, 'mixer-test');
       expect(() => new Processor({ processorOptions: { ...base(), bufferSize: 4096 } })).toThrow(
-        new TypeError("unknown option 'bufferSize'"),
+        unknownKeyError('unknown key bufferSize'),
       );
       expect(() => new SonareWorkletProcessor({ ...base(), bufferSize: 4096 } as never)).toThrow(
-        new TypeError("unknown option 'bufferSize'"),
+        unknownKeyError('unknown key bufferSize'),
       );
     });
 
@@ -128,7 +129,7 @@ describe('engine and mixer processorOptions refuse undeclared keys', () => {
 
     it('refuses the retired blockSize key by name', () => {
       expect(() => new SonareWorkletProcessor({ ...base(), blockSize: 128 } as never)).toThrow(
-        new TypeError("unknown option 'blockSize'"),
+        unknownKeyError('unknown key blockSize'),
       );
     });
   });

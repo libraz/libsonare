@@ -84,6 +84,23 @@ class ValueEchoTest(unittest.TestCase):
         self.assertEqual(dict(found), {"value-echo": 2})
 
 
+class UnknownKeyTest(unittest.TestCase):
+    def test_counts_each_older_spelling_and_not_the_current_one(self) -> None:
+        text = (
+            "throw refuseType(`unknown request key '${key}'`);\n"
+            "throw refuseType(`unknown option '${key}' in 'bank'`);\n"
+            "throw refuseType(\"unknown config key 'destinationId'\");\n"
+            "throw refuseType(`unknown key ${path} (expected ${list})`);\n"
+            "// an unknown option in a comment\n"
+        )
+        self.assertEqual(counts(text)["unknown-key"], 3)
+
+    def test_cpp_counts_the_older_spelling(self) -> None:
+        text = 'throw WasmTypeError("unknown option \'" + key + "\'");\n'
+        found = ratchet.count_text(text, ("unknown-key",), cpp=True)
+        self.assertEqual(dict(found), {"unknown-key": 1})
+
+
 class EvaluateTest(unittest.TestCase):
     def found(self, raw: int, scanned: int = 1) -> dict:
         totals = {"raw-error": raw, "fn-name-param": 0}
@@ -146,7 +163,7 @@ class ScanTest(unittest.TestCase):
                 (root / rel / "b.h").write_text('throw X("i must be below 4");\n')
             native = ratchet.scan(root)["native"]
             self.assertEqual(native["scanned"], 4)
-            self.assertEqual(native["totals"], {"value-echo": 2})
+            self.assertEqual(native["totals"], {"value-echo": 2, "unknown-key": 0})
 
 
 if __name__ == "__main__":

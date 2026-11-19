@@ -33,6 +33,7 @@ import {
   projectAbiVersion,
 } from '../src/index.js';
 import { EXPECTED_PROJECT_ABI_VERSION } from '../src/types_project.js';
+import { unknownKeyError } from './_helpers.js';
 
 /** A byte view for subsequence search and ASCII reads on an exported file. */
 function bytes(data: Uint8Array): Buffer {
@@ -1670,7 +1671,7 @@ describe('MIDI message module functions', () => {
     for (const [name, packer, request] of packers) {
       expect(() => packer(request as never), name).not.toThrow();
       expect(() => packer({ ...request, bogus: 1 } as never), name).toThrow(
-        new TypeError(`${name}: unknown request key 'bogus'`),
+        unknownKeyError(`${name}: unknown key bogus`),
       );
     }
     expect(() =>

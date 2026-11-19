@@ -87,12 +87,14 @@ describe.each(FAMILIES)('$name', (family) => {
     using project = midiProject();
     expect(() => family.call(project, [family.binding, [family.binding]])).toThrow(TypeError);
     expect(() => family.call(project, [family.binding, [family.binding]])).toThrow(
-      new RegExp(`Project\\.${family.name}: request must be an object`),
+      new TypeError(
+        `Project.${family.name}: instruments[1] must be a { destinationId?, instrument } pair`,
+      ),
     );
     expect(() => family.call(project, 42)).toThrow(/instruments must be an array/);
     expect(() => family.call(project, null)).toThrow(TypeError);
     expect(() => family.call(project, [{ destinationId: 0 }])).toThrow(
-      new TypeError(`Project.${family.name}: binding.instrument must be an object`),
+      new TypeError(`Project.${family.name}: instruments[0].instrument must be given`),
     );
   });
 });

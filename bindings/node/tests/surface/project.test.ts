@@ -513,7 +513,11 @@ describe('compile and bounce', () => {
           [{ destinationId: 0, instrument: { destinationId: 1, waveform: 'saw' } }] as never,
           { totalFrames: 128 },
         ),
-      ).toThrow(/unknown request key 'destinationId'/);
+      ).toThrow(
+        new TypeError(
+          'Project.bounceWithBuiltinInstruments: unknown key instruments[0].instrument.destinationId (expected instruments[0].destinationId)',
+        ),
+      );
     });
   });
 

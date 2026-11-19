@@ -1,4 +1,4 @@
-import { refuse, refuseType } from './internal/entry.js';
+import { refuse, refuseType, refuseUnknownKey } from './internal/entry.js';
 import { tokenName, tokenOrdinal } from './internal/project_tokens.js';
 import { refuseSynthPatchOrdinals } from './internal/synth_tokens.js';
 import { SampleBank } from './sample_bank.js';
@@ -87,13 +87,16 @@ export function projectAutomationPointFromNative(native: {
   };
 }
 
-const AUTOMATION_POINT_KEYS: ReadonlySet<string> = new Set(['ppq', 'value', 'curveToNext']);
+const AUTOMATION_POINT_KEYS = ['ppq', 'value', 'curveToNext'];
 
 /** Resolve a breakpoint's curve token; a key outside the point's fields is refused by name. */
-export function projectAutomationPointValue(point: ProjectAutomationPoint): NativeAutomationPoint {
+export function projectAutomationPointValue(
+  point: ProjectAutomationPoint,
+  index: number,
+): NativeAutomationPoint {
   for (const key of Object.keys(point)) {
-    if (!AUTOMATION_POINT_KEYS.has(key)) {
-      throw refuseType(`unknown option '${key}' in 'points'`);
+    if (!AUTOMATION_POINT_KEYS.includes(key)) {
+      throw refuseUnknownKey(`points[${index}].${key}`, AUTOMATION_POINT_KEYS);
     }
   }
   const curveToNext = tokenOrdinal(
@@ -117,7 +120,7 @@ export function projectAutomationLaneValue(
   }
   return {
     ...desc,
-    points: desc.points.map((point) => projectAutomationPointValue(point)),
+    points: desc.points.map((point, index) => projectAutomationPointValue(point, index)),
   };
 }
 

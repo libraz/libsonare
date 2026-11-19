@@ -596,7 +596,11 @@ describe('Project edit ops (new bindings)', () => {
           targetParamId: 2,
           points: [{ ppq: 0, value: 1, curve: 'sCurve' } as unknown as ProjectAutomationPoint],
         }),
-      ).toThrow(/unknown option 'curve' in 'points'/);
+      ).toThrow(
+        new TypeError(
+          'Project.addAutomationLane: unknown key points[0].curve (expected ppq, value, curveToNext)',
+        ),
+      );
       expect(project.toJson()).toBe(before);
     } finally {
       project.destroy();

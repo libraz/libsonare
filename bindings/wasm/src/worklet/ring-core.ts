@@ -1,5 +1,5 @@
 import { ErrorCode } from '../errors.js';
-import { codedError, refuse, refuseType } from '../internal/entry.js';
+import { codedError, refuse, refuseType, refuseUnknownKey } from '../internal/entry.js';
 export const RING_CURSOR_RANGE = 0x1_0000_0000;
 
 // Overwrite records use one atomic state word per slot. The high bit excludes
@@ -174,7 +174,7 @@ export function resolveRingOptions<K extends string>(
   const known = new Set<string>(Object.keys(defaults));
   for (const key of Object.keys(given)) {
     if (!known.has(key)) {
-      throw refuseType(`unknown option '${key}'`);
+      throw refuseUnknownKey(key, [...known]);
     }
   }
   const resolved = {} as Record<K, unknown>;

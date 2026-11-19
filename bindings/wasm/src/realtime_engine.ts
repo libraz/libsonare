@@ -16,7 +16,14 @@ import {
   bindNativeClipPageProvider,
   nativeClipPageProviderOf,
 } from './internal/clip_page_native.js';
-import { codedError, entryClass, invalidState, refuse, refuseType } from './internal/entry.js';
+import {
+  codedError,
+  entryClass,
+  invalidState,
+  refuse,
+  refuseType,
+  refuseUnknownKey,
+} from './internal/entry.js';
 import { eqBandJson } from './internal/eq_band_json.js';
 import { externalMidiEvent } from './internal/external_midi.js';
 import { assertHandleLive, releasedHandleError } from './internal/handle_guard.js';
@@ -839,7 +846,7 @@ export class RealtimeEngine {
     config: Omit<BuiltinSynthConfig, 'destinationId'> = {},
   ): void {
     if (typeof config === 'object' && config !== null && 'destinationId' in config) {
-      throw refuseType("unknown config key 'destinationId' (pass it as the first argument)");
+      throw refuseUnknownKey('config.destinationId', ['the destinationId argument']);
     }
     refuseBuiltinSynthOrdinals(config);
     refuseBuiltinPolyphonyZero(config);
@@ -898,7 +905,7 @@ export class RealtimeEngine {
     config: Omit<Sf2InstrumentConfig, 'destinationId'> = {},
   ): void {
     if (typeof config === 'object' && config !== null && 'destinationId' in config) {
-      throw refuseType("unknown config key 'destinationId' (pass it as the first argument)");
+      throw refuseUnknownKey('config.destinationId', ['the destinationId argument']);
     }
     this.native.setSf2Instrument(destinationId ?? 0, config);
   }

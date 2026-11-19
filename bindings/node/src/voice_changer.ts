@@ -1,4 +1,11 @@
-import { entryClass, nameNativeError, refuse, refuseType, withEntry } from './internal/entry.js';
+import {
+  entryClass,
+  nameNativeError,
+  refuse,
+  refuseType,
+  refuseUnknownKey,
+  withEntry,
+} from './internal/entry.js';
 import { addon } from './native.js';
 import type {
   RealtimeVoiceChangerConfig,
@@ -215,7 +222,7 @@ export class RealtimeVoiceChanger {
     }
     for (const key of Object.keys(options)) {
       if (!CONSTRUCTOR_KEYS.includes(key)) {
-        throw refuseType(`unknown option '${key}'`);
+        throw refuseUnknownKey(key, CONSTRUCTOR_KEYS);
       }
     }
     assertSampleRate(options.sampleRate);

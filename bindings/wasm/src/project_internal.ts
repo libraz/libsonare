@@ -16,7 +16,7 @@ import type {
   SynthEnumTables,
   SynthPatch,
 } from './instrument_types.js';
-import { codedError, refuse, refuseType } from './internal/entry.js';
+import { codedError, refuse, refuseType, refuseUnknownKey } from './internal/entry.js';
 import { releasedHandleError } from './internal/handle_guard.js';
 import { deinterleavePlanes, interleavePlanes } from './internal/pod_config.js';
 import { refuseSynthPatchOrdinals } from './internal/synth_tokens.js';
@@ -265,6 +265,9 @@ export function normalizeSynthInstrument(patch: unknown): NativeSynthBinding {
  * `entry` converts each instrument to the shape the native reader takes; the
  * destination is merged in beside it, defaulting to `0`.
  */
+/** The keys of a `{ destinationId?, instrument }` pair. */
+const INSTRUMENT_BINDING_KEYS = ['destinationId', 'instrument'];
+
 export function normalizeInstrumentBindings<E, R extends object>(
   value: ReadonlyArray<ProjectInstrumentBinding<E>> | null | undefined,
   entry: (instrument: E) => R,
@@ -282,23 +285,20 @@ export function normalizeInstrumentBindings<E, R extends object>(
     }
     const record = pair as Record<string, unknown>;
     for (const key of Object.keys(record)) {
-      if (key !== 'destinationId' && key !== 'instrument') {
-        const hint =
-          'instrument' in record ? '' : ` (a bare config must be wrapped as { instrument })`;
-        throw refuseType(`${label}: unknown request key '${key}'${hint}`);
+      if (!INSTRUMENT_BINDING_KEYS.includes(key)) {
+        const also = 'instrument' in record ? undefined : `${label}.instrument.${key}`;
+        throw refuseUnknownKey(`${label}.${key}`, INSTRUMENT_BINDING_KEYS, also);
       }
     }
-    if (!('instrument' in record)) {
-      throw refuseType(`${label} needs an 'instrument' key`);
+    if (record.instrument === undefined || record.instrument === null) {
+      throw refuseType(`${label}.instrument must be given`);
     }
     const instrument = record.instrument;
-    if (typeof instrument !== 'object' || instrument === null || Array.isArray(instrument)) {
+    if (typeof instrument !== 'object' || Array.isArray(instrument)) {
       throw refuseType(`${label}.instrument must be an object`);
     }
     if ('destinationId' in instrument) {
-      throw refuseType(
-        `${label}.instrument: unknown request key 'destinationId' ('destinationId' belongs on the pair)`,
-      );
+      throw refuseUnknownKey(`${label}.instrument.destinationId`, [`${label}.destinationId`]);
     }
     const destinationId = optionalId(`${label}.destinationId`, record.destinationId, true);
     return { ...entry(instrument as E), destinationId: destinationId ?? 0 };
@@ -1066,13 +1066,16 @@ export function projectAutomationPointFromNative(native: {
   };
 }
 
-const AUTOMATION_POINT_KEYS: ReadonlySet<string> = new Set(['ppq', 'value', 'curveToNext']);
+const AUTOMATION_POINT_KEYS = ['ppq', 'value', 'curveToNext'];
 
 /** Resolve a breakpoint's curve token; a key outside the point's fields is refused by name. */
-export function projectAutomationPointValue(point: ProjectAutomationPoint): NativeAutomationPoint {
+export function projectAutomationPointValue(
+  point: ProjectAutomationPoint,
+  index: number,
+): NativeAutomationPoint {
   for (const key of Object.keys(point)) {
-    if (!AUTOMATION_POINT_KEYS.has(key)) {
-      throw refuseType(`unknown option '${key}' in 'points'`);
+    if (!AUTOMATION_POINT_KEYS.includes(key)) {
+      throw refuseUnknownKey(`points[${index}].${key}`, AUTOMATION_POINT_KEYS);
     }
   }
   const curveToNext = tokenCode(
@@ -1097,7 +1100,7 @@ export function projectAutomationLaneValue(
     ...(targetKind === undefined
       ? {}
       : { targetKind: projectAutomationTargetKindValue(targetKind) }),
-    points: points.map((point) => projectAutomationPointValue(point)),
+    points: points.map((point, index) => projectAutomationPointValue(point, index)),
   };
 }
 

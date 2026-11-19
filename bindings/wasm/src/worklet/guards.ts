@@ -1,5 +1,5 @@
 import type { EngineCaptureStatus } from '../index.js';
-import { refuse, refuseType } from '../internal/entry.js';
+import { refuse, refuseType, refuseUnknownKey } from '../internal/entry.js';
 import type {
   EngineClipPageRequestMessage,
   SonareEngineCaptureRequestMessage,
@@ -497,7 +497,7 @@ export function assertKnownProcessorOptions(table: ProcessorOptionsTable, option
   const keys: readonly string[] = PROCESSOR_OPTION_KEYS[table];
   for (const key of Object.keys(options)) {
     if (!keys.includes(key)) {
-      throw refuseType(`unknown option '${key}'`);
+      throw refuseUnknownKey(key, keys);
     }
   }
 }

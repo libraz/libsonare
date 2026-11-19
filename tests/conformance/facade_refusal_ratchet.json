@@ -2,14 +2,17 @@
   "node": {
     "raw-error": 0,
     "fn-name-param": 0,
-    "value-echo": 0
+    "value-echo": 0,
+    "unknown-key": 0
   },
   "wasm": {
     "raw-error": 0,
     "fn-name-param": 0,
-    "value-echo": 0
+    "value-echo": 0,
+    "unknown-key": 0
   },
   "native": {
-    "value-echo": 37
+    "value-echo": 37,
+    "unknown-key": 2
   }
 }

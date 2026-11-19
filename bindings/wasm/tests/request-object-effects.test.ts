@@ -196,30 +196,30 @@ describe('analyzeMelody reports invalid params as a RangeError (WASM)', () => {
 describe('enum-code helpers reject unknown strings instead of silently defaulting', () => {
   it('throws for an invalid pan law / pan mode / meter tap', () => {
     // biome-ignore lint/suspicious/noExplicitAny: exercising the runtime guard with an invalid enum string
-    expect(() => panLawCode('bogus' as any)).toThrow();
+    expect(() => panLawCode('bogus' as any, 'panLaw')).toThrow();
     // biome-ignore lint/suspicious/noExplicitAny: same
-    expect(() => panModeCode('bogus' as any)).toThrow();
+    expect(() => panModeCode('bogus' as any, 'panMode')).toThrow();
     // biome-ignore lint/suspicious/noExplicitAny: same
-    expect(() => meterTapCode('bogus' as any)).toThrow();
+    expect(() => meterTapCode('bogus' as any, 'tap')).toThrow();
   });
 
   it('still maps valid strings', () => {
-    expect(panLawCode('const6Db')).toBe(2);
-    expect(panModeCode('balance')).toBe(0);
-    expect(panModeCode('stereoPan')).toBe(1);
-    expect(panModeCode('dualPan')).toBe(2);
-    expect(meterTapCode('postFader')).toBe(1);
+    expect(panLawCode('const6Db', 'panLaw')).toBe(2);
+    expect(panModeCode('balance', 'panMode')).toBe(0);
+    expect(panModeCode('stereoPan', 'panMode')).toBe(1);
+    expect(panModeCode('dualPan', 'panMode')).toBe(2);
+    expect(meterTapCode('postFader', 'tap')).toBe(1);
   });
 
   it('resolves exactly the shared pan-law spellings and refuses every other', () => {
     for (const { value, ordinal } of panLawCorpus.accepted) {
-      expect(panLawCode(value as never)).toBe(ordinal);
+      expect(panLawCode(value as never, 'panLaw')).toBe(ordinal);
     }
     for (const value of panLawCorpus.rejected) {
-      expect(() => panLawCode(value as never)).toThrow(RangeError);
+      expect(() => panLawCode(value as never, 'panLaw')).toThrow(RangeError);
     }
     for (const value of panLawCorpus.rejected_numeric) {
-      expect(() => panLawCode(value as never)).toThrow(TypeError);
+      expect(() => panLawCode(value as never, 'panLaw')).toThrow(TypeError);
     }
   });
 
@@ -227,27 +227,27 @@ describe('enum-code helpers reject unknown strings instead of silently defaultin
     // SonarePanMode (include/sonare/sonare_c_mixing.h): BALANCE=0, STEREO_PAN=1,
     // DUAL_PAN=2. Must match Node's panModeValue and Python's _PAN_MODE_NAMES so
     // the same spelling picks the same panning algorithm on every surface.
-    expect(panModeCode('balance')).toBe(0);
+    expect(panModeCode('balance', 'panMode')).toBe(0);
     // @ts-expect-error panModeCode no longer carries the generic 'pan' spelling
     expect(() => panModeCode('pan')).toThrow(RangeError);
-    expect(panModeCode('stereoPan')).toBe(1);
-    expect(panModeCode('dualPan')).toBe(2);
+    expect(panModeCode('stereoPan', 'panMode')).toBe(1);
+    expect(panModeCode('dualPan', 'panMode')).toBe(2);
   });
 
   it('sendTimingCode rejects an unknown string instead of defaulting to post-fader', () => {
     // biome-ignore lint/suspicious/noExplicitAny: exercising the runtime guard with an invalid enum string
-    expect(() => sendTimingCode('bogus' as any)).toThrow();
-    expect(sendTimingCode('postFader')).toBe(0);
-    expect(sendTimingCode('preFader')).toBe(1);
+    expect(() => sendTimingCode('bogus' as any, 'sendTiming')).toThrow();
+    expect(sendTimingCode('postFader', 'sendTiming')).toBe(0);
+    expect(sendTimingCode('preFader', 'sendTiming')).toBe(1);
     // biome-ignore lint/suspicious/noExplicitAny: direct JS callers bypass TypeScript unions.
-    expect(() => sendTimingCode(1 as any)).toThrow(TypeError);
+    expect(() => sendTimingCode(1 as any, 'sendTiming')).toThrow(TypeError);
   });
 
   it('refuses raw ordinals across code and project resolvers', () => {
     // biome-ignore lint/suspicious/noExplicitAny: direct JS callers bypass TypeScript unions.
-    expect(() => panLawCode(99 as any)).toThrow(TypeError);
+    expect(() => panLawCode(99 as any, 'panLaw')).toThrow(TypeError);
     // biome-ignore lint/suspicious/noExplicitAny: direct JS callers bypass TypeScript unions.
-    expect(() => meterTapCode(-1 as any)).toThrow(TypeError);
+    expect(() => meterTapCode(-1 as any, 'tap')).toThrow(TypeError);
     // biome-ignore lint/suspicious/noExplicitAny: direct JS callers bypass TypeScript unions.
     expect(() => projectTrackKindValue('bus' as any)).toThrow(RangeError);
     // biome-ignore lint/suspicious/noExplicitAny: direct JS callers bypass TypeScript unions.

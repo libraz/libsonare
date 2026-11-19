@@ -7,10 +7,12 @@ A Node or WASM facade refusal is raised bare through the helpers in
 here per surface: a raw ``new RangeError(`` / ``new TypeError(`` /
 ``new SonareError(`` outside ``entry.ts``, and a helper parameter that carries
 the caller's name as text (``fnName`` and its siblings). A third kind,
-``value-echo``, counts string literals stating ``, got <value>``, ``(got <value>)`` or ``out of
-range`` instead of the predicate the value failed; it is also counted over the
-native readers (``bindings/node/src/addon`` and ``src/wasm``) as the ``native``
-surface, so the TS and native halves are two lines of one scan.
+``value-echo``, counts string literals stating ``, got <value>``, ``(got <value>)`` or
+``out of range`` instead of the predicate the value failed, and ``unknown-key`` counts
+the spellings of an undeclared-key refusal older than ``unknown key <path> (expected
+...)``. Both are also counted over the native readers (``bindings/node/src/addon`` and
+``src/wasm``) as the ``native`` surface, so the TS and native halves are two lines of
+one scan.
 
 The counts in ``facade_refusal_ratchet.json`` are a line, not a target: a count
 above it fails, and a count below it fails too until the file is rewritten with
@@ -31,11 +33,15 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 BASELINE = Path(__file__).resolve().parent / "facade_refusal_ratchet.json"
 # surface -> (source roots, file suffixes, counted kinds)
-TS_KINDS = ("raw-error", "fn-name-param", "value-echo")
+TS_KINDS = ("raw-error", "fn-name-param", "value-echo", "unknown-key")
 SURFACES: dict[str, tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...]]] = {
     "node": (("bindings/node/src",), (".ts",), TS_KINDS),
     "wasm": (("bindings/wasm/src",), (".ts",), TS_KINDS),
-    "native": (("bindings/node/src/addon", "src/wasm"), (".cpp", ".h"), ("value-echo",)),
+    "native": (
+        ("bindings/node/src/addon", "src/wasm"),
+        (".cpp", ".h"),
+        ("value-echo", "unknown-key"),
+    ),
 }
 # The helpers' own home, and a generated table.
 EXEMPT = {"internal/entry.ts", "internal/native_entries.ts"}
@@ -48,10 +54,14 @@ FN_PARAM = re.compile(
 KINDS = {"raw-error": RAW_ERROR, "fn-name-param": FN_PARAM}
 # A refusal states the predicate, never the value it refused or a bare "out of range".
 VALUE_ECHO = re.compile(r"[,(]\s*got\b|out of range", re.IGNORECASE)
+# An undeclared key reads "unknown key <path> (expected ...)"; these are the spellings before it.
+UNKNOWN_KEY = re.compile(r"unknown (?:request key|option|config key)\b", re.IGNORECASE)
+LITERAL_KINDS = {"value-echo": VALUE_ECHO, "unknown-key": UNKNOWN_KEY}
 HINTS = {
     "raw-error": "raise the refusal through refuse/refuseType/invalidState/codedError",
     "fn-name-param": "name it with the entry, not a passed-in name",
     "value-echo": 'state the predicate ("<key> must be ...") without echoing the value',
+    "unknown-key": "refuse it with refuseUnknownKey: unknown key <path> (expected a, b, c)",
 }
 
 
@@ -131,8 +141,11 @@ def count_text(text: str, kinds: tuple[str, ...] = TS_KINDS, cpp: bool = False) 
         for kind in kinds:
             if kind in KINDS:
                 found[kind] = len(KINDS[kind].findall(code))
-    if "value-echo" in kinds:
-        found["value-echo"] = sum(len(VALUE_ECHO.findall(s)) for s in string_literals(text, cpp))
+    literal_kinds = [kind for kind in kinds if kind in LITERAL_KINDS]
+    if literal_kinds:
+        literals = string_literals(text, cpp)
+        for kind in literal_kinds:
+            found[kind] = sum(len(LITERAL_KINDS[kind].findall(s)) for s in literals)
     return found
 
 

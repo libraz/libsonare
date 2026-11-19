@@ -1,4 +1,4 @@
-import { refuse, refuseType } from './internal/entry.js';
+import { refuse, refuseType, refuseUnknownKey } from './internal/entry.js';
 import type { VocalReason, VocalStateToken } from './types_vocal_edit.js';
 import type {
   ProjectVocalEditApplyRequest,
@@ -373,7 +373,7 @@ export function projectRehydrateVocalEdits(
   const opts = objectValue(options, 'options');
   for (const key of Object.keys(opts)) {
     if (key !== 'cancel') {
-      throw refuseType(`unknown option "${key}"`);
+      throw refuseUnknownKey(key, ['cancel']);
     }
   }
   const cancel = opts.cancel as (() => boolean) | undefined;

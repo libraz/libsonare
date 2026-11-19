@@ -1,4 +1,4 @@
-import { refuse, refuseType, withEntry } from './internal/entry.js';
+import { refuse, refuseType, refuseUnknownKey, withEntry } from './internal/entry.js';
 import { panModeToNative } from './internal/mix_scene.js';
 import { addon } from './native.js';
 import type {
@@ -122,7 +122,7 @@ export function mixStereo(...args: unknown[]): MixResult {
       }
       for (const key of Object.keys(strip)) {
         if (!(STRIP_KEYS as readonly string[]).includes(key)) {
-          throw refuseType(`unknown option '${key}' in '${path}'`);
+          throw refuseUnknownKey(`${path}.${key}`, STRIP_KEYS);
         }
       }
       assertAudioInput(strip.left, req.sampleRate, req, `${path}.left`);

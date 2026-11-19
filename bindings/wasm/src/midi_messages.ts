@@ -1,4 +1,4 @@
-import { refuse, refuseType, withEntry } from './internal/entry.js';
+import { refuse, refuseType, refuseUnknownKey, withEntry } from './internal/entry.js';
 import { assertMidiCcBindingListBytes } from './internal/midi_cc_binding.js';
 import { packMidi2Program } from './internal/midi_program_pack.js';
 import {
@@ -76,7 +76,7 @@ function bankPair(value: unknown): MidiBank {
   const { msb, lsb } = value as Record<string, unknown>;
   for (const key of Object.keys(value)) {
     if (key !== 'msb' && key !== 'lsb') {
-      throw refuseType(`unknown option '${key}' in 'bank'`);
+      throw refuseUnknownKey(`bank.${key}`, ['msb', 'lsb']);
     }
   }
   return {

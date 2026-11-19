@@ -9,7 +9,13 @@ import type {
   Sf2ProgramStatus,
   SynthPatch,
 } from './instrument_types.js';
-import { entryClass, invalidState, refuse, refuseType } from './internal/entry.js';
+import {
+  entryClass,
+  invalidState,
+  refuse,
+  refuseType,
+  refuseUnknownKey,
+} from './internal/entry.js';
 import { assertHandleLive } from './internal/handle_guard.js';
 import { midiFxConfigJson } from './internal/midi_fx_config.js';
 import { mixSceneJsonToNative } from './internal/mix_scene.js';
@@ -171,14 +177,17 @@ function optionsObject<T extends object>(
   return options === undefined ? ({} as T) : requestObject(requestName, options, 'options', true);
 }
 
+/** The fields of a part-rig key. */
+const PART_RIG_KEY_KEYS = ['destinationId', 'part'];
+
 /** A part-rig key, which is exactly a destination and a part. */
 function partRigKey(key: unknown): PartRigKey {
   if (typeof key !== 'object' || key === null || Array.isArray(key)) {
     throw refuseType(`key must be an object`);
   }
   for (const name of Object.keys(key)) {
-    if (name !== 'destinationId' && name !== 'part') {
-      throw refuseType(`unknown request key '${name}'`);
+    if (!PART_RIG_KEY_KEYS.includes(name)) {
+      throw refuseUnknownKey(`key.${name}`, PART_RIG_KEY_KEYS);
     }
   }
   return key as PartRigKey;
