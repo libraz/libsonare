@@ -1045,12 +1045,12 @@ def test_mix_stereo_rejects_non_finite_strip_samples() -> None:
 
     tone = [0.5, -0.5, 0.5, -0.5]
 
-    with pytest.raises(SonareValueError, match=r"strips\[0\]\[0\] contains NaN or Inf"):
+    with pytest.raises(SonareValueError, match=r"strips\[0\]\[0\] contains a non-finite sample"):
         mix_stereo([([math.nan] * 4, tone)], sample_rate=48000)
-    with pytest.raises(SonareValueError, match=r"strips\[0\]\[1\] contains NaN or Inf"):
+    with pytest.raises(SonareValueError, match=r"strips\[0\]\[1\] contains a non-finite sample"):
         mix_stereo([(tone, [math.inf] * 4)], sample_rate=48000)
     # The offending strip is named by index, not just the first one scanned.
-    with pytest.raises(SonareValueError, match=r"strips\[1\]\[1\] contains NaN or Inf"):
+    with pytest.raises(SonareValueError, match=r"strips\[1\]\[1\] contains a non-finite sample"):
         mix_stereo([(tone, tone), (tone, [0.5, math.nan, 0.5, -0.5])], sample_rate=48000)
 
 

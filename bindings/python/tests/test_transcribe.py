@@ -330,7 +330,7 @@ def test_transcribe_rejects_out_of_domain_options(
         ),
         pytest.param(
             lambda audio: libsonare.transcribe(np.full(64, np.nan, dtype=np.float32), SR),
-            "transcribe: samples contains NaN or Inf at index 0",
+            "transcribe: samples contains a non-finite sample at index 0",
             id="nan",
         ),
         pytest.param(
@@ -460,7 +460,7 @@ def test_transcribe_to_clip_rejects_out_of_domain_options(
         pytest.param(
             np.full(64, np.nan, dtype=np.float32),
             SR,
-            "transcribe_to_clip: samples contains NaN or Inf at index 0",
+            "transcribe_to_clip: samples contains a non-finite sample at index 0",
             id="nan",
         ),
         pytest.param(

@@ -327,7 +327,7 @@ def test_a_buffer_element_past_the_float32_range_is_refused_as_the_value_it_was(
     # A value that really is non-finite keeps the message that is true of it,
     # so the two causes stay separable rather than collapsing into one report.
     for value in (float("inf"), float("nan")):
-        with pytest.raises(SonareValueError, match="contains NaN or Inf"):
+        with pytest.raises(SonareValueError, match="contains a non-finite sample"):
             ls.rms_energy(
                 clean[:100] + [value] + clean[101:],
                 frame_length=512,

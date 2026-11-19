@@ -128,7 +128,7 @@ def test_non_finite_input_is_refused_by_name(fn_name: str, arg: str, value: floa
     label = f"{arg}[0]" if arg == "channels" else arg
     with pytest.raises(
         SonareValueError,
-        match=rf"^{fn_name}: {re.escape(label)} contains NaN or Inf at index {BAD_INDEX}$",
+        match=rf"^{fn_name}: {re.escape(label)} contains a non-finite sample at index {BAD_INDEX}$",
     ):
         fn(**_call_args(fn, arg, value))
 

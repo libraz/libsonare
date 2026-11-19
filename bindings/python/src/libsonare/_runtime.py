@@ -287,7 +287,7 @@ def _validate_samples(
             # NumPy converts a None element to NaN; name what the caller passed.
             if not isinstance(samples, np.ndarray) and _element_is_none(samples, bad):
                 raise _refuse(f"{arg_name}[{bad}] is None, not a number")
-            raise _refuse(f"{arg_name} contains NaN or Inf at index {bad}")
+            raise _refuse(f"{arg_name} contains a non-finite sample at index {bad}")
     return buf
 
 

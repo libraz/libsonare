@@ -258,7 +258,7 @@ class TestNormalizeStereoPairRefusals:
         left, right = _pair()
         spoiled = left.copy()
         spoiled[7] = np.nan
-        with pytest.raises(SonareValueError, match="left contains NaN or Inf at index 7"):
+        with pytest.raises(SonareValueError, match="left contains a non-finite sample at index 7"):
             call(spoiled, right, SR)  # type: ignore[operator]
 
 

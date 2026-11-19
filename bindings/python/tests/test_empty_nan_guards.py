@@ -181,30 +181,34 @@ class TestEmptyGuards:
 
 class TestNanInfGuards:
     def test_lufs_rejects_nan_with_index(self):
-        with pytest.raises(ValueError, match=r"lufs: samples contains NaN or Inf at index 100"):
+        with pytest.raises(
+            ValueError, match=r"lufs: samples contains a non-finite sample at index 100"
+        ):
             lufs(_with_nan(), SR)
 
     def test_lufs_rejects_inf_with_index(self):
-        with pytest.raises(ValueError, match=r"lufs: samples contains NaN or Inf at index 200"):
+        with pytest.raises(
+            ValueError, match=r"lufs: samples contains a non-finite sample at index 200"
+        ):
             lufs(_with_inf(), SR)
 
     def test_mastering_dynamics_compressor_rejects_nan(self):
         with pytest.raises(
             ValueError,
-            match=r"mastering_dynamics_compressor: samples contains NaN or Inf at index 100",
+            match=r"mastering_dynamics_compressor: samples contains a non-finite sample at index 100",
         ):
             mastering_dynamics_compressor(_with_nan(), SR)
 
     def test_mastering_dynamics_gate_rejects_inf(self):
         with pytest.raises(
             ValueError,
-            match=r"mastering_dynamics_gate: samples contains NaN or Inf at index 200",
+            match=r"mastering_dynamics_gate: samples contains a non-finite sample at index 200",
         ):
             mastering_dynamics_gate(_with_inf(), SR)
 
     def test_metering_peak_db_rejects_nan(self):
         with pytest.raises(
-            ValueError, match=r"metering_peak_db: samples contains NaN or Inf at index 100"
+            ValueError, match=r"metering_peak_db: samples contains a non-finite sample at index 100"
         ):
             metering_peak_db(_with_nan(), sample_rate=22050)
 
@@ -216,7 +220,9 @@ class TestWaveformPeaksSilenceVsNonFinite:
         quiet = waveform_peaks(np.zeros(1024, dtype=np.float32), 1, samples_per_bucket=256)
         assert quiet.min[0] == 0.0
         assert quiet.max[0] == 0.0
-        with pytest.raises(SonareValueError, match="waveform_peaks: samples contains NaN or Inf"):
+        with pytest.raises(
+            SonareValueError, match="waveform_peaks: samples contains a non-finite sample"
+        ):
             waveform_peaks(_with_nan(), 1, samples_per_bucket=256)
 
 
@@ -227,7 +233,7 @@ class TestPitchCAbiValidation:
     def test_rejects_negative_inf_with_index(self, pitch_name, pitch):
         with pytest.raises(
             ValueError,
-            match=rf"{pitch_name}: samples contains NaN or Inf at index 321",
+            match=rf"{pitch_name}: samples contains a non-finite sample at index 321",
         ):
             pitch(_with_neg_inf(), sample_rate=SR)
 
@@ -268,13 +274,17 @@ class TestSampleWrapperGuardCoverage:
     @pytest.mark.parametrize("name", sorted(_SAMPLE_WRAPPERS))
     def test_rejects_nan_with_index(self, name):
         arg = _buffer_arg(name)
-        with pytest.raises(ValueError, match=rf"{name}: {arg} contains NaN or Inf at index 100"):
+        with pytest.raises(
+            ValueError, match=rf"{name}: {arg} contains a non-finite sample at index 100"
+        ):
             _SAMPLE_WRAPPERS[name](_with_nan())
 
     @pytest.mark.parametrize("name", sorted(_SAMPLE_WRAPPERS))
     def test_rejects_inf_with_index(self, name):
         arg = _buffer_arg(name)
-        with pytest.raises(ValueError, match=rf"{name}: {arg} contains NaN or Inf at index 200"):
+        with pytest.raises(
+            ValueError, match=rf"{name}: {arg} contains a non-finite sample at index 200"
+        ):
             _SAMPLE_WRAPPERS[name](_with_inf())
 
 
@@ -430,7 +440,10 @@ class TestNonFiniteInputYieldsNoPlausibleResult:
         assert len(zero_crossings(alternating)) > 0
         corrupted = alternating.copy()
         corrupted[10] = math.nan
-        with pytest.raises(SonareValueError, match=r"zero_crossings: samples contains NaN"):
+        with pytest.raises(
+            SonareValueError,
+            match=r"^zero_crossings: samples contains a non-finite sample at index 10$",
+        ):
             zero_crossings(corrupted)
 
     def test_pitch_tuning_rejects_an_all_non_finite_track(self):
@@ -438,7 +451,10 @@ class TestNonFiniteInputYieldsNoPlausibleResult:
         # nothing usable in it must not resolve to 0.0 -- a legitimate "perfectly
         # in tune" answer that no caller could distinguish from a real one.
         assert math.isfinite(pitch_tuning([440.0, 880.0, 660.0]))
-        with pytest.raises(SonareValueError, match=r"pitch_tuning: frequencies contains NaN"):
+        with pytest.raises(
+            SonareValueError,
+            match=r"^pitch_tuning: frequencies contains a non-finite sample at index 0$",
+        ):
             pitch_tuning(np.full(32, math.nan, dtype=np.float32))
 
     def test_magnitude_response_separates_an_empty_curve_from_a_non_finite_frequency(self):
@@ -454,7 +470,8 @@ class TestNonFiniteInputYieldsNoPlausibleResult:
             assert eq.magnitude_response([]).size == 0
             assert len(eq.magnitude_response([100.0, 1000.0])) == 2
             with pytest.raises(
-                SonareValueError, match=r"magnitude_response: frequencies_hz contains NaN"
+                SonareValueError,
+                match=r"^StreamingEqualizer\.magnitude_response: frequencies_hz contains a non-finite sample at index 1$",
             ):
                 eq.magnitude_response([100.0, math.nan, 1000.0])
 
@@ -542,7 +559,9 @@ class TestDocumentedBufferInputForms:
     def test_nan_element_in_a_list_still_reports_nan(self):
         samples = [0.0] * 1024
         samples[7] = math.nan
-        with pytest.raises(SonareValueError, match=r"samples contains NaN or Inf at index 7"):
+        with pytest.raises(
+            SonareValueError, match=r"samples contains a non-finite sample at index 7"
+        ):
             metering_rms_db(samples, sample_rate=22050)
 
 
@@ -627,8 +646,8 @@ class TestNoneIsRefusedAsNotABufferNotAsANanSample:
     """``None`` is refused as not a buffer instead of pointing at the audio data.
 
     NumPy turns ``None`` into ``array(nan)``, so a rank check that did not run
-    ahead of the non-finite scan let it come back as "samples contains NaN or
-    Inf at index 0" — a message that sends the caller to inspect a buffer that
+    ahead of the non-finite scan let it come back as "samples contains a non-finite sample
+    at index 0" — a message that sends the caller to inspect a buffer that
     was never produced, instead of at whatever returned ``None``.
     """
 

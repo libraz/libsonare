@@ -90,7 +90,7 @@ def test_non_finite_inside_the_frame_is_refused_by_absolute_index(bad: float) ->
     bad_index = FRAME_OFFSET + 176
     with pytest.raises(
         SonareValueError,
-        match=rf"^metering_spectrum_frame: samples contains NaN or Inf at index {bad_index}$",
+        match=rf"^metering_spectrum_frame: samples contains a non-finite sample at index {bad_index}$",
     ):
         libsonare.metering_spectrum_frame(_with(bad_index, bad), SR, FRAME_OFFSET, N_FFT)
 
@@ -142,7 +142,7 @@ def test_a_fractional_frame_offset_is_refused_as_an_offset() -> None:
     """
     with pytest.raises(Exception) as excinfo:  # noqa: PT011 - the class is the assertion
         libsonare.metering_spectrum_frame(_tone(), SR, 100.5, N_FFT)  # type: ignore[arg-type]
-    assert "NaN or Inf" not in str(excinfo.value)
+    assert "non-finite sample" not in str(excinfo.value)
     assert "frame_offset" in str(excinfo.value)
 
 

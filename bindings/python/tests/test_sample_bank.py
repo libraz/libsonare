@@ -120,7 +120,10 @@ def test_add_sample_rejects_bad_buffers_and_out_of_range_fields() -> None:
     with SampleBank() as bank:
         with pytest.raises(ValueError, match="must not be empty"):
             bank.add_sample(np.zeros(0, dtype=np.float32))
-        with pytest.raises(ValueError, match="NaN or Inf"):
+        with pytest.raises(
+            ValueError,
+            match=r"^SampleBank\.add_sample: data contains a non-finite sample at index 1$",
+        ):
             bank.add_sample(np.array([0.0, np.nan], dtype=np.float32))
         with pytest.raises(ValueError, match="1-D buffer"):
             bank.add_sample(np.zeros((4, 2), dtype=np.float32))
