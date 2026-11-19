@@ -36,6 +36,7 @@ import {
   pitchCorrectTimevarying,
   RealtimeEngine,
   roomMorphStereo,
+  SonareError,
   StreamingRetune,
   spectralEdit,
   trim,
@@ -1320,6 +1321,51 @@ describe('the room morph receiver spacing answers the shared corpus', () => {
       expect(call).toThrow(
         testCase.refused === 'range' ? new RangeError(refusal) : new TypeError(refusal),
       );
+    });
+  }
+});
+
+type SceneInsertCase = {
+  id: string;
+  param: string;
+  value: unknown;
+  accepted?: boolean;
+  code_name?: string;
+  message?: string;
+  pending?: Record<string, string>;
+};
+type SceneInsertSection = {
+  fn: string;
+  options: Record<string, unknown>;
+  scene: { strips: { inserts: { params: Record<string, unknown> }[] }[] };
+  cases: SceneInsertCase[];
+};
+
+describe('a scene insert refusal reaches the caller with its document path untouched', () => {
+  const section = (corpus as unknown as { scene_insert_refusal: SceneInsertSection })
+    .scene_insert_refusal;
+  const options = camelRecord(section.options);
+  const fn = 'Mixer.fromJson';
+  for (const testCase of section.cases) {
+    const pending = testCase.pending?.[SURFACE];
+    const test = pending ? it.fails : it;
+    test(`${testCase.id}${pending ? ` (pending: ${pending})` : ''}`, () => {
+      const scene = structuredClone(section.scene);
+      scene.strips[0].inserts[0].params[testCase.param] = testCase.value;
+      const call = () => Mixer.fromJson(JSON.stringify(scene), options as never);
+      if (testCase.accepted) {
+        expect(call).not.toThrow();
+        return;
+      }
+      let caught: unknown;
+      try {
+        call();
+      } catch (error) {
+        caught = error;
+      }
+      expect(caught).toBeInstanceOf(SonareError);
+      expect((caught as SonareError).codeName).toBe(testCase.code_name);
+      expect((caught as Error).message).toBe(`${fn}: ${testCase.message}`);
     });
   }
 });
