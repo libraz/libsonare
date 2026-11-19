@@ -285,7 +285,8 @@ INTEGRALITY_TESTS = (
 )
 
 # The exception classes a refusal is spelled with.
-REFUSAL_ERRORS = ("SonareValueError", "ValueError", "TypeError", "OverflowError")
+# The binding's refusal formatters (`raise _refuse(...)`) count as the classes they build.
+REFUSAL_ERRORS = ("SonareValueError", "ValueError", "TypeError", "OverflowError", "_refuse", "_refuse_type")
 
 # How deep a value is followed through local helper calls. Three hops covers
 # every route in this tree (facade -> options builder -> marshaller); the limit
@@ -1087,11 +1088,19 @@ def _is_index_call(callee: ast.AST) -> bool:
 
 def _raised_name(node: ast.Raise) -> str:
     """The class a `raise` names, whether it is constructed or re-raised bare."""
-    if node.exc is None:
+    return _exception_name(node.exc)
+
+
+def _exception_name(exc: ast.expr | None) -> str:
+    """The class an exception expression names; for `a if cond else b`, a refusing branch."""
+    if exc is None:
         return ""
-    if isinstance(node.exc, ast.Call):
-        return _callee_name(node.exc.func) or ""
-    return _callee_name(node.exc) or ""
+    if isinstance(exc, ast.IfExp):
+        names = (_exception_name(exc.body), _exception_name(exc.orelse))
+        return next((name for name in names if name in REFUSAL_ERRORS), names[0])
+    if isinstance(exc, ast.Call):
+        return _callee_name(exc.func) or ""
+    return _callee_name(exc) or ""
 
 
 def _iterated(iterator: ast.expr) -> tuple[str, int | None] | None:
