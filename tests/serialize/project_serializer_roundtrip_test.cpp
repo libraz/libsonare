@@ -982,21 +982,31 @@ TEST_CASE("project scene deserializer refuses earlier scene spellings", "[serial
   };
   const Case cases[] = {
       {R"({"id":"a","input_trim_db":1.5})",
-       "input_trim_db is an earlier spelling; write inputTrimDb"},
-      {R"({"id":"a","pan_mode":"balance"})", "pan_mode is an earlier spelling; write panMode"},
-      {R"({"id":"a","panMode":2})", "balance, stereoPan or dualPan"},
-      {R"({"id":"a","panLaw":3})", "const3Db, const4.5Db, const6Db or linear0Db"},
-      {R"({"id":"a","sends":[{"id":"s","timing":"pre"}]})", "preFader or postFader"},
+       "scene.strips[0].input_trim_db is an earlier spelling; write scene.strips[0].inputTrimDb"},
+      {R"({"id":"a","pan_mode":"balance"})",
+       "scene.strips[0].pan_mode is an earlier spelling; write scene.strips[0].panMode"},
+      {R"({"id":"a","panMode":2})",
+       "scene.strips[0].panMode takes a token, not a number (valid names: balance, stereoPan, "
+       "dualPan)"},
+      {R"({"id":"a","panLaw":3})",
+       "scene.strips[0].panLaw takes a token, not a number (valid names: const3Db, const4.5Db, "
+       "const6Db, linear0Db)"},
+      {R"({"id":"a","sends":[{"id":"s","timing":"pre"}]})",
+       "scene.strips[0].sends[0].timing must be one of preFader, postFader"},
       {R"({"id":"a","sends":[{"id":"s","destination_bus_id":"bus"}]})",
-       "destination_bus_id is an earlier spelling; write destinationBusId"},
+       "scene.strips[0].sends[0].destination_bus_id is an earlier spelling; write "
+       "scene.strips[0].sends[0].destinationBusId"},
       {R"({"id":"a","inserts":[{"processor_name":"gain"}]})",
-       "processor_name is an earlier spelling; write processor"},
+       "scene.strips[0].inserts[0].processor_name is an earlier spelling; write "
+       "scene.strips[0].inserts[0].processor"},
       {R"({"id":"a","inserts":[{"processor":"gain","params_json":"{}"}]})",
-       "params_json is an earlier spelling; write params"},
+       "scene.strips[0].inserts[0].params_json is an earlier spelling; write "
+       "scene.strips[0].inserts[0].params"},
       {R"({"id":"a","inserts":[{"processor":"gain","params":"{}"}]})",
-       "params must be a JSON object"},
+       "scene.strips[0].inserts[0].params must be an object"},
       {R"({"id":"a","inserts":[{"processor":"gain","sidechain_key":"k"}]})",
-       "sidechain_key is an earlier spelling; write sidechainKey"},
+       "scene.strips[0].inserts[0].sidechain_key is an earlier spelling; write "
+       "scene.strips[0].inserts[0].sidechainKey"},
   };
   for (const Case& c : cases) {
     INFO(c.strip);
@@ -1006,14 +1016,14 @@ TEST_CASE("project scene deserializer refuses earlier scene spellings", "[serial
     REQUIRE_FALSE(result.ok());
     REQUIRE_FALSE(result.diagnostics.empty());
     CHECK(result.diagnostics.back().code == "invalid_format");
-    CHECK(result.diagnostics.back().message.find(c.expected) != std::string::npos);
+    CHECK(result.diagnostics.back().message == c.expected);
   }
 
   const auto top_level =
       project_from_json(R"({"version":7,"scene":{"version":1,"vca_groups":[{"id":"v"}]}})");
   REQUIRE_FALSE(top_level.ok());
-  CHECK(top_level.diagnostics.back().message.find(
-            "vca_groups is an earlier spelling; write vcaGroups") != std::string::npos);
+  CHECK(top_level.diagnostics.back().message ==
+        "scene.vca_groups is an earlier spelling; write scene.vcaGroups");
 }
 
 TEST_CASE("project deserialize preserves next id counters without gaps", "[serialize]") {
@@ -1384,46 +1394,55 @@ TEST_CASE("project deserialize refuses a track pan outside [-1, 1]", "[serialize
 TEST_CASE("project deserialize rejects float narrowing overflow with a field path", "[serialize]") {
   struct InvalidFloatField {
     const char* document;
-    const char* field_path;
+    const char* message;
   };
   const std::vector<InvalidFloatField> documents = {
-      {R"({"version":7,"tracks":[{"id":1,"gain":1e39}]})", "tracks[0].gain"},
-      {R"({"version":7,"tracks":[{"id":1,"pan":-1e39}]})", "tracks[0].pan"},
+      {R"({"version":7,"tracks":[{"id":1,"gain":1e39}]})",
+       "tracks[0].gain must be finite and in [-3.4028235e38, 3.4028235e38]"},
+      {R"({"version":7,"tracks":[{"id":1,"pan":-1e39}]})",
+       "tracks[0].pan must be finite and in [-3.4028235e38, 3.4028235e38]"},
       {R"({"version":7,"tracks":[{"id":1,"automationLanes":[{"points":[{"value":1e39}]}]}]})",
-       "tracks[0].automationLanes[0].points[0].value"},
-      {R"({"version":7,"clips":[{"id":1,"gain":-1e39}]})", "clips[0].gain"},
-      {R"({"version":7,"annotation":{"tempoConfidence":1e39}})", "annotation.tempoConfidence"},
+       "tracks[0].automationLanes[0].points[0].value must be finite and in [-3.4028235e38, "
+       "3.4028235e38]"},
+      {R"({"version":7,"clips":[{"id":1,"gain":-1e39}]})",
+       "clips[0].gain must be finite and in [-3.4028235e38, 3.4028235e38]"},
+      {R"({"version":7,"annotation":{"tempoConfidence":1e39}})",
+       "annotation.tempoConfidence must be finite and in [-3.4028235e38, 3.4028235e38]"},
       {R"({"version":7,"annotation":{"onsets":[{"confidence":-1e39}]}})",
-       "annotation.onsets[0].confidence"},
+       "annotation.onsets[0].confidence must be finite and in [-3.4028235e38, 3.4028235e38]"},
       {R"({"version":7,"scene":{"version":1,"strips":[{"inputTrimDb":1e39}]}})",
-       "scene.strips[].inputTrimDb"},
+       "scene.strips[0].inputTrimDb must be finite and in [-3.4028235e38, 3.4028235e38]"},
       {R"({"version":7,"scene":{"version":1,"strips":[{"faderDb":-1e39}]}})",
-       "scene.strips[].faderDb"},
+       "scene.strips[0].faderDb must be finite and in [-3.4028235e38, 3.4028235e38]"},
       {R"({"version":7,"scene":{"version":1,"strips":[{"vcaOffsetDb":1e39}]}})",
-       "scene.strips[].vcaOffsetDb"},
-      {R"({"version":7,"scene":{"version":1,"strips":[{"pan":-1e39}]}})", "scene.strips[].pan"},
-      {R"({"version":7,"scene":{"version":1,"strips":[{"width":1e39}]}})", "scene.strips[].width"},
+       "scene.strips[0].vcaOffsetDb must be finite and in [-3.4028235e38, 3.4028235e38]"},
+      {R"({"version":7,"scene":{"version":1,"strips":[{"pan":-1e39}]}})",
+       "scene.strips[0].pan must be finite and in [-3.4028235e38, 3.4028235e38]"},
+      {R"({"version":7,"scene":{"version":1,"strips":[{"width":1e39}]}})",
+       "scene.strips[0].width must be finite and in [-3.4028235e38, 3.4028235e38]"},
       {R"({"version":7,"scene":{"version":1,"strips":[{"dualPanLeft":-1e39}]}})",
-       "scene.strips[].dualPanLeft"},
+       "scene.strips[0].dualPanLeft must be finite and in [-3.4028235e38, 3.4028235e38]"},
       {R"({"version":7,"scene":{"version":1,"strips":[{"dualPanRight":1e39}]}})",
-       "scene.strips[].dualPanRight"},
+       "scene.strips[0].dualPanRight must be finite and in [-3.4028235e38, 3.4028235e38]"},
       {R"({"version":7,"scene":{"version":1,"strips":[{"surroundPan":{"azimuth":1e39}}]}})",
-       "scene.strips[].surroundPan.azimuth"},
+       "scene.strips[0].surroundPan.azimuth must be finite and in [-3.4028235e38, 3.4028235e38]"},
       {R"({"version":7,"scene":{"version":1,"strips":[{"surroundPan":{"elevation":-1e39}}]}})",
-       "scene.strips[].surroundPan.elevation"},
+       "scene.strips[0].surroundPan.elevation must be finite and in [-3.4028235e38, 3.4028235e38]"},
       {R"({"version":7,"scene":{"version":1,"strips":[{"surroundPan":{"divergence":1e39}}]}})",
-       "scene.strips[].surroundPan.divergence"},
+       "scene.strips[0].surroundPan.divergence must be finite and in [-3.4028235e38, "
+       "3.4028235e38]"},
       {R"({"version":7,"scene":{"version":1,"strips":[{"surroundPan":{"lfe":-1e39}}]}})",
-       "scene.strips[].surroundPan.lfe"},
+       "scene.strips[0].surroundPan.lfe must be finite and in [-3.4028235e38, 3.4028235e38]"},
       {R"({"version":7,"scene":{"version":1,"strips":[{"surroundPan":{"distance":1e39}}]}})",
-       "scene.strips[].surroundPan.distance"},
+       "scene.strips[0].surroundPan.distance must be finite and in [-3.4028235e38, 3.4028235e38]"},
       {R"({"version":7,"scene":{"version":1,"strips":[{"sends":[{"sendDb":-1e39}]}]}})",
-       "scene.strips[].sends[].sendDb"},
+       "scene.strips[0].sends[0].sendDb must be finite and in [-3.4028235e38, 3.4028235e38]"},
       {R"({"version":7,"scene":{"version":1,"buses":[{"inputTrimDb":1e39}]}})",
-       "scene.buses[].inputTrimDb"},
-      {R"({"version":7,"scene":{"version":1,"buses":[{"width":-1e39}]}})", "scene.buses[].width"},
+       "scene.buses[0].inputTrimDb must be finite and in [-3.4028235e38, 3.4028235e38]"},
+      {R"({"version":7,"scene":{"version":1,"buses":[{"width":-1e39}]}})",
+       "scene.buses[0].width must be finite and in [-3.4028235e38, 3.4028235e38]"},
       {R"({"version":7,"scene":{"version":1,"vcaGroups":[{"gainDb":1e39}]}})",
-       "scene.vcaGroups[].gainDb"},
+       "scene.vcaGroups[0].gainDb must be finite and in [-3.4028235e38, 3.4028235e38]"},
   };
 
   for (const auto& test : documents) {
@@ -1432,7 +1451,7 @@ TEST_CASE("project deserialize rejects float narrowing overflow with a field pat
     REQUIRE_FALSE(result.ok());
     REQUIRE_FALSE(result.diagnostics.empty());
     CHECK(result.diagnostics.back().code == "invalid_format");
-    CHECK(result.diagnostics.back().message.find(test.field_path) != std::string::npos);
+    CHECK(result.diagnostics.back().message == test.message);
   }
 }
 
