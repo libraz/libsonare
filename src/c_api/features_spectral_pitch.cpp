@@ -52,7 +52,8 @@ SonareError sonare_clicks(const float* times, size_t time_count, int sample_rate
 SonareError sonare_spectral_centroid(const float* samples, size_t length, int sample_rate,
                                      int n_fft, int hop_length, float** out, size_t* out_count) {
   SONARE_C_API_ENTRY;
-  if (!out || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_REQUIRE_NONNULL(out_count);
   if (out) *out = nullptr;
   if (out_count) *out_count = 0;
 
@@ -78,7 +79,8 @@ SonareError sonare_spectral_bandwidth_ex(const float* samples, size_t length, in
                                          int n_fft, int hop_length, float p, float** out,
                                          size_t* out_count) {
   SONARE_C_API_ENTRY;
-  if (!out || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_REQUIRE_NONNULL(out_count);
   if (out) *out = nullptr;
   if (out_count) *out_count = 0;
   if (!std::isfinite(p) || p <= 0.0f) return SONARE_ERROR_INVALID_PARAMETER;
@@ -98,7 +100,8 @@ SonareError sonare_spectral_rolloff(const float* samples, size_t length, int sam
                                     int hop_length, float roll_percent, float** out,
                                     size_t* out_count) {
   SONARE_C_API_ENTRY;
-  if (!out || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_REQUIRE_NONNULL(out_count);
   if (out) *out = nullptr;
   if (out_count) *out_count = 0;
 
@@ -117,7 +120,8 @@ SonareError sonare_spectral_rolloff(const float* samples, size_t length, int sam
 SonareError sonare_spectral_flatness(const float* samples, size_t length, int sample_rate,
                                      int n_fft, int hop_length, float** out, size_t* out_count) {
   SONARE_C_API_ENTRY;
-  if (!out || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_REQUIRE_NONNULL(out_count);
   *out = nullptr;
   *out_count = 0;
 
@@ -135,7 +139,8 @@ SonareError sonare_spectral_flatness(const float* samples, size_t length, int sa
 SonareError sonare_spectral_flux(const float* samples, size_t length, int sample_rate, int n_fft,
                                  int hop_length, int lag, float** out, size_t* out_count) {
   SONARE_C_API_ENTRY;
-  if (!out || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_REQUIRE_NONNULL(out_count);
   *out = nullptr;
   *out_count = 0;
   if (lag < 1) return SONARE_ERROR_INVALID_PARAMETER;
@@ -154,7 +159,8 @@ SonareError sonare_zero_crossing_rate(const float* samples, size_t length, int s
                                       int frame_length, int hop_length, float** out,
                                       size_t* out_count) {
   SONARE_C_API_ENTRY;
-  if (!out || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_REQUIRE_NONNULL(out_count);
   *out = nullptr;
   *out_count = 0;
 
@@ -169,7 +175,8 @@ SonareError sonare_zero_crossing_rate(const float* samples, size_t length, int s
 SonareError sonare_rms_energy(const float* samples, size_t length, int sample_rate,
                               int frame_length, int hop_length, float** out, size_t* out_count) {
   SONARE_C_API_ENTRY;
-  if (!out || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_REQUIRE_NONNULL(out_count);
 
   *out = nullptr;
   *out_count = 0;
@@ -185,7 +192,9 @@ SonareError sonare_spectral_contrast(const float* samples, size_t length, int sa
                                      int n_fft, int hop_length, int n_bands, float fmin_hz,
                                      float quantile, float** out, int* out_rows, int* out_cols) {
   SONARE_C_API_ENTRY;
-  if (!out || !out_rows || !out_cols) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_REQUIRE_NONNULL(out_rows);
+  SONARE_C_REQUIRE_NONNULL(out_cols);
   *out = nullptr;
   *out_rows = 0;
   *out_cols = 0;
@@ -213,7 +222,9 @@ SonareError sonare_poly_features(const float* samples, size_t length, int sample
                                  int hop_length, int order, float** out, int* out_rows,
                                  int* out_cols) {
   SONARE_C_API_ENTRY;
-  if (!out || !out_rows || !out_cols) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_REQUIRE_NONNULL(out_rows);
+  SONARE_C_REQUIRE_NONNULL(out_cols);
   *out = nullptr;
   *out_rows = 0;
   *out_cols = 0;
@@ -240,7 +251,8 @@ SonareError sonare_zero_crossings(const float* samples, size_t length, float thr
                                   int ref_magnitude, int pad, int zero_pos, int** out,
                                   size_t* out_count) {
   SONARE_C_API_ENTRY;
-  if (!out || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_REQUIRE_NONNULL(out_count);
   *out = nullptr;
   *out_count = 0;
   if (!samples && length > 0) return SONARE_ERROR_INVALID_PARAMETER;
@@ -261,7 +273,8 @@ SonareError sonare_zero_crossings(const float* samples, size_t length, float thr
 SonareError sonare_onset_backtrack(const int* events, size_t event_count, const float* energy,
                                    size_t energy_count, int** out, size_t* out_count) {
   SONARE_C_API_ENTRY;
-  if (!out || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_REQUIRE_NONNULL(out_count);
   *out = nullptr;
   *out_count = 0;
   if ((!events && event_count > 0) || (!energy && energy_count > 0)) {
@@ -305,7 +318,7 @@ SonareError sonare_onset_backtrack(const int* events, size_t event_count, const 
 SonareError sonare_pitch_tuning(const float* frequencies, size_t length, float resolution,
                                 int bins_per_octave, float* out_tuning) {
   SONARE_C_API_ENTRY;
-  if (!out_tuning) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out_tuning);
   *out_tuning = 0.0f;
   if (!frequencies && length > 0) return SONARE_ERROR_INVALID_PARAMETER;
   if (const SonareError err =
@@ -328,7 +341,7 @@ SonareError sonare_estimate_tuning(const float* samples, size_t length, int samp
                                    int hop_length, float resolution, int bins_per_octave,
                                    float* out_tuning) {
   SONARE_C_API_ENTRY;
-  if (!out_tuning) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out_tuning);
   *out_tuning = 0.0f;
   if (const SonareError err =
           run_validation([&] { validate_tuning_params(resolution, bins_per_octave); });
@@ -347,7 +360,7 @@ SonareError sonare_estimate_tuning(const float* samples, size_t length, int samp
 SonareError sonare_tuning_to_reference_hz(float tuning_cents, float a4_hz, float* out_hz) {
   SONARE_C_API_ENTRY;
   SONARE_C_TRY
-  if (!out_hz) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out_hz);
   *out_hz = 0.0f;
   if (!std::isfinite(tuning_cents) || !numeric::finite_positive(a4_hz)) {
     return SONARE_ERROR_INVALID_PARAMETER;
@@ -363,7 +376,7 @@ SonareError sonare_reference_hz_to_tuning(float reference_hz, float a4_hz,
                                           float* out_tuning_cents) {
   SONARE_C_API_ENTRY;
   SONARE_C_TRY
-  if (!out_tuning_cents) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out_tuning_cents);
   *out_tuning_cents = 0.0f;
   if (!numeric::finite_positive(reference_hz) || !numeric::finite_positive(a4_hz)) {
     return SONARE_ERROR_INVALID_PARAMETER;
@@ -409,7 +422,7 @@ SonareError sonare_reassigned_spectrogram(const float* samples, size_t length, i
                                           int n_fft, int hop_length, float ref_power, int fill_nan,
                                           SonareReassignedSpectrogramResult* out) {
   SONARE_C_API_ENTRY;
-  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out);
   // Zero the owned out-pointers BEFORE any validating early-return, following
   // the analysis wrappers' convention, so a rejected input always leaves a
   // NULL owned pointer and sonare_free_reassigned_spectrogram_result(&r) never
@@ -494,7 +507,7 @@ SonareError sonare_pitch_yin(const float* samples, size_t length, int sample_rat
                              int hop_length, float f0_min_hz, float f0_max_hz, float threshold,
                              SonarePitchResult* out) {
   SONARE_C_API_ENTRY;
-  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out);
 
   out->f0 = nullptr;
   out->voiced_prob = nullptr;
@@ -511,7 +524,7 @@ SonareError sonare_pitch_pyin(const float* samples, size_t length, int sample_ra
                               int frame_length, int hop_length, float f0_min_hz, float f0_max_hz,
                               float threshold, int fill_na, SonarePitchResult* out) {
   SONARE_C_API_ENTRY;
-  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out);
 
   out->f0 = nullptr;
   out->voiced_prob = nullptr;

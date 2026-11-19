@@ -8,7 +8,7 @@ SonareError run_cqt_family(const char* fn, const char* name, const float* sample
                            int sample_rate, int hop_length, float fmin, int n_bins,
                            int bins_per_octave, SonareCqtResult* out, Transform&& transform) {
   SONARE_C_API_ENTRY;
-  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out);
   *out = {};
   if (const SonareError err = run_validation([&] {
         CqtConfig config;
@@ -68,7 +68,7 @@ SonareError sonare_vqt(const float* samples, size_t length, int sample_rate, int
                        float fmin_hz, int n_bins, int bins_per_octave, float gamma,
                        SonareCqtResult* out) {
   SONARE_C_API_ENTRY;
-  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out);
   *out = {};
   if (const SonareError err = run_validation([&] {
         VqtConfig config;

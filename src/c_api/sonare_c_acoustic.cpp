@@ -187,7 +187,8 @@ SonareError sonare_room_geometry_from_estimate(const SonareRoomEstimate* estimat
                                                SonareRirSynthConfig* out) {
   SONARE_C_API_ENTRY;
   SONARE_C_TRY
-  if (!estimate || !out) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(estimate);
+  SONARE_C_REQUIRE_NONNULL(out);
   sonare_rir_synth_config_init(out);
   if (!sonare::acoustic::estimated_dimensions_measured(estimate->length_m, estimate->width_m,
                                                        estimate->height_m)) {
@@ -223,7 +224,8 @@ SonareError sonare_synthesize_rir(const SonareRirSynthConfig* config, int sample
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ACOUSTIC_SIM)
   sonare_c_detail::clear_last_diagnostics();
-  if (!config || !out) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(config);
+  SONARE_C_REQUIRE_NONNULL(out);
   // Define the result before any validation return, so a rejected call hands
   // back a defined struct rather than the caller's untouched stack slot.
   out->rir = nullptr;
@@ -312,9 +314,9 @@ SonareError sonare_estimate_room(const float* samples, size_t length, int sample
                                  const SonareRoomEstimateConfig* config, SonareRoomEstimate* out) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ACOUSTIC_SIM)
-  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out);
   *out = {};
-  if (!config) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(config);
   sonare::AcousticConfig::Mode mode = sonare::AcousticConfig::Mode::Auto;
   if (!sonare_c_detail::ordinal_to_enum(config->mode, SONARE_ACOUSTIC_MODE_AUTO,
                                         SONARE_ACOUSTIC_MODE_IMPULSE_RESPONSE, &mode)) {

@@ -57,10 +57,7 @@ extern "C" {
 SonareError sonare_streaming_retune_create(float pitch_semitones, float mix, int grain_size_samples,
                                            SonareStreamingRetune** out) {
   SONARE_C_API_ENTRY;
-  if (!out) {
-    set_last_error(SONARE_ERROR_INVALID_PARAMETER, "streaming_retune_create: out must not be NULL");
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
+  SONARE_C_REQUIRE_NONNULL(out);
   *out = nullptr;
 #if defined(SONARE_WITH_VOICE_CHANGER)
   StreamingRetuneConfig config;

@@ -24,7 +24,7 @@ SonareError sonare_mastering_streaming_preview(const float* samples, size_t leng
                                                const SonareStreamingPlatform* platforms,
                                                size_t platform_count, char** json_out) {
   SONARE_C_API_ENTRY;
-  if (!json_out) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(json_out);
   *json_out = nullptr;
   if (!platforms && platform_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
 
@@ -66,7 +66,7 @@ SonareError sonare_streaming_loudness_gain(const float* samples, size_t length, 
                                            const SonareMasteringParam* params, size_t param_count,
                                            SonareStreamingLoudnessGain* out) {
   SONARE_C_API_ENTRY;
-  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out);
   *out = undefined_streaming_loudness_gain();
   SonareError err =
       validate_audio_params("streaming_loudness_gain", "samples", samples, length, sample_rate);
@@ -89,7 +89,7 @@ SonareError sonare_streaming_loudness_gain_stereo(const float* left, const float
                                                   size_t param_count,
                                                   SonareStreamingLoudnessGain* out) {
   SONARE_C_API_ENTRY;
-  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out);
   *out = undefined_streaming_loudness_gain();
   SonareError err = validate_stereo_audio_params("streaming_loudness_gain_stereo", "left", "right",
                                                  left, right, length, sample_rate);
@@ -110,7 +110,7 @@ SonareError sonare_mastering_assistant_suggest(const float* samples, size_t leng
                                                const SonareMasteringParam* params,
                                                size_t param_count, char** json_out) {
   SONARE_C_API_ENTRY;
-  if (!json_out) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(json_out);
   *json_out = nullptr;
   SonareError err =
       validate_audio_params("mastering_assistant_suggest", "samples", samples, length, sample_rate);
@@ -131,7 +131,7 @@ SonareError sonare_mastering_assistant_suggest_chain_json(const float* samples, 
                                                           const SonareMasteringParam* params,
                                                           size_t param_count, char** json_out) {
   SONARE_C_API_ENTRY;
-  if (!json_out) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(json_out);
   *json_out = nullptr;
   SonareError err = validate_audio_params("mastering_assistant_suggest_chain_json", "samples",
                                           samples, length, sample_rate);
@@ -151,7 +151,7 @@ SonareError sonare_mastering_audio_profile(const float* samples, size_t length, 
                                            const SonareMasteringParam* params, size_t param_count,
                                            char** json_out) {
   SONARE_C_API_ENTRY;
-  if (!json_out) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(json_out);
   *json_out = nullptr;
   SonareError err =
       validate_audio_params("mastering_audio_profile", "samples", samples, length, sample_rate);
@@ -196,7 +196,7 @@ SonareError sonare_mastering_streaming_preview_stereo(const float* left, const f
                                                       const SonareStreamingPlatform* platforms,
                                                       size_t platform_count, char** json_out) {
   SONARE_C_API_ENTRY;
-  if (!json_out) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(json_out);
   *json_out = nullptr;
   SonareError err = validate_stereo_params("mastering_streaming_preview_stereo", "left", "right",
                                            left, right, length, sample_rate);
@@ -229,7 +229,7 @@ SonareError sonare_mastering_assistant_suggest_stereo(const float* left, const f
                                                       const SonareMasteringParam* params,
                                                       size_t param_count, char** json_out) {
   SONARE_C_API_ENTRY;
-  if (!json_out) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(json_out);
   *json_out = nullptr;
   SonareError err = validate_stereo_params("mastering_assistant_suggest_stereo", "left", "right",
                                            left, right, length, sample_rate);
@@ -250,7 +250,7 @@ SonareError sonare_mastering_assistant_suggest_chain_json_stereo(
     const float* left, const float* right, size_t length, int sample_rate,
     const SonareMasteringParam* params, size_t param_count, char** json_out) {
   SONARE_C_API_ENTRY;
-  if (!json_out) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(json_out);
   *json_out = nullptr;
   SonareError err = validate_stereo_params("mastering_assistant_suggest_chain_json_stereo", "left",
                                            "right", left, right, length, sample_rate);
@@ -272,7 +272,7 @@ SonareError sonare_mastering_audio_profile_stereo(const float* left, const float
                                                   const SonareMasteringParam* params,
                                                   size_t param_count, char** json_out) {
   SONARE_C_API_ENTRY;
-  if (!json_out) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(json_out);
   *json_out = nullptr;
   SonareError err = validate_stereo_params("mastering_audio_profile_stereo", "left", "right", left,
                                            right, length, sample_rate);
@@ -309,7 +309,7 @@ SonareError sonare_streaming_mastering_chain_create_ex(const SonareMasteringPara
                                                        float loudness_static_gain_peak_db,
                                                        SonareStreamingMasteringChain** out) {
   SONARE_C_API_ENTRY;
-  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out);
   *out = nullptr;
   if (!params && param_count > 0) {
     set_last_error(

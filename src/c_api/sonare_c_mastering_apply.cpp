@@ -84,7 +84,7 @@ SonareError sonare_mastering_process(const float* samples, size_t length, int sa
                                      const SonareMasteringConfig* config,
                                      SonareMasteringResult* out) {
   SONARE_C_API_ENTRY;
-  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out);
 
   out->samples = nullptr;
   out->length = 0;
@@ -574,7 +574,7 @@ SonareError sonare_mastering_apply_pair_processor_stereo_ex(
     size_t reference_length, int reference_sample_rate, int sample_rate,
     const SonareMasteringParam* params, size_t param_count, SonareMasteringStereoResult* out) {
   SONARE_C_API_ENTRY;
-  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out);
   clear_stereo_result(out, sample_rate);
   if (!processor || processor[0] == '\0') return SONARE_ERROR_INVALID_PARAMETER;
 
@@ -613,7 +613,8 @@ SonareError sonare_mastering_analyze_pair_ex(const char* analysis, const float* 
                                              int sample_rate, const SonareMasteringParam* params,
                                              size_t param_count, char** json_out) {
   SONARE_C_API_ENTRY;
-  if (!json_out || !analysis) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(json_out);
+  SONARE_C_REQUIRE_NONNULL(analysis);
   *json_out = nullptr;
   SonareError err = validate_audio_params("mastering_analyze_pair_ex", "source", source,
                                           source_length, sample_rate);
@@ -645,7 +646,8 @@ SonareError sonare_mastering_analyze_stereo(const char* analysis, const float* l
                                             const SonareMasteringParam* params, size_t param_count,
                                             char** json_out) {
   SONARE_C_API_ENTRY;
-  if (!json_out || !analysis) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(json_out);
+  SONARE_C_REQUIRE_NONNULL(analysis);
   *json_out = nullptr;
   SonareError err = validate_stereo_audio_params("mastering_analyze_stereo", "left", "right", left,
                                                  right, length, sample_rate);
@@ -697,7 +699,7 @@ SonareError sonare_mastering_ab_match_loudness_stereo(
     SonareLoudnessMatch* out_match) {
   SONARE_C_API_ENTRY;
   if (out_match) *out_match = SonareLoudnessMatch{};
-  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out);
   clear_stereo_result(out, sample_rate);
 
   SonareError err = validate_stereo_audio_params("mastering_ab_match_loudness_stereo",

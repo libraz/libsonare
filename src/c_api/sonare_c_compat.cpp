@@ -185,7 +185,10 @@ SonareError sonare_trim_silence(const float* samples, size_t length, float top_d
   if (out_length) *out_length = 0;
   if (start_sample) *start_sample = 0;
   if (end_sample) *end_sample = 0;
-  if (!out || !out_length || !start_sample || !end_sample) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_REQUIRE_NONNULL(out_length);
+  SONARE_C_REQUIRE_NONNULL(start_sample);
+  SONARE_C_REQUIRE_NONNULL(end_sample);
   SONARE_C_TRY
   TrimResult result = trim(samples, length, top_db, frame_length, hop_length);
   *start_sample = result.start_sample;
@@ -279,7 +282,9 @@ SonareError sonare_frame_signal(const float* samples, size_t length, int frame_l
   if (out) *out = nullptr;
   if (out_length) *out_length = 0;
   if (out_n_frames) *out_n_frames = 0;
-  if (!out || !out_length || !out_n_frames) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_REQUIRE_NONNULL(out_length);
+  SONARE_C_REQUIRE_NONNULL(out_n_frames);
   SONARE_C_TRY
   *out_n_frames = frame_count(length, frame_length, hop_length);
   return copy_vector(frame(samples, length, frame_length, hop_length), out, out_length);
@@ -389,7 +394,9 @@ SonareError sonare_tempogram_with_mode(const float* onset_envelope, size_t lengt
   if (out) *out = nullptr;
   if (out_length) *out_length = 0;
   if (out_n_frames) *out_n_frames = 0;
-  if (!out || !out_length || !out_n_frames) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_REQUIRE_NONNULL(out_length);
+  SONARE_C_REQUIRE_NONNULL(out_n_frames);
   if (validate_buffer("tempogram_with_mode", "onset_envelope", onset_envelope, length) != SONARE_OK)
     return SONARE_ERROR_INVALID_PARAMETER;
   if (mode != SONARE_TEMPOGRAM_AUTOCORRELATION && mode != SONARE_TEMPOGRAM_COSINE) {
@@ -428,7 +435,9 @@ SonareError sonare_cyclic_tempogram(const float* onset_envelope, size_t length, 
   if (out) *out = nullptr;
   if (out_length) *out_length = 0;
   if (out_n_frames) *out_n_frames = 0;
-  if (!out || !out_length || !out_n_frames) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_REQUIRE_NONNULL(out_length);
+  SONARE_C_REQUIRE_NONNULL(out_n_frames);
   if (validate_buffer("cyclic_tempogram", "onset_envelope", onset_envelope, length) != SONARE_OK)
     return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
@@ -470,7 +479,9 @@ SonareError sonare_fourier_tempogram(const float* onset_envelope, size_t length,
   if (out) *out = nullptr;
   if (out_length) *out_length = 0;
   if (out_n_frames) *out_n_frames = 0;
-  if (!out || !out_length || !out_n_frames) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_REQUIRE_NONNULL(out_length);
+  SONARE_C_REQUIRE_NONNULL(out_n_frames);
   if (!buffer_present(onset_envelope, length)) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
   TempogramConfig config;
@@ -508,7 +519,7 @@ SonareError sonare_tempogram_ratio(const float* tempogram, size_t length, int wi
 SonareError sonare_lufs(const float* samples, size_t length, int sample_rate,
                         SonareLufsResult* out) {
   SONARE_C_API_ENTRY;
-  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out);
   *out = {};
   return run_offline("lufs", "samples", samples, length, sample_rate,
                      [&](const Audio& audio) -> SonareError {
@@ -527,7 +538,7 @@ SonareError sonare_momentary_lufs(const float* samples, size_t length, int sampl
                                   size_t* out_length) {
   SONARE_C_API_ENTRY;
   if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
-  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out);
   return run_offline("momentary_lufs", "samples", samples, length, sample_rate,
                      [&](const Audio& audio) -> SonareError {
                        return copy_vector(metering::momentary_lufs(audio), out, out_length);
@@ -538,7 +549,7 @@ SonareError sonare_short_term_lufs(const float* samples, size_t length, int samp
                                    float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
   if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
-  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out);
   return run_offline("short_term_lufs", "samples", samples, length, sample_rate,
                      [&](const Audio& audio) -> SonareError {
                        return copy_vector(metering::short_term_lufs(audio), out, out_length);
@@ -549,10 +560,7 @@ SonareError sonare_lufs_interleaved(const float* samples, size_t frames, int cha
                                     int sample_rate, SonareLufsResult* out) {
   SONARE_C_API_ENTRY;
   SONARE_C_TRY
-  if (!out) {
-    set_last_error(SONARE_ERROR_INVALID_PARAMETER, "lufs_interleaved: out must not be NULL");
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
+  SONARE_C_REQUIRE_NONNULL(out);
   *out = {};
   const SonareError err =
       validate_interleaved_lufs_input("lufs_interleaved", samples, frames, channels, sample_rate);
@@ -622,7 +630,7 @@ SonareError sonare_lufs_series_interleaved(const float* samples, size_t frames, 
 SonareError sonare_ebur128_loudness_range_lu(const float* samples, size_t length, int sample_rate,
                                              float* out_loudness_range_lu) {
   SONARE_C_API_ENTRY;
-  if (!out_loudness_range_lu) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out_loudness_range_lu);
   return run_offline("ebur128_loudness_range_lu", "samples", samples, length, sample_rate,
                      [&](const Audio& audio) -> SonareError {
                        *out_loudness_range_lu = metering::ebur128_loudness_range_lu(audio);
@@ -635,7 +643,8 @@ SonareError sonare_ebur128_loudness_range_lu(const float* samples, size_t length
 SonareError sonare_audio_ebur128_loudness_range_lu(const SonareAudio* audio,
                                                    float* out_loudness_range_lu) {
   SONARE_C_API_ENTRY;
-  if (!audio || !out_loudness_range_lu) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(audio);
+  SONARE_C_REQUIRE_NONNULL(out_loudness_range_lu);
   SONARE_C_TRY
   *out_loudness_range_lu = metering::ebur128_loudness_range_lu(audio->audio);
   return SONARE_OK;

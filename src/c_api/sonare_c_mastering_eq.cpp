@@ -42,7 +42,7 @@ sonare::mastering::eq::StereoPlacement parse_placement(int placement) {
 
 SonareError sonare_eq_create(double sample_rate, int max_block_size, SonareEq** out) {
   SONARE_C_API_ENTRY;
-  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out);
   *out = nullptr;
   if (max_block_size == 0) {
     max_block_size = sonare::mastering::eq::EqualizerProcessor::kDefaultMaxBlock;
@@ -81,7 +81,7 @@ void sonare_eq_clear(SonareEq* eq) {
 
 SonareError sonare_eq_set_phase_mode(SonareEq* eq, int mode) {
   SONARE_C_API_ENTRY;
-  if (!eq) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(eq);
   SONARE_C_TRY
   eq->processor.set_phase_mode(parse_phase(mode));
   return SONARE_OK;
@@ -131,7 +131,7 @@ float sonare_eq_last_auto_gain_db(const SonareEq* eq) {
 
 SonareError sonare_eq_set_gain_scale(SonareEq* eq, float scale) {
   SONARE_C_API_ENTRY;
-  if (!eq) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(eq);
   SONARE_C_TRY
   eq->processor.set_gain_scale(scale);
   return SONARE_OK;
@@ -140,7 +140,7 @@ SonareError sonare_eq_set_gain_scale(SonareEq* eq, float scale) {
 
 SonareError sonare_eq_set_output_gain_db(SonareEq* eq, float gain_db) {
   SONARE_C_API_ENTRY;
-  if (!eq) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(eq);
   SONARE_C_TRY
   eq->processor.set_output_gain_db(gain_db);
   return SONARE_OK;
@@ -149,7 +149,7 @@ SonareError sonare_eq_set_output_gain_db(SonareEq* eq, float gain_db) {
 
 SonareError sonare_eq_set_output_pan(SonareEq* eq, float pan) {
   SONARE_C_API_ENTRY;
-  if (!eq) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(eq);
   SONARE_C_TRY
   eq->processor.set_output_pan(pan);
   return SONARE_OK;
@@ -166,7 +166,8 @@ int sonare_eq_latency_samples(const SonareEq* eq) {
 SonareError sonare_eq_max_block_size(const SonareEq* eq, int* out_max_block_size) {
   SONARE_C_API_ENTRY;
   if (out_max_block_size) *out_max_block_size = 0;
-  if (!eq || !out_max_block_size) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(eq);
+  SONARE_C_REQUIRE_NONNULL(out_max_block_size);
   *out_max_block_size = eq->max_block_size;
   return SONARE_OK;
 }
@@ -183,7 +184,7 @@ SonareError sonare_eq_non_finite_discard_count(const SonareEq* eq, uint32_t* out
 SonareError sonare_eq_set_sidechain(SonareEq* eq, const float* const* channels, int num_channels,
                                     int num_samples) {
   SONARE_C_API_ENTRY;
-  if (!eq) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(eq);
   SONARE_C_TRY
   eq->processor.set_sidechain(channels, num_channels, num_samples);
   return SONARE_OK;
@@ -202,7 +203,7 @@ void sonare_eq_clear_sidechain(SonareEq* eq) {
 SonareError sonare_eq_process(SonareEq* eq, float* const* channels, int num_channels,
                               int num_samples) {
   SONARE_C_API_ENTRY;
-  if (!eq) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(eq);
   SONARE_C_TRY
   eq->processor.process(channels, num_channels, num_samples);
   return SONARE_OK;
@@ -223,7 +224,8 @@ SonareError sonare_eq_magnitude_response(const SonareEq* eq, int placement,
 
 SonareError sonare_eq_spectrum(const SonareEq* eq, SonareEqSnapshot* out) {
   SONARE_C_API_ENTRY;
-  if (!eq || !out) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(eq);
+  SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_TRY
   const auto snapshot = eq->processor.spectrum_snapshot();
   *out = {};

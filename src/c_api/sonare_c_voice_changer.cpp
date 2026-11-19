@@ -143,7 +143,8 @@ SonareError sonare_voice_change(const float* samples, size_t length, int sample_
   SONARE_C_API_ENTRY;
   if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
 #if defined(SONARE_WITH_VOICE_CHANGER)
-  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_REQUIRE_NONNULL(out_length);
 
   return run_offline("voice_change", "samples", samples, length, sample_rate,
                      [&](const Audio& audio) -> SonareError {
@@ -195,7 +196,8 @@ SonareError sonare_voice_change_realtime(const float* samples, size_t length, in
                                          size_t* out_length) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_VOICE_CHANGER)
-  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_REQUIRE_NONNULL(out_length);
   *out = nullptr;
   *out_length = 0;
   if (channels < 1 || channels > 2) return SONARE_ERROR_INVALID_PARAMETER;
@@ -437,7 +439,7 @@ SonareError sonare_realtime_voice_changer_preset_config(SonareVoiceCharacterPres
                                                         SonareRealtimeVoiceChangerConfig* out) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_VOICE_CHANGER)
-  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out);
   // Reject an out-of-range preset ordinal instead of silently substituting
   // NeutralMonitor. This matches sonare_voice_character_preset_id, which returns
   // nullptr for the same input, and every other surface's strict handling.
@@ -456,7 +458,7 @@ SonareError sonare_realtime_voice_changer_preset_config(SonareVoiceCharacterPres
 SonareError sonare_realtime_voice_changer_config_default(SonareRealtimeVoiceChangerConfig* out) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_VOICE_CHANGER)
-  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_TRY
   const auto config = editing::voice_changer::realtime_voice_changer_preset(
       editing::voice_changer::VoiceCharacterPreset::NeutralMonitor);
@@ -475,7 +477,7 @@ SonareError sonare_realtime_voice_changer_create(const SonareRealtimeVoiceChange
   SONARE_C_API_ENTRY;
   if (out) *out = nullptr;
 #if defined(SONARE_WITH_VOICE_CHANGER)
-  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out);
   if (max_block_size == 0) {
     max_block_size = editing::voice_changer::kRealtimeVoiceChangerDefaultMaxBlock;
   }
@@ -521,7 +523,8 @@ SonareError sonare_realtime_voice_changer_set_config(
     SonareRealtimeVoiceChanger* handle, const SonareRealtimeVoiceChangerConfig* config) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_VOICE_CHANGER)
-  if (!handle || !config) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(handle);
+  SONARE_C_REQUIRE_NONNULL(config);
   SONARE_C_TRY
   editing::voice_changer::RealtimeVoiceChangerConfig normalized;
   std::string error;
@@ -544,7 +547,8 @@ SonareError sonare_realtime_voice_changer_get_config(const SonareRealtimeVoiceCh
                                                      SonareRealtimeVoiceChangerConfig* out) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_VOICE_CHANGER)
-  if (!handle || !out) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(handle);
+  SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_TRY
   vc_config_to_pod(handle->changer.config(), out);
   return SONARE_OK;
@@ -561,7 +565,7 @@ SonareError sonare_realtime_voice_changer_create_json(const char* preset_or_conf
   SONARE_C_API_ENTRY;
   if (out) *out = nullptr;
 #if defined(SONARE_WITH_VOICE_CHANGER)
-  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out);
   if (max_block_size == 0) {
     max_block_size = editing::voice_changer::kRealtimeVoiceChangerDefaultMaxBlock;
   }
@@ -608,7 +612,7 @@ void sonare_realtime_voice_changer_destroy(SonareRealtimeVoiceChanger* handle) {
 SonareError sonare_realtime_voice_changer_reset(SonareRealtimeVoiceChanger* handle) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_VOICE_CHANGER)
-  if (!handle) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(handle);
   SONARE_C_TRY
   handle->changer.reset();
   return SONARE_OK;
@@ -622,7 +626,8 @@ SonareError sonare_realtime_voice_changer_set_config_json(SonareRealtimeVoiceCha
                                                           const char* preset_or_config_json) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_VOICE_CHANGER)
-  if (!handle || !preset_or_config_json) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(handle);
+  SONARE_C_REQUIRE_NONNULL(preset_or_config_json);
   SONARE_C_TRY
   editing::voice_changer::RealtimeVoiceChangerConfig config;
   std::string error;
@@ -843,7 +848,8 @@ SonareError sonare_realtime_voice_changer_config_json(const SonareRealtimeVoiceC
                                                       char** out_json) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_VOICE_CHANGER)
-  if (!handle || !out_json) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(handle);
+  SONARE_C_REQUIRE_NONNULL(out_json);
   *out_json = nullptr;
   SONARE_C_TRY
   *out_json = copy_string(
@@ -901,7 +907,8 @@ const char* sonare_voice_character_preset_id(SonareVoiceCharacterPreset ordinal)
 SonareError sonare_realtime_voice_changer_preset_json(const char* name, char** out_json) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_VOICE_CHANGER)
-  if (!name || !out_json) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(name);
+  SONARE_C_REQUIRE_NONNULL(out_json);
   *out_json = nullptr;
   SONARE_C_TRY
   const auto preset = editing::voice_changer::realtime_voice_changer_preset_from_id(name);
@@ -919,7 +926,9 @@ SonareError sonare_realtime_voice_changer_validate_preset_json(const char* json,
                                                                char** out_error) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_VOICE_CHANGER)
-  if (!json || !out_normalized_json || !out_error) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(json);
+  SONARE_C_REQUIRE_NONNULL(out_normalized_json);
+  SONARE_C_REQUIRE_NONNULL(out_error);
   *out_normalized_json = nullptr;
   *out_error = nullptr;
   // Both copy_string calls stay inside the guarded body so an allocation

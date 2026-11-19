@@ -320,12 +320,15 @@ SonareError sonare_decompose_with_init(const float* s, int n_features, int n_fra
                                        float** out_w, size_t* out_w_length, float** out_h,
                                        size_t* out_h_length) {
   SONARE_C_API_ENTRY;
-  if (!out_w || !out_w_length || !out_h || !out_h_length) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out_w);
+  SONARE_C_REQUIRE_NONNULL(out_w_length);
+  SONARE_C_REQUIRE_NONNULL(out_h);
+  SONARE_C_REQUIRE_NONNULL(out_h_length);
   *out_w = nullptr;
   *out_w_length = 0;
   *out_h = nullptr;
   *out_h_length = 0;
-  if (!s) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(s);
   if (const SonareError err = run_validation(
           [&] { validate_decompose_shape(n_features, n_frames, n_components, n_iter); });
       err != SONARE_OK) {
@@ -548,7 +551,8 @@ SonareError sonare_remix_aligned_intervals(const float* samples, size_t length, 
                                            const int* intervals, size_t interval_count,
                                            int align_zeros, int** out, size_t* out_count) {
   SONARE_C_API_ENTRY;
-  if (!out || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_REQUIRE_NONNULL(out_count);
   *out = nullptr;
   *out_count = 0;
   if (interval_count > 0 && !intervals) return SONARE_ERROR_INVALID_PARAMETER;
