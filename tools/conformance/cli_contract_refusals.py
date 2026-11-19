@@ -5,8 +5,13 @@ set is narrower than its type. Both front-ends are given one value outside that 
 must refuse it with the exit class the row declares and with the line
 ``argument --X: <predicate>``, the predicate generated here from the row in the
 library's vocabulary (src/util/refusal_predicates.h) rather than read from either
-front-end. The rows a run could not compare -- a command one build does not carry --
-are counted and named, never folded into a pass.
+front-end. Every input positional names a file that cannot be opened, so a refusal
+that waits for the input to be read fails as a file error instead of passing. The
+rows a run could not compare -- a command one build does not carry -- are counted
+and named, never folded into a pass.
+
+The cross-option rows hold the command validators to the same order: each pairs
+options that are legal alone and refused together, again beside an unreadable input.
 """
 
 from __future__ import annotations
@@ -24,6 +29,9 @@ from _repo import REPO_ROOT
 DOMAINS_PATH = REPO_ROOT / "tests" / "conformance" / "cli_option_domains.json"
 
 EXIT_FOR_CLASS = {"usage": 2, "invalid_parameter": 3}
+
+# An input no front-end can open; reading it before validating fails the row.
+UNREADABLE_INPUT = "/nonexistent/sonare-conformance/unreadable.wav"
 
 # One line of either front-end's stderr; the prefixes around it differ by design.
 _REFUSAL_TEXT = re.compile(r"argument --[\w-]+: must [^\n]*$", re.MULTILINE)
@@ -128,9 +136,21 @@ def _is_number(text: object) -> bool:
         return False
 
 
-def _argv(path: str, option: str, value: str, required: list[str]) -> list[str]:
-    # The value under test comes first, so the Python parser reaches it before anything else.
-    return [*path.split("."), f"--{option}", value, *required]
+def positional_tokens(positionals: list[dict[str, Any]]) -> list[str]:
+    """One token per required positional: an unreadable input for a path, else ``1``."""
+    return [
+        UNREADABLE_INPUT if record["type"] == "path" else "1"
+        for record in positionals
+        if record["required"]
+    ]
+
+
+def _argv(
+    path: str, positionals: list[str], option: str, value: str, required: list[str]
+) -> list[str]:
+    # The value under test comes before the other options, so the Python parser
+    # reaches it before anything else it could refuse.
+    return [*path.split("."), *positionals, f"--{option}", value, *required]
 
 
 def run_domain_refusals(
@@ -139,13 +159,19 @@ def run_domain_refusals(
     python_executable: str,
     native_inventory: dict[str, dict[str, Any]],
     python_inventory: dict[str, dict[str, Any]],
+    positionals: dict[str, list[dict[str, Any]]],
     directory: Path,
     timeout: float,
     report: list[tuple[str, str]],
 ) -> tuple[int, list[str]]:
     """Compare both front-ends' refusal of every declared domain.
 
-    Returns the number of rows compared and the rows that could not be, each with its reason.
+    ``positionals`` maps a command path to its declared positionals; a shared command
+    with none recorded is still compared, without an input, and named in the second
+    list so the ordering it leaves unchecked is visible.
+
+    Returns the number of rows compared and the rows that could not be, or could be
+    only without an input, each with its reason.
     """
     declaration = json.loads(DOMAINS_PATH.read_text(encoding="utf-8"))
     required_parameter: dict[str, set[str]] = {}
@@ -172,7 +198,15 @@ def run_domain_refusals(
             and (record["required"] or record["name"] in required_parameter.get(path, set()))
             for token in (f"--{record['name']}", inside_value(record, directory))
         ]
-        argv = _argv(path, name, outside_value(row, option["type"]), required)
+        if path not in positionals:
+            not_compared.append(f"{key}: no positional record, compared without an input")
+        argv = _argv(
+            path,
+            positional_tokens(positionals.get(path, [])),
+            name,
+            outside_value(row, option["type"]),
+            required,
+        )
         expected_text = f"argument --{name}: {expected_predicate(row, option['type'])}"
         expected_exit = EXIT_FOR_CLASS[row["reject_exit"]]
         texts = {}
@@ -216,3 +250,87 @@ def run_domain_refusals(
                 )
             )
     return compared, not_compared
+
+
+# (argv, the one line both front-ends must print, exit). ``{input}`` is an unreadable
+# input and ``{output}`` a scratch path; each pair is legal option by option.
+CROSS_OPTION_ROWS: tuple[tuple[list[str], str, int], ...] = (
+    (
+        ["key", "{input}", "--hpss", "--hop-length", "8"],
+        "--hop-length must be at least 16 with --hpss (got 8)",
+        3,
+    ),
+    (
+        ["rhythm", "{input}", "--bpm-min", "200", "--bpm-max", "100"],
+        "--bpm-max must be greater than --bpm-min (--bpm-min 200, --bpm-max 100)",
+        3,
+    ),
+    (
+        ["rhythm", "{input}", "--bpm-min", "250"],
+        "--bpm-max must be greater than --bpm-min (--bpm-min 250, --bpm-max 200)",
+        3,
+    ),
+    (
+        ["pitch", "{input}", "--f0-max-hz", "50"],
+        "--f0-max-hz must be greater than --f0-min-hz (--f0-min-hz 65, --f0-max-hz 50)",
+        2,
+    ),
+    (
+        ["vocal-notes", "{input}", "--f0-min-hz", "3000"],
+        "--f0-max-hz must be greater than --f0-min-hz (--f0-min-hz 3000, --f0-max-hz 2093)",
+        2,
+    ),
+    (
+        ["note-move", "{input}", "--onset-sample", "0", "--onset-sec", "0", "-o", "{output}"],
+        "give --onset-sample or --onset-sec, not both",
+        3,
+    ),
+    (
+        ["note-stretch", "{input}", "--offset-sample", "9", "--offset-sec", "1", "-o", "{output}"],
+        "give --offset-sample or --offset-sec, not both",
+        3,
+    ),
+    (["repair", "{input}"], "--output is required unless --detect is given", 3),
+    (
+        ["repair", "{input}", "--detect", "-o", "{output}"],
+        "--output cannot be combined with --detect",
+        3,
+    ),
+    (
+        ["project", "bounce", "{input}", "--channels", "3", "-o", "{output}"],
+        "argument --channels: must be one of 1, 2, 6, 8; leave it out for the scene master's width",
+        3,
+    ),
+    (
+        ["midi-render", "{input}", "--channels", "3", "-o", "{output}"],
+        "argument --channels: must be one of 1, 2, 6, 8; leave it out for the scene master's width",
+        3,
+    ),
+)
+
+
+def run_cross_option_refusals(
+    run: Runner,
+    native_executable: str,
+    python_executable: str,
+    directory: Path,
+    timeout: float,
+    report: list[tuple[str, str]],
+) -> int:
+    """Run every cross-option row on both front-ends; returns the number of rows compared."""
+    tokens = {"{input}": UNREADABLE_INPUT, "{output}": str(directory / "cross_option.wav")}
+    for template, expected, expected_exit in CROSS_OPTION_ROWS:
+        argv = [tokens.get(token, token) for token in template]
+        for surface, executable in (("native", native_executable), ("python", python_executable)):
+            result = run(surface, executable, argv, timeout)
+            label = f"cross-option.{surface}.{argv!r}"
+            tail = repr(result["stderr"].strip()[-200:])
+            if result["returncode"] != expected_exit:
+                detail = result.get("error") or f"exit {result['returncode']}"
+                report.append(
+                    ("fail", f"{label}: expected exit {expected_exit}, got {detail}: {tail}")
+                )
+            lines = result["stderr"].splitlines()
+            if not any(line == expected or line.endswith(f": {expected}") for line in lines):
+                report.append(("fail", f"{label}: no line {expected!r} in {tail}"))
+    return len(CROSS_OPTION_ROWS)

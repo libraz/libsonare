@@ -51,7 +51,7 @@ from cli_contract_payload import (
     parse_single_json,
     validate_payload,  # noqa: F401
 )
-from cli_contract_refusals import run_domain_refusals
+from cli_contract_refusals import run_cross_option_refusals, run_domain_refusals
 from cli_contract_schema import (
     _FEATURE_NAMES,
     NOT_SUPPORTED_EXIT,
@@ -966,6 +966,10 @@ def main(argv: list[str] | None = None) -> int:
             _run, native_executable, python_executable, Path(temporary), args.timeout, report
         )
         print(f"numeric texts: {compared} rows compared")
+        compared = run_cross_option_refusals(
+            _run, native_executable, python_executable, Path(temporary), args.timeout, report
+        )
+        print(f"cross-option refusals: {compared} rows compared")
         if native_inventory is not None and python_inventory is not None:
             compared, not_compared = run_domain_refusals(
                 _run,
@@ -973,6 +977,7 @@ def main(argv: list[str] | None = None) -> int:
                 python_executable,
                 native_inventory,
                 python_inventory,
+                {record["path"]: record["positionals"] for record in manifest["active_paths"]},
                 Path(temporary),
                 args.timeout,
                 report,

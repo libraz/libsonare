@@ -160,10 +160,12 @@ class _ContractArgumentParser(argparse.ArgumentParser):
         self._record_supplied_options(parsed, argv)
         _restore_parser_compat_defaults(parsed)
         _reject_stdout_output(parsed, self)
-        if self.prog.endswith(" pitch") or getattr(parsed, "command", None) == "pitch":
-            _validate_pitch_namespace(parsed, self)
-        if self.prog.endswith(" vocal-notes") or getattr(parsed, "command", None) == "vocal-notes":
-            _validate_vocal_notes_namespace(parsed, self)
+        # The subparser's prog spells the leaf (`sonare project bounce`); the
+        # top-level parser falls back to the command it dispatched to.
+        path = ".".join(self.prog.split()[1:]) or getattr(parsed, "command", None)
+        validator = _COMMAND_VALIDATORS.get(path or "")
+        if validator is not None:
+            validator(parsed, self)
         return parsed, extras
 
     def _expand_flag_values(self, argv: list[str]) -> list[str]:
@@ -565,6 +567,59 @@ def _validate_vocal_notes_namespace(
             f"--f0-max-hz must be greater than --f0-min-hz "
             f"(--f0-min-hz {fmin:g}, --f0-max-hz {fmax:g})"
         )
+
+
+# The tempo search range `analyze_rhythm` falls back to for an omitted bound.
+_RHYTHM_DEFAULT_BPM_MIN = 60.0
+_RHYTHM_DEFAULT_BPM_MAX = 200.0
+
+
+def _validate_rhythm_namespace(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
+    bpm_min = getattr(args, "bpm_min", None)
+    bpm_max = getattr(args, "bpm_max", None)
+    bpm_min = _RHYTHM_DEFAULT_BPM_MIN if bpm_min is None else bpm_min
+    bpm_max = _RHYTHM_DEFAULT_BPM_MAX if bpm_max is None else bpm_max
+    if bpm_max <= bpm_min:
+        raise ValueError(
+            f"--bpm-max must be greater than --bpm-min (--bpm-min {bpm_min:g}, --bpm-max {bpm_max:g})"
+        )
+
+
+# The hop below which the key analyzer's HPSS cannot resynthesize
+# (kMinKeyHpssHopLength, src/analysis/key_analyzer.h).
+_MIN_KEY_HPSS_HOP_LENGTH = 16
+
+
+def _validate_key_namespace(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
+    hop_length = getattr(args, "hop_length", None)
+    if not getattr(args, "hpss", False) or hop_length is None:
+        return
+    if hop_length < _MIN_KEY_HPSS_HOP_LENGTH:
+        raise ValueError(
+            f"--hop-length must be at least {_MIN_KEY_HPSS_HOP_LENGTH} with --hpss "
+            f"(got {hop_length})"
+        )
+
+
+def _validate_render_channels(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
+    channels = getattr(args, "channels", None)
+    if channels is None or channels in (1, 2, 6, 8):
+        return
+    raise ValueError(
+        "argument --channels: must be one of 1, 2, 6, 8; leave it out for the scene master's width"
+    )
+
+
+# Cross-option checks, keyed by command path, run once parsing has succeeded and
+# before any handler reads its input -- the native registry's command validators.
+_COMMAND_VALIDATORS: dict[str, Callable[[argparse.Namespace, argparse.ArgumentParser], None]] = {
+    "pitch": _validate_pitch_namespace,
+    "vocal-notes": _validate_vocal_notes_namespace,
+    "rhythm": _validate_rhythm_namespace,
+    "key": _validate_key_namespace,
+    "project.bounce": _validate_render_channels,
+    "midi-render": _validate_render_channels,
+}
 
 
 def _restore_parser_compat_defaults(args: argparse.Namespace) -> None:
