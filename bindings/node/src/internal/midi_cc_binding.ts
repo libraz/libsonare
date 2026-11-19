@@ -22,6 +22,8 @@ export function assertMidiCcBindingBytes(binding: unknown, path = ''): void {
 /** {@link assertMidiCcBindingBytes} over a `bindings` list, naming each by its index. */
 export function assertMidiCcBindingListBytes(bindings: unknown): void {
   if (Array.isArray(bindings)) {
-    bindings.forEach((binding, index) => assertMidiCcBindingBytes(binding, `bindings[${index}].`));
+    for (const [index, binding] of bindings.entries()) {
+      assertMidiCcBindingBytes(binding, `bindings[${index}].`);
+    }
   }
 }
