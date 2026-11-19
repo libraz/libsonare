@@ -7,8 +7,9 @@ A Node or WASM facade refusal is raised bare through the helpers in
 here per surface: a raw ``new RangeError(`` / ``new TypeError(`` /
 ``new SonareError(`` outside ``entry.ts``, and a helper parameter that carries
 the caller's name as text (``fnName`` and its siblings). A third kind,
-``value-echo``, counts string literals stating ``, got <value>``, ``(got <value>)`` or
-``out of range`` instead of the predicate the value failed, and ``unknown-key`` counts
+``value-echo``, counts string literals stating ``, got <value>``, ``(got <value>)``,
+``out of [supported ]range`` or ``a finite number`` instead of the predicate the value
+failed, and ``unknown-key`` counts
 the spellings of an undeclared-key refusal older than ``unknown key <path> (expected
 ...)``. Both are also counted over the native readers (``bindings/node/src/addon`` and
 ``src/wasm``) as the ``native`` surface, so the TS and native halves are two lines of
@@ -52,8 +53,9 @@ FN_PARAM = re.compile(
     r"[(,]\s*(?:" + "|".join(FN_PARAM_NAMES) + r")\s*\??\s*:\s*(?:string|RequestFn)\b"
 )
 KINDS = {"raw-error": RAW_ERROR, "fn-name-param": FN_PARAM}
-# A refusal states the predicate, never the value it refused or a bare "out of range".
-VALUE_ECHO = re.compile(r"[,(]\s*got\b|out of range", re.IGNORECASE)
+# A refusal states the predicate, never the value it refused or a bare "out of range";
+# "a finite number" restates the type where the value predicate is "must be finite".
+VALUE_ECHO = re.compile(r"[,(]\s*got\b|out of (?:supported )?range|a finite number", re.IGNORECASE)
 # An undeclared key reads "unknown key <path> (expected ...)"; these are the spellings before it.
 UNKNOWN_KEY = re.compile(r"unknown (?:request key|option|config key)\b", re.IGNORECASE)
 LITERAL_KINDS = {"value-echo": VALUE_ECHO, "unknown-key": UNKNOWN_KEY}

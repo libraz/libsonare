@@ -62,8 +62,10 @@ class ValueEchoTest(unittest.TestCase):
             'throw refuseType("mode must be a name, got " + typeof v);\n'
             "throw refuse(`mode must be one of a, b (got '${mode}')`);\n"
             "throw refuse('gain must be finite');\n"
+            "throw refuse(`rate out of supported range [8000, 384000]`);\n"
+            "throw refuse(`${key} must be a finite number`);\n"
         )
-        self.assertEqual(counts(text)["value-echo"], 4)
+        self.assertEqual(counts(text)["value-echo"], 6)
 
     def test_ignores_comments_and_code(self) -> None:
         text = (
