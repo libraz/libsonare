@@ -98,6 +98,7 @@ RULE_SLUGS = (
     "c-count-types",
     "c-error-path",
     "error-class-by-cause",
+    "entry-named-refusals",
     "getters",
     "collections",
     "one-entry-per-operation",

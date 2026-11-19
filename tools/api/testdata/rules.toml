@@ -166,6 +166,11 @@ title = "Title of error-class-by-cause"
 summary = "Summary of error-class-by-cause."
 
 [[rule]]
+slug = "entry-named-refusals"
+title = "Title of entry-named-refusals"
+summary = "Summary of entry-named-refusals."
+
+[[rule]]
 slug = "getters"
 title = "Title of getters"
 summary = "Summary of getters."

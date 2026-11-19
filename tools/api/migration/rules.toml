@@ -662,6 +662,21 @@ try { new OfflineWorkerClient(); } catch (e) {
 '''
 
 [[rule]]
+slug = "entry-named-refusals"
+title = "A refusal names the public entry the caller invoked"
+summary = "Every refusal message opens with the public entry the caller invoked: a function by its name, a method as `Class.method`, a constructor as `Class`. A coded error other than `RangeError` / `TypeError` / `SonareValueError` keeps its code in front, so a closed project reads `[7] Project.add_track: Project is closed`. Text the native library supplies gets the same prefix, and when one public call reaches another only the outermost is named. A match anchored at the start of a message needs the entry in front."
+[[rule.example]]
+surface = "python"
+before = '''
+with pytest.raises(libsonare.SonareValueError, match="^hop_length must be"):
+    libsonare.hpss(samples, 22050, hop_length=0)
+'''
+after = '''
+with pytest.raises(libsonare.SonareValueError, match="^hpss: hop_length must be"):
+    libsonare.hpss(samples, 22050, hop_length=0)
+'''
+
+[[rule]]
 slug = "getters"
 title = "Cheap scalar state reads are getters and properties"
 summary = "A read with no arguments that is O(1) and allocation-free and returns a scalar or enum is a readonly getter in JavaScript and a `@property` in Python. Counts are such reads: `engine.clip_count`, `mixer.strip_count`, never `clip_count()`. Reads that compute, allocate, take arguments or return a record stay methods without a `get` prefix, so a count that takes an argument (`engine.controller_binding_count(destination_id)`) is a method."
