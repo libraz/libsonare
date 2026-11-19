@@ -23,16 +23,15 @@ def configure_engine_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_size_t,
         ctypes.c_size_t,
     ]
-    if hasattr(lib, "sonare_engine_prepare_with_channels"):
-        lib.sonare_engine_prepare_with_channels.restype = ctypes.c_int32
-        lib.sonare_engine_prepare_with_channels.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_double,
-            ctypes.c_int,
-            ctypes.c_size_t,
-            ctypes.c_size_t,
-            ctypes.c_int,
-        ]
+    lib.sonare_engine_prepare_with_channels.restype = ctypes.c_int32
+    lib.sonare_engine_prepare_with_channels.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_double,
+        ctypes.c_int,
+        ctypes.c_size_t,
+        ctypes.c_size_t,
+        ctypes.c_int,
+    ]
     lib.sonare_engine_play.restype = ctypes.c_int32
     lib.sonare_engine_play.argtypes = [ctypes.c_void_p, ctypes.c_int64]
     lib.sonare_engine_stop.restype = ctypes.c_int32
@@ -41,75 +40,64 @@ def configure_engine_signatures(lib: ctypes.CDLL) -> None:
     lib.sonare_engine_seek_sample.argtypes = [ctypes.c_void_p, ctypes.c_int64, ctypes.c_int64]
     lib.sonare_engine_seek_ppq.restype = ctypes.c_int32
     lib.sonare_engine_seek_ppq.argtypes = [ctypes.c_void_p, ctypes.c_double, ctypes.c_int64]
-    if hasattr(lib, "sonare_engine_reset_master_loudness_meter"):
-        lib.sonare_engine_reset_master_loudness_meter.restype = ctypes.c_int32
-        lib.sonare_engine_reset_master_loudness_meter.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_int64,
-        ]
-    if hasattr(lib, "sonare_engine_reset_processor_state"):
-        lib.sonare_engine_reset_processor_state.restype = ctypes.c_int32
-        lib.sonare_engine_reset_processor_state.argtypes = [ctypes.c_void_p, ctypes.c_int64]
-    if hasattr(lib, "sonare_engine_prime_offline_parameters"):
-        lib.sonare_engine_prime_offline_parameters.restype = ctypes.c_int32
-        lib.sonare_engine_prime_offline_parameters.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_int,
-            ctypes.c_int,
-        ]
-    if hasattr(lib, "sonare_engine_graph_latency_samples_q8"):
-        lib.sonare_engine_graph_latency_samples_q8.restype = ctypes.c_int32
-        lib.sonare_engine_graph_latency_samples_q8.argtypes = [
-            ctypes.c_void_p,
-            ctypes.POINTER(ctypes.c_int),
-        ]
-    if hasattr(lib, "sonare_engine_max_block_size"):
-        lib.sonare_engine_max_block_size.restype = ctypes.c_int32
-        lib.sonare_engine_max_block_size.argtypes = [
-            ctypes.c_void_p,
-            ctypes.POINTER(ctypes.c_int),
-        ]
-    if hasattr(lib, "sonare_engine_tail_samples"):
-        lib.sonare_engine_tail_samples.restype = ctypes.c_int32
-        lib.sonare_engine_tail_samples.argtypes = [
-            ctypes.c_void_p,
-            ctypes.POINTER(ctypes.c_int),
-        ]
+    lib.sonare_engine_reset_master_loudness_meter.restype = ctypes.c_int32
+    lib.sonare_engine_reset_master_loudness_meter.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_int64,
+    ]
+    lib.sonare_engine_reset_processor_state.restype = ctypes.c_int32
+    lib.sonare_engine_reset_processor_state.argtypes = [ctypes.c_void_p, ctypes.c_int64]
+    lib.sonare_engine_prime_offline_parameters.restype = ctypes.c_int32
+    lib.sonare_engine_prime_offline_parameters.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_int,
+        ctypes.c_int,
+    ]
+    lib.sonare_engine_graph_latency_samples_q8.restype = ctypes.c_int32
+    lib.sonare_engine_graph_latency_samples_q8.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(ctypes.c_int),
+    ]
+    lib.sonare_engine_max_block_size.restype = ctypes.c_int32
+    lib.sonare_engine_max_block_size.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(ctypes.c_int),
+    ]
+    lib.sonare_engine_tail_samples.restype = ctypes.c_int32
+    lib.sonare_engine_tail_samples.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(ctypes.c_int),
+    ]
     lib.sonare_engine_settle_parameters.restype = ctypes.c_int32
     lib.sonare_engine_settle_parameters.argtypes = [ctypes.c_void_p]
     lib.sonare_engine_flush_control_commands.restype = ctypes.c_int32
     lib.sonare_engine_flush_control_commands.argtypes = [ctypes.c_void_p]
-    if hasattr(lib, "sonare_engine_settle_insert_parameters"):
-        lib.sonare_engine_settle_insert_parameters.restype = ctypes.c_int32
-        lib.sonare_engine_settle_insert_parameters.argtypes = [ctypes.c_void_p]
-    if hasattr(lib, "sonare_engine_apply_commands_due_now_preserving_future"):
-        lib.sonare_engine_apply_commands_due_now_preserving_future.restype = ctypes.c_int32
-        lib.sonare_engine_apply_commands_due_now_preserving_future.argtypes = [ctypes.c_void_p]
+    lib.sonare_engine_settle_insert_parameters.restype = ctypes.c_int32
+    lib.sonare_engine_settle_insert_parameters.argtypes = [ctypes.c_void_p]
+    lib.sonare_engine_apply_commands_due_now_preserving_future.restype = ctypes.c_int32
+    lib.sonare_engine_apply_commands_due_now_preserving_future.argtypes = [ctypes.c_void_p]
     lib.sonare_engine_set_tempo.restype = ctypes.c_int32
     lib.sonare_engine_set_tempo.argtypes = [ctypes.c_void_p, ctypes.c_double]
     lib.sonare_engine_set_time_signature.restype = ctypes.c_int32
     lib.sonare_engine_set_time_signature.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int]
-    if hasattr(lib, "sonare_engine_set_tempo_segments"):
-        lib.sonare_engine_set_tempo_segments.restype = ctypes.c_int32
-        lib.sonare_engine_set_tempo_segments.argtypes = [
-            ctypes.c_void_p,
-            ctypes.POINTER(SonareProjectTempoSegment),
-            ctypes.c_size_t,
-        ]
-    if hasattr(lib, "sonare_engine_set_time_signature_segments"):
-        lib.sonare_engine_set_time_signature_segments.restype = ctypes.c_int32
-        lib.sonare_engine_set_time_signature_segments.argtypes = [
-            ctypes.c_void_p,
-            ctypes.POINTER(SonareProjectTimeSignatureSegment),
-            ctypes.c_size_t,
-        ]
-    if hasattr(lib, "sonare_engine_sample_at_ppq"):
-        lib.sonare_engine_sample_at_ppq.restype = ctypes.c_int32
-        lib.sonare_engine_sample_at_ppq.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_double,
-            ctypes.POINTER(ctypes.c_int64),
-        ]
+    lib.sonare_engine_set_tempo_segments.restype = ctypes.c_int32
+    lib.sonare_engine_set_tempo_segments.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(SonareProjectTempoSegment),
+        ctypes.c_size_t,
+    ]
+    lib.sonare_engine_set_time_signature_segments.restype = ctypes.c_int32
+    lib.sonare_engine_set_time_signature_segments.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(SonareProjectTimeSignatureSegment),
+        ctypes.c_size_t,
+    ]
+    lib.sonare_engine_sample_at_ppq.restype = ctypes.c_int32
+    lib.sonare_engine_sample_at_ppq.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_double,
+        ctypes.POINTER(ctypes.c_int64),
+    ]
     lib.sonare_engine_set_loop.restype = ctypes.c_int32
     lib.sonare_engine_set_loop.argtypes = [
         ctypes.c_void_p,
@@ -122,9 +110,8 @@ def configure_engine_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_void_p,
         ctypes.POINTER(SonareParameterInfo),
     ]
-    if hasattr(lib, "sonare_engine_clear_parameters"):
-        lib.sonare_engine_clear_parameters.restype = ctypes.c_int32
-        lib.sonare_engine_clear_parameters.argtypes = [ctypes.c_void_p]
+    lib.sonare_engine_clear_parameters.restype = ctypes.c_int32
+    lib.sonare_engine_clear_parameters.argtypes = [ctypes.c_void_p]
     lib.sonare_engine_parameter_count.restype = ctypes.c_int32
     lib.sonare_engine_parameter_count.argtypes = [
         ctypes.c_void_p,
@@ -223,446 +210,388 @@ def configure_engine_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_void_p,
         ctypes.POINTER(ctypes.c_size_t),
     ]
-    if hasattr(lib, "sonare_engine_apply_project_timeline"):
-        lib.sonare_engine_apply_project_timeline.restype = ctypes.c_int32
-        lib.sonare_engine_apply_project_timeline.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_void_p,
-        ]
-    if hasattr(lib, "sonare_engine_set_lane_sidechain"):
-        lib.sonare_engine_set_lane_sidechain.restype = ctypes.c_int32
-        lib.sonare_engine_set_lane_sidechain.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-            ctypes.c_uint,
-            ctypes.c_uint32,
-        ]
-    if hasattr(lib, "sonare_engine_set_bus_sidechain"):
-        lib.sonare_engine_set_bus_sidechain.restype = ctypes.c_int32
-        lib.sonare_engine_set_bus_sidechain.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-            ctypes.c_uint,
-            ctypes.c_int,
-            ctypes.c_uint32,
-        ]
-    if hasattr(lib, "sonare_engine_set_master_sidechain"):
-        lib.sonare_engine_set_master_sidechain.restype = ctypes.c_int32
-        lib.sonare_engine_set_master_sidechain.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint,
-            ctypes.c_int,
-            ctypes.c_uint32,
-        ]
-    if hasattr(lib, "sonare_engine_can_set_lane_sidechain"):
-        lib.sonare_engine_can_set_lane_sidechain.restype = ctypes.c_int32
-        lib.sonare_engine_can_set_lane_sidechain.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-            ctypes.c_uint,
-            ctypes.c_uint32,
-            ctypes.POINTER(ctypes.c_int),
-        ]
-    if hasattr(lib, "sonare_engine_can_set_bus_sidechain"):
-        lib.sonare_engine_can_set_bus_sidechain.restype = ctypes.c_int32
-        lib.sonare_engine_can_set_bus_sidechain.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-            ctypes.c_uint,
-            ctypes.c_int,
-            ctypes.c_uint32,
-            ctypes.POINTER(ctypes.c_int),
-        ]
-    if hasattr(lib, "sonare_engine_can_set_master_sidechain"):
-        lib.sonare_engine_can_set_master_sidechain.restype = ctypes.c_int32
-        lib.sonare_engine_can_set_master_sidechain.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint,
-            ctypes.c_int,
-            ctypes.c_uint32,
-            ctypes.POINTER(ctypes.c_int),
-        ]
-    if hasattr(lib, "sonare_engine_set_track_lanes"):
-        lib.sonare_engine_set_track_lanes.restype = ctypes.c_int32
-        lib.sonare_engine_set_track_lanes.argtypes = [
-            ctypes.c_void_p,
-            ctypes.POINTER(SonareEngineTrackLane),
-            ctypes.c_size_t,
-        ]
-    if hasattr(lib, "sonare_engine_set_track_sends"):
-        lib.sonare_engine_set_track_sends.restype = ctypes.c_int32
-        lib.sonare_engine_set_track_sends.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-            ctypes.POINTER(SonareEngineTrackSend),
-            ctypes.c_size_t,
-        ]
-    if hasattr(lib, "sonare_engine_set_track_output_bus"):
-        lib.sonare_engine_set_track_output_bus.restype = ctypes.c_int32
-        lib.sonare_engine_set_track_output_bus.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-            ctypes.c_uint32,
-        ]
-    if hasattr(lib, "sonare_engine_set_track_buses"):
-        lib.sonare_engine_set_track_buses.restype = ctypes.c_int32
-        lib.sonare_engine_set_track_buses.argtypes = [
-            ctypes.c_void_p,
-            ctypes.POINTER(SonareEngineBus),
-            ctypes.c_size_t,
-        ]
-    if hasattr(lib, "sonare_engine_set_bus_strip_json"):
-        lib.sonare_engine_set_bus_strip_json.restype = ctypes.c_int32
-        lib.sonare_engine_set_bus_strip_json.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-            ctypes.c_char_p,
-        ]
-    if hasattr(lib, "sonare_engine_set_bus_strip_eq_band_json"):
-        lib.sonare_engine_set_bus_strip_eq_band_json.restype = ctypes.c_int32
-        lib.sonare_engine_set_bus_strip_eq_band_json.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-            ctypes.c_int,
-            ctypes.c_char_p,
-        ]
-    if hasattr(lib, "sonare_engine_set_track_strip_json"):
-        lib.sonare_engine_set_track_strip_json.restype = ctypes.c_int32
-        lib.sonare_engine_set_track_strip_json.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-            ctypes.c_char_p,
-        ]
-    if hasattr(lib, "sonare_engine_set_track_strip_eq_band_json"):
-        lib.sonare_engine_set_track_strip_eq_band_json.restype = ctypes.c_int32
-        lib.sonare_engine_set_track_strip_eq_band_json.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-            ctypes.c_int,
-            ctypes.c_char_p,
-        ]
-    if hasattr(lib, "sonare_engine_set_track_strip_insert_bypassed"):
-        lib.sonare_engine_set_track_strip_insert_bypassed.restype = ctypes.c_int32
-        lib.sonare_engine_set_track_strip_insert_bypassed.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-            ctypes.c_uint,
-            ctypes.c_int,
-            ctypes.c_int,
-        ]
-    if hasattr(lib, "sonare_engine_set_track_strip_insert_param_by_name"):
-        lib.sonare_engine_set_track_strip_insert_param_by_name.restype = ctypes.c_int32
-        lib.sonare_engine_set_track_strip_insert_param_by_name.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-            ctypes.c_uint,
-            ctypes.c_char_p,
-            ctypes.c_float,
-        ]
-    if hasattr(lib, "sonare_engine_set_track_strip_pan"):
-        lib.sonare_engine_set_track_strip_pan.restype = ctypes.c_int32
-        lib.sonare_engine_set_track_strip_pan.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-            ctypes.c_float,
-        ]
-    if hasattr(lib, "sonare_engine_set_track_strip_pan_law"):
-        lib.sonare_engine_set_track_strip_pan_law.restype = ctypes.c_int32
-        lib.sonare_engine_set_track_strip_pan_law.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-            ctypes.c_int,
-        ]
-    if hasattr(lib, "sonare_engine_set_track_strip_pan_mode"):
-        lib.sonare_engine_set_track_strip_pan_mode.restype = ctypes.c_int32
-        lib.sonare_engine_set_track_strip_pan_mode.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-            ctypes.c_int,
-        ]
-    if hasattr(lib, "sonare_engine_set_track_strip_dual_pan"):
-        lib.sonare_engine_set_track_strip_dual_pan.restype = ctypes.c_int32
-        lib.sonare_engine_set_track_strip_dual_pan.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-            ctypes.c_float,
-            ctypes.c_float,
-        ]
-    if hasattr(lib, "sonare_engine_set_track_strip_surround_pan"):
-        lib.sonare_engine_set_track_strip_surround_pan.restype = ctypes.c_int32
-        lib.sonare_engine_set_track_strip_surround_pan.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-            ctypes.POINTER(SonareSurroundPan),
-        ]
-    if hasattr(lib, "sonare_engine_set_track_strip_channel_delay_samples"):
-        lib.sonare_engine_set_track_strip_channel_delay_samples.restype = ctypes.c_int32
-        lib.sonare_engine_set_track_strip_channel_delay_samples.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-            ctypes.c_int,
-        ]
-    if hasattr(lib, "sonare_engine_set_master_strip_json"):
-        lib.sonare_engine_set_master_strip_json.restype = ctypes.c_int32
-        lib.sonare_engine_set_master_strip_json.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_char_p,
-        ]
-    if hasattr(lib, "sonare_engine_set_master_strip_eq_band_json"):
-        lib.sonare_engine_set_master_strip_eq_band_json.restype = ctypes.c_int32
-        lib.sonare_engine_set_master_strip_eq_band_json.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_int,
-            ctypes.c_char_p,
-        ]
-    if hasattr(lib, "sonare_engine_set_master_strip_insert_bypassed"):
-        lib.sonare_engine_set_master_strip_insert_bypassed.restype = ctypes.c_int32
-        lib.sonare_engine_set_master_strip_insert_bypassed.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint,
-            ctypes.c_int,
-            ctypes.c_int,
-        ]
-    if hasattr(lib, "sonare_engine_set_master_strip_insert_param_by_name"):
-        lib.sonare_engine_set_master_strip_insert_param_by_name.restype = ctypes.c_int32
-        lib.sonare_engine_set_master_strip_insert_param_by_name.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint,
-            ctypes.c_char_p,
-            ctypes.c_float,
-        ]
-    if hasattr(lib, "sonare_engine_set_bus_strip_insert_param_by_name"):
-        lib.sonare_engine_set_bus_strip_insert_param_by_name.restype = ctypes.c_int32
-        lib.sonare_engine_set_bus_strip_insert_param_by_name.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-            ctypes.c_uint,
-            ctypes.c_char_p,
-            ctypes.c_float,
-        ]
-    if hasattr(lib, "sonare_engine_apply_track_strip_insert_param_by_name_now"):
-        lib.sonare_engine_apply_track_strip_insert_param_by_name_now.restype = ctypes.c_int32
-        lib.sonare_engine_apply_track_strip_insert_param_by_name_now.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-            ctypes.c_uint,
-            ctypes.c_char_p,
-            ctypes.c_float,
-            ctypes.POINTER(ctypes.c_int),
-        ]
-    if hasattr(lib, "sonare_engine_apply_master_strip_insert_param_by_name_now"):
-        lib.sonare_engine_apply_master_strip_insert_param_by_name_now.restype = ctypes.c_int32
-        lib.sonare_engine_apply_master_strip_insert_param_by_name_now.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint,
-            ctypes.c_char_p,
-            ctypes.c_float,
-            ctypes.POINTER(ctypes.c_int),
-        ]
-    if hasattr(lib, "sonare_engine_apply_bus_strip_insert_param_by_name_now"):
-        lib.sonare_engine_apply_bus_strip_insert_param_by_name_now.restype = ctypes.c_int32
-        lib.sonare_engine_apply_bus_strip_insert_param_by_name_now.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-            ctypes.c_uint,
-            ctypes.c_char_p,
-            ctypes.c_float,
-            ctypes.POINTER(ctypes.c_int),
-        ]
-    if hasattr(lib, "sonare_engine_restore_track_strip_insert_param_by_name"):
-        lib.sonare_engine_restore_track_strip_insert_param_by_name.restype = ctypes.c_int32
-        lib.sonare_engine_restore_track_strip_insert_param_by_name.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-            ctypes.c_uint,
-            ctypes.c_char_p,
-            ctypes.c_float,
-        ]
-    if hasattr(lib, "sonare_engine_restore_master_strip_insert_param_by_name"):
-        lib.sonare_engine_restore_master_strip_insert_param_by_name.restype = ctypes.c_int32
-        lib.sonare_engine_restore_master_strip_insert_param_by_name.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint,
-            ctypes.c_char_p,
-            ctypes.c_float,
-        ]
-    if hasattr(lib, "sonare_engine_restore_bus_strip_insert_param_by_name"):
-        lib.sonare_engine_restore_bus_strip_insert_param_by_name.restype = ctypes.c_int32
-        lib.sonare_engine_restore_bus_strip_insert_param_by_name.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-            ctypes.c_uint,
-            ctypes.c_char_p,
-            ctypes.c_float,
-        ]
-    if hasattr(lib, "sonare_engine_clear_track_insert_parameter_bases"):
-        lib.sonare_engine_clear_track_insert_parameter_bases.restype = ctypes.c_int32
-        lib.sonare_engine_clear_track_insert_parameter_bases.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-        ]
-    if hasattr(lib, "sonare_engine_clear_master_insert_parameter_bases"):
-        lib.sonare_engine_clear_master_insert_parameter_bases.restype = ctypes.c_int32
-        lib.sonare_engine_clear_master_insert_parameter_bases.argtypes = [ctypes.c_void_p]
-    if hasattr(lib, "sonare_engine_clear_bus_insert_parameter_bases"):
-        lib.sonare_engine_clear_bus_insert_parameter_bases.restype = ctypes.c_int32
-        lib.sonare_engine_clear_bus_insert_parameter_bases.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-        ]
-    if hasattr(lib, "sonare_engine_set_bus_strip_insert_bypassed"):
-        lib.sonare_engine_set_bus_strip_insert_bypassed.restype = ctypes.c_int32
-        lib.sonare_engine_set_bus_strip_insert_bypassed.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-            ctypes.c_uint,
-            ctypes.c_int,
-            ctypes.c_int,
-        ]
-    if hasattr(lib, "sonare_engine_set_bus_strip_pan"):
-        lib.sonare_engine_set_bus_strip_pan.restype = ctypes.c_int32
-        lib.sonare_engine_set_bus_strip_pan.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-            ctypes.c_float,
-        ]
-    if hasattr(lib, "sonare_engine_set_bus_strip_pan_law"):
-        lib.sonare_engine_set_bus_strip_pan_law.restype = ctypes.c_int32
-        lib.sonare_engine_set_bus_strip_pan_law.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-            ctypes.c_int,
-        ]
-    if hasattr(lib, "sonare_engine_set_bus_strip_pan_mode"):
-        lib.sonare_engine_set_bus_strip_pan_mode.restype = ctypes.c_int32
-        lib.sonare_engine_set_bus_strip_pan_mode.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-            ctypes.c_int,
-        ]
-    if hasattr(lib, "sonare_engine_set_bus_strip_dual_pan"):
-        lib.sonare_engine_set_bus_strip_dual_pan.restype = ctypes.c_int32
-        lib.sonare_engine_set_bus_strip_dual_pan.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-            ctypes.c_float,
-            ctypes.c_float,
-        ]
-    if hasattr(lib, "sonare_engine_resolve_track_insert_automation_id"):
-        lib.sonare_engine_resolve_track_insert_automation_id.restype = ctypes.c_int32
-        lib.sonare_engine_resolve_track_insert_automation_id.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-            ctypes.c_uint,
-            ctypes.c_char_p,
-            ctypes.POINTER(ctypes.c_uint32),
-        ]
-    if hasattr(lib, "sonare_engine_insert_parameter_constructed_value"):
-        lib.sonare_engine_insert_parameter_constructed_value.restype = ctypes.c_int32
-        lib.sonare_engine_insert_parameter_constructed_value.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-            ctypes.POINTER(ctypes.c_float),
-        ]
-    if hasattr(lib, "sonare_engine_resolve_track_lane_automation_id"):
-        lib.sonare_engine_resolve_track_lane_automation_id.restype = ctypes.c_int32
-        lib.sonare_engine_resolve_track_lane_automation_id.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-            ctypes.c_char_p,
-            ctypes.POINTER(ctypes.c_uint32),
-        ]
-    if hasattr(lib, "sonare_engine_resolve_bus_automation_id"):
-        lib.sonare_engine_resolve_bus_automation_id.restype = ctypes.c_int32
-        lib.sonare_engine_resolve_bus_automation_id.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-            ctypes.c_char_p,
-            ctypes.POINTER(ctypes.c_uint32),
-        ]
-    if hasattr(lib, "sonare_engine_resolve_master_automation_id"):
-        lib.sonare_engine_resolve_master_automation_id.restype = ctypes.c_int32
-        lib.sonare_engine_resolve_master_automation_id.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_char_p,
-            ctypes.POINTER(ctypes.c_uint32),
-        ]
-    if hasattr(lib, "sonare_engine_resolve_master_insert_automation_id"):
-        lib.sonare_engine_resolve_master_insert_automation_id.restype = ctypes.c_int32
-        lib.sonare_engine_resolve_master_insert_automation_id.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint,
-            ctypes.c_char_p,
-            ctypes.POINTER(ctypes.c_uint32),
-        ]
-    if hasattr(lib, "sonare_engine_resolve_bus_insert_automation_id"):
-        lib.sonare_engine_resolve_bus_insert_automation_id.restype = ctypes.c_int32
-        lib.sonare_engine_resolve_bus_insert_automation_id.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-            ctypes.c_uint,
-            ctypes.c_char_p,
-            ctypes.POINTER(ctypes.c_uint32),
-        ]
-    if hasattr(lib, "sonare_engine_resolve_instrument_automation_id"):
-        lib.sonare_engine_resolve_instrument_automation_id.restype = ctypes.c_int32
-        lib.sonare_engine_resolve_instrument_automation_id.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-            ctypes.c_char_p,
-            ctypes.POINTER(ctypes.c_uint32),
-        ]
-    if hasattr(lib, "sonare_engine_set_midi_destination_external"):
-        lib.sonare_engine_set_midi_destination_external.restype = ctypes.c_int32
-        lib.sonare_engine_set_midi_destination_external.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-            ctypes.c_int,
-        ]
-    if hasattr(lib, "sonare_engine_set_external_midi_clock_enabled"):
-        lib.sonare_engine_set_external_midi_clock_enabled.restype = ctypes.c_int32
-        lib.sonare_engine_set_external_midi_clock_enabled.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_int,
-        ]
-    if hasattr(lib, "sonare_engine_external_midi_dropped_count"):
-        lib.sonare_engine_external_midi_dropped_count.restype = ctypes.c_int32
-        lib.sonare_engine_external_midi_dropped_count.argtypes = [
-            ctypes.c_void_p,
-            ctypes.POINTER(ctypes.c_uint32),
-        ]
-    if hasattr(lib, "sonare_engine_clip_page_request_overflow_count"):
-        lib.sonare_engine_clip_page_request_overflow_count.restype = ctypes.c_int32
-        lib.sonare_engine_clip_page_request_overflow_count.argtypes = [
-            ctypes.c_void_p,
-            ctypes.POINTER(ctypes.c_uint32),
-        ]
-    if hasattr(lib, "sonare_engine_warp_stretch_overflow_count"):
-        lib.sonare_engine_warp_stretch_overflow_count.restype = ctypes.c_int32
-        lib.sonare_engine_warp_stretch_overflow_count.argtypes = [
-            ctypes.c_void_p,
-            ctypes.POINTER(ctypes.c_uint32),
-        ]
-    if hasattr(lib, "sonare_engine_set_warp_voice_capacity"):
-        lib.sonare_engine_set_warp_voice_capacity.restype = ctypes.c_int32
-        lib.sonare_engine_set_warp_voice_capacity.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-        ]
-    if hasattr(lib, "sonare_engine_warp_voice_capacity"):
-        lib.sonare_engine_warp_voice_capacity.restype = ctypes.c_int32
-        lib.sonare_engine_warp_voice_capacity.argtypes = [
-            ctypes.c_void_p,
-            ctypes.POINTER(ctypes.c_uint32),
-        ]
-    if hasattr(lib, "sonare_engine_drain_external_midi"):
-        lib.sonare_engine_drain_external_midi.restype = ctypes.c_int32
-        lib.sonare_engine_drain_external_midi.argtypes = [
-            ctypes.c_void_p,
-            ctypes.POINTER(SonareExternalMidiEvent),
-            ctypes.c_size_t,
-            ctypes.POINTER(ctypes.c_size_t),
-        ]
+    lib.sonare_engine_apply_project_timeline.restype = ctypes.c_int32
+    lib.sonare_engine_apply_project_timeline.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+    ]
+    lib.sonare_engine_set_lane_sidechain.restype = ctypes.c_int32
+    lib.sonare_engine_set_lane_sidechain.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.c_uint,
+        ctypes.c_uint32,
+    ]
+    lib.sonare_engine_set_bus_sidechain.restype = ctypes.c_int32
+    lib.sonare_engine_set_bus_sidechain.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.c_uint,
+        ctypes.c_int,
+        ctypes.c_uint32,
+    ]
+    lib.sonare_engine_set_master_sidechain.restype = ctypes.c_int32
+    lib.sonare_engine_set_master_sidechain.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint,
+        ctypes.c_int,
+        ctypes.c_uint32,
+    ]
+    lib.sonare_engine_can_set_lane_sidechain.restype = ctypes.c_int32
+    lib.sonare_engine_can_set_lane_sidechain.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.c_uint,
+        ctypes.c_uint32,
+        ctypes.POINTER(ctypes.c_int),
+    ]
+    lib.sonare_engine_can_set_bus_sidechain.restype = ctypes.c_int32
+    lib.sonare_engine_can_set_bus_sidechain.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.c_uint,
+        ctypes.c_int,
+        ctypes.c_uint32,
+        ctypes.POINTER(ctypes.c_int),
+    ]
+    lib.sonare_engine_can_set_master_sidechain.restype = ctypes.c_int32
+    lib.sonare_engine_can_set_master_sidechain.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint,
+        ctypes.c_int,
+        ctypes.c_uint32,
+        ctypes.POINTER(ctypes.c_int),
+    ]
+    lib.sonare_engine_set_track_lanes.restype = ctypes.c_int32
+    lib.sonare_engine_set_track_lanes.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(SonareEngineTrackLane),
+        ctypes.c_size_t,
+    ]
+    lib.sonare_engine_set_track_sends.restype = ctypes.c_int32
+    lib.sonare_engine_set_track_sends.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.POINTER(SonareEngineTrackSend),
+        ctypes.c_size_t,
+    ]
+    lib.sonare_engine_set_track_output_bus.restype = ctypes.c_int32
+    lib.sonare_engine_set_track_output_bus.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.c_uint32,
+    ]
+    lib.sonare_engine_set_track_buses.restype = ctypes.c_int32
+    lib.sonare_engine_set_track_buses.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(SonareEngineBus),
+        ctypes.c_size_t,
+    ]
+    lib.sonare_engine_set_bus_strip_json.restype = ctypes.c_int32
+    lib.sonare_engine_set_bus_strip_json.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.c_char_p,
+    ]
+    lib.sonare_engine_set_bus_strip_eq_band_json.restype = ctypes.c_int32
+    lib.sonare_engine_set_bus_strip_eq_band_json.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.c_int,
+        ctypes.c_char_p,
+    ]
+    lib.sonare_engine_set_track_strip_json.restype = ctypes.c_int32
+    lib.sonare_engine_set_track_strip_json.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.c_char_p,
+    ]
+    lib.sonare_engine_set_track_strip_eq_band_json.restype = ctypes.c_int32
+    lib.sonare_engine_set_track_strip_eq_band_json.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.c_int,
+        ctypes.c_char_p,
+    ]
+    lib.sonare_engine_set_track_strip_insert_bypassed.restype = ctypes.c_int32
+    lib.sonare_engine_set_track_strip_insert_bypassed.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.c_uint,
+        ctypes.c_int,
+        ctypes.c_int,
+    ]
+    lib.sonare_engine_set_track_strip_insert_param_by_name.restype = ctypes.c_int32
+    lib.sonare_engine_set_track_strip_insert_param_by_name.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.c_uint,
+        ctypes.c_char_p,
+        ctypes.c_float,
+    ]
+    lib.sonare_engine_set_track_strip_pan.restype = ctypes.c_int32
+    lib.sonare_engine_set_track_strip_pan.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.c_float,
+    ]
+    lib.sonare_engine_set_track_strip_pan_law.restype = ctypes.c_int32
+    lib.sonare_engine_set_track_strip_pan_law.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.c_int,
+    ]
+    lib.sonare_engine_set_track_strip_pan_mode.restype = ctypes.c_int32
+    lib.sonare_engine_set_track_strip_pan_mode.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.c_int,
+    ]
+    lib.sonare_engine_set_track_strip_dual_pan.restype = ctypes.c_int32
+    lib.sonare_engine_set_track_strip_dual_pan.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.c_float,
+        ctypes.c_float,
+    ]
+    lib.sonare_engine_set_track_strip_surround_pan.restype = ctypes.c_int32
+    lib.sonare_engine_set_track_strip_surround_pan.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.POINTER(SonareSurroundPan),
+    ]
+    lib.sonare_engine_set_track_strip_channel_delay_samples.restype = ctypes.c_int32
+    lib.sonare_engine_set_track_strip_channel_delay_samples.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.c_int,
+    ]
+    lib.sonare_engine_set_master_strip_json.restype = ctypes.c_int32
+    lib.sonare_engine_set_master_strip_json.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_char_p,
+    ]
+    lib.sonare_engine_set_master_strip_eq_band_json.restype = ctypes.c_int32
+    lib.sonare_engine_set_master_strip_eq_band_json.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_int,
+        ctypes.c_char_p,
+    ]
+    lib.sonare_engine_set_master_strip_insert_bypassed.restype = ctypes.c_int32
+    lib.sonare_engine_set_master_strip_insert_bypassed.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint,
+        ctypes.c_int,
+        ctypes.c_int,
+    ]
+    lib.sonare_engine_set_master_strip_insert_param_by_name.restype = ctypes.c_int32
+    lib.sonare_engine_set_master_strip_insert_param_by_name.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint,
+        ctypes.c_char_p,
+        ctypes.c_float,
+    ]
+    lib.sonare_engine_set_bus_strip_insert_param_by_name.restype = ctypes.c_int32
+    lib.sonare_engine_set_bus_strip_insert_param_by_name.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.c_uint,
+        ctypes.c_char_p,
+        ctypes.c_float,
+    ]
+    lib.sonare_engine_apply_track_strip_insert_param_by_name_now.restype = ctypes.c_int32
+    lib.sonare_engine_apply_track_strip_insert_param_by_name_now.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.c_uint,
+        ctypes.c_char_p,
+        ctypes.c_float,
+        ctypes.POINTER(ctypes.c_int),
+    ]
+    lib.sonare_engine_apply_master_strip_insert_param_by_name_now.restype = ctypes.c_int32
+    lib.sonare_engine_apply_master_strip_insert_param_by_name_now.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint,
+        ctypes.c_char_p,
+        ctypes.c_float,
+        ctypes.POINTER(ctypes.c_int),
+    ]
+    lib.sonare_engine_apply_bus_strip_insert_param_by_name_now.restype = ctypes.c_int32
+    lib.sonare_engine_apply_bus_strip_insert_param_by_name_now.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.c_uint,
+        ctypes.c_char_p,
+        ctypes.c_float,
+        ctypes.POINTER(ctypes.c_int),
+    ]
+    lib.sonare_engine_restore_track_strip_insert_param_by_name.restype = ctypes.c_int32
+    lib.sonare_engine_restore_track_strip_insert_param_by_name.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.c_uint,
+        ctypes.c_char_p,
+        ctypes.c_float,
+    ]
+    lib.sonare_engine_restore_master_strip_insert_param_by_name.restype = ctypes.c_int32
+    lib.sonare_engine_restore_master_strip_insert_param_by_name.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint,
+        ctypes.c_char_p,
+        ctypes.c_float,
+    ]
+    lib.sonare_engine_restore_bus_strip_insert_param_by_name.restype = ctypes.c_int32
+    lib.sonare_engine_restore_bus_strip_insert_param_by_name.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.c_uint,
+        ctypes.c_char_p,
+        ctypes.c_float,
+    ]
+    lib.sonare_engine_clear_track_insert_parameter_bases.restype = ctypes.c_int32
+    lib.sonare_engine_clear_track_insert_parameter_bases.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+    ]
+    lib.sonare_engine_clear_master_insert_parameter_bases.restype = ctypes.c_int32
+    lib.sonare_engine_clear_master_insert_parameter_bases.argtypes = [ctypes.c_void_p]
+    lib.sonare_engine_clear_bus_insert_parameter_bases.restype = ctypes.c_int32
+    lib.sonare_engine_clear_bus_insert_parameter_bases.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+    ]
+    lib.sonare_engine_set_bus_strip_insert_bypassed.restype = ctypes.c_int32
+    lib.sonare_engine_set_bus_strip_insert_bypassed.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.c_uint,
+        ctypes.c_int,
+        ctypes.c_int,
+    ]
+    lib.sonare_engine_set_bus_strip_pan.restype = ctypes.c_int32
+    lib.sonare_engine_set_bus_strip_pan.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.c_float,
+    ]
+    lib.sonare_engine_set_bus_strip_pan_law.restype = ctypes.c_int32
+    lib.sonare_engine_set_bus_strip_pan_law.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.c_int,
+    ]
+    lib.sonare_engine_set_bus_strip_pan_mode.restype = ctypes.c_int32
+    lib.sonare_engine_set_bus_strip_pan_mode.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.c_int,
+    ]
+    lib.sonare_engine_set_bus_strip_dual_pan.restype = ctypes.c_int32
+    lib.sonare_engine_set_bus_strip_dual_pan.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.c_float,
+        ctypes.c_float,
+    ]
+    lib.sonare_engine_resolve_track_insert_automation_id.restype = ctypes.c_int32
+    lib.sonare_engine_resolve_track_insert_automation_id.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.c_uint,
+        ctypes.c_char_p,
+        ctypes.POINTER(ctypes.c_uint32),
+    ]
+    lib.sonare_engine_insert_parameter_constructed_value.restype = ctypes.c_int32
+    lib.sonare_engine_insert_parameter_constructed_value.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.POINTER(ctypes.c_float),
+    ]
+    lib.sonare_engine_resolve_track_lane_automation_id.restype = ctypes.c_int32
+    lib.sonare_engine_resolve_track_lane_automation_id.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.c_char_p,
+        ctypes.POINTER(ctypes.c_uint32),
+    ]
+    lib.sonare_engine_resolve_bus_automation_id.restype = ctypes.c_int32
+    lib.sonare_engine_resolve_bus_automation_id.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.c_char_p,
+        ctypes.POINTER(ctypes.c_uint32),
+    ]
+    lib.sonare_engine_resolve_master_automation_id.restype = ctypes.c_int32
+    lib.sonare_engine_resolve_master_automation_id.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_char_p,
+        ctypes.POINTER(ctypes.c_uint32),
+    ]
+    lib.sonare_engine_resolve_master_insert_automation_id.restype = ctypes.c_int32
+    lib.sonare_engine_resolve_master_insert_automation_id.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint,
+        ctypes.c_char_p,
+        ctypes.POINTER(ctypes.c_uint32),
+    ]
+    lib.sonare_engine_resolve_bus_insert_automation_id.restype = ctypes.c_int32
+    lib.sonare_engine_resolve_bus_insert_automation_id.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.c_uint,
+        ctypes.c_char_p,
+        ctypes.POINTER(ctypes.c_uint32),
+    ]
+    lib.sonare_engine_resolve_instrument_automation_id.restype = ctypes.c_int32
+    lib.sonare_engine_resolve_instrument_automation_id.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.c_char_p,
+        ctypes.POINTER(ctypes.c_uint32),
+    ]
+    lib.sonare_engine_set_midi_destination_external.restype = ctypes.c_int32
+    lib.sonare_engine_set_midi_destination_external.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.c_int,
+    ]
+    lib.sonare_engine_set_external_midi_clock_enabled.restype = ctypes.c_int32
+    lib.sonare_engine_set_external_midi_clock_enabled.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_int,
+    ]
+    lib.sonare_engine_external_midi_dropped_count.restype = ctypes.c_int32
+    lib.sonare_engine_external_midi_dropped_count.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(ctypes.c_uint32),
+    ]
+    lib.sonare_engine_clip_page_request_overflow_count.restype = ctypes.c_int32
+    lib.sonare_engine_clip_page_request_overflow_count.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(ctypes.c_uint32),
+    ]
+    lib.sonare_engine_warp_stretch_overflow_count.restype = ctypes.c_int32
+    lib.sonare_engine_warp_stretch_overflow_count.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(ctypes.c_uint32),
+    ]
+    lib.sonare_engine_set_warp_voice_capacity.restype = ctypes.c_int32
+    lib.sonare_engine_set_warp_voice_capacity.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+    ]
+    lib.sonare_engine_warp_voice_capacity.restype = ctypes.c_int32
+    lib.sonare_engine_warp_voice_capacity.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(ctypes.c_uint32),
+    ]
+    lib.sonare_engine_drain_external_midi.restype = ctypes.c_int32
+    lib.sonare_engine_drain_external_midi.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(SonareExternalMidiEvent),
+        ctypes.c_size_t,
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
     lib.sonare_clip_page_provider_create.restype = ctypes.c_int32
     lib.sonare_clip_page_provider_create.argtypes = [
         ctypes.c_int,
@@ -688,18 +617,16 @@ def configure_engine_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(SonareClipPageRequest),
         ctypes.POINTER(ctypes.c_int),
     ]
-    if hasattr(lib, "sonare_engine_set_clip_page_prefetch_frames"):
-        lib.sonare_engine_set_clip_page_prefetch_frames.restype = ctypes.c_int32
-        lib.sonare_engine_set_clip_page_prefetch_frames.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_int64,
-        ]
-    if hasattr(lib, "sonare_engine_clip_page_prefetch_frames"):
-        lib.sonare_engine_clip_page_prefetch_frames.restype = ctypes.c_int32
-        lib.sonare_engine_clip_page_prefetch_frames.argtypes = [
-            ctypes.c_void_p,
-            ctypes.POINTER(ctypes.c_int64),
-        ]
+    lib.sonare_engine_set_clip_page_prefetch_frames.restype = ctypes.c_int32
+    lib.sonare_engine_set_clip_page_prefetch_frames.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_int64,
+    ]
+    lib.sonare_engine_clip_page_prefetch_frames.restype = ctypes.c_int32
+    lib.sonare_engine_clip_page_prefetch_frames.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(ctypes.c_int64),
+    ]
     lib.sonare_engine_set_capture_buffer.restype = ctypes.c_int32
     lib.sonare_engine_set_capture_buffer.argtypes = [
         ctypes.c_void_p,
@@ -814,170 +741,152 @@ def configure_engine_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_size_t,
         ctypes.POINTER(ctypes.c_size_t),
     ]
-    if hasattr(lib, "sonare_engine_drain_meter_telemetry"):
-        lib.sonare_engine_drain_meter_telemetry.restype = ctypes.c_int32
-        lib.sonare_engine_drain_meter_telemetry.argtypes = [
-            ctypes.c_void_p,
-            ctypes.POINTER(SonareMeterTelemetryRecord),
-            ctypes.c_size_t,
-            ctypes.POINTER(ctypes.c_size_t),
-        ]
-    if hasattr(lib, "sonare_engine_drain_meter_telemetry_wide"):
-        lib.sonare_engine_drain_meter_telemetry_wide.restype = ctypes.c_int32
-        lib.sonare_engine_drain_meter_telemetry_wide.argtypes = [
-            ctypes.c_void_p,
-            ctypes.POINTER(SonareMeterTelemetryRecordWide),
-            ctypes.c_size_t,
-            ctypes.POINTER(ctypes.c_size_t),
-        ]
-    if hasattr(lib, "sonare_engine_drain_meter_telemetry_v2"):
-        lib.sonare_engine_drain_meter_telemetry_v2.restype = ctypes.c_int32
-        lib.sonare_engine_drain_meter_telemetry_v2.argtypes = [
-            ctypes.c_void_p,
-            ctypes.POINTER(SonareMeterTelemetryRecordV2),
-            ctypes.c_size_t,
-            ctypes.POINTER(ctypes.c_size_t),
-        ]
-    if hasattr(lib, "sonare_engine_meter_target_insert_gain_reduction"):
-        lib.sonare_engine_meter_target_insert_gain_reduction.restype = ctypes.c_int32
-        lib.sonare_engine_meter_target_insert_gain_reduction.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-            ctypes.POINTER(ctypes.c_float),
-            ctypes.c_size_t,
-            ctypes.POINTER(ctypes.c_size_t),
-        ]
-    if hasattr(lib, "sonare_engine_drain_meter_telemetry_wide_v2"):
-        lib.sonare_engine_drain_meter_telemetry_wide_v2.restype = ctypes.c_int32
-        lib.sonare_engine_drain_meter_telemetry_wide_v2.argtypes = [
-            ctypes.c_void_p,
-            ctypes.POINTER(SonareMeterTelemetryRecordWideV2),
-            ctypes.c_size_t,
-            ctypes.POINTER(ctypes.c_size_t),
-        ]
-    if hasattr(lib, "sonare_engine_configure_scope_telemetry"):
-        lib.sonare_engine_configure_scope_telemetry.restype = ctypes.c_int32
-        lib.sonare_engine_configure_scope_telemetry.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_int,
-            ctypes.c_uint,
-            ctypes.POINTER(ctypes.c_uint),
-        ]
-    if hasattr(lib, "sonare_engine_drain_scope_telemetry"):
-        lib.sonare_engine_drain_scope_telemetry.restype = ctypes.c_int32
-        lib.sonare_engine_drain_scope_telemetry.argtypes = [
-            ctypes.c_void_p,
-            ctypes.POINTER(SonareScopeTelemetryRecord),
-            ctypes.c_size_t,
-            ctypes.POINTER(ctypes.c_size_t),
-        ]
-    if hasattr(lib, "sonare_engine_set_parameter"):
-        lib.sonare_engine_set_parameter.restype = ctypes.c_int32
-        lib.sonare_engine_set_parameter.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-            ctypes.c_float,
-            ctypes.c_int64,
-        ]
-        lib.sonare_engine_set_parameter_smoothed.restype = ctypes.c_int32
-        lib.sonare_engine_set_parameter_smoothed.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-            ctypes.c_float,
-            ctypes.c_int64,
-        ]
-    if hasattr(lib, "sonare_engine_set_param_smoothing_ms"):
-        lib.sonare_engine_set_param_smoothing_ms.restype = ctypes.c_int32
-        lib.sonare_engine_set_param_smoothing_ms.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_float,
-        ]
-    if hasattr(lib, "sonare_engine_set_solo_mute"):
-        lib.sonare_engine_set_solo_mute.restype = ctypes.c_int32
-        lib.sonare_engine_set_solo_mute.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-            ctypes.c_int,
-            ctypes.c_int,
-            ctypes.c_int64,
-        ]
-    if hasattr(lib, "sonare_engine_set_track_monitor_mode"):
-        lib.sonare_engine_set_track_monitor_mode.restype = ctypes.c_int32
-        lib.sonare_engine_set_track_monitor_mode.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-            ctypes.c_int,
-            ctypes.c_int64,
-        ]
-    if hasattr(lib, "sonare_engine_set_midi_clips"):
-        lib.sonare_engine_set_midi_clips.restype = ctypes.c_int32
-        lib.sonare_engine_set_midi_clips.argtypes = [
-            ctypes.c_void_p,
-            ctypes.POINTER(SonareEngineMidiClipSchedule),
-            ctypes.c_size_t,
-        ]
-    if hasattr(lib, "sonare_engine_push_midi_cc"):
-        lib.sonare_engine_push_midi_cc.restype = ctypes.c_int32
-        lib.sonare_engine_push_midi_cc.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-            ctypes.c_uint8,
-            ctypes.c_uint8,
-            ctypes.c_uint8,
-            ctypes.c_uint8,
-            ctypes.c_int64,
-        ]
-    if hasattr(lib, "sonare_engine_push_midi_sysex"):
-        lib.sonare_engine_push_midi_sysex.restype = ctypes.c_int32
-        lib.sonare_engine_push_midi_sysex.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-            ctypes.POINTER(ctypes.c_uint8),
-            ctypes.c_size_t,
-            ctypes.c_int64,
-        ]
-    if hasattr(lib, "sonare_engine_push_midi_ump"):
-        lib.sonare_engine_push_midi_ump.restype = ctypes.c_int32
-        lib.sonare_engine_push_midi_ump.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-            ctypes.POINTER(ctypes.c_uint32),
-            ctypes.c_size_t,
-            ctypes.c_int64,
-        ]
-    if hasattr(lib, "sonare_engine_push_midi_input_ump"):
-        lib.sonare_engine_push_midi_input_ump.restype = ctypes.c_int32
-        lib.sonare_engine_push_midi_input_ump.argtypes = [
-            ctypes.c_void_p,
-            ctypes.POINTER(ctypes.c_uint32),
-            ctypes.c_size_t,
-            ctypes.c_int64,
-        ]
-    if hasattr(lib, "sonare_engine_push_midi_program"):
-        lib.sonare_engine_push_midi_program.restype = ctypes.c_int32
-        lib.sonare_engine_push_midi_program.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-            ctypes.c_uint8,
-            ctypes.c_uint8,
-            ctypes.c_uint8,
-            ctypes.c_int,
-            ctypes.c_uint8,
-            ctypes.c_uint8,
-            ctypes.c_int64,
-        ]
-    if hasattr(lib, "sonare_engine_push_midi_input_program"):
-        lib.sonare_engine_push_midi_input_program.restype = ctypes.c_int32
-        lib.sonare_engine_push_midi_input_program.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint8,
-            ctypes.c_uint8,
-            ctypes.c_uint8,
-            ctypes.c_int,
-            ctypes.c_uint8,
-            ctypes.c_uint8,
-            ctypes.c_int64,
-        ]
+    lib.sonare_engine_drain_meter_telemetry.restype = ctypes.c_int32
+    lib.sonare_engine_drain_meter_telemetry.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(SonareMeterTelemetryRecord),
+        ctypes.c_size_t,
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+    lib.sonare_engine_drain_meter_telemetry_wide.restype = ctypes.c_int32
+    lib.sonare_engine_drain_meter_telemetry_wide.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(SonareMeterTelemetryRecordWide),
+        ctypes.c_size_t,
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+    lib.sonare_engine_drain_meter_telemetry_v2.restype = ctypes.c_int32
+    lib.sonare_engine_drain_meter_telemetry_v2.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(SonareMeterTelemetryRecordV2),
+        ctypes.c_size_t,
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+    lib.sonare_engine_meter_target_insert_gain_reduction.restype = ctypes.c_int32
+    lib.sonare_engine_meter_target_insert_gain_reduction.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+    lib.sonare_engine_drain_meter_telemetry_wide_v2.restype = ctypes.c_int32
+    lib.sonare_engine_drain_meter_telemetry_wide_v2.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(SonareMeterTelemetryRecordWideV2),
+        ctypes.c_size_t,
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+    lib.sonare_engine_configure_scope_telemetry.restype = ctypes.c_int32
+    lib.sonare_engine_configure_scope_telemetry.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_int,
+        ctypes.c_uint,
+        ctypes.POINTER(ctypes.c_uint),
+    ]
+    lib.sonare_engine_drain_scope_telemetry.restype = ctypes.c_int32
+    lib.sonare_engine_drain_scope_telemetry.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(SonareScopeTelemetryRecord),
+        ctypes.c_size_t,
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+    lib.sonare_engine_set_parameter.restype = ctypes.c_int32
+    lib.sonare_engine_set_parameter.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.c_float,
+        ctypes.c_int64,
+    ]
+    lib.sonare_engine_set_parameter_smoothed.restype = ctypes.c_int32
+    lib.sonare_engine_set_parameter_smoothed.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.c_float,
+        ctypes.c_int64,
+    ]
+    lib.sonare_engine_set_param_smoothing_ms.restype = ctypes.c_int32
+    lib.sonare_engine_set_param_smoothing_ms.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_float,
+    ]
+    lib.sonare_engine_set_solo_mute.restype = ctypes.c_int32
+    lib.sonare_engine_set_solo_mute.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int64,
+    ]
+    lib.sonare_engine_set_track_monitor_mode.restype = ctypes.c_int32
+    lib.sonare_engine_set_track_monitor_mode.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.c_int,
+        ctypes.c_int64,
+    ]
+    lib.sonare_engine_set_midi_clips.restype = ctypes.c_int32
+    lib.sonare_engine_set_midi_clips.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(SonareEngineMidiClipSchedule),
+        ctypes.c_size_t,
+    ]
+    lib.sonare_engine_push_midi_cc.restype = ctypes.c_int32
+    lib.sonare_engine_push_midi_cc.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.c_uint8,
+        ctypes.c_uint8,
+        ctypes.c_uint8,
+        ctypes.c_uint8,
+        ctypes.c_int64,
+    ]
+    lib.sonare_engine_push_midi_sysex.restype = ctypes.c_int32
+    lib.sonare_engine_push_midi_sysex.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.POINTER(ctypes.c_uint8),
+        ctypes.c_size_t,
+        ctypes.c_int64,
+    ]
+    lib.sonare_engine_push_midi_ump.restype = ctypes.c_int32
+    lib.sonare_engine_push_midi_ump.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.POINTER(ctypes.c_uint32),
+        ctypes.c_size_t,
+        ctypes.c_int64,
+    ]
+    lib.sonare_engine_push_midi_input_ump.restype = ctypes.c_int32
+    lib.sonare_engine_push_midi_input_ump.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(ctypes.c_uint32),
+        ctypes.c_size_t,
+        ctypes.c_int64,
+    ]
+    lib.sonare_engine_push_midi_program.restype = ctypes.c_int32
+    lib.sonare_engine_push_midi_program.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.c_uint8,
+        ctypes.c_uint8,
+        ctypes.c_uint8,
+        ctypes.c_int,
+        ctypes.c_uint8,
+        ctypes.c_uint8,
+        ctypes.c_int64,
+    ]
+    lib.sonare_engine_push_midi_input_program.restype = ctypes.c_int32
+    lib.sonare_engine_push_midi_input_program.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint8,
+        ctypes.c_uint8,
+        ctypes.c_uint8,
+        ctypes.c_int,
+        ctypes.c_uint8,
+        ctypes.c_uint8,
+        ctypes.c_int64,
+    ]
     # MIDI 2.0 event-POD builders: each packs its UMP words into the POD.
     _u8, _u32, _i32 = ctypes.c_uint8, ctypes.c_uint32, ctypes.c_int32
     _head: list[Any] = [ctypes.c_double, _u8, _u8]
@@ -1003,211 +912,180 @@ def configure_engine_signatures(lib: ctypes.CDLL) -> None:
             _fn = getattr(lib, _name)
             _fn.restype = ctypes.c_int32
             _fn.argtypes = [*_head, *_tail, ctypes.POINTER(SonareMidiEventPod)]
-    if hasattr(lib, "sonare_engine_push_midi_panic"):
-        lib.sonare_engine_push_midi_panic.restype = ctypes.c_int32
-        lib.sonare_engine_push_midi_panic.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_int64,
-        ]
-    if hasattr(lib, "sonare_engine_set_builtin_instrument"):
-        lib.sonare_engine_set_builtin_instrument.restype = ctypes.c_int32
-        lib.sonare_engine_set_builtin_instrument.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-            ctypes.POINTER(SonareBuiltinSynthConfig),
-        ]
-    if hasattr(lib, "sonare_engine_set_synth_instrument"):
-        lib.sonare_engine_set_synth_instrument.restype = ctypes.c_int32
-        lib.sonare_engine_set_synth_instrument.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-            ctypes.POINTER(SonareSynthPatch),
-        ]
-    if hasattr(lib, "sonare_engine_set_synth_instrument_with_bank"):
-        lib.sonare_engine_set_synth_instrument_with_bank.restype = ctypes.c_int32
-        lib.sonare_engine_set_synth_instrument_with_bank.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-            ctypes.POINTER(SonareSynthPatch),
-            ctypes.c_void_p,
-        ]
-    if hasattr(lib, "sonare_engine_set_synth_instrument_binding"):
-        lib.sonare_engine_set_synth_instrument_binding.restype = ctypes.c_int32
-        lib.sonare_engine_set_synth_instrument_binding.argtypes = [
-            ctypes.c_void_p,
-            ctypes.POINTER(SonareSynthInstrumentBinding),
-        ]
-    if hasattr(lib, "sonare_engine_load_soundfont"):
-        lib.sonare_engine_load_soundfont.restype = ctypes.c_int32
-        lib.sonare_engine_load_soundfont.argtypes = [
-            ctypes.c_void_p,
-            ctypes.POINTER(ctypes.c_uint8),
-            ctypes.c_size_t,
-        ]
-    if hasattr(lib, "sonare_engine_set_sf2_instrument"):
-        lib.sonare_engine_set_sf2_instrument.restype = ctypes.c_int32
-        lib.sonare_engine_set_sf2_instrument.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-            ctypes.POINTER(SonareSf2InstrumentConfig),
-        ]
-    if hasattr(lib, "sonare_engine_clear_midi_instrument"):
-        lib.sonare_engine_clear_midi_instrument.restype = ctypes.c_int32
-        lib.sonare_engine_clear_midi_instrument.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-        ]
-    if hasattr(lib, "sonare_engine_midi_instrument_count"):
-        lib.sonare_engine_midi_instrument_count.restype = ctypes.c_int32
-        lib.sonare_engine_midi_instrument_count.argtypes = [
-            ctypes.c_void_p,
-            ctypes.POINTER(ctypes.c_size_t),
-        ]
-    if hasattr(lib, "sonare_engine_bind_midi_cc"):
-        lib.sonare_engine_bind_midi_cc.restype = ctypes.c_int32
-        lib.sonare_engine_bind_midi_cc.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint8,
-            ctypes.c_uint8,
-            ctypes.c_uint32,
-            ctypes.c_float,
-            ctypes.c_float,
-        ]
-    if hasattr(lib, "sonare_engine_bind_midi_cc_binding"):
-        lib.sonare_engine_bind_midi_cc_binding.restype = ctypes.c_int32
-        lib.sonare_engine_bind_midi_cc_binding.argtypes = [
-            ctypes.c_void_p,
-            ctypes.POINTER(SonareMidiCcBinding),
-        ]
-    if hasattr(lib, "sonare_engine_clear_midi_cc_bindings"):
-        lib.sonare_engine_clear_midi_cc_bindings.restype = ctypes.c_int32
-        lib.sonare_engine_clear_midi_cc_bindings.argtypes = [ctypes.c_void_p]
-    if hasattr(lib, "sonare_engine_midi_cc_binding_count"):
-        lib.sonare_engine_midi_cc_binding_count.restype = ctypes.c_int32
-        lib.sonare_engine_midi_cc_binding_count.argtypes = [
-            ctypes.c_void_p,
-            ctypes.POINTER(ctypes.c_size_t),
-        ]
-    if hasattr(lib, "sonare_controller_profile_names"):
-        lib.sonare_controller_profile_names.restype = ctypes.c_char_p
-        lib.sonare_controller_profile_names.argtypes = []
-    if hasattr(lib, "sonare_engine_set_controller_profile"):
-        lib.sonare_engine_set_controller_profile.restype = ctypes.c_int32
-        lib.sonare_engine_set_controller_profile.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-            ctypes.c_char_p,
-        ]
-    if hasattr(lib, "sonare_engine_bind_controller"):
-        lib.sonare_engine_bind_controller.restype = ctypes.c_int32
-        lib.sonare_engine_bind_controller.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-            ctypes.POINTER(SonareControllerBinding),
-        ]
-    if hasattr(lib, "sonare_engine_clear_controller_bindings"):
-        lib.sonare_engine_clear_controller_bindings.restype = ctypes.c_int32
-        lib.sonare_engine_clear_controller_bindings.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-        ]
-    if hasattr(lib, "sonare_engine_controller_binding_count"):
-        lib.sonare_engine_controller_binding_count.restype = ctypes.c_int32
-        lib.sonare_engine_controller_binding_count.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-            ctypes.POINTER(ctypes.c_size_t),
-        ]
-    if hasattr(lib, "sonare_engine_set_controller_velocity_meaningful"):
-        lib.sonare_engine_set_controller_velocity_meaningful.restype = ctypes.c_int32
-        lib.sonare_engine_set_controller_velocity_meaningful.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-            ctypes.c_int,
-        ]
-    if hasattr(lib, "sonare_engine_controller_velocity_meaningful"):
-        lib.sonare_engine_controller_velocity_meaningful.restype = ctypes.c_int32
-        lib.sonare_engine_controller_velocity_meaningful.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-            ctypes.POINTER(ctypes.c_int),
-        ]
-    if hasattr(lib, "sonare_engine_set_controller_note_tracking"):
-        lib.sonare_engine_set_controller_note_tracking.restype = ctypes.c_int32
-        lib.sonare_engine_set_controller_note_tracking.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-            ctypes.c_int,
-            ctypes.c_int,
-        ]
-    if hasattr(lib, "sonare_engine_controller_note_tracking"):
-        lib.sonare_engine_controller_note_tracking.restype = ctypes.c_int32
-        lib.sonare_engine_controller_note_tracking.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-            ctypes.c_int,
-            ctypes.POINTER(ctypes.c_int),
-        ]
-    if hasattr(lib, "sonare_engine_set_part_rig"):
-        lib.sonare_engine_set_part_rig.restype = ctypes.c_int32
-        lib.sonare_engine_set_part_rig.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-            ctypes.c_uint8,
-            ctypes.c_int,
-            ctypes.c_char_p,
-        ]
-    if hasattr(lib, "sonare_engine_set_articulation"):
-        lib.sonare_engine_set_articulation.restype = ctypes.c_int32
-        lib.sonare_engine_set_articulation.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-            ctypes.c_uint8,
-            ctypes.c_int,
-        ]
-    if hasattr(lib, "sonare_engine_articulation"):
-        lib.sonare_engine_articulation.restype = ctypes.c_int32
-        lib.sonare_engine_articulation.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-            ctypes.c_uint8,
-            ctypes.POINTER(ctypes.c_int),
-        ]
-    if hasattr(lib, "sonare_engine_legato_fallback_count"):
-        lib.sonare_engine_legato_fallback_count.restype = ctypes.c_int32
-        lib.sonare_engine_legato_fallback_count.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-            ctypes.POINTER(ctypes.c_uint32),
-        ]
-    if hasattr(lib, "sonare_engine_set_midi_fx"):
-        lib.sonare_engine_set_midi_fx.restype = ctypes.c_int32
-        lib.sonare_engine_set_midi_fx.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-            ctypes.c_char_p,
-        ]
-    if hasattr(lib, "sonare_engine_clear_midi_fx"):
-        lib.sonare_engine_clear_midi_fx.restype = ctypes.c_int32
-        lib.sonare_engine_clear_midi_fx.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-        ]
-    if hasattr(lib, "sonare_engine_set_midi_input_source"):
-        lib.sonare_engine_set_midi_input_source.restype = ctypes.c_int32
-        lib.sonare_engine_set_midi_input_source.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-        ]
-    if hasattr(lib, "sonare_engine_clear_midi_input_source"):
-        lib.sonare_engine_clear_midi_input_source.restype = ctypes.c_int32
-        lib.sonare_engine_clear_midi_input_source.argtypes = [ctypes.c_void_p]
-    if hasattr(lib, "sonare_engine_midi_input_pending_count"):
-        lib.sonare_engine_midi_input_pending_count.restype = ctypes.c_int32
-        lib.sonare_engine_midi_input_pending_count.argtypes = [
-            ctypes.c_void_p,
-            ctypes.POINTER(ctypes.c_size_t),
-        ]
+    lib.sonare_engine_push_midi_panic.restype = ctypes.c_int32
+    lib.sonare_engine_push_midi_panic.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_int64,
+    ]
+    lib.sonare_engine_set_builtin_instrument.restype = ctypes.c_int32
+    lib.sonare_engine_set_builtin_instrument.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.POINTER(SonareBuiltinSynthConfig),
+    ]
+    lib.sonare_engine_set_synth_instrument.restype = ctypes.c_int32
+    lib.sonare_engine_set_synth_instrument.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.POINTER(SonareSynthPatch),
+    ]
+    lib.sonare_engine_set_synth_instrument_with_bank.restype = ctypes.c_int32
+    lib.sonare_engine_set_synth_instrument_with_bank.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.POINTER(SonareSynthPatch),
+        ctypes.c_void_p,
+    ]
+    lib.sonare_engine_set_synth_instrument_binding.restype = ctypes.c_int32
+    lib.sonare_engine_set_synth_instrument_binding.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(SonareSynthInstrumentBinding),
+    ]
+    lib.sonare_engine_load_soundfont.restype = ctypes.c_int32
+    lib.sonare_engine_load_soundfont.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(ctypes.c_uint8),
+        ctypes.c_size_t,
+    ]
+    lib.sonare_engine_set_sf2_instrument.restype = ctypes.c_int32
+    lib.sonare_engine_set_sf2_instrument.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.POINTER(SonareSf2InstrumentConfig),
+    ]
+    lib.sonare_engine_clear_midi_instrument.restype = ctypes.c_int32
+    lib.sonare_engine_clear_midi_instrument.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+    ]
+    lib.sonare_engine_midi_instrument_count.restype = ctypes.c_int32
+    lib.sonare_engine_midi_instrument_count.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+    lib.sonare_engine_bind_midi_cc.restype = ctypes.c_int32
+    lib.sonare_engine_bind_midi_cc.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint8,
+        ctypes.c_uint8,
+        ctypes.c_uint32,
+        ctypes.c_float,
+        ctypes.c_float,
+    ]
+    lib.sonare_engine_bind_midi_cc_binding.restype = ctypes.c_int32
+    lib.sonare_engine_bind_midi_cc_binding.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(SonareMidiCcBinding),
+    ]
+    lib.sonare_engine_clear_midi_cc_bindings.restype = ctypes.c_int32
+    lib.sonare_engine_clear_midi_cc_bindings.argtypes = [ctypes.c_void_p]
+    lib.sonare_engine_midi_cc_binding_count.restype = ctypes.c_int32
+    lib.sonare_engine_midi_cc_binding_count.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+    lib.sonare_controller_profile_names.restype = ctypes.c_char_p
+    lib.sonare_controller_profile_names.argtypes = []
+    lib.sonare_engine_set_controller_profile.restype = ctypes.c_int32
+    lib.sonare_engine_set_controller_profile.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.c_char_p,
+    ]
+    lib.sonare_engine_bind_controller.restype = ctypes.c_int32
+    lib.sonare_engine_bind_controller.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.POINTER(SonareControllerBinding),
+    ]
+    lib.sonare_engine_clear_controller_bindings.restype = ctypes.c_int32
+    lib.sonare_engine_clear_controller_bindings.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+    ]
+    lib.sonare_engine_controller_binding_count.restype = ctypes.c_int32
+    lib.sonare_engine_controller_binding_count.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+    lib.sonare_engine_set_controller_velocity_meaningful.restype = ctypes.c_int32
+    lib.sonare_engine_set_controller_velocity_meaningful.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.c_int,
+    ]
+    lib.sonare_engine_controller_velocity_meaningful.restype = ctypes.c_int32
+    lib.sonare_engine_controller_velocity_meaningful.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.POINTER(ctypes.c_int),
+    ]
+    lib.sonare_engine_set_controller_note_tracking.restype = ctypes.c_int32
+    lib.sonare_engine_set_controller_note_tracking.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.c_int,
+        ctypes.c_int,
+    ]
+    lib.sonare_engine_controller_note_tracking.restype = ctypes.c_int32
+    lib.sonare_engine_controller_note_tracking.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.c_int,
+        ctypes.POINTER(ctypes.c_int),
+    ]
+    lib.sonare_engine_set_part_rig.restype = ctypes.c_int32
+    lib.sonare_engine_set_part_rig.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.c_uint8,
+        ctypes.c_int,
+        ctypes.c_char_p,
+    ]
+    lib.sonare_engine_set_articulation.restype = ctypes.c_int32
+    lib.sonare_engine_set_articulation.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.c_uint8,
+        ctypes.c_int,
+    ]
+    lib.sonare_engine_articulation.restype = ctypes.c_int32
+    lib.sonare_engine_articulation.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.c_uint8,
+        ctypes.POINTER(ctypes.c_int),
+    ]
+    lib.sonare_engine_legato_fallback_count.restype = ctypes.c_int32
+    lib.sonare_engine_legato_fallback_count.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.POINTER(ctypes.c_uint32),
+    ]
+    lib.sonare_engine_set_midi_fx.restype = ctypes.c_int32
+    lib.sonare_engine_set_midi_fx.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.c_char_p,
+    ]
+    lib.sonare_engine_clear_midi_fx.restype = ctypes.c_int32
+    lib.sonare_engine_clear_midi_fx.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+    ]
+    lib.sonare_engine_set_midi_input_source.restype = ctypes.c_int32
+    lib.sonare_engine_set_midi_input_source.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+    ]
+    lib.sonare_engine_clear_midi_input_source.restype = ctypes.c_int32
+    lib.sonare_engine_clear_midi_input_source.argtypes = [ctypes.c_void_p]
+    lib.sonare_engine_midi_input_pending_count.restype = ctypes.c_int32
+    lib.sonare_engine_midi_input_pending_count.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
     for _name in (
         "sonare_engine_push_midi_input_note_on",
         "sonare_engine_push_midi_input_note_off",
@@ -1225,24 +1103,22 @@ def configure_engine_signatures(lib: ctypes.CDLL) -> None:
                 ctypes.c_uint8,
                 ctypes.c_int64,
             ]
-    if hasattr(lib, "sonare_engine_push_midi_input_pitch_bend"):
-        lib.sonare_engine_push_midi_input_pitch_bend.restype = ctypes.c_int32
-        lib.sonare_engine_push_midi_input_pitch_bend.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint8,
-            ctypes.c_uint8,
-            ctypes.c_uint16,
-            ctypes.c_int64,
-        ]
-    if hasattr(lib, "sonare_engine_push_midi_input_channel_pressure"):
-        lib.sonare_engine_push_midi_input_channel_pressure.restype = ctypes.c_int32
-        lib.sonare_engine_push_midi_input_channel_pressure.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint8,
-            ctypes.c_uint8,
-            ctypes.c_uint8,
-            ctypes.c_int64,
-        ]
+    lib.sonare_engine_push_midi_input_pitch_bend.restype = ctypes.c_int32
+    lib.sonare_engine_push_midi_input_pitch_bend.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint8,
+        ctypes.c_uint8,
+        ctypes.c_uint16,
+        ctypes.c_int64,
+    ]
+    lib.sonare_engine_push_midi_input_channel_pressure.restype = ctypes.c_int32
+    lib.sonare_engine_push_midi_input_channel_pressure.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint8,
+        ctypes.c_uint8,
+        ctypes.c_uint8,
+        ctypes.c_int64,
+    ]
     for _name in (
         "sonare_engine_push_midi_note_on",
         "sonare_engine_push_midi_note_off",
@@ -1260,29 +1136,26 @@ def configure_engine_signatures(lib: ctypes.CDLL) -> None:
                 ctypes.c_uint8,
                 ctypes.c_int64,
             ]
-    if hasattr(lib, "sonare_engine_push_midi_pitch_bend"):
-        lib.sonare_engine_push_midi_pitch_bend.restype = ctypes.c_int32
-        lib.sonare_engine_push_midi_pitch_bend.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-            ctypes.c_uint8,
-            ctypes.c_uint8,
-            ctypes.c_uint16,
-            ctypes.c_int64,
-        ]
-    if hasattr(lib, "sonare_engine_push_midi_channel_pressure"):
-        lib.sonare_engine_push_midi_channel_pressure.restype = ctypes.c_int32
-        lib.sonare_engine_push_midi_channel_pressure.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-            ctypes.c_uint8,
-            ctypes.c_uint8,
-            ctypes.c_uint8,
-            ctypes.c_int64,
-        ]
-    if hasattr(lib, "sonare_engine_get_transport_state"):
-        lib.sonare_engine_get_transport_state.restype = ctypes.c_int32
-        lib.sonare_engine_get_transport_state.argtypes = [
-            ctypes.c_void_p,
-            ctypes.POINTER(SonareTransportState),
-        ]
+    lib.sonare_engine_push_midi_pitch_bend.restype = ctypes.c_int32
+    lib.sonare_engine_push_midi_pitch_bend.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.c_uint8,
+        ctypes.c_uint8,
+        ctypes.c_uint16,
+        ctypes.c_int64,
+    ]
+    lib.sonare_engine_push_midi_channel_pressure.restype = ctypes.c_int32
+    lib.sonare_engine_push_midi_channel_pressure.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.c_uint8,
+        ctypes.c_uint8,
+        ctypes.c_uint8,
+        ctypes.c_int64,
+    ]
+    lib.sonare_engine_get_transport_state.restype = ctypes.c_int32
+    lib.sonare_engine_get_transport_state.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(SonareTransportState),
+    ]

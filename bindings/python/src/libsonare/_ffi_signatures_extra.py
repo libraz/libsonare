@@ -135,57 +135,54 @@ def configure_extra_signatures(lib: ctypes.CDLL) -> None:
     ]
 
     # sonare_decompose_with_init (selectable NMF initialiser; two flat matrices)
-    if hasattr(lib, "sonare_decompose_with_init"):
-        lib.sonare_decompose_with_init.restype = ctypes.c_int32
-        lib.sonare_decompose_with_init.argtypes = [
-            ctypes.POINTER(ctypes.c_float),
-            ctypes.c_int,
-            ctypes.c_int,
-            ctypes.c_int,
-            ctypes.c_int,
-            ctypes.c_float,
-            ctypes.c_char_p,
-            ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
-            ctypes.POINTER(ctypes.c_size_t),
-            ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
-            ctypes.POINTER(ctypes.c_size_t),
-        ]
+    lib.sonare_decompose_with_init.restype = ctypes.c_int32
+    lib.sonare_decompose_with_init.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_float,
+        ctypes.c_char_p,
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.c_size_t),
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
 
     # sonare_decompose_stems (phase-carrying NMF stems: flat components + W/H)
-    if hasattr(lib, "sonare_decompose_stems"):
-        lib.sonare_decompose_stems.restype = ctypes.c_int32
-        lib.sonare_decompose_stems.argtypes = [
-            ctypes.POINTER(ctypes.c_float),
-            ctypes.c_size_t,
-            ctypes.c_int,
-            ctypes.POINTER(SonareDecomposeStemsConfig),
-            ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
-            ctypes.POINTER(ctypes.c_size_t),
-            ctypes.POINTER(ctypes.c_size_t),
-            ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
-            ctypes.POINTER(ctypes.c_size_t),
-            ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
-            ctypes.POINTER(ctypes.c_size_t),
-        ]
+    lib.sonare_decompose_stems.restype = ctypes.c_int32
+    lib.sonare_decompose_stems.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.POINTER(SonareDecomposeStemsConfig),
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.c_size_t),
+        ctypes.POINTER(ctypes.c_size_t),
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.c_size_t),
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
 
     # sonare_decompose_stems_linked (channel-planar phase-carrying NMF stems)
-    if hasattr(lib, "sonare_decompose_stems_linked"):
-        lib.sonare_decompose_stems_linked.restype = ctypes.c_int32
-        lib.sonare_decompose_stems_linked.argtypes = [
-            ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
-            ctypes.c_size_t,
-            ctypes.c_size_t,
-            ctypes.c_int,
-            ctypes.POINTER(SonareDecomposeStemsConfig),
-            ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
-            ctypes.POINTER(ctypes.c_size_t),
-            ctypes.POINTER(ctypes.c_size_t),
-            ctypes.POINTER(ctypes.c_size_t),
-            ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
-            ctypes.POINTER(ctypes.c_size_t),
-            ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
-            ctypes.POINTER(ctypes.c_size_t),
-        ]
+    lib.sonare_decompose_stems_linked.restype = ctypes.c_int32
+    lib.sonare_decompose_stems_linked.argtypes = [
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.c_size_t,
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.POINTER(SonareDecomposeStemsConfig),
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.c_size_t),
+        ctypes.POINTER(ctypes.c_size_t),
+        ctypes.POINTER(ctypes.c_size_t),
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.c_size_t),
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
 
     # sonare_nn_filter (matrix: n_features x n_frames)
     lib.sonare_nn_filter.restype = ctypes.c_int32
@@ -214,18 +211,17 @@ def configure_extra_signatures(lib: ctypes.CDLL) -> None:
     ]
 
     # sonare_remix_aligned_intervals (resolved cut points, no cutting)
-    if hasattr(lib, "sonare_remix_aligned_intervals"):
-        lib.sonare_remix_aligned_intervals.restype = ctypes.c_int32
-        lib.sonare_remix_aligned_intervals.argtypes = [
-            ctypes.POINTER(ctypes.c_float),
-            ctypes.c_size_t,
-            ctypes.c_int,
-            ctypes.POINTER(ctypes.c_int),
-            ctypes.c_size_t,
-            ctypes.c_int,
-            ctypes.POINTER(ctypes.POINTER(ctypes.c_int)),
-            ctypes.POINTER(ctypes.c_size_t),
-        ]
+    lib.sonare_remix_aligned_intervals.restype = ctypes.c_int32
+    lib.sonare_remix_aligned_intervals.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.POINTER(ctypes.c_int),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_int)),
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
 
     # sonare_hpss_with_residual (three audio buffers)
     lib.sonare_hpss_with_residual.restype = ctypes.c_int32
