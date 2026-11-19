@@ -1470,7 +1470,7 @@ def _order_drift(c_index, indexed, allow, rep: Report, selected, roles: set[str]
                 verdict = _mirror_order_verdict(key, c_pos, s_cfg)
             else:
                 verdict = _order_verdict(key, c_pos, s_cfg)
-            message = f"config param order/name mismatch vs C for '{key}': C={c_cfg} {s}={s_cfg}"
+            message = f"config param order/name mismatch vs C for '{key}': C={c_pos} {s}={s_cfg}"
             if allow.order_ok(key, s, verdict, f"[{s}] {message}") or verdict == AGREED:
                 continue
             rep.findings.append(
@@ -1479,7 +1479,7 @@ def _order_drift(c_index, indexed, allow, rep: Report, selected, roles: set[str]
                     key=key,
                     surface=s,
                     message=message,
-                    detail={"c": c_cfg, s: s_cfg},
+                    detail={"c": c_pos, s: s_cfg},
                     location=f"{ssig.file}:{ssig.line} (C {csig.file}:{csig.line})",
                 )
             )
