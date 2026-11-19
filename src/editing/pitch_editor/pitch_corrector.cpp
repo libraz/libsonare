@@ -12,6 +12,7 @@
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/math_utils.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::editing::pitch_editor {
 
@@ -19,8 +20,16 @@ using constants::kCentsPerSemitone;
 using constants::kSemitonesPerOctave;
 using constants::kSpectrumEpsilon;
 using constants::kTwoPi;
+namespace check = ::sonare::util::check;
 
 namespace {
+
+void refuse_non_finite_origin(double frame_origin_sample) {
+  if (!std::isfinite(frame_origin_sample)) {
+    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, "frame_origin_sample",
+                                            "must be finite");
+  }
+}
 
 bool valid_voiced_frame(const F0Track& track, int frame) {
   const size_t index = static_cast<size_t>(frame);
@@ -38,12 +47,17 @@ float hann(float t) noexcept { return 0.5f - 0.5f * std::cos(kTwoPi * t); }
 
 void validate_f0_track(const Audio& audio, const F0Track& track) {
   // Validate in the core so every public surface inherits the same track contract.
-  SONARE_CHECK_MSG(!track.f0_hz.empty(), ErrorCode::InvalidParameter, "f0Hz must not be empty");
-  SONARE_CHECK_MSG(track.hop_length > 0, ErrorCode::InvalidParameter, "hopLength must be > 0");
-  SONARE_CHECK_MSG(track.f0_hz.size() == track.voiced.size(), ErrorCode::InvalidParameter,
-                   "voiced must have the same length as f0Hz");
-  SONARE_CHECK_MSG(track.voiced_prob.empty() || track.voiced_prob.size() == track.f0_hz.size(),
-                   ErrorCode::InvalidParameter, "voicedProb must have the same length as f0Hz");
+  if (track.f0_hz.empty()) {
+    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, "f0_hz",
+                                            "must not be empty");
+  }
+  check::integer_at_least(track.hop_length, 1, "hop_length");
+  if (track.f0_hz.size() != track.voiced.size()) {
+    check::refuse_relation({"voiced", "f0_hz"}, "{0} must have the same length as {1}");
+  }
+  if (!track.voiced_prob.empty() && track.voiced_prob.size() != track.f0_hz.size()) {
+    check::refuse_relation({"voiced_prob", "f0_hz"}, "{0} must have the same length as {1}");
+  }
   // hop_length is in samples at the track's rate; a rate mismatch would
   // silently apply the correction curve at the wrong time positions.
   SONARE_CHECK_MSG(track.sample_rate == audio.sample_rate(), ErrorCode::InvalidParameter,
@@ -55,26 +69,18 @@ void validate_f0_track(const Audio& audio, const F0Track& track) {
   const float nyquist = 0.5f * static_cast<float>(audio.sample_rate());
   for (size_t i = 0; i < track.f0_hz.size(); ++i) {
     const float f0 = track.f0_hz[i];
-    const auto at = [i] { return "f0Hz[" + std::to_string(i) + "]"; };
+    const std::string subject = "f0_hz[" + std::to_string(i) + "]";
     if (track.voiced[i]) {
-      SONARE_CHECK_MSG(!std::isnan(f0), ErrorCode::InvalidParameter,
-                       at() + " is NaN but the frame is voiced");
-      SONARE_CHECK_MSG(std::isfinite(f0), ErrorCode::InvalidParameter, at() + " is not finite");
-      SONARE_CHECK_MSG(f0 > 0.0f && f0 <= nyquist, ErrorCode::InvalidParameter,
-                       at() + " must be in (0, Nyquist] for a voiced frame");
+      check::in_interval(f0, 0.0, false, nyquist, true, subject.c_str());
     } else if (!std::isnan(f0)) {
       // pYIN uses NaN for unvoiced F0. A finite non-negative value is also
       // accepted for host-supplied tracks because voiced[] is authoritative.
-      SONARE_CHECK_MSG(std::isfinite(f0), ErrorCode::InvalidParameter, at() + " is not finite");
-      SONARE_CHECK_MSG(f0 >= 0.0f && f0 <= nyquist, ErrorCode::InvalidParameter,
-                       at() + " must be in [0, Nyquist]");
+      check::in_range(f0, 0.0, nyquist, subject.c_str());
     }
   }
   for (size_t i = 0; i < track.voiced_prob.size(); ++i) {
-    const float probability = track.voiced_prob[i];
-    SONARE_CHECK_MSG(std::isfinite(probability) && probability >= 0.0f && probability <= 1.0f,
-                     ErrorCode::InvalidParameter,
-                     "voicedProb[" + std::to_string(i) + "] must be in [0, 1]");
+    const std::string subject = "voiced_prob[" + std::to_string(i) + "]";
+    check::in_range(track.voiced_prob[i], 0.0, 1.0, subject.c_str());
   }
 }
 
@@ -146,16 +152,13 @@ Audio resynthesize_validated(const Audio& audio, const F0Track& track,
 }  // namespace
 
 PitchCorrector::PitchCorrector(PitchCorrectionConfig config) : config_(config) {
-  SONARE_CHECK(
-      valid_scale_args(config_.scale.root, config_.scale.mode_mask) &&
-          std::isfinite(config_.scale.reference_midi) && config_.scale.reference_midi >= 0.0f &&
-          config_.scale.reference_midi <= kMaxReferenceMidi &&
-          std::isfinite(config_.retune_amount) && config_.retune_amount >= 0.0f &&
-          config_.retune_amount <= 1.0f && std::isfinite(config_.max_correction_semitones) &&
-          config_.max_correction_semitones >= 0.0f && std::isfinite(config_.retune_speed_ms) &&
-          config_.retune_speed_ms >= 0.0f && std::isfinite(config_.vibrato_threshold_cents) &&
-          config_.vibrato_threshold_cents >= 0.0f,
-      ErrorCode::InvalidParameter);
+  check::integer_in_range(config_.scale.root, 0, 11, "scale.root");
+  check::integer_in_range(config_.scale.mode_mask, 1, 0x0FFF, "scale.mode_mask");
+  check::in_range(config_.scale.reference_midi, 0.0, kMaxReferenceMidi, "scale.reference_midi");
+  check::in_range(config_.retune_amount, 0.0, 1.0, "retune_amount");
+  check::at_least(config_.max_correction_semitones, 0.0, "max_correction_semitones");
+  check::at_least(config_.retune_speed_ms, 0.0, "retune_speed_ms");
+  check::at_least(config_.vibrato_threshold_cents, 0.0, "vibrato_threshold_cents");
 }
 
 Audio PitchCorrector::shift(const Audio& audio, float semitones) const {
@@ -172,9 +175,8 @@ Audio PitchCorrector::shift(const Audio& audio, float semitones) const {
 
 Audio PitchCorrector::correct_to_midi(const Audio& audio, float current_midi,
                                       float target_midi) const {
-  SONARE_CHECK(std::isfinite(current_midi) && current_midi >= 0.0f && current_midi <= 127.0f &&
-                   std::isfinite(target_midi) && target_midi >= 0.0f && target_midi <= 127.0f,
-               ErrorCode::InvalidParameter);
+  check::in_range(current_midi, 0.0, 127.0, "current_midi");
+  check::in_range(target_midi, 0.0, 127.0, "target_midi");
   const Audio shifted = shift(audio, target_midi - current_midi);
   if (shifted.size() == audio.size()) {
     return shifted;
@@ -202,8 +204,7 @@ Audio PitchCorrector::correct_to_midi_timevarying(const Audio& audio, const F0Tr
   // Reject a non-finite or out-of-range target so a bad value cannot turn into a
   // garbage shift. Validated here in the core so every surface (C ABI, Node,
   // Python, WASM) inherits the same contract rather than each re-checking.
-  SONARE_CHECK(std::isfinite(target_midi) && target_midi >= 0.0f && target_midi <= 127.0f,
-               ErrorCode::InvalidParameter);
+  check::in_range(target_midi, 0.0, 127.0, "target_midi");
   return correct_timevarying(audio, track, TargetMode::kFixedMidi, target_midi);
 }
 
@@ -212,7 +213,9 @@ Audio PitchCorrector::correct_to_scale_timevarying(const Audio& audio, const F0T
 }
 
 float PitchCorrector::estimate_median_midi(const F0Track& track) const {
-  SONARE_CHECK(track.f0_hz.size() == track.voiced.size(), ErrorCode::InvalidParameter);
+  if (track.f0_hz.size() != track.voiced.size()) {
+    check::refuse_relation({"voiced", "f0_hz"}, "{0} must have the same length as {1}");
+  }
 
   std::vector<float> midi_values;
   midi_values.reserve(track.f0_hz.size());
@@ -227,7 +230,7 @@ float PitchCorrector::estimate_median_midi(const F0Track& track) const {
 }
 
 float PitchCorrector::correction_to_midi(const F0Track& track, float target_midi) const {
-  SONARE_CHECK(std::isfinite(target_midi), ErrorCode::InvalidParameter);
+  check::finite_float(target_midi, "target_midi");
   const float detected_midi = estimate_median_midi(track);
   return apply_limits((target_midi - detected_midi) * config_.retune_amount);
 }
@@ -671,13 +674,20 @@ Audio PitchCorrector::resynthesize(const Audio& audio, const F0Track& track,
 Audio PitchCorrector::resynthesize(const Audio& audio, const F0Track& track,
                                    const std::vector<float>& deltas_semitones,
                                    double frame_origin_sample, double samples_per_frame) const {
-  SONARE_CHECK(std::isfinite(samples_per_frame) && samples_per_frame >= 1.0,
-               ErrorCode::InvalidParameter);
-  SONARE_CHECK(!audio.empty() && track.n_frames() > 0, ErrorCode::InvalidParameter);
+  check::at_least(samples_per_frame, 1.0, "samples_per_frame");
+  if (audio.empty()) {
+    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, "audio",
+                                            "must not be empty");
+  }
+  if (track.n_frames() <= 0) {
+    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, "f0_hz",
+                                            "must not be empty");
+  }
   // One delta per track frame prevents interpolation from reading past the correction curve.
-  SONARE_CHECK(deltas_semitones.size() == static_cast<size_t>(track.n_frames()),
-               ErrorCode::InvalidParameter);
-  SONARE_CHECK(std::isfinite(frame_origin_sample), ErrorCode::InvalidParameter);
+  if (deltas_semitones.size() != static_cast<size_t>(track.n_frames())) {
+    check::refuse_relation({"deltas_semitones", "f0_hz"}, "{0} must have the same length as {1}");
+  }
+  refuse_non_finite_origin(frame_origin_sample);
   validate_f0_track(audio, track);
   return resynthesize_validated(audio, track, deltas_semitones, frame_origin_sample,
                                 samples_per_frame, 0, track.n_frames());
@@ -687,15 +697,24 @@ Audio PitchCorrector::resynthesize_window(const Audio& audio, const F0Track& win
                                           const std::vector<float>& window_deltas,
                                           double frame_origin_sample, double samples_per_frame,
                                           int first_frame, int total_frames) const {
-  SONARE_CHECK(first_frame >= 0 && total_frames >= window.n_frames() &&
-                   first_frame <= total_frames - window.n_frames(),
-               ErrorCode::InvalidParameter);
-  SONARE_CHECK(std::isfinite(samples_per_frame) && samples_per_frame >= 1.0,
-               ErrorCode::InvalidParameter);
-  SONARE_CHECK(!audio.empty() && window.n_frames() > 0, ErrorCode::InvalidParameter);
-  SONARE_CHECK(window_deltas.size() == static_cast<size_t>(window.n_frames()),
-               ErrorCode::InvalidParameter);
-  SONARE_CHECK(std::isfinite(frame_origin_sample), ErrorCode::InvalidParameter);
+  check::integer_at_least(first_frame, 0, "first_frame");
+  if (!(total_frames >= window.n_frames() && first_frame <= total_frames - window.n_frames())) {
+    check::refuse_relation({"first_frame", "total_frames"},
+                           "{0} plus the window length must be at most {1}");
+  }
+  check::at_least(samples_per_frame, 1.0, "samples_per_frame");
+  if (audio.empty()) {
+    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, "audio",
+                                            "must not be empty");
+  }
+  if (window.n_frames() <= 0) {
+    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, "f0_hz",
+                                            "must not be empty");
+  }
+  if (window_deltas.size() != static_cast<size_t>(window.n_frames())) {
+    check::refuse_relation({"window_deltas", "f0_hz"}, "{0} must have the same length as {1}");
+  }
+  refuse_non_finite_origin(frame_origin_sample);
   validate_f0_track(audio, window);
   return resynthesize_validated(audio, window, window_deltas, frame_origin_sample,
                                 samples_per_frame, first_frame, total_frames);

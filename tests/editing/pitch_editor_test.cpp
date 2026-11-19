@@ -889,14 +889,113 @@ TEST_CASE("PitchCorrector names the field and frame of a malformed F0 track", "[
 
   F0Track track = constant_track(440.0f, sample_rate, 256, 16);
   track.f0_hz[5] = std::numeric_limits<float>::quiet_NaN();
-  CHECK(message_of(track) == "f0Hz[5] is NaN but the frame is voiced");
+  CHECK(message_of(track) == "f0_hz[5] must be finite and in (0, 11025]");
 
   track.f0_hz[5] = std::numeric_limits<float>::infinity();
-  CHECK(message_of(track) == "f0Hz[5] is not finite");
+  CHECK(message_of(track) == "f0_hz[5] must be finite and in (0, 11025]");
 
   track = constant_track(440.0f, sample_rate, 256, 16);
   track.hop_length = 0;
-  CHECK(message_of(track) == "hopLength must be > 0");
+  CHECK(message_of(track) == "hop_length must be an integer in [1, 2147483647]");
+}
+
+TEST_CASE("PitchCorrector refuses each parameter under its own core name", "[pitch_editor]") {
+  constexpr int sample_rate = 22050;
+  const sonare::Audio audio =
+      sonare::Audio::from_vector(sine(440.0f, sample_rate, 8192), sample_rate);
+  const auto text_of = [](auto&& call) {
+    try {
+      call();
+    } catch (const sonare::SonareException& e) {
+      CHECK(e.code() == sonare::ErrorCode::InvalidParameter);
+      return std::string(e.what());
+    }
+    return std::string();
+  };
+  const PitchCorrector corrector;
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+
+  const auto config_text = [&](const PitchCorrectionConfig& config) {
+    return text_of([&] { PitchCorrector{config}; });
+  };
+  PitchCorrectionConfig config;
+  config.scale.root = 12;
+  CHECK(config_text(config) == "scale.root must be an integer in [0, 11]");
+  config = {};
+  config.scale.mode_mask = 0;
+  CHECK(config_text(config) == "scale.mode_mask must be an integer in [1, 4095]");
+  config = {};
+  config.scale.reference_midi = kMaxReferenceMidi + 1.0f;
+  CHECK(config_text(config) == "scale.reference_midi must be finite and in [0, 127]");
+  config = {};
+  config.retune_amount = 1.5f;
+  CHECK(config_text(config) == "retune_amount must be finite and in [0, 1]");
+  config = {};
+  config.max_correction_semitones = -1.0f;
+  CHECK(config_text(config) == "max_correction_semitones must be finite and at least 0");
+  config = {};
+  config.retune_speed_ms = nan;
+  CHECK(config_text(config) == "retune_speed_ms must be finite and at least 0");
+  config = {};
+  config.vibrato_threshold_cents = -1.0f;
+  CHECK(config_text(config) == "vibrato_threshold_cents must be finite and at least 0");
+
+  CHECK(text_of([&] { corrector.correct_to_midi(audio, 128.0f, 69.0f); }) ==
+        "current_midi must be finite and in [0, 127]");
+  CHECK(text_of([&] { corrector.correct_to_midi(audio, 69.0f, nan); }) ==
+        "target_midi must be finite and in [0, 127]");
+
+  const F0Track good = constant_track(440.0f, sample_rate, 256, 16);
+  CHECK(text_of([&] { corrector.correct_to_midi(audio, good, 200.0f); }) ==
+        "target_midi must be finite and in [0, 127]");
+  CHECK(text_of([&] { corrector.correction_to_midi(good, nan); }) ==
+        "target_midi must be finite and in [-3.4028235e38, 3.4028235e38]");
+
+  F0Track track = good;
+  track.f0_hz.clear();
+  track.voiced.clear();
+  track.voiced_prob.clear();
+  CHECK(text_of([&] { corrector.correct_to_midi(audio, track, 70.0f); }) ==
+        "f0_hz must not be empty");
+  track = good;
+  track.voiced.pop_back();
+  CHECK(text_of([&] { corrector.correct_to_midi(audio, track, 70.0f); }) ==
+        "voiced must have the same length as f0_hz");
+  CHECK(text_of([&] { corrector.estimate_median_midi(track); }) ==
+        "voiced must have the same length as f0_hz");
+  track = good;
+  track.voiced_prob.pop_back();
+  CHECK(text_of([&] { corrector.correct_to_midi(audio, track, 70.0f); }) ==
+        "voiced_prob must have the same length as f0_hz");
+  track = good;
+  track.voiced_prob[3] = 1.5f;
+  CHECK(text_of([&] { corrector.correct_to_midi(audio, track, 70.0f); }) ==
+        "voiced_prob[3] must be finite and in [0, 1]");
+  track = good;
+  track.voiced[2] = false;
+  track.f0_hz[2] = -1.0f;
+  CHECK(text_of([&] { corrector.correct_to_midi(audio, track, 70.0f); }) ==
+        "f0_hz[2] must be finite and in [0, 11025]");
+
+  const std::vector<float> deltas(16, 0.0f);
+  CHECK(text_of([&] { corrector.resynthesize(audio, good, deltas, 0.0, 0.5); }) ==
+        "samples_per_frame must be finite and at least 1");
+  CHECK(text_of([&] { corrector.resynthesize(audio, good, std::vector<float>(3, 0.0f)); }) ==
+        "deltas_semitones must have the same length as f0_hz");
+  CHECK(text_of([&] { corrector.resynthesize(audio, good, deltas, nan); }) ==
+        "frame_origin_sample must be finite");
+  const sonare::Audio no_audio = sonare::Audio::from_vector(std::vector<float>{}, sample_rate);
+  CHECK(text_of([&] { corrector.resynthesize(no_audio, good, deltas); }) ==
+        "audio must not be empty");
+
+  CHECK(text_of([&] { corrector.resynthesize_window(audio, good, deltas, 0.0, 256.0, -1, 16); }) ==
+        "first_frame must be an integer in [0, 2147483647]");
+  CHECK(text_of([&] { corrector.resynthesize_window(audio, good, deltas, 0.0, 256.0, 4, 16); }) ==
+        "first_frame plus the window length must be at most total_frames");
+  CHECK(text_of([&] {
+          corrector.resynthesize_window(audio, good, std::vector<float>(3, 0.0f), 0.0, 256.0, 0,
+                                        16);
+        }) == "window_deltas must have the same length as f0_hz");
 }
 
 TEST_CASE("PitchCorrector constant MIDI transpose reaches its target independent of sample rate",
@@ -2398,7 +2497,7 @@ TEST_CASE("PitchCorrector time-varying correction names the offending frame", "[
   } catch (const sonare::SonareException& error) {
     message = error.what();
   }
-  CHECK(message.find("f0Hz[5]") != std::string::npos);
+  CHECK(message.find("f0_hz[5]") != std::string::npos);
 }
 
 TEST_CASE("auto_tune holds its pitch frame as a duration across input rates",
