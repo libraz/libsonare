@@ -1479,9 +1479,7 @@ export class SonareEngine {
 
   /** Queues a MIDI panic (all-notes-off) releasing every sounding note on both engines. `renderFrame` is the absolute render frame to fire at; omitted: immediate. */
   pushMidiPanic(renderFrame?: number): void {
-    const frame = resolveRenderFrame(renderFrame);
-    this.offlineEngine.pushMidiPanic(renderFrame);
-    this.postSync({ type: 'syncMidiPanic', renderFrame: frame });
+    strips.pushMidiPanic(this.stripContext, renderFrame);
   }
 
   /**
