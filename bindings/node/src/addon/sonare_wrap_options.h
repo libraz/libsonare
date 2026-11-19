@@ -1178,6 +1178,26 @@ inline bool OptionalIntArg(Napi::Env env, const Napi::CallbackInfo& info, size_t
   return RequiredIntValue(env, value, name, out);
 }
 
+/// @brief Read an optional int positional argument whose 0 is the library
+///        default (@ref ZeroIsSentinel), refusing a fraction.
+/// @details Reports by leaving a pending exception rather than unwinding, which
+///   is this family's contract, so the caller still bails on a false return.
+inline bool OptionalIntArg(Napi::Env env, const Napi::CallbackInfo& info, size_t index,
+                           const char* name, ZeroIsSentinel, int* out) {
+  if (env.IsExceptionPending()) return false;
+  const Napi::Value value = info[index];
+  if (value.IsUndefined() || value.IsNull()) {
+    *out = 0;
+    return true;
+  }
+  if (!RequireNumberValue(env, value, name)) return false;
+  if (node_is_fraction(value)) {
+    Napi::RangeError::New(env, node_fraction_message(name)).ThrowAsJavaScriptException();
+    return false;
+  }
+  return RequiredIntValue(env, value, name, out);
+}
+
 /// @brief Positional form of @ref Int32Value: an absent, undefined or null
 ///        argument reads as @p fallback, anything else goes through the strict
 ///        int read.

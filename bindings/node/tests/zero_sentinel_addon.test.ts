@@ -564,3 +564,69 @@ describe('a facade-guarded sentinel key, reached past the facade', () => {
     }
   });
 });
+
+describe('an inverse-transform hop whose zero runs as a quarter of nFft', () => {
+  const N_FFT = 256;
+  const N_FRAMES = 6;
+  const N_MELS = 16;
+  const N_MFCC = 8;
+  const filled = (length: number, value: number) => new Float32Array(length).fill(value);
+  const inverses: Array<[string, (hop: number | undefined) => number]> = [
+    [
+      'griffinLim',
+      (hop) =>
+        native.griffinLim(
+          filled((N_FFT / 2 + 1) * N_FRAMES, 0.1),
+          N_FFT / 2 + 1,
+          N_FRAMES,
+          22050,
+          N_FFT,
+          hop,
+          2,
+        ).length,
+    ],
+    [
+      'melToAudio',
+      (hop) =>
+        native.melToAudio(
+          filled(N_MELS * N_FRAMES, 0.1),
+          N_MELS,
+          N_FRAMES,
+          22050,
+          N_FFT,
+          hop,
+          0,
+          0,
+          2,
+        ).length,
+    ],
+    [
+      'mfccToAudio',
+      (hop) =>
+        native.mfccToAudio(
+          filled(N_MFCC * N_FRAMES, 0.1),
+          N_MFCC,
+          N_FRAMES,
+          N_MELS,
+          22050,
+          N_FFT,
+          hop,
+          0,
+          0,
+          2,
+        ).length,
+    ],
+  ];
+
+  for (const [name, render] of inverses) {
+    it(`refuses a fractional hopLength on ${name}, naming the sentinel`, () => {
+      expect(render(0)).toBe(render(undefined));
+      expect(render(N_FFT / 8)).not.toBe(render(undefined)); // positive control
+      for (const value of FRACTIONS) {
+        expect(() => render(value), `hopLength ${value}`).toThrow(
+          /hopLength must be a whole number: its zero selects the library default/,
+        );
+      }
+    });
+  }
+});

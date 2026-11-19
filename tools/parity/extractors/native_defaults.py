@@ -479,7 +479,7 @@ def extract(root: Path) -> tuple[list[NativeDefault], dict[str, str]]:
                 param=param,
                 literal=fallback,
             )
-            if fallback.startswith("ZeroIsSentinel"):
+            if fallback.removeprefix("k").startswith("ZeroIsSentinel"):
                 rec.unresolved = "zero is the library-default sentinel, not a default value"
             elif param and _presence_guarded(text, fn[1], pos, param):
                 rec.unresolved = PRESENCE_GUARDED
