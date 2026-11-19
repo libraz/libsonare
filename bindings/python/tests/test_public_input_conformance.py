@@ -14,6 +14,7 @@ from libsonare import (
     EngineMarker,
     MidiCcBinding,
     Project,
+    ProjectMidiCcBindingKind,
     RealtimeEngine,
     SonareValueError,
     mix_stereo,
@@ -109,6 +110,35 @@ _MIDI_CC_CASES = _CORPUS["midi_cc_binding"]["cases"]
 def test_midi_cc_binding_corpus_has_both_outcomes() -> None:
     assert len(_MIDI_CC_CASES) >= 11
     assert {case["accepted"] for case in _MIDI_CC_CASES} == {True, False}
+
+
+# Each byte field with the binding kind that reads it and an in-range value the
+# library accepts there (a 14-bit LSB controller is the MSB's pair, 32..63).
+_MIDI_CC_BYTE_FIELDS: dict[str, tuple[ProjectMidiCcBindingKind, int]] = {
+    "cc_number": ("controlChange7", 127),
+    "cc_lsb_number": ("controlChange14", 33),
+    "selector_msb": ("rpn", 127),
+    "selector_lsb": ("nrpn", 127),
+}
+
+
+@pytest.mark.parametrize("field", sorted(_MIDI_CC_BYTE_FIELDS))
+@pytest.mark.parametrize("value", [128, 255])
+def test_bind_midi_cc_refuses_a_byte_above_the_midi_data_range(field: str, value: int) -> None:
+    # The C fields are uint8, so 128..255 fit the struct and only the MIDI domain refuses them.
+    kind, accepted = _MIDI_CC_BYTE_FIELDS[field]
+    binding = MidiCcBinding(param_id=1, kind=kind, **{"cc_number": 1, field: value})
+    with RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
+        with pytest.raises(
+            SonareValueError,
+            match=rf"^RealtimeEngine\.bind_midi_cc: {field} must be an integer in \[0, 127\]$",
+        ):
+            engine.bind_midi_cc(binding)
+        assert engine.midi_cc_binding_count == 0
+        engine.bind_midi_cc(
+            MidiCcBinding(param_id=1, kind=kind, **{"cc_number": 1, field: accepted})
+        )
+        assert engine.midi_cc_binding_count == 1
 
 
 @pytest.mark.parametrize("case", _MIDI_CC_CASES, ids=lambda case: case["id"])

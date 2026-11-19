@@ -27,6 +27,7 @@ from typing import TYPE_CHECKING, Any, Literal, SupportsFloat, TypeAlias, cast, 
 import numpy as np
 
 from ._errors import _entry, _refuse, _refuse_type
+from ._narrowing import _narrow_int
 
 if TYPE_CHECKING:
     from ._project import Project, ProjectTimeline
@@ -396,17 +397,17 @@ class MidiCcBinding:
     """
 
     cc_number: int
-    """Controller number (the MSB controller for a 14-bit CC)."""
+    """Controller number 0..127 (the MSB controller for a 14-bit CC)."""
     channel: int | None = None
     """MIDI channel 0..15; None matches any channel."""
     kind: ProjectMidiCcBindingKind = "controlChange7"
     """Controller shape, a ``ProjectMidiCcBindingKind`` token."""
     cc_lsb_number: int = 0
-    """LSB controller number of a 14-bit CC."""
+    """LSB controller number 0..127 of a 14-bit CC."""
     selector_msb: int = 0
-    """Selector MSB of an RPN/NRPN binding."""
+    """Selector MSB 0..127 of an RPN/NRPN binding."""
     selector_lsb: int = 0
-    """Selector LSB of an RPN/NRPN binding."""
+    """Selector LSB 0..127 of an RPN/NRPN binding."""
     param_id: int
     """Automation parameter id the controller drives."""
     min_value: float = 0.0
@@ -444,6 +445,9 @@ class MidiRouteResult:
     """Number of events dropped."""
 
 
+# Largest 7-bit MIDI data byte: a controller number or a selector byte.
+_MIDI_DATA_MAX = 127
+
 # The C ABI's "no pitch class" code; absence on the Python side.
 _NO_PITCH_CLASS = 255
 
@@ -467,15 +471,14 @@ def _cc_binding_to_c(binding: MidiCcBinding) -> SonareMidiCcBinding:
     spelling of it is refused as a value.
     """
     _require_instance(binding, MidiCcBinding, "binding")
-    # Passed unconverted so the struct's own narrowing sees each caller value;
-    # int() would truncate a fraction past it and land on a neighbouring CC.
+    # Controller numbers and selector bytes are 7-bit MIDI data, narrower than their uint8 fields.
     return SonareMidiCcBinding(
-        cc_number=binding.cc_number,
+        cc_number=_narrow_int(binding.cc_number, "cc_number", 0, _MIDI_DATA_MAX),
         channel=_absent_or_in_range(binding.channel, "channel", 15, 0xFF),
         kind=_token_ordinal(binding.kind, _MIDI_CC_BINDING_KINDS, "MIDI CC binding kind"),
-        cc_lsb_number=binding.cc_lsb_number,
-        selector_msb=binding.selector_msb,
-        selector_lsb=binding.selector_lsb,
+        cc_lsb_number=_narrow_int(binding.cc_lsb_number, "cc_lsb_number", 0, _MIDI_DATA_MAX),
+        selector_msb=_narrow_int(binding.selector_msb, "selector_msb", 0, _MIDI_DATA_MAX),
+        selector_lsb=_narrow_int(binding.selector_lsb, "selector_lsb", 0, _MIDI_DATA_MAX),
         reserved=0,
         param_id=binding.param_id,
         min_value=float(binding.min_value),
