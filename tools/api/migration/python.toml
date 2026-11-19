@@ -6019,6 +6019,22 @@ rule = "string-closed-sets"
 test = "bindings/python/tests/test_engine.py::test_engine_rejects_out_of_range_automation_curve"
 
 [[entry]]
+kind = "field"
+old = "ProjectClip.loop_length_ppq"
+changed = "float | None: None when the clip loops its whole length (was 0.0)"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_project_edit_ops.py::test_set_clip_fade_and_loop_round_trip"
+
+[[entry]]
+kind = "option"
+old = "Project.set_clip_loop(loop_length_ppq)"
+changed = "float | None, default None: omitted loops the whole clip; an explicit 0 raises SonareValueError (it was the whole-clip sentinel) and a negative length is refused"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_project_edit_ops.py::test_set_clip_fade_and_loop_round_trip"
+
+[[entry]]
 kind = "option"
 old = "Project.set_clip_loop(loop_mode)"
 changed = "'off' or 'loop' only; 'on', 'none' and the LOOP_MODE_* ordinals are refused"

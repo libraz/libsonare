@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import ctypes
 import json
-import math
 from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING
 
@@ -884,10 +883,10 @@ class _ProjectEditMixin:
         exclusive strip. Mute and solo are unaffected: a silenced MIDI track
         schedules no events at all.
         """
-        # Type half shared, semantic half local: ">= 0" is this field's own rule.
+        # Type half shared, semantic half local: the lower bound is this field's own rule.
         g = _narrow_float(gain, "gain")
         if g < 0.0:
-            raise _refuse("gain must be a finite number >= 0")
+            raise _refuse("gain must be at least 0")
         _check(
             _get_lib().sonare_project_set_track_gain(
                 self._require_handle(), _to_c_uint32(track_id, "track_id"), g
@@ -948,11 +947,11 @@ class _ProjectEditMixin:
 
     @_entry("Project.set_clip_gain")
     def set_clip_gain(self, clip_id: int, gain: float) -> None:
-        """Set a clip's linear playback gain (>= 0; 0 = muted) via an undoable edit."""
-        # Type half shared, semantic half local: ">= 0" is this field's own rule.
+        """Set a clip's linear playback gain (at least 0; 0 = muted) via an undoable edit."""
+        # Type half shared, semantic half local: the lower bound is this field's own rule.
         g = _narrow_float(gain, "gain")
         if g < 0.0:
-            raise _refuse("gain must be a finite number >= 0")
+            raise _refuse("gain must be at least 0")
         _check(
             _get_lib().sonare_project_set_clip_gain(
                 self._require_handle(), _to_c_uint32(clip_id, "clip_id"), g
@@ -971,16 +970,16 @@ class _ProjectEditMixin:
     ) -> None:
         """Set a clip's fade-in and fade-out regions via an undoable edit.
 
-        Each fade length (PPQ) must be finite and >= 0 (0 = no fade); each curve
+        Each fade length (PPQ) must be finite and at least 0 (0 = no fade); each curve
         is a token (``"linear"`` / ``"equalPower"`` / ``"exponential"`` /
         ``"logarithmic"``).
         """
         fin = _narrow_double(fade_in_length_ppq, "fade_in_length_ppq")
         fout = _narrow_double(fade_out_length_ppq, "fade_out_length_ppq")
-        if not math.isfinite(fin) or fin < 0.0:
-            raise _refuse("fade_in_length_ppq must be a finite number >= 0")
-        if not math.isfinite(fout) or fout < 0.0:
-            raise _refuse("fade_out_length_ppq must be a finite number >= 0")
+        if fin < 0.0:
+            raise _refuse("fade_in_length_ppq must be at least 0")
+        if fout < 0.0:
+            raise _refuse("fade_out_length_ppq must be at least 0")
         c_in = SonareProjectClipFade(length_ppq=fin, curve=_fade_curve_value(fade_in_curve))
         c_out = SonareProjectClipFade(length_ppq=fout, curve=_fade_curve_value(fade_out_curve))
         _check(
@@ -997,25 +996,29 @@ class _ProjectEditMixin:
         self,
         clip_id: int,
         loop_mode: ProjectLoopMode = "off",
-        loop_length_ppq: float = 0.0,
+        loop_length_ppq: float | None = None,
         loop_crossfade_ppq: float = 0.0,
     ) -> None:
         """Set a clip's loop mode + loop length (PPQ) via an undoable edit.
 
-        ``loop_mode`` is ``"off"`` or ``"loop"``. When looping,
-        ``loop_length_ppq`` must be finite and >= 0, where ``0`` means "loop the
-        entire clip" (the effective length is resolved from the clip's own
-        duration). ``loop_crossfade_ppq`` is an optional equal-power crossfade at
-        the loop seam (PPQ, finite and >= 0; 0 = hard loop); the engine clamps it
-        to the clip's pre-roll and half the loop.
+        ``loop_mode`` is ``"off"`` or ``"loop"``. An omitted ``loop_length_ppq``
+        loops the entire clip (the length is resolved from the clip's own
+        duration); a given one must be greater than 0. ``loop_crossfade_ppq`` is
+        an optional equal-power crossfade at the loop seam (PPQ, at least 0;
+        0 = hard loop); the engine clamps it to the clip's pre-roll and half the
+        loop.
         """
         mode = _loop_mode_value(loop_mode)
-        length = _narrow_double(loop_length_ppq, "loop_length_ppq")
+        length = 0.0
+        if loop_length_ppq is not None:
+            length = _narrow_double(loop_length_ppq, "loop_length_ppq")
+            if length == 0.0:
+                raise _refuse("loop_length_ppq must not be 0; omit it to loop the whole clip")
+            if length < 0.0:
+                raise _refuse("loop_length_ppq must be greater than 0")
         crossfade = _narrow_double(loop_crossfade_ppq, "loop_crossfade_ppq")
-        if not math.isfinite(length) or length < 0.0:
-            raise _refuse("loop_length_ppq must be a finite number >= 0")
-        if not math.isfinite(crossfade) or crossfade < 0.0:
-            raise _refuse("loop_crossfade_ppq must be a finite number >= 0")
+        if crossfade < 0.0:
+            raise _refuse("loop_crossfade_ppq must be at least 0")
         _check(
             _get_lib().sonare_project_set_clip_loop(
                 self._require_handle(),

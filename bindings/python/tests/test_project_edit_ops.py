@@ -12,7 +12,14 @@ import json
 
 import pytest
 
-from libsonare import AutomationPoint, ErrorCode, Project, SonareError, mastering_insert_names
+from libsonare import (
+    AutomationPoint,
+    ErrorCode,
+    Project,
+    SonareError,
+    SonareValueError,
+    mastering_insert_names,
+)
 
 from ._helpers import raises_coded
 
@@ -67,14 +74,24 @@ def test_set_clip_fade_and_loop_round_trip() -> None:
     assert "loopCrossfadePpq" in p.to_json()
     p.undo()
     assert p.to_json() == before
-    # loop_length_ppq == 0 while looping means "loop the entire clip" (the
-    # C-ABI semantics); Python must accept it rather than over-validate.
-    p.set_clip_loop(clip, "loop", 0.0)
+    # An omitted loop length loops the entire clip and reads back as None.
+    p.set_clip_loop(clip, "loop")
     assert p.to_json() != before
+    assert p.clips()[0].loop_length_ppq is None
     p.undo()
     assert p.to_json() == before
-    with raises_coded():
-        p.set_clip_loop(clip, "loop", 240.0, loop_crossfade_ppq=-1.0)  # crossfade must be >= 0
+    with pytest.raises(SonareValueError) as zero:
+        p.set_clip_loop(clip, "loop", 0.0)
+    assert str(zero.value) == (
+        "Project.set_clip_loop: loop_length_ppq must not be 0; omit it to loop the whole clip"
+    )
+    with pytest.raises(SonareValueError) as negative:
+        p.set_clip_loop(clip, "loop", -1.0)
+    assert str(negative.value) == "Project.set_clip_loop: loop_length_ppq must be greater than 0"
+    with pytest.raises(SonareValueError) as crossfade:
+        p.set_clip_loop(clip, "loop", 240.0, loop_crossfade_ppq=-1.0)
+    assert str(crossfade.value) == "Project.set_clip_loop: loop_crossfade_ppq must be at least 0"
+    assert p.to_json() == before
 
 
 def test_duplicate_clip_allocates_new_id() -> None:

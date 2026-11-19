@@ -92,7 +92,7 @@ def test_lists_stored_tracks_clips_and_sources() -> None:
         assert clip.source_offset_ppq == 1.0
         assert clip.gain == 0.75
         assert clip.loop_mode == "off"
-        assert clip.loop_length_ppq == 0.0
+        assert clip.loop_length_ppq is None
 
         source = project.sources()[0]
         assert source.id == clip.source_id

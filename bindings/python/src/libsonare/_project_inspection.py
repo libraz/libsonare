@@ -568,7 +568,7 @@ class _ProjectInspectionMixin:
             source_offset_ppq=float(raw.source_offset_ppq),
             gain=float(raw.gain),
             loop_mode=cast(ProjectLoopMode, _LOOP_MODES[int(raw.loop_mode)]),
-            loop_length_ppq=float(raw.loop_length_ppq),
+            loop_length_ppq=float(raw.loop_length_ppq) or None,
         )
 
     def _source_by_index(self, index: int) -> ProjectSource:

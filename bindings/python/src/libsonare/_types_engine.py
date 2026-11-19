@@ -389,8 +389,8 @@ class ProjectClip:
     """Linear gain of the clip."""
     loop_mode: ProjectLoopMode
     """Whether the clip loops (:data:`ProjectLoopMode`)."""
-    loop_length_ppq: float
-    """Loop length in PPQ."""
+    loop_length_ppq: float | None
+    """Loop length in PPQ as set; ``None`` when the clip loops its whole length."""
 
 
 @dataclass(frozen=True, slots=True)
