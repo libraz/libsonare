@@ -4,12 +4,20 @@ from __future__ import annotations
 
 import json
 import math
+import re
 from pathlib import Path
 from typing import Any
 
 import pytest
 
-from libsonare import EngineMarker, RealtimeEngine, mix_stereo
+from libsonare import (
+    EngineMarker,
+    MidiCcBinding,
+    Project,
+    RealtimeEngine,
+    SonareValueError,
+    mix_stereo,
+)
 
 _CORPUS = json.loads(
     (Path(__file__).resolve().parents[3] / "tests/conformance/public_input_corpus.json").read_text()
@@ -87,3 +95,46 @@ def test_shared_mix_option_corpus_rejects_and_recovers(case: dict[str, Any]) -> 
     recovered = mix_stereo(strips, sample_rate=48000)
     assert len(recovered.left) == 2
     assert len(recovered.right) == 2
+
+
+def _python_field(case: dict[str, Any]) -> str:
+    """The corpus field is the Node spelling; the Python keyword is its snake case."""
+    return re.sub(r"(?<!^)(?=[A-Z])", "_", case["field"]).lower()
+
+
+def _midi_cc_binding(case: dict[str, Any]) -> MidiCcBinding:
+    return MidiCcBinding(**{"cc_number": 7, "param_id": 1, _python_field(case): case["value"]})
+
+
+_MIDI_CC_CASES = _CORPUS["midi_cc_binding"]["cases"]
+
+
+def test_midi_cc_binding_corpus_has_both_outcomes() -> None:
+    assert len(_MIDI_CC_CASES) >= 11
+    assert {case["accepted"] for case in _MIDI_CC_CASES} == {True, False}
+
+
+@pytest.mark.parametrize("case", _MIDI_CC_CASES, ids=lambda case: case["id"])
+def test_bind_midi_cc_byte_fields_follow_the_corpus(case: dict[str, Any]) -> None:
+    with RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
+        if case["accepted"]:
+            engine.bind_midi_cc(_midi_cc_binding(case))
+            assert engine.midi_cc_binding_count == 1
+        else:
+            with pytest.raises(
+                SonareValueError, match=rf"^\S+: {_python_field(case)} must be an integer in \[0, "
+            ):
+                engine.bind_midi_cc(_midi_cc_binding(case))
+            assert engine.midi_cc_binding_count == 0
+
+
+@pytest.mark.parametrize("case", _MIDI_CC_CASES, ids=lambda case: case["id"])
+def test_midi_cc_to_breakpoint_byte_fields_follow_the_corpus(case: dict[str, Any]) -> None:
+    event = Project.midi_cc(0.0, 0, 0, 7, 64)
+    if case["accepted"]:
+        Project.midi_cc_to_breakpoint([_midi_cc_binding(case)], event)
+    else:
+        with pytest.raises(
+            SonareValueError, match=rf"^\S+: {_python_field(case)} must be an integer in \[0, "
+        ):
+            Project.midi_cc_to_breakpoint([_midi_cc_binding(case)], event)

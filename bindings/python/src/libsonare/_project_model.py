@@ -449,11 +449,14 @@ _NO_PITCH_CLASS = 255
 
 
 def _absent_or_in_range(value: object, name: str, upper: int, absent: int) -> int:
-    """Map ``None`` to the C ABI's ``absent`` code; refuse anything outside 0..``upper`` by name."""
+    """Map ``None`` to the C ABI's ``absent`` code; refuse a value outside [0, ``upper``]."""
     if value is None:
         return absent
-    if isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= upper:
-        raise _refuse(f"{name} {value!r} must be in 0..{upper}, or None when absent")
+    message = f"{name} must be an integer in [0, {upper}], or None"
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise _refuse_type(message)
+    if not isinstance(value, int) or not 0 <= value <= upper:
+        raise _refuse(message)
     return value
 
 

@@ -515,7 +515,7 @@ def _note_pitch_hz(value: float | None, name: str) -> float:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise _refuse_type(f"{name} must be a number or None")
     if not math.isfinite(value) or value <= 0.0:
-        raise _refuse(f"{name} {value!r} must be finite and greater than 0, or None for no pitch")
+        raise _refuse(f"{name} must be finite and greater than 0, or None for no pitch")
     return float(value)
 
 
