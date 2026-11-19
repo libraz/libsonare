@@ -374,6 +374,9 @@ TEST_CASE("the synthesis generators refuse in the shared parameter vocabulary",
         "times must be finite and in [-3.4028235e38, 3.4028235e38]");
   CHECK(refusal_message([&] { (void)clicks({1.0e9f}, 22050); }) ==
         "times * sr must be at most 5e8");
+  // 22675.7 s lands just under the cap, so only the click tail runs past it.
+  CHECK(refusal_message([&] { (void)clicks({22675.7f}, 22050, 0, 1000.0f, 0.1f); }) ==
+        "max(times) * sr + click_duration * sr must be at most 5e8");
 }
 
 TEST_CASE("the dB conversions refuse in the shared parameter vocabulary", "[convert][refusal]") {

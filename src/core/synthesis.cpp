@@ -110,9 +110,6 @@ Audio clicks(const std::vector<float>& times, int sr, int length, float frequenc
 
   // Build the click waveform: 2**(0 .. -10) * sin(2*pi*f*n/sr)
   const size_t click_count = checked_sample_count(click_duration, sr, "click_duration");
-  if (click_count > static_cast<size_t>(std::numeric_limits<int>::max())) {
-    throw SonareException(ErrorCode::InvalidParameter, "clicks: click duration is too long");
-  }
   const int click_n = static_cast<int>(click_count);
   if (click_n <= 0) {
     util::check::refuse_relation({"click_duration", "sr"}, "{0} * {1} must be at least 1");
@@ -159,8 +156,10 @@ Audio clicks(const std::vector<float>& times, int sr, int length, float frequenc
       if (p > max_pos) max_pos = p;
     }
     if (static_cast<size_t>(max_pos) > resource::kMaxOfflineAudioSamples - click_count) {
-      throw SonareException(ErrorCode::InvalidParameter,
-                            "clicks: output exceeds the offline audio limit");
+      util::check::refuse_relation(
+          {"times", "sr", "click_duration"},
+          "max({0}) * {1} + {2} * {1} must be at most " +
+              util::refusal::bound_text(resource::kMaxOfflineAudioSamples));
     }
     out_len = static_cast<int>(static_cast<size_t>(max_pos) + click_count);
   } else {
