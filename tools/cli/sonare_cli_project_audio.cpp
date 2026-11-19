@@ -339,7 +339,7 @@ int project_bounce_impl(const CliArgs& args, bool use_synth, bool binds_source_a
   }
 
   SonareProjectBounceOptions options{};
-  options.total_frames = static_cast<int64_t>(args.get_int("frames", 0));
+  options.total_frames = static_cast<int64_t>(args.get_int64("frames", 0));
   options.num_channels = args.get_int("channels", 0);
   options.instrument_latency_samples =
       args.get_int("instrument-latency-samples", options.instrument_latency_samples);

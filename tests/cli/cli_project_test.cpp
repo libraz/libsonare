@@ -445,6 +445,15 @@ TEST_CASE("CLI project command group", "[cli]") {
     REQUIRE(missing_code == 2);
     REQUIRE_THAT(missing_output, ContainsSubstring("--channels"));
 
+    // The render length feeds an int64 count, so a value past INT_MAX reaches the input read.
+    for (const char* command : {" project bounce", " midi-render"}) {
+      INFO(command);
+      auto [long_code, long_output] = exec_command(CLI + command + " no-such-project.json -o " +
+                                                   wav + " --frames 3000000000 -q");
+      REQUIRE(long_code == 4);
+      REQUIRE_THAT(long_output, !ContainsSubstring("--frames"));
+    }
+
     std::remove(proj.c_str());
   }
 

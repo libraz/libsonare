@@ -27,6 +27,7 @@ from ._cli_inventory import (
     _action_domain,
     _canonical_option_string,
     _cli_domain,
+    _cli_integer_ceiling,
     _cli_scalar_type,
     _inventory_subparsers,
     _option_type,
@@ -477,6 +478,8 @@ _cli_scalar_type(_positive_pitch_frequency, "number")
 _cli_scalar_type(_c_int, "integer")
 _cli_scalar_type(_int64, "integer")
 _cli_scalar_type(_positive_int, "integer")
+_cli_integer_ceiling(_c_int, _C_INT_MAX)
+_cli_integer_ceiling(_positive_int, _C_INT_MAX)
 
 # The accepted value set each of the checkers above enforces, in the shape the
 # published inventory uses.  A ``type=`` callable is opaque to argparse, so the
@@ -495,9 +498,7 @@ _cli_domain(_positive_int, minimum=0.0, exclusive_minimum=True)
 def _add_wav_bits_argument(parser: argparse.ArgumentParser) -> argparse.Action:
     """Add ``--bits`` with the accepted set ``_wav_bits`` enforces.
 
-    argparse accepts any integer here; the handler refuses anything but 16 or
-    24 after parsing, which is why the domain records the invalid-parameter
-    class rather than the usage one.
+    The declared domain refuses anything but 16 or 24 at parse time.
     """
     return _cli_domain(
         parser.add_argument("--bits", type=_c_int, default=16),

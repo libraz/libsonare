@@ -455,6 +455,16 @@ int CliArgs::get_int(const std::string& k, int def) const {
   return value.kind == CliOptionDefaultKind::Integer ? value.integer_value : def;
 }
 
+long long CliArgs::get_int64(const std::string& k, long long def) const {
+  const auto it = option_value_for(*this, k);
+  if (it != options.end()) {
+    const CliOptionSpec* spec = cli_option_spec_for_command(command_path_for_args(*this), k);
+    return parse_int64_strict(spec == nullptr ? k : spec->name, it->second);
+  }
+  const CliOptionValue value = static_default_for(*this, k);
+  return value.kind == CliOptionDefaultKind::Integer ? value.integer_value : def;
+}
+
 unsigned CliArgs::get_uint32(const std::string& k, unsigned def) const {
   const auto it = option_value_for(*this, k);
   if (it == options.end()) {

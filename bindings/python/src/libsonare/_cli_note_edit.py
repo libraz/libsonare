@@ -28,11 +28,11 @@ from ._cli_options import (
     _ContractArgumentParser,
     _finite_float,
     _given,
+    _int64,
     _mode_mask,
     _NumericTextError,
     _pitch_threshold,
     _positive_finite_float,
-    _positive_int,
     _read_integer_text,
     _read_number_text,
 )
@@ -838,19 +838,29 @@ def register_note_edit_parsers(
         metavar="MS",
         help="Shortest note kept (session default: 30)",
     )
-    vocal_notes_p.add_argument(
-        "--frame-length-samples",
-        type=_positive_int,
-        default=None,
-        metavar="N",
-        help="Analysis frame length in samples (session default: 2048)",
+    _cli_domain(
+        vocal_notes_p.add_argument(
+            "--frame-length-samples",
+            type=_int64,
+            default=None,
+            metavar="N",
+            help="Analysis frame length in samples (session default: 2048)",
+        ),
+        minimum=0,
+        exclusive_minimum=True,
+        maximum=0xFFFFFFFF,
     )
-    vocal_notes_p.add_argument(
-        "--hop-length-samples",
-        type=_positive_int,
-        default=None,
-        metavar="N",
-        help="Analysis hop length in samples (session default: 512)",
+    _cli_domain(
+        vocal_notes_p.add_argument(
+            "--hop-length-samples",
+            type=_int64,
+            default=None,
+            metavar="N",
+            help="Analysis hop length in samples (session default: 512)",
+        ),
+        minimum=0,
+        exclusive_minimum=True,
+        maximum=0xFFFFFFFF,
     )
     vocal_notes_p.add_argument(
         "--f0-min-hz",

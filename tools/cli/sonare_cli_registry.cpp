@@ -241,8 +241,20 @@ CliOptionDomain enum_index(int lowest, int highest) {
   return choices_of(std::move(values));
 }
 
+// An integer read into a C int ends at INT_MAX, so a lower bound alone gets that upper bound.
 CliOptionSpec with_domain(CliOptionSpec spec, CliOptionDomain domain) {
+  if (spec.scalar_type == CliOptionScalarType::Integer && !spec.int64_width && domain.has_minimum &&
+      !domain.has_maximum && domain.choices.empty()) {
+    domain.has_maximum = true;
+    domain.maximum = static_cast<double>(std::numeric_limits<int>::max());
+  }
   spec.domain = std::move(domain);
+  return spec;
+}
+
+/// Marks an integer option backed by an `int64_t` field, read with `get_int64`.
+CliOptionSpec int64_width(CliOptionSpec spec) {
+  spec.int64_width = true;
   return spec;
 }
 
@@ -742,8 +754,8 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     add_command(commands, "vocal-notes", true,
                 {with_domain(number_value("segmentation-threshold-cents"), greater_than(0.0)),
                  with_domain(number_value("min-note-ms"), greater_than(0.0)),
-                 with_domain(int_value("frame-length-samples"), greater_than(0.0)),
-                 with_domain(int_value("hop-length-samples"), greater_than(0.0)),
+                 with_domain(int_value("frame-length-samples"), above_zero_up_to(4294967295.0)),
+                 with_domain(int_value("hop-length-samples"), above_zero_up_to(4294967295.0)),
                  with_domain(number_value("f0-min-hz"), greater_than(0.0)),
                  with_domain(number_value("f0-max-hz"), greater_than(0.0)),
                  with_domain(number_value("yin-threshold"), above_zero_up_to(1.0)),
@@ -1211,8 +1223,8 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     // assignment, not a bare path.
     add_project_command(
         "project.bounce",
-        {required_output(), int_value("sample-rate"), project_length(int_value("frames")),
-         master_width(int_value("channels")),
+        {required_output(), int_value("sample-rate"),
+         project_length(int64_width(int_value("frames"))), master_width(int_value("channels")),
          library_default(int_value("instrument-latency-samples"), "0"), optional_string("synth"),
          string_value("audio", false, true), flag("resolve-audio")},
         &validate_project_bounce_channels, kProjectJsonPositional);
@@ -1233,12 +1245,13 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     // no subcommand positional, and `--synth` is a plain value rather than an
     // optional flag because the rendering always goes through NativeSynth and
     // only the preset is in question.
-    add_command(commands, "midi-render", false,
-                {required_output(), int_value("sample-rate"), project_length(int_value("frames")),
-                 master_width(int_value("channels")),
-                 library_default(int_value("instrument-latency-samples"), "0"),
-                 with_stated_default(nullable_string_value("synth"), "GM program/channel routing")},
-                {}, &validate_project_bounce_channels, 1, false, false, kProjectJsonPositional);
+    add_command(
+        commands, "midi-render", false,
+        {required_output(), int_value("sample-rate"),
+         project_length(int64_width(int_value("frames"))), master_width(int_value("channels")),
+         library_default(int_value("instrument-latency-samples"), "0"),
+         with_stated_default(nullable_string_value("synth"), "GM program/channel routing")},
+        {}, &validate_project_bounce_channels, 1, false, false, kProjectJsonPositional);
     // Every numeric here means "keep the library default" when absent. The ranges a
     // single value can be refused by are declared; the reattack ratio's "0 or above 1"
     // stays in the handler, and the rules joining two options stay with the core.

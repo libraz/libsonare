@@ -783,11 +783,16 @@ def register_project_parsers(
             "Default: the project's own sample rate."
         ),
     )
-    pbounce.add_argument(
-        "--frames",
-        type=_positive_int,
-        default=None,
-        help="Render length in frames (default: through the last event and its tail)",
+    # The render length is an int64 count, so a lower bound alone leaves it unbounded above.
+    _cli_domain(
+        pbounce.add_argument(
+            "--frames",
+            type=_int64,
+            default=None,
+            help="Render length in frames (default: through the last event and its tail)",
+        ),
+        minimum=0,
+        exclusive_minimum=True,
     )
     pbounce.add_argument(
         "--channels",
@@ -843,8 +848,6 @@ def register_project_parsers(
         help="Align every take in a project against one reference source",
     )
     palign.add_argument("input", metavar="project.json", help="Input project JSON")
-    # The value domains stay out of argparse: `type=` / `choices=` would report
-    # them as usage errors, and each one is an invalid parameter.
     _cli_domain(
         palign.add_argument(
             "--reference-source",
@@ -924,11 +927,16 @@ def register_project_parsers(
             "Default: the project's own sample rate."
         ),
     )
-    midi_render_p.add_argument(
-        "--frames",
-        type=_positive_int,
-        default=None,
-        help="Render length in frames (default: through the last event and its tail)",
+    # The render length is an int64 count, so a lower bound alone leaves it unbounded above.
+    _cli_domain(
+        midi_render_p.add_argument(
+            "--frames",
+            type=_int64,
+            default=None,
+            help="Render length in frames (default: through the last event and its tail)",
+        ),
+        minimum=0,
+        exclusive_minimum=True,
     )
     midi_render_p.add_argument(
         "--channels",

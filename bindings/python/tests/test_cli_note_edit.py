@@ -435,7 +435,7 @@ def test_tune_to_midi_cli_forwards_a_correction_bound_of_zero() -> None:
 @pytest.mark.parametrize(
     ("extra", "message"),
     [
-        (["--track", "-1"], "argument --track: must be an integer of at least 0"),
+        (["--track", "-1"], "argument --track: must be an integer in [0, 2147483647]"),
         (
             ["--min-overlap-ratio", "1.5"],
             "argument --min-overlap-ratio: must be finite and in [0, 1]",
@@ -774,7 +774,7 @@ def test_note_bounds_in_seconds_round_to_the_nearest_sample(monkeypatch, capsys,
         (
             "note-move",
             ["--offset-sample", "-1"],
-            "argument --offset-sample: must be an integer of at least 0",
+            "argument --offset-sample: must be an integer in [0, 2147483647]",
         ),
     ],
 )

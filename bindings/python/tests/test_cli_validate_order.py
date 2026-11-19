@@ -80,6 +80,16 @@ def test_a_layout_channel_count_passes_validation(tmp_path, channels) -> None:
     assert "--channels" not in result.stderr
 
 
+@pytest.mark.parametrize("command", [["project", "bounce"], ["midi-render"]])
+def test_a_render_length_past_a_c_int_passes_validation(tmp_path, command) -> None:
+    """The render length is an int64 count, so a value past INT_MAX reaches the input read."""
+    result = _run_cli(
+        [*command, _UNREADABLE, "--frames", "3000000000", "-o", str(tmp_path / "o.wav")]
+    )
+    assert result.returncode == 4, result.stderr
+    assert "--frames" not in result.stderr
+
+
 def _domain_rows() -> list[tuple[str, str]]:
     declaration = json.loads((_ROOT / "tests/conformance/cli_option_domains.json").read_text())
     return [(row["command"], row["option"]) for row in declaration["domains"]]

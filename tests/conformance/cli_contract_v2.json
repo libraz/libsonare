@@ -146,7 +146,7 @@
             "choices": [],
             "minimum": 0,
             "exclusive_minimum": true,
-            "maximum": null,
+            "maximum": 2147483647,
             "exclusive_maximum": false
           }
         },
@@ -228,7 +228,7 @@
             "choices": [],
             "minimum": 0,
             "exclusive_minimum": false,
-            "maximum": null,
+            "maximum": 2147483647,
             "exclusive_maximum": false
           }
         },
@@ -954,7 +954,7 @@
             "choices": [],
             "minimum": 0,
             "exclusive_minimum": true,
-            "maximum": null,
+            "maximum": 2147483647,
             "exclusive_maximum": false
           }
         },
@@ -1012,7 +1012,7 @@
             "choices": [],
             "minimum": 0,
             "exclusive_minimum": true,
-            "maximum": null,
+            "maximum": 2147483647,
             "exclusive_maximum": false
           }
         },
@@ -1058,7 +1058,7 @@
             "choices": [],
             "minimum": 0,
             "exclusive_minimum": true,
-            "maximum": null,
+            "maximum": 2147483647,
             "exclusive_maximum": false
           }
         },
@@ -2054,7 +2054,7 @@
             "choices": [],
             "minimum": 0,
             "exclusive_minimum": true,
-            "maximum": null,
+            "maximum": 2147483647,
             "exclusive_maximum": false
           }
         },
@@ -2355,7 +2355,7 @@
             "choices": [],
             "minimum": 0,
             "exclusive_minimum": false,
-            "maximum": null,
+            "maximum": 2147483647,
             "exclusive_maximum": false
           }
         },
@@ -2387,7 +2387,7 @@
             "choices": [],
             "minimum": 0,
             "exclusive_minimum": false,
-            "maximum": null,
+            "maximum": 2147483647,
             "exclusive_maximum": false
           }
         },
@@ -2431,7 +2431,7 @@
             "choices": [],
             "minimum": 0,
             "exclusive_minimum": false,
-            "maximum": null,
+            "maximum": 2147483647,
             "exclusive_maximum": false
           }
         },
@@ -2475,7 +2475,7 @@
             "choices": [],
             "minimum": 0,
             "exclusive_minimum": false,
-            "maximum": null,
+            "maximum": 2147483647,
             "exclusive_maximum": false
           }
         },
@@ -2507,7 +2507,7 @@
             "choices": [],
             "minimum": 0,
             "exclusive_minimum": false,
-            "maximum": null,
+            "maximum": 2147483647,
             "exclusive_maximum": false
           }
         },
@@ -2678,7 +2678,7 @@
             "choices": [],
             "minimum": 0,
             "exclusive_minimum": true,
-            "maximum": null,
+            "maximum": 2147483647,
             "exclusive_maximum": false
           }
         },
@@ -2766,7 +2766,7 @@
             "choices": [],
             "minimum": 0,
             "exclusive_minimum": true,
-            "maximum": null,
+            "maximum": 2147483647,
             "exclusive_maximum": false
           }
         },
@@ -2947,7 +2947,7 @@
             "choices": [],
             "minimum": 0,
             "exclusive_minimum": true,
-            "maximum": null,
+            "maximum": 2147483647,
             "exclusive_maximum": false
           }
         },
@@ -2973,7 +2973,7 @@
             "choices": [],
             "minimum": 0,
             "exclusive_minimum": true,
-            "maximum": null,
+            "maximum": 2147483647,
             "exclusive_maximum": false
           }
         },
@@ -3175,7 +3175,7 @@
             "choices": [],
             "minimum": 0,
             "exclusive_minimum": true,
-            "maximum": null,
+            "maximum": 4294967295,
             "exclusive_maximum": false
           }
         },
@@ -3191,7 +3191,7 @@
             "choices": [],
             "minimum": 0,
             "exclusive_minimum": true,
-            "maximum": null,
+            "maximum": 4294967295,
             "exclusive_maximum": false
           }
         },
@@ -3331,7 +3331,7 @@
             "choices": [],
             "minimum": 0,
             "exclusive_minimum": true,
-            "maximum": null,
+            "maximum": 2147483647,
             "exclusive_maximum": false
           }
         },
@@ -3437,7 +3437,7 @@
             "choices": [],
             "minimum": 0,
             "exclusive_minimum": true,
-            "maximum": null,
+            "maximum": 2147483647,
             "exclusive_maximum": false
           }
         },
@@ -3453,7 +3453,7 @@
             "choices": [],
             "minimum": 0,
             "exclusive_minimum": true,
-            "maximum": null,
+            "maximum": 2147483647,
             "exclusive_maximum": false
           }
         },
@@ -4640,7 +4640,7 @@
             "choices": [],
             "minimum": 0,
             "exclusive_minimum": true,
-            "maximum": null,
+            "maximum": 2147483647,
             "exclusive_maximum": false
           }
         },
@@ -4666,7 +4666,7 @@
             "choices": [],
             "minimum": 0,
             "exclusive_minimum": true,
-            "maximum": null,
+            "maximum": 2147483647,
             "exclusive_maximum": false
           }
         },
@@ -5057,7 +5057,7 @@
             "choices": [],
             "minimum": 0,
             "exclusive_minimum": false,
-            "maximum": null,
+            "maximum": 2147483647,
             "exclusive_maximum": false
           }
         },
@@ -6439,7 +6439,7 @@
             "choices": [],
             "minimum": 0,
             "exclusive_minimum": true,
-            "maximum": null,
+            "maximum": 2147483647,
             "exclusive_maximum": false
           }
         },
@@ -8767,7 +8767,7 @@
             "choices": [],
             "minimum": 0,
             "exclusive_minimum": true,
-            "maximum": null,
+            "maximum": 2147483647,
             "exclusive_maximum": false
           }
         },
@@ -9644,7 +9644,7 @@
             "choices": [],
             "minimum": 0,
             "exclusive_minimum": true,
-            "maximum": null,
+            "maximum": 2147483647,
             "exclusive_maximum": false
           }
         },
@@ -9670,7 +9670,7 @@
             "choices": [],
             "minimum": 0,
             "exclusive_minimum": true,
-            "maximum": null,
+            "maximum": 2147483647,
             "exclusive_maximum": false
           }
         },
@@ -9750,7 +9750,7 @@
             "choices": [],
             "minimum": 0,
             "exclusive_minimum": true,
-            "maximum": null,
+            "maximum": 2147483647,
             "exclusive_maximum": false
           }
         },
@@ -9776,7 +9776,7 @@
             "choices": [],
             "minimum": 0,
             "exclusive_minimum": true,
-            "maximum": null,
+            "maximum": 2147483647,
             "exclusive_maximum": false
           }
         },
@@ -9953,7 +9953,7 @@
             "choices": [],
             "minimum": 0,
             "exclusive_minimum": false,
-            "maximum": null,
+            "maximum": 2147483647,
             "exclusive_maximum": false
           }
         },
@@ -9985,7 +9985,7 @@
             "choices": [],
             "minimum": 0,
             "exclusive_minimum": false,
-            "maximum": null,
+            "maximum": 2147483647,
             "exclusive_maximum": false
           }
         },
@@ -10909,7 +10909,7 @@
             "choices": [],
             "minimum": 0,
             "exclusive_minimum": true,
-            "maximum": null,
+            "maximum": 2147483647,
             "exclusive_maximum": false
           }
         },
@@ -10955,7 +10955,7 @@
             "choices": [],
             "minimum": 0,
             "exclusive_minimum": true,
-            "maximum": null,
+            "maximum": 2147483647,
             "exclusive_maximum": false
           }
         },
@@ -11524,7 +11524,7 @@
             "choices": [],
             "minimum": 0,
             "exclusive_minimum": false,
-            "maximum": null,
+            "maximum": 2147483647,
             "exclusive_maximum": false
           }
         },
@@ -12421,7 +12421,7 @@
             "choices": [],
             "minimum": 0,
             "exclusive_minimum": true,
-            "maximum": null,
+            "maximum": 4294967295,
             "exclusive_maximum": false
           }
         },
@@ -12437,7 +12437,7 @@
             "choices": [],
             "minimum": 0,
             "exclusive_minimum": true,
-            "maximum": null,
+            "maximum": 4294967295,
             "exclusive_maximum": false
           }
         },
@@ -13542,7 +13542,7 @@
             "choices": [],
             "minimum": 0,
             "exclusive_minimum": true,
-            "maximum": null,
+            "maximum": 2147483647,
             "exclusive_maximum": false
           }
         },
@@ -13773,7 +13773,7 @@
             "choices": [],
             "minimum": 0,
             "exclusive_minimum": true,
-            "maximum": null,
+            "maximum": 2147483647,
             "exclusive_maximum": false
           }
         },
@@ -13789,7 +13789,7 @@
             "choices": [],
             "minimum": 0,
             "exclusive_minimum": true,
-            "maximum": null,
+            "maximum": 2147483647,
             "exclusive_maximum": false
           }
         },
@@ -14652,7 +14652,7 @@
             "choices": [],
             "minimum": 0,
             "exclusive_minimum": true,
-            "maximum": null,
+            "maximum": 2147483647,
             "exclusive_maximum": false
           }
         },
@@ -16096,7 +16096,7 @@
             "choices": [],
             "minimum": 0,
             "exclusive_minimum": true,
-            "maximum": null,
+            "maximum": 2147483647,
             "exclusive_maximum": false
           }
         },
@@ -16586,7 +16586,7 @@
             "choices": [],
             "minimum": 0,
             "exclusive_minimum": false,
-            "maximum": null,
+            "maximum": 2147483647,
             "exclusive_maximum": false
           }
         },
@@ -16618,7 +16618,7 @@
             "choices": [],
             "minimum": 0,
             "exclusive_minimum": false,
-            "maximum": null,
+            "maximum": 2147483647,
             "exclusive_maximum": false
           }
         },
@@ -16662,7 +16662,7 @@
             "choices": [],
             "minimum": 0,
             "exclusive_minimum": false,
-            "maximum": null,
+            "maximum": 2147483647,
             "exclusive_maximum": false
           }
         },
@@ -17363,7 +17363,7 @@
             "choices": [],
             "minimum": 0,
             "exclusive_minimum": true,
-            "maximum": null,
+            "maximum": 2147483647,
             "exclusive_maximum": false
           }
         },
@@ -18505,7 +18505,7 @@
             "choices": [],
             "minimum": 0,
             "exclusive_minimum": false,
-            "maximum": null,
+            "maximum": 2147483647,
             "exclusive_maximum": false
           }
         },

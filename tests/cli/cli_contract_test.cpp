@@ -1135,6 +1135,25 @@ TEST_CASE("CLI refuses every registry domain before the input is read",
   REQUIRE(compared > 100);
 }
 
+TEST_CASE("CLI integer domains end at the width of the field they feed",
+          "[cli][argument-contract]") {
+  // A C int field ends at INT_MAX, so only an int64 option is unbounded above;
+  // the library states the two as "in [N, 2147483647]" and "of at least N".
+  size_t bounded = 0;
+  for (const auto& command : cli_command_registry()) {
+    for (const auto& option : command.options) {
+      if (option.scalar_type != CliOptionScalarType::Integer || !option.domain.has_minimum ||
+          !option.domain.choices.empty()) {
+        continue;
+      }
+      CAPTURE(command.path, option.name);
+      REQUIRE(option.domain.has_maximum != option.int64_width);
+      if (option.domain.has_maximum) ++bounded;
+    }
+  }
+  REQUIRE(bounded > 25);
+}
+
 TEST_CASE("CLI generic parser failures use the usage exit code", "[cli][argument-contract]") {
   SECTION("unknown option") {
     auto [code, output] = exec_command(CLI + " chroma --no-such-option");

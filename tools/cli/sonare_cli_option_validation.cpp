@@ -128,8 +128,9 @@ std::string validate_numeric_option_values(const CliArgs& args) {
         // An option whose declared domain reaches past int is parsed at 64 bits,
         // so the domain below is what refuses the value rather than the parser's
         // width silently doing it first with a message that names no range.
-        if (spec->domain.has_maximum &&
-            spec->domain.maximum > static_cast<double>(std::numeric_limits<int>::max())) {
+        if (spec->int64_width ||
+            (spec->domain.has_maximum &&
+             spec->domain.maximum > static_cast<double>(std::numeric_limits<int>::max()))) {
           (void)parse_int64_strict(key, value);
         } else {
           (void)parse_int_strict(key, value);

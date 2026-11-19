@@ -93,6 +93,8 @@ struct CliArgs {
   /// Reads a number at full double width, for an option backed by a `double` field.
   double get_double(const std::string& k, double def) const;
   int get_int(const std::string& k, int def) const;
+  /// Reads an option backed by an `int64_t` field at full width.
+  long long get_int64(const std::string& k, long long def) const;
   /// Reads an option backed by a C `uint32` field. Separate from @ref get_int
   /// because that one cannot express the upper half of the field's range, which
   /// left every seed above 2^31-1 unreachable from this front-end while the

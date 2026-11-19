@@ -71,6 +71,9 @@ struct CliOptionSpec {
   /// An Integer option that also reads a mode name (`major`, `dorian`, ...) as
   /// the scale mask of that mode. The domain is checked on the resolved mask.
   bool accepts_mode_name = false;
+  /// An Integer option backed by an `int64_t` field: parsed at 64 bits, and a lower
+  /// bound alone leaves it unbounded above rather than ending at INT_MAX.
+  bool int64_width = false;
   /// What the library takes when the option is left out, as `--help` states it. Set only on an
   /// option with no registry default, whose handler then keeps the library's own value.
   std::string stated_default;

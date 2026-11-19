@@ -110,8 +110,18 @@ def _cli_domain(target: _TargetT, **domain: Any) -> _TargetT:
 
     Returns @p target so a caller can wrap an ``add_argument`` result inline.
     The return type mirrors the argument so an inline wrap keeps the action or
-    callable type it started with rather than widening to ``Any``.
+    callable type it started with rather than widening to ``Any``. A lower bound
+    alone on an integer reader with a ceiling ends at that ceiling.
     """
+    reader = target.type if isinstance(target, argparse.Action) else target
+    ceiling = getattr(reader, _INTEGER_CEILING_ATTRIBUTE, None)
+    if (
+        ceiling is not None
+        and domain.get("minimum") is not None
+        and domain.get("maximum") is None
+        and not domain.get("choices")
+    ):
+        domain = {**domain, "maximum": ceiling}
     setattr(target, _DOMAIN_ATTRIBUTE, _domain_record(**domain))
     choices = domain.get("choices")
     # A declared token set is read in any case, the same as an argparse ``choices=``.
@@ -130,6 +140,16 @@ def _cli_domain(target: _TargetT, **domain: Any) -> _TargetT:
 # scalar it yields or the inventory falls back to guessing from the default --
 # and an option defaulting to None has no default to guess from.
 _SCALAR_TYPE_ATTRIBUTE = "sonare_cli_scalar_type"
+
+
+# The largest value an integer ``type=`` callable reads: a C ``int`` reader's INT_MAX.
+_INTEGER_CEILING_ATTRIBUTE = "sonare_cli_integer_ceiling"
+
+
+def _cli_integer_ceiling(target: _TargetT, ceiling: int) -> _TargetT:
+    """Record the largest value an integer type callable reads, returning @p target."""
+    setattr(target, _INTEGER_CEILING_ATTRIBUTE, ceiling)
+    return target
 
 
 def _cli_scalar_type(target: _TargetT, scalar_type: str) -> _TargetT:
