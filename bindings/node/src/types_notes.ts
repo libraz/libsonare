@@ -153,7 +153,10 @@ export interface NoteExtractorOptions {
  * Readonly: edit a note by passing a modified copy to {@link renderNotes}.
  *
  * @example
+ * ```ts
+ * declare const notes: NoteObject[]; // what extractNotes returned
  * renderNotes({ samples, sampleRate, notes: notes.map((n) => ({ ...n, edit: { ...n.edit, gainDb: -6 } })) });
+ * ```
  */
 export interface NoteEdit {
   /**

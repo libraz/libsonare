@@ -65,6 +65,8 @@ function streamingGainFromNative(raw: object): StreamingLoudnessGainResult {
  * @throws {RangeError} on audio out of domain or an out-of-range `sampleRate`
  *
  * @example
+ * ```ts
+ * declare const config: MasteringChainConfig; // the chain the stream will run
  * const { loudnessStaticGainDb, truePeakDbtp } = streamingLoudnessGain(samples, 48000, { config });
  * const chain = new StreamingMasteringChain({
  *   ...config,
@@ -73,6 +75,7 @@ function streamingGainFromNative(raw: object): StreamingLoudnessGainResult {
  *   loudnessStaticGainDb,
  *   loudnessStaticGainPeakDb: truePeakDbtp,
  * });
+ * ```
  */
 export function streamingLoudnessGain(
   request: StreamingLoudnessGainRequest,

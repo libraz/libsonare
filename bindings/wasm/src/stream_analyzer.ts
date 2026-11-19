@@ -539,8 +539,11 @@ export class StreamAnalyzer {
    *
    * @param referenceHz - Reference frequency for A4 in Hz (default 440)
    * @example
+   * ```ts
+   * declare const analyzer: StreamAnalyzer;
    * // If audio is 1 semitone sharp (A4 = 466.16 Hz)
    * analyzer.setReferenceHz(466.16);
+   * ```
    */
   setReferenceHz(referenceHz: number): void {
     assertReferenceHz(referenceHz);

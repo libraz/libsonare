@@ -16,7 +16,9 @@ import { assertClosedToken, assertFiniteScalar } from './validation.js';
  * so is an unknown name (`RangeError`).
  *
  * @example
+ * ```ts
  * scaleMaskForMode(0, 'major'); // 0b101010110101
+ * ```
  */
 export function scaleMaskForMode(root: PitchClass, mode: KeyMode): number {
   return withEntry('scaleMaskForMode', () => {

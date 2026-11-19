@@ -249,7 +249,9 @@ export function pitchCorrectTimevarying(...args: unknown[]): Float32Array {
  * for an unknown one, `TypeError` for a non-string).
  *
  * @example
+ * ```ts
  * const { samples: tuned, key } = autoTune({ samples, sampleRate: 44100, strength: 0.8 });
+ * ```
  *
  * @param samples - Audio samples (mono, float32)
  * @param sampleRate - Sample rate in Hz

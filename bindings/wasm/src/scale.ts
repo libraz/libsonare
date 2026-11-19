@@ -20,7 +20,9 @@ import { assertFiniteScalar } from './validation.js';
  * non-string, `RangeError` for an unknown token).
  *
  * @example
+ * ```ts
  * scaleMaskForMode(0, 'major'); // 0b101010110101
+ * ```
  */
 export function scaleMaskForMode(root: PitchClass, mode: KeyMode): number {
   return withEntry('scaleMaskForMode', () => {
