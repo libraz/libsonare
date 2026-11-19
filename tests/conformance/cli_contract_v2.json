@@ -6028,7 +6028,7 @@
       "status": "native_only",
       "option_status": "pending",
       "reason_kind": "by_design",
-      "reason": "a librosa-style primitive; a Python caller reaches it as libsonare.onset_envelope() over the array it already holds, where it composes"
+      "reason": "a librosa-style primitive; a Python caller reaches it as libsonare.onset_strength() over the array it already holds, where it composes"
     },
     "fourier-tempogram": {
       "classification": "native_only",
