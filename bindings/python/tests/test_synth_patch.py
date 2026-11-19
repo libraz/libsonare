@@ -601,11 +601,11 @@ def test_synth_patch_field_outside_the_published_range_is_refused_by_name() -> N
 
 @pytest.mark.parametrize("field", ["cutoff_hz", "detune_cents", "gain", "drift_rate_hz"])
 def test_synth_patch_float_beyond_float32_is_refused_as_narrowing(field: str) -> None:
-    with pytest.raises(SonareValueError, match=rf"{field} must be a finite number within"):
+    with pytest.raises(SonareValueError, match=rf"{field} must be finite and in "):
         SynthPatch(**{field: 1e40})._to_c()
-    with pytest.raises(SonareValueError, match=rf"{field} must be a finite number within"):
+    with pytest.raises(SonareValueError, match=rf"{field} must be finite and in "):
         SynthPatch(**{field: -1e40})._to_c()
-    with pytest.raises(TypeError, match=rf"{field} must be a finite number within"):
+    with pytest.raises(TypeError, match=rf"{field} must be finite and in "):
         SynthPatch(**{field: True})._to_c()
 
 

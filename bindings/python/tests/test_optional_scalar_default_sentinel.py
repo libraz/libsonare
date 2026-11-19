@@ -65,9 +65,7 @@ class TestMelFrequencyBounds:
         # A negative edge is representable, so it reaches the core and the
         # core's domain check refuses it; a non-finite one never leaves the
         # binding, whose argument reader refuses it.
-        wording = (
-            "finite non-negative" if math.isfinite(value) else "must be a finite number within"
-        )
+        wording = "finite non-negative" if math.isfinite(value) else "must be finite and in"
         assert wording in str(excinfo.value)
 
     @pytest.mark.parametrize("value", [0.0, *REFUSED_VALUES])

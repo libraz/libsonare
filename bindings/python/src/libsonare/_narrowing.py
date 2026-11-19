@@ -119,7 +119,7 @@ def _narrow_float(value: object, name: str) -> float:
 
 def _float_narrowing_error(name: str) -> str:
     """Word one refusal for the float half, as :func:`_narrowing_error` does for ints."""
-    return f"{name} must be a finite number within the 32-bit float range"
+    return f"{name} must be finite and in [-3.4028235e38, 3.4028235e38]"
 
 
 def _narrow_double(value: object, name: str) -> float:

@@ -87,7 +87,7 @@ def _normalize_target(target_db: float) -> float:
     target_db = _validate_scalar(target_db, "target_db")
     target_db_c = ctypes.c_float(target_db).value
     if not np.isfinite(target_db_c):
-        raise _refuse("target_db must be a finite number within the 32-bit float range")
+        raise _refuse("target_db must be finite and in [-3.4028235e38, 3.4028235e38]")
     if target_db_c > 0.0:
         raise _refuse("target_db must be at or below 0 dBFS")
     return target_db_c

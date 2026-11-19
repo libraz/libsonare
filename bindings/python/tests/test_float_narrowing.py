@@ -291,7 +291,7 @@ def test_a_buffer_element_past_the_float32_range_is_refused_as_the_value_it_was(
     wide_array = np.array(clean, dtype=np.float64)
     wide_array[100] = 1e300
     for samples in (wide_list, wide_array):
-        with pytest.raises(SonareValueError, match=re.escape("samples[100] must be a finite")):
+        with pytest.raises(SonareValueError, match=re.escape("samples[100] must be finite and in")):
             ls.rms_energy(samples, frame_length=512, hop_length=256, sample_rate=22050)
 
     # A value that really is non-finite keeps the message that is true of it,
@@ -329,7 +329,7 @@ def test_a_number_too_wide_for_a_double_is_refused_by_the_library_not_by_python(
         len(ls.rms_energy(clean, frame_length=512, hop_length=256, sample_rate=22050)) == 9
     )  # positive control
 
-    with pytest.raises(SonareValueError, match="must be a finite number"):
+    with pytest.raises(SonareValueError, match="samples must be finite and in"):
         ls.rms_energy(
             clean[:100] + [10**400] + clean[101:],
             frame_length=512,
