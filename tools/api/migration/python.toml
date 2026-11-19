@@ -11383,6 +11383,14 @@ test = "bindings/python/tests/test_analyzer_features.py::test_an_omitted_hpss_ho
 
 [[entry]]
 kind = "option"
+old = "phase_vocoder(hop_length)"
+changed = "omitted is n_fft // 4 instead of a fixed 512, so a small n_fft with no hop resynthesizes; an explicit 0 or negative hop raises SonareValueError naming the function"
+domain = "effects"
+rule = "library-owned-defaults"
+test = "bindings/python/tests/test_analyzer_features.py::test_an_omitted_phase_vocoder_hop_is_a_quarter_of_n_fft"
+
+[[entry]]
+kind = "option"
 old = "time_stretch(hop_length)"
 changed = "omitted is n_fft // 4 instead of a fixed 512, so a small n_fft with no hop resynthesizes"
 domain = "effects"

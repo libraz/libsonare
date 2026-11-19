@@ -639,6 +639,26 @@ def test_an_omitted_pitch_shift_hop_is_a_quarter_of_n_fft() -> None:
     )
 
 
+def test_an_omitted_phase_vocoder_hop_is_a_quarter_of_n_fft() -> None:
+    """phase_vocoder with n_fft 512 and no hop equals the hop-128 call."""
+    from libsonare import phase_vocoder
+
+    tone = _generate_sine(440, 22050, 0.5)
+    np.testing.assert_array_equal(
+        phase_vocoder(tone, 22050, 1.25, n_fft=512),
+        phase_vocoder(tone, 22050, 1.25, n_fft=512, hop_length=128),
+    )
+
+
+@pytest.mark.parametrize("hop_length", [0, -1])
+def test_phase_vocoder_refuses_a_given_hop_below_one(hop_length: int) -> None:
+    from libsonare import SonareValueError, phase_vocoder
+
+    with pytest.raises(SonareValueError) as caught:
+        phase_vocoder(_generate_sine(440, 22050, 0.25), 22050, 1.25, hop_length=hop_length)
+    assert str(caught.value) == "phase_vocoder: hop_length must be an integer in [1, 2147483647]"
+
+
 def test_spectral_rolloff() -> None:
     """spectral_rolloff returns non-empty list."""
     from libsonare import spectral_rolloff

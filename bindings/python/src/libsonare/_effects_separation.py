@@ -849,7 +849,7 @@ def phase_vocoder(
     sample_rate: int,
     speed_ratio: float,
     n_fft: int = 2048,
-    hop_length: int = 512,
+    hop_length: int | None = None,
 ) -> np.ndarray:
     """Phase-vocoder time-scale modification (STFT -> phase_vocoder -> iSTFT).
 
@@ -862,12 +862,14 @@ def phase_vocoder(
         n_fft: FFT size used for analysis/synthesis; an even integer >= 4
             (default 2048).
         hop_length: Hop length used for analysis/synthesis, in ``(0, n_fft / 2]``
-            so frames overlap by at least half a window (default 512).
+            so frames overlap by at least half a window. Default: ``n_fft / 4``,
+            derived by the library.
 
     Returns:
         The time-stretched audio as a 1-D float32 array.
     """
     _validate_samples(samples)
+    hop_length = 0 if hop_length is None else _validate_effect_hop(hop_length)
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
     with _out_float_array(lib) as (out, out_length):
