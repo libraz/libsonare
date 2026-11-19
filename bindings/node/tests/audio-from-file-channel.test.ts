@@ -82,7 +82,7 @@ describe('Audio.fromFileChannel', () => {
 
       // The decoder's own refusal, not the facade's argument wording.
       const outOfRange =
-        /^(Audio::from_file_channel: channel index is outside the file's channels|Invalid parameter)$/;
+        /^Audio\.fromFileChannel: (Audio::from_file_channel: channel index is outside the file's channels|Invalid parameter)$/;
       for (const call of [
         () => Audio.fromFileChannel(stereo, 2),
         () => Audio.fromFileChannel(stereo, -1),

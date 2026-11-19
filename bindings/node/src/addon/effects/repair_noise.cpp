@@ -170,10 +170,9 @@ Napi::Value SonareWrap::MasteringRepairDenoiseClassical(const Napi::CallbackInfo
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
-  const int sr = node_narrow_int(env, info[1], "sr");
+  const int sr = node_narrow_int(env, info[1], "sampleRate");
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
-  sonare::validate_offline_audio_input("denoise_classical", "samples", typed.Data(),
-                                       typed.ElementLength(), sr);
+  sonare::validate_offline_audio_input(nullptr, "samples", typed.Data(), typed.ElementLength(), sr);
   sonare::mastering::repair::DenoiseClassicalConfig config;
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object options = info[2].As<Napi::Object>();
@@ -192,11 +191,13 @@ Napi::Value SonareWrap::MasteringRepairDenoiseClassical(const Napi::CallbackInfo
     config.gain_smoothing = BoolProperty(options, "gainSmoothing", config.gain_smoothing);
   }
   if (config.n_fft <= 0 || (config.n_fft & (config.n_fft - 1)) != 0) {
-    Napi::RangeError::New(env, "nFft must be a positive power of two").ThrowAsJavaScriptException();
+    Napi::RangeError::New(env, "nFft must be a power of two greater than 0")
+        .ThrowAsJavaScriptException();
     return env.Undefined();
   }
   if (config.hop_length <= 0) {
-    Napi::RangeError::New(env, "hopLength must be positive").ThrowAsJavaScriptException();
+    Napi::RangeError::New(env, "hopLength must be an integer in [1, " + node_int_max_text() + "]")
+        .ThrowAsJavaScriptException();
     return env.Undefined();
   }
   sonare::Audio audio = sonare::Audio::from_buffer(typed.Data(), typed.ElementLength(), sr);
@@ -208,11 +209,16 @@ Napi::Value SonareWrap::MasteringRepairDenoiseClassical(const Napi::CallbackInfo
 
 Napi::Value SonareWrap::MasteringRepairDenoiseClassicalStereo(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (info.Length() < 3 || !IsFloat32Array(info[0]) || !IsFloat32Array(info[1]) ||
-      !info[2].IsNumber()) {
-    Napi::TypeError::New(env,
-                         "Expected (Float32Array left, Float32Array right, sampleRate, options?)")
-        .ThrowAsJavaScriptException();
+  if (!IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "left must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!IsFloat32Array(info[1])) {
+    Napi::TypeError::New(env, "right must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[2].IsNumber()) {
+    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -220,8 +226,7 @@ Napi::Value SonareWrap::MasteringRepairDenoiseClassicalStereo(const Napi::Callba
   auto left = info[0].As<Napi::Float32Array>();
   auto right = info[1].As<Napi::Float32Array>();
   if (left.ElementLength() != right.ElementLength()) {
-    Napi::RangeError::New(
-        env, "masteringRepairDenoiseClassicalStereo: left and right must have the same length")
+    Napi::RangeError::New(env, "left and right must have the same length")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
@@ -262,7 +267,7 @@ Napi::Value SonareWrap::MasteringRepairDenoiseClassicalLinked(const Napi::Callba
 
   SONARE_NODE_TRY
   LinkedPlanes planes;
-  if (!ReadLinkedPlanes(env, info[0], "masteringRepairDenoiseClassicalLinked", &planes)) {
+  if (!ReadLinkedPlanes(env, info[0], &planes)) {
     return env.Undefined();
   }
   const int sr = node_narrow_int(env, info[1], "sampleRate");
@@ -333,9 +338,9 @@ Napi::Value SonareWrap::MasteringRepairDehum(const Napi::CallbackInfo& info) {
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
-  const int sr = node_narrow_int(env, info[1], "sr");
+  const int sr = node_narrow_int(env, info[1], "sampleRate");
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
-  sonare::validate_offline_audio_input("dehum", "samples", typed.Data(), typed.ElementLength(), sr);
+  sonare::validate_offline_audio_input(nullptr, "samples", typed.Data(), typed.ElementLength(), sr);
   sonare::mastering::repair::DehumConfig config;
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object options = info[2].As<Napi::Object>();
@@ -359,11 +364,16 @@ Napi::Value SonareWrap::MasteringRepairDehum(const Napi::CallbackInfo& info) {
 
 Napi::Value SonareWrap::MasteringRepairDehumStereo(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (info.Length() < 3 || !IsFloat32Array(info[0]) || !IsFloat32Array(info[1]) ||
-      !info[2].IsNumber()) {
-    Napi::TypeError::New(env,
-                         "Expected (Float32Array left, Float32Array right, sampleRate, options?)")
-        .ThrowAsJavaScriptException();
+  if (!IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "left must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!IsFloat32Array(info[1])) {
+    Napi::TypeError::New(env, "right must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[2].IsNumber()) {
+    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -371,8 +381,7 @@ Napi::Value SonareWrap::MasteringRepairDehumStereo(const Napi::CallbackInfo& inf
   auto left = info[0].As<Napi::Float32Array>();
   auto right = info[1].As<Napi::Float32Array>();
   if (left.ElementLength() != right.ElementLength()) {
-    Napi::RangeError::New(env,
-                          "masteringRepairDehumStereo: left and right must have the same length")
+    Napi::RangeError::New(env, "left and right must have the same length")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }

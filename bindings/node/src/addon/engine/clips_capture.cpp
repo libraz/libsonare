@@ -368,18 +368,22 @@ Napi::Value RealtimeEngineWrap::SetLaneSidechain(const Napi::CallbackInfo& info)
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
-  if (info.Length() < 3 || !info[0].IsNumber() || !info[1].IsNumber() || !info[2].IsNumber()) {
-    Napi::TypeError::New(env, "expected (trackId, insertIndex, sourceTrackId)")
-        .ThrowAsJavaScriptException();
+  if (!info[0].IsNumber()) {
+    Napi::TypeError::New(env, "trackId must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  ThrowIfError(
-      env,
-      sonare_engine_set_lane_sidechain(
-          engine_,
-          sonare_node::node_narrow_uint32(env, info[0], sonare_node::node_arg_label(0).c_str()),
-          sonare_node::node_narrow_uint32(env, info[1], sonare_node::node_arg_label(1).c_str()),
-          sonare_node::node_narrow_uint32(env, info[2], sonare_node::node_arg_label(2).c_str())));
+  if (!info[1].IsNumber()) {
+    Napi::TypeError::New(env, "insertIndex must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[2].IsNumber()) {
+    Napi::TypeError::New(env, "sourceTrackId must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  ThrowIfError(env, sonare_engine_set_lane_sidechain(
+                        engine_, sonare_node::node_narrow_uint32(env, info[0], "trackId"),
+                        sonare_node::node_narrow_uint32(env, info[1], "insertIndex"),
+                        sonare_node::node_narrow_uint32(env, info[2], "sourceTrackId")));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -452,20 +456,27 @@ Napi::Value RealtimeEngineWrap::SetBusSidechain(const Napi::CallbackInfo& info) 
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
-  if (info.Length() < 4 || !info[0].IsNumber() || !info[1].IsNumber() || !info[2].IsNumber() ||
-      !info[3].IsNumber()) {
-    Napi::TypeError::New(env, "expected (busId, insertIndex, sourceKind, sourceId)")
-        .ThrowAsJavaScriptException();
+  if (!info[0].IsNumber()) {
+    Napi::TypeError::New(env, "busId must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  ThrowIfError(
-      env,
-      sonare_engine_set_bus_sidechain(
-          engine_,
-          sonare_node::node_narrow_uint32(env, info[0], sonare_node::node_arg_label(0).c_str()),
-          sonare_node::node_narrow_uint32(env, info[1], sonare_node::node_arg_label(1).c_str()),
-          sonare_node::node_narrow_int(env, info[2], sonare_node::node_arg_label(2).c_str()),
-          sonare_node::node_narrow_uint32(env, info[3], sonare_node::node_arg_label(3).c_str())));
+  if (!info[1].IsNumber()) {
+    Napi::TypeError::New(env, "insertIndex must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[2].IsNumber()) {
+    Napi::TypeError::New(env, "sourceKind must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[3].IsNumber()) {
+    Napi::TypeError::New(env, "sourceId must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  ThrowIfError(env, sonare_engine_set_bus_sidechain(
+                        engine_, sonare_node::node_narrow_uint32(env, info[0], "busId"),
+                        sonare_node::node_narrow_uint32(env, info[1], "insertIndex"),
+                        sonare_node::node_narrow_int(env, info[2], "sourceKind"),
+                        sonare_node::node_narrow_uint32(env, info[3], "sourceId")));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -474,18 +485,22 @@ Napi::Value RealtimeEngineWrap::SetMasterSidechain(const Napi::CallbackInfo& inf
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
-  if (info.Length() < 3 || !info[0].IsNumber() || !info[1].IsNumber() || !info[2].IsNumber()) {
-    Napi::TypeError::New(env, "expected (insertIndex, sourceKind, sourceId)")
-        .ThrowAsJavaScriptException();
+  if (!info[0].IsNumber()) {
+    Napi::TypeError::New(env, "insertIndex must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  ThrowIfError(
-      env,
-      sonare_engine_set_master_sidechain(
-          engine_,
-          sonare_node::node_narrow_uint32(env, info[0], sonare_node::node_arg_label(0).c_str()),
-          sonare_node::node_narrow_int(env, info[1], sonare_node::node_arg_label(1).c_str()),
-          sonare_node::node_narrow_uint32(env, info[2], sonare_node::node_arg_label(2).c_str())));
+  if (!info[1].IsNumber()) {
+    Napi::TypeError::New(env, "sourceKind must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[2].IsNumber()) {
+    Napi::TypeError::New(env, "sourceId must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  ThrowIfError(env, sonare_engine_set_master_sidechain(
+                        engine_, sonare_node::node_narrow_uint32(env, info[0], "insertIndex"),
+                        sonare_node::node_narrow_int(env, info[1], "sourceKind"),
+                        sonare_node::node_narrow_uint32(env, info[2], "sourceId")));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -586,7 +601,7 @@ Napi::Value RealtimeEngineWrap::SetClipPagePrefetchFrames(const Napi::CallbackIn
   double frames = 0.0;
   if (!OptionalDoubleArg(env, info, 0, "frames", 0.0, &frames)) return env.Undefined();
   if (!(frames >= 0.0)) {
-    Napi::TypeError::New(env, "clip page prefetch frames must be >= 0")
+    Napi::TypeError::New(env, "clip page prefetch frames must be finite and at least 0")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
@@ -642,7 +657,7 @@ Napi::Value RealtimeEngineWrap::SetCaptureBufferExtent(const Napi::CallbackInfo&
     return env.Undefined();
   }
   if (num_channels <= 0 || capacity_frames <= 0) {
-    Napi::RangeError::New(env, "capture channel count and capacity must be positive")
+    Napi::RangeError::New(env, "numChannels and capacityFrames must be integers of at least 1")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }

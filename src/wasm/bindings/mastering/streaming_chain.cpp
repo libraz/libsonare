@@ -71,7 +71,7 @@ class StreamingMasteringChainWrapper {
 
   val processStereo(val left_samples, val right_samples) {
     validateWasmFloat32ArrayPair(left_samples, "left process block", right_samples,
-                                 "right process block", "streaming mastering stereo block", true);
+                                 "right process block", true);
     const std::size_t length = wasmFloat32ArrayLength(left_samples, "left process block");
     validateBlockLength(length);
     std::vector<float> left = float32ArrayToVector(left_samples);

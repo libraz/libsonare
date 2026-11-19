@@ -43,14 +43,13 @@ val vectorToFloat64Array(const double* data, std::size_t count) {
   return result;
 }
 
-[[noreturn]] void throwVocalError(SonareError error, const char* context) {
+[[noreturn]] void throwVocalError(SonareError error) {
   SonareVocalErrorDetail structured{};
   sonare_vocal_error_detail_init(&structured);
   sonare_vocal_last_error_detail(&structured);
   vocal_error_sequence =
       vocal_error_sequence == std::numeric_limits<uint64_t>::max() ? 0 : vocal_error_sequence + 1;
-  std::string message = context == nullptr ? "vocal edit operation failed" : context;
-  message += ": ";
+  std::string message;
   const char* detail = sonare_last_error_message();
   const char* fallback = sonare_error_message(error);
   message += detail != nullptr && detail[0] != '\0' ? detail : fallback;
@@ -63,9 +62,9 @@ val vectorToFloat64Array(const double* data, std::size_t count) {
 }
 
 template <typename F>
-void check(F&& function, const char* context) {
+void check(F&& function) {
   const SonareError error = function();
-  if (error != SONARE_OK) throwVocalError(error, context);
+  if (error != SONARE_OK) throwVocalError(error);
 }
 
 template <typename T>
@@ -254,7 +253,7 @@ SonareVocalNoteEdit editFromVal(const val& object, EditStorage* storage) {
 
 int64_t nonNegativeWindow(int64_t value, const char* field) {
   if (value < 0) {
-    throw WasmRangeError(std::string(field) + " must be a non-negative integer");
+    throw WasmRangeError(std::string(field) + " must be an integer of at least 0");
   }
   return value;
 }
@@ -650,12 +649,10 @@ val js_vocal_edit_session_create(val samples, const val& sample_rate_value, val 
   CreateStorage storage;
   const SonareVocalCreateOptions parsed = optionsFromVal(options, &storage);
   SonareVocalSession* session = nullptr;
-  check(
-      [&] {
-        return sonare_vocal_session_create(source.data(), static_cast<int64_t>(source.size()), 1,
-                                           sample_rate, &parsed, &session);
-      },
-      "vocal session create");
+  check([&] {
+    return sonare_vocal_session_create(source.data(), static_cast<int64_t>(source.size()), 1,
+                                       sample_rate, &parsed, &session);
+  });
   return val(handleValue(session));
 }
 
@@ -671,13 +668,10 @@ double js_vocal_edit_session_restore(val samples, const val& sample_rate_value, 
                       &parsed.max_undo_depth, &parsed.max_render_jobs);
   }
   SonareVocalSession* session = nullptr;
-  check(
-      [&] {
-        return sonare_vocal_session_restore(source.data(), static_cast<int64_t>(source.size()), 1,
-                                            sample_rate, bytes.data(), bytes.size(), &parsed,
-                                            &session);
-      },
-      "vocal session restore");
+  check([&] {
+    return sonare_vocal_session_restore(source.data(), static_cast<int64_t>(source.size()), 1,
+                                        sample_rate, bytes.data(), bytes.size(), &parsed, &session);
+  });
   return handleValue(session);
 }
 
@@ -688,91 +682,74 @@ void js_vocal_edit_session_destroy(double handle) {
 
 val js_vocal_edit_session_notes(double handle) {
   NotesGuard result;
-  check(
-      [&] {
-        return sonare_vocal_session_notes(
-            handlePointer<const SonareVocalSession>(handle, "session"), &result.value);
-      },
-      "vocal session notes");
+  check([&] {
+    return sonare_vocal_session_notes(handlePointer<const SonareVocalSession>(handle, "session"),
+                                      &result.value);
+  });
   return notesResultToVal(result.value);
 }
 
 val js_vocal_edit_draft_notes(double handle) {
   NotesGuard result;
-  check(
-      [&] {
-        return sonare_vocal_draft_notes(handlePointer<const SonareVocalDraft>(handle, "draft"),
-                                        &result.value);
-      },
-      "vocal draft notes");
+  check([&] {
+    return sonare_vocal_draft_notes(handlePointer<const SonareVocalDraft>(handle, "draft"),
+                                    &result.value);
+  });
   return notesResultToVal(result.value);
 }
 
 val js_vocal_edit_session_token(double handle) {
   SonareVocalStateToken token{};
-  check(
-      [&] {
-        return sonare_vocal_session_token(
-            handlePointer<const SonareVocalSession>(handle, "session"), &token);
-      },
-      "vocal session token");
+  check([&] {
+    return sonare_vocal_session_token(handlePointer<const SonareVocalSession>(handle, "session"),
+                                      &token);
+  });
   return tokenToVal(token);
 }
 
 val js_vocal_edit_draft_token(double handle) {
   SonareVocalStateToken token{};
-  check(
-      [&] {
-        return sonare_vocal_draft_token(handlePointer<const SonareVocalDraft>(handle, "draft"),
-                                        &token);
-      },
-      "vocal draft token");
+  check([&] {
+    return sonare_vocal_draft_token(handlePointer<const SonareVocalDraft>(handle, "draft"), &token);
+  });
   return tokenToVal(token);
 }
 
 val js_vocal_edit_session_analysis(double handle) {
   AnalysisGuard result;
-  check(
-      [&] {
-        return sonare_vocal_session_analysis(
-            handlePointer<const SonareVocalSession>(handle, "session"), &result.value);
-      },
-      "vocal session analysis");
+  check([&] {
+    return sonare_vocal_session_analysis(handlePointer<const SonareVocalSession>(handle, "session"),
+                                         &result.value);
+  });
   return analysisResultToVal(result.value);
 }
 
 val js_vocal_edit_session_capabilities(double handle) {
   SonareVocalCapabilities value{};
   sonare_vocal_capabilities_init(&value);
-  check(
-      [&] {
-        return sonare_vocal_session_capabilities(
-            handlePointer<const SonareVocalSession>(handle, "session"), &value);
-      },
-      "vocal session capabilities");
+  check([&] {
+    return sonare_vocal_session_capabilities(
+        handlePointer<const SonareVocalSession>(handle, "session"), &value);
+  });
   return capabilitiesToVal(value);
 }
 
 double js_vocal_edit_session_output_length(double handle) {
   int64_t samples = 0;
-  check(
-      [&] {
-        return sonare_vocal_session_output_length(
-            handlePointer<const SonareVocalSession>(handle, "session"), &samples);
-      },
-      "vocal session output length");
+  check([&] {
+    return sonare_vocal_session_output_length(
+        handlePointer<const SonareVocalSession>(handle, "session"), &samples);
+  });
   return static_cast<double>(samples);
 }
 
 val js_vocal_edit_session_history(double handle) {
   int can_undo = 0;
   int can_redo = 0;
-  check(
-      [&] {
-        return sonare_vocal_session_history(
-            handlePointer<const SonareVocalSession>(handle, "session"), &can_undo, &can_redo);
-      },
-      "vocal session history");
+  check([&] {
+    return sonare_vocal_session_history(handlePointer<const SonareVocalSession>(handle, "session"),
+                                        &can_undo, &can_redo);
+  });
   val out = val::object();
   out.set("canUndo", can_undo != 0);
   out.set("canRedo", can_redo != 0);
@@ -782,12 +759,10 @@ val js_vocal_edit_session_history(double handle) {
 val js_vocal_edit_session_begin_edit(double handle, const val& revision_value) {
   const uint64_t expected = checkedDecimalUint64FromVal(revision_value, "expectedRevision");
   SonareVocalDraft* draft = nullptr;
-  check(
-      [&] {
-        return sonare_vocal_session_begin_edit(handlePointer<SonareVocalSession>(handle, "session"),
-                                               expected, &draft);
-      },
-      "vocal begin edit");
+  check([&] {
+    return sonare_vocal_session_begin_edit(handlePointer<SonareVocalSession>(handle, "session"),
+                                           expected, &draft);
+  });
   return val(handleValue(draft));
 }
 
@@ -798,32 +773,28 @@ val js_vocal_edit_draft_apply(double handle, const val& generation_value, val op
   for (std::size_t i = 0; i < count; ++i)
     parsed[i] = operationFromVal(operations[static_cast<unsigned>(i)], &storage[i]);
   EditResultGuard result;
-  check(
-      [&] {
-        return sonare_vocal_draft_apply(
-            handlePointer<SonareVocalDraft>(handle, "draft"),
-            checkedDecimalUint64FromVal(generation_value, "expectedGeneration"), parsed.data(),
-            parsed.size(), &result.value);
-      },
-      "vocal draft apply");
+  check([&] {
+    return sonare_vocal_draft_apply(
+        handlePointer<SonareVocalDraft>(handle, "draft"),
+        checkedDecimalUint64FromVal(generation_value, "expectedGeneration"), parsed.data(),
+        parsed.size(), &result.value);
+  });
   return editResultToVal(result.value);
 }
 
 val js_vocal_edit_draft_commit(double handle, const val& revision_value) {
   EditResultGuard result;
-  check(
-      [&] {
-        return sonare_vocal_draft_commit(
-            handlePointer<SonareVocalDraft>(handle, "draft"),
-            checkedDecimalUint64FromVal(revision_value, "expectedRevision"), &result.value);
-      },
-      "vocal draft commit");
+  check([&] {
+    return sonare_vocal_draft_commit(
+        handlePointer<SonareVocalDraft>(handle, "draft"),
+        checkedDecimalUint64FromVal(revision_value, "expectedRevision"), &result.value);
+  });
   return editResultToVal(result.value);
 }
 
 void js_vocal_edit_draft_cancel(double handle) {
-  check([&] { return sonare_vocal_draft_cancel(handlePointer<SonareVocalDraft>(handle, "draft")); },
-        "vocal draft cancel");
+  check(
+      [&] { return sonare_vocal_draft_cancel(handlePointer<SonareVocalDraft>(handle, "draft")); });
 }
 
 void js_vocal_edit_draft_destroy(double handle) {
@@ -832,30 +803,26 @@ void js_vocal_edit_draft_destroy(double handle) {
 
 val js_vocal_edit_session_apply_history(double handle, const val& revision_value, bool redo) {
   EditResultGuard result;
-  check(
-      [&] {
-        const auto session = handlePointer<SonareVocalSession>(handle, "session");
-        const uint64_t expected = checkedDecimalUint64FromVal(revision_value, "expectedRevision");
-        return redo ? sonare_vocal_session_redo(session, expected, &result.value)
-                    : sonare_vocal_session_undo(session, expected, &result.value);
-      },
-      redo ? "vocal redo" : "vocal undo");
+  check([&] {
+    const auto session = handlePointer<SonareVocalSession>(handle, "session");
+    const uint64_t expected = checkedDecimalUint64FromVal(revision_value, "expectedRevision");
+    return redo ? sonare_vocal_session_redo(session, expected, &result.value)
+                : sonare_vocal_session_undo(session, expected, &result.value);
+  });
   return editResultToVal(result.value);
 }
 
 val js_vocal_edit_evaluate_pitch(double handle, const val& note_id_value, bool draft) {
   const uint32_t note_id = checkedUintFromVal(note_id_value, "noteId");
   PitchGuard result;
-  check(
-      [&] {
-        return draft ? sonare_vocal_draft_evaluate_pitch(
-                           handlePointer<const SonareVocalDraft>(handle, "draft"), note_id,
-                           &result.value)
-                     : sonare_vocal_session_evaluate_pitch(
-                           handlePointer<const SonareVocalSession>(handle, "session"), note_id,
-                           &result.value);
-      },
-      "vocal evaluate pitch");
+  check([&] {
+    return draft
+               ? sonare_vocal_draft_evaluate_pitch(
+                     handlePointer<const SonareVocalDraft>(handle, "draft"), note_id, &result.value)
+               : sonare_vocal_session_evaluate_pitch(
+                     handlePointer<const SonareVocalSession>(handle, "session"), note_id,
+                     &result.value);
+  });
   return pitchResultToVal(result.value);
 }
 
@@ -864,34 +831,30 @@ double js_vocal_edit_map_coordinate(double handle, const val& note_id_value,
   const uint32_t note_id = checkedUintFromVal(note_id_value, "noteId");
   const double sample = checkedDoubleFromVal(sample_value, "sample");
   double output = 0.0;
-  check(
-      [&] {
-        if (draft && inverse)
-          return sonare_vocal_draft_destination_to_source(
-              handlePointer<const SonareVocalDraft>(handle, "draft"), note_id, sample, &output);
-        if (draft)
-          return sonare_vocal_draft_source_to_destination(
-              handlePointer<const SonareVocalDraft>(handle, "draft"), note_id, sample, &output);
-        if (inverse)
-          return sonare_vocal_session_destination_to_source(
-              handlePointer<const SonareVocalSession>(handle, "session"), note_id, sample, &output);
-        return sonare_vocal_session_source_to_destination(
-            handlePointer<const SonareVocalSession>(handle, "session"), note_id, sample, &output);
-      },
-      "vocal coordinate mapping");
+  check([&] {
+    if (draft && inverse)
+      return sonare_vocal_draft_destination_to_source(
+          handlePointer<const SonareVocalDraft>(handle, "draft"), note_id, sample, &output);
+    if (draft)
+      return sonare_vocal_draft_source_to_destination(
+          handlePointer<const SonareVocalDraft>(handle, "draft"), note_id, sample, &output);
+    if (inverse)
+      return sonare_vocal_session_destination_to_source(
+          handlePointer<const SonareVocalSession>(handle, "session"), note_id, sample, &output);
+    return sonare_vocal_session_source_to_destination(
+        handlePointer<const SonareVocalSession>(handle, "session"), note_id, sample, &output);
+  });
   return output;
 }
 
 double js_vocal_edit_capture_snapshot(double handle, bool draft) {
   SonareVocalSnapshot* snapshot = nullptr;
-  check(
-      [&] {
-        return draft ? sonare_vocal_draft_capture_snapshot(
-                           handlePointer<const SonareVocalDraft>(handle, "draft"), &snapshot)
-                     : sonare_vocal_session_capture_snapshot(
-                           handlePointer<const SonareVocalSession>(handle, "session"), &snapshot);
-      },
-      "vocal capture snapshot");
+  check([&] {
+    return draft ? sonare_vocal_draft_capture_snapshot(
+                       handlePointer<const SonareVocalDraft>(handle, "draft"), &snapshot)
+                 : sonare_vocal_session_capture_snapshot(
+                       handlePointer<const SonareVocalSession>(handle, "session"), &snapshot);
+  });
   return handleValue(snapshot);
 }
 
@@ -902,12 +865,10 @@ void js_vocal_edit_snapshot_destroy(double handle) {
 
 double js_vocal_edit_snapshot_output_length(double handle) {
   int64_t samples = 0;
-  check(
-      [&] {
-        return sonare_vocal_snapshot_output_length(
-            handlePointer<const SonareVocalSnapshot>(handle, "snapshot"), &samples);
-      },
-      "vocal snapshot output length");
+  check([&] {
+    return sonare_vocal_snapshot_output_length(
+        handlePointer<const SonareVocalSnapshot>(handle, "snapshot"), &samples);
+  });
   return static_cast<double>(samples);
 }
 
@@ -917,14 +878,12 @@ val js_vocal_edit_snapshot_render(double handle, const val& start_value, const v
   const int64_t end = checkedInt64FromVal(end_value, "endSample");
   RenderGuard result;
   const SonareVocalRange range{start, end};
-  check(
-      [&] {
-        return sonare_vocal_snapshot_render(
-            handlePointer<const SonareVocalSnapshot>(handle, "snapshot"), range,
-            checkedDecimalUint64FromVal(request_id_value, "requestId"), nullptr, nullptr,
-            &result.value);
-      },
-      "vocal snapshot render");
+  check([&] {
+    return sonare_vocal_snapshot_render(
+        handlePointer<const SonareVocalSnapshot>(handle, "snapshot"), range,
+        checkedDecimalUint64FromVal(request_id_value, "requestId"), nullptr, nullptr,
+        &result.value);
+  });
   return renderResultToVal(result.value);
 }
 
@@ -933,35 +892,29 @@ double js_vocal_edit_render_job_begin(double handle, const val& start_value, con
   const int64_t start = checkedInt64FromVal(start_value, "startSample");
   const int64_t end = checkedInt64FromVal(end_value, "endSample");
   SonareVocalRenderJob* job = nullptr;
-  check(
-      [&] {
-        return sonare_vocal_render_job_begin(
-            handlePointer<const SonareVocalSnapshot>(handle, "snapshot"), {start, end},
-            checkedDecimalUint64FromVal(request_id_value, "requestId"), &job);
-      },
-      "vocal render job begin");
+  check([&] {
+    return sonare_vocal_render_job_begin(
+        handlePointer<const SonareVocalSnapshot>(handle, "snapshot"), {start, end},
+        checkedDecimalUint64FromVal(request_id_value, "requestId"), &job);
+  });
   return handleValue(job);
 }
 
 bool js_vocal_edit_render_job_next(double handle) {
   int complete = 0;
-  check(
-      [&] {
-        return sonare_vocal_render_job_next(handlePointer<SonareVocalRenderJob>(handle, "job"),
-                                            nullptr, nullptr, &complete);
-      },
-      "vocal render job next");
+  check([&] {
+    return sonare_vocal_render_job_next(handlePointer<SonareVocalRenderJob>(handle, "job"), nullptr,
+                                        nullptr, &complete);
+  });
   return complete != 0;
 }
 
 val js_vocal_edit_render_job_finalize(double handle) {
   RenderGuard result;
-  check(
-      [&] {
-        return sonare_vocal_render_job_finalize(handlePointer<SonareVocalRenderJob>(handle, "job"),
-                                                nullptr, nullptr, &result.value);
-      },
-      "vocal render job finalize");
+  check([&] {
+    return sonare_vocal_render_job_finalize(handlePointer<SonareVocalRenderJob>(handle, "job"),
+                                            nullptr, nullptr, &result.value);
+  });
   return renderResultToVal(result.value);
 }
 
@@ -977,12 +930,10 @@ void js_vocal_edit_render_job_destroy(double handle) {
 
 val js_vocal_edit_session_export_state(double handle) {
   StateGuard result;
-  check(
-      [&] {
-        return sonare_vocal_session_export_state(
-            handlePointer<const SonareVocalSession>(handle, "session"), &result.value);
-      },
-      "vocal export state");
+  check([&] {
+    return sonare_vocal_session_export_state(
+        handlePointer<const SonareVocalSession>(handle, "session"), &result.value);
+  });
   return vectorToUint8Array(result.value.data, static_cast<std::size_t>(result.value.size));
 }
 

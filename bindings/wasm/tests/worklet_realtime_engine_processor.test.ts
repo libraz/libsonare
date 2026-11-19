@@ -185,7 +185,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         expect(() => build(channelCount)).toThrow(/numChannels must be an integer of at least 1/);
       }
       // The ceiling is the engine's, so a count past it is refused there.
-      expect(() => build(1e9)).toThrow(/max_channels must be within 1\.\./);
+      expect(() => build(1e9)).toThrow(/^RealtimeEngine: maxChannels must be within 1\.\./);
     });
 
     it('refuses a meterIntervalFrames instead of rounding it into range', () => {

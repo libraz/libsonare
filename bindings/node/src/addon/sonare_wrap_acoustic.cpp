@@ -61,9 +61,9 @@ void ValidateRirShapeAndTiming(const sonare::acoustic::RirSynthConfig& cfg) {
 }
 
 // Refuses a buffer under the shared offline-input policy, as the C ABI and WASM entries do.
-bool ValidateAcousticInput(const Napi::Env& env, const char* fn, const char* name,
-                           const float* data, size_t length, int sr) {
-  const std::string problem = sonare::offline_audio_input_problem(fn, name, data, length, sr);
+bool ValidateAcousticInput(const Napi::Env& env, const char* name, const float* data, size_t length,
+                           int sr) {
+  const std::string problem = sonare::offline_audio_input_problem(nullptr, name, data, length, sr);
   if (!problem.empty()) {
     Napi::RangeError::New(env, problem).ThrowAsJavaScriptException();
     return false;
@@ -187,13 +187,13 @@ Napi::Array DiagnosticsArray(Napi::Env env, const std::vector<sonare::Diagnostic
 Napi::Value SonareWrap::SynthesizeRir(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (info.Length() < 1 || !info[0].IsObject()) {
-    Napi::TypeError::New(env, "Expected (options) object").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "options must be an object").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
   SONARE_NODE_TRY
   Napi::Object opts = info[0].As<Napi::Object>();
-  RefuseUnknownKeys(opts, "synthesizeRir", RoomKeys(), {"sampleRate"});
+  RefuseUnknownKeys(opts, "options", RoomKeys(), {"sampleRate"});
   const int sample_rate = IntProperty(opts, "sampleRate", 48000);
   if (!ValidateAcousticSampleRate(env, sample_rate)) return env.Undefined();
   sonare::acoustic::RirSynthConfig cfg;
@@ -201,8 +201,9 @@ Napi::Value SonareWrap::SynthesizeRir(const Napi::CallbackInfo& info) {
   // the same invalid input fails identically on every surface.
   cfg.ism_order = IntProperty(opts, "ismOrder", cfg.ism_order);
   if (cfg.ism_order < 0) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "ismOrder must be non-negative");
+    throw sonare::SonareException(
+        sonare::ErrorCode::InvalidParameter,
+        "ismOrder must be an integer in [0, " + node_int_max_text() + "]");
   }
   cfg.late_model = BoolProperty(opts, "preferEyring", true) ? sonare::acoustic::ReverbModel::Eyring
                                                             : sonare::acoustic::ReverbModel::Sabine;
@@ -236,18 +237,14 @@ Napi::Value SonareWrap::SynthesizeRir(const Napi::CallbackInfo& info) {
 
 Napi::Value SonareWrap::EstimateRoom(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (info.Length() < 2 || !IsFloat32Array(info[0]) || !info[1].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, options?)")
-        .ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
+  if (!RequireFloat32Array(info, 0, "samples must be a Float32Array")) return env.Undefined();
+  if (!RequireNumberValue(env, info[1], "sampleRate")) return env.Undefined();
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
   const int sample_rate = node_narrow_int(env, info[1], "sampleRate");
   if (!ValidateAcousticSampleRate(env, sample_rate)) return env.Undefined();
-  if (!ValidateAcousticInput(env, "estimate_room", "samples", typed.Data(), typed.ElementLength(),
-                             sample_rate))
+  if (!ValidateAcousticInput(env, "samples", typed.Data(), typed.ElementLength(), sample_rate))
     return env.Undefined();
   const sonare::Audio audio =
       sonare::Audio::from_buffer(typed.Data(), typed.ElementLength(), sample_rate);
@@ -255,7 +252,7 @@ Napi::Value SonareWrap::EstimateRoom(const Napi::CallbackInfo& info) {
                                                                : Napi::Object::New(env);
   // samples, sampleRate and validate ride along from the request object and are not read here.
   RefuseUnknownKeys(
-      opts, "estimateRoom",
+      opts, "options",
       {"aspectHintLw", "aspectHintLh", "referenceAbsorption", "preferEyring", "nOctaveBands",
        "minDecayDb", "noiseFloorMarginDb", "mode", "samples", "sampleRate", "validate"});
 
@@ -319,7 +316,7 @@ Napi::Value SonareWrap::EstimateRoom(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::RoomGeometryFromEstimate(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (info.Length() < 1 || !info[0].IsObject()) {
-    Napi::TypeError::New(env, "Expected (estimate)").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "estimate must be an object").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -391,21 +388,22 @@ sonare::effects::acoustic::RoomMorphConfig RoomMorphConfigFromOptions(const Napi
 
 Napi::Value SonareWrap::RoomMorph(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (info.Length() < 3 || !IsFloat32Array(info[0]) || !info[1].IsNumber() || !info[2].IsObject()) {
-    Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, options)")
-        .ThrowAsJavaScriptException();
+  if (!RequireFloat32Array(info, 0, "samples must be a Float32Array")) return env.Undefined();
+  if (!RequireNumberValue(env, info[1], "sampleRate")) return env.Undefined();
+  if (!info[2].IsObject()) {
+    Napi::TypeError::New(env, "options must be an object").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
-  const int sr = node_narrow_int(env, info[1], "sr");
+  const int sr = node_narrow_int(env, info[1], "sampleRate");
   if (!ValidateAcousticSampleRate(env, sr)) return env.Undefined();
-  if (!ValidateAcousticInput(env, "room_morph", "samples", typed.Data(), typed.ElementLength(), sr))
+  if (!ValidateAcousticInput(env, "samples", typed.Data(), typed.ElementLength(), sr))
     return env.Undefined();
   const sonare::Audio audio = sonare::Audio::from_buffer(typed.Data(), typed.ElementLength(), sr);
   Napi::Object opts = info[2].As<Napi::Object>();
-  RefuseUnknownKeys(opts, "roomMorph", RoomKeys(),
+  RefuseUnknownKeys(opts, "options", RoomKeys(),
                     {"wet", "sourceTailSuppression", "samples", "sampleRate", "validate"});
 
   const sonare::effects::acoustic::RoomMorphConfig cfg = RoomMorphConfigFromOptions(opts);
@@ -426,23 +424,22 @@ Napi::Value SonareWrap::RoomMorph(const Napi::CallbackInfo& info) {
 
 Napi::Value SonareWrap::RoomMorphStereo(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (info.Length() < 4 || !IsFloat32Array(info[0]) || !IsFloat32Array(info[1]) ||
-      !info[2].IsNumber() || !info[3].IsObject()) {
-    Napi::TypeError::New(env, "Expected (Float32Array, Float32Array, sampleRate, options)")
-        .ThrowAsJavaScriptException();
+  if (!RequireFloat32Array(info, 0, "left must be a Float32Array")) return env.Undefined();
+  if (!RequireFloat32Array(info, 1, "right must be a Float32Array")) return env.Undefined();
+  if (!RequireNumberValue(env, info[2], "sampleRate")) return env.Undefined();
+  if (!info[3].IsObject()) {
+    Napi::TypeError::New(env, "options must be an object").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
   SONARE_NODE_TRY
   auto left = info[0].As<Napi::Float32Array>();
   auto right = info[1].As<Napi::Float32Array>();
-  const int sr = node_narrow_int(env, info[2], "sr");
+  const int sr = node_narrow_int(env, info[2], "sampleRate");
   if (!ValidateAcousticSampleRate(env, sr)) return env.Undefined();
-  if (!ValidateAcousticInput(env, "room_morph_stereo", "left", left.Data(), left.ElementLength(),
-                             sr))
+  if (!ValidateAcousticInput(env, "left", left.Data(), left.ElementLength(), sr))
     return env.Undefined();
-  if (!ValidateAcousticInput(env, "room_morph_stereo", "right", right.Data(), right.ElementLength(),
-                             sr))
+  if (!ValidateAcousticInput(env, "right", right.Data(), right.ElementLength(), sr))
     return env.Undefined();
   if (left.ElementLength() != right.ElementLength()) {
     Napi::RangeError::New(env, "left and right must have the same length")
@@ -454,7 +451,7 @@ Napi::Value SonareWrap::RoomMorphStereo(const Napi::CallbackInfo& info) {
   const sonare::Audio right_audio =
       sonare::Audio::from_buffer(right.Data(), right.ElementLength(), sr);
   Napi::Object opts = info[3].As<Napi::Object>();
-  RefuseUnknownKeys(opts, "roomMorphStereo", RoomKeys(),
+  RefuseUnknownKeys(opts, "options", RoomKeys(),
                     {"wet", "sourceTailSuppression", "receiverSpacingM", "left", "right",
                      "sampleRate", "validate"});
 

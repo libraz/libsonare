@@ -23,15 +23,14 @@ Napi::Value ProjectWrap::ImportExternalStems(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   if (info.Length() != 1 || !info[0].IsObject()) {
-    Napi::TypeError::New(env, "importExternalStems expects a request object")
+    Napi::TypeError::New(env, "request must be a single object argument")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
   const Napi::Object request = info[0].As<Napi::Object>();
   const Napi::Value stems_value = request.Get("stems");
   if (!stems_value.IsArray()) {
-    Napi::TypeError::New(env, "importExternalStems request.stems must be an array")
-        .ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "request.stems must be an array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   const Napi::Array stem_values = stems_value.As<Napi::Array>();

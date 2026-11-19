@@ -903,6 +903,7 @@ describe('vocal edit Worker mutation semantics', () => {
       expect(response.error).toEqual({
         name: 'SonareError',
         message: 'revision conflict',
+        bare: 'revision conflict',
         code: 5,
         codeName: 'InvalidState',
         detail: {

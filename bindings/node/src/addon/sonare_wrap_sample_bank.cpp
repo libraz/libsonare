@@ -69,14 +69,15 @@ bool ReadOptionsBag(Napi::Env env, const Napi::Value& value, const char* what, N
 }  // namespace
 
 Napi::Object SampleBankWrap::Init(Napi::Env env, Napi::Object exports) {
-  Napi::Function func = DefineClass(env, "SampleBank",
-                                    {
-                                        InstanceMethod<&SampleBankWrap::AddSample>("addSample"),
-                                        InstanceMethod<&SampleBankWrap::AddZone>("addZone"),
-                                        InstanceMethod<&SampleBankWrap::SampleCount>("sampleCount"),
-                                        InstanceMethod<&SampleBankWrap::SetCount>("setCount"),
-                                        InstanceMethod<&SampleBankWrap::Destroy>("destroy"),
-                                    });
+  Napi::Function func = DefineClass(
+      env, "SampleBank",
+      {
+          InstanceMethod<&SampleBankWrap::AddSample>("addSample", napi_default_method),
+          InstanceMethod<&SampleBankWrap::AddZone>("addZone", napi_default_method),
+          InstanceMethod<&SampleBankWrap::SampleCount>("sampleCount", napi_default_method),
+          InstanceMethod<&SampleBankWrap::SetCount>("setCount", napi_default_method),
+          InstanceMethod<&SampleBankWrap::Destroy>("destroy", napi_default_method),
+      });
   g_sample_bank_constructor = new Napi::FunctionReference();
   *g_sample_bank_constructor = Napi::Persistent(func);
   g_sample_bank_constructor->SuppressDestruct();
@@ -90,7 +91,7 @@ SampleBankWrap::SampleBankWrap(const Napi::CallbackInfo& info)
   SONARE_NODE_TRY
   const SonareError create_err = sonare_sample_bank_create(&bank_);
   if (create_err != SONARE_OK) {
-    sonare_node::ThrowSonareError(env, create_err, "SampleBank: ");
+    sonare_node::ThrowSonareError(env, create_err);
   }
   SONARE_NODE_CATCH_VOID(env)
 }
@@ -130,15 +131,14 @@ Napi::Value SampleBankWrap::AddSample(const Napi::CallbackInfo& info) {
     sonare_node::ThrowHandleClosed(env, "SampleBank");
     return env.Undefined();
   }
-  if (!sonare_node::RequireFloat32Array(info, 0,
-                                        "addSample expects a Float32Array of mono frames")) {
+  if (!sonare_node::RequireFloat32Array(info, 0, "data must be a Float32Array")) {
     return env.Undefined();
   }
   Napi::Float32Array data = info[0].As<Napi::Float32Array>();
 
   SonareSampleDesc desc{};
   Napi::Object obj;
-  if (!ReadOptionsBag(env, info[1], "addSample desc", &obj)) return env.Undefined();
+  if (!ReadOptionsBag(env, info[1], "desc", &obj)) return env.Undefined();
   if (!obj.IsEmpty()) {
     desc.root_key = MidiByteProperty(env, obj, "rootKey", desc.root_key);
     desc.fine_tune_cents = FloatProperty(obj, "fineTuneCents", 0.0f);
@@ -172,7 +172,7 @@ Napi::Value SampleBankWrap::AddZone(const Napi::CallbackInfo& info) {
 
   SonareSampleZoneDesc zone{};
   Napi::Object obj;
-  if (!ReadOptionsBag(env, info[1], "addZone zone", &obj)) return env.Undefined();
+  if (!ReadOptionsBag(env, info[1], "zone", &obj)) return env.Undefined();
   if (!obj.IsEmpty()) {
     zone.key_lo = MidiByteProperty(env, obj, "keyLo", 0);
     zone.key_hi = MidiByteProperty(env, obj, "keyHi", zone.key_hi);

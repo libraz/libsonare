@@ -50,7 +50,8 @@ function refusal(call: () => unknown): Error {
 function expectNulRefusal(call: () => unknown, field: string): void {
   const error = refusal(call);
   expect(error).toBeInstanceOf(RangeError);
-  expect(error.message).toBe(`${field} must not contain NUL`);
+  // The public entry the caller reached names itself first; the field follows.
+  expect(error.message).toMatch(new RegExp(`^[A-Za-z_][\\w.]*: ${field} must not contain NUL$`));
 }
 
 function expectUnknownPresetRefusal(call: () => unknown): void {

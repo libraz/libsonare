@@ -266,6 +266,7 @@ int VocalProjectCancel(void* user_data) {
     return 1;
   }
   const Napi::Value value = context->callback->Call({});
+  sonare_node::MarkPendingForeign(context->env);
   if (context->env.IsExceptionPending()) return 1;
   return value.ToBoolean().Value() ? 1 : 0;
 }
@@ -344,7 +345,7 @@ Napi::Value ProjectWrap::ApplyVocalEdit(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   if (info.Length() != 1) {
-    Napi::TypeError::New(env, "applyVocalEdit expects one request object")
+    Napi::TypeError::New(env, "request must be a single object argument")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
@@ -364,8 +365,7 @@ Napi::Value ProjectWrap::GetVocalEditDependencies(const Napi::CallbackInfo& info
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   if (info.Length() != 0) {
-    Napi::TypeError::New(env, "getVocalEditDependencies expects no arguments")
-        .ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "takes no arguments").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   DependenciesGuard result;
@@ -392,8 +392,7 @@ Napi::Value ProjectWrap::RehydrateVocalEdits(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   if (info.Length() < 1 || info.Length() > 2) {
-    Napi::TypeError::New(env,
-                         "rehydrateVocalEdits expects originals and an optional cancel callback")
+    Napi::TypeError::New(env, "expects originals and an optional cancel callback")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }

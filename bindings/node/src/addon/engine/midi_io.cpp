@@ -25,10 +25,10 @@ using namespace sonare_node::engine;
 namespace {
 
 // Refuses a live MIDI push whose arguments leave the MIDI domain before the C
-// call, naming the JS method; true when a RangeError is now pending.
-bool RefuseLivePushArg(Napi::Env env, const char* method, const char* error) {
+// call; true when a RangeError is now pending.
+bool RefuseLivePushArg(Napi::Env env, const char* error) {
   if (error == nullptr) return false;
-  Napi::RangeError::New(env, std::string(method) + ": " + error).ThrowAsJavaScriptException();
+  Napi::RangeError::New(env, error).ThrowAsJavaScriptException();
   return true;
 }
 
@@ -117,7 +117,7 @@ Napi::Value RealtimeEngineWrap::PushMidiNoteOn(const Napi::CallbackInfo& info) {
   if (!ReadLiveVoiceArgs(env, info, true, "note", "velocity", &a)) {
     return env.Undefined();
   }
-  if (RefuseLivePushArg(env, "pushMidiNoteOn",
+  if (RefuseLivePushArg(env,
                         sonare::midi::live_push_note_error(a.group, a.channel, a.first, a.second)))
     return env.Undefined();
   ThrowIfError(env, sonare_engine_push_midi_note_on(engine_, a.destination_id, a.group, a.channel,
@@ -165,7 +165,7 @@ Napi::Value RealtimeEngineWrap::PushMidiInputNoteOn(const Napi::CallbackInfo& in
   if (!ReadLiveVoiceArgs(env, info, false, "note", "velocity", &a)) {
     return env.Undefined();
   }
-  if (RefuseLivePushArg(env, "pushMidiInputNoteOn",
+  if (RefuseLivePushArg(env,
                         sonare::midi::live_push_note_error(a.group, a.channel, a.first, a.second)))
     return env.Undefined();
   ThrowIfError(env, sonare_engine_push_midi_input_note_on(engine_, a.group, a.channel, a.first,
@@ -183,7 +183,7 @@ Napi::Value RealtimeEngineWrap::PushMidiInputNoteOff(const Napi::CallbackInfo& i
   if (!ReadLiveVoiceArgs(env, info, false, "note", "velocity", &a)) {
     return env.Undefined();
   }
-  if (RefuseLivePushArg(env, "pushMidiInputNoteOff",
+  if (RefuseLivePushArg(env,
                         sonare::midi::live_push_note_error(a.group, a.channel, a.first, a.second)))
     return env.Undefined();
   ThrowIfError(env, sonare_engine_push_midi_input_note_off(engine_, a.group, a.channel, a.first,
@@ -201,7 +201,7 @@ Napi::Value RealtimeEngineWrap::PushMidiInputCc(const Napi::CallbackInfo& info) 
   if (!ReadLiveVoiceArgs(env, info, false, "controller", "value", &a)) {
     return env.Undefined();
   }
-  if (RefuseLivePushArg(env, "pushMidiInputCc",
+  if (RefuseLivePushArg(env,
                         sonare::midi::live_push_cc_error(a.group, a.channel, a.first, a.second)))
     return env.Undefined();
   ThrowIfError(env, sonare_engine_push_midi_input_cc(engine_, a.group, a.channel, a.first, a.second,
@@ -224,8 +224,7 @@ Napi::Value RealtimeEngineWrap::PushMidiInputPitchBend(const Napi::CallbackInfo&
       !OptionalInt64Arg(env, info, 3, "offsetInBlockSamples", 0, &port_time)) {
     return env.Undefined();
   }
-  if (RefuseLivePushArg(env, "pushMidiInputPitchBend",
-                        sonare::midi::live_push_pitch_bend_error(group, channel, bend14))) {
+  if (RefuseLivePushArg(env, sonare::midi::live_push_pitch_bend_error(group, channel, bend14))) {
     return env.Undefined();
   }
   ThrowIfError(
@@ -244,8 +243,7 @@ Napi::Value RealtimeEngineWrap::PushMidiInputChannelPressure(const Napi::Callbac
     return env.Undefined();
   }
   if (RefuseLivePushArg(
-          env, "pushMidiInputChannelPressure",
-          sonare::midi::live_push_channel_pressure_error(a.group, a.channel, a.first)))
+          env, sonare::midi::live_push_channel_pressure_error(a.group, a.channel, a.first)))
     return env.Undefined();
   ThrowIfError(env, sonare_engine_push_midi_input_channel_pressure(engine_, a.group, a.channel,
                                                                    a.first, a.time));
@@ -263,8 +261,7 @@ Napi::Value RealtimeEngineWrap::PushMidiInputPolyPressure(const Napi::CallbackIn
     return env.Undefined();
   }
   if (RefuseLivePushArg(
-          env, "pushMidiInputPolyPressure",
-          sonare::midi::live_push_poly_pressure_error(a.group, a.channel, a.first, a.second)))
+          env, sonare::midi::live_push_poly_pressure_error(a.group, a.channel, a.first, a.second)))
     return env.Undefined();
   ThrowIfError(env, sonare_engine_push_midi_input_poly_pressure(engine_, a.group, a.channel,
                                                                 a.first, a.second, a.time));
@@ -281,7 +278,7 @@ Napi::Value RealtimeEngineWrap::PushMidiNoteOff(const Napi::CallbackInfo& info) 
   if (!ReadLiveVoiceArgs(env, info, true, "note", "velocity", &a)) {
     return env.Undefined();
   }
-  if (RefuseLivePushArg(env, "pushMidiNoteOff",
+  if (RefuseLivePushArg(env,
                         sonare::midi::live_push_note_error(a.group, a.channel, a.first, a.second)))
     return env.Undefined();
   ThrowIfError(env, sonare_engine_push_midi_note_off(engine_, a.destination_id, a.group, a.channel,
@@ -299,7 +296,7 @@ Napi::Value RealtimeEngineWrap::PushMidiCc(const Napi::CallbackInfo& info) {
   if (!ReadLiveVoiceArgs(env, info, true, "controller", "value", &a)) {
     return env.Undefined();
   }
-  if (RefuseLivePushArg(env, "pushMidiCc",
+  if (RefuseLivePushArg(env,
                         sonare::midi::live_push_cc_error(a.group, a.channel, a.first, a.second)))
     return env.Undefined();
   ThrowIfError(env, sonare_engine_push_midi_cc(engine_, a.destination_id, a.group, a.channel,
@@ -324,8 +321,7 @@ Napi::Value RealtimeEngineWrap::PushMidiPitchBend(const Napi::CallbackInfo& info
       !OptionalInt64Arg(env, info, 4, "renderFrame", -1, &deadline)) {
     return env.Undefined();
   }
-  if (RefuseLivePushArg(env, "pushMidiPitchBend",
-                        sonare::midi::live_push_pitch_bend_error(group, channel, bend14))) {
+  if (RefuseLivePushArg(env, sonare::midi::live_push_pitch_bend_error(group, channel, bend14))) {
     return env.Undefined();
   }
   ThrowIfError(env, sonare_engine_push_midi_pitch_bend(engine_, destination_id, group, channel,
@@ -344,8 +340,7 @@ Napi::Value RealtimeEngineWrap::PushMidiChannelPressure(const Napi::CallbackInfo
     return env.Undefined();
   }
   if (RefuseLivePushArg(
-          env, "pushMidiChannelPressure",
-          sonare::midi::live_push_channel_pressure_error(a.group, a.channel, a.first)))
+          env, sonare::midi::live_push_channel_pressure_error(a.group, a.channel, a.first)))
     return env.Undefined();
   ThrowIfError(env, sonare_engine_push_midi_channel_pressure(engine_, a.destination_id, a.group,
                                                              a.channel, a.first, a.time));
@@ -363,8 +358,7 @@ Napi::Value RealtimeEngineWrap::PushMidiPolyPressure(const Napi::CallbackInfo& i
     return env.Undefined();
   }
   if (RefuseLivePushArg(
-          env, "pushMidiPolyPressure",
-          sonare::midi::live_push_poly_pressure_error(a.group, a.channel, a.first, a.second)))
+          env, sonare::midi::live_push_poly_pressure_error(a.group, a.channel, a.first, a.second)))
     return env.Undefined();
   ThrowIfError(env, sonare_engine_push_midi_poly_pressure(engine_, a.destination_id, a.group,
                                                           a.channel, a.first, a.second, a.time));
@@ -400,8 +394,7 @@ Napi::Value RealtimeEngineWrap::PushMidiSysex(const Napi::CallbackInfo& info) {
     bytes = arr.Data();
     len = arr.ByteLength();
   } else {
-    Napi::TypeError::New(env, "pushMidiSysex expects a Buffer or Uint8Array")
-        .ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "data must be a Buffer or Uint8Array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   int64_t deadline = -1;
@@ -424,7 +417,7 @@ Napi::Value RealtimeEngineWrap::PushMidiUmp(const Napi::CallbackInfo& info) {
       !OptionalInt64Arg(env, info, 2, "renderFrame", -1, &deadline)) {
     return env.Undefined();
   }
-  if (RefuseLivePushArg(env, "pushMidiUmp",
+  if (RefuseLivePushArg(env,
                         sonare::engine::RealtimeEngine::is_pushable_midi_ump(words.data(), count)
                             ? nullptr
                             : sonare::midi::kLivePushUmpShapeError)) {
@@ -447,7 +440,7 @@ Napi::Value RealtimeEngineWrap::PushMidiInputUmp(const Napi::CallbackInfo& info)
       !OptionalInt64Arg(env, info, 1, "offsetInBlockSamples", 0, &port_time)) {
     return env.Undefined();
   }
-  if (RefuseLivePushArg(env, "pushMidiInputUmp",
+  if (RefuseLivePushArg(env,
                         sonare::engine::RealtimeEngine::is_pushable_midi_ump(words.data(), count)
                             ? nullptr
                             : sonare::midi::kLivePushUmpShapeError)) {
@@ -480,9 +473,8 @@ Napi::Value RealtimeEngineWrap::PushMidiProgram(const Napi::CallbackInfo& info) 
       !OptionalInt64Arg(env, info, 7, "renderFrame", -1, &deadline)) {
     return env.Undefined();
   }
-  if (RefuseLivePushArg(env, "pushMidiProgram",
-                        sonare::midi::live_push_program_error(group, channel, program, bank_valid,
-                                                              bank_msb, bank_lsb))) {
+  if (RefuseLivePushArg(env, sonare::midi::live_push_program_error(
+                                 group, channel, program, bank_valid, bank_msb, bank_lsb))) {
     return env.Undefined();
   }
   ThrowIfError(env,
@@ -512,9 +504,8 @@ Napi::Value RealtimeEngineWrap::PushMidiInputProgram(const Napi::CallbackInfo& i
       !OptionalInt64Arg(env, info, 6, "offsetInBlockSamples", 0, &port_time)) {
     return env.Undefined();
   }
-  if (RefuseLivePushArg(env, "pushMidiInputProgram",
-                        sonare::midi::live_push_program_error(group, channel, program, bank_valid,
-                                                              bank_msb, bank_lsb))) {
+  if (RefuseLivePushArg(env, sonare::midi::live_push_program_error(
+                                 group, channel, program, bank_valid, bank_msb, bank_lsb))) {
     return env.Undefined();
   }
   ThrowIfError(env, sonare_engine_push_midi_input_program(engine_, group, channel, program,

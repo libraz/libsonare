@@ -36,7 +36,9 @@ describe('Mixer input count (WASM)', () => {
     expect(() => mixer.processStereo(inputs(1), inputs(1))).not.toThrow();
     expect(() => mixer.processStereo(inputs(strips), inputs(strips))).not.toThrow();
     expect(() => mixer.processStereo(inputs(strips + 1), inputs(strips + 1))).toThrow(
-      new RangeError(`got ${strips + 1} input channels for a ${strips}-strip mixer`),
+      new RangeError(
+        `Mixer.processStereo: got ${strips + 1} input channels for a ${strips}-strip mixer`,
+      ),
     );
   });
 
@@ -47,7 +49,11 @@ describe('Mixer input count (WASM)', () => {
     expect(() => mixer.processStereoInto(inputs(strips), inputs(strips), outL, outR)).not.toThrow();
     expect(() =>
       mixer.processStereoInto(inputs(strips + 1), inputs(strips + 1), outL, outR),
-    ).toThrow(new RangeError(`got ${strips + 1} input channels for a ${strips}-strip mixer`));
+    ).toThrow(
+      new RangeError(
+        `Mixer.processStereoInto: got ${strips + 1} input channels for a ${strips}-strip mixer`,
+      ),
+    );
   });
 
   it('a missing strip is silent: fewer inputs match explicit silence on the rest', () => {

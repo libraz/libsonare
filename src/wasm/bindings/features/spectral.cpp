@@ -3,28 +3,27 @@
 
 #ifdef __EMSCRIPTEN__
 
-#include <algorithm>
-
 #include "wasm/bindings/common/common.h"
 
 namespace {
 
-std::vector<float> load_segment_matrix(const char* fn_name, val input, int rows, int cols,
-                                       const char* data_name) {
+std::vector<float> load_segment_matrix(val input, int rows, int cols, const char* data_name) {
   if (rows <= 0 || cols <= 0) {
-    throw WasmRangeError(std::string(fn_name) + ": matrix dimensions must be positive");
+    throw WasmRangeError("matrix dimensions must be integers in [1, 2147483647]");
   }
   std::size_t expected = 0;
   if (!sonare::numeric::checked_size_product(static_cast<std::size_t>(rows),
                                              static_cast<std::size_t>(cols),
                                              kMaxWasmFloat32Elements, &expected) ||
       wasmFloat32ArrayLength(input, data_name) != expected) {
-    throw WasmRangeError(std::string(fn_name) + ": " + data_name +
-                         " length must equal rows * cols");
+    throw WasmRangeError(std::string(data_name) + " length must equal rows * cols");
   }
   std::vector<float> data = float32ArrayToVector(input);
-  if (!std::all_of(data.begin(), data.end(), [](float value) { return std::isfinite(value); })) {
-    throw WasmRangeError(std::string(fn_name) + ": " + data_name + " contains NaN or Inf");
+  for (std::size_t i = 0; i < data.size(); ++i) {
+    if (!std::isfinite(data[i])) {
+      throw WasmRangeError(std::string(data_name) + " contains a non-finite value at index " +
+                           std::to_string(i));
+    }
   }
   return data;
 }
@@ -48,7 +47,7 @@ val js_spectral_centroid(val samples, const val& sample_rate_val, const val& n_f
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
-  Audio audio = loadValidatedAudio("spectral_centroid", "samples", samples, sample_rate);
+  Audio audio = loadValidatedAudio("samples", samples, sample_rate);
 
   StftConfig config;
   config.n_fft = n_fft;
@@ -66,7 +65,7 @@ val js_spectral_bandwidth(val samples, const val& sample_rate_val, const val& n_
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   const float p = checkedFloatFromVal(p_val, "p");
-  Audio audio = loadValidatedAudio("spectral_bandwidth", "samples", samples, sample_rate);
+  Audio audio = loadValidatedAudio("samples", samples, sample_rate);
 
   StftConfig config;
   config.n_fft = n_fft;
@@ -84,7 +83,7 @@ val js_spectral_rolloff(val samples, const val& sample_rate_val, const val& n_ff
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   const float roll_percent = checkedFloatFromVal(roll_percent_val, "rollPercent");
-  Audio audio = loadValidatedAudio("spectral_rolloff", "samples", samples, sample_rate);
+  Audio audio = loadValidatedAudio("samples", samples, sample_rate);
 
   StftConfig config;
   config.n_fft = n_fft;
@@ -101,7 +100,7 @@ val js_spectral_flatness(val samples, const val& sample_rate_val, const val& n_f
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
-  Audio audio = loadValidatedAudio("spectral_flatness", "samples", samples, sample_rate);
+  Audio audio = loadValidatedAudio("samples", samples, sample_rate);
 
   StftConfig config;
   config.n_fft = n_fft;
@@ -119,7 +118,7 @@ val js_spectral_flux(val samples, const val& sample_rate_val, const val& n_fft_v
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   const int lag = checkedIntFromVal(lag_val, "lag");
-  Audio audio = loadValidatedAudio("spectral_flux", "samples", samples, sample_rate);
+  Audio audio = loadValidatedAudio("samples", samples, sample_rate);
   StftConfig config;
   config.n_fft = n_fft;
   config.hop_length = hop_length;
@@ -131,7 +130,7 @@ val js_zero_crossing_rate(val samples, const val& sample_rate_val, const val& fr
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int frame_length = checkedIntFromVal(frame_length_val, "frameLength");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
-  Audio audio = loadValidatedAudio("zero_crossing_rate", "samples", samples, sample_rate);
+  Audio audio = loadValidatedAudio("samples", samples, sample_rate);
   std::vector<float> zcr = zero_crossing_rate(audio, frame_length, hop_length);
   return vectorToFloat32Array(zcr);
 }
@@ -141,7 +140,7 @@ val js_rms_energy(val samples, const val& sample_rate_val, const val& frame_leng
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int frame_length = checkedIntFromVal(frame_length_val, "frameLength");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
-  Audio audio = loadValidatedAudio("rms_energy", "samples", samples, sample_rate);
+  Audio audio = loadValidatedAudio("samples", samples, sample_rate);
   std::vector<float> rms = rms_energy(audio, frame_length, hop_length);
   return vectorToFloat32Array(rms);
 }
@@ -159,7 +158,7 @@ val js_spectral_contrast(val samples, const val& sample_rate_val, const val& n_f
   const int n_bands = checkedIntFromVal(n_bands_val, "nBands");
   const float fmin = checkedFloatFromVal(fmin_val, "fmin");
   const float quantile = checkedFloatFromVal(quantile_val, "quantile");
-  Audio audio = loadValidatedAudio("spectral_contrast", "samples", samples, sample_rate);
+  Audio audio = loadValidatedAudio("samples", samples, sample_rate);
 
   StftConfig config;
   config.n_fft = n_fft;
@@ -188,7 +187,7 @@ val js_poly_features(val samples, const val& sample_rate_val, const val& n_fft_v
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   const int order = checkedIntFromVal(order_val, "order");
-  Audio audio = loadValidatedAudio("poly_features", "samples", samples, sample_rate);
+  Audio audio = loadValidatedAudio("samples", samples, sample_rate);
 
   StftConfig config;
   config.n_fft = n_fft;
@@ -230,11 +229,11 @@ val js_segment_cross_similarity(val x, const val& x_rows_val, const val& x_cols_
   const int y_rows = checkedIntFromVal(y_rows_val, "yRows");
   const int y_cols = checkedIntFromVal(y_cols_val, "yCols");
   const int k = checkedIntFromVal(k_val, "k");
-  std::vector<float> x_data = load_segment_matrix("segmentCrossSimilarity", x, x_rows, x_cols, "x");
-  std::vector<float> y_data = load_segment_matrix("segmentCrossSimilarity", y, y_rows, y_cols, "y");
+  std::vector<float> x_data = load_segment_matrix(x, x_rows, x_cols, "x");
+  std::vector<float> y_data = load_segment_matrix(y, y_rows, y_cols, "y");
   if (x_rows != y_rows || k < 0) {
     throw WasmRangeError(
-        "segmentCrossSimilarity: feature dimensions must match and k must be non-negative");
+        "feature dimensions must match and k must be an integer in [0, 2147483647]");
   }
   const int rows = mode == "affinity" ? y_cols : x_cols;
   const int cols = mode == "affinity" ? x_cols : y_cols;
@@ -250,10 +249,9 @@ val js_segment_recurrence_matrix(val data, const val& rows_val, const val& cols_
   const int cols = checkedIntFromVal(cols_val, "cols");
   const int k = checkedIntFromVal(k_val, "k");
   const int width = checkedIntFromVal(width_val, "width");
-  std::vector<float> values =
-      load_segment_matrix("segmentRecurrenceMatrix", data, rows, cols, "data");
+  std::vector<float> values = load_segment_matrix(data, rows, cols, "data");
   if (k < 0 || width < 0) {
-    throw WasmRangeError("segmentRecurrenceMatrix: k and width must be non-negative");
+    throw WasmRangeError("k and width must be integers in [0, 2147483647]");
   }
   return segment_matrix_result(
       recurrence_matrix(values.data(), rows, cols, k, width, sym, metric, mode), cols, cols);
@@ -261,15 +259,14 @@ val js_segment_recurrence_matrix(val data, const val& rows_val, const val& cols_
 
 val js_segment_recurrence_to_lag(val recurrence, const val& n_val, bool pad) {
   const int n = checkedIntFromVal(n_val, "n");
-  std::vector<float> values =
-      load_segment_matrix("segmentRecurrenceToLag", recurrence, n, n, "recurrence");
+  std::vector<float> values = load_segment_matrix(recurrence, n, n, "recurrence");
   return segment_matrix_result(recurrence_to_lag(values.data(), n, pad), pad ? 2 * n : n, n);
 }
 
 val js_segment_lag_to_recurrence(val lag, const val& rows_val, const val& lags_val) {
   const int rows = checkedIntFromVal(rows_val, "rows");
   const int lags = checkedIntFromVal(lags_val, "lags");
-  std::vector<float> values = load_segment_matrix("segmentLagToRecurrence", lag, lags, rows, "lag");
+  std::vector<float> values = load_segment_matrix(lag, lags, rows, "lag");
   return segment_matrix_result(lag_to_recurrence(values.data(), rows, lags), rows, rows);
 }
 
@@ -278,9 +275,9 @@ val js_segment_subsegment(val data, const val& rows_val, const val& cols_val, va
   const int rows = checkedIntFromVal(rows_val, "rows");
   const int cols = checkedIntFromVal(cols_val, "cols");
   const int n_segments = checkedIntFromVal(n_segments_val, "nSegments");
-  std::vector<float> values = load_segment_matrix("segmentSubsegment", data, rows, cols, "data");
+  std::vector<float> values = load_segment_matrix(data, rows, cols, "data");
   if (n_segments <= 0) {
-    throw WasmRangeError("segmentSubsegment: n_segments must be positive");
+    throw WasmRangeError("nSegments must be an integer in [1, 2147483647]");
   }
   const std::vector<int32_t> source = int32ArrayToVector(boundaries);
   const std::vector<int> points(source.begin(), source.end());
@@ -292,9 +289,9 @@ val js_segment_agglomerative(val data, const val& rows_val, const val& cols_val,
   const int rows = checkedIntFromVal(rows_val, "rows");
   const int cols = checkedIntFromVal(cols_val, "cols");
   const int k = checkedIntFromVal(k_val, "k");
-  std::vector<float> values = load_segment_matrix("segmentAgglomerative", data, rows, cols, "data");
+  std::vector<float> values = load_segment_matrix(data, rows, cols, "data");
   if (k <= 0) {
-    throw WasmRangeError("segmentAgglomerative: k must be positive");
+    throw WasmRangeError("k must be an integer in [1, 2147483647]");
   }
   return vectorToInt32Array(agglomerative(values.data(), rows, cols, k, linkage));
 }
@@ -307,10 +304,9 @@ val js_segment_path_enhance(val recurrence, const val& n_val, const val& win_val
   const int max_ratio = checkedIntFromVal(max_ratio_val, "maxRatio");
   const int min_ratio = checkedIntFromVal(min_ratio_val, "minRatio");
   const int n_filters = checkedIntFromVal(n_filters_val, "nFilters");
-  std::vector<float> values =
-      load_segment_matrix("segmentPathEnhance", recurrence, n, n, "recurrence");
+  std::vector<float> values = load_segment_matrix(recurrence, n, n, "recurrence");
   if (win <= 0 || max_ratio <= 0 || min_ratio < 0 || n_filters <= 0) {
-    throw WasmRangeError("segmentPathEnhance: invalid enhancement parameters");
+    throw WasmRangeError("invalid enhancement parameters");
   }
   return segment_matrix_result(path_enhance(values.data(), n, win, max_ratio, min_ratio, n_filters),
                                n, n);

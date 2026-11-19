@@ -110,10 +110,10 @@ editing::polyphony::PolyphonicEditConfig configFromVal(const val& config) {
 
 // The config is resolved before the samples are copied, the way the C entry point
 // resolves it before run_offline.
-editing::polyphony::PolyphonicAnalysis analyzeFromVal(const char* fn, const char* name, val samples,
+editing::polyphony::PolyphonicAnalysis analyzeFromVal(const char* name, val samples,
                                                       int sample_rate, val config) {
   const editing::polyphony::PolyphonicEditConfig resolved = configFromVal(config);
-  return editing::polyphony::analyze_polyphonic(loadValidatedAudio(fn, name, samples, sample_rate),
+  return editing::polyphony::analyze_polyphonic(loadValidatedAudio(name, samples, sample_rate),
                                                 resolved);
 }
 
@@ -122,7 +122,7 @@ editing::polyphony::PolyphonicAnalysis analyzeFromVal(const char* fn, const char
 class PolyphonicAnalysisWasm {
  public:
   PolyphonicAnalysisWasm(val samples, int sample_rate, val config)
-      : analysis_(analyzeFromVal("analyze_polyphonic", "samples", samples, sample_rate, config)) {}
+      : analysis_(analyzeFromVal("samples", samples, sample_rate, config)) {}
 
   // A count crosses as a double: every other count on this surface does, and a
   // host sizes nothing from it -- the accessors below return whole arrays.
@@ -140,8 +140,7 @@ class PolyphonicAnalysisWasm {
     std::size_t cumulative_count = 0;
     // Whatever the render rejects about an edit it rejects on the way out, so a
     // field is not checked twice here and a refusal names one place.
-    analysis_.notes[index].edit =
-        noteEditFromVal(edit, "setNoteEdit edit", "setNoteEdit input", &cumulative_count);
+    analysis_.notes[index].edit = noteEditFromVal(edit, "edit", &cumulative_count);
   }
 
   val polyphony() const { return vectorToInt32Array(analysis_.track.polyphony); }
@@ -168,12 +167,12 @@ class PolyphonicAnalysisWasm {
     const editing::note_model::NoteObject& object = analysis_.notes[index];
     const std::vector<editing::polyphony::NoteMask>& masks = analysis_.masks.notes;
     if (index >= masks.size()) {
-      throw SonareException(ErrorCode::InvalidState, "noteSalience: the note has no claim set");
+      throw SonareException(ErrorCode::InvalidState, "the note has no claim set");
     }
     const int ridge_index = masks[index].ridge_index;
     const std::vector<editing::polyphony::F0Ridge>& ridges = analysis_.track.ridges;
     if (ridge_index < 0 || static_cast<std::size_t>(ridge_index) >= ridges.size()) {
-      throw SonareException(ErrorCode::InvalidState, "noteSalience: the claim set has no ridge");
+      throw SonareException(ErrorCode::InvalidState, "the claim set has no ridge");
     }
 
     // The ridge's curve, not the note's, so it is read through the ridge's own
@@ -196,8 +195,7 @@ class PolyphonicAnalysisWasm {
   val noteInharmonicity() const {
     const std::vector<float>& fitted = analysis_.inharmonicity_fit;
     if (!fitted.empty() && fitted.size() != analysis_.notes.size()) {
-      throw SonareException(ErrorCode::InvalidState,
-                            "noteInharmonicity: the fit does not cover every note");
+      throw SonareException(ErrorCode::InvalidState, "the fit does not cover every note");
     }
     return vectorToFloat32Array(fitted);
   }
@@ -210,7 +208,7 @@ class PolyphonicAnalysisWasm {
     const float vibrato_cutoff_hz = floatProperty(options, "vibratoCutoffHz", 0.0f);
     if (!std::isfinite(fade_ms) || fade_ms < 0.0f || !std::isfinite(vibrato_cutoff_hz) ||
         vibrato_cutoff_hz < 0.0f) {
-      throw WasmRangeError("render: fadeMs and vibratoCutoffHz must be finite and non-negative");
+      throw WasmRangeError("fadeMs and vibratoCutoffHz must be finite and at least 0");
     }
     if (fade_ms > 0.0f) config.fade_ms = fade_ms;
     if (vibrato_cutoff_hz > 0.0f) config.decomposition.vibrato_cutoff_hz = vibrato_cutoff_hz;

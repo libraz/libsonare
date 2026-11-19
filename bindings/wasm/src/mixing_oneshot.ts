@@ -1,3 +1,4 @@
+import { withEntry } from './internal/entry.js';
 import { panModeToNative } from './internal/mix_scene.js';
 import { getSonareModule } from './module_state.js';
 import type {
@@ -35,10 +36,9 @@ export function mixingScenePresetNames(): MixScenePreset[] {
  */
 export function mixingScenePreset(name: MixScenePreset): MixSceneDocument {
   assertString('mixingScenePreset', name, 'name');
-  if (!mixingScenePresetNames().includes(name)) {
-    throw new RangeError(
-      `mixingScenePreset: name must be one of ${mixingScenePresetNames().join(', ')}`,
-    );
+  const names = withEntry('mixingScenePreset', () => mixingScenePresetNames());
+  if (!names.includes(name)) {
+    throw new RangeError(`mixingScenePreset: name must be one of ${names.join(', ')}`);
   }
   return JSON.parse(requireModule().mixingScenePresetJson(name)) as MixSceneDocument;
 }

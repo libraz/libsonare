@@ -19,8 +19,8 @@ namespace {
 // Everything else is left to validate_config, which decompose_stems /
 // decompose_stems_linked applies to the config it is handed, so a negative
 // count or a sub-unit mask power is rejected with the same error the C ABI
-// returns. `fn_name` names the caller in the negative-value refusal.
-DecomposeStemsConfig readDecomposeStemsConfig(const char* fn_name, val options) {
+// returns.
+DecomposeStemsConfig readDecomposeStemsConfig(val options) {
   DecomposeStemsConfig config;
   const int n_components = intProperty(options, "nComponents", 0);
   const int n_fft = intProperty(options, "nFft", 0);
@@ -34,9 +34,9 @@ DecomposeStemsConfig readDecomposeStemsConfig(const char* fn_name, val options) 
   // default" rule that follows.
   if (n_components < 0 || n_fft < 0 || hop_length < 0 || n_iter < 0 || !std::isfinite(beta) ||
       !std::isfinite(mask_power) || mask_power < 0.0f) {
-    throw WasmRangeError(std::string(fn_name) +
-                         ": counts must not be negative, beta and maskPower must "
-                         "be finite, and maskPower must not be negative");
+    throw WasmRangeError(
+        "counts must be integers in [0, 2147483647], beta and maskPower must be finite, and "
+        "maskPower must be at least 0");
   }
   if (n_components > 0) config.n_components = n_components;
   if (n_fft > 0) config.n_fft = n_fft;
@@ -66,10 +66,10 @@ val js_decompose(val s, const val& n_features_val, const val& n_frames_val,
   const float beta = checkedFloatFromVal(beta_val, "beta");
   std::vector<float> data = float32ArrayToVector(s);
   if (n_components <= 0) {
-    throw WasmRangeError("n_components must be positive");
+    throw WasmRangeError("nComponents must be an integer in [1, 2147483647]");
   }
   if (n_iter <= 0) {
-    throw WasmRangeError("n_iter must be positive");
+    throw WasmRangeError("nIter must be an integer in [1, 2147483647]");
   }
   if (n_features <= 0 || n_frames <= 0 ||
       static_cast<size_t>(n_features) >
@@ -103,10 +103,10 @@ val js_decompose_with_init(val s, const val& n_features_val, const val& n_frames
   const float beta = checkedFloatFromVal(beta_val, "beta");
   std::vector<float> data = float32ArrayToVector(s);
   if (n_components <= 0) {
-    throw WasmRangeError("n_components must be positive");
+    throw WasmRangeError("nComponents must be an integer in [1, 2147483647]");
   }
   if (n_iter <= 0) {
-    throw WasmRangeError("n_iter must be positive");
+    throw WasmRangeError("nIter must be an integer in [1, 2147483647]");
   }
   if (n_features <= 0 || n_frames <= 0 ||
       static_cast<size_t>(n_features) >
@@ -131,8 +131,8 @@ val js_decompose_with_init(val s, const val& n_features_val, const val& n_frames
 // listenable. Returns { components: Float32Array[], w, h }.
 val js_decompose_stems(val samples, const val& sample_rate_val, val options) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  Audio audio = loadValidatedAudio("decompose_stems", "samples", samples, sample_rate);
-  const DecomposeStemsConfig config = readDecomposeStemsConfig("decomposeStems", options);
+  Audio audio = loadValidatedAudio("samples", samples, sample_rate);
+  const DecomposeStemsConfig config = readDecomposeStemsConfig(options);
 
   DecomposeStemsResult result = decompose_stems(audio.data(), audio.size(), sample_rate, config);
   val components = val::array();
@@ -158,9 +158,8 @@ val js_decompose_stems(val samples, const val& sample_rate_val, val options) {
 // component k's signal on channel c.
 val js_decompose_stems_linked(val channels, const val& sample_rate_val, val options) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  const std::vector<Audio> loaded = loadValidatedChannelSet(
-      "decompose_stems_linked", "channels", channels, sample_rate, "decomposeStemsLinked");
-  const DecomposeStemsConfig config = readDecomposeStemsConfig("decomposeStemsLinked", options);
+  const std::vector<Audio> loaded = loadValidatedChannelSet("channels", channels, sample_rate);
+  const DecomposeStemsConfig config = readDecomposeStemsConfig(options);
 
   std::vector<const float*> pointers;
   pointers.reserve(loaded.size());
@@ -229,7 +228,7 @@ val js_remix(val samples, val intervals, const val& sample_rate, const val& alig
   // so js_remix rejects exactly what the C ABI's run_offline (sonare_remix) does,
   // rather than copying NaN/Inf through or silently accepting a bad rate.
   Audio audio =
-      loadValidatedAudio("remix", "samples", samples, checkedIntFromVal(sample_rate, "sampleRate"));
+      loadValidatedAudio("samples", samples, checkedIntFromVal(sample_rate, "sampleRate"));
   // Sample indices must survive as exact integers: converting through float32
   // would round any boundary above 2^24 (16,777,216) and silently misalign the
   // slice. Read the Int32Array straight into int32 storage instead.
@@ -253,8 +252,8 @@ val js_remix(val samples, val intervals, const val& sample_rate, const val& alig
 val js_remix_aligned_intervals(val samples, val intervals, const val& sample_rate,
                                const val& align_zeros_val) {
   const bool align_zeros = alignZerosFromVal(align_zeros_val);
-  Audio audio = loadValidatedAudio("align_remix_intervals", "samples", samples,
-                                   checkedIntFromVal(sample_rate, "sampleRate"));
+  Audio audio =
+      loadValidatedAudio("samples", samples, checkedIntFromVal(sample_rate, "sampleRate"));
   std::vector<int32_t> interval_ints = int32ArrayToVector(intervals);
   if (interval_ints.size() % 2 != 0) {
     throw WasmRangeError("remix intervals must be (start, end) pairs");

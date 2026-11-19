@@ -102,12 +102,9 @@ function capture(run: () => unknown): unknown {
 }
 
 /** Asserts the caught value is the float-range refusal naming `key`. */
-function expectRangeRefusal(caught: unknown, key: string, context: string): void {
+function expectRangeRefusal(caught: unknown, entry: string, key: string, context: string): void {
   const error = expectArgumentRefusal(caught, RangeError, context);
-  // The two high-pass corners are refused by the facade, which prefixes the entry point.
-  expect(error.message, context).toMatch(
-    new RegExp(`^(masteringDynamics\\w+: )?${key} ${RANGE_MESSAGE}$`),
-  );
+  expect(error.message, context).toBe(`${entry}: ${key} ${RANGE_MESSAGE}`);
 }
 
 const compressorWith = (options: CompressorOptions, samples = tone): Float32Array =>
@@ -218,15 +215,19 @@ describe('every float field refuses a value the float type cannot hold', () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it.each(FLOAT_FIELDS)('$entry names $key rather than accepting an infinity', ({ key, run }) => {
-    for (const value of REFUSED) {
-      expectRangeRefusal(
-        capture(() => run(value)),
-        key,
-        `${key} = ${value}`,
-      );
-    }
-  });
+  it.each(FLOAT_FIELDS)(
+    '$entry names $key rather than accepting an infinity',
+    ({ entry, key, run }) => {
+      for (const value of REFUSED) {
+        expectRangeRefusal(
+          capture(() => run(value)),
+          entry,
+          key,
+          `${key} = ${value}`,
+        );
+      }
+    },
+  );
 });
 
 describe('preemphasis and deemphasis land the initial state they were given', () => {
@@ -317,11 +318,16 @@ describe('the refusal is the same one the shared readers already raised', () => 
   it('answers a bag field and a positional field by the same code and wording', () => {
     const fromBag = capture(() => compressorWith({ thresholdDb: 1e300 }));
     const fromPositional = capture(() => preemphasis(emphasisInput, SR, { coef: 0.97, zi: 1e300 }));
-    expectRangeRefusal(fromBag, 'thresholdDb', 'compressor thresholdDb');
-    expectRangeRefusal(fromPositional, 'zi', 'preemphasis zi');
-    expect((fromBag as SonareError).code).toBe((fromPositional as SonareError).code);
-    expect((fromBag as SonareError).message.replace('thresholdDb', '<key>')).toBe(
-      (fromPositional as SonareError).message.replace('zi', '<key>'),
+    expectRangeRefusal(
+      fromBag,
+      'masteringDynamicsCompressor',
+      'thresholdDb',
+      'compressor thresholdDb',
     );
+    expectRangeRefusal(fromPositional, 'preemphasis', 'zi', 'preemphasis zi');
+    expect((fromBag as SonareError).code).toBe((fromPositional as SonareError).code);
+    const wording = (error: unknown, key: string) =>
+      (error as SonareError).message.replace(/^\w+: /, '').replace(key, '<key>');
+    expect(wording(fromBag, 'thresholdDb')).toBe(wording(fromPositional, 'zi'));
   });
 });

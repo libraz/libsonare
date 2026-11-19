@@ -45,13 +45,13 @@ bool RefuseOutOfDomain(Napi::Env env, const SonareTranscribeConfig& config, bool
     if (!field.present) continue;
     if (!(field.value > 0.0f)) {
       ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_PARAMETER,
-                              std::string(field.key) + " must be a positive number");
+                              std::string(field.key) + " must be finite and greater than 0");
       return false;
     }
   }
   if (!(config.velocity_floor_db < 0.0f)) {
     ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_PARAMETER,
-                            "velocityFloorDb must be negative");
+                            "velocityFloorDb must be finite and less than 0");
     return false;
   }
   return true;
@@ -174,16 +174,11 @@ bool ReadTranscribeConfig(Napi::Env env, const Napi::Object& request, SonareTran
 // The request shape both entry points share: mono audio plus its rate. Returns
 // false with exactly one pending JS exception, so the caller bails out before
 // the C-ABI call.
-//
-// @p fn_name precedes the object because a (Env, Object, char*) parameter list
-// is the shape a key reader has, and a key reader outside sonare_wrap_options.h
-// is what the addon's reader-convention guard exists to refuse.
-bool ReadTranscribeSource(Napi::Env env, const char* fn_name, const Napi::Object& request,
+bool ReadTranscribeSource(Napi::Env env, const Napi::Object& request,
                           Napi::Float32Array* out_samples, int* out_sample_rate) {
   const Napi::Value samples = request.Get("samples");
   if (!IsFloat32Array(samples)) {
-    Napi::TypeError::New(env, std::string(fn_name) + " requires samples as a Float32Array")
-        .ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
     return false;
   }
   if (!RequiredIntProperty(env, request, "sampleRate", out_sample_rate)) return false;
@@ -201,10 +196,9 @@ struct TranscribeResultGuard {
 
 // Rejects anything but a plain request object, so a positional call is reported
 // rather than read as an empty bag whose every field took its default.
-bool RequireRequestObject(Napi::Env env, const char* fn_name, const Napi::CallbackInfo& info,
-                          Napi::Object* out) {
+bool RequireRequestObject(Napi::Env env, const Napi::CallbackInfo& info, Napi::Object* out) {
   if (info.Length() != 1 || !info[0].IsObject() || info[0].IsArray()) {
-    Napi::TypeError::New(env, std::string(fn_name) + " expects one request object")
+    Napi::TypeError::New(env, "request must be a single object argument")
         .ThrowAsJavaScriptException();
     return false;
   }
@@ -218,10 +212,10 @@ Napi::Value Transcribe(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   Napi::Object request;
-  if (!RequireRequestObject(env, "transcribe", info, &request)) return env.Undefined();
+  if (!RequireRequestObject(env, info, &request)) return env.Undefined();
   Napi::Float32Array samples;
   int sample_rate = 0;
-  if (!ReadTranscribeSource(env, "transcribe", request, &samples, &sample_rate)) {
+  if (!ReadTranscribeSource(env, request, &samples, &sample_rate)) {
     return env.Undefined();
   }
   // A tempo <= 0 is the C ABI's "detect it", which is also what an omitted key
@@ -258,7 +252,7 @@ Napi::Value ProjectWrap::TranscribeToClip(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   Napi::Object request;
-  if (!sonare_node::RequireRequestObject(env, "transcribeToClip", info, &request)) {
+  if (!sonare_node::RequireRequestObject(env, info, &request)) {
     return env.Undefined();
   }
   uint32_t clip_id = 0;
@@ -267,8 +261,7 @@ Napi::Value ProjectWrap::TranscribeToClip(const Napi::CallbackInfo& info) {
   }
   Napi::Float32Array samples;
   int sample_rate = 0;
-  if (!sonare_node::ReadTranscribeSource(env, "transcribeToClip", request, &samples,
-                                         &sample_rate)) {
+  if (!sonare_node::ReadTranscribeSource(env, request, &samples, &sample_rate)) {
     return env.Undefined();
   }
   // No tempo argument: the grid is the project's own tempo map, which is why the

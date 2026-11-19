@@ -163,8 +163,8 @@ describe('normalizeStereo refusals', () => {
       caught = error;
     }
     expect(caught).toBeInstanceOf(RangeError);
-    // The facade's own refusals are prefixed with the entry name; the core's are not.
-    expect((caught as Error).message).not.toMatch(/^normalizeStereo: /);
+    // Every refusal names the entry once, the core's as well as the facade's.
+    expect((caught as Error).message).toMatch(/^normalizeStereo: (?!normalizeStereo: )/);
     return caught as Error;
   };
 

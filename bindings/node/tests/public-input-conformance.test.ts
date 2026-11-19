@@ -191,7 +191,7 @@ describe('shared public-input conformance corpus', () => {
     const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     try {
       expect(() => engine.bindMidiCc({ ccNumber: 7, paramId: 1, channel: '3' } as never)).toThrow(
-        /^channel must be a number$/,
+        /^RealtimeEngine\.bindMidiCc: channel must be a number$/,
       );
       expect(engine.midiCcBindingCount).toBe(0);
     } finally {

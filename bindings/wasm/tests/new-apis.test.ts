@@ -1040,7 +1040,10 @@ describe('v1.2 feature additions (WASM)', () => {
       ];
       for (const [config, message] of refusals) {
         expect(() => engine.setMidiFx(0, config as never)).toThrow(
-          expect.objectContaining({ code: ErrorCode.InvalidFormat, message }),
+          expect.objectContaining({
+            code: ErrorCode.InvalidFormat,
+            message: `RealtimeEngine.setMidiFx: ${message}`,
+          }),
         );
       }
       engine.setMidiInputSource(0);

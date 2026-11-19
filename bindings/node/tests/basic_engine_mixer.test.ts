@@ -160,7 +160,7 @@ describe('RealtimeEngine', () => {
       expect(() => engine.setMidiFx(0, { quantizePpq: 0 })).toThrow(
         expect.objectContaining({
           code: ErrorCode.InvalidFormat,
-          message: 'quantizePpq must be a positive PPQ length in range',
+          message: 'RealtimeEngine.setMidiFx: quantizePpq must be a positive PPQ length in range',
         }),
       );
     } finally {

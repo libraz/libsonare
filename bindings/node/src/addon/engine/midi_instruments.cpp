@@ -82,8 +82,7 @@ Napi::Value RealtimeEngineWrap::SetMidiClips(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   if (info.Length() == 0 || !info[0].IsArray()) {
-    Napi::TypeError::New(env, "setMidiClips expects an array of clip schedules")
-        .ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "clips must be an array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   Napi::Array input = info[0].As<Napi::Array>();
@@ -198,8 +197,7 @@ Napi::Value RealtimeEngineWrap::LoadSoundFont(const Napi::CallbackInfo& info) {
     bytes = arr.Data();
     len = arr.ByteLength();
   } else {
-    Napi::TypeError::New(env, "loadSoundFont expects a Buffer or Uint8Array")
-        .ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "data must be a Buffer or Uint8Array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   ThrowIfError(env, sonare_engine_load_soundfont(engine_, bytes, len));

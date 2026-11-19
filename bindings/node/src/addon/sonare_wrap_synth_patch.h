@@ -58,7 +58,7 @@ inline bool SynthEnumValue(Napi::Env env, const Napi::Value& value, const char* 
     return true;
   }
   if (!value.IsNumber()) {
-    Napi::TypeError::New(env, std::string("Expected ") + what + " to be a number or string")
+    Napi::TypeError::New(env, std::string(what) + " must be a number or string")
         .ThrowAsJavaScriptException();
     return false;
   }

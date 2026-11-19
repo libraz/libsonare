@@ -9,15 +9,15 @@
 
 namespace {
 
-void validate_positive(const char* fn_name, int value, const char* arg_name) {
+void validate_positive(int value, const char* arg_name) {
   if (value <= 0) {
-    throw WasmRangeError(std::string(fn_name) + ": " + arg_name + " must be positive");
+    throw WasmRangeError(std::string(arg_name) + " must be an integer in [1, 2147483647]");
   }
 }
 
-void validate_sample_rate(const char* fn_name, int sample_rate) {
+void validate_sample_rate(int sample_rate) {
   if (sample_rate < sonare::kMinAudioSampleRate || sample_rate > sonare::kMaxAudioSampleRate) {
-    throw WasmRangeError(std::string(fn_name) + ": sample_rate out of supported range [" +
+    throw WasmRangeError("sampleRate out of supported range [" +
                          std::to_string(sonare::kMinAudioSampleRate) + ", " +
                          std::to_string(sonare::kMaxAudioSampleRate) + "]");
   }
@@ -27,21 +27,20 @@ void validate_sample_rate(const char* fn_name, int sample_rate) {
 /// element case is deliberately absent: the core transforms this helper feeds
 /// reject it themselves, so the rule has a single home shared with every other
 /// surface.
-std::vector<float> load_validated_matrix(const char* fn_name, val input, int rows, int frames,
-                                         const char* data_name, const char* rows_name) {
-  validate_positive(fn_name, rows, rows_name);
-  validate_positive(fn_name, frames, "n_frames");
+std::vector<float> load_validated_matrix(val input, int rows, int frames, const char* data_name,
+                                         const char* rows_name) {
+  validate_positive(rows, rows_name);
+  validate_positive(frames, "nFrames");
 
   std::size_t expected = 0;
   if (!sonare::numeric::checked_size_product(static_cast<std::size_t>(rows),
                                              static_cast<std::size_t>(frames),
                                              kMaxWasmFloat32Elements, &expected)) {
-    throw WasmRangeError(std::string(fn_name) + ": matrix shape exceeds WASM budget");
+    throw WasmRangeError("matrix shape exceeds WASM budget");
   }
   const std::size_t actual = wasmFloat32ArrayLength(input, data_name);
   if (expected != actual) {
-    throw WasmRangeError(std::string(fn_name) + ": " + data_name +
-                         " length must equal rows * n_frames");
+    throw WasmRangeError(std::string(data_name) + " length must equal rows * nFrames");
   }
   return float32ArrayToVector(input);
 }
@@ -57,7 +56,7 @@ val js_stft(val samples, const val& sample_rate_val, const val& n_fft_val,
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
-  Audio audio = loadValidatedAudio("Spectrogram::compute", "samples", samples, sample_rate);
+  Audio audio = loadValidatedAudio("samples", samples, sample_rate);
 
   StftConfig config;
   config.n_fft = n_fft;
@@ -82,7 +81,7 @@ val js_stft_db(val samples, const val& sample_rate_val, const val& n_fft_val,
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
-  Audio audio = loadValidatedAudio("Spectrogram::compute", "samples", samples, sample_rate);
+  Audio audio = loadValidatedAudio("samples", samples, sample_rate);
 
   StftConfig config;
   config.n_fft = n_fft;
@@ -112,7 +111,7 @@ val js_mel_spectrogram(val samples, const val& sample_rate_val, const val& n_fft
   const float fmin = checkedFloatFromVal(fmin_val, "fmin");
   const float fmax = checkedFloatFromVal(fmax_val, "fmax");
   validate_mel_bounds(fmin, fmax);
-  Audio audio = loadValidatedAudio("MelSpectrogram::compute", "samples", samples, sample_rate);
+  Audio audio = loadValidatedAudio("samples", samples, sample_rate);
 
   MelConfig config;
   config.n_fft = n_fft;
@@ -157,7 +156,7 @@ val js_mfcc(val samples, const val& sample_rate_val, const val& n_fft_val,
   const float fmax = checkedFloatFromVal(fmax_val, "fmax");
   const float lifter = checkedFloatFromVal(lifter_val, "lifter");
   validate_mel_bounds(fmin, fmax);
-  Audio audio = loadValidatedAudio("MelSpectrogram::mfcc", "samples", samples, sample_rate);
+  Audio audio = loadValidatedAudio("samples", samples, sample_rate);
 
   MelConfig config;
   config.n_fft = n_fft;
@@ -193,9 +192,9 @@ val js_mel_delta(val features, const val& n_features_val, const val& n_frames_va
   const int n_frames = checkedIntFromVal(n_frames_val, "nFrames");
   const int width = checkedIntFromVal(width_val, "width");
   std::vector<float> data =
-      load_validated_matrix("melDelta", features, n_features, n_frames, "features", "n_features");
+      load_validated_matrix(features, n_features, n_frames, "features", "nFeatures");
   if (width < 3 || width % 2 == 0) {
-    throw WasmRangeError("melDelta: width must be an odd integer of at least 3");
+    throw WasmRangeError("width must be an odd integer of at least 3");
   }
   return vectorToFloat32Array(MelSpectrogram::delta(data.data(), n_features, n_frames, width));
 }
@@ -206,11 +205,11 @@ val js_reassigned_spectrogram(val samples, const val& sample_rate_val, const val
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   const float ref_power = checkedFloatFromVal(ref_power_val, "refPower");
-  const Audio audio = loadValidatedAudio("reassigned_spectrogram", "samples", samples, sample_rate);
-  validate_positive("reassignedSpectrogram", n_fft, "n_fft");
-  validate_positive("reassignedSpectrogram", hop_length, "hop_length");
+  const Audio audio = loadValidatedAudio("samples", samples, sample_rate);
+  validate_positive(n_fft, "nFft");
+  validate_positive(hop_length, "hopLength");
   if (ref_power < 0.0f) {
-    throw WasmRangeError("reassignedSpectrogram: ref_power must be non-negative");
+    throw WasmRangeError("refPower must be at least 0");
   }
   StftConfig config;
   config.n_fft = n_fft;
@@ -239,10 +238,9 @@ val js_mel_to_stft(val mel_power, const val& n_mels_val, const val& n_frames_val
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
   const float fmin = checkedFloatFromVal(fmin_val, "fmin");
   const float fmax = checkedFloatFromVal(fmax_val, "fmax");
-  validate_sample_rate("melToStft", sample_rate);
-  std::vector<float> data =
-      load_validated_matrix("melToStft", mel_power, n_mels, n_frames, "power", "n_mels");
-  validate_positive("melToStft", n_fft, "n_fft");
+  validate_sample_rate(sample_rate);
+  std::vector<float> data = load_validated_matrix(mel_power, n_mels, n_frames, "power", "nMels");
+  validate_positive(n_fft, "nFft");
   validate_mel_bounds(fmin, fmax);
 
   MelConfig config;
@@ -274,10 +272,9 @@ val js_mel_to_audio(val mel_power, const val& n_mels_val, const val& n_frames_va
   const int n_iter = checkedIntFromVal(n_iter_val, "nIter");
   const float fmin = checkedFloatFromVal(fmin_val, "fmin");
   const float fmax = checkedFloatFromVal(fmax_val, "fmax");
-  validate_sample_rate("melToAudio", sample_rate);
-  std::vector<float> data =
-      load_validated_matrix("melToAudio", mel_power, n_mels, n_frames, "power", "n_mels");
-  validate_positive("melToAudio", n_fft, "n_fft");
+  validate_sample_rate(sample_rate);
+  std::vector<float> data = load_validated_matrix(mel_power, n_mels, n_frames, "power", "nMels");
+  validate_positive(n_fft, "nFft");
   // A hop of 0 is absent and the core runs a quarter of n_fft; it names a negative one.
   validate_mel_bounds(fmin, fmax);
 
@@ -303,15 +300,15 @@ val js_griffin_lim(val magnitude, const val& n_bins_val, const val& n_frames_val
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   const int n_iter = checkedIntFromVal(n_iter_val, "nIter");
   const float momentum = checkedFloatFromVal(momentum_val, "momentum");
-  validate_sample_rate("griffinLim", sample_rate);
+  validate_sample_rate(sample_rate);
   std::vector<float> data =
-      load_validated_matrix("griffinLim", magnitude, n_bins, n_frames, "magnitude", "n_bins");
-  validate_positive("griffinLim", n_fft, "n_fft");
+      load_validated_matrix(magnitude, n_bins, n_frames, "magnitude", "nBins");
+  validate_positive(n_fft, "nFft");
   // A hop of 0 is absent and the core runs a quarter of n_fft; it names a negative one.
-  validate_positive("griffinLim", n_iter, "n_iter");
+  validate_positive(n_iter, "nIter");
   if (n_bins != n_fft / 2 + 1 || n_iter > sonare::resource::kMaxGriffinLimIterations ||
       momentum < 0.0f || momentum >= 1.0f) {
-    throw WasmRangeError("griffinLim: invalid shape or options");
+    throw WasmRangeError("invalid shape or options");
   }
   GriffinLimConfig config;
   config.n_iter = n_iter;
@@ -329,8 +326,7 @@ val js_mfcc_to_mel(val mfcc, const val& n_mfcc_val, const val& n_frames_val, con
   const int n_frames = checkedIntFromVal(n_frames_val, "nFrames");
   const int n_mels = checkedIntFromVal(n_mels_val, "nMels");
   const float lifter = checkedFloatFromVal(lifter_val, "lifter");
-  std::vector<float> data =
-      load_validated_matrix("mfccToMel", mfcc, n_mfcc, n_frames, "coefficients", "n_mfcc");
+  std::vector<float> data = load_validated_matrix(mfcc, n_mfcc, n_frames, "coefficients", "nMfcc");
 
   std::vector<float> mel = mfcc_to_mel(data.data(), n_mfcc, n_frames, n_mels, lifter);
 
@@ -356,10 +352,9 @@ val js_mfcc_to_audio(val mfcc, const val& n_mfcc_val, const val& n_frames_val,
   const float fmin = checkedFloatFromVal(fmin_val, "fmin");
   const float fmax = checkedFloatFromVal(fmax_val, "fmax");
   const float lifter = checkedFloatFromVal(lifter_val, "lifter");
-  validate_sample_rate("mfccToAudio", sample_rate);
-  std::vector<float> data =
-      load_validated_matrix("mfccToAudio", mfcc, n_mfcc, n_frames, "coefficients", "n_mfcc");
-  validate_positive("mfccToAudio", n_fft, "n_fft");
+  validate_sample_rate(sample_rate);
+  std::vector<float> data = load_validated_matrix(mfcc, n_mfcc, n_frames, "coefficients", "nMfcc");
+  validate_positive(n_fft, "nFft");
   // A hop of 0 is absent and the core runs a quarter of n_fft; it names a negative one.
   validate_mel_bounds(fmin, fmax);
 
@@ -385,15 +380,15 @@ val js_cqt_to_audio(val magnitude, const val& n_bins_val, const val& n_frames_va
   const int bins_per_octave = checkedIntFromVal(bins_per_octave_val, "binsPerOctave");
   const int n_iter = checkedIntFromVal(n_iter_val, "nIter");
   const float fmin = checkedFloatFromVal(fmin_val, "fmin");
-  validate_sample_rate("cqtToAudio", sample_rate);
+  validate_sample_rate(sample_rate);
   std::vector<float> data =
-      load_validated_matrix("cqtToAudio", magnitude, n_bins, n_frames, "magnitude", "n_bins");
-  validate_positive("cqtToAudio", hop_length, "hop_length");
-  validate_positive("cqtToAudio", bins_per_octave, "bins_per_octave");
-  validate_positive("cqtToAudio", n_iter, "n_iter");
+      load_validated_matrix(magnitude, n_bins, n_frames, "magnitude", "nBins");
+  validate_positive(hop_length, "hopLength");
+  validate_positive(bins_per_octave, "binsPerOctave");
+  validate_positive(n_iter, "nIter");
   validate_cqt_fmin(fmin);
   if (n_iter > sonare::resource::kMaxGriffinLimIterations) {
-    throw WasmRangeError("cqtToAudio: nIter must be at most " +
+    throw WasmRangeError("nIter must be at most " +
                          std::to_string(sonare::resource::kMaxGriffinLimIterations));
   }
   CqtConfig config;
@@ -415,16 +410,16 @@ val js_vqt_to_audio(val magnitude, const val& n_bins_val, const val& n_frames_va
   const int bins_per_octave = checkedIntFromVal(bins_per_octave_val, "binsPerOctave");
   const int n_iter = checkedIntFromVal(n_iter_val, "nIter");
   const float fmin = checkedFloatFromVal(fmin_val, "fmin");
-  validate_sample_rate("vqtToAudio", sample_rate);
+  validate_sample_rate(sample_rate);
   std::vector<float> data =
-      load_validated_matrix("vqtToAudio", magnitude, n_bins, n_frames, "magnitude", "n_bins");
-  validate_positive("vqtToAudio", hop_length, "hop_length");
-  validate_positive("vqtToAudio", bins_per_octave, "bins_per_octave");
-  validate_positive("vqtToAudio", n_iter, "n_iter");
+      load_validated_matrix(magnitude, n_bins, n_frames, "magnitude", "nBins");
+  validate_positive(hop_length, "hopLength");
+  validate_positive(bins_per_octave, "binsPerOctave");
+  validate_positive(n_iter, "nIter");
   validate_cqt_fmin(fmin);
   validate_vqt_gamma(gamma);
   if (n_iter > sonare::resource::kMaxGriffinLimIterations) {
-    throw WasmRangeError("vqtToAudio: nIter must be at most " +
+    throw WasmRangeError("nIter must be at most " +
                          std::to_string(sonare::resource::kMaxGriffinLimIterations));
   }
   VqtConfig config;

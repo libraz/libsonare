@@ -9,6 +9,7 @@
 #include "bindings/common/common.h"
 #include "c_api/capability_features.h"
 #include "c_api/sonare_c_error_mapping.h"
+#include "c_entry_names.h"
 #include "util/error_classification.h"
 
 // Pulled in for the compile-time SONARE_ABI_VERSION macro only. The macro packs
@@ -318,7 +319,8 @@ val js_sonare_exception_info(std::uintptr_t exception_ptr) {
   if (code == 4 && !info.hasOwnProperty("kind")) info.set("kind", std::string("RangeError"));
   info.set("code", code);
   info.set("codeName", std::string(code_name));
-  info.set("message", message);
+  // The public entry names itself in JS, so a C entry name the text opened with is dropped.
+  info.set("message", message.substr(sonare_c_entries::CEntryPrefixLength(message)));
   return info;
 }
 
@@ -401,11 +403,10 @@ val js_audio_from_memory(val bytes) {
 namespace {
 
 // Raises a C-ABI failure as the core exception the JS facade already classifies.
-[[noreturn]] void throw_c_error(SonareError err, const char* context) {
+[[noreturn]] void throw_c_error(SonareError err) {
   const char* detail = sonare_last_error_message();
   const char* text = detail != nullptr && detail[0] != '\0' ? detail : sonare_error_message(err);
-  throw SonareException(sonare_c_detail::error_code_from_c_error(err),
-                        std::string(context) + ": " + text);
+  throw SonareException(sonare_c_detail::error_code_from_c_error(err), text);
 }
 
 struct CFloatBuffer {
@@ -423,7 +424,7 @@ val js_decode_channels(val bytes) {
   int sample_rate = 0;
   const SonareError err = sonare_decode_channels(data.data(), data.size(), &planar.data, &frames,
                                                  &channels, &sample_rate);
-  if (err != SONARE_OK) throw_c_error(err, "decodeChannels");
+  if (err != SONARE_OK) throw_c_error(err);
   val planes = val::array();
   for (int channel = 0; channel < channels; ++channel) {
     planes.call<void>(
@@ -438,11 +439,11 @@ val js_decode_channels(val bytes) {
 val js_downmix(val channels, val target_layout_value, val options) {
   const int target_layout = checkedIntFromVal(target_layout_value, "targetLayout");
   if (channels.isUndefined() || channels.isNull()) {
-    throw WasmTypeError("downmix: channels must be an array of Float32Array");
+    throw WasmTypeError("channels must be an array of Float32Array");
   }
   const size_t count = wasmArrayLikeLength(channels, "channels");
   if (count == 0) {
-    throw WasmRangeError("downmix: channels must hold at least one channel");
+    throw WasmRangeError("channels must hold at least one channel");
   }
   // The C entry takes one planar block, so the planes are packed back to back.
   std::vector<float> packed;
@@ -453,7 +454,7 @@ val js_downmix(val channels, val target_layout_value, val options) {
       frames = plane.size();
       packed.reserve(frames * count);
     } else if (plane.size() != frames) {
-      throw WasmRangeError("downmix: channel lengths must match");
+      throw WasmRangeError("channel lengths must match");
     }
     packed.insert(packed.end(), plane.begin(), plane.end());
   }
@@ -466,7 +467,7 @@ val js_downmix(val channels, val target_layout_value, val options) {
   CFloatBuffer mixed;
   const SonareError err =
       sonare_downmix(packed.data(), frames, count, target_layout, &fold, &mixed.data);
-  if (err != SONARE_OK) throw_c_error(err, "downmix");
+  if (err != SONARE_OK) throw_c_error(err);
   const size_t out_channels =
       static_cast<size_t>(channel_count(static_cast<ChannelLayout>(target_layout)));
   val planes = val::array();

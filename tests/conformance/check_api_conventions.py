@@ -1396,6 +1396,48 @@ def _c_entry_name_sites(root: Path) -> list[dict]:
     return out
 
 
+_JSON_READER_INCLUDE = re.compile(r'#include "util/json(?:_budget|_schema)?\.h"|\bjson::Value\b')
+_REFUSAL_WRITER_FILES = frozenset({"src/util/json_schema.h", "src/util/json.h"})
+_HAND_COMPOSED_REFUSAL = (
+    ("an unknown-key text", re.compile(r'"unknown (?:[\w-]+ )?(?:key|field)')),
+    ("a \"$.\" path", re.compile(r'"[^"\n]*\$\.')),
+    (
+        "a path joined by hand",
+        re.compile(
+            r"""(?=.*(?:throw|refus|error|Exception|fail\())"""
+            r"""(?:.*\+\s*(?:"\."|'\.')\s*\+|.*"\["\s*\+\s*std::to_string)"""
+        ),
+    ),
+)
+
+
+def _document_refusal_sites(root: Path) -> list[dict]:
+    """One record per core source that reads a JSON document, with each hand-composed refusal.
+
+    A reader composes a path, an unknown-key text and every other document refusal through
+    src/util/json_schema.h; the writer itself and the parser's own duplicate-key path are its
+    two homes. A joined path counts only on a line that refuses, so a path joined on one line
+    and refused on the next, a literal split across lines, or a path built by append is not seen.
+    """
+    out: list[dict] = []
+    for path in sorted((root / "src").rglob("*")):
+        if path.suffix not in (".cpp", ".h") or not path.is_file():
+            continue
+        rel = path.relative_to(root).as_posix()
+        text = path.read_text(encoding="utf-8")
+        if rel in _REFUSAL_WRITER_FILES or not _JSON_READER_INCLUDE.search(text):
+            continue
+        sites = []
+        for number, line in enumerate(text.splitlines(), 1):
+            if _COMMENT_LINE.match(line):
+                continue
+            for what, pattern in _HAND_COMPOSED_REFUSAL:
+                if pattern.search(line):
+                    sites.append(f"{rel}:{number} ({what})")
+        out.append({"surface": "c", "kind": "document-refusal", "name": rel, "sites": sites})
+    return out
+
+
 def _c_entry_name_violation(r: dict) -> str | None:
     want = r["entry"].removeprefix("sonare_")
     if r["literal"] != want:
@@ -1769,6 +1811,17 @@ RULES: list[Rule] = [
         population=lambda r: r["kind"] == "c-entry-name",
         violation=_c_entry_name_violation,
         scan=_c_entry_name_sites,
+    ),
+    Rule(
+        name="document-refusal-writer",
+        summary="a JSON document reader composes its paths and refusals through util/json_schema.h",
+        population=lambda r: r["kind"] == "document-refusal",
+        violation=lambda r: (
+            f"{len(r['sites'])} hand-composed refusal sites, first {r['sites'][0]}"
+            if r["sites"]
+            else None
+        ),
+        scan=_document_refusal_sites,
     ),
     Rule(
         name="c-entry-forward",

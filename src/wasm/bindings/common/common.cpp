@@ -99,7 +99,7 @@ std::size_t wasmCountArg(double value, const char* subject) {
   constexpr double kMaxSafeInteger = 9007199254740991.0;
   if (!std::isfinite(value) || value < 0.0 || std::floor(value) != value ||
       value > kMaxSafeInteger) {
-    throw WasmRangeError(std::string(subject) + " must be a non-negative safe integer");
+    throw WasmRangeError(std::string(subject) + " must be an integer in [0, 9007199254740991]");
   }
   return static_cast<std::size_t>(value);
 }
@@ -129,7 +129,8 @@ std::size_t wasmArrayLikeLength(const val& arr, const char* subject, const char*
   constexpr double kMaxSafeInteger = 9007199254740991.0;
   if (!std::isfinite(length) || length < 0.0 || std::floor(length) != length ||
       length > kMaxSafeInteger) {
-    throw WasmRangeError(std::string(subject) + " length must be a non-negative safe integer");
+    throw WasmRangeError(std::string(subject) +
+                         " length must be an integer in [0, 9007199254740991]");
   }
   if (length > static_cast<double>(kMaxWasmFloat32Elements)) {
     throw WasmRangeError(std::string(subject) + " exceeds the WASM Float32 input budget");
@@ -141,41 +142,37 @@ std::size_t wasmFloat32ArrayLength(const val& arr, const char* subject) {
   return wasmArrayLikeLength(arr, subject);
 }
 
-void validateWasmFloat32ElementBudget(std::initializer_list<std::size_t> counts,
-                                      const char* subject) {
+void validateWasmFloat32ElementBudget(std::initializer_list<std::size_t> counts) {
   std::size_t total = 0;
   for (const std::size_t count : counts) {
     if (!sonare::numeric::checked_add(total, count, &total) || total > kMaxWasmFloat32Elements) {
-      throw WasmRangeError(std::string(subject) + " exceeds the WASM Float32 input budget");
+      throw WasmRangeError("input exceeds the WASM Float32 input budget");
     }
   }
 }
 
 std::size_t accumulateWasmFloat32ArrayLength(const val& arr, const char* array_subject,
-                                             const char* budget_subject,
                                              std::size_t* cumulative_count) {
   if (cumulative_count == nullptr) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          std::string(budget_subject) + " has no cumulative budget counter");
+    throw SonareException(ErrorCode::InvalidParameter, "input has no cumulative budget counter");
   }
   const std::size_t count = wasmFloat32ArrayLength(arr, array_subject);
   if (!sonare::numeric::checked_add(*cumulative_count, count, cumulative_count) ||
       *cumulative_count > kMaxWasmFloat32Elements) {
-    throw WasmRangeError(std::string(budget_subject) + " exceeds the WASM Float32 input budget");
+    throw WasmRangeError("input exceeds the WASM Float32 input budget");
   }
   return count;
 }
 
 void validateWasmFloat32ArrayPair(const val& first, const char* first_subject, const val& second,
-                                  const char* second_subject, const char* budget_subject,
-                                  bool require_matching_lengths) {
+                                  const char* second_subject, bool require_matching_lengths) {
   std::size_t cumulative_count = 0;
   const std::size_t first_count =
-      accumulateWasmFloat32ArrayLength(first, first_subject, budget_subject, &cumulative_count);
+      accumulateWasmFloat32ArrayLength(first, first_subject, &cumulative_count);
   const std::size_t second_count =
-      accumulateWasmFloat32ArrayLength(second, second_subject, budget_subject, &cumulative_count);
+      accumulateWasmFloat32ArrayLength(second, second_subject, &cumulative_count);
   if (require_matching_lengths && first_count != second_count) {
-    throw WasmRangeError(std::string(budget_subject) + " channel lengths must match");
+    throw WasmRangeError("channel lengths must match");
   }
 }
 
@@ -195,33 +192,28 @@ std::vector<float> float32ArrayToVector(val arr) {
   return result;
 }
 
-static Audio validatedAudioFromVector(const char* fn, const char* name, std::vector<float> data,
-                                      int sample_rate) {
-  validate_offline_audio_input(fn, name, data.data(), data.size(), sample_rate);
+static Audio validatedAudioFromVector(const char* name, std::vector<float> data, int sample_rate) {
+  validate_offline_audio_input(nullptr, name, data.data(), data.size(), sample_rate);
   return Audio::from_vector(std::move(data), sample_rate);
 }
 
-Audio loadValidatedAudio(const char* fn, const char* name, val samples, int sample_rate) {
-  return validatedAudioFromVector(fn, name, float32ArrayToVector(samples), sample_rate);
+Audio loadValidatedAudio(const char* name, val samples, int sample_rate) {
+  return validatedAudioFromVector(name, float32ArrayToVector(samples), sample_rate);
 }
 
-std::vector<Audio> loadValidatedChannelSet(const char* fn, const char* name, const val& channels,
-                                           int sample_rate, const char* entry) {
-  return loadChannelSet(fn, name, channels, sample_rate, entry, ChannelSetValidation::Offline);
+std::vector<Audio> loadValidatedChannelSet(const char* name, const val& channels, int sample_rate) {
+  return loadChannelSet(name, channels, sample_rate, ChannelSetValidation::Offline);
 }
 
-std::vector<Audio> loadChannelSet(const char* fn, const char* name, const val& channels,
-                                  int sample_rate, const char* entry,
+std::vector<Audio> loadChannelSet(const char* name, const val& channels, int sample_rate,
                                   ChannelSetValidation validation) {
-  const std::string subject(entry);
   if (channels.isUndefined() || channels.isNull()) {
-    throw WasmTypeError(subject + ": channels must be an array of Float32Array");
+    throw WasmTypeError("channels must be an array of Float32Array");
   }
   const std::size_t count = wasmArrayLikeLength(channels, "channels");
   if (count == 0) {
-    throw WasmRangeError(subject + ": channels must hold at least one channel");
+    throw WasmRangeError("channels must hold at least one channel");
   }
-  const std::string budget = subject + " input";
   std::vector<Audio> loaded;
   loaded.reserve(std::min(count, kMaxWasmObjectArrayReserve));
   std::size_t cumulative = 0;
@@ -229,19 +221,18 @@ std::vector<Audio> loadChannelSet(const char* fn, const char* name, const val& c
   for (std::size_t index = 0; index < count; ++index) {
     const val channel = channels[index];
     if (channel.isUndefined() || channel.isNull()) {
-      throw WasmTypeError(subject + ": channels[" + std::to_string(index) +
-                          "] must be a Float32Array");
+      throw WasmTypeError("channels[" + std::to_string(index) + "] must be a Float32Array");
     }
     const std::size_t frames =
-        accumulateWasmFloat32ArrayLength(channel, "channels entry", budget.c_str(), &cumulative);
+        accumulateWasmFloat32ArrayLength(channel, "channels entry", &cumulative);
     if (index == 0) {
       length = frames;
     } else if (frames != length) {
-      throw WasmRangeError(subject + ": channel lengths must match");
+      throw WasmRangeError("channel lengths must match");
     }
     if (validation == ChannelSetValidation::Offline) {
       const std::string channel_name = std::string(name) + "[" + std::to_string(index) + "]";
-      loaded.push_back(loadValidatedAudio(fn, channel_name.c_str(), channel, sample_rate));
+      loaded.push_back(loadValidatedAudio(channel_name.c_str(), channel, sample_rate));
     } else {
       loaded.push_back(Audio::from_vector(float32ArrayToVector(channel), sample_rate));
     }
@@ -275,30 +266,30 @@ std::vector<float> float32ArrayWindowToVector(val arr, std::size_t start, std::s
   return result;
 }
 
-Audio loadValidatedAudioWindow(const char* fn, const char* name, val samples, int sample_rate,
+Audio loadValidatedAudioWindow(const char* name, val samples, int sample_rate,
                                std::size_t scan_offset, std::size_t scan_count) {
   const std::size_t length = wasmFloat32ArrayLength(samples);
   // The extent rules are asked about the whole buffer, as they are on the C ABI;
   // only the finiteness scan -- and the copy that feeds it -- narrows.
-  validate_offline_audio_extent(fn, name, length, sample_rate);
+  validate_offline_audio_extent(nullptr, name, length, sample_rate);
   const std::size_t begin = std::min(scan_offset, length);
   const std::size_t count = std::min(scan_count, length - begin);
   std::vector<float> window = float32ArrayWindowToVector(samples, begin, count);
   // An offset at or past the end leaves no sample to read, which the core
   // answers with a zero-padded frame rather than a refusal.
   if (count != 0) {
-    validate_offline_audio_samples(fn, name, window.data(), count, begin);
+    validate_offline_audio_samples(nullptr, name, window.data(), count, begin);
   }
   return Audio::from_vector(std::move(window), sample_rate);
 }
 
-std::vector<float> loadValidatedInterleaved(const char* fn, const char* name, val samples,
-                                            int channels, int sample_rate, size_t* frames) {
+std::vector<float> loadValidatedInterleaved(const char* name, val samples, int channels,
+                                            int sample_rate, size_t* frames) {
   if (channels <= 0) {
-    throw WasmRangeError("channels must be positive");
+    throw WasmRangeError("channels must be an integer in [1, 2147483647]");
   }
   std::vector<float> data = float32ArrayToVector(samples);
-  validate_offline_audio_input(fn, name, data.data(), data.size(), sample_rate);
+  validate_offline_audio_input(nullptr, name, data.data(), data.size(), sample_rate);
   if (data.size() % static_cast<size_t>(channels) != 0) {
     throw WasmRangeError("interleaved sample count must be a whole number of frames");
   }
@@ -360,7 +351,7 @@ bool hasProperty(val object, const char* key) {
   return !object[key].isUndefined() && !object[key].isNull();
 }
 
-void refuseUnknownKeys(val object, const char* subject, const std::vector<const char*>& allowed,
+void refuseUnknownKeys(val object, const std::vector<const char*>& allowed,
                        std::initializer_list<const char*> extra) {
   if (object.isNull() || object.isUndefined() || object.typeOf().as<std::string>() != "object") {
     return;
@@ -374,7 +365,7 @@ void refuseUnknownKeys(val object, const char* subject, const std::vector<const 
         std::any_of(extra.begin(), extra.end(), matches)) {
       continue;
     }
-    throw WasmTypeError(std::string(subject) + ": unknown option '" + key + "'");
+    throw WasmTypeError("unknown option '" + key + "'");
   }
 }
 
@@ -493,13 +484,13 @@ int checkedIntFromVal(const val& value, const char* key) {
   return static_cast<int>(number);
 }
 
-int checkedMidiNoteFromVal(const val& note, const char* subject) {
+int checkedMidiNoteFromVal(const val& note) {
   if (!note.isNumber()) {
-    throw WasmTypeError(std::string(subject) + ": note must be a number");
+    throw WasmTypeError("note must be a number");
   }
   const int note_number = checkedIntFromVal(note, "note");
   if (const char* error = sonare::midi::live_push_note_error(0, 0, note_number, 0)) {
-    throw WasmRangeError(std::string(subject) + ": " + error);
+    throw WasmRangeError(error);
   }
   return note_number;
 }
@@ -613,7 +604,8 @@ int64_t renderFrameFromVal(const val& value) {
   if (value.isUndefined()) return -1;
   const int64_t frame = checkedInt64FromVal(value, "renderFrame");
   if (frame < 0) {
-    throw WasmRangeError("renderFrame must not be negative (omit it to apply immediately)");
+    throw WasmRangeError(
+        "renderFrame must be an integer of at least 0 (omit it to apply immediately)");
   }
   return frame;
 }

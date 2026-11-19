@@ -37,7 +37,7 @@ void RealtimeEngineWasm::setCaptureBuffer(const val& num_channels_val,
   const int num_channels = checkedIntFromVal(num_channels_val, "numChannels");
   const int capacity_frames = checkedIntFromVal(capacity_frames_val, "capacityFrames");
   if (num_channels <= 0 || capacity_frames <= 0) {
-    throw WasmRangeError("capture buffer dimensions must be positive");
+    throw WasmRangeError("capture buffer dimensions must be integers of at least 1");
   }
   allocatePlanes(capture_storage_, capture_ptrs_, num_channels, capacity_frames);
   engine_.set_capture_segment(

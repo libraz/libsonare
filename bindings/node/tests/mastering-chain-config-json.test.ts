@@ -112,7 +112,7 @@ describe('masteringChainConfigFromJson', () => {
     const error = refusal(() => masteringChainConfigFromJson(document));
     expect(isSonareError(error)).toBe(true);
     expect((error as { code: number }).code).toBe(ErrorCode.InvalidFormat);
-    expect((error as Error).message).toBe(message);
+    expect((error as Error).message).toBe(`masteringChainConfigFromJson: ${message}`);
   });
 
   it('refuses a document that is not a string with a TypeError', () => {

@@ -359,6 +359,16 @@ describe('Web MIDI helper', () => {
     binding.destroy();
   });
 
+  it('refuses an empty inputIds instead of binding every input', async () => {
+    const access = new FakeAccess();
+    const engine = new FakeEngine();
+    installMidi(access);
+    await expect(bindWebMidi(engine as never, { inputIds: [] })).rejects.toThrow(
+      /^bindWebMidi: inputIds must not be empty; omit it to bind every input$/,
+    );
+    expect(engine.messages).toEqual([]);
+  });
+
   it('binds hot-plugged matching inputs and unbinds disconnected ports', async () => {
     const access = new FakeAccess();
     const engine = new FakeEngine();

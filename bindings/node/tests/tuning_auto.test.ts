@@ -110,7 +110,7 @@ describe("tuningCents: 'auto'", () => {
     expect(() => detectKey({ samples: loop, sampleRate, tuningCents: 70 })).toThrow(RangeError);
     // The core's guard, which the facade deliberately does not mirror.
     expect(() => detectKey({ samples: loop, sampleRate, tuningCents: 70 })).toThrow(
-      /^tuning_cents must be/,
+      /^detectKey: tuning_cents must be/,
     );
   });
 });
@@ -129,9 +129,9 @@ describe('tuning converters', () => {
   it('refuse values outside their domain', () => {
     expect(() => tuningToReferenceHz(Number.NaN)).toThrow();
     // The core's plain refusal for each.
-    expect(() => tuningToReferenceHz(0, 0)).toThrow(/^Invalid parameter$/);
-    expect(() => referenceHzToTuning(-1)).toThrow(/^Invalid parameter$/);
-    expect(() => referenceHzToTuning(440, 0)).toThrow(/^Invalid parameter$/);
+    expect(() => tuningToReferenceHz(0, 0)).toThrow(/^tuningToReferenceHz: Invalid parameter$/);
+    expect(() => referenceHzToTuning(-1)).toThrow(/^referenceHzToTuning: Invalid parameter$/);
+    expect(() => referenceHzToTuning(440, 0)).toThrow(/^referenceHzToTuning: Invalid parameter$/);
     for (const refuse of [
       () => tuningToReferenceHz(0, 0),
       () => referenceHzToTuning(-1),

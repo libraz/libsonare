@@ -42,7 +42,7 @@ describe('SonareError', () => {
     };
     const malformed = load('not json');
     expect(malformed.code).toBe(ErrorCode.InvalidFormat);
-    expect(malformed.message).toContain('failed to build mixer from scene JSON');
+    expect(malformed.message).toMatch(/^Mixer\.fromJson: invalid JSON literal/);
     // An unsupported version is a content defect of the document: also InvalidFormat.
     const unsupported = load('{"version":999}');
     expect(unsupported.code).toBe(ErrorCode.InvalidFormat);

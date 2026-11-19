@@ -155,10 +155,10 @@ class StreamAnalyzerWrapper {
     config.emit_every_n_frames = emit_every_n_frames;
     config.magnitude_downsample = magnitude_downsample;
     if (!numeric::checked_integral_cast(max_pending_frames, &config.max_pending_frames)) {
-      throw WasmRangeError("maxPendingFrames must be a non-negative integer");
+      throw WasmRangeError("maxPendingFrames must be an integer of at least 0");
     }
     if (!numeric::checked_integral_cast(max_progression_entries, &config.max_progression_entries)) {
-      throw WasmRangeError("maxProgressionEntries must be a non-negative integer");
+      throw WasmRangeError("maxProgressionEntries must be an integer of at least 0");
     }
     if (output_format != 0) {
       throw WasmRangeError("outputFormat is deprecated; use readFramesU8/readFramesI16");

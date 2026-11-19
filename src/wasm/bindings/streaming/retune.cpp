@@ -3,8 +3,8 @@
 
 #ifdef __EMSCRIPTEN__
 
-#include <algorithm>
 #include <cmath>
+#include <string>
 
 #include "wasm/bindings/common/common.h"
 
@@ -26,38 +26,31 @@ editing::voice_changer::StreamingRetuneConfig streamingRetuneConfigFromVal(
   if (config.isNull() || config.isUndefined()) {
     return result;
   }
-  refuseUnknownKeys(config, "StreamingRetune", {"pitchSemitones", "mix", "grainSizeSamples"});
-  // A non-finite control is a caller error, not a request to clamp: silently
-  // dropping it here left a NaN request looking like an omitted key, and made
-  // this the one surface that answered differently from the C ABI. Finite
-  // out-of-range values stay clamped -- that is the documented contract.
+  refuseUnknownKeys(config, {"pitchSemitones", "mix", "grainSizeSamples"});
   if (const auto semitones =
           optionalNumber(objectProperty(config, "pitchSemitones"), "pitchSemitones");
       semitones) {
-    if (!std::isfinite(*semitones)) {
-      throw WasmRangeError("StreamingRetune: pitchSemitones must be finite");
-    }
-    result.semitones = std::clamp(*semitones, -24.0f, 24.0f);
+    result.semitones = *semitones;
   }
   if (const auto mix = optionalNumber(objectProperty(config, "mix"), "mix"); mix) {
-    if (!std::isfinite(*mix)) {
-      throw WasmRangeError("StreamingRetune: mix must be finite");
-    }
-    result.mix = std::clamp(*mix, 0.0f, 1.0f);
+    result.mix = *mix;
   }
   if (const auto grain =
           optionalNumber(objectProperty(config, "grainSizeSamples"), "grainSizeSamples");
       grain) {
-    if (!std::isfinite(*grain)) {
-      throw WasmRangeError("StreamingRetune: grainSizeSamples must be finite");
-    }
     if (*grain == 0.0f) {
-      throw WasmRangeError(
-          "StreamingRetune: grainSizeSamples must be positive; omit it for an automatic grain "
-          "size");
+      throw WasmRangeError("grainSizeSamples must not be 0; omit it for an automatic grain size");
     }
-    result.grain_size = static_cast<int>(std::lround(std::clamp(*grain, 0.0f, 8192.0f)));
+    // A grain no int holds exactly is off the domain's grid, so it reaches the refusal below as -1.
+    const bool integral =
+        std::isfinite(*grain) && *grain == std::floor(*grain) &&
+        std::fabs(*grain) <= static_cast<float>(editing::voice_changer::kMaxRetuneGrainSize);
+    result.grain_size = integral ? static_cast<int>(*grain) : -1;
   }
+  // The class states the domain once; the refusal quotes the fields as the caller spelled them.
+  const std::string problem = editing::voice_changer::streaming_retune_config_problem(
+      result, nullptr, {"pitchSemitones", "mix", "grainSizeSamples"});
+  if (!problem.empty()) throw WasmRangeError(problem);
   return result;
 }
 
@@ -96,7 +89,7 @@ class StreamingRetuneWrapper {
   int latencySamples() const { return retune_.latency_samples(); }
 
   val processMono(val samples) {
-    const std::size_t length = wasmFloat32ArrayLength(samples, "StreamingRetune process block");
+    const std::size_t length = wasmFloat32ArrayLength(samples, "process block");
     ensurePrepared();
     validateBlockLength(length);
     std::vector<float> block = float32ArrayToVector(samples);
@@ -104,9 +97,9 @@ class StreamingRetuneWrapper {
     // history clean but told the caller nothing, so a block silently became a
     // different block; the C ABI reports it, and a surface that quietly repairs
     // its input is the asymmetry that keeps regrowing here.
-    for (const float sample : block) {
-      if (!std::isfinite(sample)) {
-        throw WasmRangeError("StreamingRetune: input samples must be finite");
+    for (std::size_t i = 0; i < block.size(); ++i) {
+      if (!std::isfinite(block[i])) {
+        throw WasmRangeError("samples contains a non-finite sample at index " + std::to_string(i));
       }
     }
     std::vector<float> out(block.size());

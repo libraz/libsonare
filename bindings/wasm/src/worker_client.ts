@@ -1,6 +1,7 @@
 import { ErrorCode, SonareError } from './errors.js';
 import { failureFromPayload, isFailurePayload } from './internal/failure_payload.js';
 import './lifetime.js';
+import { entryClass } from './internal/entry.js';
 import type { MasterAudioRequest, MasterAudioStereoRequest } from './mastering_chain.js';
 import type { ProgressCallback } from './public_types.js';
 import type {
@@ -138,6 +139,7 @@ function cancellationFlag(): Int32Array | undefined {
  * `Project`, `Mixer`, and realtime APIs are intentionally absent: their native
  * handles are local to one JavaScript realm and cannot be transferred safely.
  */
+@entryClass('OfflineWorkerClient')
 export class OfflineWorkerClient {
   private readonly worker: OfflineWorker;
   private readonly ownsWorker: boolean;

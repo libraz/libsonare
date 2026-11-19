@@ -483,11 +483,8 @@ class RealtimeEngineWasm {
   /// where the MIDI headers are not included.
   void queueMidiUmp(uint32_t destination_id, uint32_t word0, int64_t render_frame);
 #if defined(SONARE_WITH_ARRANGEMENT)
-  /// Enqueues one UMP message (one or more words) on the live input source. @p what
-  /// names the entry point in the refusal, which is the only thing the three
-  /// per-note dimensions do not share.
-  void pushMidiInputUmpInternal(const sonare::midi::Ump& ump, int64_t offset_in_block_samples,
-                                const char* what);
+  /// Enqueues one UMP message (one or more words) on the live input source.
+  void pushMidiInputUmpInternal(const sonare::midi::Ump& ump, int64_t offset_in_block_samples);
 #endif
 
   sonare::engine::RealtimeEngine engine_{};

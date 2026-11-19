@@ -5,6 +5,7 @@ import {
   panModeCode,
   sendTimingCode,
 } from './codes.js';
+import { entryClass } from './internal/entry.js';
 import { assertHandleLive } from './internal/handle_guard.js';
 import { assertStripMetering, mixSceneJsonToNative } from './internal/mix_scene.js';
 import { getSonareModule } from './module_state.js';
@@ -256,6 +257,7 @@ export interface MixerRealtimeBuffer {
  * }
  * ```
  */
+@entryClass('Mixer', ['processStereo', 'processStereoInto'])
 export class Mixer {
   private mixerHandle: import('./sonare.js').WasmMixer;
   private released = false;

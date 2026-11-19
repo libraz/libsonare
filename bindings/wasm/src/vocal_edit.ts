@@ -1,4 +1,5 @@
 import { ErrorCode, SonareError } from './errors.js';
+import { entryClass } from './internal/entry.js';
 import { releasedHandleError } from './internal/handle_guard.js';
 import { attachVocalErrorDetail, vocalReasonFromCode } from './internal/vocal_error_detail.js';
 import { getSonareModule } from './module_state.js';
@@ -496,8 +497,11 @@ function validateCreate(request: VocalCreateRequest): void {
   if (request.outputLengthSamples !== undefined) {
     requireSample(request.outputLengthSamples, 'outputLengthSamples');
   }
-  if (request.analysis) {
+  if (request.analysis !== undefined && request.analysis !== null) {
     const analysis = request.analysis;
+    if (typeof analysis !== 'object' || Array.isArray(analysis)) {
+      throw new TypeError('analysis must be an object');
+    }
     if (analysis.algorithmId !== undefined) {
       if (typeof analysis.algorithmId !== 'string') {
         throw new TypeError('analysis.algorithmId must be a string');
@@ -612,6 +616,7 @@ export function restoreVocalEditSession(request: VocalRestoreRequest): VocalEdit
 }
 
 /** A vocal editing session. Disposing it also disposes every live draft it began. */
+@entryClass('VocalEditSession')
 export class VocalEditSession {
   private handle: number;
   private readonly drafts = new Set<VocalEditDraft>();
@@ -775,6 +780,7 @@ export class VocalEditSession {
 }
 
 /** An open batch of edits on a {@link VocalEditSession}. Commit it to publish the edits or cancel it to drop them. */
+@entryClass('VocalEditDraft')
 export class VocalEditDraft {
   private handle: number;
   private disposed = false;
@@ -906,6 +912,7 @@ export class VocalEditDraft {
 }
 
 /** A frozen copy of session or draft state that can be rendered repeatedly. */
+@entryClass('VocalRenderSnapshot')
 export class VocalRenderSnapshot {
   private handle: number;
   private disposed = false;
@@ -1024,6 +1031,7 @@ export class VocalRenderSnapshot {
 }
 
 /** An incremental render started with {@link VocalRenderSnapshot.beginRenderJob}. */
+@entryClass('VocalRenderJob')
 export class VocalRenderJob {
   private handle: number;
   private disposed = false;

@@ -52,34 +52,42 @@ Napi::Object RealtimeVoiceChangerWrap::Init(Napi::Env env, Napi::Object exports)
   Napi::Function func = DefineClass(
       env, "RealtimeVoiceChanger",
       {
-          InstanceMethod<&RealtimeVoiceChangerWrap::Prepare>("prepare"),
-          InstanceMethod<&RealtimeVoiceChangerWrap::Reset>("reset"),
-          InstanceMethod<&RealtimeVoiceChangerWrap::SetConfig>("setConfig"),
-          InstanceMethod<&RealtimeVoiceChangerWrap::Config>("config"),
-          InstanceMethod<&RealtimeVoiceChangerWrap::ConfigJson>("configJson"),
-          InstanceMethod<&RealtimeVoiceChangerWrap::LatencySamples>("latencySamples"),
-          InstanceMethod<&RealtimeVoiceChangerWrap::MaxBlockSize>("maxBlockSize"),
-          InstanceMethod<&RealtimeVoiceChangerWrap::NonFiniteDiscardCount>("nonFiniteDiscardCount"),
-          InstanceMethod<&RealtimeVoiceChangerWrap::ProcessMono>("processMono"),
-          InstanceMethod<&RealtimeVoiceChangerWrap::ProcessMonoInto>("processMonoInto"),
-          InstanceMethod<&RealtimeVoiceChangerWrap::ProcessInterleaved>("processInterleaved"),
+          InstanceMethod<&RealtimeVoiceChangerWrap::Prepare>("prepare", napi_default_method),
+          InstanceMethod<&RealtimeVoiceChangerWrap::Reset>("reset", napi_default_method),
+          InstanceMethod<&RealtimeVoiceChangerWrap::SetConfig>("setConfig", napi_default_method),
+          InstanceMethod<&RealtimeVoiceChangerWrap::Config>("config", napi_default_method),
+          InstanceMethod<&RealtimeVoiceChangerWrap::ConfigJson>("configJson", napi_default_method),
+          InstanceMethod<&RealtimeVoiceChangerWrap::LatencySamples>("latencySamples",
+                                                                    napi_default_method),
+          InstanceMethod<&RealtimeVoiceChangerWrap::MaxBlockSize>("maxBlockSize",
+                                                                  napi_default_method),
+          InstanceMethod<&RealtimeVoiceChangerWrap::NonFiniteDiscardCount>("nonFiniteDiscardCount",
+                                                                           napi_default_method),
+          InstanceMethod<&RealtimeVoiceChangerWrap::ProcessMono>("processMono",
+                                                                 napi_default_method),
+          InstanceMethod<&RealtimeVoiceChangerWrap::ProcessMonoInto>("processMonoInto",
+                                                                     napi_default_method),
+          InstanceMethod<&RealtimeVoiceChangerWrap::ProcessInterleaved>("processInterleaved",
+                                                                        napi_default_method),
           InstanceMethod<&RealtimeVoiceChangerWrap::ProcessInterleavedInto>(
-              "processInterleavedInto"),
-          InstanceMethod<&RealtimeVoiceChangerWrap::ProcessPlanarStereo>("processPlanarStereo"),
+              "processInterleavedInto", napi_default_method),
+          InstanceMethod<&RealtimeVoiceChangerWrap::ProcessPlanarStereo>("processPlanarStereo",
+                                                                         napi_default_method),
           InstanceMethod<&RealtimeVoiceChangerWrap::ProcessMonoWithCarrier>(
-              "processMonoWithCarrier"),
+              "processMonoWithCarrier", napi_default_method),
           InstanceMethod<&RealtimeVoiceChangerWrap::ProcessMonoWithCarrierInto>(
-              "processMonoWithCarrierInto"),
+              "processMonoWithCarrierInto", napi_default_method),
           InstanceMethod<&RealtimeVoiceChangerWrap::ProcessInterleavedWithCarrier>(
-              "processInterleavedWithCarrier"),
+              "processInterleavedWithCarrier", napi_default_method),
           InstanceMethod<&RealtimeVoiceChangerWrap::ProcessInterleavedWithCarrierInto>(
-              "processInterleavedWithCarrierInto"),
+              "processInterleavedWithCarrierInto", napi_default_method),
           InstanceMethod<&RealtimeVoiceChangerWrap::ProcessPlanarStereoWithCarrier>(
-              "processPlanarStereoWithCarrier"),
-          InstanceMethod<&RealtimeVoiceChangerWrap::NoteOn>("noteOn"),
-          InstanceMethod<&RealtimeVoiceChangerWrap::NoteOff>("noteOff"),
-          InstanceMethod<&RealtimeVoiceChangerWrap::AllNotesOff>("allNotesOff"),
-          InstanceMethod<&RealtimeVoiceChangerWrap::Destroy>("destroy"),
+              "processPlanarStereoWithCarrier", napi_default_method),
+          InstanceMethod<&RealtimeVoiceChangerWrap::NoteOn>("noteOn", napi_default_method),
+          InstanceMethod<&RealtimeVoiceChangerWrap::NoteOff>("noteOff", napi_default_method),
+          InstanceMethod<&RealtimeVoiceChangerWrap::AllNotesOff>("allNotesOff",
+                                                                 napi_default_method),
+          InstanceMethod<&RealtimeVoiceChangerWrap::Destroy>("destroy", napi_default_method),
       });
 
   exports.Set("RealtimeVoiceChanger", func);
@@ -125,9 +133,8 @@ Napi::Value RealtimeVoiceChangerWrap::Destroy(const Napi::CallbackInfo& info) {
 Napi::Value RealtimeVoiceChangerWrap::Prepare(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (!EnsureAlive(env)) return env.Undefined();
-  if (info.Length() < 1 || !info[0].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (sampleRate, maxBlockSize?, channels?)")
-        .ThrowAsJavaScriptException();
+  if (!info[0].IsNumber()) {
+    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   SONARE_NODE_TRY
@@ -173,7 +180,8 @@ Napi::Value RealtimeVoiceChangerWrap::SetConfig(const Napi::CallbackInfo& info) 
   Napi::Env env = info.Env();
   if (!EnsureAlive(env)) return env.Undefined();
   if (info.Length() < 1) {
-    Napi::TypeError::New(env, "Expected (presetIdOrConfig)").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "config must be a preset id or a config object")
+        .ThrowAsJavaScriptException();
     return env.Undefined();
   }
   SONARE_NODE_TRY
@@ -344,14 +352,16 @@ Napi::Value RealtimeVoiceChangerWrap::ProcessMonoImpl(const Napi::CallbackInfo& 
   }
   const size_t carrier_index = 1;
   const size_t output_index = with_carrier ? 2 : 1;
-  const size_t required = 1 + (with_carrier ? 1 : 0) + (into ? 1 : 0);
-  if (info.Length() < required || !IsFloat32Array(info[0]) ||
-      (with_carrier && !IsFloat32Array(info[carrier_index])) ||
-      (into && !IsFloat32Array(info[output_index]))) {
-    Napi::TypeError::New(env, std::string("Expected (inputFloat32Array") +
-                                  (with_carrier ? ", carrierFloat32Array" : "") +
-                                  (into ? ", outputFloat32Array" : "") + ")")
-        .ThrowAsJavaScriptException();
+  if (!IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "input must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (with_carrier && !IsFloat32Array(info[carrier_index])) {
+    Napi::TypeError::New(env, "carrier must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (into && !IsFloat32Array(info[output_index])) {
+    Napi::TypeError::New(env, "output must be a Float32Array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   SONARE_NODE_TRY
@@ -397,14 +407,20 @@ Napi::Value RealtimeVoiceChangerWrap::ProcessInterleavedImpl(const Napi::Callbac
   const size_t carrier_index = 1;
   const size_t channels_index = with_carrier ? 2 : 1;
   const size_t output_index = with_carrier ? 3 : 2;
-  const size_t required = 2 + (with_carrier ? 1 : 0) + (into ? 1 : 0);
-  if (info.Length() < required || !IsFloat32Array(info[0]) || !info[channels_index].IsNumber() ||
-      (with_carrier && !IsFloat32Array(info[carrier_index])) ||
-      (into && !IsFloat32Array(info[output_index]))) {
-    Napi::TypeError::New(env, std::string("Expected (interleavedFloat32Array") +
-                                  (with_carrier ? ", carrierFloat32Array" : "") + ", channels" +
-                                  (into ? ", outputInterleavedFloat32Array" : "") + ")")
-        .ThrowAsJavaScriptException();
+  if (!IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "input must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (with_carrier && !IsFloat32Array(info[carrier_index])) {
+    Napi::TypeError::New(env, "carrier must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[channels_index].IsNumber()) {
+    Napi::TypeError::New(env, "channels must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (into && !IsFloat32Array(info[output_index])) {
+    Napi::TypeError::New(env, "output must be a Float32Array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   SONARE_NODE_TRY
@@ -471,12 +487,16 @@ Napi::Value RealtimeVoiceChangerWrap::ProcessPlanarStereoImpl(const Napi::Callba
     sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE, kNotPreparedMessage);
     return env.Undefined();
   }
-  if (info.Length() < (with_carrier ? 3u : 2u) || !IsFloat32Array(info[0]) ||
-      !IsFloat32Array(info[1]) || (with_carrier && !IsFloat32Array(info[2]))) {
-    Napi::TypeError::New(env, with_carrier ? "Expected (leftFloat32Array, rightFloat32Array, "
-                                             "carrierFloat32Array)"
-                                           : "Expected (leftFloat32Array, rightFloat32Array)")
-        .ThrowAsJavaScriptException();
+  if (!IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "left must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!IsFloat32Array(info[1])) {
+    Napi::TypeError::New(env, "right must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (with_carrier && !IsFloat32Array(info[2])) {
+    Napi::TypeError::New(env, "carrier must be a Float32Array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   if (channels_ < 2) {
@@ -615,8 +635,8 @@ Napi::Value RealtimeVoiceChangerPresetNames(const Napi::CallbackInfo& info) {
 
 Napi::Value RealtimeVoiceChangerPresetJson(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (info.Length() < 1 || !info[0].IsString()) {
-    Napi::TypeError::New(env, "Expected (presetId)").ThrowAsJavaScriptException();
+  if (!info[0].IsString()) {
+    Napi::TypeError::New(env, "presetId must be a string").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   SONARE_NODE_TRY
@@ -629,8 +649,8 @@ Napi::Value RealtimeVoiceChangerPresetJson(const Napi::CallbackInfo& info) {
 
 Napi::Value ValidateRealtimeVoiceChangerPresetJson(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (info.Length() < 1 || !info[0].IsString()) {
-    Napi::TypeError::New(env, "Expected (json)").ThrowAsJavaScriptException();
+  if (!info[0].IsString()) {
+    Napi::TypeError::New(env, "json must be a string").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   SONARE_NODE_TRY

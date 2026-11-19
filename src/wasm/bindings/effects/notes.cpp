@@ -30,8 +30,7 @@ using sonare_wasm_editing::noteRowEditFromVal;
 
 // Every field takes its default at 0 or absent, mirroring
 // SonareNoteExtractorConfig.
-editing::note_model::NoteExtractorConfig noteExtractorConfigFromVal(val options,
-                                                                    const char* entry_point) {
+editing::note_model::NoteExtractorConfig noteExtractorConfigFromVal(val options) {
   editing::note_model::NoteExtractorConfig config;
   const float threshold_cents = floatProperty(options, "segmentationThresholdCents", 0.0f);
   const float min_note_ms = floatProperty(options, "minNoteMs", 0.0f);
@@ -41,9 +40,8 @@ editing::note_model::NoteExtractorConfig noteExtractorConfigFromVal(val options,
       !std::isfinite(reference_hz) || !std::isfinite(voiced_threshold) || threshold_cents < 0.0f ||
       min_note_ms < 0.0f || reference_hz < 0.0f || voiced_threshold < 0.0f ||
       voiced_threshold > 1.0f) {
-    throw WasmRangeError(std::string(entry_point) +
-                         ": config values must be finite and non-negative, and "
-                         "voicedThreshold must be in [0, 1]");
+    throw WasmRangeError(
+        "config values must be finite and at least 0, and voicedThreshold must be in [0, 1]");
   }
   if (threshold_cents > 0.0f) config.segmenter.segmentation_threshold_cents = threshold_cents;
   if (min_note_ms > 0.0f) config.segmenter.min_note_ms = min_note_ms;
@@ -70,36 +68,34 @@ int noteFrameArg(double value, const char* subject) {
 editing::pitch_editor::F0Track noteTrackFromVal(const val& samples, int sample_rate,
                                                 const val& f0_hz, const val& voiced_prob,
                                                 const val& voiced, float frame_rate,
-                                                float voiced_threshold, const char* entry_point,
+                                                float voiced_threshold,
                                                 std::size_t* cumulative_count) {
-  const std::string prefix = std::string(entry_point) + ": ";
-  const std::string budget = std::string(entry_point) + " input";
   const bool has_voiced = !voiced.isUndefined() && !voiced.isNull();
   const bool has_prob = !has_voiced && !voiced_prob.isUndefined() && !voiced_prob.isNull();
   if (!has_voiced && !has_prob) {
-    throw WasmRangeError(prefix + "voiced or voicedProb is required");
+    throw WasmRangeError("voiced or voicedProb is required");
   }
   if (!std::isfinite(frame_rate) || frame_rate <= 0.0f) {
-    throw WasmRangeError(prefix + "frameRate must be a finite positive number");
+    throw WasmRangeError("frameRate must be finite and greater than 0");
   }
-  accumulateWasmFloat32ArrayLength(samples, "samples", budget.c_str(), cumulative_count);
-  accumulateWasmFloat32ArrayLength(f0_hz, "f0Hz", budget.c_str(), cumulative_count);
+  accumulateWasmFloat32ArrayLength(samples, "samples", cumulative_count);
+  accumulateWasmFloat32ArrayLength(f0_hz, "f0Hz", cumulative_count);
   if (has_voiced) {
-    accumulateWasmFloat32ArrayLength(voiced, "voiced", budget.c_str(), cumulative_count);
+    accumulateWasmFloat32ArrayLength(voiced, "voiced", cumulative_count);
   }
   if (has_prob) {
-    accumulateWasmFloat32ArrayLength(voiced_prob, "voicedProb", budget.c_str(), cumulative_count);
+    accumulateWasmFloat32ArrayLength(voiced_prob, "voicedProb", cumulative_count);
   }
 
   std::vector<float> f0 = float32ArrayToVector(f0_hz);
   const size_t n_frames = f0.size();
   if (n_frames == 0) {
-    throw WasmRangeError(prefix + "f0Hz must not be empty");
+    throw WasmRangeError("f0Hz must not be empty");
   }
   std::vector<float> voiced_vec = has_voiced ? float32ArrayToVector(voiced) : std::vector<float>{};
   std::vector<float> prob_vec = has_prob ? float32ArrayToVector(voiced_prob) : std::vector<float>{};
   if ((has_voiced && voiced_vec.size() != n_frames) || (has_prob && prob_vec.size() != n_frames)) {
-    throw WasmRangeError(prefix + "voiced and voicedProb must match f0Hz length");
+    throw WasmRangeError("voiced and voicedProb must match f0Hz length");
   }
   for (size_t i = 0; i < n_frames; ++i) {
     // f0Hz values are not checked: a frame carrying no pitch is spelled zero,
@@ -107,7 +103,7 @@ editing::pitch_editor::F0Track noteTrackFromVal(const val& samples, int sample_r
     // it -- and every consumer reads all three as contributing no measurement.
     // voicedProb is read only when voiced is absent, so it is validated only then.
     if (!has_voiced && (!std::isfinite(prob_vec[i]) || prob_vec[i] < 0.0f || prob_vec[i] > 1.0f)) {
-      throw WasmRangeError(prefix + "voicedProb values must be in [0, 1]");
+      throw WasmRangeError("voicedProb values must be in [0, 1]");
     }
   }
 
@@ -129,24 +125,22 @@ editing::pitch_editor::F0Track noteTrackFromVal(const val& samples, int sample_r
 // so apply the same usable-pitch rule here before constructing a NoteObject.
 // A supplied mask only suppresses a positive finite candidate; a true flag
 // cannot make a zero, negative or non-finite F0 usable.
-std::vector<float> normalizedF0FromVal(const val& f0_hz, const val& voiced, const char* entry_point,
+std::vector<float> normalizedF0FromVal(const val& f0_hz, const val& voiced,
                                        std::size_t* cumulative_count) {
-  const std::string prefix = std::string(entry_point) + ": ";
-  const std::string budget = std::string(entry_point) + " input";
   const bool has_voiced = !voiced.isUndefined() && !voiced.isNull();
 
-  accumulateWasmFloat32ArrayLength(f0_hz, "f0Hz", budget.c_str(), cumulative_count);
+  accumulateWasmFloat32ArrayLength(f0_hz, "f0Hz", cumulative_count);
   std::vector<float> f0 = float32ArrayToVector(f0_hz);
   if (f0.empty()) {
-    throw WasmRangeError(prefix + "f0Hz must not be empty");
+    throw WasmRangeError("f0Hz must not be empty");
   }
 
   std::vector<float> voiced_vec;
   if (has_voiced) {
-    accumulateWasmFloat32ArrayLength(voiced, "voiced", budget.c_str(), cumulative_count);
+    accumulateWasmFloat32ArrayLength(voiced, "voiced", cumulative_count);
     voiced_vec = float32ArrayToVector(voiced);
     if (voiced_vec.size() != f0.size()) {
-      throw WasmRangeError(prefix + "voiced must match f0Hz length");
+      throw WasmRangeError("voiced must match f0Hz length");
     }
   }
 
@@ -167,34 +161,33 @@ editing::note_model::NoteObject renderableNoteFromVal(const val& row, const std:
                                                       float frame_rate, bool has_track,
                                                       std::size_t* cumulative_count) {
   editing::note_model::NoteObject note;
-  note.onset_sample = requireInt64Property(row, "onsetSample", "renderNotes note");
-  note.offset_sample = requireInt64Property(row, "offsetSample", "renderNotes note");
-  note.edit = noteRowEditFromVal(row, "renderNotes", cumulative_count);
+  note.onset_sample = requireInt64Property(row, "onsetSample", "note");
+  note.offset_sample = requireInt64Property(row, "offsetSample", "note");
+  note.edit = noteRowEditFromVal(row, cumulative_count);
 
   if (has_track) {
     // The note's pitch curve is the caller's own track sliced by its bounds.
-    const int frame_start =
-        noteFrameArg(hasProperty(row, "frameStart")
-                         ? requireNumberProperty(row, "frameStart", "renderNotes note")
-                         : note.frame_start,
-                     "renderNotes note.frameStart");
-    const int frame_end = noteFrameArg(
-        hasProperty(row, "frameEnd") ? requireNumberProperty(row, "frameEnd", "renderNotes note")
-                                     : note.frame_end,
-        "renderNotes note.frameEnd");
+    const int frame_start = noteFrameArg(hasProperty(row, "frameStart")
+                                             ? requireNumberProperty(row, "frameStart", "note")
+                                             : note.frame_start,
+                                         "note.frameStart");
+    const int frame_end =
+        noteFrameArg(hasProperty(row, "frameEnd") ? requireNumberProperty(row, "frameEnd", "note")
+                                                  : note.frame_end,
+                     "note.frameEnd");
     if (frame_start < 0 || frame_end < frame_start ||
         static_cast<std::size_t>(frame_end) > f0.size()) {
-      throw WasmRangeError("renderNotes: every note's frame span must lie inside f0Hz");
+      throw WasmRangeError("every note's frame span must lie inside f0Hz");
     }
-    note.median_hz = static_cast<float>(
-        hasProperty(row, "medianHz") ? requireNumberProperty(row, "medianHz", "renderNotes note")
-                                     : note.median_hz);
+    note.median_hz = static_cast<float>(hasProperty(row, "medianHz")
+                                            ? requireNumberProperty(row, "medianHz", "note")
+                                            : note.median_hz);
     note.f0_hz.values.assign(f0.begin() + frame_start, f0.begin() + frame_end);
     note.f0_hz.frame_rate_hz = frame_rate;
     note.f0_hz.frame_offset = frame_start;
   } else if (note.edit.vibrato_depth_change != 0.0f || note.edit.drift_change != 0.0f) {
     // A curve edit with no track has nothing to act on.
-    throw WasmRangeError("renderNotes: vibratoDepthChange and driftChange need f0Hz");
+    throw WasmRangeError("vibratoDepthChange and driftChange need f0Hz");
   }
   return note;
 }
@@ -213,9 +206,8 @@ struct NoteSetEntry {
 // (sonare_c_daw.cpp's to_core_edit_checked). Nothing here touches the audio: a
 // malformed edit is a bad argument rather than a measurement, so it is rejected
 // before any audio work.
-std::vector<NoteSetEntry> noteSetFromVal(const val& notes, const char* entry_point,
-                                         std::size_t* cumulative_count) {
-  const std::string subject = std::string(entry_point) + " note";
+std::vector<NoteSetEntry> noteSetFromVal(const val& notes, std::size_t* cumulative_count) {
+  const std::string subject = "note";
   const std::string list_subject = subject + "s";
   const std::size_t count = wasmArrayLikeLength(notes, list_subject.c_str());
   std::vector<NoteSetEntry> out;
@@ -227,7 +219,7 @@ std::vector<NoteSetEntry> noteSetFromVal(const val& notes, const char* entry_poi
                                      (subject + ".frameStart").c_str());
     entry.frame_end = noteFrameArg(requireNumberProperty(row, "frameEnd", subject.c_str()),
                                    (subject + ".frameEnd").c_str());
-    entry.edit = noteRowEditFromVal(row, entry_point, cumulative_count);
+    entry.edit = noteRowEditFromVal(row, cumulative_count);
     if (!editing::note_model::is_valid_note_edit(entry.edit)) {
       throw WasmRangeError(subject + ".edit contains invalid values");
     }
@@ -270,14 +262,13 @@ val js_extract_notes(val samples, const val& sample_rate_val, val f0_hz, val voi
                      val voiced, const val& frame_rate_val, val options) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const float frame_rate = checkedFloatFromVal(frame_rate_val, "frameRate");
-  const editing::note_model::NoteExtractorConfig config =
-      noteExtractorConfigFromVal(options, "extractNotes");
+  const editing::note_model::NoteExtractorConfig config = noteExtractorConfigFromVal(options);
   std::size_t cumulative_count = 0;
   const editing::pitch_editor::F0Track track =
       noteTrackFromVal(samples, sample_rate, f0_hz, voiced_prob, voiced, frame_rate,
-                       config.voiced_threshold, "extractNotes", &cumulative_count);
+                       config.voiced_threshold, &cumulative_count);
 
-  Audio audio = loadValidatedAudio("extract_notes", "samples", samples, sample_rate);
+  Audio audio = loadValidatedAudio("samples", samples, sample_rate);
   return noteObjectsToVal(editing::note_model::extract_notes(audio, track, config));
 }
 
@@ -286,17 +277,17 @@ val js_render_notes(val samples, const val& sample_rate, val notes, val options)
   editing::note_model::NoteRenderConfig config;
   const float fade_ms = floatProperty(options, "fadeMs", 0.0f);
   if (!std::isfinite(fade_ms) || fade_ms < 0.0f) {
-    throw WasmRangeError("renderNotes: fadeMs must be finite and non-negative");
+    throw WasmRangeError("fadeMs must be finite and at least 0");
   }
   if (fade_ms > 0.0f) config.fade_ms = fade_ms;
   const float vibrato_cutoff_hz = floatProperty(options, "vibratoCutoffHz", 0.0f);
   if (!std::isfinite(vibrato_cutoff_hz) || vibrato_cutoff_hz < 0.0f) {
-    throw WasmRangeError("renderNotes: vibratoCutoffHz must be finite and non-negative");
+    throw WasmRangeError("vibratoCutoffHz must be finite and at least 0");
   }
   if (vibrato_cutoff_hz > 0.0f) config.decomposition.vibrato_cutoff_hz = vibrato_cutoff_hz;
 
   std::size_t cumulative_count = 0;
-  accumulateWasmFloat32ArrayLength(samples, "samples", "renderNotes input", &cumulative_count);
+  accumulateWasmFloat32ArrayLength(samples, "samples", &cumulative_count);
 
   // The track is optional; only a vibrato or drift edit reads it.
   const val f0_hz = objectProperty(options, "f0Hz");
@@ -304,19 +295,18 @@ val js_render_notes(val samples, const val& sample_rate, val notes, val options)
   const val voiced = objectProperty(options, "voiced");
   const bool has_voiced = !voiced.isUndefined() && !voiced.isNull();
   if (has_voiced && !has_track) {
-    throw WasmRangeError("renderNotes: voiced requires f0Hz");
+    throw WasmRangeError("voiced requires f0Hz");
   }
   const float frame_rate = floatProperty(options, "frameRate", 0.0f);
   std::vector<float> f0;
   if (has_track) {
     if (!std::isfinite(frame_rate) || frame_rate <= 0.0f) {
-      throw WasmRangeError(
-          "renderNotes: frameRate must be a finite positive number when f0Hz is given");
+      throw WasmRangeError("frameRate must be finite and greater than 0 when f0Hz is given");
     }
-    f0 = normalizedF0FromVal(f0_hz, voiced, "renderNotes", &cumulative_count);
+    f0 = normalizedF0FromVal(f0_hz, voiced, &cumulative_count);
   }
 
-  const std::size_t count = wasmArrayLikeLength(notes, "renderNotes notes");
+  const std::size_t count = wasmArrayLikeLength(notes, "notes");
   std::vector<editing::note_model::NoteObject> core_notes;
   core_notes.reserve(std::min(count, kMaxWasmObjectArrayReserve));
   for (std::size_t i = 0; i < count; ++i) {
@@ -324,7 +314,7 @@ val js_render_notes(val samples, const val& sample_rate, val notes, val options)
         renderableNoteFromVal(notes[i], f0, frame_rate, has_track, &cumulative_count));
   }
 
-  Audio audio = loadValidatedAudio("render_notes", "samples", samples, rate);
+  Audio audio = loadValidatedAudio("samples", samples, rate);
   Audio result = editing::note_model::render_notes(audio, core_notes, config);
   return vectorToFloat32Array(result.data(), result.size());
 }
@@ -337,17 +327,16 @@ val js_decompose_note_pitch(val f0_hz, const val& voiced, const val& frame_rate_
   // A note with no pitch is spelled 0, so only a value that cannot be a centre
   // or a cutoff at all is rejected.
   if (median_hz < 0.0f) {
-    throw WasmRangeError("decomposeNotePitch: medianHz must be non-negative");
+    throw WasmRangeError("medianHz must be at least 0");
   }
   if (vibrato_cutoff_hz < 0.0f) {
-    throw WasmRangeError("decomposeNotePitch: vibratoCutoffHz must be non-negative");
+    throw WasmRangeError("vibratoCutoffHz must be at least 0");
   }
   if (frame_rate <= 0.0f) {
-    throw WasmRangeError("decomposeNotePitch: frameRate must be a positive number");
+    throw WasmRangeError("frameRate must be greater than 0");
   }
   std::size_t cumulative_count = 0;
-  std::vector<float> f0 =
-      normalizedF0FromVal(f0_hz, voiced, "decomposeNotePitch", &cumulative_count);
+  std::vector<float> f0 = normalizedF0FromVal(f0_hz, voiced, &cumulative_count);
 
   editing::note_model::NoteObject note;
   note.median_hz = median_hz;
@@ -371,20 +360,19 @@ val js_split_note(val samples, const val& sample_rate_val, val f0_hz, val voiced
                   const val& frame_rate_val, val notes, double index, double frame, val options) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const float frame_rate = checkedFloatFromVal(frame_rate_val, "frameRate");
-  const std::size_t note_index = wasmIndexArg(index, "splitNote index");
-  const int cut_frame = noteFrameArg(frame, "splitNote frame");
-  const editing::note_model::NoteExtractorConfig config =
-      noteExtractorConfigFromVal(options, "splitNote");
+  const std::size_t note_index = wasmIndexArg(index, "index");
+  const int cut_frame = noteFrameArg(frame, "frame");
+  const editing::note_model::NoteExtractorConfig config = noteExtractorConfigFromVal(options);
   std::size_t cumulative_count = 0;
   const editing::pitch_editor::F0Track track =
       noteTrackFromVal(samples, sample_rate, f0_hz, voiced_prob, voiced, frame_rate,
-                       config.voiced_threshold, "splitNote", &cumulative_count);
-  std::vector<NoteSetEntry> entries = noteSetFromVal(notes, "splitNote", &cumulative_count);
+                       config.voiced_threshold, &cumulative_count);
+  std::vector<NoteSetEntry> entries = noteSetFromVal(notes, &cumulative_count);
   if (note_index >= entries.size()) {
-    throw WasmRangeError("splitNote: index is outside the note set");
+    throw WasmRangeError("index is outside the note set");
   }
 
-  Audio audio = loadValidatedAudio("split_note", "samples", samples, sample_rate);
+  Audio audio = loadValidatedAudio("samples", samples, sample_rate);
   const std::vector<editing::note_model::NoteObject> core_notes =
       deriveNoteSet(audio, track, entries, config);
   return noteObjectsToVal(
@@ -395,20 +383,19 @@ val js_merge_notes(val samples, const val& sample_rate_val, val f0_hz, val voice
                    const val& frame_rate_val, val notes, double first, double last, val options) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const float frame_rate = checkedFloatFromVal(frame_rate_val, "frameRate");
-  const std::size_t first_index = wasmIndexArg(first, "mergeNotes first");
-  const std::size_t last_index = wasmIndexArg(last, "mergeNotes last");
-  const editing::note_model::NoteExtractorConfig config =
-      noteExtractorConfigFromVal(options, "mergeNotes");
+  const std::size_t first_index = wasmIndexArg(first, "first");
+  const std::size_t last_index = wasmIndexArg(last, "last");
+  const editing::note_model::NoteExtractorConfig config = noteExtractorConfigFromVal(options);
   std::size_t cumulative_count = 0;
   const editing::pitch_editor::F0Track track =
       noteTrackFromVal(samples, sample_rate, f0_hz, voiced_prob, voiced, frame_rate,
-                       config.voiced_threshold, "mergeNotes", &cumulative_count);
-  std::vector<NoteSetEntry> entries = noteSetFromVal(notes, "mergeNotes", &cumulative_count);
+                       config.voiced_threshold, &cumulative_count);
+  std::vector<NoteSetEntry> entries = noteSetFromVal(notes, &cumulative_count);
   if (!(first_index < last_index) || last_index >= entries.size()) {
-    throw WasmRangeError("mergeNotes: first and last must be an ascending run inside the set");
+    throw WasmRangeError("first and last must be an ascending run inside the set");
   }
 
-  Audio audio = loadValidatedAudio("merge_notes", "samples", samples, sample_rate);
+  Audio audio = loadValidatedAudio("samples", samples, sample_rate);
   const std::vector<editing::note_model::NoteObject> core_notes =
       deriveNoteSet(audio, track, entries, config);
   return noteObjectsToVal(
@@ -433,7 +420,7 @@ UnmatchedTargetPolicy unmatchedTargetPolicyFromVal(const val& request) {
     if (name == "mute") return UnmatchedTargetPolicy::Mute;
     if (name == "nearest") return UnmatchedTargetPolicy::Nearest;
   }
-  throw WasmRangeError("assignNoteTargets: unmatchedPolicy must be 'leave', 'mute' or 'nearest'");
+  throw WasmRangeError("unmatchedPolicy must be 'leave', 'mute' or 'nearest'");
 }
 
 // Both floats fall back to a default-constructed config, so the defaults are the
@@ -450,10 +437,10 @@ NoteTargetAssignConfig noteTargetAssignConfigFromVal(const val& request) {
   // nothing downstream can tell from a deliberate one. This is the C ABI's
   // resolve_note_target_config, which this surface does not go through.
   if (config.min_overlap_ratio < 0.0f || config.min_overlap_ratio > 1.0f) {
-    throw WasmRangeError("assignNoteTargets: minOverlapRatio must be in [0, 1]");
+    throw WasmRangeError("minOverlapRatio must be in [0, 1]");
   }
   if (config.max_correction_semitones < 0.0f) {
-    throw WasmRangeError("assignNoteTargets: maxCorrectionSemitones must not be negative");
+    throw WasmRangeError("maxCorrectionSemitones must be at least 0");
   }
   return config;
 }
@@ -462,8 +449,8 @@ NoteTargetAssignConfig noteTargetAssignConfigFromVal(const val& request) {
 // overlap comparison is false for a NaN, so the target would be taken by the
 // nearest arm and written into pitch_shift_semitones with nothing left to catch
 // it (sonare_assign_note_targets).
-std::vector<NoteTarget> noteTargetsFromVal(const val& targets, const char* entry_point) {
-  const std::string subject = std::string(entry_point) + " target";
+std::vector<NoteTarget> noteTargetsFromVal(const val& targets) {
+  const std::string subject = "target";
   const std::string list_subject = subject + "s";
   const std::size_t count = wasmArrayLikeLength(targets, list_subject.c_str());
   std::vector<NoteTarget> out;
@@ -490,8 +477,8 @@ std::vector<NoteTarget> noteTargetsFromVal(const val& targets, const char* entry
 // with the edit it arrived with rather than a zeroed one.
 editing::note_model::NoteObject assignableNoteFromVal(const val& row) {
   editing::note_model::NoteObject note;
-  note.onset_sample = requireInt64Property(row, "onsetSample", "assignNoteTargets note");
-  note.offset_sample = requireInt64Property(row, "offsetSample", "assignNoteTargets note");
+  note.onset_sample = requireInt64Property(row, "onsetSample", "note");
+  note.offset_sample = requireInt64Property(row, "offsetSample", "note");
   // floatOption, not floatProperty: a note carrying no measured pitch spells it
   // 0 or non-finite and the rule reads both the same way, so a NaN here is the
   // caller's own "unvoiced" rather than a bad argument (note_target.h). 0 is
@@ -530,12 +517,12 @@ val assignedNoteToVal(const val& row, const editing::note_model::NoteEdit& edit)
 val js_assign_note_targets(val notes, const val& sample_rate_val, val targets, val request) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   if (sample_rate <= 0) {
-    throw WasmRangeError("assignNoteTargets: sampleRate must be a positive number");
+    throw WasmRangeError("sampleRate must be an integer in [1, 2147483647]");
   }
   const NoteTargetAssignConfig config = noteTargetAssignConfigFromVal(request);
-  const std::vector<NoteTarget> core_targets = noteTargetsFromVal(targets, "assignNoteTargets");
+  const std::vector<NoteTarget> core_targets = noteTargetsFromVal(targets);
 
-  const std::size_t count = wasmArrayLikeLength(notes, "assignNoteTargets notes");
+  const std::size_t count = wasmArrayLikeLength(notes, "notes");
   std::vector<editing::note_model::NoteObject> core_notes;
   core_notes.reserve(std::min(count, kMaxWasmObjectArrayReserve));
   for (std::size_t i = 0; i < count; ++i) {

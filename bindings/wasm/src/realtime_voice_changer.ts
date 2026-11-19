@@ -1,3 +1,4 @@
+import { entryClass } from './internal/entry.js';
 import { assertHandleLive } from './internal/handle_guard.js';
 import { deinterleavePlanes, interleavePlanes, nativeVoiceConfig } from './internal/pod_config.js';
 import {
@@ -128,6 +129,14 @@ function assertPlanes(fnName: string, channels: unknown, carrier?: unknown): Flo
 // ============================================================================
 
 /** Realtime voice-changer chain: pitch, formant, EQ, dynamics, harmony, vocoder, character and space stages over mono or stereo blocks. Call {@link RealtimeVoiceChanger.destroy} when done. */
+@entryClass('RealtimeVoiceChanger', [
+  'processInterleavedInto',
+  'processInterleavedWithCarrierInto',
+  'processMono',
+  'processMonoInto',
+  'processMonoWithCarrier',
+  'processMonoWithCarrierInto',
+])
 export class RealtimeVoiceChanger {
   private changerHandle: import('./sonare.js').WasmRealtimeVoiceChanger;
   private released = false;

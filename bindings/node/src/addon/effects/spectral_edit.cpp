@@ -38,20 +38,19 @@ int read_window_type(Napi::Env env, const Napi::Value& value) {
     // narrowing one -- node_narrow_int has already accepted the value.
     if (sonare_node::node_is_fraction(value)) {
       throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "spectralEdit: window ordinal must be an integer, not " +
+                                    "window ordinal must be an integer, not " +
                                         std::to_string(value.As<Napi::Number>().DoubleValue()));
     }
     const int ordinal = sonare_node::node_narrow_int(env, value, "window");
     if (ordinal < SONARE_WINDOW_HANN || ordinal > SONARE_WINDOW_RECTANGULAR) {
-      throw sonare::SonareException(
-          sonare::ErrorCode::InvalidParameter,
-          "spectralEdit: unknown window type: " + std::to_string(ordinal));
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "unknown window type: " + std::to_string(ordinal));
     }
     return ordinal;
   }
   if (!value.IsString()) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "spectralEdit: window must be a window name or a window ordinal");
+                                  "window must be a window name or a window ordinal");
   }
   return node_narrow_choice(env, value, "window", kWindowChoices);
 }
@@ -62,10 +61,16 @@ Napi::Value SonareWrap::SpectralEdit(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
   // (samples: Float32Array, sampleRate: number, ops: object[], options?: object)
-  if (info.Length() < 3 || !IsFloat32Array(info[0]) || !info[1].IsNumber() || !info[2].IsArray()) {
-    Napi::TypeError::New(env,
-                         "Expected (Float32Array, sampleRate, ops: object[], options?: object)")
-        .ThrowAsJavaScriptException();
+  if (!IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[1].IsNumber()) {
+    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[2].IsArray()) {
+    Napi::TypeError::New(env, "ops must be an array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -73,7 +78,7 @@ Napi::Value SonareWrap::SpectralEdit(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
-  int sr = node_narrow_int(env, info[1], "sr");
+  int sr = node_narrow_int(env, info[1], "sampleRate");
 
   // Build config (optional fourth argument).
   SonareSpectralEditConfig config{};  // zero-init = all defaults
@@ -99,7 +104,7 @@ Napi::Value SonareWrap::SpectralEdit(const Napi::CallbackInfo& info) {
   for (uint32_t i = 0; i < n_ops; ++i) {
     Napi::Value item = js_ops.Get(i);
     if (!item.IsObject()) {
-      throw Napi::TypeError::New(env, "spectralEdit: each op must be a plain object");
+      throw Napi::TypeError::New(env, "each op must be a plain object");
     }
     Napi::Object op = item.As<Napi::Object>();
     // Every field in this bag now refuses a wrong-typed value by name, matching

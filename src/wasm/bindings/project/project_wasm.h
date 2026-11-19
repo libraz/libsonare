@@ -80,18 +80,18 @@ inline sonare::ErrorCode codeFromCError(SonareError err) {
   throw sonare::SonareException(codeFromCError(err), message);
 }
 
-[[noreturn]] inline void throwCError(SonareError err, const char* context) {
-  throwCErrorMessage(err, cErrorMessage(err, context));
+[[noreturn]] inline void throwCError(SonareError err) {
+  throwCErrorMessage(err, cErrorMessage(err));
 }
 
 /// Throws via throwCodedCError unless @p err is SONARE_OK.
-inline void checkCodedCError(SonareError err, const char* context) {
-  if (err != SONARE_OK) throwCodedCError(err, context);
+inline void checkCodedCError(SonareError err) {
+  if (err != SONARE_OK) throwCodedCError(err);
 }
 
 /// Throws via throwCError unless @p err is SONARE_OK.
-inline void checkCError(SonareError err, const char* context) {
-  if (err != SONARE_OK) throwCError(err, context);
+inline void checkCError(SonareError err) {
+  if (err != SONARE_OK) throwCError(err);
 }
 
 struct ProjectWasm {

@@ -1,3 +1,4 @@
+import { withEntry } from './internal/entry.js';
 import { panModeToNative } from './internal/mix_scene.js';
 import { addon } from './native.js';
 import type {
@@ -32,7 +33,7 @@ export function mixingScenePreset(name: MixScenePreset): MixSceneDocument {
   if (typeof name !== 'string') {
     throw new TypeError('mixingScenePreset: name must be a string');
   }
-  const names = mixingScenePresetNames();
+  const names = withEntry('mixingScenePreset', () => mixingScenePresetNames());
   if (!names.includes(name)) {
     throw new RangeError(`mixingScenePreset: name must be one of ${names.join(', ')}`);
   }

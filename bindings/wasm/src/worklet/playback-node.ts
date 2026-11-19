@@ -1,5 +1,6 @@
 import { ErrorCode, SonareError } from '../errors.js';
 import { init, isInitialized } from '../index.js';
+import { entryClass } from '../internal/entry.js';
 import type {
   SonarePlaybackDiagnosticsReplyMessage,
   SonarePlaybackErrorMessage,
@@ -48,6 +49,7 @@ function configObject(config: PlaybackRendererConfig | undefined): PlaybackRende
  * video.addEventListener('seeking', () => playback.reset());
  * ```
  */
+@entryClass('SonarePlaybackNode')
 export class SonarePlaybackNode {
   /** AudioWorkletNode that renders the playback; connect a source to it and it to the destination. */
   readonly node: AudioWorkletNode;

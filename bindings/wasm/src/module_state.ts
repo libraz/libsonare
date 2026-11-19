@@ -1,5 +1,7 @@
 import { EXPECTED_ABI_VERSION } from './abi.js';
 import { ErrorCode, SonareError } from './errors.js';
+import { nameNativeError, passForeign } from './internal/entry.js';
+import { NATIVE_ENTRIES } from './internal/native_entries.js';
 import type { SonareModule } from './sonare.js';
 
 let wrappedModule: SonareModule | null = null;
@@ -103,17 +105,32 @@ function makeSonareError(raw: SonareModule, thrown: number): Error {
 function wrapModuleErrors(raw: SonareModule): SonareModule {
   const cache = new Map<PropertyKey, unknown>();
   const objectCache = new WeakMap<object, unknown>();
-  const convert = (error: unknown): never => {
+  const translate = (error: unknown): unknown => {
     const ptr = nativeExceptionPtr(error);
     if (ptr !== null) {
-      throw makeSonareError(raw, ptr);
+      return makeSonareError(raw, ptr);
     }
     // embind's use-after-delete is a plain BindingError; report it as object state.
     if (error instanceof Error && EMBIND_DELETED_PATTERN.test(error.message)) {
-      throw new SonareError(ErrorCode.InvalidState, error.message);
+      return new SonareError(ErrorCode.InvalidState, error.message);
     }
-    throw error;
+    return error;
   };
+  // The error carries the public entry its native key belongs to ("analyze: ...").
+  const convert = (error: unknown, key: string): never => {
+    throw nameNativeError(translate(error), NATIVE_ENTRIES[key] ?? key);
+  };
+  // A callback handed to a native call (progress, cancel) throws as the caller's own: never renamed.
+  const foreignArgs = (args: ArrayLike<unknown>): ArrayLike<unknown> => {
+    for (let i = 0; i < args.length; i++) {
+      if (typeof args[i] === 'function') {
+        return Array.from(args, passForeign);
+      }
+    }
+    return args;
+  };
+  const keyOf = (owner: string | undefined, prop: PropertyKey): string =>
+    owner ? `${owner}.${String(prop)}` : String(prop);
 
   const wrapNativeObject = (value: unknown): unknown => {
     if (value === null || typeof value !== 'object') {
@@ -134,6 +151,7 @@ function wrapModuleErrors(raw: SonareModule): SonareModule {
       return cached;
     }
     const methodCache = new Map<PropertyKey, unknown>();
+    const owner = (proto?.constructor as { name?: string } | undefined)?.name;
     const wrapped = new Proxy(objectValue, {
       get(target, prop, receiver) {
         const member = Reflect.get(target, prop, receiver);
@@ -145,11 +163,14 @@ function wrapModuleErrors(raw: SonareModule): SonareModule {
           return cachedMethod;
         }
         const method = member as (...a: unknown[]) => unknown;
-        const wrappedMethod = (...args: unknown[]) => {
+        const key = keyOf(owner, prop);
+        // `arguments` rather than a rest parameter: forwarded without an array allocation on the per-block path.
+        const wrappedMethod = function (this: unknown) {
           try {
-            return wrapNativeObject(Reflect.apply(method, target, args));
+            // biome-ignore lint/complexity/noArguments: forwarded without an array allocation on the per-block path
+            return wrapNativeObject(Reflect.apply(method, target, foreignArgs(arguments)));
           } catch (error) {
-            return convert(error);
+            return convert(error, key);
           }
         };
         methodCache.set(prop, wrappedMethod);
@@ -160,7 +181,7 @@ function wrapModuleErrors(raw: SonareModule): SonareModule {
     return wrapped;
   };
 
-  const wrapFunction = (value: (...a: unknown[]) => unknown): unknown => {
+  const wrapFunction = (value: (...a: unknown[]) => unknown, name: string): unknown => {
     const fnCache = new Map<PropertyKey, unknown>();
     return new Proxy(value, {
       get(target, prop, receiver) {
@@ -173,11 +194,13 @@ function wrapModuleErrors(raw: SonareModule): SonareModule {
           return cachedMember;
         }
         const fn = member as (...a: unknown[]) => unknown;
-        const wrappedMember = (...args: unknown[]) => {
+        const key = keyOf(name, prop);
+        const wrappedMember = function (this: unknown) {
           try {
-            return wrapNativeObject(Reflect.apply(fn, target, args));
+            // biome-ignore lint/complexity/noArguments: forwarded without an array allocation on the per-block path
+            return wrapNativeObject(Reflect.apply(fn, target, foreignArgs(arguments)));
           } catch (error) {
-            return convert(error);
+            return convert(error, key);
           }
         };
         fnCache.set(prop, wrappedMember);
@@ -185,16 +208,18 @@ function wrapModuleErrors(raw: SonareModule): SonareModule {
       },
       apply(t, thisArg, args) {
         try {
-          return wrapNativeObject(Reflect.apply(t, thisArg, args as unknown[]));
+          return wrapNativeObject(Reflect.apply(t, thisArg, foreignArgs(args as unknown[])));
         } catch (error) {
-          return convert(error);
+          return convert(error, name);
         }
       },
       construct(t, args, newTarget) {
         try {
-          return wrapNativeObject(Reflect.construct(t, args as unknown[], newTarget)) as object;
+          return wrapNativeObject(
+            Reflect.construct(t, foreignArgs(args as unknown[]), newTarget),
+          ) as object;
         } catch (error) {
-          return convert(error) as object;
+          return convert(error, name) as object;
         }
       },
     });
@@ -213,7 +238,7 @@ function wrapModuleErrors(raw: SonareModule): SonareModule {
       // Wrap as a Proxy (not a plain function) so embind class constructors
       // invoked via `new module.Foo(...)` keep their `[[Construct]]` behaviour
       // and prototype while still converting thrown native pointers.
-      const wrapped = wrapFunction(value as (...a: unknown[]) => unknown);
+      const wrapped = wrapFunction(value as (...a: unknown[]) => unknown, String(prop));
       cache.set(prop, wrapped);
       return wrapped;
     },

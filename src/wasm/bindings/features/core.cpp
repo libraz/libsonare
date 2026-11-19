@@ -8,33 +8,36 @@
 
 namespace {
 
-void validateFiniteVector(const std::vector<float>& values, const char* function) {
+void validateFiniteVector(const std::vector<float>& values, const std::string& name,
+                          const char* noun = "value") {
   if (values.size() > kMaxAudioBufferSize) {
-    throw WasmRangeError(std::string(function) + ": input buffer is too large");
+    throw WasmRangeError("input buffer is too large");
   }
-  for (float value : values) {
-    if (!std::isfinite(value)) {
-      throw WasmRangeError(std::string(function) + ": input contains NaN or Inf");
+  for (std::size_t i = 0; i < values.size(); ++i) {
+    if (!std::isfinite(values[i])) {
+      throw WasmRangeError(name + " contains a non-finite " + noun + " at index " +
+                           std::to_string(i));
     }
   }
 }
 
-void validateMatrix(const std::vector<float>& values, int rows, int columns, const char* function) {
+void validateMatrix(const std::vector<float>& values, const std::string& name, int rows,
+                    int columns) {
   if (rows <= 0 || columns <= 0 ||
       static_cast<size_t>(rows) > kMaxAudioBufferSize / static_cast<size_t>(columns) ||
       values.size() != static_cast<size_t>(rows) * static_cast<size_t>(columns)) {
-    throw WasmRangeError(std::string(function) + ": matrix dimensions do not match input");
+    throw WasmRangeError("matrix dimensions do not match input");
   }
-  validateFiniteVector(values, function);
+  validateFiniteVector(values, name);
 }
 
 // The tempogram / PLP family takes an onset envelope (not raw audio); its
 // sample_rate is only a BPM-scaling factor, so — matching the C ABI oracle,
 // which does not band-limit it — we require it to be positive rather than
 // inside the [kMin,kMax]AudioSampleRate audio band.
-void validatePositiveSampleRate(const char* function, int sample_rate) {
+void validatePositiveSampleRate(int sample_rate) {
   if (sample_rate <= 0) {
-    throw WasmRangeError(std::string(function) + ": sample rate must be positive");
+    throw WasmRangeError("sampleRate must be an integer in [1, 2147483647]");
   }
 }
 
@@ -80,7 +83,7 @@ val js_power_to_db(val values, const val& ref_val, const val& amin_val, const va
   const float amin = checkedFloatFromVal(amin_val, "amin");
   const float top_db = checkedFloatFromVal(top_db_val, "topDb");
   std::vector<float> data = float32ArrayToVector(values);
-  validateFiniteVector(data, "powerToDb");
+  validateFiniteVector(data, "values");
   return vectorToFloat32Array(power_to_db(data, ref, amin, top_db));
 }
 
@@ -89,21 +92,21 @@ val js_amplitude_to_db(val values, const val& ref_val, const val& amin_val, cons
   const float amin = checkedFloatFromVal(amin_val, "amin");
   const float top_db = checkedFloatFromVal(top_db_val, "topDb");
   std::vector<float> data = float32ArrayToVector(values);
-  validateFiniteVector(data, "amplitudeToDb");
+  validateFiniteVector(data, "values");
   return vectorToFloat32Array(amplitude_to_db(data, ref, amin, top_db));
 }
 
 val js_db_to_power(val values, const val& ref_val) {
   const float ref = checkedFloatFromVal(ref_val, "ref");
   std::vector<float> data = float32ArrayToVector(values);
-  validateFiniteVector(data, "dbToPower");
+  validateFiniteVector(data, "values");
   return vectorToFloat32Array(db_to_power(data, ref));
 }
 
 val js_db_to_amplitude(val values, const val& ref_val) {
   const float ref = checkedFloatFromVal(ref_val, "ref");
   std::vector<float> data = float32ArrayToVector(values);
-  validateFiniteVector(data, "dbToAmplitude");
+  validateFiniteVector(data, "values");
   return vectorToFloat32Array(db_to_amplitude(data, ref));
 }
 
@@ -161,18 +164,16 @@ namespace {
 // rule that follows from it lives in sonare::split_common_with_report -- a merge
 // rule held in two places is one place for them to disagree.
 CommonSplitReport splitSilenceCommonImpl(val signals, const val& top_db_val,
-                                         const val& frame_length_val, const val& hop_length_val,
-                                         const char* function) {
+                                         const val& frame_length_val, const val& hop_length_val) {
   const float top_db = checkedFloatFromVal(top_db_val, "topDb");
   const int frame_length = checkedIntFromVal(frame_length_val, "frameLength");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
 
   const std::size_t signal_count = wasmArrayLikeLength(signals, "signals");
   if (signal_count == 0) {
-    throw WasmRangeError(std::string(function) + ": signals must not be empty");
+    throw WasmRangeError("signals must not be empty");
   }
 
-  const std::string budget_subject = std::string(function) + " input";
   std::vector<std::vector<float>> buffers(signal_count);
   std::vector<const float*> pointers(signal_count);
   std::vector<std::size_t> lengths(signal_count);
@@ -182,9 +183,9 @@ CommonSplitReport splitSilenceCommonImpl(val signals, const val& top_db_val,
     if (signal.isUndefined() || signal.isNull()) {
       throw WasmTypeError("signals[" + std::to_string(index) + "] must be a Float32Array");
     }
-    accumulateWasmFloat32ArrayLength(signal, "signals entry", budget_subject.c_str(), &budget);
+    accumulateWasmFloat32ArrayLength(signal, "signals entry", &budget);
     buffers[index] = float32ArrayToVector(signal);
-    validateFiniteVector(buffers[index], function);
+    validateFiniteVector(buffers[index], "signals[" + std::to_string(index) + "]", "sample");
     pointers[index] = buffers[index].data();
     lengths[index] = buffers[index].size();
   }
@@ -207,15 +208,15 @@ val flattenIntervals(const std::vector<std::pair<int, int>>& intervals) {
 
 val js_split_silence_common(val signals, const val& top_db_val, const val& frame_length_val,
                             const val& hop_length_val) {
-  const CommonSplitReport report = splitSilenceCommonImpl(signals, top_db_val, frame_length_val,
-                                                          hop_length_val, "splitSilenceCommon");
+  const CommonSplitReport report =
+      splitSilenceCommonImpl(signals, top_db_val, frame_length_val, hop_length_val);
   return flattenIntervals(report.intervals);
 }
 
 val js_split_silence_common_with_report(val signals, const val& top_db_val,
                                         const val& frame_length_val, const val& hop_length_val) {
-  const CommonSplitReport result = splitSilenceCommonImpl(
-      signals, top_db_val, frame_length_val, hop_length_val, "splitSilenceCommonWithReport");
+  const CommonSplitReport result =
+      splitSilenceCommonImpl(signals, top_db_val, frame_length_val, hop_length_val);
   val report = val::object();
   report.set("silenceCeilingDb", result.silence_ceiling_db);
   report.set("maxSignalIntervals", result.max_signal_intervals);
@@ -264,7 +265,7 @@ val js_clicks(val times, const val& sample_rate_val, const val& length_val,
   const float frequency = checkedFloatFromVal(frequency_val, "frequency");
   const float click_duration = checkedFloatFromVal(click_duration_val, "clickDuration");
   std::vector<float> values = float32ArrayToVector(times);
-  validateFiniteVector(values, "clicks");
+  validateFiniteVector(values, "times");
   const Audio audio = clicks(values, sample_rate, length, frequency, click_duration);
   return vectorToFloat32Array(audio.data(), audio.size());
 }
@@ -273,9 +274,9 @@ val js_pad_center(val values, const val& size_val, const val& pad_value_val) {
   const int size = checkedIntFromVal(size_val, "size");
   const float pad_value = checkedFloatFromVal(pad_value_val, "padValue");
   std::vector<float> data = float32ArrayToVector(values);
-  validateFiniteVector(data, "padCenter");
+  validateFiniteVector(data, "values");
   if (size < 0) {
-    throw WasmRangeError("padCenter: size must be non-negative");
+    throw WasmRangeError("size must be an integer in [0, 2147483647]");
   }
   return vectorToFloat32Array(pad_center(data, static_cast<size_t>(size), pad_value));
 }
@@ -284,9 +285,9 @@ val js_fix_length(val values, const val& size_val, const val& pad_value_val) {
   const int size = checkedIntFromVal(size_val, "size");
   const float pad_value = checkedFloatFromVal(pad_value_val, "padValue");
   std::vector<float> data = float32ArrayToVector(values);
-  validateFiniteVector(data, "fixLength");
+  validateFiniteVector(data, "values");
   if (size < 0) {
-    throw WasmRangeError("fixLength: size must be non-negative");
+    throw WasmRangeError("size must be an integer in [0, 2147483647]");
   }
   return vectorToFloat32Array(fix_length(data, static_cast<size_t>(size), pad_value));
 }
@@ -312,7 +313,7 @@ val js_fix_frames(val frames, const val& x_min, const val& x_max, bool pad) {
 
 val js_onset_backtrack(val events, val energy) {
   std::vector<float> energy_values = float32ArrayToVector(energy);
-  validateFiniteVector(energy_values, "onsetBacktrack");
+  validateFiniteVector(energy_values, "energy");
   return vectorToInt32Array(onset_backtrack(intArrayToVector(events), energy_values));
 }
 
@@ -325,7 +326,7 @@ val js_peak_pick(val values, const val& pre_max, const val& post_max, const val&
   const float delta = checkedFloatFromVal(delta_val, "delta");
   const int wait_frames = checkedIntFromVal(wait, "wait");
   std::vector<float> data = float32ArrayToVector(values);
-  validateFiniteVector(data, "peakPick");
+  validateFiniteVector(data, "values");
   return vectorToInt32Array(peak_pick(data, pre_max_frames, post_max_frames, pre_avg_frames,
                                       post_avg_frames, delta, wait_frames));
 }
@@ -334,7 +335,7 @@ val js_vector_normalize(val values, const val& norm_type_val, const val& thresho
   const int norm_type = checkedIntFromVal(norm_type_val, "normType");
   const float threshold = checkedFloatFromVal(threshold_val, "threshold");
   std::vector<float> data = float32ArrayToVector(values);
-  validateFiniteVector(data, "vectorNormalize");
+  validateFiniteVector(data, "values");
   requireOrdinalInRange(norm_type, static_cast<int>(NormType::Inf),
                         static_cast<int>(NormType::Power), "normType");
   return vectorToFloat32Array(normalize(data, static_cast<NormType>(norm_type), threshold));
@@ -344,7 +345,7 @@ val js_pcen(val values, const val& n_bins_val, const val& n_frames_val, val opti
   const int n_bins = checkedIntFromVal(n_bins_val, "nBins");
   const int n_frames = checkedIntFromVal(n_frames_val, "nFrames");
   std::vector<float> data = float32ArrayToVector(values);
-  validateMatrix(data, n_bins, n_frames, "pcen");
+  validateMatrix(data, "values", n_bins, n_frames);
   PcenConfig config;
   if (!options.isUndefined() && !options.isNull()) {
     config.sr = intProperty(options, "sampleRate", config.sr);
@@ -362,7 +363,7 @@ val js_tonnetz(val chromagram, const val& n_chroma_val, const val& n_frames_val)
   const int n_chroma = checkedIntFromVal(n_chroma_val, "nChroma");
   const int n_frames = checkedIntFromVal(n_frames_val, "nFrames");
   std::vector<float> data = float32ArrayToVector(chromagram);
-  validateMatrix(data, n_chroma, n_frames, "tonnetz");
+  validateMatrix(data, "chromagram", n_chroma, n_frames);
   return vectorToFloat32Array(tonnetz(data.data(), n_chroma, n_frames));
 }
 
@@ -371,18 +372,18 @@ TempogramMode tempogramModeFromValue(val mode) {
   if (mode.typeOf().as<std::string>() == "number") {
     // An ordinal names a member, not a quantity: 0.5 used to select
     // autocorrelation and 1.5 cosine, neither of which the caller spelled.
-    const int mode_id = checkedIntFromVal(mode, "tempogram mode");
+    const int mode_id = checkedIntFromVal(mode, "mode");
     if (mode_id == SONARE_TEMPOGRAM_AUTOCORRELATION) return TempogramMode::kAutocorrelation;
     if (mode_id == SONARE_TEMPOGRAM_COSINE) return TempogramMode::kCosine;
-    throw WasmRangeError("tempogram mode must be 'autocorrelation' or 'cosine'");
+    throw WasmRangeError("mode must be 'autocorrelation' or 'cosine'");
   }
-  if (!mode.isString()) throw WasmTypeError("tempogram mode must be a string or a number");
+  if (!mode.isString()) throw WasmTypeError("mode must be a string or a number");
   const std::string value = mode.as<std::string>();
   if (value == "autocorrelation" || value == "auto" || value == "ac") {
     return TempogramMode::kAutocorrelation;
   }
   if (value == "cosine") return TempogramMode::kCosine;
-  throw WasmRangeError("tempogram mode must be 'autocorrelation' or 'cosine'");
+  throw WasmRangeError("mode must be 'autocorrelation' or 'cosine'");
 }
 
 val js_tempogram(val onset_envelope, const val& sample_rate_val, const val& hop_length_val,
@@ -391,8 +392,8 @@ val js_tempogram(val onset_envelope, const val& sample_rate_val, const val& hop_
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   const int win_length = checkedIntFromVal(win_length_val, "winLength");
   std::vector<float> data = float32ArrayToVector(onset_envelope);
-  validateFiniteVector(data, "tempogram");
-  validatePositiveSampleRate("tempogram", sample_rate);
+  validateFiniteVector(data, "onsetEnvelope");
+  validatePositiveSampleRate(sample_rate);
   TempogramConfig config;
   config.hop_length = hop_length;
   config.win_length = win_length;
@@ -418,8 +419,8 @@ val js_cyclic_tempogram(val onset_envelope, const val& sample_rate_val, const va
                          ? kCyclicTempogramBins
                          : checkedIntFromVal(n_bins_val, "nBins");
   std::vector<float> data = float32ArrayToVector(onset_envelope);
-  validateFiniteVector(data, "cyclicTempogram");
-  validatePositiveSampleRate("cyclicTempogram", sample_rate);
+  validateFiniteVector(data, "onsetEnvelope");
+  validatePositiveSampleRate(sample_rate);
   TempogramConfig config;
   config.hop_length = hop_length;
   config.win_length = win_length;
@@ -442,8 +443,8 @@ val js_plp(val onset_envelope, const val& sample_rate_val, const val& hop_length
   if (const auto v = optionalNumber(bpm_max_val, "bpmMax")) config.tempo_max = *v;
   const int win_length = checkedIntFromVal(win_length_val, "winLength");
   std::vector<float> data = float32ArrayToVector(onset_envelope);
-  validateFiniteVector(data, "plp");
-  validatePositiveSampleRate("plp", sample_rate);
+  validateFiniteVector(data, "onsetEnvelope");
+  validatePositiveSampleRate(sample_rate);
   config.sr = sample_rate;
   config.hop_length = hop_length;
   config.win_length = win_length;
@@ -456,7 +457,7 @@ val js_onset_envelope(val samples, const val& sample_rate_val, const val& n_fft_
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   const int n_mels = checkedIntFromVal(n_mels_val, "nMels");
-  Audio audio = loadValidatedAudio("compute_onset_strength", "samples", samples, sample_rate);
+  Audio audio = loadValidatedAudio("samples", samples, sample_rate);
   MelConfig mel_config;
   mel_config.n_fft = n_fft;
   mel_config.hop_length = hop_length;
@@ -472,7 +473,7 @@ val js_onset_strength_multi(val samples, const val& sample_rate_val, const val& 
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   const int n_mels = checkedIntFromVal(n_mels_val, "nMels");
   const int n_bands = checkedIntFromVal(n_bands_val, "nBands");
-  Audio audio = loadValidatedAudio("onset_strength_multi", "samples", samples, sample_rate);
+  Audio audio = loadValidatedAudio("samples", samples, sample_rate);
   MelConfig mel_config;
   mel_config.n_fft = n_fft;
   mel_config.hop_length = hop_length;
@@ -493,7 +494,7 @@ val js_fourier_tempogram(val onset_envelope, const val& sample_rate_val, const v
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   const int win_length = checkedIntFromVal(win_length_val, "winLength");
   std::vector<float> data = float32ArrayToVector(onset_envelope);
-  validatePositiveSampleRate("fourierTempogram", sample_rate);
+  validatePositiveSampleRate(sample_rate);
   TempogramConfig config;
   config.hop_length = hop_length;
   config.win_length = win_length;
@@ -514,11 +515,10 @@ val js_tempogram_ratio(val tempogram_data, const val& win_length_val, const val&
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   const bool has_factors = !factors.isUndefined() && !factors.isNull();
   if (has_factors) {
-    validateWasmFloat32ArrayPair(tempogram_data, "tempogram data", factors, "factors",
-                                 "tempogramRatio input", false);
+    validateWasmFloat32ArrayPair(tempogram_data, "tempogram data", factors, "factors", false);
   }
   std::vector<float> data = float32ArrayToVector(tempogram_data);
-  validatePositiveSampleRate("tempogramRatio", sample_rate);
+  validatePositiveSampleRate(sample_rate);
   // An undefined/null/empty factors argument falls back to the library default
   // {0.5, 1, 2, 3, 4}, matching the C and Node behaviour.
   if (!has_factors) {

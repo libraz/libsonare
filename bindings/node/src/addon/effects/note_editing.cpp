@@ -113,16 +113,15 @@ bool ReadNoteTrackOptions(Napi::Env env, const Napi::Value& value, size_t n_fram
 /// error class the WASM surface throws for the same omission, so the two agree
 /// on the rejection as well as on the policy. Shared by the note and the
 /// percussive-event readers, whose input types declare the same two fields.
-void RequireSpanKey(const char* fn, const char* subject, const Napi::Object& row, const char* key) {
+void RequireSpanKey(const char* subject, const Napi::Object& row, const char* key) {
   const Napi::Value value = row.Get(key);
   if (value.IsUndefined() || value.IsNull()) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  std::string(fn) + " " + subject + "." + key + " is required");
+                                  std::string(subject) + "." + key + " is required");
   }
   if (!value.IsNumber()) {
-    throw sonare::SonareException(
-        sonare::ErrorCode::InvalidParameter,
-        std::string(fn) + " " + subject + "." + key + " must be a number");
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  std::string(subject) + "." + key + " must be a number");
   }
 }
 
@@ -136,56 +135,54 @@ void RequireSpanKey(const char* fn, const char* subject, const Napi::Object& row
 /// 0, which is a zero-length span: the note's edit silently rendered as nothing
 /// while the same request threw on the WASM surface. The note-set entries split
 /// and merge take do not declare the bounds at all, so they keep the default.
-void ReadNotes(const char* fn, const Napi::Array& js_notes, std::vector<SonareNoteObject>* notes,
+void ReadNotes(const Napi::Array& js_notes, std::vector<SonareNoteObject>* notes,
                std::vector<float>* envelopes, bool require_span = false) {
   const uint32_t count = js_notes.Length();
   notes->assign(count, SonareNoteObject{});
   for (uint32_t i = 0; i < count; ++i) {
     Napi::Value item = js_notes.Get(i);
     if (!item.IsObject() || item.IsArray()) {
-      throw Napi::TypeError::New(js_notes.Env(),
-                                 std::string(fn) + ": each note must be a plain object");
+      throw Napi::TypeError::New(js_notes.Env(), "each note must be a plain object");
     }
     Napi::Object note = item.As<Napi::Object>();
     SonareNoteObject& row = (*notes)[i];
     if (require_span) {
-      RequireSpanKey(fn, "note", note, "onsetSample");
-      RequireSpanKey(fn, "note", note, "offsetSample");
+      RequireSpanKey("note", note, "onsetSample");
+      RequireSpanKey("note", note, "offsetSample");
     }
     row.onset_sample = Int64Property(note, "onsetSample", row.onset_sample);
     row.offset_sample = Int64Property(note, "offsetSample", row.offset_sample);
     row.frame_start = IntProperty(note, "frameStart", row.frame_start);
     row.frame_end = IntProperty(note, "frameEnd", row.frame_end);
     row.median_hz = FloatProperty(note, "medianHz", row.median_hz);
-    ReadNoteEdit(fn, note, envelopes, &row.edit);
+    ReadNoteEdit(note, envelopes, &row.edit);
   }
 }
 
 /// Bounds-checks a note's slice of one of a result's shared pools. Only
 /// reachable if the C ABI contradicted itself; say so, because an empty slice
 /// here would read like a short note and hide the inconsistency.
-void RequireSliceInRange(const char* fn, const char* field, int64_t offset, int64_t span,
-                         size_t pool_count) {
+void RequireSliceInRange(const char* field, int64_t offset, int64_t span, size_t pool_count) {
   if (span < 0 || offset < 0 ||
       static_cast<uint64_t>(offset) + static_cast<uint64_t>(span) > pool_count) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidState,
-                                  std::string(fn) + ": " + field + " slice out of range");
+                                  std::string(field) + " slice out of range");
   }
 }
 
 /// Marshals a heap-owned result into the JS note array, giving every note its
 /// own copy of its amplitude and envelope slices.
-Napi::Array NoteObjectsToJs(Napi::Env env, const char* fn, const SonareNoteObjectsResult& result) {
+Napi::Array NoteObjectsToJs(Napi::Env env, const SonareNoteObjectsResult& result) {
   Napi::Array notes = Napi::Array::New(env, result.count);
   for (size_t i = 0; i < result.count; ++i) {
     const SonareNoteObject& note = result.notes[i];
     // Each note is given its own copy of both slices, so neither pool offset
     // ever reaches JS.
     const size_t envelope_count = note.edit.envelope_count;
-    RequireSliceInRange(fn, "amplitudeEnvelope", note.edit.envelope_offset,
+    RequireSliceInRange("amplitudeEnvelope", note.edit.envelope_offset,
                         static_cast<int64_t>(envelope_count), result.envelope_count);
     const int64_t span = note.frame_end - note.frame_start;
-    RequireSliceInRange(fn, "amplitude", note.amplitude_offset, span, result.amplitude_count);
+    RequireSliceInRange("amplitude", note.amplitude_offset, span, result.amplitude_count);
     notes.Set(static_cast<uint32_t>(i),
               NoteObjectToJs(env, note, result.amplitude + note.amplitude_offset,
                              static_cast<size_t>(span),
@@ -199,19 +196,19 @@ Napi::Array NoteObjectsToJs(Napi::Env env, const char* fn, const SonareNoteObjec
 /// 0 is a zero-length span at the start of the take or a pitch five octaves below
 /// middle C -- values a caller could have named, so nothing downstream could tell
 /// the omission from a choice.
-bool ReadNoteTargets(Napi::Env env, const char* fn, const Napi::Array& js_targets,
+bool ReadNoteTargets(Napi::Env env, const Napi::Array& js_targets,
                      std::vector<SonareNoteTarget>* targets) {
   const uint32_t count = js_targets.Length();
   targets->assign(count, SonareNoteTarget{});
   for (uint32_t i = 0; i < count; ++i) {
     Napi::Value item = js_targets.Get(i);
     if (!item.IsObject() || item.IsArray()) {
-      throw Napi::TypeError::New(env, std::string(fn) + ": each target must be a plain object");
+      throw Napi::TypeError::New(env, "each target must be a plain object");
     }
     Napi::Object target = item.As<Napi::Object>();
     SonareNoteTarget& row = (*targets)[i];
     // Indexed, because the key alone cannot say which target was refused.
-    const std::string label = std::string(fn) + " targets[" + std::to_string(i) + "]";
+    const std::string label = std::string("targets[") + std::to_string(i) + "]";
     if (!RequiredDoubleValue(env, target.Get("startSec"), label + ".startSec", &row.start_sec) ||
         !RequiredDoubleValue(env, target.Get("endSec"), label + ".endSec", &row.end_sec) ||
         !RequiredFloatValue(env, target.Get("targetMidi"), label + ".targetMidi",
@@ -296,15 +293,13 @@ void ReadPercussiveRenderConfig(const Napi::Value& value, SonarePercussiveRender
 
 /// Reads an event's optional `edit`. A zeroed SonarePercussiveEventEdit is the
 /// identity, so an omitted edit, and an omitted key within one, is a no-op.
-void ReadPercussiveEventEdit(const char* fn, const Napi::Object& event,
-                             SonarePercussiveEventEdit* out) {
+void ReadPercussiveEventEdit(const Napi::Object& event, SonarePercussiveEventEdit* out) {
   const Napi::Value edit_value = event.Get("edit");
   if (edit_value.IsUndefined() || edit_value.IsNull()) {
     return;
   }
   if (!edit_value.IsObject() || edit_value.IsArray()) {
-    throw Napi::TypeError::New(event.Env(),
-                               std::string(fn) + ": event.edit must be a plain object");
+    throw Napi::TypeError::New(event.Env(), "event.edit must be a plain object");
   }
   Napi::Object edit = edit_value.As<Napi::Object>();
   out->time_offset_samples = Int64Property(edit, "timeOffsetSamples", out->time_offset_samples);
@@ -317,23 +312,22 @@ void ReadPercussiveEventEdit(const char* fn, const Napi::Object& event,
 /// extraction round-trips without them having to survive the trip. The span is
 /// required, as PercussiveEventInput declares it — an omitted bound defaulted to
 /// 0, and a zero-length span renders the event's edit as nothing.
-void ReadPercussiveEvents(const char* fn, const Napi::Array& js_events,
+void ReadPercussiveEvents(const Napi::Array& js_events,
                           std::vector<SonarePercussiveEvent>* events) {
   const uint32_t count = js_events.Length();
   events->assign(count, SonarePercussiveEvent{});
   for (uint32_t i = 0; i < count; ++i) {
     Napi::Value item = js_events.Get(i);
     if (!item.IsObject() || item.IsArray()) {
-      throw Napi::TypeError::New(js_events.Env(),
-                                 std::string(fn) + ": each event must be a plain object");
+      throw Napi::TypeError::New(js_events.Env(), "each event must be a plain object");
     }
     Napi::Object event = item.As<Napi::Object>();
     SonarePercussiveEvent& row = (*events)[i];
-    RequireSpanKey(fn, "event", event, "onsetSample");
-    RequireSpanKey(fn, "event", event, "offsetSample");
+    RequireSpanKey("event", event, "onsetSample");
+    RequireSpanKey("event", event, "offsetSample");
     row.onset_sample = node_narrow_int64(event.Env(), event.Get("onsetSample"), "onsetSample");
     row.offset_sample = node_narrow_int64(event.Env(), event.Get("offsetSample"), "offsetSample");
-    ReadPercussiveEventEdit(fn, event, &row.edit);
+    ReadPercussiveEventEdit(event, &row.edit);
   }
 }
 
@@ -371,10 +365,20 @@ Napi::Value SonareWrap::ExtractNotes(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
   // (samples, sampleRate, f0Hz, frameRate, options?)
-  if (info.Length() < 4 || !IsFloat32Array(info[0]) || !info[1].IsNumber() ||
-      !IsFloat32Array(info[2]) || !info[3].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, f0Hz Float32Array, frameRate)")
-        .ThrowAsJavaScriptException();
+  if (!IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[1].IsNumber()) {
+    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!IsFloat32Array(info[2])) {
+    Napi::TypeError::New(env, "f0Hz must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[3].IsNumber()) {
+    Napi::TypeError::New(env, "frameRate must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -382,7 +386,7 @@ Napi::Value SonareWrap::ExtractNotes(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   const size_t length = typed.ElementLength();
-  const int sr = node_narrow_int(env, info[1], "sr");
+  const int sr = node_narrow_int(env, info[1], "sampleRate");
   auto f0 = info[2].As<Napi::Float32Array>();
   const size_t n_frames = f0.ElementLength();
   const float frame_rate = node_narrow_finite_float(env, info[3], "frameRate");
@@ -400,7 +404,7 @@ Napi::Value SonareWrap::ExtractNotes(const Napi::CallbackInfo& info) {
     ThrowIfError(env, err);
     return env.Undefined();
   }
-  return NoteObjectsToJs(env, "extractNotes", result.value);
+  return NoteObjectsToJs(env, result.value);
   SONARE_NODE_CATCH(env)
 }
 
@@ -408,10 +412,16 @@ Napi::Value SonareWrap::RenderNotes(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
   // (samples, sampleRate, notes, options?)
-  if (info.Length() < 3 || !IsFloat32Array(info[0]) || !info[1].IsNumber() || !info[2].IsArray()) {
-    Napi::TypeError::New(env,
-                         "Expected (Float32Array, sampleRate, notes: object[], options?: object)")
-        .ThrowAsJavaScriptException();
+  if (!IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[1].IsNumber()) {
+    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[2].IsArray()) {
+    Napi::TypeError::New(env, "notes must be an array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -419,7 +429,7 @@ Napi::Value SonareWrap::RenderNotes(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   const size_t length = typed.ElementLength();
-  const int sr = node_narrow_int(env, info[1], "sr");
+  const int sr = node_narrow_int(env, info[1], "sampleRate");
 
   SonareNoteRenderConfig config{};
   config.struct_version = 1;
@@ -458,7 +468,7 @@ Napi::Value SonareWrap::RenderNotes(const Napi::CallbackInfo& info) {
 
   std::vector<SonareNoteObject> notes;
   std::vector<float> envelopes;
-  ReadNotes("renderNotes", info[2].As<Napi::Array>(), &notes, &envelopes, /*require_span=*/true);
+  ReadNotes(info[2].As<Napi::Array>(), &notes, &envelopes, /*require_span=*/true);
 
   float* out = nullptr;
   size_t out_length = 0;
@@ -480,10 +490,20 @@ Napi::Value SonareWrap::DecomposeNotePitch(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
   // (f0Hz, frameRate, medianHz, vibratoCutoffHz, voiced?)
-  if (info.Length() < 4 || !IsFloat32Array(info[0]) || !info[1].IsNumber() || !info[2].IsNumber() ||
-      !info[3].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (f0Hz Float32Array, frameRate, medianHz, vibratoCutoffHz)")
-        .ThrowAsJavaScriptException();
+  if (!IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "f0Hz must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[1].IsNumber()) {
+    Napi::TypeError::New(env, "frameRate must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[2].IsNumber()) {
+    Napi::TypeError::New(env, "medianHz must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[3].IsNumber()) {
+    Napi::TypeError::New(env, "vibratoCutoffHz must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -524,13 +544,32 @@ Napi::Value SonareWrap::SplitNote(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
   // (samples, sampleRate, f0Hz, frameRate, notes, index, frame, options?)
-  if (info.Length() < 7 || !IsFloat32Array(info[0]) || !info[1].IsNumber() ||
-      !IsFloat32Array(info[2]) || !info[3].IsNumber() || !info[4].IsArray() ||
-      !info[5].IsNumber() || !info[6].IsNumber()) {
-    Napi::TypeError::New(env,
-                         "Expected (Float32Array, sampleRate, f0Hz Float32Array, frameRate, "
-                         "notes: object[], index, frame)")
-        .ThrowAsJavaScriptException();
+  if (!IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[1].IsNumber()) {
+    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!IsFloat32Array(info[2])) {
+    Napi::TypeError::New(env, "f0Hz must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[3].IsNumber()) {
+    Napi::TypeError::New(env, "frameRate must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[4].IsArray()) {
+    Napi::TypeError::New(env, "notes must be an array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[5].IsNumber()) {
+    Napi::TypeError::New(env, "index must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[6].IsNumber()) {
+    Napi::TypeError::New(env, "frame must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -538,7 +577,7 @@ Napi::Value SonareWrap::SplitNote(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   const size_t length = typed.ElementLength();
-  const int sr = node_narrow_int(env, info[1], "sr");
+  const int sr = node_narrow_int(env, info[1], "sampleRate");
   auto f0 = info[2].As<Napi::Float32Array>();
   const size_t n_frames = f0.ElementLength();
   const float frame_rate = node_narrow_finite_float(env, info[3], "frameRate");
@@ -552,7 +591,7 @@ Napi::Value SonareWrap::SplitNote(const Napi::CallbackInfo& info) {
 
   std::vector<SonareNoteObject> notes;
   std::vector<float> envelopes;
-  ReadNotes("splitNote", info[4].As<Napi::Array>(), &notes, &envelopes);
+  ReadNotes(info[4].As<Napi::Array>(), &notes, &envelopes);
 
   OwnedNoteObjects result;
   const SonareError err =
@@ -564,7 +603,7 @@ Napi::Value SonareWrap::SplitNote(const Napi::CallbackInfo& info) {
     ThrowIfError(env, err);
     return env.Undefined();
   }
-  return NoteObjectsToJs(env, "splitNote", result.value);
+  return NoteObjectsToJs(env, result.value);
   SONARE_NODE_CATCH(env)
 }
 
@@ -572,13 +611,32 @@ Napi::Value SonareWrap::MergeNotes(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
   // (samples, sampleRate, f0Hz, frameRate, notes, first, last, options?)
-  if (info.Length() < 7 || !IsFloat32Array(info[0]) || !info[1].IsNumber() ||
-      !IsFloat32Array(info[2]) || !info[3].IsNumber() || !info[4].IsArray() ||
-      !info[5].IsNumber() || !info[6].IsNumber()) {
-    Napi::TypeError::New(env,
-                         "Expected (Float32Array, sampleRate, f0Hz Float32Array, frameRate, "
-                         "notes: object[], first, last)")
-        .ThrowAsJavaScriptException();
+  if (!IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[1].IsNumber()) {
+    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!IsFloat32Array(info[2])) {
+    Napi::TypeError::New(env, "f0Hz must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[3].IsNumber()) {
+    Napi::TypeError::New(env, "frameRate must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[4].IsArray()) {
+    Napi::TypeError::New(env, "notes must be an array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[5].IsNumber()) {
+    Napi::TypeError::New(env, "first must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[6].IsNumber()) {
+    Napi::TypeError::New(env, "last must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -586,7 +644,7 @@ Napi::Value SonareWrap::MergeNotes(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   const size_t length = typed.ElementLength();
-  const int sr = node_narrow_int(env, info[1], "sr");
+  const int sr = node_narrow_int(env, info[1], "sampleRate");
   auto f0 = info[2].As<Napi::Float32Array>();
   const size_t n_frames = f0.ElementLength();
   const float frame_rate = node_narrow_finite_float(env, info[3], "frameRate");
@@ -600,7 +658,7 @@ Napi::Value SonareWrap::MergeNotes(const Napi::CallbackInfo& info) {
 
   std::vector<SonareNoteObject> notes;
   std::vector<float> envelopes;
-  ReadNotes("mergeNotes", info[4].As<Napi::Array>(), &notes, &envelopes);
+  ReadNotes(info[4].As<Napi::Array>(), &notes, &envelopes);
 
   OwnedNoteObjects result;
   const SonareError err = sonare_merge_notes(
@@ -611,7 +669,7 @@ Napi::Value SonareWrap::MergeNotes(const Napi::CallbackInfo& info) {
     ThrowIfError(env, err);
     return env.Undefined();
   }
-  return NoteObjectsToJs(env, "mergeNotes", result.value);
+  return NoteObjectsToJs(env, result.value);
   SONARE_NODE_CATCH(env)
 }
 
@@ -631,8 +689,7 @@ Napi::Value SonareWrap::NoteTargetsFromSmf(const Napi::CallbackInfo& info) {
     bytes = typed.Data();
     len = typed.ByteLength();
   } else {
-    Napi::TypeError::New(env, "noteTargetsFromSmf expects a Buffer or Uint8Array")
-        .ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "data must be a Buffer or Uint8Array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   // An index is an ordinal, so the strict reader: 1.5 truncating to 1 would read
@@ -668,15 +725,21 @@ Napi::Value SonareWrap::AssignNoteTargets(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
   // (notes, sampleRate, targets, options?)
-  if (info.Length() < 3 || !info[0].IsArray() || !info[1].IsNumber() || !info[2].IsArray()) {
-    Napi::TypeError::New(
-        env, "Expected (notes: object[], sampleRate, targets: object[], options?: object)")
-        .ThrowAsJavaScriptException();
+  if (!info[0].IsArray()) {
+    Napi::TypeError::New(env, "notes must be an array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[1].IsNumber()) {
+    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[2].IsArray()) {
+    Napi::TypeError::New(env, "targets must be an array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
   SONARE_NODE_TRY
-  const int sr = node_narrow_int(env, info[1], "sr");
+  const int sr = node_narrow_int(env, info[1], "sampleRate");
 
   // Seeded from the library rather than from literals here: 0 is a legal value on
   // both floats, so it cannot spell "unset" and an omitted key has to keep
@@ -704,11 +767,11 @@ Napi::Value SonareWrap::AssignNoteTargets(const Napi::CallbackInfo& info) {
   std::vector<float> envelopes;
   // The sample bounds are what the rule measures each overlap against, so they
   // are required here as they are for a render.
-  ReadNotes("assignNoteTargets", info[0].As<Napi::Array>(), &notes, &envelopes,
+  ReadNotes(info[0].As<Napi::Array>(), &notes, &envelopes,
             /*require_span=*/true);
 
   std::vector<SonareNoteTarget> targets;
-  if (!ReadNoteTargets(env, "assignNoteTargets", info[2].As<Napi::Array>(), &targets)) {
+  if (!ReadNoteTargets(env, info[2].As<Napi::Array>(), &targets)) {
     return env.Undefined();
   }
 
@@ -742,9 +805,12 @@ Napi::Value SonareWrap::ExtractPercussiveEvents(const Napi::CallbackInfo& info) 
   Napi::Env env = info.Env();
 
   // (samples, sampleRate, options?)
-  if (info.Length() < 2 || !IsFloat32Array(info[0]) || !info[1].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, options?: object)")
-        .ThrowAsJavaScriptException();
+  if (!IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[1].IsNumber()) {
+    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -752,7 +818,7 @@ Napi::Value SonareWrap::ExtractPercussiveEvents(const Napi::CallbackInfo& info) 
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   const size_t length = typed.ElementLength();
-  const int sr = node_narrow_int(env, info[1], "sr");
+  const int sr = node_narrow_int(env, info[1], "sampleRate");
 
   SonarePercussiveEventConfig config{};
   ReadPercussiveEventConfig(info[2], &config);
@@ -774,10 +840,16 @@ Napi::Value SonareWrap::RenderPercussiveEvents(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
   // (samples, sampleRate, events, options?)
-  if (info.Length() < 3 || !IsFloat32Array(info[0]) || !info[1].IsNumber() || !info[2].IsArray()) {
-    Napi::TypeError::New(env,
-                         "Expected (Float32Array, sampleRate, events: object[], options?: object)")
-        .ThrowAsJavaScriptException();
+  if (!IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[1].IsNumber()) {
+    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[2].IsArray()) {
+    Napi::TypeError::New(env, "events must be an array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -785,13 +857,13 @@ Napi::Value SonareWrap::RenderPercussiveEvents(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   const size_t length = typed.ElementLength();
-  const int sr = node_narrow_int(env, info[1], "sr");
+  const int sr = node_narrow_int(env, info[1], "sampleRate");
 
   SonarePercussiveRenderConfig config{};
   ReadPercussiveRenderConfig(info[3], &config);
 
   std::vector<SonarePercussiveEvent> events;
-  ReadPercussiveEvents("renderPercussiveEvents", info[2].As<Napi::Array>(), &events);
+  ReadPercussiveEvents(info[2].As<Napi::Array>(), &events);
 
   float* out = nullptr;
   size_t out_length = 0;

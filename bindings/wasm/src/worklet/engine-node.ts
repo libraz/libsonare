@@ -1,5 +1,6 @@
 import { ErrorCode, SonareError } from '../errors.js';
 import type { EngineCaptureStatus, EngineTransportState } from '../index.js';
+import { entryClass } from '../internal/entry.js';
 import { externalMidiEvent } from '../internal/external_midi.js';
 import { failureFromPayload, isFailurePayload } from '../internal/failure_payload.js';
 import { assertHandleLive, releasedHandleError } from '../internal/handle_guard.js';
@@ -159,6 +160,7 @@ function workletBlockSize(maxBlockSize: number | undefined): number {
  * {@link SonareRealtimeEngineNode.create}; release it with {@link destroy}. After `destroy`, command
  * methods throw `SonareError` with `ErrorCode.InvalidState`.
  */
+@entryClass('SonareRealtimeEngineNode')
 export class SonareRealtimeEngineNode {
   /** The underlying AudioWorkletNode; connect it into the audio graph. */
   readonly node: AudioWorkletNode;

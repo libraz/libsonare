@@ -17,6 +17,9 @@ namespace sonare_node {
 
 const char* ErrorMessageForCode(SonareError err);
 
+/// The exception text without a leading C-entry prefix, which the public entry replaces.
+const char* ExceptionMessage(const std::exception& e);
+
 /// @brief Canonical name for a C-ABI error code ("InvalidParameter", ...).
 ///        Mirrors the JS-exposed ErrorCode enum; used as the error's codeName.
 const char* ErrorCodeName(SonareError err);
@@ -74,6 +77,9 @@ Napi::Value JoinedNamesToArray(Napi::Env env, const char* joined, const std::str
 
 /// @brief Throw @p e classified through the shared std::exception classifier.
 void ThrowStdException(Napi::Env env, const std::exception& e);
+
+/// @brief Marks a pending exception a caller's callback threw, so no public entry renames it.
+void MarkPendingForeign(Napi::Env env);
 
 /// @brief Add the public SonareError shape to an existing JavaScript Error, or
 /// re-class it as a RangeError for INVALID_PARAMETER (see MakeSonareError).
@@ -164,8 +170,7 @@ struct ChannelInputs {
 ///        argument has no way to carry. An empty list goes through to the C
 ///        entry, which owns that rejection. Returns false with a JS exception
 ///        pending on refusal.
-bool ReadChannelInputs(Napi::Env env, const Napi::Value& value, const char* fn_name,
-                       ChannelInputs* inputs);
+bool ReadChannelInputs(Napi::Env env, const Napi::Value& value, ChannelInputs* inputs);
 
 bool IsFloat32Array(const Napi::Value& value);
 bool IsUint8Array(const Napi::Value& value);
@@ -253,7 +258,7 @@ inline std::vector<int> IntVectorFromValue(const Napi::Value& value, const char*
     }
     return out;
   }
-  throw Napi::TypeError::New(value.Env(), "Expected Int32Array or number[]");
+  throw Napi::TypeError::New(value.Env(), std::string(name) + " must be an Int32Array or number[]");
 }
 
 /// @brief Coerce a JS value into a std::vector<float>, accepting a Float32Array
@@ -274,7 +279,8 @@ inline std::vector<float> FloatVectorFromValue(const Napi::Value& value, const c
     }
     return out;
   }
-  throw Napi::TypeError::New(value.Env(), "Expected Float32Array or number[]");
+  throw Napi::TypeError::New(value.Env(),
+                             std::string(name) + " must be a Float32Array or number[]");
 }
 
 /// @brief Validate that a flat row-major matrix's declared dims match its
@@ -286,7 +292,7 @@ inline std::vector<float> FloatVectorFromValue(const Napi::Value& value, const c
 /// from caller-supplied dims that exceed the buffer.
 ///
 /// @return true when the dims are consistent (no exception thrown).
-bool ValidateMatrixDims(Napi::Env env, const char* fn_name, int rows, int cols, size_t length);
+bool ValidateMatrixDims(Napi::Env env, int rows, int cols, size_t length);
 const char* PitchClassNameLocal(SonarePitchClass pc);
 /// @brief Resolves a pitch class given as an ordinal in [0, 12) or as its name ("C", "C#", ...,
 /// "B").

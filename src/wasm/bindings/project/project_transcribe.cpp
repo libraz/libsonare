@@ -50,10 +50,10 @@ float signedField(val config, const char* key, FloatDomain domain) {
   const std::string name(key);
   switch (domain) {
     case FloatDomain::kPositive:
-      if (!(value > 0.0f)) throw WasmRangeError(name + " must be a positive number");
+      if (!(value > 0.0f)) throw WasmRangeError(name + " must be finite and greater than 0");
       return value;
     case FloatDomain::kNegative:
-      if (!(value < 0.0f)) throw WasmRangeError(name + " must be negative");
+      if (!(value < 0.0f)) throw WasmRangeError(name + " must be finite and less than 0");
       return value;
     case FloatDomain::kUnitRatio:
       if (!(value >= 0.0f && value <= 1.0f)) {
@@ -92,7 +92,7 @@ SonareTranscribeConfig transcribeConfigFromVal(val config) {
   const val reference = config["referenceHz"];
   if (reference.isString()) {
     if (reference.as<std::string>() != "auto") {
-      throw WasmRangeError("referenceHz must be a positive number or 'auto'");
+      throw WasmRangeError("referenceHz must be finite and greater than 0, or 'auto'");
     }
     out.reference_auto = 1;
   } else {
@@ -153,7 +153,7 @@ val js_transcribe(val samples, const val& sample_rate_val, const val& tempo_bpm_
   const SonareError err = sonare_transcribe(buffer.empty() ? nullptr : buffer.data(), buffer.size(),
                                             sample_rate, tempo_bpm, &resolved, &result);
   if (err != SONARE_OK) {
-    throwCError(err, "failed to transcribe audio");
+    throwCError(err);
   }
   const double note_count = static_cast<double>(result.note_count);
   const float tempo = result.tempo_bpm;
@@ -184,7 +184,7 @@ uint32_t ProjectWasm::transcribeToClip(const val& clip_id_val, val samples,
       project_.get(), clip_id, buffer.empty() ? nullptr : buffer.data(), buffer.size(), sample_rate,
       &resolved, &note_count);
   if (err != SONARE_OK) {
-    throwCError(err, "failed to transcribe into MIDI clip");
+    throwCError(err);
   }
   return static_cast<uint32_t>(note_count);
 }

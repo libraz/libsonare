@@ -249,16 +249,16 @@ describe('insert gain reduction query', () => {
       engine.meterTargetInsertGainReduction = notSupported;
       engine.transportState = notSupported;
       engine.captureStatus = notSupported;
-      for (const request of [
-        () => node.pollInsertGainReduction(LANE_TARGET),
-        () => node.requestTransportState(),
-        () => node.requestCaptureStatus(),
-      ]) {
+      for (const [entry, request] of [
+        ['pollInsertGainReduction', () => node.pollInsertGainReduction(LANE_TARGET)],
+        ['requestTransportState', () => node.requestTransportState()],
+        ['requestCaptureStatus', () => node.requestCaptureStatus()],
+      ] as const) {
         await expect(request()).rejects.toMatchObject({
           name: 'SonareError',
           code: ErrorCode.NotSupported,
           codeName: 'NotSupported',
-          message: 'not compiled in',
+          message: `SonareRealtimeEngineNode.${entry}: not compiled in`,
         });
       }
     } finally {

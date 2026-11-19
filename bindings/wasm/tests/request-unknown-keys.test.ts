@@ -18,7 +18,9 @@ function entry(name: string): Entry {
   if (typeof fn !== 'function') {
     throw new Error(`${name} is not exported`);
   }
-  if (/^class\b/.test(Function.prototype.toString.call(fn))) {
+  // A decorated class is exported as a proxy, whose source text no longer reads `class`; its prototype carries methods.
+  const proto = (fn as { prototype?: object }).prototype;
+  if (proto !== undefined && Object.getOwnPropertyNames(proto).length > 1) {
     const Ctor = fn as new (...args: unknown[]) => unknown;
     return (request, ...rest) => new Ctor(request, ...rest);
   }

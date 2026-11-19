@@ -28,7 +28,7 @@ struct MonoAnalysisInput {
 
 bool ReadMonoAnalysisInput(const Napi::CallbackInfo& info, MonoAnalysisInput* out,
                            int default_sample_rate) {
-  if (!RequireFloat32Array(info, 0, "Expected Float32Array argument")) return false;
+  if (!RequireFloat32Array(info, 0, "samples must be a Float32Array")) return false;
   out->samples = info[0].As<Napi::Float32Array>();
   out->data = out->samples.Data();
   out->length = out->samples.ElementLength();
@@ -247,8 +247,8 @@ Napi::Value SonareWrap::EstimateMeter(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
 
-  if (!RequireFloat32Array(info, 0, "estimateMeter: beatTimes must be a Float32Array") ||
-      !RequireFloat32Array(info, 1, "estimateMeter: beatStrengths must be a Float32Array")) {
+  if (!RequireFloat32Array(info, 0, "beatTimes must be a Float32Array") ||
+      !RequireFloat32Array(info, 1, "beatStrengths must be a Float32Array")) {
     return env.Undefined();
   }
 
@@ -258,10 +258,9 @@ Napi::Value SonareWrap::EstimateMeter(const Napi::CallbackInfo& info) {
   // reach the core guard that rejects it: passing the shorter length would read
   // a prefix nobody asked about, and the longer one would run off a buffer.
   if (beat_times.ElementLength() != beat_strengths.ElementLength()) {
-    Napi::RangeError::New(
-        env, "estimateMeter: beatTimes and beatStrengths must be the same length (got " +
-                 std::to_string(beat_times.ElementLength()) + " and " +
-                 std::to_string(beat_strengths.ElementLength()) + ")")
+    Napi::RangeError::New(env, "beatTimes and beatStrengths must be the same length (got " +
+                                   std::to_string(beat_times.ElementLength()) + " and " +
+                                   std::to_string(beat_strengths.ElementLength()) + ")")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
@@ -469,7 +468,7 @@ Napi::Value SonareWrap::AnalyzeAsync(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   if (info.Length() < 1 || !IsFloat32Array(info[0])) {
     auto deferred = Napi::Promise::Deferred::New(env);
-    deferred.Reject(Napi::TypeError::New(env, "Expected (Float32Array, sampleRate?)").Value());
+    deferred.Reject(Napi::TypeError::New(env, "samples must be a Float32Array").Value());
     return deferred.Promise();
   }
   auto typed = info[0].As<Napi::Float32Array>();
@@ -1036,7 +1035,7 @@ Napi::Value SonareWrap::FunctionalAnalysis(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
 
-  if (!RequireFloat32Array(info, 0, "Expected Float32Array argument")) {
+  if (!RequireFloat32Array(info, 0, "samples must be a Float32Array")) {
     return env.Undefined();
   }
 
@@ -1131,8 +1130,8 @@ Napi::Value SonareWrap::FunctionalAnalysis(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::ChordFunctions(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (info.Length() < 3 || !info[0].IsArray()) {
-    Napi::TypeError::New(env, "Expected (chords, keyRoot, keyMode)").ThrowAsJavaScriptException();
+  if (!info[0].IsArray()) {
+    Napi::TypeError::New(env, "chords must be an array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   const Napi::Array entries = info[0].As<Napi::Array>();
@@ -1190,7 +1189,7 @@ Napi::Value SonareWrap::Capabilities(const Napi::CallbackInfo& info) {
   char* raw = nullptr;
   const SonareError err = sonare_capabilities_json(&raw);
   if (err != SONARE_OK) {
-    sonare_node::ThrowSonareError(env, err, "capabilities: ");
+    sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
   const std::string json(raw);

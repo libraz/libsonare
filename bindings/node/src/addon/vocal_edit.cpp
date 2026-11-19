@@ -44,7 +44,7 @@ bool ReadArrayNumber(Napi::Env env, const Napi::Value& value, const char* field,
   }
   for (size_t i = 0; i < out->size(); ++i) {
     if (!std::isfinite((*out)[i]) || (*out)[i] < 0.0f) {
-      Napi::RangeError::New(env, std::string(field) + " must contain finite non-negative values")
+      Napi::RangeError::New(env, std::string(field) + " must contain finite values of at least 0")
           .ThrowAsJavaScriptException();
       return false;
     }
@@ -81,7 +81,7 @@ bool ReadRange(Napi::Env env, const Napi::Value& value, SonareVocalRange* out) {
     return false;
   }
   if (end < start) {
-    Napi::RangeError::New(env, "range.endSample must be greater than or equal to startSample")
+    Napi::RangeError::New(env, "range.endSample must be at least startSample")
         .ThrowAsJavaScriptException();
     return false;
   }
@@ -892,10 +892,10 @@ Napi::Value RequireSessionValue(Napi::Env env, SonareVocalSession* session) {
 
 // Reads the (range, requestId?) leading arguments of the render entry points;
 // false leaves one pending exception.
-bool ReadRenderRange(Napi::Env env, const Napi::CallbackInfo& info, const char* usage_message,
-                     SonareVocalRange* range, uint64_t* request_id) {
+bool ReadRenderRange(Napi::Env env, const Napi::CallbackInfo& info, SonareVocalRange* range,
+                     uint64_t* request_id) {
   if (info.Length() == 0) {
-    Napi::TypeError::New(env, usage_message).ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "range must be an object").ThrowAsJavaScriptException();
     return false;
   }
   if (!ReadRange(env, info[0], range)) return false;
@@ -1069,6 +1069,7 @@ bool PrepareAbortSignal(Napi::Env env, const Napi::Value& value,
     cancelled->store(true, std::memory_order_relaxed);
   });
   add.As<Napi::Function>().Call(signal, {Napi::String::New(env, "abort"), listener});
+  sonare_node::MarkPendingForeign(env);
   if (env.IsExceptionPending()) return false;
   *signal_out = signal;
   *listener_out = listener;
@@ -1081,24 +1082,27 @@ Napi::Object VocalEditSessionWrap::Init(Napi::Env env, Napi::Object exports) {
   const Napi::Function function = DefineClass(
       env, "VocalEditSession",
       {
-          InstanceMethod<&VocalEditSessionWrap::Notes>("notes"),
-          InstanceMethod<&VocalEditSessionWrap::Analysis>("analysis"),
-          InstanceMethod<&VocalEditSessionWrap::Capabilities>("capabilities"),
-          InstanceMethod<&VocalEditSessionWrap::Token>("token"),
-          InstanceMethod<&VocalEditSessionWrap::Revision>("revision"),
-          InstanceMethod<&VocalEditSessionWrap::OutputLengthSamples>("outputLengthSamples"),
-          InstanceMethod<&VocalEditSessionWrap::History>("history"),
-          InstanceMethod<&VocalEditSessionWrap::BeginEdit>("beginEdit"),
-          InstanceMethod<&VocalEditSessionWrap::Undo>("undo"),
-          InstanceMethod<&VocalEditSessionWrap::Redo>("redo"),
-          InstanceMethod<&VocalEditSessionWrap::EvaluatePitch>("evaluatePitch"),
+          InstanceMethod<&VocalEditSessionWrap::Notes>("notes", napi_default_method),
+          InstanceMethod<&VocalEditSessionWrap::Analysis>("analysis", napi_default_method),
+          InstanceMethod<&VocalEditSessionWrap::Capabilities>("capabilities", napi_default_method),
+          InstanceMethod<&VocalEditSessionWrap::Token>("token", napi_default_method),
+          InstanceMethod<&VocalEditSessionWrap::Revision>("revision", napi_default_method),
+          InstanceMethod<&VocalEditSessionWrap::OutputLengthSamples>("outputLengthSamples",
+                                                                     napi_default_method),
+          InstanceMethod<&VocalEditSessionWrap::History>("history", napi_default_method),
+          InstanceMethod<&VocalEditSessionWrap::BeginEdit>("beginEdit", napi_default_method),
+          InstanceMethod<&VocalEditSessionWrap::Undo>("undo", napi_default_method),
+          InstanceMethod<&VocalEditSessionWrap::Redo>("redo", napi_default_method),
+          InstanceMethod<&VocalEditSessionWrap::EvaluatePitch>("evaluatePitch",
+                                                               napi_default_method),
           InstanceMethod<&VocalEditSessionWrap::SourceSampleToDestinationSample>(
-              "sourceSampleToDestinationSample"),
+              "sourceSampleToDestinationSample", napi_default_method),
           InstanceMethod<&VocalEditSessionWrap::DestinationSampleToSourceSample>(
-              "destinationSampleToSourceSample"),
-          InstanceMethod<&VocalEditSessionWrap::CaptureRenderSnapshot>("captureRenderSnapshot"),
-          InstanceMethod<&VocalEditSessionWrap::ExportState>("exportState"),
-          InstanceMethod<&VocalEditSessionWrap::Destroy>("destroy"),
+              "destinationSampleToSourceSample", napi_default_method),
+          InstanceMethod<&VocalEditSessionWrap::CaptureRenderSnapshot>("captureRenderSnapshot",
+                                                                       napi_default_method),
+          InstanceMethod<&VocalEditSessionWrap::ExportState>("exportState", napi_default_method),
+          InstanceMethod<&VocalEditSessionWrap::Destroy>("destroy", napi_default_method),
       });
   constructor_ = Napi::Persistent(function);
   constructor_.SuppressDestruct();
@@ -1369,18 +1373,19 @@ Napi::Object VocalEditDraftWrap::Init(Napi::Env env, Napi::Object exports) {
   const Napi::Function function = DefineClass(
       env, "VocalEditDraft",
       {
-          InstanceMethod<&VocalEditDraftWrap::Notes>("notes"),
-          InstanceMethod<&VocalEditDraftWrap::Token>("token"),
-          InstanceMethod<&VocalEditDraftWrap::Apply>("apply"),
-          InstanceMethod<&VocalEditDraftWrap::Commit>("commit"),
-          InstanceMethod<&VocalEditDraftWrap::Cancel>("cancel"),
-          InstanceMethod<&VocalEditDraftWrap::EvaluatePitch>("evaluatePitch"),
+          InstanceMethod<&VocalEditDraftWrap::Notes>("notes", napi_default_method),
+          InstanceMethod<&VocalEditDraftWrap::Token>("token", napi_default_method),
+          InstanceMethod<&VocalEditDraftWrap::Apply>("apply", napi_default_method),
+          InstanceMethod<&VocalEditDraftWrap::Commit>("commit", napi_default_method),
+          InstanceMethod<&VocalEditDraftWrap::Cancel>("cancel", napi_default_method),
+          InstanceMethod<&VocalEditDraftWrap::EvaluatePitch>("evaluatePitch", napi_default_method),
           InstanceMethod<&VocalEditDraftWrap::SourceSampleToDestinationSample>(
-              "sourceSampleToDestinationSample"),
+              "sourceSampleToDestinationSample", napi_default_method),
           InstanceMethod<&VocalEditDraftWrap::DestinationSampleToSourceSample>(
-              "destinationSampleToSourceSample"),
-          InstanceMethod<&VocalEditDraftWrap::CaptureRenderSnapshot>("captureRenderSnapshot"),
-          InstanceMethod<&VocalEditDraftWrap::Destroy>("destroy"),
+              "destinationSampleToSourceSample", napi_default_method),
+          InstanceMethod<&VocalEditDraftWrap::CaptureRenderSnapshot>("captureRenderSnapshot",
+                                                                     napi_default_method),
+          InstanceMethod<&VocalEditDraftWrap::Destroy>("destroy", napi_default_method),
       });
   constructor_ = Napi::Persistent(function);
   constructor_.SuppressDestruct();
@@ -1459,13 +1464,12 @@ Napi::Value VocalEditDraftWrap::Apply(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (draft_ == nullptr) return RequireSessionValue(env, nullptr);
-  if (info.Length() < 2) {
-    Napi::TypeError::New(env, "apply(expectedGeneration, operations) requires two arguments")
-        .ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
   uint64_t generation = 0;
   if (!RequiredUint64Value(env, info[0], "expectedGeneration", &generation)) return env.Undefined();
+  if (info.Length() < 2) {
+    Napi::TypeError::New(env, "operations must be an array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
   std::vector<ParsedOperation> parsed;
   if (!ReadOperations(env, info[1], &parsed)) return env.Undefined();
   std::vector<SonareVocalOperation> operations;
@@ -1568,11 +1572,13 @@ Napi::Object VocalRenderSnapshotWrap::Init(Napi::Env env, Napi::Object exports) 
   const Napi::Function function = DefineClass(
       env, "VocalRenderSnapshot",
       {
-          InstanceMethod<&VocalRenderSnapshotWrap::Render>("render"),
-          InstanceMethod<&VocalRenderSnapshotWrap::RenderAsync>("renderAsync"),
-          InstanceMethod<&VocalRenderSnapshotWrap::BeginRenderJob>("beginRenderJob"),
-          InstanceMethod<&VocalRenderSnapshotWrap::OutputLengthSamples>("outputLengthSamples"),
-          InstanceMethod<&VocalRenderSnapshotWrap::Destroy>("destroy"),
+          InstanceMethod<&VocalRenderSnapshotWrap::Render>("render", napi_default_method),
+          InstanceMethod<&VocalRenderSnapshotWrap::RenderAsync>("renderAsync", napi_default_method),
+          InstanceMethod<&VocalRenderSnapshotWrap::BeginRenderJob>("beginRenderJob",
+                                                                   napi_default_method),
+          InstanceMethod<&VocalRenderSnapshotWrap::OutputLengthSamples>("outputLengthSamples",
+                                                                        napi_default_method),
+          InstanceMethod<&VocalRenderSnapshotWrap::Destroy>("destroy", napi_default_method),
       });
   constructor_ = Napi::Persistent(function);
   constructor_.SuppressDestruct();
@@ -1621,8 +1627,7 @@ Napi::Value VocalRenderSnapshotWrap::Render(const Napi::CallbackInfo& info) {
   if (snapshot_ == nullptr) return RequireSessionValue(env, nullptr);
   SonareVocalRange range{};
   uint64_t request_id = 0;
-  if (!ReadRenderRange(env, info, "render(range, requestId?) requires a range", &range,
-                       &request_id)) {
+  if (!ReadRenderRange(env, info, &range, &request_id)) {
     return env.Undefined();
   }
   RenderGuard result;
@@ -1639,8 +1644,7 @@ Napi::Value VocalRenderSnapshotWrap::RenderAsync(const Napi::CallbackInfo& info)
   if (snapshot_ == nullptr) return RejectedVocalPromise(env, SONARE_ERROR_INVALID_STATE);
   SonareVocalRange range{};
   uint64_t request_id = 0;
-  if (!ReadRenderRange(env, info, "renderAsync(range, requestId?, signal?) requires a range",
-                       &range, &request_id)) {
+  if (!ReadRenderRange(env, info, &range, &request_id)) {
     return sonare_node::RejectedFromPending(env);
   }
   SonareVocalRenderJob* job = nullptr;
@@ -1672,8 +1676,7 @@ Napi::Value VocalRenderSnapshotWrap::BeginRenderJob(const Napi::CallbackInfo& in
   if (snapshot_ == nullptr) return RequireSessionValue(env, nullptr);
   SonareVocalRange range{};
   uint64_t request_id = 0;
-  if (!ReadRenderRange(env, info, "beginRenderJob(range, requestId?) requires a range", &range,
-                       &request_id)) {
+  if (!ReadRenderRange(env, info, &range, &request_id)) {
     return env.Undefined();
   }
   SonareVocalRenderJob* job = nullptr;
@@ -1698,10 +1701,10 @@ Napi::Object VocalRenderJobWrap::Init(Napi::Env env, Napi::Object exports) {
   const Napi::Function function =
       DefineClass(env, "VocalRenderJob",
                   {
-                      InstanceMethod<&VocalRenderJobWrap::Next>("next"),
-                      InstanceMethod<&VocalRenderJobWrap::Finish>("finalize"),
-                      InstanceMethod<&VocalRenderJobWrap::Abort>("abort"),
-                      InstanceMethod<&VocalRenderJobWrap::Destroy>("destroy"),
+                      InstanceMethod<&VocalRenderJobWrap::Next>("next", napi_default_method),
+                      InstanceMethod<&VocalRenderJobWrap::Finish>("finalize", napi_default_method),
+                      InstanceMethod<&VocalRenderJobWrap::Abort>("abort", napi_default_method),
+                      InstanceMethod<&VocalRenderJobWrap::Destroy>("destroy", napi_default_method),
                   });
   constructor_ = Napi::Persistent(function);
   constructor_.SuppressDestruct();
@@ -1784,8 +1787,7 @@ Napi::Value CreateVocalEditSession(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (info.Length() == 0 || !info[0].IsObject()) {
-    Napi::TypeError::New(env, "createVocalEditSession requires an options object")
-        .ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "options must be an object").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   const Napi::Object request = info[0].As<Napi::Object>();
@@ -1816,8 +1818,7 @@ Napi::Value RestoreVocalEditSession(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (info.Length() == 0 || !info[0].IsObject()) {
-    Napi::TypeError::New(env, "restoreVocalEditSession requires an options object")
-        .ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "options must be an object").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   const Napi::Object request = info[0].As<Napi::Object>();

@@ -124,8 +124,8 @@ Napi::Value SonareWrap::MasteringInsertNames(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::MasteringInsertParamNames(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (info.Length() < 1 || !info[0].IsString()) {
-    Napi::TypeError::New(env, "Expected (name: string)").ThrowAsJavaScriptException();
+  if (!info[0].IsString()) {
+    Napi::TypeError::New(env, "name must be a string").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   // sonare_mastering_insert_param_names(name) returns a thread-local '\n'-joined
@@ -160,9 +160,8 @@ Napi::Value SonareWrap::MasteringInsertParamNames(const Napi::CallbackInfo& info
 Napi::Value SonareWrap::MasteringInsertParamInfo(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (info.Length() < 1 || !info[0].IsString()) {
-    Napi::TypeError::New(env, "Expected (name: string, sampleRate?: number)")
-        .ThrowAsJavaScriptException();
+  if (!info[0].IsString()) {
+    Napi::TypeError::New(env, "name must be a string").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   // A JSON array ("[]" for an unknown name) the TS facade parses into the typed
@@ -189,9 +188,16 @@ Napi::Value SonareWrap::MasteringInsertParamInfo(const Napi::CallbackInfo& info)
 
 Napi::Value SonareWrap::MasteringInsertTiming(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (info.Length() < 3 || !info[0].IsString() || !info[1].IsString() || !info[2].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (name: string, params: string, sampleRate: number)")
-        .ThrowAsJavaScriptException();
+  if (!info[0].IsString()) {
+    Napi::TypeError::New(env, "name must be a string").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[1].IsString()) {
+    Napi::TypeError::New(env, "params must be a string").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[2].IsNumber()) {
+    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   SONARE_NODE_TRY
@@ -215,10 +221,16 @@ Napi::Value SonareWrap::MasteringInsertTiming(const Napi::CallbackInfo& info) {
 
 Napi::Value SonareWrap::MasteringEnumValue(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (info.Length() < 3 || !(info[0].IsString() || info[0].IsNull()) || !info[1].IsString() ||
-      !info[2].IsString()) {
-    Napi::TypeError::New(env, "Expected (processor: string | null, key: string, name: string)")
-        .ThrowAsJavaScriptException();
+  if (!(info[0].IsString() || info[0].IsNull())) {
+    Napi::TypeError::New(env, "processor must be a string or null").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[1].IsString()) {
+    Napi::TypeError::New(env, "key must be a string").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[2].IsString()) {
+    Napi::TypeError::New(env, "name must be a string").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   SONARE_NODE_TRY

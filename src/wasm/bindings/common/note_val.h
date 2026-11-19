@@ -26,19 +26,16 @@
 namespace sonare_wasm_editing {
 
 /// @brief One edit's own amplitude envelope, budgeted before it is copied.
-inline std::vector<float> noteEnvelopeFromVal(const val& edit, const char* budget_subject,
-                                              std::size_t* cumulative_count) {
+inline std::vector<float> noteEnvelopeFromVal(const val& edit, std::size_t* cumulative_count) {
   const val envelope = objectProperty(edit, "amplitudeEnvelope");
   if (envelope.isUndefined()) return {};
-  accumulateWasmFloat32ArrayLength(envelope, "amplitudeEnvelope", budget_subject, cumulative_count);
+  accumulateWasmFloat32ArrayLength(envelope, "amplitudeEnvelope", cumulative_count);
   return float32ArrayToVector(envelope);
 }
 
 /// @brief Reads a JS edit object.
-/// @param subject Names the edit in a rejection, e.g. "setNoteEdit edit".
-/// @param budget_subject Names the entry point's cumulative input budget.
+/// @param subject Names the edit in a rejection, e.g. "edit" or "note.edit".
 inline sonare::editing::note_model::NoteEdit noteEditFromVal(const val& edit, const char* subject,
-                                                             const char* budget_subject,
                                                              std::size_t* cumulative_count) {
   sonare::editing::note_model::NoteEdit out;
   if (hasProperty(edit, "timeOffsetSamples")) {
@@ -60,20 +57,15 @@ inline sonare::editing::note_model::NoteEdit noteEditFromVal(const val& edit, co
   out.vibrato_depth_change = floatProperty(edit, "vibratoDepthChange", 0.0f);
   out.drift_change = floatProperty(edit, "driftChange", 0.0f);
   out.muted = boolProperty(edit, "muted", false);
-  out.amplitude_envelope = noteEnvelopeFromVal(edit, budget_subject, cumulative_count);
+  out.amplitude_envelope = noteEnvelopeFromVal(edit, cumulative_count);
   return out;
 }
 
 /// @brief Reads the edit riding on a JS note object, which is where the by-value
 ///        door carries it.
-/// @param entry_point Names the call in a rejection, e.g. "renderNotes".
 inline sonare::editing::note_model::NoteEdit noteRowEditFromVal(const val& row,
-                                                                const char* entry_point,
                                                                 std::size_t* cumulative_count) {
-  const std::string subject = std::string(entry_point) + " note.edit";
-  const std::string budget = std::string(entry_point) + " input";
-  return noteEditFromVal(objectProperty(row, "edit"), subject.c_str(), budget.c_str(),
-                         cumulative_count);
+  return noteEditFromVal(objectProperty(row, "edit"), "note.edit", cumulative_count);
 }
 
 /// @brief Writes one edit back, field for field.

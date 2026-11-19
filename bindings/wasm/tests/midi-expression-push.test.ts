@@ -131,16 +131,16 @@ describe('Sonare WASM live per-note expression', () => {
       // A bend is 14-bit, so 16384 is the first value a 7-bit-shaped check would
       // let through and the one that has to be refused.
       expect(() => engine.pushMidiInputPitchBend(0, 0, 16384)).toThrow(
-        new RangeError('pushMidiInputPitchBend: bend14 must be in [0, 16383]'),
+        new RangeError('RealtimeEngine.pushMidiInputPitchBend: bend14 must be in [0, 16383]'),
       );
       expect(() => engine.pushMidiPitchBend(DESTINATION, 0, 0, 16384)).toThrow(
-        new RangeError('pushMidiPitchBend: bend14 must be in [0, 16383]'),
+        new RangeError('RealtimeEngine.pushMidiPitchBend: bend14 must be in [0, 16383]'),
       );
       expect(() => engine.pushMidiInputChannelPressure(0, 16, 64)).toThrow(
-        new RangeError('pushMidiInputChannelPressure: channel must be in [0, 15]'),
+        new RangeError('RealtimeEngine.pushMidiInputChannelPressure: channel must be in [0, 15]'),
       );
       expect(() => engine.pushMidiPolyPressure(DESTINATION, 0, 0, 128, 64)).toThrow(
-        new RangeError('pushMidiPolyPressure: note must be in [0, 127]'),
+        new RangeError('RealtimeEngine.pushMidiPolyPressure: note must be in [0, 127]'),
       );
     });
   });

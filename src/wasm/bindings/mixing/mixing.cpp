@@ -36,7 +36,7 @@ void setPerPlaneMeters(val& out, const float* peak_db, const float* rms_db,
 MixerWasm::MixerWasm(SonareMixer* mixer, int sample_rate, int block_size)
     : mixer_(mixer), sample_rate_(sample_rate), block_size_(block_size) {
   if (block_size_ <= 0) {
-    throw WasmRangeError("mixer block size must be positive");
+    throw WasmRangeError("mixer block size must be an integer of at least 1");
   }
   out_scratch_left_.resize(static_cast<size_t>(block_size_));
   out_scratch_right_.resize(static_cast<size_t>(block_size_));
@@ -77,7 +77,7 @@ MixerWasm* MixerWasm::fromSceneJson(std::string json, int sample_rate, int block
   SonareMixer* mixer =
       sonare_mixer_from_scene_json(wasmCString(json, "json"), sample_rate, block_size);
   if (mixer == nullptr) {
-    throwLastCError("failed to build mixer from scene JSON: ");
+    throwLastCError();
   }
   // Capture the load's warnings (e.g. insert params no processor read) before
   // any later C-ABI call can overwrite the thread-local list.
@@ -99,8 +99,8 @@ val MixerWasm::sceneWarnings() const {
 std::string MixerWasm::presetJson(std::string name) {
   char* json = nullptr;
   SonareError err = sonare_mixing_scene_preset_json(wasmCString(name, "name"), &json);
-  if (err != SONARE_OK) throwCodedCError(err, "failed to get mixing scene preset JSON");
-  if (json == nullptr) throwLastCError("failed to get mixing scene preset JSON: ");
+  if (err != SONARE_OK) throwCodedCError(err);
+  if (json == nullptr) throwLastCError();
   std::string out(json);
   sonare_free_string(json);
   return out;
@@ -109,8 +109,7 @@ std::string MixerWasm::presetJson(std::string name) {
 void MixerWasm::compile() {
   SonareError err = sonare_mixer_compile(mixer_);
   if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
-                                  cErrorMessage(err, "failed to compile mixer graph"));
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState, cErrorMessage(err));
   }
   ensureScratchBuffers();
 }
@@ -122,7 +121,7 @@ size_t MixerWasm::stripCount() const { return sonare_mixer_strip_count(mixer_); 
 SonareStrip* MixerWasm::stripAt(unsigned int strip_index) {
   SonareStrip* strip = sonare_mixer_strip_at(mixer_, static_cast<size_t>(strip_index));
   if (strip == nullptr) {
-    throwLastCError("mixer strip index out of range: ");
+    throwLastCError();
   }
   return strip;
 }
@@ -144,15 +143,15 @@ int MixerWasm::stripById(std::string id) {
   return -1;
 }
 
-void MixerWasm::checkStripError(SonareError err, const char* what) {
-  if (err != SONARE_OK) throwCodedCError(err, what);
+void MixerWasm::checkStripError(SonareError err) {
+  if (err != SONARE_OK) throwCodedCError(err);
 }
 
-void MixerWasm::checkStripValueError(SonareError err, const char* what) {
+void MixerWasm::checkStripValueError(SonareError err) {
   if (err == SONARE_ERROR_INVALID_PARAMETER) {
-    throw WasmRangeError(cErrorMessage(err, what));
+    throw WasmRangeError(cErrorMessage(err));
   }
-  checkStripError(err, what);
+  checkStripError(err);
 }
 
 val MixerWasm::mixMeterSnapshotToVal(const SonareMixMeterSnapshot& snapshot) {
@@ -296,9 +295,9 @@ int panModeOrdinalFromVal(val value) {
 }
 
 #if defined(SONARE_WITH_MIXING) && defined(SONARE_WITH_GRAPH)
-void checkOneShotSetter(SonareError err, const char* what) {
+void checkOneShotSetter(SonareError err) {
   if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, cErrorMessage(err, what));
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, cErrorMessage(err));
   }
 }
 
@@ -323,7 +322,7 @@ val js_mix_stereo(val left_channels, val right_channels, const val& sample_rate_
     const val value = options[key];
     if (val::global("Array").call<bool>("isArray", value) &&
         wasmArrayLikeLength(value, key) > static_cast<std::size_t>(count)) {
-      throw WasmRangeError(std::string("mixStereo: '") + key + "' has more entries than strips (" +
+      throw WasmRangeError(std::string("'") + key + "' has more entries than strips (" +
                            std::to_string(count) + ")");
     }
   }
@@ -347,11 +346,11 @@ val js_mix_stereo(val left_channels, val right_channels, const val& sample_rate_
       throw WasmRangeError("all strips must have the same length");
     }
     if (left_length > kMaxWasmFloat32Elements - total_input_elements) {
-      throw WasmRangeError("mixStereo inputs exceed the WASM Float32 input budget");
+      throw WasmRangeError("inputs exceed the WASM Float32 input budget");
     }
     total_input_elements += left_length;
     if (right_length > kMaxWasmFloat32Elements - total_input_elements) {
-      throw WasmRangeError("mixStereo inputs exceed the WASM Float32 input budget");
+      throw WasmRangeError("inputs exceed the WASM Float32 input budget");
     }
     total_input_elements += right_length;
   }
@@ -372,7 +371,7 @@ val js_mix_stereo(val left_channels, val right_channels, const val& sample_rate_
   const SonareError create_err =
       sonare_mixer_create(sample_rate, static_cast<int>(std::max<size_t>(1, length)), &mixer);
   if (create_err != SONARE_OK) {
-    throwCodedCError(create_err, "failed to create mixer");
+    throwCodedCError(create_err);
   }
   std::vector<SonareStrip*> strips;
   std::vector<const float*> left_ptrs(static_cast<size_t>(count));
@@ -382,15 +381,15 @@ val js_mix_stereo(val left_channels, val right_channels, const val& sample_rate_
     for (int index = 0; index < count; ++index) {
       SonareStrip* strip = sonare_mixer_add_strip(mixer, ("strip" + std::to_string(index)).c_str());
       if (strip == nullptr) {
-        throwLastCError("failed to add mixer strip: ");
+        throwLastCError();
       }
       strips.push_back(strip);
 
       if (auto v = optionalNumberAt(options, "inputTrimDb", index)) {
-        checkOneShotSetter(sonare_strip_set_input_trim_db(strip, *v), "failed to set input trim");
+        checkOneShotSetter(sonare_strip_set_input_trim_db(strip, *v));
       }
       if (auto v = optionalNumberAt(options, "faderDb", index)) {
-        checkOneShotSetter(sonare_strip_set_fader_db(strip, *v), "failed to set fader");
+        checkOneShotSetter(sonare_strip_set_fader_db(strip, *v));
       }
       // pan and panMode are independent fields: either one alone must apply.
       // The C ABI takes them together, so the missing half comes from the strip
@@ -400,16 +399,15 @@ val js_mix_stereo(val left_channels, val right_channels, const val& sample_rate_
       const bool has_pan_mode = !pan_mode.isUndefined() && !pan_mode.isNull();
       const auto pan = optionalNumberAt(options, "pan", index);
       if (pan || has_pan_mode) {
-        checkOneShotSetter(sonare_strip_set_pan(strip, pan.value_or(0.0f),
-                                                has_pan_mode ? panModeOrdinalFromVal(pan_mode)
-                                                             : SONARE_PAN_MODE_KEEP),
-                           "failed to set pan");
+        checkOneShotSetter(sonare_strip_set_pan(
+            strip, pan.value_or(0.0f),
+            has_pan_mode ? panModeOrdinalFromVal(pan_mode) : SONARE_PAN_MODE_KEEP));
       }
       if (auto v = optionalNumberAt(options, "width", index)) {
-        checkOneShotSetter(sonare_strip_set_width(strip, *v), "failed to set width");
+        checkOneShotSetter(sonare_strip_set_width(strip, *v));
       }
       if (auto v = optionalBool(optionAt(options, "muted", index), "muted")) {
-        checkOneShotSetter(sonare_strip_set_muted(strip, *v ? 1 : 0), "failed to set mute");
+        checkOneShotSetter(sonare_strip_set_muted(strip, *v ? 1 : 0));
       }
 
       left_ptrs[static_cast<size_t>(index)] = left_inputs[static_cast<size_t>(index)].data();
@@ -420,14 +418,12 @@ val js_mix_stereo(val left_channels, val right_channels, const val& sample_rate_
                                                   static_cast<size_t>(count), out_left.data(),
                                                   out_right.data(), length);
     if (err != SONARE_OK) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidState,
-                                    cErrorMessage(err, "mixer process failed"));
+      throw sonare::SonareException(sonare::ErrorCode::InvalidState, cErrorMessage(err));
     }
     // The whole signal was one block: fold the meters' pending group delay in.
     err = sonare_mixer_flush_meters(mixer);
     if (err != SONARE_OK) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidState,
-                                    cErrorMessage(err, "mixer meter flush failed"));
+      throw sonare::SonareException(sonare::ErrorCode::InvalidState, cErrorMessage(err));
     }
     // The per-strip meter snapshots reflect only this single one-shot block.
     // The LUFS fields (momentaryLufs/shortTermLufs/integratedLufs) are

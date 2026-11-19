@@ -37,12 +37,21 @@ struct TrackArrays {
 // pending JS exception on the first bad argument, so the caller must bail out
 // before touching native state (a second throw on a pending exception aborts).
 bool ReadTrackArrays(Napi::Env env, const Napi::CallbackInfo& info, TrackArrays* out) {
-  if (info.Length() < 6 || !info[0].IsArray() || !info[2].IsArray() || !info[5].IsNumber() ||
-      !(info[4].IsArray() || info[4].IsNull() || info[4].IsUndefined())) {
-    Napi::TypeError::New(env,
-                         "Expected (leftChannels, rightChannels, trackIds, trackNames, "
-                         "trackSampleRates, sampleRate, params?)")
+  if (!info[0].IsArray()) {
+    Napi::TypeError::New(env, "leftChannels must be an array").ThrowAsJavaScriptException();
+    return false;
+  }
+  if (!info[2].IsArray()) {
+    Napi::TypeError::New(env, "trackIds must be an array").ThrowAsJavaScriptException();
+    return false;
+  }
+  if (!(info[4].IsArray() || info[4].IsNull() || info[4].IsUndefined())) {
+    Napi::TypeError::New(env, "trackSampleRates must be an array or null")
         .ThrowAsJavaScriptException();
+    return false;
+  }
+  if (!info[5].IsNumber()) {
+    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
     return false;
   }
 
@@ -180,7 +189,7 @@ Napi::Value SuggestMixScene(const Napi::CallbackInfo& info) {
       tracks.left.data(), tracks.any_right ? tracks.right.data() : nullptr,
       tracks.id_pointers.data(), tracks.any_name ? tracks.name_pointers.data() : nullptr,
       tracks.lengths.data(), tracks.sample_rates.empty() ? nullptr : tracks.sample_rates.data(),
-      tracks.left.size(), node_narrow_int(env, info[5], node_arg_label(5).c_str()),
+      tracks.left.size(), node_narrow_int(env, info[5], "sampleRate"),
       c_params.empty() ? nullptr : c_params.data(), c_params.size(), &json);
   if (err != SONARE_OK) {
     sonare_free_string(json);
@@ -216,8 +225,8 @@ Napi::Value SonareWrap::MixingAssistantSourceClassNames(const Napi::CallbackInfo
 Napi::Value SonareWrap::MixingAssistantSourceClassFromName(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (info.Length() < 1 || !info[0].IsString()) {
-    Napi::TypeError::New(env, "Expected (name: string)").ThrowAsJavaScriptException();
+  if (!info[0].IsString()) {
+    Napi::TypeError::New(env, "name must be a string").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   const std::string name = node_narrow_string(env, info[0], "name");

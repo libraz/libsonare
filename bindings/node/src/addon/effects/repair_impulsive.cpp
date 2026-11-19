@@ -77,7 +77,8 @@ SonareDeclickConfig read_declick_config_c(Napi::Env env, const Napi::Object& opt
     const int max_click_samples =
         IntProperty(options, "maxClickSamples", static_cast<int>(config.max_click_samples));
     if (max_click_samples <= 0) {
-      throw Napi::RangeError::New(env, "maxClickSamples must be positive");
+      throw Napi::RangeError::New(
+          env, "maxClickSamples must be an integer in [1, " + node_int_max_text() + "]");
     }
     config.max_click_samples = static_cast<size_t>(max_click_samples);
   }
@@ -127,9 +128,8 @@ Napi::Object EmitDeclipReport(Napi::Env env, const T& report) {
 ///        and defaults as the mono facade's C++ DeclipConfig mapping above --
 ///        the two structs share their shape, this is the C-ABI mirror of that
 ///        reading.
-SonareDeclipConfig read_declip_config_c(const Napi::Object& options, SonareDeclipConfig config,
-                                        const char* entry) {
-  RefuseUnknownKeys(options, entry, {"clipThresholdDb", "lpcOrder", "iterations", "lpcBlend"});
+SonareDeclipConfig read_declip_config_c(const Napi::Object& options, SonareDeclipConfig config) {
+  RefuseUnknownKeys(options, "options", {"clipThresholdDb", "lpcOrder", "iterations", "lpcBlend"});
   config.clip_threshold_db =
       FiniteFloatProperty(options, "clipThresholdDb", config.clip_threshold_db);
   config.lpc_order = IntProperty(options, "lpcOrder", config.lpc_order);
@@ -182,10 +182,9 @@ Napi::Value SonareWrap::MasteringRepairDeclick(const Napi::CallbackInfo& info) {
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
-  const int sr = node_narrow_int(env, info[1], "sr");
+  const int sr = node_narrow_int(env, info[1], "sampleRate");
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
-  sonare::validate_offline_audio_input("declick", "samples", typed.Data(), typed.ElementLength(),
-                                       sr);
+  sonare::validate_offline_audio_input(nullptr, "samples", typed.Data(), typed.ElementLength(), sr);
   sonare::mastering::repair::DeclickConfig config;
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object options = info[2].As<Napi::Object>();
@@ -195,7 +194,9 @@ Napi::Value SonareWrap::MasteringRepairDeclick(const Napi::CallbackInfo& info) {
       const int max_click_samples =
           IntProperty(options, "maxClickSamples", static_cast<int>(config.max_click_samples));
       if (max_click_samples <= 0) {
-        Napi::RangeError::New(env, "maxClickSamples must be positive").ThrowAsJavaScriptException();
+        Napi::RangeError::New(
+            env, "maxClickSamples must be an integer in [1, " + node_int_max_text() + "]")
+            .ThrowAsJavaScriptException();
         return env.Undefined();
       }
       config.max_click_samples = static_cast<size_t>(max_click_samples);
@@ -212,11 +213,16 @@ Napi::Value SonareWrap::MasteringRepairDeclick(const Napi::CallbackInfo& info) {
 
 Napi::Value SonareWrap::MasteringRepairDeclickStereo(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (info.Length() < 3 || !IsFloat32Array(info[0]) || !IsFloat32Array(info[1]) ||
-      !info[2].IsNumber()) {
-    Napi::TypeError::New(env,
-                         "Expected (Float32Array left, Float32Array right, sampleRate, options?)")
-        .ThrowAsJavaScriptException();
+  if (!IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "left must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!IsFloat32Array(info[1])) {
+    Napi::TypeError::New(env, "right must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[2].IsNumber()) {
+    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -224,8 +230,7 @@ Napi::Value SonareWrap::MasteringRepairDeclickStereo(const Napi::CallbackInfo& i
   auto left = info[0].As<Napi::Float32Array>();
   auto right = info[1].As<Napi::Float32Array>();
   if (left.ElementLength() != right.ElementLength()) {
-    Napi::RangeError::New(env,
-                          "masteringRepairDeclickStereo: left and right must have the same length")
+    Napi::RangeError::New(env, "left and right must have the same length")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
@@ -278,14 +283,13 @@ Napi::Value SonareWrap::MasteringRepairDeclip(const Napi::CallbackInfo& info) {
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
-  const int sr = node_narrow_int(env, info[1], "sr");
+  const int sr = node_narrow_int(env, info[1], "sampleRate");
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
-  sonare::validate_offline_audio_input("declip", "samples", typed.Data(), typed.ElementLength(),
-                                       sr);
+  sonare::validate_offline_audio_input(nullptr, "samples", typed.Data(), typed.ElementLength(), sr);
   sonare::mastering::repair::DeclipConfig config;
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object options = info[2].As<Napi::Object>();
-    RefuseUnknownKeys(options, "masteringRepairDeclip",
+    RefuseUnknownKeys(options, "options",
                       {"clipThresholdDb", "lpcOrder", "iterations", "lpcBlend"});
     config.clip_threshold = DbfsAsLinearProperty(options, "clipThresholdDb", config.clip_threshold);
     config.lpc_order = IntProperty(options, "lpcOrder", config.lpc_order);
@@ -301,11 +305,16 @@ Napi::Value SonareWrap::MasteringRepairDeclip(const Napi::CallbackInfo& info) {
 
 Napi::Value SonareWrap::MasteringRepairDeclipStereo(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (info.Length() < 3 || !IsFloat32Array(info[0]) || !IsFloat32Array(info[1]) ||
-      !info[2].IsNumber()) {
-    Napi::TypeError::New(env,
-                         "Expected (Float32Array left, Float32Array right, sampleRate, options?)")
-        .ThrowAsJavaScriptException();
+  if (!IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "left must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!IsFloat32Array(info[1])) {
+    Napi::TypeError::New(env, "right must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[2].IsNumber()) {
+    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -313,8 +322,7 @@ Napi::Value SonareWrap::MasteringRepairDeclipStereo(const Napi::CallbackInfo& in
   auto left = info[0].As<Napi::Float32Array>();
   auto right = info[1].As<Napi::Float32Array>();
   if (left.ElementLength() != right.ElementLength()) {
-    Napi::RangeError::New(env,
-                          "masteringRepairDeclipStereo: left and right must have the same length")
+    Napi::RangeError::New(env, "left and right must have the same length")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
@@ -323,8 +331,7 @@ Napi::Value SonareWrap::MasteringRepairDeclipStereo(const Napi::CallbackInfo& in
   // any options key overrides a field.
   SonareDeclipConfig config = kDeclipConfigDefaults;
   if (info.Length() >= 4 && info[3].IsObject()) {
-    config =
-        read_declip_config_c(info[3].As<Napi::Object>(), config, "masteringRepairDeclipStereo");
+    config = read_declip_config_c(info[3].As<Napi::Object>(), config);
   }
   SonareDeclipStereoResult result{};
   SonareError err = sonare_mastering_repair_declip_stereo(
@@ -351,8 +358,7 @@ Napi::Value SonareWrap::MasteringRepairDetectClipping(const Napi::CallbackInfo& 
   SonareDeclipConfig config = kDeclipConfigDefaults;
   const bool has_options = info.Length() >= 3 && info[2].IsObject();
   if (has_options) {
-    config =
-        read_declip_config_c(info[2].As<Napi::Object>(), config, "masteringRepairDetectClipping");
+    config = read_declip_config_c(info[2].As<Napi::Object>(), config);
   }
   SonareClipDetection detection{};
   SonareError err = sonare_mastering_repair_detect_clipping(
@@ -371,10 +377,9 @@ Napi::Value SonareWrap::MasteringRepairDecrackle(const Napi::CallbackInfo& info)
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
-  const int sr = node_narrow_int(env, info[1], "sr");
+  const int sr = node_narrow_int(env, info[1], "sampleRate");
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
-  sonare::validate_offline_audio_input("decrackle", "samples", typed.Data(), typed.ElementLength(),
-                                       sr);
+  sonare::validate_offline_audio_input(nullptr, "samples", typed.Data(), typed.ElementLength(), sr);
   sonare::mastering::repair::DecrackleConfig config;
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object options = info[2].As<Napi::Object>();
@@ -391,11 +396,16 @@ Napi::Value SonareWrap::MasteringRepairDecrackle(const Napi::CallbackInfo& info)
 
 Napi::Value SonareWrap::MasteringRepairDecrackleStereo(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (info.Length() < 3 || !IsFloat32Array(info[0]) || !IsFloat32Array(info[1]) ||
-      !info[2].IsNumber()) {
-    Napi::TypeError::New(env,
-                         "Expected (Float32Array left, Float32Array right, sampleRate, options?)")
-        .ThrowAsJavaScriptException();
+  if (!IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "left must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!IsFloat32Array(info[1])) {
+    Napi::TypeError::New(env, "right must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[2].IsNumber()) {
+    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -403,8 +413,7 @@ Napi::Value SonareWrap::MasteringRepairDecrackleStereo(const Napi::CallbackInfo&
   auto left = info[0].As<Napi::Float32Array>();
   auto right = info[1].As<Napi::Float32Array>();
   if (left.ElementLength() != right.ElementLength()) {
-    Napi::RangeError::New(
-        env, "masteringRepairDecrackleStereo: left and right must have the same length")
+    Napi::RangeError::New(env, "left and right must have the same length")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }

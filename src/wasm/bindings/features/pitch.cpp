@@ -31,7 +31,7 @@ val pitch_result_to_val(const PitchResult& result) {
 }
 
 template <typename PitchFn>
-val run_pitch_track(const char* fn, const char* name, val samples, const val& sample_rate_val,
+val run_pitch_track(const char* name, val samples, const val& sample_rate_val,
                     const val& frame_length_val, const val& hop_length_val, const val& fmin_val,
                     const val& fmax_val, const val& threshold_val, bool fill_na, PitchFn pitch) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
@@ -40,7 +40,7 @@ val run_pitch_track(const char* fn, const char* name, val samples, const val& sa
   const float fmin = checkedFloatFromVal(fmin_val, "fmin");
   const float fmax = checkedFloatFromVal(fmax_val, "fmax");
   const float threshold = checkedFloatFromVal(threshold_val, "threshold");
-  Audio audio = loadValidatedAudio(fn, name, samples, sample_rate);
+  Audio audio = loadValidatedAudio(name, samples, sample_rate);
 
   PitchConfig config;
   config.frame_length = frame_length;
@@ -59,8 +59,8 @@ val run_pitch_track(const char* fn, const char* name, val samples, const val& sa
 val js_pitch_yin(val samples, const val& sample_rate_val, const val& frame_length_val,
                  const val& hop_length_val, const val& fmin_val, const val& fmax_val,
                  const val& threshold_val) {
-  return run_pitch_track("yin_track", "samples", samples, sample_rate_val, frame_length_val,
-                         hop_length_val, fmin_val, fmax_val, threshold_val,
+  return run_pitch_track("samples", samples, sample_rate_val, frame_length_val, hop_length_val,
+                         fmin_val, fmax_val, threshold_val,
                          /*fill_na=*/false, [](const Audio& audio, const PitchConfig& config) {
                            return yin_track(audio, config);
                          });
@@ -70,8 +70,8 @@ val js_pitch_pyin(val samples, const val& sample_rate_val, const val& frame_leng
                   const val& hop_length_val, const val& fmin_val, const val& fmax_val,
                   const val& threshold_val, bool fill_na) {
   return run_pitch_track(
-      "pyin", "samples", samples, sample_rate_val, frame_length_val, hop_length_val, fmin_val,
-      fmax_val, threshold_val, fill_na,
+      "samples", samples, sample_rate_val, frame_length_val, hop_length_val, fmin_val, fmax_val,
+      threshold_val, fill_na,
       [](const Audio& audio, const PitchConfig& config) { return pyin(audio, config); });
 }
 
@@ -82,7 +82,7 @@ val js_note_segments(val f0_hz, val voiced_prob, val voiced_flags, const val& fr
   const bool has_prob = !voiced_prob.isUndefined() && !voiced_prob.isNull();
   const bool has_flags = !voiced_flags.isUndefined() && !voiced_flags.isNull();
   if (has_prob == has_flags) {
-    throw WasmRangeError("noteSegments: exactly one of voicedProb and voicedFlags must be given");
+    throw WasmRangeError("exactly one of voicedProb and voicedFlags must be given");
   }
   std::vector<float> f0 = float32ArrayToVector(f0_hz);
   std::vector<float> probabilities;
@@ -90,12 +90,12 @@ val js_note_segments(val f0_hz, val voiced_prob, val voiced_flags, const val& fr
   if (has_prob) {
     probabilities = float32ArrayToVector(voiced_prob);
     if (probabilities.size() != f0.size()) {
-      throw WasmRangeError("noteSegments: voicedProb must have the same length as f0Hz");
+      throw WasmRangeError("voicedProb must have the same length as f0Hz");
     }
   } else {
     const std::vector<uint8_t> raw = uint8ArrayToVector(voiced_flags);
     if (raw.size() != f0.size()) {
-      throw WasmRangeError("noteSegments: voicedFlags must have the same length as f0Hz");
+      throw WasmRangeError("voicedFlags must have the same length as f0Hz");
     }
     flags.assign(raw.begin(), raw.end());
   }
@@ -111,7 +111,7 @@ val js_note_segments(val f0_hz, val voiced_prob, val voiced_flags, const val& fr
       f0.data(), has_prob ? probabilities.data() : nullptr, has_flags ? flags.data() : nullptr,
       f0.size(), frame_rate, &config, &result);
   if (error != SONARE_OK) {
-    throwCodedCError(error, "noteSegments");
+    throwCodedCError(error);
   }
 
   val out = val::array();
@@ -148,7 +148,7 @@ float js_estimate_tuning(val samples, const val& sample_rate_val, const val& n_f
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   const int bins_per_octave = checkedIntFromVal(bins_per_octave_val, "binsPerOctave");
   const float resolution = checkedFloatFromVal(resolution_val, "resolution");
-  Audio audio = loadValidatedAudio("estimate_tuning", "samples", samples, sample_rate);
+  Audio audio = loadValidatedAudio("samples", samples, sample_rate);
   return estimate_tuning(audio, n_fft, hop_length, resolution, bins_per_octave);
 }
 
@@ -160,7 +160,7 @@ float js_tuning_to_reference_hz(const val& tuning_val, const val& a4_val) {
   float hz = 0.0f;
   const SonareError error = sonare_tuning_to_reference_hz(tuning, a4, &hz);
   if (error != SONARE_OK) {
-    throwCodedCError(error, "tuningToReferenceHz");
+    throwCodedCError(error);
   }
   return hz;
 }
@@ -171,7 +171,7 @@ float js_reference_hz_to_tuning(const val& hz_val, const val& a4_val) {
   float tuning = 0.0f;
   const SonareError error = sonare_reference_hz_to_tuning(hz, a4, &tuning);
   if (error != SONARE_OK) {
-    throwCodedCError(error, "referenceHzToTuning");
+    throwCodedCError(error);
   }
   return tuning;
 }
@@ -185,7 +185,7 @@ val js_piptrack(val samples, const val& sample_rate_val, const val& n_fft_val,
   const float fmin = checkedFloatFromVal(fmin_val, "fmin");
   const float fmax = checkedFloatFromVal(fmax_val, "fmax");
   const float threshold = checkedFloatFromVal(threshold_val, "threshold");
-  const Audio audio = loadValidatedAudio("piptrack", "samples", samples, sample_rate);
+  const Audio audio = loadValidatedAudio("samples", samples, sample_rate);
   const PiptrackResult result = piptrack(audio, n_fft, hop_length, fmin, fmax, threshold);
   val out = val::object();
   out.set("nBins", result.n_bins);

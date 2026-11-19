@@ -1,4 +1,5 @@
 import { ErrorCode, SonareError } from './errors.js';
+import { entryClass } from './internal/entry.js';
 import { midiFxConfigJson } from './internal/midi_fx_config.js';
 import { mixSceneJsonToNative } from './internal/mix_scene.js';
 import { deinterleave, interleavePlanar } from './internal/planar.js';
@@ -491,6 +492,7 @@ let createTimeline: (native: InstanceType<typeof addon.ProjectTimeline>) => Proj
  * garbage-collected, so release it with {@link destroy} (or `using`). It cannot
  * be constructed directly.
  */
+@entryClass('ProjectTimeline')
 export class ProjectTimeline {
   private disposed = false;
 
@@ -550,6 +552,7 @@ export class ProjectTimeline {
  * project.destroy();
  * ```
  */
+@entryClass('Project')
 export class Project {
   private readonly handle: NativeProject;
 

@@ -130,7 +130,7 @@ describe('detectOnsets reads delta on both surfaces', () => {
       const label = JSON.stringify(value);
       const caught = capture(() => nodeOnsets({ delta: value }));
       expect(caught, `delta ${label}`).toBeInstanceOf(TypeError);
-      expect((caught as TypeError).message).toBe('delta must be a number');
+      expect((caught as TypeError).message).toBe('detectOnsets: delta must be a number');
     }
   });
 
@@ -211,7 +211,9 @@ describe('the room measurement volume is read one way on both surfaces', () => {
     for (const value of DISCRIMINATING) {
       const caught = capture(() => wasmLateDelayMs(value));
       expect(caught, JSON.stringify(value)).toBeInstanceOf(Error);
-      expect((caught as Error).message).toBe('volume must be a number');
+      expect((caught as Error).message).toBe(
+        'masteringRepairDereverbConfigForRoom: volume must be a number',
+      );
     }
     // Non-vacuity: the omitted call still succeeds and still differs from a
     // measured one, so the refusals above are about the value and not the call.

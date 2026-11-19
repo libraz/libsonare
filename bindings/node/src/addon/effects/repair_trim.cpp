@@ -58,12 +58,11 @@ Napi::Object EmitTrimReport(Napi::Env env, const T& report) {
 ///   above the core's padding bound, where it reads as an out-of-range
 ///   padding rather than as the negative the caller wrote. Refusing it by name
 ///   here reports what was actually wrong, and the false return is why this
-///   reports success rather than returning the config. @p entry names the caller in the
-///   unknown-key refusal.
+///   reports success rather than returning the config.
 /// @return false with a JS exception pending; the caller must bail.
 bool ReadTrimSilenceConfig(Napi::Env env, const Napi::Object& options,
-                           SonareTrimSilenceConfig* config, const char* entry) {
-  RefuseUnknownKeys(options, entry,
+                           SonareTrimSilenceConfig* config) {
+  RefuseUnknownKeys(options, "options",
                     {"thresholdDb", "paddingSamples", "mode", "gateLufs", "windowMs"});
   config->threshold_db = FiniteFloatProperty(options, "thresholdDb", config->threshold_db);
   if (!NonNegativeSizeTProperty(env, options, "paddingSamples", config->padding_samples,
@@ -90,21 +89,21 @@ Napi::Value SonareWrap::MasteringRepairTrimSilence(const Napi::CallbackInfo& inf
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
-  const int sr = node_narrow_int(env, info[1], "sr");
+  const int sr = node_narrow_int(env, info[1], "sampleRate");
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
-  sonare::validate_offline_audio_input("trim_silence", "samples", typed.Data(),
-                                       typed.ElementLength(), sr);
+  sonare::validate_offline_audio_input(nullptr, "samples", typed.Data(), typed.ElementLength(), sr);
   sonare::mastering::repair::TrimSilenceConfig config;
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object options = info[2].As<Napi::Object>();
-    RefuseUnknownKeys(options, "masteringRepairTrimSilence",
+    RefuseUnknownKeys(options, "options",
                       {"thresholdDb", "paddingSamples", "mode", "gateLufs", "windowMs"});
     config.threshold = DbfsAsLinearProperty(options, "thresholdDb", config.threshold);
     if (options.Has("paddingSamples")) {
       const int padding_samples =
           IntProperty(options, "paddingSamples", static_cast<int>(config.padding_samples));
       if (padding_samples < 0) {
-        Napi::RangeError::New(env, "paddingSamples must be non-negative")
+        Napi::RangeError::New(
+            env, "paddingSamples must be an integer in [0, " + node_int_max_text() + "]")
             .ThrowAsJavaScriptException();
         return env.Undefined();
       }
@@ -123,11 +122,16 @@ Napi::Value SonareWrap::MasteringRepairTrimSilence(const Napi::CallbackInfo& inf
 
 Napi::Value SonareWrap::MasteringRepairTrimSilenceStereo(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (info.Length() < 3 || !IsFloat32Array(info[0]) || !IsFloat32Array(info[1]) ||
-      !info[2].IsNumber()) {
-    Napi::TypeError::New(env,
-                         "Expected (Float32Array left, Float32Array right, sampleRate, options?)")
-        .ThrowAsJavaScriptException();
+  if (!IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "left must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!IsFloat32Array(info[1])) {
+    Napi::TypeError::New(env, "right must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[2].IsNumber()) {
+    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -135,17 +139,14 @@ Napi::Value SonareWrap::MasteringRepairTrimSilenceStereo(const Napi::CallbackInf
   auto left = info[0].As<Napi::Float32Array>();
   auto right = info[1].As<Napi::Float32Array>();
   if (left.ElementLength() != right.ElementLength()) {
-    Napi::RangeError::New(env,
-                          "masteringRepairTrimSilenceStereo: left and right must have the same "
-                          "length")
+    Napi::RangeError::New(env, "left and right must have the same length")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
   const int sr = node_narrow_int(env, info[2], "sampleRate");
   SonareTrimSilenceConfig config = kTrimSilenceConfigDefaults;
   if (info.Length() >= 4 && info[3].IsObject()) {
-    if (!ReadTrimSilenceConfig(env, info[3].As<Napi::Object>(), &config,
-                               "masteringRepairTrimSilenceStereo")) {
+    if (!ReadTrimSilenceConfig(env, info[3].As<Napi::Object>(), &config)) {
       return env.Undefined();
     }
   }
@@ -176,8 +177,7 @@ Napi::Value SonareWrap::MasteringRepairDetectTrimRange(const Napi::CallbackInfo&
   const int sr = node_narrow_int(env, info[1], "sampleRate");
   SonareTrimSilenceConfig config = kTrimSilenceConfigDefaults;
   const bool has_options = info.Length() >= 3 && info[2].IsObject();
-  if (has_options && !ReadTrimSilenceConfig(env, info[2].As<Napi::Object>(), &config,
-                                            "masteringRepairDetectTrimRange")) {
+  if (has_options && !ReadTrimSilenceConfig(env, info[2].As<Napi::Object>(), &config)) {
     return env.Undefined();
   }
   SonareTrimRange range{};
@@ -193,11 +193,16 @@ Napi::Value SonareWrap::MasteringRepairDetectTrimRange(const Napi::CallbackInfo&
 
 Napi::Value SonareWrap::MasteringRepairDetectTrimRangeStereo(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (info.Length() < 3 || !IsFloat32Array(info[0]) || !IsFloat32Array(info[1]) ||
-      !info[2].IsNumber()) {
-    Napi::TypeError::New(env,
-                         "Expected (Float32Array left, Float32Array right, sampleRate, options?)")
-        .ThrowAsJavaScriptException();
+  if (!IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "left must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!IsFloat32Array(info[1])) {
+    Napi::TypeError::New(env, "right must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[2].IsNumber()) {
+    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -205,16 +210,14 @@ Napi::Value SonareWrap::MasteringRepairDetectTrimRangeStereo(const Napi::Callbac
   auto left = info[0].As<Napi::Float32Array>();
   auto right = info[1].As<Napi::Float32Array>();
   if (left.ElementLength() != right.ElementLength()) {
-    Napi::RangeError::New(
-        env, "masteringRepairDetectTrimRangeStereo: left and right must have the same length")
+    Napi::RangeError::New(env, "left and right must have the same length")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
   const int sr = node_narrow_int(env, info[2], "sampleRate");
   SonareTrimSilenceConfig config = kTrimSilenceConfigDefaults;
   const bool has_options = info.Length() >= 4 && info[3].IsObject();
-  if (has_options && !ReadTrimSilenceConfig(env, info[3].As<Napi::Object>(), &config,
-                                            "masteringRepairDetectTrimRangeStereo")) {
+  if (has_options && !ReadTrimSilenceConfig(env, info[3].As<Napi::Object>(), &config)) {
     return env.Undefined();
   }
   SonareTrimRange range{};

@@ -10,6 +10,7 @@ import type {
   Sf2ProgramStatus,
   SynthPatch,
 } from './instrument_types.js';
+import { entryClass } from './internal/entry.js';
 import { assertHandleLive } from './internal/handle_guard.js';
 import { midiFxConfigJson } from './internal/midi_fx_config.js';
 import { mixSceneJsonToNative } from './internal/mix_scene.js';
@@ -246,6 +247,7 @@ const timelineToken = Symbol('ProjectTimeline');
  * called right afterwards. The embind handle is not garbage-collected; release
  * it when no further apply needs it.
  */
+@entryClass('ProjectTimeline')
 export class ProjectTimeline {
   private native: WasmProjectTimeline | null;
 
@@ -305,6 +307,7 @@ export class ProjectTimeline {
  * }
  * ```
  */
+@entryClass('Project')
 export class Project {
   private nativeHandle: WasmProject;
 

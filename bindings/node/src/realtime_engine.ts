@@ -1,6 +1,7 @@
 import type { ClipPageSampleRequest } from './clip_page_provider.js';
 import { ErrorCode, SonareError } from './errors.js';
 import { nativeClipPageProviderOf } from './internal/clip_page_native.js';
+import { entryClass } from './internal/entry.js';
 import { assignMarkerIds } from './internal/marker_ids.js';
 import { midiFxConfigJson } from './internal/midi_fx_config.js';
 import { mixSceneBusToNative, mixSceneStripToNative } from './internal/mix_scene.js';
@@ -742,6 +743,7 @@ function requireName(fnName: string, value: unknown, argName: string): string {
  * `TypeError` / `RangeError`; every other failure is a coded {@link SonareError}.
  * A full command queue throws `SonareError` with `OutOfMemory`.
  */
+@entryClass('RealtimeEngine', ['process', 'processWithMonitor'])
 export class RealtimeEngine {
   private native: InstanceType<typeof addon.RealtimeEngine>;
   private disposed = false;

@@ -1,3 +1,4 @@
+import { entryClass } from './internal/entry.js';
 import { refuseSampleDescOrdinals } from './internal/synth_tokens.js';
 import { addon } from './native.js';
 import type { SampleDesc, SampleZoneDesc } from './types.js';
@@ -35,6 +36,7 @@ type NativeSampleBank = InstanceType<typeof addon.SampleBank>;
  * );
  * ```
  */
+@entryClass('SampleBank')
 export class SampleBank {
   private native: NativeSampleBank;
   private disposed = false;

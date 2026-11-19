@@ -135,7 +135,7 @@ std::shared_ptr<WasmClipPageProvider> createClipPageProvider(const val& num_chan
                                                              int64_t page_frames) {
   const int num_channels = checkedIntFromVal(num_channels_val, "numChannels");
   if (!sonare::engine::validate_clip_page_dimensions(num_channels, num_samples, page_frames)) {
-    throw WasmRangeError("clip page provider dimensions must be positive");
+    throw WasmRangeError("clip page provider dimensions must be integers of at least 1");
   }
   return std::make_shared<WasmClipPageProvider>(num_channels, num_samples, page_frames);
 }
@@ -221,12 +221,12 @@ RealtimeEngineWasm::BuiltClip RealtimeEngineWasm::buildClipSchedule(val clip_val
   schedule.loop = boolProperty(clip_val, "loop", schedule.loop);
   schedule.gain = floatProperty(clip_val, "gain", 1.0f);
   if (!(std::isfinite(schedule.gain) && schedule.gain >= 0.0f)) {
-    throw WasmRangeError("clip gain must be a finite non-negative number");
+    throw WasmRangeError("clip gain must be finite and at least 0");
   }
   schedule.fade_in_samples = int64Property(clip_val, "fadeInSamples", 0);
   schedule.fade_out_samples = int64Property(clip_val, "fadeOutSamples", 0);
   if (schedule.fade_in_samples < 0 || schedule.fade_out_samples < 0) {
-    throw WasmRangeError("clip fade lengths must be non-negative");
+    throw WasmRangeError("clip fade lengths must be an integer of at least 0");
   }
   if (hasProperty(clip_val, "warpMode")) {
     val mode_val = objectProperty(clip_val, "warpMode");

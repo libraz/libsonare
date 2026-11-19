@@ -1,3 +1,4 @@
+import { entryClass, withEntry } from './internal/entry.js';
 import { addon } from './native.js';
 import type {
   RealtimeVoiceChangerConfig,
@@ -189,6 +190,14 @@ function deinterleavePlanes(data: Float32Array, numChannels: number): Float32Arr
 const CONSTRUCTOR_KEYS: readonly string[] = ['sampleRate', 'maxBlockSize', 'numChannels', 'config'];
 
 /** Realtime voice-changer chain: pitch, formant, EQ, dynamics, harmony, vocoder, character and space stages over mono or stereo blocks. Call {@link RealtimeVoiceChanger.destroy} when done. */
+@entryClass('RealtimeVoiceChanger', [
+  'processInterleavedInto',
+  'processInterleavedWithCarrierInto',
+  'processMono',
+  'processMonoInto',
+  'processMonoWithCarrier',
+  'processMonoWithCarrierInto',
+])
 export class RealtimeVoiceChanger {
   private native: InstanceType<typeof addon.RealtimeVoiceChanger>;
   private disposed = false;
@@ -511,7 +520,9 @@ export function voiceChangeRealtime(request: VoiceChangeRealtimeRequest): Float3
   }
   assertAudioChannels(fnName, req.channels, req.sampleRate, req);
   const planes = assertPlanes(fnName, req.channels);
-  const native = nativeVoiceConfig(fnName, req.config ?? 'neutralMonitor');
+  const native = withEntry('voiceChangeRealtime', () =>
+    nativeVoiceConfig(fnName, req.config ?? 'neutralMonitor'),
+  );
   const out = addon.voiceChangeRealtime(
     interleavePlanes(planes),
     req.sampleRate,

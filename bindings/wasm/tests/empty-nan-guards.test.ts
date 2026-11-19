@@ -138,7 +138,9 @@ describe('NaN/Inf guards (WASM)', () => {
     expect(() => plp({ onsetEnvelope: withNaN(), sampleRate: SR })).toThrow();
     // The cyclic and ratio tempogram wrappers previously skipped finiteness
     // validation and silently returned NaN-filled arrays (unlike the C ABI).
-    expect(() => cyclicTempogram({ onsetEnvelope: withNaN(), sampleRate: SR })).toThrow(/NaN|Inf/);
+    expect(() => cyclicTempogram({ onsetEnvelope: withNaN(), sampleRate: SR })).toThrow(
+      /^cyclicTempogram: onsetEnvelope contains a non-finite value at index \d+$/,
+    );
     expect(() =>
       tempogramRatio({ tempogram: { data: withNaN(), rows: 64, cols: 16 }, sampleRate: SR }),
     ).toThrow(/non-finite/);

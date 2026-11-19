@@ -103,7 +103,7 @@ describe('chordSymbolFromAnalysis', () => {
 
   it('refuses an unrecognised value with a RangeError naming the field', () => {
     expect(() => chordSymbolFromAnalysis(chord('lydian'))).toThrowError(
-      new RangeError("chord.quality is not a chord quality: 'lydian'"),
+      new RangeError("chordSymbolFromAnalysis: chord.quality is not a chord quality: 'lydian'"),
     );
     expect(() => chordSymbolFromAnalysis(byOrdinal(25))).toThrow(/chord\.quality/);
     expect(() => chordSymbolFromAnalysis(byOrdinal(-1))).toThrow(/chord\.quality/);

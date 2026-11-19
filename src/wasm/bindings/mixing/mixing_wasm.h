@@ -279,9 +279,9 @@ class MixerWasm {
   // Growing keeps existing per-strip buffers, so JS views of earlier strips stay valid.
   void ensureScratchBuffers();
 
-  static void checkStripError(SonareError err, const char* what);
+  static void checkStripError(SonareError err);
   // Like checkStripError, but a refused pan or width value (INVALID_PARAMETER) is a RangeError.
-  static void checkStripValueError(SonareError err, const char* what);
+  static void checkStripValueError(SonareError err);
 
   SonareMixer* mixer_ = nullptr;
   int sample_rate_ = 48000;

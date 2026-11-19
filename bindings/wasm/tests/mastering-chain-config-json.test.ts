@@ -86,7 +86,7 @@ describe('masteringChainConfigFromJson', () => {
   });
 
   it.each([
-    ['malformed JSON', '{', 'expected object key string at byte 1'],
+    ['malformed JSON', '{', 'masteringChainConfigFromJson: expected object key string at byte 1'],
     [
       'version 1',
       '{"version":1,"params":{"loudness.targetLufs":-9}}',

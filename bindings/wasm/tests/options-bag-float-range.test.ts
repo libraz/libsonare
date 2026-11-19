@@ -78,9 +78,9 @@ const capture = (run: () => unknown): unknown => {
 };
 
 /** Asserts the caught value is the reader's out-of-float-range refusal for `key`. */
-function expectRangeRefusal(caught: unknown, key: string): Error {
+function expectRangeRefusal(caught: unknown, entry: string, key: string): Error {
   const error = expectArgumentRefusal(caught);
-  expect(error.message).toBe(`${key} ${RANGE_MESSAGE}`);
+  expect(error.message).toBe(`${entry}: ${key} ${RANGE_MESSAGE}`);
   return error;
 }
 
@@ -119,6 +119,7 @@ describe('floatOption refuses a finite value wider than a float', () => {
     for (const value of PAST_FLOAT_MAX) {
       expectRangeRefusal(
         capture(() => configForRoom(value)),
+        'masteringRepairDereverbConfigForRoom',
         'volume',
       );
     }
@@ -152,7 +153,7 @@ describe('floatOption refuses a finite value wider than a float', () => {
     for (const value of WRONG_TYPES) {
       const caught = capture(() => configForRoom(value));
       const error = expectArgumentRefusal(caught, TypeError, `volume ${JSON.stringify(value)}`);
-      expect(error.message).toBe('volume must be a number');
+      expect(error.message).toBe('masteringRepairDereverbConfigForRoom: volume must be a number');
     }
   });
 });
@@ -168,6 +169,7 @@ describe('floatProperty refuses a finite value wider than a float', () => {
     for (const value of PAST_FLOAT_MAX) {
       expectRangeRefusal(
         capture(() => pcenWith(value)),
+        'pcen',
         'gain',
       );
     }
@@ -198,6 +200,7 @@ describe('floatProperty refuses a finite value wider than a float', () => {
     for (const value of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
       expectRangeRefusal(
         capture(() => pcenWith(value)),
+        'pcen',
         'gain',
       );
     }
@@ -209,7 +212,7 @@ describe('floatProperty refuses a finite value wider than a float', () => {
     for (const value of ['0.8', [0.8], true, {}]) {
       const caught = capture(() => pcenWith(value));
       const error = expectArgumentRefusal(caught, TypeError, `gain ${JSON.stringify(value)}`);
-      expect(error.message).toBe('gain must be a number');
+      expect(error.message).toBe('pcen: gain must be a number');
     }
   });
 });
@@ -218,15 +221,17 @@ describe('both readers answer 1e300 the same way', () => {
   it('refuses it by the same class and the same message, naming each field', () => {
     const fromOption = expectRangeRefusal(
       capture(() => configForRoom(1e300)),
+      'masteringRepairDereverbConfigForRoom',
       'volume',
     );
     const fromProperty = expectRangeRefusal(
       capture(() => pcenWith(1e300)),
+      'pcen',
       'gain',
     );
     expect(fromOption.constructor).toBe(fromProperty.constructor);
-    expect(fromOption.message.replace('volume', '<key>')).toBe(
-      fromProperty.message.replace('gain', '<key>'),
-    );
+    const wording = (error: Error, key: string) =>
+      error.message.replace(/^\w+: /, '').replace(key, '<key>');
+    expect(wording(fromOption, 'volume')).toBe(wording(fromProperty, 'gain'));
   });
 });

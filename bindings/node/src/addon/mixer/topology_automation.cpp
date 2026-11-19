@@ -12,9 +12,8 @@ Napi::Value MixerWrap::AddStrip(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
-  if (info.Length() < 1 || !info[0].IsString()) {
-    Napi::TypeError::New(env, "Expected (id: string, metering?: object)")
-        .ThrowAsJavaScriptException();
+  if (!info[0].IsString()) {
+    Napi::TypeError::New(env, "id must be a string").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   const std::string id = node_narrow_string(env, info[0], "id");
@@ -24,8 +23,7 @@ Napi::Value MixerWrap::AddStrip(const Napi::CallbackInfo& info) {
   Napi::Object metering = Napi::Object::New(env);
   if (info.Length() >= 2 && !info[1].IsUndefined() && !info[1].IsNull()) {
     if (!info[1].IsObject() || info[1].IsArray()) {
-      Napi::TypeError::New(env, "addStrip: metering must be a plain object")
-          .ThrowAsJavaScriptException();
+      Napi::TypeError::New(env, "metering must be a plain object").ThrowAsJavaScriptException();
       return env.Undefined();
     }
     metering = info[1].As<Napi::Object>();
@@ -50,8 +48,8 @@ Napi::Value MixerWrap::AddBus(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
-  if (info.Length() < 1 || !info[0].IsString()) {
-    Napi::TypeError::New(env, "Expected (id: string, role?: string)").ThrowAsJavaScriptException();
+  if (!info[0].IsString()) {
+    Napi::TypeError::New(env, "id must be a string").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   const std::string id = node_narrow_string(env, info[0], "id");
@@ -69,9 +67,12 @@ Napi::Value MixerWrap::SetOutputBus(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
-  if (info.Length() < 2 || !info[0].IsString() || !info[1].IsString()) {
-    Napi::TypeError::New(env, "Expected (sourceId: string, busId: string)")
-        .ThrowAsJavaScriptException();
+  if (!info[0].IsString()) {
+    Napi::TypeError::New(env, "sourceId must be a string").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[1].IsString()) {
+    Napi::TypeError::New(env, "busId must be a string").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   const std::string source_id = node_narrow_string(env, info[0], "sourceId");
@@ -89,8 +90,8 @@ Napi::Value MixerWrap::RemoveBus(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
-  if (info.Length() < 1 || !info[0].IsString()) {
-    Napi::TypeError::New(env, "Expected (id: string)").ThrowAsJavaScriptException();
+  if (!info[0].IsString()) {
+    Napi::TypeError::New(env, "id must be a string").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   const std::string id = node_narrow_string(env, info[0], "id");
@@ -120,9 +121,12 @@ Napi::Value MixerWrap::AddVcaGroup(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
-  if (info.Length() < 2 || !info[0].IsString() || !info[1].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (id: string, gainDb: number, members?: string[])")
-        .ThrowAsJavaScriptException();
+  if (!info[0].IsString()) {
+    Napi::TypeError::New(env, "id must be a string").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[1].IsNumber()) {
+    Napi::TypeError::New(env, "gainDb must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   const std::string id = node_narrow_string(env, info[0], "id");
@@ -161,8 +165,8 @@ Napi::Value MixerWrap::RemoveVcaGroup(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
-  if (info.Length() < 1 || !info[0].IsString()) {
-    Napi::TypeError::New(env, "Expected (id: string)").ThrowAsJavaScriptException();
+  if (!info[0].IsString()) {
+    Napi::TypeError::New(env, "id must be a string").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   const std::string id = node_narrow_string(env, info[0], "id");
@@ -178,8 +182,12 @@ Napi::Value MixerWrap::SetVcaGroupGainDb(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
-  if (info.Length() < 2 || !info[0].IsString() || !info[1].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (id: string, gainDb: number)").ThrowAsJavaScriptException();
+  if (!info[0].IsString()) {
+    Napi::TypeError::New(env, "id must be a string").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[1].IsNumber()) {
+    Napi::TypeError::New(env, "gainDb must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   const std::string id = node_narrow_string(env, info[0], "id");
@@ -196,9 +204,12 @@ Napi::Value MixerWrap::SetVcaGroupMembers(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
-  if (info.Length() < 2 || !info[0].IsString() || !info[1].IsArray()) {
-    Napi::TypeError::New(env, "Expected (id: string, members: string[])")
-        .ThrowAsJavaScriptException();
+  if (!info[0].IsString()) {
+    Napi::TypeError::New(env, "id must be a string").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[1].IsArray()) {
+    Napi::TypeError::New(env, "members must be an array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   const std::string id = node_narrow_string(env, info[0], "id");
@@ -243,13 +254,16 @@ Napi::Value MixerWrap::ScheduleFaderAutomation(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
-  if (info.Length() < 3 || !info[1].IsNumber() || !info[2].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (strip, samplePos, faderDb, curve?)")
-        .ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
   SonareStrip* strip = ResolveStrip(info, info[0]);
   if (strip == nullptr) {
+    return env.Undefined();
+  }
+  if (!info[1].IsNumber()) {
+    Napi::TypeError::New(env, "samplePos must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[2].IsNumber()) {
+    Napi::TypeError::New(env, "faderDb must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   const int64_t sample_pos = sonare_node::node_narrow_int64(env, info[1], "samplePos");
@@ -268,13 +282,16 @@ Napi::Value MixerWrap::SchedulePanAutomation(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
-  if (info.Length() < 3 || !info[1].IsNumber() || !info[2].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (strip, samplePos, pan, curve?)")
-        .ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
   SonareStrip* strip = ResolveStrip(info, info[0]);
   if (strip == nullptr) {
+    return env.Undefined();
+  }
+  if (!info[1].IsNumber()) {
+    Napi::TypeError::New(env, "samplePos must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[2].IsNumber()) {
+    Napi::TypeError::New(env, "pan must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   const int64_t sample_pos = sonare_node::node_narrow_int64(env, info[1], "samplePos");
@@ -293,13 +310,16 @@ Napi::Value MixerWrap::ScheduleWidthAutomation(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
-  if (info.Length() < 3 || !info[1].IsNumber() || !info[2].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (strip, samplePos, width, curve?)")
-        .ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
   SonareStrip* strip = ResolveStrip(info, info[0]);
   if (strip == nullptr) {
+    return env.Undefined();
+  }
+  if (!info[1].IsNumber()) {
+    Napi::TypeError::New(env, "samplePos must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[2].IsNumber()) {
+    Napi::TypeError::New(env, "width must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   const int64_t sample_pos = sonare_node::node_narrow_int64(env, info[1], "samplePos");
@@ -318,13 +338,20 @@ Napi::Value MixerWrap::ScheduleSendAutomation(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
-  if (info.Length() < 4 || !info[1].IsNumber() || !info[2].IsNumber() || !info[3].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (strip, sendIndex, samplePos, db, curve?)")
-        .ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
   SonareStrip* strip = ResolveStrip(info, info[0]);
   if (strip == nullptr) {
+    return env.Undefined();
+  }
+  if (!info[1].IsNumber()) {
+    Napi::TypeError::New(env, "sendIndex must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[2].IsNumber()) {
+    Napi::TypeError::New(env, "samplePos must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[3].IsNumber()) {
+    Napi::TypeError::New(env, "db must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   const size_t send_index = sonare_node::node_narrow_uint32(env, info[1], "sendIndex");

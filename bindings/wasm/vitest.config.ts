@@ -1,7 +1,9 @@
 import path from 'node:path';
 import { defineConfig } from 'vitest/config';
+import { lowerDecorators } from './scripts/vitest-decorators.mjs';
 
 export default defineConfig({
+  plugins: [lowerDecorators()],
   resolve: {
     alias: {
       './sonare.js': path.resolve(import.meta.dirname, 'dist/sonare.js'),

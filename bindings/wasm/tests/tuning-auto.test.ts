@@ -178,6 +178,6 @@ describe("transcribe referenceHz: 'auto'", () => {
   it('refuses a reference that is neither a number nor auto', () => {
     expect(() =>
       transcribe({ samples: tones(1), sampleRate, referenceHz: 'other' as never }),
-    ).toThrow(/referenceHz must be a positive number or 'auto'/);
+    ).toThrow(/^transcribe: referenceHz must be finite and greater than 0, or 'auto'$/);
   });
 });

@@ -335,9 +335,11 @@ const brokenFramings: readonly { nFft: number; hopLength: number }[] = [
 function expectBrokenFraming(framing: { nFft: number; hopLength: number }, run: () => void) {
   if (framing.nFft < 0 || framing.hopLength < 0) {
     expectRefusalOf(run);
-    expect(() => run()).toThrow(/must not be negative/);
+    expect(() => run()).toThrow(
+      /^(extractPercussiveEvents|renderPercussiveEvents): the framing and kernel sizes must be integers in \[0, 2147483647\]$/,
+    );
   } else {
-    expectCoreRefusal(run, /^StftConfig: /);
+    expectCoreRefusal(run, /^(extractPercussiveEvents|renderPercussiveEvents): StftConfig: /);
   }
 }
 
@@ -1019,7 +1021,9 @@ describe('renderPercussiveEvents', () => {
       { hpssKernelPercussive: -1 },
     ]) {
       expectRangeRefusal(() => render([edited(4410, 15435)], options));
-      expect(() => render([edited(4410, 15435)], options)).toThrow(/must not be negative/);
+      expect(() => render([edited(4410, 15435)], options)).toThrow(
+        'renderPercussiveEvents: the framing and kernel sizes must be integers in [0, 2147483647]',
+      );
     }
     for (const options of [{ hpssKernelHarmonic: 4 }, { hpssKernelPercussive: 4 }]) {
       expectCoreRefusal(() => render([edited(4410, 15435)], options));

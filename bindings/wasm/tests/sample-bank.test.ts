@@ -82,7 +82,7 @@ function expectRangeRefusal(action: () => void): void {
  * carries the add-zone context from the C-ABI call.
  */
 function expectCoreRefusal(action: () => void): void {
-  expect(expectRefusalOf(action).message).toMatch(/^failed to add a zone to the sample bank: /);
+  expect(expectRefusalOf(action).message).toMatch(/^SampleBank\.addZone: /);
 }
 
 /** Asserts that @p action throws a TypeError: a wrong-typed argument. */

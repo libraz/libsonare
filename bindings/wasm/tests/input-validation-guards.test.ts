@@ -739,16 +739,18 @@ describe('StreamingRetune refuses non-finite input and clamps finite ranges', ()
     }
   });
 
-  it('still clamps a finite out-of-range control', async () => {
+  it('refuses a finite out-of-range control instead of clamping it', async () => {
     const { StreamingRetune } = await import('../dist/index.js');
-    // The grain is structural and refused outside its domain rather than clamped.
     expectRangeRefusal(() => new StreamingRetune({ grainSizeSamples: 1_000_000 }));
-    const retune = new StreamingRetune({ pitchSemitones: 500, mix: 4 });
+    expect(() => new StreamingRetune({ pitchSemitones: 500 })).toThrow(
+      /^StreamingRetune: pitchSemitones must be finite and in \[-24, 24\]$/,
+    );
+    expectRangeRefusal(() => new StreamingRetune({ mix: 4 }));
+    const retune = new StreamingRetune({ pitchSemitones: 24, mix: 1 });
     try {
       retune.prepare(48000, 128);
-      const config = retune.config();
-      expect(config.pitchSemitones).toBe(24);
-      expect(config.mix).toBe(1);
+      expect(retune.config().pitchSemitones).toBe(24);
+      expect(retune.config().mix).toBe(1);
       expect(
         Array.from(retune.processMono(new Float32Array(128).fill(0.1))).every(Number.isFinite),
       ).toBe(true);

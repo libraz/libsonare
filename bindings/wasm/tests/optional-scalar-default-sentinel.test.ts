@@ -98,7 +98,9 @@ describe('meteringSpectrum optional scalars', () => {
       // The integer and float halves of this bag word the refusal differently --
       // the floats state the sentinel as well -- so the shared part is matched.
       expect(() => spectrum({ [field]: -5 })).toThrow(
-        new RegExp(`${field} must be .*non-negative`),
+        field === 'nFft' || field === 'octaveFraction'
+          ? `meteringSpectrum: ${field} must be an integer in [0, 2147483647]`
+          : new RegExp(`^meteringSpectrum: ${field} must be .*non-negative`),
       );
     },
   );

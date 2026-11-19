@@ -1,4 +1,5 @@
 import { ErrorCode, isSonareError, SonareError } from './errors.js';
+import { entryClass } from './internal/entry.js';
 import { failureFromPayload } from './internal/failure_payload.js';
 import { releasedHandleError } from './internal/handle_guard.js';
 import {
@@ -640,6 +641,7 @@ class ClientCore {
  * Runs vocal-edit sessions in a Worker so analysis and rendering stay off the calling
  * thread. A session mirrors {@link VocalEditSession}, with every call returning a promise.
  */
+@entryClass('VocalEditWorkerClient')
 export class VocalEditWorkerClient {
   private readonly core: ClientCore;
 
@@ -681,6 +683,7 @@ export class VocalEditWorkerClient {
 }
 
 /** An open batch of edits on a {@link VocalEditWorkerSession}. */
+@entryClass('VocalEditWorkerDraft')
 export class VocalEditWorkerDraft {
   private readonly core: ClientCore;
   private readonly sessionState: SessionState;
@@ -850,6 +853,7 @@ export class VocalEditWorkerDraft {
 }
 
 /** A vocal editing session living in a Worker. */
+@entryClass('VocalEditWorkerSession')
 export class VocalEditWorkerSession {
   /** Identifier of the session inside the Worker. */
   readonly sessionId: string;

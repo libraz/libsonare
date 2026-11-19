@@ -39,6 +39,7 @@ import type {
 } from '../index.js';
 import { RealtimeEngine } from '../index.js';
 import { opfsClipPageProviderFactoryFor } from '../internal/clip_page_native.js';
+import { entryClass } from '../internal/entry.js';
 import { releasedHandleError } from '../internal/handle_guard.js';
 import { mixSceneBusToNative, mixSceneStripToNative } from '../internal/mix_scene.js';
 import type { SonareEngineSyncMessage } from '../internal/worklet_messages.js';
@@ -133,6 +134,7 @@ function transferableAudioBuffers(channels: readonly Float32Array[]): Transferab
  * answered synchronously from the offline mirror, which holds the same state.
  * Argument refusals are `TypeError` / `RangeError`, as on {@link RealtimeEngine}.
  */
+@entryClass('SonareEngine')
 export class SonareEngine {
   /** The underlying AudioWorkletNode; connect it into the audio graph. */
   readonly node: AudioWorkletNode;

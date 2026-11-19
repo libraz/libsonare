@@ -219,8 +219,8 @@ void RealtimeEngineWasm::prepareChannels(const val& num_channels_val, const val&
   const int num_channels = checkedIntFromVal(num_channels_val, "numChannels");
   const int max_frames = checkedIntFromVal(max_frames_val, "maxFrames");
   if (num_channels <= 0 || num_channels > kMaxPreparedChannels || max_frames <= 0) {
-    throw WasmRangeError("RealtimeEngine.prepareChannels: channels must be within 1.." +
-                         std::to_string(kMaxPreparedChannels) + "; max_frames must be positive");
+    throw WasmRangeError("channels must be within 1.." + std::to_string(kMaxPreparedChannels) +
+                         "; maxFrames must be an integer of at least 1");
   }
   prepared_channels_ = num_channels;
   prepared_capacity_ = max_frames;
@@ -232,11 +232,11 @@ val RealtimeEngineWasm::getChannelBuffer(const val& channel_val, const val& num_
   const int num_frames = checkedIntFromVal(num_frames_val, "numFrames");
   if (channel < 0 || channel >= prepared_channels_) {
     throw WasmRangeError(
-        "RealtimeEngine.getChannelBuffer: channel out of range; call "
+        "channel out of range; call "
         "prepareChannels() first");
   }
   if (num_frames <= 0 || num_frames > prepared_capacity_) {
-    throw WasmRangeError("RealtimeEngine.getChannelBuffer: out-of-range frame count");
+    throw WasmRangeError("out-of-range frame count");
   }
   return val(typed_memory_view(static_cast<size_t>(num_frames),
                                prepared_storage_[static_cast<size_t>(channel)].data()));
@@ -246,11 +246,11 @@ void RealtimeEngineWasm::processPrepared(const val& num_frames_val) {
   const int num_frames = checkedIntFromVal(num_frames_val, "numFrames");
   if (prepared_channels_ <= 0 || prepared_storage_.empty()) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidState,
-                                  "RealtimeEngine.processPrepared: prepareChannels() must be "
+                                  "prepareChannels() must be "
                                   "called first");
   }
   if (num_frames <= 0 || num_frames > prepared_capacity_) {
-    throw WasmRangeError("RealtimeEngine.processPrepared: out-of-range frame count");
+    throw WasmRangeError("out-of-range frame count");
   }
   engine_.process(prepared_ptrs_.data(), prepared_channels_, num_frames);
 }
@@ -267,9 +267,9 @@ void RealtimeEngineWasm::prepareMonitorChannels(const val& num_channels_val,
   const int max_frames = checkedIntFromVal(max_frames_val, "maxFrames");
   if (num_channels <= 0 || num_channels > kMaxPreparedChannels || max_frames <= 0) {
     throw WasmRangeError(
-        "RealtimeEngine.prepareMonitorChannels: channels must be "
+        "channels must be "
         "within 1.." +
-        std::to_string(kMaxPreparedChannels) + "; max_frames must be positive");
+        std::to_string(kMaxPreparedChannels) + "; maxFrames must be an integer of at least 1");
   }
   monitor_channels_ = num_channels;
   monitor_capacity_ = max_frames;
@@ -281,12 +281,12 @@ val RealtimeEngineWasm::getMonitorChannelBuffer(const val& channel_val, const va
   const int num_frames = checkedIntFromVal(num_frames_val, "numFrames");
   if (channel < 0 || channel >= monitor_channels_) {
     throw WasmRangeError(
-        "RealtimeEngine.getMonitorChannelBuffer: channel out of range; call "
+        "channel out of range; call "
         "prepareMonitorChannels() first");
   }
   if (num_frames <= 0 || num_frames > monitor_capacity_) {
     throw WasmRangeError(
-        "RealtimeEngine.getMonitorChannelBuffer: out-of-range frame "
+        "out-of-range frame "
         "count");
   }
   return val(typed_memory_view(static_cast<size_t>(num_frames),
@@ -297,24 +297,24 @@ void RealtimeEngineWasm::processPreparedWithMonitor(const val& num_frames_val) {
   const int num_frames = checkedIntFromVal(num_frames_val, "numFrames");
   if (prepared_channels_ <= 0 || prepared_storage_.empty()) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidState,
-                                  "RealtimeEngine.processPreparedWithMonitor: prepareChannels() "
+                                  "prepareChannels() "
                                   "must be called first");
   }
   if (monitor_channels_ <= 0 || monitor_storage_.empty()) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidState,
-                                  "RealtimeEngine.processPreparedWithMonitor: "
+                                  ""
                                   "prepareMonitorChannels() must be called first");
   }
   // The engine writes one cue plane per program channel, so a narrower monitor
   // plane would be written past its end.
   if (monitor_channels_ < prepared_channels_) {
     throw WasmRangeError(
-        "RealtimeEngine.processPreparedWithMonitor: monitor channel "
+        "monitor channel "
         "count must be at least the prepared channel count");
   }
   if (num_frames <= 0 || num_frames > prepared_capacity_ || num_frames > monitor_capacity_) {
     throw WasmRangeError(
-        "RealtimeEngine.processPreparedWithMonitor: out-of-range frame "
+        "out-of-range frame "
         "count");
   }
   engine_.process_with_monitor(prepared_ptrs_.data(), monitor_ptrs_.data(), prepared_channels_,
@@ -352,7 +352,7 @@ val RealtimeEngineWasm::renderOffline(val channels_val, const val& block_size_va
   // Match the C-ABI oracle (sonare_engine_render_offline): a negative block
   // size is an error, and 0 selects the default offline block.
   if (block_size < 0) {
-    throw WasmRangeError("renderOffline block size must not be negative");
+    throw WasmRangeError("block size must be an integer of at least 0");
   }
   block_size = resolveOfflineBlock(block_size);
   ChannelBlock block = readChannels(channels_val);
@@ -360,7 +360,7 @@ val RealtimeEngineWasm::renderOffline(val channels_val, const val& block_size_va
   // bound, as the C ABI refuses.
   if (static_cast<int>(block.storage.size()) > engine_.prepared_channels() ||
       block_size > engine_.max_block_size()) {
-    throw WasmRangeError("renderOffline channel count or block size exceeds the prepared engine");
+    throw WasmRangeError("channel count or block size exceeds the prepared engine");
   }
   engine_.render_offline(block.pointers.data(), static_cast<int>(block.storage.size()),
                          block.frames, block_size, finalize);
@@ -380,7 +380,7 @@ void RealtimeEngineWasm::finishOfflineRender() {
 val RealtimeEngineWasm::bounceOffline(val options_val) {
   const int64_t total_frames = int64Property(options_val, "totalFrames", 0);
   int block_size = intProperty(options_val, "blockSize", 0);
-  const int num_channels = requireIntProperty(options_val, "numChannels", "bounceOffline");
+  const int num_channels = requireIntProperty(options_val, "numChannels", "options");
   // 0 (or absent) selects the prepared rate for the source and the source rate for the target.
   const int requested_source_rate = intProperty(options_val, "sourceSampleRate", 0);
   const int requested_target_rate = intProperty(options_val, "targetSampleRate", 0);
@@ -492,7 +492,7 @@ val RealtimeEngineWasm::bounceOffline(val options_val) {
 val RealtimeEngineWasm::freezeOffline(val options_val) {
   const int64_t total_frames = int64Property(options_val, "totalFrames", 0);
   int block_size = intProperty(options_val, "blockSize", 0);
-  const int num_channels = requireIntProperty(options_val, "numChannels", "freezeOffline");
+  const int num_channels = requireIntProperty(options_val, "numChannels", "options");
   if (total_frames <= 0 || block_size < 0 || num_channels <= 0 ||
       !sonare::resource::engine_offline_shape_fits(total_frames, num_channels, 1)) {
     throw WasmRangeError("invalid freeze options");

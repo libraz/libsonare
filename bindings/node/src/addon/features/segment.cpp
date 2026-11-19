@@ -34,14 +34,14 @@ Napi::Int32Array SegmentIndicesResult(Napi::Env env, SonareSegmentIndices* resul
   return values;
 }
 
-bool SegmentMatrixInput(Napi::Env env, const char* name, const Napi::Float32Array& values, int rows,
-                        int cols) {
+bool SegmentMatrixInput(Napi::Env env, const Napi::Float32Array& values, int rows, int cols) {
   if (rows <= 0 || cols <= 0) {
-    Napi::RangeError::New(env, std::string(name) + ": matrix dimensions must be positive")
+    Napi::RangeError::New(env,
+                          "matrix dimensions must be integers in [1, " + node_int_max_text() + "]")
         .ThrowAsJavaScriptException();
     return false;
   }
-  return ValidateMatrixDims(env, name, rows, cols, values.ElementLength());
+  return ValidateMatrixDims(env, rows, cols, values.ElementLength());
 }
 
 }  // namespace
@@ -49,8 +49,8 @@ bool SegmentMatrixInput(Napi::Env env, const char* name, const Napi::Float32Arra
 Napi::Value SonareWrap::SegmentCrossSimilarity(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (!RequireFloat32Array(info, 0, "Expected X Float32Array") ||
-      !RequireFloat32Array(info, 3, "Expected Y Float32Array"))
+  if (!RequireFloat32Array(info, 0, "x must be a Float32Array") ||
+      !RequireFloat32Array(info, 3, "y must be a Float32Array"))
     return env.Undefined();
   const auto x = info[0].As<Napi::Float32Array>();
   int x_rows{};
@@ -75,8 +75,7 @@ Napi::Value SonareWrap::SegmentCrossSimilarity(const Napi::CallbackInfo& info) {
   if (x_rows <= 0 || x_cols <= 0 || y_rows != x_rows || y_cols <= 0 || k < 0 ||
       x.ElementLength() != static_cast<size_t>(x_rows) * x_cols ||
       y.ElementLength() != static_cast<size_t>(y_rows) * y_cols) {
-    Napi::TypeError::New(env, "segmentCrossSimilarity: invalid matrix dimensions")
-        .ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "invalid matrix dimensions").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   SonareSegmentMatrix result{};
@@ -90,13 +89,13 @@ Napi::Value SonareWrap::SegmentCrossSimilarity(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::SegmentRecurrenceMatrix(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (!RequireFloat32Array(info, 0, "Expected data Float32Array")) return env.Undefined();
+  if (!RequireFloat32Array(info, 0, "data must be a Float32Array")) return env.Undefined();
   const auto data = info[0].As<Napi::Float32Array>();
   int rows{};
   if (!OptionalIntArg(env, info, 1, "rows", 0, &rows)) return env.Undefined();
   int cols{};
   if (!OptionalIntArg(env, info, 2, "cols", 0, &cols)) return env.Undefined();
-  if (!SegmentMatrixInput(env, "segmentRecurrenceMatrix", data, rows, cols)) return env.Undefined();
+  if (!SegmentMatrixInput(env, data, rows, cols)) return env.Undefined();
   int k{};
   if (!OptionalIntArg(env, info, 3, "k", 0, &k)) return env.Undefined();
   int width{};
@@ -122,11 +121,11 @@ Napi::Value SonareWrap::SegmentRecurrenceMatrix(const Napi::CallbackInfo& info) 
 Napi::Value SonareWrap::SegmentRecurrenceToLag(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (!RequireFloat32Array(info, 0, "Expected recurrence Float32Array")) return env.Undefined();
+  if (!RequireFloat32Array(info, 0, "recurrence must be a Float32Array")) return env.Undefined();
   const auto recurrence = info[0].As<Napi::Float32Array>();
   int n{};
   if (!OptionalIntArg(env, info, 1, "n", 0, &n)) return env.Undefined();
-  if (!SegmentMatrixInput(env, "segmentRecurrenceToLag", recurrence, n, n)) return env.Undefined();
+  if (!SegmentMatrixInput(env, recurrence, n, n)) return env.Undefined();
   bool pad{};
   if (!OptionalBoolArg(env, info, 2, "pad", true, &pad)) return env.Undefined();
   SonareSegmentMatrix result{};
@@ -140,13 +139,13 @@ Napi::Value SonareWrap::SegmentRecurrenceToLag(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::SegmentLagToRecurrence(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (!RequireFloat32Array(info, 0, "Expected lag Float32Array")) return env.Undefined();
+  if (!RequireFloat32Array(info, 0, "lag must be a Float32Array")) return env.Undefined();
   const auto lag = info[0].As<Napi::Float32Array>();
   int rows{};
   if (!OptionalIntArg(env, info, 1, "rows", 0, &rows)) return env.Undefined();
   int lags{};
   if (!OptionalIntArg(env, info, 2, "lags", 0, &lags)) return env.Undefined();
-  if (!SegmentMatrixInput(env, "segmentLagToRecurrence", lag, lags, rows)) return env.Undefined();
+  if (!SegmentMatrixInput(env, lag, lags, rows)) return env.Undefined();
   SonareSegmentMatrix result{};
   const SonareError err = sonare_segment_lag_to_recurrence(lag.Data(), rows, lags, &result);
   if (err != SONARE_OK) return CheckCResult(env, err);
@@ -156,11 +155,11 @@ Napi::Value SonareWrap::SegmentLagToRecurrence(const Napi::CallbackInfo& info) {
 
 Napi::Value SonareWrap::SegmentSubsegment(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (!RequireFloat32Array(info, 0, "Expected data Float32Array")) return env.Undefined();
+  if (!RequireFloat32Array(info, 0, "data must be a Float32Array")) return env.Undefined();
   // A short argument list used to short-circuit ahead of the reader, so the call
   // returned undefined with nothing pending and the caller saw no error at all.
   if (info.Length() < 4) {
-    Napi::TypeError::New(env, "Expected (data, rows, cols, boundaries, nSegments?)")
+    Napi::TypeError::New(env, "boundaries must be an Int32Array or number[]")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
@@ -170,7 +169,7 @@ Napi::Value SonareWrap::SegmentSubsegment(const Napi::CallbackInfo& info) {
   if (!OptionalIntArg(env, info, 1, "rows", 0, &rows)) return env.Undefined();
   int cols{};
   if (!OptionalIntArg(env, info, 2, "cols", 0, &cols)) return env.Undefined();
-  if (!SegmentMatrixInput(env, "segmentSubsegment", data, rows, cols)) return env.Undefined();
+  if (!SegmentMatrixInput(env, data, rows, cols)) return env.Undefined();
   const std::vector<int> boundaries = IntVectorFromValue(info[3], "boundaries");
   int n_segments{};
   if (!OptionalIntArg(env, info, 4, "nSegments", 4, &n_segments)) return env.Undefined();
@@ -185,13 +184,13 @@ Napi::Value SonareWrap::SegmentSubsegment(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::SegmentAgglomerative(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (!RequireFloat32Array(info, 0, "Expected data Float32Array")) return env.Undefined();
+  if (!RequireFloat32Array(info, 0, "data must be a Float32Array")) return env.Undefined();
   const auto data = info[0].As<Napi::Float32Array>();
   int rows{};
   if (!OptionalIntArg(env, info, 1, "rows", 0, &rows)) return env.Undefined();
   int cols{};
   if (!OptionalIntArg(env, info, 2, "cols", 0, &cols)) return env.Undefined();
-  if (!SegmentMatrixInput(env, "segmentAgglomerative", data, rows, cols)) return env.Undefined();
+  if (!SegmentMatrixInput(env, data, rows, cols)) return env.Undefined();
   int k{};
   if (!RequiredIntArg(env, info, 3, "k", &k)) return env.Undefined();
   std::string linkage;
@@ -209,11 +208,11 @@ Napi::Value SonareWrap::SegmentAgglomerative(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::SegmentPathEnhance(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (!RequireFloat32Array(info, 0, "Expected recurrence Float32Array")) return env.Undefined();
+  if (!RequireFloat32Array(info, 0, "recurrence must be a Float32Array")) return env.Undefined();
   const auto recurrence = info[0].As<Napi::Float32Array>();
   int n{};
   if (!OptionalIntArg(env, info, 1, "n", 0, &n)) return env.Undefined();
-  if (!SegmentMatrixInput(env, "segmentPathEnhance", recurrence, n, n)) return env.Undefined();
+  if (!SegmentMatrixInput(env, recurrence, n, n)) return env.Undefined();
   int win{};
   if (!RequiredIntArg(env, info, 2, "win", &win)) return env.Undefined();
   int max_ratio{};

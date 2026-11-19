@@ -113,11 +113,11 @@ void RealtimeEngineWasm::bindMidiCc(const val& channel_val, const val& controlle
   if (channel < 0 || channel > 15 || controller < 0 || controller > 127 || param_id == 0 ||
       max_value < min_value) {
     throw WasmRangeError(
-        "bindMidiCc: channel in [0,15], controller in [0,127], paramId "
+        "channel in [0,15], controller in [0,127], paramId "
         "non-zero, maxValue >= minValue");
   }
   if (sonare::engine::RealtimeEngine::parameter_target_reserved(param_id)) {
-    throw WasmRangeError("bindMidiCc: paramId " + std::to_string(param_id) + " is reserved");
+    throw WasmRangeError("paramId " + std::to_string(param_id) + " is reserved");
   }
   if (!engine_.bind_midi_cc(static_cast<uint8_t>(controller), static_cast<uint8_t>(channel),
                             param_id, min_value, max_value)) {
@@ -162,8 +162,7 @@ void RealtimeEngineWasm::bindMidiCcBinding(val object) {
     throw WasmRangeError("invalid full MIDI CC binding");
   }
   if (sonare::engine::RealtimeEngine::parameter_target_reserved(binding.param_id)) {
-    throw WasmRangeError("bindMidiCcBinding: paramId " + std::to_string(binding.param_id) +
-                         " is reserved");
+    throw WasmRangeError("paramId " + std::to_string(binding.param_id) + " is reserved");
   }
   if (!engine_.bind_midi_cc(binding)) {
     throwMidiCcBindFailure(engine_, "failed to bind full MIDI CC descriptor");
@@ -250,7 +249,7 @@ void RealtimeEngineWasm::bindController(const val& destination_id_val, val bindi
     throw WasmRangeError("binding range must be finite");
   }
   if (!std::isfinite(curve) || curve <= 0.0f) {
-    throw WasmRangeError("binding curve must be finite and positive");
+    throw WasmRangeError("binding curve must be finite and greater than 0");
   }
   entry.lo = lo;
   entry.hi = hi;

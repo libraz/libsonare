@@ -17,8 +17,7 @@ using editing::event_model::PercussiveEvent;
 // at 0 or absent (SonarePercussiveEventConfig / SonarePercussiveRenderConfig).
 // Whether the framing overlap-adds is left to the core, which rejects it on
 // both calls.
-editing::event_model::PercussiveSeparationConfig percussiveSeparationFromVal(
-    val options, const char* entry_point) {
+editing::event_model::PercussiveSeparationConfig percussiveSeparationFromVal(val options) {
   editing::event_model::PercussiveSeparationConfig separation;
   const int n_fft = intProperty(options, "nFft", 0);
   const int hop_length = intProperty(options, "hopLength", 0);
@@ -27,8 +26,7 @@ editing::event_model::PercussiveSeparationConfig percussiveSeparationFromVal(
   // Rejected before the sentinel promotion: a negative value must not be
   // swallowed by the "0 keeps the default" rule that follows.
   if (n_fft < 0 || hop_length < 0 || kernel_harmonic < 0 || kernel_percussive < 0) {
-    throw WasmRangeError(std::string(entry_point) +
-                         ": the framing and kernel sizes must not be negative");
+    throw WasmRangeError("the framing and kernel sizes must be integers in [0, 2147483647]");
   }
   if (n_fft != 0) separation.n_fft = n_fft;
   if (hop_length != 0) separation.hop_length = hop_length;
@@ -63,12 +61,11 @@ val percussiveEventToVal(const PercussiveEvent& event) {
 // is its own identity spelling.
 PercussiveEvent renderablePercussiveEventFromVal(const val& row) {
   PercussiveEvent event;
-  event.onset_sample = requireInt64Property(row, "onsetSample", "renderPercussiveEvents event");
-  event.offset_sample = requireInt64Property(row, "offsetSample", "renderPercussiveEvents event");
+  event.onset_sample = requireInt64Property(row, "onsetSample", "event");
+  event.offset_sample = requireInt64Property(row, "offsetSample", "event");
   const val edit = objectProperty(row, "edit");
   if (hasProperty(edit, "timeOffsetSamples")) {
-    event.edit.time_offset_samples =
-        requireInt64Property(edit, "timeOffsetSamples", "renderPercussiveEvents event.edit");
+    event.edit.time_offset_samples = requireInt64Property(edit, "timeOffsetSamples", "event.edit");
   }
   event.edit.gain_db = floatProperty(edit, "gainDb", event.edit.gain_db);
   event.edit.muted = boolProperty(edit, "muted", event.edit.muted);
@@ -83,7 +80,7 @@ PercussiveEvent renderablePercussiveEventFromVal(const val& row) {
 val js_extract_percussive_events(val samples, const val& sample_rate, val options) {
   const int rate = checkedIntFromVal(sample_rate, "sampleRate");
   editing::event_model::PercussiveEventExtractorConfig config;
-  config.separation = percussiveSeparationFromVal(options, "extractPercussiveEvents");
+  config.separation = percussiveSeparationFromVal(options);
 
   const int onset_wait = intProperty(options, "onsetWait", 0);
   const float onset_delta = floatProperty(options, "onsetDelta", 0.0f);
@@ -93,9 +90,9 @@ val js_extract_percussive_events(val samples, const val& sample_rate, val option
       !std::isfinite(min_percussive_ratio) || onset_wait < 0 || max_event_ms < 0.0f ||
       min_percussive_ratio < 0.0f || min_percussive_ratio > 1.0f) {
     throw WasmRangeError(
-        "extractPercussiveEvents: onsetDelta, maxEventMs and "
-        "minPercussiveRatio must be finite, onsetWait and maxEventMs must not "
-        "be negative, and minPercussiveRatio must be in [0, 1]");
+        "onsetDelta, maxEventMs and minPercussiveRatio must be finite, onsetWait must be an "
+        "integer in [0, 2147483647], maxEventMs must be at least 0, and minPercussiveRatio "
+        "must be in [0, 1]");
   }
   // config.onset keeps percussive_onset_defaults(), so backtracking stays on:
   // a span that opened after its own transient would report the next hit's peak
@@ -108,7 +105,7 @@ val js_extract_percussive_events(val samples, const val& sample_rate, val option
   // it is assigned unconditionally rather than read as "leave the default".
   config.min_percussive_ratio = min_percussive_ratio;
 
-  Audio audio = loadValidatedAudio("extract_percussive_events", "samples", samples, rate);
+  Audio audio = loadValidatedAudio("samples", samples, rate);
   val out = val::array();
   for (const PercussiveEvent& event :
        editing::event_model::extract_percussive_events(audio, config)) {
@@ -120,21 +117,21 @@ val js_extract_percussive_events(val samples, const val& sample_rate, val option
 val js_render_percussive_events(val samples, const val& sample_rate, val events, val options) {
   const int rate = checkedIntFromVal(sample_rate, "sampleRate");
   editing::event_model::PercussiveEventRenderConfig config;
-  config.separation = percussiveSeparationFromVal(options, "renderPercussiveEvents");
+  config.separation = percussiveSeparationFromVal(options);
   const float fade_ms = floatProperty(options, "fadeMs", 0.0f);
   if (!std::isfinite(fade_ms) || fade_ms < 0.0f) {
-    throw WasmRangeError("renderPercussiveEvents: fadeMs must be finite and non-negative");
+    throw WasmRangeError("fadeMs must be finite and at least 0");
   }
   if (fade_ms != 0.0f) config.fade_ms = fade_ms;
 
-  const std::size_t count = wasmArrayLikeLength(events, "renderPercussiveEvents events");
+  const std::size_t count = wasmArrayLikeLength(events, "events");
   std::vector<PercussiveEvent> core_events;
   core_events.reserve(std::min(count, kMaxWasmObjectArrayReserve));
   for (std::size_t i = 0; i < count; ++i) {
     core_events.push_back(renderablePercussiveEventFromVal(events[i]));
   }
 
-  Audio audio = loadValidatedAudio("render_percussive_events", "samples", samples, rate);
+  Audio audio = loadValidatedAudio("samples", samples, rate);
   Audio result = editing::event_model::render_percussive_events(audio, core_events, config);
   return vectorToFloat32Array(result.data(), result.size());
 }

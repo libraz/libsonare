@@ -456,7 +456,7 @@ describe('renderNotes', () => {
       expect(caught, `expected a RangeError for ${JSON.stringify(note)}`).toBeInstanceOf(
         RangeError,
       );
-      expect((caught as { message: string }).message).toContain(`renderNotes ${fragment}`);
+      expect((caught as { message: string }).message).toContain(`renderNotes: ${fragment}`);
     }
 
     // A non-finite bound is refused too, but by the TS facade's own int64 range
@@ -1160,7 +1160,7 @@ describe('splitNote and mergeNotes', () => {
       }
       expect(caught).toBeInstanceOf(RangeError);
       // The extractor's own refusal; the length mismatch above is the facade's.
-      expect((caught as Error).message).toBe('Invalid parameter');
+      expect((caught as Error).message).toBe('extractNotes: Invalid parameter');
     }
   });
 

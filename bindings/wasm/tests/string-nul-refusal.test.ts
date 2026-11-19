@@ -48,10 +48,10 @@ function refusal(call: () => unknown): Error {
   return caught as Error;
 }
 
-function expectNulRefusal(call: () => unknown, field: string): void {
+function expectNulRefusal(call: () => unknown, entry: string, field: string): void {
   const error = refusal(call);
   expect(error).toBeInstanceOf(RangeError);
-  expect(error.message).toBe(`${field} must not contain NUL`);
+  expect(error.message).toBe(`${entry}: ${field} must not contain NUL`);
 }
 
 function withEngine<T>(body: (engine: RealtimeEngine) => T): T {
@@ -131,6 +131,7 @@ describe('embedded NUL refusal, by reader', () => {
       expect(() => engine.setMarkers([{ id: 1, ppq: 0, name: 'a', kind: 'marker' }])).not.toThrow();
       expectNulRefusal(
         () => engine.setMarkers([{ id: 1, ppq: 0, name: `a${NUL}b`, kind: 'marker' }]),
+        'RealtimeEngine.setMarkers',
         'name',
       );
     });
@@ -142,6 +143,7 @@ describe('embedded NUL refusal, by reader', () => {
     request.analysis.algorithmId = `host${NUL}suffix`;
     expectNulRefusal(
       () => native.vocalEditSessionCreate(request.samples, request.sampleRate, request),
+      'vocalEditSessionCreate',
       'algorithmId',
     );
   });
@@ -151,6 +153,7 @@ describe('embedded NUL refusal, by reader', () => {
       expect(() => engine.setBuiltinInstrument(0, { waveform: 'sine' })).not.toThrow();
       expectNulRefusal(
         () => engine.setBuiltinInstrument(0, { waveform: `sine${NUL}x` as BuiltinSynthWaveform }),
+        'RealtimeEngine.setBuiltinInstrument',
         'waveform',
       );
     });
@@ -158,13 +161,17 @@ describe('embedded NUL refusal, by reader', () => {
 
   it('wasmCString names the subject of each handoff', () => {
     withMixer((mixer) => {
-      expectNulRefusal(() => mixer.busMeter(`a${NUL}b`), 'busId');
-      expectNulRefusal(() => mixer.stripById(`${stripId()}${NUL}b`), 'id');
+      expectNulRefusal(() => mixer.busMeter(`a${NUL}b`), 'Mixer.busMeter', 'busId');
+      expectNulRefusal(() => mixer.stripById(`${stripId()}${NUL}b`), 'Mixer.stripById', 'id');
     });
     withEngine((engine) => {
       engine.setTrackBuses([{ busId: 1 }]);
       engine.setBusStrip(1, SCENE_BUS);
-      expectNulRefusal(() => nativeOf(engine).setBusStripEqBandJson(1, 0, `a${NUL}b`), 'bandJson');
+      expectNulRefusal(
+        () => nativeOf(engine).setBusStripEqBandJson(1, 0, `a${NUL}b`),
+        'RealtimeEngine.setBusStripEqBandJson',
+        'bandJson',
+      );
     });
   });
 });
@@ -180,7 +187,7 @@ describe('embedded NUL refusal, by handoff kind', () => {
     withMixer((mixer) => {
       expect(() => mixer.busMeter('master')).not.toThrow();
       expect(() => mixer.busMeter('masterx')).toThrow();
-      expectNulRefusal(() => mixer.busMeter(`master${NUL}x`), 'busId');
+      expectNulRefusal(() => mixer.busMeter(`master${NUL}x`), 'Mixer.busMeter', 'busId');
     });
   });
 
@@ -188,7 +195,7 @@ describe('embedded NUL refusal, by handoff kind', () => {
     withMixer((mixer) => {
       expect(mixer.stripById(stripId())).toBe(0);
       expect(() => mixer.stripById(`${stripId()}x`)).toThrow(RangeError);
-      expectNulRefusal(() => mixer.stripById(`${stripId()}${NUL}x`), 'id');
+      expectNulRefusal(() => mixer.stripById(`${stripId()}${NUL}x`), 'Mixer.stripById', 'id');
     });
   });
 
@@ -201,6 +208,7 @@ describe('embedded NUL refusal, by handoff kind', () => {
       expect(() => native.setBusStripEqBandJson(1, 0, 'garbage')).toThrow();
       expectNulRefusal(
         () => native.setBusStripEqBandJson(1, 0, `${BAND_JSON}${NUL}garbage`),
+        'RealtimeEngine.setBusStripEqBandJson',
         'bandJson',
       );
     });
@@ -208,9 +216,14 @@ describe('embedded NUL refusal, by handoff kind', () => {
 
   it('a fixed-buffer copy (synth patch preset)', () => {
     expect(synthPatchRoundTripForTest({ preset: 'piano' }).preset).toBe('piano');
-    expectNulRefusal(() => synthPatchRoundTripForTest({ preset: `piano${NUL}x` }), 'preset');
+    expectNulRefusal(
+      () => synthPatchRoundTripForTest({ preset: `piano${NUL}x` }),
+      '_synthPatchRoundTrip',
+      'preset',
+    );
     expectNulRefusal(
       () => synthPatchRoundTripForTest(`piano${NUL}x` as unknown as { preset: string }),
+      '_synthPatchRoundTrip',
       'preset',
     );
   });
@@ -220,7 +233,11 @@ describe('embedded NUL refusal, by handoff kind', () => {
       engine.setGraph(graph('a'));
       expect(engine.graphNodeCount).toBe(1);
       expect(() => engine.setGraph(graph('zz'))).toThrow();
-      expectNulRefusal(() => engine.setGraph(graph(`a${NUL}b`)), 'inputNode');
+      expectNulRefusal(
+        () => engine.setGraph(graph(`a${NUL}b`)),
+        'RealtimeEngine.setGraph',
+        'inputNode',
+      );
       expect(engine.graphNodeCount).toBe(1);
     });
   });
@@ -241,12 +258,20 @@ describe('embedded NUL refusal, mastering names', () => {
   it('a chain configuration document is refused by name', () => {
     const document = '{"version":2,"params":{}}';
     expect(() => masteringChainConfigFromJson(document)).not.toThrow();
-    expectNulRefusal(() => masteringChainConfigFromJson(`${document}${NUL}x`), 'document');
+    expectNulRefusal(
+      () => masteringChainConfigFromJson(`${document}${NUL}x`),
+      'masteringChainConfigFromJson',
+      'document',
+    );
   });
 
   it('a preset name is refused in every spelling', () => {
     expect(() => masteringPresetParams('pop')).not.toThrow();
-    expectNulRefusal(() => masteringPresetParams(`pop${NUL}x` as MasteringPreset), 'preset');
+    expectNulRefusal(
+      () => masteringPresetParams(`pop${NUL}x` as MasteringPreset),
+      'masteringPresetParams',
+      'preset',
+    );
     expectRangeRefusal(() => masterAudio({ ...base, preset: `pop${NUL}x` as MasteringPreset }));
     expectRangeRefusal(() =>
       masterAudio(samples, 44100, { preset: `pop${NUL}x` as MasteringPreset }),
@@ -280,11 +305,11 @@ describe('embedded NUL refusal, std::string entry points', () => {
   it('a preset name or note name is refused by name, not looked up truncated', () => {
     const [id] = realtimeVoiceChangerPresetNames();
     expect(noteToHz('A4')).toBeCloseTo(440, 3);
-    expectNulRefusal(() => noteToHz(`A4${NUL}junk`), 'note');
+    expectNulRefusal(() => noteToHz(`A4${NUL}junk`), 'noteToHz', 'note');
     // The facade resolves the closed preset set first; the native reader is driven directly.
     const presetJson = (name: string): string => getSonareModule().mixingScenePresetJson(name);
     expect(presetJson('vocalReverbSend').length).toBeGreaterThan(0);
-    expectNulRefusal(() => presetJson(`vocalReverbSend${NUL}junk`), 'preset');
+    expectNulRefusal(() => presetJson(`vocalReverbSend${NUL}junk`), 'mixingScenePreset', 'preset');
     expect(refusal(() => mixingScenePreset(`vocalReverbSend${NUL}junk` as never))).toBeInstanceOf(
       RangeError,
     );
@@ -301,9 +326,17 @@ describe('embedded NUL refusal, std::string entry points', () => {
   it('a JSON text is refused by name, not reported as trailing data', () => {
     const json = new Project().toJson();
     expect(() => Project.fromJson(json)).not.toThrow();
-    expectNulRefusal(() => Project.fromJson(`${json}${NUL}junk`), 'json');
-    expectNulRefusal(() => Project.fromJsonWithDiagnostics(`${json}${NUL}junk`), 'json');
-    expectNulRefusal(() => realtimeVoiceChangerValidatePresetJson(`{}${NUL}junk`), 'json');
+    expectNulRefusal(() => Project.fromJson(`${json}${NUL}junk`), 'Project.fromJson', 'json');
+    expectNulRefusal(
+      () => Project.fromJsonWithDiagnostics(`${json}${NUL}junk`),
+      'Project.fromJsonWithDiagnostics',
+      'json',
+    );
+    expectNulRefusal(
+      () => realtimeVoiceChangerValidatePresetJson(`{}${NUL}junk`),
+      'realtimeVoiceChangerValidatePresetJson',
+      'json',
+    );
   });
 
   it('an unknown voice preset name is a RangeError', () => {
@@ -347,16 +380,28 @@ describe('embedded NUL refusal, scan', () => {
    */
   const ALLOWED: { file: string; text: string; count: number; reason: string }[] = [
     {
+      file: 'mastering/api.cpp',
+      text: 'subject.c_str()',
+      count: 2,
+      reason: 'error-subject label built from a platform index',
+    },
+    {
+      file: 'mastering/api.cpp',
+      text: '(subject + ".name").c_str()',
+      count: 1,
+      reason: 'error-subject label built from a platform index',
+    },
+    {
+      file: 'mastering/api.cpp',
+      text: '(subject + "." + key).c_str()',
+      count: 1,
+      reason: 'error-subject label built from a platform index and a literal key',
+    },
+    {
       file: 'common/common.cpp',
       text: 'return text.c_str();',
       count: 1,
       reason: 'wasmCString itself',
-    },
-    {
-      file: 'common/common.cpp',
-      text: 'budget.c_str()',
-      count: 1,
-      reason: 'error-subject label built from literals',
     },
     {
       file: 'common/common.h',
@@ -364,18 +409,6 @@ describe('embedded NUL refusal, scan', () => {
       count: 2,
       reason:
         'Diagnostic labels for requireInt64Property and requireIntProperty: all keys are literal or macro-stringized names, and subjects are code-owned labels (including note-edit labels composed from fixed entry-point names). checkedInt64FromVal/checkedIntFromVal consume the temporary synchronously for errors; no JS string crosses this boundary.',
-    },
-    {
-      file: 'common/note_val.h',
-      text: 'subject.c_str()',
-      count: 1,
-      reason: 'error-subject label built from an element index',
-    },
-    {
-      file: 'effects/notes.cpp',
-      text: 'budget.c_str()',
-      count: 6,
-      reason: 'error-subject label built from literals',
     },
     {
       file: 'effects/notes.cpp',
@@ -400,18 +433,6 @@ describe('embedded NUL refusal, scan', () => {
       text: '".frameEnd").c_str()',
       count: 1,
       reason: 'error-subject label built from an element index',
-    },
-    {
-      file: 'effects/repair.cpp',
-      text: '" input").c_str()',
-      count: 1,
-      reason: 'error-subject label built from a literal entry-point name',
-    },
-    {
-      file: 'features/core.cpp',
-      text: 'budget_subject.c_str()',
-      count: 1,
-      reason: 'error-subject label built from a literal function name',
     },
     {
       file: 'analysis/quick.cpp',

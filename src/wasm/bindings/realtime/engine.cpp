@@ -18,8 +18,8 @@ void RealtimeEngineWasm::validatePrepare(double sample_rate, int max_block_size)
   if (!sonare::is_supported_sample_rate(sample_rate) ||
       !sonare::is_valid_realtime_block_size(max_block_size)) {
     throw WasmRangeError(
-        "prepare: sample_rate must be a whole number of hertz within 8000..384000; "
-        "max_block_size must be within 1..1048576");
+        "sampleRate must be a whole number of hertz within 8000..384000; "
+        "maxBlockSize must be within 1..1048576");
   }
 }
 
@@ -96,14 +96,14 @@ void RealtimeEngineWasm::prepareWithChannels(double sample_rate, const val& max_
   // so raising the ceiling moves the guard and the text a host reads together.
   constexpr int kMaxChannels = static_cast<int>(sonare::engine::RealtimeEngine::kMaxAudioChannels);
   if (max_channels <= 0 || max_channels > kMaxChannels) {
-    throw WasmRangeError("prepare: max_channels must be within 1.." + std::to_string(kMaxChannels));
+    throw WasmRangeError("maxChannels must be within 1.." + std::to_string(kMaxChannels));
   }
   // The C ABI takes both as size_t, so only this surface can express a negative
   // one. Refuse it here rather than letting capacity() read it as the sentinel,
   // which would answer a caller error with the default queue.
   if (command_capacity < 0 || telemetry_capacity < 0) {
     throw WasmRangeError(
-        "prepare: command_capacity and telemetry_capacity must be 0 (the default) or positive");
+        "commandCapacity and telemetryCapacity must be 0 (the default) or positive");
   }
   // Mirrors the C ABI: the engine clamps these, but a host asking for more than
   // it can get should hear about it rather than quietly receive a smaller
@@ -115,8 +115,7 @@ void RealtimeEngineWasm::prepareWithChannels(double sample_rate, const val& max_
       capacity(telemetry_capacity, RealtimeEngine::kDefaultTelemetryCapacity);
   if (command_resolved > RealtimeEngine::kMaxCommandCapacity ||
       telemetry_resolved > RealtimeEngine::kMaxTelemetryCapacity) {
-    throw WasmRangeError(
-        "prepare: command_capacity or telemetry_capacity exceeds its documented maximum");
+    throw WasmRangeError("commandCapacity or telemetryCapacity exceeds its documented maximum");
   }
   engine_.prepare(sample_rate, max_block_size, command_resolved, telemetry_resolved, max_channels);
 }

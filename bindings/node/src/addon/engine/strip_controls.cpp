@@ -587,8 +587,8 @@ Napi::Value RealtimeEngineWrap::SetTrackStripSurroundPan(const Napi::CallbackInf
   if (!RequiredUint32Arg(env, info, 0, "trackId", &track_id)) {
     return env.Undefined();
   }
-  if (info.Length() < 2 || !info[1].IsObject()) {
-    Napi::TypeError::New(env, "Expected (trackId, pan: SurroundPan)").ThrowAsJavaScriptException();
+  if (!info[1].IsObject()) {
+    Napi::TypeError::New(env, "pan must be an object").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   const Napi::Object obj = info[1].As<Napi::Object>();

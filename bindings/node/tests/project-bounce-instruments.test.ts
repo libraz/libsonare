@@ -317,13 +317,13 @@ describe('bounceWithInstruments', () => {
     it('names a missing or mistyped callback before any render starts', () => {
       using project = midiProject();
       expect(() => bounceOne(project, {})).toThrow(
-        new TypeError('bounceWithInstruments: instruments[0].render must be a function'),
+        new TypeError('Project.bounceWithInstruments: instruments[0].render must be a function'),
       );
       expect(() => bounceOne(project, { render() {}, prepare: 5 })).toThrow(
-        new TypeError('bounceWithInstruments: instruments[0].prepare must be a function'),
+        new TypeError('Project.bounceWithInstruments: instruments[0].prepare must be a function'),
       );
       expect(() => bounceOne(project, { render() {}, onEvent: 'x' })).toThrow(
-        new TypeError('bounceWithInstruments: instruments[0].onEvent must be a function'),
+        new TypeError('Project.bounceWithInstruments: instruments[0].onEvent must be a function'),
       );
     });
 

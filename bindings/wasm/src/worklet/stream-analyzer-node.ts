@@ -1,6 +1,7 @@
 import { ErrorCode, SonareError } from '../errors.js';
 import type { StreamFrames, StreamStats } from '../index.js';
 import { init, isInitialized, StreamAnalyzer } from '../index.js';
+import { entryClass } from '../internal/entry.js';
 import type { SonareStreamAnalyzerChunkMessage } from '../internal/stream_analyzer_messages.js';
 import type {
   SonareStreamAnalyzerNodeOptions,
@@ -36,6 +37,7 @@ import { resolveStreamAnalyzerChunkFrames } from './stream-analyzer-processor.js
  * const stop = analyzer.onFrames((frames) => draw(frames.mel, frames.nFrames));
  * ```
  */
+@entryClass('SonareStreamAnalyzerNode')
 export class SonareStreamAnalyzerNode {
   /** AudioWorkletNode that receives the audio; connect a source to it. */
   readonly node: AudioWorkletNode;

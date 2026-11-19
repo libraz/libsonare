@@ -309,13 +309,13 @@ float js_detect_bpm(val samples, const val& sample_rate_val, const val& bpm_min_
   if (const auto v = optionalNumber(bpm_min_val, "bpmMin")) config.bpm_min = *v;
   if (const auto v = optionalNumber(bpm_max_val, "bpmMax")) config.bpm_max = *v;
   validate_bpm_config(config);
-  Audio audio = loadValidatedAudio("detect_bpm", "samples", samples, sample_rate);
+  Audio audio = loadValidatedAudio("samples", samples, sample_rate);
   return quick::detect_bpm(audio.data(), audio.size(), sample_rate, config);
 }
 
 val js_detect_key(val samples, const val& sample_rate_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  Audio audio = loadValidatedAudio("detect_key", "samples", samples, sample_rate);
+  Audio audio = loadValidatedAudio("samples", samples, sample_rate);
   Key key = quick::detect_key(audio.data(), audio.size(), sample_rate);
 
   val result = val::object();
@@ -391,7 +391,7 @@ val js_detect_key_with_options(val samples, const val& sample_rate_val, const va
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   const int profile_type = checkedIntFromVal(profile_type_val, "profileType");
   const float high_pass_hz = checkedFloatFromVal(high_pass_hz_val, "chromaHighPassHz");
-  Audio audio = loadValidatedAudio("detect_key", "samples", samples, sample_rate);
+  Audio audio = loadValidatedAudio("samples", samples, sample_rate);
   KeyConfig config = makeKeyConfig(n_fft, hop_length, use_hpss, loudness_weighted, high_pass_hz,
                                    modes, profile_type, genre_hint);
   config.tuning = tuningFromVal(tuning_val, "tuningCents").value();
@@ -417,7 +417,7 @@ val js_detect_key_candidates(val samples, const val& sample_rate_val, const val&
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   const int profile_type = checkedIntFromVal(profile_type_val, "profileType");
   const float high_pass_hz = checkedFloatFromVal(high_pass_hz_val, "chromaHighPassHz");
-  Audio audio = loadValidatedAudio("detect_key_candidates", "samples", samples, sample_rate);
+  Audio audio = loadValidatedAudio("samples", samples, sample_rate);
   KeyConfig config = makeKeyConfig(n_fft, hop_length, use_hpss, loudness_weighted, high_pass_hz,
                                    modes, profile_type, genre_hint);
   config.tuning = tuningFromVal(tuning_val, "tuningCents").value();
@@ -441,7 +441,7 @@ val js_detect_key_candidates(val samples, const val& sample_rate_val, const val&
 
 val js_detect_onsets(val samples, const val& sample_rate_val, val options) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  Audio audio = loadValidatedAudio("detect_onsets", "samples", samples, sample_rate);
+  Audio audio = loadValidatedAudio("samples", samples, sample_rate);
   OnsetDetectConfig config;
   config.n_fft = intProperty(options, "nFft", config.n_fft);
   config.hop_length = intProperty(options, "hopLength", config.hop_length);
@@ -477,14 +477,14 @@ val js_detect_beats(val samples, const val& sample_rate_val, const val& bpm_min_
   BeatConfig config;
   config.bpm_min = tempo.bpm_min;
   config.bpm_max = tempo.bpm_max;
-  Audio audio = loadValidatedAudio("detect_beats", "samples", samples, sample_rate);
+  Audio audio = loadValidatedAudio("samples", samples, sample_rate);
   std::vector<float> beats = quick::detect_beats(audio.data(), audio.size(), sample_rate, config);
   return vectorToFloat32Array(beats);
 }
 
 val js_detect_downbeats(val samples, const val& sample_rate_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  Audio audio = loadValidatedAudio("detect_downbeats", "samples", samples, sample_rate);
+  Audio audio = loadValidatedAudio("samples", samples, sample_rate);
   std::vector<float> downbeats = quick::detect_downbeats(audio.data(), audio.size(), sample_rate);
   return vectorToFloat32Array(downbeats);
 }
@@ -553,7 +553,7 @@ val js_detect_chords(val samples, const val& sample_rate_val, const val& min_dur
     validateKey(key_root, key_mode);
   }
 
-  Audio audio = loadValidatedAudio("ChordAnalyzer", "samples", samples, sample_rate);
+  Audio audio = loadValidatedAudio("samples", samples, sample_rate);
 
   const ChordConfig config =
       makeChordConfig(min_duration, smoothing_window, threshold, use_triads_only, n_fft, hop_length,
@@ -593,7 +593,7 @@ val js_chord_functional_analysis(val samples, const val& key_root_val, const val
   validateChromaMethod(chroma_method);
   validateKey(key_root, key_mode);
 
-  Audio audio = loadValidatedAudio("ChordAnalyzer", "samples", samples, sample_rate);
+  Audio audio = loadValidatedAudio("samples", samples, sample_rate);
 
   const ChordConfig config =
       makeChordConfig(min_duration, smoothing_window, threshold, use_triads_only, n_fft, hop_length,
@@ -623,9 +623,9 @@ val js_chord_functional_analysis(val samples, const val& key_root_val, const val
 // ranges, even sizes, powers of two, ...) stay with the core validators, so
 // what this owns is the JS-number narrowing: a non-finite or out-of-range
 // Number must not reach a static_cast to int/float. An undefined or null value
-// leaves the core default in place. @p subject prefixes the error message.
+// leaves the core default in place.
 template <typename Field>
-void setNumberOption(const val& options, const char* key, const char* subject, Field* field) {
+void setNumberOption(const val& options, const char* key, Field* field) {
   const val value = options[key];
   if (value.isUndefined() || value.isNull()) return;
   const double raw = numberFromVal(value, key);
@@ -637,7 +637,7 @@ void setNumberOption(const val& options, const char* key, const char* subject, F
     converted_ok = sonare::numeric::checked_float_cast(raw, &converted);
   }
   if (!converted_ok) {
-    throw WasmRangeError(std::string(subject) + ": " + key + " must be a finite in-range number");
+    throw WasmRangeError(std::string(key) + " must be a finite in-range number");
   }
   *field = converted;
 }
@@ -646,7 +646,7 @@ void setNumberOption(const val& options, const char* key, const char* subject, F
 // bound is applied to the JS length before any element is read, because the
 // core can only see the vector after the whole array has been converted; the
 // non-empty rule and the [2, 32] per-entry range stay with the core validators.
-// @p subject names the field, e.g. "analyze: meterCandidateNumerators".
+// @p subject names the field, e.g. "meterCandidateNumerators".
 std::vector<int> meterCandidateNumeratorsFromVal(const val& numerators, const char* subject) {
   const std::size_t length = wasmArrayLikeLength(numerators, subject);
   if (length > static_cast<std::size_t>(sonare::kMaxMeterCandidateNumerators)) {
@@ -670,9 +670,7 @@ std::vector<int> meterCandidateNumeratorsFromVal(const val& numerators, const ch
 // MusicAnalyzer is constructed.
 MusicAnalyzerConfig musicAnalyzerConfigFromVal(const val& options) {
   MusicAnalyzerConfig config;
-  auto set_number = [&](const char* key, auto& field) {
-    setNumberOption(options, key, "analyze", &field);
-  };
+  auto set_number = [&](const char* key, auto& field) { setNumberOption(options, key, &field); };
   auto set_bool = [&](const char* key, bool& field) { field = boolProperty(options, key, field); };
   set_number("nFft", config.n_fft);
   set_number("hopLength", config.hop_length);
@@ -694,7 +692,7 @@ MusicAnalyzerConfig musicAnalyzerConfigFromVal(const val& options) {
   set_number("meterDenominator", config.meter_denominator);
   const val tuning = options["tuningCents"];
   if (!tuning.isUndefined() && !tuning.isNull()) {
-    config.tuning = tuningFromVal(tuning, "analyze: tuningCents").value();
+    config.tuning = tuningFromVal(tuning, "tuningCents").value();
   }
   // meterCandidateNumerators is an array, so set_number (a scalar reader) does
   // not apply. An undefined/null value leaves the core default {3, 4, 6} in
@@ -702,14 +700,14 @@ MusicAnalyzerConfig musicAnalyzerConfigFromVal(const val& options) {
   const val meter_numerators = options["meterCandidateNumerators"];
   if (!meter_numerators.isUndefined() && !meter_numerators.isNull()) {
     config.meter_candidate_numerators =
-        meterCandidateNumeratorsFromVal(meter_numerators, "analyze: meterCandidateNumerators");
+        meterCandidateNumeratorsFromVal(meter_numerators, "meterCandidateNumerators");
   }
   return config;
 }
 
 val js_analyze(val samples, const val& sample_rate_val, val options) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  Audio audio = loadValidatedAudio("MusicAnalyzer::analyze", "samples", samples, sample_rate);
+  Audio audio = loadValidatedAudio("samples", samples, sample_rate);
   const MusicAnalyzerConfig config = musicAnalyzerConfigFromVal(options);
   MusicAnalyzer analyzer(audio, config);
   AnalysisResult result = analyzer.analyze();
@@ -720,22 +718,20 @@ val js_estimate_meter(val beat_times, val beat_strengths, val options) {
   // Budget both arrays before either one is copied. Their lengths are
   // deliberately NOT compared here: estimate_meter_from_beats rejects a
   // mismatch itself, so every surface reports it with the same message.
-  validateWasmFloat32ArrayPair(beat_times, "estimateMeter: beatTimes", beat_strengths,
-                               "estimateMeter: beatStrengths", "estimateMeter",
+  validateWasmFloat32ArrayPair(beat_times, "beatTimes", beat_strengths, "beatStrengths",
                                /*require_matching_lengths=*/false);
 
   MeterConfig config;
   const val candidate_numerators = options["candidateNumerators"];
   if (!candidate_numerators.isUndefined() && !candidate_numerators.isNull()) {
     config.candidate_numerators =
-        meterCandidateNumeratorsFromVal(candidate_numerators, "estimateMeter: candidateNumerators");
+        meterCandidateNumeratorsFromVal(candidate_numerators, "candidateNumerators");
   }
-  setNumberOption(options, "denominator", "estimateMeter", &config.denominator);
-  setNumberOption(options, "downbeatWeight", "estimateMeter", &config.downbeat_weight);
-  setNumberOption(options, "measureWeight", "estimateMeter", &config.measure_weight);
-  setNumberOption(options, "subdivisionWeight", "estimateMeter", &config.subdivision_weight);
-  setNumberOption(options, "compoundSubdivisionThreshold", "estimateMeter",
-                  &config.compound_subdivision_threshold);
+  setNumberOption(options, "denominator", &config.denominator);
+  setNumberOption(options, "downbeatWeight", &config.downbeat_weight);
+  setNumberOption(options, "measureWeight", &config.measure_weight);
+  setNumberOption(options, "subdivisionWeight", &config.subdivision_weight);
+  setNumberOption(options, "compoundSubdivisionThreshold", &config.compound_subdivision_threshold);
 
   // validate_meter_config runs inside estimate_meter_from_beats, so the empty
   // candidate list, the per-entry range, the denominator rule, and the weight
@@ -841,7 +837,7 @@ val js_chord_functions(val chords, const val& key_root_val, const val& key_mode_
 val js_analyze_with_progress(val samples, const val& sample_rate_val, val options,
                              val progress_callback, val cancel_callback) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  Audio audio = loadValidatedAudio("MusicAnalyzer::analyze", "samples", samples, sample_rate);
+  Audio audio = loadValidatedAudio("samples", samples, sample_rate);
   MusicAnalyzer analyzer(audio, musicAnalyzerConfigFromVal(options));
   if (!progress_callback.isNull() && !progress_callback.isUndefined()) {
     analyzer.set_progress_callback([progress_callback](float progress, const char* stage) {

@@ -807,12 +807,13 @@ describe('Project native binding', () => {
     ).toThrow(TypeError);
 
     // Errors travel the same path with and without the flag.
-    const emptyChord = expect.objectContaining({
-      code: ErrorCode.InvalidFormat,
-      message: 'chordIntervals must hold 1 to 8 intervals',
-    });
+    const emptyChord = (entry: string) =>
+      expect.objectContaining({
+        code: ErrorCode.InvalidFormat,
+        message: `Project.${entry}: chordIntervals must hold 1 to 8 intervals`,
+      });
     expect(() => bare.bakeMidiFx({ clipId: bareClip, config: { chordIntervals: [] } })).toThrow(
-      emptyChord,
+      emptyChord('bakeMidiFx'),
     );
     expect(() =>
       request.bakeMidiFx({
@@ -820,10 +821,10 @@ describe('Project native binding', () => {
         config: { chordIntervals: [] },
         withSourceIndex: true,
       }),
-    ).toThrow(emptyChord);
+    ).toThrow(emptyChord('bakeMidiFx'));
     expect(() =>
       request.previewMidiFxCount({ clipId: requestClip, config: { chordIntervals: [] } }),
-    ).toThrow(emptyChord);
+    ).toThrow(emptyChord('previewMidiFxCount'));
 
     request.destroy();
     bare.destroy();
@@ -1760,7 +1761,7 @@ describe('MIDI message module functions', () => {
     expect(() => project.previewMidiFxCount({ clipId, config: { chordIntervals: [] } })).toThrow(
       expect.objectContaining({
         code: ErrorCode.InvalidFormat,
-        message: 'chordIntervals must hold 1 to 8 intervals',
+        message: 'Project.previewMidiFxCount: chordIntervals must hold 1 to 8 intervals',
       }),
     );
     project.destroy();

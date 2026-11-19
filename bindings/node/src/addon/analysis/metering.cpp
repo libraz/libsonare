@@ -73,7 +73,7 @@ Napi::Value SonareWrap::Lufs(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (info.Length() < 1 || !IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "Expected Float32Array argument").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   auto typed = info[0].As<Napi::Float32Array>();
@@ -102,7 +102,7 @@ Napi::Value SonareWrap::MomentaryLufs(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (info.Length() < 1 || !IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "Expected Float32Array argument").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   auto typed = info[0].As<Napi::Float32Array>();
@@ -129,7 +129,7 @@ Napi::Value SonareWrap::ShortTermLufs(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (info.Length() < 1 || !IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "Expected Float32Array argument").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   auto typed = info[0].As<Napi::Float32Array>();
@@ -155,9 +155,12 @@ Napi::Value SonareWrap::ShortTermLufs(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::LufsInterleaved(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (info.Length() < 2 || !IsFloat32Array(info[0]) || !info[1].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (Float32Array, channels, sampleRate?)")
-        .ThrowAsJavaScriptException();
+  if (!IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[1].IsNumber()) {
+    Napi::TypeError::New(env, "channels must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   auto typed = info[0].As<Napi::Float32Array>();
@@ -165,7 +168,8 @@ Napi::Value SonareWrap::LufsInterleaved(const Napi::CallbackInfo& info) {
   int sr{};
   if (!OptionalIntArg(env, info, 2, "sampleRate", 22050, &sr)) return env.Undefined();
   if (channels <= 0) {
-    Napi::RangeError::New(env, "channels must be > 0").ThrowAsJavaScriptException();
+    Napi::RangeError::New(env, "channels must be an integer in [1, " + node_int_max_text() + "]")
+        .ThrowAsJavaScriptException();
     return env.Undefined();
   }
   if (typed.ElementLength() % static_cast<size_t>(channels) != 0) {
@@ -196,9 +200,12 @@ Napi::Value SonareWrap::LufsInterleaved(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::LufsSeriesInterleaved(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (info.Length() < 2 || !IsFloat32Array(info[0]) || !info[1].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (Float32Array, channels, sampleRate?)")
-        .ThrowAsJavaScriptException();
+  if (!IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[1].IsNumber()) {
+    Napi::TypeError::New(env, "channels must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   auto typed = info[0].As<Napi::Float32Array>();
@@ -206,7 +213,8 @@ Napi::Value SonareWrap::LufsSeriesInterleaved(const Napi::CallbackInfo& info) {
   int sr{};
   if (!OptionalIntArg(env, info, 2, "sampleRate", 22050, &sr)) return env.Undefined();
   if (channels <= 0) {
-    Napi::RangeError::New(env, "channels must be > 0").ThrowAsJavaScriptException();
+    Napi::RangeError::New(env, "channels must be an integer in [1, " + node_int_max_text() + "]")
+        .ThrowAsJavaScriptException();
     return env.Undefined();
   }
   if (typed.ElementLength() % static_cast<size_t>(channels) != 0) {
@@ -241,7 +249,7 @@ Napi::Value SonareWrap::Ebur128LoudnessRangeLu(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (info.Length() < 1 || !IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "Expected Float32Array argument").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   auto typed = info[0].As<Napi::Float32Array>();
@@ -264,12 +272,10 @@ namespace {
 // Shared shape for the scalar offline meters (peak/rms/crest/dc).
 using MeteringScalarFn = SonareError (*)(const float*, size_t, int, float*);
 
-Napi::Value MeteringScalar(const Napi::CallbackInfo& info, MeteringScalarFn fn,
-                           const char* fn_label) {
+Napi::Value MeteringScalar(const Napi::CallbackInfo& info, MeteringScalarFn fn) {
   Napi::Env env = info.Env();
   if (info.Length() < 1 || !IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, std::string(fn_label) + ": expected Float32Array argument")
-        .ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   auto typed = info[0].As<Napi::Float32Array>();
@@ -289,14 +295,14 @@ Napi::Value MeteringScalar(const Napi::CallbackInfo& info, MeteringScalarFn fn,
 Napi::Value SonareWrap::MeteringPeakDb(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  return MeteringScalar(info, &sonare_metering_peak_db, "meteringPeakDb");
+  return MeteringScalar(info, &sonare_metering_peak_db);
   SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::MeteringRmsDb(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  return MeteringScalar(info, &sonare_metering_rms_db, "meteringRmsDb");
+  return MeteringScalar(info, &sonare_metering_rms_db);
   SONARE_NODE_CATCH(env)
 }
 
@@ -304,8 +310,7 @@ Napi::Value SonareWrap::MeteringSilenceRatio(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (info.Length() < 1 || !IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "meteringSilenceRatio: expected Float32Array argument")
-        .ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   auto samples = info[0].As<Napi::Float32Array>();
@@ -333,14 +338,14 @@ Napi::Value SonareWrap::MeteringSilenceRatio(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::MeteringCrestFactorDb(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  return MeteringScalar(info, &sonare_metering_crest_factor_db, "meteringCrestFactorDb");
+  return MeteringScalar(info, &sonare_metering_crest_factor_db);
   SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::MeteringDcOffset(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  return MeteringScalar(info, &sonare_metering_dc_offset, "meteringDcOffset");
+  return MeteringScalar(info, &sonare_metering_dc_offset);
   SONARE_NODE_CATCH(env)
 }
 
@@ -348,8 +353,7 @@ Napi::Value SonareWrap::MeteringTruePeakDb(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (info.Length() < 1 || !IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "meteringTruePeakDb: expected Float32Array argument")
-        .ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   auto typed = info[0].As<Napi::Float32Array>();
@@ -372,8 +376,7 @@ Napi::Value SonareWrap::MeteringDetectClipping(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (info.Length() < 1 || !IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "meteringDetectClipping: expected Float32Array argument")
-        .ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   auto typed = info[0].As<Napi::Float32Array>();
@@ -385,7 +388,7 @@ Napi::Value SonareWrap::MeteringDetectClipping(const Napi::CallbackInfo& info) {
   if (!OptionalInt64Arg(env, info, 3, "minRegionValue", 1, &min_region_value))
     return env.Undefined();
   if (min_region_value < 0) {
-    Napi::RangeError::New(env, "minRegionSamples must be non-negative")
+    Napi::RangeError::New(env, "minRegionSamples must be an integer of at least 0")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
@@ -422,8 +425,7 @@ Napi::Value SonareWrap::MeteringDynamicRange(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (info.Length() < 1 || !IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "meteringDynamicRange: expected Float32Array argument")
-        .ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   auto typed = info[0].As<Napi::Float32Array>();
@@ -464,11 +466,13 @@ namespace {
 
 bool ParseScaleArgs(const Napi::CallbackInfo& info, int* root, uint16_t* mode_mask,
                     float* reference_midi, float* midi) {
-  if (info.Length() < 3 || !info[0].IsNumber() || !info[1].IsNumber() || !info[2].IsNumber()) {
+  Napi::Env env = info.Env();
+  if (!RequireNumberValue(env, info[0], "root") || !RequireNumberValue(env, info[1], "modeMask") ||
+      !RequireNumberValue(env, info[2], "midi")) {
     return false;
   }
-  *root = node_narrow_int(info.Env(), info[0], node_arg_label(0).c_str());
-  int mask_int = node_narrow_int(info.Env(), info[1], "maskInt");
+  *root = node_narrow_int(env, info[0], "root");
+  int mask_int = node_narrow_int(env, info[1], "modeMask");
   // modeMask is a 12-bit pitch-class set (one bit per semitone). Validate the
   // range explicitly: the narrowing cast to uint16_t would otherwise turn -1
   // into 0xFFFF and any value > 4095 into an unrelated mask.
@@ -490,13 +494,7 @@ Napi::Value SonareWrap::ScaleQuantizeMidi(const Napi::CallbackInfo& info) {
   uint16_t mask = 0;
   float ref = 0.0f;
   float midi = 0.0f;
-  if (!ParseScaleArgs(info, &root, &mask, &ref, &midi)) {
-    if (env.IsExceptionPending()) return env.Undefined();
-    Napi::TypeError::New(env,
-                         "scaleQuantizeMidi: expected (root, modeMask, midi, scaleReferenceMidi?)")
-        .ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
+  if (!ParseScaleArgs(info, &root, &mask, &ref, &midi)) return env.Undefined();
   float out_value = 0.0f;
   SonareError err = sonare_scale_quantize_midi(root, mask, ref, midi, &out_value);
   if (err != SONARE_OK) {
@@ -510,14 +508,11 @@ Napi::Value SonareWrap::ScaleQuantizeMidi(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::ScaleMaskForMode(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (info.Length() < 2 || !info[0].IsNumber()) {
-    Napi::TypeError::New(env, "scaleMaskForMode: expected (root, mode)")
-        .ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-  const int root = node_narrow_int(env, info[0], node_arg_label(0).c_str());
+  if (!RequireNumberValue(env, info[0], "root")) return env.Undefined();
+  const int root = node_narrow_int(env, info[0], "root");
   uint16_t mask = 0;
-  const SonareError err = sonare_scale_mask_for_mode(root, node_mode_from_value(info[1]), &mask);
+  const SonareError err =
+      sonare_scale_mask_for_mode(root, node_mode_from_value(info[1], "mode"), &mask);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
@@ -533,13 +528,7 @@ Napi::Value SonareWrap::ScaleCorrectionSemitones(const Napi::CallbackInfo& info)
   uint16_t mask = 0;
   float ref = 0.0f;
   float midi = 0.0f;
-  if (!ParseScaleArgs(info, &root, &mask, &ref, &midi)) {
-    if (env.IsExceptionPending()) return env.Undefined();
-    Napi::TypeError::New(
-        env, "scaleCorrectionSemitones: expected (root, modeMask, midi, scaleReferenceMidi?)")
-        .ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
+  if (!ParseScaleArgs(info, &root, &mask, &ref, &midi)) return env.Undefined();
   float out_value = 0.0f;
   SonareError err = sonare_scale_correction_semitones(root, mask, ref, midi, &out_value);
   if (err != SONARE_OK) {
@@ -553,13 +542,11 @@ Napi::Value SonareWrap::ScaleCorrectionSemitones(const Napi::CallbackInfo& info)
 Napi::Value SonareWrap::ScalePitchClassEnabled(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (info.Length() < 3 || !info[0].IsNumber() || !info[1].IsNumber() || !info[2].IsNumber()) {
-    Napi::TypeError::New(env, "scalePitchClassEnabled: expected (root, modeMask, pitchClass)")
-        .ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
+  if (!RequireNumberValue(env, info[0], "root")) return env.Undefined();
+  if (!RequireNumberValue(env, info[1], "modeMask")) return env.Undefined();
+  if (!RequireNumberValue(env, info[2], "pitchClass")) return env.Undefined();
   int root = node_narrow_int(env, info[0], "root");
-  uint16_t mask = node_narrow_uint16(env, info[1], "mask");
+  uint16_t mask = node_narrow_uint16(env, info[1], "modeMask");
   int pitch_class = node_narrow_int(env, info[2], "pitchClass");
   int out_enabled = 0;
   SonareError err = sonare_scale_pitch_class_enabled(root, mask, pitch_class, &out_enabled);
@@ -589,18 +576,16 @@ class CResultGuard {
   T* result_;
 };
 
-Napi::Value StereoScalar(const Napi::CallbackInfo& info, StereoScalarFn fn, const char* fn_label) {
+Napi::Value StereoScalar(const Napi::CallbackInfo& info, StereoScalarFn fn) {
   Napi::Env env = info.Env();
   if (info.Length() < 2 || !IsFloat32Array(info[0]) || !IsFloat32Array(info[1])) {
-    Napi::TypeError::New(
-        env, std::string(fn_label) + ": expected (Float32Array left, Float32Array right)")
-        .ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "left and right must be Float32Arrays").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   auto left = info[0].As<Napi::Float32Array>();
   auto right = info[1].As<Napi::Float32Array>();
   if (left.ElementLength() != right.ElementLength()) {
-    Napi::RangeError::New(env, std::string(fn_label) + ": left and right must have the same length")
+    Napi::RangeError::New(env, "left and right must have the same length")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
@@ -620,30 +605,26 @@ Napi::Value StereoScalar(const Napi::CallbackInfo& info, StereoScalarFn fn, cons
 Napi::Value SonareWrap::MeteringStereoCorrelation(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  return StereoScalar(info, &sonare_metering_stereo_correlation, "meteringStereoCorrelation");
+  return StereoScalar(info, &sonare_metering_stereo_correlation);
   SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::MeteringStereoWidth(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  return StereoScalar(info, &sonare_metering_stereo_width, "meteringStereoWidth");
+  return StereoScalar(info, &sonare_metering_stereo_width);
   SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::MeteringVectorscope(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (info.Length() < 2 || !IsFloat32Array(info[0]) || !IsFloat32Array(info[1])) {
-    Napi::TypeError::New(env,
-                         "meteringVectorscope: expected (Float32Array left, Float32Array right)")
-        .ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
+  if (!RequireFloat32Array(info, 0, "left must be a Float32Array")) return env.Undefined();
+  if (!RequireFloat32Array(info, 1, "right must be a Float32Array")) return env.Undefined();
   auto left = info[0].As<Napi::Float32Array>();
   auto right = info[1].As<Napi::Float32Array>();
   if (left.ElementLength() != right.ElementLength()) {
-    Napi::RangeError::New(env, "meteringVectorscope: left and right must have the same length")
+    Napi::RangeError::New(env, "left and right must have the same length")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
@@ -676,16 +657,12 @@ Napi::Value SonareWrap::MeteringVectorscope(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::MeteringPhaseScope(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (info.Length() < 2 || !IsFloat32Array(info[0]) || !IsFloat32Array(info[1])) {
-    Napi::TypeError::New(env,
-                         "meteringPhaseScope: expected (Float32Array left, Float32Array right)")
-        .ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
+  if (!RequireFloat32Array(info, 0, "left must be a Float32Array")) return env.Undefined();
+  if (!RequireFloat32Array(info, 1, "right must be a Float32Array")) return env.Undefined();
   auto left = info[0].As<Napi::Float32Array>();
   auto right = info[1].As<Napi::Float32Array>();
   if (left.ElementLength() != right.ElementLength()) {
-    Napi::RangeError::New(env, "meteringPhaseScope: left and right must have the same length")
+    Napi::RangeError::New(env, "left and right must have the same length")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
@@ -728,8 +705,7 @@ Napi::Value SonareWrap::MeteringSpectrum(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (info.Length() < 1 || !IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "meteringSpectrum: expected Float32Array samples")
-        .ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   auto typed = info[0].As<Napi::Float32Array>();
@@ -764,8 +740,7 @@ Napi::Value SonareWrap::MeteringSpectrumFrame(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (info.Length() < 1 || !IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "meteringSpectrumFrame: expected Float32Array samples")
-        .ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   auto typed = info[0].As<Napi::Float32Array>();
@@ -928,8 +903,7 @@ Napi::Value SonareWrap::DetectClippingInstance(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   if (info.Length() < 1 || !info[0].IsObject()) {
-    Napi::TypeError::New(env, "expected a detectClipping options object")
-        .ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "options must be an object").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   Napi::Object opts = info[0].As<Napi::Object>();
@@ -938,7 +912,7 @@ Napi::Value SonareWrap::DetectClippingInstance(const Napi::CallbackInfo& info) {
     return env.Undefined();
   const int64_t min_region_value = Int64Property(opts, "minRegionSamples", 1);
   if (min_region_value < 0) {
-    Napi::RangeError::New(env, "minRegionSamples must be non-negative")
+    Napi::RangeError::New(env, "minRegionSamples must be an integer of at least 0")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
@@ -1097,18 +1071,15 @@ Napi::Value SonareWrap::Ebur128LoudnessRangeLuInstance(const Napi::CallbackInfo&
 Napi::Value SonareWrap::WaveformPeaks(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (info.Length() < 3 || !IsFloat32Array(info[0]) || !info[1].IsNumber() || !info[2].IsNumber()) {
-    Napi::TypeError::New(
-        env, "waveformPeaks: expected (Float32Array samples, channels, samplesPerBucket)")
-        .ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
+  if (!RequireFloat32Array(info, 0, "samples must be a Float32Array")) return env.Undefined();
+  if (!RequireNumberValue(env, info[1], "channels")) return env.Undefined();
+  if (!RequireNumberValue(env, info[2], "samplesPerBucket")) return env.Undefined();
   auto typed = info[0].As<Napi::Float32Array>();
   int channels = node_narrow_int(env, info[1], "channels");
   size_t samples_per_bucket = static_cast<size_t>(
-      std::max<int64_t>(0, node_narrow_int64(env, info[2], node_arg_label(2).c_str())));
+      std::max<int64_t>(0, node_narrow_int64(env, info[2], "samplesPerBucket")));
   if (channels <= 0 || typed.ElementLength() % static_cast<size_t>(channels) != 0) {
-    Napi::RangeError::New(env, "waveformPeaks: samples length must be a multiple of channels")
+    Napi::RangeError::New(env, "samples length must be a multiple of channels")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
@@ -1128,16 +1099,16 @@ Napi::Value SonareWrap::WaveformPeaks(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::WaveformPeakPyramid(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (info.Length() < 3 || !IsFloat32Array(info[0]) || !info[1].IsNumber() || !info[2].IsArray()) {
-    Napi::TypeError::New(env,
-                         "waveformPeakPyramid: expected (Float32Array samples, channels, levels)")
-        .ThrowAsJavaScriptException();
+  if (!RequireFloat32Array(info, 0, "samples must be a Float32Array")) return env.Undefined();
+  if (!RequireNumberValue(env, info[1], "channels")) return env.Undefined();
+  if (!info[2].IsArray()) {
+    Napi::TypeError::New(env, "levels must be an array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   auto typed = info[0].As<Napi::Float32Array>();
   int channels = node_narrow_int(env, info[1], "channels");
   if (channels <= 0 || typed.ElementLength() % static_cast<size_t>(channels) != 0) {
-    Napi::RangeError::New(env, "waveformPeakPyramid: samples length must be a multiple of channels")
+    Napi::RangeError::New(env, "samples length must be a multiple of channels")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
@@ -1147,8 +1118,7 @@ Napi::Value SonareWrap::WaveformPeakPyramid(const Napi::CallbackInfo& info) {
   for (uint32_t i = 0; i < js_levels.Length(); ++i) {
     Napi::Value item = js_levels.Get(i);
     if (!item.IsNumber()) {
-      Napi::TypeError::New(env, "waveformPeakPyramid: levels must be numbers")
-          .ThrowAsJavaScriptException();
+      Napi::TypeError::New(env, "levels must be numbers").ThrowAsJavaScriptException();
       return env.Undefined();
     }
     levels.push_back(

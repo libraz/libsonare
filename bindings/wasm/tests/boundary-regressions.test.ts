@@ -50,7 +50,7 @@ describe('boundary regressions (WASM)', () => {
     const mel = new Float32Array(8 * 4).fill(0.1);
     mel[3] = Number.NaN;
     expect(() => module.melToStft(mel, 8, 4, SR, 256, 0, 0, false)).toThrow(
-      /mel_to_stft: M contains a non-finite value/,
+      /melToStft: M contains a non-finite value/,
     );
     expect(() => module.melToAudio(mel, 8, 4, SR, 256, 64, 0, 0, 2, false)).toThrow(
       /non-finite value/,
@@ -59,7 +59,7 @@ describe('boundary regressions (WASM)', () => {
     const mfcc = new Float32Array(5 * 4).fill(0.1);
     mfcc[7] = Number.POSITIVE_INFINITY;
     expect(() => module.mfccToMel(mfcc, 5, 4, 8, 0)).toThrow(
-      /mfcc_to_mel: mfcc contains a non-finite value/,
+      /mfccToMel: mfcc contains a non-finite value/,
     );
     expect(() => module.mfccToAudio(mfcc, 5, 4, 8, SR, 256, 64, 0, 0, 2, false, 0)).toThrow(
       /non-finite value/,
@@ -68,7 +68,7 @@ describe('boundary regressions (WASM)', () => {
     const magnitude = new Float32Array(3 * 5).fill(1);
     magnitude[4] = Number.NaN;
     expect(() => module.griffinLim(magnitude, 3, 5, SR, 4, 1, 1, 0)).toThrow(
-      /griffin_lim: magnitude contains a non-finite value/,
+      /griffinLim: magnitude contains a non-finite value/,
     );
 
     const cq = new Float32Array(12 * 4).fill(0.5);

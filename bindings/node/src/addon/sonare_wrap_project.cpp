@@ -60,113 +60,138 @@ Napi::Object ProjectWrap::Init(Napi::Env env, Napi::Object exports) {
   Napi::Function func = DefineClass(
       env, "Project",
       {
-          InstanceMethod<&ProjectWrap::ToJson>("toJson"),
-          InstanceMethod<&ProjectWrap::SetSampleRate>("setSampleRate"),
-          InstanceMethod<&ProjectWrap::AddTrack>("addTrack"),
-          InstanceMethod<&ProjectWrap::AddClip>("addClip"),
-          InstanceMethod<&ProjectWrap::ImportExternalStems>("importExternalStems"),
-          InstanceMethod<&ProjectWrap::ApplyVocalEdit>("applyVocalEdit"),
-          InstanceMethod<&ProjectWrap::GetVocalEditDependencies>("getVocalEditDependencies"),
-          InstanceMethod<&ProjectWrap::RehydrateVocalEdits>("rehydrateVocalEdits"),
-          InstanceMethod<&ProjectWrap::AddLoopRecordingTakes>("addLoopRecordingTakes"),
-          InstanceMethod<&ProjectWrap::AddMidiClip>("addMidiClip"),
-          InstanceMethod<&ProjectWrap::SplitClip>("splitClip"),
-          InstanceMethod<&ProjectWrap::TrimClip>("trimClip"),
-          InstanceMethod<&ProjectWrap::MoveClip>("moveClip"),
-          InstanceMethod<&ProjectWrap::SetTrackKind>("setTrackKind"),
-          InstanceMethod<&ProjectWrap::SetClipWarpRef>("setClipWarpRef"),
-          InstanceMethod<&ProjectWrap::SetClipWarpMode>("setClipWarpMode"),
-          InstanceMethod<&ProjectWrap::SetWarpMap>("setWarpMap"),
-          InstanceMethod<&ProjectWrap::RemoveWarpMap>("removeWarpMap"),
-          InstanceMethod<&ProjectWrap::SetTrackMidiDestination>("setTrackMidiDestination"),
-          InstanceMethod<&ProjectWrap::SetPartRig>("setPartRig"),
-          InstanceMethod<&ProjectWrap::GetPartRig>("getPartRig"),
-          InstanceMethod<&ProjectWrap::ClearPartRig>("clearPartRig"),
-          InstanceMethod<&ProjectWrap::SetTrackGain>("setTrackGain"),
-          InstanceMethod<&ProjectWrap::SetTrackMute>("setTrackMute"),
-          InstanceMethod<&ProjectWrap::SetTrackSolo>("setTrackSolo"),
-          InstanceMethod<&ProjectWrap::SetTrackPan>("setTrackPan"),
-          InstanceMethod<&ProjectWrap::RemoveClip>("removeClip"),
-          InstanceMethod<&ProjectWrap::SetClipGain>("setClipGain"),
-          InstanceMethod<&ProjectWrap::SetClipFade>("setClipFade"),
-          InstanceMethod<&ProjectWrap::SetClipTakes>("setClipTakes"),
-          InstanceMethod<&ProjectWrap::SetClipCompSegments>("setClipCompSegments"),
-          InstanceMethod<&ProjectWrap::SetClipLoop>("setClipLoop"),
-          InstanceMethod<&ProjectWrap::SetClipSource>("setClipSource"),
-          InstanceMethod<&ProjectWrap::DuplicateClip>("duplicateClip"),
-          InstanceMethod<&ProjectWrap::RemoveTrack>("removeTrack"),
-          InstanceMethod<&ProjectWrap::RenameTrack>("renameTrack"),
-          InstanceMethod<&ProjectWrap::SetTrackRoute>("setTrackRoute"),
-          InstanceMethod<&ProjectWrap::AddAutomationLane>("addAutomationLane"),
-          InstanceMethod<&ProjectWrap::EditAutomationLane>("editAutomationLane"),
-          InstanceMethod<&ProjectWrap::RemoveAutomationLane>("removeAutomationLane"),
-          InstanceMethod<&ProjectWrap::Undo>("undo"),
-          InstanceMethod<&ProjectWrap::Redo>("redo"),
-          InstanceMethod<&ProjectWrap::ClearHistory>("clearHistory"),
-          InstanceMethod<&ProjectWrap::SetMaxUndoDepth>("setMaxUndoDepth"),
-          InstanceMethod<&ProjectWrap::SetMaxHistoryBytes>("setMaxHistoryBytes"),
-          InstanceMethod<&ProjectWrap::SetMidiEvents>("setMidiEvents"),
-          InstanceMethod<&ProjectWrap::ImportSmf>("importSmf"),
-          InstanceMethod<&ProjectWrap::ExportSmf>("exportSmf"),
-          InstanceMethod<&ProjectWrap::ImportClipFile>("importClipFile"),
-          InstanceMethod<&ProjectWrap::ExportClipFile>("exportClipFile"),
-          InstanceMethod<&ProjectWrap::SetProgram>("setProgram"),
-          InstanceMethod<&ProjectWrap::SetProgramOnChannel>("setProgramOnChannel"),
-          InstanceMethod<&ProjectWrap::BakeMidiFx>("bakeMidiFx"),
-          InstanceMethod<&ProjectWrap::BakeMidiFxWithSourceIndex>("bakeMidiFxWithSourceIndex"),
-          InstanceMethod<&ProjectWrap::PreviewMidiFxCount>("previewMidiFxCount"),
-          InstanceMethod<&ProjectWrap::SetMidiFx>("setMidiFx"),
-          InstanceMethod<&ProjectWrap::ValidateMidiNotes>("validateMidiNotes"),
-          InstanceMethod<&ProjectWrap::TranscribeToClip>("transcribeToClip"),
-          InstanceMethod<&ProjectWrap::AutoTempo>("autoTempo"),
-          InstanceMethod<&ProjectWrap::AnalyzeTempo>("analyzeTempo"),
-          InstanceMethod<&ProjectWrap::SnapToGrid>("snapToGrid"),
-          InstanceMethod<&ProjectWrap::AnnotateKeys>("annotateKeys"),
-          InstanceMethod<&ProjectWrap::AnnotateChords>("annotateChords"),
-          InstanceMethod<&ProjectWrap::SetAssistSidecar>("setAssistSidecar"),
-          InstanceMethod<&ProjectWrap::AssistSidecarCount>("assistSidecarCount"),
-          InstanceMethod<&ProjectWrap::GetAssistSidecar>("getAssistSidecar"),
-          InstanceMethod<&ProjectWrap::AssistSidecars>("assistSidecars"),
-          InstanceMethod<&ProjectWrap::Compile>("compile"),
-          InstanceMethod<&ProjectWrap::CompileTimeline>("compileTimeline"),
-          InstanceMethod<&ProjectWrap::LastBounceCompileResult>("lastBounceCompileResult"),
-          InstanceMethod<&ProjectWrap::Bounce>("bounce"),
-          InstanceMethod<&ProjectWrap::BounceWithBuiltinInstruments>(
-              "bounceWithBuiltinInstruments"),
-          InstanceMethod<&ProjectWrap::BounceWithInstruments>("bounceWithInstruments"),
-          InstanceMethod<&ProjectWrap::BounceWithSynthInstruments>("bounceWithSynthInstruments"),
-          InstanceMethod<&ProjectWrap::LoadSoundFont>("loadSoundFont"),
-          InstanceMethod<&ProjectWrap::ClearSoundFont>("clearSoundFont"),
-          InstanceMethod<&ProjectWrap::SoundFontPresetCount>("soundFontPresetCount"),
-          InstanceMethod<&ProjectWrap::SoundFontManifest>("soundFontManifest"),
-          InstanceMethod<&ProjectWrap::BounceWithSf2Instruments>("bounceWithSf2Instruments"),
-          InstanceMethod<&ProjectWrap::GetSampleRate>("getSampleRate"),
-          InstanceMethod<&ProjectWrap::SetOverlapPolicy>("setOverlapPolicy"),
-          InstanceMethod<&ProjectWrap::GetOverlapPolicy>("getOverlapPolicy"),
-          InstanceMethod<&ProjectWrap::SetMixerSceneJson>("setMixerSceneJson"),
-          InstanceMethod<&ProjectWrap::SetMarker>("setMarker"),
-          InstanceMethod<&ProjectWrap::SetMarkerEx>("setMarkerEx"),
-          InstanceMethod<&ProjectWrap::MarkerByIndex>("markerByIndex"),
-          InstanceMethod<&ProjectWrap::TrackByIndex>("trackByIndex"),
-          InstanceMethod<&ProjectWrap::ClipByIndex>("clipByIndex"),
-          InstanceMethod<&ProjectWrap::SourceByIndex>("sourceByIndex"),
-          InstanceMethod<&ProjectWrap::SetTempoSegments>("setTempoSegments"),
-          InstanceMethod<&ProjectWrap::SetTimeSignatures>("setTimeSignatures"),
-          InstanceMethod<&ProjectWrap::TrackCount>("trackCount"),
-          InstanceMethod<&ProjectWrap::ClipCount>("clipCount"),
-          InstanceMethod<&ProjectWrap::SourceCount>("sourceCount"),
-          InstanceMethod<&ProjectWrap::UnresolvedAudioSourceIds>("unresolvedAudioSourceIds"),
-          InstanceMethod<&ProjectWrap::UnresolvedAudioSources>("unresolvedAudioSources"),
-          InstanceMethod<&ProjectWrap::SetSourceAudio>("setSourceAudio"),
-          InstanceMethod<&ProjectWrap::SetAudioSourceMetadata>("setAudioSourceMetadata"),
-          InstanceMethod<&ProjectWrap::TempoSegmentCount>("tempoSegmentCount"),
-          InstanceMethod<&ProjectWrap::TempoSegmentByIndex>("tempoSegmentByIndex"),
-          InstanceMethod<&ProjectWrap::TimeSignatureByIndex>("timeSignatureByIndex"),
-          InstanceMethod<&ProjectWrap::TimeSignatureCount>("timeSignatureCount"),
-          InstanceMethod<&ProjectWrap::MarkerCount>("markerCount"),
-          InstanceMethod<&ProjectWrap::Destroy>("destroy"),
-          StaticMethod<&ProjectWrap::FromJson>("fromJson"),
-          StaticMethod<&ProjectWrap::FromJsonWithDiagnostics>("fromJsonWithDiagnostics"),
+          InstanceMethod<&ProjectWrap::ToJson>("toJson", napi_default_method),
+          InstanceMethod<&ProjectWrap::SetSampleRate>("setSampleRate", napi_default_method),
+          InstanceMethod<&ProjectWrap::AddTrack>("addTrack", napi_default_method),
+          InstanceMethod<&ProjectWrap::AddClip>("addClip", napi_default_method),
+          InstanceMethod<&ProjectWrap::ImportExternalStems>("importExternalStems",
+                                                            napi_default_method),
+          InstanceMethod<&ProjectWrap::ApplyVocalEdit>("applyVocalEdit", napi_default_method),
+          InstanceMethod<&ProjectWrap::GetVocalEditDependencies>("getVocalEditDependencies",
+                                                                 napi_default_method),
+          InstanceMethod<&ProjectWrap::RehydrateVocalEdits>("rehydrateVocalEdits",
+                                                            napi_default_method),
+          InstanceMethod<&ProjectWrap::AddLoopRecordingTakes>("addLoopRecordingTakes",
+                                                              napi_default_method),
+          InstanceMethod<&ProjectWrap::AddMidiClip>("addMidiClip", napi_default_method),
+          InstanceMethod<&ProjectWrap::SplitClip>("splitClip", napi_default_method),
+          InstanceMethod<&ProjectWrap::TrimClip>("trimClip", napi_default_method),
+          InstanceMethod<&ProjectWrap::MoveClip>("moveClip", napi_default_method),
+          InstanceMethod<&ProjectWrap::SetTrackKind>("setTrackKind", napi_default_method),
+          InstanceMethod<&ProjectWrap::SetClipWarpRef>("setClipWarpRef", napi_default_method),
+          InstanceMethod<&ProjectWrap::SetClipWarpMode>("setClipWarpMode", napi_default_method),
+          InstanceMethod<&ProjectWrap::SetWarpMap>("setWarpMap", napi_default_method),
+          InstanceMethod<&ProjectWrap::RemoveWarpMap>("removeWarpMap", napi_default_method),
+          InstanceMethod<&ProjectWrap::SetTrackMidiDestination>("setTrackMidiDestination",
+                                                                napi_default_method),
+          InstanceMethod<&ProjectWrap::SetPartRig>("setPartRig", napi_default_method),
+          InstanceMethod<&ProjectWrap::GetPartRig>("getPartRig", napi_default_method),
+          InstanceMethod<&ProjectWrap::ClearPartRig>("clearPartRig", napi_default_method),
+          InstanceMethod<&ProjectWrap::SetTrackGain>("setTrackGain", napi_default_method),
+          InstanceMethod<&ProjectWrap::SetTrackMute>("setTrackMute", napi_default_method),
+          InstanceMethod<&ProjectWrap::SetTrackSolo>("setTrackSolo", napi_default_method),
+          InstanceMethod<&ProjectWrap::SetTrackPan>("setTrackPan", napi_default_method),
+          InstanceMethod<&ProjectWrap::RemoveClip>("removeClip", napi_default_method),
+          InstanceMethod<&ProjectWrap::SetClipGain>("setClipGain", napi_default_method),
+          InstanceMethod<&ProjectWrap::SetClipFade>("setClipFade", napi_default_method),
+          InstanceMethod<&ProjectWrap::SetClipTakes>("setClipTakes", napi_default_method),
+          InstanceMethod<&ProjectWrap::SetClipCompSegments>("setClipCompSegments",
+                                                            napi_default_method),
+          InstanceMethod<&ProjectWrap::SetClipLoop>("setClipLoop", napi_default_method),
+          InstanceMethod<&ProjectWrap::SetClipSource>("setClipSource", napi_default_method),
+          InstanceMethod<&ProjectWrap::DuplicateClip>("duplicateClip", napi_default_method),
+          InstanceMethod<&ProjectWrap::RemoveTrack>("removeTrack", napi_default_method),
+          InstanceMethod<&ProjectWrap::RenameTrack>("renameTrack", napi_default_method),
+          InstanceMethod<&ProjectWrap::SetTrackRoute>("setTrackRoute", napi_default_method),
+          InstanceMethod<&ProjectWrap::AddAutomationLane>("addAutomationLane", napi_default_method),
+          InstanceMethod<&ProjectWrap::EditAutomationLane>("editAutomationLane",
+                                                           napi_default_method),
+          InstanceMethod<&ProjectWrap::RemoveAutomationLane>("removeAutomationLane",
+                                                             napi_default_method),
+          InstanceMethod<&ProjectWrap::Undo>("undo", napi_default_method),
+          InstanceMethod<&ProjectWrap::Redo>("redo", napi_default_method),
+          InstanceMethod<&ProjectWrap::ClearHistory>("clearHistory", napi_default_method),
+          InstanceMethod<&ProjectWrap::SetMaxUndoDepth>("setMaxUndoDepth", napi_default_method),
+          InstanceMethod<&ProjectWrap::SetMaxHistoryBytes>("setMaxHistoryBytes",
+                                                           napi_default_method),
+          InstanceMethod<&ProjectWrap::SetMidiEvents>("setMidiEvents", napi_default_method),
+          InstanceMethod<&ProjectWrap::ImportSmf>("importSmf", napi_default_method),
+          InstanceMethod<&ProjectWrap::ExportSmf>("exportSmf", napi_default_method),
+          InstanceMethod<&ProjectWrap::ImportClipFile>("importClipFile", napi_default_method),
+          InstanceMethod<&ProjectWrap::ExportClipFile>("exportClipFile", napi_default_method),
+          InstanceMethod<&ProjectWrap::SetProgram>("setProgram", napi_default_method),
+          InstanceMethod<&ProjectWrap::SetProgramOnChannel>("setProgramOnChannel",
+                                                            napi_default_method),
+          InstanceMethod<&ProjectWrap::BakeMidiFx>("bakeMidiFx", napi_default_method),
+          InstanceMethod<&ProjectWrap::BakeMidiFxWithSourceIndex>("bakeMidiFxWithSourceIndex",
+                                                                  napi_default_method),
+          InstanceMethod<&ProjectWrap::PreviewMidiFxCount>("previewMidiFxCount",
+                                                           napi_default_method),
+          InstanceMethod<&ProjectWrap::SetMidiFx>("setMidiFx", napi_default_method),
+          InstanceMethod<&ProjectWrap::ValidateMidiNotes>("validateMidiNotes", napi_default_method),
+          InstanceMethod<&ProjectWrap::TranscribeToClip>("transcribeToClip", napi_default_method),
+          InstanceMethod<&ProjectWrap::AutoTempo>("autoTempo", napi_default_method),
+          InstanceMethod<&ProjectWrap::AnalyzeTempo>("analyzeTempo", napi_default_method),
+          InstanceMethod<&ProjectWrap::SnapToGrid>("snapToGrid", napi_default_method),
+          InstanceMethod<&ProjectWrap::AnnotateKeys>("annotateKeys", napi_default_method),
+          InstanceMethod<&ProjectWrap::AnnotateChords>("annotateChords", napi_default_method),
+          InstanceMethod<&ProjectWrap::SetAssistSidecar>("setAssistSidecar", napi_default_method),
+          InstanceMethod<&ProjectWrap::AssistSidecarCount>("assistSidecarCount",
+                                                           napi_default_method),
+          InstanceMethod<&ProjectWrap::GetAssistSidecar>("getAssistSidecar", napi_default_method),
+          InstanceMethod<&ProjectWrap::AssistSidecars>("assistSidecars", napi_default_method),
+          InstanceMethod<&ProjectWrap::Compile>("compile", napi_default_method),
+          InstanceMethod<&ProjectWrap::CompileTimeline>("compileTimeline", napi_default_method),
+          InstanceMethod<&ProjectWrap::LastBounceCompileResult>("lastBounceCompileResult",
+                                                                napi_default_method),
+          InstanceMethod<&ProjectWrap::Bounce>("bounce", napi_default_method),
+          InstanceMethod<&ProjectWrap::BounceWithBuiltinInstruments>("bounceWithBuiltinInstruments",
+                                                                     napi_default_method),
+          InstanceMethod<&ProjectWrap::BounceWithInstruments>("bounceWithInstruments",
+                                                              napi_default_method),
+          InstanceMethod<&ProjectWrap::BounceWithSynthInstruments>("bounceWithSynthInstruments",
+                                                                   napi_default_method),
+          InstanceMethod<&ProjectWrap::LoadSoundFont>("loadSoundFont", napi_default_method),
+          InstanceMethod<&ProjectWrap::ClearSoundFont>("clearSoundFont", napi_default_method),
+          InstanceMethod<&ProjectWrap::SoundFontPresetCount>("soundFontPresetCount",
+                                                             napi_default_method),
+          InstanceMethod<&ProjectWrap::SoundFontManifest>("soundFontManifest", napi_default_method),
+          InstanceMethod<&ProjectWrap::BounceWithSf2Instruments>("bounceWithSf2Instruments",
+                                                                 napi_default_method),
+          InstanceMethod<&ProjectWrap::GetSampleRate>("getSampleRate", napi_default_method),
+          InstanceMethod<&ProjectWrap::SetOverlapPolicy>("setOverlapPolicy", napi_default_method),
+          InstanceMethod<&ProjectWrap::GetOverlapPolicy>("getOverlapPolicy", napi_default_method),
+          InstanceMethod<&ProjectWrap::SetMixerSceneJson>("setMixerSceneJson", napi_default_method),
+          InstanceMethod<&ProjectWrap::SetMarker>("setMarker", napi_default_method),
+          InstanceMethod<&ProjectWrap::SetMarkerEx>("setMarkerEx", napi_default_method),
+          InstanceMethod<&ProjectWrap::MarkerByIndex>("markerByIndex", napi_default_method),
+          InstanceMethod<&ProjectWrap::TrackByIndex>("trackByIndex", napi_default_method),
+          InstanceMethod<&ProjectWrap::ClipByIndex>("clipByIndex", napi_default_method),
+          InstanceMethod<&ProjectWrap::SourceByIndex>("sourceByIndex", napi_default_method),
+          InstanceMethod<&ProjectWrap::SetTempoSegments>("setTempoSegments", napi_default_method),
+          InstanceMethod<&ProjectWrap::SetTimeSignatures>("setTimeSignatures", napi_default_method),
+          InstanceMethod<&ProjectWrap::TrackCount>("trackCount", napi_default_method),
+          InstanceMethod<&ProjectWrap::ClipCount>("clipCount", napi_default_method),
+          InstanceMethod<&ProjectWrap::SourceCount>("sourceCount", napi_default_method),
+          InstanceMethod<&ProjectWrap::UnresolvedAudioSourceIds>("unresolvedAudioSourceIds",
+                                                                 napi_default_method),
+          InstanceMethod<&ProjectWrap::UnresolvedAudioSources>("unresolvedAudioSources",
+                                                               napi_default_method),
+          InstanceMethod<&ProjectWrap::SetSourceAudio>("setSourceAudio", napi_default_method),
+          InstanceMethod<&ProjectWrap::SetAudioSourceMetadata>("setAudioSourceMetadata",
+                                                               napi_default_method),
+          InstanceMethod<&ProjectWrap::TempoSegmentCount>("tempoSegmentCount", napi_default_method),
+          InstanceMethod<&ProjectWrap::TempoSegmentByIndex>("tempoSegmentByIndex",
+                                                            napi_default_method),
+          InstanceMethod<&ProjectWrap::TimeSignatureByIndex>("timeSignatureByIndex",
+                                                             napi_default_method),
+          InstanceMethod<&ProjectWrap::TimeSignatureCount>("timeSignatureCount",
+                                                           napi_default_method),
+          InstanceMethod<&ProjectWrap::MarkerCount>("markerCount", napi_default_method),
+          InstanceMethod<&ProjectWrap::Destroy>("destroy", napi_default_method),
+          StaticMethod<&ProjectWrap::FromJson>("fromJson", napi_default_method),
+          StaticMethod<&ProjectWrap::FromJsonWithDiagnostics>("fromJsonWithDiagnostics",
+                                                              napi_default_method),
       });
   exports.Set("Project", func);
   return exports;
@@ -234,7 +259,7 @@ Napi::Value ProjectWrap::FromJson(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (info.Length() < 1 || !info[0].IsString()) {
-    Napi::TypeError::New(env, "fromJson expects a JSON string").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "json must be a string").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   const uint32_t abi_version = sonare_project_abi_version();
@@ -267,8 +292,7 @@ Napi::Value ProjectWrap::FromJsonWithDiagnostics(const Napi::CallbackInfo& info)
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (info.Length() < 1 || !info[0].IsString()) {
-    Napi::TypeError::New(env, "fromJsonWithDiagnostics expects a JSON string")
-        .ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "json must be a string").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   const uint32_t abi_version = sonare_project_abi_version();
@@ -549,7 +573,7 @@ Napi::Value ProjectWrap::SetTempoSegments(const Napi::CallbackInfo& info) {
       segments.push_back(seg);
     }
   } else if (info.Length() > 0 && !info[0].IsUndefined() && !info[0].IsNull()) {
-    Napi::TypeError::New(env, "setTempoSegments expects an array").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "segments must be an array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   ThrowIfError(env, sonare_project_set_tempo_segments(
@@ -581,7 +605,7 @@ Napi::Value ProjectWrap::SetTimeSignatures(const Napi::CallbackInfo& info) {
       segments.push_back(seg);
     }
   } else if (info.Length() > 0 && !info[0].IsUndefined() && !info[0].IsNull()) {
-    Napi::TypeError::New(env, "setTimeSignatures expects an array").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "segments must be an array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   ThrowIfError(env, sonare_project_set_time_signatures(
@@ -668,10 +692,16 @@ Napi::Value ProjectWrap::SetSourceAudio(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
-  if (info.Length() < 4 || !sonare_node::IsFloat32Array(info[1])) {
-    Napi::TypeError::New(env,
-                         "setSourceAudio expects (sourceId, Float32Array, channels, sampleRate)")
-        .ThrowAsJavaScriptException();
+  if (!sonare_node::IsFloat32Array(info[1])) {
+    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (info.Length() < 3) {
+    Napi::TypeError::New(env, "channels must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (info.Length() < 4) {
+    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   uint32_t source_id = 0;

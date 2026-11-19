@@ -248,8 +248,8 @@ inline void node_refuse_fraction(Napi::Env env, const Napi::Value& value, const 
   }
 }
 
-/// @brief The subject an out-of-range positional argument is named by.
-inline std::string node_arg_label(size_t index) { return "argument " + std::to_string(index); }
+/// @brief The largest int as text, the upper limit named by "an integer in [lo, hi]" refusals.
+inline std::string node_int_max_text() { return std::to_string(std::numeric_limits<int>::max()); }
 
 /// @brief The wording every embedded-NUL refusal reports.
 inline std::string node_nul_message(const std::string& name) {
@@ -303,8 +303,9 @@ inline void node_require_property_type(Napi::Env env, bool ok, const char* key,
 
 /// @brief Refuses an own enumerable key of @p obj that is in neither @p allowed nor @p extra,
 ///        so a renamed key cannot be silently read as absent.
-/// @throws Napi::TypeError naming @p subject and the key.
-inline void RefuseUnknownKeys(const Napi::Object& obj, const char* subject,
+/// @throws Napi::TypeError naming @p field (the argument or option the object was read from) and
+///         the key.
+inline void RefuseUnknownKeys(const Napi::Object& obj, const char* field,
                               const std::vector<const char*>& allowed,
                               std::initializer_list<const char*> extra = {}) {
   const Napi::Array names = obj.GetPropertyNames();
@@ -315,7 +316,7 @@ inline void RefuseUnknownKeys(const Napi::Object& obj, const char* subject,
         std::any_of(extra.begin(), extra.end(), matches)) {
       continue;
     }
-    throw Napi::TypeError::New(obj.Env(), std::string(subject) + ": unknown option '" + key + "'");
+    throw Napi::TypeError::New(obj.Env(), std::string(field) + ": unknown option '" + key + "'");
   }
 }
 

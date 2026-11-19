@@ -18,7 +18,7 @@ Napi::Value SonareWrap::HzToMel(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
   if (info.Length() < 1 || !info[0].IsNumber()) {
-    Napi::TypeError::New(env, "Expected number argument").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "hz must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -32,7 +32,7 @@ Napi::Value SonareWrap::MelToHz(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
   if (info.Length() < 1 || !info[0].IsNumber()) {
-    Napi::TypeError::New(env, "Expected number argument").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "mel must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -46,7 +46,7 @@ Napi::Value SonareWrap::HzToMidi(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
   if (info.Length() < 1 || !info[0].IsNumber()) {
-    Napi::TypeError::New(env, "Expected number argument").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "hz must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -60,7 +60,7 @@ Napi::Value SonareWrap::MidiToHz(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
   if (info.Length() < 1 || !info[0].IsNumber()) {
-    Napi::TypeError::New(env, "Expected number argument").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "midi must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -74,7 +74,7 @@ Napi::Value SonareWrap::HzToNote(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
   if (info.Length() < 1 || !info[0].IsNumber()) {
-    Napi::TypeError::New(env, "Expected number argument").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "hz must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -88,7 +88,7 @@ Napi::Value SonareWrap::NoteToHz(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
   if (info.Length() < 1 || !info[0].IsString()) {
-    Napi::TypeError::New(env, "Expected string argument").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "note must be a string").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -101,14 +101,13 @@ Napi::Value SonareWrap::NoteToHz(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::FramesToTime(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
-  if (info.Length() < 3 || !info[0].IsNumber() || !info[1].IsNumber() || !info[2].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (frames, sr, hopLength)").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
+  if (!RequireNumberValue(env, info[0], "frames")) return env.Undefined();
+  if (!RequireNumberValue(env, info[1], "sampleRate")) return env.Undefined();
+  if (!RequireNumberValue(env, info[2], "hopLength")) return env.Undefined();
 
   SONARE_NODE_TRY
   int frames = node_narrow_int(env, info[0], "frames");
-  int sr = node_narrow_int(env, info[1], "sr");
+  int sr = node_narrow_int(env, info[1], "sampleRate");
   int hop_length = node_narrow_int(env, info[2], "hopLength");
 
   return Napi::Number::New(env,
@@ -119,14 +118,13 @@ Napi::Value SonareWrap::FramesToTime(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::TimeToFrames(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
-  if (info.Length() < 3 || !info[0].IsNumber() || !info[1].IsNumber() || !info[2].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (time, sr, hopLength)").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
+  if (!RequireNumberValue(env, info[0], "time")) return env.Undefined();
+  if (!RequireNumberValue(env, info[1], "sampleRate")) return env.Undefined();
+  if (!RequireNumberValue(env, info[2], "hopLength")) return env.Undefined();
 
   SONARE_NODE_TRY
   float time = node_narrow_finite_float(env, info[0], "time");
-  int sr = node_narrow_int(env, info[1], "sr");
+  int sr = node_narrow_int(env, info[1], "sampleRate");
   int hop_length = node_narrow_int(env, info[2], "hopLength");
 
   return Napi::Number::New(env, sonare::time_to_frames(time, sr, hop_length));
@@ -136,13 +134,10 @@ Napi::Value SonareWrap::TimeToFrames(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::FramesToSamples(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (info.Length() < 1 || !info[0].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (frames, hopLength?, nFft?)").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
+  if (!RequireNumberValue(env, info[0], "frames")) return env.Undefined();
   int frames = node_narrow_int(env, info[0], "frames");
   int hop{};
-  if (!RequiredIntArg(env, info, 1, "hop", &hop)) return env.Undefined();
+  if (!RequiredIntArg(env, info, 1, "hopLength", &hop)) return env.Undefined();
   int n_fft{};
   if (!OptionalIntArg(env, info, 2, "nFft", 0, &n_fft)) return env.Undefined();
   return Napi::Number::New(env, sonare_frames_to_samples(frames, hop, n_fft));
@@ -152,13 +147,10 @@ Napi::Value SonareWrap::FramesToSamples(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::SamplesToFrames(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (info.Length() < 1 || !info[0].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (samples, hopLength?, nFft?)").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
+  if (!RequireNumberValue(env, info[0], "samples")) return env.Undefined();
   int samples = node_narrow_int(env, info[0], "samples");
   int hop{};
-  if (!RequiredIntArg(env, info, 1, "hop", &hop)) return env.Undefined();
+  if (!RequiredIntArg(env, info, 1, "hopLength", &hop)) return env.Undefined();
   int n_fft{};
   if (!OptionalIntArg(env, info, 2, "nFft", 0, &n_fft)) return env.Undefined();
   return Napi::Number::New(env, sonare_samples_to_frames(samples, hop, n_fft));
@@ -168,7 +160,7 @@ Napi::Value SonareWrap::SamplesToFrames(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::PowerToDb(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (!RequireFloat32Array(info, 0, "Expected Float32Array")) {
+  if (!RequireFloat32Array(info, 0, "values must be a Float32Array")) {
     return env.Undefined();
   }
   auto arr = info[0].As<Napi::Float32Array>();
@@ -190,7 +182,7 @@ Napi::Value SonareWrap::PowerToDb(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::AmplitudeToDb(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (!RequireFloat32Array(info, 0, "Expected Float32Array")) {
+  if (!RequireFloat32Array(info, 0, "values must be a Float32Array")) {
     return env.Undefined();
   }
   auto arr = info[0].As<Napi::Float32Array>();
@@ -212,7 +204,7 @@ Napi::Value SonareWrap::AmplitudeToDb(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::DbToPower(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (!RequireFloat32Array(info, 0, "Expected Float32Array")) {
+  if (!RequireFloat32Array(info, 0, "values must be a Float32Array")) {
     return env.Undefined();
   }
   auto arr = info[0].As<Napi::Float32Array>();
@@ -229,7 +221,7 @@ Napi::Value SonareWrap::DbToPower(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::DbToAmplitude(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (!RequireFloat32Array(info, 0, "Expected Float32Array")) {
+  if (!RequireFloat32Array(info, 0, "values must be a Float32Array")) {
     return env.Undefined();
   }
   auto arr = info[0].As<Napi::Float32Array>();

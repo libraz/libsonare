@@ -73,7 +73,7 @@ describe('RealtimeEngine.pushMidiProgram', () => {
         ],
       ];
       for (const [call, message] of calls) {
-        expect(call).toThrow(new RangeError(`pushMidiProgram: ${message}`));
+        expect(call).toThrow(new RangeError(`RealtimeEngine.pushMidiProgram: ${message}`));
       }
     } finally {
       engine.destroy();
@@ -108,10 +108,10 @@ describe('RealtimeEngine.pushMidiInputProgram', () => {
         engine.pushMidiInputProgram(0, 0, 5, { msb: 1, lsb: 2, valid: false } as never),
       ).toThrow(TypeError);
       expect(() => engine.pushMidiInputProgram(0, 16, 0)).toThrow(
-        new RangeError('pushMidiInputProgram: channel must be in [0, 15]'),
+        new RangeError('RealtimeEngine.pushMidiInputProgram: channel must be in [0, 15]'),
       );
       expect(() => engine.pushMidiInputProgram(0, 0, 128)).toThrow(
-        new RangeError('pushMidiInputProgram: program must be in [0, 127]'),
+        new RangeError('RealtimeEngine.pushMidiInputProgram: program must be in [0, 127]'),
       );
     } finally {
       engine.destroy();

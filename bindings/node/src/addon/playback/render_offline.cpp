@@ -14,8 +14,7 @@ namespace sonare_node {
 Napi::Value RenderPlayback(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (!RequireFloat32Array(info, 0,
-                           "Expected (Float32Array, inChannels, sampleRate, configJson, hrtf?)")) {
+  if (!RequireFloat32Array(info, 0, "samples must be a Float32Array")) {
     return env.Undefined();
   }
   int in_channels = 0;

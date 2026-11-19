@@ -11,12 +11,13 @@ Napi::FunctionReference* g_hrtf_set_constructor = nullptr;
 }  // namespace
 
 Napi::Object HrtfSetWrap::Init(Napi::Env env, Napi::Object exports) {
-  Napi::Function func = DefineClass(env, "HrtfSet",
-                                    {
-                                        StaticMethod<&HrtfSetWrap::Default>("default"),
-                                        StaticMethod<&HrtfSetWrap::FromBytes>("fromBytes"),
-                                        InstanceMethod<&HrtfSetWrap::Destroy>("destroy"),
-                                    });
+  Napi::Function func =
+      DefineClass(env, "HrtfSet",
+                  {
+                      StaticMethod<&HrtfSetWrap::Default>("default", napi_default_method),
+                      StaticMethod<&HrtfSetWrap::FromBytes>("fromBytes", napi_default_method),
+                      InstanceMethod<&HrtfSetWrap::Destroy>("destroy", napi_default_method),
+                  });
 
   g_hrtf_set_constructor = new Napi::FunctionReference();
   *g_hrtf_set_constructor = Napi::Persistent(func);
@@ -78,8 +79,7 @@ Napi::Value HrtfSetWrap::FromBytes(const Napi::CallbackInfo& info) {
     data = array.Data();
     size = array.ByteLength();
   } else {
-    Napi::TypeError::New(env, "Expected Buffer or Uint8Array argument")
-        .ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "bytes must be a Buffer or Uint8Array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   SonareHrtfSet* handle = nullptr;

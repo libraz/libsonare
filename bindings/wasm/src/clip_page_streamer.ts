@@ -1,3 +1,4 @@
+import { entryClass, withEntry } from './internal/entry.js';
 import { releasedHandleError } from './internal/handle_guard.js';
 import {
   createOpfsClipPageProvider,
@@ -104,6 +105,7 @@ const streamerEpochs = new WeakMap<ClipPageStreamer, OwnerEpoch>();
  * per animation frame or per worklet control tick on the main/control thread
  * (never the audio thread; fetches are asynchronous).
  */
+@entryClass('ClipPageStreamer')
 export class ClipPageStreamer {
   private readonly engine: ClipPageStreamerEngine;
   private readonly readAheadPages: number;
@@ -371,46 +373,48 @@ export async function attachOpfsClipStream(
   streamerOrEngine: ClipPageStreamer | WorkletOpfsClipStreamHost,
   options: OpfsClipStreamOptions,
 ): Promise<OpfsClipStream> {
-  if (!(streamerOrEngine instanceof ClipPageStreamer)) {
-    return streamerOrEngine.attachOpfsClipStream(options);
-  }
-  const streamer = streamerOrEngine;
-  if (!options) {
-    throw new TypeError('attachOpfsClipStream requires options.');
-  }
-  const { clipId, primePages = 1, ...providerOptions } = options;
-  const epoch = streamerEpochs.get(streamer);
-  if (!epoch || epoch.closed) {
-    throw releasedHandleError('ClipPageStreamer', 'is closed.');
-  }
-  const token = epoch.current();
-  const binding = createOpfsClipPageProvider(providerOptions);
-  // A destroy() while priming reclaims the binding before it is registered.
-  const releaseOnClose = epoch.onClose(() => binding.destroy());
-  try {
-    const lastPage = Math.ceil(providerOptions.numSamples / providerOptions.pageFrames) - 1;
-    const primed: number[] = [];
-    for (let page = 0; page < primePages && page <= lastPage; ++page) {
-      const ok = await binding.supplyPage(page);
-      epoch.assertCurrent(token);
-      if (ok) {
-        primed.push(page);
-      }
+  return withEntry('attachOpfsClipStream', async () => {
+    if (!(streamerOrEngine instanceof ClipPageStreamer)) {
+      return streamerOrEngine.attachOpfsClipStream(options);
     }
-    streamer.addSource(
-      {
-        clipId,
-        binding,
-        pageFrames: providerOptions.pageFrames,
-        numSamples: providerOptions.numSamples,
-      },
-      primed,
-    );
-  } catch (error) {
-    binding.destroy();
-    throw error;
-  } finally {
-    releaseOnClose();
-  }
-  return { binding, provider: binding.provider };
+    const streamer = streamerOrEngine;
+    if (!options) {
+      throw new TypeError('attachOpfsClipStream requires options.');
+    }
+    const { clipId, primePages = 1, ...providerOptions } = options;
+    const epoch = streamerEpochs.get(streamer);
+    if (!epoch || epoch.closed) {
+      throw releasedHandleError('ClipPageStreamer', 'is closed.');
+    }
+    const token = epoch.current();
+    const binding = createOpfsClipPageProvider(providerOptions);
+    // A destroy() while priming reclaims the binding before it is registered.
+    const releaseOnClose = epoch.onClose(() => binding.destroy());
+    try {
+      const lastPage = Math.ceil(providerOptions.numSamples / providerOptions.pageFrames) - 1;
+      const primed: number[] = [];
+      for (let page = 0; page < primePages && page <= lastPage; ++page) {
+        const ok = await binding.supplyPage(page);
+        epoch.assertCurrent(token);
+        if (ok) {
+          primed.push(page);
+        }
+      }
+      streamer.addSource(
+        {
+          clipId,
+          binding,
+          pageFrames: providerOptions.pageFrames,
+          numSamples: providerOptions.numSamples,
+        },
+        primed,
+      );
+    } catch (error) {
+      binding.destroy();
+      throw error;
+    } finally {
+      releaseOnClose();
+    }
+    return { binding, provider: binding.provider };
+  });
 }

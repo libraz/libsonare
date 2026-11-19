@@ -56,34 +56,38 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
   Napi::Function func = DefineClass(
       env, "Audio",
       {
-          InstanceMethod<&SonareWrap::GetData>("getData"),
-          InstanceMethod<&SonareWrap::GetLength>("getLength"),
-          InstanceMethod<&SonareWrap::GetSampleRate>("getSampleRate"),
-          InstanceMethod<&SonareWrap::GetDuration>("getDuration"),
-          InstanceMethod<&SonareWrap::DetectBpmInstance>("detectBpm"),
-          InstanceMethod<&SonareWrap::DetectKeyInstance>("detectKey"),
-          InstanceMethod<&SonareWrap::DetectKeyCandidatesInstance>("detectKeyCandidates"),
-          InstanceMethod<&SonareWrap::DetectBeatsInstance>("detectBeats"),
-          InstanceMethod<&SonareWrap::DetectDownbeatsInstance>("detectDownbeats"),
-          InstanceMethod<&SonareWrap::DetectOnsetsInstance>("detectOnsets"),
-          InstanceMethod<&SonareWrap::AnalyzeInstance>("analyze"),
-          InstanceMethod<&SonareWrap::PeakDbInstance>("peakDb"),
-          InstanceMethod<&SonareWrap::RmsDbInstance>("rmsDb"),
-          InstanceMethod<&SonareWrap::DcOffsetInstance>("dcOffset"),
-          InstanceMethod<&SonareWrap::CrestFactorDbInstance>("crestFactorDb"),
-          InstanceMethod<&SonareWrap::SilenceRatioInstance>("silenceRatio"),
-          InstanceMethod<&SonareWrap::TruePeakDbInstance>("truePeakDb"),
-          InstanceMethod<&SonareWrap::DetectClippingInstance>("detectClipping"),
-          InstanceMethod<&SonareWrap::DynamicRangeInstance>("dynamicRange"),
-          InstanceMethod<&SonareWrap::SpectrumInstance>("spectrum"),
-          InstanceMethod<&SonareWrap::SpectrumFrameInstance>("spectrumFrame"),
-          InstanceMethod<&SonareWrap::Ebur128LoudnessRangeLuInstance>("ebur128LoudnessRangeLu"),
-          InstanceMethod<&SonareWrap::Destroy>("destroy"),
-          StaticMethod<&SonareWrap::FromFile>("fromFile"),
-          StaticMethod<&SonareWrap::FromFileChannel>("fromFileChannel"),
-          StaticMethod<&SonareWrap::FileChannelCount>("fileChannelCount"),
-          StaticMethod<&SonareWrap::FromBuffer>("fromBuffer"),
-          StaticMethod<&SonareWrap::FromMemory>("fromMemory"),
+          InstanceMethod<&SonareWrap::GetData>("getData", napi_default_method),
+          InstanceMethod<&SonareWrap::GetLength>("getLength", napi_default_method),
+          InstanceMethod<&SonareWrap::GetSampleRate>("getSampleRate", napi_default_method),
+          InstanceMethod<&SonareWrap::GetDuration>("getDuration", napi_default_method),
+          InstanceMethod<&SonareWrap::DetectBpmInstance>("detectBpm", napi_default_method),
+          InstanceMethod<&SonareWrap::DetectKeyInstance>("detectKey", napi_default_method),
+          InstanceMethod<&SonareWrap::DetectKeyCandidatesInstance>("detectKeyCandidates",
+                                                                   napi_default_method),
+          InstanceMethod<&SonareWrap::DetectBeatsInstance>("detectBeats", napi_default_method),
+          InstanceMethod<&SonareWrap::DetectDownbeatsInstance>("detectDownbeats",
+                                                               napi_default_method),
+          InstanceMethod<&SonareWrap::DetectOnsetsInstance>("detectOnsets", napi_default_method),
+          InstanceMethod<&SonareWrap::AnalyzeInstance>("analyze", napi_default_method),
+          InstanceMethod<&SonareWrap::PeakDbInstance>("peakDb", napi_default_method),
+          InstanceMethod<&SonareWrap::RmsDbInstance>("rmsDb", napi_default_method),
+          InstanceMethod<&SonareWrap::DcOffsetInstance>("dcOffset", napi_default_method),
+          InstanceMethod<&SonareWrap::CrestFactorDbInstance>("crestFactorDb", napi_default_method),
+          InstanceMethod<&SonareWrap::SilenceRatioInstance>("silenceRatio", napi_default_method),
+          InstanceMethod<&SonareWrap::TruePeakDbInstance>("truePeakDb", napi_default_method),
+          InstanceMethod<&SonareWrap::DetectClippingInstance>("detectClipping",
+                                                              napi_default_method),
+          InstanceMethod<&SonareWrap::DynamicRangeInstance>("dynamicRange", napi_default_method),
+          InstanceMethod<&SonareWrap::SpectrumInstance>("spectrum", napi_default_method),
+          InstanceMethod<&SonareWrap::SpectrumFrameInstance>("spectrumFrame", napi_default_method),
+          InstanceMethod<&SonareWrap::Ebur128LoudnessRangeLuInstance>("ebur128LoudnessRangeLu",
+                                                                      napi_default_method),
+          InstanceMethod<&SonareWrap::Destroy>("destroy", napi_default_method),
+          StaticMethod<&SonareWrap::FromFile>("fromFile", napi_default_method),
+          StaticMethod<&SonareWrap::FromFileChannel>("fromFileChannel", napi_default_method),
+          StaticMethod<&SonareWrap::FileChannelCount>("fileChannelCount", napi_default_method),
+          StaticMethod<&SonareWrap::FromBuffer>("fromBuffer", napi_default_method),
+          StaticMethod<&SonareWrap::FromMemory>("fromMemory", napi_default_method),
       });
 
   exports.Set("Audio", func);
@@ -676,7 +680,7 @@ Napi::Value SonareWrap::FromFile(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
 
   if (info.Length() < 1 || !info[0].IsString()) {
-    Napi::TypeError::New(env, "Expected string path argument").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "path must be a string").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -703,7 +707,7 @@ Napi::Value SonareWrap::FromFileChannel(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
 
   if (info.Length() < 1 || !info[0].IsString()) {
-    Napi::TypeError::New(env, "Expected string path argument").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "path must be a string").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -733,7 +737,7 @@ Napi::Value SonareWrap::FileChannelCount(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
 
   if (info.Length() < 1 || !info[0].IsString()) {
-    Napi::TypeError::New(env, "Expected string path argument").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "path must be a string").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -753,7 +757,7 @@ Napi::Value SonareWrap::FromBuffer(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
 
   if (info.Length() < 1 || !IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "Expected Float32Array argument").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -788,8 +792,7 @@ Napi::Value SonareWrap::FromMemory(const Napi::CallbackInfo& info) {
   size_t len = 0;
 
   if (info.Length() < 1) {
-    Napi::TypeError::New(env, "Expected Buffer or Uint8Array argument")
-        .ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "data must be a Buffer or Uint8Array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -802,8 +805,7 @@ Napi::Value SonareWrap::FromMemory(const Napi::CallbackInfo& info) {
     data = arr.Data();
     len = arr.ByteLength();
   } else {
-    Napi::TypeError::New(env, "Expected Buffer or Uint8Array argument")
-        .ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "data must be a Buffer or Uint8Array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -838,8 +840,7 @@ Napi::Value SonareWrap::DecodeChannels(const Napi::CallbackInfo& info) {
     data = arr.Data();
     len = arr.ByteLength();
   } else {
-    Napi::TypeError::New(env, "Expected Buffer or Uint8Array argument")
-        .ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "data must be a Buffer or Uint8Array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -872,13 +873,12 @@ Napi::Value SonareWrap::Downmix(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
 
-  if (info.Length() < 1 || !info[0].IsArray()) {
-    Napi::TypeError::New(env, "Expected (Float32Array[] channels, targetLayout, options?)")
-        .ThrowAsJavaScriptException();
+  if (!info[0].IsArray()) {
+    Napi::TypeError::New(env, "channels must be an array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   sonare_node::ChannelInputs inputs;
-  if (!sonare_node::ReadChannelInputs(env, info[0], "downmix", &inputs)) {
+  if (!sonare_node::ReadChannelInputs(env, info[0], &inputs)) {
     return env.Undefined();
   }
   int target = 0;
@@ -889,14 +889,14 @@ Napi::Value SonareWrap::Downmix(const Napi::CallbackInfo& info) {
   bool normalize = false;
   if (info.Length() > 2 && !info[2].IsUndefined() && !info[2].IsNull()) {
     Napi::Object options;
-    if (!sonare_node::RequiredObjectValue(env, info[2], "downmix options", &options)) {
+    if (!sonare_node::RequiredObjectValue(env, info[2], "options", &options)) {
       return env.Undefined();
     }
     include_lfe = sonare_node::BoolProperty(options, "includeLfe", false);
     normalize = sonare_node::BoolProperty(options, "normalize", false);
   }
   if (inputs.ptrs.empty()) {
-    Napi::RangeError::New(env, "downmix: channels must not be empty").ThrowAsJavaScriptException();
+    Napi::RangeError::New(env, "channels must not be empty").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 

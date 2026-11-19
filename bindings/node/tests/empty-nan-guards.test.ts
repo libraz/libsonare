@@ -179,9 +179,9 @@ describe('addon input errors remain catchable (Node)', () => {
         hopLength: 512,
         factors: 'nope' as unknown as Float32Array,
       }),
-    ).toThrow(/Expected Float32Array or number\[\]/);
+    ).toThrow(/^tempogramRatio: factors must be a Float32Array or number\[\]$/);
     expect(() => new StreamAnalyzer({ sampleRate: SR, maxPendingFrames: 1.5 })).toThrow(
-      /maxPendingFrames must be a non-negative integer/,
+      /^StreamAnalyzer: maxPendingFrames must be an integer of at least 0$/,
     );
   });
 });

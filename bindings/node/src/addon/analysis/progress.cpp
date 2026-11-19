@@ -38,10 +38,20 @@ Napi::Value SonareWrap::AnalyzeWithProgress(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
 
-  if (info.Length() < 3 || !IsFloat32Array(info[0]) || !info[1].IsNumber() ||
-      !info[2].IsFunction() || (info.Length() > 3 && !info[3].IsFunction())) {
-    Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, onProgress, cancel?, options?)")
-        .ThrowAsJavaScriptException();
+  if (!IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[1].IsNumber()) {
+    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[2].IsFunction()) {
+    Napi::TypeError::New(env, "onProgress must be a function").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (info.Length() > 3 && !info[3].IsFunction()) {
+    Napi::TypeError::New(env, "cancel must be a function").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -85,12 +95,14 @@ Napi::Value SonareWrap::AnalyzeWithProgress(const Napi::CallbackInfo& info) {
     if (c->env.IsExceptionPending()) return;
     c->cb.Call({Napi::Number::New(c->env, static_cast<double>(progress)),
                 Napi::String::New(c->env, stage != nullptr ? stage : "")});
+    sonare_node::MarkPendingForeign(c->env);
   };
   auto c_cancel = [](void* user_data) {
     auto* c = static_cast<ProgressCtx*>(user_data);
     if (c->env.IsExceptionPending()) return 1;
     if (!c->cancel) return 0;
     const Napi::Value result = c->cancel->Call({});
+    sonare_node::MarkPendingForeign(c->env);
     if (c->env.IsExceptionPending()) return 1;
     return result.IsBoolean() && result.As<Napi::Boolean>().Value() ? 1 : 0;
   };
@@ -140,7 +152,7 @@ Napi::Value SonareWrap::AnalyzeSections(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
 
   if (info.Length() < 1 || !IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "Expected Float32Array argument").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -187,7 +199,7 @@ Napi::Value SonareWrap::DetectBoundaries(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
 
   if (info.Length() < 1 || !IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "Expected Float32Array argument").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -257,7 +269,7 @@ Napi::Value SonareWrap::AnalyzeMelody(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
 
   if (info.Length() < 1 || !IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "Expected Float32Array argument").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 

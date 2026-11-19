@@ -8,9 +8,11 @@ Napi::Object PlaybackLoudnessMeterWrap::Init(Napi::Env env, Napi::Object exports
   Napi::Function func = DefineClass(
       env, "PlaybackLoudnessMeter",
       {
-          InstanceMethod<&PlaybackLoudnessMeterWrap::PushInterleaved>("pushInterleaved"),
-          InstanceMethod<&PlaybackLoudnessMeterWrap::IntegratedLufs>("integratedLufs"),
-          InstanceMethod<&PlaybackLoudnessMeterWrap::Destroy>("destroy"),
+          InstanceMethod<&PlaybackLoudnessMeterWrap::PushInterleaved>("pushInterleaved",
+                                                                      napi_default_method),
+          InstanceMethod<&PlaybackLoudnessMeterWrap::IntegratedLufs>("integratedLufs",
+                                                                     napi_default_method),
+          InstanceMethod<&PlaybackLoudnessMeterWrap::Destroy>("destroy", napi_default_method),
       });
 
   exports.Set("PlaybackLoudnessMeter", func);
@@ -56,7 +58,7 @@ Napi::Value PlaybackLoudnessMeterWrap::Destroy(const Napi::CallbackInfo& info) {
 Napi::Value PlaybackLoudnessMeterWrap::PushInterleaved(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (!EnsureAlive(env)) return env.Undefined();
-  if (!sonare_node::RequireFloat32Array(info, 0, "Expected (Float32Array)")) {
+  if (!sonare_node::RequireFloat32Array(info, 0, "samples must be a Float32Array")) {
     return env.Undefined();
   }
   SONARE_NODE_TRY
@@ -64,7 +66,7 @@ Napi::Value PlaybackLoudnessMeterWrap::PushInterleaved(const Napi::CallbackInfo&
   const size_t channels = static_cast<size_t>(channels_);
   if (samples.ElementLength() % channels != 0) {
     Napi::RangeError::New(env,
-                          "PlaybackLoudnessMeter.pushInterleaved: interleaved sample count "
+                          "interleaved sample count "
                           "must be a whole number of frames")
         .ThrowAsJavaScriptException();
     return env.Undefined();

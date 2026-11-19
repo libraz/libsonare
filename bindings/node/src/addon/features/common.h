@@ -78,7 +78,7 @@ inline int TempogramModeFromValue(const Napi::Value& value) {
     }
     if (mode == "cosine") return SONARE_TEMPOGRAM_COSINE;
   }
-  throw Napi::TypeError::New(value.Env(), "Expected tempogram mode 'autocorrelation' or 'cosine'");
+  throw Napi::TypeError::New(value.Env(), "mode must be 'autocorrelation' or 'cosine'");
 }
 
 }  // namespace sonare_node::features

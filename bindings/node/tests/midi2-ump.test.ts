@@ -305,7 +305,9 @@ describe('RealtimeEngine raw UMP push', () => {
 
   it('pushMidiUmp refuses data messages and mismatched word counts', () => {
     withEngine((engine) => {
-      const shape = new RangeError('pushMidiUmp: words do not form a pushable UMP message');
+      const shape = new RangeError(
+        'RealtimeEngine.pushMidiUmp: words do not form a pushable UMP message',
+      );
       expect(() => engine.pushMidiUmp(0, [0x30160000, 0])).toThrow(shape);
       expect(() => engine.pushMidiUmp(0, [0x50000000, 0, 0, 0])).toThrow(shape);
       expect(() => engine.pushMidiUmp(0, [0x41923c00])).toThrow(shape);
@@ -338,7 +340,9 @@ describe('RealtimeEngine raw UMP push', () => {
       engine.setMidiInputSource(0);
       expect(() => engine.pushMidiInputUmp(new Uint32Array(NOTE_ON_2W))).not.toThrow();
       expect(() => engine.pushMidiInputUmp(NOTE_ON_2W, 128)).not.toThrow();
-      const shape = new RangeError('pushMidiInputUmp: words do not form a pushable UMP message');
+      const shape = new RangeError(
+        'RealtimeEngine.pushMidiInputUmp: words do not form a pushable UMP message',
+      );
       expect(() => engine.pushMidiInputUmp([0x30160000, 0])).toThrow(shape);
       expect(() => engine.pushMidiInputUmp([0x50000000, 0, 0, 0])).toThrow(shape);
       expect(() => engine.pushMidiInputUmp([0x41923c00])).toThrow(shape);

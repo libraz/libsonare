@@ -281,7 +281,6 @@ using sonare_node::Int64Property;
 using sonare_node::IntProperty;
 using sonare_node::kZeroIsSentinel;
 using sonare_node::MidiByteProperty;
-using sonare_node::node_arg_label;
 using sonare_node::node_narrow_finite_float;
 using sonare_node::node_narrow_int;
 using sonare_node::node_narrow_int64;

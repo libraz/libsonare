@@ -386,7 +386,9 @@ describe('PolyphonicAnalysis.render', () => {
     // The C ABI checks an edit where the render checks it, so setting it is not
     // the refusal.
     edited.setNoteEdit(lower, { amplitudeEnvelope: new Float32Array([1, -1]) });
-    expect(expectRefusalOf(() => edited.render()).message).toBe('Invalid parameter');
+    expect(expectRefusalOf(() => edited.render()).message).toBe(
+      'PolyphonicAnalysis.render: Invalid parameter',
+    );
     edited.setNoteEdit(lower, { amplitudeEnvelope: new Float32Array([1, 0.25]) });
     expectEdited(edited.render(), identity);
     edited.setNoteEdit(lower, {});

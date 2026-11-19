@@ -25,13 +25,12 @@ void MixerWasm::scheduleInsertAutomation(const val& strip_index_val, const val& 
   const int curve = checkedIntFromVal(curve_val, "curve");
   SonareStrip* strip = sonare_mixer_strip_at(mixer_, static_cast<size_t>(strip_index));
   if (strip == nullptr) {
-    throwLastCError("mixer strip index out of range: ");
+    throwLastCError();
   }
   SonareError err = sonare_strip_schedule_insert_automation(
       strip, insert_index, param_id, static_cast<int64_t>(sample_pos), value, curve);
   if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
-                                  cErrorMessage(err, "failed to schedule insert automation"));
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState, cErrorMessage(err));
   }
 }
 
@@ -41,8 +40,7 @@ val MixerWasm::meterTap(const val& strip_index_val, const val& tap_val) {
   const unsigned int strip_index = checkedUintFromVal(strip_index_val, "stripIndex");
   const int tap = checkedIntFromVal(tap_val, "tap");
   SonareMixMeterSnapshot snapshot{};
-  checkStripError(sonare_strip_meter_tap(stripAt(strip_index), tap, &snapshot),
-                  "failed to read meter tap");
+  checkStripError(sonare_strip_meter_tap(stripAt(strip_index), tap, &snapshot));
   return mixMeterSnapshotToVal(snapshot);
 }
 
@@ -52,15 +50,13 @@ val MixerWasm::meterTap(const val& strip_index_val, const val& tap_val) {
 val MixerWasm::stripMeter(const val& strip_index_val) {
   const unsigned int strip_index = checkedUintFromVal(strip_index_val, "stripIndex");
   SonareMixMeterSnapshot snapshot{};
-  checkStripError(sonare_strip_meter(stripAt(strip_index), &snapshot),
-                  "failed to read strip meter");
+  checkStripError(sonare_strip_meter(stripAt(strip_index), &snapshot));
   return mixMeterSnapshotToVal(snapshot);
 }
 
 val MixerWasm::busMeter(std::string bus_id) {
   SonareMixMeterSnapshot snapshot{};
-  checkStripError(sonare_mixer_bus_meter(mixer_, wasmCString(bus_id, "busId"), &snapshot),
-                  "failed to read bus meter");
+  checkStripError(sonare_mixer_bus_meter(mixer_, wasmCString(bus_id, "busId"), &snapshot));
   return mixMeterSnapshotToVal(snapshot);
 }
 
@@ -69,8 +65,7 @@ val MixerWasm::busMeter(std::string bus_id) {
 uint32_t MixerWasm::stripNonFiniteDiscardCount(const val& strip_index_val) {
   const unsigned int strip_index = checkedUintFromVal(strip_index_val, "stripIndex");
   uint32_t count = 0;
-  checkStripError(sonare_strip_non_finite_discard_count(stripAt(strip_index), &count),
-                  "failed to read strip non-finite discard count");
+  checkStripError(sonare_strip_non_finite_discard_count(stripAt(strip_index), &count));
   return count;
 }
 
@@ -80,8 +75,7 @@ uint32_t MixerWasm::stripNonFiniteDiscardCount(const val& strip_index_val) {
 uint32_t MixerWasm::busNonFiniteDiscardCount(std::string bus_id) {
   uint32_t count = 0;
   checkStripError(
-      sonare_mixer_bus_non_finite_discard_count(mixer_, wasmCString(bus_id, "busId"), &count),
-      "failed to read bus non-finite discard count");
+      sonare_mixer_bus_non_finite_discard_count(mixer_, wasmCString(bus_id, "busId"), &count));
   return count;
 }
 
@@ -94,8 +88,7 @@ void MixerWasm::scheduleFaderAutomation(const val& strip_index_val, double sampl
   const float fader_db = checkedFloatFromVal(fader_db_val, "faderDb");
   const int curve = checkedIntFromVal(curve_val, "curve");
   checkStripError(sonare_strip_schedule_fader_automation(
-                      stripAt(strip_index), static_cast<int64_t>(sample_pos), fader_db, curve),
-                  "failed to schedule fader automation");
+      stripAt(strip_index), static_cast<int64_t>(sample_pos), fader_db, curve));
 }
 
 void MixerWasm::schedulePanAutomation(const val& strip_index_val, double sample_pos,
@@ -104,8 +97,7 @@ void MixerWasm::schedulePanAutomation(const val& strip_index_val, double sample_
   const float pan = checkedFloatFromVal(pan_val, "pan");
   const int curve = checkedIntFromVal(curve_val, "curve");
   checkStripValueError(sonare_strip_schedule_pan_automation(
-                           stripAt(strip_index), static_cast<int64_t>(sample_pos), pan, curve),
-                       "failed to schedule pan automation");
+      stripAt(strip_index), static_cast<int64_t>(sample_pos), pan, curve));
 }
 
 void MixerWasm::scheduleWidthAutomation(const val& strip_index_val, double sample_pos,
@@ -114,8 +106,7 @@ void MixerWasm::scheduleWidthAutomation(const val& strip_index_val, double sampl
   const float width = checkedFloatFromVal(width_val, "width");
   const int curve = checkedIntFromVal(curve_val, "curve");
   checkStripValueError(sonare_strip_schedule_width_automation(
-                           stripAt(strip_index), static_cast<int64_t>(sample_pos), width, curve),
-                       "failed to schedule width automation");
+      stripAt(strip_index), static_cast<int64_t>(sample_pos), width, curve));
 }
 
 // Schedules sample-accurate send-level automation on a strip's send.
@@ -126,10 +117,8 @@ void MixerWasm::scheduleSendAutomation(const val& strip_index_val, const val& se
       static_cast<std::size_t>(checkedUintFromVal(send_index_val, "sendIndex"));
   const float db = checkedFloatFromVal(db_val, "db");
   const int curve = checkedIntFromVal(curve_val, "curve");
-  checkStripError(
-      sonare_strip_schedule_send_automation(stripAt(strip_index), send_index,
-                                            static_cast<int64_t>(sample_pos), db, curve),
-      "failed to schedule send automation");
+  checkStripError(sonare_strip_schedule_send_automation(
+      stripAt(strip_index), send_index, static_cast<int64_t>(sample_pos), db, curve));
 }
 
 // Reads up to max_points of the strip's most recent goniometer samples.

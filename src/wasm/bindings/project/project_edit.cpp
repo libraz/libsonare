@@ -13,14 +13,13 @@
 
 void ProjectWasm::removeClip(const val& clip_id_val) {
   const uint32_t clip_id = checkedUintFromVal(clip_id_val, "clipId");
-  checkCError(sonare_project_remove_clip(project_.get(), clip_id), "failed to remove clip");
+  checkCError(sonare_project_remove_clip(project_.get(), clip_id));
 }
 
 void ProjectWasm::setClipGain(const val& clip_id_val, const val& gain_val) {
   const uint32_t clip_id = checkedUintFromVal(clip_id_val, "clipId");
   const float gain = checkedFloatFromVal(gain_val, "gain");
-  checkCError(sonare_project_set_clip_gain(project_.get(), clip_id, gain),
-              "failed to set clip gain");
+  checkCError(sonare_project_set_clip_gain(project_.get(), clip_id, gain));
 }
 
 SonareProjectClipFade ProjectWasm::clipFadeFromVal(val desc) {
@@ -49,20 +48,19 @@ void ProjectWasm::setClipFade(const val& clip_id_val, val fade_in, val fade_out)
   const uint32_t clip_id = checkedUintFromVal(clip_id_val, "clipId");
   SonareProjectClipFade in = clipFadeFromVal(fade_in);
   SonareProjectClipFade out = clipFadeFromVal(fade_out);
-  checkCError(sonare_project_set_clip_fade(project_.get(), clip_id, &in, &out),
-              "failed to set clip fade");
+  checkCError(sonare_project_set_clip_fade(project_.get(), clip_id, &in, &out));
 }
 
 val ProjectWasm::unresolvedAudioSourceIds() const {
   size_t count = 0;
   const SonareError err = sonare_project_unresolved_audio_source_count(project_.get(), &count);
-  if (err != SONARE_OK) throwCError(err, "failed to enumerate unresolved audio sources");
+  if (err != SONARE_OK) throwCError(err);
   val ids = val::array();
   for (size_t i = 0; i < count; ++i) {
     uint32_t source_id = 0;
     const SonareError id_err =
         sonare_project_unresolved_audio_source_id_by_index(project_.get(), i, &source_id);
-    if (id_err != SONARE_OK) throwCError(id_err, "failed to read unresolved audio source");
+    if (id_err != SONARE_OK) throwCError(id_err);
     ids.set(static_cast<unsigned>(i), source_id);
   }
   return ids;
@@ -71,17 +69,17 @@ val ProjectWasm::unresolvedAudioSourceIds() const {
 val ProjectWasm::unresolvedAudioSources() const {
   size_t count = 0;
   const SonareError err = sonare_project_unresolved_audio_source_count(project_.get(), &count);
-  if (err != SONARE_OK) throwCError(err, "failed to enumerate unresolved audio sources");
+  if (err != SONARE_OK) throwCError(err);
   val sources = val::array();
   for (size_t i = 0; i < count; ++i) {
     SonareProjectSource source{};
     const SonareError source_err =
         sonare_project_unresolved_audio_source_by_index(project_.get(), i, &source);
-    if (source_err != SONARE_OK) throwCError(source_err, "failed to read unresolved audio source");
+    if (source_err != SONARE_OK) throwCError(source_err);
     char* uri = nullptr;
     const SonareError uri_err =
         sonare_project_get_audio_source_uri(project_.get(), source.id, &uri);
-    if (uri_err != SONARE_OK) throwCError(uri_err, "failed to read audio source uri");
+    if (uri_err != SONARE_OK) throwCError(uri_err);
     const std::unique_ptr<char, decltype(&sonare_free_string)> owned(uri, &sonare_free_string);
     sources.set(static_cast<unsigned>(i), sourceToVal(source, uri));
   }
@@ -99,17 +97,15 @@ void ProjectWasm::setSourceAudio(const val& source_id_val, val audio, const val&
   }
   checkCError(sonare_project_set_source_audio(project_.get(), source_id, samples.data(),
                                               static_cast<int64_t>(samples.size() / channels),
-                                              channels, sample_rate),
-              "failed to set source audio");
+                                              channels, sample_rate));
 }
 
 void ProjectWasm::setAudioSourceMetadata(const val& source_id_val, const std::string& content_hash,
                                          const std::string& external_stem_role) {
   const uint32_t source_id = checkedUintFromVal(source_id_val, "sourceId");
   checkCError(sonare_project_set_audio_source_metadata(
-                  project_.get(), source_id, wasmCString(content_hash, "contentHash"),
-                  wasmCString(external_stem_role, "externalStemRole")),
-              "failed to set audio source metadata");
+      project_.get(), source_id, wasmCString(content_hash, "contentHash"),
+      wasmCString(external_stem_role, "externalStemRole")));
 }
 
 void ProjectWasm::setClipTakes(const val& clip_id_val, val takes_val,
@@ -138,10 +134,9 @@ void ProjectWasm::setClipTakes(const val& clip_id_val, val takes_val,
     }
     takes.push_back(take);
   }
-  checkCError(
-      sonare_project_set_clip_takes(project_.get(), clip_id, takes.empty() ? nullptr : takes.data(),
-                                    takes.size(), active_take_id),
-      "failed to set clip takes");
+  checkCError(sonare_project_set_clip_takes(project_.get(), clip_id,
+                                            takes.empty() ? nullptr : takes.data(), takes.size(),
+                                            active_take_id));
 }
 
 void ProjectWasm::setClipCompSegments(const val& clip_id_val, val segments_val) {
@@ -161,10 +156,8 @@ void ProjectWasm::setClipCompSegments(const val& clip_id_val, val segments_val) 
     segment.crossfade_ppq = doubleProperty(entry, "crossfadePpq", segment.crossfade_ppq);
     segments.push_back(segment);
   }
-  checkCError(
-      sonare_project_set_clip_comp_segments(
-          project_.get(), clip_id, segments.empty() ? nullptr : segments.data(), segments.size()),
-      "failed to set clip comp segments");
+  checkCError(sonare_project_set_clip_comp_segments(
+      project_.get(), clip_id, segments.empty() ? nullptr : segments.data(), segments.size()));
 }
 
 void ProjectWasm::setClipLoop(const val& clip_id_val, const val& loop_mode_val,
@@ -172,46 +165,40 @@ void ProjectWasm::setClipLoop(const val& clip_id_val, const val& loop_mode_val,
   const uint32_t clip_id = checkedUintFromVal(clip_id_val, "clipId");
   const int loop_mode = checkedIntFromVal(loop_mode_val, "loopMode");
   checkCError(sonare_project_set_clip_loop(project_.get(), clip_id, loop_mode, loop_length_ppq,
-                                           loop_crossfade_ppq),
-              "failed to set clip loop");
+                                           loop_crossfade_ppq));
 }
 
 void ProjectWasm::setClipSource(const val& clip_id_val, const val& source_id_val) {
   const uint32_t clip_id = checkedUintFromVal(clip_id_val, "clipId");
   const uint32_t source_id = checkedUintFromVal(source_id_val, "sourceId");
-  checkCError(sonare_project_set_clip_source(project_.get(), clip_id, source_id),
-              "failed to set clip source");
+  checkCError(sonare_project_set_clip_source(project_.get(), clip_id, source_id));
 }
 
 uint32_t ProjectWasm::duplicateClip(const val& clip_id_val, double new_start_ppq) {
   const uint32_t clip_id = checkedUintFromVal(clip_id_val, "clipId");
   uint32_t out = 0;
-  checkCError(sonare_project_duplicate_clip(project_.get(), clip_id, new_start_ppq, &out),
-              "failed to duplicate clip");
+  checkCError(sonare_project_duplicate_clip(project_.get(), clip_id, new_start_ppq, &out));
   return out;
 }
 
 void ProjectWasm::removeTrack(const val& track_id_val) {
   const uint32_t track_id = checkedUintFromVal(track_id_val, "trackId");
-  checkCError(sonare_project_remove_track(project_.get(), track_id), "failed to remove track");
+  checkCError(sonare_project_remove_track(project_.get(), track_id));
 }
 
 void ProjectWasm::renameTrack(const val& track_id_val, const std::string& name) {
   const uint32_t track_id = checkedUintFromVal(track_id_val, "trackId");
   checkCError(sonare_project_rename_track(project_.get(), track_id,
-                                          name.empty() ? nullptr : wasmCString(name, "name")),
-              "failed to rename track");
+                                          name.empty() ? nullptr : wasmCString(name, "name")));
 }
 
 void ProjectWasm::setTrackRoute(const val& track_id_val, const std::string& channel_strip_ref,
                                 const std::string& output_target) {
   const uint32_t track_id = checkedUintFromVal(track_id_val, "trackId");
-  checkCError(
-      sonare_project_set_track_route(
-          project_.get(), track_id,
-          channel_strip_ref.empty() ? nullptr : wasmCString(channel_strip_ref, "channelStripRef"),
-          output_target.empty() ? nullptr : wasmCString(output_target, "outputTarget")),
-      "failed to set track route");
+  checkCError(sonare_project_set_track_route(
+      project_.get(), track_id,
+      channel_strip_ref.empty() ? nullptr : wasmCString(channel_strip_ref, "channelStripRef"),
+      output_target.empty() ? nullptr : wasmCString(output_target, "outputTarget")));
 }
 
 namespace {
@@ -338,8 +325,7 @@ double ProjectWasm::addAutomationLane(const val& track_id_val, val desc) {
   }
   checkCError(has_target_kind
                   ? sonare_project_add_automation_lane_ex(project_.get(), track_id, &d_ex, &out)
-                  : sonare_project_add_automation_lane(project_.get(), track_id, &d, &out),
-              "failed to add automation lane");
+                  : sonare_project_add_automation_lane(project_.get(), track_id, &d, &out));
   return static_cast<double>(out);
 }
 
@@ -358,16 +344,14 @@ void ProjectWasm::editAutomationLane(const val& track_id_val, double target_para
   checkCError(has_target_kind
                   ? sonare_project_edit_automation_lane_ex(
                         project_.get(), track_id, static_cast<uint32_t>(target_param_id), &d_ex)
-                  : sonare_project_edit_automation_lane(project_.get(), track_id,
-                                                        static_cast<uint32_t>(target_param_id), &d),
-              "failed to edit automation lane");
+                  : sonare_project_edit_automation_lane(
+                        project_.get(), track_id, static_cast<uint32_t>(target_param_id), &d));
 }
 
 void ProjectWasm::removeAutomationLane(const val& track_id_val, double target_param_id) {
   const uint32_t track_id = checkedUintFromVal(track_id_val, "trackId");
   checkCError(sonare_project_remove_automation_lane(project_.get(), track_id,
-                                                    static_cast<uint32_t>(target_param_id)),
-              "failed to remove automation lane");
+                                                    static_cast<uint32_t>(target_param_id)));
 }
 
 void registerProjectEdit(class_<ProjectWasm>& cls) {

@@ -29,7 +29,7 @@ describe('WASM exception scope', () => {
         thrown = error;
       }
       const error = expectArgumentRefusal(thrown, RangeError, name);
-      expect(error.message, name).toMatch(/^note_to_hz: /);
+      expect(error.message, name).toMatch(/^noteToHz: /);
     }
   });
 

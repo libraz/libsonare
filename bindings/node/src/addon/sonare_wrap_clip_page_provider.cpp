@@ -20,12 +20,13 @@ Napi::FunctionReference* g_clip_page_provider_constructor = nullptr;
 }  // namespace
 
 Napi::Object ClipPageProviderWrap::Init(Napi::Env env, Napi::Object exports) {
-  Napi::Function func = DefineClass(env, "ClipPageProvider",
-                                    {
-                                        InstanceMethod<&ClipPageProviderWrap::Supply>("supply"),
-                                        InstanceMethod<&ClipPageProviderWrap::Clear>("clear"),
-                                        InstanceMethod<&ClipPageProviderWrap::Destroy>("destroy"),
-                                    });
+  Napi::Function func = DefineClass(
+      env, "ClipPageProvider",
+      {
+          InstanceMethod<&ClipPageProviderWrap::Supply>("supply", napi_default_method),
+          InstanceMethod<&ClipPageProviderWrap::Clear>("clear", napi_default_method),
+          InstanceMethod<&ClipPageProviderWrap::Destroy>("destroy", napi_default_method),
+      });
   g_clip_page_provider_constructor = new Napi::FunctionReference();
   *g_clip_page_provider_constructor = Napi::Persistent(func);
   g_clip_page_provider_constructor->SuppressDestruct();

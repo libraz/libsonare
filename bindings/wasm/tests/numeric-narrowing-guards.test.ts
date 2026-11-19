@@ -593,15 +593,14 @@ describe('the double reader refuses a non-finite number at the read', () => {
     });
   });
 
-  it('names the field rather than the entry point when a tempo field is not finite', () => {
+  it('names the entry point and the field when a tempo field is not finite', () => {
     for (const value of [...NON_FINITE, Number.NEGATIVE_INFINITY]) {
       const error = withEngine((engine) =>
         refusalFor(() => engine.setTempoSegments([{ startPpq: 0, bpm: value }])),
       );
-      expect(error.message).toContain('bpm must be a finite number');
-      // The site's own composite check is the fallback, not the first line of
-      // defence; seeing its wording here would mean the reader let the value by.
-      expect(error.message).not.toContain('setTempoSegments:');
+      expect(error.message).toMatch(
+        /^RealtimeEngine\.setTempoSegments: bpm must be a finite number/,
+      );
     }
   });
 

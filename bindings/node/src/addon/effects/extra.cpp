@@ -108,8 +108,8 @@ std::vector<int> ReadRemixIntervals(Napi::Env env, const Napi::Value& value) {
 Napi::Value SonareWrap::VoiceCharacterPresetId(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (info.Length() < 1 || !info[0].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (presetOrdinal)").ThrowAsJavaScriptException();
+  if (!info[0].IsNumber()) {
+    Napi::TypeError::New(env, "presetOrdinal must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   const int ordinal = node_narrow_int(env, info[0], "ordinal");
@@ -123,8 +123,8 @@ Napi::Value SonareWrap::VoiceCharacterPresetId(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::RealtimeVoiceChangerPresetConfig(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (info.Length() < 1 || !info[0].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (presetOrdinal)").ThrowAsJavaScriptException();
+  if (!info[0].IsNumber()) {
+    Napi::TypeError::New(env, "presetOrdinal must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   const int ordinal = node_narrow_int(env, info[0], "ordinal");
@@ -142,17 +142,27 @@ Napi::Value SonareWrap::RealtimeVoiceChangerPresetConfig(const Napi::CallbackInf
 Napi::Value SonareWrap::Decompose(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (info.Length() < 4 || !IsFloat32Array(info[0]) || !info[1].IsNumber() || !info[2].IsNumber() ||
-      !info[3].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (Float32Array, nFeatures, nFrames, nComponents, ...)")
-        .ThrowAsJavaScriptException();
+  if (!IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[1].IsNumber()) {
+    Napi::TypeError::New(env, "nFeatures must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[2].IsNumber()) {
+    Napi::TypeError::New(env, "nFrames must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[3].IsNumber()) {
+    Napi::TypeError::New(env, "nComponents must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   auto arr = info[0].As<Napi::Float32Array>();
   int n_features = node_narrow_int(env, info[1], "nFeatures");
   int n_frames = node_narrow_int(env, info[2], "nFrames");
   int n_components = node_narrow_int(env, info[3], "nComponents");
-  if (!ValidateMatrixDims(env, "decompose", n_features, n_frames, arr.ElementLength())) {
+  if (!ValidateMatrixDims(env, n_features, n_frames, arr.ElementLength())) {
     return env.Undefined();
   }
   int n_iter{};
@@ -161,7 +171,8 @@ Napi::Value SonareWrap::Decompose(const Napi::CallbackInfo& info) {
   }
   // 0 is the C entry's spelling of "library default"; absence is this surface's.
   if (n_iter < 1) {
-    Napi::RangeError::New(env, "nIter must be >= 1").ThrowAsJavaScriptException();
+    Napi::RangeError::New(env, "nIter must be an integer in [1, " + node_int_max_text() + "]")
+        .ThrowAsJavaScriptException();
     return env.Undefined();
   }
   float beta{};
@@ -205,7 +216,7 @@ Napi::Value SonareWrap::DecomposeStems(const Napi::CallbackInfo& info) {
   if (!CheckMonoArgs(env, info)) return env.Undefined();
   SONARE_NODE_TRY
   auto arr = info[0].As<Napi::Float32Array>();
-  int sr = node_narrow_int(env, info[1], "sr");
+  int sr = node_narrow_int(env, info[1], "sampleRate");
   // The init string must outlive the C call, so keep it in a local.
   std::string init;
   const SonareDecomposeStemsConfig config =
@@ -244,10 +255,10 @@ Napi::Value SonareWrap::DecomposeStemsLinked(const Napi::CallbackInfo& info) {
   if (!CheckLinkedArgs(env, info)) return env.Undefined();
   SONARE_NODE_TRY
   ChannelInputs inputs;
-  if (!ReadChannelInputs(env, info[0], "decomposeStemsLinked", &inputs)) {
+  if (!ReadChannelInputs(env, info[0], &inputs)) {
     return env.Undefined();
   }
-  int sr = node_narrow_int(env, info[1], "sr");
+  int sr = node_narrow_int(env, info[1], "sampleRate");
   // The init string must outlive the C call, so keep it in a local.
   std::string init;
   const SonareDecomposeStemsConfig config =
@@ -291,15 +302,22 @@ Napi::Value SonareWrap::DecomposeStemsLinked(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::NnFilter(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (info.Length() < 3 || !IsFloat32Array(info[0]) || !info[1].IsNumber() || !info[2].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (Float32Array, nFeatures, nFrames, ...)")
-        .ThrowAsJavaScriptException();
+  if (!IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[1].IsNumber()) {
+    Napi::TypeError::New(env, "nFeatures must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[2].IsNumber()) {
+    Napi::TypeError::New(env, "nFrames must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   auto arr = info[0].As<Napi::Float32Array>();
   int n_features = node_narrow_int(env, info[1], "nFeatures");
   int n_frames = node_narrow_int(env, info[2], "nFrames");
-  if (!ValidateMatrixDims(env, "nnFilter", n_features, n_frames, arr.ElementLength())) {
+  if (!ValidateMatrixDims(env, n_features, n_frames, arr.ElementLength())) {
     return env.Undefined();
   }
   std::string aggregate;
@@ -313,7 +331,9 @@ Napi::Value SonareWrap::NnFilter(const Napi::CallbackInfo& info) {
     return env.Undefined();
   // -1 is the C entry's spelling of "library default"; absence is this surface's.
   if (k < 1 || width < 0) {
-    Napi::RangeError::New(env, k < 1 ? "k must be >= 1" : "width must be >= 0")
+    const std::string int_max = node_int_max_text();
+    Napi::RangeError::New(env, k < 1 ? "k must be an integer in [1, " + int_max + "]"
+                                     : "width must be an integer in [0, " + int_max + "]")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
@@ -332,9 +352,8 @@ Napi::Value SonareWrap::NnFilter(const Napi::CallbackInfo& info) {
 
 Napi::Value SonareWrap::Remix(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (info.Length() < 2 || !IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "Expected (Float32Array, intervals, sampleRate?, alignZeros?)")
-        .ThrowAsJavaScriptException();
+  if (!IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   SONARE_NODE_TRY
@@ -357,9 +376,8 @@ Napi::Value SonareWrap::Remix(const Napi::CallbackInfo& info) {
 
 Napi::Value SonareWrap::RemixAlignedIntervals(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (info.Length() < 2 || !IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "Expected (Float32Array, intervals, sampleRate?, alignZeros?)")
-        .ThrowAsJavaScriptException();
+  if (!IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   SONARE_NODE_TRY
@@ -383,20 +401,22 @@ Napi::Value SonareWrap::RemixAlignedIntervals(const Napi::CallbackInfo& info) {
 
 Napi::Value SonareWrap::HpssWithResidual(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (info.Length() < 2 || !IsFloat32Array(info[0]) || !info[1].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, ...)")
-        .ThrowAsJavaScriptException();
+  if (!IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[1].IsNumber()) {
+    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   SONARE_NODE_TRY
   auto arr = info[0].As<Napi::Float32Array>();
-  int sr = node_narrow_int(env, info[1], "sr");
+  int sr = node_narrow_int(env, info[1], "sampleRate");
   // Shared with Hpss, so the defaults and the narrowing agree on both.
   HpssArguments args;
   if (!ReadHpssArguments(env, info, &args)) return env.Undefined();
 
-  sonare::validate_offline_audio_input("hpss_with_residual", "arr", arr.Data(), arr.ElementLength(),
-                                       sr);
+  sonare::validate_offline_audio_input(nullptr, "samples", arr.Data(), arr.ElementLength(), sr);
   sonare::Audio audio = sonare::Audio::from_buffer(arr.Data(), arr.ElementLength(), sr);
   sonare::HpssConfig config;
   config.kernel_size_harmonic = args.kernel_harmonic;
@@ -429,13 +449,20 @@ Napi::Value SonareWrap::HpssWithResidual(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::PhaseVocoder(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (info.Length() < 3 || !IsFloat32Array(info[0]) || !info[1].IsNumber() || !info[2].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, rate, nFft?, hopLength?)")
-        .ThrowAsJavaScriptException();
+  if (!IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[1].IsNumber()) {
+    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[2].IsNumber()) {
+    Napi::TypeError::New(env, "rate must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   auto arr = info[0].As<Napi::Float32Array>();
-  int sr = node_narrow_int(env, info[1], "sr");
+  int sr = node_narrow_int(env, info[1], "sampleRate");
   float rate = node_narrow_finite_float(env, info[2], "rate");
   int n_fft{};
   if (!OptionalIntArg(env, info, 3, "nFft", sonare::constants::kDefaultNFft, &n_fft))

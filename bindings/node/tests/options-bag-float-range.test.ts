@@ -94,7 +94,7 @@ describe('the addon float option reader refuses a value no float can hold', () =
     for (const value of PAST_FLOAT_MAX) {
       const caught = capture(() => spectrumDb(value));
       expect(caught, `dbRef ${value}`).toBeInstanceOf(RangeError);
-      expect((caught as RangeError).message).toBe(`dbRef ${RANGE_MESSAGE}`);
+      expect((caught as RangeError).message).toBe(`meteringSpectrum: dbRef ${RANGE_MESSAGE}`);
     }
   });
 
@@ -154,9 +154,11 @@ describe('the addon and the WASM binding read one options bag one way', () => {
       expect(fromNode, `node ${value}`).toBeInstanceOf(Error);
       expect(fromWasm, `wasm ${value}`).toBeInstanceOf(Error);
       // The error CLASS differs by surface convention (RangeError vs
-      // SonareError); the sentence the caller reads does not.
-      expect((fromNode as Error).message).toBe(`dbRef ${RANGE_MESSAGE}`);
-      expect((fromWasm as Error).message).toBe(`volume ${RANGE_MESSAGE}`);
+      // SonareError); the sentence after the entry name does not.
+      expect((fromNode as Error).message).toBe(`meteringSpectrum: dbRef ${RANGE_MESSAGE}`);
+      expect((fromWasm as Error).message).toBe(
+        `masteringRepairDereverbConfigForRoom: volume ${RANGE_MESSAGE}`,
+      );
     }
   });
 
@@ -172,10 +174,12 @@ describe('the addon and the WASM binding read one options bag one way', () => {
       const label = JSON.stringify(value);
       const fromNode = capture(() => spectrumDb(value));
       expect(fromNode, `node dbRef ${label}`).toBeInstanceOf(TypeError);
-      expect((fromNode as Error).message).toBe('dbRef must be a number');
+      expect((fromNode as Error).message).toBe('meteringSpectrum: dbRef must be a number');
       const caught = capture(() => wasmLateDelayMs(value));
       expect(caught, `wasm volume ${label}`).toBeInstanceOf(Error);
-      expect((caught as Error).message).toBe('volume must be a number');
+      expect((caught as Error).message).toBe(
+        'masteringRepairDereverbConfigForRoom: volume must be a number',
+      );
     }
   });
 });

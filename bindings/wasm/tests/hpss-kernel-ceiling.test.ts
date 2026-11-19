@@ -348,7 +348,9 @@ describe('percussive-event separation kernel', () => {
       const error = expectReaderRefusal(
         capture(() => extractPercussiveEvents({ samples: hits, sampleRate, [key]: -1 })),
       );
-      expect(error.message).toContain('must not be negative');
+      expect(error.message).toBe(
+        `extractPercussiveEvents: the framing and kernel sizes must be integers in [0, 2147483647]`,
+      );
     });
 
     // The native config reads 0 as "use the default", so an explicit 0 would
@@ -509,7 +511,7 @@ describe('percussive-event separation framing', () => {
         // -0.5 truncates to 0, so the module's own negativity check cannot see
         // it; a refusal quoting that check would mean the integrality guard
         // never ran.
-        expect(error.message).not.toContain('must not be negative');
+        expect(error.message).not.toContain('framing and kernel sizes');
       });
     }
 

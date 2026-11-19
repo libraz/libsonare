@@ -76,10 +76,9 @@ Napi::Value SonareWrap::MasteringDynamicsCompressor(const Napi::CallbackInfo& in
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
-  const int sr = node_narrow_int(env, info[1], "sr");
+  const int sr = node_narrow_int(env, info[1], "sampleRate");
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
-  sonare::validate_offline_audio_input("Compressor::process", "samples", typed.Data(),
-                                       typed.ElementLength(), sr);
+  sonare::validate_offline_audio_input(nullptr, "samples", typed.Data(), typed.ElementLength(), sr);
   sonare::mastering::dynamics::CompressorConfig config;
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object options = info[2].As<Napi::Object>();
@@ -96,7 +95,7 @@ Napi::Value SonareWrap::MasteringDynamicsCompressor(const Napi::CallbackInfo& in
     if (!high_pass.IsUndefined() && !high_pass.IsNull()) {
       config.sidechain_hpf_hz = FiniteFloatProperty(options, "sidechainHighPassHz", 0.0f);
       if (!(config.sidechain_hpf_hz > 0.0f)) {
-        throw Napi::RangeError::New(env, "sidechainHighPassHz must be positive");
+        throw Napi::RangeError::New(env, "sidechainHighPassHz must be finite and greater than 0");
       }
       config.sidechain_hpf_enabled = true;
     }
@@ -117,10 +116,9 @@ Napi::Value SonareWrap::MasteringDynamicsGate(const Napi::CallbackInfo& info) {
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
-  const int sr = node_narrow_int(env, info[1], "sr");
+  const int sr = node_narrow_int(env, info[1], "sampleRate");
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
-  sonare::validate_offline_audio_input("Gate::process", "samples", typed.Data(),
-                                       typed.ElementLength(), sr);
+  sonare::validate_offline_audio_input(nullptr, "samples", typed.Data(), typed.ElementLength(), sr);
   sonare::mastering::dynamics::GateConfig config;
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object options = info[2].As<Napi::Object>();
@@ -147,10 +145,9 @@ Napi::Value SonareWrap::MasteringDynamicsTransientShaper(const Napi::CallbackInf
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
-  const int sr = node_narrow_int(env, info[1], "sr");
+  const int sr = node_narrow_int(env, info[1], "sampleRate");
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
-  sonare::validate_offline_audio_input("TransientShaper::process", "samples", typed.Data(),
-                                       typed.ElementLength(), sr);
+  sonare::validate_offline_audio_input(nullptr, "samples", typed.Data(), typed.ElementLength(), sr);
   sonare::mastering::dynamics::TransientShaperConfig config;
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object options = info[2].As<Napi::Object>();

@@ -1,6 +1,7 @@
 import type { ClipPageSampleRequest } from './clip_page_streamer.js';
 import { ErrorCode, SonareError } from './errors.js';
 import { registerOpfsClipPageProviderFactory } from './internal/clip_page_native.js';
+import { withEntry } from './internal/entry.js';
 import { releasedHandleError } from './internal/handle_guard.js';
 import { ClipPageProvider, RealtimeEngine } from './realtime_engine.js';
 
@@ -236,11 +237,15 @@ export function createOpfsClipPageWorker(): Worker {
 export function createOpfsClipPageProvider(
   options: OpfsClipPageProviderOptions,
 ): OpfsClipPageProviderBinding {
-  const provider = new ClipPageProvider({
-    numChannels: options.numChannels,
-    numSamples: options.numSamples,
-    pageFrames: options.pageFrames,
-  });
+  const provider = withEntry(
+    'createOpfsClipPageProvider',
+    () =>
+      new ClipPageProvider({
+        numChannels: options.numChannels,
+        numSamples: options.numSamples,
+        pageFrames: options.pageFrames,
+      }),
+  );
   const worker = options.worker ?? createOpfsClipPageWorker();
   const heldKey = opfsClipPathKey(options.path);
   heldOpfsClipPaths.set(heldKey, (heldOpfsClipPaths.get(heldKey) ?? 0) + 1);
@@ -276,7 +281,9 @@ export function createOpfsClipPageProvider(
       return;
     }
     try {
-      provider.supply(response.pageIndex, channels);
+      withEntry('OpfsClipPageProviderBinding.supplyPage', () =>
+        provider.supply(response.pageIndex, channels),
+      );
       options.onPageSupplied?.(response.pageIndex, channels);
     } catch {
       entry.resolve(false);
@@ -345,7 +352,7 @@ export function createOpfsClipPageProvider(
       if (closed) {
         return;
       }
-      provider.clear(pageIndex);
+      withEntry('OpfsClipPageProviderBinding.clearPage', () => provider.clear(pageIndex));
       options.onPageCleared?.(pageIndex);
     },
     destroy() {

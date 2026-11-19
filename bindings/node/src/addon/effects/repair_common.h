@@ -22,9 +22,12 @@ namespace sonare_node::repair_detail {
 /// @brief Argument check shared by the mono entries, which all take
 ///        (Float32Array, sampleRate, options?).
 inline bool CheckMonoArgs(Napi::Env env, const Napi::CallbackInfo& info) {
-  if (info.Length() < 2 || !IsFloat32Array(info[0]) || !info[1].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, options?)")
-        .ThrowAsJavaScriptException();
+  if (!IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
+    return false;
+  }
+  if (!info[1].IsNumber()) {
+    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
     return false;
   }
   return true;
@@ -103,8 +106,7 @@ struct LinkedPlanes {
 /// @details Refuses what the C form cannot express: a non-Float32Array element,
 ///   and a length disagreement, which the single @c length argument has no way to
 ///   carry. An empty list goes through to the C entry, which owns that rejection.
-inline bool ReadLinkedPlanes(Napi::Env env, const Napi::Value& value, const char* fn_name,
-                             LinkedPlanes* planes) {
+inline bool ReadLinkedPlanes(Napi::Env env, const Napi::Value& value, LinkedPlanes* planes) {
   Napi::Array channels = value.As<Napi::Array>();
   const size_t count = channels.Length();
   planes->inputs.reserve(count);
@@ -114,7 +116,7 @@ inline bool ReadLinkedPlanes(Napi::Env env, const Napi::Value& value, const char
   for (size_t index = 0; index < count; ++index) {
     Napi::Value channel = channels.Get(index);
     if (!IsFloat32Array(channel)) {
-      Napi::TypeError::New(env, std::string(fn_name) + ": every channel must be a Float32Array")
+      Napi::TypeError::New(env, "every channel must be a Float32Array")
           .ThrowAsJavaScriptException();
       return false;
     }
@@ -123,7 +125,7 @@ inline bool ReadLinkedPlanes(Napi::Env env, const Napi::Value& value, const char
     if (index == 0) {
       planes->length = length;
     } else if (length != planes->length) {
-      Napi::RangeError::New(env, std::string(fn_name) + ": every channel must have the same length")
+      Napi::RangeError::New(env, "every channel must have the same length")
           .ThrowAsJavaScriptException();
       return false;
     }
@@ -146,9 +148,12 @@ inline Napi::Array EmitLinkedChannels(Napi::Env env, const LinkedPlanes& planes)
 /// @brief Argument check shared by the channel-linked entries, which both take
 ///        (Float32Array[], sampleRate, options?).
 inline bool CheckLinkedArgs(Napi::Env env, const Napi::CallbackInfo& info) {
-  if (info.Length() < 2 || !info[0].IsArray() || !info[1].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (Float32Array[] channels, sampleRate, options?)")
-        .ThrowAsJavaScriptException();
+  if (!info[0].IsArray()) {
+    Napi::TypeError::New(env, "channels must be an array").ThrowAsJavaScriptException();
+    return false;
+  }
+  if (!info[1].IsNumber()) {
+    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
     return false;
   }
   return true;

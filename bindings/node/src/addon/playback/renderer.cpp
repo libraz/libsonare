@@ -11,20 +11,28 @@ Napi::Object PlaybackRendererWrap::Init(Napi::Env env, Napi::Object exports) {
   Napi::Function func = DefineClass(
       env, "PlaybackRenderer",
       {
-          InstanceMethod<&PlaybackRendererWrap::ProcessPlanar>("processPlanar"),
-          InstanceMethod<&PlaybackRendererWrap::ProcessInterleaved>("processInterleaved"),
-          InstanceMethod<&PlaybackRendererWrap::RenderOffline>("renderOffline"),
-          InstanceMethod<&PlaybackRendererWrap::SetConfig>("setConfig"),
-          InstanceMethod<&PlaybackRendererWrap::Config>("config"),
-          InstanceMethod<&PlaybackRendererWrap::SetHeadOrientation>("setHeadOrientation"),
-          InstanceMethod<&PlaybackRendererWrap::Reset>("reset"),
-          InstanceMethod<&PlaybackRendererWrap::LatencySamples>("latencySamples"),
-          InstanceMethod<&PlaybackRendererWrap::MaxBlockSize>("maxBlockSize"),
-          InstanceMethod<&PlaybackRendererWrap::InputChannels>("inputChannels"),
-          InstanceMethod<&PlaybackRendererWrap::OutputChannels>("outputChannels"),
-          InstanceMethod<&PlaybackRendererWrap::Diagnostics>("diagnostics"),
-          InstanceMethod<&PlaybackRendererWrap::NonFiniteDiscardCount>("nonFiniteDiscardCount"),
-          InstanceMethod<&PlaybackRendererWrap::Destroy>("destroy"),
+          InstanceMethod<&PlaybackRendererWrap::ProcessPlanar>("processPlanar",
+                                                               napi_default_method),
+          InstanceMethod<&PlaybackRendererWrap::ProcessInterleaved>("processInterleaved",
+                                                                    napi_default_method),
+          InstanceMethod<&PlaybackRendererWrap::RenderOffline>("renderOffline",
+                                                               napi_default_method),
+          InstanceMethod<&PlaybackRendererWrap::SetConfig>("setConfig", napi_default_method),
+          InstanceMethod<&PlaybackRendererWrap::Config>("config", napi_default_method),
+          InstanceMethod<&PlaybackRendererWrap::SetHeadOrientation>("setHeadOrientation",
+                                                                    napi_default_method),
+          InstanceMethod<&PlaybackRendererWrap::Reset>("reset", napi_default_method),
+          InstanceMethod<&PlaybackRendererWrap::LatencySamples>("latencySamples",
+                                                                napi_default_method),
+          InstanceMethod<&PlaybackRendererWrap::MaxBlockSize>("maxBlockSize", napi_default_method),
+          InstanceMethod<&PlaybackRendererWrap::InputChannels>("inputChannels",
+                                                               napi_default_method),
+          InstanceMethod<&PlaybackRendererWrap::OutputChannels>("outputChannels",
+                                                                napi_default_method),
+          InstanceMethod<&PlaybackRendererWrap::Diagnostics>("diagnostics", napi_default_method),
+          InstanceMethod<&PlaybackRendererWrap::NonFiniteDiscardCount>("nonFiniteDiscardCount",
+                                                                       napi_default_method),
+          InstanceMethod<&PlaybackRendererWrap::Destroy>("destroy", napi_default_method),
       });
 
   exports.Set("PlaybackRenderer", func);
@@ -35,9 +43,8 @@ PlaybackRendererWrap::PlaybackRendererWrap(const Napi::CallbackInfo& info)
     : Napi::ObjectWrap<PlaybackRendererWrap>(info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (info.Length() < 1 || !info[0].IsString()) {
-    Napi::TypeError::New(env, "Expected (configJson, hrtf?, sampleRate?, maxBlockSize?)")
-        .ThrowAsJavaScriptException();
+  if (!info[0].IsString()) {
+    Napi::TypeError::New(env, "configJson must be a string").ThrowAsJavaScriptException();
     return;
   }
   const std::string config_json = sonare_node::node_narrow_string(env, info[0], "configJson");
@@ -78,8 +85,8 @@ Napi::Value PlaybackRendererWrap::Destroy(const Napi::CallbackInfo& info) {
 Napi::Value PlaybackRendererWrap::ProcessPlanar(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (!EnsureAlive(env)) return env.Undefined();
-  if (info.Length() < 1 || !info[0].IsArray()) {
-    Napi::TypeError::New(env, "Expected (Float32Array[])").ThrowAsJavaScriptException();
+  if (!info[0].IsArray()) {
+    Napi::TypeError::New(env, "planes must be an array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   SONARE_NODE_TRY
@@ -135,7 +142,7 @@ Napi::Value PlaybackRendererWrap::ProcessInterleaved(const Napi::CallbackInfo& i
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (!EnsureAlive(env)) return env.Undefined();
-  if (!sonare_node::RequireFloat32Array(info, 0, "Expected (Float32Array, inChannels)")) {
+  if (!sonare_node::RequireFloat32Array(info, 0, "samples must be a Float32Array")) {
     return env.Undefined();
   }
   int in_channels = 0;
@@ -168,7 +175,7 @@ Napi::Value PlaybackRendererWrap::RenderOffline(const Napi::CallbackInfo& info) 
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (!EnsureAlive(env)) return env.Undefined();
-  if (!sonare_node::RequireFloat32Array(info, 0, "Expected (Float32Array, inChannels)")) {
+  if (!sonare_node::RequireFloat32Array(info, 0, "samples must be a Float32Array")) {
     return env.Undefined();
   }
   int in_channels = 0;
@@ -200,8 +207,8 @@ Napi::Value PlaybackRendererWrap::RenderOffline(const Napi::CallbackInfo& info) 
 Napi::Value PlaybackRendererWrap::SetConfig(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (!EnsureAlive(env)) return env.Undefined();
-  if (info.Length() < 1 || !info[0].IsString()) {
-    Napi::TypeError::New(env, "Expected (configJson)").ThrowAsJavaScriptException();
+  if (!info[0].IsString()) {
+    Napi::TypeError::New(env, "configJson must be a string").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   SONARE_NODE_TRY

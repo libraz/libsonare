@@ -23,7 +23,9 @@ describe('Mixer input count (Node)', () => {
     expect(() => mixer.processStereo(inputs(1), inputs(1))).not.toThrow();
     expect(() => mixer.processStereo(inputs(strips), inputs(strips))).not.toThrow();
     expect(() => mixer.processStereo(inputs(strips + 1), inputs(strips + 1))).toThrow(
-      new RangeError(`got ${strips + 1} input channels for a ${strips}-strip mixer`),
+      new RangeError(
+        `Mixer.processStereo: got ${strips + 1} input channels for a ${strips}-strip mixer`,
+      ),
     );
   });
 });

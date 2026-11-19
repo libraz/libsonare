@@ -11,8 +11,8 @@
 // ============================================================================
 
 val js_chroma(val samples, const val& sample_rate, const val& n_fft, const val& hop_length) {
-  Audio audio = loadValidatedAudio("Chroma::compute", "samples", samples,
-                                   checkedIntFromVal(sample_rate, "sampleRate"));
+  Audio audio =
+      loadValidatedAudio("samples", samples, checkedIntFromVal(sample_rate, "sampleRate"));
 
   ChromaConfig config;
   config.n_fft = checkedIntFromVal(n_fft, "nFft");
@@ -60,8 +60,8 @@ val chromaToVal(const Chroma& chroma) {
 val js_chroma_cens(val samples, const val& sample_rate, const val& hop_length, const val& n_chroma,
                    const val& bins_per_octave_val) {
   const int bins_per_octave = checkedIntFromVal(bins_per_octave_val, "binsPerOctave");
-  Audio audio = loadValidatedAudio("chroma_cens", "samples", samples,
-                                   checkedIntFromVal(sample_rate, "sampleRate"));
+  Audio audio =
+      loadValidatedAudio("samples", samples, checkedIntFromVal(sample_rate, "sampleRate"));
 
   ChromaCensConfig config;
   config.base = make_chroma_cqt_config(checkedIntFromVal(hop_length, "hopLength"),
@@ -72,8 +72,8 @@ val js_chroma_cens(val samples, const val& sample_rate, const val& hop_length, c
 val js_chroma_cqt(val samples, const val& sample_rate, const val& hop_length, const val& n_chroma,
                   const val& bins_per_octave_val) {
   const int bins_per_octave = checkedIntFromVal(bins_per_octave_val, "binsPerOctave");
-  Audio audio = loadValidatedAudio("chroma_cqt", "samples", samples,
-                                   checkedIntFromVal(sample_rate, "sampleRate"));
+  Audio audio =
+      loadValidatedAudio("samples", samples, checkedIntFromVal(sample_rate, "sampleRate"));
 
   const ChromaCqtConfig config =
       make_chroma_cqt_config(checkedIntFromVal(hop_length, "hopLength"),
@@ -83,8 +83,8 @@ val js_chroma_cqt(val samples, const val& sample_rate, const val& hop_length, co
 
 val js_bass_chroma(val samples, const val& sample_rate, const val& hop_length,
                    const val& n_chroma) {
-  Audio audio = loadValidatedAudio("bass_chroma", "samples", samples,
-                                   checkedIntFromVal(sample_rate, "sampleRate"));
+  Audio audio =
+      loadValidatedAudio("samples", samples, checkedIntFromVal(sample_rate, "sampleRate"));
 
   BassChromaConfig config;
   config.cqt.hop_length = checkedIntFromVal(hop_length, "hopLength");
@@ -96,8 +96,8 @@ val js_nnls_chroma_ex(val samples, const val& sample_rate, bool enable_stft_blen
                       const val& stft_blend_weight_val, const val& stft_blend_n_fft,
                       const val& hop_length) {
   const float stft_blend_weight = checkedFloatFromVal(stft_blend_weight_val, "stftBlendWeight");
-  Audio audio = loadValidatedAudio("nnls_chroma", "samples", samples,
-                                   checkedIntFromVal(sample_rate, "sampleRate"));
+  Audio audio =
+      loadValidatedAudio("samples", samples, checkedIntFromVal(sample_rate, "sampleRate"));
 
   NnlsChromaConfig config = NnlsChromaConfig::fast(checkedIntFromVal(hop_length, "hopLength"));
   config.enable_stft_blend = enable_stft_blend;
@@ -139,8 +139,8 @@ val js_analyze_sections(val samples, const val& sample_rate, const val& n_fft_va
   if (!threshold_val.isUndefined() && !threshold_val.isNull()) {
     config.boundary_threshold = checkedFloatFromVal(threshold_val, "threshold");
   }
-  Audio audio = loadValidatedAudio("SectionAnalyzer", "samples", samples,
-                                   checkedIntFromVal(sample_rate, "sampleRate"));
+  Audio audio =
+      loadValidatedAudio("samples", samples, checkedIntFromVal(sample_rate, "sampleRate"));
   validate_section_config(config);
 
   SectionAnalyzer analyzer(audio, config);
@@ -186,7 +186,7 @@ val js_detect_boundaries(val samples, const val& sample_rate, val options) {
   // The detector does not refuse these itself; checked before the audio is loaded.
   validate_boundary_config(config);
 
-  Audio audio = loadValidatedAudio("BoundaryDetector", "samples", samples, sr);
+  Audio audio = loadValidatedAudio("samples", samples, sr);
   BoundaryDetector detector(audio, config);
 
   val boundaries = val::array();
@@ -224,8 +224,8 @@ val js_analyze_melody(val samples, const val& sample_rate, const val& fmin_val, 
   const float fmin = checkedFloatFromVal(fmin_val, "fmin");
   const float fmax = checkedFloatFromVal(fmax_val, "fmax");
   const float threshold = checkedFloatFromVal(threshold_val, "threshold");
-  Audio audio = loadValidatedAudio("MelodyAnalyzer", "samples", samples,
-                                   checkedIntFromVal(sample_rate, "sampleRate"));
+  Audio audio =
+      loadValidatedAudio("samples", samples, checkedIntFromVal(sample_rate, "sampleRate"));
 
   MelodyConfig config;
   config.fmin = fmin;
@@ -280,7 +280,7 @@ val js_cqt(val samples, const val& sample_rate, const val& hop_length, const val
            const val& n_bins, const val& bins_per_octave) {
   const float fmin = checkedFloatFromVal(fmin_val, "fmin");
   Audio audio =
-      loadValidatedAudio("cqt", "samples", samples, checkedIntFromVal(sample_rate, "sampleRate"));
+      loadValidatedAudio("samples", samples, checkedIntFromVal(sample_rate, "sampleRate"));
 
   CqtConfig config;
   config.hop_length = checkedIntFromVal(hop_length, "hopLength");
@@ -294,8 +294,8 @@ val js_cqt(val samples, const val& sample_rate, const val& hop_length, const val
 val js_pseudo_cqt(val samples, const val& sample_rate, const val& hop_length, const val& fmin_val,
                   const val& n_bins, const val& bins_per_octave) {
   const float fmin = checkedFloatFromVal(fmin_val, "fmin");
-  Audio audio = loadValidatedAudio("pseudo_cqt", "samples", samples,
-                                   checkedIntFromVal(sample_rate, "sampleRate"));
+  Audio audio =
+      loadValidatedAudio("samples", samples, checkedIntFromVal(sample_rate, "sampleRate"));
 
   CqtConfig config;
   config.hop_length = checkedIntFromVal(hop_length, "hopLength");
@@ -309,8 +309,8 @@ val js_pseudo_cqt(val samples, const val& sample_rate, const val& hop_length, co
 val js_hybrid_cqt(val samples, const val& sample_rate, const val& hop_length, const val& fmin_val,
                   const val& n_bins, const val& bins_per_octave) {
   const float fmin = checkedFloatFromVal(fmin_val, "fmin");
-  Audio audio = loadValidatedAudio("hybrid_cqt", "samples", samples,
-                                   checkedIntFromVal(sample_rate, "sampleRate"));
+  Audio audio =
+      loadValidatedAudio("samples", samples, checkedIntFromVal(sample_rate, "sampleRate"));
 
   CqtConfig config;
   config.hop_length = checkedIntFromVal(hop_length, "hopLength");
@@ -325,7 +325,7 @@ val js_vqt(val samples, const val& sample_rate, const val& hop_length, const val
            const val& n_bins, const val& bins_per_octave, float gamma) {
   const float fmin = checkedFloatFromVal(fmin_val, "fmin");
   Audio audio =
-      loadValidatedAudio("vqt", "samples", samples, checkedIntFromVal(sample_rate, "sampleRate"));
+      loadValidatedAudio("samples", samples, checkedIntFromVal(sample_rate, "sampleRate"));
 
   VqtConfig config;
   config.hop_length = checkedIntFromVal(hop_length, "hopLength");

@@ -714,7 +714,9 @@ describe('Sonare WASM Module', () => {
       ];
       for (const call of calls) {
         expect(call).toThrow(RangeError);
-        expect(call).toThrow(/renderFrame must not be negative/);
+        expect(call).toThrow(
+          /^RealtimeEngine\.\w+: renderFrame must be an integer of at least 0 \(omit it to apply immediately\)$/,
+        );
       }
       // Omitted means immediate, as does a frame of 0.
       expect(() => native.setParameter(0x4d58ff01, -6)).not.toThrow();

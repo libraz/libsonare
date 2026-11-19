@@ -257,7 +257,7 @@ describe('transcribe', () => {
         f0MinHz: 1800,
         tempoBpm: 120,
       }),
-    ).toThrow(/^f0_max_hz \(1760 Hz\) must be above f0_min_hz \(1800 Hz\)$/);
+    ).toThrow(/^transcribe: f0_max_hz \(1760 Hz\) must be above f0_min_hz \(1800 Hz\)$/);
   });
 
   it('refuses a zero the C ABI would have read as its default', () => {
@@ -268,13 +268,15 @@ describe('transcribe', () => {
     const zeroed = (extra: Record<string, number>) => () =>
       transcribe({ samples: audio, sampleRate: SR, ...extra });
 
-    expect(zeroed({ velocityFloorDb: 0 })).toThrow(/velocityFloorDb must be negative/);
-    expect(zeroed({ referenceHz: 0 })).toThrow(/referenceHz must be a positive number/);
+    expect(zeroed({ velocityFloorDb: 0 })).toThrow(
+      /velocityFloorDb must be finite and less than 0/,
+    );
+    expect(zeroed({ referenceHz: 0 })).toThrow(/referenceHz must be finite and greater than 0/);
     expect(zeroed({ f0MinHz: 0 })).toThrow(/f0MinHz must be positive/);
     expect(zeroed({ f0MaxHz: 0 })).toThrow(/f0MaxHz must be positive/);
-    expect(zeroed({ minNoteMs: 0 })).toThrow(/minNoteMs must be a positive number/);
+    expect(zeroed({ minNoteMs: 0 })).toThrow(/minNoteMs must be finite and greater than 0/);
     expect(zeroed({ segmentationThresholdCents: 0 })).toThrow(
-      /segmentationThresholdCents must be a positive number/,
+      /segmentationThresholdCents must be finite and greater than 0/,
     );
     // 0 is not a MIDI velocity either, so it is refused by its own domain rather
     // than read as the "measure it" the omitted key asks for.
@@ -344,18 +346,22 @@ describe('transcribe', () => {
       transcribe({ samples: audio, sampleRate: SR, f0MinHz: 900, f0MaxHz: 200 }),
     ).toThrow(/^transcribe: f0MaxHz must be above f0MinHz$/);
     expect(() => transcribe({ samples: audio, sampleRate: SR, group: 99 })).toThrow(
-      /^group must be an integer in \[0, 15\]$/,
+      /^transcribe: group must be an integer in \[0, 15\]$/,
     );
     expect(() => transcribe({ samples: audio, sampleRate: SR, channel: 99 })).toThrow(
-      /^channel must be an integer in \[0, 15\]$/,
+      /^transcribe: channel must be an integer in \[0, 15\]$/,
     );
 
     // The detail is a last-error slot, so a message that merely LOOKS right may
     // be the previous call's. Fail something else first and check the answer
     // moved: without this, a slot that had stopped being written would still
     // read as correct for whichever failure ran before it.
-    expect(() => transcribe({ samples: audio, sampleRate: SR, channel: 99 })).toThrow(/^channel /);
-    expect(() => transcribe({ samples: audio, sampleRate: SR, group: 99 })).toThrow(/^group /);
+    expect(() => transcribe({ samples: audio, sampleRate: SR, channel: 99 })).toThrow(
+      /^transcribe: channel /,
+    );
+    expect(() => transcribe({ samples: audio, sampleRate: SR, group: 99 })).toThrow(
+      /^transcribe: group /,
+    );
     // ...and a success after a failure is still a success, i.e. the slot is not
     // consulted when there is nothing to report.
     expect(transcribe({ samples: audio, sampleRate: SR }).noteCount).toBeGreaterThan(0);
@@ -385,17 +391,17 @@ describe('transcribe', () => {
       const unannotated = () =>
         project.transcribeToClip({ clipId: clipId + 5000, samples: audio, sampleRate: SR });
 
-      expect(detail(annotated)).toBe('channel must be an integer in [0, 15]');
-      expect(detail(unannotated)).toBe('Invalid parameter');
+      expect(detail(annotated)).toBe('transcribe: channel must be an integer in [0, 15]');
+      expect(detail(unannotated)).toBe('Project.transcribeToClip: Invalid parameter');
       expect(detail(() => transcribe({ samples: audio, sampleRate: SR, group: 99 }))).toBe(
-        'group must be an integer in [0, 15]',
+        'transcribe: group must be an integer in [0, 15]',
       );
-      expect(detail(unannotated)).toBe('Invalid parameter');
+      expect(detail(unannotated)).toBe('Project.transcribeToClip: Invalid parameter');
 
       // Reversed, so the generic answer above cannot be "it is generic whatever
       // ran before it, including nothing".
-      expect(detail(unannotated)).toBe('Invalid parameter');
-      expect(detail(annotated)).toBe('channel must be an integer in [0, 15]');
+      expect(detail(unannotated)).toBe('Project.transcribeToClip: Invalid parameter');
+      expect(detail(annotated)).toBe('transcribe: channel must be an integer in [0, 15]');
 
       // A success after a failure is still a success: the slot is not consulted
       // when there is nothing to report.
@@ -506,15 +512,15 @@ describe('Project.transcribeToClip', () => {
       // reach this entry point too rather than guarding only the free function.
       expect(() =>
         project.transcribeToClip({ clipId, samples: audio, sampleRate: SR, velocityFloorDb: 0 }),
-      ).toThrow(/velocityFloorDb must be negative/);
+      ).toThrow(/velocityFloorDb must be finite and less than 0/);
       expect(() =>
         project.transcribeToClip({ clipId, samples: audio, sampleRate: SR, minNoteMs: 0 }),
-      ).toThrow(/minNoteMs must be a positive number/);
+      ).toThrow(/minNoteMs must be finite and greater than 0/);
       // The C ABI's field-naming refusals reach this door too, not only the
       // free function's.
       expect(() =>
         project.transcribeToClip({ clipId, samples: audio, sampleRate: SR, group: 99 }),
-      ).toThrow(/^group must be an integer in \[0, 15\]$/);
+      ).toThrow(/^Project\.transcribeToClip: group must be an integer in \[0, 15\]$/);
       // The facade checks the F0 bounds by their public names before the addon.
       expect(() =>
         project.transcribeToClip({

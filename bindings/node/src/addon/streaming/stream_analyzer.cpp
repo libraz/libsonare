@@ -191,22 +191,28 @@ Napi::Object StreamAnalyzerWrap::Init(Napi::Env env, Napi::Object exports) {
   Napi::Function func = DefineClass(
       env, "StreamAnalyzer",
       {
-          InstanceMethod<&StreamAnalyzerWrap::Process>("process"),
-          InstanceMethod<&StreamAnalyzerWrap::ProcessWithOffset>("processWithOffset"),
-          InstanceMethod<&StreamAnalyzerWrap::FinalizeStream>("finalize"),
-          InstanceMethod<&StreamAnalyzerWrap::AvailableFrames>("availableFrames"),
-          InstanceMethod<&StreamAnalyzerWrap::ReadFramesSoa>("readFramesSoa"),
-          InstanceMethod<&StreamAnalyzerWrap::ReadFramesU8>("readFramesU8"),
-          InstanceMethod<&StreamAnalyzerWrap::ReadFramesI16>("readFramesI16"),
-          InstanceMethod<&StreamAnalyzerWrap::Reset>("reset"),
-          InstanceMethod<&StreamAnalyzerWrap::Stats>("stats"),
-          InstanceMethod<&StreamAnalyzerWrap::FrameCount>("frameCount"),
-          InstanceMethod<&StreamAnalyzerWrap::CurrentTimeSec>("currentTimeSec"),
-          InstanceMethod<&StreamAnalyzerWrap::SampleRate>("sampleRate"),
-          InstanceMethod<&StreamAnalyzerWrap::SetExpectedDuration>("setExpectedDuration"),
-          InstanceMethod<&StreamAnalyzerWrap::SetNormalizationGain>("setNormalizationGain"),
-          InstanceMethod<&StreamAnalyzerWrap::SetReferenceHz>("setReferenceHz"),
-          InstanceMethod<&StreamAnalyzerWrap::Destroy>("destroy"),
+          InstanceMethod<&StreamAnalyzerWrap::Process>("process", napi_default_method),
+          InstanceMethod<&StreamAnalyzerWrap::ProcessWithOffset>("processWithOffset",
+                                                                 napi_default_method),
+          InstanceMethod<&StreamAnalyzerWrap::FinalizeStream>("finalize", napi_default_method),
+          InstanceMethod<&StreamAnalyzerWrap::AvailableFrames>("availableFrames",
+                                                               napi_default_method),
+          InstanceMethod<&StreamAnalyzerWrap::ReadFramesSoa>("readFramesSoa", napi_default_method),
+          InstanceMethod<&StreamAnalyzerWrap::ReadFramesU8>("readFramesU8", napi_default_method),
+          InstanceMethod<&StreamAnalyzerWrap::ReadFramesI16>("readFramesI16", napi_default_method),
+          InstanceMethod<&StreamAnalyzerWrap::Reset>("reset", napi_default_method),
+          InstanceMethod<&StreamAnalyzerWrap::Stats>("stats", napi_default_method),
+          InstanceMethod<&StreamAnalyzerWrap::FrameCount>("frameCount", napi_default_method),
+          InstanceMethod<&StreamAnalyzerWrap::CurrentTimeSec>("currentTimeSec",
+                                                              napi_default_method),
+          InstanceMethod<&StreamAnalyzerWrap::SampleRate>("sampleRate", napi_default_method),
+          InstanceMethod<&StreamAnalyzerWrap::SetExpectedDuration>("setExpectedDuration",
+                                                                   napi_default_method),
+          InstanceMethod<&StreamAnalyzerWrap::SetNormalizationGain>("setNormalizationGain",
+                                                                    napi_default_method),
+          InstanceMethod<&StreamAnalyzerWrap::SetReferenceHz>("setReferenceHz",
+                                                              napi_default_method),
+          InstanceMethod<&StreamAnalyzerWrap::Destroy>("destroy", napi_default_method),
       });
 
   exports.Set("StreamAnalyzer", func);
@@ -258,14 +264,14 @@ StreamAnalyzerWrap::StreamAnalyzerWrap(const Napi::CallbackInfo& info)
           DoubleProperty(opts, "maxPendingFrames", config.max_pending_frames);
       if (!sonare::numeric::checked_integral_cast(max_pending_frames, &config.max_pending_frames)) {
         throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                      "maxPendingFrames must be a non-negative integer");
+                                      "maxPendingFrames must be an integer of at least 0");
       }
       const double max_progression_entries =
           DoubleProperty(opts, "maxProgressionEntries", config.max_progression_entries);
       if (!sonare::numeric::checked_integral_cast(max_progression_entries,
                                                   &config.max_progression_entries)) {
         throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                      "maxProgressionEntries must be a non-negative integer");
+                                      "maxProgressionEntries must be an integer of at least 0");
       }
       config.key_update_interval_sec = static_cast<float>(
           DoubleProperty(opts, "keyUpdateIntervalSec", config.key_update_interval_sec));
@@ -316,8 +322,8 @@ Napi::Value StreamAnalyzerWrap::Destroy(const Napi::CallbackInfo& info) {
 Napi::Value StreamAnalyzerWrap::Process(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_REQUIRE_OPEN(env, analyzer_, "StreamAnalyzer");
-  if (info.Length() < 1 || !IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "Expected (Float32Array)").ThrowAsJavaScriptException();
+  if (!IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   SONARE_NODE_TRY
@@ -331,8 +337,8 @@ Napi::Value StreamAnalyzerWrap::ProcessWithOffset(const Napi::CallbackInfo& info
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, analyzer_, "StreamAnalyzer");
-  if (info.Length() < 2 || !IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "Expected (Float32Array, sampleOffset)").ThrowAsJavaScriptException();
+  if (!IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   size_t offset = 0;
@@ -364,10 +370,6 @@ Napi::Value StreamAnalyzerWrap::ReadFramesSoa(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, analyzer_, "StreamAnalyzer");
-  if (info.Length() < 1) {
-    Napi::TypeError::New(env, "Expected (maxFrames)").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
   size_t max_frames = 0;
   if (!NonNegativeSizeTArg(env, info, 0, "maxFrames", &max_frames)) return env.Undefined();
   sonare::FrameBuffer buffer;
@@ -380,10 +382,6 @@ Napi::Value StreamAnalyzerWrap::ReadFramesU8(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, analyzer_, "StreamAnalyzer");
-  if (info.Length() < 1) {
-    Napi::TypeError::New(env, "Expected (maxFrames)").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
   size_t max_frames = 0;
   if (!NonNegativeSizeTArg(env, info, 0, "maxFrames", &max_frames)) return env.Undefined();
   sonare::QuantizedFrameBufferU8 buffer;
@@ -398,10 +396,6 @@ Napi::Value StreamAnalyzerWrap::ReadFramesI16(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, analyzer_, "StreamAnalyzer");
-  if (info.Length() < 1) {
-    Napi::TypeError::New(env, "Expected (maxFrames)").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
   size_t max_frames = 0;
   if (!NonNegativeSizeTArg(env, info, 0, "maxFrames", &max_frames)) return env.Undefined();
   sonare::QuantizedFrameBufferI16 buffer;
@@ -560,8 +554,8 @@ Napi::Value StreamAnalyzerWrap::SampleRate(const Napi::CallbackInfo& info) {
 Napi::Value StreamAnalyzerWrap::SetExpectedDuration(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_REQUIRE_OPEN(env, analyzer_, "StreamAnalyzer");
-  if (info.Length() < 1 || !info[0].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (durationSec)").ThrowAsJavaScriptException();
+  if (!info[0].IsNumber()) {
+    Napi::TypeError::New(env, "durationSec must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   SONARE_NODE_TRY
@@ -573,8 +567,8 @@ Napi::Value StreamAnalyzerWrap::SetExpectedDuration(const Napi::CallbackInfo& in
 Napi::Value StreamAnalyzerWrap::SetNormalizationGain(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_REQUIRE_OPEN(env, analyzer_, "StreamAnalyzer");
-  if (info.Length() < 1 || !info[0].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (gain)").ThrowAsJavaScriptException();
+  if (!info[0].IsNumber()) {
+    Napi::TypeError::New(env, "gain must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   SONARE_NODE_TRY
@@ -586,8 +580,8 @@ Napi::Value StreamAnalyzerWrap::SetNormalizationGain(const Napi::CallbackInfo& i
 Napi::Value StreamAnalyzerWrap::SetReferenceHz(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_REQUIRE_OPEN(env, analyzer_, "StreamAnalyzer");
-  if (info.Length() < 1 || !info[0].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (referenceHz)").ThrowAsJavaScriptException();
+  if (!info[0].IsNumber()) {
+    Napi::TypeError::New(env, "referenceHz must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   SONARE_NODE_TRY

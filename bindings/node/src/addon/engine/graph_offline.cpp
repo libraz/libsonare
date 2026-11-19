@@ -414,9 +414,12 @@ Napi::Value RealtimeEngineWrap::ConfigureScopeTelemetry(const Napi::CallbackInfo
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
-  if (info.Length() < 2 || !info[0].IsNumber() || !info[1].IsNumber()) {
-    Napi::TypeError::New(env, "configureScopeTelemetry expects (intervalFrames, bandCount) numbers")
-        .ThrowAsJavaScriptException();
+  if (!info[0].IsNumber()) {
+    Napi::TypeError::New(env, "intervalFrames must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[1].IsNumber()) {
+    Napi::TypeError::New(env, "bandCount must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   const int interval_frames = sonare_node::node_narrow_int(env, info[0], "intervalFrames");

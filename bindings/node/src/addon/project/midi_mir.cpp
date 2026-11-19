@@ -94,8 +94,7 @@ Napi::Value ProjectWrap::ImportSmf(const Napi::CallbackInfo& info) {
     bytes = arr.Data();
     len = arr.ByteLength();
   } else {
-    Napi::TypeError::New(env, "importSmf expects a Buffer or Uint8Array")
-        .ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "data must be a Buffer or Uint8Array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   uint32_t out_id = 0;
@@ -135,8 +134,7 @@ Napi::Value ProjectWrap::ImportClipFile(const Napi::CallbackInfo& info) {
     bytes = arr.Data();
     len = arr.ByteLength();
   } else {
-    Napi::TypeError::New(env, "importClipFile expects a Buffer or Uint8Array")
-        .ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "data must be a Buffer or Uint8Array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   uint32_t out_id = 0;
@@ -314,8 +312,7 @@ Napi::Value ProjectWrap::AutoTempo(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   if (info.Length() < 1 || !sonare_node::IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "autoTempo expects a Float32Array of mono audio")
-        .ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   Napi::Float32Array audio = info[0].As<Napi::Float32Array>();
@@ -345,8 +342,7 @@ Napi::Value ProjectWrap::AnalyzeTempo(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   if (info.Length() < 1 || !sonare_node::IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "analyzeTempo expects a Float32Array of mono audio")
-        .ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   Napi::Float32Array audio = info[0].As<Napi::Float32Array>();
@@ -503,15 +499,13 @@ Napi::Value ProjectWrap::SetAssistSidecar(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   if (info.Length() < 1 || !info[0].IsObject()) {
-    Napi::TypeError::New(env, "setAssistSidecar expects a sidecar descriptor object")
-        .ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "sidecar must be an object").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   Napi::Object obj = info[0].As<Napi::Object>();
   Napi::Value module_value = obj.Get("moduleId");
   if (!module_value.IsString()) {
-    Napi::TypeError::New(env, "setAssistSidecar: moduleId must be a string")
-        .ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "moduleId must be a string").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   std::string module_id = sonare_node::node_narrow_string(env, module_value, "moduleId");
@@ -529,7 +523,7 @@ Napi::Value ProjectWrap::SetAssistSidecar(const Napi::CallbackInfo& info) {
     Napi::Buffer<uint8_t> buf = payload_value.As<Napi::Buffer<uint8_t>>();
     payload.assign(buf.Data(), buf.Data() + buf.Length());
   } else if (!payload_value.IsUndefined() && !payload_value.IsNull()) {
-    Napi::TypeError::New(env, "setAssistSidecar: payload must be a Uint8Array or Buffer")
+    Napi::TypeError::New(env, "payload must be a Uint8Array or Buffer")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
@@ -598,12 +592,20 @@ namespace sonare_node {
 Napi::Value AlignTakeToReference(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (info.Length() < 4 || !IsFloat32Array(info[0]) || !IsFloat32Array(info[1])) {
-    Napi::TypeError::New(
-        env,
-        "alignTakeToReference expects (reference, take, sampleRate, takeSampleRate, config?) with "
-        "two Float32Arrays")
-        .ThrowAsJavaScriptException();
+  if (!IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "reference must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!IsFloat32Array(info[1])) {
+    Napi::TypeError::New(env, "take must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (info.Length() < 3) {
+    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (info.Length() < 4) {
+    Napi::TypeError::New(env, "takeSampleRate must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   Napi::Float32Array reference = info[0].As<Napi::Float32Array>();
@@ -654,8 +656,7 @@ Napi::Value ChordSymbolFromAnalysis(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (info.Length() < 1 || !info[0].IsObject() || info[0].IsArray()) {
-    Napi::TypeError::New(env, "chordSymbolFromAnalysis: chord must be an object")
-        .ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "chord must be an object").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   const Napi::Object chord = info[0].As<Napi::Object>();
@@ -690,8 +691,7 @@ Napi::Value KeyModeFromAnalysis(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (info.Length() < 1 || !info[0].IsString()) {
-    Napi::TypeError::New(env, "keyModeFromAnalysis: mode must be a mode name")
-        .ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "mode must be a mode name").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   const std::string name = node_narrow_string(env, info[0], "mode");

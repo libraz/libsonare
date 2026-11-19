@@ -1,6 +1,7 @@
 import { closeSync, openSync, readSync } from 'node:fs';
 import { ErrorCode, SonareError } from './errors.js';
 import { bindNativeClipPageProvider } from './internal/clip_page_native.js';
+import { entryClass } from './internal/entry.js';
 import { addon } from './native.js';
 import type { ClipPageProviderOptions, FileClipPageProviderOptions } from './types.js';
 import { requestObject } from './validation.js';
@@ -22,6 +23,7 @@ interface NativeClipPageProvider {
 }
 
 /** A paged clip source: pages are supplied on demand and the provider is passed as a clip's `pageProvider`. */
+@entryClass('ClipPageProvider')
 export class ClipPageProvider {
   private readonly native: NativeClipPageProvider;
 
@@ -57,6 +59,7 @@ export class ClipPageProvider {
 }
 
 /** A {@link ClipPageProvider} fed from a headerless interleaved float32 file. */
+@entryClass('FileClipPageProvider')
 export class FileClipPageProvider extends ClipPageProvider {
   private fd: number | null;
   private readonly channelCount: number;

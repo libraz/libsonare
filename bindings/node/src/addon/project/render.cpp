@@ -235,7 +235,7 @@ bool RefuseThenable(Napi::Env env, const Napi::Value& result, const char* callba
   const Napi::Value then = result.As<Napi::Object>().Get("then");
   if (env.IsExceptionPending()) return true;
   if (!then.IsFunction()) return false;
-  Napi::TypeError::New(env, std::string("bounceWithInstruments: instrument ") + callback +
+  Napi::TypeError::New(env, std::string("instrument ") + callback +
                                 " must not return a Promise; instruments are synchronous")
       .ThrowAsJavaScriptException();
   return true;
@@ -246,8 +246,7 @@ bool ReadInstrumentCallback(Napi::Env env, const Napi::Value& value, const std::
                             std::optional<Napi::Function>* out) {
   if (value.IsUndefined() || value.IsNull()) return true;
   if (!value.IsFunction()) {
-    Napi::TypeError::New(env, "bounceWithInstruments: " + label + " must be a function")
-        .ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, label + " must be a function").ThrowAsJavaScriptException();
     return false;
   }
   out->emplace(value.As<Napi::Function>());
@@ -264,6 +263,7 @@ void PrepareOnJsThread(JsInstrumentSlot* slot, double sample_rate, int max_block
       slot->prepare->Call(slot->self, {Napi::Number::New(slot->env, sample_rate),
                                        Napi::Number::New(slot->env, max_block_size),
                                        Napi::Number::New(slot->env, kInstrumentChannels)});
+  sonare_node::MarkPendingForeign(slot->env);
   if (slot->env.IsExceptionPending()) return;
   RefuseThenable(slot->env, result, "prepare");
 }
@@ -283,6 +283,7 @@ void OnEventOnJsThread(JsInstrumentSlot* slot, uint32_t destination_id, const ui
   event.Set("words", words);
   event.Set("renderFrame", Napi::Number::New(env, static_cast<double>(render_frame)));
   const Napi::Value result = slot->on_event->Call(slot->self, {event});
+  sonare_node::MarkPendingForeign(env);
   if (env.IsExceptionPending()) return;
   RefuseThenable(env, result, "onEvent");
 }
@@ -318,6 +319,7 @@ void RenderOnJsThread(JsInstrumentSlot* slot, float* const* channels, int num_ch
   }
   const Napi::Value result =
       slot->render.Call(slot->self, {outputs, Napi::Number::New(env, num_frames)});
+  sonare_node::MarkPendingForeign(env);
   if (env.IsExceptionPending() || RefuseThenable(env, result, "render")) return;
   for (int ch = 0; ch < num_channels; ++ch) {
     Napi::Float32Array base = ScratchChannel(slot, static_cast<size_t>(ch), frames);
@@ -393,8 +395,7 @@ void RunBounceJob(void* arg) {
                                                       job->binding_count, &job->interleaved,
                                                       &job->len, &job->num_channels);
   // The detail slot is thread-local, so it is read here and not on the JS thread.
-  const char* detail = sonare_last_error_message();
-  if (job->error != SONARE_OK && detail != nullptr) job->detail = detail;
+  if (job->error != SONARE_OK) job->detail = sonare_node::ErrorMessageForCode(job->error);
   job->bridge->Finish();
 }
 }  // namespace
@@ -474,8 +475,7 @@ Napi::Value ProjectWrap::BounceWithBuiltinInstruments(const Napi::CallbackInfo& 
     for (uint32_t i = 0; i < arr.Length(); ++i) {
       Napi::Value element = arr.Get(i);
       if (!element.IsObject()) {
-        Napi::TypeError::New(env,
-                             "bounceWithBuiltinInstruments: instrument bindings must be objects")
+        Napi::TypeError::New(env, "instrument bindings must be objects")
             .ThrowAsJavaScriptException();
         return env.Undefined();
       }
@@ -524,7 +524,7 @@ Napi::Value ProjectWrap::BounceWithInstruments(const Napi::CallbackInfo& info) {
     for (uint32_t i = 0; i < arr.Length(); ++i) {
       const Napi::Value element = arr.Get(i);
       if (!element.IsObject()) {
-        Napi::TypeError::New(env, "bounceWithInstruments: instrument bindings must be objects")
+        Napi::TypeError::New(env, "instrument bindings must be objects")
             .ThrowAsJavaScriptException();
         return env.Undefined();
       }
@@ -538,7 +538,7 @@ Napi::Value ProjectWrap::BounceWithInstruments(const Napi::CallbackInfo& info) {
         return env.Undefined();
       }
       if (!render) {
-        Napi::TypeError::New(env, "bounceWithInstruments: " + label + ".render must be a function")
+        Napi::TypeError::New(env, label + ".render must be a function")
             .ThrowAsJavaScriptException();
         return env.Undefined();
       }
@@ -563,7 +563,7 @@ Napi::Value ProjectWrap::BounceWithInstruments(const Napi::CallbackInfo& info) {
   BounceThread worker(&bridge);
   if (!worker.Start(RunBounceJob, &job)) {
     sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_UNKNOWN,
-                                         "bounceWithInstruments: cannot start the bounce thread");
+                                         "cannot start the bounce thread");
     return env.Undefined();
   }
   bridge.Serve();
@@ -664,8 +664,7 @@ void ProjectWrap::LoadSoundFont(const Napi::CallbackInfo& info) {
     bytes = arr.Data();
     len = arr.ByteLength();
   } else {
-    Napi::TypeError::New(env, "loadSoundFont expects a Buffer or Uint8Array")
-        .ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "data must be a Buffer or Uint8Array").ThrowAsJavaScriptException();
     return;
   }
   ThrowIfError(env, sonare_project_load_soundfont(project_, bytes, len));
@@ -738,7 +737,7 @@ Napi::Value ProjectWrap::BounceWithSf2Instruments(const Napi::CallbackInfo& info
     for (uint32_t i = 0; i < arr.Length(); ++i) {
       Napi::Value element = arr.Get(i);
       if (!element.IsObject()) {
-        Napi::TypeError::New(env, "bounceWithSf2Instruments: instrument bindings must be objects")
+        Napi::TypeError::New(env, "instrument bindings must be objects")
             .ThrowAsJavaScriptException();
         return env.Undefined();
       }

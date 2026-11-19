@@ -193,6 +193,7 @@ export function isWebMidiAvailable(): boolean {
  *
  * @throws SonareError `NotSupported` when Web MIDI is unavailable.
  * @throws RangeError when `options.group` is outside 0 to 15.
+ * @throws RangeError when `options.inputIds` is an empty array.
  */
 export async function bindWebMidi(
   engine: WebMidiEngine,
@@ -206,6 +207,9 @@ export async function bindWebMidi(
   const group = options.group ?? 0;
   assertNibble('bindWebMidi', group, 'group');
   const destinationId = options.destinationId ?? 0;
+  if (options.inputIds !== undefined && options.inputIds.length === 0) {
+    throw new RangeError('bindWebMidi: inputIds must not be empty; omit it to bind every input');
+  }
   const selectedIds = new Set(options.inputIds ?? []);
   // Invoke through the navigator so the browser's native method keeps its
   // required `this` binding (detached calls throw "Illegal invocation").

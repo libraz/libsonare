@@ -1,3 +1,4 @@
+import { entryClass } from './internal/entry.js';
 import { assertHandleLive } from './internal/handle_guard.js';
 import { getSonareModule } from './module_state.js';
 import type {
@@ -73,6 +74,7 @@ const hrtfHandles = new WeakMap<HrtfSet, WasmHrtfSet>();
  * hrtf.destroy();
  * ```
  */
+@entryClass('HrtfSet')
 export class HrtfSet {
   private constructor(native: WasmHrtfSet) {
     hrtfHandles.set(this, native);
@@ -113,6 +115,7 @@ export class HrtfSet {
  * with 0 and counted rather than refused. The AudioWorklet path is
  * `SonarePlaybackWorkletProcessor` in the worklet bundle.
  */
+@entryClass('PlaybackRenderer', ['processPlanar', 'processInterleaved'])
 export class PlaybackRenderer {
   private nativeHandle: WasmPlaybackRenderer;
   private released = false;
@@ -265,6 +268,7 @@ export class PlaybackRenderer {
  * channel weights by channel count: 1, 2, 6 or 8), for measuring
  * `loudness.programLufs` ahead of a {@link PlaybackRenderer}.
  */
+@entryClass('PlaybackLoudnessMeter', ['pushInterleaved'])
 export class PlaybackLoudnessMeter {
   private nativeHandle: WasmPlaybackLoudnessMeter;
   private released = false;

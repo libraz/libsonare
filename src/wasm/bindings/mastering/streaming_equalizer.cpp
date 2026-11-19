@@ -157,7 +157,7 @@ class EqualizerWrapper {
     validateBlockLength(length, "sidechain");
     std::vector<float> staged_left = float32ArrayToVector(samples);
     if (staged_left.empty()) return clearSidechain();
-    validateSidechainBuffer("EqualizerProcessor::set_sidechain", "samples", staged_left);
+    validateSidechainBuffer("samples", staged_left);
 
     // The wrapper preflight covers every core rejection condition. Commit the
     // owned storage first, then lend the core only the member pointer array.
@@ -172,7 +172,7 @@ class EqualizerWrapper {
   void setSidechainStereo(val left_samples, val right_samples) {
     const std::size_t left_length = wasmFloat32ArrayLength(left_samples, "left sidechain");
     const std::size_t right_length = wasmFloat32ArrayLength(right_samples, "right sidechain");
-    validateWasmFloat32ElementBudget({left_length, right_length}, "stereo sidechain");
+    validateWasmFloat32ElementBudget({left_length, right_length});
     if (left_length != right_length) {
       throw WasmRangeError("sidechain channel lengths must match");
     }
@@ -181,8 +181,8 @@ class EqualizerWrapper {
 
     std::vector<float> staged_left = float32ArrayToVector(left_samples);
     std::vector<float> staged_right = float32ArrayToVector(right_samples);
-    validateSidechainBuffer("EqualizerProcessor::set_sidechain", "left", staged_left);
-    validateSidechainBuffer("EqualizerProcessor::set_sidechain", "right", staged_right);
+    validateSidechainBuffer("left", staged_left);
+    validateSidechainBuffer("right", staged_right);
     sidechain_left_.swap(staged_left);
     sidechain_right_.swap(staged_right);
     sidechain_channels_ = {sidechain_left_.data(), sidechain_right_.data()};
@@ -220,7 +220,7 @@ class EqualizerWrapper {
   val processStereo(val left_samples, val right_samples) {
     const std::size_t left_length = wasmFloat32ArrayLength(left_samples, "left process block");
     const std::size_t right_length = wasmFloat32ArrayLength(right_samples, "right process block");
-    validateWasmFloat32ElementBudget({left_length, right_length}, "stereo process block");
+    validateWasmFloat32ElementBudget({left_length, right_length});
     if (left_length != right_length) {
       throw WasmRangeError("stereo channel lengths must match");
     }
@@ -279,8 +279,7 @@ class EqualizerWrapper {
   }
 
   void match(val source, val reference, val options) {
-    validateWasmFloat32ArrayPair(source, "source samples", reference, "reference samples",
-                                 "StreamingEqualizer.match input", false);
+    validateWasmFloat32ArrayPair(source, "source samples", reference, "reference samples", false);
     std::vector<float> src = float32ArrayToVector(source);
     std::vector<float> ref = float32ArrayToVector(reference);
     const int sample_rate =
@@ -288,12 +287,11 @@ class EqualizerWrapper {
     // An omitted reference rate is the source's.
     const int reference_sample_rate = intProperty(options, "referenceSampleRate", sample_rate);
     const int max_bands = intProperty(options, "maxBands", 8);
-    validate_offline_audio_input("configure_equalizer_from_audio", "samples", src.data(),
-                                 src.size(), sample_rate);
-    validate_offline_audio_input("configure_equalizer_from_audio", "ref", ref.data(), ref.size(),
+    validate_offline_audio_input(nullptr, "source", src.data(), src.size(), sample_rate);
+    validate_offline_audio_input(nullptr, "reference", ref.data(), ref.size(),
                                  reference_sample_rate);
     if (max_bands <= 0) {
-      throw WasmRangeError("StreamingEqualizer.match: maxBands must be positive");
+      throw WasmRangeError("maxBands must be an integer in [1, 2147483647]");
     }
     mastering::match::MatchEqConfig match_config;
     match_config.max_bands = static_cast<size_t>(max_bands);
@@ -309,9 +307,8 @@ class EqualizerWrapper {
     }
   }
 
-  void validateSidechainBuffer(const char* fn, const char* name,
-                               const std::vector<float>& samples) const {
-    validate_offline_audio_input(fn, name, samples.data(), samples.size(),
+  void validateSidechainBuffer(const char* name, const std::vector<float>& samples) const {
+    validate_offline_audio_input(nullptr, name, samples.data(), samples.size(),
                                  static_cast<int>(std::lround(sample_rate_)));
   }
 

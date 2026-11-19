@@ -70,9 +70,9 @@ function run(call: () => unknown): Outcome {
 }
 
 /** Asserts the caught value is the float-range refusal naming `key`. */
-function expectRangeRefusal(caught: unknown, key: string, context: string): void {
+function expectRangeRefusal(caught: unknown, entry: string, key: string, context: string): void {
   const error = expectArgumentRefusal(caught, RangeError, context);
-  expect(error.message, context).toBe(`${key} ${RANGE_MESSAGE}`);
+  expect(error.message, context).toBe(`${entry}: ${key} ${RANGE_MESSAGE}`);
 }
 
 beforeAll(async () => {
@@ -90,7 +90,7 @@ describe('timeToFrames refuses a saturated time', () => {
       // caller would have acted on.
       expect(outcome.returned, `${context}: returned a frame index`).toBeUndefined();
       expect(outcome.returned, context).not.toBe(SATURATED_FRAME_INDEX);
-      expectRangeRefusal(outcome.error, 'time', context);
+      expectRangeRefusal(outcome.error, 'timeToFrames', 'time', context);
     }
   });
 
@@ -99,7 +99,7 @@ describe('timeToFrames refuses a saturated time', () => {
       const context = `timeToFrames(${value})`;
       const outcome = run(() => timeToFrames(value, SR, HOP));
       expect(outcome.returned, context).toBeUndefined();
-      expectRangeRefusal(outcome.error, 'time', context);
+      expectRangeRefusal(outcome.error, 'timeToFrames', 'time', context);
     }
   });
 
@@ -150,7 +150,7 @@ describe('the note-name conversions refuse', () => {
         thrown = error;
       }
       const error = expectArgumentRefusal(thrown, RangeError, String(hz));
-      expect(error.message, String(hz)).toMatch(/^hz_to_note: hz must be finite and positive/);
+      expect(error.message, String(hz)).toMatch(/^hzToNote: hz must be finite and positive/);
     }
   });
 });

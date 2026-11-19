@@ -95,7 +95,7 @@ Napi::Value RealtimeEngineWrap::BindMidiCcBinding(const Napi::CallbackInfo& info
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   if (info.Length() < 1 || !info[0].IsObject()) {
-    Napi::TypeError::New(env, "Expected a MIDI CC binding object").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "binding must be an object").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   SonareMidiCcBinding binding{};
@@ -133,8 +133,7 @@ Napi::Value RealtimeEngineWrap::SetControllerProfile(const Napi::CallbackInfo& i
   uint32_t destination_id = 0;
   if (!RequiredUint32Arg(env, info, 0, "destinationId", &destination_id)) return env.Undefined();
   if (info.Length() < 2 || !info[1].IsString()) {
-    Napi::TypeError::New(env, "setControllerProfile expects a preset name string")
-        .ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "preset must be a string").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   const std::string preset = sonare_node::node_narrow_string(env, info[1], "preset");

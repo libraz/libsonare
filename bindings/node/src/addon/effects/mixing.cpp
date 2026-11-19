@@ -99,7 +99,7 @@ Napi::Value SonareWrap::MixingScenePresetJson(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (info.Length() < 1 || !info[0].IsString()) {
-    Napi::TypeError::New(env, "Expected preset name").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "preset must be a string").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   char* json = nullptr;
@@ -118,9 +118,16 @@ Napi::Value SonareWrap::MixingScenePresetJson(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::MixStereo(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (info.Length() < 3 || !info[0].IsArray() || !info[1].IsArray() || !info[2].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (leftChannels, rightChannels, sampleRate, options?)")
-        .ThrowAsJavaScriptException();
+  if (!info[0].IsArray()) {
+    Napi::TypeError::New(env, "leftChannels must be an array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[1].IsArray()) {
+    Napi::TypeError::New(env, "rightChannels must be an array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[2].IsNumber()) {
+    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -170,7 +177,7 @@ Napi::Value SonareWrap::MixStereo(const Napi::CallbackInfo& info) {
 
   const int sample_rate = node_narrow_int(env, info[2], "sampleRate");
   if (sample_rate < sonare::kMinAudioSampleRate || sample_rate > sonare::kMaxAudioSampleRate) {
-    Napi::RangeError::New(env, "mixStereo: sampleRate out of supported range [" +
+    Napi::RangeError::New(env, "sampleRate out of supported range [" +
                                    std::to_string(sonare::kMinAudioSampleRate) + ", " +
                                    std::to_string(sonare::kMaxAudioSampleRate) + "]")
         .ThrowAsJavaScriptException();
@@ -183,8 +190,7 @@ Napi::Value SonareWrap::MixStereo(const Napi::CallbackInfo& info) {
   for (const char* key : {"inputTrimDb", "faderDb", "pan", "panMode", "width", "muted"}) {
     const Napi::Value value = options.Get(key);
     if (value.IsArray() && value.As<Napi::Array>().Length() > count) {
-      throw Napi::RangeError::New(env, std::string("mixStereo: '") + key +
-                                           "' has more entries than strips (" +
+      throw Napi::RangeError::New(env, std::string("'") + key + "' has more entries than strips (" +
                                            std::to_string(count) + ")");
     }
   }
@@ -193,7 +199,7 @@ Napi::Value SonareWrap::MixStereo(const Napi::CallbackInfo& info) {
   const SonareError create_err =
       sonare_mixer_create(sample_rate, static_cast<int>(std::max<size_t>(1, length)), &mixer);
   if (create_err != SONARE_OK) {
-    sonare_node::ThrowSonareError(env, create_err, "mixStereo: failed to create mixer: ");
+    sonare_node::ThrowSonareError(env, create_err, "failed to create mixer: ");
     return env.Undefined();
   }
 
@@ -210,7 +216,7 @@ Napi::Value SonareWrap::MixStereo(const Napi::CallbackInfo& info) {
   for (size_t index = 0; index < count; ++index) {
     SonareStrip* strip = sonare_mixer_add_strip(mixer, ("strip" + std::to_string(index)).c_str());
     if (strip == nullptr) {
-      sonare_node::ThrowLastSonareError(env, "mixStereo: failed to add mixer strip: ");
+      sonare_node::ThrowLastSonareError(env, "failed to add mixer strip: ");
       return env.Undefined();
     }
     strips.push_back(strip);

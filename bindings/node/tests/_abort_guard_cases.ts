@@ -181,7 +181,7 @@ const NAMED_OPTIONAL_REFUSALS: Array<[string, string, () => unknown]> = [
   ['addon.estimateTuning', 'sampleRate', () => addon.estimateTuning(readerTone, 'x')],
   ['addon.fixFrames', 'xMin', () => addon.fixFrames(new Int32Array([0, 1]), 'x')],
   ['addon.fourierTempogram', 'sampleRate', () => addon.fourierTempogram(readerTone, 'x')],
-  ['addon.framesToSamples', 'hop', () => addon.framesToSamples(2, 'x')],
+  ['addon.framesToSamples', 'hopLength', () => addon.framesToSamples(2, 'x')],
   ['addon.griffinLim', 'sampleRate', () => addon.griffinLim(readerMatrix, 2, 2, 'x')],
   ['addon.hybridCqt', 'sampleRate', () => addon.hybridCqt(readerTone, 'x')],
   ['addon.lufs', 'sampleRate', () => addon.lufs(readerTone, 'x')],
@@ -256,7 +256,7 @@ const NAMED_OPTIONAL_REFUSALS: Array<[string, string, () => unknown]> = [
     () => addon.remixAlignedIntervals(readerTone, new Int32Array([0, 2]), 'x'),
   ],
   ['addon.rmsEnergy', 'sampleRate', () => addon.rmsEnergy(readerTone, 'x')],
-  ['addon.samplesToFrames', 'hop', () => addon.samplesToFrames(2, 'x')],
+  ['addon.samplesToFrames', 'hopLength', () => addon.samplesToFrames(2, 'x')],
   ['addon.segmentAgglomerative', 'rows', () => addon.segmentAgglomerative(readerTone, 'x')],
   [
     'addon.segmentCrossSimilarity',

@@ -661,7 +661,8 @@ describe('zeroCrossings refuses a non-finite sample in the core', () => {
 
   it.each(refused)('refuses $id in the core', (item) => {
     const kind = errorClassFor[item.cause as Cause];
-    const text = literal(item.message as string);
+    // The corpus holds the core's text; the C entry in front of it gives way to the public name.
+    const text = literal((item.message as string).replace(/^zero_crossings: /, 'zeroCrossings: '));
     const samples = samplesFor(item);
     expectRefusal(() => addon.zeroCrossings(samples, 1e-10, false, true, true), kind, text);
   });

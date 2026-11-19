@@ -1,4 +1,5 @@
 import { ErrorCode, SonareError } from './errors.js';
+import { entryClass } from './internal/entry.js';
 import { releasedHandleError } from './internal/handle_guard.js';
 
 /**
@@ -12,6 +13,7 @@ import { releasedHandleError } from './internal/handle_guard.js';
  * and runs every cleanup registered with {@link onClose}, which is how pending
  * waiters settle and half-built resources are reclaimed.
  */
+@entryClass('OwnerEpoch')
 export class OwnerEpoch {
   private generation = 0;
   private ended = false;

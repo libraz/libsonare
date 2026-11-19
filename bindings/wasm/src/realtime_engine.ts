@@ -16,6 +16,7 @@ import {
   bindNativeClipPageProvider,
   nativeClipPageProviderOf,
 } from './internal/clip_page_native.js';
+import { entryClass } from './internal/entry.js';
 import { eqBandJson } from './internal/eq_band_json.js';
 import { externalMidiEvent } from './internal/external_midi.js';
 import { assertHandleLive, releasedHandleError } from './internal/handle_guard.js';
@@ -673,6 +674,12 @@ function bandJson(fnName: string, band: unknown): string {
  *   `SonareError` with `ErrorCode.OutOfMemory`; a feature compiled out of the
  *   build throws `ErrorCode.NotSupported`.
  */
+@entryClass('RealtimeEngine', [
+  'process',
+  'processPrepared',
+  'processPreparedWithMonitor',
+  'processWithMonitor',
+])
 export class RealtimeEngine {
   private nativeHandle: WasmRealtimeEngine;
   private released = false;
@@ -2978,6 +2985,7 @@ export class RealtimeEngine {
 }
 
 /** A paged clip source, independent of any engine; pages are supplied on demand. */
+@entryClass('ClipPageProvider')
 export class ClipPageProvider {
   private nativeHandle: WasmClipPageProvider;
   private disposed = false;

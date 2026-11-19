@@ -203,21 +203,17 @@ const char* wasmCString(const std::string& text, const char* subject);
 /// @throws WasmRangeError when @p text contains a NUL.
 void wasmRefuseEmbeddedNul(const std::string& text, const char* subject);
 
-/// @brief "<context>: <C detail, or the code's generic text>".
-inline std::string cErrorMessage(SonareError err, const char* context) {
+/// @brief The C detail, or the code's generic text.
+inline std::string cErrorMessage(SonareError err) {
   const char* detail = sonare_last_error_message();
   const char* fallback = sonare_error_message(err);
-  std::string message = context != nullptr ? context : "C API call failed";
-  message += ": ";
-  message += detail != nullptr && detail[0] != '\0' ? detail : fallback;
-  return message;
+  return detail != nullptr && detail[0] != '\0' ? detail : fallback;
 }
 
 /// @brief Throws the returned @p err as its SonareException with
-///        cErrorMessage(@p err, @p context).
-[[noreturn]] inline void throwCodedCError(SonareError err, const char* context) {
-  throw sonare::SonareException(sonare_c_detail::error_code_from_c_error(err),
-                                cErrorMessage(err, context));
+///        cErrorMessage(@p err).
+[[noreturn]] inline void throwCodedCError(SonareError err) {
+  throw sonare::SonareException(sonare_c_detail::error_code_from_c_error(err), cErrorMessage(err));
 }
 
 /// @brief The messages of the diagnostics the most recent C-ABI call published, in order.
@@ -236,16 +232,14 @@ inline std::vector<std::string> lastDiagnosticMessages() {
 
 /// @brief Throws the failure recorded by a C-ABI call that returned NULL
 ///        (a handle, or a descriptor / JSON string): the thread-local code with
-///        @p context and the recorded detail as the message.
+///        the recorded detail as the message.
 /// @param fallback Code used when the library recorded none (the code reads Ok).
-[[noreturn]] inline void throwLastCError(const char* context,
-                                         SonareError fallback = SONARE_ERROR_INVALID_STATE) {
+[[noreturn]] inline void throwLastCError(SonareError fallback = SONARE_ERROR_INVALID_STATE) {
   SonareError code = sonare_last_error_code();
   if (code == SONARE_OK) code = fallback;
   const char* detail = sonare_last_error_message();
   const char* text = detail != nullptr && detail[0] != '\0' ? detail : sonare_error_message(code);
-  throw sonare::SonareException(sonare_c_detail::error_code_from_c_error(code),
-                                std::string(context) + text);
+  throw sonare::SonareException(sonare_c_detail::error_code_from_c_error(code), text);
 }
 
 /// @brief Throws NotSupported for an arrangement/MIDI entry point in a build without the engine.
@@ -300,20 +294,17 @@ std::size_t wasmArrayLikeLength(const val& arr, const char* subject = "array",
 std::size_t wasmFloat32ArrayLength(const val& arr, const char* subject = "Float32Array");
 /// Checks a cumulative caller-controlled Float32 element count before any
 /// associated vectors are allocated.
-void validateWasmFloat32ElementBudget(std::initializer_list<std::size_t> counts,
-                                      const char* subject);
+void validateWasmFloat32ElementBudget(std::initializer_list<std::size_t> counts);
 /// Reads one array length and adds it to a caller-maintained cumulative input
 /// count. Use this for entry points with optional or variable numbers of input
 /// buffers so every length is budgeted before the first vector copy.
 std::size_t accumulateWasmFloat32ArrayLength(const val& arr, const char* array_subject,
-                                             const char* budget_subject,
                                              std::size_t* cumulative_count);
 /// Preflights both members of an offline pair before either is copied. When
 /// @p require_matching_lengths is true, mismatched stereo planes are rejected
 /// at the same pre-allocation boundary.
 void validateWasmFloat32ArrayPair(const val& first, const char* first_subject, const val& second,
-                                  const char* second_subject, const char* budget_subject,
-                                  bool require_matching_lengths);
+                                  const char* second_subject, bool require_matching_lengths);
 std::vector<float> float32ArrayToVector(val arr);
 /// @brief float32ArrayToVector for one span of the source, so a windowed entry
 /// point costs its window rather than the buffer it is polling. @p start and
@@ -323,20 +314,18 @@ std::vector<float> float32ArrayWindowToVector(val arr, std::size_t start, std::s
 /// validation (rejects null/empty, an out-of-range sampleRate, an oversized
 /// buffer, and any non-finite sample). Mirrors the C ABI validate_audio_params
 /// so the WASM surface rejects the same inputs even though it bypasses the
-/// C-ABI translation unit. @p fn and @p name prefix the refusal as on the C ABI.
+/// C-ABI translation unit. @p name is the argument the refusal names.
 /// @throws WasmArgumentError.
-Audio loadValidatedAudio(const char* fn, const char* name, val samples, int sample_rate);
+Audio loadValidatedAudio(const char* name, val samples, int sample_rate);
 /// @brief Loads a JS array of equal-length Float32Array channels, running
 /// loadValidatedAudio over EVERY channel. A linked core entry guards channels[0]
 /// alone and takes one shared length, so this is the whole non-finite and length
-/// guard on the set. @p entry names the caller in each message.
+/// guard on the set.
 /// @throws WasmArgumentError.
-std::vector<Audio> loadValidatedChannelSet(const char* fn, const char* name, const val& channels,
-                                           int sample_rate, const char* entry);
+std::vector<Audio> loadValidatedChannelSet(const char* name, const val& channels, int sample_rate);
 
 enum class ChannelSetValidation { Offline, StructureOnly };
-std::vector<Audio> loadChannelSet(const char* fn, const char* name, const val& channels,
-                                  int sample_rate, const char* entry,
+std::vector<Audio> loadChannelSet(const char* name, const val& channels, int sample_rate,
                                   ChannelSetValidation validation);
 
 /// @brief loadValidatedAudio for an entry point that reads one window of the
@@ -346,15 +335,15 @@ std::vector<Audio> loadChannelSet(const char* fn, const char* name, const val& c
 /// sample outside that window is never read, so its value is not a precondition
 /// -- the contract the C ABI states for its windowed calls.
 /// @throws WasmArgumentError.
-Audio loadValidatedAudioWindow(const char* fn, const char* name, val samples, int sample_rate,
+Audio loadValidatedAudioWindow(const char* name, val samples, int sample_rate,
                                std::size_t scan_offset, std::size_t scan_count);
 /// @brief Interleaved sibling for the (samples, channels, sampleRate) facade.
 /// Validates channels > 0, the shared offline-input rules over the whole buffer,
 /// and that the length is a whole number of frames (no silent truncation of a
 /// trailing partial frame). Writes the per-channel frame count to @p frames and
 /// returns the copied samples. @throws WasmArgumentError.
-std::vector<float> loadValidatedInterleaved(const char* fn, const char* name, val samples,
-                                            int channels, int sample_rate, size_t* frames);
+std::vector<float> loadValidatedInterleaved(const char* name, val samples, int channels,
+                                            int sample_rate, size_t* frames);
 std::vector<int32_t> int32ArrayToVector(val arr);
 std::vector<uint8_t> uint8ArrayToVector(val arr);
 bool hasProperty(val object, const char* key);
@@ -362,8 +351,8 @@ val objectProperty(val object, const char* key);
 /// @brief Refuses an own enumerable key of @p object that is in neither @p allowed nor
 ///        @p extra, so a renamed key cannot be silently read as absent.
 /// @details An absent or non-object @p object is left to the property readers.
-/// @throws WasmTypeError naming @p subject and the key.
-void refuseUnknownKeys(val object, const char* subject, const std::vector<const char*>& allowed,
+/// @throws WasmTypeError naming the key.
+void refuseUnknownKeys(val object, const std::vector<const char*>& allowed,
                        std::initializer_list<const char*> extra = {});
 /// @brief Presence- AND type-checked float reader: an absent field -- omitted,
 ///        `undefined` or `null` -- takes @p default_value, a present one must be
@@ -416,9 +405,8 @@ void requireIntegral(double number, const char* key);
 /// @throws WasmArgumentError naming @p key.
 int checkedIntFromVal(const val& value, const char* key);
 /// @brief Reads an integer MIDI note in the 7-bit domain [0, 127].
-/// @param subject Prefix for the type and MIDI-domain errors.
-/// @throws WasmArgumentError naming @p subject for a wrong type or note-domain value.
-int checkedMidiNoteFromVal(const val& note, const char* subject);
+/// @throws WasmArgumentError for a wrong type or note-domain value.
+int checkedMidiNoteFromVal(const val& note);
 
 /// @brief Resolves a musical mode given as its ordinal (0..6) or its lowercase
 ///        church-mode name ("major", "minor", "dorian", ...).

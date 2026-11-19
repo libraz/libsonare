@@ -1,4 +1,5 @@
 import { ErrorCode, isSonareError, SonareError } from './errors.js';
+import { entryClass } from './internal/entry.js';
 import { addon } from './native.js';
 import type {
   VocalAnalysis,
@@ -239,6 +240,7 @@ const disposedSessions = new WeakSet<VocalEditSession>();
  *
  * Disposing a session also disposes every live draft it began.
  */
+@entryClass('VocalEditSession')
 export class VocalEditSession implements Disposable {
   private disposed = false;
 
@@ -364,6 +366,7 @@ export class VocalEditSession implements Disposable {
 }
 
 /** A draft that can be edited and rendered before it is committed. */
+@entryClass('VocalEditDraft')
 export class VocalEditDraft implements Disposable {
   private disposed = false;
 
@@ -488,6 +491,7 @@ function renderUntilCancelled(job: VocalRenderJob, cancel: () => boolean): Vocal
 }
 
 /** An immutable render view whose lifetime is independent of its session. */
+@entryClass('VocalRenderSnapshot')
 export class VocalRenderSnapshot implements Disposable {
   private disposed = false;
 
@@ -595,6 +599,7 @@ export class VocalRenderSnapshot implements Disposable {
 }
 
 /** Incremental render job. Each next() call advances one native work unit. */
+@entryClass('VocalRenderJob')
 export class VocalRenderJob implements Disposable {
   private disposed = false;
 

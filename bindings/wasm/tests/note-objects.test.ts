@@ -235,7 +235,7 @@ function expectRangeRefusal(action: () => void): void {
  * the binding's own refusals name the entry point and the field.
  */
 const CORE_NOTE_REFUSAL =
-  /^(Invalid parameter|re-derived note has no positive sample span|terminal note repair would make a predecessor empty)$/;
+  /^(renderNotes|splitNote|mergeNotes): (Invalid parameter|re-derived note has no positive sample span|terminal note repair would make a predecessor empty)$/;
 function expectCoreRefusal(action: () => void): void {
   expect(expectRefusalOf(action).message).toMatch(CORE_NOTE_REFUSAL);
 }
@@ -736,7 +736,7 @@ describe('renderNotes refuses a note that omits a sample bound', () => {
       // The field, not merely "something threw". A refusal for an unrelated
       // reason is indistinguishable from this one without it, which is exactly
       // the case the defect produced.
-      expect(error.message).toContain(`renderNotes note.${fragment}`);
+      expect(error.message).toContain(`renderNotes: note.${fragment}`);
     });
   }
 
@@ -2299,7 +2299,7 @@ describe('an index into a note set is refused above the addressable range', () =
       const message = expectAddressRefusal(() =>
         splitNote({ ...source, notes: before, index: bad, frame: 18 }),
       );
-      expect(message).toContain('splitNote index');
+      expect(message).toContain('splitNote: index');
     }
     // And an index merely past the end of the set is still the set's own
     // refusal, not this one -- the two failures stay distinguishable.
@@ -2326,10 +2326,10 @@ describe('an index into a note set is refused above the addressable range', () =
     const pair = expectAddressRefusal(() =>
       mergeNotes({ ...source, notes: before, first: BEYOND + 1, last: BEYOND + 2 }),
     );
-    expect(pair).toContain('mergeNotes first');
+    expect(pair).toContain('mergeNotes: first');
     const single = expectAddressRefusal(() =>
       mergeNotes({ ...source, notes: before, first: 0, last: BEYOND }),
     );
-    expect(single).toContain('mergeNotes last');
+    expect(single).toContain('mergeNotes: last');
   });
 });

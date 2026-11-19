@@ -22,8 +22,8 @@ val js_analyze_bpm(val samples, const val& sample_rate, const val& bpm_min_val,
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   const int max_candidates = checkedIntFromVal(max_candidates_val, "maxCandidates");
-  Audio audio = loadValidatedAudio("BpmAnalyzer", "samples", samples,
-                                   checkedIntFromVal(sample_rate, "sampleRate"));
+  Audio audio =
+      loadValidatedAudio("samples", samples, checkedIntFromVal(sample_rate, "sampleRate"));
   config.n_fft = n_fft;
   config.hop_length = hop_length;
   // The analyzer clamps what these refuse; the rule is the one the C ABI applies.
@@ -61,8 +61,8 @@ val js_analyze_rhythm(val samples, const val& sample_rate, const val& bpm_min_va
   if (const auto v = optionalNumber(start_bpm_val, "startBpm")) config.start_bpm = *v;
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
-  Audio audio = loadValidatedAudio("RhythmAnalyzer", "samples", samples,
-                                   checkedIntFromVal(sample_rate, "sampleRate"));
+  Audio audio =
+      loadValidatedAudio("samples", samples, checkedIntFromVal(sample_rate, "sampleRate"));
   config.n_fft = n_fft;
   config.hop_length = hop_length;
   validate_rhythm_config(config);
@@ -93,8 +93,8 @@ val js_analyze_dynamics(val samples, const val& sample_rate, const val& window_s
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   const float compression_threshold =
       checkedFloatFromVal(compression_threshold_val, "compressionThreshold");
-  Audio audio = loadValidatedAudio("DynamicsAnalyzer", "samples", samples,
-                                   checkedIntFromVal(sample_rate, "sampleRate"));
+  Audio audio =
+      loadValidatedAudio("samples", samples, checkedIntFromVal(sample_rate, "sampleRate"));
   DynamicsConfig config;
   config.window_sec = window_sec;
   config.hop_length = hop_length;
@@ -125,8 +125,8 @@ val js_analyze_timbre(val samples, const val& sample_rate, const val& n_fft_val,
   const int n_mels = checkedIntFromVal(n_mels_val, "nMels");
   const int n_mfcc = checkedIntFromVal(n_mfcc_val, "nMfcc");
   const float window_sec = checkedFloatFromVal(window_sec_val, "windowSec");
-  Audio audio = loadValidatedAudio("TimbreAnalyzer", "samples", samples,
-                                   checkedIntFromVal(sample_rate, "sampleRate"));
+  Audio audio =
+      loadValidatedAudio("samples", samples, checkedIntFromVal(sample_rate, "sampleRate"));
   TimbreConfig config;
   config.n_fft = n_fft;
   config.hop_length = hop_length;

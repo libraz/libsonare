@@ -37,9 +37,12 @@ using namespace sonare_node;
 Napi::Value SonareWrap::Hpss(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
-  if (info.Length() < 2 || !IsFloat32Array(info[0]) || !info[1].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, ...)")
-        .ThrowAsJavaScriptException();
+  if (!IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[1].IsNumber()) {
+    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -47,12 +50,12 @@ Napi::Value SonareWrap::Hpss(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
-  int sr = node_narrow_int(env, info[1], "sr");
+  int sr = node_narrow_int(env, info[1], "sampleRate");
   HpssArguments args;
   if (!ReadHpssArguments(env, info, &args)) return env.Undefined();
 
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
-  sonare::validate_offline_audio_input("hpss", "samples", data, length, sr);
+  sonare::validate_offline_audio_input(nullptr, "samples", data, length, sr);
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
 
   sonare::HpssConfig config;
@@ -85,8 +88,12 @@ Napi::Value SonareWrap::Hpss(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::Harmonic(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
-  if (info.Length() < 2 || !IsFloat32Array(info[0]) || !info[1].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (Float32Array, sampleRate)").ThrowAsJavaScriptException();
+  if (!IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[1].IsNumber()) {
+    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -94,10 +101,10 @@ Napi::Value SonareWrap::Harmonic(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
-  int sr = node_narrow_int(env, info[1], "sr");
+  int sr = node_narrow_int(env, info[1], "sampleRate");
 
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
-  sonare::validate_offline_audio_input("harmonic", "samples", data, length, sr);
+  sonare::validate_offline_audio_input(nullptr, "samples", data, length, sr);
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
   sonare::Audio result = sonare::harmonic(audio);
   std::vector<float> out_vec(result.data(), result.data() + result.size());
@@ -108,8 +115,12 @@ Napi::Value SonareWrap::Harmonic(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::Percussive(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
-  if (info.Length() < 2 || !IsFloat32Array(info[0]) || !info[1].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (Float32Array, sampleRate)").ThrowAsJavaScriptException();
+  if (!IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[1].IsNumber()) {
+    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -117,10 +128,10 @@ Napi::Value SonareWrap::Percussive(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
-  int sr = node_narrow_int(env, info[1], "sr");
+  int sr = node_narrow_int(env, info[1], "sampleRate");
 
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
-  sonare::validate_offline_audio_input("percussive", "samples", data, length, sr);
+  sonare::validate_offline_audio_input(nullptr, "samples", data, length, sr);
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
   sonare::Audio result = sonare::percussive(audio);
   std::vector<float> out_vec(result.data(), result.data() + result.size());
@@ -131,9 +142,16 @@ Napi::Value SonareWrap::Percussive(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::TimeStretch(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
-  if (info.Length() < 3 || !IsFloat32Array(info[0]) || !info[1].IsNumber() || !info[2].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, rate)")
-        .ThrowAsJavaScriptException();
+  if (!IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[1].IsNumber()) {
+    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[2].IsNumber()) {
+    Napi::TypeError::New(env, "rate must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -141,7 +159,7 @@ Napi::Value SonareWrap::TimeStretch(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
-  int sr = node_narrow_int(env, info[1], "sr");
+  int sr = node_narrow_int(env, info[1], "sampleRate");
   float rate = node_narrow_finite_float(env, info[2], "rate");
   int n_fft{};
   if (!OptionalIntArg(env, info, 3, "nFft", 2048, &n_fft)) return env.Undefined();
@@ -150,7 +168,7 @@ Napi::Value SonareWrap::TimeStretch(const Napi::CallbackInfo& info) {
   if (!OptionalIntArg(env, info, 4, "hopLength", 0, &hop_length)) return env.Undefined();
 
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
-  sonare::validate_offline_audio_input("time_stretch", "samples", data, length, sr);
+  sonare::validate_offline_audio_input(nullptr, "samples", data, length, sr);
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
   sonare::TimeStretchConfig config;
   config.n_fft = n_fft;
@@ -165,9 +183,16 @@ Napi::Value SonareWrap::TimeStretch(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::PitchShift(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
-  if (info.Length() < 3 || !IsFloat32Array(info[0]) || !info[1].IsNumber() || !info[2].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, semitones)")
-        .ThrowAsJavaScriptException();
+  if (!IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[1].IsNumber()) {
+    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[2].IsNumber()) {
+    Napi::TypeError::New(env, "semitones must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -175,7 +200,7 @@ Napi::Value SonareWrap::PitchShift(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
-  int sr = node_narrow_int(env, info[1], "sr");
+  int sr = node_narrow_int(env, info[1], "sampleRate");
   float semitones = node_narrow_finite_float(env, info[2], "semitones");
   int n_fft{};
   if (!OptionalIntArg(env, info, 3, "nFft", 2048, &n_fft)) return env.Undefined();
@@ -184,7 +209,7 @@ Napi::Value SonareWrap::PitchShift(const Napi::CallbackInfo& info) {
   if (!OptionalIntArg(env, info, 4, "hopLength", 0, &hop_length)) return env.Undefined();
 
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
-  sonare::validate_offline_audio_input("pitch_shift", "samples", data, length, sr);
+  sonare::validate_offline_audio_input(nullptr, "samples", data, length, sr);
   sonare::PitchShiftPlan plan;
   if (!sonare::make_pitch_shift_plan(length, sr, semitones, &plan)) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
@@ -204,10 +229,20 @@ Napi::Value SonareWrap::PitchShift(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::PitchCorrectToMidi(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
-  if (info.Length() < 4 || !IsFloat32Array(info[0]) || !info[1].IsNumber() || !info[2].IsNumber() ||
-      !info[3].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, currentMidi, targetMidi)")
-        .ThrowAsJavaScriptException();
+  if (!IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[1].IsNumber()) {
+    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[2].IsNumber()) {
+    Napi::TypeError::New(env, "currentMidi must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[3].IsNumber()) {
+    Napi::TypeError::New(env, "targetMidi must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -215,12 +250,11 @@ Napi::Value SonareWrap::PitchCorrectToMidi(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
-  int sr = node_narrow_int(env, info[1], "sr");
+  int sr = node_narrow_int(env, info[1], "sampleRate");
   float current_midi = node_narrow_finite_float(env, info[2], "currentMidi");
   float target_midi = node_narrow_finite_float(env, info[3], "targetMidi");
 
-  sonare::validate_offline_audio_input("PitchCorrector::correct_to_midi", "samples", data, length,
-                                       sr);
+  sonare::validate_offline_audio_input(nullptr, "samples", data, length, sr);
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
   sonare::editing::pitch_editor::PitchCorrector corrector;
   sonare::Audio result = corrector.correct_to_midi(audio, current_midi, target_midi);
@@ -233,11 +267,24 @@ Napi::Value SonareWrap::PitchCorrectToMidiTimevarying(const Napi::CallbackInfo& 
   Napi::Env env = info.Env();
 
   // (samples, sampleRate, f0Hz, targetMidi, hopLength, voiced?, voicedProb?)
-  if (info.Length() < 5 || !IsFloat32Array(info[0]) || !info[1].IsNumber() ||
-      !IsFloat32Array(info[2]) || !info[3].IsNumber() || !info[4].IsNumber()) {
-    Napi::TypeError::New(
-        env, "Expected (Float32Array, sampleRate, f0Hz Float32Array, targetMidi, hopLength)")
-        .ThrowAsJavaScriptException();
+  if (!IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[1].IsNumber()) {
+    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!IsFloat32Array(info[2])) {
+    Napi::TypeError::New(env, "f0Hz must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[3].IsNumber()) {
+    Napi::TypeError::New(env, "targetMidi must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[4].IsNumber()) {
+    Napi::TypeError::New(env, "hopLength must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -245,7 +292,7 @@ Napi::Value SonareWrap::PitchCorrectToMidiTimevarying(const Napi::CallbackInfo& 
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
-  int sr = node_narrow_int(env, info[1], "sr");
+  int sr = node_narrow_int(env, info[1], "sampleRate");
   auto f0 = info[2].As<Napi::Float32Array>();
   float target_midi = node_narrow_finite_float(env, info[3], "targetMidi");
   int hop_length = node_narrow_int(env, info[4], "hopLength");
@@ -286,8 +333,7 @@ Napi::Value SonareWrap::PitchCorrectToMidiTimevarying(const Napi::CallbackInfo& 
   }
 
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
-  sonare::validate_offline_audio_input("PitchCorrector::correct_to_midi_timevarying", "samples",
-                                       data, length, sr);
+  sonare::validate_offline_audio_input(nullptr, "samples", data, length, sr);
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
   sonare::editing::pitch_editor::PitchCorrector corrector;
   sonare::Audio result = corrector.correct_to_midi_timevarying(audio, track, target_midi);
@@ -300,10 +346,20 @@ Napi::Value SonareWrap::PitchCorrectTimevarying(const Napi::CallbackInfo& info) 
   Napi::Env env = info.Env();
 
   // (samples, sampleRate, f0Hz, hopLength, options?)
-  if (info.Length() < 4 || !IsFloat32Array(info[0]) || !info[1].IsNumber() ||
-      !IsFloat32Array(info[2]) || !info[3].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, f0Hz Float32Array, hopLength)")
-        .ThrowAsJavaScriptException();
+  if (!IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[1].IsNumber()) {
+    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!IsFloat32Array(info[2])) {
+    Napi::TypeError::New(env, "f0Hz must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[3].IsNumber()) {
+    Napi::TypeError::New(env, "hopLength must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -311,7 +367,7 @@ Napi::Value SonareWrap::PitchCorrectTimevarying(const Napi::CallbackInfo& info) 
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
-  int sr = node_narrow_int(env, info[1], "sr");
+  int sr = node_narrow_int(env, info[1], "sampleRate");
   auto f0 = info[2].As<Napi::Float32Array>();
   const size_t n_frames = f0.ElementLength();
   int hop_length = node_narrow_int(env, info[3], "hopLength");
@@ -325,7 +381,7 @@ Napi::Value SonareWrap::PitchCorrectTimevarying(const Napi::CallbackInfo& info) 
   if (info.Length() > 4 && info[4].IsObject()) {
     Napi::Object opts = info[4].As<Napi::Object>();
     sonare_node::RefuseUnknownKeys(
-        opts, "pitchCorrectTimevarying",
+        opts, "options",
         {"targetMode", "targetMidi", "scaleRoot", "scaleModeMask", "scaleReferenceMidi",
          "retuneAmount", "maxCorrectionSemitones", "retuneSpeedMs", "vibratoThresholdCents",
          "voiced", "voicedProb"});
@@ -399,16 +455,22 @@ Napi::Value SonareWrap::AutoTune(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
   // (samples, sampleRate, key | null, options?)
-  if (info.Length() < 3 || !IsFloat32Array(info[0]) || !info[1].IsNumber() ||
-      !(info[2].IsNull() || info[2].IsUndefined() || info[2].IsObject())) {
-    Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, key | null, options?)")
-        .ThrowAsJavaScriptException();
+  if (!IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[1].IsNumber()) {
+    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!(info[2].IsNull() || info[2].IsUndefined() || info[2].IsObject())) {
+    Napi::TypeError::New(env, "key must be an object or null").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
-  const int sr = node_narrow_int(env, info[1], "sr");
+  const int sr = node_narrow_int(env, info[1], "sampleRate");
 
   SonareKey key{};
   const SonareKey* key_ptr = nullptr;
@@ -424,7 +486,7 @@ Napi::Value SonareWrap::AutoTune(const Napi::CallbackInfo& info) {
   sonare_pitch_correction_config_default(&config);
   if (info.Length() > 3 && info[3].IsObject()) {
     const Napi::Object opts = info[3].As<Napi::Object>();
-    sonare_node::RefuseUnknownKeys(opts, "autoTune",
+    sonare_node::RefuseUnknownKeys(opts, "options",
                                    {"strength", "scaleReferenceMidi", "maxCorrectionSemitones",
                                     "retuneSpeedMs", "vibratoThresholdCents"});
     config.retune_amount = sonare_node::FloatProperty(opts, "strength", config.retune_amount);
@@ -462,12 +524,24 @@ Napi::Value SonareWrap::AutoTune(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::NoteStretch(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
-  if (info.Length() < 5 || !IsFloat32Array(info[0]) || !info[1].IsNumber() || !info[2].IsNumber() ||
-      !info[3].IsNumber() || !info[4].IsNumber()) {
-    Napi::TypeError::New(env,
-                         "Expected (Float32Array, sampleRate, onsetSample, offsetSample, "
-                         "stretchRatio)")
-        .ThrowAsJavaScriptException();
+  if (!IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[1].IsNumber()) {
+    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[2].IsNumber()) {
+    Napi::TypeError::New(env, "onsetSample must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[3].IsNumber()) {
+    Napi::TypeError::New(env, "offsetSample must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[4].IsNumber()) {
+    Napi::TypeError::New(env, "stretchRatio must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -475,13 +549,13 @@ Napi::Value SonareWrap::NoteStretch(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
-  int sr = node_narrow_int(env, info[1], "sr");
+  int sr = node_narrow_int(env, info[1], "sampleRate");
   int onset_sample = node_narrow_int(env, info[2], "onsetSample");
   int offset_sample = node_narrow_int(env, info[3], "offsetSample");
   float stretch_ratio = node_narrow_finite_float(env, info[4], "stretchRatio");
 
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
-  sonare::validate_offline_audio_input("NoteEditor::stretch_note", "samples", data, length, sr);
+  sonare::validate_offline_audio_input(nullptr, "samples", data, length, sr);
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
   sonare::editing::pitch_editor::NoteRegion region;
   region.onset_sample = onset_sample;
@@ -495,12 +569,24 @@ Napi::Value SonareWrap::NoteStretch(const Napi::CallbackInfo& info) {
 
 Napi::Value SonareWrap::NoteMove(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (info.Length() < 5 || !IsFloat32Array(info[0]) || !info[1].IsNumber() || !info[2].IsNumber() ||
-      !info[3].IsNumber() || !info[4].IsNumber()) {
-    Napi::TypeError::New(env,
-                         "Expected (Float32Array, sampleRate, onsetSample, offsetSample, "
-                         "targetOnsetSample)")
-        .ThrowAsJavaScriptException();
+  if (!IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[1].IsNumber()) {
+    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[2].IsNumber()) {
+    Napi::TypeError::New(env, "onsetSample must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[3].IsNumber()) {
+    Napi::TypeError::New(env, "offsetSample must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[4].IsNumber()) {
+    Napi::TypeError::New(env, "targetOnsetSample must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -508,15 +594,15 @@ Napi::Value SonareWrap::NoteMove(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   const size_t length = typed.ElementLength();
-  const int sr = node_narrow_int(env, info[1], "sr");
-  sonare::validate_offline_audio_input("NoteEditor::move_note", "samples", data, length, sr);
+  const int sr = node_narrow_int(env, info[1], "sampleRate");
+  sonare::validate_offline_audio_input(nullptr, "samples", data, length, sr);
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
   sonare::editing::pitch_editor::NoteRegion region;
-  region.onset_sample = node_narrow_int(env, info[2], node_arg_label(2).c_str());
-  region.offset_sample = node_narrow_int(env, info[3], node_arg_label(3).c_str());
+  region.onset_sample = node_narrow_int(env, info[2], "onsetSample");
+  region.offset_sample = node_narrow_int(env, info[3], "offsetSample");
   sonare::editing::pitch_editor::NoteEditor editor;
   sonare::Audio result =
-      editor.move_note(audio, region, node_narrow_int(env, info[4], node_arg_label(4).c_str()));
+      editor.move_note(audio, region, node_narrow_int(env, info[4], "targetOnsetSample"));
   std::vector<float> out_vec(result.data(), result.data() + result.size());
   return VecToFloat32(env, out_vec);
   SONARE_NODE_CATCH(env)
@@ -525,11 +611,20 @@ Napi::Value SonareWrap::NoteMove(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::VoiceChange(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
-  if (info.Length() < 4 || !IsFloat32Array(info[0]) || !info[1].IsNumber() || !info[2].IsNumber() ||
-      !info[3].IsNumber()) {
-    Napi::TypeError::New(
-        env, "Expected (Float32Array, sampleRate, pitchSemitones, formantFactor, formantMode?)")
-        .ThrowAsJavaScriptException();
+  if (!IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[1].IsNumber()) {
+    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[2].IsNumber()) {
+    Napi::TypeError::New(env, "pitchSemitones must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[3].IsNumber()) {
+    Napi::TypeError::New(env, "formantFactor must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -537,7 +632,7 @@ Napi::Value SonareWrap::VoiceChange(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
-  int sr = node_narrow_int(env, info[1], "sr");
+  int sr = node_narrow_int(env, info[1], "sampleRate");
   float pitch_semitones = node_narrow_finite_float(env, info[2], "pitchSemitones");
   float formant_factor = node_narrow_finite_float(env, info[3], "formantFactor");
   std::string formant_mode;
@@ -546,7 +641,7 @@ Napi::Value SonareWrap::VoiceChange(const Napi::CallbackInfo& info) {
   }
 
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
-  sonare::validate_offline_audio_input("VoiceChanger::process", "samples", data, length, sr);
+  sonare::validate_offline_audio_input(nullptr, "samples", data, length, sr);
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
   sonare::editing::voice_changer::VoiceChangerConfig config;
   config.pitch_semitones = pitch_semitones;
@@ -562,10 +657,20 @@ Napi::Value SonareWrap::VoiceChange(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::VoiceChangeRealtime(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (info.Length() < 4 || !IsFloat32Array(info[0]) || !info[1].IsNumber() || !info[2].IsString() ||
-      !info[3].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, preset, channels)")
-        .ThrowAsJavaScriptException();
+  if (!IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[1].IsNumber()) {
+    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[2].IsString()) {
+    Napi::TypeError::New(env, "preset must be a string").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[3].IsNumber()) {
+    Napi::TypeError::New(env, "channels must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -592,9 +697,12 @@ Napi::Value SonareWrap::VoiceChangeRealtime(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::Trim(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
-  if (info.Length() < 2 || !IsFloat32Array(info[0]) || !info[1].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, ...)")
-        .ThrowAsJavaScriptException();
+  if (!IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[1].IsNumber()) {
+    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -602,7 +710,7 @@ Napi::Value SonareWrap::Trim(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
-  int sr = node_narrow_int(env, info[1], "sr");
+  int sr = node_narrow_int(env, info[1], "sampleRate");
   float threshold_db{};
   if (!OptionalFiniteFloatArg(env, info, 2, "thresholdDb", -60.0f, &threshold_db))
     return env.Undefined();
@@ -612,18 +720,19 @@ Napi::Value SonareWrap::Trim(const Napi::CallbackInfo& info) {
       return true;
     }
     if (!info[index].IsNumber()) {
-      Napi::TypeError::New(env, std::string("trim: ") + name + " must be an integer")
+      Napi::TypeError::New(env, std::string(name) + " must be an integer")
           .ThrowAsJavaScriptException();
       return false;
     }
     const double value = info[index].As<Napi::Number>().DoubleValue();
     if (!std::isfinite(value) || std::floor(value) != value) {
-      Napi::RangeError::New(env, std::string("trim: ") + name + " must be an integer")
+      Napi::RangeError::New(env, std::string(name) + " must be an integer")
           .ThrowAsJavaScriptException();
       return false;
     }
     if (value <= 0 || value > std::numeric_limits<int>::max()) {
-      Napi::RangeError::New(env, std::string("trim: ") + name + " must be a positive integer")
+      Napi::RangeError::New(env, std::string(name) + " must be an integer in [1, " +
+                                     std::to_string(std::numeric_limits<int>::max()) + "]")
           .ThrowAsJavaScriptException();
       return false;
     }
@@ -638,7 +747,7 @@ Napi::Value SonareWrap::Trim(const Napi::CallbackInfo& info) {
   }
 
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
-  sonare::validate_offline_audio_input("trim_absolute", "samples", data, length, sr);
+  sonare::validate_offline_audio_input(nullptr, "samples", data, length, sr);
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
   sonare::Audio result = sonare::trim_absolute(audio, threshold_db, frame_length, hop_length);
   std::vector<float> out_vec(result.data(), result.data() + result.size());
@@ -649,9 +758,12 @@ Napi::Value SonareWrap::Trim(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::Normalize(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
-  if (info.Length() < 2 || !IsFloat32Array(info[0]) || !info[1].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, ...)")
-        .ThrowAsJavaScriptException();
+  if (!IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[1].IsNumber()) {
+    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -659,7 +771,7 @@ Napi::Value SonareWrap::Normalize(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
-  int sr = node_narrow_int(env, info[1], "sr");
+  int sr = node_narrow_int(env, info[1], "sampleRate");
   float target_db{};
   if (!OptionalFiniteFloatArg(env, info, 2, "targetDb", 0.0f, &target_db)) return env.Undefined();
   std::string mode;
@@ -667,13 +779,12 @@ Napi::Value SonareWrap::Normalize(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   if (mode != "peak" && mode != "rms") {
-    Napi::TypeError::New(env, "normalize: mode must be 'peak' or 'rms'")
-        .ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "mode must be 'peak' or 'rms'").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
-  sonare::validate_offline_audio_input("normalize", "samples", data, length, sr);
+  sonare::validate_offline_audio_input(nullptr, "samples", data, length, sr);
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
   sonare::Audio result = mode == "rms" ? sonare::normalize_rms(audio, target_db, true)
                                        : sonare::normalize(audio, target_db);
@@ -685,9 +796,12 @@ Napi::Value SonareWrap::Normalize(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::NormalizeStereo(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
-  if (!IsFloat32Array(info[0]) || !IsFloat32Array(info[1])) {
-    Napi::TypeError::New(env, "Expected (Float32Array left, Float32Array right, sampleRate, ...)")
-        .ThrowAsJavaScriptException();
+  if (!IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "left must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!IsFloat32Array(info[1])) {
+    Napi::TypeError::New(env, "right must be a Float32Array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -701,16 +815,15 @@ Napi::Value SonareWrap::NormalizeStereo(const Napi::CallbackInfo& info) {
   std::string mode;
   if (!OptionalStringArg(env, info, 4, "mode", "peak", &mode)) return env.Undefined();
   if (mode != "peak" && mode != "rms") {
-    Napi::TypeError::New(env, "normalizeStereo: mode must be 'peak' or 'rms'")
-        .ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "mode must be 'peak' or 'rms'").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
   // Re-apply the C-ABI input validation these direct core calls would otherwise
   // bypass. Per channel, because each carries its own samples.
-  sonare::validate_offline_audio_input("normalize_stereo", "left_typed", left_typed.Data(),
+  sonare::validate_offline_audio_input(nullptr, "left", left_typed.Data(),
                                        left_typed.ElementLength(), sr);
-  sonare::validate_offline_audio_input("normalize_stereo", "right_typed", right_typed.Data(),
+  sonare::validate_offline_audio_input(nullptr, "right", right_typed.Data(),
                                        right_typed.ElementLength(), sr);
   sonare::Audio left =
       sonare::Audio::from_buffer(left_typed.Data(), left_typed.ElementLength(), sr);

@@ -120,6 +120,7 @@ void ReportProgress(float progress, const char* stage, void* user_data) {
   if (context->env.IsExceptionPending()) return;
   context->callback.Call({Napi::Number::New(context->env, progress),
                           Napi::String::New(context->env, stage != nullptr ? stage : "")});
+  sonare_node::MarkPendingForeign(context->env);
 }
 
 int CancellationRequested(void* user_data) {
@@ -127,6 +128,7 @@ int CancellationRequested(void* user_data) {
   if (context->env.IsExceptionPending()) return 1;
   if (!context->cancel) return 0;
   const Napi::Value result = context->cancel->Call({});
+  sonare_node::MarkPendingForeign(context->env);
   if (context->env.IsExceptionPending()) return 1;
   return result.IsBoolean() && result.As<Napi::Boolean>().Value() ? 1 : 0;
 }
@@ -155,9 +157,12 @@ Napi::Value RunChainWithCallbacks(Napi::Env env, mastering_api::MasteringChain& 
 Napi::Value SonareWrap::Mastering(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
-  if (info.Length() < 2 || !IsFloat32Array(info[0]) || !info[1].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, ...)")
-        .ThrowAsJavaScriptException();
+  if (!IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[1].IsNumber()) {
+    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -165,9 +170,9 @@ Napi::Value SonareWrap::Mastering(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
-  int sr = node_narrow_int(env, info[1], "sr");
+  int sr = node_narrow_int(env, info[1], "sampleRate");
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
-  sonare::validate_offline_audio_input("loudness_optimize", "samples", data, length, sr);
+  sonare::validate_offline_audio_input(nullptr, "samples", data, length, sr);
 
   sonare::mastering::maximizer::LoudnessOptimizeConfig config;
   if (!OptionalFiniteFloatArg(env, info, 2, "targetLufs", -14.0f, &config.target_lufs) ||
@@ -209,9 +214,16 @@ Napi::Value SonareWrap::Mastering(const Napi::CallbackInfo& info) {
 
 Napi::Value SonareWrap::MasteringProcess(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (info.Length() < 3 || !info[0].IsString() || !IsFloat32Array(info[1]) || !info[2].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (processorName, Float32Array, sampleRate, params?)")
-        .ThrowAsJavaScriptException();
+  if (!info[0].IsString()) {
+    Napi::TypeError::New(env, "processorName must be a string").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!IsFloat32Array(info[1])) {
+    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[2].IsNumber()) {
+    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -219,16 +231,15 @@ Napi::Value SonareWrap::MasteringProcess(const Napi::CallbackInfo& info) {
   auto name = node_narrow_string(env, info[0], "name");
   auto typed = info[1].As<Napi::Float32Array>();
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
-  sonare::validate_offline_audio_input("apply_named_processor", "samples", typed.Data(),
-                                       typed.ElementLength(),
-                                       node_narrow_int(env, info[2], node_arg_label(2).c_str()));
+  sonare::validate_offline_audio_input(nullptr, "samples", typed.Data(), typed.ElementLength(),
+                                       node_narrow_int(env, info[2], "sampleRate"));
   std::vector<sonare::mastering::api::Param> params;
   if (info.Length() >= 4 && info[3].IsObject()) {
     params = ParamsFromObject(info[3].As<Napi::Object>());
   }
   auto result = sonare::mastering::api::apply_named_processor(
-      name, typed.Data(), typed.ElementLength(),
-      node_narrow_int(env, info[2], node_arg_label(2).c_str()), params);
+      name, typed.Data(), typed.ElementLength(), node_narrow_int(env, info[2], "sampleRate"),
+      params);
   Napi::Object out = Napi::Object::New(env);
   out.Set("samples", VecToFloat32(env, result.samples));
   out.Set("sampleRate", Napi::Number::New(env, result.sample_rate));
@@ -245,10 +256,20 @@ Napi::Value SonareWrap::MasteringProcess(const Napi::CallbackInfo& info) {
 
 Napi::Value SonareWrap::MasteringProcessStereo(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (info.Length() < 4 || !info[0].IsString() || !IsFloat32Array(info[1]) ||
-      !IsFloat32Array(info[2]) || !info[3].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (processorName, left, right, sampleRate, params?)")
-        .ThrowAsJavaScriptException();
+  if (!info[0].IsString()) {
+    Napi::TypeError::New(env, "processorName must be a string").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!IsFloat32Array(info[1])) {
+    Napi::TypeError::New(env, "left must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!IsFloat32Array(info[2])) {
+    Napi::TypeError::New(env, "right must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[3].IsNumber()) {
+    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -262,11 +283,9 @@ Napi::Value SonareWrap::MasteringProcessStereo(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
-  const int sr = node_narrow_int(env, info[3], "sr");
-  sonare::validate_offline_audio_input("apply_named_processor_stereo", "left", left.Data(),
-                                       left.ElementLength(), sr);
-  sonare::validate_offline_audio_input("apply_named_processor_stereo", "right", right.Data(),
-                                       right.ElementLength(), sr);
+  const int sr = node_narrow_int(env, info[3], "sampleRate");
+  sonare::validate_offline_audio_input(nullptr, "left", left.Data(), left.ElementLength(), sr);
+  sonare::validate_offline_audio_input(nullptr, "right", right.Data(), right.ElementLength(), sr);
   std::vector<sonare::mastering::api::Param> params;
   if (info.Length() >= 5 && info[4].IsObject()) {
     params = ParamsFromObject(info[4].As<Napi::Object>());
@@ -290,24 +309,26 @@ Napi::Value SonareWrap::MasteringProcessStereo(const Napi::CallbackInfo& info) {
 
 Napi::Value SonareWrap::MasteringChain(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (info.Length() < 2 || !IsFloat32Array(info[0]) || !info[1].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, configJson?: string)")
-        .ThrowAsJavaScriptException();
+  if (!IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[1].IsNumber()) {
+    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
-  sonare::validate_offline_audio_input("MasteringChain::process_mono", "samples", typed.Data(),
-                                       typed.ElementLength(),
-                                       node_narrow_int(env, info[1], node_arg_label(1).c_str()));
+  sonare::validate_offline_audio_input(nullptr, "samples", typed.Data(), typed.ElementLength(),
+                                       node_narrow_int(env, info[1], "sampleRate"));
   std::optional<std::string> document;
   if (!OptionalStringArg(env, info, 2, "configJson", &document)) {
     return env.Undefined();
   }
   sonare::mastering::api::MasteringChain chain(OfflineChainConfig(document));
   auto result = chain.process_mono(typed.Data(), typed.ElementLength(),
-                                   node_narrow_int(env, info[1], node_arg_label(1).c_str()));
+                                   node_narrow_int(env, info[1], "sampleRate"));
   Napi::Object out = Napi::Object::New(env);
   out.Set("samples", VecToFloat32(env, result.samples));
   out.Set("sampleRate", Napi::Number::New(env, result.sample_rate));
@@ -326,10 +347,16 @@ Napi::Value SonareWrap::MasteringChain(const Napi::CallbackInfo& info) {
 
 Napi::Value SonareWrap::MasteringChainStereo(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (info.Length() < 3 || !IsFloat32Array(info[0]) || !IsFloat32Array(info[1]) ||
-      !info[2].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (left, right, sampleRate, configJson?: string)")
-        .ThrowAsJavaScriptException();
+  if (!IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "left must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!IsFloat32Array(info[1])) {
+    Napi::TypeError::New(env, "right must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[2].IsNumber()) {
+    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   SONARE_NODE_TRY
@@ -341,11 +368,9 @@ Napi::Value SonareWrap::MasteringChainStereo(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
-  const int sr = node_narrow_int(env, info[2], "sr");
-  sonare::validate_offline_audio_input("MasteringChain::process_stereo", "left", left.Data(),
-                                       left.ElementLength(), sr);
-  sonare::validate_offline_audio_input("MasteringChain::process_stereo", "right", right.Data(),
-                                       right.ElementLength(), sr);
+  const int sr = node_narrow_int(env, info[2], "sampleRate");
+  sonare::validate_offline_audio_input(nullptr, "left", left.Data(), left.ElementLength(), sr);
+  sonare::validate_offline_audio_input(nullptr, "right", right.Data(), right.ElementLength(), sr);
   std::optional<std::string> document;
   if (!OptionalStringArg(env, info, 3, "configJson", &document)) {
     return env.Undefined();
@@ -384,17 +409,20 @@ Napi::Object StreamingLoudnessGainToObject(
 
 Napi::Value SonareWrap::MasteringStreamingLoudnessGain(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (info.Length() < 2 || !IsFloat32Array(info[0]) || !info[1].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, configJson?: string)")
-        .ThrowAsJavaScriptException();
+  if (!IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[1].IsNumber()) {
+    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
-  const int sample_rate = node_narrow_int(env, info[1], node_arg_label(1).c_str());
+  const int sample_rate = node_narrow_int(env, info[1], "sampleRate");
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
-  sonare::validate_offline_audio_input("streaming_loudness_gain_mono", "samples", typed.Data(),
-                                       typed.ElementLength(), sample_rate);
+  sonare::validate_offline_audio_input(nullptr, "samples", typed.Data(), typed.ElementLength(),
+                                       sample_rate);
   std::optional<std::string> document;
   if (!OptionalStringArg(env, info, 2, "configJson", &document)) {
     return env.Undefined();
@@ -408,10 +436,16 @@ Napi::Value SonareWrap::MasteringStreamingLoudnessGain(const Napi::CallbackInfo&
 
 Napi::Value SonareWrap::MasteringStreamingLoudnessGainStereo(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (info.Length() < 3 || !IsFloat32Array(info[0]) || !IsFloat32Array(info[1]) ||
-      !info[2].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (left, right, sampleRate, configJson?: string)")
-        .ThrowAsJavaScriptException();
+  if (!IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "left must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!IsFloat32Array(info[1])) {
+    Napi::TypeError::New(env, "right must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[2].IsNumber()) {
+    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   SONARE_NODE_TRY
@@ -422,11 +456,11 @@ Napi::Value SonareWrap::MasteringStreamingLoudnessGainStereo(const Napi::Callbac
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  const int sample_rate = node_narrow_int(env, info[2], node_arg_label(2).c_str());
-  sonare::validate_offline_audio_input("streaming_loudness_gain_stereo", "left", left.Data(),
-                                       left.ElementLength(), sample_rate);
-  sonare::validate_offline_audio_input("streaming_loudness_gain_stereo", "right", right.Data(),
-                                       right.ElementLength(), sample_rate);
+  const int sample_rate = node_narrow_int(env, info[2], "sampleRate");
+  sonare::validate_offline_audio_input(nullptr, "left", left.Data(), left.ElementLength(),
+                                       sample_rate);
+  sonare::validate_offline_audio_input(nullptr, "right", right.Data(), right.ElementLength(),
+                                       sample_rate);
   std::optional<std::string> document;
   if (!OptionalStringArg(env, info, 3, "configJson", &document)) {
     return env.Undefined();
@@ -440,11 +474,16 @@ Napi::Value SonareWrap::MasteringStreamingLoudnessGainStereo(const Napi::Callbac
 
 Napi::Value SonareWrap::MasterAudio(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (info.Length() < 3 || !IsDocumentOrAbsent(info[0]) || !IsFloat32Array(info[1]) ||
-      !info[2].IsNumber()) {
-    Napi::TypeError::New(
-        env, "Expected (presetName | null, Float32Array, sampleRate, overridesJson?: string)")
-        .ThrowAsJavaScriptException();
+  if (!IsDocumentOrAbsent(info[0])) {
+    Napi::TypeError::New(env, "presetName must be a string or null").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!IsFloat32Array(info[1])) {
+    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[2].IsNumber()) {
+    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   SONARE_NODE_TRY
@@ -452,16 +491,15 @@ Napi::Value SonareWrap::MasterAudio(const Napi::CallbackInfo& info) {
   if (info[0].IsString()) preset_name = node_narrow_string(env, info[0], "presetName");
   auto typed = info[1].As<Napi::Float32Array>();
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
-  sonare::validate_offline_audio_input("MasteringChain::process_mono", "samples", typed.Data(),
-                                       typed.ElementLength(),
-                                       node_narrow_int(env, info[2], node_arg_label(2).c_str()));
+  sonare::validate_offline_audio_input(nullptr, "samples", typed.Data(), typed.ElementLength(),
+                                       node_narrow_int(env, info[2], "sampleRate"));
   std::optional<std::string> overrides;
   if (!OptionalStringArg(env, info, 3, "overridesJson", &overrides)) {
     return env.Undefined();
   }
   sonare::mastering::api::MasteringChain chain(PresetChainConfig(preset_name, overrides));
   auto result = chain.process_mono(typed.Data(), typed.ElementLength(),
-                                   node_narrow_int(env, info[2], node_arg_label(2).c_str()));
+                                   node_narrow_int(env, info[2], "sampleRate"));
   Napi::Object out = Napi::Object::New(env);
   out.Set("samples", VecToFloat32(env, result.samples));
   out.Set("sampleRate", Napi::Number::New(env, result.sample_rate));
@@ -544,19 +582,19 @@ class MasterAudioAsyncWorker : public Napi::AsyncWorker {
   void Execute() override {
     try {
       // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
-      sonare::validate_offline_audio_input("MasteringChain::process_mono", "samples_",
-                                           samples_.data(), samples_.size(), sample_rate_);
+      sonare::validate_offline_audio_input(nullptr, "samples", samples_.data(), samples_.size(),
+                                           sample_rate_);
       // An absent preset runs the overrides document alone, as the synchronous entry does.
       sonare::mastering::api::MasteringChain chain(PresetChainConfig(preset_name_, overrides_));
       result_ = chain.process_mono(samples_.data(), samples_.size(), sample_rate_);
     } catch (const sonare::SonareException& e) {
       error_code_ = sonare_node::CErrorFromException(e);
-      SetError(e.what());
+      SetError(sonare_node::ExceptionMessage(e));
     } catch (const std::bad_alloc&) {
       error_code_ = SONARE_ERROR_OUT_OF_MEMORY;
       SetError("Out of memory");
     } catch (const std::exception& e) {
-      SetError(e.what());
+      SetError(sonare_node::ExceptionMessage(e));
     }
   }
 
@@ -599,20 +637,20 @@ class MasterAudioStereoAsyncWorker : public Napi::AsyncWorker {
   void Execute() override {
     try {
       // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
-      sonare::validate_offline_audio_input("MasteringChain::process_stereo", "left_", left_.data(),
-                                           left_.size(), sample_rate_);
-      sonare::validate_offline_audio_input("MasteringChain::process_stereo", "right_",
-                                           right_.data(), right_.size(), sample_rate_);
+      sonare::validate_offline_audio_input(nullptr, "left", left_.data(), left_.size(),
+                                           sample_rate_);
+      sonare::validate_offline_audio_input(nullptr, "right", right_.data(), right_.size(),
+                                           sample_rate_);
       sonare::mastering::api::MasteringChain chain(PresetChainConfig(preset_name_, overrides_));
       result_ = chain.process_stereo(left_.data(), right_.data(), left_.size(), sample_rate_);
     } catch (const sonare::SonareException& e) {
       error_code_ = sonare_node::CErrorFromException(e);
-      SetError(e.what());
+      SetError(sonare_node::ExceptionMessage(e));
     } catch (const std::bad_alloc&) {
       error_code_ = SONARE_ERROR_OUT_OF_MEMORY;
       SetError("Out of memory");
     } catch (const std::exception& e) {
-      SetError(e.what());
+      SetError(sonare_node::ExceptionMessage(e));
     }
   }
 
@@ -648,13 +686,19 @@ Napi::Value SonareWrap::MasterAudioAsync(const Napi::CallbackInfo& info) {
   // A Promise-returning entry point must reject rather than throw synchronously,
   // so invalid input never escapes a caller's `.catch()`.
   const bool preset_absent = info.Length() >= 1 && (info[0].IsUndefined() || info[0].IsNull());
-  if (info.Length() < 3 || !(info[0].IsString() || preset_absent) || !IsFloat32Array(info[1]) ||
-      !info[2].IsNumber()) {
+  if (!(info[0].IsString() || preset_absent)) {
     auto deferred = Napi::Promise::Deferred::New(env);
-    deferred.Reject(
-        Napi::TypeError::New(
-            env, "Expected (presetName | null, Float32Array, sampleRate, overridesJson?: string)")
-            .Value());
+    deferred.Reject(Napi::TypeError::New(env, "presetName must be a string or null").Value());
+    return deferred.Promise();
+  }
+  if (!IsFloat32Array(info[1])) {
+    auto deferred = Napi::Promise::Deferred::New(env);
+    deferred.Reject(Napi::TypeError::New(env, "samples must be a Float32Array").Value());
+    return deferred.Promise();
+  }
+  if (!info[2].IsNumber()) {
+    auto deferred = Napi::Promise::Deferred::New(env);
+    deferred.Reject(Napi::TypeError::New(env, "sampleRate must be a number").Value());
     return deferred.Promise();
   }
   std::optional<std::string> preset_name;
@@ -680,13 +724,24 @@ Napi::Value SonareWrap::MasterAudioStereoAsync(const Napi::CallbackInfo& info) {
   // A Promise-returning entry point must reject rather than throw synchronously,
   // so invalid input never escapes a caller's `.catch()`.
   const bool preset_absent = info.Length() >= 1 && (info[0].IsUndefined() || info[0].IsNull());
-  if (info.Length() < 4 || !(info[0].IsString() || preset_absent) || !IsFloat32Array(info[1]) ||
-      !IsFloat32Array(info[2]) || !info[3].IsNumber()) {
+  if (!(info[0].IsString() || preset_absent)) {
     auto deferred = Napi::Promise::Deferred::New(env);
-    deferred.Reject(
-        Napi::TypeError::New(
-            env, "Expected (presetName | null, left, right, sampleRate, overridesJson?: string)")
-            .Value());
+    deferred.Reject(Napi::TypeError::New(env, "presetName must be a string or null").Value());
+    return deferred.Promise();
+  }
+  if (!IsFloat32Array(info[1])) {
+    auto deferred = Napi::Promise::Deferred::New(env);
+    deferred.Reject(Napi::TypeError::New(env, "left must be a Float32Array").Value());
+    return deferred.Promise();
+  }
+  if (!IsFloat32Array(info[2])) {
+    auto deferred = Napi::Promise::Deferred::New(env);
+    deferred.Reject(Napi::TypeError::New(env, "right must be a Float32Array").Value());
+    return deferred.Promise();
+  }
+  if (!info[3].IsNumber()) {
+    auto deferred = Napi::Promise::Deferred::New(env);
+    deferred.Reject(Napi::TypeError::New(env, "sampleRate must be a number").Value());
     return deferred.Promise();
   }
   std::optional<std::string> preset_name;
@@ -717,11 +772,20 @@ Napi::Value SonareWrap::MasterAudioStereoAsync(const Napi::CallbackInfo& info) {
 
 Napi::Value SonareWrap::MasterAudioStereo(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (info.Length() < 4 || !IsDocumentOrAbsent(info[0]) || !IsFloat32Array(info[1]) ||
-      !IsFloat32Array(info[2]) || !info[3].IsNumber()) {
-    Napi::TypeError::New(
-        env, "Expected (presetName | null, left, right, sampleRate, overridesJson?: string)")
-        .ThrowAsJavaScriptException();
+  if (!IsDocumentOrAbsent(info[0])) {
+    Napi::TypeError::New(env, "presetName must be a string or null").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!IsFloat32Array(info[1])) {
+    Napi::TypeError::New(env, "left must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!IsFloat32Array(info[2])) {
+    Napi::TypeError::New(env, "right must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[3].IsNumber()) {
+    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   SONARE_NODE_TRY
@@ -735,11 +799,9 @@ Napi::Value SonareWrap::MasterAudioStereo(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
-  const int sr = node_narrow_int(env, info[3], "sr");
-  sonare::validate_offline_audio_input("MasteringChain::process_stereo", "left", left.Data(),
-                                       left.ElementLength(), sr);
-  sonare::validate_offline_audio_input("MasteringChain::process_stereo", "right", right.Data(),
-                                       right.ElementLength(), sr);
+  const int sr = node_narrow_int(env, info[3], "sampleRate");
+  sonare::validate_offline_audio_input(nullptr, "left", left.Data(), left.ElementLength(), sr);
+  sonare::validate_offline_audio_input(nullptr, "right", right.Data(), right.ElementLength(), sr);
   std::optional<std::string> overrides;
   if (!OptionalStringArg(env, info, 4, "overridesJson", &overrides)) {
     return env.Undefined();
@@ -765,11 +827,20 @@ Napi::Value SonareWrap::MasterAudioStereo(const Napi::CallbackInfo& info) {
 
 Napi::Value SonareWrap::MasteringChainWithProgress(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  constexpr const char* kUsage =
-      "Expected (Float32Array, sampleRate, configJson: string | null, onProgress, cancel?)";
-  if (info.Length() < 4 || !IsFloat32Array(info[0]) || !info[1].IsNumber() ||
-      !info[3].IsFunction() || (info.Length() > 4 && !info[4].IsFunction())) {
-    Napi::TypeError::New(env, kUsage).ThrowAsJavaScriptException();
+  if (!IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[1].IsNumber()) {
+    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[3].IsFunction()) {
+    Napi::TypeError::New(env, "onProgress must be a function").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (info.Length() > 4 && !info[4].IsFunction()) {
+    Napi::TypeError::New(env, "cancel must be a function").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   SONARE_NODE_TRY
@@ -782,9 +853,8 @@ Napi::Value SonareWrap::MasteringChainWithProgress(const Napi::CallbackInfo& inf
   // core contract is pinned by "MasteringChain copies its input before the first
   // progress callback" in tests/mastering/chain_test.cpp.
   auto typed = info[0].As<Napi::Float32Array>();
-  const int sr = node_narrow_int(env, info[1], node_arg_label(1).c_str());
-  sonare::validate_offline_audio_input("MasteringChain::process_mono", "samples", typed.Data(),
-                                       typed.ElementLength(), sr);
+  const int sr = node_narrow_int(env, info[1], "sampleRate");
+  sonare::validate_offline_audio_input(nullptr, "samples", typed.Data(), typed.ElementLength(), sr);
   std::optional<std::string> document;
   if (!OptionalStringArg(env, info, 2, "configJson", &document)) return env.Undefined();
   sonare::mastering::api::MasteringChain chain(OfflineChainConfig(document));
@@ -803,12 +873,24 @@ Napi::Value SonareWrap::MasteringChainWithProgress(const Napi::CallbackInfo& inf
 
 Napi::Value SonareWrap::MasteringChainStereoWithProgress(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  constexpr const char* kUsage =
-      "Expected (left, right, sampleRate, configJson: string | null, onProgress, cancel?)";
-  if (info.Length() < 5 || !IsFloat32Array(info[0]) || !IsFloat32Array(info[1]) ||
-      !info[2].IsNumber() || !info[4].IsFunction() ||
-      (info.Length() > 5 && !info[5].IsFunction())) {
-    Napi::TypeError::New(env, kUsage).ThrowAsJavaScriptException();
+  if (!IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "left must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!IsFloat32Array(info[1])) {
+    Napi::TypeError::New(env, "right must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[2].IsNumber()) {
+    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[4].IsFunction()) {
+    Napi::TypeError::New(env, "onProgress must be a function").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (info.Length() > 5 && !info[5].IsFunction()) {
+    Napi::TypeError::New(env, "cancel must be a function").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   SONARE_NODE_TRY
@@ -819,11 +901,9 @@ Napi::Value SonareWrap::MasteringChainStereoWithProgress(const Napi::CallbackInf
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  const int sr = node_narrow_int(env, info[2], "sr");
-  sonare::validate_offline_audio_input("MasteringChain::process_stereo", "left", left.Data(),
-                                       left.ElementLength(), sr);
-  sonare::validate_offline_audio_input("MasteringChain::process_stereo", "right", right.Data(),
-                                       right.ElementLength(), sr);
+  const int sr = node_narrow_int(env, info[2], "sampleRate");
+  sonare::validate_offline_audio_input(nullptr, "left", left.Data(), left.ElementLength(), sr);
+  sonare::validate_offline_audio_input(nullptr, "right", right.Data(), right.ElementLength(), sr);
   std::optional<std::string> document;
   if (!OptionalStringArg(env, info, 3, "configJson", &document)) return env.Undefined();
   sonare::mastering::api::MasteringChain chain(OfflineChainConfig(document));
@@ -847,13 +927,24 @@ Napi::Value SonareWrap::MasteringChainStereoWithProgress(const Napi::CallbackInf
 
 Napi::Value SonareWrap::MasterAudioWithProgress(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  constexpr const char* kUsage =
-      "Expected (presetName | null, Float32Array, sampleRate, overridesJson: string | null, "
-      "onProgress, cancel?)";
-  if (info.Length() < 5 || !IsDocumentOrAbsent(info[0]) || !IsFloat32Array(info[1]) ||
-      !info[2].IsNumber() || !info[4].IsFunction() ||
-      (info.Length() > 5 && !info[5].IsFunction())) {
-    Napi::TypeError::New(env, kUsage).ThrowAsJavaScriptException();
+  if (!IsDocumentOrAbsent(info[0])) {
+    Napi::TypeError::New(env, "presetName must be a string or null").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!IsFloat32Array(info[1])) {
+    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[2].IsNumber()) {
+    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[4].IsFunction()) {
+    Napi::TypeError::New(env, "onProgress must be a function").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (info.Length() > 5 && !info[5].IsFunction()) {
+    Napi::TypeError::New(env, "cancel must be a function").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   SONARE_NODE_TRY
@@ -862,9 +953,8 @@ Napi::Value SonareWrap::MasterAudioWithProgress(const Napi::CallbackInfo& info) 
   // Pointer lent across the callbacks for the same reason as the chain variants:
   // the preset path runs the same MasteringChain, which copies first.
   auto typed = info[1].As<Napi::Float32Array>();
-  const int sr = node_narrow_int(env, info[2], node_arg_label(2).c_str());
-  sonare::validate_offline_audio_input("MasteringChain::process_mono", "samples", typed.Data(),
-                                       typed.ElementLength(), sr);
+  const int sr = node_narrow_int(env, info[2], "sampleRate");
+  sonare::validate_offline_audio_input(nullptr, "samples", typed.Data(), typed.ElementLength(), sr);
   std::optional<std::string> overrides;
   if (!OptionalStringArg(env, info, 3, "overridesJson", &overrides)) return env.Undefined();
   sonare::mastering::api::MasteringChain chain(PresetChainConfig(preset_name, overrides));
@@ -883,13 +973,28 @@ Napi::Value SonareWrap::MasterAudioWithProgress(const Napi::CallbackInfo& info) 
 
 Napi::Value SonareWrap::MasterAudioStereoWithProgress(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  constexpr const char* kUsage =
-      "Expected (presetName | null, left, right, sampleRate, overridesJson: string | null, "
-      "onProgress, cancel?)";
-  if (info.Length() < 6 || !IsDocumentOrAbsent(info[0]) || !IsFloat32Array(info[1]) ||
-      !IsFloat32Array(info[2]) || !info[3].IsNumber() || !info[5].IsFunction() ||
-      (info.Length() > 6 && !info[6].IsFunction())) {
-    Napi::TypeError::New(env, kUsage).ThrowAsJavaScriptException();
+  if (!IsDocumentOrAbsent(info[0])) {
+    Napi::TypeError::New(env, "presetName must be a string or null").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!IsFloat32Array(info[1])) {
+    Napi::TypeError::New(env, "left must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!IsFloat32Array(info[2])) {
+    Napi::TypeError::New(env, "right must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[3].IsNumber()) {
+    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[5].IsFunction()) {
+    Napi::TypeError::New(env, "onProgress must be a function").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (info.Length() > 6 && !info[6].IsFunction()) {
+    Napi::TypeError::New(env, "cancel must be a function").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   SONARE_NODE_TRY
@@ -902,11 +1007,9 @@ Napi::Value SonareWrap::MasterAudioStereoWithProgress(const Napi::CallbackInfo& 
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  const int sr = node_narrow_int(env, info[3], "sr");
-  sonare::validate_offline_audio_input("MasteringChain::process_stereo", "left", left.Data(),
-                                       left.ElementLength(), sr);
-  sonare::validate_offline_audio_input("MasteringChain::process_stereo", "right", right.Data(),
-                                       right.ElementLength(), sr);
+  const int sr = node_narrow_int(env, info[3], "sampleRate");
+  sonare::validate_offline_audio_input(nullptr, "left", left.Data(), left.ElementLength(), sr);
+  sonare::validate_offline_audio_input(nullptr, "right", right.Data(), right.ElementLength(), sr);
   std::optional<std::string> overrides;
   if (!OptionalStringArg(env, info, 4, "overridesJson", &overrides)) return env.Undefined();
   sonare::mastering::api::MasteringChain chain(PresetChainConfig(preset_name, overrides));
@@ -929,14 +1032,21 @@ Napi::Value SonareWrap::MasterAudioStereoWithProgress(const Napi::CallbackInfo& 
 
 Napi::Value SonareWrap::MasteringRepairAnalyze(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (info.Length() < 3 || !info[0].IsArray() || !info[1].IsNumber() || !info[2].IsString()) {
-    Napi::TypeError::New(env, "Expected (Float32Array[] channels, sampleRate, requestJson)")
-        .ThrowAsJavaScriptException();
+  if (!info[0].IsArray()) {
+    Napi::TypeError::New(env, "channels must be an array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[1].IsNumber()) {
+    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[2].IsString()) {
+    Napi::TypeError::New(env, "requestJson must be a string").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   SONARE_NODE_TRY
   repair_detail::LinkedPlanes planes;
-  if (!repair_detail::ReadLinkedPlanes(env, info[0], "masteringRepairAnalyze", &planes)) {
+  if (!repair_detail::ReadLinkedPlanes(env, info[0], &planes)) {
     return env.Undefined();
   }
   const int sr = node_narrow_int(env, info[1], "sampleRate");
@@ -956,17 +1066,29 @@ Napi::Value SonareWrap::MasteringRepairAnalyze(const Napi::CallbackInfo& info) {
 
 Napi::Value SonareWrap::MasteringRepairApply(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (info.Length() < 5 || !info[0].IsArray() || !info[1].IsNumber() || !info[2].IsString() ||
-      !info[3].IsFunction() || !info[4].IsFunction()) {
-    Napi::TypeError::New(env,
-                         "Expected (Float32Array[] channels, sampleRate, stagesJson, onProgress, "
-                         "cancel)")
-        .ThrowAsJavaScriptException();
+  if (!info[0].IsArray()) {
+    Napi::TypeError::New(env, "channels must be an array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[1].IsNumber()) {
+    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[2].IsString()) {
+    Napi::TypeError::New(env, "stagesJson must be a string").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[3].IsFunction()) {
+    Napi::TypeError::New(env, "onProgress must be a function").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[4].IsFunction()) {
+    Napi::TypeError::New(env, "cancel must be a function").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   SONARE_NODE_TRY
   repair_detail::LinkedPlanes planes;
-  if (!repair_detail::ReadLinkedPlanes(env, info[0], "masteringRepairApply", &planes)) {
+  if (!repair_detail::ReadLinkedPlanes(env, info[0], &planes)) {
     return env.Undefined();
   }
   const int sr = node_narrow_int(env, info[1], "sampleRate");

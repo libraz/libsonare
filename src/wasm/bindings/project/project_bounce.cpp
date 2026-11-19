@@ -29,12 +29,18 @@ EM_JS(EM_VAL, sonare_project_invoke_instrument,
         typeof result.then === 'function') {
       return Emval.toHandle({
         failed: true,
-        error: new TypeError('bounceWithInstruments: instrument ' + UTF8ToString(name) +
+        error: new TypeError('instrument ' + UTF8ToString(name) +
                              ' must not return a Promise; instruments are synchronous'),
       });
     }
     return Emval.toHandle({ failed: false });
   } catch (error) {
+    // The caller's own throw: marked so no public entry renames it on the way out.
+    if (error !== null && (typeof error === 'object' || typeof error === 'function')) {
+      try {
+        Object.defineProperty(error, Symbol.for('libsonare.foreignError'), { value: true, configurable: true });
+      } catch (_) {}
+    }
     return Emval.toHandle({ failed: true, error });
   }
 });
@@ -250,7 +256,7 @@ val bounceResultToVal(const std::vector<float>& samples, int num_channels) {
 }  // namespace
 
 SampleBankWasm::SampleBankWasm() : bank_(nullptr), id_(nextSampleBankId()) {
-  checkCodedCError(sonare_sample_bank_create(&bank_), "failed to create sample bank");
+  checkCodedCError(sonare_sample_bank_create(&bank_));
   sampleBankRegistry().emplace(id_, bank_);
 }
 
@@ -287,7 +293,7 @@ uint32_t SampleBankWasm::addSample(val data, val desc) {
   uint32_t index = 0;
   const SonareError err =
       sonare_sample_bank_add_sample(bank_, frames.data(), frames.size(), &c, &index);
-  if (err != SONARE_OK) throwCodedCError(err, "failed to add a sample to the bank");
+  if (err != SONARE_OK) throwCodedCError(err);
   return index;
 }
 
@@ -300,7 +306,7 @@ void SampleBankWasm::addZone(const val& set_index_val, val zone) {
   // documents as the neutral zone; a present one that is not an object is a
   // caller mistake rather than a default.
   if (!zone.isUndefined() && !zone.isNull() && zone.typeOf().as<std::string>() != "object") {
-    throw WasmTypeError("addZone zone must be an object");
+    throw WasmTypeError("zone must be an object");
   }
   SonareSampleZoneDesc c{};
   c.sample_index =
@@ -316,20 +322,20 @@ void SampleBankWasm::addZone(const val& set_index_val, val zone) {
   c.pan_units = static_cast<float>(numberField(zone, "panUnits", "sample zone", 0.0));
 
   const SonareError err = sonare_sample_bank_add_zone(bank_, set_index, &c);
-  if (err != SONARE_OK) throwCodedCError(err, "failed to add a zone to the sample bank");
+  if (err != SONARE_OK) throwCodedCError(err);
 }
 
 double SampleBankWasm::sampleCount() const {
   std::size_t count = 0;
   const SonareError err = sonare_sample_bank_sample_count(bank_, &count);
-  if (err != SONARE_OK) throwCodedCError(err, "failed to read the bank sample count");
+  if (err != SONARE_OK) throwCodedCError(err);
   return static_cast<double>(count);
 }
 
 double SampleBankWasm::setCount() const {
   std::size_t count = 0;
   const SonareError err = sonare_sample_bank_set_count(bank_, &count);
-  if (err != SONARE_OK) throwCodedCError(err, "failed to read the bank keymap set count");
+  if (err != SONARE_OK) throwCodedCError(err);
   return static_cast<double>(count);
 }
 
@@ -338,7 +344,7 @@ val ProjectWasm::compile() {
   const SonareError err = sonare_project_compile(project_.get(), &result);
   if (err != SONARE_OK) {
     sonare_free_project_compile_result(&result);
-    throwCError(err, "failed to compile project");
+    throwCError(err);
   }
   val out = projectCompileResultToVal(result);
   sonare_free_project_compile_result(&result);
@@ -352,7 +358,7 @@ val ProjectWasm::compileTimeline() {
   if (err != SONARE_OK) {
     sonare_free_project_compile_result(&result);
     sonare_project_timeline_destroy(timeline);
-    throwCError(err, "failed to compile project timeline");
+    throwCError(err);
   }
   val out = projectCompileResultToVal(result);
   sonare_free_project_compile_result(&result);
@@ -371,7 +377,7 @@ SonareProjectBounceOptions ProjectWasm::bounceOptionsFromVal(val options) {
     // refuses a fraction and an out-of-int64-range value by name instead of
     // truncating the one and casting the other into undefined behavior.
     if (hasProperty(options, "totalFrames")) {
-      opts.total_frames = requireInt64Property(options, "totalFrames", "Project.bounce options");
+      opts.total_frames = requireInt64Property(options, "totalFrames", "options");
     }
     if (hasProperty(options, "blockSize")) {
       opts.block_size = checkedIntFromVal(options["blockSize"], "blockSize");
@@ -446,7 +452,7 @@ val ProjectWasm::bounce(val options) {
       sonare_project_bounce(project_.get(), &opts, &interleaved, &len, &num_channels);
   if (err != SONARE_OK) {
     sonare_free_floats(interleaved);
-    throwCError(err, "failed to bounce project");
+    throwCError(err);
   }
   std::vector<float> samples(interleaved, interleaved + len);
   sonare_free_floats(interleaved);
@@ -464,7 +470,7 @@ val ProjectWasm::bounceWithBuiltinInstrument(val bindings, val options) {
       &len, &num_channels);
   if (err != SONARE_OK) {
     sonare_free_floats(interleaved);
-    throwCError(err, "failed to bounce project with built-in instrument");
+    throwCError(err);
   }
   std::vector<float> samples(interleaved, interleaved + len);
   sonare_free_floats(interleaved);
@@ -503,7 +509,7 @@ val ProjectWasm::bounceWithInstruments(val bindings, val options) {
   // The native failure is reported ahead of a callback's, as in the Python binding.
   if (err != SONARE_OK) {
     sonare_free_floats(interleaved);
-    throwCError(err, "failed to bounce project with callback instrument");
+    throwCError(err);
   }
   if (failure.failed) {
     sonare_free_floats(interleaved);
@@ -552,7 +558,7 @@ val ProjectWasm::bounceWithSynthInstrument(val bindings, val options) {
       &len, &num_channels);
   if (err != SONARE_OK) {
     sonare_free_floats(interleaved);
-    throwCError(err, "failed to bounce project with synth instrument");
+    throwCError(err);
   }
   std::vector<float> samples(interleaved, interleaved + len);
   sonare_free_floats(interleaved);
@@ -564,14 +570,14 @@ void ProjectWasm::loadSoundFont(val data) {
   const SonareError err = sonare_project_load_soundfont(
       project_.get(), bytes.empty() ? nullptr : bytes.data(), bytes.size());
   if (err != SONARE_OK) {
-    throwCError(err, "failed to load SoundFont");
+    throwCError(err);
   }
 }
 
 void ProjectWasm::clearSoundFont() {
   const SonareError err = sonare_project_clear_soundfont(project_.get());
   if (err != SONARE_OK) {
-    throwCError(err, "failed to clear SoundFont");
+    throwCError(err);
   }
 }
 
@@ -579,7 +585,7 @@ size_t ProjectWasm::soundFontPresetCount() {
   size_t count = 0;
   const SonareError err = sonare_project_soundfont_preset_count(project_.get(), &count);
   if (err != SONARE_OK) {
-    throwCError(err, "failed to query SoundFont preset count");
+    throwCError(err);
   }
   return count;
 }
@@ -588,13 +594,13 @@ val ProjectWasm::soundFontManifest() {
   size_t total = 0;
   SonareError err = sonare_project_soundfont_manifest(project_.get(), nullptr, 0, &total);
   if (err != SONARE_OK) {
-    throwCError(err, "failed to build SoundFont manifest");
+    throwCError(err);
   }
   std::vector<SonareSf2ProgramStatus> entries(total);
   if (total > 0) {
     err = sonare_project_soundfont_manifest(project_.get(), entries.data(), total, &total);
     if (err != SONARE_OK) {
-      throwCError(err, "failed to build SoundFont manifest");
+      throwCError(err);
     }
   }
   val out = val::array();
@@ -664,7 +670,7 @@ val ProjectWasm::bounceWithSf2Instrument(val bindings, val options) {
       &interleaved, &len, &num_channels);
   if (err != SONARE_OK) {
     sonare_free_floats(interleaved);
-    throwCError(err, "failed to bounce project with SF2 instrument");
+    throwCError(err);
   }
   std::vector<float> samples(interleaved, interleaved + len);
   sonare_free_floats(interleaved);

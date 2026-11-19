@@ -77,6 +77,14 @@ describe('WASM vocal edit facade', () => {
     expect(() => createVocalEditSession(request)).toThrow(RangeError);
   });
 
+  it('refuses a present analysis that is not an object rather than skipping it', () => {
+    for (const analysis of [0, '', false, 1, 'frames', []]) {
+      const request = { samples: tone(256), sampleRate: SAMPLE_RATE, analysis } as never;
+      expect(() => createVocalEditSession(request)).toThrow(TypeError);
+      expect(() => createVocalEditSession(request)).toThrow(/^analysis must be an object$/);
+    }
+  });
+
   it('rejects NUL bytes through the native WASM vocal export', () => {
     const request = suppliedOneFrameRequest();
     request.analysis.algorithmId = 'host\0suffix';

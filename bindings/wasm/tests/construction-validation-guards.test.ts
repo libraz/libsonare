@@ -58,7 +58,7 @@ const expectRangeRefusal = (fn: () => unknown): void => {
 
 /** The core's `MusicAnalyzerConfig` guard answered, not a facade or reader of the binding. */
 const expectConfigRefusal = (fn: () => unknown): void => {
-  expect(expectRefusalOf(fn).message).toMatch(/^MusicAnalyzerConfig: /);
+  expect(expectRefusalOf(fn).message).toMatch(/^analyze: MusicAnalyzerConfig: /);
 };
 
 const expectTypeRefusal = (fn: () => unknown): void => {

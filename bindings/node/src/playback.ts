@@ -1,3 +1,4 @@
+import { entryClass } from './internal/entry.js';
 import { addon } from './native.js';
 import type {
   PlaybackDiagnostics,
@@ -51,6 +52,7 @@ function nativeHrtf(hrtf: HrtfSet | undefined): NativeHrtfSet | undefined {
  * directly. A renderer built from one keeps its own copy, so destroying this
  * handle right after construction is safe.
  */
+@entryClass('HrtfSet')
 export class HrtfSet {
   private native: NativeHrtfSet;
   private disposed = false;
@@ -100,6 +102,7 @@ export class HrtfSet {
  * is either fixed at construction ("prepare") or adopted at the next
  * processed block ("realtime") — see {@link PlaybackRendererConfig}.
  */
+@entryClass('PlaybackRenderer', ['processPlanar', 'processInterleaved'])
 export class PlaybackRenderer {
   private native: NativePlaybackRenderer;
   private disposed = false;
@@ -239,6 +242,7 @@ export class PlaybackRenderer {
  * channel weights by channel count: 1, 2, 6 or 8), for measuring
  * `loudness.programLufs` ahead of a {@link PlaybackRenderer}.
  */
+@entryClass('PlaybackLoudnessMeter', ['pushInterleaved'])
 export class PlaybackLoudnessMeter {
   private native: NativePlaybackLoudnessMeter;
   private disposed = false;

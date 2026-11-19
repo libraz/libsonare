@@ -71,11 +71,15 @@ describe('failure class follows the cause', () => {
   // authority. These reach the core with arguments the facade has nothing to say about.
   const badHop = { samples: sine(22050), sampleRate: 22050, hopLength: 0 };
   const refusals: ReadonlyArray<[string, () => unknown, RegExp]> = [
-    ['analyze (sync)', () => analyze(badHop), /^MusicAnalyzerConfig: hopLength must be positive/],
+    [
+      'analyze (sync)',
+      () => analyze(badHop),
+      /^analyze: MusicAnalyzerConfig: hopLength must be positive/,
+    ],
     [
       'synthPresetPatch',
       () => synthPresetPatch('definitely-not-a-real-preset'),
-      /^unknown synth preset name$/,
+      /^synthPresetPatch: unknown synth preset name$/,
     ],
   ];
 

@@ -30,8 +30,7 @@ bool ReadPolyphonicConfig(Napi::Env env, const Napi::Value& value, SonarePolypho
     return true;
   }
   if (!value.IsObject() || value.IsArray()) {
-    Napi::TypeError::New(env, "PolyphonicAnalysis: config must be a plain object")
-        .ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "config must be a plain object").ThrowAsJavaScriptException();
     return false;
   }
   Napi::Object opts = value.As<Napi::Object>();
@@ -97,18 +96,22 @@ Napi::Object PolyphonicAnalysisWrap::Init(Napi::Env env, Napi::Object exports) {
   Napi::Function func = DefineClass(
       env, "PolyphonicAnalysis",
       {
-          InstanceMethod<&PolyphonicAnalysisWrap::NoteCount>("noteCount"),
-          InstanceMethod<&PolyphonicAnalysisWrap::FrameCount>("frameCount"),
-          InstanceMethod<&PolyphonicAnalysisWrap::Notes>("notes"),
-          InstanceMethod<&PolyphonicAnalysisWrap::SetNoteEdit>("setNoteEdit"),
-          InstanceMethod<&PolyphonicAnalysisWrap::Polyphony>("polyphony"),
-          InstanceMethod<&PolyphonicAnalysisWrap::NoteF0>("noteF0"),
-          InstanceMethod<&PolyphonicAnalysisWrap::NoteAmplitude>("noteAmplitude"),
-          InstanceMethod<&PolyphonicAnalysisWrap::NoteSalience>("noteSalience"),
-          InstanceMethod<&PolyphonicAnalysisWrap::NoteEnvelope>("noteEnvelope"),
-          InstanceMethod<&PolyphonicAnalysisWrap::NoteInharmonicity>("noteInharmonicity"),
-          InstanceMethod<&PolyphonicAnalysisWrap::Render>("render"),
-          InstanceMethod<&PolyphonicAnalysisWrap::Destroy>("destroy"),
+          InstanceMethod<&PolyphonicAnalysisWrap::NoteCount>("noteCount", napi_default_method),
+          InstanceMethod<&PolyphonicAnalysisWrap::FrameCount>("frameCount", napi_default_method),
+          InstanceMethod<&PolyphonicAnalysisWrap::Notes>("notes", napi_default_method),
+          InstanceMethod<&PolyphonicAnalysisWrap::SetNoteEdit>("setNoteEdit", napi_default_method),
+          InstanceMethod<&PolyphonicAnalysisWrap::Polyphony>("polyphony", napi_default_method),
+          InstanceMethod<&PolyphonicAnalysisWrap::NoteF0>("noteF0", napi_default_method),
+          InstanceMethod<&PolyphonicAnalysisWrap::NoteAmplitude>("noteAmplitude",
+                                                                 napi_default_method),
+          InstanceMethod<&PolyphonicAnalysisWrap::NoteSalience>("noteSalience",
+                                                                napi_default_method),
+          InstanceMethod<&PolyphonicAnalysisWrap::NoteEnvelope>("noteEnvelope",
+                                                                napi_default_method),
+          InstanceMethod<&PolyphonicAnalysisWrap::NoteInharmonicity>("noteInharmonicity",
+                                                                     napi_default_method),
+          InstanceMethod<&PolyphonicAnalysisWrap::Render>("render", napi_default_method),
+          InstanceMethod<&PolyphonicAnalysisWrap::Destroy>("destroy", napi_default_method),
       });
 
   exports.Set("PolyphonicAnalysis", func);
@@ -122,9 +125,8 @@ PolyphonicAnalysisWrap::PolyphonicAnalysisWrap(const Napi::CallbackInfo& info)
   // point as a method: without the harness the throw leaves the N-API callback
   // uncaught and takes the process down instead of reporting a RangeError.
   SONARE_NODE_TRY
-  if (info.Length() < 2 || !IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, config?: object)")
-        .ThrowAsJavaScriptException();
+  if (!IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
     return;
   }
   int sample_rate = 0;
@@ -169,9 +171,8 @@ PolyphonicAnalysisWrap::PolyphonicAnalysisWrap(const Napi::CallbackInfo& info)
   // by a note index the C ABI validated against the handle, not against it.
   if (written != note_count) {
     Release();
-    sonare_node::ThrowSonareErrorMessage(
-        env, SONARE_ERROR_UNKNOWN,
-        "PolyphonicAnalysis: the analysis reported a different note count");
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_UNKNOWN,
+                                         "the analysis reported a different note count");
     return;
   }
   spans_.reserve(written);
@@ -231,7 +232,7 @@ Napi::Value PolyphonicAnalysisWrap::Notes(const Napi::CallbackInfo& info) {
   // write is an inconsistency rather than a buffer the caller sized badly.
   if (written != notes.size()) {
     sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_UNKNOWN,
-                                         "notes: the analysis reported a different note count");
+                                         "the analysis reported a different note count");
     return env.Undefined();
   }
 
@@ -280,7 +281,7 @@ Napi::Value PolyphonicAnalysisWrap::SetNoteEdit(const Napi::CallbackInfo& info) 
   const Napi::Value edit_value = info[1];
   if (!edit_value.IsUndefined() && !edit_value.IsNull()) {
     if (!edit_value.IsObject() || edit_value.IsArray()) {
-      throw Napi::TypeError::New(info.Env(), "setNoteEdit: edit must be a plain object");
+      throw Napi::TypeError::New(info.Env(), "edit must be a plain object");
     }
     ReadNoteEditFields(edit_value.As<Napi::Object>(), &envelope, &edit);
   }
@@ -428,8 +429,7 @@ Napi::Value PolyphonicAnalysisWrap::Render(const Napi::CallbackInfo& info) {
   const Napi::Value options = info[0];
   if (!options.IsUndefined() && !options.IsNull()) {
     if (!options.IsObject() || options.IsArray()) {
-      Napi::TypeError::New(env, "render: options must be a plain object")
-          .ThrowAsJavaScriptException();
+      Napi::TypeError::New(env, "options must be a plain object").ThrowAsJavaScriptException();
       return env.Undefined();
     }
     Napi::Object opts = options.As<Napi::Object>();

@@ -12,10 +12,11 @@ Napi::FunctionReference* g_project_timeline_constructor = nullptr;
 }  // namespace
 
 Napi::Object ProjectTimelineWrap::Init(Napi::Env env, Napi::Object exports) {
-  Napi::Function func = DefineClass(env, "ProjectTimeline",
-                                    {
-                                        InstanceMethod<&ProjectTimelineWrap::Destroy>("destroy"),
-                                    });
+  Napi::Function func =
+      DefineClass(env, "ProjectTimeline",
+                  {
+                      InstanceMethod<&ProjectTimelineWrap::Destroy>("destroy", napi_default_method),
+                  });
   g_project_timeline_constructor = new Napi::FunctionReference();
   *g_project_timeline_constructor = Napi::Persistent(func);
   g_project_timeline_constructor->SuppressDestruct();

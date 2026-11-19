@@ -48,14 +48,14 @@ inline void ReadNoteEditFields(const Napi::Object& edit, std::vector<float>* env
 
 /// @brief Reads a note's optional `edit` key through @ref ReadNoteEditFields.
 ///        An absent edit leaves @p out untouched, which is the identity.
-inline void ReadNoteEdit(const char* fn, const Napi::Object& note, std::vector<float>* envelopes,
+inline void ReadNoteEdit(const Napi::Object& note, std::vector<float>* envelopes,
                          SonareNoteEdit* out) {
   const Napi::Value edit_value = note.Get("edit");
   if (edit_value.IsUndefined() || edit_value.IsNull()) {
     return;
   }
   if (!edit_value.IsObject() || edit_value.IsArray()) {
-    throw Napi::TypeError::New(note.Env(), std::string(fn) + ": note.edit must be a plain object");
+    throw Napi::TypeError::New(note.Env(), "note.edit must be a plain object");
   }
   ReadNoteEditFields(edit_value.As<Napi::Object>(), envelopes, out);
 }

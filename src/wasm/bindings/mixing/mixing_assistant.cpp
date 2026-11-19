@@ -114,7 +114,7 @@ AssistantInput buildAssistantInput(val left_channels, val right_channels, val tr
   // is audio for it to describe.
   if (count == 0) return input;
   if (sample_rate <= 0) {
-    throw WasmRangeError("sampleRate must be positive");
+    throw WasmRangeError("sampleRate must be an integer of at least 1");
   }
 
   input.left.resize(count);
@@ -130,16 +130,16 @@ AssistantInput buildAssistantInput(val left_channels, val right_channels, val tr
     if (isAbsent(left)) {
       throw WasmTypeError("leftChannels[" + std::to_string(index) + "] must be a Float32Array");
     }
-    const std::size_t frames = accumulateWasmFloat32ArrayLength(
-        left, "leftChannels entry", "mixingAssistantSuggest input", &budget);
+    const std::size_t frames =
+        accumulateWasmFloat32ArrayLength(left, "leftChannels entry", &budget);
     input.left[index] = float32ArrayToVector(left);
 
     const val right = isAbsent(right_channels) ? val::undefined() : right_channels[index];
     if (!isAbsent(right)) {
       // The core carries one frame count per track and reads both planes with
       // it, so a shorter right plane would be read past its end.
-      const std::size_t right_frames = accumulateWasmFloat32ArrayLength(
-          right, "rightChannels entry", "mixingAssistantSuggest input", &budget);
+      const std::size_t right_frames =
+          accumulateWasmFloat32ArrayLength(right, "rightChannels entry", &budget);
       if (right_frames != frames) {
         throw WasmRangeError("track " + std::to_string(index) +
                              " left and right lengths must match");
@@ -151,7 +151,7 @@ AssistantInput buildAssistantInput(val left_channels, val right_channels, val tr
       const std::string subject = "trackSampleRates[" + std::to_string(index) + "]";
       const int track_rate = checkedIntFromVal(track_sample_rates[index], subject.c_str());
       if (track_rate <= 0) {
-        throw WasmRangeError(subject + " must be positive");
+        throw WasmRangeError(subject + " must be an integer of at least 1");
       }
       if (track_rate != sample_rate && !input.left[index].empty()) {
         input.left[index] = sonare::resample(input.left[index].data(), input.left[index].size(),

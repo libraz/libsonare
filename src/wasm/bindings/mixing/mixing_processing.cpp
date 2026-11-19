@@ -20,7 +20,7 @@ void requireInputCountWithinStrips(size_t input_count, size_t strip_count) {
 
 // A C INVALID_PARAMETER from the mixer is an argument refusal, not object state.
 [[noreturn]] void throwMixerProcessError(SonareError err) {
-  const std::string message = cErrorMessage(err, "mixer process failed");
+  const std::string message = cErrorMessage(err);
   if (err == SONARE_ERROR_INVALID_PARAMETER) {
     throw WasmRangeError(message);
   }
@@ -46,10 +46,10 @@ val MixerWasm::processStereo(val left_channels, val right_channels) {
   size_t length = 0;
   size_t cumulative_count = 0;
   for (int index = 0; index < count; ++index) {
-    const size_t left_length = accumulateWasmFloat32ArrayLength(
-        left_channels[index], "left channel", "mixer process input", &cumulative_count);
-    const size_t right_length = accumulateWasmFloat32ArrayLength(
-        right_channels[index], "right channel", "mixer process input", &cumulative_count);
+    const size_t left_length =
+        accumulateWasmFloat32ArrayLength(left_channels[index], "left channel", &cumulative_count);
+    const size_t right_length =
+        accumulateWasmFloat32ArrayLength(right_channels[index], "right channel", &cumulative_count);
     if (left_length != right_length) {
       throw WasmRangeError("left and right channel lengths must match");
     }
@@ -192,8 +192,7 @@ void MixerWasm::configureMeter(bool enabled, const val& true_peak_oversample,
   if (const auto true_peak = optionalBool(measure_true_peak, "measureTruePeak")) {
     config.measure_true_peak = *true_peak ? 1 : 0;
   }
-  checkStripError(sonare_mixer_configure_master_meter(mixer_, &config),
-                  "failed to configure the master meter");
+  checkStripError(sonare_mixer_configure_master_meter(mixer_, &config));
 }
 
 val MixerWasm::meterSnapshot() const {
@@ -203,7 +202,7 @@ val MixerWasm::meterSnapshot() const {
     throw sonare::SonareException(sonare::ErrorCode::InvalidState,
                                   "mixer meter has not been enabled");
   }
-  checkStripError(err, "failed to read the master meter");
+  checkStripError(err);
   return mixMeterSnapshotToVal(meter);
 }
 
@@ -238,8 +237,7 @@ int MixerWasm::tailSamples() {
   int out = 0;
   SonareError err = sonare_mixer_tail_samples(mixer_, &out);
   if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
-                                  cErrorMessage(err, "failed to read mixer tail samples"));
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState, cErrorMessage(err));
   }
   return out;
 }
@@ -250,8 +248,7 @@ int MixerWasm::latencySamples() {
   int out = 0;
   SonareError err = sonare_mixer_latency_samples(mixer_, &out);
   if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
-                                  cErrorMessage(err, "failed to read mixer latency samples"));
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState, cErrorMessage(err));
   }
   return out;
 }
@@ -260,8 +257,7 @@ int MixerWasm::maxBlockSize() {
   int out = 0;
   SonareError err = sonare_mixer_max_block_size(mixer_, &out);
   if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
-                                  cErrorMessage(err, "failed to read mixer max block size"));
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState, cErrorMessage(err));
   }
   return out;
 }
@@ -278,8 +274,7 @@ val MixerWasm::drainTailStereo(double num_samples) {
   SonareError err =
       sonare_mixer_drain_tail_stereo(mixer_, out_left.data(), out_right.data(), count);
   if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
-                                  cErrorMessage(err, "mixer drain tail failed"));
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState, cErrorMessage(err));
   }
   val out = val::object();
   out.set("left", vectorToFloat32Array(out_left));
@@ -294,8 +289,7 @@ val MixerWasm::drainTailStereo(double num_samples) {
 void MixerWasm::flushMeters() {
   const SonareError err = sonare_mixer_flush_meters(mixer_);
   if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
-                                  cErrorMessage(err, "mixer meter flush failed"));
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState, cErrorMessage(err));
   }
 }
 

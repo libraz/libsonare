@@ -166,12 +166,9 @@ Napi::Value MidiBankProgram(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   for (size_t i = 0; i < 6; ++i) {
-    if (info.Length() <= i || !info[i].IsNumber()) {
-      Napi::TypeError::New(env,
-                           "Expected (ppq, group, channel, bankMsb, bankLsb, program) as numbers")
-          .ThrowAsJavaScriptException();
-      return env.Undefined();
-    }
+    static const char* const kNames[] = {"ppq",     "group",   "channel",
+                                         "bankMsb", "bankLsb", "program"};
+    if (!sonare_node::RequireNumberValue(env, info[i], kNames[i])) return env.Undefined();
   }
   // group/channel are uint8_t C-ABI fields; read them with the MidiByte reader
   // so an out-of-range value is rejected instead of wrapping into a value the
@@ -244,9 +241,12 @@ bool CcBindingsFromArray(Napi::Env env, Napi::Array array, std::vector<SonareMid
 Napi::Value MidiCcLearn(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (info.Length() < 2 || !info[0].IsArray() || !info[1].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (events, paramId, minValue?, maxValue?, minMovement?)")
-        .ThrowAsJavaScriptException();
+  if (!info[0].IsArray()) {
+    Napi::TypeError::New(env, "events must be an array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[1].IsNumber()) {
+    Napi::TypeError::New(env, "paramId must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   Napi::Array array = info[0].As<Napi::Array>();
@@ -279,10 +279,10 @@ Napi::Value MidiCcLearn(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   SonareMidiCcBinding learned{};
-  const SonareError err = sonare_midi_cc_learn(
-      events.empty() ? nullptr : events.data(), events.size(),
-      sonare_node::node_narrow_uint32(env, info[1], sonare_node::node_arg_label(1).c_str()),
-      min_value, max_value, min_movement, &learned);
+  const SonareError err =
+      sonare_midi_cc_learn(events.empty() ? nullptr : events.data(), events.size(),
+                           sonare_node::node_narrow_uint32(env, info[1], "paramId"), min_value,
+                           max_value, min_movement, &learned);
   if (err == SONARE_ERROR_INVALID_STATE) return env.Null();
   if (err != SONARE_OK) {
     Napi::RangeError::New(env, "invalid MIDI CC learn arguments").ThrowAsJavaScriptException();
@@ -295,9 +295,12 @@ Napi::Value MidiCcLearn(const Napi::CallbackInfo& info) {
 Napi::Value MidiCcToBreakpoint(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (info.Length() < 2 || !info[0].IsArray() || !info[1].IsObject()) {
-    Napi::TypeError::New(env, "Expected (bindings: object[], event: object)")
-        .ThrowAsJavaScriptException();
+  if (!info[0].IsArray()) {
+    Napi::TypeError::New(env, "bindings must be an array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[1].IsObject()) {
+    Napi::TypeError::New(env, "event must be an object").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   std::vector<SonareMidiCcBinding> bindings;
@@ -323,10 +326,20 @@ Napi::Value MidiCcToBreakpoint(const Napi::CallbackInfo& info) {
 Napi::Value MidiParamToCc(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (info.Length() < 4 || !info[0].IsArray() || !info[1].IsNumber() || !info[2].IsNumber() ||
-      !info[3].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (bindings: object[], paramId, value, group, ppq?)")
-        .ThrowAsJavaScriptException();
+  if (!info[0].IsArray()) {
+    Napi::TypeError::New(env, "bindings must be an array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[1].IsNumber()) {
+    Napi::TypeError::New(env, "paramId must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[2].IsNumber()) {
+    Napi::TypeError::New(env, "value must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[3].IsNumber()) {
+    Napi::TypeError::New(env, "group must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   std::vector<SonareMidiCcBinding> bindings;
@@ -339,7 +352,7 @@ Napi::Value MidiParamToCc(const Napi::CallbackInfo& info) {
   SonareMidiEventPod event{};
   const SonareError err = sonare_midi_param_to_cc(
       bindings.empty() ? nullptr : bindings.data(), bindings.size(),
-      sonare_node::node_narrow_uint32(env, info[1], sonare_node::node_arg_label(1).c_str()),
+      sonare_node::node_narrow_uint32(env, info[1], "paramId"),
       sonare_node::node_narrow_finite_float(env, info[2], "unitValue"), group, ppq, &event);
   if (err == SONARE_ERROR_INVALID_STATE) return env.Null();
   if (err != SONARE_OK) {
@@ -470,8 +483,7 @@ Napi::Value SynthPresetPatch(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (info.Length() < 1 || !info[0].IsString()) {
-    Napi::TypeError::New(env, "synthPresetPatch expects a preset name string")
-        .ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "preset must be a string").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   std::string name = sonare_node::node_narrow_string(env, info[0], "preset");

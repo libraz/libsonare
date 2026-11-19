@@ -1,4 +1,5 @@
 import type { SampleDesc, SampleZoneDesc } from './instrument_types.js';
+import { entryClass } from './internal/entry.js';
 import { assertHandleLive } from './internal/handle_guard.js';
 import { refuseSampleDescOrdinals } from './internal/synth_tokens.js';
 import { projectModule, type WasmSampleBank } from './project_internal.js';
@@ -37,6 +38,7 @@ import { projectModule, type WasmSampleBank } from './project_internal.js';
  * }
  * ```
  */
+@entryClass('SampleBank')
 export class SampleBank {
   private readonly nativeHandle: WasmSampleBank;
   private released = false;

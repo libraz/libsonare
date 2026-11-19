@@ -59,9 +59,9 @@ function capture(run: () => unknown): unknown {
 }
 
 /** Asserts the caught value is the float-range refusal naming `key`. */
-function expectRangeRefusal(caught: unknown, key: string, context: string): void {
+function expectRangeRefusal(caught: unknown, entry: string, key: string, context: string): void {
   const error = expectArgumentRefusal(caught, RangeError, context);
-  expect(error.message, context).toBe(`${key} ${RANGE_MESSAGE}`);
+  expect(error.message, context).toBe(`${entry}: ${key} ${RANGE_MESSAGE}`);
 }
 
 /** A pure tone or sum of tones, generated without touching the WASM module. */
@@ -134,6 +134,8 @@ function N_FRAMES() {
 /** One float field of one entry point, and how to drive it with a value. */
 interface FloatField {
   entry: string;
+  /** The public entry the refusal names, when the raw export differs from it. */
+  refusedAs?: string;
   key: string;
   run: (value: number) => unknown;
 }
@@ -227,6 +229,8 @@ const FLOAT_FIELDS: FloatField[] = [
   },
   {
     entry: 'nnlsChromaEx',
+    // The raw export the facade calls refuses under the public entry's name.
+    refusedAs: 'nnlsChroma',
     key: 'stftBlendWeight',
     run: (v) => m().nnlsChromaEx(threePartials, SR, true, v, 512, 256),
   },
@@ -245,15 +249,19 @@ describe('every converted float parameter refuses a value the float type cannot 
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it.each(FLOAT_FIELDS)('$entry names $key rather than accepting an infinity', ({ key, run }) => {
-    for (const value of REFUSED) {
-      expectRangeRefusal(
-        capture(() => run(value)),
-        key,
-        `${key} = ${value}`,
-      );
-    }
-  });
+  it.each(FLOAT_FIELDS)(
+    '$entry names $key rather than accepting an infinity',
+    ({ entry, refusedAs, key, run }) => {
+      for (const value of REFUSED) {
+        expectRangeRefusal(
+          capture(() => run(value)),
+          refusedAs ?? entry,
+          key,
+          `${key} = ${value}`,
+        );
+      }
+    },
+  );
 });
 
 // A dedicated signal for the mel filterbank tests below, matched to the exact

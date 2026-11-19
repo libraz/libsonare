@@ -23,7 +23,7 @@ mastering::dynamics::DetectorMode parseCompressorDetector(
   if (type == "number") {
     // An ordinal names a member, not a quantity: 1.5 used to select Rms and NaN
     // Peak, neither of which the caller spelled.
-    const int code = checkedIntFromVal(value, "masteringDynamicsCompressor detector");
+    const int code = checkedIntFromVal(value, "detector");
     switch (code) {
       case 0:
         return mastering::dynamics::DetectorMode::Peak;
@@ -32,7 +32,7 @@ mastering::dynamics::DetectorMode parseCompressorDetector(
       case 2:
         return mastering::dynamics::DetectorMode::LogRms;
       default:
-        throw WasmRangeError("masteringDynamicsCompressor: unknown detector code");
+        throw WasmRangeError("unknown detector code");
     }
   }
   if (type == "string") {
@@ -42,7 +42,7 @@ mastering::dynamics::DetectorMode parseCompressorDetector(
     if (s == "peak") return mastering::dynamics::DetectorMode::Peak;
     if (s == "rms") return mastering::dynamics::DetectorMode::Rms;
     if (s == "log_rms" || s == "logrms") return mastering::dynamics::DetectorMode::LogRms;
-    throw WasmRangeError("masteringDynamicsCompressor: unknown detector mode: " + s);
+    throw WasmRangeError("unknown detector mode: " + s);
   }
   return fallback;
 }
@@ -73,8 +73,7 @@ val makeDynamicsResult(const std::vector<float>& samples, int latency_samples) {
 val js_mastering_dynamics_compressor(val samples, const val& sample_rate_val, val options) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   std::vector<float> data = float32ArrayToVector(samples);
-  validate_offline_audio_input("Compressor::process", "samples", data.data(), data.size(),
-                               sample_rate);
+  validate_offline_audio_input(nullptr, "samples", data.data(), data.size(), sample_rate);
   mastering::dynamics::CompressorConfig cfg;
   if (!options.isUndefined() && !options.isNull()) {
     if (hasProperty(options, "thresholdDb")) {
@@ -102,7 +101,7 @@ val js_mastering_dynamics_compressor(val samples, const val& sample_rate_val, va
       cfg.sidechain_hpf_hz =
           checkedFloatFromVal(options["sidechainHighPassHz"], "sidechainHighPassHz");
       if (!std::isfinite(cfg.sidechain_hpf_hz) || !(cfg.sidechain_hpf_hz > 0.0f)) {
-        throw WasmRangeError("masteringDynamicsCompressor: sidechainHighPassHz must be positive");
+        throw WasmRangeError("sidechainHighPassHz must be finite and greater than 0");
       }
       cfg.sidechain_hpf_enabled = true;
     }
@@ -122,7 +121,7 @@ val js_mastering_dynamics_compressor(val samples, const val& sample_rate_val, va
 val js_mastering_dynamics_gate(val samples, const val& sample_rate_val, val options) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   std::vector<float> data = float32ArrayToVector(samples);
-  validate_offline_audio_input("Gate::process", "samples", data.data(), data.size(), sample_rate);
+  validate_offline_audio_input(nullptr, "samples", data.data(), data.size(), sample_rate);
   mastering::dynamics::GateConfig cfg;
   if (!options.isUndefined() && !options.isNull()) {
     if (hasProperty(options, "thresholdDb")) {
@@ -156,8 +155,7 @@ val js_mastering_dynamics_gate(val samples, const val& sample_rate_val, val opti
 val js_mastering_dynamics_transient_shaper(val samples, const val& sample_rate_val, val options) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   std::vector<float> data = float32ArrayToVector(samples);
-  validate_offline_audio_input("TransientShaper::process", "samples", data.data(), data.size(),
-                               sample_rate);
+  validate_offline_audio_input(nullptr, "samples", data.data(), data.size(), sample_rate);
   mastering::dynamics::TransientShaperConfig cfg;
   if (!options.isUndefined() && !options.isNull()) {
     if (hasProperty(options, "attackGainDb")) {
@@ -206,13 +204,13 @@ namespace {
 editing::pitch_editor::ScaleQuantizerConfig makeScaleConfig(int root, int mode_mask,
                                                             float scale_reference_midi) {
   if (root < 0 || root > 11) {
-    throw WasmRangeError("scaleQuantizer: root must be in [0, 11]");
+    throw WasmRangeError("root must be in [0, 11]");
   }
   if (mode_mask == 0) {
-    throw WasmRangeError("scaleQuantizer: modeMask must be non-zero");
+    throw WasmRangeError("modeMask must be non-zero");
   }
   if (mode_mask < 0 || mode_mask > 4095) {
-    throw WasmRangeError("scaleQuantizer: modeMask must be in [0, 4095]");
+    throw WasmRangeError("modeMask must be in [0, 4095]");
   }
   editing::pitch_editor::ScaleQuantizerConfig cfg;
   cfg.root = root;
@@ -228,7 +226,7 @@ editing::pitch_editor::ScaleQuantizerConfig makeScaleConfig(int root, int mode_m
 int js_scale_mask_for_mode(const val& root_val, const val& mode_val) {
   const int root = checkedIntFromVal(root_val, "root");
   if (root < 0 || root > 11) {
-    throw WasmRangeError("scaleMaskForMode: root must be in [0, 11]");
+    throw WasmRangeError("root must be in [0, 11]");
   }
   return sonare::scale_mask_for_mode(modeFromVal(mode_val, "mode"));
 }
@@ -253,7 +251,7 @@ bool js_scale_pitch_class_enabled(const val& root, const val& mode_mask,
                                   const val& pitch_class_val) {
   const int pitch_class = checkedIntFromVal(pitch_class_val, "pitchClass");
   if (pitch_class < 0 || pitch_class > 11) {
-    throw WasmRangeError("scalePitchClassEnabled: pitchClass must be in [0, 11]");
+    throw WasmRangeError("pitchClass must be in [0, 11]");
   }
   editing::pitch_editor::ScaleQuantizer q(makeScaleConfig(
       checkedIntFromVal(root, "root"), checkedIntFromVal(mode_mask, "modeMask"), 0.0f));

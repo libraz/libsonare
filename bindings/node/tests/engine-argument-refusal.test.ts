@@ -61,7 +61,7 @@ describe('RealtimeEngine value refusals are RangeError, not SonareError', () => 
   it('carries the C detail in the message', () => {
     withEngine((engine) => {
       expect(() => engine.setTrackSends(UNKNOWN_ID, [])).toThrow(
-        new RangeError(`unknown track id ${UNKNOWN_ID}`),
+        new RangeError(`RealtimeEngine.setTrackSends: unknown track id ${UNKNOWN_ID}`),
       );
     });
   });

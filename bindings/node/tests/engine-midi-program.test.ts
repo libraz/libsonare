@@ -105,18 +105,18 @@ describe('RealtimeEngine live program change', () => {
     const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: BLOCK });
     try {
       expect(() => engine.pushMidiProgram(DEST, 16, 0, 0)).toThrow(
-        new RangeError('pushMidiProgram: group must be in [0, 15]'),
+        new RangeError('RealtimeEngine.pushMidiProgram: group must be in [0, 15]'),
       );
       expect(() => engine.pushMidiProgram(DEST, 0, 16, 0)).toThrow(
-        new RangeError('pushMidiProgram: channel must be in [0, 15]'),
+        new RangeError('RealtimeEngine.pushMidiProgram: channel must be in [0, 15]'),
       );
       expect(() => engine.pushMidiProgram(DEST, 300, 0, 0)).toThrow(/group/);
       expect(() => engine.pushMidiProgram(DEST, 0, 300, 0)).toThrow(/channel/);
       expect(() => engine.pushMidiProgram(DEST, 0, 0, 128)).toThrow(
-        new RangeError('pushMidiProgram: program must be in [0, 127]'),
+        new RangeError('RealtimeEngine.pushMidiProgram: program must be in [0, 127]'),
       );
       expect(() => engine.pushMidiProgram(DEST, 0, 0, 0, { msb: 128, lsb: 0 })).toThrow(
-        new RangeError('pushMidiProgram: bank_msb must be in [0, 127]'),
+        new RangeError('RealtimeEngine.pushMidiProgram: bank_msb must be in [0, 127]'),
       );
       expect(() => engine.pushMidiProgram(DEST, 0, 0, 300)).toThrow(/program/);
       expect(() => engine.pushMidiProgram(DEST, 0, 0, 0, { msb: 300, lsb: 0 })).toThrow(/bankMsb/);

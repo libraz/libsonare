@@ -96,16 +96,16 @@ Napi::Value SonareWrap::MasteringRepairDereverbClassical(const Napi::CallbackInf
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
-  const int sr = node_narrow_int(env, info[1], "sr");
+  const int sr = node_narrow_int(env, info[1], "sampleRate");
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
-  sonare::validate_offline_audio_input("dereverb_classical", "samples", typed.Data(),
-                                       typed.ElementLength(), sr);
+  sonare::validate_offline_audio_input(nullptr, "samples", typed.Data(), typed.ElementLength(), sr);
   sonare::mastering::repair::DereverbClassicalConfig config;
   if (info.Length() >= 3 && info[2].IsObject()) {
     config = read_dereverb_config(info[2].As<Napi::Object>(), config);
   }
   if (config.n_fft <= 0 || (config.n_fft & (config.n_fft - 1)) != 0) {
-    Napi::RangeError::New(env, "nFft must be a positive power of two").ThrowAsJavaScriptException();
+    Napi::RangeError::New(env, "nFft must be a power of two greater than 0")
+        .ThrowAsJavaScriptException();
     return env.Undefined();
   }
   if (config.hop_length <= 0 || config.hop_length > config.n_fft / 2) {
@@ -121,11 +121,16 @@ Napi::Value SonareWrap::MasteringRepairDereverbClassical(const Napi::CallbackInf
 
 Napi::Value SonareWrap::MasteringRepairDereverbClassicalStereo(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (info.Length() < 3 || !IsFloat32Array(info[0]) || !IsFloat32Array(info[1]) ||
-      !info[2].IsNumber()) {
-    Napi::TypeError::New(env,
-                         "Expected (Float32Array left, Float32Array right, sampleRate, options?)")
-        .ThrowAsJavaScriptException();
+  if (!IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "left must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!IsFloat32Array(info[1])) {
+    Napi::TypeError::New(env, "right must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[2].IsNumber()) {
+    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -133,8 +138,7 @@ Napi::Value SonareWrap::MasteringRepairDereverbClassicalStereo(const Napi::Callb
   auto left = info[0].As<Napi::Float32Array>();
   auto right = info[1].As<Napi::Float32Array>();
   if (left.ElementLength() != right.ElementLength()) {
-    Napi::RangeError::New(
-        env, "masteringRepairDereverbClassicalStereo: left and right must have the same length")
+    Napi::RangeError::New(env, "left and right must have the same length")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
@@ -162,8 +166,8 @@ Napi::Value SonareWrap::MasteringRepairDereverbClassicalStereo(const Napi::Callb
 
 Napi::Value SonareWrap::MasteringRepairDereverbConfigForRoom(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (info.Length() < 1 || !info[0].IsObject()) {
-    Napi::TypeError::New(env, "Expected (roomEstimate, config?)").ThrowAsJavaScriptException();
+  if (!info[0].IsObject()) {
+    Napi::TypeError::New(env, "roomEstimate must be an object").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -225,7 +229,7 @@ Napi::Value SonareWrap::MasteringRepairDereverbClassicalLinked(const Napi::Callb
 
   SONARE_NODE_TRY
   LinkedPlanes planes;
-  if (!ReadLinkedPlanes(env, info[0], "masteringRepairDereverbClassicalLinked", &planes)) {
+  if (!ReadLinkedPlanes(env, info[0], &planes)) {
     return env.Undefined();
   }
   const int sr = node_narrow_int(env, info[1], "sampleRate");

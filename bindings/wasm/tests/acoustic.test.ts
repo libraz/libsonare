@@ -683,7 +683,7 @@ describe('named selectors and estimate-to-geometry', () => {
     // The library refuses the estimate's non-finite geometry as a refused argument.
     expect(() => roomGeometryFromEstimate({ estimate: silent })).toThrow(RangeError);
     expect(() => roomGeometryFromEstimate({ estimate: silent })).toThrow(
-      /^room estimate has no measurable dimensions/,
+      /^roomGeometryFromEstimate: room estimate has no measurable dimensions/,
     );
   });
 });

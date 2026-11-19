@@ -1,3 +1,4 @@
+import { entryClass } from './internal/entry.js';
 import { assertStripMetering, mixSceneJsonToNative } from './internal/mix_scene.js';
 import { addon } from './native.js';
 import type {
@@ -207,6 +208,7 @@ let adoptedSceneJson: string | undefined;
  * or by their string id ({@link StripRef}); the underlying strip handles are
  * never exposed.
  */
+@entryClass('Mixer', ['processStereo'])
 export class Mixer {
   private native: InstanceType<typeof addon.Mixer>;
   private disposed = false;

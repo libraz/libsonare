@@ -162,49 +162,49 @@ const NARROWED_SLOTS: NarrowedSlot[] = [
     entry: 'RealtimeEngine/4',
     field: 'maxBlockSize',
     legal: 256,
-    domainRefusal: 'max_block_size must be within 1..',
+    domainRefusal: 'maxBlockSize must be within 1..',
     construct: (maxBlockSize) => newEngine4({ maxBlockSize }),
   },
   {
     entry: 'RealtimeEngine/4',
     field: 'commandCapacity',
     legal: 512,
-    domainRefusal: 'command_capacity and telemetry_capacity must be 0',
+    domainRefusal: 'commandCapacity and telemetryCapacity must be 0',
     construct: (commandCapacity) => newEngine4({ commandCapacity }),
   },
   {
     entry: 'RealtimeEngine/4',
     field: 'telemetryCapacity',
     legal: 512,
-    domainRefusal: 'command_capacity and telemetry_capacity must be 0',
+    domainRefusal: 'commandCapacity and telemetryCapacity must be 0',
     construct: (telemetryCapacity) => newEngine4({ telemetryCapacity }),
   },
   {
     entry: 'RealtimeEngine/5',
     field: 'maxBlockSize',
     legal: 256,
-    domainRefusal: 'max_block_size must be within 1..',
+    domainRefusal: 'maxBlockSize must be within 1..',
     construct: (maxBlockSize) => newEngine5({ maxBlockSize }),
   },
   {
     entry: 'RealtimeEngine/5',
     field: 'commandCapacity',
     legal: 512,
-    domainRefusal: 'command_capacity and telemetry_capacity must be 0',
+    domainRefusal: 'commandCapacity and telemetryCapacity must be 0',
     construct: (commandCapacity) => newEngine5({ commandCapacity }),
   },
   {
     entry: 'RealtimeEngine/5',
     field: 'telemetryCapacity',
     legal: 512,
-    domainRefusal: 'command_capacity and telemetry_capacity must be 0',
+    domainRefusal: 'commandCapacity and telemetryCapacity must be 0',
     construct: (telemetryCapacity) => newEngine5({ telemetryCapacity }),
   },
   {
     entry: 'RealtimeEngine/5',
     field: 'maxChannels',
     legal: 4,
-    domainRefusal: 'max_channels must be within 1..',
+    domainRefusal: 'maxChannels must be within 1..',
     construct: (maxChannels) => newEngine5({ maxChannels }),
   },
   {
@@ -312,11 +312,11 @@ describe('a narrowed constructor position refuses what a wrap made legal', () =>
       // the engine's and the two ordinal guards are the binding's own, the
       // analyzer's other guards are the core's StreamConfig validation.
       if (slot.entry.startsWith('RealtimeEngine')) {
-        expect(error.message).toMatch(/^prepare: /);
+        expect(error.message).toMatch(/^RealtimeEngine: /);
       } else if (BINDING_GUARDS.has(slot.field)) {
-        expect(error.message).not.toMatch(/^StreamConfig: /);
+        expect(error.message).not.toMatch(/^StreamAnalyzer: StreamConfig: /);
       } else {
-        expect(error.message).toMatch(/^StreamConfig: /);
+        expect(error.message).toMatch(/^StreamAnalyzer: StreamConfig: /);
       }
       expect(error.message).not.toContain(READER_RANGE);
       expect(error.message).not.toContain(READER_FRACTIONAL);
@@ -468,7 +468,7 @@ describe('the untouched neighbours of the narrowed positions are unchanged', () 
     for (const shape of NEIGHBOUR_VALUES) {
       const error = refusalFor(() => newAnalyzer({ maxPendingFrames: shape.value }));
       expect(error.message, `maxPendingFrames = ${shape.label}`).toContain(
-        'maxPendingFrames must be a non-negative integer',
+        'StreamAnalyzer: maxPendingFrames must be an integer of at least 0',
       );
     }
   });

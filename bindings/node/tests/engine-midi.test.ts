@@ -39,7 +39,7 @@ describe('RealtimeEngine native binding', () => {
     expect(isSonareError(badGroupError)).toBe(false);
 
     expect(() => engine.pushMidiNoteOn(5, 0, 16, 60, 100)).toThrow(
-      new RangeError('pushMidiNoteOn: channel must be in [0, 15]'),
+      new RangeError('RealtimeEngine.pushMidiNoteOn: channel must be in [0, 15]'),
     );
 
     let badSoundFontError: unknown;
@@ -488,33 +488,24 @@ describe('live MIDI push argument and state rule', () => {
   it.each(refusals)('%s names the refused argument', (method, push, message) => {
     const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     try {
-      expect(() => push(engine)).toThrow(new RangeError(`${method}: ${message}`));
+      expect(() => push(engine)).toThrow(new RangeError(`RealtimeEngine.${method}: ${message}`));
     } finally {
       engine.destroy();
     }
   });
 
   const inputPushes: [string, (engine: RealtimeEngine) => void][] = [
-    ['sonare_engine_push_midi_input_note_on', (e) => e.pushMidiInputNoteOn(0, 0, 60, 100)],
-    ['sonare_engine_push_midi_input_note_off', (e) => e.pushMidiInputNoteOff(0, 0, 60, 0)],
-    ['sonare_engine_push_midi_input_cc', (e) => e.pushMidiInputCc(0, 0, 7, 100)],
-    ['sonare_engine_push_midi_input_pitch_bend', (e) => e.pushMidiInputPitchBend(0, 0, 8192)],
-    [
-      'sonare_engine_push_midi_input_channel_pressure',
-      (e) => e.pushMidiInputChannelPressure(0, 0, 64),
-    ],
-    [
-      'sonare_engine_push_midi_input_poly_pressure',
-      (e) => e.pushMidiInputPolyPressure(0, 0, 60, 64),
-    ],
-    ['sonare_engine_push_midi_input_ump', (e) => e.pushMidiInputUmp([0x40903c00, 0x80000000])],
-    [
-      'sonare_engine_push_midi_input_program',
-      (e) => e.pushMidiInputProgram(0, 0, 5, { msb: 8, lsb: 0 }),
-    ],
+    ['pushMidiInputNoteOn', (e) => e.pushMidiInputNoteOn(0, 0, 60, 100)],
+    ['pushMidiInputNoteOff', (e) => e.pushMidiInputNoteOff(0, 0, 60, 0)],
+    ['pushMidiInputCc', (e) => e.pushMidiInputCc(0, 0, 7, 100)],
+    ['pushMidiInputPitchBend', (e) => e.pushMidiInputPitchBend(0, 0, 8192)],
+    ['pushMidiInputChannelPressure', (e) => e.pushMidiInputChannelPressure(0, 0, 64)],
+    ['pushMidiInputPolyPressure', (e) => e.pushMidiInputPolyPressure(0, 0, 60, 64)],
+    ['pushMidiInputUmp', (e) => e.pushMidiInputUmp([0x40903c00, 0x80000000])],
+    ['pushMidiInputProgram', (e) => e.pushMidiInputProgram(0, 0, 5, { msb: 8, lsb: 0 })],
   ];
 
-  it.each(inputPushes)('%s refuses a disabled source as InvalidState', (cFunction, push) => {
+  it.each(inputPushes)('%s refuses a disabled source as InvalidState', (method, push) => {
     const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     try {
       let refused: unknown;
@@ -527,7 +518,9 @@ describe('live MIDI push argument and state rule', () => {
         throw new Error('expected SonareError');
       }
       expect(refused.code).toBe(ErrorCode.InvalidState);
-      expect(refused.message).toContain(`${cFunction}: the MIDI input source is not enabled`);
+      expect(refused.message).toBe(
+        `RealtimeEngine.${method}: the MIDI input source is not enabled`,
+      );
     } finally {
       engine.destroy();
     }

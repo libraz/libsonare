@@ -26,7 +26,7 @@ val js_hpss_ex(val samples, const val& sample_rate, const val& kernel_harmonic,
                const val& kernel_percussive, const val& n_fft, const val& hop_length,
                bool hard_mask) {
   Audio audio =
-      loadValidatedAudio("hpss", "samples", samples, checkedIntFromVal(sample_rate, "sampleRate"));
+      loadValidatedAudio("samples", samples, checkedIntFromVal(sample_rate, "sampleRate"));
 
   HpssConfig config;
   config.kernel_size_harmonic = checkedIntFromVal(kernel_harmonic, "kernelHarmonic");
@@ -60,16 +60,16 @@ val js_hpss(val samples, const val& sample_rate, const val& kernel_harmonic,
 
 // Get harmonic component only
 val js_harmonic(val samples, const val& sample_rate) {
-  Audio audio = loadValidatedAudio("harmonic", "samples", samples,
-                                   checkedIntFromVal(sample_rate, "sampleRate"));
+  Audio audio =
+      loadValidatedAudio("samples", samples, checkedIntFromVal(sample_rate, "sampleRate"));
   Audio result = harmonic(audio);
   return vectorToFloat32Array(result.data(), result.size());
 }
 
 // Get percussive component only
 val js_percussive(val samples, const val& sample_rate) {
-  Audio audio = loadValidatedAudio("percussive", "samples", samples,
-                                   checkedIntFromVal(sample_rate, "sampleRate"));
+  Audio audio =
+      loadValidatedAudio("samples", samples, checkedIntFromVal(sample_rate, "sampleRate"));
   Audio result = percussive(audio);
   return vectorToFloat32Array(result.data(), result.size());
 }
@@ -78,8 +78,8 @@ val js_percussive(val samples, const val& sample_rate) {
 val js_time_stretch_ex(val samples, const val& sample_rate, const val& rate_val, const val& n_fft,
                        const val& hop_length) {
   const float rate = checkedFloatFromVal(rate_val, "rate");
-  Audio audio = loadValidatedAudio("time_stretch", "samples", samples,
-                                   checkedIntFromVal(sample_rate, "sampleRate"));
+  Audio audio =
+      loadValidatedAudio("samples", samples, checkedIntFromVal(sample_rate, "sampleRate"));
   TimeStretchConfig config;
   config.n_fft = checkedIntFromVal(n_fft, "nFft");
   config.hop_length = checkedIntFromVal(hop_length, "hopLength");
@@ -102,7 +102,7 @@ val js_pitch_shift_ex(val samples, const val& sample_rate_val, const val& semito
   if (!make_pitch_shift_plan(samples["length"].as<size_t>(), sample_rate, semitones, &plan)) {
     throw WasmRangeError("unsupported pitch-shift expansion");
   }
-  Audio audio = loadValidatedAudio("pitch_shift", "samples", samples, sample_rate);
+  Audio audio = loadValidatedAudio("samples", samples, sample_rate);
   PitchShiftConfig config;
   config.n_fft = checkedIntFromVal(n_fft, "nFft");
   config.hop_length = checkedIntFromVal(hop_length, "hopLength");
@@ -130,8 +130,8 @@ val js_pitch_correct_to_midi(val samples, const val& sample_rate, const val& cur
                              const val& target_midi_val) {
   const float current_midi = checkedFloatFromVal(current_midi_val, "currentMidi");
   const float target_midi = checkedFloatFromVal(target_midi_val, "targetMidi");
-  Audio audio = loadValidatedAudio("PitchCorrector::correct_to_midi", "samples", samples,
-                                   checkedIntFromVal(sample_rate, "sampleRate"));
+  Audio audio =
+      loadValidatedAudio("samples", samples, checkedIntFromVal(sample_rate, "sampleRate"));
   editing::pitch_editor::PitchCorrector corrector;
   Audio result = corrector.correct_to_midi(audio, current_midi, target_midi);
   return vectorToFloat32Array(result.data(), result.size());
@@ -179,17 +179,13 @@ val js_pitch_correct_to_midi_timevarying(val samples, const val& sample_rate_val
   // companion probability array when they are present.
   const bool has_prob = !has_voiced && !voiced_prob.isUndefined() && !voiced_prob.isNull();
   std::size_t cumulative_count = 0;
-  accumulateWasmFloat32ArrayLength(samples, "samples", "pitchCorrectToMidiTimevarying input",
-                                   &cumulative_count);
-  accumulateWasmFloat32ArrayLength(f0_hz, "f0Hz", "pitchCorrectToMidiTimevarying input",
-                                   &cumulative_count);
+  accumulateWasmFloat32ArrayLength(samples, "samples", &cumulative_count);
+  accumulateWasmFloat32ArrayLength(f0_hz, "f0Hz", &cumulative_count);
   if (has_voiced) {
-    accumulateWasmFloat32ArrayLength(voiced, "voiced", "pitchCorrectToMidiTimevarying input",
-                                     &cumulative_count);
+    accumulateWasmFloat32ArrayLength(voiced, "voiced", &cumulative_count);
   }
   if (has_prob) {
-    accumulateWasmFloat32ArrayLength(voiced_prob, "voicedProb",
-                                     "pitchCorrectToMidiTimevarying input", &cumulative_count);
+    accumulateWasmFloat32ArrayLength(voiced_prob, "voicedProb", &cumulative_count);
   }
   std::vector<float> data = float32ArrayToVector(samples);
   std::vector<float> f0 = float32ArrayToVector(f0_hz);
@@ -203,8 +199,7 @@ val js_pitch_correct_to_midi_timevarying(val samples, const val& sample_rate_val
   const editing::pitch_editor::F0Track track =
       buildF0Track(sample_rate, hop_length, f0, has_voiced, voiced_vec, has_prob, prob_vec);
 
-  validate_offline_audio_input("PitchCorrector::correct_to_midi_timevarying", "samples",
-                               data.data(), data.size(), sample_rate);
+  validate_offline_audio_input(nullptr, "samples", data.data(), data.size(), sample_rate);
   Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
   editing::pitch_editor::PitchCorrector corrector;
   Audio result = corrector.correct_to_midi_timevarying(audio, track, target_midi);
@@ -215,10 +210,9 @@ val js_pitch_correct_timevarying(val samples, const val& sample_rate_val, val f0
                                  const val& hop_length_val, val options) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
-  refuseUnknownKeys(options, "pitchCorrectTimevarying",
-                    {"targetMode", "targetMidi", "scaleRoot", "scaleModeMask", "scaleReferenceMidi",
-                     "retuneAmount", "maxCorrectionSemitones", "retuneSpeedMs",
-                     "vibratoThresholdCents", "voiced", "voicedProb"});
+  refuseUnknownKeys(options, {"targetMode", "targetMidi", "scaleRoot", "scaleModeMask",
+                              "scaleReferenceMidi", "retuneAmount", "maxCorrectionSemitones",
+                              "retuneSpeedMs", "vibratoThresholdCents", "voiced", "voicedProb"});
   val voiced = val::undefined();
   val voiced_prob = val::undefined();
   bool has_voiced = false;
@@ -230,17 +224,13 @@ val js_pitch_correct_timevarying(val samples, const val& sample_rate_val, val f0
     has_prob = !has_voiced && !voiced_prob.isUndefined() && !voiced_prob.isNull();
   }
   std::size_t cumulative_count = 0;
-  accumulateWasmFloat32ArrayLength(samples, "samples", "pitchCorrectTimevarying input",
-                                   &cumulative_count);
-  accumulateWasmFloat32ArrayLength(f0_hz, "f0Hz", "pitchCorrectTimevarying input",
-                                   &cumulative_count);
+  accumulateWasmFloat32ArrayLength(samples, "samples", &cumulative_count);
+  accumulateWasmFloat32ArrayLength(f0_hz, "f0Hz", &cumulative_count);
   if (has_voiced) {
-    accumulateWasmFloat32ArrayLength(voiced, "voiced", "pitchCorrectTimevarying input",
-                                     &cumulative_count);
+    accumulateWasmFloat32ArrayLength(voiced, "voiced", &cumulative_count);
   }
   if (has_prob) {
-    accumulateWasmFloat32ArrayLength(voiced_prob, "voicedProb", "pitchCorrectTimevarying input",
-                                     &cumulative_count);
+    accumulateWasmFloat32ArrayLength(voiced_prob, "voicedProb", &cumulative_count);
   }
   std::vector<float> data = float32ArrayToVector(samples);
   std::vector<float> f0 = float32ArrayToVector(f0_hz);
@@ -296,8 +286,7 @@ val js_pitch_correct_timevarying(val samples, const val& sample_rate_val, val f0
   const editing::pitch_editor::F0Track track =
       buildF0Track(sample_rate, hop_length, f0, has_voiced, voiced_vec, has_prob, prob_vec);
 
-  validate_offline_audio_input("PitchCorrector::correct_to_scale_timevarying", "samples",
-                               data.data(), data.size(), sample_rate);
+  validate_offline_audio_input(nullptr, "samples", data.data(), data.size(), sample_rate);
   Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
   editing::pitch_editor::PitchCorrector corrector(config);
   Audio result = scale_mode ? corrector.correct_to_scale_timevarying(audio, track)
@@ -316,9 +305,8 @@ val js_auto_tune(val samples, const val& sample_rate_val, const val& key_val, va
     named = Key{static_cast<PitchClass>(root), modeFromVal(key_val["mode"], "key.mode"), 1.0f};
   }
 
-  refuseUnknownKeys(options, "autoTune",
-                    {"strength", "scaleReferenceMidi", "maxCorrectionSemitones", "retuneSpeedMs",
-                     "vibratoThresholdCents"});
+  refuseUnknownKeys(options, {"strength", "scaleReferenceMidi", "maxCorrectionSemitones",
+                              "retuneSpeedMs", "vibratoThresholdCents"});
   editing::pitch_editor::PitchCorrectionConfig config{};
   if (!options.isUndefined() && !options.isNull()) {
     config.retune_amount = floatProperty(options, "strength", config.retune_amount);
@@ -331,7 +319,7 @@ val js_auto_tune(val samples, const val& sample_rate_val, const val& key_val, va
         floatProperty(options, "vibratoThresholdCents", config.vibrato_threshold_cents);
   }
 
-  Audio audio = loadValidatedAudio("auto_tune", "samples", samples, sample_rate);
+  Audio audio = loadValidatedAudio("samples", samples, sample_rate);
   const editing::pitch_editor::AutoTuneResult result =
       editing::pitch_editor::auto_tune(audio, named, config);
   val out = val::object();
@@ -349,8 +337,8 @@ val js_auto_tune(val samples, const val& sample_rate_val, const val& key_val, va
 val js_note_stretch(val samples, const val& sample_rate, const val& onset_sample,
                     const val& offset_sample, const val& stretch_ratio_val) {
   const float stretch_ratio = checkedFloatFromVal(stretch_ratio_val, "stretchRatio");
-  Audio audio = loadValidatedAudio("NoteEditor::stretch_note", "samples", samples,
-                                   checkedIntFromVal(sample_rate, "sampleRate"));
+  Audio audio =
+      loadValidatedAudio("samples", samples, checkedIntFromVal(sample_rate, "sampleRate"));
   editing::pitch_editor::NoteRegion region;
   region.onset_sample = checkedIntFromVal(onset_sample, "onsetSample");
   region.offset_sample = checkedIntFromVal(offset_sample, "offsetSample");
@@ -361,8 +349,8 @@ val js_note_stretch(val samples, const val& sample_rate, const val& onset_sample
 
 val js_note_move(val samples, const val& sample_rate, const val& onset_sample,
                  const val& offset_sample, const val& target_onset_sample) {
-  Audio audio = loadValidatedAudio("NoteEditor::move_note", "samples", samples,
-                                   checkedIntFromVal(sample_rate, "sampleRate"));
+  Audio audio =
+      loadValidatedAudio("samples", samples, checkedIntFromVal(sample_rate, "sampleRate"));
   editing::pitch_editor::NoteRegion region;
   region.onset_sample = checkedIntFromVal(onset_sample, "onsetSample");
   region.offset_sample = checkedIntFromVal(offset_sample, "offsetSample");
@@ -376,8 +364,8 @@ val js_voice_change(val samples, const val& sample_rate, const val& pitch_semito
                     const val& formant_factor_val, const std::string& formant_mode) {
   const float pitch_semitones = checkedFloatFromVal(pitch_semitones_val, "pitchSemitones");
   const float formant_factor = checkedFloatFromVal(formant_factor_val, "formantFactor");
-  Audio audio = loadValidatedAudio("VoiceChanger::process", "samples", samples,
-                                   checkedIntFromVal(sample_rate, "sampleRate"));
+  Audio audio =
+      loadValidatedAudio("samples", samples, checkedIntFromVal(sample_rate, "sampleRate"));
   editing::voice_changer::VoiceChangerConfig config;
   config.pitch_semitones = pitch_semitones;
   config.formant_factor = formant_factor;
@@ -400,7 +388,7 @@ val js_voice_change_realtime(val samples, const val& sample_rate, std::string pr
   if (err != SONARE_OK) {
     sonare_free_floats(output);
     // The C code and its recorded detail, as on Node, so a host can branch on `err.code`.
-    throwCodedCError(err, "voiceChangeRealtime failed");
+    throwCodedCError(err);
   }
   std::vector<float> result(output, output + output_length);
   sonare_free_floats(output);
@@ -414,8 +402,8 @@ val js_voice_change_realtime(val samples, const val& sample_rate, std::string pr
 val js_hpss_with_residual_ex(val samples, const val& sample_rate, const val& kernel_harmonic,
                              const val& kernel_percussive, const val& n_fft, const val& hop_length,
                              bool hard_mask) {
-  Audio audio = loadValidatedAudio("hpss_with_residual", "samples", samples,
-                                   checkedIntFromVal(sample_rate, "sampleRate"));
+  Audio audio =
+      loadValidatedAudio("samples", samples, checkedIntFromVal(sample_rate, "sampleRate"));
 
   HpssConfig config;
   config.kernel_size_harmonic = checkedIntFromVal(kernel_harmonic, "kernelHarmonic");
@@ -450,14 +438,16 @@ val js_phase_vocoder(val samples, const val& sample_rate_val, const val& rate_va
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const float rate = checkedFloatFromVal(rate_val, "rate");
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
-  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
+  // A hop of 0 is absent and runs a quarter of nFft, as the C entry resolves it.
+  const int hop_length =
+      resolve_resynthesis_hop(checkedIntFromVal(hop_length_val, "hopLength"), n_fft);
   // Guard the time-scale rate before deriving the output length. Mirrors the C
   // ABI rate > 0 check (sonare_phase_vocoder); no upper cap is imposed on fast
   // rates.
   if (rate <= 0.0f) {
-    throw WasmRangeError("phaseVocoder: rate must be a positive number");
+    throw WasmRangeError("rate must be greater than 0");
   }
-  Audio audio = loadValidatedAudio("phase_vocoder", "samples", samples, sample_rate);
+  Audio audio = loadValidatedAudio("samples", samples, sample_rate);
 
   StftConfig stft_config;
   stft_config.n_fft = n_fft;
@@ -477,11 +467,11 @@ val js_phase_vocoder(val samples, const val& sample_rate_val, const val& rate_va
 val js_normalize_ex(val samples, const val& sample_rate, const val& target_db_val,
                     const std::string& mode) {
   if (mode != "peak" && mode != "rms") {
-    throw WasmRangeError("normalize: mode must be 'peak' or 'rms'");
+    throw WasmRangeError("mode must be 'peak' or 'rms'");
   }
   const float target_db = checkedFloatFromVal(target_db_val, "targetDb");
-  Audio audio = loadValidatedAudio("normalize", "samples", samples,
-                                   checkedIntFromVal(sample_rate, "sampleRate"));
+  Audio audio =
+      loadValidatedAudio("samples", samples, checkedIntFromVal(sample_rate, "sampleRate"));
   Audio result =
       mode == "rms" ? normalize_rms(audio, target_db, true) : normalize(audio, target_db);
   return vectorToFloat32Array(result.data(), result.size());
@@ -498,14 +488,13 @@ val js_normalize(val samples, const val& sample_rate, const val& target_db) {
 val js_normalize_stereo(val left_samples, val right_samples, const val& sample_rate_val,
                         const val& target_db_val, const std::string& mode) {
   if (mode != "peak" && mode != "rms") {
-    throw WasmRangeError("normalizeStereo: mode must be 'peak' or 'rms'");
+    throw WasmRangeError("mode must be 'peak' or 'rms'");
   }
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const float target_db = checkedFloatFromVal(target_db_val, "targetDb");
-  validateWasmFloat32ArrayPair(left_samples, "left samples", right_samples, "right samples",
-                               "normalizeStereo input", true);
-  Audio left = loadValidatedAudio("normalize_stereo", "left", left_samples, sample_rate);
-  Audio right = loadValidatedAudio("normalize_stereo", "right", right_samples, sample_rate);
+  validateWasmFloat32ArrayPair(left_samples, "left samples", right_samples, "right samples", true);
+  Audio left = loadValidatedAudio("left", left_samples, sample_rate);
+  Audio right = loadValidatedAudio("right", right_samples, sample_rate);
   const NormalizeStereoResult result = mode == "rms"
                                            ? normalize_rms_stereo(left, right, target_db, true)
                                            : normalize_stereo(left, right, target_db);
@@ -519,8 +508,8 @@ val js_normalize_stereo(val left_samples, val right_samples, const val& sample_r
 // Trim silence
 val js_trim_ex(val samples, const val& sample_rate, const val& threshold_db,
                const val& frame_length, const val& hop_length) {
-  Audio audio = loadValidatedAudio("trim_absolute", "samples", samples,
-                                   checkedIntFromVal(sample_rate, "sampleRate"));
+  Audio audio =
+      loadValidatedAudio("samples", samples, checkedIntFromVal(sample_rate, "sampleRate"));
   Audio result = trim_absolute(audio, checkedFloatFromVal(threshold_db, "thresholdDb"),
                                checkedIntFromVal(frame_length, "frameLength"),
                                checkedIntFromVal(hop_length, "hopLength"));

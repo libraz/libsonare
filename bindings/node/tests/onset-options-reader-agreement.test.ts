@@ -127,7 +127,7 @@ describe.each(FIELDS)('detectOnsets reads $key the same way on both surfaces', (
     for (const value of wrongTyped(high)) {
       const caught = capture(() => withValue(s, value));
       expect(caught, `${key} ${JSON.stringify(value)} on ${s}`).toBeInstanceOf(Error);
-      expect((caught as Error).message).toBe(`${key} must be a number`);
+      expect((caught as Error).message).toBe(`detectOnsets: ${key} must be a number`);
     }
   });
 
@@ -156,7 +156,7 @@ describe.each(FIELDS)('detectOnsets reads $key the same way on both surfaces', (
     for (const s of SURFACES) {
       const caught = capture(() => withValue(s, true));
       expect(caught, `${key} true on ${s}`).toBeInstanceOf(Error);
-      expect((caught as Error).message).toBe(`${key} must be a number`);
+      expect((caught as Error).message).toBe(`detectOnsets: ${key} must be a number`);
     }
   });
 

@@ -279,7 +279,9 @@ describe('the HPSS positional readers default only an omitted argument', () => {
           expect(error?.code).toBeUndefined();
           // Which of the two was wrong, not merely that one of them was, and in
           // the core's StftConfig wording rather than an addon reader's.
-          expect(error?.message).toMatch(new RegExp(`^StftConfig: ${argument} must be`));
+          expect(error?.message).toMatch(
+            new RegExp(`^${entry.name}: StftConfig: ${argument} must be`),
+          );
         });
       }
     }
@@ -614,10 +616,10 @@ describe('the abort-guard table accounts for every rejecting entry point', () =>
     // non-integer half: every integer read moved onto the shared narrowing
     // family, either onto a bail-out reader or as a bare info[i] read routed
     // through node_narrow_int, which is a call rather than an inline accessor.
-    // 13 reads match. The floor sits under that on purpose: routing an
+    // 8 reads match. The floor sits under that on purpose: routing an
     // argument onto a reader shrinks this population without touching the
     // violation subset it guards, so such a move must not redden it.
-    expect(inlineTypedArgumentReads().length).toBeGreaterThan(8);
+    expect(inlineTypedArgumentReads().length).toBeGreaterThan(4);
     // The floor alone would not notice the implicit-conversion form being
     // dropped again, and the addon no longer holds one to measure it on, so
     // the scanner is driven with each form and must report both unchecked.

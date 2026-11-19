@@ -11,8 +11,8 @@
 ProjectWasm::ProjectWasm() {
   SonareProject* handle = nullptr;
   const SonareError err = sonare_project_create(&handle);
-  if (err != SONARE_OK) throwCodedCError(err, "failed to create headless project");
-  if (handle == nullptr) throwLastCError("failed to create headless project: ");
+  if (err != SONARE_OK) throwCodedCError(err);
+  if (handle == nullptr) throwLastCError();
   project_ = std::shared_ptr<SonareProject>(handle, sonare_project_destroy);
 }
 
@@ -24,8 +24,8 @@ std::string ProjectWasm::toJson() const {
   const SonareError err = sonare_project_serialize(project_.get(), &json, &len);
   if (err != SONARE_OK || json == nullptr) {
     sonare_free_string(json);
-    if (err != SONARE_OK) throwCodedCError(err, "failed to serialize project");
-    throwLastCError("failed to serialize project: ");
+    if (err != SONARE_OK) throwCodedCError(err);
+    throwLastCError();
   }
   std::string out(json, len);
   sonare_free_string(json);
@@ -70,7 +70,7 @@ val ProjectWasm::fromJsonWithDiagnostics(const std::string& json) {
 }
 
 void ProjectWasm::setSampleRate(double sample_rate) {
-  checkCError(sonare_project_set_sample_rate(project_.get(), sample_rate), "setSampleRate");
+  checkCError(sonare_project_set_sample_rate(project_.get(), sample_rate));
 }
 
 #endif  // SONARE_WITH_ARRANGEMENT

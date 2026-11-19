@@ -308,7 +308,9 @@ function expectInvalidParameter(run: () => unknown): void {
   const error = capture(run);
   expect(error).toBeInstanceOf(RangeError);
   expect(isSonareError(error)).toBe(false);
-  expect((error as Error).message).toMatch(/^(Invalid parameter|StftConfig: )/);
+  expect((error as Error).message).toMatch(
+    /^(extract|render)PercussiveEvents: (Invalid parameter|StftConfig: )/,
+  );
 }
 
 /**
@@ -687,7 +689,7 @@ describe('renderPercussiveEvents', () => {
         RangeError,
       );
       // The addon's event reader names the field; the core's refusal does not.
-      expect((caught as Error).message).toMatch(/^renderPercussiveEvents event\.\w+ /);
+      expect((caught as Error).message).toMatch(/^renderPercussiveEvents: event\.\w+ /);
     }
 
     // The control. A reader that had started refusing every event would satisfy

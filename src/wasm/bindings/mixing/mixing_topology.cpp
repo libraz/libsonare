@@ -18,7 +18,7 @@ void MixerWasm::addStrip(std::string id, val metering) {
   if (!metering.isUndefined() && !metering.isNull() &&
       (metering.typeOf().as<std::string>() != "object" ||
        val::global("Array").call<bool>("isArray", metering))) {
-    throw WasmTypeError("addStrip: metering must be a plain object");
+    throw WasmTypeError("metering must be a plain object");
   }
   const bool enabled = boolProperty(metering, "enabled", true);
   const bool lufs = boolProperty(metering, "lufs", true);
@@ -30,7 +30,7 @@ void MixerWasm::addStrip(std::string id, val metering) {
   // is mixer-owned and never reaches JS: strips are addressed by index or id.
   if (sonare_mixer_add_strip_ex(mixer_, wasmCString(id, "id"), enabled ? 1 : 0, lufs ? 1 : 0,
                                 true_peak ? 1 : 0, true_peak_oversample) == nullptr) {
-    throwLastCError("failed to add strip: ");
+    throwLastCError();
   }
   // Size the new strip's scratch planes before a realtime caller asks for its views.
   ensureScratchBuffers();
@@ -42,12 +42,12 @@ void MixerWasm::addStrip(std::string id, val metering) {
 void MixerWasm::addBus(std::string id, std::string role) {
   SonareError err = sonare_mixer_add_bus(mixer_, wasmCString(id, "id"),
                                          role.empty() ? nullptr : wasmCString(role, "role"));
-  if (err != SONARE_OK) throwCodedCError(err, "failed to add bus");
+  if (err != SONARE_OK) throwCodedCError(err);
 }
 
 void MixerWasm::removeBus(std::string id) {
   SonareError err = sonare_mixer_remove_bus(mixer_, wasmCString(id, "id"));
-  if (err != SONARE_OK) throwCodedCError(err, "failed to remove bus");
+  if (err != SONARE_OK) throwCodedCError(err);
 }
 
 // Re-routes a strip or non-master bus into a bus or the master. Validation is the
@@ -55,15 +55,14 @@ void MixerWasm::removeBus(std::string id) {
 void MixerWasm::setOutputBus(std::string source_id, std::string bus_id) {
   const SonareError err = sonare_mixer_set_output_bus(mixer_, wasmCString(source_id, "sourceId"),
                                                       wasmCString(bus_id, "busId"));
-  if (err != SONARE_OK) throwLastCError("failed to set output bus: ");
+  if (err != SONARE_OK) throwLastCError();
 }
 
 size_t MixerWasm::busCount() const {
   size_t count = 0;
   SonareError err = sonare_mixer_bus_count(mixer_, &count);
   if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
-                                  cErrorMessage(err, "failed to read bus count"));
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState, cErrorMessage(err));
   }
   return count;
 }
@@ -89,16 +88,14 @@ void MixerWasm::addVcaGroup(std::string id, const val& gain_db_val, val members)
                                                member_ptrs.empty() ? nullptr : member_ptrs.data(),
                                                member_ptrs.size());
   if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
-                                  cErrorMessage(err, "failed to add VCA group"));
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState, cErrorMessage(err));
   }
 }
 
 void MixerWasm::removeVcaGroup(std::string id) {
   SonareError err = sonare_mixer_remove_vca_group(mixer_, wasmCString(id, "id"));
   if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
-                                  cErrorMessage(err, "failed to remove VCA group"));
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState, cErrorMessage(err));
   }
 }
 
@@ -106,8 +103,7 @@ void MixerWasm::setVcaGroupGainDb(std::string id, const val& gain_db_val) {
   const float gain_db = checkedFloatFromVal(gain_db_val, "gainDb");
   SonareError err = sonare_mixer_set_vca_group_gain_db(mixer_, wasmCString(id, "id"), gain_db);
   if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
-                                  cErrorMessage(err, "failed to set VCA group gain"));
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState, cErrorMessage(err));
   }
 }
 
@@ -123,8 +119,7 @@ void MixerWasm::setVcaGroupMembers(std::string id, val members) {
       mixer_, wasmCString(id, "id"), member_ptrs.empty() ? nullptr : member_ptrs.data(),
       member_ptrs.size());
   if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
-                                  cErrorMessage(err, "failed to set VCA group members"));
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState, cErrorMessage(err));
   }
 }
 
@@ -132,8 +127,7 @@ size_t MixerWasm::vcaGroupCount() const {
   size_t count = 0;
   SonareError err = sonare_mixer_vca_group_count(mixer_, &count);
   if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
-                                  cErrorMessage(err, "failed to read VCA group count"));
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState, cErrorMessage(err));
   }
   return count;
 }
@@ -142,8 +136,7 @@ std::string MixerWasm::toSceneJson() const {
   char* json = nullptr;
   SonareError err = sonare_mixer_to_scene_json(mixer_, &json);
   if (err != SONARE_OK || json == nullptr) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
-                                  cErrorMessage(err, "failed to serialize mixer scene"));
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState, cErrorMessage(err));
   }
   std::string out(json);
   sonare_free_string(json);

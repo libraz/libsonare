@@ -16,58 +16,67 @@ Napi::Object MixerWrap::Init(Napi::Env env, Napi::Object exports) {
   Napi::Function func = DefineClass(
       env, "Mixer",
       {
-          InstanceMethod<&MixerWrap::Compile>("compile"),
-          InstanceMethod<&MixerWrap::ProcessStereo>("processStereo"),
-          InstanceMethod<&MixerWrap::DrainTailStereo>("drainTailStereo"),
-          InstanceMethod<&MixerWrap::FlushMeters>("flushMeters"),
-          InstanceMethod<&MixerWrap::TailSamples>("tailSamples"),
-          InstanceMethod<&MixerWrap::LatencySamples>("latencySamples"),
-          InstanceMethod<&MixerWrap::MaxBlockSize>("maxBlockSize"),
-          InstanceMethod<&MixerWrap::StripCount>("stripCount"),
-          InstanceMethod<&MixerWrap::SceneWarnings>("sceneWarnings"),
-          InstanceMethod<&MixerWrap::ScheduleInsertAutomation>("scheduleInsertAutomation"),
-          InstanceMethod<&MixerWrap::ToSceneJson>("toSceneJson"),
-          InstanceMethod<&MixerWrap::Destroy>("destroy"),
-          InstanceMethod<&MixerWrap::SetInputTrimDb>("setInputTrimDb"),
-          InstanceMethod<&MixerWrap::SetFaderDb>("setFaderDb"),
-          InstanceMethod<&MixerWrap::SetPan>("setPan"),
-          InstanceMethod<&MixerWrap::SetWidth>("setWidth"),
-          InstanceMethod<&MixerWrap::SetMuted>("setMuted"),
-          InstanceMethod<&MixerWrap::SetSoloed>("setSoloed"),
-          InstanceMethod<&MixerWrap::SetSoloSafe>("setSoloSafe"),
-          InstanceMethod<&MixerWrap::SetPolarityInvert>("setPolarityInvert"),
-          InstanceMethod<&MixerWrap::SetPanLaw>("setPanLaw"),
-          InstanceMethod<&MixerWrap::SetChannelDelaySamples>("setChannelDelaySamples"),
-          InstanceMethod<&MixerWrap::SetVcaOffsetDb>("setVcaOffsetDb"),
-          InstanceMethod<&MixerWrap::SetDualPan>("setDualPan"),
-          InstanceMethod<&MixerWrap::SetSurroundPan>("setSurroundPan"),
-          InstanceMethod<&MixerWrap::Settle>("settle"),
-          InstanceMethod<&MixerWrap::AddSend>("addSend"),
-          InstanceMethod<&MixerWrap::SetSendDb>("setSendDb"),
-          InstanceMethod<&MixerWrap::RemoveSend>("removeSend"),
-          InstanceMethod<&MixerWrap::StripMeter>("stripMeter"),
-          InstanceMethod<&MixerWrap::BusMeter>("busMeter"),
-          InstanceMethod<&MixerWrap::ConfigureMeter>("configureMeter"),
-          InstanceMethod<&MixerWrap::MeterSnapshot>("meterSnapshot"),
-          InstanceMethod<&MixerWrap::MeterTap>("meterTap"),
-          InstanceMethod<&MixerWrap::ReadGoniometerLatest>("readGoniometerLatest"),
-          InstanceMethod<&MixerWrap::StripNonFiniteDiscardCount>("stripNonFiniteDiscardCount"),
-          InstanceMethod<&MixerWrap::BusNonFiniteDiscardCount>("busNonFiniteDiscardCount"),
-          InstanceMethod<&MixerWrap::StripById>("stripById"),
-          InstanceMethod<&MixerWrap::AddStrip>("addStrip"),
-          InstanceMethod<&MixerWrap::AddBus>("addBus"),
-          InstanceMethod<&MixerWrap::SetOutputBus>("setOutputBus"),
-          InstanceMethod<&MixerWrap::RemoveBus>("removeBus"),
-          InstanceMethod<&MixerWrap::BusCount>("busCount"),
-          InstanceMethod<&MixerWrap::AddVcaGroup>("addVcaGroup"),
-          InstanceMethod<&MixerWrap::SetVcaGroupGainDb>("setVcaGroupGainDb"),
-          InstanceMethod<&MixerWrap::SetVcaGroupMembers>("setVcaGroupMembers"),
-          InstanceMethod<&MixerWrap::RemoveVcaGroup>("removeVcaGroup"),
-          InstanceMethod<&MixerWrap::VcaGroupCount>("vcaGroupCount"),
-          InstanceMethod<&MixerWrap::ScheduleFaderAutomation>("scheduleFaderAutomation"),
-          InstanceMethod<&MixerWrap::SchedulePanAutomation>("schedulePanAutomation"),
-          InstanceMethod<&MixerWrap::ScheduleWidthAutomation>("scheduleWidthAutomation"),
-          InstanceMethod<&MixerWrap::ScheduleSendAutomation>("scheduleSendAutomation"),
+          InstanceMethod<&MixerWrap::Compile>("compile", napi_default_method),
+          InstanceMethod<&MixerWrap::ProcessStereo>("processStereo", napi_default_method),
+          InstanceMethod<&MixerWrap::DrainTailStereo>("drainTailStereo", napi_default_method),
+          InstanceMethod<&MixerWrap::FlushMeters>("flushMeters", napi_default_method),
+          InstanceMethod<&MixerWrap::TailSamples>("tailSamples", napi_default_method),
+          InstanceMethod<&MixerWrap::LatencySamples>("latencySamples", napi_default_method),
+          InstanceMethod<&MixerWrap::MaxBlockSize>("maxBlockSize", napi_default_method),
+          InstanceMethod<&MixerWrap::StripCount>("stripCount", napi_default_method),
+          InstanceMethod<&MixerWrap::SceneWarnings>("sceneWarnings", napi_default_method),
+          InstanceMethod<&MixerWrap::ScheduleInsertAutomation>("scheduleInsertAutomation",
+                                                               napi_default_method),
+          InstanceMethod<&MixerWrap::ToSceneJson>("toSceneJson", napi_default_method),
+          InstanceMethod<&MixerWrap::Destroy>("destroy", napi_default_method),
+          InstanceMethod<&MixerWrap::SetInputTrimDb>("setInputTrimDb", napi_default_method),
+          InstanceMethod<&MixerWrap::SetFaderDb>("setFaderDb", napi_default_method),
+          InstanceMethod<&MixerWrap::SetPan>("setPan", napi_default_method),
+          InstanceMethod<&MixerWrap::SetWidth>("setWidth", napi_default_method),
+          InstanceMethod<&MixerWrap::SetMuted>("setMuted", napi_default_method),
+          InstanceMethod<&MixerWrap::SetSoloed>("setSoloed", napi_default_method),
+          InstanceMethod<&MixerWrap::SetSoloSafe>("setSoloSafe", napi_default_method),
+          InstanceMethod<&MixerWrap::SetPolarityInvert>("setPolarityInvert", napi_default_method),
+          InstanceMethod<&MixerWrap::SetPanLaw>("setPanLaw", napi_default_method),
+          InstanceMethod<&MixerWrap::SetChannelDelaySamples>("setChannelDelaySamples",
+                                                             napi_default_method),
+          InstanceMethod<&MixerWrap::SetVcaOffsetDb>("setVcaOffsetDb", napi_default_method),
+          InstanceMethod<&MixerWrap::SetDualPan>("setDualPan", napi_default_method),
+          InstanceMethod<&MixerWrap::SetSurroundPan>("setSurroundPan", napi_default_method),
+          InstanceMethod<&MixerWrap::Settle>("settle", napi_default_method),
+          InstanceMethod<&MixerWrap::AddSend>("addSend", napi_default_method),
+          InstanceMethod<&MixerWrap::SetSendDb>("setSendDb", napi_default_method),
+          InstanceMethod<&MixerWrap::RemoveSend>("removeSend", napi_default_method),
+          InstanceMethod<&MixerWrap::StripMeter>("stripMeter", napi_default_method),
+          InstanceMethod<&MixerWrap::BusMeter>("busMeter", napi_default_method),
+          InstanceMethod<&MixerWrap::ConfigureMeter>("configureMeter", napi_default_method),
+          InstanceMethod<&MixerWrap::MeterSnapshot>("meterSnapshot", napi_default_method),
+          InstanceMethod<&MixerWrap::MeterTap>("meterTap", napi_default_method),
+          InstanceMethod<&MixerWrap::ReadGoniometerLatest>("readGoniometerLatest",
+                                                           napi_default_method),
+          InstanceMethod<&MixerWrap::StripNonFiniteDiscardCount>("stripNonFiniteDiscardCount",
+                                                                 napi_default_method),
+          InstanceMethod<&MixerWrap::BusNonFiniteDiscardCount>("busNonFiniteDiscardCount",
+                                                               napi_default_method),
+          InstanceMethod<&MixerWrap::StripById>("stripById", napi_default_method),
+          InstanceMethod<&MixerWrap::AddStrip>("addStrip", napi_default_method),
+          InstanceMethod<&MixerWrap::AddBus>("addBus", napi_default_method),
+          InstanceMethod<&MixerWrap::SetOutputBus>("setOutputBus", napi_default_method),
+          InstanceMethod<&MixerWrap::RemoveBus>("removeBus", napi_default_method),
+          InstanceMethod<&MixerWrap::BusCount>("busCount", napi_default_method),
+          InstanceMethod<&MixerWrap::AddVcaGroup>("addVcaGroup", napi_default_method),
+          InstanceMethod<&MixerWrap::SetVcaGroupGainDb>("setVcaGroupGainDb", napi_default_method),
+          InstanceMethod<&MixerWrap::SetVcaGroupMembers>("setVcaGroupMembers", napi_default_method),
+          InstanceMethod<&MixerWrap::RemoveVcaGroup>("removeVcaGroup", napi_default_method),
+          InstanceMethod<&MixerWrap::VcaGroupCount>("vcaGroupCount", napi_default_method),
+          InstanceMethod<&MixerWrap::ScheduleFaderAutomation>("scheduleFaderAutomation",
+                                                              napi_default_method),
+          InstanceMethod<&MixerWrap::SchedulePanAutomation>("schedulePanAutomation",
+                                                            napi_default_method),
+          InstanceMethod<&MixerWrap::ScheduleWidthAutomation>("scheduleWidthAutomation",
+                                                              napi_default_method),
+          InstanceMethod<&MixerWrap::ScheduleSendAutomation>("scheduleSendAutomation",
+                                                             napi_default_method),
       });
 
   exports.Set("Mixer", func);
@@ -77,15 +86,14 @@ Napi::Object MixerWrap::Init(Napi::Env env, Napi::Object exports) {
 MixerWrap::MixerWrap(const Napi::CallbackInfo& info) : Napi::ObjectWrap<MixerWrap>(info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (info.Length() < 1 || !info[0].IsString()) {
-    Napi::TypeError::New(env, "Expected (sceneJson, sampleRate?, blockSize?)")
-        .ThrowAsJavaScriptException();
+  if (!info[0].IsString()) {
+    Napi::TypeError::New(env, "sceneJson must be a string").ThrowAsJavaScriptException();
     return;
   }
   std::string json = node_narrow_string(env, info[0], "sceneJson");
   if (!OptionalIntArg(env, info, 1, "sampleRate", 48000, &sample_rate_)) return;
   if (sample_rate_ < sonare::kMinAudioSampleRate || sample_rate_ > sonare::kMaxAudioSampleRate) {
-    Napi::RangeError::New(env, "Mixer: sampleRate out of supported range [" +
+    Napi::RangeError::New(env, "sampleRate out of supported range [" +
                                    std::to_string(sonare::kMinAudioSampleRate) + ", " +
                                    std::to_string(sonare::kMaxAudioSampleRate) + "]")
         .ThrowAsJavaScriptException();
@@ -130,10 +138,12 @@ Napi::Value MixerWrap::ProcessStereo(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
-  if (info.Length() < 2 || !info[0].IsArray() || !info[1].IsArray()) {
-    Napi::TypeError::New(env,
-                         "Expected (leftChannels: Float32Array[], rightChannels: Float32Array[])")
-        .ThrowAsJavaScriptException();
+  if (!info[0].IsArray()) {
+    Napi::TypeError::New(env, "leftChannels must be an array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[1].IsArray()) {
+    Napi::TypeError::New(env, "rightChannels must be an array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -268,8 +278,8 @@ Napi::Value MixerWrap::DrainTailStereo(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
-  if (info.Length() < 1 || !info[0].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (numSamples: number)").ThrowAsJavaScriptException();
+  if (!info[0].IsNumber()) {
+    Napi::TypeError::New(env, "numSamples must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   // Unify the accepted range with the WASM and Python facades: numSamples must be
@@ -327,11 +337,24 @@ Napi::Value MixerWrap::ScheduleInsertAutomation(const Napi::CallbackInfo& info) 
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
-  if (info.Length() < 5 || !info[0].IsNumber() || !info[1].IsNumber() || !info[2].IsNumber() ||
-      !info[3].IsNumber() || !info[4].IsNumber()) {
-    Napi::TypeError::New(env,
-                         "Expected (stripIndex, insertIndex, paramId, samplePos, value, curve?)")
-        .ThrowAsJavaScriptException();
+  if (!info[0].IsNumber()) {
+    Napi::TypeError::New(env, "stripIndex must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[1].IsNumber()) {
+    Napi::TypeError::New(env, "insertIndex must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[2].IsNumber()) {
+    Napi::TypeError::New(env, "paramId must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[3].IsNumber()) {
+    Napi::TypeError::New(env, "samplePos must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[4].IsNumber()) {
+    Napi::TypeError::New(env, "value must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 

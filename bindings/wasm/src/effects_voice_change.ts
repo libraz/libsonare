@@ -1,3 +1,4 @@
+import { withEntry } from './internal/entry.js';
 import { deinterleavePlanes, interleavePlanes, nativeVoiceConfig } from './internal/pod_config.js';
 import { getSonareModule } from './module_state.js';
 import type { RealtimeVoiceChangerConfigInput } from './public_types.js';
@@ -111,7 +112,9 @@ export function voiceChangeRealtime(request: VoiceChangeRealtimeRequest): Float3
   if (planes.some((plane) => plane.length !== frames)) {
     throw new RangeError(`${fnName}: channels must have equal lengths`);
   }
-  const native = nativeVoiceConfig(fnName, req.config ?? 'neutralMonitor');
+  const native = withEntry('voiceChangeRealtime', () =>
+    nativeVoiceConfig(fnName, req.config ?? 'neutralMonitor'),
+  );
   const out = requireModule().voiceChangeRealtime(
     interleavePlanes(planes),
     req.sampleRate,

@@ -75,7 +75,7 @@ describe('argument refusal error class', () => {
       );
       expect(error).toBeInstanceOf(TypeError);
       expect(isSonareError(error)).toBe(false);
-      expect((error as Error).message).toBe('ppq must be a number');
+      expect((error as Error).message).toBe('RealtimeEngine.setMarkers: ppq must be a number');
     });
   });
 
@@ -87,7 +87,7 @@ describe('argument refusal error class', () => {
       expect(error).toBeInstanceOf(RangeError);
       expect(isSonareError(error)).toBe(false);
       expect((error as Error).message).toBe(
-        'setMarkers: marker ppq must be finite and non-negative',
+        'RealtimeEngine.setMarkers: marker ppq must be finite and at least 0',
       );
     });
   });
@@ -127,7 +127,7 @@ describe('argument refusal error class', () => {
       const refusal = thrown(() => mixer.busMeter('no-such-bus'));
       expect(refusal).toBeInstanceOf(RangeError);
       expect(isSonareError(refusal)).toBe(false);
-      expect((refusal as Error).message).toBe('failed to read bus meter: Invalid parameter');
+      expect((refusal as Error).message).toBe('Mixer.busMeter: Invalid parameter');
     } finally {
       mixer.destroy();
     }

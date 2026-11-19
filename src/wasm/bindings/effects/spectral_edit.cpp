@@ -20,7 +20,7 @@ SpectralEditMode parseSpectralEditMode(val mode) {
   if (s == "attenuate") return SpectralEditMode::Attenuate;
   if (s == "mute") return SpectralEditMode::Mute;
   if (s == "heal") return SpectralEditMode::Heal;
-  throw WasmRangeError("spectralEdit: unknown mode: " + s);
+  throw WasmRangeError("unknown mode: " + s);
 }
 
 // Map a window string ('hann'|'hamming'|'blackman'|'rectangular') or a
@@ -44,7 +44,7 @@ WindowType parseSpectralEditWindow(val window) {
     }
   }
   if (!window.isString()) {
-    throw WasmRangeError("spectralEdit: window must be a window name or a window ordinal");
+    throw WasmRangeError("window must be a window name or a window ordinal");
   }
   std::string s = window.as<std::string>();
   std::transform(s.begin(), s.end(), s.begin(),
@@ -53,7 +53,7 @@ WindowType parseSpectralEditWindow(val window) {
   if (s == "hamming") return WindowType::Hamming;
   if (s == "blackman") return WindowType::Blackman;
   if (s == "rectangular" || s == "rect") return WindowType::Rectangular;
-  throw WasmRangeError("spectralEdit: unknown window: " + s);
+  throw WasmRangeError("unknown window: " + s);
 }
 
 }  // namespace
@@ -64,8 +64,8 @@ WindowType parseSpectralEditWindow(val window) {
 // optional config bag { nFft, hopLength, window, healRadiusFrames }. Returns the
 // edited audio (same length/sample rate as the input) as a Float32Array.
 val js_spectral_edit(val samples, const val& sample_rate, val ops, val options) {
-  Audio audio = loadValidatedAudio("spectral_edit", "samples", samples,
-                                   checkedIntFromVal(sample_rate, "sampleRate"));
+  Audio audio =
+      loadValidatedAudio("samples", samples, checkedIntFromVal(sample_rate, "sampleRate"));
 
   SpectralEditConfig config;
   if (!options.isUndefined() && !options.isNull()) {
@@ -111,10 +111,10 @@ val js_spectral_edit(val samples, const val& sample_rate, val ops, val options) 
       // truncating or casting into undefined behavior. Callers need not pass
       // BigInt -- a plain number is required.
       if (hasProperty(op, "startSample")) {
-        region.start_sample = requireInt64Property(op, "startSample", "spectralEdit region");
+        region.start_sample = requireInt64Property(op, "startSample", "region");
       }
       if (hasProperty(op, "endSample")) {
-        region.end_sample = requireInt64Property(op, "endSample", "spectralEdit region");
+        region.end_sample = requireInt64Property(op, "endSample", "region");
       }
       if (hasProperty(op, "lowHz")) region.low_hz = checkedFloatFromVal(op["lowHz"], "lowHz");
       if (hasProperty(op, "highHz")) region.high_hz = checkedFloatFromVal(op["highHz"], "highHz");

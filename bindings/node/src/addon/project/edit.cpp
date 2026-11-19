@@ -23,11 +23,9 @@ bool ClipFadeFromObject(Napi::Env env, const Napi::Object& obj, SonareProjectCli
     const std::string name = sonare_node::node_narrow_string(env, curve, "curve");
     const SonareError err = sonare_project_fade_curve_from_name(name.c_str(), &fade.curve);
     if (err != SONARE_OK) {
-      const char* detail = sonare_last_error_message();
       sonare_node::ThrowSonareErrorMessage(
           env, err,
-          std::string("Invalid project fade curve: ") +
-              ((detail != nullptr && detail[0] != '\0') ? detail : sonare_error_message(err)));
+          std::string("Invalid project fade curve: ") + sonare_node::ErrorMessageForCode(err));
       return false;
     }
   } else {
@@ -265,8 +263,7 @@ Napi::Value ProjectWrap::AddClip(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   if (info.Length() < 1 || !info[0].IsObject()) {
-    Napi::TypeError::New(env, "addClip expects a clip descriptor object")
-        .ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "desc must be an object").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   Napi::Object obj = info[0].As<Napi::Object>();
@@ -317,8 +314,7 @@ Napi::Value ProjectWrap::AddLoopRecordingTakes(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   if (info.Length() < 1 || !info[0].IsObject()) {
-    Napi::TypeError::New(env, "addLoopRecordingTakes expects a descriptor object")
-        .ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "desc must be an object").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   Napi::Object obj = info[0].As<Napi::Object>();
@@ -491,7 +487,7 @@ Napi::Value ProjectWrap::SetWarpMap(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   if (info.Length() < 1 || !info[0].IsObject()) {
-    Napi::TypeError::New(env, "Expected warp map object").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "map must be an object").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   std::vector<SonareProjectWarpAnchor> anchors;
@@ -781,10 +777,12 @@ Napi::Value ProjectWrap::SetAudioSourceMetadata(const Napi::CallbackInfo& info) 
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
-  if (info.Length() < 3 || !info[1].IsString() || !info[2].IsString()) {
-    Napi::TypeError::New(env,
-                         "setAudioSourceMetadata expects (sourceId, contentHash, externalStemRole)")
-        .ThrowAsJavaScriptException();
+  if (!info[1].IsString()) {
+    Napi::TypeError::New(env, "contentHash must be a string").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[2].IsString()) {
+    Napi::TypeError::New(env, "externalStemRole must be a string").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   uint32_t source_id = 0;
@@ -871,8 +869,7 @@ Napi::Value ProjectWrap::AddAutomationLane(const Napi::CallbackInfo& info) {
   uint32_t track_id = 0;
   if (!OptionalUint32Arg(env, info, 0, "trackId", 0, &track_id)) return env.Undefined();
   if (info.Length() < 2 || !info[1].IsObject()) {
-    Napi::TypeError::New(env, "addAutomationLane expects a lane descriptor object")
-        .ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "lane must be an object").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   std::vector<SonareAutomationPoint> points;
@@ -916,8 +913,7 @@ Napi::Value ProjectWrap::EditAutomationLane(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   if (info.Length() < 3 || !info[2].IsObject()) {
-    Napi::TypeError::New(env, "editAutomationLane expects a lane descriptor object")
-        .ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "lane must be an object").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   std::vector<SonareAutomationPoint> points;

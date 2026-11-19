@@ -26,15 +26,22 @@ using namespace sonare_node::features;
 Napi::Value SonareWrap::Tonnetz(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (info.Length() < 3 || !IsFloat32Array(info[0]) || !info[1].IsNumber() || !info[2].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (chromagram, nChroma, nFrames)")
-        .ThrowAsJavaScriptException();
+  if (!IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "chromagram must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[1].IsNumber()) {
+    Napi::TypeError::New(env, "nChroma must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[2].IsNumber()) {
+    Napi::TypeError::New(env, "nFrames must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   auto arr = info[0].As<Napi::Float32Array>();
   const int n_chroma = node_narrow_int(env, info[1], "nChroma");
   const int n_frames = node_narrow_int(env, info[2], "nFrames");
-  if (!ValidateMatrixDims(env, "tonnetz", n_chroma, n_frames, arr.ElementLength())) {
+  if (!ValidateMatrixDims(env, n_chroma, n_frames, arr.ElementLength())) {
     return env.Undefined();
   }
   float* out = nullptr;
@@ -49,14 +56,14 @@ Napi::Value SonareWrap::Tempogram(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (info.Length() < 1 || !IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "Expected onset envelope Float32Array").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "onsetEnvelope must be a Float32Array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   auto arr = info[0].As<Napi::Float32Array>();
   int sr{};
   if (!RequiredIntArg(env, info, 1, "sampleRate", &sr)) return env.Undefined();
   int hop{};
-  if (!OptionalIntArg(env, info, 2, "hop", 512, &hop)) return env.Undefined();
+  if (!OptionalIntArg(env, info, 2, "hopLength", 512, &hop)) return env.Undefined();
   int win{};
   if (!OptionalIntArg(env, info, 3, "win", 384, &win)) return env.Undefined();
   const int mode =
@@ -87,14 +94,14 @@ Napi::Value SonareWrap::CyclicTempogram(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (info.Length() < 1 || !IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "Expected onset envelope Float32Array").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "onsetEnvelope must be a Float32Array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   auto arr = info[0].As<Napi::Float32Array>();
   int sr{};
   if (!RequiredIntArg(env, info, 1, "sampleRate", &sr)) return env.Undefined();
   int hop{};
-  if (!OptionalIntArg(env, info, 2, "hop", 512, &hop)) return env.Undefined();
+  if (!OptionalIntArg(env, info, 2, "hopLength", 512, &hop)) return env.Undefined();
   int win{};
   if (!OptionalIntArg(env, info, 3, "win", 384, &win)) return env.Undefined();
   float bpm_min = sonare::kCyclicTempogramBpmMin;
@@ -120,14 +127,14 @@ Napi::Value SonareWrap::Plp(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (info.Length() < 1 || !IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "Expected onset envelope Float32Array").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "onsetEnvelope must be a Float32Array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   auto arr = info[0].As<Napi::Float32Array>();
   int sr{};
   if (!OptionalIntArg(env, info, 1, "sampleRate", 22050, &sr)) return env.Undefined();
   int hop{};
-  if (!OptionalIntArg(env, info, 2, "hop", 512, &hop)) return env.Undefined();
+  if (!OptionalIntArg(env, info, 2, "hopLength", 512, &hop)) return env.Undefined();
   const sonare::PlpConfig plp_defaults;
   float bpm_min{};
   if (!OptionalFiniteFloatArg(env, info, 3, "bpmMin", plp_defaults.tempo_min, &bpm_min))
@@ -150,7 +157,7 @@ Napi::Value SonareWrap::OnsetEnvelope(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (info.Length() < 1 || !IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "Expected audio Float32Array").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   auto arr = info[0].As<Napi::Float32Array>();
@@ -159,7 +166,7 @@ Napi::Value SonareWrap::OnsetEnvelope(const Napi::CallbackInfo& info) {
   int n_fft{};
   if (!OptionalIntArg(env, info, 2, "nFft", 2048, &n_fft)) return env.Undefined();
   int hop{};
-  if (!OptionalIntArg(env, info, 3, "hop", 512, &hop)) return env.Undefined();
+  if (!OptionalIntArg(env, info, 3, "hopLength", 512, &hop)) return env.Undefined();
   int n_mels{};
   if (!OptionalIntArg(env, info, 4, "nMels", 128, &n_mels)) return env.Undefined();
   float* out = nullptr;
@@ -175,7 +182,7 @@ Napi::Value SonareWrap::OnsetStrengthMulti(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (info.Length() < 1 || !IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "Expected audio Float32Array").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   auto arr = info[0].As<Napi::Float32Array>();
@@ -184,7 +191,7 @@ Napi::Value SonareWrap::OnsetStrengthMulti(const Napi::CallbackInfo& info) {
   int n_fft{};
   if (!OptionalIntArg(env, info, 2, "nFft", 2048, &n_fft)) return env.Undefined();
   int hop{};
-  if (!OptionalIntArg(env, info, 3, "hop", 512, &hop)) return env.Undefined();
+  if (!OptionalIntArg(env, info, 3, "hopLength", 512, &hop)) return env.Undefined();
   int n_mels{};
   if (!OptionalIntArg(env, info, 4, "nMels", 128, &n_mels)) return env.Undefined();
   int n_bands{};
@@ -209,14 +216,14 @@ Napi::Value SonareWrap::FourierTempogram(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (info.Length() < 1 || !IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "Expected onset envelope Float32Array").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "onsetEnvelope must be a Float32Array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   auto arr = info[0].As<Napi::Float32Array>();
   int sr{};
   if (!RequiredIntArg(env, info, 1, "sampleRate", &sr)) return env.Undefined();
   int hop{};
-  if (!OptionalIntArg(env, info, 2, "hop", 512, &hop)) return env.Undefined();
+  if (!OptionalIntArg(env, info, 2, "hopLength", 512, &hop)) return env.Undefined();
   int win{};
   if (!OptionalIntArg(env, info, 3, "win", 384, &win)) return env.Undefined();
   bool center = true;
@@ -246,7 +253,7 @@ Napi::Value SonareWrap::TempogramRatio(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (info.Length() < 1 || !IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "Expected tempogram Float32Array").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "tempogram must be a Float32Array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   auto arr = info[0].As<Napi::Float32Array>();
@@ -255,7 +262,7 @@ Napi::Value SonareWrap::TempogramRatio(const Napi::CallbackInfo& info) {
   int sr{};
   if (!RequiredIntArg(env, info, 2, "sampleRate", &sr)) return env.Undefined();
   int hop{};
-  if (!RequiredIntArg(env, info, 3, "hop", &hop)) return env.Undefined();
+  if (!RequiredIntArg(env, info, 3, "hopLength", &hop)) return env.Undefined();
   std::vector<float> factors;
   if (info.Length() >= 5 && !info[4].IsUndefined() && !info[4].IsNull()) {
     factors = FloatVectorFromValue(info[4], "factors");
@@ -275,7 +282,7 @@ Napi::Value SonareWrap::NnlsChroma(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (info.Length() < 1 || !IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "Expected audio Float32Array").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   auto arr = info[0].As<Napi::Float32Array>();
@@ -315,9 +322,16 @@ Napi::Value SonareWrap::NnlsChroma(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::Resample(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
-  if (info.Length() < 3 || !IsFloat32Array(info[0]) || !info[1].IsNumber() || !info[2].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (Float32Array, srcSr, targetSr)")
-        .ThrowAsJavaScriptException();
+  if (!IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[1].IsNumber()) {
+    Napi::TypeError::New(env, "srcSr must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!info[2].IsNumber()) {
+    Napi::TypeError::New(env, "targetSr must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 

@@ -175,11 +175,8 @@ describe('the shared options-bag reader refuses a fractional value', () => {
       // different input class. Without this, a range check that had started
       // refusing everything would satisfy the assertion above.
       expect(error.message).not.toContain('within the 32-bit integer range');
-      // No facade prefixes this message, which is what says the refusal came
-      // from the reader rather than from a JS-side assertion above it. If a
-      // facade check is added for this field later, this line is the one that
-      // reports the test has stopped measuring what it claims to.
-      expect(error.message).not.toContain(`${entry}: ${field} must be an integer`);
+      // The message names the entry the caller used, then the field.
+      expect(error.message.startsWith(`${entry}: ${field} must be an integer`)).toBe(true);
     });
 
     it(`${entry}: still accepts ${field} = ${floor}, the value ${fractional} truncated onto`, () => {
@@ -248,11 +245,10 @@ describe('the facade and the reader refuse the same inputs', () => {
       if (refused) {
         const facadeError = expectParameterRefusal(facadeChecked);
         const readerError = expectParameterRefusal(readerOnly);
-        // Both layers refuse as a RangeError, so the wording says which one
-        // answered: the facade's message carries the entry name, the reader's
-        // does not.
+        // Both layers refuse as a RangeError and name the entry the caller used.
+        expect(facadeError.message).toMatch(/^extractPercussiveEvents: /);
+        expect(readerError.message).toMatch(/^meteringSpectrum: /);
         if (facade === 'range') {
-          expect(facadeError.message).not.toContain('extractPercussiveEvents: nFft');
           expect(facadeError.message).toContain('within the 32-bit integer range');
         } else if (facade === 'zero') {
           expect(facadeError.message).toContain('extractPercussiveEvents: nFft must not be 0');
@@ -260,10 +256,6 @@ describe('the facade and the reader refuse the same inputs', () => {
           expect(facadeError.message).toContain('extractPercussiveEvents: nFft must be an integer');
         }
         expect(readerError.message).toContain('nFft');
-        // An explicit 0 is refused by both facades, so only the other probes reach the reader.
-        if (facade !== 'zero') {
-          expect(readerError.message).not.toContain('meteringSpectrum: nFft');
-        }
       }
     });
   }

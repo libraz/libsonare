@@ -506,7 +506,9 @@ describe('PlaybackRenderer.renderOffline', () => {
       caught = error;
     }
     expect(caught).toBeInstanceOf(RangeError);
-    expect((caught as Error).message).toMatch(/^in_channels 3 does not match the input layout/);
+    expect((caught as Error).message).toMatch(
+      /^PlaybackRenderer\.renderOffline: in_channels 3 does not match the input layout/,
+    );
 
     const bad = interleavedStereo(64);
     bad[10] = Number.NaN;

@@ -28,6 +28,12 @@ EM_JS(EM_VAL, sonare_project_invoke_cancel, (EM_VAL callback), {
       cancelled: Boolean(value),
     });
   } catch (error) {
+    // The caller's own throw: marked so no public entry renames it on the way out.
+    if (error !== null && (typeof error === 'object' || typeof error === 'function')) {
+      try {
+        Object.defineProperty(error, Symbol.for('libsonare.foreignError'), { value: true, configurable: true });
+      } catch (_) {}
+    }
     return Emval.toHandle({ failed: true, cancelled: true, error });
   }
 });
@@ -173,7 +179,7 @@ SonareProjectVocalEditApplyDesc applyDescFromVal(const val& request, ApplyStorag
   storage->desc.expected_source_sample_count = checkedInt64FromVal(
       property(request, "expectedSourceSampleCount"), "expectedSourceSampleCount");
   if (storage->desc.expected_source_sample_count <= 0) {
-    invalid("expectedSourceSampleCount must be positive");
+    invalid("expectedSourceSampleCount must be an integer of at least 1");
   }
   if (static_cast<uint64_t>(storage->desc.expected_source_sample_count) >
       std::numeric_limits<size_t>::max()) {
@@ -359,7 +365,7 @@ val ProjectWasm::applyVocalEdit(val request) {
   SonareProjectVocalEditApplyResult result{};
   sonare_project_vocal_edit_apply_result_init(&result);
   const SonareError error = sonare_project_apply_vocal_edit(project_.get(), &desc, &result);
-  if (error != SONARE_OK) throwCError(error, "failed to apply vocal edit");
+  if (error != SONARE_OK) throwCError(error);
   return applyResultToVal(result);
 }
 
@@ -367,7 +373,7 @@ val ProjectWasm::getVocalEditDependencies() {
   DependenciesGuard result;
   const SonareError error =
       sonare_project_get_vocal_edit_dependencies(project_.get(), &result.value);
-  if (error != SONARE_OK) throwCError(error, "failed to enumerate vocal edit dependencies");
+  if (error != SONARE_OK) throwCError(error);
   return dependenciesToVal(result.value);
 }
 
@@ -395,7 +401,7 @@ val ProjectWasm::rehydrateVocalEdits(val originals, val cancel) {
     failure.set("cancelFailure", cancel_storage.callback_failure);
     return failure;
   }
-  if (error != SONARE_OK) throwCError(error, "failed to rehydrate vocal edits");
+  if (error != SONARE_OK) throwCError(error);
   return rehydrateItemsToVal(result.value);
 }
 

@@ -5,6 +5,7 @@
 #include <string>
 
 #include "c_api/sonare_c_error_mapping.h"
+#include "c_entry_names.h"
 #include "effects/hpss.h"
 #include "sonare_wrap_options.h"
 #include "util/constants.h"
@@ -17,9 +18,14 @@ using sonare::constants::kDefaultNFft;
 const char* ErrorMessageForCode(SonareError err) {
   const char* detail = sonare_last_error_message();
   if (detail != nullptr && detail[0] != '\0') {
-    return detail;
+    return detail + sonare_c_entries::CEntryPrefixLength(detail);
   }
   return sonare_error_message(err);
+}
+
+const char* ExceptionMessage(const std::exception& e) {
+  const char* what = e.what();
+  return what + sonare_c_entries::CEntryPrefixLength(what);
 }
 
 const char* ErrorCodeName(SonareError err) {
@@ -96,13 +102,27 @@ void ThrowHandleClosed(Napi::Env env, const char* what) {
                           std::string(what) + " has been destroyed");
 }
 
+void MarkPendingForeign(Napi::Env env) {
+  if (!env.IsExceptionPending()) return;
+  Napi::Error error = env.GetAndClearPendingException();
+  const Napi::Value value = error.Value();
+  if (value.IsObject()) {
+    value.As<Napi::Object>().DefineProperty(
+        Napi::PropertyDescriptor::Value(Napi::Symbol::For(env, "libsonare.foreignError"),
+                                        Napi::Boolean::New(env, true), napi_configurable));
+    // A frozen value keeps no mark; the caller's own throw still wins over the failed define.
+    if (env.IsExceptionPending()) env.GetAndClearPendingException();
+  }
+  error.ThrowAsJavaScriptException();
+}
+
 void ThrowCurrentException(Napi::Env env) {
   try {
     throw;
   } catch (const Napi::Error& e) {
     e.ThrowAsJavaScriptException();
   } catch (const sonare::SonareException& e) {
-    ThrowSonareErrorMessage(env, CErrorFromException(e), e.what());
+    ThrowSonareErrorMessage(env, CErrorFromException(e), ExceptionMessage(e));
   } catch (const std::exception& e) {
     ThrowStdException(env, e);
   } catch (...) {
@@ -121,10 +141,7 @@ Napi::Promise RejectedFromPending(Napi::Env env) {
 void ThrowLastSonareError(Napi::Env env, const std::string& prefix, SonareError fallback) {
   SonareError code = sonare_last_error_code();
   if (code == SONARE_OK) code = fallback;
-  const char* detail = sonare_last_error_message();
-  const std::string text =
-      (detail != nullptr && detail[0] != '\0') ? std::string(detail) : ErrorMessageForCode(code);
-  ThrowSonareErrorMessage(env, code, prefix + text);
+  ThrowSonareErrorMessage(env, code, prefix + ErrorMessageForCode(code));
 }
 
 Napi::Value JoinedNamesToArray(Napi::Env env, const char* joined, const std::string& what) {
@@ -151,11 +168,11 @@ Napi::Value JoinedNamesToArray(Napi::Env env, const char* joined, const std::str
 
 void ThrowStdException(Napi::Env env, const std::exception& e) {
   if (const auto* coded = dynamic_cast<const sonare::SonareException*>(&e)) {
-    ThrowSonareErrorMessage(env, CErrorFromException(*coded), e.what());
+    ThrowSonareErrorMessage(env, CErrorFromException(*coded), ExceptionMessage(e));
     return;
   }
   ThrowSonareErrorMessage(env, static_cast<SonareError>(sonare::error_code_for_std_exception(e)),
-                          e.what());
+                          ExceptionMessage(e));
 }
 
 void DecorateSonareError(Napi::Env env, Napi::Object error, SonareError err) {
@@ -294,15 +311,15 @@ bool IsInt32Array(const Napi::Value& value) {
   return value.IsTypedArray() && value.As<Napi::TypedArray>().TypedArrayType() == napi_int32_array;
 }
 
-bool ValidateMatrixDims(Napi::Env env, const char* fn_name, int rows, int cols, size_t length) {
+bool ValidateMatrixDims(Napi::Env env, int rows, int cols, size_t length) {
   if (rows < 0 || cols < 0) {
-    Napi::RangeError::New(env, std::string(fn_name) + ": dimensions must be non-negative")
+    Napi::RangeError::New(env, "dimensions must be integers in [0, " + node_int_max_text() + "]")
         .ThrowAsJavaScriptException();
     return false;
   }
   const size_t expected = static_cast<size_t>(rows) * static_cast<size_t>(cols);
   if (expected != length) {
-    Napi::RangeError::New(env, std::string(fn_name) + ": rows*cols (" + std::to_string(expected) +
+    Napi::RangeError::New(env, "rows*cols (" + std::to_string(expected) +
                                    ") must equal input length (" + std::to_string(length) + ")")
         .ThrowAsJavaScriptException();
     return false;
@@ -631,8 +648,7 @@ Napi::Value FullAnalysisJsonToObject(Napi::Env env, const float* data, size_t le
   return result;
 }
 
-bool ReadChannelInputs(Napi::Env env, const Napi::Value& value, const char* fn_name,
-                       ChannelInputs* inputs) {
+bool ReadChannelInputs(Napi::Env env, const Napi::Value& value, ChannelInputs* inputs) {
   Napi::Array channels = value.As<Napi::Array>();
   const uint32_t count = channels.Length();
   inputs->arrays.reserve(count);
@@ -640,7 +656,7 @@ bool ReadChannelInputs(Napi::Env env, const Napi::Value& value, const char* fn_n
   for (uint32_t index = 0; index < count; ++index) {
     Napi::Value channel = channels.Get(index);
     if (!IsFloat32Array(channel)) {
-      Napi::TypeError::New(env, std::string(fn_name) + ": every channel must be a Float32Array")
+      Napi::TypeError::New(env, "every channel must be a Float32Array")
           .ThrowAsJavaScriptException();
       return false;
     }
@@ -649,7 +665,7 @@ bool ReadChannelInputs(Napi::Env env, const Napi::Value& value, const char* fn_n
     if (index == 0) {
       inputs->length = length;
     } else if (length != inputs->length) {
-      Napi::RangeError::New(env, std::string(fn_name) + ": every channel must have the same length")
+      Napi::RangeError::New(env, "every channel must have the same length")
           .ThrowAsJavaScriptException();
       return false;
     }

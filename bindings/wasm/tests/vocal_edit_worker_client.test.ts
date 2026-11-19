@@ -777,7 +777,7 @@ describe('vocal edit Worker client pipelining and failure paths', () => {
       expect(isSonareError(error)).toBe(true);
       expect(error).toMatchObject({
         name: 'SonareError',
-        message: 'revision conflict',
+        message: 'VocalEditWorkerSession.notes: revision conflict',
         code: 7,
         codeName: 'InvalidState',
         detail: {
