@@ -267,8 +267,10 @@ def test_trim_silence_selector_defaults_are_dynamic() -> None:
     assert _option(commands["trim-silence"], "threshold-db")["default"] is None
 
     parser = _parser()
+    # Neither selector given: the threshold rule runs at the library's own level.
     default_args = parser.parse_args(["trim-silence", "input.wav"])
-    assert default_args.threshold_db == -60.0
+    assert default_args.threshold_db is None
+    assert default_args.top_db is None
 
     top_args = parser.parse_args(["trim-silence", "input.wav", "--top-db", "24"])
     assert top_args.threshold_db is None

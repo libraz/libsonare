@@ -1260,15 +1260,17 @@ int cmd_trim_silence(const CliArgs& args, const Audio& audio) {
     throw std::invalid_argument("--threshold-db and --top-db are mutually exclusive");
   }
   const bool use_legacy_top_db = args.has("top-db") && !args.has("threshold-db");
-  const float threshold_db = args.get_float("threshold-db", -60.0f);
+  const float threshold_db = args.get_float("threshold-db", sonare::kDefaultAbsoluteSilenceDb);
+  const float top_db = args.get_float("top-db", sonare::kDefaultSilenceTopDb);
+  const int frame_length = args.get_int("n-fft", sonare::kDefaultSilenceFrameLength);
+  const int hop_length = args.get_int("hop-length", sonare::kDefaultSilenceHopLength);
   Audio result =
       use_legacy_top_db
-          ? Audio::from_vector(
-                sonare::trim(std::vector<float>(audio.begin(), audio.end()),
-                             args.get_float("top-db", 60.0f), args.n_fft, args.hop_length)
-                    .audio,
-                audio.sample_rate())
-          : trim_absolute(audio, threshold_db, args.n_fft, args.hop_length);
+          ? Audio::from_vector(sonare::trim(std::vector<float>(audio.begin(), audio.end()), top_db,
+                                            frame_length, hop_length)
+                                   .audio,
+                               audio.sample_rate())
+          : trim_absolute(audio, threshold_db, frame_length, hop_length);
 
   if (!args.output_file.empty()) {
     save_wav(args.output_file, result.data(), result.size(), audio.sample_rate());
@@ -1283,11 +1285,11 @@ int cmd_trim_silence(const CliArgs& args, const Audio& audio) {
     // Report the parameter that actually drove the trim: the relative top_db for
     // the legacy algorithm, the absolute threshold_db otherwise.
     if (use_legacy_top_db) {
-      json.kv("top_db", args.get_float("top-db", 60.0f));
+      json.kv("top_db", top_db);
     } else {
       json.kv("threshold_db", threshold_db);
     }
-    json.kv("n_fft", args.n_fft).kv("hop_length", args.hop_length);
+    json.kv("n_fft", frame_length).kv("hop_length", hop_length);
     if (!args.output_file.empty()) json.kv("output", args.output_file);
     json.end_object().print();
   } else {
@@ -1361,7 +1363,9 @@ void write_split_silence_takes(const std::string& prefix,
 }  // namespace
 
 int cmd_split_silence(const CliArgs& args, const Audio& audio) {
-  const float top_db = args.get_float("top-db", 60.0f);
+  const float top_db = args.get_float("top-db", sonare::kDefaultSilenceTopDb);
+  const int frame_length = args.get_int("n-fft", sonare::kDefaultSilenceFrameLength);
+  const int hop_length = args.get_int("hop-length", sonare::kDefaultSilenceHopLength);
   const std::vector<std::vector<float>> takes = load_split_silence_takes(args, audio);
 
   std::vector<const float*> signals;
@@ -1383,7 +1387,7 @@ int cmd_split_silence(const CliArgs& args, const Audio& audio) {
   SonareSilenceCommonReport report{};
   const SonareError err =
       sonare_split_silence_common_ex(signals.data(), signals.size(), lengths.data(), top_db,
-                                     args.n_fft, args.hop_length, &flat, &flat_count, &report);
+                                     frame_length, hop_length, &flat, &flat_count, &report);
   if (err != SONARE_OK) {
     // Mapped rather than raised as a plain runtime error, so the failure keeps
     // the class it carries out to the exit code the two front-ends publish for

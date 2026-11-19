@@ -621,8 +621,7 @@ def register_analysis_parsers(
     sub.add_parser("info", parents=[stdout_options], help="Show audio file information")
     sub.add_parser("bpm", parents=[stdout_options], help="Detect BPM")
     key_p = sub.add_parser("key", parents=[stdout_options], help="Detect musical key")
-    # Declared here rather than inherited from fft_options: key takes no
-    # --win-length or --window options.
+    # Declared here rather than inherited: key takes no --win-length or --window options.
     key_p.add_argument("--n-fft", type=_c_int, default=None, help="FFT size (default: 2048)")
     key_p.add_argument("--hop-length", type=_c_int, default=None, help="Hop length (default: 512)")
     key_p.add_argument(

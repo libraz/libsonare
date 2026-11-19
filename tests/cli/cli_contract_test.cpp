@@ -1662,6 +1662,7 @@ TEST_CASE("CLI options left to the library reproduce their stated default", "[cl
   const std::string silent_wav = unique_temp_path("_stated_silent.wav");
   const std::string glide_wav = unique_temp_path("_stated_glide.wav");
   const std::string stereo_wav = unique_temp_path("_stated_stereo.wav");
+  const std::string gapped_wav = unique_temp_path("_stated_gapped.wav");
   const std::string takes_project = unique_temp_path("_stated_takes.json");
   const std::string takes_out = unique_temp_path("_stated_takes_out.json");
   create_test_wav(tone_wav, 1.0f);
@@ -1672,6 +1673,9 @@ TEST_CASE("CLI options left to the library reproduce their stated default", "[cl
   create_silent_wav(silent_wav);
   create_glide_wav(glide_wav);
   create_stereo_delayed_wav(stereo_wav);
+  // Two tones around a near-silent gap, with silence at both ends to trim.
+  create_blocked_level_wav(
+      gapped_wav, {{0.0f, 0.3f}, {0.5f, 0.4f}, {0.003f, 0.3f}, {0.5f, 0.4f}, {0.0f, 0.3f}});
   create_clipped_wav(clipped_wav);
   create_stepped_level_wav(stepped_wav);
   create_noisy_wav(noisy_wav);
@@ -1870,7 +1874,12 @@ TEST_CASE("CLI options left to the library reproduce their stated default", "[cl
       {"boundaries", sections_wav + " --json -q", "hop-length", "256"},
       {"hpss", tone_wav + " --harmonic-only" + to_out, "n-fft", "1024"},
       {"decompose-stems", tone_wav + to_out, "n-fft", "1024"},
-      {"decompose-stems", tone_wav + to_out, "hop-length", "256"},
+      {"trim-silence", gapped_wav + to_out, "threshold-db", "-20"},
+      {"trim-silence", gapped_wav + to_out, "n-fft", "1024"},
+      {"trim-silence", gapped_wav + to_out, "hop-length", "256"},
+      {"split-silence", gapped_wav + " --json -q", "top-db", "30"},
+      {"split-silence", gapped_wav + " --json -q", "n-fft", "1024"},
+      {"split-silence", gapped_wav + " --json -q", "hop-length", "256"},
       {"pitch-shift", tone_wav + " --pitch-semitones 3" + to_out, "n-fft", "1024"},
       {"time-stretch", tone_wav + " --rate 1.5" + to_out, "n-fft", "1024"},
       {"mel-to-audio", tone_wav + to_out, "n-fft", "1024"},
@@ -1930,14 +1939,50 @@ TEST_CASE("CLI options left to the library reproduce their stated default", "[cl
     return output + std::string(std::istreambuf_iterator<char>(file), {});
   };
 
-  // Every option that states a library default is in the table.
+  // A default derived from another option: each case sets that option and names the value the
+  // library then takes, and two cases keep the row from passing on one setting alone.
+  struct DerivedRow {
+    std::string command;
+    std::string arguments;
+    std::string option;
+    std::vector<std::pair<std::string, std::string>> cases;
+  };
+  const std::vector<DerivedRow> derived_rows = {
+      {"decompose-stems",
+       tone_wav + to_out,
+       "hop-length",
+       {{"--n-fft 2048", "512"}, {"--n-fft 1024", "256"}}},
+      {"normalize",
+       gapped_wav + to_out,
+       "target-db",
+       {{"--mode peak", "0.0"}, {"--mode rms", "-20.0"}}},
+  };
+
+  // Every option that states a library default is in one of the two tables.
   for (const CliCommandSpec& command : cli_command_registry()) {
     for (const CliOptionSpec& option : command.options) {
       if (option.stated_default.empty()) continue;
       CAPTURE(command.path, option.name);
-      CHECK(std::any_of(rows.begin(), rows.end(), [&](const Row& row) {
+      const auto names = [&](const auto& row) {
         return registry_path(row.command) == command.path && row.option == option.name;
-      }));
+      };
+      CHECK((std::any_of(rows.begin(), rows.end(), names) ||
+             std::any_of(derived_rows.begin(), derived_rows.end(), names)));
+    }
+  }
+
+  for (const DerivedRow& row : derived_rows) {
+    CAPTURE(row.command, row.option);
+    const auto* spec = cli_option_spec_for_command(registry_path(row.command), row.option);
+    REQUIRE(spec != nullptr);
+    REQUIRE(spec->default_value.kind == CliOptionDefaultKind::Null);
+    REQUIRE_FALSE(spec->stated_default.empty());
+    REQUIRE(row.cases.size() >= 2);
+    REQUIRE(row.cases[0].second != row.cases[1].second);
+    for (const auto& [setting, value] : row.cases) {
+      CAPTURE(setting, value);
+      const std::string base = row.command + " " + row.arguments + " " + setting;
+      CHECK(rendered(base) == rendered(base + " --" + row.option + " " + value));
     }
   }
 
@@ -1959,7 +2004,7 @@ TEST_CASE("CLI options left to the library reproduce their stated default", "[cl
   for (const std::string& path :
        {tone_wav, clipped_wav, stepped_wav, noisy_wav, out, project_json, reference_smf, rir_wav,
         click_wav, sine_chords_wav, sine_chords_fast_wav, harmonic_chords_wav, sections_wav,
-        silent_wav, glide_wav, stereo_wav, takes_project, takes_out})
+        silent_wav, glide_wav, stereo_wav, takes_project, takes_out, gapped_wav})
     std::remove(path.c_str());
 }
 

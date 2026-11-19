@@ -72,7 +72,15 @@ from ._cli_note_edit import (
 from ._cli_note_edit import (
     register_note_edit_parsers,
 )
-from ._cli_options import SharedParsers, _c_int, _ContractArgumentParser, _finite_float, _given
+from ._cli_options import (
+    SharedParsers,
+    _c_int,
+    _ContractArgumentParser,
+    _effective,
+    _finite_float,
+    _given,
+)
+from ._effects_level import _DEFAULT_NORMALIZE_TARGET_DB
 
 
 def cmd_hpss(args: argparse.Namespace) -> int:
@@ -277,12 +285,12 @@ def cmd_normalize(args: argparse.Namespace) -> int:
 
     planes, sr = _load_channels_or_downmix(args.file)
     mode = getattr(args, "mode", "peak")
-    target_db = getattr(args, "target_db", None)
-    if target_db is None:
-        target_db = -20.0 if mode == "rms" else 0.0
     if mode not in ("peak", "rms"):
         raise ValueError("--mode must be 'peak' or 'rms'")
     checked_mode = cast(Literal["peak", "rms"], mode)
+    given = getattr(args, "target_db", None)
+    # The payload reports the level the library normalizes to, the mode's own when none is given.
+    target_db = _DEFAULT_NORMALIZE_TARGET_DB[checked_mode] if given is None else given
 
     # One gain for the pair, measured across both channels. Normalizing each
     # channel to the target on its own would drive the quieter one up by a
@@ -290,11 +298,11 @@ def cmd_normalize(args: argparse.Namespace) -> int:
     # 12 dB apart that is a factor of four on one side.
     if len(planes) == 2:
         stereo = normalize_stereo(
-            planes[0], planes[1], sample_rate=sr, mode=checked_mode, target_db=target_db
+            planes[0], planes[1], sample_rate=sr, mode=checked_mode, target_db=given
         )
         channels = [stereo.left, stereo.right]
     else:
-        mono = normalize(planes[0], sample_rate=sr, mode=checked_mode, target_db=target_db)
+        mono = normalize(planes[0], sample_rate=sr, mode=checked_mode, target_db=given)
         channels = [mono]
 
     return _emit_effect_result(
@@ -314,29 +322,23 @@ def cmd_trim_silence(args: argparse.Namespace) -> int:
     top_db = getattr(args, "top_db", None)
     if threshold_db is not None and top_db is not None:
         raise ValueError("--threshold-db and --top-db are mutually exclusive")
-    n_fft = getattr(args, "n_fft", 2048)
-    hop_length = getattr(args, "hop_length", 512)
+    geometry = _given(args, frame_length="n_fft", hop_length="hop_length")
+    facade: Any
+    extra: dict[str, Any]
     if top_db is not None:
-        result = trim_silence(
-            samples,
-            top_db=top_db,
-            frame_length=n_fft,
-            hop_length=hop_length,
-        ).audio.tolist()
-        extra = {"top_db": top_db, "n_fft": n_fft, "hop_length": hop_length}
+        result = trim_silence(samples, top_db=top_db, **geometry).audio.tolist()
+        facade = trim_silence
+        extra = {"top_db": top_db}
         label = f"Trim silence (top {top_db:.1f} dB)"
     else:
-        if threshold_db is None:
-            threshold_db = -60.0
-        result = trim(
-            samples,
-            sample_rate=sr,
-            threshold_db=threshold_db,
-            frame_length=n_fft,
-            hop_length=hop_length,
-        )
-        extra = {"threshold_db": threshold_db, "n_fft": n_fft, "hop_length": hop_length}
+        result = trim(samples, sample_rate=sr, **_given(args, "threshold_db"), **geometry)
+        facade = trim
+        threshold_db = _effective(args, trim, "threshold_db")
+        extra = {"threshold_db": threshold_db}
         label = f"Trim silence (threshold {threshold_db:.1f} dB)"
+    # The payload reports the geometry the library ran with, its own where none is given.
+    extra["n_fft"] = _effective(args, facade, "frame_length", "n_fft")
+    extra["hop_length"] = _effective(args, facade, "hop_length")
 
     return _emit_effect_result(
         args,
@@ -383,18 +385,13 @@ def _split_silence_slice(take: list[float], start: int, end: int) -> list[float]
 def cmd_split_silence(args: argparse.Namespace) -> int:
     from . import split_silence_common_with_report
 
-    top_db = getattr(args, "top_db", 60.0)
-    n_fft = getattr(args, "n_fft", 2048)
-    hop_length = getattr(args, "hop_length", 512)
+    top_db = _effective(args, split_silence_common_with_report, "top_db")
 
     takes, sr = _split_silence_takes(args)
     # Always asked for, only sometimes printed: one call site rather than two
     # that could come to refuse differently.
     split = split_silence_common_with_report(
-        takes,
-        top_db=top_db,
-        frame_length=n_fft,
-        hop_length=hop_length,
+        takes, **_given(args, "top_db", frame_length="n_fft", hop_length="hop_length")
     )
     intervals = split.intervals.tolist()
     report = split.report
@@ -676,7 +673,6 @@ def register_effects_parsers(
     """Register the offline effect and voice-preset commands."""
     common = shared.common
     stdout_options = shared.stdout_options
-    fft_options = shared.fft_options
 
     hpss_p = sub.add_parser("hpss", parents=[common], help="Harmonic-percussive separation")
     # The hop stays the CLI's own 512 on both front-ends, so this command cannot
@@ -711,8 +707,13 @@ def register_effects_parsers(
 
     stems_p = sub.add_parser(
         "decompose-stems",
-        parents=[fft_options],
+        parents=[common],
         help="Separate into NMF components that keep the original phase",
+    )
+    # The hop is derived from the FFT size, so this command states its own geometry.
+    stems_p.add_argument("--n-fft", type=_c_int, default=None, help="FFT size (default: 2048)")
+    stems_p.add_argument(
+        "--hop-length", type=_c_int, default=None, help="Hop length (default: n_fft/4)"
     )
     stems_p.add_argument(
         "--n-components", type=_c_int, default=None, help="Number of NMF components (default: 4)"
@@ -773,7 +774,10 @@ def register_effects_parsers(
         help="Normalization mode (default: peak)",
     )
     normalize_p.add_argument(
-        "--target-db", type=_finite_float, default=None, help="Target peak level in dB"
+        "--target-db",
+        type=_finite_float,
+        default=None,
+        help="Target level in dB (default: 0.0 (peak) or -20.0 (rms))",
     )
     trim_silence_p = sub.add_parser(
         "trim-silence",
@@ -789,34 +793,37 @@ def register_effects_parsers(
         "--threshold-db",
         type=_finite_float,
         default=None,
-        help="Silence threshold in dB (default: -60)",
+        help="Silence threshold in dB (default: -60.0)",
     )
     # ``--threshold-db`` and ``--top-db`` select two handler paths. Leave the
     # alternate selector absent by default so the handler can distinguish the
     # default threshold mode from an explicit top-dB request.
-    trim_silence_p.add_argument("--top-db", type=_finite_float, default=None)
-    # The native core call takes both positionally, so the CLI owns these values on both front-ends.
     trim_silence_p.add_argument(
-        "--n-fft", type=_c_int, default=2048, help="FFT size (default: 2048)"
+        "--top-db",
+        type=_finite_float,
+        default=None,
+        help="Trim by the peak-relative rule instead, at this many dB below the peak",
     )
     trim_silence_p.add_argument(
-        "--hop-length", type=_c_int, default=512, help="Hop length (default: 512)"
+        "--n-fft", type=_c_int, default=None, help="Analysis frame length (default: 2048)"
+    )
+    trim_silence_p.add_argument(
+        "--hop-length", type=_c_int, default=None, help="Hop length (default: 512)"
     )
     split_silence_p = sub.add_parser(
         "split-silence", parents=[stdout_options], help="List non-silent intervals"
     )
-    # The C entry has no default for either, so the CLI owns them.
     split_silence_p.add_argument(
-        "--n-fft", type=_c_int, default=2048, help="FFT size (default: 2048)"
+        "--n-fft", type=_c_int, default=None, help="Analysis frame length (default: 2048)"
     )
     split_silence_p.add_argument(
-        "--hop-length", type=_c_int, default=512, help="Hop length (default: 512)"
+        "--hop-length", type=_c_int, default=None, help="Hop length (default: 512)"
     )
     split_silence_p.add_argument(
         "--top-db",
         type=_finite_float,
-        default=60.0,
-        help="Silence threshold below the peak in dB (default: 60)",
+        default=None,
+        help="Silence threshold below the peak in dB (default: 60.0)",
     )
     split_silence_p.add_argument(
         "--write-takes",

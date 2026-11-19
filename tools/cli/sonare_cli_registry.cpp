@@ -12,6 +12,8 @@
 #include "analysis/section_analyzer.h"
 #include "core/audio.h"
 #include "core/channel_layout.h"
+#include "effects/normalize.h"
+#include "effects/silence.h"
 
 #ifdef SONARE_WITH_MASTERING
 #include "mastering/assistant/platform_targets.h"
@@ -488,6 +490,33 @@ CliOptionSpec library_default(CliOptionSpec option, const char* library_value) {
   return option;
 }
 
+/// An option whose library value depends on another option, stated as prose rather than a value.
+CliOptionSpec with_stated_default(CliOptionSpec option, std::string statement) {
+  option.stated_default = std::move(statement);
+  return option;
+}
+
+/// A library constant as `--help` states it: an integral value keeps one decimal place.
+std::string stated_number(double value) {
+  std::ostringstream text;
+  if (value == static_cast<double>(static_cast<long long>(value))) {
+    text.setf(std::ios::fixed);
+    text.precision(1);
+  }
+  text << value;
+  return text.str();
+}
+
+CliOptionSpec library_default(CliOptionSpec option, int library_value) {
+  option.stated_default = std::to_string(library_value);
+  return option;
+}
+
+CliOptionSpec library_default(CliOptionSpec option, float library_value) {
+  option.stated_default = stated_number(library_value);
+  return option;
+}
+
 /// A twelve-bit scale mask (or mode name) the handler leaves to the library when absent.
 CliOptionSpec global_number(const char* name, double value) {
   return number_value(name, value, false, true);
@@ -810,14 +839,16 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
              "random"),
          library_default(number_value("mask-power"), "1.0"), required_output(),
          library_default(global_int("n-fft"), "2048"),
-         library_default(global_int("hop-length"), "512")});
+         library_default(global_int("hop-length"), "n_fft/4")});
     add_command(commands, "preemphasis", true,
                 {library_default(number_value("coef"), "0.97"), required_output()});
     add_command(commands, "deemphasis", true,
                 {library_default(number_value("coef"), "0.97"), required_output()});
     add_command(commands, "trim-silence", true,
-                {number_value("threshold-db"), number_value("top-db"), output_value(),
-                 global_int("n-fft", 2048), global_int("hop-length", 512)});
+                {library_default(number_value("threshold-db"), sonare::kDefaultAbsoluteSilenceDb),
+                 number_value("top-db"), output_value(),
+                 library_default(global_int("n-fft"), sonare::kDefaultSilenceFrameLength),
+                 library_default(global_int("hop-length"), sonare::kDefaultSilenceHopLength)});
     // `--input` names further takes of the same part; the positional is the
     // first. `--write-takes` is the destination rather than `-o`, because one
     // run writes a file per take per interval.
@@ -827,12 +858,18 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     // reachable from a command line at all -- one interval covering everything
     // answers three different situations and the intervals cannot say which.
     add_command(commands, "split-silence", true,
-                {number_value("top-db", 60.0), path_value("write-takes"), flag("report"),
-                 global_int("n-fft", 2048), global_int("hop-length", 512)},
+                {library_default(number_value("top-db"), sonare::kDefaultSilenceTopDb),
+                 path_value("write-takes"), flag("report"),
+                 library_default(global_int("n-fft"), sonare::kDefaultSilenceFrameLength),
+                 library_default(global_int("hop-length"), sonare::kDefaultSilenceHopLength)},
                 {}, nullptr, kUnboundedPositionals);
     add_command(commands, "normalize", true,
-                {string_value("mode", "peak"), number_value("target-db"), required_output()}, {},
-                nullptr, 0, /*preserves_stereo_input=*/true);
+                {string_value("mode", "peak"),
+                 with_stated_default(number_value("target-db"),
+                                     stated_number(sonare::kDefaultPeakTargetDb) + " (peak) or " +
+                                         stated_number(sonare::kDefaultRmsTargetDb) + " (rms)"),
+                 required_output()},
+                {}, nullptr, 0, /*preserves_stereo_input=*/true);
     add_command(commands, "gain", true, {number_value("gain-db"), required_output()});
     add_command(commands, "fade", true,
                 {number_value("fade-in-sec"), number_value("fade-out-sec"), required_output()});

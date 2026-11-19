@@ -9,7 +9,8 @@ int cmd_normalize(const CliArgs& args, const Audio& audio) {
     return 1;
   }
   const bool rms = mode == "rms";
-  const float target_db = args.get_float("target-db", rms ? -20.0f : 0.0f);
+  const float target_db =
+      args.get_float("target-db", rms ? sonare::kDefaultRmsTargetDb : sonare::kDefaultPeakTargetDb);
 
   size_t length = 0;
   double duration = 0.0;

@@ -214,9 +214,14 @@ def _given(args: argparse.Namespace, *same: str, **renamed: str) -> dict[str, An
     }
 
 
-def _effective(args: argparse.Namespace, facade: Callable[..., Any], name: str) -> Any:
-    """The value ``facade`` runs with for option ``name``: the one given, else its own default."""
-    value = getattr(args, name, None)
+def _effective(
+    args: argparse.Namespace, facade: Callable[..., Any], name: str, dest: str | None = None
+) -> Any:
+    """The value ``facade`` runs with for keyword ``name``: the option given, else its own default.
+
+    ``dest`` names the option destination when it differs from the keyword.
+    """
+    value = getattr(args, name if dest is None else dest, None)
     return inspect.signature(facade).parameters[name].default if value is None else value
 
 
@@ -425,20 +430,6 @@ def _restore_parser_compat_defaults(args: argparse.Namespace) -> None:
     command = getattr(args, "command", "")
     if command == "key" and getattr(args, "candidates", None) is None:
         args.candidates = 0
-    elif command == "normalize" and getattr(args, "target_db", None) is None:
-        # Preserve the historical peak default while honoring the RMS
-        # normalizer's distinct -20 dB reference level.
-        args.target_db = -20.0 if getattr(args, "mode", "peak") == "rms" else 0.0
-    elif (
-        command == "trim-silence"
-        and getattr(args, "threshold_db", None) is None
-        and getattr(args, "top_db", None) is None
-    ):
-        # ``--threshold-db`` and ``--top-db`` select different handler paths.
-        # Keep the threshold action dynamic so an explicit top-db does not
-        # appear to conflict with an implicit threshold; only the no-selector
-        # path receives the historical -60 dB fallback.
-        args.threshold_db = -60.0
 
 
 # The one place a command declares whether it writes an audio artifact.
@@ -522,13 +513,12 @@ def _reject_stdout_output(args: argparse.Namespace, parser: argparse.ArgumentPar
 class SharedParsers:
     """The parent parsers each command family draws its common options from.
 
-    They are passed as one object rather than as five arguments so a family
+    They are passed as one object rather than as four arguments so a family
     registrar's signature does not change when a new parent is added.
     """
 
     common: _ContractArgumentParser
     stdout_options: _ContractArgumentParser
-    fft_options: _ContractArgumentParser
     fft_stdout_options: _ContractArgumentParser
     mel_options: _ContractArgumentParser
 
@@ -551,13 +541,8 @@ def build_shared_parsers() -> SharedParsers:
         "-o", "--output", type=str, default=argparse.SUPPRESS, help=argparse.SUPPRESS
     )
 
-    fft_options = _ContractArgumentParser(add_help=False, parents=[common])
     # The geometry a command leaves out is the library's own, which every command
     # fed by these parents agrees on, so one help text states it.
-    fft_options.add_argument("--n-fft", type=_c_int, default=None, help="FFT size (default: 2048)")
-    fft_options.add_argument(
-        "--hop-length", type=_c_int, default=None, help="Hop length (default: 512)"
-    )
     fft_stdout_options = _ContractArgumentParser(add_help=False, parents=[stdout_options])
     fft_stdout_options.add_argument(
         "--n-fft", type=_c_int, default=None, help="FFT size (default: 2048)"
@@ -572,7 +557,6 @@ def build_shared_parsers() -> SharedParsers:
     return SharedParsers(
         common=common,
         stdout_options=stdout_options,
-        fft_options=fft_options,
         fft_stdout_options=fft_stdout_options,
         mel_options=mel_options,
     )

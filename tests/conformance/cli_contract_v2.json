@@ -3846,7 +3846,7 @@
         {
           "name": "hop-length",
           "type": "integer",
-          "default": 512,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -3864,7 +3864,7 @@
         {
           "name": "n-fft",
           "type": "integer",
-          "default": 2048,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -3882,7 +3882,7 @@
         {
           "name": "top-db",
           "type": "number",
-          "default": 60.0,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -4483,7 +4483,7 @@
         {
           "name": "hop-length",
           "type": "integer",
-          "default": 512,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -4501,7 +4501,7 @@
         {
           "name": "n-fft",
           "type": "integer",
-          "default": 2048,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -9818,7 +9818,7 @@
         {
           "name": "hop-length",
           "type": "integer",
-          "default": 512,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -9836,7 +9836,7 @@
         {
           "name": "n-fft",
           "type": "integer",
-          "default": 2048,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -9916,7 +9916,7 @@
         {
           "name": "hop-length",
           "type": "integer",
-          "default": 512,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -9934,7 +9934,7 @@
         {
           "name": "n-fft",
           "type": "integer",
-          "default": 2048,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -9952,7 +9952,7 @@
         {
           "name": "top-db",
           "type": "number",
-          "default": 60.0,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
