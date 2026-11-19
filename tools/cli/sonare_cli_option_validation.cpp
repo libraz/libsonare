@@ -180,6 +180,7 @@ std::vector<CliOptionMetadata> cli_option_metadata_for_command(const std::string
     metadata.default_string = option.default_value.string_value;
     metadata.default_string_array = option.default_value.string_array_value;
     metadata.aliases = option.aliases;
+    metadata.stated_default = cli_option_stated_default(option);
     metadata.repeatable = option.repeatable;
     metadata.arity = option.arity;
     metadata.scalar_type = option.scalar_type;
@@ -216,7 +217,8 @@ std::vector<std::string> cli_options_for_command(const std::string& command) {
       display += " <value>";
     else if (option.arity == CliOptionArity::OptionalValue)
       display += " [value]";
-    if (!option.stated_default.empty()) display += "  (default: " + option.stated_default + ")";
+    const std::string stated = cli_option_stated_default(option);
+    if (!stated.empty()) display += "  (default: " + stated + ")";
     result.push_back(std::move(display));
   }
   return result;

@@ -26,6 +26,8 @@ from ._cli_inventory import (
     _cli_domain,
     _cli_scalar_type,
     _inventory_subparsers,
+    _rendered_default,
+    _stated_default,
     _token_of,
 )
 from ._errors import SonareValueError
@@ -78,7 +80,17 @@ class _ContractArgumentParser(argparse.ArgumentParser):
             and all(isinstance(choice, str) for choice in choices)
         ):
             kwargs["type"] = _token_of(tuple(choices))
-        return super().add_argument(*args, **kwargs)
+        action = super().add_argument(*args, **kwargs)
+        # The parser states its own default in --help, so the text cannot drift from the value.
+        if action.default not in (None, argparse.SUPPRESS) and _stated_default(action) is not None:
+            raise ValueError(
+                f"{action.option_strings[-1]} states a default by hand beside its parser default"
+            )
+        rendered = _rendered_default(action)
+        if rendered is not None:
+            stated = f"(default: {rendered})"
+            action.help = f"{action.help} {stated}" if action.help else stated
+        return action
 
     def _get_value(self, action: argparse.Action, arg_string: str) -> Any:
         """Convert one value and hold it to the option's published domain.

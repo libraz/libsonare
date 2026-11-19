@@ -240,7 +240,7 @@ TEST_CASE("CLI hidden contract inventory is machine-readable", "[cli][contract]"
   auto [code, output] = exec_command(CLI + " --dump-cli-contract");
   REQUIRE(code == 0);
   const auto inventory = sonare::util::json::parse_strict(output);
-  REQUIRE(inventory["schema_version"].as_int() == 3);
+  REQUIRE(inventory["schema_version"].as_int() == 4);
   REQUIRE(inventory["surface"].as_string() == "native");
   REQUIRE(inventory["commands"].is_array());
 
@@ -1315,7 +1315,7 @@ TEST_CASE("CLI --set delivers a JSON value that contains commas intact",
     // The preset schema rejects the array on its own terms. The splitter used
     // to fail first, on the orphaned "2]" fragment, which never reached the
     // schema at all.
-    REQUIRE_THAT(output, ContainsSubstring("field must be numeric: macros.pitch"));
+    REQUIRE_THAT(output, ContainsSubstring("macros.pitch must be a number"));
     REQUIRE_THAT(output, !ContainsSubstring("invalid --set assignment"));
   }
 
@@ -1665,7 +1665,8 @@ constexpr const char* kStatedDefaultCase =
 struct StatedDefaultPaths {
   std::string tone_wav, short_tone_wav, clipped_wav, stepped_wav, noisy_wav, out, project_json,
       reference_smf, rir_wav, click_wav, sine_chords_wav, sine_chords_fast_wav, harmonic_chords_wav,
-      sections_wav, silent_wav, glide_wav, stereo_wav, gapped_wav, takes_project, takes_out;
+      sections_wav, silent_wav, glide_wav, stereo_wav, gapped_wav, takes_project, takes_out,
+      short_notes_wav;
 };
 
 struct StatedRow {
@@ -1689,9 +1690,18 @@ struct DerivedRow {
   std::vector<std::pair<std::string, std::string>> cases;
 };
 
+// A default stated in words: what the library does then has no value the CLI could pass, so
+// no run can compare it, and the reason says what the words describe.
+struct ProseRow {
+  std::string command;
+  std::string option;
+  std::string reason;
+};
+
 struct StatedDefaultTables {
   std::vector<StatedRow> rows;
   std::vector<DerivedRow> derived;
+  std::vector<ProseRow> prose;
 };
 
 StatedDefaultTables build_stated_default_tables(const StatedDefaultPaths& p) {
@@ -1761,6 +1771,10 @@ StatedDefaultTables build_stated_default_tables(const StatedDefaultPaths& p) {
       {"analyze", p.tone_wav + " --json -q", "chroma-high-pass-hz", "4000", true},
       {"analyze", p.tone_wav + " --json -q", "meter-denominator", "8", true},
       {"key", p.tone_wav + " --json -q", "high-pass-hz", "4000", true},
+      {"key", p.tone_wav + " --json -q", "modes", "all", true},
+      {"key", p.tone_wav + " --json -q", "genre-hint", "edm", true},
+      // A steady tone has no meter to choose; clicks every 0.4 s do.
+      {"analyze", p.click_wav + " --json -q", "meter-candidates", "5,7", true},
       // Options read past the chroma stage take a cheaper chroma than the CQT one (~1.8 s a run).
       {"chords", p.sine_chords_wav + " --chroma-method stft --json -q", "min-duration-sec", "1.5"},
       {"chords", p.tone_wav + " --chroma-method stft --json -q", "smoothing-window", "0.5"},
@@ -1915,8 +1929,25 @@ StatedDefaultTables build_stated_default_tables(const StatedDefaultPaths& p) {
       // The channel shows only in the written .mid status bytes.
       {"transcribe", p.tone_wav + to_out, "channel", "5"},
       {"transcribe", p.glide_wav + to_out, "monophonic-model", "singing"},
+      {"transcribe", p.tone_wav + to_out, "reference-hz", "415"},
+      {"transcribe", p.tone_wav + to_out, "velocity-floor-db", "-12"},
+      {"transcribe", p.glide_wav + to_out, "segmentation-threshold-cents", "20"},
+      {"transcribe", p.harmonic_chords_wav + " --polyphonic" + to_out, "max-polyphony", "1"},
+      {"transcribe", p.harmonic_chords_wav + " --polyphonic" + to_out, "min-frame-peak-ratio",
+       "0.95"},
+      {"transcribe", p.harmonic_chords_wav + " --polyphonic" + to_out, "min-ridge-peak-ratio",
+       "0.95"},
+      {"transcribe", p.harmonic_chords_wav + " --polyphonic" + to_out, "reattack-ratio", "50"},
       {"project align-takes", takes_arguments, "hop-length", "256"},
       {"project align-takes", takes_arguments, "bins-per-octave", "24"},
+#endif
+#ifdef SONARE_WITH_PLAYBACK
+      {"playback", p.stereo_wav + to_out, "target", "5.1"},
+      {"playback", p.stereo_wav + to_out, "input-layout", "mono"},
+      {"playback", p.stereo_wav + to_out, "night", "0.8"},
+      // A stereo input has no centre channel for the dialogue gain to reach.
+      {"playback", p.stereo_wav + to_out, "dialogue-db", ""},
+      {"playback", p.stereo_wav + to_out, "target-lufs", "-14"},
 #endif
   };
   tables.derived = {
@@ -1940,6 +1971,35 @@ StatedDefaultTables build_stated_default_tables(const StatedDefaultPaths& p) {
        p.gapped_wav + to_out,
        "target-db",
        {{"--mode peak", "0.0"}, {"--mode rms", "-20.0"}}},
+#ifdef SONARE_WITH_ARRANGEMENT
+      {"transcribe",
+       p.short_notes_wav + to_out,
+       "min-note-ms",
+       {{"--monophonic-model segments", "30"},
+        {"--monophonic-model singing", "45"},
+        {"--polyphonic", "60"}}},
+#endif
+  };
+  tables.prose = {
+      {"key", "profile", "the genre hint picks the profile family"},
+      {"mel", "fmax-hz", "half the input's sample rate"},
+      {"voice-change", "preset", "no preset is applied"},
+#ifdef SONARE_WITH_ACOUSTIC_SIM
+      {"synthesize-rir", "max-sec", "the synthesized tail runs to its own end"},
+      {"room-morph", "max-sec", "the synthesized tail runs to its own end"},
+#endif
+#ifdef SONARE_WITH_ARRANGEMENT
+      {"project new", "sample-rate", "the new project's own rate"},
+      {"project bounce", "frames", "the project's last event plus its tail"},
+      {"project bounce", "channels", "the scene master's channel count"},
+      {"midi-render", "frames", "the project's last event plus its tail"},
+      {"midi-render", "channels", "the scene master's channel count"},
+      {"midi-render", "synth", "each channel's GM program picks its instrument"},
+      {"transcribe", "tempo-bpm", "the tempo detected in the input"},
+#endif
+#ifdef SONARE_WITH_PLAYBACK
+      {"playback", "program-lufs", "the loudness measured over the whole input"},
+#endif
   };
   return tables;
 }
@@ -1949,7 +2009,8 @@ const StatedDefaultTables& stated_default_tables() {
       {"@tone@",        "@short_tone@",       "@clipped@",         "@stepped@",  "@noisy@",
        "@out@",         "@project@",          "@reference_smf@",   "@rir@",      "@clicks@",
        "@sine_chords@", "@sine_chords_fast@", "@harmonic_chords@", "@sections@", "@silent@",
-       "@glide@",       "@stereo@",           "@gapped@",          "@takes@",    "@takes_out@"});
+       "@glide@",       "@stereo@",           "@gapped@",          "@takes@",    "@takes_out@",
+       "@short_notes@"});
   return tables;
 }
 
@@ -2010,6 +2071,8 @@ class StatedDefaultFixtures {
     add("@takes@", "_stated_takes.json",
         [](const std::string& path) { create_takes_project(path); });
     add("@takes_out@", "_stated_takes_out.json", nullptr);
+    add("@short_notes@", "_stated_short_notes.wav",
+        [](const std::string& path) { create_short_notes_wav(path); });
   }
 
   ~StatedDefaultFixtures() {
@@ -2090,7 +2153,14 @@ void run_derived_row(std::size_t index) {
   for (const auto& [setting, value] : row.cases) {
     CAPTURE(setting, value);
     const std::string base = fixtures.resolve(row.command + " " + row.arguments + " " + setting);
-    CHECK(fixtures.rendered(base) == fixtures.rendered(base + " --" + row.option + " " + value));
+    const std::string omitted = fixtures.rendered(base);
+    CHECK(omitted == fixtures.rendered(base + " --" + row.option + " " + value));
+    // Another case's value has to move this one, or the equality above could hold on any value.
+    for (const auto& [other_setting, other_value] : row.cases) {
+      if (other_value == value) continue;
+      CAPTURE(other_value);
+      CHECK(omitted != fixtures.rendered(base + " --" + row.option + " " + other_value));
+    }
   }
 }
 
@@ -2144,7 +2214,8 @@ TEST_CASE("CLI options left to the library each have a stated-default row", "[cl
         return stated_registry_path(row.command) == command.path && row.option == option.name;
       };
       CHECK((std::any_of(tables.rows.begin(), tables.rows.end(), names) ||
-             std::any_of(tables.derived.begin(), tables.derived.end(), names)));
+             std::any_of(tables.derived.begin(), tables.derived.end(), names) ||
+             std::any_of(tables.prose.begin(), tables.prose.end(), names)));
     }
   }
 
@@ -2161,6 +2232,10 @@ TEST_CASE("CLI options left to the library each have a stated-default row", "[cl
     check_spec(row.command, row.option);
     REQUIRE(row.cases.size() >= 2);
     CHECK(row.cases[0].second != row.cases[1].second);
+  }
+  for (const ProseRow& row : tables.prose) {
+    check_spec(row.command, row.option);
+    CHECK_FALSE(row.reason.empty());
   }
 }
 

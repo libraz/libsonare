@@ -1000,7 +1000,7 @@ def _add_assistant_control_arguments(parser: argparse.ArgumentParser) -> None:
             "club",
             "cd",
         ),
-        help="Delivery target the assistant masters for (default: streaming)",
+        help="Delivery target the assistant masters for",
     )
     parser.add_argument(
         "--no-streaming-safe",

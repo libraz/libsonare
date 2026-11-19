@@ -560,10 +560,12 @@ def register_mixing_parsers(
         "--sample-rate",
         type=_c_int,
         default=48000,
-        help="Shared analysis sample rate (default: 48000)",
+        help="Shared analysis sample rate",
     )
     suggest_mix_p.add_argument(
-        "--params", default="", help="Assistant params as k=v,k=v (default: the library's own)"
+        "--params",
+        default="",
+        help="Assistant params as k=v,k=v; a key left out keeps the library's value",
     )
     suggest_mix_p.add_argument(
         "--tempo-bpm",
@@ -614,9 +616,7 @@ def register_mixing_parsers(
             "instead, one per strip in scene order"
         ),
     )
-    mix_p.add_argument(
-        "--sample-rate", type=_c_int, default=48000, help="Mixer sample rate (default: 48000)"
-    )
+    mix_p.add_argument("--sample-rate", type=_c_int, default=48000, help="Mixer sample rate")
 
     mix_strip_p = sub.add_parser(
         "mix-strip",
@@ -628,14 +628,10 @@ def register_mixing_parsers(
             "input because a duplicated mono pair carries no side signal to widen."
         ),
     )
-    mix_strip_p.add_argument(
-        "--input-trim-db", type=float, default=0.0, help="Input trim in dB (default: 0)"
-    )
-    mix_strip_p.add_argument("--fader-db", type=float, default=0.0, help="Fader in dB (default: 0)")
+    mix_strip_p.add_argument("--input-trim-db", type=float, default=0.0, help="Input trim in dB")
+    mix_strip_p.add_argument("--fader-db", type=float, default=0.0, help="Fader in dB")
     _cli_domain(
-        mix_strip_p.add_argument(
-            "--pan", type=float, default=0.0, help="Pan position, -1 to 1 (default: 0)"
-        ),
+        mix_strip_p.add_argument("--pan", type=float, default=0.0, help="Pan position, -1 to 1"),
         minimum=-1.0,
         maximum=1.0,
         reject_exit="invalid_parameter",
@@ -644,15 +640,13 @@ def register_mixing_parsers(
         mix_strip_p.add_argument(
             "--pan-mode",
             default="balance",
-            help="Pan mode: balance, stereo-pan or dual-pan (default: balance)",
+            help="Pan mode: balance, stereo-pan or dual-pan",
         ),
         choices=tuple(_cli_token(mode) for mode in _MIX_STRIP_PAN_MODES),
         reject_exit="invalid_parameter",
     )
     _cli_domain(
-        mix_strip_p.add_argument(
-            "--width", type=float, default=1.0, help="Stereo width, 0 to 2 (default: 1.0)"
-        ),
+        mix_strip_p.add_argument("--width", type=float, default=1.0, help="Stereo width, 0 to 2"),
         minimum=0.0,
         maximum=2.0,
         reject_exit="invalid_parameter",

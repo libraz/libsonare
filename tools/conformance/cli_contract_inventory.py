@@ -113,8 +113,8 @@ def _validate_inventory(value: Any, surface: str) -> tuple[list[str], dict[str, 
     ]
     if not _exact(value, {"schema_version", "surface", "commands"}, f"inventory.{surface}", errors):
         return errors, {}
-    if value["schema_version"] != 3:
-        errors.append(f"inventory.{surface}.schema_version: expected 3")
+    if value["schema_version"] != 4:
+        errors.append(f"inventory.{surface}.schema_version: expected 4")
     if value["surface"] != surface:
         errors.append(f"inventory.{surface}.surface: expected {surface!r}")
     commands: dict[str, dict[str, Any]] = {}

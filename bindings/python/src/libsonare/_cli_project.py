@@ -988,7 +988,7 @@ def register_project_parsers(
         "--reference-hz",
         type=_finite_float,
         default=None,
-        help="Tuning reference the MIDI note numbers are measured against (default: 440)",
+        help="Tuning reference the MIDI note numbers are measured against (default: 440.0)",
     )
     transcribe_p.add_argument(
         "--f0-min-hz",
@@ -1007,7 +1007,7 @@ def register_project_parsers(
         type=_finite_float,
         default=None,
         help="Shortest span kept as a note, in ms "
-        "(default: 30 monophonic segments, 45 singing, 60 polyphonic)",
+        "(default: 30.0 (segments), 45.0 (singing) or 60.0 (polyphonic))",
     )
     _cli_domain(
         transcribe_p.add_argument(
@@ -1040,7 +1040,7 @@ def register_project_parsers(
             type=_finite_float,
             default=None,
             help="Polyphonic only: a frame's search stops below this share of its first "
-            "peak, 0-1 (default: 0.20)",
+            "peak, 0-1 (default: 0.2)",
         ),
         minimum=0.0,
         maximum=1.0,
@@ -1052,7 +1052,7 @@ def register_project_parsers(
             type=_finite_float,
             default=None,
             help="Polyphonic only: a ridge ends below this share of its own peak, 0-1 "
-            "(default: 0.10)",
+            "(default: 0.1)",
         ),
         minimum=0.0,
         maximum=1.0,
@@ -1063,14 +1063,14 @@ def register_project_parsers(
         type=_finite_float,
         default=None,
         help="Polyphonic only: split a ridge where its salience climbs past this "
-        "multiple of the level before, above 1 (default: no split)",
+        "multiple of the level before, above 1 (default: 2.0)",
     )
     transcribe_p.add_argument(
         "--segmentation-threshold-cents",
         type=_finite_float,
         default=None,
         help="Monophonic: segments ends a note where the pitch moves this many cents; "
-        "singing reads it as the pitch movement kept within one note (default: 50)",
+        "singing reads it as the pitch movement kept within one note (default: 50.0)",
     )
     _cli_domain(
         transcribe_p.add_argument(
@@ -1088,7 +1088,7 @@ def register_project_parsers(
         "--velocity-floor-db",
         type=_finite_float,
         default=None,
-        help="Level mapped to velocity 1; must be negative (default: -48)",
+        help="Level mapped to velocity 1; must be negative (default: -48.0)",
     )
     transcribe_p.add_argument(
         "--fixed-velocity",

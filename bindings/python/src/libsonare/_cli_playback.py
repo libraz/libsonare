@@ -62,7 +62,7 @@ def register_playback_parsers(sub: argparse._SubParsersAction[Any], shared: Shar
     p.add_argument("--no-upmix", action="store_true", help="Disable the stereo-to-surround upmix")
     _cli_domain(
         p.add_argument(
-            "--night", type=_finite_float, default=None, help="Night-mode DRC amount (default: 0)"
+            "--night", type=_finite_float, default=None, help="Night-mode DRC amount (default: 0.0)"
         ),
         minimum=0.0,
         maximum=1.0,
@@ -72,7 +72,7 @@ def register_playback_parsers(sub: argparse._SubParsersAction[Any], shared: Shar
             "--dialogue-db",
             type=_finite_float,
             default=None,
-            help="Dialogue level gain in dB (default: 0)",
+            help="Dialogue level gain in dB (default: 0.0)",
         ),
         minimum=-12.0,
         maximum=12.0,
@@ -92,7 +92,7 @@ def register_playback_parsers(sub: argparse._SubParsersAction[Any], shared: Shar
             "--target-lufs",
             type=_finite_float,
             default=None,
-            help="Target loudness in LUFS (default: -24)",
+            help="Target loudness in LUFS (default: -24.0)",
         ),
         minimum=-40.0,
         maximum=-5.0,

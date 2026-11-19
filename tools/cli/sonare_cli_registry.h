@@ -140,6 +140,11 @@ const CliCommandSpec* cli_command_spec_for_path(const std::string& path);
 const CliOptionSpec* cli_option_spec_for_command(const std::string& command,
                                                  const std::string& option);
 
+/// The default `--help` states for @p option, and the text the inventory publishes: the
+/// stated library default, else the registry default (a number keeps one decimal place when
+/// integral). Empty for a flag, a required or repeatable option, and an empty string.
+std::string cli_option_stated_default(const CliOptionSpec& option);
+
 // The command parser and hidden contract inventory project this metadata from
 // the same registry. These fields retain the stable JSON-facing projection;
 // the richer arity/required/default-binding fields are available on the
@@ -167,6 +172,8 @@ struct CliOptionMetadata {
   /// parser's `choices=` / `type=` domains instead of assuming they agree.
   CliOptionDomain domain;
   CliOptionDomainStage required_stage = CliOptionDomainStage::Usage;
+  /// `cli_option_stated_default`, the text `--help` prints.
+  std::string stated_default;
 };
 
 std::vector<CliOptionMetadata> cli_option_metadata_for_command(const std::string& command);

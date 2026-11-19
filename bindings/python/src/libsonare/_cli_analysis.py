@@ -648,7 +648,7 @@ def register_analysis_parsers(
         type=str,
         default=None,
         help="Candidate modes: major-minor, all, or comma-separated mode names "
-        "(default: major and minor)",
+        "(default: major-minor)",
     )
     key_p.add_argument(
         "--profile",
@@ -760,7 +760,7 @@ def register_analysis_parsers(
             "--threshold",
             type=_finite_float,
             default=None,
-            help="Relative boundary threshold (default: the library's section default)",
+            help="Relative boundary threshold (default: 0.22)",
         ),
         minimum=0.0,
         reject_exit="invalid_parameter",

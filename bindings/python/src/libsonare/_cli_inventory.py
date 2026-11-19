@@ -187,6 +187,58 @@ def _is_repeatable(action: argparse.Action) -> bool:
     return bool(action_types) and isinstance(action, action_types)
 
 
+def _stated_number(value: float) -> str:
+    """A number as both CLIs state it in ``--help``: an integral value keeps one decimal place."""
+    number = float(value)
+    return f"{number:.1f}" if number.is_integer() else format(number, "g")
+
+
+def _rendered_default(action: argparse.Action) -> str | None:
+    """The parser default as ``--help`` states it, or None where there is none to state.
+
+    The rule is the native help renderer's, ``cli_option_stated_default``: a flag, a
+    required or repeatable option and an empty string state nothing.
+    """
+    if not action.option_strings or action.required or _is_repeatable(action):
+        return None
+    default = action.default
+    if default is None or default is argparse.SUPPRESS or isinstance(default, bool):
+        return None
+    if default == "":
+        return None
+    option_type = _option_type(action, _canonical_option_string(action).lstrip("-"))
+    if option_type == "boolean":
+        return None
+    if option_type == "integer":
+        return str(int(default))
+    if option_type == "number":
+        return _stated_number(default)
+    return str(default)
+
+
+_STATED_PREFIX = "(default: "
+
+
+def _stated_default(action: argparse.Action) -> str | None:
+    """The default an option's help states, exactly as ``--help`` prints it."""
+    text = action.help
+    if not isinstance(text, str) or text == argparse.SUPPRESS:
+        return None
+    start = text.rfind(_STATED_PREFIX)
+    if start < 0:
+        return None
+    begin = start + len(_STATED_PREFIX)
+    depth = 1
+    for index in range(begin, len(text)):
+        if text[index] == "(":
+            depth += 1
+        elif text[index] == ")":
+            depth -= 1
+            if depth == 0:
+                return " ".join(text[begin:index].split())
+    return None
+
+
 def _inventory_option(action: argparse.Action) -> dict[str, Any] | None:
     """Convert one argparse option action to a schema-v2 record.
 
@@ -227,6 +279,7 @@ def _inventory_option(action: argparse.Action) -> dict[str, Any] | None:
         "name": canonical,
         "type": option_type,
         "default": default,
+        "stated_default": _stated_default(action),
         "aliases": aliases,
         "repeatable": repeatable,
         "required": required,
@@ -260,7 +313,7 @@ def build_cli_contract(
 ) -> dict[str, Any]:
     """Build the hidden inventory from the supplied argparse tree."""
     return {
-        "schema_version": 3,
+        "schema_version": 4,
         "surface": surface,
         "commands": [
             _command_record(path, command_parser)

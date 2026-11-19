@@ -545,6 +545,30 @@ inline void create_glide_wav(const std::string& path, float duration = 1.5f,
   save_wav(path, samples, sample_rate);
 }
 
+/// @brief Creates alternating 220 / 330 Hz notes of 20, 38, 52 and 75 ms, three times over.
+/// @param path Output path
+/// @param sample_rate Sample rate
+///
+/// The note lengths straddle the 30, 45 and 60 ms shortest-note defaults, so a transcription
+/// keeps a different set of notes at each; 0.1 s of silence pads both ends.
+inline void create_short_notes_wav(const std::string& path, int sample_rate = 22050) {
+  const std::array<double, 4> lengths_sec{0.020, 0.038, 0.052, 0.075};
+  const size_t pad = static_cast<size_t>(0.1 * sample_rate);
+  std::vector<float> samples(pad, 0.0f);
+  const double two_pi = 2.0 * sonare::constants::kPiD;
+  double cumulative = 0.0;
+  for (int note = 0; note < 12; ++note) {
+    const double frequency = note % 2 == 0 ? 220.0 : 330.0;
+    const auto length = static_cast<size_t>(lengths_sec[note % 4] * sample_rate);
+    for (size_t i = 0; i < length; ++i) {
+      cumulative += frequency;
+      samples.push_back(static_cast<float>(0.5 * std::sin(two_pi * cumulative / sample_rate)));
+    }
+  }
+  samples.insert(samples.end(), pad, 0.0f);
+  save_wav(path, samples, sample_rate);
+}
+
 /// @brief Creates a one-second stereo WAV whose right channel trails the left.
 /// @param path Output path
 /// @param sample_rate Sample rate

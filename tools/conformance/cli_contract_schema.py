@@ -364,11 +364,23 @@ def _validate_text_expectations(case: Any, label: str, errors: list[str]) -> Non
 def _validate_option(option: Any, label: str, errors: list[str]) -> None:
     if not _exact(
         option,
-        {"name", "type", "default", "aliases", "repeatable", "required", "domain"},
+        {
+            "name",
+            "type",
+            "default",
+            "stated_default",
+            "aliases",
+            "repeatable",
+            "required",
+            "domain",
+        },
         label,
         errors,
     ):
         return
+    stated = option["stated_default"]
+    if stated is not None and (not isinstance(stated, str) or not stated):
+        errors.append(f"{label}.stated_default: expected null or a non-empty string")
     if not _domain_is_well_formed(option["domain"]):
         errors.append(f"{label}.domain: expected null or a domain record")
     if not isinstance(option["name"], str) or not option["name"]:
@@ -1037,6 +1049,7 @@ _OPTION_RECORD_FIELDS = {
     "name",
     "type",
     "default",
+    "stated_default",
     "aliases",
     "repeatable",
     "required",
@@ -1089,6 +1102,7 @@ def _option_inventory_is_well_formed(options: Any) -> bool:
         isinstance(option, dict)
         and set(option) == _OPTION_RECORD_FIELDS
         and isinstance(option.get("name"), str)
+        and (option.get("stated_default") is None or isinstance(option["stated_default"], str))
         and isinstance(option.get("aliases"), list)
         and all(isinstance(alias, str) for alias in option["aliases"])
         and isinstance(option.get("repeatable"), bool)
@@ -1116,6 +1130,7 @@ def _normalized_option_inventory(
             "name": option["name"],
             "type": option["type"],
             "default": option["default"],
+            "stated_default": option["stated_default"],
             "aliases": sorted(option["aliases"]),
             "repeatable": option["repeatable"],
             "required": option["required"],

@@ -58,6 +58,7 @@ from cli_contract_schema import (
     _normalized_option_inventory,
     _validate_option,  # noqa: F401
 )
+from cli_contract_stated import compare_stated_defaults
 
 DEFAULT_MANIFEST = REPO_ROOT / "tests" / "conformance" / "cli_contract_v2.json"
 
@@ -972,6 +973,12 @@ def main(argv: list[str] | None = None) -> int:
                 report,
             )
             print(f"option-domain refusals: {compared} compared, {len(not_compared)} not compared")
+            for reason in not_compared:
+                print(f"  not compared: {reason}")
+            compared, not_compared = compare_stated_defaults(
+                native_inventory, python_inventory, report
+            )
+            print(f"stated defaults: {compared} compared, {len(not_compared)} not compared")
             for reason in not_compared:
                 print(f"  not compared: {reason}")
 

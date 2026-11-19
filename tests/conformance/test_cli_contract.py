@@ -152,12 +152,13 @@ class CliContractSelfTest(unittest.TestCase):
                 "with-seventh",
             ],
         )
-        # Left to the library: the CLI holds no default of its own for the high-pass corner.
-        self.assertIsNone(
-            next(
-                option for option in contract["options"] if option["name"] == "chroma-high-pass-hz"
-            )["default"]
+        # Left to the library: the CLI holds no default of its own for the high-pass corner, and
+        # both front-ends state the library's.
+        high_pass = next(
+            option for option in contract["options"] if option["name"] == "chroma-high-pass-hz"
         )
+        self.assertIsNone(high_pass["default"])
+        self.assertEqual(high_pass["stated_default"], "80.0")
         payload_keys = set(contract["payloads"]["success"]["keys"])
         self.assertEqual(
             payload_keys,
@@ -660,7 +661,7 @@ class CliContractSelfTest(unittest.TestCase):
             for path in CHECKER._expected_paths(manifest["commands"], surface)
         }
         return {
-            "schema_version": 3,
+            "schema_version": 4,
             "surface": surface,
             "commands": list(commands.values()),
         }
@@ -1176,6 +1177,7 @@ class CliContractSelfTest(unittest.TestCase):
             "name": "input",
             "type": "path",
             "default": None,
+            "stated_default": None,
             "aliases": [],
             "repeatable": False,
             "required": True,
@@ -1194,6 +1196,7 @@ class CliContractSelfTest(unittest.TestCase):
             "name": "set",
             "type": "string",
             "default": [],
+            "stated_default": None,
             "aliases": [],
             "repeatable": True,
             "required": False,
@@ -1214,6 +1217,7 @@ class CliContractSelfTest(unittest.TestCase):
             "name": "semitones",
             "type": "number",
             "default": None,
+            "stated_default": None,
             "aliases": [],
             "repeatable": False,
             "required": False,
@@ -1240,6 +1244,7 @@ class CliContractSelfTest(unittest.TestCase):
                 "name": "zeta",
                 "type": "string",
                 "default": "",
+                "stated_default": None,
                 "aliases": ["z", "zz"],
                 "repeatable": False,
                 "required": False,
@@ -1256,6 +1261,7 @@ class CliContractSelfTest(unittest.TestCase):
                 "name": "alpha",
                 "type": "number",
                 "default": [],
+                "stated_default": None,
                 "aliases": ["a"],
                 "repeatable": True,
                 "required": False,

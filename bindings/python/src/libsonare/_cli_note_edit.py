@@ -824,7 +824,7 @@ def register_note_edit_parsers(
             type=_c_int,
             default=0,
             metavar="N",
-            help="MIDI-bearing track the melody is read from (default: 0)",
+            help="MIDI-bearing track the melody is read from",
         ),
         minimum=0,
         reject_exit="invalid_parameter",

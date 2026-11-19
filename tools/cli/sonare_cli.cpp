@@ -233,6 +233,12 @@ void emit_inventory_domain(JsonBuilder& json, const CliOptionMetadata& option) {
 void emit_inventory_option(JsonBuilder& json, const CliOptionMetadata& option) {
   json.begin_object().kv("name", option.name).kv("type", option.type);
   emit_inventory_default(json, option);
+  json.key("stated_default");
+  if (option.stated_default.empty()) {
+    json.null_value();
+  } else {
+    json.value(option.stated_default);
+  }
   json.key("aliases").begin_array();
   for (const auto& alias : option.aliases) json.value(alias);
   json.end_array().kv("repeatable", option.repeatable).kv("required", option.required);
@@ -244,7 +250,7 @@ void emit_inventory_option(JsonBuilder& json, const CliOptionMetadata& option) {
 
 std::string dump_cli_contract_json() {
   JsonBuilder json;
-  json.begin_object().kv("schema_version", 3).kv("surface", "native").key("commands").begin_array();
+  json.begin_object().kv("schema_version", 4).kv("surface", "native").key("commands").begin_array();
   for (const auto& command : cli_command_registry()) {
     if (!command.inventory) continue;
     json.begin_object().kv("path", command.path).key("aliases").begin_array();

@@ -87,14 +87,15 @@ def _validate_declared_inventory(manifest: Any, inventory: Any, errors: list[str
         "manifest.inventory",
         errors,
     ):
-        if inventory["schema_version"] != 3:
-            errors.append("manifest.inventory.schema_version: expected 3")
+        if inventory["schema_version"] != 4:
+            errors.append("manifest.inventory.schema_version: expected 4")
         if inventory["command_fields"] != ["path", "aliases", "options"]:
             errors.append("manifest.inventory.command_fields: unexpected field order")
         if inventory["option_fields"] != [
             "name",
             "type",
             "default",
+            "stated_default",
             "aliases",
             "repeatable",
             "required",

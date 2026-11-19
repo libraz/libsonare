@@ -753,9 +753,7 @@ def register_effects_parsers(
         "normalize", parents=[common], help="Peak-normalize audio to a target dB level"
     )
     _cli_domain(
-        normalize_p.add_argument(
-            "--mode", default="peak", help="Normalization mode: peak or rms (default: peak)"
-        ),
+        normalize_p.add_argument("--mode", default="peak", help="Normalization mode: peak or rms"),
         choices=("peak", "rms"),
         reject_exit="invalid_parameter",
     )

@@ -317,19 +317,19 @@ def register_acoustic_parsers(
             "--length",
             type=_finite_float,
             default=None if library_geometry else 7.0,
-            help="Room length (m) (default: 7.0)",
+            help="Room length (m)" + (" (default: 7.0)" if library_geometry else ""),
         )
         p.add_argument(
             "--width",
             type=_finite_float,
             default=None if library_geometry else 5.0,
-            help="Room width (m) (default: 5.0)",
+            help="Room width (m)" + (" (default: 5.0)" if library_geometry else ""),
         )
         p.add_argument(
             "--height",
             type=_finite_float,
             default=None if library_geometry else 3.0,
-            help="Room height (m) (default: 3.0)",
+            help="Room height (m)" + (" (default: 3.0)" if library_geometry else ""),
         )
         # The room builder clamps rather than validates, so the refusal comes from
         # the material check beside it -- an invalid parameter, not a usage error.
