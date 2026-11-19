@@ -4,8 +4,8 @@
     "input": { "n_mfcc": 4, "n_frames": 3, "fill": 0.1 },
     "accepted": [{ "id": "one_mel", "n_mels": 1 }],
     "refused": [
-      { "id": "zero_mels", "n_mels": 0, "cause": "argument", "message": "n_mels must be >= 1" },
-      { "id": "negative_mels", "n_mels": -1, "cause": "argument", "message": "n_mels must be >= 1" }
+      { "id": "zero_mels", "n_mels": 0, "cause": "argument", "message": "n_mels must be an integer in [1, 2147483647]" },
+      { "id": "negative_mels", "n_mels": -1, "cause": "argument", "message": "n_mels must be an integer in [1, 2147483647]" }
     ]
   },
   "streaming_retune_config": {
@@ -54,8 +54,8 @@
     "input": { "n_mels": 8, "n_frames": 4, "fill": 0.1 },
     "accepted": [{ "id": "one_iter", "n_iter": 1 }],
     "refused": [
-      { "id": "zero_iter", "n_iter": 0, "cause": "argument", "message": "n_iter must be >= 1" },
-      { "id": "negative_iter", "n_iter": -1, "cause": "argument", "message": "n_iter must be >= 1" }
+      { "id": "zero_iter", "n_iter": 0, "cause": "argument", "message": "n_iter must be an integer in [1, 2147483647]" },
+      { "id": "negative_iter", "n_iter": -1, "cause": "argument", "message": "n_iter must be an integer in [1, 2147483647]" }
     ],
     "absent_hop": [
       { "id": "absent_hop", "n_fft": 2048, "hop_length": 0, "derived_hop_length": 512 }
@@ -68,8 +68,8 @@
     "input": { "n_mfcc": 4, "n_frames": 3, "n_mels": 8, "fill": 0.1 },
     "accepted": [{ "id": "one_iter", "n_iter": 1 }],
     "refused": [
-      { "id": "zero_iter", "n_iter": 0, "cause": "argument", "message": "n_iter must be >= 1" },
-      { "id": "negative_iter", "n_iter": -1, "cause": "argument", "message": "n_iter must be >= 1" }
+      { "id": "zero_iter", "n_iter": 0, "cause": "argument", "message": "n_iter must be an integer in [1, 2147483647]" },
+      { "id": "negative_iter", "n_iter": -1, "cause": "argument", "message": "n_iter must be an integer in [1, 2147483647]" }
     ],
     "absent_hop": [
       { "id": "absent_hop", "n_fft": 2048, "hop_length": 0, "derived_hop_length": 512 }
@@ -163,7 +163,7 @@
       { "id": "clean_signal" }
     ],
     "refused": [
-      { "id": "nan_sample", "nan_at": 1, "cause": "argument", "message": "zero_crossings: input contains a non-finite sample" }
+      { "id": "nan_sample", "nan_at": 1, "cause": "argument", "message": "y contains a non-finite sample at index 1" }
     ]
   },
   "master_audio": {
