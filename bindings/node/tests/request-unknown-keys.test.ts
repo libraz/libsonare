@@ -364,7 +364,7 @@ describe('record fields inside a request refuse an undeclared key by its path', 
       } as never),
     ).toThrow(
       new TypeError(
-        'masteringStreamingPreview: unknown key platforms[1].ceiling (expected name, targetLufs, ceilingDbtp)',
+        'masteringStreamingPreview: unknown key platforms[1].ceiling (expected ceilingDbtp, name, targetLufs)',
       ),
     );
   });

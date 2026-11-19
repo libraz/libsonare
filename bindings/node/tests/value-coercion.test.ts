@@ -110,7 +110,7 @@ describe('enum ordinal coercion', () => {
         } as unknown as ProjectAutomationPoint,
         2,
       ),
-    ).toThrow(new TypeError('unknown key points[2].curve (expected ppq, value, curveToNext)'));
+    ).toThrow(new TypeError('unknown key points[2].curve (expected curveToNext, ppq, value)'));
   });
 });
 

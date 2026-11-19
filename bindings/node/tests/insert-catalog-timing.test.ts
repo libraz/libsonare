@@ -85,7 +85,11 @@ describe('insert catalog carries construction-only params, and timing answers pe
         params: { notAKey: 1 } as never,
         sampleRate: 48000,
       }),
-    ).toThrowError(/does not read parameter\(s\).*notAKey/);
+    ).toThrowError(
+      new RangeError(
+        'masteringInsertTiming: unknown key notAKey (expected aliasing, ceiling, driveDb, mix)',
+      ),
+    );
   });
 
   it('rejects a non-finite number, naming the key', () => {
