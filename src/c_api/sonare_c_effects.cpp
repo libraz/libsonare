@@ -99,11 +99,9 @@ SonareError sonare_hpss_ex(const float* samples, size_t length, int sample_rate,
   if (out == nullptr || (with_residual != 0 && out_residual == nullptr)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  // Validate the transform shape at the boundary rather than relying on the
-  // core's precondition throw, so every _ex entry point rejects it identically
-  // and before any input is decoded.
-  // A hop of 0 is absent: the core runs a quarter of n_fft.
-  if (n_fft <= 0 || hop_length < 0) return SONARE_ERROR_INVALID_PARAMETER;
+  // The FFT size is refused before any input is decoded. A hop of 0 is absent and
+  // the core runs a quarter of n_fft; it names a negative one.
+  if (n_fft <= 0) return SONARE_ERROR_INVALID_PARAMETER;
 
   return run_offline(
       "hpss_ex", "samples", samples, length, sample_rate, [&](const Audio& audio) -> SonareError {

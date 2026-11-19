@@ -278,7 +278,7 @@ val js_mel_to_audio(val mel_power, const val& n_mels_val, const val& n_frames_va
   std::vector<float> data =
       load_validated_matrix("melToAudio", mel_power, n_mels, n_frames, "power", "n_mels");
   validate_positive("melToAudio", n_fft, "n_fft");
-  validate_positive("melToAudio", hop_length, "hop_length");
+  // A hop of 0 is absent and the core runs a quarter of n_fft; it names a negative one.
   validate_mel_bounds(fmin, fmax);
 
   MelConfig config;
@@ -307,7 +307,7 @@ val js_griffin_lim(val magnitude, const val& n_bins_val, const val& n_frames_val
   std::vector<float> data =
       load_validated_matrix("griffinLim", magnitude, n_bins, n_frames, "magnitude", "n_bins");
   validate_positive("griffinLim", n_fft, "n_fft");
-  validate_positive("griffinLim", hop_length, "hop_length");
+  // A hop of 0 is absent and the core runs a quarter of n_fft; it names a negative one.
   validate_positive("griffinLim", n_iter, "n_iter");
   if (n_bins != n_fft / 2 + 1 || n_iter > sonare::resource::kMaxGriffinLimIterations ||
       momentum < 0.0f || momentum >= 1.0f) {
@@ -360,7 +360,7 @@ val js_mfcc_to_audio(val mfcc, const val& n_mfcc_val, const val& n_frames_val,
   std::vector<float> data =
       load_validated_matrix("mfccToAudio", mfcc, n_mfcc, n_frames, "coefficients", "n_mfcc");
   validate_positive("mfccToAudio", n_fft, "n_fft");
-  validate_positive("mfccToAudio", hop_length, "hop_length");
+  // A hop of 0 is absent and the core runs a quarter of n_fft; it names a negative one.
   validate_mel_bounds(fmin, fmax);
 
   MelConfig config;

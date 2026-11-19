@@ -150,6 +150,30 @@ TEST_CASE("mel_to_audio refusals are owned by the core function",
                                  n_iter, &audio, &audio_length) == SONARE_ERROR_INVALID_PARAMETER);
     CHECK_THAT(last_error_message(), Catch::Matchers::ContainsSubstring(message));
   }
+
+  const auto run = [&](int n_fft, int hop, SonareError expected) {
+    float* audio = nullptr;
+    size_t audio_length = 0;
+    REQUIRE(sonare_mel_to_audio_ex(mel.data(), n_mels, n_frames, kRate, n_fft, hop, 0.0f, 0.0f, 0,
+                                   1, &audio, &audio_length) == expected);
+    std::vector<float> result(audio, audio + audio_length);
+    sonare_free_floats(audio);
+    return result;
+  };
+  for (const auto& item : route["absent_hop"].as_array()) {
+    INFO(item["id"].as_string());
+    const int n_fft = static_cast<int>(item["n_fft"].as_number());
+    CHECK(run(n_fft, static_cast<int>(item["hop_length"].as_number()), SONARE_OK) ==
+          run(n_fft, static_cast<int>(item["derived_hop_length"].as_number()), SONARE_OK));
+  }
+  for (const auto& item : route["negative_hop"].as_array()) {
+    INFO(item["id"].as_string());
+    REQUIRE(item["cause"].as_string() == "argument");
+    run(static_cast<int>(item["n_fft"].as_number()),
+        static_cast<int>(item["hop_length"].as_number()), SONARE_ERROR_INVALID_PARAMETER);
+    CHECK_THAT(last_error_message(),
+               Catch::Matchers::ContainsSubstring(item["message"].as_string()));
+  }
 }
 
 TEST_CASE("mfcc_to_audio refusals are owned by the core function",
@@ -192,6 +216,69 @@ TEST_CASE("mfcc_to_audio refusals are owned by the core function",
                                    0.0f, 0, 0.0f, n_iter, &audio,
                                    &audio_length) == SONARE_ERROR_INVALID_PARAMETER);
     CHECK_THAT(last_error_message(), Catch::Matchers::ContainsSubstring(message));
+  }
+
+  const auto run = [&](int n_fft, int hop, SonareError expected) {
+    float* audio = nullptr;
+    size_t audio_length = 0;
+    REQUIRE(sonare_mfcc_to_audio_ex2(mfcc.data(), n_mfcc, n_frames, n_mels, kRate, n_fft, hop, 0.0f,
+                                     0.0f, 0, 0.0f, 1, &audio, &audio_length) == expected);
+    std::vector<float> result(audio, audio + audio_length);
+    sonare_free_floats(audio);
+    return result;
+  };
+  for (const auto& item : route["absent_hop"].as_array()) {
+    INFO(item["id"].as_string());
+    const int n_fft = static_cast<int>(item["n_fft"].as_number());
+    CHECK(run(n_fft, static_cast<int>(item["hop_length"].as_number()), SONARE_OK) ==
+          run(n_fft, static_cast<int>(item["derived_hop_length"].as_number()), SONARE_OK));
+  }
+  for (const auto& item : route["negative_hop"].as_array()) {
+    INFO(item["id"].as_string());
+    REQUIRE(item["cause"].as_string() == "argument");
+    run(static_cast<int>(item["n_fft"].as_number()),
+        static_cast<int>(item["hop_length"].as_number()), SONARE_ERROR_INVALID_PARAMETER);
+    CHECK_THAT(last_error_message(),
+               Catch::Matchers::ContainsSubstring(item["message"].as_string()));
+  }
+}
+
+TEST_CASE("griffin_lim derives an absent hop and names a negative one",
+          "[conformance][core_validation]") {
+  const Value corpus = load_refusal_corpus();
+  const Value& route = corpus["griffin_lim"];
+  const Value& input = route["input"];
+  const int rate = static_cast<int>(input["sample_rate"].as_number());
+  const int n_frames = static_cast<int>(input["n_frames"].as_number());
+  const float fill = static_cast<float>(input["fill"].as_number());
+
+  const auto run = [&](int n_fft, int hop, SonareError expected) {
+    const int n_bins = n_fft / 2 + 1;
+    const std::vector<float> magnitude(static_cast<size_t>(n_bins) * n_frames, fill);
+    float* audio = nullptr;
+    size_t audio_length = 0;
+    REQUIRE(sonare_griffin_lim(magnitude.data(), magnitude.size(), n_bins, n_frames, n_fft, hop,
+                               rate, 1, 0.0f, &audio, &audio_length) == expected);
+    std::vector<float> result(audio, audio + audio_length);
+    sonare_free_floats(audio);
+    return result;
+  };
+  for (const auto& item : route["absent_hop"].as_array()) {
+    INFO(item["id"].as_string());
+    const int n_fft = static_cast<int>(item["n_fft"].as_number());
+    const std::vector<float> absent =
+        run(n_fft, static_cast<int>(item["hop_length"].as_number()), SONARE_OK);
+    CHECK_FALSE(absent.empty());
+    CHECK(absent ==
+          run(n_fft, static_cast<int>(item["derived_hop_length"].as_number()), SONARE_OK));
+  }
+  for (const auto& item : route["negative_hop"].as_array()) {
+    INFO(item["id"].as_string());
+    REQUIRE(item["cause"].as_string() == "argument");
+    run(static_cast<int>(item["n_fft"].as_number()),
+        static_cast<int>(item["hop_length"].as_number()), SONARE_ERROR_INVALID_PARAMETER);
+    CHECK_THAT(last_error_message(),
+               Catch::Matchers::ContainsSubstring(item["message"].as_string()));
   }
 }
 

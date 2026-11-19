@@ -9,6 +9,7 @@
 #include <cmath>
 #include <cstdint>
 #include <limits>
+#include <string>
 #include <vector>
 
 #if defined(SONARE_WITH_MIXING)
@@ -211,6 +212,26 @@ TEST_CASE("C effects _ex options reach their native processing paths", "[c_api][
     sonare_free_hpss_result(&hard_two_way);
     sonare_free_hpss_result(&hard_three_way);
     sonare_free_floats(residual);
+  }
+
+  SECTION("HPSS runs a hop of 0 as a quarter of n_fft and names a negative hop") {
+    SonareHpssResult absent{};
+    SonareHpssResult quarter{};
+    REQUIRE(sonare_hpss_ex(samples.data(), samples.size(), sample_rate, 31, 31, 1024, 0, 1, 0,
+                           &absent, nullptr) == SONARE_OK);
+    REQUIRE(sonare_hpss_ex(samples.data(), samples.size(), sample_rate, 31, 31, 1024, 256, 1, 0,
+                           &quarter, nullptr) == SONARE_OK);
+    REQUIRE(absent.length == quarter.length);
+    CHECK(std::equal(absent.harmonic, absent.harmonic + absent.length, quarter.harmonic));
+    CHECK(std::equal(absent.percussive, absent.percussive + absent.length, quarter.percussive));
+    sonare_free_hpss_result(&absent);
+    sonare_free_hpss_result(&quarter);
+
+    SonareHpssResult refused{};
+    CHECK(sonare_hpss_ex(samples.data(), samples.size(), sample_rate, 31, 31, 1024, -1, 1, 0,
+                         &refused, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(std::string(sonare_last_error_message()).find("hopLength must be positive") !=
+          std::string::npos);
   }
 }
 

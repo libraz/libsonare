@@ -302,7 +302,8 @@ Napi::Value SonareWrap::MelToAudio(const Napi::CallbackInfo& info) {
   int n_fft{};
   if (!OptionalIntArg(env, info, 4, "nFft", 2048, &n_fft)) return env.Undefined();
   int hop_length{};
-  if (!OptionalIntArg(env, info, 5, "hopLength", 512, &hop_length)) return env.Undefined();
+  // An absent hop stays 0, which the core runs as a quarter of n_fft.
+  if (!OptionalIntArg(env, info, 5, "hopLength", 0, &hop_length)) return env.Undefined();
   float fmin{};
   if (!OptionalFiniteFloatArg(env, info, 6, "fmin", 0.0f, &fmin)) return env.Undefined();
   float fmax{};
@@ -350,7 +351,8 @@ Napi::Value SonareWrap::GriffinLim(const Napi::CallbackInfo& info) {
   int n_fft{};
   if (!RequiredIntArg(env, info, 4, "nFft", &n_fft)) return env.Undefined();
   int hop_length{};
-  if (!RequiredIntArg(env, info, 5, "hopLength", &hop_length)) return env.Undefined();
+  // An absent hop stays 0, which the core runs as a quarter of n_fft.
+  if (!OptionalIntArg(env, info, 5, "hopLength", 0, &hop_length)) return env.Undefined();
   int n_iter{};
   if (!OptionalIntArg(env, info, 6, "nIter", 32, &n_iter)) return env.Undefined();
   float momentum{};
@@ -426,7 +428,8 @@ Napi::Value SonareWrap::MfccToAudio(const Napi::CallbackInfo& info) {
   int n_fft{};
   if (!OptionalIntArg(env, info, 5, "nFft", 2048, &n_fft)) return env.Undefined();
   int hop_length{};
-  if (!OptionalIntArg(env, info, 6, "hopLength", 512, &hop_length)) return env.Undefined();
+  // An absent hop stays 0, which the core runs as a quarter of n_fft.
+  if (!OptionalIntArg(env, info, 6, "hopLength", 0, &hop_length)) return env.Undefined();
   float fmin{};
   if (!OptionalFiniteFloatArg(env, info, 7, "fmin", 0.0f, &fmin)) return env.Undefined();
   float fmax{};

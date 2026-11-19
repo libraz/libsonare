@@ -31,6 +31,12 @@
     "refused": [
       { "id": "zero_iter", "n_iter": 0, "cause": "argument", "message": "n_iter must be >= 1" },
       { "id": "negative_iter", "n_iter": -1, "cause": "argument", "message": "n_iter must be >= 1" }
+    ],
+    "absent_hop": [
+      { "id": "absent_hop", "n_fft": 2048, "hop_length": 0, "derived_hop_length": 512 }
+    ],
+    "negative_hop": [
+      { "id": "negative_hop", "n_fft": 2048, "hop_length": -1, "cause": "argument", "message": "hopLength must be positive" }
     ]
   },
   "mfcc_to_audio": {
@@ -39,6 +45,21 @@
     "refused": [
       { "id": "zero_iter", "n_iter": 0, "cause": "argument", "message": "n_iter must be >= 1" },
       { "id": "negative_iter", "n_iter": -1, "cause": "argument", "message": "n_iter must be >= 1" }
+    ],
+    "absent_hop": [
+      { "id": "absent_hop", "n_fft": 2048, "hop_length": 0, "derived_hop_length": 512 }
+    ],
+    "negative_hop": [
+      { "id": "negative_hop", "n_fft": 2048, "hop_length": -1, "cause": "argument", "message": "hopLength must be positive" }
+    ]
+  },
+  "griffin_lim": {
+    "input": { "sample_rate": 22050, "n_frames": 4, "fill": 0.1 },
+    "absent_hop": [
+      { "id": "absent_hop", "n_fft": 2048, "hop_length": 0, "derived_hop_length": 512 }
+    ],
+    "negative_hop": [
+      { "id": "negative_hop", "n_fft": 2048, "hop_length": -1, "cause": "argument", "message": "hopLength must be positive" }
     ]
   },
   "native_spectral_stretch": {

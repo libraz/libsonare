@@ -142,7 +142,8 @@ SonareError sonare_mel_to_audio_ex(const float* mel, int n_mels, int n_frames, i
   SONARE_C_API_ENTRY;
   if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
   if (!mel) return SONARE_ERROR_INVALID_PARAMETER;
-  if (n_mels <= 0 || n_frames <= 0 || n_fft <= 0 || hop_length <= 0 || sample_rate <= 0) {
+  // A hop of 0 is absent and the core runs a quarter of n_fft; it names a negative one.
+  if (n_mels <= 0 || n_frames <= 0 || n_fft <= 0 || sample_rate <= 0) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
 
@@ -173,10 +174,10 @@ SonareError sonare_griffin_lim(const float* magnitude, size_t input_length, int 
                                float momentum, float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
   if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
-  if (!magnitude || n_bins <= 0 || n_frames <= 0 || n_fft <= 0 || hop_length <= 0 ||
-      sample_rate < kMinSampleRate || sample_rate > kMaxSampleRate || n_iter <= 0 ||
-      n_iter > resource::kMaxGriffinLimIterations || !std::isfinite(momentum) || momentum < 0.0f ||
-      momentum >= 1.0f || n_bins != n_fft / 2 + 1 ||
+  // A hop of 0 is absent and the core runs a quarter of n_fft; it names a negative one.
+  if (!magnitude || n_bins <= 0 || n_frames <= 0 || n_fft <= 0 || sample_rate < kMinSampleRate ||
+      sample_rate > kMaxSampleRate || n_iter <= 0 || n_iter > resource::kMaxGriffinLimIterations ||
+      !std::isfinite(momentum) || momentum < 0.0f || momentum >= 1.0f || n_bins != n_fft / 2 + 1 ||
       check_inverse_input_length(input_length, n_bins, n_frames) != SONARE_OK) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
@@ -216,7 +217,8 @@ SonareError sonare_mfcc_to_audio_ex2(const float* coefficients, int n_mfcc, int 
   SONARE_C_API_ENTRY;
   if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
   if (!coefficients) return SONARE_ERROR_INVALID_PARAMETER;
-  if (n_fft <= 0 || hop_length <= 0 || sample_rate <= 0) {
+  // A hop of 0 is absent and the core runs a quarter of n_fft; it names a negative one.
+  if (n_fft <= 0 || sample_rate <= 0) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
 
