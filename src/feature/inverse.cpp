@@ -5,6 +5,7 @@
 #include <cmath>
 #include <memory>
 
+#include "core/audio.h"
 #include "core/spectrum.h"
 #include "filters/dct.h"
 #include "filters/mel.h"
@@ -13,6 +14,7 @@
 #include "util/exception.h"
 #include "util/nnls.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 
 namespace sonare {
 
@@ -28,27 +30,23 @@ constexpr float kMinLift = 1.0e-3f;
 
 std::vector<float> mel_to_stft(const float* M, int n_mels, int n_frames,
                                const MelConfig& mel_config, int sr) {
-  if (M == nullptr) throw SonareException(ErrorCode::InvalidParameter, "mel_to_stft: M is null");
+  if (M == nullptr) {
+    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, "M", "must not be null");
+  }
   if (n_mels <= 0 || n_frames <= 0) return {};
-  if (mel_config.n_fft <= 0) {
-    throw SonareException(ErrorCode::InvalidParameter, "mel_to_stft: n_fft must be > 0");
-  }
-  if (sr <= 0) {
-    throw SonareException(ErrorCode::InvalidParameter, "mel_to_stft: sr must be > 0");
-  }
+  util::check::integer_at_least(mel_config.n_fft, 1, "n_fft");
+  util::check::integer_at_least(sr, 1, "sr");
   // A non-finite mel band poisons the NNLS active set, which then returns an
   // all-NaN spectrogram of the expected shape. Rejected here rather than at each
   // binding so the C ABI, the WASM bindings (which call this directly) and the
   // in-process callers all inherit one rule.
   if (!numeric::all_finite(M, n_mels, n_frames)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "mel_to_stft: M contains a non-finite value");
+    validate_offline_audio_samples(nullptr, "M", M,
+                                   static_cast<size_t>(n_mels) * static_cast<size_t>(n_frames), 0);
   }
   constexpr int kMaxInverseFrames = 4096;
-  if (n_frames > kMaxInverseFrames || mel_config.n_fft > 8192) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "mel_to_stft: input exceeds the inverse resource limit");
-  }
+  util::check::integer_in_range(n_frames, 1, kMaxInverseFrames, "n_frames");
+  util::check::integer_in_range(mel_config.n_fft, 1, 8192, "n_fft");
   size_t output_elements = 0;
   if (!numeric::checked_size_product(static_cast<size_t>(mel_config.n_fft / 2 + 1),
                                      static_cast<size_t>(n_frames), kMaxAudioBufferSize,
@@ -78,8 +76,7 @@ std::vector<float> mel_to_stft(const float* M, int n_mels, int n_frames,
 
 Audio mel_to_audio(const float* M, int n_mels, int n_frames, const MelConfig& mel_config,
                    int n_iter, int sr) {
-  if (n_iter < 1)
-    throw SonareException(ErrorCode::InvalidParameter, "mel_to_audio: n_iter must be >= 1");
+  util::check::integer_at_least(n_iter, 1, "n_iter");
   // mel_to_stft already returns a magnitude spectrogram (librosa-compatible), so
   // no additional square root is applied here before Griffin-Lim.
   std::vector<float> magnitude = mel_to_stft(M, n_mels, n_frames, mel_config, sr);
@@ -93,25 +90,22 @@ Audio mel_to_audio(const float* M, int n_mels, int n_frames, const MelConfig& me
 
 std::vector<float> mfcc_to_mel(const float* mfcc, int n_mfcc, int n_frames, int n_mels,
                                float lifter) {
-  if (mfcc == nullptr)
-    throw SonareException(ErrorCode::InvalidParameter, "mfcc_to_mel: mfcc is null");
-  if (n_mfcc <= 0)
-    throw SonareException(ErrorCode::InvalidParameter, "mfcc_to_mel: n_mfcc must be >= 1");
-  if (n_frames <= 0)
-    throw SonareException(ErrorCode::InvalidParameter, "mfcc_to_mel: n_frames must be >= 1");
-  if (n_mels <= 0)
-    throw SonareException(ErrorCode::InvalidParameter, "mfcc_to_mel: n_mels must be >= 1");
-  if (!std::isfinite(lifter) || lifter < 0.0f)
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "mfcc_to_mel: lifter must be a finite value >= 0");
+  if (mfcc == nullptr) {
+    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, "mfcc",
+                                            "must not be null");
+  }
+  util::check::integer_at_least(n_mfcc, 1, "n_mfcc");
+  util::check::integer_at_least(n_frames, 1, "n_frames");
+  util::check::integer_at_least(n_mels, 1, "n_mels");
+  util::check::at_least(lifter, 0.0, "lifter");
   // A non-finite coefficient spreads across every Mel band through the inverse
   // DCT, and the dB-to-power conversion turns part of it back into 0 or Inf, so
   // the caller gets a plausible-looking spectrogram with no way to detect it.
   // Rejected here rather than at each binding so the C ABI, the WASM bindings
   // (which call this directly) and the in-process callers all inherit one rule.
   if (!numeric::all_finite(mfcc, n_mfcc, n_frames)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "mfcc_to_mel: mfcc contains a non-finite value");
+    validate_offline_audio_samples(nullptr, "mfcc", mfcc,
+                                   static_cast<size_t>(n_mfcc) * static_cast<size_t>(n_frames), 0);
   }
 
   // Undo MFCC liftering before the inverse DCT. MelSpectrogram::mfcc multiplies

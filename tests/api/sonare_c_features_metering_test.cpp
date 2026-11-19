@@ -1436,6 +1436,10 @@ TEST_CASE("array transforms refuse a non-finite input in the core function they 
     CHECK(std::string(sonare_last_error_message()) ==
           std::string(function) + ": input contains a non-finite sample");
   };
+  const auto refused_as = [](SonareError code, const char* text) {
+    CHECK(code == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(std::string(sonare_last_error_message()) == text);
+  };
   float* out = nullptr;
   size_t out_length = 0;
   int* intervals = nullptr;
@@ -1446,21 +1450,21 @@ TEST_CASE("array transforms refuse a non-finite input in the core function they 
                  "preemphasis");
   refused_naming(sonare_deemphasis(input.data(), input.size(), 0.97f, 0.0f, 0, &out, &out_length),
                  "deemphasis");
-  refused_naming(sonare_trim_silence(input.data(), input.size(), 60.0f, 2048, 512, &out,
-                                     &out_length, &start, &end),
-                 "trim");
-  refused_naming(
+  refused_as(sonare_trim_silence(input.data(), input.size(), 60.0f, 2048, 512, &out, &out_length,
+                                 &start, &end),
+             "x contains a non-finite sample");
+  refused_as(
       sonare_split_silence(input.data(), input.size(), 60.0f, 2048, 512, &intervals, &out_length),
-      "split");
+      "x contains a non-finite sample");
   refused_naming(
       sonare_frame_signal(input.data(), input.size(), 2048, 512, &out, &out_length, &n_frames),
       "frame");
-  refused_naming(sonare_fourier_tempogram(input.data(), 256, 22050, 512, 8, 1, 0, &out, &out_length,
-                                          &n_frames),
-                 "fourier_tempogram");
-  refused_naming(
+  refused_as(sonare_fourier_tempogram(input.data(), 256, 22050, 512, 8, 1, 0, &out, &out_length,
+                                      &n_frames),
+             "onset_envelope contains a non-finite sample at index 100");
+  refused_as(
       sonare_tempogram_ratio(input.data(), 5 * 200, 8, 22050, 512, nullptr, 0, &out, &out_length),
-      "tempogram_ratio");
+      "tempogram_data contains a non-finite sample at index 100");
   CHECK(out == nullptr);
   CHECK(intervals == nullptr);
 

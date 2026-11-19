@@ -14,6 +14,8 @@
 #include <limits>
 #include <vector>
 
+#include "feature/inverse.h"
+#include "feature/rhythm.h"
 #include "support/audio_fixtures.h"
 #include "util/constants.h"
 #include "util/exception.h"
@@ -1036,4 +1038,175 @@ TEST_CASE("A non-finite magnitude is answered as if it were zero", "[spectral]")
     REQUIRE(spectral_flatness(loud.data(), n_bins, n_frames) !=
             spectral_flatness(reference.data(), n_bins, n_frames));
   }
+}
+
+TEST_CASE("spectral descriptors refuse a bad parameter by its core name", "[spectral][refusal]") {
+  const std::vector<float> magnitude(6, 1.0f);
+  const float* m = magnitude.data();
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+
+  CHECK_THROWS_WITH(spectral_centroid(m, 0, 1, 22050, 2048),
+                    "n_bins must be an integer in [1, 2147483647]");
+  CHECK_THROWS_WITH(spectral_centroid(m, 3, 0, 22050, 2048),
+                    "n_frames must be an integer in [1, 2147483647]");
+  CHECK_THROWS_WITH(spectral_centroid(m, 3, 1, 0, 2048),
+                    "sr must be an integer in [1, 2147483647]");
+  CHECK_THROWS_WITH(spectral_centroid(m, 3, 1, 22050, 0),
+                    "n_fft must be an integer in [1, 2147483647]");
+  CHECK_THROWS_WITH(spectral_bandwidth(m, 3, 1, 22050, 4, 0.0f),
+                    "p must be finite and greater than 0");
+  CHECK_THROWS_WITH(spectral_rolloff(m, 3, 1, 22050, 4, 1.0f),
+                    "roll_percent must be finite and in (0, 1)");
+  CHECK_THROWS_WITH(spectral_flatness(m, 0, 1), "n_bins must be an integer in [1, 2147483647]");
+  CHECK_THROWS_WITH(spectral_flatness(m, 3, 0), "n_frames must be an integer in [1, 2147483647]");
+  CHECK_THROWS_WITH(poly_features(m, 3, 1, 22050, 4, -1),
+                    "order must be an integer in [0, 2147483647]");
+
+  Spectrogram empty;
+  CHECK_THROWS_WITH(spectral_contrast(empty, 22050, 0, 200.0f, 0.02f),
+                    "n_bands must be an integer in [1, 2147483647]");
+  CHECK_THROWS_WITH(spectral_contrast(empty, 22050, 6, 200.0f, 1.0f),
+                    "quantile must be finite and in (0, 1)");
+  CHECK_THROWS_WITH(spectral_contrast(empty, 22050, 6, 0.0f, 0.02f),
+                    "fmin must be finite and greater than 0");
+  CHECK_THROWS_WITH(spectral_contrast(empty, 0, 6, 200.0f, 0.02f),
+                    "sr must be an integer in [1, 2147483647]");
+  CHECK_THROWS_WITH(spectral_contrast(empty, 22050, 6, 200.0f, 0.02f),
+                    "n_bins must be an integer in [1, 2147483647]");
+
+  StftConfig stft;
+  stft.n_fft = 512;
+  stft.hop_length = 256;
+  const Spectrogram spec = Spectrogram::compute(generate_sine_audio(440.0f), stft);
+  CHECK_THROWS_WITH(spectral_contrast(spec, 22050, 8, 200.0f, 0.02f),
+                    "fmin * 2^(n_bands - 1) must be less than sr / 2");
+
+  const std::vector<float> samples(8, 0.5f);
+  CHECK_THROWS_WITH(zero_crossing_rate(samples.data(), samples.size(), 0, 4),
+                    "frame_length must be an integer in [1, 2147483647]");
+  CHECK_THROWS_WITH(zero_crossing_rate(samples.data(), samples.size(), 4, 0),
+                    "hop_length must be an integer in [1, 2147483647]");
+  CHECK_THROWS_WITH(zero_crossing_rate(nullptr, 8, 4, 4),
+                    "samples must not be null when n_samples is greater than 0");
+  CHECK_THROWS_WITH(rms_energy(nullptr, 8, 4, 4),
+                    "samples must not be null when n_samples is greater than 0");
+  CHECK_THROWS_WITH(rms_energy(samples.data(), samples.size(), 0, 4),
+                    "frame_length must be an integer in [1, 2147483647]");
+  CHECK_THROWS_WITH(rms_energy(samples.data(), samples.size(), 4, 0),
+                    "hop_length must be an integer in [1, 2147483647]");
+
+  const std::vector<float> with_nan = {0.5f, nan, 0.5f};
+  CHECK_THROWS_WITH(zero_crossings(nullptr, 3, 1e-5f, true, true, true),
+                    "y must not be null when n is greater than 0");
+  CHECK_THROWS_WITH(zero_crossings(with_nan.data(), with_nan.size(), -1.0f, true, true, true),
+                    "threshold must be finite and at least 0");
+  CHECK_THROWS_WITH(zero_crossings(with_nan.data(), with_nan.size(), 1e-5f, true, true, true),
+                    "y contains a non-finite sample at index 1");
+}
+
+TEST_CASE("rhythm features refuse a bad parameter by its core name", "[spectral][refusal]") {
+  const std::vector<float> env(64, 1.0f);
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  TempogramConfig bad_win;
+  bad_win.win_length = 1;
+  TempogramConfig bad_hop;
+  bad_hop.hop_length = 0;
+
+  CHECK_THROWS_WITH(tempogram(env, 22050, bad_win), "win_length must be an integer in [2, 12288]");
+  CHECK_THROWS_WITH(tempogram(env, 22050, bad_hop),
+                    "hop_length must be an integer in [1, 2147483647]");
+  CHECK_THROWS_WITH(fourier_tempogram(env, 22050, bad_win),
+                    "win_length must be an integer in [2, 12288]");
+  CHECK_THROWS_WITH(fourier_tempogram(env, 22050, bad_hop),
+                    "hop_length must be an integer in [1, 2147483647]");
+  CHECK_THROWS_WITH(fourier_tempogram(std::vector<float>{1.0f, nan}, 22050, TempogramConfig()),
+                    "onset_envelope contains a non-finite sample at index 1");
+
+  const TempogramConfig ok;
+  CHECK_THROWS_WITH(cyclic_tempogram(env, 0, ok, 30.0f, 12),
+                    "sr must be an integer in [1, 2147483647]");
+  CHECK_THROWS_WITH(cyclic_tempogram(env, 22050, bad_hop, 30.0f, 12),
+                    "hop_length must be an integer in [1, 2147483647]");
+  CHECK_THROWS_WITH(cyclic_tempogram(env, 22050, ok, 0.0f, 12),
+                    "bpm_min must be finite and greater than 0");
+  CHECK_THROWS_WITH(cyclic_tempogram(env, 22050, ok, 30.0f, 0),
+                    "n_bins must be an integer in [1, 2147483647]");
+
+  PlpConfig plp_config;
+  plp_config.sr = 22050;
+  PlpConfig plp_win = plp_config;
+  plp_win.win_length = 1;
+  CHECK_THROWS_WITH(plp(env, plp_win), "win_length must be an integer in [2, 12288]");
+  PlpConfig plp_hop = plp_config;
+  plp_hop.hop_length = 0;
+  CHECK_THROWS_WITH(plp(env, plp_hop), "hop_length must be an integer in [1, 2147483647]");
+  PlpConfig plp_sr = plp_config;
+  plp_sr.sr = 0;
+  CHECK_THROWS_WITH(plp(env, plp_sr), "sr must be an integer in [1, 2147483647]");
+  PlpConfig plp_min = plp_config;
+  plp_min.tempo_min = 0.0f;
+  CHECK_THROWS_WITH(plp(env, plp_min), "tempo_min must be finite and greater than 0");
+  PlpConfig plp_max = plp_config;
+  plp_max.tempo_max = plp_max.tempo_min;
+  CHECK_THROWS_WITH(plp(env, plp_max), "tempo_max must be finite and greater than tempo_min");
+
+  const std::vector<float> data(40, 0.5f);
+  const std::vector<float> factors = {1.0f, 2.0f};
+  CHECK_THROWS_WITH(tempogram_ratio(data, 0, 22050, 512, factors),
+                    "win_length must be an integer in [1, 2147483647]");
+  CHECK_THROWS_WITH(tempogram_ratio(data, 8, 22050, 0, factors),
+                    "hop_length must be an integer in [1, 2147483647]");
+  CHECK_THROWS_WITH(tempogram_ratio(std::vector<float>{1.0f, nan}, 8, 22050, 512, factors),
+                    "tempogram_data contains a non-finite sample at index 1");
+  CHECK_THROWS_WITH(tempogram_ratio(std::vector<float>(), 8, 22050, 512, factors),
+                    "tempogram_data must not be empty");
+  CHECK_THROWS_WITH(tempogram_ratio(data, 8, 22050, 512, std::vector<float>()),
+                    "factors must not be empty");
+  CHECK_THROWS_WITH(tempogram_ratio(data, 8, 22050, 512, std::vector<float>{1.0f, 0.0f}),
+                    "factors must be finite and greater than 0");
+  CHECK_THROWS_WITH(tempogram_ratio(std::vector<float>(3, 0.5f), 8, 22050, 512, factors),
+                    "tempogram_data must hold at least win_length values");
+}
+
+TEST_CASE("inverse features refuse a bad parameter by its core name", "[spectral][refusal]") {
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  MelConfig config;
+  config.n_mels = 4;
+  const std::vector<float> mel(16, 1.0f);
+
+  CHECK_THROWS_WITH(mel_to_stft(nullptr, 4, 4, config, 22050), "M must not be null");
+  MelConfig bad_fft = config;
+  bad_fft.n_fft = 0;
+  CHECK_THROWS_WITH(mel_to_stft(mel.data(), 4, 4, bad_fft, 22050),
+                    "n_fft must be an integer in [1, 2147483647]");
+  CHECK_THROWS_WITH(mel_to_stft(mel.data(), 4, 4, config, 0),
+                    "sr must be an integer in [1, 2147483647]");
+  std::vector<float> mel_nan = mel;
+  mel_nan[1] = nan;
+  CHECK_THROWS_WITH(mel_to_stft(mel_nan.data(), 4, 4, config, 22050),
+                    "M contains a non-finite sample at index 1");
+  const std::vector<float> long_mel(4 * 4097, 1.0f);
+  CHECK_THROWS_WITH(mel_to_stft(long_mel.data(), 4, 4097, config, 22050),
+                    "n_frames must be an integer in [1, 4096]");
+  MelConfig big_fft = config;
+  big_fft.n_fft = 8193;
+  CHECK_THROWS_WITH(mel_to_stft(mel.data(), 4, 4, big_fft, 22050),
+                    "n_fft must be an integer in [1, 8192]");
+  CHECK_THROWS_WITH(mel_to_audio(mel.data(), 4, 4, config, 0, 22050),
+                    "n_iter must be an integer in [1, 2147483647]");
+
+  const std::vector<float> mfcc(8, 1.0f);
+  CHECK_THROWS_WITH(mfcc_to_mel(nullptr, 2, 4, 8, 0.0f), "mfcc must not be null");
+  CHECK_THROWS_WITH(mfcc_to_mel(mfcc.data(), 0, 4, 8, 0.0f),
+                    "n_mfcc must be an integer in [1, 2147483647]");
+  CHECK_THROWS_WITH(mfcc_to_mel(mfcc.data(), 2, 0, 8, 0.0f),
+                    "n_frames must be an integer in [1, 2147483647]");
+  CHECK_THROWS_WITH(mfcc_to_mel(mfcc.data(), 2, 4, 0, 0.0f),
+                    "n_mels must be an integer in [1, 2147483647]");
+  CHECK_THROWS_WITH(mfcc_to_mel(mfcc.data(), 2, 4, 8, -1.0f),
+                    "lifter must be finite and at least 0");
+  std::vector<float> mfcc_nan = mfcc;
+  mfcc_nan[3] = nan;
+  CHECK_THROWS_WITH(mfcc_to_mel(mfcc_nan.data(), 2, 4, 8, 0.0f),
+                    "mfcc contains a non-finite sample at index 3");
 }

@@ -7,6 +7,7 @@
 #include <cmath>
 #include <string>
 
+#include "core/audio.h"
 #include "core/fft.h"
 #include "core/window.h"
 #include "feature/mel_spectrogram.h"
@@ -14,6 +15,7 @@
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 
 namespace sonare {
 
@@ -102,18 +104,8 @@ std::vector<float> tempogram(const std::vector<float>& onset_envelope, int sr,
   // hop/window config; sr is kept only for API symmetry with the BPM-axis
   // helpers (tempogram_ratio, plp) that do need it.
   (void)sr;
-  if (config.win_length <= 1) {
-    throw SonareException(ErrorCode::InvalidParameter, "tempogram: win_length must be > 1");
-  }
-  if (config.win_length > kMaxTempogramWinLength) {
-    throw SonareException(ErrorCode::InvalidParameter, "tempogram: win_length must not exceed " +
-                                                           std::to_string(kMaxTempogramWinLength) +
-                                                           ", got " +
-                                                           std::to_string(config.win_length));
-  }
-  if (config.hop_length <= 0) {
-    throw SonareException(ErrorCode::InvalidParameter, "tempogram: hop_length must be > 0");
-  }
+  util::check::integer_in_range(config.win_length, 2, kMaxTempogramWinLength, "win_length");
+  util::check::integer_at_least(config.hop_length, 1, "hop_length");
   if (onset_envelope.empty()) return {};
 
   const int win = config.win_length;
@@ -189,18 +181,8 @@ namespace detail {
 
 std::vector<float> fourier_tempogram_of_envelope(const std::vector<float>& onset_envelope,
                                                  const TempogramConfig& config) {
-  if (config.win_length <= 1) {
-    throw SonareException(ErrorCode::InvalidParameter, "fourier_tempogram: win_length must be > 1");
-  }
-  if (config.win_length > kMaxTempogramWinLength) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "fourier_tempogram: win_length must not exceed " +
-                              std::to_string(kMaxTempogramWinLength) + ", got " +
-                              std::to_string(config.win_length));
-  }
-  if (config.hop_length <= 0) {
-    throw SonareException(ErrorCode::InvalidParameter, "fourier_tempogram: hop_length must be > 0");
-  }
+  util::check::integer_in_range(config.win_length, 2, kMaxTempogramWinLength, "win_length");
+  util::check::integer_at_least(config.hop_length, 1, "hop_length");
   if (onset_envelope.empty()) return {};
 
   const auto spec = fourier_tempogram_complex(onset_envelope, config);
@@ -215,10 +197,8 @@ std::vector<float> fourier_tempogram_of_envelope(const std::vector<float>& onset
 
 std::vector<float> fourier_tempogram(const std::vector<float>& onset_envelope, int /*sr*/,
                                      const TempogramConfig& config) {
-  if (!numeric::all_finite(onset_envelope.data(), onset_envelope.size())) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "fourier_tempogram: input contains a non-finite sample");
-  }
+  validate_offline_audio_samples(nullptr, "onset_envelope", onset_envelope.data(),
+                                 onset_envelope.size(), 0);
   return detail::fourier_tempogram_of_envelope(onset_envelope, config);
 }
 
@@ -233,16 +213,12 @@ std::vector<float> fourier_tempogram(const Audio& audio, const TempogramConfig& 
 
 std::vector<float> cyclic_tempogram(const std::vector<float>& onset_envelope, int sr,
                                     const TempogramConfig& config, float bpm_min, int n_bins) {
-  if (sr <= 0 || config.hop_length <= 0) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "cyclic_tempogram: sr and hop_length must be > 0");
-  }
+  util::check::integer_at_least(sr, 1, "sr");
+  util::check::integer_at_least(config.hop_length, 1, "hop_length");
   // Finite, not merely positive: a non-finite bpm_min makes the phase below NaN, and
   // the cast to a bin index is undefined before std::clamp ever sees the value.
-  if (!numeric::finite_positive(bpm_min) || n_bins <= 0) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "cyclic_tempogram: bpm_min must be finite and > 0, n_bins must be > 0");
-  }
+  util::check::greater_than(bpm_min, 0.0, "bpm_min");
+  util::check::integer_at_least(n_bins, 1, "n_bins");
   if (onset_envelope.empty()) return {};
 
   // NOTE: custom / approximate phase-fold, NOT librosa-compatible. Each Fourier
@@ -287,25 +263,15 @@ std::vector<float> cyclic_tempogram(const Audio& audio, const TempogramConfig& c
 }
 
 std::vector<float> plp(const std::vector<float>& onset_envelope, const PlpConfig& config) {
-  if (config.win_length <= 1) {
-    throw SonareException(ErrorCode::InvalidParameter, "plp: win_length must be > 1");
-  }
-  if (config.win_length > kMaxTempogramWinLength) {
-    throw SonareException(ErrorCode::InvalidParameter, "plp: win_length must not exceed " +
-                                                           std::to_string(kMaxTempogramWinLength) +
-                                                           ", got " +
-                                                           std::to_string(config.win_length));
-  }
-  if (config.hop_length <= 0 || config.sr <= 0) {
-    throw SonareException(ErrorCode::InvalidParameter, "plp: sr and hop_length must be > 0");
-  }
+  util::check::integer_in_range(config.win_length, 2, kMaxTempogramWinLength, "win_length");
+  util::check::integer_at_least(config.hop_length, 1, "hop_length");
+  util::check::integer_at_least(config.sr, 1, "sr");
   // The band test below is the only reader of these, and it is a pair of relational
   // comparisons: a NaN bound fails both, so the band silently stops restricting.
-  if (!numeric::finite_positive(config.tempo_min) ||
-      !numeric::finite_ordered_range(config.tempo_min, config.tempo_max)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "plp: tempo_min and tempo_max must be finite with "
-                          "0 < tempo_min < tempo_max");
+  util::check::greater_than(config.tempo_min, 0.0, "tempo_min");
+  if (!numeric::finite_ordered_range(config.tempo_min, config.tempo_max)) {
+    util::check::refuse_relation({"tempo_max", "tempo_min"},
+                                 "{0} must be finite and greater than {1}");
   }
   const int n = static_cast<int>(onset_envelope.size());
   if (n == 0) return {};
@@ -421,39 +387,32 @@ std::vector<float> plp(const Audio& audio, const PlpConfig& config) {
 
 std::vector<float> tempogram_ratio(const std::vector<float>& tempogram_data, int win_length, int sr,
                                    int hop_length, const std::vector<float>& factors) {
-  if (win_length <= 0 || hop_length <= 0) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "tempogram_ratio: win_length and hop_length must be > 0");
-  }
+  util::check::integer_at_least(win_length, 1, "win_length");
+  util::check::integer_at_least(hop_length, 1, "hop_length");
   // Every rejection below used to be answered with a zero-filled vector, which
   // reads as a genuine "no energy at this ratio" measurement. Reject instead so
   // a caller can never mistake an unanswerable call for a result.
-  if (!numeric::all_finite(tempogram_data.data(), tempogram_data.size())) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "tempogram_ratio: input contains a non-finite sample");
-  }
+  validate_offline_audio_samples(nullptr, "tempogram_data", tempogram_data.data(),
+                                 tempogram_data.size(), 0);
   if (tempogram_data.empty()) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "tempogram_ratio: tempogram_data must not be empty");
+    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, "tempogram_data",
+                                            "must not be empty");
   }
   if (factors.empty()) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "tempogram_ratio: factors must not be empty");
+    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, "factors",
+                                            "must not be empty");
   }
   // A NaN factor passes any `<= 0` test and would reach round(best_lag / f) as
   // undefined behaviour; an infinite one deterministically selects lag 0, the DC
   // autocorrelation peak the reference search below deliberately excludes.
   for (float factor : factors) {
-    if (!std::isfinite(factor) || factor <= 0.0f) {
-      throw SonareException(ErrorCode::InvalidParameter,
-                            "tempogram_ratio: factors must be finite and > 0");
-    }
+    util::check::greater_than(factor, 0.0, "factors");
   }
   const int n_frames =
       static_cast<int>(tempogram_data.size() / static_cast<std::size_t>(win_length));
   if (n_frames <= 0) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "tempogram_ratio: tempogram_data is shorter than win_length");
+    util::check::refuse_relation({"tempogram_data", "win_length"},
+                                 "{0} must hold at least {1} values");
   }
   std::vector<float> out(factors.size(), 0.0f);
 
