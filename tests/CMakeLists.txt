@@ -34,6 +34,7 @@ add_executable(sonare_tests
   util/base64_validation_test.cpp
   util/json_test.cpp
   util/number_format_test.cpp
+  util/parameter_checks_test.cpp
   util/insertion_sort_test.cpp
   util/frame_count_range_test.cpp
   util/frame_test.cpp

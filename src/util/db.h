@@ -9,6 +9,14 @@
 
 namespace sonare {
 
+/// Largest gain in dB a gain field accepts: a round bound inside the float range of
+/// db_to_linear (finite up to about 770.6 dB), so it does not move with the platform's libm.
+inline constexpr float kMaxFiniteGainDb = 770.0f;
+
+/// Smallest gain in dB a field needing a positive linear gain accepts: a round bound above the
+/// point where db_to_linear underflows to 0 (about -897 dB, through the subnormal range).
+inline constexpr float kMinPositiveGainDb = -890.0f;
+
 inline float db_to_linear(float db) noexcept { return std::pow(10.0f, db / 20.0f); }
 
 inline double db_to_linear(double db) noexcept { return std::pow(10.0, db / 20.0); }

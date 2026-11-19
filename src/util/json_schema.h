@@ -22,6 +22,7 @@
 #include "util/json.h"
 #include "util/json_key.h"
 #include "util/number_format.h"
+#include "util/refusal_predicates.h"
 
 namespace sonare::util::json::schema {
 
@@ -95,15 +96,11 @@ inline std::string refusal(std::string_view path, std::string_view predicate) {
   return std::string(path) + " " + std::string(predicate);
 }
 
-/// @brief @p e with @p parent joined in front of its subject (and rename), under @p code.
+/// @brief @p e with @p parent joined in front of each subject (and rename), under @p code.
 inline SonareParameterRefusal relabel_under(const SonareParameterRefusal& e,
                                             std::string_view parent, ErrorCode code) {
-  const std::string subject = child_path(parent, e.subject());
-  if (e.form() == SonareParameterRefusal::Form::UnknownKey) {
-    return SonareParameterRefusal::unknown(
-        code, subject, e.renamed_to().empty() ? std::string() : child_path(parent, e.renamed_to()));
-  }
-  return SonareParameterRefusal::predicate(code, subject, e.predicate());
+  return e.respelled(
+      code, [parent](const std::string& subject) { return child_path(parent, subject); }, false);
 }
 
 /// @brief Throws @ref relabel_under of @p e.
@@ -112,30 +109,10 @@ inline SonareParameterRefusal relabel_under(const SonareParameterRefusal& e,
   throw relabel_under(e, parent, code);
 }
 
-/// @brief The shortest decimal spelling of @p value that reads back as the same double.
-inline std::string bound_text(double value) {
-  constexpr int kMinDigits = 6;
-  constexpr int kMaxDigits = 17;
-  for (int digits = kMinDigits; digits < kMaxDigits; ++digits) {
-    std::string text = format_general(value, digits);
-    if (std::strtod(text.c_str(), nullptr) == value) return text;
-  }
-  return format_general(value, kMaxDigits);
-}
-
-/// @brief "must be finite and in [lo, hi]".
-inline std::string range_predicate(double lo, double hi) {
-  return "must be finite and in [" + bound_text(lo) + ", " + bound_text(hi) + "]";
-}
-
-/// @brief The domain of a value held as a 32-bit float, for one with no narrower declared range.
-inline constexpr const char* kFloatRangePredicate =
-    "must be finite and in [-3.4028235e38, 3.4028235e38]";
-
-/// @brief "must be an integer in [lo, hi]".
-inline std::string integer_range_predicate(double lo, double hi) {
-  return "must be an integer in [" + bound_text(lo) + ", " + bound_text(hi) + "]";
-}
+using ::sonare::util::refusal::bound_text;
+using ::sonare::util::refusal::integer_range_predicate;
+using ::sonare::util::refusal::kFloatRangePredicate;
+using ::sonare::util::refusal::range_predicate;
 
 /// @brief "<path> must be given", for a required key the document leaves out.
 inline std::string missing_key(std::string_view path) { return refusal(path, "must be given"); }
