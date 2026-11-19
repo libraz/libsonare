@@ -131,7 +131,7 @@ def test_set_config_with_a_record_round_trips_through_config() -> None:
             wet_mix=0.7,
             compressor_ratio=4.0,
             limiter_release_ms=80.0,
-            limiter_enable_isp_limiter=0,
+            limiter_enable_isp_limiter=False,
             limiter_isp_ceiling_dbtp=-2.5,
         )
         changer.set_config(cfg)
@@ -141,10 +141,23 @@ def test_set_config_with_a_record_round_trips_through_config() -> None:
         assert round_tripped.wet_mix == pytest.approx(0.7, abs=1e-6)
         assert round_tripped.compressor_ratio == pytest.approx(4.0, abs=1e-6)
         assert round_tripped.limiter_release_ms == pytest.approx(80.0, abs=1e-6)
-        assert round_tripped.limiter_enable_isp_limiter == 0
+        assert round_tripped.limiter_enable_isp_limiter is False
         assert round_tripped.limiter_isp_ceiling_dbtp == pytest.approx(-2.5, abs=1e-6)
     finally:
         changer.close()
+
+
+@pytest.mark.parametrize("field", ["limiter_enable_isp_limiter", "vocoder_enabled"])
+def test_on_off_fields_are_bools_and_an_int_is_refused(field: str) -> None:
+    cfg = libsonare.realtime_voice_changer_preset_config("neutralMonitor")
+    assert isinstance(getattr(cfg, field), bool)
+    flipped = dataclasses.replace(cfg, **{field: not getattr(cfg, field)})
+    assert getattr(libsonare.RealtimeVoiceChangerConfig._from_pod(flipped._to_pod()), field) is (
+        not getattr(cfg, field)
+    )
+    for wrong in (1, 0, 1.0):
+        with pytest.raises(TypeError, match=f"^{field} must be a bool$"):
+            dataclasses.replace(cfg, **{field: wrong})._to_pod()
 
 
 def test_set_config_with_a_record_does_not_break_processing() -> None:

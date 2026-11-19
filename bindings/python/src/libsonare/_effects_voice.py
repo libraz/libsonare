@@ -25,6 +25,7 @@ from ._runtime import (
     _C_INT_MIN,
     SonareValueError,
     _as_float32_buffer,
+    _bool_flag,
     _check,
     _check_realtime,
     _from_c_float_array,
@@ -83,6 +84,8 @@ _ENUM_FIELD_NAMES: dict[str, tuple[str, ...]] = {
     "reverb_variation_division": get_args(NoteDivision),
     "midi_release": get_args(MidiRelease),
 }
+# On/off POD fields: a Python bool on this side, the C 0/1 flag on the other.
+_BOOL_FIELD_NAMES = frozenset({"limiter_enable_isp_limiter", "vocoder_enabled"})
 _HARMONY_STEP_COUNT = 3
 
 
@@ -751,6 +754,8 @@ def _neutral_monitor_defaults() -> dict[str, Any]:
             value = _enum_name(name, value)
         elif name == "retune_grain_size_samples":
             value = value or None
+        elif name in _BOOL_FIELD_NAMES:
+            value = bool(value)
         values[name] = value
     return values
 
@@ -910,10 +915,10 @@ class RealtimeVoiceChangerConfig:
     )
     """Limiter release in ms, one time constant."""
     # Appended in ABI version 2 (kept at the END to match the C POD layout).
-    limiter_enable_isp_limiter: int = dataclasses.field(
+    limiter_enable_isp_limiter: bool = dataclasses.field(
         default_factory=_neutral_default("limiter_enable_isp_limiter")
     )
-    """Non-zero enables the 4x-oversampled inter-sample-peak (true-peak) limiter."""
+    """``True`` enables the 4x-oversampled inter-sample-peak (true-peak) limiter."""
     limiter_isp_ceiling_dbtp: float = dataclasses.field(
         default_factory=_neutral_default("limiter_isp_ceiling_dbtp")
     )
@@ -969,8 +974,8 @@ class RealtimeVoiceChangerConfig:
         default_factory=_neutral_default("harmony_delay_ms")
     )
     """Harmony delay in ms, [0, 40]."""
-    vocoder_enabled: int = dataclasses.field(default_factory=_neutral_default("vocoder_enabled"))
-    """Non-zero enables the channel vocoder."""
+    vocoder_enabled: bool = dataclasses.field(default_factory=_neutral_default("vocoder_enabled"))
+    """``True`` enables the channel vocoder."""
     vocoder_bands: int = dataclasses.field(default_factory=_neutral_default("vocoder_bands"))
     """Vocoder band count, [8, 32]. Fixed at creation."""
     vocoder_attack_ms: float = dataclasses.field(
@@ -1049,6 +1054,8 @@ class RealtimeVoiceChangerConfig:
                 value = _enum_name(name, value)
             elif name == "retune_grain_size_samples":
                 value = value or None
+            elif name in _BOOL_FIELD_NAMES:
+                value = bool(value)
             values[name] = value
         return cls(**values)
 
@@ -1076,6 +1083,8 @@ class RealtimeVoiceChangerConfig:
                 setattr(out, name, _enum_ordinal(name, value))
             elif name == "retune_grain_size_samples":
                 out.retune_grain_size_samples = _grain_size_request(value, name)
+            elif name in _BOOL_FIELD_NAMES:
+                setattr(out, name, _bool_flag(value, name))
             else:
                 setattr(out, name, value)
         return out

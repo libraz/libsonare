@@ -5204,6 +5204,14 @@ test = "bindings/python/tests/test_realtime_voice_changer_pod.py::test_config_re
 
 [[entry]]
 kind = "field"
+old = "RealtimeVoiceChangerConfig.limiter_enable_isp_limiter"
+changed = "a bool (was an int read as non-zero); an int, 0 and 1 included, raises TypeError, and RealtimeVoiceChangerConfig.vocoder_enabled is a bool the same way"
+domain = "effects"
+rule = "typed-results"
+test = "bindings/python/tests/test_realtime_voice_changer_pod.py::test_on_off_fields_are_bools_and_an_int_is_refused"
+
+[[entry]]
+kind = "field"
 old = "RealtimeVoiceChangerConfig.eq_highpass_hz"
 new = "RealtimeVoiceChangerConfig.eq_high_pass_hz"
 domain = "effects"

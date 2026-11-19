@@ -864,6 +864,13 @@ def _to_c_uint32(value: object, name: str) -> ctypes.c_uint32:
     return ctypes.c_uint32(_narrow_int(value, name, 0, _UINT32_MAX))
 
 
+def _bool_flag(value: object, name: str) -> int:
+    """Map a ``bool`` to the C 0/1 flag; an ``int`` is refused rather than read as truth."""
+    if not isinstance(value, (bool, np.bool_)):
+        raise TypeError(f"{name} must be a bool")
+    return int(value)
+
+
 def _optional_positive_int(value: object, name: str, hi: int) -> int:
     """Map an optional count or id onto a C field whose ``0`` means "not given".
 

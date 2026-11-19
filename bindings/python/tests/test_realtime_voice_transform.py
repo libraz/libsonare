@@ -66,7 +66,7 @@ def test_neutral_preset_selects_the_psola_engine() -> None:
     cfg = _neutral()
     assert cfg.voice_engine == "psola"
     assert cfg.pitch_correction_mode == "off"
-    assert cfg.vocoder_enabled == 0
+    assert cfg.vocoder_enabled is False
     assert len(cfg.harmony_steps) == 3
 
 
@@ -230,7 +230,7 @@ def test_grain_engine_refuses_pitch_correction_harmony_and_vocoder() -> None:
         {"pitch_correction_mode": "auto"},
         {"pitch_correction_mode": "robot"},
         {"harmony_voices": 1},
-        {"vocoder_enabled": 1},
+        {"vocoder_enabled": True},
     ):
         refused = dataclasses.replace(grain, **change)
         # Through the creation document the refusal is a content defect of that document.
@@ -345,7 +345,7 @@ def test_note_api_on_a_closed_handle_is_invalid_state() -> None:
 
 def _vocoder(source: str) -> libsonare.RealtimeVoiceChangerConfig:
     return dataclasses.replace(
-        _neutral(), vocoder_enabled=1, vocoder_carrier_source=source, vocoder_level=1.0
+        _neutral(), vocoder_enabled=True, vocoder_carrier_source=source, vocoder_level=1.0
     )
 
 

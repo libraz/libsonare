@@ -45,7 +45,7 @@ def _neutral() -> libsonare.RealtimeVoiceChangerConfig:
 
 def _vocoder(source: str) -> libsonare.RealtimeVoiceChangerConfig:
     return dataclasses.replace(
-        _neutral(), vocoder_enabled=1, vocoder_carrier_source=source, vocoder_level=1.0
+        _neutral(), vocoder_enabled=True, vocoder_carrier_source=source, vocoder_level=1.0
     )
 
 
@@ -132,7 +132,7 @@ def _assert_render(output: np.ndarray | list[np.ndarray], layout: str, frames: i
 
 def _assert_external_config(changer: libsonare.RealtimeVoiceChanger) -> None:
     config = changer.config
-    assert config.vocoder_enabled == 1
+    assert config.vocoder_enabled is True
     assert config.vocoder_carrier_source == "external"
 
 

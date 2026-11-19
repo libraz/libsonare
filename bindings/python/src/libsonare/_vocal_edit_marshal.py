@@ -36,6 +36,7 @@ from ._runtime import (
     _INT64_MAX,
     _INT64_MIN,
     _UINT32_MAX,
+    _bool_flag,
     _check,
     _get_lib,
     _narrow_int,
@@ -89,12 +90,6 @@ def _finite_float(value: object, name: str) -> float:
     if not math.isfinite(result):
         raise SonareValueError(f"{name} must be a finite number")
     return result
-
-
-def _bool_flag(value: object, name: str) -> int:
-    if not isinstance(value, (bool, np.bool_)):
-        raise TypeError(f"{name} must be a bool")
-    return int(value)
 
 
 def _int64(value: object, name: str) -> int:
