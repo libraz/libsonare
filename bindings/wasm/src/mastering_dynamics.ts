@@ -22,7 +22,7 @@ export type CompressorDetector = 'peak' | 'rms' | 'logRms';
 export interface CompressorOptions {
   /** Level above which compression starts, in dBFS. Default `-18`. */
   thresholdDb?: number;
-  /** Compression ratio, clamped to at least 1. Default `2`. */
+  /** Compression ratio, at least 1; a smaller one is refused. Default `2`. */
   ratio?: number;
   /** Attack in ms: one time constant, about 63% of the way at the set time. Default `10`. */
   attackMs?: number;
@@ -92,7 +92,7 @@ export interface TransientShaperOptions {
   slowAttackMs?: number;
   /** Release of the slow envelope follower, in ms. Default `200`. */
   slowReleaseMs?: number;
-  /** Detection sensitivity, clamped to at least 0. Default `1`. */
+  /** Detection sensitivity, at least 0; a negative one is refused. Default `1`. */
   sensitivity?: number;
   /** Safety clamp on the applied gain, in dB. Default `12`. */
   maxGainDb?: number;

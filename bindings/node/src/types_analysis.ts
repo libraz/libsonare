@@ -672,8 +672,9 @@ export interface RoomGeometry {
   /** Room height in metres. Default `3`. */
   heightM?: number;
   /**
-   * Uniform wall absorption, clamped to [0, 0.999] (the back-compat scalar).
-   * Defaults to 0.2. Higher absorption shortens RT60, so it changes both the
+   * Uniform wall absorption in [0, 1], used when no band absorption or preset
+   * is given; a value outside is refused, and the model holds a wall at most
+   * 0.999 absorbent. Defaults to 0.2. Higher absorption shortens RT60, so it changes both the
    * rendered content and the tail length rather than only the timbre.
    */
   absorption?: number;
