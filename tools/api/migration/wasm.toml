@@ -30072,3 +30072,33 @@ old = "decodeChannelsWithBrowserFallback"
 changed = "a refusal raised by the public call it forwards to opens with 'decodeChannelsWithBrowserFallback: ' rather than with the inner call's name"
 domain = "core"
 rule = "entry-named-refusals"
+
+[[entry]]
+kind = "field"
+old = "SurroundPan.distance"
+removed = "the pan law reads azimuth, width and LFE only; the two settings never changed the output"
+domain = "mastering"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "SurroundPan.elevation"
+removed = "the pan law reads azimuth, width and LFE only; the two settings never changed the output"
+domain = "mastering"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "SurroundPan.distance"
+removed = "the pan law reads azimuth, width and LFE only; the two settings never changed the output"
+domain = "mastering"
+rule = "individual"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "SurroundPan.elevation"
+removed = "the pan law reads azimuth, width and LFE only; the two settings never changed the output"
+domain = "mastering"
+rule = "individual"
+entry = "./analysis"
