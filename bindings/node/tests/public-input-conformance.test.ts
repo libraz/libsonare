@@ -182,6 +182,14 @@ describe('shared public-input conformance corpus', () => {
         );
       }
     });
+    it(`keeps midiParamToCc byte fields conformant: ${testCase.id}`, () => {
+      const request = { bindings: [binding() as never], paramId: 1, unitValue: 0, group: 0 };
+      if (testCase.accepted) {
+        expect(() => midiParamToCc(request)).not.toThrow();
+      } else {
+        expect(() => midiParamToCc(request)).toThrow(RangeError);
+      }
+    });
   }
 
   // Each byte field with the binding kind that reads it and an in-range value the

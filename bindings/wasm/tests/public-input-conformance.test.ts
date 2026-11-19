@@ -6,6 +6,7 @@ import {
   midiCc,
   midiCcLearn,
   midiCcToBreakpoint,
+  midiParamToCc,
   mixStereo,
   RealtimeEngine,
 } from '../dist/index.js';
@@ -174,6 +175,14 @@ describe('shared public-input conformance corpus (WASM)', () => {
         expect(() => midiCcToBreakpoint({ bindings: [binding() as never], event })).toThrow(
           RangeError,
         );
+      }
+    });
+    it(`keeps midiParamToCc byte fields conformant: ${testCase.id}`, () => {
+      const request = { bindings: [binding() as never], paramId: 1, unitValue: 0, group: 0 };
+      if (testCase.accepted) {
+        expect(() => midiParamToCc(request)).not.toThrow();
+      } else {
+        expect(() => midiParamToCc(request)).toThrow(RangeError);
       }
     });
   }
